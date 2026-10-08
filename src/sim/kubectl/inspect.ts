@@ -20,7 +20,7 @@ import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type D
 import { currentReplicaSet } from "../replicasets";
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { positionals, slashRef, notSimulated, unknownResourceType } from "./args";
+import { callOf, positionals, slashRef, notSimulated, unknownResourceType } from "./args";
 import { sameRbac } from "../rbac";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName, statefulPodNode } from "../workload";
@@ -716,8 +716,9 @@ function logsTarget(host: KubectlHost, tok: string): { name: string; note?: stri
 export function kubectlLogs(host: KubectlHost, t: string[]) {
   // Flags können vor oder hinter dem Pod-Namen stehen: -f/--follow (live folgen),
   // -p/--previous (Logs des abgestürzten Vorgänger-Containers).
-  const follow = t.includes("-f") || t.includes("--follow");
-  const previous = t.includes("-p") || t.includes("--previous");
+  const call = callOf("logs", t);
+  const follow = call.has("-f", "--follow");
+  const previous = call.has("-p", "--previous");
   const tok = positionals("logs", t)[0];
   if (!tok) return host._err("kubectl logs: Welcher Pod?", "Pod-Namen siehst du mit 'kubectl get pods'.");
   const target = logsTarget(host, tok);

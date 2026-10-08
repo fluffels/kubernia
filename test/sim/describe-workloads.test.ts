@@ -10,7 +10,7 @@ const run = (sim: KQSim, cmd: string) => sim.exec("kubectl " + cmd);
 const out = (sim: KQSim, cmd: string) => run(sim, cmd).output ?? "";
 const sts = (extra: object = {}) => ({ name: "speicher", image: "postgres:16", replicas: 3, serviceName: "speicher", ...extra });
 const dep = (name: string, extra: object = {}) => ({ name, image: "nginx:1", replicas: 2, ...extra });
-const svc = (name: string, extra: object = {}) => ({ name, type: "ClusterIP", clusterIP: "10.96.0.20", port: 80, ...extra });
+const svc = (name: string, extra: object = {}) => ({ name, type: "ClusterIP" as const, clusterIP: "10.96.0.20", port: 80, ...extra });
 const EXTERNAL = "apiVersion: v1\nkind: Service\nmetadata:\n  name: bank\nspec:\n  type: ExternalName\n  externalName: api.bank.example.com\n";
 
 describe("describe deployment", () => {
@@ -252,5 +252,46 @@ describe("ohne Namen und Namenspräfix", () => {
       expect(r.error, plural).toBeFalsy();
       for (const n of names) expect(r.output, plural + " " + n).toMatch(new RegExp("^Name:\\s+" + n + "$", "m"));
     }
+  });
+});
+
+/* ---------- #1469: mehrere Namen – jeder exakt, NotFound je fehlendem Namen, Präfix nur bei genau einem ---------- */
+describe("describe <typ> a b: mehrere Namen", () => {
+  const sim = () => new KQSim({ deployments: [dep("web"), dep("web2"), dep("api")] });
+  test("beide exakt beschrieben, zwei Leerzeilen-frei getrennt, kein Fehler", () => {
+    const s = sim();
+    const r = run(s, "describe deploy web api");
+    expect(r.error).toBeFalsy();
+    expect(r.output).toMatch(/^Name:\s+web$/m);
+    expect(r.output).toMatch(/^Name:\s+api$/m);
+    expect(r.output).not.toMatch(/^Name:\s+web2$/m);
+  });
+  test("exakt statt Präfix: `web api` beschreibt web, nicht web2", () => {
+    const names = [...out(sim(), "describe deploy web api").matchAll(/^Name:\s+(\S+)$/gm)].map(m => m[1]);
+    expect(names).toEqual(["web", "api"]);
+  });
+  test("ein fehlender Name: die anderen werden beschrieben, am Ende NotFound, error=true", () => {
+    const r = run(sim(), "describe deploy web nope");
+    expect(r.error).toBe(true);
+    expect(r.output).toMatch(/^Name:\s+web$/m);
+    expect(r.output).toContain('Error from server (NotFound): deployments.apps "nope" not found');
+    expect(run(sim(), "describe deploy nope nada").output).toMatch(/^Error from server \(NotFound\)/);
+    expect(r.output!.indexOf("Name:")).toBeLessThan(r.output!.indexOf("NotFound"));
+  });
+  test("zwei fehlende Namen: je eine NotFound-Zeile; kein Präfix-Treffer bei mehreren Namen", () => {
+    const r = run(sim(), "describe deploy we nope");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain('"we" not found');
+    expect(r.output).toContain('"nope" not found');
+    expect(r.output).not.toMatch(/^Name:/m);
+  });
+  test("ein einzelner Name behält die Präfix-Suche", () => {
+    const names = [...out(sim(), "describe deploy we").matchAll(/^Name:\s+(\S+)$/gm)].map(m => m[1]);
+    expect(names).toEqual(["web", "web2"]);
+  });
+  test("gilt für jede Art der Registry (Service, StatefulSet)", () => {
+    const s = new KQSim({ deployments: [dep("web")], services: [svc("web"), svc("api")], statefulSets: [sts({ replicas: 1 })] });
+    expect(out(s, "describe svc web api").match(/^Name:/gm)).toHaveLength(2);
+    expect(run(s, "describe sts speicher nope").error).toBe(true);
   });
 });

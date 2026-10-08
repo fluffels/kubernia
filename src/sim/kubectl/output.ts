@@ -9,7 +9,7 @@
  * vorher (vor dem Control-Plane-Gate), damit ein Tippfehler im Format nie hinter „connection refused“ verschwindet.
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert nur das Blattmodul ../cliargs. */
-import { checkedFlag, flagValueOf, notSimulated, type ErrHost } from "../cliargs";
+import { checkedFlag, notSimulated, type Call, type ErrHost } from "../cliargs";
 
 interface OutputFormat {
   readonly name: string;
@@ -55,6 +55,6 @@ export function checkOutputFormat(host: ErrHost, value: string): string | null {
 export const OUTPUT_FLAG = checkedFlag(checkOutputFormat, "-o", "--output");
 
 /** Verlangt die Anfrage `-o wide`? (Nach `checkArgs` ist jeder andere Wert leer oder ausgewertet.) */
-export function isWide(t: readonly string[]): boolean {
-  return flagValueOf(t, OUTPUT_FLAG.names) === "wide";
+export function isWide(c: Call): boolean {
+  return c.value(...OUTPUT_FLAG.names) === "wide";
 }

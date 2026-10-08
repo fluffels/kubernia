@@ -291,9 +291,9 @@ describe("Headless Service (#1301)", () => {
 });
 
 describe("ExternalName-Konsistenz (#1403, #1324)", () => {
-  const kaputt = { name: "kaputt", type: "ExternalName", clusterIP: "<none>", port: "" };
-  const kasse = { name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.50", port: 80 };
-  const ext = (name: string, externalName: string) => ({ name, type: "ExternalName", clusterIP: "<none>", port: "", externalName });
+  const kaputt = { name: "kaputt", type: "ExternalName" as const, clusterIP: "<none>", port: "" };
+  const kasse = { name: "kasse", type: "ClusterIP" as const, clusterIP: "10.96.0.50", port: 80 };
+  const ext = (name: string, externalName: string) => ({ name, type: "ExternalName" as const, clusterIP: "<none>", port: "", externalName });
 
   test("(a) expose --type=ExternalName wird abgelehnt, nichts angelegt", () => {
     const sim = freshSim();

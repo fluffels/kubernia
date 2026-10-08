@@ -12,6 +12,11 @@
  * Ketten kurzer Bool-Flags `-aq`) und `goflag` (terraform, Go-Paket `flag`: `-x=v`, `-x v`, `--x` ≙ `-x`,
  * der Name ist alles vor dem `=`, also `-out=plan` ≠ `-o`).
  *
+ * Ein Scanner (`walk`) speist alles: `checkFlags` (Prüfung), `positionalArgs`, `parseCall` (Prüfung + `Call` mit
+ * `args`/`has`/`value`/`values`, #1469: kein Handler indiziert mehr feste Tokens) und die kubectl-Leser. Regeln:
+ * `--` beendet die Flags, Bool-Flags werten `=true|false` aus (`strconv.ParseBool`), Ketten `-fp` werden je Zeichen
+ * gelesen, ein Wert-Flag in der Kette schluckt den Rest (`-nfoo` setzt kein `-f`), der LETZTE Wert gewinnt.
+ *
  * Blattmodul (pure Domäne, importfrei): jede Familie darf es importieren, ohne Zyklus. */
 
 /** Was die Prüfung vom Host braucht: die Fehlerausgabe. */
@@ -22,9 +27,8 @@ export type FlagStyle = "pflag" | "goflag";
 export interface FlagSpec {
   readonly names: readonly string[];
   readonly takesValue: boolean;
-  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `checkFlags`
-   *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`). Steht das Flag mitten in einer Kette
-   *  (`-Ao wide`), lehnt `checkFlags` es ab: die Leser (`flagValueOf`, `-A`) sehen Ketten nicht (#1469). */
+  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `checkFlags`/`parseCall`
+   *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`, in einer Kette `-Ao wide`). */
   readonly check?: (host: ErrHost, value: string) => string | null;
 }
 
@@ -78,13 +82,24 @@ function attachedValueOf(tok: string, style: FlagStyle): string | null {
 }
 
 /** Wert eines Flags mit seinen Schreibweisen (`-n x`, `-n=x`, `-nx`, `--namespace x`, `--namespace=x`; goflag
- *  `-var-file=x`, `-var-file x`). `null` = Flag fehlt oder ohne Wert. */
+ *  `-var-file=x`, `-var-file x`). `null` = Flag fehlt oder ohne Wert. Der LETZTE Treffer gewinnt (pflag). Ohne
+ *  Tabelle: für Stellen, die nur ein einzelnes Flag aus fertigen Tokens brauchen; sonst `parseCall`. */
 export function flagValueOf(t: readonly string[], names: readonly string[], style: FlagStyle = "pflag"): string | null {
+  let found: string | null = null;
   for (let i = 0; i < t.length; i++) {
     const tok = t[i];
     if (!isFlagToken(tok) || !names.includes(flagNameOf(tok, style))) continue;
-    return attachedValueOf(tok, style) ?? t[i + 1] ?? null;
+    const attached = attachedValueOf(tok, style);
+    found = attached ?? t[i + 1] ?? null;
+    if (attached === null) i++; // der nächste Token war der Wert
   }
+  return found;
+}
+
+/** `strconv.ParseBool`: die sechs wahren und sechs falschen Schreibweisen, sonst `null`. */
+export function parseBool(v: string): boolean | null {
+  if (["1", "t", "T", "TRUE", "true", "True"].includes(v)) return true;
+  if (["0", "f", "F", "FALSE", "false", "False"].includes(v)) return false;
   return null;
 }
 
@@ -92,37 +107,63 @@ function findSpec(specs: readonly FlagSpec[], name: string): FlagSpec | undefine
   return specs.find(s => s.names.includes(name));
 }
 
-/** `spec` und `attached` (der angeklebte Wert, `null` = keiner) füllt der Scan nur für Wert-Flags. */
-interface Scan { unknown: string | null; needsNext: boolean; name: string; spec?: FlagSpec; attached?: string | null; chained?: boolean }
+interface Hit { readonly spec: FlagSpec; readonly value: string | null }
+type ScanError =
+  | { kind: "unknown"; name: string }
+  | { kind: "missing"; name: string }
+  | { kind: "bool"; label: string; value: string };
+interface Walk { hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null }
+interface Step { used: boolean; error: ScanError | null }
 
-/** Kette kurzer Flags (`-aq`): jedes Zeichen muss ein bekanntes Bool-Flag sein; ein Wert-Flag schluckt den Rest. */
-function scanShortChain(specs: readonly FlagSpec[], tok: string): Scan {
-  const first = flagNameOf(tok, "pflag");
-  const spec = findSpec(specs, first);
-  if (!spec) return { unknown: first, needsNext: false, name: first };
-  if (spec.takesValue) { const attached = attachedValueOf(tok, "pflag"); return { unknown: null, needsNext: attached === null, name: first, spec, attached }; }
-  const rest = tok.slice(2);
-  for (let k = 0; k < rest.length; k++) {
-    if (k === 0 && rest[0] === "=") return { unknown: null, needsNext: false, name: first };
-    const name = "-" + rest[k];
-    const s = findSpec(specs, name);
-    if (!s) return { unknown: name, needsNext: false, name };
-    if (s.takesValue && s.check) return { unknown: null, needsNext: false, name, chained: true };
-    if (s.takesValue) {
-      const tail = rest.slice(k + 1);
-      return { unknown: null, needsNext: tail === "", name, spec: s, attached: tail === "" ? null : tail.replace(/^=/, "") };
-    }
+/** Ein benanntes Flag lesen: Wert-Flags nehmen den angeklebten Wert oder den nächsten Token, Bool-Flags nur `=bool`. */
+function take(flags: readonly FlagSpec[], name: string, attached: string | null, next: string | undefined, w: Walk): Step {
+  const s = findSpec(flags, name);
+  if (!s) return { used: false, error: { kind: "unknown", name } };
+  if (s.takesValue) {
+    const v = attached ?? next;
+    if (v === undefined) return { used: false, error: { kind: "missing", name } };
+    w.hits.push({ spec: s, value: v });
+    return { used: attached === null, error: null };
   }
-  return { unknown: null, needsNext: false, name: first };
+  if (attached !== null && parseBool(attached) === null) return { used: false, error: { kind: "bool", label: s.names.join(", "), value: attached } };
+  w.hits.push({ spec: s, value: attached });
+  return { used: false, error: null };
 }
 
-function scanToken(specs: readonly FlagSpec[], tok: string, style: FlagStyle): Scan {
-  if (style === "pflag" && !tok.startsWith("--")) return scanShortChain(specs, tok);
-  const name = flagNameOf(tok, style);
-  const spec = findSpec(specs, name);
-  if (!spec) return { unknown: name, needsNext: false, name };
-  const attached = spec.takesValue ? attachedValueOf(tok, style) : null;
-  return { unknown: null, needsNext: spec.takesValue && attached === null, name, spec, attached };
+/** Kette kurzer Flags (`-aq`, pflag): jedes Zeichen ist ein Flag; ein Wert-Flag schluckt den Rest (`-nfoo` setzt kein `-f`). */
+function scanChain(flags: readonly FlagSpec[], tok: string, next: string | undefined, w: Walk): Step {
+  for (let k = 1; k < tok.length; k++) {
+    const name = "-" + tok[k];
+    const s = findSpec(flags, name);
+    if (!s) return { used: false, error: { kind: "unknown", name } };
+    const rest = tok.slice(k + 1);
+    if (s.takesValue || rest === "" || rest.startsWith("=")) {
+      const attached = rest === "" ? null : rest.startsWith("=") ? rest.slice(1) : rest;
+      return take(flags, name, attached, next, w);
+    }
+    w.hits.push({ spec: s, value: null });
+  }
+  return { used: false, error: null };
+}
+
+/** Der EINE Scanner hinter Prüfung und Auslesen. `--` beendet die Flags; mit `stopAtPositional` gehört alles ab
+ *  dem ersten Nicht-Flag (der Container-Befehl hinter dem Image) zu den Positionsargumenten. Der erste Fehler wird
+ *  gemerkt, der Scan läuft weiter (so bleiben die Positionsargumente auch bei einem unbekannten Flag lesbar). */
+function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
+  const style = styleOf(spec);
+  const w: Walk = { hits: [], entries: [], error: null };
+  for (let i = from; i < t.length; i++) {
+    const tok = t[i];
+    const rest = tok === "--" ? i + 1 : !isFlagToken(tok) && spec.stopAtPositional ? i : -1;
+    if (rest >= 0) { for (let k = rest; k < t.length; k++) w.entries.push({ tok: t[k], at: k }); break; }
+    if (!isFlagToken(tok)) { w.entries.push({ tok, at: i }); continue; }
+    const step = style === "pflag" && !tok.startsWith("--")
+      ? scanChain(spec.flags, tok, t[i + 1], w)
+      : take(spec.flags, flagNameOf(tok, style), tok.includes("=") ? tok.slice(tok.indexOf("=") + 1) : null, t[i + 1], w);
+    if (step.error) { w.error ??= step.error; if (step.error.kind === "missing") break; continue; }
+    if (step.used) i++;
+  }
+  return w;
 }
 
 function missingValue(host: ErrHost, name: string, style: FlagStyle): string {
@@ -141,67 +182,104 @@ function rejectFlag(host: ErrHost, spec: ArgSpec, name: string): string {
   return notSimulated(host, "das Flag '" + name + "' bei '" + spec.cmd + "'.", [kann], hint);
 }
 
-/** Ein geprüftes Wert-Flag mitten in einer Kette (`-Ao wide`): die Leser (`flagValueOf`, `-A`) sehen Ketten
- *  nicht, der Wert würde still verloren gehen – darum ehrlich ablehnen (#1466, Ketten-Fix: #1469). */
-function rejectChain(host: ErrHost, spec: ArgSpec, tok: string, name: string): string {
-  return notSimulated(host, "das Flag '" + name + "' innerhalb der Kette '" + tok + "' bei '" + spec.cmd + "'.", ["jedes Flag einzeln, z.B. '-A -o wide'"]);
+function scanErrorText(host: ErrHost, spec: ArgSpec, e: ScanError): string {
+  if (e.kind === "unknown") return rejectFlag(host, spec, e.name);
+  if (e.kind === "missing") return missingValue(host, e.name, styleOf(spec));
+  return host._err('invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseBool: parsing "' + e.value + '": invalid syntax');
 }
 
-/** Prüft alle Flags eines Unterbefehls ab Token `from`: unbekannte (nicht simulierte) und Wert-Flags ohne Wert.
- *  `null` = alles bekannt; sonst die fertige Fehlerausgabe. */
-export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): string | null {
-  const style = styleOf(spec);
-  for (let i = from; i < t.length; i++) {
-    const tok = t[i];
-    if (!isFlagToken(tok)) { if (spec.stopAtPositional) break; continue; }
-    const scan = scanToken(spec.flags, tok, style);
-    if (scan.unknown) return rejectFlag(host, spec, scan.unknown);
-    if (scan.chained) return rejectChain(host, spec, tok, scan.name);
-    if (scan.needsNext && t[i + 1] === undefined) return missingValue(host, scan.name, style);
-    const value = scan.needsNext ? t[i + 1] : scan.attached;
-    const invalid = value != null && scan.spec?.check?.(host, value);
+/** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool) oder der erste Wertprüfer, der anschlägt. */
+function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
+  if (w.error) return scanErrorText(host, spec, w.error);
+  for (const h of w.hits) {
+    const invalid = h.value !== null && h.spec.check?.(host, h.value);
     if (invalid) return invalid;
-    if (scan.needsNext) i++; // der Wert gehört zum Flag
   }
   return null;
 }
 
-/** Die Nicht-Flag-Tokens ab `from` mit ihrem Index (ohne die Werte der Wert-Flags). Mit `stopAtPositional`
- *  gehört alles ab dem ersten Nicht-Flag dazu (der Container-Befehl hinter dem Image). */
-function positionalEntries(spec: ArgSpec, t: readonly string[], from: number): { tok: string; at: number }[] {
-  const style = styleOf(spec);
-  const out: { tok: string; at: number }[] = [];
-  for (let i = from; i < t.length; i++) {
-    const tok = t[i];
-    if (!isFlagToken(tok)) {
-      if (spec.stopAtPositional) { for (let k = i; k < t.length; k++) out.push({ tok: t[k], at: k }); break; }
-      out.push({ tok, at: i });
-      continue;
-    }
-    const scan = scanToken(spec.flags, tok, style);
-    if (!scan.unknown && scan.needsNext) i++;
+/** Prüft alle Flags eines Unterbefehls ab Token `from`: unbekannte (nicht simulierte), Wert-Flags ohne Wert,
+ *  ungültige Bool-Werte und Werte, die eine `check`-Funktion ablehnt. `null` = alles bekannt; sonst die fertige
+ *  Fehlerausgabe. */
+export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): string | null {
+  return firstError(host, spec, walk(spec, t, from));
+}
+
+/** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags; hinter `--` alles). */
+export function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): string[] {
+  return walk(spec, t, from).entries.map(e => e.tok);
+}
+
+/** Die ausgelesene Eingabe EINES Unterbefehls: Positionsargumente und Flag-Werte (alle Aliase eines Flags zählen
+ *  gleich). Kein Handler liest Tokens per Index oder Flags per Regex aus der Rohzeile. */
+export interface Call {
+  /** Die Nicht-Flag-Argumente in Eingabereihenfolge. */
+  readonly args: readonly string[];
+  /** Ist das Flag gesetzt (Bool-Flags werten `=true|false` aus; der letzte Treffer gewinnt)? */
+  has(...names: string[]): boolean;
+  /** Der Wert eines Wert-Flags; bei mehrfacher Angabe der letzte (pflag), `null` ohne das Flag. */
+  value(...names: string[]): string | null;
+  /** Alle Werte eines Wert-Flags in Eingabereihenfolge (`--set a=1 --set b=2`). */
+  values(...names: string[]): string[];
+}
+
+function makeCall(w: Walk): Call {
+  const match = (names: string[]) => w.hits.filter(h => h.spec.names.some(n => names.includes(n)));
+  return {
+    args: w.entries.map(e => e.tok),
+    has: (...names) => {
+      const last = match(names).pop();
+      if (!last) return false;
+      return last.spec.takesValue || last.value === null ? true : parseBool(last.value) === true;
+    },
+    value: (...names) => match(names).filter(h => h.spec.takesValue).pop()?.value ?? null,
+    values: (...names) => match(names).filter(h => h.spec.takesValue).map(h => h.value ?? ""),
+  };
+}
+
+/** Prüft die Flags (wie `checkFlags`) und liest dann die Eingabe: `Call` oder die fertige Fehlerausgabe. */
+export function parseCall(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): Call | string {
+  const w = walk(spec, t, from);
+  return firstError(host, spec, w) ?? makeCall(w);
+}
+
+/** Wie `parseCall`, aber ohne Fehlerpfad: für Stellen, an denen die Prüfung schon gelaufen ist (kubectl). */
+export function lenientCall(spec: ArgSpec, t: readonly string[], from: number): Call {
+  return makeCall(walk(spec, t, from));
+}
+
+/** Zerlegt eine Eingabezeile wie die Shell: `"…"` und `'…'` gruppieren (in `"…"` gelten `\"` und `\\`), `\x` außerhalb
+ *  von Quotes ist `x`, ein alleinstehendes `\` (Zeilenfortsetzung) fällt weg. `null` bei unbalancierten Quotes. */
+export function shellTokens(raw: string): string[] | null {
+  const out: string[] = [];
+  let cur = "", open = false;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (c === '"' || c === "'") {
+      const q = scanQuoted(raw, i + 1, c);
+      if (!q) return null;
+      cur += q.text; i = q.end; open = true;
+    } else if (/\s/.test(c)) {
+      if (open) { out.push(cur); cur = ""; open = false; }
+    } else if (c === "\\") {
+      if (i + 1 < raw.length && !/\s/.test(raw[i + 1])) { cur += raw[++i]; open = true; }
+    } else { cur += c; open = true; }
   }
+  if (open) out.push(cur);
   return out;
 }
 
-/** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags). */
-export function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): string[] {
-  return positionalEntries(spec, t, from).map(e => e.tok);
-}
-
-/** Der Index des ersten Nicht-Flag-Tokens ab `from` (ohne Flag-Werte), `-1` ohne eines. */
-export function firstPositionalIndex(spec: ArgSpec, t: readonly string[], from: number): number {
-  return positionalEntries(spec, t, from)[0]?.at ?? -1;
-}
-
-/** Steht ein Bool-Flag (`-a`/`--all`, auch `-a=true`, in einer Kette `-ad`)? Nur für Tabellen ohne Wert-Flag
- *  vor dem Zeichen gedacht (z.B. `docker ps`). */
-export function hasFlag(t: readonly string[], names: readonly string[]): boolean {
-  return t.some(tok => {
-    if (!isFlagToken(tok)) return false;
-    if (tok.startsWith("--")) return names.includes(flagNameOf(tok, "pflag"));
-    return names.some(n => n.length === 2 && tok.slice(1).split("=")[0].includes(n[1]));
-  });
+/** Der Inhalt eines Quote-Paars ab `from` (hinter dem öffnenden Zeichen): Text und Index des schließenden Zeichens,
+ *  `null` ohne schließendes. In `"…"` gelten `\"` und `\\`, in `'…'` nichts. */
+function scanQuoted(raw: string, from: number, quote: string): { text: string; end: number } | null {
+  let text = "";
+  for (let i = from; i < raw.length; i++) {
+    const c = raw[i];
+    if (c === quote) return { text, end: i };
+    if (quote === '"' && c === "\\" && (raw[i + 1] === '"' || raw[i + 1] === "\\")) text += raw[++i];
+    else text += c;
+  }
+  return null;
 }
 
 /** Der Eintrag einer Dispatch-Tabelle zu `key` – ohne Treffer auf Prototyp-Schlüsseln (`constructor`, `toString`). */
@@ -212,7 +290,8 @@ export function subEntry<E>(table: Readonly<Record<string, E>>, key: string): E 
 /** Ein Eintrag einer Dispatch-Tabelle: Handler + Flag-Tabelle. Ein neuer Unterbefehl bleibt EIN Eintrag. */
 export interface SubEntry<H> extends Omit<ArgSpec, "cmd" | "flags"> { readonly run: H; readonly flags?: readonly FlagSpec[] }
 
-/** Die Flag-Tabelle eines Dispatch-Eintrags als `ArgSpec` (`cmd` = der volle Befehl für Meldungen). */
-export function specOfSub(cmd: string, e: SubEntry<unknown>): ArgSpec {
-  return { cmd, flags: e.flags ?? [], style: e.style, hints: e.hints, stopAtPositional: e.stopAtPositional };
+/** Die Flag-Tabelle eines Dispatch-Eintrags als `ArgSpec` (`cmd` = der volle Befehl für Meldungen); `defaultStyle`
+ *  ist der Familien-Stil (terraform: `goflag`), ein Eintrag mit eigenem `style` überschreibt ihn. */
+export function specOfSub(cmd: string, e: SubEntry<unknown>, defaultStyle: FlagStyle = "pflag"): ArgSpec {
+  return { cmd, flags: e.flags ?? [], style: e.style ?? defaultStyle, hints: e.hints, stopAtPositional: e.stopAtPositional };
 }

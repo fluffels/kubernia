@@ -89,7 +89,7 @@ describe("(d) erfundene Kurznamen sind weg, echte gehen weiter", () => {
 /* ---------- (a) nicht simulierte Flags ---------- */
 describe("(a) nicht simulierte Flags werden abgelehnt", () => {
   test.each([
-    ["get pods -Ao wide", "-o"], ["get pods -Aowide", "-o"], ["get pods -l app=web", "-l"], ["get pods --selector=app=web", "--selector"], ["get pods -w", "-w"],
+    ["get pods -l app=web", "-l"], ["get pods --selector=app=web", "--selector"], ["get pods -w", "-w"],
     ["get pods --watch", "--watch"], ["get pods --show-labels", "--show-labels"], ["get pods --sort-by=.metadata.name", "--sort-by"],
     ["describe pod x -o yaml", "-o"], ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
     ["create deployment x --image=nginx --dry-run=client", "--dry-run"], ["scale deployment web --replicas=2 --timeout=5s", "--timeout"],
@@ -531,5 +531,62 @@ describe("ResourcePlural: getippte Schlüssel statt freier Strings", () => {
     // @ts-expect-error – "deploymnets" ist kein Plural der Registry
     const bad: ResourcePlural = "deploymnets";
     expect([ok, bad]).toHaveLength(2);
+  });
+});
+
+/* ---------- #1469: Flags über den Flag-Leser statt `t.includes`/Regex auf der Rohzeile ---------- */
+describe("kubectl: logs -f/-p, -A, --replicas über cliargs", () => {
+  const withPod = () => {
+    const s = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
+    return { s, pod: s.exec("kubectl get pods").output!.split("\n")[1].split(/\s+/)[0] };
+  };
+  test("logs: Ketten (-fp), =true/=false, Flags vor und hinter dem Pod", () => {
+    const { s, pod } = withPod();
+    const plain = s.exec("kubectl logs " + pod).output!;
+    const follow = s.exec("kubectl logs -f " + pod).output!;
+    expect(follow).not.toBe(plain);
+    expect(s.exec("kubectl logs -fp " + pod).output).toBe(s.exec("kubectl logs -f -p " + pod).output);
+    expect(s.exec("kubectl logs --follow=true " + pod).output).toBe(follow);
+    expect(s.exec("kubectl logs --follow=false " + pod).output).toBe(plain);
+    expect(s.exec("kubectl logs -fn default " + pod).output).toBe(follow);
+    expect(s.exec("kubectl logs " + pod + " --follow").output).toBe(follow);
+  });
+  test("logs: ein ungültiger Bool-Wert ist ein Fehler, nicht still true", () => {
+    const { s, pod } = withPod();
+    const r = s.exec("kubectl logs --follow=vielleicht " + pod);
+    expect(r.error).toBe(true);
+    expect(r.output).toContain('invalid argument "vielleicht" for "-f, --follow" flag');
+  });
+  test("get -A: =false schaltet es ab, =true und die Kette gelten", () => {
+    const s = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
+    expect(s.exec("kubectl get pods -A=false").output).not.toContain("NAMESPACE");
+    expect(s.exec("kubectl get pods --all-namespaces=false").output).not.toContain("NAMESPACE");
+    expect(s.exec("kubectl get pods --all-namespaces=true").output).toContain("NAMESPACE");
+    expect(s.exec("kubectl get pods -A").output).toContain("NAMESPACE");
+  });
+  test("scale --replicas: Zahl, nicht 3.5 → 3; Text und negativ sind Fehler; Schreibweisen", () => {
+    const s = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
+    const rep = () => s.deployments.find(d => d.name === "web")!.replicas;
+    expect(s.exec("kubectl scale deployment web --replicas 3").error).toBe(false);
+    expect(rep()).toBe(3);
+    expect(s.exec("kubectl scale --replicas=2 deployment web").error).toBe(false);
+    expect(rep()).toBe(2);
+    const frac = s.exec("kubectl scale deployment web --replicas=3.5");
+    expect(frac.error).toBe(true);
+    expect(frac.output).toContain('invalid argument "3.5" for "--replicas" flag: strconv.ParseInt: parsing "3.5": invalid syntax');
+    expect(s.exec("kubectl scale deployment web --replicas=abc").error).toBe(true);
+    expect(s.exec("kubectl scale deployment web --replicas=-1").output).toContain("The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
+    expect(rep()).toBe(2);
+    expect(s.exec("kubectl scale deployment web --replicas=0").error).toBe(false);
+    expect(rep()).toBe(0);
+    expect(s.exec("kubectl scale deployment web").output).toContain("So nicht ganz");
+  });
+  test("create deployment --replicas: gleicher Parser, 3.5 und Text abgelehnt, nichts angelegt", () => {
+    const s = freshSim();
+    expect(s.exec("kubectl create deployment a --image=nginx --replicas=3.5").output).toContain("strconv.ParseInt");
+    expect(s.exec("kubectl create deployment a --image=nginx --replicas=abc").error).toBe(true);
+    expect(s.exec("kubectl create deployment a --image=nginx --replicas=-1").error).toBe(true);
+    expect(s.deployments.some(d => d.name === "a")).toBe(false);
+    expect(s.exec("kubectl create deployment a --image=nginx --replicas=2").error).toBe(false);
   });
 });

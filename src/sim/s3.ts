@@ -21,6 +21,7 @@
  */
 import type { S3Bucket, S3Object } from "./state";
 import { suggest } from "./util";
+import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
 
 /** Was die aws-s3-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
 export interface S3Host {
@@ -32,7 +33,31 @@ export interface S3Host {
   _err(msg: string, tip?: string): string;
 }
 
-const VERBS = ["mb", "rb", "ls", "cp", "rm"];
+type S3Handler = (host: S3Host, c: Call) => string;
+
+/** Hinweise zu den globalen aws-Flags, die Spieler aus dem echten Werkzeug kennen (der Store ist ein einziger). */
+const GLOBAL_HINTS: Readonly<Record<string, string>> = {
+  "--endpoint-url": "Es gibt genau EINEN Object Store im Hafen – einen anderen Endpoint wählst du nicht.",
+  "--region": "Regionen gibt es nicht – der Object Store liegt im Hafen.",
+  "--profile": "Profile und Zugangsdaten gibt es nicht – der Object Store ist ohne Anmeldung erreichbar.",
+};
+const RECURSIVE_HINT: Readonly<Record<string, string>> = {
+  ...GLOBAL_HINTS,
+  "--recursive": "Ordner gibt es nicht – jeder Key steht für sich; nenne das Objekt ('s3://bucket/key').",
+};
+
+// `ls --recursive` wird angenommen, aber nicht ausgewertet: die Sim listet ohnehin flach alle Keys mit dem Präfix.
+const S3_SUBCOMMANDS: Record<string, SubEntry<S3Handler>> = {
+  mb: { run: s3MakeBucket, hints: GLOBAL_HINTS },
+  rb: { run: s3RemoveBucket, flags: [flag(false, "--force")], hints: GLOBAL_HINTS },
+  ls: { run: s3List, flags: [flag(false, "--recursive")], hints: GLOBAL_HINTS },
+  cp: { run: s3Copy, hints: RECURSIVE_HINT },
+  rm: { run: s3Remove, hints: RECURSIVE_HINT },
+};
+const VERBS = Object.keys(S3_SUBCOMMANDS);
+/** Echte `aws s3`-Verben, die die Sim nicht kann. */
+const NOT_SIMULATED = ["sync", "mv", "presign", "website"];
+const KANN = ["aws s3 mb|rb|ls|cp|rm …"];
 
 /** Zerlegt eine `s3://bucket/key…`-Adresse. Gibt null, wenn es keine s3-Adresse ist
  *  (dann ist es ein lokaler Pfad). `key` ist "" für `s3://bucket` bzw. `s3://bucket/`. */
@@ -54,37 +79,34 @@ function findBucket(host: S3Host, name: string): S3Bucket | undefined {
   return host.objectStore.buckets.find(b => b.name === name);
 }
 
-/** Object Store als „aws s3"-Befehlsfamilie. `t` sind die Tokens, `raw` die Rohzeile
- *  (für Flags wie `--force`). */
-export function awsCommand(host: S3Host, t: string[], raw: string): string {
+/** Object Store als „aws s3"-Befehlsfamilie. `t` sind die Tokens (Quotes schon aufgelöst); Flags und Positionsargumente
+ *  liest die gemeinsame Eingabegrenze (`parseCall`). */
+export function awsCommand(host: S3Host, t: string[], _raw?: string): string {
   // tokens: aws s3 <verb> …
+  if (!t[1]) return host._err("aws: Unterbefehl fehlt.", "z.B. 'aws s3 ls' oder 'aws s3 mb s3://hafen-backup'.");
   if (t[1] !== "s3") {
-    const guess = suggest(t[1] || "", ["s3"]);
-    return host._err("aws: Hier ist nur der Object Store (aws s3) eingebaut.",
-      (guess ? "Meintest du 'aws s3'? " : "") + "z.B. 'aws s3 ls' oder 'aws s3 mb s3://hafen-backup'.");
+    const guess = isFlagToken(t[1]) ? null : suggest(t[1], ["s3"]);
+    return notSimulated(host, isFlagToken(t[1]) ? "das Flag '" + t[1] + "' vor dem Dienst." : "'aws " + t[1] + "'.", KANN, guess ? "Meintest du 'aws s3'?" : undefined);
   }
   const verb = t[2];
   if (!verb) {
     return host._err("aws s3: Welcher Befehl?",
       "Verfügbar: mb (Bucket anlegen), rb (Bucket löschen), ls (auflisten), cp (kopieren/up-/download), rm (Objekt löschen).");
   }
-  switch (verb) {
-    case "mb": return s3MakeBucket(host, t);
-    case "rb": return s3RemoveBucket(host, t, raw);
-    case "ls": return s3List(host, t);
-    case "cp": return s3Copy(host, t);
-    case "rm": return s3Remove(host, t);
-    default: {
-      const guess = suggest(verb, VERBS);
-      return host._err("aws s3: Den Unterbefehl '" + verb + "' gibt es hier nicht.",
-        guess ? "Meintest du 'aws s3 " + guess + "'?" : "Verfügbar: " + VERBS.join(", ") + ".");
-    }
+  const entry = subEntry(S3_SUBCOMMANDS, verb);
+  if (!entry) {
+    if (NOT_SIMULATED.includes(verb) || isFlagToken(verb)) return notSimulated(host, "'aws s3 " + verb + "'.", KANN);
+    const guess = suggest(verb, VERBS);
+    return host._err("aws s3: Den Unterbefehl '" + verb + "' gibt es hier nicht.",
+      guess ? "Meintest du 'aws s3 " + guess + "'?" : "Verfügbar: " + VERBS.join(", ") + ".");
   }
+  const call = parseCall(host, specOfSub("aws s3 " + verb, entry), t, 3);
+  return typeof call === "string" ? call : entry.run(host, call);
 }
 
 /** aws s3 mb s3://<bucket> – Bucket anlegen. */
-function s3MakeBucket(host: S3Host, t: string[]): string {
-  const target = t[3];
+function s3MakeBucket(host: S3Host, c: Call): string {
+  const target = c.args[0];
   const ref = target ? parseS3Uri(target) : null;
   if (!ref || !ref.bucket || ref.key) {
     return host._err("aws s3 mb: Bitte einen Bucket angeben.", "z.B. 'aws s3 mb s3://hafen-backup'.");
@@ -98,8 +120,8 @@ function s3MakeBucket(host: S3Host, t: string[]): string {
 }
 
 /** aws s3 rb s3://<bucket> [--force] – Bucket löschen (nur leer, außer --force). */
-function s3RemoveBucket(host: S3Host, t: string[], raw: string): string {
-  const target = t.find((tok, i) => i >= 3 && !tok.startsWith("-")) || null;
+function s3RemoveBucket(host: S3Host, c: Call): string {
+  const target = c.args[0] ?? null;
   const ref = target ? parseS3Uri(target) : null;
   if (!ref || !ref.bucket || ref.key) {
     return host._err("aws s3 rb: Welchen Bucket?", "z.B. 'aws s3 rb s3://hafen-backup' (leer) oder '… --force' (mit Inhalt).");
@@ -109,7 +131,7 @@ function s3RemoveBucket(host: S3Host, t: string[], raw: string): string {
     return host._err("remove_bucket failed: s3://" + ref.bucket + " NoSuchBucket: Den Bucket gibt es nicht.",
       "Mit 'aws s3 ls' siehst du die vorhandenen Buckets.");
   }
-  const force = /(^|\s)--force(\s|$)/.test(raw);
+  const force = c.has("--force");
   if (bucket.objects.length > 0 && !force) {
     return host._err("remove_bucket failed: s3://" + ref.bucket + " BucketNotEmpty: Der Bucket ist nicht leer (" + bucket.objects.length + " Objekt(e)).",
       "Erst die Objekte löschen ('aws s3 rm …') oder den Bucket mit '--force' samt Inhalt entfernen.");
@@ -119,8 +141,8 @@ function s3RemoveBucket(host: S3Host, t: string[], raw: string): string {
 }
 
 /** aws s3 ls [s3://<bucket>[/präfix]] – Buckets bzw. Objekte auflisten. */
-function s3List(host: S3Host, t: string[]): string {
-  const target = t.find((tok, i) => i >= 3 && !tok.startsWith("-")) || null;
+function s3List(host: S3Host, c: Call): string {
+  const target = c.args[0] ?? null;
   // Ohne Argument: alle Buckets.
   if (!target) {
     if (host.objectStore.buckets.length === 0) return "(keine Buckets)";
@@ -185,9 +207,8 @@ function s3CopyObject(host: S3Host, srcRef: { bucket: string; key: string }, dst
 
 /** aws s3 cp <quelle> <ziel> – Upload (Datei→s3), Download (s3→Datei) oder Copy (s3→s3).
  *  Dünner Dispatcher: welche Seite eine s3-Adresse ist, wählt den Modus. */
-function s3Copy(host: S3Host, t: string[]): string {
-  const args = t.filter((tok, i) => i >= 3 && !tok.startsWith("-"));
-  const src = args[0], dst = args[1];
+function s3Copy(host: S3Host, c: Call): string {
+  const [src, dst] = c.args;
   if (!src || !dst) {
     return host._err("aws s3 cp: Bitte Quelle UND Ziel angeben.",
       "Hochladen: 'aws s3 cp daten.txt s3://hafen-backup/daten.txt' · Herunterladen: 'aws s3 cp s3://hafen-backup/daten.txt daten.txt'.");
@@ -202,8 +223,8 @@ function s3Copy(host: S3Host, t: string[]): string {
 }
 
 /** aws s3 rm s3://<bucket>/<key> – Objekt löschen. */
-function s3Remove(host: S3Host, t: string[]): string {
-  const target = t.find((tok, i) => i >= 3 && !tok.startsWith("-")) || null;
+function s3Remove(host: S3Host, c: Call): string {
+  const target = c.args[0] ?? null;
   const ref = target ? parseS3Uri(target) : null;
   if (!ref || !ref.bucket) {
     return host._err("aws s3 rm: Welches Objekt?", "z.B. 'aws s3 rm s3://hafen-backup/daten.txt'.");

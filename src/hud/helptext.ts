@@ -64,9 +64,9 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { id: "logs-follow", text: "logs -f läuft nicht live weiter, der Strom endet nach dem aktuellen Stand." },
   ] },
   { key: "kubeadm", rows: [
-    { use: "init", desc: "Control-Plane hochziehen" },
+    { use: "init [--pod-network-cidr <cidr>]", desc: "Control-Plane hochziehen" },
     { use: "join <token>", desc: "Worker-Knoten anschließen" },
-    { use: "reset", desc: "Cluster abräumen (zurück auf bare metal)" },
+    { use: "reset [-f]", desc: "Cluster abräumen (zurück auf bare metal)" },
   ] },
   { key: "helm", rows: [
     { use: "repo add <name> <url>", desc: "Chart-Repository hinzufügen" },
@@ -92,15 +92,15 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   { key: "git", rows: [
     { use: "init", desc: "aus dem Ordner ein Repository machen" },
     { use: "status", desc: "aktuellen Stand zeigen" },
-    { use: "add <datei>", desc: "Änderung vormerken (Staging)" },
+    { use: "add <datei>|.|-A", desc: "Änderung vormerken (Staging)" },
     { use: "commit -m \"…\"", desc: "Vorgemerktes als Schnappschuss festhalten" },
     { use: "log", desc: "Commit-Historie zeigen" },
     { use: "branch [<name>]", desc: "Branches zeigen / einen anlegen" },
     { use: "checkout [-b] <name>", desc: "Branch wechseln / [neu anlegen]" },
     { use: "merge <name>", desc: "einen Branch zusammenführen" },
     { use: "fetch", desc: "vom Server holen, ohne einzufügen" },
-    { use: "pull", desc: "holen und einfügen (fetch + merge)" },
-    { use: "push", desc: "eigene Commits zum Server hochladen" },
+    { use: "pull [origin [<branch>]]", desc: "holen und einfügen (fetch + merge)" },
+    { use: "push [-u] [origin [<branch>]]", desc: "eigene Commits zum Server hochladen" },
   ] },
   { key: "argocd", rows: [
     { use: "app list", desc: "GitOps-Apps zeigen" },
@@ -120,7 +120,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   { key: "aws", rows: [
     { use: "s3 mb s3://<bucket>", desc: "Bucket anlegen (Object Store, off-cluster)" },
     { use: "s3 rb s3://<bucket> [--force]", desc: "Bucket löschen" },
-    { use: "s3 ls [s3://<bucket>]", desc: "Buckets bzw. Objekte auflisten" },
+    { use: "s3 ls [--recursive] [s3://<bucket>]", desc: "Buckets bzw. Objekte auflisten" },
     { use: "s3 cp <quelle> <ziel>", desc: "Objekt kopieren" },
     { use: "s3 rm s3://<bucket>/<key>", desc: "Objekt entfernen" },
   ] },

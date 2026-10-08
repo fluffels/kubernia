@@ -21,7 +21,8 @@ import { sameRbac } from "../rbac";
 import { multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitNewPods } from "./rollout";
 import { resolveKind, qualified, type ResourcePlural } from "./resources";
-import { flagValueOf, notSimulated, positionals, typeAndName, unknownResourceType } from "./args";
+import { flagValueOf, notSimulated, positionals, replicasArg, typeAndName, unknownResourceType } from "./args";
+import { subEntry } from "../cliargs";
 import { applyDeployment } from "./apply-deployment";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
 import type { KubectlHost } from "./host";
@@ -198,9 +199,10 @@ const createDeployment: CreateHandler = (host, t, raw) => {
   if (!name || name.startsWith("--")) return host._err("kubectl create deployment: Der Name fehlt.", "z.B. 'kubectl create deployment kasse --image=nginx'");
   { const bad = invalidNameError(host, "Deployment", name); if (bad) return bad; }
   if (!imgMatch) return host._err("error: required flag(s) \"image\" not set", "Häng '--image=nginx' an.");
-  const repSpec = flagValueOf(t, ["--replicas"]);
-  const replicas = repSpec === null ? 1 : Number(repSpec);
-  if (!Number.isInteger(replicas) || replicas < 0 || repSpec === "") return host._err('error: invalid argument "' + repSpec + '" for "--replicas" flag', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.");
+  const rep = replicasArg(host, "create", t);
+  if ("error" in rep) return rep.error;
+  const replicas = rep.replicas ?? 1;
+  if (replicas < 0) return host._err('error: invalid argument "' + replicas + '" for "--replicas" flag', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.");
   if (host.deployments.some(d => d.name === name)) return host._err('error: deployment "' + name + '" already exists');
   // Pod-Security-Admission: ein imperativ erzeugtes Deployment hat keinen securityContext.
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).
@@ -221,7 +223,7 @@ const CREATE_HANDLERS: Readonly<Record<string, CreateHandler>> = {
 };
 
 export function kubectlCreate(host: KubectlHost, t: string[], raw: string): string {
-  const handler = CREATE_HANDLERS[t[2]];
+  const handler = subEntry(CREATE_HANDLERS, t[2] ?? "");
   if (!handler) return notSimulated(host, "'kubectl create " + (t[2] ?? "") + "'.", ["kubectl create deployment|serviceaccount|role|clusterrole|rolebinding|clusterrolebinding …", ...CREATE_SECRET_KANN, "kubectl create configmap …"]);
   return handler(host, t, raw);
 }

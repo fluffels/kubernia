@@ -16,7 +16,7 @@ import type { KubectlHost } from "./host";
 import { GET_RENDERERS, noResourcesIn, type GetTable } from "./inspect";
 import { allNamespaces, foreignNamespace, requestedNamespace } from "./namespace";
 import { allKinds, qualified, resolveKind, type ResourceKind } from "./resources";
-import { notSimulated, positionals, slashRef, SLASH_SINGLE_ERROR, unknownResourceType } from "./args";
+import { callOf, notSimulated, positionals, slashRef, SLASH_SINGLE_ERROR, unknownResourceType } from "./args";
 import { isWide } from "./output";
 
 /** Was verlangt wurde: ein Typ mit den (möglicherweise leeren) gewünschten Namen. */
@@ -130,7 +130,7 @@ export function kubectlGet(host: KubectlHost, t: string[]): string {
     return host._err("error: a resource cannot be retrieved by name across all namespaces");
   }
 
-  const wide = isWide(t);
+  const wide = isWide(callOf("get", t));
   const blocks = parsed.requests.map(r => renderBlock(host, t, r, wide));
   const prefixed = blocks.length > 1;
   const parts: string[] = [];

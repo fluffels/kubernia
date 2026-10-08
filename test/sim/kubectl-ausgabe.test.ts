@@ -65,11 +65,20 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
     const out = lauf("kubectl get pods " + flag).out;
     expect(kopf(out)).toEqual(["NAME", "READY", "STATUS", "RESTARTS", "AGE"]);
   });
-  test.each(["-Ao wide", "-Aowide", "-Ao=wide"])("NEGATIV: %s (Wert-Flag in einer Kette) wird abgelehnt statt still als normale Tabelle gedruckt", flag => {
+  test.each(["-Ao wide", "-Aowide", "-Ao=wide"])("%s (Wert-Flag in einer Kette) wird gelesen, nicht still als normale Tabelle gedruckt", flag => {
     const r = lauf("kubectl get pods " + flag);
+    expect(r.error).toBeFalsy();
+    expect(r.out).toContain("NOMINATED NODE");
+  });
+  test("kubectl get pods -o json -w: der unbekannte Schalter wird zuerst gemeldet, nicht das Format", () => {
+    const r = lauf("kubectl get pods -o json -w");
     expect(r.error).toBe(true);
-    expect(r.out).toContain("innerhalb der Kette");
-    expect(r.out).not.toContain("READY");
+    expect(r.out).toContain("das Flag '-w'");
+  });
+  test("-Ao yaml in einer Kette: das Format wird geprüft und abgelehnt", () => {
+    const r = lauf("kubectl get pods -Ao yaml");
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("Nicht simuliert");
   });
   test.each(["-o wide", "-o=wide", "-owide", "--output wide", "--output=wide"])("%s ist ein Flag mit Wert (wide, nicht ein Positionsargument)", flag => {
     const r = lauf("kubectl get pods " + flag);
@@ -268,7 +277,7 @@ describe("(d) Service kubernetes: get endpoints, describe, Selektor", () => {
   });
   test("ein Spieler-Service gleichen Namens ist NICHT der eingebaute (Identität, nicht Name)", () => {
     const sim = new KQSim({ deployments: [{ name: "kubernetes", image: "nginx", replicas: 1 }] });
-    const eigener = { name: "kubernetes", type: "ClusterIP", clusterIP: "10.96.9.9", port: 80 };
+    const eigener = { name: "kubernetes", type: "ClusterIP" as const, clusterIP: "10.96.9.9", port: 80 };
     expect(isKubernetesService(eigener)).toBe(false);
     expect(serviceBackends(sim, eigener)).toHaveLength(1);
   });

@@ -223,3 +223,58 @@ describe("aws – Fehlbedienung", () => {
     expect(r.error).toBe(true);
   });
 });
+
+/* ===== #1469: Eingabetreue – Flag-Tabelle, Top-Level-Text, Positionsargumente hinter Flags ===== */
+describe("aws s3 – Eingabetreue", () => {
+  let sim: KQSim;
+  beforeEach(() => { sim = freshSim(); });
+
+  test("Top-Level: andere Dienste sind 'nicht simuliert' mit Liste, Tippfehler behalten den Vorschlag", () => {
+    const ec2 = sim.exec("aws ec2 describe-instances");
+    expect(ec2.error).toBe(true);
+    expect(ec2.output).toContain("Nicht simuliert: 'aws ec2'.");
+    expect(ec2.output).toContain("Der Simulator kann: aws s3 mb|rb|ls|cp|rm");
+    expect(ec2.output).not.toContain("Meintest du");
+    expect(sim.exec("aws s4 ls").output).toContain("Meintest du 'aws s3'?");
+    expect(sim.exec("aws").output).toContain("Unterbefehl fehlt");
+    expect(sim.exec("aws --region x s3 ls").output).toContain("das Flag '--region' vor dem Dienst");
+  });
+
+  test("rb --force: Bool-Flag statt Regex, vor und hinter dem Bucket, =false hebt es auf", () => {
+    sim.exec("aws s3 mb s3://b");
+    sim.files["f.txt"] = "x";
+    sim.exec("aws s3 cp f.txt s3://b/f.txt");
+    expect(sim.exec("aws s3 rb s3://b --force=false").output).toContain("BucketNotEmpty");
+    expect(sim.exec("aws s3 rb --force s3://b").output).toContain("remove_bucket: b");
+    expect(sim.objectStore.buckets).toEqual([]);
+  });
+
+  test("ls --recursive wird angenommen; cp/rm --recursive und die globalen Flags lehnen mit Hinweis ab", () => {
+    sim.exec("aws s3 mb s3://b");
+    expect(sim.exec("aws s3 ls --recursive s3://b").error).toBe(false);
+    expect(sim.exec("aws s3 ls s3://b --recursive").error).toBe(false);
+    const cp = sim.exec("aws s3 cp --recursive a s3://b/");
+    expect(cp.error).toBe(true);
+    expect(cp.output).toContain("Nicht simuliert: das Flag '--recursive' bei 'aws s3 cp'. Ordner gibt es nicht");
+    expect(sim.exec("aws s3 rm --recursive s3://b/k").output).toContain("das Flag '--recursive' bei 'aws s3 rm'");
+    expect(sim.exec("aws s3 mb --region eu s3://c").output).toContain("Regionen gibt es nicht");
+    expect(sim.objectStore.buckets.map(b => b.name)).toEqual(["b"]);
+    expect(sim.exec("aws s3 ls --endpoint-url http://x").output).toContain("EINEN Object Store");
+    expect(sim.exec("aws s3 ls --profile p").output).toContain("Profile");
+  });
+
+  test("Positionsargumente hinter Flags und hinter `--`", () => {
+    sim.exec("aws s3 mb -- s3://b");
+    sim.files["f.txt"] = "x";
+    expect(sim.exec("aws s3 cp -- f.txt s3://b/f.txt").output).toContain("upload: f.txt to s3://b/f.txt");
+    expect(sim.exec("aws s3 ls -- s3://b").output).toContain("f.txt");
+    expect(sim.exec("aws s3 rm -- s3://b/f.txt").output).toContain("delete: s3://b/f.txt");
+  });
+
+  test("sync/mv/presign sind nicht simuliert, ein Tippfehler bekommt den Vorschlag, Prototyp-Schlüssel sind ein Fehler", () => {
+    for (const v of ["sync", "mv", "presign"]) expect(sim.exec("aws s3 " + v + " a b").output).toContain("Nicht simuliert: 'aws s3 " + v + "'.");
+    expect(sim.exec("aws s3 mbb s3://x").output).toContain("Meintest du 'aws s3 mb'?");
+    expect(sim.exec("aws s3 constructor").error).toBe(true);
+    expect(sim.exec("aws s3 --bogus").output).toContain("Nicht simuliert:");
+  });
+});

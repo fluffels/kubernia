@@ -202,3 +202,81 @@ test("Aufbau-Bogen spielbar: Sturm zerstört, danach init/join baut wieder auf",
 function APISERVERTOKEN(token: string, withFlag: boolean): string {
   return withFlag ? "10.0.0.10:6443 --token " + token + " --discovery-token-ca-cert-hash sha256:deadbeef" : token;
 }
+
+/* ===== #1469: Eingabetreue – Flag-Tabelle, Endpoint, nicht simulierte Unterbefehle ===== */
+
+test("kubeadm init --pod-network-cidr: angenommen und in der Zusammenfassung genannt, nichts im State", () => {
+  const bare = new KQSim({ bareMetal: true });
+  const r = bare.exec("kubeadm init --pod-network-cidr=10.244.0.0/16");
+  assert.equal(r.error, false);
+  assert.match(r.output!, /Pod-Netz: 10\.244\.0\.0\/16/);
+  assert.deepEqual(Object.keys(bare.controlPlane).sort(), ["node", "token", "up"], "das Pod-Netz wird nicht gespeichert");
+  assert.equal(new KQSim({ bareMetal: true }).exec("kubeadm init --pod-network-cidr 10.244.0.0/16,10.245.0.0/16").error, false);
+});
+
+test("kubeadm init --pod-network-cidr: ungültig, ohne Wert und IPv6 lehnen ab, ohne die Control-Plane hochzuziehen", () => {
+  for (const [cmd, text] of [
+    ["kubeadm init --pod-network-cidr foo", /networking\.podSubnet: Invalid value: "foo": couldn't parse subnet/],
+    ["kubeadm init --pod-network-cidr=10.244.0.0/99", /couldn't parse subnet/],
+    ["kubeadm init --pod-network-cidr=300.1.1.1/16", /couldn't parse subnet/],
+    ["kubeadm init --pod-network-cidr", /flag needs an argument/],
+    ["kubeadm init --pod-network-cidr=fd00::/48", /Nicht simuliert: IPv6/],
+    ["kubeadm init --kubernetes-version=1.30", /Nicht simuliert: das Flag '--kubernetes-version' bei 'kubeadm init'/],
+  ] as const) {
+    const bare = new KQSim({ bareMetal: true });
+    const r = bare.exec(cmd);
+    assert.equal(r.error, true, cmd);
+    assert.match(r.output!, text, cmd);
+    assert.equal(bare.controlPlane.up, false, cmd + ": kein Teil-Erfolg");
+  }
+});
+
+test("kubeadm: nicht simulierte Unterbefehle und Flags vor dem Unterbefehl, Tippfehler mit Vorschlag", () => {
+  const bare = new KQSim({ bareMetal: true });
+  for (const cmd of ["kubeadm token create", "kubeadm upgrade plan", "kubeadm certs renew all", "kubeadm version", "kubeadm --v=5 init"]) {
+    const r = bare.exec(cmd);
+    assert.equal(r.error, true, cmd);
+    assert.match(r.output!, /Nicht simuliert:/, cmd);
+    assert.match(r.output!, /Der Simulator kann: kubeadm init/, cmd);
+  }
+  assert.match(bare.exec("kubeadm joim").output!, /unbekannter Unterbefehl 'joim'[\s\S]*Meintest du 'kubeadm join'\?/);
+  assert.match(bare.exec("kubeadm frobnicate").output!, /unbekannter Unterbefehl/);
+});
+
+test("kubeadm join: der von init gedruckte Befehl funktioniert einzeilig und mit Zeilenfortsetzung", () => {
+  const bare = new KQSim({ bareMetal: true });
+  const init = bare.exec("kubeadm init").output!;
+  const line = init.match(/kubeadm join [^\n]*\\\n\s*--discovery-token-ca-cert-hash sha256:\w+/)![0];
+  const einzeilig = line.replace(/\\\n\s*/, "");
+  assert.match(bare.exec(einzeilig).output!, /joined the cluster/i);
+  assert.match(bare.exec(line.replace("\\\n", "\\ ")).output!, /joined the cluster/i, "mit stehengebliebenem Backslash");
+  assert.match(bare.exec("kubeadm join 10.0.0.10:6443 --token " + bare.controlPlane.token).output!, /joined the cluster/i);
+  assert.match(bare.exec("kubeadm join " + bare.controlPlane.token + " 10.0.0.10:6443").output!, /joined the cluster/i, "Token und Endpoint in beliebiger Reihenfolge");
+});
+
+test("kubeadm join: falscher Endpoint ist 'connection refused', falsche Argumente und fehlende Werte lehnen ab", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  const token = bare.controlPlane.token!;
+  const refused = bare.exec("kubeadm join 10.9.9.9:6443 --token " + token);
+  assert.equal(refused.error, true);
+  assert.match(refused.output!, /10\.9\.9\.9:6443: connect: connection refused/);
+  assert.match(bare.exec("kubeadm join --token").output!, /flag needs an argument/);
+  assert.match(bare.exec("kubeadm join foo").output!, /weder ein API-Server-Endpoint/);
+  assert.match(bare.exec("kubeadm join 10.0.0.10:6443 " + token + " extra.arg").output!, /accepts at most 1 arg/);
+  assert.match(bare.exec("kubeadm join --bogus " + token).output!, /Nicht simuliert: das Flag '--bogus'/);
+  assert.match(bare.exec("kubeadm join 10.0.0.10:6443 10.0.0.10:6443 --token " + token).output!, /accepts at most 1 arg\(s\), received 2/);
+  assert.match(bare.exec("kubeadm join " + token + " " + token).output!, /accepts at most 1 arg/);
+  assert.equal(bare.nodes.length, 1, "kein Fehlversuch hängt einen Worker an");
+  assert.match(bare.exec("kubeadm join --discovery-token-ca-cert-hash sha256:abc " + token).output!, /joined the cluster/i);
+});
+
+test("kubeadm reset -f wird angenommen, unbekannte Flags nicht", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  assert.match(bare.exec("kubeadm reset --bogus").output!, /Nicht simuliert: das Flag '--bogus' bei 'kubeadm reset'/);
+  assert.equal(bare.controlPlane.up, true, "der abgelehnte Befehl ändert nichts");
+  assert.equal(bare.exec("kubeadm reset -f").error, false);
+  assert.equal(bare.controlPlane.up, false);
+  assert.equal(new KQSim({ bareMetal: true }).exec("kubeadm reset --force").error, false);
+});

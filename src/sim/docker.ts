@@ -21,7 +21,7 @@
  */
 import type { Container } from "./state";
 import { randSuffix, table, suggest } from "./util";
-import { flag, checkFlags, firstPositionalIndex, flagValueOf, hasFlag, positionalArgs, specOfSub, subEntry, type SubEntry } from "./cliargs";
+import { flag, isFlagToken, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
 import { hashStr, hashHex } from "../core/rng";
 
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
@@ -61,10 +61,10 @@ export function checkImageTypo(sim: DockerHost, img: string): string | null {
   return null; // unbekannt, aber kein klarer Tippfehler -> zum Ausprobieren erlauben
 }
 
-/** Ein docker-Unterbefehl-Handler: bekommt Host + Tokens, gibt die Ausgabe.
- *  Handler, die `t` nicht brauchen, lassen den Parameter weg – dank struktureller
+/** Ein docker-Unterbefehl-Handler: bekommt Host + die ausgelesene Eingabe (`Call`, #1469), gibt die Ausgabe.
+ *  Handler, die `c` nicht brauchen, lassen den Parameter weg – dank struktureller
  *  Kompatibilität bleiben sie zur Tabelle zuweisbar. */
-type DockerHandler = (sim: DockerHost, t: string[]) => string;
+type DockerHandler = (sim: DockerHost, c: Call) => string;
 
 /** Flag-Tabelle + Handler je Unterbefehl (#1459): nur Flags, die die Sim auswertet; alles andere lehnt
  *  `dockerCommand` ehrlich ab (vorher still ignoriert, `docker run -e A=b nginx` machte `A=b` zum Image). */
@@ -81,8 +81,8 @@ const RUN_HINTS: Readonly<Record<string, string>> = {
 };
 
 /** `docker pull <image>` – zieht ein Image (Registry/Tag zerlegt, #449). */
-function dockerPull(sim: DockerHost, t: string[]): string {
-  const img = t[2];
+function dockerPull(sim: DockerHost, c: Call): string {
+  const img = c.args[0];
   if (!img) return sim._err("docker pull: Welches Image denn?", "z.B. 'docker pull lotsen-dienst'");
   const typo = checkImageTypo(sim, img);
   if (typo) return typo;
@@ -110,17 +110,16 @@ function dockerPull(sim: DockerHost, t: string[]): string {
 }
 
 /** `docker build -t <name[:tag]> <kontext>` – baut aus dem Dockerfile ein eigenes Image. */
-function dockerBuild(sim: DockerHost, t: string[]): string {
-  const tagSpec = flagValueOf(t, ["-t", "--tag"]);
+function dockerBuild(sim: DockerHost, c: Call): string {
+  const tagSpec = c.value("-t", "--tag");
   if (!tagSpec) return sim._err("docker build: Ohne -t bekommt dein Image keinen Namen.", "Muster: docker build -t <name>:<tag> .");
   // Build-Kontext = das positionale Argument (PATH | URL | -) hinter den Optionen.
   // Fehlt es, bricht echtes Docker mit "requires exactly 1 argument" ab – kein falscher Erfolg.
-  const hasContext = positionalArgs(specOfSub("docker build", DOCKER_SUBCOMMANDS.build), t, 2).length > 0;
-  if (!hasContext) {
+  if (c.args.length === 0) {
     return sim._err('"docker build" requires exactly 1 argument.',
       "Am Ende fehlt der Build-Kontext-Punkt '.' – er sagt: der Bauplan (Dockerfile) liegt HIER im aktuellen Ordner. Muster: docker build -t <name>:<tag> .");
   }
-  const dockerfile = flagValueOf(t, ["-f", "--file"]) ?? "Dockerfile";
+  const dockerfile = c.value("-f", "--file") ?? "Dockerfile";
   if (!sim.files[dockerfile]) {
     return sim._err("ERROR: failed to read dockerfile: open " + dockerfile + ": no such file or directory",
       "docker build liest den Bauplan aus der Datei '" + dockerfile + "' im aktuellen Ordner. Schau mit 'ls', ob sie da ist.");
@@ -144,9 +143,9 @@ function dockerBuild(sim: DockerHost, t: string[]): string {
 }
 
 /** `docker tag <quelle> <ziel>` – hängt einem vorhandenen Image einen zweiten Namen an. */
-function dockerTag(sim: DockerHost, t: string[]): string {
-  const src = t[2], dst = t[3];
-  if (!src || !dst || src.startsWith("-") || dst.startsWith("-")) {
+function dockerTag(sim: DockerHost, c: Call): string {
+  const [src, dst] = c.args;
+  if (!src || !dst) {
     return sim._err("docker tag: Quelle und Ziel fehlen.", "Muster: docker tag <quelle>[:tag] <ziel>[:tag]");
   }
   const srcFull = src.includes(":") ? src : src + ":latest";
@@ -174,22 +173,13 @@ function dockerImages(sim: DockerHost): string {
   );
 }
 
-/** Zerlegt die `docker run`-Argumente (#545): Optionen stehen VOR dem Image; sobald das
- *  Image gelesen ist, gehört alles Weitere zum Container-Befehl – ein Flag danach setzt
- *  `flagAfterImage` (falsche Reihenfolge, Issue #17). Als eigener Parser gehalten, damit
- *  `dockerRun` unter dem Komplexitäts-Budget bleibt. */
-function parseRunArgs(t: string[]): { name: string | null; image: string | null; flagAfterImage: boolean } {
-  // Dieselbe Tabelle wie die Flag-Prüfung (alle Schreibweisen, auch `--name=web`); alles ab dem Image = Container-Befehl.
-  const spec = specOfSub("docker run", DOCKER_SUBCOMMANDS.run);
-  const at = firstPositionalIndex(spec, t, 2);
-  if (at < 0) return { name: flagValueOf(t, ["--name"]), image: null, flagAfterImage: false };
-  return { name: flagValueOf(t.slice(0, at), ["--name"]), image: t[at], flagAfterImage: t.slice(at + 1).some(a => a.startsWith("-")) };
-}
-
 /** `docker run [-d] [--name X] [-p a:b] IMAGE [BEFEHL ...]` – startet einen Container. */
-function dockerRun(sim: DockerHost, t: string[]): string {
-  const { image, flagAfterImage, name: parsedName } = parseRunArgs(t);
-  let name = parsedName;
+function dockerRun(sim: DockerHost, c: Call): string {
+  // Optionen stehen VOR dem Image (Tabelle: `stopAtPositional`); alles ab dem Image ist der Container-Befehl –
+  // ein Flag dahinter ist die falsche Reihenfolge (Issue #17).
+  const image = c.args[0];
+  const flagAfterImage = c.args.slice(1).some(isFlagToken);
+  let name = c.value("--name");
   if (!image) return sim._err("docker run: Es fehlt das Image.", "z.B. 'docker run -d --name lotse lotsen-dienst'");
   if (flagAfterImage) return sim._err("docker run: Optionen wie -d/--name müssen VOR das Image.", "Alles nach dem Image ist der Container-Befehl. Muster: docker run [-d] [--name <name>] <image>");
   const typo = checkImageTypo(sim, image);
@@ -205,8 +195,8 @@ function dockerRun(sim: DockerHost, t: string[]): string {
 }
 
 /** `docker ps [-a]` – laufende (mit -a: auch gestoppte) Container listen. */
-function dockerPs(sim: DockerHost, t: string[]): string {
-  const all = hasFlag(t, ["-a", "--all"]);
+function dockerPs(sim: DockerHost, c: Call): string {
+  const all = c.has("-a", "--all");
   const list = sim.docker.containers.filter(c => all || c.running);
   if (list.length === 0) return "CONTAINER ID   IMAGE   COMMAND   CREATED   STATUS   PORTS   NAMES" + (all ? "" : "\n💡 Keine laufenden Container. Mit 'docker ps --all' siehst du auch gestoppte.");
   return table(
@@ -216,8 +206,8 @@ function dockerPs(sim: DockerHost, t: string[]): string {
 }
 
 /** `docker stop <name|id>` – hält einen laufenden Container an. */
-function dockerStop(sim: DockerHost, t: string[]): string {
-  const name = t[2];
+function dockerStop(sim: DockerHost, call: Call): string {
+  const name = call.args[0];
   if (!name) return sim._err("docker stop: Welcher Container?", "Den Namen siehst du mit 'docker ps' in der Spalte NAMES.");
   const c = sim.docker.containers.find(c => c.name === name || c.id === name);
   if (!c) return sim._err("Error: No such container: " + name, "Mit 'docker ps' siehst du alle laufenden Container.");
@@ -226,8 +216,8 @@ function dockerStop(sim: DockerHost, t: string[]): string {
 }
 
 /** `docker rm <name|id>` – löscht einen (gestoppten) Container. */
-function dockerRm(sim: DockerHost, t: string[]): string {
-  const name = t[2];
+function dockerRm(sim: DockerHost, call: Call): string {
+  const name = call.args[0];
   if (!name) return sim._err("docker rm: Welcher Container?");
   const idx = sim.docker.containers.findIndex(c => c.name === name || c.id === name);
   if (idx === -1) return sim._err("Error: No such container: " + name);
@@ -258,5 +248,6 @@ export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): stri
   if (!sub) return sim._err("docker: Unterbefehl fehlt.", "Probier z.B. 'docker ps'.");
   const entry = subEntry(DOCKER_SUBCOMMANDS, sub);
   if (!entry) return sim._err("docker: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
-  return checkFlags(sim, specOfSub("docker " + sub, entry), t, 2) ?? entry.run(sim, t);
+  const call = parseCall(sim, specOfSub("docker " + sub, entry), t, 2);
+  return typeof call === "string" ? call : entry.run(sim, call);
 }
