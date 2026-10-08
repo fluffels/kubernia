@@ -11,7 +11,7 @@ import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu, MEM_H
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
-import { notSimulated, parseFromRef, parseResourceList, replicasArg, type ResourceList } from "./args";
+import { notSimulated, parseFromRef, parseResourceList, replicasArg, type KubectlSub, type ResourceList } from "./args";
 import { readTargets, targetOutcome } from "./targets";
 import { subEntry, type Call } from "../cliargs";
 
@@ -23,7 +23,7 @@ const DEPLOYMENTS_TIP = "Welche Deployments es gibt: 'kubectl get deployments'";
 /** Die Deployment-Namen der Ziele, die scale/expose/set/rollout gemeinsam annehmen (`deploy/a deploy/b`, `deployment a b`;
  *  Zerlegung und Fehlertexte: ./targets). Eine andere Art als Deployment (`scale pods/x`) ist „nicht simuliert“ und
  *  lehnt den ganzen Befehl ab, bevor etwas geändert wird. Ohne Ziel ist die Liste leer. */
-function deploymentNames(host: KubectlHost, sub: string, args: readonly string[]): { names: string[] } | { error: string } {
+function deploymentNames(host: KubectlHost, sub: KubectlSub, args: readonly string[]): { names: string[] } | { error: string } {
   const parsed = readTargets(host, args);
   if ("error" in parsed) return parsed;
   const other = parsed.targets.find(t => t.kind.plural !== "deployments");
@@ -33,7 +33,7 @@ function deploymentNames(host: KubectlHost, sub: string, args: readonly string[]
 
 /** Wie `deploymentNames`, aber für Befehle, die genau EIN Deployment ändern (expose, set): weitere Ziele lehnt die Sim ab,
  *  statt sie still zu ignorieren. `name` ist `null` ohne Ziel. */
-function singleDeployment(host: KubectlHost, sub: string, args: readonly string[]): { name: string | null } | { error: string } {
+function singleDeployment(host: KubectlHost, sub: KubectlSub, args: readonly string[]): { name: string | null } | { error: string } {
   const r = deploymentNames(host, sub, args);
   if ("error" in r) return r;
   if (r.names.length > 1) return { error: notSimulated(host, "mehrere Ziele bei 'kubectl " + sub + "'.", ["kubectl " + sub + " deployment <name> …"]) };

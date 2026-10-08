@@ -27,6 +27,7 @@ describe("readTargets: der Builder von kubectl", () => {
     ["Kreuzprodukt mit zwei Namen", ["pods,svc", "a", "b"], ["pods:a,b", "services:a,b"]],
     ["doppelte Arten fallen weg", ["deploy,deployments", "x"], ["deployments:x"]],
     ["leere Einträge der Liste fallen weg", ["pods,,svc"], ["pods:*", "services:*"]],
+    ["leere Einträge im Kreuzprodukt fallen weg", ["pods,,svc", "web"], ["pods:web", "services:web"]],
     ["all ohne Namen", ["all"], ["pods:*", "services:*", "deployments:*", "replicasets:*", "statefulsets:*", "grafanadatasources:*", "grafanadashboards:*"]],
   ])("%s", (_name, args, erwartet) => {
     expect(kurz(args)).toEqual(erwartet);

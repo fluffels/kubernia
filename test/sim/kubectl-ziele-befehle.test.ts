@@ -3,7 +3,8 @@
  * weitere Ziele ab, statt sie still zu ignorieren. Jeder Fehlerfall prüft per Snapshot, dass nichts angefasst wurde.
  * Der Ziel-Leser selbst: kubectl-ziele.test.ts. */
 import { describe, test, expect } from "vitest";
-import { KQSim } from "./helpers";
+import { KQSim, freshSim } from "./helpers";
+import { deploymentYaml } from "../factories/manifests";
 import type { Scenario } from "../../src/sim/state";
 
 const NO_TYPE = "there is no need to specify a resource type as a separate argument";
@@ -240,5 +241,62 @@ describe("expose und set: weitere Ziele werden abgelehnt, nie still ignoriert", 
     const r = lauf("kubectl set image nginx=ghcr.io/org/img:1 deployment/web");
     expect(r.error).toBe(false);
     expect(r.out).toBe("deployment.apps/web image updated");
+  });
+});
+
+describe("Mehrfachziele unter Pod-Security: ein abgewiesenes Ziel stoppt die übrigen nicht", () => {
+  /** a ist ungehärtet, b gehärtet; danach gilt `restricted`. */
+  function restricted(): KQSim {
+    const sim = freshSim();
+    sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=privileged");
+    sim.files["a.yaml"] = deploymentYaml({ name: "a", replicas: 1 });
+    sim.files["b.yaml"] = deploymentYaml({ name: "b", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false } });
+    sim.exec("kubectl apply -f a.yaml");
+    sim.exec("kubectl apply -f b.yaml");
+    sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+    return sim;
+  }
+
+  test("scale: a wird abgewiesen, b skaliert, Forbidden steht zuletzt, kein NotFound-Tipp", () => {
+    const sim = restricted();
+    const r = lauf("kubectl scale deployment a b --replicas=3", sim);
+    expect(r.error).toBe(true);
+    const zeilen = r.out.split("\n");
+    expect(zeilen[0]).toBe("deployment.apps/b scaled");
+    expect(zeilen[1]).toMatch(/Forbidden/);
+    expect(r.out).not.toContain("kubectl get deployments");
+    expect(sim.deployments.find(d => d.name === "b")!.replicas).toBe(3);
+    expect(sim.deployments.find(d => d.name === "a")!.replicas).toBe(1);
+  });
+
+  test("rollout restart: a wird abgewiesen, b startet neu, Forbidden steht zuletzt, kein NotFound-Tipp", () => {
+    const r = lauf("kubectl rollout restart deployment a b", restricted());
+    expect(r.error).toBe(true);
+    const zeilen = r.out.split("\n");
+    expect(zeilen[0]).toBe("deployment.apps/b restarted");
+    expect(zeilen[1]).toMatch(/Forbidden/);
+    expect(r.out).not.toContain("kubectl get deployments");
+  });
+});
+
+describe("leere Ziel-Eingabe und Randfälle", () => {
+  test.each([
+    ["kubectl get", "Was möchtest du sehen?"],
+    ["kubectl get ,", "Was möchtest du sehen?"],
+    ["kubectl delete", "Was und wie heißt es?"],
+    ["kubectl delete ,", "Was und wie heißt es?"],
+    ["kubectl describe ,", "You must specify the type of resource"],
+  ])("%s → Fehler, nichts angefasst", (cmd, text) => { ablehnen(cmd, text); });
+
+  test("delete: der Tipp nennt die erste fehlende Art", () => {
+    const r = lauf("kubectl delete pod/x svc/y");
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("kubectl get pods");
+    expect(r.out).not.toContain("kubectl get services");
+  });
+
+  test("describe mit einem einzelnen fehlenden Namen: der Tipp des Renderers (Ingress: 'ingress')", () => {
+    const sim = new KQSim({ ...szenario(), ingresses: [{ name: "tor", host: "a.example", path: "/", service: "web", port: 80, className: "nginx" }] });
+    expect(lauf("kubectl describe ingress/fehlt", sim).out).toContain("kubectl get ingress'");
   });
 });

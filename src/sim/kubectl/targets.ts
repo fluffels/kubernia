@@ -9,16 +9,15 @@
  *   4. sonst ist das erste Argument die Art (oder die Kategorie `all`), der Rest sind Namen.
  * Mehrere Namen bei mehreren Arten (`get all web`) lehnt der Builder mit `you must specify only one resource` ab.
  *
- * Blattmodul der kubectl-Mappe (pure Domäne): importiert nur ./resources, ./args und den Host-Typ – nie get,
+ * Blattmodul der kubectl-Mappe (pure Domäne): importiert nur ./resources, ./args und den Typ aus ../cliargs – nie get,
  * inspect, describe, lifecycle oder ops (sonst Zyklus, check:arch). */
-import type { KubectlHost } from "./host";
+import type { ErrHost } from "../cliargs";
 import { allKinds, resolveKind, type ResourceKind } from "./resources";
 import { SLASH_SINGLE_ERROR, slashRef, unknownResourceType } from "./args";
 
 /** Ein Ziel: eine Art mit den (möglicherweise leeren = alle) gewünschten Namen. */
 export interface Target { kind: ResourceKind; names: string[] }
 
-type ErrHost = Pick<KubectlHost, "_err">;
 
 export const NO_TYPE_NEEDED_ERROR = "error: there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'kubectl get resource/<resource_name>' instead of 'kubectl get resource resource/<resource_name>'";
 const ONLY_ONE_ERROR = "error: you must specify only one resource";
