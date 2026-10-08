@@ -44,6 +44,7 @@ const KINDS = [
   kind("statefulsets", "statefulset", ["sts"], "apps", true, true),
   // KEP-4974: ab v1.33 warnt der API-Server bei jeder Anfrage auf v1 Endpoints (die Sim simuliert >= v1.33, ./nodes).
   { ...kind("endpoints", "endpoint", ["ep"], "", true), deprecationWarning: "v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice" },
+  kind("endpointslices", "endpointslice", [], "discovery.k8s.io", true),
   kind("nodes", "node", ["no"], "", false),
   kind("namespaces", "namespace", ["ns"], "", false),
   kind("secrets", "secret", [], "", true),

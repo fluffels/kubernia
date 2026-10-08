@@ -23,6 +23,7 @@
     {"befehl":"get","ziel":"replicasets","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"services","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"endpoints","verhalten":"gleich","ausgabe":"gleich"},
+    {"befehl":"get","ziel":"endpointslices","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"nodes","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nodes-diskpressure"]},
     {"befehl":"get","ziel":"secrets","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"configmaps","verhalten":"gleich","ausgabe":"gleich"},

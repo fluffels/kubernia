@@ -9,7 +9,7 @@ import type { Scenario } from "../../src/sim/state";
 // Quelle: Spalte NAMESPACED von `kubectl api-resources`; Schlüssel = erster Alias.
 // `alerts` ist eine Pseudoressource (eingebaute Regeln), also cluster-weit.
 const API_RESOURCES: Record<string, boolean> = {
-  pods: true, deployments: true, replicasets: true, services: true, endpoints: true, nodes: false,
+  pods: true, deployments: true, replicasets: true, services: true, endpoints: true, endpointslices: true, nodes: false,
   secrets: true, configmaps: true, ingresses: true, networkpolicies: true,
   servicemonitors: true, prometheusrules: true, grafanadatasources: true, grafanadashboards: true,
   statefulsets: true, persistentvolumeclaims: true, persistentvolumes: false, storageclasses: false,
@@ -19,7 +19,7 @@ const API_RESOURCES: Record<string, boolean> = {
 
 /** Name eines Objekts je Ressource (erster Alias), das im Szenario in `default` liegt. */
 const NAMEN: Record<string, string> = {
-  pods: "zz-web", deployments: "zz-web", replicasets: "zz-web", services: "zz-svc", endpoints: "zz-svc",
+  pods: "zz-web", deployments: "zz-web", replicasets: "zz-web", services: "zz-svc", endpoints: "zz-svc", endpointslices: "zz-svc",
   secrets: "zz-secret", configmaps: "zz-cm", ingresses: "zz-ing", networkpolicies: "zz-np",
   servicemonitors: "zz-smon", prometheusrules: "zz-rule", grafanadatasources: "zz-ds",
   grafanadashboards: "zz-dash", statefulsets: "zz-db", persistentvolumeclaims: "zz-pvc",
@@ -100,7 +100,7 @@ describe("namespaced Ressourcen: fremder Namespace → Leermeldung", () => {
 describe("Negativtests je Ressourcenfamilie: kein Objekt aus default im fremden Namespace", () => {
   const FAMILIEN: Record<string, string[]> = {
     Workloads: ["deployments", "replicasets", "statefulsets", "pods"],
-    Netz: ["services", "endpoints", "ingresses", "networkpolicies"],
+    Netz: ["services", "endpoints", "endpointslices", "ingresses", "networkpolicies"],
     Konfiguration: ["secrets", "configmaps"],
     Observability: ["servicemonitors", "prometheusrules", "grafanadatasources", "grafanadashboards"],
     Speicher: ["persistentvolumeclaims", "volumesnapshots"],
