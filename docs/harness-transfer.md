@@ -61,9 +61,9 @@ Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, de
 
 **Vertrag der Schicht-Definition:** eine CommonJS-Datei, die `SCHICHT_MODELL` und `pruefeModell` exportiert. Das Modell trägt `quellwurzel` (das Code-Verzeichnis mit Slash, etwa `wetter/`), `schichten` (je `id`, `label`, `wurzeln`, `muster`, `darf`; genau eine Auffang-Schicht mit `muster: null`) und `extern`. Alles, was nicht in `darf` steht, ist verboten. Der Schichten-Generator prüft zusätzlich selbst, dass `quellwurzel` gesetzt ist und mit `/` endet, auch wenn der mitgelieferte Prüfer es nicht tut. Die Regeln des Werkzeugs (hier die von dependency-cruiser) sollten aus derselben Datei abgeleitet werden, wie [`scripts/layers.cjs`](../scripts/layers.cjs) es vormacht.
 
-## Offene Entscheidung: Veröffentlichung
+## Form der Vorlage ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md))
 
-Ob Kern und Harness als eigenes Template-Repo oder npm-Paket veröffentlicht werden, hat Außenwirkung und liegt bei der Maintainerin. Empfehlung: jetzt kein eigenes docs-gen-Paket, die Form des gesamten Harness-Kerns wird zusammen in #1366 entschieden und docs-gen dort als Kern-Baustein mitbedacht; die Übernahme per Kopie trägt bis dahin.
+Entschieden: ein Factory-Repo als Quelle, verteilt per Sync mit Besitz-Manifest; Projektwerte kommen zur Laufzeit aus einer Projekt-Config. Es gibt kein eigenes docs-gen-Paket, der docs-gen-Kern ist ein Baustein des Kerns. Offen ist nur die Veröffentlichung (Außenwirkung, liegt bei der Maintainerin). Bis das Sync-Werkzeug steht, trägt die Übernahme per Kopie.
 
 ## Gliederung für Artikel oder Vortrag
 

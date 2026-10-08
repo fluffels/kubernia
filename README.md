@@ -195,6 +195,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 07.10.2026 | [ADR 0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md): Das Langfuse-Plugin bleibt auch im User-Scope aktiv |
 | 08.10.2026 | [ADR 0020](/docs/adr/0020-architekturmodell-likec4.md): Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs |
 | 08.10.2026 | [ADR 0021](/docs/adr/0021-agenten-sandbox-wsl2.md): Agenten-Sandbox über eine eigene WSL2-Distribution |
+| 08.10.2026 | [ADR 0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md): Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest |
 
 <!-- GEN:zeitleiste END -->
 

@@ -84,7 +84,7 @@ Statusline: noch kein Eigenbau, #1358 plant sie. Nativ: `statusLine` seit v1.0.7
 | Review ohne Self-Grading, Festgefahren-Protokoll | unabhängiger Blick, begrenzte Fix-Schleifen | kein Gegenstück | behalten: gleicht eine Modellschwäche aus, Lockern-Kandidat #1357 | ja |
 | Worktree-Regeln | Isolation je Ticket | `--worktree` ab v2.1.49, `isolation: worktree` ab v2.1.49 | beobachten: siehe #1066 | teilweise |
 | Browser-Prüfung per Playwright-MCP, Claude in Chrome gesperrt | reproduzierbare Browser-Prüfung | `@playwright/mcp` selbst | behalten | ja |
-| Vorlage-Form: Plugin und Mods | Eingabe für die Form-Entscheidung in #1366 | `claude plugin install --marketplace` ab v2.1.292 ([Plugins](https://code.claude.com/docs/en/plugins/install.md)); Mods ab v2.1.287 laufen auch in `claude -p`, nicht in WSL-Sitzungen der Desktop-App | beobachten | ja |
+| Vorlage-Form: Plugin und Mods | Eingabe für die Form-Entscheidung ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md), #1366) | `claude plugin install --marketplace` ab v2.1.292 ([Plugins](https://code.claude.com/docs/en/plugins/install.md)); Mods ab v2.1.287 laufen auch in `claude -p`, nicht in WSL-Sitzungen der Desktop-App | beobachten | ja |
 
 ## D. Werkzeuge
 
@@ -102,7 +102,7 @@ Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta,
 ## Verwendung
 
 - #1362 liest die Marker und die Versionsquellen und meldet nur Changelog-Einträge, die eine Inventarzeile berühren.
-- #1366 nimmt den Kern-Schnitt aus der Spalte „Spielunabhängig“.
+- [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md) (#1366) nimmt den Kern-Schnitt aus der Spalte „Spielunabhängig“.
 - #1357 nimmt die Zeilen, die nur eine Modellschwäche ausgleichen, als Lockern-Kandidaten.
 
 ## Sicherheit
