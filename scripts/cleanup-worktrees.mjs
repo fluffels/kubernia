@@ -278,7 +278,7 @@ export function diagnoseOrphans(cwd, deps = {}) {
 }
 
 /** Name eines Lens-Worktrees: `kq-<nr>-lens-r<runde>` oder `kq-<nr>-lens-m<n>` (Skill review-lenses); Gruppe 1 ist der Eltern-Worktree `kq-<nr>`. */
-const LENS_WORKTREE = LENS_WORKTREE_NAME;
+
 
 /**
  * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `kq-<nr>` NICHT mehr registriert ist (#1425).
@@ -289,7 +289,7 @@ export function verwaisteLensWorktrees(registeredPaths, worktreesDir) {
   const registriert = new Set(registeredPaths.map(norm));
   const namen = [...registriert].filter((p) => p.startsWith(basis) && !p.slice(basis.length).includes("/")).map((p) => p.slice(basis.length));
   return namen.filter((name) => {
-    const m = LENS_WORKTREE.exec(name);
+    const m = LENS_WORKTREE_NAME.exec(name);
     return m !== null && !registriert.has(basis + m[1]);
   });
 }

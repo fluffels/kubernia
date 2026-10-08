@@ -22,8 +22,10 @@ import { buildDenyOutput, emit, istDirektaufruf, readStdin } from "./hook-io.mjs
  * Name eines Lens-Worktrees (SSOT, auch für cleanup-worktrees): `kq-<nr>-lens-r<runde>` (Lens-Runde) oder
  * `kq-<nr>-lens-m<n>` (Merge-Delta-Lens nach einem Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `kq-<nr>`.
  */
-export const LENS_WORKTREE_NAME = /^(kq-\d+)-lens-[rm]\d+$/i;
-const LENS_WORKTREE = new RegExp(`/\\.claude/worktrees/${LENS_WORKTREE_NAME.source.slice(1, -1)}/`, "i");
+const LENS_NAME_KERN = String.raw`(kq-\d+)-lens-[rm]\d+`;
+export const LENS_WORKTREE_NAME = new RegExp(`^${LENS_NAME_KERN}$`);
+// Pfadform: Groß-/Kleinschreibung egal (Windows-Pfade), der Ordnername selbst für das Aufräumen exakt (kein Flag oben).
+const LENS_WORKTREE = new RegExp(String.raw`/\.claude/worktrees/${LENS_NAME_KERN}/`, "i");
 
 /** Pfad lexikalisch normalisieren (Backslashes → Slashes, `..` auflösen), relative Pfade gegen `cwd`. */
 const normalisiere = (pfad, cwd) => {
