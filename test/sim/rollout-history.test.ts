@@ -479,3 +479,34 @@ describe("Laufzeitwerte und Untergrenze in der Historie (Lens R2)", () => {
     expect(revisionen(sim)).toEqual([2, 5]);
   });
 });
+
+describe("Mehrfachziele bei history und undo (Merge mit #1488)", () => {
+  const zwei = () => { const sim = dreiRevisionen(); sim.exec("kubectl create deployment api --image=nginx --replicas=1"); return sim; };
+
+  test.each([
+    "kubectl rollout history deployment web api",
+    "kubectl rollout undo deployment web api",
+    "kubectl rollout undo deployment/web deployment/api",
+  ])("%s wird abgelehnt, nichts ändert sich", cmd => {
+    const sim = zwei(); const pods = dep(sim).pods.map(p => String(p.name)); const revs = revisionen(sim);
+    const r = sim.exec(cmd);
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("mehrere Ziele bei 'kubectl rollout'");
+    expect(dep(sim).pods.map(p => String(p.name))).toEqual(pods);
+    expect(revisionen(sim)).toEqual(revs);
+    expect(dep(sim, "api").oldReplicaSets ?? []).toHaveLength(0);
+  });
+
+  test("NotFound bei history/undo trägt den Tipp", () => {
+    const sim = neu();
+    for (const a of ["history", "undo"]) expect(out(sim, "kubectl rollout " + a + " deployment/gibtsnicht")).toContain("kubectl get deployments");
+  });
+
+  test("--to-revision bei Mehrfachziel-restart: abgelehnt, keines wird neu gestartet", () => {
+    const sim = zwei(); const vorher = pods(sim);
+    const r = sim.exec("kubectl rollout restart deployment web api --to-revision=1");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("unknown flag: --to-revision");
+    expect(pods(sim)).toEqual(vorher);
+  });
+});
