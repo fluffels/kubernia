@@ -113,7 +113,7 @@ function num(v) {
 }
 
 /** Stand der Preistabelle (im Report ausgegeben, bei jeder Preisänderung mitziehen). */
-export const PRICES_STAND = "2026-10-06";
+export const PRICES_STAND = "2026-10-08";
 
 /**
  * Preise in $ je Mio Tokens (Stand siehe `PRICES_STAND`, Quelle: Preisliste auf claude.com/pricing,
@@ -125,12 +125,28 @@ export const PRICES_STAND = "2026-10-06";
  * Ein Eintrag ist ein Preisobjekt (gilt immer) ODER eine Liste von Perioden
  * `[{ validFrom: null | ISO-Zeit, …Preise }]`, aufsteigend nach `validFrom` (`null` = seit
  * Modellstart). Eine Preisänderung wird als neue Periode ANGEHÄNGT, damit alte Läufe ihren
- * damaligen Preis behalten.
+ * damaligen Preis behalten. Preisobjekt oder Periode kann `stufen: [{ ueberPrompt, …Preise }]`
+ * tragen: Prompt = input + cacheWrite + cacheRead des Calls; über `ueberPrompt` Tokens
+ * (strikt größer) gelten die Preise der höchsten zutreffenden Stufe statt der Grundpreise.
+ * Quellen: platform.claude.com/docs/en/about-claude/pricing und die Release Notes
+ * (Sonnet 5.5, Cache-Read ab 2026-10-07 0,10 statt 0,20 $; die Uhrzeit ist nicht belegt, 00:00 UTC
+ * ist eine Annahme, der Fehler beschränkt sich auf Cache-Reads dieses einen Tages).
  */
 export const PRICES = {
-  "claude-sonnet-5-5": { input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2, output: 10 },
+  "claude-sonnet-5-5": [
+    { validFrom: null, input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2, output: 10 },
+    { validFrom: "2026-10-07T00:00:00Z", input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.1, output: 10 },
+  ],
   "claude-opus-5-5": { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2, output: 20 },
   "claude-opus-5": { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.5, output: 25 },
+  "claude-haiku-5-5": {
+    input: 0.1,
+    cacheWrite5m: 0.125,
+    cacheWrite1h: 0.2,
+    cacheRead: 0.01,
+    output: 0.5,
+    stufen: [{ ueberPrompt: 100_000, input: 0.5, cacheWrite5m: 0.625, cacheWrite1h: 1, cacheRead: 0.05, output: 2.5 }],
+  },
   "claude-haiku-4-5": { input: 1, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1, output: 5 },
 };
 
@@ -163,11 +179,18 @@ function priceFor(model, prices, ts) {
   return hit ? periodAt(prices[hit.key], ts) : null;
 }
 
+/** Preise der höchsten Stufe, deren `ueberPrompt` der Prompt strikt übersteigt (unabhängig von der Listenreihenfolge); sonst die Grundpreise. */
+function stufePreis(preis, prompt) {
+  const treffer = (preis.stufen ?? []).filter((st) => prompt > st.ueberPrompt).sort((a, b) => b.ueberPrompt - a.ueberPrompt)[0];
+  return treffer ? { ...preis, ...treffer } : preis;
+}
+
 /** Kosten eines Calls je Teil in $; null, wenn das Modell keinen Preis hat. */
 export function priceParts(c, prices = PRICES) {
-  const p = priceFor(c.model, prices, c.ts);
-  if (!p) return null;
+  const base = priceFor(c.model, prices, c.ts);
+  if (!base) return null;
   const write = num(c.cacheWrite);
+  const p = stufePreis(base, num(c.input) + write + num(c.cacheRead));
   const write1h = Math.min(num(c.cacheWrite1h), write);
   // Division statt Multiplikation mit 1e-6: bleibt bei glatten Zahlen exakt.
   const mio = 1e6;
@@ -224,6 +247,18 @@ function sockelOf(allCalls, windowCalls) {
   return { main: main ? contextOf(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
 }
 
+const ohnePreis = (c) => c.cost === undefined || c.cost === null;
+
+/** Calls ohne Preis je Modell (#1441): der Wächter nennt das fehlende Modell, damit es in PRICES nachgetragen wird. */
+function unpricedModels(calls) {
+  const out = {};
+  for (const c of calls.filter(ohnePreis)) {
+    const name = String(c.model ?? "unbekannt");
+    out[name] = (out[name] ?? 0) + 1;
+  }
+  return out;
+}
+
 /**
  * Pure Kernlogik über normalisierte Calls:
  *   calls:     [{ ts, model, input, cacheWrite, cacheWrite1h?, cacheRead, output, cost?, costParts?, subagent?: {id, agentType, description} }]
@@ -249,7 +284,8 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     reviewRounds: countReviewRounds(reviewDescriptions(ticket)),
     cacheRebuilds: countCacheRebuilds(ticket),
     questions,
-    unpriced: ticket.filter((c) => c.cost === undefined || c.cost === null).length,
+    unpriced: ticket.filter(ohnePreis).length,
+    unpricedModels: unpricedModels(ticket),
     costParts: costPartsOf(ticket),
     medianContext: {
       all: median(ticket.map(contextOf)),
@@ -647,7 +683,7 @@ export function renderMarkdown(summary, loop = {}) {
   if (summary.pflegeOhneDauer > 0) lines.push(`⚠️ ${summary.pflegeOhneDauer} Pflege-Intervall ohne Dauer — Start und Ende standen im selben Befehl (je ein eigener Shell-Befehl nötig), Phase „Pflege“ nicht messbar.`);
   if (summary.pflegeUnpaired > 0) lines.push(`⚠️ ${summary.pflegeUnpaired} Pflege-Marker ohne Gegenstück — Phase „Pflege“ unvollständig.`);
   lines.push(`Preise Stand ${PRICES_STAND}`);
-  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES oder Zeitpunkt fehlt) — Kosten unvollständig.`);
+  if (summary.unpriced > 0) lines.push(ohnePreisZeile(summary));
   const nw = loop.nachweis;
   const runden = nw ? `${nw.runden} (Nachweis)` : `${summary.reviewRounds} (Heuristik)`;
   const planer = nw && nw.plan !== null ? ` · Planer: ${nw.plan ? "ja" : "nein"} (KQ-Plan)` : "";
@@ -656,6 +692,23 @@ export function renderMarkdown(summary, loop = {}) {
     `Review-Runden: ${runden} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne CI-Fix: ${merged}${planer}`,
   );
   return lines.join("\n");
+}
+
+/** Warnzeile „ohne Preis“ mit den betroffenen Modellen (#1441). */
+function ohnePreisZeile(summary) {
+  const modelle = Object.entries(summary.unpricedModels ?? {}).map(([m, n]) => `${m} (${n})`).join(", ");
+  return `⚠️ ${summary.unpriced} Call(s) ohne Preis${modelle ? `: ${modelle}` : ""} — Modell in PRICES nachtragen (oder Zeitpunkt fehlt), Kosten unvollständig.`;
+}
+
+/** Zugangsdaten für `--langfuse` aus der Umgebung (#1441); ohne Secret-Key (Agentenläufe haben ihn nicht) Hinweis auf den Ersatzweg. */
+export function langfuseZugang(env) {
+  const { LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey } = env;
+  if (!publicKey || !secretKey) {
+    throw new Error(
+      "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe haben den Secret-Key nicht: dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe docs/model-routing.md › Checkliste Punkt 1.",
+    );
+  }
+  return { baseUrl: env.LANGFUSE_BASE_URL ?? "http://localhost:3000", publicKey, secretKey };
 }
 
 export function parseArgs(argv) {
@@ -687,11 +740,9 @@ async function loadRun(args) {
     const root = join(homedir(), ".claude", "projects");
     return merge(args.sessions.map((s) => readTranscriptSession(s, root)));
   }
-  const { LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey } = process.env;
-  if (!publicKey || !secretKey) throw new Error("--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY.");
-  const baseUrl = process.env.LANGFUSE_BASE_URL ?? "http://localhost:3000";
+  const zugang = langfuseZugang(process.env);
   const parts = [];
-  for (const s of args.sessions) parts.push(await ladeLangfuseSession(s, { baseUrl, publicKey, secretKey }));
+  for (const s of args.sessions) parts.push(await ladeLangfuseSession(s, zugang));
   return merge(parts);
 }
 

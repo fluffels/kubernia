@@ -61,8 +61,8 @@
  *     bricht bei unbekannten Labels laut ab. Der Skill-Pfad wird nur auf den Verweis im Text geprüft.
  *   - Das Agent-Tool kennt `effort`, die Konvention setzt ihn nicht am Spawn (docs/model-routing.md §2): der
  *     Effort von Repo-Agenten (kubernia-lens, Explore) kommt aus ihrem Frontmatter; am Spawn wird geprüft, dass
- *     KEIN `model:` das Frontmatter überstimmt. `effort: low` am Explore deklariert nur: Haiku
- *     unterstützt laut Claude-Code-Doku keinen Effort, er wirkt erst bei einem anderen Alias-Ziel.
+ *     KEIN `model:` das Frontmatter überstimmt. `effort: low` am Explore wirkt, solange `haiku`
+ *     auf Haiku 5.5 auflöst (Anthropic-API, Effort unterstützt); auf Cloud-Providern mit Haiku 4.5 nicht.
  *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/agents-md-native, nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
@@ -494,7 +494,7 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
         "und jede Explore-Delegation läuft auf haiku.",
     );
     assert.equal(explore.model, "haiku");
-    assert.equal(explore.effort, "low", "Matrix §1: Explore haiku/low (auf Haiku ohne Wirkung, siehe docs/model-routing.md)");
+    assert.equal(explore.effort, "low", "Matrix §1: Explore haiku/low (wirkt auf Haiku 5.5, siehe docs/model-routing.md)");
     assert.ok(!agenten["explore"], "Ein klein geschriebener Name würde den Override still verfehlen");
     assert.ok(
       !/\b(Edit|Write|NotebookEdit)\b/.test(explore.tools ?? ""),

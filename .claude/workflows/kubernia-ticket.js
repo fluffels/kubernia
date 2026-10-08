@@ -498,7 +498,7 @@ const LENS_QUELLE = [
     intro: 'Lens „Test-Adäquanz" — prüfe, ob der Test Verhalten abdeckt und echt ist.',
     pruefpunkte: [
       'Prüft der Test die öffentliche API / beobachtbares Verhalten (überlebt Refactoring), nicht Interna?',
-      'Negativfälle dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path? Bei Generatoren jede Kantenart und jeden Sortierschlüssel per Fixture abdecken, Substring-Asserts am Zeilenanfang verankern (ext_q_a enthält q_a).',
+      'Negativfälle dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path? Bei Generatoren jede Kantenart und jeden Sortierschlüssel per Fixture abdecken, Substring-Asserts am Zeilenanfang verankern (ext_q_a enthält q_a). Hat jede neue Bedingung (Filter, Guard, Sonderfall, catch/Weiterwurf) einen Test, der genau diesen Zweig auslöst? Räumen Tests Temp-Ordner und -Dateien auf (afterEach/finally), und schreibt kein Test ins Repo?',
       'Kein False Positive (Red-Green): würde der Test rot, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den fehlschlagenden Repro-Test zuerst?',
       'Echte Gate-Sabotage bei abgeleiteten Regeln: leitet der Diff Gate-Regeln aus einem Modell ab (z.B. die Schichtregeln von check:arch aus SCHICHT_MODELL), verlangt die Lens einen Test, der das echte Gate laufen lässt (verbotene Kante in eine Temp-Fixture einschleusen, das Gate muss rot werden, eine erlaubte Kante grün bleiben). Ein Nachbau des Matchers im Test genügt nicht: er beweist nur, dass die Ableitung richtig rechnet, nicht, dass das Gate sie anwendet.',
       'Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test, ebenso sicht-/spielbare Content-Daten (Quests, Dialoge) — ist das passiert und belegt, wie im Plan vorgesehen (kqDev.state-Auszug, Screenshot-Pfad)?',
@@ -877,7 +877,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - § Worktree entfernen auf Windows, Falle 2: arbeite mit absoluten Pfaden und cd NICHT
   in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen. Skripte nie über stdin starten (python -, node -): per Write ablegen und node <pfad> starten.
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,
-  § Tests gegen False Positives absichern (Red-Green). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
+  § Tests gegen False Positives absichern (Red-Green), § Mehr-Perspektiven-Review (Selbstcheck vor dem Commit). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Ausnahmen: Regeltext), Spiel-/Inhalts-Befund → gebündeltes Issue.
@@ -899,7 +899,7 @@ Verfügung, gib ergebnis="abgebrochen" mit abbruchgrund "PixelLab-Asset fehlt: <
 KEIN prozeduraler Platzhalter.
 Lernkandidaten: gib in lernkandidaten höchstens 3 Punkte zurück, nur projektübergreifendes Wissen
 (Kubernia-Spezifisches gehört ins Projekt-Brain bzw. als Befund ins Sammelticket/Issue), sonst leer.
-Für Lernkandidaten legst du nichts selbst ab.
+Prüfe jeden vor dem Eintragen gegen gemergte PRs (gh pr list --state merged --limit 1000 --search "<Stichwort>"), Erledigtes entfällt. Für Lernkandidaten legst du nichts selbst ab.
 
 Ist das Ticket ein Sammelticket (Titel „… (gesammelt)": „Harness-Härtung" oder „Langfuse-Befunde"), setze ALLE Zeilen um (auch später
 dazugekommene und beim Arbeiten gefundene Befunde), nichts auslagern (AGENTS.md § Harness-Befunde sind
