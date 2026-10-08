@@ -83,6 +83,9 @@ const SUB: Record<string, SubEntry<KubeadmHandler>> = {
   reset: { run: kubeadmReset, flags: [flag(false, "-f", "--force")] },
 };
 
+/** Die registrierten Unterbefehle (Treue-Matrix, docs/sim-treue/: ein neuer Unterbefehl braucht eine Zeile). */
+export const KUBEADM_SUBCOMMANDS: readonly string[] = Object.keys(SUB);
+
 /** Echte kubeadm-Unterbefehle, die die Sim nicht kann. */
 const NOT_SIMULATED = ["token", "upgrade", "certs", "config", "kubeconfig", "version", "completion", "alpha"];
 const KANN = ["kubeadm init [--pod-network-cidr <cidr>]", "kubeadm join <token>", "kubeadm reset [-f]"];

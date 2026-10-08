@@ -13,7 +13,7 @@
 /** Eine Zeile der Hilfe: Aufruf (Unterbefehl + Argumente) + Kurzbeschreibung. */
 interface HelpRow { use: string; desc: string; }
 /** Eine bewusste Vereinfachung des Simulators (#1440). Die `id` verweist aus der Treue-Matrix
- *  (docs/sim-treue/kubectl.json) auf den Text; ein Test hält beide in Einklang. */
+ *  (docs/sim-treue/<familie>.json) auf den Text; ein Test hält beide in Einklang. */
 interface HelpLimit { id: string; text: string; }
 /** Eine Befehlsfamilie: Schlüssel (= erstes Befehls-Token, passend zur Freischalt-
  *  Ableitung in cmdunlock.ts) + ihre Zeilen. Der Anzeigename ist der Schlüssel.
@@ -68,6 +68,10 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { use: "init [--pod-network-cidr <cidr>]", desc: "Control-Plane hochziehen" },
     { use: "join <token>", desc: "Worker-Knoten anschließen" },
     { use: "reset [-f]", desc: "Cluster abräumen (zurück auf bare metal)" },
+  ], grenzen: [
+    { id: "kubeadm-eine-cp", text: "Es gibt eine Control-Plane und einen Token; Zertifikate, CA-Hash und Pod-Netz wertet der Simulator nicht aus." },
+    { id: "kubeadm-ausgabe", text: "Die Ausgaben von init, join und reset sind gekürzt; Zeilen mit 💡 sind Lernhilfen des Spiels." },
+    { id: "kubeadm-reset", text: "reset fragt nicht nach und räumt den ganzen Cluster ab (Nodes, Workloads), nicht nur den lokalen Knoten." },
   ] },
   { key: "helm", rows: [
     { use: "repo add <name> <url>", desc: "Chart-Repository hinzufügen" },
@@ -114,9 +118,18 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ] },
   { key: "nslookup", rows: [
     { use: "<name>", desc: "DNS: Adresse hinter einem Service-Namen (CoreDNS)" },
+  ], grenzen: [
+    { id: "nslookup-ausgabe", text: "nslookup nennt immer den Server 10.96.0.10 und zeigt nur Name und Adresse, keine anderen Eintragsarten." },
+    { id: "nslookup-ein-namespace", text: "Es gibt nur den Namespace default; <svc>.<ns> eines anderen Namespace ist immer NXDOMAIN." },
+    { id: "nslookup-nur-cluster", text: "Nur Namen aus dem Cluster werden aufgelöst; jeder externe Name ist NXDOMAIN." },
+    { id: "nslookup-nicht-interaktiv", text: "Ohne Namen startet nslookup nicht den interaktiven Modus, sondern fragt nach dem Namen." },
   ] },
   { key: "curl", rows: [
     { use: "[http://]<service>[:port][/pfad]", desc: "Service abrufen – läuft er und ist er erreichbar?" },
+  ], grenzen: [
+    { id: "curl-antwort", text: "curl zeigt immer Statuszeile, Header und einen festen Text (wie -i); Flags wie -s, -v und -I ändern nichts." },
+    { id: "curl-nur-services", text: "curl erreicht nur Services im Cluster; externe Adressen löst der Simulator nicht auf." },
+    { id: "curl-fehlertext", text: "Die Fehler (6) und (7) folgen älterem curl; neuere Versionen hängen Zeitangabe und Grund an." },
   ] },
   { key: "aws", rows: [
     { use: "s3 mb s3://<bucket>", desc: "Bucket anlegen (Object Store, off-cluster)" },
@@ -141,6 +154,11 @@ function isUnlocked(available?: Set<string>): (key: string) => boolean {
  *  (docs/sim-treue/) verweist auf diese IDs. */
 export function simGrenzen(familie: string): ReadonlyArray<HelpLimit> {
   return HELP_FAMILIES.find(f => f.key === familie)?.grenzen ?? [];
+}
+
+/** Die Familien, die bewusste Vereinfachungen nennen, in Katalog-Reihenfolge (Treue-Matrix-Wächter, Fußzeile von `help`). */
+export function familienMitGrenzen(): string[] {
+  return HELP_FAMILIES.filter(f => f.grenzen?.length).map(f => f.key);
 }
 
 /** Eine fertig zusammengesetzte Zeile (Familienname nur in der ersten Zeile der
@@ -174,8 +192,8 @@ export function renderHelp(available?: Set<string>): string {
     out.push("  " + r.name.padEnd(nameW) + r.use.padEnd(useW) + r.desc);
   }
   // Hinweis auf die Einzelansicht, solange eine sichtbare Familie Grenzen nennt (#1440).
-  const mitGrenzen = HELP_FAMILIES.find(f => has(f.key) && f.grenzen);
-  if (mitGrenzen) out.push("💡 Was der Simulator vereinfacht: 'help " + mitGrenzen.key + "'.");
+  const beispiel = familienMitGrenzen().find(has);
+  if (beispiel) out.push("💡 Was der Simulator vereinfacht: 'help <befehl>', z.B. 'help " + beispiel + "'.");
   // Gefilterte Liste → Hinweis, dass weitere Befehle im Spielverlauf dazukommen (#358).
   if (available !== undefined) out.push("💡 Weitere Befehle schaltest du nach und nach frei, während du die Mission spielst.");
   return out.join("\n");

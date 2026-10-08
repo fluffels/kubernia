@@ -201,7 +201,8 @@ const COMMAND_HANDLERS: Record<string, (sim: Sim, tokens: string[], raw: string)
 };
 /** Alle hier funktionierenden Befehle – für die „Meintest du …?"-Vorschläge bei Tippfehlern.
  *  Die Handler-Tabelle plus die Sonderfälle `clear`/`help`. */
-const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
+export const SIM_COMMANDS: readonly string[] = Object.keys(COMMAND_HANDLERS);
+const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
 
   class Sim implements ClusterState {
     // `!` = definite assignment: alle Felder werden in reset() gesetzt, das der

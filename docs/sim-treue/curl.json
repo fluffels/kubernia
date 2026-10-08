@@ -1,0 +1,25 @@
+{
+  "hinweis": "Treue-Matrix curl (#1461): Einzelbefehl, je Ziel-Art und Aufrufform bzw. Flag zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die Manpage. Methode und Felder: docs/sim-treue.md. Geprüft gegen curl.se am 2026-10-08.",
+  "stand": "2026-10-08",
+  "befehle": {
+    "curl": {"doku":"https://curl.se/docs/manpage.html"}
+  },
+  "zeilen": [
+    {"befehl":"curl","ziel":"ClusterIP-Service","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","ziel":"ExternalName-Service","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-antwort","curl-nur-services"]},
+    {"befehl":"curl","ziel":"unbekannter Name","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-nur-services","curl-fehlertext"]},
+    {"befehl":"curl","ziel":"NetworkPolicy","verhalten":"abweichend","ausgabe":"gleich","tickets":[887]},
+    {"befehl":"curl","flag":"<host>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"http://<host>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"<host>:<port>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort","curl-fehlertext"]},
+    {"befehl":"curl","flag":"<host>/<pfad>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"https://<host>","verhalten":"abweichend","ausgabe":"vereinfacht","tickets":[1510],"grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"-s","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"-v","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"-I","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"-o <datei>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]},
+    {"befehl":"curl","flag":"-H <header>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]},
+    {"befehl":"curl","flag":"-X <methode>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]},
+    {"befehl":"curl","flag":"-d <daten>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]}
+  ]
+}

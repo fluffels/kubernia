@@ -1,0 +1,20 @@
+{
+  "hinweis": "Treue-Matrix kubeadm (#1461): je Unterbefehl und Flag zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die offizielle Doku. Methode und Felder: docs/sim-treue.md. Geprüft gegen kubernetes.io am 2026-10-08.",
+  "stand": "2026-10-08",
+  "befehle": {
+    "init": {"doku":"https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/"},
+    "join": {"doku":"https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-join/"},
+    "reset": {"doku":"https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-reset/"}
+  },
+  "zeilen": [
+    {"befehl":"init","ziel":"control-plane","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-eine-cp","kubeadm-ausgabe"]},
+    {"befehl":"init","flag":"--pod-network-cidr","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-eine-cp","kubeadm-ausgabe"]},
+    {"befehl":"join","ziel":"worker","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-eine-cp","kubeadm-ausgabe"]},
+    {"befehl":"join","flag":"<api-server-endpoint>","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-eine-cp","kubeadm-ausgabe"]},
+    {"befehl":"join","flag":"--token","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-eine-cp","kubeadm-ausgabe"]},
+    {"befehl":"join","flag":"--discovery-token-ca-cert-hash","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["kubeadm-eine-cp"]},
+    {"befehl":"join","flag":"<token>","verhalten":"abweichend","ausgabe":"vereinfacht","tickets":[1511],"grenzen":["kubeadm-ausgabe"]},
+    {"befehl":"reset","ziel":"node","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-reset","kubeadm-ausgabe"]},
+    {"befehl":"reset","flag":"-f","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-reset","kubeadm-ausgabe"]}
+  ]
+}

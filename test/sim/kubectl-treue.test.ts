@@ -1,31 +1,19 @@
-/* Domänen-Fitness (#1440): Die Treue-Matrix (docs/sim-treue/kubectl.json) deckt jeden registrierten
- * kubectl-Unterbefehl und jede unterstützte Ressourcenart ab. Ein neuer Befehl oder eine neue Art ohne
- * Matrix-Zeile ist rot. Probing: `sim.exec` je Alias; „unterstützt“ heißt, die Ausgabe passt nicht auf
- * den „nicht simuliert“-Text des Befehls (fail-closed: ändert sich der Text, schlägt die Sanity-Probe an). */
+/* Domänen-Fitness (#1440): Die kubectl-Tiefe der Treue-Matrix (docs/sim-treue/kubectl.json): jede unterstützte
+ * Ressourcenart bzw. jedes Unterverb hat eine Zeile. Schema und Unterbefehls-Vollständigkeit prüft der generische
+ * Wächter test/sim/sim-treue.test.ts. Eine neue Art ohne Matrix-Zeile ist rot. Probing: `sim.exec` je Alias;
+ * „unterstützt“ heißt, die Ausgabe passt nicht auf den „nicht simuliert“-Text des Befehls (fail-closed: ändert sich der Text, schlägt die Sanity-Probe an). */
 import { test, expect, describe } from "vitest";
-import { readFileSync } from "node:fs";
 import { freshSim } from "./helpers";
-import { KUBECTL_SUBCOMMANDS } from "../../src/sim/kubectl";
 import { GET_RESOURCE_SCOPES } from "../../src/sim/kubectl/inspect";
 import { MAPPED_KINDS } from "../../src/sim/manifest/registry";
-import { simGrenzen } from "../../src/hud/helptext";
 import { NODE_VERSION } from "../../src/sim/nodes";
+import { ladeMatrix } from "../support/sim-treue";
 
-const STATUS = ["gleich", "vereinfacht", "abweichend"];
-const ZEILEN_SCHLUESSEL = ["befehl", "ziel", "flag", "verhalten", "ausgabe", "tickets", "grenzen", "doku"];
-const DOKU_HOSTS = ["kubernetes.io", "prometheus-operator.dev", "prometheus.io", "grafana.github.io", "argo-cd.readthedocs.io"];
-
-interface Zeile {
-  befehl: string; ziel?: string; flag?: string; verhalten: string; ausgabe: string;
-  tickets?: number[]; grenzen?: string[]; doku?: string;
-}
-interface Matrix { clusterVersion: string; befehle: Record<string, { doku: string; dokuZiele?: string[] }>; zeilen: Zeile[] }
-
-const matrix = JSON.parse(readFileSync("docs/sim-treue/kubectl.json", "utf8")) as Matrix;
+const matrix = ladeMatrix("kubectl");
 const rows = matrix.zeilen;
 
 describe("Versionsbasis (#1483)", () => {
-  test("clusterVersion der Matrix ist die simulierte NODE_VERSION: Serververhalten (Warnungen, Deprecations) folgt ihr", () => {
+  test("clusterVersion der kubectl-Matrix ist gesetzt und die simulierte NODE_VERSION: Serververhalten (Warnungen, Deprecations) folgt ihr", () => {
     expect(matrix.clusterVersion).toBe(NODE_VERSION);
   });
 });
@@ -49,56 +37,7 @@ function supported(befehl: string, wort: string): boolean {
   return !NICHT_SIMULIERT[befehl].test(out);
 }
 
-describe("Matrix-Schema", () => {
-  test("jede Zeile: genau eins von ziel/flag, bekannte Schlüssel, gültige Status", () => {
-    for (const r of rows) {
-      const name = `${r.befehl} ${r.ziel ?? r.flag}`;
-      expect((r.ziel === undefined) !== (r.flag === undefined), `${name}: genau eins von ziel/flag`).toBe(true);
-      expect(Object.keys(r).filter(k => !ZEILEN_SCHLUESSEL.includes(k)), `${name}: unbekannte Schlüssel`).toEqual([]);
-      expect(STATUS, `${name}: verhalten`).toContain(r.verhalten);
-      expect(STATUS, `${name}: ausgabe`).toContain(r.ausgabe);
-    }
-  });
-
-  test("(befehl, ziel|flag) ist eindeutig", () => {
-    const keys = rows.map(r => `${r.befehl}|${r.ziel !== undefined ? "ziel" : "flag"}|${r.ziel ?? r.flag}`);
-    expect(keys.filter((k, i) => keys.indexOf(k) !== i)).toEqual([]);
-  });
-
-  test("abweichend verlangt Tickets (ganze Zahlen), vereinfacht verlangt bekannte Grenzen", () => {
-    const ids = simGrenzen("kubectl").map(g => g.id);
-    const probleme: string[] = [];
-    for (const r of rows) {
-      const name = `${r.befehl} ${r.ziel ?? r.flag}`;
-      const zellen = [r.verhalten, r.ausgabe];
-      if (zellen.includes("abweichend") && !(r.tickets?.length && r.tickets.every(Number.isInteger))) probleme.push(`${name}: abweichend ohne Ticket`);
-      if (zellen.includes("vereinfacht") && !r.grenzen?.length) probleme.push(`${name}: vereinfacht ohne Grenze`);
-      for (const g of r.grenzen ?? []) if (!ids.includes(g)) probleme.push(`${name}: unbekannte Grenze ${g}`);
-    }
-    expect(probleme).toEqual([]);
-  });
-
-  test("jede Grenze in help kubectl wird von mindestens einer Zeile benutzt", () => {
-    const benutzt = new Set(rows.flatMap(r => r.grenzen ?? []));
-    expect(simGrenzen("kubectl").map(g => g.id).filter(id => !benutzt.has(id))).toEqual([]);
-  });
-
-  test("Doku-Links sind https auf erlaubten Hosts", () => {
-    const links = [...rows.map(r => r.doku), ...Object.values(matrix.befehle).map(b => b.doku)].filter(Boolean) as string[];
-    for (const l of links) {
-      const u = new URL(l);
-      expect(u.protocol, l).toBe("https:");
-      expect(DOKU_HOSTS.some(h => u.hostname === h || u.hostname.endsWith("." + h)), l).toBe(true);
-    }
-  });
-});
-
 describe("Vollständigkeit gegen die registrierten Befehle", () => {
-  test("Matrix-Befehle = registrierte Unterbefehle, in beide Richtungen", () => {
-    expect(sorted(new Set(rows.map(r => r.befehl)))).toEqual(sorted(KUBECTL_SUBCOMMANDS));
-    expect(sorted(Object.keys(matrix.befehle))).toEqual(sorted(KUBECTL_SUBCOMMANDS));
-  });
-
   test("Sanity: der „nicht simuliert“-Text jedes geprobten Befehls trifft noch (fail-closed)", () => {
     for (const b of Object.keys(NICHT_SIMULIERT)) expect(supported(b, "zzz-nichtda"), b).toBe(false);
   });
