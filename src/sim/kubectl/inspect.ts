@@ -372,7 +372,7 @@ export function describeNetworkPolicy(host: KubectlHost, name: string): string {
     "PolicyTypes:  Ingress",
     "Allowing ingress traffic:",
     np.allowFrom
-      ? "  From: Pods mit Label app=" + np.allowFrom
+      ? "  From: Pods mit Label " + workloadSelector(np.allowFrom)
       : "  <none> (default-deny: niemand darf rein, bis du eine Quelle erlaubst)",
   ].join("\n");
 }

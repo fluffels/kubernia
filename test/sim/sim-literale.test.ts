@@ -22,7 +22,7 @@ function literale(src: string): string[] {
 const treffer = (re: RegExp) => files.flatMap(f => literale(readFileSync(f, "utf8")).filter(l => re.test(l)).map(l => f + ": " + l));
 
 test("kein handgeschriebenes app=<name> (workloadSelector)", () => {
-  expect(treffer(/^["'`]app=/)).toEqual([]);
+  expect(treffer(/app=/)).toEqual([]);
 });
 test("kein Literal ahoi-control / ahoi-worker- (CONTROL_PLANE_NODE, workerNodeName)", () => {
   expect(treffer(/ahoi-control|ahoi-worker-/)).toEqual([]);

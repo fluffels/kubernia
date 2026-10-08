@@ -72,7 +72,7 @@ function deploymentEnvFrom(dep: Deployment): string[] {
 function deploymentTemplate(host: KubectlHost, dep: Deployment): string[] {
   return [
     "Pod Template:",
-    "  Labels:  app=" + dep.name,
+    "  Labels:  " + workloadSelector(dep.name),
     ...(dep.serviceAccountName ? ["  Service Account:  " + dep.serviceAccountName] : []),
     "  Containers:",
     "   " + dep.name + ":",
@@ -186,7 +186,7 @@ function describeStatefulSet(host: KubectlHost, name: string, kind: ResourceKind
     "  Partition:  0",
     kv("Pods Status", podsStatus(host, sts), 24),
     "Pod Template:",
-    "  Labels:  app=" + sts.name,
+    "  Labels:  " + workloadSelector(sts.name),
     "  Containers:",
     "   " + sts.name + ":",
     "    Image:  " + sts.image,

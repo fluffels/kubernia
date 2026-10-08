@@ -210,6 +210,7 @@ describe("(b) wide: replicasets und nodes (#1483)", () => {
     expect(kopf(out)).toEqual(["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP", "OS-IMAGE", "KERNEL-VERSION", "CONTAINER-RUNTIME"]);
     const cp = zeile(out, "ahoi-control")!;
     expect(cp.slice(4)).toEqual([NODE_VERSION, "10.0.0.10", "<none>", NODE_SYSTEM_INFO.osImage, NODE_SYSTEM_INFO.kernelVersion, NODE_SYSTEM_INFO.containerRuntimeVersion]);
+    expect(zeile(out, "ahoi-worker-1")!.slice(6)).toEqual(["<none>", NODE_SYSTEM_INFO.osImage, NODE_SYSTEM_INFO.kernelVersion, NODE_SYSTEM_INFO.containerRuntimeVersion]);
   });
   test("die CP-Adresse ist die des Endpoints kubernetes; Worker-IPs sind stabil über Sims und verschieden", () => {
     const sim = new KQSim(szenario());

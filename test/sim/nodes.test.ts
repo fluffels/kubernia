@@ -167,7 +167,7 @@ test("nodeInternalIP: ein Worker bekommt nie die CP-Adresse, auch nicht unter de
   const w: ClusterNode = { name: "ahoi-control", status: "Ready", roles: "<none>", version: NODE_VERSION };
   assert.notEqual(nodeInternalIP(w), CONTROL_PLANE_IP);
   for (let i = 1; i <= 2000; i++) {
-    assert.notEqual(nodeInternalIP({ ...w, name: "ahoi-worker-" + i }), CONTROL_PLANE_IP);
+    assert.doesNotMatch(nodeInternalIP({ ...w, name: "ahoi-worker-" + i }), /^10\.0\.0\./);
   }
 });
 
