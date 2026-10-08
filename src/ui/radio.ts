@@ -9,6 +9,7 @@ import {
   type GateContext, type SubmissionTask,
 } from "../hud/viewdecide";
 import { fmtCmd } from "../hud/markup";
+import { splitTermBlocks } from "../hud/termblocks";
 import type { QuestTask } from "../types";
 import { part, $, esc, NPCS, masteryBadge } from "./shared";
 
@@ -18,6 +19,20 @@ function gateCtx(): GateContext {
     isAbbrevUnlocked: (id) => Game.isAbbrevUnlocked(id),
     unlockAbbrev: Game.currentStep()?.unlockAbbrev,
   };
+}
+
+/** Sim-Ausgabe als Terminal-HTML (#1484): Tabellen als `.t-table` (kein Umbruch, einzeln horizontal
+ *  scrollbar), Fließtext wie bisher (Tipp-Zeilen als t-tip), Blöcke mit "\n" verbunden. */
+function termOutputHtml(output: string, error: boolean): string {
+  const errCls = error ? " t-err" : "";
+  return splitTermBlocks(output)
+    .map((b): string => {
+      const text = esc(b.text);
+      if (b.kind === "table") return '<span class="t-table' + errCls + '">' + text + "</span>";
+      const tipped = text.replace(/💡[^\n]*/g, (s: string) => '</span><span class="t-tip">' + s + "</span><span>");
+      return (error ? '<span class="t-err">' : "<span>") + tipped + "</span>";
+    })
+    .join("\n");
 }
 
 export const radioUI = part({
@@ -180,10 +195,7 @@ export const radioUI = part({
   /** Befehl + Sim-Ausgabe ins Terminal-Log schreiben, kappen und neu zeichnen (#565). */
   _echoCommand(line: string, result: { output?: string; error?: boolean }) {
     this.termLog.push('<span class="t-cmd">crew@hafen:~$ ' + esc(line) + "</span>");
-    if (result.output) {
-      const text = esc(result.output).replace(/💡[^\n]*/g, s => '</span><span class="t-tip">' + s + '</span><span>');
-      this.termLog.push(result.error ? '<span class="t-err">' + text + "</span>" : "<span>" + text + "</span>");
-    }
+    if (result.output) this.termLog.push(termOutputHtml(result.output, !!result.error));
     if (this.termLog.length > 160) this.termLog = this.termLog.slice(-120);
     this.termRedraw();
   },
