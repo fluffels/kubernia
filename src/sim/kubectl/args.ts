@@ -13,7 +13,6 @@ import { flag, checkedFlag, notSimulated, subEntry, type Call } from "../cliargs
 export { notSimulated } from "../cliargs";
 import { parseMem, parseCpuMilli } from "../util";
 import { RESOURCE_KINDS, resolveKind } from "./resources";
-import { OUTPUT_FLAG } from "./output";
 
 /** Top-Level-Befehle von echtem kubectl: sie gibt es, die Sim kann sie nur (noch) nicht. */
 export const REAL_KUBECTL_COMMANDS: readonly string[] = [
