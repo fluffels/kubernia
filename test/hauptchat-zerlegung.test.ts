@@ -11,7 +11,7 @@ import * as hcModule from "../scripts/hauptchat-zerlegung.mjs";
 type Row = Record<string, unknown>;
 type Zeile = { kategorie: string; quelle: string; modell: string; calls: number; cost: number };
 type Fenster = { nr: number; art: string; startTs: string; closedAt: string | null; modelle: Record<string, number> };
-type Ergebnis = { rows: Zeile[]; fenster: Fenster[]; kubernia: { calls: number; cost: number }; ohnePreis: number };
+type Ergebnis = { rows: Zeile[]; fenster: Fenster[]; kubernia: { calls: number; cost: number }; ohnePreis: number; ohnePreisModelle: Record<string, number> };
 type Sub = { meta: { agentType?: string; description?: string; parentAgentId?: string }; zeilen: Row[] };
 type Eingabe = {
   sessions: { id: string; main: Row[]; subagents?: Sub[] }[];
@@ -23,6 +23,7 @@ type Eingabe = {
 const hc = hcModule as {
   zerlegeHauptchat: (e: Eingabe) => Ergebnis;
   slugFuerPfad: (p: string) => string;
+  renderMarkdown: (r: Ergebnis) => string;
 };
 
 const OPUS = "claude-opus-5-5";
@@ -243,6 +244,14 @@ describe("zerlegeHauptchat: Zeitfenster und Randfälle", () => {
   test("Modell ohne Preis zählt in ohnePreis, nicht als 0 $ ohne Hinweis", () => {
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a"), call(1, "claude-unbekannt-9")] }] });
     assert.equal(r.ohnePreis, 1);
+  });
+
+  test("Hinweis nennt die Modelle ohne Preis (#1441); ohne solche Calls keine Hinweiszeile", () => {
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a"), call(1, "claude-unbekannt-9"), call(2, "claude-unbekannt-9"), call(3, OPUS)] }] });
+    assert.deepEqual(r.ohnePreisModelle, { "claude-unbekannt-9": 2 });
+    assert.match(hc.renderMarkdown(r), /2 Calls ohne Preis: claude-unbekannt-9 \(2\) \(Modell in PRICES nachtragen\)/);
+    const ok = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a"), call(1, OPUS)] }] });
+    assert.doesNotMatch(hc.renderMarkdown(ok), /ohne Preis/);
   });
 
   test("Slug-Ableitung Windows und POSIX", () => {

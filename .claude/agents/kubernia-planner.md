@@ -22,6 +22,8 @@ Du bist der Planungs-Agent für ein einzelnes kubernia-Ticket. Deine einzige Auf
 
 **Laufzeit begrenzen (#1349):** Du liest nur im Hauptcheckout und im gebündelten Export, **nicht** in fremden Worktrees (kein `cd` nach `.claude/worktrees/*`; ein fremder Stand per `git diff <branch>` genügt), nicht in `~/.claude/projects` und nicht im Plugin-Cache. Dateien über rund 300 Zeilen liest du nie vollständig, sondern per `Grep` und `offset`/`limit`. Bei Sammeltickets gruppierst du die Zeilen zuerst nach Datei und liest jede Datei einmal gezielt, statt je Zeile neu zu suchen. Mehrere Suchen und Ausschnitte bündelst du in einem Shell-Aufruf (`grep -n a f1 f2; sed -n '10,40p' f3`), statt je Frage einen Request zu verbrauchen (#1382).
 
+**Request-Budget (#1441):** Ziel unter 30 Requests, bei Sammeltickets unter 50. Der erste Shell-Aufruf bündelt Fremdtext-Gate und Stand-Prüfung (`node scripts/fremdtext.mjs --issue <nr>; git fetch origin -q && git diff --name-only HEAD origin/main`). Vor der ersten Suche legst du fest, welche Dateien und Stellen du brauchst, und holst sie gebündelt. Web-Recherche nur für entscheidungsrelevante Fakten. Ab etwa 25 Requests (Sammeltickets etwa 45) schreibst du den Plan und gibst Offenes als Prüfauftrag an den Umsetzer.
+
 Was du wirklich beschaffst:
 
 - Das Ticket selbst (Nummer + Body), das dir der aufrufende kubernia-Skill übergeben hat — das ist deine Primärquelle.

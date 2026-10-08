@@ -5,9 +5,9 @@ import * as raw from "../scripts/subagent-laufzeit.mjs";
 
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[] };
-type L = { ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; maxKontext: number; parallel: number; offen: boolean; start: string };
-type Stat = { n: number; dauerMin: number | null; maxDauerMin: number | null };
-type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; offen: number } };
+type L = { ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
+type Stat = { n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
+type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
   median: (w: number[]) => number | null;
   vereinigungMs: (i: [number, number][]) => number;
@@ -129,9 +129,39 @@ describe("laufzeiten: Filter und Aggregat", () => {
     const r = S.laufzeiten({ laeufe: [lauf("#1", 0, 10), lauf("#2", 5, 15), lauf("#3", 30, 40), lauf("#9", 0, 40, { agentType: "kubernia-lens" })] });
     expect(r.laeufe.map((l) => l.parallel)).toEqual([1, 1, 0]);
   });
+  test("s je Request: Median der Modellzeit je Request, Lauf ohne Request zählt nicht (kein Infinity/NaN)", () => {
+    // 2 Requests über 10 min Modellzeit = 300 s; 3 Requests, 8 min Modellzeit = 160 s; Lauf ohne Request.
+    const ohneRequest: Lauf = { meta: { agentType: "kubernia-planner" }, zeilen: [user(0, "Plane #3"), user(5, "weiter")] };
+    const r = S.laufzeiten({ laeufe: [lauf("Plane #1", 0, 10), lauf("Plane #2", 0, 10, { tool: [2, 4] }), ohneRequest] });
+    const [a, b, c] = r.laeufe;
+    expect(a.sProRequest).toBeCloseTo(300, 5);
+    expect(b.sProRequest).toBeCloseTo(160, 5);
+    expect(c).toMatchObject({ requests: 0, sProRequest: null });
+    expect(r.aggregat.gesamt.n).toBe(3);
+    expect(r.aggregat.gesamt.sProRequest).toBeCloseTo(230, 5);
+    expect(S.laufzeiten({ laeufe: [ohneRequest] }).aggregat.gesamt.sProRequest).toBeNull();
+  });
+  test("Parallelität je Gruppe als Median; ein offener Lauf zählt für andere mit, aber nicht in der Gruppe", () => {
+    const offen = lauf("Plane #9", 0, 12);
+    offen.zeilen.push(call(13, 7, "offen"));
+    const r = S.laufzeiten({ laeufe: [lauf("#1", 0, 10), lauf("#2", 5, 15), lauf("#3", 30, 40), offen] });
+    // #1 und #2 überlappen sich und den offenen Lauf, #3 niemanden.
+    expect(r.laeufe.map((l) => l.parallel)).toEqual([2, 2, 2, 0]); // Reihenfolge nach Start, stabil: #1, offen, #2, #3
+    expect(r.aggregat.gesamt.n).toBe(3);
+    expect(r.aggregat.gesamt.parallel).toBe(2);
+  });
+  test("Schnitt trennt auch die Läufe ohne Sammeltickets (alt/neu)", () => {
+    const laeufe = [lauf("#1", 0, 4), lauf("#2 (gesammelt)", 0, 4), lauf("#3", 10, 20), lauf("#4", 12, 30), lauf("#5 (gesammelt)", 10, 20)];
+    const a = S.laufzeiten({ laeufe, schnitt: t(10) }).aggregat;
+    expect(a.altOhneSammel?.n).toBe(1);
+    expect(a.neuOhneSammel?.n).toBe(2);
+    expect(S.laufzeiten({ laeufe }).aggregat.neuOhneSammel).toBeUndefined();
+  });
   test("renderMarkdown nennt Aggregat und Läufe", () => {
     const md = S.renderMarkdown(S.laufzeiten({ laeufe: [lauf("Plane #77", 0, 4)], schnitt: t(1) }));
     expect(md).toMatch(/\| #77 \|/);
     expect(md).toMatch(/alle ab Schnitt/);
+    expect(md).toMatch(/ohne Sammel ab Schnitt/);
+    expect(md).toContain("s/Req");
   });
 });

@@ -126,6 +126,8 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
       e.summe += Number.isFinite(b.n) ? b.n : 0;
     }
   }
+  // Blocker je PR der Brille (Σ Blocker / PRs; #1441): die Zahl, an der die Wirkung der Selbstprüfung vor dem Commit gemessen wird.
+  for (const e of Object.values(brillen)) e.jePr = e.prs > 0 ? e.summe / e.prs : null;
   const zaehle = (art) => zeilen.filter((z) => z.nacharbeit === art).length;
   const abgelaufen = zeilen.filter((z) => z.nacharbeit !== "offen");
   return {
@@ -157,7 +159,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   }
   out.push("", `PRs: ${k.prs} (ohne KQ-Review-Nachweis: ${k.ohneNachweis}, ohne blocker-Feld: ${k.ohneBlockerFeld})`);
   out.push(`Runde 1 mit Blocker (Proxy runden ≥ 2): ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
-  for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe}`);
+  for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
   return out.join("\n");

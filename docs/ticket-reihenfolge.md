@@ -51,6 +51,7 @@ Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#w
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash
   gh issue list --state open --limit 1000 --json number,title,assignees --jq '[.[] | select(.title=="Harness-Härtung (gesammelt)" and (.assignees|length)==0) | .number] | max // empty'
+  gh pr list --state merged --search "<Stichwort>"   # schon durch einen gemergten PR erledigt? Dann keine Zeile
   gh issue comment <nr> --body "- [ ] <Befund>"
   ```
   Kein ungeclaimter Treffer (leere Ausgabe) → anlegen (unten). Die Suche läuft über die konsistente Liste (kein Such-Index, der Neues verzögert liefert); `max // empty` liefert bei keinem Treffer nichts statt `null`. Zwei offene **ungeclaimte ohne gegenseitigen Blocker-Bezug** (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen. Ein **Nachfolger** (Body `blockiert durch #<vorgänger>`, angelegt oder freigegeben, während der Vorgänger geclaimt war oder wegen eines Blockers freigegeben wurde) ist kein Wettlauf: beide bleiben, **neue Zeilen kommen ins jüngste ungeclaimte** Sammelticket (den Nachfolger), das ältere trägt weiter seinen Blocker und kommt zuerst dran, sobald der frei ist.
@@ -82,6 +83,7 @@ Das Sammelticket „Langfuse-Befunde (gesammelt)" (`area:harness`) bündelt Befu
 - **Höchstens ein** ungeclaimtes; ein geclaimtes (Assignee) läuft daneben weiter. Jeder Agent darf es jederzeit befüllen:
   ```bash
   gh issue list --state open --limit 1000 --json number,title,assignees --jq '.[] | select(.title=="Langfuse-Befunde (gesammelt)" and (.assignees|length)==0) | .number'
+  gh pr list --state merged --search "<Stichwort>"   # schon durch einen gemergten PR erledigt? Dann keine Zeile
   gh issue comment <nr> --body "- [ ] <Befund>"
   ```
   Zwei ungeclaimte ohne gegenseitigen Blocker-Bezug (Wettlauf): das jüngere schließen, seine Zeilen ins ältere übertragen; ein Nachfolger mit `blockiert durch #<vorgänger>` ist keiner, neue Zeilen kommen ins jüngste ungeclaimte.

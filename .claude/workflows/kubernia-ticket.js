@@ -877,7 +877,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - § Worktree entfernen auf Windows, Falle 2: arbeite mit absoluten Pfaden und cd NICHT
   in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen. Skripte nie über stdin starten (python -, node -): per Write ablegen und node <pfad> starten.
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,
-  § Tests gegen False Positives absichern (Red-Green). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
+  § Tests gegen False Positives absichern (Red-Green), § Mehr-Perspektiven-Review (Selbstcheck vor dem Commit). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Ausnahmen: Regeltext), Spiel-/Inhalts-Befund → gebündeltes Issue.

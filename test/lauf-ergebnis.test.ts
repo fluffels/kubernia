@@ -138,6 +138,19 @@ describe("bewertePrs und Aggregate", () => {
     assert.equal(z(51).nacharbeit, "nein");
     assert.equal(z(50).ticket, 40);
   });
+  test("Blocker je PR: Σ Blocker / PRs der Brille, ohne PRs der Brille kein NaN und keine Division durch 0", () => {
+    const k = mod.bewertePrs({
+      prs: [pr({ mergeCommit: { oid: "9".repeat(40) } })],
+      commits: [commit(review("runden=1 lenses=architektur blocker=architektur:3"), MERGED, "9".repeat(40))],
+      ci: {},
+      festgefahren: {},
+      jetzt: SPAETER,
+    });
+    assert.equal(k.kennzahlen.brillen.architektur.jePr, 3);
+    assert.match(mod.formatiere(k), /Σ Blocker 3 \(3,00 je PR\)/);
+    const leer = mod.bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt: SPAETER });
+    assert.deepEqual(leer.kennzahlen.brillen, {});
+  });
   test("kaputtes runden in der Squash-Message zählt als ohne Nachweis, kein NaN in den Aggregaten", () => {
     const k = mod.bewertePrs({
       prs: [pr({ mergeCommit: { oid: "9".repeat(40) } })],
@@ -156,8 +169,8 @@ describe("bewertePrs und Aggregate", () => {
     const k = e.kennzahlen;
     assert.equal(k.ohneNachweis, 1);
     assert.equal(k.ohneBlockerFeld, 1);
-    assert.deepEqual(k.brillen.architektur, { prs: 2, treffer: 1, summe: 2 });
-    assert.deepEqual(k.brillen["test-adaequanz"], { prs: 2, treffer: 1, summe: 1 });
+    assert.deepEqual(k.brillen.architektur, { prs: 2, treffer: 1, summe: 2, jePr: 1 });
+    assert.deepEqual(k.brillen["test-adaequanz"], { prs: 2, treffer: 1, summe: 1, jePr: 0.5 });
     assert.equal(k.runde1MitBlockerProxy, 2, "runden ≥ 2 über alle PRs mit Nachweis");
     assert.equal(k.mitNachweis, 3);
   });
@@ -172,7 +185,7 @@ describe("bewertePrs und Aggregate", () => {
   test("formatiere nennt Tabelle und Aggregate", () => {
     const t = mod.formatiere(e);
     assert.match(t, /\| #50 \| #40 \| 2026-10-01 \| 2 \| architektur:2,requirement-treue:0,test-adaequanz:1 \| 1 \| 0 \| folge \|/);
-    assert.match(t, /Lens-Trefferquote architektur: 50 % \(1\/2\)/);
+    assert.match(t, /Lens-Trefferquote architektur: 50 % \(1\/2\), Σ Blocker 2 \(1,00 je PR\)/);
     assert.match(t, /ohne KQ-Review-Nachweis: 1/);
   });
 });

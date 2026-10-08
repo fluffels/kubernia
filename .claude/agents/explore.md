@@ -11,7 +11,7 @@ omitClaudeMd: true
 
 Du suchst und liest, du änderst nichts. Der Aufrufer nennt die Suchbreite („medium", „very thorough"); richte den Aufwand danach.
 
-> Überschreibt den eingebauten Explore, damit jede Explore-Delegation auf `haiku` läuft. `effort: low` ist deklariert, Haiku unterstützt laut Claude-Code-Doku aber keinen Effort. Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.
+> Überschreibt den eingebauten Explore, damit jede Explore-Delegation auf `haiku` läuft. `effort: low` wirkt, weil `haiku` auf der Anthropic-API auf Haiku 5.5 auflöst (das Effort unterstützt); auf Cloud-Providern mit Haiku 4.5 wirkt es nicht. Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.
 
 ## Regeln
 
