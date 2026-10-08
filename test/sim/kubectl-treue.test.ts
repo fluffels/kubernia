@@ -23,7 +23,9 @@ const sorted = (xs: Iterable<string>) => [...xs].sort();
 
 /** „Nicht simuliert“-Text je Befehl (testlokal; die Sanity-Probe unten hält ihn aktuell). */
 const NICHT_SIMULIERT: Record<string, RegExp> = {
-  ...Object.fromEntries(["get", "describe", "delete", "top", "set", "rollout", "auth"].map(b => [b, /Nicht simuliert:|doesn't have a resource type|unknown command/])),
+  ...Object.fromEntries(["get", "describe", "delete", "top"].map(b => [b, /Nicht simuliert:|doesn't have a resource type|unknown command/])),
+  // Bei set/rollout/auth ist das erste Wort eine Aktion, keine Art: ein unbekannter Ressourcentyp in den Zielen („treue-probe“) heißt „Aktion unterstützt“.
+  ...Object.fromEntries(["set", "rollout", "auth"].map(b => [b, /Nicht simuliert:|unknown command/])),
   // create/label haben tiefere „nicht simuliert“-Meldungen (Unterart des Secrets, anderes Label), die den Befehl selbst nicht ausschließen.
   create: /Nicht simuliert: 'kubectl create (?!secret )|doesn't have a resource type/,
   label: /Nicht simuliert: 'kubectl label/,

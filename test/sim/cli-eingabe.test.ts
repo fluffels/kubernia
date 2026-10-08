@@ -7,11 +7,17 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkedFlag, checkFlags, positionalArgs, flagValueOf, parseCall, shellTokens, subEntry, notSimulated, specOfSub, type ArgSpec,
+  flag, checkedFlag, checkFlags, positionalArgs, parseCall, shellTokens, subEntry, notSimulated, specOfSub, type ArgSpec, type FlagStyle,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
 const host = { _err: (m: string, tip?: string) => m + (tip ? "\n" + tip : "") };
+
+/** Der Wert eines Flags über `parseCall` (die EINE Stelle, an der Flags gelesen werden); `null` ohne das Flag oder ohne Wert. */
+function valueOf(t: string[], names: string[], style: FlagStyle = "pflag"): string | null {
+  const r = parseCall(host, { cmd: "x", style, flags: [flag(true, ...names)] }, t, 1);
+  return typeof r === "string" ? null : r.value(...names);
+}
 
 const PF: ArgSpec = {
   cmd: "x run", flags: [flag(true, "-n", "--namespace"), flag(false, "-a", "--all"), flag(false, "-d", "--detach")],
@@ -129,16 +135,17 @@ describe("cliargs: goflag-Stil (terraform)", () => {
   });
 });
 
-describe("cliargs: flagValueOf und Helfer", () => {
+describe("cliargs: Flag-Werte über parseCall und Helfer", () => {
   test.each([
     [["a", "-n", "x"], "x"], [["a", "-n=x"], "x"], [["a", "-nx"], "x"], [["a", "--namespace", "x"], "x"],
     [["a", "--namespace=x"], "x"], [["a", "-n"], null], [["a"], null],
-  ])("pflag %j → %j", (t, erwartet) => { expect(flagValueOf(t, ["-n", "--namespace"])).toBe(erwartet); });
-  test("pflag: kurzes Flag mit angeklebtem Wert", () => { expect(flagValueOf(["docker", "build", "-tname:1", "."], ["-t", "--tag"])).toBe("name:1"); });
-  test("goflag: -var-file=x und -var-file x", () => {
-    expect(flagValueOf(["tf", "-var-file=x"], ["-var-file"], "goflag")).toBe("x");
-    expect(flagValueOf(["tf", "--var-file", "x"], ["-var-file"], "goflag")).toBe("x");
-    expect(flagValueOf(["tf", "-var-file"], ["-var-file"], "goflag")).toBeNull();
+  ])("pflag %j → %j", (t, erwartet) => { expect(valueOf(t, ["-n", "--namespace"])).toBe(erwartet); });
+  test("pflag: kurzes Flag mit angeklebtem Wert", () => { expect(valueOf(["docker", "build", "-tname:1", "."], ["-t", "--tag"])).toBe("name:1"); });
+  test("goflag: -var-file=x und -var-file x; ohne Wert der Go-Text", () => {
+    expect(valueOf(["tf", "-var-file=x"], ["-var-file"], "goflag")).toBe("x");
+    expect(valueOf(["tf", "--var-file", "x"], ["-var-file"], "goflag")).toBe("x");
+    expect(valueOf(["tf", "-var-file"], ["-var-file"], "goflag")).toBeNull();
+    expect(parseCall(host, GO, ["tf", "-var-file"], 1)).toContain("flag needs an argument: -var-file");
   });
   test("notSimulated: Meldung, Hinweis und Liste", () => {
     expect(notSimulated(host, "'a b'.", ["a c", "a d"], "Hinweis.")).toBe("Nicht simuliert: 'a b'. Hinweis.\nDer Simulator kann: a c · a d");
@@ -591,11 +598,11 @@ describe("docker: Bool-Werte werden ausgewertet", () => {
 
 /* ---------- #1469, Review-Runde 1: Grenzfälle des Scanners ---------- */
 describe("cliargs: Grenzfälle (Review R1)", () => {
-  test("flagValueOf: der letzte Treffer gewinnt, der Wert-Token wird übersprungen", () => {
-    expect(flagValueOf(["a", "-n", "x", "-n", "y"], ["-n"])).toBe("y");
-    expect(flagValueOf(["a", "-n", "-n", "x"], ["-n"])).toBe("-n");
-    expect(flagValueOf(["a", "--namespace=x", "-n", "y"], ["-n", "--namespace"])).toBe("y");
-    expect(flagValueOf(["a", "-n", "y", "--namespace=x"], ["-n", "--namespace"])).toBe("x");
+  test("Flag-Wert: der letzte Treffer gewinnt, der Wert-Token wird übersprungen", () => {
+    expect(valueOf(["a", "-n", "x", "-n", "y"], ["-n"])).toBe("y");
+    expect(valueOf(["a", "-n", "-n", "x"], ["-n"])).toBe("-n");
+    expect(valueOf(["a", "--namespace=x", "-n", "y"], ["-n", "--namespace"])).toBe("y");
+    expect(valueOf(["a", "-n", "y", "--namespace=x"], ["-n", "--namespace"])).toBe("x");
   });
   test("kubectl get pods -n a -n b: der letzte Namespace gilt", () => {
     const s = freshSim();

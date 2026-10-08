@@ -17,54 +17,13 @@ import { DEFAULT_NAMESPACE } from "../state";
 import type { KubectlHost } from "./host";
 import { GET_RENDERERS, noResourcesIn, type GetTable } from "./inspect";
 import { allNamespaces, foreignNamespace, requestedNamespace } from "./namespace";
-import { allKinds, qualified, resolveKind, serverWarnings, type ResourceKind } from "./resources";
-import { callOf, notSimulated, positionals, slashRef, SLASH_SINGLE_ERROR, unknownResourceType } from "./args";
+import { qualified, serverWarnings, type ResourceKind } from "./resources";
+import { notSimulated } from "./args";
+import { readTargets, type Target } from "./targets";
+import type { Call } from "../cliargs";
 import { isWide, isYaml } from "./output";
 import { emitYaml } from "../yaml-emit";
 import { yamlKinds, yamlList, yamlObjects } from "./get-yaml";
-
-/** Was verlangt wurde: ein Typ mit den (möglicherweise leeren) gewünschten Namen. */
-interface Request { kind: ResourceKind; names: string[] }
-type Parsed = { requests: Request[] } | { error: string };
-
-const NO_TYPE_NEEDED_ERROR = "error: there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'kubectl get resource/<resource_name>' instead of 'kubectl get resource resource/<resource_name>'";
-
-/** Die Typen einer Komma-Liste (`pods,svc`, `all`), ohne Doppelte, in Eingabereihenfolge. */
-function expandTypes(host: KubectlHost, list: string): ResourceKind[] | string {
-  const out: ResourceKind[] = [];
-  for (const tok of list.split(",").filter(s => s !== "")) {
-    const kinds = tok.toLowerCase() === "all" ? allKinds() : [resolveKind(tok)];
-    for (const k of kinds) {
-      if (!k) return unknownResourceType(host, tok);
-      if (!out.includes(k)) out.push(k);
-    }
-  }
-  return out;
-}
-
-/** Die Slash-Form `typ/name …` (auch gemischte Typen). */
-function parsePairs(host: KubectlHost, pos: string[]): Parsed {
-  const requests: Request[] = [];
-  for (const tok of pos) {
-    const ref = slashRef(tok) ?? { error: SLASH_SINGLE_ERROR }; // ein Token ohne Slash mitten in der Slash-Form
-    if ("error" in ref) return { error: host._err(ref.error) };
-    const kind = resolveKind(ref.typ);
-    if (!kind) return { error: unknownResourceType(host, ref.typ) };
-    const existing = requests.find(r => r.kind === kind);
-    if (existing) existing.names.push(ref.name); else requests.push({ kind, names: [ref.name] });
-  }
-  return { requests };
-}
-
-function parseRequests(host: KubectlHost, pos: string[]): Parsed {
-  if (pos[0].includes("/")) return parsePairs(host, pos);
-  if (pos.slice(1).some(a => a.includes("/"))) return { error: host._err(NO_TYPE_NEEDED_ERROR) };
-  const kinds = expandTypes(host, pos[0]);
-  if (typeof kinds === "string") return { error: kinds };
-  const names = pos.slice(1);
-  if (names.length > 0 && kinds.length > 1) return { error: host._err("error: you may only specify a single resource type") };
-  return { requests: kinds.map(kind => ({ kind, names })) };
-}
 
 /** Das Ergebnis eines Typs: die gezeigten Zeilen (mit Kopf) und die nicht gefundenen Namen. */
 interface Block { kind: ResourceKind; table: GetTable; missing: string[]; foreign: string | null }
@@ -78,11 +37,11 @@ function narrow(full: GetTable, wide: boolean): GetTable {
 
 /** Rendert einen Typ und wendet Namespace-Wache und Namensfilter an. Ein fremder Namespace liefert
  *  nichts (dort liegt nichts); bei Namen kommen die Zeilen in Eingabereihenfolge, fehlende in `missing`. */
-function renderBlock(host: KubectlHost, t: string[], req: Request, wide: boolean): Block {
+function renderBlock(host: KubectlHost, c: Call, req: Target, wide: boolean): Block {
   const entry = GET_RENDERERS.get(req.kind.plural);
   if (!entry) throw new Error("get: kein Renderer für " + req.kind.plural);   // vorher per rendererMissing abgefangen
-  const foreign = foreignNamespace(t, req.kind.namespaced, entry.extraNamespaces);
-  const full: GetTable = foreign ? { header: [], rows: [], names: [] } : narrow(entry.render(host, t), wide);
+  const foreign = foreignNamespace(c, req.kind.namespaced, entry.extraNamespaces);
+  const full: GetTable = foreign ? { header: [], rows: [], names: [] } : narrow(entry.render(host, c), wide);
   if (req.names.length === 0) return { kind: req.kind, table: full, missing: [], foreign };
   const rows: string[][] = [];
   const names: string[] = [];
@@ -97,10 +56,10 @@ function renderBlock(host: KubectlHost, t: string[], req: Request, wide: boolean
 }
 
 /** Die Leermeldung eines Typs: `No resources found in <ns> namespace.` bzw. bei cluster-weiten Typen. */
-function emptyMessage(b: Block, t: string[]): string {
+function emptyMessage(b: Block, c: Call): string {
   if (b.kind.plural === "alerts") return "No alerts firing.";
   if (!b.kind.namespaced) return "No resources found.";
-  return noResourcesIn(b.foreign ?? requestedNamespace(t) ?? DEFAULT_NAMESPACE);
+  return noResourcesIn(b.foreign ?? requestedNamespace(c) ?? DEFAULT_NAMESPACE);
 }
 
 /** Tabelle eines Blocks; bei mehreren Typen trägt die NAME-Zelle den Präfix `kind[.group]/`. */
@@ -116,7 +75,7 @@ function notFoundLines(b: Block): string[] {
 }
 
 /** Typen, die die Registry kennt, die der Simulator aber nicht auflisten kann (z.B. `namespaces`). */
-function rendererMissing(host: KubectlHost, requests: Request[]): string | null {
+function rendererMissing(host: KubectlHost, requests: Target[]): string | null {
   const bad = requests.find(r => !GET_RENDERERS.has(r.kind.plural));
   if (!bad) return null;
   return notSimulated(host, "'kubectl get " + bad.kind.plural + "'.", ["kubectl get " + [...GET_RENDERERS.keys()].join(", ")]);
@@ -130,7 +89,7 @@ function withNotFound(host: KubectlHost, text: string, blocks: Block[]): string 
 /** `-o yaml`: die Objekte der gefundenen Namen. Genau eine Anfrage mit genau einem Namen ergibt das Einzelobjekt
  *  (fehlt er, nur die NotFound-Zeile), sonst eine `kind: List` mit den NotFound-Zeilen dahinter (wie `printGeneric`).
  *  Kann eine Art nicht vollständig abgebildet werden (kein Baustein, System-Pods), lehnt die Sim ehrlich ab. */
-function yamlOutput(host: KubectlHost, requests: Request[], blocks: Block[], warn: (text: string) => string): string {
+function yamlOutput(host: KubectlHost, requests: Target[], blocks: Block[], warn: (text: string) => string): string {
   const found = blocks.map(b => yamlObjects(host, b.kind, b.table.names));
   if (found.some(o => o === null)) {
     return notSimulated(host, "'kubectl get -o yaml' für diese Art (oder die System-Pods).", ["kubectl get " + yamlKinds().join("|") + " [<name>] -o yaml"]);
@@ -143,24 +102,22 @@ function yamlOutput(host: KubectlHost, requests: Request[], blocks: Block[], war
   return warn(errors.length > 0 ? withNotFound(host, text, blocks) : text);
 }
 
-export function kubectlGet(host: KubectlHost, t: string[]): string {
+export function kubectlGet(host: KubectlHost, c: Call): string {
   host._recheckReadiness();
-  const pos = positionals("get", t);
-  if (pos.length === 0) return host._err("kubectl get: Was möchtest du sehen?", "z.B. 'kubectl get pods' oder 'kubectl get nodes'");
-  const parsed = parseRequests(host, pos);
+  const parsed = readTargets(host, c.args);
   if ("error" in parsed) return parsed.error;
-  const missingRenderer = rendererMissing(host, parsed.requests);
+  if (parsed.targets.length === 0) return host._err("kubectl get: Was möchtest du sehen?", "z.B. 'kubectl get pods' oder 'kubectl get nodes'");
+  const missingRenderer = rendererMissing(host, parsed.targets);
   if (missingRenderer) return missingRenderer;
-  if (allNamespaces(t) && parsed.requests.some(r => r.names.length > 0)) {
+  if (allNamespaces(c) && parsed.targets.some(r => r.names.length > 0)) {
     return host._err("error: a resource cannot be retrieved by name across all namespaces");
   }
 
-  const call = callOf("get", t);
-  const blocks = parsed.requests.map(r => renderBlock(host, t, r, isWide(call)));
+  const blocks = parsed.targets.map(r => renderBlock(host, c, r, isWide(c)));
   // Die Warnungen des API-Servers stehen vor jeder Antwort, die er wirklich gibt (nicht vor Client-Fehlern oder "Nicht simuliert").
-  const warnings = serverWarnings(parsed.requests.map(r => r.kind));
+  const warnings = serverWarnings(parsed.targets.map(r => r.kind));
   const warn = (text: string): string => (warnings.length > 0 ? warnings.join("\n") + "\n" + text : text);
-  if (isYaml(call)) return yamlOutput(host, parsed.requests, blocks, warn);
+  if (isYaml(c)) return yamlOutput(host, parsed.targets, blocks, warn);
   const prefixed = blocks.length > 1;
   const parts: string[] = [];
   const errors: string[] = [];
@@ -172,6 +129,6 @@ export function kubectlGet(host: KubectlHost, t: string[]): string {
     lines.push(...nf);
     if (lines.length > 0) parts.push(lines.join("\n"));
   }
-  const text = parts.length > 0 ? parts.join("\n\n") : emptyMessage(blocks[0], t);
+  const text = parts.length > 0 ? parts.join("\n\n") : emptyMessage(blocks[0], c);
   return warn(errors.length > 0 ? withNotFound(host, text, blocks) : text);
 }

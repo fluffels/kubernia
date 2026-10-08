@@ -9,8 +9,8 @@
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources), ./output, die Mengen-Parser aus ../util und das Blattmodul ../cliargs. */
 import type { KubectlHost } from "./host";
-import { flag, checkedFlag, checkFlags, lenientCall, notSimulated, positionalArgs, subEntry, type ArgSpec, type Call, type FlagSpec } from "../cliargs";
-export { notSimulated, flagValueOf } from "../cliargs";
+import { flag, checkedFlag, notSimulated, parseCall, subEntry, type ArgSpec, type Call, type FlagSpec } from "../cliargs";
+export { notSimulated } from "../cliargs";
 import { parseMem, parseCpuMilli } from "../util";
 import { RESOURCE_KINDS, resolveKind } from "./resources";
 import { OUTPUT_FLAG } from "./output";
@@ -71,16 +71,12 @@ const FLAG_HINTS: Readonly<Record<string, string>> = {
 /** Die Prüf-Tabelle eines Unterbefehls (Flags + Lernhinweise) für die gemeinsame Eingabegrenze. */
 const specFor = (sub: KubectlSub): ArgSpec => ({ cmd: "kubectl " + sub, flags: KNOWN_FLAGS[sub], hints: FLAG_HINTS });
 
-/** Prüft alle Flags eines Unterbefehls: unbekannte (nicht simulierte), Wert-Flags ohne Wert, ungültige Bool-Werte und abgelehnte `check`-Werte (`-o`).
- *  `null` = alles bekannt; sonst die fertige Fehlerausgabe. */
-export function checkArgs(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: string[]): string | null {
-  return checkFlags(host, specFor(sub), t, 2);
-}
-
-/** Die ausgelesene Eingabe eines Unterbefehls (`has`/`value`/`values`/`args`, #1469): die EINE Stelle, an der kubectl
- *  Flags liest – nie per `t.includes` oder Regex auf der Rohzeile. Ohne Fehlerpfad, weil `checkArgs` vorher lief. */
-export function callOf(sub: KubectlSub, t: string[]): Call {
-  return lenientCall(specFor(sub), t, 2);
+/** Der EINE Parse eines Unterbefehls (der Dispatcher in ../kubectl.ts ruft ihn einmal): prüft alle Flags (unbekannte
+ *  = nicht simuliert, Wert-Flags ohne Wert, ungültige Bool-Werte, abgelehnte `check`-Werte wie `-o`) und liest dann
+ *  `args`/`has`/`value`/`values`/`list` (#1469). Flags liest kubectl nur über den `Call`, nie per `t.includes` oder
+ *  Regex auf der Rohzeile. Ein String ist die fertige Fehlerausgabe. */
+export function parseKubectlCall(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: readonly string[]): Call | string {
+  return parseCall(host, specFor(sub), t, 2);
 }
 
 /** `--replicas`: `null` = nicht angegeben, sonst die ganze Zahl (auch negativ: den Wertebereich prüft der Aufrufer, die
@@ -92,11 +88,6 @@ export function replicasArg(host: Pick<KubectlHost, "_err">, c: Call): { replica
     return { error: host._err('error: invalid argument "' + v + '" for "--replicas" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.") };
   }
   return { replicas: parseInt(v, 10) };
-}
-
-/** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags). */
-export function positionals(sub: KubectlSub, t: string[], from = 2): string[] {
-  return positionalArgs(specFor(sub), t, from);
 }
 
 /** Die zwei Fehlertexte der Slash-Form `typ/name` – wörtlich wie `splitResourceTypeName` in kubectl. */
@@ -111,14 +102,6 @@ export function slashRef(tok: string): { typ: string; name: string } | { error: 
   if (seg.length !== 2) return { error: SLASH_MULTI_ERROR };
   const [typ, name] = seg;
   return !typ || !name || typ.includes(",") ? { error: SLASH_SINGLE_ERROR } : { typ, name };
-}
-
-/** Typ und Name aus den Argumenten: `pod <name>` oder die Slash-Form `pod/<name>`; eine kaputte Slash-Form
- *  liefert `error` (Text wie kubectl). */
-export function typeAndName(pos: string[]): { typ?: string; name?: string; error?: string } {
-  const ref = pos[0] === undefined ? null : slashRef(pos[0]);
-  if (!ref) return { typ: pos[0], name: pos[1] };
-  return "error" in ref ? { error: ref.error } : ref;
 }
 
 /** `error: the server doesn't have a resource type "x"` samt Hinweis auf die Typen, die die Sim kennt. */
