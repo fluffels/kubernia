@@ -2,8 +2,8 @@
 import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { clusterPods, findClusterPod } from "../../src/sim/pods";
-import { clusterPodStatus, deploymentPodStatus, isReady, podView, workloadSummaries } from "../../src/sim/podstatus";
-import { BROKEN_STATUS, type Broken } from "../../src/sim/state";
+import { BROKEN_POD, clusterPodStatus, deploymentPodStatus, isReady, podView, workloadSummaries } from "../../src/sim/podstatus";
+import type { Broken } from "../../src/sim/state";
 import type { ClusterPod } from "../../src/sim/pods";
 import { podAddress } from "../../src/sim/endpoints";
 
@@ -137,8 +137,8 @@ describe("deploymentPodStatus (#1426)", () => {
   test("gesund: Running 1/1 0 Restarts", () => {
     expect(deploymentPodStatus({ broken: null })).toEqual({ status: "Running", ready: "1/1", restarts: 0, label: "Running" });
   });
-  test.each(TYPES)("broken %s entspricht BROKEN_STATUS", (type) => {
-    expect(deploymentPodStatus({ broken: broken(type) })).toEqual(BROKEN_STATUS[type]);
+  test.each(TYPES)("broken %s entspricht BROKEN_POD", (type) => {
+    expect(deploymentPodStatus({ broken: broken(type) })).toEqual(BROKEN_POD[type].status);
   });
   test("notready: Status Running, Label NotReady, nicht bereit", () => {
     const st = deploymentPodStatus({ broken: broken("notready") });
@@ -149,10 +149,10 @@ describe("deploymentPodStatus (#1426)", () => {
     expect(deploymentPodStatus({ evicted: { reason: "DiskPressure" }, broken: broken("crashloop") }))
       .toEqual({ status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" });
   });
-  test("Ergebnis ist eine Kopie: Mutation ändert BROKEN_STATUS nicht", () => {
+  test("Ergebnis ist eine Kopie: Mutation ändert BROKEN_POD nicht", () => {
     const st = deploymentPodStatus({ broken: broken("crashloop") });
     st.restarts = 99; st.label = "x";
-    expect(BROKEN_STATUS.crashloop).toMatchObject({ restarts: 5, label: "CrashLoopBackOff" });
+    expect(BROKEN_POD.crashloop.status).toMatchObject({ restarts: 5, label: "CrashLoopBackOff" });
   });
 });
 

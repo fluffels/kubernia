@@ -11,7 +11,7 @@ import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, type Deployment, type PodInst
 import { currentReplicaSet } from "../replicasets";
 import { findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName } from "../workload";
-import { clusterPodStatus } from "../podstatus";
+import { BROKEN_POD, clusterPodStatus } from "../podstatus";
 import { podPlacement } from "./inspect";
 
 // --- describe pod: in kohäsive Blöcke zerlegt (Events / Container / Volumes) ---
@@ -81,15 +81,16 @@ export function podSecurityLines(dep: Deployment): string[] {
 function podContainerBlock(host: KubectlHost, dep: Deployment, st: PodStatus): string[] {
   // OOMKilled zeigt sich NICHT im State (der ist gerade wieder Waiting), sondern im
   // Last State + Reason und am memory-Limit – genau das ist die Lern-Pointe.
-  const oom = !!dep.broken && dep.broken.type === "oomkilled";
+  const c = dep.broken ? BROKEN_POD[dep.broken.type].container : null;
+  const last = c?.lastTerminated;
   return [
     "  " + dep.name + ":",
     "    Image:        " + dep.image,
-    "    State:        " + (oom ? "Waiting (CrashLoopBackOff)" : st.status),
-    ...(oom ? [
+    "    State:        " + (last ? "Waiting (" + c?.waiting + ")" : st.status),
+    ...(last ? [
       "    Last State:   Terminated",
-      "      Reason:     OOMKilled",
-      "      Exit Code:  137",
+      "      Reason:     " + last.reason,
+      "      Exit Code:  " + last.exitCode,
     ] : []),
     ...podLimitLines(host, dep),
     ...podSecurityLines(dep),

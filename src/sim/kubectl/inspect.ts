@@ -11,11 +11,11 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { podIP, BUILTIN_AGE, workloadSelector } from "../util";
+import { podIP, BUILTIN_AGE, workloadSelector, formatLabels } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type Deployment, type RbacSubject, type StatefulSetRes } from "../state";
-import { currentReplicaSet } from "../replicasets";
+import { currentReplicaSet, podTemplateLabels } from "../replicasets";
 import { nodeInternalIP, NODE_SYSTEM_INFO, CONTROL_PLANE_IP, CONTROL_PLANE_NODE } from "../nodes";
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, type ResourcePlural } from "./resources";
@@ -130,7 +130,7 @@ function getReplicaSets(host: KubectlHost): GetTable {
     host.deployments.map(d => {
       const rs = currentReplicaSet(d);
       return [rs.name, String(d.replicas), String(d.pods.length), String(host._podReady(d) ? d.pods.length : 0), host._age(rs.created),
-        d.name, d.image, workloadSelector(d.name) + ",pod-template-hash=" + rs.hash];
+        d.name, d.image, formatLabels(podTemplateLabels(d))];
     })), 3);
 }
 
@@ -146,7 +146,7 @@ function getServices(host: KubectlHost): GetTable {
       isExt ? (s.externalName || "<none>") : "<none>",
       isExt ? "<none>" : (s.port + "/TCP"),
       isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0),
-      serviceSelector(host, s) ?? "<none>",
+      formatLabels(serviceSelector(host, s)),
     ]);
   }
   return withWide(tableOf(["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE", "SELECTOR"], rows), 1);

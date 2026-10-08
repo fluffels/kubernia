@@ -18,7 +18,7 @@ import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type ClusterNode, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
 import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
 import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
-import { workloadSelector } from "../util";
+import { workloadSelector, formatLabels } from "../util";
 import { clusterPods } from "../pods";
 import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
 import { statefulPodClaimName, STATEFUL_CLAIM_ACCESS_MODES } from "../workload";
@@ -114,7 +114,7 @@ function describeService(host: KubectlHost, name: string, kind: ResourceKind): s
   return [
     kv("Name", svc.name),
     kv("Namespace", DEFAULT_NAMESPACE),
-    kv("Selector", serviceSelector(host, svc) ?? "<none>"),
+    kv("Selector", formatLabels(serviceSelector(host, svc))),
     kv("Type", svc.type),
     kv("IP", ip),
     ...(external ? [kv("External Name", svc.externalName ?? "")] : [

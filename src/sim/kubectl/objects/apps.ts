@@ -10,22 +10,23 @@ import type { YamlValue } from "../../yaml";
 import type { YamlMap } from "../../yaml-emit";
 import type { KubectlHost } from "../host";
 import type { Deployment, StatefulSetRes } from "../../state";
-import { currentReplicaSet } from "../../replicasets";
+import { currentReplicaSet, podTemplateLabels } from "../../replicasets";
+import { workloadLabels, type Labels } from "../../util";
 import { availableReplicas, statefulSetReadyReplicas } from "../inspect";
 import { accessModesLong } from "../../pv-controller";
 import { STATEFUL_CLAIM_ACCESS_MODES } from "../../workload";
-import { appLabels, compact, deploymentPodSpec, metaOf, type ObjectsOf } from "./core";
+import { compact, deploymentPodSpec, metaOf, type ObjectsOf } from "./core";
 
 /** Ein Zähler, der bei 0 fehlt (`omitempty`). */
 const omitZero = (n: number): number | undefined => (n === 0 ? undefined : n);
 
-const matchLabels = (labels: Record<string, string>): YamlMap => ({ matchLabels: labels });
-const template = (labels: Record<string, string>, spec: YamlValue): YamlMap => ({ metadata: { labels }, spec });
+const matchLabels = (labels: Labels): YamlMap => ({ matchLabels: labels });
+const template = (labels: Labels, spec: YamlValue): YamlMap => ({ metadata: { labels }, spec });
 
 // ===== Deployment =====
 
 function deploymentObject(host: KubectlHost, d: Deployment): YamlMap {
-  const labels = appLabels(d.name);
+  const labels = workloadLabels(d.name);
   const available = availableReplicas(host, d);
   const total = d.pods.length;
   return {
@@ -47,7 +48,7 @@ export const deploymentObjects: ObjectsOf = host => new Map(host.deployments.map
 
 function replicaSetObject(host: KubectlHost, d: Deployment): YamlMap {
   const rs = currentReplicaSet(d);
-  const labels = { ...appLabels(d.name), "pod-template-hash": rs.hash };
+  const labels = podTemplateLabels(d);
   const ready = availableReplicas(host, d);
   return {
     apiVersion: "apps/v1", kind: "ReplicaSet", metadata: metaOf(rs.name, labels),
@@ -69,7 +70,7 @@ export const replicaSetObjects: ObjectsOf = host => new Map(host.deployments.map
 // ===== StatefulSet =====
 
 function statefulSetObject(host: KubectlHost, s: StatefulSetRes): YamlMap {
-  const labels = appLabels(s.name);
+  const labels = workloadLabels(s.name);
   const running = statefulSetReadyReplicas(host, s);
   const claim = compact({
     accessModes: accessModesLong(STATEFUL_CLAIM_ACCESS_MODES),

@@ -168,3 +168,27 @@ test("snapshot/restore erhält selbst gebaute Charts", () => {
   // und das wiederhergestellte Chart ist sofort wieder installierbar
   assert.ok(!restored.exec("helm install w ./funkdienst").error);
 });
+
+/* ---------- helm search: Ingress-NGINX eingestellt, Gateway-API-Nachfolger (#1506) ---------- */
+
+test("helm search repo gateway: listet den Gateway-Controller, nicht Ingress-NGINX", () => {
+  sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami");
+  const out = sim.exec("helm search repo gateway").output!;
+  assert.match(out, /^bitnami\/envoy-gateway\s/m);
+  assert.doesNotMatch(out, /nginx-ingress-controller/);
+});
+
+test("helm search repo ingress: Ingress-NGINX bleibt auffindbar, aber als eingestellt markiert", () => {
+  sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami");
+  const out = sim.exec("helm search repo ingress").output!;
+  const zeile = out.split("\n").find(l => l.startsWith("bitnami/nginx-ingress-controller"))!;
+  assert.ok(zeile, "Chart weiter gelistet");
+  assert.match(zeile, /eingestellt/);
+  assert.match(out, /^bitnami\/envoy-gateway\s/m);
+});
+
+test("helm search: ohne Repo ein Fehler, unbekannter Begriff ohne Treffer", () => {
+  assert.match(sim.exec("helm search repo gateway").output!, /no repositories configured/);
+  sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami");
+  assert.equal(sim.exec("helm search repo zzz-gibt-es-nicht").output, "No results found");
+});

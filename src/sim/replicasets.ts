@@ -14,7 +14,7 @@
  */
 import { hashStr } from "../core/rng";
 import { SECURITY_CONTEXT_KEYS, type Deployment, type PodTemplateSpec } from "./state";
-import { safeEncode } from "./util";
+import { safeEncode, workloadLabels, type Labels } from "./util";
 
 /** Welche Template-Felder in den Hash eingehen. `satisfies` bricht den Typecheck, sobald ein neues
  *  `PodTemplateSpec`-Feld hier nicht entschieden ist. `ephemeralUsedMi` ist ein Laufzeitwert. */
@@ -83,4 +83,9 @@ export function podTemplateHash(dep: Deployment): string {
 export function currentReplicaSet(dep: Deployment): { name: string; hash: string; created: number } {
   const hash = dep.replicaSet?.hash ?? podTemplateHash(dep);
   return { name: dep.name + "-" + hash, hash, created: dep.replicaSet?.created ?? dep.created };
+}
+
+/** Die Labels der Pods (und der Selektor) des aktuellen ReplicaSets: Workload-Label plus `pod-template-hash`. */
+export function podTemplateLabels(dep: Deployment): Labels {
+  return { ...workloadLabels(dep.name), "pod-template-hash": currentReplicaSet(dep).hash };
 }
