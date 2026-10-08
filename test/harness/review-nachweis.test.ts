@@ -128,11 +128,20 @@ describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#
     assert.deepEqual(bewerteNachweis({ ...basis, konfliktMerges: [] }), []);
     assert.ok(bewerteNachweis({ ...basis, konfliktMerges: ["m".repeat(40)] }).length > 0, "ein Konflikt-Merge nach dem Review muss rot sein");
   });
-  test("die Langfassung (§3a) trägt Erklärung und Folge, der Skill nur den Verweis", () => {
+  test("die Langfassung (§3a) trägt Erklärung und Folge, der Skill den Weg", () => {
     const harness = read("docs/agent-harness.md");
     assert.match(harness, /remerge-diff/);
     assert.match(harness, /wird der Check rot/);
-    assert.doesNotMatch(read(".claude/skills/review-lenses/SKILL.md"), /remerge-diff/, "keine zweite Kopie der Erklärung im Skill");
+    assert.match(harness, /Nach jedem Merge von `main`/, "§3a verweist auf die Schritte im Skill");
+    const skill = read(".claude/skills/review-lenses/SKILL.md");
+    assert.doesNotMatch(skill, /wird der Check rot/, "keine zweite Kopie der Erklärung im Skill");
+    assert.doesNotMatch(skill, /git ≥ 2\.36/, "keine zweite Kopie der Erklärung im Skill");
+    assert.match(skill, /git show --remerge-diff --format= <M>/, "der Skill trägt das Rezept");
+    assert.match(read(".claude/agents/kubernia-umsetzer.md"), /`review-lenses` › Nach jedem Merge von `main`/, "der Umsetzer verweist auf den Skill-Abschnitt");
+    assert.match(skill, /git diff <basis> <M>\^2 -- <alte datei>/, "der Skill trägt den Prüfschritt für verschobenen Code");
+  });
+  test("das Rezept im Skill ist an die Erkennung im Skript gekoppelt", () => {
+    assert.match(read("scripts/check-review-nachweis.mjs"), /\["show", "--remerge-diff", "--format=", sha\]/);
   });
 });
 
