@@ -118,13 +118,13 @@ describe("rollout undo", () => {
       serviceAccountName: "sa", containerPort: 8080, cpuLimitMilli: 250, securityContext: { runAsNonRoot: true },
       node: "ahoi-worker-1", emptyDir: { data: "", usedMi: 0 }, ephemeralLimit: 64, initContainer: { fillsMi: 10, doubleStage: true },
     }], configMaps: [{ name: "cfg", keys: ["k"] }], serviceAccounts: ["sa"] });
-    const vorher = JSON.parse(JSON.stringify(sim.snapshot().deployments![0])) as Record<string, unknown>;
+    const vorher = JSON.parse(JSON.stringify(sim.snapshot().deployments[0])) as Record<string, unknown>;
     const h = currentReplicaSet(dep(sim)).hash;
     expect(sim.exec("kubectl set image deployment/web web=web:2").error).toBe(false);
     expect(sim.exec("kubectl set resources deployment/web --limits=memory=512Mi").error).toBe(false);
     expect(dep(sim).memLimit).toBe(512);
     expect(sim.exec("kubectl rollout undo deployment/web --to-revision=1").error).toBe(false);
-    const nachher = JSON.parse(JSON.stringify(sim.snapshot().deployments![0])) as Record<string, unknown>;
+    const nachher = JSON.parse(JSON.stringify(sim.snapshot().deployments[0])) as Record<string, unknown>;
     for (const k of Object.keys(vorher).filter(k => k !== "revision" && k !== "rsHistory")) expect(nachher[k], k).toEqual(vorher[k]);
     expect(nachher).not.toHaveProperty("memLimit");
     expect(dep(sim).initContainer?.doubleStage).toBe(true);
@@ -272,7 +272,7 @@ describe("Persistenz ohne Save-Bump", () => {
       { revision: 4, rsHistory: [{ revision: 1, image: "i", securityContext: "kaputt", emptyDir: 5 }] },
     ];
     for (const f of faelle) {
-      const sim = new KQSim({ deployments: [{ name: "web", image: "web", replicas: 1, ...f }] } as Scenario);
+      const sim = new KQSim({ deployments: [{ name: "web", image: "web", replicas: 1, ...f }] });
       expect(replicaSetsOf(dep(sim)).length, JSON.stringify(f)).toBeLessThanOrEqual(REVISION_HISTORY_LIMIT + 1);
       expect(clusterInvariantViolations(sim), JSON.stringify(f)).toEqual([]);
     }
@@ -308,7 +308,7 @@ describe("YAML und Invariante (10)", () => {
     const basis = () => dreiRevisionen();
     const meldungen = (mutiere: (d: ReturnType<typeof dep>) => void) => {
       const sim = basis(); mutiere(dep(sim));
-      return clusterInvariantViolations(sim as unknown as Parameters<typeof clusterInvariantViolations>[0]).join("\n");
+      return clusterInvariantViolations(sim).join("\n");
     };
     expect(meldungen(() => undefined)).toBe("");
     expect(meldungen(d => { d.oldReplicaSets![1].hash = d.oldReplicaSets![0].hash; })).toContain("doppelte Hashes");
