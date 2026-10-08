@@ -5,6 +5,7 @@
 import { describe, test, expect } from "vitest";
 import { KQSim, freshSim } from "./helpers";
 import { parseYamlDocuments, type YamlValue } from "../../src/sim/yaml";
+import { emitYaml } from "../../src/sim/yaml-emit";
 import { effectsFromManifest, MAPPED_KINDS } from "../../src/sim/manifest/registry";
 import { YAML_BAUSTEINE, yamlKinds } from "../../src/sim/kubectl/get-yaml";
 import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
@@ -254,10 +255,12 @@ describe("Service", () => {
       "  loadBalancer: {}",
     ].join("\n"));
   });
-  test("ClusterIP: Port, targetPort (Rückfall auf port), Selector app=<name>", () => {
+  test("ClusterIP: targetPort nur, wenn gesetzt (kein Rückfall auf port: die Sim wertet beides verschieden), Selector app=<name>", () => {
     const sim = new KQSim({ ...reich(), services: [svc("web", { targetPort: 8080 }), svc("api")] });
     expect((doc(sim, "get svc web -o yaml").spec as Obj).ports).toEqual([{ port: 80, protocol: "TCP", targetPort: 8080 }]);
-    expect((doc(sim, "get svc api -o yaml").spec as Obj)).toMatchObject({ ports: [{ port: 80, protocol: "TCP", targetPort: 80 }], selector: { app: "api" } });
+    const api = doc(sim, "get svc api -o yaml").spec as Obj;
+    expect(api.ports).toEqual([{ port: 80, protocol: "TCP" }]);
+    expect(api.selector).toEqual({ app: "api" });
   });
   test("Port als Text (Helm speichert \"80\") wird als Zahl ausgegeben und liest sich zurück", () => {
     const sim = new KQSim({});
@@ -265,7 +268,7 @@ describe("Service", () => {
     const text = out(sim, "get svc h -o yaml");
     expect(text).toContain("port: 80\n");
     expect(text).not.toContain('"80"');
-    expect(effectsFromManifest(text, "h.yaml")).toEqual([{ service: { name: "h", port: 80, type: "ClusterIP", targetPort: 80 } }]);
+    expect(effectsFromManifest(text, "h.yaml")).toEqual([{ service: { name: "h", port: 80, type: "ClusterIP" } }]);
   });
   test("headless: clusterIP None, Selector des StatefulSet", () => {
     const sim = new KQSim({ statefulSets: [sts()], services: [svc("speicher", { clusterIP: "None", port: 5432 })] });
@@ -296,8 +299,8 @@ describe("PersistentVolumeClaim", () => {
   });
   test("Access-Modes: Kurzformen werden lang, Langformen und mehrere bleiben", () => {
     const sim = new KQSim({});
-    sim.pvcs.push({ name: "m", status: "Pending", volume: "", capacity: "2Gi", storageClass: "", accessModes: "RWX,ReadOnlyMany", created: 0 });
-    expect((doc(sim, "get pvc m -o yaml").spec as Obj).accessModes).toEqual(["ReadWriteMany", "ReadOnlyMany"]);
+    sim.pvcs.push({ name: "m", status: "Pending", volume: "", capacity: "2Gi", storageClass: "", accessModes: "RWX,ReadOnlyMany,ROX,RWOP", created: 0 });
+    expect((doc(sim, "get pvc m -o yaml").spec as Obj).accessModes).toEqual(["ReadWriteMany", "ReadOnlyMany", "ReadOnlyMany", "ReadWriteOncePod"]);
   });
 });
 
@@ -315,6 +318,18 @@ describe("StatefulSet", () => {
   test("mit Pending-PVC: nicht bereit, availableReplicas bleibt 0 (kein omitempty)", () => {
     const o = doc(new KQSim({ statefulSets: [sts({ storageClass: "", replicas: 1 })] }), "get sts speicher -o yaml");
     expect(o.status).toEqual({ availableReplicas: 0, currentReplicas: 1, replicas: 1, updatedReplicas: 1 });
+  });
+});
+
+describe("replicas bleibt bei ReplicaSet und StatefulSet als 0 stehen (omitempty nur beim Deployment)", () => {
+  test("ReplicaSet mit 0 Replicas: status.replicas 0", () => {
+    const sim = new KQSim({ deployments: [dep("web", { replicas: 0 })] });
+    const rs = out(sim, "get rs").split(String.fromCharCode(10))[1].split(/\s+/)[0];
+    expect(doc(sim, "get rs " + rs + " -o yaml").status).toEqual({ replicas: 0 });
+  });
+  test("StatefulSet mit 0 Replicas: availableReplicas und replicas 0", () => {
+    const o = doc(new KQSim({ statefulSets: [sts({ replicas: 0 })] }), "get sts speicher -o yaml");
+    expect(o.status).toEqual({ availableReplicas: 0, replicas: 0 });
   });
 });
 
@@ -419,7 +434,7 @@ describe("Round-Trip mit dem Manifest-Mapper (Konsistenz-Wächter Mapper ↔ Aus
     ["LoadBalancer", { name: "web", port: 443, type: "LoadBalancer" }, {}],
     ["ExternalName", { name: "bank", port: 0, type: "ExternalName", externalName: "api.bank.example.com" }, {}],
   ];
-  test.each(services)("Service %s: Mapper(Ausgabe) = Mapper(Original) samt dokumentiertem Default targetPort := port", (_n, o) => {
+  test.each(services)("Service %s: Mapper(Ausgabe) = Mapper(Original) (targetPort nur wenn gesetzt, sonst Original-Effekt ohne ihn)", (_n, o) => {
     const orig = serviceYaml(o);
     const sim = freshSim();
     sim.files["a.yaml"] = orig;
@@ -427,7 +442,6 @@ describe("Round-Trip mit dem Manifest-Mapper (Konsistenz-Wächter Mapper ↔ Aus
     const text = out(sim, "get svc " + o.name + " -o yaml");
     const want = effectsFromManifest(orig, "a.yaml") as ApplyEffect[];
     const got = effectsFromManifest(text, "b.yaml") as ApplyEffect[];
-    if (o.externalName === undefined) want[0].service!.targetPort ??= o.port;
     expect(got).toEqual(want);
   });
 
@@ -453,11 +467,25 @@ describe("Round-Trip mit dem Manifest-Mapper (Konsistenz-Wächter Mapper ↔ Aus
     expect(["get deploy web -o yaml", "get svc web -o yaml"].map(c => out(b, c))).toEqual(first);
   });
 
-  test("jede Ausgabe liest der Parser verlustfrei wieder (List und Einzelobjekt)", () => {
-    const sim = new KQSim(reich());
-    for (const cmd of ["get all -o yaml", "get deploy web -o yaml", "get pods -o yaml", "get pvc -o yaml"]) {
-      expect(() => parseYamlDocuments(out(sim, cmd)), cmd).not.toThrow();
+  test("Property: parseYamlDocuments(emitYaml(objekt)) = objekt für alle Baustein-Objekte einer reichen Fixture", () => {
+    const sim = new KQSim({
+      deployments: [
+        dep("web", { containerPort: 8080, memLimit: 1536, cpuLimitMilli: 1500, serviceAccountName: "robo", securityContext: { runAsNonRoot: true }, emptyDir: {}, initContainer: { fillsMi: 1 }, envFrom: { configMaps: ["c"], secrets: ["s"] } }),
+        dep("a", { broken: { type: "imagepull" } }), dep("b", { broken: { type: "crashloop" } }), dep("c", { broken: { type: "oomkilled" } }),
+        dep("d", { broken: { type: "pending" } }), dep("e", { broken: { type: "notready", needsSecret: "x" } }),
+        dep("f", { ephemeralLimit: 512, emptyDir: { data: "x", usedMi: 600 } }),
+      ],
+      services: [svc("web", { targetPort: 8080 }), svc("speicher", { clusterIP: "None", port: "5432" })],
+      statefulSets: [sts(), sts({ name: "wartend", serviceName: "wartend", volumeClaimName: "w", storageClass: "", replicas: 1 })],
+    });
+    let n = 0;
+    for (const [plural, baustein] of YAML_BAUSTEINE) {
+      for (const [name, o] of baustein(sim)) {
+        expect(parseYamlDocuments(emitYaml(o)), plural + "/" + name).toEqual([o]);
+        n++;
+      }
     }
+    expect(n).toBeGreaterThan(20);
   });
 });
 
@@ -469,7 +497,7 @@ describe("Fitness: Registry ↔ Renderer ↔ Mapper", () => {
     const sim = new KQSim(reich());
     for (const [plural, baustein] of YAML_BAUSTEINE) {
       const names = [...baustein(sim).keys()];
-      const table = out(sim, "get " + plural + (plural === "pods" ? "" : "")).split("\n").slice(1).map(l => l.split(/\s+/)[0]).filter(Boolean);
+      const table = out(sim, "get " + plural).split("\n").slice(1).map(l => l.split(/\s+/)[0]).filter(Boolean);
       expect(names.sort(), plural).toEqual(table.sort());
     }
   });

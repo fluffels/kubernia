@@ -46,6 +46,13 @@ describe("emitYaml – Schlüsselordnung (go-yaml)", () => {
   it("Großbuchstaben vor Kleinbuchstaben, Nicht-Buchstabe vor Buchstabe", () => {
     expect(sortedKeys({ a: 1, Z: 1, "-x": 1, _y: 1 })).toEqual(["-x", "_y", "Z", "a"]);
   });
+  it("führende Null zählt als Ziffernfolge ohne Vorrang: a1 vor a01 (gleicher Wert, kürzer zuerst)", () => {
+    expect(sortedKeys({ a01: 1, a1: 1 })).toEqual(["a1", "a01"]);
+  });
+  it("Null hinter einer Ziffer ungleich null gehört zur Zahl: a19 vor a100, a1009 vor a1010", () => {
+    expect(sortedKeys({ a100: 1, a19: 1 })).toEqual(["a19", "a100"]);
+    expect(sortedKeys({ a1010: 1, a1009: 1 })).toEqual(["a1009", "a1010"]);
+  });
   it("ein Präfix kommt vor dem längeren Schlüssel", () => {
     expect(sortedKeys({ app2: 1, app: 1 })).toEqual(["app", "app2"]);
   });
@@ -56,7 +63,7 @@ describe("emitYaml – Quoting", () => {
     ["", '""'], ["80", '"80"'], ["1.5", '"1.5"'], ["true", '"true"'], ["null", '"null"'], ["~", '"~"'], ["yes", '"yes"'],
     ["0x1F", '"0x1F"'], ["1e3", '"1e3"'], ["a: b", "'a: b'"], ["-x", "-x"], ["- x", "'- x'"], ["#c", "'#c'"], ["a #b", "'a #b'"],
     ["x:", "'x:'"], ["'q", "'''q'"], ["@a", "'@a'"], ["a\nb", '"a\\nb"'], ["None", "None"], ["Größe", "Größe"], ["250m", "250m"],
-    ["10Gi", "10Gi"], [" a", "' a'"], ["---", "'---'"], ["[a]", "'[a]'"], ["|", "'|'"], ["-", "'-'"], ["2024-01-02", '"2024-01-02"'],
+    ["10Gi", "10Gi"], [" a", "' a'"], ["---", "'---'"], ["[a]", "'[a]'"], ["|", "'|'"], ["-", "'-'"], ["2024-01-02", '"2024-01-02"'], ["1:30", '"1:30"'], ["0o17", '"0o17"'], ["on", '"on"'], ["Off", '"Off"'],
     [".inf", '".inf"'], ["a\tb", '"a\\tb"'],
   ];
   it.each(cases)("Wert %j wird zu %s", (s, text) => {

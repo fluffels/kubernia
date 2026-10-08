@@ -137,11 +137,10 @@ function podShape(c: ClusterPod, scheduled: boolean): PodShape {
 function podStatus(host: KubectlHost, c: ClusterPod, ip: string | null): YamlMap {
   const shape = podShape(c, ip !== null);
   const st = clusterPodStatus(host, c);
-  const dep = c.owner === "Deployment" ? c.dep : null;
-  const workload = dep ?? (c.owner === "StatefulSet" ? c.sts : null);
-  const evicted = dep?.evicted ?? null;
+  const workload = c.owner === "Deployment" ? c.dep : c.sts;
+  const evicted = c.owner === "Deployment" ? c.dep.evicted : null;
   return compact({
-    containerStatuses: shape.noContainer || !workload
+    containerStatuses: shape.noContainer
       ? undefined
       : [{ image: workload.image, lastState: shape.lastState ?? {}, name: workload.name, ready: shape.ready, restartCount: st.restarts, state: shape.state ?? {} }],
     message: evicted ? evicted.reason : undefined,
@@ -153,7 +152,7 @@ function podStatus(host: KubectlHost, c: ClusterPod, ip: string | null): YamlMap
 
 function podSpec(c: ClusterPod, node: string | null): YamlMap {
   if (c.owner === "Deployment") {
-    return compact({ ...deploymentPodSpec({ ...c.dep, node: undefined }), nodeName: node ?? undefined });
+    return compact({ ...deploymentPodSpec(c.dep), nodeName: node ?? undefined });
   }
   return compact({
     containers: [{ image: c.sts.image, name: c.sts.name }],
@@ -191,7 +190,7 @@ function servicePorts(svc: ServiceRes): YamlValue[] | undefined {
     name: isKubernetesService(svc) ? "https" : undefined,
     port: portValue(svc.port),
     protocol: "TCP",
-    targetPort: portValue(svc.targetPort ?? svc.port),
+    targetPort: svc.targetPort === undefined ? undefined : portValue(svc.targetPort), // nur wenn gesetzt: die Sim wertet einen fehlenden targetPort anders als `port` (net.ts), der Round-Trip bleibt exakt
   })];
 }
 
