@@ -6,7 +6,8 @@
 import { describe, test, expect } from "vitest";
 import { KQSim, freshSim } from "./helpers";
 import { RESOURCE_KINDS, resolveKind, qualified, allKinds, type ResourcePlural } from "../../src/sim/kubectl/resources";
-import { checkArgs, positionals, flagValueOf, typeAndName, slashRef } from "../../src/sim/kubectl/args";
+import { parseKubectlCall, slashRef, type KubectlSub } from "../../src/sim/kubectl/args";
+import type { Call } from "../../src/sim/cliargs";
 import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
 import type { Scenario } from "../../src/sim/state";
 
@@ -315,12 +316,20 @@ describe("(c) get a,b und get all", () => {
     expect(r.error).toBe(true);
     expect(r.out).toContain(NICHT_SIMULIERT);
   });
-  test("Typ-Liste mit Namen ist mehrdeutig (echter Fehler)", () => {
-    expect(lauf("kubectl get pods,svc web").out).toContain("you may only specify a single resource type");
+  test("Typ-Liste mit Namen ist das Kreuzprodukt (wie der Builder von kubectl)", () => {
+    const r = lauf("kubectl get pods,svc web");
+    expect(r.out).toContain("service/web");
+    expect(r.out).toContain('Error from server (NotFound): pods "web" not found');
+    expect(r.error).toBe(true);
+  });
+  test("get all mit Namen: mehrere Arten, ein Name ist mehrdeutig (echter Fehler)", () => {
+    const r = lauf("kubectl get all web");
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("you must specify only one resource");
   });
   test("gemischte Slash-Formen ergeben die echten Fehler", () => {
     expect(lauf("kubectl get deploy deploy/web").out).toContain("there is no need to specify a resource type as a separate argument");
-    expect(lauf("kubectl get deploy/web api").out).toContain("arguments in resource/name form must have a single resource and name");
+    expect(lauf("kubectl get deploy/web api").out).toContain("there is no need to specify a resource type as a separate argument");
   });
   test("verschiedene Typen in Slash-Form bekommen Präfixe", () => {
     const out = lauf("kubectl get deploy/web svc/web").out;
@@ -453,28 +462,35 @@ describe("(g) expose --type prüft den Service-Typ", () => {
 });
 
 /* ---------- Parser-Bausteine ---------- */
-describe("args: positionals / flagValueOf / checkArgs / typeAndName", () => {
+describe("args: parseKubectlCall (Positionsargumente, Flag-Werte, Prüfung)", () => {
   const host = { _err: (m: string) => m };
-  test("positionals überspringt Flags samt Wert, nicht aber Boolean-Flags", () => {
-    expect(positionals("get", ["kubectl", "get", "-n", "x", "pods", "-A", "web"])).toEqual(["pods", "web"]);
-    expect(positionals("get", ["kubectl", "get", "-nx", "pods", "--namespace=y"])).toEqual(["pods"]);
-    expect(positionals("logs", ["kubectl", "logs", "-f", "pod"])).toEqual(["pod"]);
+  /** Der Call; ein Fehlertext lässt den Test scheitern. */
+  const callOf = (...t: string[]): Call => {
+    const r = parseKubectlCall(host, t[0] as KubectlSub, ["kubectl", ...t]);
+    if (typeof r === "string") throw new Error(r);
+    return r;
+  };
+  test("args überspringt Flags samt Wert, nicht aber Boolean-Flags", () => {
+    expect(callOf("get", "-n", "x", "pods", "-A", "web").args).toEqual(["pods", "web"]);
+    expect(callOf("get", "-nx", "pods", "--namespace=y").args).toEqual(["pods"]);
+    expect(callOf("logs", "-f", "pod").args).toEqual(["pod"]);
   });
-  test("flagValueOf kennt alle Schreibweisen", () => {
-    for (const t of [["-n", "x"], ["-n=x"], ["-nx"], ["--namespace", "x"], ["--namespace=x"]]) expect(flagValueOf(["kubectl", "get", ...t], ["-n", "--namespace"])).toBe("x");
-    expect(flagValueOf(["kubectl", "get", "pods"], ["-n"])).toBeNull();
-    expect(flagValueOf(["kubectl", "get", "-n"], ["-n"])).toBeNull();
+  test("der Namespace in allen Schreibweisen", () => {
+    for (const t of [["-n", "x"], ["-n=x"], ["-nx"], ["--namespace", "x"], ["--namespace=x"]]) expect(callOf("get", ...t).value("-n", "--namespace")).toBe("x");
+    expect(callOf("get", "pods").value("-n")).toBeNull();
   });
-  test("checkArgs: bekannt → null, unbekannt → Text, Wert fehlt → Text", () => {
-    expect(checkArgs(host, "get", ["kubectl", "get", "pods", "-A"])).toBeNull();
-    expect(checkArgs(host, "get", ["kubectl", "get", "pods", "-x"])).toContain(NICHT_SIMULIERT);
-    expect(checkArgs(host, "get", ["kubectl", "get", "-n"])).toContain("flag needs an argument");
-    expect(checkArgs(host, "get", ["kubectl", "get", "-n", "x", "pods"])).toBeNull();
+  test("-f: auch -ffile und -f=file", () => {
+    for (const t of [["-f", "x.yaml"], ["-fx.yaml"], ["-f=x.yaml"], ["--filename", "x.yaml"], ["--filename=x.yaml"]]) expect(callOf("apply", ...t).value("-f", "--filename")).toBe("x.yaml");
   });
-  test("typeAndName: Slash-Form und getrennt", () => {
-    expect(typeAndName(["pod/x"])).toEqual({ typ: "pod", name: "x" });
-    expect(typeAndName(["pod", "x"])).toEqual({ typ: "pod", name: "x" });
-    expect(typeAndName([])).toEqual({ typ: undefined, name: undefined });
+  test("Prüfung: bekannt → Call, unbekannt → Text, Wert fehlt → Text", () => {
+    expect(typeof parseKubectlCall(host, "get", ["kubectl", "get", "pods", "-A"])).toBe("object");
+    expect(parseKubectlCall(host, "get", ["kubectl", "get", "pods", "-x"])).toContain(NICHT_SIMULIERT);
+    expect(parseKubectlCall(host, "get", ["kubectl", "get", "-n"])).toContain("flag needs an argument");
+    expect(typeof parseKubectlCall(host, "get", ["kubectl", "get", "-n", "x", "pods"])).toBe("object");
+  });
+  test("-A gilt nur bei get: bei describe lehnt der Parse es ab", () => {
+    expect(callOf("get", "pods", "-A").has("-A", "--all-namespaces")).toBe(true);
+    expect(parseKubectlCall(host, "describe", ["kubectl", "describe", "pods", "-A"])).toContain(NICHT_SIMULIERT);
   });
 });
 
@@ -488,10 +504,6 @@ describe("slashRef: eine Zerlegung für get, describe, delete, scale/expose/set/
     expect(slashRef("pod/x")).toEqual({ typ: "pod", name: "x" });
     expect(slashRef("a/b/c")).toEqual({ error: MEHR });
     for (const bad of ["pod/", "/x", "/", "pods,svc/x"]) expect(slashRef(bad), bad).toEqual({ error: EINZEL });
-  });
-  test("typeAndName reicht den Fehler durch", () => {
-    expect(typeAndName(["pod/a/b"])).toEqual({ error: MEHR });
-    expect(typeAndName(["pod/"])).toEqual({ error: EINZEL });
   });
   test.each([
     ["kubectl describe pod/", EINZEL],
