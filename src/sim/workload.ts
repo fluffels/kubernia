@@ -24,7 +24,7 @@
  */
 import type { ClusterNode, Deployment, PodInstance, PodTemplateSpec, PvcRes, ReplicaSetRecord, RolloutHistorySpec, RsTemplate, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
-import { POD_TEMPLATE_KEYS, REVISION_HISTORY_LIMIT, podTemplateHash, switchReplicaSet, templateHash } from "./replicasets";
+import { POD_TEMPLATE_KEYS, REVISION_HISTORY_LIMIT, switchReplicaSet, templateHash } from "./replicasets";
 import { asPodName, InvalidSpecError } from "./names";
 import { isControlPlane } from "./nodes";
 
