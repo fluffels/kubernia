@@ -14,7 +14,9 @@
  * Programmierfehler und wirft. Bewusst ohne Phaser/DOM und ohne Sim-Imports (Leaf-Modul der Domäne). */
 import type { YamlValue } from "./yaml";
 
-type Obj = { [key: string]: YamlValue };
+/** Ein YAML-Mapping (die Bausteine in kubectl/objects/ bauen daraus ihre Objekte). */
+export type YamlMap = { [key: string]: YamlValue };
+type Obj = YamlMap;
 
 /* ---------- Schlüsselordnung (go-yaml v2 keyList.Less) ---------- */
 

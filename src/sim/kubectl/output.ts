@@ -1,10 +1,10 @@
 /* ===== Kubernia – kubectl get -o: Ausgabeformate prüfen (sim/kubectl/output.ts, #1466) =====
  * Der Wert von `-o/--output` wird an der Eingabegrenze geprüft (FlagSpec.check, ../cliargs), wie in
  * echtem kubectl (cli-runtime `PrintFlags`): ein leerer Wert ist die normale Tabelle, `wide` hängt Spalten
- * an, jedes andere bekannte Format kennt der Simulator nicht (`Nicht simuliert` samt Lernhinweis), ein
+ * an, `yaml` druckt die Objekte (./get-yaml), jedes andere bekannte Format kennt der Simulator nicht (`Nicht simuliert` samt Lernhinweis), ein
  * unbekannter Wert bekommt den echten Fehlertext samt der Liste der erlaubten Formate.
  *
- * Eine Formattabelle als Daten: ein weiteres Format (z.B. `yaml`, #1467) ist ein Schalter `simulated`.
+ * Eine Formattabelle als Daten: ein weiteres Format ist ein Schalter `simulated` (`wide` und `yaml` sind es).
  * Abweichung zu echtem kubectl: es baut den Printer erst NACH der Server-Anfrage (`r.Infos()`), die Sim prüft
  * vorher (vor dem Control-Plane-Gate), damit ein Tippfehler im Format nie hinter „connection refused“ verschwindet.
  *
@@ -17,7 +17,7 @@ interface OutputFormat {
   readonly ignoreCase?: boolean;
   /** Template-Familien tragen ihr Template hinter `=` (`jsonpath={.x}`); ohne Template ist die Sim ebenfalls „nicht simuliert“. */
   readonly template?: boolean;
-  /** Wertet die Sim das Format aus? Nur `wide` (und später `yaml`, #1467). */
+  /** Wertet die Sim das Format aus? Nur `wide` und `yaml` (Objekt-Bausteine in ./get-yaml). */
   readonly simulated: boolean;
 }
 
@@ -30,7 +30,7 @@ export const OUTPUT_FORMATS: readonly OutputFormat[] = [
   plain("json", true), templated("jsonpath"), templated("jsonpath-as-json"), templated("jsonpath-file"),
   plain("kyaml", true), plain("name", true), templated("template"), templated("templatefile"),
   { name: "wide", simulated: true },
-  plain("yaml", true),
+  { name: "yaml", ignoreCase: true, simulated: true },
 ];
 
 function formatOf(value: string): OutputFormat | undefined {
@@ -45,10 +45,10 @@ export function checkOutputFormat(host: ErrHost, value: string): string | null {
   if (value === "") return null;
   const fmt = formatOf(value);
   if (fmt?.simulated) return null;
-  if (fmt) return notSimulated(host, "das Ausgabeformat '-o " + value + "'.", ["kubectl get <art> -o wide", "kubectl describe <art> <name>"]);
+  if (fmt) return notSimulated(host, "das Ausgabeformat '-o " + value + "'.", ["kubectl get <art> -o wide", "kubectl get <art> -o yaml", "kubectl describe <art> <name>"]);
   return host._err(
     "error: unable to match a printer suitable for the output format " + JSON.stringify(value) + ", allowed formats are: " + OUTPUT_FORMATS.map(f => f.name).join(","),
-    "Der Simulator kann -o wide; Details zeigt 'kubectl describe'.");
+    "Der Simulator kann -o wide und -o yaml; Details zeigt 'kubectl describe'.");
 }
 
 /** Das Flag `-o/--output` mit Wertprüfung (in der Flag-Tabelle von `get`). */
@@ -57,4 +57,9 @@ export const OUTPUT_FLAG = checkedFlag(checkOutputFormat, "-o", "--output");
 /** Verlangt die Anfrage `-o wide`? (Nach `checkArgs` ist jeder andere Wert leer oder ausgewertet.) */
 export function isWide(c: Call): boolean {
   return c.value(...OUTPUT_FLAG.names) === "wide";
+}
+
+/** Verlangt die Anfrage `-o yaml`? Wie kubectl ohne Rücksicht auf Groß-/Kleinschreibung (`-o YAML`). */
+export function isYaml(c: Call): boolean {
+  return c.value(...OUTPUT_FLAG.names)?.toLowerCase() === "yaml";
 }

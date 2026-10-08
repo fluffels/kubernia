@@ -104,9 +104,9 @@ describe("(a) nicht simulierte Flags werden abgelehnt", () => {
     expect(lauf("kubectl describe pod x -o json").out).toContain("-o wide");
     expect(lauf("kubectl describe pod x -o json").out).toContain("kubectl describe");
   });
-  // Die Formate bei get prüfen die Tests in kubectl-ausgabe.test.ts; -o yaml dreht #1467 um.
-  test("-o yaml ist (bis #1467) nicht simuliert und druckt keine Tabelle", () => {
-    const r = lauf("kubectl get pods -o yaml");
+  // Die Formate bei get prüfen die Tests in kubectl-ausgabe.test.ts, `-o yaml` kubectl-get-yaml.test.ts.
+  test("-o json ist nicht simuliert und druckt keine Tabelle", () => {
+    const r = lauf("kubectl get pods -o json");
     expect(r.out).toContain(NICHT_SIMULIERT);
     expect(r.out).not.toContain("READY");
   });

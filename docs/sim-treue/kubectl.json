@@ -45,6 +45,7 @@
     {"befehl":"get","flag":"-n","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["ein-namespace"]},
     {"befehl":"get","flag":"-A","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1430],"grenzen":["ein-namespace"]},
     {"befehl":"get","flag":"-o wide","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["wide-auswahl","selektor-ueber-namen"]},
+    {"befehl":"get","flag":"-o yaml","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["yaml-auswahl","yaml-gekuerzt"]},
     {"befehl":"get","flag":"-o FORMAT","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["keine-ausgabeformate"]},
     {"befehl":"get","flag":"-l","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["keine-ausgabeformate"]},
     {"befehl":"get","flag":"-w","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["keine-ausgabeformate"]},
