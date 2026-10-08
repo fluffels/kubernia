@@ -13,13 +13,33 @@
  *
  * Ausführen mit: npm test
  */
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { lies, repoDateien } from "./repo-texte";
+
+// Zähler der PowerShell-Starts (#1526): bei einem gesperrten Waisen-Ordner fragt `checkAndFixOrphanWorktrees` unter Windows
+// die Prozessliste per `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests
+// injizieren darum `listProcesses` (`ohnePowershell`); der letzte Test dieser Datei belegt, dass nie ein echter Start passiert (nur unter Windows aussagekräftig, `listProcessesWindows` läuft sonst nie; bewusst der letzte Test, mit `-t`-Filter läuft er leer).
+const powershellStarts = vi.hoisted(() => ({ n: 0 }));
+vi.mock("node:child_process", async (importOriginal) => {
+  const echt = await importOriginal<typeof import("node:child_process")>();
+  const execFileSync = (file: string, ...rest: unknown[]): unknown => {
+    if (/^powershell/i.test(file)) powershellStarts.n++;
+    return (echt.execFileSync as unknown as (...a: unknown[]) => unknown)(file, ...rest);
+  };
+  return { ...echt, execFileSync };
+});
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as hook from "../../scripts/stop-verify-hook.mjs";
+
+const checkRoh = (hook as unknown as { checkAndFixOrphanWorktrees: unknown }).checkAndFixOrphanWorktrees;
+
+/** Gibt `checkAndFixOrphanWorktrees` mit leerer Prozessliste als Vorgabe zurück; eigene `listProcesses`-Fakes der Tests gewinnen. */
+const ohnePowershell = <F>(f: unknown): F =>
+  ((root: string, deps?: object) => (f as (r: string, d: object) => unknown)(root, { listProcesses: () => [], ...deps })) as unknown as F;
 
 const parseStopInput: (text: string) => { stopHookActive: boolean } = hook.parseStopInput;
 const repoRootFromScriptUrl: (url: string) => string = hook.repoRootFromScriptUrl;
@@ -129,7 +149,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     blocked: boolean;
     reason?: string;
     removed?: string[];
-  } = hook.checkAndFixOrphanWorktrees;
+  } = ohnePowershell(checkRoh);
 
   test("keine Waisen-Ordner vorhanden, blocked false", () => {
     const result = checkAndFixOrphanWorktrees(
@@ -410,7 +430,7 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
 describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)", () => {
   type Deps = Record<string, unknown>;
   type Check = (root: string, deps?: Deps) => { blocked: boolean; reason?: string; warning?: string; removed?: string[] };
-  const check = (hook as unknown as { checkAndFixOrphanWorktrees: Check }).checkAndFixOrphanWorktrees;
+  const check = ohnePowershell<Check>(checkRoh);
   const WT = "/root/.claude/worktrees";
   const basisDeps = (inhalt: string[]): Deps => ({
     execSync: (cmd: string) => (cmd.includes("worktree list") ? "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n" : ""),
@@ -458,42 +478,34 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
 describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
   // Parallele Agenten laufen in anderen Worktrees; ein Kill per Name (`Stop-Process -Name`, `taskkill /IM`) beendet ihre
   // Prozesse mit. Erlaubt ist nur der gezielte Kill per PID samt Baum (`taskkill /PID … /T`).
-  const VERBOTEN = /Stop-Process\s+-Name\b|taskkill\s+\/{1,2}IM\b/i;
+  // Auch `-Force -Name`, der Alias-Parameter `-ProcessName`, `spps`/`kill -Name` und `/IM` nicht als erste taskkill-Option (#1526);
+  // Stopp an Backtick, `|` und `;`: Prosa wie "`Stop-Process` -Name" ist kein Rat.
+  const VERBOTEN = /\b(?:Stop-Process|spps)\b[^\n`|;]*?\s-(?:Name|ProcessName)\b|(?<![\w-])kill\s+(?:-\w+\s+)*-(?:Name|ProcessName)\b|\btaskkill(?:\.exe)?\b[^\n`|;]*?\s\/{1,2}IM\b/i;
 
   /** Texte der Agenten-Anweisungen, Docs, Hooks und Skripte, in denen eine solche Anleitung stehen könnte. */
-  async function texte(): Promise<Record<string, string>> {
-    const { readFileSync, readdirSync, statSync } = await import("node:fs");
-    const { join, relative } = await import("node:path");
-    const wurzel = fileURLToPath(new URL("../../", import.meta.url));
-    const out: Record<string, string> = { "AGENTS.md": readFileSync(join(wurzel, "AGENTS.md"), "utf8") };
-    // passt bekommt den Pfad relativ zur Wurzel (Schrägstriche), damit docs/ als Ganzes gescannt werden kann
-    const sammle = (rel: string, passt: (pfad: string) => boolean) => {
-      for (const e of readdirSync(join(wurzel, rel), { withFileTypes: true })) {
-        const p = join(wurzel, rel, e.name);
-        const relPfad = relative(wurzel, p).replace(/\\/g, "/");
-        if (e.isDirectory()) {
-          if (e.name !== "worktrees" && e.name !== "node_modules") sammle(relPfad, passt); // fremde Worktrees sind nicht dieser Stand
-        }
-        else if (passt(relPfad) && e.name !== "settings.local.json" && statSync(p).size < 2_000_000) out[relPfad] = readFileSync(p, "utf8");
-      }
-    };
-    // alle Docs außer den ADRs (historisch, nie umgeschrieben): auch docs/referenz/, model-routing.md, sicherheit-agenten.md
-    sammle("docs", (pfad) => pfad.endsWith(".md") && !pfad.startsWith("docs/adr/"));
-    sammle(".claude", (pfad) => /\.(md|js|mjs|json)$/.test(pfad));
-    sammle("scripts", (pfad) => /\.mjs$/.test(pfad));
+  // Nur versionierte Dateien aus dem gecachten Scan-Helfer (#1526): die CI scannt ohnehin nur Versioniertes, und ein
+  // zweiter Scan-Mechanismus (readdirSync) las dieselben Dateien unter Last erneut.
+  function texte(): Record<string, string> {
+    const out: Record<string, string> = { "AGENTS.md": lies("AGENTS.md") };
+    const passt = (pfad: string): boolean =>
+      // alle Docs außer den ADRs (historisch, nie umgeschrieben): auch docs/referenz/, model-routing.md, sicherheit-agenten.md
+      (pfad.startsWith("docs/") && pfad.endsWith(".md") && !pfad.startsWith("docs/adr/")) ||
+      (pfad.startsWith(".claude/") && /\.(md|js|mjs|json)$/.test(pfad)) ||
+      (pfad.startsWith("scripts/") && pfad.endsWith(".mjs"));
+    for (const pfad of repoDateien()) if (passt(pfad)) out[pfad] = lies(pfad);
     return out;
   }
 
-  test("texte() scannt alle Docs außer den ADRs (#1508)", async () => {
-    const pfade = Object.keys(await texte());
+  test("texte() scannt alle Docs außer den ADRs (#1508)", () => {
+    const pfade = Object.keys(texte());
     for (const pflicht of ["docs/referenz/befehle.md", "docs/model-routing.md", "docs/sicherheit-agenten.md", "docs/agent-harness-faq.md"]) {
       assert.ok(pfade.includes(pflicht), `${pflicht} fehlt im Scan`);
     }
     assert.deepEqual(pfade.filter((p) => p.startsWith("docs/adr/")), [], "ADRs sind historisch und zählen nicht");
   });
 
-  test("kein Dokument, Skill, Workflow, Agent und Skript rät zu `Stop-Process -Name` oder `taskkill /IM`", async () => {
-    const treffer = Object.entries(await texte())
+  test("kein Dokument, Skill, Workflow, Agent und Skript rät zu `Stop-Process -Name` oder `taskkill /IM`", () => {
+    const treffer = Object.entries(texte())
       .filter(([, t]) => VERBOTEN.test(t))
       .map(([pfad]) => pfad);
     assert.deepEqual(treffer, [], "Kill per Name beendet auch Prozesse paralleler Agenten: gezielt per PID (`taskkill /PID … /T`)");
@@ -509,6 +521,26 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     assert.ok(!VERBOTEN.test("nie per Name (Stop-Process -Id <pid>)"));
   });
 
+  test("Red-Green (#1526): auch `-Force -Name`, `-ProcessName`, Aliase und `taskkill /F /IM` treffen; Prosa und Kill per PID nicht", () => {
+    for (const roh of [
+      "taskkill /F /IM node.exe",
+      "taskkill.exe /T /F /IM node.exe",
+      "taskkill //F //IM node.exe",
+      "Stop-Process -Force -Name node",
+      "Stop-Process -ProcessName node",
+      "spps -ProcessName node",
+      "spps -Name node",
+      "kill -Name node",
+    ]) assert.ok(VERBOTEN.test(roh), roh);
+    for (const ok of [
+      "taskkill /PID 4711 /T /F",
+      "Stop-Process -Id 4711",
+      "Stop-Process kann keinen Baum beenden (`Stop-Process` -Name wäre ohnehin falsch)",
+      "Bash: kill -9 $pid",
+      "der Name des Prozesses steht in der Liste",
+    ]) assert.ok(!VERBOTEN.test(ok), ok);
+  });
+
   // #1501: Die PID ist oft nur die npx-/npm-Hülle; ein Kill ohne Baum (`/T`) lässt den node.exe-Listener stehen, und
   // `Stop-Process` kann keinen Baum beenden. Jeder Rat zum Kill per PID nennt darum `taskkill … /T`.
   const OHNE_BAUM = (text: string): string[] => {
@@ -520,8 +552,9 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     // PowerShell kann keinen Baum beenden: `-Id` an beliebiger Stelle (`-Force -Id`), Aliase `spps`/`kill`, positionale PID.
     // Stopp an Backtick, `|` und `;`: Prosa wie "`Stop-Process` (…) -Id" ist kein Rat.
     for (const re of [
-      /\b(?:Stop-Process|spps)\b[^\n`|;]*?\s-Id\b/gi,
-      /(?<![\w-])kill\s+(?:-\w+\s+)*-Id\b/gi,
+      /\b(?:Stop-Process|spps)\b[^\n`|;]*?\s-I(?:d|nputObject)?\b/gi,
+      /(?<![\w-])kill\s+(?:-\w+\s+)*-I(?:d|nputObject)?\b/gi,
+      /(?<![\w-])kill\s+(?:\d+|\$\w+|<[^>\s]+>)/gi,
       /\b(?:Stop-Process|spps)\s+(?:\d+|\$\w+|<[^>\s]+>)/gi,
     ]) {
       for (const m of text.matchAll(re)) treffer.push(m[0].trim());
@@ -529,8 +562,8 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     return treffer;
   };
 
-  test("kein Rat zum Kill per PID ohne Baum: weder `taskkill /PID` ohne `/T` noch `Stop-Process -Id` (#1501)", async () => {
-    const treffer = Object.entries(await texte())
+  test("kein Rat zum Kill per PID ohne Baum: weder `taskkill /PID` ohne `/T` noch `Stop-Process -Id` (#1501)", () => {
+    const treffer = Object.entries(texte())
       .map(([pfad, t]) => [pfad, OHNE_BAUM(t)] as const)
       .filter(([, t]) => t.length > 0);
     assert.deepEqual(treffer, [], "Hülle statt Listener beendet: `taskkill /PID <pid> /T /F` (PowerShell) bzw. `taskkill //PID <pid> //T //F` (Git-Bash)");
@@ -553,6 +586,11 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
       "kill -Id 4711",
       "Stop-Process 4711",
       "taskkill /PID $pid /F",
+      "Stop-Process -I 4711", // Kurzform von -Id (eindeutiges Präfix)
+      "Stop-Process -InputObject $p",
+      "kill 4711", // Alias `kill` mit positionaler PID
+      "kill $pid",
+      "kill <pid>",
     ]) assert.equal(OHNE_BAUM(roh).length, 1, roh);
     // Platzhalter und Prosa: sollen nicht treffen
     for (const ok of [
@@ -562,6 +600,8 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
       "PowerShells `Stop-Process` (es kann keinen Baum beenden)",
       "kill %1",
       "Bash: kill -9 $pid",
+      "kill -n 9 $pid",
+      "PowerShells `Stop-Process` kann keinen Baum beenden, `kill` auch nicht",
     ]) assert.deepEqual(OHNE_BAUM(ok), [], ok);
   });
 });
@@ -571,9 +611,7 @@ describe("checkAndFixOrphanWorktrees: Lens-Worktrees ohne Feature-Worktree (#142
   const WT = "/root/.claude/worktrees";
   const JETZT = 50_000_000;
   const porcelain = (pfade: string[]) => pfade.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n");
-  const check = (hook as unknown as {
-    checkAndFixOrphanWorktrees: (root: string, deps: object) => { blocked: boolean; reason?: string; removed?: string[] };
-  }).checkAndFixOrphanWorktrees;
+  const check = ohnePowershell<(root: string, deps: object) => { blocked: boolean; reason?: string; removed?: string[] }>(checkRoh);
 
   function deps(start: string[], opts: { alterMs?: number; klemmt?: boolean; symlink?: boolean; geisterOrdner?: string[] } = {}) {
     const registriert = new Set(start);
@@ -658,7 +696,7 @@ describe("checkAndFixOrphanWorktrees: lose Dateien unter .claude/worktrees (#147
   const WT = "/root/.claude/worktrees";
   const JETZT = 50_000_000;
   type Ergebnis = { blocked: boolean; reason?: string; removed?: string[]; warning?: string };
-  const check = (hook as unknown as { checkAndFixOrphanWorktrees: (root: string, deps: object) => Ergebnis }).checkAndFixOrphanWorktrees;
+  const check = ohnePowershell<(root: string, deps: object) => Ergebnis>(checkRoh);
 
   function deps(dateien: string[], opts: { rmWirft?: boolean; link?: boolean; alterMs?: number } = {}) {
     const befehle: string[] = [];
@@ -772,5 +810,11 @@ HEAD abc
     assert.equal(r.exit, 0);
     assert.match(r.stdout, /systemMessage/);
     assert.match(r.stdout, /notizen\.txt/);
+  });
+});
+
+describe("keine echten Prozessstarts (#1526)", () => {
+  test("kein Test dieser Datei hat PowerShell gestartet (listProcesses ist überall injiziert)", () => {
+    assert.equal(powershellStarts.n, 0, "ein deps-Objekt ohne `listProcesses` löst unter Windows einen echten PowerShell/WMI-Start aus (~600 ms)");
   });
 });

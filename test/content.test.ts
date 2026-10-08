@@ -4,6 +4,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { KQContent } from "../src/content";
+import { ANZEIGE_FELDER, ANZEIGE_KINDER, questAnzeigeFelder } from "./support/anzeigetexte";
 import { validateContent, type ContentBundle } from "../src/content/validate";
 import { KQAssets } from "../src/assets-data";
 import { ARCHIPEL_NPC } from "../src/world/regions/archipel";
@@ -826,27 +827,76 @@ function scanFields(pairs: [string, string][]): string[] {
   return out;
 }
 
-test("Quest-Texte: keine unsichtbaren Platzhalter, alle Tags geschlossen (#1508)", () => {
-  const problems = scanFields(questAnzeigeFelder(KQContent.QUESTS));
-  assert.deepEqual(problems, [], "Quest-Felder mit unsichtbarem Platzhalter oder offenem Tag:\n" + problems.join("\n"));
-});
+type Sammler = () => [string, string][];
+/** Wie eine Content-Sammlung angezeigt wird: per `fmtCmd` als Markup (dann ein Sammler, den der Wächter durchsucht) oder nicht (dann die Begründung). */
+type Anzeigequelle = Sammler | { ohneScan: string };
 
-/** Weitere Sammlungen, die im Spiel per `fmtCmd` gerendert werden (Quest-Texte, Drills und Quiz prüfen die Tests daneben). */
-const ANZEIGE_QUELLEN: [string, () => [string, string][]][] = [
-  ["SMALLTALK", () => Object.entries(KQContent.SMALLTALK)
-    .flatMap(([npc, zeilen]) => zeilen.map((t, i): [string, string] => [`${npc}[${i}]`, t]))],
-  ["CMD_CARDS", () => KQContent.CMD_CARDS.flatMap((c): [string, string][] => [[`${c.id}.q`, c.q], [`${c.id}.explain`, c.explain]])],
-  ["FUNK_EXPLAINS", () => KQContent.FUNK_EXPLAINS.map((f): [string, string] => [`${f.id}.text`, f.text])],
-];
+/**
+ * JEDE Sammlung der Content-Fassade ist hier klassifiziert (#1526): `satisfies Record<keyof typeof KQContent, …>` macht eine neue
+ * Sammlung ohne Eintrag zum Typfehler (vorher eine Handliste, in der neue Sammlungen still herausfielen). Was `fmtCmd`/`innerHTML`
+ * rendert (src/ui/{dialog,quiz,radio,album}.ts), bekommt einen Sammler; der Rest eine Begründung.
+ */
+const KLARTEXT = "Anzeigenamen und Kurztexte, im UI ohne fmtCmd als Text gesetzt";
+const ANZEIGE_QUELLEN = {
+  QUESTS: () => questAnzeigeFelder(KQContent.QUESTS),
+  SMALLTALK: () => Object.entries(KQContent.SMALLTALK)
+    .flatMap(([npc, zeilen]) => zeilen.map((t, i): [string, string] => [`${npc}[${i}]`, t])),
+  CMD_CARDS: () => KQContent.CMD_CARDS.flatMap((c): [string, string][] => [[`${c.id}.q`, c.q], [`${c.id}.explain`, c.explain]]),
+  FUNK_EXPLAINS: () => KQContent.FUNK_EXPLAINS.map((f): [string, string] => [`${f.id}.text`, f.text]),
+  CRAB_QUIZ: () => KQContent.CRAB_QUIZ.flatMap((c): [string, string][] => [
+    [`${c.id}.q`, c.q], [`${c.id}.explain`, c.explain], ...c.options.map((o, i): [string, string] => [`${c.id}.options[${i}]`, o]),
+  ]),
+  DRILLS: () => Object.entries(KQContent.DRILLS).flatMap(([id, make]): [string, string][] => {
+    const task = make(new KQSim({}));
+    return [[`${id}.hint`, task.hint], [`${id}.why`, task.why ?? ""]];
+  }),
+  RANKS: { ohneScan: KLARTEXT },
+  // SHOP/NPCS landen roh (ohne fmtCmd) in innerHTML: der Scan fängt dort nur offene/verwaiste Tags, ein `<token>` bliebe sichtbar-kaputt unentdeckt.
+  SHOP: () => KQContent.SHOP.flatMap((i): [string, string][] => [[`${i.id}.name`, i.name], [`${i.id}.desc`, i.desc]]), // src/ui/shop.ts setzt beide unescaped in innerHTML
+  NPCS: () => Object.entries(KQContent.NPCS).flatMap(([id, n]): [string, string][] => [[`${id}.name`, n.name], [`${id}.title`, n.title]]), // src/ui/hud.ts ebenso
+  PRACTICE: { ohneScan: "Drill-Verweise je NPC (IDs), keine Texte" },
+  QUEST_TOPICS: { ohneScan: KLARTEXT },
+  TF_CONFIGS: { ohneScan: "Terraform-Konfig-Quelltext im Code-Block (Daten, kein Markup)" },
+  STACK_ROUNDS: { ohneScan: "Minispiel-Daten, nicht per fmtCmd gerendert" },
+  POD_PACKING_ROUNDS: { ohneScan: "Minispiel-Daten, nicht per fmtCmd gerendert" },
+  YAML_STRUCT_ROUNDS: { ohneScan: "Minispiel-Daten, nicht per fmtCmd gerendert" },
+  ROUTING_ROUNDS: { ohneScan: "Minispiel-Daten, nicht per fmtCmd gerendert" },
+  DRIFT_HEAL_ROUNDS: { ohneScan: "Minispiel-Daten, nicht per fmtCmd gerendert" },
+  RBAC_KEYRING_ROUNDS: { ohneScan: "Minispiel-Daten, nicht per fmtCmd gerendert" },
+  corruptImage: { ohneScan: "Funktion, keine Daten" },
+  groupQuestsByTopic: { ohneScan: "Funktion, keine Daten" },
+  chapterForTopic: { ohneScan: "Funktion, keine Daten" },
+} satisfies Record<keyof typeof KQContent, Anzeigequelle>;
 
-for (const [name, felder] of ANZEIGE_QUELLEN) {
+for (const [name, quelle] of Object.entries(ANZEIGE_QUELLEN) as [string, Anzeigequelle][]) {
+  if (typeof quelle !== "function") {
+    test(`${name}: nicht gescannt, weil ${quelle.ohneScan}`, () => {
+      assert.ok(quelle.ohneScan.length > 10, `${name}: ohneScan braucht eine Begründung`);
+    });
+    continue;
+  }
   test(`${name}: keine unsichtbaren Platzhalter, alle Tags geschlossen (#1508)`, () => {
-    const pairs = felder();
+    const pairs = quelle();
     assert.ok(pairs.length > 0, `${name}: keine Felder gesammelt – die Quelle ist leer?`);
     const problems = scanFields(pairs);
     assert.deepEqual(problems, [], `${name}-Felder mit unsichtbarem Platzhalter oder offenem Tag:\n` + problems.join("\n"));
   });
 }
+
+test("Anzeige-Felder (#1526): die Container-Einträge der Klassifikation sind genau die, in die der Sammler hinabsteigt", () => {
+  const kinder = new Set(Object.values(ANZEIGE_FELDER).flatMap((t) => Object.entries(t).filter(([, art]) => art === "kinder").map(([feld]) => feld)));
+  assert.deepEqual([...kinder].sort(), [...ANZEIGE_KINDER].sort());
+});
+
+test("Anzeige-Felder (#1526): jeder Schritt-Typ der Quests ist klassifiziert und der Sammler liefert für jede Art Texte", () => {
+  const typen = new Set(KQContent.QUESTS.flatMap((q) => q.steps.map((s) => s.type)));
+  for (const typ of typen) assert.ok(typ in ANZEIGE_FELDER, `Schritt-Typ ${typ} ohne Klassifikation`);
+  const felder = questAnzeigeFelder(KQContent.QUESTS).map(([label]) => label);
+  for (const muster of [/\.title$/, /\.brief$/, /\.lines\[0\]$/, /\.q$/, /\.options\[0\]\.reply$/, /\.intro$/, /\.why$/, /\.text$/, /\.hint$/]) {
+    assert.ok(felder.some((l) => muster.test(l)), `kein Feld mit ${String(muster)} gesammelt`);
+  }
+  assert.ok(!felder.some((l) => /\.solution$/.test(l)), "`solution` ist escaped, nicht Markup");
+});
 
 test("Red-Green (#1508): Platzhalter und offenes Tag in einer Quest-Dialogzeile werden gemeldet", () => {
   const dialogIdx = (q: (typeof KQContent.QUESTS)[number]) => q.steps.findIndex(s => s.type === "dialog");
@@ -868,26 +918,6 @@ test("Red-Green (#1508): offeneTags meldet offen, verwaist und falsch verschacht
   assert.equal(offeneTags('<span class="a">x').length, 1);
   assert.deepEqual(offeneTags("<code>a</code> <br> <b>b</b>"), []);
   assert.deepEqual(offeneTags("<br/> &lt;b&gt; <pod-name>"), []);
-});
-
-test("Drills: why/hint enthalten keine unsichtbaren Platzhalter (fmtCmd macht <token> sichtbar, #311/#320)", () => {
-  const pairs: [string, string][] = [];
-  for (const [id, make] of Object.entries(KQContent.DRILLS)) {
-    const task = make(new KQSim({}));
-    pairs.push([`${id}.hint`, task.hint], [`${id}.why`, task.why ?? ""]);
-  }
-  const problems = scanFields(pairs);
-  assert.deepEqual(problems, [], "Drill-Felder mit Platzhaltern, die fmtCmd nicht sichtbar macht (werden im Browser unsichtbar):\n" + problems.join("\n"));
-});
-
-test("Quiz: q/options/explain enthalten keine unsichtbaren Platzhalter (#311/#458)", () => {
-  const pairs: [string, string][] = [];
-  for (const c of KQContent.CRAB_QUIZ) {
-    pairs.push([`${c.id}.q`, c.q], [`${c.id}.explain`, c.explain]);
-    c.options.forEach((o, i) => pairs.push([`${c.id}.options[${i}]`, o]));
-  }
-  const problems = scanFields(pairs);
-  assert.deepEqual(problems, [], "Quiz-Felder mit Platzhaltern, die fmtCmd nicht sichtbar macht:\n" + problems.join("\n"));
 });
 
 test("Red-Green: ein Platzhalter, den fmtCmd NICHT erkennt (z.B. mit Unterstrich), wird als unsichtbar gemeldet (#311)", () => {
@@ -1490,34 +1520,8 @@ test("#139 Wachturm-Quests (k8s-serviceaccount–k8s-pod-security): von Vidar, T
  * die nur einmal im Spiel auftaucht. Der Wächter sammelt ALLE spielersichtbaren
  * Quest-Texte und stellt sicher, dass „Kisten-Supermarkt" nicht zurückkehrt. */
 
-/** Sammelt alle vom Spieler gelesenen Textfelder einer Quest-Liste mit Label `<quest>#<schritt>.<feld>`
- *  (Titel, Dialoge, Choices, Teach-/Terminal-Panels samt Hints und `why`, Drill-Intros). Die EINE Feldliste:
- *  Wording-Wächter und Platzhalter-/Tag-Wächter (#1508) lesen beide hieraus. */
-function questAnzeigeFelder(quests: typeof KQContent.QUESTS): [string, string][] {
-  const out: [string, string][] = [];
-  for (const quest of quests) {
-    out.push([`${quest.id}.title`, quest.title]);
-    quest.steps.forEach((step, i) => {
-      const l = `${quest.id}#${i}`;
-      if ("brief" in step && step.brief) out.push([`${l}.brief`, step.brief]);
-      if (step.type === "dialog") step.lines.forEach((t, k) => out.push([`${l}.lines[${k}]`, t]));
-      else if (step.type === "choice") {
-        out.push([`${l}.q`, step.q]);
-        step.options.forEach((o, k) => out.push([`${l}.options[${k}].t`, o.t], [`${l}.options[${k}].reply`, o.reply]));
-      } else if (step.type === "teach") {
-        out.push([`${l}.intro`, step.cmd.intro], [`${l}.text`, step.cmd.text], [`${l}.hint`, step.cmd.hint]);
-        if (step.cmd.why) out.push([`${l}.why`, step.cmd.why]);
-      } else if (step.type === "terminal") {
-        for (const t of step.tasks) {
-          out.push([`${l}/${t.id}.text`, t.text], [`${l}/${t.id}.hint`, t.hint]);
-          if (t.why) out.push([`${l}/${t.id}.why`, t.why]);
-        }
-      } else if (step.type === "drill") out.push([`${l}.intro`, step.intro]);
-    });
-  }
-  return out;
-}
-
+/** Alle vom Spieler als Markup gelesenen Textfelder einer Quest-Liste: die EINE exhaustive Feldliste in
+ *  `test/support/anzeigetexte.ts` (Wording-Wächter, Platzhalter-/Tag-Wächter #1508 und Kurzform-Wächter in abbrev.test.ts). */
 /** Nur die Texte (ohne Label) für den Wording-Wächter. */
 function playerVisibleQuestText(quests: typeof KQContent.QUESTS): string[] {
   return questAnzeigeFelder(quests).map(([, text]) => text);

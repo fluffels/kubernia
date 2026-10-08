@@ -106,8 +106,13 @@ describe("Routing und Entscheidung (#1311)", () => {
   });
 });
 
-describe("Prozess-Start (#1311)", () => {
+// Jeder Test startet echte node-Prozesse (~60-100 ms je Start, unter Parallellast ein Vielfaches). Darum je Skript ein Test
+// mit wenigen Starts und ein großzügigeres Describe-Timeout statt des globalen 5-s-Limits (#1526; Präzedenz haupt-sync).
+describe("Prozess-Start (#1311)", { timeout: 30_000 }, () => {
   const start = (skript: string, eingabe: string) => execFileSync("node", [resolve(WURZEL, "scripts", skript)], { input: eingabe, encoding: "utf8", cwd: WURZEL });
+  // Haupt-Checkout (für die deny-Payloads der Direktaufrufe): ein git-Start je Datei statt je Test.
+  const mainDir = resolve(WURZEL, execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: WURZEL, encoding: "utf8" }).trim(), "..");
+  const deny = (skript: string, tool: string) => (JSON.parse(start(skript, payload(tool, "git commit -m x", mainDir))) as Out)?.hookSpecificOutput.permissionDecision;
 
   test("der Dispatcher gibt bei gh api -X DELETE ein ask-JSON aus, bei kaputtem JSON nichts", () => {
     const out = JSON.parse(start("pretooluse-hook.mjs", payload("Bash", "gh api -X DELETE repos/o/r/issues/1"))) as Out;
@@ -116,15 +121,20 @@ describe("Prozess-Start (#1311)", () => {
     assert.equal(start("pretooluse-hook.mjs", payload("Bash", "ls")).trim(), "");
   });
 
-  test("die drei Direktaufrufe bleiben lauffähig (laufende Sessions behalten ihre alte Hook-Konfiguration)", () => {
+  // Die Direktaufrufe: laufende Sessions behalten ihre alte Hook-Konfiguration. Je Skript ein Test; die deny-Payload
+  // belegt, dass main() lebt (ein toter main() ergäbe auch bei "ls" eine leere Ausgabe).
+  test("Direktaufruf gh-guard-hook.mjs bleibt lauffähig", () => {
     const ask = JSON.parse(start("gh-guard-hook.mjs", payload("Bash", "gh api -X DELETE repos/o/r/issues/1"))) as Out;
     assert.equal(ask?.hookSpecificOutput.permissionDecision, "ask");
+  });
+
+  test("Direktaufruf worktree-guard-hook.mjs bleibt lauffähig", () => {
     assert.equal(start("worktree-guard-hook.mjs", payload("Bash", "ls")).trim(), "");
-    assert.equal(start("worktree-guard-powershell.mjs", payload("PowerShell", "ls")).trim(), "");
-    // deny-Payload je Direktaufruf (ein toter main() ergäbe auch bei "ls" eine leere Ausgabe)
-    const mainDir = resolve(WURZEL, execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: WURZEL, encoding: "utf8" }).trim(), "..");
-    const deny = (skript: string, tool: string) => (JSON.parse(start(skript, payload(tool, "git commit -m x", mainDir))) as Out)?.hookSpecificOutput.permissionDecision;
     assert.equal(deny("worktree-guard-hook.mjs", "Bash"), "deny");
+  });
+
+  test("Direktaufruf worktree-guard-powershell.mjs bleibt lauffähig", () => {
+    assert.equal(start("worktree-guard-powershell.mjs", payload("PowerShell", "ls")).trim(), "");
     assert.equal(deny("worktree-guard-powershell.mjs", "PowerShell"), "deny");
   });
 });

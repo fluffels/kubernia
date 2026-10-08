@@ -9,8 +9,21 @@
  *
  * Ausfuehren mit: npm test
  */
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
+
+// Zähler der PowerShell-Starts (#1526): `fixOrphans` fragt unter Windows bei einem gesperrten Ordner die Prozessliste per
+// `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests injizieren darum
+// `listProcesses` (siehe `fixOrphans` unten); der letzte Test dieser Datei belegt, dass nie ein echter Start passiert (nur unter Windows aussagekräftig, `listProcessesWindows` läuft sonst nie; bewusst der letzte Test, mit `-t`-Filter läuft er leer).
+const powershellStarts = vi.hoisted(() => ({ n: 0 }));
+vi.mock("node:child_process", async (importOriginal) => {
+  const echt = await importOriginal<typeof import("node:child_process")>();
+  const execFileSync = (file: string, ...rest: unknown[]): unknown => {
+    if (/^powershell/i.test(file)) powershellStarts.n++;
+    return (echt.execFileSync as unknown as (...a: unknown[]) => unknown)(file, ...rest);
+  };
+  return { ...echt, execFileSync };
+});
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
@@ -61,11 +74,14 @@ const {
   suspiciousWorktreeEntries,
   computeOrphans,
   diagnoseOrphans,
-  fixOrphans,
   assertSafeOrphanTarget,
   splitByAge,
   MIN_ORPHAN_AGE_MS,
 } = cleanup;
+
+/** `fixOrphans` mit leerer Prozessliste als Vorgabe: kein echter PowerShell-Start. Tests, die die Liste brauchen, übergeben eigene Fakes. */
+const fixOrphans: CleanupModule["fixOrphans"] = (mainRoot, worktreesDir, orphans, deps) =>
+  cleanup.fixOrphans(mainRoot, worktreesDir, orphans, { listProcesses: () => [], ...deps });
 
 describe("parseWorktreeListPorcelain (#952)", () => {
   test("ein Eintrag (nur Haupt-Checkout)", () => {
@@ -715,6 +731,16 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-r2"]);
   });
 
+  test("Merge-Delta-Lens `kq-<nr>-lens-m<n>` ohne `kq-<nr>` ist verwaist, mit Feature-Worktree nicht", () => {
+    const reg = [MAIN, `${WT}/kq-13-lens-m1`, `${WT}/kq-14`, `${WT}/kq-14-lens-m2`, `${WT}/kq-15-lens-m`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-m1"]);
+  });
+
+  test("Großgeschriebener Ordnername `KQ-13-lens-r1` wird nicht mit `kq-13` verwechselt (kein Flag i, sonst fälschlich verwaist)", () => {
+    const reg = [MAIN, `${WT}/kq-13`, `${WT}/KQ-13-lens-r1`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);
+  });
+
   test("nie angefasst: `kq-<nr>`, `kq-<nr>-lens-x`, `foo-lens-r1`, fremde Ordner, tiefer verschachtelte Pfade", () => {
     const reg = [MAIN, `${WT}/kq-12`, `${WT}/kq-12-lens-x`, `${WT}/foo-lens-r1`, `/other/kq-9-lens-r1`, `${WT}/kq-9-lens-r1/sub`, `${WT}/kq-9-lens-r10x`];
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);
@@ -953,5 +979,11 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
     const f = assertSafeOrphanTarget as unknown as (a: string, b: string, c: string, d: object, e: string) => { safe: boolean };
     assert.equal(f(MAIN, WT, "kq-1-a.bak", { lstatSync: () => reguLaer }, "file").safe, true);
     assert.equal(f(MAIN, WT, "kq-1-a.bak", { lstatSync: () => ({ ...reguLaer, isFile: () => false }) }, "file").safe, false);
+  });
+});
+
+describe("keine echten Prozessstarts (#1526)", () => {
+  test("kein Test dieser Datei hat PowerShell gestartet (listProcesses ist überall injiziert)", () => {
+    assert.equal(powershellStarts.n, 0, "ein deps-Objekt ohne `listProcesses` löst unter Windows einen echten PowerShell/WMI-Start aus (~600 ms)");
   });
 });

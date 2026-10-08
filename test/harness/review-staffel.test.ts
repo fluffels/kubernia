@@ -316,14 +316,14 @@ describe("Merge von main ist kein Fix-Pass (#1311)", () => {
     });
     const nach = aufrufe.find((a) => a.label.startsWith("nachbessern"))?.prompt ?? "";
     assert.match(nach, /git diff h1\.\.M\^1 plus git diff M\.\.HEAD/);
-    assert.match(nach, /git show --cc M/);
+    assert.match(nach, /git show --remerge-diff M/);
     assert.doesNotMatch(nach, /gemergt oder rebased, lass deltaPfad leer/, "der alte Satz erzwang nach jedem Merge den vollen Pass");
     assert.match(nach, /REBASED, lass deltaPfad\s+leer/, "nur ein Rebase erzwingt weiter den vollen Satz");
   });
 
   const SKILL_MD = lies(".claude/skills/review-lenses/SKILL.md");
   const HARNESS_MD = lies("docs/agent-harness.md");
-  const nenntMergeRegel = (s: string) => /Merge von `main`[^\n]*kein Fix-Pass/.test(s) && /git show --cc/.test(s);
+  const nenntMergeRegel = (s: string) => /Merge von `main`[^\n]*kein Fix-Pass/.test(s) && /git show --remerge-diff/.test(s);
 
   test("Skill und agent-harness §3a tragen dieselbe Regel; die alte Fail-closed-Klausel ist weg", () => {
     assert.ok(nenntMergeRegel(SKILL_MD), "review-lenses/SKILL.md");
@@ -334,7 +334,7 @@ describe("Merge von main ist kein Fix-Pass (#1311)", () => {
   test("Prädikat greift (Red-Green)", () => {
     assert.ok(!nenntMergeRegel("Ein Merge von `main` ist ein voller Pass."));
     assert.ok(!nenntMergeRegel("Merge von `main` ist kein Fix-Pass."), "ohne die Konfliktauflösung unvollständig");
-    assert.ok(nenntMergeRegel("Merge von `main` ist kein Fix-Pass; Auflösung per git show --cc M"));
+    assert.ok(nenntMergeRegel("Merge von `main` ist kein Fix-Pass; Auflösung per git show --remerge-diff M"));
   });
 });
 

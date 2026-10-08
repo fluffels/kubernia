@@ -17,7 +17,7 @@
  * Skript räumt stattdessen über `fs.rmSync` auf (kein Shell-`rm`, `Bash(node:*)`
  * bleibt erlaubt).
  *
- * Lens-Worktrees (#1425): die Test-Lens sabotiert in `kq-<nr>-lens-r<runde>` (Skill `review-lenses`). Bleibt so ein
+ * Lens-Worktrees (#1425): die Test-Lens sabotiert in `kq-<nr>-lens-r<runde>` bzw. `kq-<nr>-lens-m<n>` (Merge-Delta-Lens, Skill `review-lenses`). Bleibt so ein
  * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `kq-<nr>` weg ist, fehlt er in der Waisen-Sicht oben
  * (die kennt nur unregistrierte Ordner). `verwaisteLensWorktrees` findet sie, `entferneLensWorktrees` räumt sie per
  * `git worktree remove --force` und prüft das Ergebnis.
@@ -38,6 +38,7 @@ import { execFileSync, execSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { LENS_WORKTREE_NAME } from "./lens-edit-guard.mjs";
 
 /** Pfad-Normalisierung: Backslashes → Slashes, kein Trailing-Slash. Real entstehen
  *  gemischte Pfade (`mainRoot` slash-normalisiert, `join()` hängt auf Windows
@@ -276,9 +277,6 @@ export function diagnoseOrphans(cwd, deps = {}) {
   return { ok: true, orphans, young, lensOrphans, lensYoung, orphanFiles: dateien.verwaist, youngFiles: dateien.jung, foreignFiles: dateien.fremd, mainRoot, worktreesDir };
 }
 
-/** Name eines Lens-Worktrees: `kq-<nr>-lens-r<runde>` (Skill review-lenses); Gruppe 1 ist der Eltern-Worktree `kq-<nr>`. */
-const LENS_WORKTREE = /^(kq-\d+)-lens-r\d+$/;
-
 /**
  * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `kq-<nr>` NICHT mehr registriert ist (#1425).
  * `registeredPaths` sind die absoluten Pfade aus `git worktree list`. Pure; liefert Ordnernamen (nicht Pfade).
@@ -288,7 +286,7 @@ export function verwaisteLensWorktrees(registeredPaths, worktreesDir) {
   const registriert = new Set(registeredPaths.map(norm));
   const namen = [...registriert].filter((p) => p.startsWith(basis) && !p.slice(basis.length).includes("/")).map((p) => p.slice(basis.length));
   return namen.filter((name) => {
-    const m = LENS_WORKTREE.exec(name);
+    const m = LENS_WORKTREE_NAME.exec(name);
     return m !== null && !registriert.has(basis + m[1]);
   });
 }

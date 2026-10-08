@@ -12,6 +12,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 // Reine Node-Tooling-Skripte ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
@@ -70,6 +71,41 @@ describe("Doku↔Code-Drift (#482/#907)", () => {
     assert.ok(covered.has("src/scenes/WorldScene.ts"), "WorldScene.ts muss in presentation.md stehen");
     assert.ok(covered.has("src/store.ts"), "store.ts muss in app.md stehen");
     assert.ok(covered.size >= 163, `Alle 163 Module müssen abgedeckt sein, got ${covered.size}`);
+  });
+
+  // Z11 (#1526): sim.md ist die Hauptkonfliktquelle paralleler PRs. Modul-Einträge als Tabellenzeilen ohne Leerzeile
+  // dazwischen konfliktieren bei jeder Nachbaränderung; ein Listeneintrag je Modul mit Leerzeile mergt sauber.
+  test("sim.md: Modul-Einträge sind Listeneinträge mit Leerzeile dazwischen, keine Tabellenzeilen", () => {
+    const zeilen = readFileSync(new URL("../docs/module/sim.md", import.meta.url), "utf8").split(/\r?\n/);
+    assert.deepEqual(
+      zeilen.filter((z) => /^\|\s*`src\//.test(z)).slice(0, 3),
+      [],
+      "Modul-Einträge nicht als Tabellenzeile `| `src/…` |`, sondern als `- `src/…`: …` mit Leerzeile dazwischen",
+    );
+    const eintraege = zeilen.map((z, i) => ({ z, i })).filter(({ z }) => /^- `src\/sim\/[^`]+`/.test(z));
+    assert.ok(eintraege.length >= 40, `erwartet ≥ 40 Modul-Einträge, got ${eintraege.length}`);
+    const klebend = eintraege.filter(({ i }) => /^- `src\//.test(zeilen[i + 1] ?? ""));
+    assert.deepEqual(klebend.map((e) => e.z.slice(0, 60)), [], "Modul-Einträge brauchen eine Leerzeile zwischen sich");
+    assert.deepEqual(eintraege.filter(({ z }) => eintragsProbleme(z).length > 0).map(({ z }) => z.slice(0, 80)), [], "Eintragskopf oder Spalten-Rest kaputt");
+  });
+
+  // Die Umwandlung der Tabellen hat einmal an einem `||` in einer Code-Spanne gespalten und den Eintragskopf zerstört
+  // (`…restarts):  | pod.restarts`): der Kopf ist `- `pfad` (#Schritt): Inhalt`, und außerhalb von Code-Spannen steht kein ` | `.
+  const eintragsProbleme = (zeile: string): string[] => {
+    const probleme: string[] = [];
+    if (!/^- `src\/[^`]+`(?: \(#[^:]*\))?: \S/.test(zeile)) probleme.push("Kopf");
+    if (/ \| /.test(zeile.replace(/`[^`]*`/g, ""))) probleme.push("Spalten-Rest");
+    if (/\):\s+\|/.test(zeile)) probleme.push("Spalten-Rest nach Klammer");
+    return probleme;
+  };
+
+  test("Red-Green: der Eintragswächter erkennt den zerlegten Eintrag, nicht den heilen", () => {
+    assert.deepEqual(eintragsProbleme("- `src/sim/a.ts` (#12): Regel `restarts || pod.restarts` gilt."), []);
+    assert.deepEqual(eintragsProbleme("- `src/sim/a.ts`: kein Schritt, `top pods|nodes`."), []);
+    assert.ok(eintragsProbleme("- `src/sim/a.ts` (Status (#1414): die Regel `restarts):  | pod.restarts`; weiter.").length > 0);
+    assert.ok(eintragsProbleme("- `src/sim/a.ts` (#12): Text | Rest").length > 0);
+    assert.deepEqual(eintragsProbleme("- `src/sim/a.ts` (#12): Regel `x):  | y`"), ["Spalten-Rest nach Klammer"], "Rest innerhalb einer Code-Spanne bei heilem Kopf");
+    assert.ok(eintragsProbleme("- src/sim/a.ts: ohne Backticks").length > 0);
   });
 
   test("layerOf klassifiziert repräsentative Pfade wie der dependency-cruiser", () => {
