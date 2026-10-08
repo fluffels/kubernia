@@ -218,7 +218,7 @@ const migrations: Record<number, Migration> = {
     }
     return { ...d, inventory: newInv };
   },
-  // 9 -> 10 (#1496): die Node-Version im Cluster-Snapshot wird abgeleitet statt gespeichert (snapshotNode in
+  // 9 -> 10 (#1496): die Node-Version im Cluster-Snapshot wird abgeleitet statt gespeichert (nodeSnapshot in
   //         sim/nodes.ts lässt sie weg, solange sie `NODE_VERSION` ist). Ein v9-Stand trägt sie bei jedem Knoten und
   //         hielte den Cluster für immer auf der alten Sim-Version (v1.30.2 ohne Support). ECHTE Transformation:
   //         jede Version, die genau dem alten Default entspricht, fällt weg; eine bewusst abweichende Version

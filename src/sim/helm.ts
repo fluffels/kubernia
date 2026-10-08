@@ -98,7 +98,8 @@ function helmSearch(host: HelmHost, c: Call): string {
   if (host.helmRepos.length === 0) return host._err("Error: no repositories configured", "Erst 'helm repo add bitnami https://charts.bitnami.com/bitnami'");
   const charts = [
     ["bitnami/nginx", "18.1.0", "1.27.0", "NGINX – der beliebte Webserver"],
-    ["bitnami/nginx-ingress-controller", "11.3.1", "1.11.1", "Ingress Controller auf NGINX-Basis"],
+    ["bitnami/nginx-ingress-controller", "11.3.1", "1.11.1", "Ingress-NGINX – eingestellt seit 03/2026, keine Sicherheits-Updates mehr"],
+    ["bitnami/envoy-gateway", "2.0.4", "1.5.0", "Envoy Gateway – Controller für die Gateway API (Nachfolger von Ingress)"],
     ["bitnami/redis", "19.5.2", "7.2.5", "Redis – In-Memory-Datenbank"],
     ["bitnami/postgresql", "15.5.1", "16.3.0", "PostgreSQL-Datenbank"],
   ].filter(c => !term || c[0].includes(term) || c[3].toLowerCase().includes(term.toLowerCase()));

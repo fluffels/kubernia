@@ -27,6 +27,14 @@ function szenario(): Scenario {
       { name: "bank", type: "ExternalName", clusterIP: "<none>", port: "", externalName: "api.bank.example.com" },
     ],
     statefulSets: [{ name: "db", image: "postgres:16", replicas: 2, serviceName: "db", volumeClaimName: "daten" }],
+    pvs: [{ name: "pv-lose", capacity: "2Gi" }],
+    roles: [{ name: "leser", rules: [{ verbs: ["get"], resources: ["pods"] }] }],
+    roleBindings: [
+      { name: "gemischt", roleRef: { kind: "Role", name: "leser" }, subjects: [{ kind: "User", name: "anna" }, { kind: "User", name: "ben" }, { kind: "ServiceAccount", name: "bot", namespace: "ci" }, { kind: "ServiceAccount", name: "ohne-ns" }] },
+      { name: "nur-user", roleRef: { kind: "Role", name: "leser" }, subjects: [{ kind: "User", name: "carla" }] },
+      { name: "nur-sa", roleRef: { kind: "Role", name: "leser" }, subjects: [{ kind: "ServiceAccount", name: "bot", namespace: "ci" }] },
+      { name: "cluster-b", cluster: true, roleRef: { kind: "ClusterRole", name: "cluster-admin" }, subjects: [{ kind: "User", name: "dora" }, { kind: "ServiceAccount", name: "ops", namespace: "kube-system" }] },
+    ],
   };
 }
 
@@ -239,14 +247,62 @@ describe("(b) wide: replicasets und nodes (#1483)", () => {
     aufbau();
     expect(zeile(lauf("kubectl get nodes -o wide", sim).out, "ahoi-worker-1")![5]).toBe(ip);
   });
-  test("Hilfe: wide-auswahl nennt jede Art mit wide-Spalten", () => {
-    const text = simGrenzen("kubectl").find(g => g.id === "wide-auswahl")!.text;
-    for (const art of ["pods", "deployments", "replicasets", "services", "statefulsets", "nodes"]) expect(text).toContain(art);
+  test("Hilfe: die Grenze wide-auswahl ist entfallen", () => {
+    expect(simGrenzen("kubectl").some(g => g.id === "wide-auswahl")).toBe(false);
+  });
+});
+
+describe("(b) wide: rolebindings, clusterrolebindings, pv, pvc (#1497)", () => {
+  test("rolebindings: USERS GROUPS SERVICEACCOUNTS, mehrere Subjekte mit \", \" verbunden, SA als namespace/name", () => {
+    const out = lauf("kubectl get rolebindings -o wide").out;
+    expect(kopf(out)).toEqual(["NAME", "ROLE", "AGE", "USERS", "GROUPS", "SERVICEACCOUNTS"]);
+    expect(out).toMatch(/^gemischt\s+Role\/leser\s+\S+\s+anna, ben\s+ci\/bot, default\/ohne-ns$/m);
+  });
+  test("rolebindings: nur User und nur ServiceAccount lassen die jeweils andere Spalte leer", () => {
+    const out = lauf("kubectl get rolebindings -o wide").out;
+    expect(out).toMatch(/^nur-user\s+Role\/leser\s+\S+\s+carla$/m);
+    expect(out).toMatch(/^nur-sa\s+Role\/leser\s+\S+\s+ci\/bot$/m);
+    expect(out).not.toContain("cluster-b");
+  });
+  test("clusterrolebindings: dieselben Spalten, nur Cluster-Bindungen", () => {
+    const out = lauf("kubectl get clusterrolebindings -o wide").out;
+    expect(kopf(out)).toEqual(["NAME", "ROLE", "AGE", "USERS", "GROUPS", "SERVICEACCOUNTS"]);
+    expect(out).toMatch(/^cluster-b\s+ClusterRole\/cluster-admin\s+\S+\s+dora\s+kube-system\/ops$/m);
+    expect(out).not.toContain("gemischt");
+  });
+  test("pv und pvc: VOLUMEMODE Filesystem als letzte Spalte, ohne wide fehlt sie", () => {
+    for (const art of ["pv", "pvc"]) {
+      const out = lauf("kubectl get " + art + " -o wide").out;
+      expect(kopf(out).at(-1), art).toBe("VOLUMEMODE");
+      const zeilen = out.split("\n").slice(1);
+      expect(zeilen.length, art).toBeGreaterThan(0);
+      for (const z of zeilen) expect(z.trim().split(/\s+/).at(-1), art).toBe("Filesystem");
+      expect(lauf("kubectl get " + art).out, art).not.toContain("VOLUMEMODE");
+    }
+  });
+});
+
+describe("Node-AGE aus dem Beitritt (#1497)", () => {
+  const alter = (sim: KQSim, n: string) => zeile(lauf("kubectl get nodes", sim).out, n)![3];
+  test("eingebaute Knoten bleiben 3d, ein per kubeadm join angehängter zählt ab dem Beitritt", () => {
+    const sim = new KQSim({ bareMetal: true });
+    sim.exec("kubeadm init");
+    sim.exec("kubeadm join 10.0.0.10:6443 --token " + sim.controlPlane.token! + " --discovery-token-ca-cert-hash sha256:deadbeef");
+    expect(alter(sim, "ahoi-worker-1")).toMatch(/^\d+[smh]$/);
+    expect(alter(sim, "ahoi-control")).toMatch(/^\d+[smh]$/);
+    expect(alter(new KQSim(szenario()), "ahoi-worker-1")).toBe("3d");
+  });
+  test("terraform apply: die neuen Worker sind jung, die Ausgangsknoten 3d", () => {
+    const sim = new KQSim({ ...szenario(), tfResources: [{ addr: "hafen_server.worker[0]", desc: "neue Server" }] });
+    sim.exec("terraform init");
+    sim.exec("terraform apply");
+    expect(alter(sim, "ahoi-worker-3")).toMatch(/^\d+[smh]$/);
+    expect(alter(sim, "ahoi-worker-1")).toBe("3d");
   });
 });
 
 describe("(c) ohne wide bleibt jede Ausgabe wie zuvor; Arten ohne wide-Spalten ändern sich nicht", () => {
-  const MIT_WIDE: ResourcePlural[] = ["pods", "deployments", "replicasets", "services", "statefulsets", "nodes"];
+  const MIT_WIDE: ResourcePlural[] = ["pods", "deployments", "replicasets", "services", "statefulsets", "nodes", "rolebindings", "clusterrolebindings", "persistentvolumes", "persistentvolumeclaims"];
   const ohneZeit = (s?: string | null) => (s ?? "").replace(/\b\d+[smhd]\b/g, "T");   // jeder exec lässt die Uhr weiterlaufen
   const beide = (plural: string) => {
     const sim = new KQSim({ ...szenario(), secrets: [{ name: "s", keys: ["k"] }] });
@@ -265,6 +321,9 @@ describe("(c) ohne wide bleibt jede Ausgabe wie zuvor; Arten ohne wide-Spalten �
     ["pods", ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]], ["deployments", ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]],
     ["services", ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]], ["statefulsets", ["NAME", "READY", "AGE"]],
     ["replicasets", ["NAME", "DESIRED", "CURRENT", "READY", "AGE"]], ["nodes", ["NAME", "STATUS", "ROLES", "AGE", "VERSION"]],
+    ["rolebindings", ["NAME", "ROLE", "AGE"]], ["clusterrolebindings", ["NAME", "ROLE", "AGE"]],
+    ["persistentvolumes", ["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"]],
+    ["persistentvolumeclaims", ["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"]],
   ])("ohne -o wide hat %s den bisherigen Kopf (keine wide-Spalte sickert durch)", (plural, header) => {
     expect(kopf(lauf("kubectl get " + plural).out)).toEqual(header);
   });

@@ -55,7 +55,7 @@ Die Matrix liegt unter `docs/`, nicht unter `src/`: sie wird nie ausgeliefert (k
   1. Die Druckspalten gegen die Matrix prüfen: `pkg/printers/internalversion/printers.go` zwischen den Release-Branches diffen (alle simulierten Arten, auch `-o wide`).
   2. Release-Blog und CHANGELOG, Abschnitt „Deprecations and removals“, auf Arten und Verhalten der Sim lesen.
   3. Laufzeit-Support prüfen (containerd, Kernel) und `NODE_SYSTEM_INFO` in `src/sim/nodes.ts` nachziehen.
-  4. `NODE_VERSION` und `clusterVersion` anheben; die `hafen_cluster`-Version in den Quest-Daten (`version = "x.y.z"` in Terraform-Texten) zieht ein Wächter in `test/sim/nodes.test.ts` mit. Node-Specs der Quests tragen keine Version, sie folgt `NODE_VERSION`; der Snapshot speichert die Version nur bei Abweichung (`snapshotNode`), ein Anheben braucht darum keinen Save-Format-Bump.
+  4. `NODE_VERSION` und `clusterVersion` anheben; die `hafen_cluster`-Version in den Quest-Daten (`version = "x.y.z"` in Terraform-Texten) zieht ein Wächter in `test/sim/nodes.test.ts` mit. Node-Specs der Quests tragen keine Version, sie folgt `NODE_VERSION`; der Snapshot speichert die Version nur bei Abweichung (`nodeSnapshot`), ein Anheben braucht darum keinen Save-Format-Bump.
   5. Serverwarnungen als Feld `deprecationWarning` in der Registry (`src/sim/kubectl/resources.ts`) pflegen; `stand` in der JSON mitziehen.
 
 ## Bekannte Lücken (Stand 2026-10-08)

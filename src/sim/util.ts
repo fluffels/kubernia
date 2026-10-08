@@ -35,17 +35,21 @@ export function podIP(name: string): string {
   return "10.244.1." + (10 + (hashStr(name) % 200));
 }
 
-/** Adresse und Name der Control-Plane: kubeadm-Static-Pods laufen mit hostNetwork und teilen sich ihre IP (#1466);
- *  dieselbe Adresse nennt `kubeadm join` als API-Server. */
-export const CONTROL_PLANE_IP = "10.0.0.10";
-export const CONTROL_PLANE_NODE = "ahoi-control";
+/** Labels und Selektoren sind Maps (Schlüssel → Wert); jeder Text (`app=x,tier=y`) wird daraus abgeleitet (#1500). */
+export type Labels = Readonly<Record<string, string>>;
 
-/** Name des n-ten Worker-Knotens (`ahoi-worker-<n>`, ab 1): die EINE Namenskonvention der Sim (#1483). */
-export const workerNodeName = (n: number): string => "ahoi-worker-" + n;
+/** Das Label (und der Selektor), das ein Workload in der Sim trägt: `{ app: <name> }` (Grenze `selektor-ueber-namen`). */
+export const workloadLabels = (name: string): Labels => ({ app: name });
 
-/** Label und Selektor sind in der Sim dieselbe Zeichenkette `app=<name>` (Grenze `selektor-ueber-namen`):
- *  der EINE Helfer statt der handgeschriebenen Konvention (#1483). */
-export const workloadSelector = (name: string): string => "app=" + name;
+/** Labels als Text, wie `kubectl` sie zeigt (`labels.FormatLabels`): Schlüssel sortiert, `k=v` mit Komma verbunden,
+ *  `null` oder leer als `<none>`. Der Wert darf `=` enthalten, er wird nicht zerlegt. */
+export function formatLabels(labels: Labels | null): string {
+  const keys = labels ? Object.keys(labels).sort() : [];
+  return keys.length === 0 ? "<none>" : keys.map(k => k + "=" + labels![k]).join(",");
+}
+
+/** Label und Selektor eines Workloads als Text `app=<name>`: der EINE Helfer statt der handgeschriebenen Konvention (#1483). */
+export const workloadSelector = (name: string): string => formatLabels(workloadLabels(name));
 
 /** Alter der eingebauten Objekte (kubeadm-Static-Pods, CoreDNS, Service und Endpoints `kubernetes`, Nodes):
  *  sie existieren seit Clusteraufbau, nicht seit dem Spielstart (#1483). */

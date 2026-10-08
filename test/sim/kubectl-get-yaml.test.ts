@@ -11,6 +11,9 @@ import { YAML_BAUSTEINE, yamlKinds } from "../../src/sim/kubectl/get-yaml";
 import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
 import { RESOURCE_KINDS } from "../../src/sim/kubectl/resources";
 import { simGrenzen } from "../../src/hud/helptext";
+import { formatLabels } from "../../src/sim/util";
+import { serviceSelector, servicesWithDefault } from "../../src/sim/endpoints";
+import { BROKEN_POD, isReady } from "../../src/sim/podstatus";
 import { deploymentYaml, serviceYaml } from "../factories/manifests";
 import type { ApplyEffect, Scenario } from "../../src/sim/state";
 
@@ -524,5 +527,69 @@ describe("Fitness: Registry ↔ Renderer ↔ Mapper", () => {
       const k = RESOURCE_KINDS.find(r => r.plural === plural)!;
       expect([k.plural, ...k.short].some(n => text.includes(n)), plural).toBe(true);
     }
+  });
+});
+
+describe("spec.selector als Map (#1500)", () => {
+  test("ein Service-Name mit = bleibt ein Wert: selector { app: \"a=b\" }", () => {
+    const sim = new KQSim({ deployments: [dep("web")] });
+    sim.services.push(svc("a=b"));
+    const o = items(sim, "get svc -o yaml").find(i => (i.metadata as Obj).name === "a=b")!;
+    expect((o.spec as Obj).selector).toEqual({ app: "a=b" });
+  });
+});
+
+describe("Selektor und Labels: eine Quelle für Tabelle, describe und YAML (#1500)", () => {
+  const rich = (): KQSim => new KQSim({
+    deployments: [dep("web"), dep("api")],
+    statefulSets: [sts({ name: "speicher", serviceName: "db" })],
+    services: [svc("web"), svc("db", { clusterIP: "None" }), svc("ext", { type: "ExternalName", externalName: "x.example.org" })],
+  });
+  test("jeder Service: YAML-selector, SELECTOR-Zelle (-o wide) und describe-Zeile stammen aus serviceSelector", () => {
+    const sim = rich();
+    const wide = out(sim, "get svc -o wide").split("\n");
+    const col = wide[0].indexOf("SELECTOR");
+    for (const s of servicesWithDefault(sim)) {
+      const sel = serviceSelector(sim, s);
+      const o = items(sim, "get svc -o yaml").find(i => (i.metadata as Obj).name === s.name)!;
+      expect((o.spec as Obj).selector, s.name).toEqual(sel ?? undefined);
+      const row = wide.find(l => l.startsWith(s.name + " "))!;
+      expect(row.slice(col).trim(), s.name).toBe(formatLabels(sel));
+      const zeile = out(sim, "describe svc " + s.name).split("\n").find(l => l.startsWith("Selector:"))!;
+      expect(zeile.slice("Selector:".length).trim(), s.name).toBe(formatLabels(sel));
+    }
+  });
+  test("ReplicaSet: SELECTOR (-o wide) = matchLabels (YAML) = Labels der Pods", () => {
+    const sim = rich();
+    const rs = items(sim, "get rs -o yaml")[0];
+    const match = ((rs.spec as Obj).selector as Obj).matchLabels as Obj;
+    const row = out(sim, "get rs -o wide").split("\n").find(l => l.startsWith((rs.metadata as Obj).name as string))!;
+    expect(row.trim().endsWith(formatLabels(match as Record<string, string>))).toBe(true);
+    const pod = items(sim, "get pods -o yaml").find(p => ((p.metadata as Obj).name as string).startsWith((rs.metadata as Obj).name as string))!;
+    expect((pod.metadata as Obj).labels).toEqual(match);
+  });
+});
+
+describe("BROKEN_POD treibt alle Ausgaben (#1500)", () => {
+  test.each(Object.keys(BROKEN_POD) as (keyof typeof BROKEN_POD)[])("broken %s: get pods, YAML und describe pod zeigen denselben Eintrag", type => {
+    const e = BROKEN_POD[type];
+    const sim = new KQSim({ deployments: [dep("web", { replicas: 1, broken: { type, needsSecret: "sek" } })] });
+    const row = out(sim, "get pods").split("\n")[1].split(/\s+/);
+    expect(row[1]).toBe(e.status.ready);
+    expect(row[2]).toBe(e.status.status);
+    const p = items(sim, "get pods -o yaml")[0];
+    const status = p.status as Obj;
+    expect(status.phase).toBe(e.phase);
+    const states = status.containerStatuses as Obj[] | undefined;
+    const c = e.container;
+    const last = c?.lastTerminated;
+    // Ohne Container (nicht eingeplant): weder Container-Status noch podIP; sonst alles aus dem Tabelleneintrag.
+    expect(states === undefined).toBe(c === null);
+    expect(status.podIP === undefined).toBe(c === null);
+    expect(states?.[0]?.ready).toEqual(c === null ? undefined : isReady(e.status));
+    expect(states?.[0]?.state).toEqual(c === null ? undefined : c.waiting ? { waiting: { reason: c.waiting } } : { running: {} });
+    expect(states?.[0]?.lastState).toEqual(c === null ? undefined : last ? { terminated: { exitCode: last.exitCode, reason: last.reason } } : {});
+    const name = (p.metadata as Obj).name as string;
+    expect(out(sim, "describe pod " + name).includes("Last State:   Terminated")).toBe(e.container?.lastTerminated !== undefined);
   });
 });
