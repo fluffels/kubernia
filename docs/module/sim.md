@@ -73,7 +73,7 @@ Tests: `test/sim/kubeadm.test.ts` (Happy-Path init→join→join + alle Negativf
 
 ## Treue-Matrix (#1440, #1461)
 
-Jede Befehlsfamilie der Dispatch-Tabelle (`SIM_COMMANDS` in `src/sim.ts`) hat eine Matrix `docs/sim-treue/<familie>.json` oder steht in der Abbauliste `OHNE_MATRIX` (Methode: [sim-treue.md](../sim-treue.md)). Neuer Unterbefehl, neue Ressourcenart oder neue Aufrufform ⇒ Zeile in der Matrix, sonst ist der Wächter rot. Bewusste Vereinfachungen stehen als `grenzen` je Familie in `src/hud/helptext.ts` und erscheinen im Spiel unter `help <befehl>`; die Fußzeile von `help` nennt nur ein Beispiel (`familienMitGrenzen()`).
+Jede Befehlsfamilie der Dispatch-Tabelle (`SIM_COMMANDS` in `src/sim.ts`) hat eine Matrix `docs/sim-treue/<familie>.json` oder steht in der Abbauliste `OHNE_MATRIX` (Methode: [sim-treue.md](../sim-treue.md)). Neuer Unterbefehl oder neue Ressourcenart ⇒ Zeile in der Matrix, sonst ist der Wächter rot; Aufrufformen und Flags der Einzelbefehle trägt jemand von Hand ein. Bewusste Vereinfachungen stehen als `grenzen` je Familie in `src/hud/helptext.ts` und erscheinen im Spiel unter `help <befehl>`; die Fußzeile von `help` nennt nur ein Beispiel (`familienMitGrenzen()`).
 
 ## Heimat-Werft: eigenen Service bauen → deployen → erreichbar (#164, Phase 10)
 

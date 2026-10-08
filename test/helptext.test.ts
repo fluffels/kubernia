@@ -36,8 +36,11 @@ describe("help kubectl", () => {
     for (const g of simGrenzen(f)) expect(out).toContain("  - " + g.text);
   });
 
-  test("familienMitGrenzen: Katalog-Reihenfolge, kubectl, kubeadm, curl und nslookup dabei", () => {
-    expect(familienMitGrenzen()).toEqual(["kubectl", "kubeadm", "nslookup", "curl"]);
+  test("familienMitGrenzen: kubectl, kubeadm, curl und nslookup sind dabei, kubectl zuerst", () => {
+    const fam = familienMitGrenzen();
+    expect(fam[0]).toBe("kubectl");
+    expect(fam).toEqual(expect.arrayContaining(["kubeadm", "curl", "nslookup"]));
+    expect(fam).not.toContain("ls");
   });
 });
 

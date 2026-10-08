@@ -66,6 +66,8 @@ function schemaProbleme(familie: string, roh: unknown, grenzIds: string[], clust
   const p: string[] = unbekannte(roh, DATEI_SCHLUESSEL).map(k => `${familie}: unbekannter Datei-Schlüssel ${k}`);
   for (const k of DATEI_PFLICHT) if (roh[k] === undefined) p.push(`${familie}: Datei-Schlüssel ${k} fehlt`);
   if (roh.clusterVersion !== undefined && roh.clusterVersion !== clusterVersion) p.push(`${familie}: clusterVersion ${JSON.stringify(roh.clusterVersion)} ≠ ${clusterVersion}`);
+  if (roh.befehle !== undefined && !istObj(roh.befehle)) p.push(`${familie}: befehle ist kein Objekt`);
+  if (roh.zeilen !== undefined && !Array.isArray(roh.zeilen)) p.push(`${familie}: zeilen ist kein Array`);
   if (istObj(roh.befehle)) {
     for (const [b, e] of Object.entries(roh.befehle)) {
       if (!istObj(e)) { p.push(`befehle.${b}: kein Objekt`); continue; }
@@ -128,8 +130,8 @@ function vollstaendigkeitProbleme(familie: string, spec: Spec, m: TreueMatrix): 
 
 /** Spec je Familie mit Matrix: Schlüssel = Matrix-Dateien. */
 const SPECS: Record<string, Spec> = {
-  kubectl: { form: "unterbefehl", registry: KUBECTL_SUBCOMMANDS, unbekannt: /unknown command "zzz-nichtda"/ },
-  kubeadm: { form: "unterbefehl", registry: KUBEADM_SUBCOMMANDS, unbekannt: /unbekannter Unterbefehl 'zzz-nichtda'/ },
+  kubectl: { form: "unterbefehl", registry: KUBECTL_SUBCOMMANDS, unbekannt: /unknown command "/ },
+  kubeadm: { form: "unterbefehl", registry: KUBEADM_SUBCOMMANDS, unbekannt: /unbekannter Unterbefehl '/ },
   curl: { form: "einzel" },
   nslookup: { form: "einzel" },
 };
@@ -148,6 +150,12 @@ describe("Schema-Wächter: Negativfälle (synthetisch)", () => {
   });
   test.each<[string, Obj, RegExp]>([
     ["unbekannter Datei-Schlüssel", datei({ extra: 1 }), /unbekannter Datei-Schlüssel extra/],
+    ["befehle ist kein Objekt", datei({ befehle: [] }), /befehle ist kein Objekt/],
+    ["zeilen ist kein Array", datei({ zeilen: {} }), /zeilen ist kein Array/],
+    ["befehle-Eintrag ist kein Objekt", datei({ befehle: { x: "doku" } }), /befehle\.x: kein Objekt/],
+    ["Zeile ist kein Objekt", datei({}, ["x" as unknown as Obj]), /zeilen\[0\]: kein Objekt/],
+    ["Zeile ohne befehl", datei({}, [(() => { const z = zeile(); delete z.befehl; return z; })()]), /zeilen\[0\]: befehl fehlt/],
+    ["Doku-Link nicht lesbar", datei({ befehle: { x: { doku: "kein-link" } } }), /Doku-Link nicht lesbar/],
     ["fehlender Pflicht-Schlüssel hinweis", (() => { const d = datei(); delete d.hinweis; return d; })(), /Datei-Schlüssel hinweis fehlt/],
     ["unbekannter Schlüssel im befehle-Eintrag", datei({ befehle: { x: { doku: "https://curl.se/x", doc: "y" } } }), /befehle\.x: unbekannter Schlüssel doc/],
     ["befehle-Eintrag ohne doku", datei({ befehle: { x: {} } }), /befehle\.x: Doku-Link kein String/],
@@ -169,6 +177,9 @@ describe("Schema-Wächter: Negativfälle (synthetisch)", () => {
     expect(probleme(roh).join("\n")).toMatch(muster);
   });
 
+  test("Wurzel ist kein Objekt ist rot", () => {
+    expect(schemaProbleme("x", [], [])).toEqual(["x: Wurzel ist kein Objekt"]);
+  });
   test("unbenutzte Grenze der Familie ist rot", () => {
     expect(schemaProbleme("x", datei(), ["g1"])).toEqual(["x: Grenze g1 wird von keiner Zeile benutzt"]);
   });

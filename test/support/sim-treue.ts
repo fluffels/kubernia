@@ -24,7 +24,7 @@ export function ladeRoh(familie: string): unknown {
   return JSON.parse(readFileSync(`${MATRIX_ORDNER}/${familie}.json`, "utf8"));
 }
 
-/** Eine Matrix, nachdem der generische Schema-Test sie geprüft hat (sonst wäre die Typzusicherung leer). */
+/** Eine Matrix als Typ; der Cast verlässt sich darauf, dass der generische Schema-Test (test/sim/sim-treue.test.ts) sie prüft. */
 export function ladeMatrix(familie: string): TreueMatrix {
   return ladeRoh(familie) as TreueMatrix;
 }
