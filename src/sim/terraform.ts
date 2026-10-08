@@ -30,7 +30,7 @@
  */
 import type { ClusterState } from "./state";
 import { provisionNode, removeNode, isControlPlane } from "./nodes";
-import { flag, checkFlags, flagValueOf, notSimulated, positionalArgs, specOfSub, subEntry, type SubEntry } from "./cliargs";
+import { flag, notSimulated, parseCall, specOfSub, subEntry, type Call, type FlagStyle, type SubEntry } from "./cliargs";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -104,10 +104,10 @@ function lockError(host: TerraformHost): string | null {
   return null;
 }
 
-/** Ein terraform-Unterbefehl-Handler: bekommt Host + Tokens, gibt die Ausgabe.
- *  Handler, die `t` nicht brauchen, lassen den Parameter weg – dank struktureller
+/** Ein terraform-Unterbefehl-Handler: bekommt Host + die ausgelesene Eingabe (`Call`, #1469), gibt die Ausgabe.
+ *  Handler, die `c` nicht brauchen, lassen den Parameter weg – dank struktureller
  *  Kompatibilität bleiben sie zur Tabelle zuweisbar. */
-type TerraformHandler = (host: TerraformHost, t: string[]) => string;
+type TerraformHandler = (host: TerraformHost, c: Call) => string;
 
 /** `terraform get` – referenzierte Module holen. */
 function tfGet(host: TerraformHost): string {
@@ -145,8 +145,8 @@ function tfInit(host: TerraformHost): string {
 }
 
 /** `terraform plan` – geplante Ressourcen (Top-Level + aus Modulen expandiert). */
-function tfPlan(host: TerraformHost, t: string[]): string {
-  const varFile = varFileError(host, t);
+function tfPlan(host: TerraformHost, c: Call): string {
+  const varFile = varFileError(host, c);
   if (varFile) return varFile;
   const tf = host.tf;
   if (tf.applied) {
@@ -179,8 +179,8 @@ function provisionClusterFromCode(host: TerraformHost): void {
 }
 
 /** `terraform apply` – Ressourcen erzeugen, ggf. Nodes/Cluster provisionieren. */
-function tfApply(host: TerraformHost, t: string[]): string {
-  const varFile = varFileError(host, t);
+function tfApply(host: TerraformHost, c: Call): string {
+  const varFile = varFileError(host, c);
   if (varFile) return varFile;
   const tf = host.tf;
   if (tf.applied) return "No changes. Your infrastructure matches the configuration.\n\nApply complete! Resources: 0 added, 0 changed, 0 destroyed.";
@@ -211,7 +211,9 @@ function tfApply(host: TerraformHost, t: string[]): string {
 }
 
 /** `terraform destroy` – Ressourcen abräumen, ggf. Cluster zurück auf bare metal. */
-function tfDestroy(host: TerraformHost): string {
+function tfDestroy(host: TerraformHost, c: Call): string {
+  const varFile = varFileError(host, c);
+  if (varFile) return varFile;
   const tf = host.tf;
   if (!tf.applied) return "No changes. No objects need to be destroyed.";
   const locked = lockError(host);
@@ -233,8 +235,8 @@ function tfDestroy(host: TerraformHost): string {
 }
 
 /** `terraform state list` – Adressen im (ggf. remote liegenden) State. */
-function tfState(host: TerraformHost, t: string[]): string {
-  const action = positionalArgs(specOfSub("terraform state", TERRAFORM_SUBCOMMANDS.state), t, 2)[0];
+function tfState(host: TerraformHost, c: Call): string {
+  const action = c.args[0];
   if (!action) return host._err("terraform state: Unterbefehl fehlt.", "z.B. 'terraform state list'.");
   if (action !== "list") return notSimulated(host, "'terraform state " + action + "'.", ["terraform state list"]);
   if (!host.tf.applied) return host._err("Noch nichts im State.", "Der State füllt sich erst nach 'terraform apply'.");
@@ -244,11 +246,11 @@ function tfState(host: TerraformHost, t: string[]): string {
 }
 
 /** `terraform output [name]` – deklarierte Outputs (nach apply bekannt). */
-function tfOutput(host: TerraformHost, t: string[]): string {
+function tfOutput(host: TerraformHost, c: Call): string {
   const tf = host.tf;
   // Outputs sind erst nach einem Apply bekannt (vorher steht nichts im State).
   if (!tf.applied) return host._err("Noch keine Outputs.", "Outputs sind erst nach 'terraform apply' bekannt.");
-  const name = positionalArgs(specOfSub("terraform output", TERRAFORM_SUBCOMMANDS.output), t, 2)[0];
+  const name = c.args[0];
   if (name) {
     const o = tf.outputs.find(x => x.name === name);
     if (!o) return host._err('Error: Output "' + name + '" not found', "Prüfe die deklarierten output-Blöcke.");
@@ -259,14 +261,14 @@ function tfOutput(host: TerraformHost, t: string[]): string {
 }
 
 /** `terraform force-unlock <id>` – einen hängenden State-Lock lösen (#146). */
-function tfForceUnlock(host: TerraformHost, t: string[]): string {
+function tfForceUnlock(host: TerraformHost, c: Call): string {
   const tf = host.tf;
   if (!tf.backend || !tf.backend.locking) {
     return host._err("Kein sperrbarer Remote-State konfiguriert.", "force-unlock gibt es nur mit einem Backend, das State-Locking unterstützt.");
   }
   if (!tf.locked) return host._err("Der State ist nicht gesperrt.", "Es gibt gerade keinen Lock zu lösen.");
   tf.locked = false;
-  const id = positionalArgs(specOfSub("terraform force-unlock", TERRAFORM_SUBCOMMANDS["force-unlock"]), t, 2)[0];
+  const id = c.args[0];
   return "Terraform state has been successfully unlocked!" + (id ? "\n\nUnlocked ID: " + id : "");
 }
 
@@ -281,25 +283,28 @@ const AUTO_APPROVE = flag(false, "-auto-approve");
 // `-var-file` wird als Existenzprüfung ausgewertet (Quest-Dateien liegen im Szenario, `environments/prod.tfvars`).
 const OUTPUT_HINT = "Der benannte Output ('terraform output <name>') kommt im Simulator schon roh.";
 
+/** Familien-Stil: terraform liest wie das Go-Paket `flag` (`-x=v`, `--x` ≙ `-x`); gilt für JEDEN Eintrag. */
+const STYLE: FlagStyle = "goflag";
+
 /** Alias → Eintrag (Handler + Flag-Tabelle, terraform nutzt Go-`flag`-Schreibweise). Ein neuer Unterbefehl ist
  *  ein Eintrag hier + eine Funktion oben – der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht
  *  mit dem Befehlssatz. */
 const TERRAFORM_SUBCOMMANDS: Record<string, SubEntry<TerraformHandler>> = {
-  get: { run: tfGet, style: "goflag" },
-  init: { run: tfInit, style: "goflag" },
-  plan: { run: tfPlan, style: "goflag", flags: [VAR_FILE] },
-  apply: { run: tfApply, style: "goflag", flags: [VAR_FILE, AUTO_APPROVE] },
-  destroy: { run: tfDestroy, style: "goflag", flags: [AUTO_APPROVE] },
-  state: { run: tfState, style: "goflag" },
-  output: { run: tfOutput, style: "goflag", hints: { "-raw": OUTPUT_HINT, "-json": OUTPUT_HINT } },
-  "force-unlock": { run: tfForceUnlock, style: "goflag", flags: [flag(false, "-force")] },
-  fmt: { run: () => "main.tf", style: "goflag" },
-  validate: { run: () => "Success! The configuration is valid.", style: "goflag" },
+  get: { run: tfGet },
+  init: { run: tfInit },
+  plan: { run: tfPlan, flags: [VAR_FILE] },
+  apply: { run: tfApply, flags: [VAR_FILE, AUTO_APPROVE] },
+  destroy: { run: tfDestroy, flags: [VAR_FILE, AUTO_APPROVE] },
+  state: { run: tfState },
+  output: { run: tfOutput, hints: { "-raw": OUTPUT_HINT, "-json": OUTPUT_HINT } },
+  "force-unlock": { run: tfForceUnlock, flags: [flag(false, "-force")] },
+  fmt: { run: () => "main.tf" },
+  validate: { run: () => "Success! The configuration is valid." },
 };
 
 /** `-var-file` muss auf eine Datei zeigen, die es im Ordner gibt (sonst bricht echtes Terraform ab). */
-function varFileError(host: TerraformHost, t: string[]): string | null {
-  const f = flagValueOf(t, ["-var-file"], "goflag");
+function varFileError(host: TerraformHost, c: Call): string | null {
+  const f = c.value("-var-file");
   if (f === null || host.files[f] !== undefined) return null;
   return host._err("Error: Failed to read variables file", "Given variables file " + f + " does not exist.");
 }
@@ -312,8 +317,8 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
 
   const entry = subEntry(TERRAFORM_SUBCOMMANDS, sub);
   if (!entry) return host._err("terraform: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
-  const flagErr = checkFlags(host, specOfSub("terraform " + sub, entry), t, 2);
-  if (flagErr) return flagErr;
+  const call = parseCall(host, specOfSub("terraform " + sub, entry, STYLE), t, 2);
+  if (typeof call === "string") return call;
 
   // init/get laufen ohne Vor-Guards; plan/apply/destroy brauchen ein initialisiertes Verzeichnis.
   if (!host.tf.initialized && needsInit(sub)) {
@@ -329,5 +334,5 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     }
   }
 
-  return entry.run(host, t);
+  return entry.run(host, call);
 }

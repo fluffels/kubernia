@@ -19,8 +19,8 @@
  * per `kubeadmCommand(this, …)`.
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
-import { randSuffix } from "./util";
-import { flagValueOf } from "./cliargs";
+import { randSuffix, suggest } from "./util";
+import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
 import { provisionNode, isControlPlane, NODE_VERSION } from "./nodes";
 
 const APISERVER = "10.0.0.10:6443";
@@ -73,17 +73,55 @@ export function applyBootstrapScenario(state: ClusterState, sc: Scenario): void 
   if (sc.controlPlane) state.controlPlane = deriveControlPlane(sc, state.nodes);
 }
 
+type KubeadmHandler = (host: KubeadmHost, c: Call) => string;
+
+// `--discovery-token-ca-cert-hash` wird angenommen, aber nicht ausgewertet: der von `init` gedruckte Join-Befehl trägt
+// ihn, und die Sim hat nur EINE Control-Plane – es gibt nichts, wogegen der Hash zu prüfen wäre.
+const SUB: Record<string, SubEntry<KubeadmHandler>> = {
+  init: { run: kubeadmInit, flags: [flag(true, "--pod-network-cidr")] },
+  join: { run: kubeadmJoin, flags: [flag(true, "--token"), flag(true, "--discovery-token-ca-cert-hash")] },
+  reset: { run: kubeadmReset, flags: [flag(false, "-f", "--force")] },
+};
+
+/** Echte kubeadm-Unterbefehle, die die Sim nicht kann. */
+const NOT_SIMULATED = ["token", "upgrade", "certs", "config", "kubeconfig", "version", "completion", "alpha"];
+const KANN = ["kubeadm init [--pod-network-cidr <cidr>]", "kubeadm join <token>", "kubeadm reset [-f]"];
+
 export function kubeadmCommand(host: KubeadmHost, t: string[]): string {
   const sub = (t[1] || "").toLowerCase();
   if (!sub) return host._err("kubeadm: Unterbefehl fehlt.", "Probier 'kubeadm init', dann 'kubeadm join <token>'.");
-  if (sub === "init") return kubeadmInit(host);
-  if (sub === "join") return kubeadmJoin(host, t);
-  if (sub === "reset") return kubeadmReset(host);
-  return host._err("kubeadm: unbekannter Unterbefehl '" + sub + "'", "Es gibt 'kubeadm init', 'kubeadm join <token>' und 'kubeadm reset'.");
+  if (isFlagToken(sub)) return notSimulated(host, "das Flag '" + sub + "' vor dem Unterbefehl.", KANN);
+  const entry = subEntry(SUB, sub);
+  if (!entry) {
+    if (NOT_SIMULATED.includes(sub)) return notSimulated(host, "'kubeadm " + sub + "'.", KANN);
+    const guess = suggest(sub, [...Object.keys(SUB), ...NOT_SIMULATED]);
+    return host._err("kubeadm: unbekannter Unterbefehl '" + sub + "'",
+      (guess ? "Meintest du 'kubeadm " + guess + "'? " : "") + "Es gibt 'kubeadm init', 'kubeadm join <token>' und 'kubeadm reset'.");
+  }
+  const call = parseCall(host, specOfSub("kubeadm " + sub, entry), t, 2);
+  return typeof call === "string" ? call : entry.run(host, call);
+}
+
+/** Ein IPv4-CIDR (`10.244.0.0/16`)? */
+function isIpv4Cidr(v: string): boolean {
+  const m = v.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/);
+  return !!m && m.slice(1, 5).every(o => Number(o) <= 255) && Number(m[5]) <= 32;
+}
+
+/** `--pod-network-cidr` prüfen (kommagetrennte IPv4-CIDRs): `null` = ok oder nicht gesetzt, sonst die Fehlerausgabe. */
+function podCidrError(host: KubeadmHost, cidr: string | null): string | null {
+  if (cidr === null) return null;
+  const bad = cidr.split(",").find(c => !c.includes(":") && !isIpv4Cidr(c));
+  if (bad !== undefined) return host._err('networking.podSubnet: Invalid value: "' + bad + '": couldn\'t parse subnet', "Ein Pod-Netz ist ein CIDR, z.B. '--pod-network-cidr=10.244.0.0/16'.");
+  if (cidr.includes(":")) return notSimulated(host, "IPv6-Pod-Netze (" + cidr + ").", ["--pod-network-cidr=10.244.0.0/16"]);
+  return null;
 }
 
 /** Control-Plane hochziehen. Doppeltes init wird abgelehnt (der Cluster läuft schon). */
-function kubeadmInit(host: KubeadmHost): string {
+function kubeadmInit(host: KubeadmHost, c: Call): string {
+  const cidr = c.value("--pod-network-cidr");
+  const cidrErr = podCidrError(host, cidr);
+  if (cidrErr) return cidrErr;
   if (host.controlPlane.up) {
     return host._err(
       "[init] error: a control plane is already running on this host\n" +
@@ -112,13 +150,13 @@ function kubeadmInit(host: KubeadmHost): string {
     "  kubeadm join " + APISERVER + " --token " + token + " \\",
     "          --discovery-token-ca-cert-hash sha256:" + randSuffix(64, host.rng),
     "",
-    "💡 Die Control-Plane (" + cpName + ") läuft jetzt – kubectl ist wieder ansprechbar. Häng Worker mit dem obigen 'kubeadm join'-Befehl an.",
+    "💡 Die Control-Plane (" + cpName + ") läuft jetzt – kubectl ist wieder ansprechbar." + (cidr ? " Pod-Netz: " + cidr + " (der Simulator merkt es sich nicht)." : "") + " Häng Worker mit dem obigen 'kubeadm join'-Befehl an.",
   ].join("\n");
 }
 
 /** Worker an die Control-Plane anschließen. Negativfälle: vor init (Control-Plane down),
  *  ohne Token, mit falschem Token. */
-function kubeadmJoin(host: KubeadmHost, t: string[]): string {
+function kubeadmJoin(host: KubeadmHost, c: Call): string {
   if (!host.controlPlane.up) {
     return host._err(
       "[preflight] Running pre-flight checks\n" +
@@ -126,10 +164,20 @@ function kubeadmJoin(host: KubeadmHost, t: string[]): string {
       "Get \"https://" + APISERVER + "/api/v1/...\": dial tcp " + APISERVER + ": connect: connection refused",
       "Es läuft noch keine Control-Plane, an die sich der Worker hängen könnte. Zieh sie zuerst mit 'kubeadm init' hoch.");
   }
-  // Token akzeptieren als `--token <tok>` ODER positional `kubeadm join <tok>` (beide Schreibweisen).
-  const flagToken = flagValueOf(t, ["--token"]);
-  const positional = t.slice(2).find(a => !a.startsWith("-") && /^\w+\.\w+$/.test(a));
-  const token = flagToken || positional || null;
+  // Token akzeptieren als `--token <tok>` ODER positional `kubeadm join <tok>` (Sim-Vereinfachung, die die Quests nutzen);
+  // dazu optional der Endpoint `host:port` (so druckt ihn `kubeadm init`). Mehr als zwei Argumente gibt es nicht.
+  const tokenLike = (a: string) => /^\w+\.\w+$/.test(a);
+  const bad = c.args.find(a => !a.includes(":") && !tokenLike(a));
+  if (bad !== undefined || c.args.length > 2) {
+    return host._err(bad !== undefined ? 'error: "' + bad + '" ist weder ein API-Server-Endpoint (host:port) noch ein Bootstrap-Token' : "accepts at most 1 arg(s), received " + c.args.length,
+      "Muster: kubeadm join 10.0.0.10:6443 --token <token>");
+  }
+  const endpoint = c.args.find(a => a.includes(":"));
+  if (endpoint !== undefined && endpoint !== APISERVER) {
+    return host._err('error execution phase preflight: couldn\'t validate the identity of the API Server: Get "https://' + endpoint + '/api/v1/namespaces/kube-public/configmaps/cluster-info?timeout=10s": dial tcp ' + endpoint + ": connect: connection refused",
+      "Die Control-Plane lauscht auf " + APISERVER + " – das ist der Endpoint aus 'kubeadm init'.");
+  }
+  const token = c.value("--token") || c.args.find(tokenLike) || null;
   if (!token) {
     return host._err("[preflight] error: --token is required",
       "Den Token zeigt 'kubeadm init' an. Aufruf z.B.: kubeadm join --token <token>");
@@ -161,7 +209,7 @@ function kubeadmJoin(host: KubeadmHost, t: string[]): string {
 
 /** Cluster auf „bare metal" zurückräumen: keine Nodes, Control-Plane down, kein Token.
  *  Macht die Sturm-/Neuanfang-Lage als Befehl verfügbar (und ist der Gegenpart zu init). */
-function kubeadmReset(host: KubeadmHost): string {
+function kubeadmReset(host: KubeadmHost): string { // -f/--force: der Simulator fragt nie nach
   const wasUp = host.controlPlane.up;
   host.nodes.length = 0;
   host.controlPlane = { up: false, token: null, node: null };

@@ -9,7 +9,7 @@
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources) und das Blattmodul ../cliargs. */
 import type { KubectlHost } from "./host";
-import { flag, checkFlags, positionalArgs, type ArgSpec, type FlagSpec } from "../cliargs";
+import { flag, checkFlags, lenientCall, positionalArgs, type ArgSpec, type Call, type FlagSpec } from "../cliargs";
 export { notSimulated, flagValueOf } from "../cliargs";
 import { RESOURCE_KINDS } from "./resources";
 
@@ -70,6 +70,23 @@ const specFor = (sub: KubectlSub): ArgSpec => ({ cmd: "kubectl " + sub, flags: K
  *  `null` = alles bekannt; sonst die fertige Fehlerausgabe. */
 export function checkArgs(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: string[]): string | null {
   return checkFlags(host, specFor(sub), t, 2);
+}
+
+/** Die ausgelesene Eingabe eines Unterbefehls (`has`/`value`/`values`/`args`, #1469): die EINE Stelle, an der kubectl
+ *  Flags liest – nie per `t.includes` oder Regex auf der Rohzeile. Ohne Fehlerpfad, weil `checkArgs` vorher lief. */
+export function callOf(sub: KubectlSub, t: string[]): Call {
+  return lenientCall(specFor(sub), t, 2);
+}
+
+/** `--replicas`: `null` = nicht angegeben, sonst die ganze Zahl (auch negativ: den Wertebereich prüft der Aufrufer, die
+ *  Meldung unterscheidet sich je Befehl). Keine ganze Zahl: der pflag-Fehler wie bei echtem kubectl. */
+export function replicasArg(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: string[]): { replicas: number | null } | { error: string } {
+  const v = callOf(sub, t).value("--replicas");
+  if (v === null) return { replicas: null };
+  if (!/^[+-]?\d+$/.test(v)) {
+    return { error: host._err('error: invalid argument "' + v + '" for "--replicas" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.") };
+  }
+  return { replicas: parseInt(v, 10) };
 }
 
 /** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags). */

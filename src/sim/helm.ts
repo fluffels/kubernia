@@ -22,7 +22,7 @@
  */
 import { DEFAULT_NAMESPACE, type ClusterState, type Deployment, type ServiceRes, type ServiceSpec, type Broken, type HelmRepo } from "./state";
 import { table } from "./util";
-import { flag, checkFlags, positionalArgs, specOfSub, subEntry, type SubEntry } from "./cliargs";
+import { flag, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -40,10 +40,24 @@ export interface HelmHost extends Pick<ClusterState, "helmRepos" | "charts" | "r
   _makeService(spec: ServiceSpec): ServiceRes;
 }
 
-/** Liest `--set <key>=<zahl>` aus der rohen Eingabe (helm install/upgrade). */
-export function setValue(raw: string, key: string): number | null {
-  const m = raw.match(new RegExp("--set(?:=|\\s+)" + key + "=(\\d+)"));
-  return m ? parseInt(m[1], 10) : null;
+/** Liest `--set key=wert[,key=wert]` (mehrfach erlaubt, der letzte Wert gewinnt) über den Flag-Leser – `--set x`,
+ *  `--set=x`, `--set a=1,replicaCount=4`. Ausgewertet wird nur `replicaCount` (ganze Zahl ab 0); jeder andere Key ist
+ *  „nicht simuliert“, ein Key ohne `=` ein Parse-Fehler wie bei echtem helm. Geprüft wird VOR jeder Mutation. Rückgabe:
+ *  die Replicas (`null` = nicht gesetzt) oder die fertige Fehlerausgabe; `dep` ist der Deployment-Name für den Fehlertext. */
+function setReplicas(host: HelmHost, c: Call, fail: string, dep: string): { replicas: number | null } | { error: string } {
+  let replicas: number | null = null;
+  const tip = "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--set replicaCount=3'.";
+  const invalid = 'Error: ' + fail + ': Deployment.apps "' + dep + '" is invalid: spec.replicas: ';
+  for (const pair of c.values("--set").flatMap(v => v.split(","))) {
+    const eq = pair.indexOf("=");
+    if (eq < 0) return { error: host._err('Error: failed parsing --set data: key "' + pair + '" has no value', "Muster: '--set replicaCount=3'") };
+    const key = pair.slice(0, eq), val = pair.slice(eq + 1);
+    if (key !== "replicaCount") return { error: notSimulated(host, "'--set " + key + "=…'.", ["--set replicaCount=<zahl>"]) };
+    if (!/^-?\d+$/.test(val)) return { error: host._err(invalid + 'invalid type for io.k8s.api.apps.v1.DeploymentSpec.replicas: got "string", expected "integer"', tip) };
+    if (val.startsWith("-")) return { error: host._err(invalid + "Invalid value: " + val + ": must be greater than or equal to 0", tip) };
+    replicas = parseInt(val, 10);
+  }
+  return { replicas };
 }
 
 /** Normalisiert einen Chart-Pfad-Ref (`./foo`, `foo/`) auf den nackten Chart-Namen. */
@@ -51,16 +65,16 @@ function chartNameOf(ref: string): string {
   return ref.replace(/^\.?\.?\//, "").replace(/\/+$/, "");
 }
 
-/** Ein Unterbefehl-Handler: bekommt Host, Tokens und die Rohzeile, gibt die Ausgabe.
- *  Handler, die `t`/`raw` nicht brauchen, lassen die Parameter weg – dank
+/** Ein Unterbefehl-Handler: bekommt Host und die ausgelesene Eingabe (`Call`, #1469), gibt die Ausgabe.
+ *  Handler, die `c` nicht brauchen, lassen den Parameter weg – dank
  *  struktureller Kompatibilität bleiben sie zur Tabelle zuweisbar. */
-type HelmHandler = (host: HelmHost, t: string[], raw: string) => string;
+type HelmHandler = (host: HelmHost, c: Call) => string;
 
 /** `helm repo add|update|list` – die konfigurierten Chart-Repositories verwalten. */
-function helmRepo(host: HelmHost, t: string[]): string {
-  const action = t[2];
+function helmRepo(host: HelmHost, c: Call): string {
+  const action = c.args[0];
   if (action === "add") {
-    const name = t[3], url = t[4];
+    const name = c.args[1], url = c.args[2];
     if (!name || !url) return host._err("helm repo add: Name und URL fehlen.", "z.B. 'helm repo add bitnami https://charts.bitnami.com/bitnami'");
     if (!host.helmRepos.some((r: HelmRepo) => r.name === name)) host.helmRepos.push({ name, url });
     return '"' + name + '" has been added to your repositories';
@@ -79,8 +93,8 @@ function helmRepo(host: HelmHost, t: string[]): string {
 }
 
 /** `helm search` – im (fiktiven) bitnami-Katalog nach Charts suchen. */
-function helmSearch(host: HelmHost, t: string[]): string {
-  const term = t[3] || "";
+function helmSearch(host: HelmHost, c: Call): string {
+  const term = c.args[1] || ""; // `helm search repo <begriff>`
   if (host.helmRepos.length === 0) return host._err("Error: no repositories configured", "Erst 'helm repo add bitnami https://charts.bitnami.com/bitnami'");
   const charts = [
     ["bitnami/nginx", "18.1.0", "1.27.0", "NGINX – der beliebte Webserver"],
@@ -93,9 +107,9 @@ function helmSearch(host: HelmHost, t: string[]): string {
 }
 
 /** `helm create <chart>` – ein Chart samt lesbarem Gerüst (Chart.yaml/values/templates) anlegen. */
-function helmCreate(host: HelmHost, t: string[]): string {
-  const name = t[2];
-  if (!name || name.startsWith("-")) return host._err("helm create: Chart-Name fehlt.", "Muster: 'helm create <mein-chart>'");
+function helmCreate(host: HelmHost, c: Call): string {
+  const name = c.args[0];
+  if (!name) return host._err("helm create: Chart-Name fehlt.", "Muster: 'helm create <mein-chart>'");
   if (host.charts.some(c => c.name === name)) return host._err('Error: file "' + name + '" already exists', "Den Namen gibt es schon. Nimm einen anderen.");
   host.charts.push({ name, version: "0.1.0", packaged: false });
   // Das Gerüst, das echtes 'helm create' anlegt – als virtuelle Dateien zum Anschauen (ls/cat).
@@ -176,8 +190,8 @@ function helmCreate(host: HelmHost, t: string[]): string {
 }
 
 /** `helm template [RELEASE] <chart>` – Vorlagen + Werte zu fertigen Manifesten rendern (ohne Install, #273). */
-function helmTemplate(host: HelmHost, t: string[]): string {
-  const args = helmArgs("template", t);
+function helmTemplate(host: HelmHost, c: Call): string {
+  const args = c.args;
   if (args.length === 0) return host._err("helm template: Welches Chart?", "Muster: 'helm template <chart>' – z.B. das von 'helm create'.");
   const ref = args[args.length - 1];
   const release = args.length >= 2 ? args[0] : "release-name";
@@ -226,8 +240,8 @@ function helmTemplate(host: HelmHost, t: string[]): string {
 }
 
 /** `helm lint <chart>` – nur existierende Charts durchwinken (Übungs-Feedback). */
-function helmLint(host: HelmHost, t: string[]): string {
-  const ref = t[2];
+function helmLint(host: HelmHost, c: Call): string {
+  const ref = c.args[0];
   if (!ref) return host._err("helm lint: Welches Chart?", "Muster: 'helm lint <chart>' – z.B. das von 'helm create'.");
   const name = chartNameOf(ref);
   if (!host.charts.some(c => c.name === name)) return host._err('Error: path "' + ref + '" not found', "Erst 'helm create " + name + "' – oder den Pfad prüfen.");
@@ -240,8 +254,8 @@ function helmLint(host: HelmHost, t: string[]): string {
 }
 
 /** `helm package <chart>` – Chart als `.tgz` packen und als virtuelle Datei ablegen. */
-function helmPackage(host: HelmHost, t: string[]): string {
-  const ref = t[2];
+function helmPackage(host: HelmHost, c: Call): string {
+  const ref = c.args[0];
   if (!ref) return host._err("helm package: Welches Chart?", "Muster: 'helm package <chart>'.");
   const name = chartNameOf(ref);
   const chart = host.charts.find(c => c.name === name);
@@ -253,8 +267,8 @@ function helmPackage(host: HelmHost, t: string[]): string {
 }
 
 /** `helm install <release> <chart>` – lokales oder Repo-Chart als Release ausrollen. */
-function helmInstall(host: HelmHost, t: string[], raw: string): string {
-  const [release, chart] = helmArgs("install", t);
+function helmInstall(host: HelmHost, c: Call): string {
+  const [release, chart] = c.args;
   if (!release || !chart) return host._err("helm install: Release-Name und Chart fehlen.", "Muster: 'helm install <mein-name> bitnami/nginx' oder '<mein-name> ./<eigenes-chart>'");
   // Lokales Chart (eigenes, mit 'helm create' gebautes) vs. Repo-Chart unterscheiden.
   const localName = chartNameOf(chart);
@@ -265,9 +279,11 @@ function helmInstall(host: HelmHost, t: string[], raw: string): string {
     return host._err("Error: repo " + chart.split("/")[0] + " not found", "Erst 'helm repo add ...' ausführen.");
   }
   if (host.releases.some(r => r.name === release)) return host._err("Error: INSTALLATION FAILED: cannot re-use a name that is still in use", "Der Release-Name ist schon vergeben. Nimm 'helm upgrade' oder einen anderen Namen.");
-  const replicas = setValue(raw, "replicaCount") || 1;
   const chartShort = isLocal ? localName : (chart.split("/").pop() || chart);
   const depName = release + "-" + chartShort.split(":")[0];
+  const set = setReplicas(host, c, "INSTALLATION FAILED", depName); // vor jeder Mutation
+  if ("error" in set) return set.error;
+  const replicas = set.replicas ?? 1;
   addDeployment(host, host._makeDeployment(depName, chartShort + ":latest", replicas));
   host.services.push(host._makeService({ name: depName, port: "80" })); // #507: zentral über die Fabrik
 
@@ -292,24 +308,26 @@ function helmList(host: HelmHost): string {
 }
 
 /** `helm upgrade <release> <chart>` – neue Revision, optional Replicas per `--set`. */
-function helmUpgrade(host: HelmHost, t: string[], raw: string): string {
-  const [release, chart] = helmArgs("upgrade", t);
+function helmUpgrade(host: HelmHost, c: Call): string {
+  const [release, chart] = c.args;
   if (!release || !chart) return host._err("helm upgrade: Release und Chart fehlen.", "Muster: 'helm upgrade <release> bitnami/nginx --set replicaCount=3'");
   const rel = host.releases.find(r => r.name === release);
   if (!rel) return host._err('Error: UPGRADE FAILED: "' + release + '" has no deployed releases', "Welche Releases es gibt: 'helm list'");
-  const replicas = setValue(raw, "replicaCount");
+  const set = setReplicas(host, c, "UPGRADE FAILED", rel.depName); // vor der Revision, sonst zählt ein Fehlschlag mit
+  if ("error" in set) return set.error;
+  const replicas = set.replicas;
   rel.revision++;
-  const newReplicas = replicas || rel.history[rel.history.length - 1].replicas;
+  const newReplicas = replicas ?? rel.history[rel.history.length - 1].replicas;
   rel.history.push({ revision: rel.revision, replicas: newReplicas });
   const dep = host.deployments.find(d => d.name === rel.depName);
-  if (dep && replicas) scaleDeployment(dep, replicas, host.clock, host.rng);
+  if (dep && replicas !== null) scaleDeployment(dep, replicas, host.clock, host.rng);
   return 'Release "' + release + '" has been upgraded. Happy Helming!\nREVISION: ' + rel.revision;
 }
 
 /** `helm rollback <release> [revision]` – auf eine frühere Revision zurückrollen. */
-function helmRollback(host: HelmHost, t: string[]): string {
-  const release = t[2];
-  const targetRev = t[3] ? parseInt(t[3], 10) : null;
+function helmRollback(host: HelmHost, c: Call): string {
+  const release = c.args[0];
+  const targetRev = c.args[1] ? parseInt(c.args[1], 10) : null;
   const rel = host.releases.find(r => r.name === release);
   if (!rel) return host._err("Error: release: not found", "Welche Releases es gibt: 'helm list'");
   const target = targetRev
@@ -324,8 +342,8 @@ function helmRollback(host: HelmHost, t: string[]): string {
 }
 
 /** `helm uninstall`/`delete <release>` – Release samt Deployment/Service entfernen. */
-function helmUninstall(host: HelmHost, t: string[]): string {
-  const release = t[2];
+function helmUninstall(host: HelmHost, c: Call): string {
+  const release = c.args[0];
   const idx = host.releases.findIndex(r => r.name === release);
   if (idx === -1) return host._err("Error: uninstall: Release not loaded: " + (release || "?") + ": release: not found", "Welche Releases es gibt: 'helm list'");
   const rel = host.releases[idx];
@@ -336,17 +354,17 @@ function helmUninstall(host: HelmHost, t: string[]): string {
 }
 
 /** `helm status <release>` – Kurzstatus einer Release-Revision. */
-function helmStatus(host: HelmHost, t: string[]): string {
-  const release = t[2];
+function helmStatus(host: HelmHost, c: Call): string {
+  const release = c.args[0];
   const rel = host.releases.find(r => r.name === release);
   if (!rel) return host._err("Error: release: not found");
   return ["NAME: " + rel.name, "NAMESPACE: " + DEFAULT_NAMESPACE, "STATUS: deployed", "REVISION: " + rel.revision].join("\n");
 }
 
 /** `helm dependency`/`dep update|build|up <chart>` – Chart-Abhängigkeiten aktualisieren. */
-function helmDependency(host: HelmHost, t: string[]): string {
-  const action = t[2];
-  const ref = t[3];
+function helmDependency(host: HelmHost, c: Call): string {
+  const action = c.args[0];
+  const ref = c.args[1];
   if (action === "update" || action === "build" || action === "up") {
     if (!ref) return host._err("helm dependency " + action + ": Chart-Pfad fehlt.", "z.B. 'helm dependency update ./mein-chart'");
     const name = chartNameOf(ref);
@@ -392,16 +410,12 @@ const HELM_SUBCOMMANDS: Record<string, SubEntry<HelmHandler>> = {
   dep: DEPENDENCY,
 };
 
-/** Die Nicht-Flag-Argumente eines Unterbefehls (ohne die Werte seiner Flags). */
-function helmArgs(sub: string, t: string[]): string[] {
-  return positionalArgs(specOfSub("helm " + sub, HELM_SUBCOMMANDS[sub]), t, 2);
-}
-
 /** Dünner `helm`-Dispatcher: wählt den Eintrag aus `HELM_SUBCOMMANDS`, prüft dessen Flags, ruft den Handler. */
-export function helmCommand(host: HelmHost, t: string[], raw: string): string {
+export function helmCommand(host: HelmHost, t: string[], _raw?: string): string {
   const sub = t[1];
   if (!sub) return host._err("helm: Unterbefehl fehlt.", "Probier z.B. 'helm list'.");
   const entry = subEntry(HELM_SUBCOMMANDS, sub);
   if (!entry) return host._err("helm: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
-  return checkFlags(host, specOfSub("helm " + sub, entry), t, 2) ?? entry.run(host, t, raw);
+  const call = parseCall(host, specOfSub("helm " + sub, entry), t, 2);
+  return typeof call === "string" ? call : entry.run(host, call);
 }

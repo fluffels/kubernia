@@ -28,7 +28,7 @@ import { HEADLESS_CLUSTER_IP } from "./state";
 import { InvalidSpecError, resourceName } from "./names";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
-import { checkFlags, notSimulated, specOfSub, subEntry, type SubEntry } from "./cliargs";
+import { notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -244,13 +244,13 @@ export function reconcileAutoSync(host: ArgocdHost): void {
 }
 
 /** Ein `argocd app <action>`-Handler: bekommt Host + Tokens, gibt die Ausgabe. */
-type ArgocdAppHandler = (host: ArgocdHost, t: string[]) => string;
+type ArgocdAppHandler = (host: ArgocdHost, c: Call) => string;
 
 /** Löst die von `get`/`sync` benötigte Application auf (gemeinsame „welche App?"-Wache),
  *  oder liefert die passende Fehlermeldung. Bündelt die drei sonst duplizierten Fälle
  *  (fehlender Name / Flag statt Name / unbekannter Name). */
 function resolveArgoApp(host: ArgocdHost, action: string, name: string | undefined): ArgoApp | string {
-  if (!name || name.startsWith("-")) return host._err("argocd app " + action + ": Welche Application?", "Die Namen siehst du mit 'argocd app list'.");
+  if (!name) return host._err("argocd app " + action + ": Welche Application?", "Die Namen siehst du mit 'argocd app list'.");
   const app = host.argoApps.find(a => a.name === name);
   if (!app) return host._err('Error: rpc error: code = NotFound desc = applications.argoproj.io "' + name + '" not found', "Die Namen siehst du mit 'argocd app list'.");
   return app;
@@ -295,8 +295,8 @@ function outOfSyncHint(host: ArgocdHost, app: ArgoApp): string {
 }
 
 /** `argocd app get <name>` – Detailansicht einer Application (inkl. App-of-Apps-Kinder). */
-function argoAppGet(host: ArgocdHost, t: string[]): string {
-  const app = resolveArgoApp(host, "get", t[3]);
+function argoAppGet(host: ArgocdHost, c: Call): string {
+  const app = resolveArgoApp(host, "get", c.args[0]);
   if (typeof app === "string") return app;
   const sync = argoSyncStatus(host, app);
   const err = argoSyncError(host, app);
@@ -331,8 +331,8 @@ function rootSyncFailure(host: ArgocdHost, app: ArgoApp, failed: { name: string;
 }
 
 /** `argocd app sync <name>` – zieht den Git-Soll in den Cluster (Pull-Prinzip). */
-function argoAppSync(host: ArgocdHost, t: string[]): string {
-  const app = resolveArgoApp(host, "sync", t[3]);
+function argoAppSync(host: ArgocdHost, c: Call): string {
+  const app = resolveArgoApp(host, "sync", c.args[0]);
   if (typeof app === "string") return app;
   const before = argoSyncStatus(host, app);
   argoReconcile(host, app);
@@ -374,5 +374,6 @@ export function argocdCommand(host: ArgocdHost, t: string[]): string {
   if (!action) return host._err("argocd app: Aktion fehlt.", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
   const entry = subEntry(ARGOCD_APP_ACTIONS, action);
   if (!entry) return notSimulated(host, "'argocd app " + action + "'.", ARGOCD_KANN);
-  return checkFlags(host, specOfSub("argocd app " + action, entry), t, 3) ?? entry.run(host, t);
+  const call = parseCall(host, specOfSub("argocd app " + action, entry), t, 3);
+  return typeof call === "string" ? call : entry.run(host, call);
 }

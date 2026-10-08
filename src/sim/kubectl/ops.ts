@@ -13,7 +13,7 @@ import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
 import { resolveKind, type ResourceKind } from "./resources";
-import { positionals, notSimulated, slashRef, type KubectlSub } from "./args";
+import { positionals, notSimulated, replicasArg, slashRef, type KubectlSub } from "./args";
 
 /** Eine Objekt-Referenz `<typ>/<name>` (Slash) ODER `<typ> <name>` (getrennt) – egal an welcher Position
  *  sie steht. Der Typ löst über die Registry auf (`deploy`, `deployments`, `Deployment` …); Tokens, die
@@ -49,12 +49,13 @@ function resolveDeploymentRef(host: KubectlHost, sub: KubectlSub, t: string[], f
 export function kubectlScale(host: KubectlHost, t: string[], raw: string) {
   const { name, error } = resolveDeploymentRef(host, "scale", t, 2);
   if (error) return error;
-  const repMatch = raw.match(/--replicas[=\s]+(\d+)/);
-  if (!name || !repMatch) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
+  const rep = replicasArg(host, "scale", t);
+  if ("error" in rep) return rep.error;
+  if (!name || rep.replicas === null) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
   const dep = host.deployments.find(d => d.name === name);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
-  const target = parseInt(repMatch[1], 10);
-  const denied = scaleTo(host, dep, target);
+  if (rep.replicas < 0) return host._err("error: The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
+  const denied = scaleTo(host, dep, rep.replicas);
   if (denied) return denied;
   return "deployment.apps/" + name + " scaled";
 }

@@ -49,6 +49,7 @@ import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
+import { shellTokens, subEntry } from "./sim/cliargs";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
@@ -829,7 +830,8 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         this._preStep();   // #1409: im selben Fehlernetz wie der Befehl
         const raw = line.trim();
         if (!raw) return { output: "", error: false };
-        const tokens = raw.split(/\s+/);
+        const tokens = shellTokens(raw); // #1469: Quotes gruppieren wie in der Shell (`-m "zwei Worte"`)
+        if (!tokens) return { output: this._err("bash: unexpected EOF while looking for matching quote", "Ein Anführungszeichen (\" oder ') wurde geöffnet, aber nicht wieder geschlossen."), error: true };
         const cmd = tokens[0];
         if (cmd === "clear") return { output: null, error: false, clear: true };
         out = this._runCommand(cmd, tokens, raw, available);
@@ -865,7 +867,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     /** Dispatch einer erkannten Befehlszeile über die Handler-Tabelle (#563); `help` braucht
      *  die freigeschalteten Familien, Unbekanntes bekommt eine Meintest-du-Meldung. */
     _runCommand(cmd: string, tokens: string[], raw: string, available?: Set<string>): string {
-      const handler = COMMAND_HANDLERS[cmd];
+      const handler = subEntry(COMMAND_HANDLERS, cmd);
       if (handler) return handler(this, tokens, raw);
       if (cmd === "help") return this._help(available, tokens[1]);
       return this._unknownCommand(cmd);

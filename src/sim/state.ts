@@ -186,7 +186,7 @@ export interface ServiceSpec {
 }
 export interface ServiceRes {
   name: string;
-  type: string;
+  type: ServiceType;
   /** Abgeleitete virtuelle IP, `"<none>"` bei ExternalName, `"None"` bei headless (#1301). */
   clusterIP: string;
   port: string | number;

@@ -19,6 +19,7 @@
 import type { ClusterState, Deployment, Broken } from "./state";
 import { runPipeline } from "./glab";
 import { suggest } from "./util";
+import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
 
 /** Was die git-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -35,46 +36,66 @@ export interface GitHost extends Pick<ClusterState, "git" | "files" | "ci" | "de
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
 }
 
-/** Ein git-Unterbefehl-Handler: bekommt Host + Tokens + Rohzeile, gibt die Ausgabe.
- *  Handler, die `t`/`raw` nicht brauchen, lassen den Parameter weg – dank struktureller
+/** Ein git-Unterbefehl-Handler: bekommt Host + die ausgelesene Eingabe (`Call`, #1469), gibt die Ausgabe.
+ *  Handler, die `c` nicht brauchen, lassen den Parameter weg – dank struktureller
  *  Kompatibilität bleiben sie zur Tabelle zuweisbar (wie bei docker `DockerHandler`). */
-type GitHandler = (host: GitHost, t: string[], raw: string) => string;
+type GitHandler = (host: GitHost, c: Call) => string;
 
-/** Alias → Handler (alle NACH der `git init`-Wache, also im initialisierten Repo). Ein
- *  neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion oben – der Dispatcher
- *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
-const GIT_SUBCOMMANDS: Record<string, GitHandler> = {
-  status: gitStatus,
-  add: gitAdd,
-  commit: (host, _t, raw) => gitCommit(host, raw),
-  log: gitLog,
-  branch: gitBranch,
-  checkout: gitCheckout,
-  merge: gitMerge,
-  push: gitPush,
-  fetch: gitFetch,
-  pull: gitPull,
+const COMMIT_HINTS: Readonly<Record<string, string>> = {
+  "-a": "Der Simulator kennt nur die Stage: erst 'git add <datei>', dann 'git commit --message \"…\"'.",
+  "--all": "Der Simulator kennt nur die Stage: erst 'git add <datei>', dann 'git commit --message \"…\"'.",
+  "--amend": "Einen Commit nachträglich ändern gibt es nicht – committe die Änderung neu.",
+};
+const PUSH_HINTS: Readonly<Record<string, string>> = {
+  "--force": "Erzwungenes Pushen gibt es nicht – hol erst die Neuigkeiten mit 'git pull'.",
+  "-f": "Erzwungenes Pushen gibt es nicht – hol erst die Neuigkeiten mit 'git pull'.",
 };
 
-export function gitCommand(host: GitHost, t: string[], raw: string): string {
+/** Alias → Eintrag (Handler + Flag-Tabelle; alle NACH der `git init`-Wache, also im initialisierten Repo, `init`
+ *  selbst läuft davor). Ein neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion unten – der Dispatcher
+ *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
+const GIT_SUBCOMMANDS: Record<string, SubEntry<GitHandler>> = {
+  init: { run: gitInit },
+  status: { run: gitStatus },
+  add: { run: gitAdd, flags: [flag(false, "-A", "--all")] },
+  commit: { run: gitCommit, flags: [flag(true, "-m", "--message")], hints: COMMIT_HINTS },
+  log: { run: gitLog },
+  branch: { run: gitBranch },
+  checkout: { run: gitCheckout, flags: [flag(true, "-b"), flag(false, "--ours"), flag(false, "--theirs")] },
+  merge: { run: gitMerge },
+  push: { run: gitPush, flags: [flag(false, "-u", "--set-upstream")], hints: PUSH_HINTS },
+  fetch: { run: gitFetch },
+  pull: { run: gitPull },
+};
+
+/** Echte git-Unterbefehle, die die Sim nicht kann. */
+const NOT_SIMULATED = ["stash", "rebase", "reset", "diff", "remote", "clone", "tag", "show", "switch", "restore", "rm", "mv", "cherry-pick", "revert"];
+const KANN = ["git init", "status", "add", "commit", "log", "branch", "checkout", "merge", "push", "fetch", "pull"];
+
+export function gitCommand(host: GitHost, t: string[], _raw?: string): string {
   const sub = t[1];
   const g = host.git;
+  if (sub && isFlagToken(sub)) return notSimulated(host, "das Flag '" + sub + "' vor dem Unterbefehl.", KANN);
+  const entry = sub ? subEntry(GIT_SUBCOMMANDS, sub) : undefined;
   // `git init` läuft VOR der „ist ein Repo?"-Wache – es legt das Repo überhaupt erst an.
-  if (sub === "init") {
-    if (g.initialized) return "Hinweis: Hier liegt schon ein Git-Repository (.git existiert bereits).";
-    g.initialized = true;
-    return "Initialisiertes leeres Git-Repository in /hafen/.git/\n📜 Ab jetzt kann Git jede Änderung an deinen Dateien festhalten.";
-  }
-  if (!g.initialized) {
+  if (!g.initialized && sub !== "init") {
     return host._err("⚠️ Das hier ist (noch) kein Git-Repository.", "Starte eins mit 'git init'.");
   }
-  const handler = sub ? GIT_SUBCOMMANDS[sub] : undefined;
-  if (!handler) {
-    const guess = suggest(sub || "", ["init", "status", "add", "commit", "log", "branch", "checkout", "merge", "push", "fetch", "pull"]);
+  if (!entry) {
+    if (sub && NOT_SIMULATED.includes(sub)) return notSimulated(host, "'git " + sub + "'.", KANN);
+    const guess = suggest(sub || "", Object.keys(GIT_SUBCOMMANDS));
     return host._err("⚠️ 'git " + (sub || "") + "' kenne ich hier nicht.",
       guess ? "Meintest du 'git " + guess + "'?" : "Versuch's mit status, add, commit, log, branch, checkout, merge oder push.");
   }
-  return handler(host, t, raw);
+  const call = parseCall(host, specOfSub("git " + sub, entry), t, 2);
+  return typeof call === "string" ? call : entry.run(host, call);
+}
+
+function gitInit(host: GitHost): string {
+  const g = host.git;
+  if (g.initialized) return "Hinweis: Hier liegt schon ein Git-Repository (.git existiert bereits).";
+  g.initialized = true;
+  return "Initialisiertes leeres Git-Repository in /hafen/.git/\n📜 Ab jetzt kann Git jede Änderung an deinen Dateien festhalten.";
 }
 
 function gitUntracked(host: GitHost): string[] {
@@ -98,9 +119,9 @@ function gitStatus(host: GitHost): string {
   return s.trimEnd();
 }
 
-function gitAdd(host: GitHost, t: string[]): string {
+function gitAdd(host: GitHost, c: Call): string {
   const g = host.git;
-  const arg = t[2];
+  const arg = c.has("-A", "--all") ? "." : c.args[0]; // -A/--all gilt wie `.` (der Sim-Arbeitsordner ist flach)
   if (!arg) return host._err("git add: Welche Datei?", "z.B. 'git add seekarte.md' – oder 'git add .' für alles.");
   // Mitten im Konflikt markiert 'git add <konfliktdatei>' (oder 'git add .') ihn als gelöst.
   if (g.conflict && (arg === "." || arg === g.conflict.file)) {
@@ -124,11 +145,12 @@ function gitAdd(host: GitHost, t: string[]): string {
   return toAdd.length ? "Vorgemerkt: " + toAdd.join(", ") + " (bereit zum Commit)." : "Nichts Neues zum Vormerken.";
 }
 
-function gitCommit(host: GitHost, raw: string): string {
+function gitCommit(host: GitHost, c: Call): string {
   const g = host.git;
-  // -m und --message sind gleichwertig (wie echtes git + die accept-Regex, #381).
-  const m = raw.match(/(?:-m|--message)\s+"([^"]*)"|(?:-m|--message)\s+'([^']*)'|(?:-m|--message)\s+(\S+)/);
-  const msg = m ? (m[1] || m[2] || m[3]) : null;
+  // -m und --message sind gleichwertig; mehrere -m werden Absätze (wie echtes git). Die Tokens sind schon geklammert
+  // (`shellTokens`), `-m "remove --force flag"` bleibt EINE Nachricht.
+  const msg = c.values("-m", "--message").join("\n\n");
+  if (c.args.length) return notSimulated(host, "'git commit " + c.args[0] + "' (nur bestimmte Pfade committen).", ['git commit --message "…"'], "Merk Dateien erst mit 'git add' vor.");
   if (!msg) return host._err("git commit: Die Commit-Nachricht fehlt.", 'Muster: git commit --message "Was du geändert hast"');
   if (g.conflict) return host._err("git commit: Der Konflikt in '" + g.conflict.file + "' ist noch nicht gelöst.",
     "Seite wählen ('git checkout --ours/--theirs " + g.conflict.file + "'), dann 'git add " + g.conflict.file + "', erst dann committen.");
@@ -138,40 +160,42 @@ function gitCommit(host: GitHost, raw: string): string {
   g.staged = [];
   const hash = (0xc0ffee + g.commits.length * 7).toString(16).slice(-7);
   g.commits.push({ hash, msg, branch: g.branch, files });
-  return "[" + g.branch + " " + hash + "] " + msg + "\n " + files.length + " Datei(en) festgehalten.";
+  return "[" + g.branch + " " + hash + "] " + msg.split("\n")[0] + "\n " + files.length + " Datei(en) festgehalten.";
 }
 
 function gitLog(host: GitHost): string {
   const g = host.git;
   if (!g.commits.length) return "Noch keine Commits. Mach deinen ersten mit 'git commit --message \"…\"'.";
   return g.commits.slice().reverse()
-    .map(c => "commit " + c.hash + "  (" + c.branch + ")\n    " + c.msg).join("\n");
+    .map(c => "commit " + c.hash + "  (" + c.branch + ")\n" + c.msg.split("\n").map(l => (l ? "    " + l : "")).join("\n")).join("\n");
 }
 
-function gitBranch(host: GitHost, t: string[]): string {
+function gitBranch(host: GitHost, c: Call): string {
   const g = host.git;
-  const name = t[2];
+  const name = c.args[0];
   if (!name) return "Branches:\n" + g.branches.map(b => (b === g.branch ? "* " : "  ") + b).join("\n");
-  if (name.startsWith("-")) return host._err("git branch: So nicht.", "Zum Anlegen: 'git branch <name>'.");
   if (g.branches.includes(name)) return host._err("git branch: Branch '" + name + "' gibt es schon.");
   g.branches.push(name);
   return "Branch '" + name + "' angelegt. (Wechseln mit 'git checkout " + name + "'.)";
 }
 
-function gitCheckout(host: GitHost, t: string[]): string {
+function gitCheckout(host: GitHost, c: Call): string {
   const g = host.git;
-  // Konflikt-Auflösung: eine Seite wählen. 'git checkout --ours/--theirs <datei>'
-  if (t[2] === "--ours" || t[2] === "--theirs") {
-    const side = t[2] === "--ours" ? "ours" : "theirs";
-    const file = t[3];
-    if (!g.conflict) return host._err("git checkout " + t[2] + ": Gerade ist kein Konflikt offen.", "Diese Form wählt im Konflikt eine Seite aus.");
-    if (!file || file !== g.conflict.file) return host._err("git checkout " + t[2] + ": Welche Konfliktdatei?", "Im Konflikt steckt: " + g.conflict.file + ". Also: 'git checkout " + t[2] + " " + g.conflict.file + "'.");
+  // Konflikt-Auflösung: eine Seite wählen. 'git checkout --ours/--theirs [--] <datei>'
+  const ours = c.has("--ours"), theirs = c.has("--theirs");
+  if (ours || theirs) {
+    const flagName = ours ? "--ours" : "--theirs";
+    const side = ours ? "ours" : "theirs";
+    const file = c.args[0];
+    if (!g.conflict) return host._err("git checkout " + flagName + ": Gerade ist kein Konflikt offen.", "Diese Form wählt im Konflikt eine Seite aus.");
+    if (!file || file !== g.conflict.file) return host._err("git checkout " + flagName + ": Welche Konfliktdatei?", "Im Konflikt steckt: " + g.conflict.file + ". Also: 'git checkout " + flagName + " " + g.conflict.file + "'.");
     host.files[file] = side === "ours" ? g.conflict.ours : g.conflict.theirs;
     const wer = side === "ours" ? "deine eigene (HEAD)" : "die hereinkommende (" + g.conflict.from + ")";
     return "'" + file + "' auf " + wer + " Version gesetzt. ▸ Markier die Lösung mit 'git add " + file + "', dann 'git commit'.";
   }
-  let name = t[2], create = false;
-  if (t[2] === "-b") { create = true; name = t[3]; }
+  const create = c.value("-b") !== null;
+  const name = create ? c.value("-b") : c.args[0];
+  if (create && c.args.length) return notSimulated(host, "einen Startpunkt bei 'git checkout -b' (" + c.args[0] + ").", ["git checkout -b <name>"], "Wechsle erst auf den Ausgangs-Branch, dann leg den neuen an.");
   if (!name) return host._err("git checkout: Welcher Branch?", "Neu + wechseln: 'git checkout -b <name>'. Nur wechseln: 'git checkout <name>'.");
   if (create) {
     if (g.branches.includes(name)) return host._err("git checkout -b: Branch '" + name + "' gibt es schon.", "Wechsle mit 'git checkout " + name + "'.");
@@ -183,9 +207,9 @@ function gitCheckout(host: GitHost, t: string[]): string {
   return "Gewechselt zu Branch '" + name + "'" + (create ? " (neu angelegt)" : "") + ".";
 }
 
-function gitMerge(host: GitHost, t: string[]): string {
+function gitMerge(host: GitHost, c: Call): string {
   const g = host.git;
-  const name = t[2];
+  const name = c.args[0];
   if (g.conflict) return host._err("git merge: Ein Merge läuft noch – es gibt einen offenen Konflikt in '" + g.conflict.file + "'.",
     "Erst lösen: Seite wählen ('git checkout --ours/--theirs " + g.conflict.file + "'), 'git add', 'git commit'.");
   if (!name) return host._err("git merge: Welchen Branch reinholen?", "Muster: 'git merge <branch>'.");
@@ -211,8 +235,26 @@ function gitMerge(host: GitHost, t: string[]): string {
   return "Merge: '" + name + "' → '" + g.branch + "' ✅ Die Arbeit aus beiden Branches ist jetzt vereint.";
 }
 
-function gitFetch(host: GitHost): string {
+/** `[remote [branch]]` von push/pull/fetch: in der Sim gibt es nur das Remote `origin` und den AKTUELLEN Branch.
+ *  `null` = in Ordnung, sonst die fertige Fehlerausgabe (wie git: unbekanntes Remote, unbekannter Branch). */
+function remoteRef(host: GitHost, cmd: string, c: Call): string | null {
   const g = host.git;
+  const [remote, branch] = c.args;
+  if (remote !== undefined && remote !== "origin") {
+    return host._err("fatal: '" + remote + "' does not appear to be a git repository", "Das einzige Remote heißt 'origin' (git push origin <branch>).");
+  }
+  if (c.args.length > 2 || branch?.includes(":")) return notSimulated(host, "mehrere Branches oder Refspecs bei 'git " + cmd + "'.", ["git " + cmd + " [origin [<branch>]]"]);
+  if (branch === undefined || branch === g.branch || branch === "HEAD") return null;
+  if (g.branches.includes(branch)) {
+    return notSimulated(host, "'git " + cmd + " origin " + branch + "' für einen anderen Branch als den aktuellen.", ["git " + cmd + " [origin [" + g.branch + "]]"], "Wechsle erst mit 'git checkout " + branch + "'.");
+  }
+  return host._err(cmd === "push" ? "error: src refspec " + branch + " does not match any" : "fatal: couldn't find remote ref " + branch, "Welche Branches es gibt, zeigt 'git branch'.");
+}
+
+function gitFetch(host: GitHost, c: Call): string {
+  const g = host.git;
+  const refErr = remoteRef(host, "fetch", c);
+  if (refErr) return refErr;
   if (g.remoteAhead > 0) {
     g.fetched = true;
     return "Hole von origin … origin/" + g.branch + " ist " + g.remoteAhead + " Commit(s) voraus.\n" +
@@ -221,8 +263,10 @@ function gitFetch(host: GitHost): string {
   return "Hole von origin … Schon aktuell – origin/" + g.branch + " hat nichts Neues.";
 }
 
-function gitPull(host: GitHost): string {
+function gitPull(host: GitHost, c: Call): string {
   const g = host.git;
+  const refErr = remoteRef(host, "pull", c);
+  if (refErr) return refErr;
   if (g.conflict) return host._err("git pull: Ein Konflikt ist noch offen.", "Erst den Merge abschließen, dann wieder pullen.");
   if (g.remoteAhead > 0) {
     const n = g.remoteAhead;
@@ -238,14 +282,17 @@ function gitPull(host: GitHost): string {
   return "Hole von origin … Bereits auf dem neuesten Stand. ✨";
 }
 
-function gitPush(host: GitHost): string {
+function gitPush(host: GitHost, c: Call): string {
   const g = host.git;
+  const refErr = remoteRef(host, "push", c);
+  if (refErr) return refErr;
   if (g.conflict) return host._err("git push: Ein Merge-Konflikt ist noch offen.", "Erst lösen (Seite wählen, 'git add', 'git commit'), dann pushen.");
   if (g.remoteAhead > 0) return host._err("git push: origin/" + g.branch + " ist dir voraus (" + g.remoteAhead + " Commit(s)).",
     "Hol sie erst mit 'git pull', dann push – sonst weist der Server deinen Push ab.");
   if (!g.commits.length) return host._err("git push: Noch nichts zu pushen.", "Erst committen, dann pushen.");
   g.pushed = true;
   let msg = "Schiebe nach origin/" + g.branch + " … ✅ Deine Commits liegen jetzt auf dem Server (z.B. GitLab) – sichtbar fürs Team.";
+  if (c.has("-u", "--set-upstream")) msg += "\nbranch '" + g.branch + "' set up to track 'origin/" + g.branch + "'.";
   // Liegt eine .gitlab-ci.yml im Repo, startet der Runner bei jedem Push automatisch eine Pipeline.
   if (host.files[".gitlab-ci.yml"]) {
     const p = runPipeline(host);

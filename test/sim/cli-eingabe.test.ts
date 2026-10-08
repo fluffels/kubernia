@@ -7,7 +7,7 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkFlags, positionalArgs, flagValueOf, hasFlag, firstPositionalIndex, subEntry, notSimulated, specOfSub, type ArgSpec,
+  flag, checkFlags, positionalArgs, flagValueOf, parseCall, shellTokens, subEntry, notSimulated, specOfSub, type ArgSpec,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
@@ -105,14 +105,6 @@ describe("cliargs: flagValueOf und Helfer", () => {
     expect(checkFlags(host, PF, ["x", "run", "-adnfoo"], 2)).toBeNull();
     expect(positionalArgs(PF, ["x", "run", "-adnfoo", "a"], 2)).toEqual(["a"]);
     expect(positionalArgs(PF, ["x", "run", "-adn", "foo", "a"], 2)).toEqual(["a"]);
-  });
-  test("hasFlag: kurz, lang, Kette, mit =; nicht bei fremdem Flag", () => {
-    for (const t of [["-a"], ["--all"], ["-ad"], ["-a=true"], ["--all=true"]]) expect(hasFlag(["x", ...t], ["-a", "--all"]), t.join()).toBe(true);
-    for (const t of [["-d"], ["--detach"], ["x"], ["--allx"]]) expect(hasFlag(["x", ...t], ["-a", "--all"]), t.join()).toBe(false);
-  });
-  test("firstPositionalIndex: Index im Original, -1 ohne", () => {
-    expect(firstPositionalIndex(PF, ["x", "run", "-n", "ns", "img"], 2)).toBe(4);
-    expect(firstPositionalIndex(PF, ["x", "run", "-d"], 2)).toBe(-1);
   });
   test("subEntry: eigene Schlüssel ja, Prototyp-Schlüssel nein", () => {
     expect(subEntry({ a: 1 }, "a")).toBe(1);
@@ -312,6 +304,240 @@ describe("terraform", () => {
   });
 });
 
+/* ---------- #1469: Scanner (`parseCall`), Shell-Tokens, Prototyp-Schlüssel, Positionsargumente hinter `--` ---------- */
+const call = (spec: ArgSpec, ...t: string[]) => {
+  const c = parseCall(host, spec, ["x", "run", ...t], 2);
+  if (typeof c === "string") throw new Error(c);
+  return c;
+};
+const FOLLOW: ArgSpec = { cmd: "x logs", flags: [flag(true, "-n", "--namespace"), flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] };
+
+describe("parseCall: Scanner", () => {
+  test("`--` beendet die Flags: alles danach ist positional, auch ein -x", () => {
+    expect(call(PF, "-a", "--", "-x", "--y", "z").args).toEqual(["-x", "--y", "z"]);
+    expect(call(PF, "-a", "--", "-x").has("-a")).toBe(true);
+    expect(checkFlags(host, PF, ["x", "run", "--", "-x"], 2)).toBeNull();
+    expect(positionalArgs(PF, ["x", "run", "--", "-x"], 2)).toEqual(["-x"]);
+  });
+  test("has: Ketten, =true/=false, Aliase; der letzte Treffer gewinnt", () => {
+    expect(call(FOLLOW, "-fp").has("-f")).toBe(true);
+    expect(call(FOLLOW, "-fp").has("-p", "--previous")).toBe(true);
+    expect(call(FOLLOW, "--follow=false").has("-f", "--follow")).toBe(false);
+    expect(call(FOLLOW, "--follow=true").has("--follow")).toBe(true);
+    expect(call(FOLLOW, "-f=0").has("-f")).toBe(false);
+    expect(call(FOLLOW, "-f", "--follow=false").has("-f")).toBe(false);
+    expect(call(FOLLOW).has("-f")).toBe(false);
+  });
+  test("ein Wert-Flag in der Kette schluckt den Rest: -nfoo setzt kein -f", () => {
+    const c = call(FOLLOW, "-nfoo");
+    expect(c.has("-f")).toBe(false);
+    expect(c.value("-n")).toBe("foo");
+    expect(call(FOLLOW, "-fn", "foo").value("--namespace")).toBe("foo");
+    expect(call(FOLLOW, "-fn", "foo").has("-f")).toBe(true);
+  });
+  test("value: der letzte Wert gewinnt, values liefert alle in Reihenfolge, Aliase zählen gleich", () => {
+    const c = call(FOLLOW, "-n", "a", "--namespace=b", "-nc");
+    expect(c.value("-n")).toBe("c");
+    expect(c.values("--namespace", "-n")).toEqual(["a", "b", "c"]);
+    expect(call(FOLLOW).value("-n")).toBeNull();
+    expect(call(FOLLOW).values("-n")).toEqual([]);
+  });
+  test("ungültiger Bool-Wert: pflag-artiger Fehler; unbekanntes Flag und fehlender Wert bleiben Fehler", () => {
+    expect(parseCall(host, FOLLOW, ["x", "logs", "--follow=maybe"], 2)).toContain('invalid argument "maybe" for "-f, --follow" flag: strconv.ParseBool: parsing "maybe": invalid syntax');
+    expect(parseCall(host, FOLLOW, ["x", "logs", "-o"], 2)).toContain("das Flag '-o'");
+    expect(parseCall(host, FOLLOW, ["x", "logs", "-n"], 2)).toContain("flag needs an argument");
+    expect(checkFlags(host, FOLLOW, ["x", "logs", "-f=zwei"], 2)).toContain('invalid argument "zwei"');
+  });
+  test("goflag: `--` und -x=false", () => {
+    const tf: ArgSpec = { cmd: "tf x", style: "goflag", flags: [flag(false, "-force"), flag(true, "-var-file")] };
+    const c = parseCall(host, tf, ["tf", "x", "-force=false", "-var-file", "a", "--", "-b"], 2) as ReturnType<typeof call>;
+    expect(c.has("-force")).toBe(false);
+    expect(c.value("-var-file")).toBe("a");
+    expect(c.args).toEqual(["-b"]);
+  });
+  test("stopAtPositional: Flags hinter dem ersten Positionsargument werden nicht gelesen", () => {
+    const run: ArgSpec = { ...PF, stopAtPositional: true };
+    const c = call(run, "-a", "img", "-d", "--wirr");
+    expect(c.args).toEqual(["img", "-d", "--wirr"]);
+    expect(c.has("-d")).toBe(false);
+  });
+  test("specOfSub: Familien-Stil als Default, ein Eintrag überschreibt ihn", () => {
+    expect(specOfSub("x y", { run: () => "" }, "goflag").style).toBe("goflag");
+    expect(specOfSub("x y", { run: () => "", style: "pflag" }, "goflag").style).toBe("pflag");
+    expect(specOfSub("x y", { run: () => "" }).style).toBe("pflag");
+  });
+});
+
+describe("shellTokens", () => {
+  test.each([
+    ['git commit -m "zwei Worte"', ["git", "commit", "-m", "zwei Worte"]],
+    ["git commit -m 'a  b'", ["git", "commit", "-m", "a  b"]],
+    ['a "" b', ["a", "", "b"]],
+    ["a   b\t c", ["a", "b", "c"]],
+    ['x "sagt \\"hi\\" \\\\"', ["x", 'sagt "hi" \\']],
+    ["x --set=a=\"b c\"", ["x", "--set=a=b c"]],
+    ["kubeadm join 1.2.3.4:6443 --token t \\ --hash h", ["kubeadm", "join", "1.2.3.4:6443", "--token", "t", "--hash", "h"]],
+    ["x a\\ b", ["x", "a", "b"]], // `\` vor Leerraum = Zeilenfortsetzung (gedruckter kubeadm-Join-Befehl), kein maskiertes Leerzeichen
+    ['x a\\"b', ["x", 'a"b']],
+    ["x a\\", ["x", "a"]],
+    ["'in \"doppelt\"'", ['in "doppelt"']],
+  ])("%s", (raw, expected) => { expect(shellTokens(raw)).toEqual(expected); });
+  test.each(['git commit -m "offen', "x 'offen", 'x "a\\"'])("unbalancierte Quotes: %s → null", (raw) => { expect(shellTokens(raw)).toBeNull(); });
+  test("exec meldet unbalancierte Quotes im bash-Stil statt zu raten", () => {
+    const r = freshSim().exec('git commit -m "offen');
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("unexpected EOF while looking for matching quote");
+  });
+});
+
+describe("Prototyp-Schlüssel: kein Wurf, ein Fehler (Dispatch-Tabellen über subEntry)", () => {
+  const keys = ["constructor", "toString", "__proto__", "hasOwnProperty"];
+  const prefixes = ["", "git ", "helm ", "docker ", "terraform ", "argocd app ", "glab ci ", "kubeadm ", "aws s3 ", "kubectl create ", "kubectl "];
+  test.each(prefixes.flatMap(p => keys.map(k => [p + k] as const)))("%s", (cmd) => {
+    const s = freshSim();
+    s.exec("git init");
+    const r = s.exec(cmd);
+    expect(typeof r.output).toBe("string");
+    expect(r.error, cmd).toBe(true);
+  });
+});
+
+describe("Positionsargumente stehen hinter `--` (kein Handler liest feste Token-Indizes)", () => {
+  const helmSim = () => {
+    const s = new KQSim({ helmRepos: [{ name: "bitnami", url: "u" }] });
+    s.exec("helm install r bitnami/nginx");
+    s.exec("helm upgrade r bitnami/nginx --set replicaCount=2");
+    return s;
+  };
+  test("helm status/rollback/uninstall", () => {
+    const s = helmSim();
+    expect(s.exec("helm status -- r").output).toContain("NAME: r");
+    expect(s.exec("helm rollback -- r 1").output).toContain("Rollback was a success");
+    expect(s.exec("helm uninstall -- r").output).toContain('release "r" uninstalled');
+    expect(s.releases).toEqual([]);
+  });
+  test("helm lint/package/create/repo/search/dependency", () => {
+    const s = helmSim();
+    expect(s.exec("helm create -- mein").output).toContain("Creating mein");
+    expect(s.exec("helm lint -- mein").output).toContain("1 chart(s) linted");
+    expect(s.exec("helm package -- mein").output).toContain("Successfully packaged");
+    expect(s.exec("helm dependency update -- ./mein").output).toContain("Chart.lock updated");
+    expect(s.exec("helm repo add -- extra https://x.test").output).toContain('"extra" has been added');
+    expect(s.exec("helm template -- r2 mein").output).toContain("name: r2-mein");
+  });
+  test("docker stop/rm/pull/tag", () => {
+    const s = freshSim();
+    s.exec("docker run -d --name c nginx");
+    expect(s.exec("docker pull -- nginx").output).toContain("nginx");
+    expect(s.exec("docker tag -- nginx mein:1").error).toBe(false);
+    expect(s.exec("docker stop -- c").error).toBe(false);
+    expect(s.exec("docker rm -- c").output).toBe("c");
+  });
+  test("docker run -- IMAGE", () => {
+    const s = freshSim();
+    expect(s.exec("docker run -- nginx").error).toBe(false);
+    expect(s.docker.containers[0].image).toBe("nginx:latest");
+  });
+  test("argocd app get/sync", () => {
+    const s = freshSim();
+    s.files["kasse-app.yaml"] = "kind: Application …";
+    s.applyEffects["kasse-app.yaml"] = { application: { name: "kasse", repo: "https://git.hafen.de/apps.git", path: "kasse/", deployment: { name: "kasse", image: "nginx", replicas: 3 }, service: { name: "kasse", port: "80" } } };
+    s.exec("kubectl apply -f kasse-app.yaml");
+    expect(s.exec("argocd app get -- kasse").output).toContain("kasse");
+    expect(s.exec("argocd app get -- kasse").output).not.toContain("Welche Application");
+    expect(s.exec("argocd app sync -- kasse").error).toBe(false);
+  });
+  test("terraform output/state/force-unlock", () => {
+    const s = new KQSim({ tfOutputs: [{ name: "n", value: "v" }] });
+    s.exec("terraform init");
+    s.exec("terraform apply");
+    expect(s.exec("terraform output -- n").output).toBe("v");
+    expect(s.exec("terraform state -- list").output).not.toContain(NS);
+  });
+});
+
+describe("helm --set: Flag-Leser statt Regex auf der Rohzeile", () => {
+  const sim = () => {
+    const s = new KQSim({ helmRepos: [{ name: "bitnami", url: "u" }] });
+    s.exec("helm install web bitnami/nginx");
+    return s;
+  };
+  const replicas = (s: KQSim) => s.deployments.find(d => d.name.startsWith("web"))?.replicas;
+  test("3.5 wird abgelehnt: kein Lesen als 3, die Revision zählt nicht hoch", () => {
+    const s = sim();
+    const r = lauf("helm upgrade web bitnami/nginx --set replicaCount=3.5", s);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("Error: UPGRADE FAILED:");
+    expect(s.releases[0].revision).toBe(1);
+    expect(replicas(s)).toBe(1);
+  });
+  test("0 ist erlaubt (nicht `|| 1`), negativ und Text nicht", () => {
+    const s = sim();
+    expect(lauf("helm upgrade web bitnami/nginx --set replicaCount=0", s).error).toBe(false);
+    expect(replicas(s)).toBe(0);
+    expect(lauf("helm upgrade web bitnami/nginx --set replicaCount=-1", s).out).toContain("must be greater than or equal to 0");
+    expect(lauf("helm upgrade web bitnami/nginx --set replicaCount=abc", s).error).toBe(true);
+    expect(s.releases[0].revision).toBe(2);
+    expect(lauf("helm install z bitnami/redis --set replicaCount=0").sim.deployments.find(d => d.name.startsWith("z"))?.replicas).toBe(undefined);
+  });
+  test("install mit 0: Deployment mit 0 Replicas; ungültiger Wert legt nichts an", () => {
+    const s = new KQSim({ helmRepos: [{ name: "bitnami", url: "u" }] });
+    expect(lauf("helm install z bitnami/redis --set replicaCount=0", s).error).toBe(false);
+    expect(s.deployments.find(d => d.name.startsWith("z"))?.replicas).toBe(0);
+    const t = new KQSim({ helmRepos: [{ name: "bitnami", url: "u" }] });
+    const r = lauf("helm install y bitnami/redis --set replicaCount=3.5", t);
+    expect(r.out).toContain("INSTALLATION FAILED");
+    expect(t.releases).toEqual([]);
+    expect(t.deployments).toEqual([]);
+  });
+  test("Key ohne =, fremder Key, Komma-Liste, mehrfaches --set (der letzte gewinnt)", () => {
+    const s = sim();
+    expect(lauf("helm upgrade web bitnami/nginx --set replicaCount", s).out).toContain('failed parsing --set data: key "replicaCount" has no value');
+    const fremd = lauf("helm upgrade web bitnami/nginx --set image.tag=x", s);
+    expect(fremd.out).toContain(NS);
+    expect(fremd.out).toContain("--set replicaCount=<zahl>");
+    expect(lauf("helm upgrade web bitnami/nginx --set replicaCount=4,image.tag=x", s).out).toContain(NS);
+    expect(s.releases[0].revision).toBe(1);
+    lauf("helm upgrade web bitnami/nginx --set replicaCount=2 --set replicaCount=5", s);
+    expect(replicas(s)).toBe(5);
+    lauf("helm upgrade web bitnami/nginx --set=replicaCount=6,replicaCount=7", s);
+    expect(replicas(s)).toBe(7);
+  });
+  test("ein Wert in Anführungszeichen wird gelesen", () => {
+    const s = sim();
+    lauf('helm upgrade web bitnami/nginx --set "replicaCount=4"', s);
+    expect(replicas(s)).toBe(4);
+  });
+});
+
+describe("terraform: goflag ist der Familien-Default, destroy nimmt -var-file", () => {
+  test.each(["get", "init", "plan", "apply", "destroy", "state", "output", "force-unlock", "fmt", "validate"])("%s --bogus meldet '-bogus'", (sub) => {
+    expect(lauf("terraform " + sub + " --bogus").out).toContain("das Flag '-bogus' bei 'terraform " + sub + "'");
+  });
+  test("destroy -var-file: vorhandene Datei ok, fehlende ein Fehler", () => {
+    const s = new KQSim({ files: { "prod.tfvars": "x = 1" }, tfResources: [{ addr: "local_file.n", desc: "x" }] });
+    s.exec("terraform init");
+    s.exec("terraform apply");
+    expect(lauf("terraform destroy -var-file=prod.tfvars", s).out).not.toContain(NS);
+    expect(lauf("terraform destroy -var-file=prod.tfvars", s).error).toBe(false);
+    const r = lauf("terraform destroy -var-file=fehlt.tfvars", s);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("Failed to read variables file");
+  });
+});
+
+describe("docker: Bool-Werte werden ausgewertet", () => {
+  test("ps --all=false zeigt nur laufende Container, ps -a=true auch gestoppte", () => {
+    const s = freshSim();
+    s.exec("docker run -d --name a nginx");
+    s.exec("docker run -d --name b nginx");
+    s.exec("docker stop b");
+    expect(s.exec("docker ps --all=false").output).not.toContain("Exited");
+    expect(s.exec("docker ps --all=true").output).toContain("Exited");
+    expect(s.exec("docker ps -a=false").output).not.toContain("Exited");
+  });
+});
+
 /* ---------- Inventur: keine Musterlösung darf an der Flag-Prüfung scheitern ---------- */
 describe("Inventur: jede Lösung aus Karten, Quests und Drills läuft ohne 'Nicht simuliert'", () => {
   const lösungen: { label: string; cmd: string }[] = [];
@@ -325,9 +551,9 @@ describe("Inventur: jede Lösung aus Karten, Quests und Drills läuft ohne 'Nich
   for (const [id, gen] of Object.entries(KQContent.DRILLS)) {
     for (let i = 0; i < 5; i++) lösungen.push({ label: "Drill " + id + " #" + i, cmd: gen(freshSim()).solution });
   }
-  test("die Inventur ist nicht leer und enthält alle sechs Familien", () => {
+  test("die Inventur ist nicht leer und enthält alle neun Familien", () => {
     expect(lösungen.length).toBeGreaterThan(200);
-    for (const cli of ["kubectl", "docker", "helm", "terraform", "argocd", "glab"]) {
+    for (const cli of ["kubectl", "docker", "helm", "terraform", "argocd", "glab", "kubeadm", "git", "aws"]) {
       expect(lösungen.some(l => l.cmd.startsWith(cli + " ")), cli).toBe(true);
     }
   });
