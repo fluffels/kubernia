@@ -47,7 +47,7 @@ function runTask(sim: KQSim, task: RunnableTask, label: string) {
   assert.ok(task.accept.some((re: RegExp) => re.test(norm)), label + ": Lösung matcht Regex nicht: " + norm);
   assert.ok(!result.error, label + ": Simulator-Fehler: " + result.output);
   assert.ok(!task.check || task.check(sim), label + ": check() nicht erfüllt");
-  return result.output;
+  return result.output ?? "";
 }
 
 /** #1508: Eine Teach-Lösung soll etwas Sichtbares zeigen. Leere Ausgabe oder ein Kein-Treffer-/Fehlermuster
