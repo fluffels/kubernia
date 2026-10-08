@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { Sim as KQSim } from "../src/sim";
 import { KQContent } from "../src/content";
 import { freshSim } from "./factories/sim";
+import { evaluateSubmission } from "../src/hud/viewdecide";
 
 function resolvePlaceholder(cmd: string, sim: KQSim) {
   if (!cmd.includes("<")) return cmd;
@@ -181,6 +182,44 @@ function checkModeViolations(
   return out;
 }
 
+/** #1521: Oles Lehre „ein Präfix geht auch“ gilt für JEDE describe-pod-Aufgabe. Die Sim beschreibt
+ *  bei `describe pod <dep>` alle Pods des Deployments ohne Fehler; die Aufgabe muss das dann auch
+ *  als gelöst werten (sonst „falsch“ trotz korrekter Ausgabe). Geprüft wird mit dem echten
+ *  `evaluateSubmission` auf der Live-Sim (ein Snapshot-Klon würfelt die Pod-Suffixe neu).
+ *  Negativ: ein geratener Name (`<dep>-geraten`) trifft keinen Pod und ist nie gelöst. */
+function describePrefixViolations(
+  sim: KQSim,
+  task: { accept: RegExp[]; solution: string; check?: (sim: KQSim) => unknown },
+  label: string,
+): string[] {
+  const cmd = norm(resolvePlaceholder(task.solution, sim));
+  const m = cmd.match(/^kubectl describe pods? (\S+)$/);
+  if (!m) return [];
+  const pod = m[1];
+  const dep = sim.deployments.find(d => d.pods.some(p => p.name === pod));
+  if (!dep) return []; // nackter Pod: kein Präfix-Versprechen
+  const out: string[] = [];
+  const solved = (input: string) => {
+    const verdict = evaluateSubmission(input, task, {
+      simError: !!sim.exec(input).error,
+      checkOk: !task.check || !!task.check(sim),
+      isAbbrevUnlocked: () => true,
+      failCount: 0,
+    });
+    return verdict.outcome === "solved";
+  };
+  const rsPrefix = pod.replace(/-[^-]+$/, "");
+  for (const praefix of [dep.name, rsPrefix]) {
+    if (!solved("kubectl describe pod " + praefix)) {
+      out.push(`${label}: Präfix „${praefix}“ wird nicht als gelöst gewertet (accept muss ${dep.name}(-\\S*)? erlauben)`);
+    }
+  }
+  if (solved("kubectl describe pod " + dep.name + "-geraten")) {
+    out.push(`${label}: geratener Name „${dep.name}-geraten“ gilt als gelöst`);
+  }
+  return out;
+}
+
 /* #603: Gegenstück zum Positiv-Durchspiel oben. Der Durchspiel-Test beweist, dass die
  * Musterlösung akzeptiert wird; hier beweisen wir SYSTEMATISCH JE TERMINAL-AUFGABE, dass
  * eine naheliegende, fachlich falsche Eingabe ABGELEHNT wird (z.B. `delete` statt `get`).
@@ -198,6 +237,7 @@ test("Jede Quest-Terminal-Aufgabe lehnt eine naheliegende Falscheingabe ab (#603
     for (const step of quest.steps) {
       if (step.scenario) sim.mergeScenario(step.scenario);
       if (step.type === "teach") {
+        fehler.push(...describePrefixViolations(sim, step.cmd, quest.id + "/" + step.cmd.id));
         runTask(sim, step.cmd, quest.id + "/" + step.cmd.id);
       } else if (step.type === "drill") {
         for (let i = 0; i < step.count; i++) {
@@ -207,6 +247,7 @@ test("Jede Quest-Terminal-Aufgabe lehnt eine naheliegende Falscheingabe ab (#603
       } else if (step.type === "terminal") {
         for (const task of step.tasks) {
           const label = quest.id + "/" + task.id;
+          fehler.push(...describePrefixViolations(sim, task, label));
           const cmd = norm(resolvePlaceholder(task.solution, sim));
           // Sanity: die aufgelöste Lösung gilt (sonst wäre die Verfälschung nicht aussagekräftig).
           assert.ok(task.accept.some(re => re.test(cmd)), label + ": Lösung matcht Regex nicht: " + cmd);
@@ -267,4 +308,26 @@ test("#891 check-Modus-Wächter ist scharf: jede Regel wird bei gezielter Verfä
   assert.ok(checkModeViolations(sim, { ...good, altSolutions: [cmd] }, cmd, "b").some(m => m.includes("jenseits von accept")));
   // (b) eine kaputte Alternative erreicht das Ziel nicht.
   assert.ok(checkModeViolations(sim, { ...good, altSolutions: ["kubectl get pods"] }, cmd, "b2").some(m => m.includes("erreicht das Ziel nicht")));
+});
+
+test("#1521 describe-Präfix-Wächter ist scharf (Red-Green)", () => {
+  const sim = freshSim();
+  sim.exec("kubectl create deployment kantine --image=nginx");
+  const pod = sim.deployments[0].pods[0].name;
+  const mk = (re: RegExp, extra: Partial<{ solvedBy: "check"; check: () => boolean }> = {}) => ({
+    accept: [re],
+    solution: "kubectl describe pod " + pod,
+    ...extra,
+  });
+  // Alte Regex verlangt `kantine-S+`: der blanke Präfix wird zu Unrecht abgelehnt.
+  const alt = mk(/^kubectl\s+describe\s+pods?\s+kantine-\S+$/);
+  assert.ok(describePrefixViolations(sim, alt, "alt").some(m => m.includes("„kantine“ wird nicht")));
+  // Neue Regex: sauber, auch der geratene Name bleibt ungelöst (Sim-Fehler NotFound).
+  const neu = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/);
+  assert.deepEqual(describePrefixViolations(sim, neu, "neu"), []);
+  // Negativ-Zweig scharf: im Modus check mit immer wahrem Ziel gilt jede Eingabe, auch der geratene Name.
+  const immer = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/, { solvedBy: "check", check: () => true });
+  assert.ok(describePrefixViolations(sim, immer, "immer").some(m => m.includes("geraten")));
+  // Kein Deployment-Pod (nackter Name): kein Präfix-Versprechen.
+  assert.deepEqual(describePrefixViolations(sim, { accept: [/^x$/], solution: "kubectl describe pod nackt" }, "nackt"), []);
 });

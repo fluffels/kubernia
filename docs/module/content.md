@@ -80,6 +80,8 @@ Im Modus `check` sind `check` und `altSolutions` (mindestens ein dokumentierter 
 
 Wächter (`checkModeViolations` in `test/quests.test.ts`, läuft im #603-Story-Loop auf Klonen der Sim): (a) das Ziel ist vor der Lösung nicht erfüllt, (b) jede `altSolutions`-Zeile erreicht es und mindestens eine geht nicht über `accept`, (c) keine naheliegende Falscheingabe erreicht es. Pilot: `juno.json` › `t-j24-3`.
 
+**describe-pod-Aufgaben nehmen einen Präfix an.** Die Sim beschreibt bei `kubectl describe pod <dep>` alle Pods des Deployments ohne Fehler (wie echtes kubectl, und Oles Lehre sagt es so). Darum erlaubt `accept` jeder describe-pod-Aufgabe den Namen ab dem Deployment: `<dep>(-\S*)?`, nicht `<dep>-\S+` und nicht `<dep>\S*` (sonst ginge `kantinen-lager` durch). Ein geratener Name scheitert am Sim-Fehler (NotFound). Der Wächter `describePrefixViolations` in `test/quests.test.ts` prüft das im #603-Story-Loop über das echte `evaluateSubmission` auf der Live-Sim (Snapshot-Klone würfeln die Pod-Suffixe neu): der blanke Präfix und der ReplicaSet-Präfix gelten als gelöst, `<dep>-geraten` nie.
+
 ## Loader-Leaves (`src/content/loader/*`, Split #517)
 
 `src/content/loader.ts` ist das Barrel; die einzelnen Datenquellen liegen je als eigenständiges Leaf unter `src/content/loader/`:
