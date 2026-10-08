@@ -91,6 +91,8 @@ const HOST_HTML = "dist/index.html";
  *   • Phaser-vendor-Chunk (dist/) 1_450_000 (#595, #474).
  *   • #1466 (kubectl get -o wide, Formatprüfung, Service kubernetes: neuer Sim-Code, bewusst und legitim):
  *     Spielcode 530_000 → 540_000, Offline-HTML ohne Content 2_529_000 → 2_545_000 (Ist 530_319 bzw. 2_530_488 B).
+ *   • #1467 (kubectl get -o yaml: YAML-Emitter, Objekt-Bausteine, neuer Sim-Code, bewusst und legitim):
+ *     Spielcode 540_000 → 555_000, Offline-HTML ohne Content 2_545_000 → 2_560_000 (Ist 547_646 bzw. 2_547_572 B).
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -100,13 +102,13 @@ export const BUNDLE_BUDGETS = [
     // Die Offline-Datei enthält den Content inline; er wird über `subtractChunksDir` abgezogen und
     // zählt allein bei den Content-Chunks (ADR 0018). Gemessen: Offline-HTML minus Summe der Chunks.
     subtractChunksDir: CONTENT_CHUNK_DIR_DIST,
-    maxBytes: 2_545_000,
+    maxBytes: 2_560_000,
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 540_000,
+    maxBytes: 555_000,
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
