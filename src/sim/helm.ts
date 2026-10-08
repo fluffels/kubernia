@@ -3,8 +3,8 @@
  *
  * Hier liegt die komplette `helm`-Befehlsfamilie (repo add|update|list, search,
  * create, template, lint, package, install, list, upgrade, rollback, uninstall,
- * status, dependency) plus der helm-eigene `--set <key>=<n>`-Parser (`setValue`, früher
- * `_setValue` – wird nur von helm install/upgrade gebraucht). Aus `sim.ts`
+ * status, dependency) plus der helm-eigene `--set`-Leser (`setReplicas`: nur `replicaCount`,
+ * ganze Zahl ab 0, geprüft vor jeder Mutation – gebraucht von helm install/upgrade). Aus `sim.ts`
  * ausgelagert als freie Funktionen, die die Sim-Instanz als `HelmHost` bekommen –
  * so bleibt der Cluster-Zustand in EINER Hand (die `Sim`-Klasse), die helm-Logik
  * aber in einer eigenen, testbaren Datei. Aufgerufen aus dem `exec`-Dispatch in

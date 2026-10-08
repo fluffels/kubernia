@@ -265,6 +265,8 @@ test("kubeadm join: falscher Endpoint ist 'connection refused', falsche Argument
   assert.match(bare.exec("kubeadm join foo").output!, /weder ein API-Server-Endpoint/);
   assert.match(bare.exec("kubeadm join 10.0.0.10:6443 " + token + " extra.arg").output!, /accepts at most 1 arg/);
   assert.match(bare.exec("kubeadm join --bogus " + token).output!, /Nicht simuliert: das Flag '--bogus'/);
+  assert.match(bare.exec("kubeadm join 10.0.0.10:6443 10.0.0.10:6443 --token " + token).output!, /accepts at most 1 arg\(s\), received 2/);
+  assert.match(bare.exec("kubeadm join " + token + " " + token).output!, /accepts at most 1 arg/);
   assert.equal(bare.nodes.length, 1, "kein Fehlversuch hängt einen Worker an");
   assert.match(bare.exec("kubeadm join --discovery-token-ca-cert-hash sha256:abc " + token).output!, /joined the cluster/i);
 });

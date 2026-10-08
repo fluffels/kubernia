@@ -478,7 +478,6 @@ describe("helm --set: Flag-Leser statt Regex auf der Rohzeile", () => {
     expect(lauf("helm upgrade web bitnami/nginx --set replicaCount=-1", s).out).toContain("must be greater than or equal to 0");
     expect(lauf("helm upgrade web bitnami/nginx --set replicaCount=abc", s).error).toBe(true);
     expect(s.releases[0].revision).toBe(2);
-    expect(lauf("helm install z bitnami/redis --set replicaCount=0").sim.deployments.find(d => d.name.startsWith("z"))?.replicas).toBe(undefined);
   });
   test("install mit 0: Deployment mit 0 Replicas; ungültiger Wert legt nichts an", () => {
     const s = new KQSim({ helmRepos: [{ name: "bitnami", url: "u" }] });
@@ -535,6 +534,76 @@ describe("docker: Bool-Werte werden ausgewertet", () => {
     expect(s.exec("docker ps --all=false").output).not.toContain("Exited");
     expect(s.exec("docker ps --all=true").output).toContain("Exited");
     expect(s.exec("docker ps -a=false").output).not.toContain("Exited");
+  });
+});
+
+/* ---------- #1469, Review-Runde 1: Grenzfälle des Scanners ---------- */
+describe("cliargs: Grenzfälle (Review R1)", () => {
+  test("flagValueOf: der letzte Treffer gewinnt, der Wert-Token wird übersprungen", () => {
+    expect(flagValueOf(["a", "-n", "x", "-n", "y"], ["-n"])).toBe("y");
+    expect(flagValueOf(["a", "-n", "-n", "x"], ["-n"])).toBe("-n");
+    expect(flagValueOf(["a", "--namespace=x", "-n", "y"], ["-n", "--namespace"])).toBe("y");
+    expect(flagValueOf(["a", "-n", "y", "--namespace=x"], ["-n", "--namespace"])).toBe("x");
+  });
+  test("kubectl get pods -n a -n b: der letzte Namespace gilt", () => {
+    const s = freshSim();
+    const sys = s.exec("kubectl get pods -n kube-system").output;
+    expect(sys).not.toBe(s.exec("kubectl get pods -n default").output);
+    expect(s.exec("kubectl get pods -n default -n kube-system").output).toBe(sys);
+    expect(s.exec("kubectl get pods -n kube-system -n default").output).toBe(s.exec("kubectl get pods -n default").output);
+  });
+  test("mehrere Fehler: der ERSTE wird gemeldet, nicht der letzte", () => {
+    const r = parseCall(host, FOLLOW, ["x", "logs", "-o", "-q"], 2) as string;
+    expect(r).toContain("das Flag '-o'");
+    expect(r).not.toContain("das Flag '-q'");
+    expect(lauf("git push --force --rebase", freshSim()).out).not.toContain("--rebase");
+  });
+  test.each(["1", "t", "T", "TRUE", "true", "True"])("Bool-Wert %s ist wahr", (v) => {
+    expect(call(FOLLOW, "--follow=" + v).has("-f")).toBe(true);
+  });
+  test.each(["0", "f", "F", "FALSE", "false", "False"])("Bool-Wert %s ist falsch", (v) => {
+    expect(call(FOLLOW, "-f", "--follow=" + v).has("-f")).toBe(false);
+  });
+  test.each(["yes", "", "2", "tRuE", "on"])("Bool-Wert '%s' ist ungültig", (v) => {
+    expect(parseCall(host, FOLLOW, ["x", "logs", "--follow=" + v], 2)).toContain("strconv.ParseBool");
+  });
+  test("Call: has() auf einem Wert-Flag ist true, value() auf einem Bool-Flag null", () => {
+    expect(call(FOLLOW, "-n", "x").has("-n")).toBe(true);
+    expect(call(FOLLOW, "-f").value("-f")).toBeNull();
+    expect(call(FOLLOW, "-f").values("-f")).toEqual([]);
+  });
+  test("shellTokens: in einfachen Quotes gilt kein Escape", () => {
+    expect(shellTokens("x 'a\\\"b'")).toEqual(["x", 'a\\"b']);
+    expect(shellTokens("x 'a\\\\b'")).toEqual(["x", "a\\\\b"]);
+  });
+});
+
+describe("Review R1: Einzelfälle der Familien", () => {
+  test("docker tag ohne Ziel: Fehler, auch hinter `--`", () => {
+    for (const c of ["docker tag nginx", "docker tag -- nginx", "docker tag"]) {
+      const r = lauf(c);
+      expect(r.error, c).toBe(true);
+      expect(r.out, c).toContain("Quelle und Ziel fehlen");
+    }
+  });
+  test("doppeltes git init ist nur ein Hinweis, das Repo bleibt", () => {
+    const s = freshSim();
+    s.exec("git init");
+    expect(s.exec("git init").output).toContain("schon ein Git-Repository");
+    expect(s.git.initialized).toBe(true);
+  });
+  test("das Ticket-Beispiel: Flags vor den Positionsargumenten verschieben Release und Chart nicht", () => {
+    const s = new KQSim({ helmRepos: [{ name: "bitnami", url: "u" }] });
+    s.exec("helm install web bitnami/nginx");
+    const r = lauf("helm upgrade --set replicaCount=3 web bitnami/nginx", s);
+    expect(r.error).toBe(false);
+    expect(r.out).not.toContain("has no deployed releases");
+    expect(s.deployments.find(d => d.name.startsWith("web"))?.replicas).toBe(3);
+  });
+  test("helm install mit Repo und replicaCount=0 legt ein Deployment mit 0 Replicas an", () => {
+    const s = new KQSim({ helmRepos: [{ name: "bitnami", url: "u" }] });
+    expect(lauf("helm install z bitnami/redis --set replicaCount=0", s).error).toBe(false);
+    expect(s.deployments.find(d => d.name.startsWith("z"))?.replicas).toBe(0);
   });
 });
 

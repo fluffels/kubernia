@@ -168,7 +168,8 @@ function kubeadmJoin(host: KubeadmHost, c: Call): string {
   // dazu optional der Endpoint `host:port` (so druckt ihn `kubeadm init`). Mehr als zwei Argumente gibt es nicht.
   const tokenLike = (a: string) => /^\w+\.\w+$/.test(a);
   const bad = c.args.find(a => !a.includes(":") && !tokenLike(a));
-  if (bad !== undefined || c.args.length > 2) {
+  const tooMany = c.args.filter(a => a.includes(":")).length > 1 || c.args.filter(tokenLike).length > 1;
+  if (bad !== undefined || tooMany) {
     return host._err(bad !== undefined ? 'error: "' + bad + '" ist weder ein API-Server-Endpoint (host:port) noch ein Bootstrap-Token' : "accepts at most 1 arg(s), received " + c.args.length,
       "Muster: kubeadm join 10.0.0.10:6443 --token <token>");
   }

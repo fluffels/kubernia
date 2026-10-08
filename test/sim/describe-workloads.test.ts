@@ -275,6 +275,7 @@ describe("describe <typ> a b: mehrere Namen", () => {
     expect(r.error).toBe(true);
     expect(r.output).toMatch(/^Name:\s+web$/m);
     expect(r.output).toContain('Error from server (NotFound): deployments.apps "nope" not found');
+    expect(run(sim(), "describe deploy nope nada").output).toMatch(/^Error from server \(NotFound\)/);
     expect(r.output!.indexOf("Name:")).toBeLessThan(r.output!.indexOf("NotFound"));
   });
   test("zwei fehlende Namen: je eine NotFound-Zeile; kein Präfix-Treffer bei mehreren Namen", () => {
