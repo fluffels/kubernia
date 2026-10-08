@@ -93,6 +93,8 @@ const HOST_HTML = "dist/index.html";
  *     Spielcode 530_000 → 540_000, Offline-HTML ohne Content 2_529_000 → 2_545_000 (Ist 530_319 bzw. 2_530_488 B).
  *   • #1467 (kubectl get -o yaml: YAML-Emitter, Objekt-Bausteine, neuer Sim-Code, bewusst und legitim):
  *     Spielcode 540_000 → 555_000, Offline-HTML ohne Content 2_545_000 → 2_560_000 (Ist 547_646 bzw. 2_547_572 B).
+ *   • #1471 (ReplicaSet-Historie, rollout history/undo, Persistenz, YAML: neuer Sim-Code, bewusst und legitim):
+ *     Spielcode 555_000 → 560_000 (Ist 555_957 B); Offline-HTML bleibt bei 2_560_000 (Ist 2_555_888 B).
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -108,7 +110,7 @@ export const BUNDLE_BUDGETS = [
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 555_000,
+    maxBytes: 560_000,
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
