@@ -64,6 +64,18 @@ export function externalIP(name: string): string {
 /** Das Alphabet, aus dem Kubernetes Pod-Suffixe und pod-template-hashes zieht (`rand.alphanums`):
  *  keine Vokale und keine Ziffern 0, 1, 3 – so entstehen keine lesbaren Wörter. */
 export const K8S_ALPHANUMS = "bcdfghjklmnpqrstvwxz2456789";
+/** Wie `SimpleNameGenerator` des API-Servers: `<prefix><5 Zeichen>`, die Basis wird auf 58 Zeichen gekürzt
+ *  (63 minus Suffix). Das Suffix ist deterministisch (Basis-27-Ziffern von `hashStr(seed)` über `K8S_ALPHANUMS`,
+ *  kein rng), damit ein generateName-Objekt über Aufrufe stabil bleibt wie `podIP`. */
+export function generatedName(prefix: string, seed: string): string {
+  let h = hashStr(seed);
+  let suffix = "";
+  for (let i = 0; i < 5; i++) {
+    suffix += K8S_ALPHANUMS[h % K8S_ALPHANUMS.length];
+    h = Math.floor(h / K8S_ALPHANUMS.length);
+  }
+  return prefix.slice(0, 58) + suffix;
+}
 /** Länge des zufälligen Pod-Suffixes (`<dep>-<hash>-<suffix>`). */
 export const POD_SUFFIX_LEN = 5;
 
