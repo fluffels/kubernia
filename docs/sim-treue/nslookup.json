@@ -1,0 +1,21 @@
+{
+  "hinweis": "Treue-Matrix nslookup (#1461): Einzelbefehl, je Namensform und Aufrufform bzw. Option zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die BIND-9-Manpage. Methode und Felder: docs/sim-treue.md. Geprüft gegen bind9.readthedocs.io am 2026-10-08.",
+  "stand": "2026-10-08",
+  "befehle": {
+    "nslookup": {"doku":"https://bind9.readthedocs.io/en/latest/manpages.html#std-iscman-nslookup"}
+  },
+  "zeilen": [
+    {"befehl":"nslookup","ziel":"<svc>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nslookup-ausgabe"]},
+    {"befehl":"nslookup","ziel":"<svc>.<ns>","verhalten":"vereinfacht","ausgabe":"vereinfacht","tickets":[1430],"grenzen":["nslookup-ein-namespace","nslookup-ausgabe"]},
+    {"befehl":"nslookup","ziel":"<svc>.<ns>.svc.cluster.local","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nslookup-ausgabe"]},
+    {"befehl":"nslookup","ziel":"ExternalName-Service","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nslookup-ausgabe"]},
+    {"befehl":"nslookup","ziel":"headless Service","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nslookup-ausgabe"]},
+    {"befehl":"nslookup","ziel":"<pod>.<svc>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nslookup-ausgabe"]},
+    {"befehl":"nslookup","ziel":"kubernetes","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nslookup-ausgabe"]},
+    {"befehl":"nslookup","ziel":"externer Name","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["nslookup-nur-cluster","nslookup-ausgabe"]},
+    {"befehl":"nslookup","flag":"<name>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nslookup-ausgabe"]},
+    {"befehl":"nslookup","flag":"<name> <server>","verhalten":"abweichend","ausgabe":"gleich","tickets":[1510]},
+    {"befehl":"nslookup","flag":"-<option>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]},
+    {"befehl":"nslookup","flag":"(ohne Argument)","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["nslookup-nicht-interaktiv","nslookup-ausgabe"]}
+  ]
+}
