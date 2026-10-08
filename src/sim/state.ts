@@ -290,6 +290,9 @@ export interface ClusterNode {
   /** Sim-Tick des Beitritts (nur init/join/terraform, nie gespeichert); fehlt er, gehört der Knoten zum Clusteraufbau. */
   created?: number;
 }
+/** Ein Knoten, wie ihn ein Szenario oder ein Snapshot vorgibt: nur der Name ist Pflicht, der Rest folgt den Cluster-
+ *  Defaults (`provisionNode`). Insbesondere fehlt `version` im Regelfall: die Knoten folgen `NODE_VERSION`. */
+export type NodeSpec = Partial<ClusterNode> & { name: string };
 export interface Container {
   name: string;
   image: string;
@@ -668,7 +671,7 @@ export interface Alert {
 export interface Scenario {
   dockerImages?: string[];
   dockerContainers?: Container[];
-  nodes?: ClusterNode[];
+  nodes?: NodeSpec[];
   // Aufbau-Bogen (#460): „bare metal" – ein leerer/zerstörter Cluster zum Selbst-Aufbauen.
   // `bareMetal: true` heißt: KEINE Nodes (sofern `nodes` nicht eigens vorgegeben ist) und
   // die Control-Plane ist down – dann scheitern alle kubectl-Befehle mit „connection refused",

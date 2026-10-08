@@ -83,7 +83,8 @@ flowchart TB
   v6["v6"]
   v7["v7"]
   v8["v8"]
-  v9[["v9 · aktuell"]]
+  v9["v9"]
+  v10[["v10 · aktuell"]]
   v0 --> v1
   v1 -->|"#35;353"| v2
   v2 -->|"#35;354"| v3
@@ -93,6 +94,7 @@ flowchart TB
   v6 ==>|"#35;574"| v7
   v7 -->|"#35;232"| v8
   v8 ==>|"#35;421"| v9
+  v9 ==>|"#35;1496"| v10
 ```
 
 | Schritt | Ticket | Art | Kurzbeschreibung |
@@ -106,6 +108,7 @@ flowchart TB
 | 6 → 7 | #574 | strukturell | Abkürzungen werden zur Komfort-Kauf-Mechanik: Alt-Werte wandern nach owned und comfortUsage |
 | 7 → 8 | #232 | additiv | Umbelegbare Aktionstasten als settings.keys, Alt-Stand bekommt die Default-Belegung |
 | 8 → 9 | #421 | strukturell | Inventar von Zahl pro Gegenstand auf ItemStack { count } gehoben |
+| 9 → 10 | #1496 | strukturell | Node-Version im Cluster-Snapshot wird abgeleitet: der alte Default v1.30.2 entfällt |
 
 <!-- GEN:save-versionen END -->
 

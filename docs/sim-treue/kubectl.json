@@ -1,7 +1,7 @@
 {
   "hinweis": "Treue-Matrix kubectl (#1440): je Befehl und Ressourcenart bzw. Flag zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die offizielle Doku. Methode und Felder: docs/sim-treue.md. Geprüft gegen kubernetes.io (v1.37) am 2026-10-08.",
   "stand": "2026-10-08",
-  "clusterVersion": "v1.30.2",
+  "clusterVersion": "v1.37.1",
   "befehle": {
     "get": {"doku":"https://kubernetes.io/docs/reference/kubectl/generated/kubectl_get/"},
     "describe": {"doku":"https://kubernetes.io/docs/reference/kubectl/generated/kubectl_describe/"},

@@ -218,10 +218,11 @@ describe("(b) wide: replicasets und nodes (#1483)", () => {
   });
   test("nodes: INTERNAL-IP EXTERNAL-IP OS-IMAGE KERNEL-VERSION CONTAINER-RUNTIME", () => {
     const out = lauf("kubectl get nodes -o wide").out;
+    const KERNEL = NODE_SYSTEM_INFO.kernelVersion + " (amd64)"; // ab v1.36 mit Architektur (#132402)
     expect(kopf(out)).toEqual(["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP", "OS-IMAGE", "KERNEL-VERSION", "CONTAINER-RUNTIME"]);
     const cp = zeile(out, "ahoi-control")!;
-    expect(cp.slice(4)).toEqual([NODE_VERSION, "10.0.0.10", "<none>", NODE_SYSTEM_INFO.osImage, NODE_SYSTEM_INFO.kernelVersion, NODE_SYSTEM_INFO.containerRuntimeVersion]);
-    expect(zeile(out, "ahoi-worker-1")!.slice(6)).toEqual(["<none>", NODE_SYSTEM_INFO.osImage, NODE_SYSTEM_INFO.kernelVersion, NODE_SYSTEM_INFO.containerRuntimeVersion]);
+    expect(cp.slice(4)).toEqual([NODE_VERSION, "10.0.0.10", "<none>", NODE_SYSTEM_INFO.osImage, KERNEL, NODE_SYSTEM_INFO.containerRuntimeVersion]);
+    expect(zeile(out, "ahoi-worker-1")!.slice(6)).toEqual(["<none>", NODE_SYSTEM_INFO.osImage, KERNEL, NODE_SYSTEM_INFO.containerRuntimeVersion]);
   });
   test("die CP-Adresse ist die des Endpoints kubernetes; Worker-IPs sind stabil über Sims und verschieden", () => {
     const sim = new KQSim(szenario());
@@ -417,12 +418,49 @@ describe("(d) Service kubernetes: get endpoints, describe, Selektor", () => {
   });
 });
 
-describe("(d) Version: v1 Endpoints (#1483)", () => {
-  test("get endpoints druckt keine Deprecation-Warnung, solange die Sim unter v1.33 bleibt", () => {
-    expect(lauf("kubectl get endpoints", new KQSim({})).out).not.toMatch(/^Warning:/m);
+describe("(d) Version: v1 Endpoints (#1483, #1496)", () => {
+  const WARNUNG = "Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice";
+  const warnungen = (out: string) => out.match(/^Warning:/gm)?.length ?? 0;
+  test("die Sim simuliert mindestens v1.33, sonst gäbe es die Warnung nicht", () => {
+    expect(Number(NODE_VERSION.split(".")[1])).toBeGreaterThanOrEqual(33);
   });
-  test("WÄCHTER: ab v1.33 warnt der API-Server vor v1 Endpoints (KEP-4974); dann die Warnung nachbilden", () => {
-    const minor = Number(NODE_VERSION.split(".")[1]);
-    expect(minor, "NODE_VERSION " + NODE_VERSION + " ist >= v1.33: Warnung nachbilden (KEP-4974: 'Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice'), Matrixzeile get endpoints prüfen").toBeLessThan(33);
+  test.each([
+    "kubectl get endpoints", "kubectl get ep", "kubectl get endpoint kubernetes", "kubectl get ep/kubernetes", "kubectl get ep -o wide",
+  ])("%s: die Warnung steht genau einmal und als erste Zeile", cmd => {
+    const out = lauf(cmd).out;
+    expect(warnungen(out)).toBe(1);
+    expect(out.split("\n")[0]).toBe(WARNUNG);
+    expect(out).toContain("kubernetes");
+  });
+  test("get svc,ep: die Warnung steht vor beiden Blöcken, einmal", () => {
+    const out = lauf("kubectl get svc,ep").out;
+    expect(warnungen(out)).toBe(1);
+    expect(out.split("\n")[0]).toBe(WARNUNG);
+    expect(out).toContain("service/kubernetes");
+    expect(out).toContain("endpoint/kubernetes");
+  });
+  test("ein doppelt aufgelöster Typ (ep,endpoints) warnt trotzdem nur einmal", () => {
+    expect(warnungen(lauf("kubectl get ep,endpoints").out)).toBe(1);
+  });
+  test("get ep gibtsnicht: Warnung, dann NotFound, Fehler", () => {
+    const r = lauf("kubectl get ep gibtsnicht");
+    expect(r.error).toBe(true);
+    expect(warnungen(r.out)).toBe(1);
+    expect(r.out.split("\n")[0]).toBe(WARNUNG);
+    expect(r.out).toContain('endpoints "gibtsnicht" not found');
+  });
+  test("get ep in einem leeren Namespace: Warnung, dann die Leermeldung", () => {
+    const out = lauf("kubectl get ep -n anderer-ns").out;
+    expect(out.split("\n")[0]).toBe(WARNUNG);
+    expect(out).toContain("No resources found in anderer-ns namespace.");
+  });
+  test.each([
+    "kubectl get svc", "kubectl get all", "kubectl describe svc kubernetes", "kubectl get ep -o yaml", "kubectl get unfug",
+  ])("NEGATIV %s: keine Warnung", cmd => {
+    expect(warnungen(lauf(cmd).out)).toBe(0);
+  });
+  test("NEGATIV: im Bare-Metal-Cluster (connection refused) kommt keine Warnung", () => {
+    const out = lauf("kubectl get ep", new KQSim({ bareMetal: true })).out;
+    expect(warnungen(out)).toBe(0);
   });
 });

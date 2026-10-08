@@ -684,7 +684,7 @@
         "brief": "Wer bedient wirklich?",
         "cmd": {
           "id": "t-endpoints",
-          "intro": "🆕 Neuer Befehl: <code>kubectl get endpoints</code> (kurz <code>ep</code>) – zeigt, welche Pods ein Service <b>tatsächlich</b> bedient. Nur <b>bereite</b> Pods stehen hier.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl get endpoints</code> (kurz <code>ep</code>) – zeigt, welche Pods ein Service <b>tatsächlich</b> bedient. Nur <b>bereite</b> Pods stehen hier. Über der Tabelle steht dabei eine <code>Warning</code>-Zeile: Die ist echt. Seit Kubernetes v1.33 gilt die alte Endpoints-API als abgekündigt, ihr Nachfolger heißt EndpointSlice. Lesen geht weiter, und um zu sehen, wer hinter einem Service steht, ist <code>ep</code> genau richtig.",
           "text": "Schau, welche Endpoints der Service <code>kombuese</code> hat. (Spoiler: <code>&lt;none&gt;</code> – der nicht-bereite Pod fehlt!)",
           "accept": [
             "^kubectl\\s+get\\s+(endpoints|endpoint|ep)\\s+kombuese$"

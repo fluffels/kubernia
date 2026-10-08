@@ -48,7 +48,7 @@
 | `src/ui/hud.ts` | `hudUI` | HUD/Toasts/Alarm, Interaktion, Tastatur-Navigation der Antwort-Buttons. |
 | `src/ui/quest.ts` | `questUI` | Quest-Maschine + Begrüßung/Intro (#288). |
 | `src/ui/dialog.ts` | `dialogUI` | NPC-/Bo-Dialoge. |
-| `src/ui/radio.ts` | `radioUI` | Funkgerät-Terminal (teach/drill/terminal) + freies Üben. |
+| `src/ui/radio.ts` | `radioUI` | Funkgerät-Terminal (teach/drill/terminal) + freies Üben; CLI-Tabellen ohne Umbruch, je Tabelle horizontal scrollbar. |
 | `src/ui/minigame.ts` | `minigameUI` | Stapel-Minispiel. |
 | `src/ui/podpacking.ts` | `podpackingUI` | Pod-Packspiel (#567): Pods per Klick auf Nodes verteilen, Kapazitätsbalken, Pending-Erkennung. |
 | `src/ui/yamlstruct.ts` | `yamlstructUI` | YAML-Bausteine-Minispiel (#568): Zeile wählen (Reihenfolge) → Ebene wählen (Einrückung), Sofort-Feedback + Tab-Distraktor. |
