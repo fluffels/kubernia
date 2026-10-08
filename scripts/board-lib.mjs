@@ -309,7 +309,9 @@ export const STATUS_FIELD_ID = 358708531;
 
 /**
  * Antwort von `gh api --paginate --slurp users/fluffels/projectsV2/1/items` (Liste von Seiten) →
- * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), number, status, title, assignees, state }`. Pur, damit die Form
+ * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), number, status, title, assignees, state, body, labels, autor, blockedBy }`
+ * (die letzten vier liest `naechstes-ticket.mjs`; Feldform `issue_dependencies_summary` belegt per Probe 2026-10-08: 151 von 151 Items tragen
+ * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; ein Wert über 0 wurde noch nie beobachtet). Pur, damit die Form
  * mit einer echten JSON-Probe testbar ist. Bricht laut ab bei unerwarteter Form, statt Nummern still
  * als fehlend zu melden. Drafts und PRs fliegen raus. REST statt GraphQL: das Core-Kontingent ist
  * getrennt vom GraphQL-Kontingent, das bei Board-Arbeit binnen Minuten leer war.
@@ -328,6 +330,11 @@ export function normalizeItems(pages) {
       title: typeof i.content.title === "string" ? i.content.title : "",
       assignees: Array.isArray(i.content.assignees) ? i.content.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
       state: typeof i.content.state === "string" ? i.content.state : "",
+      // Nur für die Auswahl des nächsten Tickets (scripts/naechstes-ticket.mjs, #1460 Z8); ohne die Felder leer bzw. 0.
+      body: typeof i.content.body === "string" ? i.content.body : "",
+      labels: Array.isArray(i.content.labels) ? i.content.labels.map((l) => (typeof l === "string" ? l : l?.name)).filter((n) => typeof n === "string" && n !== "") : [],
+      autor: typeof i.content.user?.login === "string" && i.content.user.login !== "" ? { login: i.content.user.login, type: i.content.user.type ?? "" } : null,
+      blockedBy: Number.isFinite(i.content.issue_dependencies_summary?.blocked_by) ? i.content.issue_dependencies_summary.blocked_by : 0,
     }));
 }
 
@@ -398,7 +405,7 @@ export function loadItems(opts = {}) {
   return normalizeItems(loadItemPages(opts));
 }
 
-/** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues, für die Ticket-Auswahl (naechstes-ticket.mjs). */
+/** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues; `normalizeItems` macht daraus die Items (auch für naechstes-ticket.mjs). */
 export function loadItemPages(opts = {}) {
   return JSON.parse(gh(["api", "--paginate", "--slurp", `users/fluffels/projectsV2/1/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts));
 }

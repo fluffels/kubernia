@@ -5,6 +5,7 @@
  *   - `get pods,svc`        Komma-Liste: ein Block je Typ, NAME mit `kind[.group]/`-Präfix
  *   - `get all`             die Kategorie `all` (Pods, Services, Deployments, ReplicaSets, StatefulSets, Grafana-CRDs)
  *   - `get pod/web svc/db`  Slash-Form
+ *   - `-o wide`             die Zusatzspalten (`GetTable.wide`), geprüft in ./output
  * Die Tabellen selbst liefern die Renderer aus ./inspect (`GET_RENDERERS`); hier liegen nur Lesen der
  * Anfrage, Namespace-Wache, Namensfilter und das Zusammensetzen. inspect.ts importiert dieses Modul nie.
  *
@@ -15,7 +16,8 @@ import type { KubectlHost } from "./host";
 import { GET_RENDERERS, noResourcesIn, type GetTable } from "./inspect";
 import { allNamespaces, foreignNamespace, requestedNamespace } from "./namespace";
 import { allKinds, qualified, resolveKind, type ResourceKind } from "./resources";
-import { notSimulated, positionals, slashRef, SLASH_SINGLE_ERROR, unknownResourceType } from "./args";
+import { callOf, notSimulated, positionals, slashRef, SLASH_SINGLE_ERROR, unknownResourceType } from "./args";
+import { isWide } from "./output";
 
 /** Was verlangt wurde: ein Typ mit den (möglicherweise leeren) gewünschten Namen. */
 interface Request { kind: ResourceKind; names: string[] }
@@ -63,13 +65,20 @@ function parseRequests(host: KubectlHost, pos: string[]): Parsed {
 /** Das Ergebnis eines Typs: die gezeigten Zeilen (mit Kopf) und die nicht gefundenen Namen. */
 interface Block { kind: ResourceKind; table: GetTable; missing: string[]; foreign: string | null }
 
+/** Ohne `-o wide` fallen die Endspalten weg, die nur wide zeigt (`GetTable.wide`). */
+function narrow(full: GetTable, wide: boolean): GetTable {
+  if (wide || !full.wide) return full;
+  const keep = (r: string[]): string[] => r.slice(0, r.length - full.wide!);
+  return { header: keep(full.header), rows: full.rows.map(keep), names: full.names };
+}
+
 /** Rendert einen Typ und wendet Namespace-Wache und Namensfilter an. Ein fremder Namespace liefert
  *  nichts (dort liegt nichts); bei Namen kommen die Zeilen in Eingabereihenfolge, fehlende in `missing`. */
-function renderBlock(host: KubectlHost, t: string[], req: Request): Block {
+function renderBlock(host: KubectlHost, t: string[], req: Request, wide: boolean): Block {
   const entry = GET_RENDERERS.get(req.kind.plural);
   if (!entry) throw new Error("get: kein Renderer für " + req.kind.plural);   // vorher per rendererMissing abgefangen
   const foreign = foreignNamespace(t, req.kind.namespaced, entry.extraNamespaces);
-  const full: GetTable = foreign ? { header: [], rows: [], names: [] } : entry.render(host, t);
+  const full: GetTable = foreign ? { header: [], rows: [], names: [] } : narrow(entry.render(host, t), wide);
   if (req.names.length === 0) return { kind: req.kind, table: full, missing: [], foreign };
   const rows: string[][] = [];
   const names: string[] = [];
@@ -121,7 +130,8 @@ export function kubectlGet(host: KubectlHost, t: string[]): string {
     return host._err("error: a resource cannot be retrieved by name across all namespaces");
   }
 
-  const blocks = parsed.requests.map(r => renderBlock(host, t, r));
+  const wide = isWide(callOf("get", t));
+  const blocks = parsed.requests.map(r => renderBlock(host, t, r, wide));
   const prefixed = blocks.length > 1;
   const parts: string[] = [];
   const errors: string[] = [];

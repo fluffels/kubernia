@@ -75,7 +75,8 @@ export function zaehleTicketMerges(commits, seit = null) {
  * Nennt die Titelzeile `#N`-Referenzen, entscheiden sie allein: eine davon in der Menge = Harness, sonst Spiel (so zählen `docs(adr)`
  * und `fix(ci)` zu einem Harness-Issue als Harness, ein `feat(harness)` zu einem Spiel-Issue als Spiel). Ohne Referenz oder ohne Menge
  * (null) bleibt der Rückfall auf den COMMIT-SCOPE `(harness)`. Bewusste Grenze: ein Commit ohne `#N` im Titel (Handarbeit) zählt nur
- * über den Scope.
+ * über den Scope; ein Titel mit nur einer PR-Nummer zählt als Spiel (keine PR→Issue-Auflösung, #1460 Z6: von 139 Commits tragen 128 Issue und
+ * PR, die 11 mit einer Nummer sind Dependabot, keiner ist ohne; der Scope-Rückfall greift praktisch nie).
  */
 export function istHarnessCommit(commit, harnessIssues = null) {
   const kopf = String(commit?.commit?.message ?? "").split(/\r?\n/, 1)[0];

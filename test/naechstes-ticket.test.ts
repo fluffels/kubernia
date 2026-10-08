@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/naechstes-ticket.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as boardLib from "../scripts/board-lib.mjs";
 
 type Eingabe = { items: unknown[]; offene: Set<number>; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
@@ -12,12 +14,17 @@ const N = raw as unknown as {
   fuehreAus: (argv: string[], io: { lade: () => Eingabe; owner: string }) => { code: number; out: string; err: string };
 };
 
+// Ein Parse-Pfad (#1460 Z8): die Roh-Fixtures (REST-Form) laufen wie im Echtbetrieb durch normalizeItems, waehleNaechstes sieht nur Normalisiertes.
+const normalizeItems = (boardLib as unknown as { normalizeItems: (pages: unknown[][]) => unknown[] }).normalizeItems;
+const norm = (items: unknown[]) => normalizeItems([items]);
+
 const item = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
+  node_id: `PVTI_${nr}`,
   content_type: "Issue",
   fields: [{ name: "Status", value: { name: { raw: status } } }],
   content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
 });
-const frei = (items: unknown[], extra: Partial<Eingabe> = {}) => N.waehleNaechstes({ items, offene: new Set(), owner: "fluffels", ...extra });
+const frei = (items: unknown[], extra: Partial<Eingabe> = {}) => N.waehleNaechstes({ items: norm(items), offene: new Set(), owner: "fluffels", ...extra });
 
 describe("blockerNummern", () => {
   test("mehrfach, case-insensitiv, mehrere Nummern je Zeile; Klammertext zählt nicht", () => {
@@ -100,7 +107,7 @@ describe("fuehreAus", () => {
     },
   });
   test("gefunden: Exit 0, erste Zeile `#nr<TAB>Titel`", () => {
-    const r = N.fuehreAus([], io({ items: [item(7)], offene: new Set() }));
+    const r = N.fuehreAus([], io({ items: norm([item(7)]), offene: new Set() }));
     expect(r.code).toBe(0);
     expect(r.out.split("\n")[0]).toBe("#7\tT7");
   });
@@ -113,7 +120,7 @@ describe("fuehreAus", () => {
     expect(r.err).toContain("kein Netz");
   });
   test("--json: parsebar; der Body erscheint nie in der Ausgabe", () => {
-    const r = N.fuehreAus(["--json"], io({ items: [item(7, { body: "GEHEIMER BODY" })], offene: new Set() }));
+    const r = N.fuehreAus(["--json"], io({ items: norm([item(7, { body: "GEHEIMER BODY" })]), offene: new Set() }));
     expect((JSON.parse(r.out) as Ergebnis).ticket?.nr).toBe(7);
     expect(r.out).not.toContain("GEHEIMER");
   });

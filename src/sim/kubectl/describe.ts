@@ -21,7 +21,7 @@ import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type Resourc
 import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
 import { clusterPods } from "../pods";
 import { clusterPodStatus } from "../podstatus";
-import { endpointAddresses, serviceSelector } from "../endpoints";
+import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
 import { statefulPodClaimName } from "../workload";
 import {
   availableReplicas, describeNode, describeIngress, describeNetworkPolicy, describeRole, describeServiceAccount, describePod,
@@ -106,7 +106,7 @@ function describeDeployment(host: KubectlHost, name: string, kind: ResourceKind)
 // ===== Service =====
 
 function describeService(host: KubectlHost, name: string, kind: ResourceKind): string {
-  const svc: ServiceRes | undefined = host.services.find(s => s.name === name);
+  const svc: ServiceRes | undefined = servicesWithDefault(host).find(s => s.name === name);
   if (!svc) return notFound(host, kind, name);
   const external = isExternalNameService(svc);
   const ip = external ? "" : isHeadlessService(svc) ? "None" : svc.clusterIP;
@@ -214,7 +214,7 @@ export const DESCRIBE_ENTRIES: ReadonlyMap<ResourcePlural, DescribeEntry> = new 
   ["serviceaccounts", { names: fromList(h => h.serviceAccounts), render: describeServiceAccount }],
   ["pods", { names: h => clusterPods(h).map(c => String(c.pod.name)), render: describePod }],
   ["deployments", { names: fromList(h => h.deployments), render: describeDeployment }],
-  ["services", { names: fromList(h => h.services), render: describeService }],
+  ["services", { names: fromList(servicesWithDefault), render: describeService }],
   ["persistentvolumeclaims", { names: fromList(h => h.pvcs), render: describePvc }],
   ["statefulsets", { names: fromList(h => h.statefulSets), render: describeStatefulSet }],
 ]);

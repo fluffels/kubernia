@@ -27,7 +27,7 @@
  * nicht mit Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
  * `scripts/check-` ist Gate-Config (Audit-Kommentar-Pflicht), und
  * für rein doku-strukturelle Wächter gibt es die etablierte test-only-Familie
- * (`test/readme.test.ts`, `test/build-config.test.ts`, `test/forum-board-prio.test.ts`).
+ * (`test/harness/readme.test.ts`, `test/harness/build-config.test.ts`, `test/harness/forum-board-prio.test.ts`).
  *
  * Fence-Logik + Markdown-Inventar importiert aus scripts/check-docdrift.mjs (EINE
  * Quelle der Wahrheit für „was in diesem Repo als Codeblock gilt" bzw. „welche

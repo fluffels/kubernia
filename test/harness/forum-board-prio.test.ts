@@ -1,3 +1,4 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Board-Top der Forum-Action (#644/#747) — struktureller Guard (Fitness-Function).
  *
  * Die Action forum-inbox.yml fügt beim Anlegen eines neuen Inbox-Issues das Issue
@@ -16,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const yml = readFileSync(
-  fileURLToPath(new URL("../.github/workflows/forum-inbox.yml", import.meta.url)),
+  fileURLToPath(new URL("../../.github/workflows/forum-inbox.yml", import.meta.url)),
   "utf8",
 );
 

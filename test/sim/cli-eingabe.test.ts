@@ -7,7 +7,7 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkFlags, positionalArgs, flagValueOf, parseCall, shellTokens, subEntry, notSimulated, specOfSub, type ArgSpec,
+  flag, checkedFlag, checkFlags, positionalArgs, flagValueOf, parseCall, shellTokens, subEntry, notSimulated, specOfSub, type ArgSpec,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
@@ -18,6 +18,42 @@ const PF: ArgSpec = {
   hints: { "-o": "Format gibt es nicht." },
 };
 const GO: ArgSpec = { cmd: "tf apply", style: "goflag", flags: [flag(true, "-var-file"), flag(false, "-auto-approve")] };
+
+describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
+  const seen: string[] = [];
+  const spec: ArgSpec = {
+    cmd: "x get",
+    flags: [checkedFlag((_h, v) => { seen.push(v); return v === "bad" ? "FEHLER" : null; }, "-o", "--output"), flag(false, "-A")],
+  };
+  const run = (...t: string[]) => { seen.length = 0; return checkFlags(host, spec, ["x", "get", ...t], 2); };
+
+  test.each([
+    [["-o", "x"], "x"], [["-o=x"], "x"], [["-ox"], "x"], [["--output", "x"], "x"], [["--output=x"], "x"],
+    [["-o="], ""], [["--output="], ""],
+  ])("der Wert kommt in jeder Schreibweise an: %j", (t, wert) => {
+    expect(run(...t)).toBeNull();
+    expect(seen).toEqual([wert]);
+  });
+  test("ein Fehler der Prüfung wird wörtlich durchgereicht (auch in Kette und mit Folgetoken)", () => {
+    expect(run("-o", "bad")).toBe("FEHLER");
+    expect(run("--output=bad")).toBe("FEHLER");
+  });
+  test.each([["-Ao", "x"], ["-Aox"], ["-Ao=x"]])("ein geprüftes Wert-Flag in einer Kette (%j) wird gelesen und geprüft, nie still verworfen", (...t) => {
+    expect(run(...t.flat().filter(Boolean))).toBeNull();
+    expect(seen).toEqual(["x"]);
+    expect(run("-Ao", "bad")).toBe("FEHLER");
+  });
+  test("ein Wert-Flag OHNE Prüfung bleibt in der Kette erlaubt (-An x)", () => {
+    const s: ArgSpec = { cmd: "x", flags: [flag(true, "-n"), flag(false, "-A")] };
+    expect(checkFlags(host, s, ["x", "get", "-An", "a"], 2)).toBeNull();
+  });
+  test("ohne das Flag kein Aufruf; ein fehlender Wert bleibt 'flag needs an argument' ohne Aufruf", () => {
+    expect(run("-A", "pods")).toBeNull();
+    expect(seen).toEqual([]);
+    expect(run("-o")).toContain("flag needs an argument: 'o' in -o");
+    expect(seen).toEqual([]);
+  });
+});
 
 describe("cliargs: pflag-Stil", () => {
   test.each([

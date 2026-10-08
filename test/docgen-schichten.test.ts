@@ -360,6 +360,13 @@ describe("pruefeCruiseArgs: Cruise-Ziel und Collapse folgen der Quellwurzel (#14
     assert.match(pruefe(gut, { ...m, quellwurzel: "lib/" }) ?? "", /passt nicht/);
     assert.equal(pruefe([gut[0], "lib", "--collapse", "^(lib|node_modules)/[^/]+/"], { ...m, quellwurzel: "lib/" }), null);
   });
+  test("Sonderzeichen in der Quellwurzel werden im Collapse-Muster escaped (#1460 Z7c)", () => {
+    const sonder = { ...m, quellwurzel: "a.b/" };
+    const bin = gut[0];
+    assert.equal(pruefe([bin, "a.b", "--collapse", String.raw`^(a\.b|node_modules)/[^/]+/`], sonder), null);
+    // das unescapte Muster (Punkt als Joker) ist NICHT das erwartete und wird gemeldet
+    assert.match(pruefe([bin, "a.b", "--collapse", "^(a.b|node_modules)/[^/]+/"], sonder) ?? "", /--collapse/);
+  });
   test("der Ist-Generator bricht bei einer unpassenden Config ab, bevor er cruist", () => {
     const root = fixtureMitModell(m);
     assert.throws(() => api.schichtenIstGenerator({ rootDir: root, config: cfg({ cruise: [gut[0], "lib"] }) }), /passt nicht zur Quellwurzel/);

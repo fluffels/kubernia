@@ -1,3 +1,4 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* #495: Coverage wird gemessen UND pro Schicht gegatet — diese Fitness-Function hält die
  * Coverage-Config ehrlich (analog verify-script/docmap/docdrift: struktureller Wächter, kein
  * Verhaltens-Test).
@@ -26,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { LAYERS, COVERAGE_GLOBS, layerOf } = require("../scripts/layers.cjs") as {
+const { LAYERS, COVERAGE_GLOBS, layerOf } = require("../../scripts/layers.cjs") as {
   LAYERS: { PRESENTATION: string; APPLICATION: string; ENTRY: string; DOMAIN: string };
   COVERAGE_GLOBS: Record<string, string>;
   layerOf: (file: string) => string;
@@ -39,7 +40,7 @@ const { LAYERS, COVERAGE_GLOBS, layerOf } = require("../scripts/layers.cjs") as 
 const picomatch = require("picomatch") as (glob: string, opts?: { dot?: boolean }) => (path: string) => boolean;
 
 const readRepo = (rel: string) =>
-  readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+  readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 const pkg = JSON.parse(readRepo("package.json")) as {
   scripts: Record<string, string>;
@@ -53,7 +54,7 @@ const ci = readRepo(".github/workflows/ci.yml");
 function collectSrcTs(): string[] {
   const out: string[] = [];
   const walk = (rel: string) => {
-    for (const ent of readdirSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), { withFileTypes: true })) {
+    for (const ent of readdirSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), { withFileTypes: true })) {
       const child = `${rel}/${ent.name}`;
       if (ent.isDirectory()) walk(child);
       else if (ent.isFile() && ent.name.endsWith(".ts")) out.push(child);

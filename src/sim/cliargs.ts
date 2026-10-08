@@ -24,10 +24,19 @@ export interface ErrHost { _err(msg: string, tip?: string): string }
 
 export type FlagStyle = "pflag" | "goflag";
 
-export interface FlagSpec { readonly names: readonly string[]; readonly takesValue: boolean }
+export interface FlagSpec {
+  readonly names: readonly string[];
+  readonly takesValue: boolean;
+  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `checkFlags`/`parseCall`
+   *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`, in einer Kette `-Ao wide`). */
+  readonly check?: (host: ErrHost, value: string) => string | null;
+}
 
 /** Ein Flag der Tabelle (`flag(true, "-n", "--namespace")`). */
 export const flag = (takesValue: boolean, ...names: string[]): FlagSpec => ({ names, takesValue });
+
+/** Ein Wert-Flag mit Wertprüfung. */
+export const checkedFlag = (check: NonNullable<FlagSpec["check"]>, ...names: string[]): FlagSpec => ({ names, takesValue: true, check });
 
 /** Die Flag-Tabelle EINES Unterbefehls. */
 export interface ArgSpec {
@@ -179,11 +188,21 @@ function scanErrorText(host: ErrHost, spec: ArgSpec, e: ScanError): string {
   return host._err('invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseBool: parsing "' + e.value + '": invalid syntax');
 }
 
-/** Prüft alle Flags eines Unterbefehls ab Token `from`: unbekannte (nicht simulierte), Wert-Flags ohne Wert und
- *  ungültige Bool-Werte. `null` = alles bekannt; sonst die fertige Fehlerausgabe. */
+/** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool) oder der erste Wertprüfer, der anschlägt. */
+function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
+  if (w.error) return scanErrorText(host, spec, w.error);
+  for (const h of w.hits) {
+    const invalid = h.value !== null && h.spec.check?.(host, h.value);
+    if (invalid) return invalid;
+  }
+  return null;
+}
+
+/** Prüft alle Flags eines Unterbefehls ab Token `from`: unbekannte (nicht simulierte), Wert-Flags ohne Wert,
+ *  ungültige Bool-Werte und Werte, die eine `check`-Funktion ablehnt. `null` = alles bekannt; sonst die fertige
+ *  Fehlerausgabe. */
 export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): string | null {
-  const w = walk(spec, t, from);
-  return w.error ? scanErrorText(host, spec, w.error) : null;
+  return firstError(host, spec, walk(spec, t, from));
 }
 
 /** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags; hinter `--` alles). */
@@ -221,7 +240,7 @@ function makeCall(w: Walk): Call {
 /** Prüft die Flags (wie `checkFlags`) und liest dann die Eingabe: `Call` oder die fertige Fehlerausgabe. */
 export function parseCall(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): Call | string {
   const w = walk(spec, t, from);
-  return w.error ? scanErrorText(host, spec, w.error) : makeCall(w);
+  return firstError(host, spec, w) ?? makeCall(w);
 }
 
 /** Wie `parseCall`, aber ohne Fehlerpfad: für Stellen, an denen die Prüfung schon gelaufen ist (kubectl). */

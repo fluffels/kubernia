@@ -55,7 +55,7 @@ const NETWORK_DEPENDENT_GATES = new Set(["check:doctickets", "check:tseslint-ts7
 // CI-Artefakte, die daher AUSDRÜCKLICH NICHT in die `verify`-Kette gehören. #612:
 // check:duplication (jscpd) ist ein reiner Copy-Paste-Report ohne `threshold`; ein
 // Platz in `verify` würde ihn zum harten Gate machen — genau das soll er nicht sein
-// (die weiche Auslegung sichert test/duplication-config.test.ts).
+// (die weiche Auslegung sichert test/harness/duplication-config.test.ts).
 const SOFT_NONBLOCKING_GATES = new Set(["check:duplication"]);
 
 // Die build-freien Einzel-Gates, die `verify` fährt: jedes `check:*` (außer den

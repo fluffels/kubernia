@@ -64,7 +64,7 @@ Wer **kein Node lokal installieren** will (oder eine garantiert reproduzierbare 
 
 - **VS Code Dev Container:** Ordner öffnen → „Reopen in Container". VS Code baut die Umgebung aus [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json) (Node 22 + `gh`-CLI), installiert die Abhängigkeiten automatisch und leitet Port 5173 weiter; den Dev-Server dann wie gewohnt mit `npm run dev` starten.
 
-> Beides ist reine Entwicklungs-Tooling. Node-Version (Node 22, aus [`.nvmrc`](.nvmrc)) und Dev-Port bleiben über einen Test ([`test/devcontainer.test.ts`](test/devcontainer.test.ts)) mit Container-Konfig und CI konsistent.
+> Beides ist reine Entwicklungs-Tooling. Node-Version (Node 22, aus [`.nvmrc`](.nvmrc)) und Dev-Port bleiben über einen Test ([`test/harness/devcontainer.test.ts`](test/harness/devcontainer.test.ts)) mit Container-Konfig und CI konsistent.
 
 ### Dev-Panel als Docker-Image (Passwort zur Laufzeit, #334)
 

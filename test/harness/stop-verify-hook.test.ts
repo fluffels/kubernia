@@ -437,6 +437,7 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
     assert.match(r.reason ?? "", /kq-1404/);
     assert.match(r.reason ?? "", /PID 4711 python3\.exe/);
     assert.match(r.reason ?? "", /Stop-Process -Id <pid>/);
+    assert.match(r.reason ?? "", /taskkill \/\/PID <pid> \/\/F/, "Git-Bash-Weg");
     assert.ok(!/Stop-Process -Name/.test(r.reason ?? ""), "kein pauschaler Kill per Name");
   });
 
@@ -456,7 +457,7 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
 describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
   // Parallele Agenten laufen in anderen Worktrees; ein Kill per Name (`Stop-Process -Name`, `taskkill /IM`) beendet ihre
   // Prozesse mit. Erlaubt ist nur der gezielte Kill per PID (`Stop-Process -Id`).
-  const VERBOTEN = /Stop-Process\s+-Name\b|taskkill\s+\/IM\b/i;
+  const VERBOTEN = /Stop-Process\s+-Name\b|taskkill\s+\/{1,2}IM\b/i;
 
   /** Texte der Agenten-Anweisungen, Docs, Hooks und Skripte, in denen eine solche Anleitung stehen könnte. */
   async function texte(): Promise<Record<string, string>> {
@@ -489,8 +490,10 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
   test("Red-Green: das Muster erkennt beide Formen und lässt den Kill per PID zu", () => {
     assert.ok(VERBOTEN.test("pwsh: Stop-Process -Name node -Force"));
     assert.ok(VERBOTEN.test("cmd: taskkill /IM node.exe /F"));
+    assert.ok(VERBOTEN.test("Git-Bash: taskkill //IM node.exe //F"));
     assert.ok(VERBOTEN.test("stop-process  -name python"));
     assert.ok(!VERBOTEN.test("Stop-Process -Id 4711"));
+    assert.ok(!VERBOTEN.test("taskkill //PID 4711 //F"));
     assert.ok(!VERBOTEN.test("nie per Name (Stop-Process -Id <pid>)"));
   });
 });

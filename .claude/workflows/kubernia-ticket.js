@@ -502,7 +502,7 @@ const LENS_QUELLE = [
       'Echte Gate-Sabotage bei abgeleiteten Regeln: leitet der Diff Gate-Regeln aus einem Modell ab (z.B. die Schichtregeln von check:arch aus SCHICHT_MODELL), verlangt die Lens einen Test, der das echte Gate laufen lässt (verbotene Kante in eine Temp-Fixture einschleusen, das Gate muss rot werden, eine erlaubte Kante grün bleiben). Ein Nachbau des Matchers im Test genügt nicht: er beweist nur, dass die Ableitung richtig rechnet, nicht, dass das Gate sie anwendet.',
       'Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test, ebenso sicht-/spielbare Content-Daten (Quests, Dialoge) — ist das passiert und belegt, wie im Plan vorgesehen (kqDev.state-Auszug, Screenshot-Pfad)?',
     ],
-    hinweis: 'Die Sabotage (Assertion oder Fix kurz verfälschen, rot sehen, zurücksetzen) ist die EINE Ausnahme von „du änderst nichts“: sie ist erlaubt und bei Zweifel Pflicht, denn sie ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT wegoptimiert. Fahre sie NIE im Feature-Worktree, sondern je Runde in einem eigenen Lens-Worktree: git -C <worktree> worktree add --detach <hauptrepo>/.claude/worktrees/kq-<nr>-lens-r<runde> <erwarteter HEAD>, darin einmal npm ci, Tests mit absoluten Pfaden (npm --prefix <lens-worktree> test -- <datei>, kein cd). Danach git worktree remove --force auf den Lens-Worktree und belege: git worktree list ohne den Pfad, Test-Path False, dazu mit einem leeren git status --porcelain im Feature-Worktree.',
+    hinweis: 'Die Sabotage (Assertion oder Fix kurz verfälschen, rot sehen, zurücksetzen) ist die EINE Ausnahme von „du änderst nichts“: sie ist erlaubt und bei Zweifel Pflicht, denn sie ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT wegoptimiert. Fahre sie NIE im Feature-Worktree, sondern je Runde in einem eigenen Lens-Worktree: git -C <worktree> worktree add --detach <hauptrepo>/.claude/worktrees/kq-<nr>-lens-r<runde> <erwarteter HEAD>, darin einmal npm ci, Tests mit absoluten Pfaden (npm --prefix <lens-worktree> test -- <datei>, kein cd). Danach git worktree remove --force auf den Lens-Worktree und belege: git worktree list ohne den Pfad, Test-Path False (Git-Bash: test -e scheitert), dazu mit einem leeren git status --porcelain im Feature-Worktree.',
     regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.',
   },
   {
@@ -874,9 +874,9 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   .claude/worktrees/kq-${nr}, Branch feature/kq-${nr}-<slug>. Im frischen Worktree
   einmal npm ci (schreibt den Lockfile nie, #1119). Kein Junction/Symlink auf fremde node_modules.
 - § Worktree entfernen auf Windows, Falle 2: arbeite mit absoluten Pfaden und cd NICHT
-  in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen.
+  in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen. Skripte nie über stdin starten (python -, node -): per Write ablegen und node <pfad> starten.
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,
-  § Tests gegen False Positives absichern (Red-Green).
+  § Tests gegen False Positives absichern (Red-Green). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → gebündeltes Issue.
@@ -1264,7 +1264,7 @@ AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionssc
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
 Auto-Merge setzen, CI abwarten.
 ${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
-Vor dem Push: setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
+Vor dem Push: verschärft der Diff ein Gate oder Schema, merge einmal origin/main ein (nur konfliktfrei, sonst ergebnis="fehler") und fahre das betroffene Gate erneut (#1449). Dann setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
 zwei Zeilen als Commit-Message, unverändert${shaHinweis}:
 ${nachweis}
 (leerer Commit mit --allow-empty, die Zeilen am Zeilenanfang). Prüfe ihn lokal mit
@@ -1377,13 +1377,13 @@ numerierten Punkte inkl. Verify-Schritt #908) und § „Eigener Worktree von fri
 Zu entfernen: Worktree ${worktree}, Branch ${branch} und alle übrig gebliebenen Lens-Worktrees .claude/worktrees/kq-${nr}-lens-* (Sabotage-Proben der Test-Lens; git worktree list prüft, git worktree remove --force entfernt).
 
 Zwei Dinge, die hier regelmäßig schiefgehen und in der Doku stehen: laufende
-Dev-Server und Hilfsserver erst per PID beenden (Stop-Process -Id, nie per Name; pkill aus Git-Bash erwischt
+Dev-Server und Hilfsserver erst per PID beenden (Stop-Process -Id <pid> oder aus Git-Bash taskkill //PID <pid> //F, nie per Name; pkill aus Git-Bash erwischt
 Windows-Prozesse nicht), und aus dem Worktree heraus arbeiten statt hinein-cd'en. Auch Hintergrund-Tasks (Monitor/run_in_background) mit cwd im Worktree halten den Ordner fest: vorher mit TaskStop beenden.
 
 Danach verifizieren — schlägt EINER der Checks fehl, stoppen und laut melden statt
 stillschweigend weitermachen:
 - git worktree list zeigt .claude/worktrees/kq-${nr} NICHT mehr
-- PowerShell Test-Path auf den Worktree-Pfad liefert False
+- Test-Path auf den Worktree-Pfad liefert False (Git-Bash: test -e scheitert)
 - gh issue view ${nr} zeigt das Issue als geschlossen (das Closes #${nr} im PR
   schließt es automatisch)
 

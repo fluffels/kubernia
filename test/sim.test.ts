@@ -81,7 +81,7 @@ test("help-Format ist CLI-typisch: ein Befehl pro Zeile, ausgerichtete Beschreib
   // OHNE 'kubectl'.
   assert.doesNotMatch(descLine!, /kubectl/, "Folgezeile trägt den Familiennamen NICHT erneut");
   // Beschreibung ist von der Verwendung getrennt (mehrere Leerzeichen als Spaltenabstand).
-  assert.match(getLine!, /get <resource> {2,}\S/, "Beschreibung in ausgerichteter Spalte");
+  assert.match(getLine!, /get <resource> \[-o wide\] {2,}\S/, "Beschreibung in ausgerichteter Spalte");
 });
 
 test("snapshot/restore erhält den kompletten Zustand", () => {
