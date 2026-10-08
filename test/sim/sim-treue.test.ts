@@ -65,7 +65,7 @@ function schemaProbleme(familie: string, roh: unknown, grenzIds: string[], clust
   if (!istObj(roh)) return [`${familie}: Wurzel ist kein Objekt`];
   const p: string[] = unbekannte(roh, DATEI_SCHLUESSEL).map(k => `${familie}: unbekannter Datei-Schlüssel ${k}`);
   for (const k of DATEI_PFLICHT) if (roh[k] === undefined) p.push(`${familie}: Datei-Schlüssel ${k} fehlt`);
-  if (roh.clusterVersion !== undefined && roh.clusterVersion !== clusterVersion) p.push(`${familie}: clusterVersion ${String(roh.clusterVersion)} ≠ ${clusterVersion}`);
+  if (roh.clusterVersion !== undefined && roh.clusterVersion !== clusterVersion) p.push(`${familie}: clusterVersion ${JSON.stringify(roh.clusterVersion)} ≠ ${clusterVersion}`);
   if (istObj(roh.befehle)) {
     for (const [b, e] of Object.entries(roh.befehle)) {
       if (!istObj(e)) { p.push(`befehle.${b}: kein Objekt`); continue; }
@@ -164,7 +164,7 @@ describe("Schema-Wächter: Negativfälle (synthetisch)", () => {
     ["Sammel-Hosting als Subdomain", datei({ befehle: { x: { doku: "https://evil.readthedocs.io/x" } } }), /Doku-Host nicht erlaubt: evil\.readthedocs\.io/],
     ["Subdomain eines erlaubten Hosts", datei({ befehle: { x: { doku: "https://x.kubernetes.io/y" } } }), /Doku-Host nicht erlaubt: x\.kubernetes\.io/],
     ["Doku-Link in der Zeile", datei({}, [zeile({ doku: "https://example.org/" })]), /Doku-Host nicht erlaubt/],
-    ["clusterVersion ≠ NODE_VERSION", datei({ clusterVersion: "v0.0.1" }), /clusterVersion v0\.0\.1/],
+    ["clusterVersion ≠ NODE_VERSION", datei({ clusterVersion: "v0.0.1" }), /clusterVersion "v0\.0\.1"/],
   ])("%s ist rot", (_n, roh, muster) => {
     expect(probleme(roh).join("\n")).toMatch(muster);
   });
