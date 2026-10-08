@@ -174,12 +174,12 @@
         "cmd": {
           "id": "t-describe",
           "intro": "🆕 Neuer Befehl: <code>kubectl describe pod <name></code> – alle Details + Ereignisse.",
-          "text": "Beschreibe einen <code>kantine</code>-Pod. (Name per <code>kubectl get pods</code> holen und abtippen – das Abtippen trainiert!)",
+          "text": "Beschreibe einen <code>kantine</code>-Pod. (Name per <code>kubectl get pods</code> holen und abtippen – das Abtippen trainiert!) Nur der Anfang bis zum Deployment-Namen (also <code>kantine</code>) geht auch, dann bekommst du alle kantine-Pods.",
           "accept": [
-            "^kubectl\\s+describe\\s+pods?\\s+kantine-\\S+$"
+            "^kubectl\\s+describe\\s+pods?\\s+kantine(-\\S*)?$"
           ],
           "solution": "kubectl describe pod <name aus get pods>",
-          "why": "<code>get</code> zeigt die Übersicht, <code>describe</code> die volle Akte samt Events – bei der Fehlersuche willst du das Warum, nicht nur den Status. Weil jeder Pod-Name ein zufälliges Anhängsel trägt, tippst du ihn aus der Liste ab, statt zu raten.",
+          "why": "<code>get</code> zeigt die Übersicht, <code>describe</code> die volle Akte samt Events – bei der Fehlersuche willst du das Warum, nicht nur den Status. Weil jeder Pod-Name ein zufälliges Anhängsel trägt, tippst du ihn aus der Liste ab, statt zu raten: ein erfundener Name findet keinen Pod (NotFound).",
           "hint": "Erst kubectl get pods, dann kubectl describe pod <name>."
         }
       },
