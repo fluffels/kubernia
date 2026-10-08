@@ -812,3 +812,145 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
     assert.ok(!g.befehle.some((c) => c.includes("worktree remove")));
   });
 });
+
+describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
+  type DateiModule = {
+    localWorktreeFiles: (worktreesDir: string, deps?: object) => string[];
+    sortiereDateien: (
+      worktreesDir: string,
+      dateien: string[],
+      registered: Set<string>,
+      deps?: object,
+    ) => { verwaist: string[]; jung: string[]; fremd: string[] };
+    entferneVerwaisteDateien: (
+      mainRoot: string,
+      worktreesDir: string,
+      names: string[],
+      deps?: object,
+    ) => { removed: string[]; errors: string[]; refused: { name: string; reason: string }[] };
+  };
+  const m = cleanupModule as unknown as DateiModule;
+  const MAIN = "/root";
+  const WT = "/root/.claude/worktrees";
+  const JETZT = 10_000_000;
+  const alt = (p: string) => ({ mtimeMs: p.includes("jung") ? JETZT - 1000 : JETZT - MIN_ORPHAN_AGE_MS - 1 });
+  const porcelain = (pfade: string[]) => pfade.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n");
+
+  test("localWorktreeFiles: nur reguläre Dateien, keine Ordner oder Links; Fake ohne isFile wirft nicht", () => {
+    const deps = {
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "a.bak", isFile: () => true },
+        { name: "ordner", isFile: () => false },
+        { name: "link", isFile: () => false, isSymbolicLink: () => true },
+        { name: "fake-ohne-isfile" },
+      ],
+    };
+    assert.deepEqual(m.localWorktreeFiles(WT, deps), ["a.bak"]);
+    assert.deepEqual(m.localWorktreeFiles(WT, { existsSync: () => false }), []);
+  });
+
+  test("sortiereDateien: verwaist, jung, fremd; registrierter Worktree schützt seine Dateien", () => {
+    const registered = new Set([`${WT}/kq-5`]);
+    const r = m.sortiereDateien(WT, ["kq-1361-lens-r2-orig.bak", "kq-9-jung.bak", "kq-5-notiz.txt", "notizen.txt"], registered, { now: JETZT, statSync: alt });
+    assert.deepEqual(r.verwaist, ["kq-1361-lens-r2-orig.bak"]);
+    assert.deepEqual(r.jung, ["kq-9-jung.bak"]);
+    assert.deepEqual(r.fremd, ["notizen.txt"]);
+  });
+
+  test("sortiereDateien: kq-13610-x gehört zu kq-13610, nicht zu kq-1361", () => {
+    const r = m.sortiereDateien(WT, ["kq-13610-x.bak"], new Set([`${WT}/kq-1361`]), { now: JETZT, statSync: alt });
+    assert.deepEqual(r.verwaist, ["kq-13610-x.bak"]);
+    const r2 = m.sortiereDateien(WT, ["kq-13610-x.bak"], new Set([`${WT}/kq-13610`]), { now: JETZT, statSync: alt });
+    assert.deepEqual(r2.verwaist, []);
+    assert.deepEqual(m.sortiereDateien(WT, ["kq-1361x.bak"], new Set(), { now: JETZT, statSync: alt }).fremd, ["kq-1361x.bak"]);
+  });
+
+  test("diagnoseOrphans liefert die Dateilisten; Ordner bleiben getrennt", () => {
+    const deps = {
+      now: JETZT,
+      execSync: () => porcelain([MAIN]),
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "kq-7-x.bak", isDirectory: () => false, isFile: () => true },
+        { name: "kq-8-jung.bak", isDirectory: () => false, isFile: () => true },
+        { name: "fremd.txt", isDirectory: () => false, isFile: () => true },
+      ],
+      statSync: alt,
+    };
+    const r = diagnoseOrphans(MAIN, deps) as unknown as { orphanFiles: string[]; youngFiles: string[]; foreignFiles: string[]; orphans: string[] };
+    assert.deepEqual(r.orphanFiles, ["kq-7-x.bak"]);
+    assert.deepEqual(r.youngFiles, ["kq-8-jung.bak"]);
+    assert.deepEqual(r.foreignFiles, ["fremd.txt"]);
+    assert.deepEqual(r.orphans, []);
+  });
+
+  test("diagnoseOrphans: Dateien eines registrierten Worktrees sind weder verwaist noch fremd (Verdrahtung der Registrierung)", () => {
+    const deps = {
+      now: JETZT,
+      execSync: () => porcelain([MAIN, `${WT}/kq-5`]),
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "kq-5", isDirectory: () => true, isFile: () => false },
+        { name: "kq-5-notiz.bak", isDirectory: () => false, isFile: () => true },
+      ],
+      statSync: alt,
+    };
+    const r = diagnoseOrphans(MAIN, deps) as unknown as { orphanFiles: string[]; youngFiles: string[]; foreignFiles: string[] };
+    assert.deepEqual(r.orphanFiles, []);
+    assert.deepEqual(r.youngFiles, []);
+    assert.deepEqual(r.foreignFiles, []);
+  });
+
+  const reguLaer = { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false };
+
+  test("entferneVerwaisteDateien löscht ohne recursive", () => {
+    const gerufen: Array<[string, object]> = [];
+    let da = true;
+    const deps = {
+      lstatSync: () => reguLaer,
+      rmSync: (p: string, o: object) => {
+        gerufen.push([p, o]);
+        da = false;
+      },
+      existsSync: () => da,
+    };
+    const r = m.entferneVerwaisteDateien(MAIN, WT, ["kq-7-x.bak"], deps);
+    assert.deepEqual(r.removed, ["kq-7-x.bak"]);
+    assert.equal(gerufen.length, 1);
+    assert.equal((gerufen[0][1] as { recursive?: boolean }).recursive, undefined);
+  });
+
+  test("Schutzgurt lehnt Link, Ordner, Fremdpfad und Trenner ab, ohne zu löschen", () => {
+    let gerufen = 0;
+    const basis = { rmSync: () => gerufen++, existsSync: () => true };
+    const link = m.entferneVerwaisteDateien(MAIN, WT, ["kq-1-a.bak"], { ...basis, lstatSync: () => ({ ...reguLaer, isSymbolicLink: () => true }) });
+    const ordner = m.entferneVerwaisteDateien(MAIN, WT, ["kq-1-b.bak"], { ...basis, lstatSync: () => ({ ...reguLaer, isFile: () => false, isDirectory: () => true }) });
+    const fremdPfad = m.entferneVerwaisteDateien(MAIN, "/anderswo/worktrees", ["kq-1-c.bak"], { ...basis, lstatSync: () => reguLaer });
+    const trenner = m.entferneVerwaisteDateien(MAIN, WT, ["../x.bak", "a/b.bak"], { ...basis, lstatSync: () => reguLaer });
+    assert.equal(link.refused.length, 1);
+    assert.equal(ordner.refused.length, 1);
+    assert.equal(fremdPfad.refused.length, 1);
+    assert.equal(trenner.refused.length, 2);
+    assert.equal(gerufen, 0);
+  });
+
+  test("gescheiterte Löschung (Datei bleibt, rmSync wirft) landet in errors", () => {
+    const deps = {
+      lstatSync: () => reguLaer,
+      rmSync: () => {
+        throw new Error("EBUSY");
+      },
+      existsSync: () => true,
+    };
+    const r = m.entferneVerwaisteDateien(MAIN, WT, ["kq-7-x.bak"], deps);
+    assert.deepEqual(r.errors, ["kq-7-x.bak"]);
+    assert.deepEqual(r.removed, []);
+  });
+
+  test("assertSafeOrphanTarget für Dateien verlangt eine reguläre Datei", () => {
+    const f = assertSafeOrphanTarget as unknown as (a: string, b: string, c: string, d: object, e: string) => { safe: boolean };
+    assert.equal(f(MAIN, WT, "kq-1-a.bak", { lstatSync: () => reguLaer }, "file").safe, true);
+    assert.equal(f(MAIN, WT, "kq-1-a.bak", { lstatSync: () => ({ ...reguLaer, isFile: () => false }) }, "file").safe, false);
+  });
+});

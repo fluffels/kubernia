@@ -1,3 +1,8 @@
+# Alle Textdateien mit LF auschecken (#1476): Doku-Wächter lesen Dateien zeilenweise und
+# sähen unter core.autocrlf=true sonst CRLF, die Linux-CI aber LF. text=auto lässt
+# Binärdateien (PNG, Fonts) unangetastet. Die spezielleren Regeln unten bleiben gültig.
+* text=auto eol=lf
+
 # Shell-Skripte MÜSSEN LF behalten – ein CRLF-Skript (#!/bin/sh\r) bricht im
 # Linux-Container (z.B. der Dev-Panel-Entrypoint, #334). Erzwingt LF unabhängig
 # von core.autocrlf / Checkout-Plattform.

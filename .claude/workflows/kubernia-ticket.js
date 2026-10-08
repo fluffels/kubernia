@@ -178,7 +178,7 @@ const LENS_SCHEMA = {
     },
     ausserhalbScope: {
       type: 'array',
-      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — Harness-Befunde als Zeile im Sammelticket, Issue nur bei Spiel-/Inhalts-Befund (gebündelt) oder Notfall (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets)',
+      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — Harness-Befunde als Zeile im Sammelticket, Issue nur in den Ausnahmefällen der Regel (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets)',
       items: { type: 'string' },
     },
   },
@@ -879,7 +879,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   § Tests gegen False Positives absichern (Red-Green). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
-  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → gebündeltes Issue.
+  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Ausnahmen: Regeltext), Spiel-/Inhalts-Befund → gebündeltes Issue.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
 - § Projekt-Brain pflegen (AGENTS.md § Doku aktuell halten), zum Schluss VOR dem abschließenden npm run verify:kompakt
   und dem Commit: ist Übertragbares entstanden, nach Wissensart einordnen. Eingerahmt von
@@ -1003,7 +1003,7 @@ Du reviewst, du änderst NICHTS und mergst NICHTS. Findings müssen konkret und 
 sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fundstelle.
 „blockierend" ist für echte Fehler/Regelverstöße reserviert, nicht für Geschmack.
 Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (Harness → Zeile im
-Sammelticket, Spiel-/Inhalts-Befund oder Notfall → gebündeltes Issue) — nicht in die Findings.`,
+Sammelticket, Spiel-/Inhalts-Befund oder Ausnahmefall der Regel → gebündeltes Issue) — nicht in die Findings.`,
             // Modell und Effort der Lens stehen im Frontmatter von kubernia-lens (#1209), hier nur der Effort
             // (muss gleich sein, bewacht von test/harness/model-routing.test.ts).
             { label: `lens:${lens.key}:r${runde}`, phase: 'Review', schema: LENS_SCHEMA, ...REVIEW },
@@ -1391,7 +1391,7 @@ ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
 ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): Spiel-/Inhalts-Befunde und
-Notfälle (roter main, Security, Datenverlust) werden Issues, gebündelt nach den Kriterien in
+Notfälle (roter main, Security, Datenverlust) und Harness-Befunde, die allein nicht in eine Session passen, werden Issues, gebündelt nach den Kriterien in
 AGENTS.md § Oberste Regel (dort nachlesen, hier nicht kopiert; ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
 einsortieren; vorher per gh issue list --limit 500 auf Duplikate prüfen). Alles zum Harness (Defekt,
 Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket

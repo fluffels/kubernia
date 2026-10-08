@@ -539,6 +539,92 @@ describe("Generator harness-inventar", () => {
     assert.ok(o2.indexOf("`a`") > 0 && o2.indexOf("`a`") < o2.indexOf("`z`"));
     assert.ok(!o2.includes("`x`") && !o2.includes("`y`"));
   });
+  test("Frontmatter-Hooks von Agent (args-Form) und Skill (Inline-command), hinter Settings, vor Plugins (#1476)", () => {
+    const agent = [
+      "---",
+      "name: gamma",
+      "hooks:",
+      "  PreToolUse:",
+      '    - matcher: "Edit"',
+      "      hooks:",
+      "        - type: command",
+      "          command: node",
+      "          timeout: 5",
+      "          args:",
+      "            - ${CLAUDE_PROJECT_DIR}/scripts/agent-guard.mjs",
+      "            - --streng",
+      "---",
+      "Text",
+    ].join("\n");
+    const skill = [
+      "---",
+      "name: s3",
+      "hooks:",
+      "  PostToolUse:",
+      "    - hooks:",
+      "        - type: command",
+      "          command: node ${CLAUDE_PROJECT_DIR}/scripts/skill-hook.mjs",
+      "---",
+    ].join("\n");
+    const f = {
+      ...files,
+      ".claude/agents/g.md": agent,
+      ".claude/skills/s3/SKILL.md": skill,
+      ".claude/settings.json": JSON.stringify({ enabledPlugins: { "an@markt": true }, hooks: { PreToolUse: [{ matcher: "Bash|PowerShell", hooks: [{ type: "command", command: "node", args: ["${CLAUDE_PROJECT_DIR}/scripts/h.mjs"] }] }] } }),
+    };
+    const out = gen(f);
+    assert.ok(out.includes("| Hook | `PreToolUse` | matcher: `Edit`, `node scripts/agent-guard.mjs --streng` | `.claude/agents/g.md` |"));
+    assert.ok(out.includes("| Hook | `PostToolUse` | `node scripts/skill-hook.mjs` | `.claude/skills/s3/SKILL.md` |"));
+    assert.ok(!out.includes("CLAUDE_PROJECT_DIR"));
+    const settingsPos = out.indexOf("`.claude/settings.json` |");
+    assert.ok(settingsPos < out.indexOf("agent-guard") && out.indexOf("agent-guard") < out.indexOf("skill-hook") && out.indexOf("skill-hook") < out.indexOf("| Plugin |"));
+  });
+  test("Agent ohne hooks: keine zusätzliche Hook-Zeile (#1476)", () => {
+    assert.equal(gen(files).split("| Hook |").length - 1, 1);
+  });
+  test("hooks im Frontmatter ohne lesbaren Befehl: rot mit Dateiname (#1476)", () => {
+    const kaputt = { ...files, ".claude/agents/x.md": "---\nname: x\nhooks:\n  PreToolUse:\n    - matcher: Edit\n---\n" };
+    assert.throws(() => gen(kaputt), /agents\/x\.md.*ohne lesbaren Befehl/);
+    const ohneEvent = { ...files, ".claude/agents/y.md": "---\nname: y\nhooks:\n  - type: command\n    command: node x.mjs\n---\n" };
+    assert.throws(() => gen(ohneEvent), /agents\/y\.md.*ohne lesbaren Befehl/);
+  });
+  test("mehrere Events, Matcher und Handler; Strich-Form command; Schlüssel hinter hooks bleibt außen (#1476)", () => {
+    const agent = [
+      "---",
+      "name: multi",
+      "hooks:",
+      "  PreToolUse:",
+      "    - matcher: Edit",
+      "      hooks:",
+      "        - type: command",
+      "          command: node ${CLAUDE_PROJECT_DIR}/scripts/a.mjs",
+      "        - type: command",
+      "          command: node ${CLAUDE_PROJECT_DIR}/scripts/a2.mjs",
+      "    - matcher: Write",
+      "      hooks:",
+      "        - command: node ${CLAUDE_PROJECT_DIR}/scripts/b.mjs",
+      "        - command: node ${CLAUDE_PROJECT_DIR}/scripts/b2.mjs",
+      "  PostToolUse:",
+      "    - hooks:",
+      "        - type: command",
+      "          command: node ${CLAUDE_PROJECT_DIR}/scripts/c.mjs",
+      "model: opus",
+      "mcpServers:",
+      "  srv:",
+      "    command: nicht-ein-hook",
+      "---",
+      "Text",
+    ].join("\n");
+    const out = gen({ ...files, ".claude/agents/m.md": agent });
+    assert.ok(out.includes("| Hook | `PostToolUse` | `node scripts/c.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("| Hook | `PreToolUse` | matcher: `Edit`, `node scripts/a.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("| Hook | `PreToolUse` | matcher: `Write`, `node scripts/b.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("matcher: `Edit`, `node scripts/a2.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("matcher: `Write`, `node scripts/b2.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(!out.includes("nicht-ein-hook"));
+    assert.ok(out.includes("| Subagent | `multi` | model: opus,"));
+    assert.equal(out.split("`.claude/agents/m.md` |").length - 1, 6, "ein Subagent plus fünf Hooks");
+  });
   test("konfigurierter Pfad fehlt: rot; nicht konfigurierter Teil entfällt", () => {
     assert.throws(() => gen({ ".mcp.json": "{}" }, { harness: { mcp: ".mcp.json", agents: "weg" } }), /weg.*nicht gefunden/);
     const out = gen({ ".mcp.json": "{}" }, { harness: { mcp: ".mcp.json" } });

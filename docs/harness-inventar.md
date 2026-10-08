@@ -54,7 +54,7 @@ Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie 
 | `langfuse-observability` (lokaler Patch, [Patch-Doku](langfuse-hook-patch.md)) | Langfuse-Erfassung, Patch für verschachtelte und fortgesetzte Subagenten | OTel-Metriken und Events, Traces als Beta mit `agent_id`/`parent_agent_id` ([Monitoring](https://code.claude.com/docs/en/monitoring-usage.md)); Langfuse-Plugin offiziell ([Integration](https://langfuse.com/integrations/developer-tools/claude-code)) | beobachten: der #1291-Teil (verschachtelte Subagenten) liegt ab Plugin 1.2.1 upstream ([Patch-Doku](langfuse-hook-patch.md)); Beta-Traces tragen den Subagenten-Baum, Langfuse-Eingang und Fortsetzungen (#1311, #1378) sind nicht belegt | ja |
 | `pre-push` | Zusatznetz vor dem Push | Git-Hooks, kein Claude-Feature; Required-Checks sind der Riegel | behalten | ja |
 | `playwright` (`scripts/playwright-mcp.mjs`) | startet `@playwright/mcp` mit der Lockfile-Version | [Optionen und Config-Datei](https://github.com/microsoft/playwright-mcp) (`--config`, `--output-dir`, `--isolated`); Versionspinning aus dem Lockfile deckt keine Option ab | behalten | ja |
-| `pixellab` | Pixel-Art über den gehosteten MCP-Server | kein Eigenbau, nur Konfiguration in `.mcp.json` | behalten | ja |
+| `pixellab` | Pixel-Art über den gehosteten MCP-Server | kein Eigenbau, nur Konfiguration in `.mcp.json` | behalten: `list_projects` (Git-URLs, Push-Weg) steht in `deny` (#1476), `pixelart_workbench` bleibt uneingeschränkt | ja |
 | Permissions und Sandbox (`sandbox-doctor.mjs`) | Allowlist, Deny-Regeln, WSL2-Sandbox | [Sandboxing](https://code.claude.com/docs/en/sandboxing.md) nativ seit v2.0.24, `permissions` nativ | behalten: Prüfung des Zusammenspiels unter WSL2 ([ADR 0021](adr/0021-agenten-sandbox-wsl2.md)) ist Projektfall | teilweise |
 
 Statusline: noch kein Eigenbau, #1358 plant sie. Nativ: `statusLine` seit v1.0.71, `agentType` im `subagentStatusLine`-Payload seit v2.1.293 (Eingabe für #1358).
@@ -97,7 +97,7 @@ Statusline: noch kein Eigenbau, #1358 plant sie. Nativ: `statusLine` seit v1.0.7
 
 ## Befunde aus dem Erstabgleich (Stand 2026-10-08)
 
-Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta, offener Bug) oder Projektpolitik. Kleine Befunde stehen als Zeilen im Harness-Sammelticket [#1476](https://github.com/fluffels/kubernia/issues/1476): Hooks aus Agent-Frontmatter fehlen im Generator, ein Fall „Befund größer als eine Zeile“ fehlt in AGENTS.md, PixelLab-Tools mit Außenwirkung. Eingaben für die Beobachtungen liegen bei #1358 (Mods, `agentType`), #1366 (`--marketplace`, Mods) und #1362 (Marker, Versionsquellen). Die Worktree-Mechanik prüft #1066.
+Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta, offener Bug) oder Projektpolitik. Kleine Befunde stehen als Zeilen im Harness-Sammelticket [#1476](https://github.com/fluffels/kubernia/issues/1476): Hooks aus Agent-Frontmatter fehlen im Generator, ein Fall „Befund größer als eine Zeile“ fehlt in AGENTS.md, PixelLab-Tools mit Außenwirkung. Eingaben für die Beobachtungen liegen bei #1358 (Mods, `agentType`), #1366 ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); `--marketplace`, Mods) und #1362 (Marker, Versionsquellen). Die Worktree-Mechanik prüft #1066.
 
 ## Verwendung
 

@@ -1,4 +1,5 @@
-/* Zeilenende-Wächter (#1026) – alles unter `.claude/` muss mit LF ausgecheckt werden.
+/* Zeilenende-Wächter (#1026, #1476) – alles unter `.claude/` und jede Textdatei des Repos
+ * muss mit LF ausgecheckt werden (globale Regel `* text=auto eol=lf` in `.gitattributes`).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
@@ -16,6 +17,11 @@
  * eine neue Workflow-/Skill-Datei soll automatisch mit abgedeckt sein, nicht erst, wenn
  * jemand die Regel nachzieht.
  *
+ * #1476: Die globale Regel gilt für alle Textdateien, weil Doku-Wächter Dateien zeilenweise
+ * lesen und unter `core.autocrlf=true` sonst CRLF sähen, die Linux-CI aber LF. Zusätzlich
+ * prüft der Wächter den Index (`git ls-files --eol`): keine Datei darf als CRLF oder gemischt
+ * eingecheckt sein, Binärdateien bleiben `i/-text`.
+ *
  * ⚠ GRENZE (ehrlich): Der Test belegt, dass Git für diese Pfade LF erzwingt – nicht, dass
  * eine BESTEHENDE Windows-Arbeitskopie schon LF hat. Die bekommt es erst nach einem
  * Neu-Auschecken (`git checkout -- .claude` bzw. frischer Worktree). Ein direkter
@@ -29,7 +35,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const git = (args: string[]) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" });
+const git = (args: string[], input?: string) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8", input });
+
+/** Attributwert je Pfad (`git check-attr --stdin -z`): die Pfade gehen über stdin, nicht als argv (Windows begrenzt die Kommandozeile auf 32.767 Zeichen). */
+function attrWerte(attr: string, pfade: string[]): Map<string, string> {
+  const teile = git(["check-attr", "--stdin", "-z", attr], pfade.join("\0")).split("\0");
+  const werte = new Map<string, string>();
+  for (let i = 0; i + 2 < teile.length; i += 3) werte.set(teile[i], teile[i + 2]);
+  return werte;
+}
 
 /**
  * Parst die `-z`-Ausgabe von `git check-attr -z eol -- <pfade>` (NUL-getrennte Tripel
@@ -44,7 +58,20 @@ function pfadeOhneLf(checkAttrZ: string): string[] {
   return ohneLf;
 }
 
-const eolOhneLf = (pfade: string[]) => pfadeOhneLf(git(["check-attr", "-z", "eol", "--", ...pfade]));
+/**
+ * Parst `git ls-files --eol` (Zeilen `i/<index> w/<arbeitskopie> attr/<attr>\t<pfad>`) und
+ * liefert die Pfade, deren Index-Zeilenende `crlf` oder `mixed` ist.
+ */
+function pfadeMitCrlfImIndex(eolAusgabe: string): string[] {
+  const funde: string[] = [];
+  for (const zeile of eolAusgabe.split("\n")) {
+    const [kopf, pfad] = zeile.split("\t");
+    if (pfad !== undefined && /^i\/(crlf|mixed)\b/.test(kopf)) funde.push(pfad);
+  }
+  return funde;
+}
+
+const eolOhneLf = (pfade: string[]) => pfadeOhneLf(git(["check-attr", "--stdin", "-z", "eol"], pfade.join("\0")));
 
 describe("pfadeOhneLf (Parser)", () => {
   it("meldet nur Pfade ohne eol=lf", () => {
@@ -54,6 +81,23 @@ describe("pfadeOhneLf (Parser)", () => {
 
   it("leere Ausgabe ergibt keine Funde", () => {
     expect(pfadeOhneLf("")).toEqual([]);
+  });
+});
+
+describe("pfadeMitCrlfImIndex (Parser)", () => {
+  it("meldet crlf und mixed, nicht lf, -text oder none", () => {
+    const ausgabe = [
+      "i/lf    w/lf    attr/text=auto eol=lf \ta.md",
+      "i/crlf  w/crlf  attr/                 \tb.md",
+      "i/mixed w/lf    attr/                 \tc.md",
+      "i/-text w/-text attr/                 \td.png",
+      "i/none  w/none  attr/                 \te.json",
+    ].join("\n");
+    expect(pfadeMitCrlfImIndex(ausgabe)).toEqual(["b.md", "c.md"]);
+  });
+
+  it("leere Ausgabe ergibt keine Funde", () => {
+    expect(pfadeMitCrlfImIndex("")).toEqual([]);
   });
 });
 
@@ -77,7 +121,34 @@ describe(".claude/ wird mit LF ausgecheckt (#1026)", () => {
     expect(eolOhneLf(kuenftig)).toEqual([]);
   });
 
-  it("Gegenprobe: außerhalb von .claude/ greift die Regel nicht (Wächter ist nicht trivial grün)", () => {
-    expect(eolOhneLf(["src/main.ts"])).toEqual(["src/main.ts"]);
+  it("globale Regel: jede versionierte Textdatei hat eol=lf (#1476)", () => {
+    const alle = git(["ls-files", "-z"]).split("\0").filter(Boolean);
+    // Binärdateien haben bewusst kein eol=lf (text=auto erkennt sie, Index i/-text).
+    const eol = git(["ls-files", "--eol"]).split("\n").filter(Boolean);
+    const binaer = new Set(eol.filter((z) => z.startsWith("i/-text")).map((z) => z.split("\t")[1]));
+    const text = alle.filter((p) => !binaer.has(p));
+    expect(text.length).toBeGreaterThan(500);
+    expect(eolOhneLf(text)).toEqual([]);
+  });
+
+  it("deckt auch künftige Pfade außerhalb von .claude/ ab (#1476)", () => {
+    expect(eolOhneLf(["docs/neu.md", "src/neu.ts", "test/neu.test.ts"])).toEqual([]);
+  });
+
+  it("Binär-Assets bleiben i/-text (text=auto fasst sie nicht an)", () => {
+    const png = git(["ls-files", "--eol", "--", "assets/pixellab/*.png"]).split("\n").filter(Boolean);
+    expect(png.length).toBeGreaterThan(0);
+    for (const zeile of png) expect(zeile.startsWith("i/-text")).toBe(true);
+    // `i/-text` ist nur die Inhaltserkennung des Blobs; dass Git die Dateien auch künftig nicht als Text
+    // normalisiert, hängt an `text=auto` (ein `* text` würde sie beim nächsten `git add` anfassen).
+    const pfade = git(["ls-files", "-z", "--", "assets/pixellab/*.png"]).split("\0").filter(Boolean);
+    expect(pfade.length).toBe(png.length);
+    const werte = attrWerte("text", pfade);
+    expect(werte.size).toBe(pfade.length);
+    for (const wert of werte.values()) expect(wert).toBe("auto");
+  });
+
+  it("der Index enthält keine CRLF-Datei (#1476)", () => {
+    expect(pfadeMitCrlfImIndex(git(["ls-files", "--eol"]))).toEqual([]);
   });
 });
