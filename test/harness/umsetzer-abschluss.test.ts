@@ -307,3 +307,21 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
     assert.equal(lies(datei([zeile("assistant", "kein Bericht")])), null);
   });
 });
+
+describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
+  // Die Workflow-Umsetzung nutzt nicht den Agenten `kubernia-umsetzer`, sondern einen eigenen Prompt: drei Regeln müssen dort
+  // genauso stehen wie in der Agenten-Definition, sonst driften sie auseinander.
+  const WORKFLOW = readFileSync(resolve(ROOT, ".claude/workflows/kubernia-ticket.js"), "utf8");
+  const KERNPHRASEN = [
+    "nie über stdin", // Skripte nie über stdin starten
+    "eigenen Negativtest, der genau diese Regel verfälscht", // je neue Guard-/Gate-Regel ein Negativtest
+    "das betroffene Gate erneut", // Gate verschärft: origin/main einmergen (#1449)
+  ];
+
+  test("jede Kernphrase steht in der Agenten-Definition und im Workflow", () => {
+    for (const phrase of KERNPHRASEN) {
+      assert.ok(UMSETZER.includes(phrase), `kubernia-umsetzer.md ohne „${phrase}“`);
+      assert.ok(WORKFLOW.includes(phrase), `kubernia-ticket.js ohne „${phrase}“`);
+    }
+  });
+});

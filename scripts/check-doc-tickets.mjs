@@ -35,6 +35,8 @@ import { readFileSync } from "node:fs";
 import { ghText } from "./gh-cli.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
+import { ALLOWLIST as SIZE_ALLOWLIST } from "./check-size.mjs";
+import { ALLOWLIST as CONTEXT_ALLOWLIST } from "./check-context-size.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -64,6 +66,40 @@ export function parseOpenHarnessTickets(md) {
     for (const m of bold[1].matchAll(/#(\d+)/g)) nums.add(Number(m[1]));
   }
   return [...nums].sort((a, b) => a - b);
+}
+
+/** Die Ausnahme-Listen, die ein offenes Ticket nennen müssen (#1460 Z1). DECKEL in check-size sind Ratchet-Historie,
+ *  kein Ticket-Versprechen, und gehören bewusst nicht dazu. */
+export const AUSNAHME_LISTEN = [
+  { skript: "scripts/check-size.mjs", eintraege: SIZE_ALLOWLIST },
+  { skript: "scripts/check-context-size.mjs", eintraege: CONTEXT_ALLOWLIST },
+];
+
+/** Je Ausnahme die Ticket-Nummer: das erste `#N` der Begründung, sonst null. Rein, offline. */
+export function ausnahmeTickets(eintraege) {
+  return eintraege.map((e) => {
+    const m = /#(\d+)/.exec(e.reason ?? "");
+    return { file: e.file, nr: m ? Number(m[1]) : null };
+  });
+}
+
+/**
+ * Urteil über die Ausnahmen (`{ file, nr, skript }`): `stateOf(nr)` liefert "OPEN" | "CLOSED" | null (nicht ermittelbar). Rot ist eine
+ * Ausnahme ohne Nummer oder mit CLOSED-Ticket, unbekannt eine mit nicht ermittelbarem Status (kein Rot aus dem falschen Grund). Rein.
+ */
+export function bewerteAusnahmen(ausnahmen, stateOf) {
+  const rot = [];
+  const unbekannt = [];
+  for (const a of ausnahmen) {
+    if (a.nr === null) {
+      rot.push({ ...a, grund: "keine Ticket-Nummer" });
+      continue;
+    }
+    const state = stateOf(a.nr);
+    if (state === "CLOSED") rot.push({ ...a, grund: `#${a.nr} ist CLOSED` });
+    else if (state == null) unbekannt.push(a);
+  }
+  return { rot, unbekannt };
 }
 
 // ── gh-Abgleich (nur in der CLI, nicht im Test) ─────────────────────────────────
@@ -98,8 +134,9 @@ function main() {
 
   const md = readFileSync(join(ROOT, HARNESS_DOC), "utf8");
   const open = parseOpenHarnessTickets(md);
+  const ausnahmen = AUSNAHME_LISTEN.flatMap((l) => ausnahmeTickets(l.eintraege).map((e) => ({ ...e, skript: l.skript })));
 
-  if (open.length === 0) {
+  if (open.length === 0 && ausnahmen.length === 0) {
     console.log(green(`✔ Keine offen-markierten Roadmap-Tickets in ${HARNESS_DOC} (nichts abzugleichen).`));
     return;
   }
@@ -109,7 +146,7 @@ function main() {
       yellow(
         `… gh nicht verfügbar — Doku-Aktualitäts-Abgleich übersprungen (${open.length} als „offen" markierte Tickets: ${open
           .map((n) => `#${n}`)
-          .join(", ")}).`,
+          .join(", ")}; ${ausnahmen.length} Größen-Ausnahmen).`,
       ),
     );
     return; // graceful skip: offline/kein Token darf nicht rot aus dem falschen Grund sein
@@ -117,6 +154,15 @@ function main() {
 
   const closed = [];
   const unknown = [];
+  const urteil = bewerteAusnahmen(ausnahmen, ghStateOf);
+  for (const a of urteil.unbekannt) {
+    console.error(yellow(`… #${a.nr}: gh-Status der Ausnahme für ${a.file} nicht ermittelbar — übersprungen (transient/kein Zugriff).`));
+  }
+  for (const a of urteil.rot) {
+    console.error(
+      red(`✖ ${a.skript}: die Ausnahme für ${a.file}: ${a.grund}; offenes Ticket eintragen oder die Ausnahme abbauen.`),
+    );
+  }
   for (const n of open) {
     const state = ghStateOf(n);
     if (state === "CLOSED") closed.push(n);
@@ -125,6 +171,11 @@ function main() {
 
   for (const n of unknown) {
     console.error(yellow(`… #${n}: gh-Status nicht ermittelbar — übersprungen (transient/kein Zugriff).`));
+  }
+
+  if (urteil.rot.length && closed.length === 0) {
+    console.error(`\nAusnahme-Drift: eine Größen-Ausnahme nennt kein offenes Ticket.`);
+    process.exit(1);
   }
 
   if (closed.length) {
@@ -141,7 +192,7 @@ function main() {
   }
 
   console.log(
-    green(`✔ Harness-Roadmap aktuell: alle ${open.length} als „offen" markierten Tickets sind auf GitHub offen.`),
+    green(`✔ Harness-Roadmap aktuell: ${open.length} als „offen" markierte Tickets und ${ausnahmen.length} Größen-Ausnahmen mit offenem Ticket.`),
   );
 }
 

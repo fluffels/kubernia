@@ -140,7 +140,7 @@ const LABEL_TO_LAYER = {
 /** Die Wurzel-Namen (Datei- bzw. Verzeichnis-Segmente) der NICHT-Domäne-Schichten, aus dem Modell abgeleitet:
  *  erst die Schichten mit Modul-Ordnern (Modell-Reihenfolge), dann die reinen Datei-Wurzeln. EINE Quelle für
  *  den Domänen-Glob unten: Domäne = „alles unter src, dessen erstes Segment NICHT hier steht" (Extglob-
- *  Ausschluss). `test/coverage-config.test.ts` beweist die Deckungsgleichheit mit den Mustern. */
+ *  Ausschluss). `test/harness/coverage-config.test.ts` beweist die Deckungsgleichheit mit den Mustern. */
 const mitWurzeln = SCHICHT_MODELL.schichten.filter((s) => s.wurzeln.length > 0);
 const NON_DOMAIN = [...mitWurzeln.filter((s) => !s.nurDatei), ...mitWurzeln.filter((s) => s.nurDatei)].flatMap((s) => s.wurzeln);
 const _nd = NON_DOMAIN.join("|");
@@ -153,7 +153,7 @@ const globVon = (s) => `${QUELLWURZEL}{${s.wurzeln.join(",")}}${s.nurDatei ? ".t
 
 /** Glob-Form derselben Schicht-Grenzen (#495) — für Vitests Coverage-`thresholds`, deren
  *  Schlüssel Globs (picomatch), keine RegExps sind. Aus dem Modell abgeleitet (#1392), damit beide Formen
- *  an EINER Stelle stehen; `test/coverage-config.test.ts` bindet die zwei Formen aneinander, indem es für
+ *  an EINER Stelle stehen; `test/harness/coverage-config.test.ts` bindet die zwei Formen aneinander, indem es für
  *  JEDE echte `src`-Datei prüft, dass GENAU EIN Bucket-Glob greift und dieser mit `layerOf()` (der
  *  RegExp-Wahrheit) übereinstimmt — driftet eines, wird es rot. GENAU EIN Glob je Bucket, damit Vitest die
  *  Schwelle über das ganze Schicht-Aggregat prüft (nicht Datei-Untergruppen zersplittert). Verzeichnisbasiert
@@ -171,8 +171,8 @@ const globVon = (s) => `${QUELLWURZEL}{${s.wurzeln.join(",")}}${s.nurDatei ? ".t
  *  deckt Unterordner ab. Rest-Grenze: eine künftige Domänen-DIR mit reserviertem Präfix (`gameplay/`)
  *  träfe denselben picomatch-Präfix-Effekt (in einem einzelnen Glob nicht behebbar, auch nicht mit
  *  `@()`/`bash:true`) — sie fällt aber NICHT still durch, sondern lässt die reale-Datei-Bindung in
- *  `test/coverage-config.test.ts` rot laufen (0 Buckets getroffen), genau wie #500 auffiel.
- *  Prüfung: `test/coverage-config.test.ts` (reale Dateien + synthetische reservierte-Präfix-Namen). */
+ *  `test/harness/coverage-config.test.ts` rot laufen (0 Buckets getroffen), genau wie #500 auffiel.
+ *  Prüfung: `test/harness/coverage-config.test.ts` (reale Dateien + synthetische reservierte-Präfix-Namen). */
 const COVERAGE_GLOBS = {
   ...Object.fromEntries(mitWurzeln.map((s) => [s.id, globVon(s)])),
   [AUFFANG.id]: `${QUELLWURZEL}{!(${_nd})/**,!(${_ndTs})}`,

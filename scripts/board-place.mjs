@@ -91,26 +91,27 @@ function parseOhneNotfall(rest, dry) {
  * Skript selbst auf (`addProjectV2ItemById` + Status Todo; `--dry-run`: nur Meldung). Nur offene Issues; geschlossene, PRs, unbekannte und der
  * `--after`-Anker nicht (Meldung „fehlt im Board, nicht aufgenommen: <Grund>“, am Ende Exit 1).
  */
-function nimmFehlendeAuf(items, args) {
+export function nimmFehlendeAuf(items, args, io = {}) {
+  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns = addToBoardTodo, log = console.log, warn = console.error } = io;
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length === 0) return items;
   const issues = {};
   for (const nr of fehlend) {
     try {
-      issues[nr] = ghJson(["api", `repos/${REPO}/issues/${nr}`]);
+      issues[nr] = lade(["api", `repos/${REPO}/issues/${nr}`]);
     } catch {
       issues[nr] = null;
     }
   }
   const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, args.anchor);
-  for (const a of abgelehnt) console.error(`⚠ #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
+  for (const a of abgelehnt) warn(`⚠ #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
   const neu = aufnehmen.map((a) => {
     if (args.dry) {
-      console.log(`#${a.number} fehlt im Board: würde aufnehmen (Status Todo).`);
+      log(`#${a.number} fehlt im Board: würde aufnehmen (Status Todo).`);
       return todoItem({ id: `(neu #${a.number})`, number: a.number, title: a.title });
     }
-    console.log(`#${a.number} fehlte im Board: aufgenommen (Status Todo).`);
-    return todoItem({ id: addToBoardTodo(a.nodeId), number: a.number, title: a.title });
+    log(`#${a.number} fehlte im Board: aufgenommen (Status Todo).`);
+    return todoItem({ id: aufnehmenIns(a.nodeId), number: a.number, title: a.title });
   });
   return ergaenzeFehlende(items, neu);
 }

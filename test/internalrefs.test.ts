@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawModule from "../scripts/check-internalrefs.mjs";
 
-type Violation = { file: string; line: number; term: string; kind: "ref" | "name" | "steuerbyte"; excerpt: string };
+type Violation = { file: string; line: number; term: string; kind: "ref" | "name"; excerpt: string };
 
 type InternalRefsApi = {
   ENCODED_TERMS: string[];
@@ -82,7 +82,9 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
       [],
       "Interne Referenz(en) gefunden — neutral umformulieren (die Sache benennen, nicht die Herkunft).",
     );
-  });
+    // Eigener Timeout (FAQ § Test-Timeouts): runCheck() startet echte Git-Kindprozesse und liest ~760 Quellen; unter Last
+    // riss der 5-s-Default (#1460 Z3).
+  }, 30_000);
 
   test("Detektion greift wirklich (Red-Green)", () => {
     // No-op-Schutz: ein Wächter, der nie anschlägt, wäre wertlos.
@@ -222,32 +224,6 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
       ["a.md:name", "commit:abc1234:ref"],
       "Begriffsliste UND Namensliste greifen, auch in Commit-Messages",
     );
-  });
-
-  test("Steuerbyte-Wächter (#1428 Z17): NUL und ESC in einer getrackten Textdatei sind rot, mit Datei und Zeile", () => {
-    const inhalte: Record<string, string> = {
-      "nul.md": "Zeile 1\nZeile 2 \0 kaputt\n",
-      "esc.ts": "a\nb\nc \x1b[31m\n",
-      "tab-crlf.md": "a\tb\r\nc\r\n",
-      "sauber.md": "Umlaute äöüß und Emoji-frei\n",
-    };
-    const r = runCheck("/x", { listFiles: () => Object.keys(inhalte), listCommits: () => [], readFile: (rel) => inhalte[rel], terms: [], nameTerms: [] });
-    const steuer = r.violations.filter((v) => v.kind === "steuerbyte").map((v) => `${v.file}:${v.line}`).sort();
-    assert.deepEqual(steuer, ["esc.ts:3", "nul.md:2"], "Tab und CRLF bleiben ok, Steuerbytes werden gemeldet");
-  });
-
-  test("Steuerbyte-Wächter: .png bleibt ausgeschlossen, Commit-Messages und nicht lesbare Dateien lösen ihn nicht aus", () => {
-    const r = runCheck("/x", {
-      listFiles: () => ["bild.png", "weg.md"],
-      listCommits: () => [{ name: "commit:abc1234", text: "feat: x \0 y" }],
-      readFile: (rel) => {
-        if (rel === "weg.md") throw new Error("ENOENT");
-        return "\0\0\0";
-      },
-      terms: [],
-      nameTerms: [],
-    });
-    assert.deepEqual(r.violations, []);
   });
 
   test("PR-Text-Workflow prüft Titel/Body per --text, auch nach Edit, ohne Interpolation ins Skript (#1239)", () => {

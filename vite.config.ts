@@ -35,7 +35,7 @@ const { contentChunkName, CONTENT_CHUNK_DIR, CONTENT_STEMPEL_META, contentStempe
 // Diese Vitest-Version rechnet Glob-Treffer NICHT aus einer globalen Schwelle heraus —
 // darum setzen wir bewusst GAR KEINE globale Schwelle, sondern geben jeder Schicht (inkl.
 // Domäne, als Extglob-Ausschluss) eigene, EXPLIZITE Glob-Schwellen. So ist jede Datei genau
-// einem Bucket zugeordnet (Vollständigkeit + Disjunktheit prüft test/coverage-config.test.ts),
+// einem Bucket zugeordnet (Vollständigkeit + Disjunktheit prüft test/harness/coverage-config.test.ts),
 // und es gibt keinen einzelnen Repo-Mittelwert mehr, hinter dem sich etwas versteckt.
 //
 // Die Zahlen sind ehrliche Ist-Floors (leicht unter dem gemessenen Stand, damit

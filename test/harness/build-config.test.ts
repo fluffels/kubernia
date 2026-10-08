@@ -1,6 +1,7 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 import { describe, it, expect } from "vitest";
 import type { HmrContext } from "vite";
-import viteConfig, { devNoFullReload, CODE_CHANGED_EVENT } from "../vite.config";
+import viteConfig, { devNoFullReload, CODE_CHANGED_EVENT } from "../../vite.config";
 
 /* Ticket #58: Der Build hat ZWEI getrennte Wege, die nicht wieder zusammenfallen
  * dürfen. Diese Tests sichern beide Pfade gegen Regressionen ab:

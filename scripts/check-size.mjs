@@ -33,10 +33,10 @@ export const LOC_BUDGET = 800
  *  Fällt die Datei unter Budget (Split erledigt), meldet der Wächter den Eintrag als
  *  stale und schlägt fehl – das erinnert daran, die Ausnahme wieder zu entfernen. */
 export const ALLOWLIST = [
-  // sim.ts liegt über dem Budget; der Split ist als #942 offen (Kern nach sim/core.ts
+  // sim.ts liegt über dem Budget; der Split ist als #893 offen (Kern nach sim/core.ts
   // auslagern, Ziel: unter 800 LOC). #864 (Builder-Registry) hat die Datei geringfügig
   // vergrößert, aber den Erweiterungs-Aufwand für neue Ressourcentypen auf 1 Eintrag reduziert.
-  { file: 'src/sim.ts', reason: '#942 (Split offen): God-File-Kern auslagern.' },
+  { file: 'src/sim.ts', reason: '#893 (Split offen): sim.ts entflechten, God-File von der Allowlist.' },
 ]
 
 /**
@@ -161,4 +161,4 @@ function main() {
   process.exit(1)
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()

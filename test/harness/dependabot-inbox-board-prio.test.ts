@@ -1,3 +1,4 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Board-Top der Dependabot-Inbox-Action (#712/#747) — struktureller Guard (Fitness-Function).
  *
  * Die Action dependabot-inbox.yml fügt beim Anlegen des Sammel-Issues das Issue
@@ -16,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const yml = readFileSync(
-  fileURLToPath(new URL("../.github/workflows/dependabot-inbox.yml", import.meta.url)),
+  fileURLToPath(new URL("../../.github/workflows/dependabot-inbox.yml", import.meta.url)),
   "utf8",
 );
 

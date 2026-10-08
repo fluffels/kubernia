@@ -1,10 +1,11 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // eslint.config.js ist bewusst JS (ESLint-Flat-Config) und hat keine Typdeklaration –
 // wir prüfen hier gerade ihre Struktur, darum der bewusste Import ohne Typen.
 // @ts-expect-error – kein .d.ts für die Flat-Config
-import eslintConfig from "../eslint.config.js";
+import eslintConfig from "../../eslint.config.js";
 
 /* Ticket #502: Der Dateigröße-Deckel (check-size.mjs, 800 LOC/Datei) misst nur
  * physische Zeilen JE DATEI und sieht die eigentliche God-Function nicht (eine
@@ -78,7 +79,7 @@ describe("Typecheck-Gate #868: recommendedTypeChecked bleibt aktiv", () => {
 
 describe("Komplexitäts-Gate #502: Suppressions-Baseline ist ehrlich", () => {
   const suppressions = JSON.parse(
-    readFileSync(fileURLToPath(new URL("../eslint-suppressions.json", import.meta.url)), "utf8"),
+    readFileSync(fileURLToPath(new URL("../../eslint-suppressions.json", import.meta.url)), "utf8"),
   ) as Record<string, Record<string, { count: number }>>;
 
   const COMPLEXITY_RULES = new Set(["complexity", "max-depth", "max-lines-per-function"]);

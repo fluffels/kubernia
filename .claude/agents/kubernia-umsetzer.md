@@ -48,7 +48,7 @@ Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen,
 
 ## Letzte Nachricht (festes Format)
 
-Vorher beendest du alle eigenen Hintergrund-Tasks (`Monitor`, `run_in_background`, CI-Watch) per `TaskStop` und eigene Hilfsserver und Stubs (z.B. `python3 -m http.server`) per PID (`Stop-Process -Id`, nie per Name): ein weiterlaufender Task liefert sonst Meldungen nach, und der Bericht kommt mehrfach beim Aufrufer an.
+Vorher beendest du alle eigenen Hintergrund-Tasks (`Monitor`, `run_in_background`, CI-Watch) per `TaskStop` und eigene Hilfsserver und Stubs (z.B. `python3 -m http.server`) per PID (`Stop-Process -Id <pid>` oder `taskkill //PID <pid> //F`, nie per Name): ein weiterlaufender Task liefert sonst Meldungen nach, und der Bericht kommt mehrfach beim Aufrufer an.
 
 **Warten:** Auf die CI wartest du blockierend im Vordergrund, nie mit einem `Monitor`: ein `Monitor` oder Hintergrund-Task hält deinen Lauf nicht offen, die Laufzeit erzwingt dann die Übergabe (#1327). Auf deine Lenses wartest du, indem du den Turn mit einer kurzen Statuszeile beendest, ohne `SubagentHandback`: solange eigene Subagenten laufen, bleibt dein Lauf offen, und jeder Lens-Bericht setzt dich fort. Kein `sleep`, kein Pollen der `.output`-Dateien.
 
