@@ -16,7 +16,7 @@ export interface TermBlock {
 const HINT_MARKERS = ["💡", "▸", "ℹ", "⚠"];
 
 const COLUMN_GAP = /\s{2,}/;
-const HEAD_CHARS = /^[A-Z0-9 %/_.-]+$/;
+const HEAD_CHARS = /^[A-Z0-9 %-]+$/;
 const DASH_ROW = /^[- ]+$/;
 
 function columnCount(line: string): number {
@@ -32,7 +32,7 @@ function isUpperHead(line: string): boolean {
 
 /** Kopf B: describe-Events (`Type   Reason   Age` + Strich-Zeile darunter). */
 function isDashedHead(line: string, next: string | undefined): boolean {
-  if (next === undefined || line.trim() === "" || columnCount(line) < 2) return false;
+  if (next === undefined || columnCount(line) < 2) return false;
   const dash = next.trim();
   return dash !== "" && DASH_ROW.test(dash) && dash.split(COLUMN_GAP).length >= 2;
 }

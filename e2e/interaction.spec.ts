@@ -40,6 +40,8 @@ test("Terminal: Befehl eintippen zeigt ein Ergebnis", async ({ page }) => {
   await expect(tabelle).toBeVisible();
   expect(await tabelle.evaluate(el => getComputedStyle(el).whiteSpace)).toBe("pre");
   expect(await tabelle.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+  // Wirklich scrollbar (nicht nur überstehend): scrollLeft lässt sich setzen.
+  expect(await tabelle.evaluate(el => { el.scrollLeft = 50; return el.scrollLeft; })).toBeGreaterThan(0);
 });
 
 test("Dialoge lassen sich mit Leertaste und Enter weiterschalten (#312)", async ({ page }) => {

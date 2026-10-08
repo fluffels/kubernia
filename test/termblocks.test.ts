@@ -73,6 +73,14 @@ describe("splitTermBlocks: Negativ- und Grenzfälle", () => {
     expect(kinds("Type\n----")).toEqual(["text"]);
   });
 
+  it("zweispaltiger Kopf über einer Strich-Zeile mit nur einem Lauf bleibt Text", () => {
+    expect(kinds("Spalte  A\n---------")).toEqual(["text"]);
+  });
+
+  it("Textzeile direkt nach der Tabelle (ohne Leerzeile/Marker) gehört bewusst zum Tabellenblock", () => {
+    expect(kinds("Text\nNAME   X\n1   2\nText")).toEqual(["text", "table"]);
+  });
+
   it("Invariante: Join der Blöcke ergibt die Eingabe", () => {
     const proben = [
       "", "\n", "a\n\nb", "NAME   X\n1   2\n\n\nNAME   Y\n3   4\n",

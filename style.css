@@ -640,8 +640,7 @@ button:focus-visible, select:focus-visible {
 .term-out .t-err { color: #ff9b9b; }
 .term-out .t-tip { color: #ffd97a; }
 /* Erkannte CLI-Tabellen (hud/termblocks.ts): kein Umbruch, je Tabelle horizontal scrollbar (wie `less -S`, #1484).
-   inline-block + max-width, damit das "
-" zwischen den Blöcken keine Leerzeile erzeugt. */
+   inline-block + max-width, damit der Zeilenumbruch zwischen den Blöcken keine Leerzeile erzeugt. */
 .term-out .t-table {
   display: inline-block; vertical-align: top; max-width: 100%;
   white-space: pre; overflow-x: auto; overflow-y: hidden;
