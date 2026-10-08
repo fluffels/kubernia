@@ -885,6 +885,23 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
     assert.deepEqual(r.orphans, []);
   });
 
+  test("diagnoseOrphans: Dateien eines registrierten Worktrees sind weder verwaist noch fremd (Verdrahtung der Registrierung)", () => {
+    const deps = {
+      now: JETZT,
+      execSync: () => porcelain([MAIN, `${WT}/kq-5`]),
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "kq-5", isDirectory: () => true, isFile: () => false },
+        { name: "kq-5-notiz.bak", isDirectory: () => false, isFile: () => true },
+      ],
+      statSync: alt,
+    };
+    const r = diagnoseOrphans(MAIN, deps) as unknown as { orphanFiles: string[]; youngFiles: string[]; foreignFiles: string[] };
+    assert.deepEqual(r.orphanFiles, []);
+    assert.deepEqual(r.youngFiles, []);
+    assert.deepEqual(r.foreignFiles, []);
+  });
+
   const reguLaer = { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false };
 
   test("entferneVerwaisteDateien löscht ohne recursive", () => {

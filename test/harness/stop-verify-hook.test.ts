@@ -617,6 +617,46 @@ describe("checkAndFixOrphanWorktrees: lose Dateien unter .claude/worktrees (#147
     };
   }
 
+  test("Datei eines registrierten Worktrees bleibt unangetastet (nichts gelöscht, keine Meldung)", () => {
+    const g = deps(["kq-5-notiz.bak"]);
+    const d = { ...g.deps, execSync: (cmd: string) => (cmd.includes("worktree list") ? `worktree ${MAIN}
+HEAD abc
+
+worktree ${WT}/kq-5
+HEAD abc
+` : "") };
+    const r = check(MAIN, d);
+    assert.deepEqual(r, { blocked: false });
+    assert.equal(g.geloescht.length, 0);
+  });
+
+  test("verwaiste Datei und verwaister Lens-Worktree im selben Lauf: beide in removed", () => {
+    const g = deps(["kq-1361-x.bak"]);
+    let lensDa = true;
+    const d = {
+      ...g.deps,
+      execSync: (cmd: string) => {
+        if (cmd.includes("worktree list")) return `worktree ${MAIN}
+HEAD abc
+` + (lensDa ? `
+worktree ${WT}/kq-7-lens-r1
+HEAD abc
+` : "");
+        if (cmd.includes("worktree remove")) lensDa = false;
+        return "";
+      },
+      existsSync: (p: string) => p.replace(/\\/g, "/") === WT || (p.replace(/\\/g, "/").endsWith("kq-1361-x.bak") && g.geloescht.length === 0),
+      readdirSync: () => [
+        { name: "kq-1361-x.bak", isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+        ...(lensDa ? [{ name: "kq-7-lens-r1", isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false }] : []),
+      ],
+      lstatSync: () => ({ isFile: () => true, isDirectory: () => true, isSymbolicLink: () => false }),
+    };
+    const r = check(MAIN, d);
+    assert.equal(r.blocked, false);
+    assert.deepEqual([...(r.removed ?? [])].sort(), ["kq-1361-x.bak", "kq-7-lens-r1"]);
+  });
+
   test("verwaiste, alte Datei wird still entfernt: kein Block, keine Warnung", () => {
     const g = deps(["kq-1361-lens-r2-orig.bak"]);
     const r = check(MAIN, g.deps);

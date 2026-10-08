@@ -17,6 +17,8 @@ const entquote = (v) => v.trim().replace(/^(['"])(.*)\1$/, "$2");
  * Eigener, zeilenweiser Parser für die Form `hooks: <Event>: - matcher: … hooks: - type: command,
  * command: …, args: - …` (keine YAML-Dependency). Fail-closed: ein `hooks:`-Block ohne lesbaren Befehl
  * wirft mit Dateinamen, damit ein neuer Hook nie still im Inventar fehlt.
+ * Bewusste Grenzen: die Flow-Form `args: ["a", "b"]` und Block-Scalare (`command: >`) liest er nicht (dann
+ * fehlen Argumente bzw. der Befehl wird `>`); die Form bleibt nicht abgedeckt, bis ein Hook sie braucht.
  */
 export function frontmatterHooks(text, datei) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);

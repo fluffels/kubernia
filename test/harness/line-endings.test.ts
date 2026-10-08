@@ -35,7 +35,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const git = (args: string[]) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" });
+const git = (args: string[], input?: string) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8", input });
+
+/** Attributwert je Pfad (`git check-attr --stdin -z`): die Pfade gehen über stdin, nicht als argv (Windows begrenzt die Kommandozeile auf 32.767 Zeichen). */
+function attrWerte(attr: string, pfade: string[]): Map<string, string> {
+  const teile = git(["check-attr", "--stdin", "-z", attr], pfade.join("\0")).split("\0");
+  const werte = new Map<string, string>();
+  for (let i = 0; i + 2 < teile.length; i += 3) werte.set(teile[i], teile[i + 2]);
+  return werte;
+}
 
 /**
  * Parst die `-z`-Ausgabe von `git check-attr -z eol -- <pfade>` (NUL-getrennte Tripel
@@ -63,7 +71,7 @@ function pfadeMitCrlfImIndex(eolAusgabe: string): string[] {
   return funde;
 }
 
-const eolOhneLf = (pfade: string[]) => pfadeOhneLf(git(["check-attr", "-z", "eol", "--", ...pfade]));
+const eolOhneLf = (pfade: string[]) => pfadeOhneLf(git(["check-attr", "--stdin", "-z", "eol"], pfade.join("\0")));
 
 describe("pfadeOhneLf (Parser)", () => {
   it("meldet nur Pfade ohne eol=lf", () => {
@@ -131,6 +139,10 @@ describe(".claude/ wird mit LF ausgecheckt (#1026)", () => {
     const png = git(["ls-files", "--eol", "--", "assets/pixellab/*.png"]).split("\n").filter(Boolean);
     expect(png.length).toBeGreaterThan(0);
     for (const zeile of png) expect(zeile.startsWith("i/-text")).toBe(true);
+    // `i/-text` ist nur die Inhaltserkennung des Blobs; dass Git die Dateien auch künftig nicht als Text
+    // normalisiert, hängt an `text=auto` (ein `* text` würde sie beim nächsten `git add` anfassen).
+    const pfade = png.map((z) => z.split("\t")[1]);
+    for (const wert of attrWerte("text", pfade).values()) expect(wert).toBe("auto");
   });
 
   it("der Index enthält keine CRLF-Datei (#1476)", () => {

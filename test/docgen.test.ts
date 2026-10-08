@@ -585,8 +585,40 @@ describe("Generator harness-inventar", () => {
   test("hooks im Frontmatter ohne lesbaren Befehl: rot mit Dateiname (#1476)", () => {
     const kaputt = { ...files, ".claude/agents/x.md": "---\nname: x\nhooks:\n  PreToolUse:\n    - matcher: Edit\n---\n" };
     assert.throws(() => gen(kaputt), /agents\/x\.md.*ohne lesbaren Befehl/);
-    const ohneEvent = { ...files, ".claude/agents/y.md": "---\nname: y\nhooks:\n  - type: command\n---\n" };
-    assert.throws(() => gen(ohneEvent), /agents\/y\.md/);
+    const ohneEvent = { ...files, ".claude/agents/y.md": "---\nname: y\nhooks:\n  - type: command\n    command: node x.mjs\n---\n" };
+    assert.throws(() => gen(ohneEvent), /agents\/y\.md.*ohne lesbaren Befehl/);
+  });
+  test("mehrere Events, Matcher und Handler; Strich-Form command; Schlüssel hinter hooks bleibt außen (#1476)", () => {
+    const agent = [
+      "---",
+      "name: multi",
+      "hooks:",
+      "  PreToolUse:",
+      "    - matcher: Edit",
+      "      hooks:",
+      "        - type: command",
+      "          command: node ${CLAUDE_PROJECT_DIR}/scripts/a.mjs",
+      "    - matcher: Write",
+      "      hooks:",
+      "        - command: node ${CLAUDE_PROJECT_DIR}/scripts/b.mjs",
+      "  PostToolUse:",
+      "    - hooks:",
+      "        - type: command",
+      "          command: node ${CLAUDE_PROJECT_DIR}/scripts/c.mjs",
+      "model: opus",
+      "mcpServers:",
+      "  srv:",
+      "    command: nicht-ein-hook",
+      "---",
+      "Text",
+    ].join("\n");
+    const out = gen({ ...files, ".claude/agents/m.md": agent });
+    assert.ok(out.includes("| Hook | `PostToolUse` | `node scripts/c.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("| Hook | `PreToolUse` | matcher: `Edit`, `node scripts/a.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("| Hook | `PreToolUse` | matcher: `Write`, `node scripts/b.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(!out.includes("nicht-ein-hook"));
+    assert.ok(out.includes("| Subagent | `multi` | model: opus,"));
+    assert.equal(out.split("`.claude/agents/m.md` |").length - 1, 4, "ein Subagent plus drei Hooks");
   });
   test("konfigurierter Pfad fehlt: rot; nicht konfigurierter Teil entfällt", () => {
     assert.throws(() => gen({ ".mcp.json": "{}" }, { harness: { mcp: ".mcp.json", agents: "weg" } }), /weg.*nicht gefunden/);

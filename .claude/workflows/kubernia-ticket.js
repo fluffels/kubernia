@@ -1391,7 +1391,7 @@ ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
 ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): Spiel-/Inhalts-Befunde und
-Notfälle (roter main, Security, Datenverlust) werden Issues, gebündelt nach den Kriterien in
+Notfälle (roter main, Security, Datenverlust) und Harness-Befunde, die allein nicht in eine Session passen, werden Issues, gebündelt nach den Kriterien in
 AGENTS.md § Oberste Regel (dort nachlesen, hier nicht kopiert; ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
 einsortieren; vorher per gh issue list --limit 500 auf Duplikate prüfen). Alles zum Harness (Defekt,
 Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket

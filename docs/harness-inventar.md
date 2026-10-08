@@ -97,7 +97,7 @@ Statusline: noch kein Eigenbau, #1358 plant sie. Nativ: `statusLine` seit v1.0.7
 
 ## Befunde aus dem Erstabgleich (Stand 2026-10-08)
 
-Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta, offener Bug) oder Projektpolitik. Die kleinen Befunde (Hooks aus Agent-Frontmatter im Generator, ein Fall „Befund größer als eine Zeile“ in AGENTS.md, PixelLab-Tools mit Außenwirkung) hat [#1476](https://github.com/fluffels/kubernia/issues/1476) umgesetzt. Eingaben für die Beobachtungen liegen bei #1358 (Mods, `agentType`), #1366 ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); `--marketplace`, Mods) und #1362 (Marker, Versionsquellen). Die Worktree-Mechanik prüft #1066.
+Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta, offener Bug) oder Projektpolitik. Kleine Befunde stehen als Zeilen im Harness-Sammelticket [#1476](https://github.com/fluffels/kubernia/issues/1476): Hooks aus Agent-Frontmatter fehlen im Generator, ein Fall „Befund größer als eine Zeile“ fehlt in AGENTS.md, PixelLab-Tools mit Außenwirkung. Eingaben für die Beobachtungen liegen bei #1358 (Mods, `agentType`), #1366 ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); `--marketplace`, Mods) und #1362 (Marker, Versionsquellen). Die Worktree-Mechanik prüft #1066.
 
 ## Verwendung
 

@@ -10,7 +10,7 @@
 
 **Vor jeder Änderung und jeder Entscheidung die eine Frage stellen: „Ist das okay, wenn Kubernia ein Spiel in Stardew-Valley-Größe wird?" — nur umsetzen, wenn die Antwort Ja ist.** Die Frage steht **über** allen ADRs und Konventionen. Eine Lösung, die bei 10× Inhalt/NPCs/Welten dasselbe Problem reproduziert, ist keine — **Granularität und Struktur mitdenken, nicht nur das Format**. Im Zweifel recherchieren, wie ein Spiel dieser Größe es macht.
 
-**Was beim Entwickeln auffällt, aber gerade nicht dran ist → sofort in GitHub festhalten** (nicht inline mitfixen, nicht „im Kopf" behalten): Befunde zum Harness (Defekt, Härtung, Kosmetik, Wunsch) als Zeile im Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befunde als Issue (siehe „Wo die TODOs leben"), **gebündelt**: Zusammengehöriges (gleiches Subsystem, gleicher Fehlertyp, gemeinsamer Lösungsweg) wird **ein** Issue mit Teil-Akzeptanzkriterien, Kleinkram eine Zeile in einem passenden offenen Ticket (vorher `gh issue list --search`). Lieber festgehalten als verlorenes Wissen.
+**Was beim Entwickeln auffällt, aber gerade nicht dran ist → sofort in GitHub festhalten** (nicht inline mitfixen, nicht „im Kopf" behalten): Befunde zum Harness (Defekt, Härtung, Kosmetik, Wunsch) als Zeile im Sammelticket (Ausnahmen: „Wo die TODOs leben“), Spiel-/Inhalts-Befunde als Issue (siehe „Wo die TODOs leben"), **gebündelt**: Zusammengehöriges (gleiches Subsystem, gleicher Fehlertyp, gemeinsamer Lösungsweg) wird **ein** Issue mit Teil-Akzeptanzkriterien, Kleinkram eine Zeile in einem passenden offenen Ticket (vorher `gh issue list --search`). Lieber festgehalten als verlorenes Wissen.
 
 ### Git, PR und Merge
 
