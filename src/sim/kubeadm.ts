@@ -19,9 +19,9 @@
  * per `kubeadmCommand(this, …)`.
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
-import { randSuffix, suggest, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, workerNodeName } from "./util";
+import { randSuffix, suggest } from "./util";
 import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
-import { provisionNode, isControlPlane, NODE_VERSION } from "./nodes";
+import { provisionNode, isControlPlane, NODE_VERSION, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, workerNodeName } from "./nodes";
 
 const APISERVER = CONTROL_PLANE_IP + ":6443";
 
@@ -30,7 +30,7 @@ const APISERVER = CONTROL_PLANE_IP + ":6443";
  *  Import-Zyklus kubeadm ↔ sim. Statt des ganzen `ClusterState` (Leaky Abstraction
  *  #516) nur die berührten `nodes`/`controlPlane` per `Pick` (ISP), typgebunden an die
  *  SSOT (sim/state.ts, #372). */
-export interface KubeadmHost extends Pick<ClusterState, "nodes" | "controlPlane"> {
+export interface KubeadmHost extends Pick<ClusterState, "nodes" | "controlPlane" | "clock"> {
   rng: () => number; // Instanz-eigener Zufallsstrom (#580): Bootstrap-Token/CA-Hash statt globaler Strom
   _err(msg: string, tip?: string): string;
   _reschedulePending(): void; // ein neuer Worker kann wartende Pods einplanen
@@ -136,7 +136,7 @@ function kubeadmInit(host: KubeadmHost, c: Call): string {
   // Der Knoten, auf dem init läuft, wird die Control-Plane. Gibt es schon einen Control-Plane-
   // Knoten (z.B. aus dem Szenario), nimm ihn; sonst lege den Standard-Control-Plane-Knoten an. Idempotent über Name.
   const cpName = host.nodes.find(isControlPlane)?.name ?? CONTROL_PLANE_NODE;
-  provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
+  provisionNode(host, { name: cpName, roles: "control-plane", created: host.clock }); // idempotent per Name
   host.controlPlane = { up: true, token, node: cpName };
   return [
     "[init] Using Kubernetes version: " + NODE_VERSION,
@@ -174,7 +174,7 @@ function kubeadmJoin(host: KubeadmHost, c: Call): string {
   const tooMany = c.args.filter(a => a.includes(":")).length > 1 || c.args.filter(tokenLike).length > 1;
   if (bad !== undefined || tooMany) {
     return host._err(bad !== undefined ? 'error: "' + bad + '" ist weder ein API-Server-Endpoint (host:port) noch ein Bootstrap-Token' : "accepts at most 1 arg(s), received " + c.args.length,
-      "Muster: kubeadm join 10.0.0.10:6443 --token <token>");
+      "Muster: kubeadm join " + APISERVER + " --token <token>");
   }
   const endpoint = c.args.find(a => a.includes(":"));
   if (endpoint !== undefined && endpoint !== APISERVER) {
@@ -194,7 +194,7 @@ function kubeadmJoin(host: KubeadmHost, c: Call): string {
   // Nächster freier Worker-Name: ahoi-worker-<n>, fortlaufend über die schon vorhandenen Worker.
   const workerCount = host.nodes.filter(n => !isControlPlane(n)).length;
   const name = workerNodeName(workerCount + 1);
-  provisionNode(host, { name }); // Worker-Default: roles "<none>", version NODE_VERSION
+  provisionNode(host, { name, created: host.clock }); // Worker-Default: roles "<none>", version NODE_VERSION
   // Ein neuer Knoten kann wartende (Pending) Pods einplanen – wie ein echter Worker, der dazukommt.
   host._reschedulePending();
   return [

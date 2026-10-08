@@ -48,14 +48,14 @@ import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./si
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
-import { randSuffix, clusterIP, suggest, CONTROL_PLANE_NODE, workerNodeName } from "./sim/util";
+import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { shellTokens, subEntry } from "./sim/cliargs";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
 import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
-import { provisionNode, NODE_VERSION } from "./sim/nodes";
+import { provisionNode, NODE_VERSION, CONTROL_PLANE_NODE, workerNodeName, nodeSnapshot } from "./sim/nodes";
 import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
 /* ---------- Ressourcen-Registry (#499) ----------
@@ -749,7 +749,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
       return {
         dockerImages: this.docker.pulled.slice(),
         dockerContainers: this.docker.containers.map(c => Object.assign({}, c)),
-        nodes: this.nodes.map(n => Object.assign({}, n)),
+        nodes: this.nodes.map(nodeSnapshot),
         deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, ...snapshotPodTemplate(d) })), // Template-Felder (Ephemeral #240, Limits/securityContext #1300, SA): überleben den Reload; `evicted` wird beim Laden neu abgeleitet
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
         // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
