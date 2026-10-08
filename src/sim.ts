@@ -19,7 +19,7 @@ import type {
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
-import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
+import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
 export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
@@ -50,7 +50,7 @@ import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
-import { resourceName, assertServiceType, InvalidSpecError } from "./sim/names";
+import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
 import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
