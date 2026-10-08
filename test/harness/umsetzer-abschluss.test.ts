@@ -338,7 +338,11 @@ describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
 
   test("Red-Green-Rücknahme per git checkout gehört auch in AGENTS.md und die Langfassung (#1501)", () => {
     for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
-      assert.ok(readFileSync(resolve(ROOT, datei), "utf8").includes("git checkout <datei>"), `${datei} ohne die Rücknahme-Regel`);
+      const text = readFileSync(resolve(ROOT, datei), "utf8");
+      // beide Dateien nennen dieselben Befehle und die Ausnahme für den sauberen Lens-Worktree
+      for (const teil of ["git checkout <datei>", "git restore <datei>", "Lens-Worktree", "git -C <lens-worktree> checkout -- <datei>"]) {
+        assert.ok(text.includes(teil), `${datei} ohne „${teil}“`);
+      }
     }
   });
 });
