@@ -168,7 +168,7 @@ describe("Unterbefehle: echte kubectl-Befehle sind „nicht simuliert“, Tippfe
 /* ---------- (f) EIN Text für „nicht simuliert“ ---------- */
 describe("(f) alle früheren Fundstellen nutzen den einen Helfer", () => {
   test.each([
-    "describe service web", "create frobnicate x", "create secret docker-registry x", "set frobnicate x", "rollout undo deployment web",
+    "describe configmap web", "create frobnicate x", "create secret docker-registry x", "set frobnicate x", "rollout undo deployment web",
     "auth reconcile", "label pods x a=b", "label namespaces default foo=bar", "delete nodes x", "logs statefulset/db",
     "scale pods/x --replicas=2", "expose pods/x --port=80",
   ])("kubectl %s", cmd => {

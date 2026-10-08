@@ -54,4 +54,4 @@ Die Matrix liegt unter `docs/`, nicht unter `src/`: sie wird nie ausgeliefert (k
 
 ## Bekannte Lücken (Stand 2026-10-08)
 
-Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe deployment`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430).
+Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe configmap`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430).

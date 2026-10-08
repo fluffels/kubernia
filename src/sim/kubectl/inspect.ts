@@ -1,6 +1,6 @@
 /* ===== Kubernia – kubectl Inspect (sim/kubectl/inspect.ts) =====
  * Die lesenden kubectl-Befehle (kein Cluster-Zustand wird verändert): die `get`-Renderer
- * (alle Ressourcen-Listen; der `get`-Dispatcher liegt in ./get.ts), `describe` (Detail zu Pod/Ingress/NetworkPolicy/Role/SA),
+ * (alle Ressourcen-Listen; der `get`-Dispatcher liegt in ./get.ts), die älteren `describe`-Renderer (Pod/Node/Ingress/NetworkPolicy/Role/SA; der Dispatcher liegt in ./describe.ts),
  * `top` (Pod-/Node-Metriken, #109) und `logs` (#…). Die eigentliche
  * Observability-Mechanik (podMetrics/nodeMetrics/alerts) liegt in ../observability.ts –
  * `top`/`get` lesen sie nur über das Host-Interface.
@@ -14,12 +14,12 @@
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
 import { table } from "../util";
-import { readyBackends, endpointPort, podAddress } from "../endpoints";
+import { endpointAddresses, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { positionals, slashRef, typeAndName, notSimulated, unknownResourceType } from "./args";
+import { positionals, slashRef, notSimulated, unknownResourceType } from "./args";
 import { sameRbac } from "../rbac";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName, statefulPodNode } from "../workload";
@@ -78,10 +78,15 @@ function getPods(host: KubectlHost, t: string[]): GetTable {
   return tableOf(POD_HEADER, clusterPods(host).map(c => podRow(host, c)));
 }
 
+/** Die verfügbaren Replicas eines Deployments: alle Pods, solange sie bereit sind, sonst keiner. */
+export function availableReplicas(host: Pick<KubectlHost, "_podReady">, d: Deployment): number {
+  return host._podReady(d) ? d.pods.length : 0;
+}
+
 function getDeployments(host: KubectlHost): GetTable {
   return tableOf(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"],
     host.deployments.map(d => {
-      const ready = host._podReady(d) ? d.pods.length : 0;
+      const ready = availableReplicas(host, d);
       return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created)];
     }));
 }
@@ -111,7 +116,7 @@ function getEndpoints(host: KubectlHost): GetTable {
     // Endpoints zeigen den Ziel-Port (targetPort), an den weitergeleitet wird – fehlt er,
     // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
     // Die Pods kommen aus der gemeinsamen Service→Pod-Auflösung (#1318).
-    const ips = readyBackends(host, s).flatMap(b => (b.ip ? [b.ip + ":" + endpointPort(s)] : []));
+    const ips = endpointAddresses(host, s);
     return [s.name, ips.length ? ips.join(",") : "<none>", host._age(s.created || 0)];
   }));
 }
@@ -254,8 +259,7 @@ export const GET_RESOURCE_SCOPES = RESOURCE_KINDS.filter(k => GET_RENDERERS.has(
 
 // ===== kubectl describe – ein Renderer je Ressourcentyp =====
 
-function describeNode(host: KubectlHost, name: string | undefined): string {
-  if (!name) return host._err("kubectl describe node: Welcher Knoten?", "Die Namen siehst du mit 'kubectl get nodes'.");
+export function describeNode(host: KubectlHost, name: string): string {
   const node = host.nodes.find(n => n.name === name);
   if (!node) return host._err('Error from server (NotFound): nodes "' + name + '" not found', "Tipp: Namen aus 'kubectl get nodes' kopieren.");
   const lines = [
@@ -290,8 +294,7 @@ function describeNode(host: KubectlHost, name: string | undefined): string {
   return lines.join("\n");
 }
 
-function describeIngress(host: KubectlHost, name: string | undefined): string {
-  if (!name) return host._err("kubectl describe ingress: Welcher Ingress?", "Die Namen siehst du mit 'kubectl get ingress'.");
+export function describeIngress(host: KubectlHost, name: string): string {
   const ing = host.ingresses.find(i => i.name === name);
   if (!ing) return host._err('Error from server (NotFound): ingresses.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get ingress' kopieren.");
   const svcExists = host.services.some(s => s.name === ing.service);
@@ -314,8 +317,7 @@ function describeIngress(host: KubectlHost, name: string | undefined): string {
   ].join("\n");
 }
 
-function describeNetworkPolicy(host: KubectlHost, name: string | undefined): string {
-  if (!name) return host._err("kubectl describe networkpolicy: Welche NetworkPolicy?", "Die Namen siehst du mit 'kubectl get networkpolicies'.");
+export function describeNetworkPolicy(host: KubectlHost, name: string): string {
   const np = host.networkPolicies.find(n => n.name === name);
   if (!np) return host._err('Error from server (NotFound): networkpolicies.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get networkpolicies' kopieren.");
   return [
@@ -330,9 +332,8 @@ function describeNetworkPolicy(host: KubectlHost, name: string | undefined): str
   ].join("\n");
 }
 
-function describeRole(host: KubectlHost, name: string | undefined, kind: ResourceKind): string {
+export function describeRole(host: KubectlHost, name: string, kind: ResourceKind): string {
   const cluster = kind.plural === "clusterroles";
-  if (!name) return host._err("kubectl describe " + kind.singular + ": Welche Rolle?", "Die Namen siehst du mit 'kubectl get " + kind.plural + "'.");
   const role = host.roles.find(r => sameRbac(r, { name, cluster }));
   if (!role) return host._err('Error from server (NotFound): ' + qualified(kind, "plural") + ' "' + name + '" not found', "Tipp: Namen aus 'kubectl get " + kind.plural + "' kopieren.");
   const lines = [
@@ -346,8 +347,7 @@ function describeRole(host: KubectlHost, name: string | undefined, kind: Resourc
   return lines.join("\n");
 }
 
-function describeServiceAccount(host: KubectlHost, name: string | undefined): string {
-  if (!name) return host._err("kubectl describe serviceaccount: Welche SA?", "Die Namen siehst du mit 'kubectl get sa'.");
+export function describeServiceAccount(host: KubectlHost, name: string): string {
   const acc = host.serviceAccounts.find(s => s.name === name);
   if (!acc) return host._err('Error from server (NotFound): serviceaccounts "' + name + '" not found', "Tipp: Namen aus 'kubectl get sa' kopieren.");
   return ["Name:         " + acc.name, "Namespace:    " + DEFAULT_NAMESPACE, "Mountable secrets:  <none>"].join("\n");
@@ -392,7 +392,7 @@ function podDescribeEvents(host: KubectlHost, pod: PodInstance, dep: Deployment)
 
 // Limits-Block (EIN Kopf): cpu, ephemeral-storage, memory – jeweils nur, wenn gesetzt. Dazu die
 // ephemeral-storage-Zeilen (#240): sie machen sichtbar, woran ein Evicted-Pod sein Limit gesprengt hat.
-function podLimitLines(host: KubectlHost, dep: Deployment): string[] {
+export function podLimitLines(host: KubectlHost, dep: Deployment): string[] {
   const rows: string[] = [];
   if (dep.cpuLimitMilli !== undefined) rows.push("      cpu:                " + dep.cpuLimitMilli + "m");
   if (dep.ephemeralLimit !== undefined) rows.push("      ephemeral-storage:  " + dep.ephemeralLimit + "Mi");
@@ -409,7 +409,7 @@ function podLimitLines(host: KubectlHost, dep: Deployment): string[] {
 
 // Security Context: nur die gesetzten Schlüssel; ohne Wert keine Kopfzeile (nichts erfinden). Echtes
 // `describe pod` zeigt das nicht – die Sim hat kein `get -o yaml`, hier ist die einzige Sichtstelle.
-function podSecurityLines(dep: Deployment): string[] {
+export function podSecurityLines(dep: Deployment): string[] {
   const sc = dep.securityContext;
   const set = SECURITY_CONTEXT_KEYS.filter(k => sc?.[k] !== undefined);
   if (set.length === 0) return [];
@@ -535,8 +535,7 @@ function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
   ].join("\n");
 }
 
-function describePod(host: KubectlHost, name: string | undefined): string {
-  if (!name) return host._err("kubectl describe pod: Welcher Pod?", "Die Namen siehst du mit 'kubectl get pods'.");
+export function describePod(host: KubectlHost, name: string): string {
   const c = findClusterPod(host, name);
   if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found', "Tipp: Pod-Namen kannst du aus 'kubectl get pods' kopieren.");
   switch (c.owner) {
@@ -544,32 +543,6 @@ function describePod(host: KubectlHost, name: string | undefined): string {
     case "StatefulSet": return describeStatefulPod(host, c);
   }
 }
-
-/** Ein describe-Renderer bekommt den Objektnamen (oder undefined) und den aufgelösten Typ. */
-type DescribeRenderer = (host: KubectlHost, name: string | undefined, kind: ResourceKind) => string;
-
-/** Die beschreibbaren Typen (Schlüssel = Plural aus ./resources). */
-const DESCRIBE_RENDERERS: ReadonlyMap<ResourcePlural, DescribeRenderer> = new Map<ResourcePlural, DescribeRenderer>([
-  ["nodes", describeNode],
-  ["ingresses", describeIngress],
-  ["networkpolicies", describeNetworkPolicy],
-  ["roles", describeRole],
-  ["clusterroles", describeRole],
-  ["serviceaccounts", describeServiceAccount],
-  ["pods", describePod],
-]);
-
-export function kubectlDescribe(host: KubectlHost, t: string[]) {
-  const { typ, name, error } = typeAndName(positionals("describe", t));
-  if (error) return host._err(error);
-  if (!typ) return host._err("error: You must specify the type of resource to describe.", "z.B. 'kubectl describe pod <name>'.");
-  const kind = resolveKind(typ);
-  if (!kind) return unknownResourceType(host, typ);
-  const render = DESCRIBE_RENDERERS.get(kind.plural);
-  if (!render) return notSimulated(host, "'kubectl describe " + kind.plural + "'.", ["kubectl describe pod|node|ingress|networkpolicy|role|clusterrole|serviceaccount <name>"]);
-  return render(host, name, kind);
-}
-
 
 export function kubectlTop(host: KubectlHost, t: string[]) {
   const [what = "", name = null] = positionals("top", t);

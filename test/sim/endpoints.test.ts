@@ -4,7 +4,7 @@ import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { podIP } from "../../src/sim/util";
 import { findClusterPod } from "../../src/sim/pods";
-import { podAddress, serviceBackends, readyBackends, endpointPort } from "../../src/sim/endpoints";
+import { podAddress, serviceBackends, readyBackends, endpointPort, serviceSelector, endpointAddresses } from "../../src/sim/endpoints";
 
 const HEADLESS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  clusterIP: None\n  selector:\n    app: speicher\n  ports:\n    - port: 5432\n";
 const NORMAL_STS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  ports:\n    - port: 5432\n";
@@ -266,5 +266,59 @@ describe("StatefulSet-Pod mit Pending-PVC (#1404)", () => {
     expect(b[0].ready).toBe(true);
     expect(podAddress(findClusterPod(sim, "speicher-0")!, sim.pvcs)).toBe(podIP("speicher-0"));
     expect(sim.scrapeTargets().filter(t => t.job !== "kubelet")).toStrictEqual([{ job: "speicher", instance: podIP("speicher-0") + ":5432", health: "up" }]);
+  });
+});
+
+describe("serviceSelector und endpointAddresses (#1465)", () => {
+  const svc = (sim: KQSim, name: string) => sim.services.find(s => s.name === name)!;
+
+  test("Service vor einem Deployment: app=<service>", () => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }], services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80 }] });
+    expect(serviceSelector(sim, svc(sim, "kasse"))).toBe("app=kasse");
+  });
+
+  test("ExternalName hat keinen Selektor", () => {
+    const sim = new KQSim({ files: { "e.yaml": EXTERNAL } });
+    sim.exec("kubectl apply -f e.yaml");
+    expect(serviceSelector(sim, svc(sim, "speicher"))).toBeNull();
+  });
+
+  test("StatefulSet mit fremdem Namen am Service: app=<statefulset>", () => {
+    const sim = new KQSim({ statefulSets: [sts({ name: "speicher", serviceName: "db" })], services: [{ name: "db", type: "ClusterIP", clusterIP: "None", port: 5432 }] });
+    expect(serviceSelector(sim, svc(sim, "db"))).toBe("app=speicher");
+  });
+
+  test("Konsistenz: der Workload-Name jedes Backends ist der Selektorwert", () => {
+    const sim = new KQSim({
+      deployments: [{ name: "kasse", image: "nginx", replicas: 2 }],
+      statefulSets: [sts({ name: "speicher", serviceName: "db" })],
+      services: [
+        { name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80 },
+        { name: "db", type: "ClusterIP", clusterIP: "None", port: 5432 },
+      ],
+    });
+    for (const s of sim.services) {
+      const sel = serviceSelector(sim, s)!.replace("app=", "");
+      const backends = serviceBackends(sim, s);
+      expect(backends.length).toBeGreaterThan(0);
+      for (const b of backends) {
+        const c = findClusterPod(sim, b.pod)!;
+        expect(c.owner === "Deployment" ? c.dep.name : c.sts.name).toBe(sel);
+      }
+    }
+  });
+
+  test("endpointAddresses: nur bereite Pods, ip:Zielport; ohne bereite Pods leer", () => {
+    const sim = new KQSim({
+      deployments: [{ name: "kasse", image: "nginx", replicas: 2 }],
+      services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80, targetPort: 8080 }],
+    });
+    const d = sim.deployments[0];
+    expect(endpointAddresses(sim, svc(sim, "kasse"))).toEqual(d.pods.map(p => podIP(p.name) + ":8080"));
+    const kaputt = new KQSim({
+      deployments: [{ name: "kasse", image: "nginx", replicas: 2, broken: { type: "notready" } }],
+      services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80 }],
+    });
+    expect(endpointAddresses(kaputt, kaputt.services[0])).toEqual([]);
   });
 });
