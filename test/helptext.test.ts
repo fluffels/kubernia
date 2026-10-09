@@ -44,6 +44,14 @@ describe("help kubectl", () => {
   });
 });
 
+describe("help kubeadm", () => {
+  test("lehrt die echte join-Form mit Endpoint und --token, kein positionales Token", () => {
+    const out = help("help kubeadm").output!;
+    expect(out).toContain("join <endpoint> --token <token>");
+    expect(out).not.toMatch(/join <token>/);
+  });
+});
+
 describe("help <andere>", () => {
   test("Familie ohne Grenzen: keine Vereinfachungs-Rubrik", () => {
     const out = help("help ls").output!;

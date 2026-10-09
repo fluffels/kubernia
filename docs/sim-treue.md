@@ -83,4 +83,4 @@ Zeilen mit 💡 an einer **Fehlermeldung** zählen nicht als Abweichung (Lernhil
 
 ## Bekannte Lücken (Stand 2026-10-09)
 
-Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe configmap`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430; curl-NetworkPolicy: #887; kubeadm-join-Form: #1511).
+Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe configmap`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430; curl-NetworkPolicy: #887).

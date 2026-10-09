@@ -7,6 +7,7 @@ import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
 
+const JOIN = (t: string) => "kubeadm join 10.0.0.10:6443 --token " + t;
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
 
@@ -58,9 +59,9 @@ test("kubeadm join: hängt Worker an, sie tauchen in get nodes auf", () => {
   const bare = new KQSim({ bareMetal: true });
   bare.exec("kubeadm init");
   const token = bare.controlPlane.token!;
-  // Beide Schreibweisen: --token und positional.
-  assert.match(bare.exec("kubeadm join " + APISERVERTOKEN(token, true)).output!, /joined the cluster/i);
-  assert.match(bare.exec("kubeadm join " + token).output!, /joined the cluster/i);
+  // Volle Form mit CA-Hash und die Kurzform ohne.
+  assert.match(bare.exec("kubeadm join " + APISERVERTOKEN(token)).output!, /joined the cluster/i);
+  assert.match(bare.exec(JOIN(token)).output!, /joined the cluster/i);
   assert.equal(bare.nodes.length, 3, "1 Control-Plane + 2 Worker");
   const nodes = bare.exec("kubectl get nodes").output!;
   assert.match(nodes, /ahoi-worker-1/);
@@ -71,10 +72,14 @@ test("kubeadm join: hängt Worker an, sie tauchen in get nodes auf", () => {
 
 test("Negativ: kubeadm join VOR init scheitert, fügt keinen Node hinzu", () => {
   const bare = new KQSim({ bareMetal: true });
-  const r = bare.exec("kubeadm join abcdef.0123456789abcdef");
+  const r = bare.exec(JOIN("abcdef.0123456789abcdef"));
   assert.equal(r.error, true);
   assert.match(r.output!, /connection refused|couldn't validate/i);
   assert.equal(bare.nodes.length, 0, "ohne Control-Plane kommt kein Worker dazu");
+  // Die Argumentprüfung kommt zuerst (wie bei echtem kubeadm): die falsche Form ist ein Validierungsfehler, kein connection refused.
+  const falsch = bare.exec("kubeadm join abcdef.0123456789abcdef");
+  assert.match(falsch.output!, /missing port in address/);
+  assert.doesNotMatch(falsch.output!, /connection refused/);
 });
 
 test("Negativ: doppeltes kubeadm init wird abgelehnt, Cluster bleibt heil", () => {
@@ -91,7 +96,7 @@ test("Negativ: doppeltes kubeadm init wird abgelehnt, Cluster bleibt heil", () =
 test("Negativ: kubeadm join mit falschem Token scheitert", () => {
   const bare = new KQSim({ bareMetal: true });
   bare.exec("kubeadm init");
-  const r = bare.exec("kubeadm join wrong.token0000000000");
+  const r = bare.exec(JOIN("wrong.token0000000000"));
   assert.equal(r.error, true);
   assert.match(r.output!, /invalid bootstrap token/i);
   assert.equal(bare.nodes.length, 1, "ein falscher Token hängt keinen Worker an");
@@ -100,9 +105,37 @@ test("Negativ: kubeadm join mit falschem Token scheitert", () => {
 test("Negativ: kubeadm join ohne Token scheitert", () => {
   const bare = new KQSim({ bareMetal: true });
   bare.exec("kubeadm init");
-  const r = bare.exec("kubeadm join");
+  const r = bare.exec("kubeadm join 10.0.0.10:6443");
   assert.equal(r.error, true);
-  assert.match(r.output!, /token is required/i);
+  assert.match(r.output!, /the bootstrap token is invalid/);
+  assert.match(r.output!, /--token/);
+  assert.equal(bare.nodes.length, 1);
+});
+
+test("Negativ: kubeadm join mit positionalem Token (die erfundene Form) wird abgelehnt, mit Hinweis auf die echte Form", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  const token = bare.controlPlane.token!;
+  for (const cmd of ["kubeadm join " + token, "kubeadm join " + token + " --token " + token]) {
+    const r = bare.exec(cmd);
+    assert.equal(r.error, true, cmd);
+    assert.match(r.output!, new RegExp('apiServerEndpoint: Invalid value: "' + token + '": address ' + token + ": missing port in address"), cmd);
+    assert.match(r.output!, /Join-Token, kein Endpoint/, cmd);
+    assert.ok(r.output!.includes("kubeadm join 10.0.0.10:6443 --token " + token), cmd + ": Tipp nennt die echte Form mit dem eingegebenen Token");
+  }
+  assert.equal(bare.nodes.length, 1, "kein Fehlversuch hängt einen Worker an");
+});
+
+test("Negativ: kubeadm join ohne Endpoint (nackt oder nur --token) nennt den echten Validierungsfehler", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  for (const cmd of ["kubeadm join", "kubeadm join --token " + bare.controlPlane.token]) {
+    const r = bare.exec(cmd);
+    assert.equal(r.error, true, cmd);
+    assert.match(r.output!, /discovery: Invalid value: "": bootstrapToken or file must be set/, cmd);
+    assert.match(r.output!, /kubeadm join 10.0.0.10:6443 --token/, cmd);
+  }
+  assert.equal(bare.nodes.length, 1);
 });
 
 test("Negativ: unbekannter kubeadm-Unterbefehl", () => {
@@ -114,7 +147,7 @@ test("Negativ: unbekannter kubeadm-Unterbefehl", () => {
 test("kubeadm reset: räumt den Cluster ab, kubectl scheitert wieder", () => {
   const bare = new KQSim({ bareMetal: true });
   bare.exec("kubeadm init");
-  bare.exec("kubeadm join " + bare.controlPlane.token);
+  bare.exec(JOIN(bare.controlPlane.token!));
   assert.equal(bare.nodes.length, 2);
   const r = bare.exec("kubeadm reset");
   assert.equal(r.error, false);
@@ -133,9 +166,9 @@ test("kubeadm join: ein neuer Worker kann wartende Pods einplanen", () => {
     deployments: [{ name: "app", image: "nginx", replicas: 1, broken: { type: "pending" } }],
   });
   assert.match(s.exec("kubectl get pods").output!, /Pending/);
-  s.exec("kubeadm join tok123.aaaaaaaaaaaaaaaa");
-  s.exec("kubeadm join tok123.aaaaaaaaaaaaaaaa");
-  s.exec("kubeadm join tok123.aaaaaaaaaaaaaaaa"); // > 3 Nodes löst _reschedulePending
+  s.exec(JOIN("tok123.aaaaaaaaaaaaaaaa"));
+  s.exec(JOIN("tok123.aaaaaaaaaaaaaaaa"));
+  s.exec(JOIN("tok123.aaaaaaaaaaaaaaaa")); // > 3 Nodes löst _reschedulePending
   assert.equal(s.deployments[0].broken, null, "mit genug Nodes wird der Pod eingeplant");
 });
 
@@ -144,7 +177,7 @@ test("kubeadm join: ein neuer Worker kann wartende Pods einplanen", () => {
 test("Round-trip: ein aufgebauter Cluster überlebt snapshot → neue Sim", () => {
   const bare = new KQSim({ bareMetal: true });
   bare.exec("kubeadm init");
-  bare.exec("kubeadm join " + bare.controlPlane.token);
+  bare.exec(JOIN(bare.controlPlane.token!));
   const snap = bare.snapshot();
   const reloaded = new KQSim(snap);
   assert.equal(reloaded.controlPlane.up, true);
@@ -192,15 +225,15 @@ test("Aufbau-Bogen spielbar: Sturm zerstört, danach init/join baut wieder auf",
   sim.mergeScenario({ bareMetal: true });
   assert.equal(sim.controlPlane.up, false);
   sim.exec("kubeadm init");
-  sim.exec("kubeadm join " + sim.controlPlane.token);
+  sim.exec(JOIN(sim.controlPlane.token!));
   assert.equal(sim.controlPlane.up, true);
   assert.equal(sim.nodes.length, 2, "Control-Plane + 1 Worker neu aufgebaut");
   assert.doesNotMatch(sim.exec("kubectl get nodes").output!, /was refused/i);
 });
 
 /** Hilfs-Schreibweise: realistischer `kubeadm join`-Aufruf mit --token (wie init ihn ausgibt). */
-function APISERVERTOKEN(token: string, withFlag: boolean): string {
-  return withFlag ? "10.0.0.10:6443 --token " + token + " --discovery-token-ca-cert-hash sha256:deadbeef" : token;
+function APISERVERTOKEN(token: string): string {
+  return "10.0.0.10:6443 --token " + token + " --discovery-token-ca-cert-hash sha256:deadbeef";
 }
 
 /* ===== #1469: Eingabetreue – Flag-Tabelle, Endpoint, nicht simulierte Unterbefehle ===== */
@@ -251,7 +284,7 @@ test("kubeadm join: der von init gedruckte Befehl funktioniert einzeilig und mit
   assert.match(bare.exec(einzeilig).output!, /joined the cluster/i);
   assert.match(bare.exec(line.replace("\\\n", "\\ ")).output!, /joined the cluster/i, "mit stehengebliebenem Backslash");
   assert.match(bare.exec("kubeadm join 10.0.0.10:6443 --token " + bare.controlPlane.token).output!, /joined the cluster/i);
-  assert.match(bare.exec("kubeadm join " + bare.controlPlane.token + " 10.0.0.10:6443").output!, /joined the cluster/i, "Token und Endpoint in beliebiger Reihenfolge");
+  assert.match(bare.exec("kubeadm join --token " + bare.controlPlane.token + " 10.0.0.10:6443").output!, /joined the cluster/i, "Flag vor dem Endpoint");
 });
 
 test("kubeadm join: falscher Endpoint ist 'connection refused', falsche Argumente und fehlende Werte lehnen ab", () => {
@@ -262,13 +295,16 @@ test("kubeadm join: falscher Endpoint ist 'connection refused', falsche Argument
   assert.equal(refused.error, true);
   assert.match(refused.output!, /10\.9\.9\.9:6443: connect: connection refused/);
   assert.match(bare.exec("kubeadm join --token").output!, /flag needs an argument/);
-  assert.match(bare.exec("kubeadm join foo").output!, /weder ein API-Server-Endpoint/);
+  const foo = bare.exec("kubeadm join foo").output!;
+  assert.match(foo, /missing port in address/);
+  assert.match(foo, /Der Endpoint ist host:port/);
+  assert.doesNotMatch(foo, /Join-Token, kein Endpoint/, "ein Nicht-Token bekommt nicht den Token-Tipp");
   assert.match(bare.exec("kubeadm join 10.0.0.10:6443 " + token + " extra.arg").output!, /accepts at most 1 arg/);
-  assert.match(bare.exec("kubeadm join --bogus " + token).output!, /Nicht simuliert: das Flag '--bogus'/);
+  assert.match(bare.exec("kubeadm join --bogus 10.0.0.10:6443 --token " + token).output!, /Nicht simuliert: das Flag '--bogus'/);
   assert.match(bare.exec("kubeadm join 10.0.0.10:6443 10.0.0.10:6443 --token " + token).output!, /accepts at most 1 arg\(s\), received 2/);
   assert.match(bare.exec("kubeadm join " + token + " " + token).output!, /accepts at most 1 arg/);
   assert.equal(bare.nodes.length, 1, "kein Fehlversuch hängt einen Worker an");
-  assert.match(bare.exec("kubeadm join --discovery-token-ca-cert-hash sha256:abc " + token).output!, /joined the cluster/i);
+  assert.match(bare.exec("kubeadm join --discovery-token-ca-cert-hash sha256:abc --token " + token + " 10.0.0.10:6443").output!, /joined the cluster/i);
 });
 
 test("kubeadm reset -f wird angenommen, unbekannte Flags nicht", () => {

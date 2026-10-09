@@ -13,7 +13,7 @@
     {"befehl":"join","flag":"<api-server-endpoint>","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-eine-cp","kubeadm-ausgabe"]},
     {"befehl":"join","flag":"--token","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-eine-cp","kubeadm-ausgabe"]},
     {"befehl":"join","flag":"--discovery-token-ca-cert-hash","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["kubeadm-eine-cp"]},
-    {"befehl":"join","flag":"<token>","verhalten":"abweichend","ausgabe":"vereinfacht","tickets":[1511],"grenzen":["kubeadm-ausgabe"]},
+    {"befehl":"join","flag":"<token>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["kubeadm-ausgabe"]},
     {"befehl":"reset","ziel":"node","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-reset","kubeadm-ausgabe"]},
     {"befehl":"reset","flag":"-f","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["kubeadm-reset","kubeadm-ausgabe"]}
   ]

@@ -87,7 +87,7 @@ test("kubeadm init/join/reset provisionieren & räumen Knoten über den Kanal (m
   assert.equal(sim.controlPlane.up, true);
 
   const token = sim.controlPlane.token!;
-  sim.exec("kubeadm join --token " + token);
+  sim.exec("kubeadm join 10.0.0.10:6443 --token " + token);
   const workers = sim.nodes.filter(n => !isControlPlane(n));
   assert.equal(workers.length, 1, "join hängt genau einen Worker an");
   assert.equal(workers[0].version, NODE_VERSION);
