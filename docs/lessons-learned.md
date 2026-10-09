@@ -17,7 +17,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 ### Ein Regler wirkt nur beim passenden Modell
 
-**Was geschah:** `effort: low` am Explore-Agenten (eingeführt mit [PR #1541](https://github.com/fluffels/kubernia/pull/1541)) wirkt nur, weil der Alias `haiku` (Stand 2026-10-08) auf ein Modell mit Effort-Unterstützung auflöst. Auf einem Cloud-Anbieter mit älterem Haiku wäre derselbe Wert wirkungslos.
+**Was geschah:** `effort: low` am Explore-Agenten (eingeführt mit [#1209](https://github.com/fluffels/kubernia/issues/1209), Wirkung geklärt in [PR #1541](https://github.com/fluffels/kubernia/pull/1541)) wirkt nur, weil der Alias `haiku` (Stand 2026-10-08) auf ein Modell mit Effort-Unterstützung auflöst. Auf einem Cloud-Anbieter mit älterem Haiku wäre derselbe Wert wirkungslos.
 
 **Geändert:** Die Abhängigkeit steht an der Phasen-Zeile selbst, damit ein Modellwechsel sie nicht still bricht.
 
@@ -37,7 +37,9 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Was geschah:** Jedes Gate kostet Zeit und Tokens; ob es etwas findet, wurde lange nicht erfasst.
 
-**Geändert:** Die Status-Checkliste meldet Lockern-Kandidaten (Punkt 8: Kosten ohne Fund über mehrere Läufe in Folge).**Offen (Stand 2026-10-09):** die Entscheidung, wie gelockert wird ([#1357](https://github.com/fluffels/kubernia/issues/1357)), und die Fundquote je Gate ([#1360](https://github.com/fluffels/kubernia/issues/1360)).
+**Geändert:** Die Status-Checkliste meldet Lockern-Kandidaten (Punkt 8: Kosten ohne Fund über mehrere Läufe in Folge).
+
+**Offen (Stand 2026-10-09):** die Entscheidung, wie gelockert wird ([#1357](https://github.com/fluffels/kubernia/issues/1357)), und die Fundquote je Gate ([#1360](https://github.com/fluffels/kubernia/issues/1360)).
 
 **Beleg:** [Checkliste, Punkt 8](model-routing.md#langfuse-status-überprüfen-1293).
 
