@@ -23,7 +23,7 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { median } from "./mess-lib.mjs";
+import { istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
 import { projektSlug } from "./transkript.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laufzeit.mjs";
 
@@ -36,7 +36,6 @@ export const PHASEN = ["Umsetzung", "Pflege", "verify", "Review", "Lens-Fix", "C
 const CI_WARTEN = /gh\s+pr\s+checks|pr-warten|gh\s+run\s+watch|until\b[^\n]*gh\s+pr\s+view/;
 const VERIFY = /verify:|npm\s+run\s+verify|vitest|eslint|typecheck|check:/;
 const num = (x) => (Number.isFinite(x) ? x : 0);
-const kontextVon = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
 const summe = (liste) => liste.reduce((s, x) => s + x, 0);
 
 /** Pfade und Befehle ohne Benutzerordner und Worktree-Präfix (das Repo ist öffentlich). */
@@ -117,8 +116,7 @@ function neuaufbauten(eintraege) {
   for (let i = 1; i < eintraege.length; i++) {
     const c = eintraege[i].call;
     const gap = Date.parse(c.ts) - Date.parse(eintraege[i - 1].call.ts);
-    const ctx = kontextVon(c);
-    if (!(gap > PAUSE_MS && ctx > 0 && num(c.cacheRead) < ctx / 2)) continue;
+    if (!istNeuaufbau({ gapMs: gap, pauseMs: PAUSE_MS, call: c })) continue;
     const preis = priceFor(c.model, PRICES, c.ts);
     liste.push({
       ursache: ursacheVon(eintraege[i - 1]),

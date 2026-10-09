@@ -33,7 +33,7 @@ import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei } from "./transkript.mjs";
-import { CACHE_TTL_MS, median } from "./mess-lib.mjs";
+import { CACHE_TTL_MS, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
@@ -114,7 +114,6 @@ export function countReviewRounds(reviewDescriptions) {
   return lensRounds + (rounds.length - lenses.length);
 }
 
-const contextOf = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
 
 const subKey = (c) => c.subagent.id ?? c.subagent;
 /**
@@ -139,9 +138,9 @@ function sockelOf(allCalls, windowCalls) {
     median(
       [...firstBySub.values()]
         .filter((c) => classifySubagent(c.subagent.agentType, c.subagent.description) === phase)
-        .map(contextOf),
+        .map(kontextVon),
     );
-  return { main: main ? contextOf(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
+  return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
 }
 
 const ohnePreis = (c) => c.cost === undefined || c.cost === null;
@@ -185,8 +184,8 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     unpricedModels: unpricedModels(ticket),
     costParts: costPartsOf(ticket),
     medianContext: {
-      all: median(ticket.map(contextOf)),
-      main: median(ticket.filter((c) => !c.subagent).map(contextOf)),
+      all: median(ticket.map(kontextVon)),
+      main: median(ticket.filter((c) => !c.subagent).map(kontextVon)),
     },
     sockel: sockelOf(calls, ticket),
   };
@@ -295,8 +294,7 @@ export function countCacheRebuilds(calls) {
     const sorted = [...list].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
     for (let i = 1; i < sorted.length; i++) {
       const gap = Date.parse(sorted[i].ts) - Date.parse(sorted[i - 1].ts);
-      const ctx = contextOf(sorted[i]);
-      if (gap > pause && ctx > 0 && num(sorted[i].cacheRead) < ctx / 2) {
+      if (istNeuaufbau({ gapMs: gap, pauseMs: pause, call: sorted[i] })) {
         count += 1;
         cacheWriteTokens += num(sorted[i].cacheWrite);
       }
