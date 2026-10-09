@@ -165,12 +165,12 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(md).toContain("s/Req");
   });
   test("renderMarkdown zeigt die Kosten-Spalte, `-` ohne Preis", () => {
-    const md = S.renderMarkdown(S.laufzeiten({ laeufe: [lauf("Plane #77", 0, 4), ohnePreisLauf("Plane #78")] }));
+    const md = S.renderMarkdown(S.laufzeiten({ laeufe: [lauf("Plane #77", 0, 4), lauf("Plane #79", 0, 4), ohnePreisLauf("Plane #78")] }));
     expect(md).toContain("Kosten ($)");
     expect(md).toMatch(/\| #77 \|.*\| 0\.01 \|/);
     expect(md).toMatch(/\| #78 \|.*\| - \|/);
-    // Aggregat: Median 0,01, Σ 0,01, ein Lauf ohne Preis (Spalten Median, Summe, ohne Preis).
-    expect(md).toMatch(/\| alle gemessenen \| 2 \|.*\| 0\.01 \| 0\.01 \| 1 \|/);
+    // Aggregat: Median 0,01, Σ 0,02, ein Lauf ohne Preis (Spalten Median, Summe, ohne Preis).
+    expect(md).toMatch(/\| alle gemessenen | 3 |.*| 0.01 | 0.02 | 1\| 2 \|.*\| 0\.01 \| 0\.01 \| 1 \|/);
   });
 });
 
