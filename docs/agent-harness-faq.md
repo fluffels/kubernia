@@ -126,7 +126,7 @@ Dann `browser_navigate` auf `http://127.0.0.1:4173/`, per `browser_evaluate` war
 
 Für Belege, die einen echten Lauf brauchen (Langfuse-Erfassung, Hook-Verhalten in einem Subagenten):
 
-- **Aufruf:** `claude -p --allowedTools "Agent,SendMessage" "<auftrag>"` statt Bypass-Modus: den lehnt der Auto-Mode ab, und für eine Probe mit Subagent genügen diese zwei Tools. Das Ergebnis per `--output-format json` oder Umleitung in eine Datei im Scratchpad schreiben lassen.
+- **Aufruf:** `claude -p "<auftrag>" --allowedTools "Agent,SendMessage"` (der Prompt steht vor den Flags: `--allowedTools` ist variadisch und verschluckt einen Prompt dahinter, dann meldet `claude` fehlende Eingabe) statt Bypass-Modus: den lehnt der Auto-Mode ab, und für eine Probe mit Subagent genügen diese zwei Tools. Das Ergebnis per `--output-format json` oder Umleitung in eine Datei im Scratchpad schreiben lassen.
 - **Warten:** nie mit einem Hintergrund-`Monitor`, der `sleep` aufruft: er funktioniert nicht, und ein Hintergrund-Task hält den eigenen Lauf nicht offen (die Laufzeit erzwingt dann die Übergabe). Stattdessen eine Vordergrund-Schleife mit Timeout auf die Zieldatei, z.B. `timeout 590 bash -c 'until [ -s <ziel> ]; do sleep 10; done'` mit Tool-Timeout 600000. Ist die Datei nach dem Timeout noch leer, dieselbe Schleife höchstens noch einmal, danach melden statt endlos zu warten.
 
 ## Wie räume ich Scratch auf, wenn Befehle blockiert werden? (#1382)

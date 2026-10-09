@@ -16,7 +16,7 @@ Die Messung (Token, Kosten, Läufe je Rolle) hängt an Langfuse. Der gepatchte H
 - **Das lokale Claude-Code-Transkript ist die Quelle der Wahrheit** für Calls, Tokens und Kosten; **Langfuse ist die Sicht darauf.** Was dort fehlt, wird aus dem Transkript nachgeliefert, nicht der Hook weiter gepatcht.
 - Der Abgleich läuft **automatisch und idempotent** an `SessionStart` und `SessionEnd` (nie an `Stop`), losgelöst vom Claude-Code-Prozess, mit Lock und Log. Idempotenz stammt aus deterministischen Beobachtungs-IDs und der Frage „Ist zuerst“ (Ledger nur als Brücke über den Ingestion-Verzug); ein kaputtes Ledger kostet höchstens Abfragen.
 - **Dubletten werden nur gemeldet**, nie gelöscht oder korrigiert: das Schreiben in fremde Daten wäre schwerer rückgängig zu machen als eine gemeldete Doppelzählung.
-- Der Zugang zum Secret-Key kommt für den Hook aus `~/.config/agent-secrets.env`, nicht aus einer Windows-Benutzervariable (unter nativem Windows sähe sie jede Agenten-Shell).
+- Der Zugang kommt für den Hook aus `~/.langfuse-secret` (Secret-Key) und den Plugin-Optionen der User-Settings (öffentlicher Key, URL), nicht aus einer Windows-Benutzervariable (unter nativem Windows sähe sie jede Agenten-Shell). Nur der Hook-Einstieg liest sie.
 
 ## Konsequenzen
 
