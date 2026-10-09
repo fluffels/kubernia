@@ -1,0 +1,86 @@
+name: Deploy-Validierung
+
+# #1544: `deploy/**` hatte keine CI-Validierung. Dieser Workflow prüft das Helm-Chart (helm lint)
+# und validiert rohe Manifeste sowie das gerenderte Chart per kubeconform gegen die
+# Kubernetes-Schemas plus cert-manager-/Gateway-API-CRD-Schemas.
+#
+# NICHT-BLOCKIEREND: kein Required Check im Ruleset, und bewusst ohne `continue-on-error`
+# (die Eingaben sind fest, der Lauf ist deterministisch; ein verstecktes Rot wäre kein Signal).
+# Läuft nur bei Änderungen an deploy/** bzw. an dieser Datei. Eine spätere Hochstufung zum
+# Required Check ist eine Ruleset-Änderung (Außenwirkung, vorher klären); dann `paths:` durch
+# einen job-internen Skip ersetzen, sonst bleibt der Check bei PRs ohne Deploy-Änderung aus.
+#
+# Feste Eingaben (kein Dependabot-Update dafür, Anhebung von Hand): kubeconform-Version samt SHA256,
+# Kubernetes-Schema-Version und der Commit des CRD-Katalogs. Fehlt für eine neue CRD-Gruppe ein Schema,
+# die Katalog-SHA anheben, nie `-ignore-missing-schemas` setzen (fail-closed).
+# Nicht fest: das Helm-Binary des Runner-Images (die Version wird nur geloggt) und `-schema-location default`
+# (yannh/kubernetes-json-schema, nur der Versionsordner ist gepinnt); beides kann ohne Änderung an deploy/** rot machen.
+# Grenze: kubeconform prüft Schemas, keine Semantik (z.B. ein unbekannter `pathType`-Wert geht durch).
+on:
+  pull_request:
+    paths: ['deploy/**', '.github/workflows/deploy-validate.yml']
+  push:
+    branches: [main]
+    paths: ['deploy/**', '.github/workflows/deploy-validate.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KUBECONFORM_VERSION: v0.8.0
+  KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+  KUBERNETES_VERSION: 1.36.0
+  CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/63669a570e231d4f1f8396d229a1de512bcf0a34/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+
+# Tragend: erst ein explizites `shell: bash` setzt `-eo pipefail`. Ohne wäre
+# `helm template … | kubeconform -` grün, wenn helm scheitert (leeres stdin = 0 Ressourcen, Exit 0).
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    name: Deploy-Manifeste prüfen (helm lint + kubeconform, nicht-blockierend, #1544)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Helm-Version
+        run: helm version --short
+
+      - name: kubeconform installieren (feste Version, SHA256 geprüft)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/kubeconform.tar.gz" \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  $RUNNER_TEMP/kubeconform.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$RUNNER_TEMP" kubeconform
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: helm lint (Default und ci-Values)
+        run: |
+          helm lint --strict deploy/chart
+          for f in deploy/chart/ci/*-values.yaml; do
+            helm lint --strict deploy/chart -f "$f"
+          done
+
+      - name: Rohe Manifeste validieren
+        run: |
+          kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" \
+            -schema-location default -schema-location "$CRD_SCHEMAS" \
+            -ignore-filename-pattern '^deploy.chart.' deploy/
+
+      - name: Gerendertes Chart validieren (Default und ci-Values)
+        run: |
+          helm template kubernia deploy/chart | kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" \
+            -schema-location default -schema-location "$CRD_SCHEMAS" -
+          for f in deploy/chart/ci/*-values.yaml; do
+            helm template kubernia deploy/chart -f "$f" | kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" \
+              -schema-location default -schema-location "$CRD_SCHEMAS" -
+          done
