@@ -23,7 +23,8 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { ladeLaeufe, laufAus, median } from "./subagent-laufzeit.mjs";
+import { median } from "./mess-lib.mjs";
+import { ladeLaeufe, laufAus } from "./subagent-laufzeit.mjs";
 
 const MIN = 60_000;
 const PAUSE_MS = 5 * MIN;
