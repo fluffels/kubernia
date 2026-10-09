@@ -277,3 +277,118 @@ describe("ladeLaeufe: datei relativ zum Projektordner (#1580)", () => {
     expect(r[0].datei).toBe("sess1/subagents/agent-x.jsonl");
   });
 });
+
+describe("laufzeiten: Beschreibung, Delta-Art, Erst-Call (#1582)", () => {
+  type Ext = L & { beschreibung: string | null; brille: string | null; runde: number | null; deltaArt: string | null; promptZeichen: number; ersterCall: { input: number; cacheWrite: number; cacheRead: number } | null };
+  const mit = (beschreibung: string | undefined, prompt: string, o: { ohneCall?: boolean } = {}): Ext => {
+    const zeilen: Row[] = [user(0, prompt)];
+    if (!o.ohneCall) zeilen.push(call(1, 7, undefined, 100, 8000), call(2));
+    const meta: Record<string, unknown> = { agentType: "kubernia-lens" };
+    if (beschreibung !== undefined) meta.description = beschreibung;
+    return S.laufzeiten({ laeufe: [{ meta: meta as Lauf["meta"], zeilen }], agent: "kubernia-lens" }).laeufe[0] as Ext;
+  };
+  test("neues Format: Brille und Runde, kurze Namen werden zur Brille normalisiert", () => {
+    expect(mit("Lens Architektur R1", "x")).toMatchObject({ brille: "Architektur", runde: 1, beschreibung: "Lens Architektur R1" });
+    expect(mit("Lens Test R3", "x")).toMatchObject({ brille: "Test-Adäquanz", runde: 3 });
+    expect(mit("Lens Requirement R2", "x")).toMatchObject({ brille: "Requirement-Treue", runde: 2 });
+  });
+  test("älteres Format lens:<brille>:r<n>", () => {
+    expect(mit("lens:doku:r2", "x")).toMatchObject({ brille: "Doku", runde: 2 });
+  });
+  test("fehlende oder fremde Beschreibung: null ohne Absturz", () => {
+    expect(mit(undefined, "x")).toMatchObject({ beschreibung: null, brille: null, runde: null });
+    expect(mit("Plane etwas", "x")).toMatchObject({ brille: null, runde: null });
+  });
+  test("deltaArt: null ohne Delta-Patch, fix mit, merge bei Konflikt-Auflösung oder Merge in der Beschreibung", () => {
+    expect(mit("Lens Doku R2", "Patch: /t/kq-1-r1.patch").deltaArt).toBeNull();
+    expect(mit("Lens Doku R2", "Patch: /t/kq-1-r1.patch Delta-Patch: /t/kq-1-r2-delta.patch").deltaArt).toBe("fix");
+    expect(mit("Lens Doku R2", "Delta-Patch: /t/x.patch prüfe die Konflikt-Auflösung").deltaArt).toBe("merge");
+    expect(mit("Lens Doku R3 Merge-Auflösung", "Delta-Patch: /t/x.patch").deltaArt).toBe("merge");
+  });
+  test("ersterCall und promptZeichen; ohne Call null", () => {
+    const l = mit("Lens Doku R1", "abcde");
+    expect(l.promptZeichen).toBe(5);
+    expect(l.ersterCall).toMatchObject({ input: 100 });
+    expect(mit("Lens Doku R1", "x", { ohneCall: true }).ersterCall).toBeNull();
+  });
+});
+
+describe("laufzeiten: Patch-Zugriffe (#1582)", () => {
+  type Z = { zugriffe: number; zeilen: number; gesamt: number | null; anteil: number | null; komplett: boolean };
+  type P = { ticket: number | null; runde: number | null; voll: Z; delta: Z | null } | null;
+  const VOLL = "C:\\Temp\\kq-12-r2.patch";
+  const DELTA = "C:\\Temp\\kq-12-r2-delta.patch";
+  let n = 0;
+  type Aufruf = { name: string; input: Record<string, unknown>; ergebnis?: Record<string, unknown>; fehler?: boolean };
+  const lesen = (pfad: string, offset: number, num: number, total: number): Aufruf => ({ name: "Read", input: { file_path: pfad, offset, limit: num }, ergebnis: { type: "text", file: { filePath: pfad, startLine: offset, numLines: num, totalLines: total } } });
+  const patchVon = (prompt: string, aufrufe: Aufruf[]): P => {
+    const zeilen: Row[] = [user(0, prompt)];
+    aufrufe.forEach((a, i) => {
+      const id = `p${++n}`;
+      zeilen.push(call(1 + i, 7, undefined, 1000));
+      const asst = call(1 + i + 0.05, 7, id);
+      (asst.message as { content: unknown[] }).content = [{ type: "tool_use", id, name: a.name, input: a.input }];
+      zeilen.push(asst);
+      zeilen.push({ type: "user", timestamp: t(1 + i + 0.1), toolUseResult: a.ergebnis, message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok", is_error: a.fehler }] } });
+    });
+    zeilen.push(call(20));
+    const l = S.laufzeiten({ laeufe: [{ meta: { agentType: "kubernia-lens" }, zeilen }], agent: "kubernia-lens" }).laeufe[0] as unknown as { patch: P };
+    return l.patch;
+  };
+  const PROMPT = `Lens Doku R2 · Patch: ${VOLL} · Delta-Patch: ${DELTA} · erwarteter HEAD: abc`;
+  const sh = (command: string, name = "Bash"): Aufruf => ({ name, input: { command }, ergebnis: { stdout: "x" } });
+
+  test("Ticket und Runde stammen aus dem Patch-Pfad, ohne Patch im Prompt ist patch null", () => {
+    expect(patchVon(PROMPT, [])).toMatchObject({ ticket: 12, runde: 2 });
+    expect(patchVon("kein Patch hier", [lesen(VOLL, 1, 10, 10)])).toBeNull();
+  });
+  test("abschnittsweise Vollständigkeit: alle Abschnitte gelesen = komplett, Anteil 1", () => {
+    const p = patchVon(PROMPT, [lesen(VOLL, 1, 100, 250), lesen(VOLL, 101, 100, 250), lesen(VOLL, 201, 50, 250)])!;
+    expect(p.voll).toMatchObject({ zugriffe: 3, zeilen: 250, gesamt: 250, anteil: 1, komplett: true });
+    expect(p.delta).toMatchObject({ zugriffe: 0, komplett: false });
+  });
+  test("nur Delta gelesen plus gezielter Read auf den vollen Patch: voll nicht komplett", () => {
+    const p = patchVon(PROMPT, [lesen(DELTA, 1, 40, 40), lesen(VOLL, 120, 20, 400)])!;
+    expect(p.delta).toMatchObject({ zeilen: 40, anteil: 1, komplett: true });
+    expect(p.voll).toMatchObject({ zeilen: 20, gesamt: 400, anteil: 0.05, komplett: false });
+  });
+  test("überlappende Bereiche zählen einmal", () => {
+    const p = patchVon(PROMPT, [lesen(VOLL, 1, 60, 100), lesen(VOLL, 41, 20, 100)])!;
+    expect(p.voll.zeilen).toBe(60);
+  });
+  test("Read ohne offset/limit und ohne Längenangabe gilt als komplett, mit Längenangabe zählt der Anteil", () => {
+    expect(patchVon(PROMPT, [{ name: "Read", input: { file_path: VOLL }, ergebnis: {} }])!.voll.komplett).toBe(true);
+    const mitLaenge: Aufruf = { name: "Read", input: { file_path: VOLL }, ergebnis: { file: { startLine: 1, numLines: 100, totalLines: 5000 } } };
+    expect(patchVon(PROMPT, [mitLaenge])!.voll).toMatchObject({ anteil: 0.02, komplett: false });
+  });
+  test("Fallback offset/limit ohne Ergebnisfeld: Bereich aus der Eingabe, Länge unbekannt, nicht komplett", () => {
+    const p = patchVon(PROMPT, [{ name: "Read", input: { file_path: VOLL, offset: 11, limit: 30 }, ergebnis: {} }])!;
+    expect(p.voll).toMatchObject({ zeilen: 30, gesamt: null, anteil: null, komplett: false });
+  });
+  test("fehlgeschlagener Read zählt nicht", () => {
+    expect(patchVon(PROMPT, [{ ...lesen(VOLL, 1, 10, 10), fehler: true }])!.voll.zugriffe).toBe(0);
+  });
+  test("cat und Get-Content ohne Begrenzung sind komplett, sed/head/grep gezielt", () => {
+    expect(patchVon(PROMPT, [sh(`cat "${VOLL}"`)])!.voll.komplett).toBe(true);
+    expect(patchVon(PROMPT, [sh(`Get-Content ${VOLL}`, "PowerShell")])!.voll.komplett).toBe(true);
+    expect(patchVon(PROMPT, [sh(`sed -n '1,50p' "${VOLL}"`)])!.voll).toMatchObject({ zugriffe: 1, komplett: false });
+    expect(patchVon(PROMPT, [sh(`head -n 20 ${VOLL}`)])!.voll.komplett).toBe(false);
+    expect(patchVon(PROMPT, [sh(`cat ${VOLL} | grep foo`)])!.voll.komplett).toBe(false);
+    expect(patchVon(PROMPT, [sh(`Get-Content ${VOLL} -TotalCount 30`, "PowerShell")])!.voll.komplett).toBe(false);
+  });
+  test("Grep auf den Patch ist ein gezielter Zugriff ohne Zeilen", () => {
+    const p = patchVon(PROMPT, [{ name: "Grep", input: { pattern: "x", path: VOLL }, ergebnis: {} }])!;
+    expect(p.voll).toMatchObject({ zugriffe: 1, zeilen: 0, komplett: false });
+  });
+  test("Basename-Vergleich: Slash-Stil und Großschreibung gelten, ein anderer Patch und der Delta-Name nicht für den vollen", () => {
+    const p = patchVon(PROMPT, [lesen("c:/temp/KQ-12-R2.PATCH", 1, 10, 10), lesen("C:\\Temp\\kq-99-r2.patch", 1, 10, 10)])!;
+    expect(p.voll.zugriffe).toBe(1);
+    const q = patchVon(PROMPT, [lesen(DELTA, 1, 5, 5)])!;
+    expect(q.voll.zugriffe).toBe(0);
+    expect(q.delta!.zugriffe).toBe(1);
+    expect(patchVon(PROMPT, [sh(`cat ${DELTA}`)])!.voll.zugriffe).toBe(0);
+  });
+  test("Read auf eine Tool-Result-Datei zählt nicht als Patch-Zugriff", () => {
+    expect(patchVon(PROMPT, [lesen("C:\\Users\\x\\tool-results\\abc.txt", 1, 200, 200)])!.voll.zugriffe).toBe(0);
+  });
+});

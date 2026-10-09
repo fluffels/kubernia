@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { median } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektSlug, transkriptZeilen } from "./transkript.mjs";
+import { patchAus } from "./patch-zugriff.mjs";
 
 const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
@@ -73,6 +74,24 @@ function kostenAus(calls) {
   return calls.reduce((summe, c) => summe + c.cost, 0);
 }
 
+const BRILLEN = [[/^arch/i, "Architektur"], [/^req/i, "Requirement-Treue"], [/^test/i, "Test-Adäquanz"], [/^doku/i, "Doku"]];
+const brilleNorm = (b) => BRILLEN.find(([re]) => re.test(b))?.[1] ?? b;
+
+/** Brille und Runde aus der Spawn-Beschreibung (`Lens <Brille> R<n>`, älter `lens:<brille>:r<n>`); Merge-Läufe heißen `M<n>`. */
+export function beschreibungAus(beschreibung) {
+  const d = typeof beschreibung === "string" ? beschreibung.trim() : "";
+  const merge = /\bMerge|\bM\d+\b/i.test(d);
+  const neu = /^Lens\s+(.+?)\s+R(\d+)\b/i.exec(d);
+  if (neu) return { brille: brilleNorm(neu[1]), runde: Number(neu[2]), merge };
+  const alt = /^lens(-m)?:([^:\s]+):r?(\d+)/i.exec(d);
+  if (alt) return { brille: brilleNorm(alt[2]), runde: alt[1] ? null : Number(alt[3]), merge: Boolean(alt[1]) };
+  const ohne = /^Lens\s+(\S+)/i.exec(d);
+  return { brille: ohne ? brilleNorm(ohne[1]) : null, runde: null, merge };
+}
+
+/** Art des Delta-Auftrags: `null` ohne `Delta-Patch:`, `"merge"` bei Konflikt-Auflösung (Merge-Lens), sonst `"fix"`. */
+const deltaArtAus = (prompt, merge) => (!/Delta-Patch:/.test(prompt) ? null : merge || /Konflikt-Aufl(?:ö|oe)sung/i.test(prompt) ? "merge" : "fix");
+
 /** Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. */
 export function laufAus({ meta, zeilen, datei }) {
   const zeiten = zeilen.map((r) => r?.timestamp).filter(gueltig).map(ms);
@@ -83,11 +102,21 @@ export function laufAus({ meta, zeilen, datei }) {
   const { calls } = callsFromTranscript(zeilen);
   const { intervalle, offeneTools } = toolIntervalle(zeilen);
   const dauer = ende - start;
+  const beschr = beschreibungAus(meta?.description);
+  const patch = patchAus(prompt, zeilen);
+  const erster = calls[0];
   const tool = Math.min(vereinigungMs(intervalle), dauer);
   return {
     agentType: meta?.agentType ?? null,
     modelle: [...new Set(calls.map((c) => c.model).filter(Boolean))].sort(),
     datei: datei ?? null,
+    beschreibung: typeof meta?.description === "string" ? meta.description : null,
+    brille: beschr.brille,
+    runde: beschr.runde ?? patch?.runde ?? null,
+    deltaArt: deltaArtAus(prompt, beschr.merge),
+    promptZeichen: prompt.length,
+    ersterCall: erster ? { input: erster.input ?? 0, cacheWrite: erster.cacheWrite ?? 0, cacheRead: erster.cacheRead ?? 0 } : null,
+    patch,
     ticket: Number(/#(\d+)/.exec(prompt)?.[1]) || null,
     sammel: /\(gesammelt\)/i.test(prompt),
     start,

@@ -283,3 +283,36 @@ describe("Lens-Fix, Repo-Wurzel, Kostenteile (Grenzfälle R2)", () => {
     expect(g.kostenWrite).toBeCloseTo((6000 * 2.5) / 1e6, 9);
   });
 });
+
+describe("Filter --delta und --brille (#1582)", () => {
+  type Filter = { laeufe: Lauf[]; agent?: string; delta?: boolean | null; brille?: string | null };
+  const kt = (e: Filter) => (K as unknown as { kontextTreiber: (e: Filter) => { gesamt: { gesamt: { n: number } | null } } }).kontextTreiber(e).gesamt.gesamt?.n ?? 0;
+  const PA = (K as unknown as { parseArgs: (a: string[]) => { delta?: boolean; brille?: string; fehler?: string } }).parseArgs;
+  const lens = (beschreibung: string, prompt: string): Lauf => {
+    const l = lauf(prompt, [{ min: 1 }, { min: 2 }], "kubernia-lens");
+    (l.meta as Record<string, unknown>).description = beschreibung;
+    return l;
+  };
+  const r1 = lens("Lens Architektur R1", "Patch: /t/kq-1-r1.patch");
+  const r2 = lens("Lens Test-Adäquanz R2", "Patch: /t/kq-1-r1.patch Delta-Patch: /t/kq-1-r2-delta.patch");
+  const alle = [r1, r2];
+  test("ohne Filter zählen alle Läufe (Regression)", () => {
+    expect(kt({ laeufe: alle, agent: "kubernia-lens" })).toBe(2);
+  });
+  test("delta true nur mit Delta-Patch, delta false nur ohne", () => {
+    expect(kt({ laeufe: alle, agent: "kubernia-lens", delta: true })).toBe(1);
+    expect(kt({ laeufe: alle, agent: "kubernia-lens", delta: false })).toBe(1);
+  });
+  test("brille filtert auf den Namen, ein unbekannter Name liefert keine Läufe", () => {
+    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Architektur" })).toBe(1);
+    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Test-Adäquanz", delta: true })).toBe(1);
+    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Architektur", delta: true })).toBe(0);
+    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Gibtsnicht" })).toBe(0);
+  });
+  test("parseArgs: --delta ja|nein und --brille; ein anderer Wert ist ein Fehler", () => {
+    expect(PA(["--delta", "ja", "--brille", "Doku"])).toMatchObject({ delta: true, brille: "Doku" });
+    expect(PA(["--delta", "nein"]).delta).toBe(false);
+    expect(PA(["--delta", "vielleicht"]).fehler).toMatch(/ja\|nein/);
+    expect(PA([]).delta).toBeUndefined();
+  });
+});
