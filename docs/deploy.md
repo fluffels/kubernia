@@ -161,8 +161,8 @@ helm lint deploy/chart
 helm template kubernia deploy/chart
 
 # Schema-Validierung (kubeconform): rohe Manifeste und gerendertes Chart
-kubeconform -strict -summary -schema-location default -schema-location '<CRD-Katalog-URL>' -ignore-filename-pattern '^deploy.chart.' deploy/
-helm template kubernia deploy/chart | kubeconform -strict -summary -schema-location default -schema-location '<CRD-Katalog-URL>' -
+kubeconform -strict -summary -kubernetes-version <Version aus dem Workflow> -schema-location default -schema-location '<CRD-Katalog-URL>' -ignore-filename-pattern '^deploy.chart.' deploy/
+helm template kubernia deploy/chart | kubeconform -strict -summary -kubernetes-version <Version aus dem Workflow> -schema-location default -schema-location '<CRD-Katalog-URL>' -
 ```
 
 Dieselben Prüfungen laufen in der CI als nicht-blockierender Job für `deploy/**`

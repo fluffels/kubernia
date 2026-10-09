@@ -13,6 +13,8 @@ name: Deploy-Validierung
 # Feste Eingaben (kein Dependabot-Update dafür, Anhebung von Hand): kubeconform-Version samt SHA256,
 # Kubernetes-Schema-Version und der Commit des CRD-Katalogs. Fehlt für eine neue CRD-Gruppe ein Schema,
 # die Katalog-SHA anheben, nie `-ignore-missing-schemas` setzen (fail-closed).
+# Nicht fest: das Helm-Binary des Runner-Images (die Version wird nur geloggt) und `-schema-location default`
+# (yannh/kubernetes-json-schema, nur der Versionsordner ist gepinnt); beides kann ohne Änderung an deploy/** rot machen.
 # Grenze: kubeconform prüft Schemas, keine Semantik (z.B. ein unbekannter `pathType`-Wert geht durch).
 on:
   pull_request:
