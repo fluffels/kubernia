@@ -48,7 +48,7 @@ function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}
         return "";
       }
       if (a.startsWith("for-each-ref")) return (welt.refs ?? []).join("\n");
-      if (a.startsWith("worktree list")) return ["worktree C:/dev/kubernia", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n");
+      if (a.startsWith("worktree list")) return ["worktree /repo", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n");
       if (a.startsWith("log -1")) return String(welt.commitSek ?? 0);
       if (a.includes("reflog")) return String(welt.reflogSek ?? 0);
       if (a.includes("status --porcelain")) return (welt.status ?? []).join("\n");
@@ -109,7 +109,7 @@ describe("claim", () => {
 
   test("belegt: Worktree kq-<nr> oder lokaler/remote Branch feature/kq-<nr>-* → Exit 4, kein Lock", () => {
     for (const welt of [
-      { worktrees: ["C:/dev/kubernia/.claude/worktrees/kq-9"] },
+      { worktrees: ["/repo/.claude/worktrees/kq-9"] },
       { refs: ["feature/kq-9-irgendwas"] },
       { refs: ["origin/feature/kq-9-irgendwas"] },
     ]) {
@@ -147,7 +147,7 @@ describe("pruefe", () => {
   });
 
   test("Worktree mit Aktivität vor 29 min → aktiv (Exit 4), vor 31 min → uebernehmbar (Exit 0)", () => {
-    const wt = "C:/dev/kubernia/.claude/worktrees/kq-5";
+    const wt = "/repo/.claude/worktrees/kq-5";
     const welt = (minuten: number): Welt => ({ worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: (JETZT - minuten * MIN) / 1000, reflogSek: (JETZT - minuten * MIN) / 1000 });
     const aktiv = lauf(["pruefe", "5"], welt(29));
     assert.equal(aktiv.code, 4);
@@ -157,7 +157,7 @@ describe("pruefe", () => {
   });
 
   test("jede Quelle zählt: Commit, Reflog, geänderte Datei, node_modules", () => {
-    const wt = "C:/dev/kubernia/.claude/worktrees/kq-5";
+    const wt = "/repo/.claude/worktrees/kq-5";
     const alt = (JETZT - 120 * MIN) / 1000;
     const basis: Welt = { worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: alt, reflogSek: alt, status: [" M scripts/a.mjs", "?? neu.txt"] };
     assert.equal(lauf(["pruefe", "5"], basis).out, "uebernehmbar\n", "Kontrolle: alles alt");
@@ -175,7 +175,7 @@ describe("pruefe", () => {
 
   test("mit eigener Nonce und einem Worktree mit frischer Aktivität bleibt es aktiv (Doppel-Spawn)", () => {
     const a = lauf(["claim", "5"]);
-    const welt: Welt = { worktrees: ["C:/dev/kubernia/.claude/worktrees/kq-5"], reflogSek: (JETZT - 5 * MIN) / 1000 };
+    const welt: Welt = { worktrees: ["/repo/.claude/worktrees/kq-5"], reflogSek: (JETZT - 5 * MIN) / 1000 };
     assert.equal(lauf(["pruefe", "5", "--nonce", nonceVon(a)], welt).code, 4);
   });
 });
@@ -243,5 +243,55 @@ describe("Aufruf und reine Funktionen", () => {
     const echt = M.echteDeps() as { lockDir: string };
     assert.match(echt.lockDir.replace(/\\/g, "/"), /\.git\/kq-locks$/);
     assert.doesNotMatch(echt.lockDir.replace(/\\/g, "/"), /\.claude\/worktrees/);
+  });
+});
+
+describe("verlorener Wettlauf und Randfälle in claim und pruefe", () => {
+  const fehler = (code: string) => Object.assign(new Error(code), { code });
+
+  test("das Umbenennen des verwaisten Locks scheitert (ein anderer war schneller) → Exit 4, der fremde Lock bleibt", () => {
+    const alt = lauf(["claim", "7"], {}, JETZT - 3 * 60 * MIN);
+    const r = M.fuehreAus(["claim", "7"], {
+      ...deps(),
+      benenneUm: () => {
+        throw fehler("ENOENT");
+      },
+    });
+    assert.equal(r.code, 4);
+    assert.match(r.err, /übernommen/);
+    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonce, nonceVon(alt));
+  });
+
+  test("nach dem Umbenennen gewinnt ein anderer das Neuanlegen → Exit 4, keine Nonce ausgegeben", () => {
+    lauf(["claim", "7"], {}, JETZT - 3 * 60 * MIN);
+    const r = M.fuehreAus(["claim", "7"], {
+      ...deps(),
+      schreibeNeu: () => {
+        throw fehler("EEXIST");
+      },
+    });
+    assert.equal(r.code, 4);
+    assert.doesNotMatch(r.out, /nonce=/);
+    assert.match(r.err, /belegt/);
+  });
+
+  test("ein anderer Fehler beim Anlegen (kein EEXIST) ist Exit 2, nicht still „gewonnen“", () => {
+    const r = M.fuehreAus(["claim", "7"], {
+      ...deps(),
+      schreibeNeu: () => {
+        throw fehler("EACCES");
+      },
+    });
+    assert.equal(r.code, 2);
+    assert.doesNotMatch(r.out, /nonce=/);
+  });
+
+  test("git status: Umbenennung (`R  alt -> neu`) und zitierter Pfad mit Leerzeichen zählen als geänderte Datei", () => {
+    const wt = "/repo/.claude/worktrees/kq-5";
+    const alt = (JETZT - 120 * MIN) / 1000;
+    const welt: Welt = { worktrees: [wt], reflogSek: alt, status: ["R  alt.txt -> neu.txt", '?? "mit leer.txt"'] };
+    assert.equal(lauf(["pruefe", "5"], welt).out, "uebernehmbar\n", "Kontrolle: nichts frisch");
+    assert.equal(lauf(["pruefe", "5"], welt, JETZT, { [join(wt, "neu.txt")]: JETZT - 5 * MIN }).out, "aktiv\n", "Ziel der Umbenennung");
+    assert.equal(lauf(["pruefe", "5"], welt, JETZT, { [join(wt, "mit leer.txt")]: JETZT - 5 * MIN }).out, "aktiv\n", "zitierter Pfad");
   });
 });

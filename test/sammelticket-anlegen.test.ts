@@ -12,7 +12,7 @@ type Offen = { number: number; titel: string; assignees: string[]; createdAt: st
 type Anlegen = {
   parseArgs: (argv: string[]) => Args | null;
   sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerOffen?: boolean }) => string;
-  vorhandenesSammelticket: (offene: Offen[], titel: string) => Offen | null;
+  kandidatenSammelticket: (offene: Offen[], titel: string) => Offen[];
 };
 const A = raw as unknown as Anlegen;
 
@@ -59,20 +59,20 @@ describe("sammelticketBody", () => {
   });
 });
 
-describe("vorhandenesSammelticket", () => {
+describe("kandidatenSammelticket", () => {
   const o = (number: number, titel: string, assignees: string[] = []): Offen => ({ number, titel, assignees, createdAt: "2026-10-01T00:00:00Z" });
   const T = "Harness-Härtung (gesammelt)";
 
   test("exakter Titel, ungeclaimt; bei mehreren das mit der höchsten Nummer", () => {
-    expect(A.vorhandenesSammelticket([o(5, T), o(9, T), o(7, T)], T)?.number).toBe(9);
-    expect(A.vorhandenesSammelticket([o(5, T)], T)?.number).toBe(5);
+    expect(A.kandidatenSammelticket([o(5, T), o(9, T), o(7, T)], T).map((i) => i.number)).toEqual([9, 7, 5]);
+    expect(A.kandidatenSammelticket([o(5, T)], T).map((i) => i.number)).toEqual([5]);
   });
 
   test("Negativfälle: geclaimt, anderer oder fast gleicher Titel, leer → null", () => {
-    expect(A.vorhandenesSammelticket([o(5, T, ["fluffels"])], T)).toBeNull();
-    expect(A.vorhandenesSammelticket([o(5, `${T} x`), o(6, T.toLowerCase()), o(7, "Langfuse-Befunde (gesammelt)")], T)).toBeNull();
-    expect(A.vorhandenesSammelticket([], T)).toBeNull();
-    expect(A.vorhandenesSammelticket([o(5, T, ["fluffels"]), o(6, T)], T)?.number).toBe(6);
+    expect(A.kandidatenSammelticket([o(5, T, ["fluffels"])], T)).toEqual([]);
+    expect(A.kandidatenSammelticket([o(5, `${T} x`), o(6, T.toLowerCase()), o(7, "Langfuse-Befunde (gesammelt)")], T)).toEqual([]);
+    expect(A.kandidatenSammelticket([], T)).toEqual([]);
+    expect(A.kandidatenSammelticket([o(5, T, ["fluffels"]), o(6, T)], T).map((i) => i.number)).toEqual([6]);
   });
 });
 

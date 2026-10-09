@@ -34,6 +34,7 @@ describe("deny: Interpreter liest das Programm von stdin", () => {
     ["innerhalb von $(…)", "X=$(python3 - <<EOF\nprint(1)\nEOF\n)"],
     ["hinter &&", "cd x && python3 - <<EOF\nx\nEOF"],
     ["Programm nach --: kein Programm, nur -", "python3 -- -"],
+    ["-- ohne Folgewort", "python3 --"],
   ])("%s", (_name, command) => {
     assert.ok(blockt(command), command);
   });
@@ -59,6 +60,11 @@ describe("durchlassen: Programm kommt aus Datei, -c/-e/-m oder es ist nur eine A
     ["node -v", "node -v"],
     ["node -c Datei", "node -c f.mjs"],
     ["python -c", "python3 -c 'print(1)'"],
+    ["node --eval=Form", "node --eval='console.log(1)'"],
+    ["-- vor einer Datei", "python3 -- f.py"],
+    ["Cluster mit -e/-p", "node -pe '1+1'"],
+    ["Cluster mit -c", "python3 -Ic 'print(1)'"],
+    ["Cluster -VV", "python3 -VV"],
     ["python -m", "python3 -m http.server"],
     ["python --version", "python3 --version"],
     ["python -V", "python -V"],

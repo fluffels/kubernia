@@ -14,7 +14,7 @@
  * (Exit 0): `board-place.mjs` und der Board-Takt (`board-takt.mjs`) korrigieren die Position beim nächsten Lauf selbst.
  * Race-fest (#1561): `vorhanden` wird per Direktabruf (`repos/<repo>/issues/<nr>`) bestätigt, weil die Listen-Abfrage nachhinkt (ein gerade geschlossenes
  * Ticket stand noch als offen und ungeclaimt darin, Evidenz #1560/#1561). Nach dem Anlegen und nach der Positions-Schleife läuft ein Dubletten-Check:
- * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0); hat das eigene
+ * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
  * schon Kommentare, warnt es nur.
  * Mit `--vorgaenger <nr>` nennt der Body den Vorgänger; `blockiert durch #<nr>` steht nur drin, solange er offen ist.
  *
@@ -70,13 +70,7 @@ export function sammelticketBody({ art, vorgaenger = null, vorgaengerOffen = fal
   return zeilen.join("\n");
 }
 
-/** Das ungeclaimte offene Sammelticket mit exaktem Titel (bei mehreren das mit der höchsten Nummer, das jüngste) aus `normalizeOffene`; sonst null. Pur. */
-export function vorhandenesSammelticket(offene, titel) {
-  const treffer = offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0);
-  return treffer.length === 0 ? null : treffer.reduce((a, b) => (b.number > a.number ? b : a));
-}
-
-/** Die Kandidaten (offen laut Liste, exakter Titel, ungeclaimt) in absteigender Nummer. Pur. */
+/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). Pur. */
 export function kandidatenSammelticket(offene, titel) {
   return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0).sort((a, b) => b.number - a.number);
 }
@@ -122,7 +116,7 @@ function schliesseWennDublette(nr, titel) {
   if (d.art !== "eigenes-schliessen") return false;
   ghJson(["api", "-X", "POST", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`]);
   ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"]);
-  console.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen, kein Board-Platz. Das Original ist #${d.aelter}.`);
+  console.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen (stand es schon im Board, bleibt das Item dort geschlossen liegen). Das Original ist #${d.aelter}.`);
   return true;
 }
 /** Zustand des Vorgängers (offen?) per REST; unlesbar zählt als offen (die Sperre ist die sichere Seite). */

@@ -25,7 +25,7 @@ describe("CACHE_TTL_MS", () => {
 
 describe("keine lokalen Kopien in den Mess-Skripten", () => {
   test.each(["token-baseline", "subagent-laufzeit", "hauptchat-zerlegung"])("%s importiert aus mess-lib.mjs und definiert kein eigenes median", (name) => {
-    const src = readFileSync(`scripts/${name}.mjs`, "utf8");
+    const src = readFileSync(new URL(`../scripts/${name}.mjs`, import.meta.url), "utf8");
     expect(src).toMatch(/from "\.\/mess-lib\.mjs"/);
     expect(src).not.toMatch(/(function median|const median\w* =|\d \* 60_000)/);
   });

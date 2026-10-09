@@ -138,7 +138,7 @@ const ergebnis = (code, out = "", err = "") => ({ code, out: out ? `${out}\n` : 
 
 function claim(deps, nr) {
   try {
-    deps.git(["fetch", "-q", "origin"]);
+    deps.git(["fetch", "-q", "--prune", "origin"]);
   } catch {
     /* fail-open: ohne Netz zählen die lokalen Refs */
   }
