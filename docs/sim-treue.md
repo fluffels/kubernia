@@ -66,11 +66,11 @@ Zeilen mit 💡 an einer **Fehlermeldung** zählen nicht als Abweichung (Lernhil
 - **Familien:** jeder Befehl der Dispatch-Tabelle (`SIM_COMMANDS`, ohne die Metabefehle `ls` und `cat`) hat eine Matrix-Datei oder steht in der Abbauliste `OHNE_MATRIX` im Wächter (Familie → offenes Kind-Ticket von #1452; die Liste dort ist die SSOT, hier stehen keine Nummern). Eine Matrix zu einem Abbaulisten-Eintrag macht den Eintrag stale und damit rot; eine Familie mit `grenzen` in `helptext.ts` braucht eine Matrix.
 - **Vollständigkeit** je Familie über ein Spec-Objekt im Test (Form oben). Bei Unterbefehls-Familien prüft eine Sanity-Probe fail-closed, dass der „unbekannt“-Text nur den erfundenen Unterbefehl trifft.
 - **kubectl-Tiefe:** bei `get` hat jede Aliasgruppe (`GET_RESOURCE_SCOPES`) genau eine Zeile. Bei `describe`, `create`, `delete`, `top` probt der Test jeden get-Alias per `exec`, bei `set`, `rollout`, `auth`, `label` die Unterverben aus `dokuZiele` plus Zeilen, bei `apply` müssen die per Mapper unterstützten `kind`s (`MAPPED_KINDS`) Zeilen haben; ändert sich der „nicht simuliert“-Text eines Befehls, schlägt die Sanity-Probe an.
-- **Nicht geprüft:** ob ein Status stimmt (das ist Handarbeit gegen die Doku), `scale`, `expose`, `logs` (nur Präsenz), Flags und Aufrufformen (nur durch Zeilen, die jemand einträgt, bei Einzelbefehlen ganz), Altpfad-Arten von `apply` über `MAPPED_KINDS` hinaus.
+- **Nicht geprüft:** ob ein Status stimmt (das ist Handarbeit gegen die Doku), `scale`, `expose`, `logs` (nur Präsenz), Flags und Aufrufformen (nur durch Zeilen, die jemand einträgt; bei Einzelbefehlen prüft der Wächter, dass jedes Flag der Flag-Tabelle eine Zeile hat, nicht die Aufrufformen), Altpfad-Arten von `apply` über `MAPPED_KINDS` hinaus.
 
 ## Neuer Befehl, neue Familie, neue Doku-Version
 
-- Neuer Unterbefehl oder neue Ressourcenart im Simulator: Zeile in der Matrix, sonst ist der Test rot. Neue Aufrufform oder neues Flag eines Einzelbefehls: Zeile von Hand eintragen (der Wächter sieht sie nicht).
+- Neuer Unterbefehl oder neue Ressourcenart im Simulator: Zeile in der Matrix, sonst ist der Test rot. Neues Flag eines Einzelbefehls (Eintrag in `CURL_ARGS`/`NSLOOKUP_ARGS`): Zeile mit dem Flag-Namen im `flag`, sonst ist der Test rot; neue Aufrufform ohne Flag: Zeile von Hand eintragen (der Wächter sieht sie nicht).
 - **Neue Befehlsfamilie** (Eintrag in `COMMAND_HANDLERS`): Matrix `sim-treue/<familie>.json` nach demselben Muster, ihre `grenzen` in `helptext.ts`, ein Eintrag im Spec-Objekt des Tests (bei einer Unterbefehls-Familie mit exportierter Registry). Ohne Matrix ist der Familien-Wächter rot; wer sie bewusst später baut, trägt sie mit offenem Ticket in `OHNE_MATRIX` ein.
 - Neue Doku-Version einer Familie (Manpage, Referenzseite): die Referenzseiten der Zeilen mit Status `gleich` erneut ansehen, `stand` in der JSON mitziehen. Für `kubectl` und `kubeadm` gilt beim K8s-Bump zusätzlich die Liste unten.
 - Zwei Versionen bei `kubectl`: Clientseitiges (Flags, Spalten) prüfst du gegen die aktuelle Doku, Serverseitiges (Warnungen, Deprecations, entfernte APIs) folgt `clusterVersion` in der JSON, und die ist `NODE_VERSION` (`src/sim/nodes.ts`, ein Test koppelt beide).
@@ -81,6 +81,6 @@ Zeilen mit 💡 an einer **Fehlermeldung** zählen nicht als Abweichung (Lernhil
   4. `NODE_VERSION` und `clusterVersion` anheben; die `hafen_cluster`-Version in den Quest-Daten (`version = "x.y.z"` in Terraform-Texten) zieht ein Wächter in `test/sim/nodes.test.ts` mit. Node-Specs der Quests tragen keine Version, sie folgt `NODE_VERSION`; der Snapshot speichert die Version nur bei Abweichung (`nodeSnapshot`), ein Anheben braucht darum keinen Save-Format-Bump.
   5. Serverwarnungen als Feld `deprecationWarning` in der Registry (`src/sim/kubectl/resources.ts`) pflegen; `stand` in den Matrizen der K8s-Familien (`kubectl`, `kubeadm`) mitziehen.
 
-## Bekannte Lücken (Stand 2026-10-08)
+## Bekannte Lücken (Stand 2026-10-09)
 
-Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe configmap`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430; curl-NetworkPolicy: #887; curl- und nslookup-Flags: #1510).
+Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe configmap`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430; curl-NetworkPolicy: #887).

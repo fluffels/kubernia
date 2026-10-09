@@ -4,10 +4,12 @@ import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { podIP, generatedName, K8S_ALPHANUMS } from "../../src/sim/util";
 import { CONTROL_PLANE_IP } from "../../src/sim/nodes";
+import { endpointSliceOf, serviceBackends } from "../../src/sim/endpoints";
 
 const svc = (name: string, extra: object = {}) => ({ name, type: "ClusterIP" as const, clusterIP: "10.96.0.20", port: 80, ...extra });
 const zeilen = (sim: KQSim, cmd = "kubectl get endpointslices") => (sim.exec(cmd).output || "").split("\n").filter(l => !l.startsWith("Warning:") && l.trim() !== "");
 const spalten = (zeile: string) => zeile.trim().split(/\s{2,}/);
+const ageVon = (zeile: string) => spalten(zeile)[4];
 const zeileVon = (sim: KQSim, name: string) => zeilen(sim).find(l => l.startsWith(name + "-") || l.startsWith(name + " ")) ?? "";
 
 describe("kubectl get endpointslices", () => {
@@ -36,7 +38,7 @@ describe("kubectl get endpointslices", () => {
     for (const type of ["crashloop", "imagepull"] as const) {
       const broken = type === "crashloop" ? { type, needsSecret: "key" } : { type };
       const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, broken }], services: [svc("kasse")] });
-      expect(sim.exec("kubectl get endpoints kasse").output).toContain("<none>");
+      expect(sim.exec("kubectl get endpoints kasse").output).toMatch(/^kasse\s+<none>\s/m);
       expect(spalten(zeileVon(sim, "kasse"))[3], type).toBe(podIP(sim.deployments[0].pods[0].name));
     }
   });
@@ -69,6 +71,15 @@ describe("kubectl get endpointslices", () => {
     expect(spalten(zeileVon(sim, "kasse"))[3]).toBe(ips.slice(0, 3).join(",") + " + 1 more...");
   });
 
+  test("AGE: eingebaute Slice 3d, Spieler-Service wie get svc", () => {
+    const sim = new KQSim({ services: [svc("kasse")] });
+    sim.clock += 130;
+    expect(ageVon(zeileVon(sim, "kubernetes"))).toBe("3d");
+    const alterSvc = spalten(sim.exec("kubectl get svc").output!.split(String.fromCharCode(10)).find(l => l.startsWith("kasse "))!)[5];
+    expect(alterSvc).not.toBe("3d");
+    expect(ageVon(zeileVon(sim, "kasse"))).toBe(alterSvc);
+  });
+
   test("Name stabil über Aufrufe und Instanzen, je Service verschieden", () => {
     const cfg = { services: [svc("a"), svc("b")] };
     const sim = new KQSim(cfg);
@@ -82,9 +93,9 @@ describe("kubectl get endpointslices", () => {
     const sim = new KQSim({ services: [svc("kasse")] });
     const r = sim.exec("kubectl get endpointslices kasse");
     expect(r.error).toBe(true);
-    expect(r.output).toContain('Error from server (NotFound): endpointslices.discovery.k8s.io "kasse" not found');
+    expect(r.output).toMatch(/^Error from server \(NotFound\): endpointslices\.discovery\.k8s\.io "kasse" not found$/m);
     const name = spalten(zeileVon(sim, "kasse"))[0];
-    for (const t of ["endpointslices.discovery.k8s.io", "endpointslice"]) expect(sim.exec(`kubectl get ${t} ${name}`).output, t).toContain(name);
+    for (const t of ["endpointslices.discovery.k8s.io", "endpointslice"]) expect(spalten(zeilen(sim, `kubectl get ${t} ${name}`)[1])[0], t).toBe(name);
   });
 
   test("Warnungen: get endpointslices ohne, get ep,endpointslices genau eine, mit Präfix", () => {
@@ -92,11 +103,11 @@ describe("kubectl get endpointslices", () => {
     expect(sim.exec("kubectl get endpointslices").output).not.toContain("Warning:");
     const out = sim.exec("kubectl get ep,endpointslices").output || "";
     expect(out.split("\n").filter(l => l.startsWith("Warning:"))).toHaveLength(1);
-    expect(out).toContain("endpointslice.discovery.k8s.io/");
+    expect(out).toMatch(/^endpointslice\.discovery\.k8s\.io\//m);
   });
 
   test("fremder Namespace: leer", () => {
-    expect(new KQSim({ services: [svc("kasse")] }).exec("kubectl get endpointslices -n anderer-ns").output).toContain("No resources found in anderer-ns namespace.");
+    expect(new KQSim({ services: [svc("kasse")] }).exec("kubectl get endpointslices -n anderer-ns").output).toMatch(/^No resources found in anderer-ns namespace\.$/m);
   });
 
   test("-o yaml ist ehrlich nicht simuliert", () => {
@@ -117,5 +128,21 @@ describe("generatedName", () => {
     const n = generatedName("a".repeat(63) + "-", "x");
     expect(n).toHaveLength(63);
     expect(n.startsWith("a".repeat(58))).toBe(true);
+  });
+});
+
+describe("endpointSliceOf: ready und terminal (#1538)", () => {
+  test("endpoints[].ready: Crashloop false, gesund true", () => {
+    const krank = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, broken: { type: "crashloop", needsSecret: "key" } }], services: [svc("kasse")] });
+    expect(endpointSliceOf(krank, krank.services[0])!.endpoints.map(e => e.ready)).toEqual([false]);
+    const gesund = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 2 }], services: [svc("kasse")] });
+    expect(endpointSliceOf(gesund, gesund.services[0])!.endpoints.map(e => e.ready)).toEqual([true, true]);
+  });
+
+  test("serviceBackends: terminal nur für evictetes Deployment, nie für gesund oder StatefulSet", () => {
+    const evict = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "x", usedMi: 600 } }], services: [svc("kasse")] });
+    expect(serviceBackends(evict, evict.services[0]).map(b => b.terminal)).toEqual([true]);
+    const ok = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }], statefulSets: [{ name: "x", image: "postgres:16", replicas: 2, serviceName: "kasse" }], services: [svc("kasse")] });
+    expect(serviceBackends(ok, ok.services[0]).map(b => b.terminal)).toEqual([false, false, false]);
   });
 });
