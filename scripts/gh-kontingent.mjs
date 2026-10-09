@@ -33,10 +33,10 @@ function ressource(json, art) {
 }
 
 /** Prüft beide Kontingente. Fail-open: nicht lesbare Antworten ergeben `ok` mit `warnung`. Pur. */
-export function kontingentPruefen(json, { minAnteil = MIN_ANTEIL, jetzt = Date.now() } = {}) {
+export function kontingentPruefen(json, { minAnteil = MIN_ANTEIL, jetzt = Date.now(), arten = ARTEN } = {}) {
   const knapp = [];
   let gelesen = 0;
-  for (const art of ARTEN) {
+  for (const art of arten) {
     const r = ressource(json, art);
     if (!r) continue;
     gelesen++;
@@ -92,8 +92,8 @@ export function berichtAus(zeilen) {
 }
 
 /** `gh api rate_limit` lesen; wirft bei Fehler (Aufrufer entscheidet fail-open). */
-export function kontingentLesen({ token, exec } = {}) {
-  return ghJson(["api", "rate_limit"], { token, exec, timeout: 15_000 });
+export function kontingentLesen({ token, exec, timeout = 15_000 } = {}) {
+  return ghJson(["api", "rate_limit"], { token, exec, timeout });
 }
 
 export const logPfad = (env = process.env) => env.KQ_GH_KOSTEN_LOG || join(tmpdir(), "kubernia-gh-kosten.jsonl");
@@ -101,12 +101,14 @@ export const logPfad = (env = process.env) => env.KQ_GH_KOSTEN_LOG || join(tmpdi
 /**
  * Vorab-Prüfung am Anfang eines Skripts und Kostenmessung beim Beenden. Gibt `{ ok }` zurück.
  * Knapp lokal: Meldung, `beende(3)` (Standard `process.exit`). Unter GitHub Actions nur `::warning::`, damit ein Takt auf `main` nicht rot wird.
+ * `arten` begrenzt die Vorab-Prüfung auf die Kontingente, die das Skript verbraucht (`naechstes-ticket` läuft nur über REST: `["core"]`).
  * Alles injizierbar (`exec`, `schreibe`, `schreibeLog`, `registriere`, `beende`, `env`, `jetzt`) für Tests.
  */
 export function mitKontingent(name, opts = {}) {
   const {
     token,
     exec,
+    arten = ARTEN,
     env = process.env,
     jetzt = Date.now,
     schreibe = (t) => process.stderr.write(t),
@@ -122,7 +124,7 @@ export function mitKontingent(name, opts = {}) {
     schreibe(`Hinweis: GitHub-API-Kontingent nicht lesbar (${String(e instanceof Error ? e.message : e).split("\n")[0].slice(0, 100)}), Lauf geht weiter.\n`);
     return { ok: true };
   }
-  const p = kontingentPruefen(vorher, { jetzt: jetzt() });
+  const p = kontingentPruefen(vorher, { jetzt: jetzt(), arten });
   if (p.warnung) schreibe(`${p.warnung}\n`);
   if (!p.ok) {
     if (!actions) {
@@ -134,7 +136,7 @@ export function mitKontingent(name, opts = {}) {
   }
   registriere(() => {
     try {
-      const nachher = kontingentLesen({ token, exec });
+      const nachher = kontingentLesen({ token, exec, timeout: 5_000 });
       const d = kostenDelta(vorher, nachher);
       const c = ressource(nachher, "core");
       const g = ressource(nachher, "graphql");

@@ -7,7 +7,7 @@
  *   node scripts/naechstes-ticket.mjs --json   # { ticket, uebersprungen }
  *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel   # nur Label `area:harness` bzw. nur ohne (#1552); Notfälle 🚨/🔒 zählen in beiden
  *
- * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler. Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
+ * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 3 = GitHub-API-Kontingent knapp (`gh-kontingent.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Label `forum`) wird übersprungen und als „Befund melden“ ausgewiesen.
  *
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
@@ -133,7 +133,7 @@ function ladeEcht() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  mitKontingent("naechstes-ticket");
+  mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
   const { code, out, err } = fuehreAus(process.argv.slice(2), { lade: ladeEcht, owner: REPO.split("/")[0] });
   process.stdout.write(out);
   process.stderr.write(err);

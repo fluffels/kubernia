@@ -1,4 +1,6 @@
 /* GitHub-API-Kontingent (#1549 Z1): Vorab-Prüfung, Kostenmessung je Skriptlauf, Bericht. */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/gh-kontingent.mjs";
@@ -54,6 +56,19 @@ describe("kontingentPruefen", () => {
   });
 });
 
+describe("kontingentPruefen: Teilantworten", () => {
+  test("nur core lesbar: core wird geprüft, die kaputte Art übersprungen", () => {
+    expect(K.kontingentPruefen({ resources: { core: res(4000) } }, { jetzt: JETZT }).ok).toBe(true);
+    expect(K.kontingentPruefen({ resources: { core: res(1), graphql: "x" } }, { jetzt: JETZT }).ok).toBe(false);
+  });
+  test("fehlendes used wird aus limit - remaining abgeleitet", () => {
+    const ohneUsed = (r: Res) => ({ limit: r.limit, remaining: r.remaining, reset: r.reset });
+    const v = rate(ohneUsed(res(4000)) as Res, res(5000));
+    const n = rate(ohneUsed(res(3990)) as Res, res(5000));
+    expect(K.kostenDelta(v, n).core).toBe(10);
+  });
+});
+
 describe("kostenDelta", () => {
   test("gleiches Fenster: Differenz der used-Werte", () => {
     const v = rate(res(4000), res(4900));
@@ -92,13 +107,15 @@ describe("mitKontingent", () => {
   function umgebung(vorher: unknown, nachher: unknown, env: Record<string, string> = {}) {
     const antworten = [vorher, nachher];
     const aufrufe: string[][] = [];
+    const tokens: Array<string | undefined> = [];
     const ausgaben: string[] = [];
     const logZeilen: string[] = [];
     const handler: Array<() => void> = [];
     let exitCode: number | undefined;
     const opts = {
-      exec: (_c: string, args: string[]) => {
+      exec: (_c: string, args: string[], o: { env?: Record<string, string> }) => {
         aufrufe.push(args);
+        tokens.push(o.env?.GH_TOKEN);
         const a = antworten.shift();
         if (a instanceof Error) throw a;
         return JSON.stringify(a);
@@ -112,7 +129,7 @@ describe("mitKontingent", () => {
       env,
       jetzt: () => JETZT,
     };
-    return { opts, aufrufe, ausgaben, logZeilen, handler, exit: () => exitCode };
+    return { opts, aufrufe, tokens, ausgaben, logZeilen, handler, exit: () => exitCode };
   }
 
   test("genug Kontingent: Lauf darf weiter, nach dem Lauf genau eine Logzeile mit Delta", () => {
@@ -145,7 +162,42 @@ describe("mitKontingent", () => {
     const u = umgebung(new Error("rate limit exceeded"), new Error("x"));
     expect(K.mitKontingent("board-place", u.opts).ok).toBe(true);
     expect(u.exit()).toBeUndefined();
-    u.handler.forEach((f) => f());
+    expect(u.handler).toHaveLength(0);
+    expect(u.ausgaben.join("")).toContain("nicht lesbar");
+  });
+  test("zweites Lesen im Exit-Handler scheitert: der Handler wirft nie, keine Logzeile", () => {
+    const u = umgebung(rate(res(4000), res(4000)), new Error("netz weg"));
+    expect(K.mitKontingent("board-place", u.opts).ok).toBe(true);
+    expect(u.handler).toHaveLength(1);
+    expect(() => u.handler.forEach((f) => f())).not.toThrow();
     expect(u.logZeilen).toHaveLength(0);
+  });
+  test("lesbare, aber unbrauchbare Antwort: Warnung, Lauf geht weiter, Handler ist registriert", () => {
+    const u = umgebung({}, {});
+    expect(K.mitKontingent("board-place", u.opts).ok).toBe(true);
+    expect(u.ausgaben.join("")).toContain("nicht lesbar");
+    expect(u.handler).toHaveLength(1);
+  });
+  test("token wird an beide Lesevorgänge durchgereicht", () => {
+    const u = umgebung(rate(res(4000), res(4000)), rate(res(4000), res(4000)), {});
+    K.mitKontingent("board-takt", { ...u.opts, token: "PAT" });
+    u.handler.forEach((f) => f());
+    expect(u.tokens).toEqual(["PAT", "PAT"]);
+  });
+  test("arten: [core] ignoriert ein knappes graphql, prüft core weiter", () => {
+    const u = umgebung(rate(res(4000), res(10)), rate(res(4000), res(10)));
+    expect(K.mitKontingent("naechstes-ticket", { ...u.opts, arten: ["core"] }).ok).toBe(true);
+    expect(u.exit()).toBeUndefined();
+    const v = umgebung(rate(res(10), res(4000)), rate(res(10), res(4000)));
+    expect(K.mitKontingent("naechstes-ticket", { ...v.opts, arten: ["core"] }).ok).toBe(false);
+    expect(v.exit()).toBe(3);
+  });
+});
+
+describe("Verdrahtung: die vier Board-Skripte prüfen das Kontingent vorab", () => {
+  test.each(["board-place", "naechstes-ticket", "sammelticket-anlegen", "board-takt"])("%s importiert und ruft mitKontingent auf", (name) => {
+    const text = readFileSync(join(process.cwd(), "scripts", `${name}.mjs`), "utf8");
+    expect(text).toMatch(/import \{ mitKontingent \} from "\.\/gh-kontingent\.mjs";/);
+    expect(text).toContain(`mitKontingent("${name}"`);
   });
 });

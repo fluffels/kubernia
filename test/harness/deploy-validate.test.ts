@@ -38,14 +38,17 @@ interface Workflow {
   jobs?: Record<string, Job>;
 }
 
-/** Zerlegt ein run-Skript in einzelne Befehle (ohne Kommentare, Fortsetzungen aufgelöst). */
-function befehle(run: string): string[] {
-  const ohneKommentar = run
+/** Entfernt Shell-Kommentare (`#` am Zeilenanfang oder nach Leerraum bis Zeilenende). */
+const ohneKommentare = (run: string): string =>
+  run
     .split("\n")
     .map((l) => l.replace(/(^|\s)#.*$/, ""))
-    .join("\n")
-    .replace(/\\\n/g, " ");
-  return ohneKommentar
+    .join("\n");
+
+/** Zerlegt ein run-Skript in einzelne Befehle (ohne Kommentare, Fortsetzungen aufgelöst). */
+function befehle(run: string): string[] {
+  return ohneKommentare(run)
+    .replace(/\\\n/g, " ")
     .split(/\|\|?|&&|;|\n/)
     .map((b) => b.trim().replace(/^(do|then)\s+/, ""))
     .filter((b) => b.length > 0);
@@ -74,7 +77,7 @@ function verstoesse(text: string): string[] {
     if (step["continue-on-error"] !== undefined) v.push(`Step „${n}“ hat continue-on-error`);
     const run = step.run ?? "";
     for (const muster of [/set \+o pipefail/, /set \+e\b/, /\|\|\s*true\b/, /-ignore-missing-schemas/]) {
-      if (muster.test(run.split("\n").map((l) => l.replace(/(^|\s)#.*$/, "")).join("\n"))) {
+      if (muster.test(ohneKommentare(run))) {
         v.push(`Step „${n}“ enthält ${muster.source}`);
       }
     }
@@ -169,5 +172,56 @@ describe("deploy-validate.yml hält seine tragenden Eigenschaften (#1544, #1549)
   test("umbenannter Job (Shadowing eines Required-Kontexts) wird erkannt", () => {
     const s = sabotiere("name: Deploy-Manifeste prüfen", "name: verify");
     assert.deepEqual(verstoesse(s), ["Jobname beginnt nicht mit „Deploy-Manifeste prüfen“"]);
+  });
+
+  test("Job validate fehlt wird erkannt", () => {
+    assert.deepEqual(verstoesse(sabotiere("  validate:\n", "  pruefen:\n")), ["Job validate fehlt"]);
+  });
+
+  test("defaults am Job wird erkannt", () => {
+    const s = sabotiere("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    defaults:\n      run:\n        shell: bash\n");
+    assert.deepEqual(verstoesse(s), ["Job überschreibt defaults"]);
+  });
+
+  test("if am Job wird erkannt", () => {
+    const s = sabotiere("    timeout-minutes: 10\n", "    timeout-minutes: 10\n    if: false\n");
+    assert.deepEqual(verstoesse(s), ["Job hat if"]);
+  });
+
+  test("continue-on-error am Step wird erkannt", () => {
+    const s = sabotiere("      - name: Helm-Version\n", "      - name: Helm-Version\n        continue-on-error: true\n");
+    assert.deepEqual(verstoesse(s), ["Step „Helm-Version“ hat continue-on-error"]);
+  });
+
+  test("set +e wird erkannt", () => {
+    const s = sabotiere("        run: helm version --short", "        run: |\n          set +e\n          helm version --short");
+    assert.deepEqual(verstoesse(s), ["Step „Helm-Version“ enthält set \\+e\\b"]);
+  });
+
+  test("kubeconform ohne -schema-location default wird erkannt", () => {
+    const s = sabotiere(/-schema-location default -schema-location "\$CRD_SCHEMAS" \\\n/, '-schema-location "$CRD_SCHEMAS" \\\n');
+    const v = verstoesse(s);
+    assert.equal(v.length, 1);
+    assert.match(v[0], /^kubeconform ohne -schema-location default: kubeconform -strict /);
+  });
+
+  test("weniger als zwei helm lint wird erkannt", () => {
+    const s = sabotiere('            helm lint --strict deploy/chart -f "$f"\n', '            echo "$f"\n');
+    assert.deepEqual(verstoesse(s), ["weniger als zwei helm lint (Default und ci-Values)"]);
+  });
+
+  test("weniger als drei kubeconform wird erkannt", () => {
+    const s = sabotiere(/-f "\$f" \| kubeconform -strict/, '-f "$f" | cat');
+    assert.deepEqual(verstoesse(s), ["weniger als drei kubeconform (roh, Default, ci-Values)"]);
+  });
+
+  test("Verbotenes nur im Shell-Kommentar ist kein Verstoß", () => {
+    const s = sabotiere("        run: helm version --short", "        run: |\n          helm version --short # || true, set +e, set +o pipefail, -ignore-missing-schemas");
+    assert.deepEqual(verstoesse(s), []);
+  });
+
+  test("Verbotenes in der Zeile nach einem Kommentar zählt weiter", () => {
+    const s = sabotiere("        run: helm version --short", "        run: |\n          # Erklärung\n          helm version --short || true");
+    assert.deepEqual(verstoesse(s), ["Step „Helm-Version“ enthält \\|\\|\\s*true\\b"]);
   });
 });
