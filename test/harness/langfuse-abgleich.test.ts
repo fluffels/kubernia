@@ -8,7 +8,7 @@
  * Ausführen mit: npm test
  */
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, utimesSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
@@ -314,6 +314,22 @@ describe("Diff (pur)", () => {
     expect(d.dubletten).toHaveLength(1);
   });
 
+  test("passende message_id trifft: nichts fehlt, keine Dublette", () => {
+    const soll = [eintrag(1), eintrag(2)];
+    const d = A.diffMultimenge(soll, soll.map((e) => obsZu(e, { metadata: { message_id: e.messageId } })));
+    expect(d).toMatchObject({ art: "messageId", fehlend: [], dubletten: [] });
+  });
+
+  test("fehlend und Dublette zugleich: Status Lücke, Summenzeile zählt beides", () => {
+    const soll = [eintrag(1), eintrag(2)];
+    const d = A.diffMultimenge(soll, [obsZu(soll[0], { id: "a" }), obsZu(soll[0], { id: "b" })]);
+    expect(d.fehlend).toHaveLength(1);
+    expect(d.dubletten).toHaveLength(1);
+    const b = A.bewerteSession({ soll, ist: { calls: 2, tokens: null }, mtime: 0, now: 1e12, diff: d });
+    expect(b.status).toBe("Lücke");
+    expect(A.summenzeile([b])).toMatchObject({ fehlend: 1, dubletten: 1, callsLangfuse: 2 });
+  });
+
   test("Fingerabdruck unterscheidet Modell und Cache-Write-Aufteilung", () => {
     const e = eintrag(1);
     expect(A.diffMultimenge([e], [obsZu(e, { providedModelName: "anderes" })]).fehlend).toHaveLength(1);
@@ -350,7 +366,7 @@ describe("Diff (pur)", () => {
     expect(luecke.status).toBe("Lücke");
     const ok = A.bewerteSession({ soll: [eintrag(3)], ist: { calls: 1, tokens: null }, mtime: 0, now });
     const sum = A.summenzeile([laeuft, ok]);
-    expect(sum).toMatchObject({ sessions: 1, laeuft: 1, callsTranskript: 1, fehlend: 0, quote: 1 });
+    expect(sum).toMatchObject({ sessions: 1, laeuft: 1, callsTranskript: 1, callsLangfuse: 1, fehlend: 0, quote: 1 });
     expect(A.summenzeile([luecke, ok])).toMatchObject({ sessions: 2, callsTranskript: 3, fehlend: 2 });
   });
 });
@@ -363,16 +379,18 @@ describe("pruefen (Ablauf)", () => {
   const antwort = (body: unknown, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body), text: () => Promise.resolve(JSON.stringify(body)) });
 
   /** Ein Langfuse-Mock: zählt Aufrufe, antwortet je nach Pfad. */
-  const mock = (o: { zaehlung?: unknown[]; tokens?: unknown[]; observations?: Obs[]; status?: number }) => {
+  const mock = (o: { zaehlung?: unknown[]; zaehlungFn?: (q: Record<string, unknown>) => unknown[]; tokens?: unknown[]; observations?: Obs[]; status?: number }) => {
     const aufrufe: { url: string; method?: string; auth?: string }[] = [];
+    const queries: Record<string, unknown>[] = [];
     const fetchImpl: Fetch = (url, init) => {
       aufrufe.push({ url, method: init?.method, auth: init?.headers?.Authorization });
       if (o.status) return antwort({ error: "kaputt" }, o.status);
       if (url.includes("/v2/observations")) return antwort({ data: o.observations ?? [], meta: {} });
       const q = JSON.parse(new URL(url).searchParams.get("query") ?? "{}") as { dimensions: unknown[] };
-      return antwort({ data: q.dimensions.length === 1 ? (o.zaehlung ?? []) : (o.tokens ?? []) });
+      queries.push(q);
+      return antwort({ data: q.dimensions.length === 1 ? (o.zaehlungFn ? o.zaehlungFn(q) : (o.zaehlung ?? [])) : (o.tokens ?? []) });
     };
-    return { aufrufe, fetchImpl };
+    return { aufrufe, queries, fetchImpl };
   };
   const tokenZeilen = (id: string, t: { input: number; output: number; cacheRead: number; w5: number; w1: number }) => [
     { sessionId: id, usageType: "input", sum_usageByType: t.input },
@@ -492,6 +510,72 @@ describe("pruefen (Ablauf)", () => {
     const r = await A.pruefen(args({ seit: new Date(Date.now() + 3_600_000).toISOString() }), { env: ZUGANG, projectsRoot: root, repoRoot: REPO, fetchImpl: mock({}).fetchImpl });
     expect(r.exitCode).toBe(0);
     expect(r.text).toMatch(/Keine Sessions/);
+  });
+
+  test("gesendete Abfrage: Zeitfenster umschließt den frühesten Call, --session wird als Filter weitergereicht", async () => {
+    const root = mitSession([msg("a")]);
+    const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }] });
+    const jetzt = SPAET();
+    await A.pruefen(args({ session: "s1" }), { env: ZUGANG, now: jetzt, projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    const frueh = Date.parse("2026-10-09T10:00:00Z");
+    for (const q of m.queries) {
+      expect(Date.parse(q.fromTimestamp as string)).toBeLessThanOrEqual(frueh);
+      expect(Date.parse(q.toTimestamp as string)).toBeGreaterThan(jetzt);
+      expect((q.filters as { column: string; value: string }[]).some((f) => f.column === "sessionId" && f.value === "s1")).toBe(true);
+    }
+    expect(m.queries).toHaveLength(2);
+  });
+
+  test("row_limit erreicht: das Zeitfenster wird halbiert und die Teile werden zusammengeführt", async () => {
+    const root = mitSession([msg("a"), msg("b")]);
+    const m = mock({
+      zaehlungFn: (q) => {
+        const dauer = Date.parse(q.toTimestamp as string) - Date.parse(q.fromTimestamp as string);
+        if (dauer > 12 * 3_600_000) return Array.from({ length: A.ROW_LIMIT }, (_, i) => ({ sessionId: `x${i}`, count_count: 1 }));
+        return [{ sessionId: "s1", count_count: 1 }];
+      },
+    });
+    const jetzt = Date.parse("2026-10-11T10:00:00Z");
+    const r = await A.pruefen(args({ json: true }), { env: ZUGANG, now: jetzt, projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    expect(r.exitCode).toBe(0);
+    expect(m.queries.length).toBeGreaterThan(2);
+    const j = JSON.parse(r.text) as { sessions: Bewertung[] };
+    expect(j.sessions[0].callsLangfuse).toBeGreaterThan(1); // Teile addiert
+  });
+
+  test("--ist mit row_limit Zeilen ist abgeschnitten: Exit 1 (kein stilles Kürzen)", async () => {
+    const root = mitSession([msg("a")]);
+    const viele = Array.from({ length: A.ROW_LIMIT }, (_, i) => ({ sessionId: `x${i}`, count_count: 1 }));
+    const r = await A.pruefen(args({ ist: ["z.json"] }), { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: () => JSON.stringify(viele) });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/abgeschnitten/);
+  });
+
+  test("--ist mit gültigem JSON in unbekannter Form: Exit 1", async () => {
+    const root = mitSession([msg("a")]);
+    const r = await A.pruefen(args({ ist: ["z.json"] }), { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: () => JSON.stringify({ foo: 1 }) });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/unbekannte Form/);
+  });
+
+  test("Ruhefrist: nur der Subagent schreibt (Hauptdatei alt) gilt als läuft", async () => {
+    const root = fixture({ [`${PRAEFIX}/s1.jsonl`]: msg("a"), [`${PRAEFIX}/s1/subagents/a0.jsonl`]: msg("b") });
+    const alt = new Date(Date.now() - 2 * 3_600_000);
+    utimesSync(join(root, PRAEFIX, "s1.jsonl"), alt, alt);
+    const r = await A.pruefen(args({ json: true }), { env: ZUGANG, now: Date.now(), projectsRoot: root, repoRoot: REPO, fetchImpl: mock({}).fetchImpl });
+    expect((JSON.parse(r.text) as { sessions: Bewertung[] }).sessions[0].status).toBe("läuft");
+    // Gegenprobe: auch die Subagent-Datei alt → Lücke
+    utimesSync(join(root, PRAEFIX, "s1/subagents/a0.jsonl"), alt, alt);
+    const r2 = await A.pruefen(args({ json: true }), { env: ZUGANG, now: Date.now(), projectsRoot: root, repoRoot: REPO, fetchImpl: mock({}).fetchImpl });
+    expect((JSON.parse(r2.text) as { sessions: Bewertung[] }).sessions[0].status).toBe("Lücke");
+  });
+
+  test("Bericht kappt die Liste fehlender Calls und nennt den Rest", async () => {
+    const root = mitSession(Array.from({ length: 23 }, (_, i) => msg(`m${i}`)));
+    const m = mock({ zaehlung: [], observations: [] });
+    const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    expect(r.text).toMatch(/… und 3 weitere/);
+    expect(r.text.match(/^- m\d+ ·/gm)).toHaveLength(20);
   });
 
   test("parseArgs: --ist wiederholbar", () => {

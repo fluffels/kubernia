@@ -36,10 +36,10 @@ import { ladeSessionDatei } from "./transkript.mjs";
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
+import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 
 // Ausgelagert (#1562, hook-taugliche Module ohne gh-/git-Kette); hier re-exportiert, damit Verbraucher und Tests unverändert bleiben.
 export { PRICES, PRICES_STAND, periodAt, priceParts, priceCall, callsFromTranscript, fetchSessionObservations };
-import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;

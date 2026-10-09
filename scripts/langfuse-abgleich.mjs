@@ -6,11 +6,11 @@
  *   node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]
  *
  * Soll: `~/.claude/projects/<Projektpräfix>*` (Hauptdatei + `<id>/subagents/`), je Assistant-Message (`message.id`) ein
- * Eintrag mit deterministischen IDs. Ist: zwei Metrics-Abfragen (Zählung und `usageByType` je `sessionId`), Observations
+ * Eintrag mit deterministischen IDs. Ist: zwei Metrics-Abfragen (Zählung und `usageByType` je `sessionId`; bei Erreichen von `row_limit` wird das Zeitfenster halbiert), Observations
  * nur für Sessions mit Differenz. Ohne Secret-Key (Agentenläufe) ersatzweise `--ist <datei>` mit einem `queryMetrics`-Export
  * des Langfuse-MCP (mehrfach nutzbar: Zählung und Tokens dürfen zwei Exporte sein).
  *
- * Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`), damit es
+ * Bekannte Grenze: das Präfix trifft per `startsWith` auch Geschwister-Repos mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`), damit es
  * später als Hook laufen kann, ohne die gh-/git-Kette von `token-baseline.mjs` mitzuziehen. Aufruf und Einordnung:
  * docs/model-routing.md › Checkliste Punkt 1.
  */
@@ -279,7 +279,7 @@ export function renderMarkdown(bewertungen, sum) {
 }
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]";
-export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe haben den Secret-Key nicht: queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count; Tokens: Dimension usageType, Metrik usageByType; jeweils orderBy desc, row_limit 1000), siehe docs/model-routing.md › Checkliste Punkt 1.";
+export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe haben den Secret-Key nicht: queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count; Tokens: Dimensionen sessionId und usageType, Metrik usageByType; jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe docs/model-routing.md › Checkliste Punkt 1.";
 
 export function parseArgs(argv) {
   const a = { pruefen: false, json: false, seit: null, session: null, ist: [] };
@@ -296,6 +296,21 @@ export function parseArgs(argv) {
 
 // ── Ablauf (ohne process.exit, damit testbar) ────────────────────────────────
 
+/**
+ * Eine Metrics-Abfrage; erreicht sie `ROW_LIMIT`, wird das Zeitfenster halbiert und die Teile werden zusammengeführt
+ * (Zählung und Summen sind je Observation-Startzeit additiv, `istAusMetrics` addiert gleiche Sessions). Unter 2 h Fenster
+ * ist Schluss: dann abgeschnitten (fail-closed, nie still kürzen).
+ */
+export async function holeMetrics(abfrage, zugang, fetchImpl) {
+  const rows = await queryMetrics(abfrage, { ...zugang, fetchImpl });
+  if (rows.length < ROW_LIMIT) return rows;
+  const von = Date.parse(abfrage.fromTimestamp);
+  const bis = Date.parse(abfrage.toTimestamp);
+  if (bis - von < 2 * 3_600_000) throw new Error(`Metrics-Antwort abgeschnitten (${rows.length} Zeilen = row_limit): --seit enger wählen oder --session nutzen.`);
+  const mitte = new Date((von + bis) / 2).toISOString();
+  return [...(await holeMetrics({ ...abfrage, toTimestamp: mitte }, zugang, fetchImpl)), ...(await holeMetrics({ ...abfrage, fromTimestamp: mitte }, zugang, fetchImpl))];
+}
+
 async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
   if (args.ist.length) {
     const rows = args.ist.flatMap((pfad) => {
@@ -307,6 +322,7 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
       }
       const r = Array.isArray(j) ? j : j?.data;
       if (!Array.isArray(r)) throw new Error(`--ist ${pfad}: unbekannte Form, erwartet {data:[…]} oder ein Array.`);
+      if (r.length >= ROW_LIMIT) throw new Error(`--ist ${pfad}: Export abgeschnitten (${r.length} Zeilen = row_limit): Fenster enger wählen oder je Session (--session) exportieren.`);
       return r;
     });
     return istAusMetrics(rows);
@@ -314,11 +330,7 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
   const fruehester = Math.min(...[...soll.values()].flat().map((e) => Date.parse(e.ts)).filter(Number.isFinite));
   const q = istAbfragen({ von: new Date(fruehester - 3_600_000).toISOString(), bis: new Date(now + 60_000).toISOString(), session: args.session });
   const rows = [];
-  for (const abfrage of [q.zaehlung, q.tokens]) {
-    const r = await queryMetrics(abfrage, { ...zugang, fetchImpl });
-    if (r.length >= ROW_LIMIT) throw new Error(`Metrics-Antwort abgeschnitten (${r.length} Zeilen = row_limit): --seit enger wählen oder --session nutzen.`);
-    rows.push(...r);
-  }
+  for (const abfrage of [q.zaehlung, q.tokens]) rows.push(...(await holeMetrics(abfrage, zugang, fetchImpl)));
   return istAusMetrics(rows);
 }
 
