@@ -28,6 +28,8 @@ export interface ServiceBackend {
   ip: string | null;
   ready: boolean;
   owner: "Deployment" | "StatefulSet";
+  /** Der Pod ist beendet (evictetes Deployment): er steht in keiner EndpointSlice. */
+  terminal: boolean;
   /** Nur Deployments kennen den containerPort (aus dem Manifest). */
   containerPort?: number;
 }
@@ -85,9 +87,9 @@ function backendOf(host: EndpointsHost, c: ClusterPod): ServiceBackend {
   const ip = podAddress(c, host.pvcs);
   switch (c.owner) {
     case "Deployment":
-      return { pod: c.pod.name, ip, ready: host._podReady(c.dep), owner: "Deployment", containerPort: c.dep.containerPort };
+      return { pod: c.pod.name, ip, ready: host._podReady(c.dep), owner: "Deployment", terminal: !!c.dep.evicted, containerPort: c.dep.containerPort };
     case "StatefulSet":
-      return { pod: c.pod.name, ip, ready: ip !== null, owner: "StatefulSet" };
+      return { pod: c.pod.name, ip, ready: ip !== null, owner: "StatefulSet", terminal: false };
   }
 }
 
@@ -123,17 +125,14 @@ export interface EndpointSliceView {
 
 /** Die EndpointSlice des Services, oder `null` (ExternalName: der Controller legt keine an).
  *  Anders als `get endpoints` führt sie auch NICHT bereite Pods (`ready: false`); Pods ohne IP
- *  (nicht eingeplant) und evictete Deployment-Pods fehlen. Ohne Endpunkte bleibt eine Platzhalter-Slice
+ *  (nicht eingeplant) und beendete (`terminal`, evictete Deployments) fehlen; sie ist ein Filter über `serviceBackends`. Ohne Endpunkte bleibt eine Platzhalter-Slice
  *  mit leeren Ports. Der API-Server führt die Slice von `kubernetes` unter genau diesem Namen. */
 export function endpointSliceOf(host: EndpointsHost, svc: ServiceRes): EndpointSliceView | null {
   if (isExternalNameService(svc)) return null;
   if (isKubernetesService(svc)) {
     return { name: svc.name, addressType: "IPv4", ports: [endpointPort(svc)], endpoints: [{ address: CONTROL_PLANE_IP, ready: true }] };
   }
-  const endpoints = clusterPods(host).filter(c => selects(svc, c) && !(c.owner === "Deployment" && c.dep.evicted)).flatMap(c => {
-    const b = backendOf(host, c);
-    return b.ip ? [{ address: b.ip, ready: b.ready }] : [];
-  });
+  const endpoints = serviceBackends(host, svc).flatMap(b => (b.ip && !b.terminal ? [{ address: b.ip, ready: b.ready }] : []));
   return {
     name: generatedName(svc.name + "-", "endpointslice/" + svc.name),
     addressType: "IPv4",

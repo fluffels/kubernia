@@ -17,7 +17,7 @@
  */
 import type { ClusterState } from "./state";
 import { rbacKey, roleKind } from "./rbac";
-import { POD_SUFFIX_LEN } from "./util";
+import { GENERATED_SUFFIX_LEN } from "./util";
 import { REVISION_HISTORY_LIMIT, templateHash } from "./replicasets";
 
 /** (1)/(2) Replica Ist/Soll konsistent: ein Deployment/StatefulSet hält genau so viele
@@ -215,7 +215,7 @@ function checkPodTemplateHash(s: ClusterState): string[] {
     const prefix = `${d.name}-${d.replicaSet.hash}-`;
     for (const p of d.pods) {
       const name = String(p.name);
-      if (!(name.startsWith(prefix) && name.length === prefix.length + POD_SUFFIX_LEN)) {
+      if (!(name.startsWith(prefix) && name.length === prefix.length + GENERATED_SUFFIX_LEN)) {
         v.push(`Deployment "${d.name}": Pod "${name}" trägt nicht den pod-template-hash "${d.replicaSet.hash}" seines ReplicaSets`);
       }
     }

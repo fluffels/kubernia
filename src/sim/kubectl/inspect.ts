@@ -15,7 +15,7 @@ import { effectiveDefaultStorageClass, podIP, BUILTIN_AGE, workloadSelector, for
 import { endpointAddresses, endpointSliceOf, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import type { Call } from "../cliargs";
-import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type Deployment, type RbacSubject, type StatefulSetRes } from "../state";
+import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type Deployment, type RbacSubject, type ServiceRes, type StatefulSetRes } from "../state";
 import { podTemplateLabels, replicaSetsOf } from "../replicasets";
 import { nodeInternalIP, NODE_SYSTEM_INFO, CONTROL_PLANE_IP, CONTROL_PLANE_NODE } from "../nodes";
 import { requestedNamespace, allNamespaces } from "./namespace";
@@ -145,11 +145,16 @@ function getServices(host: KubectlHost): GetTable {
       isExt ? "<none>" : s.clusterIP,
       isExt ? (s.externalName || "<none>") : "<none>",
       isExt ? "<none>" : (s.port + "/TCP"),
-      isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0),
+      serviceAge(host, s),
       formatLabels(serviceSelector(host, s)),
     ]);
   }
   return withWide(tableOf(["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE", "SELECTOR"], rows), 1);
+}
+
+/** AGE eines Service: der eingebaute `kubernetes` trägt `BUILTIN_AGE`, ein Spieler-Service seine Anlegezeit. */
+function serviceAge(host: KubectlHost, s: ServiceRes): string {
+  return isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0);
 }
 
 function getEndpoints(host: KubectlHost): GetTable {
@@ -161,12 +166,12 @@ function getEndpoints(host: KubectlHost): GetTable {
     // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
     // Die Pods kommen aus der gemeinsamen Service→Pod-Auflösung (#1318).
     const ips = endpointAddresses(host, s);
-    return [s.name, ips.length ? ips.join(",") : "<none>", isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0)];
+    return [s.name, ips.length ? listWithMore(ips) : "<none>", serviceAge(host, s)];
   }));
 }
 
 /** `a,b,c + N more...` wie die Drucker von kubectl (höchstens `max` Einträge), leer: `<unset>`. */
-function listWithMore(items: readonly (string | number)[], max = 3): string {
+export function listWithMore(items: readonly (string | number)[], max = 3): string {
   if (items.length === 0) return "<unset>";
   const shown = items.slice(0, max).join(",");
   return items.length > max ? shown + " + " + (items.length - max) + " more..." : shown;
@@ -179,7 +184,7 @@ function getEndpointSlices(host: KubectlHost): GetTable {
     const slice = endpointSliceOf(host, s);
     if (!slice) return [];
     return [[slice.name, slice.addressType, listWithMore(slice.ports), listWithMore(slice.endpoints.map(e => e.address)),
-      isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0)]];
+      serviceAge(host, s)]];
   });
   return tableOf(["NAME", "ADDRESSTYPE", "PORTS", "ENDPOINTS", "AGE"], rows);
 }
