@@ -624,7 +624,7 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(r1.protokoll.sessions[0].status).toBe("läuft");
     expect(ledgerVon(a.ledger).s1).toMatchObject({ beendet: true, bestaetigt: false });
     const m2 = mock({ ist: 0 });
-    const r2 = await lauf(a, m2, {}, jetzt + 2 * MIN);
+    const r2 = await lauf(frisch(), m2, {}, jetzt + 2 * MIN);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
     expect(m2.otlp).toHaveLength(1);
   });
@@ -659,19 +659,27 @@ describe("Ledger-Zustand und Grenzfälle", () => {
   });
 
   test("SessionEnd-Kind nach resume: wuchs das Transkript nach dem Ende, gilt das Ende nicht, es wird nicht gesendet und kein beendet vermerkt", async () => {
-    const a = aufbau([msg("a", 1)]);
     const jetzt = Date.now();
-    const t3 = new Date(jetzt - 3 * MIN);
-    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t3, t3);
+    const frisch = () => {
+      const x = aufbau([msg("a", 1)]);
+      const t3 = new Date(jetzt - 3 * MIN);
+      utimesSync(join(x.root, PRAEFIX, "s1.jsonl"), t3, t3);
+      return x;
+    };
+    const a = frisch();
     const m = mock({ ist: 0 });
     const r = await lauf(a, m, { beendet: "s1", ende: jetzt - 10 * MIN }, jetzt);
     expect(r.protokoll.sessions[0].status).toBe("läuft");
     expect(m.aufrufe).toHaveLength(0);
     expect(existsSync(a.ledger)).toBe(false);
-    // Gegenprobe: Transkript vor dem Ende (und innerhalb des Schlupfs) geändert: das Ende gilt, gesendet wird
+    // Schlupf von 5 s: das Transkript wurde 4 s NACH dem Ende-Zeitpunkt geschrieben (mtime = ende + 4 s): das Ende gilt, gesendet wird
     const m2 = mock({ ist: 0 });
-    const r2 = await lauf(a, m2, { beendet: "s1", ende: jetzt - 3 * MIN + 4_000 }, jetzt);
+    const r2 = await lauf(a, m2, { beendet: "s1", ende: jetzt - 3 * MIN - 4_000 }, jetzt);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
+    // 6 s nach dem Ende: außerhalb des Schlupfs, das Ende gilt nicht
+    const m3 = mock({ ist: 0 });
+    const r3 = await lauf(frisch(), m3, { beendet: "s1", ende: jetzt - 3 * MIN - 6_000 }, jetzt);
+    expect(r3.protokoll.sessions[0].status).toBe("läuft");
   });
 
   test("--aktuell setzt ein früheres beendet zurück (resume), --trocken lässt das Ledger byte-gleich", async () => {
