@@ -77,11 +77,11 @@ export async function sendeOtlp(payload, { baseUrl, publicKey, secretKey, fetchI
   });
   await wirfHttp(res);
   const text = await res.text();
-  let body = null;
+  let body;
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
-    body = null;
+    body = null; // Antwort ohne JSON: kein partialSuccess auswertbar, der HTTP-Status war schon 2xx
   }
   const abgelehnt = Number(body?.partialSuccess?.rejectedSpans ?? 0);
   if (abgelehnt > 0) throw new Error(`Langfuse lehnte ${abgelehnt} Span(s) ab: ${body.partialSuccess.errorMessage ?? "ohne Grund"}`);

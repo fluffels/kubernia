@@ -39,7 +39,7 @@ const A = rawAbgleich as unknown as {
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
   projektPraefix: (r: string) => string;
-  findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number }[];
+  findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number; groesse: number }[];
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
   schluesselArt: (o: Obs[]) => string;
@@ -222,7 +222,7 @@ describe("Session-Auswahl", () => {
       [`${PRAEFIX}-tools/fremd.jsonl`]: msg("m"),
       [`${PRAEFIX}--claude-worktrees-kq-1/b.jsonl`]: msg("m"),
     });
-    const sessions = A.findeSessions({ projectsRoot: root, praefix: PRAEFIX }) as { id: string; groesse: number }[];
+    const sessions = A.findeSessions({ projectsRoot: root, praefix: PRAEFIX });
     expect(sessions.map((s) => s.id).sort()).toEqual(["a", "b"]);
     expect(sessions.find((s) => s.id === "a")?.groesse).toBe(8);
   });
