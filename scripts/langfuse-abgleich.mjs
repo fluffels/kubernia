@@ -10,9 +10,10 @@
  * nur für Sessions mit Differenz. Ohne Secret-Key (Agentenläufe) ersatzweise `--ist <datei>` mit einem `queryMetrics`-Export
  * des Langfuse-MCP (mehrfach nutzbar: Zählung und Tokens dürfen zwei Exporte sein).
  *
- * Bekannte Grenze: das Präfix trifft per `startsWith` auch Geschwister-Repos mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`), damit es
+ * Das Präfix trifft nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
+ * mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`), damit es
  * später als Hook laufen kann, ohne die gh-/git-Kette von `token-baseline.mjs` mitzuziehen. Aufruf und Einordnung:
- * docs/model-routing.md › Checkliste Punkt 1.
+ * docs/model-routing.md › Checkliste Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
  */
 
 import { createHash } from "node:crypto";
@@ -35,6 +36,10 @@ const sha = (text) => createHash("sha256").update(text).digest("hex");
 export const beobachtungsId = (session, messageId) => sha(session + messageId).slice(0, 16);
 /** Trace-ID: 32 Hex, je Session ein Abgleich-Trace. */
 export const traceIdVon = (session) => sha(session).slice(0, 32);
+/** Span-ID eines Subagenten: 16 Hex, deterministisch aus Session und Agent-ID (Nachliefern sendet den Span je Session einmal). */
+export const subagentSpanId = (session, agentId) => sha(session + "agent:" + agentId).slice(0, 16);
+/** Score-ID: 32 Hex, deterministisch aus Name und Session (Upsert statt Dublette). */
+export const scoreId = (session, name) => sha("score:" + name + ":" + session).slice(0, 32);
 
 // ── Soll (pur) ───────────────────────────────────────────────────────────────
 
@@ -53,7 +58,12 @@ export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
     { zeilen: sitzung.main, rolle: null },
     ...sitzung.subagents.map((s) => ({
       zeilen: s.zeilen,
-      rolle: { agentType: s.meta?.agentType, description: s.meta?.description, parentAgentId: s.meta?.parentAgentId },
+      rolle: {
+        agentId: s.datei.replace(/\.jsonl$/, "").replace(/^agent-/, ""),
+        agentType: s.meta?.agentType,
+        description: s.meta?.description,
+        parentAgentId: s.meta?.parentAgentId,
+      },
     })),
   ];
   const byId = new Map();
@@ -83,28 +93,37 @@ export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
 
 /** Projektordner-Präfix unter `~/.claude/projects` aus dem Repo-Pfad (Worktrees auf das Hauptrepo gekürzt), ohne git. */
 export function projektPraefix(repoRoot) {
-  const wurzel = String(repoRoot)
+  return repoWurzel(repoRoot).replace(/[^A-Za-z0-9]/g, "-");
+}
+
+/** Wurzel des Hauptrepos: ein Worktree-Pfad (`…/.claude/worktrees/<name>`) wird gekürzt, ein Schlussstrich entfällt. */
+export function repoWurzel(repoRoot) {
+  return String(repoRoot)
     .replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "")
     .replace(/[\\/]+$/, "");
-  return wurzel.replace(/[^A-Za-z0-9]/g, "-");
 }
 
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);
 
-/** Sessions des Projekts: `[{ id, pfad, mtime }]` (mtime = jüngste Datei der Session). `seitMs` filtert nach mtime, `sessionId` gilt unabhängig davon. */
+/**
+ * Sessions des Projekts: `[{ id, pfad, mtime, groesse }]` (mtime = jüngste Datei der Session, groesse = Bytes von Haupt- und Subagent-Dateien).
+ * Nur der Ordner `<präfix>` selbst und `<präfix>--claude-worktrees-…` zählen (kein Geschwister-Repo wie `<präfix>-tools`).
+ * `seitMs` filtert nach mtime, `sessionId` gilt unabhängig davon.
+ */
 export function findeSessions({ projectsRoot, praefix, seitMs = 0, sessionId = null }) {
   if (!existsSync(projectsRoot)) return [];
   const out = new Map();
-  for (const d of readdirSync(projectsRoot).filter((n) => n.startsWith(praefix))) {
+  for (const d of readdirSync(projectsRoot).filter((n) => n === praefix || n.startsWith(praefix + "--claude-worktrees-"))) {
     for (const datei of jsonlDateien(join(projectsRoot, d))) {
       const id = datei.replace(/\.jsonl$/, "");
       if (sessionId && id !== sessionId) continue;
       const pfad = join(projectsRoot, d, datei);
       const subDir = join(projectsRoot, d, id, "subagents");
-      const mtime = Math.max(statSync(pfad).mtimeMs, ...jsonlDateien(subDir).map((n) => statSync(join(subDir, n)).mtimeMs));
+      const stats = [statSync(pfad), ...jsonlDateien(subDir).map((n) => statSync(join(subDir, n)))];
+      const mtime = Math.max(...stats.map((s) => s.mtimeMs));
       if (!sessionId && mtime < seitMs) continue;
       const prev = out.get(id);
-      if (!prev || prev.mtime < mtime) out.set(id, { id, pfad, mtime });
+      if (!prev || prev.mtime < mtime) out.set(id, { id, pfad, mtime, groesse: stats.reduce((s, x) => s + x.size, 0) });
     }
   }
   return [...out.values()].sort((a, b) => a.mtime - b.mtime);
