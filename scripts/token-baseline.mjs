@@ -32,8 +32,14 @@ import { parseNachweis } from "./slice-override.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
-import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
+import { ladeSessionDatei } from "./transkript.mjs";
+import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
+import { callsFromTranscript } from "./transkript-calls.mjs";
+import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
 import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
+
+// Ausgelagert (#1562, hook-taugliche Module ohne gh-/git-Kette); hier re-exportiert, damit Verbraucher und Tests unverändert bleiben.
+export { PRICES, PRICES_STAND, periodAt, priceParts, priceCall, callsFromTranscript, fetchSessionObservations };
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -106,109 +112,6 @@ export function countReviewRounds(reviewDescriptions) {
     : Math.ceil(lenses.length / LENSES_PER_ROUND);
   return lensRounds + (rounds.length - lenses.length);
 }
-
-function num(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Stand der Preistabelle (im Report ausgegeben, bei jeder Preisänderung mitziehen). */
-export const PRICES_STAND = "2026-10-08";
-
-/**
- * Preise in $ je Mio Tokens (Stand siehe `PRICES_STAND`, Quelle: Preisliste auf claude.com/pricing,
- * deckungsgleich mit den Modell-Definitionen der lokalen Langfuse-Instanz). Langfuse
- * rechnet Kosten nur bei der Ingestion, ein später angelegter Preis gilt nicht
- * rückwirkend — darum kommen die Kosten im Transkript-Modus aus dieser Tabelle.
- * Ein Modell ohne Eintrag ist „ohne Preis" (null), nie 0 $.
- *
- * Ein Eintrag ist ein Preisobjekt (gilt immer) ODER eine Liste von Perioden
- * `[{ validFrom: null | ISO-Zeit, …Preise }]`, aufsteigend nach `validFrom` (`null` = seit
- * Modellstart). Eine Preisänderung wird als neue Periode ANGEHÄNGT, damit alte Läufe ihren
- * damaligen Preis behalten. Preisobjekt oder Periode kann `stufen: [{ ueberPrompt, …Preise }]`
- * tragen: Prompt = input + cacheWrite + cacheRead des Calls; über `ueberPrompt` Tokens
- * (strikt größer) gelten die Preise der höchsten zutreffenden Stufe statt der Grundpreise.
- * Quellen: platform.claude.com/docs/en/about-claude/pricing und die Release Notes
- * (Sonnet 5.5, Cache-Read ab 2026-10-07 0,10 statt 0,20 $; die Uhrzeit ist nicht belegt, 00:00 UTC
- * ist eine Annahme, der Fehler beschränkt sich auf Cache-Reads dieses einen Tages).
- */
-export const PRICES = {
-  "claude-sonnet-5-5": [
-    { validFrom: null, input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2, output: 10 },
-    { validFrom: "2026-10-07T00:00:00Z", input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.1, output: 10 },
-  ],
-  "claude-opus-5-5": { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2, output: 20 },
-  "claude-opus-5": { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.5, output: 25 },
-  "claude-haiku-5-5": {
-    input: 0.1,
-    cacheWrite5m: 0.125,
-    cacheWrite1h: 0.2,
-    cacheRead: 0.01,
-    output: 0.5,
-    stufen: [{ ueberPrompt: 100_000, input: 0.5, cacheWrite5m: 0.625, cacheWrite1h: 1, cacheRead: 0.05, output: 2.5 }],
-  },
-  "claude-haiku-4-5": { input: 1, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1, output: 5 },
-};
-
-const matcherCache = new WeakMap();
-
-/** Je Preistabelle einmal gebaut: [{ key, re }] statt pro Call neuer RegExp. */
-function matchersOf(prices) {
-  let list = matcherCache.get(prices);
-  if (!list) {
-    list = Object.keys(prices).map((key) => ({ key, re: new RegExp(`^${key}-\\d{8}$`) }));
-    matcherCache.set(prices, list);
-  }
-  return list;
-}
-
-/** Eintrag → die zum Zeitpunkt `ts` gültige Periode (Einzelobjekt gilt immer). Bei einer Periodenliste
- *  und fehlendem/ungültigem `ts` ist die Periode nicht bestimmbar: „ohne Preis" (null), nie still die neueste (#1309). */
-export function periodAt(entry, ts) {
-  if (!Array.isArray(entry)) return entry;
-  const at = Date.parse(ts);
-  if (!Number.isFinite(at)) return null;
-  const valid = entry.filter((p) => p.validFrom == null || !(at < Date.parse(p.validFrom)));
-  return valid.length ? valid[valid.length - 1] : null;
-}
-
-/** Exakter Name oder Name mit Datums-Suffix (`-20251001`); `claude-opus-5-5` ist kein Opus 5. */
-function priceFor(model, prices, ts) {
-  const id = String(model ?? "");
-  const hit = matchersOf(prices).find(({ key, re }) => id === key || re.test(id));
-  return hit ? periodAt(prices[hit.key], ts) : null;
-}
-
-/** Preise der höchsten Stufe, deren `ueberPrompt` der Prompt strikt übersteigt (unabhängig von der Listenreihenfolge); sonst die Grundpreise. */
-function stufePreis(preis, prompt) {
-  const treffer = (preis.stufen ?? []).filter((st) => prompt > st.ueberPrompt).sort((a, b) => b.ueberPrompt - a.ueberPrompt)[0];
-  return treffer ? { ...preis, ...treffer } : preis;
-}
-
-/** Kosten eines Calls je Teil in $; null, wenn das Modell keinen Preis hat. */
-export function priceParts(c, prices = PRICES) {
-  const base = priceFor(c.model, prices, c.ts);
-  if (!base) return null;
-  const write = num(c.cacheWrite);
-  const p = stufePreis(base, num(c.input) + write + num(c.cacheRead));
-  const write1h = Math.min(num(c.cacheWrite1h), write);
-  // Division statt Multiplikation mit 1e-6: bleibt bei glatten Zahlen exakt.
-  const mio = 1e6;
-  return {
-    input: (num(c.input) * p.input) / mio,
-    cacheWrite: ((write - write1h) * p.cacheWrite5m + write1h * p.cacheWrite1h) / mio,
-    cacheRead: (num(c.cacheRead) * p.cacheRead) / mio,
-    output: (num(c.output) * p.output) / mio,
-  };
-}
-
-/** Gesamtkosten eines Calls in $; null = ohne Preis. */
-export function priceCall(c, prices = PRICES) {
-  const parts = c.costParts ?? priceParts(c, prices);
-  return parts ? sumParts(parts) : null;
-}
-
-const sumParts = (p) => p.input + p.cacheWrite + p.cacheRead + p.output;
 
 const contextOf = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
 
@@ -419,48 +322,6 @@ function reviewDescriptions(ticketCalls) {
 
 // ── Quelle 1: Claude-Code-Transkript ─────────────────────────────────────────
 
-/**
- * JSONL-Zeilen eines Transkripts → Calls. Claude Code schreibt pro Content-
- * Block eine Zeile mit derselben `message.id`; die Usage wird je Nachricht
- * genau einmal gezählt (Output = Maximum über die Zeilen, weil Zwischenzeilen
- * einen Teilstand tragen).
- */
-export function callsFromTranscript(textOderZeilen, subagent = null) {
-  const byId = new Map();
-  let questions = 0;
-  // Text oder die schon geparsten Zeilen (`transkriptZeilen`): `readTranscriptSession` parst jede Zeile nur einmal.
-  for (const row of Array.isArray(textOderZeilen) ? textOderZeilen : transkriptZeilen(textOderZeilen)) {
-    const msg = row?.message;
-    if (row?.type !== "assistant" || !msg?.usage) continue;
-    // Eine Zeile trägt genau einen Content-Block — jede Rückfrage zählt also einmal.
-    for (const c of msg.content ?? []) if (c?.type === "tool_use" && c.name === "AskUserQuestion") questions += 1;
-    const key = msg.id ?? row.uuid;
-    const u = msg.usage;
-    const prev = byId.get(key);
-    if (prev) {
-      prev.output = Math.max(prev.output, num(u.output_tokens));
-      prev.costParts = priceParts(prev);
-      prev.cost = prev.costParts ? priceCall(prev) : null;
-      continue;
-    }
-    const call = {
-      ts: row.timestamp,
-      model: msg.model,
-      input: num(u.input_tokens),
-      cacheWrite: num(u.cache_creation_input_tokens),
-      // Ohne Aufteilung zählt alles als 5m (der günstigere Preis, bewusst nicht geraten).
-      cacheWrite1h: num(u.cache_creation?.ephemeral_1h_input_tokens),
-      cacheRead: num(u.cache_read_input_tokens),
-      output: num(u.output_tokens),
-      subagent,
-    };
-    call.costParts = priceParts(call);
-    call.cost = call.costParts ? priceCall(call) : null;
-    byId.set(key, call);
-  }
-  return { calls: [...byId.values()], questions };
-}
-
 /** Sucht <id>.jsonl in allen Projektordnern unter ~/.claude/projects (Worktree-Sessions liegen in eigenen). */
 export function readTranscriptSession(sessionId, projectsRoot) {
   const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
@@ -519,20 +380,15 @@ export function callsFromLangfuse(observations) {
     .filter((o) => o.type === "GENERATION")
     .map((o) => {
       const span = findSubagentAncestor(o, byId);
-      const u = o.usageDetails ?? {};
-      // Die Hook-Aufzeichnung trennt die Cache-Writes nach TTL (`input_cache_creation_5m|1h`); ältere
-      // Aufzeichnungen tragen nur die Summe (`cache_creation_input_tokens`, zählt als 5m).
-      const write5m = num(u.input_cache_creation_5m);
-      const write1h = num(u.input_cache_creation_1h);
-      const split = u.input_cache_creation_5m !== undefined || u.input_cache_creation_1h !== undefined;
+      const u = usageAusObservation(o);
       const call = {
         ts: o.startTime,
         model: o.providedModelName ?? o.model,
-        input: num(u.input),
-        cacheWrite: split ? write5m + write1h : num(u.cache_creation_input_tokens),
-        cacheWrite1h: split ? write1h : 0,
-        cacheRead: num(u.cache_read_input_tokens),
-        output: num(u.output),
+        input: u.input,
+        cacheWrite: u.cacheWrite5m + u.cacheWrite1h,
+        cacheWrite1h: u.cacheWrite1h,
+        cacheRead: u.cacheRead,
+        output: u.output,
         subagent: span ? spanInfo(span) : null,
       };
       // Eine Preisquelle (#1239): Kosten immer aus PRICES wie im Transkript-Modus, nicht aus Langfuse
@@ -545,30 +401,6 @@ export function callsFromLangfuse(observations) {
     calls,
     questions: observations.filter((o) => o.name === "Tool: AskUserQuestion").length,
   };
-}
-
-/** Alle Observations einer Session über die v2-API holen (cursor-paginiert). */
-export async function fetchSessionObservations(
-  sessionId,
-  { baseUrl, publicKey, secretKey, fetchImpl = fetch, type, name, fields = "core,basic,model,usage,metadata" },
-) {
-  const auth = "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
-  const out = [];
-  let cursor;
-  do {
-    const q = new URLSearchParams({ sessionId, limit: "1000", fields });
-    if (type) q.set("type", type);
-    if (name) q.set("name", name);
-    if (cursor) q.set("cursor", cursor);
-    const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/observations?${q}`, {
-      headers: { Authorization: auth },
-    });
-    if (!res.ok) throw new Error(`Langfuse ${res.status}: ${await res.text()}`);
-    const body = await res.json();
-    out.push(...(body.data ?? []));
-    cursor = body.meta?.cursor;
-  } while (cursor);
-  return out;
 }
 
 // ── Loop-Kennzahlen aus GitHub ───────────────────────────────────────────────
@@ -702,13 +534,10 @@ function ohnePreisZeile(summary) {
 
 /** Zugangsdaten für `--langfuse` aus der Umgebung (#1441); ohne Secret-Key (Agentenläufe haben ihn nicht) Hinweis auf den Ersatzweg. */
 export function langfuseZugang(env) {
-  const { LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey } = env;
-  if (!publicKey || !secretKey) {
-    throw new Error(
-      "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe haben den Secret-Key nicht: dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe docs/model-routing.md › Checkliste Punkt 1.",
-    );
-  }
-  return { baseUrl: env.LANGFUSE_BASE_URL ?? "http://localhost:3000", publicKey, secretKey };
+  return zugangAus(
+    env,
+    "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe haben den Secret-Key nicht: dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe docs/model-routing.md › Checkliste Punkt 1.",
+  );
 }
 
 export function parseArgs(argv) {
