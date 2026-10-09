@@ -640,6 +640,23 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(ledgerVon(a.ledger).s1).toMatchObject({ gesendet: ["x"], spans: ["y"], beendet: true });
   });
 
+  test("bestätigte, danach gewachsene Session mit --beendet in der Ruhefrist: nicht mehr bestätigt, der Folgelauf sendet", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const jetzt = Date.now();
+    const t5 = new Date(jetzt - 5 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t5, t5);
+    mkdirLedger(a.state);
+    const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: true, gesendet: [], spans: [] };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
+    const r1 = await lauf(a, mock({ ist: 0 }), { beendet: "s1" }, jetzt);
+    expect(r1.protokoll.sessions[0].status).toBe("läuft");
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ bestaetigt: false, beendet: true });
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(a, m2, {}, jetzt + 26 * MIN);
+    expect(r2.protokoll.sessions[0].status).toBe("gesendet");
+    expect(m2.otlp).toHaveLength(1);
+  });
+
   test.each([
     ["ein Call vor und einer nach dem Stichtag: gilt als vor dem Stichtag", ["2026-10-08T23:59:59.999Z", "2026-10-09T12:00:00.000Z"], "vor Stichtag"],
     ["ein Call exakt am Stichtag: nicht davor", ["2026-10-09T00:00:00.000Z"], "gesendet"],
