@@ -170,7 +170,7 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(md).toMatch(/\| #77 \|.*\| 0\.01 \|/);
     expect(md).toMatch(/\| #78 \|.*\| - \|/);
     // Aggregat: Median 0,01, Σ 0,02, ein Lauf ohne Preis (Spalten Median, Summe, ohne Preis).
-    expect(md).toMatch(/\| alle gemessenen | 3 |.*| 0.01 | 0.02 | 1\| 2 \|.*\| 0\.01 \| 0\.01 \| 1 \|/);
+    expect(md).toMatch(/\| alle gemessenen \| 3 \|.*\| 0\.01 \| 0\.02 \| 1 \|/);
   });
 });
 
