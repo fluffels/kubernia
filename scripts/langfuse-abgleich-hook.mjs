@@ -32,16 +32,50 @@ export function leseZugang(text) {
   return out;
 }
 
-/** Umgebung des Kindes: fehlende Zugangsnamen kommen aus `~/.config/agent-secrets.env` (ein Projekt-Hook sieht den Secret-Key sonst nicht); die Umgebung hat Vorrang. */
-export function kindEnv(env, home, lies = (p) => readFileSync(p, "utf8")) {
-  let datei = {};
+/** Secret-Key aus `~/.langfuse-secret`: die erste nicht leere Zeile, roh (nur der Key) oder als `LANGFUSE_SECRET_KEY=…`; sonst `undefined`. */
+export function leseSecretDatei(text) {
+  const zeile = String(text).split(/\r?\n/).map((z) => z.trim()).find((z) => z !== "" && !z.startsWith("#"));
+  if (!zeile) return undefined;
+  const benannt = leseZugang(zeile).LANGFUSE_SECRET_KEY;
+  if (benannt) return benannt;
+  return zeile.includes("=") ? undefined : zeile;
+}
+
+/** Öffentlicher Key und Basis-URL aus den Plugin-Optionen der User-Settings (`pluginConfigs.<…langfuse…>.options`); kaputtes JSON: leer. */
+export function lesePluginOptionen(text) {
+  const out = {};
   try {
-    datei = leseZugang(lies(join(home, ".config", "agent-secrets.env")));
+    const configs = JSON.parse(text)?.pluginConfigs ?? {};
+    for (const [name, c] of Object.entries(configs)) {
+      if (!/langfuse/i.test(name)) continue;
+      for (const k of ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_BASE_URL"]) if (typeof c?.options?.[k] === "string" && c.options[k]) out[k] ??= c.options[k];
+    }
   } catch {
-    // keine Datei: Umgebung unverändert
+    // kein JSON: nichts
   }
+  return out;
+}
+
+/**
+ * Umgebung des Kindes: fehlende Zugangsnamen kommen aus `~/.config/agent-secrets.env` (optional), den Plugin-Optionen in `~/.claude/settings.json`
+ * (öffentlicher Key, URL) und `~/.langfuse-secret` (Secret-Key); ein Projekt-Hook sieht den Secret-Key sonst nicht. Die Umgebung hat Vorrang vor allem.
+ */
+export function kindEnv(env, home, lies = (p) => readFileSync(p, "utf8")) {
+  const versuche = (pfad, f) => {
+    try {
+      return f(lies(pfad));
+    } catch {
+      return {}; // keine oder kaputte Datei: ohne diese Quelle weiter
+    }
+  };
+  const quellen = [
+    versuche(join(home, ".config", "agent-secrets.env"), leseZugang),
+    versuche(join(home, ".claude", "settings.json"), lesePluginOptionen),
+    versuche(join(home, ".langfuse-secret"), (t) => ({ LANGFUSE_SECRET_KEY: leseSecretDatei(t) })),
+  ];
   const out = { ...env };
-  for (const name of ZUGANGSNAMEN) if (!out[name] && datei[name]) out[name] = datei[name];
+  for (const name of ZUGANGSNAMEN) if (!out[name]) out[name] = quellen.map((q) => q[name]).find(Boolean) ?? out[name];
+  for (const name of ZUGANGSNAMEN) if (out[name] === undefined) delete out[name];
   return out;
 }
 

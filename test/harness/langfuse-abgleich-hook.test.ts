@@ -29,6 +29,8 @@ type Log = Record<string, unknown> & { ausloeser: string; lock: string; sessions
 const H = rawHook as unknown as {
   kindArgs: (i: { event?: string; session?: unknown; source?: string }) => string[] | null;
   leseZugang: (t: string) => Record<string, string>;
+  leseSecretDatei: (t: string) => string | undefined;
+  lesePluginOptionen: (t: string) => Record<string, string>;
   kindEnv: (env: Record<string, string>, home: string, lies?: (p: string) => string) => Record<string, string>;
   starte: (t: string, o: { spawn: (...a: unknown[]) => Kind; env?: Record<string, string>; execPath?: string; home?: string }) => boolean;
 };
@@ -163,6 +165,40 @@ describe("Zugangs-Lader (nur im Hook)", () => {
       throw new Error("ENOENT");
     };
     expect(H.kindEnv({ PATH: "p" }, "/h", wirf)).toEqual({ PATH: "p" });
+  });
+
+  const PLUGIN = JSON.stringify({ pluginConfigs: { "langfuse-observability@langfuse-observability": { options: { LANGFUSE_PUBLIC_KEY: "pk-fake", LANGFUSE_BASE_URL: "http://plugin.test", ANDERES: "x" } }, "anderes@x": { options: { LANGFUSE_PUBLIC_KEY: "falsch" } } } });
+  const nachPfad = (dateien: Record<string, string>) => (p: string): string => {
+    const hit = Object.entries(dateien).find(([ende]) => p.replaceAll("\\", "/").endsWith(ende));
+    if (!hit) throw new Error("ENOENT");
+    return hit[1];
+  };
+
+  test("leseSecretDatei: rohe Zeile, benannte Form, Kommentar und leere Zeilen übersprungen, fremde Form und leer: nichts", () => {
+    expect(H.leseSecretDatei("sk-fake-1\n")).toBe("sk-fake-1");
+    expect(H.leseSecretDatei("\r\n  # Kommentar\r\n  sk-fake-2  \r\nzweite")).toBe("sk-fake-2");
+    expect(H.leseSecretDatei("export LANGFUSE_SECRET_KEY='sk-fake-3'")).toBe("sk-fake-3");
+    expect(H.leseSecretDatei("ANDERER_NAME=wert")).toBeUndefined();
+    expect(H.leseSecretDatei("")).toBeUndefined();
+    expect(H.leseSecretDatei("# nur Kommentar")).toBeUndefined();
+  });
+
+  test("lesePluginOptionen: nur Langfuse-Plugin, nur die zwei nicht-sensiblen Namen; kaputt oder ohne pluginConfigs: leer", () => {
+    expect(H.lesePluginOptionen(PLUGIN)).toEqual({ LANGFUSE_PUBLIC_KEY: "pk-fake", LANGFUSE_BASE_URL: "http://plugin.test" });
+    expect(H.lesePluginOptionen("kein json")).toEqual({});
+    expect(H.lesePluginOptionen("{}")).toEqual({});
+    expect(H.lesePluginOptionen(JSON.stringify({ pluginConfigs: { "langfuse@x": { options: { LANGFUSE_SECRET_KEY: "nie" } } } }))).toEqual({});
+  });
+
+  test("echter Weg: Secret aus .langfuse-secret, Public-Key und URL aus den Plugin-Optionen, Umgebung hat Vorrang", () => {
+    const lies = nachPfad({ "/.langfuse-secret": "sk-fake-9\n", "/.claude/settings.json": PLUGIN });
+    expect(H.kindEnv({ PATH: "p" }, "/h", lies)).toEqual({ PATH: "p", LANGFUSE_PUBLIC_KEY: "pk-fake", LANGFUSE_BASE_URL: "http://plugin.test", LANGFUSE_SECRET_KEY: "sk-fake-9" });
+    expect(H.kindEnv({ LANGFUSE_SECRET_KEY: "env-sk", LANGFUSE_BASE_URL: "http://env.test" }, "/h", lies)).toMatchObject({ LANGFUSE_SECRET_KEY: "env-sk", LANGFUSE_BASE_URL: "http://env.test", LANGFUSE_PUBLIC_KEY: "pk-fake" });
+  });
+
+  test("agent-secrets.env geht vor den Plugin-Optionen; eine fehlende oder kaputte Quelle lässt die anderen gelten", () => {
+    const lies = nachPfad({ "/.config/agent-secrets.env": "LANGFUSE_PUBLIC_KEY=pk-datei", "/.claude/settings.json": "kaputt {", "/.langfuse-secret": "sk-fake-5" });
+    expect(H.kindEnv({}, "/h", lies)).toEqual({ LANGFUSE_PUBLIC_KEY: "pk-datei", LANGFUSE_SECRET_KEY: "sk-fake-5" });
   });
 
   test("leere Variable in der Umgebung gilt als fehlend", () => {
