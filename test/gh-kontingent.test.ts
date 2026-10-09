@@ -108,12 +108,14 @@ describe("mitKontingent", () => {
     const antworten = [vorher, nachher];
     const aufrufe: string[][] = [];
     const tokens: Array<string | undefined> = [];
+    const timeouts: Array<number | undefined> = [];
     const ausgaben: string[] = [];
     const logZeilen: string[] = [];
     const handler: Array<() => void> = [];
     let exitCode: number | undefined;
     const opts = {
-      exec: (_c: string, args: string[], o: { env?: Record<string, string> }) => {
+      exec: (_c: string, args: string[], o: { env?: Record<string, string>; timeout?: number }) => {
+        timeouts.push(o.timeout);
         aufrufe.push(args);
         tokens.push(o.env?.GH_TOKEN);
         const a = antworten.shift();
@@ -129,7 +131,7 @@ describe("mitKontingent", () => {
       env,
       jetzt: () => JETZT,
     };
-    return { opts, aufrufe, tokens, ausgaben, logZeilen, handler, exit: () => exitCode };
+    return { opts, aufrufe, tokens, timeouts, ausgaben, logZeilen, handler, exit: () => exitCode };
   }
 
   test("genug Kontingent: Lauf darf weiter, nach dem Lauf genau eine Logzeile mit Delta", () => {
@@ -178,6 +180,12 @@ describe("mitKontingent", () => {
     expect(u.ausgaben.join("")).toContain("nicht lesbar");
     expect(u.handler).toHaveLength(1);
   });
+  test("Nachmessung im Exit-Handler hat ein kürzeres Timeout als die Vorab-Prüfung", () => {
+    const u = umgebung(rate(res(4000), res(4000)), rate(res(4000), res(4000)));
+    K.mitKontingent("board-place", u.opts);
+    u.handler.forEach((f) => f());
+    expect(u.timeouts).toEqual([15_000, 5_000]);
+  });
   test("token wird an beide Lesevorgänge durchgereicht", () => {
     const u = umgebung(rate(res(4000), res(4000)), rate(res(4000), res(4000)), {});
     K.mitKontingent("board-takt", { ...u.opts, token: "PAT" });
@@ -199,5 +207,10 @@ describe("Verdrahtung: die vier Board-Skripte prüfen das Kontingent vorab", () 
     const text = readFileSync(join(process.cwd(), "scripts", `${name}.mjs`), "utf8");
     expect(text).toMatch(/import \{ mitKontingent \} from "\.\/gh-kontingent\.mjs";/);
     expect(text).toContain(`mitKontingent("${name}"`);
+  });
+  test("naechstes-ticket prüft nur core (REST-only), kein anderes Skript schränkt die Arten ein", () => {
+    const lies = (n: string) => readFileSync(join(process.cwd(), "scripts", `${n}.mjs`), "utf8");
+    expect(lies("naechstes-ticket")).toContain('mitKontingent("naechstes-ticket", { arten: ["core"] })');
+    for (const n of ["board-place", "sammelticket-anlegen", "board-takt"]) expect(lies(n)).not.toMatch(/mitKontingent\([^)]*arten/);
   });
 });
