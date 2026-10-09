@@ -1,6 +1,6 @@
 ---
 name: kubernia
-description: Arbeitet EIN kubernia-Ticket end-to-end ab (claimen, planen, klären, Umsetzung bis zum Merge im Subagenten kubernia-umsetzer); zu große Epics werden aufgeteilt. Auslösen bei "arbeite ein kubernia-Ticket ab", "nimm das nächste kubernia-Ticket", "mehrere kubernia-Tickets", "nächstes Agentic-Ticket", "nächstes Spiel-Ticket".
+description: Arbeitet EIN kubernia-Ticket end-to-end ab (claimen, planen, klären, Umsetzung bis zum Merge im Subagenten kubernia-umsetzer); Epics werden aufgeteilt. Auslösen bei "nimm das nächste kubernia-Ticket", "mehrere kubernia-Tickets", "nächstes Agentic-Ticket", "nächstes Spiel-Ticket".
 model: sonnet
 effort: medium
 ---
