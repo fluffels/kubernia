@@ -402,3 +402,72 @@ describe("laufzeiten: Patch-Zugriffe (#1582)", () => {
     expect(patchVon(PROMPT, [lesen("C:\\Users\\x\\tool-results\\abc.txt", 1, 200, 200)])!.voll.zugriffe).toBe(0);
   });
 });
+
+describe("laufzeiten: Grenzfälle Runde 1 (#1582)", () => {
+  type Ext = L & { brille: string | null; runde: number | null; deltaArt: string | null; ersterCall: { input: number; cacheWrite: number; cacheRead: number } | null; patch: { voll: { komplett: boolean; zugriffe: number }; delta: unknown } | null };
+  const eins = (beschreibung: string | undefined, prompt: string, zeilen: Row[] = []): Ext => {
+    const meta: Record<string, unknown> = { agentType: "kubernia-lens" };
+    if (beschreibung !== undefined) meta.description = beschreibung;
+    return S.laufzeiten({ laeufe: [{ meta: meta, zeilen: [user(0, prompt), call(1, 7, undefined, 100, 0), ...zeilen, call(2)] }], agent: "kubernia-lens" }).laeufe[0] as Ext;
+  };
+  test("Merge über M<n> und lens-m: Merge-Delta ohne Runde, Brille bleibt", () => {
+    expect(eins("Lens Test M1", "Delta-Patch: /t/kq-1-r2-delta.patch")).toMatchObject({ deltaArt: "merge", brille: "Test-Adäquanz", runde: null });
+    expect(eins("lens-m:test:1", "Delta-Patch: /t/kq-1-r2-delta.patch")).toMatchObject({ deltaArt: "merge", runde: null });
+  });
+  test("Beschreibung Merge-Auflösung R3 ist keine Brille", () => {
+    expect(eins("Lens Merge-Auflösung R3", "x").brille).toBeNull();
+  });
+  test("ohne Beschreibung kommt die Runde aus dem Patch-Pfad", () => {
+    expect(eins(undefined, "Patch: /t/kq-1-r2.patch").runde).toBe(2);
+  });
+  test("ersterCall trennt cacheWrite und cacheRead", () => {
+    const l = S.laufzeiten({ laeufe: [{ meta: { agentType: "kubernia-lens" }, zeilen: [user(0, "x"), { ...call(1, 7, undefined, 100, 0), message: { id: "mx", model: "claude-opus-5-5", usage: { input_tokens: 7, output_tokens: 1, cache_creation_input_tokens: 111, cache_read_input_tokens: 222 }, content: [{ type: "text", text: "x" }] } }] }], agent: "kubernia-lens" }).laeufe[0] as Ext;
+    expect(l.ersterCall).toEqual({ input: 7, cacheWrite: 111, cacheRead: 222 });
+  });
+  test("Prompt nur mit Patch: Delta ist null und deltaArt null; Delta-Pfad ohne Label (Workflow-Prompt) gilt", () => {
+    const a = eins("Lens Doku R1", "Patch: /t/kq-3-r1.patch");
+    expect(a.patch?.delta).toBeNull();
+    expect(a.deltaArt).toBeNull();
+    const w = eins("lens:doku:r2", "Patch-Datei bereit:\n  /t/kq-3-r2.patch\nDelta-Patch der Nachbesserung:\n  /t/kq-3-r2-delta.patch");
+    expect(w.deltaArt).toBe("fix");
+    expect(w.patch?.delta).not.toBeNull();
+    expect(w.runde).toBe(2);
+  });
+  test("deltaArt und patch.delta stammen aus einer Quelle: Delta-Pfad im Feld Patch: ergibt fix", () => {
+    const l = eins("Lens Doku R2", "Patch: /t/kq-3-r2-delta.patch Delta-Patch: ein Satz");
+    expect(l.deltaArt).toBe("fix");
+    expect(l.patch?.delta).not.toBeNull();
+  });
+  test("Lookbehind: Delta-Patch zuerst, dann Patch, der volle Pfad bleibt der volle", () => {
+    const VOLL = "/t/kq-9-r2.patch";
+    const zeilen: Row[] = [];
+    const id = "lb1";
+    const asst = call(1.5, 7, id);
+    (asst.message as { content: unknown[] }).content = [{ type: "tool_use", id, name: "Read", input: { file_path: VOLL, offset: 1, limit: 10 } }];
+    zeilen.push(asst, { type: "user", timestamp: t(1.6), toolUseResult: { file: { startLine: 1, numLines: 10, totalLines: 10 } }, message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } });
+    const l = eins("Lens Doku R2", `Delta-Patch: /t/kq-9-r2-delta.patch Patch: ${VOLL}`, zeilen);
+    expect(l.patch?.voll).toMatchObject({ zugriffe: 1, komplett: true });
+  });
+  test("Schwelle komplett: 225 von 250 Zeilen (0,9) ja, 224 nein", () => {
+    const VOLL = "/t/kq-9-r2.patch";
+    const lesenZ = (num: number): Row[] => {
+      const id = `sw${num}`;
+      const asst = call(1.5, 7, id);
+      (asst.message as { content: unknown[] }).content = [{ type: "tool_use", id, name: "Read", input: { file_path: VOLL, offset: 1, limit: num } }];
+      return [asst, { type: "user", timestamp: t(1.6), toolUseResult: { file: { startLine: 1, numLines: num, totalLines: 250 } }, message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } }];
+    };
+    expect(eins("Lens Doku R1", `Patch: ${VOLL}`, lesenZ(225)).patch?.voll.komplett).toBe(true);
+    expect(eins("Lens Doku R1", `Patch: ${VOLL}`, lesenZ(224)).patch?.voll.komplett).toBe(false);
+  });
+  test("PowerShell-Begrenzer: Select-Object -First ist gezielt, type ohne Begrenzung komplett", () => {
+    const VOLL = "/t/kq-9-r2.patch";
+    const sh = (command: string): Row[] => {
+      const id = `ps${command.length}`;
+      const asst = call(1.5, 7, id);
+      (asst.message as { content: unknown[] }).content = [{ type: "tool_use", id, name: "PowerShell", input: { command } }];
+      return [asst, { type: "user", timestamp: t(1.6), toolUseResult: { stdout: "x" }, message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } }];
+    };
+    expect(eins("Lens Doku R1", `Patch: ${VOLL}`, sh(`Get-Content ${VOLL} | Select-Object -First 50`)).patch?.voll.komplett).toBe(false);
+    expect(eins("Lens Doku R1", `Patch: ${VOLL}`, sh(`type ${VOLL}`)).patch?.voll.komplett).toBe(true);
+  });
+});

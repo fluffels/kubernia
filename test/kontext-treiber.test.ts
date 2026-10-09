@@ -316,3 +316,13 @@ describe("Filter --delta und --brille (#1582)", () => {
     expect(PA([]).delta).toBeUndefined();
   });
 });
+
+describe("--delta ja zählt Merge-Delta-Läufe (#1582)", () => {
+  test("ein Lauf mit Delta-Patch-Pfad und Merge-Beschreibung bleibt bei delta true", () => {
+    const l = lauf("Patch: /t/kq-1-r1.patch Delta-Patch: /t/kq-1-r2-delta.patch Konflikt-Auflösung", [{ min: 1 }, { min: 2 }], "kubernia-lens");
+    (l.meta as Record<string, unknown>).description = "Lens Doku Merge-Auflösung";
+    const n = (delta: boolean) => (K as unknown as { kontextTreiber: (e: { laeufe: Lauf[]; agent: string; delta: boolean }) => { gesamt: { gesamt: { n: number } | null } } }).kontextTreiber({ laeufe: [l], agent: "kubernia-lens", delta }).gesamt.gesamt?.n ?? 0;
+    expect(n(true)).toBe(1);
+    expect(n(false)).toBe(0);
+  });
+});

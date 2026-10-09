@@ -20,7 +20,7 @@ import { pathToFileURL } from "node:url";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { median } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektSlug, transkriptZeilen } from "./transkript.mjs";
-import { patchAus } from "./patch-zugriff.mjs";
+import { patchAus, patchPfade } from "./patch-zugriff.mjs";
 
 const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
@@ -75,7 +75,7 @@ function kostenAus(calls) {
 }
 
 const BRILLEN = [[/^arch/i, "Architektur"], [/^req/i, "Requirement-Treue"], [/^test/i, "Test-Adäquanz"], [/^doku/i, "Doku"]];
-const brilleNorm = (b) => BRILLEN.find(([re]) => re.test(b))?.[1] ?? b;
+const brilleNorm = (b) => (/^merge/i.test(b) ? null : (BRILLEN.find(([re]) => re.test(b))?.[1] ?? b));
 
 /** Brille und Runde aus der Spawn-Beschreibung (`Lens <Brille> R<n>`, älter `lens:<brille>:r<n>`); Merge-Läufe heißen `M<n>`. */
 export function beschreibungAus(beschreibung) {
@@ -89,8 +89,8 @@ export function beschreibungAus(beschreibung) {
   return { brille: ohne ? brilleNorm(ohne[1]) : null, runde: null, merge };
 }
 
-/** Art des Delta-Auftrags: `null` ohne `Delta-Patch:`, `"merge"` bei Konflikt-Auflösung (Merge-Lens), sonst `"fix"`. */
-const deltaArtAus = (prompt, merge) => (!/Delta-Patch:/.test(prompt) ? null : merge || /Konflikt-Aufl(?:ö|oe)sung/i.test(prompt) ? "merge" : "fix");
+/** Art des Delta-Auftrags: `null` ohne Delta-Patch-Pfad im Prompt, `"merge"` bei Konflikt-Auflösung (Merge-Lens), sonst `"fix"`. */
+const deltaArtAus = (prompt, merge) => (!patchPfade(prompt).delta ? null : merge || /Konflikt-Aufl(?:ö|oe)sung/i.test(prompt) ? "merge" : "fix");
 
 /** Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. */
 export function laufAus({ meta, zeilen, datei }) {
@@ -112,7 +112,7 @@ export function laufAus({ meta, zeilen, datei }) {
     datei: datei ?? null,
     beschreibung: typeof meta?.description === "string" ? meta.description : null,
     brille: beschr.brille,
-    runde: beschr.runde ?? patch?.runde ?? null,
+    runde: beschr.runde ?? (beschr.merge ? null : patch?.runde) ?? null,
     deltaArt: deltaArtAus(prompt, beschr.merge),
     promptZeichen: prompt.length,
     ersterCall: erster ? { input: erster.input ?? 0, cacheWrite: erster.cacheWrite ?? 0, cacheRead: erster.cacheRead ?? 0 } : null,
