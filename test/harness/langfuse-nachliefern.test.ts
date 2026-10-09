@@ -726,8 +726,8 @@ describe("OTLP-Aufbau: Randfälle", () => {
     expect(O.nanos("kein-datum")).toBe("0");
   });
 
-  test("sendeOtlp: 2xx ohne JSON-Antwort ist kein Fehler", async () => {
-    const fetchImpl: Fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}), text: () => Promise.resolve("") });
+  test("sendeOtlp: 2xx mit Nicht-JSON-Antwort ist kein Fehler", async () => {
+    const fetchImpl: Fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}), text: () => Promise.resolve("<html>ok</html>") });
     await expect(API.sendeOtlp({}, { baseUrl: "http://lf.test", publicKey: "pk", secretKey: "sk", fetchImpl })).resolves.toBeNull();
   });
 });
