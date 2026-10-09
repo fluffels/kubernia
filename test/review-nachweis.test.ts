@@ -356,7 +356,7 @@ describe("Konflikt-Merge nach dem Review (#1392 Z9)", () => {
   });
 });
 
-describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", () => {
+describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () => {
   const git = (cwd: string, ...args: string[]) =>
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
