@@ -16,6 +16,7 @@
  * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts.
  */
 import { pathToFileURL } from "node:url";
+import { mitKontingent } from "./gh-kontingent.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,
@@ -271,6 +272,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
 }
 
 function main() {
+  if (process.env.PROJECT_TOKEN) mitKontingent("board-takt", { token: process.env.PROJECT_TOKEN });
   const { fehler } = fuehreTaktAus({
     jetzt: new Date(),
     dry: process.argv.includes("--dry-run"),

@@ -17,6 +17,7 @@
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
 import { pathToFileURL } from "node:url";
+import { mitKontingent } from "./gh-kontingent.mjs";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
   REPO,
@@ -118,6 +119,7 @@ async function main(argv = process.argv.slice(2)) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run]");
     process.exit(2);
   }
+  mitKontingent("sammelticket-anlegen");
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const vorhanden = vorhandenesSammelticket(normalizeOffene(loadOpenIssuePages()), titel);

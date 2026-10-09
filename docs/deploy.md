@@ -122,6 +122,8 @@ Helm-Chart in `deploy/chart/` installieren. Das bündelt Deployment + Service +
 Ingress als Helm-Templates und macht alle Konfig-Werte über `values.yaml`
 steuerbar.
 
+Die rohen Manifeste (Slice 2/4, kubectl-Lernweg) und das Chart sind bewusst zwei Wege: eine Änderung an Deployment, Service oder Ingress gehört in beide, die CI (`deploy-validate.yml`) validiert beide.
+
 > *Voraussetzung: Image aus Slice 1, Cluster + Ingress-Controller aus Slice 2.*
 
 ### Helm installieren
