@@ -149,7 +149,8 @@ const FUENF_MIN = 5 * 60_000;
 const SECHZIG_MIN = 60 * 60_000;
 
 /**
- * 1h-gegen-5m-TTL (#1557) für die Hauptchat-Calls der Ticket-Orchestrierung: Pause = Abstand zum vorigen Call derselben Session.
+ * 1h-gegen-5m-TTL (#1557): Pause = Abstand zum vorigen Hauptchat-Call derselben Session (alle Kategorien, die TTL gilt für die ganze Konversation);
+ * Kosten, Pausen- und Callzähler nur für Calls mit `zaehlt !== false` (die Ticket-Orchestrierung), die übrigen bilden nur die Kette.
  * Ist-Kosten = Cache-Write und Cache-Read wie gebucht (1h-Write); Simulation 5m: bei Pause über 5 min, Modellwechsel oder ohne
  * Vorgänger wird Write + Read zum 5m-Write-Preis neu geschrieben, sonst 5m-Write plus Read. Calls ohne gültige Zeit oder
  * Preis zählen nur in `uebersprungen`. Die Preisverhältnisse (1h-Write zu 5m-Write, Read zu 5m-Write) sind bei Sonnet und Opus gleich.
@@ -160,10 +161,11 @@ export function ttlVergleich(calls) {
   const proSession = new Map();
   for (const c of calls) {
     if (!gueltig(c.ts) || !priceParts(c)) {
-      r.uebersprungen += 1;
+      if (c.zaehlt !== false) r.uebersprungen += 1;
       continue;
     }
-    proSession.set(c.session, [...(proSession.get(c.session) ?? []), c]);
+    if (!proSession.has(c.session)) proSession.set(c.session, []);
+    proSession.get(c.session).push(c);
   }
   const lange = [];
   for (const liste of proSession.values()) {
@@ -171,6 +173,7 @@ export function ttlVergleich(calls) {
     liste.forEach((c, i) => {
       const prev = liste[i - 1];
       const pause = prev ? Date.parse(c.ts) - Date.parse(prev.ts) : null;
+      if (c.zaehlt === false) return;
       if (pause !== null && pause > FUENF_MIN) lange.push(pause);
       if (pause !== null && pause > SECHZIG_MIN) r.pausenUeber60 += 1;
       const kalt = !prev || prev.model !== c.model || pause > FUENF_MIN;
@@ -196,7 +199,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   const wurzeln = brainRoots.map((r) => norm(r).replace(/\/+$/, "")).filter(Boolean);
   const summen = new Map();
   const fenster = [];
-  const ticketCalls = [];
+  const hauptCalls = [];
   const kubernia = { calls: 0, cost: 0 };
   let ohnePreis = 0;
   const ohnePreisModelle = {};
@@ -257,8 +260,9 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
         if (!imFenster(c.ts)) continue;
         const kat = kategorieFuer(turn, c.ts);
         buche(kat, "Hauptchat", c);
+        // Alle Hauptchat-Calls bilden die Pausenkette der Session (die TTL gilt für die ganze Konversation); nur Ticket-Calls zählen in die Kosten.
+        hauptCalls.push({ ...c, session: s.id, zaehlt: kat === KAT.TICKET });
         if (kat === KAT.TICKET) {
-          ticketCalls.push({ ...c, session: s.id });
           const w = fensterVon(turn);
           if (w) {
             w.modelle[c.model] = (w.modelle[c.model] ?? 0) + 1;
@@ -287,7 +291,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
-  return { rows, fenster, kubernia, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0, modellanteil: modellAnteil(fenster), ttl: ttlVergleich(ticketCalls) };
+  return { rows, fenster, kubernia, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0, modellanteil: modellAnteil(fenster), ttl: ttlVergleich(hauptCalls) };
 }
 
 const de = (n, stellen = 1) => n.toFixed(stellen).replace(".", ",");

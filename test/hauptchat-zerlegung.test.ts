@@ -441,7 +441,7 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
 });
 
 type Anteil = { sonnet: number; opus: number; haiku: number; sonst: number; gesamt: number; anteil: number; fenster: number; medianKosten: number };
-type TtlCall = { session: string; ts?: string; model: string; input: number; cacheWrite: number; cacheWrite1h: number; cacheRead: number; output: number };
+type TtlCall = { session: string; ts?: string; model: string; input: number; cacheWrite: number; cacheWrite1h: number; cacheRead: number; output: number; zaehlt?: boolean };
 type Ttl = { calls: number; uebersprungen: number; pausenUeber5: number; pausenUeber60: number; medianPauseMin: number | null; istKosten: number; sim5mKosten: number };
 const hcx = hcModule as {
   modellAnteil: (f: { modelle: Record<string, number>; kosten: Record<string, number> }[]) => Anteil | null;
@@ -460,6 +460,10 @@ describe("modellAnteil (#1557)", () => {
     assert.ok(r);
     assert.deepEqual([r.sonnet, r.opus, r.haiku, r.sonst, r.gesamt, r.fenster], [18, 2, 1, 1, 22, 2]);
     assert.equal(r.anteil, 18 / 22);
+  });
+  test("die Familie wird am Präfix erkannt, ein Fremdname mit eingebettetem Namen ist sonst", () => {
+    const r = hcx.modellAnteil([f({ "x-claude-sonnet-5": 1, [SONNET]: 1 }, {})]);
+    assert.deepEqual([r?.sonnet, r?.sonst], [1, 1]);
   });
   test("<synthetic> zählt weder als Call noch als Fremdmodell", () => {
     const r = hcx.modellAnteil([f({ [SONNET]: 3, "<synthetic>": 5 }, { [SONNET]: 1 })]);
@@ -523,9 +527,26 @@ describe("ttlVergleich (#1557)", () => {
     assert.ok(Math.abs(r.sim5mKosten - 15) < 1e-9);
   });
   test("Sessions werden getrennt, die Reihenfolge der Eingabe spielt keine Rolle", () => {
-    const r = hcx.ttlVergleich([c(10, { session: "b" }), c(0), c(1), c(0, { session: "b" })]);
+    // s bei 0 und 10 (Pause 10 min), b bei 5: in EINER gemeinsamen Liste wären es zwei Pausen von genau 5 min, also keine lange.
+    const r = hcx.ttlVergleich([c(10), c(5, { session: "b" }), c(0)]);
     assert.equal(r.pausenUeber5, 1);
-    assert.equal(r.calls, 4);
+    assert.equal(r.calls, 3);
+    // der erste Call von b hat keinen Vorgänger und ist kalt: 5 (s erster) + 5 (b) + 5 (s zweiter, Pause 10 min)
+    assert.ok(Math.abs(r.sim5mKosten - 15) < 1e-9);
+  });
+  test("genau 60 min zählt nicht als Pause über 60 min", () => {
+    const r = hcx.ttlVergleich([c(0), c(60)]);
+    assert.deepEqual([r.pausenUeber5, r.pausenUeber60], [1, 0]);
+  });
+  test("Calls mit zaehlt=false bilden nur die Pausenkette: sie halten den Cache warm, kosten und zählen aber nicht", () => {
+    // 0 und 8 min sind ohne Zwischen-Call eine lange Pause; mit einem Zwischen-Call bei 4 min sind beide Abstände kurz.
+    const r = hcx.ttlVergleich([c(0), c(4, { zaehlt: false }), c(8)]);
+    assert.equal(r.calls, 2);
+    assert.equal(r.pausenUeber5, 0);
+    assert.ok(Math.abs(r.sim5mKosten - (5 + 2.7)) < 1e-9);
+    const ohne = hcx.ttlVergleich([c(0), c(8)]);
+    assert.equal(ohne.pausenUeber5, 1);
+    assert.equal(hcx.ttlVergleich([c(1, { zaehlt: false, ts: undefined })]).uebersprungen, 0, "ein nicht zählender Call ohne Zeit ist kein übersprungener");
   });
   test("Calls ohne Zeitstempel oder ohne Preis werden übersprungen und gezählt", () => {
     const r = hcx.ttlVergleich([c(0), c(1, { ts: undefined }), c(2, { ts: "kaputt" }), c(3, { model: "claude-unbekannt-1" })]);

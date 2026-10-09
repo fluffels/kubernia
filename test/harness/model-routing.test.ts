@@ -122,10 +122,11 @@ const frontmatter = parseFrontmatter as (md: string) => Record<string, string>;
  * und kein `env`-Schlüssel mit MODEL darf es überstimmen (`ANTHROPIC_MODEL` hat Vorrang vor dem Settings-`model`; generisch,
  * damit neue Variablennamen nicht durchrutschen). Die 1h-TTL des Hauptchats bleibt Default: kein TTL-Schlüssel (docs/model-routing.md §5).
  */
-function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: string; env?: Record<string, string> }): string[] {
+function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: string; experimental?: { cacheTtl?: string }; env?: Record<string, string> }): string[] {
   const out = settings.model === "sonnet" ? [] : [`model=${JSON.stringify(settings.model ?? null)}`];
   for (const k of Object.keys(settings.env ?? {})) if (/MODEL|PROMPT_CACHE_TTL|PROMPT_CACHING/i.test(k)) out.push(`env.${k}`);
   if (settings.promptCacheTtl !== undefined) out.push("promptCacheTtl");
+  if (settings.experimental?.cacheTtl !== undefined) out.push("experimental.cacheTtl");
   return out;
 }
 
@@ -458,6 +459,7 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
       assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { [k]: "5m" } }), [`env.${k}`], k);
     }
     assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", promptCacheTtl: "5m" }), ["promptCacheTtl"]);
+    assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", experimental: { cacheTtl: "5m" } }), ["experimental.cacheTtl"]);
   });
 
   test("Planer opus/xhigh", () => {
