@@ -68,7 +68,7 @@ const P = rawPreise as unknown as { priceParts: (c: Record<string, unknown>) => 
 const REPO = "X:/repo";
 const PRAEFIX = "X--repo";
 const ZUGANG = { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", LANGFUSE_BASE_URL: "http://lf.test" };
-const HEUTE = Date.parse(rawNach.STICHTAG) + 3_600_000; // eine Stunde nach dem Stichtag: gesendet wird
+const HEUTE = Date.parse((rawNach as unknown as { STICHTAG: string }).STICHTAG) + 3_600_000; // eine Stunde nach dem Stichtag: gesendet wird
 
 // ── Helfer ───────────────────────────────────────────────────────────────────
 
@@ -691,7 +691,7 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(ohne.protokoll.zugang).toBe(false);
     expect(m.aufrufe).toHaveLength(0);
     expect((await lauf(a, m)).protokoll.zugang).toBe(true);
-    expect((await lauf(a, m, { fehler: "x" } as Partial<Args>)).protokoll.zugang).toBeNull();
+    expect((await lauf(a, m, { fehler: "x" })).protokoll.zugang).toBeNull();
   });
 
   test.each([

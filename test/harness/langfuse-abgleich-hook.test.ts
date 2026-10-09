@@ -24,7 +24,7 @@ import * as rawIo from "../../scripts/hook-io.mjs";
 type Args = { ausloeser: string | null; session: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null; seit: string | null };
 type Ergebnis = { exitCode: number; text: string; protokoll: Record<string, unknown> };
 type Lauf = (a: Args, o: { now: number }) => Promise<Ergebnis>;
-type Log = Record<string, unknown> & { sessions: unknown[]; fehler: { meldung: string }[] };
+type Log = Record<string, unknown> & { ausloeser: string; lock: string; sessions: unknown[]; fehler: { meldung: string }[] };
 
 const H = rawHook as unknown as {
   kindArgs: (i: { event?: string; session?: unknown; source?: string }) => string[] | null;
@@ -172,6 +172,8 @@ describe("Zugangs-Lader (nur im Hook)", () => {
 
 // ── Lock ─────────────────────────────────────────────────────────────────────
 
+const pidVon = (d: string): number => (JSON.parse(readFileSync(d, "utf8")) as { pid: number }).pid;
+
 describe("Lock", () => {
   const lockDatei = () => join(fixture({}), "state", "langfuse-abgleich.lock");
 
@@ -180,7 +182,7 @@ describe("Lock", () => {
     expect(N.lockNehmen(d, { now: T0, pid: 11 })).toBe("frei");
     expect(JSON.parse(readFileSync(d, "utf8"))).toEqual({ pid: 11, zeit: T0 });
     expect(N.lockNehmen(d, { now: T0 + MIN, pid: 12 })).toBe("belegt");
-    expect(JSON.parse(readFileSync(d, "utf8")).pid).toBe(11);
+    expect(pidVon(d)).toBe(11);
   });
 
   test("veraltet nach 15 min: übernommen, bei genau 15 min noch belegt", () => {
@@ -188,7 +190,7 @@ describe("Lock", () => {
     N.lockNehmen(d, { now: T0, pid: 11 });
     expect(N.lockNehmen(d, { now: T0 + N.LOCK_VERALTET_MS, pid: 12 })).toBe("belegt");
     expect(N.lockNehmen(d, { now: T0 + N.LOCK_VERALTET_MS + 1, pid: 12 })).toBe("übernommen");
-    expect(JSON.parse(readFileSync(d, "utf8")).pid).toBe(12);
+    expect(pidVon(d)).toBe(12);
   });
 
   test("kaputter Inhalt: nach mtime beurteilt (frisch belegt, > 15 min alt veraltet)", () => {
@@ -222,7 +224,7 @@ describe("Log", () => {
     N.logAnhaengen(d, { a: 1 });
     N.logAnhaengen(d, { a: 2 });
     const zeilen = readFileSync(d, "utf8").trimEnd().split("\n");
-    expect(zeilen.map((z) => JSON.parse(z))).toEqual([{ a: 1 }, { a: 2 }]);
+    expect(zeilen.map((z) => JSON.parse(z) as unknown)).toEqual([{ a: 1 }, { a: 2 }]);
   });
 
   test("ab der Grenze wandert die Datei nach .log.1 (eine ältere .1 wird ersetzt), die neue Datei trägt nur die neue Zeile", () => {
