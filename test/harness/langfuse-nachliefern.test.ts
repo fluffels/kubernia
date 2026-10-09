@@ -628,6 +628,18 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(m2.otlp).toHaveLength(1);
   });
 
+  test("--beendet in der Ruhefrist behält den bisherigen Ledger-Fortschritt (gesendet, spans)", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const jetzt = Date.now();
+    const t5 = new Date(jetzt - 5 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t5, t5);
+    mkdirLedger(a.state);
+    const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: false, gesendet: ["x"], spans: ["y"] };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
+    await lauf(a, mock({ ist: 0 }), { beendet: "s1" }, jetzt);
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ gesendet: ["x"], spans: ["y"], beendet: true });
+  });
+
   test.each([
     ["ein Call vor und einer nach dem Stichtag: gilt als vor dem Stichtag", ["2026-10-08T23:59:59.999Z", "2026-10-09T12:00:00.000Z"], "vor Stichtag"],
     ["ein Call exakt am Stichtag: nicht davor", ["2026-10-09T00:00:00.000Z"], "gesendet"],
@@ -711,6 +723,19 @@ describe("OTLP-Aufbau: Randfälle", () => {
     expect(spans).toHaveLength(6);
     expect(new Set(spans.map((s) => s.spanId)).size).toBe(6);
     for (const id of ["a1", "a2", "a3"]) expect(spans.find((s) => s.spanId === A.subagentSpanId("s1", id))?.parentSpanId).toBeUndefined();
+  });
+
+  test("Agent unter einem Eltern-Zyklus, zu dem er nicht gehört: endet, hängt unter dem Zyklus, der Zyklus bleibt Root", () => {
+    const e = [
+      eintrag(1, { rolle: { agentId: "a1", agentType: "t", parentAgentId: "a2" } }),
+      eintrag(2, { rolle: { agentId: "a2", agentType: "t", parentAgentId: "a1" } }),
+      eintrag(3, { rolle: { agentId: "a3", agentType: "t", parentAgentId: "a1" } }),
+    ];
+    const spans = spansVon(O.bauePayloads("s1", e, { project: "repo" }).chunks[0].payload);
+    const eltern = (id: string) => spans.find((s) => s.spanId === A.subagentSpanId("s1", id))?.parentSpanId;
+    expect(eltern("a3")).toBe(A.subagentSpanId("s1", "a1"));
+    expect(eltern("a1")).toBeUndefined();
+    expect(eltern("a2")).toBeUndefined();
   });
 
   test("Zeitspanne des Subagent-Spans unabhängig von der Reihenfolge der Calls", () => {
