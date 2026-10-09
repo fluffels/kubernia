@@ -56,8 +56,13 @@ const A = rawAbgleich as unknown as {
 const BASE = rawBase as unknown as Record<string, unknown>;
 const PREISE = rawPreise as unknown as Record<string, unknown>;
 const CALLS = rawCalls as unknown as { callsFromTranscript: (t: string | Zeilen) => { calls: { messageId: string; sessionId: string | null; gitBranch: string | null; output: number }[] } };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawTranskript from "../../scripts/transkript.mjs";
+
 const API = rawApi as unknown as Record<string, unknown>;
 
+const LADE = (rawTranskript as unknown as { ladeSessionDatei: (p: string) => Parameters<typeof A.sollEintraege>[0] }).ladeSessionDatei;
+const row = (s: string) => JSON.parse(s) as Record<string, unknown>;
 const zeile = (o: Record<string, unknown>) => JSON.stringify(o);
 let zaehler = 0;
 /** Eine Assistant-Zeile; `id` ist die message.id, `usage` überschreibt die Defaults. */
@@ -136,23 +141,23 @@ describe("Soll (pur)", () => {
   };
 
   test("mehrere Zeilen je message.id ergeben einen Eintrag, Output = Maximum", () => {
-    const e = A.sollEintraege({ id: "s1", main: [JSON.parse(msg("m", { output_tokens: 3 })), JSON.parse(msg("m", { output_tokens: 9 })), JSON.parse(msg("m", { output_tokens: 4 }))], subagents: [] });
+    const e = A.sollEintraege({ id: "s1", main: [row(msg("m", { output_tokens: 3 })), row(msg("m", { output_tokens: 9 })), row(msg("m", { output_tokens: 4 }))], subagents: [] });
     expect(e).toHaveLength(1);
     expect(e[0].usage.output).toBe(9);
   });
 
   test("Assistant ohne usage ergibt keinen Eintrag", () => {
-    expect(A.sollEintraege({ id: "s1", main: [JSON.parse(msg("m", null))], subagents: [] })).toEqual([]);
+    expect(A.sollEintraege({ id: "s1", main: [row(msg("m", null))], subagents: [] })).toEqual([]);
   });
 
   test("Felder: IDs, Modell, Ticket, getrennter Cache-Write, Rolle des Hauptchats null", () => {
-    const [e] = A.sollEintraege({ id: "s1", main: [JSON.parse(msg("m"))], subagents: [] });
+    const [e] = A.sollEintraege({ id: "s1", main: [row(msg("m"))], subagents: [] });
     expect(e).toMatchObject({ id: A.beobachtungsId("s1", "m"), traceId: A.traceIdVon("s1"), session: "s1", messageId: "m", model: "claude-opus-5-5", ticket: "kq-1562", rolle: null });
     expect(e.usage).toEqual({ input: 10, output: 5, cacheRead: 100, cacheWrite5m: 10, cacheWrite1h: 30 });
   });
 
   test("die 1h-Aufteilung wird auf die Summe gekappt", () => {
-    const [e] = A.sollEintraege({ id: "s1", main: [JSON.parse(msg("m", { cache_creation_input_tokens: 5, cache_creation: { ephemeral_1h_input_tokens: 50 } }))], subagents: [] });
+    const [e] = A.sollEintraege({ id: "s1", main: [row(msg("m", { cache_creation_input_tokens: 5, cache_creation: { ephemeral_1h_input_tokens: 50 } }))], subagents: [] });
     expect(e.usage).toMatchObject({ cacheWrite5m: 0, cacheWrite1h: 5 });
   });
 
@@ -167,20 +172,16 @@ describe("Soll (pur)", () => {
     const { root } = sitzung(`${msg("m1")}\n{kaputt\n${msg("m2")}\n{"abgeschnitten`, [{ meta: "{nicht json", text: `${msg("sub")}\n` }]);
     const [s] = A.findeSessions({ projectsRoot: root, praefix: "p" });
     expect(s).toBeDefined();
-    // Über den Gesamtweg: pruefen liest dieselben Dateien (siehe unten); hier die pure Ebene mit dem Loader
-    return import("../../scripts/transkript.mjs").then((m: { ladeSessionDatei: (p: string) => Parameters<typeof A.sollEintraege>[0] }) => {
-      const e = A.sollEintraege(m.ladeSessionDatei(s.pfad));
-      expect(e.map((x) => x.messageId).sort()).toEqual(["m1", "m2", "sub"]);
-      const sub = e.find((x) => x.messageId === "sub");
-      expect(sub?.rolle?.agentType).toBeUndefined();
-      expect(sub?.rolle).not.toBeNull();
-    });
+    const e = A.sollEintraege(LADE(s.pfad));
+    expect(e.map((x) => x.messageId).sort()).toEqual(["m1", "m2", "sub"]);
+    const sub = e.find((x) => x.messageId === "sub");
+    expect(sub?.rolle?.agentType).toBeUndefined();
+    expect(sub?.rolle).not.toBeNull();
   });
 
-  test("Rolle und Zusammenführung über Dateien: erster Fund bestimmt die Rolle, Output = Maximum", async () => {
+  test("Rolle und Zusammenführung über Dateien: erster Fund bestimmt die Rolle, Output = Maximum", () => {
     const { root } = sitzung(msg("dup", { output_tokens: 2 }), [{ meta: JSON.stringify({ agentType: "kubernia-lens", description: "L", parentAgentId: "p" }), text: msg("dup", { output_tokens: 8 }) + "\n" + msg("nur-sub") }]);
-    const m = (await import("../../scripts/transkript.mjs")) as { ladeSessionDatei: (p: string) => Parameters<typeof A.sollEintraege>[0] };
-    const e = A.sollEintraege(m.ladeSessionDatei(lade(root).pfad));
+    const e = A.sollEintraege(LADE(lade(root).pfad));
     expect(e).toHaveLength(2);
     const dup = e.find((x) => x.messageId === "dup");
     expect(dup?.usage.output).toBe(8);
@@ -380,7 +381,6 @@ describe("pruefen (Ablauf)", () => {
     { sessionId: id, usageType: "input_cache_creation_5m", sum_usageByType: t.w5 },
     { sessionId: id, usageType: "input_cache_creation_1h", sum_usageByType: t.w1 },
   ];
-  const T1 = { input: 10, output: 5, cacheRead: 100, w5: 10, w1: 30 };
 
   test("ohne Zugang und ohne --ist: Exit 2 und Hinweis auf --ist", async () => {
     const root = mitSession([msg("a")]);
@@ -424,8 +424,7 @@ describe("pruefen (Ablauf)", () => {
     const root = mitSession([msg("a", { input_tokens: 1 }), msg("b", { input_tokens: 2 }), msg("c", { input_tokens: 3 })]);
     const [s] = A.findeSessions({ projectsRoot: root, praefix: PRAEFIX });
     expect(s.id).toBe("s1");
-    const soll = (await import("../../scripts/transkript.mjs")) as { ladeSessionDatei: (p: string) => Parameters<typeof A.sollEintraege>[0] };
-    const e = A.sollEintraege(soll.ladeSessionDatei(s.pfad));
+    const e = A.sollEintraege(LADE(s.pfad));
     const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 2 }], tokens: [], observations: [obsZu(e[0]), obsZu(e[2])] });
     const r = await A.pruefen(args({ json: true }), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
     expect(r.exitCode).toBe(0);

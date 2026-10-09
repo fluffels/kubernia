@@ -303,7 +303,7 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
       try {
         j = JSON.parse(leseDatei(pfad, "utf8"));
       } catch (e) {
-        throw new Error(`--ist ${pfad}: kein lesbares JSON (${e.message})`);
+        throw new Error(`--ist ${pfad}: kein lesbares JSON (${e.message})`, { cause: e });
       }
       const r = Array.isArray(j) ? j : j?.data;
       if (!Array.isArray(r)) throw new Error(`--ist ${pfad}: unbekannte Form, erwartet {data:[…]} oder ein Array.`);
