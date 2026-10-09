@@ -202,7 +202,7 @@ function checkOutput(host: ErrHost, value: string): string | null {
     "Schreib in eine Datei direkt im Arbeitsverzeichnis.");
 }
 
-/** curl-Flags. -s, -S, -v, -I, -i, -H, -X und -d werden angenommen, ändern aber nichts (Grenzen curl-antwort und
+/** curl-Flags. -S, -v, -I, -i, -H, -X und -d werden angenommen, ändern aber nichts (-s nur ohne -o; Grenzen curl-antwort und
  *  curl-anfrage): jeder Dienst antwortet gleich. -o schreibt die Antwort in eine Datei. */
 export const CURL_ARGS: ArgSpec = {
   cmd: "curl",
