@@ -41,6 +41,7 @@ const SECRET_PFADE = [
   "~/.claude/.credentials.json",
   "~/.claude.json",
   "~/.config/agent-secrets.env",
+  "~/.langfuse-secret",
   "./.env",
   "./.env.local",
   "./.env.development.local",
