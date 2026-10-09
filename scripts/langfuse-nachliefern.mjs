@@ -143,13 +143,18 @@ async function verarbeite(s, c) {
   const endeBekannt = args.beendet === s.id || args.session === s.id;
   const beendet = endeBekannt || Boolean(alt?.beendet && unveraendert);
   const ruheMs = beendet ? RUHEFRIST_MIN * 60_000 : RUHEFRIST_OHNE_ENDE_H * 3_600_000;
-  if (now - s.mtime < ruheMs) return Object.assign(rec, { status: "läuft" });
+  if (now - s.mtime < ruheMs) {
+    // Bekanntes Ende festhalten, sonst gälte beim nächsten Lauf (nach der Ruhefrist) wieder die 24-h-Frist.
+    if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: Boolean(alt?.bestaetigt && unveraendert), beendet: true };
+    return Object.assign(rec, { status: "läuft" });
+  }
   if (alt?.bestaetigt && unveraendert) return Object.assign(rec, { status: "bestätigt" });
   const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id });
   if (!soll.length) return Object.assign(rec, { status: "ohne Calls" });
   const vorStichtag = Math.min(...soll.map((e) => Date.parse(e.ts)).filter(Number.isFinite)) < Date.parse(STICHTAG);
   const { observations, diff } = await istUndDiff({ s, soll, zugang, now, fetchImpl });
-  const eintrag = { pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, gesendet: [], spans: [], ...(alt ?? {}), beendet: endeBekannt || Boolean(alt?.beendet && unveraendert) };
+  // Ein neu verarbeiteter Stand gilt erst nach Δ = 0 als bestätigt (auch wenn der alte Eintrag bestätigt war und die Session gewachsen ist).
+  const eintrag = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet: beendet };
   const imLedger = new Set(eintrag.gesendet);
   const fehlend = diff?.fehlend ?? [];
   const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
@@ -160,7 +165,8 @@ async function verarbeite(s, c) {
   if (args.trocken) return Object.assign(rec, { status: mehrdeutig ? "mehrdeutig" : "trocken", wuerdeSenden: sendbar.length });
 
   // Δ = 0 oder nichts mehr sendbar: nur bestätigen, wenn auch kein gesendeter Call mehr unterwegs ist.
-  eintrag.gesendet = eintrag.gesendet.filter((id) => fehlend.some((e) => e.id === id));
+  const nochFehlend = new Set(fehlend.map((e) => e.id));
+  eintrag.gesendet = eintrag.gesendet.filter((id) => nochFehlend.has(id));
   let ok = true;
   if (sendbar.length) {
     const { chunks } = bauePayloads(s.id, sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(repoWurzel(repoRoot)) });

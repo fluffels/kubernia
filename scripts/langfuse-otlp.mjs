@@ -129,7 +129,13 @@ export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans
   // Eltern-Agent bekannt → dessen Span, sonst Root (unbekannter oder fehlender Eltern-Agent).
   const elternVon = (a) => {
     const p = normAgent(a.rolle.parentAgentId);
-    return p && p !== a.rolle.agentId && agenten.has(p) ? spanIdVon(p) : null;
+    if (!p || p === a.rolle.agentId || !agenten.has(p)) return null;
+    // Zyklus (a → b → a): den Eltern-Verweis kappen, damit der Span-Baum ein Baum bleibt.
+    for (let id = p, n = 0; id && n <= agenten.size; n++) {
+      if (id === a.rolle.agentId) return null;
+      id = agenten.has(id) ? normAgent(agenten.get(id).rolle.parentAgentId) : null;
+    }
+    return spanIdVon(p);
   };
   // Benötigte Agenten: die der zu sendenden Calls samt aller Vorfahren.
   const noetig = new Set();
@@ -143,10 +149,11 @@ export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans
     }
     for (const k of kette.reverse()) noetig.add(k); // Eltern vor Kindern
   }
+  const schonGesendet = new Set(ledgerSpans);
   const spans = [];
   for (const id of noetig) {
     const sid = spanIdVon(id);
-    if (ledgerSpans.includes(sid)) continue;
+    if (schonGesendet.has(sid)) continue;
     const a = agenten.get(id);
     spans.push({ id: sid, span: subagentSpan(a.rolle, { traceAttrs, traceId, spanId: sid, parentSpanId: elternVon(a) }, a) });
   }

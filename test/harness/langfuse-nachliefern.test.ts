@@ -118,7 +118,7 @@ const obsZu = (e: Eintrag, metadata: Obs = {}): Obs => ({
 /** Soll-Eintrag zu `msg(id, i)`: zwei Zeilen mit demselben Inhalt ergäben denselben Fingerabdruck. */
 const sollZu = (id: string, i = 10): Eintrag => eintrag(0, { messageId: id, id: A.beobachtungsId("s1", id), usage: usage({ input: i }) });
 
-type Cfg = { ist?: number; obs?: Obs[]; otlpStatus?: (n: number) => number; partial?: number; scoreStatus?: number };
+type Cfg = { getStatus?: (n: number) => number; ist?: number; obs?: Obs[]; otlpStatus?: (n: number) => number; partial?: number; scoreStatus?: number };
 const antwort = (body: unknown, status = 200): Promise<Antwort> => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body), text: () => Promise.resolve(JSON.stringify(body)) });
 /** Langfuse-Mock: Metrics (Zählung = cfg.ist, Tokens leer), Observations (cfg.obs), OTLP-/Score-POST mit Aufzeichnung. */
 const mock = (cfg: Cfg = {}) => {
@@ -136,6 +136,10 @@ const mock = (cfg: Cfg = {}) => {
     if (url.endsWith("/api/public/scores")) {
       scores.push(JSON.parse(init?.body ?? "{}") as Record<string, unknown>);
       return antwort({}, cfg.scoreStatus ?? 200);
+    }
+    if (method === "GET" && cfg.getStatus) {
+      const status = cfg.getStatus(aufrufe.filter((x) => x.method === "GET").length - 1);
+      if (status !== 200) return antwort({ error: "x" }, status);
     }
     if (url.includes("/v2/observations")) return antwort({ data: cfg.obs ?? [], meta: {} });
     const q = JSON.parse(new URL(url).searchParams.get("query") ?? "{}") as { dimensions: unknown[] };
@@ -435,6 +439,7 @@ describe("Fehler", () => {
     const e = ledgerVon(a.ledger).s1;
     expect(e.gesendet).toHaveLength(O.MAX_SPANS_JE_REQUEST);
     expect(e.bestaetigt).toBe(false);
+    expect(e.groesse).toBeNull(); // Stand nicht als aktuell vermerkt
   });
 
   test("Fehler in einer Session lässt die übrigen weiterlaufen", async () => {
@@ -577,5 +582,152 @@ describe("Scores", () => {
     await lauf(a, m);
     await lauf(aufbau([msg("a", 1)]), m, { trocken: true });
     expect(m.scores).toHaveLength(0);
+  });
+});
+
+describe("Ledger-Zustand und Grenzfälle", () => {
+  const MIN = 60_000;
+  test("Ledger-Einträge ohne Transkript werden beim schreibenden Lauf entfernt, im Trockenlauf nicht", async () => {
+    const a = aufbau([msg("a", 1)]);
+    mkdirLedger(a.state);
+    const eintragL = { pfad: join(a.root, "gibt-es-nicht.jsonl"), groesse: 1, mtime: 1, bestaetigt: true, gesendet: [], spans: [] };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { weg: eintragL } }, null, 2) + "\n");
+    await lauf(a, mock({ ist: 1 }), { trocken: true });
+    expect(Object.keys(ledgerVon(a.ledger))).toEqual(["weg"]);
+    await lauf(a, mock({ ist: 1 }));
+    expect(Object.keys(ledgerVon(a.ledger))).toEqual(["s1"]);
+  });
+
+  test("bestätigte Session, die danach wächst: neu geprüft, Nachsendung bleibt unbestätigt, der Folgelauf fragt das Ist ab", async () => {
+    const a = aufbau([msg("a", 1)]);
+    await lauf(a, mock({ ist: 1 }));
+    expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(true);
+    writeFileSync(join(a.root, PRAEFIX, "s1.jsonl"), [msg("a", 1), msg("b", 2)].join("\n"));
+    const m2 = mock({ ist: 1, obs: [obsZu(sollZu("a", 1))] });
+    await lauf(a, m2);
+    expect(m2.otlp).toHaveLength(1);
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ bestaetigt: false, gesendet: [A.beobachtungsId("s1", "b")] });
+    const m3 = mock({ ist: 1, obs: [obsZu(sollZu("a", 1))] });
+    const r3 = await lauf(a, m3);
+    expect(m3.aufrufe.length).toBeGreaterThan(0);
+    expect(m3.otlp).toHaveLength(0);
+    expect(r3.protokoll.sessions[0].ausstehend).toBe(1);
+  });
+
+  test("--beendet in der Ruhefrist wird im Ledger festgehalten und gilt im nächsten Lauf (30 statt 24 h)", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const jetzt = Date.now();
+    const t5 = new Date(jetzt - 5 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t5, t5);
+    const r1 = await lauf(a, mock({ ist: 0 }), { beendet: "s1" }, jetzt);
+    expect(r1.protokoll.sessions[0].status).toBe("läuft");
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ beendet: true, bestaetigt: false });
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(a, m2, {}, jetzt + 26 * MIN);
+    expect(r2.protokoll.sessions[0].status).toBe("gesendet");
+    expect(m2.otlp).toHaveLength(1);
+  });
+
+  test.each([
+    ["ein Call vor und einer nach dem Stichtag: gilt als vor dem Stichtag", ["2026-10-08T23:59:59.999Z", "2026-10-09T12:00:00.000Z"], "vor Stichtag"],
+    ["ein Call exakt am Stichtag: nicht davor", ["2026-10-09T00:00:00.000Z"], "gesendet"],
+  ])("Stichtag: %s", async (_n, zeiten, status) => {
+    const a = aufbau(zeiten.map((z, i) => msg(`m${i}`, i, { timestamp: z })));
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m);
+    expect(r.protokoll.sessions[0].status).toBe(status);
+    expect(m.otlp).toHaveLength(status === "gesendet" ? 1 : 0);
+  });
+
+  test("Session ohne Assistant-Call: „ohne Calls“, kein Request, Exit 0", async () => {
+    const a = aufbau([JSON.stringify({ type: "user", sessionId: "s1", message: { role: "user", content: "hi" } })]);
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m);
+    expect(r.exitCode).toBe(0);
+    expect(r.protokoll.sessions[0].status).toBe("ohne Calls");
+    expect(m.aufrufe).toHaveLength(0);
+  });
+
+  test("Lesefehler (HTTP 500 bei Metrics) in einer Session: Exit 1 mit Status, die übrige Session läuft weiter", async () => {
+    const a = aufbau([msg("a", 1)], { [`${PRAEFIX}/s2.jsonl`]: msg("b", 2) });
+    const m = mock({ ist: 0, getStatus: (n) => (n === 0 ? 500 : 200) });
+    const r = await lauf(a, m);
+    expect(r.exitCode).toBe(1);
+    expect(r.protokoll.fehler).toHaveLength(1);
+    expect(r.protokoll.fehler[0].status).toBe(500);
+    expect(m.otlp).toHaveLength(1);
+  });
+
+  test("mehrdeutig: erfassung liegt unter 1 (nichts gesendet, zwei Calls fehlen)", async () => {
+    const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+    const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), obsZu(sollZu("zz", 99))] });
+    await lauf(a, m);
+    const s = m.scores.find((x) => x.name === "erfassung")!;
+    expect(s.value as number).toBeCloseTo(1 / 3, 6);
+  });
+
+  test("ungültiges --seit: Exit 2 ohne Request", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { seit: "gestern" });
+    expect(r.exitCode).toBe(2);
+    expect(m.aufrufe).toHaveLength(0);
+  });
+
+  test("Ledger wird atomar geschrieben: keine tmp-Datei bleibt liegen", async () => {
+    const a = aufbau([msg("a", 1)]);
+    await lauf(a, mock({ ist: 0 }));
+    expect(readdirSync(a.state)).toEqual(["langfuse-abgleich.json"]);
+  });
+
+  test("--json: der Bericht ist das Protokoll", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const r = await lauf(a, mock({ ist: 1 }), { json: true });
+    expect(JSON.parse(r.text)).toMatchObject({ geprueft: 1, gesendet: 0 });
+  });
+});
+
+describe("parseArgs", () => {
+  test("alle Flags landen im richtigen Feld", () => {
+    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", session: "s", seit: "2026-10-01", trocken: true, json: true, fehler: null });
+  });
+  test.each([
+    ["Wert fehlt", ["--session"]],
+    ["der nächste Parameter ist ein Flag (sonst würde --session --trocken echt senden)", ["--session", "--trocken"]],
+    ["unbekanntes Flag", ["--foo"]],
+  ])("Fehler: %s", (_n, argv) => {
+    expect(N.parseArgs(argv).fehler).toMatch(/\S/);
+  });
+});
+
+describe("OTLP-Aufbau: Randfälle", () => {
+  test("Eltern-Zyklus und Selbstverweis: jeder Span genau einmal, kein zyklischer Baum", () => {
+    const e = [
+      eintrag(1, { rolle: { agentId: "a1", agentType: "t", parentAgentId: "a2" } }),
+      eintrag(2, { rolle: { agentId: "a2", agentType: "t", parentAgentId: "a1" } }),
+      eintrag(3, { rolle: { agentId: "a3", agentType: "t", parentAgentId: "a3" } }),
+    ];
+    const spans = spansVon(O.bauePayloads("s1", e, { project: "repo" }).chunks[0].payload);
+    expect(spans).toHaveLength(6);
+    expect(new Set(spans.map((s) => s.spanId)).size).toBe(6);
+    for (const id of ["a1", "a2", "a3"]) expect(spans.find((s) => s.spanId === A.subagentSpanId("s1", id))?.parentSpanId).toBeUndefined();
+  });
+
+  test("Zeitspanne des Subagent-Spans unabhängig von der Reihenfolge der Calls", () => {
+    const rolle = { agentId: "a1", agentType: "t" };
+    const spaet = eintrag(9, { rolle });
+    const frueh = eintrag(1, { rolle });
+    const s = spansVon(O.bauePayloads("s1", [spaet, frueh], { project: "repo" }).chunks[0].payload).find((x) => x.spanId === A.subagentSpanId("s1", "a1"))!;
+    expect(s.startTimeUnixNano).toBe(O.nanos(frueh.ts));
+    expect(s.endTimeUnixNano).toBe(O.nanos(spaet.ts));
+  });
+
+  test("ungültige Zeit ergibt Nanosekunden \"0\"", () => {
+    expect(O.nanos("kein-datum")).toBe("0");
+  });
+
+  test("sendeOtlp: 2xx ohne JSON-Antwort ist kein Fehler", async () => {
+    const fetchImpl: Fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}), text: () => Promise.resolve("") });
+    await expect(API.sendeOtlp({}, { baseUrl: "http://lf.test", publicKey: "pk", secretKey: "sk", fetchImpl })).resolves.toBeNull();
   });
 });
