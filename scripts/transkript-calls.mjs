@@ -32,6 +32,7 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
       continue;
     }
     const call = {
+      id: key,
       ts: row.timestamp,
       model: msg.model,
       input: num(u.input_tokens),
