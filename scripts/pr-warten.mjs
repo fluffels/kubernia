@@ -54,7 +54,7 @@ export function bewerte(pr) {
 export function warten({ hole, schlafe, jetzt, maxMs, intervallMs }) {
   const ende = jetzt() + maxMs;
   let fehler = 0;
-  let letzte = { exit: 2, zeilen: ["OFFEN"] };
+  let letzte;
   for (;;) {
     try {
       letzte = bewerte(hole());
