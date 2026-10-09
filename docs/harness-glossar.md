@@ -37,7 +37,7 @@
 | Worktree | Ein eigener `git worktree` je Ticket als Kollisionsschutz für parallele Agenten. Die Abhängigkeiten dort installiert `npm ci`. | [Kollisionsschutz](agent-harness.md#23-kollisionsschutz-für-parallele-agenten) |
 | Sammelticket | Ein Ticket, das viele kleine Befunde als Zeilen sammelt: Harness-Befunde in „Harness-Härtung (gesammelt)“, Langfuse-Befunde in „Langfuse-Befunde (gesammelt)“. Kommt es dran, wird es komplett abgearbeitet. | [ticket-reihenfolge.md](ticket-reihenfolge.md#sammelticket-harness-härtung-gesammelt-1199) |
 | Status-Ticket | Das wiederkehrende Ticket „Langfuse-Status überprüfen“. Der Workflow [board-takt.yml](../.github/workflows/board-takt.yml) legt es an (Bedingungen im Kopf der Datei), ein Agent wertet es nach der Checkliste aus; den Lauf startet die Maintainerin von Hand. | [Checkliste](model-routing.md#langfuse-status-überprüfen-1293) |
-| Spielquote | Der Wechsel zwischen Spiel- und Harness-Arbeit: Nach einer festen Zahl Spiel-Merges holt der Takt das Sammelticket nach vorn. Die Zahl steht im Workflow, nicht hier. | [ADR 0016](adr/0016-langfuse-takt-woechentlich.md), [scripts/board-takt.mjs](../scripts/board-takt.mjs) |
+| Spielquote | Der Wechsel zwischen Spiel- und Harness-Arbeit: Nach einer festen Zahl Spiel-Merges holt der Takt das Sammelticket nach vorn. Die Zahl steht im Skript, nicht hier. | [ADR 0016](adr/0016-langfuse-takt-woechentlich.md), [scripts/board-takt.mjs](../scripts/board-takt.mjs) |
 
 ## Messung und Richtung
 
@@ -45,4 +45,4 @@
 |---|---|---|
 | Langfuse | Die Messplattform für Agentenläufe: Tokens, Kosten und Läufe je Modell und Rolle. | [ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md), [Token- und Loop-Baseline](model-routing.md#5-token--und-loop-baseline-1068) |
 | Nacharbeit | Ein Revert oder ein Commit mit der Zeile `Folge #<nr>` innerhalb eines festen Fensters nach dem Merge. Das Skript `scripts/lauf-ergebnis.mjs` misst sie je Ticket. | [Ergebnis je Ticket-Lauf](model-routing.md#ergebnis-je-ticket-lauf-1123) |
-| Dark Factory | Das Zielbild aus ADR 0022: der spielunabhängige Kern des Harness wird eine wiederverwendbare Vorlage; menschliche Stopps bei Irreversiblem und Außenwirkung bleiben. Stand 2026-10-09: entschieden, nicht gebaut. | [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md), [harness-transfer.md](harness-transfer.md) |
+| Dark Factory | Das Zielbild aus ADR 0022: der spielunabhängige Kern des Harness wird ein wiederverwendbarer Kern, den Projekte per Sync beziehen; menschliche Stopps bei Irreversiblem und Außenwirkung bleiben. Stand 2026-10-09: entschieden, nicht gebaut. | [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md), [harness-transfer.md](harness-transfer.md) |
