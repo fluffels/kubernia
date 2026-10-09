@@ -18,19 +18,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { callsFromTranscript } from "./token-baseline.mjs";
+import { median } from "./mess-lib.mjs";
 import { transkriptZeilen } from "./transkript.mjs";
 
 const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
 const MIN = 60_000;
-
-/** Median einer Zahlenliste (gerade Anzahl: Mittel der beiden mittleren), `null` bei leerer Liste. */
-export function median(werte) {
-  const s = werte.filter((w) => Number.isFinite(w)).sort((a, b) => a - b);
-  if (!s.length) return null;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 
 /** Vereinigung von [von, bis]-Intervallen in Millisekunden (überlappende zählen einmal). */
 export function vereinigungMs(intervalle) {

@@ -33,6 +33,7 @@ import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
+import { CACHE_TTL_MS, median } from "./mess-lib.mjs";
 import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
@@ -212,13 +213,6 @@ const sumParts = (p) => p.input + p.cacheWrite + p.cacheRead + p.output;
 
 const contextOf = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
 
-function median(values) {
-  if (values.length === 0) return null;
-  const s = [...values].sort((a, b) => a - b);
-  const mid = s.length >> 1;
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
-
 const subKey = (c) => c.subagent.id ?? c.subagent;
 /**
  * Schlüssel der Konversation eines Calls (#1331): Subagent über `subKey`, der Hauptagent über `main:<sessionId>`. Mehrere
@@ -376,7 +370,7 @@ function costPartsOf(calls) {
 }
 
 /** Pause, ab der ein Cache (5-Minuten-TTL) als abgelaufen gilt: Subagenten schreiben mit 5 m, der Hauptchat mit 1 h. */
-const CACHE_PAUSE_MS = { subagent: 5 * 60_000, main: 60 * 60_000 };
+const CACHE_PAUSE_MS = { subagent: CACHE_TTL_MS.fuenfMin, main: CACHE_TTL_MS.eineStunde };
 
 /**
  * Cache-Neuaufbauten (#1309, Messpunkt zur Cache-TTL des Umsetzers): ein Call gilt als Neuaufbau, wenn
