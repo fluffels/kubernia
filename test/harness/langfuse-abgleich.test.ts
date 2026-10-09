@@ -379,7 +379,7 @@ describe("pruefen (Ablauf)", () => {
   const antwort = (body: unknown, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body), text: () => Promise.resolve(JSON.stringify(body)) });
 
   /** Ein Langfuse-Mock: zählt Aufrufe, antwortet je nach Pfad. */
-  const mock = (o: { zaehlung?: unknown[]; zaehlungFn?: (q: Record<string, unknown>) => unknown[]; tokens?: unknown[]; observations?: Obs[]; status?: number }) => {
+  const mock = (o: { zaehlung?: unknown[]; zaehlungFn?: (q: Record<string, unknown>) => unknown[]; tokensFn?: (q: Record<string, unknown>) => unknown[]; tokens?: unknown[]; observations?: Obs[]; status?: number }) => {
     const aufrufe: { url: string; method?: string; auth?: string }[] = [];
     const queries: Record<string, unknown>[] = [];
     const fetchImpl: Fetch = (url, init) => {
@@ -388,7 +388,7 @@ describe("pruefen (Ablauf)", () => {
       if (url.includes("/v2/observations")) return antwort({ data: o.observations ?? [], meta: {} });
       const q = JSON.parse(new URL(url).searchParams.get("query") ?? "{}") as { dimensions: unknown[] };
       queries.push(q);
-      return antwort({ data: q.dimensions.length === 1 ? (o.zaehlungFn ? o.zaehlungFn(q) : (o.zaehlung ?? [])) : (o.tokens ?? []) });
+      return antwort({ data: q.dimensions.length === 1 ? (o.zaehlungFn ? o.zaehlungFn(q) : (o.zaehlung ?? [])) : (o.tokensFn ? o.tokensFn(q) : (o.tokens ?? [])) });
     };
     return { aufrufe, queries, fetchImpl };
   };
@@ -474,7 +474,7 @@ describe("pruefen (Ablauf)", () => {
   test("row_limit erreicht: abgeschnitten, Exit 1 (nie still kürzen)", async () => {
     const root = mitSession([msg("a")]);
     const viele = Array.from({ length: A.ROW_LIMIT }, (_, i) => ({ sessionId: `x${i}`, count_count: 1 }));
-    const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: mock({ zaehlung: viele }).fetchImpl });
+    const r = await A.pruefen(args(), { env: ZUGANG, now: Date.parse("2026-10-11T10:00:00Z"), projectsRoot: root, repoRoot: REPO, fetchImpl: mock({ zaehlung: viele }).fetchImpl });
     expect(r.exitCode).toBe(1);
     expect(r.text).toMatch(/abgeschnitten/);
   });
@@ -541,6 +541,52 @@ describe("pruefen (Ablauf)", () => {
     expect(m.queries.length).toBeGreaterThan(2);
     const j = JSON.parse(r.text) as { sessions: Bewertung[] };
     expect(j.sessions[0].callsLangfuse).toBeGreaterThan(1); // Teile addiert
+  });
+
+  test("Zeitfenster beginnt vor dem FRÜHESTEN Call (zwei Calls über eine Stunde auseinander)", async () => {
+    const root = mitSession([msg("spaet", {}, { timestamp: "2026-10-09T10:00:00.000Z" }), msg("frueh", {}, { timestamp: "2026-10-09T07:30:00.000Z" })]);
+    const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 2 }] });
+    await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    for (const q of m.queries) expect(Date.parse(q.fromTimestamp as string)).toBeLessThanOrEqual(Date.parse("2026-10-09T07:30:00.000Z") - 3_600_000);
+  });
+
+  test("Halbierung deckt das Fenster lückenlos ab: Blätter schließen aneinander an, erstes from und letztes to bleiben", async () => {
+    const root = mitSession([msg("a")]);
+    const blaetter: { von: number; bis: number }[] = [];
+    const m = mock({
+      zaehlungFn: (q) => {
+        const von = Date.parse(q.fromTimestamp as string);
+        const bis = Date.parse(q.toTimestamp as string);
+        if (bis - von > 12 * 3_600_000) return Array.from({ length: A.ROW_LIMIT }, (_, i) => ({ sessionId: `x${i}`, count_count: 1 }));
+        blaetter.push({ von, bis });
+        return [{ sessionId: "s1", count_count: 1 }];
+      },
+    });
+    await A.pruefen(args(), { env: ZUGANG, now: Date.parse("2026-10-11T10:00:00Z"), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    const erste = m.queries[0];
+    const sortiert = [...blaetter].sort((a, b) => a.von - b.von);
+    expect(sortiert.length).toBeGreaterThan(1);
+    expect(sortiert[0].von).toBe(Date.parse(erste.fromTimestamp as string));
+    expect(sortiert.at(-1)?.bis).toBe(Date.parse(erste.toTimestamp as string));
+    for (let i = 1; i < sortiert.length; i++) expect(sortiert[i].von).toBe(sortiert[i - 1].bis);
+  });
+
+  test("Token-Summen aus den Hälften werden addiert, nicht überschrieben", async () => {
+    const root = mitSession([msg("a")]);
+    let blaetter = 0;
+    const m = mock({
+      zaehlung: [{ sessionId: "s1", count_count: 1 }],
+      tokensFn: (q) => {
+        const dauer = Date.parse(q.toTimestamp as string) - Date.parse(q.fromTimestamp as string);
+        if (dauer > 12 * 3_600_000) return Array.from({ length: A.ROW_LIMIT }, (_, i) => ({ sessionId: `x${i}`, usageType: "input", sum_usageByType: 1 }));
+        blaetter += 1;
+        return [{ sessionId: "s1", usageType: "input", sum_usageByType: 1 }];
+      },
+    });
+    const r = await A.pruefen(args({ json: true }), { env: ZUGANG, now: Date.parse("2026-10-11T10:00:00Z"), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    const j = JSON.parse(r.text) as { sessions: (Bewertung & { tokensLangfuse: { input: number } })[] };
+    expect(blaetter).toBeGreaterThan(1);
+    expect(j.sessions[0].tokensLangfuse.input).toBe(blaetter);
   });
 
   test("--ist mit row_limit Zeilen ist abgeschnitten: Exit 1 (kein stilles Kürzen)", async () => {

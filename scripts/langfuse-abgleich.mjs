@@ -306,7 +306,8 @@ export async function holeMetrics(abfrage, zugang, fetchImpl) {
   if (rows.length < ROW_LIMIT) return rows;
   const von = Date.parse(abfrage.fromTimestamp);
   const bis = Date.parse(abfrage.toTimestamp);
-  if (bis - von < 2 * 3_600_000) throw new Error(`Metrics-Antwort abgeschnitten (${rows.length} Zeilen = row_limit): --seit enger wählen oder --session nutzen.`);
+  if (bis - von < 2 * 3_600_000) throw new Error(`Metrics-Antwort abgeschnitten (${rows.length} Zeilen = row_limit): Fenster unter 2 h noch zu voll, --session nutzen.`);
+  // Beide Hälften teilen die Grenze `mitte`; eine Observation exakt auf dieser Millisekunde ist praktisch ausgeschlossen.
   const mitte = new Date((von + bis) / 2).toISOString();
   return [...(await holeMetrics({ ...abfrage, toTimestamp: mitte }, zugang, fetchImpl)), ...(await holeMetrics({ ...abfrage, fromTimestamp: mitte }, zugang, fetchImpl))];
 }
