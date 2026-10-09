@@ -35,7 +35,7 @@ import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFro
 import { ladeSessionDatei } from "./transkript.mjs";
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
-import { fetchSessionObservations, langfuseZugang as zugangAus } from "./langfuse-api.mjs";
+import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
 
 // Ausgelagert (#1562, hook-taugliche Module ohne gh-/git-Kette); hier re-exportiert, damit Verbraucher und Tests unverändert bleiben.
 export { PRICES, PRICES_STAND, periodAt, priceParts, priceCall, callsFromTranscript, fetchSessionObservations };
@@ -380,20 +380,15 @@ export function callsFromLangfuse(observations) {
     .filter((o) => o.type === "GENERATION")
     .map((o) => {
       const span = findSubagentAncestor(o, byId);
-      const u = o.usageDetails ?? {};
-      // Die Hook-Aufzeichnung trennt die Cache-Writes nach TTL (`input_cache_creation_5m|1h`); ältere
-      // Aufzeichnungen tragen nur die Summe (`cache_creation_input_tokens`, zählt als 5m).
-      const write5m = num(u.input_cache_creation_5m);
-      const write1h = num(u.input_cache_creation_1h);
-      const split = u.input_cache_creation_5m !== undefined || u.input_cache_creation_1h !== undefined;
+      const u = usageAusObservation(o);
       const call = {
         ts: o.startTime,
         model: o.providedModelName ?? o.model,
-        input: num(u.input),
-        cacheWrite: split ? write5m + write1h : num(u.cache_creation_input_tokens),
-        cacheWrite1h: split ? write1h : 0,
-        cacheRead: num(u.cache_read_input_tokens),
-        output: num(u.output),
+        input: u.input,
+        cacheWrite: u.cacheWrite5m + u.cacheWrite1h,
+        cacheWrite1h: u.cacheWrite1h,
+        cacheRead: u.cacheRead,
+        output: u.output,
         subagent: span ? spanInfo(span) : null,
       };
       // Eine Preisquelle (#1239): Kosten immer aus PRICES wie im Transkript-Modus, nicht aus Langfuse

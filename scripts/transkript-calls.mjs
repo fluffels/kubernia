@@ -11,7 +11,7 @@ import { transkriptZeilen } from "./transkript.mjs";
  * JSONL-Zeilen eines Transkripts → Calls. Claude Code schreibt pro Content-
  * Block eine Zeile mit derselben `message.id`; die Usage wird je Nachricht
  * genau einmal gezählt (Output = Maximum über die Zeilen, weil Zwischenzeilen
- * einen Teilstand tragen).
+ * einen Teilstand tragen). Je Call zusätzlich `messageId` (Rückfall `uuid`), `sessionId`, `gitBranch`.
  */
 export function callsFromTranscript(textOderZeilen, subagent = null) {
   const byId = new Map();
@@ -41,6 +41,10 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
       cacheRead: num(u.cache_read_input_tokens),
       output: num(u.output_tokens),
       subagent,
+      // Für den Langfuse-Abgleich (#1562): Schlüssel der Nachricht, Session und Branch aus der ersten Zeile der Nachricht.
+      messageId: key,
+      sessionId: row.sessionId ?? null,
+      gitBranch: row.gitBranch ?? null,
     };
     call.costParts = priceParts(call);
     call.cost = call.costParts ? priceCall(call) : null;
