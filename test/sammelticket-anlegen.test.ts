@@ -157,7 +157,7 @@ describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist id
       return offen();
     });
     expect(r?.number).toBe(9);
-    expect(abgerufen).toEqual([9], "ein Treffer genügt, absteigend");
+    expect(abgerufen, "ein Treffer genügt, absteigend").toEqual([9]);
   });
 
   test("Liste sagt offen, Einzelabruf sagt geschlossen (das war der Wettlauf #1560/#1561) → das nächste", () => {

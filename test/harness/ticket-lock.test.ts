@@ -57,6 +57,7 @@ function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}
   };
 }
 const lauf = (argv: string[], welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}) => M.fuehreAus(argv, deps(welt, jetzt, datei));
+const lockInhalt = (text: string) => JSON.parse(text) as { nonce: string; nr: number };
 const nonceVon = (r: Erg) => /nonce=(\S+)/.exec(r.out)?.[1] ?? "";
 
 beforeEach(() => {
@@ -72,12 +73,12 @@ describe("claim", () => {
     assert.equal(a.code, 0);
     assert.match(a.out, /^nonce=nonce-\d+\n$/);
     const lockText = readFileSync(join(dir, "kq-locks", "1561.json"), "utf8");
-    assert.equal(JSON.parse(lockText).nonce, nonceVon(a));
-    assert.equal(JSON.parse(lockText).nr, 1561);
+    assert.equal(lockInhalt(lockText).nonce, nonceVon(a));
+    assert.equal(lockInhalt(lockText).nr, 1561);
     const b = lauf(["claim", "1561"]);
     assert.equal(b.code, 4);
     assert.match(b.err, /anderen Session/);
-    assert.equal(JSON.parse(readFileSync(join(dir, "kq-locks", "1561.json"), "utf8")).nonce, nonceVon(a), "der Lock des Gewinners bleibt");
+    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "1561.json"), "utf8")).nonce, nonceVon(a), "der Lock des Gewinners bleibt");
   });
 
   test("ein anderes Ticket ist unabhängig", () => {
@@ -91,7 +92,7 @@ describe("claim", () => {
     const b = lauf(["claim", "7"]);
     assert.equal(b.code, 0);
     assert.notEqual(nonceVon(b), nonceVon(a));
-    assert.equal(JSON.parse(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonce, nonceVon(b));
+    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonce, nonceVon(b));
     assert.ok(readdirSync(join(dir, "kq-locks")).some((f) => f === `7.json.verwaist-${nonceVon(b)}`));
   });
 
