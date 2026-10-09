@@ -39,7 +39,19 @@ Klasse **„Hook meldet Erfolg, Ingestion kommt nicht an, kein Fehlersignal“**
 
 ## Alternative ohne Patch
 
-Stand 2026-10: gibt es nicht. Der native OTel-Export von Claude Code liefert Tokens nicht als `gen_ai.usage.*`, und Langfuse übernimmt sie deshalb nicht als Usage (#1185). Bei neuem Claude-Code-Release neu prüfen.
+**Entscheidung 2026-10-09 (#1563; Claude Code 2.1.295, Langfuse 4.46.0 lokal, Quellcode bis v4.56.0): die native OTel-Ausgabe ersetzt den gepatchten Hook nicht, weil Langfuse aus ihr keine Usage übernimmt.** Die Vollständigkeitsgarantie ist der Transkript-Abgleich (#1556), nicht der Exportweg.
+
+| Kriterium | native OTel (Traces, Beta) | Folge |
+| --- | --- | --- |
+| Usage als `gen_ai.usage.*` | nein: `claude_code.llm_request` trägt `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`; im Binary kein `gen_ai.usage`. Langfuse liest Usage nur unter `gen_ai.usage.*` bzw. `llm.token_count.*` (`OtelIngestionProcessor.ts`, kein Zweig für den Scope `claude_code`) | keine Tokens, keine Kosten in Langfuse |
+| Cache-Write getrennt 5m/1h | nein, ein Wert `cache_creation_tokens` | 1h-Write-Kosten nicht unterscheidbar |
+| Subagenten | laut Doku Spans unter dem `claude_code.tool`-Span des Elternteils, mit `agent_id`/`parent_agent_id`; fortgesetzte Subagenten (SendMessage) nicht dokumentiert, ungeprüft | Verschachtelung und Fortsetzung nicht belegt |
+| Session-ID, Modell | `session.id`, `gen_ai.request.model` vorhanden | kein Hindernis |
+| Tool-Span mit Eingabe (für `brain-metrics.mjs`) | mit `OTEL_LOG_TOOL_DETAILS=1` nur `file_path`, `full_command`, `skill_name`, `subagent_type`; volles `tool_input` nur mit Detailed Beta Tracing | Eingabe nur teilweise |
+
+Die Collector-Umbenennung (Option aus #1185) bleibt verworfen: auch umbenannt gäbe es keinen 5m/1h-Split. Der Tracing-Export ist zudem Beta (`CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`).
+
+**Neu bewerten, wenn** (Prüfweg, alle drei): (a) `grep -a -c "gen_ai.usage" "$(command -v claude)"` ist ungleich 0 (native Installation); (b) `packages/shared/src/server/otel/OtelIngestionProcessor.ts` im Langfuse-Quellcode kennt `claude_code`; (c) eine Konsolen-Probe (`OTEL_TRACES_EXPORTER=console`, `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`, kurze Headless-Session in einem Temp-Ordner) zeigt Cache-Writes getrennt nach 5m/1h. Erst dann Probe gegen die lokale Instanz und Vergleich mit `langfuse-abgleich.mjs --pruefen`; bei „ersetzt“ eine ADR, die [0019](adr/0019-langfuse-plugin-im-user-scope.md) präzisiert, plus Folge-Issue zur Umstellung (Hook und OTel parallel ergeben Dubletten).
 
 ## Nach einem Plugin-Update
 
