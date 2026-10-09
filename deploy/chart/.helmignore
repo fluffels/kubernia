@@ -1,0 +1,2 @@
+# Nur CI-Values (helm lint -f deploy/chart/ci/...), gehoeren nicht ins gepackte Chart.
+ci/
