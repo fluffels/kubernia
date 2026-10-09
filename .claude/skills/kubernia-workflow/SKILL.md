@@ -7,6 +7,8 @@ description: Arbeitet EIN kubernia-Ticket als orchestrierten Phasen-Workflow ab 
 
 Dieser Skill ist **nur der Einstieg** in den Workflow [`kubernia-ticket`](../../workflows/kubernia-ticket.js) — er beschreibt den Ablauf **absichtlich nicht**. Der Ablauf ist und bleibt die Repo-SSOT [`AGENTS.md`](../../../AGENTS.md); das Workflow-Skript ist nur die Orchestrierung darüber und schickt jeden Phasen-Agenten auf den passenden Abschnitt.
 
+**Bereich zuerst.** Wie im [`kubernia`-Skill](../kubernia/SKILL.md): beim Start per `AskUserQuestion` „Agentic Engineering oder Spielentwicklung?“ fragen, außer der Auslöser nennt den Bereich oder gibt eine Ticketnummer vor. Der Workflow kann mitten im Lauf nicht fragen, darum geht die Antwort als `args.bereich` hinein: `Workflow({ name: "kubernia-ticket", args: { bereich: "agentic" } })` bzw. `"spiel"` (ein reiner String `"spiel"` geht auch); „egal“ heißt ohne `args`. Bei `wartet-auf-klaerung` **denselben `bereich` beim Resume mitgeben**, sonst ändert sich der Auswahl-Prompt, der Cache greift nicht, und womöglich wird ein anderes Ticket geclaimt. Ein anderer Wert als `agentic`/`spiel` endet als `ungueltige-args`.
+
 **Aufruf** (der Skill-Aufruf ist gleichzeitig das nötige Opt-in für das Workflow-Tool):
 
 ```

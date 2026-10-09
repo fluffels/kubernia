@@ -37,7 +37,7 @@ import { blockFunktion, workflowBlock } from "./workflow-block"
 const MARKER_ANFANG = "// ── args-Auswertung (#1027) — Anfang"
 const MARKER_ENDE = "// ── args-Auswertung (#1027) — Ende"
 
-type ArgsErgebnis = { nummer?: number; klaerungAntworten?: unknown[]; fehler?: string }
+type ArgsErgebnis = { nummer?: number; klaerungAntworten?: unknown[]; bereich?: string; fehler?: string }
 
 const { quelle, block } = workflowBlock(MARKER_ANFANG, MARKER_ENDE)
 const argsLesen = blockFunktion<(roh: unknown) => ArgsErgebnis>(block, "argsLesen")
@@ -79,6 +79,40 @@ describe("Workflow-args: keine Vorgabe = normale Board-Auswahl", () => {
     const ergebnis = argsLesen(eingabe)
     expect(ergebnis.nummer).toBeUndefined()
     expect(ergebnis.fehler).toBeUndefined()
+  })
+})
+
+describe("Workflow-args: Bereich (#1552)", () => {
+  it.each([
+    ["Objekt agentic", { bereich: "agentic" }, "agentic"],
+    ["JSON-String spiel", '{"bereich":"spiel"}', "spiel"],
+    ["reiner String", "spiel", "spiel"],
+    ["String mit Whitespace", "  agentic ", "agentic"],
+  ])("%s -> Bereich", (_name, eingabe, erwartet) => {
+    const ergebnis = argsLesen(eingabe)
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.bereich).toBe(erwartet)
+  })
+
+  it("bleibt neben Antworten bzw. Nummer erhalten", () => {
+    const a = argsLesen({ bereich: "spiel", klaerungAntworten: ["A"] })
+    expect(a.bereich).toBe("spiel")
+    expect(a.klaerungAntworten).toEqual(["A"])
+    const n = argsLesen({ nummer: 965, bereich: "spiel" })
+    expect(n.fehler).toBeUndefined()
+    expect(n.nummer).toBe(965)
+    expect(n.bereich).toBe("spiel")
+  })
+
+  it.each([
+    ["unbekannter Wert", { bereich: "harness" }],
+    ["Großschreibung", { bereich: "Agentic" }],
+    ["Zahl", { bereich: 1 }],
+    ["JSON-String mit Müll", '{"bereich":"x"}'],
+  ])("%s -> Fehler, kein Bereich", (_name, eingabe) => {
+    const ergebnis = argsLesen(eingabe)
+    expect(ergebnis.fehler).toContain("bereich")
+    expect(ergebnis.bereich).toBeUndefined()
   })
 })
 
@@ -165,6 +199,10 @@ describe("Workflow-args: der Orchestrator nutzt den Parser wirklich", () => {
   it("speist auch klaerungAntworten aus der Normalisierung", () => {
     expect(quelle).toContain("eingabe.klaerungAntworten")
     expect(quelle).not.toContain("Array.isArray(args.klaerungAntworten)")
+  })
+
+  it("reicht den Bereich an naechstes-ticket.mjs durch", () => {
+    expect(quelle).toContain("naechstes-ticket.mjs${eingabe.bereich ? ` --bereich ${eingabe.bereich}` : ''}")
   })
 
   it("steht im Quelltext vor dem ersten Agenten-Aufruf", () => {
