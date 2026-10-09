@@ -2,6 +2,8 @@
 
 > **Was ist dieses Dokument?** Die **eine** erklärende Gesamtsicht auf den „Harness": die Maschinerie, mit der autonome KI-Coding-Agenten dieses Repo **billig und sicher** weiterbauen. Der komplette Code von Kubernia entsteht durch solche Agenten — kein Mensch tippt die Implementierung.
 >
+> **Begriffe:** [Harness-Glossar](harness-glossar.md); Muster mit Belegen: [Lessons Learned](lessons-learned.md).
+>
 > **Abgrenzung — was hier NICHT steht.** Dies ist die *erklärende* Sicht (das System als Ganzes, das „warum"), nicht die operative Arbeitsanweisung. Die **harten Regeln + den Schritt-für-Schritt-Ablauf** hat weiterhin die [AGENTS.md](../AGENTS.md) (SSOT für „wie arbeite ich"), die Nachschlage-Tabellen liegen on-demand unter [`docs/referenz/`](referenz/anlaufstellen.md) ([Befehle](referenz/befehle.md), [Repo-Landkarte](referenz/repo-landkarte.md), [Schichtregeln](referenz/schichtregeln.md), [Anlaufstellen](referenz/anlaufstellen.md), #1078). Dieses Doc **verlinkt** dorthin, statt zu doppeln — driftet etwas, gilt AGENTS.md (SSOT). Es ist die Tiefenquelle, auf die die [README › Gebaut von KI-Agenten](../README.md#-gebaut-von-ki-agenten) (Marketing-Ebene 3) und [arc42 §8](arc42-architektur.md#8-querschnittliche-konzepte--ddd-bewertung) verweisen.
 
 ## 1. Die Kernidee
@@ -523,6 +525,8 @@ Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die 
 
 ## 6. Verwandte Dokumente
 
+- **[docs/lessons-learned.md](lessons-learned.md)** — wiederkehrende Muster aus dem Bau des Harness mit datierten Belegen (was geschah, was geändert wurde, was offen ist).
+- **[docs/harness-glossar.md](harness-glossar.md)** — die Begriffe des Harness in Klartext, für Außenstehende.
 - **[docs/agent-harness-faq.md](agent-harness-faq.md)** — häufig gestellte Einzelfragen zum Harness (CI-Feedback-Mechanismus, Deploybarkeit, Portabilität, Hook vs. PR-Gate), gesammelt statt einzeln neu beantwortet.
 - **[AGENTS.md](../AGENTS.md)** — operative Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen). *Bei Konflikt maßgeblich.*
 - **[`docs/referenz/`](referenz/anlaufstellen.md)** — die Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen).
