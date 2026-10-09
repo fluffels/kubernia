@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -23,6 +23,8 @@ const M = raw as unknown as {
   nonceAus: (argv: string[]) => string | null;
   fuehreAus: (argv: string[], deps: Deps) => Erg;
   echteDeps: () => Deps;
+  ALTLAST_MS: number;
+  aufzuraeumen: (o: { eintraege: { name: string; mtime: number }[]; jetzt: number }) => string[];
 };
 
 const MIN = 60_000;
@@ -301,5 +303,56 @@ describe("verlorener Wettlauf und Randfälle in claim und pruefe", () => {
     assert.equal(lauf(["pruefe", "5"], welt).out, "uebernehmbar\n", "Kontrolle: nichts frisch");
     assert.equal(lauf(["pruefe", "5"], welt, JETZT, { [join(wt, "neu.txt")]: JETZT - 5 * MIN }).out, "aktiv\n", "Ziel der Umbenennung");
     assert.equal(lauf(["pruefe", "5"], welt, JETZT, { [join(wt, "mit leer.txt")]: JETZT - 5 * MIN }).out, "aktiv\n", "zitierter Pfad");
+  });
+});
+
+describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
+  const H = 60 * MIN;
+  const lockDatei = (name: string, text = "{}") => {
+    mkdirSync(join(dir, "kq-locks"), { recursive: true });
+    writeFileSync(join(dir, "kq-locks", name), text);
+    return join(dir, "kq-locks", name);
+  };
+
+  test("aufzuraeumen: jede .verwaist-Datei und jede <nr>.json über ALTLAST_MS, sonst nichts", () => {
+    const eintraege = [
+      { name: "5.json.verwaist-abc", mtime: JETZT },
+      { name: "6.json", mtime: JETZT - 25 * H },
+      { name: "7.json", mtime: JETZT - 23 * H },
+      { name: "8.json", mtime: Number.NaN },
+      { name: "notiz.txt", mtime: JETZT - 99 * H },
+      { name: "x5.json", mtime: JETZT - 99 * H },
+      { name: "9.json", mtime: JETZT - 24 * H },
+    ];
+    assert.deepEqual(M.aufzuraeumen({ eintraege, jetzt: JETZT }).sort(), ["5.json.verwaist-abc", "6.json"], "genau 24 h bleibt, x5.json ist keine Lock-Datei");
+    assert.equal(M.ALTLAST_MS, 24 * H);
+  });
+
+  test("claim räumt eine verwaiste Datei ab", () => {
+    const verwaist = lockDatei("9.json.verwaist-x");
+    assert.equal(lauf(["claim", "5"]).code, 0);
+    assert.equal(existsSync(verwaist), false);
+  });
+
+  test("claim: fremder Lock mit 23 h bleibt, mit 25 h wird er gelöscht, ein frischer eigener bleibt", () => {
+    const jung = lockDatei("11.json");
+    const alt = lockDatei("12.json");
+    const a = lauf(["claim", "5"], {}, JETZT, { [jung]: JETZT - 23 * H, [alt]: JETZT - 25 * H });
+    assert.equal(a.code, 0);
+    assert.equal(existsSync(jung), true, "23 h alt bleibt");
+    assert.equal(existsSync(alt), false, "25 h alt wird gelöscht");
+    const b = lauf(["claim", "6"]);
+    assert.equal(b.code, 0);
+    assert.equal(existsSync(join(dir, "kq-locks", "5.json")), true, "der eigene frische Lock bleibt");
+    assert.equal(lauf(["pruefe", "5", "--nonce", nonceVon(a)]).out, "frei\n");
+  });
+
+  test("fail-open: scheitert das Auflisten oder Löschen, gewinnt der Claim trotzdem", () => {
+    const wirft = () => {
+      throw new Error("kaputt");
+    };
+    assert.equal(M.fuehreAus(["claim", "5"], { ...deps(), liste: wirft }).code, 0);
+    const alt = lockDatei("12.json");
+    assert.equal(M.fuehreAus(["claim", "6"], { ...deps({}, JETZT, { [alt]: JETZT - 99 * H }), loesche: wirft }).code, 0);
   });
 });

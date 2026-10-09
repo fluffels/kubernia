@@ -15,7 +15,6 @@
  * Pur und ohne IO bis auf das CLI (liest `~/.claude/projects`, fragt `gh`); der Kern ist getestet.
  */
 
-import { execFileSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -23,19 +22,15 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, median } from "./mess-lib.mjs";
-import { callsFromTranscript, priceParts } from "./token-baseline.mjs";
-import { ladeSessionDatei } from "./transkript.mjs";
+import { priceParts } from "./preise.mjs";
+import { callsFromTranscript } from "./transkript-calls.mjs";
+import { hauptrepoWurzel, ladeSessionDatei, projektSlug } from "./transkript.mjs";
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
 const CLAIM = /\bgh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--add-assignee)/;
 const norm = (p) => String(p ?? "").replace(/\\/g, "/").toLowerCase();
 const gueltig = (ts) => Number.isFinite(Date.parse(ts));
-
-/** Projektordner-Name unter `~/.claude/projects`: jedes Nicht-Alphanumerische wird `-`. */
-export function slugFuerPfad(p) {
-  return String(p).replace(/[^A-Za-z0-9]/g, "-");
-}
 
 /** Text einer Nutzerzeile (String- oder Block-Inhalt), `null` bei reinen tool_result-Zeilen. */
 function nutzerText(row) {
@@ -364,8 +359,7 @@ function main() {
     console.error("Aufruf: node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }
-  const root = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8" }).trim().replace(/[\\/]\.git[\\/]?$/, ""); // Hauptrepo auch aus einem Worktree
-  const slug = args.projekt ?? slugFuerPfad(root);
+  const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
   const dir = join(homedir(), ".claude", "projects", slug);
   const cache = new Map();
   const closedAtOf = (nr) => (cache.has(nr) ? cache.get(nr) : cache.set(nr, closedAtViaGh(nr)).get(nr));

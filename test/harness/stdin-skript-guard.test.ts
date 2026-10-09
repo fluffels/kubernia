@@ -35,6 +35,8 @@ describe("deny: Interpreter liest das Programm von stdin", () => {
     ["hinter &&", "cd x && python3 - <<EOF\nx\nEOF"],
     ["Programm nach --: kein Programm, nur -", "python3 -- -"],
     ["-- ohne Folgewort", "python3 --"],
+    ["node-Cluster ganz ohne Buchstaben aus dem Satz (-zz) bleibt ein stdin-Skript", "node -zz <<EOF\nx\nEOF"],
+    ["python-Cluster mit node-Buchstaben (-ze) ist kein Programm", "python3 -ze <<EOF\nx\nEOF"],
   ])("%s", (_name, command) => {
     assert.ok(blockt(command), command);
   });
@@ -68,6 +70,11 @@ describe("durchlassen: Programm kommt aus Datei, -c/-e/-m oder es ist nur eine A
     ["Cluster mit -m ohne Folgewort", "python3 -Im"],
     ["Cluster mit -h ohne Folgewort", "python3 -Ih"],
     ["node Cluster -vh", "node -vh"],
+    ["node Cluster mit e als einzigem Buchstaben des Satzes (-ze)", "node -ze"],
+    ["node Cluster mit c als einzigem Buchstaben des Satzes (-zc)", "node -zc"],
+    ["node Cluster mit h als einzigem Buchstaben des Satzes (-zh)", "node -zh"],
+    ["node Cluster mit p als einzigem Buchstaben des Satzes (-zp)", "node -zp"],
+    ["node Cluster mit v als einzigem Buchstaben des Satzes (-zv)", "node -zv"],
     ["Cluster -VV", "python3 -VV"],
     ["python -m", "python3 -m http.server"],
     ["python --version", "python3 --version"],

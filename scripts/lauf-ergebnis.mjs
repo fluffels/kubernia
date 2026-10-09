@@ -20,6 +20,8 @@ import { parseNachweis } from "./slice-override.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 
 export const NACHARBEIT_TAGE = 14;
+/** `git log --since` filtert nach Commit-Datum, `mergedAt` kann eine Sekunde später liegen: Puffer vor `von` (Zuordnung läuft über die SHA, Zeitfilter macht `nacharbeitVon`). */
+const SINCE_PUFFER_MS = 60 * 60_000;
 const TAG_MS = 24 * 3600 * 1000;
 const PR_LIMIT = 1000;
 /** PRs je GraphQL-Abfrage (Aliase): hält die Abfrage klein und die Zahl der Aufrufe bei ⌈N/50⌉. */
@@ -186,7 +188,7 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date() }) {
   const prs = liste.filter((p) => new Date(p.mergedAt).getTime() >= t0 && new Date(p.mergedAt).getTime() <= t1).sort((a, b) => a.number - b.number);
   let commits;
   try {
-    commits = parseCommits(runGit(["log", "origin/main", `--since=${von}`, "--format=%H%x1f%cI%x1f%B%x1e"]));
+    commits = parseCommits(runGit(["log", "origin/main", `--since=${new Date(t0 - SINCE_PUFFER_MS).toISOString()}`, "--format=%H%x1f%cI%x1f%B%x1e"]));
   } catch (e) {
     throw new DatenFehler(`git log origin/main fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
   }

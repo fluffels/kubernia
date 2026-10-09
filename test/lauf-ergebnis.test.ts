@@ -310,6 +310,21 @@ describe("laufErgebnis (git und gh injiziert)", () => {
   test("lokal fehlender Merge-Commit ist ein Datenfehler (kein stilles 0)", () => {
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh() }), (err: Error) => err instanceof mod.DatenFehler && /git fetch origin/.test(err.message));
   });
+  test("von genau auf der Merge-Zeit: Commit-Datum eine Sekunde früher wird gefunden (--since filtert nach Commit-Datum)", () => {
+    // Beobachtet bei #1558: mergedAt 22:23:11, Commit-Datum 22:23:10.
+    const merged = new Date(MERGED).getTime();
+    const commitDatum = new Date(merged - 1000).toISOString();
+    const commitLog = `${SHA}\x1f${commitDatum}\x1f${review("runden=1 lenses=doku")}\x1e`;
+    const seitGit = (a: string[]): string => {
+      const since = a.find((x) => x.startsWith("--since="))?.slice("--since=".length) ?? "";
+      return new Date(commitDatum).getTime() >= new Date(since).getTime() ? commitLog : "";
+    };
+    const e = mod.laufErgebnis({ von: MERGED, bis, runGit: seitGit, runGh: gh(), jetzt: SPAETER });
+    assert.equal(e.zeilen.length, 1);
+  });
+  test("ein wirklich fehlender Merge-Commit bleibt trotz Puffer ein Datenfehler", () => {
+    assert.throws(() => mod.laufErgebnis({ von: MERGED, bis, runGit: () => "", runGh: gh() }), mod.DatenFehler);
+  });
   test("abgeschnittene 1000er-Liste ist ein Datenfehler", () => {
     const voll = Array.from({ length: 1000 }, (_, i) => pr({ number: i + 1 }));
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ liste: voll }) }), (err: Error) => err instanceof mod.DatenFehler && /abgeschnitten/.test(err.message));

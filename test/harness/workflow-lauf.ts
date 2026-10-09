@@ -26,6 +26,8 @@ export interface LaufOptionen {
   plan?: string;
   /** Titel des geclaimten Tickets (Standard: "Testticket"). */
   titel?: string;
+  /** Nonce aus `ticket-lock.mjs claim`, die der claim-Agent als `lockNonce` zurückgibt (Standard: keine). */
+  lockNonce?: string;
   /** Antwort des Pre-Flight-Agenten; Standard: keine Klärung nötig, keine Entscheidung. */
   preflight?: Record<string, unknown>;
   /** Wert des Workflow-Globals `args` (Standard: undefined). */
@@ -66,7 +68,7 @@ export async function workflowLauf(o: LaufOptionen = {}) {
     aufrufe.push({ prompt, label: opt.label, agentType: opt.agentType, model: opt.model, effort: opt.effort });
     const l = opt.label;
     if (l === "auswahl+claim") {
-      return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: o.titel ?? "Testticket", body: "Body", art });
+      return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: o.titel ?? "Testticket", body: "Body", art, lockNonce: o.lockNonce });
     }
     if (opt.agentType === "kubernia-planner") return Promise.resolve(planerDa ? (o.plan ?? "PLAN-TEXT") : null);
     if (l.startsWith("preflight")) return Promise.resolve(o.preflight ?? { brauchtKlaerung: false });
