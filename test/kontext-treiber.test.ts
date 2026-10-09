@@ -101,6 +101,9 @@ describe("Phasen je Call", () => {
     expect(p.slice(0, 3)).toEqual(["CI-Warten", "CI-Warten", "CI-Warten"]);
     expect(p[3]).not.toBe("CI-Warten");
   });
+  test("Vorrang: ein Befehl mit CI-Warten und verify zählt als CI-Warten", () => {
+    expect(phasen([{ min: 1, tools: [bash("gh pr checks 5 --watch && npx vitest run")] }])).toEqual(["CI-Warten"]);
+  });
 });
 
 describe("bereinige", () => {
