@@ -159,7 +159,18 @@ helm lint deploy/chart
 
 # Template: generierten YAML-Output inspizieren
 helm template kubernia deploy/chart
+
+# Schema-Validierung (kubeconform): rohe Manifeste und gerendertes Chart
+kubeconform -strict -summary -kubernetes-version <Version aus dem Workflow> -schema-location default -schema-location '<CRD-Katalog-URL>' -ignore-filename-pattern '^deploy.chart.' deploy/
+helm template kubernia deploy/chart | kubeconform -strict -summary -kubernetes-version <Version aus dem Workflow> -schema-location default -schema-location '<CRD-Katalog-URL>' -
 ```
+
+Dieselben Prüfungen laufen in der CI als nicht-blockierender Job für `deploy/**`
+([`deploy-validate.yml`](../.github/workflows/deploy-validate.yml), #1544). Der Workflow ist die SSOT für die
+festen Eingaben (kubeconform-Version samt SHA256, Kubernetes-Version, Commit des CRD-Katalogs mit den
+cert-manager-/Gateway-API-Schemas). Fehlt für eine neue CRD-Gruppe ein Schema, die Katalog-SHA dort anheben,
+nie `-ignore-missing-schemas`. Zusätzliche Chart-Varianten (z.B. TLS) liegen als `deploy/chart/ci/*-values.yaml`
+und werden automatisch mitgeprüft.
 
 ### Chart-Struktur
 
@@ -167,6 +178,8 @@ helm template kubernia deploy/chart
 deploy/chart/
 ├── Chart.yaml            # Name, Version, appVersion
 ├── values.yaml           # Standardwerte (image, ingress, resources …)
+├── ci/
+│   └── tls-values.yaml   # Variante für die CI-Validierung (TLS-Ingress)
 └── templates/
     ├── _helpers.tpl      # Namens-/Label-Helfer
     ├── deployment.yaml   # 1 nginx-Replica, Liveness-/Readiness-Probe

@@ -1,0 +1,6 @@
+# Nur für die CI-Validierung (.github/workflows/deploy-validate.yml): rendert die TLS-Variante des Ingress.
+ingress:
+  tls:
+    - secretName: kubernia-tls
+      hosts:
+        - kubernia.example.com
