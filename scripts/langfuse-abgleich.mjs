@@ -21,7 +21,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { istProjektOrdner, ladeSessionDatei, projektSlug } from "./transkript.mjs";
-import { callsFromTranscript } from "./transkript-calls.mjs";
+import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang, queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 
 /** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
@@ -56,29 +56,22 @@ export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
       rolle: { agentType: s.meta?.agentType, description: s.meta?.description, parentAgentId: s.meta?.parentAgentId },
     })),
   ];
-  const byId = new Map();
-  for (const { zeilen, rolle } of quellen) {
-    for (const c of callsFromTranscript(zeilen).calls) {
-      const prev = byId.get(c.messageId);
-      if (prev) {
-        prev.usage.output = Math.max(prev.usage.output, c.output);
-        continue;
-      }
-      const write1h = Math.min(c.cacheWrite1h, c.cacheWrite);
-      byId.set(c.messageId, {
-        id: beobachtungsId(session, c.messageId),
-        traceId: traceIdVon(session),
-        session,
-        messageId: c.messageId,
-        model: c.model ?? null,
-        ts: c.ts,
-        usage: { input: c.input, output: c.output, cacheRead: c.cacheRead, cacheWrite5m: c.cacheWrite - write1h, cacheWrite1h: write1h },
-        rolle,
-        ticket: ticketAusBranch(c.gitBranch),
-      });
-    }
-  }
-  return [...byId.values()];
+  // Dieselbe Zusammenführung wie `readTranscriptSession` (token-baseline): die Rolle steht als `subagent` am Call.
+  const calls = eindeutigeCalls(quellen.flatMap(({ zeilen, rolle }) => callsFromTranscript(zeilen, rolle).calls));
+  return calls.map((c) => {
+    const write1h = Math.min(c.cacheWrite1h, c.cacheWrite);
+    return {
+      id: beobachtungsId(session, c.messageId),
+      traceId: traceIdVon(session),
+      session,
+      messageId: c.messageId,
+      model: c.model ?? null,
+      ts: c.ts,
+      usage: { input: c.input, output: c.output, cacheRead: c.cacheRead, cacheWrite5m: c.cacheWrite - write1h, cacheWrite1h: write1h },
+      rolle: c.subagent,
+      ticket: ticketAusBranch(c.gitBranch),
+    };
+  });
 }
 
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);

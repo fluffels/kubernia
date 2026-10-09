@@ -35,7 +35,7 @@ import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFro
 import { ladeSessionDatei } from "./transkript.mjs";
 import { CACHE_TTL_MS, median } from "./mess-lib.mjs";
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
-import { callsFromTranscript } from "./transkript-calls.mjs";
+import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
 import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 
@@ -316,7 +316,10 @@ function reviewDescriptions(ticketCalls) {
 
 // ── Quelle 1: Claude-Code-Transkript ─────────────────────────────────────────
 
-/** Sucht <id>.jsonl in allen Projektordnern unter ~/.claude/projects (Worktree-Sessions liegen in eigenen). */
+/**
+ * Sucht <id>.jsonl in allen Projektordnern unter ~/.claude/projects (Worktree-Sessions liegen in eigenen). Bewusst keine
+ * Projektableitung: das ist ein Session-ID-Nachschlag, und `--sessions` muss auch Worktree-Sessions finden.
+ */
 export function readTranscriptSession(sessionId, projectsRoot) {
   const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
   const main = candidates.find((p) => existsSync(p));
@@ -332,6 +335,9 @@ export function readTranscriptSession(sessionId, projectsRoot) {
     all.calls.push(...r.calls);
     all.questions += r.questions;
   }
+  // Dieselbe message.id in Haupt- und Subagent-Datei zählt einmal (20 von 31.042 Messages in #1572). Grenze: die Tool-Events
+  // darüber tragen keine Message-übergreifende ID und werden nicht dedupliziert.
+  all.calls = eindeutigeCalls(all.calls);
   return all;
 }
 

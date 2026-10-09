@@ -54,3 +54,27 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
   return { calls: [...byId.values()], questions };
 }
 
+
+/**
+ * Calls über mehrere Dateien einer Session zusammenführen (#1572): dieselbe `message.id` kann in der Hauptdatei und in einer
+ * Subagent-Datei stehen und zählt dann einmal. Der erste Fund bestimmt Rolle und Zeitpunkt, der Output ist das Maximum;
+ * Kosten werden aus dem zusammengeführten Stand neu berechnet. Die Eingabe bleibt unverändert.
+ */
+export function eindeutigeCalls(calls) {
+  const byId = new Map();
+  for (const c of calls) {
+    const key = c.messageId ?? c.id;
+    const prev = byId.get(key);
+    if (!prev) {
+      byId.set(key, c);
+      continue;
+    }
+    const output = Math.max(prev.output, c.output);
+    if (output === prev.output) continue;
+    const merged = { ...prev, output };
+    merged.costParts = priceParts(merged);
+    merged.cost = merged.costParts ? priceCall(merged) : null;
+    byId.set(key, merged);
+  }
+  return [...byId.values()];
+}
