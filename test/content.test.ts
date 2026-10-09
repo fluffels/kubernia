@@ -1595,8 +1595,16 @@ test("#463 Worker-Join-Quest: korrekt eingehängt + lehrt kubelet/Token/mehrere 
 
   // Zwei kubeadm-join-Schritte (Node für Node) + ein get-nodes-Beweis.
   const teachCmds = quest!.steps.filter((s): s is TeachStep => s.type === "teach").map(s => s.cmd);
-  const joins = teachCmds.filter(c => c.accept.some(re => re.test("kubeadm join abcdef.0123456789abcdef")));
+  const TOKEN = "abcdef.0123456789abcdef";
+  const joins = teachCmds.filter(c => c.accept.some(re => re.test("kubeadm join 10.0.0.10:6443 --token " + TOKEN)));
   assert.equal(joins.length, 2, "es gibt zwei kubeadm-join-Schritte (Node für Node)");
+  // Die erfundene Form (positionales Token) wird nicht mehr akzeptiert (#1511); die von init gedruckte Form samt CA-Hash schon.
+  for (const c of joins) {
+    assert.ok(!c.accept.some(re => re.test("kubeadm join " + TOKEN)), "positionales Token darf nicht passen");
+    assert.ok(!c.accept.some(re => re.test("kubeadm join --token " + TOKEN)), "ohne Endpoint darf nichts passen");
+    assert.ok(c.accept.some(re => re.test("kubeadm join 10.0.0.10:6443 --token " + TOKEN + " \\ --discovery-token-ca-cert-hash sha256:0123abcdef")), "init-Form mit Hash");
+    assert.ok(c.accept.some(re => re.test("kubeadm join --token=" + TOKEN + " 10.0.0.10:6443")), "Flag zuerst");
+  }
   assert.ok(teachCmds.some(c => c.accept.some(re => re.test("kubectl get nodes"))), "Beweis-Schritt 'kubectl get nodes' fehlt");
 
   // Lernbegriffe im Quest-Text.
@@ -1630,7 +1638,20 @@ test("#463 join-Checks füllen den Cluster Knoten für Knoten (Red-Green)", () =
   assert.equal(getNodes.cmd.check!(sim), true, "nach beiden Joins: drei Knoten (Control-Plane + 2 Worker)");
 
   // Negativprobe: ein falscher Token wird abgewiesen (Erreichbarkeits-/Auth-Schutz).
-  assert.ok(sim.exec("kubeadm join falsch.tokenxxxxxxxxxx").error, "falscher Token scheitert");
+  assert.ok(sim.exec("kubeadm join 10.0.0.10:6443 --token falsch.tokenxxxxxxxxxx").error, "falscher Token scheitert");
+  assert.match(sim.exec("kubeadm join 10.0.0.10:6443 --token falsch.tokenxxxxxxxxxx").output!, /invalid bootstrap token/, "scheitert am Token, nicht an der Form");
+  // Jede Eingabe, die ein accept trifft, läuft im Sim fehlerfrei (kein accept lässt eine Form durch, die der Sim ablehnt).
+  for (const eingabe of [
+    "kubeadm join 10.0.0.10:6443 --token abcdef.0123456789abcdef",
+    "kubeadm join 10.0.0.10:6443 --token abcdef.0123456789abcdef --discovery-token-ca-cert-hash sha256:0123abcdef",
+    "kubeadm join --token abcdef.0123456789abcdef 10.0.0.10:6443",
+  ]) {
+    assert.ok(join1.cmd.accept.some(re => re.test(eingabe)), "accept trifft: " + eingabe);
+    const s2 = new KQSim({});
+    s2.mergeScenario(scenario!);
+    assert.ok(!s2.exec(eingabe).error, "Sim nimmt an: " + eingabe);
+  }
+  assert.ok(new KQSim({}).exec("kubeadm join abcdef.0123456789abcdef").error, "die alte Form ist auch im Sim abgelehnt");
 });
 
 test("#464 Dienste-Quest: korrekt eingehängt + bringt Workloads per apply zurück", () => {

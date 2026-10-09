@@ -67,7 +67,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ] },
   { key: "kubeadm", rows: [
     { use: "init [--pod-network-cidr <cidr>]", desc: "Control-Plane hochziehen" },
-    { use: "join <token>", desc: "Worker-Knoten anschließen" },
+    { use: "join <endpoint> --token <token>", desc: "Worker-Knoten anschließen" },
     { use: "reset [-f]", desc: "Cluster abräumen (zurück auf bare metal)" },
   ], grenzen: [
     { id: "kubeadm-eine-cp", text: "Es gibt eine Control-Plane und einen Token; Zertifikate, CA-Hash und Pod-Netz wertet der Simulator nicht aus." },

@@ -956,7 +956,7 @@
         "lines": [
           "Die Kommandobrücke steht – aber sie ist <b>einsam</b>. <code>kubectl get nodes</code> zeigt genau einen Knoten, die Control-Plane. Die <b>entscheidet</b> nur; tragen muss die Fracht jemand anderes: die <b>Worker</b>.",
           "Warum nicht alles auf einen großen Knoten? Zwei Gründe, die du im Schlaf können musst: <b>Kapazität</b> (mehr Knoten = mehr Pods passen rein) und <b>Ausfallsicherheit</b> – fällt ein Steg weg, schiebt der Cluster seine Pods auf die anderen. <b>Ein</b> Knoten ist ein <i>single point of failure</i>.",
-          "Auf jedem Worker läuft ein <b>kubelet</b> – der Hafenarbeiter des Knotens: er meldet den Knoten bei der Control-Plane an, nimmt Pod-Aufträge entgegen und hält die Container am Laufen. Anmelden darf er sich nur mit dem <b>Join-Token</b>, das <code>kubeadm init</code> ausgegeben hat: <code>abcdef.0123456789abcdef</code>. Häng den ersten Steg an!"
+          "Auf jedem Worker läuft ein <b>kubelet</b> – der Hafenarbeiter des Knotens: er meldet den Knoten bei der Control-Plane an, nimmt Pod-Aufträge entgegen und hält die Container am Laufen. Anmelden darf er sich nur mit dem, was <code>kubeadm init</code> ausgegeben hat: der <b>Adresse der Brücke</b> (<code>10.0.0.10:6443</code>, der apiserver) und dem <b>Join-Token</b> (<code>abcdef.0123456789abcdef</code>). Häng den ersten Steg an!"
         ]
       },
       {
@@ -964,14 +964,15 @@
         "brief": "Ersten Worker anschließen",
         "cmd": {
           "id": "t-join-1",
-          "intro": "🆕 Neuer Befehl: <code>kubeadm join <token></code> – meldet einen Worker-Knoten mit dem Join-Token bei der Control-Plane an. Das kubelet des Knotens weist sich damit als befugt aus.",
-          "text": "Schließ den ersten Worker an: <code>kubeadm join abcdef.0123456789abcdef</code>. Der Token ist genau der aus <code>kubeadm init</code> – ein Geheimnis auf Zeit, mit dem sich jeder Knoten anmeldet.",
+          "intro": "🆕 Neuer Befehl: <code>kubeadm join <endpoint> --token <token></code> – meldet einen Worker-Knoten unter der Adresse der Control-Plane mit dem Join-Token an. Das kubelet des Knotens weist sich damit als befugt aus. In echt hängt <code>kubeadm init</code> noch <code>--discovery-token-ca-cert-hash sha256:…</code> an, damit der Worker die Brücke am Zertifikat erkennt; der Simulator prüft den Hash nicht.",
+          "text": "Schließ den ersten Worker an: <code>kubeadm join 10.0.0.10:6443 --token abcdef.0123456789abcdef</code>. Adresse und Token sind genau die aus <code>kubeadm init</code> – ein Geheimnis auf Zeit, mit dem sich jeder Knoten anmeldet.",
           "accept": [
-            "^kubeadm\\s+join\\s+(--token\\s+)?abcdef\\.0123456789abcdef$"
+            "^kubeadm\\s+join\\s+10\\.0\\.0\\.10:6443\\s+--token(\\s+|=)abcdef\\.0123456789abcdef(\\s+(\\\\\\s+)?--discovery-token-ca-cert-hash(\\s+|=)sha256:[0-9a-f]+)?$",
+            "^kubeadm\\s+join\\s+--token(\\s+|=)abcdef\\.0123456789abcdef\\s+10\\.0\\.0\\.10:6443$"
           ],
-          "solution": "kubeadm join abcdef.0123456789abcdef",
+          "solution": "kubeadm join 10.0.0.10:6443 --token abcdef.0123456789abcdef",
           "why": "Ein Worker darf sich nur mit dem Token aus <code>kubeadm init</code> anmelden – ein Geheimnis auf Zeit, das Fremde draußen hält. So wächst der Cluster kontrolliert, Knoten für Knoten.",
-          "hint": "kubeadm join abcdef.0123456789abcdef – den Token aus init unverändert übernehmen.",
+          "hint": "kubeadm join 10.0.0.10:6443 --token abcdef.0123456789abcdef – Adresse und Token aus init unverändert übernehmen.",
           "check": {
             "some": "nodes",
             "where": {
@@ -994,11 +995,12 @@
         "cmd": {
           "id": "t-join-2",
           "intro": "🔁 Node für Node: derselbe <code>kubeadm join</code> auf dem nächsten Server – der Token bleibt gleich, bis er abläuft.",
-          "text": "Schließ den zweiten Worker an: <code>kubeadm join abcdef.0123456789abcdef</code>. So wächst der Cluster, ein Knoten nach dem anderen.",
+          "text": "Schließ den zweiten Worker an: <code>kubeadm join 10.0.0.10:6443 --token abcdef.0123456789abcdef</code>. So wächst der Cluster, ein Knoten nach dem anderen.",
           "accept": [
-            "^kubeadm\\s+join\\s+(--token\\s+)?abcdef\\.0123456789abcdef$"
+            "^kubeadm\\s+join\\s+10\\.0\\.0\\.10:6443\\s+--token(\\s+|=)abcdef\\.0123456789abcdef(\\s+(\\\\\\s+)?--discovery-token-ca-cert-hash(\\s+|=)sha256:[0-9a-f]+)?$",
+            "^kubeadm\\s+join\\s+--token(\\s+|=)abcdef\\.0123456789abcdef\\s+10\\.0\\.0\\.10:6443$"
           ],
-          "solution": "kubeadm join abcdef.0123456789abcdef",
+          "solution": "kubeadm join 10.0.0.10:6443 --token abcdef.0123456789abcdef",
           "why": "Jeder weitere Knoten kommt mit exakt demselben Join-Befehl dazu – so skaliert ein echter Cluster: ein Kommando, auf jedem neuen Server ausgeführt. Mehr Knoten heißt mehr Kapazität und Ausfallsicherheit.",
           "hint": "Exakt derselbe Befehl wie eben.",
           "check": {
