@@ -34,6 +34,7 @@ export const BESTAND: readonly string[] = [
   "check-steuerbytes -> check-internalrefs",
   "cleanup-worktrees -> lens-edit-guard",
   "kontext-treiber -> subagent-laufzeit",
+  "langfuse-nachliefern -> langfuse-abgleich",
   "naechstes-ticket -> fremdtext",
   "naechstes-ticket -> gh-kontingent",
   "pretooluse-hook -> gh-guard-hook",

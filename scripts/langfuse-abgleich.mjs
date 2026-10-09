@@ -89,7 +89,6 @@ export const projektPraefix = projektSlug;
 
 /** Wurzel des Hauptrepos: ein Worktree-Pfad wird gekürzt, ein Schlussstrich entfällt (gemeinsam mit `projektSlug`). */
 export const repoWurzel = hauptrepoPfad;
-}
 
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);
 
@@ -354,7 +353,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     if (!args.ist.length) return { exitCode: 2, text: e.message };
   }
   try {
-    const sessions = findeSessions({ projectsRoot, slug: projektSlug(repoRoot), seitMs, sessionId: args.session });
+    const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
     const soll = new Map();
     const mtimes = new Map();
     for (const s of sessions) {
