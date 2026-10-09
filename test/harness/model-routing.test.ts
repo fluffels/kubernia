@@ -14,7 +14,7 @@
  *
  *   1. **Der Hebel verschwindet.** Seit #1280 ist der Hebel das Frontmatter des Subagenten
  *      `kubernia-umsetzer` (Skill-Frontmatter greift wegen anthropics/claude-code#98898 nur bei
- *      `/kubernia`, ein Projekt-Default ließ sich per `/model` überstimmen). Es ist je eine Zeile –
+ *      `/kubernia`, ein Projekt-Default ließ sich per `/model` überstimmen; seit #1557 gilt `sonnet` als Projekt-Default nur für den Hauptchat). Es ist je eine Zeile –
  *      gelöscht/umformuliert fällt die Umsetzung wortlos aufs Session-Modell zurück.
  *   2. **Der Review wird still mitdemoviert.** Umsetzer und Workflow-Phasen laufen auf dem
  *      Coding-Tier. Liefen die Lens-Pässe INLINE in einem orchestrierenden Agenten (Umsetzer oder
@@ -29,7 +29,7 @@
  * `kubernia-umsetzer` mit `sonnet`/`medium` im eigenen Frontmatter: Projekt-Default und Skill-Frontmatter
  * ließen sich per `/model` bzw. durch den Turn-Scope still umgehen. Der Wächter prüft Agent, Spawn ohne
  * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review), dass kubernia-loop weg ist
- * und dass `.claude/settings.json` kein Modell mehr pinnt (der Hauptchat folgt der Wahl der Maintainerin).
+ * und dass `.claude/settings.json` den Hauptchat auf `sonnet` setzt (#1557: Projekt-Default, Ad-hoc-Opus per `/model`).
  *
  * Seit #1065 gilt zusätzlich: jede `agent()`-Aufrufstelle im Workflow setzt `effort` und
  * `model` (oder `agentType`), es gibt keine festen Modell-IDs mehr und genau
@@ -117,10 +117,15 @@ const ROUTING_SSOT = "docs/model-routing.md";
 /** Das YAML-Frontmatter als flache Key→Value-Map: dieselbe Implementierung wie die Generatoren (#1392). */
 const frontmatter = parseFrontmatter as (md: string) => Record<string, string>;
 
-/** Pins des Hauptchat-Modells in den Projekt-Settings: der Schlüssel `model` und jeder `env`-Schlüssel mit MODEL (generisch, damit neue Variablennamen nicht durchrutschen). */
-function modellPins(settings: { model?: string; env?: Record<string, string> }): string[] {
-  const out = settings.model === undefined ? [] : ["model"];
-  for (const k of Object.keys(settings.env ?? {})) if (/MODEL/i.test(k)) out.push(`env.${k}`);
+/**
+ * Befunde zum Hauptchat-Modell in den Projekt-Settings (#1557): `model` muss genau `sonnet` sein (der Alias, nie eine feste ID),
+ * und kein `env`-Schlüssel mit MODEL darf es überstimmen (`ANTHROPIC_MODEL` hat Vorrang vor dem Settings-`model`; generisch,
+ * damit neue Variablennamen nicht durchrutschen). Die 1h-TTL des Hauptchats bleibt Default: kein TTL-Schlüssel (docs/model-routing.md §5).
+ */
+function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: string; env?: Record<string, string> }): string[] {
+  const out = settings.model === "sonnet" ? [] : [`model=${JSON.stringify(settings.model ?? null)}`];
+  for (const k of Object.keys(settings.env ?? {})) if (/MODEL|PROMPT_CACHE_TTL|PROMPT_CACHING/i.test(k)) out.push(`env.${k}`);
+  if (settings.promptCacheTtl !== undefined) out.push("promptCacheTtl");
   return out;
 }
 
@@ -263,12 +268,13 @@ const RETIRED_ROUTING_CLAIMS: { term: string; home: string; nurWenn?: RegExp; au
     home: `die Umsetzung tippt auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad im Subagenten ${UMSETZER} (Frontmatter, #1280)`,
   },
   {
-    // „Projekt-Default sonnet in settings.json" ist seit #1280 abgelegt (#1309). `nurWenn`/`ausser` sparen die
+    // „Die Umsetzung läuft über den Projekt-Default sonnet" ist seit #1280 abgelegt (#1309); seit #1557 gilt der Projekt-Default
+    // sonnet dem Hauptchat, darum zählt nur die Umsetzungs-Behauptung (`nurWenn`). `ausser` spart die
     // Historien-Absätze aus (model-routing §5, agent-harness Stufe 3/4), die den Begriff mit Datum/Ticket nennen.
     term: "Projekt-Default",
-    nurWenn: /sonnet/i,
-    ausser: /#1065|#1280|entfernt|ließe|ließ\b|damals/,
-    home: `kein Modell-Pin im Projekt; Umsetzung im Subagenten ${UMSETZER} (#1280)`,
+    nurWenn: /(?=.*sonnet)(?=.*Umsetzung)(?=.*läuft)/i,
+    ausser: /#1065|#1280|#1557|entfernt|ließe|ließ\b|damals/,
+    home: `die Umsetzung läuft im Subagenten ${UMSETZER} (Frontmatter, #1280); der Projekt-Default sonnet gilt dem Hauptchat (#1557)`,
   },
 ];
 
@@ -426,23 +432,32 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     assert.equal(r.aufrufe, 2, "ein Aufruf ohne Optionen fällt über die Zählung auf");
   });
 
-  test(".claude/settings.json pinnt kein Modell für den Hauptchat (#1280, #1311)", () => {
+  test(".claude/settings.json setzt den Hauptchat auf sonnet (#1557)", () => {
     const settings = JSON.parse(read(".claude/settings.json")) as { model?: string; env?: Record<string, string> };
     assert.deepEqual(
-      modellPins(settings),
+      hauptchatModellBefunde(settings),
       [],
-      "Das Routing steht in den Agent-Frontmattern (Umsetzer, Planer, Lenses). Ein Projekt-Default überstimmte " +
-        "nur die Modellwahl der Maintainerin für Gespräche und Pre-Flight im Hauptchat und lässt sich per /model ohnehin umgehen. " +
-        "Das gilt auch für `env` (`ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL` …).",
+      "Der Hauptchat orchestriert nur (Claim, Plan weiterreichen, Umsetzer spawnen, melden) und läuft per Projekt-Default auf `sonnet` " +
+        "(#1557: 114 von 117 Sessions liefen sonst auf dem Opus-User-Default). Ad-hoc-Arbeit auf Opus geht per `/model opus`. " +
+        "`env` darf das Modell nicht überstimmen (`ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL` …) " +
+        "und keinen Cache-TTL-Schlüssel setzen (Entscheidung 1h-Default, docs/model-routing.md §5).",
     );
   });
 
-  test("Erkennung greift wirklich (Red-Green): `model` und jeder env-Schlüssel mit MODEL zählt als Pin", () => {
-    assert.deepEqual(modellPins({ env: { CC_LANGFUSE_TRACE_TAGS: "kubernia" } }), []);
-    assert.deepEqual(modellPins({ model: "opus" }), ["model"]);
-    for (const k of ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL", "anthropic_model"]) {
-      assert.deepEqual(modellPins({ env: { [k]: "x" } }), [`env.${k}`], k);
+  test("Erkennung greift wirklich (Red-Green): nur der Alias sonnet ist grün, env-Modelle und TTL-Schlüssel sind Befunde", () => {
+    assert.deepEqual(hauptchatModellBefunde({ model: "sonnet" }), []);
+    assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { CC_LANGFUSE_TRACE_TAGS: "kubernia" } }), []);
+    assert.deepEqual(hauptchatModellBefunde({}), ["model=null"], "fehlendes model");
+    for (const m of ["opus", "opusplan", "best", "claude-sonnet-5-5", "Sonnet "]) {
+      assert.equal(hauptchatModellBefunde({ model: m }).length, 1, m);
     }
+    for (const k of ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL", "anthropic_model"]) {
+      assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { [k]: "x" } }), [`env.${k}`], k);
+    }
+    for (const k of ["CLAUDE_CODE_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M"]) {
+      assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { [k]: "5m" } }), [`env.${k}`], k);
+    }
+    assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", promptCacheTtl: "5m" }), ["promptCacheTtl"]);
   });
 
   test("Planer opus/xhigh", () => {
@@ -722,6 +737,16 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
       "Historienzeilen mit Ticket-Bezug sind keine Behauptung",
     );
     assert.deepEqual(retiredRoutingClaims("Ein Projekt-Default für opus wäre denkbar."), [], "ohne sonnet keine Umsetzungs-Behauptung");
+    assert.deepEqual(
+      retiredRoutingClaims("Der Hauptchat startet über den Projekt-Default sonnet (#1557)."),
+      [],
+      "der Hauptchat-Projekt-Default ist wieder wahr und darf nicht als abgelegt zählen (#1557)",
+    );
+    assert.deepEqual(
+      retiredRoutingClaims("Der Hauptchat läuft auf dem Projekt-Default sonnet und orchestriert nur."),
+      [],
+      "ohne Umsetzungs-Behauptung keine Meldung",
+    );
     assert.deepEqual(retiredRoutingClaims("```\nSession-Default\n```\n"), [], "im Codeblock zählt nicht");
     assert.deepEqual(
       retiredRoutingClaims("Ein Subagent ohne Modell-Angabe erbt das Session-Modell."),

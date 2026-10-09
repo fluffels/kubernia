@@ -8,6 +8,7 @@
  * Kategorien (Vorrang von oben): Brain (ab dem ersten Call, dessen Tool eine `--brain`-Wurzel berührt oder der Skill `brain-input` ist, bis Turn-Ende; ein Turn mit `/brain-input` ganz),
  * Ticket-Orchestrierung (vom Claim-Turn bis `closedAt`), Nachlauf (nach dem Merge bis zum nächsten Claim),
  * Ad-hoc. Turn = Nutzerzeile (kein tool_result, keine Benachrichtigung); Benachrichtigungs-Turns bleiben im Turn davor.
+ * Kennzahlen der Ticket-Orchestrierung (#1557): Zeile `Modellanteil` (Sonnet-Anteil, Median je Fenster) und Zeile `TTL` (1h-Ist gegen 5m-Simulation).
  * Calls ohne gültigen Zeitstempel stehen in „ohne Zeit“. kubernia-Subagenten und verschachtelte zählen nicht zum
  * Hauptchat; andere Subagenten (Forks) folgen der Kategorie des Turns, in dem sie starten (eigene Quelle „Fork“).
  *
@@ -21,7 +22,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ghText } from "./gh-cli.mjs";
-import { callsFromTranscript } from "./token-baseline.mjs";
+import { callsFromTranscript, priceParts } from "./token-baseline.mjs";
 import { ladeSessionDatei } from "./transkript.mjs";
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
@@ -115,6 +116,77 @@ function claimsAus(events, turnVon) {
  */
 export const istKubernia = (meta) => Boolean(meta?.parentAgentId) || /^kubernia-/.test(meta?.agentType ?? "");
 
+const medianVon = (werte) => {
+  if (werte.length === 0) return null;
+  const s = [...werte].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
+
+/**
+ * Modellanteil der Ticket-Orchestrierung (#1557): Calls je Familie über das Präfix `claude-<familie>-`, über alle Fenster mit Calls.
+ * `<synthetic>` (Client-Platzhalter) zählt nicht. `null` ohne Fenster mit Calls.
+ * @param {{ modelle: Record<string, number>, kosten?: Record<string, number> }[]} fenster
+ */
+export function modellAnteil(fenster) {
+  const z = { sonnet: 0, opus: 0, haiku: 0, sonst: 0 };
+  const kosten = [];
+  for (const w of fenster) {
+    let calls = 0;
+    for (const [m, n] of Object.entries(w.modelle ?? {})) {
+      if (m === "<synthetic>") continue;
+      calls += n;
+      z[/^claude-(sonnet|opus|haiku)-/.exec(m)?.[1] ?? "sonst"] += n;
+    }
+    if (calls > 0) kosten.push(Object.values(w.kosten ?? {}).reduce((a, b) => a + b, 0));
+  }
+  const gesamt = z.sonnet + z.opus + z.haiku + z.sonst;
+  if (gesamt === 0) return null;
+  return { ...z, gesamt, anteil: z.sonnet / gesamt, fenster: kosten.length, medianKosten: medianVon(kosten) };
+}
+
+const FUENF_MIN = 5 * 60_000;
+const SECHZIG_MIN = 60 * 60_000;
+
+/**
+ * 1h-gegen-5m-TTL (#1557) für die Hauptchat-Calls der Ticket-Orchestrierung: Pause = Abstand zum vorigen Call derselben Session.
+ * Ist-Kosten = Cache-Write und Cache-Read wie gebucht (1h-Write); Simulation 5m: bei Pause über 5 min, Modellwechsel oder ohne
+ * Vorgänger wird Write + Read zum 5m-Write-Preis neu geschrieben, sonst 5m-Write plus Read. Calls ohne gültige Zeit oder
+ * Preis zählen nur in `uebersprungen`. Die Preisverhältnisse (1h-Write zu 5m-Write, Read zu 5m-Write) sind bei Sonnet und Opus gleich.
+ * @param {{ session: string, ts?: string, model: string, input: number, cacheWrite: number, cacheWrite1h: number, cacheRead: number, output: number }[]} calls
+ */
+export function ttlVergleich(calls) {
+  const r = { calls: 0, uebersprungen: 0, pausenUeber5: 0, pausenUeber60: 0, medianPauseMin: null, istKosten: 0, sim5mKosten: 0 };
+  const proSession = new Map();
+  for (const c of calls) {
+    if (!gueltig(c.ts) || !priceParts(c)) {
+      r.uebersprungen += 1;
+      continue;
+    }
+    proSession.set(c.session, [...(proSession.get(c.session) ?? []), c]);
+  }
+  const lange = [];
+  for (const liste of proSession.values()) {
+    liste.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    liste.forEach((c, i) => {
+      const prev = liste[i - 1];
+      const pause = prev ? Date.parse(c.ts) - Date.parse(prev.ts) : null;
+      if (pause !== null && pause > FUENF_MIN) lange.push(pause);
+      if (pause !== null && pause > SECHZIG_MIN) r.pausenUeber60 += 1;
+      const kalt = !prev || prev.model !== c.model || pause > FUENF_MIN;
+      const ist = priceParts(c);
+      const sim = priceParts({ ...c, cacheWrite: kalt ? c.cacheWrite + c.cacheRead : c.cacheWrite, cacheRead: kalt ? 0 : c.cacheRead, cacheWrite1h: 0 });
+      r.calls += 1;
+      r.istKosten += ist.cacheWrite + ist.cacheRead;
+      r.sim5mKosten += sim.cacheWrite + sim.cacheRead;
+    });
+  }
+  r.pausenUeber5 = lange.length;
+  const med = medianVon(lange);
+  r.medianPauseMin = med === null ? null : med / 60_000;
+  return r;
+}
+
 /**
  * Kern: Sessions (Hauptzeilen + Subagenten) → Summen je Kategorie × Modell × Quelle plus Ticket-Fenster.
  * @param {{ sessions: Iterable<{ id: string, main: object[], subagents?: { meta: object, zeilen: object[] }[] }>,
@@ -124,6 +196,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   const wurzeln = brainRoots.map((r) => norm(r).replace(/\/+$/, "")).filter(Boolean);
   const summen = new Map();
   const fenster = [];
+  const ticketCalls = [];
   const kubernia = { calls: 0, cost: 0 };
   let ohnePreis = 0;
   const ohnePreisModelle = {};
@@ -185,6 +258,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
         const kat = kategorieFuer(turn, c.ts);
         buche(kat, "Hauptchat", c);
         if (kat === KAT.TICKET) {
+          ticketCalls.push({ ...c, session: s.id });
           const w = fensterVon(turn);
           if (w) {
             w.modelle[c.model] = (w.modelle[c.model] ?? 0) + 1;
@@ -213,7 +287,23 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
-  return { rows, fenster, kubernia, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0 };
+  return { rows, fenster, kubernia, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0, modellanteil: modellAnteil(fenster), ttl: ttlVergleich(ticketCalls) };
+}
+
+const de = (n, stellen = 1) => n.toFixed(stellen).replace(".", ",");
+
+/** Die beiden Kennzahl-Zeilen der Ticket-Orchestrierung (#1557): Modellanteil und TTL-Vergleich. */
+function kennzahlZeilen(r) {
+  const m = r.modellanteil;
+  const t = r.ttl;
+  return [
+    m
+      ? `Modellanteil Ticket-Orchestrierung: sonnet ${m.sonnet}/${m.gesamt} (${de(m.anteil * 100)} %), opus ${m.opus}, haiku ${m.haiku}, sonst ${m.sonst}, Fenster ${m.fenster}, Median ${de(m.medianKosten, 2)} $/Fenster`
+      : "Modellanteil Ticket-Orchestrierung: keine Fenster mit Calls",
+    t && t.calls > 0
+      ? `TTL Ticket-Orchestrierung: ${t.calls} Calls (${t.uebersprungen} übersprungen), Pausen über 5 min ${t.pausenUeber5} (Median ${t.medianPauseMin === null ? "-" : de(t.medianPauseMin)} min), über 60 min ${t.pausenUeber60}, Cache-Kosten Ist (1h) ${de(t.istKosten, 2)} $, Simulation 5m ${de(t.sim5mKosten, 2)} $`
+      : "TTL Ticket-Orchestrierung: keine Calls",
+  ];
 }
 
 /** Markdown-Tabelle Kategorie × Modell (Hauptchat und Forks getrennt) plus Fensterliste. */
@@ -227,6 +317,7 @@ export function renderMarkdown(r) {
   out.push(`kubernia-Subagenten (nicht Hauptchat): ${r.kubernia.calls} Calls, ${$(r.kubernia.cost)}`);
   if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
   if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen oder Zeitpunkt fehlt), nicht als 0 $ zu lesen.`);
+  out.push(...kennzahlZeilen(r));
   out.push("", "| Ticket | Session | Start | Start-Art | Hauptchat-Calls je Modell |", "|---|---|---|---|---|");
   for (const f of r.fenster) {
     const m = Object.entries(f.modelle).map(([k, v]) => `${k}: ${v} (${f.kosten[k].toFixed(2)} $)`).join(", ") || "0 Calls";
