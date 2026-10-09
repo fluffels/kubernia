@@ -39,7 +39,7 @@ Klasse **„Hook meldet Erfolg, Ingestion kommt nicht an, kein Fehlersignal“**
 
 ## Alternative ohne Patch
 
-**Entscheidung 2026-10-09 (#1563; Claude Code 2.1.295, Langfuse 4.46.0 lokal, Quellcode bis v4.56.0): die native OTel-Ausgabe ersetzt den gepatchten Hook nicht, weil Langfuse aus ihr keine Usage übernimmt.** Die Vollständigkeitsgarantie ist der Abgleich gegen das Transkript (Checkliste Punkt 1, Automatisierung in #1556), nicht der Exportweg.
+**Entscheidung 2026-10-09 (#1563; Claude Code 2.1.295, Langfuse 4.46.0 lokal, Quellcode bis v4.56.0): die native OTel-Ausgabe ersetzt den gepatchten Hook nicht, weil Langfuse aus ihr keine Usage übernimmt.** Die Vollständigkeitsgarantie ist der Abgleich gegen das Transkript (Checkliste Punkt 1, `scripts/langfuse-abgleich.mjs`), nicht der Exportweg.
 
 | Kriterium | native OTel (Traces, Beta) | Folge |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Klasse **„Hook meldet Erfolg, Ingestion kommt nicht an, kein Fehlersignal“**
 
 Die Collector-Umbenennung (Option aus #1185) bleibt verworfen: auch umbenannt gäbe es keinen 5m/1h-Split. Der Tracing-Export ist zudem Beta (`CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`).
 
-**Neu bewerten, wenn** (a) oder (b) anschlägt, dann (c) als Bestätigung (die Konsolen-Probe kostet Tokens, sie läuft nur in diesem Fall): (a) `grep -a -c "gen_ai.usage" "$(command -v claude)"` ist ungleich 0 (native Installation); (b) die Quelle `packages/shared/src/server/otel/OtelIngestionProcessor.ts` im Repo `langfuse/langfuse` (z.B. `gh api repos/langfuse/langfuse/contents/packages/shared/src/server/otel/OtelIngestionProcessor.ts`) kennt `claude_code`; (c) eine Konsolen-Probe (`OTEL_TRACES_EXPORTER=console`, `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`, kurze Headless-Session in einem Temp-Ordner, die auch einen verschachtelten und einen per SendMessage fortgesetzten Subagenten auslöst) zeigt Cache-Writes getrennt nach 5m/1h. Erst dann Probe gegen die lokale Instanz und Vergleich mit `langfuse-abgleich.mjs --pruefen` (Skript entsteht in #1562); bei „ersetzt“ eine ADR, die [0019](adr/0019-langfuse-plugin-im-user-scope.md) präzisiert, plus Folge-Issue zur Umstellung (Hook und OTel parallel ergeben Dubletten).
+**Neu bewerten, wenn** (a) oder (b) anschlägt, dann (c) als Bestätigung (die Konsolen-Probe kostet Tokens, sie läuft nur in diesem Fall): (a) `grep -a -c "gen_ai.usage" "$(command -v claude)"` ist ungleich 0 (native Installation); (b) die Quelle `packages/shared/src/server/otel/OtelIngestionProcessor.ts` im Repo `langfuse/langfuse` (z.B. `gh api repos/langfuse/langfuse/contents/packages/shared/src/server/otel/OtelIngestionProcessor.ts`) kennt `claude_code`; (c) eine Konsolen-Probe (`OTEL_TRACES_EXPORTER=console`, `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`, kurze Headless-Session in einem Temp-Ordner, die auch einen verschachtelten und einen per SendMessage fortgesetzten Subagenten auslöst) zeigt Cache-Writes getrennt nach 5m/1h. Erst dann Probe gegen die lokale Instanz und Vergleich mit `langfuse-abgleich.mjs --pruefen`; bei „ersetzt“ eine ADR, die [0019](adr/0019-langfuse-plugin-im-user-scope.md) präzisiert, plus Folge-Issue zur Umstellung (Hook und OTel parallel ergeben Dubletten).
 
 ## Nach einem Plugin-Update
 
