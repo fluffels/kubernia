@@ -6,7 +6,7 @@
  *
  * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` und deren JSONL (nicht alle Haupttranskripte).
  * Je Lauf: Ticket (erstes `#<nr>` im Prompt), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
- * Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
+ * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
  * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request), Kosten in $ (`kosten`, Summe der Call-Preise aus PRICES, `null` bei einem Call ohne Preis; nur
  * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
@@ -74,7 +74,7 @@ function kostenAus(calls) {
 }
 
 /** Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. */
-export function laufAus({ meta, zeilen }) {
+export function laufAus({ meta, zeilen, datei }) {
   const zeiten = zeilen.map((r) => r?.timestamp).filter(gueltig).map(ms);
   if (!zeiten.length) return null;
   const start = Math.min(...zeiten);
@@ -86,6 +86,8 @@ export function laufAus({ meta, zeilen }) {
   const tool = Math.min(vereinigungMs(intervalle), dauer);
   return {
     agentType: meta?.agentType ?? null,
+    modelle: [...new Set(calls.map((c) => c.model).filter(Boolean))].sort(),
+    datei: datei ?? null,
     ticket: Number(/#(\d+)/.exec(prompt)?.[1]) || null,
     sammel: /\(gesammelt\)/i.test(prompt),
     start,
@@ -122,7 +124,7 @@ const stat = (laeufe) => ({
 
 /**
  * Kern: Läufe aus `{ meta, zeilen }` des gewünschten `agentType` im Fenster [von, bis] (Start) → Läufe plus Aggregat.
- * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, schnitt?: string }} e
+ * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], agent?: string, von?: string, bis?: string, schnitt?: string }} e
  */
 export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schnitt }) {
   const alle = laeufe
@@ -175,9 +177,9 @@ export function renderMarkdown(r) {
     z("Sammel vor Schnitt", r.aggregat.altSammel);
     z("Sammel ab Schnitt", r.aggregat.neuSammel);
   }
-  out.push("", "| Start | Ticket | Sammel | Dauer | Modell | Tool | Requests | Kosten ($) | s/Req | max. Kontext | parallel |", "|---|--:|---|--:|--:|--:|--:|--:|--:|--:|--:|");
+  out.push("", "| Start | Ticket | Sammel | Dauer | Modellzeit | Modell | Tool | Requests | Kosten ($) | s/Req | max. Kontext | parallel |", "|---|--:|---|--:|--:|---|--:|--:|--:|--:|--:|--:|");
   for (const l of r.laeufe) {
-    out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${f1(l.toolMin)} | ${l.requests} | ${f2(l.kosten)} | ${f1(l.sProRequest ?? null)} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);
+    out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${l.modelle.length ? l.modelle.join(", ") : "-"} | ${f1(l.toolMin)} | ${l.requests} | ${f2(l.kosten)} | ${f1(l.sProRequest ?? null)} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);
   }
   return out.join("\n");
 }
@@ -214,7 +216,7 @@ export function ladeLaeufe(dir, agent, von) {
         continue;
       }
       if (meta?.agentType !== agent) continue;
-      laeufe.push({ meta, zeilen: transkriptZeilen(readFileSync(jsonl, "utf8")) });
+      laeufe.push({ meta, zeilen: transkriptZeilen(readFileSync(jsonl, "utf8")), datei: `${id}/subagents/${n.replace(/.meta.json$/, ".jsonl")}` });
     }
   }
   return laeufe;
