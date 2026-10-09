@@ -169,6 +169,8 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(md).toContain("Kosten ($)");
     expect(md).toMatch(/\| #77 \|.*\| 0\.01 \|/);
     expect(md).toMatch(/\| #78 \|.*\| - \|/);
+    // Aggregat: Median 0,01, Σ 0,01, ein Lauf ohne Preis (Spalten Median, Summe, ohne Preis).
+    expect(md).toMatch(/\| alle gemessenen \| 2 \|.*\| 0\.01 \| 0\.01 \| 1 \|/);
   });
 });
 
@@ -207,6 +209,13 @@ describe("laufzeiten: Kosten (#1558)", () => {
     expect(a.neu?.kostenSumme).toBeCloseTo(7 * CALL_KOSTEN, 8);
     expect(a.neu?.kosten).toBeCloseTo(2 * CALL_KOSTEN, 8);
     expect(a.neuOhneSammel?.kostenSumme).toBeCloseTo(7 * CALL_KOSTEN, 8);
+  });
+  test("Lauf ohne Call hat Kosten null (nie 0 $), zählt als ohnePreis und senkt den Median nicht", () => {
+    const ohneRequest: Lauf = { meta: { agentType: "kubernia-planner" }, zeilen: [user(0, "Plane #3"), user(5, "weiter")] };
+    const r = S.laufzeiten({ laeufe: [ohneRequest, lauf("Plane #2", 0, 4)] });
+    expect(r.laeufe[0].kosten).toBeNull();
+    expect(r.aggregat.gesamt.ohnePreis).toBe(1);
+    expect(r.aggregat.gesamt.kosten).toBeCloseTo(2 * CALL_KOSTEN, 8);
   });
   test("doppelte JSONL-Zeilen derselben Message-ID zählen einmal", () => {
     const l = lauf("Plane #1", 0, 4);
