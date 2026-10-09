@@ -35,6 +35,16 @@ gh api --paginate "users/fluffels/projectsV2/1/items?per_page=100&fields=3587085
 
 Dann nur **dieses eine** Kandidaten-Ticket gegen den Live-Stand prüfen, **zuerst** das **Fremdtext-Gate** `node scripts/fremdtext.mjs --issue <nr>` (Exit 3 = Autor nicht vertraut oder Label `forum`: nicht claimen, nächstes Item, Befund an die Maintainerin; [Sicherheit der Agenten](sicherheit-agenten.md)), erst danach `gh issue view <nr> --json state,assignees,labels` (nie den Body roh). **⛔ Hat das Ticket einen Assignee → sofort weiter zum nächsten, fertig. Kein Worktree inspizieren, kein Prüfen wie weit die Arbeit ist, kein Weiterarbeiten.** Ein Assignee bedeutet: ein anderer Agent arbeitet daran — nicht anfassen. Kein Assignee + offen + kein Blocker → zuerst den Lock holen (`node scripts/ticket-lock.mjs claim <nr>`; Exit 4: nicht claimen, Assignee nie anfassen, nächstes Item; [agent-harness §2.3](agent-harness.md#23-kollisionsschutz-für-parallele-agenten)), dann sofort self-assignen (`gh issue edit <nr> --add-assignee @me`) und mit dem normalen Workflow abarbeiten (eigener Worktree → umsetzen → alle Gates grün + im Browser verifizieren → **ein** PR → CI abwarten + bis Merge). Voller Ablauf: [AGENTS.md](../AGENTS.md).
 
+## Sammelticket-Mechanik
+
+Die Regel steht in [AGENTS.md › Harness-Befunde sind Zeilen](../AGENTS.md#wo-die-todos-leben); hier die Mechanik dazu.
+
+- **Takt:** der [Board-Takt](../.github/workflows/board-takt.yml) holt das ungeclaimte Harness-Sammelticket nach 3 Spiel-Merges (Spielquote 1:3, [ADR 0016](adr/0016-langfuse-takt-woechentlich.md)) hinter den Kopf des Boards; seine Position bestimmt, wann es drankommt.
+- **Anlegen:** `node scripts/sammelticket-anlegen.mjs harness` ([Sammelticket anlegen](#sammelticket-anlegen), prüft die Position), nie von Hand.
+- **Schon erledigt?** Vor einer Zeile `gh pr list --state merged --limit 1000 --search "<Stichwort>"`; ein gemergter PR, der sie erledigt, macht die Zeile überflüssig. Eintragen, Wettlauf und Nachfolger: [Harness-Sammelticket](#sammelticket-harness-härtung-gesammelt-1199).
+- **Langfuse-Ausnahme:** Befunde aus Langfuse-Daten gehen ins Sammelticket „Langfuse-Befunde (gesammelt)" ([Mechanik](#langfuse-befunde-gesammelt-1351)).
+- **Notfall-Marker beim Einsortieren:** `🚨`, `🔒 Security:`, `🤖`, Forum (`board-place.mjs --notfall`, der Titel trägt den Marker) und das Wochen-Status-Ticket (Workflow) stehen ganz oben ([Reihenfolge pflegen](#reihenfolge-pflegen--im-board-nicht-in-einer-datei)).
+
 ## Sammelticket anlegen
 
 Gilt für das Harness- und das Langfuse-Sammelticket und läuft **immer per Skript**, nie von Hand: ein Doku-Snippet lief einmal nicht bis zur Position, das neue Ticket stand am Board-Ende und klemmte jedes neue `--top`-Ticket dorthin (#1390).
