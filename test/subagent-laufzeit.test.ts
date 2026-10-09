@@ -210,7 +210,7 @@ describe("laufzeiten: Kosten (#1558)", () => {
   });
   test("doppelte JSONL-Zeilen derselben Message-ID zählen einmal", () => {
     const l = lauf("Plane #1", 0, 4);
-    l.zeilen.push({ ...(l.zeilen[1] as Row), uuid: "dupe" }); // gleiche message.id wie Zeile 1
+    l.zeilen.push({ ...l.zeilen[1], uuid: "dupe" }); // gleiche message.id wie Zeile 1
     expect(S.laufzeiten({ laeufe: [l] }).laeufe[0].kosten).toBeCloseTo(2 * CALL_KOSTEN, 8);
   });
 });
