@@ -229,14 +229,22 @@ describe("Log", () => {
     const d = logDatei();
     N.logAnhaengen(d, { n: "alt" }, { max: 30 });
     const groesse = statSync(d).size;
-    N.logAnhaengen(d, { n: "mittel" }, { max: groesse + 1 }); // unter der Grenze: kein Wechsel
-    expect(existsSync(`${d}.1`)).toBe(false);
-    N.logAnhaengen(d, { n: "neu" }, { max: groesse }); // Datei ist größer als die Grenze: Wechsel
+    N.logAnhaengen(d, { n: "neu" }, { max: groesse }); // Größe == Grenze: Wechsel (ab, nicht über der Grenze)
     expect(readFileSync(d, "utf8").trim()).toBe(JSON.stringify({ n: "neu" }));
     expect(readFileSync(`${d}.1`, "utf8")).toContain('"alt"');
     N.logAnhaengen(d, { n: "noch neuer" }, { max: 5 });
     expect(readFileSync(`${d}.1`, "utf8").trim()).toBe(JSON.stringify({ n: "neu" }));
     expect(readFileSync(d, "utf8").trim()).toBe(JSON.stringify({ n: "noch neuer" }));
+  });
+
+  test("unter der Grenze: kein Wechsel", () => {
+    const d = logDatei();
+    N.logAnhaengen(d, { n: "alt" });
+    const groesse = statSync(d).size;
+    N.logAnhaengen(d, { n: "neu" }, { max: groesse + 1 });
+    expect(existsSync(`${d}.1`)).toBe(false);
+    expect(readFileSync(d, "utf8").trim().split("
+")).toHaveLength(2);
   });
 
   test("logEintrag: alle Felder; sessions nur mit Befund; Fehlermeldung auf 300 Zeichen gekürzt; ohne Protokoll Nullwerte", () => {
