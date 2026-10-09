@@ -16,7 +16,10 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { blockFunktion, workflowBlock } from "./workflow-block";
 
 type Nachweis = { plan: { art: string } | null; review: { head: string | null; runden: number; lenses: string[]; verdikt: string | null } | null };
@@ -29,6 +32,7 @@ type Mod = {
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/check-review-nachweis.mjs";
 const { MAX_FIX_RUNDEN, parseNachweis, pflichtLenses, bewerteNachweis } = raw as Mod;
+const checkReviewNachweis = (raw as unknown as { checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => { ok: boolean; zusatzpass: { grund: string } | null } }).checkReviewNachweis;
 
 const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 const SHA = "c".repeat(40);
@@ -357,5 +361,60 @@ describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
   test("Format-SSOT und Skill nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /zusatzpass=/);
     assert.match(read(".claude/skills/review-lenses/SKILL.md"), /zusatzpass=/);
+  });
+});
+
+describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
+  const BASE = "b".repeat(40);
+  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
+  /** Gefälschtes git für `checkReviewNachweis`: ein Code-Slice (src/a.ts) und ein Nachweis-Commit mit der gegebenen KQ-Review-Zeile. */
+  const fakeGit = (review: string) => (a: string[]): string => {
+    const j = a.join(" ");
+    if (j.startsWith("merge-base")) return BASE;
+    if (j === "rev-parse HEAD") return "d".repeat(40);
+    if (j.startsWith("log --reverse")) return `KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}\n`;
+    if (j.startsWith("diff --name-only")) return "src/a.ts\n";
+    if (j.startsWith("rev-parse --verify")) return SHA;
+    if (j.startsWith("rev-list --count")) return "1";
+    if (j.startsWith("rev-list --merges")) return "";
+    if (j.startsWith("rev-list")) return `${SHA}\n`;
+    throw new Error(`unerwartet: ${j}`);
+  };
+
+  test("gültiger Zusatzpass: das Feld trägt den Grund (Rückgabe von checkReviewNachweis)", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), env: {} });
+    assert.equal(r.ok, true);
+    assert.equal(r.zusatzpass?.grund, "Maintainerin gab Pass frei");
+  });
+  test("ohne Zusatzpass oder mit ungültigem: das Feld ist null", () => {
+    assert.equal(checkReviewNachweis({ runGit: fakeGit(`runden=2 ${LENSES} verdikt=ok`), env: {} }).zusatzpass, null);
+    const ungueltig = checkReviewNachweis({ runGit: fakeGit(`runden=4 zusatzpass=0 ${LENSES} verdikt=ok`), env: {} });
+    assert.equal(ungueltig.ok, false);
+    assert.equal(ungueltig.zusatzpass, null);
+  });
+
+  /** Echtes Temp-Repo: main mit einem Commit, Feature-Branch mit Code-Commit und leerem Nachweis-Commit. */
+  function cliAusgabe(review: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+    try {
+      const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", ...a], { cwd: dir, encoding: "utf8" });
+      git("init", "-q", "-b", "main");
+      git("commit", "-q", "--allow-empty", "-m", "basis");
+      git("update-ref", "refs/remotes/origin/main", "HEAD");
+      git("checkout", "-q", "-b", "feature/x");
+      git("commit", "-q", "--allow-empty", "-m", "umsetzung");
+      const head = git("rev-parse", "HEAD").trim();
+      git("commit", "-q", "--allow-empty", "-m", `nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${head} ${review}`);
+      const env = { ...process.env };
+      delete env.KQ_DIFF_BASE;
+      return execFileSync("node", [fileURLToPath(new URL("../../scripts/check-review-nachweis.mjs", import.meta.url))], { cwd: dir, env, encoding: "utf8" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  test("CLI nennt den Zusatzpass samt Grund, ohne Zusatzpass keine solche Zeile", () => {
+    assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass \(Freigabe der Maintainerin\): Maintainerin gab Pass frei/);
+    assert.doesNotMatch(cliAusgabe(`runden=1 ${LENSES} verdikt=ok`), /Zusatzpass/);
   });
 });

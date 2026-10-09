@@ -9,6 +9,7 @@ type Tool = { name: string; input?: Record<string, unknown>; result?: string | n
 type CallSpec = { min: number; ctx?: number; cacheRead?: number; tools?: Tool[] };
 type Top = { label: string; tokens: number; last: number };
 type Rebuild = { ursache: string; tokens: number; mehrkosten: number | null };
+type Pause = { ursache: string; sekunden: number; ticks: number };
 type Analyse = {
   ticket: number | null;
   sammel: boolean;
@@ -18,6 +19,7 @@ type Analyse = {
   kosten: number | null;
   ergebnisse: Top[];
   neuaufbauten: Rebuild[];
+  pausen: Pause[];
   wachstum: { ergebnis: number; eingabe: number; rest: number };
 };
 type Bericht = {
@@ -25,12 +27,12 @@ type Bericht = {
   top: Top[];
   phasen: Record<string, { calls: number }>;
   neuaufbau: Record<string, { n: number; mehrkosten: number }>;
+  pausen: Record<string, { n: number; ticks: number }>;
 };
 const K = raw as unknown as {
   phaseDerCalls: (zeilen: Row[]) => string[];
   analysiereLauf: (l: Lauf) => Analyse | null;
-  kontextTreiber: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; tickets?: number[] }) => { gesamt: Bericht; ohneSammel: Bericht; sammel: Bericht };
-  bereinige: (s: string) => string;
+  kontextTreiber: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; tickets?: number[]; wurzel?: string | null }) => { gesamt: Bericht; ohneSammel: Bericht; sammel: Bericht };
   renderMarkdown: (r: ReturnType<typeof K.kontextTreiber>) => string;
 };
 
@@ -103,14 +105,6 @@ describe("Phasen je Call", () => {
   });
   test("Vorrang: ein Befehl mit CI-Warten und verify zählt als CI-Warten", () => {
     expect(phasen([{ min: 1, tools: [bash("gh pr checks 5 --watch && npx vitest run")] }])).toEqual(["CI-Warten"]);
-  });
-});
-
-describe("bereinige", () => {
-  test("Home und Worktree-Präfix werden ersetzt, Backslashes zu Schrägstrichen", () => {
-    expect(K.bereinige("C:/Users/Max/dev/x.ts")).toBe("~/dev/x.ts");
-    expect(K.bereinige("C:\\Users\\Max\\dev\\x.ts")).toBe("~/dev/x.ts");
-    expect(K.bereinige("C:/dev/kubernia/.claude/worktrees/kq-1559/src/a.ts")).toBe("<wt>/src/a.ts");
   });
 });
 
@@ -194,6 +188,13 @@ describe("kontextTreiber (Aggregat)", () => {
     expect(K.kontextTreiber({ laeufe: [kurz, sammel], tickets: [1] }).gesamt.gesamt!.n).toBe(1);
     expect(K.kontextTreiber({ laeufe: [kurz] }).sammel.gesamt).toBeNull();
   });
+  test("wurzel: der Repo-Pfad im Top-Label wird maskiert (öffentliches Repo), ohne wurzel bleibt er unverändert", () => {
+    const l = lauf("#1 x", [{ min: 1, tools: [{ name: "Read", input: { file_path: "C:/work/projekt/docs/a.md" }, result: "x".repeat(400) }] }, { min: 2 }, { min: 3 }]);
+    const labels = (wurzel?: string) => K.kontextTreiber({ laeufe: [l], wurzel }).gesamt.top.map((x) => x.label);
+    expect(labels("C:/work/projekt").some((x) => x.includes("<repo>/docs/a.md"))).toBe(true);
+    expect(labels("C:/work/projekt").some((x) => x.includes("C:/work/projekt"))).toBe(false);
+    expect(labels().some((x) => x.includes("C:/work/projekt/docs/a.md"))).toBe(true);
+  });
   test("Top-10: genau 10 bei 12 Ergebnissen, absteigend nach Last", () => {
     const calls: CallSpec[] = Array.from({ length: 12 }, (_, i) => ({ min: i + 1, tools: [{ name: "Read", input: { file_path: `f${i}` }, result: "x".repeat(400 * (i + 1)) }] }));
     calls.push({ min: 20 }, { min: 21 });
@@ -268,12 +269,6 @@ describe("Zerlegung und Ursachen, Grenzfälle", () => {
   test("gh run view ist kein CI-Warten (Log lesen gehört zum Fix)", () => {
     expect(K.phaseDerCalls(lauf("#1 x", [{ min: 1, tools: [bash("gh run view 5 --log-failed | tail -n 80")] }]).zeilen)).not.toContain("CI-Warten");
   });
-  test("bereinige: Git-Bash-Home, Worktree ohne Schrägstrich, Repo-Wurzel, Leerraum", () => {
-    expect(K.bereinige("cat /c/Users/Max/x.md")).toBe("cat ~/x.md");
-    expect(K.bereinige("cd /c/dev/kubernia/.claude/worktrees/kq-1469 && ls")).toBe("cd <wt>/ && ls");
-    expect(K.bereinige("Read C:/dev/kubernia/docs/a.md")).toBe("Read <repo>/docs/a.md");
-    expect(K.bereinige("a   b\n c")).toBe("a b c");
-  });
 });
 
 describe("Lens-Fix, Repo-Wurzel, Kostenteile (Grenzfälle R2)", () => {
@@ -282,11 +277,6 @@ describe("Lens-Fix, Repo-Wurzel, Kostenteile (Grenzfälle R2)", () => {
     expect(a.phasen.slice(1, 3)).toEqual(["Lens-Fix", "Lens-Fix"]);
     expect(a.neuaufbauten[0].ursache).toBe("Lens-Warten");
   });
-  test("bereinige: Repo-Wurzel in Git-Bash-Form, fremder Pfad bleibt unverändert", () => {
-    expect(K.bereinige("cat /c/dev/kubernia/docs/a.md")).toBe("cat <repo>/docs/a.md");
-    expect(K.bereinige("C:/dev/kubernia-alt/x")).toBe("C:/dev/kubernia-alt/x");
-    expect(K.bereinige("Read C:/dev/kubernia/.claude/worktrees/kq-7")).toBe("Read <wt>/");
-  });
   test("Kostenteile: Write > 0 bei geschriebenem Cache, Read + Write + Output ergeben die Summe", () => {
     const g = (K as unknown as { kontextTreiber: (e: { laeufe: Lauf[] }) => { gesamt: { gesamt: { kostenSumme: number; kostenRead: number; kostenWrite: number; kostenOutput: number } } } })
       .kontextTreiber({ laeufe: [lauf("#1 x", [{ min: 1, ctx: 10_000, cacheRead: 4000 }, { min: 2, ctx: 12_000, cacheRead: 12_000 }])] }).gesamt.gesamt;
@@ -294,5 +284,50 @@ describe("Lens-Fix, Repo-Wurzel, Kostenteile (Grenzfälle R2)", () => {
     expect(g.kostenRead).toBeGreaterThan(0);
     expect(g.kostenRead + g.kostenWrite + g.kostenOutput).toBeCloseTo(g.kostenSumme, 9);
     expect(g.kostenWrite).toBeCloseTo((6000 * 2.5) / 1e6, 9);
+  });
+});
+
+describe("Wartepausen über 240 s (#1588)", () => {
+  const sek = (x: number) => x / 60;
+  const pausen = (calls: CallSpec[]) => K.analysiereLauf(lauf("#1 x", calls))?.pausen ?? [];
+  test("241 s nach einem Lens-Spawn: Lens-Warten, 1 Tick", () => {
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 1 + sek(241) }])).toEqual([{ ursache: "Lens-Warten", sekunden: 241, ticks: 1 }]);
+  });
+  test("600 s ergeben 2 Ticks (abgerundet)", () => {
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 11 }])[0]).toMatchObject({ sekunden: 600, ticks: 2 });
+  });
+  test("280 s bei vollem Cache-Read ist eine Pause, aber kein Neuaufbau", () => {
+    const a = K.analysiereLauf(lauf("#1 x", [{ min: 1, tools: [linse] }, { min: 1 + sek(280) }]));
+    expect(a?.pausen).toHaveLength(1);
+    expect(a?.neuaufbauten).toHaveLength(0);
+  });
+  test("Ursache nach verify und nach pr-warten", () => {
+    expect(pausen([{ min: 1, tools: [bash("npm run verify:kompakt")] }, { min: 7 }])[0].ursache).toBe("verify");
+    expect(pausen([{ min: 1, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 7 }])[0].ursache).toBe("CI-Warten");
+  });
+  test("genau 240 s und 239 s zählen nicht (strikt größer)", () => {
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 5 }])).toEqual([]);
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 1 + sek(239) }])).toEqual([]);
+  });
+  test("ein einzelner Call hat keine Pausen; fehlender Zeitstempel ergibt keine Pause", () => {
+    expect(pausen([{ min: 1 }])).toEqual([]);
+    const l = lauf("#1 x", [{ min: 1, tools: [linse] }, { min: 20 }]);
+    for (const z of l.zeilen) if (z.type === "assistant" && z.timestamp === t(20)) delete z.timestamp;
+    expect(() => K.analysiereLauf(l)).not.toThrow();
+    expect(K.analysiereLauf(l)?.pausen).toEqual([]);
+  });
+  test("Aggregat trennt die Ursachen in eigene Buckets, leere Gruppe hat pausen {}", () => {
+    const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 16 }];
+    const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls)] });
+    expect(r.gesamt.pausen).toEqual({ "Lens-Warten": { n: 1, ticks: 2 }, "CI-Warten": { n: 1, ticks: 1 } });
+    expect(r.sammel.pausen).toEqual({});
+  });
+  test("Aggregat über zwei Läufe, Trennung Sammel/ohne Sammel, Markdown-Zeile", () => {
+    const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11 }];
+    const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls), lauf("#2 Harness-Härtung (gesammelt)", calls)] });
+    expect(r.gesamt.pausen["Lens-Warten"]).toEqual({ n: 2, ticks: 4 });
+    expect(r.ohneSammel.pausen["Lens-Warten"]).toEqual({ n: 1, ticks: 2 });
+    expect(r.sammel.pausen["Lens-Warten"]).toEqual({ n: 1, ticks: 2 });
+    expect(K.renderMarkdown(r)).toContain("| Lens-Warten | 2 | 4 |");
   });
 });

@@ -14,6 +14,8 @@
  *    späteren Calls des Laufs (so oft wird das Ergebnis erneut aus dem Cache gelesen).
  *  - Neuaufbau: Pause > 5 min zum Vorgänger und Cache-Read unter der Hälfte des Kontexts (wie `countCacheRebuilds`); Mehrkosten =
  *    neu geschriebene Tokens × (Write-5m − Read-Preis), ohne Preisstufen.
+ *  - Wartepausen (#1588): jede Lücke > 240 s zum Vorgänger-Call, mit Ursache wie beim Neuaufbau und Ticks = Lücke / 240 s abgerundet
+ *    (so viele Wach-Calls hätte ein Keep-alive im 4-min-Takt gebraucht); eine Pause ist kein Neuaufbau, der Cache kann gehalten haben.
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laufzeit; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
@@ -23,11 +25,13 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { median } from "./mess-lib.mjs";
+import { bereinige, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
+import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laufzeit.mjs";
 
 const MIN = 60_000;
 const PAUSE_MS = 5 * MIN;
+const TICK_MS = 4 * MIN;
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
 export const PHASEN = ["Umsetzung", "Pflege", "verify", "Review", "Lens-Fix", "CI-Warten", "CI-Fix", "Merge/Cleanup"];
@@ -35,28 +39,16 @@ export const PHASEN = ["Umsetzung", "Pflege", "verify", "Review", "Lens-Fix", "C
 const CI_WARTEN = /gh\s+pr\s+checks|pr-warten|gh\s+run\s+watch|until\b[^\n]*gh\s+pr\s+view/;
 const VERIFY = /verify:|npm\s+run\s+verify|vitest|eslint|typecheck|check:/;
 const num = (x) => (Number.isFinite(x) ? x : 0);
-const kontextVon = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
 const summe = (liste) => liste.reduce((s, x) => s + x, 0);
-
-/** Pfade und Befehle ohne Benutzerordner und Worktree-Präfix (das Repo ist öffentlich). */
-export function bereinige(text) {
-  return String(text)
-    .replace(/\\/g, "/")
-    .replace(/[A-Za-z]:\/Users\/[^/\s"']+/g, "~")
-    .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~")
-    .replace(/\S*\/\.claude\/worktrees\/kq-\d+[\w-]*(?:\/|(?=\s|$))/g, "<wt>/")
-    .replace(/(?:[A-Za-z]:|\/[a-z])\/dev\/kubernia\//g, "<repo>/")
-    .replace(/\s+/g, " ");
-}
 
 const befehlVon = (tool) => (SHELL_TOOLS.has(tool.tool) ? String(tool.input?.command ?? "") : "");
 const istLinse = (tool) => tool.tool === "Agent" && String(tool.input?.subagent_type ?? "") === "kubernia-lens";
 
 /** Kurzbeschreibung eines Tool-Aufrufs für die Top-10 (Tool plus ~60 Zeichen Befehl, Pfad oder Muster). */
-function labelVon(tool) {
+function labelVon(tool, wurzel) {
   const i = tool.input ?? {};
   const detail = i.command ?? i.file_path ?? i.path ?? i.pattern ?? i.description ?? i.subagent_type ?? "";
-  return bereinige(`${tool.tool} ${detail}`).slice(0, 70).trim();
+  return bereinige(`${tool.tool} ${detail}`, { wurzel }).slice(0, 70).trim();
 }
 
 /** Calls des Laufs mit ihren Tool-Aufrufen und der Phase je Call. */
@@ -116,8 +108,7 @@ function neuaufbauten(eintraege) {
   for (let i = 1; i < eintraege.length; i++) {
     const c = eintraege[i].call;
     const gap = Date.parse(c.ts) - Date.parse(eintraege[i - 1].call.ts);
-    const ctx = kontextVon(c);
-    if (!(gap > PAUSE_MS && ctx > 0 && num(c.cacheRead) < ctx / 2)) continue;
+    if (!istNeuaufbau({ gapMs: gap, pauseMs: PAUSE_MS, call: c })) continue;
     const preis = priceFor(c.model, PRICES, c.ts);
     liste.push({
       ursache: ursacheVon(eintraege[i - 1]),
@@ -128,8 +119,19 @@ function neuaufbauten(eintraege) {
   return liste;
 }
 
+/** Lücken über 240 s zwischen zwei Calls (#1588): Ursache des Vorgängers, Sekunden, Ticks eines 4-min-Keep-alive. */
+function wartepausen(eintraege) {
+  const liste = [];
+  for (let i = 1; i < eintraege.length; i++) {
+    const gap = Date.parse(eintraege[i].call.ts) - Date.parse(eintraege[i - 1].call.ts);
+    if (!(gap > TICK_MS)) continue;
+    liste.push({ ursache: ursacheVon(eintraege[i - 1]), sekunden: Math.round(gap / 1000), ticks: Math.floor(gap / TICK_MS) });
+  }
+  return liste;
+}
+
 /** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. */
-export function analysiereLauf(lauf) {
+export function analysiereLauf(lauf, { wurzel = null } = {}) {
   const eintraege = phasenUndTools(lauf.zeilen);
   if (!eintraege.length) return null;
   const kopf = laufAus(lauf);
@@ -144,7 +146,7 @@ export function analysiereLauf(lauf) {
       const tokens = Math.round(tool.resultChars / 4);
       ergTokens += tokens;
       einTokens += Math.round(JSON.stringify(tool.input ?? {}).length / 4);
-      ergebnisse.push({ label: labelVon(tool), tokens, last: tokens * spaeter, phase: e.phase });
+      ergebnisse.push({ label: labelVon(tool, wurzel), tokens, last: tokens * spaeter, phase: e.phase });
     }
     const naechster = idx + 1 < eintraege.length ? ctx[idx + 1] - ctx[idx] : 0;
     if (naechster <= 0) return;
@@ -177,12 +179,13 @@ export function analysiereLauf(lauf) {
     phasenDetail: eintraege.map((e, i) => ({ phase: e.phase, kontext: ctx[i], kosten: e.call.cost ?? null })),
     ergebnisse,
     neuaufbauten: neuaufbauten(eintraege),
+    pausen: wartepausen(eintraege),
     wachstum,
   };
 }
 
 function gruppe(analysen) {
-  if (!analysen.length) return { gesamt: null, top: [], phasen: {}, neuaufbau: {}, wachstum: { ergebnis: 0, eingabe: 0, rest: 0 } };
+  if (!analysen.length) return { gesamt: null, top: [], phasen: {}, neuaufbau: {}, pausen: {}, wachstum: { ergebnis: 0, eingabe: 0, rest: 0 } };
   const requests = summe(analysen.map((a) => a.requests));
   const mitPreis = analysen.filter((a) => a.kosten !== null);
   const phasen = {};
@@ -201,6 +204,14 @@ function gruppe(analysen) {
       u.n += 1;
       u.tokens += n.tokens;
       u.mehrkosten += n.mehrkosten ?? 0;
+    }
+  }
+  const pausen = {};
+  for (const a of analysen) {
+    for (const x of a.pausen) {
+      const u = (pausen[x.ursache] ??= { n: 0, ticks: 0 });
+      u.n += 1;
+      u.ticks += x.ticks;
     }
   }
   const teile = mitPreis.map((a) => a.kostenTeile).filter(Boolean);
@@ -229,6 +240,7 @@ function gruppe(analysen) {
       .slice(0, 10),
     phasen,
     neuaufbau,
+    pausen,
     wachstum,
   };
 }
@@ -237,10 +249,10 @@ function gruppe(analysen) {
  * Kern: Läufe des Typs im Start-Fenster [von, bis] (optional nur/ohne bestimmte Tickets) → Bericht je Gruppe (alle, ohne Sammeltickets, Sammeltickets).
  * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[] }} e
  */
-export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [] }) {
+export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [], wurzel = null }) {
   const analysen = laeufe
     .filter((l) => l?.meta?.agentType === agent)
-    .map(analysiereLauf)
+    .map((l) => analysiereLauf(l, { wurzel }))
     .filter(Boolean)
     .filter((a) => (!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis)))
     .filter((a) => !tickets.length || tickets.includes(a.ticket))
@@ -273,6 +285,8 @@ function renderGruppe(titel, g) {
   }
   out.push("", "| Neuaufbau-Ursache | Ereignisse | neu geschriebene Tokens | Mehrkosten ($) |", "|---|--:|--:|--:|");
   for (const [u, d] of Object.entries(g.neuaufbau)) out.push(`| ${u} | ${d.n} | ${k(d.tokens)} | ${f(d.mehrkosten)} |`);
+  out.push("", "| Pausen-Ursache (> 240 s) | Pausen | Ticks |", "|---|--:|--:|");
+  for (const [u, d] of Object.entries(g.pausen)) out.push(`| ${u} | ${d.n} | ${d.ticks} |`);
   out.push("", `Wachstum des Kontexts (Σ Zuwachs): Tool-Ergebnisse ${k(g.wachstum.ergebnis)}, eigene Tool-Eingaben ${k(g.wachstum.eingabe)}, Rest (Text, Overhead) ${k(g.wachstum.rest)}`);
   out.push("", "Top-10 Tool-Ergebnisse nach Last (Tokens × spätere Calls):", "", "| Last (Tok) | Tokens | Phase | Ticket | Tool-Aufruf |", "|--:|--:|---|--:|---|");
   for (const t of g.top) out.push(`| ${k(t.last)} | ${t.tokens} | ${t.phase} | ${t.ticket ? `#${t.ticket}` : "-"} | ${t.label.replace(/\|/g, "/")} |`);
@@ -307,10 +321,10 @@ function main() {
     console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }
-  const slug = args.projekt ?? process.cwd().replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "").replace(/[^A-Za-z0-9]/g, "-");
+  const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
   const dir = join(homedir(), ".claude", "projects", slug);
   readdirSync(dir);
-  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne });
+  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel() });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
 
