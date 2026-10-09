@@ -95,6 +95,9 @@ export function priceParts(c, prices = PRICES) {
   return {
     input: (num(c.input) * p.input) / mio,
     cacheWrite: ((write - write1h) * p.cacheWrite5m + write1h * p.cacheWrite1h) / mio,
+    // Aufteilung für den OTLP-Nachlieferer (#1577); `cacheWrite` bleibt wörtlich oben (Float-Drift der Summen).
+    cacheWrite5m: ((write - write1h) * p.cacheWrite5m) / mio,
+    cacheWrite1h: (write1h * p.cacheWrite1h) / mio,
     cacheRead: (num(c.cacheRead) * p.cacheRead) / mio,
     output: (num(c.output) * p.output) / mio,
   };

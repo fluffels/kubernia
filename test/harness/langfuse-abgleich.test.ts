@@ -179,6 +179,11 @@ describe("Soll (pur)", () => {
     expect(sub?.rolle).not.toBeNull();
   });
 
+  test("Rolle trägt die agentId aus dem Dateinamen (agent-<id>.jsonl)", () => {
+    const e = A.sollEintraege({ id: "s1", main: [], subagents: [{ datei: "agent-abc123.jsonl", meta: { agentType: "t" }, zeilen: [row(msg("x"))] }] });
+    expect(e[0].rolle).toMatchObject({ agentId: "abc123", agentType: "t" });
+  });
+
   test("Rolle und Zusammenführung über Dateien: erster Fund bestimmt die Rolle, Output = Maximum", () => {
     const { root } = sitzung(msg("dup", { output_tokens: 2 }), [{ meta: JSON.stringify({ agentType: "kubernia-lens", description: "L", parentAgentId: "p" }), text: msg("dup", { output_tokens: 8 }) + "\n" + msg("nur-sub") }]);
     const e = A.sollEintraege(LADE(lade(root).pfad));
@@ -208,6 +213,18 @@ describe("Session-Auswahl", () => {
     expect(ids({ seitMs: Date.now() + 3_600_000 })).toEqual([]);
     expect(ids({ seitMs: Date.now() + 3_600_000, sessionId: "a" })).toEqual(["a"]);
     expect(ids({ sessionId: "c" })).toEqual([]);
+  });
+
+  test("Präfix-Grenze: Geschwister-Repo mit gleichem Namensanfang wird nicht gelesen, Worktree-Ordner schon; groesse summiert Haupt- und Subagent-Dateien", () => {
+    const root = fixture({
+      [`${PRAEFIX}/a.jsonl`]: "12345",
+      [`${PRAEFIX}/a/subagents/agent-x.jsonl`]: "123",
+      [`${PRAEFIX}-tools/fremd.jsonl`]: msg("m"),
+      [`${PRAEFIX}--claude-worktrees-kq-1/b.jsonl`]: msg("m"),
+    });
+    const sessions = A.findeSessions({ projectsRoot: root, praefix: PRAEFIX }) as { id: string; groesse: number }[];
+    expect(sessions.map((s) => s.id).sort()).toEqual(["a", "b"]);
+    expect(sessions.find((s) => s.id === "a")?.groesse).toBe(8);
   });
 
   test("fehlender Projektordner ergibt keine Sessions", () => {
