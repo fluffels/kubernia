@@ -118,6 +118,16 @@ describe("starte: losgelöster Kindprozess", () => {
     expect(f.kind.handler).toContain("error");
   });
 
+  test("das Kind bekommt die Zugangswerte aus den Dateien im Home (Fake-Werte), die Umgebung hat Vorrang", () => {
+    const home = fixture({
+      ".langfuse-secret": "sk-fake-77\n",
+      ".claude/settings.json": JSON.stringify({ pluginConfigs: { "langfuse-observability@x": { options: { LANGFUSE_PUBLIC_KEY: "pk-fake", LANGFUSE_BASE_URL: "http://plugin.test" } } } }),
+    });
+    const f = fakeSpawn();
+    expect(H.starte(START, { spawn: f.spawn, env: { LANGFUSE_BASE_URL: "http://env.test" }, execPath: "n", home })).toBe(true);
+    expect(f.aufrufe[0].opts.env).toEqual({ LANGFUSE_SECRET_KEY: "sk-fake-77", LANGFUSE_PUBLIC_KEY: "pk-fake", LANGFUSE_BASE_URL: "http://env.test" });
+  });
+
   test.each([
     ["Müll", "kein json"],
     ["leer", ""],
@@ -125,7 +135,7 @@ describe("starte: losgelöster Kindprozess", () => {
     ["compact", JSON.stringify({ hook_event_name: "SessionStart", session_id: "s1", source: "compact" })],
   ])("kein Spawn bei %s", (_n, text) => {
     const f = fakeSpawn();
-    expect(H.starte(text, { spawn: f.spawn })).toBe(false);
+    expect(H.starte(text, { spawn: f.spawn, home: fixture({}) })).toBe(false);
     expect(f.aufrufe).toHaveLength(0);
   });
 
@@ -133,7 +143,7 @@ describe("starte: losgelöster Kindprozess", () => {
     const spawn = () => {
       throw new Error("EPERM");
     };
-    expect(H.starte(START, { spawn })).toBe(false);
+    expect(H.starte(START, { spawn, home: fixture({}) })).toBe(false);
   });
 
   test("Ende zu Ende: Müll-stdin, leeres stdin und ein Stop-Payload enden mit Exit 0 und ohne Ausgabe", () => {
@@ -403,6 +413,34 @@ describe("hookLauf", () => {
     expect(a.logZeilen().map((z) => `${z.ausloeser}:${z.lock}`)).toEqual(["manuell:frei", "manuell:belegt"]);
   });
 
+  test("SessionEnd gibt den Ende-Zeitpunkt von VOR der Wartezeit mit, SessionStart keinen", async () => {
+    const a = aufbau();
+    const gesehen: (number | undefined)[] = [];
+    const lauf: Lauf = (x) => {
+      gesehen.push((x as Args & { ende?: number }).ende);
+      return Promise.resolve(ok);
+    };
+    await N.hookLauf(argsVon(ENDE), { stateDir: a.stateDir, lauf, schlafen: a.schlafen, uhr: a.uhr, pid: 7 });
+    await N.hookLauf(argsVon(START_ARGS), { stateDir: a.stateDir, lauf, schlafen: a.schlafen, uhr: a.uhr, pid: 7 });
+    expect(gesehen).toEqual([T0, undefined]);
+  });
+
+  test("ein Logfehler (Verzeichnis statt Logdatei) kippt den Lauf nicht: Ergebnis kommt zurück, Lock danach frei", async () => {
+    const a = aufbau();
+    mkdirSync(join(a.stateDir, "langfuse-abgleich.log"), { recursive: true });
+    const r = await N.hookLauf(argsVon(START_ARGS), { stateDir: a.stateDir, lauf: a.lauf, schlafen: a.schlafen, uhr: a.uhr, pid: 7 });
+    expect(r.ergebnis).toEqual(ok);
+    expect(existsSync(a.lock)).toBe(false);
+  });
+
+  test("ein unlesbarer Zustandsordner (Datei statt Ordner): kein Wurf, kein Lauf, Ergebnis lock fehler", async () => {
+    const a = aufbau();
+    const datei = join(fixture({ "state-datei": "x" }), "state-datei");
+    const r = await N.hookLauf(argsVon(START_ARGS), { stateDir: datei, lauf: a.lauf, schlafen: a.schlafen, uhr: a.uhr, pid: 7 });
+    expect(r).toEqual({ lock: "fehler", ergebnis: null });
+    expect(a.ereignisse).toEqual([]);
+  });
+
   test("Invariante: die Wartezeit nach SessionEnd ist länger als die Ruhefrist bei bekanntem Ende (sonst gälte die Session beim Lauf noch als laufend)", () => {
     expect(N.WARTE_SESSIONEND).toBeGreaterThan(N.RUHEFRIST_BEENDET_MS);
   });
@@ -423,7 +461,7 @@ describe("Ende zu Ende mit belegtem Lock (kein Request, Home umgebogen)", () => 
 
   test("--ausloeser sessionstart: Exit 0, eine Logzeile mit lock belegt", () => {
     const { r, zeilen } = mitHome(["--ausloeser", "sessionstart", "--aktuell", "s1"]);
-    expect(r.status ?? 0).toBe(0);
+    expect(r.status).toBe(0);
     expect(zeilen).toMatchObject([{ ausloeser: "sessionstart", session: "s1", lock: "belegt" }]);
   });
 

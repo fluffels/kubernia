@@ -38,6 +38,8 @@ export const RUHEFRIST_OHNE_ENDE_H = 24;
 /** Ruhe bei bekanntem Ende (SessionEnd): kürzer als die Wartezeit des Hooks (WARTE_SESSIONEND in langfuse-abgleich-hook), damit der Lauf nach dem Warten sendet. */
 export const RUHEFRIST_BEENDET_MS = 150_000;
 const LEDGER_NAME = "langfuse-abgleich.json";
+/** Zeitversatz zwischen dem Ende-Zeitpunkt des Hooks und der letzten Transkript-Änderung. */
+const ENDE_SCHLUPF_MS = 5_000;
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]";
 export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, im Hook zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe haben den Secret-Key nicht).";
@@ -143,7 +145,9 @@ async function verarbeite(s, c) {
   const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null };
   protokoll.sessions.push(rec);
   if (args.aktuell === s.id) return Object.assign(rec, { status: "aktuell" });
-  const endeBekannt = args.beendet === s.id || args.session === s.id;
+  // Das SessionEnd-Kind wartet 3 min: wuchs das Transkript danach (resume), gilt das Ende nicht mehr und die laufende Session bleibt unberührt.
+  const endeGilt = args.ende == null || s.mtime <= args.ende + ENDE_SCHLUPF_MS;
+  const endeBekannt = (args.beendet === s.id || args.session === s.id) && endeGilt;
   const beendet = endeBekannt || Boolean(alt?.beendet && unveraendert);
   const ruheMs = beendet ? RUHEFRIST_BEENDET_MS : RUHEFRIST_OHNE_ENDE_H * 3_600_000;
   if (now - s.mtime < ruheMs) {
@@ -351,12 +355,7 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
  */
 export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederholen = false, schlafen = warte, uhr = Date.now, pid = process.pid }) {
   const lockDatei = join(stateDir, LOCK_NAME);
-  let lock = lockNehmen(lockDatei, { now: uhr(), pid });
-  if (lock === "belegt" && wiederholen) {
-    await schlafen(WARTE_LOCK);
-    lock = lockNehmen(lockDatei, { now: uhr(), pid });
-  }
-  const basis = { ausloeser, session: args.session ?? args.aktuell ?? null, lock };
+  const basis = { ausloeser, session: args.session ?? args.aktuell ?? null, lock: null };
   const logge = (extra) => {
     try {
       logAnhaengen(join(stateDir, LOG_NAME), logEintrag({ zeit: new Date(uhr()).toISOString(), ...basis, ...extra }));
@@ -364,8 +363,22 @@ export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederho
       // Ein Logfehler darf den Lauf nie kippen.
     }
   };
-  if (lock === "belegt") {
-    logge({});
+  const nimm = () => {
+    try {
+      return lockNehmen(lockDatei, { now: uhr(), pid });
+    } catch (e) {
+      basis.fehler = [{ session: basis.session, status: null, meldung: `Lock: ${e.message}` }];
+      return "fehler"; // ein unlesbarer Zustandsordner: kein Lauf, aber nie ein Wurf
+    }
+  };
+  let lock = nimm();
+  if (lock === "belegt" && wiederholen) {
+    await schlafen(WARTE_LOCK);
+    lock = nimm();
+  }
+  basis.lock = lock;
+  if (lock === "belegt" || lock === "fehler") {
+    logge({ fehler: basis.fehler });
     return { lock, ergebnis: null };
   }
   try {
@@ -383,8 +396,9 @@ export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederho
 /** Hook-Lauf: SessionEnd wartet zuerst WARTE_SESSIONEND (der Lauf misst die Ruhe danach) und versucht einen belegten Lock einmal erneut. */
 export async function hookLauf(args, optionen) {
   const ende = args.ausloeser === "sessionend";
+  const endeZeit = (optionen.uhr ?? Date.now)();
   if (ende) await (optionen.schlafen ?? warte)(WARTE_SESSIONEND);
-  return gesperrterLauf(args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
+  return gesperrterLauf(ende ? { ...args, ende: endeZeit } : args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
 }
 
 async function main() {

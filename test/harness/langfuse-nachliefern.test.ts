@@ -36,7 +36,7 @@ type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<Antwort>;
 type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null };
 type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; fehler: { session: string; status: number | null; meldung: string }[] };
-type Args = { ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
+type Args = { ende?: number; ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
 
 const N = rawNach as unknown as {
@@ -656,6 +656,22 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     const r2 = await lauf(a, m2, {}, jetzt + 2 * MIN);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
     expect(m2.otlp).toHaveLength(1);
+  });
+
+  test("SessionEnd-Kind nach resume: wuchs das Transkript nach dem Ende, gilt das Ende nicht, es wird nicht gesendet und kein beendet vermerkt", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const jetzt = Date.now();
+    const t3 = new Date(jetzt - 3 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t3, t3);
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { beendet: "s1", ende: jetzt - 10 * MIN }, jetzt);
+    expect(r.protokoll.sessions[0].status).toBe("läuft");
+    expect(m.aufrufe).toHaveLength(0);
+    expect(existsSync(a.ledger)).toBe(false);
+    // Gegenprobe: Transkript vor dem Ende (und innerhalb des Schlupfs) geändert: das Ende gilt, gesendet wird
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(a, m2, { beendet: "s1", ende: jetzt - 3 * MIN + 4_000 }, jetzt);
+    expect(r2.protokoll.sessions[0].status).toBe("gesendet");
   });
 
   test("--aktuell setzt ein früheres beendet zurück (resume), --trocken lässt das Ledger byte-gleich", async () => {
