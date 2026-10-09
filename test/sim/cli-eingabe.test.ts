@@ -689,9 +689,9 @@ describe("Inventur: jede Lösung aus Karten, Quests und Drills läuft ohne 'Nich
   for (const [id, gen] of Object.entries(KQContent.DRILLS)) {
     for (let i = 0; i < 5; i++) lösungen.push({ label: "Drill " + id + " #" + i, cmd: gen(freshSim()).solution });
   }
-  test("die Inventur ist nicht leer und enthält alle neun Familien", () => {
+  test("die Inventur ist nicht leer und enthält alle elf Familien", () => {
     expect(lösungen.length).toBeGreaterThan(200);
-    for (const cli of ["kubectl", "docker", "helm", "terraform", "argocd", "glab", "kubeadm", "git", "aws"]) {
+    for (const cli of ["kubectl", "docker", "helm", "terraform", "argocd", "glab", "kubeadm", "git", "aws", "curl", "nslookup"]) {
       expect(lösungen.some(l => l.cmd.startsWith(cli + " ")), cli).toBe(true);
     }
   });

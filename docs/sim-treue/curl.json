@@ -1,6 +1,6 @@
 {
-  "hinweis": "Treue-Matrix curl (#1461): Einzelbefehl, je Ziel-Art und Aufrufform bzw. Flag zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die Manpage. Methode und Felder: docs/sim-treue.md. Geprüft gegen curl.se am 2026-10-08.",
-  "stand": "2026-10-08",
+  "hinweis": "Treue-Matrix curl (#1461): Einzelbefehl, je Ziel-Art und Aufrufform bzw. Flag zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die Manpage. Methode und Felder: docs/sim-treue.md. Geprüft gegen curl.se am 2026-10-09.",
+  "stand": "2026-10-09",
   "befehle": {
     "curl": {"doku":"https://curl.se/docs/manpage.html"}
   },
@@ -13,13 +13,15 @@
     {"befehl":"curl","flag":"http://<host>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
     {"befehl":"curl","flag":"<host>:<port>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort","curl-fehlertext"]},
     {"befehl":"curl","flag":"<host>/<pfad>","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
-    {"befehl":"curl","flag":"https://<host>","verhalten":"abweichend","ausgabe":"vereinfacht","tickets":[1510],"grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"https://<host>","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-tls","curl-antwort"]},
     {"befehl":"curl","flag":"-s","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"-S","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
+    {"befehl":"curl","flag":"-i","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
     {"befehl":"curl","flag":"-v","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
     {"befehl":"curl","flag":"-I","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-antwort"]},
-    {"befehl":"curl","flag":"-o <datei>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]},
-    {"befehl":"curl","flag":"-H <header>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]},
-    {"befehl":"curl","flag":"-X <methode>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]},
-    {"befehl":"curl","flag":"-d <daten>","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1510]}
+    {"befehl":"curl","flag":"-o <datei>","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-datei"]},
+    {"befehl":"curl","flag":"-H <header>","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-anfrage"]},
+    {"befehl":"curl","flag":"-X <methode>","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-anfrage"]},
+    {"befehl":"curl","flag":"-d <daten>","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["curl-anfrage"]}
   ]
 }
