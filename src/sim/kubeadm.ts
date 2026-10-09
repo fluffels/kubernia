@@ -6,8 +6,9 @@
  *   - `kubeadm init`        → zieht die **Control-Plane** auf einem Knoten hoch (apiserver,
  *                             etcd, scheduler, controller-manager als Sim-Komponenten),
  *                             macht den Cluster ansprechbar und erzeugt einen Join-Token.
- *   - `kubeadm join <token>`→ hängt einen **Worker-Knoten** an die Control-Plane (er taucht
- *                             danach in `kubectl get nodes` auf). Token muss zum init-Token passen.
+ *   - `kubeadm join <endpoint> --token <token>` → hängt einen **Worker-Knoten** an die Control-Plane (er
+ *                             taucht danach in `kubectl get nodes` auf). Endpoint ist Pflicht, der Token muss zum
+ *                             init-Token passen; ein positionales Token lehnt der Sim wie echtes kubeadm ab.
  *   - `kubeadm reset`       → räumt den Cluster wieder auf „bare metal" ab (keine Nodes,
  *                             Control-Plane down) – die Sturm-Lage als Befehl.
  *

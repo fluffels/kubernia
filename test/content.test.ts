@@ -1604,6 +1604,7 @@ test("#463 Worker-Join-Quest: korrekt eingehängt + lehrt kubelet/Token/mehrere 
     assert.ok(!c.accept.some(re => re.test("kubeadm join --token " + TOKEN)), "ohne Endpoint darf nichts passen");
     assert.ok(c.accept.some(re => re.test("kubeadm join 10.0.0.10:6443 --token " + TOKEN + " \\ --discovery-token-ca-cert-hash sha256:0123abcdef")), "init-Form mit Hash");
     assert.ok(c.accept.some(re => re.test("kubeadm join --token=" + TOKEN + " 10.0.0.10:6443")), "Flag zuerst");
+    assert.ok(c.accept.some(re => re.test("kubeadm join 10.0.0.10:6443 --token=" + TOKEN)), "--token= mit Endpoint zuerst");
   }
   assert.ok(teachCmds.some(c => c.accept.some(re => re.test("kubectl get nodes"))), "Beweis-Schritt 'kubectl get nodes' fehlt");
 
@@ -1651,7 +1652,7 @@ test("#463 join-Checks füllen den Cluster Knoten für Knoten (Red-Green)", () =
     s2.mergeScenario(scenario);
     assert.ok(!s2.exec(eingabe).error, "Sim nimmt an: " + eingabe);
   }
-  assert.ok(new KQSim({}).exec("kubeadm join abcdef.0123456789abcdef").error, "die alte Form ist auch im Sim abgelehnt");
+  assert.match(new KQSim({}).exec("kubeadm join abcdef.0123456789abcdef").output!, /missing port in address/, "die alte Form ist auch im Sim abgelehnt");
 });
 
 test("#464 Dienste-Quest: korrekt eingehängt + bringt Workloads per apply zurück", () => {

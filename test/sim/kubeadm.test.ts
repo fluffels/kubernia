@@ -295,7 +295,10 @@ test("kubeadm join: falscher Endpoint ist 'connection refused', falsche Argument
   assert.equal(refused.error, true);
   assert.match(refused.output!, /10\.9\.9\.9:6443: connect: connection refused/);
   assert.match(bare.exec("kubeadm join --token").output!, /flag needs an argument/);
-  assert.match(bare.exec("kubeadm join foo").output!, /missing port in address/);
+  const foo = bare.exec("kubeadm join foo").output!;
+  assert.match(foo, /missing port in address/);
+  assert.match(foo, /Der Endpoint ist host:port/);
+  assert.doesNotMatch(foo, /Join-Token, kein Endpoint/, "ein Nicht-Token bekommt nicht den Token-Tipp");
   assert.match(bare.exec("kubeadm join 10.0.0.10:6443 " + token + " extra.arg").output!, /accepts at most 1 arg/);
   assert.match(bare.exec("kubeadm join --bogus 10.0.0.10:6443 --token " + token).output!, /Nicht simuliert: das Flag '--bogus'/);
   assert.match(bare.exec("kubeadm join 10.0.0.10:6443 10.0.0.10:6443 --token " + token).output!, /accepts at most 1 arg\(s\), received 2/);
