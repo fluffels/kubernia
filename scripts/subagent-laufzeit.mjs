@@ -7,7 +7,8 @@
  * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` und deren JSONL (nicht alle Haupttranskripte).
  * Je Lauf: Ticket (erstes `#<nr>` im Prompt), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
  * Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
- * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request) und Zahl der parallel laufenden Läufe desselben Typs. Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
+ * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request), Kosten in $ (`kosten`, Summe der Call-Preise aus PRICES, `null` bei einem Call ohne Preis; nur
+ * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Importiert token-baseline.mjs, nicht umgekehrt.
@@ -73,6 +74,12 @@ function toolIntervalle(zeilen) {
   return { intervalle, offeneTools: offen.size };
 }
 
+/** Kosten eines Laufs in $ aus PRICES (nur aufgezeichnete Usage); `null`, sobald ein Call ohne Preis ist oder es keinen Call gibt, nie 0. */
+function kostenAus(calls) {
+  if (!calls.length || calls.some((c) => c.cost === undefined || c.cost === null)) return null;
+  return calls.reduce((summe, c) => summe + c.cost, 0);
+}
+
 /** Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. */
 export function laufAus({ meta, zeilen }) {
   const zeiten = zeilen.map((r) => r?.timestamp).filter(gueltig).map(ms);
@@ -92,6 +99,7 @@ export function laufAus({ meta, zeilen }) {
     ende,
     dauerMin: dauer / MIN,
     requests: calls.length,
+    kosten: kostenAus(calls),
     toolMin: tool / MIN,
     modellMin: (dauer - tool) / MIN,
     sProRequest: calls.length ? ((dauer - tool) / 1000) / calls.length : null,
@@ -108,6 +116,10 @@ const stat = (laeufe) => ({
   modellMin: median(laeufe.map((l) => l.modellMin)),
   toolMin: median(laeufe.map((l) => l.toolMin)),
   requests: median(laeufe.map((l) => l.requests)),
+  // Median und Summe nur über Läufe mit Preis; `ohnePreis` zählt die übrigen (kein 0 $ für ein unbekanntes Modell).
+  kosten: median(laeufe.map((l) => l.kosten).filter((x) => x !== null)),
+  kostenSumme: laeufe.reduce((summe, l) => summe + (l.kosten ?? 0), 0),
+  ohnePreis: laeufe.filter((l) => l.kosten === null).length,
   // Läufe ohne Request haben keinen Wert je Request (kein Infinity/NaN im Median).
   sProRequest: median(laeufe.map((l) => l.sProRequest).filter((x) => x !== null)),
   parallel: median(laeufe.map((l) => l.parallel)),
@@ -151,12 +163,13 @@ export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schni
 }
 
 const f1 = (x) => (x === null ? "-" : x.toFixed(1));
+const f2 = (x) => (x === null ? "-" : x.toFixed(2));
 
 /** Markdown: Aggregat-Tabelle und Läufe. */
 export function renderMarkdown(r) {
   const out = [`Subagent-Typ \`${r.agent}\`: ${r.laeufe.length} Läufe (${r.aggregat.offen} offen, nicht in den Medianen)`, ""];
-  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | s/Req (Modell) | parallel | max. Kontext | längster (min) |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
-  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} |`);
+  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | ohne Preis | s/Req (Modell) | parallel | max. Kontext | längster (min) |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
+  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${s.ohnePreis} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} |`);
   z("alle gemessenen", r.aggregat.gesamt);
   z("ohne Sammeltickets", r.aggregat.ohneSammel);
   z("Sammeltickets", r.aggregat.sammel);
@@ -169,9 +182,9 @@ export function renderMarkdown(r) {
     z("Sammel vor Schnitt", r.aggregat.altSammel);
     z("Sammel ab Schnitt", r.aggregat.neuSammel);
   }
-  out.push("", "| Start | Ticket | Sammel | Dauer | Modell | Tool | Requests | s/Req | max. Kontext | parallel |", "|---|--:|---|--:|--:|--:|--:|--:|--:|--:|");
+  out.push("", "| Start | Ticket | Sammel | Dauer | Modell | Tool | Requests | Kosten ($) | s/Req | max. Kontext | parallel |", "|---|--:|---|--:|--:|--:|--:|--:|--:|--:|--:|");
   for (const l of r.laeufe) {
-    out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${f1(l.toolMin)} | ${l.requests} | ${f1(l.sProRequest ?? null)} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);
+    out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${f1(l.toolMin)} | ${l.requests} | ${f2(l.kosten)} | ${f1(l.sProRequest ?? null)} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);
   }
   return out.join("\n");
 }
