@@ -18,25 +18,38 @@
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
  * bei fremdem oder fehlendem Lock); existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
  * Köpfe, jüngstem Reflog-Eintrag, mtime der geänderten Dateien laut `git status` und mtime von `node_modules`): jünger als
- * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock.
+ * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
  *
  * Bewusste Grenzen: nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
- * Sperre); der Workflow-Pfad (`.claude/workflows/kubernia-ticket.js`) hält keine Nonce und prüft darum nur die Aktivität; Selbstauskunft,
- * keine Authentifizierung (wer die Nonce kennt, ist der Besitzer).
+ * Sperre); der Workflow-Pfad (`.claude/workflows/kubernia-ticket.js`) hält die Nonce im Workflow-Zustand (`lockNonce`) und gibt den Lock im Cleanup frei;
+ * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer).
  *
  * Reines Node-Skript (nur Builtins + git). Die Entscheidungen sind pur exportiert, git und Dateisystem injizierbar.
  */
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, openSync, closeSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { belegteNummern, ticketAusRef } from "./naechstes-ticket.mjs";
+import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
 
 /** Ein fremder Lock, der älter ist, gilt als verwaist (Session abgestürzt, bevor ein Worktree entstand). */
 export const VERWAIST_MS = 2 * 60 * 60_000;
 /** Ein vorhandener Worktree/Branch ohne Aktivität in dieser Zeit ist übernehmbar. */
 export const INAKTIV_MS = 30 * 60_000;
+
+/** Eine Lock-Datei, die älter ist, räumt `claim` ab (Session lange tot); über `VERWAIST_MS`, damit ein langer Lauf seinen Lock behält. */
+export const ALTLAST_MS = 24 * 60 * 60_000;
+
+/**
+ * Welche Dateien im Lock-Verzeichnis `claim` abräumt (#1572): jede `*.verwaist-*` (Rest eines Übernahme-Wettlaufs) und jede
+ * `<nr>.json`, deren mtime älter als `ALTLAST_MS` ist (eine nicht lesbare mtime zählt als jung, nie löschen ohne Beleg). Pur.
+ */
+export function aufzuraeumen({ eintraege, jetzt }) {
+  return eintraege
+    .filter((e) => /\.json\.verwaist-/.test(e.name) || (/^\d+\.json$/.test(e.name) && Number.isFinite(e.mtime) && jetzt - e.mtime > ALTLAST_MS))
+    .map((e) => e.name);
+}
 
 /** Entscheidung für `claim` bei bestehender Lock-Datei: `fremd` (gilt noch) oder `ersetzen` (verwaist). Pur. */
 export function entscheideClaim({ erstellt, jetzt, verwaistMs = VERWAIST_MS }) {
@@ -136,6 +149,22 @@ function sammleAktivitaet(deps, { refs, wtPfad }) {
 
 const ergebnis = (code, out = "", err = "") => ({ code, out: out ? `${out}\n` : "", err: err ? `${err}\n` : "" });
 
+/** Räumt alte Lock-Dateien ab (siehe `aufzuraeumen`); fail-open: ein Fehler beim Auflisten oder Löschen stört den Claim nie. */
+function raeumeAuf(deps) {
+  try {
+    const eintraege = deps.liste(deps.lockDir).map((name) => ({ name, mtime: deps.mtime(join(deps.lockDir, name)) }));
+    for (const name of aufzuraeumen({ eintraege, jetzt: deps.jetzt() })) {
+      try {
+        deps.loesche(join(deps.lockDir, name));
+      } catch {
+        /* weg oder gesperrt: der nächste claim versucht es erneut */
+      }
+    }
+  } catch {
+    /* kein Verzeichnis oder keine `liste`: nichts abzuräumen */
+  }
+}
+
 function claim(deps, nr) {
   try {
     deps.git(["fetch", "-q", "--prune", "origin"]);
@@ -144,6 +173,7 @@ function claim(deps, nr) {
   }
   if (ermittleBelegung(deps, nr).belegt) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (feature/kq-${nr}-*): nicht claimen, nächstes Item.`);
   deps.legeVerzeichnisAn(deps.lockDir);
+  raeumeAuf(deps);
   const nonce = deps.nonce();
   if (legeAn(deps, nr, nonce)) return ergebnis(0, `nonce=${nonce}`);
   const vorhanden = liesLock(deps, nr);
@@ -176,7 +206,7 @@ function freigeben(deps, nr, nonce) {
   return ergebnis(0, "freigegeben");
 }
 
-/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, lockDir, liesDatei, schreibeNeu, benenneUm, loesche, legeVerzeichnisAn, mtime. */
+/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, lockDir, liesDatei, schreibeNeu, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
 export function fuehreAus(argv, deps) {
   const [befehl, nrText, ...rest] = argv;
   const nonce = nonceAus(argv);
@@ -215,6 +245,7 @@ export function echteDeps() {
     benenneUm: renameSync,
     loesche: unlinkSync,
     legeVerzeichnisAn: (d) => mkdirSync(d, { recursive: true }),
+    liste: (d) => readdirSync(d),
     mtime: (p) => {
       try {
         return statSync(p).mtimeMs;

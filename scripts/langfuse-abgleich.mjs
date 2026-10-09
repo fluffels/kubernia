@@ -21,8 +21,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ladeSessionDatei } from "./transkript.mjs";
-import { callsFromTranscript } from "./transkript-calls.mjs";
+import { hauptrepoPfad, istProjektOrdner, ladeSessionDatei, projektSlug } from "./transkript.mjs";
+import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang, queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 
 /** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
@@ -66,42 +66,29 @@ export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
       },
     })),
   ];
-  const byId = new Map();
-  for (const { zeilen, rolle } of quellen) {
-    for (const c of callsFromTranscript(zeilen).calls) {
-      const prev = byId.get(c.messageId);
-      if (prev) {
-        prev.usage.output = Math.max(prev.usage.output, c.output);
-        continue;
-      }
-      const write1h = Math.min(c.cacheWrite1h, c.cacheWrite);
-      byId.set(c.messageId, {
-        id: beobachtungsId(session, c.messageId),
-        traceId: traceIdVon(session),
-        session,
-        messageId: c.messageId,
-        model: c.model ?? null,
-        ts: c.ts,
-        usage: { input: c.input, output: c.output, cacheRead: c.cacheRead, cacheWrite5m: c.cacheWrite - write1h, cacheWrite1h: write1h },
-        rolle,
-        ticket: ticketAusBranch(c.gitBranch),
-      });
-    }
-  }
-  return [...byId.values()];
+  // Dieselbe Zusammenführung wie `readTranscriptSession` (token-baseline): die Rolle steht als `subagent` am Call.
+  const calls = eindeutigeCalls(quellen.flatMap(({ zeilen, rolle }) => callsFromTranscript(zeilen, rolle).calls));
+  return calls.map((c) => {
+    const write1h = Math.min(c.cacheWrite1h, c.cacheWrite);
+    return {
+      id: beobachtungsId(session, c.messageId),
+      traceId: traceIdVon(session),
+      session,
+      messageId: c.messageId,
+      model: c.model ?? null,
+      ts: c.ts,
+      usage: { input: c.input, output: c.output, cacheRead: c.cacheRead, cacheWrite5m: c.cacheWrite - write1h, cacheWrite1h: write1h },
+      rolle: c.subagent,
+      ticket: ticketAusBranch(c.gitBranch),
+    };
+  });
 }
 
-/** Projektordner-Präfix unter `~/.claude/projects` aus dem Repo-Pfad (Worktrees auf das Hauptrepo gekürzt), ohne git. */
-export function projektPraefix(repoRoot) {
-  return repoWurzel(repoRoot).replace(/[^A-Za-z0-9]/g, "-");
-}
+/** Projektordner unter `~/.claude/projects` aus dem Repo-Pfad: die gemeinsame Ableitung aus `transkript.mjs` (Worktrees gelten als Hauptrepo). */
+export const projektPraefix = projektSlug;
 
-/** Wurzel des Hauptrepos: ein Worktree-Pfad (`…/.claude/worktrees/<name>`) wird gekürzt, ein Schlussstrich entfällt. */
-export function repoWurzel(repoRoot) {
-  return String(repoRoot)
-    .replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "")
-    .replace(/[\\/]+$/, "");
-}
+/** Wurzel des Hauptrepos: ein Worktree-Pfad wird gekürzt, ein Schlussstrich entfällt (gemeinsam mit `projektSlug`). */
+export const repoWurzel = hauptrepoPfad;
 
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);
 
@@ -113,7 +100,7 @@ const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => 
 export function findeSessions({ projectsRoot, praefix, seitMs = 0, sessionId = null }) {
   if (!existsSync(projectsRoot)) return [];
   const out = new Map();
-  for (const d of readdirSync(projectsRoot).filter((n) => n === praefix || n.startsWith(praefix + "--claude-worktrees-"))) {
+  for (const d of readdirSync(projectsRoot).filter((n) => istProjektOrdner(n, praefix))) {
     for (const datei of jsonlDateien(join(projectsRoot, d))) {
       const id = datei.replace(/\.jsonl$/, "");
       if (sessionId && id !== sessionId) continue;
@@ -366,7 +353,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     if (!args.ist.length) return { exitCode: 2, text: e.message };
   }
   try {
-    const sessions = findeSessions({ projectsRoot, praefix: projektPraefix(repoRoot), seitMs, sessionId: args.session });
+    const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
     const soll = new Map();
     const mtimes = new Map();
     for (const s of sessions) {

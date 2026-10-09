@@ -2,6 +2,10 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/naechstes-ticket.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as refs from "../scripts/ticket-refs.mjs";
+
+const R = refs as unknown as { ticketAusRef: (t: string) => number | null; belegteNummern: (e: { refs?: string[]; worktrees?: string[]; prHeads?: string[] }) => Set<number> };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as boardLib from "../scripts/board-lib.mjs";
 
 type Eingabe = { items: unknown[]; offene: Set<number>; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string };
@@ -9,7 +13,6 @@ type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: {
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
   blockerNummern: (b: string) => number[];
-  ticketAusRef: (t: string) => number | null;
   formatiere: (e: Ergebnis) => string;
   fuehreAus: (argv: string[], io: { lade: () => Eingabe; owner: string }) => { code: number; out: string; err: string };
   bereichAusArgv: (argv: string[]) => { bereich: string | null } | { fehler: string };
@@ -40,16 +43,24 @@ describe("blockerNummern", () => {
 
 describe("ticketAusRef", () => {
   test("Branch, Remote-Ref, Worktree-Zeile", () => {
-    expect(N.ticketAusRef("feature/kq-12-foo")).toBe(12);
-    expect(N.ticketAusRef("origin/feature/kq-12-foo")).toBe(12);
-    expect(N.ticketAusRef("worktree C:/x/.claude/worktrees/kq-12")).toBe(12);
-    expect(N.ticketAusRef("worktree C:\\x\\.claude\\worktrees\\kq-12")).toBe(12);
-    expect(N.ticketAusRef("feature/kq-123-foo")).toBe(123);
+    expect(R.ticketAusRef("feature/kq-12-foo")).toBe(12);
+    expect(R.ticketAusRef("origin/feature/kq-12-foo")).toBe(12);
+    expect(R.ticketAusRef("worktree C:/x/.claude/worktrees/kq-12")).toBe(12);
+    expect(R.ticketAusRef("worktree C:\\x\\.claude\\worktrees\\kq-12")).toBe(12);
+    expect(R.ticketAusRef("feature/kq-123-foo")).toBe(123);
   });
   test("fremde Namen: null (kq-12x, anderes Präfix)", () => {
-    expect(N.ticketAusRef("main")).toBeNull();
-    expect(N.ticketAusRef("feature/kq-12x")).toBeNull();
-    expect(N.ticketAusRef("hotfix/kq-12-a")).toBeNull();
+    expect(R.ticketAusRef("main")).toBeNull();
+    expect(R.ticketAusRef("feature/kq-12x")).toBeNull();
+    expect(R.ticketAusRef("hotfix/kq-12-a")).toBeNull();
+  });
+});
+
+describe("belegteNummern", () => {
+  test("Branches, Worktrees und PR-Köpfe zählen, fremde Namen nicht", () => {
+    const belegt = R.belegteNummern({ refs: ["feature/kq-1-a", "main"], worktrees: ["worktree C:/x/.claude/worktrees/kq-2"], prHeads: ["feature/kq-3-b", "hotfix/kq-4-x"] });
+    expect([...belegt].sort()).toEqual([1, 2, 3]);
+    expect(R.belegteNummern({}).size).toBe(0);
   });
 });
 

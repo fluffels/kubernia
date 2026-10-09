@@ -17,9 +17,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { callsFromTranscript } from "./token-baseline.mjs";
+import { callsFromTranscript } from "./transkript-calls.mjs";
 import { median } from "./mess-lib.mjs";
-import { transkriptZeilen } from "./transkript.mjs";
+import { hauptrepoWurzel, projektSlug, transkriptZeilen } from "./transkript.mjs";
 
 const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
@@ -228,7 +228,7 @@ function main() {
     console.error("Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--schnitt <ISO>] [--projekt <slug>] [--json]");
     process.exit(2);
   }
-  const slug = args.projekt ?? process.cwd().replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "").replace(/[^A-Za-z0-9]/g, "-");
+  const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
   const dir = join(homedir(), ".claude", "projects", slug);
   const r = laufzeiten({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, schnitt: args.schnitt });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));

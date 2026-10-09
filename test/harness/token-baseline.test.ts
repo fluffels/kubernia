@@ -904,6 +904,31 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
     );
   });
 
+  test("dieselbe message.id in Haupt- und Subagent-Datei zählt einmal (Kosten und Calls), Output = Maximum (#1572)", () => {
+    const mit = (id: string, ts: string, output: number) =>
+      JSON.stringify({ type: "assistant", timestamp: ts, uuid: id, message: { id, model: "claude-sonnet-5-5", usage: { input_tokens: 1, output_tokens: output, cache_read_input_tokens: 3 } } });
+    mitSession(
+      (proj, id) => {
+        writeFileSync(join(proj, `${id}.jsonl`), mit("dup", "2026-09-29T09:00:00Z", 2) + "\n" + zeile("nur-haupt", "2026-09-29T09:01:00Z") + "\n");
+        const sub = join(proj, id, "subagents");
+        mkdirSync(sub, { recursive: true });
+        writeFileSync(join(sub, "agent-x.jsonl"), mit("dup", "2026-09-29T09:00:00Z", 9) + "\n");
+        writeFileSync(join(sub, "agent-x.meta.json"), JSON.stringify({ agentType: "kubernia-lens" }));
+      },
+      (root) => {
+        const r = m.readTranscriptSession("sess-1", root);
+        assert.equal(r.calls.length, 2, "dup einmal, nur-haupt einmal");
+        const dup = r.calls.filter((c) => (c as { id?: string }).id === "dup");
+        assert.equal(dup.length, 1);
+        assert.equal(dup[0].output, 9, "Maximum über die Fundstellen");
+        const einzel = m.readTranscriptSession("sess-1", root).calls.find((c) => (c as { id?: string }).id === "nur-haupt");
+        assert.ok(dup[0].cost !== null && einzel?.cost !== null);
+        assert.equal(dup[0].cost, m.priceCall({ ...dup[0], costParts: undefined }), "Kosten aus dem zusammengeführten Stand (Output 9)");
+        assert.ok((dup[0].cost ?? 0) > (m.priceCall({ ...dup[0], costParts: undefined, output: 2 }) ?? 0), "nicht die Kosten des ersten Fundes (Output 2)");
+      },
+    );
+  });
+
   test("Pflege-Marker im Subagenten-Transkript färben genau dessen Calls (Transkript-Modus, Ende zu Ende)", () => {
     const bash = (id: string, ts: string, command: string) =>
       JSON.stringify({ type: "assistant", timestamp: ts, message: { content: [{ type: "tool_use", id, name: "Bash", input: { command } }] } });
