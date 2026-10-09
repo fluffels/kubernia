@@ -5,8 +5,8 @@ import * as raw from "../scripts/subagent-laufzeit.mjs";
 
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[] };
-type L = { ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
-type Stat = { n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
+type L = { kosten: number | null; ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
+type Stat = { kosten: number | null; kostenSumme: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
   median: (w: number[]) => number | null;
@@ -163,5 +163,54 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(md).toMatch(/alle ab Schnitt/);
     expect(md).toMatch(/ohne Sammel ab Schnitt/);
     expect(md).toContain("s/Req");
+  });
+  test("renderMarkdown zeigt die Kosten-Spalte, `-` ohne Preis", () => {
+    const md = S.renderMarkdown(S.laufzeiten({ laeufe: [lauf("Plane #77", 0, 4), ohnePreisLauf("Plane #78")] }));
+    expect(md).toContain("Kosten ($)");
+    expect(md).toMatch(/\| #77 \|.*\| 0\.01 \|/);
+    expect(md).toMatch(/\| #78 \|.*\| - \|/);
+  });
+});
+
+/** Opus 5.5 = 4 $ Input und 20 $ Output je Mio: ein Call mit 1000 Input und 10 Output kostet 0,0042 $. */
+const CALL_KOSTEN = 0.0042;
+/** Lauf mit einem Call eines Modells ohne Preis. */
+const ohnePreisLauf = (prompt: string, tag = 7): Lauf => {
+  const l = lauf(prompt, 0, 4, { tag });
+  const letzte = l.zeilen[l.zeilen.length - 1] as { message: { model: string } };
+  letzte.message.model = "claude-unbekannt-9";
+  return l;
+};
+
+describe("laufzeiten: Kosten (#1558)", () => {
+  test("Kosten eines Laufs = Summe der Call-Preise", () => {
+    const l = lauf("Plane #1", 0, 4, { tool: [1, 2] }); // 3 Calls
+    expect(S.laufzeiten({ laeufe: [l] }).laeufe[0].kosten).toBeCloseTo(3 * CALL_KOSTEN, 8);
+  });
+  test("ein Call ohne Preis macht die Kosten des Laufs null (nie 0) und zählt als ohnePreis", () => {
+    const r = S.laufzeiten({ laeufe: [ohnePreisLauf("Plane #1"), lauf("Plane #2", 0, 4)] });
+    expect(r.laeufe[0].kosten).toBeNull();
+    expect(r.aggregat.gesamt.n).toBe(2);
+    expect(r.aggregat.gesamt.ohnePreis).toBe(1);
+    expect(r.aggregat.gesamt.kosten).toBeCloseTo(2 * CALL_KOSTEN, 8); // Median nur über den Lauf mit Preis
+    expect(r.aggregat.gesamt.kostenSumme).toBeCloseTo(2 * CALL_KOSTEN, 8);
+  });
+  test("Gruppe ohne bepreiste Läufe: Median null, Summe 0", () => {
+    const g = S.laufzeiten({ laeufe: [ohnePreisLauf("Plane #1")] }).aggregat.gesamt;
+    expect(g).toMatchObject({ kosten: null, kostenSumme: 0, ohnePreis: 1 });
+  });
+  test("Median und Summe je Gruppe vor und ab dem Schnitt, auch ohne Sammeltickets", () => {
+    const laeufe = [lauf("#1", 0, 4), lauf("#2 (gesammelt)", 0, 4, { tool: [1, 2] }), lauf("#3", 10, 20), lauf("#4", 12, 30), lauf("#5", 12, 30, { tool: [13, 14] })];
+    const a = S.laufzeiten({ laeufe, schnitt: t(10) }).aggregat;
+    expect(a.alt?.kostenSumme).toBeCloseTo(5 * CALL_KOSTEN, 8);
+    expect(a.altOhneSammel?.kostenSumme).toBeCloseTo(2 * CALL_KOSTEN, 8);
+    expect(a.neu?.kostenSumme).toBeCloseTo(7 * CALL_KOSTEN, 8);
+    expect(a.neu?.kosten).toBeCloseTo(2 * CALL_KOSTEN, 8);
+    expect(a.neuOhneSammel?.kostenSumme).toBeCloseTo(7 * CALL_KOSTEN, 8);
+  });
+  test("doppelte JSONL-Zeilen derselben Message-ID zählen einmal", () => {
+    const l = lauf("Plane #1", 0, 4);
+    l.zeilen.push({ ...(l.zeilen[1] as Row), uuid: "dupe" }); // gleiche message.id wie Zeile 1
+    expect(S.laufzeiten({ laeufe: [l] }).laeufe[0].kosten).toBeCloseTo(2 * CALL_KOSTEN, 8);
   });
 });
