@@ -90,7 +90,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 
 | Seite | Wann lesen |
 |---|---|
-| [deploy.md](../deploy.md) | wenn du das Spiel als Container oder per Helm-Chart in einen Cluster bringen willst (#752) |
+| [deploy.md](../deploy.md) | wenn du das Spiel als Container oder per Helm-Chart in einen Cluster bringen willst (#752) oder `deploy/**` änderst (CI-Validierung, #1544) |
 | [devpanel-docker.md](../devpanel-docker.md) | wenn du das Dev-/Test-Panel als Docker-Image mit Laufzeit-Passwort brauchst |
 | [`.devcontainer/`](../../.devcontainer/devcontainer.json) · [`docker-compose.yml`](../../docker-compose.yml) | wenn du im Container entwickelst |
 | [assets/pixellab/README.md](../../assets/pixellab/README.md) | wenn du ein PixelLab-Asset suchst oder ablegst (Liste + IDs) |
