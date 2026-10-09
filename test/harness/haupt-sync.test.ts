@@ -76,7 +76,7 @@ describe("Hilfsfunktionen", () => {
 describe("Bilddateien im Hauptcheckout-Root (#1549 Z2)", () => {
   const B = raw as unknown as { bildReste: (n: string[]) => string[]; bildResteFuer: (d: string) => string[] };
   test("bildReste: Treffer für png/jpg/jpeg/webm, groß oder klein", () => {
-    expect(B.bildReste(["a.png", "B.JPG", "c.jpeg", "d.WebM", "package.json", "png", "x.png.txt"])).toEqual(["a.png", "B.JPG", "c.jpeg", "d.WebM"]);
+    expect(B.bildReste(["a.png", "B.JPG", "c.jpeg", "d.WebM", "package.json", "png", "xpng", "x.png.txt"])).toEqual(["a.png", "B.JPG", "c.jpeg", "d.WebM"]);
   });
   test("bildReste: keine Treffer ergeben []", () => {
     expect(B.bildReste(["README.md", "AGENTS.md"])).toEqual([]);

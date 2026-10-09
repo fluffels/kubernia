@@ -138,7 +138,7 @@ export function nodeModulesHinweisFuer(dir) {
 }
 
 /** Bilddateien (Screenshots, Aufnahmen) unter den Root-Dateinamen. Pur; Groß-/Kleinschreibung egal. */
-export const bildReste = (namen) => namen.filter((n) => /.(png|jpe?g|webm)$/i.test(n));
+export const bildReste = (namen) => namen.filter((n) => /\.(png|jpe?g|webm)$/i.test(n));
 
 /** Bilddateien im Root von `dir` (nur Dateien, keine Unterordner wie `.playwright-mcp/`); bei Lesefehlern `[]` (fail-open). */
 export function bildResteFuer(dir) {
