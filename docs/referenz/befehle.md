@@ -61,6 +61,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets und `ALLOWLIST`-Ausnahmen gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
 | TS-7-Freigabe-Wächter (npm-Registry: erlaubt typescript-eslint schon TS 7? non-blocking, braucht Netz, #847) | `npm run check:tseslint-ts7` |
 | Diff-Größenbudget-Wächter (max. 20 Dateien / 800 geänderte Zeilen gegen main, #533) | `npm run check:diffsize` |
+| Langfuse-Abgleich je Call, nur lesend: welche Calls des Transkripts fehlen in Langfuse oder stehen doppelt (#1562; Doku: model-routing › Checkliste Punkt 1) | `node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]` (ohne Secret-Key `--ist` mit einem `queryMetrics`-Export) |
 | Review-/Plan-Nachweis prüfen (Commit-Zeilen `KQ-Plan:`/`KQ-Review:`, #1270; kein `npm run`, nicht in `verify`) | `node scripts/check-review-nachweis.mjs` |
 | Diff-Coverage-Wächter (geänderte Zeilen pro Slice getestet; **hart** für Domäne/Anwendung, Präsentation/Einstieg nur berichtend; läuft **NACH `test:coverage`**, #1021) | `npm run check:diffcoverage` |
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, #604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
