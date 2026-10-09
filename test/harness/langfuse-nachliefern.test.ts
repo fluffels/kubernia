@@ -68,7 +68,7 @@ const P = rawPreise as unknown as { priceParts: (c: Record<string, unknown>) => 
 const REPO = "X:/repo";
 const PRAEFIX = "X--repo";
 const ZUGANG = { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", LANGFUSE_BASE_URL: "http://lf.test" };
-const HEUTE = Date.parse("2026-10-09T10:00:00Z");
+const HEUTE = Date.parse(rawNach.STICHTAG) + 3_600_000; // eine Stunde nach dem Stichtag: gesendet wird
 
 // ── Helfer ───────────────────────────────────────────────────────────────────
 
@@ -159,6 +159,7 @@ const lauf = (a: { root: string; state: string }, m: ReturnType<typeof mock>, ar
   N.nachliefern(argsVon(args), { env, now, fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
 const ledgerVon = (pfad: string) => (JSON.parse(readFileSync(pfad, "utf8")) as { sessions: Record<string, LedgerEintrag> }).sessions;
 
+const iso = (ms: number) => new Date(ms).toISOString();
 const mkdirLedger = (dir: string) => mkdirSync(dir, { recursive: true });
 
 // ── Preise, IDs, Hülle ───────────────────────────────────────────────────────
@@ -520,7 +521,7 @@ describe("Auswahl", () => {
     expect(r.protokoll.wuerdeSenden).toBe(1);
     expect(m.posts()).toHaveLength(0);
     expect(existsSync(a.ledger)).toBe(false);
-    expect(Date.parse(N.STICHTAG)).toBe(Date.parse("2026-10-09T00:00:00Z"));
+    expect(Number.isFinite(Date.parse(N.STICHTAG))).toBe(true);
   });
 
   test("Geschwister-Repo wird nicht gelesen, auch nicht Ende zu Ende; Worktree-Ordner des Projekts schon", async () => {
@@ -694,8 +695,8 @@ describe("Ledger-Zustand und Grenzfälle", () => {
   });
 
   test.each([
-    ["ein Call vor und einer nach dem Stichtag: gilt als vor dem Stichtag", ["2026-10-08T23:59:59.999Z", "2026-10-09T12:00:00.000Z"], "vor Stichtag"],
-    ["ein Call exakt am Stichtag: nicht davor", ["2026-10-09T00:00:00.000Z"], "gesendet"],
+    ["ein Call vor und einer nach dem Stichtag: gilt als vor dem Stichtag", [iso(Date.parse(N.STICHTAG) - 1), iso(Date.parse(N.STICHTAG) + 3_600_000)], "vor Stichtag"],
+    ["ein Call exakt am Stichtag: nicht davor", [iso(Date.parse(N.STICHTAG))], "gesendet"],
   ])("Stichtag: %s", async (_n, zeiten, status) => {
     const a = aufbau(zeiten.map((z, i) => msg(`m${i}`, i, { timestamp: z })));
     const m = mock({ ist: 0 });

@@ -32,7 +32,7 @@ import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from 
 import { bauePayloads } from "./langfuse-otlp.mjs";
 
 /** Sessions mit einem Call vor diesem Zeitpunkt (Hook-Aufzeichnung davor unvollständig, nicht vergleichbar) werden nur gezählt. */
-export const STICHTAG = "2026-10-09T00:00:00Z";
+export const STICHTAG = "2026-10-09T13:30:00Z";
 /** Ohne bekanntes Ende gilt eine Session erst nach dieser Ruhe als beendet (eine untätig offene Parallelsession bleibt unberührt). */
 export const RUHEFRIST_OHNE_ENDE_H = 24;
 /** Ruhe bei bekanntem Ende (SessionEnd): kürzer als die Wartezeit des Hooks (WARTE_SESSIONEND in langfuse-abgleich-hook), damit der Lauf nach dem Warten sendet. */
