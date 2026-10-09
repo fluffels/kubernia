@@ -36,7 +36,7 @@ type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<Antwort>;
 type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null };
 type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; fehler: { session: string; status: number | null; meldung: string }[] };
-type Args = { session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
+type Args = { ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
 
 const N = rawNach as unknown as {
@@ -754,7 +754,14 @@ describe("Ledger-Zustand und Grenzfälle", () => {
 
 describe("parseArgs", () => {
   test("alle Flags landen im richtigen Feld", () => {
-    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", session: "s", seit: "2026-10-01", trocken: true, json: true, fehler: null });
+    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--ausloeser", "sessionend", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", ausloeser: "sessionend", session: "s", seit: "2026-10-01", trocken: true, json: true, fehler: null });
+  });
+  test.each(["sessionstart", "sessionend"])("--ausloeser %s ist erlaubt", (w) => {
+    expect(N.parseArgs(["--ausloeser", w])).toMatchObject({ ausloeser: w, fehler: null });
+  });
+  test.each([["manuell"], ["Stop"], [""]])("--ausloeser %j ist ungültig (Fehler, Hilfe nennt die erlaubten Werte)", (w) => {
+    const a = N.parseArgs(["--ausloeser", w]);
+    expect(a.fehler).toMatch(/sessionstart, sessionend/);
   });
   test.each([
     ["Wert fehlt", ["--session"]],
