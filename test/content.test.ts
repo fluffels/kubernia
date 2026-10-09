@@ -1648,7 +1648,7 @@ test("#463 join-Checks füllen den Cluster Knoten für Knoten (Red-Green)", () =
   ]) {
     assert.ok(join1.cmd.accept.some(re => re.test(eingabe)), "accept trifft: " + eingabe);
     const s2 = new KQSim({});
-    s2.mergeScenario(scenario!);
+    s2.mergeScenario(scenario);
     assert.ok(!s2.exec(eingabe).error, "Sim nimmt an: " + eingabe);
   }
   assert.ok(new KQSim({}).exec("kubeadm join abcdef.0123456789abcdef").error, "die alte Form ist auch im Sim abgelehnt");
