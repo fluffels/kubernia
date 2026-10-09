@@ -86,6 +86,13 @@ AGENTS.md                  @fluffels
 /scripts/naechstes-ticket.mjs @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
+/scripts/langfuse-abgleich-hook.mjs @fluffels
+/scripts/langfuse-nachliefern.mjs @fluffels
+/scripts/langfuse-otlp.mjs @fluffels
+/scripts/langfuse-abgleich.mjs @fluffels
+/scripts/langfuse-api.mjs @fluffels
+/scripts/preise.mjs @fluffels
+/scripts/transkript-calls.mjs @fluffels
 /.agents/                  @fluffels
 /.githooks/                @fluffels
 /docs/agent-harness*       @fluffels

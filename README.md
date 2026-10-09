@@ -135,8 +135,10 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
 | Workflow | `kubernia-ticket` | — | `.claude/workflows/kubernia-ticket.js` |
 | Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
+| Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/sandbox-doctor.mjs --sessionstart` | `.claude/settings.json` |
+| Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
@@ -198,6 +200,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 08.10.2026 | [ADR 0020](/docs/adr/0020-architekturmodell-likec4.md): Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs |
 | 08.10.2026 | [ADR 0021](/docs/adr/0021-agenten-sandbox-wsl2.md): Agenten-Sandbox über eine eigene WSL2-Distribution |
 | 08.10.2026 | [ADR 0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md): Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest |
+| 09.10.2026 | [ADR 0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md): Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen |
 
 <!-- GEN:zeitleiste END -->
 

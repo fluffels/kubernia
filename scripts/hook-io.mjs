@@ -58,3 +58,13 @@ export function emit(output) {
 
 /** Rekursionstiefe für Interpreter-Strings (`bash -c`, `pwsh -c`, `eval`, Funktionen, Aliase): EINE Grenze für alle Guards. */
 export const MAX_INTERPRETER = 3;
+
+/** Wie parseHookInput, aber für SessionStart/SessionEnd: `{ event, session, source }`; bei kaputtem/leerem Input `{}`. */
+export function parseSessionHookInput(text) {
+  try {
+    const data = JSON.parse(text);
+    return { event: data.hook_event_name, session: data.session_id, source: data.source };
+  } catch {
+    return {};
+  }
+}

@@ -44,5 +44,6 @@
 | Begriff | Bedeutung | Mehr dazu |
 |---|---|---|
 | Langfuse | Die Messplattform für Agentenläufe: Tokens, Kosten und Läufe je Modell und Rolle. | [ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md), [Token- und Loop-Baseline](model-routing.md#5-token--und-loop-baseline-1068) |
+| Langfuse-Abgleich | Der Vergleich Transkript gegen Langfuse je Call samt automatischer Nachlieferung fehlender Calls an SessionStart und SessionEnd. Das Transkript gilt als Wahrheit, Dubletten werden nur gemeldet. | [ADR 0023](adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md), [Abgleich als Garantie](langfuse-hook-patch.md#abgleich-als-garantie-1578) |
 | Nacharbeit | Ein Revert oder ein Commit mit der Zeile `Folge #<nr>` innerhalb eines festen Fensters nach dem Merge. Das Skript `scripts/lauf-ergebnis.mjs` misst sie je Ticket. | [Ergebnis je Ticket-Lauf](model-routing.md#ergebnis-je-ticket-lauf-1123) |
 | Dark Factory | Das Zielbild aus ADR 0022: der spielunabhängige Kern des Harness wird wiederverwendbar: Projekte beziehen ihn per Sync; menschliche Stopps bei Irreversiblem und Außenwirkung bleiben. Stand 2026-10-09: entschieden, nicht gebaut. | [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md), [harness-transfer.md](harness-transfer.md) |

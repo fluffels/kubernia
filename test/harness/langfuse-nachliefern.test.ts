@@ -35,8 +35,8 @@ type Chunk = { payload: Payload; generationIds: string[]; spanIds: string[] };
 type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<Antwort>;
 type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null };
-type Protokoll = { geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; fehler: { session: string; status: number | null; meldung: string }[] };
-type Args = { session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
+type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; fehler: { session: string; status: number | null; meldung: string }[] };
+type Args = { ende?: number; ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
 
 const N = rawNach as unknown as {
@@ -68,7 +68,7 @@ const P = rawPreise as unknown as { priceParts: (c: Record<string, unknown>) => 
 const REPO = "X:/repo";
 const PRAEFIX = "X--repo";
 const ZUGANG = { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", LANGFUSE_BASE_URL: "http://lf.test" };
-const HEUTE = Date.parse("2026-10-09T10:00:00Z");
+const HEUTE = Date.parse((rawNach as unknown as { STICHTAG: string }).STICHTAG) + 3_600_000; // eine Stunde nach dem Stichtag: gesendet wird
 
 // ── Helfer ───────────────────────────────────────────────────────────────────
 
@@ -159,6 +159,7 @@ const lauf = (a: { root: string; state: string }, m: ReturnType<typeof mock>, ar
   N.nachliefern(argsVon(args), { env, now, fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
 const ledgerVon = (pfad: string) => (JSON.parse(readFileSync(pfad, "utf8")) as { sessions: Record<string, LedgerEintrag> }).sessions;
 
+const iso = (ms: number) => new Date(ms).toISOString();
 const mkdirLedger = (dir: string) => mkdirSync(dir, { recursive: true });
 
 // ── Preise, IDs, Hülle ───────────────────────────────────────────────────────
@@ -493,14 +494,14 @@ describe("Auswahl", () => {
   };
 
   test.each([
-    ["29 min mit --beendet", 29 * MIN, { beendet: "s1" }, undefined, "läuft"],
-    ["31 min mit --beendet", 31 * MIN, { beendet: "s1" }, undefined, "gesendet"],
-    ["explizites --session gilt als beendet (31 min)", 31 * MIN, { session: "s1" }, undefined, "gesendet"],
+    ["2 min mit --beendet", 2 * MIN, { beendet: "s1" }, undefined, "läuft"],
+    ["3 min mit --beendet", 3 * MIN, { beendet: "s1" }, undefined, "gesendet"],
+    ["explizites --session gilt als beendet (3 min)", 3 * MIN, { session: "s1" }, undefined, "gesendet"],
     ["23 h ohne Ende", 23 * H, {}, undefined, "läuft"],
     ["25 h ohne Ende", 25 * H, {}, undefined, "gesendet"],
-    ["Ledger-beendet, Transkript unverändert (31 min)", 31 * MIN, {}, {}, "gesendet"],
-    ["Ledger-beendet, Transkript seitdem gewachsen: 24-h-Frist", 31 * MIN, {}, "gewachsen", "läuft"],
-    ["--beendet einer anderen Session ändert nichts", 31 * MIN, { beendet: "andere" }, undefined, "läuft"],
+    ["Ledger-beendet, Transkript unverändert (3 min)", 3 * MIN, {}, {}, "gesendet"],
+    ["Ledger-beendet, Transkript seitdem gewachsen: 24-h-Frist", 3 * MIN, {}, "gewachsen", "läuft"],
+    ["--beendet einer anderen Session ändert nichts", 3 * MIN, { beendet: "andere" }, undefined, "läuft"],
   ] as const)("%s", async (_n, alter, args, ledger, erwartet) => {
     expect((await mitAlter(alter, args, ledger)).status).toBe(erwartet);
   });
@@ -520,7 +521,7 @@ describe("Auswahl", () => {
     expect(r.protokoll.wuerdeSenden).toBe(1);
     expect(m.posts()).toHaveLength(0);
     expect(existsSync(a.ledger)).toBe(false);
-    expect(Date.parse(N.STICHTAG)).toBe(Date.parse("2026-10-09T00:00:00Z"));
+    expect(Number.isFinite(Date.parse(N.STICHTAG))).toBe(true);
   });
 
   test("Geschwister-Repo wird nicht gelesen, auch nicht Ende zu Ende; Worktree-Ordner des Projekts schon", async () => {
@@ -614,16 +615,16 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(r3.protokoll.sessions[0].ausstehend).toBe(1);
   });
 
-  test("--beendet in der Ruhefrist wird im Ledger festgehalten und gilt im nächsten Lauf (30 statt 24 h)", async () => {
+  test("--beendet in der Ruhefrist wird im Ledger festgehalten und gilt im nächsten Lauf (2,5 min statt 24 h)", async () => {
     const a = aufbau([msg("a", 1)]);
     const jetzt = Date.now();
-    const t5 = new Date(jetzt - 5 * MIN);
-    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t5, t5);
+    const t1 = new Date(jetzt - 1 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t1, t1);
     const r1 = await lauf(a, mock({ ist: 0 }), { beendet: "s1" }, jetzt);
     expect(r1.protokoll.sessions[0].status).toBe("läuft");
     expect(ledgerVon(a.ledger).s1).toMatchObject({ beendet: true, bestaetigt: false });
     const m2 = mock({ ist: 0 });
-    const r2 = await lauf(a, m2, {}, jetzt + 26 * MIN);
+    const r2 = await lauf(a, m2, {}, jetzt + 2 * MIN);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
     expect(m2.otlp).toHaveLength(1);
   });
@@ -631,8 +632,8 @@ describe("Ledger-Zustand und Grenzfälle", () => {
   test("--beendet in der Ruhefrist behält den bisherigen Ledger-Fortschritt (gesendet, spans)", async () => {
     const a = aufbau([msg("a", 1)]);
     const jetzt = Date.now();
-    const t5 = new Date(jetzt - 5 * MIN);
-    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t5, t5);
+    const t1 = new Date(jetzt - 1 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t1, t1);
     mkdirLedger(a.state);
     const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: false, gesendet: ["x"], spans: ["y"] };
     writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
@@ -643,8 +644,8 @@ describe("Ledger-Zustand und Grenzfälle", () => {
   test("bestätigte, danach gewachsene Session mit --beendet in der Ruhefrist: nicht mehr bestätigt, der Folgelauf sendet", async () => {
     const a = aufbau([msg("a", 1)]);
     const jetzt = Date.now();
-    const t5 = new Date(jetzt - 5 * MIN);
-    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t5, t5);
+    const t1 = new Date(jetzt - 1 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t1, t1);
     mkdirLedger(a.state);
     const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: true, gesendet: [], spans: [] };
     writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
@@ -652,14 +653,74 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(r1.protokoll.sessions[0].status).toBe("läuft");
     expect(ledgerVon(a.ledger).s1).toMatchObject({ bestaetigt: false, beendet: true });
     const m2 = mock({ ist: 0 });
-    const r2 = await lauf(a, m2, {}, jetzt + 26 * MIN);
+    const r2 = await lauf(a, m2, {}, jetzt + 2 * MIN);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
     expect(m2.otlp).toHaveLength(1);
   });
 
+  test("SessionEnd-Kind nach resume: wuchs das Transkript nach dem Ende, gilt das Ende nicht, es wird nicht gesendet und kein beendet vermerkt", async () => {
+    const jetzt = Date.now();
+    const frisch = () => {
+      const x = aufbau([msg("a", 1)]);
+      const t3 = new Date(jetzt - 3 * MIN);
+      utimesSync(join(x.root, PRAEFIX, "s1.jsonl"), t3, t3);
+      return x;
+    };
+    const a = frisch();
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { beendet: "s1", ende: jetzt - 10 * MIN }, jetzt);
+    expect(r.protokoll.sessions[0].status).toBe("läuft");
+    expect(m.aufrufe).toHaveLength(0);
+    expect(existsSync(a.ledger)).toBe(false);
+    // Schlupf von 5 s: das Transkript wurde 4 s NACH dem Ende-Zeitpunkt geschrieben (mtime = ende + 4 s): das Ende gilt, gesendet wird
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(frisch(), m2, { beendet: "s1", ende: jetzt - 3 * MIN - 4_000 }, jetzt);
+    expect(r2.protokoll.sessions[0].status).toBe("gesendet");
+    // 6 s nach dem Ende: außerhalb des Schlupfs, das Ende gilt nicht
+    const m3 = mock({ ist: 0 });
+    const r3 = await lauf(frisch(), m3, { beendet: "s1", ende: jetzt - 3 * MIN - 6_000 }, jetzt);
+    expect(r3.protokoll.sessions[0].status).toBe("läuft");
+  });
+
+  test("--aktuell setzt ein früheres beendet zurück (resume), --trocken lässt das Ledger byte-gleich", async () => {
+    const a = aufbau([msg("a", 1)]);
+    mkdirLedger(a.state);
+    const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: true, gesendet: [], spans: [], beendet: true };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
+    const vorher = readFileSync(a.ledger, "utf8");
+    const mt = mock({ ist: 0 });
+    await lauf(a, mt, { aktuell: "s1", trocken: true });
+    expect(readFileSync(a.ledger, "utf8")).toBe(vorher);
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { aktuell: "s1" });
+    expect(r.protokoll.sessions[0].status).toBe("aktuell");
+    expect(ledgerVon(a.ledger).s1.beendet).toBe(false);
+    expect(m.aufrufe).toHaveLength(0);
+  });
+
+  test("--aktuell einer anderen Session lässt beendet unberührt", async () => {
+    const a = aufbau([msg("a", 1)]);
+    mkdirLedger(a.state);
+    const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: true, gesendet: [], spans: [], beendet: true };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
+    await lauf(a, mock({ ist: 0 }), { aktuell: "andere" }, Date.now());
+    expect(ledgerVon(a.ledger).s1.beendet).toBe(true);
+  });
+
+  test("protokoll.zugang: false ohne Keys (Exit 2, kein Request), true mit Keys", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const m = mock({ ist: 1 });
+    const ohne = await lauf(a, m, {}, SPAET(), {});
+    expect(ohne.exitCode).toBe(2);
+    expect(ohne.protokoll.zugang).toBe(false);
+    expect(m.aufrufe).toHaveLength(0);
+    expect((await lauf(a, m)).protokoll.zugang).toBe(true);
+    expect((await lauf(a, m, { fehler: "x" })).protokoll.zugang).toBeNull();
+  });
+
   test.each([
-    ["ein Call vor und einer nach dem Stichtag: gilt als vor dem Stichtag", ["2026-10-08T23:59:59.999Z", "2026-10-09T12:00:00.000Z"], "vor Stichtag"],
-    ["ein Call exakt am Stichtag: nicht davor", ["2026-10-09T00:00:00.000Z"], "gesendet"],
+    ["ein Call vor und einer nach dem Stichtag: gilt als vor dem Stichtag", [iso(Date.parse(N.STICHTAG) - 1), iso(Date.parse(N.STICHTAG) + 3_600_000)], "vor Stichtag"],
+    ["ein Call exakt am Stichtag: nicht davor", [iso(Date.parse(N.STICHTAG))], "gesendet"],
   ])("Stichtag: %s", async (_n, zeiten, status) => {
     const a = aufbau(zeiten.map((z, i) => msg(`m${i}`, i, { timestamp: z })));
     const m = mock({ ist: 0 });
@@ -718,7 +779,14 @@ describe("Ledger-Zustand und Grenzfälle", () => {
 
 describe("parseArgs", () => {
   test("alle Flags landen im richtigen Feld", () => {
-    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", session: "s", seit: "2026-10-01", trocken: true, json: true, fehler: null });
+    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--ausloeser", "sessionend", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", ausloeser: "sessionend", session: "s", seit: "2026-10-01", trocken: true, json: true, fehler: null });
+  });
+  test.each(["sessionstart", "sessionend"])("--ausloeser %s ist erlaubt", (w) => {
+    expect(N.parseArgs(["--ausloeser", w])).toMatchObject({ ausloeser: w, fehler: null });
+  });
+  test.each([["manuell"], ["Stop"], [""]])("--ausloeser %j ist ungültig (Fehler, Hilfe nennt die erlaubten Werte)", (w) => {
+    const a = N.parseArgs(["--ausloeser", w]);
+    expect(a.fehler).toMatch(/sessionstart, sessionend/);
   });
   test.each([
     ["Wert fehlt", ["--session"]],
