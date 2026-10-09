@@ -20,7 +20,7 @@ type Eingabe = { istLinkedWorktree: boolean; branch: string; sauber: boolean; hi
 type Ergebnis = { aktion: string; grund: string; hinter: number; basis: string; gepullt: boolean; agentenGeaendert: boolean; notiz: string };
 const S = raw as unknown as {
   entscheideSync: (e: Eingabe) => { aktion: "pull" | "melden" | "nichts"; grund: string };
-  agentenGeaendert: (d: string[]) => boolean;
+  ordneHarnessAenderungen: (d: string[]) => { skill: string[]; agenten: string[]; sonstige: string[]; lockGeaendert: boolean };
   baueText: (e: Partial<Ergebnis>) => string;
   fuehreSyncAus: (dir: string) => Ergebnis;
   ausgabe: (e: Partial<Ergebnis>, text: boolean) => string;
@@ -56,19 +56,23 @@ describe("entscheideSync: jede Verzweigung", () => {
 });
 
 describe("Hilfsfunktionen", () => {
-  test("agentenGeaendert erkennt .claude/ und jede AGENTS.md, sonst nicht", () => {
-    expect(S.agentenGeaendert([".claude/agents/kubernia-planner.md"])).toBe(true);
-    expect(S.agentenGeaendert(["AGENTS.md"])).toBe(true);
-    expect(S.agentenGeaendert(["src/content/AGENTS.md"])).toBe(true);
-    expect(S.agentenGeaendert(["docs/x.md", "src/a.ts"])).toBe(false);
-    expect(S.agentenGeaendert([])).toBe(false);
+  test("ordneHarnessAenderungen: kubernia-Skill und Wurzel-AGENTS.md, Agent-Definitionen und Sonstiges getrennt (#1572)", () => {
+    expect(S.ordneHarnessAenderungen([".claude/skills/kubernia/SKILL.md", "AGENTS.md"])).toMatchObject({ skill: [".claude/skills/kubernia/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [] });
+    expect(S.ordneHarnessAenderungen([".claude/agents/kubernia-planner.md"])).toMatchObject({ skill: [], agenten: [".claude/agents/kubernia-planner.md"] });
+    expect(S.ordneHarnessAenderungen([".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"])).toMatchObject({ skill: [], agenten: [], sonstige: [".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"] });
+    expect(S.ordneHarnessAenderungen(["docs/x.md", "src/a.ts"])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
+    expect(S.ordneHarnessAenderungen([])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
+    expect(S.ordneHarnessAenderungen(["package-lock.json"]).lockGeaendert).toBe(true);
+    expect(S.ordneHarnessAenderungen([".claude/skills/kubernia-workflow/SKILL.md"]).skill).toEqual([]);
   });
-  test("baueText: Sitzungsbasis immer, Neustart-Hinweis nur bei geänderten Agenten, Meldung mit Zahl", () => {
+  test("baueText (Hook-Modus): Sitzungsbasis immer, Neustart-Hinweis nur bei Harness-Änderungen, Meldung mit Zahl", () => {
     expect(S.baueText({ aktion: "nichts", basis: "abc" })).toBe("Sitzungsbasis: abc");
-    const gepullt = S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", agentenGeaendert: true });
+    const harness = { skill: [], agenten: [".claude/agents/x.md"], sonstige: [], lockGeaendert: false };
+    const gepullt = S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", harness } as never);
     expect(gepullt).toContain("neu starten");
     expect(gepullt).toContain("Sitzungsbasis: abc");
-    expect(S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", agentenGeaendert: false })).not.toContain("neu starten");
+    const ohne = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
+    expect(S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", harness: ohne } as never)).not.toContain("neu starten");
     expect(S.baueText({ aktion: "melden", hinter: 2, grund: "Arbeitsbaum nicht sauber", basis: "abc" })).toContain("2 Commits hinter origin/main");
   });
 });
@@ -343,15 +347,54 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(X.exitCodeFuer({ aktion: "nichts", grund: "Linked Worktree", branch: "", sauber: undefined })).toBe(0);
   });
 
-  test("--text: nach einem Pull mit geänderten Skills steht „Skill neu lesen“ statt „Session neu starten“; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
-    const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", agentenGeaendert: true };
-    const text = S.ausgabe(e, true);
+  test("--text: nur der kubernia-Skill oder die Wurzel-AGENTS.md löst „Skill neu lesen“ aus; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
+    const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", harness: { skill: [".claude/skills/kubernia/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } };
+    const text = S.ausgabe(e as never, true);
     expect(text).toContain("Skill neu lesen");
+    expect(text).toContain("Geändert (Harness): .claude/skills/kubernia/SKILL.md, AGENTS.md");
     expect(text).toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
     expect(text).not.toContain("Sitzungsbasis");
-    const hook = (JSON.parse(S.ausgabe(e, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    const hook = (JSON.parse(S.ausgabe(e as never, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     expect(hook).toContain("neu starten");
     expect(hook).not.toContain("Skill neu lesen");
+  });
+
+  test("--text: ohne AGENTS.md im Diff kein AGENTS.md-Hinweis; nur Agent-Definition: Pfad und Neustart-Hinweis, kein „Skill neu lesen“", () => {
+    const nurSkill = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/kubernia/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
+    expect(nurSkill).toContain("Skill neu lesen");
+    expect(nurSkill).not.toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
+    const agent = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [], lockGeaendert: false } } as never, true);
+    expect(agent).not.toContain("Skill neu lesen");
+    expect(agent).toContain("Geändert (Harness): .claude/agents/x.md");
+    expect(agent).toContain("gelten erst nach Session-Neustart");
+    expect(agent).toContain("Umsetzer-Zusatz");
+  });
+
+  test("--text: ein anderer Skill unter .claude/skills nennt nur den Pfad (kein „Skill neu lesen“, kein Neustart-Zwang)", () => {
+    const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [], sonstige: [".claude/skills/forum/SKILL.md"], lockGeaendert: false } } as never, true);
+    expect(text).toContain("Geändert (Harness): .claude/skills/forum/SKILL.md");
+    expect(text).not.toContain("Skill neu lesen");
+  });
+
+  test("--text: lange Pfadliste wird auf 8 gekürzt", () => {
+    const sonstige = Array.from({ length: 11 }, (_, i) => `.claude/x${i}.json`);
+    const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [], sonstige, lockGeaendert: false } } as never, true);
+    expect(text).toContain(".claude/x7.json");
+    expect(text).not.toContain(".claude/x8.json");
+    expect(text).toContain("… und 3 weitere");
+  });
+
+  test("--text: Node-Versionszeile entfällt (der SessionStart-Hook meldet sie), node_modules nur wenn der Sync package-lock.json geändert hat", () => {
+    const e = { aktion: "nichts", basis: "abc", nodeHinweis: "Node 20 erfüllt nicht", nodeModulesHinweis: "node_modules passt nicht" };
+    const text = S.ausgabe(e as never, true);
+    expect(text).not.toContain("Node-Version");
+    expect(text).not.toContain("Abhängigkeiten");
+    const mitLock = S.ausgabe({ ...e, harness: { skill: [], agenten: [], sonstige: [], lockGeaendert: true } } as never, true);
+    expect(mitLock).toContain("Abhängigkeiten: node_modules passt nicht");
+    expect(mitLock).not.toContain("Node-Version");
+    const hook = (JSON.parse(S.ausgabe(e as never, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    expect(hook).toContain("Node-Version:");
+    expect(hook).toContain("Abhängigkeiten:");
   });
 
   test("CLI: sauberer, aktueller main → Exit 0; dirty → Exit 1 mit Stopp-Text; ohne --streng bleibt es Exit 0", () => {

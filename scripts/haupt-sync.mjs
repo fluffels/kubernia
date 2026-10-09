@@ -61,8 +61,24 @@ export function exitCodeFuer(ergebnis) {
   return 0;
 }
 
-/** True, wenn unter den geänderten Dateien Agenten-Definitionen, Hooks, Skills oder AGENTS.md sind (die Session kennt sie nur im Startstand). Pur. */
-export const agentenGeaendert = (dateien) => dateien.some((d) => /^\.claude\//.test(d) || /(^|\/)AGENTS\.md$/.test(d));
+/**
+ * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: der kubernia-Skill und die Wurzel-AGENTS.md (der Hauptchat
+ * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien und
+ * modul-lokale AGENTS.md; `lockGeaendert`: package-lock.json. Pur, wirft nie.
+ */
+export function ordneHarnessAenderungen(dateien) {
+  const ordnung = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
+  for (const d of Array.isArray(dateien) ? dateien : []) {
+    if (d === "package-lock.json") ordnung.lockGeaendert = true;
+    else if (d === "AGENTS.md" || d.startsWith(".claude/skills/kubernia/")) ordnung.skill.push(d);
+    else if (d.startsWith(".claude/agents/")) ordnung.agenten.push(d);
+    else if (d.startsWith(".claude/") || /(^|\/)AGENTS\.md$/.test(d)) ordnung.sonstige.push(d);
+  }
+  return ordnung;
+}
+
+const MAX_PFADE = 8;
+const pfadListe = (pfade) => (pfade.length > MAX_PFADE ? `${pfade.slice(0, MAX_PFADE).join(", ")} … und ${pfade.length - MAX_PFADE} weitere` : pfade.join(", "));
 
 /**
  * Node-Versionsprüfung (#1411): erfüllt `version` (z. B. `process.versions.node`) die Angabe `engines.node`, deren Form `>=X[.Y[.Z]]`
@@ -156,14 +172,23 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   if (ergebnis.aktion === "melden") zeilen.push(`Haupt-Checkout: ${ergebnis.hinter} Commits hinter origin/main (${ergebnis.grund}).`);
   if (ergebnis.gepullt) {
     zeilen.push(`Haupt-Checkout: main per Fast-Forward um ${ergebnis.hinter} Commits auf origin/main gehoben.`);
-    if (ergebnis.agentenGeaendert && sitzungsbasis) {
+    const h = ergebnis.harness ?? { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
+    const alle = [...h.skill, ...h.agenten, ...h.sonstige];
+    if (alle.length && sitzungsbasis) {
       zeilen.push("Hooks, Agenten, Skills und AGENTS.md dieser Session stammen vom alten Stand (der Snapshot wird beim Start eingefroren): für den neuen Stand die Session neu starten.");
-    } else if (ergebnis.agentenGeaendert) {
-      zeilen.push("Skill neu lesen: `.claude/skills`, `.claude/agents` oder AGENTS.md haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. `.claude/skills/kubernia/SKILL.md` jetzt neu lesen und der neuen Fassung folgen; bei geänderter AGENTS.md zusätzlich `git diff <Stand vor diesem Sync> HEAD -- AGENTS.md` lesen. Hooks und Agent-Definitionen gelten erst nach einem Session-Neustart.");
+    } else if (alle.length) {
+      zeilen.push(`Geändert (Harness): ${pfadListe(alle)}`);
+      if (h.skill.length) {
+        const agentsMd = h.skill.includes("AGENTS.md") ? " Die Wurzel-AGENTS.md hat sich geändert: zusätzlich `git diff <Stand vor diesem Sync> HEAD -- AGENTS.md` lesen." : "";
+        zeilen.push(`Skill neu lesen: ${h.skill.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. \`.claude/skills/kubernia/SKILL.md\` jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
+      }
+      if (h.agenten.length) zeilen.push("Agent-Definitionen geändert: gelten erst nach Session-Neustart; beim Umsetzer-Spawn den Umsetzer-Zusatz setzen (Skill § Vor dem Spawn).");
+      if (!h.agenten.length && !h.skill.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) gelten erst nach einem Session-Neustart.");
     }
   }
-  if (ergebnis.nodeHinweis) zeilen.push(`Node-Version: ${ergebnis.nodeHinweis}`);
-  if (ergebnis.nodeModulesHinweis) zeilen.push(`Abhängigkeiten: ${ergebnis.nodeModulesHinweis}`);
+  // Im Klartext-Modus (--text, Skill-Schritt 0) steht die Node-Version schon im SessionStart-Kontext, node_modules nur nach einer Lock-Änderung dieses Syncs.
+  if (ergebnis.nodeHinweis && sitzungsbasis) zeilen.push(`Node-Version: ${ergebnis.nodeHinweis}`);
+  if (ergebnis.nodeModulesHinweis && (sitzungsbasis || ergebnis.harness?.lockGeaendert)) zeilen.push(`Abhängigkeiten: ${ergebnis.nodeModulesHinweis}`);
   if (ergebnis.bildReste?.length) zeilen.push(`Bilddateien im Hauptcheckout-Root: ${ergebnis.bildReste.join(", ")} (Screenshots gehören nach .playwright-mcp/, FAQ Browser); verschieben oder löschen.`);
   if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (Stand des geteilten Checkouts bei diesem Aufruf; die Basis dieser Session nennt nur der SessionStart-Kontext)`);
   return zeilen.join("\n");
@@ -192,7 +217,8 @@ export function fuehreSyncAus(dir) {
     if (e.aktion === "pull") {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
-      ergebnis.agentenGeaendert = agentenGeaendert(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean));
+      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean));
+      ergebnis.agentenGeaendert = ergebnis.harness.skill.length + ergebnis.harness.agenten.length + ergebnis.harness.sonstige.length > 0;
     }
   } catch (e) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;
