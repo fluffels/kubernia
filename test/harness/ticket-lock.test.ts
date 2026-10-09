@@ -29,6 +29,7 @@ const MIN = 60_000;
 const JETZT = Date.UTC(2026, 9, 9, 12, 0, 0);
 let dir: string;
 let zaehler = 0;
+let fetchAufrufe: string[] = [];
 
 type Welt = { refs?: string[]; worktrees?: string[]; commitSek?: number; reflogSek?: number; status?: string[]; fetchFehler?: boolean };
 
@@ -44,7 +45,7 @@ function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}
     git: (args: string[]) => {
       const a = args.join(" ");
       if (a.startsWith("fetch")) {
-        assert.match(a, /fetch -q --prune origin/, "claim holt mit --prune: ein gelöschter Remote-Branch darf das Ticket nicht sperren");
+        fetchAufrufe.push(a);
         if (welt.fetchFehler) throw new Error("kein Netz");
         return "";
       }
@@ -62,6 +63,7 @@ const lockInhalt = (text: string) => JSON.parse(text) as { nonce: string; nr: nu
 const nonceVon = (r: Erg) => /nonce=(\S+)/.exec(r.out)?.[1] ?? "";
 
 beforeEach(() => {
+  fetchAufrufe = [];
   dir = mkdtempSync(join(tmpdir(), "kq-lock-"));
 });
 afterEach(() => {
@@ -80,6 +82,11 @@ describe("claim", () => {
     assert.equal(b.code, 4);
     assert.match(b.err, /anderen Session/);
     assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "1561.json"), "utf8")).nonce, nonceVon(a), "der Lock des Gewinners bleibt");
+  });
+
+  test("claim holt mit --prune: ein gelöschter Remote-Branch darf das Ticket nicht sperren", () => {
+    lauf(["claim", "3"]);
+    assert.deepEqual(fetchAufrufe, ["fetch -q --prune origin"]);
   });
 
   test("ein anderes Ticket ist unabhängig", () => {
