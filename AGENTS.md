@@ -93,7 +93,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 ### Modellwahl nach Phase (#910)
 
-Hauptchat auf dem Session-Modell; Umsetzung als Sonnet-Subagent `kubernia-umsetzer`, Planung und Review als Opus, Explore als Haiku. Immer per Alias (`opus`/`sonnet`/`haiku`), nie feste Modell-ID; jedes `agent()` setzt Modell bzw. `agentType` und `effort` (sonst erbt es das Session-Modell). SSOT: [docs/model-routing.md](docs/model-routing.md).
+Hauptchat auf `sonnet` (Projekt-Default in `.claude/settings.json`, Ad-hoc per `/model`); Umsetzung als Sonnet-Subagent `kubernia-umsetzer`, Planung und Review als Opus, Explore als Haiku. Immer per Alias (`opus`/`sonnet`/`haiku`), nie feste Modell-ID; jedes `agent()` setzt Modell bzw. `agentType` und `effort` (sonst erbt es das Session-Modell). SSOT: [docs/model-routing.md](docs/model-routing.md).
 
 ## Wo die TODOs leben
 
