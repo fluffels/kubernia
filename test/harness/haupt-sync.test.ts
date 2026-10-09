@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import * as raw from "../../scripts/haupt-sync.mjs";
 
 type Eingabe = { istLinkedWorktree: boolean; branch: string; sauber: boolean; hinter: number; vor: number };
-type Ergebnis = { aktion: string; grund: string; hinter: number; basis: string; gepullt: boolean; agentenGeaendert: boolean; notiz: string };
+type Ergebnis = { aktion: string; grund: string; hinter: number; basis: string; gepullt: boolean; harness?: { skill: string[]; agenten: string[]; sonstige: string[] }; notiz: string };
 const S = raw as unknown as {
   entscheideSync: (e: Eingabe) => { aktion: "pull" | "melden" | "nichts"; grund: string };
   ordneHarnessAenderungen: (d: string[]) => { skill: string[]; agenten: string[]; sonstige: string[]; lockGeaendert: boolean };
@@ -122,7 +122,7 @@ describe("Ausgabe des Hooks", () => {
     expect(t).toContain("Stand vor diesem Sync: abc");
   });
   test("--text behauptet nichts über die Session-Basis (#1537)", () => {
-    for (const e of [{ aktion: "nichts", basis: "abc" }, { aktion: "pull", gepullt: true, hinter: 2, basis: "abc", agentenGeaendert: false }]) {
+    for (const e of [{ aktion: "nichts", basis: "abc" }, { aktion: "pull", gepullt: true, hinter: 2, basis: "abc" }]) {
       const t = S.ausgabe(e, true);
       expect(t).toContain("Stand vor diesem Sync: abc");
       expect(t).not.toMatch(/nicht die Basis/);
@@ -179,7 +179,7 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
       const e = S.fuehreSyncAus(t.haupt);
       expect(e.gepullt).toBe(true);
       expect(e.basis).toBe(alt);
-      expect(e.agentenGeaendert).toBe(false);
+      expect(e.harness).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
       expect(git(t.haupt, "rev-parse", "HEAD")).not.toBe(alt);
       expect(git(t.haupt, "rev-parse", "HEAD")).toBe(git(t.haupt, "rev-parse", "origin/main"));
     } finally {
@@ -193,7 +193,7 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
       t.schiebe(".claude/agents/x.md", "neu\n");
       const e = S.fuehreSyncAus(t.haupt);
       expect(e.gepullt).toBe(true);
-      expect(e.agentenGeaendert).toBe(true);
+      expect(e.harness?.agenten).toEqual([".claude/agents/x.md"]);
       expect(S.baueText(e)).toContain("neu starten");
     } finally {
       t.aufraeumen();
@@ -370,10 +370,30 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(agent).toContain("Umsetzer-Zusatz");
   });
 
-  test("--text: ein anderer Skill unter .claude/skills nennt nur den Pfad (kein „Skill neu lesen“, kein Neustart-Zwang)", () => {
+  test("--text: ein anderer Skill unter .claude/skills nennt den Pfad und den Neustart-Hinweis, kein „Skill neu lesen“", () => {
     const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [], sonstige: [".claude/skills/forum/SKILL.md"], lockGeaendert: false } } as never, true);
     expect(text).toContain("Geändert (Harness): .claude/skills/forum/SKILL.md");
     expect(text).not.toContain("Skill neu lesen");
+    expect(text).toContain("Übrige .claude-Dateien");
+    expect(text).toContain("Session-Neustart");
+  });
+
+  test("--text: der Hinweis auf übrige .claude-Dateien kommt auch im Mischfall, fehlt aber ohne solche Dateien", () => {
+    const misch = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [".claude/settings.json"], lockGeaendert: false } } as never, true);
+    expect(misch).toContain("Übrige .claude-Dateien");
+    const ohne = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/kubernia/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
+    expect(ohne).not.toContain("Übrige .claude-Dateien");
+  });
+
+  test("ordneHarnessAenderungen wirft nie: undefined, null und kein Array ergeben die leere Ordnung", () => {
+    for (const x of [undefined, null, "AGENTS.md", {}]) expect(S.ordneHarnessAenderungen(x as never)).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
+  });
+
+  test("--text: genau 8 Pfade stehen ohne „weitere“-Angabe", () => {
+    const sonstige = Array.from({ length: 8 }, (_, i) => `.claude/x${i}.json`);
+    const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [], sonstige, lockGeaendert: false } } as never, true);
+    expect(text).toContain(".claude/x7.json");
+    expect(text).not.toContain("weitere");
   });
 
   test("--text: lange Pfadliste wird auf 8 gekürzt", () => {

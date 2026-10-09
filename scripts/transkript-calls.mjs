@@ -1,7 +1,7 @@
 // Kein Shebang: wird von Messskripten und Tests importiert.
 /**
  * Transkript → Calls (#1562, ausgelagert aus `token-baseline.mjs`). Hook-tauglich: importiert nur
- * `preise.mjs` und `transkript.mjs`, keine gh-/git-Kette.
+ * `preise.mjs` und `transkript.mjs`, keine gh-/git-Kette (`transkript.mjs` ruft git nur in `hauptrepoWurzel()` auf Anfrage auf).
  */
 
 import { num, priceCall, priceParts } from "./preise.mjs";

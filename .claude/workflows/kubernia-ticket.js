@@ -699,8 +699,8 @@ nicht selbst.`,
 
   const nr = auswahl.nummer
   const ticket = `#${nr} — ${auswahl.titel}`
-  const nonceArg = auswahl.lockNonce ? ` --nonce ${auswahl.lockNonce}` : ''
-  const lockFreigabe = auswahl.lockNonce ? `\nGanz zuletzt den Ticket-Lock freigeben: node scripts/ticket-lock.mjs freigeben ${nr}${nonceArg}; melde dessen Ausgabe.` : ''
+  const nonceArg = /^[\w-]+$/.test(auswahl.lockNonce || '') ? ` --nonce ${auswahl.lockNonce}` : '' // nur Wort-/Bindestrich-Zeichen: der Wert kommt aus einer Agenten-Antwort und landet in Shell-Befehlen
+  const lockFreigabe = nonceArg ? `\nGanz zuletzt den Ticket-Lock freigeben: node scripts/ticket-lock.mjs freigeben ${nr}${nonceArg}; melde dessen Ausgabe.` : ''
   log(`Geclaimt: ${ticket} (art: ${auswahl.art})`)
 
   const ticketKontext = `Ticket #${nr}: ${auswahl.titel}

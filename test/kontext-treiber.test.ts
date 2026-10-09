@@ -29,7 +29,7 @@ type Bericht = {
 const K = raw as unknown as {
   phaseDerCalls: (zeilen: Row[]) => string[];
   analysiereLauf: (l: Lauf) => Analyse | null;
-  kontextTreiber: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; tickets?: number[] }) => { gesamt: Bericht; ohneSammel: Bericht; sammel: Bericht };
+  kontextTreiber: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; tickets?: number[]; wurzel?: string | null }) => { gesamt: Bericht; ohneSammel: Bericht; sammel: Bericht };
   renderMarkdown: (r: ReturnType<typeof K.kontextTreiber>) => string;
 };
 
@@ -184,6 +184,13 @@ describe("kontextTreiber (Aggregat)", () => {
     expect(r.gesamt.gesamt!.n).toBe(2);
     expect(K.kontextTreiber({ laeufe: [kurz, sammel], tickets: [1] }).gesamt.gesamt!.n).toBe(1);
     expect(K.kontextTreiber({ laeufe: [kurz] }).sammel.gesamt).toBeNull();
+  });
+  test("wurzel: der Repo-Pfad im Top-Label wird maskiert (öffentliches Repo), ohne wurzel bleibt er unverändert", () => {
+    const l = lauf("#1 x", [{ min: 1, tools: [{ name: "Read", input: { file_path: "C:/work/projekt/docs/a.md" }, result: "x".repeat(400) }] }, { min: 2 }, { min: 3 }]);
+    const labels = (wurzel?: string) => K.kontextTreiber({ laeufe: [l], wurzel }).gesamt.top.map((x) => x.label);
+    expect(labels("C:/work/projekt").some((x) => x.includes("<repo>/docs/a.md"))).toBe(true);
+    expect(labels("C:/work/projekt").some((x) => x.includes("C:/work/projekt"))).toBe(false);
+    expect(labels().some((x) => x.includes("C:/work/projekt/docs/a.md"))).toBe(true);
   });
   test("Top-10: genau 10 bei 12 Ergebnissen, absteigend nach Last", () => {
     const calls: CallSpec[] = Array.from({ length: 12 }, (_, i) => ({ min: i + 1, tools: [{ name: "Read", input: { file_path: `f${i}` }, result: "x".repeat(400 * (i + 1)) }] }));

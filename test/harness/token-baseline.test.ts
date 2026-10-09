@@ -923,6 +923,8 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
         assert.equal(dup[0].output, 9, "Maximum über die Fundstellen");
         const einzel = m.readTranscriptSession("sess-1", root).calls.find((c) => (c as { id?: string }).id === "nur-haupt");
         assert.ok(dup[0].cost !== null && einzel?.cost !== null);
+        assert.equal(dup[0].cost, m.priceCall({ ...dup[0], costParts: undefined }), "Kosten aus dem zusammengeführten Stand (Output 9)");
+        assert.ok((dup[0].cost ?? 0) > (m.priceCall({ ...dup[0], costParts: undefined, output: 2 }) ?? 0), "nicht die Kosten des ersten Fundes (Output 2)");
       },
     );
   });

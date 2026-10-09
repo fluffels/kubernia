@@ -295,7 +295,7 @@ function main() {
     console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }
-  const slug = args.projekt ?? projektSlug(process.cwd());
+  const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
   const dir = join(homedir(), ".claude", "projects", slug);
   readdirSync(dir);
   const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel() });

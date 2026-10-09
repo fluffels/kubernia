@@ -7,6 +7,10 @@
  *
  * Ratchet: `BESTAND` friert die heutigen Paare ein (Abbau als Burn-down, Zeile im Sammelticket). Ein NEUES Paar ist rot, ein
  * veralteter Eintrag (Paar gibt es nicht mehr) ebenfalls: der Bestand darf nur schrumpfen.
+ *
+ * Bekannte Grenzen der Erkennung: `GUARD` kennt nur die drei Schreibweisen unten (z.B. `pathToFileURL(process.argv[1] ?? "")` nicht,
+ * damit zählen `check-c4.mjs` und `docs-gen.mjs` nicht als Einstieg); `IMPORT` sieht nur statische Importe `from "./x.mjs"` mit
+ * doppelten Anführungszeichen (kein `import "./x.mjs"`, kein `import()`). Heute fehlt dadurch kein Paar.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
@@ -29,7 +33,6 @@ export const BESTAND: readonly string[] = [
   "check-review-nachweis -> check-diffsize",
   "check-steuerbytes -> check-internalrefs",
   "cleanup-worktrees -> lens-edit-guard",
-  "hauptchat-zerlegung -> token-baseline",
   "kontext-treiber -> subagent-laufzeit",
   "naechstes-ticket -> fremdtext",
   "naechstes-ticket -> gh-kontingent",
@@ -38,7 +41,6 @@ export const BESTAND: readonly string[] = [
   "pretooluse-hook -> worktree-guard-powershell",
   "sammelticket-anlegen -> gh-kontingent",
   "stop-verify-hook -> cleanup-worktrees",
-  "subagent-laufzeit -> token-baseline",
   "verify-lauf -> check-diffsize",
   "worktree-guard-powershell -> worktree-guard-hook",
 ];

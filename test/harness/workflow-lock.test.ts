@@ -30,6 +30,13 @@ describe("Workflow hält die Lock-Nonce und gibt den Lock frei (#1572)", () => {
     expect(p).toContain(`ticket-lock.mjs freigeben 42 --nonce ${NONCE}`);
   });
 
+  test.each(["null; rm -rf x", "a b", "$(x)", ""])("unsichere Nonce %j wird nicht in Shell-Befehle übernommen", async (lockNonce) => {
+    const { aufrufe } = await workflowLauf({ lockNonce });
+    const alle = aufrufe.map((a) => a.prompt).join("\n");
+    expect(alle).not.toContain("--nonce");
+    expect(alle).not.toContain("ticket-lock.mjs freigeben");
+  });
+
   test("ohne Nonce (claim lieferte keine): kein `--nonce undefined`, kein freigeben-Auftrag", async () => {
     const { aufrufe } = await workflowLauf({});
     const alle = aufrufe.map((a) => a.prompt).join("\n");

@@ -77,10 +77,10 @@ export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);
 
 /** Sessions des Projekts: `[{ id, pfad, mtime }]` (mtime = jüngste Datei der Session). `seitMs` filtert nach mtime, `sessionId` gilt unabhängig davon. */
-export function findeSessions({ projectsRoot, praefix, seitMs = 0, sessionId = null }) {
+export function findeSessions({ projectsRoot, slug, seitMs = 0, sessionId = null }) {
   if (!existsSync(projectsRoot)) return [];
   const out = new Map();
-  for (const d of readdirSync(projectsRoot).filter((n) => istProjektOrdner(n, praefix))) {
+  for (const d of readdirSync(projectsRoot).filter((n) => istProjektOrdner(n, slug))) {
     for (const datei of jsonlDateien(join(projectsRoot, d))) {
       const id = datei.replace(/\.jsonl$/, "");
       if (sessionId && id !== sessionId) continue;
@@ -332,7 +332,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     if (!args.ist.length) return { exitCode: 2, text: e.message };
   }
   try {
-    const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
+    const sessions = findeSessions({ projectsRoot, slug: projektSlug(repoRoot), seitMs, sessionId: args.session });
     const soll = new Map();
     const mtimes = new Map();
     for (const s of sessions) {

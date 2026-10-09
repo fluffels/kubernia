@@ -333,7 +333,7 @@ export function readTranscriptSession(sessionId, projectsRoot) {
     all.calls.push(...r.calls);
     all.questions += r.questions;
   }
-  // Dieselbe message.id in Haupt- und Subagent-Datei zählt einmal (20 von 31.042 Messages in #1572). Grenze: die Tool-Events
+  // Dieselbe message.id in Haupt- und Subagent-Datei zählt einmal (Messung #1573: 20 von 31.042 Messages). Grenze: die Tool-Events
   // darüber tragen keine Message-übergreifende ID und werden nicht dedupliziert.
   all.calls = eindeutigeCalls(all.calls);
   return all;

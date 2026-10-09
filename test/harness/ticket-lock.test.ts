@@ -321,8 +321,10 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
       { name: "7.json", mtime: JETZT - 23 * H },
       { name: "8.json", mtime: Number.NaN },
       { name: "notiz.txt", mtime: JETZT - 99 * H },
+      { name: "x5.json", mtime: JETZT - 99 * H },
+      { name: "9.json", mtime: JETZT - 24 * H },
     ];
-    assert.deepEqual(M.aufzuraeumen({ eintraege, jetzt: JETZT }).sort(), ["5.json.verwaist-abc", "6.json"]);
+    assert.deepEqual(M.aufzuraeumen({ eintraege, jetzt: JETZT }).sort(), ["5.json.verwaist-abc", "6.json"], "genau 24 h bleibt, x5.json ist keine Lock-Datei");
     assert.equal(M.ALTLAST_MS, 24 * H);
   });
 

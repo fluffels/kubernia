@@ -38,7 +38,7 @@ const A = rawAbgleich as unknown as {
   traceIdVon: (s: string) => string;
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
-  findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number }[];
+  findeSessions: (o: { projectsRoot: string; slug: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number }[];
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
   schluesselArt: (o: Obs[]) => string;
@@ -135,7 +135,7 @@ describe("Soll (pur)", () => {
   };
   const lade = (root: string) => {
     // ladeSessionDatei über den Weg des Abgleichs: findeSessions + Soll
-    const [s] = A.findeSessions({ projectsRoot: root, praefix: "p" });
+    const [s] = A.findeSessions({ projectsRoot: root, slug: "p" });
     return s;
   };
 
@@ -169,7 +169,7 @@ describe("Soll (pur)", () => {
 
   test("kaputtes meta.json ergibt Rolle ohne agentType, der Eintrag bleibt; kaputte und abgeschnittene Zeilen entfallen", () => {
     const { root } = sitzung(`${msg("m1")}\n{kaputt\n${msg("m2")}\n{"abgeschnitten`, [{ meta: "{nicht json", text: `${msg("sub")}\n` }]);
-    const [s] = A.findeSessions({ projectsRoot: root, praefix: "p" });
+    const [s] = A.findeSessions({ projectsRoot: root, slug: "p" });
     expect(s).toBeDefined();
     const e = A.sollEintraege(LADE(s.pfad));
     expect(e.map((x) => x.messageId).sort()).toEqual(["m1", "m2", "sub"]);
@@ -197,7 +197,7 @@ describe("Session-Auswahl", () => {
       "Y--anders/c.jsonl": msg("m"),
       [`${PRAEFIX}-alt/d.jsonl`]: msg("m"), // Geschwister-Repo mit gleichem Präfix (#1572)
     });
-    const ids = (o: Partial<Parameters<typeof A.findeSessions>[0]>) => A.findeSessions({ projectsRoot: root, praefix: PRAEFIX, ...o }).map((s) => s.id).sort();
+    const ids = (o: Partial<Parameters<typeof A.findeSessions>[0]>) => A.findeSessions({ projectsRoot: root, slug: PRAEFIX, ...o }).map((s) => s.id).sort();
     expect(ids({})).toEqual(["a", "b"]);
     expect(ids({ seitMs: Date.now() + 3_600_000 })).toEqual([]);
     expect(ids({ seitMs: Date.now() + 3_600_000, sessionId: "a" })).toEqual(["a"]);
@@ -206,7 +206,7 @@ describe("Session-Auswahl", () => {
   });
 
   test("fehlender Projektordner ergibt keine Sessions", () => {
-    expect(A.findeSessions({ projectsRoot: join(fixture({}), "gibt-es-nicht"), praefix: PRAEFIX })).toEqual([]);
+    expect(A.findeSessions({ projectsRoot: join(fixture({}), "gibt-es-nicht"), slug: PRAEFIX })).toEqual([]);
   });
 });
 
@@ -435,7 +435,7 @@ describe("pruefen (Ablauf)", () => {
 
   test("Teil-Erfassung: Observations nur für diese Session, fehlender Call samt Zeit und Modell im Bericht, Exit 0", async () => {
     const root = mitSession([msg("a", { input_tokens: 1 }), msg("b", { input_tokens: 2 }), msg("c", { input_tokens: 3 })]);
-    const [s] = A.findeSessions({ projectsRoot: root, praefix: PRAEFIX });
+    const [s] = A.findeSessions({ projectsRoot: root, slug: PRAEFIX });
     expect(s.id).toBe("s1");
     const e = A.sollEintraege(LADE(s.pfad));
     const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 2 }], tokens: [], observations: [obsZu(e[0]), obsZu(e[2])] });

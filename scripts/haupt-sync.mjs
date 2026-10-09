@@ -165,7 +165,7 @@ export function bildResteFuer(dir) {
   }
 }
 
-/** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, agentenGeaendert, notiz }`. */
+/** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, harness, nodeHinweis, nodeModulesHinweis, notiz }`. */
 export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   const zeilen = [];
   if (ergebnis.notiz) zeilen.push(`Haupt-Sync: ${ergebnis.notiz}`);
@@ -183,7 +183,7 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
         zeilen.push(`Skill neu lesen: ${h.skill.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. \`.claude/skills/kubernia/SKILL.md\` jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
       }
       if (h.agenten.length) zeilen.push("Agent-Definitionen geändert: gelten erst nach Session-Neustart; beim Umsetzer-Spawn den Umsetzer-Zusatz setzen (Skill § Vor dem Spawn).");
-      if (!h.agenten.length && !h.skill.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) gelten erst nach einem Session-Neustart.");
+      if (h.sonstige.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) gelten erst nach einem Session-Neustart.");
     }
   }
   // Im Klartext-Modus (--text, Skill-Schritt 0) steht die Node-Version schon im SessionStart-Kontext, node_modules nur nach einer Lock-Änderung dieses Syncs.
@@ -199,7 +199,7 @@ const git = (dir, args, opts = {}) =>
 
 /** Die ganze Ablaufkette gegen ein echtes Repo in `dir` (nur CLI). Wirft nie; Fehler landen in `notiz`. */
 export function fuehreSyncAus(dir) {
-  const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, agentenGeaendert: false, notiz: "", branch: "", sauber: undefined };
+  const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: "", branch: "", sauber: undefined };
   try {
     ergebnis.basis = git(dir, ["rev-parse", "HEAD"]);
     const istLinkedWorktree = resolve(dir, git(dir, ["rev-parse", "--git-dir"])) !== resolve(dir, git(dir, ["rev-parse", "--git-common-dir"]));
@@ -218,7 +218,6 @@ export function fuehreSyncAus(dir) {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
       ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean));
-      ergebnis.agentenGeaendert = ergebnis.harness.skill.length + ergebnis.harness.agenten.length + ergebnis.harness.sonstige.length > 0;
     }
   } catch (e) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;
