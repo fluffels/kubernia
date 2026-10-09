@@ -145,7 +145,7 @@ describe("Bereich (#1552)", () => {
     expect(N.bereichAusArgv(["--json", "--bereich", "spiel"])).toEqual({ bereich: "spiel" });
   });
   test("bereichAusArgv: fehlender oder unbekannter Wert ist ein Fehler", () => {
-    for (const argv of [["--bereich"], ["--bereich", "--json"], ["--bereich", "harness"], ["--bereich", "Agentic"], ["--bereich="]]) {
+    for (const argv of [["--bereich"], ["--bereich", "--json"], ["--bereich", "harness"], ["--bereich", "Agentic"], ["--bereich="], ["--bereich", "constructor"]]) {
       expect(N.bereichAusArgv(argv), argv.join(" ")).toHaveProperty("fehler");
     }
   });

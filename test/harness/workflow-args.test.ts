@@ -104,6 +104,14 @@ describe("Workflow-args: Bereich (#1552)", () => {
     expect(n.bereich).toBe("spiel")
   })
 
+  it("ein null-Bereich ist keine Angabe (egal), kein Fehler", () => {
+    const ergebnis = argsLesen({ nummer: 965, bereich: null })
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.nummer).toBe(965)
+    expect(ergebnis.bereich).toBeUndefined()
+    expect(argsLesen({ bereich: null }).fehler).toContain("weder nummer")
+  })
+
   it.each([
     ["unbekannter Wert", { bereich: "harness" }],
     ["Großschreibung", { bereich: "Agentic" }],

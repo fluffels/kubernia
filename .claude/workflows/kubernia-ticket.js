@@ -840,7 +840,7 @@ Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints.`,
       grund: preflight.grund,
       offeneFragen: preflight.offeneFragen || [],
       hinweis:
-        'Die Fragen der Maintainerin vorlegen, dann den Workflow per resumeFromRunId fortsetzen — mit den Antworten in args.klaerungAntworten (Auswahl + Plan kommen aus dem Cache, kaum Extra-Tokens).',
+        'Die Fragen der Maintainerin vorlegen, dann den Workflow per resumeFromRunId fortsetzen — mit den Antworten in args.klaerungAntworten (und demselben args.bereich bzw. args.nummer wie im Ursprungslauf; Auswahl + Plan kommen aus dem Cache, kaum Extra-Tokens).',
     }
   }
   if (klaerungAntworten) log(`Pre-Flight-Klärung mit ${klaerungAntworten.length} Antwort(en) fortgesetzt.`)
