@@ -275,3 +275,24 @@ describe("Zerlegung und Ursachen, Grenzfälle", () => {
     expect(K.bereinige("a   b\n c")).toBe("a b c");
   });
 });
+
+describe("Lens-Fix, Repo-Wurzel, Kostenteile (Grenzfälle R2)", () => {
+  test("Neuaufbau nach einem Call ohne Tool im Zustand Lens-Fix heißt Lens-Warten", () => {
+    const a = K.analysiereLauf(lauf("#1 x", [{ min: 1, tools: [linse] }, { min: 2, tools: [edit()] }, { min: 3 }, { min: 13, ctx: 100_000, cacheRead: 1000 }]))!;
+    expect(a.phasen.slice(1, 3)).toEqual(["Lens-Fix", "Lens-Fix"]);
+    expect(a.neuaufbauten[0].ursache).toBe("Lens-Warten");
+  });
+  test("bereinige: Repo-Wurzel in Git-Bash-Form, fremder Pfad bleibt unverändert", () => {
+    expect(K.bereinige("cat /c/dev/kubernia/docs/a.md")).toBe("cat <repo>/docs/a.md");
+    expect(K.bereinige("C:/dev/kubernia-alt/x")).toBe("C:/dev/kubernia-alt/x");
+    expect(K.bereinige("Read C:/dev/kubernia/.claude/worktrees/kq-7")).toBe("Read <wt>/");
+  });
+  test("Kostenteile: Write > 0 bei geschriebenem Cache, Read + Write + Output ergeben die Summe", () => {
+    const g = (K as unknown as { kontextTreiber: (e: { laeufe: Lauf[] }) => { gesamt: { gesamt: { kostenSumme: number; kostenRead: number; kostenWrite: number; kostenOutput: number } } } })
+      .kontextTreiber({ laeufe: [lauf("#1 x", [{ min: 1, ctx: 10_000, cacheRead: 4000 }, { min: 2, ctx: 12_000, cacheRead: 12_000 }])] }).gesamt.gesamt;
+    expect(g.kostenWrite).toBeGreaterThan(0);
+    expect(g.kostenRead).toBeGreaterThan(0);
+    expect(g.kostenRead + g.kostenWrite + g.kostenOutput).toBeCloseTo(g.kostenSumme, 9);
+    expect(g.kostenWrite).toBeCloseTo((6000 * 2.5) / 1e6, 9);
+  });
+});
