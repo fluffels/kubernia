@@ -97,6 +97,7 @@ const AUSWAHL_SCHEMA = {
       type: 'boolean',
       description: 'true nur, wenn gh issue view die eigene Zuweisung bestätigt hat',
     },
+    lockNonce: { type: 'string', description: 'x aus der Ausgabe nonce=<x> von ticket-lock.mjs claim' },
   },
 }
 
@@ -675,7 +676,7 @@ Liste; ohne Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
 
 Claimen ist blockierende Pflicht: erst node scripts/ticket-lock.mjs claim <nr> (Exit 4: nicht claimen), dann gh issue edit <nr> --add-assignee @me, danach mit
 gh issue view <nr> die Zuweisung wirklich bestätigen. Ohne bestätigte Zuweisung ist
-claimVerifiziert=false — dann endet der Workflow hier.
+claimVerifiziert=false — dann endet der Workflow hier. Gib das x der claim-Ausgabe nonce=<x> als lockNonce zurück.
 
 Klassifiziere das Ticket zusätzlich in art: "epic", wenn es eine Phase/ein Epic/
 Far-Future ist und nicht in EINER Session vollständig umsetz- und schließbar wäre;
@@ -698,6 +699,8 @@ nicht selbst.`,
 
   const nr = auswahl.nummer
   const ticket = `#${nr} — ${auswahl.titel}`
+  const nonceArg = auswahl.lockNonce ? ` --nonce ${auswahl.lockNonce}` : ''
+  const lockFreigabe = auswahl.lockNonce ? `\nGanz zuletzt den Ticket-Lock freigeben: node scripts/ticket-lock.mjs freigeben ${nr}${nonceArg}; melde dessen Ausgabe.` : ''
   log(`Geclaimt: ${ticket} (art: ${auswahl.art})`)
 
   const ticketKontext = `Ticket #${nr}: ${auswahl.titel}
@@ -723,7 +726,7 @@ und CONTRIBUTING.md › Dependabot-PRs. Rote PRs nicht blind mergen.
 Am Ende das Sammel-Issue schließen und die Schließung verifizieren.
 
 Berichte am Ende knapp, was gemergt ist und dass das Issue geschlossen und
-verifiziert wurde.`,
+verifiziert wurde.${lockFreigabe}`,
       { label: `dependabot:#${nr}`, phase: 'Sonderfall', ...CODING },
     )
     log(`Sonderfall dependabot für ${ticket} abgeschlossen.`)
@@ -786,7 +789,7 @@ Neue Kindertickets ohne Assignee. Am Ende das Epic auf done schließen und die
 Schließung verifizieren.
 
 Berichte am Ende knapp, was entstanden ist und dass das Issue geschlossen und
-verifiziert wurde.`,
+verifiziert wurde.${lockFreigabe}`,
       { label: `epic-anlegen:#${nr}`, phase: 'Sonderfall', ...CODING },
     )
     log(`Sonderfall epic für ${ticket} abgeschlossen.`)
@@ -877,7 +880,7 @@ der Review läuft bewusst vor dem PR.
 
 Das Ticket ist bereits auf dich geclaimt. Folge dem Ablauf und den harten Regeln in
 AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
-- § Kollisionsschutz bei parallelen Agenten — vorher node scripts/ticket-lock.mjs pruefe ${nr} (Exit 4: abbrechen), eigener Worktree, erst git fetch origin,
+- § Kollisionsschutz bei parallelen Agenten — vorher node scripts/ticket-lock.mjs pruefe ${nr}${nonceArg} (Exit 4: abbrechen), eigener Worktree, erst git fetch origin,
   dann von origin/main aufsetzen (nicht vom lokal veralteten main), Pfad
   .claude/worktrees/kq-${nr}, Branch feature/kq-${nr}-<slug>. Im frischen Worktree
   einmal npm ci (schreibt den Lockfile nie, #1119). Kein Junction/Symlink auf fremde node_modules.
@@ -1409,7 +1412,7 @@ ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
 Zuletzt räumst du verwaiste Worktree-Ordner auf, wie es auf dem Skill-Pfad der SubagentStop-Hook beim Umsetzer-Ende
 tut (dieser Pfad hat keinen Umsetzer-Subagenten mit Hook): node scripts/cleanup-worktrees.mjs, bei gemeldeten
 Waisen mit --fix. Ordner unter 5 Minuten meldet das Skript nur (eine parallele Session legt gerade ihren Worktree an),
-die löschst du nie von Hand.
+die löschst du nie von Hand.${lockFreigabe}
 
 Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
     { label: `cleanup:#${nr}`, phase: 'Cleanup', ...CODING },
