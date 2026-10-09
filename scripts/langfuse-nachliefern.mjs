@@ -17,7 +17,6 @@ import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ladeSessionDatei } from "./transkript.mjs";
 import {
-  RUHEFRIST_MIN,
   diffMultimenge,
   findeSessions,
   hatDifferenz,
@@ -36,6 +35,8 @@ import { bauePayloads } from "./langfuse-otlp.mjs";
 export const STICHTAG = "2026-10-09T00:00:00Z";
 /** Ohne bekanntes Ende gilt eine Session erst nach dieser Ruhe als beendet (eine untätig offene Parallelsession bleibt unberührt). */
 export const RUHEFRIST_OHNE_ENDE_H = 24;
+/** Ruhe bei bekanntem Ende (SessionEnd): kürzer als die Wartezeit des Hooks (WARTE_SESSIONEND in langfuse-abgleich-hook), damit der Lauf nach dem Warten sendet. */
+export const RUHEFRIST_BEENDET_MS = 150_000;
 const LEDGER_NAME = "langfuse-abgleich.json";
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--trocken] [--json]";
@@ -142,7 +143,7 @@ async function verarbeite(s, c) {
   if (args.aktuell === s.id) return Object.assign(rec, { status: "aktuell" });
   const endeBekannt = args.beendet === s.id || args.session === s.id;
   const beendet = endeBekannt || Boolean(alt?.beendet && unveraendert);
-  const ruheMs = beendet ? RUHEFRIST_MIN * 60_000 : RUHEFRIST_OHNE_ENDE_H * 3_600_000;
+  const ruheMs = beendet ? RUHEFRIST_BEENDET_MS : RUHEFRIST_OHNE_ENDE_H * 3_600_000;
   if (now - s.mtime < ruheMs) {
     // Bekanntes Ende festhalten, sonst gälte beim nächsten Lauf (nach der Ruhefrist) wieder die 24-h-Frist.
     if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: Boolean(alt?.bestaetigt && unveraendert), beendet: true };
