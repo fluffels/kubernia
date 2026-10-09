@@ -588,6 +588,12 @@ describe("zerlegeHauptchat: Modellanteil und TTL im Ergebnis (#1557)", () => {
     assert.equal(l.ttl.pausenUeber5, 1);
     assert.ok(Math.abs(l.ttl.sim5mKosten - 5) < 1e-9);
   });
+  test("Nachlauf-Calls (nach closedAt) bilden nur die Kette und zählen nicht", () => {
+    const main = [slash(0, "kubernia"), call(1, SONNET, claim(5)), call(2, SONNET), call(20, SONNET)];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], closedAtOf: () => iso(10) }) as Ergebnis & { ttl: Ttl };
+    assert.equal(r.ttl.calls, 2, "nur die beiden Calls vor closedAt");
+    assert.equal(r.ttl.pausenUeber5, 0, "die Pause bis zum Nachlauf-Call gehört nicht zu den gezählten");
+  });
   test("ohne Ticket-Fenster stehen die Zeilen als „keine Fenster“ da", () => {
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "x"), call(1, SONNET)] }] });
     const text = hcx.renderMarkdown(r);
