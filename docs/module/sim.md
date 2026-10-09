@@ -192,7 +192,6 @@ Tests: `test/sim/yaml.test.ts`, `test/sim/manifest.test.ts`, `test/sim/apply-man
 
 - `test/sim.test.ts` — Kern/`exec`-Dispatch.
 - `test/sim/net-eingabe.test.ts` (#1510) — curl und nslookup über den Call-Vertrag: Flags mit Wert, `-o`-Datei, Default-Port des Schemas, nslookup-Optionen und Server.
-
 - `test/sim/sim-treue.test.ts` — generischer Wächter über alle Matrizen ([sim-treue.md](../sim-treue.md)): Schema jeder `docs/sim-treue/*.json`, Familien-Abgleich gegen `SIM_COMMANDS` (neue Familie ohne Matrix ist rot) und Vollständigkeit je Familie (Spec-Objekt: Unterbefehls-Familie oder Einzelbefehl); Laden und Typen in `test/support/sim-treue.ts`.
 - `test/sim/kubectl-treue.test.ts` — die kubectl-Tiefe der Matrix: unterstützte Ressourcenarten, Unterverben und `kind`s ohne Zeile in `docs/sim-treue/kubectl.json` sind rot.
 - `test/sim/kubectl-ziele.test.ts`, `test/sim/kubectl-ziele-befehle.test.ts` — der Ziel-Leser `readTargets` (Tabelle gegen den Builder von kubectl) und die Mehrfachziele von describe, delete, scale, rollout restart (je Ziel eine Zeile, NotFound zuletzt) samt Ablehnung bei expose/set; Fehlerfälle prüfen per Snapshot, dass nichts angefasst wurde.

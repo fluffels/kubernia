@@ -121,6 +121,14 @@ describe("curl: Default-Port des Schemas", () => {
     expect(run("curl lager:8080").output).toContain("200 OK");
     expect(run("curl http://lager").output).toContain("(7)");
   });
+  test("https:// mit falschem explizitem Port: (7) mit diesem Port, ohne den https-Tipp", () => {
+    const r = run("curl https://kasse:8443");
+    expect(r.output).toContain("port 8443");
+    expect(r.output).not.toContain("https:// fragt");
+  });
+  test("--silent ist der Alias von -s (auch bei -o)", () => {
+    expect(run("curl --silent -o x kasse").output ?? "").toBe("");
+  });
   test("ein expliziter Port in einer https-URL gewinnt", () => {
     expect(run("curl https://lager:8080").output).toContain("200 OK");
   });

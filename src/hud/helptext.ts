@@ -131,7 +131,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { use: "[http(s)://]<service>[:port][/pfad]", desc: "Service abrufen – läuft er und ist er erreichbar?" },
     { use: "-o <datei> <adresse>", desc: "Antwort in eine Datei schreiben (cat <datei>)" },
   ], grenzen: [
-    { id: "curl-antwort", text: "curl zeigt immer Statuszeile, Header und festen Text (wie -i); -s, -S, -v und -I ändern nichts." },
+    { id: "curl-antwort", text: "curl zeigt immer Statuszeile, Header und festen Text (wie -i); -S, -v und -I ändern nichts." },
     { id: "curl-anfrage", text: "Header (-H), Methode (-X) und Daten (-d) nimmt curl an; jeder Dienst antwortet trotzdem gleich." },
     { id: "curl-datei", text: "-o schreibt nur ins Arbeitsverzeichnis (oder /dev/null); die Fortschrittsanzeige zeigt feste Werte." },
     { id: "curl-tls", text: "https:// prüft nur Port 443; Zertifikate und TLS simuliert der Simulator nicht." },

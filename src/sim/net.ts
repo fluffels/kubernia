@@ -1,8 +1,9 @@
 /* ===== Kubernia – Netzwerk-/Erreichbarkeits-Befehle (sim/net.ts) =====
  * Die beiden „frag einen Service"-Welt-Befehle, die KEINE kubectl-Unterbefehle sind:
- *   - `nslookup <name>`  – Namensauflösung über CoreDNS (#337)
- *   - `curl [http://]<service>[:port][/pfad]` – Erreichbarkeit (#164, Werft-Capstone)
- * Beide sind rein lesend und in der Spielwelt bewusst eigene Befehle (statt `kubectl
+ *   - `nslookup [-type=A] <name> [10.96.0.10]`  – Namensauflösung über CoreDNS (#337)
+ *   - `curl [Flags] [http(s)://]<service>[:port][/pfad]` – Erreichbarkeit (#164, Werft-Capstone)
+ * Beide lesen ihre Eingabe über `parseCall` (#1510) und sind rein lesend (bis auf `curl -o`, das ins
+ * Arbeitsverzeichnis schreibt) und in der Spielwelt bewusst eigene Befehle (statt `kubectl
  * exec … nslookup/curl`), damit Namensauflösung und Erreichbarkeit greifbar werden;
  * im echten Cluster liefen sie aus einem Pod.
  *
@@ -189,10 +190,13 @@ function refusedReason(host: NetHost, svc: ServiceRes): string | null {
   return null;
 }
 
+/** Der Dateiname im Arbeitsverzeichnis: ein führendes `./` fällt weg. */
+const workName = (value: string): string => value.replace(/^\.\//, "");
+
 /** `-o <datei>`: ein Dateiname im Arbeitsverzeichnis (ein führendes `./` fällt weg), `/dev/null` (verwirft die
  *  Antwort) oder `-` (stdout). Alles andere (Unterordner, leerer Wert) ist nicht simuliert. */
 function checkOutput(host: ErrHost, value: string): string | null {
-  const name = value.replace(/^\.\//, "");
+  const name = workName(value);
   if (value === "-" || value === "/dev/null" || (name !== "" && !name.includes("/"))) return null;
   return notSimulated(host, "'-o " + value + "'.", ["curl -o <datei> <adresse> (nur Dateien im Arbeitsverzeichnis, 'ls')", "-o /dev/null", "-o -"],
     "Schreib in eine Datei direkt im Arbeitsverzeichnis.");
@@ -232,7 +236,7 @@ function progress(bytes: number): string {
 function deliver(host: NetHost, c: Call, r: Reply): string {
   const out = c.value("-o", "--output");
   if (out === null || out === "-") return r.head.concat(["", r.body]).join("\n");
-  if (out !== "/dev/null") host.files[out.replace(/^\.\//, "")] = r.body;
+  if (out !== "/dev/null") host.files[workName(out)] = r.body;
   return c.has("-s") ? "" : progress(r.body.length);
 }
 
