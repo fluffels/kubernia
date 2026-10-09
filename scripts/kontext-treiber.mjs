@@ -2,7 +2,7 @@
 /**
  * Kontext-Treiber eines Subagent-Typs (#1559), Standard `kubernia-umsetzer`: was macht den Kontext je Call groß und was kostet es?
  *
- *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--projekt <slug>] [--json]
+ *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--json]
  *
  * Je Lauf (Transkript unter `<session>/subagents/`): Requests, Kontext je Call (input + cacheWrite + cacheRead), Kosten (aus PRICES,
  * nur aufgezeichnete Usage: Output unterzählt), Phase je Call, Tool-Ergebnisse mit Größe und Last, Cache-Neuaufbauten mit Ursache.
@@ -168,6 +168,8 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
   return {
     ticket: kopf?.ticket ?? null,
     sammel: kopf?.sammel ?? false,
+    brille: kopf?.brille ?? null,
+    delta: Boolean(kopf?.deltaArt),
     start: kopf?.start ?? Date.parse(eintraege[0].call.ts),
     requests: eintraege.length,
     ersterKontext: ctx[0],
@@ -247,16 +249,19 @@ function gruppe(analysen) {
 
 /**
  * Kern: Läufe des Typs im Start-Fenster [von, bis] (optional nur/ohne bestimmte Tickets) → Bericht je Gruppe (alle, ohne Sammeltickets, Sammeltickets).
- * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[] }} e
+ * `delta` (true = nur Läufe mit Delta-Patch-Pfad im Prompt, false = nur ohne) und `brille` (Name wie in `laufAus`, z. B. `Architektur`) filtern zusätzlich (#1582).
+ * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[], delta?: boolean|null, brille?: string|null }} e
  */
-export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [], wurzel = null }) {
+export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [], wurzel = null, delta = null, brille = null }) {
   const analysen = laeufe
     .filter((l) => l?.meta?.agentType === agent)
     .map((l) => analysiereLauf(l, { wurzel }))
     .filter(Boolean)
     .filter((a) => (!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis)))
     .filter((a) => !tickets.length || tickets.includes(a.ticket))
-    .filter((a) => !ohne.includes(a.ticket));
+    .filter((a) => !ohne.includes(a.ticket))
+    .filter((a) => delta === null || a.delta === delta)
+    .filter((a) => !brille || a.brille === brille);
   return {
     agent,
     gesamt: gruppe(analysen),
@@ -310,6 +315,12 @@ export function parseArgs(argv) {
     else if (x === "--ticket") a.tickets.push(Number(argv[++i]));
     else if (x === "--ohne") a.ohne.push(Number(argv[++i]));
     else if (x === "--projekt") a.projekt = argv[++i];
+    else if (x === "--brille") a.brille = argv[++i];
+    else if (x === "--delta") {
+      const v = argv[++i];
+      if (v !== "ja" && v !== "nein") a.fehler = `--delta erwartet ja|nein, nicht ${v}`;
+      else a.delta = v === "ja";
+    }
     else if (x === "--json") a.json = true;
   }
   return a;
@@ -318,13 +329,17 @@ export function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.von) {
-    console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--projekt <slug>] [--json]");
+    console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--json]");
+    process.exit(2);
+  }
+  if (args.fehler) {
+    console.error(args.fehler);
     process.exit(2);
   }
   const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
   const dir = join(homedir(), ".claude", "projects", slug);
   readdirSync(dir);
-  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel() });
+  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel(), delta: args.delta ?? null, brille: args.brille ?? null });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
 

@@ -8,7 +8,7 @@
  * Je Lauf: Ticket (erstes `#<nr>` im Prompt), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
  * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
  * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request), Kosten in $ (`kosten`, Summe der Call-Preise aus PRICES, `null` bei einem Call ohne Preis; nur
- * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
+ * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Für Lens-Läufe (#1582) zusätzlich: Beschreibung, `brille`, `runde`, `deltaArt` (`null` ohne Delta-Patch-Pfad im Prompt (gelabelt oder `kq-<nr>-r<n>-delta.patch`), `merge`, `fix`), `promptZeichen`, `ersterCall` und `patch` (Zugriffe auf den vollen und den Delta-Patch, siehe patch-zugriff.mjs). Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Importiert token-baseline.mjs, nicht umgekehrt.
@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { median } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektSlug, transkriptZeilen } from "./transkript.mjs";
+import { patchAus, patchPfade } from "./patch-zugriff.mjs";
 
 const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
@@ -73,6 +74,24 @@ function kostenAus(calls) {
   return calls.reduce((summe, c) => summe + c.cost, 0);
 }
 
+const BRILLEN = [[/^arch/i, "Architektur"], [/^req/i, "Requirement-Treue"], [/^test/i, "Test-Adäquanz"], [/^doku/i, "Doku"]];
+const brilleNorm = (b) => (/^merge/i.test(b) ? null : (BRILLEN.find(([re]) => re.test(b))?.[1] ?? b));
+
+/** Brille und Runde aus der Spawn-Beschreibung (`Lens <Brille> R<n>`, älter `lens:<brille>:r<n>`); Merge-Läufe heißen `M<n>`. */
+export function beschreibungAus(beschreibung) {
+  const d = typeof beschreibung === "string" ? beschreibung.trim() : "";
+  const merge = /\bMerge|\bM\d+\b/i.test(d);
+  const neu = /^Lens\s+(.+?)\s+R(\d+)\b/i.exec(d);
+  if (neu) return { brille: brilleNorm(neu[1]), runde: Number(neu[2]), merge };
+  const alt = /^lens(-m)?:([^:\s]+):r?(\d+)/i.exec(d);
+  if (alt) return { brille: brilleNorm(alt[2]), runde: alt[1] ? null : Number(alt[3]), merge: Boolean(alt[1]) };
+  const ohne = /^Lens\s+(\S+)/i.exec(d);
+  return { brille: ohne ? brilleNorm(ohne[1]) : null, runde: null, merge };
+}
+
+/** Art des Delta-Auftrags: `null` ohne Delta-Patch-Pfad im Prompt, `"merge"` bei Konflikt-Auflösung (Merge-Lens), sonst `"fix"`. */
+const deltaArtAus = (prompt, merge) => (!patchPfade(prompt).delta ? null : merge || /Konflikt-Aufl(?:ö|oe)sung/i.test(prompt) ? "merge" : "fix");
+
 /** Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. */
 export function laufAus({ meta, zeilen, datei }) {
   const zeiten = zeilen.map((r) => r?.timestamp).filter(gueltig).map(ms);
@@ -83,11 +102,21 @@ export function laufAus({ meta, zeilen, datei }) {
   const { calls } = callsFromTranscript(zeilen);
   const { intervalle, offeneTools } = toolIntervalle(zeilen);
   const dauer = ende - start;
+  const beschr = beschreibungAus(meta?.description);
+  const patch = patchAus(prompt, zeilen);
+  const erster = calls[0];
   const tool = Math.min(vereinigungMs(intervalle), dauer);
   return {
     agentType: meta?.agentType ?? null,
     modelle: [...new Set(calls.map((c) => c.model).filter(Boolean))].sort(),
     datei: datei ?? null,
+    beschreibung: typeof meta?.description === "string" ? meta.description : null,
+    brille: beschr.brille,
+    runde: beschr.runde ?? (beschr.merge ? null : patch?.runde) ?? null,
+    deltaArt: deltaArtAus(prompt, beschr.merge),
+    promptZeichen: prompt.length,
+    ersterCall: erster ? { input: erster.input ?? 0, cacheWrite: erster.cacheWrite ?? 0, cacheRead: erster.cacheRead ?? 0 } : null,
+    patch,
     ticket: Number(/#(\d+)/.exec(prompt)?.[1]) || null,
     sammel: /\(gesammelt\)/i.test(prompt),
     start,
