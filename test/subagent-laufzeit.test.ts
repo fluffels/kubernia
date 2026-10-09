@@ -1,11 +1,14 @@
 /* Subagent-Laufzeit (#1382): Kern pur, synthetische Transkriptzeilen ohne IO. */
-import { describe, expect, test } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/subagent-laufzeit.mjs";
 
 type Row = Record<string, unknown>;
-type Lauf = { meta: { agentType?: string }; zeilen: Row[] };
-type L = { kosten: number | null; ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
+type Lauf = { meta: { agentType?: string }; zeilen: Row[]; datei?: string };
+type L = { modelle: string[]; datei: string | null; kosten: number | null; ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
 type Stat = { kosten: number | null; kostenSumme: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
@@ -17,7 +20,7 @@ const S = raw as unknown as {
 const t = (min: number, tag = 7) => new Date(Date.UTC(2026, 9, tag, 10, 0, 0) + min * 60_000).toISOString();
 let seq = 0;
 const user = (min: number, text: string, tag = 7): Row => ({ type: "user", timestamp: t(min, tag), message: { role: "user", content: text } });
-const call = (min: number, tag = 7, tool?: string, ctx = 1000, cache = 0): Row => {
+const call = (min: number, tag = 7, tool?: string, ctx = 1000, cache = 0, model: string | undefined = "claude-opus-5-5"): Row => {
   seq += 1;
   return {
     type: "assistant",
@@ -25,7 +28,7 @@ const call = (min: number, tag = 7, tool?: string, ctx = 1000, cache = 0): Row =
     uuid: `u${seq}`,
     message: {
       id: `m${seq}`,
-      model: "claude-opus-5-5",
+      model,
       usage: { input_tokens: ctx, output_tokens: 10, cache_creation_input_tokens: cache, cache_read_input_tokens: cache },
       content: tool ? [{ type: "tool_use", id: tool, name: "Read", input: {} }] : [{ type: "text", text: "x" }],
     },
@@ -214,5 +217,63 @@ describe("laufzeiten: Kosten (#1558)", () => {
     const l = lauf("Plane #1", 0, 4);
     l.zeilen.push({ ...l.zeilen[1], uuid: "dupe" }); // gleiche message.id wie Zeile 1
     expect(S.laufzeiten({ laeufe: [l] }).laeufe[0].kosten).toBeCloseTo(2 * CALL_KOSTEN, 8);
+  });
+});
+
+describe("laufzeiten: Modelle und Transkriptdatei (#1580)", () => {
+  const mitModellen = (modelle: string[], datei?: string): Lauf => {
+    const l = lauf("Lens #1", 0, 4);
+    l.zeilen = [user(0, "Lens #1"), ...modelle.map((m, i) => call(1 + i, 7, undefined, 1000, 0, m))];
+    if (datei) l.datei = datei;
+    l.meta.agentType = "kubernia-lens";
+    return l;
+  };
+  const lauf1 = (l: Lauf) => S.laufzeiten({ laeufe: [l], agent: "kubernia-lens" }).laeufe[0];
+  test("modelle: sortiert, ohne Doppel", () => {
+    expect(lauf1(mitModellen(["claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5-5"])).modelle).toEqual(["claude-opus-5-5", "claude-sonnet-5-5"]);
+  });
+  test("modelle: ein Call ohne model taucht nicht auf (kein undefined)", () => {
+    expect(lauf1(mitModellen(["claude-sonnet-5-5", ""])).modelle).toEqual(["claude-sonnet-5-5"]);
+  });
+  test("modelle: ohne Call leer", () => {
+    expect(lauf1(mitModellen([])).modelle).toEqual([]);
+  });
+  test("datei wird durchgereicht, fehlt sie, ist sie null", () => {
+    expect(lauf1(mitModellen(["claude-opus-5-5"], "s1/subagents/agent-x.jsonl")).datei).toBe("s1/subagents/agent-x.jsonl");
+    expect(lauf1(mitModellen(["claude-opus-5-5"])).datei).toBeNull();
+  });
+  test("renderMarkdown: Spalte Modellzeit und Spalte Modell (Name, `-` ohne Modell)", () => {
+    const r = S.laufzeiten({ laeufe: [mitModellen(["claude-sonnet-5-5"]), mitModellen([])], agent: "kubernia-lens" });
+    const md = S.renderMarkdown(r);
+    expect(md).toContain("| Modellzeit | Modell | Tool |");
+    expect(md).toContain("| Modell |");
+    expect(md).toMatch(/\| claude-sonnet-5-5 \|/);
+    expect(md).toMatch(/^\| 2026[^\n]*\| \d+\.\d \| - \| \d+\.\d \|/m);
+  });
+});
+
+describe("ladeLaeufe: datei relativ zum Projektordner (#1580)", () => {
+  const L2 = raw as unknown as { ladeLaeufe: (dir: string, agent: string, von?: string) => { meta: { agentType: string }; datei: string }[] };
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const projekt = () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-laufzeit-"));
+    dirs.push(dir);
+    const sub = join(dir, "sess1", "subagents");
+    mkdirSync(sub, { recursive: true });
+    const schreibe = (n: string, agentType: string) => {
+      writeFileSync(join(sub, `${n}.meta.json`), JSON.stringify({ agentType }));
+      writeFileSync(join(sub, `${n}.jsonl`), JSON.stringify(user(0, "Lens #1")) + "\n");
+    };
+    schreibe("agent-x", "kubernia-lens");
+    schreibe("agent-y", "kubernia-planner");
+    return dir;
+  };
+  test("datei = <session>/subagents/<name>.jsonl mit Schrägstrichen, falscher Typ wird nicht geladen", () => {
+    const r = L2.ladeLaeufe(projekt(), "kubernia-lens");
+    expect(r).toHaveLength(1);
+    expect(r[0].datei).toBe("sess1/subagents/agent-x.jsonl");
   });
 });
