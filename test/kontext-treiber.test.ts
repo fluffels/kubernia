@@ -212,3 +212,66 @@ describe("kontextTreiber (Aggregat)", () => {
     expect(md).toContain("verify");
   });
 });
+
+const verschiebe = (l: Lauf, minuten: number): Lauf => ({
+  ...l,
+  zeilen: l.zeilen.map((z) => ({ ...z, timestamp: new Date(Date.parse(z.timestamp as string) + minuten * 60_000).toISOString() })),
+});
+type Fenster = { laeufe: Lauf[]; von?: string; bis?: string; tickets?: number[]; ohne?: number[] };
+const fenster = (e: Fenster) => (K as unknown as { kontextTreiber: (e: Fenster) => { gesamt: { gesamt: { n: number; ohnePreis: number; kostenMedian: number | null; kostenRead: number; kostenWrite: number; kostenOutput: number } | null } } }).kontextTreiber(e).gesamt.gesamt;
+
+describe("Fenster und Filter", () => {
+  const a = lauf("#1 a", [{ min: 1 }]); // Start t(0)
+  const b = verschiebe(lauf("#2 b", [{ min: 1 }]), 100);
+  const c = verschiebe(lauf("#3 c", [{ min: 1 }]), 200);
+  test("von und bis grenzen den Start ein, die Grenze selbst zählt mit", () => {
+    expect(fenster({ laeufe: [a, b, c], von: t(100), bis: t(100) })!.n).toBe(1);
+    expect(fenster({ laeufe: [a, b, c], von: t(50) })!.n).toBe(2);
+    expect(fenster({ laeufe: [a, b, c], bis: t(150) })!.n).toBe(2);
+    expect(fenster({ laeufe: [a, b, c], von: t(300) })).toBeNull();
+  });
+  test("ohne schließt Tickets aus, tickets wählt aus", () => {
+    expect(fenster({ laeufe: [a, b, c], ohne: [2] })!.n).toBe(2);
+    expect(fenster({ laeufe: [a, b, c], tickets: [3], ohne: [3] })).toBeNull();
+  });
+  test("Kosten: Teile summieren, Lauf ohne Preis zählt nur in ohnePreis", () => {
+    const ohnePreis = lauf("#4 d", [{ min: 1 }]);
+    (ohnePreis.zeilen[1] as { message: { model: string } }).message.model = "unbekannt";
+    const g = fenster({ laeufe: [a, ohnePreis] })!;
+    expect(g.ohnePreis).toBe(1);
+    expect(g.kostenMedian).toBeGreaterThan(0);
+    expect(g.kostenRead).toBeGreaterThan(0);
+    expect(g.kostenWrite).toBeGreaterThanOrEqual(0);
+    expect(g.kostenOutput).toBeGreaterThan(0);
+  });
+});
+
+describe("Zerlegung und Ursachen, Grenzfälle", () => {
+  test("Zuwachs kleiner als das Tool-Ergebnis: Ergebnis = Zuwachs, Rest 0; schrumpfender Kontext trägt nichts bei", () => {
+    const klein = K.analysiereLauf(lauf("#1 x", [{ min: 1, ctx: 1000, tools: [{ name: "Read", input: { file_path: "a" }, result: "x".repeat(4000) }] }, { min: 2, ctx: 1300 }]))!;
+    expect(klein.wachstum).toEqual({ ergebnis: 300, eingabe: 0, rest: 0 });
+    const schrumpf = K.analysiereLauf(lauf("#1 x", [{ min: 1, ctx: 5000, tools: [{ name: "Read", input: {}, result: "x".repeat(400) }] }, { min: 2, ctx: 2000 }]))!;
+    expect(schrumpf.wachstum).toEqual({ ergebnis: 0, eingabe: 0, rest: 0 });
+  });
+  test("Neuaufbau nach einem Call ohne Tool im Review heißt Lens-Warten, in der Umsetzung sonstiges, nach verify verify", () => {
+    const review = K.analysiereLauf(lauf("#1 x", [{ min: 1, tools: [linse] }, { min: 2 }, { min: 12, ctx: 100_000, cacheRead: 1000 }]))!;
+    expect(review.neuaufbauten[0].ursache).toBe("Lens-Warten");
+    const umsetzung = K.analysiereLauf(lauf("#1 x", [{ min: 1 }, { min: 12, ctx: 100_000, cacheRead: 1000 }]))!;
+    expect(umsetzung.neuaufbauten[0].ursache).toBe("sonstiges");
+    const verify = K.analysiereLauf(lauf("#1 x", [{ min: 1, tools: [bash("npm run verify:kompakt")] }, { min: 12, ctx: 100_000, cacheRead: 1000 }]))!;
+    expect(verify.neuaufbauten[0].ursache).toBe("verify");
+  });
+  test("ein Call ohne Tool nach einer CI-Fix-Änderung bleibt CI-Fix", () => {
+    const p = K.phaseDerCalls(lauf("#1 x", [{ min: 1, tools: [bash("gh pr create")] }, { min: 2, tools: [edit()] }, { min: 3 }]).zeilen);
+    expect(p).toEqual(["Merge/Cleanup", "CI-Fix", "CI-Fix"]);
+  });
+  test("gh run view ist kein CI-Warten (Log lesen gehört zum Fix)", () => {
+    expect(K.phaseDerCalls(lauf("#1 x", [{ min: 1, tools: [bash("gh run view 5 --log-failed | tail -n 80")] }]).zeilen)).not.toContain("CI-Warten");
+  });
+  test("bereinige: Git-Bash-Home, Worktree ohne Schrägstrich, Repo-Wurzel, Leerraum", () => {
+    expect(K.bereinige("cat /c/Users/Max/x.md")).toBe("cat ~/x.md");
+    expect(K.bereinige("cd /c/dev/kubernia/.claude/worktrees/kq-1469 && ls")).toBe("cd <wt>/ && ls");
+    expect(K.bereinige("Read C:/dev/kubernia/docs/a.md")).toBe("Read <repo>/docs/a.md");
+    expect(K.bereinige("a   b\n c")).toBe("a b c");
+  });
+});

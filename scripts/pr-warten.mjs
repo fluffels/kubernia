@@ -10,6 +10,8 @@
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln)
+ * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
+ * `statusCheckRollup` liefert `gh` mit der Standardgrenze (rund 100 Einträge); die CI hat deutlich weniger Checks.
  * Der Kern `bewerte` ist pur; CLI und `ghJson`-Aufruf sind dünne, ungetestete IO.
  */
 import { pathToFileURL } from "node:url";
@@ -88,7 +90,7 @@ function main() {
     process.exit(3);
   }
   const r = warten({
-    hole: () => ghJson(["pr", "view", a.pr, "--json", FELDER]),
+    hole: () => ghJson(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 }),
     schlafe: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
     jetzt: () => Date.now(),
     maxMs: a.maxSekunden * 1000,

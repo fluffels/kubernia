@@ -6,7 +6,7 @@
  *
  * Je Lauf (Transkript unter `<session>/subagents/`): Requests, Kontext je Call (input + cacheWrite + cacheRead), Kosten (aus PRICES,
  * nur aufgezeichnete Usage: Output unterzählt), Phase je Call, Tool-Ergebnisse mit Größe und Last, Cache-Neuaufbauten mit Ursache.
- *  - Phase (Heuristik, Vorrang von oben): CI-Warten (`gh pr checks`, `pr-warten`, `gh run watch|view`, `until`-Schleife mit `gh pr view`),
+ *  - Phase (Heuristik, Vorrang von oben): CI-Warten (`gh pr checks`, `pr-warten`, `gh run watch`, `until`-Schleife mit `gh pr view`),
  *    verify (`verify:*`, `vitest`, `eslint`, `typecheck`, `check:*`), sonst der Zustand: Umsetzung → Pflege (zwischen den Markern
  *    `pflege: start/ende`) → Review (ab dem ersten `kubernia-lens`-Spawn) → Lens-Fix (Edit/Write im Review) → ab `gh pr create` CI-Fix
  *    (Edit/Write) bzw. Merge/Cleanup. Calls ohne Tool erben den Zustand. Grenze: ein Befehl mit mehreren Zwecken zählt zum ersten Treffer.
@@ -31,7 +31,7 @@ const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
 export const PHASEN = ["Umsetzung", "Pflege", "verify", "Review", "Lens-Fix", "CI-Warten", "CI-Fix", "Merge/Cleanup"];
 
-const CI_WARTEN = /gh\s+pr\s+checks|pr-warten|gh\s+run\s+(?:watch|view)|until\b[^\n]*gh\s+pr\s+view/;
+const CI_WARTEN = /gh\s+pr\s+checks|pr-warten|gh\s+run\s+watch|until\b[^\n]*gh\s+pr\s+view/;
 const VERIFY = /verify:|npm\s+run\s+verify|vitest|eslint|typecheck|check:/;
 const num = (x) => (Number.isFinite(x) ? x : 0);
 const kontextVon = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
@@ -43,7 +43,8 @@ export function bereinige(text) {
     .replace(/\\/g, "/")
     .replace(/[A-Za-z]:\/Users\/[^/\s"']+/g, "~")
     .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~")
-    .replace(/\S*\/\.claude\/worktrees\/kq-\d+[\w-]*\//g, "<wt>/")
+    .replace(/\S*\/\.claude\/worktrees\/kq-\d+[\w-]*(?:\/|(?=\s|$))/g, "<wt>/")
+    .replace(/(?:[A-Za-z]:|\/[a-z])\/dev\/kubernia\//g, "<repo>/")
     .replace(/\s+/g, " ");
 }
 

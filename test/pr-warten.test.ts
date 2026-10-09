@@ -99,3 +99,49 @@ describe("parseArgs", () => {
     expect(P.parseArgs(["--max-sekunden", "60", "--intervall", "10", "7"])).toEqual({ pr: "7", maxSekunden: 60, intervall: 10 });
   });
 });
+
+describe("Fail-closed und Fehlerzähler (Grenzfälle)", () => {
+  test("COMPLETED mit unbekannter oder fehlender conclusion ist rot, nie grün", () => {
+    expect(P.bewerte(offen([lauf("a", "COMPLETED", "STALE")])).exit).toBe(1);
+    expect(P.bewerte(offen([lauf("a", "COMPLETED", null)])).exit).toBe(1);
+  });
+  test("StatusContext SUCCESS ist grün, ohne __typename wird er am Feld context erkannt", () => {
+    expect(P.bewerte(offen([ctx("ci", "SUCCESS")]))).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus"] });
+    expect(P.bewerte(offen([{ context: "ci", state: "FAILURE", targetUrl: "u" }])).zeilen).toEqual(["ROT ci u"]);
+  });
+  test("Fehler, Erfolg, Fehler, Fehler sind kein Exit 3: der Zähler wird nach einem Erfolg zurückgesetzt", () => {
+    let n = 0;
+    const antworten: (object | Error)[] = [new Error("a"), offen([lauf("x", "IN_PROGRESS")]), new Error("b"), new Error("c"), { state: "MERGED", mergeCommit: { oid: "abc1234" }, statusCheckRollup: [] }];
+    let t = 0;
+    const r = P.warten({
+      hole: () => {
+        const a = antworten[n++];
+        if (a instanceof Error) throw a;
+        return a;
+      },
+      jetzt: () => t,
+      schlafe: (ms) => void (t += ms),
+      maxMs: 600_000,
+      intervallMs: 30_000,
+    });
+    expect(r.exit).toBe(0);
+  });
+  test("läuft das Budget nach einem gh-Fehler ab, steht GH-FEHLER mit Exit 2 da", () => {
+    let t = 0;
+    const r = P.warten({
+      hole: () => {
+        throw new Error("down");
+      },
+      jetzt: () => t,
+      schlafe: (ms) => void (t += ms),
+      maxMs: 40_000,
+      intervallMs: 30_000,
+    });
+    expect(r).toEqual({ exit: 2, zeilen: ["GH-FEHLER down"] });
+  });
+  test("das Budget wird genau ausgeschöpft: letzter Poll vor Ablauf, kein Schlaf darüber hinaus", () => {
+    let t = 0;
+    P.warten({ hole: () => offen([lauf("a", "IN_PROGRESS")]), jetzt: () => t, schlafe: (ms) => void (t += ms), maxMs: 90_000, intervallMs: 30_000 });
+    expect(t).toBe(60_000);
+  });
+});
