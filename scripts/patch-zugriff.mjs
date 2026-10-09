@@ -18,7 +18,7 @@ const basename = (p) => norm(p).split("/").pop() ?? "";
 const GEZIELT = /\b(?:sed|head|tail|grep|rg|awk)\b|Select-Object|Select-String|-TotalCount|-Tail|-First|-Last/i;
 const VOLLLESER = /(?:^|[\s;&|(])(?:cat|type|Get-Content|gc)\s/i;
 
-/** Pfade aus dem Prompt: `Patch: <pfad>` (voll) und `Delta-Patch: <pfad>`, jeweils als Basename. */
+/** Pfade aus dem Prompt als Basename: `Patch: <pfad>` (voll) und `Delta-Patch: <pfad>`, ohne Label der erste Pfad `kq-<nr>-r<n>[-delta].patch`. */
 export function patchPfade(prompt) {
   // Nur Pfade auf eine .patch-Datei: Fließtext wie "Patch:`" oder "Delta-Patch: ein" im Auftrag zählt nicht.
   // Ohne Label (Workflow-Prompt: "Patch-Datei bereit … :\n  <pfad>") gilt der erste Pfad der Form kq-<nr>-r<n>[-delta].patch.
@@ -73,7 +73,7 @@ function readAuf(z, eingabe, ergebnis) {
 }
 
 /**
- * Patch-Kennzahlen aus Prompt und Transkriptzeilen; `null` ohne `Patch:`/`Delta-Patch:` im Prompt.
+ * Patch-Kennzahlen aus Prompt und Transkriptzeilen; `null` ohne Patch-Pfad im Prompt.
  * @returns {{ ticket: number|null, runde: number|null, voll: object, delta: object|null } | null}
  */
 export function patchAus(prompt, zeilen) {

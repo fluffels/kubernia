@@ -438,6 +438,20 @@ describe("laufzeiten: Grenzfälle Runde 1 (#1582)", () => {
     expect(l.deltaArt).toBe("fix");
     expect(l.patch?.delta).not.toBeNull();
   });
+  test("Fließtext Delta-Patch: ohne Pfad ergibt weder deltaArt noch patch.delta", () => {
+    const l = eins("Lens Doku R2", "Patch: /t/kq-3-r2.patch Delta-Patch: kommt später");
+    expect(l.deltaArt).toBeNull();
+    expect(l.patch?.delta).toBeNull();
+  });
+  test("ungelabelter voller Pfad: Ticket, Runde und Zugriff kommen aus dem Pfad", () => {
+    const id = "ul1";
+    const asst = call(1.5, 7, id);
+    (asst.message as { content: unknown[] }).content = [{ type: "tool_use", id, name: "Read", input: { file_path: "/t/kq-3-r1.patch", offset: 1, limit: 4 } }];
+    const zeilen: Row[] = [asst, { type: "user", timestamp: t(1.6), toolUseResult: { file: { startLine: 1, numLines: 4, totalLines: 40 } }, message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } }];
+    const l = eins(undefined, "Patch-Datei bereit:\n  /t/kq-3-r1.patch", zeilen);
+    expect(l.patch).toMatchObject({ ticket: 3, runde: 1, voll: { zugriffe: 1, zeilen: 4 } });
+    expect(l.runde).toBe(1);
+  });
   test("Lookbehind: Delta-Patch zuerst, dann Patch, der volle Pfad bleibt der volle", () => {
     const VOLL = "/t/kq-9-r2.patch";
     const zeilen: Row[] = [];
