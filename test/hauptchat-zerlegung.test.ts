@@ -570,6 +570,24 @@ describe("zerlegeHauptchat: Modellanteil und TTL im Ergebnis (#1557)", () => {
     assert.match(text, /^Modellanteil Ticket-Orchestrierung: sonnet 2\/3 \(66,7 %\), opus 1, haiku 0, sonst 0, Fenster 1, Median /m);
     assert.match(text, /^TTL Ticket-Orchestrierung: /m);
   });
+  test("die Pausenkette läuft über alle Hauptchat-Calls: ein Ad-hoc-Call vor dem Claim hält den Cache des ersten Ticket-Calls warm", () => {
+    const mitCache = (row: Row): Row => {
+      const msg = row.message as { usage: Record<string, unknown> };
+      msg.usage = { ...msg.usage, cache_creation_input_tokens: 1_000_000, cache_creation: { ephemeral_1h_input_tokens: 1_000_000 }, cache_read_input_tokens: 1_000_000 };
+      return row;
+    };
+    const main = [user(0, "x"), call(1, SONNET), slash(2, "kubernia"), mitCache(call(4, SONNET, claim(5)))];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }) as Ergebnis & { ttl: Ttl };
+    assert.equal(r.ttl.calls, 1, "nur der Ticket-Call zählt");
+    assert.equal(r.ttl.pausenUeber5, 0);
+    // warm (Vorgänger 3 min davor im Ad-hoc): 1M Write zu 2,5 + 1M Read zu 0,2; ohne Kette wäre er kalt (5 $)
+    assert.ok(Math.abs(r.ttl.sim5mKosten - 2.7) < 1e-9);
+    // eine Pause über 5 min bleibt eine Pause, auch wenn sie hinter einem Ad-hoc-Call liegt
+    const lang = [user(0, "x"), call(1, SONNET), slash(10, "kubernia"), mitCache(call(12, SONNET, claim(5)))];
+    const l = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: lang }] }) as Ergebnis & { ttl: Ttl };
+    assert.equal(l.ttl.pausenUeber5, 1);
+    assert.ok(Math.abs(l.ttl.sim5mKosten - 5) < 1e-9);
+  });
   test("ohne Ticket-Fenster stehen die Zeilen als „keine Fenster“ da", () => {
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "x"), call(1, SONNET)] }] });
     const text = hcx.renderMarkdown(r);
