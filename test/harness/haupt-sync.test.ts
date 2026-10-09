@@ -68,11 +68,11 @@ describe("Hilfsfunktionen", () => {
   test("baueText (Hook-Modus): Sitzungsbasis immer, Neustart-Hinweis nur bei Harness-Änderungen, Meldung mit Zahl", () => {
     expect(S.baueText({ aktion: "nichts", basis: "abc" })).toBe("Sitzungsbasis: abc");
     const harness = { skill: [], agenten: [".claude/agents/x.md"], sonstige: [], lockGeaendert: false };
-    const gepullt = S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", harness } as never);
+    const gepullt = S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", harness });
     expect(gepullt).toContain("neu starten");
     expect(gepullt).toContain("Sitzungsbasis: abc");
     const ohne = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
-    expect(S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", harness: ohne } as never)).not.toContain("neu starten");
+    expect(S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", harness: ohne })).not.toContain("neu starten");
     expect(S.baueText({ aktion: "melden", hinter: 2, grund: "Arbeitsbaum nicht sauber", basis: "abc" })).toContain("2 Commits hinter origin/main");
   });
 });
