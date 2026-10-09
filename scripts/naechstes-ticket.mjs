@@ -5,6 +5,7 @@
  *
  *   node scripts/naechstes-ticket.mjs          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten
  *   node scripts/naechstes-ticket.mjs --json   # { ticket, uebersprungen }
+ *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel   # nur Label `area:harness` bzw. nur ohne (#1552); Notfälle 🚨/🔒 zählen in beiden
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler. Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Label `forum`) wird übersprungen und als „Befund melden“ ausgewiesen.
@@ -16,7 +17,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { REPO, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
+import { NOTFAELLE, REPO, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext.mjs";
 import { ghJson } from "./gh-cli.mjs";
 
@@ -42,16 +43,36 @@ export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }) {
   return new Set([...refs, ...worktrees, ...prHeads].map(ticketAusRef).filter((n) => n !== null));
 }
 
+/** Nutzersichtbare Bereichsnamen (#1552); das Label für „agentic“ bleibt `area:harness`. */
+export const BEREICHE = { agentic: "Agentic Engineering", spiel: "Spielentwicklung" };
+
+/** `--bereich <wert>` bzw. `--bereich=<wert>` aus argv: `{ bereich }` (null ohne Schalter) oder `{ fehler }`. Pur. */
+export function bereichAusArgv(argv) {
+  const i = argv.findIndex((a) => a === "--bereich" || a.startsWith("--bereich="));
+  if (i < 0) return { bereich: null };
+  const wert = argv[i].includes("=") ? argv[i].slice("--bereich=".length) : argv[i + 1];
+  if (Object.hasOwn(BEREICHE, wert ?? "")) return { bereich: wert };
+  return { fehler: `--bereich erwartet agentic oder spiel (bekommen: ${wert === undefined ? "nichts" : `„${wert}“`})` };
+}
+
+/** Gehört das Item zum Bereich? Ohne Bereich immer; 🚨 CI rot auf main und 🔒 Security zählen in beiden (Roter main geht vor). Pur. */
+export function imBereich(item, bereich) {
+  if (!bereich) return true;
+  const notfall = NOTFAELLE.filter((n) => n.art === "rot-main" || n.art === "security");
+  if (notfall.some((n) => String(item.title ?? "").startsWith(n.marker))) return true;
+  return item.labels.includes("area:harness") === (bereich === "agentic");
+}
+
 /**
  * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
  * Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "" }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null }) {
   const belegt = belegteNummern({ refs, worktrees, prHeads });
   const uebersprungen = [];
   for (const item of items) {
-    if (item.status !== "Todo" || item.state !== "open") continue;
+    if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich)) continue;
     const grund = ueberspringGrund(item, { offene, belegt, owner });
     if (grund) uebersprungen.push({ nr: item.number, grund });
     else return { ticket: { nr: item.number, titel: item.title }, uebersprungen };
@@ -71,16 +92,19 @@ function ueberspringGrund(c, { offene, belegt, owner }) {
 }
 
 /** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach je übersprungenem Kandidaten eine Zeile. Pur. */
-export function formatiere({ ticket, uebersprungen }) {
-  const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : "kein freies Ticket";
+export function formatiere({ ticket, uebersprungen, bereich = null }) {
+  const keins = bereich ? `kein freies Ticket im Bereich ${BEREICHE[bereich]}` : "kein freies Ticket";
+  const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : keins;
   return [kopf, ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
 }
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
+  const b = bereichAusArgv(argv);
+  if ("fehler" in b) return { code: 2, out: "", err: `✖ naechstes-ticket: ${b.fehler}\n` };
   try {
     const eingabe = io.lade();
-    const ergebnis = waehleNaechstes({ ...eingabe, owner: io.owner });
+    const ergebnis = { ...waehleNaechstes({ ...eingabe, owner: io.owner, bereich: b.bereich }), ...(b.bereich ? { bereich: b.bereich } : {}) };
     const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere(ergebnis);
     return { code: ergebnis.ticket ? 0 : 1, out, err: "" };
   } catch (e) {

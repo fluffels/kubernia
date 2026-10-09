@@ -597,6 +597,7 @@ function argsLesen(roh) {
   if (typeof wert === 'string') {
     const text = wert.trim()
     if (text === '') return {}
+    if (text === 'agentic' || text === 'spiel') return { bereich: text }
     if (text.startsWith('{') || text.startsWith('[')) {
       try {
         wert = JSON.parse(text)
@@ -619,11 +620,17 @@ function argsLesen(roh) {
       if (n === null) return { fehler: `args.nummer ist keine gültige Ticketnummer: ${JSON.stringify(wert.nummer)}` }
       ergebnis.nummer = n
     }
+    if (wert.bereich !== undefined && wert.bereich !== null) {
+      if (wert.bereich !== 'agentic' && wert.bereich !== 'spiel') {
+        return { fehler: `args.bereich ist weder agentic noch spiel: ${JSON.stringify(wert.bereich)}` }
+      }
+      ergebnis.bereich = wert.bereich
+    }
     // Ein Objekt, aus dem sich NICHTS ableiten lässt (vertippter Schlüssel wie
     // {nummber: 965}, leeres Objekt), ist derselbe stille Fremd-Claim wie zuvor —
     // also ebenfalls lauter Abbruch statt Rückfall aufs Board-Item.
-    if (ergebnis.nummer === undefined && ergebnis.klaerungAntworten === undefined) {
-      return { fehler: `args-Objekt enthält weder nummer noch klaerungAntworten: ${JSON.stringify(wert)}` }
+    if (ergebnis.nummer === undefined && ergebnis.klaerungAntworten === undefined && ergebnis.bereich === undefined) {
+      return { fehler: `args-Objekt enthält weder nummer, klaerungAntworten noch bereich: ${JSON.stringify(wert)}` }
     }
     return ergebnis
   }
@@ -660,7 +667,7 @@ ${
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
 prüfe es aber genauso (offen? kein Assignee? kein offener Blocker?).
 Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
-    : `Nimm das oberste freie Item: node scripts/naechstes-ticket.mjs (Assignee, Blocker, Branch,
+    : `Nimm das oberste freie Item: node scripts/naechstes-ticket.mjs${eingabe.bereich ? ` --bereich ${eingabe.bereich}` : ''} (Assignee, Blocker, Branch,
 Worktree, offener PR in einem Lauf; erste Zeile = dran). Wähle NICHT nach Inhalt aus und
 sortiere NICHT nach. Prüfe nur dieses eine Ticket gegen den Live-Stand, nicht die ganze
 Liste; ohne Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
@@ -680,7 +687,7 @@ nicht selbst.`,
   )
 
   if (!auswahl || auswahl.ergebnis === 'kein-freies-ticket') {
-    log('Kein freies Ticket — Board leer oder alles assigned/blockiert. Workflow endet.')
+    log(`Kein freies Ticket${eingabe.bereich ? ` im Bereich ${eingabe.bereich}` : ''} — Board leer oder alles assigned/blockiert. Workflow endet.`)
     return { ergebnis: 'kein-freies-ticket' }
   }
 
@@ -833,7 +840,7 @@ Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints.`,
       grund: preflight.grund,
       offeneFragen: preflight.offeneFragen || [],
       hinweis:
-        'Die Fragen der Maintainerin vorlegen, dann den Workflow per resumeFromRunId fortsetzen — mit den Antworten in args.klaerungAntworten (Auswahl + Plan kommen aus dem Cache, kaum Extra-Tokens).',
+        'Die Fragen der Maintainerin vorlegen, dann den Workflow per resumeFromRunId fortsetzen — mit den Antworten in args.klaerungAntworten (und demselben args.bereich bzw. args.nummer wie im Ursprungslauf; Auswahl + Plan kommen aus dem Cache, kaum Extra-Tokens).',
     }
   }
   if (klaerungAntworten) log(`Pre-Flight-Klärung mit ${klaerungAntworten.length} Antwort(en) fortgesetzt.`)

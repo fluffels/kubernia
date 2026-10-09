@@ -56,7 +56,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Sammelticket anlegen und Position prüfen, idempotent (#1390) | `node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>]` / `langfuse [--top]` (`--dry-run` zeigt nur an) |
 | Fremdtext eines Issues/PRs sicher lesen: Autor-Prüfung, Fremdes ausgeblendet (#1433) | `node scripts/fremdtext.mjs --issue <nr>` / `--pr <nr>` (Exit 3 = Fremdeingang, 2 = Fehler) |
 | Board-Takt (Status-Ticket, Harness-Sammelticket, Positionskorrektur) ansehen, ohne zu ändern (#1390) | `PROJECT_TOKEN=$(gh auth token) node scripts/board-takt.mjs --dry-run` |
-| Oberstes freies Ticket der Board-Auswahl samt übersprungenen Kandidaten (Assignee, Blocker, Branch, Worktree, PR; #1428) | `node scripts/naechstes-ticket.mjs [--json]` (Exit 0 gefunden, 1 keins frei, 2 Fehler) |
+| Oberstes freies Ticket der Board-Auswahl samt übersprungenen Kandidaten (Assignee, Blocker, Branch, Worktree, PR; #1428) | `node scripts/naechstes-ticket.mjs [--json] [--bereich agentic\|spiel]` (Exit 0 gefunden, 1 keins frei, 2 Fehler) |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` (klemmt hinter das ungeclaimte Sammelticket; ganz oben nur `--notfall <art> --top`) |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets und `ALLOWLIST`-Ausnahmen gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
 | TS-7-Freigabe-Wächter (npm-Registry: erlaubt typescript-eslint schon TS 7? non-blocking, braucht Netz, #847) | `npm run check:tseslint-ts7` |

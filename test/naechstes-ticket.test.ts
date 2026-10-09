@@ -12,6 +12,7 @@ const N = raw as unknown as {
   ticketAusRef: (t: string) => number | null;
   formatiere: (e: Ergebnis) => string;
   fuehreAus: (argv: string[], io: { lade: () => Eingabe; owner: string }) => { code: number; out: string; err: string };
+  bereichAusArgv: (argv: string[]) => { bereich: string | null } | { fehler: string };
 };
 
 // Ein Parse-Pfad (#1460 Z8): die Roh-Fixtures (REST-Form) laufen wie im Echtbetrieb durch normalizeItems, waehleNaechstes sieht nur Normalisiertes.
@@ -24,7 +25,8 @@ const item = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => (
   fields: [{ name: "Status", value: { name: { raw: status } } }],
   content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
 });
-const frei = (items: unknown[], extra: Partial<Eingabe> = {}) => N.waehleNaechstes({ items: norm(items), offene: new Set(), owner: "fluffels", ...extra });
+const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
+  (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", ...extra });
 
 describe("blockerNummern", () => {
   test("mehrfach, case-insensitiv, mehrere Nummern je Zeile; Klammertext zählt nicht", () => {
@@ -123,5 +125,80 @@ describe("fuehreAus", () => {
     const r = N.fuehreAus(["--json"], io({ items: norm([item(7, { body: "GEHEIMER BODY" })]), offene: new Set() }));
     expect((JSON.parse(r.out) as Ergebnis).ticket?.nr).toBe(7);
     expect(r.out).not.toContain("GEHEIMER");
+  });
+});
+
+describe("Bereich (#1552)", () => {
+  const harness = { labels: [{ name: "area:harness" }] };
+  const io = (items: unknown[], spion?: { n: number }) => ({
+    owner: "fluffels",
+    lade: () => {
+      if (spion) spion.n++;
+      return { items: norm(items), offene: new Set<number>() };
+    },
+  });
+
+  test("bereichAusArgv: ohne Schalter null, beide Schreibweisen, neben --json", () => {
+    expect(N.bereichAusArgv([])).toEqual({ bereich: null });
+    expect(N.bereichAusArgv(["--bereich", "agentic"])).toEqual({ bereich: "agentic" });
+    expect(N.bereichAusArgv(["--bereich=spiel"])).toEqual({ bereich: "spiel" });
+    expect(N.bereichAusArgv(["--json", "--bereich", "spiel"])).toEqual({ bereich: "spiel" });
+  });
+  test("bereichAusArgv: fehlender oder unbekannter Wert ist ein Fehler", () => {
+    for (const argv of [["--bereich"], ["--bereich", "--json"], ["--bereich", "harness"], ["--bereich", "Agentic"], ["--bereich="], ["--bereich", "constructor"]]) {
+      expect(N.bereichAusArgv(argv), argv.join(" ")).toHaveProperty("fehler");
+    }
+  });
+  test("agentic: Spiel-Tickets werden weder gewählt noch als übersprungen gemeldet", () => {
+    const r = frei([item(1), item(2, harness)], { bereich: "agentic" });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen).toEqual([]);
+  });
+  test("agentic: ein Assignee im Bereich bleibt übersprungen", () => {
+    const r = frei([item(1, { ...harness, assignees: [{ login: "fluffels" }] }), item(2, harness)], { bereich: "agentic" });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen).toEqual([{ nr: 1, grund: "Assignee @fluffels" }]);
+  });
+  test("spiel: Harness-Tickets werden weder gewählt noch gemeldet", () => {
+    const r = frei([item(1, harness), item(2)], { bereich: "spiel" });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen).toEqual([]);
+  });
+  test("ohne Schalter: ganzes Board, JSON ohne Schlüssel bereich", () => {
+    expect(frei([item(1, harness), item(2)]).ticket?.nr).toBe(1);
+    const r = N.fuehreAus(["--json"], io([item(1, harness)]));
+    expect(JSON.parse(r.out)).not.toHaveProperty("bereich");
+  });
+  test("--json mit Bereich nennt den Bereich", () => {
+    const r = N.fuehreAus(["--json", "--bereich", "agentic"], io([item(1), item(2, harness)]));
+    const j = JSON.parse(r.out) as Ergebnis & { bereich: string };
+    expect(j.bereich).toBe("agentic");
+    expect(j.ticket?.nr).toBe(2);
+  });
+  test("nichts frei im Bereich: Exit 1 mit Bereichsname, kein Ausweichen aufs ganze Board", () => {
+    const r = N.fuehreAus(["--bereich", "spiel"], io([item(1, harness)]));
+    expect(r.code).toBe(1);
+    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Spielentwicklung");
+    const a = N.fuehreAus(["--bereich", "agentic"], io([item(1)]));
+    expect(a.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Agentic Engineering");
+  });
+  test("unbekannter Bereich: Exit 2 vor jedem Laden", () => {
+    const spion = { n: 0 };
+    const r = N.fuehreAus(["--bereich", "foo"], io([item(1)], spion));
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/agentic.*spiel/);
+    expect(spion.n).toBe(0);
+  });
+  test("Notfälle (rot-main, security) gelten in beiden Bereichen", () => {
+    const rot = item(1, { title: "🚨 CI rot auf main: x", labels: [{ name: "area:architektur" }] });
+    const sec = item(2, { title: "🔒 Security: y", labels: [{ name: "area:harness" }] });
+    expect(frei([rot], { bereich: "agentic" }).ticket?.nr).toBe(1);
+    expect(frei([sec], { bereich: "spiel" }).ticket?.nr).toBe(2);
+  });
+  test("die Notfall-Ausnahme bleibt eng: Dependabot folgt dem Label", () => {
+    const dep = item(1, { title: "🤖 Dependabot-PRs auflösen", labels: [{ name: "area:architektur" }] });
+    const r = frei([dep], { bereich: "agentic" });
+    expect(r.ticket).toBeNull();
+    expect(r.uebersprungen).toEqual([]);
   });
 });
