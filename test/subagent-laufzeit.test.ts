@@ -9,7 +9,6 @@ type L = { kosten: number | null; ticket: number | null; sammel: boolean; dauerM
 type Stat = { kosten: number | null; kostenSumme: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
-  median: (w: number[]) => number | null;
   vereinigungMs: (i: [number, number][]) => number;
   laufzeiten: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; schnitt?: string }) => Erg;
   renderMarkdown: (r: Erg) => string;
@@ -43,13 +42,7 @@ const lauf = (prompt: string, von: number, bis: number, o: { tag?: number; tool?
   return { meta: { agentType: o.agentType ?? "kubernia-planner" }, zeilen };
 };
 
-describe("median und vereinigungMs", () => {
-  test("ungerade, gerade, leer, NaN ignoriert", () => {
-    expect(S.median([3, 1, 2])).toBe(2);
-    expect(S.median([4, 1, 2, 3])).toBe(2.5);
-    expect(S.median([])).toBeNull();
-    expect(S.median([Number.NaN, 5])).toBe(5);
-  });
+describe("vereinigungMs", () => {
   test("überlappende Intervalle zählen einmal, getrennte addieren sich, kaputte entfallen", () => {
     expect(S.vereinigungMs([[0, 10], [5, 15]])).toBe(15);
     expect(S.vereinigungMs([[0, 10], [20, 30]])).toBe(20);

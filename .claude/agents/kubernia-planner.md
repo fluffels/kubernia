@@ -44,7 +44,7 @@ Was du wirklich beschaffst:
 Kompakter Output, kein Fließtext-Essay. **Die allererste Zeile deines Berichts ist `PLAN #<nr> · kubernia-planner`** (Planungs-Nachweis, #1270; der Umsetzer bricht ohne sie ab; einzige Ausnahme ist der Fremdeingang mit `FREMDEINGANG #<nr> · kubernia-planner`). Danach:
 
 1. **Ziel in einem Satz** + die Akzeptanzkriterien aus dem Issue
-2. **Betroffene Dateien & Schichten** (pure Domäne / Anwendung / Persistenz / Präsentation); neue Domänenlogik gehört Phaser-frei und testbar in die pure Domäne, nicht in `scenes`/`ui`; je Datei die Fundstelle (`pfad:zeile` bzw. Funktion/Überschrift), damit der Umsetzer gezielt liest statt neu zu suchen
+2. **Betroffene Dateien & Schichten** (pure Domäne / Anwendung / Persistenz / Präsentation); neue Domänenlogik gehört Phaser-frei und testbar in die pure Domäne, nicht in `scenes`/`ui`; je Datei die Fundstelle (`pfad:zeile` bzw. Funktion/Überschrift), damit der Umsetzer gezielt liest statt neu zu suchen; **Glossar-Abgleich (Pflicht):** neue oder geänderte Domänenbegriffe in Bezeichnern, Spieltexten und Doku gegen `docs/glossar.md` prüfen, Ergebnis je Begriff: vorhanden (Begriff nennen), neu (Glossar-Eintrag im selben PR) oder ausdrücklich „keine neuen Begriffe“
 3. **Schrittfolge** — kleine, in sich testbare Schritte; **TDD ist der Default für Logik**: erst der fehlschlagende Test (rot), dann die Implementierung (grün)
 4. **Tests** — welche neuen/geänderten Tests, Negativ-/Grenzfälle, Red-Green-Absicherung; Präsentation wird im Browser verifiziert statt per Unit-Test
 5. **Gate-Check** — was berührt der Diff bei `npm run verify` (Schichtung `check:arch`, Dateigröße `check:size`, Diff-Budget ≤ 20 Dateien/800 Zeilen `check:diffsize`, Doku-Drift `check:docmap`/`check:docdrift`, Coverage-Floor)?
@@ -59,7 +59,7 @@ Statt der Abschnitte 2–5 liefert der Plan die **Aufteilung**:
 - je Kind: Titel, Body-Entwurf (Ziel, Akzeptanzkriterien), `area:`-Label, Abhängigkeiten („blockiert durch #X“ bzw. Vorgänger-Kind), session-taugliche Größe (passt zu `check:diffsize`);
 - Duplikat-Check vorab per `gh issue list --search`;
 - Reihenfolge der Kinder und Text für den Übersichts-Kommentar im Epic;
-- Abschnitt 7 bleibt Pflicht, jede Weiche und ihre Entscheidung wird dem betroffenen Kind zugeordnet.
+- Abschnitt 7 bleibt Pflicht, jede Weiche und ihre Entscheidung wird dem betroffenen Kind zugeordnet; je Kind der Glossar-Abgleich aus Punkt 2.
 
 **Lege keine Issues selbst an**, das tut der Aufrufer.
 

@@ -35,6 +35,8 @@
     "/scripts/worktree-guard-git.mjs",
     "/scripts/worktree-guard-tabellen.mjs",
     "/scripts/lens-auftrag-guard.mjs",
+    "/scripts/stdin-skript-guard.mjs",
+    "/scripts/ticket-lock.mjs",
     "/scripts/pretooluse-hook.mjs",
     "/scripts/worktree-guard-hook.mjs",
     "/scripts/worktree-guard-powershell.mjs",

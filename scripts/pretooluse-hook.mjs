@@ -4,7 +4,7 @@
  * PreToolUse-Dispatcher (#1311) für `Bash`, `PowerShell`, `SubagentHandback` (Abschluss-Wächter, #1342) und `Agent` (Lens-Auftrag-Guard, #1425): EIN Node-Prozess je Tool-Aufruf statt drei.
  *
  * Er liest das Payload einmal (`hook-io.mjs`) und fragt die Guards:
- *  - Bash:       Worktree-Guard (`decide`, scripts/worktree-guard-hook.mjs) und gh-Guard (`bewerte`)
+ *  - Bash:       Worktree-Guard (`decide`, scripts/worktree-guard-hook.mjs), gh-Guard (`bewerte`) und Stdin-Skript-Guard (`bewerteStdinSkript`, #1561)
  *  - PowerShell: Worktree-Guard für PowerShell (scripts/worktree-guard-powershell.mjs) und gh-Guard
  *  - SubagentHandback: Abschluss-Wächter des Umsetzers; Agent: Lens-Auftrag-Guard (`lens-auftrag-guard.mjs`)
  * Jeder Guard läuft im eigenen try/catch: ein werfender Guard legt den anderen nicht lahm und blockt nie selbst
@@ -19,6 +19,7 @@ import { SHELL_VON_TOOL } from "./shell-tabellen.mjs";
 import { bewerte as bewerteGh } from "./gh-guard-hook.mjs";
 import { buildDenyOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 import { lensAuftragBlockade, parseAgentInput } from "./lens-auftrag-guard.mjs";
+import { bewerteStdinSkript } from "./stdin-skript-guard.mjs";
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 import { decide, repoRootFromScriptUrl } from "./worktree-guard-hook.mjs";
 import { bewertePowerShell } from "./worktree-guard-powershell.mjs";
@@ -52,7 +53,9 @@ export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, b
     ? sicher(worktreeGuard)
     : { block: true, reason: `Dispatcher: für die Shell "${shell}" gibt es keinen Worktree-Guard (SHELL_VON_TOOL und Dispatcher driften auseinander).` };
   if (worktree?.block) return mergeDecisions([worktree]); // deny geht vor ask: ein langsamer gh-Guard darf es nicht aushebeln
-  return mergeDecisions([worktree, sicher(() => guards.bewerteGh(command, { shell }))]);
+  // Stdin-Skript-Guard (#1561): nur Bash; ein deny wie beim Worktree-Guard, ein werfender Guard lässt durch.
+  const stdin = shell === "bash" ? sicher(() => (guards.bewerteStdin ?? bewerteStdinSkript)(command)) : null;
+  return mergeDecisions([worktree, stdin, sicher(() => guards.bewerteGh(command, { shell }))]);
 }
 
 if (istDirektaufruf(import.meta.url)) emit(dispatch(readStdin(), repoRootFromScriptUrl(import.meta.url)));

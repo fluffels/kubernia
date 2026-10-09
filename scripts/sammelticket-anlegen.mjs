@@ -12,6 +12,10 @@
  * auf Position bringen (`sammelticketKorrektur`), dann prüfen: die Board-Liste liefert Neues verzögert, darum bis zu 5 Ladeversuche mit
  * Pause; steht das Ticket falsch, wird es bis zu zweimal neu gesetzt (sonst Exit 1). Erscheint es nie in der Liste, warnt das Skript
  * (Exit 0): `board-place.mjs` und der Board-Takt (`board-takt.mjs`) korrigieren die Position beim nächsten Lauf selbst.
+ * Race-fest (#1561): `vorhanden` wird per Direktabruf (`repos/<repo>/issues/<nr>`) bestätigt, weil die Listen-Abfrage nachhinkt (ein gerade geschlossenes
+ * Ticket stand noch als offen und ungeclaimt darin, Evidenz #1560/#1561). Nach dem Anlegen und nach der Positions-Schleife läuft ein Dubletten-Check:
+ * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
+ * schon Kommentare, warnt es nur.
  * Mit `--vorgaenger <nr>` nennt der Body den Vorgänger; `blockiert durch #<nr>` steht nur drin, solange er offen ist.
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
@@ -40,6 +44,7 @@ const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TIT
 const PRUEF_VERSUCHE = 5;
 const PRUEF_PAUSE_MS = 3000;
 const NEU_SETZEN_MAX = 2;
+const DUBLETTEN_PAUSE_MS = 3000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Argumente → `{ art, vorgaenger, top, dry }` oder null bei falscher Benutzung. `--vorgaenger` gilt nur für `harness`, `--top` nur für `langfuse`. Pur. */
@@ -65,13 +70,55 @@ export function sammelticketBody({ art, vorgaenger = null, vorgaengerOffen = fal
   return zeilen.join("\n");
 }
 
-/** Das ungeclaimte offene Sammelticket mit exaktem Titel (bei mehreren das mit der höchsten Nummer, das jüngste) aus `normalizeOffene`; sonst null. Pur. */
-export function vorhandenesSammelticket(offene, titel) {
-  const treffer = offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0);
-  return treffer.length === 0 ? null : treffer.reduce((a, b) => (b.number > a.number ? b : a));
+/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). Pur. */
+export function kandidatenSammelticket(offene, titel) {
+  return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0).sort((a, b) => b.number - a.number);
+}
+
+/**
+ * Das höchste Ticket der absteigend geprüften `kandidaten`, das der Direktabruf `einzeln(nr)` (REST-Form: `state`, `assignees`) als offen und
+ * ungeclaimt bestätigt; sonst null. Die Listen-Abfrage hinkt nach, nur der Einzelabruf ist maßgeblich. Ein werfender Abruf wirft weiter. Pur bis auf `einzeln`.
+ */
+export function waehleBestaetigtes(kandidaten, einzeln) {
+  for (const k of [...kandidaten].sort((a, b) => b.number - a.number)) {
+    const e = einzeln(k.number);
+    if (e && e.state === "open" && (e.assignees ?? []).length === 0) return k;
+  }
+  return null;
+}
+
+/**
+ * Dubletten-Entscheidung nach dem Anlegen von `eigenNr`: `andere` sind bestätigt offene Tickets (siehe `waehleBestaetigtes`). Gibt es ein
+ * ungeclaimtes mit gleichem `titel` und kleinerer Nummer, ist das ältere das Original: `eigenes-schliessen`, bei schon vorhandenen Kommentaren
+ * des eigenen (Zeilen, die nicht verloren gehen dürfen) nur `warnung`. Sonst `keine`. Pur.
+ */
+export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere }) {
+  const aeltere = andere.filter((i) => i.titel === titel && i.number < eigenNr && (i.assignees ?? []).length === 0);
+  if (aeltere.length === 0) return { art: "keine" };
+  const aelter = Math.min(...aeltere.map((i) => i.number));
+  return eigenKommentare > 0 ? { art: "warnung", aelter } : { art: "eigenes-schliessen", aelter };
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
+const einzelAbruf = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]);
+
+/** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
+function pruefeDublette(nr, titel) {
+  const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel).filter((i) => i.number < nr);
+  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf);
+  return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [] });
+}
+
+/** Wertet `pruefeDublette` aus: schließt das eigene Ticket bei einer Dublette (`true`), warnt sonst. */
+function schliesseWennDublette(nr, titel) {
+  const d = pruefeDublette(nr, titel);
+  if (d.art === "warnung") console.log(`::warning::#${nr} ist eine Dublette von #${d.aelter}, hat aber schon Kommentare: nicht geschlossen, Zeilen von Hand nach #${d.aelter} übertragen und #${nr} schließen.`);
+  if (d.art !== "eigenes-schliessen") return false;
+  ghJson(["api", "-X", "POST", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`]);
+  ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"]);
+  console.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen (stand es schon im Board, bleibt das Item dort geschlossen liegen). Das Original ist #${d.aelter}.`);
+  return true;
+}
 /** Zustand des Vorgängers (offen?) per REST; unlesbar zählt als offen (die Sperre ist die sichere Seite). */
 function vorgaengerOffen(nr) {
   try {
@@ -122,7 +169,7 @@ async function main(argv = process.argv.slice(2)) {
   mitKontingent("sammelticket-anlegen");
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
-  const vorhanden = vorhandenesSammelticket(normalizeOffene(loadOpenIssuePages()), titel);
+  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel), einzelAbruf);
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
@@ -136,6 +183,8 @@ async function main(argv = process.argv.slice(2)) {
     const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", "labels[]=area:harness"]);
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);
+    await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
+    if (schliesseWennDublette(nr, titel)) return;
     const itemId = addToBoardTodo(neu.node_id);
     if (args.art === "harness") {
       const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
@@ -152,6 +201,7 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (args.art !== "harness") return;
   const stand = await setzeUndPruefe(nr, position, args.dry);
+  if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
   else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);

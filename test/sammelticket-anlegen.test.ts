@@ -12,7 +12,7 @@ type Offen = { number: number; titel: string; assignees: string[]; createdAt: st
 type Anlegen = {
   parseArgs: (argv: string[]) => Args | null;
   sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerOffen?: boolean }) => string;
-  vorhandenesSammelticket: (offene: Offen[], titel: string) => Offen | null;
+  kandidatenSammelticket: (offene: Offen[], titel: string) => Offen[];
 };
 const A = raw as unknown as Anlegen;
 
@@ -59,20 +59,20 @@ describe("sammelticketBody", () => {
   });
 });
 
-describe("vorhandenesSammelticket", () => {
+describe("kandidatenSammelticket", () => {
   const o = (number: number, titel: string, assignees: string[] = []): Offen => ({ number, titel, assignees, createdAt: "2026-10-01T00:00:00Z" });
   const T = "Harness-Härtung (gesammelt)";
 
-  test("exakter Titel, ungeclaimt; bei mehreren das mit der höchsten Nummer", () => {
-    expect(A.vorhandenesSammelticket([o(5, T), o(9, T), o(7, T)], T)?.number).toBe(9);
-    expect(A.vorhandenesSammelticket([o(5, T)], T)?.number).toBe(5);
+  test("exakter Titel, ungeclaimt; absteigend sortiert (das jüngste zuerst)", () => {
+    expect(A.kandidatenSammelticket([o(5, T), o(9, T), o(7, T)], T).map((i) => i.number)).toEqual([9, 7, 5]);
+    expect(A.kandidatenSammelticket([o(5, T)], T).map((i) => i.number)).toEqual([5]);
   });
 
-  test("Negativfälle: geclaimt, anderer oder fast gleicher Titel, leer → null", () => {
-    expect(A.vorhandenesSammelticket([o(5, T, ["fluffels"])], T)).toBeNull();
-    expect(A.vorhandenesSammelticket([o(5, `${T} x`), o(6, T.toLowerCase()), o(7, "Langfuse-Befunde (gesammelt)")], T)).toBeNull();
-    expect(A.vorhandenesSammelticket([], T)).toBeNull();
-    expect(A.vorhandenesSammelticket([o(5, T, ["fluffels"]), o(6, T)], T)?.number).toBe(6);
+  test("Negativfälle: geclaimt, anderer oder fast gleicher Titel, leer → leere Liste", () => {
+    expect(A.kandidatenSammelticket([o(5, T, ["fluffels"])], T)).toEqual([]);
+    expect(A.kandidatenSammelticket([o(5, `${T} x`), o(6, T.toLowerCase()), o(7, "Langfuse-Befunde (gesammelt)")], T)).toEqual([]);
+    expect(A.kandidatenSammelticket([], T)).toEqual([]);
+    expect(A.kandidatenSammelticket([o(5, T, ["fluffels"]), o(6, T)], T).map((i) => i.number)).toEqual([6]);
   });
 });
 
@@ -136,5 +136,71 @@ describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
     expect(anlegen).toMatch(/pruefSchritt\(\{ items: loadItems\(\)/);
     expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);
     expect(anlegen).not.toMatch(/from "\.\/board-place\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
+  });
+});
+
+describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist idempotent gegen den Wettlauf)", () => {
+  type Roh = { state: string; assignees: unknown[] };
+  type Dub = { art: "keine" | "eigenes-schliessen" | "warnung"; aelter?: number };
+  const Z = raw as unknown as {
+    waehleBestaetigtes: (kandidaten: Offen[], einzeln: (nr: number) => Roh) => Offen | null;
+    dublettenEntscheidung: (a: { eigenNr: number; titel: string; eigenKommentare: number; andere: Offen[] }) => Dub;
+  };
+  const T = "Harness-Härtung (gesammelt)";
+  const o = (number: number, titel = T, assignees: string[] = []): Offen => ({ number, titel, assignees, createdAt: "2026-10-01T00:00:00Z" });
+  const offen = (): Roh => ({ state: "open", assignees: [] });
+
+  test("nimmt das höchste bestätigte Ticket; der Einzelabruf entscheidet, nicht die (nachhinkende) Liste", () => {
+    const abgerufen: number[] = [];
+    const r = Z.waehleBestaetigtes([o(5), o(9), o(7)], (nr) => {
+      abgerufen.push(nr);
+      return offen();
+    });
+    expect(r?.number).toBe(9);
+    expect(abgerufen, "ein Treffer genügt, absteigend").toEqual([9]);
+  });
+
+  test("Liste sagt offen, Einzelabruf sagt geschlossen (das war der Wettlauf #1560/#1561) → das nächste", () => {
+    const r = Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "closed", assignees: [] } : offen()));
+    expect(r?.number).toBe(7);
+  });
+
+  test("geclaimt laut Einzelabruf → das nächste; alle ungültig oder leer → null", () => {
+    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "open", assignees: [{ login: "fluffels" }] } : offen()))?.number).toBe(7);
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "closed", assignees: [] }))).toBeNull();
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [{ login: "x" }] }))).toBeNull();
+    expect(Z.waehleBestaetigtes([], () => offen())).toBeNull();
+  });
+
+  test("ein werfender Einzelabruf wirft weiter (kein stilles Weiterlaufen mit unbestätigtem Stand)", () => {
+    expect(() =>
+      Z.waehleBestaetigtes([o(9)], () => {
+        throw new Error("gh kaputt");
+      }),
+    ).toThrow(/gh kaputt/);
+  });
+
+  test("Dublette: ein anderes offenes ungeclaimtes Ticket gleichen Titels mit kleinerer Nummer → eigenes-schliessen (nennt das ältere)", () => {
+    expect(Z.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(18), o(20)] })).toEqual({ art: "eigenes-schliessen", aelter: 18 });
+    expect(Z.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(19), o(15)] })).toEqual({ art: "eigenes-schliessen", aelter: 15 });
+  });
+
+  test("hat das eigene Ticket schon Kommentare (Zeilen), wird nicht geschlossen, sondern gewarnt", () => {
+    expect(Z.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 2, andere: [o(18)] })).toEqual({ art: "warnung", aelter: 18 });
+  });
+
+  test("keine Dublette: nur größere Nummern, geclaimte, anderer Titel, nur das eigene, leer", () => {
+    for (const andere of [[o(21)], [o(18, T, ["fluffels"])], [o(18, "Langfuse-Befunde (gesammelt)")], [o(20)], []]) {
+      expect(Z.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere }).art).toBe("keine");
+    }
+  });
+
+  test("Verdrahtung: das Skript nutzt beide Funktionen, bestätigt per Direktabruf und prüft vor und nach der Positions-Schleife", () => {
+    const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
+    expect(skript).toMatch(/waehleBestaetigtes\(/);
+    expect(skript).toMatch(/repos\/\$\{REPO\}\/issues\/\$\{nr\}/);
+    expect(skript.match(/schliesseWennDublette\(/g)?.length).toBeGreaterThanOrEqual(3); // Definition und zwei Aufrufe
+    expect(skript).toMatch(/Dublette von #/);
+    expect(skript).toMatch(/state_reason=not_planned/);
   });
 });

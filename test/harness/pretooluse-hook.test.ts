@@ -42,6 +42,25 @@ describe("Routing und Entscheidung (#1311)", () => {
     }
   });
 
+  test("Stdin-Skript-Guard (#1561 Z3): Bash lehnt `python3 -` mit Heredoc ab, PowerShell und Dateiaufrufe laufen durch", () => {
+    const heredoc = "python3 - <<'EOF'\nprint(1)\nEOF";
+    const r = hook.dispatch(payload("Bash", heredoc), WURZEL);
+    assert.equal(r?.hookSpecificOutput.permissionDecision, "deny");
+    assert.match(String((r?.hookSpecificOutput as { permissionDecisionReason?: string }).permissionDecisionReason), /Write/);
+    assert.equal(hook.dispatch(payload("Bash", "node scripts/x.mjs"), WURZEL), null);
+    assert.equal(hook.dispatch(payload("PowerShell", "python3 -"), WURZEL), null, "nur Bash (bewusste Grenze)");
+  });
+
+  test("Stdin-Skript-Guard: ein werfender Guard blockt nie (fail-open), ein injizierter Guard wird gefragt", () => {
+    const nichts = () => ({ block: false });
+    const wirft = () => {
+      throw new Error("kaputt");
+    };
+    assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, { decide: nichts, bewertePowerShell: nichts, bewerteGh: nichts, bewerteStdin: wirft }), null);
+    const blockt = () => ({ block: true, reason: "stdin" });
+    assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, { decide: nichts, bewertePowerShell: nichts, bewerteGh: nichts, bewerteStdin: blockt })?.hookSpecificOutput.permissionDecision, "deny");
+  });
+
   test("fremde Tools und kaputtes JSON ergeben keine Ausgabe", () => {
     assert.equal(hook.dispatch(payload("Read", "gh api -X DELETE x"), WURZEL), null);
     assert.equal(hook.dispatch("{kaputt", WURZEL), null);

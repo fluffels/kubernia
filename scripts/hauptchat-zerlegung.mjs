@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ghText } from "./gh-cli.mjs";
+import { CACHE_TTL_MS, median } from "./mess-lib.mjs";
 import { callsFromTranscript, priceParts } from "./token-baseline.mjs";
 import { ladeSessionDatei } from "./transkript.mjs";
 
@@ -116,13 +117,6 @@ function claimsAus(events, turnVon) {
  */
 export const istKubernia = (meta) => Boolean(meta?.parentAgentId) || /^kubernia-/.test(meta?.agentType ?? "");
 
-const medianVon = (werte) => {
-  if (werte.length === 0) return null;
-  const s = [...werte].sort((a, b) => a - b);
-  const mid = s.length >> 1;
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
-
 /**
  * Modellanteil der Ticket-Orchestrierung (#1557): Calls je Familie über das Präfix `claude-<familie>-`, über alle Fenster mit Calls.
  * `<synthetic>` (Client-Platzhalter) zählt nicht. `null` ohne Fenster mit Calls.
@@ -142,11 +136,11 @@ export function modellAnteil(fenster) {
   }
   const gesamt = z.sonnet + z.opus + z.haiku + z.sonst;
   if (gesamt === 0) return null;
-  return { ...z, gesamt, anteil: z.sonnet / gesamt, fenster: kosten.length, medianKosten: medianVon(kosten) };
+  return { ...z, gesamt, anteil: z.sonnet / gesamt, fenster: kosten.length, medianKosten: median(kosten) };
 }
 
-const FUENF_MIN = 5 * 60_000;
-const SECHZIG_MIN = 60 * 60_000;
+const FUENF_MIN = CACHE_TTL_MS.fuenfMin;
+const SECHZIG_MIN = CACHE_TTL_MS.eineStunde;
 
 /**
  * 1h-gegen-5m-TTL (#1557): Pause = Abstand zum vorigen Hauptchat-Call derselben Session (alle Kategorien, die TTL gilt für die ganze Konversation);
@@ -185,7 +179,7 @@ export function ttlVergleich(calls) {
     });
   }
   r.pausenUeber5 = lange.length;
-  const med = medianVon(lange);
+  const med = median(lange);
   r.medianPauseMin = med === null ? null : med / 60_000;
   return r;
 }

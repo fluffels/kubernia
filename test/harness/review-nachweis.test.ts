@@ -314,3 +314,48 @@ describe("(f) BEKANNTE_LENSES == die Brillen-Keys des Workflows (#1349)", () => 
     assert.notDeepEqual([...BEKANNTE_LENSES].sort(), keysDesWorkflows(zusaetzlich));
   });
 });
+
+describe("Zusatzpass nach Freigabe der Maintainerin (#1561 Z2)", () => {
+  const bewerteZ = (review: string, dateien = ["src/a.ts"]) =>
+    bewerteNachweis({
+      nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`),
+      dateien,
+      headBekannt: true,
+      headImSlice: true,
+    });
+  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
+
+  test("runden=4 ohne Feld ist rot, die Meldung nennt zusatzpass=", () => {
+    assert.match(bewerteZ(`runden=4 ${LENSES} verdikt=ok`).join(" "), /zusatzpass=/);
+  });
+  test("runden=4 mit zusatzpass=1:<Grund> ist ok, der Grund darf Leerzeichen tragen", () => {
+    assert.deepEqual(bewerteZ(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), []);
+    assert.deepEqual(bewerteZ(`runden=4 ${LENSES} zusatzpass=1:Maintainerin gab Pass frei verdikt=ok`), []);
+  });
+  test("runden=5 mit zusatzpass=1 ist rot, mit zusatzpass=2 ok", () => {
+    assert.match(bewerteZ(`runden=5 zusatzpass=1:x ${LENSES} verdikt=ok`).join(" "), /überschreitet/);
+    assert.deepEqual(bewerteZ(`runden=5 zusatzpass=2:x ${LENSES} verdikt=ok`), []);
+  });
+  test("rot: Anzahl 0, leerer Grund, keine Zahl", () => {
+    for (const w of ["0:x", "1:", "1:   ", "abc", "x:y", ""]) {
+      assert.match(bewerteZ(`runden=4 zusatzpass=${w} ${LENSES} verdikt=ok`).join(" "), /zusatzpass/, w);
+    }
+  });
+  test("rot: Zusatzpass ohne Überschreitung (runden ≤ 3)", () => {
+    assert.match(bewerteZ(`runden=3 zusatzpass=1:x ${LENSES} verdikt=ok`).join(" "), /zusatzpass ist nur/);
+  });
+  test("das Feld vor lenses= verschiebt die Brillen-Erkennung nicht", () => {
+    const n = parseNachweis(`KQ-Review: head=${SHA} runden=4 zusatzpass=1:Grund mit Wörtern ${LENSES} verdikt=ok`);
+    assert.deepEqual(n.review?.lenses, ["architektur", "requirement-treue", "test-adaequanz"]);
+  });
+  test("die Vorlage des Skripts führt kein Feld zusatzpass (kein Standardweg)", () => {
+    assert.doesNotMatch(read("scripts/check-review-nachweis.mjs").split("export const VORLAGE")[1].split(";")[0], /zusatzpass/);
+  });
+});
+
+describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
+  test("Format-SSOT und Skill nennen das Feld", () => {
+    assert.match(read("docs/agent-harness.md"), /zusatzpass=/);
+    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /zusatzpass=/);
+  });
+});

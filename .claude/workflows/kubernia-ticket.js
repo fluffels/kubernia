@@ -485,7 +485,7 @@ const LENS_QUELLE = [
     pruefpunkte: [
       'Ticket lesen (gh issue view <nr>) und den Diff gegen die Akzeptanzkriterien halten — jedes Kriterium einzeln: erfüllt / offen / darüber hinausgegangen.',
       'Scope-Kriechen: ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes wird festgehalten, nicht inline mitgefixt)?',
-      'Betrifft es Spielinhalte/Quests/Steuerung → README mitgezogen? Neues src/-Modul → Backtick-Pfad-Zeile im passenden docs/module/-Tiefendoc ergänzt (nicht in die Repo-Landkarte, #907)?',
+      'Betrifft es Spielinhalte/Quests/Steuerung → README mitgezogen? Neues src/-Modul → Backtick-Pfad-Zeile im passenden docs/module/-Tiefendoc ergänzt (nicht in die Repo-Landkarte, #907)? Neue Begriffe in Texten/Bezeichnern gegen docs/glossar.md: ein Hafen-Wort in Sim-Text oder umgekehrt (ACL) ist blockierend; ein neuer Domänenbegriff ohne Glossar-Eintrag ist ein Hinweis.',
       'Berührt es das Save-Format → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?',
       'Fügt der Diff Agenten, Subagenten, MCP-Server, Hooks oder Plugins hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)? Messbehauptungen in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sie hat keine Langfuse-Tools und prüft sonst nur die Transkript-Seite per node scripts/token-baseline.mjs --session <id>; ohne Rohwerte meldet sie „nicht belegt“ (Hinweis).',
       BRAIN_PRUEFPUNKT,
@@ -673,7 +673,7 @@ sortiere NICHT nach. Prüfe nur dieses eine Ticket gegen den Live-Stand, nicht d
 Liste; ohne Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
 }
 
-Claimen ist blockierende Pflicht: gh issue edit <nr> --add-assignee @me, danach mit
+Claimen ist blockierende Pflicht: erst node scripts/ticket-lock.mjs claim <nr> (Exit 4: nicht claimen), dann gh issue edit <nr> --add-assignee @me, danach mit
 gh issue view <nr> die Zuweisung wirklich bestätigen. Ohne bestätigte Zuweisung ist
 claimVerifiziert=false — dann endet der Workflow hier.
 
@@ -877,7 +877,7 @@ der Review läuft bewusst vor dem PR.
 
 Das Ticket ist bereits auf dich geclaimt. Folge dem Ablauf und den harten Regeln in
 AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
-- § Kollisionsschutz bei parallelen Agenten — eigener Worktree, erst git fetch origin,
+- § Kollisionsschutz bei parallelen Agenten — vorher node scripts/ticket-lock.mjs pruefe ${nr} (Exit 4: abbrechen), eigener Worktree, erst git fetch origin,
   dann von origin/main aufsetzen (nicht vom lokal veralteten main), Pfad
   .claude/worktrees/kq-${nr}, Branch feature/kq-${nr}-<slug>. Im frischen Worktree
   einmal npm ci (schreibt den Lockfile nie, #1119). Kein Junction/Symlink auf fremde node_modules.

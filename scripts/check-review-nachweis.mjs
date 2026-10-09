@@ -13,6 +13,7 @@
  *   KQ-Plan: kubernia-planner            |  KQ-Plan: ohne — <Begründung>
  *   KQ-Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
+ *   Optional `zusatzpass=<anzahl>:<grund>` (#1561): nur wenn die Maintainerin Pässe über das Cap hinaus freigab; erhöht die Obergrenze.
  *
  * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
  * Aus einer stillen Auslassung wird so eine bewusste Falschangabe; die unabhängige Prüfung
@@ -90,6 +91,26 @@ function bewerteBlocker(review) {
   return fehler;
 }
 
+/** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<grund>` (#1561): nur die Maintainerin gibt Pässe
+ *  über das Cap hinaus frei; der Nachweis bleibt Selbstauskunft. Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
+function bewerteRunden(review) {
+  const zp = review.zusatzpass ?? null;
+  if (zp && "ungueltig" in zp) {
+    return [`KQ-Review: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Grund der Freigabe>).`];
+  }
+  const erlaubt = MAX_REVIEW_PAESSE + (zp ? zp.anzahl : 0);
+  if (review.runden > erlaubt) {
+    return [
+      `KQ-Review: runden=${review.runden} überschreitet die Obergrenze (Cap ${MAX_FIX_RUNDEN} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
+        `Gab die Maintainerin einen Zusatzpass frei: zusatzpass=<anzahl>:<Grund> in die KQ-Review-Zeile.`,
+    ];
+  }
+  if (zp && review.runden <= MAX_REVIEW_PAESSE) {
+    return [`KQ-Review: zusatzpass ist nur bei runden > ${MAX_REVIEW_PAESSE} zulässig (runden=${review.runden}).`];
+  }
+  return [];
+}
+
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
 export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [] }) {
@@ -117,10 +138,8 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   }
   if (!Number.isInteger(review.runden) || review.runden < 1) {
     fehler.push("KQ-Review: runden fehlt oder ist keine Zahl ≥ 1.");
-  } else if (review.runden > MAX_REVIEW_PAESSE) {
-    fehler.push(
-      `KQ-Review: runden=${review.runden} überschreitet die Obergrenze (Cap ${MAX_FIX_RUNDEN} Fix-Runden = höchstens ${MAX_REVIEW_PAESSE} Pässe).`,
-    );
+  } else {
+    fehler.push(...bewerteRunden(review));
   }
   const pflicht = pflichtLenses(dateien);
   const fehlend = pflicht.filter((l) => !review.lenses.includes(l));
@@ -194,6 +213,7 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
       invalid: ov.invalid,
       commitsNachReview,
       blockerFehlt: nachweis.review?.blocker === null,
+      zusatzpass: nachweis.review?.zusatzpass && "grund" in nachweis.review.zusatzpass ? nachweis.review.zusatzpass : null,
     };
   } catch (e) {
     return { ok: false, fehler: [`git-Fehler beim Prüfen des Nachweises: ${e instanceof Error ? e.message : String(e)}`] };
@@ -218,6 +238,7 @@ function main() {
       console.log(`• ${r.commitsNachReview} Commit(s) nach dem reviewten Stand (inkl. Nachweis-Commit).`);
     }
     if (r.blockerFehlt) console.log("• Hinweis: blocker= fehlt (Messung #1123).");
+    if (r.zusatzpass) console.log(`• Zusatzpass (Freigabe der Maintainerin): ${r.zusatzpass.grund}`);
     console.log("✔ Review-/Plan-Nachweis ok.");
     return;
   }
