@@ -13,13 +13,14 @@
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
- * `feature/kq-<nr>-*`. I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`, ein `gh pr list`; kein GraphQL.
+ * `feature/kq-<nr>-*`. I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`, ein REST-Aufruf für offene PRs; kein GraphQL.
  */
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { NOTFAELLE, REPO, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext.mjs";
 import { ghJson } from "./gh-cli.mjs";
+import { mitKontingent } from "./gh-kontingent.mjs";
 
 /** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
 export function blockerNummern(body) {
@@ -112,6 +113,9 @@ export function fuehreAus(argv, io) {
   }
 }
 
+/** Branchnamen der offenen PRs aus den REST-Seiten (`gh api --paginate --slurp`); GraphQL-frei und ohne 200er-Deckel. Pur. */
+export const prHeadsAus = (seiten) => seiten.flat().map((p) => `${p.head.ref}`);
+
 const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 
 function ladeEcht() {
@@ -124,11 +128,12 @@ function ladeEcht() {
   }
   const refs = git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
   const worktrees = git(["worktree", "list", "--porcelain"]).split(/\r?\n/).filter((z) => /^(worktree|branch) /.test(z));
-  const prHeads = ghJson(["pr", "list", "--state", "open", "--limit", "200", "--json", "headRefName"]).map((p) => `${p.headRefName}`);
+  const prHeads = prHeadsAus(ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/pulls?state=open&per_page=100`]));
   return { items, offene, refs, worktrees, prHeads };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  mitKontingent("naechstes-ticket");
   const { code, out, err } = fuehreAus(process.argv.slice(2), { lade: ladeEcht, owner: REPO.split("/")[0] });
   process.stdout.write(out);
   process.stderr.write(err);
