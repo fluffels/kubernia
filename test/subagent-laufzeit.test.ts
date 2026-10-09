@@ -230,7 +230,7 @@ describe("laufzeiten: Modelle und Transkriptdatei (#1580)", () => {
   };
   const lauf1 = (l: Lauf) => S.laufzeiten({ laeufe: [l], agent: "kubernia-lens" }).laeufe[0];
   test("modelle: sortiert, ohne Doppel", () => {
-    expect(lauf1(mitModellen(["claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5-5"])).modelle).toEqual(["claude-opus-5-5", "claude-sonnet-5-5"]);
+    expect(lauf1(mitModellen(["claude-sonnet-5-5", "claude-opus-5-5", "claude-sonnet-5-5"])).modelle).toEqual(["claude-opus-5-5", "claude-sonnet-5-5"]);
   });
   test("modelle: ein Call ohne model taucht nicht auf (kein undefined)", () => {
     expect(lauf1(mitModellen(["claude-sonnet-5-5", ""])).modelle).toEqual(["claude-sonnet-5-5"]);
