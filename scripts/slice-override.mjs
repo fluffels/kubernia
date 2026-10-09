@@ -140,6 +140,17 @@ function blockerAus(reviewWert) {
     });
 }
 
+/** Optionales Feld `zusatzpass=<anzahl>:<grund>` (#1561): von der Maintainerin freigegebene Pässe über das Cap hinaus.
+ *  `null`, wenn das Feld fehlt; `{ungueltig}`, wenn Anzahl (ganze Zahl ≥ 1) oder Grund fehlen; sonst `{anzahl, grund}`. */
+function zusatzpassAus(reviewWert) {
+  const wert = feldWert(reviewWert, "zusatzpass");
+  if (wert === null) return null;
+  const m = /^(\d+):(.*)$/.exec(wert.trim());
+  const anzahl = m ? Number(m[1]) : 0;
+  const grund = m ? m[2].trim() : "";
+  return anzahl >= 1 && grund !== "" ? { anzahl, grund } : { ungueltig: wert };
+}
+
 /** Parst die letzte `KQ-Plan:`- und die letzte `KQ-Review:`-Zeile (am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -166,6 +177,7 @@ export function parseNachweis(text) {
       runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
       lenses: lensenAus(reviewWert),
       blocker: blockerAus(reviewWert),
+      zusatzpass: zusatzpassAus(reviewWert),
       verdikt: felder.verdikt ?? null,
     };
   }
