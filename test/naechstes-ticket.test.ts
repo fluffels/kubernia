@@ -202,3 +202,13 @@ describe("Bereich (#1552)", () => {
     expect(r.uebersprungen).toEqual([]);
   });
 });
+
+describe("prHeadsAus: REST-Form der offenen PRs (#1549 Z1)", () => {
+  const P = raw as unknown as { prHeadsAus: (s: unknown[]) => string[] };
+  test("flacht die Seiten ab und liest head.ref", () => {
+    const seiten = [[{ head: { ref: "feature/kq-1-a" } }, { head: { ref: "feature/kq-2-b" } }], [{ head: { ref: "feature/kq-3-c" } }]];
+    expect(P.prHeadsAus(seiten)).toEqual(["feature/kq-1-a", "feature/kq-2-b", "feature/kq-3-c"]);
+    expect(P.prHeadsAus([])).toEqual([]);
+    expect(P.prHeadsAus([[]])).toEqual([]);
+  });
+});

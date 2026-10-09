@@ -27,7 +27,7 @@
  * Nur Node-Builtins.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { istDirektaufruf } from "./hook-io.mjs";
 
@@ -137,6 +137,18 @@ export function nodeModulesHinweisFuer(dir) {
   }
 }
 
+/** Bilddateien (Screenshots, Aufnahmen) unter den Root-Dateinamen. Pur; Groß-/Kleinschreibung egal. */
+export const bildReste = (namen) => namen.filter((n) => /\.(png|jpe?g|webm)$/i.test(n));
+
+/** Bilddateien im Root von `dir` (nur Dateien, keine Unterordner wie `.playwright-mcp/`); bei Lesefehlern `[]` (fail-open). */
+export function bildResteFuer(dir) {
+  try {
+    return bildReste(readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile()).map((e) => e.name));
+  } catch {
+    return [];
+  }
+}
+
 /** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, agentenGeaendert, notiz }`. */
 export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   const zeilen = [];
@@ -152,6 +164,7 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   }
   if (ergebnis.nodeHinweis) zeilen.push(`Node-Version: ${ergebnis.nodeHinweis}`);
   if (ergebnis.nodeModulesHinweis) zeilen.push(`Abhängigkeiten: ${ergebnis.nodeModulesHinweis}`);
+  if (ergebnis.bildReste?.length) zeilen.push(`Bilddateien im Hauptcheckout-Root: ${ergebnis.bildReste.join(", ")} (Screenshots gehören nach .playwright-mcp/, FAQ Browser); verschieben oder löschen.`);
   if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (Stand des geteilten Checkouts bei diesem Aufruf; die Basis dieser Session nennt nur der SessionStart-Kontext)`);
   return zeilen.join("\n");
 }
@@ -196,7 +209,7 @@ export function ausgabe(ergebnis, text) {
 
 function main() {
   const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir) };
+  const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) };
   const out = ausgabe(ergebnis, process.argv.includes("--text"));
   if (out) console.log(out);
   if (process.argv.includes("--streng") && exitCodeFuer(ergebnis) !== 0) {

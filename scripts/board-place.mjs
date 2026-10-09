@@ -27,6 +27,7 @@
  * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
+import { mitKontingent } from "./gh-kontingent.mjs";
 import {
   NOTFALL_ARTEN,
   REPO,
@@ -133,6 +134,7 @@ async function main(argv = process.argv.slice(2)) {
     console.error("Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing)");
     process.exit(2);
   }
+  mitKontingent("board-place");
   if (args.missing) return reportMissing();
   let plan;
   let korrektur = null;

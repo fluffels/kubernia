@@ -73,6 +73,39 @@ describe("Hilfsfunktionen", () => {
   });
 });
 
+describe("Bilddateien im Hauptcheckout-Root (#1549 Z2)", () => {
+  const B = raw as unknown as { bildReste: (n: string[]) => string[]; bildResteFuer: (d: string) => string[] };
+  test("bildReste: Treffer für png/jpg/jpeg/webm, groß oder klein", () => {
+    expect(B.bildReste(["a.png", "B.JPG", "c.jpeg", "d.WebM", "package.json", "png", "xpng", "x.png.txt"])).toEqual(["a.png", "B.JPG", "c.jpeg", "d.WebM"]);
+  });
+  test("bildReste: keine Treffer ergeben []", () => {
+    expect(B.bildReste(["README.md", "AGENTS.md"])).toEqual([]);
+    expect(B.bildReste([])).toEqual([]);
+  });
+  test("bildResteFuer: nur Dateien im Root, Unterordner (auch .playwright-mcp) und Ordner mit Bildnamen zählen nicht", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-bilder-"));
+    try {
+      mkdirSync(join(dir, ".playwright-mcp"));
+      writeFileSync(join(dir, ".playwright-mcp", "ok.png"), "x");
+      mkdirSync(join(dir, "ordner.png"));
+      writeFileSync(join(dir, "rest.png"), "x");
+      writeFileSync(join(dir, "notiz.md"), "x");
+      expect(B.bildResteFuer(dir)).toEqual(["rest.png"]);
+      expect(B.bildResteFuer(join(dir, "gibt-es-nicht"))).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("baueText: Hinweiszeile nennt die Dateien und .playwright-mcp/; ohne Reste keine Zeile; nicht blockierend", () => {
+    const t = S.baueText({ aktion: "nichts", basis: "abc", bildReste: ["rest.png", "b.jpg"] } as Partial<Ergebnis>);
+    expect(t).toContain("Bilddateien im Hauptcheckout-Root: rest.png, b.jpg");
+    expect(t).toContain(".playwright-mcp/");
+    expect(S.baueText({ aktion: "nichts", basis: "abc", bildReste: [] } as Partial<Ergebnis>)).not.toContain("Bilddateien");
+    const ex = (raw as unknown as { exitCodeFuer: (e: unknown) => number }).exitCodeFuer;
+    expect(ex({ aktion: "nichts", bildReste: ["rest.png"] })).toBe(ex({ aktion: "nichts" }));
+  });
+});
+
 describe("Ausgabe des Hooks", () => {
   test("SessionStart-Modus: JSON mit additionalContext und Sitzungsbasis", () => {
     const o = JSON.parse(S.ausgabe({ aktion: "nichts", basis: "abc" }, false)) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
