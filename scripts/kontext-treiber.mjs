@@ -14,6 +14,8 @@
  *    späteren Calls des Laufs (so oft wird das Ergebnis erneut aus dem Cache gelesen).
  *  - Neuaufbau: Pause > 5 min zum Vorgänger und Cache-Read unter der Hälfte des Kontexts (wie `countCacheRebuilds`); Mehrkosten =
  *    neu geschriebene Tokens × (Write-5m − Read-Preis), ohne Preisstufen.
+ *  - Wartepausen (#1588): jede Lücke > 240 s zum Vorgänger-Call, mit Ursache wie beim Neuaufbau und Ticks = Lücke / 240 s abgerundet
+ *    (so viele Wach-Calls hätte ein Keep-alive im 4-min-Takt gebraucht); eine Pause ist kein Neuaufbau, der Cache kann gehalten haben.
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laufzeit; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
@@ -29,6 +31,7 @@ import { ladeLaeufe, laufAus } from "./subagent-laufzeit.mjs";
 
 const MIN = 60_000;
 const PAUSE_MS = 5 * MIN;
+const TICK_MS = 4 * MIN;
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
 export const PHASEN = ["Umsetzung", "Pflege", "verify", "Review", "Lens-Fix", "CI-Warten", "CI-Fix", "Merge/Cleanup"];
@@ -116,6 +119,17 @@ function neuaufbauten(eintraege) {
   return liste;
 }
 
+/** Lücken über 240 s zwischen zwei Calls (#1588): Ursache des Vorgängers, Sekunden, Ticks eines 4-min-Keep-alive. */
+function wartepausen(eintraege) {
+  const liste = [];
+  for (let i = 1; i < eintraege.length; i++) {
+    const gap = Date.parse(eintraege[i].call.ts) - Date.parse(eintraege[i - 1].call.ts);
+    if (!(gap > TICK_MS)) continue;
+    liste.push({ ursache: ursacheVon(eintraege[i - 1]), sekunden: Math.round(gap / 1000), ticks: Math.floor(gap / TICK_MS) });
+  }
+  return liste;
+}
+
 /** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. */
 export function analysiereLauf(lauf, { wurzel = null } = {}) {
   const eintraege = phasenUndTools(lauf.zeilen);
@@ -165,12 +179,13 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
     phasenDetail: eintraege.map((e, i) => ({ phase: e.phase, kontext: ctx[i], kosten: e.call.cost ?? null })),
     ergebnisse,
     neuaufbauten: neuaufbauten(eintraege),
+    pausen: wartepausen(eintraege),
     wachstum,
   };
 }
 
 function gruppe(analysen) {
-  if (!analysen.length) return { gesamt: null, top: [], phasen: {}, neuaufbau: {}, wachstum: { ergebnis: 0, eingabe: 0, rest: 0 } };
+  if (!analysen.length) return { gesamt: null, top: [], phasen: {}, neuaufbau: {}, pausen: {}, wachstum: { ergebnis: 0, eingabe: 0, rest: 0 } };
   const requests = summe(analysen.map((a) => a.requests));
   const mitPreis = analysen.filter((a) => a.kosten !== null);
   const phasen = {};
@@ -189,6 +204,14 @@ function gruppe(analysen) {
       u.n += 1;
       u.tokens += n.tokens;
       u.mehrkosten += n.mehrkosten ?? 0;
+    }
+  }
+  const pausen = {};
+  for (const a of analysen) {
+    for (const x of a.pausen) {
+      const u = (pausen[x.ursache] ??= { n: 0, ticks: 0 });
+      u.n += 1;
+      u.ticks += x.ticks;
     }
   }
   const teile = mitPreis.map((a) => a.kostenTeile).filter(Boolean);
@@ -217,6 +240,7 @@ function gruppe(analysen) {
       .slice(0, 10),
     phasen,
     neuaufbau,
+    pausen,
     wachstum,
   };
 }
@@ -261,6 +285,8 @@ function renderGruppe(titel, g) {
   }
   out.push("", "| Neuaufbau-Ursache | Ereignisse | neu geschriebene Tokens | Mehrkosten ($) |", "|---|--:|--:|--:|");
   for (const [u, d] of Object.entries(g.neuaufbau)) out.push(`| ${u} | ${d.n} | ${k(d.tokens)} | ${f(d.mehrkosten)} |`);
+  out.push("", "| Pausen-Ursache (> 240 s) | Pausen | Ticks |", "|---|--:|--:|");
+  for (const [u, d] of Object.entries(g.pausen)) out.push(`| ${u} | ${d.n} | ${d.ticks} |`);
   out.push("", `Wachstum des Kontexts (Σ Zuwachs): Tool-Ergebnisse ${k(g.wachstum.ergebnis)}, eigene Tool-Eingaben ${k(g.wachstum.eingabe)}, Rest (Text, Overhead) ${k(g.wachstum.rest)}`);
   out.push("", "Top-10 Tool-Ergebnisse nach Last (Tokens × spätere Calls):", "", "| Last (Tok) | Tokens | Phase | Ticket | Tool-Aufruf |", "|--:|--:|---|--:|---|");
   for (const t of g.top) out.push(`| ${k(t.last)} | ${t.tokens} | ${t.phase} | ${t.ticket ? `#${t.ticket}` : "-"} | ${t.label.replace(/\|/g, "/")} |`);

@@ -9,6 +9,7 @@ type Tool = { name: string; input?: Record<string, unknown>; result?: string | n
 type CallSpec = { min: number; ctx?: number; cacheRead?: number; tools?: Tool[] };
 type Top = { label: string; tokens: number; last: number };
 type Rebuild = { ursache: string; tokens: number; mehrkosten: number | null };
+type Pause = { ursache: string; sekunden: number; ticks: number };
 type Analyse = {
   ticket: number | null;
   sammel: boolean;
@@ -18,6 +19,7 @@ type Analyse = {
   kosten: number | null;
   ergebnisse: Top[];
   neuaufbauten: Rebuild[];
+  pausen: Pause[];
   wachstum: { ergebnis: number; eingabe: number; rest: number };
 };
 type Bericht = {
@@ -25,6 +27,7 @@ type Bericht = {
   top: Top[];
   phasen: Record<string, { calls: number }>;
   neuaufbau: Record<string, { n: number; mehrkosten: number }>;
+  pausen: Record<string, { n: number; ticks: number }>;
 };
 const K = raw as unknown as {
   phaseDerCalls: (zeilen: Row[]) => string[];
@@ -281,5 +284,50 @@ describe("Lens-Fix, Repo-Wurzel, Kostenteile (Grenzfälle R2)", () => {
     expect(g.kostenRead).toBeGreaterThan(0);
     expect(g.kostenRead + g.kostenWrite + g.kostenOutput).toBeCloseTo(g.kostenSumme, 9);
     expect(g.kostenWrite).toBeCloseTo((6000 * 2.5) / 1e6, 9);
+  });
+});
+
+describe("Wartepausen über 240 s (#1588)", () => {
+  const sek = (x: number) => x / 60;
+  const pausen = (calls: CallSpec[]) => K.analysiereLauf(lauf("#1 x", calls))?.pausen ?? [];
+  test("241 s nach einem Lens-Spawn: Lens-Warten, 1 Tick", () => {
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 1 + sek(241) }])).toEqual([{ ursache: "Lens-Warten", sekunden: 241, ticks: 1 }]);
+  });
+  test("600 s ergeben 2 Ticks (abgerundet)", () => {
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 11 }])[0]).toMatchObject({ sekunden: 600, ticks: 2 });
+  });
+  test("280 s bei vollem Cache-Read ist eine Pause, aber kein Neuaufbau", () => {
+    const a = K.analysiereLauf(lauf("#1 x", [{ min: 1, tools: [linse] }, { min: 1 + sek(280) }]));
+    expect(a?.pausen).toHaveLength(1);
+    expect(a?.neuaufbauten).toHaveLength(0);
+  });
+  test("Ursache nach verify und nach pr-warten", () => {
+    expect(pausen([{ min: 1, tools: [bash("npm run verify:kompakt")] }, { min: 7 }])[0].ursache).toBe("verify");
+    expect(pausen([{ min: 1, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 7 }])[0].ursache).toBe("CI-Warten");
+  });
+  test("genau 240 s und 239 s zählen nicht (strikt größer)", () => {
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 5 }])).toEqual([]);
+    expect(pausen([{ min: 1, tools: [linse] }, { min: 1 + sek(239) }])).toEqual([]);
+  });
+  test("ein einzelner Call hat keine Pausen; fehlender Zeitstempel ergibt keine Pause", () => {
+    expect(pausen([{ min: 1 }])).toEqual([]);
+    const l = lauf("#1 x", [{ min: 1, tools: [linse] }, { min: 20 }]);
+    for (const z of l.zeilen) if (z.type === "assistant" && z.timestamp === t(20)) delete z.timestamp;
+    expect(() => K.analysiereLauf(l)).not.toThrow();
+    expect(K.analysiereLauf(l)?.pausen).toEqual([]);
+  });
+  test("Aggregat trennt die Ursachen in eigene Buckets, leere Gruppe hat pausen {}", () => {
+    const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 16 }];
+    const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls)] });
+    expect(r.gesamt.pausen).toEqual({ "Lens-Warten": { n: 1, ticks: 2 }, "CI-Warten": { n: 1, ticks: 1 } });
+    expect(r.sammel.pausen).toEqual({});
+  });
+  test("Aggregat über zwei Läufe, Trennung Sammel/ohne Sammel, Markdown-Zeile", () => {
+    const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11 }];
+    const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls), lauf("#2 Harness-Härtung (gesammelt)", calls)] });
+    expect(r.gesamt.pausen["Lens-Warten"]).toEqual({ n: 2, ticks: 4 });
+    expect(r.ohneSammel.pausen["Lens-Warten"]).toEqual({ n: 1, ticks: 2 });
+    expect(r.sammel.pausen["Lens-Warten"]).toEqual({ n: 1, ticks: 2 });
+    expect(K.renderMarkdown(r)).toContain("| Lens-Warten | 2 | 4 |");
   });
 });
