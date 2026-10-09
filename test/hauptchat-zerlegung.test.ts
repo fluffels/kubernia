@@ -22,7 +22,6 @@ type Eingabe = {
 };
 const hc = hcModule as {
   zerlegeHauptchat: (e: Eingabe) => Ergebnis;
-  slugFuerPfad: (p: string) => string;
   renderMarkdown: (r: Ergebnis) => string;
 };
 
@@ -254,10 +253,6 @@ describe("zerlegeHauptchat: Zeitfenster und Randfälle", () => {
     assert.doesNotMatch(hc.renderMarkdown(ok), /ohne Preis/);
   });
 
-  test("Slug-Ableitung Windows und POSIX", () => {
-    assert.equal(hc.slugFuerPfad("C:\\dev\\kubernia"), "C--dev-kubernia");
-    assert.equal(hc.slugFuerPfad("/home/x/kubernia"), "-home-x-kubernia");
-  });
 });
 
 describe("zerlegeHauptchat: Grenzfälle aus dem Review (R1)", () => {

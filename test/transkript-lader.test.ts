@@ -128,3 +128,21 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
     expect(ausGenerator.rows.reduce((s, r) => s + r.calls, 0)).toBe(2);
   });
 });
+
+describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", () => {
+  const P = rawTranskript as unknown as { projektSlug: (p: string) => string; istProjektOrdner: (n: string, s: string) => boolean };
+  test("projektSlug: Windows und POSIX, Worktree-Pfad zählt als Hauptrepo, abschließender Schrägstrich entfällt", () => {
+    expect(P.projektSlug("X:\\dev\\repo")).toBe("X--dev-repo");
+    expect(P.projektSlug("/home/x/repo")).toBe("-home-x-repo");
+    expect(P.projektSlug("X:\\dev\\repo\\.claude\\worktrees\\kq-1")).toBe("X--dev-repo");
+    expect(P.projektSlug("/home/x/repo/.claude/worktrees/kq-1/scripts")).toBe("-home-x-repo");
+    expect(P.projektSlug("X:/dev/repo/")).toBe("X--dev-repo");
+  });
+  test("istProjektOrdner: exakter Ordner und Worktree-Ordner ja, Geschwister-Repos mit gleichem Präfix nein", () => {
+    expect(P.istProjektOrdner("X--dev-repo", "X--dev-repo")).toBe(true);
+    expect(P.istProjektOrdner("X--dev-repo--claude-worktrees-kq-1", "X--dev-repo")).toBe(true);
+    expect(P.istProjektOrdner("X--dev-repo-alt", "X--dev-repo")).toBe(false);
+    expect(P.istProjektOrdner("X--dev-repo2", "X--dev-repo")).toBe(false);
+    expect(P.istProjektOrdner("X--dev", "X--dev-repo")).toBe(false);
+  });
+});

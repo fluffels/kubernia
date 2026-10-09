@@ -38,7 +38,6 @@ const A = rawAbgleich as unknown as {
   traceIdVon: (s: string) => string;
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
-  projektPraefix: (r: string) => string;
   findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number }[];
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
@@ -191,23 +190,19 @@ describe("Soll (pur)", () => {
 });
 
 describe("Session-Auswahl", () => {
-  test("Präfix eines Worktree-Pfads ist das des Hauptrepos", () => {
-    expect(A.projektPraefix("X:/repo")).toBe(PRAEFIX);
-    expect(A.projektPraefix("X:\\repo\\.claude\\worktrees\\kq-1")).toBe(PRAEFIX);
-    expect(A.projektPraefix("X:/repo/")).toBe(PRAEFIX);
-  });
-
   test("fremder Projektordner wird nicht gelesen; Worktree-Ordner des Projekts schon; --seit filtert nach mtime, --session nicht", () => {
     const root = fixture({
       [`${PRAEFIX}/a.jsonl`]: msg("m"),
       [`${PRAEFIX}--claude-worktrees-kq-1/b.jsonl`]: msg("m"),
       "Y--anders/c.jsonl": msg("m"),
+      [`${PRAEFIX}-alt/d.jsonl`]: msg("m"), // Geschwister-Repo mit gleichem Präfix (#1572)
     });
     const ids = (o: Partial<Parameters<typeof A.findeSessions>[0]>) => A.findeSessions({ projectsRoot: root, praefix: PRAEFIX, ...o }).map((s) => s.id).sort();
     expect(ids({})).toEqual(["a", "b"]);
     expect(ids({ seitMs: Date.now() + 3_600_000 })).toEqual([]);
     expect(ids({ seitMs: Date.now() + 3_600_000, sessionId: "a" })).toEqual(["a"]);
     expect(ids({ sessionId: "c" })).toEqual([]);
+    expect(ids({ sessionId: "d" })).toEqual([]);
   });
 
   test("fehlender Projektordner ergibt keine Sessions", () => {

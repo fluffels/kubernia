@@ -24,6 +24,7 @@ import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
 import { median } from "./mess-lib.mjs";
+import { projektSlug } from "./transkript.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laufzeit.mjs";
 
 const MIN = 60_000;
@@ -307,7 +308,7 @@ function main() {
     console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }
-  const slug = args.projekt ?? process.cwd().replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "").replace(/[^A-Za-z0-9]/g, "-");
+  const slug = args.projekt ?? projektSlug(process.cwd());
   const dir = join(homedir(), ".claude", "projects", slug);
   readdirSync(dir);
   const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne });

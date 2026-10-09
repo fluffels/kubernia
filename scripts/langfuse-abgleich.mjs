@@ -20,7 +20,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ladeSessionDatei } from "./transkript.mjs";
+import { istProjektOrdner, ladeSessionDatei, projektSlug } from "./transkript.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang, queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 
@@ -81,21 +81,13 @@ export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
   return [...byId.values()];
 }
 
-/** Projektordner-Präfix unter `~/.claude/projects` aus dem Repo-Pfad (Worktrees auf das Hauptrepo gekürzt), ohne git. */
-export function projektPraefix(repoRoot) {
-  const wurzel = String(repoRoot)
-    .replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "")
-    .replace(/[\\/]+$/, "");
-  return wurzel.replace(/[^A-Za-z0-9]/g, "-");
-}
-
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);
 
 /** Sessions des Projekts: `[{ id, pfad, mtime }]` (mtime = jüngste Datei der Session). `seitMs` filtert nach mtime, `sessionId` gilt unabhängig davon. */
 export function findeSessions({ projectsRoot, praefix, seitMs = 0, sessionId = null }) {
   if (!existsSync(projectsRoot)) return [];
   const out = new Map();
-  for (const d of readdirSync(projectsRoot).filter((n) => n.startsWith(praefix))) {
+  for (const d of readdirSync(projectsRoot).filter((n) => istProjektOrdner(n, praefix))) {
     for (const datei of jsonlDateien(join(projectsRoot, d))) {
       const id = datei.replace(/\.jsonl$/, "");
       if (sessionId && id !== sessionId) continue;
@@ -347,7 +339,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     if (!args.ist.length) return { exitCode: 2, text: e.message };
   }
   try {
-    const sessions = findeSessions({ projectsRoot, praefix: projektPraefix(repoRoot), seitMs, sessionId: args.session });
+    const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
     const soll = new Map();
     const mtimes = new Map();
     for (const s of sessions) {

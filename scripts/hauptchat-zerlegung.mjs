@@ -24,18 +24,13 @@ import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, median } from "./mess-lib.mjs";
 import { callsFromTranscript, priceParts } from "./token-baseline.mjs";
-import { ladeSessionDatei } from "./transkript.mjs";
+import { ladeSessionDatei, projektSlug } from "./transkript.mjs";
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
 const CLAIM = /\bgh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--add-assignee)/;
 const norm = (p) => String(p ?? "").replace(/\\/g, "/").toLowerCase();
 const gueltig = (ts) => Number.isFinite(Date.parse(ts));
-
-/** Projektordner-Name unter `~/.claude/projects`: jedes Nicht-Alphanumerische wird `-`. */
-export function slugFuerPfad(p) {
-  return String(p).replace(/[^A-Za-z0-9]/g, "-");
-}
 
 /** Text einer Nutzerzeile (String- oder Block-Inhalt), `null` bei reinen tool_result-Zeilen. */
 function nutzerText(row) {
@@ -365,7 +360,7 @@ function main() {
     process.exit(2);
   }
   const root = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8" }).trim().replace(/[\\/]\.git[\\/]?$/, ""); // Hauptrepo auch aus einem Worktree
-  const slug = args.projekt ?? slugFuerPfad(root);
+  const slug = args.projekt ?? projektSlug(root);
   const dir = join(homedir(), ".claude", "projects", slug);
   const cache = new Map();
   const closedAtOf = (nr) => (cache.has(nr) ? cache.get(nr) : cache.set(nr, closedAtViaGh(nr)).get(nr));
