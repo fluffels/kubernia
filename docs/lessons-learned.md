@@ -56,7 +56,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 ### Ein Verfahren braucht ein Konvergenz-Signal
 
-**Was geschah:** „Abarbeiten, was in einen PR passt“ ließ in jeder Generation Zeilen übrig: Generation [#1276](https://github.com/fluffels/kubernia/issues/1276) und Generation [#1308](https://github.com/fluffels/kubernia/issues/1308) hatten je 66 offene Zeilen (2026-10-06). Eine Halbierung ([#1309](https://github.com/fluffels/kubernia/issues/1309)) wurde wieder abgelöst.
+**Was geschah:** Ein Teil eines Sammeltickets abzuarbeiten ließ in jeder Generation Zeilen übrig: Generation [#1276](https://github.com/fluffels/kubernia/issues/1276) und Generation [#1308](https://github.com/fluffels/kubernia/issues/1308) hatten je 66 offene Zeilen (2026-10-06). Eine Halbierung ([#1309](https://github.com/fluffels/kubernia/issues/1309)) wurde wieder abgelöst.
 **Geändert:** Die Regel „immer komplett“ ([#1311](https://github.com/fluffels/kubernia/issues/1311)). Der Preis sind breitere PRs, die mit einer begründeten Ausnahme am Größen-Gate erlaubt sind.
 **Beleg:** die Fortschreibungen in [ADR 0012](adr/0012-harness-autonomie-audit-spur.md).
 
