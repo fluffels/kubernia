@@ -14,14 +14,15 @@
  *    späteren Calls des Laufs (so oft wird das Ergebnis erneut aus dem Cache gelesen).
  *  - Neuaufbau: Pause > 5 min zum Vorgänger und Cache-Read unter der Hälfte des Kontexts (wie `countCacheRebuilds`); Mehrkosten =
  *    neu geschriebene Tokens × (Write-5m − Read-Preis), ohne Preisstufen.
- * Pur und ohne IO bis auf das CLI. Importiert token-baseline, brain-metrics, subagent-laufzeit; wird selbst nicht importiert.
+ * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laufzeit; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
-import { callsFromTranscript, PRICES, priceFor } from "./token-baseline.mjs";
+import { callsFromTranscript } from "./transkript-calls.mjs";
+import { PRICES, priceFor } from "./preise.mjs";
 import { ladeLaeufe, laufAus, median } from "./subagent-laufzeit.mjs";
 
 const MIN = 60_000;
