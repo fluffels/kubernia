@@ -581,8 +581,9 @@ export const ASSIGN_RE = /^[A-Za-z_]\w*=/;
  * Gruppen und über die Ersetzungen (`$(…)`, Backticks, `<(…)`) samt Heredoc-Bodies mit Ersetzungen. Führende Zuweisungswörter
  * fallen weg (`LANG=C cat x` → `["cat","x"]`); eine reine Zuweisung (`X=1`) ergibt kein Kommando. Reihenfolge: Quelltext-nah,
  * ein Kommando vor den Kommandos seiner Ersetzungen. Wörter innerhalb von Strings (`bash -c '…'`) sind nicht zerlegt.
+ * Mit `{ worte: true }` kommen statt der Texte die Wort-Objekte (`text`, `dynamic`, `quoted`) zurück (Stdin-Skript-Guard, #1561).
  */
-export function einfacheKommandos(ast) {
+export function einfacheKommandos(ast, { worte: mitWorten = false } = {}) {
   const out = [];
   const gehe = (node) => {
     if (!node || typeof node !== "object") return;
@@ -594,7 +595,7 @@ export function einfacheKommandos(ast) {
       const worte = node.words.map((w) => w.text);
       let i = 0;
       while (i < worte.length && ASSIGN_RE.test(worte[i])) i += 1;
-      if (i < worte.length) out.push(worte.slice(i));
+      if (i < worte.length) out.push((mitWorten ? node.words : worte).slice(i));
       gehe(node.substs);
       for (const h of node.heredocs ?? []) gehe(h.substs);
       return;

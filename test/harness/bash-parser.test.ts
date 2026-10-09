@@ -214,6 +214,17 @@ describe("einfacheKommandos — alle einfachen Kommandos eines AST (#1322 Z4)", 
     assert.deepEqual(mod.einfacheKommandos(undefined), []);
   });
 
+  test("{ worte: true } liefert Wort-Objekte (text, dynamic, quoted); ohne Option bleibt es bei Texten (#1561 Z3)", () => {
+    const mitWorten = (command: string) =>
+      (raw as { einfacheKommandos: (a: unknown, o: { worte: boolean }) => { text: string; dynamic: boolean; quoted: boolean }[][] }).einfacheKommandos(ast(command), { worte: true });
+    const k = mitWorten("A=1 python3 - 'x y'");
+    assert.deepEqual(k.map((w) => w.map((x) => x.text)), [["python3", "-", "x y"]], "Zuweisungspräfix fällt auch hier weg");
+    assert.equal(k[0][2].quoted, true);
+    assert.equal(k[0][0].quoted, false);
+    assert.equal(mitWorten("echo $X")[0][1].dynamic, true);
+    assert.deepEqual(kommandos("python3 -"), [["python3", "-"]]);
+  });
+
   test("ASSIGN_RE ist die eine Quelle: der Worktree-Guard re-exportiert sie", async () => {
     // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
     const tab = (await import("../../scripts/worktree-guard-tabellen.mjs")) as { ASSIGN_RE: RegExp };

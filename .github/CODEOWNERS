@@ -66,6 +66,7 @@ AGENTS.md                  @fluffels
 /scripts/worktree-guard-git.mjs @fluffels
 /scripts/worktree-guard-tabellen.mjs @fluffels
 /scripts/lens-auftrag-guard.mjs @fluffels
+/scripts/stdin-skript-guard.mjs @fluffels
 /scripts/pretooluse-hook.mjs @fluffels
 /scripts/worktree-guard-hook.mjs @fluffels
 /scripts/worktree-guard-powershell.mjs @fluffels
