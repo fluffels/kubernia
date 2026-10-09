@@ -65,15 +65,19 @@ export function ladeSessionDatei(pfad) {
   return { id, main, subagents };
 }
 
+/** Repo-Pfad ohne Worktree-Suffix `.claude/worktrees/…` und ohne abschließende Schrägstriche (ein Worktree zählt als Hauptrepo). */
+export function hauptrepoPfad(pfad) {
+  return String(pfad)
+    .replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "")
+    .replace(/[\\/]+$/, "");
+}
+
 /**
  * Projektordner-Name unter `~/.claude/projects` aus dem Repo-Pfad (#1572): Worktree-Suffix `.claude/worktrees/…` und
  * abschließende Schrägstriche entfallen (das Hauptrepo zählt), jedes Nicht-Alphanumerische wird `-`. EINE Ableitung für alle Messskripte.
  */
 export function projektSlug(pfad) {
-  return String(pfad)
-    .replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "")
-    .replace(/[\\/]+$/, "")
-    .replace(/[^A-Za-z0-9]/g, "-");
+  return hauptrepoPfad(pfad).replace(/[^A-Za-z0-9]/g, "-");
 }
 
 /** Gehört der Ordnername zum Projekt `slug`: das Hauptrepo selbst oder einer seiner Worktrees; Geschwister (`<slug>-alt`) nicht. */

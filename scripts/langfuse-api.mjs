@@ -22,13 +22,19 @@ export function usageAusObservation(o) {
   };
 }
 
+/** Bei einer Fehlerantwort mit dem HTTP-Status (`.status`) werfen; das Protokoll des Nachlieferers weist ihn aus. */
+async function wirfHttp(res) {
+  if (res.ok) return;
+  throw Object.assign(new Error(`Langfuse ${res.status}: ${await res.text()}`), { status: res.status });
+}
+
 /** Eine Metrics-Abfrage (v2, nur lesend: GET) → die Zeilen `data`. `fetchImpl` ist für Tests injizierbar. */
 export async function queryMetrics(query, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
   const auth = "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
   const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/metrics?query=${encodeURIComponent(JSON.stringify(query))}`, {
     headers: { Authorization: auth },
   });
-  if (!res.ok) throw new Error(`Langfuse ${res.status}: ${await res.text()}`);
+  await wirfHttp(res);
   const body = await res.json();
   return body.data ?? [];
 }
@@ -49,12 +55,47 @@ export async function fetchSessionObservations(
     const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/observations?${q}`, {
       headers: { Authorization: auth },
     });
-    if (!res.ok) throw new Error(`Langfuse ${res.status}: ${await res.text()}`);
+    await wirfHttp(res);
     const body = await res.json();
     out.push(...(body.data ?? []));
     cursor = body.meta?.cursor;
   } while (cursor);
   return out;
+}
+
+const basisAuth = ({ publicKey, secretKey }) => "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
+
+/**
+ * Spans per OTLP/HTTP-JSON senden (einziger Schreibweg des Nachlieferers; Version 4 = observation-zentrierte Ingestion).
+ * Wirft mit `.status` bei HTTP-Fehler und bei `partialSuccess.rejectedSpans > 0` (die Ingestion lehnte Spans ab).
+ */
+export async function sendeOtlp(payload, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
+  const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/otel/v1/traces`, {
+    method: "POST",
+    headers: { Authorization: basisAuth({ publicKey, secretKey }), "Content-Type": "application/json", "x-langfuse-ingestion-version": "4" },
+    body: JSON.stringify(payload),
+  });
+  await wirfHttp(res);
+  const text = await res.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = null; // Antwort ohne JSON: kein partialSuccess auswertbar, der HTTP-Status war schon 2xx
+  }
+  const abgelehnt = Number(body?.partialSuccess?.rejectedSpans ?? 0);
+  if (abgelehnt > 0) throw new Error(`Langfuse lehnte ${abgelehnt} Span(s) ab: ${body.partialSuccess.errorMessage ?? "ohne Grund"}`);
+  return body;
+}
+
+/** Einen Score anlegen oder (bei gleicher `id`) überschreiben. */
+export async function sendeScore(score, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
+  const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/scores`, {
+    method: "POST",
+    headers: { Authorization: basisAuth({ publicKey, secretKey }), "Content-Type": "application/json" },
+    body: JSON.stringify(score),
+  });
+  await wirfHttp(res);
 }
 
 /** Zugangsdaten aus der Umgebung; ohne Secret-Key (Agentenläufe haben ihn nicht) wirft es `meldung` (Ersatzweg-Hinweis des Aufrufers). */
