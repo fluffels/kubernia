@@ -205,7 +205,8 @@ export function parseArgs(argv) {
   return a;
 }
 
-function ladeLaeufe(dir, agent, von) {
+/** Lädt die Läufe (Meta + Transkriptzeilen) eines Subagent-Typs aus `<projektordner>/<session>/subagents/`, nur Dateien jünger als `von`. */
+export function ladeLaeufe(dir, agent, von) {
   const laeufe = [];
   for (const id of readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)) {
     const subDir = join(dir, id, "subagents");

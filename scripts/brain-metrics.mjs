@@ -110,7 +110,7 @@ export function toolEventsFromTranscript(textOderZeilen, agent = null) {
     if (!Array.isArray(content)) continue;
     for (const c of content) {
       if (row.type === "assistant" && c?.type === "tool_use") {
-        const ev = { ts: row.timestamp, tool: c.name, input: c.input ?? {}, resultChars: 0, agent, fehler: null };
+        const ev = { ts: row.timestamp, msgId: row.message?.id ?? null, tool: c.name, input: c.input ?? {}, resultChars: 0, agent, fehler: null };
         events.push(ev);
         if (c.id) byId.set(c.id, ev);
       } else if (row.type === "user" && c?.type === "tool_result") {

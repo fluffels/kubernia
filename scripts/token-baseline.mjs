@@ -173,7 +173,7 @@ export function periodAt(entry, ts) {
 }
 
 /** Exakter Name oder Name mit Datums-Suffix (`-20251001`); `claude-opus-5-5` ist kein Opus 5. */
-function priceFor(model, prices, ts) {
+export function priceFor(model, prices, ts) {
   const id = String(model ?? "");
   const hit = matchersOf(prices).find(({ key, re }) => id === key || re.test(id));
   return hit ? periodAt(prices[hit.key], ts) : null;
@@ -444,6 +444,7 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
       continue;
     }
     const call = {
+      id: key,
       ts: row.timestamp,
       model: msg.model,
       input: num(u.input_tokens),
