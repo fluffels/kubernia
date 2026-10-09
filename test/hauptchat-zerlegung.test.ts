@@ -439,3 +439,165 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
     assert.doesNotMatch(text, /\| - \|/);
   });
 });
+
+type Anteil = { sonnet: number; opus: number; haiku: number; sonst: number; gesamt: number; anteil: number; fenster: number; medianKosten: number };
+type TtlCall = { session: string; ts?: string; model: string; input: number; cacheWrite: number; cacheWrite1h: number; cacheRead: number; output: number; zaehlt?: boolean };
+type Ttl = { calls: number; uebersprungen: number; pausenUeber5: number; pausenUeber60: number; medianPauseMin: number | null; istKosten: number; sim5mKosten: number };
+const hcx = hcModule as {
+  modellAnteil: (f: { modelle: Record<string, number>; kosten: Record<string, number> }[]) => Anteil | null;
+  ttlVergleich: (c: TtlCall[]) => Ttl;
+  renderMarkdown: (r: unknown) => string;
+};
+
+describe("modellAnteil (#1557)", () => {
+  const f = (modelle: Record<string, number>, kosten: Record<string, number>) => ({ modelle, kosten });
+  test("zählt Calls je Familie über alle Fenster, Fenster ohne Calls bleiben außen vor", () => {
+    const r = hcx.modellAnteil([
+      f({ [SONNET]: 8, [OPUS]: 2 }, { [SONNET]: 1, [OPUS]: 3 }),
+      f({ [SONNET]: 10, "claude-haiku-5-5": 1, "gpt-x": 1 }, { [SONNET]: 2 }),
+      f({}, {}),
+    ]);
+    assert.ok(r);
+    assert.deepEqual([r.sonnet, r.opus, r.haiku, r.sonst, r.gesamt, r.fenster], [18, 2, 1, 1, 22, 2]);
+    assert.equal(r.anteil, 18 / 22);
+  });
+  test("die Familie wird am Präfix erkannt, ein Fremdname mit eingebettetem Namen ist sonst", () => {
+    const r = hcx.modellAnteil([f({ "x-claude-sonnet-5": 1, [SONNET]: 1 }, {})]);
+    assert.deepEqual([r?.sonnet, r?.sonst], [1, 1]);
+  });
+  test("<synthetic> zählt weder als Call noch als Fremdmodell", () => {
+    const r = hcx.modellAnteil([f({ [SONNET]: 3, "<synthetic>": 5 }, { [SONNET]: 1 })]);
+    assert.equal(r?.gesamt, 3);
+    assert.equal(r?.sonst, 0);
+    assert.equal(r?.anteil, 1);
+  });
+  test("Median der Fensterkosten bei ungerader und gerader Zahl", () => {
+    const k = (x: number) => f({ [SONNET]: 1 }, { [SONNET]: x });
+    assert.equal(hcx.modellAnteil([k(1), k(9), k(2)])?.medianKosten, 2);
+    assert.equal(hcx.modellAnteil([k(1), k(9), k(2), k(4)])?.medianKosten, 3);
+  });
+  test("leere Eingabe und nur leere Fenster ergeben null statt Division durch 0", () => {
+    assert.equal(hcx.modellAnteil([]), null);
+    assert.equal(hcx.modellAnteil([f({}, {})]), null);
+  });
+  test("ein Opus-Call senkt den Anteil (kein Dauer-1)", () => {
+    assert.equal(hcx.modellAnteil([f({ [OPUS]: 1 }, { [OPUS]: 1 })])?.anteil, 0);
+  });
+});
+
+describe("ttlVergleich (#1557)", () => {
+  // Sonnet ab 2026-10-07: Write 5m 2,5 / 1h 4 / Read 0,1 $ je Mio. iso(min) liegt am 2026-10-05, also gilt der ältere Read-Preis 0,2.
+  const c = (min: number, extra: Partial<TtlCall> = {}): TtlCall => ({
+    session: "s",
+    ts: iso(min),
+    model: SONNET,
+    input: 0,
+    cacheWrite: 1_000_000,
+    cacheWrite1h: 1_000_000,
+    cacheRead: 1_000_000,
+    output: 0,
+    ...extra,
+  });
+  test("kurze Pause: 5m-Simulation ist billiger, weil der 1h-Write teurer ist", () => {
+    const r = hcx.ttlVergleich([c(0), c(2)]);
+    assert.equal(r.pausenUeber5, 0);
+    // Ist: 2 x (4 + 0,2); Sim: erster Call kalt (Write+Read zu 2,5), zweiter warm (2,5 + 0,2)
+    assert.ok(Math.abs(r.istKosten - 8.4) < 1e-9);
+    assert.ok(Math.abs(r.sim5mKosten - (5 + 2.7)) < 1e-9);
+  });
+  test("Pause über 5 min schreibt den Cache in der Simulation neu (Read wird zum Write)", () => {
+    const r = hcx.ttlVergleich([c(0), c(6)]);
+    assert.equal(r.pausenUeber5, 1);
+    assert.equal(r.pausenUeber60, 0);
+    assert.equal(r.medianPauseMin, 6);
+    assert.ok(Math.abs(r.sim5mKosten - 2 * (2.5 + 2.5)) < 1e-9);
+  });
+  test("genau 5 min ist noch warm (Grenze einschließlich)", () => {
+    const r = hcx.ttlVergleich([c(0), c(5)]);
+    assert.equal(r.pausenUeber5, 0);
+    assert.ok(Math.abs(r.sim5mKosten - (5 + 2.7)) < 1e-9);
+  });
+  test("Pause über 60 min zählt zusätzlich in pausenUeber60", () => {
+    const r = hcx.ttlVergleich([c(0), c(61), c(62)]);
+    assert.deepEqual([r.pausenUeber5, r.pausenUeber60], [1, 1]);
+  });
+  test("Modellwechsel ist kalt, auch bei kurzer Pause", () => {
+    const r = hcx.ttlVergleich([c(0), c(1, { model: "claude-opus-5-5" })]);
+    // Opus: Write 5m 5, kalt = (1+1) x 5 = 10 USD; Sonnet erster Call kalt = 5
+    assert.ok(Math.abs(r.sim5mKosten - 15) < 1e-9);
+  });
+  test("Sessions werden getrennt, die Reihenfolge der Eingabe spielt keine Rolle", () => {
+    // s bei 0 und 10 (Pause 10 min), b bei 5: in EINER gemeinsamen Liste wären es zwei Pausen von genau 5 min, also keine lange.
+    const r = hcx.ttlVergleich([c(10), c(5, { session: "b" }), c(0)]);
+    assert.equal(r.pausenUeber5, 1);
+    assert.equal(r.calls, 3);
+    // der erste Call von b hat keinen Vorgänger und ist kalt: 5 (s erster) + 5 (b) + 5 (s zweiter, Pause 10 min)
+    assert.ok(Math.abs(r.sim5mKosten - 15) < 1e-9);
+  });
+  test("genau 60 min zählt nicht als Pause über 60 min", () => {
+    const r = hcx.ttlVergleich([c(0), c(60)]);
+    assert.deepEqual([r.pausenUeber5, r.pausenUeber60], [1, 0]);
+  });
+  test("Calls mit zaehlt=false bilden nur die Pausenkette: sie halten den Cache warm, kosten und zählen aber nicht", () => {
+    // 0 und 8 min sind ohne Zwischen-Call eine lange Pause; mit einem Zwischen-Call bei 4 min sind beide Abstände kurz.
+    const r = hcx.ttlVergleich([c(0), c(4, { zaehlt: false }), c(8)]);
+    assert.equal(r.calls, 2);
+    assert.equal(r.pausenUeber5, 0);
+    assert.ok(Math.abs(r.sim5mKosten - (5 + 2.7)) < 1e-9);
+    const ohne = hcx.ttlVergleich([c(0), c(8)]);
+    assert.equal(ohne.pausenUeber5, 1);
+    assert.equal(hcx.ttlVergleich([c(1, { zaehlt: false, ts: undefined })]).uebersprungen, 0, "ein nicht zählender Call ohne Zeit ist kein übersprungener");
+  });
+  test("Calls ohne Zeitstempel oder ohne Preis werden übersprungen und gezählt", () => {
+    const r = hcx.ttlVergleich([c(0), c(1, { ts: undefined }), c(2, { ts: "kaputt" }), c(3, { model: "claude-unbekannt-1" })]);
+    assert.equal(r.calls, 1);
+    assert.equal(r.uebersprungen, 3);
+  });
+  test("leere Eingabe ergibt Nullen und keinen Median", () => {
+    const r = hcx.ttlVergleich([]);
+    assert.deepEqual([r.calls, r.istKosten, r.sim5mKosten, r.medianPauseMin], [0, 0, 0, null]);
+  });
+});
+
+describe("zerlegeHauptchat: Modellanteil und TTL im Ergebnis (#1557)", () => {
+  test("Ergebnis trägt modellanteil und ttl, renderMarkdown zeigt beide Zeilen", () => {
+    const main = [slash(0, "kubernia"), call(1, SONNET, claim(5)), call(2, SONNET), call(3, OPUS)];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }) as Ergebnis & { modellanteil: Anteil; ttl: Ttl };
+    assert.equal(r.modellanteil.gesamt, 3);
+    assert.equal(r.modellanteil.sonnet, 2);
+    assert.equal(r.ttl.calls, 3);
+    const text = hcx.renderMarkdown(r);
+    assert.match(text, /^Modellanteil Ticket-Orchestrierung: sonnet 2\/3 \(66,7 %\), opus 1, haiku 0, sonst 0, Fenster 1, Median /m);
+    assert.match(text, /^TTL Ticket-Orchestrierung: /m);
+  });
+  test("die Pausenkette läuft über alle Hauptchat-Calls: ein Ad-hoc-Call vor dem Claim hält den Cache des ersten Ticket-Calls warm", () => {
+    const mitCache = (row: Row): Row => {
+      const msg = row.message as { usage: Record<string, unknown> };
+      msg.usage = { ...msg.usage, cache_creation_input_tokens: 1_000_000, cache_creation: { ephemeral_1h_input_tokens: 1_000_000 }, cache_read_input_tokens: 1_000_000 };
+      return row;
+    };
+    const main = [user(0, "x"), call(1, SONNET), slash(2, "kubernia"), mitCache(call(4, SONNET, claim(5)))];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }) as Ergebnis & { ttl: Ttl };
+    assert.equal(r.ttl.calls, 1, "nur der Ticket-Call zählt");
+    assert.equal(r.ttl.pausenUeber5, 0);
+    // warm (Vorgänger 3 min davor im Ad-hoc): 1M Write zu 2,5 + 1M Read zu 0,2; ohne Kette wäre er kalt (5 $)
+    assert.ok(Math.abs(r.ttl.sim5mKosten - 2.7) < 1e-9);
+    // eine Pause über 5 min bleibt eine Pause, auch wenn sie hinter einem Ad-hoc-Call liegt
+    const lang = [user(0, "x"), call(1, SONNET), slash(10, "kubernia"), mitCache(call(12, SONNET, claim(5)))];
+    const l = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: lang }] }) as Ergebnis & { ttl: Ttl };
+    assert.equal(l.ttl.pausenUeber5, 1);
+    assert.ok(Math.abs(l.ttl.sim5mKosten - 5) < 1e-9);
+  });
+  test("Nachlauf-Calls (nach closedAt) bilden nur die Kette und zählen nicht", () => {
+    const main = [slash(0, "kubernia"), call(1, SONNET, claim(5)), call(2, SONNET), call(20, SONNET)];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], closedAtOf: () => iso(10) }) as Ergebnis & { ttl: Ttl };
+    assert.equal(r.ttl.calls, 2, "nur die beiden Calls vor closedAt");
+    assert.equal(r.ttl.pausenUeber5, 0, "die Pause bis zum Nachlauf-Call gehört nicht zu den gezählten");
+  });
+  test("ohne Ticket-Fenster stehen die Zeilen als „keine Fenster“ da", () => {
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "x"), call(1, SONNET)] }] });
+    const text = hcx.renderMarkdown(r);
+    assert.match(text, /^Modellanteil Ticket-Orchestrierung: keine Fenster/m);
+    assert.match(text, /^TTL Ticket-Orchestrierung: keine Calls/m);
+  });
+});
