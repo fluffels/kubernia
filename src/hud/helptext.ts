@@ -123,7 +123,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { id: "nslookup-ausgabe", text: "nslookup nennt immer den Server 10.96.0.10 und zeigt nur Name und Adresse, keine anderen Eintragsarten." },
     { id: "nslookup-ein-namespace", text: "Es gibt nur den Namespace default; <svc>.<ns> eines anderen Namespace ist immer NXDOMAIN." },
     { id: "nslookup-nur-cluster", text: "Nur Namen aus dem Cluster werden aufgelöst; jeder externe Name ist NXDOMAIN." },
-    { id: "nslookup-optionen", text: "Von den Optionen versteht nslookup nur die Eintragsart A (-type=A, kurz -q=A); andere Arten und Optionen meldet der Simulator als nicht simuliert." },
+    { id: "nslookup-optionen", text: "Von den Optionen versteht nslookup nur die Eintragsart A (-type=A, kurz -q=A); sonst: nicht simuliert." },
     { id: "nslookup-server", text: "Als Server nimmt nslookup nur CoreDNS (10.96.0.10)." },
     { id: "nslookup-nicht-interaktiv", text: "Ohne Namen startet nslookup nicht den interaktiven Modus, sondern fragt nach dem Namen." },
   ] },
@@ -131,7 +131,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { use: "[http(s)://]<service>[:port][/pfad]", desc: "Service abrufen – läuft er und ist er erreichbar?" },
     { use: "-o <datei> <adresse>", desc: "Antwort in eine Datei schreiben (cat <datei>)" },
   ], grenzen: [
-    { id: "curl-antwort", text: "curl zeigt immer Statuszeile, Header und einen festen Text (wie -i); Flags wie -s, -S, -v und -I ändern nichts." },
+    { id: "curl-antwort", text: "curl zeigt immer Statuszeile, Header und festen Text (wie -i); -s, -S, -v und -I ändern nichts." },
     { id: "curl-anfrage", text: "Header (-H), Methode (-X) und Daten (-d) nimmt curl an; jeder Dienst antwortet trotzdem gleich." },
     { id: "curl-datei", text: "-o schreibt nur ins Arbeitsverzeichnis (oder /dev/null); die Fortschrittsanzeige zeigt feste Werte." },
     { id: "curl-tls", text: "https:// prüft nur Port 443; Zertifikate und TLS simuliert der Simulator nicht." },
