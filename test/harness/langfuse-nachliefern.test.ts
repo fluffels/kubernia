@@ -35,7 +35,7 @@ type Chunk = { payload: Payload; generationIds: string[]; spanIds: string[] };
 type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<Antwort>;
 type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null };
-type Protokoll = { geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; fehler: { session: string; status: number | null; meldung: string }[] };
+type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; fehler: { session: string; status: number | null; meldung: string }[] };
 type Args = { session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
 
@@ -655,6 +655,42 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     const r2 = await lauf(a, m2, {}, jetzt + 2 * MIN);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
     expect(m2.otlp).toHaveLength(1);
+  });
+
+  test("--aktuell setzt ein früheres beendet zurück (resume), --trocken lässt das Ledger byte-gleich", async () => {
+    const a = aufbau([msg("a", 1)]);
+    mkdirLedger(a.state);
+    const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: true, gesendet: [], spans: [], beendet: true };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
+    const vorher = readFileSync(a.ledger, "utf8");
+    const mt = mock({ ist: 0 });
+    await lauf(a, mt, { aktuell: "s1", trocken: true });
+    expect(readFileSync(a.ledger, "utf8")).toBe(vorher);
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { aktuell: "s1" });
+    expect(r.protokoll.sessions[0].status).toBe("aktuell");
+    expect(ledgerVon(a.ledger).s1.beendet).toBe(false);
+    expect(m.aufrufe).toHaveLength(0);
+  });
+
+  test("--aktuell einer anderen Session lässt beendet unberührt", async () => {
+    const a = aufbau([msg("a", 1)]);
+    mkdirLedger(a.state);
+    const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: true, gesendet: [], spans: [], beendet: true };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
+    await lauf(a, mock({ ist: 0 }), { aktuell: "andere" }, Date.now());
+    expect(ledgerVon(a.ledger).s1.beendet).toBe(true);
+  });
+
+  test("protokoll.zugang: false ohne Keys (Exit 2, kein Request), true mit Keys", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const m = mock({ ist: 1 });
+    const ohne = await lauf(a, m, {}, SPAET(), {});
+    expect(ohne.exitCode).toBe(2);
+    expect(ohne.protokoll.zugang).toBe(false);
+    expect(m.aufrufe).toHaveLength(0);
+    expect((await lauf(a, m)).protokoll.zugang).toBe(true);
+    expect((await lauf(a, m, { fehler: "x" } as Partial<Args>)).protokoll.zugang).toBeNull();
   });
 
   test.each([

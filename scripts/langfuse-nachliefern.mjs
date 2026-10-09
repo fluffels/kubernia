@@ -216,20 +216,24 @@ function bericht(args, protokoll) {
  * 2 = Aufruf oder Zugang fehlt (vor jedem Request).
  */
 export async function nachliefern(args, { env = process.env, now = Date.now(), fetchImpl = fetch, projectsRoot, repoRoot, stateDir } = {}) {
-  const protokoll = { geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] };
+  const protokoll = { zugang: null, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] };
   if (args.fehler) return { exitCode: 2, text: `${args.fehler}\n${AUFRUFHILFE}`, protokoll };
   const seitMs = args.seit ? Date.parse(args.seit) : now - 7 * 86_400_000;
   if (!Number.isFinite(seitMs)) return { exitCode: 2, text: `--seit ist keine ISO-Zeit: ${args.seit}\n${AUFRUFHILFE}`, protokoll };
   let zugang;
   try {
     zugang = langfuseZugang(env, OHNE_ZUGANG);
+    protokoll.zugang = true;
   } catch (e) {
+    protokoll.zugang = false;
     return { exitCode: 2, text: e.message, protokoll };
   }
   const ledgerDatei = join(stateDir, LEDGER_NAME);
   const { ledger, kaputt } = ledgerLesen(ledgerDatei);
   if (kaputt && !args.trocken) renameSync(ledgerDatei, `${ledgerDatei}.kaputt-${new Date(now).toISOString().replace(/[:.]/g, "-")}`);
   const vorher = JSON.stringify(ledger);
+  // resume: die Session läuft wieder, ein früheres SessionEnd gilt nicht mehr (sonst sendete der nächste Lauf nach der kurzen Ruhefrist mitten in die Session).
+  if (args.aktuell && !args.trocken && ledger.sessions[args.aktuell]?.beendet) ledger.sessions[args.aktuell].beendet = false;
   const sessions = findeSessions({ projectsRoot, praefix: projektPraefix(repoRoot), seitMs, sessionId: args.session });
   for (const s of sessions) {
     protokoll.geprueft += 1;
