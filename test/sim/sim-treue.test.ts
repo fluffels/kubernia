@@ -10,6 +10,8 @@ import { SIM_COMMANDS } from "../../src/sim";
 import { KUBECTL_SUBCOMMANDS } from "../../src/sim/kubectl";
 import { KUBEADM_SUBCOMMANDS } from "../../src/sim/kubeadm";
 import { NODE_VERSION } from "../../src/sim/nodes";
+import { CURL_ARGS, NSLOOKUP_ARGS } from "../../src/sim/net";
+import { flag, type ArgSpec } from "../../src/sim/cliargs";
 import { simGrenzen, familienMitGrenzen } from "../../src/hud/helptext";
 import { ladeMatrix, ladeRoh, matrixFamilien, type TreueMatrix } from "../support/sim-treue";
 
@@ -105,7 +107,16 @@ function familienProbleme(simCommands: readonly string[], matrix: string[], ohne
   return p;
 }
 
-type Spec = { form: "unterbefehl"; registry: readonly string[]; unbekannt: RegExp } | { form: "einzel" };
+type Spec = { form: "unterbefehl"; registry: readonly string[]; unbekannt: RegExp } | { form: "einzel"; args?: ArgSpec };
+
+/** Jedes Flag der Tabelle eines Einzelbefehls (erster Name) hat eine Zeile: `flag` ist der Name oder beginnt mit
+ *  `<name> ` (Wert-Flag, `-o <datei>`) bzw. `<name>=` (goflag, `-type=A`). */
+function flagZeilenProbleme(familie: string, args: ArgSpec, m: TreueMatrix): string[] {
+  const flags = m.zeilen.flatMap(z => (z.flag === undefined ? [] : [z.flag]));
+  return args.flags.map(f => f.names[0])
+    .filter(n => !flags.some(fl => fl === n || fl.startsWith(n + " ") || fl.startsWith(n + "=")))
+    .map(n => `${familie}: Flag ${n} der Flag-Tabelle hat keine Zeile`);
+}
 
 /** Vollständigkeit einer Familie gegen die Matrix (die Sanity-Probe des „unbekannt“-Texts läuft im eigenen Test). */
 function vollstaendigkeitProbleme(familie: string, spec: Spec, m: TreueMatrix): string[] {
@@ -116,6 +127,7 @@ function vollstaendigkeitProbleme(familie: string, spec: Spec, m: TreueMatrix): 
   if (spec.form === "einzel") {
     if (befehleKeys.length !== 1 || befehleKeys[0] !== familie) p.push(`${familie}: befehle muss nur "${familie}" enthalten, ist [${befehleKeys.join(", ")}]`);
     for (const b of zeilenBefehle) if (b !== familie) p.push(`${familie}: Zeile mit fremdem befehl ${b}`);
+    if (spec.args) p.push(...flagZeilenProbleme(familie, spec.args, m));
     return p;
   }
   const reg = sorted(spec.registry);
@@ -132,8 +144,8 @@ function vollstaendigkeitProbleme(familie: string, spec: Spec, m: TreueMatrix): 
 const SPECS: Record<string, Spec> = {
   kubectl: { form: "unterbefehl", registry: KUBECTL_SUBCOMMANDS, unbekannt: /unknown command "/ },
   kubeadm: { form: "unterbefehl", registry: KUBEADM_SUBCOMMANDS, unbekannt: /unbekannter Unterbefehl '/ },
-  curl: { form: "einzel" },
-  nslookup: { form: "einzel" },
+  curl: { form: "einzel", args: CURL_ARGS },
+  nslookup: { form: "einzel", args: NSLOOKUP_ARGS },
 };
 
 // ---------- Negativtests mit synthetischen Daten (jede Regel schlägt an) ----------
@@ -234,6 +246,15 @@ describe("Vollständigkeits-Wächter: Negativfälle (synthetisch)", () => {
     expect(vollstaendigkeitProbleme("f", e, m(["f"], []))).toEqual(["f: keine Zeile"]);
     expect(vollstaendigkeitProbleme("f", e, m(["f", "g"], ["f"]))[0]).toMatch(/befehle muss nur "f" enthalten/);
     expect(vollstaendigkeitProbleme("f", e, m(["f"], ["f", "g"]))).toEqual(["f: Zeile mit fremdem befehl g"]);
+  });
+  test("Einzelbefehl mit Flag-Tabelle: jedes Flag braucht eine Zeile (Name, `<name> …` oder `<name>=…`)", () => {
+    const args: ArgSpec = { cmd: "f", flags: [flag(false, "-s", "--silent"), flag(true, "-o"), flag(true, "-type")] };
+    const e: Spec = { form: "einzel", args };
+    const mit = (flags: string[]): TreueMatrix => ({ ...m(["f"], ["f"]), zeilen: flags.map(fl => ({ befehl: "f", flag: fl, verhalten: "gleich", ausgabe: "gleich" })) });
+    expect(vollstaendigkeitProbleme("f", e, mit(["-s", "-o <datei>", "-type=A"]))).toEqual([]);
+    expect(vollstaendigkeitProbleme("f", e, mit(["-o <datei>", "-type=A"]))).toEqual(["f: Flag -s der Flag-Tabelle hat keine Zeile"]);
+    expect(vollstaendigkeitProbleme("f", e, mit(["-s", "-type=A"]))).toEqual(["f: Flag -o der Flag-Tabelle hat keine Zeile"]);
+    expect(vollstaendigkeitProbleme("f", e, mit(["-s", "-o <datei>", "-typo=A"]))).toEqual(["f: Flag -type der Flag-Tabelle hat keine Zeile"]);
   });
 });
 

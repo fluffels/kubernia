@@ -92,7 +92,7 @@ describe("curl", () => {
   test("Headless-Service vor einem StatefulSet: curl unverändert erreichbar (#1338)", () => {
     const sim = new KQSim({ statefulSets: [sts()], files: { "h.yaml": HEADLESS } });
     sim.exec("kubectl apply -f h.yaml");
-    const r = sim.exec("curl speicher");
+    const r = sim.exec("curl speicher:5432");
     expect(r.error).toBe(false);
     expect(r.output).toContain("200 OK");
     expect(r.output).toContain("speicher:5432/");
@@ -100,7 +100,7 @@ describe("curl", () => {
   test("ClusterIP-Service vor einem StatefulSet ist erreichbar", () => {
     const sim = new KQSim({ statefulSets: [sts()], files: { "n.yaml": NORMAL_STS } });
     sim.exec("kubectl apply -f n.yaml");
-    const r = sim.exec("curl speicher");
+    const r = sim.exec("curl speicher:5432");
     expect(r.error).toBe(false);
     expect(r.output).toContain("200 OK");
   });
@@ -108,7 +108,7 @@ describe("curl", () => {
   test("StatefulSet mit Pending-PVC: refused, Pods nicht bereit", () => {
     const sim = new KQSim({ statefulSets: [sts({ storageClass: "" })], files: { "n.yaml": NORMAL_STS } });
     sim.exec("kubectl apply -f n.yaml");
-    const r = sim.exec("curl speicher");
+    const r = sim.exec("curl speicher:5432");
     expect(r.error).toBe(true);
     expect(r.output).toContain("nicht bereit");
   });
@@ -134,7 +134,7 @@ describe("curl", () => {
   test("Service ohne Backend: keine Endpoints", () => {
     const sim = new KQSim({ files: { "n.yaml": NORMAL_STS } });
     sim.exec("kubectl apply -f n.yaml");
-    const r = sim.exec("curl speicher");
+    const r = sim.exec("curl speicher:5432");
     expect(r.error).toBe(true);
     expect(r.output).toContain("keine Endpoints");
   });
