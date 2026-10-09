@@ -419,7 +419,7 @@ async function main() {
   }
   const { lock, ergebnis } = await gesperrterLauf(args, { stateDir, lauf, ausloeser: "manuell" });
   if (!ergebnis) {
-    console.error(lock === "belegt" ? "Ein anderer Nachlieferlauf hält den Lock (~/.claude/state/langfuse-abgleich.lock); später erneut versuchen." : "Nachliefern abgestürzt, siehe ~/.claude/state/langfuse-abgleich.log.");
+    console.error(lock === "belegt" ? "Ein anderer Nachlieferlauf hält den Lock (~/.claude/state/langfuse-abgleich.lock); später erneut versuchen." : lock === "fehler" ? "Der Lock ließ sich nicht anlegen: ~/.claude/state prüfen." : "Nachliefern abgestürzt, siehe ~/.claude/state/langfuse-abgleich.log.");
     process.exitCode = 1;
     return;
   }

@@ -624,7 +624,7 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(r1.protokoll.sessions[0].status).toBe("läuft");
     expect(ledgerVon(a.ledger).s1).toMatchObject({ beendet: true, bestaetigt: false });
     const m2 = mock({ ist: 0 });
-    const r2 = await lauf(frisch(), m2, {}, jetzt + 2 * MIN);
+    const r2 = await lauf(a, m2, {}, jetzt + 2 * MIN);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
     expect(m2.otlp).toHaveLength(1);
   });
@@ -674,7 +674,7 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     expect(existsSync(a.ledger)).toBe(false);
     // Schlupf von 5 s: das Transkript wurde 4 s NACH dem Ende-Zeitpunkt geschrieben (mtime = ende + 4 s): das Ende gilt, gesendet wird
     const m2 = mock({ ist: 0 });
-    const r2 = await lauf(a, m2, { beendet: "s1", ende: jetzt - 3 * MIN - 4_000 }, jetzt);
+    const r2 = await lauf(frisch(), m2, { beendet: "s1", ende: jetzt - 3 * MIN - 4_000 }, jetzt);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
     // 6 s nach dem Ende: außerhalb des Schlupfs, das Ende gilt nicht
     const m3 = mock({ ist: 0 });
