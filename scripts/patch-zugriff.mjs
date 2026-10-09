@@ -20,9 +20,12 @@ const VOLLLESER = /(?:^|[\s;&|(])(?:cat|type|Get-Content|gc)\s/i;
 
 /** Pfade aus dem Prompt: `Patch: <pfad>` (voll) und `Delta-Patch: <pfad>`, jeweils als Basename. */
 export function patchPfade(prompt) {
-  const voll = /(?<![\w-])Patch:\s*(\S+)/.exec(prompt)?.[1];
-  const delta = /Delta-Patch:\s*(\S+)/.exec(prompt)?.[1];
-  return { voll: voll ? basename(voll) : null, delta: delta ? basename(delta) : null, vollPfad: voll ?? null };
+  // Nur Pfade auf eine .patch-Datei: Fließtext wie "Patch:`" oder "Delta-Patch: ein" im Auftrag zählt nicht.
+  const voll = /(?<![\w-])Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? null;
+  const delta = /Delta-Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? null;
+  // Ein Delta-Pfad im Feld "Patch:" (falsch gespawnt) ist der Delta-Patch, kein voller.
+  if (voll && !delta && /-delta\.patch$/i.test(voll)) return { voll: null, delta: basename(voll), vollPfad: null };
+  return { voll: voll ? basename(voll) : null, delta: delta ? basename(delta) : null, vollPfad: voll };
 }
 
 function neu() {

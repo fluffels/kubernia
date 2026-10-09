@@ -285,7 +285,7 @@ describe("laufzeiten: Beschreibung, Delta-Art, Erst-Call (#1582)", () => {
     if (!o.ohneCall) zeilen.push(call(1, 7, undefined, 100, 8000), call(2));
     const meta: Record<string, unknown> = { agentType: "kubernia-lens" };
     if (beschreibung !== undefined) meta.description = beschreibung;
-    return S.laufzeiten({ laeufe: [{ meta: meta as Lauf["meta"], zeilen }], agent: "kubernia-lens" }).laeufe[0] as Ext;
+    return S.laufzeiten({ laeufe: [{ meta: meta, zeilen }], agent: "kubernia-lens" }).laeufe[0] as Ext;
   };
   test("neues Format: Brille und Runde, kurze Namen werden zur Brille normalisiert", () => {
     expect(mit("Lens Architektur R1", "x")).toMatchObject({ brille: "Architektur", runde: 1, beschreibung: "Lens Architektur R1" });
@@ -387,6 +387,16 @@ describe("laufzeiten: Patch-Zugriffe (#1582)", () => {
     expect(q.voll.zugriffe).toBe(0);
     expect(q.delta!.zugriffe).toBe(1);
     expect(patchVon(PROMPT, [sh(`cat ${DELTA}`)])!.voll.zugriffe).toBe(0);
+  });
+  test("Fließtext mit Patch: im Auftrag zählt nicht, nur ein Pfad auf eine .patch-Datei", () => {
+    const p = patchVon("Regel (Patch:`, Delta-Patch: ein Satz) Patch: " + VOLL + " Delta-Patch: " + DELTA, [lesen(VOLL, 1, 5, 5)])!;
+    expect(p.voll.zugriffe).toBe(1);
+    expect(p.delta).toMatchObject({ zugriffe: 0 });
+  });
+  test("ein Delta-Pfad im Feld Patch: ist der Delta-Patch, kein voller Patch", () => {
+    const p = patchVon("Patch: " + DELTA + " Delta-Patch: ein Satz", [lesen(DELTA, 1, 17, 18)])!;
+    expect(p.voll.zugriffe).toBe(0);
+    expect(p.delta).toMatchObject({ zugriffe: 1 });
   });
   test("Read auf eine Tool-Result-Datei zählt nicht als Patch-Zugriff", () => {
     expect(patchVon(PROMPT, [lesen("C:\\Users\\x\\tool-results\\abc.txt", 1, 200, 200)])!.voll.zugriffe).toBe(0);
