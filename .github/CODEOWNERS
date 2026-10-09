@@ -68,6 +68,7 @@ AGENTS.md                  @fluffels
 /scripts/lens-auftrag-guard.mjs @fluffels
 /scripts/stdin-skript-guard.mjs @fluffels
 /scripts/ticket-lock.mjs @fluffels
+/scripts/ticket-refs.mjs @fluffels
 /scripts/pretooluse-hook.mjs @fluffels
 /scripts/worktree-guard-hook.mjs @fluffels
 /scripts/worktree-guard-powershell.mjs @fluffels

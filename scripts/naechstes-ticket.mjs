@@ -21,6 +21,7 @@ import { NOTFAELLE, REPO, loadItemPages, loadOpenIssuePages, normalizeItems, nor
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./gh-kontingent.mjs";
+import { belegteNummern } from "./ticket-refs.mjs";
 
 /** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
 export function blockerNummern(body) {
@@ -31,17 +32,6 @@ export function blockerNummern(body) {
     }
   }
   return [...nummern];
-}
-
-/** Ticketnummer aus einem Branch-, Worktree- oder Ref-Namen `…feature/kq-<nr>-…` bzw. `…worktrees/kq-<nr>`; sonst null. Pur. */
-export function ticketAusRef(text) {
-  const m = /(?:feature\/kq-|worktrees[\\/]kq-)(\d+)(?=$|[-/\\\s])/.exec(String(text ?? ""));
-  return m ? Number(m[1]) : null;
-}
-
-/** Nummern, zu denen Branch, Worktree oder offener PR existieren. Pur. */
-export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }) {
-  return new Set([...refs, ...worktrees, ...prHeads].map(ticketAusRef).filter((n) => n !== null));
 }
 
 /** Nutzersichtbare Bereichsnamen (#1552); das Label für „agentic“ bleibt `area:harness`. */

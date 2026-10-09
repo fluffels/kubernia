@@ -31,7 +31,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { belegteNummern, ticketAusRef } from "./naechstes-ticket.mjs";
+import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
 
 /** Ein fremder Lock, der älter ist, gilt als verwaist (Session abgestürzt, bevor ein Worktree entstand). */
 export const VERWAIST_MS = 2 * 60 * 60_000;
