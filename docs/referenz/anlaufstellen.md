@@ -51,7 +51,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [README.md](../../README.md) | wenn du wissen willst, was das Spiel ist: Story, Steuerung, Lernpfad |
 | [arc42-architektur.md](../arc42-architektur.md) | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
 | [architektur/spiel.c4](../architektur/spiel.c4) | für das LikeC4-Architekturmodell (Kontext, Container, Schichten, Hauptmodule; ansehen mit `npm run c4:serve`, Wächter `check:c4`) |
-| [glossar.md](../glossar.md) | wenn dir ein Begriff fehlt (Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
+| [glossar.md](../glossar.md) | wenn dir ein Spielbegriff fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md); Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 | [module/sim.md](../module/sim.md) | beim Arbeiten am Cluster-Simulator (`src/sim/*`) |
 | [sim-treue.md](../sim-treue.md) | wenn du das Verhalten einer Befehlsfamilie des Simulators gegen die Doku abgleichst oder einen Befehl, eine Aufrufform bzw. eine Ressourcenart ergänzt (Treue-Matrix) |
@@ -80,6 +80,8 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 |---|---|
 | [agent-harness.md](../agent-harness.md) | wenn du verstehen willst, wie und warum der Agenten-Harness funktioniert (inkl. Langfassung der harten Regeln) |
 | [agent-harness-faq.md](../agent-harness-faq.md) | wenn du über eine Harness-Falle stolperst (Worktrees unter Windows, Hooks, Gates) |
+| [lessons-learned.md](../lessons-learned.md) | wenn du als Außenstehende:r wissen willst, welche Muster der Bau des Harness gezeigt hat (datierte Belege, was geändert wurde, was offen ist) |
+| [harness-glossar.md](../harness-glossar.md) | wenn dir ein Harness-Begriff fehlt (Subagent, Lens, Leitplanke, Override, Sammelticket, Dark Factory) |
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |

@@ -205,6 +205,10 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 
 **Warum das funktioniert:** Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die **Leitplanken drumherum** – SSOT-Doku, ein enger Ticket-Fokus, Kollisionsschutz und ein Gate-Netz, das jeden Fehler an der Grenze abfängt. Genau diese Kombination ist selbst ein Architekturziel (siehe [arc42 §8](docs/arc42-architektur.md)).
 
+### Wohin es geht
+
+Das Ziel ist eine „Dark Factory“: der spielunabhängige Kern des Harness soll eine wiederverwendbare Vorlage werden, menschliche Stopps bei Irreversiblem und Außenwirkung bleiben ([ADR 0022](docs/adr/0022-dark-factory-kern-und-verteilung.md)). **Stand 2026-10-09:** Gebaut ist, dass der Workflow [`board-takt.yml`](.github/workflows/board-takt.yml) das wiederkehrende Status-Ticket anlegt und ein Agent es nach einer Checkliste auswertet; die Läufe startet die Maintainerin von Hand. Nicht gebaut sind das evidenzbasierte Lockern von Regeln ([#1357](https://github.com/fluffels/kubernia/issues/1357)), Budget-Pacing ([#1358](https://github.com/fluffels/kubernia/issues/1358)) und der wöchentliche Release-Abgleich ([#1362](https://github.com/fluffels/kubernia/issues/1362); bisher gab es einen einmaligen Abgleich in [`docs/harness-inventar.md`](docs/harness-inventar.md)). Die Dark-Factory-Folgetickets sind nur entworfen, über eine Veröffentlichung ist nicht entschieden. Was dabei schiefging und was daraus wurde: [Lessons Learned](docs/lessons-learned.md); die Begriffe: [Harness-Glossar](docs/harness-glossar.md).
+
 > 📝 Die **kanonische Harness-Tiefendoku** — der KI-Agenten-Harness als System, „wie + warum" an einer Stelle — steht in **[docs/agent-harness.md](docs/agent-harness.md)**, konkrete Einzelfragen dazu in der **[Harness-FAQ](docs/agent-harness-faq.md)**. Beide sind die erklärende Gesamtsicht; die operative Arbeitsanweisung bleibt [AGENTS.md](AGENTS.md), die Referenz-Tabellen liegen unter [`docs/referenz/`](docs/referenz/anlaufstellen.md).
 
 ---
