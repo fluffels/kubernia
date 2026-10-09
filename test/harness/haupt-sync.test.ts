@@ -349,12 +349,12 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
 
   test("--text: nur der kubernia-Skill oder die Wurzel-AGENTS.md löst „Skill neu lesen“ aus; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
     const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", harness: { skill: [".claude/skills/kubernia/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } };
-    const text = S.ausgabe(e as never, true);
+    const text = S.ausgabe(e, true);
     expect(text).toContain("Skill neu lesen");
     expect(text).toContain("Geändert (Harness): .claude/skills/kubernia/SKILL.md, AGENTS.md");
     expect(text).toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
     expect(text).not.toContain("Sitzungsbasis");
-    const hook = (JSON.parse(S.ausgabe(e as never, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    const hook = (JSON.parse(S.ausgabe(e, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     expect(hook).toContain("neu starten");
     expect(hook).not.toContain("Skill neu lesen");
   });
@@ -386,13 +386,13 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
 
   test("--text: Node-Versionszeile entfällt (der SessionStart-Hook meldet sie), node_modules nur wenn der Sync package-lock.json geändert hat", () => {
     const e = { aktion: "nichts", basis: "abc", nodeHinweis: "Node 20 erfüllt nicht", nodeModulesHinweis: "node_modules passt nicht" };
-    const text = S.ausgabe(e as never, true);
+    const text = S.ausgabe(e, true);
     expect(text).not.toContain("Node-Version");
     expect(text).not.toContain("Abhängigkeiten");
     const mitLock = S.ausgabe({ ...e, harness: { skill: [], agenten: [], sonstige: [], lockGeaendert: true } } as never, true);
     expect(mitLock).toContain("Abhängigkeiten: node_modules passt nicht");
     expect(mitLock).not.toContain("Node-Version");
-    const hook = (JSON.parse(S.ausgabe(e as never, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    const hook = (JSON.parse(S.ausgabe(e, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     expect(hook).toContain("Node-Version:");
     expect(hook).toContain("Abhängigkeiten:");
   });
