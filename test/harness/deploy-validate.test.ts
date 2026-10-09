@@ -37,7 +37,7 @@ describe("deploy-validate.yml hält seine tragenden Eigenschaften (#1544)", () =
   });
 
   test("jeder helm lint läuft mit --strict", () => {
-    const lints = code.split("\n").filter((l) => /\bhelm lint\b/.test(l));
+    const lints = code.split("\n").filter((l) => /^\s*helm lint\b/.test(l));
     assert.ok(lints.length >= 2, "Default- und ci-Values-Lint erwartet");
     for (const l of lints) assert.match(l, /--strict/);
   });
