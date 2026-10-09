@@ -316,6 +316,12 @@ describe("Wartepausen über 240 s (#1588)", () => {
     expect(() => K.analysiereLauf(l)).not.toThrow();
     expect(K.analysiereLauf(l)?.pausen).toEqual([]);
   });
+  test("Aggregat trennt die Ursachen in eigene Buckets, leere Gruppe hat pausen {}", () => {
+    const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 16 }];
+    const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls)] });
+    expect(r.gesamt.pausen).toEqual({ "Lens-Warten": { n: 1, ticks: 2 }, "CI-Warten": { n: 1, ticks: 1 } });
+    expect(r.sammel.pausen).toEqual({});
+  });
   test("Aggregat über zwei Läufe, Trennung Sammel/ohne Sammel, Markdown-Zeile", () => {
     const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11 }];
     const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls), lauf("#2 Harness-Härtung (gesammelt)", calls)] });
