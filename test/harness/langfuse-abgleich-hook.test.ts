@@ -243,8 +243,7 @@ describe("Log", () => {
     const groesse = statSync(d).size;
     N.logAnhaengen(d, { n: "neu" }, { max: groesse + 1 });
     expect(existsSync(`${d}.1`)).toBe(false);
-    expect(readFileSync(d, "utf8").trim().split("
-")).toHaveLength(2);
+    expect(readFileSync(d, "utf8").trimEnd().split("\n")).toHaveLength(2);
   });
 
   test("logEintrag: alle Felder; sessions nur mit Befund; Fehlermeldung auf 300 Zeichen gekürzt; ohne Protokoll Nullwerte", () => {
