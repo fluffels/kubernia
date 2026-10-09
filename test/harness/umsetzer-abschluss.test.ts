@@ -57,7 +57,7 @@ function abschlussProbleme(md: string): string[] {
   if (!a) return ["Abschnitt „## Letzte Nachricht“ fehlt"];
   const vorBericht = a.split("```")[0];
   if (!/TaskStop/.test(vorBericht)) probleme.push("TaskStop steht nicht vor dem Berichtsformat");
-  if (!/blockierend im Vordergrund/.test(vorBericht) || !/hält deinen Lauf nicht offen/.test(vorBericht) || !/timeout 590 gh pr checks/.test(vorBericht))
+  if (!/blockierend im Vordergrund/.test(vorBericht) || !/hält deinen Lauf nicht offen/.test(vorBericht) || !/node scripts\/pr-warten\.mjs/.test(vorBericht))
     probleme.push("Warte-Regel (blockierend im Vordergrund, Monitor hält den Lauf nicht offen) fehlt");
   if (/per `Monitor`/.test(vorBericht)) probleme.push("Monitor als CI-Warteweg ist verboten (hält den Lauf nicht offen)");
   if (!/Turn mit einer kurzen Statuszeile/.test(vorBericht)) probleme.push("Warten auf Lenses per Turn-Ende mit Statuszeile fehlt");
@@ -122,7 +122,7 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
     const a = abschnitt(UMSETZER, /^## Letzte Nachricht/);
     assert.match(a, /offener PR mit Auto-Merge ist kein Ende/);
     assert.match(a, /Tool-Timeout beim CI-Warten ist kein Abbruchgrund/);
-    assert.match(a, /timeout: 600000/);
+    assert.match(a, /timeout: 300000/);
     assert.match(a, /umsetzer-abschluss\.mjs/);
     assert.doesNotMatch(abschnitt(UMSETZER.replace("ist kein Ende.", "ist ok."), /^## Letzte Nachricht/), /ist kein Ende\./);
   });
@@ -143,7 +143,7 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
     for (const e of ["gemergt", "abgebrochen", "abgebrochen (Zwischenstand)"]) {
       const g = blockade(eingabe(bericht(e)), { prStatus: offenMitAuto });
       assert.match(g ?? "", /noch offen und hat Auto-Merge/);
-      assert.match(g ?? "", /timeout 590 gh pr checks 1330 --watch/);
+      assert.match(g ?? "", /node scripts\/pr-warten\.mjs 1330/);
       assert.match(g ?? "", /Monitor hält deinen Lauf nicht offen/);
       assert.doesNotMatch(g ?? "", /Monitor-until|per `Monitor`/);
     }
@@ -227,7 +227,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     for (const e of [eingabe(festgefahren), vorher(festgefahren)]) {
       const g = blockade(e, { prStatus: offenMitAuto });
       assert.match(g ?? "", /festgefahren bei offenem PR #1330/);
-      assert.match(g ?? "", /timeout 590 gh pr checks 1330 --watch/);
+      assert.match(g ?? "", /node scripts\/pr-warten\.mjs 1330/);
     }
     const g = blockade(eingabe(bericht("festgefahren (NICHT gemergt, Lauf vom System beendet)")), { prStatus: offenMitAuto });
     assert.match(g ?? "", /Label status:festgefahren fehlt/);

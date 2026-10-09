@@ -59,8 +59,8 @@ export function ghPrStatus(nummer) {
 const FORMAT =
   "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -)";
 const WARTEN = (nr) =>
-  `Warte im Vordergrund und blockierend: \`timeout 590 gh pr checks ${nr} --watch --interval 30\` (Bash-timeout: 600000), danach eine begrenzte ` +
-  `Schleife, bis der PR MERGED ist. Ein Monitor hält deinen Lauf nicht offen. Hängt die CI, melde entscheidung-noetig.`;
+  `Warte im Vordergrund und blockierend: \`node scripts/pr-warten.mjs ${nr}\` (Bash-timeout: 300000), bei Exit 2 erneut, bis der PR MERGED ist. ` +
+  `Ein Monitor hält deinen Lauf nicht offen. Hängt die CI (6 Aufrufe ohne Fortschritt), melde entscheidung-noetig.`;
 
 /**
  * Grund für die Blockade oder `null`. `input`: `{ hookEvent, agentType, toolName, lastMessage }`.
