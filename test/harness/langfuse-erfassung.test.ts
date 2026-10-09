@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+import { lokaleImporteTransitiv } from "./hook-importe";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
@@ -166,6 +167,17 @@ const erfassungKonfigIntakt = (settingsJson: string): boolean => {
   );
 };
 
+/** Der automatische Abgleich (#1578) ist verdrahtet: SessionStart UND SessionEnd starten den Hook, kein Stop/SubagentStop, und das vom Hook gestartete Skript samt Importen ist geschützt. */
+const abgleichVerdrahtet = (settingsJson: string, hookQuelle: string, geschuetzt: (rel: string) => boolean, lies: (rel: string) => string): boolean => {
+  const HOOK = "scripts/langfuse-abgleich-hook.mjs";
+  const s = JSON.parse(settingsJson) as { hooks?: Record<string, { hooks: { args?: string[] }[] }[]> };
+  const zeigt = (ereignis: string): boolean => (s.hooks?.[ereignis] ?? []).some((e) => e.hooks.some((h) => (h.args ?? []).some((a) => a.endsWith(HOOK))));
+  if (!zeigt("SessionStart") || !zeigt("SessionEnd") || zeigt("Stop") || zeigt("SubagentStop")) return false;
+  const ziel = /new URL\("\.\/([\w.-]+\.mjs)", import\.meta\.url\)/.exec(hookQuelle)?.[1];
+  if (!ziel) return false;
+  return lokaleImporteTransitiv([`scripts/${ziel}`, HOOK], lies).every(geschuetzt);
+};
+
 describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
   const agents = read("AGENTS.md");
   const mr = read("docs/model-routing.md");
@@ -310,6 +322,41 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, enabledPlugins: {} })));
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, env: { CC_LANGFUSE_TRACE_TAGS: "x" } })));
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, disableAllHooks: true })));
+  });
+});
+
+describe("Automatischer Abgleich verdrahtet (#1578)", () => {
+  const settings = read(".claude/settings.json");
+  const hookQuelle = read("scripts/langfuse-abgleich-hook.mjs");
+  const geschuetztDurch = (eintraege: string[]) => (rel: string): boolean => eintraege.some((p) => p !== "" && rel.startsWith(p.replace(/^\//, "")));
+  const echte = (JSON.parse(read(".github/protected-paths.json")) as { harness: string[] }).harness;
+  const owners = read(".github/CODEOWNERS")
+    .split("\n")
+    .map((z) => z.trim().split(/\s+/)[0])
+    .filter((p) => p.startsWith("/"));
+  const eintrag = (ereignis: string) => ({ [ereignis]: [{ hooks: [{ type: "command", command: "node", args: ["${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"] }] }] });
+  const mit = (hooks: Record<string, unknown>) => JSON.stringify({ hooks });
+
+  test("echte Dateien: beide Hook-Einträge, Spawn-Ziel samt Importen in protected-paths.json UND CODEOWNERS", () => {
+    assert.ok(abgleichVerdrahtet(settings, hookQuelle, geschuetztDurch(echte), read));
+    assert.ok(abgleichVerdrahtet(settings, hookQuelle, geschuetztDurch(owners), read));
+    // die ganze Kette, die der Spawn nachzieht
+    for (const n of ["langfuse-abgleich-hook", "langfuse-nachliefern", "langfuse-otlp", "langfuse-abgleich", "langfuse-api", "preise", "transkript", "transkript-calls"]) {
+      assert.ok(geschuetztDurch(echte)(`scripts/${n}.mjs`) && geschuetztDurch(owners)(`scripts/${n}.mjs`), n);
+    }
+  });
+
+  test("rote Gegenbeispiele: SessionEnd fehlt, SessionStart fehlt, Stop/SubagentStop-Eintrag, ungeschütztes Kettenglied, Hook startet ungeschütztes Skript", () => {
+    const g = geschuetztDurch(echte);
+    assert.ok(abgleichVerdrahtet(mit({ ...eintrag("SessionStart"), ...eintrag("SessionEnd") }), hookQuelle, g, read));
+    assert.ok(!abgleichVerdrahtet(mit(eintrag("SessionStart")), hookQuelle, g, read), "SessionEnd fehlt");
+    assert.ok(!abgleichVerdrahtet(mit(eintrag("SessionEnd")), hookQuelle, g, read), "SessionStart fehlt");
+    assert.ok(!abgleichVerdrahtet(mit({ ...eintrag("SessionStart"), ...eintrag("SessionEnd"), ...eintrag("Stop") }), hookQuelle, g, read), "Stop");
+    assert.ok(!abgleichVerdrahtet(mit({ ...eintrag("SessionStart"), ...eintrag("SessionEnd"), ...eintrag("SubagentStop") }), hookQuelle, g, read), "SubagentStop");
+    assert.ok(!abgleichVerdrahtet(settings, hookQuelle, geschuetztDurch(echte.filter((p) => !p.includes("langfuse-otlp"))), read), "langfuse-otlp.mjs fehlt in der Liste");
+    const ungeschuetzt = hookQuelle.replace("./langfuse-nachliefern.mjs", "./transkript-kopie.mjs");
+    assert.ok(!abgleichVerdrahtet(settings, ungeschuetzt, g, (rel) => (rel === "scripts/transkript-kopie.mjs" ? "" : read(rel))), "Spawn-Ziel ungeschützt");
+    assert.ok(!abgleichVerdrahtet(settings, "kein Spawn-Ziel", g, read), "Spawn-Ziel nicht erkennbar");
   });
 });
 

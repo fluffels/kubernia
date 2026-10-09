@@ -147,6 +147,28 @@
               "--sessionstart"
             ],
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"
+            ],
+            "timeout": 10
           }
         ]
       }

@@ -54,6 +54,13 @@
     "/scripts/naechstes-ticket.mjs",
     "/scripts/haupt-sync.mjs",
     "/scripts/lens-edit-guard.mjs",
+    "/scripts/langfuse-abgleich-hook.mjs",
+    "/scripts/langfuse-nachliefern.mjs",
+    "/scripts/langfuse-otlp.mjs",
+    "/scripts/langfuse-abgleich.mjs",
+    "/scripts/langfuse-api.mjs",
+    "/scripts/preise.mjs",
+    "/scripts/transkript-calls.mjs",
     "/.agents/",
     "/.githooks/",
     "/docs/agent-harness*"
