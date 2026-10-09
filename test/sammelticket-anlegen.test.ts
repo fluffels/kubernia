@@ -63,12 +63,12 @@ describe("kandidatenSammelticket", () => {
   const o = (number: number, titel: string, assignees: string[] = []): Offen => ({ number, titel, assignees, createdAt: "2026-10-01T00:00:00Z" });
   const T = "Harness-Härtung (gesammelt)";
 
-  test("exakter Titel, ungeclaimt; bei mehreren das mit der höchsten Nummer", () => {
+  test("exakter Titel, ungeclaimt; absteigend sortiert (das jüngste zuerst)", () => {
     expect(A.kandidatenSammelticket([o(5, T), o(9, T), o(7, T)], T).map((i) => i.number)).toEqual([9, 7, 5]);
     expect(A.kandidatenSammelticket([o(5, T)], T).map((i) => i.number)).toEqual([5]);
   });
 
-  test("Negativfälle: geclaimt, anderer oder fast gleicher Titel, leer → null", () => {
+  test("Negativfälle: geclaimt, anderer oder fast gleicher Titel, leer → leere Liste", () => {
     expect(A.kandidatenSammelticket([o(5, T, ["fluffels"])], T)).toEqual([]);
     expect(A.kandidatenSammelticket([o(5, `${T} x`), o(6, T.toLowerCase()), o(7, "Langfuse-Befunde (gesammelt)")], T)).toEqual([]);
     expect(A.kandidatenSammelticket([], T)).toEqual([]);

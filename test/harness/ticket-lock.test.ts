@@ -44,6 +44,7 @@ function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}
     git: (args: string[]) => {
       const a = args.join(" ");
       if (a.startsWith("fetch")) {
+        assert.match(a, /fetch -q --prune origin/, "claim holt mit --prune: ein gelöschter Remote-Branch darf das Ticket nicht sperren");
         if (welt.fetchFehler) throw new Error("kein Netz");
         return "";
       }
