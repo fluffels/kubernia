@@ -4,6 +4,7 @@
  * `umsetzer-abschluss.mjs`), darum steht es in keinem von ihnen. Reines Node-Skript ohne Abhängigkeiten.
  */
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
@@ -78,4 +79,13 @@ export function projektSlug(pfad) {
 /** Gehört der Ordnername zum Projekt `slug`: das Hauptrepo selbst oder einer seiner Worktrees; Geschwister (`<slug>-alt`) nicht. */
 export function istProjektOrdner(name, slug) {
   return name === slug || String(name).startsWith(`${slug}--claude-worktrees-`);
+}
+
+/** Hauptrepo auch aus einem Worktree (`--git-common-dir` ohne `.git`); `null` ohne git. */
+export function hauptrepoWurzel() {
+  try {
+    return execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8" }).trim().replace(/[\\/]\.git[\\/]?$/, "");
+  } catch {
+    return null;
+  }
 }

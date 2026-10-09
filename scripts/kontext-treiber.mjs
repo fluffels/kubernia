@@ -23,8 +23,8 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
-import { projektSlug } from "./transkript.mjs";
+import { bereinige, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
+import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laufzeit.mjs";
 
 const MIN = 60_000;
@@ -38,25 +38,14 @@ const VERIFY = /verify:|npm\s+run\s+verify|vitest|eslint|typecheck|check:/;
 const num = (x) => (Number.isFinite(x) ? x : 0);
 const summe = (liste) => liste.reduce((s, x) => s + x, 0);
 
-/** Pfade und Befehle ohne Benutzerordner und Worktree-Präfix (das Repo ist öffentlich). */
-export function bereinige(text) {
-  return String(text)
-    .replace(/\\/g, "/")
-    .replace(/[A-Za-z]:\/Users\/[^/\s"']+/g, "~")
-    .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~")
-    .replace(/\S*\/\.claude\/worktrees\/kq-\d+[\w-]*(?:\/|(?=\s|$))/g, "<wt>/")
-    .replace(/(?:[A-Za-z]:|\/[a-z])\/dev\/kubernia\//g, "<repo>/")
-    .replace(/\s+/g, " ");
-}
-
 const befehlVon = (tool) => (SHELL_TOOLS.has(tool.tool) ? String(tool.input?.command ?? "") : "");
 const istLinse = (tool) => tool.tool === "Agent" && String(tool.input?.subagent_type ?? "") === "kubernia-lens";
 
 /** Kurzbeschreibung eines Tool-Aufrufs für die Top-10 (Tool plus ~60 Zeichen Befehl, Pfad oder Muster). */
-function labelVon(tool) {
+function labelVon(tool, wurzel) {
   const i = tool.input ?? {};
   const detail = i.command ?? i.file_path ?? i.path ?? i.pattern ?? i.description ?? i.subagent_type ?? "";
-  return bereinige(`${tool.tool} ${detail}`).slice(0, 70).trim();
+  return bereinige(`${tool.tool} ${detail}`, { wurzel }).slice(0, 70).trim();
 }
 
 /** Calls des Laufs mit ihren Tool-Aufrufen und der Phase je Call. */
@@ -128,7 +117,7 @@ function neuaufbauten(eintraege) {
 }
 
 /** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. */
-export function analysiereLauf(lauf) {
+export function analysiereLauf(lauf, { wurzel = null } = {}) {
   const eintraege = phasenUndTools(lauf.zeilen);
   if (!eintraege.length) return null;
   const kopf = laufAus(lauf);
@@ -143,7 +132,7 @@ export function analysiereLauf(lauf) {
       const tokens = Math.round(tool.resultChars / 4);
       ergTokens += tokens;
       einTokens += Math.round(JSON.stringify(tool.input ?? {}).length / 4);
-      ergebnisse.push({ label: labelVon(tool), tokens, last: tokens * spaeter, phase: e.phase });
+      ergebnisse.push({ label: labelVon(tool, wurzel), tokens, last: tokens * spaeter, phase: e.phase });
     }
     const naechster = idx + 1 < eintraege.length ? ctx[idx + 1] - ctx[idx] : 0;
     if (naechster <= 0) return;
@@ -236,10 +225,10 @@ function gruppe(analysen) {
  * Kern: Läufe des Typs im Start-Fenster [von, bis] (optional nur/ohne bestimmte Tickets) → Bericht je Gruppe (alle, ohne Sammeltickets, Sammeltickets).
  * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[] }} e
  */
-export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [] }) {
+export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [], wurzel = null }) {
   const analysen = laeufe
     .filter((l) => l?.meta?.agentType === agent)
-    .map(analysiereLauf)
+    .map((l) => analysiereLauf(l, { wurzel }))
     .filter(Boolean)
     .filter((a) => (!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis)))
     .filter((a) => !tickets.length || tickets.includes(a.ticket))
@@ -309,7 +298,7 @@ function main() {
   const slug = args.projekt ?? projektSlug(process.cwd());
   const dir = join(homedir(), ".claude", "projects", slug);
   readdirSync(dir);
-  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne });
+  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel() });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
 

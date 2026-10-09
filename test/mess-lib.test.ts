@@ -58,3 +58,34 @@ describe("kontextVon und istNeuaufbau (#1572: ein Prädikat für countCacheRebui
     expect(src).not.toMatch(/cacheRead\) < ctx \/ 2/);
   });
 });
+
+describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)", () => {
+  const B = raw as unknown as { bereinige: (t: string, o?: { wurzel?: string | null }) => string };
+  const WURZEL = "C:/work/projekt";
+  test("Home und Worktree-Präfix werden ersetzt, Backslashes zu Schrägstrichen", () => {
+    expect(B.bereinige("C:/Users/Max/dev/x.ts")).toBe("~/dev/x.ts");
+    expect(B.bereinige("C:\\Users\\Max\\dev\\x.ts")).toBe("~/dev/x.ts");
+    expect(B.bereinige("cat /c/Users/Max/x.md")).toBe("cat ~/x.md");
+    expect(B.bereinige("C:/work/projekt/.claude/worktrees/kq-1559/src/a.ts")).toBe("<wt>/src/a.ts");
+    expect(B.bereinige("cd /c/work/projekt/.claude/worktrees/kq-1469 && ls")).toBe("cd <wt>/ && ls");
+    expect(B.bereinige("a   b\n c")).toBe("a b c");
+  });
+  test("Wurzel in beiden Schreibweisen, mit und ohne Schrägstrich am Ende der Wurzel und im Text", () => {
+    for (const wurzel of ["C:/work/projekt", "C:\\work\\projekt\\", "/c/work/projekt", "/c/work/projekt/"]) {
+      expect(B.bereinige("Read C:/work/projekt/docs/a.md", { wurzel })).toBe("Read <repo>/docs/a.md");
+      expect(B.bereinige("cat /c/work/projekt/docs/a.md", { wurzel })).toBe("cat <repo>/docs/a.md");
+      expect(B.bereinige("cd /c/work/projekt && ls", { wurzel })).toBe("cd <repo>/ && ls");
+    }
+  });
+  test("Geschwister-Pfad, fremder Pfad und fehlende Wurzel bleiben unverändert", () => {
+    expect(B.bereinige("C:/work/projekt-alt/x", { wurzel: WURZEL })).toBe("C:/work/projekt-alt/x");
+    expect(B.bereinige("D:/andere/y", { wurzel: WURZEL })).toBe("D:/andere/y");
+    expect(B.bereinige("C:/work/projekt/a", { wurzel: null })).toBe("C:/work/projekt/a");
+    expect(B.bereinige("C:/work/projekt/a")).toBe("C:/work/projekt/a");
+  });
+  test("keine fest verdrahtete Repo-Wurzel im Quelltext der Messskripte", () => {
+    for (const name of ["mess-lib", "kontext-treiber"]) {
+      expect(readFileSync(new URL(`../scripts/${name}.mjs`, import.meta.url), "utf8")).not.toMatch(/dev\/kubernia/);
+    }
+  });
+});
