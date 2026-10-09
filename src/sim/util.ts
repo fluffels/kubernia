@@ -64,20 +64,24 @@ export function externalIP(name: string): string {
 /** Das Alphabet, aus dem Kubernetes Pod-Suffixe und pod-template-hashes zieht (`rand.alphanums`):
  *  keine Vokale und keine Ziffern 0, 1, 3 – so entstehen keine lesbaren Wörter. */
 export const K8S_ALPHANUMS = "bcdfghjklmnpqrstvwxz2456789";
-/** Wie `SimpleNameGenerator` des API-Servers: `<prefix><5 Zeichen>`, die Basis wird auf 58 Zeichen gekürzt
- *  (63 minus Suffix). Das Suffix ist deterministisch (Basis-27-Ziffern von `hashStr(seed)` über `K8S_ALPHANUMS`,
+/** Länge des zufälligen Suffixes generierter Namen (Pod-Suffix `<dep>-<hash>-<suffix>`, `generateName`). */
+export const GENERATED_SUFFIX_LEN = 5;
+/** Maximale Länge eines Kubernetes-Objektnamens (DNS-Label). */
+export const K8S_NAME_MAX_LEN = 63;
+/** Längste Basis eines generierten Namens, damit Basis + Suffix in `K8S_NAME_MAX_LEN` passen. */
+export const MAX_GENERATED_BASE_LEN = K8S_NAME_MAX_LEN - GENERATED_SUFFIX_LEN;
+/** Wie `SimpleNameGenerator` des API-Servers: `<prefix><Suffix>`, die Basis wird auf `MAX_GENERATED_BASE_LEN` gekürzt
+ *  (Objektname höchstens `K8S_NAME_MAX_LEN`). Das Suffix ist deterministisch (Basis-27-Ziffern von `hashStr(seed)` über `K8S_ALPHANUMS`,
  *  kein rng), damit ein generateName-Objekt über Aufrufe stabil bleibt wie `podIP`. */
 export function generatedName(prefix: string, seed: string): string {
   let h = hashStr(seed);
   let suffix = "";
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < GENERATED_SUFFIX_LEN; i++) {
     suffix += K8S_ALPHANUMS[h % K8S_ALPHANUMS.length];
     h = Math.floor(h / K8S_ALPHANUMS.length);
   }
-  return prefix.slice(0, 58) + suffix;
+  return prefix.slice(0, MAX_GENERATED_BASE_LEN) + suffix;
 }
-/** Länge des zufälligen Pod-Suffixes (`<dep>-<hash>-<suffix>`). */
-export const POD_SUFFIX_LEN = 5;
 
 /** Kodiert einen Hash-Wert wie `rand.SafeEncodeString`: je Zeichen des Dezimaltexts
  *  (Zeichen-Code mod 27) ein Zeichen aus `K8S_ALPHANUMS`. Pur und deterministisch. */
@@ -93,7 +97,7 @@ export function safeEncode(s: string): string {
  *  `sim/workload.ts` (scale/rollout/heal) gebraucht – darum hier als geteilter Helfer. */
 export function makePodName(depName: string, hash: string, rng: () => number): PodName {
   // Intern erzeugt → vertrauenswürdig: ungeprüft branden (der Name ist per Konstruktion gültig).
-  return asPodName(depName + "-" + hash + "-" + randSuffix(POD_SUFFIX_LEN, rng, K8S_ALPHANUMS));
+  return asPodName(depName + "-" + hash + "-" + randSuffix(GENERATED_SUFFIX_LEN, rng, K8S_ALPHANUMS));
 }
 
 /** Mit Leerzeichen auf Mindestbreite `n` auffüllen (Spalten-Ausrichtung der CLI-Tabellen). */

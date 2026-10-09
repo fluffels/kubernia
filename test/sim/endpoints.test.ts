@@ -336,3 +336,37 @@ describe("formatLabels (#1500)", () => {
     expect(formatLabels(null)).toBe("<none>");
   });
 });
+
+describe("Kappung auf 3 Endpunkte (#1538)", () => {
+  const svc8080 = { name: "kasse", type: "ClusterIP" as const, clusterIP: "10.96.0.20", port: 80, targetPort: 8080 };
+  const mit = (replicas: number) => new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas }], services: [svc8080] });
+  const ips = (sim: KQSim) => sim.deployments[0].pods.map(p => podIP(p.name) + ":8080");
+
+  test("vier bereite Pods: get endpoints zeigt drei plus '+ 1 more...'", () => {
+    const sim = mit(4);
+    expect(ep(sim, "kasse").trim().split(/\s{2,}/)[1]).toBe(ips(sim).slice(0, 3).join(",") + " + 1 more...");
+  });
+
+  test("genau drei Pods: volle Liste ohne more", () => {
+    const sim = mit(3);
+    const zelle = ep(sim, "kasse").trim().split(/\s{2,}/)[1];
+    expect(zelle).toBe(ips(sim).join(","));
+    expect(zelle).not.toContain("more");
+  });
+
+  test("kein bereiter Pod: <none>, nicht <unset>", () => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, broken: { type: "crashloop", needsSecret: "key" } }], services: [svc8080] });
+    expect(ep(sim, "kasse").trim().split(/\s{2,}/)[1]).toBe("<none>");
+  });
+
+  test("describe service kürzt die Endpoints-Zeile ebenso", () => {
+    const sim = mit(4);
+    const zeile = (sim.exec("kubectl describe svc kasse").output || "").split("\n").find(l => l.startsWith("Endpoints:")) ?? "";
+    expect(zeile).toContain(ips(sim).slice(0, 3).join(",") + " + 1 more...");
+    expect(zeile).not.toContain(ips(sim)[3]);
+  });
+
+  test("curl sieht weiter alle Backends (Kappung ist nur Text)", () => {
+    expect(readyBackends(mit(4), svc8080)).toHaveLength(4);
+  });
+});

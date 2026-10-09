@@ -25,7 +25,7 @@ import { workloadSelector, formatLabels } from "../util";
 import { clusterPods } from "../pods";
 import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
 import { statefulPodClaimName, STATEFUL_CLAIM_ACCESS_MODES } from "../workload";
-import { availableReplicas, statefulSetReadyReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
+import { listWithMore, availableReplicas, statefulSetReadyReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
 import { accessModesLong, pvcPendingEvent } from "../pv-controller";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
 import { sameRbac } from "../rbac";
@@ -123,7 +123,7 @@ function describeService(host: KubectlHost, name: string, kind: ResourceKind): s
     ...(external ? [kv("External Name", svc.externalName ?? "")] : [
       kv("Port", "<unset>  " + svc.port + "/TCP"),
       kv("TargetPort", (svc.targetPort ?? svc.port) + "/TCP"),
-      kv("Endpoints", endpoints.length ? endpoints.join(",") : "<none>"),
+      kv("Endpoints", endpoints.length ? listWithMore(endpoints) : "<none>"),
     ]),
     kv("Events", "<none>"),
   ].join("\n");

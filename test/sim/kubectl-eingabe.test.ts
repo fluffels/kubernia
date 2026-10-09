@@ -48,7 +48,7 @@ describe("Registry: nur echte Kurznamen (kubectl api-resources / CRD-Manifeste)"
   test.each(RESOURCE_KINDS.map(k => [k.plural, k.short] as const))("%s: %j", (plural, short) => {
     expect([...short]).toEqual(ECHT[plural] ?? []);
   });
-  test("Typen ohne Kurznamen: secrets, roles, clusterroles, rolebindings, clusterrolebindings, Grafana", () => {
+  test("Typen ohne Kurznamen (endpointslices, secrets, RBAC, Grafana): leere Kurznamen-Liste", () => {
     for (const n of ["endpointslices", "secrets", "roles", "clusterroles", "rolebindings", "clusterrolebindings", "grafanadatasources", "grafanadashboards"]) {
       expect(resolveKind(n)?.short, n).toEqual([]);
     }
