@@ -119,7 +119,7 @@ function kubeadmInit(host: KubeadmHost, c: Call): string {
       "[init] error: a control plane is already running on this host\n" +
       "[ERROR Port-6443]: Port 6443 is in use\n" +
       "[ERROR FileAvailable--etc-kubernetes-manifests]: /etc/kubernetes/manifests is not empty",
-      "Die Control-Plane läuft bereits. Worker hängst du mit 'kubeadm join <token>' an, abräumen geht mit 'kubeadm reset'.");
+      "Die Control-Plane läuft bereits. Worker hängst du mit 'kubeadm join <endpoint> --token <token>' an, abräumen geht mit 'kubeadm reset'.");
   }
   const token = genToken(host.rng);
   // Der Knoten, auf dem init läuft, wird die Control-Plane. Gibt es schon einen Control-Plane-
@@ -146,9 +146,36 @@ function kubeadmInit(host: KubeadmHost, c: Call): string {
   ].join("\n");
 }
 
-/** Worker an die Control-Plane anschließen. Negativfälle: vor init (Control-Plane down),
- *  ohne Token, mit falschem Token. */
+/** Argumente von `kubeadm join` prüfen wie das echte kubeadm (Validierung vor dem Preflight): `null` = ok, sonst die
+ *  Fehlerausgabe. Echte Form: `kubeadm join <api-server-endpoint> --token <token>` (cobra `MaximumNArgs(1)`, Endpoint
+ *  `host:port`); ein positionales Token gibt es nicht. */
+function joinArgError(host: KubeadmHost, c: Call): string | null {
+  const muster = "kubeadm join " + APISERVER + " --token <token>";
+  if (c.args.length > 1) return host._err("accepts at most 1 arg(s), received " + c.args.length, "Muster: " + muster);
+  const endpoint = c.args[0];
+  if (endpoint === undefined) {
+    return host._err('discovery: Invalid value: "": bootstrapToken or file must be set',
+      "Ein Worker braucht die Adresse der Control-Plane. Muster: " + muster);
+  }
+  if (!endpoint.includes(":")) {
+    const istToken = /^\w+\.\w+$/.test(endpoint);
+    return host._err('discovery.bootstrapToken.apiServerEndpoint: Invalid value: "' + endpoint + '": address ' + endpoint + ": missing port in address",
+      istToken
+        ? "Das ist der Join-Token, kein Endpoint. Der Token gehört hinter --token: kubeadm join " + APISERVER + " --token " + endpoint
+        : "Der Endpoint ist host:port. Muster: " + muster);
+  }
+  if (!c.value("--token")) {
+    return host._err('discovery.bootstrapToken.token: Invalid value: "": the bootstrap token is invalid',
+      "Den Token zeigt 'kubeadm init' an. Muster: kubeadm join " + endpoint + " --token <token>");
+  }
+  return null;
+}
+
+/** Worker an die Control-Plane anschließen. Negativfälle: Argumente wie echtes kubeadm (Endpoint Pflicht, Token nur per
+ *  `--token`), vor init (Control-Plane down), falscher Endpoint, falscher Token. */
 function kubeadmJoin(host: KubeadmHost, c: Call): string {
+  const argErr = joinArgError(host, c);
+  if (argErr) return argErr;
   if (!host.controlPlane.up) {
     return host._err(
       "[preflight] Running pre-flight checks\n" +
@@ -156,25 +183,12 @@ function kubeadmJoin(host: KubeadmHost, c: Call): string {
       "Get \"https://" + APISERVER + "/api/v1/...\": dial tcp " + APISERVER + ": connect: connection refused",
       "Es läuft noch keine Control-Plane, an die sich der Worker hängen könnte. Zieh sie zuerst mit 'kubeadm init' hoch.");
   }
-  // Token akzeptieren als `--token <tok>` ODER positional `kubeadm join <tok>` (Sim-Vereinfachung, die die Quests nutzen);
-  // dazu optional der Endpoint `host:port` (so druckt ihn `kubeadm init`). Mehr als zwei Argumente gibt es nicht.
-  const tokenLike = (a: string) => /^\w+\.\w+$/.test(a);
-  const bad = c.args.find(a => !a.includes(":") && !tokenLike(a));
-  const tooMany = c.args.filter(a => a.includes(":")).length > 1 || c.args.filter(tokenLike).length > 1;
-  if (bad !== undefined || tooMany) {
-    return host._err(bad !== undefined ? 'error: "' + bad + '" ist weder ein API-Server-Endpoint (host:port) noch ein Bootstrap-Token' : "accepts at most 1 arg(s), received " + c.args.length,
-      "Muster: kubeadm join " + APISERVER + " --token <token>");
-  }
-  const endpoint = c.args.find(a => a.includes(":"));
-  if (endpoint !== undefined && endpoint !== APISERVER) {
+  const endpoint = c.args[0];
+  if (endpoint !== APISERVER) {
     return host._err('error execution phase preflight: couldn\'t validate the identity of the API Server: Get "https://' + endpoint + '/api/v1/namespaces/kube-public/configmaps/cluster-info?timeout=10s": dial tcp ' + endpoint + ": connect: connection refused",
       "Die Control-Plane lauscht auf " + APISERVER + " – das ist der Endpoint aus 'kubeadm init'.");
   }
-  const token = c.value("--token") || c.args.find(tokenLike) || null;
-  if (!token) {
-    return host._err("[preflight] error: --token is required",
-      "Den Token zeigt 'kubeadm init' an. Aufruf z.B.: kubeadm join --token <token>");
-  }
+  const token = c.value("--token");
   if (token !== host.controlPlane.token) {
     return host._err(
       "[preflight] error: couldn't validate the identity of the API Server: invalid bootstrap token \"" + token + "\"",
