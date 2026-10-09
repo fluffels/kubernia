@@ -39,6 +39,7 @@ const A = rawAbgleich as unknown as {
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
   projektPraefix: (r: string) => string;
+  repoWurzel: (r: string) => string;
   findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number; groesse: number }[];
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
@@ -196,6 +197,15 @@ describe("Soll (pur)", () => {
 });
 
 describe("Session-Auswahl", () => {
+  test("Präfix und Wurzel eines Worktree-Pfads sind die des Hauptrepos (Aliase der gemeinsamen Ableitung)", () => {
+    expect(A.projektPraefix("X:/repo")).toBe(PRAEFIX);
+    expect(A.projektPraefix("X:\\repo\\.claude\\worktrees\\kq-1")).toBe(PRAEFIX);
+    expect(A.projektPraefix("X:/repo/")).toBe(PRAEFIX);
+    expect(A.repoWurzel("X:\\repo\\.claude\\worktrees\\kq-1")).toBe("X:\\repo");
+    expect(A.repoWurzel("X:/repo/")).toBe("X:/repo");
+    expect(A.repoWurzel("X:/repo")).toBe("X:/repo");
+  });
+
   test("fremder Projektordner wird nicht gelesen; Worktree-Ordner des Projekts schon; --seit filtert nach mtime, --session nicht", () => {
     const root = fixture({
       [`${PRAEFIX}/a.jsonl`]: msg("m"),
