@@ -513,7 +513,7 @@ describe("Auswahl", () => {
   });
 
   test("vor dem Stichtag: nur lesen, „würde senden“ zählen, kein POST, kein Ledger, kein Score", async () => {
-    const alt = msg("a", 1, { timestamp: "2026-10-08T10:00:00.000Z" });
+    const alt = msg("a", 1, { timestamp: iso(Date.parse(N.STICHTAG) - 86_400_000) });
     const a = aufbau([alt]);
     const m = mock({ ist: 0 });
     const r = await lauf(a, m);
@@ -578,7 +578,7 @@ describe("Scores", () => {
   });
 
   test("vor dem Stichtag und im Trockenlauf kein Score", async () => {
-    const a = aufbau([msg("a", 1, { timestamp: "2026-10-08T10:00:00.000Z" })]);
+    const a = aufbau([msg("a", 1, { timestamp: iso(Date.parse(N.STICHTAG) - 86_400_000) })]);
     const m = mock({ ist: 0 });
     await lauf(a, m);
     await lauf(aufbau([msg("a", 1)]), m, { trocken: true });
