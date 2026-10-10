@@ -982,6 +982,134 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
   });
 });
 
+describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
+  type Ref = { name: string; gone: boolean; sha: string };
+  type Gemergt = { headRefName: string; headRefOid: string };
+  const B = cleanupModule as unknown as {
+    parseBranchRefs: (text: string) => Ref[];
+    worktreeBranchen: (porcelain: string) => Set<string>;
+    aufraeumbareBranches: (o: { refs: Ref[]; worktreeBranches: Set<string> | string[]; gemergteHeads: Gemergt[] | null | undefined }) => string[];
+    branchesAufraeumen: (o: { git: (a: string[]) => string; gh: () => Gemergt[]; loeschen?: boolean }) => { ok: boolean; grund?: string; kandidaten: string[]; geloescht: string[]; behalten: number; fehler: string[] };
+  };
+  const SHA_A = "a".repeat(40);
+  const SHA_B = "b".repeat(40);
+  const ref = (name: string, over: Partial<Ref> = {}): Ref => ({ name, gone: true, sha: SHA_A, ...over });
+  const gemergt = (name: string, oid = SHA_A): Gemergt => ({ headRefName: name, headRefOid: oid });
+  const frei = new Set<string>();
+
+  test("Positivfall: genau der gemergte, [gone]-markierte, nicht ausgecheckte Branch mit gleicher Spitze", () => {
+    const r = B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-1-a")] });
+    assert.deepEqual(r, ["feature/kq-1-a"]);
+  });
+
+  test("nicht [gone]: bleibt (Remote existiert noch, Arbeit läuft)", () => {
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a", { gone: false })], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-1-a")] }), []);
+  });
+
+  test("gone, aber in einem Worktree ausgecheckt: bleibt", () => {
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: new Set(["feature/kq-1-a"]), gemergteHeads: [gemergt("feature/kq-1-a")] }), []);
+  });
+
+  test("gone, aber die Spitze weicht vom gemergten Kopf ab (lokale Nach-Commits): bleibt", () => {
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a", { sha: SHA_B })], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-1-a", SHA_A)] }), []);
+  });
+
+  test("gone, aber kein gemergter PR zu diesem Namen (Remote ohne Merge gelöscht): bleibt", () => {
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-2-b")] }), []);
+  });
+
+  test("Name außerhalb von feature/kq-: bleibt, auch wenn alles andere passt", () => {
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("main"), ref("feature/andere"), ref("hotfix/kq-1")], worktreeBranches: frei, gemergteHeads: [gemergt("main"), gemergt("feature/andere"), gemergt("hotfix/kq-1")] }), []);
+  });
+
+  test("gh liefert nichts (null/undefined): nichts löschen, fail-closed", () => {
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: null }), []);
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: undefined }), []);
+  });
+
+  test("parseBranchRefs: Tab-getrennt, [gone] erkannt, andere Tracking-Texte und kaputte Zeilen nicht", () => {
+    const text = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-2-b\t\t" + SHA_B, "feature/kq-3-c\t[ahead 2]\t" + SHA_A, "kaputt", "\t[gone]\t" + SHA_A, "feature/kq-4-d\t[gone]\tkurz", ""].join("\n");
+    assert.deepEqual(B.parseBranchRefs(text), [
+      { name: "feature/kq-1-a", gone: true, sha: SHA_A },
+      { name: "feature/kq-2-b", gone: false, sha: SHA_B },
+      { name: "feature/kq-3-c", gone: false, sha: SHA_A },
+    ]);
+  });
+
+  test("worktreeBranchen: Branch-Zeilen aus der Porcelain-Ausgabe, detached und gesperrte Einträge ohne Branch", () => {
+    const out = ["worktree /r", "HEAD abc", "branch refs/heads/main", "", "worktree /r/.claude/worktrees/kq-1", "HEAD def", "branch refs/heads/feature/kq-1-a", "", "worktree /r/x", "HEAD 123", "detached", ""].join("\n");
+    assert.deepEqual([...B.worktreeBranchen(out)].sort(), ["feature/kq-1-a", "main"]);
+  });
+
+  describe("branchesAufraeumen (git und gh injiziert)", () => {
+    const refsText = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-2-b\t[gone]\t" + SHA_A, "feature/kq-3-c\t\t" + SHA_A].join("\n");
+    const worktrees = "worktree /r\nbranch refs/heads/main\n\nworktree /r/w\nbranch refs/heads/feature/kq-2-b\n";
+    const aufbau = (gh: () => Gemergt[], gitFehler: string | null = null) => {
+      const befehle: string[][] = [];
+      const git = (a: string[]): string => {
+        befehle.push(a);
+        if (gitFehler && a[0] === gitFehler) throw new Error("git kaputt");
+        if (a[0] === "for-each-ref") return refsText;
+        if (a[0] === "worktree") return worktrees;
+        return "";
+      };
+      return { befehle, git, gh };
+    };
+    const alleGemergt = () => [gemergt("feature/kq-1-a"), gemergt("feature/kq-2-b"), gemergt("feature/kq-3-c")];
+
+    test("Trockenlauf: nennt Kandidaten, löscht nichts (kein git branch)", () => {
+      const a = aufbau(alleGemergt);
+      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh });
+      assert.deepEqual(r.kandidaten, ["feature/kq-1-a"]);
+      assert.deepEqual(r.geloescht, []);
+      assert.equal(r.behalten, 2);
+      assert.ok(!a.befehle.some((b) => b[0] === "branch"));
+    });
+
+    test("mit loeschen: git branch -D genau für die Kandidaten", () => {
+      const a = aufbau(alleGemergt);
+      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
+      assert.deepEqual(r.geloescht, ["feature/kq-1-a"]);
+      assert.deepEqual(a.befehle.filter((b) => b[0] === "branch"), [["branch", "-D", "feature/kq-1-a"]]);
+      assert.equal(r.ok, true);
+    });
+
+    test("gh scheitert: nichts gelöscht, ok false, Grund nennt gh", () => {
+      const a = aufbau(() => {
+        throw new Error("HTTP 502");
+      });
+      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
+      assert.equal(r.ok, false);
+      assert.match(r.grund ?? "", /gh: HTTP 502/);
+      assert.ok(!a.befehle.some((b) => b[0] === "branch"));
+    });
+
+    test("git for-each-ref scheitert: ok false, nichts gelöscht", () => {
+      const a = aufbau(alleGemergt, "for-each-ref");
+      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
+      assert.equal(r.ok, false);
+      assert.match(r.grund ?? "", /^git:/);
+      assert.ok(!a.befehle.some((b) => b[0] === "branch"));
+    });
+
+    test("ein gescheitertes git branch -D landet in fehler, die übrigen laufen weiter", () => {
+      const befehle: string[][] = [];
+      const refs = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-5-e\t[gone]\t" + SHA_A].join("\n");
+      const git = (a: string[]): string => {
+        befehle.push(a);
+        if (a[0] === "for-each-ref") return refs;
+        if (a[0] === "worktree") return "";
+        if (a[2] === "feature/kq-1-a") throw new Error("gesperrt");
+        return "";
+      };
+      const r = B.branchesAufraeumen({ git, gh: () => [gemergt("feature/kq-1-a"), gemergt("feature/kq-5-e")], loeschen: true });
+      assert.deepEqual(r.geloescht, ["feature/kq-5-e"]);
+      assert.equal(r.fehler.length, 1);
+      assert.equal(r.ok, false);
+    });
+  });
+});
+
 describe("keine echten Prozessstarts (#1526)", () => {
   test("kein Test dieser Datei hat PowerShell gestartet (listProcesses ist überall injiziert)", () => {
     assert.equal(powershellStarts.n, 0, "ein deps-Objekt ohne `listProcesses` löst unter Windows einen echten PowerShell/WMI-Start aus (~600 ms)");

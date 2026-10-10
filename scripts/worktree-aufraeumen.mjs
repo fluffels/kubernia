@@ -451,3 +451,82 @@ function istLeer(absPath, deps = {}) {
     return false;
   }
 }
+
+// ── Lokale Branches nach dem Squash-Merge (#1579) ─────────────────────────────
+
+/** Branch-Namensraum der Ticket-Branches; nur darunter wird je etwas gelöscht. */
+const TICKET_BRANCH = /^feature\/kq-\d+/;
+
+/**
+ * Ausgabe von `git for-each-ref --format=%(refname:short)%09%(upstream:track)%09%(objectname) refs/heads/…` →
+ * `[{ name, gone, sha }]` (`gone`: der Upstream ist nach dem Merge entfernt, `[gone]`). Zeilen ohne Namen oder Hash entfallen.
+ */
+export function parseBranchRefs(text) {
+  return String(text ?? "")
+    .split(/\r?\n/)
+    .map((zeile) => zeile.split("\t"))
+    .filter(([name, , sha]) => name && /^[0-9a-f]{40}$/.test(sha ?? ""))
+    .map(([name, track, sha]) => ({ name, gone: (track ?? "").trim() === "[gone]", sha }));
+}
+
+/** Namen der in einem Worktree (auch dem Hauptcheckout) ausgecheckten Branches aus `git worktree list --porcelain`. */
+export function worktreeBranchen(porcelain) {
+  return new Set(
+    String(porcelain ?? "")
+      .split(/\r?\n/)
+      .map((z) => /^branch refs\/heads\/(.+)$/.exec(z)?.[1])
+      .filter(Boolean),
+  );
+}
+
+/**
+ * Welche lokalen Branches sind nach einem Squash-Merge sicher löschbar? Alle Bedingungen zugleich: Name `feature/kq-<nr>…`,
+ * `[gone]` (Remote nach dem Merge gelöscht), in keinem Worktree ausgecheckt, und die Spitze gleicht dem Kopf-Commit eines gemergten
+ * PR desselben Branch-Namens (`gemergteHeads`: `[{ headRefName, headRefOid }]`): lokale Nach-Commits bleiben also stehen.
+ * Fehlt `gemergteHeads` (gh scheiterte), wird nichts gelöscht (fail-closed). `git branch --merged` erkennt Squash-Merges nicht.
+ */
+export function aufraeumbareBranches({ refs, worktreeBranches, gemergteHeads }) {
+  if (!Array.isArray(gemergteHeads)) return [];
+  const belegt = worktreeBranches instanceof Set ? worktreeBranches : new Set(worktreeBranches ?? []);
+  return refs
+    .filter((r) => TICKET_BRANCH.test(r.name) && r.gone && !belegt.has(r.name))
+    .filter((r) => gemergteHeads.some((h) => h?.headRefName === r.name && h?.headRefOid === r.sha))
+    .map((r) => r.name);
+}
+
+/**
+ * Räumt gemergte lokale Ticket-Branches auf (nur CLI, nie im Stop-Hook). `git(args)` und `gh()` sind injiziert (`gh` liefert die
+ * gemergten PRs `[{ headRefName, headRefOid }]`). Ohne `loeschen` nur die Liste. Rückgabe `{ ok, grund?, kandidaten, geloescht, behalten, fehler }`.
+ */
+export function branchesAufraeumen({ git, gh, loeschen = false }) {
+  const leer = { kandidaten: [], geloescht: [], behalten: 0, fehler: [] };
+  let refsText;
+  let worktrees;
+  try {
+    refsText = git(["for-each-ref", "--format=%(refname:short)%09%(upstream:track)%09%(objectname)", "refs/heads/feature/kq-*"]);
+    worktrees = git(["worktree", "list", "--porcelain"]);
+  } catch (e) {
+    return { ...leer, ok: false, grund: `git: ${e.message}` };
+  }
+  let gemergteHeads;
+  try {
+    gemergteHeads = gh();
+  } catch (e) {
+    return { ...leer, ok: false, grund: `gh: ${e.message} (nichts gelöscht)` };
+  }
+  const refs = parseBranchRefs(refsText);
+  const kandidaten = aufraeumbareBranches({ refs, worktreeBranches: worktreeBranchen(worktrees), gemergteHeads });
+  const geloescht = [];
+  const fehler = [];
+  if (loeschen) {
+    for (const name of kandidaten) {
+      try {
+        git(["branch", "-D", name]);
+        geloescht.push(name);
+      } catch (e) {
+        fehler.push(`${name}: ${e.message}`);
+      }
+    }
+  }
+  return { ok: fehler.length === 0, kandidaten, geloescht, behalten: refs.length - kandidaten.length, fehler };
+}
