@@ -95,6 +95,7 @@ AGENTS.md                  @fluffels
 /scripts/transkript-calls.mjs @fluffels
 /scripts/langfuse-abgleich-kern.mjs @fluffels
 /scripts/langfuse-lock.mjs @fluffels
+/scripts/worktree-aufraeumen.mjs @fluffels
 /.agents/                  @fluffels
 /.githooks/                @fluffels
 /docs/agent-harness*       @fluffels
