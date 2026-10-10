@@ -14,18 +14,7 @@
  */
 import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
-
-/** REST-Logins vertrauter Bots (zusätzlich zum Repo-Owner); gelten nur mit `type === "Bot"`. */
-export const VERTRAUTE_BOTS = Object.freeze(["github-actions[bot]", "dependabot[bot]"]);
-/** Labels, die einen Eintrag als Fremdeingang kennzeichnen, egal wer ihn anlegte. */
-export const FREMDEINGANG_LABELS = Object.freeze(["forum"]);
-
-/** Ist der REST-User `{login, type}` vertraut? Alles Unbekannte, auch `null`, ist fremd. */
-export function istVertraut(user, owner) {
-  if (!user || typeof user.login !== "string" || user.login === "") return false;
-  if (typeof owner === "string" && owner !== "" && user.login.toLowerCase() === owner.toLowerCase()) return true;
-  return user.type === "Bot" && VERTRAUTE_BOTS.includes(user.login);
-}
+import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
 const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${loginVon(user)}, ${url}]`;

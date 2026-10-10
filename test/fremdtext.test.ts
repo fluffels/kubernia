@@ -11,6 +11,8 @@ import assert from "node:assert/strict";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as fremdtextRoh from "../scripts/fremdtext.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as fremdtextLib from "../scripts/fremdtext-lib.mjs";
 
 interface User {
   login: string;
@@ -54,7 +56,8 @@ interface Api {
   flach: (slurped: unknown) => unknown[];
   pruefe: (argv: string[], gh: (args: string[]) => string) => { code: number; out: string; err: string };
 }
-const fremdtext = fremdtextRoh as unknown as Api;
+// Die Vertrauensliste steht in scripts/fremdtext-lib.mjs (#1579), der Rest im CLI-Skript.
+const fremdtext = { ...fremdtextRoh, ...fremdtextLib } as unknown as Api;
 const { VERTRAUTE_BOTS, FREMDEINGANG_LABELS, istVertraut, trenneFremdtext, formatiere, parseArgs, flach, pruefe } = fremdtext;
 
 const OWNER = "fluffels";

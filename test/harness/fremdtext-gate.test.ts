@@ -18,7 +18,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as fremdtextRoh from "../../scripts/fremdtext.mjs";
+import * as fremdtextRoh from "../../scripts/fremdtext-lib.mjs";
 
 const fremdtext = fremdtextRoh as unknown as { VERTRAUTE_BOTS: string[]; FREMDEINGANG_LABELS: string[] };
 

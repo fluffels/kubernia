@@ -65,6 +65,7 @@
     "/scripts/langfuse-abgleich-kern.mjs",
     "/scripts/langfuse-lock.mjs",
     "/scripts/worktree-aufraeumen.mjs",
+    "/scripts/fremdtext-lib.mjs",
     "/.agents/",
     "/.githooks/",
     "/docs/agent-harness*"
