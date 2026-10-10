@@ -12,6 +12,22 @@
 
 Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI ändert das billig **und** sicher"), gleichrangig neben Testbarkeit, Erweiterbarkeit und Datensicherheit — und es steht unter derselben obersten Regel wie alles andere: **„Trägt das noch, wenn Kubernia so groß wie Stardew Valley wird?"** Ein Harness, der bei 10× Content/NPCs/parallelen Agenten zusammenbricht, ist keiner.
 
+**Der Harness in Zahlen** (aus dem Repo gezählt; ein zusätzliches Skript, ein Wächter-Test, ein Workflow oder ein ADR macht den Abschnitt veraltet, bis `npm run docs:gen` läuft, [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md)):
+
+<!-- GEN:harness-kennzahlen START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+| Kennzahl | Wert | Zählregel |
+|---|---|---|
+| Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Skripte | 98 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 69 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
+| ADRs | 23 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+
+<!-- GEN:harness-kennzahlen END -->
+
 ## 2. Die fünf Bausteine
 
 Der Harness ist kein einzelnes Tool, sondern das Zusammenspiel von fünf Schichten. Jede fängt eine andere Fehlklasse ab.

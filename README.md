@@ -118,6 +118,22 @@ Ein Agent nimmt **genau ein** Ticket vom Board und bringt es bis zum Merge. Dabe
 - **♻️ Lebende Doku.** Zählbares und Aufzählungen stehen nicht von Hand im Text, sondern kommen aus Generatoren und werden vom Gate `check:docgen` geprüft ([ADR 0017](docs/adr/0017-lebende-doku-generierte-abschnitte.md)); wie man das in ein fremdes Repo überträgt, steht in [harness-transfer.md](docs/harness-transfer.md).
 - **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen werden als [Architecture Decision Record](docs/adr/) festgehalten, mit den verworfenen Alternativen; die Zeitleiste unten wird aus ihnen erzeugt.
 
+In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
+
+<!-- GEN:harness-kennzahlen START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+| Kennzahl | Wert | Zählregel |
+|---|---|---|
+| Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Skripte | 98 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 69 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
+| ADRs | 23 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+
+<!-- GEN:harness-kennzahlen END -->
+
 Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdateien, daher immer aktuell):
 
 <!-- GEN:harness-inventar START -->
