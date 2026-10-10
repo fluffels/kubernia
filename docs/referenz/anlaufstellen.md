@@ -87,6 +87,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
 | [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
+| [lens-gegenprobe-2026-10-09.md](../lens-gegenprobe-2026-10-09.md) | Momentaufnahme: Rohwerte und Rezept der Lens-Gegenprobe (Opus gegen Sonnet gegen Haiku je Brille); die Entscheidung steht in model-routing.md |
 | [langfuse-hook-patch.md](../langfuse-hook-patch.md) | wenn das Plugin `langfuse-observability` aktualisiert wird, der Hook-Patch geprüft oder portiert werden muss oder Langfuse Turns vermisst |
 
 ### Betrieb, Assets, Tests
