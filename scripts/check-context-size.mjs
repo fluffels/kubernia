@@ -31,7 +31,7 @@
  * grobe INFO aus (≈ Zeichen / CHARS_PER_TOKEN) – das Budget selbst bleibt in Zeichen.
  * CR (`\r`) zählt nicht mit: sonst misst ein Windows-Checkout (core.autocrlf) mehr als die CI.
  *
- * Bewusst ein reines Node-Skript (nur Builtins + der Walk aus check-docdrift.mjs), analog zu
+ * Bewusst ein reines Node-Skript (nur Builtins + der Walk aus check-basis.mjs), analog zu
  * check-size.mjs.
  * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts importiert –
  * EINE Quelle der Wahrheit für Budget + Ausnahmen.
@@ -44,7 +44,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 // Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
-import { collectMarkdown } from "./check-docdrift.mjs";
+import { collectMarkdown } from "./check-basis.mjs";
+import { CONTEXT_ALLOWLIST as ALLOWLIST } from "./check-allowlists.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -75,13 +76,6 @@ export const CHARS_PER_TOKEN = 4.2;
 export function countChars(text) {
   return text.replace(/\r/g, "").length;
 }
-
-/** Bewusst geduldete Ausnahmen: Datei → Grund mit offenem Tracking-Ticket (bei Harness-Befunden zählt das
- *  ungeclaimte Sammelticket samt Zeile als offenes Ticket; sein PR löst den Eintrag wieder auf). Gleiche
- *  Ratchet-Philosophie wie scripts/check-size.mjs (#390) – kein Grün-durch-Aufweichen
- *  des Budgets selbst, nur eine begründete Einzelfall-Ausnahme. Fällt die Datei wieder
- *  unter ihr Budget, meldet der Wächter den Eintrag als stale. */
-export const ALLOWLIST = [];
 
 /** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
 export function collectAgentsFiles(rootDir = ROOT) {
@@ -162,7 +156,7 @@ function main() {
       `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
         `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md (Vorbild src/content/AGENTS.md, #483) ` +
         `bzw. ein docs/module/*.md-Tiefendoc (#394) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
-        `die ALLOWLIST in scripts/check-context-size.mjs aufnehmen.`,
+        `CONTEXT_ALLOWLIST in scripts/check-allowlists.mjs aufnehmen.`,
     );
   process.exit(1);
 }

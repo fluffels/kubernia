@@ -15,7 +15,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolveBase } from "./check-diffsize.mjs";
+import { resolveBase } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");

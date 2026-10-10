@@ -5,8 +5,8 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Ratchet: `BESTAND` friert die heutigen Paare ein (Abbau als Burn-down, Zeile im Sammelticket). Ein NEUES Paar ist rot, ein
- * veralteter Eintrag (Paar gibt es nicht mehr) ebenfalls: der Bestand darf nur schrumpfen.
+ * Kein Bestand mehr (#1579): jeder Importeur zählt, auch eine Lib; der Test fordert `paare == []`. Ein Einstiegsskript darf aus Libs
+ * importieren, nie umgekehrt und nie aus einem anderen Einstieg.
  *
  * Bekannte Grenzen der Erkennung: `GUARD` kennt nur die drei Schreibweisen unten (z.B. `pathToFileURL(process.argv[1] ?? "")` nicht,
  * damit zählen `check-c4.mjs` und `docs-gen.mjs` nicht als Einstieg); `IMPORT` sieht nur statische Importe `from "./x.mjs"` mit
@@ -21,31 +21,6 @@ const SKRIPTE = new URL("../../scripts/", import.meta.url);
 const GUARD = /istDirektaufruf\(import\.meta\.url\)|import\.meta\.url\s*===\s*pathToFileURL\(process\.argv\[1\]\)|process\.argv\[1\][^\n]*import\.meta\.url/;
 const IMPORT = /\bfrom\s+"\.\/([\w-]+)\.mjs"/g;
 
-/** Eingefrorener Bestand: `importeur -> ziel`, beide ohne Endung. Nur schrumpfend. */
-export const BESTAND: readonly string[] = [
-  "board-place -> gh-kontingent",
-  "board-takt -> gh-kontingent",
-  "check-context-size -> check-docdrift",
-  "check-diffcoverage -> check-diffsize",
-  "check-doc-tickets -> check-context-size",
-  "check-doc-tickets -> check-size",
-  "check-lockfile -> check-diffsize",
-  "check-review-nachweis -> check-diffsize",
-  "check-steuerbytes -> check-internalrefs",
-  "cleanup-worktrees -> lens-edit-guard",
-  "kontext-treiber -> subagent-laufzeit",
-  "langfuse-nachliefern -> langfuse-abgleich",
-  "naechstes-ticket -> fremdtext",
-  "naechstes-ticket -> gh-kontingent",
-  "pretooluse-hook -> gh-guard-hook",
-  "pretooluse-hook -> worktree-guard-hook",
-  "pretooluse-hook -> worktree-guard-powershell",
-  "sammelticket-anlegen -> gh-kontingent",
-  "stop-verify-hook -> cleanup-worktrees",
-  "verify-lauf -> check-diffsize",
-  "worktree-guard-powershell -> worktree-guard-hook",
-];
-
 type Quelle = Record<string, string>;
 
 /** Einstiegsskripte unter den Quelltexten (Name ohne Endung). Pur. */
@@ -53,19 +28,14 @@ export function einstiegsskripte(quellen: Quelle): Set<string> {
   return new Set(Object.entries(quellen).filter(([, text]) => GUARD.test(text)).map(([name]) => name));
 }
 
-/** Alle Paare `importeur -> ziel`, bei denen das Ziel ein Einstiegsskript ist und der Importeur selbst eines. Pur. */
+/** Alle Paare `importeur -> ziel`, bei denen das Ziel ein Einstiegsskript ist; der Importeur ist ein Einstieg oder eine Lib. Pur. */
 export function einstiegsPaare(quellen: Quelle): string[] {
   const einstiege = einstiegsskripte(quellen);
   const paare = new Set<string>();
-  for (const name of einstiege) {
-    for (const m of quellen[name].matchAll(IMPORT)) if (einstiege.has(m[1]) && m[1] !== name) paare.add(`${name} -> ${m[1]}`);
+  for (const [name, text] of Object.entries(quellen)) {
+    for (const m of text.matchAll(IMPORT)) if (einstiege.has(m[1]) && m[1] !== name) paare.add(`${name} -> ${m[1]}`);
   }
   return [...paare].sort();
-}
-
-/** Neue Paare (nicht im Bestand) und veraltete Bestandseinträge (kein Paar mehr). Pur. */
-export function bewerte(paare: string[], bestand: readonly string[]): { neu: string[]; veraltet: string[] } {
-  return { neu: paare.filter((p) => !bestand.includes(p)), veraltet: bestand.filter((p) => !paare.includes(p)) };
 }
 
 const lade = (): Quelle =>
@@ -86,12 +56,8 @@ describe("Einstiegsskripte importieren nicht voneinander (#1398)", () => {
     expect(einstiegsskripte(quellen).has("ticket-refs")).toBe(false);
   });
 
-  test("kein neues Paar außerhalb des eingefrorenen Bestands", () => {
-    expect(bewerte(paare, BESTAND).neu).toEqual([]);
-  });
-
-  test("der Bestand ist nicht veraltet (Ratchet: nur schrumpfen)", () => {
-    expect(bewerte(paare, BESTAND).veraltet).toEqual([]);
+  test("kein Skript importiert aus einem Einstiegsskript (kein Bestand)", () => {
+    expect(paare).toEqual([]);
   });
 
   test("ticket-lock importiert aus der Lib, nicht aus naechstes-ticket", () => {
@@ -110,8 +76,15 @@ describe("Erkennung und Bewertung (Negativfälle gegen die Funktionen selbst)", 
     };
     expect(einstiegsPaare(quellen)).toEqual(["a -> b"]);
   });
-  test("ein Importeur ohne Guard (selbst eine Lib) zählt nicht", () => {
-    expect(einstiegsPaare({ a: 'import { x } from "./b.mjs";', b: guard })).toEqual([]);
+  test("auch eine Lib als Importeur zählt: Lib -> Einstieg ist ein Paar (Negativfall der früheren Grenze)", () => {
+    expect(einstiegsPaare({ a: 'import { x } from "./b.mjs";', b: guard })).toEqual(["a -> b"]);
+  });
+  test("Einstieg -> Lib und Lib -> Lib sind keine Paare", () => {
+    const a = `import { x } from "./l1.mjs";\n${guard}`;
+    expect(einstiegsPaare({ a, l1: 'import { y } from "./l2.mjs";', l2: "export const y = 1;" })).toEqual([]);
+  });
+  test("ein Selbstimport zählt nicht", () => {
+    expect(einstiegsPaare({ a: `import { x } from "./a.mjs";\n${guard}` })).toEqual([]);
   });
   test("alle drei Guard-Schreibweisen gelten als Einstieg", () => {
     const quellen: Quelle = {
@@ -121,8 +94,5 @@ describe("Erkennung und Bewertung (Negativfälle gegen die Funktionen selbst)", 
       d: "export const nichts = 1;",
     };
     expect([...einstiegsskripte(quellen)].sort()).toEqual(["a", "b", "c"]);
-  });
-  test("bewerte: neues Paar und veralteter Eintrag werden gemeldet", () => {
-    expect(bewerte(["a -> b", "c -> d"], ["a -> b", "x -> y"])).toEqual({ neu: ["c -> d"], veraltet: ["x -> y"] });
   });
 });

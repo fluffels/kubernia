@@ -15,10 +15,10 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
+import * as checkBasis from "../../scripts/check-basis.mjs";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
+const listTrackedFiles: (rootDir?: string) => string[] = checkBasis.listTrackedFiles;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/emoji-baseline.json";

@@ -35,8 +35,7 @@ import { readFileSync } from "node:fs";
 import { ghText } from "./gh-cli.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-import { ALLOWLIST as SIZE_ALLOWLIST } from "./check-size.mjs";
-import { ALLOWLIST as CONTEXT_ALLOWLIST } from "./check-context-size.mjs";
+import { SIZE_ALLOWLIST, CONTEXT_ALLOWLIST } from "./check-allowlists.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -71,8 +70,8 @@ export function parseOpenHarnessTickets(md) {
 /** Die Ausnahme-Listen, die ein offenes Ticket nennen müssen (#1460 Z1). DECKEL in check-size sind Ratchet-Historie,
  *  kein Ticket-Versprechen, und gehören bewusst nicht dazu. */
 export const AUSNAHME_LISTEN = [
-  { skript: "scripts/check-size.mjs", eintraege: SIZE_ALLOWLIST },
-  { skript: "scripts/check-context-size.mjs", eintraege: CONTEXT_ALLOWLIST },
+  { skript: "scripts/check-allowlists.mjs › SIZE_ALLOWLIST", eintraege: SIZE_ALLOWLIST },
+  { skript: "scripts/check-allowlists.mjs › CONTEXT_ALLOWLIST", eintraege: CONTEXT_ALLOWLIST },
 ];
 
 /** Je Ausnahme die Ticket-Nummer: das erste `#N` der Begründung, sonst null. Rein, offline. */

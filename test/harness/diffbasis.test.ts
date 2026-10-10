@@ -59,12 +59,12 @@ import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File – wie in claude-bridge.test.ts.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
+import * as checkBasis from "../../scripts/check-basis.mjs";
 
 // Begründete Ausnahme wie in claude-bridge.test.ts: der Namespace des .mjs ist für tsc
 // „error typed"; eng begrenzter Inline-Disable statt Gate-Config anzufassen.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const VERSIONED_CLAUDE_DIRS: Set<string> = checkDocDrift.VERSIONED_CLAUDE_DIRS;
+const VERSIONED_CLAUDE_DIRS: Set<string> = checkBasis.VERSIONED_CLAUDE_DIRS;
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(ROOT + rel, "utf8");

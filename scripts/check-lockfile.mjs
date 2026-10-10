@@ -37,7 +37,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-import { resolveBase } from "./check-diffsize.mjs";
+import { resolveBase } from "./check-basis.mjs";
 import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");

@@ -33,7 +33,6 @@ type CheckDiffSizeModule = {
   readThresholds: (env?: Env) => Thresholds;
   parseNumstat: (text: string) => { files: { path: string; added: number; deleted: number; binary: boolean }[] } & Sums;
   evaluate: (sums: Sums, t: Thresholds) => Eval;
-  resolveBase: (runGit: RunGit, env?: Env) => string | null;
   checkDiffSize: (opts: { runGit: RunGit; env?: Env }) => Record<string, unknown>;
   isGeneratedArtifact: (path: string) => boolean;
 };
@@ -46,6 +45,11 @@ type CheckDiffSizeModule = {
 import * as checkDiffRaw from "../scripts/check-diffsize.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as basisRaw from "../scripts/check-basis.mjs";
+
+// resolveBase steht in der Gate-Lib scripts/check-basis.mjs (#1579).
+const { resolveBase } = basisRaw as unknown as { resolveBase: (runGit: RunGit, env?: Env) => string | null };
 
 const { parseOverrideTrailers, sliceOverride } = sliceRaw as {
   parseOverrideTrailers: (text: string, key: string) => Trailers;
@@ -59,7 +63,6 @@ const {
   readThresholds,
   parseNumstat,
   evaluate,
-  resolveBase,
   checkDiffSize,
   isGeneratedArtifact,
 } = checkDiffRaw as CheckDiffSizeModule;

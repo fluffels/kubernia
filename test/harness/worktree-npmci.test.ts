@@ -34,12 +34,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
+import * as checkBasis from "../../scripts/check-basis.mjs";
 
 // Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed".
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
+const collectMarkdown: (rootDir?: string) => string[] = checkBasis.collectMarkdown;
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 

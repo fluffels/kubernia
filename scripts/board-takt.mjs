@@ -16,7 +16,7 @@
  * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts.
  */
 import { pathToFileURL } from "node:url";
-import { mitKontingent } from "./gh-kontingent.mjs";
+import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,

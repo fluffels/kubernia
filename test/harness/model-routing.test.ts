@@ -93,6 +93,8 @@ const pflegeMarker = (brainMetrics as { pflegeMarker: (ev: { tool: string; input
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkBasis from "../../scripts/check-basis.mjs";
 
 // Begründete Ausnahme, identisch zu test/harness/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed". Eng begrenzter
@@ -100,7 +102,7 @@ import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const stripFencedCode: (md: string) => string = checkDocDrift.stripFencedCode;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
+const collectMarkdown: (rootDir?: string) => string[] = checkBasis.collectMarkdown;
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");

@@ -24,6 +24,8 @@ import { fileURLToPath } from "node:url";
 // error-typed Wert zu ziehen — das kommt ohne `no-unsafe-*`-Suppressions aus (Ratchet #868).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawModule from "../scripts/check-internalrefs.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawBasis from "../scripts/check-basis.mjs";
 
 type Violation = { file: string; line: number; term: string; kind: "ref" | "name"; excerpt: string };
 
@@ -34,7 +36,6 @@ type InternalRefsApi = {
   encodeTerm: (term: string) => string;
   buildTermPattern: (term: string, opts?: { stem?: boolean }) => RegExp;
   listBranchCommitMessages: (root: string, exec: () => string) => { name: string; text: string }[];
-  isCheckable: (file: string) => boolean;
   findViolations: (
     files: string[],
     terms: string[],
@@ -62,12 +63,13 @@ const {
   decodeTerms,
   encodeTerm,
   buildTermPattern,
-  isCheckable,
   findViolations,
   runCheck,
   checkedLabel,
   addTerm,
 } = rawModule as unknown as InternalRefsApi;
+// isCheckable steht in der Gate-Lib scripts/check-basis.mjs (#1579).
+const isCheckable = (rawBasis as unknown as { isCheckable: (file: string) => boolean }).isCheckable;
 
 const DUMMY = "zzzdummyfirma";
 const readRepo = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");

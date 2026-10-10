@@ -12,11 +12,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
+import * as checkBasis from "../../scripts/check-basis.mjs";
 
 // Begründete Ausnahme wie in test/harness/agents-refs.test.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
+const listTrackedFiles: (rootDir?: string) => string[] = checkBasis.listTrackedFiles;
 
 export const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 

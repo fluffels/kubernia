@@ -17,12 +17,14 @@ import assert from "node:assert/strict";
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkSize from "../scripts/check-size.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as allowlists from "../scripts/check-allowlists.mjs";
 
 type Sized = { file: string; loc: number };
 type Allow = { file: string; reason: string };
 
 const LOC_BUDGET: number = checkSize.LOC_BUDGET;
-const ALLOWLIST: Allow[] = checkSize.ALLOWLIST;
+const ALLOWLIST: Allow[] = allowlists.SIZE_ALLOWLIST;
 const collectSizes: (rootDir?: string) => Sized[] = checkSize.collectSizes;
 const findOversized: (sizes: Sized[], budget?: number) => Sized[] = checkSize.findOversized;
 const countLines: (text: string) => number = checkSize.countLines;
@@ -45,7 +47,7 @@ describe("Dateigröße-Budget (#390)", () => {
       [],
       `Module über dem ${LOC_BUDGET}-LOC-Budget ohne Allowlist-Eintrag:\n` +
         violations.map((v) => `  ${v.file}: ${v.loc}`).join("\n") +
-        `\nAufteilen (siehe #392/#393) oder – mit offenem Split-Ticket – in scripts/check-size.mjs allowlisten.`,
+        `\nAufteilen (siehe #392/#393) oder – mit offenem Split-Ticket – in SIZE_ALLOWLIST (scripts/check-allowlists.mjs) allowlisten.`,
     );
   });
 
@@ -61,7 +63,7 @@ describe("Dateigröße-Budget (#390)", () => {
       stale,
       [],
       `Stale Allowlist-Einträge (Datei nicht mehr über Budget oder nicht mehr vorhanden) – ` +
-        `aus scripts/check-size.mjs entfernen:\n` +
+        `aus SIZE_ALLOWLIST (scripts/check-allowlists.mjs) entfernen:\n` +
         stale.map((a) => `  ${a.file}`).join("\n"),
     );
   });

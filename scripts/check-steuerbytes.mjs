@@ -6,8 +6,8 @@
  * auch git für eine Binärdatei: Diffs, Review und Gates sähen sie nicht mehr (Anlass: ein Skript schrieb unter Git Bash ein echtes
  * NUL-Byte in eine Datei). Ein Gate prüft eine Fehlklasse: die Begriffe bleiben in `check:internalrefs`, die Steuerbytes hier.
  *
- * Dieselbe Dateimenge wie `check:internalrefs` (getrackte Dateien ohne Binär-Endungen), darum importiert dieses Skript dessen
- * `listTrackedFiles`/`isCheckable` (einseitig: check-internalrefs kennt dieses Skript nicht). Nur Dateien, keine Commit-Messages.
+ * Dieselbe Dateimenge wie `check:internalrefs` (getrackte Dateien ohne Binär-Endungen), darum importiert dieses Skript die gemeinsame Lib check-basis.mjs:
+ * `listTrackedFiles`/`isCheckable` (auch check-internalrefs nutzt sie). Nur Dateien, keine Commit-Messages.
  * Nicht lesbare Dateien werden übersprungen statt das Gate zu sprengen.
  *
  * Ausführen mit:  npm run check:steuerbytes   (oder als Teil von: npm run verify)
@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-import { isCheckable, listTrackedFiles } from "./check-internalrefs.mjs";
+import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
