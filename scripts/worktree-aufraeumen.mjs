@@ -499,7 +499,7 @@ export const PR_LIMIT = 1000;
 
 /**
  * Räumt gemergte lokale Ticket-Branches auf (nur CLI, nie im Stop-Hook). `git(args)` und `gh()` sind injiziert (`gh` liefert die
- * gemergten PRs `[{ headRefName, headRefOid }]`). Ohne `loeschen` nur die Liste. Rückgabe `{ ok, grund?, kandidaten, geloescht, behalten, fehler }`.
+ * gemergten PRs `[{ headRefName, headRefOid }]`). Ohne `loeschen` nur die Liste. Rückgabe `{ ok, grund?, kandidaten, geloescht, behalten, fehler, warnung }`.
  */
 export function branchesAufraeumen({ git, gh, loeschen = false }) {
   const leer = { kandidaten: [], geloescht: [], behalten: 0, fehler: [] };
@@ -531,6 +531,6 @@ export function branchesAufraeumen({ git, gh, loeschen = false }) {
       }
     }
   }
-  const warnung = gemergteHeads.length >= PR_LIMIT ? `${PR_LIMIT} gemergte PRs gelesen (Suchgrenze): ältere [gone]-Branches bleiben unberücksichtigt.` : null;
+  const warnung = Array.isArray(gemergteHeads) && gemergteHeads.length >= PR_LIMIT ? `${PR_LIMIT} gemergte PRs gelesen (Suchgrenze): ältere [gone]-Branches bleiben unberücksichtigt.` : null;
   return { ok: fehler.length === 0, kandidaten, geloescht, behalten: refs.length - kandidaten.length, fehler, warnung };
 }

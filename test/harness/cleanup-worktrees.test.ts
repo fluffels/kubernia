@@ -1084,6 +1084,14 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       assert.equal(B.branchesAufraeumen({ git: knapp.git, gh: knapp.gh }).warnung, null);
     });
 
+    test("gh liefert null statt einer Liste: kein Absturz, nichts löschbar, keine Warnung", () => {
+      const a = aufbau((() => null) as unknown as () => Gemergt[]);
+      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
+      assert.deepEqual(r.kandidaten, []);
+      assert.equal(r.warnung, null);
+      assert.ok(!a.befehle.some((b) => b[0] === "branch"));
+    });
+
     test("gh scheitert: nichts gelöscht, ok false, Grund nennt gh", () => {
       const a = aufbau(() => {
         throw new Error("HTTP 502");
