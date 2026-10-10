@@ -44,6 +44,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ghJson } from "./gh-cli.mjs";
 import {
   MIN_ORPHAN_AGE_MS,
+  PR_LIMIT,
   branchesAufraeumen,
   diagnoseOrphans,
   entferneLensWorktrees,
@@ -59,11 +60,7 @@ import {
 /** `--branches [--fix]`: gemergte lokale Ticket-Branches aufräumen (#1579); ohne `--fix` nur die Liste. Nie im Stop-Hook. */
 function branchenModus(root, loeschen) {
   const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
-  const gh = () => {
-    const prs = ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", "1000"]);
-    if (prs.length >= 1000) console.error("Warnung: 1000 gemergte PRs gelesen (Suchgrenze): ältere [gone]-Branches bleiben unberücksichtigt.");
-    return prs;
-  };
+  const gh = () => ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]);
   const r = branchesAufraeumen({ git, gh, loeschen });
   if (r.grund) {
     console.error(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${r.grund}`);
@@ -73,6 +70,7 @@ function branchenModus(root, loeschen) {
   for (const n of r.kandidaten) console.log(`  ${loeschen && r.geloescht.includes(n) ? "gelöscht" : "löschbar "} ${n}`);
   if (!loeschen && r.kandidaten.length > 0) console.log("Zum Löschen: node scripts/cleanup-worktrees.mjs --branches --fix");
   for (const f of r.fehler) console.error(`  ✗ ${f}`);
+  if (r.warnung) console.error(`Warnung: ${r.warnung}`);
   if (!r.ok) process.exit(1);
 }
 

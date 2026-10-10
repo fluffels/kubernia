@@ -494,6 +494,9 @@ export function aufraeumbareBranches({ refs, worktreeBranches, gemergteHeads }) 
     .map((r) => r.name);
 }
 
+/** Obergrenze der gelesenen gemergten PRs (Suchgrenze von `gh pr list`); wird sie erreicht, bleiben ältere Branches unberücksichtigt. */
+export const PR_LIMIT = 1000;
+
 /**
  * Räumt gemergte lokale Ticket-Branches auf (nur CLI, nie im Stop-Hook). `git(args)` und `gh()` sind injiziert (`gh` liefert die
  * gemergten PRs `[{ headRefName, headRefOid }]`). Ohne `loeschen` nur die Liste. Rückgabe `{ ok, grund?, kandidaten, geloescht, behalten, fehler }`.
@@ -528,5 +531,6 @@ export function branchesAufraeumen({ git, gh, loeschen = false }) {
       }
     }
   }
-  return { ok: fehler.length === 0, kandidaten, geloescht, behalten: refs.length - kandidaten.length, fehler };
+  const warnung = gemergteHeads.length >= PR_LIMIT ? `${PR_LIMIT} gemergte PRs gelesen (Suchgrenze): ältere [gone]-Branches bleiben unberücksichtigt.` : null;
+  return { ok: fehler.length === 0, kandidaten, geloescht, behalten: refs.length - kandidaten.length, fehler, warnung };
 }

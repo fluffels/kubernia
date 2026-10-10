@@ -1075,6 +1075,15 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       assert.equal(r.ok, true);
     });
 
+    test("Suchgrenze: genau PR_LIMIT gemergte PRs ergeben eine Warnung, eine weniger nicht", () => {
+      const PR_LIMIT = (cleanupModule as unknown as { PR_LIMIT: number }).PR_LIMIT;
+      const viele = (n: number) => () => Array.from({ length: n }, (_, i) => gemergt(`feature/kq-${100 + i}-x`));
+      const voll = aufbau(viele(PR_LIMIT));
+      assert.match((B.branchesAufraeumen({ git: voll.git, gh: voll.gh }) as { warnung: string | null }).warnung ?? "", /Suchgrenze/);
+      const knapp = aufbau(viele(PR_LIMIT - 1));
+      assert.equal((B.branchesAufraeumen({ git: knapp.git, gh: knapp.gh }) as { warnung: string | null }).warnung, null);
+    });
+
     test("gh scheitert: nichts gelöscht, ok false, Grund nennt gh", () => {
       const a = aufbau(() => {
         throw new Error("HTTP 502");
