@@ -948,6 +948,23 @@ describe("--beendet im Fehlerpfad (Z6c)", () => {
   });
 });
 
+describe("--beendet bei teilweise gesendeten Chunks (Z6c)", () => {
+  test("500 im zweiten Chunk mit --beendet: der Fortschritt bleibt, der aktuelle Stand und das Ende bleiben vermerkt (ohne --beendet bleibt groesse null)", async () => {
+    const viele = Array.from({ length: O.MAX_SPANS_JE_REQUEST + 1 }, (_, i) => msg(`m${i}`, i));
+    const a = aufbau(viele);
+    const jetzt = Date.now();
+    const t = new Date(jetzt - 3 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t, t);
+    const r = await lauf(a, mock({ ist: 0, otlpStatus: (n) => (n === 1 ? 500 : 200) }), { beendet: "s1" }, jetzt);
+    expect(r.exitCode).toBe(1);
+    const e = ledgerVon(a.ledger).s1;
+    expect(e.gesendet).toHaveLength(O.MAX_SPANS_JE_REQUEST);
+    expect(e).toMatchObject({ beendet: true, bestaetigt: false });
+    expect(e.groesse).toBeGreaterThan(0);
+    expect(e.mtime).toBe(t.getTime());
+  });
+});
+
 describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
   const Z = { baseUrl: "http://lf.test", publicKey: "pk", secretKey: "sk" };
   /** Ein Fetch, der nie antwortet und nur das Abbruch-Signal beachtet. */
