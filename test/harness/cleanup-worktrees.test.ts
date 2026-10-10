@@ -1028,11 +1028,12 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
   });
 
   test("parseBranchRefs: Tab-getrennt, [gone] erkannt, andere Tracking-Texte und kaputte Zeilen nicht", () => {
-    const text = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-2-b\t\t" + SHA_B, "feature/kq-3-c\t[ahead 2]\t" + SHA_A, "kaputt", "\t[gone]\t" + SHA_A, "feature/kq-4-d\t[gone]\tkurz", ""].join("\n");
+    const text = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-2-b\t\t" + SHA_B, "feature/kq-3-c\t[ahead 2]\t" + SHA_A, "feature/kq-6-f\tgone\t" + SHA_B, "kaputt", "\t[gone]\t" + SHA_A, "feature/kq-4-d\t[gone]\tkurz", ""].join("\n");
     assert.deepEqual(B.parseBranchRefs(text), [
       { name: "feature/kq-1-a", gone: true, sha: SHA_A },
       { name: "feature/kq-2-b", gone: false, sha: SHA_B },
       { name: "feature/kq-3-c", gone: false, sha: SHA_A },
+      { name: "feature/kq-6-f", gone: false, sha: SHA_B },
     ]);
   });
 

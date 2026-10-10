@@ -9,6 +9,11 @@
  * Fix-Modus (löscht Geister-Ordner + prunet git-Einträge):
  *   node scripts/cleanup-worktrees.mjs --fix
  *
+ * Lokale Branches nach dem Squash-Merge (#1579; Liste, mit `--fix` löschen; nie im Stop-Hook):
+ *   node scripts/cleanup-worktrees.mjs --branches [--fix]
+ * Gelöscht wird nur ein `feature/kq-<nr>…`-Branch, dessen Remote weg ist (`[gone]`), der in keinem Worktree ausgecheckt ist und dessen
+ * Spitze dem Kopf-Commit eines gemergten PR entspricht; scheitert `gh`, wird nichts gelöscht.
+ *
  * Geister = Ordner in .claude/worktrees/, die git worktree list nicht kennt.
  * Ursachen: git worktree remove ist auf Windows wegen laufendem Dev-Server
  * oder Shell-cwd-im-Worktree fehlgeschlagen (AGENTS.md Punkte 1-2). Seit #913
@@ -33,10 +38,13 @@
  * scripts/stop-verify-hook.mjs (#952).
  */
 
+import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { ghJson } from "./gh-cli.mjs";
 import {
   MIN_ORPHAN_AGE_MS,
+  branchesAufraeumen,
   diagnoseOrphans,
   entferneLensWorktrees,
   entferneVerwaisteDateien,
@@ -47,9 +55,27 @@ import {
 } from "./worktree-aufraeumen.mjs";
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
+
+/** `--branches [--fix]`: gemergte lokale Ticket-Branches aufräumen (#1579); ohne `--fix` nur die Liste. Nie im Stop-Hook. */
+function branchenModus(root, loeschen) {
+  const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  const gh = () => ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", "1000"]);
+  const r = branchesAufraeumen({ git, gh, loeschen });
+  if (r.grund) {
+    console.error(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${r.grund}`);
+    process.exit(1);
+  }
+  console.log(`Lokale feature/kq-*-Branches: ${r.kandidaten.length} gemergt und löschbar ([gone], nicht ausgecheckt, Spitze = gemergter PR-Kopf), ${r.behalten} bleiben.`);
+  for (const n of r.kandidaten) console.log(`  ${loeschen && r.geloescht.includes(n) ? "gelöscht" : "löschbar "} ${n}`);
+  if (!loeschen && r.kandidaten.length > 0) console.log("Zum Löschen: node scripts/cleanup-worktrees.mjs --branches --fix");
+  for (const f of r.fehler) console.error(`  ✗ ${f}`);
+  if (!r.ok) process.exit(1);
+}
+
 function main() {
   const FIX = process.argv.includes("--fix");
   const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+  if (process.argv.includes("--branches")) return branchenModus(ROOT, FIX);
 
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);
