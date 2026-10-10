@@ -1,5 +1,5 @@
-// Kein Shebang: wird über den Dispatcher `scripts/pretooluse-hook.mjs` (oder direkt per `node scripts/gh-guard-hook.mjs`)
-// gestartet UND von test/harness/gh-guard.test.ts importiert (ein `#!` bricht den Test-Import, wie bei worktree-guard-hook.mjs).
+// Kein Einstieg, kein Direktaufruf (#1579, Konvention #1398): Lib des Dispatchers `scripts/pretooluse-hook.mjs`, der einzige registrierte
+// PreToolUse-Hook; wird von ihm und von test/harness/gh-guard.test.ts importiert.
 /**
  * gh-Guard-Hook (#1311, Z5 aus #1204) — Claude-Code-`PreToolUse`-Hook für `Bash` und `PowerShell`.
  *
@@ -40,7 +40,7 @@
  *
  * Reines Node-Skript (nur Builtins). `bewerte` ist pur und exportiert.
  */
-import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { MAX_INTERPRETER, buildAskOutput, parseHookInput } from "./hook-io.mjs";
 import { quoteFolge } from "./quote-folge.mjs";
 import { INTERPRETER_NAMEN, SHELLS, SHELL_VON_TOOL, WRAPPER_NAMEN, baseName } from "./shell-tabellen.mjs";
 
@@ -447,11 +447,3 @@ function bewerteIntern(command, tiefe, kontext, d) {
 export function bewerte(command, { shell } = {}) {
   return bewerteIntern(command, 0, command, shell === "bash" || shell === "powershell" ? shell : "neutral");
 }
-
-function main() {
-  const { tool, command } = parseHookInput(readStdin());
-  if (tool !== undefined && !Object.hasOwn(SHELL_VON_TOOL, tool)) return;
-  emit(mergeDecisions([bewerte(command, { shell: tool === undefined ? undefined : SHELL_VON_TOOL[tool] })]));
-}
-
-if (istDirektaufruf(import.meta.url)) main();

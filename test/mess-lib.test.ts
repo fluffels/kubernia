@@ -111,7 +111,7 @@ describe("vereinigungsLaenge (#1579: eine Intervall-Vereinigung für Zeit und Ze
     expect(V.vereinigungsLaenge([[10, 0], [Number.NaN, 3], [0, 4]])).toBe(4);
     expect(V.vereinigungsLaenge([[10, 0], [Number.NaN, 3]], { geschlossen: true })).toBe(0);
   });
-  test.each(["patch-zugriff", "subagent-laufzeit"])("%s definiert keine eigene Vereinigung", (name) => {
+  test.each(["patch-zugriff", "subagent-laeufe"])("%s definiert keine eigene Vereinigung", (name) => {
     const src = readFileSync(new URL(`../scripts/${name}.mjs`, import.meta.url), "utf8");
     expect(src).toMatch(/vereinigungsLaenge/);
     expect(src).not.toMatch(/function vereinigung(Ms)?\(/);
