@@ -102,7 +102,7 @@ describe("vereinigungsLaenge (#1579: eine Intervall-Vereinigung für Zeit und Ze
     expect(V.vereinigungsLaenge([[0, 3], [3, 5]])).toBe(5);
     expect(V.vereinigungsLaenge([[0, 3], [4, 5]])).toBe(4);
   });
-  test("geschlossen (Zeilenbereiche): Anschluss zählt, Länge b-a+1", () => {
+  test("geschlossen (Zeilenbereiche): Länge b-a+1", () => {
     expect(V.vereinigungsLaenge([[1, 3], [4, 5]], { geschlossen: true })).toBe(5);
     expect(V.vereinigungsLaenge([[1, 3], [5, 6]], { geschlossen: true })).toBe(5);
     expect(V.vereinigungsLaenge([[7, 7]], { geschlossen: true })).toBe(1);

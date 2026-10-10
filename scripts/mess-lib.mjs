@@ -62,7 +62,7 @@ export function bereinige(text, { wurzel = null } = {}) {
 /**
  * Länge der Vereinigung von [a, b]-Intervallen (#1579): überlappende zählen einmal, ungültige (nicht endlich, b < a) werden
  * ignoriert. Standard halboffen (Zeit in ms: Länge b-a, ein Abstand ist eine Lücke, Anstoßen nicht); `geschlossen: true` für
- * Zeilenbereiche (Länge b-a+1, direkt anschließende Bereiche verschmelzen).
+ * Zeilenbereiche (Länge b-a+1, direkt anschließende Bereiche ergeben dieselbe Summe).
  */
 export function vereinigungsLaenge(intervalle, { geschlossen = false } = {}) {
   const plus = geschlossen ? 1 : 0;
@@ -70,7 +70,7 @@ export function vereinigungsLaenge(intervalle, { geschlossen = false } = {}) {
   let summe = 0;
   let cur = null;
   for (const [a, b] of s) {
-    if (!cur || a > cur[1] + plus) {
+    if (!cur || a > cur[1]) {
       if (cur) summe += cur[1] - cur[0] + plus;
       cur = [a, b];
     } else if (b > cur[1]) cur[1] = b;
