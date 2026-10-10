@@ -91,8 +91,6 @@ const IGNORED_DIRS = new Set([
  *  sonst lokal ungeprüft. test/docdrift.test.ts gleicht die Liste mit .gitignore ab. */
 export const VERSIONED_CLAUDE_DIRS = new Set(["agents", "skills", "workflows"]);
 
-// ── Markdown sammeln ───────────────────────────────────────────────────────────
-
 /** Alle *.md im Repo (repo-relativer POSIX-Pfad), IGNORED_DIRS ausgenommen; unter
  *  dem .claude im Repo-Root nur die VERSIONED_CLAUDE_DIRS (und keine losen Dateien direkt
  *  darin). Anders als früher (Basename-Match) gilt das nur für das Root-.claude. */

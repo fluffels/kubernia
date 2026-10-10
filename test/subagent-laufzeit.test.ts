@@ -235,7 +235,7 @@ describe("laufzeiten: Modelle und Transkriptdatei (#1580)", () => {
   });
   test("renderMarkdown: zwei Modelle stehen kommagetrennt in einer Zelle", () => {
     const md = S.renderMarkdown(S.laufzeiten({ laeufe: [mitModellen(["claude-sonnet-5-5", "claude-opus-5-5"])], agent: "kubernia-lens" }));
-    expect(md).toMatch(/| claude-opus-5-5, claude-sonnet-5-5 |/);
+    expect(md).toContain("| claude-opus-5-5, claude-sonnet-5-5 |");
   });
   test("renderMarkdown: Spalte Modellzeit und Spalte Modell (Name, `-` ohne Modell)", () => {
     const r = S.laufzeiten({ laeufe: [mitModellen(["claude-sonnet-5-5"]), mitModellen([])], agent: "kubernia-lens" });

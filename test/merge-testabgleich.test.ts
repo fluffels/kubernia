@@ -145,6 +145,24 @@ describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
     assert.match(r.text, /von main/);
   });
 
+  test("keine Merge-Basis (git merge-base scheitert): Exit 2 statt stillem Grün", () => {
+    const { root, g } = aufbau();
+    konfliktMerge(g);
+    const ohneBasis = (a: string[]) => {
+      if (a[0] === "merge-base") throw new Error("keine gemeinsame Basis");
+      return g(a);
+    };
+    const r = M.pruefeMerge({ git: ohneBasis, lies: lies(root) });
+    assert.equal(r.code, 2);
+    assert.match(r.text, /keine Merge-Basis/);
+  });
+
+  test("beide Seiten hatten den Titel, die Auflösung verliert ihn: je Seite eine Meldung", () => {
+    const D = "test/a.test.ts";
+    const r = M.verloreneTests({ basis: { [D]: quelle("a") }, unsere: { [D]: quelle("a", "t") }, ihre: { [D]: quelle("a", "t") }, ergebnis: { [D]: quelle("a") } });
+    assert.deepEqual(r.map((v) => v.seite).sort(), ["ihre", "unsere"]);
+  });
+
   test("kein Merge (HEAD hat ein Elternteil, kein MERGE_HEAD): Exit 2 mit Erklärung", () => {
     const { root, g } = aufbau();
     const r = M.pruefeMerge({ git: g, lies: lies(root) });

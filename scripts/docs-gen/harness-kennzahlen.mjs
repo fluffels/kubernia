@@ -1,6 +1,5 @@
 // Kein Shebang (siehe docs-gen.mjs). Generator `harness-kennzahlen` (#1579, ADR 0017): Zählbares des Harness aus versionierten Dateien
-// ableiten, damit `check:docgen` die Zahlen in README und docs/agent-harness.md aktuell hält (von Hand gezählt waren sie falsch:
-// 23 statt 22 ADRs, 65 statt 61 Wächter-Tests). Jede Zeile nennt ihre Zählregel; ein zusätzliches Skript, ein Wächter-Test, ein Workflow
+// ableiten, damit `check:docgen` die Zahlen in README und docs/agent-harness.md aktuell hält). Jede Zeile nennt ihre Zählregel; ein zusätzliches Skript, ein Wächter-Test, ein Workflow
 // oder ein ADR macht den Abschnitt veraltet, bis `npm run docs:gen` läuft. Harness-Stack: setzt npm und GitHub Actions voraus.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";

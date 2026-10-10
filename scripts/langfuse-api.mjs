@@ -4,7 +4,7 @@
  * der Abgleich läuft später als Hook, die gh-/git-Kette von `token-baseline.mjs` darf nicht mitkommen.
  */
 
-/** Frist je Anfrage (inklusive Lesen des Antworttexts): danach bricht der Aufruf ab, damit kein Lauf länger hängt als sein Lock. */
+/** Frist je Anfrage (das Signal gilt auch für das Lesen des Antworttexts; die lesbare Meldung gibt es nur für den Fetch selbst): danach bricht der Aufruf ab, damit kein Lauf länger hängt als sein Lock. */
 export const ANFRAGE_FRIST_MS = 30_000;
 
 /** `fetchImpl` mit Abbruch-Signal; ein Ablauf wirft einen Fehler mit lesbarer Meldung (ohne `status`). */

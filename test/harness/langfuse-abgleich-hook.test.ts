@@ -275,6 +275,31 @@ describe("Lock", () => {
     expect(readdirSync(join(d, "..")).filter((n) => n.includes("verwaist"))).toEqual([]);
   });
 
+  test("war der veraltete Lock zwischen Prüfung und Übernahme schon freigegeben (ohne neue Belegung): der Bewerber bekommt ihn als frei", () => {
+    const d = lockDatei();
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    const spaet = T0 + N.LOCK_VERALTET_MS + 1;
+    const b = N.lockNehmen(d, { now: spaet, pid: 12, nachPruefung: () => unlinkSync(d) });
+    expect(b).toBe("frei");
+    expect(pidVon(d)).toBe(12);
+  });
+
+  test("Grabsteine: ein alter (über 24 h) wird bei der nächsten Übernahme weggeräumt, ein junger bleibt", () => {
+    const d = lockDatei();
+    mkdirSync(join(d, ".."), { recursive: true });
+    const alt = d + ".verwaist-alt";
+    const jung = d + ".verwaist-jung";
+    writeFileSync(alt, "x");
+    writeFileSync(jung, "x");
+    const lange = new Date(T0 - 2 * 24 * 3_600_000);
+    utimesSync(alt, lange, lange);
+    utimesSync(jung, new Date(T0), new Date(T0));
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    N.lockNehmen(d, { now: T0 + N.LOCK_VERALTET_MS + 1, pid: 12 });
+    expect(existsSync(alt)).toBe(false);
+    expect(existsSync(jung)).toBe(true);
+  });
+
   test("lockMeldung: je Zustand ein eigener Text", () => {
     expect(N.lockMeldung("belegt")).toMatch(/hält den Lock/);
     expect(N.lockMeldung("fehler")).toMatch(/nicht anlegen/);

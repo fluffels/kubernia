@@ -992,6 +992,10 @@ describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
   test.each(aufrufe)("%s: ein Fetch, der nie antwortet, wirft nach der Frist mit lesbarer Meldung", async (_n, rufe) => {
     await expect(rufe({ ...Z, fetchImpl: haengt, fristMs: 20 })).rejects.toThrow(/antwortete nicht innerhalb von/);
   });
+  test.each(aufrufe)("%s: ein anderer Fetch-Fehler geht unverändert durch (keine Timeout-Meldung)", async (_n, rufe) => {
+    const fetchImpl: Fetch = () => Promise.reject(new TypeError("fetch failed"));
+    await expect(rufe({ ...Z, fetchImpl })).rejects.toThrow(/^fetch failed$/);
+  });
   test.each(aufrufe)("%s: der Fetch bekommt ein Abbruch-Signal", async (_n, rufe) => {
     let signal: AbortSignal | undefined;
     const fetchImpl: Fetch = (_url, init) => {

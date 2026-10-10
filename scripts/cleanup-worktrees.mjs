@@ -59,7 +59,11 @@ import {
 /** `--branches [--fix]`: gemergte lokale Ticket-Branches aufräumen (#1579); ohne `--fix` nur die Liste. Nie im Stop-Hook. */
 function branchenModus(root, loeschen) {
   const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
-  const gh = () => ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", "1000"]);
+  const gh = () => {
+    const prs = ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", "1000"]);
+    if (prs.length >= 1000) console.error("Warnung: 1000 gemergte PRs gelesen (Suchgrenze): ältere [gone]-Branches bleiben unberücksichtigt.");
+    return prs;
+  };
   const r = branchesAufraeumen({ git, gh, loeschen });
   if (r.grund) {
     console.error(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${r.grund}`);

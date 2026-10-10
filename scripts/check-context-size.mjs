@@ -34,7 +34,7 @@
  * Bewusst ein reines Node-Skript (nur Builtins + der Walk aus check-basis.mjs), analog zu
  * check-size.mjs.
  * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts importiert –
- * EINE Quelle der Wahrheit für Budget + Ausnahmen.
+ * EINE Quelle der Wahrheit für Budget (hier) und Ausnahmen (scripts/check-allowlists.mjs).
  *
  * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
  */

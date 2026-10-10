@@ -1,4 +1,4 @@
-// Kein Shebang, kein Direktaufruf: Lib für `naechstes-ticket.mjs`, `ticket-lock.mjs`, `cleanup-worktrees.mjs` und `lens-edit-guard.mjs` (#1572, #1579, Konvention #1398: Einstiegsskripte
+// Kein Shebang, kein Direktaufruf: Lib für `naechstes-ticket.mjs`, `ticket-lock.mjs`, `worktree-aufraeumen.mjs` und `lens-edit-guard.mjs` (#1572, #1579, Konvention #1398: Einstiegsskripte
 // importieren nicht voneinander, gemeinsamer Code steht in einer Lib). Rein, ohne Importe.
 
 /** Ticketnummer aus einem Branch-, Worktree- oder Ref-Namen `…feature/kq-<nr>-…` bzw. `…worktrees/kq-<nr>`; sonst null. Pur. */
