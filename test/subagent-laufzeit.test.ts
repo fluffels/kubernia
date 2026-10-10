@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/subagent-laufzeit.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
 
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[]; datei?: string };
@@ -231,6 +233,10 @@ describe("laufzeiten: Modelle und Transkriptdatei (#1580)", () => {
     expect(lauf1(mitModellen(["claude-opus-5-5"], "s1/subagents/agent-x.jsonl")).datei).toBe("s1/subagents/agent-x.jsonl");
     expect(lauf1(mitModellen(["claude-opus-5-5"])).datei).toBeNull();
   });
+  test("renderMarkdown: zwei Modelle stehen kommagetrennt in einer Zelle", () => {
+    const md = S.renderMarkdown(S.laufzeiten({ laeufe: [mitModellen(["claude-sonnet-5-5", "claude-opus-5-5"])], agent: "kubernia-lens" }));
+    expect(md).toMatch(/| claude-opus-5-5, claude-sonnet-5-5 |/);
+  });
   test("renderMarkdown: Spalte Modellzeit und Spalte Modell (Name, `-` ohne Modell)", () => {
     const r = S.laufzeiten({ laeufe: [mitModellen(["claude-sonnet-5-5"]), mitModellen([])], agent: "kubernia-lens" });
     const md = S.renderMarkdown(r);
@@ -242,7 +248,7 @@ describe("laufzeiten: Modelle und Transkriptdatei (#1580)", () => {
 });
 
 describe("ladeLaeufe: datei relativ zum Projektordner (#1580)", () => {
-  const L2 = raw as unknown as { ladeLaeufe: (dir: string, agent: string, von?: string) => { meta: { agentType: string }; datei: string }[] };
+  const L2 = rawLaeufe as unknown as { ladeLaeufe: (dir: string, agent: string, von?: string) => { meta: { agentType: string }; datei: string }[] };
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });

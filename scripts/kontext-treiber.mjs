@@ -16,7 +16,7 @@
  *    neu geschriebene Tokens × (Write-5m − Read-Preis), ohne Preisstufen.
  *  - Wartepausen (#1588): jede Lücke > 240 s zum Vorgänger-Call, mit Ursache wie beim Neuaufbau und Ticks = Lücke / 240 s abgerundet
  *    (so viele Wach-Calls hätte ein Keep-alive im 4-min-Takt gebraucht); eine Pause ist kein Neuaufbau, der Cache kann gehalten haben.
- * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laufzeit; wird selbst nicht importiert.
+ * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laeufe; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -27,7 +27,7 @@ import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
 import { bereinige, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
-import { ladeLaeufe, laufAus } from "./subagent-laufzeit.mjs";
+import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 
 const MIN = 60_000;
 const PAUSE_MS = 5 * MIN;
