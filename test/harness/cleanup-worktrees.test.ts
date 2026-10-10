@@ -989,7 +989,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
     parseBranchRefs: (text: string) => Ref[];
     worktreeBranchen: (porcelain: string) => Set<string>;
     aufraeumbareBranches: (o: { refs: Ref[]; worktreeBranches: Set<string> | string[]; gemergteHeads: Gemergt[] | null | undefined }) => string[];
-    branchesAufraeumen: (o: { git: (a: string[]) => string; gh: () => Gemergt[]; loeschen?: boolean }) => { ok: boolean; grund?: string; kandidaten: string[]; geloescht: string[]; behalten: number; fehler: string[] };
+    branchesAufraeumen: (o: { git: (a: string[]) => string; gh: () => Gemergt[]; loeschen?: boolean }) => { ok: boolean; grund?: string; kandidaten: string[]; geloescht: string[]; behalten: number; fehler: string[]; warnung?: string | null };
   };
   const SHA_A = "a".repeat(40);
   const SHA_B = "b".repeat(40);
@@ -1079,9 +1079,9 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       const PR_LIMIT = (cleanupModule as unknown as { PR_LIMIT: number }).PR_LIMIT;
       const viele = (n: number) => () => Array.from({ length: n }, (_, i) => gemergt(`feature/kq-${100 + i}-x`));
       const voll = aufbau(viele(PR_LIMIT));
-      assert.match((B.branchesAufraeumen({ git: voll.git, gh: voll.gh }) as { warnung: string | null }).warnung ?? "", /Suchgrenze/);
+      assert.match(B.branchesAufraeumen({ git: voll.git, gh: voll.gh }).warnung ?? "", /Suchgrenze/);
       const knapp = aufbau(viele(PR_LIMIT - 1));
-      assert.equal((B.branchesAufraeumen({ git: knapp.git, gh: knapp.gh }) as { warnung: string | null }).warnung, null);
+      assert.equal(B.branchesAufraeumen({ git: knapp.git, gh: knapp.gh }).warnung, null);
     });
 
     test("gh scheitert: nichts gelöscht, ok false, Grund nennt gh", () => {
