@@ -15,7 +15,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSy
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ladeSessionDatei } from "./transkript.mjs";
+import { hauptrepoPfad, ladeSessionDatei, projektSlug } from "./transkript.mjs";
 import {
   diffMultimenge,
   findeSessions,
@@ -23,11 +23,9 @@ import {
   istAbfragen,
   istAusMetrics,
   holeMetrics,
-  projektPraefix,
-  repoWurzel,
   scoreId,
   sollEintraege,
-} from "./langfuse-abgleich.mjs";
+} from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
 
@@ -176,7 +174,7 @@ async function verarbeite(s, c) {
   eintrag.gesendet = eintrag.gesendet.filter((id) => nochFehlend.has(id));
   let ok = true;
   if (sendbar.length) {
-    const { chunks } = bauePayloads(s.id, sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(repoWurzel(repoRoot)) });
+    const { chunks } = bauePayloads(s.id, sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(hauptrepoPfad(repoRoot)) });
     ok = await sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec });
   }
   rec.status = mehrdeutig ? "mehrdeutig" : ok ? "gesendet" : "Fehler";
@@ -242,7 +240,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), f
   const vorher = JSON.stringify(ledger);
   // resume: die Session läuft wieder, ein früheres SessionEnd gilt nicht mehr (sonst sendete der nächste Lauf nach der kurzen Ruhefrist mitten in die Session).
   if (args.aktuell && !args.trocken && ledger.sessions[args.aktuell]?.beendet) ledger.sessions[args.aktuell].beendet = false;
-  const sessions = findeSessions({ projectsRoot, praefix: projektPraefix(repoRoot), seitMs, sessionId: args.session });
+  const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
   for (const s of sessions) {
     protokoll.geprueft += 1;
     try {
@@ -403,7 +401,7 @@ export async function hookLauf(args, optionen) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const repoRoot = repoWurzel(fileURLToPath(new URL("..", import.meta.url)));
+  const repoRoot = hauptrepoPfad(fileURLToPath(new URL("..", import.meta.url)));
   const stateDir = join(homedir(), ".claude", "state");
   const lauf = (a, o) => nachliefern(a, { projectsRoot: join(homedir(), ".claude", "projects"), stateDir, repoRoot, ...o });
   if (args.ausloeser && !args.fehler) {

@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel (nur lesend, Hook-taugliche Import-Hülle), darum im geschützten test/harness/ (#1165).
  *
- * Die Logik lebt in scripts/langfuse-abgleich.mjs. Weder ~/.claude noch Langfuse werden angefasst: synthetisches JSONL
+ * Die Logik lebt in scripts/langfuse-abgleich.mjs (Bewertung, Bericht, CLI) und scripts/langfuse-abgleich-kern.mjs (IDs, Soll, Ist, Diff). Weder ~/.claude noch Langfuse werden angefasst: synthetisches JSONL
  * in einem Temp-Ordner, die Fetch-Schicht bekommt ein injiziertes `fetch`.
  *
  * Ausführen mit: npm test
@@ -14,7 +14,9 @@ import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawAbgleich from "../../scripts/langfuse-abgleich.mjs";
+import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawKern from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -31,15 +33,14 @@ type Obs = Record<string, unknown>;
 type Ist = { calls: number | null; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } | null };
 type Bewertung = { status: string; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>;
-const A = rawAbgleich as unknown as {
+// Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
+const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   RUHEFRIST_MIN: number;
   ROW_LIMIT: number;
   beobachtungsId: (s: string, m: string) => string;
   traceIdVon: (s: string) => string;
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
-  projektPraefix: (r: string) => string;
-  repoWurzel: (r: string) => string;
   findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number; groesse: number }[];
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
@@ -197,15 +198,6 @@ describe("Soll (pur)", () => {
 });
 
 describe("Session-Auswahl", () => {
-  test("Präfix und Wurzel eines Worktree-Pfads sind die des Hauptrepos (Aliase der gemeinsamen Ableitung)", () => {
-    expect(A.projektPraefix("X:/repo")).toBe(PRAEFIX);
-    expect(A.projektPraefix("X:\\repo\\.claude\\worktrees\\kq-1")).toBe(PRAEFIX);
-    expect(A.projektPraefix("X:/repo/")).toBe(PRAEFIX);
-    expect(A.repoWurzel("X:\\repo\\.claude\\worktrees\\kq-1")).toBe("X:\\repo");
-    expect(A.repoWurzel("X:/repo/")).toBe("X:/repo");
-    expect(A.repoWurzel("X:/repo")).toBe("X:/repo");
-  });
-
   test("fremder Projektordner wird nicht gelesen; Worktree-Ordner des Projekts schon; --seit filtert nach mtime, --session nicht", () => {
     const root = fixture({
       [`${PRAEFIX}/a.jsonl`]: msg("m"),

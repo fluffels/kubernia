@@ -7,7 +7,7 @@
  */
 
 import { priceParts, sumParts } from "./preise.mjs";
-import { subagentSpanId, traceIdVon } from "./langfuse-abgleich.mjs";
+import { subagentSpanId, traceIdVon } from "./langfuse-abgleich-kern.mjs";
 
 export const SCOPE_NAME = "kubernia-abgleich";
 export const TRACE_NAME = "Abgleich";

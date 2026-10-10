@@ -62,6 +62,7 @@
     "/scripts/langfuse-api.mjs",
     "/scripts/preise.mjs",
     "/scripts/transkript-calls.mjs",
+    "/scripts/langfuse-abgleich-kern.mjs",
     "/.agents/",
     "/.githooks/",
     "/docs/agent-harness*"

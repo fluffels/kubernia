@@ -93,6 +93,7 @@ AGENTS.md                  @fluffels
 /scripts/langfuse-api.mjs @fluffels
 /scripts/preise.mjs @fluffels
 /scripts/transkript-calls.mjs @fluffels
+/scripts/langfuse-abgleich-kern.mjs @fluffels
 /.agents/                  @fluffels
 /.githooks/                @fluffels
 /docs/agent-harness*       @fluffels
