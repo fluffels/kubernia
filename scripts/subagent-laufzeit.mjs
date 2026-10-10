@@ -18,27 +18,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { callsFromTranscript } from "./transkript-calls.mjs";
-import { median } from "./mess-lib.mjs";
+import { istEchtesModell, median, vereinigungsLaenge } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektSlug, transkriptZeilen } from "./transkript.mjs";
 import { patchAus, patchPfade } from "./patch-zugriff.mjs";
 
 const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
 const MIN = 60_000;
-
-/** Vereinigung von [von, bis]-Intervallen in Millisekunden (überlappende zählen einmal). */
-export function vereinigungMs(intervalle) {
-  const s = intervalle.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b >= a).sort((x, y) => x[0] - y[0]);
-  let summe = 0;
-  let cur = null;
-  for (const [a, b] of s) {
-    if (!cur || a > cur[1]) {
-      if (cur) summe += cur[1] - cur[0];
-      cur = [a, b];
-    } else if (b > cur[1]) cur[1] = b;
-  }
-  return summe + (cur ? cur[1] - cur[0] : 0);
-}
 
 /** Prompt des Laufs: Text der ersten Nutzerzeile. */
 function promptAus(zeilen) {
@@ -105,10 +91,10 @@ export function laufAus({ meta, zeilen, datei }) {
   const beschr = beschreibungAus(meta?.description);
   const patch = patchAus(prompt, zeilen);
   const erster = calls[0];
-  const tool = Math.min(vereinigungMs(intervalle), dauer);
+  const tool = Math.min(vereinigungsLaenge(intervalle), dauer);
   return {
     agentType: meta?.agentType ?? null,
-    modelle: [...new Set(calls.map((c) => c.model).filter(Boolean))].sort(),
+    modelle: [...new Set(calls.map((c) => c.model).filter(istEchtesModell))].sort(),
     datei: datei ?? null,
     beschreibung: typeof meta?.description === "string" ? meta.description : null,
     brille: beschr.brille,

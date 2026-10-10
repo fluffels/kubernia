@@ -103,31 +103,33 @@ function ursacheVon(vorher) {
   return "sonstiges";
 }
 
-function neuaufbauten(eintraege) {
+/** Aufeinanderfolgende Call-Paare (#1579): der Vorgänger-Eintrag, der Call und die Lücke zwischen beiden in Millisekunden. */
+function paare(eintraege) {
   const liste = [];
   for (let i = 1; i < eintraege.length; i++) {
-    const c = eintraege[i].call;
-    const gap = Date.parse(c.ts) - Date.parse(eintraege[i - 1].call.ts);
-    if (!istNeuaufbau({ gapMs: gap, pauseMs: PAUSE_MS, call: c })) continue;
-    const preis = priceFor(c.model, PRICES, c.ts);
-    liste.push({
-      ursache: ursacheVon(eintraege[i - 1]),
-      tokens: num(c.cacheWrite),
-      mehrkosten: preis ? (num(c.cacheWrite) * (preis.cacheWrite5m - preis.cacheRead)) / 1e6 : null,
-    });
+    liste.push({ vorher: eintraege[i - 1], call: eintraege[i].call, gapMs: Date.parse(eintraege[i].call.ts) - Date.parse(eintraege[i - 1].call.ts) });
   }
   return liste;
 }
 
+function neuaufbauten(eintraege) {
+  return paare(eintraege)
+    .filter(({ call, gapMs }) => istNeuaufbau({ gapMs, pauseMs: PAUSE_MS, call }))
+    .map(({ vorher, call }) => {
+      const preis = priceFor(call.model, PRICES, call.ts);
+      return {
+        ursache: ursacheVon(vorher),
+        tokens: num(call.cacheWrite),
+        mehrkosten: preis ? (num(call.cacheWrite) * (preis.cacheWrite5m - preis.cacheRead)) / 1e6 : null,
+      };
+    });
+}
+
 /** Lücken über 240 s zwischen zwei Calls (#1588): Ursache des Vorgängers, Sekunden, Ticks eines 4-min-Keep-alive. */
 function wartepausen(eintraege) {
-  const liste = [];
-  for (let i = 1; i < eintraege.length; i++) {
-    const gap = Date.parse(eintraege[i].call.ts) - Date.parse(eintraege[i - 1].call.ts);
-    if (!(gap > TICK_MS)) continue;
-    liste.push({ ursache: ursacheVon(eintraege[i - 1]), sekunden: Math.round(gap / 1000), ticks: Math.floor(gap / TICK_MS) });
-  }
-  return liste;
+  return paare(eintraege)
+    .filter(({ gapMs }) => gapMs > TICK_MS)
+    .map(({ vorher, gapMs }) => ({ ursache: ursacheVon(vorher), sekunden: Math.round(gapMs / 1000), ticks: Math.floor(gapMs / TICK_MS) }));
 }
 
 /** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. */
