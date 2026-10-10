@@ -23,6 +23,7 @@ import {
   istAbfragen,
   istAusMetrics,
   holeMetrics,
+  RUHEFRIST_MIN,
   scoreId,
   sollEintraege,
 } from "./langfuse-abgleich-kern.mjs";
@@ -38,7 +39,11 @@ export const RUHEFRIST_OHNE_ENDE_H = 24;
 export const RUHEFRIST_BEENDET_MS = 150_000;
 const LEDGER_NAME = "langfuse-abgleich.json";
 /** Zeitversatz zwischen dem Ende-Zeitpunkt des Hooks und der letzten Transkript-Änderung. */
-const ENDE_SCHLUPF_MS = 5_000;
+export const ENDE_SCHLUPF_MS = 5_000;
+/** Ein Ledger-`gesendet` gilt so lange als unterwegs (Ingestion-Verzug), danach wird ein noch fehlender Call erneut gesendet (die IDs sind deterministisch, eine Wiederholung ist ungefährlich). */
+export const GESENDET_ABLAUF_MS = 4 * RUHEFRIST_MIN * 60_000;
+/** Gesamtfrist eines Laufs: unter LOCK_VERALTET_MS (15 min), damit kein Lauf länger hängt als sein Lock; übrige Sessions folgen beim nächsten Lauf. */
+export const GESAMTFRIST_MS = 10 * 60_000;
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]";
 export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, im Hook zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe haben den Secret-Key nicht).";
@@ -119,7 +124,7 @@ function scoresFuer({ s, soll, observations, rest, ledgerGesendet, env }) {
   return scores;
 }
 
-async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec }) {
+async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec, now }) {
   for (const chunk of chunks) {
     try {
       await sendeOtlp(chunk.payload, { ...zugang, fetchImpl });
@@ -128,6 +133,7 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
       return false;
     }
     eintrag.gesendet.push(...chunk.generationIds);
+    for (const id of chunk.generationIds) eintrag.gesendetAm[id] = now;
     eintrag.spans.push(...chunk.spanIds);
     rec.gesendet += chunk.generationIds.length;
     protokoll.gesendet += chunk.generationIds.length;
@@ -141,26 +147,43 @@ async function verarbeite(s, c) {
   const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll } = c;
   const alt = ledger.sessions[s.id];
   const unveraendert = alt && alt.groesse === s.groesse && alt.mtime === s.mtime;
-  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null };
+  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false };
   protokoll.sessions.push(rec);
   if (args.aktuell === s.id) return Object.assign(rec, { status: "aktuell" });
   // Das SessionEnd-Kind wartet 3 min: wuchs das Transkript danach (resume), gilt das Ende nicht mehr und die laufende Session bleibt unberührt.
   const endeGilt = args.ende == null || s.mtime <= args.ende + ENDE_SCHLUPF_MS;
-  const endeBekannt = (args.beendet === s.id || args.session === s.id) && endeGilt;
+  const endeAngegeben = args.beendet === s.id || args.session === s.id;
+  const endeBekannt = endeAngegeben && endeGilt;
+  // Ob Claude Code nach dem SessionEnd-Hook noch länger ins Transkript schreibt, zeigt dieses Logfeld (sonst fiele jede Session still auf die 24-h-Frist zurück).
+  rec.endeVerworfen = endeAngegeben && !endeGilt;
   const beendet = endeBekannt || Boolean(alt?.beendet && unveraendert);
   const ruheMs = beendet ? RUHEFRIST_BEENDET_MS : RUHEFRIST_OHNE_ENDE_H * 3_600_000;
-  if (now - s.mtime < ruheMs) {
-    // Bekanntes Ende festhalten, sonst gälte beim nächsten Lauf (nach der Ruhefrist) wieder die 24-h-Frist.
-    if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: Boolean(alt?.bestaetigt && unveraendert), beendet: true };
-    return Object.assign(rec, { status: "läuft" });
-  }
+  // Bekanntes Ende vor jedem Fetch festhalten (auch wenn dieser wirft), sonst gälte beim nächsten Lauf wieder die 24-h-Frist.
+  if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: Boolean(alt?.bestaetigt && unveraendert), beendet: true };
+  if (now - s.mtime < ruheMs) return Object.assign(rec, { status: "läuft" });
   if (alt?.bestaetigt && unveraendert) return Object.assign(rec, { status: "bestätigt" });
+  // Sessions vor dem Stichtag und ohne Calls: der Vermerk spart bei unverändertem Stand das erneute Parsen und die Abfrage.
+  if (alt?.vermerk && unveraendert) return Object.assign(rec, { status: alt.vermerk });
+  const vermerke = (status) => {
+    if (!args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], gesendetAm: {}, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet, vermerk: status };
+  };
   const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id });
-  if (!soll.length) return Object.assign(rec, { status: "ohne Calls" });
+  if (!soll.length) {
+    vermerke("ohne Calls");
+    return Object.assign(rec, { status: "ohne Calls" });
+  }
   const vorStichtag = Math.min(...soll.map((e) => Date.parse(e.ts)).filter(Number.isFinite)) < Date.parse(STICHTAG);
+  if (vorStichtag) {
+    vermerke("vor Stichtag");
+    // Würde-senden-Zahl für den Bericht nur im ersten Lauf: der Vermerk überspringt die Abfrage bei unverändertem Stand.
+  }
   const { observations, diff } = await istUndDiff({ s, soll, zugang, now, fetchImpl });
   // Ein neu verarbeiteter Stand gilt erst nach Δ = 0 als bestätigt (auch wenn der alte Eintrag bestätigt war und die Session gewachsen ist).
   const eintrag = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet: beendet };
+  // Abgelaufene (oder ohne Zeitstempel aus einem Altbestand stammende) Einträge zählen nicht mehr als unterwegs: ein noch fehlender Call wird erneut gesendet.
+  const frisch = (id) => now - (eintrag.gesendetAm?.[id] ?? -Infinity) < GESENDET_ABLAUF_MS;
+  eintrag.gesendet = eintrag.gesendet.filter(frisch);
+  eintrag.gesendetAm = Object.fromEntries(eintrag.gesendet.map((id) => [id, eintrag.gesendetAm[id]]));
   const imLedger = new Set(eintrag.gesendet);
   const fehlend = diff?.fehlend ?? [];
   const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
@@ -173,16 +196,18 @@ async function verarbeite(s, c) {
   // Δ = 0 oder nichts mehr sendbar: nur bestätigen, wenn auch kein gesendeter Call mehr unterwegs ist.
   const nochFehlend = new Set(fehlend.map((e) => e.id));
   eintrag.gesendet = eintrag.gesendet.filter((id) => nochFehlend.has(id));
+  eintrag.gesendetAm = Object.fromEntries(eintrag.gesendet.map((id) => [id, eintrag.gesendetAm[id]]));
   let ok = true;
   if (sendbar.length) {
     const { chunks } = bauePayloads(s.id, sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(hauptrepoPfad(repoRoot)) });
-    ok = await sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec });
+    ok = await sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec, now });
   }
   rec.status = mehrdeutig ? "mehrdeutig" : ok ? "gesendet" : "Fehler";
   rec.ausstehend = eintrag.gesendet.length;
   if (!ok) {
     // Fortschritt nur für angenommene Chunks; nicht bestätigt, Stand nicht als aktuell vermerken.
-    if (eintrag.gesendet.length || eintrag.spans.length) ledger.sessions[s.id] = { ...eintrag, bestaetigt: false, groesse: alt?.groesse ?? null, mtime: alt?.mtime ?? null };
+    // Mit bekanntem Ende bleibt der aktuelle Stand vermerkt, damit der Folgelauf `beendet` wiedererkennt.
+    if (eintrag.gesendet.length || eintrag.spans.length) ledger.sessions[s.id] = { ...eintrag, bestaetigt: false, groesse: beendet ? s.groesse : (alt?.groesse ?? null), mtime: beendet ? s.mtime : (alt?.mtime ?? null) };
     return rec;
   }
   // Nichts sendbar und nichts mehr unterwegs (Δ = 0 oder nur Dubletten/mehrdeutig): bestätigt, neue Prüfung erst bei Transkript-Änderung.
@@ -210,8 +235,9 @@ function bericht(args, protokoll) {
   const p = protokoll;
   const zeilen = [`Nachliefern: ${p.geprueft} Session(s) geprüft, ${p.gesendet} Call(s) und ${p.spans} Subagent-Span(s) gesendet, ${p.dubletten} Dublette(n) (nur gemeldet), würde senden: ${p.wuerdeSenden}.`];
   for (const r of p.sessions.filter(zeigenswert)) {
-    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}`);
+    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}${r.endeVerworfen ? ", Ende verworfen (Transkript wuchs nach dem SessionEnd-Hook)" : ""}`);
   }
+  if (p.uebrig) zeilen.push(`Gesamtfrist von ${GESAMTFRIST_MS / 60_000} min erreicht: ${p.uebrig} Session(s) folgen beim nächsten Lauf.`);
   for (const f of p.fehler) zeilen.push(`FEHLER ${f.session.slice(0, 8)} (HTTP ${f.status ?? "–"}): ${f.meldung}`);
   return zeilen.join("\n");
 }
@@ -220,8 +246,8 @@ function bericht(args, protokoll) {
  * Nachliefern ausführen: `{ exitCode, text, protokoll }`. 0 = Bericht, 1 = mindestens ein Fehler (übrige Sessions liefen weiter),
  * 2 = Aufruf oder Zugang fehlt (vor jedem Request).
  */
-export async function nachliefern(args, { env = process.env, now = Date.now(), fetchImpl = fetch, projectsRoot, repoRoot, stateDir } = {}) {
-  const protokoll = { zugang: null, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] };
+export async function nachliefern(args, { env = process.env, now = Date.now(), uhr = Date.now, fetchImpl = fetch, projectsRoot, repoRoot, stateDir } = {}) {
+  const protokoll = { zugang: null, geprueft: 0, uebrig: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] };
   if (args.fehler) return { exitCode: 2, text: `${args.fehler}\n${AUFRUFHILFE}`, protokoll };
   const seitMs = args.seit ? Date.parse(args.seit) : now - 7 * 86_400_000;
   if (!Number.isFinite(seitMs)) return { exitCode: 2, text: `--seit ist keine ISO-Zeit: ${args.seit}\n${AUFRUFHILFE}`, protokoll };
@@ -240,7 +266,13 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), f
   // resume: die Session läuft wieder, ein früheres SessionEnd gilt nicht mehr (sonst sendete der nächste Lauf nach der kurzen Ruhefrist mitten in die Session).
   if (args.aktuell && !args.trocken && ledger.sessions[args.aktuell]?.beendet) ledger.sessions[args.aktuell].beendet = false;
   const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
-  for (const s of sessions) {
+  // Gesamtfrist: nach GESAMTFRIST_MS beginnt keine weitere Session; die übrigen folgen beim nächsten Lauf.
+  const start = uhr();
+  for (const [i, s] of sessions.entries()) {
+    if (uhr() - start > GESAMTFRIST_MS) {
+      protokoll.uebrig = sessions.length - i;
+      break;
+    }
     protokoll.geprueft += 1;
     try {
       await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll });

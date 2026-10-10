@@ -12,6 +12,8 @@ import { istProjektOrdner } from "./transkript.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 
+/** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
+export const RUHEFRIST_MIN = 30;
 /** Obergrenze der Metrics-Zeilen; wird sie erreicht, ist das Ergebnis abgeschnitten (fail-closed, nie still kürzen). */
 export const ROW_LIMIT = 1000;
 

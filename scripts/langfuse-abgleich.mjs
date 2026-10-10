@@ -24,6 +24,7 @@ import { ladeSessionDatei, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import {
   ROW_LIMIT,
+  RUHEFRIST_MIN,
   diffMultimenge,
   findeSessions,
   gleich,
@@ -36,8 +37,6 @@ import {
   summe,
 } from "./langfuse-abgleich-kern.mjs";
 
-/** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
-export const RUHEFRIST_MIN = 30;
 const FEHLEND_ANZEIGE = 20;
 
 /**

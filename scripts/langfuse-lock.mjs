@@ -132,11 +132,11 @@ export function logAnhaengen(datei, eintrag, { max = LOG_MAX_BYTES } = {}) {
 }
 
 /** Gehört die Session-Zeile in Bericht und Log (etwas gesendet, gefunden oder schiefgegangen)? */
-export const zeigenswert = (x) => x.gesendet || x.wuerdeSenden || x.dubletten || x.ausstehend || x.befund || x.status === "Fehler" || x.status === "mehrdeutig";
+export const zeigenswert = (x) => x.gesendet || x.wuerdeSenden || x.dubletten || x.ausstehend || x.befund || x.endeVerworfen || x.status === "Fehler" || x.status === "mehrdeutig";
 
 /** Die Logzeile eines Laufs aus dem `protokoll` (ohne Protokoll, z.B. Lock belegt: Nullwerte). Keine Zugangswerte, nur ja/nein. */
 export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, protokoll = null, fehler = [] }) {
-  const p = protokoll ?? { zugang: null, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] };
+  const p = protokoll ?? { zugang: null, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [], uebrig: 0 };
   const kurz = (f) => ({ ...f, meldung: String(f.meldung ?? "").slice(0, 300) });
   return {
     zeit,
@@ -150,7 +150,8 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
     spans: p.spans,
     dubletten: p.dubletten,
     wuerdeSenden: p.wuerdeSenden,
-    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, ausstehend: r.ausstehend })),
+    uebrig: p.uebrig ?? 0,
+    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, ausstehend: r.ausstehend, endeVerworfen: Boolean(r.endeVerworfen) })),
     fehler: [...p.fehler, ...fehler].map(kurz),
   };
 }

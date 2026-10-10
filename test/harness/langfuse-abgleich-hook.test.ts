@@ -342,12 +342,22 @@ describe("Log", () => {
       fehler: [{ session: "s1", status: 500, meldung: "x".repeat(400) }],
     };
     const e = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 1, protokoll });
-    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "session", "sessions", "spans", "wuerdeSenden", "zeit", "zugang"]);
+    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "session", "sessions", "spans", "uebrig", "wuerdeSenden", "zeit", "zugang"]);
     expect(e).toMatchObject({ zugang: true, geprueft: 3, gesendet: 2, dubletten: 1, exitCode: 1 });
     expect(e.sessions).toHaveLength(1);
     expect(e.fehler[0].meldung).toHaveLength(300);
     expect(e.fehler[0]).toMatchObject({ status: 500 });
     expect(N.logEintrag({ zeit: "Z", ausloeser: "sessionstart", session: null, lock: "belegt" })).toMatchObject({ zugang: null, geprueft: 0, gesendet: 0, sessions: [], fehler: [], exitCode: null });
+  });
+});
+
+describe("Log: Ende verworfen (#1579)", () => {
+  test("eine Session mit verworfenem Ende steht im Log, auch wenn sonst nichts zu melden ist; ohne das Feld bleibt sie draußen", () => {
+    const sess = (endeVerworfen: boolean) => ({ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, befund: null, endeVerworfen });
+    const mit = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(true)], fehler: [] } });
+    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, endeVerworfen: true }]);
+    const ohne = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(false)], fehler: [] } });
+    expect(ohne.sessions).toEqual([]);
   });
 });
 

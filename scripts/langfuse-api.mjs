@@ -4,6 +4,21 @@
  * der Abgleich läuft später als Hook, die gh-/git-Kette von `token-baseline.mjs` darf nicht mitkommen.
  */
 
+/** Frist je Anfrage (inklusive Lesen des Antworttexts): danach bricht der Aufruf ab, damit kein Lauf länger hängt als sein Lock. */
+export const ANFRAGE_FRIST_MS = 30_000;
+
+/** `fetchImpl` mit Abbruch-Signal; ein Ablauf wirft einen Fehler mit lesbarer Meldung (ohne `status`). */
+async function mitFrist(fetchImpl, url, init, fristMs) {
+  try {
+    return await fetchImpl(url, { ...init, signal: AbortSignal.timeout(fristMs) });
+  } catch (e) {
+    if (e?.name === "TimeoutError" || e?.name === "AbortError") {
+      throw new Error(`Langfuse antwortete nicht innerhalb von ${Math.round(fristMs / 1000)} s (${new URL(url).pathname})`, { cause: e });
+    }
+    throw e;
+  }
+}
+
 const zahl = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 /**
@@ -29,11 +44,10 @@ async function wirfHttp(res) {
 }
 
 /** Eine Metrics-Abfrage (v2, nur lesend: GET) → die Zeilen `data`. `fetchImpl` ist für Tests injizierbar. */
-export async function queryMetrics(query, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
+export async function queryMetrics(query, { baseUrl, publicKey, secretKey, fetchImpl = fetch, fristMs = ANFRAGE_FRIST_MS }) {
   const auth = "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
-  const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/metrics?query=${encodeURIComponent(JSON.stringify(query))}`, {
-    headers: { Authorization: auth },
-  });
+  const url = `${baseUrl.replace(/\/$/, "")}/api/public/v2/metrics?query=${encodeURIComponent(JSON.stringify(query))}`;
+  const res = await mitFrist(fetchImpl, url, { headers: { Authorization: auth } }, fristMs);
   await wirfHttp(res);
   const body = await res.json();
   return body.data ?? [];
@@ -42,7 +56,7 @@ export async function queryMetrics(query, { baseUrl, publicKey, secretKey, fetch
 /** Alle Observations einer Session über die v2-API holen (cursor-paginiert). */
 export async function fetchSessionObservations(
   sessionId,
-  { baseUrl, publicKey, secretKey, fetchImpl = fetch, type, name, fields = "core,basic,model,usage,metadata" },
+  { baseUrl, publicKey, secretKey, fetchImpl = fetch, fristMs = ANFRAGE_FRIST_MS, type, name, fields = "core,basic,model,usage,metadata" },
 ) {
   const auth = "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
   const out = [];
@@ -52,9 +66,7 @@ export async function fetchSessionObservations(
     if (type) q.set("type", type);
     if (name) q.set("name", name);
     if (cursor) q.set("cursor", cursor);
-    const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/observations?${q}`, {
-      headers: { Authorization: auth },
-    });
+    const res = await mitFrist(fetchImpl, `${baseUrl.replace(/\/$/, "")}/api/public/v2/observations?${q}`, { headers: { Authorization: auth } }, fristMs);
     await wirfHttp(res);
     const body = await res.json();
     out.push(...(body.data ?? []));
@@ -69,12 +81,17 @@ const basisAuth = ({ publicKey, secretKey }) => "Basic " + Buffer.from(`${public
  * Spans per OTLP/HTTP-JSON senden (einziger Schreibweg des Nachlieferers; Version 4 = observation-zentrierte Ingestion).
  * Wirft mit `.status` bei HTTP-Fehler und bei `partialSuccess.rejectedSpans > 0` (die Ingestion lehnte Spans ab).
  */
-export async function sendeOtlp(payload, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
-  const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/otel/v1/traces`, {
-    method: "POST",
-    headers: { Authorization: basisAuth({ publicKey, secretKey }), "Content-Type": "application/json", "x-langfuse-ingestion-version": "4" },
-    body: JSON.stringify(payload),
-  });
+export async function sendeOtlp(payload, { baseUrl, publicKey, secretKey, fetchImpl = fetch, fristMs = ANFRAGE_FRIST_MS }) {
+  const res = await mitFrist(
+    fetchImpl,
+    `${baseUrl.replace(/\/$/, "")}/api/public/otel/v1/traces`,
+    {
+      method: "POST",
+      headers: { Authorization: basisAuth({ publicKey, secretKey }), "Content-Type": "application/json", "x-langfuse-ingestion-version": "4" },
+      body: JSON.stringify(payload),
+    },
+    fristMs,
+  );
   await wirfHttp(res);
   const text = await res.text();
   let body;
@@ -89,12 +106,13 @@ export async function sendeOtlp(payload, { baseUrl, publicKey, secretKey, fetchI
 }
 
 /** Einen Score anlegen oder (bei gleicher `id`) überschreiben. */
-export async function sendeScore(score, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
-  const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/scores`, {
-    method: "POST",
-    headers: { Authorization: basisAuth({ publicKey, secretKey }), "Content-Type": "application/json" },
-    body: JSON.stringify(score),
-  });
+export async function sendeScore(score, { baseUrl, publicKey, secretKey, fetchImpl = fetch, fristMs = ANFRAGE_FRIST_MS }) {
+  const res = await mitFrist(
+    fetchImpl,
+    `${baseUrl.replace(/\/$/, "")}/api/public/scores`,
+    { method: "POST", headers: { Authorization: basisAuth({ publicKey, secretKey }), "Content-Type": "application/json" }, body: JSON.stringify(score) },
+    fristMs,
+  );
   await wirfHttp(res);
 }
 
