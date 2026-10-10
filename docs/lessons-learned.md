@@ -27,7 +27,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Was geschah:** Ein Abgleich von Transkript und Langfuse fand 2026-10-07/08, dass 28 von 38 Sessions in Langfuse ganz fehlten ([#1517](https://github.com/fluffels/kubernia/issues/1517)). Wer nur Langfuse las, maß ein Bruchstück.
 
-**Geändert:** Der Abgleich je Call kam in drei Teilen ([#1562](https://github.com/fluffels/kubernia/issues/1562), [#1565](https://github.com/fluffels/kubernia/issues/1565), [#1566](https://github.com/fluffels/kubernia/issues/1566)). Seit dem Stichtag 2026-10-07 liefert der Abgleich nach, die Messregel „nur Transkript-Modus“ entfällt dafür; davor bleibt das Transkript die Referenz.
+**Geändert:** Der Abgleich je Call kam in drei Teilen ([#1562](https://github.com/fluffels/kubernia/issues/1562), [#1565](https://github.com/fluffels/kubernia/issues/1565), [#1566](https://github.com/fluffels/kubernia/issues/1566)). Seit dem [Stichtag](langfuse-hook-patch.md#abgleich-als-garantie-1578) liefert der Abgleich nach, die Messregel „nur Transkript-Modus“ entfällt dafür; davor bleibt das Transkript die Referenz.
 
 **Beleg:** Spalte „Datenvollständigkeit“ der [Verdichtungstabelle](model-routing.md#langfuse-status-überprüfen-1293).
 

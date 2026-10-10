@@ -424,7 +424,7 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     const nenntStichtag = (doku: string, d: string): boolean => new RegExp(`\\*\\*Stichtag:\\*\\*[^\\n]*${d}`).test(doku);
     assert.ok(nenntStichtag(hp, datum), `docs/langfuse-hook-patch.md nennt in der Stichtag-Zeile nicht ${datum}`);
     // darf NICHT passieren: Konstante und Doku laufen auseinander
-    assert.ok(!nenntStichtag(hp, stichtag('export const STICHTAG = "2099-01-01T00:00:00Z";')));
+    assert.ok(!nenntStichtag(hp, "2026-10-09"), "das frühere Datum darf nicht mehr in der Stichtag-Zeile stehen");
   });
 
   test("Abschluss fortgesetzter Subagenten ist erklärt: task-id-Regel, Selbstheilung, SessionEnd, Diagnose (#1378)", () => {
