@@ -19,6 +19,10 @@ describe("ticketAusLauf", () => {
     const prompt = "Brille: schon erledigt durch #1349 … Patch: C:/tmp/kq-1580-r1.patch · erwarteter HEAD: abc";
     expect(A.ticketAusLauf({ patch: { ticket: 1580 }, prompt })).toBe(1580);
   });
+  test("Reihenfolge: der Patch-Pfad schlägt einen Worktree-Pfad im Prompt", () => {
+    const prompt = "Arbeitsverzeichnis: C:/x/.claude/worktrees/kq-1111 · Patch: /tmp/kq-1580-r1.patch";
+    expect(A.ticketAusLauf({ patch: { ticket: 1580 }, prompt })).toBe(1580);
+  });
   test("Diät-Überschrift (#1034) plus Lens-Worktree: der Worktree gibt das Ticket", () => {
     const prompt = "Kontext-Diät (#1034) · Arbeitsverzeichnis: C:/x/.claude/worktrees/kq-1582-lens-r1 · Brille #907";
     expect(A.ticketAusLauf({ patch: null, prompt })).toBe(1582);
