@@ -417,6 +417,16 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.ok(!patchDokuStimmig(hp.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 26));
   });
 
+  test("die Doku nennt das Datum des Stichtags aus langfuse-nachliefern.mjs (Drift Doku <-> Konstante)", () => {
+    const stichtag = (skript: string): string => /export const STICHTAG = "(\d{4}-\d{2}-\d{2})T/.exec(skript)?.[1] ?? "";
+    const datum = stichtag(read("scripts/langfuse-nachliefern.mjs"));
+    assert.match(datum, /^\d{4}-\d{2}-\d{2}$/);
+    const nenntStichtag = (doku: string, d: string): boolean => new RegExp(`\\*\\*Stichtag:\\*\\*[^\\n]*${d}`).test(doku);
+    assert.ok(nenntStichtag(hp, datum), `docs/langfuse-hook-patch.md nennt in der Stichtag-Zeile nicht ${datum}`);
+    // darf NICHT passieren: Konstante und Doku laufen auseinander
+    assert.ok(!nenntStichtag(hp, stichtag('export const STICHTAG = "2099-01-01T00:00:00Z";')));
+  });
+
   test("Abschluss fortgesetzter Subagenten ist erklärt: task-id-Regel, Selbstheilung, SessionEnd, Diagnose (#1378)", () => {
     assert.ok(resumeAbschlussDokuStimmig(hp));
     // darf NICHT passieren: ein Baustein fehlt
