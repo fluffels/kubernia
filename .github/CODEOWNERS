@@ -94,6 +94,7 @@ AGENTS.md                  @fluffels
 /scripts/preise.mjs @fluffels
 /scripts/transkript-calls.mjs @fluffels
 /scripts/langfuse-abgleich-kern.mjs @fluffels
+/scripts/langfuse-lock.mjs @fluffels
 /.agents/                  @fluffels
 /.githooks/                @fluffels
 /docs/agent-harness*       @fluffels

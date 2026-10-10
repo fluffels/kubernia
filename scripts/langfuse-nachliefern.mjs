@@ -11,9 +11,9 @@
  * (Hook-Verdrahtung: #1578, Einstieg scripts/langfuse-abgleich-hook.mjs; mit --ausloeser laufen Wartezeit, Lock und Log, ohne nur Lock und Log). Aufruf: docs/referenz/befehle.md, Einordnung: docs/model-routing.md › Checkliste Punkt 1.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { hauptrepoPfad, ladeSessionDatei, projektSlug } from "./transkript.mjs";
 import {
@@ -28,6 +28,7 @@ import {
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
+import { gesperrterLauf, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
 
 /** Sessions mit einem Call vor diesem Zeitpunkt (Hook-Aufzeichnung davor unvollständig, nicht vergleichbar) werden nur gezählt. */
 export const STICHTAG = "2026-10-09T13:27:35Z";
@@ -204,8 +205,6 @@ async function verarbeite(s, c) {
 
 // ── Ablauf ───────────────────────────────────────────────────────────────────
 
-const zeigenswert = (x) => x.gesendet || x.wuerdeSenden || x.dubletten || x.ausstehend || x.befund || x.status === "Fehler" || x.status === "mehrdeutig";
-
 function bericht(args, protokoll) {
   if (args.json) return JSON.stringify(protokoll, null, 2);
   const p = protokoll;
@@ -258,138 +257,10 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), f
   return { exitCode: protokoll.fehler.length ? 1 : 0, text: bericht(args, protokoll), protokoll };
 }
 
-// ── Hook-Betrieb: Lock, Log, Wartezeit (#1578) ─────────────────────────────────
+// ── Hook-Betrieb: Wartezeit, Lock und Log (#1578; Lock und Log: langfuse-lock.mjs) ─────
 
 /** Nach SessionEnd zuerst warten: Plugin-Flush und Ingestion-Verzug. Muss länger sein als RUHEFRIST_BEENDET_MS, sonst gälte die Session beim Lauf noch als laufend. */
 export const WARTE_SESSIONEND = 180_000;
-/** Belegter Lock an SessionEnd: einmal nach dieser Zeit erneut versuchen (`/clear` löst SessionEnd und SessionStart fast gleichzeitig aus). */
-export const WARTE_LOCK = 60_000;
-export const LOCK_VERALTET_MS = 15 * 60_000;
-export const LOG_MAX_BYTES = 1_048_576;
-const LOCK_NAME = "langfuse-abgleich.lock";
-const LOG_NAME = "langfuse-abgleich.log";
-const warte = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function lockVeraltet(datei, now) {
-  try {
-    const zeit = JSON.parse(readFileSync(datei, "utf8"))?.zeit;
-    if (Number.isFinite(zeit)) return now - zeit > LOCK_VERALTET_MS;
-  } catch {
-    // kaputter Inhalt: dann zählt die Änderungszeit
-  }
-  try {
-    return now - statSync(datei).mtimeMs > LOCK_VERALTET_MS;
-  } catch {
-    return true; // inzwischen weg
-  }
-}
-
-/** `"frei"` (neu angelegt), `"übernommen"` (veralteten Lock ersetzt) oder `"belegt"`. Anlage atomar per `wx` mit pid und Zeit. */
-export function lockNehmen(datei, { now = Date.now(), pid = process.pid } = {}) {
-  mkdirSync(dirname(datei), { recursive: true });
-  const versuch = () => {
-    try {
-      writeFileSync(datei, JSON.stringify({ pid, zeit: now }), { flag: "wx" });
-      return true;
-    } catch (e) {
-      if (e.code === "EEXIST") return false;
-      throw e;
-    }
-  };
-  if (versuch()) return "frei";
-  if (!lockVeraltet(datei, now)) return "belegt";
-  try {
-    unlinkSync(datei);
-  } catch {
-    // ein anderer Lauf war schneller: der zweite wx entscheidet
-  }
-  return versuch() ? "übernommen" : "belegt";
-}
-
-/** Gibt den Lock nur frei, wenn er die eigene pid trägt (ein übernommener Lock gehört einem anderen Lauf). */
-export function lockFreigeben(datei, pid = process.pid) {
-  try {
-    if (JSON.parse(readFileSync(datei, "utf8"))?.pid === pid) unlinkSync(datei);
-  } catch {
-    // weg oder kaputt: nichts zu tun
-  }
-}
-
-/** Hängt `eintrag` als eine JSON-Zeile an; ab `max` Bytes wandert die Datei vorher nach `<datei>.1` (eine ältere `.1` wird ersetzt). */
-export function logAnhaengen(datei, eintrag, { max = LOG_MAX_BYTES } = {}) {
-  mkdirSync(dirname(datei), { recursive: true });
-  try {
-    if (statSync(datei).size >= max) renameSync(datei, `${datei}.1`);
-  } catch {
-    // keine Datei: die erste Zeile legt sie an
-  }
-  appendFileSync(datei, JSON.stringify(eintrag) + "\n");
-}
-
-/** Die Logzeile eines Laufs aus dem `protokoll` (ohne Protokoll, z.B. Lock belegt: Nullwerte). Keine Zugangswerte, nur ja/nein. */
-export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, protokoll = null, fehler = [] }) {
-  const p = protokoll ?? { zugang: null, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] };
-  const kurz = (f) => ({ ...f, meldung: String(f.meldung ?? "").slice(0, 300) });
-  return {
-    zeit,
-    ausloeser,
-    session: session ?? null,
-    lock,
-    zugang: p.zugang,
-    exitCode,
-    geprueft: p.geprueft,
-    gesendet: p.gesendet,
-    spans: p.spans,
-    dubletten: p.dubletten,
-    wuerdeSenden: p.wuerdeSenden,
-    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, ausstehend: r.ausstehend })),
-    fehler: [...p.fehler, ...fehler].map(kurz),
-  };
-}
-
-/**
- * Ein Lauf unter Lock mit Logzeile: `{ lock, ergebnis }` (`ergebnis` null, wenn der Lock belegt blieb oder der Lauf abstürzte). `wiederholen`: bei belegtem
- * Lock einmal nach WARTE_LOCK erneut versuchen. Ein Absturz in `lauf` wird protokolliert, der Lock im `finally` freigegeben.
- */
-export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederholen = false, schlafen = warte, uhr = Date.now, pid = process.pid }) {
-  const lockDatei = join(stateDir, LOCK_NAME);
-  const basis = { ausloeser, session: args.session ?? args.aktuell ?? null, lock: null };
-  const logge = (extra) => {
-    try {
-      logAnhaengen(join(stateDir, LOG_NAME), logEintrag({ zeit: new Date(uhr()).toISOString(), ...basis, ...extra }));
-    } catch {
-      // Ein Logfehler darf den Lauf nie kippen.
-    }
-  };
-  const nimm = () => {
-    try {
-      return lockNehmen(lockDatei, { now: uhr(), pid });
-    } catch (e) {
-      basis.fehler = [{ session: basis.session, status: null, meldung: `Lock: ${e.message}` }];
-      return "fehler"; // ein unlesbarer Zustandsordner: kein Lauf, aber nie ein Wurf
-    }
-  };
-  let lock = nimm();
-  if (lock === "belegt" && wiederholen) {
-    await schlafen(WARTE_LOCK);
-    lock = nimm();
-  }
-  basis.lock = lock;
-  if (lock === "belegt" || lock === "fehler") {
-    logge({ fehler: basis.fehler });
-    return { lock, ergebnis: null };
-  }
-  try {
-    const ergebnis = await lauf(args, { now: uhr() });
-    logge({ exitCode: ergebnis.exitCode, protokoll: ergebnis.protokoll });
-    return { lock, ergebnis };
-  } catch (e) {
-    logge({ exitCode: 1, fehler: [{ session: basis.session, status: null, meldung: e.message }] });
-    return { lock, ergebnis: null };
-  } finally {
-    lockFreigeben(lockDatei, pid);
-  }
-}
 
 /** Hook-Lauf: SessionEnd wartet zuerst WARTE_SESSIONEND (der Lauf misst die Ruhe danach) und versucht einen belegten Lock einmal erneut. */
 export async function hookLauf(args, optionen) {
@@ -417,7 +288,7 @@ async function main() {
   }
   const { lock, ergebnis } = await gesperrterLauf(args, { stateDir, lauf, ausloeser: "manuell" });
   if (!ergebnis) {
-    console.error(lock === "belegt" ? "Ein anderer Nachlieferlauf hält den Lock (~/.claude/state/langfuse-abgleich.lock); später erneut versuchen." : lock === "fehler" ? "Der Lock ließ sich nicht anlegen: ~/.claude/state prüfen." : "Nachliefern abgestürzt, siehe ~/.claude/state/langfuse-abgleich.log.");
+    console.error(lockMeldung(lock));
     process.exitCode = 1;
     return;
   }

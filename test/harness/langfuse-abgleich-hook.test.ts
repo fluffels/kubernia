@@ -9,7 +9,7 @@
  * Ausführen mit: npm test
  */
 import { describe, expect, test } from "vitest";
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fixture } from "../support/tmp-fixture";
@@ -17,7 +17,9 @@ import { fixture } from "../support/tmp-fixture";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawHook from "../../scripts/langfuse-abgleich-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
+import * as rawNachEinstieg from "../../scripts/langfuse-nachliefern.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLock from "../../scripts/langfuse-lock.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawIo from "../../scripts/hook-io.mjs";
 
@@ -35,13 +37,15 @@ const H = rawHook as unknown as {
   starte: (t: string, o: { spawn: (...a: unknown[]) => Kind; env?: Record<string, string>; execPath?: string; home?: string }) => boolean;
 };
 type Kind = { on: (e: string, f: () => void) => void; unref: () => void };
-const N = rawNach as unknown as {
+// Wartezeit und hookLauf im Einstieg, Lock, Log und gesperrterLauf in der Lib langfuse-lock.mjs.
+const N = { ...rawNachEinstieg, ...rawLock } as unknown as {
   RUHEFRIST_BEENDET_MS: number;
   WARTE_SESSIONEND: number;
   WARTE_LOCK: number;
   LOCK_VERALTET_MS: number;
   parseArgs: (a: string[]) => Args;
-  lockNehmen: (d: string, o: { now: number; pid: number }) => "frei" | "übernommen" | "belegt";
+  lockNehmen: (d: string, o: { now: number; pid: number; nachPruefung?: () => void }) => "frei" | "übernommen" | "belegt";
+  lockMeldung: (lock: string) => string;
   lockFreigeben: (d: string, pid: number) => void;
   logAnhaengen: (d: string, e: unknown, o?: { max: number }) => void;
   logEintrag: (o: Record<string, unknown>) => Log;
@@ -247,6 +251,35 @@ describe("Lock", () => {
     const alt = new Date(Date.now() - 20 * MIN);
     utimesSync(d, alt, alt);
     expect(N.lockNehmen(d, { now: Date.now(), pid: 12 })).toBe("übernommen");
+  });
+
+  test("TOCTOU: zwei Bewerber sehen denselben veralteten Lock, genau einer gewinnt und der frische Lock des Gewinners bleibt (Negativfall)", () => {
+    const d = lockDatei();
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    const spaet = T0 + N.LOCK_VERALTET_MS + 1;
+    let a = "";
+    // Bewerber 12 hat „veraltet“ gesehen; bevor er übernimmt, übernimmt Bewerber 13 vollständig.
+    const b = N.lockNehmen(d, { now: spaet, pid: 12, nachPruefung: () => { a = N.lockNehmen(d, { now: spaet, pid: 13 }); } });
+    expect(a).toBe("übernommen");
+    expect(b).toBe("belegt");
+    expect(pidVon(d)).toBe(13);
+  });
+
+  test("TOCTOU: war der Lock zwischen Prüfung und Übernahme schon freigegeben und neu belegt, bleibt der frische Lock, kein Grabstein übrig", () => {
+    const d = lockDatei();
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    const spaet = T0 + N.LOCK_VERALTET_MS + 1;
+    const b = N.lockNehmen(d, { now: spaet, pid: 12, nachPruefung: () => { unlinkSync(d); N.lockNehmen(d, { now: spaet, pid: 13 }); } });
+    expect(b).toBe("belegt");
+    expect(pidVon(d)).toBe(13);
+    expect(readdirSync(join(d, "..")).filter((n) => n.includes("verwaist"))).toEqual([]);
+  });
+
+  test("lockMeldung: je Zustand ein eigener Text", () => {
+    expect(N.lockMeldung("belegt")).toMatch(/hält den Lock/);
+    expect(N.lockMeldung("fehler")).toMatch(/nicht anlegen/);
+    expect(N.lockMeldung("frei")).toMatch(/abgestürzt/);
+    expect(new Set([N.lockMeldung("belegt"), N.lockMeldung("fehler"), N.lockMeldung("frei")]).size).toBe(3);
   });
 
   test("Freigabe nur mit der eigenen pid", () => {

@@ -183,10 +183,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-abgleich-kern, langfuse-otlp nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-abgleich-kern, langfuse-otlp, langfuse-lock nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-abgleich-kern", "langfuse-otlp"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock"]));
   });
 });
 
