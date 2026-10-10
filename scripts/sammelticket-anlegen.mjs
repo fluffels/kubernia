@@ -21,7 +21,7 @@
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
 import { pathToFileURL } from "node:url";
-import { mitKontingent } from "./gh-kontingent.mjs";
+import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
   REPO,

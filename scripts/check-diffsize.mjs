@@ -57,6 +57,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { resolveBase } from "./check-basis.mjs";
 import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -201,29 +202,6 @@ export function evaluate({ fileCount, changedLines }, { maxFiles, maxLines }) {
 
 /** Schlüssel des Override-Trailers für dieses Gate (#1269). */
 export const OVERRIDE_KEY = "KQ-Diffsize-Override";
-
-/** Löst die Vergleichs-Basis auf (Commit, gegen den der Diff gemessen wird).
- *  Reihenfolge: explizites KQ_DIFF_BASE → Merge-Base gegen origin/main → gegen
- *  main. origin/main ZUERST, weil im pre-push-Hook HEAD == main ist und nur
- *  origin/main (der alte Stand) den zu pushenden Slice sichtbar macht. `runGit`
- *  ist injizierbar (Test); es wirft bei Fehler, wir fangen und gehen weiter.
- *  Rückgabe: Basis-SHA oder null (keine Basis auflösbar → Aufrufer degradiert). */
-export function resolveBase(runGit, env = process.env) {
-  const tryGit = (args) => {
-    try {
-      const out = runGit(args).trim();
-      return out === "" ? null : out;
-    } catch {
-      return null;
-    }
-  };
-  const explicit = (env.KQ_DIFF_BASE ?? "").trim();
-  if (explicit !== "") {
-    const sha = tryGit(["rev-parse", "--verify", "--quiet", `${explicit}^{commit}`]);
-    if (sha) return sha;
-  }
-  return tryGit(["merge-base", "HEAD", "origin/main"]) ?? tryGit(["merge-base", "HEAD", "main"]);
-}
 
 const SCRIPTS_ORDNER = dirname(fileURLToPath(import.meta.url));
 

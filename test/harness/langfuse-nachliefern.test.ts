@@ -8,7 +8,7 @@
  * Ausführen mit: npm test
  */
 import { describe, expect, test } from "vitest";
-import { existsSync, mkdirSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
@@ -18,7 +18,7 @@ import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawOtlp from "../../scripts/langfuse-otlp.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawAbgleich from "../../scripts/langfuse-abgleich.mjs";
+import * as rawAbgleich from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawApi from "../../scripts/langfuse-api.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -33,17 +33,19 @@ type Span = { traceId: string; spanId: string; parentSpanId?: string; name: stri
 type Payload = { resourceSpans: { resource: { attributes: Attr[] }; scopeSpans: { scope: { name: string }; spans: Span[] }[] }[] };
 type Chunk = { payload: Payload; generationIds: string[]; spanIds: string[] };
 type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
-type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<Antwort>;
-type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null };
-type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; fehler: { session: string; status: number | null; meldung: string }[] };
+type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) => Promise<Antwort>;
+type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null; endeVerworfen: boolean };
+type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; uebrig: number; fehler: { session: string; status: number | null; meldung: string }[] };
 type Args = { ende?: number; ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
-type LedgerEintrag = { pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
+type LedgerEintrag = { gesendetAm?: Record<string, number>; vermerk?: string; pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
 
 const N = rawNach as unknown as {
   STICHTAG: string;
   RUHEFRIST_OHNE_ENDE_H: number;
+  GESENDET_ABLAUF_MS: number;
+  GESAMTFRIST_MS: number;
   parseArgs: (a: string[]) => Args;
-  nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
+  nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
 };
 const O = rawOtlp as unknown as {
   MAX_SPANS_JE_REQUEST: number;
@@ -183,10 +185,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-abgleich, langfuse-otlp nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-abgleich-kern, langfuse-otlp, langfuse-lock nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-abgleich", "langfuse-otlp"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock"]));
   });
 });
 
@@ -512,7 +514,7 @@ describe("Auswahl", () => {
     expect(r.m.aufrufe).toHaveLength(0);
   });
 
-  test("vor dem Stichtag: nur lesen, „würde senden“ zählen, kein POST, kein Ledger, kein Score", async () => {
+  test("vor dem Stichtag: nur lesen, „würde senden“ zählen, kein POST, nur ein Vermerk im Ledger, kein Score", async () => {
     const alt = msg("a", 1, { timestamp: iso(Date.parse(N.STICHTAG) - 86_400_000) });
     const a = aufbau([alt]);
     const m = mock({ ist: 0 });
@@ -520,7 +522,7 @@ describe("Auswahl", () => {
     expect(r.protokoll.sessions[0]).toMatchObject({ status: "vor Stichtag", wuerdeSenden: 1, gesendet: 0 });
     expect(r.protokoll.wuerdeSenden).toBe(1);
     expect(m.posts()).toHaveLength(0);
-    expect(existsSync(a.ledger)).toBe(false);
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ vermerk: "vor Stichtag", bestaetigt: false, gesendet: [], spans: [] });
     expect(Number.isFinite(Date.parse(N.STICHTAG))).toBe(true);
   });
 
@@ -676,10 +678,17 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     const m2 = mock({ ist: 0 });
     const r2 = await lauf(frisch(), m2, { beendet: "s1", ende: jetzt - 3 * MIN - 4_000 }, jetzt);
     expect(r2.protokoll.sessions[0].status).toBe("gesendet");
+    expect(r2.protokoll.sessions[0].endeVerworfen).toBe(false);
+    // Genau 5 s nach dem Ende ist die Grenze: das Ende gilt noch
+    const r25 = await lauf(frisch(), mock({ ist: 0 }), { beendet: "s1", ende: jetzt - 3 * MIN - 5_000 }, jetzt);
+    expect(r25.protokoll.sessions[0]).toMatchObject({ status: "gesendet", endeVerworfen: false });
     // 6 s nach dem Ende: außerhalb des Schlupfs, das Ende gilt nicht
     const m3 = mock({ ist: 0 });
     const r3 = await lauf(frisch(), m3, { beendet: "s1", ende: jetzt - 3 * MIN - 6_000 }, jetzt);
     expect(r3.protokoll.sessions[0].status).toBe("läuft");
+    // Das Logfeld „Ende verworfen“ zeigt die Session; der erste Lauf (Ende 10 min vor der Änderung) ist ebenso markiert
+    expect(r3.protokoll.sessions[0].endeVerworfen).toBe(true);
+    expect(r.protokoll.sessions[0].endeVerworfen).toBe(true);
   });
 
   test("--aktuell setzt ein früheres beendet zurück (resume), --trocken lässt das Ledger byte-gleich", async () => {
@@ -839,5 +848,179 @@ describe("OTLP-Aufbau: Randfälle", () => {
   test("sendeOtlp: 2xx mit Nicht-JSON-Antwort ist kein Fehler", async () => {
     const fetchImpl: Fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}), text: () => Promise.resolve("<html>ok</html>") });
     await expect(API.sendeOtlp({}, { baseUrl: "http://lf.test", publicKey: "pk", secretKey: "sk", fetchImpl })).resolves.toBeNull();
+  });
+});
+
+// ── Restlücken des Ledgers und Fristen (#1579) ───────────────────────────────
+
+const MIN = 60_000;
+
+describe("Ledger: Ablauf von gesendet (Z6a)", () => {
+  test("in der Frist unterdrückt, nach Ablauf erneut gesendet, ohne doppelten Eintrag und ohne doppelt als ausstehend gezählt", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const sa = sollZu("a", 1);
+    const jetzt = SPAET();
+    const m1 = mock({ ist: 0 });
+    await lauf(a, m1, {}, jetzt);
+    expect(m1.otlp).toHaveLength(1);
+    expect(ledgerVon(a.ledger).s1.gesendetAm?.[sa.id]).toBe(jetzt);
+    // Die Ingestion hat den Call verloren (Ist bleibt 0): in der Frist bleibt er unterdrückt und als ausstehend gezählt
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(a, m2, {}, jetzt + N.GESENDET_ABLAUF_MS - 1);
+    expect(m2.otlp).toHaveLength(0);
+    expect(r2.protokoll.sessions[0]).toMatchObject({ gesendet: 0, ausstehend: 1 });
+    // Nach Ablauf wird der noch fehlende Call erneut gesendet
+    const m3 = mock({ ist: 0 });
+    const r3 = await lauf(a, m3, {}, jetzt + N.GESENDET_ABLAUF_MS + 1);
+    expect(m3.otlp).toHaveLength(1);
+    expect(r3.protokoll.sessions[0]).toMatchObject({ status: "gesendet", gesendet: 1, ausstehend: 1 });
+    expect(ledgerVon(a.ledger).s1.gesendet).toEqual([sa.id]);
+    expect(ledgerVon(a.ledger).s1.gesendetAm?.[sa.id]).toBe(jetzt + N.GESENDET_ABLAUF_MS + 1);
+  });
+
+  test("Altbestand ohne Zeitstempel (String-Array): ohne Absturz gelesen und als abgelaufen behandelt", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const sa = sollZu("a", 1);
+    mkdirLedger(a.state);
+    const alt = { pfad: join(a.root, PRAEFIX, "s1.jsonl"), groesse: 1, mtime: 1, bestaetigt: false, gesendet: [sa.id], spans: [] };
+    writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: alt } }));
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m);
+    expect(r.exitCode).toBe(0);
+    expect(m.otlp).toHaveLength(1);
+    expect(ledgerVon(a.ledger).s1.gesendet).toEqual([sa.id]);
+  });
+});
+
+describe("Ledger: Vermerke für vor Stichtag und ohne Calls (Z6b)", () => {
+  test("vor Stichtag: der zweite Lauf mit unverändertem Stand fragt Langfuse nicht ab; bei geänderter Größe wird neu bewertet", async () => {
+    const a = aufbau([msg("a", 1, { timestamp: iso(Date.parse(N.STICHTAG) - 86_400_000) })]);
+    const m1 = mock({ ist: 0 });
+    await lauf(a, m1);
+    expect(m1.aufrufe.length).toBeGreaterThan(0);
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(a, m2);
+    expect(m2.aufrufe).toHaveLength(0);
+    expect(r2.protokoll.sessions[0].status).toBe("vor Stichtag");
+    appendFileSync(join(a.root, PRAEFIX, "s1.jsonl"), "\n" + msg("b", 2));
+    const m3 = mock({ ist: 0 });
+    await lauf(a, m3);
+    expect(m3.aufrufe.length).toBeGreaterThan(0);
+  });
+
+  test("ohne Calls: Vermerk im Ledger; wächst die Datei um einen Call, wird neu bewertet und gesendet", async () => {
+    const a = aufbau([JSON.stringify({ type: "user", sessionId: "s1", message: { role: "user", content: "hi" } })]);
+    const r1 = await lauf(a, mock({ ist: 0 }));
+    expect(r1.protokoll.sessions[0].status).toBe("ohne Calls");
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ vermerk: "ohne Calls" });
+    const r2 = await lauf(a, mock({ ist: 0 }));
+    expect(r2.protokoll.sessions[0].status).toBe("ohne Calls");
+    appendFileSync(join(a.root, PRAEFIX, "s1.jsonl"), "\n" + msg("a", 1));
+    const m3 = mock({ ist: 0 });
+    const r3 = await lauf(a, m3);
+    expect(r3.protokoll.sessions[0].status).toBe("gesendet");
+    expect(m3.otlp).toHaveLength(1);
+  });
+
+  test("--trocken schreibt keinen Vermerk", async () => {
+    const a = aufbau([msg("a", 1, { timestamp: iso(Date.parse(N.STICHTAG) - 86_400_000) })]);
+    await lauf(a, mock({ ist: 0 }), { trocken: true });
+    expect(existsSync(a.ledger)).toBe(false);
+  });
+});
+
+describe("--beendet im Fehlerpfad (Z6c)", () => {
+  test.each([
+    ["Metrics-Abfrage wirft", () => mock({ ist: 0, getStatus: () => 500 })],
+    ["OTLP-POST scheitert", () => mock({ ist: 0, otlpStatus: () => 500 })],
+  ])("%s: das Ende steht trotzdem im Ledger, der Folgelauf nach 150 s verarbeitet statt zu warten", async (_n, neuerMock) => {
+    const a = aufbau([msg("a", 1)]);
+    const jetzt = Date.now();
+    const t = new Date(jetzt - 3 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t, t);
+    const r1 = await lauf(a, neuerMock(), { beendet: "s1" }, jetzt);
+    expect(r1.exitCode).toBe(1);
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ beendet: true, bestaetigt: false });
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(a, m2, {}, jetzt + MIN); // 4 min nach der letzten Änderung: über 150 s, weit unter 24 h
+    expect(r2.protokoll.sessions[0].status).toBe("gesendet");
+    expect(m2.otlp).toHaveLength(1);
+  });
+});
+
+describe("--beendet bei teilweise gesendeten Chunks (Z6c)", () => {
+  test("500 im zweiten Chunk mit --beendet: der Fortschritt bleibt, der aktuelle Stand und das Ende bleiben vermerkt (ohne --beendet bleibt groesse null)", async () => {
+    const viele = Array.from({ length: O.MAX_SPANS_JE_REQUEST + 1 }, (_, i) => msg(`m${i}`, i));
+    const a = aufbau(viele);
+    const jetzt = Date.now();
+    const t = new Date(jetzt - 3 * MIN);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t, t);
+    const r = await lauf(a, mock({ ist: 0, otlpStatus: (n) => (n === 1 ? 500 : 200) }), { beendet: "s1" }, jetzt);
+    expect(r.exitCode).toBe(1);
+    const e = ledgerVon(a.ledger).s1;
+    expect(e.gesendet).toHaveLength(O.MAX_SPANS_JE_REQUEST);
+    expect(e).toMatchObject({ beendet: true, bestaetigt: false });
+    expect(e.groesse).toBeGreaterThan(0);
+    expect(e.mtime).toBe(t.getTime());
+  });
+});
+
+describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
+  const Z = { baseUrl: "http://lf.test", publicKey: "pk", secretKey: "sk" };
+  /** Ein Fetch, der nie antwortet und nur das Abbruch-Signal beachtet. */
+  const haengt: Fetch = (_url, init) =>
+    new Promise((_ok, fehler) => {
+      init?.signal?.addEventListener("abort", () => fehler(init.signal?.reason as Error));
+    });
+  const API2 = rawApi as unknown as {
+    ANFRAGE_FRIST_MS: number;
+    queryMetrics: (q: unknown, z: Record<string, unknown>) => Promise<unknown>;
+    fetchSessionObservations: (s: string, z: Record<string, unknown>) => Promise<unknown>;
+    sendeOtlp: (p: unknown, z: Record<string, unknown>) => Promise<unknown>;
+    sendeScore: (s: unknown, z: Record<string, unknown>) => Promise<unknown>;
+  };
+  const aufrufe: [string, (z: Record<string, unknown>) => Promise<unknown>][] = [
+    ["queryMetrics", (z) => API2.queryMetrics({}, z)],
+    ["fetchSessionObservations", (z) => API2.fetchSessionObservations("s1", z)],
+    ["sendeOtlp", (z) => API2.sendeOtlp({}, z)],
+    ["sendeScore", (z) => API2.sendeScore({}, z)],
+  ];
+
+  test("Standardfrist: 30 s", () => {
+    expect(API2.ANFRAGE_FRIST_MS).toBe(30_000);
+  });
+  test.each(aufrufe)("%s: ein Fetch, der nie antwortet, wirft nach der Frist mit lesbarer Meldung", async (_n, rufe) => {
+    await expect(rufe({ ...Z, fetchImpl: haengt, fristMs: 20 })).rejects.toThrow(/antwortete nicht innerhalb von/);
+  });
+  test.each(aufrufe)("%s: ein anderer Fetch-Fehler geht unverändert durch (keine Timeout-Meldung)", async (_n, rufe) => {
+    const fetchImpl: Fetch = () => Promise.reject(new TypeError("fetch failed"));
+    await expect(rufe({ ...Z, fetchImpl })).rejects.toThrow(/^fetch failed$/);
+  });
+  test.each(aufrufe)("%s: der Fetch bekommt ein Abbruch-Signal", async (_n, rufe) => {
+    let signal: AbortSignal | undefined;
+    const fetchImpl: Fetch = (_url, init) => {
+      signal = init?.signal;
+      return antwort({ data: [], meta: {}, partialSuccess: {} });
+    };
+    await rufe({ ...Z, fetchImpl });
+    expect(signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("Gesamtfrist: bei überschrittener Uhr beginnt keine weitere Session, der Bericht meldet es", async () => {
+    const a = aufbau([msg("a", 1)], { [`${PRAEFIX}/s2.jsonl`]: msg("b", 2) });
+    const m = mock({ ist: 0 });
+    let t = 0;
+    const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), uhr: () => (t += 6 * MIN), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
+    expect(r.protokoll.sessions).toHaveLength(1);
+    expect(r.protokoll.uebrig).toBe(1);
+    expect(r.text).toMatch(/Gesamtfrist von 10 min erreicht: 1 Session/);
+    expect(r.exitCode).toBe(0);
+    expect(N.GESAMTFRIST_MS).toBeLessThan(15 * MIN);
+  });
+  test("unter der Gesamtfrist laufen alle Sessions", async () => {
+    const a = aufbau([msg("a", 1)], { [`${PRAEFIX}/s2.jsonl`]: msg("b", 2) });
+    const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), uhr: () => 0, fetchImpl: mock({ ist: 0 }).fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
+    expect(r.protokoll.sessions).toHaveLength(2);
+    expect(r.protokoll.uebrig).toBe(0);
   });
 });

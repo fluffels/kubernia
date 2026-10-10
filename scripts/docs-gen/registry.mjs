@@ -6,6 +6,7 @@ import { zeitleisteGenerator } from "./zeitleiste.mjs";
 import { diagrammGenerator } from "./diagramme.mjs";
 import { gatesGenerator } from "./gates.mjs";
 import { harnessInventarGenerator } from "./harness-inventar.mjs";
+import { harnessKennzahlenGenerator } from "./harness-kennzahlen.mjs";
 import { questGraphGenerator, questsJeThemaGenerator } from "./quests.mjs";
 import { saveVersionenGenerator } from "./save-versionen.mjs";
 import { schichtenIstGenerator, schichtenSollGenerator } from "./schichten.mjs";
@@ -21,6 +22,7 @@ export const GENERATORS = {
   // Harness-Stack (Claude Code, GitHub, npm)
   gates: gatesGenerator,
   "harness-inventar": harnessInventarGenerator,
+  "harness-kennzahlen": harnessKennzahlenGenerator,
   "agenten-ablauf": diagrammGenerator("agenten-ablauf"),
   "agenten-sequenz": diagrammGenerator("agenten-sequenz"),
   "leitplanken-schichten": diagrammGenerator("leitplanken-schichten"),

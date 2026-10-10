@@ -56,6 +56,15 @@
   "adr": {
     "ordner": "docs/adr"
   },
+  "kennzahlen": {
+    "package": "package.json",
+    "chains": ["verify", "verify:full"],
+    "skripte": ["scripts"],
+    "skriptEndungen": [".mjs", ".cjs"],
+    "waechter": { "ordner": "test/harness" },
+    "workflows": ".github/workflows",
+    "adr": "docs/adr"
+  },
   "zeitleiste": {
     "meilensteine": "docs/meilensteine.json"
   },

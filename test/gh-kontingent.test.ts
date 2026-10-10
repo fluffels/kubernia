@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as raw from "../scripts/gh-kontingent.mjs";
+import * as raw from "../scripts/kontingent-lib.mjs";
 
 type Art = { art: string; remaining: number; limit: number; resetInMin: number };
 type Pruefung = { ok: boolean; knapp: Art[]; meldung: string; warnung?: string };
@@ -205,7 +205,7 @@ describe("mitKontingent", () => {
 describe("Verdrahtung: die vier Board-Skripte prüfen das Kontingent vorab", () => {
   test.each(["board-place", "naechstes-ticket", "sammelticket-anlegen", "board-takt"])("%s importiert und ruft mitKontingent auf", (name) => {
     const text = readFileSync(join(process.cwd(), "scripts", `${name}.mjs`), "utf8");
-    expect(text).toMatch(/import \{ mitKontingent \} from "\.\/gh-kontingent\.mjs";/);
+    expect(text).toMatch(/import \{ mitKontingent \} from "\.\/kontingent-lib\.mjs";/);
     expect(text).toContain(`mitKontingent("${name}"`);
   });
   test("naechstes-ticket prüft nur core (REST-only), kein anderes Skript schränkt die Arten ein", () => {

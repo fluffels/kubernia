@@ -47,7 +47,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
+import * as checkBasis from "../../scripts/check-basis.mjs";
 
 // Begründete Ausnahme: das .mjs hat kein Declaration-File, der Namespace ist für tsc
 // „error typed". Die Schwester-Tests (docdrift/docmap/context-size) haben dafür Einträge
@@ -56,10 +56,10 @@ import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const stripFencedCode: (md: string) => string = checkDocDrift.stripFencedCode;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
+const collectMarkdown: (rootDir?: string) => string[] = checkBasis.collectMarkdown;
 // Getrackte Dateien per `git ls-files -z` (quotepath-sicher) – dieselbe Quelle wie check:internalrefs.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
+const listTrackedFiles: (rootDir?: string) => string[] = checkBasis.listTrackedFiles;
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");

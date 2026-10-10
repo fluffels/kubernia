@@ -17,13 +17,15 @@ import { dirname, join } from "node:path";
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkContextSize from "../scripts/check-context-size.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as allowlists from "../scripts/check-allowlists.mjs";
 
 type Budget = { file: string; budget: number };
 type Sized = { file: string; chars: number; budget: number };
 type Allow = { file: string; reason: string };
 
 const CONTEXT_BUDGETS: Budget[] = checkContextSize.CONTEXT_BUDGETS;
-const ALLOWLIST: Allow[] = checkContextSize.ALLOWLIST;
+const ALLOWLIST: Allow[] = allowlists.CONTEXT_ALLOWLIST;
 const collectContextSizes: (rootDir?: string, budgets?: Budget[], moduleBudget?: number) => Sized[] = checkContextSize.collectContextSizes;
 const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversized;
 // Neu mit #1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,

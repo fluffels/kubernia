@@ -129,9 +129,6 @@ describe("Routing und Entscheidung (#1311)", () => {
 // mit wenigen Starts und ein großzügigeres Describe-Timeout statt des globalen 5-s-Limits (#1526; Präzedenz haupt-sync).
 describe("Prozess-Start (#1311)", { timeout: 30_000 }, () => {
   const start = (skript: string, eingabe: string) => execFileSync("node", [resolve(WURZEL, "scripts", skript)], { input: eingabe, encoding: "utf8", cwd: WURZEL });
-  // Haupt-Checkout (für die deny-Payloads der Direktaufrufe): ein git-Start je Datei statt je Test.
-  const mainDir = resolve(WURZEL, execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: WURZEL, encoding: "utf8" }).trim(), "..");
-  const deny = (skript: string, tool: string) => (JSON.parse(start(skript, payload(tool, "git commit -m x", mainDir))) as Out)?.hookSpecificOutput.permissionDecision;
 
   test("der Dispatcher gibt bei gh api -X DELETE ein ask-JSON aus, bei kaputtem JSON nichts", () => {
     const out = JSON.parse(start("pretooluse-hook.mjs", payload("Bash", "gh api -X DELETE repos/o/r/issues/1"))) as Out;
@@ -140,21 +137,12 @@ describe("Prozess-Start (#1311)", { timeout: 30_000 }, () => {
     assert.equal(start("pretooluse-hook.mjs", payload("Bash", "ls")).trim(), "");
   });
 
-  // Die Direktaufrufe: laufende Sessions behalten ihre alte Hook-Konfiguration. Je Skript ein Test; die deny-Payload
-  // belegt, dass main() lebt (ein toter main() ergäbe auch bei "ls" eine leere Ausgabe).
-  test("Direktaufruf gh-guard-hook.mjs bleibt lauffähig", () => {
-    const ask = JSON.parse(start("gh-guard-hook.mjs", payload("Bash", "gh api -X DELETE repos/o/r/issues/1"))) as Out;
-    assert.equal(ask?.hookSpecificOutput.permissionDecision, "ask");
-  });
-
-  test("Direktaufruf worktree-guard-hook.mjs bleibt lauffähig", () => {
-    assert.equal(start("worktree-guard-hook.mjs", payload("Bash", "ls")).trim(), "");
-    assert.equal(deny("worktree-guard-hook.mjs", "Bash"), "deny");
-  });
-
-  test("Direktaufruf worktree-guard-powershell.mjs bleibt lauffähig", () => {
-    assert.equal(start("worktree-guard-powershell.mjs", payload("PowerShell", "ls")).trim(), "");
-    assert.equal(deny("worktree-guard-powershell.mjs", "PowerShell"), "deny");
+  // Die drei Guards sind Libs des Dispatchers (#1579, Konvention #1398): ein Direktaufruf wäre eine stille No-op, darum tragen sie keinen
+  // Direktaufruf-Guard mehr und nennen im Kopf, dass der Einstieg pretooluse-hook.mjs ist.
+  test.each(["gh-guard-hook.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs"])("%s: kein Direktaufruf, Kopf nennt den Dispatcher als Einstieg", (name) => {
+    const text = lies(`scripts/${name}`);
+    assert.doesNotMatch(text, /istDirektaufruf|process\.argv/);
+    assert.match(text.split("\n").slice(0, 3).join("\n"), /Kein Einstieg, kein Direktaufruf.*pretooluse-hook\.mjs/s);
   });
 });
 
@@ -284,8 +272,8 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
     for (const tool of ["constructor", "toString", "__proto__", "bash"]) assert.equal(hook.dispatch(payload(tool, "x"), WURZEL, guards as never), null, tool);
   });
 
-  test("jeder Guard mit Direktaufruf trägt im ersten Kommentarblock genau einmal den Abschnitt `Bewusste Grenzen:`", () => {
-    const guards = readdirSync(resolve(WURZEL, "scripts")).filter((n) => /guard.*\.mjs$/.test(n) && lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)"));
+  test("jeder Guard (Direktaufruf oder als Lib des Dispatchers gekennzeichnet) trägt im ersten Kommentarblock genau einmal den Abschnitt `Bewusste Grenzen:`", () => {
+    const guards = readdirSync(resolve(WURZEL, "scripts")).filter((n) => /guard.*\.mjs$/.test(n) && (lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)") || lies(`scripts/${n}`).startsWith("// Kein Einstieg, kein Direktaufruf")));
     assert.deepEqual(guards.sort(), ["gh-guard-hook.mjs", "lens-edit-guard.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs"]);
     for (const n of guards) {
       const kopf = /\/\*\*[\s\S]*?\*\//.exec(lies(`scripts/${n}`))?.[0] ?? "";

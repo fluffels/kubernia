@@ -89,3 +89,41 @@ describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)
     }
   });
 });
+
+describe("vereinigungsLaenge (#1579: eine Intervall-Vereinigung für Zeit und Zeilen)", () => {
+  const V = raw as unknown as { vereinigungsLaenge: (i: [number, number][], o?: { geschlossen?: boolean }) => number };
+  test("leer, unsortiert, verschachtelt", () => {
+    expect(V.vereinigungsLaenge([])).toBe(0);
+    expect(V.vereinigungsLaenge([[20, 30], [0, 10]])).toBe(20);
+    expect(V.vereinigungsLaenge([[0, 10], [2, 4]])).toBe(10);
+    expect(V.vereinigungsLaenge([[0, 10], [5, 15]])).toBe(15);
+  });
+  test("halboffen: anstoßend ergibt keine Lücke, ein Abstand schon", () => {
+    expect(V.vereinigungsLaenge([[0, 3], [3, 5]])).toBe(5);
+    expect(V.vereinigungsLaenge([[0, 3], [4, 5]])).toBe(4);
+  });
+  test("geschlossen (Zeilenbereiche): Länge b-a+1", () => {
+    expect(V.vereinigungsLaenge([[1, 3], [4, 5]], { geschlossen: true })).toBe(5);
+    expect(V.vereinigungsLaenge([[1, 3], [5, 6]], { geschlossen: true })).toBe(5);
+    expect(V.vereinigungsLaenge([[7, 7]], { geschlossen: true })).toBe(1);
+  });
+  test("ungültige Einträge (NaN, b < a) werden ignoriert", () => {
+    expect(V.vereinigungsLaenge([[10, 0], [Number.NaN, 3], [0, 4]])).toBe(4);
+    expect(V.vereinigungsLaenge([[10, 0], [Number.NaN, 3]], { geschlossen: true })).toBe(0);
+  });
+  test.each(["patch-zugriff", "subagent-laeufe"])("%s definiert keine eigene Vereinigung", (name) => {
+    const src = readFileSync(new URL(`../scripts/${name}.mjs`, import.meta.url), "utf8");
+    expect(src).toMatch(/vereinigungsLaenge/);
+    expect(src).not.toMatch(/function vereinigung(Ms)?\(/);
+  });
+});
+
+describe("istEchtesModell (#1579)", () => {
+  const E = raw as unknown as { istEchtesModell: (m: unknown) => boolean };
+  test("leer und der Client-Platzhalter zählen nicht, ein echtes Modell schon", () => {
+    expect(E.istEchtesModell("<synthetic>")).toBe(false);
+    expect(E.istEchtesModell("")).toBe(false);
+    expect(E.istEchtesModell(undefined)).toBe(false);
+    expect(E.istEchtesModell("claude-opus-4-7")).toBe(true);
+  });
+});

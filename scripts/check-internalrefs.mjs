@@ -45,6 +45,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
+import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
 const ROOT = join(dirname(SELF), "..");
@@ -61,22 +62,6 @@ export const ENCODED_TERMS = ["d3Bz", "a2ktZmFicmlr"];
  *  Der Nachname ist bewusst NICHT gelistet: er ist ein gewöhnliches deutsches Wort und würde das
  *  Gate dauerhaft mit Fehltreffern belegen. Pflege: `--add-name "<begriff>"`. */
 export const ENCODED_NAME_TERMS = ["S2F0aGFyaW5h"];
-
-/** Dateien, die bewusst NICHT geprüft werden. Grund ist in jedem Fall base64-/Binärrauschen,
- *  nicht Bequemlichkeit: `package-lock.json` trägt tausende base64-Integrity-Hashes, in denen
- *  ein kurzer Begriff zufällig zwischen zwei `/` landen und einen Wortgrenzen-Treffer
- *  vortäuschen kann. Textdateien mit eingebettetem base64 (z.B. `fonts.css`) bleiben bewusst
- *  IN der Prüfung — dort schützen die Wortgrenzen zuverlässig (empirisch geprüft: der eine
- *  Zufalls-Substring mitten in den Font-Bytes steht zwischen Wortzeichen und fällt sauber raus). */
-export const EXCLUDED_FILES = ["package-lock.json"];
-
-/** Endungen ohne prüfbaren Text (Binärassets). */
-export const EXCLUDED_EXTENSIONS = [
-  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp",
-  ".ttf", ".otf", ".woff", ".woff2",
-  ".wav", ".mp3", ".ogg",
-  ".zip", ".gz", ".pdf",
-];
 
 /** base64 → Klartext. */
 export function decodeTerms(encoded = ENCODED_TERMS) {
@@ -102,19 +87,6 @@ export function buildTermPattern(term, { stem = false } = {}) {
   const left = /^\w/.test(term) ? "\\b" : "";
   const right = !stem && /\w$/.test(term) ? "\\b" : "";
   return new RegExp(`${left}${escaped}${right}`, "i");
-}
-
-/** Alle vom Repo getrackten Dateien (via git, damit ignorierte/ungetrackte Pfade außen bleiben). */
-export function listTrackedFiles(rootDir = ROOT, exec = execFileSync) {
-  const out = exec("git", ["ls-files", "-z"], { cwd: rootDir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  return out.split("\0").filter(Boolean);
-}
-
-/** True, wenn die Datei geprüft werden soll. */
-export function isCheckable(file, excludedFiles = EXCLUDED_FILES, excludedExts = EXCLUDED_EXTENSIONS) {
-  if (excludedFiles.includes(file)) return false;
-  const lower = file.toLowerCase();
-  return !excludedExts.some((ext) => lower.endsWith(ext));
 }
 
 /** Sucht die Begriffe in den Dateien und liefert je Treffer { file, line, term, excerpt }.

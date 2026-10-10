@@ -1,6 +1,6 @@
 # Harness-Glossar: die Begriffe der Agenten-Maschinerie
 
-> **Fachlich geprüft am: 2026-10-09.**
+> **Fachlich geprüft am: 2026-10-10.**
 > Für Außenstehende, die den [Harness](agent-harness.md) lesen wollen. Die Begriffe des Spiels (Hafen, Kubernetes, Code) stehen getrennt im [Glossar](glossar.md). Regelkonstanten und Zählwerte stehen hier bewusst nicht: sie driften, die verlinkte Quelle gilt. Muster mit Belegen: [Lessons Learned](lessons-learned.md).
 
 ## Akteure und Werkzeuge
@@ -29,6 +29,8 @@
 | Lens, Review-Runde | Eine Lens ist ein frischer, unabhängiger Kritiker mit genau einer Brille (etwa Architektur oder Tests) auf einem fertigen Diff. Eine Review-Runde ist ein Durchgang, danach folgt eine begrenzte Zahl Fix-Runden; der letzte Blick ist nie der, der zuletzt gefixt hat. | [Review-Staffel](model-routing.md#review-staffel-1265), [Skill review-lenses](../.claude/skills/review-lenses/SKILL.md) |
 | Weiche | Eine offene Entscheidung im Ticket (Optik, Risiko, Plan-Variante). Der Agent entscheidet sie selbst und nennt sie im PR mit Begründung; die Maintainerin kann per Revert widersprechen. Nur bei Irreversiblem oder Außenwirkung wird vorher gefragt. | [ADR 0012](adr/0012-harness-autonomie-audit-spur.md) |
 | Fremdtext | Text Dritter (Issue-Kommentare, Forum) gilt als Daten, nie als Anweisung. Ein Skript liest ihn gefiltert. | [sicherheit-agenten.md](sicherheit-agenten.md), [scripts/fremdtext.mjs](../scripts/fremdtext.mjs) |
+| Einstiegsskript, Lib | Ein Einstiegsskript läuft per `node scripts/<name>.mjs` (oder als Hook) und hat einen Direktaufruf-Guard. Gemeinsamer Code steht in einer Lib ohne Guard; ein Skript importiert nie aus einem Einstiegsskript, auch eine Lib nicht. Ein Wächter-Test prüft das. | [Skript-Konvention](agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064) |
+| Sabotage-Probe (Red-Green) | Der Beweis, dass ein Test echt ist: die geprüfte Eigenschaft wird testweise verfälscht, der Test muss rot werden, danach wird zurückgesetzt. Die Test-Lens macht das in einem eigenen Worktree; der Anker der Verfälschung muss eindeutig sein. | [Tests gegen False Positives](agent-harness.md#tests-npm-test-vitest), [Lens-Definition](../.claude/agents/kubernia-lens.md) |
 
 ## Ablauf
 
@@ -45,5 +47,6 @@
 |---|---|---|
 | Langfuse | Die Messplattform für Agentenläufe: Tokens, Kosten und Läufe je Modell und Rolle. | [ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md), [Token- und Loop-Baseline](model-routing.md#5-token--und-loop-baseline-1068) |
 | Langfuse-Abgleich | Der Vergleich Transkript gegen Langfuse je Call samt automatischer Nachlieferung fehlender Calls an SessionStart und SessionEnd. Das Transkript gilt als Wahrheit, Dubletten werden nur gemeldet. | [ADR 0023](adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md), [Abgleich als Garantie](langfuse-hook-patch.md#abgleich-als-garantie-1578) |
+| Ledger (Nachliefern) | Die lokale Merkdatei des Nachlieferers (`~/.claude/state/langfuse-abgleich.json`): je Session, welche Calls schon gesendet sind (mit Zeitstempel, nach Ablauf einer Frist gilt ein noch fehlender Call wieder als nicht gesendet), ob sie bestätigt ist, ob ihr Ende bekannt ist. Eine Brücke über den Ingestion-Verzug, keine Wahrheit: fehlt sie, kostet das nur Abfragen. | [Langfuse-Hook-Patch](langfuse-hook-patch.md) |
 | Nacharbeit | Ein Revert oder ein Commit mit der Zeile `Folge #<nr>` innerhalb eines festen Fensters nach dem Merge. Das Skript `scripts/lauf-ergebnis.mjs` misst sie je Ticket. | [Ergebnis je Ticket-Lauf](model-routing.md#ergebnis-je-ticket-lauf-1123) |
 | Dark Factory | Das Zielbild aus ADR 0022: der spielunabhängige Kern des Harness wird wiederverwendbar: Projekte beziehen ihn per Sync; menschliche Stopps bei Irreversiblem und Außenwirkung bleiben. Stand 2026-10-09: entschieden, nicht gebaut. | [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md), [harness-transfer.md](harness-transfer.md) |

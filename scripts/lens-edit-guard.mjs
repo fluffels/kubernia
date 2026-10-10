@@ -17,13 +17,8 @@
  */
 import { posix } from "node:path";
 import { buildDenyOutput, emit, istDirektaufruf, readStdin } from "./hook-io.mjs";
+import { LENS_NAME_KERN } from "./ticket-refs.mjs";
 
-/**
- * Name eines Lens-Worktrees (SSOT, auch für cleanup-worktrees): `kq-<nr>-lens-r<runde>` (Lens-Runde) oder
- * `kq-<nr>-lens-m<n>` (Merge-Delta-Lens nach einem Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `kq-<nr>`.
- */
-const LENS_NAME_KERN = String.raw`(kq-\d+)-lens-[rm]\d+`;
-export const LENS_WORKTREE_NAME = new RegExp(`^${LENS_NAME_KERN}$`);
 // Pfadform: Groß-/Kleinschreibung egal (Windows-Pfade), der Ordnername selbst für das Aufräumen exakt (kein Flag oben).
 const LENS_WORKTREE = new RegExp(String.raw`/\.claude/worktrees/${LENS_NAME_KERN}/`, "i");
 

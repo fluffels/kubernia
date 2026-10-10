@@ -1,5 +1,5 @@
-// Kein Shebang: wird über `.claude/settings.json` per `node scripts/worktree-guard-powershell.mjs` gestartet UND von
-// test/harness/worktree-guard-powershell.test.ts importiert (ein `#!` bricht den Test-Import).
+// Kein Einstieg, kein Direktaufruf (#1579, Konvention #1398): Lib des Dispatchers `scripts/pretooluse-hook.mjs`, der einzige registrierte
+// PreToolUse-Hook; wird von ihm und von test/harness/worktree-guard-powershell.test.ts importiert.
 /**
  * Worktree-Guard für das PowerShell-Tool (#1311, Z25) — Claude-Code-`PreToolUse`-Hook, Matcher `PowerShell`.
  *
@@ -36,12 +36,11 @@
  *    der beide Wörter nennt.
  */
 import { statSync } from "node:fs";
-import { dirname, resolve, isAbsolute } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve, isAbsolute } from "node:path";
 import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
 import { INTERPRETER_NAMEN, SHELLS, baseName } from "./shell-tabellen.mjs";
 import { GIT_COMMIT_PUSH } from "./worktree-guard-tabellen.mjs";
-import { MAX_INTERPRETER, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { MAX_INTERPRETER, parseHookInput } from "./hook-io.mjs";
 
 export { parseHookInput };
 
@@ -401,12 +400,3 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0
   }
   return frage ?? { block: false };
 }
-
-function main() {
-  const { tool, cwd, command } = parseHookInput(readStdin());
-  if (tool !== undefined && tool !== "PowerShell") return;
-  const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-  emit(mergeDecisions([bewertePowerShell({ command, cwd, repoRoot })]));
-}
-
-if (istDirektaufruf(import.meta.url)) main();

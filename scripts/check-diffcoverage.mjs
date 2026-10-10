@@ -15,7 +15,7 @@
  * `coverage/lcov.info` (v8) ergibt das je Zeile „getestet / nicht getestet". Bewertet
  * wird PRO SCHICHT über `layerOf()` aus der Schicht-SSOT scripts/layers.cjs — dieselben
  * Grenzen, an denen auch die Aggregat-Floors in vite.config.ts hängen. Die Basis-Semantik
- * teilt es sich mit check:diffsize (#533), dessen `resolveBase` es IMPORTIERT statt kopiert.
+ * teilt es sich mit check:diffsize (#533): `resolveBase` steht in check-basis.mjs.
  *
  * Die volle Begründung (Floors je Schicht, asymmetrische Degradation, Ratchet) steht als
  * Regel in AGENTS.md › Testabdeckung. Reines Node-Skript (nur Builtins); die Parse-/
@@ -29,7 +29,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolveBase } from "./check-diffsize.mjs";
+import { resolveBase } from "./check-basis.mjs";
 import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 // layers.cjs ist bewusst CommonJS (der dependency-cruiser-Config `require`t es) —

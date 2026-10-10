@@ -506,7 +506,7 @@ function ungeschuetzt(skripte: string[], src: ProtectedSource): string[] {
 describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
   test("jedes Hook-Skript und jeder lokale Import davon steht in der Quelle UND in CODEOWNERS", () => {
     const skripte = lokaleImporteTransitiv(hookSkripte(read(".claude/settings.json")), read);
-    assert.ok(skripte.includes("scripts/cleanup-worktrees.mjs"), "der Stop-Hook importiert cleanup-worktrees.mjs");
+    assert.ok(skripte.includes("scripts/worktree-aufraeumen.mjs"), "der Stop-Hook importiert worktree-aufraeumen.mjs");
     assert.ok(skripte.includes("scripts/umsetzer-abschluss.mjs"), "der Stop-Hook importiert umsetzer-abschluss.mjs");
     assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
     const owners = codeownersPaths(codeowners);

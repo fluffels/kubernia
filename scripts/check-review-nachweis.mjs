@@ -30,12 +30,12 @@
  * Nachweis entsteht erst danach (Vorbild: check-festgefahren.mjs). Lokal:
  *   node scripts/check-review-nachweis.mjs
  *
- * Reines Node-Skript (nur Builtins + check-diffsize.mjs); die Bewertung ist pur exportiert.
+ * Reines Node-Skript (nur Builtins + check-basis.mjs); die Bewertung ist pur exportiert.
  */
 
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { resolveBase } from "./check-diffsize.mjs";
+import { resolveBase } from "./check-basis.mjs";
 import { meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
 
 // parseNachweis lebt im neutralen Modul slice-override.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);

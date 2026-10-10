@@ -20,6 +20,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
+import { SIZE_ALLOWLIST as ALLOWLIST } from './check-allowlists.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -27,17 +28,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
  *  800 gewählt, weil game.ts (793) heute knapp darunter liegt und ohnehin (#392)
  *  aufgeteilt wird – die Schwelle fängt also echte Ausreißer, nicht den Normalfall. */
 export const LOC_BUDGET = 800
-
-/** Bewusst geduldete Ausnahmen: Datei (repo-relativ, POSIX) → Grund mit Tracking-Ticket.
- *  „Kein Grün-durch-Aufweichen": jede Ausnahme MUSS ein offenes Split-Ticket nennen.
- *  Fällt die Datei unter Budget (Split erledigt), meldet der Wächter den Eintrag als
- *  stale und schlägt fehl – das erinnert daran, die Ausnahme wieder zu entfernen. */
-export const ALLOWLIST = [
-  // sim.ts liegt über dem Budget; der Split ist als #893 offen (Kern nach sim/core.ts
-  // auslagern, Ziel: unter 800 LOC). #864 (Builder-Registry) hat die Datei geringfügig
-  // vergrößert, aber den Erweiterungs-Aufwand für neue Ressourcentypen auf 1 Eintrag reduziert.
-  { file: 'src/sim.ts', reason: '#893 (Split offen): sim.ts entflechten, God-File von der Allowlist.' },
-]
 
 /**
  * Deckel für Workflow-Skripte unter `.claude/workflows/*.js` (#1349): über `LOC_BUDGET` nur mit Eintrag, und der Eintrag ist
@@ -156,7 +146,7 @@ function main() {
   if (violations.length)
     console.error(
       `\n${violations.length} Modul(e) über dem Budget. Aufteilen (siehe #392/#393 als Vorlage) ` +
-        `oder – mit offenem Split-Ticket – bewusst in die ALLOWLIST in scripts/check-size.mjs aufnehmen.`,
+        `oder – mit offenem Split-Ticket – bewusst in SIZE_ALLOWLIST in scripts/check-allowlists.mjs aufnehmen.`,
     )
   process.exit(1)
 }

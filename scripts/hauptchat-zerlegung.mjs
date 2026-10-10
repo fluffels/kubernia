@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ghText } from "./gh-cli.mjs";
-import { CACHE_TTL_MS, median } from "./mess-lib.mjs";
+import { CACHE_TTL_MS, istEchtesModell, median } from "./mess-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { hauptrepoWurzel, ladeSessionDatei, projektSlug } from "./transkript.mjs";
@@ -123,7 +123,7 @@ export function modellAnteil(fenster) {
   for (const w of fenster) {
     let calls = 0;
     for (const [m, n] of Object.entries(w.modelle ?? {})) {
-      if (m === "<synthetic>") continue;
+      if (!istEchtesModell(m)) continue;
       calls += n;
       z[/^claude-(sonnet|opus|haiku)-/.exec(m)?.[1] ?? "sonst"] += n;
     }

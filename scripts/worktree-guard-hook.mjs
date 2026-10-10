@@ -1,5 +1,5 @@
-// Kein Shebang: wird über den Dispatcher `scripts/pretooluse-hook.mjs` (oder direkt per `node scripts/worktree-guard-hook.mjs`)
-// gestartet UND von test/harness/worktree-guard.test.ts importiert (ein `#!` bricht den Test-Import, analog zu check-diffsize.mjs).
+// Kein Einstieg, kein Direktaufruf (#1579, Konvention #1398): Lib des Dispatchers `scripts/pretooluse-hook.mjs`, der einzige registrierte
+// PreToolUse-Hook; wird von ihm, von worktree-guard-powershell.mjs und von test/harness/worktree-guard.test.ts importiert.
 /**
  * Worktree-Guard-Hook (#735) — Claude-Code-`PreToolUse`-Hook für `Bash`.
  *
@@ -55,7 +55,7 @@ import { execFileSync } from "node:child_process";
 import { statSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildDenyOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { buildDenyOutput, parseHookInput } from "./hook-io.mjs";
 import { analyse } from "./worktree-guard-eval.mjs";
 import { coarseProtected, fromMsysPath, pathFor } from "./worktree-guard-tabellen.mjs";
 
@@ -171,11 +171,3 @@ export function decide({ cwd, command, repoRoot, deps = {} }) {
 
 /** Repo-Root aus dem Skript-Pfad ableiten (`scripts/<datei>.mjs` liegt eine Ebene unter dem Root). */
 export const repoRootFromScriptUrl = (importMetaUrl) => dirname(dirname(fileURLToPath(importMetaUrl)));
-
-// ── CLI (Direktaufruf; der Dispatcher ruft `decide` selbst) ─────────────────
-function main() {
-  const { cwd, command } = parseHookInput(readStdin());
-  emit(mergeDecisions([decide({ cwd, command, repoRoot: repoRootFromScriptUrl(import.meta.url) })]));
-}
-
-if (istDirektaufruf(import.meta.url)) main();

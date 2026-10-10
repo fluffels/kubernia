@@ -9,7 +9,7 @@
  * Ausführen mit: npm test
  */
 import { describe, expect, test } from "vitest";
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fixture } from "../support/tmp-fixture";
@@ -17,7 +17,9 @@ import { fixture } from "../support/tmp-fixture";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawHook from "../../scripts/langfuse-abgleich-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
+import * as rawNachEinstieg from "../../scripts/langfuse-nachliefern.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLock from "../../scripts/langfuse-lock.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawIo from "../../scripts/hook-io.mjs";
 
@@ -35,13 +37,15 @@ const H = rawHook as unknown as {
   starte: (t: string, o: { spawn: (...a: unknown[]) => Kind; env?: Record<string, string>; execPath?: string; home?: string }) => boolean;
 };
 type Kind = { on: (e: string, f: () => void) => void; unref: () => void };
-const N = rawNach as unknown as {
+// Wartezeit und hookLauf im Einstieg, Lock, Log und gesperrterLauf in der Lib langfuse-lock.mjs.
+const N = { ...rawNachEinstieg, ...rawLock } as unknown as {
   RUHEFRIST_BEENDET_MS: number;
   WARTE_SESSIONEND: number;
   WARTE_LOCK: number;
   LOCK_VERALTET_MS: number;
   parseArgs: (a: string[]) => Args;
-  lockNehmen: (d: string, o: { now: number; pid: number }) => "frei" | "übernommen" | "belegt";
+  lockNehmen: (d: string, o: { now: number; pid: number; nachPruefung?: () => void }) => "frei" | "übernommen" | "belegt";
+  lockMeldung: (lock: string) => string;
   lockFreigeben: (d: string, pid: number) => void;
   logAnhaengen: (d: string, e: unknown, o?: { max: number }) => void;
   logEintrag: (o: Record<string, unknown>) => Log;
@@ -249,6 +253,60 @@ describe("Lock", () => {
     expect(N.lockNehmen(d, { now: Date.now(), pid: 12 })).toBe("übernommen");
   });
 
+  test("TOCTOU: zwei Bewerber sehen denselben veralteten Lock, genau einer gewinnt und der frische Lock des Gewinners bleibt (Negativfall)", () => {
+    const d = lockDatei();
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    const spaet = T0 + N.LOCK_VERALTET_MS + 1;
+    let a = "";
+    // Bewerber 12 hat „veraltet“ gesehen; bevor er übernimmt, übernimmt Bewerber 13 vollständig.
+    const b = N.lockNehmen(d, { now: spaet, pid: 12, nachPruefung: () => { a = N.lockNehmen(d, { now: spaet, pid: 13 }); } });
+    expect(a).toBe("übernommen");
+    expect(b).toBe("belegt");
+    expect(pidVon(d)).toBe(13);
+  });
+
+  test("TOCTOU: war der Lock zwischen Prüfung und Übernahme schon freigegeben und neu belegt, bleibt der frische Lock, kein Grabstein übrig", () => {
+    const d = lockDatei();
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    const spaet = T0 + N.LOCK_VERALTET_MS + 1;
+    const b = N.lockNehmen(d, { now: spaet, pid: 12, nachPruefung: () => { unlinkSync(d); N.lockNehmen(d, { now: spaet, pid: 13 }); } });
+    expect(b).toBe("belegt");
+    expect(pidVon(d)).toBe(13);
+    expect(readdirSync(join(d, "..")).filter((n) => n.includes("verwaist"))).toEqual([]);
+  });
+
+  test("war der veraltete Lock zwischen Prüfung und Übernahme schon freigegeben (ohne neue Belegung): der Bewerber bekommt ihn als frei", () => {
+    const d = lockDatei();
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    const spaet = T0 + N.LOCK_VERALTET_MS + 1;
+    const b = N.lockNehmen(d, { now: spaet, pid: 12, nachPruefung: () => unlinkSync(d) });
+    expect(b).toBe("frei");
+    expect(pidVon(d)).toBe(12);
+  });
+
+  test("Grabsteine: ein alter (über 24 h) wird bei der nächsten Übernahme weggeräumt, ein junger bleibt", () => {
+    const d = lockDatei();
+    mkdirSync(join(d, ".."), { recursive: true });
+    const alt = d + ".verwaist-alt";
+    const jung = d + ".verwaist-jung";
+    writeFileSync(alt, "x");
+    writeFileSync(jung, "x");
+    const lange = new Date(T0 - 2 * 24 * 3_600_000);
+    utimesSync(alt, lange, lange);
+    utimesSync(jung, new Date(T0), new Date(T0));
+    N.lockNehmen(d, { now: T0, pid: 11 });
+    N.lockNehmen(d, { now: T0 + N.LOCK_VERALTET_MS + 1, pid: 12 });
+    expect(existsSync(alt)).toBe(false);
+    expect(existsSync(jung)).toBe(true);
+  });
+
+  test("lockMeldung: je Zustand ein eigener Text", () => {
+    expect(N.lockMeldung("belegt")).toMatch(/hält den Lock/);
+    expect(N.lockMeldung("fehler")).toMatch(/nicht anlegen/);
+    expect(N.lockMeldung("frei")).toMatch(/abgestürzt/);
+    expect(new Set([N.lockMeldung("belegt"), N.lockMeldung("fehler"), N.lockMeldung("frei")]).size).toBe(3);
+  });
+
   test("Freigabe nur mit der eigenen pid", () => {
     const d = lockDatei();
     N.lockNehmen(d, { now: T0, pid: 11 });
@@ -309,12 +367,22 @@ describe("Log", () => {
       fehler: [{ session: "s1", status: 500, meldung: "x".repeat(400) }],
     };
     const e = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 1, protokoll });
-    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "session", "sessions", "spans", "wuerdeSenden", "zeit", "zugang"]);
+    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "session", "sessions", "spans", "uebrig", "wuerdeSenden", "zeit", "zugang"]);
     expect(e).toMatchObject({ zugang: true, geprueft: 3, gesendet: 2, dubletten: 1, exitCode: 1 });
     expect(e.sessions).toHaveLength(1);
     expect(e.fehler[0].meldung).toHaveLength(300);
     expect(e.fehler[0]).toMatchObject({ status: 500 });
     expect(N.logEintrag({ zeit: "Z", ausloeser: "sessionstart", session: null, lock: "belegt" })).toMatchObject({ zugang: null, geprueft: 0, gesendet: 0, sessions: [], fehler: [], exitCode: null });
+  });
+});
+
+describe("Log: Ende verworfen (#1579)", () => {
+  test("eine Session mit verworfenem Ende steht im Log, auch wenn sonst nichts zu melden ist; ohne das Feld bleibt sie draußen", () => {
+    const sess = (endeVerworfen: boolean) => ({ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, befund: null, endeVerworfen });
+    const mit = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(true)], fehler: [] } });
+    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, endeVerworfen: true }]);
+    const ohne = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(false)], fehler: [] } });
+    expect(ohne.sessions).toEqual([]);
   });
 });
 

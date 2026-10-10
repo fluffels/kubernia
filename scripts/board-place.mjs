@@ -27,7 +27,7 @@
  * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { mitKontingent } from "./gh-kontingent.mjs";
+import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   NOTFALL_ARTEN,
   REPO,

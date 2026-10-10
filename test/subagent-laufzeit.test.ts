@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/subagent-laufzeit.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
 
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[]; datei?: string };
@@ -12,7 +14,6 @@ type L = { modelle: string[]; datei: string | null; kosten: number | null; ticke
 type Stat = { kosten: number | null; kostenSumme: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
-  vereinigungMs: (i: [number, number][]) => number;
   laufzeiten: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; schnitt?: string }) => Erg;
   renderMarkdown: (r: Erg) => string;
 };
@@ -44,16 +45,6 @@ const lauf = (prompt: string, von: number, bis: number, o: { tag?: number; tool?
   zeilen.push(call(bis, tag));
   return { meta: { agentType: o.agentType ?? "kubernia-planner" }, zeilen };
 };
-
-describe("vereinigungMs", () => {
-  test("überlappende Intervalle zählen einmal, getrennte addieren sich, kaputte entfallen", () => {
-    expect(S.vereinigungMs([[0, 10], [5, 15]])).toBe(15);
-    expect(S.vereinigungMs([[0, 10], [20, 30]])).toBe(20);
-    expect(S.vereinigungMs([[0, 10], [2, 4]])).toBe(10);
-    expect(S.vereinigungMs([[10, 0], [Number.NaN, 3]])).toBe(0);
-    expect(S.vereinigungMs([])).toBe(0);
-  });
-});
 
 describe("laufzeiten: ein Lauf", () => {
   test("Dauer, Requests, Toolzeit, Modellzeit, Kontext, Ticket und Sammelticket-Erkennung", () => {
@@ -242,6 +233,10 @@ describe("laufzeiten: Modelle und Transkriptdatei (#1580)", () => {
     expect(lauf1(mitModellen(["claude-opus-5-5"], "s1/subagents/agent-x.jsonl")).datei).toBe("s1/subagents/agent-x.jsonl");
     expect(lauf1(mitModellen(["claude-opus-5-5"])).datei).toBeNull();
   });
+  test("renderMarkdown: zwei Modelle stehen kommagetrennt in einer Zelle", () => {
+    const md = S.renderMarkdown(S.laufzeiten({ laeufe: [mitModellen(["claude-sonnet-5-5", "claude-opus-5-5"])], agent: "kubernia-lens" }));
+    expect(md).toContain("| claude-opus-5-5, claude-sonnet-5-5 |");
+  });
   test("renderMarkdown: Spalte Modellzeit und Spalte Modell (Name, `-` ohne Modell)", () => {
     const r = S.laufzeiten({ laeufe: [mitModellen(["claude-sonnet-5-5"]), mitModellen([])], agent: "kubernia-lens" });
     const md = S.renderMarkdown(r);
@@ -253,7 +248,7 @@ describe("laufzeiten: Modelle und Transkriptdatei (#1580)", () => {
 });
 
 describe("ladeLaeufe: datei relativ zum Projektordner (#1580)", () => {
-  const L2 = raw as unknown as { ladeLaeufe: (dir: string, agent: string, von?: string) => { meta: { agentType: string }; datei: string }[] };
+  const L2 = rawLaeufe as unknown as { ladeLaeufe: (dir: string, agent: string, von?: string) => { meta: { agentType: string }; datei: string }[] };
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });

@@ -25,6 +25,8 @@ import { fileURLToPath } from "node:url";
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkBasis from "../scripts/check-basis.mjs";
 
 const parseNpmRunMentions: (md: string) => Set<string> = checkDocDrift.parseNpmRunMentions;
 const extractLinks: (md: string) => { target: string; path: string; anchor: string }[] =
@@ -42,7 +44,7 @@ const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = check
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
 // Neue Bindings (#1091) typisiert per Assertion statt per unsafe-Zugriff: der Alt-Bestand
 // oben ist in eslint-suppressions.json eingefroren und soll nicht wachsen.
-const { collectMarkdown, VERSIONED_CLAUDE_DIRS } = checkDocDrift as unknown as {
+const { collectMarkdown, VERSIONED_CLAUDE_DIRS } = checkBasis as unknown as {
   collectMarkdown: (rootDir?: string) => string[];
   VERSIONED_CLAUDE_DIRS: Set<string>;
 };

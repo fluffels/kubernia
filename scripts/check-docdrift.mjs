@@ -33,7 +33,8 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, resolve, sep, posix } from "node:path";
-import { collectMarkdown as collectMd, fenceMaske } from "./docs-gen/markdown.mjs";
+import { fenceMaske } from "./docs-gen/markdown.mjs";
+import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -51,42 +52,6 @@ export const DOC_EXEMPT_SCRIPTS = new Set([
   "preview:offline", // dito für den Offline-Build
   "test:watch", // Watch-Modus von Vitest — lokale Convenience (dokumentiert ist `npm test`)
 ]);
-
-/** Verzeichnisse, die beim Markdown-Sammeln nie betreten werden. */
-const IGNORED_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "dist-offline",
-  "dist-devpanel",
-  "test-results",
-  "playwright-report",
-]);
-
-/** Unterordner von .claude, die versioniert sind (Gegenstück zu den `!.claude/…/`-
- *  Ausnahmen in .gitignore) — nur DIESE werden unter .claude gescannt. Alles andere
- *  dort ist nicht versioniert: Worktrees paralleler Agenten (.claude/worktrees, volle
- *  Repo-Kopien), lokale Einstellungen, Tool-Caches. Bewusst eine Allowlist statt
- *  „alles außer worktrees": sonst röte der Wächter an lokal abgelegten, untrackten
- *  Dateien — lokal rot, CI grün (#1091; gleiche Abwägung wie test/harness/model-routing.test.ts).
- *  Bewusst auch kein `git ls-files`: eine neue, noch nicht ge-`add`-ete .md bliebe
- *  sonst lokal ungeprüft. test/docdrift.test.ts gleicht die Liste mit .gitignore ab. */
-export const VERSIONED_CLAUDE_DIRS = new Set(["agents", "skills", "workflows"]);
-
-// ── Markdown sammeln ───────────────────────────────────────────────────────────
-
-/** Alle *.md im Repo (repo-relativer POSIX-Pfad), IGNORED_DIRS ausgenommen; unter
- *  dem .claude im Repo-Root nur die VERSIONED_CLAUDE_DIRS (und keine losen Dateien direkt
- *  darin). Anders als früher (Basename-Match) gilt das nur für das Root-.claude. */
-export function collectMarkdown(rootDir = ROOT) {
-  return collectMd(rootDir, ["."], {
-    ueberspringe: (ent, relDir) => {
-      const inClaude = relDir === ".claude";
-      if (ent.isDirectory()) return IGNORED_DIRS.has(ent.name) || (inClaude && !VERSIONED_CLAUDE_DIRS.has(ent.name));
-      return inClaude; // lose Dateien direkt in .claude
-    },
-  });
-}
 
 // ── Code-Fences ausblenden ─────────────────────────────────────────────────────
 

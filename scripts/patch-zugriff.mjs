@@ -10,6 +10,8 @@
  * Pur, ohne IO.
  */
 
+import { vereinigungsLaenge } from "./mess-lib.mjs";
+
 export const KOMPLETT_AB = 0.9;
 const STANDARD_LIMIT = 2000;
 
@@ -39,21 +41,8 @@ function lesen(z, bereich, gesamt) {
   if (Number.isFinite(gesamt)) z.gesamt = Math.max(z.gesamt ?? 0, gesamt);
 }
 
-function vereinigung(bereiche) {
-  const s = [...bereiche].sort((a, b) => a[0] - b[0]);
-  let summe = 0;
-  let cur = null;
-  for (const [a, b] of s) {
-    if (!cur || a > cur[1] + 1) {
-      if (cur) summe += cur[1] - cur[0] + 1;
-      cur = [a, b];
-    } else if (b > cur[1]) cur[1] = b;
-  }
-  return summe + (cur ? cur[1] - cur[0] + 1 : 0);
-}
-
 function fertig(z) {
-  const zeilen = vereinigung(z.bereiche);
+  const zeilen = vereinigungsLaenge(z.bereiche, { geschlossen: true });
   const anteil = z.gesamt ? Math.min(1, zeilen / z.gesamt) : null;
   const komplett = z.catKomplett || (anteil !== null && anteil >= KOMPLETT_AB) || (z.readUnbegrenzt && z.gesamt === null);
   return { zugriffe: z.zugriffe, zeilen, gesamt: z.gesamt, anteil, komplett };

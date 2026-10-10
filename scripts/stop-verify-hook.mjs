@@ -19,7 +19,7 @@
  * scheitert (laufender Dev-Server / Shell-cwd im Worktree, AGENTS.md Punkte 1-2),
  * ist damit blockiert. Statt darauf zu vertrauen, dass jemand manuell an
  * `node scripts/cleanup-worktrees.mjs --fix` denkt, prüft und räumt dieser Hook
- * bei JEDEM Stop automatisch auf (Logik aus cleanup-worktrees.mjs, EINE Quelle).
+ * bei JEDEM Stop automatisch auf (Logik aus worktree-aufraeumen.mjs, EINE Quelle).
  * Erfolgreich (keine Waisen oder alle entfernt) → still, kein Reibungsverlust.
  * Löschen schlägt fehl (Datei-Lock) → Stop blockieren mit klarer Meldung. Bewusst
  * NICHT die `rm -rf`-Deny aufweichen — der Workaround über `fs.rmSync` (kein
@@ -46,7 +46,7 @@
 import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diagnoseOrphans, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
+import { diagnoseOrphans, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./worktree-aufraeumen.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 
