@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { median } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
-import { ladeLaeufe, laufAus, ms, MIN } from "./subagent-laeufe.mjs";
+import { ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
 const tagVon = (t) => new Date(t).toISOString().slice(0, 10);
 const stat = (laeufe) => ({

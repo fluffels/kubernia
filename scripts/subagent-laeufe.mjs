@@ -15,7 +15,7 @@ import { ticketAusRef } from "./ticket-refs.mjs";
 
 export const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
-export const MIN = 60_000;
+const MIN = 60_000;
 
 /** Prompt des Laufs: Text der ersten Nutzerzeile. */
 function promptAus(zeilen) {
