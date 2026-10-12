@@ -953,15 +953,21 @@ describe("--beendet bei teilweise gesendeten Chunks (Z6c)", () => {
     const viele = Array.from({ length: O.MAX_SPANS_JE_REQUEST + 1 }, (_, i) => msg(`m${i}`, i));
     const a = aufbau(viele);
     const jetzt = Date.now();
-    const t = new Date(jetzt - 3 * MIN);
-    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t, t);
+    // Bruchteil unter einer ms: utimes mit Date rundet auf Linux auf Mikrosekunden ab, mtimeMs ist dann nie ganzzahlig.
+    const sek = (jetzt - 3 * MIN) / 1000 + 0.0005;
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), sek, sek);
     const r = await lauf(a, mock({ ist: 0, otlpStatus: (n) => (n === 1 ? 500 : 200) }), { beendet: "s1" }, jetzt);
     expect(r.exitCode).toBe(1);
     const e = ledgerVon(a.ledger).s1;
     expect(e.gesendet).toHaveLength(O.MAX_SPANS_JE_REQUEST);
     expect(e).toMatchObject({ beendet: true, bestaetigt: false });
     expect(e.groesse).toBeGreaterThan(0);
-    expect(e.mtime).toBe(t.getTime());
+    // Orakel ist die mtime, die auch der Folgelauf über findeSessions vergleicht, nie Date#getTime().
+    const [s] = A.findeSessions({ projectsRoot: a.root, praefix: PRAEFIX });
+    expect(e.mtime).toBe(s.mtime);
+    // Folgelauf: unveränderte Datei wird am Float-mtime aus dem JSON-Ledger wiedererkannt.
+    const r2 = await lauf(a, mock({ ist: 0 }), {}, jetzt + MIN);
+    expect(r2.protokoll.sessions[0].status).not.toBe("läuft");
   });
 });
 

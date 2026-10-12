@@ -158,6 +158,10 @@ Volle Vitest-Läufe (vor allem die `store.*`-Tests, `game-hazards` und die Git-l
 
 Zwei Lastquellen in Wächter-Tests vermeidest du so: (1) **Repo-Scans** laufen über den gecachten Helfer `test/harness/repo-texte.ts` (`repoDateien()`, `lies()`, `AGENTEN_KONTEXT`): `git ls-files` und jede Datei werden je Testdatei einmal gelesen statt je Wächter neu (770 Dateien, 8 MB), und der Scan-Umfang ist der Agenten-Kontext, nicht der Spiel-Code. (2) **Prozessstarts** gehören nicht in Logik-Tests: `fixOrphans`/`checkAndFixOrphanWorktrees` starten unter Windows bei gesperrtem Ordner `powershell` (WMI, ~600 ms) und bekommen darum `listProcesses: () => []`; ein `vi.mock("node:child_process")`-Zähler am Dateiende belegt, dass kein Test einen echten Start auslöst. Wo der Prozessstart selbst geprüft wird (`pretooluse-hook.test.ts`), gilt als Richtwert: wenige Starts je Test (ein Test je Skript) und ein Describe-Timeout von 30 s.
 
+## Warum ist ein mtime-Vergleich nach `utimesSync(Date)` auf Linux flaky?
+
+`utimesSync(pfad, Date, Date)` übergibt Sekunden als Float; libuv rundet auf Linux auf ganze Mikrosekunden ab, `statSync().mtimeMs` ist dann z.B. `…809.999` statt `…810`. Ein Test darf die mtime daher nie gegen `Date#getTime()` prüfen, sondern gegen das Orakel, das auch der Produktivcode vergleicht (`findeSessions(...)[0].mtime` bzw. `statSync`). Zum Provozieren den Seed mit einem Bruchteil unter einer Millisekunde setzen (`ms / 1000 + 0.0005`): so ist der Test auf jedem OS rot, wenn beim Schreiben gerundet wird.
+
 ## Verwandte Dokumente
 
 - [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness
