@@ -309,13 +309,18 @@ export function renderMarkdown(r) {
 
 export function parseArgs(argv) {
   const a = { agent: "kubernia-umsetzer", tickets: [], ohne: [], json: false };
+  // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
+  const nummer = (name, wert) => {
+    if (!/^[0-9]+$/.test(String(wert ?? ""))) a.fehler ??= `${name} erwartet eine Ticketnummer, nicht ${wert ?? "nichts"}`;
+    return Number(wert);
+  };
   for (let i = 0; i < argv.length; i++) {
     const x = argv[i];
     if (x === "--von") a.von = argv[++i];
     else if (x === "--bis") a.bis = argv[++i];
     else if (x === "--agent") a.agent = argv[++i];
-    else if (x === "--ticket") a.tickets.push(Number(argv[++i]));
-    else if (x === "--ohne") a.ohne.push(Number(argv[++i]));
+    else if (x === "--ticket") a.tickets.push(nummer(x, argv[++i]));
+    else if (x === "--ohne") a.ohne.push(nummer(x, argv[++i]));
     else if (x === "--projekt") a.projekt = argv[++i];
     else if (x === "--brille") a.brille = argv[++i];
     else if (x === "--delta") {

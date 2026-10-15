@@ -168,7 +168,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
 }
 
 /** Holt die Daten über `runGit`/`runGh` (injizierbar) und bewertet. Wirft DatenFehler bei Lücken. */
-export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date() }) {
+export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tickets = [], ohne = [] }) {
   const gh = (args) => {
     try {
       return runGh(args);
@@ -185,7 +185,11 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date() }) {
   if (liste.length >= PR_LIMIT) throw new DatenFehler(`PR-Liste bei ${PR_LIMIT} abgeschnitten: Zeitfenster verkleinern.`);
   const t0 = new Date(von).getTime();
   const t1 = new Date(bis).getTime();
-  const prs = liste.filter((p) => new Date(p.mergedAt).getTime() >= t0 && new Date(p.mergedAt).getTime() <= t1).sort((a, b) => a.number - b.number);
+  // Ticketfilter (wie kontext-treiber): `tickets` = nur diese, `ohne` = alle außer diesen; vor den weiteren gh-Aufrufen, damit sie nur die Teilmenge laden.
+  const prs = liste
+    .filter((p) => new Date(p.mergedAt).getTime() >= t0 && new Date(p.mergedAt).getTime() <= t1)
+    .filter((p) => (tickets.length === 0 || tickets.includes(ticketVon(p))) && !ohne.includes(ticketVon(p)))
+    .sort((a, b) => a.number - b.number);
   let commits;
   try {
     commits = parseCommits(runGit(["log", "origin/main", `--since=${new Date(t0 - SINCE_PUFFER_MS).toISOString()}`, "--format=%H%x1f%cI%x1f%B%x1e"]));
@@ -224,21 +228,36 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date() }) {
   return bewertePrs({ prs, commits, ci, festgefahren, jetzt });
 }
 
-function main(argv) {
-  const opt = (name) => {
-    const i = argv.indexOf(name);
-    return i >= 0 ? argv[i + 1] : undefined;
+export const AUFRUFHILFE = "Aufruf: node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--json]";
+
+/** Argumente: `--von`, `--bis`, wiederholbar `--ticket <nr>` (nur diese) und `--ohne <nr>` (alle außer diesen), `--json`. Eine Nicht-Ganzzahl setzt `fehler`. */
+export function parseArgs(argv) {
+  const a = { von: undefined, bis: undefined, tickets: [], ohne: [], json: false, fehler: null };
+  const nummer = (name, wert) => {
+    if (!/^[0-9]+$/.test(String(wert ?? ""))) a.fehler ??= `${name} erwartet eine Ticketnummer, nicht ${wert ?? "nichts"}`;
+    return Number(wert);
   };
-  const von = opt("--von");
-  const bis = opt("--bis");
-  if (!von || !bis || [von, bis].some((d) => Number.isNaN(new Date(d).getTime()))) {
-    console.error("Aufruf: node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--json]");
+  for (let i = 0; i < argv.length; i++) {
+    const x = argv[i];
+    if (x === "--von") a.von = argv[++i];
+    else if (x === "--bis") a.bis = argv[++i];
+    else if (x === "--ticket") a.tickets.push(nummer(x, argv[++i]));
+    else if (x === "--ohne") a.ohne.push(nummer(x, argv[++i]));
+    else if (x === "--json") a.json = true;
+  }
+  return a;
+}
+
+function main(argv) {
+  const { von, bis, tickets, ohne, json, fehler } = parseArgs(argv);
+  if (fehler || !von || !bis || [von, bis].some((d) => Number.isNaN(new Date(d).getTime()))) {
+    console.error(fehler ? [fehler, AUFRUFHILFE].join("\n") : AUFRUFHILFE);
     process.exit(1);
   }
   try {
     const run = (cmd) => (args) => execFileSync(cmd, args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
-    const ergebnis = laufErgebnis({ von, bis, runGit: run("git"), runGh: ghText });
-    console.log(argv.includes("--json") ? JSON.stringify(ergebnis, null, 2) : formatiere(ergebnis));
+    const ergebnis = laufErgebnis({ von, bis, runGit: run("git"), runGh: ghText, tickets, ohne });
+    console.log(json ? JSON.stringify(ergebnis, null, 2) : formatiere(ergebnis));
   } catch (e) {
     console.error(`✖ lauf-ergebnis: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(2);

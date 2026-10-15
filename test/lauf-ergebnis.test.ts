@@ -30,7 +30,8 @@ const mod = raw as {
   formatiere: (e: Ergebnis) => string;
   labelAbfrage: (n: number[]) => string;
   festgefahrenAusAntwort: (a: unknown, n: number[]) => Record<number, number>;
-  laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date }) => Ergebnis;
+  laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; tickets?: number[]; ohne?: number[] }) => Ergebnis;
+  parseArgs: (a: string[]) => { von?: string; bis?: string; tickets: number[]; ohne: number[]; json: boolean; fehler: string | null };
 };
 
 const SHA = "abcdef1234567890abcdef1234567890abcdef12";
@@ -288,6 +289,40 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     const laeufe = "feature/alt\told\t2026-09-30T10:30:00Z\nfeature/neu\tneu\t2026-10-01T10:30:00Z\n";
     const e = mod.laufErgebnis({ von: "2026-09-30T00:00:00Z", bis, runGit: git(zwei), runGh: gh({ liste: prs, laeufe, seit: "2026-09-30" }), jetzt: SPAETER });
     assert.deepEqual(e.zeilen.map((z) => [z.pr, z.ciFix]), [[50, 1], [51, 1]]);
+  });
+  describe("Ticketfilter --ticket/--ohne", () => {
+    const drei = [
+      pr({ number: 50, headRefName: "feature/a", closingIssuesReferences: [{ number: 40 }] }),
+      pr({ number: 51, headRefName: "feature/b", closingIssuesReferences: [{ number: 41 }], mergeCommit: { oid: "1".repeat(40) } }),
+      pr({ number: 52, headRefName: "feature/c", title: "chore: ohne Ticket", closingIssuesReferences: [], mergeCommit: { oid: "2".repeat(40) } }),
+    ];
+    const sep = String.fromCharCode(31);
+    const ende = String.fromCharCode(30);
+    const dreiLog = [SHA, "1".repeat(40), "2".repeat(40)].map((s) => [s, MERGED, review("runden=1 lenses=doku") + ende].join(sep)).join("");
+    const lauf = (extra: { tickets?: number[]; ohne?: number[] }, aufrufe: string[][] = []) =>
+      mod.laufErgebnis({ von, bis, runGit: git(dreiLog), runGh: gh({ liste: drei, aufrufe }), jetzt: SPAETER, ...extra });
+    test("ohne Filter alle, --ticket nur die genannten, --ohne alle außer den genannten (auch PRs ohne Ticket)", () => {
+      assert.deepEqual(lauf({}).zeilen.map((z) => z.pr), [50, 51, 52]);
+      assert.deepEqual(lauf({ tickets: [41, 40] }).zeilen.map((z) => z.pr), [50, 51]);
+      assert.deepEqual(lauf({ ohne: [40] }).zeilen.map((z) => z.pr), [51, 52]);
+      assert.deepEqual(lauf({ tickets: [40, 41], ohne: [41] }).zeilen.map((z) => z.pr), [50]);
+      assert.deepEqual(lauf({ tickets: [999] }).zeilen, []);
+    });
+    test("der Filter greift vor den gh-Aufrufen: die Label-Abfrage nennt nur die Teilmenge, ohne Treffer bleibt es bei der Liste", () => {
+      const aufrufe: string[][] = [];
+      lauf({ tickets: [41] }, aufrufe);
+      const query = aufrufe.map((a) => a.find((x) => x.startsWith("query=")) ?? "").join("");
+      assert.ok(query.includes("p51:") && !query.includes("p50:") && !query.includes("p52:"), query);
+      const leer: string[][] = [];
+      lauf({ tickets: [999] }, leer);
+      assert.equal(leer.length, 1);
+    });
+    test("parseArgs: wiederholbare --ticket/--ohne, Nicht-Ganzzahl ist ein Aufruf-Fehler", () => {
+      assert.deepEqual(mod.parseArgs(["--von", "a", "--bis", "b", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--json"]), { von: "a", bis: "b", tickets: [1, 2], ohne: [3], json: true, fehler: null });
+      for (const kaputt of [["--ticket", "abc"], ["--ohne", "1.5"], ["--ticket"], ["--ohne", "-2"], ["--ticket", ""]]) {
+        assert.match(mod.parseArgs(kaputt).fehler ?? "", /erwartet eine Ticketnummer/, kaputt.join(" "));
+      }
+    });
   });
   test("API-Kappung bei 1000 roten Läufen ist ein Datenfehler", () => {
     const laeufe = Array.from({ length: 1000 }, (_, i) => `feature/kq-40-a&b#c+d\tsha${i}\t2026-10-01T10:30:00Z`).join("\n");
