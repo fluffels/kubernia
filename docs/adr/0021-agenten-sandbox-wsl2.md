@@ -4,6 +4,8 @@
 > Status: **akzeptiert** · Datum: 2026-10-08 · Ticket: #1432
 > ⚠️ **Natives Windows präzisiert durch [agent-harness.md › Natives Windows](../agent-harness.md#natives-windows) (2026-10-08, #1486):** dort startet die Session nicht „unverändert“, der strikte Projekt-Block sperrt Shell-Befehle; Abhilfe ist ein lokales Override samt SessionStart-Hinweis, die Entscheidung dieses ADR bleibt.
 
+> **Präzisiert durch [ADR 0025](0025-sandbox-als-austauschbare-laufumgebung.md) (2026-10-16, #1614):** WSL2 ist eine Variante des Sandbox-Vertrags, die Entscheidung dieses ADR bleibt.
+
 ## Status
 
 **Akzeptiert.** Erster Baustein des Epics #1429 (Sandbox für Agenten-Shell-Befehle). Die Reihenfolge der weiteren Bausteine steht dort; dieses ADR legt Weg und Konfiguration fest, Probe und Durchsetzung folgen in #1434 und #1437.

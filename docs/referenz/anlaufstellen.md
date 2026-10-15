@@ -43,6 +43,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0022 Dark Factory](../adr/0022-dark-factory-kern-und-verteilung.md) | wenn der Harness-Kern als Vorlage für andere Projekte herausgelöst, eine Datei als Kern, Modul oder Projekt eingeordnet, ein zweites Board oder Verifikation ohne Mensch (Holdout, Spezifikations-Gate) zur Debatte steht |
 | [0023 Transkript als Wahrheit](../adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | wenn Langfuse-Daten unvollständig wirken, der Hook des Langfuse-Plugins oder der Nachlieferer (Lock, Log, SessionStart/SessionEnd) geändert oder der Abgleich zurückgebaut werden soll |
 | [0024 Hexagon als Lesart](../adr/0024-hexagon-als-lesart.md) | wenn Ports, Adapter oder die hexagonale Sicht in arc42 und im Architekturmodell angefasst werden oder jemand das Hexagon als Ordnerstruktur umsetzen will |
+| [0025 Sandbox als Laufumgebung](../adr/0025-sandbox-als-austauschbare-laufumgebung.md) | wenn die Agenten-Sandbox gewechselt, `sandbox-doctor --streng` gebaut oder geprüft werden soll, ob eine Umgebung als gesandboxt gilt (Vertrag V0 bis V7, Docker Sandboxes, eigene Container-Sandbox) |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 
@@ -85,6 +86,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [agent-harness-faq.md](../agent-harness-faq.md) | wenn du über eine Harness-Falle stolperst (Worktrees unter Windows, Hooks, Gates) |
 | [lessons-learned.md](../lessons-learned.md) | wenn du als Außenstehende:r wissen willst, welche Muster der Bau des Harness gezeigt hat (datierte Belege, was geändert wurde, was offen ist) |
 | [harness-glossar.md](../harness-glossar.md) | wenn dir ein Harness-Begriff fehlt (Subagent, Lens, Leitplanke, Override, Sammelticket, Dark Factory) |
+| [sandbox-anbinden.md](../sandbox-anbinden.md) | wenn du den Harness mit Docker Sandboxes (`sbx`) oder einer eigenen Container-Sandbox betreiben willst (Einrichtung, Eigenheiten) |
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
