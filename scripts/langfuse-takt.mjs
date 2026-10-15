@@ -1,6 +1,6 @@
 // Kein Shebang: wird von board-takt.mjs importiert UND von test/langfuse-takt.test.ts.
 /**
- * Status-Ticket „Langfuse-Status überprüfen“ (#1351, ADR 0016: wöchentlich plus nach Aktivität): die pure Entscheidung (`entscheideTakt`),
+ * Status-Ticket „Langfuse-Status überprüfen“ (#1351, ADR 0016: wöchentlich plus nach Aktivität, Push-Ruhe Fr–So): die pure Entscheidung (`entscheideTakt`),
  * der Body (`statusBody`) und das Anlegen bzw. Hochschieben (`fuehreStatusAus`). Gestartet wird der Takt nicht hier, sondern vom
  * generischen Board-Takt `scripts/board-takt.mjs` (Workflow `.github/workflows/board-takt.yml`, #1390), der auch das Harness-Sammelticket
  * pflegt und die Commit-Fenster berechnet. Die Entscheidung ist pur und getestet (test/langfuse-takt.test.ts), nur die gh-Aufrufe in
@@ -15,8 +15,10 @@ export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
 /** Aktivitäts-Untergrenze: so viele Commits auf main seit dem Abschluss des Vorgängers, sonst kein neues Ticket. */
 export const MIN_MERGES = 5;
-/** Push-Auslöser (Aktivität): so viele Ticket-Merges (ohne Bots) seit dem Abschluss des Vorgängers legen das Status-Ticket an bzw. holen es nach oben. */
-export const MIN_TICKET_MERGES_PUSH = 8;
+/** Push-Auslöser (Aktivität): so viele Ticket-Merges (ohne Bots) seit dem Anlegen des jüngsten Status-Tickets legen das Status-Ticket an bzw. holen es nach oben. */
+export const MIN_TICKET_MERGES_PUSH = 50;
+/** Wochentage (UTC, `getUTCDay`: So=0 … Sa=6), an denen der Push-Auslöser ruht: Fr, Sa, So. Der Montags-Cron setzt das Fenster zurück. */
+export const PUSH_RUHETAGE = [5, 6, 0];
 /** Mindestabstand in Stunden zwischen dem Abschluss des Vorgängers und einem neu angelegten Status-Ticket (beide Auslöser; „nach-oben“ ist ausgenommen). */
 export const MIN_ABSTAND_STUNDEN = 24;
 
@@ -25,9 +27,12 @@ export const MIN_ABSTAND_STUNDEN = 24;
  * `ticketMerges` = davon Ticket-Merges ohne Bots, `ausloeser` = Workflow-Event (`push` zählt nur Aktivität: mindestens
  * `MIN_TICKET_MERGES_PUSH` Ticket-Merges, sonst nichts; alles andere ist der Wochen-Cron mit `MIN_MERGES`).
  * `stundenSeitAbschluss` = Stunden seit dem Abschluss des Vorgängers (null/fehlt: kein Vorgänger); das Anlegen braucht mindestens
- * `MIN_ABSTAND_STUNDEN`. Liefert `{ aktion: "anlegen" | "nach-oben" | "nichts", nr?, grund, warnungen }`. Pur.
+ * `MIN_ABSTAND_STUNDEN`. `jetzt` (Datum oder ISO-String, optional) bestimmt den Wochentag (UTC): an `PUSH_RUHETAGE` (Fr–So) ruht der
+ * Push-Auslöser ganz (auch das Hochschieben), der Cron nicht. Ungültiges `jetzt` wirft.
+ * Liefert `{ aktion: "anlegen" | "nach-oben" | "nichts", nr?, grund, warnungen }`. Pur.
  */
-export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser = "schedule", stundenSeitAbschluss = null }) {
+export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser = "schedule", stundenSeitAbschluss = null, jetzt = undefined }) {
+  const wochentag = jetzt === undefined ? null : alsDatum(jetzt, "jetzt").getUTCDay();
   if (!Array.isArray(offene)) throw new Error("offene muss eine Liste sein.");
   if (!Number.isInteger(mergesSeit) || mergesSeit < 0) throw new Error(`mergesSeit muss eine ganze Zahl ≥ 0 sein, war ${String(mergesSeit)}`);
   const treffer = offene
@@ -41,6 +46,9 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
     warnungen.push(`Mehrere offene „${STATUS_TITEL}“ (${treffer.map((t) => `#${t.number}`).join(", ")}): der Lauf arbeitet mit dem ältesten und schließt nichts selbst.`);
   }
   const push = ausloeser === "push";
+  if (push && wochentag !== null && PUSH_RUHETAGE.includes(wochentag)) {
+    return { aktion: "nichts", grund: "Push ruht Fr–So, der Montag setzt zurück", warnungen };
+  }
   if (push && ticketMerges < MIN_TICKET_MERGES_PUSH) {
     return { aktion: "nichts", grund: `Push: nur ${ticketMerges} Ticket-Merges seit dem letzten Abschluss (Untergrenze ${MIN_TICKET_MERGES_PUSH})`, warnungen };
   }

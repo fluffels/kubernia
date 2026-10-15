@@ -111,3 +111,14 @@ Entscheidung: `istHarnessCommit` ordnet einen Commit über die `#N`-Referenzen s
 Frage: soll `istHarnessCommit` eine PR-Nummer im Titel auf das verknüpfte Issue auflösen, damit auch der Scope-Rückfall bei Titeln ohne Issue-Nummer wirkt? Messung auf `origin/main` seit 2026-09-08: 139 Commits, davon 128 mit Issue- und PR-Nummer im Titel, 11 mit genau einer Nummer (alle Dependabot, ohnehin keine Ticket-Merges), keiner ohne.
 
 Entscheidung: nein. Der Rückfall auf den Commit-Scope greift in der Praxis nie, eine Auflösung kostete je Merge einen API-Aufruf und brächte keine andere Zählung. Die Grenze steht im Kopfkommentar von `istHarnessCommit` und ist in `test/board-takt.test.ts` festgehalten: ein Titel nur mit PR-Nummer zählt als Spiel.
+
+## Fortschreibung #1628 (2026-10-16): Push-Schwelle 50, Ruhe Fr–So, Zählfenster ab Anlegen
+
+Anlass: Status-Tickets entstanden am 06., 07., 08., 10. und 15.10., obwohl der Push-Auslöser auf Aktivität zielt; bei 111 bzw. 52 Merges pro Woche (zwei Messwochen) liegt die Schwelle von 8 nur Stunden auseinander, und der Zähler hing am Abschluss des Vorgängers, nicht an seinem Anlegen.
+
+Entscheidung (ersetzt die 8 aus der Fortschreibung #1349 und das Fenster ab Abschluss):
+
+- **Schwelle:** der Push-Auslöser legt das Status-Ticket an bzw. holt es nach oben, sobald mindestens 50 Ticket-Merges (ohne Bots) im Zählfenster liegen. Die Zahl steht als benannte Konstante `MIN_TICKET_MERGES_PUSH`; sie ist ein Schätzwert aus zwei Messwochen und wird nach dem Befund des nächsten Status-Laufs angepasst, wenn der Takt zu selten oder zu oft feuert.
+- **Ruhe:** der Push-Auslöser feuert nicht Freitag, Samstag, Sonntag (UTC, `PUSH_RUHETAGE`); der Montags-Cron (5 Commits, Mindestabstand 24 Stunden) bleibt und setzt zurück.
+- **Zählfenster:** beginnt mit dem Anlegen des jüngsten Status-Tickets (offen oder geschlossen, je das spätere `createdAt`); jedes Anlegen setzt den Zähler auf 0. Der Mindestabstand von 24 Stunden misst weiter ab dem Abschluss.
+- **Abgrenzung:** gezählt werden Merges auf `main`, nicht Board-Positionen; das widerspricht der verworfenen Ticket-Zählung (Positionen driften) nicht.

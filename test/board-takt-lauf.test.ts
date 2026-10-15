@@ -105,6 +105,36 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(r.fehler).toBe(false);
   });
 
+  describe("Zählfenster beginnt mit dem Anlegen des jüngsten Status-Tickets (#1628)", () => {
+    const fensterLauf = (offenCreatedAt: string | null) => {
+      const log: string[] = [];
+      const io: Io = {
+        ghJson: (a) =>
+          a.join(" ").includes("state=closed")
+            ? [[{ number: 60, title: STATUS, created_at: "2026-10-05T08:00:00Z", closed_at: "2026-10-06T08:00:00Z" }]]
+            : [[]],
+        loadItems: () => [],
+        loadOpenIssuePages: () => [offenCreatedAt ? [{ number: 70, title: STATUS, created_at: offenCreatedAt, assignees: [] }] : []],
+        positionLautAgentsMd: () => 4,
+        fuehreStatusAus: () => ({ ok: true }),
+        fuehreHarnessAus: () => true,
+        log: (z) => log.push(z),
+      };
+      T.fuehreTaktAus({ jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, io });
+      return log.join("\n");
+    };
+
+    test("Vorgänger angelegt Mo, geschlossen Di: das Fenster beginnt beim Anlegen, nicht beim Abschluss", () => {
+      expect(fensterLauf(null)).toContain("Fenster ab 2026-10-05T08:01:00.000Z");
+    });
+    test("ein offenes Status-Ticket mit jüngerem createdAt gewinnt", () => {
+      expect(fensterLauf("2026-10-12T08:00:00Z")).toContain("Fenster ab 2026-10-12T08:01:00.000Z");
+    });
+    test("ein offenes Ticket mit älterem createdAt verschiebt das Fenster nicht", () => {
+      expect(fensterLauf("2026-10-01T08:00:00Z")).toContain("Fenster ab 2026-10-05T08:01:00.000Z");
+    });
+  });
+
   test("schlagen die Aktionen fehl (Status ok=false, Harness false), ist der Lauf ein Fehler", () => {
     const mk = (statusOk: boolean, harnessOk: boolean): Io => ({
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
