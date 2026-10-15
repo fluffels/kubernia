@@ -45,10 +45,17 @@ export interface ObservabilityHost extends Pick<ClusterState, "deployments" | "n
 /** Die Last eines Deployment-Pods nach dem Vorrang (`deploymentPodState`): evicted ⇒ keine Metriken. */
 function deploymentMetric(c: Extract<ClusterPod, { owner: "Deployment" }>): PodMetrics | null {
   const s = deploymentPodState(c.dep);
-  if (s.kind === "evicted") return null;
+  switch (s.kind) {
+    case "evicted": return null;
+    case "healthy": return podLoad(c);
+    case "broken": return brokenLoad(s.broken, podLoad(c));
+  }
+}
+
+function podLoad(c: Extract<ClusterPod, { owner: "Deployment" }>): PodMetrics {
   const m = baseLoad(c.pod);
   if (c.dep.cpuHeavy) m.cpuMilli = 850 + (hashStr(c.pod.name) % 200); // 850..1049m: weit über der HighCPU-Schwelle
-  return s.kind === "broken" ? brokenLoad(s.broken, m) : m;
+  return m;
 }
 
 /** Momentane Ressourcen-Last eines Pods – oder null, wenn der Container gar nicht

@@ -51,13 +51,13 @@ export const BROKEN_POD: Record<Broken["type"], BrokenPod> = {
 
 /** Der Zustand der Pods eines Deployments nach der EINEN Vorrangregel (#1648): Evicted > gesund > Broken. */
 export type DeploymentPodState =
-  | { kind: "evicted"; evicted: { reason: string } }
+  | { kind: "evicted"; evicted: NonNullable<Deployment["evicted"]> }
   | { kind: "healthy" }
   | { kind: "broken"; broken: Broken };
 
 /** Die EINE Vorrangregel für die Pods eines Deployments (#1509, #1648): Evicted überschreibt alles (#240): der kubelet hat den
  *  Pod beendet, er läuft nicht und ist nicht bereit. Anzeige (`get pods`, `describe pod`, `-o yaml`), Metriken, Alerts und Logs
- *  schalten alle über dieses Ergebnis, keiner liest `d.evicted`/`d.broken` selbst. */
+ *  schalten über dieses Ergebnis; die übrigen Leser (`describe pod`-Statusblock, `-o yaml`-Meldung, Endpoints, ArgoCD-Health) prüfen `evicted` selbst zuerst. */
 export function deploymentPodState(d: Partial<Pick<Deployment, "evicted" | "broken">>): DeploymentPodState {
   if (d.evicted) return { kind: "evicted", evicted: d.evicted };
   if (d.broken) return { kind: "broken", broken: d.broken };

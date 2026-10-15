@@ -130,6 +130,15 @@ describe("Evicted gewinnt überall (#1648)", () => {
     expect(s.podMetrics()).toEqual([]);
   });
 
+  test.each(TYPEN)("%s + evicted: describe pod nennt Evicted samt Grund in den Events, kein Broken-Ereignis", type => {
+    const s = evictedSim(type);
+    const out = kubectl(s, "describe pod " + podName(s));
+    const events = out.slice(out.indexOf("Events:"));
+    expect(events).toMatch(/Warning {2}Evicted {4}\S+ {3}Pod ephemeral local storage usage exceeds/);
+    expect(events).toContain("Killing");
+    expect(events).not.toContain("Warning  " + EVENT_GRUND[type]);
+  });
+
   test.each(TYPEN)("%s + evicted: logs und logs -p liefern denselben Fehler, weder Absturz- noch Normal-Log", type => {
     const s = evictedSim(type);
     const n = podName(s);
