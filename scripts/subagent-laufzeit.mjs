@@ -2,8 +2,9 @@
 /**
  * Laufzeit eines Subagent-Typs (#1382), z. B. der Planer-Laufzeit aus docs/model-routing.md § Planer-Laufzeit.
  *
- *   node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--schnitt <ISO>] [--projekt <slug>] [--json]
+ *   node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]
  *
+ * `--ticket`/`--ohne` (wiederholbar) lassen Läufe eines Tickets ein- bzw. ausschließen, bevor `parallel` und das Aggregat gerechnet werden (z. B. Gegenprobe-Läufe).
  * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` und deren JSONL (nicht alle Haupttranskripte).
  * Je Lauf: Ticket (`kq-<nr>` im Patch-Pfad, sonst Worktree, sonst erstes `#<nr>` im Prompt; `ticketAusLauf`), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
  * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
@@ -14,7 +15,7 @@
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
  */
 import { pathToFileURL } from "node:url";
-import { median } from "./mess-lib.mjs";
+import { median, passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
@@ -43,13 +44,14 @@ const stat = (laeufe) => ({
 
 /**
  * Kern: Läufe aus `{ meta, zeilen }` des gewünschten `agentType` im Fenster [von, bis] (Start) → Läufe plus Aggregat.
- * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], agent?: string, von?: string, bis?: string, schnitt?: string }} e
+ * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], agent?: string, von?: string, bis?: string, schnitt?: string, tickets?: number[], ohne?: number[] }} e
  */
-export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schnitt }) {
+export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schnitt, tickets = [], ohne = [] }) {
   const alle = laeufe
     .filter((l) => l?.meta?.agentType === agent)
     .map(laufAus)
     .filter(Boolean)
+    .filter((l) => passtTicketFilter(l.ticket, { tickets, ohne }))
     .filter((l) => (!von || l.start >= ms(von)) && (!bis || l.start <= ms(bis)))
     .sort((a, b) => a.start - b.start);
   for (const l of alle) l.parallel = alle.filter((o) => o !== l && o.start < l.ende && o.ende > l.start).length;
@@ -106,12 +108,20 @@ export function renderMarkdown(r) {
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
 export function parseArgs(argv) {
-  const a = { agent: "kubernia-planner", json: false };
+  const a = { agent: "kubernia-planner", json: false, tickets: [], ohne: [] };
+  // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
+  const nummer = (name, wert) => {
+    const { nr, fehler } = ticketNummer(name, wert);
+    if (fehler) a.fehler ??= fehler;
+    return nr;
+  };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--von") a.von = argv[++i];
     else if (k === "--bis") a.bis = argv[++i];
     else if (k === "--agent") a.agent = argv[++i];
+    else if (k === "--ticket") a.tickets.push(nummer(k, argv[++i]));
+    else if (k === "--ohne") a.ohne.push(nummer(k, argv[++i]));
     else if (k === "--schnitt") a.schnitt = argv[++i];
     else if (k === "--projekt") a.projekt = argv[++i];
     else if (k === "--json") a.json = true;
@@ -122,12 +132,13 @@ export function parseArgs(argv) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.von) {
-    console.error("Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--schnitt <ISO>] [--projekt <slug>] [--json]");
+  if (args.fehler || !args.von) {
+    if (args.fehler) console.error(args.fehler);
+    console.error("Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]");
     process.exit(2);
   }
   const dir = projektOrdner(args.projekt);
-  const r = laufzeiten({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, schnitt: args.schnitt });
+  const r = laufzeiten({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, schnitt: args.schnitt, tickets: args.tickets, ohne: args.ohne });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
 

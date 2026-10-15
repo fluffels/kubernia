@@ -14,7 +14,8 @@ type L = { modelle: string[]; datei: string | null; kosten: number | null; koste
 type Stat = { kostenGeschaetzt: number | null; kosten: number | null; kostenSumme: number; kostenGeschaetztSumme: number; output: number; outputGeschaetzt: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
-  laufzeiten: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; schnitt?: string }) => Erg;
+  laufzeiten: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; schnitt?: string; tickets?: number[]; ohne?: number[] }) => Erg;
+  parseArgs: (argv: string[]) => { tickets: number[]; ohne: number[]; fehler?: string };
   renderMarkdown: (r: Erg) => string;
 };
 
@@ -76,6 +77,25 @@ describe("laufzeiten: ein Lauf", () => {
     expect(r.aggregat.offen).toBe(1);
     expect(r.aggregat.gesamt.n).toBe(1);
     expect(r.aggregat.gesamt.dauerMin).toBeCloseTo(8, 5);
+  });
+});
+
+describe("laufzeiten: Ticketfilter (--ticket, --ohne)", () => {
+  const laeufe = () => [lauf("Plane #5", 0, 10), lauf("Plane #6", 0, 10), lauf("Plane ohne Nummer", 0, 10)];
+  test("ohne: ein Ticket fällt ganz weg, Läufe ohne Ticket bleiben", () => {
+    expect(S.laufzeiten({ laeufe: laeufe(), ohne: [6] }).laeufe.map((l) => l.ticket)).toEqual([5, null]);
+  });
+  test("tickets: nur dieses Ticket, ein Lauf ohne Ticket fällt heraus", () => {
+    expect(S.laufzeiten({ laeufe: laeufe(), tickets: [6] }).laeufe.map((l) => l.ticket)).toEqual([6]);
+  });
+  test("ein ausgeschlossener Lauf zählt nicht in parallel", () => {
+    const r = S.laufzeiten({ laeufe: [lauf("Plane #5", 0, 10), lauf("Plane #6", 0, 10)], ohne: [6] });
+    expect(r.laeufe[0].parallel).toBe(0);
+  });
+  test("parseArgs: wiederholbar; ungültige Nummer oder fehlender Wert setzt fehler", () => {
+    expect(S.parseArgs(["--ticket", "5", "--ticket", "6", "--ohne", "7", "--ohne", "8"])).toMatchObject({ tickets: [5, 6], ohne: [7, 8] });
+    expect(S.parseArgs(["--von", "x"])).toMatchObject({ tickets: [], ohne: [] });
+    for (const argv of [["--ohne", "abc"], ["--ohne"], ["--ticket", "1.5"]]) expect(S.parseArgs(argv).fehler, argv.join(" ")).toMatch(/Ticketnummer/);
   });
 });
 
