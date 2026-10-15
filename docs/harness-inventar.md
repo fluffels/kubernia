@@ -58,7 +58,7 @@ Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie 
 | `pixellab` | Pixel-Art über den gehosteten MCP-Server | kein Eigenbau, nur Konfiguration in `.mcp.json` | behalten: `list_projects` (Git-URLs, Push-Weg) steht in `deny` (#1476), `pixelart_workbench` bleibt uneingeschränkt | ja |
 | Permissions und Sandbox (`sandbox-doctor.mjs`) | Allowlist, Deny-Regeln, WSL2-Sandbox | [Sandboxing](https://code.claude.com/docs/en/sandboxing.md) nativ seit v2.0.24, `permissions` nativ | behalten: Prüfung des Zusammenspiels unter WSL2 ([ADR 0021](adr/0021-agenten-sandbox-wsl2.md)) ist Projektfall | teilweise |
 
-Statusline: noch kein Eigenbau, #1358 plant sie. Nativ: `statusLine` seit v1.0.71, `agentType` im `subagentStatusLine`-Payload seit v2.1.293 (Eingabe für #1358).
+Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reicht die persönliche Statusline durch. Nativ: `statusLine` seit v1.0.71, `agentType` im `subagentStatusLine`-Payload seit v2.1.293.
 
 ## B. Skripte und Takt-Workflows
 
@@ -70,6 +70,7 @@ Statusline: noch kein Eigenbau, #1358 plant sie. Nativ: `statusLine` seit v1.0.7
 | Fremdtext und Forum (`fremdtext.mjs`, `forum-sanitize.mjs`, `forum-inbox.yml`) | Text Dritter als Daten, Forum-Eingang | kein natives Gegenstück (Hook-Output-Escape ab v2.1.292 ist nur ein Teil) | behalten | teilweise |
 | Gates und CI-Nachweis (`verify-lauf.mjs`, `slice-override.mjs`, `check-review-nachweis.mjs`, `check-festgefahren.mjs`, `festgefahren.yml`, `dependabot-inbox.yml`, `internalrefs-pr-text.yml`) | Gates, Review-Nachweis, Festgefahren-Protokoll | Rulesets und Required-Checks nativ bei GitHub; die Gates listet die [README](../README.md) | behalten | teilweise |
 | CI-Warten des Umsetzers (`pr-warten.mjs`) | pollt höchstens 240 s, eine kompakte Zeile, unter der 5-Minuten-Cache-TTL | `gh pr checks --watch` blockiert bis zu den Checks ohne Zeitbudget und ohne kompakte Statuszeile ([gh](https://cli.github.com/manual/gh_pr_checks)) | behalten: Grund [Umsetzer-Kontext](model-routing.md#umsetzer-kontext-1559) | ja |
+| Budget-Pacing (`budget-pacing.mjs`, `budget-lib.mjs`, `statusline.mjs`) | taktet Mehr-Tickets-Läufe nach dem Wochenlimit des Kontos (Snapshot aus Statusline oder Headless-Probe) | `statusLine` liefert `rate_limits` nur für Pro/Max ([Statusline](https://code.claude.com/docs/en/statusline), gelesen 2026-10-15); [Mods](https://code.claude.com/docs/en/plugins/mods/overview.md) laufen unsandboxed und sind neu | behalten: Mods beobachten | ja |
 | Lebende Doku (`docs-gen.mjs`, `scripts/docs-gen/`) | generierte Abschnitte | kein Gegenstück; Kern-Schnitt: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md) | behalten | ja |
 | `patch-abschnitte.mjs` | teilt einen Patch für die Lenses in Leseabschnitte | kein Gegenstück; gleicht den Lesezwang des Modells aus | behalten: Lockern-Kandidat #1357 | ja |
 
