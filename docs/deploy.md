@@ -122,7 +122,7 @@ Helm-Chart in `deploy/chart/` installieren. Das bündelt Deployment + Service +
 Ingress als Helm-Templates und macht alle Konfig-Werte über `values.yaml`
 steuerbar.
 
-Die rohen Manifeste (Slice 2/4, kubectl-Lernweg) und das Chart sind bewusst zwei Wege: eine Änderung an Deployment, Service oder Ingress gehört in beide, die CI (`deploy-validate.yml`) validiert beide. Die Ingress-Manifeste setzen keine `nginx.ingress.kubernetes.io/rewrite-target`-Annotation: das Spiel liegt unter `/`, ein Rewrite auf einem anderen Pfad würde auch Asset-Anfragen (`/assets/...`) auf `/` umbiegen.
+Die rohen Manifeste (Slice 2/4, kubectl-Lernweg) und das Chart sind bewusst zwei Wege: eine Änderung an Deployment, Service oder Ingress gehört in beide, die CI (`deploy-validate.yml`) validiert beide. Die Ingress-Manifeste setzen keine `nginx.ingress.kubernetes.io/rewrite-target`-Annotation: bei `path: /` wirkt `rewrite-target: /` nicht (ingress-nginx schreibt nur um, wenn Ziel und Pfad verschieden sind); bei einem anderen Ingress-Pfad würde es alle Anfragen samt `/assets/...` auf `/` umschreiben. `test/harness/deploy-ingress.test.ts` hält das fest.
 
 > *Voraussetzung: Image aus Slice 1, Cluster + Ingress-Controller aus Slice 2.*
 
