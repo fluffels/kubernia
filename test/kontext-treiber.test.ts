@@ -555,3 +555,51 @@ describe("Nachlese-Calls und Kosten ab Phase (#1592)", () => {
     expect(md).toContain("ab CI-Warten");
   });
 });
+
+describe("je Ticket: Zusammenlegung und Fenster, Grenzfälle (#1592 Review R1)", () => {
+  type Voll = { gesamt: { n: number; ohnePreis: number; kostenRead: number; kostenWrite: number; kostenOutput: number; ersterKontextMedian: number | null; maxKontextMedian: number | null; kostenSumme: number } | null; wachstum: { ergebnis: number; eingabe: number; rest: number } };
+  const jeVoll = (e: JeEingabe) => (K as unknown as { kontextTreiber: (e: JeEingabe) => { gesamt: Voll } }).kontextTreiber(e).gesamt;
+  const einzeln = (l: Lauf) => (K as unknown as { kontextTreiber: (e: { laeufe: Lauf[] }) => { gesamt: Voll } }).kontextTreiber({ laeufe: [l] }).gesamt;
+
+  test("Summen über beide Läufe: Kostenteile, Wachstum; erster Kontext vom früheren Lauf (auch bei umgekehrter Eingabe), max. Kontext vom größeren", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, ctx: 10_000 }, { min: 2, ctx: 20_000 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, ctx: 15_000 }, { min: 2, ctx: 30_000 }]);
+    const g = jeVoll({ laeufe: [n, v], jeTicket: true });
+    const a = einzeln(v);
+    const b = einzeln(n);
+    expect(g.gesamt!.kostenRead).toBeCloseTo(a.gesamt!.kostenRead + b.gesamt!.kostenRead, 10);
+    expect(g.gesamt!.kostenWrite).toBeCloseTo(a.gesamt!.kostenWrite + b.gesamt!.kostenWrite, 10);
+    expect(g.gesamt!.kostenOutput).toBeCloseTo(a.gesamt!.kostenOutput + b.gesamt!.kostenOutput, 10);
+    expect(g.wachstum.rest).toBe(a.wachstum.rest + b.wachstum.rest);
+    expect(g.wachstum.rest).toBe(10_000 + 15_000);
+    expect(g.gesamt!.ersterKontextMedian).toBe(10_000);
+    expect(g.gesamt!.maxKontextMedian).toBe(30_000);
+  });
+
+  test("ein Lauf ohne Preis macht die Ticket-Kosten unbekannt (ohnePreis), statt Teilkosten zu zählen", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1 }]);
+    (n.zeilen.find((z) => (z as { type?: string }).type === "assistant") as { message: { model: string } }).message.model = "unbekanntes-modell";
+    const g = jeVoll({ laeufe: [v, n], jeTicket: true });
+    expect(g.gesamt).toMatchObject({ n: 1, ohnePreis: 1, kostenSumme: 0 });
+  });
+
+  test("bis gilt für den ersten Start des Tickets: ein Ticket, das nach bis beginnt, fällt heraus; ein Nachfolger nach bis nicht", () => {
+    const laeufe = [
+      vorgaenger(5, "pr", 0, [{ min: 1 }]),
+      nachfolger(5, "pr", 500, [{ min: 1 }]), // nach bis, aber der Vorgänger liegt im Fenster
+      vorgaenger(6, "pr", 400, [{ min: 1 }]), // beginnt nach bis
+    ];
+    const g = jeVoll({ laeufe, bis: t(100), jeTicket: true });
+    expect(g.gesamt!.n).toBe(1);
+    expect(jeVoll({ laeufe, jeTicket: true }).gesamt!.n).toBe(2);
+  });
+
+  test("mit Repo-Wurzel: ein absolut geänderter Pfad gleicht einem relativ gelesenen; ohne Wurzel bleibt er absolut", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, tools: [edit("D:/projekt/repo/scripts/a.mjs")] }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, tools: [{ name: "Read", input: { file_path: "scripts/a.mjs" } }] }]);
+    const mit = (wurzel: string | null) => (K as unknown as { kontextTreiber: (e: JeEingabe & { wurzel: string | null }) => JeBericht }).kontextTreiber({ laeufe: [v, n], jeTicket: true, wurzel }).gesamt.nachlese!.summe;
+    expect(mit("D:/projekt/repo")).toBe(1);
+    expect(mit(null)).toBe(0);
+  });
+});

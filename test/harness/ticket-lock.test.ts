@@ -475,6 +475,17 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.equal(lockJson().uebergabe?.verbraucht, null);
   });
 
+  test("ohne Nonce zählt die Übergabe nie: ein über 2 h alter Lock mit frischer Aktivität bleibt aktiv, bei Inaktivität ist er übernehmbar, aber nichts wird verbraucht", () => {
+    const n = nonceVon(lauf(["claim", "5"], {}, JETZT - 3 * 60 * MIN));
+    lauf(["uebergeben", "5", "--nonce", n], {}, JETZT - 3 * 60 * MIN);
+    const frisch = lauf(["pruefe", "5"], aktiv);
+    assert.deepEqual({ code: frisch.code, out: frisch.out }, { code: 4, out: "aktiv\n" });
+    const alt: Welt = { worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: (JETZT - 120 * MIN) / 1000, reflogSek: (JETZT - 120 * MIN) / 1000 };
+    assert.equal(lauf(["pruefe", "5"], alt).out, "uebernehmbar\n");
+    assert.equal(lockJson().uebergabe?.verbraucht, null, "ohne Nonce kein Verbrauch");
+    assert.equal(M.entscheidePruefung({ lock: { nonce: "a", erstellt: new Date(JETZT - 3 * 60 * MIN).toISOString() } as never, nonce: null, vorhanden: true, aktivitaet: JETZT - MIN, jetzt: JETZT, uebergabeOffen: true } as never), "aktiv");
+  });
+
   test("ein Lock im Altformat (Klartext-nonce) ist übergebbar, freigeben geht danach", () => {
     mkdirSync(join(dir, "kq-locks"), { recursive: true });
     writeFileSync(lockDatei5(), `${JSON.stringify({ nr: 5, nonce: "alt", erstellt: new Date(JETZT).toISOString() })}\n`);

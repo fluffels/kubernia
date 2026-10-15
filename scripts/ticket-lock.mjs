@@ -211,7 +211,7 @@ function pruefe(deps, nr, nonce) {
   const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt(), uebergabeOffen });
   if (urteil === "fremd") return ergebnis(4, urteil, `✖ ticket-lock: der Lock zu #${nr} gehört nicht zu dieser Nonce (fremd, fehlt oder ohne Nonce noch keine 2 h alt): nicht anfassen, Befund melden. ${NICHT_VON_HAND}`);
   if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen. ${NICHT_VON_HAND}`);
-  if (urteil === "uebernehmbar" && uebergabeOffen) schreibeLock(deps, nr, { ...lock, uebergabe: { ...lock.uebergabe, verbraucht: new Date(deps.jetzt()).toISOString() } });
+  if (urteil === "uebernehmbar" && uebergabeOffen && nonce) schreibeLock(deps, nr, { ...lock, uebergabe: { ...lock.uebergabe, verbraucht: new Date(deps.jetzt()).toISOString() } });
   return ergebnis(0, urteil);
 }
 
