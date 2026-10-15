@@ -381,7 +381,11 @@ describe("zerlegeHauptchat: geschätzte Kosten und Output (Z2)", () => {
     const k = zerlege({ agentType: "kubernia-planner" }, zuwachsZeilen(true));
     const text = hc.renderMarkdown(k);
     assert.match(text, /kubernia-Subagenten \(nicht Hauptchat\): 3 Calls, [\d.]+ \$, geschätzt [\d.]+ \$ \(Output geschätzt \d+ statt 15 Tokens\)/);
-    assert.match(text, /Kosten geschätzt |/);
+    assert.match(text, /^\| Kategorie \| Quelle \| Modell \| Calls \| Kosten \| Kosten geschätzt \|$/m);
+    assert.match(text, /^\| \*\*Summe\*\* \| \| \| \d+ \| [\d.]+ \$ \| [\d.]+ \$ \|$/m);
+    const forkText = hc.renderMarkdown(r);
+    const g = r.rows.find((z) => z.quelle === "Fork") as unknown as { costGeschaetzt: number };
+    assert.ok(forkText.includes(`| ${g.costGeschaetzt.toFixed(2)} $ |`));
   });
 });
 

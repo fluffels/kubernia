@@ -65,7 +65,7 @@ export function letzteAktivitaet({ commitMs = [], reflogMs = [], dateiMs = [], n
 
 /**
  * Ergebnis von `pruefe`. `lock`: Inhalt der Lock-Datei oder null; `nonce`: Argument oder null; `vorhanden`: Worktree oder Branch
- * existiert; `aktivitaet`: ms oder null. Ohne Nonce gilt ein Lock jünger als `VERWAIST_MS` als `fremd` (Z5), sonst zählt nur die Aktivität; null (nichts feststellbar) ist fail-closed `aktiv`. Pur.
+ * existiert; `aktivitaet`: ms oder null. Ohne Nonce gilt ein Lock jünger als `VERWAIST_MS` als `fremd` (#1625), sonst zählt nur die Aktivität; null (nichts feststellbar) ist fail-closed `aktiv`. Pur.
  */
 export function entscheidePruefung({ lock, nonce, vorhanden, aktivitaet, jetzt, inaktivMs = INAKTIV_MS }) {
   if (nonce && !gehoertZu(lock, nonce)) return "fremd";
@@ -74,8 +74,6 @@ export function entscheidePruefung({ lock, nonce, vorhanden, aktivitaet, jetzt, 
   if (aktivitaet === null || jetzt - aktivitaet < inaktivMs) return "aktiv";
   return "uebernehmbar";
 }
-
-
 
 const hashVon = (nonce) => createHash("sha256").update(nonce).digest("hex");
 

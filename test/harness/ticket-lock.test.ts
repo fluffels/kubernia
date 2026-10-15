@@ -219,6 +219,7 @@ describe("Z4/Z5: Lock nie von Hand, pruefe ohne Nonce", () => {
     assert.equal(r.code, 4);
     assert.equal(r.out, "fremd\n");
     assert.match(r.err, /frei ab|noch keine 2 h/);
+    assert.match(lauf(["claim", "5"]).err, new RegExp(new Date(JETZT + M.VERWAIST_MS).toISOString()), "claim nennt den Zeitpunkt, ab dem der Lock verwaist ist");
     assert.equal(lauf(["pruefe", "5"], {}, JETZT + M.VERWAIST_MS).out, "frei\n");
     assert.equal(lauf(["pruefe", "5"], {}, JETZT + M.VERWAIST_MS - 1).code, 4);
   });
