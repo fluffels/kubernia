@@ -45,6 +45,12 @@ describe("TASTEN_HINWEISE", () => {
     expect(tastenHinweis("funkAufgabe", umbelegt)).not.toContain("<b>F</b>");
     expect(tastenHinweis("funkLogbuch", umbelegt)).toContain("(<b>X</b>)");
   });
+  it("Kralle-Wegweiser (#1630) folgt der Reden-Taste", () => {
+    expect(tastenHinweis("kralleWegweiser", def)).toContain("<b>R</b>");
+    expect(tastenHinweis("kralleWegweiser", umbelegt)).toContain("<b>Y</b>");
+    expect(tastenHinweis("kralleWegweiser", umbelegt)).not.toContain("<b>R</b>");
+    expect(tastenHinweis("kralleWegweiser", umbelegt)).not.toContain("<b>E</b>");
+  });
   it("Innenraum-Hinweise folgen der Reden-Taste", () => {
     for (const id of ["innenAnLand", "innenAnsDeck", "innenHinaus", "innenReden"] as const) {
       expect(tastenHinweis(id, umbelegt).startsWith("Y – "), id).toBe(true);

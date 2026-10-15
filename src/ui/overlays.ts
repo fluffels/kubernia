@@ -45,7 +45,7 @@ export const OVERLAYS = [
   { key: "menu", id: "overlay-menu", blocking: true, keyNav: true },
   // Erfolgs-Feier-Overlay (#314, verallgemeinert das Rang-Feier #223): blockierend
   // (fängt die Weiter-Bestätigung ein, sperrt solange die Weltinteraktion) + keyNav,
-  // damit Enter/Leer/E den „Weiter"-Button über die generische Modal-Tastatur (#283)
+  // damit Enter/Leer/Reden-Taste den „Weiter"-Button über die generische Modal-Tastatur (#283)
   // auslöst und das Overlay schließt.
   { key: "celebrate", id: "overlay-celebrate", blocking: true, keyNav: true },
   // Pod-Inspektions-Panel (#650): blockierend (sperrt Weltinteraktion), kein keyNav

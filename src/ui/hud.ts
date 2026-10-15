@@ -181,7 +181,7 @@ export const hudUI = part({
    *  gerade frei ist – sofort als gebündeltes Feier-Popup zeigen. Verallgemeinert das
    *  Rang-Aufstieg-Feier (#223) auf ALLE Erfolgs-Arten (Level-Up/Album/Abkürzung/
    *  Historie): prominentes, mittiges Overlay, maritim mit Signalflaggen-Konfetti +
-   *  Wimpelkette + Schiffsglocke, mit Enter/Leer/E schließbar. Läuft gerade ein
+   *  Wimpelkette + Schiffsglocke, mit Enter/Leer/Reden-Taste schließbar. Läuft gerade ein
    *  Dialog/Terminal/Quiz/Minispiel, wird der Erfolg gemerkt und erst gezeigt, wenn
    *  der Spieler wieder frei ist (Flush in updatePrompt). */
   celebrate(a: Achievement) {

@@ -1,6 +1,8 @@
 # Barrierefreiheit-Audit (#481)
 
 > 📸 **Momentaufnahme vom 2026-07-01 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)).
+>
+> Nachtrag 2026-10-15: Reden, Funkgerät, Logbuch und Album sind umbelegbar (Standard R/F/L/B, Menü › Tasten); die Tastennamen unten (E, T, J) sind der Stand des Audits.
 
 > **Was ist das hier?** Eine einmalige, ganzheitliche Prüfung der Zugänglichkeit von
 > Kubernia über drei Dimensionen: **(1)** wird Status irgendwo **nur über Farbe**

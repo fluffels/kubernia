@@ -117,7 +117,7 @@ import { resolveAction } from "./core/keybindings";
    * und als Andockpunkt für späteres Customizing à la Stardew erhalten. */
   const FIXED_CHARACTER = 0;
 
-  /** Antwort-Auswahl im Dialog per Tastatur (#288): ↑/↓ oder W/S navigieren, Enter/E/Leer
+  /** Antwort-Auswahl im Dialog per Tastatur (#288): ↑/↓ oder W/S navigieren, Enter/Reden-Taste/Leer
    *  bestätigt, 1–4 wählt direkt. In diesem Modus verbraucht der Dialog jede Taste. */
   function handleDialogueChoiceKey(e: KeyboardEvent, k: string): void {
     if (k === "ArrowUp" || k === "w") { UI.dlgMoveSel(-1); e.preventDefault(); return; }
@@ -127,7 +127,7 @@ import { resolveAction } from "./core/keybindings";
   }
 
   /** Fortlaufender Dialog ohne Antwortauswahl: ← / Backspace blättert eine Zeile zurück
-   *  (#310, reines Nachlesen ohne Zustandsänderung), E/Enter/Leer wieder vorwärts. */
+   *  (#310, reines Nachlesen ohne Zustandsänderung), Reden-Taste/Enter/Leer wieder vorwärts. */
   function handleDialogueReadKey(e: KeyboardEvent, k: string): void {
     if (k === "ArrowLeft" || k === "Backspace") { UI.dialogueBack(); e.preventDefault(); return; }
     if (actionFor(k) === "talk" || k === "Enter" || k === " ") { UI.advanceDialogue(); e.preventDefault(); }

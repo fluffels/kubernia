@@ -27,8 +27,17 @@ export function fillKeyTokens(text: string, keys: Keybindings): string {
     (BINDABLE_ACTIONS as readonly string[]).includes(a) ? keyLabel(keys, a as BindableAction) : whole);
 }
 
-/** UI-Texte mit belegbarer Taste (HUD, Logbuch, Innenraum). */
+/** UI-Texte mit belegbarer Taste (HUD, Logbuch, Innenraum, Dialog-Einschübe). */
 export const TASTEN_HINWEISE = {
+  /** #451: Einmaliger Wegweiser, den Bo beim ALLERERSTEN Abschluss der Docker-
+   *  Einstiegsquest an seine Abschiedsworte hängt. Nennt Kralle namentlich, weist
+   *  den Weg (an Deck des eigenen Schiffs) und etabliert den Übungs-Loop früh –
+   *  statt nur generisch „Üben" zu erwähnen. In Bos Stein-Golem-Ton. */
+  kralleWegweiser:
+    "Eins noch, Landratte: Gekonnt ist erst, was <b>sitzt</b> – und das kommt vom " +
+    "<b>Wiederholen</b>. Dafür gibt's <b>Kralle</b>, die Quiz-Krabbe an Deck deines " +
+    "Schiffs. Sprich sie an (Taste <b>{taste:talk}</b>) – sie frischt dein Wissen auf, bis es " +
+    "hält. Bo schickt dich hin. Bo ist Stein.",
   funkAufgabe: "💻 Terminal öffnen (<b>{taste:radio}</b>)!",
   funkLogbuch: "💻 Öffne dein Terminal (<b>{taste:radio}</b>) und erledige die Aufgaben.",
   uebenNachAusbildung: "🏅 Grundausbildung geschafft! Halte den Hafen am Laufen – und übe bei der Crew ({taste:talk} → Üben).",

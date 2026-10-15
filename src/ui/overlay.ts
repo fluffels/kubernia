@@ -1,6 +1,7 @@
 import { Game } from "../game";
 import { SFX, MUSIC_THEMES } from "../sfx";
 import { resolveOverlayKey, nextFocusIndex } from "../hud/overlaykbd";
+import { keyLabel } from "../hud/tastenhinweis";
 import { BLOCKING_OVERLAY_IDS, KEYNAV_OVERLAY_IDS } from "./overlays";
 import { part, $, esc, sheetImgs, type UINpc } from "./shared";
 import { HUD_KEY_ICONS } from "../assets-data";
@@ -201,7 +202,7 @@ export const overlayUI = part({
   /* ---------- Generische Tastatur-Bedienung einfacher Modals (#283) ----------
    * Blockierende Overlays ohne eigene Navigation (Stapel-Spiel, Shop, Logbuch,
    * Menü) ganz ohne Maus bedienbar machen: ↑/↓ (w/s) wandert über die Buttons,
-   * Enter/Leer/E löst den markierten – sonst den Primär-Button – aus. Dialog,
+   * Enter/Leer/Reden-Taste löst den markierten – sonst den Primär-Button – aus. Dialog,
    * Wissensrunde (reviewKey) und Terminal (Eingabefeld) haben eigene Handler und
    * sind hier bewusst NICHT gelistet. Die Entscheidung selbst liegt im puren,
    * unit-getesteten `overlaykbd.ts`; hier nur die DOM-Anbindung. */
@@ -313,7 +314,7 @@ export const overlayUI = part({
    *  ist umbelegbar). */
   renderKeyHints() {
     const k = Game.state.settings.keys;
-    const up = (a: BindableAction) => esc(k[a].toUpperCase());
+    const up = (a: BindableAction) => esc(keyLabel(k, a));
     const ic = (key: keyof typeof HUD_KEY_ICONS) =>
       '<img class="pixel-icon" src="' + HUD_KEY_ICONS[key] + '" alt="" aria-hidden="true">';
     $("hud-keys").innerHTML =
