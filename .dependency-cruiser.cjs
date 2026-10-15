@@ -4,11 +4,12 @@
 //
 // Schichten (siehe AGENTS.md › Architektur, docs/referenz/schichtregeln.md): pure Domäne,
 // Anwendung/Persistenz, Präsentation, Einstieg/Assets. Die erlaubten Import-Richtungen stehen als
-// Positivliste in SCHICHT_MODELL (scripts/layers.cjs); verbotsRegeln() leitet daraus je verbotenem
+// Positivliste in SCHICHT_MODELL (scripts/layers.cjs); verbotsRegeln() (Kern, scripts/schichten-kern.cjs) leitet daraus je verbotenem
 // Paar eine Regel ab, und dieselbe Tabelle erzeugt die Schichtdiagramme (npm run docs:gen).
 // Neue Domänen-Module sind automatisch geschützt (Auffang-Schicht „alles übrige unter src/“),
 // eine neue Schicht muss ihre Richtungen im Modell deklarieren.
-const { SCHICHT_MODELL, verbotsRegeln } = require("./scripts/layers.cjs");
+const { SCHICHT_MODELL } = require("./scripts/layers.cjs");
+const { verbotsRegeln } = require("./scripts/schichten-kern.cjs");
 
 // Die Quellwurzel (z.B. "src/") steht nur im Modell (#1428 Z13): die Waisen-Ausnahmen unten leiten sich daraus ab, regex-escaped.
 const QUELLE = SCHICHT_MODELL.quellwurzel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

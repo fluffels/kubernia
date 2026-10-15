@@ -8,7 +8,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/check-c4.mjs";
@@ -35,7 +34,6 @@ const api = raw as unknown as {
 const { ladeModell } = schichten as unknown as { ladeModell: (rootDir: string, layers: string) => Modell };
 
 const req = createRequire(import.meta.url);
-const ECHT_PFAD = fileURLToPath(new URL("../scripts/layers.cjs", import.meta.url));
 const echt = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell; layerOf: (f: string) => string };
 
 const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
@@ -64,7 +62,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-const layersFile = (m: unknown) => `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)}, pruefeModell: require(${JSON.stringify(ECHT_PFAD)}).pruefeModell };\n`;
+const layersFile = (m: unknown) => `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)} };\n`;
 const srcFiles = (extra: Record<string, string> = {}) => ({
   "scripts/layers.cjs": layersFile(basis()),
   "src/ui/a.ts": "",

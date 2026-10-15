@@ -10,7 +10,9 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
+import { IMPORT_FORM } from "./hook-importe";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 
@@ -188,6 +190,46 @@ export function diffBasisModus(basis: string | null, env: Record<string, string 
   return env.CI === "true" ? "rot" : "entfaellt";
 }
 
+/** Offene Ausnahmen der Schichtdaten-Regel (#1612): Einheit → Grund mit Ticket. Die Liste darf nur schrumpfen. */
+export const SCHICHTDATEN_AUSNAHMEN: Record<string, string> = {
+  "scripts/check-diffcoverage.mjs": "#1611: liest die Schichtdaten noch per statischem Import, Pfad wird Projekt-Config",
+};
+
+const CODE_ENDUNG = /\.(?:mjs|cjs|js|ts)$/;
+
+/** Einheiten (Ganze-Datei-Einheiten beider Ringe), die die Schichtdaten statisch importieren. Nur direkte Importe
+ *  (`IMPORT_FORM`), relativ zum Ordner der importierenden Datei aufgelöst; ein dynamisches `require(cfg.layers)` ist
+ *  der erlaubte Weg (der Kern lädt die Schichtdaten über den konfigurierten Pfad). */
+export function schichtdatenImporte(eintraege: Eintrag[], lies: (pfad: string) => string | null, schichtdatenPfad: string): string[] {
+  const ziel = posix.normalize(schichtdatenPfad);
+  const out: string[] = [];
+  for (const e of eintraege) {
+    if (e.block !== undefined || e.schluessel !== undefined || !CODE_ENDUNG.test(e.pfad)) continue;
+    const text = lies(e.pfad);
+    if (text === null) continue;
+    for (const m of text.matchAll(IMPORT_FORM)) {
+      if (posix.normalize(posix.join(posix.dirname(e.pfad), m[1] ?? "")) === ziel) {
+        out.push(e.pfad);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** Meldungen (leer = grün): Verstoß ohne Ausnahme, Ausnahme ohne Ticket, veraltete Ausnahme. */
+export function pruefeSchichtdatenRegel(verstoesse: string[], ausnahmen: Record<string, string>): string[] {
+  const out: string[] = [];
+  for (const v of verstoesse) {
+    if (!(v in ausnahmen)) out.push(`${v}: importiert die Schichtdaten statisch, ein Kern-Modul lädt sie über den konfigurierten Pfad (schichten.layers) und nutzt Ableitung/Prüfung aus scripts/schichten-kern.cjs`);
+  }
+  for (const [pfad, grund] of Object.entries(ausnahmen)) {
+    if (!/#\d+/.test(grund)) out.push(`${pfad}: Ausnahme ohne Ticket (#<nr>) im Grund`);
+    if (!verstoesse.includes(pfad)) out.push(`${pfad}: Ausnahme veraltet (kein statischer Import mehr), Eintrag entfernen`);
+  }
+  return out;
+}
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
@@ -308,6 +350,31 @@ describe("parseNameStatus / erlaubt / anhebungen", () => {
   });
 });
 
+describe("schichtdatenImporte / pruefeSchichtdatenRegel (#1612)", () => {
+  const LAYERS = "scripts/layers.cjs";
+  const mit = (pfad: string, text: string): ((p: string) => string | null) => (p) => (p === pfad ? text : null);
+  const hits = (pfad: string, text: string, e: Partial<Eintrag> = {}): string[] => schichtdatenImporte([ein(pfad, e)], mit(pfad, text), LAYERS);
+  test("rot bei require, import-from und createRequire auf die Schichtdaten, relativ zur importierenden Datei", () => {
+    assert.deepEqual(hits("scripts/docs-gen/x.mjs", 'const l = require("../layers.cjs");'), ["scripts/docs-gen/x.mjs"]);
+    assert.deepEqual(hits("scripts/y.mjs", 'import { a } from "./layers.cjs";'), ["scripts/y.mjs"]);
+    assert.deepEqual(hits("scripts/z.mjs", 'const m = createRequire(import.meta.url)("./layers.cjs");'), ["scripts/z.mjs"]);
+  });
+  test("kein Verstoß: dynamischer Pfad, anderer aufgelöster Pfad, Markdown, Block- und Schlüssel-Einheit", () => {
+    assert.deepEqual(hits("scripts/a.mjs", "const l = require(cfg.layers);"), []);
+    assert.deepEqual(hits("scripts/docs-gen/b.mjs", 'require("./layers.cjs")'), []);
+    assert.deepEqual(hits("scripts/c.md", 'require("./layers.cjs")'), []);
+    assert.deepEqual(hits("scripts/d.mjs", 'require("./layers.cjs")', { block: "b" }), []);
+    assert.deepEqual(hits("scripts/e.mjs", 'require("./layers.cjs")', { schluessel: "k" }), []);
+    assert.deepEqual(schichtdatenImporte([ein("scripts/f.mjs")], () => null, LAYERS), []);
+  });
+  test("Regel: Verstoß ohne Ausnahme, Ausnahme ohne Ticket und veraltete Ausnahme sind rot", () => {
+    assert.match(pruefeSchichtdatenRegel(["scripts/a.mjs"], {}).join(), /^scripts\/a\.mjs: importiert die Schichtdaten statisch/);
+    assert.match(pruefeSchichtdatenRegel(["scripts/a.mjs"], { "scripts/a.mjs": "später" }).join(), /Ausnahme ohne Ticket/);
+    assert.match(pruefeSchichtdatenRegel([], { "scripts/a.mjs": "#9 x" }).join(), /Ausnahme veraltet/);
+    assert.deepEqual(pruefeSchichtdatenRegel(["scripts/a.mjs"], { "scripts/a.mjs": "#9 x" }), []);
+  });
+});
+
 // ── Reale Prüfungen ───────────────────────────────────────────────────────────
 
 const lesenWurzel = (pfad: string): string | null => {
@@ -334,6 +401,14 @@ describe("Kern-Reinheit (#1610)", () => {
       if (Object.keys(z).length > 0) ist[einheitId(e)] = z;
     }
     assert.deepEqual(vergleiche(ist, baseline), []);
+  });
+
+  test("kein Kern-Modul importiert die Schichtdaten statisch (Ausnahmen nur mit Ticket, nur schrumpfend, #1612)", () => {
+    const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { schichten?: { layers?: string } };
+    const pfad = cfg.schichten?.layers;
+    assert.ok(pfad, "scripts/docs-gen/config.json: schichten.layers fehlt");
+    const verstoesse = schichtdatenImporte(manifest.eintraege, lesenWurzel, pfad);
+    assert.deepEqual(pruefeSchichtdatenRegel(verstoesse, SCHICHTDATEN_AUSNAHMEN), []);
   });
 
   const git = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
