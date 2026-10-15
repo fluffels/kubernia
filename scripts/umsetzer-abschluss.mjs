@@ -23,7 +23,7 @@ import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 /** Erlaubte Werte hinter `ERGEBNIS:` (Format in `.claude/agents/kubernia-umsetzer.md`, Test bindet beides). */
 export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren", "abgebrochen", "uebergabe"];
 
-/** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: `kubernia-umsetzer.md`). */
+/** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: die Umsetzer-Definition unter `.claude/agents/`). */
 export const SCHNITTE = ["pr", "verify"];
 
 /** Label, das das Festgefahren-Protokoll setzt (SSOT: `check-festgefahren.mjs`, der Test bindet beide). */
