@@ -530,6 +530,32 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
     c4.views = [{ id: "ok", titel: "Ok", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr", nach: "k.app.an" }] }];
     assert.deepEqual(texte(lauf(c4)), []);
   });
+
+  test("View-Kante mit nur einem Modul-Ende (beide Richtungen) ist rot; unbekannte Kanten-IDs werden ignoriert", () => {
+    const c4 = gueltig();
+    c4.views = [{ id: "halb", titel: "Halb", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr", nach: "k.app.an.game" }, { von: "k.app.an.game", nach: "k.app.pr" }, { von: "gibts.nicht", nach: "k.app.an.game" }] }];
+    assert.equal(treffer(lauf(c4), /view „halb“: zeigt die abgeleitete Kante/).length, 2);
+  });
+
+  test("Ort in einer Bibliothek statt einer Schicht (schichtVon liefert eine Extern-ID): eine Meldung statt Absturz", () => {
+    const text = hexText(PORT, "| Tastatur | Content-Quelle | `src/dep/node_modules/phaser/a.ts` | Präsentation |");
+    const t = treffer(lauf(gueltig(), {}, CFG, { text, existiert: () => true }), /verschiedenen oder unbekannten Schichten/);
+    assert.equal(t.length, 1);
+  });
+
+  test("Adapter unter einem Nicht-Modul mit dem Titel des Moduls ist rot (Art zählt, nicht nur der Titel)", () => {
+    const c4 = gueltig();
+    c4.elemente.push(el("k.app.pr.uiS", "schicht", "ui", "k.app.pr", 30));
+    const a = c4.elemente.find((e) => e.kind === "adapter");
+    assert.ok(a);
+    a.parentId = "k.app.pr.uiS";
+    assert.equal(treffer(lauf(c4), /adapter „Tastatur“: liegt unter „ui“/).length, 1);
+  });
+
+  test("eine Überschrift der Ebene 2 beendet den Abschnitt: Pfade dahinter zählen nicht", () => {
+    const text = hexText().replace("### Nächster Abschnitt", "## 6. Nächstes Kapitel");
+    assert.deepEqual(texte(mitText(text)), []);
+  });
 });
 
 describe("ladeC4Modell: der Adapter", () => {
