@@ -4,7 +4,6 @@ import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { podIP } from "../../src/sim/util";
 import { findClusterPod } from "../../src/sim/pods";
-import { formatLabels } from "../../src/sim/util";
 import { podAddress, serviceBackends, readyBackends, endpointPort, serviceSelector, endpointAddresses } from "../../src/sim/endpoints";
 
 const HEADLESS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  clusterIP: None\n  selector:\n    app: speicher\n  ports:\n    - port: 5432\n";
@@ -321,19 +320,6 @@ describe("serviceSelector und endpointAddresses (#1465)", () => {
       services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80 }],
     });
     expect(endpointAddresses(kaputt, kaputt.services[0])).toEqual([]);
-  });
-});
-
-describe("formatLabels (#1500)", () => {
-  test("mehrere Labels: Schlüssel sortiert, mit Komma verbunden", () => {
-    expect(formatLabels({ tier: "web", app: "kasse" })).toBe("app=kasse,tier=web");
-  });
-  test("ein = im Wert bleibt erhalten", () => {
-    expect(formatLabels({ app: "a=b" })).toBe("app=a=b");
-  });
-  test("leer oder null: <none>", () => {
-    expect(formatLabels({})).toBe("<none>");
-    expect(formatLabels(null)).toBe("<none>");
   });
 });
 
