@@ -23,11 +23,15 @@ import {
   SAMMELTICKET_TITEL,
   STATUS_TITEL,
   TAG_MS,
+  addToBoardTodo,
   alsDatum,
+  aufnahmePlan,
   ghJson,
+  itemsUeberIssues,
   kopfEnde,
   loadItems,
   loadOpenIssuePages,
+  missingFromBoard,
   normalizeOffene,
   positionLautAgentsMd,
   sammelticketItem,
@@ -35,6 +39,7 @@ import {
   setPosition,
   todoItem,
   verschiebe,
+  wirklichFehlend,
 } from "./board-lib.mjs";
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 
@@ -203,9 +208,50 @@ export function fuehreHarnessAus(h, items, token, { setze = setPosition, log = c
   }
 }
 
+/**
+ * Board-Wächter (#1628): offene Issues ohne Board-Item (ein still gescheitertes Einsortieren, z.B. #1608 stand einen Tag nicht im Board)
+ * nimmt der Takt als Todo am Board-Ende auf. Die REST-Liste liefert frische Items verzögert: jeder Kandidat wird per GraphQL
+ * gegengeprüft (`wirklichFehlend`); ohne Kandidaten entfällt die Abfrage. Jede Aufnahme steht als `::warning::` mit Nummer im Log, jeder
+ * Fehler setzt `fehler` (Lauf rot). `dry`: nur Meldung. Liefert `{ items, fehler }` (`items` um die aufgenommenen Todos ergänzt).
+ */
+export function nimmFehlendeAuf({ offene, items, token, dry = false, repo = REPO }, io) {
+  const kandidaten = missingFromBoard(offene.map((i) => i.number), items);
+  if (kandidaten.length === 0) return { items, fehler: false };
+  let fehlend;
+  try {
+    fehlend = wirklichFehlend(kandidaten, io.itemsUeberIssues(kandidaten, { token }));
+  } catch (err) {
+    io.log(fehlerMeldung(err, { praefix: "Board-Wächter: GraphQL-Gegenprobe fehlgeschlagen: " }));
+    return { items, fehler: true };
+  }
+  let neu = items;
+  let fehler = false;
+  for (const nr of fehlend) {
+    try {
+      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) });
+      for (const a of abgelehnt) io.log(`::warning::Board-Wächter: #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
+      for (const a of aufnehmen) {
+        if (dry) {
+          io.log(`Board-Wächter: #${a.number} fehlt im Board, würde als Todo aufgenommen (--dry-run).`);
+          continue;
+        }
+        const id = io.addToBoardTodo(a.nodeId, { token });
+        io.log(`::warning::Board-Wächter: #${a.number} fehlte im Board, als Todo aufgenommen.`);
+        neu = [...neu, todoItem({ id, number: a.number, title: a.title })];
+      }
+    } catch (err) {
+      fehler = true;
+      io.log(fehlerMeldung(err, { praefix: `Board-Wächter: #${nr} nicht aufgenommen: ` }));
+    }
+  }
+  return { items: neu, fehler };
+}
+
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
 const ECHTE_IO = {
   ghJson,
+  itemsUeberIssues,
+  addToBoardTodo,
   loadItems,
   loadOpenIssuePages,
   positionLautAgentsMd,
@@ -262,6 +308,13 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [] });
     fehler = !r.ok;
     if (items) items = ziehListeNach(items, r);
+  }
+
+  // Board-Wächter (#1628): offene Issues ohne Board-Item aufnehmen.
+  if (items) {
+    const w = nimmFehlendeAuf({ offene, items, token, dry, repo }, io);
+    items = w.items;
+    if (w.fehler) fehler = true;
   }
 
   // Harness-Sammelticket: Aktivität (eigenes Fenster) und Positionskorrektur, auf der nachgezogenen Liste.
