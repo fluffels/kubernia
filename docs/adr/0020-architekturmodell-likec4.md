@@ -3,6 +3,8 @@
 > Architecture Decision Record. Format: Kontext → Problem → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
 > Status: **akzeptiert** · Datum: 2026-10-08 · Ticket: #1420 (Teil von #1354, Lebende Doku)
 
+> Präzisiert durch [ADR 0024](0024-hexagon-als-lesart.md) (Arten `port` und `adapter`).
+
 > Präzisiert [ADR 0017](0017-lebende-doku-generierte-abschnitte.md) (Diagramm == Regel): ein Modell, das Ableitbares zeigt, wird gegen seine Quelle geprüft, hier statt generiert.
 
 ## Status

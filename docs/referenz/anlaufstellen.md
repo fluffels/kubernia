@@ -41,6 +41,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0020 Architekturmodell LikeC4](../adr/0020-architekturmodell-likec4.md) | wenn das Architekturmodell unter `docs/architektur/`, `check:c4` oder die Ableitung der Architekturbilder aus `scripts/layers.cjs` angefasst wird |
 | [0021 Agenten-Sandbox über WSL2](../adr/0021-agenten-sandbox-wsl2.md) | wenn Sandbox, WSL2, Devcontainer oder die Netz-Allowlist der Agenten-Shell zur Debatte steht |
 | [0022 Dark Factory](../adr/0022-dark-factory-kern-und-verteilung.md) | wenn der Harness-Kern als Vorlage für andere Projekte herausgelöst, eine Datei als Kern, Modul oder Projekt eingeordnet, ein zweites Board oder Verifikation ohne Mensch (Holdout, Spezifikations-Gate) zur Debatte steht |
+| [0024 Hexagon als Lesart](../adr/0024-hexagon-als-lesart.md) | wenn Ports, Adapter oder die hexagonale Sicht in arc42 und im Architekturmodell angefasst werden oder jemand das Hexagon als Ordnerstruktur umsetzen will |
 | [0023 Transkript als Wahrheit](../adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | wenn Langfuse-Daten unvollständig wirken, der Hook des Langfuse-Plugins oder der Nachlieferer (Lock, Log, SessionStart/SessionEnd) geändert oder der Abgleich zurückgebaut werden soll |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
@@ -51,7 +52,8 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 |---|---|
 | [README.md](../../README.md) | wenn du wissen willst, was das Spiel ist: Story, Steuerung, Lernpfad |
 | [arc42-architektur.md](../arc42-architektur.md) | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
-| [architektur/spiel.c4](../architektur/spiel.c4) | für das LikeC4-Architekturmodell (Kontext, Container, Schichten, Hauptmodule; ansehen mit `npm run c4:serve`, Wächter `check:c4`) |
+| [arc42 › Hexagonale Sicht](../arc42-architektur.md#hexagonale-sicht-ports--adapters) | wenn du einen neuen Adapter oder eine neue Ein- oder Ausgabe baust (Speicher, Eingabeart, Export, Content-Quelle): welcher Port, welche Schicht, welche Tabellenzeile |
+| [architektur/spiel.c4](../architektur/spiel.c4) | für das LikeC4-Architekturmodell (Kontext, Container, Schichten, Hauptmodule, Hexagon; ansehen mit `npm run c4:serve`, Wächter `check:c4`) |
 | [glossar.md](../glossar.md) | wenn dir ein Spielbegriff fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md); Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 | [module/sim.md](../module/sim.md) | beim Arbeiten am Cluster-Simulator (`src/sim/*`) |

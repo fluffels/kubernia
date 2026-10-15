@@ -71,3 +71,15 @@ Weitgehend **ja** — die on-demand-Tiefendocs unter [`docs/module/`](module/) s
 Das ist **kein Schnittfehler, sondern gewollt**: Content-as-Data ist die eine, validierte Daten-/Übersetzungsschicht (ADR 0004). Sie hier aufzureißen würde genau die Nähte und den Übersetzungs-Code schaffen, vor denen §2 warnt — also **benennen, nicht auseinanderreißen**. Deshalb behält content.md seine Sonderrolle und wird in der Landkarte oben explizit als Shared Kernel geführt.
 
 **Angleichungen aus diesem Ticket:** keine Code-/Doc-Verschiebung nötig — die Grenzen stimmen. Sichtbar gemacht wurde nur die Zuordnung (dieses Glossar + die Verweise aus [arc42 §8/§12](arc42-architektur.md) und [referenz/anlaufstellen.md](referenz/anlaufstellen.md)).
+
+## 4. Architektur-Lesart — Ports & Adapters
+
+Die Schichtung ([arc42 §5](arc42-architektur.md#hexagonale-sicht-ports--adapters)) lässt sich hexagonal lesen ([ADR 0024](adr/0024-hexagon-als-lesart.md)). Das ist ein Vokabular über denselben Code, kein zweites Schichtmodell und keine Ordnerstruktur. Diese Begriffe sind Architektur-Sprache und haben keinen Hafen-Bezug.
+
+| Begriff | Bedeutung im Projekt | Quelle |
+|---|---|---|
+| **Port** | benannte Stelle, an der etwas von außen in die Domäne und Anwendung hineinwirkt oder sie nach außen greift (z.B. Persistenz, Spieltakt); steht als Zeile in der Ports-Tabelle und als Element `port` im Modell | [arc42 §5](arc42-architektur.md#hexagonale-sicht-ports--adapters), `docs/architektur/spiel.c4` |
+| **Adapter** | Code, der einen Port an die Außenwelt anschließt (z.B. `IndexedDB` am Persistenz-Port); liegt in der Schicht, die laut `scripts/layers.cjs` den Port erreichen darf | [arc42 §5](arc42-architektur.md#hexagonale-sicht-ports--adapters) |
+| **Treibende Seite** (Driving, primär) | Ports, über die Eingaben die Mitte anstoßen: Tastatur, Terminal-Befehle, Spieltakt, Spielstand-Import; Tag `treibend` | arc42 §5 |
+| **Getriebene Seite** (Driven, sekundär) | Ports, über die die Mitte nach außen greift: Persistenz, Content-Quelle; Tag `getrieben` | arc42 §5 |
+| **Hexagonale Sicht** | die geprüfte arc42-Tabellensicht auf Ports und Adapter samt LikeC4-View `hexagon`; `npm run check:c4` hält sie mit Pfaden, Schichten und Modell in Einklang | `scripts/check-c4.mjs` |

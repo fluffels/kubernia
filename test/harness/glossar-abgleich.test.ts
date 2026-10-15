@@ -17,12 +17,14 @@ describe("Glossar-Abgleich (#1561 Z5)", () => {
     assert.match(planer, /\*\*Glossar-Abgleich \(Pflicht\):\*\*[^\n]*docs\/glossar\.md[^\n]*keine neuen Begriffe/);
     assert.match(planer, /\*\*Glossar-Abgleich \(Pflicht\):\*\*[^\n]*docs\/harness-glossar\.md[^\n]*keine neuen Begriffe/);
     assert.match(planer, /je Kind der Glossar-Abgleich/);
+    assert.match(planer, /keine neuen Begriffe“; neue Ein- oder Ausgabe[^\n]*hexagonalen Sicht[^\n]*`docs\/arc42-architektur\.md`/);
   });
 
   test("die Requirement-Treue-Lens prüft neue Begriffe gegen das Glossar, in Skill und Workflow", () => {
     for (const rel of [".claude/skills/review-lenses/SKILL.md", ".claude/workflows/kubernia-ticket.js"]) {
       const text = lies(rel).replace(/`/g, "");
       assert.match(text, /Neue Begriffe in Texten\/Bezeichnern gegen docs\/glossar\.md \(Spiel\) und docs\/harness-glossar\.md \(Harness\): ein Hafen-Wort in Sim-Text oder umgekehrt \(ACL\) ist blockierend/, rel);
+      assert.match(text, /Neue Ein- oder Ausgabe \(Speicher, Eingabeart, Export, Content-Quelle\) gegen die hexagonale Sicht in docs\/arc42-architektur\.md: fehlt der Adapter dort oder steht er in einer anderen Schicht, ist das blockierend/, rel);
       assert.match(text, /ein neu eingeführter Fachbegriff, der in keinem der beiden Glossare steht und im Diff nicht ergänzt wird \(auch ein Harness-Begriff in einem Harness-Text\), ist blockierend/, rel);
     }
   });

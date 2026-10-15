@@ -130,7 +130,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 | Skripte | 102 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 69 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 23 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 24 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -216,6 +216,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 08.10.2026 | [ADR 0021](/docs/adr/0021-agenten-sandbox-wsl2.md): Agenten-Sandbox über eine eigene WSL2-Distribution |
 | 08.10.2026 | [ADR 0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md): Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest |
 | 09.10.2026 | [ADR 0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md): Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen |
+| 15.10.2026 | [ADR 0024](/docs/adr/0024-hexagon-als-lesart.md): Hexagon als Lesart der bestehenden Schichtung, nicht als Ordnerstruktur |
 
 <!-- GEN:zeitleiste END -->
 
@@ -337,7 +338,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
   | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
   | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
-  | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein |
+  | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein, die hexagonale Sicht in arc42 (Ports und Adapter) mit Pfaden, Schichten und Modell |
   | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
   | `npm run check:steuerbytes` | `verify` | keine Steuerbytes (NUL) in Textdateien |
   | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
