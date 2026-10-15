@@ -1165,7 +1165,7 @@ ${hinweise.map((f) => `- [${f.ort}] ${f.befund}`).join('\n')}
     : ''
 }
 Beim Fixen gezielt prüfen, danach einmal npm run verify:kompakt; rot: fixen, erneut. Bleib im Ticket-Scope: Punkte, die ein eigenes
-Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}). Vor dem Commit der Selbstcheck erneut für den Fix, Feld selbstcheck : ${SELBSTCHECK_AUFTRAG}
+Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}). Vor dem Commit der Selbstcheck erneut für den Fix, Feld selbstcheck: ${SELBSTCHECK_AUFTRAG}
 ${BRAIN_LESEN}
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
 
