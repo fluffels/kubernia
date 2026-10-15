@@ -533,7 +533,7 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
 
   test("View-Kante mit nur einem Modul-Ende (beide Richtungen) ist rot; unbekannte Kanten-IDs werden ignoriert", () => {
     const c4 = gueltig();
-    c4.views = [{ id: "halb", titel: "Halb", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr", nach: "k.app.an.game" }, { von: "k.app.an.game", nach: "k.app.pr" }, { von: "gibts.nicht", nach: "k.app.an.game" }] }];
+    c4.views = [{ id: "halb", titel: "Halb", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr", nach: "k.app.an.game" }, { von: "k.app.an.game", nach: "k.app.pr" }, { von: "gibts.nicht", nach: "k.app.an.game" }, { von: "k.app.pr", nach: "gibts.nicht" }] }];
     assert.equal(treffer(lauf(c4), /view „halb“: zeigt die abgeleitete Kante/).length, 2);
   });
 
@@ -555,6 +555,7 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
   test("eine Überschrift der Ebene 2 beendet den Abschnitt: Pfade dahinter zählen nicht", () => {
     const text = hexText().replace("### Nächster Abschnitt", "## 6. Nächstes Kapitel");
     assert.deepEqual(texte(mitText(text)), []);
+    assert.deepEqual(texte(mitText(hexText().replace("### Nächster Abschnitt", "# Anhang"))), [], "Ebene 1 beendet ihn ebenfalls");
   });
 });
 
