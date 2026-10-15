@@ -105,6 +105,7 @@ Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta,
 
 - #1362 liest die Marker und die Versionsquellen und meldet nur Changelog-Einträge, die eine Inventarzeile berühren.
 - [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md) (#1366) nimmt den Kern-Schnitt aus der Spalte „Spielunabhängig“.
+- `.factory/besitz.json` (#1610) hält den Factory-Besitz fest und ist ab jetzt die Besitz-SSOT; die Spalte „Spielunabhängig“ war nur der Startbestand.
 - #1357 nimmt die Zeilen, die nur eine Modellschwäche ausgleichen, als Lockern-Kandidaten.
 
 ## Sicherheit
