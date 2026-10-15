@@ -225,7 +225,7 @@ describe("liesSnapshot und CLI", () => {
     const d = neu();
     const pfad = join(d, "s.json");
     if (snapshot !== null) writeFileSync(pfad, typeof snapshot === "string" ? snapshot : JSON.stringify(snapshot));
-    const basis = { ...process.env, KQ_RATE_LIMITS_SNAPSHOT: pfad, ...env };
+    const basis: Record<string, string | undefined> = { ...process.env, KQ_RATE_LIMITS_SNAPSHOT: pfad, ...env };
     // Eine Zielquote aus der Umgebung der Maintainerin darf die Tests nicht verschieben.
     if (!("KQ_PACING_ZIELQUOTE" in env)) delete basis.KQ_PACING_ZIELQUOTE;
     const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", ...args], { encoding: "utf8", env: basis });
