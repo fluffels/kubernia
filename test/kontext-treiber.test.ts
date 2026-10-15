@@ -418,6 +418,7 @@ describe("parseArgs und Prompt-Zeilen (#1592)", () => {
     expect(a(`#1 x${NL}Schnitt: verify`)).toMatchObject({ schnitt: "verify", einstieg: null });
     expect(a(`#1 x${NL}Einstieg: pr  `)).toMatchObject({ schnitt: null, einstieg: "pr" });
     expect(a("#1 x: `Schnitt: verify` steht mitten im Satz").schnitt).toBeNull();
+    expect(a("#1 x, danach Schnitt: verify").schnitt).toBeNull();
     expect(a(`#1 x${NL}SCHNITT: verify${NL}UEBERGABE:`).schnitt).toBeNull();
     expect(a(`#1 x${NL}Schnitt: review`).schnitt).toBeNull();
     expect(a(`#1 x${NL}Einstieg: verify ab Stufe 0`).einstieg).toBeNull();
@@ -511,6 +512,7 @@ describe("Nachlese-Calls und Kosten ab Phase (#1592)", () => {
     expect(nachlese([edit("scripts/a.mjs")], [bash("cat scripts/b.mjs")])).toBe(0);
     expect(nachlese([edit("scripts/a.mjs")], [bash("grep -n x scripts/a.mjs")])).toBe(0);
     expect(nachlese([edit("scripts/a.mjs")], [bash("cat scripts/a.mjsx")])).toBe(0);
+    expect(nachlese([edit("scripts/a.mjs")], [bash("cat myscripts/a.mjs")])).toBe(0);
     expect(nachlese([edit("scripts/a.mjs")], [lies("xscripts/a.mjs")])).toBe(0);
     expect(nachlese([lies("scripts/a.mjs")], [lies("scripts/a.mjs")])).toBe(0);
   });
