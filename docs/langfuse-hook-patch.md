@@ -53,6 +53,10 @@ Klasse **„Hook meldet Erfolg, Ingestion kommt nicht an, kein Fehlersignal“**
 
 **Wiederholungsregel:** Fehlt in einem späteren Status-Lauf wieder eine ganze Session (Checkliste Punkt 1) und hat auch der Abgleich sie nach der Ruhefrist nicht geliefert (Score `erfassung` fehlt oder unter 1, `fehler` oder `zugang: false` im Log), ist das ein eigenes Issue (Datenverlust, `area:harness`) mit diesen Diagnoseschritten: (1) `queryMetrics` mit Dimension `sessionId` ohne Session-Filter für das Zeitfenster und Summe gegen die Transkripte aller Sessions des Fensters; (2) `~/.claude/state/langfuse_hook.log` nach der Session (`Processed N turns`, Warnungen, Fehler) und der State-Eintrag (`turn_count`, Offset, `pending_agent_turns`; Schlüssel `sha256("<session_id>::<transcript_path>")`); (3) die Docker-Logs von Web und Worker um die Emission; (4) Dauer des Hook-Laufs gegen die 5-Sekunden-Kappe. Dann prüfen, ob der Flush-Fehler im Hook sichtbar gemacht werden muss (Log statt `pass`).
 
+## Output der Subagenten ist im Transkript unterzählt (#1568)
+
+Die Subagenten-Dateien (`subagents/*.jsonl`) zeichnen `output_tokens` nur beim Stand `message_start` auf, die Hauptdatei ist vollständig. Langfuse bekommt aus dem Transkript nur die aufgezeichneten Werte, der Output der Subagenten steht dort darum zu niedrig; geschätzte Werte schickt der Nachlieferer nie (Langfuse soll nur exakte Daten tragen, ein Vergleich Transkript gegen Langfuse bleibt damit Δ = 0). Die Schätzung als Untergrenze (`outputGeschaetzt`, `costGeschaetzt`) lebt nur in den Messskripten; Verfahren und Kalibrierung: [model-routing.md › Planer-Kosten](model-routing.md#planer-kosten-1558).
+
 ## Alternative ohne Patch
 
 **Entscheidung 2026-10-09 (#1563; Claude Code 2.1.295, Langfuse 4.46.0 lokal, Quellcode bis v4.56.0): die native OTel-Ausgabe ersetzt den gepatchten Hook nicht, weil Langfuse aus ihr keine Usage übernimmt.** Die Vollständigkeitsgarantie ist der Abgleich gegen das Transkript (Checkliste Punkt 1, `scripts/langfuse-abgleich.mjs`), nicht der Exportweg.
