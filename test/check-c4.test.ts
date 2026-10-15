@@ -365,7 +365,7 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
   test("Config ohne hexagon-Block: rot, fail-closed", () => {
     const { hexagon: _weg, ...ohne } = CFG;
     void _weg;
-    const t = treffer(lauf(gueltig(), {}, ohne as Cfg), /Block "hexagon".*fehlt.*Fix: /);
+    const t = treffer(lauf(gueltig(), {}, ohne), /Block "hexagon".*fehlt.*Fix: /);
     assert.equal(t.length, 1);
   });
 
