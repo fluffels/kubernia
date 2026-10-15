@@ -8,7 +8,7 @@
  * Ausführen mit: npm test
  */
 import { describe, expect, test } from "vitest";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
@@ -922,9 +922,31 @@ describe("Ledger: Vermerke für vor Stichtag und ohne Calls (Z6b)", () => {
     expect(m3.otlp).toHaveLength(1);
   });
 
-  test("--trocken schreibt keinen Vermerk", async () => {
+  test("ohne Calls: der Vermerk ist die Abkürzung, kein erneutes Parsen (gleiche Größe und mtime, Inhalt jetzt mit Call: weiter „ohne Calls“, kein Request)", async () => {
+    const callZeile = msg("a", 1);
+    const user = JSON.stringify({ type: "user", sessionId: "s1", message: { role: "user", content: "hi" } });
+    expect(user.length).toBeLessThan(callZeile.length);
+    const a = aufbau([user + " ".repeat(callZeile.length - user.length)]);
+    const datei = join(a.root, PRAEFIX, "s1.jsonl");
+    // Bruchteil unter einer ms (wie in Z6c): der Vergleich läuft über denselben Float-mtime.
+    const sek = (Date.now() - 3 * 86_400_000) / 1000 + 0.0005;
+    utimesSync(datei, sek, sek);
+    const r1 = await lauf(a, mock({ ist: 0 }));
+    expect(r1.protokoll.sessions[0].status).toBe("ohne Calls");
+    const groesse = statSync(datei).size;
+    writeFileSync(datei, callZeile);
+    utimesSync(datei, sek, sek);
+    expect(statSync(datei).size).toBe(groesse);
+    const m2 = mock({ ist: 0 });
+    const r2 = await lauf(a, m2);
+    expect(r2.protokoll.sessions[0].status).toBe("ohne Calls");
+    expect(m2.aufrufe).toHaveLength(0);
+  });
+
+  test("--trocken schreibt keinen Vermerk, durchläuft aber den Zweig „vor Stichtag“", async () => {
     const a = aufbau([msg("a", 1, { timestamp: iso(Date.parse(N.STICHTAG) - 86_400_000) })]);
-    await lauf(a, mock({ ist: 0 }), { trocken: true });
+    const r = await lauf(a, mock({ ist: 0 }), { trocken: true });
+    expect(r.protokoll.sessions[0]).toMatchObject({ status: "vor Stichtag", wuerdeSenden: 1, gesendet: 0 });
     expect(existsSync(a.ledger)).toBe(false);
   });
 });
@@ -949,7 +971,7 @@ describe("--beendet im Fehlerpfad (Z6c)", () => {
 });
 
 describe("--beendet bei teilweise gesendeten Chunks (Z6c)", () => {
-  test("500 im zweiten Chunk mit --beendet: der Fortschritt bleibt, der aktuelle Stand und das Ende bleiben vermerkt (ohne --beendet bleibt groesse null)", async () => {
+  test("500 im zweiten Chunk mit --beendet: der Fortschritt bleibt, der aktuelle Stand und das Ende bleiben vermerkt", async () => {
     const viele = Array.from({ length: O.MAX_SPANS_JE_REQUEST + 1 }, (_, i) => msg(`m${i}`, i));
     const a = aufbau(viele);
     const jetzt = Date.now();
@@ -967,7 +989,7 @@ describe("--beendet bei teilweise gesendeten Chunks (Z6c)", () => {
     expect(e.mtime).toBe(s.mtime);
     // Folgelauf: unveränderte Datei wird am Float-mtime aus dem JSON-Ledger wiedererkannt.
     const r2 = await lauf(a, mock({ ist: 0 }), {}, jetzt + MIN);
-    expect(r2.protokoll.sessions[0].status).not.toBe("läuft");
+    expect(r2.protokoll.sessions[0].status).toBe("gesendet");
   });
 });
 
