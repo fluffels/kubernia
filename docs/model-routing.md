@@ -534,7 +534,7 @@ Beobachtungen: Ein `Monitor`-Ereignis weckt den auf einen Subagenten wartenden U
 
 **Effort-Gegenprobe `low` (#1590): Basis und Abbruchregel.** Der Skill-Pfad-Umsetzer läuft ab dem Merge von #1590 mit `effort: low` (Frontmatter, Matrix §1); der Workflow `CODING` in `.claude/workflows/kubernia-ticket.js` bleibt `medium`. Die Regel steht vor der Messung fest (Begriff: [Gegenprobe](harness-glossar.md)).
 
-**Basis, Fenster `--von 2026-10-09T11:41:27Z` (`closedAt` von #1559) bis `--bis 2026-10-15T16:15:37Z`, Stand 2026-10-15; in diesem Zeitraum lief seit 2026-10-12 kein Umsetzer mehr.** Kommandos: `node scripts/kontext-treiber.mjs --von … --bis … --ohne 1588 --ohne 1590 [--json]` (`--ohne 1588` nimmt den Probelauf aus #1588 heraus, `--ohne 1590` den eigenen Lauf), `node scripts/lauf-ergebnis.mjs --von … --bis …`, `node scripts/subagent-laufzeit.mjs --agent kubernia-umsetzer --von … --bis …`.
+**Basis, Fenster `--von 2026-10-09T11:41:27Z` (`closedAt` von #1559) bis `--bis 2026-10-15T16:15:37Z`, Stand 2026-10-15; in diesem Zeitraum lief seit 2026-10-12 kein Umsetzer mehr.** Kommandos: `node scripts/kontext-treiber.mjs --von … --bis … --ohne 1561 --ohne 1588 --ohne 1590 [--json]` (`--ohne 1561` nimmt #1576 heraus, `--ohne 1588` den Probelauf aus #1588, `--ohne 1590` den eigenen Lauf; dieselbe Liste wie bei der Qualität unten), `node scripts/lauf-ergebnis.mjs --von … --bis … --ohne 1561 --ohne 1588 --ohne 1590`, `node scripts/subagent-laufzeit.mjs --agent kubernia-umsetzer --von … --bis …`.
 
 | Kennzahl | alle Läufe (n = 10) | ohne Sammeltickets (n = 4) | Sammeltickets (n = 6) |
 |---|--:|--:|--:|
@@ -547,7 +547,7 @@ Beobachtungen: Ein `Monitor`-Ereignis weckt den auf einen Subagenten wartenden U
 | Requests je Lauf (Median) | 108 | 73,5 | 128,5 |
 | CI-Warten-Neuaufbauten | 0 | 0 | 0 |
 
-Qualität (`lauf-ergebnis`), feste **Basismenge** (festgelegt 2026-10-15 vor jeder Auswertung der Gegenprobe, nur aus dem Basisfenster): `node scripts/lauf-ergebnis.mjs --von 2026-10-09T11:41:27Z --bis 2026-10-15T16:15:37Z --ohne 1561 --ohne 1588 --ohne 1590`. `--ohne 1561` nimmt #1576 heraus (kein Umsetzer-Lauf im Fenster), `--ohne 1588` den Probelauf (#1595), `--ohne 1590` den eigenen Lauf; die Läufe zählt `kontext-treiber … --ohne 1561 --ohne 1588 --ohne 1590` (n = 10, dieselben zehn Tickets: 1566, 1572, 1577, 1578, 1579, 1580, 1582, 1584, 1600, 1602). Dieselbe `--ohne`-Liste gilt für Läufe und PRs; die früheren Zahlen „alle PRs (12)“ und „gefiltert (11)“ entfallen.
+Qualität (`lauf-ergebnis`), feste **Basismenge** (festgelegt 2026-10-15 vor jeder Auswertung der Gegenprobe, nur aus dem Basisfenster): `node scripts/lauf-ergebnis.mjs --von 2026-10-09T11:41:27Z --bis 2026-10-15T16:15:37Z --ohne 1561 --ohne 1588 --ohne 1590`. `--ohne 1561` nimmt #1576 heraus (kein Umsetzer-Lauf im Fenster), `--ohne 1588` den Probelauf (#1595), `--ohne 1590` den eigenen Lauf; die Läufe zählt `kontext-treiber` mit derselben Liste (n = 10, dieselben zehn Tickets: 1566, 1572, 1577, 1578, 1579, 1580, 1582, 1584, 1600, 1602). Dieselbe `--ohne`-Liste gilt für Läufe und PRs; die früheren Zahlen „alle PRs (12)“ und „gefiltert (11)“ entfallen.
 
 | Kennzahl | Basismenge (10 PRs) |
 |---|--:|
