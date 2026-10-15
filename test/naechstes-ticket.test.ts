@@ -1,4 +1,7 @@
-import { describe, expect, test } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/naechstes-ticket.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -8,7 +11,9 @@ const R = refs as unknown as { ticketAusRef: (t: string) => number | null; beleg
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as boardLib from "../scripts/board-lib.mjs";
 
-type Eingabe = { items: unknown[]; offene: Set<number>; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string };
+type Fenster = { k: number; agent: string; nach: number };
+type Stand = { closedAt: string | null; n: number } | { fehler: string };
+type Eingabe = { items: unknown[]; offene: Set<number>; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
@@ -16,6 +21,10 @@ const N = raw as unknown as {
   formatiere: (e: Ergebnis) => string;
   fuehreAus: (argv: string[], io: { lade: () => Eingabe; owner: string }) => { code: number; out: string; err: string };
   bereichAusArgv: (argv: string[]) => { bereich: string | null } | { fehler: string };
+  messfensterZeilen: (b: string) => (Fenster | { fehler: string })[];
+  laeufeImFenster: (l: { start: number; ticket: number | null }[], o: { closedAt: string; ohneTicket: number }) => number;
+  messfensterGrund: (f: Fenster, s: Stand) => string;
+  messfensterLader: (o: { dir?: string; holeIssue?: (nr: number) => { state: string; closed_at: string | null } }) => (f: Fenster, wartend: number) => Stand;
 };
 
 // Ein Parse-Pfad (#1460 Z8): die Roh-Fixtures (REST-Form) laufen wie im Echtbetrieb durch normalizeItems, waehleNaechstes sieht nur Normalisiertes.
@@ -221,5 +230,138 @@ describe("prHeadsAus: REST-Form der offenen PRs (#1549 Z1)", () => {
     expect(P.prHeadsAus(seiten)).toEqual(["feature/kq-1-a", "feature/kq-2-b", "feature/kq-3-c"]);
     expect(P.prHeadsAus([])).toEqual([]);
     expect(P.prHeadsAus([[]])).toEqual([]);
+  });
+});
+
+describe("messfensterZeilen (#1589)", () => {
+  const F = { k: 12, agent: "kubernia-umsetzer", nach: 1590 };
+  test("ohne Zeile: leer; eine Erwähnung im Fließtext ist keine Zeile", () => {
+    expect(N.messfensterZeilen("nichts")).toEqual([]);
+    expect(N.messfensterZeilen(null as unknown as string)).toEqual([]);
+    expect(N.messfensterZeilen("**Ziel:** Ein Issue mit der Body-Zeile `Messfenster: n ≥ 12 kubernia-umsetzer nach #1590` ist frei")).toEqual([]);
+  });
+  test("gültig: ≥ oder >=, Listenpunkt, CRLF, Groß-/Kleinschreibung", () => {
+    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590")).toEqual([F]);
+    expect(N.messfensterZeilen("Messfenster: n >= 12 kubernia-umsetzer nach #1590")).toEqual([F]);
+    expect(N.messfensterZeilen("- messfenster: n ≥ 12 kubernia-umsetzer nach #1590")).toEqual([F]);
+    expect(N.messfensterZeilen("x\r\nMessfenster: n ≥ 12 kubernia-umsetzer nach #1590\r\ny")).toEqual([F]);
+  });
+  test("mehrere Zeilen: mehrere Fenster", () => {
+    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590\nMessfenster: n ≥ 3 kubernia-lens nach #7")).toEqual([F, { k: 3, agent: "kubernia-lens", nach: 7 }]);
+  });
+  test.each(["n ≥ zehn kubernia-umsetzer nach #1", "n ≥ 0 kubernia-umsetzer nach #1", "n ≥ <k> kubernia-umsetzer nach #<nr>", "n ≥ 5 kubernia-umsetzer nach 1590", "n ≥ 5 nach #1"])(
+    "kaputte Zeile „%s“: fehler",
+    (rest) => {
+      const r = N.messfensterZeilen(`Messfenster: ${rest}`);
+      expect(r).toHaveLength(1);
+      expect(r[0]).toHaveProperty("fehler");
+    },
+  );
+});
+
+describe("laeufeImFenster (#1589)", () => {
+  const t0 = Date.parse("2026-10-15T16:00:00Z");
+  test("Start < closedAt zählt nicht, Start == closedAt zählt", () => {
+    expect(N.laeufeImFenster([{ start: t0 - 1, ticket: 5 }, { start: t0, ticket: 5 }, { start: t0 + 1, ticket: 5 }], { closedAt: "2026-10-15T16:00:00Z", ohneTicket: 99 })).toBe(2);
+  });
+  test("Läufe des wartenden Tickets zählen nicht, unzuordenbare (null) schon", () => {
+    expect(N.laeufeImFenster([{ start: t0, ticket: 99 }, { start: t0, ticket: null }, { start: t0, ticket: 4 }], { closedAt: "2026-10-15T16:00:00Z", ohneTicket: 99 })).toBe(2);
+  });
+});
+
+describe("messfensterGrund (#1589)", () => {
+  const F = { k: 12, agent: "kubernia-umsetzer", nach: 1590 };
+  test("offen: wie ein Blocker; Fehler: nicht prüfbar", () => {
+    expect(N.messfensterGrund(F, { closedAt: null, n: 0 })).toBe("offener Blocker #1590 (Messfenster)");
+    expect(N.messfensterGrund(F, { fehler: "Messfenster nicht prüfbar (x)" })).toContain("nicht prüfbar");
+  });
+  test("n = k−1 gesperrt mit exaktem Grund, n = k und n > k frei", () => {
+    expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 11 })).toBe("Messfenster offen (11/12 kubernia-umsetzer nach #1590)");
+    expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 12 })).toBe("");
+    expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 13 })).toBe("");
+  });
+});
+
+describe("waehleNaechstes mit Messfenster (#1589)", () => {
+  const zeile = "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590";
+  const lader = (stand: Stand) => {
+    const aufrufe: number[] = [];
+    return { aufrufe, fn: (_f: Fenster, wartend: number) => (aufrufe.push(wartend), stand) };
+  };
+  const frist = "2026-10-15T16:00:00Z";
+  test("#X offen: übersprungen, Lader nicht aufgerufen", () => {
+    const l = lader({ closedAt: frist, n: 99 });
+    const r = frei([item(1, { body: zeile }), item(2)], { offene: new Set([1590]), messfenster: l.fn });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen[0].grund).toBe("offener Blocker #1590 (Messfenster)");
+    expect(l.aufrufe).toEqual([]);
+  });
+  test("n < k übersprungen, n = k frei", () => {
+    const zu = lader({ closedAt: frist, n: 4 });
+    const r = frei([item(1, { body: zeile }), item(2)], { messfenster: zu.fn });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (4/12 kubernia-umsetzer nach #1590)");
+    expect(zu.aufrufe).toEqual([1]);
+    expect(frei([item(1, { body: zeile })], { messfenster: lader({ closedAt: frist, n: 12 }).fn }).ticket?.nr).toBe(1);
+  });
+  test("ohne Zeile, mit Assignee oder belegtem Branch: Lader nie aufgerufen", () => {
+    const l = lader({ closedAt: frist, n: 0 });
+    frei([item(1), item(2, { body: zeile, assignees: [{ login: "x" }] }), item(3, { body: zeile })], { refs: ["feature/kq-3-a"], messfenster: l.fn });
+    expect(l.aufrufe).toEqual([]);
+  });
+  test("ohne Lader fail-closed; Lader-Fehler übersprungen mit Grund", () => {
+    const r = frei([item(1, { body: zeile }), item(2)]);
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen[0].grund).toContain("nicht prüfbar");
+    const f = frei([item(1, { body: zeile })], { messfenster: () => ({ fehler: "Messfenster nicht prüfbar (keine lokalen Transkripte)" }) });
+    expect(f.ticket).toBeNull();
+    expect(f.uebersprungen[0].grund).toBe("Messfenster nicht prüfbar (keine lokalen Transkripte)");
+  });
+  test("unlesbare Zeile: fail-closed, der Body-Text taucht nirgends auf", () => {
+    const eingabe = { items: norm([item(1, { body: "Messfenster: n ≥ GEHEIM kubernia-umsetzer nach #1" })]), offene: new Set<number>() };
+    const r = N.fuehreAus(["--json"], { owner: "fluffels", lade: () => eingabe });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("unlesbar");
+    expect(r.out).not.toContain("GEHEIM");
+    expect(N.fuehreAus([], { owner: "fluffels", lade: () => eingabe }).out).not.toContain("GEHEIM");
+  });
+});
+
+describe("messfensterLader (#1589)", () => {
+  const F = { k: 2, agent: "kubernia-umsetzer", nach: 1590 };
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const zu = () => ({ state: "closed", closed_at: "2026-10-15T10:00:00Z" });
+  const lauf = (dir: string, name: string, agentType: string, ticket: number, ts: string) => {
+    const sub = join(dir, "sess", "subagents");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, `${name}.meta.json`), JSON.stringify({ agentType, description: "x" }));
+    writeFileSync(join(sub, `${name}.jsonl`), `${JSON.stringify({ type: "user", timestamp: ts, message: { role: "user", content: `Ticket #${ticket}: los` } })}\n`);
+  };
+  const tmp = () => {
+    const d = mkdtempSync(join(tmpdir(), "kq-mf-"));
+    dirs.push(d);
+    return d;
+  };
+  test("fehlender Ordner: fehler ohne Pfad im Text", () => {
+    const r = N.messfensterLader({ dir: join(tmpdir(), "kq-gibt-es-nicht-1589"), holeIssue: zu })(F, 1591);
+    expect(r).toEqual({ fehler: "Messfenster nicht prüfbar (keine lokalen Transkripte)" });
+  });
+  test("zählt Läufe des Typs ab closedAt, ohne die des wartenden Tickets", () => {
+    const d = tmp();
+    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "b", "kubernia-umsetzer", 1601, "2026-10-15T12:00:00Z");
+    lauf(d, "c", "kubernia-umsetzer", 1591, "2026-10-15T13:00:00Z");
+    lauf(d, "d", "kubernia-lens", 1602, "2026-10-15T13:00:00Z");
+    lauf(d, "e", "kubernia-umsetzer", 1603, "2026-10-15T09:00:00Z");
+    expect(N.messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
+  });
+  test("offenes Issue: closedAt null; Abruffehler: fehler", () => {
+    const d = tmp();
+    expect(N.messfensterLader({ dir: d, holeIssue: () => ({ state: "open", closed_at: null }) })(F, 1591)).toEqual({ closedAt: null, n: 0 });
+    const r = N.messfensterLader({ dir: d, holeIssue: () => { throw new Error("boom"); } })(F, 1591);
+    expect(r).toEqual({ fehler: "Messfenster nicht prüfbar (#1590 nicht abrufbar)" });
   });
 });

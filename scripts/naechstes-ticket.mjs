@@ -13,14 +13,21 @@
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
- * `feature/kq-<nr>-*`. I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`, ein REST-Aufruf für offene PRs; kein GraphQL.
+ * `feature/kq-<nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
+ * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
+ * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); kein GraphQL.
  */
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { NOTFAELLE, REPO, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
+import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
+import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
 
 /** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
@@ -32,6 +39,36 @@ export function blockerNummern(body) {
     }
   }
   return [...nummern];
+}
+
+/**
+ * Zeilen `Messfenster: n ≥ <k> <agent> nach #<nr>` (#1589; am Zeilenanfang, Listenpunkt erlaubt, `≥` oder `>=`, k ≥ 1; eine bloße Erwähnung im
+ * Fließtext zählt nicht). Je Zeile `{ k, agent, nach }` oder `{ fehler }` (unlesbar, ohne den Body-Text zu zitieren). Pur.
+ */
+export function messfensterZeilen(body) {
+  const fenster = [];
+  for (const zeile of String(body ?? "").split(/\r?\n/)) {
+    const kopf = /^\s*(?:[-*]\s+)?Messfenster:(.*)$/i.exec(zeile);
+    if (!kopf) continue;
+    const m = /^\s*n\s*(?:≥|>=)\s*(\d+)\s+(\S+)\s+nach\s+#(\d+)\s*\.?\s*$/i.exec(kopf[1]);
+    if (m && Number(m[1]) >= 1) fenster.push({ k: Number(m[1]), agent: m[2], nach: Number(m[3]) });
+    else fenster.push({ fehler: "Messfenster-Zeile unlesbar (erwartet „Messfenster: n ≥ <k> <agent> nach #<nr>“)" });
+  }
+  return fenster;
+}
+
+/** Anzahl der Läufe (`{ start (ms), ticket }`) mit Start ≥ `closedAt`, ohne die des wartenden Tickets. Pur. */
+export function laeufeImFenster(laeufe, { closedAt, ohneTicket }) {
+  const ab = Date.parse(closedAt);
+  return laeufe.filter((l) => l.start >= ab && l.ticket !== ohneTicket).length;
+}
+
+/** Überspringgrund eines Messfensters (`""` = erfüllt); `stand`: `{ closedAt, n }` (closedAt `null` = #nach offen) oder `{ fehler }`. Pur. */
+export function messfensterGrund(fenster, stand) {
+  if ("fehler" in stand) return stand.fehler;
+  if (stand.closedAt === null) return `offener Blocker #${fenster.nach} (Messfenster)`;
+  if (stand.n < fenster.k) return `Messfenster offen (${stand.n}/${fenster.k} ${fenster.agent} nach #${fenster.nach})`;
+  return "";
 }
 
 /** Nutzersichtbare Bereichsnamen (#1552); das Label für „agentic“ bleibt `area:harness`. */
@@ -59,26 +96,37 @@ export function imBereich(item, bereich) {
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
  * Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER }) {
   const belegt = belegteNummern({ refs, worktrees, prHeads });
   const uebersprungen = [];
   for (const item of items) {
     if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich)) continue;
-    const grund = ueberspringGrund(item, { offene, belegt, owner });
+    const grund = ueberspringGrund(item, { offene, belegt, owner, messfenster });
     if (grund) uebersprungen.push({ nr: item.number, grund });
     else return { ticket: { nr: item.number, titel: item.title }, uebersprungen };
   }
   return { ticket: null, uebersprungen };
 }
 
-function ueberspringGrund(c, { offene, belegt, owner }) {
+const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kein Lader)" });
+
+function ueberspringGrund(c, { offene, belegt, owner, messfenster }) {
   if (c.assignees.length > 0) return `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}`;
   const label = c.labels.find((l) => FREMDEINGANG_LABELS.includes(l));
   if (!istVertraut(c.autor, owner) || label) return "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden";
   const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}`;
+  const fenster = messfensterZeilen(c.body);
+  const unlesbar = fenster.find((f) => "fehler" in f);
+  if (unlesbar) return unlesbar.fehler;
+  const offenesFenster = fenster.find((f) => offene.has(f.nach) && f.nach !== c.number);
+  if (offenesFenster) return messfensterGrund(offenesFenster, { closedAt: null, n: 0 });
   if (c.blockedBy > 0) return "offener Blocker laut GitHub-Abhängigkeit";
   if (belegt.has(c.number)) return "Branch, Worktree oder offener PR vorhanden";
+  for (const f of fenster) {
+    const grund = messfensterGrund(f, messfenster(f, c.number)); // teuer (REST + Transkripte): erst für sonst freie Kandidaten
+    if (grund) return grund;
+  }
   return "";
 }
 
@@ -108,6 +156,40 @@ export const prHeadsAus = (seiten) => seiten.flat().map((p) => `${p.head.ref}`);
 
 const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 
+/**
+ * Lader für `waehleNaechstes({ messfenster })` (#1589), I/O: `closedAt` von #nach per REST (`holeIssue`) und die gestarteten Läufe des Agent-Typs
+ * aus den lokalen Transkripten (`dir`, Default der Projektordner wie `subagent-laufzeit.mjs`). Memo je `agent|nach`. Fail-closed:
+ * `{ fehler }` ohne Transkript-Ordner, bei Abruf- oder Lesefehlern (Texte ohne lokalen Pfad).
+ */
+export function messfensterLader({ dir, holeIssue = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]) } = {}) {
+  const memo = new Map();
+  return (fenster, wartend) => {
+    const schluessel = `${fenster.agent}|${fenster.nach}|${wartend}`;
+    if (!memo.has(schluessel)) memo.set(schluessel, messfensterStand(fenster, wartend, dir ?? projektOrdner(), holeIssue));
+    return memo.get(schluessel);
+  };
+}
+
+const projektOrdner = () => join(homedir(), ".claude", "projects", projektSlug(hauptrepoWurzel() ?? process.cwd()));
+
+function messfensterStand(fenster, wartend, dir, holeIssue) {
+  let closedAt;
+  try {
+    const issue = holeIssue(fenster.nach);
+    closedAt = issue.state === "closed" ? issue.closed_at : null;
+  } catch {
+    return { fehler: `Messfenster nicht prüfbar (#${fenster.nach} nicht abrufbar)` };
+  }
+  if (closedAt === null) return { closedAt: null, n: 0 };
+  if (!existsSync(dir)) return { fehler: "Messfenster nicht prüfbar (keine lokalen Transkripte)" };
+  try {
+    const laeufe = ladeLaeufe(dir, fenster.agent, closedAt).map(laufAus).filter(Boolean);
+    return { closedAt, n: laeufeImFenster(laeufe, { closedAt, ohneTicket: wartend }) };
+  } catch {
+    return { fehler: "Messfenster nicht prüfbar (Transkripte nicht lesbar)" };
+  }
+}
+
 function ladeEcht() {
   const items = normalizeItems(loadItemPages());
   const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
@@ -119,7 +201,7 @@ function ladeEcht() {
   const refs = git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
   const worktrees = git(["worktree", "list", "--porcelain"]).split(/\r?\n/).filter((z) => /^(worktree|branch) /.test(z));
   const prHeads = prHeadsAus(ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/pulls?state=open&per_page=100`]));
-  return { items, offene, refs, worktrees, prHeads };
+  return { items, offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
