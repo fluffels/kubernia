@@ -134,6 +134,35 @@ Alle 9 erlaubten Richtungen sind genutzt.
 
 <!-- GEN:schichten-ist END -->
 
+### Hexagonale Sicht (Ports & Adapters)
+
+Dieselbe Schichtung, anders gelesen ([ADR 0024](adr/0024-hexagon-als-lesart.md)): Die Hexagon-Mitte ist die Phaser-freie Domäne samt Anwendung, ein **Port** ist eine benannte Stelle, an der etwas von außen hineinwirkt (**treibend**, primär) oder die Mitte nach außen greift (**getrieben**, sekundär), ein **Adapter** ist der Code, der einen Port an die Außenwelt anschließt. Das ist **kein zweites Schichtmodell** und keine Ordnerstruktur: die Spalte Schicht steht in `scripts/layers.cjs`, `npm run check:c4` gleicht jede Zeile dagegen ab (Pfad existiert, Schicht stimmt, Modell hat dasselbe Element samt Kante Adapter → Port). Wer eine neue Ein- oder Ausgabe baut, ergänzt hier eine Adapter-Zeile (neuer Port nur, wenn kein vorhandener passt) und das passende Element in `docs/architektur/spiel.c4`.
+
+| Port | Seite | Ort | Schicht |
+|---|---|---|---|
+| Tastatur-Aktionen | treibend | `src/core/keybindings.ts` | pure Domäne |
+| Terminal-Befehle | treibend | `src/sim.ts` | pure Domäne |
+| Spieltakt | treibend | `src/game/tick.ts` | Anwendung/Persistenz |
+| Spielstand-Austausch | treibend | `src/game/save.ts` | Anwendung/Persistenz |
+| Persistenz | getrieben | `src/store.ts` | Anwendung/Persistenz |
+| Content-Quelle | getrieben | `src/content.ts` | pure Domäne |
+
+| Adapter | Port | Ort | Schicht |
+|---|---|---|---|
+| DOM-Tastatur | Tastatur-Aktionen | `src/main.ts` | Einstieg/Assets |
+| Funkgerät-Terminal | Terminal-Befehle | `src/ui/radio.ts` | Präsentation |
+| Phaser-Frame-Takt | Spieltakt | `src/main.ts` | Einstieg/Assets |
+| Dev-Zeitsprung | Spieltakt | `src/scenes/devapi.ts` | Präsentation |
+| Spielstand-Datei | Spielstand-Austausch | `src/ui/save.ts` | Präsentation |
+| IndexedDB | Persistenz | `src/store/backend.ts` | Anwendung/Persistenz |
+| localStorage | Persistenz | `src/store/backend.ts` | Anwendung/Persistenz |
+| In-Memory | Persistenz | `src/store/backend.ts` | Anwendung/Persistenz |
+| Vite-JSON-Import | Content-Quelle | `src/content/loader/` | pure Domäne |
+
+Die Hafen-Anti-Corruption-Layer (`src/scenes/worldscene/clustersync.ts`) gehört zur treibenden Präsentation: sie übersetzt Hafen ↔ Sim und ist kein eigener Port. Tests sind ein weiterer treibender Adapter (Fabriken in `test/factories/`), ohne Tabellenzeile.
+
+Ehrliche Grenzen: Adapter liegen nicht nur außen, die Persistenz-Adapter sitzen in „Anwendung/Persistenz“ und der Vite-JSON-Import in der puren Domäne; maßgeblich ist die Schicht-Spalte, nicht das Bild vom Rand. Es gibt kein TypeScript-Interface je Port, die Abhängigkeitsumkehr ist nur an den Schichtgrenzen erzwungen (`check:arch`), und der Persistenz-Port wählt seinen Adapter selbst (`src/store/backend.ts`), statt ihn injiziert zu bekommen. Die Wanduhr (`Date.now`) ist kein Port. Greift ein Port zwei zur Laufzeit austauschbare Adapter (Cloud-Save, Lazy-Load von Content), ist ein echtes Port-Interface neu zu bewerten (ADR 0024). Wird die View `hexagon` zu groß (Deckel `maxKnotenJeView`), wird sie je Seite (`treibend`, `getrieben`) geteilt, der Deckel nicht angehoben.
+
 ### Systemkontext (C4 Level 1)
 
 ```mermaid
@@ -196,7 +225,7 @@ Vier Konzepte durchziehen den Code: **Schichtung** (§5), **Content-as-Data**, *
 
 ### DDD — ehrliche Einordnung
 
-**Taktisches DDD lebt das Projekt bereits an der teuersten Stelle:** eine framework-freie, *erzwungene* Domänenschicht + eine Repository-Kapsel (`SaveStore`).
+**Taktisches DDD lebt das Projekt bereits an der teuersten Stelle:** eine framework-freie, *erzwungene* Domänenschicht + eine Repository-Kapsel (`SaveStore`, in der [hexagonalen Sicht](#hexagonale-sicht-ports--adapters) der Persistenz-Port).
 
 **Kein strategisches DDD mit getrennten Deployables/Packages** — das wäre Over-Engineering. **Aber:** Kubernia ist ein **modularer Monolith mit ~2–3 Subdomänen**, deren eigene Sprache real ist. Bounded Contexts sind hier vor allem **Grenzen für kognitive Last = Token-Last** bei KI-Entwicklung (explizites Qualitätsziel):
 

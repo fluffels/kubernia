@@ -1,7 +1,11 @@
 // Element-Arten des Architekturmodells (ADR 0020).
-// Gebunden an eine SSOT (check:c4 gleicht ab): schicht, bibliothek, modul.
+// Gebunden an eine SSOT (check:c4 gleicht ab): schicht, bibliothek, modul, port, adapter.
 // Erzählung (frei, nicht ableitbar): person, system, container, datenspeicher.
+// port/adapter: hexagonale Sicht (ADR 0024), gebunden an die Tabellen in docs/arc42-architektur.md.
 specification {
+  tag treibend
+  tag getrieben
+  tag hexagon
   element person {
     style {
       shape person
@@ -23,6 +27,18 @@ specification {
   element modul {
     style {
       shape component
+    }
+  }
+  element port {
+    style {
+      shape queue
+      color amber
+    }
+  }
+  element adapter {
+    style {
+      shape rectangle
+      color green
     }
   }
 }

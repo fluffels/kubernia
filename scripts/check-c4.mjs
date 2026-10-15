@@ -13,16 +13,16 @@
  * Die LikeC4-Model-API steckt in genau einem Adapter (`ladeC4Modell`).
  */
 import { spawnSync } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { leseConfigObjekt } from "./docs-gen/markdown.mjs";
+import { fenceMaske, leseConfigObjekt } from "./docs-gen/markdown.mjs";
 import { ladeModell, schichtVon, sollKanten } from "./docs-gen/schichten.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG = "scripts/docs-gen/config.json";
-const BINDER = ["schicht", "extern", "modul"];
+const BINDER = ["schicht", "extern", "modul", "port", "adapter"];
 
 /** Top-Level von `quelle`: Ordner plus `.ts`-Dateien (ohne `.d.ts`); ein Barrel `x.ts` neben `x/` ist dasselbe Modul. */
 export function srcModule(rootDir, quelle) {
@@ -58,6 +58,9 @@ function pruefeConfig(cfg) {
     if (erz.includes(art)) probleme.push(f(`Art "${art}" steht zugleich in bindungen und erzaehlung`, `die Art aus einer der beiden Listen entfernen`));
   }
   if (!cfg.workspace || !cfg.quelle) probleme.push(f(`workspace oder quelle fehlt`, `beide Pfade in "architektur" eintragen`));
+  if (!cfg.hexagon || typeof cfg.hexagon.datei !== "string" || typeof cfg.hexagon.abschnitt !== "string") {
+    probleme.push(f(`Block "hexagon" (datei, abschnitt) fehlt`, `"hexagon": { "datei": "docs/arc42-architektur.md", "abschnitt": "Hexagonale Sicht (Ports & Adapters)" } in "architektur" eintragen`));
+  }
   if (!Number.isInteger(cfg.maxKnotenJeView) || cfg.maxKnotenJeView < 1) probleme.push(f(`maxKnotenJeView ist keine positive Zahl`, `eine Zahl eintragen (nur senken)`));
   return probleme;
 }
@@ -174,8 +177,197 @@ function pruefeModule(c4, modell, module, byId, binderVon, ordner) {
   return ms;
 }
 
-/** Der Abgleich. Reine Funktion: Adapter-Output, Modell (layers.cjs), src-Module und Config rein, Meldungen raus. */
-export function pruefeArchitektur({ modell, module, c4, cfg }) {
+const HEX_PFAD = /`((?:src|test|scripts|docs)\/[^`\s]*)`/g;
+const HEX_KOPF = { port: ["Port", "Seite", "Ort", "Schicht"], adapter: ["Adapter", "Port", "Ort", "Schicht"] };
+const zellen = (zeile) => zeile.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+const pfadeIn = (text) => [...text.matchAll(HEX_PFAD)].map((m) => m[1]);
+
+/**
+ * Liest den Abschnitt `### <abschnitt>` der Hexagon-Sicht (bis zur nächsten Überschrift der Ebene 1 bis 3, Code-Fences
+ * ausgeblendet): die Tabellen `| Port | Seite | Ort | Schicht |` und `| Adapter | Port | Ort | Schicht |` sowie alle Backtick-Pfade
+ * `src/…`/`test/…`. Liefert `null`, wenn der Abschnitt fehlt. Reine Funktion.
+ */
+export function leseHexagon(text, abschnitt) {
+  const lines = text.split(/\r?\n/);
+  const fence = fenceMaske(lines);
+  const start = lines.findIndex((l, i) => !fence[i] && l.trim() === `### ${abschnitt}`);
+  if (start < 0) return null;
+  let ende = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (!fence[i] && /^#{1,3}\s/.test(lines[i])) {
+      ende = i;
+      break;
+    }
+  }
+  const hex = { start: start + 1, ports: [], adapter: [], pfade: [], schief: [] };
+  let modus = null;
+  for (let i = start + 1; i < ende; i++) {
+    if (fence[i]) continue;
+    const line = lines[i];
+    for (const pfad of pfadeIn(line)) hex.pfade.push({ pfad, zeile: i + 1 });
+    if (!line.trim().startsWith("|")) {
+      modus = null;
+      continue;
+    }
+    const z = zellen(line);
+    const kopf = Object.entries(HEX_KOPF).find(([, k]) => k.length === z.length && k.every((c, j) => c === z[j]));
+    if (kopf) {
+      modus = kopf[0];
+      continue;
+    }
+    if (!modus || z.every((c) => /^:?-+:?$/.test(c))) continue;
+    if (z.length !== 4) {
+      hex.schief.push({ zeile: i + 1, text: line.trim() });
+      continue;
+    }
+    const zeile = { name: z[0], zwei: z[1], ort: pfadeIn(z[2]), schicht: z[3], zeile: i + 1 };
+    (modus === "port" ? hex.ports : hex.adapter).push(zeile);
+  }
+  return hex;
+}
+
+/** Top-Level-Modul eines `src/`-Pfads (`src/ui/a.ts` → `ui`, `src/sim.ts` → `sim`), sonst `null`. */
+const modulVon = (pfad, quelle) => {
+  if (!pfad.startsWith(`${quelle}/`)) return null;
+  const erster = pfad.slice(quelle.length + 1).split("/")[0];
+  return erster.endsWith(".ts") ? erster.slice(0, -3) : erster || null;
+};
+
+/** Eine Tabellenzeile gegen Schicht-Modell: Schicht-Spalte ↔ schichtVon, genau ein Top-Level-Modul. Liefert { modul, schichtId } oder null (Meldungen in `ms`). */
+function pruefeHexZeile(z, art, { modell, quelle, datei, ms }) {
+  const m = (text, fix) => ms.push(meld(datei, z.zeile, art, z.name, text, fix));
+  if (z.ort.length === 0) return m(`Spalte Ort nennt keinen Backtick-Pfad`, `den Ort als \`src/…\` eintragen`), null;
+  const module = new Set(z.ort.map((p) => modulVon(p, quelle)));
+  if (module.has(null)) return m(`Ort liegt nicht unter ${quelle}/`, `Pfade unter ${quelle}/ angeben`), null;
+  if (module.size > 1) return m(`Ort liegt in mehreren Top-Level-Modulen (${[...module].join(", ")})`, `Zeile je Modul aufteilen`), null;
+  const ids = new Set(z.ort.map((p) => schichtVon(p, modell)));
+  const id = [...ids][0];
+  const schicht = modell.schichten.find((s) => s.id === id);
+  if (ids.size > 1 || !schicht) return m(`Ort liegt in verschiedenen oder unbekannten Schichten`, `Pfade einer Schicht angeben`), null;
+  if (schicht.label !== z.schicht) {
+    return m(`Schicht-Spalte „${z.schicht}“ widerspricht scripts/layers.cjs (dort „${schicht.label}“)`, `Schicht-Spalte auf „${schicht.label}“ ändern`), null;
+  }
+  return { modul: [...module][0], schichtId: id };
+}
+
+function pruefeHexTabellen(hex, ctx) {
+  const { ms, datei } = ctx;
+  const info = { port: new Map(), adapter: new Map() };
+  const gesehen = { port: new Set(), adapter: new Set() };
+  for (const s of hex.schief) ms.push(meld(datei, s.zeile, "hexagon", "Tabelle", `Zeile hat nicht vier Zellen: ${s.text}`, `Zeile auf vier Zellen bringen`));
+  for (const art of ["port", "adapter"]) {
+    for (const z of art === "port" ? hex.ports : hex.adapter) {
+      if (gesehen[art].has(z.name)) ms.push(meld(datei, z.zeile, art, z.name, `Zeile kommt doppelt vor`, `das Duplikat entfernen`));
+      gesehen[art].add(z.name);
+      const r = pruefeHexZeile(z, art, ctx);
+      if (r) info[art].set(z.name, { ...r, z });
+      if (art === "port" && !["treibend", "getrieben"].includes(z.zwei)) {
+        ms.push(meld(datei, z.zeile, art, z.name, `Seite „${z.zwei}“ ist weder treibend noch getrieben`, `treibend oder getrieben eintragen`));
+      }
+      if (art === "adapter" && !hex.ports.some((p) => p.name === z.zwei)) {
+        ms.push(meld(datei, z.zeile, art, z.name, `Port „${z.zwei}“ steht nicht in der Ports-Tabelle`, `den Port in die Ports-Tabelle aufnehmen oder den Namen korrigieren`));
+      }
+    }
+  }
+  return info;
+}
+
+/** Ein Port/Adapter-Element im Modell ↔ seine Tabellenzeile: Existenz, Elternmodul, Tag. */
+function pruefeHexElemente(hex, c4, info, ctx) {
+  const { ms, datei, byId, binderVon } = ctx;
+  for (const art of ["port", "adapter"]) {
+    const els = c4.elemente.filter((e) => binderVon(e.kind) === art);
+    for (const [name, i] of info[art]) {
+      const e = els.find((x) => x.title === name);
+      if (!e) {
+        ms.push(meld(datei, i.z.zeile, art, name, `fehlt im Modell (docs/architektur/spiel.c4)`, `Element ${art} '${name}' unter dem Modul '${i.modul}' anlegen`));
+        continue;
+      }
+      const eltern = byId.get(e.parentId);
+      if (!eltern || binderVon(eltern.kind) !== "modul" || eltern.title !== i.modul) {
+        ms.push(meld(e.datei, e.zeile, art, name, `liegt unter ${eltern ? `„${eltern.title}“` : "keinem Element"}, laut Tabelle gehört es unter das Modul „${i.modul}“`, `Element unter das Modul '${i.modul}' verschieben`));
+      }
+      if (art === "port") {
+        const tags = e.tags ?? [];
+        if (!tags.includes(i.z.zwei) || tags.includes(i.z.zwei === "treibend" ? "getrieben" : "treibend")) {
+          ms.push(meld(e.datei, e.zeile, art, name, `Tag ${tags.map((t) => `#${t}`).join(" ") || "fehlt"} passt nicht zur Seite „${i.z.zwei}“ der Tabelle`, `Tag #${i.z.zwei} setzen (und nur diesen)`));
+        }
+      }
+    }
+    const namen = new Set([...(art === "port" ? hex.ports : hex.adapter)].map((z) => z.name));
+    for (const e of els) {
+      if (!namen.has(e.title)) ms.push(meld(e.datei, e.zeile, art, e.title, `steht nicht in der ${art === "port" ? "Ports" : "Adapter"}-Tabelle der hexagonalen Sicht`, `Zeile in ${ctx.datei} ergänzen oder das Element entfernen`));
+    }
+  }
+}
+
+/** Kanten mit Port-/Adapter-Ende: genau je Adapter eine Kante Adapter → Port, Richtung nach den Schichtregeln. */
+function pruefeHexKanten(hex, c4, info, ctx) {
+  const { ms, datei, byId, binderVon, modell } = ctx;
+  const soll = new Set(sollKanten(modell).map(([v, n]) => `${v}>${n}`));
+  const erwartet = new Map();
+  for (const z of hex.adapter) {
+    const a = c4.elemente.find((e) => binderVon(e.kind) === "adapter" && e.title === z.name);
+    const p = c4.elemente.find((e) => binderVon(e.kind) === "port" && e.title === z.zwei);
+    if (a && p) erwartet.set(`${a.id}>${p.id}`, z);
+  }
+  const ist = new Set();
+  for (const b of c4.beziehungen) {
+    const von = byId.get(b.von);
+    const nach = byId.get(b.nach);
+    if (!von || !nach) continue;
+    const bv = binderVon(von.kind);
+    const bn = binderVon(nach.kind);
+    if (!["port", "adapter"].includes(bv) && !["port", "adapter"].includes(bn)) continue;
+    const key = `${b.von}>${b.nach}`;
+    if (!erwartet.has(key)) {
+      ms.push(meld(b.datei, b.zeile, "beziehung", `${von.title} → ${nach.title}`, `Kante mit Port-/Adapter-Ende ist nicht Adapter → Port laut Tabelle`, `Kante entfernen oder auf 'Adapter -> Port' laut Adapter-Tabelle ändern`));
+    } else if (ist.has(key)) {
+      ms.push(meld(b.datei, b.zeile, "beziehung", `${von.title} → ${nach.title}`, `Kante kommt doppelt vor`, `das Duplikat entfernen`));
+    }
+    ist.add(key);
+  }
+  for (const [key, z] of erwartet) {
+    if (!ist.has(key)) {
+      const a = c4.elemente.find((e) => e.id === key.split(">")[0]);
+      ms.push(meld(a?.datei ?? datei, a?.zeile ?? 1, "beziehung", `${z.name} → ${z.zwei}`, `Kante Adapter → Port fehlt im Modell`, `Beziehung '${z.name} -> ${z.zwei}' im Modell ergänzen`));
+    }
+  }
+  for (const z of hex.adapter) {
+    const ai = info.adapter.get(z.name);
+    const pi = info.port.get(z.zwei);
+    if (ai && pi && ai.schichtId !== pi.schichtId && !soll.has(`${ai.schichtId}>${pi.schichtId}`)) {
+      ms.push(meld(datei, z.zeile, "adapter", z.name, `Schicht-Richtung ${ai.z.schicht} → ${pi.z.schicht} ist laut SCHICHT_MODELL.darf verboten`, `Adapter in eine Schicht legen, die den Port erreichen darf`));
+    }
+  }
+}
+
+/**
+ * Die hexagonale Sicht (#1567, ADR 0024): arc42-Tabellen ↔ Dateisystem, Schicht-Modell und C4-Modell. Reine Funktion:
+ * `hexagon` = { text (arc42 oder null), existiert(pfad) }.
+ */
+export function pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon }) {
+  const datei = cfg.hexagon.datei;
+  const ms = [];
+  const hex = hexagon.text == null ? null : leseHexagon(hexagon.text, cfg.hexagon.abschnitt);
+  if (!hex) {
+    return [meld(datei, 1, "hexagon", cfg.hexagon.abschnitt, `Abschnitt „### ${cfg.hexagon.abschnitt}“ fehlt`, `Abschnitt mit Ports- und Adapter-Tabelle in ${datei} anlegen`)];
+  }
+  for (const [art, liste] of [["port", hex.ports], ["adapter", hex.adapter]]) {
+    if (liste.length === 0) ms.push(meld(datei, hex.start, art, cfg.hexagon.abschnitt, `${art === "port" ? "Ports" : "Adapter"}-Tabelle fehlt oder ist leer`, `Tabelle mit Kopf | ${HEX_KOPF[art].join(" | ")} | anlegen`));
+  }
+  for (const p of hex.pfade) {
+    if (!hexagon.existiert(p.pfad)) ms.push(meld(datei, p.zeile, "hexagon", p.pfad, `Pfad existiert nicht`, `Pfad korrigieren oder die Zeile entfernen`));
+  }
+  const ctx = { ms, datei, byId, binderVon, modell, quelle: cfg.quelle };
+  const info = pruefeHexTabellen(hex, ctx);
+  pruefeHexElemente(hex, c4, info, ctx);
+  pruefeHexKanten(hex, c4, info, ctx);
+  return ms;
+}
+
+/** Der Abgleich. Reine Funktion: Adapter-Output, Modell (layers.cjs), src-Module, Hexagon-Eingang und Config rein, Meldungen raus. */
+export function pruefeArchitektur({ modell, module, c4, cfg, hexagon }) {
   const probleme = pruefeConfig(cfg);
   if (probleme.length) return sortiere(probleme);
   const ordner = c4.elemente[0]?.datei ?? cfg.workspace;
@@ -187,7 +379,15 @@ export function pruefeArchitektur({ modell, module, c4, cfg }) {
   for (const binder of ["schicht", "extern"]) ms.push(...pruefeLabels(c4, q[binder], binder, binderVon, ordner));
   ms.push(...pruefeKanten(c4, modell, byId, binderVon, labelId, ordner));
   ms.push(...pruefeModule(c4, modell, module, byId, binderVon, ordner));
+  ms.push(...pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon }));
   for (const v of c4.views) {
+    for (const k of v.kanten ?? []) {
+      const von = byId.get(k.von);
+      const nach = byId.get(k.nach);
+      if (von && nach && (binderVon(von.kind) === "modul" || binderVon(nach.kind) === "modul")) {
+        ms.push(meld(v.datei, v.zeile, "view", v.id, `zeigt die abgeleitete Kante ${von.title} → ${nach.title} mit einem Modul-Ende (nicht aus einer SSOT ableitbar)`, `Kanten, die Module verschachtelter Elemente anheben, mit einem Tag versehen und per 'exclude * -> * where tag is #…' aus der View nehmen`));
+      }
+    }
     if (v.knoten > cfg.maxKnotenJeView) {
       ms.push(meld(v.datei, v.zeile, "view", v.id, `${v.knoten} Knoten, erlaubt sind ${cfg.maxKnotenJeView} (architektur.maxKnotenJeView)`, `View je Schicht teilen, den Deckel nur senken`));
     }
@@ -214,9 +414,9 @@ export async function ladeC4Modell(rootDir, workspace) {
       throw new Error(`LikeC4-Modell hat Fehler:\n${fehler.join("\n")}`);
     }
     const model = await likec4.computedModel();
-    const elemente = [...model.elements()].map((e) => ({ id: e.id, kind: e.kind, title: e.title, parentId: e.parent?.id ?? null, ...ort({ element: e.id }) }));
+    const elemente = [...model.elements()].map((e) => ({ id: e.id, kind: e.kind, title: e.title, parentId: e.parent?.id ?? null, tags: [...e.tags].map(String), ...ort({ element: e.id }) }));
     const beziehungen = [...model.relationships()].map((r) => ({ von: r.source.id, nach: r.target.id, ...ort({ relation: r.id }) }));
-    const views = [...model.views()].map((v) => ({ id: v.id, titel: v.title ?? v.id, knoten: [...v.nodes()].length, ...ort({ view: v.id }) }));
+    const views = [...model.views()].map((v) => ({ id: v.id, titel: v.title ?? v.id, knoten: [...v.nodes()].length, kanten: [...v.edges()].map((e) => ({ von: e.source.id, nach: e.target.id })), ...ort({ view: v.id }) }));
     return { elemente, beziehungen, views };
   } finally {
     await likec4.dispose();
@@ -266,7 +466,9 @@ export async function cli(argv, { rootDir = ROOT, out = console.log, err = conso
     const modell = ladeModell(rootDir, config.schichten.layers);
     // #1428 Z13: die Quellwurzel steht im Modell; `architektur.quelle` muss dasselbe Verzeichnis nennen (sonst vergliche der Wächter das falsche).
     if (`${cfg.quelle}/` !== modell.quellwurzel) throw new Error(`architektur.quelle „${cfg.quelle}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ des Schicht-Modells`);
-    const ms = pruefeArchitektur({ modell, module: srcModule(rootDir, cfg.quelle), c4: await ladeC4Modell(rootDir, ws), cfg });
+    const hexDatei = join(rootDir, cfg.hexagon.datei);
+    const hexagon = { text: existsSync(hexDatei) ? readFileSync(hexDatei, "utf8") : null, existiert: (p) => existsSync(join(rootDir, p)) };
+    const ms = pruefeArchitektur({ modell, module: srcModule(rootDir, cfg.quelle), c4: await ladeC4Modell(rootDir, ws), cfg, hexagon });
     for (const m of ms) err(formatiere(m));
     if (ms.length) rot = true;
   } catch (e) {

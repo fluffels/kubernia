@@ -14,27 +14,62 @@ model {
       description 'Vite und TypeScript, Phaser als Bibliothek'
 
       einstieg = schicht 'Einstieg/Assets' {
-        main = modul 'main'
+        main = modul 'main' {
+          tastatur = adapter 'DOM-Tastatur'
+          frameTakt = adapter 'Phaser-Frame-Takt'
+        }
         assetsData = modul 'assets-data'
       }
       praesentation = schicht 'Präsentation' {
-        scenes = modul 'scenes'
-        ui = modul 'ui'
+        scenes = modul 'scenes' {
+          zeitsprung = adapter 'Dev-Zeitsprung'
+        }
+        ui = modul 'ui' {
+          funkTerminal = adapter 'Funkgerät-Terminal'
+          spielstandDatei = adapter 'Spielstand-Datei'
+        }
         sfx = modul 'sfx'
       }
       anwendung = schicht 'Anwendung/Persistenz' {
-        game = modul 'game'
+        game = modul 'game' {
+          spieltakt = port 'Spieltakt' {
+            #treibend
+          }
+          austausch = port 'Spielstand-Austausch' {
+            #treibend
+          }
+        }
         runtime = modul 'runtime'
         devpanel = modul 'devpanel'
-        store = modul 'store'
+        store = modul 'store' {
+          persistenz = port 'Persistenz' {
+            #getrieben
+          }
+          idb = adapter 'IndexedDB'
+          ls = adapter 'localStorage'
+          mem = adapter 'In-Memory'
+        }
       }
       domaene = schicht 'pure Domäne' {
-        content = modul 'content'
-        core = modul 'core'
+        content = modul 'content' {
+          quelle = port 'Content-Quelle' {
+            #getrieben
+          }
+          viteJson = adapter 'Vite-JSON-Import'
+        }
+        core = modul 'core' {
+          tastaturAktionen = port 'Tastatur-Aktionen' {
+            #treibend
+          }
+        }
         crashreport = modul 'crashreport'
         devtools = modul 'devtools'
         hud = modul 'hud'
-        sim = modul 'sim'
+        sim = modul 'sim' {
+          terminalBefehle = port 'Terminal-Befehle' {
+            #treibend
+          }
+        }
         types = modul 'types'
         world = modul 'world'
       }
@@ -49,6 +84,35 @@ model {
       praesentation -> domaene
       praesentation -> phaser
       anwendung -> domaene
+
+      // Hexagonale Sicht (ADR 0024): je Adapter genau eine Kante auf seinen Port.
+      einstieg.main.tastatur -> domaene.core.tastaturAktionen {
+        #hexagon
+      }
+      einstieg.main.frameTakt -> anwendung.game.spieltakt {
+        #hexagon
+      }
+      praesentation.scenes.zeitsprung -> anwendung.game.spieltakt {
+        #hexagon
+      }
+      praesentation.ui.funkTerminal -> domaene.sim.terminalBefehle {
+        #hexagon
+      }
+      praesentation.ui.spielstandDatei -> anwendung.game.austausch {
+        #hexagon
+      }
+      anwendung.store.idb -> anwendung.store.persistenz {
+        #hexagon
+      }
+      anwendung.store.ls -> anwendung.store.persistenz {
+        #hexagon
+      }
+      anwendung.store.mem -> anwendung.store.persistenz {
+        #hexagon
+      }
+      domaene.content.viteJson -> domaene.content.quelle {
+        #hexagon
+      }
     }
 
     spielstand = datenspeicher 'Spielstand' {
@@ -87,5 +151,12 @@ views {
       kubernia.spielApp.anwendung.*,
       kubernia.spielApp.domaene.*
     exclude kubernia.spielApp.phaser
+    exclude * -> * where tag is #hexagon
+  }
+
+  view hexagon of kubernia.spielApp {
+    title 'Hexagon: Ports und Adapter'
+    include kubernia.spielApp.** where kind is port or kind is adapter
+    autoLayout LeftRight
   }
 }
