@@ -24,7 +24,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Skripte | 103 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 73 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 24 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 25 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -358,6 +358,8 @@ Gelb hinterlegt sind die drei Rückkopplungsschleifen (verify, Lenses, CI), rot 
 ### Agenten-Sandbox (WSL2)
 
 Shell-Befehle des Agenten (Bash, PowerShell, Monitor) laufen unter **WSL2 in bubblewrap** mit Domain-Allowlist; auf nativem Windows gibt es keine Sandbox, der strikte Projekt-Block sperrt dort Shell-Befehle ([Natives Windows](#natives-windows); Entscheidung, Probe und Alternativen: [ADR 0021](adr/0021-agenten-sandbox-wsl2.md)); die Anleitungen im Repo nennen beide Shell-Wege. Der `sandbox`-Block in [`.claude/settings.json`](../.claude/settings.json) wirkt darum nur dort, wo die Sandbox verfügbar ist; ein Wächter ([`test/harness/sandbox-settings.test.ts`](../test/harness/sandbox-settings.test.ts)) hält ihn fest, [`scripts/sandbox-doctor.mjs`](../scripts/sandbox-doctor.mjs) prüft die Maschine (`--check`) und druckt die User-Vorlage (`--vorlage`).
+
+Der Harness setzt nur den Sandbox-Vertrag voraus ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md)); WSL2 ist Kubernias Variante, andere Varianten (Docker Sandboxes, eigene Container-Sandbox) beschreibt [Sandbox anbinden](sandbox-anbinden.md).
 
 **Netz-Allowlist** (`sandbox.network.allowedDomains`; die Tabelle ist die Doku-Seite des Wächters, Zeilen mit Quelle „Projekt“ müssen der Liste in `.claude/settings.json` entsprechen). Anthropic-Hosts stehen bewusst nicht drin: kein Shell-Befehl braucht sie, die Session selbst läuft außerhalb der Sandbox.
 
