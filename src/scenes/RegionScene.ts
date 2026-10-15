@@ -175,7 +175,7 @@ export class RegionScene extends IslandScene {
     this.time.addEvent({ delay: 6500, loop: true, callback: () => { if (Math.random() < 0.6) this.spawnGull(); } });
     this.spawnGull();
 
-    // Ab jetzt ist die Region die aktive „WorldScene": E/Prompt der ui.ts greifen über
+    // Ab jetzt ist die Region die aktive „WorldScene": Reden-Taste/Prompt der ui.ts greifen über
     // nearestNpc(); exitToWorld() (IslandScene) stellt beides auf die Hauptkarte zurück.
     // enterRegion() hatte interiorOpen(true) gesetzt, um den Übergang abzuschirmen – hier
     // wieder frei, damit man in der Region tatsächlich reden kann.

@@ -885,7 +885,7 @@ for (const [name, quelle] of Object.entries(ANZEIGE_QUELLEN) as [string, Anzeige
   });
 }
 
-/* Tasten-Wächter (#1553; bekannte Grenzen: mehr als zwei Wörter zwischen Verb und Taste erkennt der Regex nicht, Code-gebaute UI-Strings (src/ui/quest.ts, src/ui/overlay.ts) prüft er nicht, sie folgen per `keyLabel`): umbelegbare Tasten (Reden, Funkgerät, Logbuch, Album) stehen in Dialogzeilen nur als Token
+/* Tasten-Wächter (#1553; bekannte Grenzen: mehr als zwei Wörter zwischen Verb und Taste erkennt der Regex nicht, einzelne Buchstaben als Wort („Taste a oder b“, „Taste und z. B.“) melden Fehlalarm, Code-gebaute UI-Strings (src/ui/quest.ts, src/ui/overlay.ts) prüft er nicht, sie folgen per `keyLabel`): umbelegbare Tasten (Reden, Funkgerät, Logbuch, Album) stehen in Dialogzeilen nur als Token
  * `{taste:<aktion>}` (ersetzt von src/ui/dialog.ts und dem Logbuch-Nachlesen, Domäne src/hud/tastenhinweis.ts), nie als
  * fester Buchstabe: sonst zeigt der Text nach einer Umbelegung die falsche Taste. */
 const ROHER_TASTENNAME = /(?:\bTaste\b|\b[Dd]rück(?:e|st|t)?\b)(?:\s+[\wÄÖÜäöüß]+){0,2}(?:\s+|\s*<(?:b|kbd)>)[A-Za-z](?:<\/b>|<\/kbd>)?(?![\wÄÖÜäöüß])|(?<![\wÄÖÜäöüß])(?:<b>)?[A-Za-z](?:<\/b>)?\s*drücken\b|\b[A-Za-z]-Taste\b/;
@@ -920,7 +920,7 @@ test("TASTEN_HINWEISE: keine festen Tastennamen, Token gültig (#1630)", () => {
 test("Red-Green (#1553): der Tasten-Wächter meldet feste Tastennamen und falsche Token, nicht erlaubte Schreibweisen", () => {
   const melde = (text: string, label = "q.steps[0].lines[0]", name = "QUESTS") => tastenProbleme(name, [[label, text]]).length;
   for (const roh of ["Drück <b>T</b> und tippe", "Sprich mich an (Taste <b>E</b>), dann", "(T drücken)", "die E-Taste",
-    "Drück <b>t</b> und tippe", "Drück dann <b>T</b>", "Drück einfach auf <b>F</b>", "Taste e", "Taste jetzt <b>E</b>", "(t drücken)", "die e-Taste", "drückst du <kbd>r</kbd>"]) {
+    "Drück <b>t</b> und tippe", "Drück dann <b>T</b>", "Drück einfach auf <b>F</b>", "Taste e", "Taste jetzt <b>E</b>", "(t drücken)", "die e-Taste", "drückst du <kbd>r</kbd>", "Er drückt <b>R</b>"]) {
     assert.ok(melde(roh) > 0, `nicht gemeldet: ${roh}`);
   }
   assert.ok(melde("Drück <b>{taste:funk}</b>") > 0, "unbekannte Aktion nicht gemeldet");
@@ -930,7 +930,7 @@ test("Red-Green (#1553): der Tasten-Wächter meldet feste Tastennamen und falsch
   assert.ok(melde("Drück <b>R</b>", "x", "TASTEN_HINWEISE") > 0, "fester Name in TASTEN_HINWEISE nicht gemeldet");
   assert.equal(melde("{taste:talk} – reden", "x", "TASTEN_HINWEISE"), 0, "Token in TASTEN_HINWEISE fälschlich gemeldet");
   for (const ok of ["Drück <b>Enter</b>", "Taste <b>Esc</b>", "Drück <b>{taste:radio}</b>", "<b>K</b> und <b>s</b> sind Kurzformen",
-    "Drücke eine Taste", "Tasten", "drücken", "Drück auf den Knopf", "Drück auf", "zu drücken", "Pfeil-Taste", "Leertaste", "Drück auf die Leertaste", "Taste <b>{taste:talk}</b>"]) {
+    "Drücke eine Taste", "Tasten", "drücken", "Drück auf den Knopf", "Drück auf", "zu drücken", "Pfeil-Taste", "Leertaste", "Drück auf die Leertaste", "Taste <b>{taste:talk}</b>", "Ausdrücke A und B", "Eindrücke a"]) {
     assert.equal(melde(ok), 0, `fälschlich gemeldet: ${ok}`);
   }
 });
