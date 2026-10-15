@@ -33,8 +33,8 @@ const { LAYERS, COVERAGE_GLOBS, layerOf } = require("../../scripts/layers.cjs") 
   layerOf: (file: string) => string;
 };
 
-// picomatch ist die Glob-Engine, die auch Vitest für die Coverage-`thresholds` nutzt (transitive
-// Dep, kein eigenes Paket). Per require geladen, weil es keine Typdeklarationen mitbringt — so
+// picomatch ist die Glob-Engine, die auch Vitest für die Coverage-`thresholds` nutzt (direkte
+// devDependency, #1638). Per require geladen, weil es keine Typdeklarationen mitbringt — so
 // bleibt es hier bewusst untypisiert, ohne eine @types-Dep einzuführen. Signatur nur so weit
 // getippt, wie der Test sie braucht (Glob → Prädikat).
 const picomatch = require("picomatch") as (glob: string, opts?: { dot?: boolean }) => (path: string) => boolean;
