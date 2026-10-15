@@ -604,13 +604,13 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
   test("die echte Matrix hat keine Abweichung", () => {
     assert.deepEqual(matrixAbweichungen(read(ROUTING_SSOT), fmEcht), []);
   });
-  test("Negativfälle: Umsetzer-Zelle `medium` gegen Frontmatter `low`, falscher Alias, unbekannte Zeile, fehlende Spalte", () => {
+  test("Negativfälle: Umsetzer-Zelle `high` gegen Frontmatter `medium`, falscher Alias, unbekannte Zeile, fehlende Spalte", () => {
     const doku = read(ROUTING_SSOT);
-    const zeile = "| Umsetzung | `sonnet` | `medium` | `low` |";
+    const zeile = "| Umsetzung | `sonnet` | `medium` | `medium` |";
     assert.equal(doku.split(zeile).length, 2, "Anker genau einmal");
-    const effortFalsch = doku.replace(zeile, "| Umsetzung | `sonnet` | `medium` | `medium` |");
-    assert.match(matrixAbweichungen(effortFalsch, fmEcht).join("\n"), /Umsetzung: Effort Skill-Pfad „medium“ ≠ Frontmatter umsetzer „low“/);
-    const aliasFalsch = doku.replace(zeile, "| Umsetzung | `opus` | `medium` | `low` |");
+    const effortFalsch = doku.replace(zeile, "| Umsetzung | `sonnet` | `medium` | `high` |");
+    assert.match(matrixAbweichungen(effortFalsch, fmEcht).join("\n"), /Umsetzung: Effort Skill-Pfad „high“ ≠ Frontmatter umsetzer „medium“/);
+    const aliasFalsch = doku.replace(zeile, "| Umsetzung | `opus` | `medium` | `medium` |");
     assert.match(matrixAbweichungen(aliasFalsch, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter umsetzer „sonnet“/);
     const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | – | `low` | n/a | irgendwer |\n| Explore / Recherche |");
     assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);
