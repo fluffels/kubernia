@@ -134,7 +134,7 @@ const taktWorkflowRobust = (yml: string): boolean => {
     !gruppe.includes("${{") &&
     /cancel-in-progress:\s*false/.test(yml) &&
     /issues:\s*write/.test(yml) &&
-    /secrets\.PROJECT_TOKEN/.test(yml) &&
+    /PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}\s*\n\s+run:\s*node scripts\/board-takt\.mjs\s*$/m.test(yml) && // der Token gehört an den Takt-Schritt, nicht irgendwohin in die Datei
     /^\s+run:\s*node scripts\/board-takt\.mjs\s*$/m.test(yml) &&
     !/--dry-run/.test(yml)
   );

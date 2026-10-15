@@ -7,7 +7,7 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
 
-type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean };
+type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean; generation: boolean };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Anlegen = {
   parseArgs: (argv: string[]) => Args | null;
@@ -18,11 +18,11 @@ const A = raw as unknown as Anlegen;
 
 describe("parseArgs", () => {
   test("harness ohne und mit Vorgänger, langfuse ohne und mit --top, --dry-run an beliebiger Stelle", () => {
-    expect(A.parseArgs(["harness"])).toEqual({ art: "harness", vorgaenger: null, top: false, dry: false });
-    expect(A.parseArgs(["harness", "--vorgaenger", "#1390"])).toEqual({ art: "harness", vorgaenger: 1390, top: false, dry: false });
+    expect(A.parseArgs(["harness"])).toEqual({ art: "harness", vorgaenger: null, top: false, dry: false, generation: false });
+    expect(A.parseArgs(["harness", "--vorgaenger", "#1390"])).toEqual({ art: "harness", vorgaenger: 1390, top: false, dry: false, generation: false });
     expect(A.parseArgs(["--dry-run", "harness", "--vorgaenger", "7"])).toMatchObject({ vorgaenger: 7, dry: true });
-    expect(A.parseArgs(["langfuse"])).toEqual({ art: "langfuse", vorgaenger: null, top: false, dry: false });
-    expect(A.parseArgs(["langfuse", "--top", "--dry-run"])).toEqual({ art: "langfuse", vorgaenger: null, top: true, dry: true });
+    expect(A.parseArgs(["langfuse"])).toEqual({ art: "langfuse", vorgaenger: null, top: false, dry: false, generation: false });
+    expect(A.parseArgs(["langfuse", "--top", "--dry-run"])).toEqual({ art: "langfuse", vorgaenger: null, top: true, dry: true, generation: false });
   });
 
   test("falsche Benutzung → null", () => {

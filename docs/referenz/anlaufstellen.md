@@ -44,6 +44,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0023 Transkript als Wahrheit](../adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | wenn Langfuse-Daten unvollständig wirken, der Hook des Langfuse-Plugins oder der Nachlieferer (Lock, Log, SessionStart/SessionEnd) geändert oder der Abgleich zurückgebaut werden soll |
 | [0024 Hexagon als Lesart](../adr/0024-hexagon-als-lesart.md) | wenn Ports, Adapter oder die hexagonale Sicht in arc42 und im Architekturmodell angefasst werden oder jemand das Hexagon als Ordnerstruktur umsetzen will |
 | [0025 Sandbox als Laufumgebung](../adr/0025-sandbox-als-austauschbare-laufumgebung.md) | wenn die Agenten-Sandbox gewechselt, `sandbox-doctor --streng` gebaut oder geprüft werden soll, ob eine Umgebung als gesandboxt gilt (Vertrag V0 bis V7, Docker Sandboxes, eigene Container-Sandbox) |
+| [0026 Sammeltickets in Gruppen](../adr/0026-sammelticket-gruppen.md) | wenn Sammeltickets zu groß oder teuer werden, ein Sammelticket aufgeteilt oder die Generationsgrenze geändert werden soll |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 

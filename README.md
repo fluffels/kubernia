@@ -61,6 +61,7 @@ flowchart TD
   pre{"Irreversibel oder<br/>Außenwirkung?"}
   frage["Rückfrage an die Maintainerin"]
   umsetzen["Umsetzen (TDD)<br/>kubernia-umsetzer"]
+  gruppen["Sammelticket-Gruppen,<br/>je Gruppe frisch<br/>kubernia-gruppe"]
   verify{"npm run verify grün?"}
   lenses{"Lenses ohne Blocker?<br/>kubernia-lens"}
   fix["Fix-Runde"]
@@ -80,6 +81,7 @@ flowchart TD
   pre -- nein --> wt
   wt --> umsetzen
   umsetzen --> verify
+  umsetzen -.->|"Plan mit Block GRUPPEN"| gruppen -.-> umsetzen
   verify -- nein --> umsetzen
   verify -- ja --> lenses
   lenses -- "Blocker, Runde unter 2" --> fix --> lenses
@@ -130,7 +132,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 | Skripte | 104 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 74 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 25 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 26 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -142,6 +144,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Art | Name | Konfiguration | Quelle |
 |---|---|---|---|
 | Subagent | `Explore` | model: haiku, effort: low | `.claude/agents/explore.md` |
+| Subagent | `kubernia-gruppe` | model: sonnet, effort: medium | `.claude/agents/kubernia-gruppe.md` |
 | Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/kubernia-lens.md` |
 | Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/kubernia-planner.md` |
 | Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/kubernia-umsetzer.md` |
@@ -219,6 +222,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 09.10.2026 | [ADR 0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md): Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen |
 | 15.10.2026 | [ADR 0024](/docs/adr/0024-hexagon-als-lesart.md): Hexagon als Lesart der bestehenden Schichtung, nicht als Ordnerstruktur |
 | 16.10.2026 | [ADR 0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md): Sandbox als austauschbare Laufumgebung |
+| 16.10.2026 | [ADR 0026](/docs/adr/0026-sammelticket-gruppen.md): Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum |
 
 <!-- GEN:zeitleiste END -->
 
