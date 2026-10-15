@@ -12,6 +12,7 @@
 # Dev-Toolchain wird darum nach Familien gebündelt; phaser & sonstige Majors
 # bleiben bewusst Einzel-PRs zum Einzel-Review. Umgangs-Policy mit den PRs:
 # siehe CONTRIBUTING.md › „Pull Requests & Abhängigkeits-Updates".
+# `picomatch` ist bewusst direkte devDependency (#1638); Wächter: test/harness/lockfile-peer-optional.test.ts.
 version: 2
 updates:
   # --- npm-Pakete (phaser, vite, vitest, eslint, typescript …) ---
