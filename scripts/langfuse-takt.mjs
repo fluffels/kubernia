@@ -6,7 +6,7 @@
  * pflegt und die Commit-Fenster berechnet. Die Entscheidung ist pur und getestet (test/langfuse-takt.test.ts), nur die gh-Aufrufe in
  * `fuehreStatusAus` sind es nicht.
  *
- * Nur Node-Builtins und board-lib.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
+ * Nur Node-Builtins, board-lib.mjs und gh-cli.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 import { fehlerMeldung } from "./gh-cli.mjs";
@@ -106,11 +106,12 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
  * Liefert `{ ok, nr, itemId }`: `ok` bei Erfolg (oder fehlendem Token, das nur warnt), `itemId` nur, wenn das Item an die Spitze gesetzt
  * wurde (der Aufrufer zieht seine Liste damit im Speicher nach); `nr` ist die Nummer des Tickets.
  */
-export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [] }) {
+export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {} }) {
+  const { gh = ghJson, imBoardAnlegen = addToBoardTodo, setze = setPosition } = io; // im Test injizierbar
   let node;
   let nr = e.nr;
   if (e.aktion === "anlegen") {
-    const neu = ghJson([
+    const neu = gh([
       "api", "-X", "POST", `repos/${repo}/issues`,
       "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo })}`, "-f", "labels[]=area:harness",
     ]);
@@ -118,7 +119,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [] 
     node = neu.node_id;
     nr = neu.number;
   } else {
-    node = ghJson(["api", `repos/${repo}/issues/${e.nr}`]).node_id;
+    node = gh(["api", `repos/${repo}/issues/${e.nr}`]).node_id;
   }
   if (!token) {
     console.log("::warning::PROJECT_TOKEN fehlt, Board-Position nicht gesetzt (das Ticket steht dann nicht im Board, der nächste Lauf trägt es nach, sofern es ungeclaimt und der Token gesetzt ist; nach dem Setzen des Tokens auch sofort per workflow_dispatch).");
@@ -129,8 +130,8 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [] 
       console.log("Status-Ticket steht schon im Kopf, Position bleibt.");
       return { ok: true, nr, itemId: null };
     }
-    const itemId = addToBoardTodo(node, { token });
-    setPosition(itemId, null, { token });
+    const itemId = imBoardAnlegen(node, { token });
+    setze(itemId, null, { token });
     console.log("Board-Position oben gesetzt.");
     return { ok: true, nr, itemId };
   } catch (err) {

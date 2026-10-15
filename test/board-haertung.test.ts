@@ -216,6 +216,17 @@ describe("fehlende Position: nur der Teil entfällt, der sie braucht (#1392 Z24)
     expect(place.positionOderWarnung(() => 4)).toBe(4);
   });
 
+  test("board-place: positionOderWarnung trägt Folgezeilen und stderr der Ursache (#1609)", () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    place.positionOderWarnung(() => {
+      throw Object.assign(new Error("Lesen fehlgeschlagen\nzweite Zeile"), { stderr: "gh: HTTP 502" });
+    });
+    const text = String(warn.mock.calls[0]?.[0]);
+    warn.mockRestore();
+    expect(text).toContain("zweite Zeile");
+    expect(text).toContain("gh: HTTP 502");
+  });
+
   test("planMitKorrektur ohne Position (null) plant ohne Korrektur, auch wenn ein Sammelticket falsch steht", () => {
     const sammel = it(20, { title: "Harness-Härtung (gesammelt)" });
     const items = [...Array.from({ length: 10 }, (_, i) => it(i + 1)), sammel, it(30)];
