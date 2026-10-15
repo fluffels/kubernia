@@ -392,6 +392,25 @@ describe("messfensterLader (#1589)", () => {
     writeFileSync(join(sub, "leer.jsonl"), "");
     expect(N.messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
   });
+  test("Memo-Schlüssel ist agent und nach: anderer Agent-Typ oder andere Nummer bekommt eigene Läufe und eigenen Abruf", () => {
+    const d = tmp();
+    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "b", "kubernia-umsetzer", 1601, "2026-10-15T12:00:00Z");
+    lauf(d, "c", "kubernia-lens", 1602, "2026-10-15T13:00:00Z");
+    const abrufe: number[] = [];
+    const holeIssue = (nr: number) => (abrufe.push(nr), nr === 1590 ? zu() : { state: "open", closed_at: null });
+    const lader = N.messfensterLader({ dir: d, holeIssue });
+    expect(lader(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
+    expect(lader({ ...F, agent: "kubernia-lens" }, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+    expect(lader({ ...F, nach: 1700 }, 1591)).toEqual({ closedAt: null, n: 0 });
+    lader(F, 1592);
+    lader({ ...F, agent: "kubernia-lens" }, 1592);
+    expect(abrufe).toEqual([1590, 1590, 1700]);
+  });
+  test("offenes Issue ohne Transkript-Ordner: Grund bleibt „offen“, nicht „keine Transkripte“", () => {
+    const r = N.messfensterLader({ dir: join(tmpdir(), "kq-gibt-es-nicht-1589"), holeIssue: () => ({ state: "open", closed_at: null }) })(F, 1591);
+    expect(r).toEqual({ closedAt: null, n: 0 });
+  });
   test("Memo je Fenster: ein REST-Aufruf, aber die Zählung gilt je wartendem Ticket", () => {
     const d = tmp();
     lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
