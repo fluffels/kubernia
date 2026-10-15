@@ -182,6 +182,12 @@ export function anhebungen(baseline: Baseline, erl: Baseline): string[] {
   return out;
 }
 
+/** Anheben-Prüfung gegen die Diff-Basis: `pruefen` (Basis da), `entfaellt` (lokal ohne Basis), `rot` (CI ohne Basis, fail-closed). */
+export function diffBasisModus(basis: string | null, env: Record<string, string | undefined>): "pruefen" | "entfaellt" | "rot" {
+  if (basis !== null) return "pruefen";
+  return env.CI === "true" ? "rot" : "entfaellt";
+}
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
@@ -206,6 +212,7 @@ describe("einheitText", () => {
     const blk = ein("a", { block: "b" });
     assert.equal(einheitText(blk, `v\n${markerStart("b")}\nkubernia\n${markerEnde("b")}\nn`)?.includes("kubernia"), true);
     assert.equal(einheitText(blk, `${markerEnde("b")}\n${markerStart("b")}`), null);
+    assert.equal(einheitText(blk, `x ${markerEnde("b")} kubernia`), null);
     const sch = ein("a", { schluessel: "k" });
     assert.equal(einheitText(sch, '{"k":{"x":"fluffels"},"z":"kubernia"}'), '{"x":"fluffels"}');
     assert.equal(einheitText(sch, '{"z":1}'), null);
@@ -228,6 +235,7 @@ describe("pruefeManifest", () => {
     assert.match(meld(ok([blk]), "nichts"), /genau einmal/);
     assert.match(meld(ok([blk]), `${markerStart("x")}${markerStart("x")}${markerEnde("x")}`), /genau einmal/);
     assert.match(meld(ok([blk]), `${markerEnde("x")}${markerStart("x")}`), /vor dem Start/);
+    assert.match(meld(ok([blk]), `${markerStart("x")}${markerEnde("x")}${markerEnde("x")}`), /genau einmal/);
     assert.match(meld(ok([ein("a", { schluessel: "k" })]), '{"z":1}'), /JSON-Schlüssel fehlt/);
     assert.match(meld(ok([ein("a", { schluessel: "k" })]), "{kaputt"), /JSON-Schlüssel fehlt/);
     assert.match(meld(ok([ein("a"), ein("a", { schluessel: "k" })]), '{"k":1}'), /ganz und als Teil/);
@@ -237,6 +245,15 @@ describe("pruefeManifest", () => {
     assert.match(meld({ version: 2, eintraege: [] }, "t"), /version/);
     assert.match(meld(ok([ein("a", { quelle: " " })]), "t"), /quelle fehlt/);
     assert.match(meld(ok([ein("a", { block: "x", schluessel: "k" })]), "t"), /zugleich/);
+  });
+});
+
+describe("diffBasisModus", () => {
+  test("Basis da, lokal ohne Basis entfällt, in der CI ohne Basis rot", () => {
+    assert.equal(diffBasisModus("abc", {}), "pruefen");
+    assert.equal(diffBasisModus("abc", { CI: "true" }), "pruefen");
+    assert.equal(diffBasisModus(null, {}), "entfaellt");
+    assert.equal(diffBasisModus(null, { CI: "true" }), "rot");
   });
 });
 
@@ -259,13 +276,15 @@ describe("vergleiche", () => {
 });
 
 describe("parseNameStatus / erlaubt / anhebungen", () => {
-  const nameStatus = "M\ta.mjs\nA\tneu.mjs\nR090\talt.mjs\tumbenannt.mjs\nD\tweg.mjs\n";
+  const nameStatus = "M\ta.mjs\nA\tneu.mjs\nR090\talt.mjs\tumbenannt.mjs\nD\tweg.mjs\nC075\tq.mjs\tkopie.mjs\nT\tx.mjs\n";
   const aend = parseNameStatus(nameStatus);
   test("parseNameStatus: geändert, neu, umbenannt; gelöscht fehlt", () => {
     assert.equal(aend.get("a.mjs"), "a.mjs");
     assert.equal(aend.get("neu.mjs"), null);
     assert.equal(aend.get("umbenannt.mjs"), "alt.mjs");
     assert.equal(aend.has("weg.mjs"), false);
+    assert.equal(aend.get("kopie.mjs"), null);
+    assert.equal(aend.get("x.mjs"), "x.mjs");
   });
   const basis = (p: string): string | null => (p === "a.mjs" ? "kubernia" : p === "alt.mjs" ? "fluffels fluffels" : null);
   const einheiten = [ein("a.mjs"), ein("neu.mjs"), ein("umbenannt.mjs"), ein("unberuehrt.mjs")];
@@ -322,7 +341,7 @@ describe("Kern-Reinheit (#1610)", () => {
   const basis: string | null = checkBasis.resolveBase(git, process.env) ?? null;
 
   // In der CI (fail-closed) muss die Basis auflösbar sein; lokal ohne Basis entfällt die Prüfung.
-  test.skipIf(basis === null && process.env.CI !== "true")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
+  test.skipIf(diffBasisModus(basis, process.env) === "entfaellt")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
     assert.ok(basis, "keine Diff-Basis auflösbar (KQ_DIFF_BASE/origin/main fehlt)");
     const aend = parseNameStatus(git(["diff", "-M", "--name-status", basis]));
     const basisText = (alt: string): string | null => {
