@@ -85,6 +85,9 @@ AGENTS.md                  @fluffels
 /scripts/fremdtext.mjs @fluffels
 /scripts/gh-cli.mjs @fluffels
 /scripts/naechstes-ticket.mjs @fluffels
+/scripts/subagent-laeufe.mjs @fluffels
+/scripts/mess-lib.mjs @fluffels
+/scripts/patch-zugriff.mjs @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
 /scripts/langfuse-abgleich-hook.mjs @fluffels

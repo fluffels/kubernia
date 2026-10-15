@@ -20,7 +20,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
-import { ghText } from "./gh-cli.mjs";
+import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, istEchtesModell, median } from "./mess-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
@@ -348,7 +348,7 @@ function closedAtViaGh(nr) {
     const out = ghText(["issue", "view", String(nr), "--json", "closedAt"]);
     return JSON.parse(out).closedAt || null;
   } catch (err) {
-    console.error(`Warnung: closedAt für #${nr} nicht lesbar (${String(err.message).split("\n")[0]}); Fenster läuft bis zum nächsten Claim.`);
+    console.error(`Warnung: closedAt für #${nr} nicht lesbar (${fehlerText(err)}); Fenster läuft bis zum nächsten Claim.`);
     return null;
   }
 }

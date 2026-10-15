@@ -26,7 +26,9 @@ import {
   LEDGER_NAME,
   RUHEFRIST_MIN,
   ledgerLesen,
+  endeGiltFuer,
   nachliefererWartet,
+  standUnveraendert,
   scoreId,
   sollEintraege,
   vorStichtag,
@@ -131,7 +133,7 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
 async function verarbeite(s, c) {
   const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll } = c;
   const alt = ledger.sessions[s.id];
-  const unveraendert = alt && alt.groesse === s.groesse && alt.mtime === s.mtime;
+  const unveraendert = standUnveraendert(alt, s);
   const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false };
   protokoll.sessions.push(rec);
   if (args.aktuell === s.id) return Object.assign(rec, { status: "aktuell" });
@@ -141,7 +143,7 @@ async function verarbeite(s, c) {
   const endeBekannt = endeAngegeben && endeGilt;
   // Ob Claude Code nach dem SessionEnd-Hook noch länger ins Transkript schreibt, zeigt dieses Logfeld (sonst fiele jede Session still auf die 24-h-Frist zurück).
   rec.endeVerworfen = endeAngegeben && !endeGilt;
-  const beendet = endeBekannt || Boolean(alt?.beendet && unveraendert);
+  const beendet = endeBekannt || endeGiltFuer(alt, s);
   // Bekanntes Ende vor jedem Fetch festhalten (auch wenn dieser wirft), sonst gälte beim nächsten Lauf wieder die 24-h-Frist.
   if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: Boolean(alt?.bestaetigt && unveraendert), beendet: true };
   if (nachliefererWartet({ mtime: s.mtime, now, beendet })) return Object.assign(rec, { status: "läuft" });

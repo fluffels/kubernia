@@ -34,6 +34,7 @@ import {
   holeMetrics,
   istAbfragen,
   istAusMetrics,
+  endeGiltFuer,
   ledgerLesen,
   leereSumme,
   nachliefererWartet,
@@ -51,7 +52,7 @@ const FEHLEND_ANZEIGE = 20;
  * (der Nachlieferer sendet dort nie), `ausstehend` (der Nachlieferer wartet noch: 150 s bei bekanntem Ende laut Ledger `ledgerEintrag`,
  * sonst 24 h) oder `null`.
  */
-export function bewerteSession({ soll, ist, mtime, now, diff = null, ledgerEintrag = null }) {
+export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = null, ledgerEintrag = null }) {
   const calls = ist.calls ?? 0;
   const fehlend = diff ? diff.fehlend.length : Math.max(0, soll.length - calls);
   const dubletten = diff ? diff.dubletten.length : Math.max(0, calls - soll.length);
@@ -63,7 +64,7 @@ export function bewerteSession({ soll, ist, mtime, now, diff = null, ledgerEintr
   else if (fehlend > 0) status = "Lücke";
   else if (dubletten > 0) status = "Dublette";
   else if (tokenAbweichung) status = "Abweichung";
-  const beendet = Boolean(ledgerEintrag?.beendet && ledgerEintrag.mtime === mtime);
+  const beendet = endeGiltFuer(ledgerEintrag, { mtime, groesse });
   let score = null;
   if (!laeuft) score = vorStichtag(soll) ? "vor Stichtag" : nachliefererWartet({ mtime, now, beendet }) ? "ausstehend" : null;
   return {
@@ -186,11 +187,11 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
   try {
     const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
     const soll = new Map();
-    const mtimes = new Map();
+    const staende = new Map();
     for (const s of sessions) {
       const eintraege = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id });
       if (eintraege.length) soll.set(s.id, eintraege);
-      mtimes.set(s.id, s.mtime);
+      staende.set(s.id, { mtime: s.mtime, groesse: s.groesse });
     }
     if (!soll.size) return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: [], summe: summenzeile([]) }) : "Keine Sessions mit Calls im Fenster." };
     // Ledger nur lesen (bekanntes Ende für die Score-Spalte); kaputt oder fehlend heißt: kein bekanntes Ende, nie schreiben oder sichern.
@@ -199,13 +200,14 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     const bewertungen = [];
     for (const [id, eintraege] of soll) {
       const istSession = ist.get(id) ?? { calls: 0, tokens: leereSumme() };
-      const laeuft = now - mtimes.get(id) < RUHEFRIST_MIN * 60_000;
+      const { mtime, groesse } = staende.get(id);
+      const laeuft = now - mtime < RUHEFRIST_MIN * 60_000;
       let diff = null;
       if (zugang && !laeuft && hatDifferenz(eintraege, { calls: istSession.calls ?? 0, tokens: istSession.tokens })) {
         const obs = await fetchSessionObservations(id, { ...zugang, fetchImpl, type: "GENERATION", fields: "core,basic,model,usage,metadata" });
         diff = diffMultimenge(eintraege, obs);
       }
-      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens }, mtime: mtimes.get(id), now, diff, ledgerEintrag: ledger.sessions[id] ?? null }));
+      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens }, mtime, groesse, now, diff, ledgerEintrag: ledger.sessions[id] ?? null }));
     }
     const sum = summenzeile(bewertungen);
     return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: bewertungen, summe: sum }, null, 2) : renderMarkdown(bewertungen, sum) };

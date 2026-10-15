@@ -242,3 +242,39 @@ describe("Mindestabstand und Wochenbudget (#1382)", () => {
     expect(T.statusBody({ vorgaenger: null, jetzt })).toMatch(/Wochenbudget:\*\* letzte volle Woche/);
   });
 });
+
+describe("fuehreStatusAus: Fehlertext beim Setzen der Board-Position (#1609)", () => {
+  test("ein Wurf trägt Präfix, Folgezeilen, stderr und den Idempotenz-Zusatz in eigener Zeile; ok=false", () => {
+    const F = (raw as unknown as {
+      fuehreStatusAus: (e: unknown, c: unknown) => { ok: boolean; nr: number; itemId: string | null };
+    }).fuehreStatusAus;
+    const zeilen: string[] = [];
+    const orig = console.log;
+    console.log = (z: string) => void zeilen.push(String(z));
+    try {
+      const r = F(
+        { aktion: "position", nr: 5 },
+        {
+          repo: "o/r",
+          token: "t",
+          items: [],
+          io: {
+            gh: () => ({ node_id: "N" }),
+            imBoardAnlegen: () => "I",
+            setze: () => {
+              throw Object.assign(new Error("Command failed: gh api graphql\nzweite Zeile"), { stderr: "gh: HTTP 502" });
+            },
+          },
+        },
+      );
+      expect(r).toEqual({ ok: false, nr: 5, itemId: null });
+    } finally {
+      console.log = orig;
+    }
+    const text = zeilen.join("\n");
+    expect(text).toMatch(/^::error::Board-Position nicht gesetzt: Command failed: gh api graphql/);
+    expect(text).toContain("zweite Zeile");
+    expect(text).toContain("gh: HTTP 502");
+    expect(text).toMatch(/\nDie Wiederholung ist idempotent und legt kein zweites Ticket an\.$/);
+  });
+});
