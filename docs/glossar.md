@@ -32,6 +32,7 @@ Die Hafen-Metapher ist die **Anti-Corruption-Layer** zwischen der Spieler:innen-
 | **Leitner-Box / Krabben-Quiz** | Spaced Repetition | `game/spaced-repetition.ts`, `content/data/quiz/*`, `ui/quiz.ts` | Schwieriges wird öfter abgefragt (Leitner-Fächer) |
 | **Drill / freies Üben** | Wiederholbare Befehls-Übung | `content/drills/*`, `ui/radio.ts` | Übungslauf ohne Story-Zwang |
 | **Funkgerät** | In-Welt-Terminal | `ui/radio.ts`, `hud/cmdhistory.ts`, `hud/helptext.ts` | teach/drill/terminal-Modi + gefiltertes `help` (#358) |
+| **Tasten-Token** | `{taste:<aktion>}` (talk, radio, logbook, album) in Dialogzeilen | `hud/tastenhinweis.ts` | wird zur belegten Taste; nur in Quest-Dialogzeilen und Smalltalk, Wächter in `test/content.test.ts` (#1553) |
 | **Logbuch** | Quest-Übersicht/Nachlese | `hud/questlog.ts`, `ui/questlog.ts` | Themen-Accordion (#326) |
 | **Sammelalbum** | Glossar/Sticker aus erlerntem Stoff | `hud/album.ts`, `ui/album.ts` | Freischaltung aus `completedQuests`/`review` abgeleitet (#278) |
 | **Verdiente Abkürzung** | freigeschaltete Langform↔Kürzel | `content/abbrev.ts`, `game/unlocks.ts` | z.B. `kubectl`→`k` nach genug Nutzung (#313) |

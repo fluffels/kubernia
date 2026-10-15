@@ -306,6 +306,8 @@ import { resolveAction } from "./core/keybindings";
     }
 
     UI.refreshHud();
+    // Umbelegt (overlay.renderKeyHints): der Quest-Hinweis im HUD nennt die belegte Taste (#1553).
+    document.addEventListener("kq:keys-changed", () => UI.refreshHud());
     // Zustands-Marker für die e2e-Smokes (#1411): `geplant` heißt, das Intro erscheint in Kürze (setTimeout unten), `keins` ist
     // ein Bestandsstand. So warten die Tests auf einen Zustand statt auf eine Zeit.
     let intro: "geplant" | "keins" = "keins";

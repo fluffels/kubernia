@@ -307,7 +307,7 @@ export class RegionScene extends IslandScene {
     // Quest-Marker über den NPCs (zeigt „!", sobald ein Quest-Dialogschritt ansteht).
     for (const n of this.npcs) n.marker.setVisible(!blocked && UI.questMarkerFor(n.id));
 
-    // „E – reden"-Hinweis selbst pflegen: die WorldScene (die das sonst tut) schläft,
+    // Reden-Hinweis selbst pflegen: die WorldScene (die das sonst tut) schläft,
     // solange die Region läuft.
     UI.updatePrompt();
 

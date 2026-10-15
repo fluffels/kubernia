@@ -2,6 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { dialogueNav } from "../hud/overlaykbd";
 import { fmtCmd } from "../hud/markup";
+import { fillKeyTokens } from "../hud/tastenhinweis";
 import type { ChoiceStep, ChoiceOption } from "../types";
 import { part, $, NPCS, shuffled } from "./shared";
 
@@ -19,10 +20,10 @@ export const dialogUI = part({
 
   renderDialogueLine() {
     const d = this.dialogue;
-    $("dlg-text").innerHTML = fmtCmd(d.lines[d.idx]);
+    $("dlg-text").innerHTML = fmtCmd(fillKeyTokens(d.lines[d.idx], Game.state.settings.keys));
     // #312: die akzeptierten Weiter-Tasten drangeschrieben (Leer/Enter, wie in den
-    // meisten Spielen); E schaltet weiterhin auch weiter, ist aber nicht mehr der
-    // genannte Standard.
+    // meisten Spielen); die Reden-Taste schaltet weiterhin auch weiter, ist aber
+    // nicht der genannte Standard.
     const fwd = d.idx < d.lines.length - 1 ? "▼ weiter (Leer/Enter)" : "✔ fertig (Leer/Enter)";
     // #310: Lese-Rückblick – ab der zweiten Zeile sichtbar machen, dass man eine
     // Zeile zurückblättern kann (analog zum „weiter"-Hinweis, rein per Tastatur).
