@@ -631,7 +631,7 @@ Zum Vergleich über alle Umsetzer-Läufe des Fensters mit „(gesammelt)“ im P
 
 **Nachmessen:** gleiche Befehle mit Fenster ab dem Merge von #1647. Gruppen-Läufe: `node scripts/subagent-laufzeit.mjs --agent kubernia-gruppe --von <ISO> --json` (das erste `#<nr>` der Kopfzeile ordnet den Lauf dem Ticket zu); Kosten je Zeile = (Σ Umsetzer plus Σ `kubernia-gruppe` je Ticketnummer) / Zeilen. **Ziel (Hypothese, nicht gemessen):** −20 % je Zeile; bei Review-Runden und Nacharbeit kein Anstieg. **Auswertung:** über die ersten drei Gruppen-Läufe; Kriterium im ADR.
 
-**Isolation und Cache-TTL (AK 3):** Gruppen laufen ohne `isolation`, alle arbeiten im Worktree des Umsetzers (gewollt: ein Branch, ein Lock, ein PR; ein eigener Worktree je Gruppe bräuchte Merges zwischen den Gruppen). Die TTL bleibt unverändert: `subagentPromptCacheTtl: "1h"` brachte keinen Gewinn (siehe oben), und der Wächter #1557 verbietet den Schlüssel. Die Wartezeit des Umsetzers auf eine Gruppe über 5 Minuten lässt seinen Cache ablaufen; die Nachmessung zählt das als Kostenanteil des Umsetzers.
+**Isolation und Cache-TTL (AK 3):** Gruppen laufen ohne `isolation`, alle arbeiten im Worktree des Umsetzers (gewollt: ein Branch, ein Lock, ein PR; ein eigener Worktree je Gruppe bräuchte Merges zwischen den Gruppen). Die TTL bleibt unverändert: `subagentPromptCacheTtl: "1h"` brachte keinen Gewinn (siehe oben), und `subagentPromptCacheTtl` ist nicht gesetzt. Die Wartezeit des Umsetzers auf eine Gruppe über 5 Minuten lässt seinen Cache ablaufen; die Nachmessung zählt das als Kostenanteil des Umsetzers.
 
 ### Vermeidbare Arbeit (#1425)
 

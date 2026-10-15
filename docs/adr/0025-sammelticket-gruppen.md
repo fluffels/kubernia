@@ -9,7 +9,7 @@
 
 ## Kontext
 
-Ein Sammelticket („Harness-Härtung (gesammelt)“, „Langfuse-Befunde (gesammelt)“) trägt seine Befunde als Kommentarzeilen und wird komplett in einem PR umgesetzt. Ein Umsetzer-Kontext wächst mit jeder Zeile, und jeder Call liest ihn neu: das Ticket #1628 sammelte 25 Punkte aus 20 Kommentaren. Gemessen (Baseline in model-routing.md): 22 von 33 Sammeltickets brauchten einen `KQ-Diffsize-Override`, drei gingen über das Review-Limit (#1579: 91 Dateien, danach Folge-Fix #1602; #1561; #1311), der Median liegt bei 11 Zeilen und 5,37 $ je Ticket. Von den Umsetzer-Kosten fallen 61 % in Phasen nach der Umsetzung an (verify, Review, Merge, CI-Warten; [Umsetzer-Kontext](../model-routing.md#umsetzer-kontext-1559)): mehr PRs wären darum nicht automatisch billiger.
+Ein Sammelticket („Harness-Härtung (gesammelt)“, „Langfuse-Befunde (gesammelt)“) trägt seine Befunde als Kommentarzeilen und wird komplett in einem PR umgesetzt. Ein Umsetzer-Kontext wächst mit jeder Zeile, und jeder Call liest ihn neu: das Ticket #1628 sammelte 25 Punkte aus 20 Kommentaren. Gemessen (Baseline in model-routing.md): 22 von 33 Sammeltickets brauchten einen `KQ-Diffsize-Override`, drei gingen über das Review-Limit (#1579: 91 Dateien, danach Folge-Fix #1602; #1561; #1311), der Median liegt bei 11 Zeilen und 5,37 $ je Ticket. Die Umsetzung selbst ist nur ein Teil des Umsetzer-Laufs (Laufzeit-Anteile n = 104: Umsetzung 15 %, verify 32 %, Review 25 %, CI-Warten 21 %; [Umsetzer-Kontext](../model-routing.md#umsetzer-kontext-1559)); der Ticket-Body nannte außerdem 61 % feste Kosten je PR, ohne Rohwerte (ungeprüft): mehr PRs wären darum nicht automatisch billiger.
 
 Regeln, die eine Aufteilung in mehrere PRs oder Tickets sperren: ein PR je Ticket, der Ticket-Lock (`feature/kq-<nr>-*`), „komplett, kein Rest-Übertrag“, „nie ein Epic“. Die Zeilen überschneiden sich zudem in vielen Dateien.
 
@@ -21,7 +21,7 @@ Regeln, die eine Aufteilung in mehrere PRs oder Tickets sperren: ein PR je Ticke
 | `SCHNITT: gruppe` im Übergabe-Vertrag von #1592 | #1592 sieht genau einen Schnitt je Lock vor und ist offen; passt nicht zu n Gruppen. Verworfen, #1592 bleibt unverändert. |
 | Workflow-Tool `pipeline()` | Der Workflow-Pfad (`kubernia-ticket.js`) steht auf seinem Größendeckel und läuft im Ein-Umsetzer-Ablauf weiter; kein Gewinn für den Skill-Pfad. Verworfen. |
 | Gruppen parallel | Die Gruppen teilen Dateien; parallele Edits im selben Worktree kollidieren. Verworfen. |
-| Planer je Gruppe | Median 0,69 $ je Sammelticket-Planer; das Aussortieren von Dubletten braucht den Gesamtblick. Verworfen. |
+| Planer je Gruppe | Jeder Planer zahlt den Sockel erneut, und das Aussortieren von Dubletten braucht den Gesamtblick. Verworfen. |
 | Kindertickets je Gruppe | Bricht Lock, „ein PR je Ticket“ und „komplett“; die Gruppen sind keine eigenständigen Mechanismen. Verworfen (Ausnahme unten). |
 | **Gruppen-Umsetzer nacheinander im selben Worktree (gewählt)** | Ein Ticket, ein Lock, ein PR. Der Umsetzer orchestriert; je Gruppe ein frischer Subagent. |
 
@@ -29,9 +29,10 @@ Regeln, die eine Aufteilung in mehrere PRs oder Tickets sperren: ein PR je Ticke
 
 1. **Subagent `kubernia-gruppe`** (`sonnet`/`medium`, Werkzeuge ohne `Agent`, Playwright, Web): setzt die Zeilen einer Gruppe um, committet, berichtet. Kein Push, kein PR, keine Lenses. Der Umsetzer spawnt ihn je Gruppe nacheinander **ohne `isolation`** im gemeinsamen Worktree und fährt danach verify, Review, PR und Merge im kleinen Kontext. Übergabe nur über Commits und Bericht (keine Chat-Historie). Scheitert der Spawn, setzt der Umsetzer selbst nacheinander um.
 2. **Der Planer** bleibt einer je Ticket und schneidet erst ab etwa 6 Zeilen und mindestens 2 Datei-Clustern in höchstens 6 Gruppen (Block `GRUPPEN`).
-3. **Generationsgrenze:** erreicht das jüngste ungeclaimte Harness-Sammelticket 12 offene Zeilen (`- [ ]` in Kommentaren vertrauter Autoren), legt der Board-Takt (`sammelticket-anlegen.mjs harness --generation`) einen Nachfolger **direkt hinter** dem vollen Ticket an. Es wird nicht vorgezogen: die Spielquote 1:3 bleibt unberührt. Das Sammelticket bleibt „nie ein Epic“.
+3. **Generationsgrenze:** erreicht das jüngste ungeclaimte Harness-Sammelticket 12 offene Zeilen (`- [ ]` in Kommentaren vertrauter Autoren), legt der Board-Takt (`sammelticket-anlegen.mjs harness --generation`) einen Nachfolger **direkt hinter** dem vollen Ticket an. Es wird nicht vorgezogen: die Grenze verdrängt die Spielquote 1:3 nicht (der Takt entscheidet unverändert nach den Spiel-Merges). Das Sammelticket bleibt „nie ein Epic“.
 4. **Kinder nur ausnahmsweise:** eine einzelne Zeile, die allein über Session-Größe geht, wird ein eigenes Issue; Board-Platz per `board-place --after`, nie `--top`. Es zählt in der Spielquote als Harness.
-5. **Cache-TTL unverändert** (`subagentPromptCacheTtl: "1h"` ohne Gewinn gemessen, Wächter #1557).
+5. **Cache-TTL unverändert** (`subagentPromptCacheTtl: "1h"` ohne Gewinn gemessen, siehe model-routing.md; der Schlüssel bleibt ungesetzt).
+6. **Nur das Harness-Sammelticket hat die Grenze:** das Langfuse-Sammelticket bleibt klein (wenige, gebündelte Befunde aus dem Status-Lauf); die Gruppen gelten für beide.
 
 ## Konsequenzen
 
