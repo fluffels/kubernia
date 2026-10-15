@@ -139,7 +139,7 @@ export function parseSeit(arg, jetzt, standardStunden = 24) {
 
 function lies(basis, wurzel, server, seit) {
   const alle = [];
-  let namen = [];
+  let namen;
   try {
     namen = readdirSync(basis);
   } catch {
@@ -149,7 +149,7 @@ function lies(basis, wurzel, server, seit) {
   for (const p of projektOrdner(namen, wurzel)) {
     for (const s of server) {
       const dir = join(basis, p.ordner, serverOrdner(s.name));
-      let dateien = [];
+      let dateien;
       try {
         dateien = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
       } catch {

@@ -158,7 +158,7 @@ describe("main mit Temp-Logs", () => {
     const eins = lauf(["--sessionstart"], env, { jetzt: jetztNah });
     expect(eins.code).toBe(0);
     expect(eins.aus.join("\n")).toContain("pw: reconnect ×1");
-    expect(JSON.parse(readFileSync(join(d, "stand", "stand.json"), "utf8")).bis).toBe("2026-10-15T10:00:00.000Z");
+    expect((JSON.parse(readFileSync(join(d, "stand", "stand.json"), "utf8")) as { bis: string }).bis).toBe("2026-10-15T10:00:00.000Z");
     expect(lauf(["--sessionstart"], env, { jetzt: jetztNah + 60_000 }).aus).toEqual([]);
   });
   test("ohne Modus: --json liefert parsebare Rohzeilen und schreibt keinen Stand", () => {
