@@ -37,11 +37,11 @@ permissions:
 jobs:
   inbox:
     runs-on: ubuntu-latest
-    # Eigene Posts/Antworten des Repo-Owners (fluffels) nicht flaggen – sonst löst jede
+    # Eigene Posts/Antworten des Repo-Owners nicht flaggen – sonst löst jede
     # vom /forum-Skill geschriebene Antwort eine neue Inbox aus (Endlosschleife).
     if: github.event.sender.login != github.repository_owner
     steps:
-      # Nur für scripts/forum-sanitize.mjs nötig (Text-Entschärfung, #531).
+      # Nötig für scripts/forum-sanitize.mjs (Text-Entschärfung, #531) und die Projekt-Config (#1611).
       - name: Repo auschecken
         uses: actions/checkout@v7
 
@@ -59,9 +59,6 @@ jobs:
           # User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
           # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_top unten).
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          # Node-ID des Kubernia-Backlog-Boards (stabil,
-          # siehe docs/ticket-reihenfolge.md › Reihenfolge pflegen).
-          PROJECT_ID: PVT_kwHOD8746c4Barq_
         run: |
           set -euo pipefail
           marker="Forum #${DISC_NUMBER}:"
@@ -84,6 +81,12 @@ jobs:
               echo "::error::Board-Position für ${issue_url} nicht gesetzt – gh issue view ist fehlgeschlagen (Repo/Issue nicht auflösbar?)."
               return 0
             fi
+            # Board-Node-ID aus der Projekt-Config (#1611); fehlt sie, bleibt die Position ungesetzt, das Issue steht trotzdem.
+            local project_id
+            if ! project_id=$(node scripts/projekt-config.mjs board.projectId); then
+              echo "::error::Board-Position für ${issue_url} nicht gesetzt – Projekt-Config (.factory/projekt.json) fehlt oder ist ungültig."
+              return 0
+            fi
             # #950: ein gesetztes, aber zu eng skopiertes PROJECT_TOKEN lässt genau
             # diese Mutation fehlschlagen ("Could not resolve to a node ..."). Eine
             # bare Zuweisung würde unter `set -euo pipefail` den ganzen Step abbrechen,
@@ -92,14 +95,14 @@ jobs:
             local item_id
             if ! item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
               -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
-              -f p="$PROJECT_ID" -f c="$content_id" \
+              -f p="$project_id" -f c="$content_id" \
               --jq '.data.addProjectV2ItemById.item.id'); then
               echo "::error::Board-Position für ${issue_url} nicht gesetzt – PROJECT_TOKEN kann den Issue-Node nicht auflösen (Scope prüfen: braucht Issues-Zugriff auf ${REPO} UND Projects-Schreibrecht, #950)."
               return 0
             fi
             if ! GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
               -f query='mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }' \
-              -f p="$PROJECT_ID" -f i="$item_id" >/dev/null; then
+              -f p="$project_id" -f i="$item_id" >/dev/null; then
               echo "::error::Board-Position für ${issue_url} (item ${item_id}) konnte nicht an die Spitze geschoben werden – updateProjectV2ItemPosition ist fehlgeschlagen."
               return 0
             fi
@@ -134,7 +137,7 @@ jobs:
               "- Thread: ${DISC_URL}" \
               "- Letzte Aktivität: **${SENDER}** (\`${EVENT}\`) → ${link}" \
               "" \
-              "➡️ Mit dem \`/forum\`-Skill bearbeiten: Nachricht lesen → Antwort entwerfen (Formulierung von der Maintainerin freigeben lassen) → als \`fluffels\` posten → passendes Ticket anlegen/zuordnen → dieses Issue schließen. Details in AGENTS.md › Forum-Eingang.")
+              "➡️ Mit dem \`/forum\`-Skill bearbeiten: Nachricht lesen → Antwort entwerfen (Formulierung von der Maintainerin freigeben lassen) → unter der gesetzten gh-Identität posten → passendes Ticket anlegen/zuordnen → dieses Issue schließen. Details in AGENTS.md › Forum-Eingang.")
             new_url=$(gh issue create --repo "$REPO" \
               --title "${marker} ${safe_title}" \
               --label "forum" \

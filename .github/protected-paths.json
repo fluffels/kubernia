@@ -49,6 +49,8 @@
     "/scripts/cleanup-worktrees.mjs",
     "/scripts/transkript.mjs",
     "/scripts/board-lib.mjs",
+    "/scripts/projekt-config.mjs",
+    "/scripts/projekt-config-lib.mjs",
     "/scripts/board-place.mjs",
     "/scripts/langfuse-takt.mjs",
     "/scripts/board-takt.mjs",

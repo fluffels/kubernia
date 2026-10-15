@@ -8,6 +8,8 @@ import { readFileSync } from "node:fs";
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTakt from "../scripts/board-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Lib = {
@@ -165,14 +167,14 @@ describe("gemeinsame Helfer (#1392 Z22, Z23)", () => {
     expect(typeof L.ghJson).toBe("function");
   });
 
-  test("REPO: GITHUB_REPOSITORY oder dieses Repo, und die Alias-Abfrage nutzt es als Standard", () => {
-    expect(L.REPO).toBe(process.env.GITHUB_REPOSITORY || "fluffels/kubernia");
+  test("REPO: GITHUB_REPOSITORY oder das Repo der Projekt-Config, und die Alias-Abfrage nutzt es als Standard", () => {
+    expect(L.REPO).toBe(process.env.GITHUB_REPOSITORY || (rawPc as unknown as { ladeProjektConfig(): { repo: string } }).ladeProjektConfig().repo);
     const [owner, name] = L.REPO.split("/");
     expect(L.aliasAbfrage([1])[0].query).toContain(`repository(owner:"${owner}",name:"${name}")`);
   });
 
-  test("kein Board-Skript trägt das Repo fest verdrahtet (außer dem Standardwert in board-lib)", () => {
-    for (const f of ["board-place", "board-takt", "sammelticket-anlegen", "langfuse-takt"]) {
+  test("kein Board-Skript trägt das Repo fest verdrahtet (auch board-lib liest es aus der Projekt-Config)", () => {
+    for (const f of ["board-lib", "board-place", "board-takt", "sammelticket-anlegen", "langfuse-takt"]) {
       const quelle = readFileSync(new URL(`../scripts/${f}.mjs`, import.meta.url), "utf8");
       const ohneUrls = quelle.replace(/https:\/\/github\.com\/fluffels\/kubernia[^\s"`)]*/g, "");
       expect(ohneUrls, f).not.toMatch(/repos\/fluffels\/kubernia/);

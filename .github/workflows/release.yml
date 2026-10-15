@@ -1,7 +1,7 @@
 name: Release – Image bauen und in ghcr.io pushen
 
 # Läuft bei neuem vX.Y.Z-Tag – z.B. nach `git tag v1.0.0 && git push --tags`.
-# Das Image landet unter: ghcr.io/fluffels/kubernia:latest + :v1.0.0
+# Das Image landet unter: ghcr.io/<owner>/<repo>:latest + :v1.0.0
 #
 # Kein separates Registry-Secret nötig: GITHUB_TOKEN reicht für ghcr.io.
 # Die Maintainerin muss nur sicherstellen, dass das Package-Sichtbarkeitsrecht
@@ -70,11 +70,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Image-Name aus dem GitHub-Kontext (ghcr.io verlangt Kleinschreibung), kein Projektliteral.
+      - name: Image-Namen bestimmen
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Image-Metadaten bestimmen
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/fluffels/kubernia
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest

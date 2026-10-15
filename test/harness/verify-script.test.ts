@@ -228,8 +228,11 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
   });
 
   it("priorisiert stattdessen über die Board-Position per GraphQL (Muster forum-inbox.yml, #747)", () => {
-    // Board-Node-ID muss verdrahtet sein.
-    expect(ci).toContain("PVT_kwHOD8746c4Barq_");
+    // Board-Node-ID kommt aus der Projekt-Config (#1611), nicht als Literal; Fehlerpfad ohne Abbruch.
+    expect(ci).toContain("node scripts/projekt-config.mjs board.projectId");
+    expect(ci, "kein Board-ID-Literal im Workflow").not.toMatch(/\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/);
+    expect(ci).toMatch(/::error::[^\n]*Projekt-Config/);
+    expect(ci, "Fehler bei fehlender Config bricht nicht ab").toMatch(/Projekt-Config[^\n]*\n\s*return 0/);
     // Das entfernte Prio-Feld darf NICHT mehr beschrieben werden (#747).
     expect(ci, "das Prio-Feld ist seit #747 entfernt").not.toContain("updateProjectV2ItemFieldValue");
     expect(ci, "die Prio-Feld-ID gehört seit #747 nicht mehr in den Workflow").not.toContain("PVTSSF_lAHOD8746c4Barq_zhXBLXs");

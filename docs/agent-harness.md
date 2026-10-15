@@ -21,8 +21,8 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 104 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 74 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Skripte | 106 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 75 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 26 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -183,7 +183,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Absicherung:** Code-Fences werden ausgeblendet (ein `#`-Kommentar in einem bash-Block ist keine Überschrift, ein Beispiel-Link keiner); Ausnahmen (undokumentierte Convenience-Skripte) stehen begründet in `DOC_EXEMPT_SCRIPTS`. Red-Green über `test/docdrift.test.ts` (totes Kommando, toter Link, toter Anker werden jeweils erkannt; die Slug-Regel trifft Emoji-/Umlaut-Überschriften).
 
 ### Kern-Reinheits-Wächter (`test/harness/kern-reinheit.test.ts`, #1610)
-- **WAS:** das Besitz-Manifest `.factory/besitz.json` listet den Factory-Besitz (Datei, Markdown-Block zwischen `factory-besitz`-Markern, JSON-Schlüssel); der Wächter zählt je Einheit Projektliterale (Owner, Repo, Board-ID, Stardew) gegen `test/harness/kern-literale-baseline.json`. Neues Literal, Wert über oder unter der Baseline und verwaiste Einträge sind rot; die Baseline darf gegen die Diff-Basis nicht steigen (CI fail-closed).
+- **WAS:** das Besitz-Manifest `.factory/besitz.json` listet den Factory-Besitz (Datei, Markdown-Block zwischen `factory-besitz`-Markern, JSON-Schlüssel); der Wächter zählt je Einheit Projektliterale (Owner, Repo, Board-ID und die `projektliterale` der Projekt-Config; die Begriffe leitet der Wächter aus `.factory/projekt.json` ab) gegen `test/harness/kern-literale-baseline.json`. Neues Literal, Wert über oder unter der Baseline und verwaiste Einträge sind rot; die Baseline darf gegen die Diff-Basis nicht steigen (CI fail-closed).
 - **Importregel (#1612):** keine Einheit des Manifests importiert die Schichtdaten (`schichten.layers` aus `scripts/docs-gen/config.json`) statisch; sie laden sie über den konfigurierten Pfad und nutzen Prüfung und Ableitung aus `scripts/schichten-kern.cjs`. Ausnahmen stehen mit Ticket in `SCHICHTDATEN_AUSNAHMEN` und dürfen nur schrumpfen.
 - **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1, F7); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
 

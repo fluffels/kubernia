@@ -26,8 +26,11 @@ describe("Forum-Action fügt Issue zum Board hinzu (#644)", () => {
     assert.match(yml, /PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
   });
 
-  test("kennt die Board-Node-ID", () => {
-    assert.ok(yml.includes("PVT_kwHOD8746c4Barq_"), "Projekt-Node-ID fehlt");
+  test("liest die Board-Node-ID aus der Projekt-Config (kein Literal, Fehlerpfad ohne Abbruch)", () => {
+    assert.ok(yml.includes("node scripts/projekt-config.mjs board.projectId"), "Lader-Aufruf fehlt");
+    assert.doesNotMatch(yml, /\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/, "Board-Node-ID darf nicht im Workflow stehen");
+    assert.match(yml, /Projekt-Config[^\n]*\n\s*return 0/, "Fehler muss gemeldet werden und ohne Abbruch zurückkehren");
+    assert.match(yml, /::error::[^\n]*Projekt-Config/, "::error:: bei fehlender Config fehlt");
   });
 
   test("fügt das Issue idempotent zum Board hinzu (addProjectV2ItemById)", () => {
