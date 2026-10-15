@@ -35,7 +35,7 @@ Option C. Der Harness setzt **keine bestimmte Sandbox** voraus, sondern den folg
 | V0 Reichweite | Die Grenze umschließt mindestens jeden Shell-Befehl des Agenten (Bash, PowerShell, Monitor); besser die ganze Agent-Session. | Variante liefert den Nachweis (Merkmal V6 plus Verhaltensproben). |
 | V1 Workspace | Der Repo-Checkout ist per Mount lesend und schreibend verfügbar; ein Klon in der Sandbox gilt als gleichwertig (strenger als „per Mount“, bewusste Erweiterung). Sonst ist kein Host-Pfad sichtbar (keine Windows-Laufwerke, kein Host-Home). | Schreib-/Leseprobe im Workspace; `/mnt/c` bzw. Host-Home nicht lesbar. |
 | V2 Egress | Allowlist nach Domain: GitHub, npm-Registry, Langfuse-Host. Anthropic nur, wenn der Agent-Prozess selbst in der Grenze läuft (`sbx`), nicht bei WSL2. Sonst nur benannte, projektbedingte Domains. **Keine Voll-Wildcard** (`*`, `**`, `sbx`-Preset „Open“) und keine Wildcard auf geteilte Cloud-Speicher-Domains. Die konkreten Kubernia-Hosts stehen nur in `.claude/settings.json` und der Tabelle in [agent-harness.md](../agent-harness.md#agenten-sandbox-wsl2), nicht hier. | Ein nicht freigegebenes Ziel scheitert, `api.github.com` geht durch. |
-| V3 Zugangsdaten | Kein Token im Klartext in der Sandbox (nicht in Umgebungsvariablen, nicht in lesbaren Dateien). Erlaubt sind nur **Proxy-Injection** (`sbx`: Platzhalter `proxy-managed`) oder **Maskierung** (Claude Code: `credentials.mask` samt `injectHosts`). | Variablen nach `SECRET_MUSTER` (`scripts/sandbox-doctor.mjs`) ohne echte Token-Präfixe (`ghp_`, `gho_`, `github_pat_`, `sk-ant-`, `sk-lf-`); bekannte Token-Dateien nicht lesbar. |
+| V3 Zugangsdaten | Kein Token im Klartext in der Sandbox (nicht in Umgebungsvariablen, nicht in lesbaren Dateien). Erlaubt sind nur **Proxy-Injection** (`sbx`: Platzhalter `proxy-managed`) oder **Maskierung** (Claude Code: `sandbox.credentials.envVars[].mode: "mask"` samt `injectHosts`). | Variablen nach `SECRET_MUSTER` (`scripts/sandbox-doctor.mjs`) ohne echte Token-Präfixe (`ghp_`, `gho_`, `github_pat_`, `sk-ant-`, `sk-lf-`); bekannte Token-Dateien nicht lesbar. |
 | V4 Werkzeuge | `git`, `gh`, `node`/`npm` im PATH. | `--version` je Werkzeug. |
 | V5 Langfuse | Der Host aus `LANGFUSE_BASE_URL` antwortet aus der Grenze. | Health-Endpunkt des Hosts. |
 | V6 Merkmal | Die Laufumgebung setzt `AGENT_SANDBOX=<variante>` (`wsl2-bubblewrap`, `docker-sbx`, `container`). Gesetzt wird es nie vom Repo, sondern von der User-Vorlage (`env`), der `sbx`-Environment-Datei oder dem Image-ENV. | `sandbox-doctor` erkennt die Variante daran. |
@@ -52,7 +52,7 @@ Der Status ist binär. **Verletzt eine Laufumgebung auch nur eine Vertragszeile,
 - `sbx` mit Preset „Open“ oder einer Allow-Regel auf alles (V2);
 - ein Token als ENV im Container-Image (V3);
 - pauschaler Zugriff auf `host.docker.internal` (V1, V2);
-- Merkmal gesetzt, aber eine Probe rot (V6).
+- Merkmal gesetzt, aber eine Probe rot (das Merkmal allein macht nicht grün, siehe V6).
 
 ### Varianten
 
@@ -66,7 +66,7 @@ Der Status ist binär. **Verletzt eine Laufumgebung auch nur eine Vertragszeile,
 | V3 | Maskierung, Probe offen bis #1434 | belegt für unterstützte Anbieter; für Langfuse unbelegt | Secret-Store des Projekts |
 | V4 | belegt | unbelegt (Image-Inhalt) | Sache des Images |
 | V5 | belegt (Host-Dienst) | unbelegt | internes Netz, kein `host.docker.internal` |
-| V6 | wsl2-bubblewrap, User-Vorlage | unbelegt (Environment-Datei) | Image-ENV |
+| V6 | `wsl2-bubblewrap`; offen bis #1437 (die Vorlage setzt noch kein `env`) | unbelegt (Environment-Datei) | Image-ENV |
 | V7 | belegt (ADR 0021) | belegt als Risiko (geteilter Skills-Speicher, Abwahl `--skills=off`) | Sache des Projekts |
 
 ### Docker Sandboxes: Fakten mit Quelle (gelesen 2026-10-16)
@@ -92,7 +92,7 @@ Die folgenden Aussagen sind ungeprüft, bis die Maintainerin einen Probe-Lauf ge
 
 ## Konsequenzen
 
-- **#1437:** `sandbox-doctor --check --streng` prüft den Vertrag statt WSL2-spezifischer Merkmale; `wsl.conf`, bubblewrap und `socat` bleiben berichtende Variantenprüfungen unter `--check`. Merkmal allein macht nie grün.
+- **#1437:** `sandbox-doctor --check --streng` prüft den Vertrag statt WSL2-spezifischer Merkmale; `wsl.conf`, bubblewrap und `socat` bleiben berichtende Variantenprüfungen unter `--check`. Merkmal allein macht nie grün. `--vorlage` setzt zusätzlich `env.AGENT_SANDBOX=wsl2-bubblewrap`; solange das fehlt, erfüllt Kubernias WSL2 V6 nicht.
 - **#1434:** die WSL2-Proben belegen die Variante gegen V0 bis V7; der Fallback ist jede vertragskonforme Variante, ein Wechsel der Kubernia-Variante löst ADR 0021 per neuem ADR ab.
 - Ein Harness-Nutzer schließt eine vertragskonforme Sandbox an ([Transfer](../harness-transfer.md)); sein Weg ist [Sandbox anbinden](../sandbox-anbinden.md).
 - Vertragsänderungen stehen als `## Fortschreibung #<nr> (Datum)` in diesem ADR.

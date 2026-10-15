@@ -10,8 +10,8 @@ Die offiziell dokumentierte Variante. Fakten und Quellen („gelesen 2026-10-16�
 2. **Netz (V2):** Preset „Locked Down“ wählen, dann nur die nötigen Ziele freigeben (`sbx policy allow network <host>`: GitHub, npm-Registry, Langfuse-Host, Anthropic). Nie Preset „Open“. Danach `sbx policy ls` prüfen: Standard-Domains können breite Wildcards enthalten, die zur Allowlist gehören.
 3. **Zugangsdaten (V3):** `sbx secret set github` (Wert z.B. aus `gh auth token`) und `sbx secret set anthropic`; die Sandbox sieht nur den Platzhalter `proxy-managed`. Ob der Proxy ein Langfuse-Secret einsetzen kann, ist **unbelegt**; solange das offen ist, verletzt ein Langfuse-Schlüssel im Klartext in der Sandbox V3.
 4. **Merkmal (V6):** `AGENT_SANDBOX=docker-sbx` über die Environment-Datei der Sandbox setzen (**unbelegt**), nie über das Repo.
-5. **Ladeorte (V7):** `sbx skills import` nur mit `--skills=off` oder `readonly`; ein geteilter Speicher im Modus `readwrite` lässt eine Sandbox Skills für andere ändern.
-6. **Workspace (V1):** Mount (Standard, rw) oder Klonmodus. Ohne Host-Workspace (Claude Desktop über `sbx setup ssh --auto-create`, Host `claude.sbx`) wird das Projekt in der Sandbox geklont.
+5. **Ladeorte (V7):** den geteilten Skills-Speicher abwählen (`--skills=off`, Standardmodus mit `sbx settings set skills.defaultMode off`); ein geteilter Speicher im Modus `readwrite` lässt eine Sandbox Skills für andere ändern.
+6. **Workspace (V1):** Mount (Standard, rw) oder Klonmodus. Ohne Host-Workspace (Claude Desktop über `sbx setup ssh --auto-create`, Host `claude.sbx`) wird das Projekt in der Sandbox geklont. Im Klonmodus bleiben nicht getrackte Dateien wie `.env` lesbar: keine Geheimnisse dort ablegen (V3).
 7. **Prüfen:** `node scripts/sandbox-doctor.mjs --check` (später `--streng`, [#1437](https://github.com/fluffels/kubernia/issues/1437)).
 
 Eine Kubernia-Session in `sbx` ist nicht per Probe belegt (Liste „Unbelegt“ im ADR).
