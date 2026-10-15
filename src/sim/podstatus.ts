@@ -4,7 +4,7 @@
  * StatefulSet-Pods kommt aus `podAddress` (eingeplant ja/nein, dieselbe Quelle wie Endpoints
  * und Metriken), nicht aus einer eigenen PVC-Abfrage. Eine neue Workload-Art ist hier eine
  * neue `switch`-Variante; `default: assertNever` erzwingt sie beim Kompilieren und wirft zur
- * Laufzeit statt still `undefined` zu liefern. Die Ableitung je Deployment (Evicted, gesund,
+ * Laufzeit statt still `undefined` zu liefern. Die vorrangige Ableitung je Deployment (`deploymentPodState`: Evicted, gesund,
  * `BROKEN_POD`) und die Restarts-Regel stehen je genau einmal hier.
  *
  * Phaser-frei (pure Domäne): ./state, ./pods (nur Typ), ./endpoints, ../core/assert; kein Zyklus. */
@@ -49,14 +49,32 @@ export const BROKEN_POD: Record<Broken["type"], BrokenPod> = {
   },
 };
 
-/** Die EINE Vorrangregel für die Pods eines Deployments (#1509): Evicted > gesund > `BROKEN_POD`. Evicted überschreibt alles
- *  (#240): der kubelet hat den Pod beendet, er läuft nicht und ist nicht bereit. `get pods`, `describe pod` und `-o yaml`
- *  lesen alle diesen Eintrag. Eine Kopie des Status: Aufrufer dürfen ihn ändern. */
+/** Der Zustand der Pods eines Deployments nach der EINEN Vorrangregel (#1648): Evicted > gesund > Broken. */
+export type DeploymentPodState =
+  | { kind: "evicted"; evicted: { reason: string } }
+  | { kind: "healthy" }
+  | { kind: "broken"; broken: Broken };
+
+/** Die EINE Vorrangregel für die Pods eines Deployments (#1509, #1648): Evicted überschreibt alles (#240): der kubelet hat den
+ *  Pod beendet, er läuft nicht und ist nicht bereit. Anzeige (`get pods`, `describe pod`, `-o yaml`), Metriken, Alerts und Logs
+ *  schalten alle über dieses Ergebnis, keiner liest `d.evicted`/`d.broken` selbst. */
+export function deploymentPodState(d: Partial<Pick<Deployment, "evicted" | "broken">>): DeploymentPodState {
+  if (d.evicted) return { kind: "evicted", evicted: d.evicted };
+  if (d.broken) return { kind: "broken", broken: d.broken };
+  return { kind: "healthy" };
+}
+
+/** Der angezeigte Eintrag je Zustand (siehe `deploymentPodState`). Eine Kopie des Status: Aufrufer dürfen ihn ändern. */
 export function deploymentPodEntry(d: Pick<Deployment, "evicted" | "broken">): PodEntry {
-  if (d.evicted) return { status: { status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" }, phase: "Failed", container: null };
-  if (!d.broken) return { status: { status: "Running", ready: "1/1", restarts: 0, label: "Running" }, phase: "Running", container: {} };
-  const e = BROKEN_POD[d.broken.type];
-  return { ...e, status: { ...e.status } };
+  const s = deploymentPodState(d);
+  switch (s.kind) {
+    case "evicted": return { status: { status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" }, phase: "Failed", container: null };
+    case "healthy": return { status: { status: "Running", ready: "1/1", restarts: 0, label: "Running" }, phase: "Running", container: {} };
+    case "broken": {
+      const e = BROKEN_POD[s.broken.type];
+      return { ...e, status: { ...e.status } };
+    }
+  }
 }
 
 /** Status, Ready, Restarts und Label der Pods eines Deployments (siehe `deploymentPodEntry`). */

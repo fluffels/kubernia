@@ -118,3 +118,43 @@ describe("Metriken und Alerts je Broken-Typ", () => {
     expect(s.alerts().filter(a => a.state === "firing" && a.name.startsWith("KubePod"))).toEqual([]);
   });
 });
+
+describe("Evicted gewinnt überall (#1648)", () => {
+  const evictedSim = (type: Typ) => new KQSim({ deployments: [dep(type, { ephemeralLimit: 512, emptyDir: { data: "riesig", usedMi: 600 } })] });
+  const podAlerts = (s: KQSim) => s.alerts().filter(a => a.state === "firing" && a.name.startsWith("KubePod")).map(a => a.name);
+
+  test.each(TYPEN)("%s + evicted: Evicted in get pods, kein Pod-Alert, keine Metriken", type => {
+    const s = evictedSim(type);
+    expect(kubectl(s, "get pods")).toContain("Evicted");
+    expect(podAlerts(s)).toEqual([]);
+    expect(s.podMetrics()).toEqual([]);
+  });
+
+  test.each(TYPEN)("%s + evicted: logs und logs -p liefern denselben Fehler, weder Absturz- noch Normal-Log", type => {
+    const s = evictedSim(type);
+    const n = podName(s);
+    const jetzt = kubectl(s, "logs " + n);
+    const davor = kubectl(s, "logs -p " + n);
+    expect(jetzt).toContain("BadRequest");
+    expect(jetzt).toContain("is terminated");
+    expect(jetzt).not.toContain("[start]");
+    expect(jetzt).not.toContain("GET /");
+    expect(davor).toBe(jetzt);
+  });
+
+  test("gesunder evicteter Pod: logs liefert den Fehler statt des Normal-Logs", () => {
+    const s = new KQSim({ deployments: [{ name: "web", image: "nginx:1", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "riesig", usedMi: 600 } }] });
+    const out = kubectl(s, "logs " + podName(s));
+    expect(out).toContain("is terminated");
+    expect(out).not.toContain("GET /");
+  });
+
+  test("Vorrang ist abgeleitet: fällt die Eviction weg, kehren Alert und Absturz-Log zurück", () => {
+    const s = evictedSim("crashloop");
+    expect(podAlerts(s)).toEqual([]);
+    s.exec("kubectl delete pod " + podName(s));
+    expect(kubectl(s, "get pods")).not.toContain("Evicted");
+    expect(podAlerts(s)).toEqual(["KubePodCrashLooping"]);
+    expect(kubectl(s, "logs -p " + podName(s))).toContain("Secret 'sek' nicht gefunden");
+  });
+});
