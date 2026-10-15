@@ -11,7 +11,7 @@ import * as hcModule from "../scripts/hauptchat-zerlegung.mjs";
 type Row = Record<string, unknown>;
 type Zeile = { kategorie: string; quelle: string; modell: string; calls: number; cost: number };
 type Fenster = { nr: number; art: string; startTs: string; closedAt: string | null; modelle: Record<string, number> };
-type Ergebnis = { rows: Zeile[]; fenster: Fenster[]; kubernia: { calls: number; cost: number }; ohnePreis: number; ohnePreisModelle: Record<string, number> };
+type Ergebnis = { rows: Zeile[]; fenster: Fenster[]; kubernia: { calls: number; cost: number; costGeschaetzt: number; output: number; outputGeschaetzt: number }; ohnePreis: number; ohnePreisModelle: Record<string, number> };
 type Sub = { meta: { agentType?: string; description?: string; parentAgentId?: string }; zeilen: Row[] };
 type Eingabe = {
   sessions: { id: string; main: Row[]; subagents?: Sub[] }[];
@@ -341,6 +341,47 @@ describe("zerlegeHauptchat: Grenzfälle aus dem Review (R1)", () => {
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a")], subagents }] });
     assert.equal(r.ohnePreis, 1);
     assert.deepEqual(r.ohnePreisModelle, { "claude-unbekannt-9": 1 });
+  });
+});
+
+/** Subagent-Zeilen mit Kontext-Zuwachs: Call a hat 5 aufgezeichnete Output-Token, der Kontext wächst um 400 (kein Fremdtext), also steckt mehr Output darin. */
+const zuwachsZeilen = (zuwachs: boolean, model = OPUS): Row[] => {
+  const a = (id: string, ctx: number, min: number): Row => ({
+    type: "assistant",
+    uuid: `z${id}`,
+    timestamp: iso(min),
+    message: { id, model, usage: { input_tokens: 10, cache_read_input_tokens: ctx - 10, cache_creation_input_tokens: 0, output_tokens: 5 }, content: [{ type: "text", text: "yyyy" }] },
+  });
+  return [a("a", 1000, 20), a("b", zuwachs ? 1400 : 1000, 21), a("c", zuwachs ? 1800 : 1000, 22)];
+};
+
+describe("zerlegeHauptchat: geschätzte Kosten und Output (Z2)", () => {
+  const sub = (meta: Sub["meta"], zeilen: Row[]): Sub => ({ meta, zeilen });
+  const zerlege = (meta: Sub["meta"], zeilen: Row[]) => hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a"), call(1, OPUS)], subagents: [sub(meta, zeilen)] }] });
+
+  test("kubernia-Subagent: Output und Kosten geschätzt liegen über den aufgezeichneten Werten", () => {
+    const k = zerlege({ agentType: "kubernia-umsetzer" }, zuwachsZeilen(true)).kubernia;
+    assert.equal(k.output, 15);
+    assert.ok(k.outputGeschaetzt > k.output, JSON.stringify(k));
+    assert.ok(k.costGeschaetzt > k.cost, JSON.stringify(k));
+  });
+
+  test("ohne Kontext-Zuwachs ist geschätzt gleich aufgezeichnet; ein Call ohne Preis ergibt kein NaN", () => {
+    const k = zerlege({ agentType: "kubernia-umsetzer" }, zuwachsZeilen(false)).kubernia;
+    assert.equal(k.outputGeschaetzt, k.output);
+    assert.equal(k.costGeschaetzt, k.cost);
+    const ohne = zerlege({ agentType: "kubernia-umsetzer" }, zuwachsZeilen(true, "claude-unbekannt-9")).kubernia;
+    assert.ok(Number.isFinite(ohne.costGeschaetzt) && Number.isFinite(ohne.outputGeschaetzt));
+  });
+
+  test("Fork-Zeile trägt costGeschaetzt, die Summe und die kubernia-Zeile nennen es", () => {
+    const r = zerlege({ agentType: "general-purpose" }, zuwachsZeilen(true));
+    const fork = r.rows.find((z) => z.quelle === "Fork") as unknown as { cost: number; costGeschaetzt: number };
+    assert.ok(fork.costGeschaetzt > fork.cost);
+    const k = zerlege({ agentType: "kubernia-planner" }, zuwachsZeilen(true));
+    const text = hc.renderMarkdown(k);
+    assert.match(text, /kubernia-Subagenten \(nicht Hauptchat\): 3 Calls, [\d.]+ \$, geschätzt [\d.]+ \$ \(Output geschätzt \d+ statt 15 Tokens\)/);
+    assert.match(text, /Kosten geschätzt |/);
   });
 });
 

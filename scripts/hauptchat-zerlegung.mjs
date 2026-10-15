@@ -10,7 +10,7 @@
  * Ad-hoc. Turn = Nutzerzeile (kein tool_result, keine Benachrichtigung); Benachrichtigungs-Turns bleiben im Turn davor.
  * Kennzahlen der Ticket-Orchestrierung (#1557): Zeile `Modellanteil` (Sonnet-Anteil, Median je Fenster) und Zeile `TTL` (1h-Ist gegen 5m-Simulation).
  * Calls ohne gültigen Zeitstempel stehen in „ohne Zeit“. kubernia-Subagenten und verschachtelte zählen nicht zum
- * Hauptchat; andere Subagenten (Forks) folgen der Kategorie des Turns, in dem sie starten (eigene Quelle „Fork“).
+ * Hauptchat (ihre Zeile nennt Kosten und Output auch geschätzt, `costGeschaetzt`/`outputGeschaetzt` aus der Output-Schätzung, #1568; die Tabelle führt je Zeile `Kosten geschätzt`); andere Subagenten (Forks) folgen der Kategorie des Turns, in dem sie starten (eigene Quelle „Fork“).
  *
  * Pur und ohne IO bis auf das CLI (liest `~/.claude/projects`, fragt `gh`); der Kern ist getestet.
  */
@@ -188,7 +188,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   const summen = new Map();
   const fenster = [];
   const hauptCalls = [];
-  const kubernia = { calls: 0, cost: 0 };
+  const kubernia = { calls: 0, cost: 0, costGeschaetzt: 0, output: 0, outputGeschaetzt: 0 };
   let ohnePreis = 0;
   const ohnePreisModelle = {};
   const zaehleOhnePreis = (c) => {
@@ -200,9 +200,10 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
 
   const buche = (kategorie, quelle, c) => {
     const key = `${kategorie}|${quelle}|${c.model}`;
-    const z = summen.get(key) ?? { kategorie, quelle, modell: c.model, calls: 0, cost: 0 };
+    const z = summen.get(key) ?? { kategorie, quelle, modell: c.model, calls: 0, cost: 0, costGeschaetzt: 0 };
     z.calls += 1;
     z.cost += c.cost ?? 0;
+    z.costGeschaetzt += c.costGeschaetzt ?? c.cost ?? 0;
     if (c.cost == null) zaehleOhnePreis(c);
     summen.set(key, z);
   };
@@ -265,6 +266,9 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
         if (istKubernia(sa.meta)) {
           kubernia.calls += 1;
           kubernia.cost += c.cost ?? 0;
+          kubernia.costGeschaetzt += c.costGeschaetzt ?? c.cost ?? 0;
+          kubernia.output += c.output ?? 0;
+          kubernia.outputGeschaetzt += c.outputGeschaetzt ?? c.output ?? 0;
           if (c.cost == null) zaehleOhnePreis(c);
           continue;
         }
@@ -301,12 +305,13 @@ function kennzahlZeilen(r) {
 /** Markdown-Tabelle Kategorie × Modell (Hauptchat und Forks getrennt) plus Fensterliste. */
 export function renderMarkdown(r) {
   const $ = (n) => `${n.toFixed(2)} $`;
-  const out = ["| Kategorie | Quelle | Modell | Calls | Kosten |", "|---|---|---|--:|--:|"];
-  for (const z of r.rows) out.push(`| ${z.kategorie} | ${z.quelle} | \`${z.modell}\` | ${z.calls} | ${$(z.cost)} |`);
+  const out = ["| Kategorie | Quelle | Modell | Calls | Kosten | Kosten geschätzt |", "|---|---|---|--:|--:|--:|"];
+  for (const z of r.rows) out.push(`| ${z.kategorie} | ${z.quelle} | \`${z.modell}\` | ${z.calls} | ${$(z.cost)} | ${$(z.costGeschaetzt ?? z.cost)} |`);
   const total = r.rows.reduce((s, z) => s + z.cost, 0);
   const n = r.rows.reduce((s, z) => s + z.calls, 0);
-  out.push(`| **Summe** | | | ${n} | ${$(total)} |`, "");
-  out.push(`kubernia-Subagenten (nicht Hauptchat): ${r.kubernia.calls} Calls, ${$(r.kubernia.cost)}`);
+  const totalGeschaetzt = r.rows.reduce((s, z) => s + (z.costGeschaetzt ?? z.cost), 0);
+  out.push(`| **Summe** | | | ${n} | ${$(total)} | ${$(totalGeschaetzt)} |`, "");
+  out.push(`kubernia-Subagenten (nicht Hauptchat): ${r.kubernia.calls} Calls, ${$(r.kubernia.cost)}, geschätzt ${$(r.kubernia.costGeschaetzt ?? r.kubernia.cost)} (Output geschätzt ${r.kubernia.outputGeschaetzt ?? r.kubernia.output ?? 0} statt ${r.kubernia.output ?? 0} Tokens)`);
   if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
   if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen oder Zeitpunkt fehlt), nicht als 0 $ zu lesen.`);
   out.push(...kennzahlZeilen(r));
