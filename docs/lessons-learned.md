@@ -73,7 +73,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Was geschah:** Ein Teil eines Sammeltickets abzuarbeiten ließ in jeder Generation Zeilen übrig: Generation [#1276](https://github.com/fluffels/kubernia/issues/1276) und Generation [#1308](https://github.com/fluffels/kubernia/issues/1308) hatten je 66 offene Zeilen (2026-10-06). Eine Halbierung ([#1309](https://github.com/fluffels/kubernia/issues/1309)) wurde wieder abgelöst.
 
-**Geändert:** Die Regel „immer komplett“ ([#1311](https://github.com/fluffels/kubernia/issues/1311)). Der Preis sind breitere PRs, die mit einer begründeten Ausnahme am Größen-Gate erlaubt sind.
+**Geändert:** Die Regel „immer komplett“ ([#1311](https://github.com/fluffels/kubernia/issues/1311)). Der Preis sind breitere PRs, die mit einer begründeten Ausnahme am Größen-Gate erlaubt sind. Ein breites Sammelticket braucht darum früh ein Review-Budget: [#1579](https://github.com/fluffels/kubernia/issues/1579) (PR [#1601](https://github.com/fluffels/kubernia/pull/1601), 18 Zeilen, 90 Dateien) brauchte einen Zusatzpass, weil ein Fix der Runde 2 einen ungeprüften Null-Fall in `branchesAufraeumen` mitbrachte; jeder Fix aus Runde 2 braucht einen frischen Pass, also prüft der Umsetzer ihn vor dem Commit selbst auf neue Zweige (null, Grenzwerte).
 
 **Beleg:** die Fortschreibungen in [ADR 0012](adr/0012-harness-autonomie-audit-spur.md).
 
