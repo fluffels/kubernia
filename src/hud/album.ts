@@ -20,7 +20,7 @@
  * Bewusst wie questlog.ts geschnitten: die Entscheidung lebt hier (unit-getestet),
  * die DOM-Anbindung (Rendern/Klicks) liegt dünn in ui/album.ts.
  */
-import { PLACEHOLDER_TOKEN } from "./markup";
+import { CONTENT_HTML_TAGS, PLACEHOLDER_TOKEN } from "./markup";
 import type { Quest } from "../types";
 import type { QuizCard, QuestTopic } from "../content/loader";
 
@@ -88,6 +88,8 @@ export function extractTaughtCommand(intro: string): { command: string; explanat
   if (!m) return null;
   const command = m[1].trim();
   if (!command) return null;
+  // Ein Inline-Tag (`<br>`, `<b>`) ist kein Platzhalter (wie in fmtCmd): Intro gilt als kaputt.
+  for (const [, word] of command.matchAll(/<([^<>]+)>/g)) if (CONTENT_HTML_TAGS.has(word.toLowerCase())) return null;
   return { command, explanation: m[2].trim() };
 }
 
