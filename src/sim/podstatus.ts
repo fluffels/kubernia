@@ -18,17 +18,21 @@ export type PodStatusHost = Pick<ClusterState, "pvcs">;
 
 /** Der Container-Zustand eines kaputten Pods: `waiting` = Grund im Zustand Waiting (sonst läuft er); `lastTerminated` = der
  *  letzte beendete Lauf (Last State in `describe pod`, `lastState` in YAML). */
-export interface ContainerState {
-  waiting?: string;
-  lastTerminated?: { reason: string; exitCode: number };
+export type ContainerState =
+  | { waiting?: undefined; lastTerminated?: undefined }
+  | { waiting: string; lastTerminated?: { reason: string; exitCode: number } };
+
+/** Alles, was ein Pod-Zustand an `get pods`, `describe pod` und `-o yaml` sichtbar macht. */
+export interface PodEntry {
+  status: PodStatus;
+  phase: "Pending" | "Running" | "Failed";
+  /** `null`: der Pod läuft nicht (nicht eingeplant oder evicted), es gibt keinen Container-Status. */
+  container: ContainerState | null;
 }
 
-/** Alles, was ein `Broken`-Typ an einem Pod sichtbar macht. */
-export interface BrokenPod {
-  status: PodStatus;
+/** Der Eintrag eines `Broken`-Typs: ein Pod, der nie `Failed` ist. */
+export interface BrokenPod extends PodEntry {
   phase: "Pending" | "Running";
-  /** `null`: der Pod ist nicht eingeplant, es gibt keinen Container-Status. */
-  container: ContainerState | null;
 }
 
 /** Zentrale Tabelle je Broken-Typ (#867, #1500): die EINE Quelle für `get pods` (Status, Ready, Restarts), HUD-/Weltkarten-Label,
@@ -45,13 +49,19 @@ export const BROKEN_POD: Record<Broken["type"], BrokenPod> = {
   },
 };
 
-/** Status, Ready, Restarts und Label der Pods eines Deployments. Evicted überschreibt alles (#240):
- *  der kubelet hat den Pod beendet, er läuft nicht und ist nicht bereit. Sonst gesund oder der
- *  `BROKEN_POD`-Eintrag (eine Kopie: Aufrufer dürfen sie ändern). */
+/** Die EINE Vorrangregel für die Pods eines Deployments (#1509): Evicted > gesund > `BROKEN_POD`. Evicted überschreibt alles
+ *  (#240): der kubelet hat den Pod beendet, er läuft nicht und ist nicht bereit. `get pods`, `describe pod` und `-o yaml`
+ *  lesen alle diesen Eintrag. Eine Kopie des Status: Aufrufer dürfen ihn ändern. */
+export function deploymentPodEntry(d: Pick<Deployment, "evicted" | "broken">): PodEntry {
+  if (d.evicted) return { status: { status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" }, phase: "Failed", container: null };
+  if (!d.broken) return { status: { status: "Running", ready: "1/1", restarts: 0, label: "Running" }, phase: "Running", container: {} };
+  const e = BROKEN_POD[d.broken.type];
+  return { ...e, status: { ...e.status } };
+}
+
+/** Status, Ready, Restarts und Label der Pods eines Deployments (siehe `deploymentPodEntry`). */
 export function deploymentPodStatus(d: Pick<Deployment, "evicted" | "broken">): PodStatus {
-  if (d.evicted) return { status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" };
-  if (!d.broken) return { status: "Running", ready: "1/1", restarts: 0, label: "Running" };
-  return { ...BROKEN_POD[d.broken.type].status };
+  return deploymentPodEntry(d).status;
 }
 
 /** Bereit, wenn alle Container bereit sind (`n/n` mit n > 0, auch bei Sidecars). */

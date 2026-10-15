@@ -531,6 +531,8 @@ describe("Fitness: Registry ↔ Renderer ↔ Mapper", () => {
 });
 
 describe("spec.selector als Map (#1500)", () => {
+  // Der Name ist ABSICHTLICH kein gültiger DNS-1123-Name (`services.push` umgeht die Validierung): geprüft wird nur, dass ein `=` im
+  // Selektorwert kein Trenner wird.
   test("ein Service-Name mit = bleibt ein Wert: selector { app: \"a=b\" }", () => {
     const sim = new KQSim({ deployments: [dep("web")] });
     sim.services.push(svc("a=b"));
@@ -591,5 +593,19 @@ describe("BROKEN_POD treibt alle Ausgaben (#1500)", () => {
     expect(states?.[0]?.lastState).toEqual(c === null ? undefined : last ? { terminated: { exitCode: last.exitCode, reason: last.reason } } : {});
     const name = (p.metadata as Obj).name as string;
     expect(out(sim, "describe pod " + name).includes("Last State:   Terminated")).toBe(e.container?.lastTerminated !== undefined);
+  });
+
+  // Evicted gewinnt (#240) in ALLEN Sichten, auch bei einem gesetzten Broken-Typ (#1509): eine Vorrangregel in podstatus.ts.
+  test.each(Object.keys(BROKEN_POD) as (keyof typeof BROKEN_POD)[])("evicted + broken %s: get pods, YAML und describe pod zeigen Evicted", type => {
+    const sim = new KQSim({ deployments: [dep("web", { replicas: 1, ephemeralLimit: 512, emptyDir: { data: "x", usedMi: 600 }, broken: { type, needsSecret: "sek" } })] });
+    expect(sim.deployments[0].evicted).toBeTruthy();
+    expect(out(sim, "get pods").split("\n")[1].split(/\s+/)[2]).toBe("Evicted");
+    const p = items(sim, "get pods -o yaml")[0];
+    expect((p.status as Obj).phase).toBe("Failed");
+    expect((p.status as Obj).containerStatuses).toBeUndefined();
+    const desc = out(sim, "describe pod " + ((p.metadata as Obj).name as string));
+    expect(desc).toContain("Status:       Failed");
+    expect(desc).toContain("State:        Evicted");
+    expect(desc).not.toContain("Last State:");
   });
 });

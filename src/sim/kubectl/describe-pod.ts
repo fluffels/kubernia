@@ -7,46 +7,63 @@
  * Phaser-frei (pure Domäne); importiert nur ./inspect (podPlacement), nie zurück (kein Zyklus).
  */
 import type { KubectlHost } from "./host";
-import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, type Deployment, type PodInstance, type PodStatus } from "../state";
+import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, type Broken, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { currentReplicaSet } from "../replicasets";
 import { findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName } from "../workload";
-import { BROKEN_POD, clusterPodStatus } from "../podstatus";
+import { clusterPodStatus, deploymentPodEntry } from "../podstatus";
 import { podPlacement } from "./inspect";
 
 // --- describe pod: in kohäsive Blöcke zerlegt (Events / Container / Volumes) ---
 
-// Baut die Event-Zeilen je nach (kaputtem) Pod-Zustand – die Lern-Pointe steht in den Events.
+// Die Event-Zeilen eines kaputten Pods – die Lern-Pointe steht in den Events. Wertliefernder `switch` ohne `default`:
+// ein neuer Broken-Typ ohne Zweig ist ein TS-Fehler (TS2366), kein Pod ohne Events (#1509).
+function brokenEvents(host: KubectlHost, pod: PodInstance, dep: Deployment, broken: Broken): string[] {
+  const age = host._age(pod.created);
+  const scheduled = "  Normal   Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name;
+  const started = "  Normal   Started    " + age + "   Started container " + dep.name;
+  switch (broken.type) {
+    case "imagepull":
+      return [
+        scheduled,
+        "  Warning  Failed     " + age + "   Failed to pull image \"" + dep.image + "\": repository does not exist or may require authorization",
+        "  Warning  Failed     " + age + "   Error: ImagePullBackOff",
+      ];
+    case "crashloop":
+      return [scheduled, started, "  Warning  BackOff    " + age + "   Back-off restarting failed container (Tipp: kubectl logs " + pod.name + ")"];
+    case "pending":
+      return ["  Warning  FailedScheduling  " + age + "   0/" + host.nodes.length + " nodes are available: insufficient capacity."];
+    case "notready":
+      return [
+        scheduled,
+        started,
+        "  Warning  Unhealthy  " + age + "   Readiness probe failed: HTTP probe returned statuscode 503 (Liveness probe ok – der Pod LÄUFT, ist aber nicht bereit)",
+      ];
+    case "oomkilled":
+      return [
+        scheduled,
+        "  Normal   Pulled     " + age + "   Container image \"" + dep.image + "\" already present",
+        "  Warning  BackOff    " + age + "   Back-off restarting failed container (zuletzt OOMKilled – Limit zu knapp)",
+      ];
+  }
+}
+
+// Baut die Event-Zeilen je nach Pod-Zustand: Evicted und gesund vorab, sonst je Broken-Typ.
 function podDescribeEvents(host: KubectlHost, pod: PodInstance, dep: Deployment): string[] {
   const events = ["  Type    Reason     Age   Message", "  ----    ------     ----  -------"];
+  const age = host._age(pod.created);
   if (dep.evicted) {
     // Evicted (#240): der kubelet hat den Pod beendet, um Disk freizugeben bzw. weil er sein
     // ephemeral-storage-Limit gesprengt hat. Der Grund steht – wie in echtem K8s – im Event.
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Warning  Evicted    " + host._age(pod.created) + "   " + dep.evicted.reason);
-    events.push("  Normal   Killing    " + host._age(pod.created) + "   Stopping container " + dep.name);
+    events.push("  Normal   Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
+    events.push("  Warning  Evicted    " + age + "   " + dep.evicted.reason);
+    events.push("  Normal   Killing    " + age + "   Stopping container " + dep.name);
   } else if (!dep.broken) {
-    events.push("  Normal  Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Normal  Pulled     " + host._age(pod.created) + "   Container image \"" + dep.image + "\" already present");
-    events.push("  Normal  Started    " + host._age(pod.created) + "   Started container " + dep.name);
-  } else if (dep.broken.type === "imagepull") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Warning  Failed     " + host._age(pod.created) + "   Failed to pull image \"" + dep.image + "\": repository does not exist or may require authorization");
-    events.push("  Warning  Failed     " + host._age(pod.created) + "   Error: ImagePullBackOff");
-  } else if (dep.broken.type === "crashloop") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Normal   Started    " + host._age(pod.created) + "   Started container " + dep.name);
-    events.push("  Warning  BackOff    " + host._age(pod.created) + "   Back-off restarting failed container (Tipp: kubectl logs " + pod.name + ")");
-  } else if (dep.broken.type === "pending") {
-    events.push("  Warning  FailedScheduling  " + host._age(pod.created) + "   0/" + host.nodes.length + " nodes are available: insufficient capacity.");
-  } else if (dep.broken.type === "notready") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Normal   Started    " + host._age(pod.created) + "   Started container " + dep.name);
-    events.push("  Warning  Unhealthy  " + host._age(pod.created) + "   Readiness probe failed: HTTP probe returned statuscode 503 (Liveness probe ok – der Pod LÄUFT, ist aber nicht bereit)");
-  } else if (dep.broken.type === "oomkilled") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Normal   Pulled     " + host._age(pod.created) + "   Container image \"" + dep.image + "\" already present");
-    events.push("  Warning  BackOff    " + host._age(pod.created) + "   Back-off restarting failed container (zuletzt OOMKilled – Limit zu knapp)");
+    events.push("  Normal  Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
+    events.push("  Normal  Pulled     " + age + "   Container image \"" + dep.image + "\" already present");
+    events.push("  Normal  Started    " + age + "   Started container " + dep.name);
+  } else {
+    events.push(...brokenEvents(host, pod, dep, dep.broken));
   }
   return events;
 }
@@ -81,12 +98,13 @@ export function podSecurityLines(dep: Deployment): string[] {
 function podContainerBlock(host: KubectlHost, dep: Deployment, st: PodStatus): string[] {
   // OOMKilled zeigt sich NICHT im State (der ist gerade wieder Waiting), sondern im
   // Last State + Reason und am memory-Limit – genau das ist die Lern-Pointe.
-  const c = dep.broken ? BROKEN_POD[dep.broken.type].container : null;
+  // Evicted gewinnt (#1509): `deploymentPodEntry` liefert dann keinen Container, also kein Last State.
+  const c = deploymentPodEntry(dep).container;
   const last = c?.lastTerminated;
   return [
     "  " + dep.name + ":",
     "    Image:        " + dep.image,
-    "    State:        " + (last ? "Waiting (" + c?.waiting + ")" : st.status),
+    "    State:        " + (c?.lastTerminated ? "Waiting (" + c.waiting + ")" : st.status),
     ...(last ? [
       "    Last State:   Terminated",
       "      Reason:     " + last.reason,

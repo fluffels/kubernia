@@ -22,7 +22,7 @@
  * #492 aus dem Zufall-/Determinismus-SSOT `src/rng.ts` (vorher hier lokal) – dieselbe
  * FNV-1a-Idee, jetzt an EINER Stelle für alle aus Namen abgeleiteten stabilen Werte.
  */
-import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert, PvcRes } from "./state";
+import type { Broken, ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert, PvcRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
 import { hashStr } from "../core/rng";
 import { isControlPlane } from "./nodes";
@@ -48,15 +48,29 @@ function podMetric(c: ClusterPod, pvcs: readonly PvcRes[]): PodMetrics | null {
   switch (c.owner) {
     case "Deployment": {
       const d = c.dep;
-      if (d.evicted || (d.broken && (d.broken.type === "imagepull" || d.broken.type === "pending"))) return null;
+      if (d.evicted) return null;
       const m = baseLoad(c.pod);
       if (d.cpuHeavy) m.cpuMilli = 850 + (hashStr(c.pod.name) % 200); // 850..1049m: weit über der HighCPU-Schwelle
-      if (d.broken && d.broken.type === "oomkilled") m.memMi = d.broken.memNeeded || 256; // klettert ans Limit
-      return m;
+      return d.broken ? brokenLoad(d.broken, m) : m;
     }
     case "StatefulSet":
       // PVC Pending ⇒ der Pod läuft nicht, also keine Metriken; sonst nur die Grundlast.
       return podAddress(c, pvcs) === null ? null : baseLoad(c.pod);
+  }
+}
+
+/** Die Last eines Pods mit `Broken`, je Typ ausdrücklich (#1509); `null`: der Container läuft gar nicht, es gibt keine Metriken.
+ *  Wertliefernder `switch` ohne `default`: ein neuer Typ ohne Zweig ist ein TS-Fehler (TS2366). */
+function brokenLoad(b: Broken, base: PodMetrics): PodMetrics | null {
+  switch (b.type) {
+    case "imagepull":
+    case "pending":
+      return null;
+    case "crashloop":
+    case "notready":
+      return base;
+    case "oomkilled":
+      return { ...base, memMi: b.memNeeded || 256 }; // klettert ans Limit
   }
 }
 
@@ -112,11 +126,22 @@ export function scrapeTargets(host: ObservabilityHost): ScrapeTarget[] {
   return targets;
 }
 
+/** Welchen Pod-Alert ein Broken-Typ auslöst (#1509). Ausdrücklich keiner: imagepull, pending (der Container läuft nie) und
+ *  notready (er läuft, nur die Readiness fehlt). Als `Record`: ein neuer Typ ohne Eintrag ist ein TS-Fehler. */
+const BROKEN_ALERT: Record<Broken["type"], "KubePodCrashLooping" | "KubePodOOMKilled" | null> = {
+  imagepull: null,
+  crashloop: "KubePodCrashLooping",
+  pending: null,
+  notready: null,
+  oomkilled: "KubePodOOMKilled",
+};
+
 /** Die Alert-Regeln samt aktueller Bedingung – die EINE Stelle, die festlegt,
  *  was den simulierten Alertmanager auslöst (hohe CPU, CrashLoop, OOM, Node weg). */
 function alertRules(host: ObservabilityHost): Array<{ name: string; severity: "warning" | "critical"; summary: string; firing: boolean }> {
-  const crash = host.deployments.some(d => d.broken && d.broken.type === "crashloop");
-  const oom = host.deployments.some(d => d.broken && d.broken.type === "oomkilled");
+  const brokenAlerts = new Set(host.deployments.map(d => (d.broken ? BROKEN_ALERT[d.broken.type] : null)));
+  const crash = brokenAlerts.has("KubePodCrashLooping");
+  const oom = brokenAlerts.has("KubePodOOMKilled");
   const hotPod = podMetrics(host).some(m => m.cpuMilli > 500);
   const nodeDown = host.nodes.some(nd => nd.status !== "Ready");
   return [

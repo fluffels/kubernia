@@ -3,7 +3,7 @@
  * sichern ihr Verhalten inkl. Grenz-/Negativfälle direkt an der öffentlichen Funktion ab,
  * statt sie nur indirekt über die Befehlsfamilien mitzuprüfen. */
 import { describe, test, expect } from "vitest";
-import { editDistance, suggest, parseCpuMilli } from "../../src/sim/util";
+import { editDistance, suggest, parseCpuMilli, formatLabels } from "../../src/sim/util";
 
 describe("editDistance – Levenshtein", () => {
   test("gleiche Strings: Distanz 0", () => {
@@ -42,5 +42,18 @@ describe("parseCpuMilli – CPU-Menge in Milli-Cores", () => {
   });
   test("Unsinn und zu feine Nachkommastellen → null", () => {
     for (const bad of ["", "zwei", "m", "250M", "250mi", "-1", "1.5m", "0.0001", "1.", ".5", "1e3"]) expect(parseCpuMilli(bad), bad).toBeNull();
+  });
+});
+
+describe("formatLabels (#1500)", () => {
+  test("mehrere Labels: Schlüssel sortiert, mit Komma verbunden", () => {
+    expect(formatLabels({ tier: "web", app: "kasse" })).toBe("app=kasse,tier=web");
+  });
+  test("ein = im Wert bleibt erhalten", () => {
+    expect(formatLabels({ app: "a=b" })).toBe("app=a=b");
+  });
+  test("leer oder null: <none>", () => {
+    expect(formatLabels({})).toBe("<none>");
+    expect(formatLabels(null)).toBe("<none>");
   });
 });
