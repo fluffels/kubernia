@@ -188,7 +188,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   const summen = new Map();
   const fenster = [];
   const hauptCalls = [];
-  const kubernia = { calls: 0, cost: 0, costGeschaetzt: 0, output: 0, outputGeschaetzt: 0 };
+  const eigene = { calls: 0, cost: 0, costGeschaetzt: 0, output: 0, outputGeschaetzt: 0 };
   let ohnePreis = 0;
   const ohnePreisModelle = {};
   const zaehleOhnePreis = (c) => {
@@ -264,11 +264,11 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
       for (const c of sa.calls) {
         if (!imFenster(c.ts)) continue;
         if (istKubernia(sa.meta)) {
-          kubernia.calls += 1;
-          kubernia.cost += c.cost ?? 0;
-          kubernia.costGeschaetzt += c.costGeschaetzt ?? c.cost ?? 0;
-          kubernia.output += c.output ?? 0;
-          kubernia.outputGeschaetzt += c.outputGeschaetzt ?? c.output ?? 0;
+          eigene.calls += 1;
+          eigene.cost += c.cost ?? 0;
+          eigene.costGeschaetzt += c.costGeschaetzt ?? c.cost ?? 0;
+          eigene.output += c.output ?? 0;
+          eigene.outputGeschaetzt += c.outputGeschaetzt ?? c.output ?? 0;
           if (c.cost == null) zaehleOhnePreis(c);
           continue;
         }
@@ -283,7 +283,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
-  return { rows, fenster, kubernia, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0, modellanteil: modellAnteil(fenster), ttl: ttlVergleich(hauptCalls) };
+  return { rows, fenster, kubernia: eigene, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0, modellanteil: modellAnteil(fenster), ttl: ttlVergleich(hauptCalls) };
 }
 
 const de = (n, stellen = 1) => n.toFixed(stellen).replace(".", ",");
@@ -311,7 +311,8 @@ export function renderMarkdown(r) {
   const n = r.rows.reduce((s, z) => s + z.calls, 0);
   const totalGeschaetzt = r.rows.reduce((s, z) => s + (z.costGeschaetzt ?? z.cost), 0);
   out.push(`| **Summe** | | | ${n} | ${$(total)} | ${$(totalGeschaetzt)} |`, "");
-  out.push(`kubernia-Subagenten (nicht Hauptchat): ${r.kubernia.calls} Calls, ${$(r.kubernia.cost)}, geschätzt ${$(r.kubernia.costGeschaetzt ?? r.kubernia.cost)} (Output geschätzt ${r.kubernia.outputGeschaetzt ?? r.kubernia.output ?? 0} statt ${r.kubernia.output ?? 0} Tokens)`);
+  const k = r.kubernia;
+  out.push(`kubernia-Subagenten (nicht Hauptchat): ${k.calls} Calls, ${$(k.cost)}, geschätzt ${$(k.costGeschaetzt ?? k.cost)} (Output geschätzt ${k.outputGeschaetzt ?? k.output ?? 0} statt ${k.output ?? 0} Tokens)`);
   if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
   if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen oder Zeitpunkt fehlt), nicht als 0 $ zu lesen.`);
   out.push(...kennzahlZeilen(r));
