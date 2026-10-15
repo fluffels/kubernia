@@ -38,7 +38,7 @@ export interface LaufOptionen {
   runden?: Record<string, Bericht | null>[];
   /** Ergebnisse je Lens-Key nach Aufruf-Reihenfolge (Ausfall, dann Erfolg); ersetzt `runden` für diese Lens. */
   versuche?: Record<string, (Bericht | null)[]>;
-  nachbessern?: { deltaPfad?: string; deltaDateien?: string[] };
+  nachbessern?: { deltaPfad?: string; deltaDateien?: string[]; selbstcheck?: string };
   /** verify-Ergebnis (Standard überall grün): nach dem Umsetzen und je Nachbessern-Aufruf in Reihenfolge, der letzte Wert wiederholt sich. */
   verifyGruen?: { umsetzen?: boolean; nachbessern?: boolean[] };
 }
