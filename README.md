@@ -144,7 +144,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Subagent | `Explore` | model: haiku, effort: low | `.claude/agents/explore.md` |
 | Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/kubernia-lens.md` |
 | Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/kubernia-planner.md` |
-| Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/kubernia-umsetzer.md` |
+| Subagent | `kubernia-umsetzer` | model: sonnet, effort: low | `.claude/agents/kubernia-umsetzer.md` |
 | Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
 | Skill | `kubernia` | model: sonnet | `.claude/skills/kubernia/SKILL.md` |
 | Skill | `kubernia-workflow` | model: Session-Modell | `.claude/skills/kubernia-workflow/SKILL.md` |
