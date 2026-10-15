@@ -233,7 +233,8 @@ describe("Verdrahtung der Generationsgrenze (#1647)", () => {
   test("der Board-Takt fährt `harness --generation` nach dem Takt-Skript, mit Board-Token; fehlt er, wird nur gewarnt", () => {
     expect(yml).toMatch(/node scripts\/board-takt\.mjs[\s\S]*node scripts\/sammelticket-anlegen\.mjs harness --generation/);
     expect(yml).toMatch(/GH_TOKEN: \$\{\{ secrets\.PROJECT_TOKEN \}\}/);
-    expect(yml).toMatch(/continue-on-error: true\n\s+env:/); // best effort: ein Fehler macht den Takt nicht rot
+    // best effort: ein Fehler macht den Takt nicht rot (am Generations-Schritt selbst, nicht an irgendeinem)
+    expect(yml).toMatch(/- name: Generationsgrenze des Harness-Sammeltickets\n\s+continue-on-error: true\n\s+env:/);
     expect(yml).toMatch(/if \[ -z "\$GH_TOKEN" \]; then\n\s+echo "::warning::PROJECT_TOKEN fehlt[^\n]*\n\s+exit 0/);
   });
 
