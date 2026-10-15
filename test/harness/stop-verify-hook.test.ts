@@ -410,7 +410,7 @@ PR: https://github.com/x/y/pull/7`, ...extra });
         },
         existsSync: (p: string) => p.replace(/\\/g, "/") === WT || registriert.includes(p.replace(/\\/g, "/")),
         readdirSync: () => [{ name: "kq-1592", isDirectory: () => true, isSymbolicLink: () => false }],
-        statSync: () => ({ mtimeMs: 49_999_000, birthtimeMs: 1 }),
+        statSync: () => ({ mtimeMs: 50_000_000 - 600_000, birthtimeMs: 1 }),
         lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
         rmSync: () => {
           throw new Error("ein registrierter Worktree darf nie gelöscht werden");
