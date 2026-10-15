@@ -8,6 +8,7 @@ type Call = { id: string; output: number; cost: number | null; outputSichtbar: n
 const T = raw as unknown as {
   callsFromTranscript: (z: Row[]) => { calls: Call[] };
   eindeutigeCalls: (c: Call[]) => Call[];
+  ratesGrenze: (l: ({ zuwachs: number; zeichen: number; sichtbar: number } | null)[]) => number;
 };
 
 let seq = 0;
@@ -35,16 +36,36 @@ const text = (n: number): Row => ({ type: "text", text: "y".repeat(n) });
 const tool = (inhalt: string): Row => ({ type: "tool_use", id: "t", name: "Bash", input: { command: inhalt } });
 
 describe("Output-Schätzung aus dem Kontext-Zuwachs", () => {
-  test("Zuwachs abzüglich Tool-Ergebnis (Zeichen / 4) ist der Output des vorigen Calls", () => {
+  test("Zuwachs abzüglich Tool-Ergebnis zur kleinsten Rate (Token je Zeichen) ist der Output des vorigen Calls", () => {
     const z = [
-      ...msg("a", 1000, [tool("ls")]),
-      ergebnis(400), // 100 Tokens Fremdzuwachs
-      ...msg("b", 1000 + 100 + 300, [text(4)]), // 300 Tokens Output von a
+      ...msg("a", 1000, [text(16)]), // sichtbar 4 Token
+      ergebnis(400), // ruhige Lücke: Zuwachs 104 = 4 Output + 100 Fremd, also Rate 0,25
+      ...msg("b", 1104, [text(16)]),
+      ergebnis(400), // laute Lücke: Zuwachs 400, davon 100 Fremd
+      ...msg("c", 1504, [text(4)]),
     ];
     const { calls } = T.callsFromTranscript(z);
-    expect(calls[0].output).toBe(5);
-    expect(calls[0].outputGeschaetzt).toBe(300);
-    expect(calls[0].costGeschaetzt).toBeGreaterThan(calls[0].cost as number);
+    expect(calls.map((c) => c.output)).toEqual([5, 5, 5]);
+    expect(calls[1].outputGeschaetzt).toBe(300);
+    expect(calls[1].costGeschaetzt).toBeGreaterThan(calls[1].cost as number);
+  });
+
+  test("dichter tokenisierter Fremdtext (Rate über 0,25) wird nicht als Output gezählt", () => {
+    // Beide Lücken: 400 Zeichen bringen 200 Token (Rate 0,5); die zweite Lücke trägt zusätzlich 300 Token Output.
+    const z = [
+      ...msg("a", 1000, [text(16)]),
+      ergebnis(400),
+      ...msg("b", 1204, [text(16)]),
+      ergebnis(400),
+      ...msg("c", 1704, [text(4)]),
+    ];
+    expect(T.callsFromTranscript(z).calls[1].outputGeschaetzt).toBe(300);
+  });
+
+  test("ratesGrenze: kleinste Rate über Lücken mit Fremdtext, 0,25 ohne Lücke", () => {
+    expect(T.ratesGrenze([null, { zuwachs: 0, zeichen: 10, sichtbar: 0 }, { zuwachs: 50, zeichen: 0, sichtbar: 0 }])).toBe(0.25);
+    expect(T.ratesGrenze([{ zuwachs: 300, zeichen: 400, sichtbar: 100 }, { zuwachs: 140, zeichen: 400, sichtbar: 40 }])).toBe(0.25);
+    expect(T.ratesGrenze([{ zuwachs: 10, zeichen: 400, sichtbar: 50 }])).toBe(0); // Sichtbares über dem Zuwachs: nie negativ
   });
 
   test("letzter Call und schrumpfender Kontext fallen auf das Sichtbare zurück", () => {
@@ -76,10 +97,18 @@ describe("Output-Schätzung aus dem Kontext-Zuwachs", () => {
     }
   });
 
-  test("kleine Anhänge (Token-Erinnerung) zählen als Fremdzuwachs", () => {
+  test("kleine Anhänge (Token-Erinnerung) zählen als Fremdzeichen der Lücke", () => {
     const klein: Row = { type: "attachment", attachment: { type: "total_tokens_reminder", text: "y".repeat(80) } };
-    const z = [...msg("a", 1000, [text(40)]), ergebnis(400), klein, ...msg("b", 1000 + Math.round((400 + JSON.stringify(klein.attachment).length) / 4) + 50, [text(4)])];
-    expect(T.callsFromTranscript(z).calls[0].outputGeschaetzt).toBe(50);
+    const z = [
+      ...msg("a", 1000, [text(16)]),
+      ergebnis(400),
+      klein,
+      ...msg("b", 1000 + Math.round((400 + JSON.stringify(klein.attachment).length) / 4), [text(16)]),
+      ergebnis(400),
+      ...msg("c", 1000 + Math.round((400 + JSON.stringify(klein.attachment).length) / 4) + 300, [text(4)]),
+    ];
+    // Rate = (Zuwachs 130 − sichtbar 4) / 520 Zeichen; ohne den Anhang als Fremdzeichen wären es 126 / 400 und der Output 174.
+    expect(T.callsFromTranscript(z).calls[1].outputGeschaetzt).toBe(203);
   });
 
   test("mehrzeilige Nachricht zählt einmal, Sichtbares summiert Text und Tool-Eingabe", () => {

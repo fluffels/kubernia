@@ -73,10 +73,19 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
     byId.set(key, call);
   }
   const calls = [...byId.values()];
-  calls.forEach((c, i) => {
+  // Token je Zeichen Fremdtext ist je Transkript verschieden (Code und Zeilennummern tokenisieren dichter als Prosa):
+  // die kleinste Rate, die zu einem Output von mindestens dem Sichtbaren passt, ist eine obere Grenze der echten Rate,
+  // der daraus geschätzte Output also eine Untergrenze (#1568).
+  const luecken = calls.map((c, i) => {
     const naechster = calls[i + 1];
-    const zuwachs = naechster && !unsicher.has(c.id) ? kontextVon(naechster) - kontextVon(c) - Math.round((fremd.get(c.id) ?? 0) / 4) : 0;
     c.outputSichtbar = Math.ceil((sichtbar.get(c.id) ?? 0) / 4);
+    if (!naechster || unsicher.has(c.id)) return null;
+    return { zuwachs: kontextVon(naechster) - kontextVon(c), zeichen: fremd.get(c.id) ?? 0 };
+  });
+  const rate = ratesGrenze(luecken.map((l, i) => (l ? { ...l, sichtbar: calls[i].outputSichtbar } : null)));
+  calls.forEach((c, i) => {
+    const l = luecken[i];
+    const zuwachs = l ? Math.round(l.zuwachs - rate * l.zeichen) : 0;
     c.outputGeschaetzt = schaetzeOutput({ output: c.output, sichtbar: c.outputSichtbar, zuwachs });
     c.costGeschaetzt = preisMitOutput(c, c.outputGeschaetzt);
   });
@@ -118,6 +127,13 @@ function sichtbareZeichen(content) {
  * der Output dieses Calls (inklusive Thinking). Ohne Nachfolger oder bei schrumpfendem Kontext (Verdichtung) bleibt
  * das Sichtbare (ebenso bei Anhängen unbekannter Größe); nie unter dem Sichtbaren und nie unter dem aufgezeichneten Wert.
  */
+/** Kleinste Token-je-Zeichen-Rate über alle Lücken mit Fremdtext (Obergrenze der echten Rate); 0,25 (Zeichen / 4) ohne Lücke. */
+export function ratesGrenze(luecken) {
+  let rate = Infinity;
+  for (const l of luecken) if (l && l.zeichen > 0 && l.zuwachs > 0) rate = Math.min(rate, Math.max(0, l.zuwachs - l.sichtbar) / l.zeichen);
+  return Number.isFinite(rate) ? rate : 0.25;
+}
+
 export function schaetzeOutput({ output, sichtbar, zuwachs }) {
   return Math.max(output, sichtbar, zuwachs > 0 ? zuwachs : 0);
 }
