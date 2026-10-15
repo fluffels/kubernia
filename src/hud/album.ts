@@ -20,6 +20,7 @@
  * Bewusst wie questlog.ts geschnitten: die Entscheidung lebt hier (unit-getestet),
  * die DOM-Anbindung (Rendern/Klicks) liegt dünn in ui/album.ts.
  */
+import { PLACEHOLDER_TOKEN } from "./markup";
 import type { Quest } from "../types";
 import type { QuizCard, QuestTopic } from "../content/loader";
 
@@ -28,7 +29,8 @@ export interface AlbumEntry {
   kind: "command" | "knowledge";
   /** Eindeutige Eintrags-ID (Befehl: `cmd:<befehl>`, Wissen: die Karten-ID). */
   id: string;
-  /** Überschrift des Stickers (Befehl: der Befehl selbst; Wissen: die Frage). */
+  /** Überschrift des Stickers (Befehl: der Befehl selbst; Wissen: die Frage). Content-Markup mit rohen
+   *  `<token>`-Platzhaltern, gerendert über `fmtCmd`. */
   title: string;
   /** Erklärung/Detail (kann Spiel-Markup wie <code>/<b>/<i> enthalten). */
   detail: string;
@@ -71,8 +73,11 @@ export interface AlbumUnlockState {
 /** Marker eines Teach-Intros, das wirklich einen NEUEN Befehl einführt. Bewusst
  *  „Neuer Befehl:" (mit Doppelpunkt) – Schritte wie „🆕 Kein neuer Befehl …" oder
  *  „🆕 Wieder nur ein neues Image …" stellen KEINEN neuen Befehl vor und matchen
- *  hier nicht (sie kommen also nicht ins Befehls-Album). */
-const NEW_CMD_RE = /🆕\s*Neuer Befehl:\s*<code>([^<]+)<\/code>\s*[–—-]?\s*(.*)$/s;
+ *  hier nicht (sie kommen also nicht ins Befehls-Album).
+ *  Im Fang sind rohe Platzhalter `<pod>` erlaubt (Token-Klasse aus markup.ts, #1547);
+ *  `[^<]` und `<token>` unterscheiden sich schon am ersten Zeichen (linear, kein ReDoS). */
+const NEW_CMD_RE = new RegExp(
+  String.raw`🆕\s*Neuer Befehl:\s*<code>((?:[^<]|<${PLACEHOLDER_TOKEN}>)+)<\/code>\s*[–—-]?\s*(.*)$`, "s");
 
 /**
  * Zieht aus dem Intro eines Teach-Schritts den eingeführten Befehl + seine
