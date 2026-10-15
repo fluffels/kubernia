@@ -19,7 +19,7 @@ type Schicht = { id: string; label: string; technik?: string; muster: string | n
 type Modell = { quellwurzel: string; schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
 type El = { id: string; kind: string; title: string; parentId: string | null; datei: string; zeile: number; tags?: string[] };
 type Bez = { von: string; nach: string; datei: string; zeile: number };
-type View = { id: string; titel: string; knoten: number; datei: string; zeile: number };
+type View = { id: string; titel: string; knoten: number; datei: string; zeile: number; kanten?: { von: string; nach: string }[] };
 type C4 = { elemente: El[]; beziehungen: Bez[]; views: View[] };
 type Meldung = { datei: string; zeile: number; art: string; element: string; text: string; fix: string };
 type Cfg = { workspace: string; quelle: string; bindungen: Record<string, string>; erzaehlung: string[]; maxKnotenJeView: number; hexagon?: { datei: string; abschnitt: string } };
@@ -454,6 +454,82 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
     assert.equal(t.length, 1);
     assert.deepEqual(texte(mitText(hexText())), []);
   });
+
+  test("Adapter und Port in derselben Schicht ergeben keine Schicht-Richtungs-Meldung", () => {
+    const c4 = gueltig();
+    const a = c4.elemente.find((e) => e.kind === "adapter");
+    assert.ok(a);
+    a.parentId = "k.app.do.content";
+    const t = mitText(hexText(PORT, "| Tastatur | Content-Quelle | `src/content/a.ts` | pure Domäne |"), hexVorhanden, c4);
+    assert.deepEqual(texte(t), []);
+  });
+
+  test("Top-Level-Datei src/ui.ts gehört zum Modul ui; src/ ohne Rest ist kein Modul", () => {
+    assert.deepEqual(texte(mitText(hexText(PORT, "| Tastatur | Content-Quelle | `src/ui.ts` | Präsentation |"))), []);
+    assert.equal(treffer(mitText(hexText(PORT, "| Tastatur | Content-Quelle | `src/` | Präsentation |")), /nicht unter src\//).length, 1);
+  });
+
+  test("Ort in verschiedenen Schichten (Barrel und Ordner): eine Meldung statt Absturz", () => {
+    const modell = basis();
+    modell.schichten[1].muster = "^src/(game|conflict)(\\.ts$|/)";
+    modell.schichten[0].muster = "^src/(ui|conflict)/";
+    const extra = { "scripts/layers.cjs": layersFile(modell), "src/conflict/a.ts": "", "src/conflict.ts": "" };
+    const text = hexText(PORT, "| Tastatur | Content-Quelle | `src/conflict.ts`, `src/conflict/a.ts` | Präsentation |");
+    const t = treffer(lauf(gueltig(), extra, CFG, { text, existiert: () => true }), /verschiedenen oder unbekannten Schichten/);
+    assert.equal(t.length, 1);
+  });
+
+  test("Elternprüfung: Adapter ohne Eltern oder direkt unter einer Schicht ist rot", () => {
+    const ohne = gueltig();
+    const a = ohne.elemente.find((e) => e.kind === "adapter");
+    assert.ok(a);
+    a.parentId = null;
+    assert.equal(treffer(lauf(ohne), /adapter „Tastatur“: liegt unter keinem Element/).length, 1);
+    const unterSchicht = gueltig();
+    const b = unterSchicht.elemente.find((e) => e.kind === "adapter");
+    assert.ok(b);
+    b.parentId = "k.app.pr";
+    assert.equal(treffer(lauf(unterSchicht), /adapter „Tastatur“: liegt unter „Präsentation“/).length, 1);
+  });
+
+  test("eine weitere Tabelle im Abschnitt ohne Port-/Adapter-Kopf wird nicht als Adapter gelesen", () => {
+    const text = hexText().replace("### Nächster Abschnitt", "Zwischentext.\n\n| A | B |\n|---|---|\n| x | y |\n\n### Nächster Abschnitt");
+    assert.deepEqual(texte(mitText(text)), []);
+  });
+
+  test("eine Überschrift der Ebene 4 beendet den Abschnitt nicht: Pfade dahinter werden geprüft", () => {
+    const t = treffer(mitText(hexText(PORT, ADAPTER, "#### Unterteil\n\n`src/fehlt/y.ts`")), /Pfad existiert nicht/);
+    assert.equal(t.length, 1);
+  });
+
+  test("Adapter zeigt auf einen anderen existierenden Port als die Tabelle: rot", () => {
+    const c4 = gueltig();
+    c4.elemente.push(el("k.app.an.game.z", "port", "Zweit", "k.app.an.game", 22, ["treibend"]));
+    c4.beziehungen = c4.beziehungen.map((b) => (b.von === "k.app.pr.ui.t" ? { ...b, nach: "k.app.an.game.z" } : b));
+    const text = hexText(`${PORT}\n| Zweit | treibend | \`src/game/a.ts\` | Anwendung |`);
+    const ms = mitText(text, hexVorhanden, c4);
+    assert.equal(treffer(ms, /Kante mit Port-\/Adapter-Ende ist nicht Adapter → Port/).length, 1);
+    assert.equal(treffer(ms, /Kante Adapter → Port fehlt/).length, 1);
+  });
+
+  test("Config: hexagon ohne abschnitt ist rot", () => {
+    const cfg = { ...CFG, hexagon: { datei: "docs/arc42.md" } } as unknown as Cfg;
+    assert.equal(treffer(lauf(gueltig(), {}, cfg), /Block "hexagon".*fehlt/).length, 1);
+  });
+
+  test("Pfade unter scripts/ und docs/ in der Prosa werden geprüft", () => {
+    const t = treffer(mitText(hexText(PORT, ADAPTER, "Siehe `scripts/fehlt.cjs` und `docs/fehlt.md`.")), /Pfad existiert nicht/);
+    assert.equal(t.length, 2);
+  });
+
+  test("View mit abgeleiteter Kante mit Modul-Ende: rot; Kante zwischen Schichten bleibt grün", () => {
+    const c4 = gueltig();
+    c4.views = [{ id: "mod", titel: "Mod", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr.ui", nach: "k.app.an.game" }] }];
+    const t = treffer(lauf(c4), /spiel\.c4:80 view „mod“: zeigt die abgeleitete Kante ui → game/);
+    assert.equal(t.length, 1);
+    c4.views = [{ id: "ok", titel: "Ok", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr", nach: "k.app.an" }] }];
+    assert.deepEqual(texte(lauf(c4)), []);
+  });
 });
 
 describe("ladeC4Modell: der Adapter", () => {
@@ -475,6 +551,7 @@ describe("ladeC4Modell: der Adapter", () => {
     assert.deepEqual(c4.beziehungen.map((b) => [b.von, b.nach]), [["a", "b"]]);
     assert.equal(c4.beziehungen[0].datei, "docs/architektur/m.c4");
     assert.deepEqual(c4.views.map((v) => [v.id, v.knoten]), [["index", 2]]);
+    assert.deepEqual(c4.views[0].kanten, [{ von: "a", nach: "b" }]);
   }, 30000);
 
   test("Tags eines Elements kommen als Namen ohne #", async () => {

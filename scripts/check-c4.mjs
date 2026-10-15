@@ -177,7 +177,7 @@ function pruefeModule(c4, modell, module, byId, binderVon, ordner) {
   return ms;
 }
 
-const HEX_PFAD = /`((?:src|test)\/[^`\s]*)`/g;
+const HEX_PFAD = /`((?:src|test|scripts|docs)\/[^`\s]*)`/g;
 const HEX_KOPF = { port: ["Port", "Seite", "Ort", "Schicht"], adapter: ["Adapter", "Port", "Ort", "Schicht"] };
 const zellen = (zeile) => zeile.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 const pfadeIn = (text) => [...text.matchAll(HEX_PFAD)].map((m) => m[1]);
@@ -381,6 +381,13 @@ export function pruefeArchitektur({ modell, module, c4, cfg, hexagon }) {
   ms.push(...pruefeModule(c4, modell, module, byId, binderVon, ordner));
   ms.push(...pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon }));
   for (const v of c4.views) {
+    for (const k of v.kanten ?? []) {
+      const von = byId.get(k.von);
+      const nach = byId.get(k.nach);
+      if (von && nach && (binderVon(von.kind) === "modul" || binderVon(nach.kind) === "modul")) {
+        ms.push(meld(v.datei, v.zeile, "view", v.id, `zeigt die abgeleitete Kante ${von.title} → ${nach.title} mit einem Modul-Ende (nicht aus einer SSOT ableitbar)`, `Kanten, die Module verschachtelter Elemente anheben, mit einem Tag versehen und per 'exclude * -> * where tag is #…' aus der View nehmen`));
+      }
+    }
     if (v.knoten > cfg.maxKnotenJeView) {
       ms.push(meld(v.datei, v.zeile, "view", v.id, `${v.knoten} Knoten, erlaubt sind ${cfg.maxKnotenJeView} (architektur.maxKnotenJeView)`, `View je Schicht teilen, den Deckel nur senken`));
     }
@@ -409,7 +416,7 @@ export async function ladeC4Modell(rootDir, workspace) {
     const model = await likec4.computedModel();
     const elemente = [...model.elements()].map((e) => ({ id: e.id, kind: e.kind, title: e.title, parentId: e.parent?.id ?? null, tags: [...e.tags].map(String), ...ort({ element: e.id }) }));
     const beziehungen = [...model.relationships()].map((r) => ({ von: r.source.id, nach: r.target.id, ...ort({ relation: r.id }) }));
-    const views = [...model.views()].map((v) => ({ id: v.id, titel: v.title ?? v.id, knoten: [...v.nodes()].length, ...ort({ view: v.id }) }));
+    const views = [...model.views()].map((v) => ({ id: v.id, titel: v.title ?? v.id, knoten: [...v.nodes()].length, kanten: [...v.edges()].map((e) => ({ von: e.source.id, nach: e.target.id })), ...ort({ view: v.id }) }));
     return { elemente, beziehungen, views };
   } finally {
     await likec4.dispose();

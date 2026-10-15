@@ -5,6 +5,7 @@
 specification {
   tag treibend
   tag getrieben
+  tag hexagon
   element person {
     style {
       shape person

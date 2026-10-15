@@ -86,15 +86,33 @@ model {
       anwendung -> domaene
 
       // Hexagonale Sicht (ADR 0024): je Adapter genau eine Kante auf seinen Port.
-      einstieg.main.tastatur -> domaene.core.tastaturAktionen
-      einstieg.main.frameTakt -> anwendung.game.spieltakt
-      praesentation.scenes.zeitsprung -> anwendung.game.spieltakt
-      praesentation.ui.funkTerminal -> domaene.sim.terminalBefehle
-      praesentation.ui.spielstandDatei -> anwendung.game.austausch
-      anwendung.store.idb -> anwendung.store.persistenz
-      anwendung.store.ls -> anwendung.store.persistenz
-      anwendung.store.mem -> anwendung.store.persistenz
-      domaene.content.viteJson -> domaene.content.quelle
+      einstieg.main.tastatur -> domaene.core.tastaturAktionen {
+        #hexagon
+      }
+      einstieg.main.frameTakt -> anwendung.game.spieltakt {
+        #hexagon
+      }
+      praesentation.scenes.zeitsprung -> anwendung.game.spieltakt {
+        #hexagon
+      }
+      praesentation.ui.funkTerminal -> domaene.sim.terminalBefehle {
+        #hexagon
+      }
+      praesentation.ui.spielstandDatei -> anwendung.game.austausch {
+        #hexagon
+      }
+      anwendung.store.idb -> anwendung.store.persistenz {
+        #hexagon
+      }
+      anwendung.store.ls -> anwendung.store.persistenz {
+        #hexagon
+      }
+      anwendung.store.mem -> anwendung.store.persistenz {
+        #hexagon
+      }
+      domaene.content.viteJson -> domaene.content.quelle {
+        #hexagon
+      }
     }
 
     spielstand = datenspeicher 'Spielstand' {
@@ -133,6 +151,7 @@ views {
       kubernia.spielApp.anwendung.*,
       kubernia.spielApp.domaene.*
     exclude kubernia.spielApp.phaser
+    exclude * -> * where tag is #hexagon
   }
 
   view hexagon of kubernia.spielApp {
