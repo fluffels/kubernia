@@ -95,6 +95,8 @@ const HOST_HTML = "dist/index.html";
  *     Spielcode 540_000 → 555_000, Offline-HTML ohne Content 2_545_000 → 2_560_000 (Ist 547_646 bzw. 2_547_572 B).
  *   • #1471 (ReplicaSet-Historie, rollout history/undo, Persistenz, YAML: neuer Sim-Code, bewusst und legitim):
  *     Spielcode 555_000 → 566_000 (Ist 562_252 B), Offline-HTML ohne Content 2_560_000 → 2_570_000 (Ist 2_562_363 B), jeweils mit dem Stand von main nach #1461.
+ *   • #1553 (Tastenhinweis-Domäne, Token-Ersetzung in HUD/Dialog/Innenraum: neuer Code, bewusst und legitim):
+ *     Spielcode 566_000 → 570_000 (Ist 566_729 B).
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -110,7 +112,7 @@ export const BUNDLE_BUDGETS = [
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 566_000,
+    maxBytes: 570_000,
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",

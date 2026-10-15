@@ -14,6 +14,8 @@ import { WERFT_NPC } from "../src/world/regions/werft";
 import { npcSpawnsForMap } from "../src/content/entities";
 import { Sim as KQSim } from "../src/sim";
 import { fmtCmd, CONTENT_HTML_TAGS } from "../src/hud/markup";
+import { BINDABLE_ACTIONS } from "../src/core/keybindings";
+import { keyTokenActions } from "../src/hud/tastenhinweis";
 import type { TeachStep } from "../src/types";
 
 /** Findet Befehls-Karten ohne nicht-leere Begründung (`explain`, #233) – sonst
@@ -882,6 +884,48 @@ for (const [name, quelle] of Object.entries(ANZEIGE_QUELLEN) as [string, Anzeige
     assert.deepEqual(problems, [], `${name}-Felder mit unsichtbarem Platzhalter oder offenem Tag:\n` + problems.join("\n"));
   });
 }
+
+/* Tasten-Wächter (#1553; bekannte Grenzen: Kleinbuchstaben-Tasten und Wörter zwischen Verb und Taste erkennt der Regex nicht, UI-Strings außerhalb von TASTEN_HINWEISE prüft er nicht): umbelegbare Tasten (Reden, Funkgerät, Logbuch, Album) stehen in Dialogzeilen nur als Token
+ * `{taste:<aktion>}` (ersetzt von src/ui/dialog.ts und dem Logbuch-Nachlesen, Domäne src/hud/tastenhinweis.ts), nie als
+ * fester Buchstabe: sonst zeigt der Text nach einer Umbelegung die falsche Taste. */
+const ROHER_TASTENNAME = /(?:\bTaste|[Dd]rück(?:e|st)?)\s*(?:<b>|<kbd>)?[A-Z](?:<\/b>|<\/kbd>)?(?![\wÄÖÜäöüß])|(?<![\wÄÖÜäöüß])(?:<b>)?[A-Z](?:<\/b>)?\s*drücken\b|\b[A-Z]-Taste\b/;
+function tastenProbleme(name: string, pairs: [string, string][]): string[] {
+  const out: string[] = [];
+  for (const [label, text] of pairs) {
+    if (ROHER_TASTENNAME.test(text)) {
+      out.push(`${name}.${label}: fester Tastenname – schreibe das Token {taste:talk|radio|logbook|album} (Domäne src/hud/tastenhinweis.ts)`);
+    }
+    const tokens = keyTokenActions(text);
+    for (const a of tokens) {
+      if (!(BINDABLE_ACTIONS as readonly string[]).includes(a)) out.push(`${name}.${label}: unbekannte Token-Aktion {taste:${a}}`);
+    }
+    const ersetzt = name === "SMALLTALK" || (name === "QUESTS" && /\.lines\[\d+\]$/.test(label));
+    if (tokens.length && !ersetzt) {
+      out.push(`${name}.${label}: Token nur in Dialogzeilen (QUESTS …lines[n], SMALLTALK); dieses Feld ersetzt es nicht – Ersetzung dort ergänzen oder festen Text vermeiden`);
+    }
+  }
+  return out;
+}
+for (const [name, quelle] of Object.entries(ANZEIGE_QUELLEN) as [string, Anzeigequelle][]) {
+  if (typeof quelle !== "function") continue;
+  test(`${name}: keine festen Tastennamen, Token gültig und nur in ersetzten Feldern (#1553)`, () => {
+    assert.deepEqual(tastenProbleme(name, quelle()), []);
+  });
+}
+
+test("Red-Green (#1553): der Tasten-Wächter meldet feste Tastennamen und falsche Token, nicht erlaubte Schreibweisen", () => {
+  const melde = (text: string, label = "q.steps[0].lines[0]", name = "QUESTS") => tastenProbleme(name, [[label, text]]).length;
+  for (const roh of ["Drück <b>T</b> und tippe", "Sprich mich an (Taste <b>E</b>), dann", "(T drücken)", "die E-Taste"]) {
+    assert.ok(melde(roh) > 0, `nicht gemeldet: ${roh}`);
+  }
+  assert.ok(melde("Drück <b>{taste:funk}</b>") > 0, "unbekannte Aktion nicht gemeldet");
+  assert.ok(melde("Drück <b>{taste:radio}</b>", "q.steps[0].options[0].reply") > 0, "Token in nicht ersetztem Feld nicht gemeldet");
+  assert.ok(melde("Drück <b>{taste:radio}</b>", "q.steps[0].lines[0]", "SHOP") > 0, "Token in fremder Quelle mit lines-Label nicht gemeldet");
+  assert.equal(melde("Drück <b>{taste:radio}</b>", "ole[0]", "SMALLTALK"), 0, "Token im Smalltalk fälschlich gemeldet");
+  for (const ok of ["Drück <b>Enter</b>", "Taste <b>Esc</b>", "Drück <b>{taste:radio}</b>", "<b>K</b> und <b>s</b> sind Kurzformen"]) {
+    assert.equal(melde(ok), 0, `fälschlich gemeldet: ${ok}`);
+  }
+});
 
 test("Anzeige-Felder (#1526): die Container-Einträge der Klassifikation sind genau die, in die der Sammler hinabsteigt", () => {
   const kinder = new Set(Object.values(ANZEIGE_FELDER).flatMap((t) => Object.entries(t).filter(([, art]) => art === "kinder").map(([feld]) => feld)));

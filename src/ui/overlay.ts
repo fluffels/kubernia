@@ -320,6 +320,8 @@ export const overlayUI = part({
       ic("walk") + " WASD/Pfeile · " + ic("talk") + " " + up("talk") + " reden · " +
       ic("radio") + " " + up("radio") + " Funkgerät · " + ic("logbook") + " " + up("logbook") + " Logbuch · " +
       ic("album") + " " + up("album") + " Album · " + ic("menu") + " Esc Menü";
+    // Der Quest-Hinweis im HUD nennt die belegte Taste (#1553): das HUD aktualisiert sich selbst.
+    document.dispatchEvent(new CustomEvent("kq:keys-changed"));
   },
 
   /** Startet das Umbelegen einer Aktion: merkt sie, zeichnet den Block neu (Knopf zeigt

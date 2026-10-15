@@ -13,7 +13,7 @@
         "lines": [
           "Ahoi! Du musst die neue Crew sein. Willkommen in <b>Port Kubernia</b> – dem modernsten Hafen der sieben Meere!",
           "Ich bin Ole, Hafenmeister. Keine Sorge: Hier lernt jede:r in <b>kleinen Schritten</b> – einen Handgriff nach dem anderen, mit viel Übung.",
-          "Dein wichtigstes Werkzeug: dein <b>💻 Terminal</b>. Drück <b>T</b> und tippe <code>help</code> – mehr nicht!"
+          "Dein wichtigstes Werkzeug: dein <b>💻 Terminal</b>. Drück <b>{taste:radio}</b> und tippe <code>help</code> – mehr nicht!"
         ]
       },
       {

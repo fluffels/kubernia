@@ -13,7 +13,7 @@
         "lines": [
           "BO. GRÜSST. NEUE CREW. <i>*knirsch*</i> Bo stapelt Fracht. Früher: Chaos – Säcke, Fässer, hundert Formen. Dann kam: <b>DER CONTAINER</b>. Genormte Box. Jeder Kran kann sie heben.",
           "Software genauso: App + alles Drumherum in einen <b>Container</b> → läuft <b>überall gleich</b>. Werkzeug: <b>Docker</b>.",
-          "Erster Handgriff: Bauplan holen. Baupläne heißen <b>Images</b> und liegen in der <b>Registry</b> – dem Online-Lager für fertige Images (z.B. Docker Hub). Bo zeigt: <code>docker pull lotsen-dienst</code> – der kleine Dienst, der Schiffe in den Hafen einweist. Jetzt DU! (T drücken)"
+          "Erster Handgriff: Bauplan holen. Baupläne heißen <b>Images</b> und liegen in der <b>Registry</b> – dem Online-Lager für fertige Images (z.B. Docker Hub). Bo zeigt: <code>docker pull lotsen-dienst</code> – der kleine Dienst, der Schiffe in den Hafen einweist. Jetzt DU! (<b>{taste:radio}</b> drücken)"
         ]
       },
       {
@@ -350,7 +350,7 @@
         "npc": "bo",
         "lines": [
           "Jetzt das <b>Minispiel</b>! Damit lernst du, wie ein Image aus <b>Schichten</b> gebaut ist – die Basis ganz unten, dein eigener Code oben drauf. Und es macht Spaß.",
-          "So rufst du es auf: <b>Sprich Bo an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 Stapel-Spiel</b> und spiel es einmal ganz durch. Danach geht's weiter – los, Landratte!"
+          "So rufst du es auf: <b>Sprich Bo an</b> (Taste <b>{taste:talk}</b>), dann wähle im Menü <b>🎮 Stapel-Spiel</b> und spiel es einmal ganz durch. Danach geht's weiter – los, Landratte!"
         ]
       },
       {
