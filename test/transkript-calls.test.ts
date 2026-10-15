@@ -67,6 +67,21 @@ describe("Output-Schätzung aus dem Kontext-Zuwachs", () => {
     expect(T.callsFromTranscript(z).calls[0].outputGeschaetzt).toBe(1000);
   });
 
+  test("Anhang unbekannter Größe oder eigener User-Text machen den Zuwachs unbrauchbar (Rückfall aufs Sichtbare)", () => {
+    const anhang: Row = { type: "attachment", attachment: { type: "hook_additional_context", content: "z".repeat(100) } };
+    const eigenerText: Row = { type: "user", message: { role: "user", content: "bitte weiter" } };
+    for (const dazwischen of [anhang, eigenerText, { type: "system", content: "x" }]) {
+      const z = [...msg("a", 1000, [text(40)]), ergebnis(0), dazwischen, ...msg("b", 3000, [text(4)])];
+      expect(T.callsFromTranscript(z).calls[0].outputGeschaetzt).toBe(10);
+    }
+  });
+
+  test("kleine Anhänge (Token-Erinnerung) zählen als Fremdzuwachs", () => {
+    const klein: Row = { type: "attachment", attachment: { type: "total_tokens_reminder", text: "y".repeat(80) } };
+    const z = [...msg("a", 1000, [text(40)]), ergebnis(400), klein, ...msg("b", 1000 + Math.round((400 + JSON.stringify(klein.attachment).length) / 4) + 50, [text(4)])];
+    expect(T.callsFromTranscript(z).calls[0].outputGeschaetzt).toBe(50);
+  });
+
   test("mehrzeilige Nachricht zählt einmal, Sichtbares summiert Text und Tool-Eingabe", () => {
     const z = [...msg("a", 1000, [text(40), tool("x".repeat(20))]), ...msg("b", 1000, [text(4)])];
     const { calls } = T.callsFromTranscript(z);

@@ -21,11 +21,23 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
   /** Zeichen der Texte und Tool-Eingaben je Call und Fremdzuwachs (User-Zeilen) bis zum nächsten Call. */
   const sichtbar = new Map();
   const fremd = new Map();
+  const unsicher = new Set();
   let offen = null;
   // Text oder die schon geparsten Zeilen (`transkriptZeilen`): `readTranscriptSession` parst jede Zeile nur einmal.
   for (const row of Array.isArray(textOderZeilen) ? textOderZeilen : transkriptZeilen(textOderZeilen)) {
     const msg = row?.message;
-    if (row?.type === "user" && offen !== null) fremd.set(offen, (fremd.get(offen) ?? 0) + zeichenVon(msg?.content));
+    if (offen !== null) {
+      if (row?.type === "user") {
+        // Nur Tool-Ergebnisse haben eine verlässliche Größe; eigener Text (Aufträge, Skill-Inhalte) kommt mit unbekanntem Anhang in den Kontext.
+        if (nurToolErgebnisse(msg?.content)) fremd.set(offen, (fremd.get(offen) ?? 0) + zeichenVon(msg?.content));
+        else unsicher.add(offen);
+      } else if (row?.type === "system") unsicher.add(offen);
+      // Anhänge anderer Art (Hook-Ausgaben, Skill-Inhalte) gehen unbekannt groß in den Kontext: der Zuwachs taugt dann nicht.
+      if (row?.type === "attachment") {
+        if (KLEINE_ANHAENGE.has(row.attachment?.type)) fremd.set(offen, (fremd.get(offen) ?? 0) + JSON.stringify(row.attachment).length);
+        else unsicher.add(offen);
+      }
+    }
     if (row?.type !== "assistant" || !msg?.usage) continue;
     // Eine Zeile trägt genau einen Content-Block — jede Rückfrage zählt also einmal.
     for (const c of msg.content ?? []) if (c?.type === "tool_use" && c.name === "AskUserQuestion") questions += 1;
@@ -63,7 +75,7 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
   const calls = [...byId.values()];
   calls.forEach((c, i) => {
     const naechster = calls[i + 1];
-    const zuwachs = naechster ? kontextVon(naechster) - kontextVon(c) - Math.round((fremd.get(c.id) ?? 0) / 4) : 0;
+    const zuwachs = naechster && !unsicher.has(c.id) ? kontextVon(naechster) - kontextVon(c) - Math.round((fremd.get(c.id) ?? 0) / 4) : 0;
     c.outputSichtbar = Math.ceil((sichtbar.get(c.id) ?? 0) / 4);
     c.outputGeschaetzt = schaetzeOutput({ output: c.output, sichtbar: c.outputSichtbar, zuwachs });
     c.costGeschaetzt = preisMitOutput(c, c.outputGeschaetzt);
@@ -71,7 +83,12 @@ export function callsFromTranscript(textOderZeilen, subagent = null) {
   return { calls, questions };
 }
 
+/** Anhänge, die nur wenige Token in den Kontext bringen und deren Zeichen daher mitzählen. */
+const KLEINE_ANHAENGE = new Set(["total_tokens_reminder", "deferred_tools_record"]);
+
 const kontextVon = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
+
+const nurToolErgebnisse = (content) => Array.isArray(content) && content.length > 0 && content.every((b) => b?.type === "tool_result");
 
 /** Zeichen eines Content-Werts (Text oder Blöcke: Text, `tool_result`-Inhalt), ohne Binäres zu raten. */
 function zeichenVon(content) {
@@ -99,7 +116,7 @@ function sichtbareZeichen(content) {
 /**
  * Output-Schätzung (#1568): der Kontext-Zuwachs bis zum nächsten Call, abzüglich der Fremdtexte (Zeichen / 4), ist
  * der Output dieses Calls (inklusive Thinking). Ohne Nachfolger oder bei schrumpfendem Kontext (Verdichtung) bleibt
- * das Sichtbare; nie unter dem Sichtbaren und nie unter dem aufgezeichneten Wert.
+ * das Sichtbare (ebenso bei Anhängen unbekannter Größe); nie unter dem Sichtbaren und nie unter dem aufgezeichneten Wert.
  */
 export function schaetzeOutput({ output, sichtbar, zuwachs }) {
   return Math.max(output, sichtbar, zuwachs > 0 ? zuwachs : 0);
