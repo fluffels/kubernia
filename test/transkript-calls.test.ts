@@ -111,6 +111,21 @@ describe("Output-Schätzung aus dem Kontext-Zuwachs", () => {
     expect(T.callsFromTranscript(z).calls[1].outputGeschaetzt).toBe(203);
   });
 
+  test("Tool-Ergebnis als Array von Text-Blöcken zählt wie String-Inhalt", () => {
+    const alsArray: Row = { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content: [{ type: "text", text: "x".repeat(400) }, "y".repeat(0)] }] } };
+    const z = (e: Row) => [...msg("a", 1000, [text(16)]), e, ...msg("b", 1104, [text(16)]), e, ...msg("c", 1504, [text(4)])];
+    expect(T.callsFromTranscript(z(alsArray)).calls[1].outputGeschaetzt).toBe(T.callsFromTranscript(z(ergebnis(400))).calls[1].outputGeschaetzt);
+    expect(T.callsFromTranscript(z(alsArray)).calls[1].outputGeschaetzt).toBe(300);
+  });
+
+  test("ohne Schätzfeld bleibt eindeutigeCalls ohne Schätzfeld (Langfuse-Modus, alte Eingaben)", () => {
+    const a = { id: "a", messageId: "a", model: "claude-opus-5-5", ts: "2026-10-10T10:00:00Z", input: 1, cacheWrite: 0, cacheRead: 0, output: 5, cost: 0.1 };
+    const r = T.eindeutigeCalls([a as never, { ...a, output: 9 } as never]);
+    expect(r).toHaveLength(1);
+    expect(r[0].output).toBe(9);
+    expect("outputGeschaetzt" in r[0]).toBe(false);
+  });
+
   test("mehrzeilige Nachricht zählt einmal, Sichtbares summiert Text und Tool-Eingabe", () => {
     const z = [...msg("a", 1000, [text(40), tool("x".repeat(20))]), ...msg("b", 1000, [text(4)])];
     const { calls } = T.callsFromTranscript(z);

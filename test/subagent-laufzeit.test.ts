@@ -11,7 +11,7 @@ import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[]; datei?: string };
 type L = { modelle: string[]; datei: string | null; kosten: number | null; kostenGeschaetzt: number | null; ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
-type Stat = { kosten: number | null; kostenSumme: number; kostenGeschaetztSumme: number; output: number; outputGeschaetzt: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
+type Stat = { kostenGeschaetzt: number | null; kosten: number | null; kostenSumme: number; kostenGeschaetztSumme: number; output: number; outputGeschaetzt: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
   laufzeiten: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; schnitt?: string }) => Erg;
@@ -185,6 +185,19 @@ describe("laufzeiten: Kosten (#1558)", () => {
     expect(r.aggregat.gesamt.ohnePreis).toBe(1);
     expect(r.aggregat.gesamt.kosten).toBeCloseTo(2 * CALL_KOSTEN, 8); // Median nur über den Lauf mit Preis
     expect(r.aggregat.gesamt.kostenSumme).toBeCloseTo(2 * CALL_KOSTEN, 8);
+  });
+  test("geschätzte Kosten: Kontext-Zuwachs ohne Tool-Ergebnis zählt als Output, strikt über dem Aufgezeichneten (#1568)", () => {
+    const l = lauf("Plane #1", 0, 4);
+    l.zeilen.splice(2, 0, call(1, 7, undefined, 3000)); // Kontext 1000 → 3000 → 1000: der erste Call hat 2000 Token Zuwachs
+    const r = S.laufzeiten({ laeufe: [l] });
+    expect(r.laeufe[0].kostenGeschaetzt).toBeGreaterThan(r.laeufe[0].kosten as number);
+    expect(r.aggregat.gesamt.outputGeschaetzt).toBeGreaterThanOrEqual(2000);
+    expect(r.aggregat.gesamt.output).toBe(30);
+  });
+  test("ohne Preis: auch die geschätzten Kosten sind null, nie 0 $ (#1568)", () => {
+    const r = S.laufzeiten({ laeufe: [ohnePreisLauf("Plane #1")] });
+    expect(r.laeufe[0].kostenGeschaetzt).toBeNull();
+    expect(r.aggregat.gesamt.kostenGeschaetzt).toBeNull();
   });
   test("geschätzte Kosten: Summe und Output je Lauf aus den Calls (#1568)", () => {
     const r = S.laufzeiten({ laeufe: [lauf("Plane #1", 0, 4)] });

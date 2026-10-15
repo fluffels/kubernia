@@ -576,6 +576,7 @@ describe("--danach: ein Folge-Hook läuft erst nach dem Sync (#1568)", { timeout
     expect(D.danachSkript(["--streng", "--danach", "/x/a.mjs"])).toBe("/x/a.mjs");
     expect(D.danachSkript([])).toBeNull();
     expect(D.danachSkript(["--danach"])).toBeNull();
+    expect(D.danachSkript(["--danach", ""])).toBeNull();
     expect(D.danachSkript(["--text", "--danach", "/x/a.mjs"])).toBeNull();
   });
 
@@ -593,6 +594,7 @@ describe("--danach: ein Folge-Hook läuft erst nach dem Sync (#1568)", { timeout
     expect(aufrufe[0].args[1]).toEqual(["/x/a.mjs"]);
     expect(aufrufe[0].opts.input).toBe('{"session_id":"s1"}');
     expect(aufrufe[0].opts.timeout).toBeLessThanOrEqual(10_000);
+    expect(aufrufe[0].opts.stdio).toEqual(["pipe", "ignore", "ignore"]); // die Ausgabe des Folge-Skripts darf die Hook-JSON nicht stören
     expect(D.starteDanach("/x/a.mjs", "", { spawnSync: () => ({ error: new Error("ENOENT") }) })).toBe(false);
     expect(D.starteDanach("/x/a.mjs", "", { spawnSync: () => { throw new Error("kaputt"); } })).toBe(false);
   });

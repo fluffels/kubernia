@@ -574,6 +574,14 @@ describe("token-baseline: Sockel, Median-Kontext, Kosten-Teile (#1206)", () => {
     assert.doesNotMatch(m.renderMarkdown(gleich), /Output geschätzt/);
   });
 
+  test("Output-Schätzung: Calls ohne Schätzfeld zählen mit dem aufgezeichneten Wert (Langfuse-Modus)", () => {
+    const c = { ts: "2026-10-05T10:00:00Z", model: "claude-sonnet-5-5", input: 10, cacheWrite: 0, cacheRead: 0, output: 7, cost: 0.5 };
+    const s = m.summarize({ calls: [c], questions: 0 } as never);
+    const t = s.total as unknown as { output: number; outputGeschaetzt: number; cost: number; costGeschaetzt: number };
+    assert.equal(t.outputGeschaetzt, t.output);
+    assert.equal(t.costGeschaetzt, t.cost);
+  });
+
   test("renderMarkdown nennt Sockel, Median-Kontext, Kostenanteile und Calls ohne Preis", () => {
     const text = [
       line("a", "claude-sonnet-5-5", { cache_read_input_tokens: 60_000 }, "2026-10-05T10:00:00Z"),
