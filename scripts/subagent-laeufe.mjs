@@ -76,6 +76,15 @@ export function beschreibungAus(beschreibung) {
 const deltaArtAus = (prompt, merge) => (!patchPfade(prompt).delta ? null : merge || /Konflikt-Aufl(?:ö|oe)sung/i.test(prompt) ? "merge" : "fix");
 
 /**
+ * Wert einer Prompt-Zeile `<Schlüssel>: pr|verify` (Phasen-Schnitt #1592): case-sensitiv und als ganze Zeile, sonst `null`. Ein
+ * `Schnitt: verify` mitten in einem Satz oder das großgeschriebene `SCHNITT:` aus dem Übergabe-Bericht des Vorgängers zählt nicht.
+ */
+export function schnittZeile(prompt, schluessel) {
+  const m = new RegExp(`^${schluessel}:[ \\t]*(pr|verify)[ \\t]*\\r?$`, "m").exec(String(prompt ?? ""));
+  return m ? m[1] : null;
+}
+
+/**
  * Ticket eines Laufs (#1579): zuerst `kq-<nr>` aus dem Patch-Pfad (`patch.ticket`), dann der Worktree im Prompt (`worktrees/kq-<nr>`,
  * auch ein Lens-Worktree), erst zuletzt das erste `#<nr>` im Prompt; sonst `null`. Ein `#<nr>` aus Brillen- oder Diät-Text
  * (`schon erledigt durch #1349`, `(#1034)`) darf das Ticket nur zuordnen, wenn nichts Belastbareres da ist.
@@ -111,6 +120,8 @@ export function laufAus({ meta, zeilen, datei }) {
     patch,
     ticket: ticketAusLauf({ patch, prompt }),
     sammel: /\(gesammelt\)/i.test(prompt),
+    schnitt: schnittZeile(prompt, "Schnitt"),
+    einstieg: schnittZeile(prompt, "Einstieg"),
     start,
     ende,
     dauerMin: dauer / MIN,
