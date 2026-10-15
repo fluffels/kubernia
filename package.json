@@ -71,7 +71,7 @@
     "jscpd": "^5.4.0",
     "likec4": "1.59.4",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.0",
+    "typescript-eslint": "^8.71.2",
     "vite": "^8.3.2",
     "vite-plugin-singlefile": "^2.0.0",
     "vitest": "^5.0.2",
