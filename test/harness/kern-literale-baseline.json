@@ -18,7 +18,7 @@
   "scripts/check-size.mjs": {"Repo":1,"Stardew":1},
   "scripts/docs-gen/registry.mjs": {"Repo":1},
   "scripts/haupt-sync.mjs": {"Repo":5},
-  "scripts/hauptchat-zerlegung.mjs": {"Repo":15},
+  "scripts/hauptchat-zerlegung.mjs": {"Repo":11},
   "scripts/kontext-treiber.mjs": {"Repo":7},
   "scripts/kontingent-lib.mjs": {"Repo":1},
   "scripts/langfuse-otlp.mjs": {"Repo":2},

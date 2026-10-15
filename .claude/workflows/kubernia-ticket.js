@@ -154,6 +154,7 @@ const UMSETZUNG_SCHEMA = {
       description: 'höchstens 3 Punkte, nur projektübergreifendes Wissen (wie LERNKANDIDATEN des Skill-Pfads); leer, wenn keins',
     },
     abbruchgrund: { type: 'string' },
+    selbstcheck: { type: 'string', description: 'der Block Selbstcheck: mit je Prüffrage einer Zeile ok, gefixt oder n.a.; geht unverändert in den PR-Text, nie an die Lenses' },
   },
 }
 
@@ -256,6 +257,7 @@ const NACHBESSERN_SCHEMA = {
     },
     deltaDateien: { type: 'array', items: { type: 'string' }, description: 'git diff --name-only des Fixes allein (#1265)' },
     zusammenfassung: { type: 'string', description: 'was behoben, was bewusst liegen gelassen wurde (mit Grund)' },
+    selbstcheck: { type: 'string', description: 'der Block Selbstcheck: mit je Prüffrage einer Zeile ok, gefixt oder n.a.; geht unverändert in den PR-Text, nie an die Lenses' },
   },
 }
 
@@ -522,6 +524,8 @@ const LENS_QUELLE = [
     regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.',
   },
 ]
+// Selbstcheck des Umsetzers vor jedem Commit (AGENTS.md § Mehr-Perspektiven-Review): die Prüffragen der Test-Adäquanz-Lens, sichtbar als Block.
+const SELBSTCHECK_AUFTRAG = `Selbstcheck vor dem Commit: gehe diese Prüffragen an deinem Diff durch und gib sie als Block Selbstcheck: zurück (Feld selbstcheck), je Prüffrage EINE Zeile ok, gefixt oder n.a.; bei der Frage nach den Bedingungen mit dem Test, der den Zweig auslöst:\n${LENS_QUELLE.find((l) => l.key === 'test-adaequanz').pruefpunkte.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
 const LENSES = LENS_QUELLE.map((l) => ({
   key: l.key,
   pruefpunkte: l.pruefpunkte,
@@ -887,7 +891,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - § Worktree entfernen auf Windows, Falle 2: arbeite mit absoluten Pfaden und cd NICHT
   in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen. Skripte nie über stdin starten (python -, node -): per Write ablegen und node <pfad> starten.
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,
-  § Tests gegen False Positives absichern (Red-Green), § Mehr-Perspektiven-Review (Selbstcheck vor dem Commit). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
+  § Tests gegen False Positives absichern (Red-Green), § Mehr-Perspektiven-Review. ${SELBSTCHECK_AUFTRAG} Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Ausnahmen: Regeltext), Spiel-/Inhalts-Befund → gebündeltes Issue.
@@ -1031,13 +1035,13 @@ Sammelticket, Spiel-/Inhalts-Befund oder Ausnahmefall der Regel → gebündeltes
   let verifyGruen = umsetzung.verifyGruen
   let letzteVerifyAusgabe = umsetzung.verifyAusgabe
   let letzteZusammenfassung = umsetzung.zusammenfassung
+  let letzterSelbstcheck = umsetzung.selbstcheck // geht in den PR-Text, nie an die Lenses
   let reviewRunden = 0
   // Fix-Versuche für ein rotes verify VOR dem ersten Lens-Pass (#1322): sie zählen gegen MAX_FIX_VERSUCHE (Festgefahren-Protokoll),
   // nicht gegen MAX_REVIEW_RUNDEN. Sonst würde der erste volle Lens-Pass zu „Runde 2" und der Cap wäre schon zur Hälfte verbraucht.
   let verifyFixe = 0
-  // Letzter Bericht JEDER Brille (#1265): ab Runde 2 laufen nicht mehr alle, der Endbericht und
-  // ausserhalbScope sollen aber den Stand aller zeigen. Blocker/Hinweise kommen dagegen nur aus dem
-  // aktuellen Pass: eine Brille, die nicht erneut lief, hatte in der Vorrunde keinen Blocker.
+  // Letzter Bericht JEDER Brille (#1265): ab Runde 2 laufen nicht alle, Endbericht und ausserhalbScope zeigen aber den Stand aller.
+  // Blocker/Hinweise kommen nur aus dem aktuellen Pass: eine Brille, die nicht erneut lief, hatte in der Vorrunde keinen Blocker.
   const lensStand = {}
   const lensEndstand = () => LENSES.map((l) => lensStand[l.key]).filter(Boolean)
   // Der letzte Lens-Pass (für lensPlan); null nach rotem verify ⇒ die nächste Runde prüft wieder alles.
@@ -1045,8 +1049,7 @@ Sammelticket, Spiel-/Inhalts-Befund oder Ausnahmefall der Regel → gebündeltes
   // Für den Review-Nachweis (#1270): Zahl der Lens-Pässe und die Brillen des letzten vollen Passes.
   let nachweisWerte = { paesse: 0, ersteLenses: null, ersteBlocker: null }
   let fehlend
-  // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
-  // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
+  // Der materialisierte Diff (#1034): nach jeder Nachbesserung ERSETZT, nie weiterverwendet (ein alter Patch täuschte einen Review vor).
   let diff = diffAus(umsetzung)
   if (!diff.pfad) {
     log('⚠ Kein materialisierter Diff vom Umsetzungs-Agenten (#1034) — die Lenses erheben ihn selbst (teurer).')
@@ -1162,7 +1165,7 @@ ${hinweise.map((f) => `- [${f.ort}] ${f.befund}`).join('\n')}
     : ''
 }
 Beim Fixen gezielt prüfen, danach einmal npm run verify:kompakt; rot: fixen, erneut. Bleib im Ticket-Scope: Punkte, die ein eigenes
-Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}).
+Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}). Vor dem Commit der Selbstcheck erneut für den Fix, Feld selbstcheck: ${SELBSTCHECK_AUFTRAG}
 ${BRAIN_LESEN}
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
 
@@ -1171,18 +1174,16 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
     )
     verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
     letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
-    // Die Zusammenfassung der NEUESTEN Runde geht an die nächsten Kritiker (#1034): sonst liest
-    // Runde 2 einen als aktuell etikettierten Begleittext aus Runde 1 und meldet bewusst liegen
-    // gelassene Punkte erneut als blockierend — genau die Runde, die der Cap 2 Fix-Runden knapp macht.
+    // Die Zusammenfassung der NEUESTEN Runde geht an die nächsten Kritiker (#1034): sonst liest Runde 2 den Begleittext aus Runde 1
+    // und meldet bewusst liegen gelassene Punkte erneut als blockierend — genau die Runde, die der Cap 2 Fix-Runden knapp macht.
     if (nachbesserung && nachbesserung.zusammenfassung) letzteZusammenfassung = nachbesserung.zusammenfassung
-    // Frische-Guard (#1034): der Patch der NÄCHSTEN Runde ist der neue — bewusst KEIN Fallback
-    // auf den alten Pfad (kein `|| diff`). Lieber lässt die nächste Lens ihn einmal selbst
-    // erheben (sie meldet das) als dass sie stillschweigend den Vor-Fix-Stand als geprüft ausgibt.
+    if (nachbesserung && nachbesserung.selbstcheck) letzterSelbstcheck = nachbesserung.selbstcheck
+    // Frische-Guard (#1034): der Patch der NÄCHSTEN Runde ist der neue — bewusst KEIN Fallback auf den alten Pfad (kein `|| diff`).
+    // Lieber erhebt die nächste Lens ihn einmal selbst (sie meldet das) als dass sie stillschweigend den Vor-Fix-Stand als geprüft ausgibt.
     const vorherigerHead = diff.head
     diff = diffAus(nachbesserung)
-    // Deterministisch statt nur als Bitte an den Agenten: identischer HEAD über zwei Runden heißt,
-    // es wurde nichts committet — der „neue" Patch zeigt dann den Vor-Fix-Stand. Das ist mit den
-    // vorhandenen Daten ein String-Vergleich, also ein echtes Gate statt einer Verhaltensregel.
+    // Deterministisch statt nur als Bitte an den Agenten: identischer HEAD über zwei Runden heißt, es wurde nichts committet —
+    // der „neue" Patch zeigt dann den Vor-Fix-Stand (ein String-Vergleich, also ein echtes Gate statt einer Verhaltensregel).
     if (diff.head && vorherigerHead && diff.head === vorherigerHead) {
       log(`⚠ diffHead unverändert (${diff.head}) — es wurde nichts committet, der Patch zeigt den Vor-Fix-Stand. Verworfen.`)
       diff = diffAus(null)
@@ -1195,9 +1196,8 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
   const nachweis = nachweisFuerPr({ konvergiert, head: diff.head, stand: nachweisWerte, plan })
   const shaHinweis = nachweis.includes('<SHA>') ? ' — nur <SHA> ersetzt du durch die Ausgabe von git rev-parse HEAD VOR diesem Commit' : ''
 
-  // Hand-off VOR dem PR: nach dem Cap noch blockierende Findings oder rotes verify. Keinen
-  // PR mit bekannten Blockern öffnen — an die Maintainerin übergeben (Kommentar am ISSUE,
-  // Label, Worktree + Claim bleiben stehen).
+  // Hand-off VOR dem PR: nach dem Cap noch blockierende Findings oder rotes verify. Keinen PR mit bekannten Blockern öffnen —
+  // an die Maintainerin übergeben (Kommentar am ISSUE, Label, Worktree + Claim bleiben stehen).
   if (!konvergiert) {
     phase('Festgefahren')
     const vorLensStand = nachweisWerte.paesse === 0
@@ -1273,7 +1273,7 @@ ergebnis="fehler" mit der Kollision als meldung.
 AUFGABE — EINEN Pull Request öffnen und bis zum Merge bringen, genau nach
 AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionsschutz,
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
-Auto-Merge setzen, CI abwarten.
+Auto-Merge setzen, CI abwarten.${letzterSelbstcheck ? ` Der PR-Text enthält diesen Selbstcheck-Block unverändert:\n${letzterSelbstcheck}` : ''}
 ${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
 Vor dem Push: verschärft der Diff ein Gate oder Schema, merge einmal origin/main ein (nur konfliktfrei, sonst ergebnis="fehler"); verschiebt der Branch Funktionen in neue Dateien, ${VERSCHOBEN_DIFF}: ändert main eine verschobene Funktion, ergebnis="fehler" mit der Funktion in meldung (die Übertragung braucht eine Delta-Lens); nach dem Merge fahre node scripts/merge-testabgleich.mjs (Exit 1 = ein Test fehlt im Ergebnis: ergebnis="fehler" mit dem Titel in meldung); dann fahre das betroffene Gate erneut (#1449). Dann setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
 zwei Zeilen als Commit-Message, unverändert${shaHinweis}:
