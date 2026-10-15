@@ -246,6 +246,6 @@ describe("Verdrahtung der Generationsgrenze (#1647)", () => {
   });
 
   test("befehle.md nennt das Flag", () => {
-    expect(lies("docs/referenz/befehle.md")).toMatch(/sammelticket-anlegen\.mjs harness \[--vorgaenger <nr> \\| --generation\]/);
+    expect(lies("docs/referenz/befehle.md")).toMatch(/sammelticket-anlegen\.mjs harness \[--vorgaenger <nr> \\\| --generation\]/);
   });
 });
