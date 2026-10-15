@@ -119,7 +119,7 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster }) {
   const fenster = messfensterZeilen(c.body);
   const unlesbar = fenster.find((f) => "fehler" in f);
   if (unlesbar) return unlesbar.fehler;
-  const offenesFenster = fenster.find((f) => offene.has(f.nach) && f.nach !== c.number);
+  const offenesFenster = fenster.find((f) => offene.has(f.nach));
   if (offenesFenster) return messfensterGrund(offenesFenster, { closedAt: null, n: 0 });
   if (c.blockedBy > 0) return "offener Blocker laut GitHub-Abhängigkeit";
   if (belegt.has(c.number)) return "Branch, Worktree oder offener PR vorhanden";
@@ -162,17 +162,20 @@ const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ign
  * `{ fehler }` ohne Transkript-Ordner, bei Abruf- oder Lesefehlern (Texte ohne lokalen Pfad).
  */
 export function messfensterLader({ dir, holeIssue = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]) } = {}) {
-  const memo = new Map();
+  const memo = new Map(); // je `agent|nach`: closedAt und geladene Läufe; nur die Zählung hängt am wartenden Ticket
   return (fenster, wartend) => {
-    const schluessel = `${fenster.agent}|${fenster.nach}|${wartend}`;
-    if (!memo.has(schluessel)) memo.set(schluessel, messfensterStand(fenster, wartend, dir ?? projektOrdner(), holeIssue));
-    return memo.get(schluessel);
+    const schluessel = `${fenster.agent}|${fenster.nach}`;
+    if (!memo.has(schluessel)) memo.set(schluessel, messfensterLaeufe(fenster, dir ?? projektOrdner(), holeIssue));
+    const r = memo.get(schluessel);
+    if ("fehler" in r) return r;
+    if (r.closedAt === null) return { closedAt: null, n: 0 };
+    return { closedAt: r.closedAt, n: laeufeImFenster(r.laeufe, { closedAt: r.closedAt, ohneTicket: wartend }) };
   };
 }
 
 const projektOrdner = () => join(homedir(), ".claude", "projects", projektSlug(hauptrepoWurzel() ?? process.cwd()));
 
-function messfensterStand(fenster, wartend, dir, holeIssue) {
+function messfensterLaeufe(fenster, dir, holeIssue) {
   let closedAt;
   try {
     const issue = holeIssue(fenster.nach);
@@ -180,11 +183,10 @@ function messfensterStand(fenster, wartend, dir, holeIssue) {
   } catch {
     return { fehler: `Messfenster nicht prüfbar (#${fenster.nach} nicht abrufbar)` };
   }
-  if (closedAt === null) return { closedAt: null, n: 0 };
+  if (closedAt === null) return { closedAt: null, laeufe: [] };
   if (!existsSync(dir)) return { fehler: "Messfenster nicht prüfbar (keine lokalen Transkripte)" };
   try {
-    const laeufe = ladeLaeufe(dir, fenster.agent, closedAt).map(laufAus).filter(Boolean);
-    return { closedAt, n: laeufeImFenster(laeufe, { closedAt, ohneTicket: wartend }) };
+    return { closedAt, laeufe: ladeLaeufe(dir, fenster.agent, closedAt).map(laufAus).filter(Boolean) };
   } catch {
     return { fehler: "Messfenster nicht prüfbar (Transkripte nicht lesbar)" };
   }

@@ -246,6 +246,10 @@ describe("messfensterZeilen (#1589)", () => {
     expect(N.messfensterZeilen("- messfenster: n ≥ 12 kubernia-umsetzer nach #1590")).toEqual([F]);
     expect(N.messfensterZeilen("x\r\nMessfenster: n ≥ 12 kubernia-umsetzer nach #1590\r\ny")).toEqual([F]);
   });
+  test("Schlusspunkt erlaubt, Folgetext nach der Nummer ist unlesbar", () => {
+    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590.")).toEqual([F]);
+    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590 (Hinweis)")[0]).toHaveProperty("fehler");
+  });
   test("mehrere Zeilen: mehrere Fenster", () => {
     expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590\nMessfenster: n ≥ 3 kubernia-lens nach #7")).toEqual([F, { k: 3, agent: "kubernia-lens", nach: 7 }]);
   });
@@ -309,6 +313,16 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
     frei([item(1), item(2, { body: zeile, assignees: [{ login: "x" }] }), item(3, { body: zeile })], { refs: ["feature/kq-3-a"], messfenster: l.fn });
     expect(l.aufrufe).toEqual([]);
   });
+  test("mehrere Zeilen: jede muss erfüllt sein (auch die zweite)", () => {
+    const body = `${zeile}\nMessfenster: n ≥ 3 kubernia-lens nach #1600`;
+    const nachAgent = (f: Fenster) => (f.agent === "kubernia-lens" ? { closedAt: frist, n: 2 } : { closedAt: frist, n: 50 });
+    const r = frei([item(1, { body }), item(2)], { messfenster: nachAgent });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (2/3 kubernia-lens nach #1600)");
+    expect(frei([item(1, { body })], { messfenster: () => ({ closedAt: frist, n: 50 }) }).ticket?.nr).toBe(1);
+    const offen = frei([item(1, { body }), item(2)], { offene: new Set([1600]), messfenster: lader({ closedAt: frist, n: 50 }).fn });
+    expect(offen.uebersprungen[0].grund).toBe("offener Blocker #1600 (Messfenster)");
+  });
   test("ohne Lader fail-closed; Lader-Fehler übersprungen mit Grund", () => {
     const r = frei([item(1, { body: zeile }), item(2)]);
     expect(r.ticket?.nr).toBe(2);
@@ -363,5 +377,30 @@ describe("messfensterLader (#1589)", () => {
     expect(N.messfensterLader({ dir: d, holeIssue: () => ({ state: "open", closed_at: null }) })(F, 1591)).toEqual({ closedAt: null, n: 0 });
     const r = N.messfensterLader({ dir: d, holeIssue: () => { throw new Error("boom"); } })(F, 1591);
     expect(r).toEqual({ fehler: "Messfenster nicht prüfbar (#1590 nicht abrufbar)" });
+  });
+  test("Transkript-Pfad ist eine Datei: fail-closed „nicht lesbar“", () => {
+    const d = tmp();
+    const datei = join(d, "keine-ordner");
+    writeFileSync(datei, "x");
+    expect(N.messfensterLader({ dir: datei, holeIssue: zu })(F, 1591)).toEqual({ fehler: "Messfenster nicht prüfbar (Transkripte nicht lesbar)" });
+  });
+  test("ein frisch gestarteter Lauf ohne Zeitstempel macht das Fenster nicht unprüfbar und zählt nicht", () => {
+    const d = tmp();
+    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
+    const sub = join(d, "sess", "subagents");
+    writeFileSync(join(sub, "leer.meta.json"), JSON.stringify({ agentType: "kubernia-umsetzer" }));
+    writeFileSync(join(sub, "leer.jsonl"), "");
+    expect(N.messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+  });
+  test("Memo je Fenster: ein REST-Aufruf, aber die Zählung gilt je wartendem Ticket", () => {
+    const d = tmp();
+    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "b", "kubernia-umsetzer", 1591, "2026-10-15T12:00:00Z");
+    let aufrufe = 0;
+    const lader = N.messfensterLader({ dir: d, holeIssue: () => (aufrufe++, zu()) });
+    expect(lader(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+    expect(lader(F, 1600)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+    expect(lader(F, 1700)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
+    expect(aufrufe).toBe(1);
   });
 });
