@@ -21,13 +21,16 @@ import { readFileSync } from "node:fs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 
 /** Erlaubte Werte hinter `ERGEBNIS:` (Format in `.claude/agents/kubernia-umsetzer.md`, Test bindet beides). */
-export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren", "abgebrochen"];
+export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren", "abgebrochen", "uebergabe"];
+
+/** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: `kubernia-umsetzer.md`). */
+export const SCHNITTE = ["pr", "verify"];
 
 /** Label, das das Festgefahren-Protokoll setzt (SSOT: `check-festgefahren.mjs`, der Test bindet beide). */
 const STUCK_LABEL = "status:festgefahren";
 
 /**
- * Liest `ERGEBNIS:` und `PR:` aus einer Nachricht. `token` ist das führende Wort, falls es ein erlaubter Wert ist
+ * Liest `ERGEBNIS:`, `PR:`, `SCHNITT:` und das Vorhandensein einer `UEBERGABE:`-Zeile aus einer Nachricht. `token` ist das führende Wort, falls es ein erlaubter Wert ist
  * (sonst `null`), `zusatz` der Rest der Zeile (Klammern, Satzzeichen), `pr` der `PR:`-Wert; fehlende Zeile → `null`.
  */
 export function parseErgebnis(text) {
@@ -39,7 +42,8 @@ export function parseErgebnis(text) {
   const m = roh === null ? null : /^([a-z-]+)(.*)$/i.exec(roh);
   const kandidat = m ? m[1].toLowerCase() : null;
   const token = kandidat && ERGEBNIS_WERTE.includes(kandidat) ? kandidat : null;
-  return { token, zusatz: token ? m[2].trim() : roh, pr: zeile("PR") };
+  const schnitt = zeile("SCHNITT");
+  return { token, zusatz: token ? m[2].trim() : roh, pr: zeile("PR"), schnitt: schnitt === null ? null : schnitt.toLowerCase(), uebergabe: /^[ \t]*UEBERGABE:/im.test(String(text ?? "")) };
 }
 
 /** PR-Nummer aus `PR:`-Wert (URL oder `#123`); sonst `null` (z.B. `-`). */
@@ -57,7 +61,7 @@ export function ghPrStatus(nummer) {
 }
 
 const FORMAT =
-  "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -)";
+  "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -); uebergabe zusätzlich SCHNITT: pr|verify und eine UEBERGABE:-Zeile";
 const WARTEN = (nr) =>
   `Warte im Vordergrund und blockierend: \`node scripts/pr-warten.mjs ${nr}\` (Bash-timeout: 300000), bei Exit 2 erneut, bis der PR MERGED ist. ` +
   `Ein Monitor hält deinen Lauf nicht offen. Hängt die CI (6 Aufrufe ohne Fortschritt), melde entscheidung-noetig.`;
@@ -68,13 +72,16 @@ const WARTEN = (nr) =>
  *  - R0 (nur PreToolUse): Format verletzt (kein gültiges Token, Zusatz, keine PR:-Zeile),
  *  - R1: `gemergt`/`abgebrochen` mit PR OPEN + Auto-Merge (CI läuft noch),
  *  - R2: `gemergt` mit einem PR, der nicht MERGED ist,
- *  - R3: `festgefahren` mit offenem PR ohne Label `status:festgefahren`.
+ *  - R3: `festgefahren` mit offenem PR ohne Label `status:festgefahren`,
+ *  - R4 (#1592, beide Ereignisse): `uebergabe` ohne gültiges `SCHNITT: pr|verify` oder ohne `UEBERGABE:`-Zeile,
+ *  - R5 (#1592): `uebergabe` mit `SCHNITT: pr` braucht einen PR, der OPEN ist und Auto-Merge hat (gh-Fehler: frei);
+ *    `SCHNITT: verify` ruft kein gh auf. R1 bis R3 gelten für `uebergabe` nicht.
  */
 export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage }, deps = {}) {
   if (agentType !== "kubernia-umsetzer") return null;
   const vorher = hookEvent === "PreToolUse";
   if (vorher ? toolName !== "SubagentHandback" : hookEvent !== "SubagentStop") return null;
-  const { token, zusatz, pr } = parseErgebnis(lastMessage);
+  const { token, zusatz, pr, schnitt, uebergabe } = parseErgebnis(lastMessage);
   if (vorher) {
     const fehler = [];
     if (!token) fehler.push("kein gültiges ERGEBNIS-Token");
@@ -87,6 +94,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
       );
   }
   if (!token) return null;
+  if (token === "uebergabe") return uebergabeBlockade({ schnitt, uebergabe, pr }, deps);
   const nr = prNummer(pr);
   if (!nr) return null;
   let status;
@@ -110,6 +118,27 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
       `Wartest du nur auf die CI: ${WARTEN(nr)}`
     );
   }
+  return null;
+}
+
+/** R4/R5 für `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592); `null` = frei. */
+function uebergabeBlockade({ schnitt, uebergabe, pr }, deps) {
+  const fehler = [];
+  if (!SCHNITTE.includes(schnitt)) fehler.push(`SCHNITT: fehlt oder ist unbekannt (erlaubt: ${SCHNITTE.join(" | ")})`);
+  if (!uebergabe) fehler.push("UEBERGABE:-Zeile fehlt");
+  if (fehler.length) return `Umsetzer-Abschluss (#1592): ERGEBNIS: uebergabe abgelehnt (${fehler.join(", ")}). Format wörtlich: ${FORMAT}.`;
+  if (schnitt !== "pr") return null;
+  const nr = prNummer(pr);
+  if (!nr) return "Umsetzer-Abschluss (#1592): SCHNITT: pr braucht eine PR:-Zeile mit dem offenen PR (nach `gh pr create` und gesetztem Auto-Merge).";
+  let status;
+  try {
+    status = (deps.prStatus ?? ghPrStatus)(nr);
+  } catch {
+    return null; // fail-open
+  }
+  if (!status) return null;
+  if (status.state !== "OPEN" || !status.autoMergeRequest)
+    return `Umsetzer-Abschluss (#1592): SCHNITT: pr, aber PR #${nr} ist nicht OPEN mit Auto-Merge (Status ${status.state}, Auto-Merge ${status.autoMergeRequest ? "ja" : "nein"}). Erst gh pr merge ${nr} --squash --delete-branch --auto setzen, dann übergeben.`;
   return null;
 }
 

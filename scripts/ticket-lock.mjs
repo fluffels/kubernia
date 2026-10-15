@@ -226,8 +226,7 @@ function uebergeben(deps, nr, nonce) {
 
 /** Schreibt eine bestehende Lock-Datei neu (nur für den eigenen Lock). */
 function schreibeLock(deps, nr, lock) {
-  deps.ersetze(lockPfad(deps, nr), `${JSON.stringify(lock)}
-`);
+  deps.ersetze(lockPfad(deps, nr), `${JSON.stringify(lock)}\n`);
 }
 
 function freigeben(deps, nr, nonce) {
