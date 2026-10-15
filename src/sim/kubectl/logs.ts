@@ -15,40 +15,51 @@ import { statefulPodClaimName } from "../workload";
 
 // --- kubectl logs: die (kaputt-abhängigen) Log-Texte + Vorab-Checks ausgelagert ---
 
-// Die synthetischen Log-Texte für die beiden Zustände, die einen Vorgänger-Container hinterlassen.
-function brokenLogText(dep: Deployment): string | null {
-  if (dep.broken && dep.broken.type === "crashloop") {
-    return [
-      "[start] Dienst " + dep.name + " startet …",
-      "[start] Lese Konfiguration …",
-      "FATAL: Secret '" + (dep.broken.needsSecret || "") + "' nicht gefunden – Dienst kann nicht starten!",
-      "[exit] Prozess beendet mit Code 1",
-    ].join("\n");
+// Was `kubectl logs` über ein Deployment-Pod wissen muss, je Broken-Typ ausdrücklich entschieden (#1509). Wertliefernder
+// `switch` ohne `default`: ein neuer Typ ohne Zweig ist ein TS-Fehler (TS2366), kein stiller Normal-Log.
+//  - notStarted: nie gestartete Container (Image fehlt / Pod ungescheduled) haben gar keine Logs.
+//  - crashLog: die Log-Texte der Zustände, die einen Vorgänger-Container hinterlassen.
+//  - notready: der Container LÄUFT (Liveness ok), nur die Readiness schlägt fehl: normaler Log, nie neugestartet.
+function deploymentLogFacts(host: KubectlHost, dep: Deployment, name: string): Pick<LogSource, "notStarted" | "crashLog"> {
+  if (!dep.broken) return { notStarted: null, crashLog: null };
+  switch (dep.broken.type) {
+    case "imagepull":
+      return {
+        notStarted: host._err('Error from server (BadRequest): container "' + dep.name + '" in pod "' + name + '" is waiting to start: trying and failing to pull image',
+          "Keine Logs ohne Image! Die Ursache steht in den Events: kubectl describe pod " + name),
+        crashLog: null,
+      };
+    case "pending":
+      return {
+        notStarted: host._err('Error from server (BadRequest): pod "' + name + '" is not scheduled yet', "Der Pod wartet auf einen freien Node. Schau in die Events: kubectl describe pod " + name),
+        crashLog: null,
+      };
+    case "crashloop":
+      return {
+        notStarted: null,
+        crashLog: [
+          "[start] Dienst " + dep.name + " startet …",
+          "[start] Lese Konfiguration …",
+          "FATAL: Secret '" + (dep.broken.needsSecret || "") + "' nicht gefunden – Dienst kann nicht starten!",
+          "[exit] Prozess beendet mit Code 1",
+        ].join("\n"),
+      };
+    case "oomkilled":
+      // Tückisch: Die App-Logs sehen normal aus und brechen einfach ab – den OOM-Kill
+      // macht der Kernel von außen, die App schreibt dazu nichts. Die Wahrheit steht
+      // in 'kubectl describe pod' (Last State: Terminated, Reason: OOMKilled).
+      return {
+        notStarted: null,
+        crashLog: [
+          "[start] Dienst " + dep.name + " startet …",
+          "[info]  Lade Datensätze in den Arbeitsspeicher …",
+          "[info]  Baue Index auf …",
+          "(Log endet hier abrupt – kein Fehler, kein Stacktrace.)",
+        ].join("\n"),
+      };
+    case "notready":
+      return { notStarted: null, crashLog: null };
   }
-  // Tückisch: Die App-Logs sehen normal aus und brechen einfach ab – den OOM-Kill
-  // macht der Kernel von außen, die App schreibt dazu nichts. Die Wahrheit steht
-  // in 'kubectl describe pod' (Last State: Terminated, Reason: OOMKilled).
-  if (dep.broken && dep.broken.type === "oomkilled") {
-    return [
-      "[start] Dienst " + dep.name + " startet …",
-      "[info]  Lade Datensätze in den Arbeitsspeicher …",
-      "[info]  Baue Index auf …",
-      "(Log endet hier abrupt – kein Fehler, kein Stacktrace.)",
-    ].join("\n");
-  }
-  return null;
-}
-
-// Nie gestartete Container (Image fehlt / Pod ungescheduled) haben gar keine Logs.
-function logsNotStartedError(host: KubectlHost, dep: Deployment, name: string): string | null {
-  if (dep.broken && dep.broken.type === "imagepull") {
-    return host._err('Error from server (BadRequest): container "' + dep.name + '" in pod "' + name + '" is waiting to start: trying and failing to pull image',
-      "Keine Logs ohne Image! Die Ursache steht in den Events: kubectl describe pod " + name);
-  }
-  if (dep.broken && dep.broken.type === "pending") {
-    return host._err('Error from server (BadRequest): pod "' + name + '" is not scheduled yet', "Der Pod wartet auf einen freien Node. Schau in die Events: kubectl describe pod " + name);
-  }
-  return null;
 }
 
 /** Was `kubectl logs` über einen Pod wissen muss: Fehler vor dem Start, Log des abgestürzten
@@ -59,8 +70,7 @@ function logSource(host: KubectlHost, c: ClusterPod, name: string): LogSource {
   switch (c.owner) {
     case "Deployment":
       return {
-        notStarted: logsNotStartedError(host, c.dep, name),
-        crashLog: brokenLogText(c.dep),
+        ...deploymentLogFacts(host, c.dep, name),
         container: c.dep.name,
         normal: [
           "10.244.1.1 - - [12/Jun/2026:09:14:02 +0000] \"GET / HTTP/1.1\" 200 615",
