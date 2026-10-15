@@ -576,6 +576,12 @@ describe("je Ticket: Zusammenlegung und Fenster, Grenzfälle (#1592 Review R1)",
     expect(g.gesamt!.maxKontextMedian).toBe(40_000);
   });
 
+  test("max. Kontext ist das Maximum über alle Läufe, auch wenn es im späteren Lauf liegt (Gegenrichtung)", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, ctx: 10_000 }, { min: 2, ctx: 20_000 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, ctx: 15_000 }, { min: 2, ctx: 30_000 }]);
+    expect(jeVoll({ laeufe: [v, n], jeTicket: true }).gesamt!.maxKontextMedian).toBe(30_000);
+  });
+
   test("ein Lauf ohne Preis macht die Ticket-Kosten unbekannt (ohnePreis), statt Teilkosten zu zählen", () => {
     const v = vorgaenger(5, "verify", 0, [{ min: 1 }]);
     const n = nachfolger(5, "verify", 10, [{ min: 1 }]);
