@@ -38,6 +38,7 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   RUHEFRIST_MIN: number;
   ROW_LIMIT: number;
   STICHTAG: string;
+  nachliefererWartet: (o: { mtime: number; now: number; beendet: boolean }) => boolean;
   beobachtungsId: (s: string, m: string) => string;
   traceIdVon: (s: string) => string;
   ticketAusBranch: (b: unknown) => string | null;
@@ -422,6 +423,13 @@ describe("Score ausstehend und vor Stichtag (getrennt vom Status)", () => {
     expect(bew({ soll: [eintrag(1, { ts: "2026-10-07T00:00:00Z" })], mtime: now - 25 * 3_600_000 }).score).toBeNull();
   });
 
+  test("Grenzen der Fristen: genau 24 h (ohne Ende) bzw. 150 s (mit Ende) warten nicht mehr, eine Millisekunde davor noch", () => {
+    expect(A.nachliefererWartet({ mtime: now - 24 * 3_600_000 + 1, now, beendet: false })).toBe(true);
+    expect(A.nachliefererWartet({ mtime: now - 24 * 3_600_000, now, beendet: false })).toBe(false);
+    expect(A.nachliefererWartet({ mtime: now - 150_000 + 1, now, beendet: true })).toBe(true);
+    expect(A.nachliefererWartet({ mtime: now - 150_000, now, beendet: true })).toBe(false);
+  });
+
   test("Summenzeile zählt beides unter den festen Sessions, nicht unter läuft", () => {
     const sum = A.summenzeile([bew(), bew(), bew({ mtime: now - 25 * 3_600_000 }), bew({ mtime: now - 10 * 60_000 }), bew({ soll: [eintrag(1, { ts: "2026-10-01T00:00:00Z" })], mtime: now - 25 * 3_600_000 })]);
     expect(sum).toMatchObject({ sessions: 4, laeuft: 1, scoreAusstehend: 2, vorStichtag: 1 });
@@ -579,6 +587,25 @@ describe("pruefen (Ablauf)", () => {
     expect((await lauf(kaputtDir)).text).toMatch(/Score ausstehend/);
     expect(readFileSync(join(kaputtDir, "langfuse-abgleich.json"), "utf8")).toBe("{nicht json");
     expect(readdirSync(kaputtDir)).toEqual(["langfuse-abgleich.json"]);
+  });
+
+  test("Bericht: eine Session vor dem Stichtag steht in der Summenzeile, ohne sie fehlt der Zusatz", async () => {
+    const tokens = tokenZeilen("s1", { input: 10, output: 5, cacheRead: 100, w5: 10, w1: 30 });
+    const m = () => mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }], tokens });
+    const alt = mitSession([msg("a", {}, { timestamp: "2026-10-01T10:00:00Z" })]);
+    const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: alt, repoRoot: REPO, fetchImpl: m().fetchImpl });
+    expect(r.text).toContain("1 vor dem Stichtag (nie gesendet, kein Score)");
+    const neu = mitSession([msg("a")]);
+    const r2 = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: neu, repoRoot: REPO, fetchImpl: m().fetchImpl });
+    expect(r2.text).not.toContain("vor dem Stichtag (nie gesendet");
+  });
+
+  test("Bericht: eine Lücke innerhalb der Nachlieferer-Frist bleibt Lücke und wird nie als „vollständig, Score ausstehend“ gezeigt", async () => {
+    const root = mitSession([msg("a")]);
+    const m = mock({ zaehlung: [], observations: [] });
+    const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    expect(r.text).toContain("| Lücke |");
+    expect(r.text).not.toContain("vollständig, Score ausstehend");
   });
 
   test("keine Sessions im Fenster: Exit 0 mit Hinweis", async () => {

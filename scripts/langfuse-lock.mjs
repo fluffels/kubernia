@@ -220,12 +220,7 @@ export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederho
     return { lock, ergebnis: null };
   }
   // Lock ist unser: jetzt die liegen gelassenen Plugin-Locks wegräumen (nie bei belegt oder fehler).
-  let pluginLocks = 0;
-  try {
-    pluginLocks = raeumePluginLocks(stateDir, uhr());
-  } catch {
-    // Kosmetik, kippt den Lauf nie
-  }
+  const pluginLocks = raeumePluginLocks(stateDir, uhr()); // wirft nie (Kosmetik)
   try {
     const ergebnis = await lauf(args, { now: uhr() });
     logge({ exitCode: ergebnis.exitCode, protokoll: ergebnis.protokoll, pluginLocks });

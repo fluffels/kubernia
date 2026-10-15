@@ -466,6 +466,12 @@ describe("modellAnteil (#1557)", () => {
     assert.equal(r?.sonst, 0);
     assert.equal(r?.anteil, 1);
   });
+  test("ein leerer Modellname zählt weder als Call noch als Fremdmodell (istEchtesModell, nicht nur <synthetic>)", () => {
+    const r = hcx.modellAnteil([f({ [SONNET]: 3, "": 2 }, { [SONNET]: 1 })]);
+    assert.equal(r?.gesamt, 3);
+    assert.equal(r?.sonst, 0);
+    assert.equal(r?.anteil, 1);
+  });
   test("Median der Fensterkosten bei ungerader und gerader Zahl", () => {
     const k = (x: number) => f({ [SONNET]: 1 }, { [SONNET]: x });
     assert.equal(hcx.modellAnteil([k(1), k(9), k(2)])?.medianKosten, 2);

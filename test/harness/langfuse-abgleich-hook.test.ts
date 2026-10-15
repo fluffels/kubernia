@@ -359,6 +359,14 @@ describe("Plugin-Locks aufräumen (raeumePluginLocks)", () => {
     expect(N.raeumePluginLocks(join(dir, "gibt-es-nicht"), T0)).toBe(0);
   });
 
+  test("auch wenn lauf wirft: aufgeräumt und die Zahl im Fehler-Logeintrag", async () => {
+    const dir = stateMit({ "langfuse_state.0c.lock": { alterMs: 2 * TAG } });
+    const lauf: Lauf = () => Promise.reject(new Error("kaputt"));
+    await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(existsSync(join(dir, "langfuse_state.0c.lock"))).toBe(false);
+    expect(JSON.parse(readFileSync(join(dir, "langfuse-abgleich.log"), "utf8").trim()) as Log).toMatchObject({ exitCode: 1, pluginLocks: 1 });
+  });
+
   test("gesperrterLauf räumt nach genommenem Lock auf und loggt die Zahl, bei belegtem Lock nicht", async () => {
     const dir = stateMit({ "langfuse_state.0a.lock": { alterMs: 2 * TAG } });
     const lauf: Lauf = () => Promise.resolve({ exitCode: 0, text: "", protokoll: { zugang: true, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] } });

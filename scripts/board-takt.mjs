@@ -197,7 +197,7 @@ function fuehreHarnessAus(h, items, token) {
     console.log("Sammelticket-Position gesetzt.");
     return true;
   } catch (err) {
-    console.log(`::error::Sammelticket-Position nicht gesetzt: ${String(err.message).split("\n")[0]}. Die Wiederholung ist idempotent.`);
+    console.log(`${fehlerMeldung(err).replace("::error::", "::error::Sammelticket-Position nicht gesetzt: ")}\nDie Wiederholung ist idempotent.`);
     return false;
   }
 }
