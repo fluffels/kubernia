@@ -13,8 +13,12 @@ ingress:
   enabled: true
   className: nginx
   host: kubernia.local
+  # Zusätzliche Ingress-Annotationen, Standard keine.
+  annotations: {}
   tls: []
   # Für TLS-Betrieb (z.B. via cert-manager):
+  # annotations:
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
   # tls:
   #   - secretName: kubernia-tls
   #     hosts:

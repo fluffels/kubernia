@@ -225,7 +225,11 @@ export function diffMultimenge(soll, observations, art = schluesselArt(observati
     if (treffer?.length) treffer.shift();
     else fehlend.push(e);
   }
-  return { fehlend, dubletten: [...frei.values()].flat(), art };
+  // Der Hook schreibt je Tool-Call eine zusätzliche leere GENERATION (Modell „claude“, keine Tokens, gleicher Startzeitpunkt
+  // wie der echte Call): keine Dublette (nichts doppelt gezählt), nur melden; sonst blockiert sie als „mehrdeutig“ das Nachliefern (#1639).
+  const uebrig = [...frei.values()].flat();
+  const istLeer = (o) => !o?.metadata?.message_id && Object.values(usageAusObservation(o)).every((v) => v === 0);
+  return { fehlend, dubletten: uebrig.filter((o) => !istLeer(o)), leer: uebrig.filter(istLeer), art };
 }
 
 export const summe = (soll) => soll.reduce((s, e) => ({ input: s.input + e.usage.input, output: s.output + e.usage.output, cacheRead: s.cacheRead + e.usage.cacheRead, cacheWrite: s.cacheWrite + e.usage.cacheWrite5m + e.usage.cacheWrite1h }), leereSumme());

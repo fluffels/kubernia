@@ -5,6 +5,7 @@ sequenceDiagram
   participant P as ${agent:kubernia-planner}<br/>${agent-modell:kubernia-planner}
   participant E as ${agent:Explore}<br/>${agent-modell:Explore}
   participant U as ${agent:kubernia-umsetzer}<br/>${agent-modell:kubernia-umsetzer}
+  participant G as ${agent:kubernia-gruppe} · ${agent-modell:kubernia-gruppe}<br/>je Gruppe eines Sammeltickets
   participant L1 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Architektur
   participant L2 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Requirement-Treue
   participant L3 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Test-Adäquanz
@@ -24,6 +25,12 @@ sequenceDiagram
   end
   H->>U: Ticket, Plan, Entscheidungen
   U->>U: Worktree, TDD, npm run verify
+  opt Sammelticket mit Block GRUPPEN im Plan
+    loop je Gruppe nacheinander
+      U->>G: Gruppe und Plan-Abschnitt
+      G-->>U: Commits und Bericht
+    end
+  end
   loop höchstens ${konstante:lensCap} Fix-Runden, Skill ${skill:review-lenses}
     par drei Brillen parallel
       U->>L1: Patch und Auftrag

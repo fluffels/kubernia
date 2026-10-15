@@ -390,6 +390,16 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(ledgerVon(a.ledger).s1.befund).toMatch(/mehrdeutig/);
   });
 
+  test("Leere Hook-Generationen blockieren das Nachliefern nicht: Lücke wird gesendet, leer gezählt (#1639)", async () => {
+    const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3), msg("d", 4), msg("e", 5)]);
+    const leer: Obs = { id: "leer1", type: "GENERATION", providedModelName: "claude", usageDetails: {}, metadata: {} };
+    const m = mock({ ist: 3, obs: [obsZu(sollZu("a", 1)), leer, { ...leer, id: "leer2" }] });
+    const r = await lauf(a, m);
+    expect(spansVon(m.otlp[0]).map((s) => s.spanId)).toEqual([A.beobachtungsId("s1", "b"), A.beobachtungsId("s1", "c"), A.beobachtungsId("s1", "d"), A.beobachtungsId("s1", "e")]);
+    expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 4, dubletten: 0, leer: 2 });
+    expect(r.protokoll.sessions[0].status).not.toBe("mehrdeutig");
+  });
+
   test("Schlüsselart messageId: Dublette bleibt Dublette, der fehlende Call wird trotzdem gesendet", async () => {
     const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
     const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1), { message_id: "a" }), obsZu(sollZu("zz", 9), { message_id: "zz" })] });

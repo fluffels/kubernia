@@ -1,5 +1,7 @@
 # Nur für die CI-Validierung (.github/workflows/deploy-validate.yml): rendert die TLS-Variante des Ingress.
 ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
   tls:
     - secretName: kubernia-tls
       hosts:

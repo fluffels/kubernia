@@ -122,7 +122,7 @@ Helm-Chart in `deploy/chart/` installieren. Das bündelt Deployment + Service +
 Ingress als Helm-Templates und macht alle Konfig-Werte über `values.yaml`
 steuerbar.
 
-Die rohen Manifeste (Slice 2/4, kubectl-Lernweg) und das Chart sind bewusst zwei Wege: eine Änderung an Deployment, Service oder Ingress gehört in beide, die CI (`deploy-validate.yml`) validiert beide.
+Die rohen Manifeste (Slice 2/4, kubectl-Lernweg) und das Chart sind bewusst zwei Wege: eine Änderung an Deployment, Service oder Ingress gehört in beide, die CI (`deploy-validate.yml`) validiert beide. Die Ingress-Manifeste setzen keine `nginx.ingress.kubernetes.io/rewrite-target`-Annotation: bei `path: /` wirkt `rewrite-target: /` nicht (ingress-nginx schreibt nur um, wenn Ziel und Pfad verschieden sind); bei einem anderen Ingress-Pfad würde es alle Anfragen samt `/assets/...` auf `/` umschreiben. `test/harness/deploy-ingress.test.ts` hält das fest.
 
 > *Voraussetzung: Image aus Slice 1, Cluster + Ingress-Controller aus Slice 2.*
 
@@ -186,11 +186,13 @@ deploy/chart/
     ├── _helpers.tpl      # Namens-/Label-Helfer
     ├── deployment.yaml   # 1 nginx-Replica, Liveness-/Readiness-Probe
     ├── service.yaml      # ClusterIP, Port 80
-    └── ingress.yaml      # nginx-Ingress, host + optionales TLS
+    └── ingress.yaml      # nginx-Ingress, host, optionale Annotationen, optionales TLS
 ```
 
 Für TLS-Betrieb (z.B. mit cert-manager) die `tls`-Sektion in `values.yaml`
-aktivieren und den gewünschten `secretName` eintragen.
+aktivieren und den gewünschten `secretName` eintragen. Mit cert-manager zusätzlich
+`ingress.annotations` mit `cert-manager.io/cluster-issuer: letsencrypt-prod` setzen,
+wie in `deploy/ingress-tls.yaml`.
 
 ---
 
