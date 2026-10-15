@@ -72,7 +72,7 @@ function raeumeGrabsteine(datei, now) {
  */
 export function raeumePluginLocks(stateDir, now = Date.now()) {
   let n = 0;
-  let namen = [];
+  let namen;
   try {
     namen = readdirSync(stateDir);
   } catch {
