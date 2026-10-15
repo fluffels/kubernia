@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ladeSessionDatei, projektSlug } from "./transkript.mjs";
+import { ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import {
   ROW_LIMIT,
@@ -219,7 +219,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-  const { exitCode, text } = await pruefen(args, { projectsRoot: join(homedir(), ".claude", "projects"), repoRoot, stateDir: join(homedir(), ".claude", "state") });
+  const { exitCode, text } = await pruefen(args, { projectsRoot: projekteWurzel(), repoRoot, stateDir: join(homedir(), ".claude", "state") });
   (exitCode === 0 ? console.log : console.error)(text);
   process.exitCode = exitCode;
 }

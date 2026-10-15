@@ -13,11 +13,9 @@
  *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
  */
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { median } from "./mess-lib.mjs";
-import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
+import { projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
 const tagVon = (t) => new Date(t).toISOString().slice(0, 10);
@@ -123,8 +121,7 @@ function main() {
     console.error("Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--schnitt <ISO>] [--projekt <slug>] [--json]");
     process.exit(2);
   }
-  const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
-  const dir = join(homedir(), ".claude", "projects", slug);
+  const dir = projektOrdner(args.projekt);
   const r = laufzeiten({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, schnitt: args.schnitt });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }

@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { hauptrepoPfad, ladeSessionDatei, projektSlug } from "./transkript.mjs";
+import { hauptrepoPfad, ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import {
   diffMultimenge,
   findeSessions,
@@ -292,7 +292,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = hauptrepoPfad(fileURLToPath(new URL("..", import.meta.url)));
   const stateDir = join(homedir(), ".claude", "state");
-  const lauf = (a, o) => nachliefern(a, { projectsRoot: join(homedir(), ".claude", "projects"), stateDir, repoRoot, ...o });
+  const lauf = (a, o) => nachliefern(a, { projectsRoot: projekteWurzel(), stateDir, repoRoot, ...o });
   if (args.ausloeser && !args.fehler) {
     await hookLauf(args, { stateDir, lauf });
     return;

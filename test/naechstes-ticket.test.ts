@@ -19,7 +19,10 @@ const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
   blockerNummern: (b: string) => number[];
   formatiere: (e: Ergebnis) => string;
-  fuehreAus: (argv: string[], io: { lade: () => Eingabe; owner: string }) => { code: number; out: string; err: string };
+  fuehreAus: (argv: string[], io: { lade: () => Eingabe; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string }) => { code: number; out: string; err: string };
+  ticketAusArgv: (argv: string[]) => { ticket: number | null } | { fehler: string };
+  itemAusIssue: (i: unknown) => { number: number; title: string; state: string; labels: string[]; body: string; blockedBy: number; autor: { login: string } | null };
+  pruefeTicket: (e: Omit<Eingabe, "items"> & { item: unknown }) => Ergebnis;
   bereichAusArgv: (argv: string[]) => { bereich: string | null } | { fehler: string };
   messfensterZeilen: (b: string) => (Fenster | { fehler: string })[];
   laeufeImFenster: (l: { start: number; ticket: number | null }[], o: { closedAt: string; ohneTicket: number }) => number;
@@ -421,5 +424,85 @@ describe("messfensterLader (#1589)", () => {
     expect(lader(F, 1600)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
     expect(lader(F, 1700)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
     expect(aufrufe).toBe(1);
+  });
+});
+
+describe("Einzelprüfung --ticket (#1621)", () => {
+  const issue = (nr: number, c: Record<string, unknown> = {}) => item(nr, c).content;
+  const pruefe = (nr: number, c: Record<string, unknown> = {}, extra: Partial<Eingabe> = {}) =>
+    N.pruefeTicket({ item: N.itemAusIssue(issue(nr, c)), offene: new Set(), owner: "fluffels", ...extra });
+  const grund = (r: Ergebnis) => r.uebersprungen[0]?.grund;
+  const zeile = "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590";
+
+  test("ticketAusArgv: ohne Schalter null, drei Schreibweisen, Fehler bei fehlendem oder ungültigem Wert", () => {
+    expect(N.ticketAusArgv([])).toEqual({ ticket: null });
+    expect(N.ticketAusArgv(["--ticket", "12"])).toEqual({ ticket: 12 });
+    expect(N.ticketAusArgv(["--ticket=12"])).toEqual({ ticket: 12 });
+    expect(N.ticketAusArgv(["--ticket", "#12"])).toEqual({ ticket: 12 });
+    for (const bad of [[], ["abc"], ["0"], ["-3"], ["12x"]]) expect(N.ticketAusArgv(["--ticket", ...bad])).toHaveProperty("fehler");
+  });
+  test("itemAusIssue: REST-Issue wird normalisiert; PR und kaputte Form werfen", () => {
+    const i = N.itemAusIssue(issue(7, { body: "b", labels: [{ name: "x" }], issue_dependencies_summary: { blocked_by: 2 } }));
+    expect(i).toMatchObject({ number: 7, title: "T7", state: "open", labels: ["x"], body: "b", blockedBy: 2, autor: { login: "fluffels" } });
+    expect(() => N.itemAusIssue({ ...issue(7), pull_request: {} })).toThrow();
+    expect(() => N.itemAusIssue({ title: "ohne Nummer" })).toThrow();
+    expect(() => N.itemAusIssue(null)).toThrow();
+  });
+  test("pruefeTicket: frei", () => {
+    expect(pruefe(7)).toEqual({ ticket: { nr: 7, titel: "T7" }, uebersprungen: [] });
+  });
+  test("pruefeTicket: geschlossen, Assignee, Blocker, Fremdeingang, belegt", () => {
+    expect(grund(pruefe(7, { state: "closed" }))).toBe("geschlossen");
+    expect(grund(pruefe(7, { assignees: [{ login: "fluffels" }] }))).toBe("Assignee @fluffels");
+    expect(grund(pruefe(7, { body: "blockiert durch #5" }, { offene: new Set([5]) }))).toBe("offener Blocker #5");
+    expect(grund(pruefe(7, { labels: [{ name: "forum" }] }))).toContain("Fremdeingang");
+    expect(grund(pruefe(7, { user: { login: "fremd", type: "User" } }))).toContain("Fremdeingang");
+    expect(grund(pruefe(7, {}, { refs: ["feature/kq-7-x"] }))).toBe("Branch, Worktree oder offener PR vorhanden");
+  });
+  test("pruefeTicket: Messfenster zählt, auch fail-closed; ein anderer Status als Todo ist kein Grund", () => {
+    const stand = (s: Stand) => () => s;
+    expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 4 }) }))).toBe("Messfenster offen (4/12 kubernia-umsetzer nach #1590)");
+    expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ fehler: "Messfenster nicht prüfbar (x)" }) }))).toBe("Messfenster nicht prüfbar (x)");
+    expect(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 12 }) }).ticket?.nr).toBe(7);
+  });
+
+  const io = (e: Error | null = null) => {
+    const aufrufe = { lade: 0, einzeln: 0 };
+    return {
+      aufrufe,
+      owner: "fluffels",
+      lade: () => {
+        aufrufe.lade++;
+        return { items: [], offene: new Set<number>() };
+      },
+      ladeEinzeln: (nr: number) => {
+        aufrufe.einzeln++;
+        if (e) throw e;
+        return { item: N.itemAusIssue(issue(nr, { body: "GEHEIMER BODY" })), offene: new Set<number>() } as never;
+      },
+    };
+  };
+  test("fuehreAus Einzelmodus: frei Exit 0 mit #nr TAB Titel, Board-Lader bleibt unbenutzt", () => {
+    const i = io();
+    const r = N.fuehreAus(["--ticket", "7"], i);
+    expect(r).toMatchObject({ code: 0, out: "#7\tT7\n" });
+    expect(i.aufrufe).toEqual({ lade: 0, einzeln: 1 });
+  });
+  test("fuehreAus Einzelmodus: nicht frei Exit 1 mit Grund, json ohne Body", () => {
+    const i = io();
+    const geschlossen = { ...i, ladeEinzeln: () => ({ item: N.itemAusIssue(issue(7, { state: "closed" })), offene: new Set<number>() }) as never };
+    expect(N.fuehreAus(["--ticket=7"], geschlossen)).toMatchObject({ code: 1, out: "#7 nicht frei: geschlossen\n" });
+    const j = N.fuehreAus(["--ticket", "7", "--json"], i);
+    expect(j.out).not.toContain("GEHEIMER");
+    expect((JSON.parse(j.out) as Ergebnis).ticket?.nr).toBe(7);
+  });
+  test("fuehreAus: --ticket mit --bereich, ungültige Nummer oder Ladefehler sind Exit 2, bei der Bereichskollision ohne jeden Ladeaufruf", () => {
+    const i = io();
+    expect(N.fuehreAus(["--ticket", "7", "--bereich", "spiel"], i).code).toBe(2);
+    expect(i.aufrufe).toEqual({ lade: 0, einzeln: 0 });
+    expect(N.fuehreAus(["--ticket", "abc"], i).code).toBe(2);
+    const r = N.fuehreAus(["--ticket", "7"], io(new Error("kein Netz")));
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("kein Netz");
   });
 });

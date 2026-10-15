@@ -19,14 +19,12 @@
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laeufe; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
 import { bereinige, istNeuaufbau, kontextVon, median, passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
-import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
+import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 
 const MIN = 60_000;
@@ -343,8 +341,7 @@ function main() {
     console.error(args.fehler);
     process.exit(2);
   }
-  const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
-  const dir = join(homedir(), ".claude", "projects", slug);
+  const dir = projektOrdner(args.projekt);
   readdirSync(dir);
   const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel(), delta: args.delta ?? null, brille: args.brille ?? null });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
