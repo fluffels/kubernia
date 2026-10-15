@@ -323,6 +323,25 @@ describe("Diff (pur)", () => {
     expect(A.bewerteSession({ soll, ist: { calls: 2, tokens: null }, mtime: 0, now: 1e12, diff: d }).status).toBe("Dublette");
   });
 
+  test("Leere Hook-Generationen (Modell claude, keine Tokens) sind keine Dubletten, sondern leer (#1639)", () => {
+    const soll = [eintrag(1), eintrag(2)];
+    const leer: Obs = { id: "leer1", type: "GENERATION", providedModelName: "claude", usageDetails: {}, metadata: {} };
+    const d = A.diffMultimenge(soll, [obsZu(soll[0]), leer, { ...leer, id: "leer2" }]);
+    expect(d.fehlend.map((e) => e.messageId)).toEqual(["m2"]);
+    expect(d.dubletten).toEqual([]);
+    expect((d as unknown as { leer: Obs[] }).leer.map((o) => o.id)).toEqual(["leer1", "leer2"]);
+  });
+
+  test("Eine echte Dublette neben leeren Generationen bleibt Dublette; Soll mit Null-Tokens deckt eine leere ab", () => {
+    const soll = [eintrag(1)];
+    const leer: Obs = { id: "leer1", type: "GENERATION", providedModelName: "claude", usageDetails: {}, metadata: {} };
+    const d = A.diffMultimenge(soll, [obsZu(soll[0], { id: "a" }), obsZu(soll[0], { id: "b" }), leer]);
+    expect(d.dubletten.map((o) => o.id)).toEqual(["b"]);
+    const nullEintrag = eintrag(3, { model: "claude", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0 } });
+    const d2 = A.diffMultimenge([nullEintrag], [leer]);
+    expect(d2.fehlend).toEqual([]);
+  });
+
   test("Multimenge: zwei Soll mit gleichem Fingerabdruck, eine Observation, ein Call fehlt", () => {
     const a = eintrag(1);
     const b = eintrag(1, { messageId: "m1b" });
