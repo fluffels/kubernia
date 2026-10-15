@@ -127,3 +127,26 @@ describe("istEchtesModell (#1579)", () => {
     expect(E.istEchtesModell("claude-opus-4-7")).toBe(true);
   });
 });
+
+describe("Ticketnummer und Ticketfilter (#1609)", () => {
+  const T = raw as unknown as {
+    ticketNummer: (name: string, wert: unknown) => { nr: number; fehler: string | null };
+    passtTicketFilter: (ticket: number | null, f: { tickets?: number[]; ohne?: number[] }) => boolean;
+  };
+  test("ticketNummer: Ganzzahl ok, sonst Fehlertext mit Flag und Wert", () => {
+    expect(T.ticketNummer("--ohne", "12")).toEqual({ nr: 12, fehler: null });
+    expect(T.ticketNummer("--ohne", "abc").fehler).toBe("--ohne erwartet eine Ticketnummer, nicht abc");
+    expect(T.ticketNummer("--ticket", undefined).fehler).toBe("--ticket erwartet eine Ticketnummer, nicht nichts");
+    expect(T.ticketNummer("--ticket", "1.5").fehler).not.toBeNull();
+  });
+  test("passtTicketFilter: tickets = nur diese, ohne = alle außer diesen, leer = alle", () => {
+    expect(T.passtTicketFilter(5, {})).toBe(true);
+    expect(T.passtTicketFilter(null, {})).toBe(true);
+    expect(T.passtTicketFilter(5, { tickets: [5] })).toBe(true);
+    expect(T.passtTicketFilter(6, { tickets: [5] })).toBe(false);
+    expect(T.passtTicketFilter(null, { tickets: [5] })).toBe(false);
+    expect(T.passtTicketFilter(5, { ohne: [5] })).toBe(false);
+    expect(T.passtTicketFilter(6, { ohne: [5] })).toBe(true);
+    expect(T.passtTicketFilter(5, { tickets: [5], ohne: [5] })).toBe(false);
+  });
+});

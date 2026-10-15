@@ -157,3 +157,36 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(ohnePos.fehler).toBe(true);
   });
 });
+
+describe("fuehreHarnessAus: Fehlertext und Rückgabe (#1609)", () => {
+  const F = (raw as unknown as {
+    fuehreHarnessAus: (h: { nr: number; afterId: string | null }, items: { id: string; number: number }[], token: string, o: { setze: (...a: unknown[]) => void; log: (z: string) => void }) => boolean;
+  }).fuehreHarnessAus;
+  const items = [{ id: "I7", number: 7 }];
+  test("Erfolg: setzt die Position des Items und gibt true zurück", () => {
+    const aufrufe: unknown[][] = [];
+    const log: string[] = [];
+    expect(F({ nr: 7, afterId: "A" }, items, "t", { setze: (...a) => aufrufe.push(a), log: (z) => log.push(z) })).toBe(true);
+    expect(aufrufe).toEqual([["I7", "A", { token: "t" }]]);
+    expect(log).toEqual(["Sammelticket-Position gesetzt."]);
+  });
+  test("setze wirft mehrzeilig mit stderr: Log trägt Präfix, stderr und idempotent, Rückgabe false", () => {
+    const log: string[] = [];
+    const wirf = () => {
+      throw Object.assign(new Error("Command failed: gh api graphql\nzweite Zeile"), { stderr: "gh: HTTP 502 Bad Gateway" });
+    };
+    expect(F({ nr: 7, afterId: null }, items, "t", { setze: wirf, log: (z) => log.push(z) })).toBe(false);
+    const text = log.join("\n");
+    expect(text).toMatch(/^::error::Sammelticket-Position nicht gesetzt: Command failed: gh api graphql/);
+    expect(text).toContain("zweite Zeile");
+    expect(text).toContain("gh: HTTP 502 Bad Gateway");
+    expect(text).toContain("Die Wiederholung ist idempotent.");
+  });
+  test("Item fehlt in der Liste: false statt Absturz, kein setze-Aufruf", () => {
+    const log: string[] = [];
+    let gerufen = false;
+    expect(F({ nr: 99, afterId: null }, items, "t", { setze: () => { gerufen = true; }, log: (z) => log.push(z) })).toBe(false);
+    expect(gerufen).toBe(false);
+    expect(log.join("\n")).toContain("::error::");
+  });
+});

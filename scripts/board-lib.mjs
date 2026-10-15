@@ -8,7 +8,7 @@
  * Nur Node-Builtins, analog zu den anderen scripts/-Wächtern.
  */
 import { readFileSync } from "node:fs";
-import { ghJson, ghText } from "./gh-cli.mjs";
+import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 
 const gh = ghText;
 
@@ -543,7 +543,7 @@ export function positionOderWarnung(lies = positionLautAgentsMd) {
   try {
     return lies();
   } catch (e) {
-    console.error(`⚠ Sammelticket-Selbstkorrektur übersprungen: ${String(e.message).split("\n")[0]}`);
+    console.error(`⚠ Sammelticket-Selbstkorrektur übersprungen: ${fehlerText(e)}`);
     return null;
   }
 }

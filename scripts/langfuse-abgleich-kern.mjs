@@ -39,6 +39,16 @@ export function nachliefererWartet({ mtime, now, beendet }) {
   return now - mtime < ruheMs;
 }
 
+/** Ist der Ledger-Eintrag zum selben Dateistand geschrieben worden? `mtime` und `groesse` gleich; eine fehlende Größe (null/undefined) zählt nie als gleich (#1609). */
+export function standUnveraendert(eintrag, s) {
+  return Boolean(eintrag) && eintrag.mtime === s.mtime && eintrag.groesse != null && eintrag.groesse === s.groesse;
+}
+
+/** Bekanntes Ende gilt nur für den Dateistand, zu dem es festgehalten wurde (#1609): die eine Definition für Nachlieferer und Abgleich. */
+export function endeGiltFuer(eintrag, s) {
+  return Boolean(eintrag?.beendet) && standUnveraendert(eintrag, s);
+}
+
 export const leeresLedger = () => ({ version: 1, sessions: {} });
 export const istLedger = (j) => j?.version === 1 && j.sessions && typeof j.sessions === "object" && !Array.isArray(j.sessions);
 

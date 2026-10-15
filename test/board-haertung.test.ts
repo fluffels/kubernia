@@ -190,7 +190,7 @@ describe("fehlende Position: nur der Teil entfällt, der sie braucht (#1392 Z24)
     expect(r.fehler).toBe(true);
     expect(r.meldung).toMatch(/^::error::/);
     expect(r.meldung).toContain("genau einmal");
-    expect(r.meldung).not.toContain("Zeile 2");
+    expect(r.meldung).toContain("Zeile 2");
   });
 
   test("board-takt: ohne Token nur eine Warnung (kein Fehler), mit Position und Token läuft der Teil", () => {
@@ -214,6 +214,17 @@ describe("fehlende Position: nur der Teil entfällt, der sie braucht (#1392 Z24)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Sammelticket-Selbstkorrektur übersprungen"));
     warn.mockRestore();
     expect(place.positionOderWarnung(() => 4)).toBe(4);
+  });
+
+  test("board-place: positionOderWarnung trägt Folgezeilen und stderr der Ursache (#1609)", () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    place.positionOderWarnung(() => {
+      throw Object.assign(new Error("Lesen fehlgeschlagen\nzweite Zeile"), { stderr: "gh: HTTP 502" });
+    });
+    const text = String(warn.mock.calls[0]?.[0]);
+    warn.mockRestore();
+    expect(text).toContain("zweite Zeile");
+    expect(text).toContain("gh: HTTP 502");
   });
 
   test("planMitKorrektur ohne Position (null) plant ohne Korrektur, auch wenn ein Sammelticket falsch steht", () => {

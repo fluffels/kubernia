@@ -17,6 +17,7 @@
  */
 import { pathToFileURL } from "node:url";
 import { mitKontingent } from "./kontingent-lib.mjs";
+import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,
@@ -184,20 +185,20 @@ export function harnessVoraussetzung({ items, position, positionFehler }) {
     return {
       ok: false,
       fehler: true,
-      meldung: `::error::Harness-Sammelticket-Takt übersprungen, die Position laut AGENTS.md fehlt: ${String(positionFehler ?? "keine Position").split("\n")[0]}`,
+      meldung: `::error::Harness-Sammelticket-Takt übersprungen, die Position laut AGENTS.md fehlt: ${fehlerText(positionFehler ?? "keine Position")}`,
     };
   }
   return { ok: true };
 }
 
-/** Harness-Entscheidung ausführen; true bei Erfolg. */
-function fuehreHarnessAus(h, items, token) {
+/** Harness-Entscheidung ausführen; true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
+export function fuehreHarnessAus(h, items, token, { setze = setPosition, log = console.log } = {}) {
   try {
-    setPosition(items.find((i) => i.number === h.nr).id, h.afterId, { token });
-    console.log("Sammelticket-Position gesetzt.");
+    setze(items.find((i) => i.number === h.nr).id, h.afterId, { token });
+    log("Sammelticket-Position gesetzt.");
     return true;
   } catch (err) {
-    console.log(`${fehlerMeldung(err).replace("::error::", "::error::Sammelticket-Position nicht gesetzt: ")}\nDie Wiederholung ist idempotent.`);
+    log(fehlerMeldung(err, { praefix: "Sammelticket-Position nicht gesetzt: ", zusatz: "Die Wiederholung ist idempotent." }));
     return false;
   }
 }
@@ -269,21 +270,6 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     if (!dry && h.aktion !== "nichts" && !io.fuehreHarnessAus(h, items, token)) fehler = true;
   }
   return { fehler };
-}
-
-/**
- * Log-Text eines abgebrochenen Takts: erste Zeile als `::error::` (Annotation im Actions-Lauf), danach der Rest von
- * `err.message` und `err.stderr` (bei einem `gh api`-Fehler steht dort der API-Text), getrimmt und auf `max` Zeichen gekürzt.
- * Ohne den Rest zeigte der Lauf vom 2026-10-12 nur `Command failed: gh api …` und nie die Ursache.
- */
-export function fehlerMeldung(err, max = 2000) {
-  const message = String(err?.message ?? err);
-  const stderr = String(err?.stderr ?? "").trim();
-  const [erste, ...rest] = message.split("\n");
-  const rest2 = rest.join("\n").trim();
-  const detail = [rest2, stderr && !rest2.includes(stderr) ? stderr : ""].filter(Boolean).join("\n");
-  const gekuerzt = detail.length > max ? `${detail.slice(0, max)}… (gekürzt)` : detail;
-  return `::error::${erste}${gekuerzt ? `\n${gekuerzt}` : ""}`;
 }
 
 function main() {

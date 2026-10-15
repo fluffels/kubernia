@@ -544,6 +544,82 @@ const spawnFuer = (md: string, typ: string): string =>
   spawnBloecke(md).find((b) => new RegExp(`subagent_type:\\s*["']${typ}["']`).test(b)) ?? "";
 
 
+/** Ziele der Matrix-Zeilen (§1 der Routing-Doku): Frontmatter-Datei und ob `model` mitgeprüft wird (Subagenten ja, Hauptagent nein). */
+const MATRIX_ZIELE: Record<string, { datei: string; mitModel: boolean }> = {
+  planner: { datei: ".claude/agents/kubernia-planner.md", mitModel: true },
+  lens: { datei: ".claude/agents/kubernia-lens.md", mitModel: true },
+  umsetzer: { datei: ".claude/agents/kubernia-umsetzer.md", mitModel: true },
+  explore: { datei: ".claude/agents/explore.md", mitModel: true },
+  hauptagent: { datei: UMSETZUNGS_SKILL, mitModel: false },
+};
+
+const zelleOhneCode = (z: string) => z.replace(/`/g, "").trim();
+
+/**
+ * Prüft die Phasen-Matrix (§1) gegen die Frontmatter ihrer Ziele (#1609): je Zeile Ziel über die Skill-Pfad-Zelle bestimmen
+ * (Reihenfolge `kubernia-planner`, `kubernia-lens`, `kubernia-umsetzer`/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
+ * (Spalte „Effort Skill-Pfad“) und bei Subagenten `model` (Spalte „Alias“) gleich dem Frontmatter. Liefert die Verstöße;
+ * eine fehlende Spalte, eine fehlende Tabelle oder eine nicht zuordenbare Zeile ist ein Verstoß.
+ */
+const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<string, string>): string[] => {
+  const zeilen = doku.split("\n");
+  const kopf = zeilen.findIndex((z) => z.startsWith("| Phase |"));
+  if (kopf < 0) return ["Matrix-Tabelle (Kopf „| Phase |“) fehlt"];
+  const zellen = (z: string) => z.split("|").slice(1, -1).map((c) => c.trim());
+  const spalten = zellen(zeilen[kopf]);
+  const idx = (name: string) => spalten.indexOf(name);
+  const [iAlias, iEffort, iSkill] = [idx("Alias"), idx("Effort Skill-Pfad"), idx("Skill-Pfad (`kubernia`)")];
+  if (iAlias < 0 || iEffort < 0 || iSkill < 0) return [`Spalte fehlt (Alias ${iAlias}, Effort Skill-Pfad ${iEffort}, Skill-Pfad ${iSkill})`];
+  const fehler: string[] = [];
+  for (let i = kopf + 2; i < zeilen.length && zeilen[i].startsWith("|"); i++) {
+    const c = zellen(zeilen[i]);
+    const phase = zelleOhneCode(c[0] ?? "");
+    const skill = c[iSkill] ?? "";
+    const ziel = /`kubernia-planner`/.test(skill)
+      ? "planner"
+      : /`kubernia-lens`/.test(skill)
+        ? "lens"
+        : /kubernia-umsetzer|im Umsetzer/.test(skill)
+          ? "umsetzer"
+          : /`Explore`/.test(skill)
+            ? "explore"
+            : /Hauptagent/.test(skill)
+              ? "hauptagent"
+              : null;
+    if (!ziel) {
+      fehler.push(`${phase}: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar`);
+      continue;
+    }
+    const fm = fmVon(MATRIX_ZIELE[ziel].datei);
+    const effort = zelleOhneCode(c[iEffort] ?? "");
+    if (fm.effort !== effort) fehler.push(`${phase}: Effort Skill-Pfad „${effort}“ ≠ Frontmatter ${ziel} „${fm.effort}“`);
+    const alias = zelleOhneCode(c[iAlias] ?? "");
+    if (MATRIX_ZIELE[ziel].mitModel && fm.model !== alias) fehler.push(`${phase}: Alias „${alias}“ ≠ Frontmatter ${ziel} „${fm.model}“`);
+  }
+  return fehler;
+};
+
+describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", () => {
+  const fmEcht = (datei: string) => frontmatter(read(datei));
+  test("die echte Matrix hat keine Abweichung", () => {
+    assert.deepEqual(matrixAbweichungen(read(ROUTING_SSOT), fmEcht), []);
+  });
+  test("Negativfälle: Umsetzer-Zelle `medium` gegen Frontmatter `low`, falscher Alias, unbekannte Zeile, fehlende Spalte", () => {
+    const doku = read(ROUTING_SSOT);
+    const zeile = "| Umsetzung | `sonnet` | `medium` | `low` |";
+    assert.equal(doku.split(zeile).length, 2, "Anker genau einmal");
+    const effortFalsch = doku.replace(zeile, "| Umsetzung | `sonnet` | `medium` | `medium` |");
+    assert.match(matrixAbweichungen(effortFalsch, fmEcht).join("\n"), /Umsetzung: Effort Skill-Pfad „medium“ ≠ Frontmatter umsetzer „low“/);
+    const aliasFalsch = doku.replace(zeile, "| Umsetzung | `opus` | `medium` | `low` |");
+    assert.match(matrixAbweichungen(aliasFalsch, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter umsetzer „sonnet“/);
+    const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | – | `low` | n/a | irgendwer |\n| Explore / Recherche |");
+    assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);
+    const ohneSpalte = doku.replace("| Effort Skill-Pfad |", "| Effort |");
+    assert.match(matrixAbweichungen(ohneSpalte, fmEcht).join("\n"), /Spalte fehlt/);
+    assert.match(matrixAbweichungen("kein Text", fmEcht).join("\n"), /Matrix-Tabelle/);
+  });
+});
+
 describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nicht im Hauptchat (#1280)", () => {
   test("Umsetzer-Agent: Coding-Tier und Effort aus der Matrix im eigenen Frontmatter", () => {
     const fm = frontmatter(read(UMSETZER));

@@ -152,6 +152,24 @@ describe("bewertePrs und Aggregate", () => {
     const leer = mod.bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt: SPAETER });
     assert.deepEqual(leer.kennzahlen.brillen, {});
   });
+  test("Runde 1 mit Blocker: echte Zählung aus blocker=, nicht der Proxy Runden ≥ 2 (#1609)", () => {
+    const rechne = (zeilen: string[]) =>
+      mod.bewertePrs({
+        prs: zeilen.map((_, i) => pr({ number: 60 + i, mergeCommit: { oid: String(i + 1).repeat(40) } })),
+        commits: zeilen.map((r, i) => commit(review(r), MERGED, String(i + 1).repeat(40))),
+        ci: {},
+        festgefahren: {},
+        jetzt: SPAETER,
+      });
+    const proxyOhneBlocker = rechne(["runden=2 lenses=doku blocker=doku:0"]);
+    assert.equal(proxyOhneBlocker.kennzahlen.runde1MitBlockerProxy, 1);
+    assert.equal(proxyOhneBlocker.kennzahlen.runde1MitBlocker, 0, "Runden 2, aber alle Blocker 0");
+    assert.equal(rechne(["runden=1 lenses=doku blocker=doku:1"]).kennzahlen.runde1MitBlocker, 1, "Runde 1 mit Blocker > 0");
+    const ohneFeld = rechne(["runden=3 lenses=doku"]);
+    assert.equal(ohneFeld.kennzahlen.mitBlockerFeld, 0);
+    assert.ok(mod.formatiere(ohneFeld).includes("Runde 1 mit Blocker (aus blocker=): –; Proxy Runden ≥ 2: 100 %"), "Nenner 0 steht als Strich");
+    assert.ok(mod.formatiere(proxyOhneBlocker).includes("(aus blocker=): 0 % (0/1)"));
+  });
   test("kaputtes runden in der Squash-Message zählt als ohne Nachweis, kein NaN in den Aggregaten", () => {
     const k = mod.bewertePrs({
       prs: [pr({ mergeCommit: { oid: "9".repeat(40) } })],
@@ -173,6 +191,8 @@ describe("bewertePrs und Aggregate", () => {
     assert.deepEqual(k.brillen.architektur, { prs: 2, treffer: 1, summe: 2, jePr: 1 });
     assert.deepEqual(k.brillen["test-adaequanz"], { prs: 2, treffer: 1, summe: 1, jePr: 0.5 });
     assert.equal(k.runde1MitBlockerProxy, 2, "runden ≥ 2 über alle PRs mit Nachweis");
+    assert.equal(k.runde1MitBlocker, 1, "nur #50 hat einen Blocker > 0");
+    assert.equal(k.mitBlockerFeld, 2, "#52 hat kein blocker-Feld und fällt aus dem Nenner");
     assert.equal(k.mitNachweis, 3);
   });
   test("Folge-Commit macht Nacharbeit je PR mit passender Ticketnummer, offene Fenster zählen nicht in die Quote", () => {

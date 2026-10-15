@@ -25,7 +25,7 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { bereinige, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
+import { bereinige, istNeuaufbau, kontextVon, median, passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 
@@ -260,8 +260,7 @@ export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, 
     .map((l) => analysiereLauf(l, { wurzel }))
     .filter(Boolean)
     .filter((a) => (!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis)))
-    .filter((a) => !tickets.length || tickets.includes(a.ticket))
-    .filter((a) => !ohne.includes(a.ticket))
+    .filter((a) => passtTicketFilter(a.ticket, { tickets, ohne }))
     .filter((a) => delta === null || a.delta === delta)
     .filter((a) => !brille || a.brille === brille);
   return {
@@ -311,8 +310,9 @@ export function parseArgs(argv) {
   const a = { agent: "kubernia-umsetzer", tickets: [], ohne: [], json: false };
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
   const nummer = (name, wert) => {
-    if (!/^[0-9]+$/.test(String(wert ?? ""))) a.fehler ??= `${name} erwartet eine Ticketnummer, nicht ${wert ?? "nichts"}`;
-    return Number(wert);
+    const { nr, fehler } = ticketNummer(name, wert);
+    if (fehler) a.fehler ??= fehler;
+    return nr;
   };
   for (let i = 0; i < argv.length; i++) {
     const x = argv[i];
