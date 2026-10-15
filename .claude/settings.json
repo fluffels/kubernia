@@ -137,7 +137,9 @@
             "type": "command",
             "command": "node",
             "args": [
-              "${CLAUDE_PROJECT_DIR}/scripts/haupt-sync.mjs"
+              "${CLAUDE_PROJECT_DIR}/scripts/haupt-sync.mjs",
+              "--danach",
+              "${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"
             ],
             "timeout": 120
           },
@@ -147,14 +149,6 @@
             "args": [
               "${CLAUDE_PROJECT_DIR}/scripts/sandbox-doctor.mjs",
               "--sessionstart"
-            ],
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"
             ],
             "timeout": 10
           }

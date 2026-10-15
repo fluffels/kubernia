@@ -35,7 +35,7 @@ import {
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
-import { gesperrterLauf, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
+import { gesperrterLauf, kurzerStand, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
 
 // Stichtag und Fristen stehen im Kern (eine Definition); die Tests lesen sie hier.
 export { RUHEFRIST_BEENDET_MS, RUHEFRIST_OHNE_ENDE_H, STICHTAG } from "./langfuse-abgleich-kern.mjs";
@@ -294,7 +294,7 @@ async function main() {
   const stateDir = join(homedir(), ".claude", "state");
   const lauf = (a, o) => nachliefern(a, { projectsRoot: join(homedir(), ".claude", "projects"), stateDir, repoRoot, ...o });
   if (args.ausloeser && !args.fehler) {
-    await hookLauf(args, { stateDir, lauf });
+    await hookLauf(args, { stateDir, lauf, stand: kurzerStand(fileURLToPath(new URL("..", import.meta.url))) });
     return;
   }
   // Manueller Lauf: schreibende Läufe teilen sich den Lock mit dem Hook (Aufruffehler und Trockenlauf lesen nur).
