@@ -127,10 +127,10 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 105 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Skripte | 106 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 74 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 24 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 25 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -218,6 +218,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 08.10.2026 | [ADR 0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md): Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest |
 | 09.10.2026 | [ADR 0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md): Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen |
 | 15.10.2026 | [ADR 0024](/docs/adr/0024-hexagon-als-lesart.md): Hexagon als Lesart der bestehenden Schichtung, nicht als Ordnerstruktur |
+| 16.10.2026 | [ADR 0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md): Sandbox als austauschbare Laufumgebung |
 
 <!-- GEN:zeitleiste END -->
 

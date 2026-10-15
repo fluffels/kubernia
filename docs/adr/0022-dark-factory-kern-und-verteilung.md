@@ -153,6 +153,15 @@ Reihenfolge: F1 → F2 → (F7, F9, F12, F14, F15) → F3 → F4 → F5/F6/F8 �
 
 Die Reihenfolge bleibt (F11 vor F10), obwohl F10 das Factory-Repo anlegt. Ein GitHub Project gehört dem Konto oder der Organisation, nicht einem Repository ([About Projects](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects): „at the user or organization level“), und die Items sind Issues; das Produkt-Board führt heute schon Items per Filter aus einem Repository. Darum legt F11 das Factory-Board vor dem Factory-Repo an. Bis F10 bleiben Factory-Items (Sammel- und Status-Ticket, `area:harness`) Issues in kubernia und wechseln nur das Board. Ob und wann sie ins Factory-Repo übertragen werden, entscheidet F10 im Pre-Flight (Außenwirkung). F11 bekommt keinen Blocker F10; der Body von F11 nennt diesen Zwischenzustand. Der FAQ-Verweis auf diesen ADR steht schon; F10 ergänzt nur den Repo-Link.
 
+## Fortschreibung #1612 (2026-10-16): Schicht-Kern (F7)
+
+F7 ist umgesetzt. Entscheidungen:
+
+- **Schnitt:** `scripts/layers.cjs` bleibt die Projektdatei und trägt nur Daten (`LAYERS`, `PHASER`, `QUELLWURZEL`, `SCHICHT_MODELL`, `LABEL_TO_LAYER`) sowie die vom Kern abgeleiteten Werte `layerOf`, `NON_DOMAIN`, `COVERAGE_GLOBS`. Neu ist `scripts/schichten-kern.cjs` (Ring `kern`, literalfrei, ohne Importe): `musterAus`, `pruefeModell`, `layerOfAus`, `wurzelnAusserAuffangAus`, `coverageGlobsAus`, `verbotsRegeln`; jede Ableitung prüft das Modell zuerst. CommonJS, weil der dependency-cruiser-Config es per `require` lädt.
+- **Prüfung im Kern:** `ladeModell` (docs-gen) prüft mit dem Kern; ein von der Projektdatei mitgelieferter Prüfer wird ignoriert, ein Projekt kann die Prüfung nicht aushebeln. Der Wert: Fremd-Repos bekommen die strenge Kern-Prüfung.
+- **Wächter:** `test/harness/kern-reinheit.test.ts` prüft, dass keine Einheit des Besitz-Manifests die Schichtdaten statisch importiert (nur direkte Importe, relativ zur importierenden Datei aufgelöst, Pfad aus `schichten.layers`). Offene Ausnahme: `scripts/check-diffcoverage.mjs` bis #1611 (Pfad aus der Projekt-Config); die Ausnahmeliste darf nur schrumpfen und braucht je ein Ticket.
+- **Grenze:** Ein indirekter Import (über ein drittes Modul) und ein zusammengesetzter Pfad bleiben unbemerkt. Die Projektdatei bleibt `scripts/layers.cjs`; ein Umzug ist Sache von F2 und F9.
+
 ## Fortschreibung #1610 (2026-10-15): Besitz-Manifest und Kern-Reinheits-Wächter
 
 F1 ist umgesetzt. Entscheidungen:
