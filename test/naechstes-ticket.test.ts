@@ -457,7 +457,10 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     expect(grund(pruefe(7, { body: "blockiert durch #5" }, { offene: new Set([5]) }))).toBe("offener Blocker #5");
     expect(grund(pruefe(7, { labels: [{ name: "forum" }] }))).toContain("Fremdeingang");
     expect(grund(pruefe(7, { user: { login: "fremd", type: "User" } }))).toContain("Fremdeingang");
-    expect(grund(pruefe(7, {}, { refs: ["feature/kq-7-x"] }))).toBe("Branch, Worktree oder offener PR vorhanden");
+    const belegt = "Branch, Worktree oder offener PR vorhanden";
+    expect(grund(pruefe(7, {}, { refs: ["feature/kq-7-x"] }))).toBe(belegt);
+    expect(grund(pruefe(7, {}, { prHeads: ["feature/kq-7-x"] }))).toBe(belegt);
+    expect(grund(pruefe(7, {}, { worktrees: ["branch refs/heads/feature/kq-7-x"] }))).toBe(belegt);
   });
   test("pruefeTicket: Messfenster zählt, auch fail-closed; ein anderer Status als Todo ist kein Grund", () => {
     const stand = (s: Stand) => () => s;
