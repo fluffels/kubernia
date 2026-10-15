@@ -59,11 +59,13 @@ Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, de
 - `schichten.pruefbefehl` (optional): der Befehl der Schichtprüfung, den die Fehlermeldungen nennen. Das Code-Verzeichnis steht außerdem im Cruise-Aufruf, im Collapse-Muster, im Coverage-`include` und in den Ausnahmen der Werkzeug-Config; sie ziehen nicht automatisch mit `quellwurzel` mit.
 - `befehl` (optional): der Befehl, den Hinweiszeile und `Fix:`-Text nennen, Standard `npm run docs:gen`.
 
-**Vertrag der Schicht-Definition:** eine CommonJS-Datei, die `SCHICHT_MODELL` und `pruefeModell` exportiert. Das Modell trägt `quellwurzel` (das Code-Verzeichnis mit Slash, etwa `wetter/`), `schichten` (je `id`, `label`, `wurzeln`, `muster`, `darf`; genau eine Auffang-Schicht mit `muster: null`) und `extern`. Alles, was nicht in `darf` steht, ist verboten. Der Schichten-Generator prüft zusätzlich selbst, dass `quellwurzel` gesetzt ist und mit `/` endet, auch wenn der mitgelieferte Prüfer es nicht tut. Die Regeln des Werkzeugs (hier die von dependency-cruiser) sollten aus derselben Datei abgeleitet werden, wie [`scripts/layers.cjs`](../scripts/layers.cjs) es vormacht.
+**Vertrag der Schicht-Definition:** eine CommonJS-Datei, die `SCHICHT_MODELL` exportiert (nur Daten; Prüfung und Ableitung liegen im Kern, [`scripts/schichten-kern.cjs`](../scripts/schichten-kern.cjs)). Das Modell trägt `quellwurzel` (das Code-Verzeichnis mit Slash, etwa `wetter/`), `schichten` (je `id`, `label`, `wurzeln`, `muster`, `darf`; genau eine Auffang-Schicht mit `muster: null`) und `extern`. Alles, was nicht in `darf` steht, ist verboten. Der Kern prüft das Modell fail-closed (`pruefeModell`), auch Quellwurzel und IDs; ein von der Projektdatei mitgelieferter Prüfer wird ignoriert. Die Prüfung ist streng (etwa nur Kleinbuchstaben, Ziffern, `-` und `_` in der Quellwurzel), ein Fremd-Repo muss sich ihr anpassen. Die Regeln des Werkzeugs (hier die von dependency-cruiser) leitet der Kern aus dem Modell ab (`verbotsRegeln`, `layerOfAus`, `coverageGlobsAus`), wie [`scripts/layers.cjs`](../scripts/layers.cjs) es vormacht. Ein Kern-Modul importiert die Schichtdaten nie statisch, sondern lädt sie über `schichten.layers`.
 
 ## Form der Vorlage ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md))
 
 Entschieden: ein Factory-Repo als Quelle, verteilt per Sync mit Besitz-Manifest; Projektwerte kommen zur Laufzeit aus einer Projekt-Config. Es gibt kein eigenes docs-gen-Paket, der docs-gen-Kern ist ein Baustein des Kerns. Offen ist nur die Veröffentlichung (Außenwirkung, liegt bei der Maintainerin). Bis das Sync-Werkzeug steht, trägt die Übernahme per Kopie.
+
+Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md), [Sandbox anbinden](sandbox-anbinden.md)).
 
 ## Gliederung für Artikel oder Vortrag
 
