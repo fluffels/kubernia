@@ -629,7 +629,7 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
   });
 });
 
-describe("Sammelticket-Gruppen (#1647, ADR 0025): ein Vertrag in Planer, Umsetzer und Gruppe", () => {
+describe("Sammelticket-Gruppen (#1647, ADR 0026): ein Vertrag in Planer, Umsetzer und Gruppe", () => {
   const dateien = [".claude/agents/kubernia-planner.md", ".claude/agents/kubernia-umsetzer.md", ".claude/agents/kubernia-gruppe.md"];
   test("die Kopfzeile `GRUPPE <k>/<n>` steht wortgleich in allen drei Definitionen", () => {
     for (const d of dateien) assert.ok(read(d).includes("GRUPPE <k>/<n>"), `${d} nennt \`GRUPPE <k>/<n>\``);

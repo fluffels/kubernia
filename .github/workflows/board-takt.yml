@@ -46,7 +46,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: node scripts/board-takt.mjs
-      # Generationsgrenze (ADR 0025): ist das jüngste ungeclaimte Harness-Sammelticket voll (12 offene Zeilen), entsteht der Nachfolger direkt
+      # Generationsgrenze (ADR 0026): ist das jüngste ungeclaimte Harness-Sammelticket voll (12 offene Zeilen), entsteht der Nachfolger direkt
       # dahinter. Best effort: ein Fehler macht den Takt nicht rot, fehlt der Token, wird nur gewarnt. Scheitert nur die Positionierung des Nachfolgers, bleibt er an Position 4 stehen, bis der Vorgänger geclaimt ist (Selbstkorrektur des Takts).
       - name: Generationsgrenze des Harness-Sammeltickets
         continue-on-error: true

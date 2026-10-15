@@ -2,7 +2,7 @@
 /**
  * Kontext-Treiber eines Subagent-Typs (#1559), Standard `kubernia-umsetzer`: was macht den Kontext je Call groß und was kostet es?
  *
- *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--json]
+ *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket] [--json]
  *
  * Je Lauf (Transkript unter `<session>/subagents/`): Requests, Kontext je Call (input + cacheWrite + cacheRead), Kosten (aus PRICES,
  * nur aufgezeichnete Usage: Output unterzählt), Phase je Call, Tool-Ergebnisse mit Größe und Last, Cache-Neuaufbauten mit Ursache.
@@ -16,6 +16,11 @@
  *    neu geschriebene Tokens × (Write-5m − Read-Preis), ohne Preisstufen.
  *  - Wartepausen (#1588): jede Lücke > 240 s zum Vorgänger-Call, mit Ursache wie beim Neuaufbau und Ticks = Lücke / 240 s abgerundet
  *    (so viele Wach-Calls hätte ein Keep-alive im 4-min-Takt gebraucht); eine Pause ist kein Neuaufbau, der Cache kann gehalten haben.
+ * `--je-ticket` (#1592, Phasen-Schnitt): alle Läufe eines Tickets sind ein Lauf. Vorgänger = Läufe ohne `Einstieg:`-Zeile im Prompt, Nachfolger = mit
+ * (`Einstieg: pr|verify`, startet im Zustand verify bzw. Merge/Cleanup); Gruppen nach dem `Schnitt:` des Vorgängers (Intention-to-treat). Kennzahlen:
+ * Kontext beim ersten Call des Nachfolgers, Nachlese-Calls (Read oder cat/sed/head des Nachfolgers auf Pfade, die ein Vorgänger per Edit/Write geändert hat;
+ * grep und andere Lesewege zählen nicht), Kosten ab Phase X (Σ der Calls ab X in `PHASEN`-Reihenfolge). Grenzen: der Startzustand verify zählt Edits vor
+ * dem ersten Lens-Spawn zu verify (konservativ gegen den Schnitt); Mehrkosten des Hauptchats für den zweiten Prompt sind nicht gemessen.
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laeufe; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
@@ -50,7 +55,7 @@ function labelVon(tool, wurzel) {
 }
 
 /** Calls des Laufs mit ihren Tool-Aufrufen und der Phase je Call. */
-function phasenUndTools(zeilen) {
+function phasenUndTools(zeilen, einstieg = null) {
   const { calls } = callsFromTranscript(zeilen);
   const events = toolEventsFromTranscript(zeilen);
   const jeCall = new Map();
@@ -58,10 +63,11 @@ function phasenUndTools(zeilen) {
     if (!jeCall.has(ev.msgId)) jeCall.set(ev.msgId, []);
     jeCall.get(ev.msgId).push(ev);
   }
-  let zustand = "Umsetzung";
+  // Startzustand je Einstieg (#1592): ein Nachfolger beginnt hinter dem Schnitt, nicht in der Umsetzung.
+  let zustand = einstieg === "verify" ? "verify" : einstieg === "pr" ? "Merge/Cleanup" : "Umsetzung";
   let pflege = false;
   let review = false;
-  let pr = false;
+  let pr = einstieg === "pr";
   const eintraege = calls.map((call) => {
     const tools = jeCall.get(call.id) ?? [];
     let ci = false;
@@ -89,8 +95,8 @@ function phasenUndTools(zeilen) {
 }
 
 /** Phase je Call (gleiche Reihenfolge wie `callsFromTranscript`). */
-export function phaseDerCalls(zeilen) {
-  return phasenUndTools(zeilen).map((e) => e.phase);
+export function phaseDerCalls(zeilen, einstieg = null) {
+  return phasenUndTools(zeilen, einstieg).map((e) => e.phase);
 }
 
 function ursacheVon(vorher) {
@@ -130,11 +136,48 @@ function wartepausen(eintraege) {
     .map(({ vorher, gapMs }) => ({ ursache: ursacheVon(vorher), sekunden: Math.round(gapMs / 1000), ticks: Math.floor(gapMs / TICK_MS) }));
 }
 
+/** Pfad vergleichbar machen (#1592): Schrägstriche, klein, ohne Worktree-Präfix `…/worktrees/kq-<nr>…/` und ohne die Repo-Wurzel. */
+function normPfad(pfad, wurzel) {
+  let p = String(pfad).replace(/\\/g, "/").toLowerCase();
+  p = p.replace(/^.*?\/worktrees\/kq-\d+[^/]*\//, "");
+  const w = wurzel ? `${String(wurzel).replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "")}/` : null;
+  return w && p.startsWith(w) ? p.slice(w.length) : p;
+}
+
+const LESE_BEFEHL = /(^|[\s;&|(])(cat|sed|head)\s/;
+
+/**
+ * Pfade, die der Lauf per Edit/Write geändert hat, und seine Lese-Aufrufe (`Read` sowie Shell-Befehle mit cat/sed/head), beide
+ * normalisiert (#1592). Grundlage der Nachlese-Calls: ein Nachfolger, der geänderte Dateien des Vorgängers erneut liest.
+ */
+function pfadZugriffe(eintraege, wurzel) {
+  const geaendertePfade = [];
+  const leseAufrufe = [];
+  for (const { tools } of eintraege) {
+    for (const tool of tools) {
+      const datei = tool.input?.file_path;
+      if (EDIT_TOOLS.has(tool.tool) && typeof datei === "string") geaendertePfade.push(normPfad(datei, wurzel));
+      else if (tool.tool === "Read" && typeof datei === "string") leseAufrufe.push({ art: "read", pfad: normPfad(datei, wurzel) });
+      else if (LESE_BEFEHL.test(befehlVon(tool))) leseAufrufe.push({ art: "shell", befehl: befehlVon(tool).replace(/\\/g, "/").toLowerCase() });
+    }
+  }
+  return { geaendertePfade: [...new Set(geaendertePfade)], leseAufrufe };
+}
+
+const maskiere = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Liest der Aufruf diesen (normalisierten) Pfad? Read: gleicher Pfad oder Suffix nach `/`; Shell: Pfad im Befehl, davor kein `[\w.-]`, dahinter kein `\w`. */
+function liestPfad(aufruf, pfad) {
+  if (aufruf.art === "read") return aufruf.pfad === pfad || aufruf.pfad.endsWith(`/${pfad}`);
+  return new RegExp(`(?<![\\w.-])${maskiere(pfad)}(?!\\w)`).test(aufruf.befehl);
+}
+
 /** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. */
 export function analysiereLauf(lauf, { wurzel = null } = {}) {
-  const eintraege = phasenUndTools(lauf.zeilen);
-  if (!eintraege.length) return null;
   const kopf = laufAus(lauf);
+  const eintraege = phasenUndTools(lauf.zeilen, kopf?.einstieg ?? null);
+  if (!eintraege.length) return null;
+  const { geaendertePfade, leseAufrufe } = pfadZugriffe(eintraege, wurzel);
   const ctx = eintraege.map((e) => kontextVon(e.call));
   const ergebnisse = [];
   const wachstum = { ergebnis: 0, eingabe: 0, rest: 0 };
@@ -169,6 +212,10 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
     ticket: kopf?.ticket ?? null,
     sammel: kopf?.sammel ?? false,
     brille: kopf?.brille ?? null,
+    schnitt: kopf?.schnitt ?? null,
+    einstieg: kopf?.einstieg ?? null,
+    geaendertePfade,
+    leseAufrufe,
     delta: Boolean(kopf?.deltaArt),
     start: kopf?.start ?? Date.parse(eintraege[0].call.ts),
     requests: eintraege.length,
@@ -186,7 +233,22 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
   };
 }
 
-function gruppe(analysen) {
+/**
+ * Kennzahlen der Übergabe über zusammengelegte Tickets (#1592): Nachfolger (Tickets mit mindestens einem), Kontext beim ersten Call
+ * des (ersten) Nachfolgers, Nachlese-Calls je Ticket mit Nachfolger und Kosten ab Phase X (Median und Σ über alle Tickets).
+ */
+function uebergabeKennzahlen(tickets) {
+  const mitNachfolger = tickets.filter((a) => a.nachfolgerN > 0);
+  const kostenAb = {};
+  for (const p of PHASEN) kostenAb[p] = { median: median(tickets.map((a) => a.kostenAb[p])), summe: summe(tickets.map((a) => a.kostenAb[p])) };
+  return {
+    nachfolger: { n: mitNachfolger.length, ersterKontextMedian: median(mitNachfolger.map((a) => a.ersterKontextNachfolger)) },
+    nachlese: { summe: summe(mitNachfolger.map((a) => a.nachlese)), median: median(mitNachfolger.map((a) => a.nachlese)) },
+    kostenAb,
+  };
+}
+
+function gruppe(analysen, { jeTicket = false } = {}) {
   if (!analysen.length) return { gesamt: null, top: [], phasen: {}, neuaufbau: {}, pausen: {}, wachstum: { ergebnis: 0, eingabe: 0, rest: 0 } };
   const requests = summe(analysen.map((a) => a.requests));
   const mitPreis = analysen.filter((a) => a.kosten !== null);
@@ -244,23 +306,95 @@ function gruppe(analysen) {
     neuaufbau,
     pausen,
     wachstum,
+    ...(jeTicket ? uebergabeKennzahlen(analysen) : {}),
+  };
+}
+
+/** Summiert zwei Zähl-Objekte gleicher Schlüssel. */
+const addiere = (a, b) => Object.fromEntries(Object.keys(a).map((key) => [key, a[key] + b[key]]));
+
+/**
+ * Legt alle Läufe eines Tickets zu einem Lauf zusammen (#1592, `--je-ticket`). Vorgänger = Läufe ohne `einstieg`, Nachfolger = mit;
+ * die Gruppe bestimmt der `Schnitt:` des Vorgängers. Summen über alle Läufe, `ersterKontext` und `start` vom ersten; `nachlese` zählt die
+ * Lese-Aufrufe der Nachfolger auf Pfade, die ein Vorgänger geändert hat. `null`, wenn kein Vorgänger dabei ist.
+ */
+function ticketLauf(laeufe) {
+  const sortiert = [...laeufe].sort((a, b) => a.start - b.start);
+  const vor = sortiert.filter((a) => !a.einstieg);
+  const nach = sortiert.filter((a) => a.einstieg);
+  if (!vor.length) return null;
+  const geaendert = [...new Set(vor.flatMap((a) => a.geaendertePfade))];
+  const nachlese = summe(nach.flatMap((a) => a.leseAufrufe).map((l) => (geaendert.some((p) => liestPfad(l, p)) ? 1 : 0)));
+  const details = sortiert.flatMap((a) => a.phasenDetail);
+  const kostenAb = {};
+  for (const p of PHASEN) kostenAb[p] = summe(details.filter((d) => PHASEN.indexOf(d.phase) >= PHASEN.indexOf(p)).map((d) => d.kosten ?? 0));
+  return {
+    ticket: sortiert[0].ticket,
+    sammel: sortiert.some((a) => a.sammel),
+    brille: null,
+    delta: false,
+    start: sortiert[0].start,
+    schnitt: vor.find((a) => a.schnitt)?.schnitt ?? "ohne",
+    requests: summe(sortiert.map((a) => a.requests)),
+    ersterKontext: sortiert[0].ersterKontext,
+    maxKontext: Math.max(...sortiert.map((a) => a.maxKontext)),
+    kontextSumme: summe(sortiert.map((a) => a.kontextSumme)),
+    kosten: sortiert.some((a) => a.kosten === null) ? null : summe(sortiert.map((a) => a.kosten)),
+    kostenTeile: sortiert.every((a) => a.kostenTeile) ? sortiert.map((a) => a.kostenTeile).reduce(addiere) : null,
+    phasen: sortiert.flatMap((a) => a.phasen),
+    phasenDetail: details,
+    ergebnisse: sortiert.flatMap((a) => a.ergebnisse),
+    neuaufbauten: sortiert.flatMap((a) => a.neuaufbauten),
+    pausen: sortiert.flatMap((a) => a.pausen),
+    wachstum: sortiert.map((a) => a.wachstum).reduce(addiere),
+    nachfolgerN: nach.length,
+    ersterKontextNachfolger: nach[0]?.ersterKontext ?? null,
+    nachlese,
+    kostenAb,
+  };
+}
+
+/** Je-Ticket-Bericht (#1592): Läufe pro Ticket zusammenlegen, Fenster am ersten Start des Tickets, Gruppen nach dem Schnitt des Vorgängers. */
+function jeTicketBericht(agent, analysen, { von, bis }) {
+  const jeNr = new Map();
+  let ohneTicket = 0;
+  for (const a of analysen) {
+    if (a.ticket === null) ohneTicket += 1;
+    else jeNr.set(a.ticket, [...(jeNr.get(a.ticket) ?? []), a]);
+  }
+  const zusammen = [...jeNr.values()].map(ticketLauf);
+  const tickets = zusammen
+    .filter(Boolean)
+    .filter((a) => (!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis)));
+  const gr = (liste) => gruppe(liste, { jeTicket: true });
+  return {
+    agent,
+    jeTicket: true,
+    gesamt: gr(tickets),
+    ohneSammel: gr(tickets.filter((a) => !a.sammel)),
+    sammel: gr(tickets.filter((a) => a.sammel)),
+    schnitt: { verify: gr(tickets.filter((a) => a.schnitt === "verify")), pr: gr(tickets.filter((a) => a.schnitt === "pr")), ohne: gr(tickets.filter((a) => a.schnitt === "ohne")) },
+    ohneTicket,
+    ohneVorgaenger: zusammen.filter((a) => a === null).length,
   };
 }
 
 /**
  * Kern: Läufe des Typs im Start-Fenster [von, bis] (optional nur/ohne bestimmte Tickets) → Bericht je Gruppe (alle, ohne Sammeltickets, Sammeltickets).
  * `delta` (true = nur Läufe mit Delta-Patch-Pfad im Prompt, false = nur ohne) und `brille` (Name wie in `laufAus`, z. B. `Architektur`) filtern zusätzlich (#1582).
- * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[], delta?: boolean|null, brille?: string|null }} e
+ * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[], delta?: boolean|null, brille?: string|null, jeTicket?: boolean }} e
+ * `jeTicket` (#1592): alle Läufe eines Tickets sind ein Lauf (Vorgänger und Nachfolger nach einer Übergabe), das Fenster gilt für den ersten Start.
  */
-export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [], wurzel = null, delta = null, brille = null }) {
+export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [], wurzel = null, delta = null, brille = null, jeTicket = false }) {
   const analysen = laeufe
     .filter((l) => l?.meta?.agentType === agent)
     .map((l) => analysiereLauf(l, { wurzel }))
     .filter(Boolean)
-    .filter((a) => (!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis)))
+    .filter((a) => jeTicket || ((!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis))))
     .filter((a) => passtTicketFilter(a.ticket, { tickets, ohne }))
     .filter((a) => delta === null || a.delta === delta)
     .filter((a) => !brille || a.brille === brille);
+  if (jeTicket) return jeTicketBericht(agent, analysen, { von, bis });
   return {
     agent,
     gesamt: gruppe(analysen),
@@ -297,8 +431,30 @@ function renderGruppe(titel, g) {
   return [...out, ""];
 }
 
+/** Übergabe-Zeile einer Je-Ticket-Gruppe (#1592); leer ohne Läufe. */
+function renderUebergabe(g) {
+  if (!g.gesamt || !g.nachfolger) return [];
+  const ab = (p) => `${f(g.kostenAb[p].median)} $ (Σ ${f(g.kostenAb[p].summe)} $)`;
+  return [
+    `Übergabe: ${g.gesamt.n} Tickets, ${g.nachfolger.n} mit Nachfolger, Kontext erster Call Nachfolger (Median) ${k(g.nachfolger.ersterKontextMedian)}, Nachlese-Calls Σ ${g.nachlese.summe} (Median ${f(g.nachlese.median, 1)}), Kosten ab verify ${ab("verify")}, ab CI-Warten ${ab("CI-Warten")} (Median je Ticket)`,
+    "",
+  ];
+}
+
 /** Markdown-Bericht (Top-10, Phasen, Neuaufbau) je Gruppe. */
 export function renderMarkdown(r) {
+  if (r.jeTicket) {
+    const kopf = `Kontext-Treiber \`${r.agent}\` je Ticket (Läufe eines Tickets zusammengelegt; ohne Ticket: ${r.ohneTicket}, Nachfolger ohne Vorgänger: ${r.ohneVorgaenger})`;
+    const gruppen = [
+      ["Alle Tickets", r.gesamt],
+      ["Ohne Sammeltickets", r.ohneSammel],
+      ["Sammeltickets", r.sammel],
+      ["Schnitt verify (Vorgänger mit Schnitt: verify)", r.schnitt.verify],
+      ["Schnitt pr (Vorgänger mit Schnitt: pr)", r.schnitt.pr],
+      ["Schnitt ohne (kein Schnitt)", r.schnitt.ohne],
+    ];
+    return [kopf, "", ...gruppen.flatMap(([titel, g]) => [...renderGruppe(titel, g), ...renderUebergabe(g)])].join("\n");
+  }
   return [`Kontext-Treiber \`${r.agent}\``, "", ...renderGruppe("Alle Läufe", r.gesamt), ...renderGruppe("Ohne Sammeltickets", r.ohneSammel), ...renderGruppe("Sammeltickets", r.sammel)].join("\n");
 }
 
@@ -326,6 +482,7 @@ export function parseArgs(argv) {
       if (v !== "ja" && v !== "nein") a.fehler = `--delta erwartet ja|nein, nicht ${v}`;
       else a.delta = v === "ja";
     }
+    else if (x === "--je-ticket") a.jeTicket = true;
     else if (x === "--json") a.json = true;
   }
   return a;
@@ -334,7 +491,7 @@ export function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.von) {
-    console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--json]");
+    console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket] [--json]");
     process.exit(2);
   }
   if (args.fehler) {
@@ -343,7 +500,7 @@ function main() {
   }
   const dir = projektOrdner(args.projekt);
   readdirSync(dir);
-  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel(), delta: args.delta ?? null, brille: args.brille ?? null });
+  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel(), delta: args.delta ?? null, brille: args.brille ?? null, jeTicket: Boolean(args.jeTicket) });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
 

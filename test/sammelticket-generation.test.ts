@@ -1,4 +1,4 @@
-/* Generationsgrenze für Sammeltickets (#1647, ADR 0025): Zeilen zählen, Grenze entscheiden, Nachfolger direkt hinter dem Vorgänger
+/* Generationsgrenze für Sammeltickets (#1647, ADR 0026): Zeilen zählen, Grenze entscheiden, Nachfolger direkt hinter dem Vorgänger
  * anlegen. Alles pur bzw. mit injizierten Abrufen; die gh-Aufrufe laufen im Glue von scripts/sammelticket-anlegen.mjs.
  *
  * Reines Node-Tooling ohne Declaration-File: Namespace über `unknown` auf ein lokales Interface. */

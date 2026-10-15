@@ -48,7 +48,7 @@ const NEU_SETZEN_MAX = 2;
 const DUBLETTEN_PAUSE_MS = 3000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Ab so vielen offenen Zeilen im jüngsten ungeclaimten Harness-Sammelticket legt `--generation` den Nachfolger an (ADR 0025). */
+/** Ab so vielen offenen Zeilen im jüngsten ungeclaimten Harness-Sammelticket legt `--generation` den Nachfolger an (ADR 0026). */
 export const SAMMEL_ZEILEN_GRENZE = 12;
 
 /**
@@ -236,7 +236,7 @@ async function main(argv = process.argv.slice(2)) {
   let hinter = null;
   let generationsZeilen = 0;
   if (args.generation) {
-    // Generationsgrenze (ADR 0025): nur wenn das jüngste ungeclaimte Sammelticket voll ist, entsteht ein Nachfolger direkt dahinter.
+    // Generationsgrenze (ADR 0026): nur wenn das jüngste ungeclaimte Sammelticket voll ist, entsteht ein Nachfolger direkt dahinter.
     const owner = REPO.split("/")[0];
     const plan = planeGeneration({ offene, einzeln: einzelAbruf, kommentareVon: kommentareVon, vertraut: (u) => istVertraut(u, owner) });
     if (plan.art === "nichts") {

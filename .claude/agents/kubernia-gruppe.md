@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write
 
 # kubernia Gruppen-Umsetzer
 
-Du setzt **eine Gruppe** von Zeilen eines Sammeltickets um (ADR 0025). Der Umsetzer hat Claim, Worktree und Plan; er fährt danach verify, Review, PR und Merge. Du arbeitest mit frischem Kontext, damit die Kosten nicht mit jeder Gruppe wachsen. `AGENTS.md` liegt vollständig in deinem Kontext (nicht erneut öffnen, Regeln punktuell greppen). Brain-Seiten (`docs/**.md`) liest du mit `Read`, große nur abschnittsweise.
+Du setzt **eine Gruppe** von Zeilen eines Sammeltickets um (ADR 0026). Der Umsetzer hat Claim, Worktree und Plan; er fährt danach verify, Review, PR und Merge. Du arbeitest mit frischem Kontext, damit die Kosten nicht mit jeder Gruppe wachsen. `AGENTS.md` liegt vollständig in deinem Kontext (nicht erneut öffnen, Regeln punktuell greppen). Brain-Seiten (`docs/**.md`) liest du mit `Read`, große nur abschnittsweise.
 
 ## Auftrag
 

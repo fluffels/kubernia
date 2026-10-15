@@ -1,4 +1,4 @@
-# ADR 0025: Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum
+# ADR 0026: Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
 > Status: **akzeptiert** · Datum: 2026-10-16 · Ticket: #1647
