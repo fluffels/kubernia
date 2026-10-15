@@ -39,8 +39,8 @@ const MODELL = {
   ],
   extern: [{ id: "httpx", label: "httpx", muster: "^site-packages/httpx/" }],
 };
-const PRUEFER_MINI = `function (m) { if (typeof m.quellwurzel !== "string" || !m.quellwurzel.endsWith("/")) throw new Error("quellwurzel fehlt"); }`;
-const layersDatei = (modell: unknown, pruefer = PRUEFER_MINI) => `module.exports = { SCHICHT_MODELL: ${JSON.stringify(modell)}, pruefeModell: ${pruefer} };\n`;
+/** Die Schicht-Definition des Fremd-Repos liefert nur Daten; geprüft wird mit dem Kern (#1612). Ein mitgelieferter Prüfer (`pruefer`) wird ignoriert. */
+const layersDatei = (modell: unknown, pruefer?: string) => `module.exports = { SCHICHT_MODELL: ${JSON.stringify(modell)}${pruefer ? `, pruefeModell: ${pruefer}` : ""} };\n`;
 
 /** Import-Adapter für Python: liest wetter/**.py und gibt die Form von dependency-cruiser aus. */
 const IMPORTGRAPH = `
@@ -184,6 +184,8 @@ describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", 
   // einfachen oder doppelten Anführungszeichen (#1428 Z12). Nicht erkannt: ein dynamischer Pfad (z.B. die Layers-Datei, die schichten.mjs
   // aus der Config lädt, bleibt erlaubt) und ein `createRequire`-Ergebnis, das erst in einer Variablen steht.
   const KERN = ["markdown", "adr", "zeitleiste", "schichten"];
+  // Der Schicht-Kern (Prüfung und Ableitung, #1612) ist das einzige CommonJS-Kern-Modul, das schichten.mjs laden darf.
+  const KERN_CJS = ["../schichten-kern.cjs"];
   const importeAus = (text: string): string[] => [
     ...[...text.matchAll(/^\s*(?:import|export)\s+(?:[^;]*?\sfrom\s+)?["']([^"']+)["']/gm)].map((m) => m[1]),
     ...[...text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
@@ -193,9 +195,12 @@ describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", 
   const importe = (rel: string): string[] => importeAus(readFileSync(join(__dirname, "..", rel), "utf8"));
   test.each(KERN)("scripts/docs-gen/%s.mjs: nur node:* und Kern-Module", (name) => {
     for (const spec of importe(`scripts/docs-gen/${name}.mjs`)) {
-      const ok = spec.startsWith("node:") || KERN.some((k) => spec === `./${k}.mjs`);
+      const ok = spec.startsWith("node:") || KERN.some((k) => spec === `./${k}.mjs`) || KERN_CJS.includes(spec);
       assert.ok(ok, `${name}.mjs importiert ${spec} (kein Kern-Modul)`);
     }
+  });
+  test("scripts/schichten-kern.cjs importiert nichts außer node:* (#1612)", () => {
+    assert.deepEqual(importe("scripts/schichten-kern.cjs").filter((spec) => !spec.startsWith("node:")), []);
   });
   test("scripts/docs-gen.mjs: nur node:*, markdown.mjs und der Tauschpunkt registry.mjs", () => {
     for (const spec of importe("scripts/docs-gen.mjs")) {

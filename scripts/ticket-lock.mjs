@@ -7,8 +7,9 @@
  *   node scripts/ticket-lock.mjs claim <nr>                      # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
  *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # vor Spawn und vor Übernahme eines Worktrees
  *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup
+ *   node scripts/ticket-lock.mjs uebergeben <nr> --nonce <x>     # Phasen-Schnitt (#1592): letzte Aktion des Vorgängers vor `ERGEBNIS: uebergabe`
  *
- * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `freigeben`: erledigt), 4 = nicht anfassen (belegt, fremd,
+ * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `freigeben`, `uebergeben`: erledigt), 4 = nicht anfassen (belegt, fremd,
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
  * Mechanik: die Lock-Datei `<git-common-dir>/kq-locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
@@ -18,7 +19,7 @@
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
  * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock jünger als 2 h `fremd`; existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
  * Köpfe, jüngstem Reflog-Eintrag, mtime der geänderten Dateien laut `git status` und mtime von `node_modules`): jünger als
- * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
+ * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren) und verbraucht die Übergabe (`verbraucht` = Zeitpunkt, ein zweites `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
  *
  * Bewusste Grenzen: nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre); der Workflow-Pfad (`.claude/workflows/kubernia-ticket.js`) hält die Nonce im Workflow-Zustand (`lockNonce`) und gibt den Lock im Cleanup frei;
@@ -28,7 +29,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
@@ -65,12 +66,13 @@ export function letzteAktivitaet({ commitMs = [], reflogMs = [], dateiMs = [], n
 
 /**
  * Ergebnis von `pruefe`. `lock`: Inhalt der Lock-Datei oder null; `nonce`: Argument oder null; `vorhanden`: Worktree oder Branch
- * existiert; `aktivitaet`: ms oder null. Ohne Nonce gilt ein Lock jünger als `VERWAIST_MS` als `fremd` (#1625), sonst zählt nur die Aktivität; null (nichts feststellbar) ist fail-closed `aktiv`. Pur.
+ * existiert; `aktivitaet`: ms oder null; `uebergabeOffen`: der Lock trägt eine unverbrauchte Übergabe (#1592, zählt nur mit eigener Nonce, unabhängig von der Aktivität). Ohne Nonce gilt ein Lock jünger als `VERWAIST_MS` als `fremd` (#1625), sonst zählt nur die Aktivität; null (nichts feststellbar) ist fail-closed `aktiv`. Pur.
  */
-export function entscheidePruefung({ lock, nonce, vorhanden, aktivitaet, jetzt, inaktivMs = INAKTIV_MS }) {
+export function entscheidePruefung({ lock, nonce, vorhanden, aktivitaet, jetzt, inaktivMs = INAKTIV_MS, uebergabeOffen = false }) {
   if (nonce && !gehoertZu(lock, nonce)) return "fremd";
   if (!nonce && lock && entscheideClaim({ erstellt: Date.parse(lock.erstellt), jetzt }) === "fremd") return "fremd";
   if (!vorhanden) return "frei";
+  if (nonce && uebergabeOffen) return "uebernehmbar";
   if (aktivitaet === null || jetzt - aktivitaet < inaktivMs) return "aktiv";
   return "uebernehmbar";
 }
@@ -205,10 +207,26 @@ function pruefe(deps, nr, nonce) {
   const lock = liesLock(deps, nr);
   const b = ermittleBelegung(deps, nr);
   const aktivitaet = b.belegt ? letzteAktivitaet(sammleAktivitaet(deps, b)) : null;
-  const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt() });
+  const uebergabeOffen = Boolean(lock?.uebergabe && !lock.uebergabe.verbraucht);
+  const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt(), uebergabeOffen });
   if (urteil === "fremd") return ergebnis(4, urteil, `✖ ticket-lock: der Lock zu #${nr} gehört nicht zu dieser Nonce (fremd, fehlt oder ohne Nonce noch keine 2 h alt): nicht anfassen, Befund melden. ${NICHT_VON_HAND}`);
   if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen. ${NICHT_VON_HAND}`);
+  if (urteil === "uebernehmbar" && uebergabeOffen && nonce) schreibeLock(deps, nr, { ...lock, uebergabe: { ...lock.uebergabe, verbraucht: new Date(deps.jetzt()).toISOString() } });
   return ergebnis(0, urteil);
+}
+
+/** Vermerkt die Übergabe im eigenen Lock (Phasen-Schnitt, #1592): eine je Lock; fremde Nonce, fehlender Lock oder schon vorhandene Übergabe → Exit 4. */
+function uebergeben(deps, nr, nonce) {
+  const lock = liesLock(deps, nr);
+  if (!gehoertZu(lock, nonce)) return ergebnis(4, "", `✖ ticket-lock: der Lock zu #${nr} fehlt oder gehört einer anderen Session, nichts übergeben. ${NICHT_VON_HAND}`);
+  if (lock.uebergabe) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gab es schon eine Übergabe (eine je Lock), kein zweiter Schnitt. ${NICHT_VON_HAND}`);
+  schreibeLock(deps, nr, { ...lock, uebergabe: { gesetzt: new Date(deps.jetzt()).toISOString(), verbraucht: null } });
+  return ergebnis(0, "uebergeben");
+}
+
+/** Schreibt eine bestehende Lock-Datei neu (nur für den eigenen Lock). */
+function schreibeLock(deps, nr, lock) {
+  deps.ersetze(lockPfad(deps, nr), `${JSON.stringify(lock)}\n`);
 }
 
 function freigeben(deps, nr, nonce) {
@@ -219,18 +237,19 @@ function freigeben(deps, nr, nonce) {
   return ergebnis(0, "freigegeben");
 }
 
-/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, lockDir, liesDatei, schreibeNeu, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
+/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, lockDir, liesDatei, schreibeNeu, ersetze, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
 export function fuehreAus(argv, deps) {
   const [befehl, nrText, ...rest] = argv;
   const nonce = nonceAus(argv);
   const nr = NUMMER.test(nrText ?? "") ? Number(nrText) : null;
-  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x>");
-  if (nr === null || !["claim", "pruefe", "freigeben"].includes(befehl)) return usage;
-  if (befehl === "freigeben" && !nonce) return usage;
+  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x>");
+  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben"].includes(befehl)) return usage;
+  if ((befehl === "freigeben" || befehl === "uebergeben") && !nonce) return usage;
   if (nonce === "" || (befehl === "claim" && rest.length > 0)) return usage;
   try {
     if (befehl === "claim") return claim(deps, nr);
     if (befehl === "pruefe") return pruefe(deps, nr, nonce);
+    if (befehl === "uebergeben") return uebergeben(deps, nr, nonce);
     return freigeben(deps, nr, nonce);
   } catch (e) {
     return ergebnis(2, "", `✖ ticket-lock: ${e instanceof Error ? e.message : String(e)}`);
@@ -255,6 +274,7 @@ export function echteDeps() {
         closeSync(fd);
       }
     },
+    ersetze: (p, text) => writeFileSync(p, text),
     benenneUm: renameSync,
     loesche: unlinkSync,
     legeVerzeichnisAn: (d) => mkdirSync(d, { recursive: true }),

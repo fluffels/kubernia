@@ -29,8 +29,8 @@ const api = schichten as unknown as {
 };
 
 const req = createRequire(import.meta.url);
-const echt = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell; layerOf: (f: string) => string; pruefeModell: (m: Modell) => void; verbotsRegeln: (m: Modell) => unknown[] };
-const ECHT_PFAD = fileURLToPath(new URL("../scripts/layers.cjs", import.meta.url));
+const echt = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell; layerOf: (f: string) => string };
+const kern = req("../scripts/schichten-kern.cjs") as { pruefeModell: (m: Modell) => void; verbotsRegeln: (m: Modell) => unknown[] };
 
 const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
 const basis = (): Modell => ({
@@ -54,7 +54,7 @@ function fixture(files: Record<string, string>): string {
   }
   return root;
 }
-const layersFile = (m: unknown) => `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)}, pruefeModell: require(${JSON.stringify(ECHT_PFAD)}).pruefeModell };\n`;
+const layersFile = (m: unknown) => `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)} };\n`;
 const fixtureMitModell = (m: unknown, extra: Record<string, string> = {}) => fixture({ "scripts/layers.cjs": layersFile(m), ...extra });
 const cfg = (extra: Cfg = {}): Cfg => ({ schichten: { layers: "scripts/layers.cjs", ...extra } });
 afterEach(() => {
@@ -134,9 +134,9 @@ describe("Modell-Prüfung (Negativfälle)", () => {
   const wirft = (mut: (m: Modell) => void, muster: RegExp) => {
     const m = basis();
     mut(m);
-    assert.throws(() => echt.pruefeModell(m), muster);
+    assert.throws(() => kern.pruefeModell(m), muster);
   };
-  test("echtes Modell ist gültig", () => assert.doesNotThrow(() => echt.pruefeModell(echt.SCHICHT_MODELL)));
+  test("echtes Modell ist gültig", () => assert.doesNotThrow(() => kern.pruefeModell(echt.SCHICHT_MODELL)));
   test("unbekanntes darf-Ziel", () => wirft((m) => m.schichten[1].darf.push("nirgendwo"), /unbekanntes Ziel "nirgendwo"/));
   test("doppelte ID", () => wirft((m) => (m.schichten[1].id = "domaene"), /doppelte ID "domaene"/));
   test("keine Auffang-Schicht", () => wirft((m) => (m.schichten[2].muster = "^src/x"), /Auffang-Schicht.*gefunden: 0/));
@@ -175,20 +175,20 @@ describe("Modell-Prüfung (Negativfälle)", () => {
   test("verbotsRegeln prüft das Modell zuerst (fail-closed)", () => {
     const m = basis();
     m.schichten[1].darf.push("nirgendwo");
-    assert.throws(() => echt.verbotsRegeln(m), /unbekanntes Ziel "nirgendwo"/);
-    assert.ok(echt.verbotsRegeln(basis()).length > 0);
+    assert.throws(() => kern.verbotsRegeln(m), /unbekanntes Ziel "nirgendwo"/);
+    assert.ok(kern.verbotsRegeln(basis()).length > 0);
   });
-  test("keine Schichten", () => assert.throws(() => echt.pruefeModell({ ...basis(), schichten: [], extern: [] }), /keine Schichten/));
+  test("keine Schichten", () => assert.throws(() => kern.pruefeModell({ ...basis(), schichten: [], extern: [] }), /keine Schichten/));
   test("quellwurzel fehlt, ist leer, ohne Slash am Ende oder mit Metazeichen: wirft", () => {
     const ohne = basis() as unknown as Record<string, unknown>;
     delete ohne.quellwurzel;
-    assert.throws(() => echt.pruefeModell(ohne as unknown as Modell), /quellwurzel/);
+    assert.throws(() => kern.pruefeModell(ohne as unknown as Modell), /quellwurzel/);
     for (const w of ["", "src", "(x/", "/", "../x/", "a b/", 7]) {
       const m = basis();
       (m as { quellwurzel: unknown }).quellwurzel = w;
-      assert.throws(() => echt.pruefeModell(m), /quellwurzel/, JSON.stringify(w));
+      assert.throws(() => kern.pruefeModell(m), /quellwurzel/, JSON.stringify(w));
     }
-    for (const w of ["src/", "wetter/", "lib/core/", "app_1/"]) assert.doesNotThrow(() => echt.pruefeModell({ ...basis(), quellwurzel: w }));
+    for (const w of ["src/", "wetter/", "lib/core/", "app_1/"]) assert.doesNotThrow(() => kern.pruefeModell({ ...basis(), quellwurzel: w }));
   });
   test("Generator wirft bei layers-Datei mit trivialem Prüfer ohne quellwurzel", () => {
     const m = basis() as unknown as Record<string, unknown>;
@@ -217,9 +217,15 @@ describe("Modell-Prüfung (Negativfälle)", () => {
   test("fehlende layers-Datei", () => {
     assert.throws(() => api.schichtenSollGenerator({ rootDir: fixture({}), config: cfg() }), /fehlt/);
   });
-  test("layers-Datei ohne pruefeModell", () => {
+  test("layers-Datei ohne pruefeModell lädt: geprüft wird mit dem Kern (#1612)", () => {
     const root = fixture({ "scripts/layers.cjs": `module.exports = { SCHICHT_MODELL: ${JSON.stringify(basis())} };` });
-    assert.throws(() => api.schichtenSollGenerator({ rootDir: root, config: cfg() }), /kein pruefeModell/);
+    assert.deepEqual(api.ladeModell(root, "scripts/layers.cjs"), basis());
+  });
+  test("ein mitgelieferter No-op-Prüfer hebelt die Kern-Prüfung nicht aus (kaputtes Modell bleibt rot)", () => {
+    const kaputt = basis();
+    kaputt.schichten[1].darf.push("nirgendwo");
+    const root = fixture({ "scripts/layers.cjs": `module.exports = { SCHICHT_MODELL: ${JSON.stringify(kaputt)}, pruefeModell() {} };` });
+    assert.throws(() => api.schichtenSollGenerator({ rootDir: root, config: cfg() }), /unbekanntes Ziel "nirgendwo"/);
   });
   test("layers-Datei mit kaputtem Modell wirft die Modell-Prüfung", () => {
     const kaputt = basis();

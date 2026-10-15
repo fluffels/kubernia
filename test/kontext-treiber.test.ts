@@ -382,3 +382,232 @@ describe("Wartepausen über 240 s (#1588)", () => {
     expect(K.renderMarkdown(r)).toContain("| Lens-Warten | 2 | 4 |");
   });
 });
+
+// ── Phasen-Schnitt: Übergabe, je Ticket (#1592) ──────────────────────────────
+
+type Je = {
+  gesamt: { n: number; requests: number; ersterKontextMedian: number | null; kostenSumme: number } | null;
+  nachfolger?: { n: number; ersterKontextMedian: number | null };
+  nachlese?: { summe: number; median: number | null };
+  kostenAb?: Record<string, { median: number | null; summe: number }>;
+};
+type JeBericht = { agent: string; jeTicket: true; gesamt: Je; ohneSammel: Je; sammel: Je; schnitt: { verify: Je; pr: Je; ohne: Je }; ohneTicket: number; ohneVorgaenger: number };
+type JeEingabe = { laeufe: Lauf[]; von?: string; bis?: string; ohne?: number[]; jeTicket: boolean };
+const je = (e: JeEingabe) => (K as unknown as { kontextTreiber: (e: JeEingabe) => JeBericht }).kontextTreiber(e);
+const KI = K as unknown as {
+  parseArgs: (a: string[]) => { jeTicket?: boolean };
+  analysiereLauf: (l: Lauf) => (Analyse & { schnitt: string | null; einstieg: string | null; geaendertePfade: string[]; leseAufrufe: { art: string; pfad?: string; befehl?: string }[] }) | null;
+};
+/** Lauf, der `ab` Minuten später beginnt (der Prompt-Zeitstempel ist der Start des Laufs). */
+const laufAb = (ab: number, prompt: string, calls: CallSpec[]): Lauf => ({
+  meta: { agentType: "kubernia-umsetzer" },
+  zeilen: [user(ab, prompt), ...calls.map((c) => ({ ...c, min: c.min + ab })).flatMap(schritt)],
+});
+const NL = String.fromCharCode(10);
+const vorgaenger = (nr: number, schnitt: string | null, ab: number, calls: CallSpec[]) => laufAb(ab, [`Ticket #${nr}: x`, ...(schnitt ? [`Schnitt: ${schnitt}`] : []), "Lock: nonce=abc"].join(NL), calls);
+const nachfolger = (nr: number, einstieg: string, ab: number, calls: CallSpec[]) =>
+  laufAb(ab, [`Ticket #${nr}: x`, "Lock: nonce=abc", `Einstieg: ${einstieg}`, "--- Übergabe ---", `SCHNITT: ${einstieg}`, "UEBERGABE:"].join(NL), calls);
+
+describe("parseArgs und Prompt-Zeilen (#1592)", () => {
+  test("--je-ticket schaltet um, ohne den Schalter bleibt es aus", () => {
+    expect(KI.parseArgs(["--von", "x", "--je-ticket"]).jeTicket).toBe(true);
+    expect(KI.parseArgs(["--von", "x"]).jeTicket).toBeFalsy();
+  });
+  test("Schnitt: und Einstieg: nur als ganze Zeile mit pr|verify; Prosa, SCHNITT:-Großschrift und unbekannte Werte sind null", () => {
+    const a = (prompt: string) => KI.analysiereLauf(lauf(prompt, [{ min: 1 }]))!;
+    expect(a(`#1 x${NL}Schnitt: verify`)).toMatchObject({ schnitt: "verify", einstieg: null });
+    expect(a(`#1 x${NL}Einstieg: pr  `)).toMatchObject({ schnitt: null, einstieg: "pr" });
+    expect(a("#1 x: `Schnitt: verify` steht mitten im Satz").schnitt).toBeNull();
+    expect(a("#1 x, danach Schnitt: verify").schnitt).toBeNull();
+    expect(a(`#1 x${NL}SCHNITT: verify${NL}UEBERGABE:`).schnitt).toBeNull();
+    expect(a(`#1 x${NL}Schnitt: review`).schnitt).toBeNull();
+    expect(a(`#1 x${NL}Einstieg: verify ab Stufe 0`).einstieg).toBeNull();
+  });
+});
+
+describe("Phasen beim Einstieg (#1592)", () => {
+  const phasen = (einstieg: string, calls: CallSpec[]) => KI.analysiereLauf(nachfolger(1, einstieg, 0, calls))!.phasen;
+  test("Einstieg pr: Calls ohne Tool sind Merge/Cleanup, Edit ist CI-Fix", () => {
+    expect(phasen("pr", [{ min: 1 }, { min: 2, tools: [edit()] }, { min: 3, tools: [bash("node scripts/pr-warten.mjs 5")] }])).toEqual(["Merge/Cleanup", "CI-Fix", "CI-Warten"]);
+  });
+  test("Einstieg verify: Calls ohne Tool sind verify, nach dem Lens-Spawn Review, ohne Einstieg bleibt es Umsetzung", () => {
+    expect(phasen("verify", [{ min: 1 }, { min: 2, tools: [linse] }, { min: 3 }])).toEqual(["verify", "Review", "Review"]);
+    expect(KI.analysiereLauf(lauf("#1 x", [{ min: 1 }]))!.phasen).toEqual(["Umsetzung"]);
+  });
+});
+
+describe("je Ticket (#1592)", () => {
+  test("zwei Läufe eines Tickets sind ein Lauf: Summen, erster Kontext vom Vorgänger, Nachfolger gezählt", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, ctx: 10_000 }, { min: 2, ctx: 20_000 }, { min: 3, ctx: 30_000 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, ctx: 15_000 }, { min: 2, ctx: 25_000 }]);
+    const r = je({ laeufe: [n, v], jeTicket: true });
+    expect(r.gesamt.gesamt).toMatchObject({ n: 1, requests: 5 });
+    const einzeln = [v, n].map((l) => KI.analysiereLauf(l)!.kosten!);
+    expect(r.gesamt.gesamt!.kostenSumme).toBeCloseTo(einzeln[0] + einzeln[1], 10);
+    expect(r.gesamt.nachfolger).toMatchObject({ n: 1, ersterKontextMedian: 15_000 });
+    expect(r.schnitt.verify.gesamt!.n).toBe(1);
+    expect(r.schnitt.pr.gesamt).toBeNull();
+    expect(r.schnitt.ohne.gesamt).toBeNull();
+  });
+  test("Gruppen nach dem Schnitt des Vorgängers: verify, pr, ohne; ein Schnitt ohne Nachfolger hat nachfolger.n = 0", () => {
+    const r = je({
+      laeufe: [
+        vorgaenger(5, "verify", 0, [{ min: 1 }]),
+        nachfolger(5, "verify", 10, [{ min: 1 }]),
+        vorgaenger(6, "pr", 20, [{ min: 1 }]), // kein Nachfolger
+        vorgaenger(7, null, 30, [{ min: 1 }]),
+      ],
+      jeTicket: true,
+    });
+    expect(r.schnitt.verify.gesamt!.n).toBe(1);
+    expect(r.schnitt.pr.gesamt!.n).toBe(1);
+    expect(r.schnitt.ohne.gesamt!.n).toBe(1);
+    expect(r.schnitt.pr.nachfolger!.n).toBe(0);
+    expect(r.schnitt.verify.nachfolger!.n).toBe(1);
+    expect(r.gesamt.gesamt!.n).toBe(3);
+  });
+  test("Fenster gilt für den ersten Start des Tickets; Läufe ohne Ticket zählen nur in ohneTicket; Nachfolger ohne Vorgänger fällt heraus", () => {
+    const laeufe = [
+      vorgaenger(5, "pr", 0, [{ min: 1 }]),
+      nachfolger(5, "pr", 100, [{ min: 1 }]),
+      vorgaenger(6, "pr", 200, [{ min: 1 }]),
+      laufAb(250, "kein Ticket hier", [{ min: 1 }]),
+      nachfolger(8, "pr", 300, [{ min: 1 }]),
+    ];
+    const alle = je({ laeufe, jeTicket: true });
+    expect(alle.gesamt.gesamt!.n).toBe(2);
+    expect(alle.ohneTicket).toBe(1);
+    expect(alle.ohneVorgaenger).toBe(1);
+    const spaet = je({ laeufe, von: t(50), jeTicket: true });
+    expect(spaet.gesamt.gesamt!.n).toBe(1);
+    expect(spaet.ohneVorgaenger).toBe(1); // nur Ticket 8: der Nachfolger von Ticket 5 fällt mit seinem Vorgänger vor dem Fenster ganz heraus
+    expect(je({ laeufe, ohne: [6], jeTicket: true }).gesamt.gesamt!.n).toBe(1);
+  });
+  test("ohne den Schalter ist der Bericht der alte: je Lauf, ohne jeTicket-Felder", () => {
+    const laeufe = [vorgaenger(5, "verify", 0, [{ min: 1 }]), nachfolger(5, "verify", 10, [{ min: 1 }])];
+    const r = je({ laeufe, jeTicket: false }) as unknown as { gesamt: Je; jeTicket?: boolean; schnitt?: unknown };
+    expect(r.gesamt.gesamt!.n).toBe(2);
+    expect(r.jeTicket).toBeUndefined();
+    expect(r.schnitt).toBeUndefined();
+  });
+});
+
+describe("Nachlese-Calls und Kosten ab Phase (#1592)", () => {
+  const nachlese = (geaendert: Tool[], gelesen: Tool[]) => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, tools: geaendert }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, tools: gelesen }]);
+    return je({ laeufe: [v, n], jeTicket: true }).gesamt.nachlese!.summe;
+  };
+  const lies = (file: string): Tool => ({ name: "Read", input: { file_path: file } });
+  test("Read mit absolutem Worktree-Pfad (Backslash) und Shell-Befehle cat/sed/head auf geänderte Pfade zählen", () => {
+    expect(nachlese([edit("scripts/a.mjs")], [lies("C:\\dev\\kubernia\\.claude\\worktrees\\kq-5-x\\scripts\\a.mjs")])).toBe(1);
+    expect(nachlese([edit("scripts/a.mjs")], [bash("sed -n '1,9p' scripts/a.mjs")])).toBe(1);
+    expect(nachlese([edit("scripts/a.mjs")], [bash("head -n 5 scripts/a.mjs")])).toBe(1);
+    expect(nachlese([edit("scripts/a.mjs")], [bash("cat C:/dev/kubernia/.claude/worktrees/kq-5-x/scripts/a.mjs")])).toBe(1);
+    expect(nachlese([edit("scripts/a.mjs")], [lies("scripts/a.mjs"), bash("cat scripts/a.mjs"), lies("src/b.ts")])).toBe(2);
+    // geänderter Pfad absolut (Worktree, Backslash), gelesen relativ: der Worktree-Präfix fällt weg
+    expect(nachlese([edit("C:\\dev\\kubernia\\.claude\\worktrees\\kq-5-x\\scripts\\a.mjs")], [lies("scripts/a.mjs")])).toBe(1);
+  });
+  test("Negativ: ungeänderte Datei, grep, ähnlicher Name und Lesen durch den Vorgänger zählen nicht", () => {
+    expect(nachlese([edit("scripts/a.mjs")], [bash("cat scripts/b.mjs")])).toBe(0);
+    expect(nachlese([edit("scripts/a.mjs")], [bash("grep -n x scripts/a.mjs")])).toBe(0);
+    expect(nachlese([edit("scripts/a.mjs")], [bash("cat scripts/a.mjsx")])).toBe(0);
+    expect(nachlese([edit("scripts/a.mjs")], [bash("cat myscripts/a.mjs")])).toBe(0);
+    expect(nachlese([edit("scripts/a.mjs")], [lies("xscripts/a.mjs")])).toBe(0);
+    expect(nachlese([lies("scripts/a.mjs")], [lies("scripts/a.mjs")])).toBe(0);
+  });
+  test("Median über Tickets mit Nachfolger; ein Ticket ohne Nachfolger geht nicht in die Nachlese ein", () => {
+    const r = je({
+      laeufe: [
+        vorgaenger(5, "pr", 0, [{ min: 1, tools: [edit("a.ts")] }]),
+        nachfolger(5, "pr", 10, [{ min: 1, tools: [lies("a.ts"), lies("a.ts")] }]),
+        vorgaenger(6, "pr", 20, [{ min: 1, tools: [edit("a.ts")] }]),
+        nachfolger(6, "pr", 30, [{ min: 1, tools: [lies("a.ts")] }]),
+        vorgaenger(7, "pr", 40, [{ min: 1, tools: [edit("a.ts")] }]),
+      ],
+      jeTicket: true,
+    });
+    expect(r.gesamt.nachlese).toEqual({ summe: 3, median: 1.5 });
+  });
+  test("kostenAb: Tail-Summe der Phasen ab X in Phasen-Reihenfolge, Median und Σ je Ticket", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, tools: [edit()] }, { min: 2, tools: [bash("npm run verify:kompakt")] }, { min: 3, tools: [linse] }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, tools: [bash("gh pr create --title x")] }, { min: 2, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 3, tools: [bash("git worktree remove x")] }]);
+    const c = KI.analysiereLauf(lauf("#1 x", [{ min: 1 }]))!.kosten!;
+    const ab = je({ laeufe: [v, n], jeTicket: true }).gesamt.kostenAb!;
+    // Phasen der sechs Calls: Umsetzung, verify, Review | Merge/Cleanup, CI-Warten, Merge/Cleanup
+    expect(ab["Umsetzung"].summe).toBeCloseTo(6 * c, 10);
+    expect(ab["verify"].summe).toBeCloseTo(5 * c, 10);
+    expect(ab["Review"].summe).toBeCloseTo(4 * c, 10);
+    expect(ab["CI-Warten"].summe).toBeCloseTo(3 * c, 10);
+    expect(ab["CI-Warten"].median).toBeCloseTo(3 * c, 10);
+    expect(ab["CI-Fix"].summe).toBeCloseTo(2 * c, 10);
+    expect(ab["Merge/Cleanup"].summe).toBeCloseTo(2 * c, 10);
+  });
+  test("renderMarkdown nennt Schnitt-Gruppen und die Übergabe-Kennzahlen", () => {
+    const r = je({ laeufe: [vorgaenger(5, "verify", 0, [{ min: 1, tools: [edit("a.ts")] }]), nachfolger(5, "verify", 10, [{ min: 1, tools: [{ name: "Read", input: { file_path: "a.ts" } }] }])], jeTicket: true });
+    const md = K.renderMarkdown(r as unknown as Parameters<typeof K.renderMarkdown>[0]);
+    expect(md).toContain("Schnitt verify");
+    expect(md).toContain("Schnitt pr");
+    expect(md).toContain("Schnitt ohne");
+    expect(md).toContain("Übergabe: 1 Tickets, 1 mit Nachfolger");
+    expect(md).toContain("Nachlese-Calls Σ 1");
+    expect(md).toContain("Kosten ab verify");
+    expect(md).toContain("ab CI-Warten");
+  });
+});
+
+describe("je Ticket: Zusammenlegung und Fenster, Grenzfälle (#1592 Review R1)", () => {
+  type Voll = { gesamt: { n: number; ohnePreis: number; kostenRead: number; kostenWrite: number; kostenOutput: number; ersterKontextMedian: number | null; maxKontextMedian: number | null; kostenSumme: number } | null; wachstum: { ergebnis: number; eingabe: number; rest: number } };
+  const jeVoll = (e: JeEingabe) => (K as unknown as { kontextTreiber: (e: JeEingabe) => { gesamt: Voll } }).kontextTreiber(e).gesamt;
+  const einzeln = (l: Lauf) => (K as unknown as { kontextTreiber: (e: { laeufe: Lauf[] }) => { gesamt: Voll } }).kontextTreiber({ laeufe: [l] }).gesamt;
+
+  test("Summen über beide Läufe: Kostenteile, Wachstum; erster Kontext vom früheren Lauf (auch bei umgekehrter Eingabe), max. Kontext vom größeren", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, ctx: 10_000 }, { min: 2, ctx: 40_000 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, ctx: 15_000 }, { min: 2, ctx: 30_000 }]);
+    const g = jeVoll({ laeufe: [n, v], jeTicket: true });
+    const a = einzeln(v);
+    const b = einzeln(n);
+    expect(g.gesamt!.kostenRead).toBeCloseTo(a.gesamt!.kostenRead + b.gesamt!.kostenRead, 10);
+    expect(g.gesamt!.kostenWrite).toBeCloseTo(a.gesamt!.kostenWrite + b.gesamt!.kostenWrite, 10);
+    expect(g.gesamt!.kostenOutput).toBeCloseTo(a.gesamt!.kostenOutput + b.gesamt!.kostenOutput, 10);
+    expect(g.wachstum.rest).toBe(a.wachstum.rest + b.wachstum.rest);
+    expect(g.wachstum.rest).toBe(30_000 + 15_000);
+    expect(g.gesamt!.ersterKontextMedian).toBe(10_000);
+    expect(g.gesamt!.maxKontextMedian).toBe(40_000);
+  });
+
+  test("max. Kontext ist das Maximum über alle Läufe, auch wenn es im späteren Lauf liegt (Gegenrichtung)", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, ctx: 10_000 }, { min: 2, ctx: 20_000 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, ctx: 15_000 }, { min: 2, ctx: 30_000 }]);
+    expect(jeVoll({ laeufe: [v, n], jeTicket: true }).gesamt!.maxKontextMedian).toBe(30_000);
+  });
+
+  test("ein Lauf ohne Preis macht die Ticket-Kosten unbekannt (ohnePreis), statt Teilkosten zu zählen", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1 }]);
+    (n.zeilen.find((z) => (z as { type?: string }).type === "assistant") as { message: { model: string } }).message.model = "unbekanntes-modell";
+    const g = jeVoll({ laeufe: [v, n], jeTicket: true });
+    expect(g.gesamt).toMatchObject({ n: 1, ohnePreis: 1, kostenSumme: 0 });
+  });
+
+  test("bis gilt für den ersten Start des Tickets: ein Ticket, das nach bis beginnt, fällt heraus; ein Nachfolger nach bis nicht", () => {
+    const laeufe = [
+      vorgaenger(5, "pr", 0, [{ min: 1 }]),
+      nachfolger(5, "pr", 500, [{ min: 1 }]), // nach bis, aber der Vorgänger liegt im Fenster
+      vorgaenger(6, "pr", 400, [{ min: 1 }]), // beginnt nach bis
+      vorgaenger(7, "pr", 100, [{ min: 1 }]), // beginnt genau auf bis: bleibt
+    ];
+    const g = jeVoll({ laeufe, bis: t(100), jeTicket: true });
+    expect(g.gesamt!.n).toBe(2);
+    expect((g.gesamt as unknown as { requests: number }).requests).toBe(3); // Ticket 5 mit Vorgänger UND Nachfolger, Ticket 7
+    expect(jeVoll({ laeufe, jeTicket: true }).gesamt!.n).toBe(3);
+  });
+
+  test("mit Repo-Wurzel: ein absolut geänderter Pfad gleicht einem relativ gelesenen; ohne Wurzel bleibt er absolut", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, tools: [edit("D:/projekt/repo/scripts/a.mjs")] }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, tools: [{ name: "Read", input: { file_path: "scripts/a.mjs" } }] }]);
+    const mit = (wurzel: string | null) => (K as unknown as { kontextTreiber: (e: JeEingabe & { wurzel: string | null }) => JeBericht }).kontextTreiber({ laeufe: [v, n], jeTicket: true, wurzel }).gesamt.nachlese!.summe;
+    expect(mit("D:/projekt/repo")).toBe(1);
+    expect(mit(null)).toBe(0);
+  });
+});

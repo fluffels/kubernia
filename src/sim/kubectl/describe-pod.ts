@@ -11,7 +11,7 @@ import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, type Broken, type Deployment,
 import { currentReplicaSet } from "../replicasets";
 import { findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName } from "../workload";
-import { clusterPodStatus, deploymentPodEntry } from "../podstatus";
+import { clusterPodStatus, deploymentPodEntry, deploymentPodState } from "../podstatus";
 import { podPlacement } from "./inspect";
 
 // --- describe pod: in kohäsive Blöcke zerlegt (Events / Container / Volumes) ---
@@ -52,18 +52,23 @@ function brokenEvents(host: KubectlHost, pod: PodInstance, dep: Deployment, brok
 function podDescribeEvents(host: KubectlHost, pod: PodInstance, dep: Deployment): string[] {
   const events = ["  Type    Reason     Age   Message", "  ----    ------     ----  -------"];
   const age = host._age(pod.created);
-  if (dep.evicted) {
-    // Evicted (#240): der kubelet hat den Pod beendet, um Disk freizugeben bzw. weil er sein
-    // ephemeral-storage-Limit gesprengt hat. Der Grund steht – wie in echtem K8s – im Event.
-    events.push("  Normal   Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Warning  Evicted    " + age + "   " + dep.evicted.reason);
-    events.push("  Normal   Killing    " + age + "   Stopping container " + dep.name);
-  } else if (!dep.broken) {
-    events.push("  Normal  Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
-    events.push("  Normal  Pulled     " + age + "   Container image \"" + dep.image + "\" already present");
-    events.push("  Normal  Started    " + age + "   Started container " + dep.name);
-  } else {
-    events.push(...brokenEvents(host, pod, dep, dep.broken));
+  const s = deploymentPodState(dep);
+  switch (s.kind) {
+    case "evicted":
+      // Evicted (#240): der kubelet hat den Pod beendet, um Disk freizugeben bzw. weil er sein
+      // ephemeral-storage-Limit gesprengt hat. Der Grund steht – wie in echtem K8s – im Event.
+      events.push("  Normal   Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
+      events.push("  Warning  Evicted    " + age + "   " + s.evicted.reason);
+      events.push("  Normal   Killing    " + age + "   Stopping container " + dep.name);
+      break;
+    case "healthy":
+      events.push("  Normal  Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
+      events.push("  Normal  Pulled     " + age + "   Container image \"" + dep.image + "\" already present");
+      events.push("  Normal  Started    " + age + "   Started container " + dep.name);
+      break;
+    case "broken":
+      events.push(...brokenEvents(host, pod, dep, s.broken));
+      break;
   }
   return events;
 }

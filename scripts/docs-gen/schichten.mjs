@@ -7,22 +7,21 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { MERMAID_FRONTMATTER } from "./markdown.mjs";
 
+const kern = createRequire(import.meta.url)("../schichten-kern.cjs");
+
 const MIB = 1024 * 1024;
 
 /**
- * Lädt SCHICHT_MODELL aus der konfigurierten layers-Datei relativ zu `rootDir` und prüft es mit dem
- * `pruefeModell`, das dieselbe Datei exportiert (die Prüfung lebt bei der Modell-Definition, #1392).
+ * Lädt SCHICHT_MODELL aus der konfigurierten layers-Datei relativ zu `rootDir` und prüft es mit dem Kern
+ * (`pruefeModell` aus `scripts/schichten-kern.cjs`, #1612). Die Projektdatei liefert nur Daten; ein von ihr
+ * mitgelieferter Prüfer wird ignoriert, damit ein Projekt die Prüfung nicht aushebeln kann.
  */
 export function ladeModell(rootDir, layersPfad) {
   const abs = join(rootDir, layersPfad);
   if (!existsSync(abs)) throw new Error(`Schicht-Definition ${layersPfad} fehlt`);
   const mod = createRequire(abs)(abs);
   if (!mod.SCHICHT_MODELL) throw new Error(`${layersPfad} exportiert kein SCHICHT_MODELL`);
-  if (typeof mod.pruefeModell !== "function") throw new Error(`${layersPfad} exportiert kein pruefeModell`);
-  mod.pruefeModell(mod.SCHICHT_MODELL);
-  // Fail-closed auch bei einem trivialen Prüfer der fremden Datei: ohne Quellwurzel gäbe es keine Auffang-Zuordnung.
-  const q = mod.SCHICHT_MODELL.quellwurzel;
-  if (typeof q !== "string" || !q.endsWith("/") || q === "/") throw new Error(`${layersPfad}: SCHICHT_MODELL.quellwurzel fehlt oder ist ungültig (Verzeichnis mit Slash am Ende)`);
+  kern.pruefeModell(mod.SCHICHT_MODELL);
   return mod.SCHICHT_MODELL;
 }
 
