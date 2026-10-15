@@ -477,7 +477,9 @@ describe("je Ticket (#1592)", () => {
     expect(alle.gesamt.gesamt!.n).toBe(2);
     expect(alle.ohneTicket).toBe(1);
     expect(alle.ohneVorgaenger).toBe(1);
-    expect(je({ laeufe, von: t(50), jeTicket: true }).gesamt.gesamt!.n).toBe(1);
+    const spaet = je({ laeufe, von: t(50), jeTicket: true });
+    expect(spaet.gesamt.gesamt!.n).toBe(1);
+    expect(spaet.ohneVorgaenger).toBe(1); // nur Ticket 8: der Nachfolger von Ticket 5 fällt mit seinem Vorgänger vor dem Fenster ganz heraus
     expect(je({ laeufe, ohne: [6], jeTicket: true }).gesamt.gesamt!.n).toBe(1);
   });
   test("ohne den Schalter ist der Bericht der alte: je Lauf, ohne jeTicket-Felder", () => {
@@ -502,6 +504,8 @@ describe("Nachlese-Calls und Kosten ab Phase (#1592)", () => {
     expect(nachlese([edit("scripts/a.mjs")], [bash("head -n 5 scripts/a.mjs")])).toBe(1);
     expect(nachlese([edit("scripts/a.mjs")], [bash("cat C:/dev/kubernia/.claude/worktrees/kq-5-x/scripts/a.mjs")])).toBe(1);
     expect(nachlese([edit("scripts/a.mjs")], [lies("scripts/a.mjs"), bash("cat scripts/a.mjs"), lies("src/b.ts")])).toBe(2);
+    // geänderter Pfad absolut (Worktree, Backslash), gelesen relativ: der Worktree-Präfix fällt weg
+    expect(nachlese([edit("C:\\dev\\kubernia\\.claude\\worktrees\\kq-5-x\\scripts\\a.mjs")], [lies("scripts/a.mjs")])).toBe(1);
   });
   test("Negativ: ungeänderte Datei, grep, ähnlicher Name und Lesen durch den Vorgänger zählen nicht", () => {
     expect(nachlese([edit("scripts/a.mjs")], [bash("cat scripts/b.mjs")])).toBe(0);
