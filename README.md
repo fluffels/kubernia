@@ -154,6 +154,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs --danach scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/sandbox-doctor.mjs --sessionstart` | `.claude/settings.json` |
+| Hook | `SessionStart` | matcher: `startup|resume|clear`, `node scripts/mcp-ausfall.mjs --sessionstart` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
