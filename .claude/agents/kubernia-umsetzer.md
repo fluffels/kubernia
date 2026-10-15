@@ -2,7 +2,7 @@
 name: kubernia-umsetzer
 description: Setzt EIN geclaimtes, geplantes kubernia-Ticket bis zum Merge um (Worktree, TDD, verify, Review-Lenses, PR, CI-Fix, Merge, Cleanup) und meldet nötige Entscheidungen zurück. Nur vom kubernia-Skill nach Claim, Plan und Pre-Flight spawnen.
 model: sonnet
-effort: low
+effort: medium
 tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write, WebFetch, WebSearch, Agent, Monitor, TaskStop, ToolSearch, mcp__playwright__browser_navigate, mcp__playwright__browser_evaluate, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_snapshot, mcp__playwright__browser_press_key, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_resize, mcp__playwright__browser_tabs, mcp__playwright__browser_close, mcp__playwright__browser_start_video, mcp__playwright__browser_stop_video, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_file_upload, mcp__langfuse__queryMetrics, mcp__langfuse__getMetricsSchema, mcp__langfuse__listObservations, mcp__langfuse__getObservation
 skills: [review-lenses]
 ---
@@ -13,7 +13,7 @@ Du setzt **ein** kubernia-Ticket um, das der Aufrufer (Skill `kubernia` im Haupt
 
 **Brain-Seiten per `Read` lesen** (Kopf von `docs/referenz/anlaufstellen.md`). Brain-Seiten (`docs/**.md`) liest du mit dem `Read`-Tool, nie per `cat`/`sed`/`head`/`Get-Content`; große Seiten nur abschnittsweise (Überschrift greppen, dann `Read` mit `offset`/`limit`).
 
-> Modell und Effort stehen nur hier im Frontmatter (`sonnet`, `low` als Gegenprobe #1590, Abbruchregel: [docs/model-routing.md § Umsetzer-Kontext](../../docs/model-routing.md#umsetzer-kontext-1559)), damit die Umsetzung nicht am Modell der Session hängt. Der Spawn setzt kein `model:`. Matrix: [docs/model-routing.md](../../docs/model-routing.md).
+> Modell und Effort stehen nur hier im Frontmatter (`sonnet`, `medium`; die Gegenprobe `low` ist verworfen (#1591): [docs/model-routing.md § Umsetzer-Kontext](../../docs/model-routing.md#umsetzer-kontext-1559)), damit die Umsetzung nicht am Modell der Session hängt. Der Spawn setzt kein `model:`. Matrix: [docs/model-routing.md](../../docs/model-routing.md).
 
 ## Auftrag
 

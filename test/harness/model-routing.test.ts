@@ -26,7 +26,7 @@
  *      diese Klasse sieht `check:docdrift` (#529) nicht – es prüft Kommandos/Links.
  *
  * Seit #1280 schreibt auf dem Skill-Pfad nicht mehr der Hauptagent den Code, sondern der Subagent
- * `kubernia-umsetzer` mit `sonnet`/`low` im eigenen Frontmatter: Projekt-Default und Skill-Frontmatter
+ * `kubernia-umsetzer` mit `sonnet`/`medium` im eigenen Frontmatter: Projekt-Default und Skill-Frontmatter
  * ließen sich per `/model` bzw. durch den Turn-Scope still umgehen. Der Wächter prüft Agent, Spawn ohne
  * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review), dass kubernia-loop weg ist
  * und dass `.claude/settings.json` den Hauptchat auf `sonnet` setzt (#1557: Projekt-Default, Ad-hoc-Opus per `/model`).
@@ -123,7 +123,7 @@ const frontmatter = parseFrontmatter as (md: string) => Record<string, string>;
  * Befunde zum Hauptchat-Modell in den Projekt-Settings (#1557): `model` muss genau `sonnet` sein (der Alias, nie eine feste ID),
  * und kein `env`-Schlüssel mit MODEL darf es überstimmen (`ANTHROPIC_MODEL` hat Vorrang vor dem Settings-`model`; generisch,
  * damit neue Variablennamen nicht durchrutschen); ebenso kein EFFORT-Schlüssel (`CLAUDE_CODE_EFFORT_LEVEL` überstimmt das
- * Agent-Frontmatter und damit die Effort-Gegenprobe #1590). Die 1h-TTL des Hauptchats bleibt Default: kein TTL-Schlüssel (docs/model-routing.md §5).
+ * Agent-Frontmatter). Die 1h-TTL des Hauptchats bleibt Default: kein TTL-Schlüssel (docs/model-routing.md §5).
  */
 function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: string; experimental?: { cacheTtl?: string }; env?: Record<string, string> }): string[] {
   const out = settings.model === "sonnet" ? [] : [`model=${JSON.stringify(settings.model ?? null)}`];
@@ -629,7 +629,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
       "Der Umsetzer muss im Frontmatter auf dem Coding-Tier stehen – nur das Agent-Frontmatter wirkt unabhängig " +
         "vom Session-Modell (Skill-Frontmatter gilt nur für den Turn, #98898).",
     );
-    assert.equal(fm.effort, "low", "Matrix §1: Skill-Pfad-Umsetzung sonnet/low (Gegenprobe #1590); am Spawn steht kein effort");
+    assert.equal(fm.effort, "medium", "Matrix §1: Skill-Pfad-Umsetzung sonnet/medium (Gegenprobe low verworfen, #1591); am Spawn steht kein effort");
     assert.notEqual(fm.omitClaudeMd, "true", "Der Umsetzer braucht AGENTS.md im Kontext");
   });
 
