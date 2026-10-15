@@ -290,7 +290,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     ];
     for (const [alt, neu, was] of sabotagen) {
       assert.ok(yml.includes(alt), `Vorlage enthält ${alt}`);
-      assert.ok(!taktWorkflowRobust(yml.replace(alt, neu)), was);
+      assert.ok(!taktWorkflowRobust(yml.replaceAll(alt, neu)), was); // alle Fundstellen: ein zweiter Schritt darf die Prüfung nicht verdecken
     }
     assert.ok(!taktWorkflowRobust(""));
   });

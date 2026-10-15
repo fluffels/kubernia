@@ -19,7 +19,7 @@ type G = {
   SAMMEL_ZEILEN_GRENZE: number;
   zaehleBefundZeilen: (k: Komm[], o: { vertraut: (u: User) => boolean; nurOffen?: boolean }) => number;
   entscheideGeneration: (a: { zeilen: number; grenze?: number }) => "nachfolger" | "nichts";
-  kandidatenSammelticket: (offene: Offen[], titel: string, o?: { ohne?: number | null }) => Offen[];
+  kandidatenSammelticket: (offene: Offen[], titel: string, o?: { nach?: number | null }) => Offen[];
   dublettenEntscheidung: (a: { eigenNr: number; titel: string; eigenKommentare: number; andere: Offen[]; vorgaenger?: number | null }) => { art: string; aelter?: number };
   parseArgs: (argv: string[]) => Args | null;
   planeGeneration: (a: { offene: Offen[]; einzeln: (nr: number) => Roh; kommentareVon: (nr: number) => Komm[]; vertraut: (u: User) => boolean; grenze?: number }) => Plan;
@@ -80,9 +80,10 @@ describe("Vorgänger-Ausschluss (--vorgaenger X, X ungeclaimt)", () => {
   const T = "Harness-Härtung (gesammelt)";
   const o = (number: number, assignees: string[] = []): Offen => ({ number, titel: T, assignees, createdAt: "2026-10-01T00:00:00Z" });
 
-  test("kandidatenSammelticket lässt den Vorgänger weg, andere bleiben", () => {
-    expect(G.kandidatenSammelticket([o(5), o(9)], T, { ohne: 9 }).map((i) => i.number)).toEqual([5]);
-    expect(G.kandidatenSammelticket([o(5), o(9)], T, { ohne: null }).map((i) => i.number)).toEqual([9, 5]);
+  test("kandidatenSammelticket: nur strikt jüngere als der Vorgänger zählen (auch ältere volle Generationen nicht)", () => {
+    expect(G.kandidatenSammelticket([o(5), o(9), o(12)], T, { nach: 9 }).map((i) => i.number)).toEqual([12]);
+    expect(G.kandidatenSammelticket([o(5), o(9)], T, { nach: 9 }).map((i) => i.number)).toEqual([]);
+    expect(G.kandidatenSammelticket([o(5), o(9)], T, { nach: null }).map((i) => i.number)).toEqual([9, 5]);
     expect(G.kandidatenSammelticket([o(5), o(9)], T).map((i) => i.number)).toEqual([9, 5]);
   });
 
@@ -90,8 +91,12 @@ describe("Vorgänger-Ausschluss (--vorgaenger X, X ungeclaimt)", () => {
     expect(G.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(18)], vorgaenger: 18 }).art).toBe("keine");
   });
 
-  test("ein echtes älteres Duplikat ohne Vorgänger-Bezug bleibt eine Dublette (Wettlauf #1560/#1561)", () => {
-    expect(G.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(18), o(15)], vorgaenger: 18 })).toEqual({ art: "eigenes-schliessen", aelter: 15 });
+  test("Generationskette: ein älteres volles Ticket W vor dem Vorgänger X ist keine Dublette des Nachfolgers", () => {
+    expect(G.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(15), o(18)], vorgaenger: 18 }).art).toBe("keine");
+  });
+
+  test("ein echtes älteres Duplikat (zwischen Vorgänger und Nachfolger) bleibt eine Dublette (Wettlauf #1560/#1561)", () => {
+    expect(G.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(18), o(19)], vorgaenger: 18 })).toEqual({ art: "eigenes-schliessen", aelter: 19 });
     expect(G.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(15)] })).toEqual({ art: "eigenes-schliessen", aelter: 15 });
   });
 });
@@ -168,6 +173,16 @@ describe("planeGeneration", () => {
     ).toThrow(/gh kaputt/);
   });
 
+  test("nur fremde Zeilen (nicht vertraute Autoren) → nichts, auch bei 12 offenen Zeilen", () => {
+    const fremd = [k(Array.from({ length: 12 }, () => "- [ ] x").join("\n"), { login: "fremder" })];
+    expect(G.planeGeneration({ offene: [o(9)], einzeln: offenRoh, kommentareVon: () => fremd, vertraut }).art).toBe("nichts");
+  });
+
+  test("eine eigene Grenze wird durchgereicht", () => {
+    expect(G.planeGeneration({ offene: [o(9)], einzeln: offenRoh, kommentareVon: () => zeilen(3), vertraut, grenze: 3 }).art).toBe("nachfolger");
+    expect(G.planeGeneration({ offene: [o(9)], einzeln: offenRoh, kommentareVon: () => zeilen(3), vertraut, grenze: 4 }).art).toBe("nichts");
+  });
+
   test("Kommentar an den Vorgänger nennt Zahl und Nachfolger", () => {
     expect(G.generationsKommentar({ zeilen: 12, nachfolger: 30 })).toBe("Generation voll (12 Zeilen), neue Zeilen in #30");
   });
@@ -197,7 +212,15 @@ describe("pruefSchritt mit Ziel „hinter X“", () => {
     expect(G.pruefSchritt({ items, nr: 20, position: 4, hinter: 10 })).toMatchObject({ art: "setze", k: { afterId: "I10" } });
   });
 
-  test("X nicht (mehr) im Board, etwa geclaimt und geschlossen → normale Positionsprüfung", () => {
+  test("X steht im Board, ist aber geclaimt oder geschlossen → keine „setze hinter X“, normale Positionsprüfung", () => {
+    const geclaimt = [b(1), sammel(10, { assignees: ["fluffels"] }), b(2), sammel(20), b(3)];
+    expect(G.pruefSchritt({ items: geclaimt, nr: 20, position: 4, hinter: 10 }).art).toBe("ok");
+    const geschlossen = [b(1), sammel(10, { state: "closed" }), b(2), b(3), b(4), b(5), sammel(20)];
+    expect(G.pruefSchritt({ items: geschlossen, nr: 20, position: 4, hinter: 10 })).toMatchObject({ art: "setze", k: { nr: 20 } });
+    expect(G.pruefSchritt({ items: geschlossen, nr: 20, position: 4, hinter: 10 }).k?.afterId).not.toBe("I10");
+  });
+
+  test("X nicht (mehr) im Board → normale Positionsprüfung", () => {
     const items = [b(1), b(2), sammel(20)];
     expect(G.pruefSchritt({ items, nr: 20, position: 4, hinter: 10 }).art).toBe("ok");
   });
@@ -209,8 +232,8 @@ describe("Verdrahtung der Generationsgrenze (#1647)", () => {
 
   test("der Board-Takt fährt `harness --generation` nach dem Takt-Skript, mit Board-Token; fehlt er, wird nur gewarnt", () => {
     expect(yml).toMatch(/node scripts\/board-takt\.mjs[\s\S]*node scripts\/sammelticket-anlegen\.mjs harness --generation/);
-    expect(yml).toMatch(/GH_TOKEN: \$\{\{ env\.PROJECT_TOKEN \}\}/);
-    expect(yml.match(/secrets\.PROJECT_TOKEN/g)?.length, "das Secret steht genau einmal (Job-Env), der Wächter in langfuse-erfassung sabotiert die erste Fundstelle").toBe(1);
+    expect(yml).toMatch(/GH_TOKEN: \$\{\{ secrets\.PROJECT_TOKEN \}\}/);
+    expect(yml).toMatch(/continue-on-error: true\n\s+env:/); // best effort: ein Fehler macht den Takt nicht rot
     expect(yml).toMatch(/if \[ -z "\$GH_TOKEN" \]; then\n\s+echo "::warning::PROJECT_TOKEN fehlt[^\n]*\n\s+exit 0/);
   });
 

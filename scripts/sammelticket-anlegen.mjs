@@ -115,9 +115,9 @@ export function sammelticketBody({ art, vorgaenger = null, vorgaengerOffen = fal
   return zeilen.join("\n");
 }
 
-/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `ohne`: ein Vorgänger (`--vorgaenger`), der nicht zählt. Pur. */
-export function kandidatenSammelticket(offene, titel, { ohne = null } = {}) {
-  return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0 && i.number !== ohne).sort((a, b) => b.number - a.number);
+/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `nach`: der Vorgänger (`--vorgaenger`); nur strikt jüngere Tickets zählen (der Vorgänger und ältere volle Generationen sind kein „schon vorhanden“). Pur. */
+export function kandidatenSammelticket(offene, titel, { nach = null } = {}) {
+  return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0 && (nach === null || i.number > nach)).sort((a, b) => b.number - a.number);
 }
 
 /**
@@ -135,10 +135,10 @@ export function waehleBestaetigtes(kandidaten, einzeln) {
 /**
  * Dubletten-Entscheidung nach dem Anlegen von `eigenNr`: `andere` sind bestätigt offene Tickets (siehe `waehleBestaetigtes`). Gibt es ein
  * ungeclaimtes mit gleichem `titel` und kleinerer Nummer, ist das ältere das Original: `eigenes-schliessen`, bei schon vorhandenen Kommentaren
- * des eigenen (Zeilen, die nicht verloren gehen dürfen) nur `warnung`. Sonst `keine`. Der `vorgaenger` (Generationsnachfolger) ist keine Dublette. Pur.
+ * des eigenen (Zeilen, die nicht verloren gehen dürfen) nur `warnung`. Sonst `keine`. Der `vorgaenger` (Generationsnachfolger) und ältere Tickets sind keine Dubletten: nur strikt jüngere zählen. Pur.
  */
 export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere, vorgaenger = null }) {
-  const aeltere = andere.filter((i) => i.titel === titel && i.number < eigenNr && i.number !== vorgaenger && (i.assignees ?? []).length === 0);
+  const aeltere = andere.filter((i) => i.titel === titel && i.number < eigenNr && (vorgaenger === null || i.number > vorgaenger) && (i.assignees ?? []).length === 0);
   if (aeltere.length === 0) return { art: "keine" };
   const aelter = Math.min(...aeltere.map((i) => i.number));
   return eigenKommentare > 0 ? { art: "warnung", aelter } : { art: "eigenes-schliessen", aelter };
@@ -151,7 +151,7 @@ const kommentareVon = (nr) => ghJson(["api", "--paginate", "--slurp", `repos/${R
 
 /** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
 function pruefeDublette(nr, titel, vorgaenger) {
-  const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel, { ohne: vorgaenger }).filter((i) => i.number < nr);
+  const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
   const aelter = waehleBestaetigtes(kandidaten, einzelAbruf);
   return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
 }
@@ -175,6 +175,12 @@ function vorgaengerOffen(nr) {
   }
 }
 
+/** Der Vorgänger `nr` als offenes, ungeclaimtes Item der Board-Liste, sonst null (dann gilt nicht „direkt dahinter“, sondern die Position laut AGENTS.md). Pur. */
+export function offenerVorgaenger(items, nr) {
+  if (nr === null) return null;
+  return items.find((i) => i.number === nr && i.state === "open" && (i.assignees ?? []).length === 0) ?? null;
+}
+
 /**
  * Ein Prüfschritt: was ist mit dem Sammelticket `nr` auf der frisch geladenen Board-Liste `items` zu tun? Liefert
  * `{ art: "ok" }` (steht auf Position `position` oder davor), `{ art: "warte" }` (noch nicht in der Liste), `{ art: "setze", k }`
@@ -185,7 +191,7 @@ function vorgaengerOffen(nr) {
 export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false, hinter = null }) {
   const idx = items.findIndex((i) => i.number === nr);
   if (idx < 0) return { art: "warte" };
-  const x = hinter === null ? null : items.find((i) => i.number === hinter && i.state === "open" && (i.assignees ?? []).length === 0);
+  const x = offenerVorgaenger(items, hinter);
   if (x) {
     // Generationsnachfolger: das Ziel ist direkt hinter dem noch ungeclaimten Vorgänger, nicht die Position laut AGENTS.md.
     if (items[items.indexOf(x) + 1]?.number === nr) return { art: "ok" };
@@ -206,7 +212,8 @@ async function setzeUndPruefe(nr, position, dry, hinter) {
     const schritt = pruefSchritt({ items: loadItems(), nr, position, neuGesetzt, dry, hinter });
     if (schritt.art === "ok" || schritt.art === "falsch") return schritt.art;
     if (schritt.art === "setze") {
-      console.log(`Position stimmt noch nicht (Rang ${schritt.k.vonRang}, Ziel ${schritt.k.nachRang}): setze neu (${neuGesetzt + 1}/${NEU_SETZEN_MAX}).`);
+      const ziel = schritt.k.vonRang === undefined ? "direkt hinter dem Vorgänger" : `Rang ${schritt.k.vonRang}, Ziel ${schritt.k.nachRang}`;
+      console.log(`Position stimmt noch nicht (${ziel}): setze neu (${neuGesetzt + 1}/${NEU_SETZEN_MAX}).`);
       setPosition(schritt.k.id, schritt.k.afterId);
       neuGesetzt++;
     }
@@ -225,12 +232,13 @@ async function main(argv = process.argv.slice(2)) {
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   let { vorgaenger } = args;
+  const offene = normalizeOffene(loadOpenIssuePages());
   let hinter = null;
   let generationsZeilen = 0;
   if (args.generation) {
     // Generationsgrenze (ADR 0025): nur wenn das jüngste ungeclaimte Sammelticket voll ist, entsteht ein Nachfolger direkt dahinter.
     const owner = REPO.split("/")[0];
-    const plan = planeGeneration({ offene: normalizeOffene(loadOpenIssuePages()), einzeln: einzelAbruf, kommentareVon: kommentareVon, vertraut: (u) => istVertraut(u, owner) });
+    const plan = planeGeneration({ offene, einzeln: einzelAbruf, kommentareVon: kommentareVon, vertraut: (u) => istVertraut(u, owner) });
     if (plan.art === "nichts") {
       console.log(`Keine neue Generation nötig: ${plan.grund}.`);
       return;
@@ -240,7 +248,7 @@ async function main(argv = process.argv.slice(2)) {
     generationsZeilen = plan.zeilen;
     console.log(`Generation voll: #${vorgaenger} hat ${generationsZeilen} offene Zeilen (Grenze ${SAMMEL_ZEILEN_GRENZE}).`);
   }
-  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel, { ohne: vorgaenger }), einzelAbruf);
+  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbruf);
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
@@ -260,7 +268,7 @@ async function main(argv = process.argv.slice(2)) {
     if (hinter !== null) ghJson(["api", "-X", "POST", `repos/${REPO}/issues/${hinter}/comments`, "-f", `body=${generationsKommentar({ zeilen: generationsZeilen, nachfolger: nr })}`]);
     if (args.art === "harness") {
       const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
-      const x = hinter === null ? null : items.find((i) => i.number === hinter && i.state === "open" && (i.assignees ?? []).length === 0);
+      const x = offenerVorgaenger(items, hinter);
       const k = x ? { id: itemId, afterId: x.id } : sammelticketKorrektur(items, position);
       if (k) setPosition(k.id, k.afterId);
     } else if (args.top) {
@@ -275,7 +283,7 @@ async function main(argv = process.argv.slice(2)) {
   if (args.art !== "harness") return;
   const stand = await setzeUndPruefe(nr, position, args.dry, hinter);
   if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
-  if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
+  if (stand === "ok") console.log(hinter === null ? `Position geprüft: #${nr} steht auf Position ${position} oder davor.` : `Position geprüft: #${nr} steht direkt hinter #${hinter} (oder dieser ist nicht mehr ungeclaimt, dann gilt Position ${position}).`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
   else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
   else {
