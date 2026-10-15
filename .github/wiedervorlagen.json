@@ -1,0 +1,8 @@
+[
+  {
+    "id": "langfuse-takt-schwelle",
+    "faellig": "2026-11-13",
+    "titel": "Langfuse-Takt-Schwelle prüfen",
+    "text": "50 Ticket-Merges an echten Merge-Zahlen prüfen (Konstante `MIN_TICKET_MERGES_PUSH`, ADR 0016 Fortschreibung #1628)."
+  }
+]

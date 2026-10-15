@@ -84,6 +84,8 @@ export const NOTFAELLE = [
   { art: "security", marker: "🔒 Security:", quelle: "docs/ticket-reihenfolge.md" },
   { art: "dependabot", marker: "🤖 Dependabot-PRs auflösen", quelle: ".github/workflows/dependabot-inbox.yml" },
   { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },
+  // Der Titel entsteht in scripts/wiedervorlage.mjs (der Workflow ruft nur das Skript), darum steht der Marker dort.
+  { art: "wiedervorlage", marker: "⏰ Wiedervorlage:", quelle: "scripts/wiedervorlage.mjs" },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */
