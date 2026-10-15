@@ -57,27 +57,36 @@ import {
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
-/** `--branches [--fix]`: gemergte lokale Ticket-Branches aufräumen (#1579); ohne `--fix` nur die Liste. Nie im Stop-Hook. */
-function branchenModus(root, loeschen) {
-  const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
-  const gh = () => ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]);
+/**
+ * `--branches [--fix]`: gemergte lokale Ticket-Branches aufräumen (#1579); ohne `--fix` nur die Liste. Nie im Stop-Hook.
+ * Liefert den Exit-Code (0 = ok, 1 = Abbruch oder Löschfehler) statt `process.exit`; `git`, `gh`, `out` und `err` sind injizierbar (Tests).
+ */
+export function branchenModus(root, loeschen, {
+  git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }),
+  gh = () => ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]),
+  out = console.log,
+  err = console.error,
+} = {}) {
   const r = branchesAufraeumen({ git, gh, loeschen });
   if (r.grund) {
-    console.error(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${r.grund}`);
-    process.exit(1);
+    err(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${r.grund}`);
+    return 1;
   }
-  console.log(`Lokale feature/kq-*-Branches: ${r.kandidaten.length} gemergt und löschbar ([gone], nicht ausgecheckt, Spitze = gemergter PR-Kopf), ${r.behalten} bleiben.`);
-  for (const n of r.kandidaten) console.log(`  ${loeschen && r.geloescht.includes(n) ? "gelöscht" : "löschbar "} ${n}`);
-  if (!loeschen && r.kandidaten.length > 0) console.log("Zum Löschen: node scripts/cleanup-worktrees.mjs --branches --fix");
-  for (const f of r.fehler) console.error(`  ✗ ${f}`);
-  if (r.warnung) console.error(`Warnung: ${r.warnung}`);
-  if (!r.ok) process.exit(1);
+  out(`Lokale feature/kq-*-Branches: ${r.kandidaten.length} gemergt und löschbar ([gone], nicht ausgecheckt, Spitze = gemergter PR-Kopf), ${r.behalten} bleiben.`);
+  for (const n of r.kandidaten) out(`  ${loeschen && r.geloescht.includes(n) ? "gelöscht" : "löschbar "} ${n}`);
+  if (!loeschen && r.kandidaten.length > 0) out("Zum Löschen: node scripts/cleanup-worktrees.mjs --branches --fix");
+  for (const f of r.fehler) err(`  ✗ ${f}`);
+  if (r.warnung) err(`Warnung: ${r.warnung}`);
+  return r.ok ? 0 : 1;
 }
 
 function main() {
   const FIX = process.argv.includes("--fix");
   const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-  if (process.argv.includes("--branches")) return branchenModus(ROOT, FIX);
+  if (process.argv.includes("--branches")) {
+    process.exitCode = branchenModus(ROOT, FIX);
+    return;
+  }
 
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);

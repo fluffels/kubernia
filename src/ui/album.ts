@@ -75,7 +75,7 @@ export const albumUI = part({
           const icon = e.kind === "command" ? "⌨️" : "💡";
           const example = e.kind === "command" && e.example
             ? `<div class="album-example">Beispiel: <code>${esc(e.example)}</code></div>` : "";
-          return `<div class="album-entry"><div class="album-entry-head">${icon} ${e.kind === "command" ? `<code>${esc(e.title)}</code>` : `<b>${e.title}</b>`}</div>
+          return `<div class="album-entry"><div class="album-entry-head">${icon} ${e.kind === "command" ? `<code>${fmtCmd(e.title)}</code>` : `<b>${fmtCmd(e.title)}</b>`}</div>
             <div class="album-detail">${fmtCmd(e.detail)}</div>${example}
             <div class="album-where dim">📜 gelernt in: ${esc(e.questTitle)}</div></div>`;
         }).join("");

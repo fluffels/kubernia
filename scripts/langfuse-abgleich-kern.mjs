@@ -6,7 +6,7 @@
  * Bewertung, Bericht und CLI stehen in langfuse-abgleich.mjs, der Schreibweg in langfuse-nachliefern.mjs.
  */
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { istProjektOrdner } from "./transkript.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
@@ -16,6 +16,43 @@ import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 export const RUHEFRIST_MIN = 30;
 /** Obergrenze der Metrics-Zeilen; wird sie erreicht, ist das Ergebnis abgeschnitten (fail-closed, nie still kürzen). */
 export const ROW_LIMIT = 1000;
+
+// ── Stichtag, Fristen und Ledger (geteilt von Abgleich und Nachlieferer, Konvention #1398) ──
+
+/** Sessions mit einem Call vor diesem Zeitpunkt werden nur gezählt: davor fehlt die TTL-Aufteilung der Cache-Writes, der Fingerabdruck passt nicht zu Langfuse (vgl. langfuse-abgleich.mjs). */
+export const STICHTAG = "2026-10-07T00:00:00Z";
+/** Ohne bekanntes Ende gilt eine Session erst nach dieser Ruhe als beendet (eine untätig offene Parallelsession bleibt unberührt). */
+export const RUHEFRIST_OHNE_ENDE_H = 24;
+/** Ruhe bei bekanntem Ende (SessionEnd): kürzer als die Wartezeit des Hooks (WARTE_SESSIONEND in langfuse-abgleich-hook), damit der Lauf nach dem Warten sendet. */
+export const RUHEFRIST_BEENDET_MS = 150_000;
+export const LEDGER_NAME = "langfuse-abgleich.json";
+
+/** Liegt der früheste Call des Solls vor dem Stichtag? (Ohne Calls oder ohne gültige Zeit: nein.) */
+export function vorStichtag(soll) {
+  const zeiten = soll.map((e) => Date.parse(e.ts)).filter(Number.isFinite);
+  return zeiten.length > 0 && Math.min(...zeiten) < Date.parse(STICHTAG);
+}
+
+/** Wartet der Nachlieferer noch auf diese Session (Ruhefrist nicht um)? 150 s bei bekanntem Ende, sonst 24 h seit der letzten Transkript-Änderung. */
+export function nachliefererWartet({ mtime, now, beendet }) {
+  const ruheMs = beendet ? RUHEFRIST_BEENDET_MS : RUHEFRIST_OHNE_ENDE_H * 3_600_000;
+  return now - mtime < ruheMs;
+}
+
+export const leeresLedger = () => ({ version: 1, sessions: {} });
+export const istLedger = (j) => j?.version === 1 && j.sessions && typeof j.sessions === "object" && !Array.isArray(j.sessions);
+
+/** `{ ledger, kaputt }`; fehlende Datei = leer, kaputte (kein JSON oder falsche Form) = leer und `kaputt` (ein schreibender Aufrufer sichert sie, ein lesender ignoriert sie). */
+export function ledgerLesen(datei) {
+  if (!existsSync(datei)) return { ledger: leeresLedger(), kaputt: false };
+  try {
+    const j = JSON.parse(readFileSync(datei, "utf8"));
+    if (istLedger(j)) return { ledger: j, kaputt: false };
+  } catch {
+    // fällt auf kaputt
+  }
+  return { ledger: leeresLedger(), kaputt: true };
+}
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 /** Observation-ID: 16 Hex, deterministisch aus Session und Message (idempotentes Nachtragen in 2/3). */

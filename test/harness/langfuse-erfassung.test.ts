@@ -417,9 +417,9 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.ok(!patchDokuStimmig(hp.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 26));
   });
 
-  test("die Doku nennt das Datum des Stichtags aus langfuse-nachliefern.mjs (Drift Doku <-> Konstante)", () => {
+  test("die Doku nennt das Datum des Stichtags aus langfuse-abgleich-kern.mjs (Drift Doku <-> Konstante)", () => {
     const stichtag = (skript: string): string => /export const STICHTAG = "(\d{4}-\d{2}-\d{2})T/.exec(skript)?.[1] ?? "";
-    const datum = stichtag(read("scripts/langfuse-nachliefern.mjs"));
+    const datum = stichtag(read("scripts/langfuse-abgleich-kern.mjs"));
     assert.match(datum, /^\d{4}-\d{2}-\d{2}$/);
     const nenntStichtag = (doku: string, d: string): boolean => new RegExp(`\\*\\*Stichtag:\\*\\*[^\\n]*${d}`).test(doku);
     assert.ok(nenntStichtag(hp, datum), `docs/langfuse-hook-patch.md nennt in der Stichtag-Zeile nicht ${datum}`);

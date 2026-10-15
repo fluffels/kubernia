@@ -52,6 +52,8 @@ const N = { ...rawNachEinstieg, ...rawLock } as unknown as {
   logEintrag: (o: Record<string, unknown>) => Log;
   hookLauf: (a: Args, o: { stateDir: string; lauf: Lauf; schlafen: (ms: number) => Promise<void>; uhr: () => number; pid: number }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
   kurzerStand: (wurzel: string) => string | null;
+  raeumePluginLocks: (stateDir: string, now?: number) => number;
+  PLUGIN_LOCK_ALTER_MS: number;
   gesperrterLauf: (a: Args, o: { stateDir: string; lauf: Lauf; ausloeser: string; pid: number; stand?: string | null }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
 };
 const IO = rawIo as unknown as { parseSessionHookInput: (t: string) => { event?: string; session?: string; source?: string } };
@@ -322,6 +324,70 @@ describe("Lock", () => {
 
 // ── Log ──────────────────────────────────────────────────────────────────────
 
+describe("Plugin-Locks aufräumen (raeumePluginLocks)", () => {
+  const TAG = 24 * 3_600_000;
+  const stateMit = (dateien: Record<string, { inhalt?: string; alterMs: number }>) => {
+    const dir = join(fixture({}), "state");
+    mkdirSync(dir, { recursive: true });
+    for (const [name, d] of Object.entries(dateien)) {
+      writeFileSync(join(dir, name), d.inhalt ?? "");
+      utimesSync(join(dir, name), new Date(T0 - d.alterMs), new Date(T0 - d.alterMs));
+    }
+    return dir;
+  };
+
+  test("nur leere, alte Dateien mit dem Plugin-Namen verschwinden; neue, gefüllte und fremde Namen bleiben", () => {
+    const dir = stateMit({
+      "langfuse_state.00ab12.lock": { alterMs: TAG + MIN },
+      "langfuse_state.ff00.lock": { alterMs: 40 * TAG },
+      "langfuse_state.00ab13.lock": { alterMs: 60 * MIN },
+      "langfuse_state.00ab14.lock": { alterMs: TAG },
+      "langfuse_state.00ab15.lock": { alterMs: 5 * TAG, inhalt: "x" },
+      "langfuse_state.lock": { alterMs: 5 * TAG },
+      "langfuse_state.XYZ.lock": { alterMs: 5 * TAG },
+      "langfuse_state.00ab16.lock.bak": { alterMs: 5 * TAG },
+      "langfuse-abgleich.lock": { alterMs: 5 * TAG },
+    });
+    expect(N.raeumePluginLocks(dir, T0)).toBe(2);
+    expect(readdirSync(dir).sort()).toEqual(["langfuse-abgleich.lock", "langfuse_state.00ab13.lock", "langfuse_state.00ab14.lock", "langfuse_state.00ab15.lock", "langfuse_state.XYZ.lock", "langfuse_state.lock", "langfuse_state.00ab16.lock.bak"].sort());
+  });
+
+  test("ein Verzeichnis mit Lock-Namen und ein fehlender Ordner werfen nicht", () => {
+    const dir = stateMit({});
+    mkdirSync(join(dir, "langfuse_state.abc1.lock"));
+    utimesSync(join(dir, "langfuse_state.abc1.lock"), new Date(T0 - 9 * TAG), new Date(T0 - 9 * TAG));
+    expect(N.raeumePluginLocks(dir, T0)).toBe(0);
+    expect(existsSync(join(dir, "langfuse_state.abc1.lock"))).toBe(true);
+    expect(N.raeumePluginLocks(join(dir, "gibt-es-nicht"), T0)).toBe(0);
+  });
+
+  test("auch wenn lauf wirft: aufgeräumt und die Zahl im Fehler-Logeintrag", async () => {
+    const dir = stateMit({ "langfuse_state.0c.lock": { alterMs: 2 * TAG } });
+    const lauf: Lauf = () => Promise.reject(new Error("kaputt"));
+    await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(existsSync(join(dir, "langfuse_state.0c.lock"))).toBe(false);
+    expect(JSON.parse(readFileSync(join(dir, "langfuse-abgleich.log"), "utf8").trim()) as Log).toMatchObject({ exitCode: 1, pluginLocks: 1 });
+  });
+
+  test("gesperrterLauf räumt nach genommenem Lock auf und loggt die Zahl, bei belegtem Lock nicht", async () => {
+    const dir = stateMit({ "langfuse_state.0a.lock": { alterMs: 2 * TAG } });
+    const lauf: Lauf = () => Promise.resolve({ exitCode: 0, text: "", protokoll: { zugang: true, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] } });
+    const frei = await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(frei.lock).toBe("frei");
+    expect(existsSync(join(dir, "langfuse_state.0a.lock"))).toBe(false);
+    const zeilen = () => readFileSync(join(dir, "langfuse-abgleich.log"), "utf8").trim().split(/\r?\n/).map((z) => JSON.parse(z) as Log);
+    expect(zeilen()[0]).toMatchObject({ lock: "frei", pluginLocks: 1 });
+    // belegt: nichts wird angefasst
+    writeFileSync(join(dir, "langfuse_state.0b.lock"), "");
+    utimesSync(join(dir, "langfuse_state.0b.lock"), new Date(T0 - 2 * TAG), new Date(T0 - 2 * TAG));
+    writeFileSync(join(dir, "langfuse-abgleich.lock"), JSON.stringify({ pid: 4242, zeit: T0 }));
+    const belegt = await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(belegt.lock).toBe("belegt");
+    expect(existsSync(join(dir, "langfuse_state.0b.lock"))).toBe(true);
+    expect(zeilen()[1]).toMatchObject({ lock: "belegt", pluginLocks: 0 });
+  });
+});
+
 describe("Log", () => {
   const logDatei = () => join(fixture({}), "state", "langfuse-abgleich.log");
 
@@ -369,7 +435,7 @@ describe("Log", () => {
       fehler: [{ session: "s1", status: 500, meldung: "x".repeat(400) }],
     };
     const e = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 1, protokoll });
-    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "session", "sessions", "spans", "stand", "uebrig", "wuerdeSenden", "zeit", "zugang"]);
+    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "pluginLocks", "session", "sessions", "spans", "stand", "uebrig", "wuerdeSenden", "zeit", "zugang"]);
     expect(e.stand).toBeNull();
     expect(N.logEintrag({ zeit: "Z", ausloeser: "sessionstart", session: "s1", lock: "frei", stand: "abc1234" }).stand).toBe("abc1234");
     expect(e).toMatchObject({ zugang: true, geprueft: 3, gesendet: 2, dubletten: 1, exitCode: 1 });

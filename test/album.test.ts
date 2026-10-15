@@ -7,6 +7,8 @@
  *  - buildAlbum: Gruppierung nach Thema, Sammel-Fortschritt, Befehls-Dedup und
  *    die Freischalt-Ableitung aus completedQuests (Befehle) bzw. review (Wissen),
  *    jeweils mit Positiv- UND Negativfall.
+ *  - Platzhalter-Befehle (`<pod>`) im Intro werden mitgenommen (#1547), auch gegen
+ *    den echten Content (kein Intro geht verloren).
  *  - Vollständigkeit gegen den echten Content: jede Quiz-Karte landet im Album
  *    (keine verwaiste, unsammelbare Karte) und jeder Befehl hat eine Heimat.
  */
@@ -50,6 +52,41 @@ describe("extractTaughtCommand (#278)", () => {
 
   it("weist „nur ein neues Image\" ab (kein neuer Befehl, nur anderes Argument)", () => {
     expect(extractTaughtCommand("🆕 Wieder nur ein neues Image: <code>redis</code>, der Cache.")).toBeNull();
+  });
+});
+
+describe("extractTaughtCommand mit Platzhaltern (#1547)", () => {
+  it("fängt einen Befehl mit rohem Platzhalter", () => {
+    const r = extractTaughtCommand("🆕 Neuer Befehl: <code>kubectl logs <pod></code> – zeigt die Ausgaben.");
+    expect(r).toEqual({ command: "kubectl logs <pod>", explanation: "zeigt die Ausgaben." });
+  });
+
+  it("fängt mehrere Platzhalter, Pfade und Umlaut-Token wörtlich", () => {
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>kubectl set resources deployment/<name> --limits=memory=<X></code> – setzt.")?.command)
+      .toBe("kubectl set resources deployment/<name> --limits=memory=<X>");
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>kubectl get secret <schlüssel></code> – zeigt.")?.command)
+      .toBe("kubectl get secret <schlüssel>");
+  });
+
+  it("weist kaputte Platzhalter und Inline-Tags ab", () => {
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>kubectl logs <pod</code> – x")).toBeNull();
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>x <1a></code> – x")).toBeNull();
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>a <b>b</b></code> – x")).toBeNull();
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>a<br>b</code> – x")).toBeNull();
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>a<BR>b</code> – x")).toBeNull(); // Groß-/Kleinschreibung wie fmtCmd
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>kubectl <b>logs</code> – x")).toBeNull();
+    expect(extractTaughtCommand("🆕 Kein neuer Befehl – <code>kubectl logs <pod></code> kennst du.")).toBeNull();
+  });
+
+  it("dedupliziert einen Platzhalter-Befehl über Quests hinweg", () => {
+    const qs = [
+      quest("k8s-1", "k8s", [teach("t1", "🆕 Neuer Befehl: <code>kubectl logs <pod></code> – a.", "kubectl logs p")]),
+      quest("k8s-2", "k8s", [teach("t2", "🆕 Neuer Befehl: <code>kubectl logs <pod></code> – b.", "kubectl logs q")]),
+    ];
+    const cmds = buildAlbum(qs, TOPICS, [], emptyUnlock()).pages.flatMap(p => p.entries).filter(e => e.kind === "command");
+    expect(cmds).toHaveLength(1);
+    expect(cmds[0].id).toBe("cmd:kubectl logs <pod>");
+    expect(cmds[0].questId).toBe("k8s-1");
   });
 });
 
@@ -135,6 +172,16 @@ describe("buildAlbum gegen den echten Content (#278)", () => {
     const ids = new Set(knowledge.map(e => e.id));
     expect(ids.size).toBe(knowledge.length); // keine Dubletten
     expect(ids.size).toBe(KQContent.CRAB_QUIZ.length); // jede Karte hat eine Heimat-Quest
+  });
+
+  it("verliert kein „Neuer Befehl:“-Intro des echten Contents (#1547)", () => {
+    const lost: string[] = [];
+    for (const q of KQContent.QUESTS) {
+      for (const st of q.steps) {
+        if (st.type === "teach" && /🆕\s*Neuer Befehl:/.test(st.cmd.intro) && !extractTaughtCommand(st.cmd.intro)) lost.push(st.cmd.id);
+      }
+    }
+    expect(lost).toEqual([]);
   });
 
   it("hält collected ≤ total auf jeder Seite und in Summe", () => {

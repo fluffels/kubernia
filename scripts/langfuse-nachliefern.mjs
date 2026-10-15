@@ -11,7 +11,7 @@
  * (Hook-Verdrahtung: #1578, Einstieg scripts/langfuse-abgleich-hook.mjs; mit --ausloeser laufen Wartezeit, Lock und Log, ohne nur Lock und Log). Aufruf: docs/referenz/befehle.md, Einordnung: docs/model-routing.md › Checkliste Punkt 1.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -23,21 +23,21 @@ import {
   istAbfragen,
   istAusMetrics,
   holeMetrics,
+  LEDGER_NAME,
   RUHEFRIST_MIN,
+  ledgerLesen,
+  nachliefererWartet,
   scoreId,
   sollEintraege,
+  vorStichtag,
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
 import { gesperrterLauf, kurzerStand, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
 
-/** Sessions mit einem Call vor diesem Zeitpunkt werden nur gezählt: davor fehlt die TTL-Aufteilung der Cache-Writes, der Fingerabdruck passt nicht zu Langfuse (vgl. langfuse-abgleich.mjs). */
-export const STICHTAG = "2026-10-07T00:00:00Z";
-/** Ohne bekanntes Ende gilt eine Session erst nach dieser Ruhe als beendet (eine untätig offene Parallelsession bleibt unberührt). */
-export const RUHEFRIST_OHNE_ENDE_H = 24;
-/** Ruhe bei bekanntem Ende (SessionEnd): kürzer als die Wartezeit des Hooks (WARTE_SESSIONEND in langfuse-abgleich-hook), damit der Lauf nach dem Warten sendet. */
-export const RUHEFRIST_BEENDET_MS = 150_000;
-const LEDGER_NAME = "langfuse-abgleich.json";
+// Stichtag und Fristen stehen im Kern (eine Definition); die Tests lesen sie hier.
+export { RUHEFRIST_BEENDET_MS, RUHEFRIST_OHNE_ENDE_H, STICHTAG } from "./langfuse-abgleich-kern.mjs";
+
 /** Zeitversatz zwischen dem Ende-Zeitpunkt des Hooks und der letzten Transkript-Änderung. */
 export const ENDE_SCHLUPF_MS = 5_000;
 /** Ein Ledger-`gesendet` gilt so lange als unterwegs (Ingestion-Verzug), danach wird ein noch fehlender Call erneut gesendet (die IDs sind deterministisch, eine Wiederholung ist ungefährlich). */
@@ -68,21 +68,6 @@ export function parseArgs(argv) {
 }
 
 // ── Ledger ───────────────────────────────────────────────────────────────────
-
-const leeresLedger = () => ({ version: 1, sessions: {} });
-const istLedger = (j) => j?.version === 1 && j.sessions && typeof j.sessions === "object" && !Array.isArray(j.sessions);
-
-/** `{ ledger, kaputt }`; fehlende Datei = leer, kaputte (kein JSON oder falsche Form) = leer und `kaputt` (der Aufrufer sichert sie). */
-function ledgerLesen(datei) {
-  if (!existsSync(datei)) return { ledger: leeresLedger(), kaputt: false };
-  try {
-    const j = JSON.parse(readFileSync(datei, "utf8"));
-    if (istLedger(j)) return { ledger: j, kaputt: false };
-  } catch {
-    // fällt auf kaputt
-  }
-  return { ledger: leeresLedger(), kaputt: true };
-}
 
 /** Atomar: erst `<datei>.tmp`, dann `rename`. */
 function ledgerSchreiben(datei, ledger) {
@@ -157,10 +142,9 @@ async function verarbeite(s, c) {
   // Ob Claude Code nach dem SessionEnd-Hook noch länger ins Transkript schreibt, zeigt dieses Logfeld (sonst fiele jede Session still auf die 24-h-Frist zurück).
   rec.endeVerworfen = endeAngegeben && !endeGilt;
   const beendet = endeBekannt || Boolean(alt?.beendet && unveraendert);
-  const ruheMs = beendet ? RUHEFRIST_BEENDET_MS : RUHEFRIST_OHNE_ENDE_H * 3_600_000;
   // Bekanntes Ende vor jedem Fetch festhalten (auch wenn dieser wirft), sonst gälte beim nächsten Lauf wieder die 24-h-Frist.
   if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: Boolean(alt?.bestaetigt && unveraendert), beendet: true };
-  if (now - s.mtime < ruheMs) return Object.assign(rec, { status: "läuft" });
+  if (nachliefererWartet({ mtime: s.mtime, now, beendet })) return Object.assign(rec, { status: "läuft" });
   if (alt?.bestaetigt && unveraendert) return Object.assign(rec, { status: "bestätigt" });
   // Sessions vor dem Stichtag und ohne Calls: der Vermerk spart bei unverändertem Stand das erneute Parsen und die Abfrage.
   if (alt?.vermerk && unveraendert) return Object.assign(rec, { status: alt.vermerk });
@@ -172,8 +156,8 @@ async function verarbeite(s, c) {
     vermerke("ohne Calls");
     return Object.assign(rec, { status: "ohne Calls" });
   }
-  const vorStichtag = Math.min(...soll.map((e) => Date.parse(e.ts)).filter(Number.isFinite)) < Date.parse(STICHTAG);
-  if (vorStichtag) {
+  const davor = vorStichtag(soll);
+  if (davor) {
     vermerke("vor Stichtag");
     // Würde-senden-Zahl für den Bericht nur im ersten Lauf: der Vermerk überspringt die Abfrage bei unverändertem Stand.
   }
@@ -189,7 +173,7 @@ async function verarbeite(s, c) {
   const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
   rec.dubletten = diff?.dubletten.length ?? 0;
   const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && rec.dubletten > 0;
-  if (vorStichtag) return Object.assign(rec, { status: "vor Stichtag", wuerdeSenden: mehrdeutig ? 0 : zuSenden.length });
+  if (davor) return Object.assign(rec, { status: "vor Stichtag", wuerdeSenden: mehrdeutig ? 0 : zuSenden.length });
   const sendbar = mehrdeutig ? [] : zuSenden;
   if (args.trocken) return Object.assign(rec, { status: mehrdeutig ? "mehrdeutig" : "trocken", wuerdeSenden: sendbar.length });
 

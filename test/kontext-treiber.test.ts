@@ -318,6 +318,14 @@ describe("Filter --delta und --brille (#1582)", () => {
     expect(PA(["--delta", "vielleicht"]).fehler).toMatch(/ja\|nein/);
     expect(PA([]).delta).toBeUndefined();
   });
+  test("parseArgs: --ticket/--ohne nehmen nur Ganzzahlen, sonst Aufruf-Fehler statt stillem NaN-Filter", () => {
+    const P = (a: string[]) => (K as unknown as { parseArgs: (a: string[]) => { tickets: number[]; ohne: number[]; fehler?: string } }).parseArgs(a);
+    expect(P(["--ticket", "7", "--ohne", "8"])).toMatchObject({ tickets: [7], ohne: [8] });
+    expect(P(["--ticket", "7"]).fehler).toBeUndefined();
+    expect(P(["--ticket", "abc"]).fehler).toMatch(/Ticketnummer/);
+    expect(P(["--ohne", ""]).fehler).toMatch(/Ticketnummer/);
+    expect(P(["--ohne"]).fehler).toMatch(/Ticketnummer/);
+  });
 });
 
 describe("--delta ja zählt Merge-Delta-Läufe (#1582)", () => {
