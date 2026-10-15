@@ -10,7 +10,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { ausProbe, liesSnapshot, MAX_ALTER_MS, pacing, schreibeSnapshot, snapshotPfad, zielquoteAusEnv } from "./budget-lib.mjs";
+import { ausProbe, brauchtProbe, liesSnapshot, pacing, schreibeSnapshot, snapshotPfad, zielquoteAusEnv } from "./budget-lib.mjs";
 
 const EXIT = { ok: 0, knapp: 3, stopp: 4 };
 const argv = process.argv.slice(2);
@@ -23,7 +23,12 @@ if (unbekannt.length) {
 
 /** Headless-Probe: cwd im OS-Temp, damit weder Projekt-Hooks noch das kubernia-Tag greifen. `null` bei jedem Fehler. */
 function probe() {
-  const r = spawnSync("claude", ["-p", "Antworte nur mit: ok", "--model", "haiku", "--output-format", "stream-json", "--verbose", "--max-turns", "1"], {
+  // KQ_PACING_PROBE_SKRIPT ersetzt den Claude-Aufruf (nur für Tests: ein Skript, das stream-json-Zeilen ausgibt).
+  const fake = process.env.KQ_PACING_PROBE_SKRIPT;
+  const [datei, args] = fake
+    ? [process.execPath, [fake]]
+    : ["claude", ["-p", "Antworte nur mit: ok", "--model", "haiku", "--output-format", "stream-json", "--verbose", "--max-turns", "1"]];
+  const r = spawnSync(datei, args, {
     cwd: tmpdir(),
     encoding: "utf8",
     timeout: 60_000,
@@ -39,8 +44,7 @@ const gelesen = liesSnapshot(pfad);
 let snapshot = gelesen.snapshot;
 const vorab = [];
 if (zielWarnung) vorab.push(zielWarnung);
-const frisch = snapshot && Number.isFinite(snapshot.stand) && jetzt - snapshot.stand <= MAX_ALTER_MS;
-if (!frisch && !argv.includes("--ohne-probe")) {
+if (brauchtProbe(snapshot, jetzt) && !argv.includes("--ohne-probe")) {
   const gemessen = probe();
   if (gemessen) {
     snapshot = gemessen;

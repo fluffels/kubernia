@@ -1,6 +1,6 @@
 /* Budget-Pacing (#1358): Entscheidung ok/knapp/stopp aus dem Rate-Limit-Snapshot, Quellen, Snapshot-I/O, CLI. */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -15,6 +15,7 @@ const B = raw as unknown as {
   ausStatusline: (i: unknown, j?: number) => Snap | null;
   ausProbe: (z: string[], j?: number) => Snap | null;
   zielquoteAusEnv: (e: Record<string, string>) => { zielquote: number; warnung?: string };
+  brauchtProbe: (s: unknown, j?: number) => boolean;
   liesSnapshot: (p: string) => { snapshot: Snap | null; warnung: string | null };
   snapshotPfad: (e: Record<string, string>) => string;
 };
@@ -141,8 +142,10 @@ describe("pacing: Alter und fehlender Stand (fail-open)", () => {
 describe("zielquoteAusEnv", () => {
   test("gültiger Wert, Default und ungültige Werte mit Warnung", () => {
     expect(B.zielquoteAusEnv({ KQ_PACING_ZIELQUOTE: "70" })).toEqual({ zielquote: 70 });
+    expect(B.zielquoteAusEnv({ KQ_PACING_ZIELQUOTE: "100" })).toEqual({ zielquote: 100 });
+    expect(B.zielquoteAusEnv({ KQ_PACING_ZIELQUOTE: "1" })).toEqual({ zielquote: 1 });
     expect(B.zielquoteAusEnv({})).toEqual({ zielquote: 65 });
-    for (const v of ["abc", "0", "150", "", "-5"]) {
+    for (const v of ["abc", "0", "0.5", "150", "", "-5"]) {
       const r = B.zielquoteAusEnv({ KQ_PACING_ZIELQUOTE: v });
       expect(r.zielquote).toBe(65);
       expect(r.warnung).toMatch(/ungültig/);
@@ -184,6 +187,12 @@ describe("ausProbe", () => {
     const alt = '{"type":"rate_limit_event","rateLimitType":"seven_day","utilization":0.5,"resetsAt":1792184400}';
     expect(B.ausProbe([alt])?.sevenDay?.pct).toBeCloseTo(50);
   });
+  test("ältere Form mit dem 5h-Fenster", () => {
+    const alt = '{"type":"rate_limit_event","rateLimitType":"five_hour","utilization":0.25,"resetsAt":1792098000}';
+    const s = B.ausProbe([alt]);
+    expect(s?.fiveHour?.pct).toBeCloseTo(25);
+    expect(s).not.toHaveProperty("sevenDay");
+  });
   test("das letzte Event gewinnt", () => {
     const neu = event.replace("0.18", "0.19");
     expect(B.ausProbe([event, neu])?.sevenDay?.pct).toBeCloseTo(19);
@@ -212,15 +221,15 @@ describe("liesSnapshot und CLI", () => {
     expect(B.snapshotPfad({})).toBe(join(tmpdir(), "kubernia-rate-limits.json"));
   });
 
-  const cli = (snapshot: Snap | string | null, env: Record<string, string> = {}) => {
+  const cli = (snapshot: Snap | string | null, env: Record<string, string> = {}, args: string[] = ["--ohne-probe", "--json"]) => {
     const d = neu();
     const pfad = join(d, "s.json");
     if (snapshot !== null) writeFileSync(pfad, typeof snapshot === "string" ? snapshot : JSON.stringify(snapshot));
-    const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", "--ohne-probe", "--json"], {
-      encoding: "utf8",
-      env: { ...process.env, KQ_RATE_LIMITS_SNAPSHOT: pfad, ...env },
-    });
-    return { code: r.status, out: r.stdout };
+    const basis = { ...process.env, KQ_RATE_LIMITS_SNAPSHOT: pfad, ...env };
+    // Eine Zielquote aus der Umgebung der Maintainerin darf die Tests nicht verschieben.
+    if (!("KQ_PACING_ZIELQUOTE" in env)) delete basis.KQ_PACING_ZIELQUOTE;
+    const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", ...args], { encoding: "utf8", env: basis });
+    return { code: r.status, out: r.stdout, pfad };
   };
   const jetztS = () => Math.floor(Date.now() / 1000);
   const wochenfenster = (haelfte: number) => ({ pct: haelfte, resetsAt: jetztS() + 3.5 * 86400 });
@@ -248,5 +257,60 @@ describe("liesSnapshot und CLI", () => {
     expect(r.status).toBe(2);
     const streng = cli({ stand: Date.now(), quelle: "statusline", sevenDay: { pct: 20, resetsAt: jetztS() + 3.5 * 86400 } }, { KQ_PACING_ZIELQUOTE: "20" });
     expect(streng.code).toBe(4);
+  });
+
+  test("CLI: Textausgabe nennt Status, Pause, Werte und Warnungen", () => {
+    const knapp = cli({ stand: Date.now(), quelle: "statusline", sevenDay: wochenfenster(50) }, {}, ["--ohne-probe"]);
+    expect(knapp.code).toBe(3);
+    const zeilen = knapp.out.trim().split("\n");
+    expect(zeilen[0]).toMatch(/^knapp · Pause bis \d{4}-\d{2}-\d{2} \d{2}:\d{2} \(.+\)$/);
+    expect(zeilen[1]).toMatch(/^7d: Ist 50 %, Soll [\d.]+ %, Zielquote 65 % · 5h: \? · Quelle: statusline · Alter: \d+ min$/);
+    const offen = cli(null, {}, ["--ohne-probe"]);
+    expect(offen.code).toBe(0);
+    expect(offen.out.split("\n")[0]).toBe("ok");
+    expect(offen.out).toMatch(/^Warnung: .*fehlt/m);
+  });
+
+  describe("Headless-Probe (ersetzt durch ein Skript, kein echter Aufruf)", () => {
+    const probeSkript = (zeilen: string[]) => {
+      const pfad = join(dir, "probe.mjs");
+      writeFileSync(pfad, `console.log(${JSON.stringify(zeilen.join("\n"))});`);
+      return pfad;
+    };
+    const event = (siebenTage: number) =>
+      JSON.stringify({ type: "rate_limit_event", rate_limit_info: { unifiedWindows: { seven_day: { utilization: siebenTage, resetsAt: jetztS() + 3.5 * 86400 } } } });
+
+    test("fehlender Snapshot: die Probe liefert den Stand und wird als Snapshot abgelegt", () => {
+      neu();
+      const r = cli(null, { KQ_PACING_PROBE_SKRIPT: probeSkript([event(0.9)]) }, ["--json"]);
+      expect(r.code).toBe(4);
+      expect(JSON.parse(r.out)).toMatchObject({ status: "stopp", quelle: "probe" });
+      expect(JSON.parse(readFileSync(r.pfad, "utf8"))).toMatchObject({ quelle: "probe" });
+    });
+
+    test("Probe ohne Ergebnis: fail-open mit Warnung, kein Snapshot", () => {
+      const r = cli(null, { KQ_PACING_PROBE_SKRIPT: join(tmpdir(), "gibt-es-nicht.mjs") }, ["--json"]);
+      expect(r.code).toBe(0);
+      expect((JSON.parse(r.out) as Urteil).warnungen.join()).toMatch(/Probe lieferte keinen Stand/);
+      expect(existsSync(r.pfad)).toBe(false);
+    });
+
+    test("frischer Snapshot mit Wochenstand startet keine Probe, einer ohne Wochenstand schon", () => {
+      const frisch = { stand: Date.now(), quelle: "statusline", sevenDay: wochenfenster(10) };
+      const skript = join(tmpdir(), "gibt-es-nicht.mjs");
+      expect((JSON.parse(cli(frisch, { KQ_PACING_PROBE_SKRIPT: skript }, ["--json"]).out) as Urteil).warnungen).toEqual([]);
+      const ohne7 = cli({ stand: Date.now(), quelle: "statusline" }, { KQ_PACING_PROBE_SKRIPT: skript }, ["--json"]);
+      expect((JSON.parse(ohne7.out) as Urteil).warnungen.join()).toMatch(/Probe lieferte keinen Stand/);
+    });
+  });
+});
+
+describe("brauchtProbe", () => {
+  const f = { pct: 10, resetsAt: JETZT / 1000 + 100 };
+  test("fehlt, veraltet oder ohne 7-Tage-Fenster ja, frisch mit Wochenstand nein", () => {
+    expect(B.brauchtProbe(null, JETZT)).toBe(true);
+    expect(B.brauchtProbe({ stand: JETZT - 15 * 60_000 - 1, sevenDay: f }, JETZT)).toBe(true);
+    expect(B.brauchtProbe({ stand: JETZT, fiveHour: f }, JETZT)).toBe(true);
+    expect(B.brauchtProbe({ stand: JETZT - 15 * 60_000, sevenDay: f }, JETZT)).toBe(false);
   });
 });

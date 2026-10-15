@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ausStatusline, schreibeSnapshot } from "./budget-lib.mjs";
+import { ausStatusline, liesSnapshot, schreibeSnapshot } from "./budget-lib.mjs";
 
 /** Shell wie Claude Code: unter Windows Git Bash, sonst die Standard-Shell. */
 function shellArgs(kommando) {
@@ -28,13 +28,14 @@ try {
   }
   try {
     const snapshot = ausStatusline(JSON.parse(roh));
-    if (snapshot) schreibeSnapshot(snapshot);
+    // Ein Teil-Snapshot ohne 7-Tage-Fenster ersetzt keinen vorhandenen mit Wochenstand (z.B. aus der Probe).
+    if (snapshot && (snapshot.sevenDay || !liesSnapshot().snapshot?.sevenDay)) schreibeSnapshot(snapshot);
   } catch {
     /* kein JSON oder nicht schreibbar: nur durchreichen */
   }
   if (process.env.KQ_STATUSLINE_DURCHREICHEN !== "1") {
     try {
-      const settings = join(process.env.KQ_USER_SETTINGS || join(homedir(), ".claude", "settings.json"));
+      const settings = process.env.KQ_USER_SETTINGS || join(homedir(), ".claude", "settings.json");
       const kommando = JSON.parse(readFileSync(settings, "utf8"))?.statusLine?.command;
       if (typeof kommando === "string" && kommando.trim()) {
         const { datei, args, shell } = shellArgs(kommando);

@@ -52,6 +52,20 @@ describe("scripts/statusline.mjs", () => {
     expect(readFileSync(snapshot, "utf8")).toBe('{"alt":true}');
   });
 
+  test("Teil-Snapshot ohne 7-Tage-Fenster ersetzt keinen vorhandenen Wochenstand, mit Wochenstand schon", () => {
+    dir = mkdtempSync(join(tmpdir(), "kq-statusline-"));
+    const snapshot = join(dir, "snap.json");
+    const settings = join(dir, "s.json");
+    writeFileSync(settings, "{}");
+    const alt = '{"stand":1,"quelle":"probe","sevenDay":{"pct":5,"resetsAt":1792184400}}';
+    writeFileSync(snapshot, alt);
+    const env = { ...process.env, KQ_USER_SETTINGS: settings, KQ_RATE_LIMITS_SNAPSHOT: snapshot };
+    spawnSync(process.execPath, ["scripts/statusline.mjs"], { input: '{"rate_limits":{"five_hour":{"used_percentage":9,"resets_at":1792098000}}}', env });
+    expect(readFileSync(snapshot, "utf8")).toBe(alt);
+    spawnSync(process.execPath, ["scripts/statusline.mjs"], { input: PAYLOAD, env });
+    expect(JSON.parse(readFileSync(snapshot, "utf8"))).toMatchObject({ quelle: "statusline", sevenDay: { pct: 34 } });
+  });
+
   test("ohne persönliche Statusline: leere Ausgabe, Exit 0, Snapshot trotzdem da", () => {
     const r = lauf(PAYLOAD, null);
     expect(r.code).toBe(0);

@@ -658,8 +658,8 @@ Das Abo-Limit gilt **kontoweit** und über sieben Tage. Ein Ticketlauf darf es n
 
 **Ausgabe und Exit-Codes.** Zeile 1: `ok`, `knapp · Pause bis <JJJJ-MM-TT HH:MM (Zone)>` oder `stopp · Pause bis …`; Zeile 2: 7d (Ist, Soll, Zielquote), 5h, Quelle, Alter; dann `Warnung:`-Zeilen; `--json` gibt dasselbe als JSON. Exit 0 ok (auch fail-open), 3 knapp, 4 stopp, 2 Aufruffehler.
 
-**Grenzen.** Die Prüfung läuft nur zwischen Tickets; ein laufender Umsetzer wird nie abgebrochen. Während der Hauptchat auf einen Umsetzer wartet, wird die Statusline nicht aktualisiert: der Snapshot altert, die Probe deckt das ab.
+**Grenzen.** Die Probe startet `claude` ohne Shell und findet unter Windows nur eine native `claude.exe` (kein npm-Shim `claude.cmd`), sonst bleibt sie leer (fail-open). Die `statusLine` nutzt den relativen Pfad `scripts/statusline.mjs`: sie setzt eine Session im Projekt-Root voraus. Die Haiku-Calls der Probe tragen kein Tag `kubernia` und fehlen in der Wochenkosten-Messung (Checkliste Punkt 7). Die Prüfung läuft nur zwischen Tickets; ein laufender Umsetzer wird nie abgebrochen. Während der Hauptchat auf einen Umsetzer wartet, wird die Statusline nicht aktualisiert: der Snapshot altert, die Probe deckt das ab.
 
 **Entscheidungen.**
-- 2026-10-08: Drosseln statt auf billigere Modelle umrouten (#1359): ein billigeres Modell gehört per Evidenz dauerhaft in die Matrix, sonst sinkt unter Budgetdruck die Qualität.
+- 2026-10-07: Drosseln statt auf billigere Modelle umrouten (#1359): ein billigeres Modell gehört per Evidenz dauerhaft in die Matrix, sonst sinkt unter Budgetdruck die Qualität.
 - 2026-10-15: Zielquote 65 % statt der 85 % der Ticket-Fassung, weil die Maintainerin eine feste Reserve für andere Arbeit will (Präzedenz für Entscheidungen im Routing-Dokument: #1557, #1580; kein ADR).
