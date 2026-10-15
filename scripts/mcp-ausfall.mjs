@@ -52,9 +52,12 @@ export function logBasis({ plattform, env, home }) {
   return join(env.XDG_CACHE_HOME || join(home, ".cache"), "claude-cli-nodejs");
 }
 
+/** Pfad des Hauptcheckouts zu einer Wurzel, die auch ein Worktree darunter sein darf. Pur. */
+export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").replace(/[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/, "");
+
 /** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. Pur. */
 export function projektOrdner(namen, wurzel) {
-  const haupt = slug(String(wurzel).replace(/[\\/]+$/, "").replace(/[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/, ""));
+  const haupt = slug(hauptWurzel(wurzel));
   const praefix = `${haupt}--claude-worktrees-`;
   return namen.filter((n) => n === haupt || n.startsWith(praefix)).map((n) => ({ ordner: n, suffix: n.slice(haupt.length) }));
 }
@@ -174,7 +177,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
     const wurzel = env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL("..", import.meta.url));
     const server = serverAusConfig(readFileSync(join(wurzel, ".mcp.json"), "utf8"));
     const sessionstart = argv.includes("--sessionstart");
-    const stand = env.KQ_MCP_AUSFALL_STAND || join(tmpdir(), `kq-mcp-ausfall-${slug(wurzel)}.json`);
+    const stand = env.KQ_MCP_AUSFALL_STAND || join(tmpdir(), `kq-mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
     let standSeit;
     if (sessionstart) {
       try {

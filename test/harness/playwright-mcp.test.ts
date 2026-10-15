@@ -112,7 +112,7 @@ describe("Ausfall-Meldung des Launchers (#1634)", () => {
   });
 });
 
-describe("readInstalled/readLockVersion –Dateizugriff liefert null/undefined statt zu werfen", () => {
+describe("readInstalled/readLockVersion – Dateizugriff liefert null/undefined statt zu werfen", () => {
   // Fixture-Checkout in einem Temp-Ordner: genau die Fälle, in denen main() sonst vor der
   // Startentscheidung abstürzte und der Server still fehlte.
   const fixture = (files: Record<string, string>): string => {

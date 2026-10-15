@@ -19,6 +19,7 @@ type Ausfall = {
   serverAusConfig: (text: string) => Server[];
   fehlendeVariablen: (s: Server, env: Record<string, string | undefined>) => string[];
   slug: (p: string) => string;
+  hauptWurzel: (p: string) => string;
   logBasis: (o: { plattform: string; env: Record<string, string | undefined>; home: string }) => string;
   projektOrdner: (namen: string[], wurzel: string) => { ordner: string; suffix: string }[];
   serverOrdner: (n: string) => string;
@@ -43,6 +44,7 @@ describe("klassifiziere", () => {
   test("npx-Fallback in Server-stderr, übriges stderr und sonstige Fehlerzeilen", () => {
     const r = a.klassifiziere([err("Server stderr: playwright-mcp: lokale Installation fehlt → npx @playwright/mcp@0.0.83"), err("Server stderr: boom"), err("Connection failed: x")]);
     expect(r.map((b) => b.klasse)).toEqual(["npx-fallback", "stderr", "fehler"]);
+    expect(a.klassifiziere([err("Server stderr: starte npx -y paket@1")])[0].klasse).toBe("npx-fallback");
     // Die Exit-Zeile des Launchers nennt „Modus npx“, ist aber kein Fallback-Start.
     expect(a.klassifiziere([err("Server stderr: playwright-mcp: Server beendet (Exit 1, nach 5 s, Modus npx)")])[0].klasse).toBe("stderr");
   });
@@ -71,6 +73,14 @@ describe("Pfad-Helfer", () => {
     expect(a.logBasis({ plattform: "linux", env: { XDG_CACHE_HOME: "X" }, home: "H" })).toBe(join("X", "claude-cli-nodejs"));
     expect(a.logBasis({ plattform: "linux", env: {}, home: "H" })).toBe(join("H", ".cache", "claude-cli-nodejs"));
     expect(a.logBasis({ plattform: "win32", env: { KQ_MCP_LOG_DIR: "O", LOCALAPPDATA: "L" }, home: "H" })).toBe("O");
+  });
+  test("logBasis unter Windows ohne LOCALAPPDATA fällt auf das Home zurück", () => {
+    expect(a.logBasis({ plattform: "win32", env: {}, home: "H" })).toBe(join("H", "AppData", "Local", "claude-cli-nodejs", "Cache"));
+  });
+  test("hauptWurzel kürzt Worktree und Schrägstrich am Ende, sonst unverändert", () => {
+    expect(a.hauptWurzel("C:\\dev\\proj\\.claude\\worktrees\\kq-1\\")).toBe("C:\\dev\\proj");
+    expect(a.hauptWurzel("/dev/proj/.claude/worktrees/kq-1")).toBe("/dev/proj");
+    expect(a.hauptWurzel("C:\\dev\\proj")).toBe("C:\\dev\\proj");
   });
   test("projektOrdner: Hauptcheckout und Worktrees, nie Namensvettern", () => {
     const namen = ["C--dev-proj", "C--dev-proj--claude-worktrees-kq-1", "C--dev-proj2", "C--dev-other"];
@@ -103,6 +113,7 @@ describe("bündeln, filtern, melden", () => {
     expect(t).toContain("- x: Variable fehlt");
     expect(t).toContain("node scripts/mcp-ausfall.mjs --seit 2026-10-15T00:00:00Z");
     expect(a.meldung([], ["nur Variable"], "S")).toContain("- nur Variable");
+    expect(a.meldung(a.buendeln([{ ...b("2026-10-15T09:00:00Z", "a"), suffix: "--w" }]), [], "S")).toContain("pw [Worktree--w]: reconnect");
   });
   test("parseSeit: ISO, Nh, Standard bei Unsinn", () => {
     const jetzt = Date.parse("2026-10-15T12:00:00Z");
@@ -177,6 +188,30 @@ describe("main mit Temp-Logs", () => {
     const r = lauf([], { ...env, KQ_MCP_LOG_DIR: join(d, "gibtsnicht") });
     expect(r.aus).toHaveLength(1);
     expect(r.aus[0]).toContain("gibtsnicht");
+  });
+  test("fremde Dateien im Log-Ordner werden ignoriert", () => {
+    const { env, d } = aufbau();
+    const dir = join(d, "logs", a.slug(env.CLAUDE_PROJECT_DIR), "mcp-logs-pw");
+    writeFileSync(join(dir, "notiz.txt"), `${dbg("Starting connection x")}\n${dbg("Starting connection x")}\n${dbg("Starting connection x")}\n`);
+    expect(lauf(["--seit", "2026-10-15T00:00:00Z"], env).aus.join("\n")).toContain("reconnect ×1 ");
+  });
+  test("--sessionstart mit --json bleibt Klartext", () => {
+    const { env } = aufbau();
+    const t = lauf(["--sessionstart", "--json"], env, { jetzt: Date.parse("2026-10-15T10:00:00Z") }).aus.join("\n");
+    expect(t).toContain("MCP-Abweichungen");
+  });
+  test("fehlende .mcp.json: Exit 0 ohne Wurf (äußerer Fang)", () => {
+    const { env } = aufbau();
+    rmSync(join(env.CLAUDE_PROJECT_DIR, ".mcp.json"));
+    expect(lauf(["--sessionstart"], env)).toEqual({ code: 0, aus: [] });
+  });
+  test("nicht schreibbare Stand-Datei: Exit 0, die Meldung davor bleibt erhalten", () => {
+    const { env, d } = aufbau();
+    const datei = join(d, "blockiert");
+    writeFileSync(datei, "x");
+    const r = lauf(["--sessionstart"], { ...env, KQ_MCP_AUSFALL_STAND: join(datei, "unter", "stand.json") }, { jetzt: Date.parse("2026-10-15T10:00:00Z") });
+    expect(r.code).toBe(0);
+    expect(r.aus.join("\n")).toContain("reconnect ×1");
   });
   test("kaputtes .mcp.json wirft nicht, Exit 0; unbekannte Art und fehlende Variable werden genannt", () => {
     const { env } = aufbau("{kaputt");
