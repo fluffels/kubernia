@@ -67,7 +67,7 @@ function raeumeGrabsteine(datei, now) {
 
 /**
  * Räumt verwaiste Plugin-Locks (leere Dateien `langfuse_state.<hash>.lock`, älter als PLUGIN_LOCK_ALTER_MS) im Zustandsordner weg;
- * Rückgabe: Anzahl gelöschter. Nur Dateien mit genau diesem Namensmuster und Größe 0, nie Verzeichnisse oder fremde Namen; ein Fehler
+ * Rückgabe: Anzahl gelöschter. Nur Namen mit genau diesem Muster und Größe 0 (ein Verzeichnis lässt sich nicht per unlink löschen und fällt in den Fehlerfall); ein Fehler
  * je Datei (z.B. unter Windows von einem Prozess gehalten) überspringt sie nur.
  */
 export function raeumePluginLocks(stateDir, now = Date.now()) {
@@ -82,7 +82,7 @@ export function raeumePluginLocks(stateDir, now = Date.now()) {
     const pfad = join(stateDir, name);
     try {
       const st = statSync(pfad);
-      if (!st.isFile() || st.size !== 0 || now - st.mtimeMs <= PLUGIN_LOCK_ALTER_MS) continue;
+      if (st.size !== 0 || now - st.mtimeMs <= PLUGIN_LOCK_ALTER_MS) continue;
       unlinkSync(pfad);
       n++;
     } catch {
