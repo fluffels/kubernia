@@ -6,6 +6,7 @@
  */
 import { afterEach, beforeEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -61,7 +62,9 @@ function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}
   };
 }
 const lauf = (argv: string[], welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}) => M.fuehreAus(argv, deps(welt, jetzt, datei));
-const lockInhalt = (text: string) => JSON.parse(text) as { nonce: string; nr: number };
+const lockInhalt = (text: string) => JSON.parse(text) as { nonceHash: string; nr: number };
+const sha = (n: string) => createHash("sha256").update(n).digest("hex");
+const NICHT_VON_HAND = /nie von Hand|Nicht von Hand/;
 const nonceVon = (r: Erg) => /nonce=(\S+)/.exec(r.out)?.[1] ?? "";
 
 beforeEach(() => {
@@ -78,12 +81,13 @@ describe("claim", () => {
     assert.equal(a.code, 0);
     assert.match(a.out, /^nonce=nonce-\d+\n$/);
     const lockText = readFileSync(join(dir, "kq-locks", "1561.json"), "utf8");
-    assert.equal(lockInhalt(lockText).nonce, nonceVon(a));
+    assert.equal(lockInhalt(lockText).nonceHash, sha(nonceVon(a)));
+    assert.doesNotMatch(lockText, new RegExp(nonceVon(a)), "die Nonce selbst steht nicht in der Datei");
     assert.equal(lockInhalt(lockText).nr, 1561);
     const b = lauf(["claim", "1561"]);
     assert.equal(b.code, 4);
     assert.match(b.err, /anderen Session/);
-    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "1561.json"), "utf8")).nonce, nonceVon(a), "der Lock des Gewinners bleibt");
+    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "1561.json"), "utf8")).nonceHash, sha(nonceVon(a)), "der Lock des Gewinners bleibt");
   });
 
   test("claim holt mit --prune: ein gelöschter Remote-Branch darf das Ticket nicht sperren", () => {
@@ -96,14 +100,15 @@ describe("claim", () => {
     assert.equal(lauf(["claim", "1562"]).code, 0);
   });
 
-  test("ein verwaister Lock (älter als 2 h) wird ersetzt, der alte bleibt als .verwaist-<nonce> liegen", () => {
+  test("ein verwaister Lock (älter als 2 h) wird ersetzt, der alte bleibt als .verwaist-<Hash> liegen", () => {
     const a = lauf(["claim", "7"], {}, JETZT - 2 * 60 * MIN - 1);
     assert.equal(a.code, 0);
     const b = lauf(["claim", "7"]);
     assert.equal(b.code, 0);
     assert.notEqual(nonceVon(b), nonceVon(a));
-    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonce, nonceVon(b));
-    assert.ok(readdirSync(join(dir, "kq-locks")).some((f) => f === `7.json.verwaist-${nonceVon(b)}`));
+    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonceHash, sha(nonceVon(b)));
+    assert.ok(readdirSync(join(dir, "kq-locks")).some((f) => f === `7.json.verwaist-${sha(nonceVon(b)).slice(0, 16)}`));
+    assert.ok(readdirSync(join(dir, "kq-locks")).every((f) => !f.includes(nonceVon(b))), "kein Dateiname verrät die Nonce");
   });
 
   test("ein Lock knapp unter 2 h gilt noch", () => {
@@ -207,6 +212,61 @@ describe("freigeben", () => {
   });
 });
 
+describe("Z4/Z5: Lock nie von Hand, pruefe ohne Nonce", () => {
+  test("pruefe ohne Nonce: frischer Lock → fremd (Exit 4), genau VERWAIST_MS alt → frei", () => {
+    lauf(["claim", "5"]);
+    const r = lauf(["pruefe", "5"]);
+    assert.equal(r.code, 4);
+    assert.equal(r.out, "fremd\n");
+    assert.match(r.err, /frei ab|noch keine 2 h/);
+    assert.equal(lauf(["pruefe", "5"], {}, JETZT + M.VERWAIST_MS).out, "frei\n");
+    assert.equal(lauf(["pruefe", "5"], {}, JETZT + M.VERWAIST_MS - 1).code, 4);
+  });
+
+  test("entscheidePruefung ohne Nonce: jung → fremd, genau 2 h → frei, unlesbares erstellt → frei, alter Lock + Worktree → Aktivität", () => {
+    const o = { nonce: null, vorhanden: false, aktivitaet: null, jetzt: JETZT };
+    const lock = (erstellt: string) => ({ nonce: "a", erstellt });
+    assert.equal(M.entscheidePruefung({ ...o, lock: lock(new Date(JETZT - M.VERWAIST_MS + 1).toISOString()) }), "fremd");
+    assert.equal(M.entscheidePruefung({ ...o, lock: lock(new Date(JETZT - M.VERWAIST_MS).toISOString()) }), "frei");
+    assert.equal(M.entscheidePruefung({ ...o, lock: lock("kaputt") }), "frei");
+    const alt = lock(new Date(JETZT - 3 * 60 * MIN).toISOString());
+    assert.equal(M.entscheidePruefung({ ...o, lock: alt, vorhanden: true, aktivitaet: JETZT - 5 * MIN }), "aktiv");
+  });
+
+  test("die Hash-Datei lässt sich nicht mit dem Hash als Nonce freigeben oder prüfen", () => {
+    lauf(["claim", "5"]);
+    const hash = lockInhalt(readFileSync(join(dir, "kq-locks", "5.json"), "utf8")).nonceHash;
+    const f = lauf(["freigeben", "5", "--nonce", hash]);
+    assert.equal(f.code, 4);
+    assert.ok(existsSync(join(dir, "kq-locks", "5.json")), "Lock bleibt");
+    assert.equal(lauf(["pruefe", "5", "--nonce", hash]).out, "fremd\n");
+  });
+
+  test("Altformat mit Klartext-Nonce bleibt gültig (freigeben, pruefe)", () => {
+    mkdirSync(join(dir, "kq-locks"), { recursive: true });
+    writeFileSync(join(dir, "kq-locks", "5.json"), JSON.stringify({ nr: 5, nonce: "alt", erstellt: new Date(JETZT).toISOString() }));
+    assert.equal(lauf(["pruefe", "5", "--nonce", "alt"]).out, "frei\n");
+    assert.equal(lauf(["freigeben", "5", "--nonce", "alt"]).code, 0);
+    assert.equal(existsSync(join(dir, "kq-locks", "5.json")), false);
+  });
+
+  test("jede Exit-4-Ausgabe nennt, dass man den Lock nie von Hand löst", () => {
+    const a = lauf(["claim", "5"]);
+    const fehler = Object.assign(new Error("x"), { code: "ENOENT" });
+    const meldungen = [
+      lauf(["claim", "5"]).err,
+      lauf(["claim", "9"], { refs: ["feature/kq-9-x"] }).err,
+      lauf(["pruefe", "5", "--nonce", "falsch"]).err,
+      lauf(["pruefe", "5"]).err,
+      lauf(["pruefe", "6"], { worktrees: ["/repo/.claude/worktrees/kq-6"], reflogSek: JETZT / 1000 }).err,
+      lauf(["freigeben", "5", "--nonce", "falsch"]).err,
+      M.fuehreAus(["claim", "5"], { ...deps({}, JETZT + M.VERWAIST_MS + 1), benenneUm: () => { throw fehler; } }).err,
+    ];
+    for (const m of meldungen) assert.match(m, NICHT_VON_HAND, m);
+    assert.equal(a.code, 0);
+  });
+});
+
 describe("Aufruf und reine Funktionen", () => {
   test("ungültige Nummer, unbekannter Befehl, fehlende Argumente → Exit 2", () => {
     for (const argv of [[], ["claim"], ["claim", "abc"], ["claim", "-1"], ["claim", "1.5"], ["foo", "5"], ["pruefe", "5", "--nonce"], ["claim", "5", "extra"]]) {
@@ -269,7 +329,7 @@ describe("verlorener Wettlauf und Randfälle in claim und pruefe", () => {
     });
     assert.equal(r.code, 4);
     assert.match(r.err, /übernommen/);
-    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonce, nonceVon(alt));
+    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonceHash, sha(nonceVon(alt)));
   });
 
   test("nach dem Umbenennen gewinnt ein anderer das Neuanlegen → Exit 4, keine Nonce ausgegeben", () => {

@@ -12,22 +12,22 @@
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
  * Mechanik: die Lock-Datei `<git-common-dir>/kq-locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
- * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonce, erstellt }`.
+ * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig).
  * `claim` prüft vorher, ob ein Worktree `kq-<nr>` oder ein Branch `feature/kq-<nr>-*` (lokal oder remote) existiert (Exit 4). Ein
- * fremder Lock jünger als `VERWAIST_MS` (2 h) gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<nonce>`
+ * fremder Lock jünger als `VERWAIST_MS` (2 h) gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<Hash-Präfix>`
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
- * bei fremdem oder fehlendem Lock); existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
+ * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock jünger als 2 h `fremd`; existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
  * Köpfe, jüngstem Reflog-Eintrag, mtime der geänderten Dateien laut `git status` und mtime von `node_modules`): jünger als
  * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
  *
  * Bewusste Grenzen: nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre); der Workflow-Pfad (`.claude/workflows/kubernia-ticket.js`) hält die Nonce im Workflow-Zustand (`lockNonce`) und gibt den Lock im Cleanup frei;
- * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer).
+ * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer; aus der Lock-Datei ist sie nicht lesbar). Jede Exit-4-Ausgabe nennt: den Lock nie von Hand lösen.
  *
  * Reines Node-Skript (nur Builtins + git). Die Entscheidungen sind pur exportiert, git und Dateisystem injizierbar.
  */
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -65,14 +65,29 @@ export function letzteAktivitaet({ commitMs = [], reflogMs = [], dateiMs = [], n
 
 /**
  * Ergebnis von `pruefe`. `lock`: Inhalt der Lock-Datei oder null; `nonce`: Argument oder null; `vorhanden`: Worktree oder Branch
- * existiert; `aktivitaet`: ms oder null. Ohne Nonce zählt nur die Aktivität; null (nichts feststellbar) ist fail-closed `aktiv`. Pur.
+ * existiert; `aktivitaet`: ms oder null. Ohne Nonce gilt ein Lock jünger als `VERWAIST_MS` als `fremd` (Z5), sonst zählt nur die Aktivität; null (nichts feststellbar) ist fail-closed `aktiv`. Pur.
  */
 export function entscheidePruefung({ lock, nonce, vorhanden, aktivitaet, jetzt, inaktivMs = INAKTIV_MS }) {
-  if (nonce && (!lock || lock.nonce !== nonce)) return "fremd";
+  if (nonce && !gehoertZu(lock, nonce)) return "fremd";
+  if (!nonce && lock && entscheideClaim({ erstellt: Date.parse(lock.erstellt), jetzt }) === "fremd") return "fremd";
   if (!vorhanden) return "frei";
   if (aktivitaet === null || jetzt - aktivitaet < inaktivMs) return "aktiv";
   return "uebernehmbar";
 }
+
+
+
+const hashVon = (nonce) => createHash("sha256").update(nonce).digest("hex");
+
+/** Gehört der Lock zu dieser Nonce? Neu liegt nur `nonceHash` in der Datei (die Nonce ist daraus nicht lesbar); Altformat: Klartext `nonce`. Pur. */
+export function gehoertZu(lock, nonce) {
+  if (!lock || typeof nonce !== "string" || nonce === "") return false;
+  if (typeof lock.nonceHash === "string") return lock.nonceHash === hashVon(nonce);
+  return typeof lock.nonce === "string" && lock.nonce === nonce;
+}
+
+/** Hinweis in jeder Ausgabe mit Exit 4: der Lock wird nie von Hand gelöst. */
+export const NICHT_VON_HAND = "Nicht von Hand lösen: kein mv/rm der Lock-Datei, kein freigeben mit fremder Nonce; einen verwaisten Lock (älter als 2 h) übernimmt claim selbst.";
 
 const NUMMER = /^\d+$/;
 
@@ -88,7 +103,7 @@ const lockPfad = (deps, nr) => join(deps.lockDir, `${nr}.json`);
 function liesLock(deps, nr) {
   try {
     const l = JSON.parse(deps.liesDatei(lockPfad(deps, nr)));
-    return l && typeof l === "object" && typeof l.nonce === "string" ? l : null;
+    return l && typeof l === "object" && (typeof l.nonce === "string" || typeof l.nonceHash === "string") ? l : null;
   } catch {
     return null;
   }
@@ -97,7 +112,7 @@ function liesLock(deps, nr) {
 /** Legt den Lock atomar an; `true` bei Gewinn, `false` bei vorhandener Datei, wirft sonst. */
 function legeAn(deps, nr, nonce) {
   try {
-    deps.schreibeNeu(lockPfad(deps, nr), `${JSON.stringify({ nr, nonce, erstellt: new Date(deps.jetzt()).toISOString() })}\n`);
+    deps.schreibeNeu(lockPfad(deps, nr), `${JSON.stringify({ nr, nonceHash: hashVon(nonce), erstellt: new Date(deps.jetzt()).toISOString() })}\n`);
     return true;
   } catch (e) {
     if (e && e.code === "EEXIST") return false;
@@ -171,21 +186,21 @@ function claim(deps, nr) {
   } catch {
     /* fail-open: ohne Netz zählen die lokalen Refs */
   }
-  if (ermittleBelegung(deps, nr).belegt) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (feature/kq-${nr}-*): nicht claimen, nächstes Item.`);
+  if (ermittleBelegung(deps, nr).belegt) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (feature/kq-${nr}-*): nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
   deps.legeVerzeichnisAn(deps.lockDir);
   raeumeAuf(deps);
   const nonce = deps.nonce();
   if (legeAn(deps, nr, nonce)) return ergebnis(0, `nonce=${nonce}`);
   const vorhanden = liesLock(deps, nr);
   const erstellt = vorhanden ? Date.parse(vorhanden.erstellt) : Number.NaN;
-  if (entscheideClaim({ erstellt, jetzt: deps.jetzt() }) === "fremd") return ergebnis(4, "", `✖ ticket-lock: #${nr} ist von einer anderen Session gelockt (jünger als 2 h): nicht claimen, nächstes Item.`);
+  if (entscheideClaim({ erstellt, jetzt: deps.jetzt() }) === "fremd") return ergebnis(4, "", `✖ ticket-lock: #${nr} ist von einer anderen Session gelockt (gelockt seit ${vorhanden?.erstellt}, frei ab ${new Date(erstellt + VERWAIST_MS).toISOString()}): nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
   try {
-    deps.benenneUm(lockPfad(deps, nr), `${lockPfad(deps, nr)}.verwaist-${nonce}`);
+    deps.benenneUm(lockPfad(deps, nr), `${lockPfad(deps, nr)}.verwaist-${hashVon(nonce).slice(0, 16)}`);
   } catch {
-    return ergebnis(4, "", `✖ ticket-lock: der verwaiste Lock von #${nr} wurde gerade von einer anderen Session übernommen.`);
+    return ergebnis(4, "", `✖ ticket-lock: der verwaiste Lock von #${nr} wurde gerade von einer anderen Session übernommen. ${NICHT_VON_HAND}`);
   }
   if (legeAn(deps, nr, nonce)) return ergebnis(0, `nonce=${nonce}`);
-  return ergebnis(4, "", `✖ ticket-lock: #${nr} wurde beim Übernehmen des verwaisten Locks von einer anderen Session belegt.`);
+  return ergebnis(4, "", `✖ ticket-lock: #${nr} wurde beim Übernehmen des verwaisten Locks von einer anderen Session belegt. ${NICHT_VON_HAND}`);
 }
 
 function pruefe(deps, nr, nonce) {
@@ -193,15 +208,15 @@ function pruefe(deps, nr, nonce) {
   const b = ermittleBelegung(deps, nr);
   const aktivitaet = b.belegt ? letzteAktivitaet(sammleAktivitaet(deps, b)) : null;
   const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt() });
-  if (urteil === "fremd") return ergebnis(4, urteil, `✖ ticket-lock: der Lock zu #${nr} gehört nicht zu dieser Nonce (fremd oder fehlt): nicht anfassen, Befund melden.`);
-  if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen.`);
+  if (urteil === "fremd") return ergebnis(4, urteil, `✖ ticket-lock: der Lock zu #${nr} gehört nicht zu dieser Nonce (fremd, fehlt oder ohne Nonce noch keine 2 h alt): nicht anfassen, Befund melden. ${NICHT_VON_HAND}`);
+  if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen. ${NICHT_VON_HAND}`);
   return ergebnis(0, urteil);
 }
 
 function freigeben(deps, nr, nonce) {
   const lock = liesLock(deps, nr);
   if (!lock) return ergebnis(0, "kein Lock");
-  if (lock.nonce !== nonce) return ergebnis(4, "", `✖ ticket-lock: der Lock zu #${nr} gehört einer anderen Session, nicht gelöscht.`);
+  if (!gehoertZu(lock, nonce)) return ergebnis(4, "", `✖ ticket-lock: der Lock zu #${nr} gehört einer anderen Session, nicht gelöscht. ${NICHT_VON_HAND}`);
   deps.loesche(lockPfad(deps, nr));
   return ergebnis(0, "freigegeben");
 }
