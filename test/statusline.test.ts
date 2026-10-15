@@ -34,7 +34,7 @@ describe("scripts/statusline.mjs", () => {
     const r = lauf(PAYLOAD, KOPIE);
     expect(r.code).toBe(0);
     expect(r.out).toBe(PAYLOAD);
-    const s = JSON.parse(readFileSync(r.snapshot, "utf8"));
+    const s: unknown = JSON.parse(readFileSync(r.snapshot, "utf8"));
     expect(s).toMatchObject({ quelle: "statusline", sevenDay: { pct: 34, resetsAt: 1792184400 }, fiveHour: { pct: 12 } });
   });
 

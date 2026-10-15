@@ -200,9 +200,9 @@ describe("liesSnapshot und CLI", () => {
 
   test("fehlende Datei und kaputtes JSON liefern null mit Grund", () => {
     const d = neu();
-    expect(B.liesSnapshot(join(d, "nix.json"))).toMatchObject({ snapshot: null, warnung: expect.stringMatching(/fehlt/) });
+    expect(B.liesSnapshot(join(d, "nix.json"))).toMatchObject({ snapshot: null, warnung: expect.stringMatching(/fehlt/) as string });
     writeFileSync(join(d, "k.json"), "{nicht json");
-    expect(B.liesSnapshot(join(d, "k.json"))).toMatchObject({ snapshot: null, warnung: expect.stringMatching(/kaputtes JSON/) });
+    expect(B.liesSnapshot(join(d, "k.json"))).toMatchObject({ snapshot: null, warnung: expect.stringMatching(/kaputtes JSON/) as string });
     writeFileSync(join(d, "n.json"), "42");
     expect(B.liesSnapshot(join(d, "n.json")).snapshot).toBeNull();
   });
@@ -232,14 +232,14 @@ describe("liesSnapshot und CLI", () => {
   ])("CLI: %s ergibt Exit %i", (status, w, code) => {
     const r = cli({ stand: Date.now(), quelle: "statusline", sevenDay: { ...wochenfenster(0), ...w } });
     expect(r.code).toBe(code);
-    expect(JSON.parse(r.out).status).toBe(status);
+    expect((JSON.parse(r.out) as Urteil).status).toBe(status);
   });
 
   test("CLI: fehlender oder kaputter Snapshot ist fail-open (Exit 0 mit Warnung)", () => {
     for (const s of [null, "{kaputt"]) {
       const r = cli(s);
       expect(r.code).toBe(0);
-      expect(JSON.parse(r.out).warnungen.length).toBeGreaterThan(0);
+      expect((JSON.parse(r.out) as Urteil).warnungen.length).toBeGreaterThan(0);
     }
   });
 
