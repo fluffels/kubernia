@@ -397,6 +397,37 @@ PR: https://github.com/x/y/pull/7`, ...extra });
     assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: () => ({ state: "OPEN", autoMergeRequest: null, labels: [{ name: "status:festgefahren" }] }) }).exit, 0);
   });
 
+  test("uebergabe (#1592): ein aktiver, registrierter Worktree ist keine Waise, der Stop bleibt frei; ohne Auto-Merge blockt R5", () => {
+    const WT = "/root/.claude/worktrees";
+    const registriert = ["/root", `${WT}/kq-1592`];
+    const befehle: string[] = [];
+    const echteWaisenPruefung = (root: string) =>
+      (ohnePowershell<(r: string, d: object) => { blocked: boolean; reason?: string }>(checkRoh))(root, {
+        now: 50_000_000,
+        execSync: (cmd: string) => {
+          befehle.push(cmd);
+          return cmd.includes("worktree list") ? registriert.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n") : "";
+        },
+        existsSync: (p: string) => p.replace(/\\/g, "/") === WT || registriert.includes(p.replace(/\\/g, "/")),
+        readdirSync: () => [{ name: "kq-1592", isDirectory: () => true, isSymbolicLink: () => false }],
+        statSync: () => ({ mtimeMs: 49_999_000, birthtimeMs: 1 }),
+        lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+        rmSync: () => {
+          throw new Error("ein registrierter Worktree darf nie gelöscht werden");
+        },
+        platform: "linux",
+      });
+    const uebergabe = JSON.stringify({
+      hook_event_name: "SubagentStop",
+      agent_type: "kubernia-umsetzer",
+      last_assistant_message: "ERGEBNIS: uebergabe\nPR: https://github.com/x/y/pull/7\nSCHNITT: pr\nUEBERGABE:\n  Worktree: /root/.claude/worktrees/kq-1592",
+    });
+    assert.deepEqual(runHook(uebergabe, "/root", echteWaisenPruefung, { prStatus: offen }), { exit: 0, stdout: "", stderr: "" });
+    assert.ok(befehle.some((c) => c.includes("worktree list")), "die Waisenprüfung lief wirklich");
+    assert.ok(!befehle.some((c) => c.includes("worktree remove")), "kein Worktree wurde entfernt");
+    assert.equal(runHook(uebergabe, "/root", echteWaisenPruefung, { prStatus: () => ({ state: "OPEN", autoMergeRequest: null }) }).exit, 2);
+  });
+
   test("frei bei stop_hook_active und bei gh-Fehler", () => {
     assert.equal(runHook(payload("abgebrochen", { stop_hook_active: true }), "/x", frei, { prStatus: offen }).exit, 0);
     assert.equal(runHook(payload("abgebrochen"), "/x", frei, { prStatus: () => { throw new Error("x"); } }).exit, 0);
