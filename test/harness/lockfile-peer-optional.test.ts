@@ -7,9 +7,15 @@
  * Lockfile-Erzeugung verliert solche Einträge, `npm ci` bricht dann mit
  * „Missing: <name>@<version> from lock file“ ab. Abhilfe: das Paket als direkte
  * devDependency führen, dann ist die Kante von der Wurzel aus gültig.
+ *
+ * Bekannte Grenze: der Wächter prüft die Vorbedingung im Lockfile des Branches. Entsteht ein
+ * solcher Eintrag erst innerhalb eines Dependabot-PRs (den Dependabot dann wieder verwirft),
+ * bleibt er grün und nur `npm ci` wird rot, mit seiner eigenen Meldung.
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+
+const LOCKFILE = new URL('../../package-lock.json', import.meta.url);
 
 export interface PeerOptionalEintrag {
   pfad: string;
@@ -49,13 +55,13 @@ export function meldung(e: PeerOptionalEintrag): string {
 
 describe('Lockfile ohne reine optionale Peer-Einträge (#1638)', () => {
   it('der echte Lockfile hat keinen', () => {
-    const lock: unknown = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+    const lock: unknown = JSON.parse(readFileSync(LOCKFILE, 'utf8'));
     const liste = nurOptionalePeerEintraege(lock);
     expect(liste.map(meldung)).toEqual([]);
   });
 
   it('Leerlauf-Schutz: der echte Lockfile hat v2+ und Pakete', () => {
-    const lock = JSON.parse(readFileSync('package-lock.json', 'utf8')) as {
+    const lock = JSON.parse(readFileSync(LOCKFILE, 'utf8')) as {
       lockfileVersion: number;
       packages: Record<string, unknown>;
     };
@@ -70,10 +76,12 @@ describe('Lockfile ohne reine optionale Peer-Einträge (#1638)', () => {
         '': { name: 'x' },
         'node_modules/a/node_modules/picomatch': { version: '4.0.7', peer: true, optional: true },
         'node_modules/b/node_modules/@s/p': { version: '1.0.0', peer: true, optional: true },
+        'node_modules/c': { peer: true, optional: true },
       },
     };
     const liste = nurOptionalePeerEintraege(lock);
-    expect(liste.map((e) => e.name)).toEqual(['picomatch', '@s/p']);
+    expect(liste.map((e) => e.name)).toEqual(['picomatch', '@s/p', 'c']);
+    expect(liste[2].version).toBe('?');
     expect(liste[0].version).toBe('4.0.7');
   });
 
@@ -84,6 +92,7 @@ describe('Lockfile ohne reine optionale Peer-Einträge (#1638)', () => {
         '': { peer: true, optional: true },
         'node_modules/fsevents': { version: '2.0.0', optional: true },
         'node_modules/react': { version: '1.0.0', peer: true },
+        'node_modules/leer': null,
       },
     };
     expect(nurOptionalePeerEintraege(lock)).toEqual([]);
@@ -92,6 +101,8 @@ describe('Lockfile ohne reine optionale Peer-Einträge (#1638)', () => {
   it('wirft bei kaputtem Lockfile statt still grün zu sein', () => {
     expect(() => nurOptionalePeerEintraege({ lockfileVersion: 3 })).toThrow(/packages/);
     expect(() => nurOptionalePeerEintraege({ lockfileVersion: 1, dependencies: {} })).toThrow(/lockfileVersion/);
+    expect(() => nurOptionalePeerEintraege({ packages: {} })).toThrow(/lockfileVersion/);
+    expect(() => nurOptionalePeerEintraege({ lockfileVersion: '3', packages: {} })).toThrow(/lockfileVersion/);
     expect(() => nurOptionalePeerEintraege(null)).toThrow(/Objekt/);
   });
 
