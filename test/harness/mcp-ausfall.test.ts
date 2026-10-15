@@ -20,6 +20,7 @@ type Ausfall = {
   fehlendeVariablen: (s: Server, env: Record<string, string | undefined>) => string[];
   slug: (p: string) => string;
   hauptWurzel: (p: string) => string;
+  standPfad: (w: string, env: Record<string, string | undefined>, tmp: string) => string;
   logBasis: (o: { plattform: string; env: Record<string, string | undefined>; home: string }) => string;
   projektOrdner: (namen: string[], wurzel: string) => { ordner: string; suffix: string }[];
   serverOrdner: (n: string) => string;
@@ -81,6 +82,16 @@ describe("Pfad-Helfer", () => {
     expect(a.hauptWurzel("C:\\dev\\proj\\.claude\\worktrees\\kq-1\\")).toBe("C:\\dev\\proj");
     expect(a.hauptWurzel("/dev/proj/.claude/worktrees/kq-1")).toBe("/dev/proj");
     expect(a.hauptWurzel("C:\\dev\\proj")).toBe("C:\\dev\\proj");
+  });
+  test("hauptWurzel lässt tiefere Pfade und Namensvettern unverändert", () => {
+    expect(a.hauptWurzel("/dev/proj/.claude/worktrees/kq-1/sub")).toBe("/dev/proj/.claude/worktrees/kq-1/sub");
+    expect(a.hauptWurzel("/dev/proj/.claude/worktreesX/kq-1")).toBe("/dev/proj/.claude/worktreesX/kq-1");
+  });
+  test("standPfad: Worktree und Hauptcheckout teilen eine Datei, der Override hat Vorrang", () => {
+    const haupt = a.standPfad("/dev/proj", {}, "/tmp");
+    expect(a.standPfad("/dev/proj/.claude/worktrees/kq-1", {}, "/tmp")).toBe(haupt);
+    expect(haupt).toBe(join("/tmp", "kq-mcp-ausfall--dev-proj.json"));
+    expect(a.standPfad("/dev/proj", { KQ_MCP_AUSFALL_STAND: "/x/s.json" }, "/tmp")).toBe("/x/s.json");
   });
   test("projektOrdner: Hauptcheckout und Worktrees, nie Namensvettern", () => {
     const namen = ["C--dev-proj", "C--dev-proj--claude-worktrees-kq-1", "C--dev-proj2", "C--dev-other"];

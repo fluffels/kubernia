@@ -55,6 +55,9 @@ export function logBasis({ plattform, env, home }) {
 /** Pfad des Hauptcheckouts zu einer Wurzel, die auch ein Worktree darunter sein darf. Pur. */
 export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").replace(/[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/, "");
 
+/** Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees); `KQ_MCP_AUSFALL_STAND` hat Vorrang. Pur. */
+export const standPfad = (wurzel, env, tmp) => env.KQ_MCP_AUSFALL_STAND || join(tmp, `kq-mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
+
 /** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. Pur. */
 export function projektOrdner(namen, wurzel) {
   const haupt = slug(hauptWurzel(wurzel));
@@ -177,7 +180,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
     const wurzel = env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL("..", import.meta.url));
     const server = serverAusConfig(readFileSync(join(wurzel, ".mcp.json"), "utf8"));
     const sessionstart = argv.includes("--sessionstart");
-    const stand = env.KQ_MCP_AUSFALL_STAND || join(tmpdir(), `kq-mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
+    const stand = standPfad(wurzel, env, tmpdir());
     let standSeit;
     if (sessionstart) {
       try {
