@@ -422,7 +422,7 @@ sequenceDiagram
   participant H as Hauptchat<br/>Skill kubernia · sonnet · medium
   participant P as kubernia-planner<br/>opus · xhigh
   participant E as Explore<br/>haiku · low
-  participant U as kubernia-umsetzer<br/>sonnet · low
+  participant U as kubernia-umsetzer<br/>sonnet · medium
   participant L1 as kubernia-lens · opus · high<br/>Brille Architektur
   participant L2 as kubernia-lens · opus · high<br/>Brille Requirement-Treue
   participant L3 as kubernia-lens · opus · high<br/>Brille Test-Adäquanz
