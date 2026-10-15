@@ -407,6 +407,41 @@ export function missingFromBoard(openNumbers, items) {
   return [...new Set(openNumbers)].filter((n) => !known.has(n)).sort((a, b) => a - b);
 }
 
+/**
+ * Fehlalarm-Filter (#1628): die REST-Board-Liste liefert frische Items verzögert und meldet sie fälschlich als fehlend. `restFehlend` =
+ * Nummern ohne REST-Item, `graphqlGefunden` = Ergebnis von `itemsUeberIssues` (Item oder null je Nummer). Nur was auch GraphQL nicht kennt,
+ * fehlt wirklich. Aufsteigend. Pur.
+ */
+export function wirklichFehlend(restFehlend, graphqlGefunden) {
+  const gefunden = new Set((graphqlGefunden ?? []).filter(Boolean).map((i) => i.number));
+  return [...new Set(restFehlend)].filter((n) => !gefunden.has(n)).sort((a, b) => a - b);
+}
+
+/** Vorübergehend (Wettlauf): ein frisches Issue hat noch keinen GraphQL-Node oder steht noch nicht in der Board-Abfrage. Rate-Limit gewinnt immer. Pur. */
+export function istVoruebergehend(err) {
+  const text = String(err?.message ?? err ?? "");
+  if (isRateLimit(text)) return false;
+  return /Could not resolve to a node/i.test(text) || /fehlt im Board, nicht aufgenommen: unbekannt|nicht im Board gefunden/i.test(text);
+}
+
+/**
+ * Führt `fn` bis zu `versuche`-mal aus (#1628): nach einem vorübergehenden Fehler Pause `pausenMs[n]`, jeder andere Fehler und der
+ * letzte Fehlschlag werfen sofort. `schlafe` ist für Tests injizierbar.
+ */
+export async function mitWiederholung(
+  fn,
+  { versuche = 4, pausenMs = [5000, 10000, 20000], istVoruebergehend: voruebergehend = istVoruebergehend, schlafe = (ms) => new Promise((r) => setTimeout(r, ms)) } = {},
+) {
+  for (let n = 1; ; n++) {
+    try {
+      return await fn(n);
+    } catch (e) {
+      if (n >= versuche || !voruebergehend(e)) throw e;
+      await schlafe(pausenMs[Math.min(n - 1, pausenMs.length - 1)]);
+    }
+  }
+}
+
 /** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
 export function loadItems(opts = {}) {
   return normalizeItems(loadItemPages(opts));
