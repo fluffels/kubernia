@@ -9,13 +9,20 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+
+// Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie, bricht schon der Import ab (kein stiller Standardwert, #1611).
+const PROJEKT = ladeProjektConfig();
 
 const gh = ghText;
 
-export const PROJECT_ID = "PVT_kwHOD8746c4Barq_";
+export const PROJECT_ID = PROJEKT.board.projectId;
 
-/** Das Repository (`owner/name`): in GitHub Actions `GITHUB_REPOSITORY`, sonst dieses Repo. EINE Quelle für alle Board-Skripte. */
-export const REPO = process.env.GITHUB_REPOSITORY || "fluffels/kubernia";
+/** REST-Pfad des Boards (`users|orgs/<besitzer>/projectsV2/<nr>`), aus der Projekt-Config. */
+export const BOARD_PFAD = `${PROJEKT.board.besitzerTyp === "org" ? "orgs" : "users"}/${PROJEKT.board.besitzer}/projectsV2/${PROJEKT.board.nummer}`;
+
+/** Das Repository (`owner/name`): in GitHub Actions `GITHUB_REPOSITORY`, sonst das Repo der Projekt-Config. EINE Quelle für alle Board-Skripte. */
+export const REPO = process.env.GITHUB_REPOSITORY || PROJEKT.repo;
 
 /** Item-Literal eines frisch angelegten, ungeclaimten Todo-Tickets (die REST-Liste liefert es verzögert; der Aufrufer ergänzt es per `ergaenzeFehlende`). */
 export const todoItem = ({ id, number, title }) => ({ id, number, status: "Todo", title, assignees: [], state: "open" });
@@ -305,10 +312,10 @@ export function normalizeOffene(pages) {
 }
 
 /** Feld-ID von „Status“ im Board (REST braucht sie als `fields=`, sonst fehlt der Status). */
-export const STATUS_FIELD_ID = 358708531;
+export const STATUS_FIELD_ID = PROJEKT.board.statusFeldId;
 
 /**
- * Antwort von `gh api --paginate --slurp users/fluffels/projectsV2/1/items` (Liste von Seiten) →
+ * Antwort von `gh api --paginate --slurp <BOARD_PFAD>/items` (Liste von Seiten) →
  * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), number, status, title, assignees, state, body, labels, autor, blockedBy }`
  * (die letzten vier liest `naechstes-ticket.mjs`; Feldform `issue_dependencies_summary` belegt per Probe 2026-10-08: 151 von 151 Items tragen
  * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; ein Wert über 0 wurde noch nie beobachtet). Pur, damit die Form
@@ -407,7 +414,7 @@ export function loadItems(opts = {}) {
 
 /** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues; `normalizeItems` macht daraus die Items (auch für naechstes-ticket.mjs). */
 export function loadItemPages(opts = {}) {
-  return JSON.parse(gh(["api", "--paginate", "--slurp", `users/fluffels/projectsV2/1/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts));
+  return JSON.parse(gh(["api", "--paginate", "--slurp", `${BOARD_PFAD}/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts));
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
@@ -521,9 +528,9 @@ export function addToBoardTodo(nodeId, opts = {}) {
 }
 
 /** Node-ID des Single-Select-Feldes „Status“ (GraphQL-Mutationen; die REST-Liste nutzt `STATUS_FIELD_ID`). */
-export const STATUS_FIELD_NODE_ID = "PVTSSF_lAHOD8746c4Barq_zhVhdTM";
+export const STATUS_FIELD_NODE_ID = PROJEKT.board.statusFeldNodeId;
 /** Option „Todo“ des Status-Feldes. */
-export const TODO_OPTION_ID = "f75ad846";
+export const TODO_OPTION_ID = PROJEKT.board.todoOptionId;
 
 /**
  * Der Planungsweg von main als pure Funktion (#1390): zuerst die Selbstkorrektur des ungeclaimten Harness-Sammeltickets (nicht bei

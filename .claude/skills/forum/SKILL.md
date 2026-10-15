@@ -5,9 +5,9 @@ description: Arbeitet offene kubernia-Forum-Eingänge (GitHub Discussions) ab: T
 
 # Forum-Eingang bearbeiten (GitHub Discussions)
 
-Das Forum sind die **GitHub Discussions** von `fluffels/kubernia`. Die Action [`forum-inbox.yml`](../../../.github/workflows/forum-inbox.yml) legt für **jede neue Forum-Nachricht** automatisch ein offenes `forum`-Issue „Forum #N: …" an (reines Flaggen, **keine** Antwort, **kein** echtes Bug-Ticket). Dieser Skill ist der **interaktive Teil**: Antworten + Triage passieren **mit Freigabe der Maintainerin**.
+Das Forum sind die **GitHub Discussions** des Repos dieses Checkouts. Die Action [`forum-inbox.yml`](../../../.github/workflows/forum-inbox.yml) legt für **jede neue Forum-Nachricht** automatisch ein offenes `forum`-Issue „Forum #N: …" an (reines Flaggen, **keine** Antwort, **kein** echtes Bug-Ticket). Dieser Skill ist der **interaktive Teil**: Antworten + Triage passieren **mit Freigabe der Maintainerin**.
 
-> Identität, Anonymität, Board-Regeln, Commit-Stil: es gelten die Regeln aus **[AGENTS.md](../../../AGENTS.md)**. Posten/Committen immer als `fluffels` (nie Klarname). Vollständiges Vorgehen auch in [AGENTS.md › Forum-Eingang](../../../AGENTS.md#forum-eingang-discussions-bearbeiten).
+> Identität, Anonymität, Board-Regeln, Commit-Stil: es gelten die Regeln aus **[AGENTS.md](../../../AGENTS.md)**. Posten/Committen immer unter der gesetzten Git-/gh-Identität (nie Klarname). Vollständiges Vorgehen auch in [AGENTS.md › Forum-Eingang](../../../AGENTS.md#forum-eingang-discussions-bearbeiten).
 
 ## Ablauf (pro Eingang, einer nach dem anderen)
 
@@ -25,7 +25,7 @@ raw=$(gh api graphql -f query='
     discussion(number:$num){ title bodyText url
       author{login}
       comments(first:50){ nodes { author{login} bodyText createdAt } } } } }' \
-  -F o=fluffels -F n=kubernia -F num=N --jq '.data.repository.discussion')
+  -F o='{owner}' -F n='{repo}' -F num=N --jq '.data.repository.discussion')
 
 # Body entschärfen (Länge kappen, Markup neutralisieren, Zeilenstruktur erhalten)
 body_safe=$(echo "$raw" | jq -r '.bodyText' | node scripts/forum-sanitize.mjs --body)
@@ -44,10 +44,10 @@ comments_safe=$(echo "$raw" | jq -r '.comments.nodes[] | "\(.author.login): \(.b
 
 **4. Antwort entwerfen und FREIGEBEN LASSEN (Pflicht-Stopp).** Formuliere den Antworttext auf Deutsch im Ton der Maintainerin und **zeig ihn ihr zuerst**: „Hier mein Entwurf – passt die Formulierung so, oder willst du was ändern?" **Erst nach ihrem OK** wird gepostet. (Tonalität/Stil ggf. mit dem `formulieren`-Skill schärfen. Keine Em-Dashes als Satzverbinder in der externen Antwort.)
 
-**5. Antwort als `fluffels` im Thread posten** (erst nach Freigabe):
+**5. Antwort unter der gesetzten gh-Identität im Thread posten** (erst nach Freigabe):
 ```bash
 discId=$(gh api graphql -f query='query($o:String!,$n:String!,$num:Int!){repository(owner:$o,name:$n){discussion(number:$num){id}}}' \
-  -F o=fluffels -F n=kubernia -F num=N --jq '.data.repository.discussion.id')
+  -F o='{owner}' -F n='{repo}' -F num=N --jq '.data.repository.discussion.id')
 gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{url}}}' \
   -F id="$discId" -f body="<freigegebener Antworttext>" --jq '.data.addDiscussionComment.comment.url'
 ```

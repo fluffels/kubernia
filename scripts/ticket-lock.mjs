@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Ticket-Lock (#1561 Z4) — verhindert, dass zwei Agenten-Sessions dasselbe Ticket bearbeiten, obwohl beide „claim und verifiziere“
- * durchlaufen haben: alle Agenten laufen als `fluffels`, der Assignee ist darum kein Lock (Evidenz: zwei Sessions im selben
+ * durchlaufen haben: alle Agenten laufen unter demselben GitHub-Konto, der Assignee ist darum kein Lock (Evidenz: zwei Sessions im selben
  * Worktree `kq-1549`, eine löschte dem Gegenüber `node_modules`).
  *
  *   node scripts/ticket-lock.mjs claim <nr>                      # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`

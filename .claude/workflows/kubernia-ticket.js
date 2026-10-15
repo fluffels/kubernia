@@ -63,7 +63,7 @@ Repo-Landkarte, Schichtregeln). Lies die für deine Aufgabe genannten Abschnitte
 und befolge sie wörtlich — dieser Auftrag fasst sie absichtlich nicht zusammen,
 damit keine zweite, veraltende Wahrheit entsteht.
 
-Commit-Identität ist die lokale Repo-Config (fluffels). Das Repo ist öffentlich und
+Commit-Identität ist die lokale Repo-Config (die gesetzte Git-Identität). Das Repo ist öffentlich und
 bewusst anonym: nie Klarname, externer Benutzername oder dienstliche/private
 E-Mail in Dateien, Commits oder Kommentaren (AGENTS.md § Anonymität wahren).`
 

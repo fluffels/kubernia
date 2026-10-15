@@ -13,6 +13,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ladeProjektConfig } from "../../scripts/projekt-config-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const MANIFEST = ".factory/besitz.json";
@@ -33,22 +35,36 @@ interface Manifest {
 type Zaehlung = Record<string, number>;
 type Baseline = Record<string, Zaehlung>;
 
-/** Die Projektliterale, die ein Kern nicht tragen soll (Plan #1610 §7). */
-const BEGRIFFE: Record<string, RegExp> = {
-  Owner: /fluffels/gi,
-  Repo: /kubernia/gi,
-  "Board-ID": /\bPVT[A-Z]*_[A-Za-z0-9_-]+/g,
-  Stardew: /stardew/gi,
-};
+export interface ProjektConfig {
+  repo: string;
+  board: { besitzer: string };
+  projektliterale?: Record<string, string>;
+}
+
+const escapeRe = (t: string): string => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611): Owner (Repo-Owner und Board-Besitzer),
+ * Repo-Name, generisches Board-ID-Muster und die `projektliterale` der Config. */
+export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
+  const [owner = "", name = ""] = config.repo.split("/");
+  const owners = [...new Set([owner, config.board.besitzer])];
+  const out: Record<string, RegExp> = {
+    Owner: new RegExp(owners.map(escapeRe).join("|"), "gi"),
+    Repo: new RegExp(escapeRe(name), "gi"),
+    "Board-ID": /\bPVT[A-Z]*_[A-Za-z0-9_-]+/g,
+  };
+  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(escapeRe(literal), "gi");
+  return out;
+}
 
 const markerStart = (id: string): string => `<!-- factory-besitz:start ${id} -->`;
 const markerEnde = (id: string): string => `<!-- factory-besitz:ende ${id} -->`;
 
 /** Zählung je Begriff (nur > 0), CRLF-neutral. */
-export function zaehle(text: string): Zaehlung {
+export function zaehle(text: string, begriffe: Record<string, RegExp>): Zaehlung {
   const t = text.replace(/\r\n/g, "\n");
   const out: Zaehlung = {};
-  for (const [name, re] of Object.entries(BEGRIFFE)) {
+  for (const [name, re] of Object.entries(begriffe)) {
     const n = (t.match(re) ?? []).length;
     if (n > 0) out[name] = n;
   }
@@ -158,6 +174,7 @@ export function erlaubt(
   einheiten: Eintrag[],
   aenderungen: Map<string, string | null>,
   basisText: (altPfad: string) => string | null,
+  begriffe: Record<string, RegExp>,
 ): Baseline {
   const out: Baseline = {};
   for (const e of einheiten) {
@@ -165,7 +182,7 @@ export function erlaubt(
     const alt = aenderungen.get(e.pfad) ?? null;
     const text = alt === null ? null : basisText(alt);
     const t = text === null ? null : einheitText(e, text);
-    out[einheitId(e)] = t === null ? {} : zaehle(t);
+    out[einheitId(e)] = t === null ? {} : zaehle(t, begriffe);
   }
   return out;
 }
@@ -192,17 +209,35 @@ export function diffBasisModus(basis: string | null, env: Record<string, string 
 
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
 
+const FIXTURE: ProjektConfig = { repo: "acme/demo", board: { besitzer: "acme" }, projektliterale: { Zelda: "zelda" } };
+const B = begriffeAus(FIXTURE);
+
 describe("zaehle", () => {
-  test("Owner, Repo (auch in Zusammensetzungen), Board-ID und Stardew zählen; Bezeichner PROJECT_ID allein nicht", () => {
-    assert.deepEqual(zaehle("Kubernia KUBERNIA kubernia-umsetzer"), { Repo: 3 });
-    assert.deepEqual(zaehle("x fluffels y"), { Owner: 1 });
-    assert.deepEqual(zaehle("PVT_kwHOabc PVTSSF_xyz_1"), { "Board-ID": 2 });
-    assert.deepEqual(zaehle("const PROJECT_ID = 1"), {});
-    assert.deepEqual(zaehle("docs/stardew-referenz.md"), { Stardew: 1 });
-    assert.deepEqual(zaehle("Größe über Äpfel"), {});
+  test("Owner, Repo (auch in Zusammensetzungen), Board-ID und Zelda zählen; Bezeichner PROJECT_ID allein nicht", () => {
+    assert.deepEqual(zaehle("Demo DEMO demo-umsetzer", B), { Repo: 3 });
+    assert.deepEqual(zaehle("x acme y", B), { Owner: 1 });
+    assert.deepEqual(zaehle("PVT_kwHOabc PVTSSF_xyz_1", B), { "Board-ID": 2 });
+    assert.deepEqual(zaehle("const PROJECT_ID = 1", B), {});
+    assert.deepEqual(zaehle("docs/zelda-referenz.md", B), { Zelda: 1 });
+    assert.deepEqual(zaehle("Größe über Äpfel", B), {});
   });
   test("CRLF und LF liefern dieselbe Zählung", () => {
-    assert.deepEqual(zaehle("kubernia\r\nkubernia\r\n"), zaehle("kubernia\nkubernia\n"));
+    assert.deepEqual(zaehle("demo\r\ndemo\r\n", B), zaehle("demo\ndemo\n", B));
+  });
+});
+
+describe("begriffeAus", () => {
+  test("Regex-Zeichen im Repo-Namen sind wörtlich: my.repo zählt myxrepo nicht", () => {
+    const b = begriffeAus({ repo: "zz/my.repo", board: { besitzer: "zz" } });
+    assert.deepEqual(zaehle("my.repo myxrepo", b), { Repo: 1 });
+  });
+  test("Repo-Owner und abweichender Board-Besitzer zählen beide als Owner; gleicher Besitzer nicht doppelt", () => {
+    const zwei = begriffeAus({ repo: "alice/demo", board: { besitzer: "bob" } });
+    assert.deepEqual(zaehle("alice bob", zwei), { Owner: 2 });
+    assert.deepEqual(zaehle("acme", B), { Owner: 1 });
+  });
+  test("ohne projektliterale entfällt der Zusatzbegriff", () => {
+    assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", board: { besitzer: "acme" } })), {});
   });
 });
 
@@ -210,11 +245,11 @@ describe("einheitText", () => {
   test("Datei, Block, JSON-Schlüssel und nicht Auflösbares", () => {
     assert.equal(einheitText(ein("a"), "x"), "x");
     const blk = ein("a", { block: "b" });
-    assert.equal(einheitText(blk, `v\n${markerStart("b")}\nkubernia\n${markerEnde("b")}\nn`)?.includes("kubernia"), true);
+    assert.equal(einheitText(blk, `v\n${markerStart("b")}\ndemo\n${markerEnde("b")}\nn`)?.includes("demo"), true);
     assert.equal(einheitText(blk, `${markerEnde("b")}\n${markerStart("b")}`), null);
-    assert.equal(einheitText(blk, `x ${markerEnde("b")} kubernia`), null);
+    assert.equal(einheitText(blk, `x ${markerEnde("b")} demo`), null);
     const sch = ein("a", { schluessel: "k" });
-    assert.equal(einheitText(sch, '{"k":{"x":"fluffels"},"z":"kubernia"}'), '{"x":"fluffels"}');
+    assert.equal(einheitText(sch, '{"k":{"x":"acme"},"z":"demo"}'), '{"x":"acme"}');
     assert.equal(einheitText(sch, '{"z":1}'), null);
     assert.equal(einheitText(sch, "kein json"), null);
   });
@@ -286,9 +321,9 @@ describe("parseNameStatus / erlaubt / anhebungen", () => {
     assert.equal(aend.get("kopie.mjs"), null);
     assert.equal(aend.get("x.mjs"), "x.mjs");
   });
-  const basis = (p: string): string | null => (p === "a.mjs" ? "kubernia" : p === "alt.mjs" ? "fluffels fluffels" : null);
+  const basis = (p: string): string | null => (p === "a.mjs" ? "demo" : p === "alt.mjs" ? "acme acme" : null);
   const einheiten = [ein("a.mjs"), ein("neu.mjs"), ein("umbenannt.mjs"), ein("unberuehrt.mjs")];
-  const erl = erlaubt(einheiten, aend, basis);
+  const erl = erlaubt(einheiten, aend, basis, B);
   test("erlaubt: nur berührte Einheiten; neu = 0; Umbenennung = Zählung des alten Pfads", () => {
     assert.deepEqual(erl, { "a.mjs": { Repo: 1 }, "neu.mjs": {}, "umbenannt.mjs": { Owner: 2 } });
   });
@@ -302,9 +337,9 @@ describe("parseNameStatus / erlaubt / anhebungen", () => {
   test("neue Einheit einer bestehenden Datei (Manifest-Zuwachs) ist bis zur Zählung an der Basis erlaubt", () => {
     const e = ein("a.mjs", { block: "b" });
     const aen = new Map<string, string | null>([["a.mjs", "a.mjs"]]);
-    const text = `${markerStart("b")} kubernia ${markerEnde("b")}`;
-    assert.deepEqual(erlaubt([e], aen, () => text), { "a.mjs#b": { Repo: 1 } });
-    assert.deepEqual(erlaubt([e], aen, () => "ohne Marker"), { "a.mjs#b": {} });
+    const text = `${markerStart("b")} demo ${markerEnde("b")}`;
+    assert.deepEqual(erlaubt([e], aen, () => text, B), { "a.mjs#b": { Repo: 1 } });
+    assert.deepEqual(erlaubt([e], aen, () => "ohne Marker", B), { "a.mjs#b": {} });
   });
 });
 
@@ -316,6 +351,8 @@ const lesenWurzel = (pfad: string): string | null => {
 };
 const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+const echteBegriffe = begriffeAus(ladeProjektConfig() as ProjektConfig);
 
 describe("Kern-Reinheit (#1610)", () => {
   test("das Besitz-Manifest ist gültig und nicht trivial", () => {
@@ -330,7 +367,7 @@ describe("Kern-Reinheit (#1610)", () => {
     const ist: Baseline = {};
     for (const e of manifest.eintraege) {
       const t = einheitText(e, lesenWurzel(e.pfad) ?? "");
-      const z = zaehle(t ?? "");
+      const z = zaehle(t ?? "", echteBegriffe);
       if (Object.keys(z).length > 0) ist[einheitId(e)] = z;
     }
     assert.deepEqual(vergleiche(ist, baseline), []);
@@ -351,7 +388,7 @@ describe("Kern-Reinheit (#1610)", () => {
         return null;
       }
     };
-    const erl = erlaubt(manifest.eintraege, aend, basisText);
+    const erl = erlaubt(manifest.eintraege, aend, basisText, echteBegriffe);
     assert.deepEqual(anhebungen(baseline, erl), []);
   });
 });

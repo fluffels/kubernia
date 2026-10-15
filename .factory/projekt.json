@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "repo": "fluffels/kubernia",
+  "board": {
+    "besitzer": "fluffels",
+    "besitzerTyp": "user",
+    "nummer": 1,
+    "projectId": "PVT_kwHOD8746c4Barq_",
+    "statusFeldId": 358708531,
+    "statusFeldNodeId": "PVTSSF_lAHOD8746c4Barq_zhVhdTM",
+    "todoOptionId": "f75ad846"
+  },
+  "projektliterale": {
+    "Stardew": "stardew"
+  }
+}
