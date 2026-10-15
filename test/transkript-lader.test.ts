@@ -2,6 +2,7 @@
  * Läuft gegen ein Fixture-Root (test/support/tmp-fixture); synthetische Zeilen, kein Zugriff auf ~/.claude. */
 import { describe, expect, test } from "vitest";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { fixture } from "./support/tmp-fixture";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTranskript from "../scripts/transkript.mjs";
@@ -137,6 +138,14 @@ describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", (
     expect(P.projektSlug("X:\\dev\\repo\\.claude\\worktrees\\kq-1")).toBe("X--dev-repo");
     expect(P.projektSlug("/home/x/repo/.claude/worktrees/kq-1/scripts")).toBe("-home-x-repo");
     expect(P.projektSlug("X:/dev/repo/")).toBe("X--dev-repo");
+  });
+  const O = rawTranskript as unknown as { projekteWurzel: () => string; projektOrdner: (s?: string | null) => string; hauptrepoWurzel: () => string | null };
+  test("projekteWurzel und projektOrdner: Wurzel unter ~/.claude/projects, Slug-Override, sonst Hauptrepo bzw. cwd", () => {
+    expect(O.projekteWurzel()).toBe(join(homedir(), ".claude", "projects"));
+    expect(O.projektOrdner("X--dev-repo")).toBe(join(O.projekteWurzel(), "X--dev-repo"));
+    const erwartet = join(O.projekteWurzel(), P.projektSlug(O.hauptrepoWurzel() ?? process.cwd()));
+    expect(O.projektOrdner()).toBe(erwartet);
+    expect(O.projektOrdner(null)).toBe(erwartet);
   });
   test("istProjektOrdner: exakter Ordner und Worktree-Ordner ja, Geschwister-Repos mit gleichem Präfix nein", () => {
     expect(P.istProjektOrdner("X--dev-repo", "X--dev-repo")).toBe(true);

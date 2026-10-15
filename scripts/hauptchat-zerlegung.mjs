@@ -16,7 +16,6 @@
  */
 
 import { readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
@@ -24,7 +23,7 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, istEchtesModell, median } from "./mess-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
-import { hauptrepoWurzel, ladeSessionDatei, projektSlug } from "./transkript.mjs";
+import { ladeSessionDatei, projektOrdner } from "./transkript.mjs";
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
@@ -359,8 +358,7 @@ function main() {
     console.error("Aufruf: node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }
-  const slug = args.projekt ?? projektSlug(hauptrepoWurzel() ?? process.cwd());
-  const dir = join(homedir(), ".claude", "projects", slug);
+  const dir = projektOrdner(args.projekt);
   const cache = new Map();
   const closedAtOf = (nr) => (cache.has(nr) ? cache.get(nr) : cache.set(nr, closedAtViaGh(nr)).get(nr));
   const r = zerlegeHauptchat({ sessions: ladeSessions(dir, args.von), von: args.von, bis: args.bis, brainRoots: args.brain, closedAtOf });

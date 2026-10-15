@@ -6,6 +6,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 /** Transkript-JSONL → geparste Zeilen (leere und abgeschnittene Zeilen entfallen). Einmal parsen, dann an die Adapter reichen. */
@@ -92,4 +93,14 @@ export function hauptrepoWurzel() {
   } catch {
     return null;
   }
+}
+
+/** Wurzel aller Claude-Code-Transkriptordner: `~/.claude/projects`. */
+export function projekteWurzel() {
+  return join(homedir(), ".claude", "projects");
+}
+
+/** Transkriptordner des Projekts: `slug` (z.B. aus `--projekt`) oder abgeleitet aus Hauptrepo bzw. cwd; git läuft nur ohne Slug. */
+export function projektOrdner(slug) {
+  return join(projekteWurzel(), slug ?? projektSlug(hauptrepoWurzel() ?? process.cwd()));
 }

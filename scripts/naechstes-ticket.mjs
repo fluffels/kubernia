@@ -5,6 +5,7 @@
  *
  *   node scripts/naechstes-ticket.mjs          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten
  *   node scripts/naechstes-ticket.mjs --json   # { ticket, uebersprungen }
+ *   node scripts/naechstes-ticket.mjs --ticket <nr>   # Einzelprüfung einer vorgegebenen Nummer (#1621): alle Kriterien außer Status und Bereich; Exit 1 = nicht frei, Grund in der Ausgabe
  *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel   # nur Label `area:harness` bzw. nur ohne (#1552); Notfälle 🚨/🔒 zählen in beiden
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 3 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
@@ -15,19 +16,17 @@
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
  * `feature/kq-<nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
  * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
- * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); kein GraphQL.
+ * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); kein GraphQL. `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { NOTFAELLE, REPO, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
-import { hauptrepoWurzel, projektSlug } from "./transkript.mjs";
+import { projektOrdner } from "./transkript.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
 
 /** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
@@ -83,6 +82,34 @@ export function bereichAusArgv(argv) {
   return { fehler: `--bereich erwartet agentic oder spiel (bekommen: ${wert === undefined ? "nichts" : `„${wert}“`})` };
 }
 
+/** `--ticket <nr>`, `--ticket=<nr>` bzw. `--ticket #<nr>` aus argv: `{ ticket }` (null ohne Schalter) oder `{ fehler }`. Pur. */
+export function ticketAusArgv(argv) {
+  const i = argv.findIndex((a) => a === "--ticket" || a.startsWith("--ticket="));
+  if (i < 0) return { ticket: null };
+  const wert = argv[i].includes("=") ? argv[i].slice("--ticket=".length) : argv[i + 1];
+  const m = /^#?(\d+)$/.exec(wert ?? "");
+  if (m && Number(m[1]) > 0) return { ticket: Number(m[1]) };
+  return { fehler: `--ticket erwartet eine Ticketnummer (bekommen: ${wert === undefined ? "nichts" : `„${wert}“`})` };
+}
+
+/** Normalisiertes Item aus der REST-Antwort `repos/<repo>/issues/<nr>` (gleiche Felder wie ein Board-Item, ohne Status). Wirft bei einem PR oder unerwarteter Form. Pur. */
+export function itemAusIssue(issue) {
+  if (!issue || typeof issue !== "object" || issue.pull_request) throw new Error("Unerwartete Antwort: kein Issue");
+  const items = normalizeItems([[{ content_type: "Issue", node_id: String(issue.node_id ?? ""), content: issue, fields: [] }]]);
+  if (items.length !== 1) throw new Error("Unerwartete Antwortform des Issues");
+  return items[0];
+}
+
+/**
+ * Einzelprüfung einer vorgegebenen Nummer: dieselben Kriterien wie die Board-Auswahl (`ueberspringGrund`, auch Messfenster), aber ohne Status- und
+ * Bereichsfilter; ein geschlossenes Issue ist nicht frei. `item` aus `itemAusIssue`. Liefert wie `waehleNaechstes` `{ ticket, uebersprungen }`. Pur.
+ */
+export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER }) {
+  const nr = item.number;
+  const grund = item.state !== "open" ? "geschlossen" : ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }), owner, messfenster });
+  return grund ? { ticket: null, uebersprungen: [{ nr, grund }] } : { ticket: { nr, titel: item.title }, uebersprungen: [] };
+}
+
 /** Gehört das Item zum Bereich? Ohne Bereich immer; 🚨 CI rot auf main und 🔒 Security zählen in beiden (Roter main geht vor). Pur. */
 export function imBereich(item, bereich) {
   if (!bereich) return true;
@@ -131,7 +158,9 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster }) {
 }
 
 /** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach je übersprungenem Kandidaten eine Zeile. Pur. */
-export function formatiere({ ticket, uebersprungen, bereich = null }) {
+export function formatiere({ ticket, uebersprungen, bereich = null, einzel = null }) {
+  if (einzel !== null && !ticket) return `#${einzel} nicht frei: ${uebersprungen[0]?.grund ?? "unbekannt"}
+`;
   const keins = bereich ? `kein freies Ticket im Bereich ${BEREICHE[bereich]}` : "kein freies Ticket";
   const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : keins;
   return [kopf, ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
@@ -140,16 +169,24 @@ export function formatiere({ ticket, uebersprungen, bereich = null }) {
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
   const b = bereichAusArgv(argv);
-  if ("fehler" in b) return { code: 2, out: "", err: `✖ naechstes-ticket: ${b.fehler}\n` };
+  if ("fehler" in b) return fehlerErgebnis(b.fehler);
+  const t = ticketAusArgv(argv);
+  if ("fehler" in t) return fehlerErgebnis(t.fehler);
+  if (t.ticket !== null && b.bereich) return fehlerErgebnis("--ticket und --bereich schließen sich aus");
   try {
-    const eingabe = io.lade();
-    const ergebnis = { ...waehleNaechstes({ ...eingabe, owner: io.owner, bereich: b.bereich }), ...(b.bereich ? { bereich: b.bereich } : {}) };
-    const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere(ergebnis);
+    const einzel = t.ticket;
+    const ergebnis =
+      einzel === null
+        ? { ...waehleNaechstes({ ...io.lade(), owner: io.owner, bereich: b.bereich }), ...(b.bereich ? { bereich: b.bereich } : {}) }
+        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner });
+    const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
     return { code: ergebnis.ticket ? 0 : 1, out, err: "" };
   } catch (e) {
-    return { code: 2, out: "", err: `✖ naechstes-ticket: ${e instanceof Error ? e.message : String(e)}\n` };
+    return fehlerErgebnis(e instanceof Error ? e.message : String(e));
   }
 }
+
+const fehlerErgebnis = (text) => ({ code: 2, out: "", err: `✖ naechstes-ticket: ${text}\n` });
 
 /** Branchnamen der offenen PRs aus den REST-Seiten (`gh api --paginate --slurp`); GraphQL-frei und ohne 200er-Deckel. Pur. */
 export const prHeadsAus = (seiten) => seiten.flat().map((p) => `${p.head.ref}`);
@@ -173,8 +210,6 @@ export function messfensterLader({ dir, holeIssue = (nr) => ghJson(["api", `repo
   };
 }
 
-const projektOrdner = () => join(homedir(), ".claude", "projects", projektSlug(hauptrepoWurzel() ?? process.cwd()));
-
 function messfensterLaeufe(fenster, dir, holeIssue) {
   let closedAt;
   try {
@@ -192,8 +227,8 @@ function messfensterLaeufe(fenster, dir, holeIssue) {
   }
 }
 
-function ladeEcht() {
-  const items = normalizeItems(loadItemPages());
+/** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs, Messfenster-Lader. */
+function ladeBelegung() {
   const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
   try {
     git(["fetch", "--prune", "origin"]); // fail-open: ohne Netz zählen die lokalen Remote-Refs
@@ -203,12 +238,17 @@ function ladeEcht() {
   const refs = git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
   const worktrees = git(["worktree", "list", "--porcelain"]).split(/\r?\n/).filter((z) => /^(worktree|branch) /.test(z));
   const prHeads = prHeadsAus(ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/pulls?state=open&per_page=100`]));
-  return { items, offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
+  return { offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
 }
+
+const ladeEcht = () => ({ items: normalizeItems(loadItemPages()), ...ladeBelegung() });
+
+/** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
+const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung() });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
-  const { code, out, err } = fuehreAus(process.argv.slice(2), { lade: ladeEcht, owner: REPO.split("/")[0] });
+  const { code, out, err } = fuehreAus(process.argv.slice(2), { lade: ladeEcht, ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0] });
   process.stdout.write(out);
   process.stderr.write(err);
   process.exitCode = code;

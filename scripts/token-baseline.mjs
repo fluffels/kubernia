@@ -25,14 +25,13 @@
  */
 
 import { existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
-import { ladeSessionDatei } from "./transkript.mjs";
+import { ladeSessionDatei, projekteWurzel } from "./transkript.mjs";
 import { CACHE_TTL_MS, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
@@ -572,7 +571,7 @@ function merge(parts) {
 
 async function loadRun(args) {
   if (!args.langfuse) {
-    const root = join(homedir(), ".claude", "projects");
+    const root = projekteWurzel();
     return merge(args.sessions.map((s) => readTranscriptSession(s, root)));
   }
   const zugang = langfuseZugang(process.env);
