@@ -164,7 +164,7 @@
         "lines": [
           "Noch was, bevor du weiterziehst: Bei YAML entscheidet allein die <b>Einrückung</b>, was zu was gehört. Zwei Leerzeichen pro Ebene, NIEMALS ein Tab – sonst weist der Cluster deine Karte ab.",
           "Ich hab ein <b>Minispiel</b> dafür: Die Zeilen eines Manifests liegen durcheinander, du setzt sie <b>in Reihenfolge und auf der richtigen Ebene</b> wieder zusammen.",
-          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 YAML-Bausteine</b> und spiel es einmal ganz durch. Los, Landratte!"
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>{taste:talk}</b>), dann wähle im Menü <b>🎮 YAML-Bausteine</b> und spiel es einmal ganz durch. Los, Landratte!"
         ]
       },
       {
@@ -1411,7 +1411,7 @@
         "lines": [
           "Eine letzte Übung, bevor du weiterziehst: Ingress, Service und Pod-Labels kennst du jetzt einzeln – aber lotst eine Anfrage wirklich sicher durch alle drei?",
           "Ich hab ein <b>Minispiel</b> dafür: Du bekommst Anfragen, Ingress-Regeln, Services mit Selectors und ein paar Pods. Lotse jede Anfrage über die richtige Route zum richtigen Pod – oder erkenne, wenn ein Service <b>keine passenden Endpoints</b> hat.",
-          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 Routing-Lotse</b> und spiel es einmal ganz durch. Auf geht's, Lotse!"
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>{taste:talk}</b>), dann wähle im Menü <b>🎮 Routing-Lotse</b> und spiel es einmal ganz durch. Auf geht's, Lotse!"
         ]
       },
       {

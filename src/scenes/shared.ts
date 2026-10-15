@@ -8,6 +8,7 @@ import { type Spawn, type EntityObject } from "../content/entities";
 import { TILE, type Hitbox } from "../world/world";
 import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } from "../hud/pixelfont";
 import { SFX } from "../sfx";
+import { Game } from "../game";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
 import { warpAt, type Warp } from "../world/warps";
 import { type AssetEntry } from "../assets-data";
@@ -175,18 +176,18 @@ export abstract class IslandScene extends Phaser.Scene {
    *  (vom Hinweg evtl. noch gehaltene) Lauftaste losgelassen wurde und man nicht schon auf
    *  der Rück-Kachel steht – sonst pingpongt man mit gehaltener Taste sofort zurück, weil
    *  die Ankunft direkt über dem Rück-Warp liegt. Warpt beim Betreten der Rück-Kachel
-   *  zurück; Notausgang per E/Enter, falls man am Rand feststeckt. Gibt true zurück, wenn
+   *  zurück; Notausgang per Reden-Taste/Enter, falls man am Rand feststeckt. Gibt true zurück, wenn
    *  die Szene verlassen wurde – der Aufrufer bricht dann seinen update-Frame ab.
    *
    *  `emergencyExtra` weitet den Notausgang über die Rück-Kachel hinaus (Archipel erlaubt
-   *  E auf dem ganzen Steg, nicht nur am Anker); Default = nur auf der Rück-Kachel. */
+   *  die Reden-Taste auf dem ganzen Steg, nicht nur am Anker); Default = nur auf der Rück-Kachel. */
   updateReturn(warp: Warp, blocked: boolean, emergencyExtra = false): boolean {
     const pl = this.pl;
     const onRet = warpAt(pl.x, pl.y, warp);
     const moveKeyDown = anyMoveKeyDown();
     if (!moveKeyDown && !onRet) this.returnArmed = true;
     if (!blocked && this.returnArmed && onRet) { this.exitToWorld(); return true; }
-    const e = !blocked && (!!keys["e"] || !!keys["Enter"]);
+    const e = !blocked && (!!keys[Game.state.settings.keys.talk] || !!keys["Enter"]);
     if (e && !this.ePrev && (onRet || emergencyExtra)) { this.exitToWorld(); return true; }
     this.ePrev = e;
     return false;

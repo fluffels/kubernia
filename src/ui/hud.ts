@@ -7,6 +7,7 @@ import { part, $, esc, NPCS, SMALLTALK } from "./shared";
 import { HUD_ICONS, HUD_SEASON_ICONS, MENU_ICONS, HUD_KEY_ICONS, PANEL_ICONS } from "../assets-data";
 import { resolveTalkTarget } from "../hud/viewdecide";
 import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../hud/toastlife";
+import { tastenHinweis } from "../hud/tastenhinweis";
 import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/celebrate";
 
 /** Signalflaggen-Farben fürs Erfolgs-Feier-Overlay (#223/#314): kräftige, maritime
@@ -114,7 +115,7 @@ export const hudUI = part({
       return;
     }
     if (Game.allQuestsDone()) {
-      el.innerHTML = "🏅 Grundausbildung geschafft! Halte den Hafen am Laufen – und übe bei der Crew (E → Üben).";
+      el.innerHTML = tastenHinweis("uebenNachAusbildung", Game.state.settings.keys);
       return;
     }
     const q = Game.currentQuest();
@@ -122,7 +123,7 @@ export const hudUI = part({
     if (!q || !step) { el.textContent = ""; return; }
     const chapter = this.chapterBadgeHtml();
     if (Game.isFunkStep(step)) {
-      el.innerHTML = chapter + "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
+      el.innerHTML = chapter + "📜 <b>" + q.title + "</b> – " + tastenHinweis("funkAufgabe", Game.state.settings.keys);
     } else if (step.type === "minigame") {
       const npc = NPCS[step.npc];
       const GAME_LABELS: Record<typeof step.game, string> = { stack: "🎮 Stapel-Spiel", packing: "🎮 Pod-Packspiel", yamlstruct: "🎮 YAML-Bausteine", routing: "🎮 Routing-Lotse", driftheal: "🎮 Wunschzustand einstellen", rbaskeyring: "🎮 RBAC-Schlüsselbund" };
@@ -290,14 +291,14 @@ export const hudUI = part({
       let label = "💬 Mit " + meta.name + " reden";
       if (near.id === "pelle") label = "🛒 Bei Pelle einkaufen";
       if (near.id === "kralle") label = "🦀 Quizrunde mit Kralle";
-      p.innerHTML = "<b>E</b> – " + label;
+      p.innerHTML = tastenHinweis("naehe", Game.state.settings.keys) + label;
       p.classList.remove("hidden");
       return;
     }
     // Fallback: Pod-Kiste in Reichweite (#650)?
     const pod = ws.nearestPod();
     if (pod) {
-      p.innerHTML = "<b>E</b> – 📦 Pod inspizieren";
+      p.innerHTML = tastenHinweis("naehe", Game.state.settings.keys) + "📦 Pod inspizieren";
       p.classList.remove("hidden");
       return;
     }
@@ -305,7 +306,7 @@ export const hudUI = part({
   },
 
   interact() {
-    // Während ein Hausinnenraum offen ist, gehört die E-Taste der InteriorScene
+    // Während ein Hausinnenraum offen ist, gehört die Reden-Taste der InteriorScene
     // (sonst würde man durch die Wand mit Außen-NPCs der pausierten Welt reden).
     if (interiorOpen()) return;
     const ws = worldScene();

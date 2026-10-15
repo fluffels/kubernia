@@ -592,7 +592,7 @@
         "npc": "vidar",
         "lines": [
           "Jetzt kennst du Role, ClusterRole und can-i. Zeit, es selbst zu üben, statt nur zuzuhören. Ich hab da einen <b>Schlüsselbund</b> – ein kleines <b>Minispiel</b>: für jedes Subjekt den KLEINSTEN Schlüssel finden, der noch passt.",
-          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 RBAC-Schlüsselbund</b> und spiel es einmal ganz durch. Manchmal würde ein größerer Schlüssel auch passen – trotzdem ist er die FALSCHE Wahl. Least Privilege, Kapitän. Los geht's!"
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>{taste:talk}</b>), dann wähle im Menü <b>🎮 RBAC-Schlüsselbund</b> und spiel es einmal ganz durch. Manchmal würde ein größerer Schlüssel auch passen – trotzdem ist er die FALSCHE Wahl. Least Privilege, Kapitän. Los geht's!"
         ]
       },
       {

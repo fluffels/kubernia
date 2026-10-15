@@ -9,7 +9,7 @@ import { part } from "./shared";
 const KRALLE_WEGWEISER =
   "Eins noch, Landratte: Gekonnt ist erst, was <b>sitzt</b> – und das kommt vom " +
   "<b>Wiederholen</b>. Dafür gibt's <b>Kralle</b>, die Quiz-Krabbe an Deck deines " +
-  "Schiffs. Sprich sie an (Taste <b>E</b>) – sie frischt dein Wissen auf, bis es " +
+  "Schiffs. Sprich sie an (Taste <b>{taste:talk}</b>) – sie frischt dein Wissen auf, bis es " +
   "hält. Bo schickt dich hin. Bo ist Stein.";
 
 export const questUI = part({

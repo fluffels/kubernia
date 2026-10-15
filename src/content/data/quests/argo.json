@@ -436,7 +436,7 @@
         "npc": "argo",
         "lines": [
           "Du hast gerade gesehen, wie der stille Wächter deinen Drift zurückgedreht hat. Jetzt bist DU am Ruder: Ich hab ein <b>Minispiel</b> dafür – du erlebst Drift hautnah und entscheidest, ob du nur von Hand reparierst oder den Soll-Zustand wirklich deklarierst.",
-          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 Wunschzustand einstellen</b> und spiel es einmal ganz durch. Reagierst du nur imperativ, holt dich derselbe Drift gleich wieder ein – reagierst du deklarativ, hält der Reconcile-Loop von da an durch. Los, Lotse!"
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>{taste:talk}</b>), dann wähle im Menü <b>🎮 Wunschzustand einstellen</b> und spiel es einmal ganz durch. Reagierst du nur imperativ, holt dich derselbe Drift gleich wieder ein – reagierst du deklarativ, hält der Reconcile-Loop von da an durch. Los, Lotse!"
         ]
       },
       {

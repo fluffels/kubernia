@@ -3,6 +3,8 @@ import { UI } from "../ui";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
 import { TALK_RANGE, interiorEAction, interiorEFlank, UNDERDECK_DOOR, type Door } from "../world/world";
+import { Game } from "../game";
+import { tastenHinweis, fillKeyTokens, TASTEN_HINWEISE } from "../hud/tastenhinweis";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../hud/pixelfont";
 import type { SceneDevView } from "../devtools/snapshot";
@@ -210,14 +212,11 @@ export class InteriorScene extends Phaser.Scene {
     const npcName = meta ? meta.name + " · " + meta.title : "";
     pixelText(this, cw / 2, 12, ((isShip || isUnderdeck) ? "⛵ " : "🚪 ") + door.title, { color: "#ffe9b0", size: 16, origin: [0.5, 0], depth: 20000, shadow: true }).setScrollFactor(0);
     if (npcName) pixelText(this, cw / 2, 34, npcName, { color: "#cdd9e8", size: 12, origin: [0.5, 0], depth: 20000, shadow: true }).setScrollFactor(0);
-    this.hintExit = isShip
-      ? "E – an Land   ·   ↓ Gangway"
-      : isUnderdeck
-      ? "E – ans Deck"
-      : "E – Hinausgehen   ·   ↓ durch die Tür";
-    this.hintTalk = (meta ? "E – mit " + meta.name + " reden" : "E – reden")
+    // Vorlagen mit {taste:talk}; update() füllt sie je Frame (Umbelegen greift sofort).
+    this.hintExit = isShip ? TASTEN_HINWEISE.innenAnLand : isUnderdeck ? TASTEN_HINWEISE.innenAnsDeck : TASTEN_HINWEISE.innenHinaus;
+    this.hintTalk = (meta ? "{taste:talk} – mit " + meta.name + " reden" : TASTEN_HINWEISE.innenReden)
       + (isShip ? "   ·   ↓ Gangway" : isUnderdeck ? "" : "   ·   ↓ Tür");
-    this.hint = pixelText(this, cw / 2, ch - 22, this.hintExit, { color: "#ffd97a", size: 12, origin: [0.5, 1], depth: 20000, shadow: true }).setScrollFactor(0);
+    this.hint = pixelText(this, cw / 2, ch - 22, tastenHinweis(isShip ? "innenAnLand" : isUnderdeck ? "innenAnsDeck" : "innenHinaus", Game.state.settings.keys), { color: "#ffd97a", size: 12, origin: [0.5, 1], depth: 20000, shadow: true }).setScrollFactor(0);
   }
 
   isSolid(px: number, py: number) {
@@ -261,10 +260,10 @@ export class InteriorScene extends Phaser.Scene {
     this.bobT = stepSimplePlayer(pl, dt, blocked, 70, this.bobT, (mx, my) => this.tryMove(mx, my));
     renderPlayer(this.pSprite, this.pShadow, pl, this.bobT);
 
-    const ePhys = !!keys["e"] || !!keys["Enter"] || !!keys[" "];
+    const ePhys = !!keys[Game.state.settings.keys.talk] || !!keys["Enter"] || !!keys[" "];
     const onExit = Math.floor(pl.x / T) === this.exitTx && Math.floor(pl.y / T) === this.exitTy;
     const nearNpc = !!this.npcId && Math.hypot(pl.x - this.npcX, pl.y - this.npcY) <= TALK_RANGE;
-    this.hint.setText(sanitize(nearNpc ? this.hintTalk : this.hintExit));
+    this.hint.setText(sanitize(fillKeyTokens(nearNpc ? this.hintTalk : this.hintExit, Game.state.settings.keys)));
     const { eFlank, ePrev } = interiorEFlank({ ePhys, ePrev: this.ePrev, blocked });
     this.ePrev = ePrev;
     if (!blocked) {

@@ -3,6 +3,7 @@ import { KQContent } from "../content";
 import { worldScene } from "../runtime";
 import { buildQuestLogRows, questLogUnlocked, buildQuestDetail } from "../hud/questlog";
 import { fmtCmd } from "../hud/markup";
+import { tastenHinweis, fillKeyTokens } from "../hud/tastenhinweis";
 import { part, $, esc, NPCS } from "./shared";
 
 export const questlogUI = part({
@@ -57,7 +58,7 @@ export const questlogUI = part({
     const lines = buildQuestDetail(quest, npcName);
     const icon: Record<string, string> = { dialog: "💬", choice: "❓", teach: "📻", drill: "🎯", terminal: "🖥️", minigame: "🎮" };
     let detail = lines
-      .map(l => `<div class="ql-line">${icon[l.kind] ?? "•"} ${l.speaker ? `<b>${esc(l.speaker)}:</b> ` : ""}${fmtCmd(l.text)}</div>`)
+      .map(l => `<div class="ql-line">${icon[l.kind] ?? "•"} ${l.speaker ? `<b>${esc(l.speaker)}:</b> ` : ""}${fmtCmd(fillKeyTokens(l.text, Game.state.settings.keys))}</div>`)
       .join("");
     if (!lines.length) detail = `<div class="ql-line dim">Diese Quest hat keine nachlesbaren Dialoge.</div>`;
     if (isActive) {
@@ -139,7 +140,7 @@ export const questlogUI = part({
   hintForStep() {
     const step = Game.currentStep();
     if (!step) return "";
-    if (Game.isFunkStep(step)) return "💻 Öffne dein Terminal (T) und erledige die Aufgaben.";
+    if (Game.isFunkStep(step)) return tastenHinweis("funkLogbuch", Game.state.settings.keys);
     const npc = NPCS[step.npc];
     return "💬 Sprich mit <b>" + npc.name + "</b> (" + npc.title + ").";
   },
