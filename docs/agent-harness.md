@@ -21,7 +21,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 103 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Skripte | 104 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 73 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 25 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
@@ -184,7 +184,8 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 
 ### Kern-Reinheits-Wächter (`test/harness/kern-reinheit.test.ts`, #1610)
 - **WAS:** das Besitz-Manifest `.factory/besitz.json` listet den Factory-Besitz (Datei, Markdown-Block zwischen `factory-besitz`-Markern, JSON-Schlüssel); der Wächter zählt je Einheit Projektliterale (Owner, Repo, Board-ID, Stardew) gegen `test/harness/kern-literale-baseline.json`. Neues Literal, Wert über oder unter der Baseline und verwaiste Einträge sind rot; die Baseline darf gegen die Diff-Basis nicht steigen (CI fail-closed).
-- **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
+- **Importregel (#1612):** keine Einheit des Manifests importiert die Schichtdaten (`schichten.layers` aus `scripts/docs-gen/config.json`) statisch; sie laden sie über den konfigurierten Pfad und nutzen Prüfung und Ableitung aus `scripts/schichten-kern.cjs`. Ausnahmen stehen mit Ticket in `SCHICHTDATEN_AUSNAHMEN` und dürfen nur schrumpfen.
+- **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1, F7); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
 
 ### Doku-Aktualitäts-Wächter (`npm run check:doctickets`, #610)
 - **WAS:** liest die zwischen den Markern `open-harness-tickets:start/end` in §5 als **„offen"** gelistete Roadmap-Tabelle und gleicht jede Nummer gegen den echten `gh issue`-Status ab — ist eine als offen dokumentierte Nummer auf GitHub bereits **CLOSED**, ist die Roadmap stale. Zusätzlich gleicht er das Ticket jeder `ALLOWLIST`-Ausnahme von `check:size` und `check:contextsize` ab (CLOSED oder ohne `#N` ist rot; die `DECKEL` sind Ratchet-Historie und zählen nicht). Die reine Logik (`parseOpenHarnessTickets`, `ausnahmeTickets`) testet `test/doctickets.test.ts` offline (Red-Green); dort steht auch der blockierende Teil „jede Ausnahme nennt ein `#N`“.
