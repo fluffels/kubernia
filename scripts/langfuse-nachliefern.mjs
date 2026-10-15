@@ -29,7 +29,7 @@ import {
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
-import { gesperrterLauf, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
+import { gesperrterLauf, kurzerStand, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
 
 /** Sessions mit einem Call vor diesem Zeitpunkt werden nur gezählt: davor fehlt die TTL-Aufteilung der Cache-Writes, der Fingerabdruck passt nicht zu Langfuse (vgl. langfuse-abgleich.mjs). */
 export const STICHTAG = "2026-10-07T00:00:00Z";
@@ -308,7 +308,7 @@ async function main() {
   const stateDir = join(homedir(), ".claude", "state");
   const lauf = (a, o) => nachliefern(a, { projectsRoot: join(homedir(), ".claude", "projects"), stateDir, repoRoot, ...o });
   if (args.ausloeser && !args.fehler) {
-    await hookLauf(args, { stateDir, lauf });
+    await hookLauf(args, { stateDir, lauf, stand: kurzerStand(fileURLToPath(new URL("..", import.meta.url))) });
     return;
   }
   // Manueller Lauf: schreibende Läufe teilen sich den Lock mit dem Hook (Aufruffehler und Trockenlauf lesen nur).
