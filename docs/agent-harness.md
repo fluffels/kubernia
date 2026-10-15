@@ -183,7 +183,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Absicherung:** Code-Fences werden ausgeblendet (ein `#`-Kommentar in einem bash-Block ist keine Überschrift, ein Beispiel-Link keiner); Ausnahmen (undokumentierte Convenience-Skripte) stehen begründet in `DOC_EXEMPT_SCRIPTS`. Red-Green über `test/docdrift.test.ts` (totes Kommando, toter Link, toter Anker werden jeweils erkannt; die Slug-Regel trifft Emoji-/Umlaut-Überschriften).
 
 ### Kern-Reinheits-Wächter (`test/harness/kern-reinheit.test.ts`, #1610)
-- **WAS:** das Besitz-Manifest `.factory/besitz.json` listet den Factory-Besitz (Datei, Markdown-Block zwischen `factory-besitz`-Markern, JSON-Schlüssel); der Wächter zählt je Einheit Projektliterale (Owner, Repo, Board-ID, Stardew) gegen `test/harness/kern-literale-baseline.json`. Neues Literal, Wert über oder unter der Baseline und verwaiste Einträge sind rot; die Baseline darf gegen die Diff-Basis nicht steigen (CI fail-closed).
+- **WAS:** das Besitz-Manifest `.factory/besitz.json` listet den Factory-Besitz (Datei, Markdown-Block zwischen `factory-besitz`-Markern, JSON-Schlüssel); der Wächter zählt je Einheit Projektliterale (Owner, Repo, Board-ID und die `projektliterale` der Projekt-Config; die Begriffe leitet der Wächter aus `.factory/projekt.json` ab) gegen `test/harness/kern-literale-baseline.json`. Neues Literal, Wert über oder unter der Baseline und verwaiste Einträge sind rot; die Baseline darf gegen die Diff-Basis nicht steigen (CI fail-closed).
 - **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
 
 ### Doku-Aktualitäts-Wächter (`npm run check:doctickets`, #610)

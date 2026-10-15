@@ -30,7 +30,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Nur die Projekt-Config und ihr Lader (#1611): Board-ID kommt aus .factory/projekt.json.
+      # continue-on-error: scheitert der Checkout, meldet set_board_top den Fehler und das Issue entsteht trotzdem.
       - name: Projekt-Config auschecken
+        continue-on-error: true
         uses: actions/checkout@v7
         with:
           sparse-checkout: |

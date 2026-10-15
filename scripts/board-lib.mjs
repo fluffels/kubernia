@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { boardPfad, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie, bricht schon der Import ab (kein stiller Standardwert, #1611).
 const PROJEKT = ladeProjektConfig();
@@ -19,7 +19,7 @@ const gh = ghText;
 export const PROJECT_ID = PROJEKT.board.projectId;
 
 /** REST-Pfad des Boards (`users|orgs/<besitzer>/projectsV2/<nr>`), aus der Projekt-Config. */
-export const BOARD_PFAD = `${PROJEKT.board.besitzerTyp === "org" ? "orgs" : "users"}/${PROJEKT.board.besitzer}/projectsV2/${PROJEKT.board.nummer}`;
+export const BOARD_PFAD = boardPfad(PROJEKT.board);
 
 /** Das Repository (`owner/name`): in GitHub Actions `GITHUB_REPOSITORY`, sonst das Repo der Projekt-Config. EINE Quelle für alle Board-Skripte. */
 export const REPO = process.env.GITHUB_REPOSITORY || PROJEKT.repo;

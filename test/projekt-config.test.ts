@@ -6,13 +6,14 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
 interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
   ladeProjektConfig(opt?: { rootDir?: string; pfad?: string }): { repo: string };
+  boardPfad(board: Record<string, unknown>): string;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
 }
 const pc = rawPc as unknown as Pc;
@@ -73,6 +74,16 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => ((c.board ??= {}).todoOptionId = 3)), /todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+  });
+});
+
+describe("boardPfad", () => {
+  test("user ergibt users/…, org ergibt orgs/…; die echte Config bleibt beim bisherigen Board-Pfad", () => {
+    const b = gueltig().board;
+    assert.equal(pc.boardPfad({ ...b, besitzerTyp: "user" }), "users/acme/projectsV2/7");
+    assert.equal(pc.boardPfad({ ...b, besitzerTyp: "org" }), "orgs/acme/projectsV2/7");
+    const echt = pc.ladeProjektConfig() as unknown as { board: Record<string, unknown> };
+    assert.equal(pc.boardPfad(echt.board), `users/${String(echt.board.besitzer)}/projectsV2/1`);
   });
 });
 
@@ -148,9 +159,9 @@ describe("kein stiller Standardwert (AK3)", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));
     for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
-    const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify("file:///" + join(d, "scripts/board-lib.mjs").replace(/\\/g, "/"))})`], { encoding: "utf8", cwd: d });
+    const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
-    assert.doesNotMatch(r.stdout + r.stderr, /PVT_/);
+    assert.doesNotMatch(r.stdout + r.stderr, /PVT_|fluffels|kubernia/);
   });
 });

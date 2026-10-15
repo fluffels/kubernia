@@ -51,6 +51,11 @@ export function pruefeProjektConfig(wert) {
   return fehler;
 }
 
+/** REST-Pfad des Boards: `users|orgs/<besitzer>/projectsV2/<nummer>`. Pur. */
+export function boardPfad(board) {
+  return `${board.besitzerTyp === "org" ? "orgs" : "users"}/${board.besitzer}/projectsV2/${board.nummer}`;
+}
+
 /** Liest und prüft die Config; wirft mit Pfad, allen Fehlern und einer „Fix:“-Zeile. */
 export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG } = {}) {
   const abs = isAbsolute(pfad) ? pfad : resolve(rootDir, pfad);
