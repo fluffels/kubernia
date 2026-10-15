@@ -352,7 +352,7 @@ const zuwachsZeilen = (zuwachs: boolean, model = OPUS): Row[] => {
     timestamp: iso(min),
     message: { id, model, usage: { input_tokens: 10, cache_read_input_tokens: ctx - 10, cache_creation_input_tokens: 0, output_tokens: 5 }, content: [{ type: "text", text: "yyyy" }] },
   });
-  return [a("a", 1000, 20), a("b", zuwachs ? 1400 : 1000, 21), a("c", zuwachs ? 1800 : 1000, 22)];
+  return [a("a", 1000, 20), a("b", zuwachs ? 41000 : 1000, 21), a("c", zuwachs ? 81000 : 1000, 22)];
 };
 
 describe("zerlegeHauptchat: geschätzte Kosten und Output (Z2)", () => {
@@ -386,6 +386,9 @@ describe("zerlegeHauptchat: geschätzte Kosten und Output (Z2)", () => {
     const forkText = hc.renderMarkdown(r);
     const g = r.rows.find((z) => z.quelle === "Fork") as unknown as { costGeschaetzt: number };
     assert.ok(forkText.includes(`| ${g.costGeschaetzt.toFixed(2)} $ |`));
+    const summe = r.rows.reduce((x, z) => x + (z as unknown as { costGeschaetzt: number }).costGeschaetzt, 0);
+    assert.ok(forkText.includes(`| ${summe.toFixed(2)} $ |`), "Summenzeile führt die geschätzten Kosten");
+    assert.ok(summe.toFixed(2) !== r.rows.reduce((x, z) => x + z.cost, 0).toFixed(2), "Fixture trennt geschätzt von aufgezeichnet");
   });
 });
 
