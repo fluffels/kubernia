@@ -62,6 +62,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Oberstes freies Ticket der Board-Auswahl samt übersprungenen Kandidaten (Assignee, Blocker, Messfenster, Branch, Worktree, PR; #1428) | `node scripts/naechstes-ticket.mjs [--json] [--bereich agentic\|spiel] [--ticket <nr>]` (`--ticket`: Einzelprüfung einer vorgegebenen Nummer, nicht mit `--bereich`; Exit 0 gefunden, 1 keins frei, 2 Fehler, 3 API-Kontingent knapp) |
 | GitHub-API-Kontingent anzeigen (Exit 3 bei < 10 %) bzw. Kosten je Skript aus dem Lauf-Log (#1549) | `node scripts/gh-kontingent.mjs [--bericht]` |
 | Budget-Pacing: darf das nächste Ticket starten? (Wochenlimit des Kontos, #1358; Exit 0 ok, 3 knapp, 4 stopp) | `node scripts/budget-pacing.mjs [--json] [--ohne-probe]` |
+| Fällige Wiedervorlagen als Ticket ganz oben anlegen (Trockenlauf mit `--dry-run`; läuft täglich als Workflow, Exit 1 bei fälligem Eintrag ohne Ticket, #1628) | `node scripts/wiedervorlage.mjs [--dry-run]` |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` (klemmt hinter das ungeclaimte Sammelticket; ganz oben nur `--notfall <art> --top`) |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets und `ALLOWLIST`-Ausnahmen gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
 | TS-7-Freigabe-Wächter (npm-Registry: erlaubt typescript-eslint schon TS 7? non-blocking, braucht Netz, #847) | `npm run check:tseslint-ts7` |
