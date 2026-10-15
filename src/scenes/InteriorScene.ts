@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
-import { TALK_RANGE, interiorEAction, interiorEFlank, UNDERDECK_DOOR, type Door } from "../world/world";
+import { TALK_RANGE, interiorTalkAction, interiorTalkFlank, UNDERDECK_DOOR, type Door } from "../world/world";
 import { Game } from "../game";
 import { tastenHinweis, fillKeyTokens, TASTEN_HINWEISE } from "../hud/tastenhinweis";
 import { keys, setInteriorOpen } from "../runtime";
@@ -65,7 +65,7 @@ export class InteriorScene extends Phaser.Scene {
   hintExit!: string;
   hintTalk!: string;
   hint!: Phaser.GameObjects.BitmapText;
-  ePrev!: boolean;
+  talkPrev!: boolean;
   constructor() { super("Interior"); }
 
   devView(): SceneDevView { return { map: `interior:${this.door.id}`, player: this.pl }; }
@@ -107,7 +107,7 @@ export class InteriorScene extends Phaser.Scene {
     const cam = this.setupCamera(isShip, isUnderdeck);
     this.buildLabels(cam, door, meta, isShip, isUnderdeck);
 
-    this.ePrev = true;
+    this.talkPrev = true;
   }
 
   /** Wand-Kachel im rechteckigen Haus-Innenraum (Rand + Tür-Freistellung)? */
@@ -260,16 +260,16 @@ export class InteriorScene extends Phaser.Scene {
     this.bobT = stepSimplePlayer(pl, dt, blocked, 70, this.bobT, (mx, my) => this.tryMove(mx, my));
     renderPlayer(this.pSprite, this.pShadow, pl, this.bobT);
 
-    const ePhys = !!keys[Game.state.settings.keys.talk] || !!keys["Enter"] || !!keys[" "];
+    const talkDown = !!keys[Game.state.settings.keys.talk] || !!keys["Enter"] || !!keys[" "];
     const onExit = Math.floor(pl.x / T) === this.exitTx && Math.floor(pl.y / T) === this.exitTy;
     const nearNpc = !!this.npcId && Math.hypot(pl.x - this.npcX, pl.y - this.npcY) <= TALK_RANGE;
     this.hint.setText(sanitize(fillKeyTokens(nearNpc ? this.hintTalk : this.hintExit, Game.state.settings.keys)));
-    const { eFlank, ePrev } = interiorEFlank({ ePhys, ePrev: this.ePrev, blocked });
-    this.ePrev = ePrev;
+    const { talkFlank, talkPrev } = interiorTalkFlank({ talkDown, talkPrev: this.talkPrev, blocked });
+    this.talkPrev = talkPrev;
     if (!blocked) {
       // Hatch-Kachel hat Vorrang vor dem normalen Exit (Reden-Taste am Exit-Tile wäre sonst "exit")
       const onHatch = this.isShip && Math.floor(pl.x / T) === DECK_HATCH_TX && Math.floor(pl.y / T) === DECK_HATCH_TY;
-      const action = interiorEAction({ eFlank, onExit, nearNpc });
+      const action = interiorTalkAction({ talkFlank, onExit, nearNpc });
       if (action === "talk") { UI.talkTo(this.npcId!); return; }
       if (onHatch) { this.enterUnderdeck(); return; }
       if (action === "exit") { this.exitInterior(); return; }

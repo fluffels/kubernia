@@ -78,7 +78,7 @@ export interface RegionConfig {
   /** y-Versatz (Kacheln) des Quest-Trigger-Schilds relativ zum Trigger: +1 = unter dem
    *  Trigger (Standard), -1 = darüber (Archipel, wo eine Statue auf der Kachel steht). */
   questSignDy: number;
-  /** Notausgang per E/Enter auf der GANZEN Steg-/Dock-Fläche zulassen (Archipel), nicht nur
+  /** Notausgang per Reden-Taste/Enter auf der GANZEN Steg-/Dock-Fläche zulassen (Archipel), nicht nur
    *  auf der Rück-Kachel. */
   dockEmergencyExit?: boolean;
   /** Boden-Deko-Bänder (optional). */
@@ -140,7 +140,7 @@ export class RegionScene extends IslandScene {
     for (const o of objectsForMap(cfg.map)) if (o.type === "quest_trigger") this.makeSign(o.x * T + 8, (o.y + cfg.questSignDy) * T, o.label!);
 
     // Insel-NPCs datengesteuert (#349): runde Hitbox + Schwebe-Tween + „!"-Marker. Reden
-    // läuft über E → UI.interact() → nearestNpc(); bis Quests andocken, zeigt sie Smalltalk.
+    // läuft über die Reden-Taste → UI.interact() → nearestNpc(); bis Quests andocken, zeigt sie Smalltalk.
     const npcs = npcSpawnsForMap(cfg.map);
     this.softObstacles.push(...npcHitboxes(npcs, HIT_R));
     for (const s of npcs) this.softGrid[s.y * this.W + s.x] = 1;
@@ -182,7 +182,7 @@ export class RegionScene extends IslandScene {
     setWorldScene(this);
     setInteriorOpen(false);
 
-    this.ePrev = true;
+    this.talkPrev = true;
     // Rück-Warp erst scharf, wenn die (vom Hinweg evtl. noch gehaltene) Lauftaste einmal
     // losgelassen wurde – sonst sofortiges Pingpong (#426, IslandScene.updateReturn).
     this.returnArmed = false;
@@ -312,7 +312,7 @@ export class RegionScene extends IslandScene {
     UI.updatePrompt();
 
     // Rück-Warp betreten? -> zurück nach Port Kubernia (gemeinsames Anti-Pingpong-Gate +
-    // Notausgang per E/Enter, #426). dockEmergencyExit weitet den Notausgang über die ganze
+    // Notausgang per Reden-Taste/Enter, #426). dockEmergencyExit weitet den Notausgang über die ganze
     // Steg-Fläche (Archipel), sonst greift er nur auf der Rück-Kachel.
     const emergencyExtra = this.cfg.dockEmergencyExit
       ? this.ground[Math.floor(pl.y / T) * this.W + Math.floor(pl.x / T)] === DOCK

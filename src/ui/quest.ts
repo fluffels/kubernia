@@ -1,16 +1,7 @@
 import { Game } from "../game";
 import { worldScene } from "../runtime";
 import { part } from "./shared";
-
-/** #451: Einmaliger Wegweiser, den Bo beim ALLERERSTEN Abschluss der Docker-
- *  Einstiegsquest an seine Abschiedsworte hängt. Nennt Kralle namentlich, weist
- *  den Weg (an Deck des eigenen Schiffs) und etabliert den Übungs-Loop früh –
- *  statt nur generisch „Üben" zu erwähnen. In Bos Stein-Golem-Ton. */
-const KRALLE_WEGWEISER =
-  "Eins noch, Landratte: Gekonnt ist erst, was <b>sitzt</b> – und das kommt vom " +
-  "<b>Wiederholen</b>. Dafür gibt's <b>Kralle</b>, die Quiz-Krabbe an Deck deines " +
-  "Schiffs. Sprich sie an (Taste <b>{taste:talk}</b>) – sie frischt dein Wissen auf, bis es " +
-  "hält. Bo schickt dich hin. Bo ist Stein.";
+import { keyLabel, TASTEN_HINWEISE } from "../hud/tastenhinweis";
 
 export const questUI = part({
   /* ========== Quest-Maschine ========== */
@@ -27,7 +18,7 @@ export const questUI = part({
       // Wegweiser zur Quiz-Krabbe Kralle an (nicht im Wiederspiel – siehe
       // Game.pointsToKralleAfterFirstQuest). Frische Kopie, step.lines bleibt unangetastet.
       const lines = Game.pointsToKralleAfterFirstQuest()
-        ? [...step.lines, KRALLE_WEGWEISER]
+        ? [...step.lines, TASTEN_HINWEISE.kralleWegweiser] // Token ersetzt showDialogue (ui/dialog.ts)
         : step.lines;
       this.showDialogue(step.npc, lines, () => this.afterStep());
     } else if (step.type === "choice") {
@@ -80,7 +71,7 @@ export const questUI = part({
     // #232: Tasten aus der (umbelegbaren) Belegung, nicht fest verdrahtet – sonst
     // widerspricht das Intro einer geänderten Belegung.
     const keys = Game.state.settings.keys;
-    const kb = (a: "talk" | "radio" | "logbook") => "<b>" + keys[a].toUpperCase() + "</b>";
+    const kb = (a: "talk" | "radio" | "logbook") => "<b>" + keyLabel(keys, a) + "</b>";
     this.showDialogue("ole", [
       "⚓ Ahoi und herzlich willkommen in <b>Port Kubernia</b>! Ich bin Ole, der Hafenmeister – schön, dass du anheuerst.",
       "Hier wird dein Hafen Stück für Stück zu einem echten Cluster: Du lernst Docker, Kubernetes &amp; Co., indem du den Betrieb am Laufen hältst. Aber der Reihe nach – kurz zur Steuerung:",

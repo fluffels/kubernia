@@ -298,6 +298,7 @@ function bindDevPanelKeyboard(overlay: HTMLElement, ctrl: DevPanelControls): voi
         btns.map(b => ({ disabled: b.disabled, primary: b.classList.contains("primary") })),
         current,
         k,
+        Game.state.settings.keys.talk,
       );
       if (!res) return; // irrelevante Taste – schon geschluckt
       if (res.kind === "nav") {

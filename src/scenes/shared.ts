@@ -153,7 +153,7 @@ export abstract class IslandScene extends Phaser.Scene {
   bobT!: number;
   pShadow!: Phaser.GameObjects.Ellipse;
   pSprite!: Phaser.GameObjects.Image;
-  ePrev!: boolean;
+  talkPrev!: boolean;
   returnArmed!: boolean;
 
   /** Sicht für kqDev.state() (devtools/snapshot); `map` kennt die konkrete Szene. */
@@ -187,9 +187,9 @@ export abstract class IslandScene extends Phaser.Scene {
     const moveKeyDown = anyMoveKeyDown();
     if (!moveKeyDown && !onRet) this.returnArmed = true;
     if (!blocked && this.returnArmed && onRet) { this.exitToWorld(); return true; }
-    const e = !blocked && (!!keys[Game.state.settings.keys.talk] || !!keys["Enter"]);
-    if (e && !this.ePrev && (onRet || emergencyExtra)) { this.exitToWorld(); return true; }
-    this.ePrev = e;
+    const talk = !blocked && (!!keys[Game.state.settings.keys.talk] || !!keys["Enter"]);
+    if (talk && !this.talkPrev && (onRet || emergencyExtra)) { this.exitToWorld(); return true; }
+    this.talkPrev = talk;
     return false;
   }
 }

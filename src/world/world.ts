@@ -27,32 +27,32 @@ export const NPC_SPAWNS: Spawn[] = npcSpawnsForMap("harbor");
 /** Reichweite, ab der mit einem NPC geredet werden kann (nearestNpc in scenes.ts). */
 export const TALK_RANGE = 1.7 * TILE;
 
-/** #201: Was tut die E-Taste im Hausinnenraum gerade?
- *  Steht der Spieler beim Bewohner (in Talk-Reichweite) und drückt E, soll er
- *  mit ihm reden – nicht hinausgehen. Sonst gilt wie bisher: E-Flanke oder auf
+/** #201: Was tut die Reden-Taste im Hausinnenraum gerade?
+ *  Steht der Spieler beim Bewohner (in Talk-Reichweite) und drückt die Reden-Taste (oder Enter/Leer), soll er
+ *  mit ihm reden – nicht hinausgehen. Sonst gilt wie bisher: Flanke oder auf
  *  der Tür-Schwelle stehen → hinaus. Pur, damit die Entscheidung (statt nur in
  *  der Phaser-Szene zu stecken) im Node-Test abgesichert ist; die InteriorScene
- *  in scenes.ts berechnet `eFlank`/`onExit`/`nearNpc` und ruft das hier auf. */
-export function interiorEAction(opts: { eFlank: boolean; onExit: boolean; nearNpc: boolean }): "talk" | "exit" | "none" {
-  if (opts.eFlank && opts.nearNpc) return "talk";
-  if (opts.eFlank || opts.onExit) return "exit";
+ *  (scenes/InteriorScene.ts) berechnet `talkFlank`/`onExit`/`nearNpc` und ruft das hier auf. */
+export function interiorTalkAction(opts: { talkFlank: boolean; onExit: boolean; nearNpc: boolean }): "talk" | "exit" | "none" {
+  if (opts.talkFlank && opts.nearNpc) return "talk";
+  if (opts.talkFlank || opts.onExit) return "exit";
   return "none";
 }
 
-/** #305: Flanken-Buchführung der E-Taste im Innenraum.
- *  `eFlank` (frischer E-Druck) braucht eine steigende Flanke gegenüber dem
- *  letzten Frame (`ePrev`). Der Knackpunkt: solange ein Dialog/Overlay offen ist
- *  (`blocked`), gehört E dem Dialog – und derselbe Tastendruck, der den Dialog
+/** #305: Flanken-Buchführung der Reden-Taste im Innenraum.
+ *  `talkFlank` (frischer Druck; `talkDown` umfasst auch Enter/Leer) braucht eine steigende Flanke gegenüber dem
+ *  letzten Frame (`talkPrev`). Der Knackpunkt: solange ein Dialog/Overlay offen ist
+ *  (`blocked`), gehört die Taste dem Dialog – und derselbe Tastendruck, der den Dialog
  *  schließt, darf im nächsten Frame NICHT als neue Flanke ein Reden/Hinausgehen
  *  auslösen (sonst öffnet sich der Dialog sofort wieder → man kam aus dem
- *  Haus-Dialog nicht mehr raus). Lösung: während `blocked` gilt E als „weiter
- *  gedrückt" (`ePrev = true`), sodass erst ein echtes Loslassen + Neudrücken
+ *  Haus-Dialog nicht mehr raus). Lösung: während `blocked` gilt sie als „weiter
+ *  gedrückt" (`talkPrev = true`), sodass erst ein echtes Loslassen + Neudrücken
  *  nach dem Schließen wieder eine Flanke ergibt. Liefert die Flanke fürs
- *  `interiorEAction` UND den nächsten `ePrev`-Zustand. Pur → im Node-Test
- *  prüfbar; die InteriorScene in scenes.ts hält nur `ePrev` und ruft das auf. */
-export function interiorEFlank(opts: { ePhys: boolean; ePrev: boolean; blocked: boolean }): { eFlank: boolean; ePrev: boolean } {
-  if (opts.blocked) return { eFlank: false, ePrev: true };
-  return { eFlank: opts.ePhys && !opts.ePrev, ePrev: opts.ePhys };
+ *  `interiorTalkAction` UND den nächsten `talkPrev`-Zustand. Pur → im Node-Test
+ *  prüfbar; die InteriorScene hält nur `talkPrev` und ruft das auf. */
+export function interiorTalkFlank(opts: { talkDown: boolean; talkPrev: boolean; blocked: boolean }): { talkFlank: boolean; talkPrev: boolean } {
+  if (opts.blocked) return { talkFlank: false, talkPrev: true };
+  return { talkFlank: opts.talkDown && !opts.talkPrev, talkPrev: opts.talkDown };
 }
 
 /* ===== Türen / betretbare Häuser (#6) =====

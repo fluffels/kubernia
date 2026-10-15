@@ -1,24 +1,36 @@
 /* Tastatur-Bedienbarkeit einfacher Modals (#283).
  *
  * Prüft die pure Entscheidungslogik resolveOverlayKey: Navigation per ↑/↓ (w/s)
- * mit Umlauf über NUR aktivierbare Buttons und Auslösen per Enter/Leer/E
+ * mit Umlauf über NUR aktivierbare Buttons und Auslösen per Enter/Leer/Reden-Taste
  * (markierter → primary → erster). Inklusive Negativ-/Grenzfälle (disabled,
- * leeres Overlay, irrelevante Tasten, Wrap), damit kein Maus-only-Knopf bleibt.
+ * leeres Overlay, irrelevante Tasten, Wrap), damit kein Maus-Only-Knopf bleibt.
  */
 import { test, expect, describe } from "vitest";
 import { erwarteVariante } from "./support/erwartungen";
-import { resolveOverlayKey, dialogueNav, nextFocusIndex, type OverlayButton } from "../src/hud/overlaykbd";
+import { resolveOverlayKey as resolveMit, dialogueNav, nextFocusIndex, type OverlayButton } from "../src/hud/overlaykbd";
 
 // Kürzel zum Bauen von Button-Listen.
 const b = (o: Partial<OverlayButton> = {}): OverlayButton => ({ disabled: false, primary: false, ...o });
 
-describe("resolveOverlayKey – Auslösen (Enter/Leer/E)", () => {
+// Reden-Taste der Tests (Standardbelegung); resolveOverlayKey verlangt sie ausdrücklich (#1630).
+const TALK = "r";
+const resolveOverlayKey = (btns: OverlayButton[], cur: number, key: string, talk = TALK) => resolveMit(btns, cur, key, talk);
+
+describe("resolveOverlayKey – Auslösen (Enter/Leer/Reden-Taste)", () => {
   test("ohne Markierung löst Enter den primary-Button aus (Stapel-Intro-Fall)", () => {
     // [✕ schließen, … , VERSTANDEN-STAPELN! (primary)]
     const btns = [b(), b({ primary: true })];
-    for (const key of ["Enter", " ", "e"]) {
+    for (const key of ["Enter", " ", TALK]) {
       expect(resolveOverlayKey(btns, -1, key)).toEqual({ kind: "activate", index: 1 });
     }
+  });
+
+  test("Reden-Taste folgt der Belegung: E bestätigt nicht mehr (#1630)", () => {
+    const btns = [b(), b({ primary: true })];
+    expect(resolveOverlayKey(btns, -1, "e")).toBeNull();
+    expect(resolveOverlayKey(btns, -1, "x", "x")).toEqual({ kind: "activate", index: 1 });
+    expect(resolveOverlayKey(btns, -1, "r", "x")).toBeNull();
+    expect(resolveOverlayKey(btns, -1, "Enter", "x")).toEqual({ kind: "activate", index: 1 });
   });
 
   test("ohne primary und ohne Markierung trifft Enter den ersten aktivierbaren", () => {

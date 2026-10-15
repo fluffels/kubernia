@@ -361,7 +361,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     const defs = [...this.npcSpawns, ...(this.worldConfig?.extraNpcs ?? [])];
     // #31/#343: NPCs sind solide – man läuft nicht durch sie hindurch –, aber als
     // RUNDE Hitbox (Kreis um den Standplatz) statt volles Kachel-Quadrat, sodass man
-    // weich an ihnen vorbeigleitet. Reden (E) bleibt möglich (nearestNpc greift von
+    // weich an ihnen vorbeigleitet. Reden bleibt möglich (nearestNpc greift von
     // der Nachbarkachel). Die Kachel bleibt für die Deko-Platzierung belegt (softGrid).
     for (const idx of npcSolidIndices(defs, this.W, this.H)) this.softGrid[idx] = 1;
     this.softObstacles.push(...npcHitboxes(defs, HIT_R));

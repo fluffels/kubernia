@@ -29,8 +29,8 @@ export type OverlayKeyResult =
 const NAV_DOWN = ["ArrowDown", "s"];
 const NAV_UP = ["ArrowUp", "w"];
 // Enter/Leer sind die festen, universellen Bestätigen-Tasten; die Reden-/Interagieren-
-// Taste bestätigt zusätzlich (umbelegbar, #232 – als Parameter hereingereicht, Default "e"
-// hält die reinen overlaykbd-Unit-Tests bindungsfrei gültig).
+// Taste bestätigt zusätzlich (umbelegbar, #232 – Pflichtparameter, kein Default: ein Aufrufer ohne Belegung
+// würde sonst still eine veraltete Standardtaste bestätigen lassen).
 const ACTIVATE = ["Enter", " "];
 
 /**
@@ -45,7 +45,7 @@ const ACTIVATE = ["Enter", " "];
  * Regeln:
  * - ↑/↓ (bzw. w/s) wandert nur über **aktivierbare** Buttons, mit Umlauf.
  *   Aus "nichts markiert" (-1) springt ↓ auf den ersten, ↑ auf den letzten.
- * - Enter/Leer/E löst aus: den markierten Button, sonst den `primary`-Button,
+ * - Enter/Leer/Reden-Taste löst aus: den markierten Button, sonst den `primary`-Button,
  *   sonst den ersten aktivierbaren – damit Modals ohne Maus bedienbar sind.
  * - Gibt es keinen aktivierbaren Button oder ist die Taste keine der obigen,
  *   liefert die Funktion `null`.
@@ -54,7 +54,7 @@ export function resolveOverlayKey(
   buttons: OverlayButton[],
   current: number,
   key: string,
-  talkKey = "e",
+  talkKey: string,
 ): OverlayKeyResult {
   // Nur aktivierbare Buttons mit ihrem Original-Index betrachten.
   const enabled = buttons
@@ -89,7 +89,7 @@ export function resolveOverlayKey(
 
 /* ===== Mehrzeilige Lese-Dialoge: vor-/zurückblättern (#310) =====
  * Pure Blätter-Logik für NPC-Gespräche UND Bo-Lernblöcke (beide laufen über
- * `showDialogue`): mit „weiter" (E/Enter/Leer) vorwärts, mit „zurück" (←/
+ * `showDialogue`): mit „weiter" (Reden-Taste/Enter/Leer) vorwärts, mit „zurück" (←/
  * Backspace) durch die schon gezeigten Zeilen nochmal lesen. Reiner Lese-
  * Rückblick – es wird KEIN Spielzustand und KEINE getroffene Auswahl/Antwort
  * zurückgedreht (eine laufende Frage/ein Menü blockt das in der DOM-Schicht).
@@ -111,7 +111,7 @@ export type DialogueNavAction =
  *
  * @param idx        aktuell gezeigte Zeile (0-basiert)
  * @param lineCount  Gesamtzahl der Zeilen (>= 1)
- * @param dir        +1 = weiter (E/Enter/Leer), -1 = zurück (←/Backspace)
+ * @param dir        +1 = weiter (Reden-Taste/Enter/Leer), -1 = zurück (←/Backspace)
  *
  * - weiter: auf der letzten Zeile → `finish` (Dialog schließen), sonst `show idx+1`.
  * - zurück: auf der ersten Zeile → `stay` (geclampt; eine Auswahl/Antwort wird

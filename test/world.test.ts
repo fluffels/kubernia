@@ -6,7 +6,7 @@
  * Bewusst auch Grenz-/Negativfälle: out-of-bounds, doppelte Kacheln, Erreichbarkeit.
  */
 import { test, expect } from "vitest";
-import { NPC_SPAWNS, TILE, TALK_RANGE, npcTile, npcSolidIndices, footprintSolid, resolveMove, DOORS, doorAt, findDoorAt, doorsFromObjectGroup, npcsFromObjectGroup, ENTRANCES, SHIP, SHIP_DOOR, SHIP_PIER, SHIP_DECK, SHIP_KRALLE, onShipDeck, shipTile, interiorEAction, interiorEFlank, type Door, type Spawn } from "../src/world/world";
+import { NPC_SPAWNS, TILE, TALK_RANGE, npcTile, npcSolidIndices, footprintSolid, resolveMove, DOORS, doorAt, findDoorAt, doorsFromObjectGroup, npcsFromObjectGroup, ENTRANCES, SHIP, SHIP_DOOR, SHIP_PIER, SHIP_DECK, SHIP_KRALLE, onShipDeck, shipTile, interiorTalkAction, interiorTalkFlank, type Door, type Spawn } from "../src/world/world";
 import type { TiledObjectGroup } from "../src/world/maps/tilemap";
 
 const W = 52, H = 40; // wie WorldScene.create()
@@ -382,80 +382,80 @@ test("npcsFromObjectGroup auf leerem Layer liefert keine Spawns", () => {
   expect(npcsFromObjectGroup(npcGroupFrom([]))).toEqual([]);
 });
 
-/* ===== #201: E im Hausinnenraum ist kontextabhängig (reden vs. hinausgehen) =====
- * Die Entscheidung steckt pur in interiorEAction(), damit sie ohne Phaser im
- * Node-Test prüfbar ist. InteriorScene.update() sammelt nur eFlank/onExit/nearNpc.
+/* ===== #201: Reden-Taste im Hausinnenraum ist kontextabhängig (reden vs. hinausgehen) =====
+ * Die Entscheidung steckt pur in interiorTalkAction(), damit sie ohne Phaser im
+ * Node-Test prüfbar ist. InteriorScene.update() sammelt nur talkFlank/onExit/nearNpc.
  * Bewusst inkl. Negativfällen (fern vom NPC, Schwelle, kein Tastendruck). */
 
-test("#201 beim Bewohner + E-Flanke → reden (nicht hinausgehen)", () => {
-  // Das ist der eigentliche Bugfix: vorher führte E hier IMMER zum Hinausgehen.
-  expect(interiorEAction({ eFlank: true, onExit: false, nearNpc: true })).toBe("talk");
+test("#201 beim Bewohner + Reden-Flanke → reden (nicht hinausgehen)", () => {
+  // Das ist der eigentliche Bugfix: vorher führte die Taste hier IMMER zum Hinausgehen.
+  expect(interiorTalkAction({ talkFlank: true, onExit: false, nearNpc: true })).toBe("talk");
 });
 
-test("#201 fern vom Bewohner + E-Flanke → hinausgehen (Negativfall)", () => {
-  expect(interiorEAction({ eFlank: true, onExit: false, nearNpc: false })).toBe("exit");
+test("#201 fern vom Bewohner + Reden-Flanke → hinausgehen (Negativfall)", () => {
+  expect(interiorTalkAction({ talkFlank: true, onExit: false, nearNpc: false })).toBe("exit");
 });
 
 test("#201 auf der Tür-Schwelle ohne Tastendruck → hinausgehen (wie bisher)", () => {
-  expect(interiorEAction({ eFlank: false, onExit: true, nearNpc: false })).toBe("exit");
+  expect(interiorTalkAction({ talkFlank: false, onExit: true, nearNpc: false })).toBe("exit");
 });
 
 test("#201 Schwelle zählt fürs Hinausgehen, auch wenn man (theoretisch) nah am NPC wäre", () => {
-  // onExit ohne E-Flanke darf nie 'talk' werden – reden braucht die E-Flanke.
-  expect(interiorEAction({ eFlank: false, onExit: true, nearNpc: true })).toBe("exit");
+  // onExit ohne Reden-Flanke darf nie 'talk' werden – reden braucht die Reden-Flanke.
+  expect(interiorTalkAction({ talkFlank: false, onExit: true, nearNpc: true })).toBe("exit");
 });
 
-test("#201 nah am NPC, aber E nur gehalten (keine Flanke) → nichts tun", () => {
-  // Ohne frische E-Flanke wird weder geredet noch (außerhalb der Schwelle) gegangen.
-  expect(interiorEAction({ eFlank: false, onExit: false, nearNpc: true })).toBe("none");
+test("#201 nah am NPC, aber Taste nur gehalten (keine Flanke) → nichts tun", () => {
+  // Ohne frische Reden-Flanke wird weder geredet noch (außerhalb der Schwelle) gegangen.
+  expect(interiorTalkAction({ talkFlank: false, onExit: false, nearNpc: true })).toBe("none");
 });
 
 test("#201 weder Tastendruck noch Schwelle noch NPC-Nähe → nichts tun", () => {
-  expect(interiorEAction({ eFlank: false, onExit: false, nearNpc: false })).toBe("none");
+  expect(interiorTalkAction({ talkFlank: false, onExit: false, nearNpc: false })).toBe("none");
 });
 
 test("#201 reden hat Vorrang vor hinausgehen, wenn beides zuträfe", () => {
-  // Falls eFlank+nearNpc+onExit zusammenkämen, gewinnt 'talk' (man will reden).
-  expect(interiorEAction({ eFlank: true, onExit: true, nearNpc: true })).toBe("talk");
+  // Falls talkFlank+nearNpc+onExit zusammenkämen, gewinnt 'talk' (man will reden).
+  expect(interiorTalkAction({ talkFlank: true, onExit: true, nearNpc: true })).toBe("talk");
 });
 
-/* ===== #305: E-Flanken-Buchführung im Innenraum (interiorEFlank) =====
+/* ===== #305: Reden-Flanken-Buchführung im Innenraum (interiorTalkFlank) =====
  * Regression: Im Haus kam man aus dem NPC-Dialog nicht mehr raus, weil der
- * E-Druck, der den Dialog schloss, im nächsten Frame als frische Flanke ein
- * neues Reden auslöste. interiorEFlank muss E während eines offenen Dialogs als
+ * Tastendruck, der den Dialog schloss, im nächsten Frame als frische Flanke ein
+ * neues Reden auslöste. interiorTalkFlank muss die Taste während eines offenen Dialogs als
  * „gedrückt" halten und erst nach echtem Loslassen wieder eine Flanke liefern. */
 
-test("#305 frischer E-Druck (steigende Flanke) → eFlank, ePrev gemerkt", () => {
-  expect(interiorEFlank({ ePhys: true, ePrev: false, blocked: false })).toEqual({ eFlank: true, ePrev: true });
+test("#305 frischer Druck (steigende Flanke) → talkFlank, talkPrev gemerkt", () => {
+  expect(interiorTalkFlank({ talkDown: true, talkPrev: false, blocked: false })).toEqual({ talkFlank: true, talkPrev: true });
 });
 
-test("#305 E gehalten (keine steigende Flanke) → keine Flanke (Negativfall)", () => {
-  expect(interiorEFlank({ ePhys: true, ePrev: true, blocked: false })).toEqual({ eFlank: false, ePrev: true });
+test("#305 Taste gehalten (keine steigende Flanke) → keine Flanke (Negativfall)", () => {
+  expect(interiorTalkFlank({ talkDown: true, talkPrev: true, blocked: false })).toEqual({ talkFlank: false, talkPrev: true });
 });
 
-test("#305 während offenem Dialog gehört E dem Dialog → keine Flanke, ePrev=true (gilt als gedrückt)", () => {
-  // Egal ob E physisch gedrückt ist oder nicht: solange blocked, nie eine Flanke,
-  // und ePrev bleibt true, damit der schließende Druck danach nicht zündet.
-  expect(interiorEFlank({ ePhys: true, ePrev: false, blocked: true })).toEqual({ eFlank: false, ePrev: true });
-  expect(interiorEFlank({ ePhys: false, ePrev: false, blocked: true })).toEqual({ eFlank: false, ePrev: true });
+test("#305 während offenem Dialog gehört die Taste dem Dialog → keine Flanke, talkPrev=true (gilt als gedrückt)", () => {
+  // Egal ob die Taste physisch gedrückt ist oder nicht: solange blocked, nie eine Flanke,
+  // und talkPrev bleibt true, damit der schließende Druck danach nicht zündet.
+  expect(interiorTalkFlank({ talkDown: true, talkPrev: false, blocked: true })).toEqual({ talkFlank: false, talkPrev: true });
+  expect(interiorTalkFlank({ talkDown: false, talkPrev: false, blocked: true })).toEqual({ talkFlank: false, talkPrev: true });
 });
 
-test("#305 Regression: der E-Druck, der den Dialog schließt, öffnet ihn NICHT sofort wieder", () => {
-  // Frame 1: am NPC, frischer E-Druck → Flanke → reden (Dialog öffnet).
-  let s = interiorEFlank({ ePhys: true, ePrev: false, blocked: false });
-  expect(s.eFlank).toBe(true);
-  // Frame 2..n: Dialog offen, E noch gehalten → blocked, ePrev bleibt true.
-  s = interiorEFlank({ ePhys: true, ePrev: s.ePrev, blocked: true });
-  expect(s.ePrev).toBe(true);
-  // Frame X: Spieler drückt E → main.ts schließt den Dialog. Direkt danach läuft
-  // update() wieder unblockiert, E ist (noch) gedrückt. Dank ePrev=true KEINE
-  // Flanke → interiorEAction bekommt eFlank=false → kein erneutes Reden.
-  s = interiorEFlank({ ePhys: true, ePrev: s.ePrev, blocked: false });
-  expect(s.eFlank).toBe(false);
-  expect(interiorEAction({ eFlank: s.eFlank, onExit: false, nearNpc: true })).toBe("none");
+test("#305 Regression: der Tastendruck, der den Dialog schließt, öffnet ihn NICHT sofort wieder", () => {
+  // Frame 1: am NPC, frischer Druck → Flanke → reden (Dialog öffnet).
+  let s = interiorTalkFlank({ talkDown: true, talkPrev: false, blocked: false });
+  expect(s.talkFlank).toBe(true);
+  // Frame 2..n: Dialog offen, Taste noch gehalten → blocked, talkPrev bleibt true.
+  s = interiorTalkFlank({ talkDown: true, talkPrev: s.talkPrev, blocked: true });
+  expect(s.talkPrev).toBe(true);
+  // Frame X: Spieler drückt die Taste → main.ts schließt den Dialog. Direkt danach läuft
+  // update() wieder unblockiert, Taste ist (noch) gedrückt. Dank talkPrev=true KEINE
+  // Flanke → interiorTalkAction bekommt talkFlank=false → kein erneutes Reden.
+  s = interiorTalkFlank({ talkDown: true, talkPrev: s.talkPrev, blocked: false });
+  expect(s.talkFlank).toBe(false);
+  expect(interiorTalkAction({ talkFlank: s.talkFlank, onExit: false, nearNpc: true })).toBe("none");
   // Erst Loslassen + Neudrücken ergibt wieder eine echte Flanke (gewolltes Reden).
-  s = interiorEFlank({ ePhys: false, ePrev: s.ePrev, blocked: false }); // loslassen
-  expect(s.ePrev).toBe(false);
-  s = interiorEFlank({ ePhys: true, ePrev: s.ePrev, blocked: false });  // neu drücken
-  expect(s.eFlank).toBe(true);
+  s = interiorTalkFlank({ talkDown: false, talkPrev: s.talkPrev, blocked: false }); // loslassen
+  expect(s.talkPrev).toBe(false);
+  s = interiorTalkFlank({ talkDown: true, talkPrev: s.talkPrev, blocked: false });  // neu drücken
+  expect(s.talkFlank).toBe(true);
 });
