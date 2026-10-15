@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../../scripts/projekt-config-lib.mjs";
+import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const MANIFEST = ".factory/besitz.json";
@@ -351,8 +351,7 @@ const lesenWurzel = (pfad: string): string | null => {
 };
 const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-const echteBegriffe = begriffeAus(ladeProjektConfig() as ProjektConfig);
+const echteBegriffe = begriffeAus((rawPc as unknown as { ladeProjektConfig(): ProjektConfig }).ladeProjektConfig());
 
 describe("Kern-Reinheit (#1610)", () => {
   test("das Besitz-Manifest ist gültig und nicht trivial", () => {

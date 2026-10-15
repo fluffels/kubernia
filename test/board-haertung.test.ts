@@ -9,7 +9,7 @@ import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTakt from "../scripts/board-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Lib = {
@@ -168,7 +168,7 @@ describe("gemeinsame Helfer (#1392 Z22, Z23)", () => {
   });
 
   test("REPO: GITHUB_REPOSITORY oder das Repo der Projekt-Config, und die Alias-Abfrage nutzt es als Standard", () => {
-    expect(L.REPO).toBe(process.env.GITHUB_REPOSITORY || (ladeProjektConfig() as { repo: string }).repo);
+    expect(L.REPO).toBe(process.env.GITHUB_REPOSITORY || (rawPc as unknown as { ladeProjektConfig(): { repo: string } }).ladeProjektConfig().repo);
     const [owner, name] = L.REPO.split("/");
     expect(L.aliasAbfrage([1])[0].query).toContain(`repository(owner:"${owner}",name:"${name}")`);
   });

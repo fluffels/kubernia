@@ -8,11 +8,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as pc from "../scripts/projekt-config-lib.mjs";
+import * as rawPc from "../scripts/projekt-config-lib.mjs";
+
+interface Pc {
+  pruefeProjektConfig(wert: unknown): string[];
+  ladeProjektConfig(opt?: { rootDir?: string; pfad?: string }): { repo: string };
+  cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
+}
+const pc = rawPc as unknown as Pc;
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 
-const gueltig = (): Record<string, unknown> => ({
+type Cfg = Record<string, unknown> & { board?: Record<string, unknown> };
+const gueltig = (): Cfg => ({
   version: 1,
   repo: "acme/demo",
   board: { besitzer: "acme", besitzerTyp: "org", nummer: 7, projectId: "PVT_x", statusFeldId: 5, statusFeldNodeId: "PVTSSF_y", todoOptionId: "abc" },
@@ -29,7 +37,7 @@ afterEach(() => {
   for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-const meld = (w: unknown): string => (pc.pruefeProjektConfig(w) as string[]).join("|");
+const meld = (w: unknown): string => pc.pruefeProjektConfig(w).join("|");
 
 describe("pruefeProjektConfig", () => {
   test("gültige Config und die echte Config sind grün", () => {
@@ -41,7 +49,7 @@ describe("pruefeProjektConfig", () => {
   });
 
   test("Negativfälle je Pflichtschlüssel", () => {
-    const mit = (mut: (c: Record<string, any>) => void): string => {
+    const mit = (mut: (c: Cfg) => void): string => {
       const c = gueltig();
       mut(c);
       return meld(c);
@@ -54,15 +62,15 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (c.repo = "ohneSchraegstrich")), /repo/);
     assert.match(mit((c) => (c.repo = 5)), /repo/);
     assert.match(mit((c) => delete c.board), /board muss/);
-    assert.match(mit((c) => delete c.board.besitzer), /board\.besitzer/);
-    assert.match(mit((c) => (c.board.besitzer = " ")), /board\.besitzer/);
-    assert.match(mit((c) => (c.board.besitzerTyp = "team")), /besitzerTyp/);
-    assert.match(mit((c) => (c.board.nummer = 0)), /board\.nummer/);
-    assert.match(mit((c) => (c.board.nummer = 1.5)), /board\.nummer/);
-    assert.match(mit((c) => (c.board.statusFeldId = "5")), /statusFeldId/);
-    assert.match(mit((c) => delete c.board.projectId), /board\.projectId/);
-    assert.match(mit((c) => (c.board.statusFeldNodeId = "")), /statusFeldNodeId/);
-    assert.match(mit((c) => (c.board.todoOptionId = 3)), /todoOptionId/);
+    assert.match(mit((c) => delete c.board?.besitzer), /board\.besitzer/);
+    assert.match(mit((c) => ((c.board ??= {}).besitzer = " ")), /board\.besitzer/);
+    assert.match(mit((c) => ((c.board ??= {}).besitzerTyp = "team")), /besitzerTyp/);
+    assert.match(mit((c) => ((c.board ??= {}).nummer = 0)), /board\.nummer/);
+    assert.match(mit((c) => ((c.board ??= {}).nummer = 1.5)), /board\.nummer/);
+    assert.match(mit((c) => ((c.board ??= {}).statusFeldId = "5")), /statusFeldId/);
+    assert.match(mit((c) => delete c.board?.projectId), /board\.projectId/);
+    assert.match(mit((c) => ((c.board ??= {}).statusFeldNodeId = "")), /statusFeldNodeId/);
+    assert.match(mit((c) => ((c.board ??= {}).todoOptionId = 3)), /todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
   });
@@ -84,7 +92,7 @@ describe("ladeProjektConfig", () => {
     writeFileSync(join(d, ".factory/projekt.json"), "[]");
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /JSON-Objekt/);
     const c = gueltig();
-    delete (c.board as Record<string, unknown>).projectId;
+    delete c.board?.projectId;
     writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify(c));
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /board\.projectId[\s\S]*Fix:/);
   });
@@ -94,7 +102,7 @@ describe("cli", () => {
   const lauf = (argv: string[], rootDir = WURZEL): { code: number; out: string[]; err: string[] } => {
     const out: string[] = [];
     const err: string[] = [];
-    const code = pc.cli(argv, { rootDir, out: (s: string) => out.push(s), err: (s: string) => err.push(s) }) as number;
+    const code = pc.cli(argv, { rootDir, out: (s: string) => out.push(s), err: (s: string) => err.push(s) });
     return { code, out, err };
   };
   const mitConfig = (): string => {

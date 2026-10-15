@@ -64,7 +64,7 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG } = {}
   try {
     wert = JSON.parse(roh);
   } catch (e) {
-    throw new Error(`Projekt-Config ist kein gültiges JSON: ${abs} (${e instanceof Error ? e.message : e})\nFix: JSON-Syntax korrigieren`);
+    throw new Error(`Projekt-Config ist kein gültiges JSON: ${abs} (${e instanceof Error ? e.message : e})\nFix: JSON-Syntax korrigieren`, { cause: e });
   }
   const fehler = pruefeProjektConfig(wert);
   if (fehler.length) {
