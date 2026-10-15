@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Löst den Takt aus #1293 ab („Nachfolger auf Position 20“, siehe [ADR 0012](0012-harness-autonomie-audit-spur.md)). Die operative Mechanik steht in [docs/ticket-reihenfolge.md](../ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293), die Checkliste in [docs/model-routing.md](../model-routing.md#langfuse-status-überprüfen-1293).
+**Akzeptiert.** Löst den Takt aus #1293 ab („Nachfolger auf Position 20“, siehe [ADR 0012](0012-harness-autonomie-audit-spur.md)). Die operative Mechanik steht in [docs/ticket-reihenfolge.md](../ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293), die Checkliste in [docs/model-routing.md](../model-routing.md#langfuse-status-überprüfen-1293). Präzisiert durch [ADR 0025](0025-sammelticket-gruppen.md) (Generationsgrenze).
 
 ## Kontext
 

@@ -2,6 +2,7 @@
  * anlegen. Alles pur bzw. mit injizierten Abrufen; die gh-Aufrufe laufen im Glue von scripts/sammelticket-anlegen.mjs.
  *
  * Reines Node-Tooling ohne Declaration-File: Namespace über `unknown` auf ein lokales Interface. */
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
@@ -199,5 +200,28 @@ describe("pruefSchritt mit Ziel „hinter X“", () => {
   test("X nicht (mehr) im Board, etwa geclaimt und geschlossen → normale Positionsprüfung", () => {
     const items = [b(1), b(2), sammel(20)];
     expect(G.pruefSchritt({ items, nr: 20, position: 4, hinter: 10 }).art).toBe("ok");
+  });
+});
+
+describe("Verdrahtung der Generationsgrenze (#1647)", () => {
+  const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const yml = lies(".github/workflows/board-takt.yml");
+
+  test("der Board-Takt fährt `harness --generation` nach dem Takt-Skript, mit Board-Token; fehlt er, wird nur gewarnt", () => {
+    expect(yml).toMatch(/node scripts\/board-takt\.mjs[\s\S]*node scripts\/sammelticket-anlegen\.mjs harness --generation/);
+    expect(yml).toMatch(/GH_TOKEN: \$\{\{ env\.PROJECT_TOKEN \}\}/);
+    expect(yml.match(/secrets\.PROJECT_TOKEN/g)?.length, "das Secret steht genau einmal (Job-Env), der Wächter in langfuse-erfassung sabotiert die erste Fundstelle").toBe(1);
+    expect(yml).toMatch(/if \[ -z "\$GH_TOKEN" \]; then\n\s+echo "::warning::PROJECT_TOKEN fehlt[^\n]*\n\s+exit 0/);
+  });
+
+  test("das Skript zählt Zeilen über die Vertrauensliste aus fremdtext-lib (keine eigene Liste) und paginiert die Kommentare", () => {
+    const skript = lies("scripts/sammelticket-anlegen.mjs");
+    expect(skript).toMatch(/import \{ istVertraut \} from "\.\/fremdtext-lib\.mjs"/);
+    expect(skript).toMatch(/"--paginate", "--slurp", `repos\/\$\{REPO\}\/issues\/\$\{nr\}\/comments/);
+    expect(skript).not.toMatch(/from "\.\/fremdtext\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
+  });
+
+  test("befehle.md nennt das Flag", () => {
+    expect(lies("docs/referenz/befehle.md")).toMatch(/sammelticket-anlegen\.mjs harness \[--vorgaenger <nr> \\| --generation\]/);
   });
 });

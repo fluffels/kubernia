@@ -35,6 +35,8 @@ jobs:
   takt:
     name: "Board-Takt: Status-Ticket und Sammelticket"
     runs-on: ubuntu-latest
+    env:
+      PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -44,5 +46,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: node scripts/board-takt.mjs
+      # Generationsgrenze (ADR 0025): ist das jüngste ungeclaimte Harness-Sammelticket voll (12 offene Zeilen), entsteht der Nachfolger direkt
+      # dahinter. Best effort: ein Fehler stört den Takt nicht (der nächste Lauf holt es nach), fehlt der Token, wird nur gewarnt.
+      - name: Generationsgrenze des Harness-Sammeltickets
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ env.PROJECT_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::PROJECT_TOKEN fehlt: Generationsgrenze übersprungen"
+            exit 0
+          fi
+          node scripts/sammelticket-anlegen.mjs harness --generation

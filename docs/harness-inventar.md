@@ -47,6 +47,7 @@ Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie 
 | `Explore` | Haiku-Recherche-Agent mit Kontext-Diät | eingebauter Explore-Agent ([Subagents](https://code.claude.com/docs/en/sub-agents.md)) | behalten: überschreibt den eingebauten, um das Modell zu pinnen | ja |
 | `kubernia-planner` | Plan vor dem Coden | Plan-Modus und eingebauter Plan-Agent | behalten: Planformat und Fremdtext-Gate sind Politik | teilweise |
 | `kubernia-umsetzer` | setzt ein Ticket bis zum Merge um | benutzerdefinierte Subagenten ([Subagents](https://code.claude.com/docs/en/sub-agents.md)), `isolation: worktree` ab v2.1.49 | behalten | teilweise |
+| `kubernia-gruppe` | Gruppen-Umsetzer: setzt eine Gruppe von Sammelticket-Zeilen mit frischem Kontext um ([ADR 0025](adr/0025-sammelticket-gruppen.md)) | benutzerdefinierte Subagenten; kein natives Gegenstück für Gruppen eines Tickets | behalten | ja |
 | `kubernia-lens` | unabhängiger Review-Kritiker je Brille | benutzerdefinierte Subagenten; kein natives Mehr-Perspektiven-Review | behalten | ja |
 | `kubernia` | Ticket-Ablauf als Skill | [Skills](https://code.claude.com/docs/en/skills.md), Skript-Orchestrierung als [Workflows](https://code.claude.com/docs/en/workflows.md) | behalten | nein |
 | `kubernia-workflow`, `kubernia-ticket` (`.claude/workflows/kubernia-ticket.js`) | deterministische Ticket-Orchestrierung | [dynamische Workflows](https://code.claude.com/docs/en/workflows.md), `.claude/workflows/` nativ, Datei ist schon das native Format | behalten | nein |

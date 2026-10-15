@@ -24,7 +24,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Skripte | 103 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 73 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 24 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 25 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -300,6 +300,7 @@ flowchart TD
   pre{"Irreversibel oder<br/>Außenwirkung?"}
   frage["Rückfrage an die Maintainerin"]
   umsetzen["Umsetzen (TDD)<br/>kubernia-umsetzer"]
+  gruppen["Sammelticket-Gruppen,<br/>je Gruppe frisch<br/>kubernia-gruppe"]
   verify{"npm run verify grün?"}
   lenses{"Lenses ohne Blocker?<br/>kubernia-lens"}
   fix["Fix-Runde"]
@@ -319,6 +320,7 @@ flowchart TD
   pre -- nein --> wt
   wt --> umsetzen
   umsetzen --> verify
+  umsetzen -.->|"Plan mit Block GRUPPEN"| gruppen -.-> umsetzen
   verify -- nein --> umsetzen
   verify -- ja --> lenses
   lenses -- "Blocker, Runde unter 2" --> fix --> lenses
@@ -423,6 +425,7 @@ sequenceDiagram
   participant P as kubernia-planner<br/>opus · xhigh
   participant E as Explore<br/>haiku · low
   participant U as kubernia-umsetzer<br/>sonnet · medium
+  participant G as kubernia-gruppe · sonnet · medium<br/>je Gruppe eines Sammeltickets
   participant L1 as kubernia-lens · opus · high<br/>Brille Architektur
   participant L2 as kubernia-lens · opus · high<br/>Brille Requirement-Treue
   participant L3 as kubernia-lens · opus · high<br/>Brille Test-Adäquanz
@@ -442,6 +445,12 @@ sequenceDiagram
   end
   H->>U: Ticket, Plan, Entscheidungen
   U->>U: Worktree, TDD, npm run verify
+  opt Sammelticket mit Block GRUPPEN im Plan
+    loop je Gruppe nacheinander
+      U->>G: Gruppe und Plan-Abschnitt
+      G-->>U: Commits und Bericht
+    end
+  end
   loop höchstens 2 Fix-Runden, Skill review-lenses
     par drei Brillen parallel
       U->>L1: Patch und Auftrag

@@ -8,6 +8,7 @@ flowchart TD
   pre{"Irreversibel oder<br/>Außenwirkung?"}
   frage["Rückfrage an die Maintainerin"]
   umsetzen["Umsetzen (TDD)<br/>${agent:kubernia-umsetzer}"]
+  gruppen["Sammelticket-Gruppen,<br/>je Gruppe frisch<br/>${agent:kubernia-gruppe}"]
   verify{"npm run verify grün?"}
   lenses{"Lenses ohne Blocker?<br/>${agent:kubernia-lens}"}
   fix["Fix-Runde"]
@@ -27,6 +28,7 @@ flowchart TD
   pre -- nein --> wt
   wt --> umsetzen
   umsetzen --> verify
+  umsetzen -.->|"Plan mit Block GRUPPEN"| gruppen -.-> umsetzen
   verify -- nein --> umsetzen
   verify -- ja --> lenses
   lenses -- "Blocker, Runde unter ${konstante:lensCap}" --> fix --> lenses

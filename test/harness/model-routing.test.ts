@@ -549,6 +549,7 @@ const MATRIX_ZIELE: Record<string, { datei: string; mitModel: boolean }> = {
   planner: { datei: ".claude/agents/kubernia-planner.md", mitModel: true },
   lens: { datei: ".claude/agents/kubernia-lens.md", mitModel: true },
   umsetzer: { datei: ".claude/agents/kubernia-umsetzer.md", mitModel: true },
+  gruppe: { datei: ".claude/agents/kubernia-gruppe.md", mitModel: true },
   explore: { datei: ".claude/agents/explore.md", mitModel: true },
   hauptagent: { datei: UMSETZUNGS_SKILL, mitModel: false },
 };
@@ -557,7 +558,7 @@ const zelleOhneCode = (z: string) => z.replace(/`/g, "").trim();
 
 /**
  * Prüft die Phasen-Matrix (§1) gegen die Frontmatter ihrer Ziele (#1609): je Zeile Ziel über die Skill-Pfad-Zelle bestimmen
- * (Reihenfolge `kubernia-planner`, `kubernia-lens`, `kubernia-umsetzer`/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
+ * (Reihenfolge `kubernia-planner`, `kubernia-lens`, `kubernia-gruppe`, `kubernia-umsetzer`/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
  * (Spalte „Effort Skill-Pfad“) und bei Subagenten `model` (Spalte „Alias“) gleich dem Frontmatter. Liefert die Verstöße;
  * eine fehlende Spalte, eine fehlende Tabelle oder eine nicht zuordenbare Zeile ist ein Verstoß.
  */
@@ -579,13 +580,15 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
       ? "planner"
       : /`kubernia-lens`/.test(skill)
         ? "lens"
-        : /kubernia-umsetzer|im Umsetzer/.test(skill)
-          ? "umsetzer"
-          : /`Explore`/.test(skill)
-            ? "explore"
-            : /Hauptagent/.test(skill)
-              ? "hauptagent"
-              : null;
+        : /`kubernia-gruppe`/.test(skill)
+          ? "gruppe"
+          : /kubernia-umsetzer|im Umsetzer/.test(skill)
+            ? "umsetzer"
+            : /`Explore`/.test(skill)
+              ? "explore"
+              : /Hauptagent/.test(skill)
+                ? "hauptagent"
+                : null;
     if (!ziel) {
       fehler.push(`${phase}: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar`);
       continue;
@@ -612,11 +615,35 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
     assert.match(matrixAbweichungen(effortFalsch, fmEcht).join("\n"), /Umsetzung: Effort Skill-Pfad „high“ ≠ Frontmatter umsetzer „medium“/);
     const aliasFalsch = doku.replace(zeile, "| Umsetzung | `opus` | `medium` | `medium` |");
     assert.match(matrixAbweichungen(aliasFalsch, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter umsetzer „sonnet“/);
+    const gruppeZeile = "| Sammelticket-Gruppe | `sonnet` | – | `medium` |";
+    assert.equal(doku.split(gruppeZeile).length, 2, "Gruppen-Zeile genau einmal");
+    const gruppeEffort = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `sonnet` | – | `high` |");
+    assert.match(matrixAbweichungen(gruppeEffort, fmEcht).join("\n"), /Sammelticket-Gruppe: Effort Skill-Pfad „high“ ≠ Frontmatter gruppe „medium“/);
+    const gruppeAlias = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `opus` | – | `medium` |");
+    assert.match(matrixAbweichungen(gruppeAlias, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter gruppe „sonnet“/);
     const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | – | `low` | n/a | irgendwer |\n| Explore / Recherche |");
     assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);
     const ohneSpalte = doku.replace("| Effort Skill-Pfad |", "| Effort |");
     assert.match(matrixAbweichungen(ohneSpalte, fmEcht).join("\n"), /Spalte fehlt/);
     assert.match(matrixAbweichungen("kein Text", fmEcht).join("\n"), /Matrix-Tabelle/);
+  });
+});
+
+describe("Sammelticket-Gruppen (#1647, ADR 0025): ein Vertrag in Planer, Umsetzer und Gruppe", () => {
+  const dateien = [".claude/agents/kubernia-planner.md", ".claude/agents/kubernia-umsetzer.md", ".claude/agents/kubernia-gruppe.md"];
+  test("die Kopfzeile `GRUPPE <k>/<n>` steht wortgleich in allen drei Definitionen", () => {
+    for (const d of dateien) assert.ok(read(d).includes("GRUPPE <k>/<n>"), `${d} nennt \`GRUPPE <k>/<n>\``);
+  });
+  test("der Planer nennt das Block-Format, der Umsetzer spawnt kubernia-gruppe ohne isolation", () => {
+    assert.ok(read(dateien[0]).includes("GRUPPE <k>/<n> <Name>: L<x>, L<y> | Dateien: … | nach: <k|->"));
+    const umsetzer = read(dateien[1]);
+    assert.match(umsetzer, /subagent_type: "kubernia-gruppe"/);
+    assert.match(umsetzer, /ohne `isolation`/);
+  });
+  test("die Gruppe pusht nicht, öffnet keinen PR und hat weder Agent noch Playwright noch Web", () => {
+    const fm = frontmatter(read(dateien[2]));
+    assert.ok(!/\b(Agent|WebFetch|WebSearch)\b|playwright/.test(fm.tools ?? ""), "Werkzeuge der Gruppe minimal");
+    assert.match(read(dateien[2]), /Kein Push, kein PR, keine Lenses/);
   });
 });
 

@@ -15,6 +15,7 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | **Planung** | `opus` | `xhigh` | `xhigh` | `agentType: 'kubernia-planner'` + `effort` | Subagent `kubernia-planner` (Frontmatter) |
 | Pre-Flight (Weichen selbst entscheiden) | `sonnet` | `medium` | `medium` | `agent()`-Optionen | Hauptagent (Projekt-Default `sonnet`; übernimmt die Entscheidungen des Planers, `AskUserQuestion` nur bei Irreversiblem/Außenwirkung) |
 | Umsetzung | `sonnet` | `medium` | `medium` | `agent()`-Optionen | Subagent [`kubernia-umsetzer`](../.claude/agents/kubernia-umsetzer.md) (Frontmatter, unabhängig vom Session-Modell) |
+| Sammelticket-Gruppe | `sonnet` | – | `medium` | n/a (Workflow ohne Gruppen) | Subagent `kubernia-gruppe`, vom Umsetzer je Gruppe gespawnt (Frontmatter) |
 | **Review (1–3 Lenses, [Staffel](#review-staffel-1265))** | `opus` | `high` | `high` | `agentType: 'kubernia-lens'` + `effort` | Subagenten `kubernia-lens`, vom Umsetzer über `review-lenses` gespawnt (Frontmatter, `high` wirkt) |
 | Nachbessern, CI-Fix | `sonnet` | `medium` | `medium` | `agent()`-Optionen | im Umsetzer |
 | PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | `medium` | `agent()`-Optionen | im Umsetzer |
@@ -606,6 +607,31 @@ Qualität (`lauf-ergebnis`), feste **Basismenge** (festgelegt 2026-10-15 vor jed
 Kontrollmessung zum Startzeitpunkt (alle 14 Läufe inkl. laufender): Ø Kontext 119k, Median Kosten 1,14 $; die Zahlen aus der Vorab-Messung des Planers (Stand 21:39Z, 12 Läufe) bleiben gültig, `lauf-ergebnis` lieferte roh 13 PRs und Σ CI-Fix 8; nach Abzug der drei Dependabot-PRs bleiben dieselben 10 PRs und dieselbe Σ CI-Fix (3). Die Tabellenwerte zu Kosten und Kontext stammen vom Stand 21:39Z (12 Läufe, #1634 noch offen); mit dem Fenster bis 21:46:15Z (14 Läufe inkl. laufender) liegt der Ø Kontext bei 119k, das Kontextziel liegt also im Rauschen um 120k.
 
 **Entscheidung: Abbruch, `effort: medium` zurück, weil Regel (3) wörtlich greift (Σ CI-Fix 3 = Basis 1 + 2, „mindestens eins“ genügt).** Die Drift-Runde in #1633 (`check:docgen` durch parallele Merges) bleibt in der Zählung, weil die Regel vorab keine Ursachenklassen nannte; sie auszunehmen wäre Grün-durch-Aufweichen. Störgrößen im Fenster: `kubernia-umsetzer.md` (#1619, #1624), `kubernia/SKILL.md` (#1626, #1631, #1633), `review-lenses/SKILL.md` und `kubernia-planner.md` (#1637), `settings.json` (#1624, #1631) änderten sich parallel; Kosten und Kontext sind darum nicht allein `low` zuzuschreiben. **Grenzen:** n = 10 mit Deckeneffekt bei Runde 1; die Kostenwirkung ist unterschätzt (Output unterzählt); ob `low` im Lauf wirklich griff, zeigt das Transkript nicht direkt; Regel (4) ist vorläufig. **AK 3 (Zwischenstand gegen Ziel):** Median Kosten −55 % gegen die Basis, aber das Ziel (≤ 0,74 $) ist verfehlt, der Ø Kontext knapp verfehlt; die Zielmessung (inkl. Beitrag von #1590/#1591) liegt bei #1593. Revert-Pfad ausgeführt: Frontmatter, Test, Matrix und „Warum so“ stehen wieder auf `medium`.
+
+### Sammelticket-Läufe (#1647)
+
+Entscheidung und Begründung: [ADR 0025](adr/0025-sammelticket-gruppen.md). Der Umsetzer fährt bei einem Plan mit Block `GRUPPEN` je Gruppe einen frischen `kubernia-gruppe` (Matrix §1) und behält nur Orchestrierung, verify, Review, PR und Merge. Die Messung unten ist die Baseline, gegen die der Nachfolger bewertet wird.
+
+**Baseline (Schnappschuss 2026-10-16, Fenster 2026-10-06T00:00:00Z bis 2026-10-15T22:14:14Z, vor jeder Änderung der Definitionen).** Quelle je Zahl: Läufe `node scripts/subagent-laufzeit.mjs --agent kubernia-umsetzer --von 2026-10-06T00:00:00Z --bis 2026-10-15T22:14:14Z --json` (Kosten = `kostenGeschaetzt`, sonst `kosten`; Läufe je Ticketnummer summiert), Zeilen je Ticket mit `zaehleBefundZeilen(…, { nurOffen: false })` aus `scripts/sammelticket-anlegen.mjs` über die vertrauten Kommentare, Override per `git log origin/main --grep "KQ-Diffsize-Override: #<nr>"`, Review-Runden und Nacharbeit aus `node scripts/lauf-ergebnis.mjs --von … --bis … --json` (Zeilen mit `ticket` = geschlossenes Sammelticket).
+
+| Kennzahl (33 geschlossene Sammeltickets mit Umsetzer-Lauf; 40 PRs bei Review) | Wert |
+|---|--:|
+| Median Kosten je Sammelticket (Σ Umsetzer-Läufe) | 5,37 $ |
+| Median Zeilen je Ticket | 11 |
+| **Median Kosten je Zeile** | **0,43 $** |
+| Median Requests je Ticket / Median größter Kontext | 137 / 340k |
+| Tickets ab 12 Zeilen (n = 14): Median Kosten / je Zeile | 9,26 $ / 0,35 $ |
+| mit `KQ-Diffsize-Override` | 22 von 33 |
+| Review-Runden je PR (Median) / PRs mit 3 Pässen | 2 / 15 von 40 |
+| Nacharbeit „Folge“ | 5 von 40 (nicht-Sammel: 6 von 112) |
+
+Zum Vergleich über alle Umsetzer-Läufe des Fensters mit „(gesammelt)“ im Prompt (Heuristik, n = 55, enthält Läufe, die ein Sammelticket nur erwähnen): Median 103 Requests, 254k Kontext, 3,38 $; ohne (n = 86): 71 Requests, 167k, 2,18 $.
+
+**Grenzen:** Workflow-Läufe (`kubernia-ticket.js`) sind kein `kubernia-umsetzer` und fehlen. Die Zeilenzahl ist der Stand beim Schließen (offene und erledigte Checkboxen). Eine Zeile ist nicht gleich groß; der Median je Zeile verdeckt die Streuung (0,13 $ bis 1,72 $). Ab 12 Zeilen ist die Zeile im Median billiger als darunter (feste Kosten je PR verteilen sich), die Generationsgrenze verteuert also kleine Generationen leicht; ob das die Gruppen ausgleichen, zeigt erst die Nachmessung. `kontext-treiber --ticket <Nrn>` wurde für die Baseline nicht gefahren (die Kosten stammen aus `subagent-laufzeit`); das Rezept bleibt für die Nachmessung.
+
+**Nachmessen:** gleiche Befehle mit Fenster ab dem Merge von #1647. Gruppen-Läufe: `node scripts/subagent-laufzeit.mjs --agent kubernia-gruppe --von <ISO> --json` (das erste `#<nr>` der Kopfzeile ordnet den Lauf dem Ticket zu); Kosten je Zeile = (Σ Umsetzer plus Σ `kubernia-gruppe` je Ticketnummer) / Zeilen. **Ziel (Hypothese, nicht gemessen):** −20 % je Zeile; bei Review-Runden und Nacharbeit kein Anstieg. **Auswertung:** über die ersten drei Gruppen-Läufe; Kriterium im ADR.
+
+**Isolation und Cache-TTL (AK 3):** Gruppen laufen ohne `isolation`, alle arbeiten im Worktree des Umsetzers (gewollt: ein Branch, ein Lock, ein PR; ein eigener Worktree je Gruppe bräuchte Merges zwischen den Gruppen). Die TTL bleibt unverändert: `subagentPromptCacheTtl: "1h"` brachte keinen Gewinn (siehe oben), und der Wächter #1557 verbietet den Schlüssel. Die Wartezeit des Umsetzers auf eine Gruppe über 5 Minuten lässt seinen Cache ablaufen; die Nachmessung zählt das als Kostenanteil des Umsetzers.
 
 ### Vermeidbare Arbeit (#1425)
 

@@ -31,6 +31,7 @@
 | [0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md) | Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest | akzeptiert | 08.10.2026 |
 | [0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen | akzeptiert | 09.10.2026 |
 | [0024](/docs/adr/0024-hexagon-als-lesart.md) | Hexagon als Lesart der bestehenden Schichtung, nicht als Ordnerstruktur | akzeptiert | 15.10.2026 |
+| [0025](/docs/adr/0025-sammelticket-gruppen.md) | Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum | akzeptiert | 16.10.2026 |
 
 <!-- GEN:adr-liste END -->
 
