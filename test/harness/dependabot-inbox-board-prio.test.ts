@@ -81,4 +81,9 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
       "Autoren-Filter fehlt oder wurde umbenannt",
     );
   });
+
+  test("legt das Sammel-Issue mit area:harness an, nicht area:architektur (#1628)", () => {
+    assert.match(yml, /INBOX_LABEL: area:harness/);
+    assert.doesNotMatch(yml, /area:architektur/);
+  });
 });
