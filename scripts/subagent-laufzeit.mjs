@@ -28,6 +28,11 @@ const stat = (laeufe) => ({
   // Median und Summe nur über Läufe mit Preis; `ohnePreis` zählt die übrigen (kein 0 $ für ein unbekanntes Modell).
   kosten: median(laeufe.map((l) => l.kosten).filter((x) => x !== null)),
   kostenSumme: laeufe.reduce((summe, l) => summe + (l.kosten ?? 0), 0),
+  // Mit dem aus dem Kontext-Zuwachs geschätzten Output (#1568); `kosten` bleibt der aufgezeichnete Wert.
+  kostenGeschaetzt: median(laeufe.map((l) => l.kostenGeschaetzt ?? null).filter((x) => x !== null)),
+  kostenGeschaetztSumme: laeufe.reduce((summe, l) => summe + (l.kostenGeschaetzt ?? 0), 0),
+  output: laeufe.reduce((n, l) => n + (l.output ?? 0), 0),
+  outputGeschaetzt: laeufe.reduce((n, l) => n + (l.outputGeschaetzt ?? 0), 0),
   ohnePreis: laeufe.filter((l) => l.kosten === null).length,
   // Läufe ohne Request haben keinen Wert je Request (kein Infinity/NaN im Median).
   sProRequest: median(laeufe.map((l) => l.sProRequest).filter((x) => x !== null)),
@@ -77,8 +82,8 @@ const f2 = (x) => (x === null ? "-" : x.toFixed(2));
 /** Markdown: Aggregat-Tabelle und Läufe. */
 export function renderMarkdown(r) {
   const out = [`Subagent-Typ \`${r.agent}\`: ${r.laeufe.length} Läufe (${r.aggregat.offen} offen, nicht in den Medianen)`, ""];
-  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | ohne Preis | s/Req (Modell) | parallel | max. Kontext | längster (min) |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
-  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${s.ohnePreis} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} |`);
+  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | Σ Kosten geschätzt ($) | ohne Preis | s/Req (Modell) | parallel | max. Kontext | längster (min) |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
+  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${f2(s.kostenGeschaetztSumme ?? null)} | ${s.ohnePreis} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} |`);
   z("alle gemessenen", r.aggregat.gesamt);
   z("ohne Sammeltickets", r.aggregat.ohneSammel);
   z("Sammeltickets", r.aggregat.sammel);

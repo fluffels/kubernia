@@ -562,3 +562,116 @@ describe("node_modules gegen package-lock.json (#1428 Z2)", () => {
   });
 });
 const X0 = raw as unknown as { exitCodeFuer: (e: Record<string, unknown>) => number };
+
+// #1568 Z8: der Abgleich-Hook lief parallel zum Sync und lud den alten Code des Hauptcheckouts; `--danach` startet ihn erst nach dem Fast-Forward.
+describe("--danach: ein Folge-Hook läuft erst nach dem Sync (#1568)", { timeout: 30_000 }, () => {
+  const D = raw as unknown as {
+    danachSkript: (argv: string[]) => string | null;
+    starteDanach: (skript: string, text: string, o?: { spawnSync?: (...a: unknown[]) => unknown; execPath?: string }) => boolean;
+  };
+  const skriptPfad = fileURLToPath(new URL("../../scripts/haupt-sync.mjs", import.meta.url));
+
+  test("danachSkript: Wert hinter --danach; ohne Flag, ohne Wert oder im Modus --text null", () => {
+    expect(D.danachSkript(["--danach", "/x/a.mjs"])).toBe("/x/a.mjs");
+    expect(D.danachSkript(["--streng", "--danach", "/x/a.mjs"])).toBe("/x/a.mjs");
+    expect(D.danachSkript([])).toBeNull();
+    expect(D.danachSkript(["--danach"])).toBeNull();
+    expect(D.danachSkript(["--danach", ""])).toBeNull();
+    expect(D.danachSkript(["--text", "--danach", "/x/a.mjs"])).toBeNull();
+  });
+
+  test("starteDanach: node <skript> mit stdin-Text und Zeitgrenze; Fehler und Wurf geben false statt zu werfen", () => {
+    const aufrufe: { args: unknown[]; opts: Record<string, unknown> }[] = [];
+    const ok = D.starteDanach("/x/a.mjs", '{"session_id":"s1"}', {
+      execPath: "NODE",
+      spawnSync: (...a: unknown[]) => {
+        aufrufe.push({ args: a, opts: a[2] as Record<string, unknown> });
+        return { status: 0 };
+      },
+    });
+    expect(ok).toBe(true);
+    expect(aufrufe[0].args[0]).toBe("NODE");
+    expect(aufrufe[0].args[1]).toEqual(["/x/a.mjs"]);
+    expect(aufrufe[0].opts.input).toBe('{"session_id":"s1"}');
+    expect(aufrufe[0].opts.timeout).toBeLessThanOrEqual(10_000);
+    expect(aufrufe[0].opts.stdio).toEqual(["pipe", "ignore", "ignore"]); // die Ausgabe des Folge-Skripts darf die Hook-JSON nicht stören
+    expect(D.starteDanach("/x/a.mjs", "", { spawnSync: () => ({ error: new Error("ENOENT") }) })).toBe(false);
+    expect(D.starteDanach("/x/a.mjs", "", { spawnSync: () => { throw new Error("kaputt"); } })).toBe(false);
+  });
+
+  /** Ein Folge-Skript, das HEAD des Hauptcheckouts und seinen stdin in eine Marker-Datei schreibt. */
+  function folgeSkript(ordner: string, haupt: string) {
+    const marker = join(ordner, "marker.json");
+    const skript = join(ordner, "folge.mjs");
+    writeFileSync(
+      skript,
+      [
+        'import { execFileSync } from "node:child_process";',
+        'import { readFileSync, writeFileSync } from "node:fs";',
+        `const head = execFileSync("git", ["-C", ${JSON.stringify(haupt)}, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();`,
+        `writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ head, stdin: readFileSync(0, "utf8") }));`,
+      ].join("\n"),
+    );
+    return { skript, marker };
+  }
+  const laufe = (dir: string, input: string, ...args: string[]) =>
+    execFileSync(process.execPath, [skriptPfad, ...args], { encoding: "utf8", input, env: sauberEnv({ CLAUDE_PROJECT_DIR: dir }), stdio: ["pipe", "pipe", "pipe"] });
+
+  test("CLI: das Folge-Skript sieht den schon vorgespulten HEAD und den unveränderten stdin-Text; die Hook-Ausgabe bleibt reines JSON", () => {
+    const t = aufbau();
+    try {
+      t.schiebe("scripts/langfuse-nachliefern.mjs", "neu\n");
+      const f = folgeSkript(t.wurzel, t.haupt);
+      const alt = git(t.haupt, "rev-parse", "HEAD");
+      const out = laufe(t.haupt, '{"session_id":"s1","source":"startup"}', "--danach", f.skript);
+      const m = JSON.parse(readFileSync(f.marker, "utf8")) as { head: string; stdin: string };
+      expect(m.head).toBe(git(t.haupt, "rev-parse", "origin/main"));
+      expect(m.head).not.toBe(alt);
+      expect(m.stdin).toBe('{"session_id":"s1","source":"startup"}');
+      expect(() => { JSON.parse(out); }).not.toThrow(); // das Folge-Skript schreibt nichts in die Ausgabe des Hooks
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("CLI: Abbruch (dirty Hauptcheckout) und fehlendes Folge-Skript: das Folge-Skript läuft trotzdem, der Hook endet ohne Fehler", () => {
+    const t = aufbau();
+    try {
+      const f = folgeSkript(t.wurzel, t.haupt);
+      writeFileSync(join(t.haupt, "a.txt"), "lokal geändert\n");
+      t.schiebe("docs/x.md", "x\n");
+      laufe(t.haupt, "{}", "--danach", f.skript);
+      expect((JSON.parse(readFileSync(f.marker, "utf8")) as { head: string }).head).toBe(git(t.haupt, "rev-parse", "HEAD"));
+      expect(() => laufe(t.haupt, "{}", "--danach", join(t.wurzel, "gibt-es-nicht.mjs"))).not.toThrow();
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("CLI: ohne --danach und im Modus --text startet nichts", () => {
+    const t = aufbau();
+    try {
+      const f = folgeSkript(t.wurzel, t.haupt);
+      laufe(t.haupt, "{}");
+      laufe(t.haupt, "{}", "--text", "--danach", f.skript);
+      expect(() => readFileSync(f.marker, "utf8")).toThrow();
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("Verdrahtung: SessionStart hat genau einen haupt-sync-Eintrag, der den Abgleich per --danach startet; kein paralleler Abgleich-Eintrag; SessionEnd startet ihn weiter", () => {
+    const settings = JSON.parse(readFileSync(new URL("../../.claude/settings.json", import.meta.url), "utf8")) as {
+      hooks: Record<string, { hooks: { args?: string[] }[] }[]>;
+    };
+    const args = (ereignis: string) => (settings.hooks[ereignis] ?? []).flatMap((e) => e.hooks.map((h) => h.args ?? []));
+    const start = args("SessionStart");
+    const sync = start.filter((a) => a.some((x) => x.endsWith("/scripts/haupt-sync.mjs")));
+    expect(sync).toHaveLength(1);
+    const i = sync[0].indexOf("--danach");
+    expect(i).toBeGreaterThan(0);
+    expect(sync[0][i + 1]).toMatch(/\/scripts\/langfuse-abgleich-hook\.mjs$/);
+    expect(start.filter((a) => a.some((x) => x.endsWith("/scripts/langfuse-abgleich-hook.mjs") && a !== sync[0]))).toHaveLength(0);
+    expect(args("SessionEnd").some((a) => a.some((x) => x.endsWith("/scripts/langfuse-abgleich-hook.mjs")))).toBe(true);
+  });
+});

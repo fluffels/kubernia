@@ -51,6 +51,12 @@ function kostenAus(calls) {
   return calls.reduce((summe, c) => summe + c.cost, 0);
 }
 
+/** Kosten mit dem geschätzten Output (#1568; Subagent-Transkripte zeichnen den Output nur beim Stand message_start auf); `null` wie bei `kostenAus`. */
+function kostenGeschaetztAus(calls) {
+  if (!calls.length || calls.some((c) => c.costGeschaetzt === undefined || c.costGeschaetzt === null)) return null;
+  return calls.reduce((summe, c) => summe + c.costGeschaetzt, 0);
+}
+
 const BRILLEN = [[/^arch/i, "Architektur"], [/^req/i, "Requirement-Treue"], [/^test/i, "Test-Adäquanz"], [/^doku/i, "Doku"]];
 const brilleNorm = (b) => (/^merge/i.test(b) ? null : (BRILLEN.find(([re]) => re.test(b))?.[1] ?? b));
 
@@ -110,6 +116,9 @@ export function laufAus({ meta, zeilen, datei }) {
     dauerMin: dauer / MIN,
     requests: calls.length,
     kosten: kostenAus(calls),
+    kostenGeschaetzt: kostenGeschaetztAus(calls),
+    output: calls.reduce((n, c) => n + (c.output ?? 0), 0),
+    outputGeschaetzt: calls.reduce((n, c) => n + (c.outputGeschaetzt ?? c.output ?? 0), 0),
     toolMin: tool / MIN,
     modellMin: (dauer - tool) / MIN,
     sProRequest: calls.length ? ((dauer - tool) / 1000) / calls.length : null,

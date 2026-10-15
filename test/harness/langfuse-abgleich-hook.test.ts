@@ -9,7 +9,8 @@
  * Ausführen mit: npm test
  */
 import { describe, expect, test } from "vitest";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fixture } from "../support/tmp-fixture";
@@ -50,9 +51,10 @@ const N = { ...rawNachEinstieg, ...rawLock } as unknown as {
   logAnhaengen: (d: string, e: unknown, o?: { max: number }) => void;
   logEintrag: (o: Record<string, unknown>) => Log;
   hookLauf: (a: Args, o: { stateDir: string; lauf: Lauf; schlafen: (ms: number) => Promise<void>; uhr: () => number; pid: number }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
+  kurzerStand: (wurzel: string) => string | null;
   raeumePluginLocks: (stateDir: string, now?: number) => number;
   PLUGIN_LOCK_ALTER_MS: number;
-  gesperrterLauf: (a: Args, o: { stateDir: string; lauf: Lauf; ausloeser: string; pid: number }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
+  gesperrterLauf: (a: Args, o: { stateDir: string; lauf: Lauf; ausloeser: string; pid: number; stand?: string | null }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
 };
 const IO = rawIo as unknown as { parseSessionHookInput: (t: string) => { event?: string; session?: string; source?: string } };
 
@@ -433,7 +435,9 @@ describe("Log", () => {
       fehler: [{ session: "s1", status: 500, meldung: "x".repeat(400) }],
     };
     const e = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 1, protokoll });
-    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "pluginLocks", "session", "sessions", "spans", "uebrig", "wuerdeSenden", "zeit", "zugang"]);
+    expect(Object.keys(e).sort()).toEqual(["ausloeser", "dubletten", "exitCode", "fehler", "geprueft", "gesendet", "lock", "pluginLocks", "session", "sessions", "spans", "stand", "uebrig", "wuerdeSenden", "zeit", "zugang"]);
+    expect(e.stand).toBeNull();
+    expect(N.logEintrag({ zeit: "Z", ausloeser: "sessionstart", session: "s1", lock: "frei", stand: "abc1234" }).stand).toBe("abc1234");
     expect(e).toMatchObject({ zugang: true, geprueft: 3, gesendet: 2, dubletten: 1, exitCode: 1 });
     expect(e.sessions).toHaveLength(1);
     expect(e.fehler[0].meldung).toHaveLength(300);
@@ -545,6 +549,24 @@ describe("hookLauf", () => {
     const belegt = await N.gesperrterLauf(argsVon(["--session", "s1"]), { stateDir: a.stateDir, lauf: a.lauf, ausloeser: "manuell", pid: 7 });
     expect(belegt.ergebnis).toBeNull();
     expect(a.logZeilen().map((z) => `${z.ausloeser}:${z.lock}`)).toEqual(["manuell:frei", "manuell:belegt"]);
+  });
+
+  test("Logzeile trägt den Stand des Repos, aus dem der Abgleich geladen wurde (#1568); ohne Angabe null", async () => {
+    const a = aufbau();
+    await N.gesperrterLauf(argsVon(["--session", "s1"]), { stateDir: a.stateDir, lauf: a.lauf, ausloeser: "sessionstart", pid: 7, stand: "abc1234" });
+    await N.gesperrterLauf(argsVon(["--session", "s1"]), { stateDir: a.stateDir, lauf: a.lauf, ausloeser: "sessionstart", pid: 7 });
+    expect(a.logZeilen().map((z) => z.stand)).toEqual(["abc1234", null]);
+  });
+
+  test("kurzerStand: der kurze HEAD eines Git-Ordners, null ohne Repo (nie ein Wurf)", () => {
+    expect(N.kurzerStand(join(__dirname, "../.."))).toMatch(/^[0-9a-f]{7,}$/);
+    const leer = mkdtempSync(join(tmpdir(), "kq-stand-"));
+    try {
+      expect(N.kurzerStand(leer)).toBeNull();
+      expect(N.kurzerStand(join(leer, "gibt-es-nicht"))).toBeNull();
+    } finally {
+      rmSync(leer, { recursive: true, force: true });
+    }
   });
 
   test("SessionEnd gibt den Ende-Zeitpunkt von VOR der Wartezeit mit, SessionStart keinen", async () => {

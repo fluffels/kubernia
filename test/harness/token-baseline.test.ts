@@ -559,6 +559,29 @@ describe("token-baseline: Sockel, Median-Kontext, Kosten-Teile (#1206)", () => {
     assert.equal(s.total.cost, 12);
   });
 
+  test("Output-Schätzung (#1568): Summe und Markdown-Zeile nur, wenn die Schätzung über dem Aufgezeichneten liegt", () => {
+    const text = [
+      line("a", "claude-sonnet-5-5", { cache_read_input_tokens: 10_000, output_tokens: 5 }, "2026-10-05T10:00:00Z"),
+      line("b", "claude-sonnet-5-5", { cache_read_input_tokens: 10_800, output_tokens: 5 }, "2026-10-05T10:01:00Z"),
+    ].join("\n");
+    const s = m.summarize(m.callsFromTranscript(text));
+    const t = s.total as unknown as { output: number; outputGeschaetzt: number; cost: number; costGeschaetzt: number };
+    assert.equal(t.output, 10);
+    assert.equal(t.outputGeschaetzt, 805); // 800 Zuwachs bei Call a + 5 beim letzten Call
+    assert.ok(t.costGeschaetzt > t.cost);
+    assert.match(m.renderMarkdown(s), /Output geschätzt/);
+    const gleich = m.summarize(m.callsFromTranscript(line("a", "claude-sonnet-5-5", { output_tokens: 5 }, "2026-10-05T10:00:00Z")));
+    assert.doesNotMatch(m.renderMarkdown(gleich), /Output geschätzt/);
+  });
+
+  test("Output-Schätzung: Calls ohne Schätzfeld zählen mit dem aufgezeichneten Wert (Langfuse-Modus)", () => {
+    const c = { ts: "2026-10-05T10:00:00Z", model: "claude-sonnet-5-5", input: 10, cacheWrite: 0, cacheRead: 0, output: 7, cost: 0.5 };
+    const s = m.summarize({ calls: [c], questions: 0 });
+    const t = s.total as unknown as { output: number; outputGeschaetzt: number; cost: number; costGeschaetzt: number };
+    assert.equal(t.outputGeschaetzt, t.output);
+    assert.equal(t.costGeschaetzt, t.cost);
+  });
+
   test("renderMarkdown nennt Sockel, Median-Kontext, Kostenanteile und Calls ohne Preis", () => {
     const text = [
       line("a", "claude-sonnet-5-5", { cache_read_input_tokens: 60_000 }, "2026-10-05T10:00:00Z"),

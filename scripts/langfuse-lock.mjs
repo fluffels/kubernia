@@ -11,6 +11,7 @@
  * der Link geht wieder weg und der Lock bleibt unberührt.
  */
 import { appendFileSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { basename, dirname, join } from "node:path";
 
 /** Belegter Lock an SessionEnd: einmal nach dieser Zeit erneut versuchen (`/clear` löst SessionEnd und SessionStart fast gleichzeitig aus). */
@@ -161,11 +162,20 @@ export function logAnhaengen(datei, eintrag, { max = LOG_MAX_BYTES } = {}) {
   appendFileSync(datei, JSON.stringify(eintrag) + "\n");
 }
 
+/** Kurzer HEAD des Git-Ordners `wurzel` für die Logzeile; `null` ohne Repo oder Git. Wirft nie. */
+export function kurzerStand(wurzel) {
+  try {
+    return execFileSync("git", ["-C", wurzel, "rev-parse", "--short", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5_000 }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Gehört die Session-Zeile in Bericht und Log (etwas gesendet, gefunden oder schiefgegangen)? */
 export const zeigenswert = (x) => x.gesendet || x.wuerdeSenden || x.dubletten || x.ausstehend || x.befund || x.endeVerworfen || x.status === "Fehler" || x.status === "mehrdeutig";
 
 /** Die Logzeile eines Laufs aus dem `protokoll` (ohne Protokoll, z.B. Lock belegt: Nullwerte). Keine Zugangswerte, nur ja/nein. */
-export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, protokoll = null, fehler = [], pluginLocks = 0 }) {
+export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, protokoll = null, fehler = [], pluginLocks = 0, stand = null }) {
   const p = protokoll ?? { zugang: null, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [], uebrig: 0 };
   const kurz = (f) => ({ ...f, meldung: String(f.meldung ?? "").slice(0, 300) });
   return {
@@ -173,6 +183,8 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
     ausloeser,
     session: session ?? null,
     lock,
+    // Kurzer HEAD des Repos, aus dem der Abgleich geladen wurde (#1568): ein Lauf mit altem Code ist so am Log erkennbar.
+    stand,
     pluginLocks,
     zugang: p.zugang,
     exitCode,
@@ -191,9 +203,9 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
  * Ein Lauf unter Lock mit Logzeile: `{ lock, ergebnis }` (`ergebnis` null, wenn der Lock belegt blieb oder der Lauf abstürzte). `wiederholen`: bei belegtem
  * Lock einmal nach WARTE_LOCK erneut versuchen. Ein Absturz in `lauf` wird protokolliert, der Lock im `finally` freigegeben.
  */
-export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederholen = false, schlafen = warte, uhr = Date.now, pid = process.pid }) {
+export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederholen = false, schlafen = warte, uhr = Date.now, pid = process.pid, stand = null }) {
   const lockDatei = join(stateDir, LOCK_NAME);
-  const basis = { ausloeser, session: args.session ?? args.aktuell ?? null, lock: null };
+  const basis = { ausloeser, session: args.session ?? args.aktuell ?? null, lock: null, stand };
   const logge = (extra) => {
     try {
       logAnhaengen(join(stateDir, LOG_NAME), logEintrag({ zeit: new Date(uhr()).toISOString(), ...basis, ...extra }));

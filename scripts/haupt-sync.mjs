@@ -26,10 +26,10 @@
  * Hook-Ausgabe: `hookSpecificOutput.additionalContext` (SessionStart). Wächter: test/harness/haupt-sync.test.ts.
  * Nur Node-Builtins.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf, readStdin } from "./hook-io.mjs";
 
 /**
  * Was tut der Sync? Pur. `hinter`/`vor` = Commits, die `main` gegenüber `origin/main` hinten/vorn liegt.
@@ -232,14 +232,41 @@ export function ausgabe(ergebnis, text) {
   return text ? t : JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: t } });
 }
 
+/** Wert hinter `--danach`: das Skript, das der Hook nach dem Sync mit demselben stdin startet. Im Modus `--text` (Skill-Schritt 0) nie. */
+export function danachSkript(argv) {
+  if (argv.includes("--text")) return null;
+  const i = argv.indexOf("--danach");
+  return i >= 0 && typeof argv[i + 1] === "string" && argv[i + 1] !== "" ? argv[i + 1] : null;
+}
+
+/**
+ * Startet `node <skript>` mit dem Hook-stdin und wartet kurz (Zeitgrenze 8 s; die Hook-Einstiege starten ihre Arbeit losgelöst und enden sofort).
+ * Die Ausgabe des Folge-Skripts wird verworfen, damit die Hook-JSON rein bleibt. Fail-open: `false` bei Fehler, nie ein Wurf.
+ */
+export function starteDanach(skript, text, { spawnSync = spawnSyncEcht, execPath = process.execPath } = {}) {
+  try {
+    const r = spawnSync(execPath, [skript], { input: text, stdio: ["pipe", "ignore", "ignore"], timeout: 8_000, windowsHide: true });
+    return !r?.error;
+  } catch {
+    return false;
+  }
+}
+
 function main() {
-  const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) };
-  const out = ausgabe(ergebnis, process.argv.includes("--text"));
-  if (out) console.log(out);
-  if (process.argv.includes("--streng") && exitCodeFuer(ergebnis) !== 0) {
-    console.log("Haupt-Sync (streng): STOPP, den Hauptcheckout hebt erst die Maintainerin (Reste committen oder verwerfen, auf main wechseln). Kein Ticket starten.");
-    process.exitCode = 1;
+  const danach = danachSkript(process.argv.slice(2));
+  // Der Folge-Hook (Langfuse-Abgleich, #1568) braucht den Stand NACH dem Fast-Forward: sonst lädt er den alten Code des Hauptcheckouts. Darum läuft er im `finally`, auch bei Abbruch.
+  const stdinText = danach ? readStdin() : "";
+  try {
+    const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+    const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) };
+    const out = ausgabe(ergebnis, process.argv.includes("--text"));
+    if (out) console.log(out);
+    if (process.argv.includes("--streng") && exitCodeFuer(ergebnis) !== 0) {
+      console.log("Haupt-Sync (streng): STOPP, den Hauptcheckout hebt erst die Maintainerin (Reste committen oder verwerfen, auf main wechseln). Kein Ticket starten.");
+      process.exitCode = 1;
+    }
+  } finally {
+    if (danach) starteDanach(danach, stdinText);
   }
 }
 
