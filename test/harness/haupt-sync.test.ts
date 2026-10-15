@@ -626,7 +626,7 @@ describe("--danach: ein Folge-Hook läuft erst nach dem Sync (#1568)", { timeout
       expect(m.head).toBe(git(t.haupt, "rev-parse", "origin/main"));
       expect(m.head).not.toBe(alt);
       expect(m.stdin).toBe('{"session_id":"s1","source":"startup"}');
-      expect(() => JSON.parse(out)).not.toThrow(); // das Folge-Skript schreibt nichts in die Ausgabe des Hooks
+      expect(() => { JSON.parse(out); }).not.toThrow(); // das Folge-Skript schreibt nichts in die Ausgabe des Hooks
     } finally {
       t.aufraeumen();
     }
