@@ -103,6 +103,8 @@ describe('Lockfile ohne reine optionale Peer-Einträge (#1638)', () => {
     expect(() => nurOptionalePeerEintraege({ lockfileVersion: 1, dependencies: {} })).toThrow(/lockfileVersion/);
     expect(() => nurOptionalePeerEintraege({ packages: {} })).toThrow(/lockfileVersion/);
     expect(() => nurOptionalePeerEintraege({ lockfileVersion: '3', packages: {} })).toThrow(/lockfileVersion/);
+    expect(() => nurOptionalePeerEintraege({ lockfileVersion: 3, packages: [] })).toThrow(/packages/);
+    expect(nurOptionalePeerEintraege({ lockfileVersion: 2, packages: {} })).toEqual([]);
     expect(() => nurOptionalePeerEintraege(null)).toThrow(/Objekt/);
   });
 
