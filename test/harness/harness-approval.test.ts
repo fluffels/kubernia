@@ -526,6 +526,16 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
   });
 
+  test("jedes Skript der harness-Liste und jeder lokale Import davon ist geschützt (E2)", () => {
+    const harnessSkripte = (quelle.harness ?? []).filter((p) => /^\/scripts\/[^*]+\.(mjs|cjs)$/.test(p)).map((p) => p.slice(1));
+    assert.ok(harnessSkripte.length > 10, "die Skripte der harness-Liste wurden gefunden");
+    const skripte = lokaleImporteTransitiv(harnessSkripte, read);
+    assert.ok(skripte.includes("scripts/kontingent-lib.mjs"), "board-takt.mjs importiert kontingent-lib.mjs");
+    assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
+    const owners = codeownersPaths(codeowners);
+    assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
+  });
+
   test("Red-Green: ein ungeschütztes Modul in der Importkette wird gefunden", () => {
     const lies = (rel: string) => (rel === "scripts/a.mjs" ? 'import { x } from "./b.mjs";' : rel === "scripts/b.mjs" ? 'import y from "./c.mjs";' : "");
     const kette = lokaleImporteTransitiv(["scripts/a.mjs"], lies);

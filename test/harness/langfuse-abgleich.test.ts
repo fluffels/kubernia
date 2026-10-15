@@ -8,7 +8,7 @@
  * Ausführen mit: npm test
  */
 import { describe, expect, test } from "vitest";
-import { readFileSync, utimesSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
@@ -31,12 +31,13 @@ type Usage = { input: number; output: number; cacheRead: number; cacheWrite5m: n
 type Eintrag = { id: string; traceId: string; session: string; messageId: string; model: string | null; ts: string; usage: Usage; rolle: Record<string, unknown> | null; ticket: string | null };
 type Obs = Record<string, unknown>;
 type Ist = { calls: number | null; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } | null };
-type Bewertung = { status: string; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
+type Bewertung = { status: string; score: string | null; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>;
 // Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
 const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   RUHEFRIST_MIN: number;
   ROW_LIMIT: number;
+  STICHTAG: string;
   beobachtungsId: (s: string, m: string) => string;
   traceIdVon: (s: string) => string;
   ticketAusBranch: (b: unknown) => string | null;
@@ -47,11 +48,11 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   schluesselArt: (o: Obs[]) => string;
   diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; art: string };
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
-  bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null }) => Bewertung;
-  summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number };
+  bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number } | null }) => Bewertung;
+  summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[] },
-    d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string },
+    d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null },
   ) => Promise<{ exitCode: number; text: string }>;
   parseArgs: (a: string[]) => { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[] };
 };
@@ -100,6 +101,16 @@ describe("Auslagerung: Re-Export statt Kopie, hook-taugliche Import-Hülle", () 
     const kette = lokaleImporteTransitiv(["scripts/langfuse-abgleich.mjs"], lies);
     expect(kette).toEqual(expect.arrayContaining(["scripts/preise.mjs", "scripts/transkript-calls.mjs", "scripts/langfuse-api.mjs", "scripts/transkript.mjs"]));
     for (const verboten of ["token-baseline.mjs", "gh-cli.mjs", "ci-laeufe.mjs", "slice-override.mjs"]) expect(kette.map((k) => posix.basename(k))).not.toContain(verboten);
+  });
+
+  test("der Stichtag hat genau eine Definition (Kern); Einstieg und Nachlieferer tragen kein Datumsliteral und kein Ledger-Lesen mehr", () => {
+    const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
+    expect(lies("scripts/langfuse-abgleich-kern.mjs").match(/export const STICHTAG = "/g)).toHaveLength(1);
+    for (const einstieg of ["scripts/langfuse-abgleich.mjs", "scripts/langfuse-nachliefern.mjs"]) {
+      const text = lies(einstieg);
+      expect(text, einstieg).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+      expect(text, einstieg).not.toMatch(/const STICHTAG|function ledgerLesen/);
+    }
   });
 });
 
@@ -386,6 +397,37 @@ describe("Diff (pur)", () => {
   });
 });
 
+describe("Score ausstehend und vor Stichtag (getrennt vom Status)", () => {
+  const now = 1_000_000_000_000;
+  const bew = (o: Record<string, unknown> = {}) => A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null }, mtime: now - 60 * 60_000, now, ...o });
+
+  test("ohne bekanntes Ende wartet der Nachlieferer 24 h: vollständig, Score ausstehend; danach null", () => {
+    expect(bew()).toMatchObject({ status: "vollständig", score: "ausstehend" });
+    expect(bew({ mtime: now - 25 * 3_600_000 }).score).toBeNull();
+    expect(bew({ mtime: now - 23 * 3_600_000 }).score).toBe("ausstehend");
+  });
+
+  test("bekanntes Ende laut Ledger: 150 s Ruhe genügen, aber nur bei passender mtime", () => {
+    const mtime = now - 60 * 60_000;
+    expect(bew({ ledgerEintrag: { beendet: true, mtime } }).score).toBeNull();
+    // darf NICHT passieren: ein Ende zu einem anderen Stand der Datei oder ohne beendet-Flag zählt
+    expect(bew({ ledgerEintrag: { beendet: true, mtime: mtime - 1 } }).score).toBe("ausstehend");
+    expect(bew({ ledgerEintrag: { beendet: false, mtime } }).score).toBe("ausstehend");
+  });
+
+  test("Session in der Ruhefrist des Abgleichs hat keinen Score-Vermerk, eine vor dem Stichtag den eigenen", () => {
+    expect(bew({ mtime: now - 10 * 60_000 })).toMatchObject({ status: "läuft", score: null });
+    const alt = bew({ soll: [eintrag(1, { ts: "2026-10-06T23:59:59Z" })], mtime: now - 25 * 3_600_000 });
+    expect(alt.score).toBe("vor Stichtag");
+    expect(bew({ soll: [eintrag(1, { ts: "2026-10-07T00:00:00Z" })], mtime: now - 25 * 3_600_000 }).score).toBeNull();
+  });
+
+  test("Summenzeile zählt beides unter den festen Sessions, nicht unter läuft", () => {
+    const sum = A.summenzeile([bew(), bew(), bew({ mtime: now - 25 * 3_600_000 }), bew({ mtime: now - 10 * 60_000 }), bew({ soll: [eintrag(1, { ts: "2026-10-01T00:00:00Z" })], mtime: now - 25 * 3_600_000 })]);
+    expect(sum).toMatchObject({ sessions: 4, laeuft: 1, scoreAusstehend: 2, vorStichtag: 1 });
+  });
+});
+
 describe("pruefen (Ablauf)", () => {
   const args = (o: Partial<ReturnType<typeof A.parseArgs>> = {}) => ({ pruefen: true, json: false, seit: null, session: null, ist: [], ...o });
   const mitSession = (calls: string[]) => fixture({ [`${PRAEFIX}/s1.jsonl`]: calls.join("\n") });
@@ -518,6 +560,25 @@ describe("pruefen (Ablauf)", () => {
     expect(r.text).toMatch(/\*\*Summe:\*\*/);
     expect(r.text).toMatch(/Fehlende Calls s1/);
     expect(r.text).toMatch(/kq-1562/);
+  });
+
+  test("Bericht: vollständig, Score ausstehend; Ledger (nur gelesen) mit Ende hebt es auf; kaputtes Ledger bleibt unberührt; Hinweis nennt den Stichtag aus dem Kern", async () => {
+    const root = mitSession([msg("a")]);
+    const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }], tokens: tokenZeilen("s1", { input: 10, output: 5, cacheRead: 100, w5: 10, w1: 30 }) });
+    const lauf = (stateDir: string) => A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl, stateDir });
+    const mtime = statSync(join(root, PRAEFIX, "s1.jsonl")).mtimeMs;
+    const ohne = (await lauf(fixture({}))).text;
+    expect(ohne).toContain("| vollständig, Score ausstehend |");
+    expect(ohne).toContain("1 davon Score ausstehend (Nachlieferer wartet noch)");
+    expect(ohne).toContain(`vor ${A.STICHTAG.slice(0, 10)})`);
+    const mitEnde = fixture({ "langfuse-abgleich.json": JSON.stringify({ version: 1, sessions: { s1: { beendet: true, mtime } } }) });
+    const ende = (await lauf(mitEnde)).text;
+    expect(ende).not.toMatch(/Score ausstehend/);
+    expect(ende).toContain("| vollständig |");
+    const kaputtDir = fixture({ "langfuse-abgleich.json": "{nicht json" });
+    expect((await lauf(kaputtDir)).text).toMatch(/Score ausstehend/);
+    expect(readFileSync(join(kaputtDir, "langfuse-abgleich.json"), "utf8")).toBe("{nicht json");
+    expect(readdirSync(kaputtDir)).toEqual(["langfuse-abgleich.json"]);
   });
 
   test("keine Sessions im Fenster: Exit 0 mit Hinweis", async () => {
