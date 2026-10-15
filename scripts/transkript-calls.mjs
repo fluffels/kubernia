@@ -122,11 +122,6 @@ function sichtbareZeichen(content) {
   return n;
 }
 
-/**
- * Output-Schätzung (#1568): der Kontext-Zuwachs bis zum nächsten Call, abzüglich der Fremdtexte (Zeichen / 4), ist
- * der Output dieses Calls (inklusive Thinking). Ohne Nachfolger oder bei schrumpfendem Kontext (Verdichtung) bleibt
- * das Sichtbare (ebenso bei Anhängen unbekannter Größe); nie unter dem Sichtbaren und nie unter dem aufgezeichneten Wert.
- */
 /** Kleinste Token-je-Zeichen-Rate über alle Lücken mit Fremdtext (Obergrenze der echten Rate); 0,25 (Zeichen / 4) ohne Lücke. */
 export function ratesGrenze(luecken) {
   let rate = Infinity;
@@ -134,6 +129,11 @@ export function ratesGrenze(luecken) {
   return Number.isFinite(rate) ? rate : 0.25;
 }
 
+/**
+ * Output-Schätzung (#1568): der Kontext-Zuwachs bis zum nächsten Call, abzüglich der Fremdtexte (Zeichen mal Rate, `ratesGrenze`), ist
+ * der Output dieses Calls (inklusive Thinking). Ohne Nachfolger oder bei schrumpfendem Kontext (Verdichtung) bleibt
+ * das Sichtbare (ebenso bei Anhängen unbekannter Größe); Untergrenze, kein Messwert; nie unter dem Sichtbaren und nie unter dem aufgezeichneten Wert.
+ */
 export function schaetzeOutput({ output, sichtbar, zuwachs }) {
   return Math.max(output, sichtbar, zuwachs > 0 ? zuwachs : 0);
 }
