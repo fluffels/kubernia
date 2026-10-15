@@ -73,6 +73,7 @@ describe("extractTaughtCommand mit Platzhaltern (#1547)", () => {
     expect(extractTaughtCommand("🆕 Neuer Befehl: <code>x <1a></code> – x")).toBeNull();
     expect(extractTaughtCommand("🆕 Neuer Befehl: <code>a <b>b</b></code> – x")).toBeNull();
     expect(extractTaughtCommand("🆕 Neuer Befehl: <code>a<br>b</code> – x")).toBeNull();
+    expect(extractTaughtCommand("🆕 Neuer Befehl: <code>a<BR>b</code> – x")).toBeNull(); // Groß-/Kleinschreibung wie fmtCmd
     expect(extractTaughtCommand("🆕 Neuer Befehl: <code>kubectl <b>logs</code> – x")).toBeNull();
     expect(extractTaughtCommand("🆕 Kein neuer Befehl – <code>kubectl logs <pod></code> kennst du.")).toBeNull();
   });
