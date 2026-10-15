@@ -40,7 +40,8 @@ export const CONTENT_HTML_TAGS: ReadonlySet<string> = new Set([
 // wie `deployment/<name>` matchen dadurch nicht als Ganzes) und KEINE Leerzeichen (Tags mit
 // Attributen `<a href="…">` matchen nicht). Der erste Zeichen muss ein Buchstabe sein –
 // so matchen Git-Konfliktmarker `<<<<<<<` (nach `<` folgt `<`) und `<3` nicht.
-const PLACEHOLDER = /<([A-Za-zÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß-]*)>/g;
+export const PLACEHOLDER_TOKEN = "[A-Za-zÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß-]*";
+const PLACEHOLDER = new RegExp(`<(${PLACEHOLDER_TOKEN})>`, "g");
 
 /**
  * Wandelt Platzhalter `<token>` im Content-Text in ein sichtbares `.ph`-Badge (spitze
