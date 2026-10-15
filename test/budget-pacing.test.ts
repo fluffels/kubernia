@@ -1,6 +1,6 @@
 /* Budget-Pacing (#1358): Entscheidung ok/knapp/stopp aus dem Rate-Limit-Snapshot, Quellen, Snapshot-I/O, CLI. */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -18,6 +18,7 @@ const B = raw as unknown as {
   brauchtProbe: (s: unknown, j?: number) => boolean;
   liesSnapshot: (p: string) => { snapshot: Snap | null; warnung: string | null };
   snapshotPfad: (e: Record<string, string>) => string;
+  schreibeSnapshot: (s: unknown, p: string) => void;
 };
 
 const WOCHE = 7 * 24 * 3_600_000;
@@ -201,11 +202,16 @@ describe("ausProbe", () => {
 
 describe("liesSnapshot und CLI", () => {
   let dir = "";
+  const alle: string[] = [];
   afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    for (const d of alle.splice(0)) rmSync(d, { recursive: true, force: true });
     dir = "";
   });
-  const neu = () => (dir = mkdtempSync(join(tmpdir(), "kq-budget-")));
+  const neu = () => {
+    dir = mkdtempSync(join(tmpdir(), "kq-budget-"));
+    alle.push(dir);
+    return dir;
+  };
 
   test("fehlende Datei und kaputtes JSON liefern null mit Grund", () => {
     const d = neu();
@@ -214,6 +220,28 @@ describe("liesSnapshot und CLI", () => {
     expect(B.liesSnapshot(join(d, "k.json"))).toMatchObject({ snapshot: null, warnung: expect.stringMatching(/kaputtes JSON/) as string });
     writeFileSync(join(d, "n.json"), "42");
     expect(B.liesSnapshot(join(d, "n.json")).snapshot).toBeNull();
+  });
+
+  test("schreibeSnapshot: Erfolg legt die Datei an, ein Fehler räumt die Temp-Datei weg und wirft weiter", () => {
+    const d = neu();
+    B.schreibeSnapshot({ stand: 1 }, join(d, "ok.json"));
+    expect(JSON.parse(readFileSync(join(d, "ok.json"), "utf8"))).toEqual({ stand: 1 });
+    mkdirSync(join(d, "ziel.json"));
+    expect(() => B.schreibeSnapshot({ stand: 1 }, join(d, "ziel.json"))).toThrow();
+    expect(readdirSync(d).filter((n) => n.endsWith(".tmp"))).toEqual([]);
+  });
+
+  test("CLI: nicht schreibbarer Snapshot-Pfad ergibt eine Warnung, der Stand der Probe gilt trotzdem", () => {
+    const d = neu();
+    mkdirSync(join(d, "ziel.json"));
+    const probe = join(d, "probe.mjs");
+    writeFileSync(probe, `console.log(${JSON.stringify(JSON.stringify({ type: "rate_limit_event", rate_limit_info: { unifiedWindows: { seven_day: { utilization: 0.9, resetsAt: Math.floor(Date.now() / 1000) + 3.5 * 86400 } } } }))});`);
+    const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", "--json"], {
+      encoding: "utf8",
+      env: { ...process.env, KQ_RATE_LIMITS_SNAPSHOT: join(d, "ziel.json"), KQ_PACING_PROBE_SKRIPT: probe, KQ_PACING_ZIELQUOTE: "65" },
+    });
+    expect(r.status).toBe(4);
+    expect((JSON.parse(r.stdout) as Urteil).warnungen.join()).toMatch(/Snapshot nicht schreibbar/);
   });
 
   test("snapshotPfad: Env überschreibt, sonst OS-Temp", () => {
