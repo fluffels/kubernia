@@ -26,19 +26,30 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
     assert.match(yml, /PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
   });
 
-  test("liest die Board-Node-ID aus der Projekt-Config (kein Literal, Fehlerpfad ohne Abbruch)", () => {
-    assert.ok(yml.includes("node scripts/projekt-config.mjs board.projectId"), "Lader-Aufruf fehlt");
-    assert.doesNotMatch(yml, /\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/, "Board-Node-ID darf nicht im Workflow stehen");
-    assert.match(yml, /Projekt-Config[^\n]*\n\s*return 0/, "Fehler muss gemeldet werden und ohne Abbruch zurückkehren");
-    assert.match(yml, /::error::[^\n]*Projekt-Config/, "::error:: bei fehlender Config fehlt");
+  test("ruft board-place.mjs mit Notfall-Art und Issue-Nummer auf, kein eigenes GraphQL im Workflow (#1628)", () => {
+    assert.ok(yml.includes('nr="${new_url##*/}"'), "Nummer muss aus der create-Ausgabe gezogen werden");
+    assert.ok(
+      yml.includes('node scripts/board-place.mjs --notfall dependabot --top "$nr"'),
+      "board-place.mjs --notfall dependabot --top <nr> muss nach gh issue create laufen",
+    );
+    assert.ok(!yml.includes("addProjectV2ItemById"), "die Mutationen liegen in board-lib, nicht im Workflow");
+    assert.ok(!yml.includes("set_board_top"), "die alte Shell-Funktion ist ersetzt");
+    assert.doesNotMatch(yml, /PVT[A-Z]*_[A-Za-z0-9_-]{6,}/, "Board-Node-ID darf nicht im Workflow stehen");
   });
 
-  test("checkt Projekt-Config und Lader per Sparse-Checkout aus", () => {
-    assert.match(yml, /sparse-checkout:[\s\S]*\.factory\/projekt\.json[\s\S]*scripts\/projekt-config\.mjs/);
+  test("checkt das Repo aus und richtet Node ein (Voraussetzung für board-place.mjs)", () => {
+    assert.match(yml, /actions\/checkout@v7/);
+    assert.match(yml, /actions\/setup-node@v7\n\s+(?:continue-on-error: true\n\s+)?with:\n\s+node-version-file: \.nvmrc/);
+    assert.doesNotMatch(yml, /sparse-checkout:/, "die Import-Hülle von board-place.mjs ist groß: volles Repo");
   });
 
-  test("fügt das Issue idempotent zum Board hinzu (addProjectV2ItemById)", () => {
-    assert.ok(yml.includes("addProjectV2ItemById"), "add-to-board-Mutation fehlt");
+  test("bleibt rot, wenn die Position endgültig scheitert (kein stilles `return 0`, #1628)", () => {
+    assert.match(
+      yml,
+      /elif ! GH_TOKEN="\$PROJECT_TOKEN" node scripts\/board-place\.mjs[^\n]*\n\s*echo "::error::[^\n]*"\n\s*exit 1\n\s*fi/,
+      "Fehlschlag muss ::error:: melden und mit exit 1 enden",
+    );
+    assert.doesNotMatch(yml, /return 0/, "kein stilles Weiterlaufen");
   });
 
   test("degradiert ohne Secret graceful (nur Warnung, kein harter Abbruch)", () => {
@@ -54,10 +65,6 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
       yml.includes("new_url=$(gh issue create"),
       "die create-Ausgabe muss als URL erfasst werden",
     );
-    assert.ok(
-      yml.includes('set_board_top "$new_url"'),
-      "set_board_top muss mit der neuen Issue-URL aufgerufen werden",
-    );
   });
 
   test("schließt das Sammel-Issue automatisch, wenn keine Dependabot-PRs mehr offen sind", () => {
@@ -72,28 +79,6 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
     assert.ok(
       yml.includes('--author "app/dependabot"'),
       "Autoren-Filter fehlt oder wurde umbenannt",
-    );
-  });
-
-  test("fängt einen GraphQL-Fehler ab, statt das ganze Script per set -e abzubrechen (#950)", () => {
-    // Ein gesetztes, aber zu eng skopiertes PROJECT_TOKEN lässt gh api graphql
-    // fehlschlagen. Bare Zuweisungen (item_id=$(...)) reißen unter `set -euo
-    // pipefail` den ganzen Step ab (genau der Bug aus #950) – die Mutation muss
-    // darum explizit gegen einen Fehlschlag abgesichert sein.
-    assert.ok(
-      yml.includes("if ! item_id=$(GH_TOKEN="),
-      "die addProjectV2ItemById-Mutation muss gegen einen Fehlschlag abgesichert sein",
-    );
-    assert.ok(
-      yml.includes('if ! GH_TOKEN="$PROJECT_TOKEN" gh api graphql'),
-      "die updateProjectV2ItemPosition-Mutation muss gegen einen Fehlschlag abgesichert sein",
-    );
-    // Ein GraphQL-Fehler ist ein anderer Fall als das fehlende Secret – er braucht
-    // eine eigene, sichtbare Meldung statt der set -e-Rohmeldung im Log.
-    assert.match(
-      yml,
-      /::error::[^\n]*Scope/,
-      "ein GraphQL-Fehler (z.B. falscher Token-Scope) muss sichtbar als ::error:: gemeldet werden",
     );
   });
 });

@@ -16,8 +16,8 @@ name: Forum-Eingang
 # Board-Position (#747): Die Reihenfolge lebt seit #747 in der manuellen Board-Reihenfolge
 # (das "nächstes Ticket" ist das oberste freie Item der Board-Liste; das frühere `Prio`-Feld
 # ist entfernt). Damit ein frisch geflaggtes Forum-Ticket sofort vorne steht, schiebt diese
-# Action das neue Issue an die OBERSTE Board-Position (GraphQL: addProjectV2ItemById idempotent
-# + updateProjectV2ItemPosition ohne afterId = ganz oben).
+# Action das neue Issue per scripts/board-place.mjs --notfall forum --top an die OBERSTE Board-Position
+# (mit Wiederholung bei Wettlauf; scheitert es endgültig, wird der Lauf rot, #1628).
 # ⚠️ Das braucht einen PAT mit `project`-Scope als Secret PROJECT_TOKEN – das
 # Standard-GITHUB_TOKEN kann NICHT in ein User-Project V2 schreiben. Fehlt das Secret,
 # wird nur gewarnt (das Inbox-Issue selbst entsteht trotzdem, steht dann irgendwo im Board).
@@ -45,6 +45,11 @@ jobs:
       - name: Repo auschecken
         uses: actions/checkout@v7
 
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
       - name: Inbox-Issue anlegen oder ergänzen
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,57 +62,12 @@ jobs:
           COMMENT_URL: ${{ github.event.comment.html_url }}
           # Board-Position setzen (#747). Das Standard-GITHUB_TOKEN kann NICHT in ein
           # User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
-          # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_top unten).
+          # PROJECT_TOKEN. Fehlt es, wird nur gewarnt.
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: |
           set -euo pipefail
           marker="Forum #${DISC_NUMBER}:"
           link="${COMMENT_URL:-$DISC_URL}"
-
-          # Schiebt ein frisch angelegtes Issue an die OBERSTE Board-Position (#747),
-          # damit ein Forum-Ticket beim "nächstes Ticket"-Griff sofort vorne steht.
-          # addProjectV2ItemById ist idempotent (ein Board-Auto-add für Issues gibt es nicht, nur für Sub-Issues; Todo setzt der
-          # Board-Workflow „Item added to project" ~2 s nach dem Hinzufügen, belegt in der Probe zu #1309). Ist das Issue schon
-          # drauf, kommt einfach die bestehende Item-ID zurück – der async-Race ist damit egal.
-          # updateProjectV2ItemPosition ohne afterId = ganz oben.
-          set_board_top() {
-            local issue_url="$1"
-            if [ -z "${PROJECT_TOKEN:-}" ]; then
-              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Position für ${issue_url} nicht gesetzt (Issue steht dann irgendwo statt oben). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
-              return 0
-            fi
-            local content_id
-            if ! content_id=$(gh issue view "$issue_url" --repo "$REPO" --json id --jq .id); then
-              echo "::error::Board-Position für ${issue_url} nicht gesetzt – gh issue view ist fehlgeschlagen (Repo/Issue nicht auflösbar?)."
-              return 0
-            fi
-            # Board-Node-ID aus der Projekt-Config (#1611); fehlt sie, bleibt die Position ungesetzt, das Issue steht trotzdem.
-            local project_id
-            if ! project_id=$(node scripts/projekt-config.mjs board.projectId); then
-              echo "::error::Board-Position für ${issue_url} nicht gesetzt – Projekt-Config (.factory/projekt.json) fehlt oder ist ungültig."
-              return 0
-            fi
-            # #950: ein gesetztes, aber zu eng skopiertes PROJECT_TOKEN lässt genau
-            # diese Mutation fehlschlagen ("Could not resolve to a node ..."). Eine
-            # bare Zuweisung würde unter `set -euo pipefail` den ganzen Step abbrechen,
-            # NACHDEM das Alarm-/Inbox-Issue schon angelegt wurde – darum abfangen und
-            # sichtbar melden statt den Job stillschweigend crashen zu lassen.
-            local item_id
-            if ! item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
-              -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
-              -f p="$project_id" -f c="$content_id" \
-              --jq '.data.addProjectV2ItemById.item.id'); then
-              echo "::error::Board-Position für ${issue_url} nicht gesetzt – PROJECT_TOKEN kann den Issue-Node nicht auflösen (Scope prüfen: braucht Issues-Zugriff auf ${REPO} UND Projects-Schreibrecht, #950)."
-              return 0
-            fi
-            if ! GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
-              -f query='mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }' \
-              -f p="$project_id" -f i="$item_id" >/dev/null; then
-              echo "::error::Board-Position für ${issue_url} (item ${item_id}) konnte nicht an die Spitze geschoben werden – updateProjectV2ItemPosition ist fehlgeschlagen."
-              return 0
-            fi
-            echo "Board-Position 'oben' gesetzt für ${issue_url} (item ${item_id})."
-          }
 
           # Unvertrauten externen Titel entschärfen (#531): Länge kappen, Backtick/HTML/
           # Pipe neutralisieren, einzeilig machen. Über stdin, um Argv-Escaping zu vermeiden.
@@ -143,7 +103,13 @@ jobs:
               --label "forum" \
               --body "$body")
             echo "Angelegt: ${new_url}"
-            # An die oberste Board-Position schieben (#747) – nur beim NEUEN Issue, nicht
-            # beim Ergänzen eines bestehenden (das steht schon an seiner Board-Position).
-            set_board_top "$new_url"
+            # An die oberste Board-Position schieben (#747) – nur beim NEUEN Issue, nicht beim Ergänzen eines bestehenden.
+            # board-place.mjs wiederholt den Wettlauf (frisches Issue ohne GraphQL-Node) mit Pause; scheitert es endgültig, wird der Lauf rot (#1628).
+            nr="${new_url##*/}"
+            if [ -z "${PROJECT_TOKEN:-}" ]; then
+              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Position für #${nr} nicht gesetzt (Issue steht dann irgendwo statt oben). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
+            elif ! GH_TOKEN="$PROJECT_TOKEN" node scripts/board-place.mjs --notfall forum --top "$nr"; then
+              echo "::error::Board-Position für #${nr} nicht gesetzt – board-place.mjs ist endgültig gescheitert (Token-Scope: Issues-Zugriff auf ${REPO} UND Projects-Schreibrecht, #950)."
+              exit 1
+            fi
           fi

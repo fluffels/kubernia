@@ -227,21 +227,13 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     expect(ci).toMatch(/gh issue create[\s\S]*?--label "\$ALARM_LABEL"/);
   });
 
-  it("priorisiert stattdessen über die Board-Position per GraphQL (Muster forum-inbox.yml, #747)", () => {
-    // Board-Node-ID kommt aus der Projekt-Config (#1611), nicht als Literal; Fehlerpfad ohne Abbruch.
-    expect(ci).toContain("node scripts/projekt-config.mjs board.projectId");
-    expect(ci, "kein Board-ID-Literal im Workflow").not.toMatch(/\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/);
-    expect(ci).toMatch(/::error::[^\n]*Projekt-Config/);
-    expect(ci, "Fehler bei fehlender Config bricht nicht ab").toMatch(/Projekt-Config[^\n]*\n\s*return 0/);
-    // Das entfernte Prio-Feld darf NICHT mehr beschrieben werden (#747).
+  it("priorisiert über die Board-Position per board-place.mjs (Wiederholung, Notfall-Art rot-main, #1628)", () => {
+    expect(ci).toContain('nr="${new_url##*/}"');
+    expect(ci).toContain('node scripts/board-place.mjs --notfall rot-main --top "$nr"');
+    expect(ci, "kein Board-ID-Literal im Workflow").not.toMatch(/PVT[A-Z]*_[A-Za-z0-9_-]{6,}/);
     expect(ci, "das Prio-Feld ist seit #747 entfernt").not.toContain("updateProjectV2ItemFieldValue");
-    expect(ci, "die Prio-Feld-ID gehört seit #747 nicht mehr in den Workflow").not.toContain("PVTSSF_lAHOD8746c4Barq_zhXBLXs");
-    // Beide Mutationen: idempotent aufs Board hängen UND an die Spitze schieben.
-    expect(ci).toContain("addProjectV2ItemById");
-    expect(ci).toContain("updateProjectV2ItemPosition");
-    // Am NEU angelegten Issue aufgerufen.
-    expect(ci).toMatch(/new_url=\$\(gh issue create/);
-    expect(ci).toContain('set_board_top "$new_url"');
+    expect(ci, "die Mutationen liegen in board-lib").not.toContain("addProjectV2ItemById");
+    expect(ci).not.toContain("set_board_top");
   });
 
   it("degradiert ohne PROJECT_TOKEN graceful (nur Warnung, Issue entsteht trotzdem, #658)", () => {
@@ -255,16 +247,7 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     expect(ci).toMatch(/startswith\(\\"\$marker\\"\)/);
   });
 
-  it("fängt einen GraphQL-Fehler ab, statt das ganze Script per set -e abzubrechen (#950)", () => {
-    // Ein gesetztes, aber zu eng skopiertes PROJECT_TOKEN lässt gh api graphql
-    // fehlschlagen. Bare Zuweisungen (item_id=$(...)) reißen unter `set -euo
-    // pipefail` den ganzen Step ab (genau der Bug aus #950, der das Alarm-Issue
-    // NACH dem Anlegen abstürzen ließ) – die Mutation muss darum explizit gegen
-    // einen Fehlschlag abgesichert sein.
-    expect(ci).toContain("if ! item_id=$(GH_TOKEN=");
-    expect(ci).toContain('if ! GH_TOKEN="$PROJECT_TOKEN" gh api graphql');
-    // Ein GraphQL-Fehler ist ein anderer Fall als das fehlende Secret – er braucht
-    // eine eigene, sichtbare Meldung statt der set -e-Rohmeldung im Log.
-    expect(ci).toMatch(/::error::[^\n]*Scope/);
+  it("bleibt rot, wenn die Board-Position endgültig scheitert (#1628)", () => {
+    expect(ci).toMatch(/elif ! GH_TOKEN="\$PROJECT_TOKEN" node scripts\/board-place\.mjs[^\n]*\n\s*echo "::error::[^\n]*"\n\s*exit 1\n\s*fi/);
   });
 });
