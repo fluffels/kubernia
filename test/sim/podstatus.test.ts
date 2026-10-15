@@ -2,7 +2,7 @@
 import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { clusterPods, findClusterPod } from "../../src/sim/pods";
-import { BROKEN_POD, clusterPodStatus, deploymentPodStatus, isReady, podView, workloadSummaries } from "../../src/sim/podstatus";
+import { BROKEN_POD, clusterPodStatus, deploymentPodEntry, deploymentPodStatus, isReady, type ContainerState, podView, workloadSummaries } from "../../src/sim/podstatus";
 import type { Broken } from "../../src/sim/state";
 import type { ClusterPod } from "../../src/sim/pods";
 import { podAddress } from "../../src/sim/endpoints";
@@ -207,5 +207,31 @@ describe("assertNever in den Workload-Switches (#1426)", () => {
   test("podAddress wirft", () => {
     const s = sim();
     expect(() => podAddress(fake(s), s.pvcs)).toThrow(/podAddress: unbehandelte Variante/);
+  });
+});
+
+describe("deploymentPodEntry: die eine Vorrangregel (#1509)", () => {
+  const evicted = { reason: "ephemeral-storage" };
+  test("Evicted schlägt jeden Broken-Typ: Failed, ohne Container", () => {
+    for (const type of Object.keys(BROKEN_POD) as Broken["type"][]) {
+      const e = deploymentPodEntry({ evicted, broken: { type } });
+      expect(e, type).toEqual({ status: { status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" }, phase: "Failed", container: null });
+    }
+  });
+  test("gesund: Running 1/1 mit leerem Container-Zustand", () => {
+    expect(deploymentPodEntry({ evicted: null, broken: null })).toEqual({
+      status: { status: "Running", ready: "1/1", restarts: 0, label: "Running" }, phase: "Running", container: {},
+    });
+  });
+  test("kaputt: der BROKEN_POD-Eintrag, der Status als Kopie", () => {
+    const e = deploymentPodEntry({ evicted: null, broken: { type: "oomkilled" } });
+    expect(e).toEqual(BROKEN_POD.oomkilled);
+    e.status.restarts = 99;
+    expect(BROKEN_POD.oomkilled.status.restarts).toBe(4);
+  });
+  test("ContainerState: lastTerminated ohne waiting ist nicht darstellbar (Typprobe)", () => {
+    // @ts-expect-error lastTerminated ohne waiting ist nicht darstellbar
+    const x: ContainerState = { lastTerminated: { reason: "OOMKilled", exitCode: 137 } };
+    expect(x.lastTerminated?.exitCode).toBe(137);
   });
 });

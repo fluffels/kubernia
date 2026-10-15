@@ -15,11 +15,11 @@ import type { YamlMap } from "../../yaml-emit";
 import type { KubectlHost } from "../host";
 import {
   DEFAULT_NAMESPACE, VOLUME_MODE, SECURITY_CONTEXT_KEYS, isExternalNameService,
-  type Broken, type Deployment, type PodTemplateSpec, type PvcRes, type RsTemplate, type ServiceRes,
+  type Deployment, type PodTemplateSpec, type PvcRes, type RsTemplate, type ServiceRes,
 } from "../../state";
 import { servicesWithDefault, serviceSelector, isKubernetesService } from "../../endpoints";
 import { clusterPods, type ClusterPod } from "../../pods";
-import { BROKEN_POD, clusterPodStatus, isReady } from "../../podstatus";
+import { clusterPodStatus, deploymentPodEntry, isReady, type PodEntry } from "../../podstatus";
 import { podTemplateLabels } from "../../replicasets";
 import { workloadLabels, type Labels } from "../../util";
 import { statefulPodClaimName, snapshotPodTemplate } from "../../workload";
@@ -120,9 +120,9 @@ interface PodShape { phase: string; ready: boolean; state?: YamlMap; lastState?:
 
 const WAITING = (reason: string): YamlMap => ({ waiting: { reason } });
 
-/** Die Form eines kaputten Pods, abgeleitet aus dem EINEN Eintrag in `BROKEN_POD` (../../podstatus.ts). */
-function brokenShape(type: Broken["type"]): PodShape {
-  const e = BROKEN_POD[type];
+/** Die Form eines Deployment-Pods, abgeleitet aus dem EINEN Eintrag von `deploymentPodEntry` (../../podstatus.ts):
+ *  Evicted > gesund > `BROKEN_POD`. */
+function entryShape(e: PodEntry): PodShape {
   const c = e.container;
   return {
     phase: e.phase,
@@ -133,13 +133,11 @@ function brokenShape(type: Broken["type"]): PodShape {
   };
 }
 const HEALTHY_SHAPE: PodShape = { phase: "Running", ready: true, state: { running: {} } };
-const EVICTED_SHAPE: PodShape = { phase: "Failed", ready: false, noContainer: true };
 const STS_PENDING_SHAPE: PodShape = { phase: "Pending", ready: false, noContainer: true };
 
 function podShape(c: ClusterPod, scheduled: boolean): PodShape {
   if (c.owner === "StatefulSet") return scheduled ? HEALTHY_SHAPE : STS_PENDING_SHAPE;
-  if (c.dep.evicted) return EVICTED_SHAPE;
-  return c.dep.broken ? brokenShape(c.dep.broken.type) : HEALTHY_SHAPE;
+  return entryShape(deploymentPodEntry(c.dep));
 }
 
 function podStatus(host: KubectlHost, c: ClusterPod, ip: string | null): YamlMap {
