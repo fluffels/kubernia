@@ -1,0 +1,338 @@
+/* Kern-Reinheits-Wächter (#1610, ADR 0022 F1): zählt Projektliterale je Einheit des Besitz-Manifests
+ * `.factory/besitz.json` gegen die Baseline `kern-literale-baseline.json`. Die Baseline darf nur sinken.
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
+ * Einheiten: ganze Datei (`pfad`), Markdown-Block zwischen Markern (`pfad#<block>`), JSON-Schlüssel
+ * (`pfad#/<schluessel>`). Rot bei: neuem Literal, Baseline über Ist (neues Literal) oder unter Ist nicht
+ * gesenkt, verwaistem Eintrag, ungültigem Manifest, und bei einer Baseline, die gegen die Diff-Basis angehoben wurde. */
+import { describe, test } from "vitest";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkBasis from "../../scripts/check-basis.mjs";
+
+const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
+const MANIFEST = ".factory/besitz.json";
+const BASELINE = "test/harness/kern-literale-baseline.json";
+const RINGE = ["kern", "kern-nach-entkopplung"];
+
+export interface Eintrag {
+  pfad: string;
+  block?: string;
+  schluessel?: string;
+  ring: string;
+  quelle: string;
+}
+interface Manifest {
+  version: number;
+  eintraege: Eintrag[];
+}
+type Zaehlung = Record<string, number>;
+type Baseline = Record<string, Zaehlung>;
+
+/** Die Projektliterale, die ein Kern nicht tragen soll (Plan #1610 §7). */
+const BEGRIFFE: Record<string, RegExp> = {
+  Owner: /fluffels/gi,
+  Repo: /kubernia/gi,
+  "Board-ID": /\bPVT[A-Z]*_[A-Za-z0-9_-]+/g,
+  Stardew: /stardew/gi,
+};
+
+const markerStart = (id: string): string => `<!-- factory-besitz:start ${id} -->`;
+const markerEnde = (id: string): string => `<!-- factory-besitz:ende ${id} -->`;
+
+/** Zählung je Begriff (nur > 0), CRLF-neutral. */
+export function zaehle(text: string): Zaehlung {
+  const t = text.replace(/\r\n/g, "\n");
+  const out: Zaehlung = {};
+  for (const [name, re] of Object.entries(BEGRIFFE)) {
+    const n = (t.match(re) ?? []).length;
+    if (n > 0) out[name] = n;
+  }
+  return out;
+}
+
+export function einheitId(e: Eintrag): string {
+  if (e.block !== undefined) return `${e.pfad}#${e.block}`;
+  if (e.schluessel !== undefined) return `${e.pfad}#/${e.schluessel}`;
+  return e.pfad;
+}
+
+function zaehleVorkommen(text: string, s: string): number {
+  return text.split(s).length - 1;
+}
+
+/** Text der Einheit oder `null`, wenn Block/Schlüssel nicht auflösbar ist. */
+export function einheitText(e: Eintrag, text: string): string | null {
+  if (e.block !== undefined) {
+    const a = text.indexOf(markerStart(e.block));
+    const b = text.indexOf(markerEnde(e.block));
+    if (a < 0 || b < a) return null;
+    return text.slice(a, b + markerEnde(e.block).length);
+  }
+  if (e.schluessel !== undefined) {
+    try {
+      const j = JSON.parse(text) as Record<string, unknown>;
+      return e.schluessel in j ? JSON.stringify(j[e.schluessel]) : null;
+    } catch {
+      return null;
+    }
+  }
+  return text;
+}
+
+/** Manifest-Fehler (leer = gültig). `lies` liefert den Dateitext oder `null`. */
+export function pruefeManifest(m: Manifest, lies: (pfad: string) => string | null): string[] {
+  const out: string[] = [];
+  if (m.version !== 1) out.push(`version ${String(m.version)} unbekannt (erwartet 1)`);
+  const ids = new Set<string>();
+  const ganze = new Set<string>();
+  const teile = new Set<string>();
+  for (const e of m.eintraege) {
+    const id = einheitId(e);
+    if (ids.has(id)) out.push(`${id}: doppelte Einheit`);
+    ids.add(id);
+    if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
+    if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
+    if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
+    if (e.block === undefined && e.schluessel === undefined) ganze.add(e.pfad);
+    else teile.add(e.pfad);
+    const text = lies(e.pfad);
+    if (text === null) {
+      out.push(`${id}: Pfad existiert nicht`);
+      continue;
+    }
+    if (e.block !== undefined) {
+      const na = zaehleVorkommen(text, markerStart(e.block));
+      const nb = zaehleVorkommen(text, markerEnde(e.block));
+      if (na !== 1 || nb !== 1) out.push(`${id}: Marker müssen je genau einmal stehen (start ${na}, ende ${nb})`);
+      else if (einheitText(e, text) === null) out.push(`${id}: Ende-Marker steht vor dem Start-Marker`);
+    } else if (e.schluessel !== undefined && einheitText(e, text) === null) {
+      out.push(`${id}: JSON-Schlüssel fehlt oder Datei ist kein gültiges JSON`);
+    }
+  }
+  for (const p of ganze) if (teile.has(p)) out.push(`${p}: Datei ganz und als Teil-Einheit gelistet`);
+  return out;
+}
+
+/** Meldungen (leer = grün): Ist gegen Baseline, nur sinkend. */
+export function vergleiche(ist: Baseline, baseline: Baseline): string[] {
+  const out: string[] = [];
+  for (const [einheit, z] of Object.entries(ist)) {
+    const b = baseline[einheit] ?? {};
+    for (const [begriff, n] of Object.entries(z)) {
+      const bn = b[begriff];
+      if (bn === undefined) out.push(`${einheit}: neues Projektliteral '${begriff}' (${n}x), Kern-Einheiten bleiben literalfrei`);
+      else if (n > bn) out.push(`${einheit}: '${begriff}' ${n}x über Baseline ${bn}`);
+      else if (n < bn) out.push(`${einheit}: '${begriff}' nur noch ${n}x, Baseline auf ${n} senken (steht ${bn})`);
+    }
+    for (const begriff of Object.keys(b)) {
+      if (!(begriff in z)) out.push(`${einheit}: '${begriff}' kommt nicht mehr vor, Baseline-Eintrag entfernen`);
+    }
+  }
+  for (const einheit of Object.keys(baseline)) {
+    if (!(einheit in ist)) out.push(`${einheit}: Baseline-Eintrag ohne Literale oder ohne Einheit, Eintrag entfernen`);
+  }
+  return out;
+}
+
+/** `git diff -M --name-status`-Ausgabe: Map neuer Pfad → alter Pfad (`null` = neu angelegt). */
+export function parseNameStatus(out: string): Map<string, string | null> {
+  const m = new Map<string, string | null>();
+  for (const zeile of out.split("\n")) {
+    const f = zeile.split("\t");
+    if (f.length < 2 || f[0] === undefined) continue;
+    const s = f[0][0];
+    if (s === "A") m.set(f[1] ?? "", null);
+    else if (s === "R" || s === "C") m.set(f[2] ?? "", s === "R" ? (f[1] ?? null) : null);
+    else if (s === "M" || s === "T") m.set(f[1] ?? "", f[1] ?? null);
+  }
+  return m;
+}
+
+/** Erlaubte Zählung je Einheit an der Diff-Basis (nur geänderte/umbenannte/neue Dateien). */
+export function erlaubt(
+  einheiten: Eintrag[],
+  aenderungen: Map<string, string | null>,
+  basisText: (altPfad: string) => string | null,
+): Baseline {
+  const out: Baseline = {};
+  for (const e of einheiten) {
+    if (!aenderungen.has(e.pfad)) continue;
+    const alt = aenderungen.get(e.pfad) ?? null;
+    const text = alt === null ? null : basisText(alt);
+    const t = text === null ? null : einheitText(e, text);
+    out[einheitId(e)] = t === null ? {} : zaehle(t);
+  }
+  return out;
+}
+
+/** Meldungen: Baseline-Werte über dem erlaubten Basiswert. */
+export function anhebungen(baseline: Baseline, erl: Baseline): string[] {
+  const out: string[] = [];
+  for (const [einheit, basis] of Object.entries(erl)) {
+    for (const [begriff, n] of Object.entries(baseline[einheit] ?? {})) {
+      const b = basis[begriff] ?? 0;
+      if (n > b) out.push(`${einheit}: Baseline '${begriff}' ${n} über dem Wert an der Diff-Basis (${b}), anheben ist verboten`);
+    }
+  }
+  return out;
+}
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
+
+describe("zaehle", () => {
+  test("Owner, Repo (auch in Zusammensetzungen), Board-ID und Stardew zählen; Bezeichner PROJECT_ID allein nicht", () => {
+    assert.deepEqual(zaehle("Kubernia KUBERNIA kubernia-umsetzer"), { Repo: 3 });
+    assert.deepEqual(zaehle("x fluffels y"), { Owner: 1 });
+    assert.deepEqual(zaehle("PVT_kwHOabc PVTSSF_xyz_1"), { "Board-ID": 2 });
+    assert.deepEqual(zaehle("const PROJECT_ID = 1"), {});
+    assert.deepEqual(zaehle("docs/stardew-referenz.md"), { Stardew: 1 });
+    assert.deepEqual(zaehle("Größe über Äpfel"), {});
+  });
+  test("CRLF und LF liefern dieselbe Zählung", () => {
+    assert.deepEqual(zaehle("kubernia\r\nkubernia\r\n"), zaehle("kubernia\nkubernia\n"));
+  });
+});
+
+describe("einheitText", () => {
+  test("Datei, Block, JSON-Schlüssel und nicht Auflösbares", () => {
+    assert.equal(einheitText(ein("a"), "x"), "x");
+    const blk = ein("a", { block: "b" });
+    assert.equal(einheitText(blk, `v\n${markerStart("b")}\nkubernia\n${markerEnde("b")}\nn`)?.includes("kubernia"), true);
+    assert.equal(einheitText(blk, `${markerEnde("b")}\n${markerStart("b")}`), null);
+    const sch = ein("a", { schluessel: "k" });
+    assert.equal(einheitText(sch, '{"k":{"x":"fluffels"},"z":"kubernia"}'), '{"x":"fluffels"}');
+    assert.equal(einheitText(sch, '{"z":1}'), null);
+    assert.equal(einheitText(sch, "kein json"), null);
+  });
+});
+
+describe("pruefeManifest", () => {
+  const lies = (t: string | null) => (): string | null => t;
+  const ok = (eintraege: Eintrag[]): Manifest => ({ version: 1, eintraege });
+  test("gültige Einheiten aller Arten sind grün", () => {
+    const m = ok([ein("a"), ein("b", { block: "x" }), ein("c", { schluessel: "k" })]);
+    const lies3 = (p: string): string | null =>
+      p === "a" ? "t" : p === "b" ? `${markerStart("x")}\n${markerEnde("x")}` : '{"k":1}';
+    assert.deepEqual(pruefeManifest(m, lies3), []);
+  });
+  test("Negativfälle", () => {
+    const blk = ein("a", { block: "x" });
+    const meld = (m: Manifest, t: string | null): string => pruefeManifest(m, lies(t)).join("|");
+    assert.match(meld(ok([blk]), "nichts"), /genau einmal/);
+    assert.match(meld(ok([blk]), `${markerStart("x")}${markerStart("x")}${markerEnde("x")}`), /genau einmal/);
+    assert.match(meld(ok([blk]), `${markerEnde("x")}${markerStart("x")}`), /vor dem Start/);
+    assert.match(meld(ok([ein("a", { schluessel: "k" })]), '{"z":1}'), /JSON-Schlüssel fehlt/);
+    assert.match(meld(ok([ein("a", { schluessel: "k" })]), "{kaputt"), /JSON-Schlüssel fehlt/);
+    assert.match(meld(ok([ein("a"), ein("a", { schluessel: "k" })]), '{"k":1}'), /ganz und als Teil/);
+    assert.match(meld(ok([ein("a"), ein("a")]), "t"), /doppelte Einheit/);
+    assert.match(meld(ok([ein("a", { ring: "x" })]), "t"), /unbekannter Ring/);
+    assert.match(meld(ok([ein("a")]), null), /existiert nicht/);
+    assert.match(meld({ version: 2, eintraege: [] }, "t"), /version/);
+    assert.match(meld(ok([ein("a", { quelle: " " })]), "t"), /quelle fehlt/);
+    assert.match(meld(ok([ein("a", { block: "x", schluessel: "k" })]), "t"), /zugleich/);
+  });
+});
+
+describe("vergleiche", () => {
+  test("Gleichstand ist grün", () => {
+    assert.deepEqual(vergleiche({ a: { Repo: 2 } }, { a: { Repo: 2 } }), []);
+    assert.deepEqual(vergleiche({}, {}), []);
+  });
+  test("neues Literal nennt Einheit und Begriff", () => {
+    const m = vergleiche({ "x.mjs": { Owner: 1 } }, {});
+    assert.equal(m.length, 1);
+    assert.match(m[0] ?? "", /^x\.mjs: neues Projektliteral 'Owner'/);
+  });
+  test("über Baseline, unter Baseline, verwaister Eintrag", () => {
+    assert.match(vergleiche({ a: { Repo: 3 } }, { a: { Repo: 2 } }).join(), /'Repo' 3x über Baseline 2/);
+    assert.match(vergleiche({ a: { Repo: 1 } }, { a: { Repo: 2 } }).join(), /Baseline auf 1 senken/);
+    assert.match(vergleiche({}, { a: { Repo: 2 } }).join(), /a: Baseline-Eintrag ohne Literale/);
+    assert.match(vergleiche({ a: { Repo: 1 } }, { a: { Repo: 1, Owner: 1 } }).join(), /'Owner' kommt nicht mehr vor/);
+  });
+});
+
+describe("parseNameStatus / erlaubt / anhebungen", () => {
+  const nameStatus = "M\ta.mjs\nA\tneu.mjs\nR090\talt.mjs\tumbenannt.mjs\nD\tweg.mjs\n";
+  const aend = parseNameStatus(nameStatus);
+  test("parseNameStatus: geändert, neu, umbenannt; gelöscht fehlt", () => {
+    assert.equal(aend.get("a.mjs"), "a.mjs");
+    assert.equal(aend.get("neu.mjs"), null);
+    assert.equal(aend.get("umbenannt.mjs"), "alt.mjs");
+    assert.equal(aend.has("weg.mjs"), false);
+  });
+  const basis = (p: string): string | null => (p === "a.mjs" ? "kubernia" : p === "alt.mjs" ? "fluffels fluffels" : null);
+  const einheiten = [ein("a.mjs"), ein("neu.mjs"), ein("umbenannt.mjs"), ein("unberuehrt.mjs")];
+  const erl = erlaubt(einheiten, aend, basis);
+  test("erlaubt: nur berührte Einheiten; neu = 0; Umbenennung = Zählung des alten Pfads", () => {
+    assert.deepEqual(erl, { "a.mjs": { Repo: 1 }, "neu.mjs": {}, "umbenannt.mjs": { Owner: 2 } });
+  });
+  test("anhebungen: Baseline über Basiswert rot, gleich oder darunter grün", () => {
+    assert.match(anhebungen({ "a.mjs": { Repo: 2 } }, erl).join(), /a\.mjs: Baseline 'Repo' 2 über dem Wert an der Diff-Basis \(1\)/);
+    assert.match(anhebungen({ "neu.mjs": { Owner: 1 } }, erl).join(), /neu\.mjs/);
+    assert.match(anhebungen({ "umbenannt.mjs": { Owner: 3 } }, erl).join(), /umbenannt\.mjs/);
+    assert.deepEqual(anhebungen({ "a.mjs": { Repo: 1 }, "umbenannt.mjs": { Owner: 1 } }, erl), []);
+    assert.deepEqual(anhebungen({ "unberuehrt.mjs": { Repo: 9 } }, erl), []);
+  });
+  test("neue Einheit einer bestehenden Datei (Manifest-Zuwachs) ist bis zur Zählung an der Basis erlaubt", () => {
+    const e = ein("a.mjs", { block: "b" });
+    const aen = new Map<string, string | null>([["a.mjs", "a.mjs"]]);
+    const text = `${markerStart("b")} kubernia ${markerEnde("b")}`;
+    assert.deepEqual(erlaubt([e], aen, () => text), { "a.mjs#b": { Repo: 1 } });
+    assert.deepEqual(erlaubt([e], aen, () => "ohne Marker"), { "a.mjs#b": {} });
+  });
+});
+
+// ── Reale Prüfungen ───────────────────────────────────────────────────────────
+
+const lesenWurzel = (pfad: string): string | null => {
+  const voll = WURZEL + pfad;
+  return existsSync(voll) ? readFileSync(voll, "utf8") : null;
+};
+const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
+const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
+
+describe("Kern-Reinheit (#1610)", () => {
+  test("das Besitz-Manifest ist gültig und nicht trivial", () => {
+    assert.deepEqual(pruefeManifest(manifest, lesenWurzel), []);
+    assert.ok(manifest.eintraege.length > 50, "Startbestand zu klein");
+    assert.ok(manifest.eintraege.some((e) => e.block !== undefined), "kein Block-Eintrag");
+    assert.ok(manifest.eintraege.some((e) => e.schluessel !== undefined), "kein Schlüssel-Eintrag");
+    assert.ok(manifest.eintraege.some((e) => e.block === undefined && e.schluessel === undefined), "kein Datei-Eintrag");
+  });
+
+  test("jede Einheit hält ihre Baseline an Projektliteralen, nur sinkend", () => {
+    const ist: Baseline = {};
+    for (const e of manifest.eintraege) {
+      const t = einheitText(e, lesenWurzel(e.pfad) ?? "");
+      const z = zaehle(t ?? "");
+      if (Object.keys(z).length > 0) ist[einheitId(e)] = z;
+    }
+    assert.deepEqual(vergleiche(ist, baseline), []);
+  });
+
+  const git = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+  const basis: string | null = checkBasis.resolveBase(git, process.env) ?? null;
+
+  // In der CI (fail-closed) muss die Basis auflösbar sein; lokal ohne Basis entfällt die Prüfung.
+  test.skipIf(basis === null && process.env.CI !== "true")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
+    assert.ok(basis, "keine Diff-Basis auflösbar (KQ_DIFF_BASE/origin/main fehlt)");
+    const aend = parseNameStatus(git(["diff", "-M", "--name-status", basis]));
+    const basisText = (alt: string): string | null => {
+      try {
+        return git(["show", `${basis}:${alt}`]);
+      } catch {
+        return null;
+      }
+    };
+    const erl = erlaubt(manifest.eintraege, aend, basisText);
+    assert.deepEqual(anhebungen(baseline, erl), []);
+  });
+});

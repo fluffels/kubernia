@@ -54,6 +54,7 @@ AGENTS.md                  @fluffels
 /CLAUDE.md                 @fluffels
 /CLAUDE.local.md           @fluffels
 /.claude/                  @fluffels
+/.factory/                 @fluffels
 /.mcp.json                 @fluffels
 /scripts/playwright-mcp.mjs @fluffels
 /scripts/sandbox-doctor.mjs @fluffels

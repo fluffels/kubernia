@@ -1,0 +1,113 @@
+{
+  ".claude/agents/explore.md": {
+    "Repo": 2
+  },
+  ".claude/agents/kubernia-lens.md": {
+    "Repo": 5
+  },
+  ".claude/agents/kubernia-planner.md": {
+    "Repo": 12,
+    "Stardew": 2
+  },
+  ".claude/agents/kubernia-umsetzer.md": {
+    "Owner": 1,
+    "Repo": 12,
+    "Stardew": 1
+  },
+  ".claude/settings.json#/hooks": {
+    "Repo": 1
+  },
+  ".claude/skills/kubernia-workflow/SKILL.md": {
+    "Repo": 17
+  },
+  ".claude/skills/kubernia/SKILL.md": {
+    "Owner": 1,
+    "Repo": 22
+  },
+  ".claude/skills/review-lenses/SKILL.md": {
+    "Repo": 20,
+    "Stardew": 1
+  },
+  ".claude/workflows/kubernia-ticket.js": {
+    "Owner": 1,
+    "Repo": 13,
+    "Stardew": 3
+  },
+  ".githooks/pre-push": {
+    "Repo": 1
+  },
+  ".github/workflows/dependabot-inbox.yml": {
+    "Board-ID": 1,
+    "Repo": 1
+  },
+  "scripts/board-lib.mjs": {
+    "Board-ID": 2,
+    "Owner": 3,
+    "Repo": 1
+  },
+  "scripts/check-context-size.mjs": {
+    "Stardew": 1
+  },
+  "scripts/check-docmap.mjs": {
+    "Stardew": 2
+  },
+  "scripts/check-lockfile.mjs": {
+    "Stardew": 1
+  },
+  "scripts/check-review-nachweis.mjs": {
+    "Repo": 4
+  },
+  "scripts/check-size.mjs": {
+    "Repo": 1,
+    "Stardew": 1
+  },
+  "scripts/docs-gen/registry.mjs": {
+    "Repo": 1
+  },
+  "scripts/haupt-sync.mjs": {
+    "Repo": 5
+  },
+  "scripts/hauptchat-zerlegung.mjs": {
+    "Repo": 15
+  },
+  "scripts/kontext-treiber.mjs": {
+    "Repo": 7
+  },
+  "scripts/kontingent-lib.mjs": {
+    "Repo": 1
+  },
+  "scripts/langfuse-otlp.mjs": {
+    "Repo": 2
+  },
+  "scripts/lens-auftrag-guard.mjs": {
+    "Repo": 6
+  },
+  "scripts/lens-edit-guard.mjs": {
+    "Repo": 5
+  },
+  "scripts/pretooluse-hook.mjs": {
+    "Repo": 1
+  },
+  "scripts/slice-override.mjs": {
+    "Repo": 1
+  },
+  "scripts/stdin-skript-guard.mjs": {
+    "Repo": 1
+  },
+  "scripts/stop-verify-hook.mjs": {
+    "Repo": 1
+  },
+  "scripts/subagent-laufzeit.mjs": {
+    "Repo": 4
+  },
+  "scripts/ticket-lock.mjs": {
+    "Owner": 1,
+    "Repo": 1
+  },
+  "scripts/token-baseline.mjs": {
+    "Repo": 3
+  },
+  "scripts/umsetzer-abschluss.mjs": {
+    "Repo": 3
+  }
+}
