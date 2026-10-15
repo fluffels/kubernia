@@ -41,11 +41,13 @@ import {
   loadItems,
   loadOpenIssueNumbers,
   missingFromBoard,
+  mitWiederholung,
   notfallTitelFehler,
   planMitKorrektur,
   positionOderWarnung,
   setPosition,
   todoItem,
+  wirklichFehlend,
 } from "./board-lib.mjs";
 
 export { NOTFALL_ARTEN };
@@ -117,15 +119,55 @@ export function nimmFehlendeAuf(items, args, io = {}) {
   return ergaenzeFehlende(items, neu);
 }
 
-/** Bericht: offene Issues, die nicht auf dem Board stehen (Einsortieren bleibt eine Abwägung der Agentin). */
+/** Bericht: offene Issues, die nicht auf dem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
 function reportMissing() {
   try {
-    const missing = missingFromBoard(loadOpenIssueNumbers(), loadItems());
+    const rest = missingFromBoard(loadOpenIssueNumbers(), loadItems());
+    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, itemsUeberIssues(rest));
     console.log(missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
     process.exit(1);
   }
+}
+
+/** Fehler mit Exit-Code: `einsortieren` wirft statt `process.exit`, damit `mitWiederholung` vorübergehende Wettläufe wiederholen kann. */
+const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { exitCode });
+
+/** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
+async function einsortieren(args) {
+  let items = loadItems();
+  // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
+  const fehlend = fehlendeNummern(items, args);
+  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(fehlend));
+  items = nimmFehlendeAuf(items, args);
+  if (args.notfall) {
+    const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
+    if (fehler) throw abbruch(fehler, 2);
+  }
+  const { korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : positionOderWarnung());
+  if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
+  const { steps, missing, anchorMissing } = plan;
+  if (anchorMissing) throw abbruch(`Anker #${args.anchor} steht nicht im Board (weder in der REST-Liste noch per GraphQL gefunden).`);
+  if (korrektur) {
+    console.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
+    if (!args.dry) {
+      setPosition(korrektur.id, korrektur.afterId);
+      await sleep(PAUSE_MS);
+    }
+  }
+  for (const [n, { item, afterId }] of steps.entries()) {
+    console.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
+    if (args.dry) continue;
+    try {
+      setPosition(item.id, afterId);
+    } catch (e) {
+      const rest = steps.slice(n).map((x) => `#${x.item.number}`).join(", ");
+      throw abbruch(`${abortMessage(e.message)}. Offen bleiben ${rest}`);
+    }
+    await sleep(PAUSE_MS);
+  }
+  if (missing.length > 0) throw abbruch(`Nicht im Board gefunden (auch nicht per GraphQL): ${missing.map((n) => `#${n}`).join(", ")}`);
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -136,59 +178,15 @@ async function main(argv = process.argv.slice(2)) {
   }
   mitKontingent("board-place");
   if (args.missing) return reportMissing();
-  let plan;
-  let korrektur = null;
   try {
-    let items = loadItems();
-    // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
-    const fehlend = fehlendeNummern(items, args);
-    if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(fehlend));
-    items = nimmFehlendeAuf(items, args);
-    if (args.notfall) {
-      const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
-      if (fehler) {
-        console.error(`✖ ${fehler}`);
-        process.exit(2);
-      }
-    }
-    ({ korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : positionOderWarnung()));
-    if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
+    // Wettlauf (#1628): ein frisch angelegtes Issue hat teils noch keinen GraphQL-Node; vorübergehende Fehler werden mit Pause wiederholt.
+    await mitWiederholung(
+      () => einsortieren(args),
+      { schlafe: sleep },
+    );
   } catch (e) {
-    console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);
-    process.exit(1);
-  }
-  const { steps, missing, anchorMissing } = plan;
-  if (anchorMissing) {
-    console.error(`✖ Anker #${args.anchor} steht nicht im Board (weder in der REST-Liste noch per GraphQL gefunden).`);
-    process.exit(1);
-  }
-  if (korrektur) {
-    console.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
-    if (!args.dry) {
-      try {
-        setPosition(korrektur.id, korrektur.afterId);
-      } catch (e) {
-        console.error(`✖ Abbruch bei der Sammelticket-Korrektur: ${abortMessage(e.message)}. Später erneut fahren.`);
-        process.exit(1);
-      }
-      await sleep(PAUSE_MS);
-    }
-  }
-  for (const [n, { item, afterId }] of steps.entries()) {
-    console.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
-    if (args.dry) continue;
-    try {
-      setPosition(item.id, afterId);
-    } catch (e) {
-      const rest = steps.slice(n).map((s) => `#${s.item.number}`).join(", ");
-      console.error(`✖ Abbruch: ${abortMessage(e.message)}. Offen bleiben ${rest}. Später erneut fahren.`);
-      process.exit(1);
-    }
-    await sleep(PAUSE_MS);
-  }
-  if (missing.length > 0) {
-    console.error(`⚠ Nicht im Board gefunden (auch nicht per GraphQL): ${missing.map((n) => `#${n}`).join(", ")}.`);
-    process.exit(1);
+    console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
+    process.exit(e.exitCode ?? 1);
   }
 }
 
