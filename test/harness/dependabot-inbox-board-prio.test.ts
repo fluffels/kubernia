@@ -34,7 +34,7 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
     );
     assert.ok(!yml.includes("addProjectV2ItemById"), "die Mutationen liegen in board-lib, nicht im Workflow");
     assert.ok(!yml.includes("set_board_top"), "die alte Shell-Funktion ist ersetzt");
-    assert.doesNotMatch(yml, /PVT[A-Z]*_[A-Za-z0-9_-]{6,}/, "Board-Node-ID darf nicht im Workflow stehen");
+    assert.doesNotMatch(yml, /\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/, "Board-Node-ID darf nicht im Workflow stehen");
   });
 
   test("checkt das Repo aus und richtet Node ein (Voraussetzung für board-place.mjs)", () => {

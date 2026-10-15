@@ -50,7 +50,7 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
     return { aktion: "nichts", grund: "Push ruht Fr–So, der Montag setzt zurück", warnungen };
   }
   if (push && ticketMerges < MIN_TICKET_MERGES_PUSH) {
-    return { aktion: "nichts", grund: `Push: nur ${ticketMerges} Ticket-Merges seit dem letzten Abschluss (Untergrenze ${MIN_TICKET_MERGES_PUSH})`, warnungen };
+    return { aktion: "nichts", grund: `Push: nur ${ticketMerges} Ticket-Merges seit dem Anlegen des jüngsten Status-Tickets (Untergrenze ${MIN_TICKET_MERGES_PUSH})`, warnungen };
   }
   if (treffer.length > 0) {
     const geclaimt = treffer.find((t) => t.assignees.length > 0);
@@ -58,12 +58,12 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
     return { aktion: "nach-oben", nr: treffer[0].number, grund: `#${treffer[0].number} ist offen und ungeclaimt, kommt an die Spitze`, warnungen };
   }
   if (mergesSeit < MIN_MERGES) {
-    return { aktion: "nichts", grund: `nur ${mergesSeit} Merges seit dem letzten Abschluss (Untergrenze ${MIN_MERGES})`, warnungen };
+    return { aktion: "nichts", grund: `nur ${mergesSeit} Merges seit dem Anlegen des jüngsten Status-Tickets (Untergrenze ${MIN_MERGES})`, warnungen };
   }
   if (typeof stundenSeitAbschluss === "number" && stundenSeitAbschluss < MIN_ABSTAND_STUNDEN) {
     return { aktion: "nichts", grund: `erst ${stundenSeitAbschluss.toFixed(1)} h seit dem Abschluss des Vorgängers (Mindestabstand ${MIN_ABSTAND_STUNDEN} h)`, warnungen };
   }
-  return { aktion: "anlegen", grund: `${mergesSeit} Merges seit dem letzten Abschluss, kein offenes Status-Ticket`, warnungen };
+  return { aktion: "anlegen", grund: `${mergesSeit} Merges seit dem Anlegen des jüngsten Status-Tickets, kein offenes Status-Ticket`, warnungen };
 }
 
 /** Soll das Status-Ticket bewegt werden? `nach-oben` nur, wenn es nicht schon im Kopf von `items` steht; anlegen bewegt immer. Pur. */

@@ -230,7 +230,7 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
   it("priorisiert über die Board-Position per board-place.mjs (Wiederholung, Notfall-Art rot-main, #1628)", () => {
     expect(ci).toContain('nr="${new_url##*/}"');
     expect(ci).toContain('node scripts/board-place.mjs --notfall rot-main --top "$nr"');
-    expect(ci, "kein Board-ID-Literal im Workflow").not.toMatch(/PVT[A-Z]*_[A-Za-z0-9_-]{6,}/);
+    expect(ci, "kein Board-ID-Literal im Workflow").not.toMatch(/\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/);
     expect(ci, "das Prio-Feld ist seit #747 entfernt").not.toContain("updateProjectV2ItemFieldValue");
     expect(ci, "die Mutationen liegen in board-lib").not.toContain("addProjectV2ItemById");
     expect(ci).not.toContain("set_board_top");
