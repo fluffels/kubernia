@@ -34,7 +34,11 @@ type LauncherModule = {
   planLaunch: (input: { lockVersion: string | undefined; installed: Installed }) => Plan;
   readLockVersion: (root: string) => string | undefined;
   readInstalled: (root: string) => Installed;
+  statInstallation: (binPath: string) => Kennung | null;
+  installationErsetzt: (vorher: Kennung | null, nachher: Kennung | null) => boolean;
+  exitMeldung: (o: { code: number | null; signal: string | null; vonAussen: boolean; laufzeitMs: number; modus: string; ersetzt: boolean }) => string | null;
 };
+type Kennung = { ino: number; birthtimeMs: number; mtimeMs: number };
 const launcher = launcherModule as unknown as LauncherModule;
 
 const root = join(import.meta.dirname, "..", "..");
@@ -78,6 +82,33 @@ describe("planLaunch – Startentscheidung des Launchers", () => {
 
   test("Lockfile ohne Eintrag → Fehler statt ungepinntem npx", () => {
     assert.throws(() => launcher.planLaunch({ lockVersion: undefined, installed: null }), /Lockfile/);
+  });
+});
+
+describe("Ausfall-Meldung des Launchers (#1634)", () => {
+  const basis = { code: 1 as number | null, signal: null as string | null, vonAussen: false, laufzeitMs: 4600, modus: "local", ersetzt: false };
+  const k: Kennung = { ino: 1, birthtimeMs: 10, mtimeMs: 20 };
+  test("gewollte Beendigung von außen und sauberer Exit 0 bleiben still", () => {
+    assert.equal(launcher.exitMeldung({ ...basis, vonAussen: true }), null);
+    assert.equal(launcher.exitMeldung({ ...basis, code: 0 }), null);
+  });
+  test("Exit ≠ 0, Signal und Exit 0 bei ersetzter Installation ergeben eine Zeile", () => {
+    assert.equal(launcher.exitMeldung(basis), "playwright-mcp: Server beendet (Exit 1, nach 5 s, Modus local)");
+    assert.match(launcher.exitMeldung({ ...basis, code: null, signal: "SIGKILL", modus: "npx" }) ?? "", /Signal SIGKILL, nach 5 s, Modus npx\)$/);
+    assert.match(launcher.exitMeldung({ ...basis, code: 0, ersetzt: true }) ?? "", /Exit 0.*ersetzt, etwa durch npm ci\)$/);
+  });
+  test("installationErsetzt: gleiche Kennung nein, geänderte oder verschwundene ja, npx-Modus nie", () => {
+    assert.equal(launcher.installationErsetzt(k, { ...k }), false);
+    assert.equal(launcher.installationErsetzt(k, { ...k, ino: 2 }), true);
+    assert.equal(launcher.installationErsetzt(k, { ...k, birthtimeMs: 11 }), true);
+    assert.equal(launcher.installationErsetzt(k, { ...k, mtimeMs: 21 }), true);
+    assert.equal(launcher.installationErsetzt(k, null), true);
+    assert.equal(launcher.installationErsetzt(null, k), false);
+    assert.equal(launcher.installationErsetzt(null, null), false);
+  });
+  test("statInstallation liefert die Kennung einer Datei, null bei fehlender", () => {
+    assert.deepEqual(Object.keys(launcher.statInstallation(join(root, "package.json")) ?? {}).sort(), ["birthtimeMs", "ino", "mtimeMs"]);
+    assert.equal(launcher.statInstallation(join(root, "gibt-es-nicht.js")), null);
   });
 });
 

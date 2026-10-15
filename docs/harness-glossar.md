@@ -22,6 +22,7 @@
 | Begriff | Bedeutung | Mehr dazu |
 |---|---|---|
 | Sandbox | Shell-Befehle der Agenten laufen unter WSL2 in einer Isolation mit Domain-Allowlist. Unter nativem Windows gibt es keine Sandbox. | [Agenten-Sandbox](agent-harness.md#agenten-sandbox-wsl2), [ADR 0021](adr/0021-agenten-sandbox-wsl2.md) |
+| MCP-Ausfall | Ein MCP-Server startet nicht, fällt mitten in der Session weg oder läuft nur über den Ersatzweg `npx`. Das ist ein Harness-Befund und wird als Zeile im Sammelticket festgehalten. | [Ausfälle melden](agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064) |
 | Leitplanke | Eine Grenze für Agenten, entweder als Bitte (Text, den ein Agent ignorieren könnte) oder als Mauer (Prüfung, die technisch erzwingt). Eine Pfadliste kennzeichnet Dateien, deren Änderung ein Audit-Kommentar begleitet. | [Bitte und Mauer](agent-harness.md#leitplanken-schichten-bitte-und-mauer), [.github/protected-paths.json](../.github/protected-paths.json), [ADR 0014](adr/0014-leitplanken-ohne-label-riegel.md) |
 | Check, Gate, verify | Ein Check ist eine automatische Prüfung. Ein Gate ist ein Check, dessen Rot den Merge blockiert. `verify` ist der Sammelbefehl der schnellen Gates. Die vollständige Liste ist generiert und steht in der Gate-Tabelle. | [Gate-Tabelle](agent-harness.md#3-die-fitness-functions-im-detail) |
 | Required Check | Ein Check, den GitHub serverseitig auf dem Pull Request erzwingt; er lässt sich lokal nicht umgehen. | [ADR 0009](adr/0009-pr-gating-required-checks.md) |

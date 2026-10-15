@@ -17,8 +17,11 @@
 // Abhängigkeiten frisch aufgelöst statt aus dem Lockfile, und mehrere Sessions, die nach einem Bump
 // gleichzeitig erstmals starten, können sich im `_npx`-Cache in die Quere kommen (ENOTEMPTY). Abhilfe:
 // im Haupt-Checkout einmal `npm ci`, dann startet der Server lokal.
+// Ausfälle (#1634): Endet der Server ohne Signal des Aufrufers oder mit Exit ≠ 0 (auch Exit 0 nach ersetzter lokaler
+// Installation), steht eine Zeile auf stderr (`mcp-logs-*` von Claude Code als „Server stderr“). Ein harter Kill des
+// Launchers selbst hinterlässt keine Zeile, nur den Reconnect im Log (`node scripts/mcp-ausfall.mjs`).
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -58,18 +61,60 @@ export function planLaunch({ lockVersion, installed }) {
   return { mode: "npx", spec: `${PKG}@${lockVersion}` };
 }
 
+/** Datei-Kennung des bins (Inode, Anlege- und Änderungszeit) oder null; ein `npm ci` legt `node_modules` neu an und ändert sie. */
+export function statInstallation(binPath) {
+  try {
+    const s = statSync(binPath);
+    return { ino: s.ino, birthtimeMs: s.birthtimeMs, mtimeMs: s.mtimeMs };
+  } catch {
+    return null;
+  }
+}
+
+/** Wurde die lokale Installation während der Laufzeit ersetzt? `vorher === null` (npx-Modus) ist nie „ersetzt“. Pur. */
+export function installationErsetzt(vorher, nachher) {
+  if (!vorher) return false;
+  if (!nachher) return true;
+  return vorher.ino !== nachher.ino || vorher.birthtimeMs !== nachher.birthtimeMs || vorher.mtimeMs !== nachher.mtimeMs;
+}
+
+/** Stderr-Zeile für ein unerwartetes Ende des Servers (#1634) oder null: gewollte Beendigung und sauberer Exit 0 bleiben still. Pur. */
+export function exitMeldung({ code, signal, vonAussen, laufzeitMs, modus, ersetzt }) {
+  if (vonAussen || (code === 0 && !ersetzt)) return null;
+  const ende = signal ? `Signal ${signal}` : `Exit ${code}`;
+  const zusatz = ersetzt ? "; lokale Installation während der Laufzeit ersetzt, etwa durch npm ci" : "";
+  return `playwright-mcp: Server beendet (${ende}, nach ${Math.round(laufzeitMs / 1000)} s, Modus ${modus}${zusatz})`;
+}
+
 function main() {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
   const args = process.argv.slice(2);
   const plan = planLaunch({ lockVersion: readLockVersion(root), installed: readInstalled(root) });
+  const start = Date.now();
+  const vorher = plan.mode === "local" ? statInstallation(plan.binPath) : null;
+  let vonAussen = false;
   // stdout gehört dem MCP-Protokoll – Hinweise nur auf stderr.
   const child =
     plan.mode === "local"
       ? spawn(process.execPath, [plan.binPath, ...args], { stdio: "inherit" })
       : (process.stderr.write(`playwright-mcp: lokale Installation fehlt oder weicht ab → npx ${plan.spec}\n`),
         spawn("npx", ["-y", plan.spec, ...args], { stdio: "inherit", shell: process.platform === "win32" }));
-  child.on("exit", (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
-  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => child.kill(sig));
+  child.on("error", (e) => {
+    process.stderr.write(`playwright-mcp: Start fehlgeschlagen (${e.code ?? e.message})\n`);
+    process.exit(1);
+  });
+  child.on("exit", (code, signal) => {
+    const ersetzt = plan.mode === "local" && installationErsetzt(vorher, statInstallation(plan.binPath));
+    const zeile = exitMeldung({ code, signal, vonAussen, laufzeitMs: Date.now() - start, modus: plan.mode === "local" ? "local" : "npx", ersetzt });
+    if (zeile) process.stderr.write(`${zeile}\n`);
+    process.exit(code ?? (signal ? 1 : 0));
+  });
+  for (const sig of ["SIGINT", "SIGTERM"]) {
+    process.on(sig, () => {
+      vonAussen = true;
+      child.kill(sig);
+    });
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

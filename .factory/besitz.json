@@ -81,6 +81,7 @@
     {"pfad":"scripts/lens-edit-guard.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/check-internalrefs.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/sandbox-doctor.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"scripts/mcp-ausfall.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1634)"},
     {"pfad":"scripts/docs-gen/npm-ketten.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/docs-gen/registry.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/docs-gen/diagramme.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},

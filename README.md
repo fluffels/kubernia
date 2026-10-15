@@ -127,8 +127,8 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 102 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 71 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Skripte | 103 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 72 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 8 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 24 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -154,6 +154,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs --danach scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/sandbox-doctor.mjs --sessionstart` | `.claude/settings.json` |
+| Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/mcp-ausfall.mjs --sessionstart` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
