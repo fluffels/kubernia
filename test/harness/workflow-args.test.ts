@@ -213,6 +213,10 @@ describe("Workflow-args: der Orchestrator nutzt den Parser wirklich", () => {
     expect(quelle).toContain("naechstes-ticket.mjs${eingabe.bereich ? ` --bereich ${eingabe.bereich}` : ''}")
   })
 
+  it("prüft eine vorgegebene Ticketnummer per Einzelprüfung (alle Kriterien samt Messfenster)", () => {
+    expect(quelle).toContain("naechstes-ticket.mjs --ticket ${gewuenscht}")
+  })
+
   it("steht im Quelltext vor dem ersten Agenten-Aufruf", () => {
     const abbruch = quelle.indexOf("'ungueltige-args'")
     const ersterAgent = quelle.indexOf("const auswahl = await agent(")
