@@ -39,6 +39,8 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   ROW_LIMIT: number;
   STICHTAG: string;
   nachliefererWartet: (o: { mtime: number; now: number; beendet: boolean }) => boolean;
+  standUnveraendert: (eintrag: { mtime?: number; groesse?: number | null } | null | undefined, s: { mtime: number; groesse: number | null }) => boolean;
+  endeGiltFuer: (eintrag: { beendet?: boolean; mtime?: number; groesse?: number | null } | null | undefined, s: { mtime: number; groesse: number | null }) => boolean;
   beobachtungsId: (s: string, m: string) => string;
   traceIdVon: (s: string) => string;
   ticketAusBranch: (b: unknown) => string | null;
@@ -49,7 +51,7 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   schluesselArt: (o: Obs[]) => string;
   diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; art: string };
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
-  bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number } | null }) => Bewertung;
+  bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null }) => Bewertung;
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[] },
@@ -410,10 +412,31 @@ describe("Score ausstehend und vor Stichtag (getrennt vom Status)", () => {
 
   test("bekanntes Ende laut Ledger: 150 s Ruhe genügen, aber nur bei passender mtime", () => {
     const mtime = now - 60 * 60_000;
-    expect(bew({ ledgerEintrag: { beendet: true, mtime } }).score).toBeNull();
+    expect(bew({ mtime, groesse: 100, ledgerEintrag: { beendet: true, mtime, groesse: 100 } }).score).toBeNull();
     // darf NICHT passieren: ein Ende zu einem anderen Stand der Datei oder ohne beendet-Flag zählt
-    expect(bew({ ledgerEintrag: { beendet: true, mtime: mtime - 1 } }).score).toBe("ausstehend");
-    expect(bew({ ledgerEintrag: { beendet: false, mtime } }).score).toBe("ausstehend");
+    expect(bew({ mtime, groesse: 100, ledgerEintrag: { beendet: true, mtime: mtime - 1, groesse: 100 } }).score).toBe("ausstehend");
+    expect(bew({ mtime, groesse: 100, ledgerEintrag: { beendet: false, mtime, groesse: 100 } }).score).toBe("ausstehend");
+  });
+
+  test("bekanntes Ende gilt nur für denselben Dateistand: gleiche mtime, andere Größe heißt ausstehend (#1609)", () => {
+    const mtime = now - 60 * 60_000;
+    expect(bew({ mtime, groesse: 200, ledgerEintrag: { beendet: true, mtime, groesse: 100 } }).score).toBe("ausstehend");
+    expect(bew({ mtime, groesse: null, ledgerEintrag: { beendet: true, mtime, groesse: 100 } }).score).toBe("ausstehend");
+  });
+
+  test("standUnveraendert und endeGiltFuer: eine Definition für Nachlieferer und Abgleich (#1609)", () => {
+    const s = { mtime: 5, groesse: 10 };
+    expect(A.standUnveraendert({ mtime: 5, groesse: 10 }, s)).toBe(true);
+    expect(A.standUnveraendert(null, s)).toBe(false);
+    expect(A.standUnveraendert(undefined, s)).toBe(false);
+    expect(A.standUnveraendert({ mtime: 6, groesse: 10 }, s)).toBe(false);
+    expect(A.standUnveraendert({ mtime: 5, groesse: 11 }, s)).toBe(false);
+    expect(A.standUnveraendert({ mtime: 5, groesse: null }, { mtime: 5, groesse: null })).toBe(false);
+    expect(A.standUnveraendert({ mtime: 5 }, { mtime: 5, groesse: null })).toBe(false);
+    expect(A.endeGiltFuer({ beendet: true, mtime: 5, groesse: 10 }, s)).toBe(true);
+    expect(A.endeGiltFuer({ beendet: false, mtime: 5, groesse: 10 }, s)).toBe(false);
+    expect(A.endeGiltFuer({ beendet: true, mtime: 5, groesse: 11 }, s)).toBe(false);
+    expect(A.endeGiltFuer(null, s)).toBe(false);
   });
 
   test("Session in der Ruhefrist des Abgleichs hat keinen Score-Vermerk, eine vor dem Stichtag den eigenen", () => {
@@ -576,10 +599,11 @@ describe("pruefen (Ablauf)", () => {
     const lauf = (stateDir: string) => A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl, stateDir });
     const mtime = statSync(join(root, PRAEFIX, "s1.jsonl")).mtimeMs;
     const ohne = (await lauf(fixture({}))).text;
+    const groesse = statSync(join(root, PRAEFIX, "s1.jsonl")).size;
     expect(ohne).toContain("| vollständig, Score ausstehend |");
     expect(ohne).toContain("1 davon Score ausstehend (Nachlieferer wartet noch)");
     expect(ohne).toContain(`vor ${A.STICHTAG.slice(0, 10)})`);
-    const mitEnde = fixture({ "langfuse-abgleich.json": JSON.stringify({ version: 1, sessions: { s1: { beendet: true, mtime } } }) });
+    const mitEnde = fixture({ "langfuse-abgleich.json": JSON.stringify({ version: 1, sessions: { s1: { beendet: true, mtime, groesse } } }) });
     const ende = (await lauf(mitEnde)).text;
     expect(ende).not.toMatch(/Score ausstehend/);
     expect(ende).toContain("| vollständig |");

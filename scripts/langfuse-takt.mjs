@@ -9,6 +9,7 @@
  * Nur Node-Builtins und board-lib.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, ghJson, imKopf, setPosition } from "./board-lib.mjs";
+import { fehlerMeldung } from "./gh-cli.mjs";
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
@@ -133,7 +134,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [] 
     console.log("Board-Position oben gesetzt.");
     return { ok: true, nr, itemId };
   } catch (err) {
-    console.log(`::error::Board-Position nicht gesetzt: ${String(err.message).split("\n")[0]}. Die Wiederholung ist idempotent und legt kein zweites Ticket an.`);
+    console.log(fehlerMeldung(err, { praefix: "Board-Position nicht gesetzt: ", zusatz: "Die Wiederholung ist idempotent und legt kein zweites Ticket an." }));
     return { ok: false, nr, itemId: null };
   }
 }

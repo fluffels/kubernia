@@ -1,5 +1,6 @@
-// Gemeinsame Bausteine der Mess-Skripte (token-baseline, subagent-laufzeit, hauptchat-zerlegung): Median und
-// Cache-Pausen-Schwellen stehen genau einmal hier, damit die Skripte nicht auseinanderlaufen.
+// Gemeinsame Bausteine der Mess-Skripte (token-baseline, subagent-laufzeit, hauptchat-zerlegung, kontext-treiber,
+// lauf-ergebnis): Median, Cache-Pausen-Schwellen, Ticketnummer und Ticketfilter stehen genau einmal hier, damit die
+// Skripte nicht auseinanderlaufen.
 
 /** Median einer Zahlenliste (gerade Anzahl: Mittel der beiden mittleren), nicht endliche Werte ignoriert, `null` bei leerer Liste. */
 export function median(werte) {
@@ -76,6 +77,17 @@ export function vereinigungsLaenge(intervalle, { geschlossen = false } = {}) {
     } else if (b > cur[1]) cur[1] = b;
   }
   return summe + (cur ? cur[1] - cur[0] + plus : 0);
+}
+
+/** Ticketnummer eines CLI-Werts (#1609): Ganzzahl → `{ nr, fehler: null }`, sonst `fehler` (eine Nicht-Ganzzahl würde als NaN still nichts filtern). */
+export function ticketNummer(name, wert) {
+  const ok = /^[0-9]+$/.test(String(wert ?? ""));
+  return { nr: Number(wert), fehler: ok ? null : `${name} erwartet eine Ticketnummer, nicht ${wert ?? "nichts"}` };
+}
+
+/** Ticketfilter (#1609): `tickets` = nur diese (leer = alle), `ohne` = alle außer diesen; ein Ticket ohne Nummer fällt bei `tickets` heraus. */
+export function passtTicketFilter(ticket, { tickets = [], ohne = [] } = {}) {
+  return (tickets.length === 0 || tickets.includes(ticket)) && !ohne.includes(ticket);
 }
 
 /** Ein echter Modellname: nicht leer und nicht der Client-Platzhalter `<synthetic>`. */

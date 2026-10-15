@@ -17,6 +17,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
+import { passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 
 export const NACHARBEIT_TAGE = 14;
@@ -138,6 +139,9 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
       prs: zeilen.length,
       ohneNachweis: zeilen.length - mitNachweis.length,
       ohneBlockerFeld: mitNachweis.filter((z) => z.blocker === null).length,
+      // Echte Zählung (#1609): PRs mit `blocker=`-Feld, in denen eine Brille in Runde 1 mindestens einen Blocker hatte; der Proxy (Runden ≥ 2) bleibt zum Vergleich.
+      runde1MitBlocker: mitNachweis.filter((z) => z.blocker?.some((b) => b.n > 0)).length,
+      mitBlockerFeld: mitNachweis.filter((z) => z.blocker !== null).length,
       runde1MitBlockerProxy: mitNachweis.filter((z) => z.runden >= 2).length,
       mitNachweis: mitNachweis.length,
       brillen,
@@ -160,7 +164,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
     out.push(`| #${z.pr} | ${z.ticket ? `#${z.ticket}` : "–"} | ${z.gemergt.slice(0, 10)} | ${z.runden ?? "ohne Nachweis"} | ${blocker(z)} | ${z.ciFix} | ${z.festgefahren} | ${z.nacharbeit} |`);
   }
   out.push("", `PRs: ${k.prs} (ohne KQ-Review-Nachweis: ${k.ohneNachweis}, ohne blocker-Feld: ${k.ohneBlockerFeld})`);
-  out.push(`Runde 1 mit Blocker (Proxy runden ≥ 2): ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
+  out.push(`Runde 1 mit Blocker (aus blocker=): ${prozent(k.runde1MitBlocker, k.mitBlockerFeld)}; Proxy Runden ≥ 2: ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
   for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
@@ -188,7 +192,7 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tick
   // Ticketfilter (wie kontext-treiber): `tickets` = nur diese, `ohne` = alle außer diesen; vor den weiteren gh-Aufrufen, damit sie nur die Teilmenge laden.
   const prs = liste
     .filter((p) => new Date(p.mergedAt).getTime() >= t0 && new Date(p.mergedAt).getTime() <= t1)
-    .filter((p) => (tickets.length === 0 || tickets.includes(ticketVon(p))) && !ohne.includes(ticketVon(p)))
+    .filter((p) => passtTicketFilter(ticketVon(p), { tickets, ohne }))
     .sort((a, b) => a.number - b.number);
   let commits;
   try {
@@ -234,8 +238,9 @@ export const AUFRUFHILFE = "Aufruf: node scripts/lauf-ergebnis.mjs --von <ISO> -
 export function parseArgs(argv) {
   const a = { von: undefined, bis: undefined, tickets: [], ohne: [], json: false, fehler: null };
   const nummer = (name, wert) => {
-    if (!/^[0-9]+$/.test(String(wert ?? ""))) a.fehler ??= `${name} erwartet eine Ticketnummer, nicht ${wert ?? "nichts"}`;
-    return Number(wert);
+    const { nr, fehler } = ticketNummer(name, wert);
+    if (fehler) a.fehler ??= fehler;
+    return nr;
   };
   for (let i = 0; i < argv.length; i++) {
     const x = argv[i];

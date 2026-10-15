@@ -190,7 +190,7 @@ describe("fehlende Position: nur der Teil entfällt, der sie braucht (#1392 Z24)
     expect(r.fehler).toBe(true);
     expect(r.meldung).toMatch(/^::error::/);
     expect(r.meldung).toContain("genau einmal");
-    expect(r.meldung).not.toContain("Zeile 2");
+    expect(r.meldung).toContain("Zeile 2");
   });
 
   test("board-takt: ohne Token nur eine Warnung (kein Fehler), mit Position und Token läuft der Teil", () => {

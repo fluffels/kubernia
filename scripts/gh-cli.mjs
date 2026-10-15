@@ -27,5 +27,25 @@ export function ghText(args, { token, timeout, stdio = ["ignore", "pipe", "pipe"
   return out ?? "";
 }
 
+/**
+ * Fehlertext eines geworfenen `gh`-Aufrufs (#1609): erste Zeile von `err.message`, danach der Rest der Meldung und `err.stderr`
+ * (bei einem `gh api`-Fehler steht dort der API-Text), getrimmt und auf `max` Zeichen gekürzt. Nimmt auch einen String oder
+ * Nicht-Error. Ohne den Rest zeigte der Takt-Lauf vom 2026-10-12 nur `Command failed: gh api …` und nie die Ursache.
+ */
+export function fehlerText(err, max = 2000) {
+  const message = String(err?.message ?? err);
+  const stderr = String(err?.stderr ?? "").trim();
+  const [erste, ...rest] = message.split("\n");
+  const rest2 = rest.join("\n").trim();
+  const detail = [rest2, stderr && !rest2.includes(stderr) ? stderr : ""].filter(Boolean).join("\n");
+  const gekuerzt = detail.length > max ? `${detail.slice(0, max)}… (gekürzt)` : detail;
+  return `${erste}${gekuerzt ? `\n${gekuerzt}` : ""}`;
+}
+
+/** Log-Text eines abgebrochenen Takts (#1609): `::error::` (Annotation im Actions-Lauf) + `praefix` + `fehlerText`, danach `zusatz` in einer eigenen Zeile. */
+export function fehlerMeldung(err, { praefix = "", zusatz = "", max } = {}) {
+  return `::error::${praefix}${fehlerText(err, max)}${zusatz ? `\n${zusatz}` : ""}`;
+}
+
 /** Wie `ghText`, die Ausgabe als JSON geparst. */
 export const ghJson = (args, opts = {}) => JSON.parse(ghText(args, opts));
