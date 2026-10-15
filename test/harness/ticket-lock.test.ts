@@ -218,7 +218,7 @@ describe("Z4/Z5: Lock nie von Hand, pruefe ohne Nonce", () => {
     const r = lauf(["pruefe", "5"]);
     assert.equal(r.code, 4);
     assert.equal(r.out, "fremd\n");
-    assert.match(r.err, /frei ab|noch keine 2 h/);
+    assert.match(r.err, /noch keine 2 h/);
     assert.match(lauf(["claim", "5"]).err, new RegExp(new Date(JETZT + M.VERWAIST_MS).toISOString()), "claim nennt den Zeitpunkt, ab dem der Lock verwaist ist");
     assert.equal(lauf(["pruefe", "5"], {}, JETZT + M.VERWAIST_MS).out, "frei\n");
     assert.equal(lauf(["pruefe", "5"], {}, JETZT + M.VERWAIST_MS - 1).code, 4);
@@ -262,6 +262,7 @@ describe("Z4/Z5: Lock nie von Hand, pruefe ohne Nonce", () => {
       lauf(["pruefe", "6"], { worktrees: ["/repo/.claude/worktrees/kq-6"], reflogSek: JETZT / 1000 }).err,
       lauf(["freigeben", "5", "--nonce", "falsch"]).err,
       M.fuehreAus(["claim", "5"], { ...deps({}, JETZT + M.VERWAIST_MS + 1), benenneUm: () => { throw fehler; } }).err,
+      M.fuehreAus(["claim", "5"], { ...deps({}, JETZT + M.VERWAIST_MS + 1), schreibeNeu: () => { throw Object.assign(new Error("x"), { code: "EEXIST" }); } }).err,
     ];
     for (const m of meldungen) assert.match(m, NICHT_VON_HAND, m);
     assert.equal(a.code, 0);
