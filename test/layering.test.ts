@@ -43,7 +43,8 @@ type Cond = { path?: string; pathNot?: string };
 type Regel = { name: string; from: Cond; to: Cond };
 type Modell = { quellwurzel: string; schichten: { id: string; label: string; muster: string | null; wurzeln: string[]; darf: string[] }[]; extern: { id: string; label: string; muster: string }[] };
 const req = createRequire(import.meta.url);
-const layers = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell; verbotsRegeln: (m: Modell) => Regel[] };
+const layers = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell };
+const kern = req("../scripts/schichten-kern.cjs") as { verbotsRegeln: (m: Modell) => Regel[] };
 const cruiserConfig = req("../.dependency-cruiser.cjs") as { forbidden: { name: string }[] };
 
 const trifft = (c: Cond, pfad: string) => (!c.path || new RegExp(c.path).test(pfad)) && !(c.pathNot && new RegExp(c.pathNot).test(pfad));
@@ -65,7 +66,7 @@ const ERLAUBT: Record<string, string[]> = {
 };
 
 test("Regel-Matrix des echten Modells: verletzt genau dann, wenn die Richtung nicht erlaubt ist", () => {
-  const regeln = layers.verbotsRegeln(layers.SCHICHT_MODELL);
+  const regeln = kern.verbotsRegeln(layers.SCHICHT_MODELL);
   assert.equal(regeln.length, 7);
   for (const von of Object.keys(ERLAUBT)) {
     for (const nach of Object.keys(BEISPIEL)) {
@@ -85,24 +86,24 @@ test("Fixture-Modell: eine neue Schicht bekommt ihre Regeln, eine gestrichene Ri
     ],
     extern: [],
   };
-  assert.deepEqual(layers.verbotsRegeln(m).map((r) => r.name).sort(), ["schicht-mitte-nicht-oben", "schicht-unten-nicht-mitte", "schicht-unten-nicht-oben"]);
+  assert.deepEqual(kern.verbotsRegeln(m).map((r) => r.name).sort(), ["schicht-mitte-nicht-oben", "schicht-unten-nicht-mitte", "schicht-unten-nicht-oben"]);
   m.schichten[0].darf = ["mitte"];
-  const regeln = layers.verbotsRegeln(m);
+  const regeln = kern.verbotsRegeln(m);
   assert.ok(verletzt(regeln, "src/oben/a.ts", "src/x/b.ts"), "gestrichene Richtung oben → unten ist jetzt verboten");
   assert.ok(!verletzt(regeln, "src/oben/a.ts", "src/mitte/b.ts"));
 });
 
 test("Eine .d.ts-Quelle löst nie eine Schichtregel aus", () => {
-  const regeln = layers.verbotsRegeln(layers.SCHICHT_MODELL);
+  const regeln = kern.verbotsRegeln(layers.SCHICHT_MODELL);
   assert.ok(!verletzt(regeln, "src/vite-env.d.ts", BEISPIEL.anwendung));
   assert.ok(!verletzt(regeln, "src/game/typen.d.ts", BEISPIEL.praesentation));
 });
 
 test(".dependency-cruiser.cjs enthält genau die abgeleiteten Schichtregeln plus Zyklen und Waisen", () => {
   const namen = cruiserConfig.forbidden.map((r) => r.name);
-  const abgeleitet = layers.verbotsRegeln(layers.SCHICHT_MODELL).map((r) => r.name);
+  const abgeleitet = kern.verbotsRegeln(layers.SCHICHT_MODELL).map((r) => r.name);
   assert.deepEqual(namen, [...abgeleitet, "keine-zyklen", "keine-verwaisten-module"]);
-  assert.deepEqual(cruiserConfig.forbidden.slice(0, abgeleitet.length), layers.verbotsRegeln(layers.SCHICHT_MODELL));
+  assert.deepEqual(cruiserConfig.forbidden.slice(0, abgeleitet.length), kern.verbotsRegeln(layers.SCHICHT_MODELL));
 });
 
 // ── Quellwurzel nur an einer Stelle (#1428 Z13) ─────────────────────────────────────────────
@@ -141,7 +142,7 @@ function cruiseVerstoesse(dateien: Record<string, string>, modell: Modell = laye
       mkdirSync(join(root, rel, ".."), { recursive: true });
       writeFileSync(join(root, rel), inhalt);
     }
-    writeFileSync(join(root, "cruise.cjs"), `module.exports = { forbidden: ${JSON.stringify(layers.verbotsRegeln(modell))} };\n`);
+    writeFileSync(join(root, "cruise.cjs"), `module.exports = { forbidden: ${JSON.stringify(kern.verbotsRegeln(modell))} };\n`);
     let out: string;
     try {
       out = execFileSync(process.execPath, [CRUISER, wurzel, "--config", "cruise.cjs", "--output-type", "json"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -181,7 +182,7 @@ test("Quellwurzel (#1373): die Regeln folgen dem Modell, nicht einem festen src/
     ],
     extern: [],
   };
-  const regeln = layers.verbotsRegeln(m);
+  const regeln = kern.verbotsRegeln(m);
   assert.ok(verletzt(regeln, "lib/x/b.ts", "lib/oben/a.ts"), "Auffang-Schicht unter lib/ darf oben nicht importieren");
   assert.ok(!verletzt(regeln, "src/x/b.ts", "lib/oben/a.ts"), "ein Pfad außerhalb der Quellwurzel ist keine Quelle");
   assert.ok(!verletzt(regeln, "lib/oben/a.ts", "lib/x/b.ts"));
@@ -230,3 +231,51 @@ test("echter dependency-cruiser-Lauf mit abweichender Quellwurzel (#1373): lib/ 
   const gruen = cruiseVerstoesse({ "lib/oben/a.js": 'import "../x/b.js";\n', "lib/x/b.js": "export const b = 1;\n" }, m, "lib");
   assert.deepEqual(gruen, []);
 }, 60_000);
+
+// ── Kern-Ableitungen auf einem Fremd-Modell (#1612) ───────────────────────────────────────────
+// Der Schicht-Kern kennt keine Projektdaten: Klassifikation, Auffang-Wurzeln und Coverage-Globs rechnen auf dem
+// übergebenen Modell. Ein Fremd-Modell mit eigener Quellwurzel und eigenen IDs beweist, dass nichts fest verdrahtet ist.
+const kernAbl = req("../scripts/schichten-kern.cjs") as {
+  layerOfAus: (m: Modell) => (f: string) => string;
+  wurzelnAusserAuffangAus: (m: Modell) => string[];
+  coverageGlobsAus: (m: Modell) => Record<string, string>;
+  pruefeModell: (m: Modell) => void;
+  musterAus: (q: string, w: string[], nurDatei: boolean) => string;
+};
+const fremd = (): Modell => ({
+  quellwurzel: "lib/",
+  schichten: [
+    { id: "kante", label: "Kante", wurzeln: ["cli", "boot"], nurDatei: true, muster: kernAbl.musterAus("lib/", ["cli", "boot"], true), darf: ["kern"] },
+    { id: "adapter", label: "Adapter", wurzeln: ["http"], muster: kernAbl.musterAus("lib/", ["http"], false), darf: ["kern"] },
+    { id: "kern", label: "Kern", wurzeln: [], muster: null, darf: [] },
+  ] as Modell["schichten"],
+  extern: [],
+});
+
+test("layerOfAus: Muster der Schichten vor Auffang, Auffang für alles übrige unter der Quellwurzel", () => {
+  const layerOf = kernAbl.layerOfAus(fremd());
+  assert.equal(layerOf("lib/cli.ts"), "kante");
+  assert.equal(layerOf("lib/cli/x.ts"), "kern", "nurDatei: ein Ordner gleichen Namens ist nicht die Kante");
+  assert.equal(layerOf("lib/http/a.ts"), "adapter");
+  assert.equal(layerOf("lib/http.ts"), "adapter");
+  assert.equal(layerOf("lib/modell/a.ts"), "kern");
+});
+
+test("wurzelnAusserAuffangAus: Modul-Ordner zuerst, dann reine Datei-Wurzeln", () => {
+  assert.deepEqual(kernAbl.wurzelnAusserAuffangAus(fremd()), ["http", "cli", "boot"]);
+});
+
+test("coverageGlobsAus: je Schicht ein Glob unter der Quellwurzel des Modells, Auffang ausschließend", () => {
+  assert.deepEqual(kernAbl.coverageGlobsAus(fremd()), {
+    kante: "lib/{cli,boot}.ts",
+    adapter: "lib/{http}{.ts,/**}",
+    kern: "lib/{!(http|cli|boot)/**,!(http.ts|cli.ts|boot.ts)}",
+  });
+});
+
+test("jede Ableitung des Kerns prüft das Modell zuerst (fail-closed)", () => {
+  const kaputt = fremd();
+  kaputt.schichten[0].darf.push("nirgendwo");
+  for (const f of [kernAbl.layerOfAus, kernAbl.wurzelnAusserAuffangAus, kernAbl.coverageGlobsAus, kern.verbotsRegeln])
+    assert.throws(() => f(kaputt), /unbekanntes Ziel "nirgendwo"/, f.name);
+});
