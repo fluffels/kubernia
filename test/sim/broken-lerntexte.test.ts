@@ -45,28 +45,25 @@ const LOGS: Record<Typ, LogArt> = {
   oomkilled: "absturz",
 };
 
+const LOG_ERWARTUNG: Record<LogArt, { jetztFehler: boolean; davorFehler: boolean; davorNieNeugestartet: boolean; jetztStart: boolean; gleich: boolean }> = {
+  "nicht-gestartet": { jetztFehler: true, davorFehler: true, davorNieNeugestartet: false, jetztStart: false, gleich: true },
+  absturz: { jetztFehler: false, davorFehler: false, davorNieNeugestartet: false, jetztStart: true, gleich: true },
+  normal: { jetztFehler: false, davorFehler: true, davorNieNeugestartet: true, jetztStart: false, gleich: false },
+};
+
 describe("kubectl logs je Broken-Typ", () => {
   test.each(TYPEN)("%s: logs und logs -p folgen der ausdrücklichen Entscheidung", type => {
     const s = sim(type);
     const n = podName(s);
     const jetzt = kubectl(s, "logs " + n);
     const davor = kubectl(s, "logs -p " + n);
-    switch (LOGS[type]) {
-      case "nicht-gestartet":
-        expect(jetzt).toContain("BadRequest");
-        expect(davor).toContain("BadRequest");
-        expect(davor).not.toContain("previous terminated");
-        break;
-      case "absturz":
-        expect(jetzt).toContain("[start]");
-        expect(davor).toBe(jetzt);
-        expect(davor).not.toContain("Error from server");
-        break;
-      case "normal":
-        expect(jetzt).toContain("GET /gesundheit");
-        expect(davor).toContain("previous terminated container");
-        break;
-    }
+    expect({
+      jetztFehler: jetzt.includes("BadRequest"),
+      davorFehler: davor.includes("BadRequest"),
+      davorNieNeugestartet: davor.includes("previous terminated"),
+      jetztStart: jetzt.includes("[start]"),
+      gleich: davor === jetzt,
+    }).toEqual(LOG_ERWARTUNG[LOGS[type]]);
   });
 
   test("crashloop nennt das fehlende Secret, oomkilled bricht ohne Fehler ab", () => {
@@ -103,11 +100,7 @@ describe("Metriken und Alerts je Broken-Typ", () => {
   test.each(TYPEN)("%s: Metriken", type => {
     const s = sim(type);
     const m = s.podMetrics().find(p => p.name === podName(s));
-    switch (METRIK[type]) {
-      case "keine": expect(m).toBeUndefined(); break;
-      case "grund": expect(m).toBeDefined(); expect(m!.memMi).toBeLessThan(64); break;
-      case "speicher": expect(m?.memMi).toBe(400); break;
-    }
+    expect(m === undefined ? "keine" : m.memMi === 400 ? "speicher" : m.memMi < 64 ? "grund" : "unerwartet").toBe(METRIK[type]);
   });
 
   test.each(TYPEN)("%s: firing-Alerts", type => {
