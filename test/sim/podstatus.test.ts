@@ -2,7 +2,7 @@
 import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { clusterPods, findClusterPod } from "../../src/sim/pods";
-import { BROKEN_POD, clusterPodStatus, deploymentPodEntry, deploymentPodStatus, isReady, type ContainerState, podView, workloadSummaries } from "../../src/sim/podstatus";
+import { BROKEN_POD, clusterPodStatus, deploymentPodEntry, deploymentPodState, deploymentPodStatus, isReady, type ContainerState, podView, workloadSummaries } from "../../src/sim/podstatus";
 import type { Broken } from "../../src/sim/state";
 import type { ClusterPod } from "../../src/sim/pods";
 import { podAddress } from "../../src/sim/endpoints";
@@ -207,6 +207,20 @@ describe("assertNever in den Workload-Switches (#1426)", () => {
   test("podAddress wirft", () => {
     const s = sim();
     expect(() => podAddress(fake(s), s.pvcs)).toThrow(/podAddress: unbehandelte Variante/);
+  });
+});
+
+describe("deploymentPodState: die eine Vorrangregel (#1648)", () => {
+  test.each(Object.keys(BROKEN_POD) as Broken["type"][])("evicted schlägt %s", type => {
+    expect(deploymentPodState({ evicted: { reason: "r" }, broken: { type } })).toEqual({ kind: "evicted", evicted: { reason: "r" } });
+  });
+  test("gesund: weder evicted noch broken (null und fehlend)", () => {
+    expect(deploymentPodState({ evicted: null, broken: null })).toEqual({ kind: "healthy" });
+    expect(deploymentPodState({})).toEqual({ kind: "healthy" });
+  });
+  test("nur broken: der Broken-Zustand", () => {
+    const broken = { type: "crashloop" as const, needsSecret: "x" };
+    expect(deploymentPodState({ evicted: null, broken })).toEqual({ kind: "broken", broken });
   });
 });
 

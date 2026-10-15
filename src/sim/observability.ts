@@ -27,6 +27,7 @@ import { clusterPods, type ClusterPod } from "./pods";
 import { hashStr } from "../core/rng";
 import { isControlPlane } from "./nodes";
 import { serviceBackends, endpointPort, podAddress } from "./endpoints";
+import { deploymentPodState, type DeploymentPodState } from "./podstatus";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).
  *  Bewusst schmal: statt des ganzen `ClusterState` (Leaky Abstraction #516) nur die
@@ -41,18 +42,28 @@ export interface ObservabilityHost extends Pick<ClusterState, "deployments" | "n
   _resolvedAlerts: Set<string>; // war mal an, Ursache inzwischen behoben
 }
 
+/** Die Last eines Deployment-Pods nach dem Vorrang (`deploymentPodState`): evicted ⇒ keine Metriken. */
+function deploymentMetric(c: Extract<ClusterPod, { owner: "Deployment" }>): PodMetrics | null {
+  const s = deploymentPodState(c.dep);
+  switch (s.kind) {
+    case "evicted": return null;
+    case "healthy": return podLoad(c);
+    case "broken": return brokenLoad(s.broken, podLoad(c));
+  }
+}
+
+function podLoad(c: Extract<ClusterPod, { owner: "Deployment" }>): PodMetrics {
+  const m = baseLoad(c.pod);
+  if (c.dep.cpuHeavy) m.cpuMilli = 850 + (hashStr(c.pod.name) % 200); // 850..1049m: weit über der HighCPU-Schwelle
+  return m;
+}
+
 /** Momentane Ressourcen-Last eines Pods – oder null, wenn der Container gar nicht
  *  läuft (ImagePull/Pending/Evicted), dann gibt es schlicht keine Metriken. Deterministisch
  *  aus dem Pod-Namen abgeleitet, damit `kubectl top` über Aufrufe hinweg stabil bleibt. */
 function podMetric(c: ClusterPod, pvcs: readonly PvcRes[]): PodMetrics | null {
   switch (c.owner) {
-    case "Deployment": {
-      const d = c.dep;
-      if (d.evicted) return null;
-      const m = baseLoad(c.pod);
-      if (d.cpuHeavy) m.cpuMilli = 850 + (hashStr(c.pod.name) % 200); // 850..1049m: weit über der HighCPU-Schwelle
-      return d.broken ? brokenLoad(d.broken, m) : m;
-    }
+    case "Deployment": return deploymentMetric(c);
     case "StatefulSet":
       // PVC Pending ⇒ der Pod läuft nicht, also keine Metriken; sonst nur die Grundlast.
       return podAddress(c, pvcs) === null ? null : baseLoad(c.pod);
@@ -126,7 +137,7 @@ export function scrapeTargets(host: ObservabilityHost): ScrapeTarget[] {
   return targets;
 }
 
-/** Welchen Pod-Alert ein Broken-Typ auslöst (#1509). Ausdrücklich keiner: imagepull, pending (der Container läuft nie) und
+/** Welchen Pod-Alert ein Broken-Typ auslöst (#1509; gilt nur für nicht evictete Pods, siehe `podAlert`). Ausdrücklich keiner: imagepull, pending (der Container läuft nie) und
  *  notready (er läuft, nur die Readiness fehlt). Als `Record`: ein neuer Typ ohne Eintrag ist ein TS-Fehler. */
 const BROKEN_ALERT: Record<Broken["type"], "KubePodCrashLooping" | "KubePodOOMKilled" | null> = {
   imagepull: null,
@@ -136,10 +147,19 @@ const BROKEN_ALERT: Record<Broken["type"], "KubePodCrashLooping" | "KubePodOOMKi
   oomkilled: "KubePodOOMKilled",
 };
 
+/** Der Pod-Alert nach dem Vorrang (`deploymentPodState`): ein evicteter Pod löst keinen aus (Container beendet). */
+function podAlert(s: DeploymentPodState): "KubePodCrashLooping" | "KubePodOOMKilled" | null {
+  switch (s.kind) {
+    case "evicted": return null;
+    case "healthy": return null;
+    case "broken": return BROKEN_ALERT[s.broken.type];
+  }
+}
+
 /** Die Alert-Regeln samt aktueller Bedingung – die EINE Stelle, die festlegt,
  *  was den simulierten Alertmanager auslöst (hohe CPU, CrashLoop, OOM, Node weg). */
 function alertRules(host: ObservabilityHost): Array<{ name: string; severity: "warning" | "critical"; summary: string; firing: boolean }> {
-  const brokenAlerts = new Set(host.deployments.map(d => (d.broken ? BROKEN_ALERT[d.broken.type] : null)));
+  const brokenAlerts = new Set(host.deployments.map(d => podAlert(deploymentPodState(d))));
   const crash = brokenAlerts.has("KubePodCrashLooping");
   const oom = brokenAlerts.has("KubePodOOMKilled");
   const hotPod = podMetrics(host).some(m => m.cpuMilli > 500);

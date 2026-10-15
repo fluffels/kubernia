@@ -5,7 +5,8 @@
  * Phaser-frei (pure Domäne).
  */
 import type { KubectlHost } from "./host";
-import type { Deployment } from "../state";
+import type { Broken, Deployment } from "../state";
+import { deploymentPodState } from "../podstatus";
 import { resolveKind, qualified } from "./resources";
 import { slashRef, notSimulated, unknownResourceType } from "./args";
 import type { Call } from "../cliargs";
@@ -15,32 +16,48 @@ import { statefulPodClaimName } from "../workload";
 
 // --- kubectl logs: die (kaputt-abhängigen) Log-Texte + Vorab-Checks ausgelagert ---
 
-// Was `kubectl logs` über ein Deployment-Pod wissen muss, je Broken-Typ ausdrücklich entschieden (#1509). Wertliefernder
-// `switch` ohne `default`: ein neuer Typ ohne Zweig ist ein TS-Fehler (TS2366), kein stiller Normal-Log.
-//  - notStarted: nie gestartete Container (Image fehlt / Pod ungescheduled) haben gar keine Logs.
+// Was `kubectl logs` über ein Deployment-Pod wissen muss, nach dem Vorrang `deploymentPodState` (#1648): Evicted > gesund > Broken.
+// Wertliefernde `switch`e ohne `default`: ein neuer Zustand oder Broken-Typ ohne Zweig ist ein TS-Fehler (TS2366), kein stiller Normal-Log.
+//  - noLogs: Container, die keine Logs haben: nie gestartet (Image fehlt / Pod ungescheduled) oder evicted (Pod beendet, Logs weg).
 //  - crashLog: die Log-Texte der Zustände, die einen Vorgänger-Container hinterlassen.
 //  - notready: der Container LÄUFT (Liveness ok), nur die Readiness schlägt fehl: normaler Log, nie neugestartet.
-function deploymentLogFacts(host: KubectlHost, dep: Deployment, name: string): Pick<LogSource, "notStarted" | "crashLog"> {
-  if (!dep.broken) return { notStarted: null, crashLog: null };
-  switch (dep.broken.type) {
+function deploymentLogFacts(host: KubectlHost, dep: Deployment, name: string): Pick<LogSource, "noLogs" | "crashLog"> {
+  const s = deploymentPodState(dep);
+  switch (s.kind) {
+    case "evicted":
+      // Evicted = Phase Failed, Container beendet; der kubelet räumt tote Container samt Logs ab (wie bei Disk-Druck).
+      return {
+        noLogs: host._err('Error from server (BadRequest): container "' + dep.name + '" in pod "' + name + '" is terminated',
+          "Der kubelet hat den Pod evicted: sein Container läuft nicht mehr, seine Logs sind weg. Den Grund zeigen die Events: kubectl describe pod " + name),
+        crashLog: null,
+      };
+    case "healthy":
+      return { noLogs: null, crashLog: null };
+    case "broken":
+      return brokenLogFacts(host, dep, s.broken, name);
+  }
+}
+
+function brokenLogFacts(host: KubectlHost, dep: Deployment, b: Broken, name: string): Pick<LogSource, "noLogs" | "crashLog"> {
+  switch (b.type) {
     case "imagepull":
       return {
-        notStarted: host._err('Error from server (BadRequest): container "' + dep.name + '" in pod "' + name + '" is waiting to start: trying and failing to pull image',
+        noLogs: host._err('Error from server (BadRequest): container "' + dep.name + '" in pod "' + name + '" is waiting to start: trying and failing to pull image',
           "Keine Logs ohne Image! Die Ursache steht in den Events: kubectl describe pod " + name),
         crashLog: null,
       };
     case "pending":
       return {
-        notStarted: host._err('Error from server (BadRequest): pod "' + name + '" is not scheduled yet', "Der Pod wartet auf einen freien Node. Schau in die Events: kubectl describe pod " + name),
+        noLogs: host._err('Error from server (BadRequest): pod "' + name + '" is not scheduled yet', "Der Pod wartet auf einen freien Node. Schau in die Events: kubectl describe pod " + name),
         crashLog: null,
       };
     case "crashloop":
       return {
-        notStarted: null,
+        noLogs: null,
         crashLog: [
           "[start] Dienst " + dep.name + " startet …",
           "[start] Lese Konfiguration …",
-          "FATAL: Secret '" + (dep.broken.needsSecret || "") + "' nicht gefunden – Dienst kann nicht starten!",
+          "FATAL: Secret '" + (b.needsSecret || "") + "' nicht gefunden – Dienst kann nicht starten!",
           "[exit] Prozess beendet mit Code 1",
         ].join("\n"),
       };
@@ -49,7 +66,7 @@ function deploymentLogFacts(host: KubectlHost, dep: Deployment, name: string): P
       // macht der Kernel von außen, die App schreibt dazu nichts. Die Wahrheit steht
       // in 'kubectl describe pod' (Last State: Terminated, Reason: OOMKilled).
       return {
-        notStarted: null,
+        noLogs: null,
         crashLog: [
           "[start] Dienst " + dep.name + " startet …",
           "[info]  Lade Datensätze in den Arbeitsspeicher …",
@@ -58,13 +75,13 @@ function deploymentLogFacts(host: KubectlHost, dep: Deployment, name: string): P
         ].join("\n"),
       };
     case "notready":
-      return { notStarted: null, crashLog: null };
+      return { noLogs: null, crashLog: null };
   }
 }
 
 /** Was `kubectl logs` über einen Pod wissen muss: Fehler vor dem Start, Log des abgestürzten
  *  Vorgängers, Containername und der normale Log. Je Owner aus seiner Wahrheit. */
-interface LogSource { notStarted: string | null; crashLog: string | null; container: string; normal: string }
+interface LogSource { noLogs: string | null; crashLog: string | null; container: string; normal: string }
 
 function logSource(host: KubectlHost, c: ClusterPod, name: string): LogSource {
   switch (c.owner) {
@@ -80,7 +97,7 @@ function logSource(host: KubectlHost, c: ClusterPod, name: string): LogSource {
       };
     case "StatefulSet":
       return {
-        notStarted: podAddress(c, host.pvcs) === null
+        noLogs: podAddress(c, host.pvcs) === null
           ? host._err('Error from server (BadRequest): pod "' + name + '" is not scheduled yet',
             "Der Pod wartet auf sein Volume. Schau in die Events: kubectl describe pod " + name + " – und prüfe den Claim mit: kubectl get pvc")
           : null,
@@ -131,7 +148,7 @@ function logsOf(host: KubectlHost, name: string, previous: boolean, follow: bool
   const c = findClusterPod(host, name);
   if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found');
   const src = logSource(host, c, name);
-  if (src.notStarted) return src.notStarted;
+  if (src.noLogs) return src.noLogs;
 
   if (previous) {
     // --previous zeigt die Logs des ABGESTÜRZTEN Vorgänger-Containers.
