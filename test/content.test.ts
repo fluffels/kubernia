@@ -885,7 +885,7 @@ for (const [name, quelle] of Object.entries(ANZEIGE_QUELLEN) as [string, Anzeige
   });
 }
 
-/* Tasten-Wächter (#1553): umbelegbare Tasten (Reden, Funkgerät, Logbuch, Album) stehen in Dialogzeilen nur als Token
+/* Tasten-Wächter (#1553; bekannte Grenzen: Kleinbuchstaben-Tasten und Wörter zwischen Verb und Taste erkennt der Regex nicht, UI-Strings außerhalb von TASTEN_HINWEISE prüft er nicht): umbelegbare Tasten (Reden, Funkgerät, Logbuch, Album) stehen in Dialogzeilen nur als Token
  * `{taste:<aktion>}` (ersetzt von src/ui/dialog.ts und dem Logbuch-Nachlesen, Domäne src/hud/tastenhinweis.ts), nie als
  * fester Buchstabe: sonst zeigt der Text nach einer Umbelegung die falsche Taste. */
 const ROHER_TASTENNAME = /(?:\bTaste|[Dd]rück(?:e|st)?)\s*(?:<b>|<kbd>)?[A-Z](?:<\/b>|<\/kbd>)?(?![\wÄÖÜäöüß])|(?<![\wÄÖÜäöüß])(?:<b>)?[A-Z](?:<\/b>)?\s*drücken\b|\b[A-Z]-Taste\b/;
@@ -920,6 +920,8 @@ test("Red-Green (#1553): der Tasten-Wächter meldet feste Tastennamen und falsch
   }
   assert.ok(melde("Drück <b>{taste:funk}</b>") > 0, "unbekannte Aktion nicht gemeldet");
   assert.ok(melde("Drück <b>{taste:radio}</b>", "q.steps[0].options[0].reply") > 0, "Token in nicht ersetztem Feld nicht gemeldet");
+  assert.ok(melde("Drück <b>{taste:radio}</b>", "q.steps[0].lines[0]", "SHOP") > 0, "Token in fremder Quelle mit lines-Label nicht gemeldet");
+  assert.equal(melde("Drück <b>{taste:radio}</b>", "ole[0]", "SMALLTALK"), 0, "Token im Smalltalk fälschlich gemeldet");
   for (const ok of ["Drück <b>Enter</b>", "Taste <b>Esc</b>", "Drück <b>{taste:radio}</b>", "<b>K</b> und <b>s</b> sind Kurzformen"]) {
     assert.equal(melde(ok), 0, `fälschlich gemeldet: ${ok}`);
   }

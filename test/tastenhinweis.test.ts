@@ -50,5 +50,6 @@ describe("TASTEN_HINWEISE", () => {
       expect(tastenHinweis(id, umbelegt).startsWith("Y – "), id).toBe(true);
     }
     expect(tastenHinweis("naehe", umbelegt)).toBe("<b>Y</b> – ");
+    expect(tastenHinweis("uebenNachAusbildung", umbelegt)).toContain("(Y → Üben)");
   });
 });

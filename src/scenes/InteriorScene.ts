@@ -14,7 +14,7 @@ import { T, pixelText, renderPlayer, stepSimplePlayer, type ScenePlayer } from "
  * Wird von WorldScene.enterInterior() als eigene Szene gestartet, während die
  * WorldScene schläft (eingefroren + ausgeblendet). Ein kleiner gekachelter
  * Raum aus vorhandenen Tiles, themengerechte Möbel, die NPC-Figur des Hauses
- * und eine Tür-Schwelle unten zum Hinausgehen (E oder runterlaufen).
+ * und eine Tür-Schwelle unten zum Hinausgehen (Reden-Taste oder runterlaufen).
  * Schiff-Deck (#758): statt eines kleinen Kajüten-Raums öffnet das „ship"-Thema
  * jetzt ein begehbares, bootsförmig zugeschnittenes Deck (15×11).
  * Unterdeck (#759): „ship_underdeck" startet einen zweiten Innenraum (Laderaum)
@@ -267,7 +267,7 @@ export class InteriorScene extends Phaser.Scene {
     const { eFlank, ePrev } = interiorEFlank({ ePhys, ePrev: this.ePrev, blocked });
     this.ePrev = ePrev;
     if (!blocked) {
-      // Hatch-Kachel hat Vorrang vor dem normalen Exit (E-Taste am Exit-Tile wäre sonst "exit")
+      // Hatch-Kachel hat Vorrang vor dem normalen Exit (Reden-Taste am Exit-Tile wäre sonst "exit")
       const onHatch = this.isShip && Math.floor(pl.x / T) === DECK_HATCH_TX && Math.floor(pl.y / T) === DECK_HATCH_TY;
       const action = interiorEAction({ eFlank, onExit, nearNpc });
       if (action === "talk") { UI.talkTo(this.npcId!); return; }
