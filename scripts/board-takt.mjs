@@ -197,7 +197,7 @@ function fuehreHarnessAus(h, items, token) {
     console.log("Sammelticket-Position gesetzt.");
     return true;
   } catch (err) {
-    console.log(`::error::Sammelticket-Position nicht gesetzt: ${String(err.message).split("\n")[0]}. Die Wiederholung ist idempotent.`);
+    console.log(`${fehlerMeldung(err).replace("::error::", "::error::Sammelticket-Position nicht gesetzt: ")}\nDie Wiederholung ist idempotent.`);
     return false;
   }
 }
@@ -271,6 +271,21 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   return { fehler };
 }
 
+/**
+ * Log-Text eines abgebrochenen Takts: erste Zeile als `::error::` (Annotation im Actions-Lauf), danach der Rest von
+ * `err.message` und `err.stderr` (bei einem `gh api`-Fehler steht dort der API-Text), getrimmt und auf `max` Zeichen gekürzt.
+ * Ohne den Rest zeigte der Lauf vom 2026-10-12 nur `Command failed: gh api …` und nie die Ursache.
+ */
+export function fehlerMeldung(err, max = 2000) {
+  const message = String(err?.message ?? err);
+  const stderr = String(err?.stderr ?? "").trim();
+  const [erste, ...rest] = message.split("\n");
+  const rest2 = rest.join("\n").trim();
+  const detail = [rest2, stderr && !rest2.includes(stderr) ? stderr : ""].filter(Boolean).join("\n");
+  const gekuerzt = detail.length > max ? `${detail.slice(0, max)}… (gekürzt)` : detail;
+  return `::error::${erste}${gekuerzt ? `\n${gekuerzt}` : ""}`;
+}
+
 function main() {
   if (process.env.PROJECT_TOKEN) mitKontingent("board-takt", { token: process.env.PROJECT_TOKEN });
   const { fehler } = fuehreTaktAus({
@@ -287,7 +302,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     main();
   } catch (err) {
-    console.log(`::error::${String(err.message).split("\n")[0]}`);
+    console.log(fehlerMeldung(err));
     process.exitCode = 1;
   }
 }

@@ -28,6 +28,8 @@ vi.mock("node:child_process", async (importOriginal) => {
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as cleanupModule from "../../scripts/worktree-aufraeumen.mjs";
+// @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
+import * as cliModule from "../../scripts/cleanup-worktrees.mjs";
 
 /**
  * Die Modul-Form EINMAL deklarieren und den Import genau hier casten. Vorher hing
@@ -1124,6 +1126,69 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       assert.deepEqual(r.geloescht, ["feature/kq-5-e"]);
       assert.equal(r.fehler.length, 1);
       assert.equal(r.ok, false);
+    });
+  });
+
+  describe("branchenModus (CLI-Durchreichung von branchesAufraeumen: Ausgabe und Exit-Code)", () => {
+    type Modus = (root: string, loeschen: boolean, o: { git: (a: string[]) => string; gh: () => Gemergt[]; out: (s: string) => void; err: (s: string) => void }) => number;
+    const modus = (cliModule as unknown as { branchenModus: Modus }).branchenModus;
+    const refsText = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-3-c\t\t" + SHA_A].join("\n");
+    const lauf = (o: { gh: () => Gemergt[]; gitFehler?: boolean; loeschen?: boolean; branchFehler?: boolean }) => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const git = (a: string[]): string => {
+        if (o.gitFehler) throw new Error("git kaputt");
+        if (o.branchFehler && a[0] === "branch") throw new Error("nicht löschbar");
+        return a[0] === "for-each-ref" ? refsText : a[0] === "worktree" ? "worktree /r\nbranch refs/heads/main\n" : "";
+      };
+      const code = modus("/r", o.loeschen ?? false, { git, gh: o.gh, out: (s) => out.push(s), err: (s) => err.push(s) });
+      return { code, out, err };
+    };
+    const eins = () => [gemergt("feature/kq-1-a")];
+
+    test("Normalfall: Exit 0, Kandidat gelistet, Hinweis auf --fix, kein stderr", () => {
+      const r = lauf({ gh: eins });
+      assert.equal(r.code, 0);
+      assert.ok(r.out[0].includes("1 gemergt und löschbar"));
+      assert.ok(r.out.some((z) => z.includes("löschbar  feature/kq-1-a")));
+      assert.ok(r.out.some((z) => z.includes("--branches --fix")));
+      assert.deepEqual(r.err, []);
+    });
+
+    test("Warnung (Suchgrenze) geht auf stderr, der Lauf bleibt Exit 0", () => {
+      const PR_LIMIT = (cleanupModule as unknown as { PR_LIMIT: number }).PR_LIMIT;
+      const r = lauf({ gh: () => Array.from({ length: PR_LIMIT }, (_, i) => gemergt(`feature/kq-${100 + i}-x`)) });
+      assert.equal(r.code, 0);
+      assert.equal(r.err.length, 1);
+      assert.ok(r.err[0].startsWith("Warnung: ") && r.err[0].includes("Suchgrenze"));
+    });
+
+    test("Grund (gh scheitert): Exit 1, stderr nennt „nichts gelöscht“, keine Liste auf stdout", () => {
+      const r = lauf({
+        gh: () => {
+          throw new Error("HTTP 502");
+        },
+      });
+      assert.equal(r.code, 1);
+      assert.ok(r.err.join("\n").includes("Branch-Aufräumen abgebrochen, nichts gelöscht: gh: HTTP 502"));
+      assert.deepEqual(r.out, []);
+    });
+
+    test("Grund (git scheitert): Exit 1", () => {
+      assert.equal(lauf({ gh: eins, gitFehler: true }).code, 1);
+    });
+
+    test("Fehler beim Löschen: Exit 1 und die Fehlerzeile auf stderr, die Liste bleibt auf stdout", () => {
+      const r = lauf({ gh: eins, loeschen: true, branchFehler: true });
+      assert.equal(r.code, 1);
+      assert.ok(r.err.some((z) => z.includes("✗ feature/kq-1-a: nicht löschbar")));
+      assert.ok(r.out.length > 0);
+    });
+
+    test("mit loeschen steht der Kandidat als gelöscht da", () => {
+      const r = lauf({ gh: eins, loeschen: true });
+      assert.equal(r.code, 0);
+      assert.ok(r.out.some((z) => z.includes("gelöscht feature/kq-1-a")));
     });
   });
 });

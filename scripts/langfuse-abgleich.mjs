@@ -24,7 +24,9 @@ import { ladeSessionDatei, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import {
   ROW_LIMIT,
+  LEDGER_NAME,
   RUHEFRIST_MIN,
+  STICHTAG,
   diffMultimenge,
   findeSessions,
   gleich,
@@ -32,9 +34,12 @@ import {
   holeMetrics,
   istAbfragen,
   istAusMetrics,
+  ledgerLesen,
   leereSumme,
+  nachliefererWartet,
   sollEintraege,
   summe,
+  vorStichtag,
 } from "./langfuse-abgleich-kern.mjs";
 
 const FEHLEND_ANZEIGE = 20;
@@ -42,9 +47,11 @@ const FEHLEND_ANZEIGE = 20;
 /**
  * Eine Session bewerten. `ist` = `{ calls, tokens }` (calls null zählt als 0), `diff` optional aus `diffMultimenge`
  * (sonst Zählebene: fehlend = max(0, Soll − Ist), Dubletten = max(0, Ist − Soll)). Status: `läuft` (Ruhefrist),
- * `Lücke`, `Dublette`, `Abweichung` (gleiche Zahl, andere Tokens), `vollständig`.
+ * `Lücke`, `Dublette`, `Abweichung` (gleiche Zahl, andere Tokens), `vollständig`. Dazu `score` (getrennt vom Status): `vor Stichtag`
+ * (der Nachlieferer sendet dort nie), `ausstehend` (der Nachlieferer wartet noch: 150 s bei bekanntem Ende laut Ledger `ledgerEintrag`,
+ * sonst 24 h) oder `null`.
  */
-export function bewerteSession({ soll, ist, mtime, now, diff = null }) {
+export function bewerteSession({ soll, ist, mtime, now, diff = null, ledgerEintrag = null }) {
   const calls = ist.calls ?? 0;
   const fehlend = diff ? diff.fehlend.length : Math.max(0, soll.length - calls);
   const dubletten = diff ? diff.dubletten.length : Math.max(0, calls - soll.length);
@@ -56,9 +63,13 @@ export function bewerteSession({ soll, ist, mtime, now, diff = null }) {
   else if (fehlend > 0) status = "Lücke";
   else if (dubletten > 0) status = "Dublette";
   else if (tokenAbweichung) status = "Abweichung";
+  const beendet = Boolean(ledgerEintrag?.beendet && ledgerEintrag.mtime === mtime);
+  let score = null;
+  if (!laeuft) score = vorStichtag(soll) ? "vor Stichtag" : nachliefererWartet({ mtime, now, beendet }) ? "ausstehend" : null;
   return {
     session: soll[0]?.session ?? null,
     status,
+    score,
     tickets: [...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort(),
     callsTranskript: soll.length,
     callsLangfuse: calls,
@@ -72,7 +83,7 @@ export function bewerteSession({ soll, ist, mtime, now, diff = null }) {
   };
 }
 
-/** Summenzeile: Sessions in der Ruhefrist (`läuft`) zählen nicht in Σ und Quote, sondern stehen getrennt. */
+/** Summenzeile: Sessions in der Ruhefrist (`läuft`) zählen nicht in Σ und Quote, sondern stehen getrennt; unter den festen stehen `scoreAusstehend` (Nachlieferer wartet noch) und `vorStichtag` (nie gesendet) gesondert. */
 export function summenzeile(bewertungen) {
   const fest = bewertungen.filter((b) => b.status !== "läuft");
   const t = fest.reduce((s, b) => s + b.callsTranskript, 0);
@@ -80,6 +91,8 @@ export function summenzeile(bewertungen) {
   return {
     sessions: fest.length,
     laeuft: bewertungen.length - fest.length,
+    scoreAusstehend: fest.filter((b) => b.score === "ausstehend").length,
+    vorStichtag: fest.filter((b) => b.score === "vor Stichtag").length,
     callsTranskript: t,
     callsLangfuse: fest.reduce((s, b) => s + b.callsLangfuse, 0),
     fehlend,
@@ -100,17 +113,21 @@ export function renderMarkdown(bewertungen, sum) {
   for (const b of bewertungen) {
     const l = b.tokensLangfuse;
     zeilen.push(
-      `| ${String(b.session).slice(0, 8)} | ${b.tickets.join(", ") || "–"} | ${b.status} | ${paar(b.callsTranskript, b.callsLangfuse)} | ${paar(b.tokensTranskript.input, l?.input ?? null)} | ${paar(b.tokensTranskript.output, l?.output ?? null)} | ${paar(b.tokensTranskript.cacheRead, l?.cacheRead ?? null)} | ${paar(b.tokensTranskript.cacheWrite, l?.cacheWrite ?? null)} | ${b.fehlend} | ${b.dubletten} | ${pct(b.quote)} |`,
+      `| ${String(b.session).slice(0, 8)} | ${b.tickets.join(", ") || "–"} | ${b.status === "vollständig" && b.score === "ausstehend" ? "vollständig, Score ausstehend" : b.status} | ${paar(b.callsTranskript, b.callsLangfuse)} | ${paar(b.tokensTranskript.input, l?.input ?? null)} | ${paar(b.tokensTranskript.output, l?.output ?? null)} | ${paar(b.tokensTranskript.cacheRead, l?.cacheRead ?? null)} | ${paar(b.tokensTranskript.cacheWrite, l?.cacheWrite ?? null)} | ${b.fehlend} | ${b.dubletten} | ${pct(b.quote)} |`,
     );
   }
   const out = ["# Langfuse-Abgleich (T = Transkript, L = Langfuse)", "", ...zeilen, ""];
-  out.push(`**Summe:** ${sum.sessions} Session(s), Calls ${fmt(sum.callsTranskript)} / ${fmt(sum.callsLangfuse)}, fehlend ${sum.fehlend}, Dubletten ${sum.dubletten}, Erfassungsquote ${pct(sum.quote)}${sum.laeuft ? `; ${sum.laeuft} Session(s) läuft noch (Ruhefrist ${RUHEFRIST_MIN} min, nicht in Σ)` : ""}.`);
+  const teile = [];
+  if (sum.scoreAusstehend) teile.push(`${sum.scoreAusstehend} davon Score ausstehend (Nachlieferer wartet noch)`);
+  if (sum.vorStichtag) teile.push(`${sum.vorStichtag} vor dem Stichtag (nie gesendet, kein Score)`);
+  const zusatz = teile.length ? `; ${teile.join(", ")}` : "";
+  out.push(`**Summe:** ${sum.sessions} Session(s), Calls ${fmt(sum.callsTranskript)} / ${fmt(sum.callsLangfuse)}, fehlend ${sum.fehlend}, Dubletten ${sum.dubletten}, Erfassungsquote ${pct(sum.quote)}${sum.laeuft ? `; ${sum.laeuft} Session(s) läuft noch (Ruhefrist ${RUHEFRIST_MIN} min, nicht in Σ)` : ""}${zusatz}.`);
   for (const b of bewertungen.filter((x) => x.fehlendeCalls?.length)) {
     out.push("", `Fehlende Calls ${String(b.session).slice(0, 8)} (Schlüssel: ${b.schluessel}):`);
     for (const c of b.fehlendeCalls.slice(0, FEHLEND_ANZEIGE)) out.push(`- ${c.messageId} · ${c.ts} · ${c.model}`);
     if (b.fehlendeCalls.length > FEHLEND_ANZEIGE) out.push(`- … und ${b.fehlendeCalls.length - FEHLEND_ANZEIGE} weitere`);
   }
-  out.push("", "Hinweis: Aufzeichnungen ohne TTL-Aufteilung der Cache-Writes (vor dem Hook-Patch, vor 2026-10-07) passen nicht auf den Fingerabdruck und erscheinen als fehlend plus Dublette.");
+  out.push("", `Hinweis: Aufzeichnungen ohne TTL-Aufteilung der Cache-Writes (vor dem Hook-Patch, vor ${STICHTAG.slice(0, 10)}) passen nicht auf den Fingerabdruck und erscheinen als fehlend plus Dublette.`);
   return out.join("\n");
 }
 
@@ -156,7 +173,7 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
 }
 
 /** `--pruefen` ausführen: `{ exitCode, text }`. 0 = Bericht (auch mit Lücken: Messwerkzeug, kein Gate), 1 = Fehler beim Lesen/Abfragen, 2 = Aufruf oder Zugang fehlt. */
-export async function pruefen(args, { env = process.env, now = Date.now(), projectsRoot, repoRoot, fetchImpl = fetch, leseDatei = readFileSync } = {}) {
+export async function pruefen(args, { env = process.env, now = Date.now(), projectsRoot, repoRoot, fetchImpl = fetch, leseDatei = readFileSync, stateDir = null } = {}) {
   if (!args.pruefen) return { exitCode: 2, text: AUFRUFHILFE };
   const seitMs = args.seit ? Date.parse(args.seit) : now - 7 * 86_400_000;
   if (!Number.isFinite(seitMs)) return { exitCode: 2, text: `--seit ist keine ISO-Zeit: ${args.seit}\n${AUFRUFHILFE}` };
@@ -176,6 +193,8 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
       mtimes.set(s.id, s.mtime);
     }
     if (!soll.size) return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: [], summe: summenzeile([]) }) : "Keine Sessions mit Calls im Fenster." };
+    // Ledger nur lesen (bekanntes Ende für die Score-Spalte); kaputt oder fehlend heißt: kein bekanntes Ende, nie schreiben oder sichern.
+    const ledger = stateDir ? ledgerLesen(join(stateDir, LEDGER_NAME)).ledger : { sessions: {} };
     const ist = await istHolen({ args, soll, zugang, now, fetchImpl, leseDatei });
     const bewertungen = [];
     for (const [id, eintraege] of soll) {
@@ -186,7 +205,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
         const obs = await fetchSessionObservations(id, { ...zugang, fetchImpl, type: "GENERATION", fields: "core,basic,model,usage,metadata" });
         diff = diffMultimenge(eintraege, obs);
       }
-      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens }, mtime: mtimes.get(id), now, diff }));
+      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens }, mtime: mtimes.get(id), now, diff, ledgerEintrag: ledger.sessions[id] ?? null }));
     }
     const sum = summenzeile(bewertungen);
     return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: bewertungen, summe: sum }, null, 2) : renderMarkdown(bewertungen, sum) };
@@ -198,7 +217,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-  const { exitCode, text } = await pruefen(args, { projectsRoot: join(homedir(), ".claude", "projects"), repoRoot });
+  const { exitCode, text } = await pruefen(args, { projectsRoot: join(homedir(), ".claude", "projects"), repoRoot, stateDir: join(homedir(), ".claude", "state") });
   (exitCode === 0 ? console.log : console.error)(text);
   process.exitCode = exitCode;
 }

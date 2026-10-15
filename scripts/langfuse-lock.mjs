@@ -18,6 +18,9 @@ export const WARTE_LOCK = 60_000;
 export const LOCK_VERALTET_MS = 15 * 60_000;
 /** Grabsteine veralteter Locks werden ab diesem Alter weggeräumt (weit über LOCK_VERALTET_MS). */
 const GRABSTEIN_ALTER_MS = 24 * 3_600_000;
+/** Das Langfuse-Plugin legt je Zustand eine leere `langfuse_state.<hash>.lock` an und räumt sie nie auf; ab diesem Alter wird sie weggeräumt (ein Hook hält sie nur Sekunden). */
+export const PLUGIN_LOCK_ALTER_MS = 24 * 3_600_000;
+const PLUGIN_LOCK_NAME = /^langfuse_state\.[0-9a-f]+\.lock$/;
 export const LOG_MAX_BYTES = 1_048_576;
 export const LOCK_NAME = "langfuse-abgleich.lock";
 export const LOG_NAME = "langfuse-abgleich.log";
@@ -60,6 +63,33 @@ function raeumeGrabsteine(datei, now) {
   } catch {
     // Ordner nicht lesbar: Aufräumen ist nur Kosmetik
   }
+}
+
+/**
+ * Räumt verwaiste Plugin-Locks (leere Dateien `langfuse_state.<hash>.lock`, älter als PLUGIN_LOCK_ALTER_MS) im Zustandsordner weg;
+ * Rückgabe: Anzahl gelöschter. Nur Namen mit genau diesem Muster und Größe 0 (ein Verzeichnis lässt sich nicht per unlink löschen und fällt in den Fehlerfall); ein Fehler
+ * je Datei (z.B. unter Windows von einem Prozess gehalten) überspringt sie nur.
+ */
+export function raeumePluginLocks(stateDir, now = Date.now()) {
+  let n = 0;
+  let namen;
+  try {
+    namen = readdirSync(stateDir);
+  } catch {
+    return 0; // Ordner nicht lesbar: Aufräumen ist nur Kosmetik
+  }
+  for (const name of namen.filter((x) => PLUGIN_LOCK_NAME.test(x))) {
+    const pfad = join(stateDir, name);
+    try {
+      const st = statSync(pfad);
+      if (st.size !== 0 || now - st.mtimeMs <= PLUGIN_LOCK_ALTER_MS) continue;
+      unlinkSync(pfad);
+      n++;
+    } catch {
+      // gehalten, schon weg oder nicht lesbar: überspringen
+    }
+  }
+  return n;
 }
 
 /**
@@ -135,7 +165,7 @@ export function logAnhaengen(datei, eintrag, { max = LOG_MAX_BYTES } = {}) {
 export const zeigenswert = (x) => x.gesendet || x.wuerdeSenden || x.dubletten || x.ausstehend || x.befund || x.endeVerworfen || x.status === "Fehler" || x.status === "mehrdeutig";
 
 /** Die Logzeile eines Laufs aus dem `protokoll` (ohne Protokoll, z.B. Lock belegt: Nullwerte). Keine Zugangswerte, nur ja/nein. */
-export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, protokoll = null, fehler = [] }) {
+export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, protokoll = null, fehler = [], pluginLocks = 0 }) {
   const p = protokoll ?? { zugang: null, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [], uebrig: 0 };
   const kurz = (f) => ({ ...f, meldung: String(f.meldung ?? "").slice(0, 300) });
   return {
@@ -143,6 +173,7 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
     ausloeser,
     session: session ?? null,
     lock,
+    pluginLocks,
     zugang: p.zugang,
     exitCode,
     geprueft: p.geprueft,
@@ -188,12 +219,14 @@ export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederho
     logge({ fehler: basis.fehler });
     return { lock, ergebnis: null };
   }
+  // Lock ist unser: jetzt die liegen gelassenen Plugin-Locks wegräumen (nie bei belegt oder fehler).
+  const pluginLocks = raeumePluginLocks(stateDir, uhr()); // wirft nie (Kosmetik)
   try {
     const ergebnis = await lauf(args, { now: uhr() });
-    logge({ exitCode: ergebnis.exitCode, protokoll: ergebnis.protokoll });
+    logge({ exitCode: ergebnis.exitCode, protokoll: ergebnis.protokoll, pluginLocks });
     return { lock, ergebnis };
   } catch (e) {
-    logge({ exitCode: 1, fehler: [{ session: basis.session, status: null, meldung: e.message }] });
+    logge({ exitCode: 1, fehler: [{ session: basis.session, status: null, meldung: e.message }], pluginLocks });
     return { lock, ergebnis: null };
   } finally {
     lockFreigeben(lockDatei, pid);

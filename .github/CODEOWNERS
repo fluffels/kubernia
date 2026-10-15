@@ -80,6 +80,7 @@ AGENTS.md                  @fluffels
 /scripts/board-place.mjs @fluffels
 /scripts/langfuse-takt.mjs @fluffels
 /scripts/board-takt.mjs @fluffels
+/scripts/kontingent-lib.mjs @fluffels
 /scripts/sammelticket-anlegen.mjs @fluffels
 /scripts/fremdtext.mjs @fluffels
 /scripts/gh-cli.mjs @fluffels

@@ -96,6 +96,25 @@ describe("harness-kennzahlen: Fehlerfälle (fail-closed)", () => {
     const kaputt = { ...KONFIG, kennzahlen: { ...(KONFIG.kennzahlen as object), workflows: ".github/weg" } };
     assert.throws(() => gen({ rootDir: root, config: kaputt }), /Workflow-Ordner.*nicht gefunden/);
   });
+  test.each([
+    ["Skript-Ordner", { skripte: ["scripts-weg"] }],
+    ["Wächter-Ordner", { waechter: { ordner: "test/weg" } }],
+    ["ADR-Ordner", { adr: "docs/adr-weg" }],
+  ])("%s der Config fehlt: Fehler mit Ordnername statt einer Zeile mit falscher Zahl", (was, aenderung) => {
+    const kaputt = { ...KONFIG, kennzahlen: { ...(KONFIG.kennzahlen as object), ...aenderung } };
+    assert.throws(() => gen({ rootDir: fixture({ ...REPO }), config: kaputt }), new RegExp(`${was} ".*weg" nicht gefunden`));
+    // darf NICHT passieren: ein vorhandener Ordner löst denselben Fehler aus
+    assert.doesNotThrow(() => gen({ rootDir: fixture({ ...REPO }), config: KONFIG }));
+  });
+  test("zyklische Kette UND fehlender Workflow-Ordner: die Meldung nennt beides (Fehler werden gesammelt, nicht beim ersten abgebrochen)", () => {
+    const scripts = { a: "npm run b && npm run x", b: "npm run a && npm run y", x: "x", y: "y", verify: "npm run a && npm run x", "verify:full": "npm run verify && npm run x" };
+    const root = fixture({ ...REPO, "package.json": JSON.stringify({ scripts }) });
+    const kaputt = { ...KONFIG, kennzahlen: { ...(KONFIG.kennzahlen as object), workflows: ".github/weg" } };
+    assert.throws(
+      () => gen({ rootDir: root, config: kaputt }),
+      (e: Error) => /Zyklus in den Ketten: verify → a → b → a/.test(e.message) && /Workflow-Ordner ".github\/weg" nicht gefunden/.test(e.message),
+    );
+  });
   test("ADR mit falschem Kopf: Fehler statt falscher Zahl", () => {
     const root = fixture({ ...REPO, "docs/adr/0003-c.md": "# Kein ADR-Kopf\n" });
     assert.throws(() => gen({ rootDir: root, config: KONFIG }), /docs\/adr\/0003-c\.md/);
