@@ -23,6 +23,7 @@
     "/CLAUDE.md",
     "/CLAUDE.local.md",
     "/.claude/",
+    "/.factory/",
     "/.mcp.json",
     "/scripts/playwright-mcp.mjs",
     "/scripts/sandbox-doctor.mjs",
