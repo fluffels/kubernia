@@ -8,8 +8,17 @@ import { posix } from "node:path";
 
 /** Skripte, die `.claude/settings.json` als Hook startet (Argumente auf `scripts/*.mjs`). */
 export function hookSkripte(settingsText: string): string[] {
-  const settings = JSON.parse(settingsText) as { hooks?: Record<string, { hooks: { args?: string[] }[] }[]> };
+  const settings = JSON.parse(settingsText) as {
+    hooks?: Record<string, { hooks: { args?: string[] }[] }[]>;
+    statusLine?: { command?: string };
+    subagentStatusLine?: { command?: string };
+  };
   const skripte = new Set<string>();
+  // statusLine/subagentStatusLine laufen als Kommando-String (#1358): das Skript steht im Kommando, nicht in args.
+  for (const k of [settings.statusLine?.command, settings.subagentStatusLine?.command]) {
+    const treffer = k?.match(/scripts\/[\w.-]+\.mjs/);
+    if (treffer) skripte.add(treffer[0]);
+  }
   for (const eintraege of Object.values(settings.hooks ?? {}))
     for (const e of eintraege) for (const h of e.hooks) for (const a of h.args ?? []) if (/scripts\/[\w.-]+\.mjs$/.test(a)) skripte.add(a.replace(/^.*?(scripts\/)/, "$1"));
   return [...skripte];

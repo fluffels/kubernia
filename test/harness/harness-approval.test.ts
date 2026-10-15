@@ -546,6 +546,7 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
       rel === "scripts/a.mjs" ? 'import { x } from "./sub/b.mjs";' : rel === "scripts/sub/b.mjs" ? 'import y from "./c.mjs"; import z from "../d.mjs"; const e = require("../e.cjs");' : "";
     assert.deepEqual(lokaleImporteTransitiv(["scripts/a.mjs"], tief), ["scripts/a.mjs", "scripts/d.mjs", "scripts/e.cjs", "scripts/sub/b.mjs", "scripts/sub/c.mjs"]);
     assert.deepEqual(hookSkripte(JSON.stringify({ hooks: { Stop: [{ hooks: [{ args: ["${CLAUDE_PROJECT_DIR}/scripts/h.mjs"] }] }] } })), ["scripts/h.mjs"]);
+    assert.deepEqual(hookSkripte(JSON.stringify({ statusLine: { type: "command", command: "node scripts/s.mjs" }, subagentStatusLine: { command: "node scripts/t.mjs --x" } })).sort(), ["scripts/s.mjs", "scripts/t.mjs"]);
   });
 
   test("Red-Green: Side-Effect-, dynamische und createRequire-Importe gehören zur Kette (Z12e)", () => {
