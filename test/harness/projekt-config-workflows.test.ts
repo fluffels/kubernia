@@ -2,11 +2,14 @@
  * per Sparse-Checkout aus. Fehlt eine Datei der Import-Hülle von `scripts/projekt-config.mjs` in der Liste, scheitert der Lader
  * im Job mit ERR_MODULE_NOT_FOUND, `set_board_top` meldet nur `::error::` und die Board-Position bleibt still ungesetzt.
  *
+ * Bewusste Grenzen: `importHuelle` erkennt nur `from "<pfad>"` in doppelten Anführungszeichen (kein `import "./x.mjs"`, kein
+ * dynamisches `import()`, keine einfachen Anführungszeichen); `sparseListe` liest nur den ersten Sparse-Block je Workflow.
+ *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,7 +28,7 @@ export function importHuelle(einstieg: string, leser: (pfad: string) => string):
     for (const m of leser(pfad).matchAll(/\bfrom\s+"([^"]+)"/g)) {
       const ziel = m[1] ?? "";
       if (ziel.startsWith("node:")) continue;
-      if (!ziel.startsWith("./")) throw new Error(`${pfad}: Import '${ziel}' ist weder node: noch relativ`);
+      if (!ziel.startsWith(".")) throw new Error(`${pfad}: Import '${ziel}' ist weder node: noch relativ`);
       offen.push(posix.join(dirname(pfad), ziel));
     }
   }
@@ -47,6 +50,16 @@ describe("importHuelle / sparseListe", () => {
   test("Hülle folgt relativen Importen, ignoriert node:", () => {
     assert.deepEqual(importHuelle("s/a.mjs", (p) => quellen[p] ?? ""), ["s/a.mjs", "s/b.mjs"]);
   });
+  test("zyklische und mehrfach erreichte Importe terminieren, jede Datei einmal", () => {
+    const zyklus: Record<string, string> = { "s/x.mjs": 'import a from "./y.mjs";', "s/y.mjs": 'import b from "./x.mjs";' };
+    assert.deepEqual(importHuelle("s/x.mjs", (p) => zyklus[p] ?? ""), ["s/x.mjs", "s/y.mjs"]);
+    const diamant: Record<string, string> = { "s/a.mjs": 'import b from "./b.mjs";\nimport c from "./c.mjs";', "s/b.mjs": 'import c from "./c.mjs";', "s/c.mjs": "" };
+    assert.deepEqual(importHuelle("s/a.mjs", (p) => diamant[p] ?? ""), ["s/a.mjs", "s/b.mjs", "s/c.mjs"]);
+  });
+  test("ein Import aus dem Elternordner zählt als relativ", () => {
+    const eltern: Record<string, string> = { "s/a.mjs": 'import b from "../lib/b.mjs";', "lib/b.mjs": "" };
+    assert.deepEqual(importHuelle("s/a.mjs", (p) => eltern[p] ?? ""), ["lib/b.mjs", "s/a.mjs"]);
+  });
   test("ein Paketimport bricht ab", () => {
     assert.throws(() => importHuelle("s/c.mjs", (p) => quellen[p] ?? ""), /weder node: noch relativ/);
   });
@@ -62,7 +75,18 @@ describe("Sparse-Checkout der Projekt-Config in den Workflows", () => {
     assert.ok(huelle.includes("scripts/projekt-config-lib.mjs"));
     assert.ok(huelle.length <= 3, `Hülle wächst: ${huelle.join(", ")}`);
   });
-  for (const wf of ["ci", "dependabot-inbox"]) {
+  // Alle Workflows, die den Lader aufrufen und nur sparse auschecken (abgeleitet, nicht hart codiert).
+  const workflows = readdirSync(WURZEL + ".github/workflows")
+    .filter((n) => n.endsWith(".yml"))
+    .map((n) => n.replace(/\.yml$/, ""))
+    .filter((n) => {
+      const t = lies(`.github/workflows/${n}.yml`);
+      return t.includes("projekt-config.mjs") && t.includes("sparse-checkout:");
+    });
+  test("die Ableitung findet ci und dependabot-inbox", () => {
+    assert.ok(workflows.includes("ci") && workflows.includes("dependabot-inbox"), workflows.join(", "));
+  });
+  for (const wf of workflows) {
     const yml = lies(`.github/workflows/${wf}.yml`);
     test(`${wf}.yml: Sparse-Liste enthält Config und die ganze Import-Hülle, Checkout bricht den Job nicht ab`, () => {
       const liste = sparseListe(yml);

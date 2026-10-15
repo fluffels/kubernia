@@ -162,6 +162,6 @@ describe("kein stiller Standardwert (AK3)", () => {
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
-    assert.doesNotMatch(r.stdout + r.stderr, /PVT_|fluffels|kubernia/);
+    assert.doesNotMatch((r.stdout + r.stderr).split(d).join(""), /PVT_|fluffels|kubernia/); // ohne den Temp-Pfad, der selbst so heißen könnte
   });
 });
