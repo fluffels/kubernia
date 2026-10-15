@@ -174,6 +174,7 @@ async function verarbeite(s, c) {
   const fehlend = diff?.fehlend ?? [];
   const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
   rec.dubletten = diff?.dubletten.length ?? 0;
+  rec.leer = diff?.leer?.length ?? 0;
   const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && rec.dubletten > 0;
   if (davor) return Object.assign(rec, { status: "vor Stichtag", wuerdeSenden: mehrdeutig ? 0 : zuSenden.length });
   const sendbar = mehrdeutig ? [] : zuSenden;

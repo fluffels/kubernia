@@ -49,7 +49,7 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
   schluesselArt: (o: Obs[]) => string;
-  diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; art: string };
+  diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; leer: Obs[]; art: string };
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
   bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null }) => Bewertung;
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
@@ -329,7 +329,7 @@ describe("Diff (pur)", () => {
     const d = A.diffMultimenge(soll, [obsZu(soll[0]), leer, { ...leer, id: "leer2" }]);
     expect(d.fehlend.map((e) => e.messageId)).toEqual(["m2"]);
     expect(d.dubletten).toEqual([]);
-    expect((d as unknown as { leer: Obs[] }).leer.map((o) => o.id)).toEqual(["leer1", "leer2"]);
+    expect(d.leer.map((o) => o.id)).toEqual(["leer1", "leer2"]);
   });
 
   test("Eine echte Dublette neben leeren Generationen bleibt Dublette; Soll mit Null-Tokens deckt eine leere ab", () => {
@@ -337,6 +337,11 @@ describe("Diff (pur)", () => {
     const leer: Obs = { id: "leer1", type: "GENERATION", providedModelName: "claude", usageDetails: {}, metadata: {} };
     const d = A.diffMultimenge(soll, [obsZu(soll[0], { id: "a" }), obsZu(soll[0], { id: "b" }), leer]);
     expect(d.dubletten.map((o) => o.id)).toEqual(["b"]);
+    // Eine Observation mit Message-ID und null Tokens ist keine leere Hook-Generation, sondern bleibt Dublette.
+    const mitId: Obs = { ...leer, id: "mitid", metadata: { message_id: "zz" } };
+    const d3 = A.diffMultimenge(soll, [obsZu(soll[0]), leer, mitId]);
+    expect(d3.dubletten.map((o) => o.id)).toEqual(["mitid"]);
+    expect(A.bewerteSession({ soll, ist: { calls: 3, tokens: null }, mtime: 0, now: 1e12, diff: d3 })).toMatchObject({ dubletten: 1, leer: 1 });
     const nullEintrag = eintrag(3, { model: "claude", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0 } });
     const d2 = A.diffMultimenge([nullEintrag], [leer]);
     expect(d2.fehlend).toEqual([]);

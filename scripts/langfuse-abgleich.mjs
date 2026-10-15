@@ -78,6 +78,7 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
     tokensLangfuse: ist.tokens,
     fehlend,
     dubletten,
+    leer: diff?.leer?.length ?? 0,
     quote: soll.length ? (soll.length - fehlend) / soll.length : 1,
     fehlendeCalls: diff ? diff.fehlend.map((e) => ({ messageId: e.messageId, ts: e.ts, model: e.model })) : null,
     schluessel: diff?.art ?? "zählung",
