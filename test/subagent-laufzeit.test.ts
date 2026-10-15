@@ -10,8 +10,8 @@ import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
 
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[]; datei?: string };
-type L = { modelle: string[]; datei: string | null; kosten: number | null; ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
-type Stat = { kosten: number | null; kostenSumme: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
+type L = { modelle: string[]; datei: string | null; kosten: number | null; kostenGeschaetzt: number | null; ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
+type Stat = { kosten: number | null; kostenSumme: number; kostenGeschaetztSumme: number; output: number; outputGeschaetzt: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
   laufzeiten: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; schnitt?: string }) => Erg;
@@ -157,7 +157,9 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(md).toMatch(/\| #77 \|.*\| 0\.01 \|/);
     expect(md).toMatch(/\| #78 \|.*\| - \|/);
     // Aggregat: Median 0,01, Σ 0,02, ein Lauf ohne Preis (Spalten Median, Summe, ohne Preis).
-    expect(md).toMatch(/\| alle gemessenen \| 3 \|.*\| 0\.01 \| 0\.02 \| 1 \|/);
+    // Σ geschätzt (#1568) steht zwischen Summe und „ohne Preis“.
+    expect(md).toContain("Σ Kosten geschätzt ($)");
+    expect(md).toMatch(/\| alle gemessenen \| 3 \|.*\| 0\.01 \| 0\.02 \| 0\.02 \| 1 \|/);
   });
 });
 
@@ -183,6 +185,13 @@ describe("laufzeiten: Kosten (#1558)", () => {
     expect(r.aggregat.gesamt.ohnePreis).toBe(1);
     expect(r.aggregat.gesamt.kosten).toBeCloseTo(2 * CALL_KOSTEN, 8); // Median nur über den Lauf mit Preis
     expect(r.aggregat.gesamt.kostenSumme).toBeCloseTo(2 * CALL_KOSTEN, 8);
+  });
+  test("geschätzte Kosten: Summe und Output je Lauf aus den Calls (#1568)", () => {
+    const r = S.laufzeiten({ laeufe: [lauf("Plane #1", 0, 4)] });
+    expect(r.laeufe[0].kostenGeschaetzt).toBeGreaterThanOrEqual(r.laeufe[0].kosten as number);
+    expect(r.aggregat.gesamt.kostenGeschaetztSumme).toBeCloseTo(r.laeufe[0].kostenGeschaetzt as number, 8);
+    expect(r.aggregat.gesamt.outputGeschaetzt).toBeGreaterThanOrEqual(r.aggregat.gesamt.output);
+    expect(r.aggregat.gesamt.output).toBeGreaterThan(0);
   });
   test("Gruppe ohne bepreiste Läufe: Median null, Summe 0", () => {
     const g = S.laufzeiten({ laeufe: [ohnePreisLauf("Plane #1")] }).aggregat.gesamt;

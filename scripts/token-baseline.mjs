@@ -238,13 +238,16 @@ function phaseRows(window) {
   for (const { call: c, phase } of window) {
     const model = c.model || "unbekannt";
     const key = `${phase}\u0000${model}`;
-    const r = rows.get(key) ?? { phase, model, calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 };
+    const r = rows.get(key) ?? { phase, model, calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0, outputGeschaetzt: 0, costGeschaetzt: 0 };
     r.calls += 1;
     r.input += num(c.input);
     r.cacheWrite += num(c.cacheWrite);
     r.cacheRead += num(c.cacheRead);
     r.output += num(c.output);
     if (c.cost !== undefined && c.cost !== null) r.cost += num(c.cost);
+    // Schätzung aus dem Kontext-Zuwachs (#1568); ohne Schätzfeld (alte Eingaben) gilt der aufgezeichnete Wert.
+    r.outputGeschaetzt += num(c.outputGeschaetzt ?? c.output);
+    r.costGeschaetzt += num(c.costGeschaetzt ?? c.cost);
     rows.set(key, r);
   }
   return [...rows.values()].sort((a, b) => PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase) || a.model.localeCompare(b.model));
@@ -259,8 +262,10 @@ function totalOf(rows) {
       cacheRead: t.cacheRead + r.cacheRead,
       output: t.output + r.output,
       cost: t.cost + r.cost,
+      outputGeschaetzt: t.outputGeschaetzt + r.outputGeschaetzt,
+      costGeschaetzt: t.costGeschaetzt + r.costGeschaetzt,
     }),
-    { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 },
+    { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0, outputGeschaetzt: 0, costGeschaetzt: 0 },
   );
 }
 
@@ -480,6 +485,9 @@ export function renderMarkdown(summary, loop = {}) {
     `| **Summe (ohne Nachlauf)** | | ${t.calls} | ${fmt(t.input)} | ${fmt(t.cacheWrite)} | ${fmt(t.cacheRead)} | ${fmt(t.output)} | ${cost(t.cost)} |`,
   );
   for (const r of summary.rows.filter((x) => x.phase === "Nachlauf")) lines.push(zeile(r, "Nachlauf (nicht in der Summe)"));
+  if (t.outputGeschaetzt > t.output) {
+    lines.push("", `Output geschätzt (Kontext-Zuwachs, Subagent-Transkripte zeichnen nur den Stand message_start auf): ${fmt(t.outputGeschaetzt)} statt ${fmt(t.output)} Tokens, Kosten ${cost(t.costGeschaetzt)} $ statt ${cost(t.cost)} $.`);
+  }
   const ci = loop.failedPushes ?? "–";
   const merged =
     loop.mergedAt === undefined ? "–" : mergedWithoutRework(loop.mergedAt, loop.failedPushes) ? "ja" : "nein";
