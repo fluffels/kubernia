@@ -1273,7 +1273,7 @@ ergebnis="fehler" mit der Kollision als meldung.
 AUFGABE — EINEN Pull Request öffnen und bis zum Merge bringen, genau nach
 AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionsschutz,
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
-Auto-Merge setzen, CI abwarten.${letzterSelbstcheck ? ` Der PR-Text enthält diesen Selbstcheck-Block unverändert:\n${letzterSelbstcheck}` : ''}
+Auto-Merge setzen, CI abwarten.${letzterSelbstcheck ? ` Der PR-Text enthält diesen Selbstcheck-Block unverändert:\n${/^Selbstcheck:/m.test(letzterSelbstcheck) ? '' : 'Selbstcheck:\n'}${letzterSelbstcheck}` : ''}
 ${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
 Vor dem Push: verschärft der Diff ein Gate oder Schema, merge einmal origin/main ein (nur konfliktfrei, sonst ergebnis="fehler"); verschiebt der Branch Funktionen in neue Dateien, ${VERSCHOBEN_DIFF}: ändert main eine verschobene Funktion, ergebnis="fehler" mit der Funktion in meldung (die Übertragung braucht eine Delta-Lens); nach dem Merge fahre node scripts/merge-testabgleich.mjs (Exit 1 = ein Test fehlt im Ergebnis: ergebnis="fehler" mit dem Titel in meldung); dann fahre das betroffene Gate erneut (#1449). Dann setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
 zwei Zeilen als Commit-Message, unverändert${shaHinweis}:
