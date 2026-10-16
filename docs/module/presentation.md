@@ -43,7 +43,6 @@
 
 | Modul | Bündel | Inhalt |
 |---|---|---|
-| `src/ui/html-escape.ts` | — | `esc()`: HTML-Escape für Text- und Attributkontext (`& < > " '`), pur und unit-getestet; von `ui/shared.ts` genutzt (`devpanel.ts` hält als Anwendungsschicht eine eigene, gleich getestete Kopie). |
 | `src/ui/shared.ts` | — | Geteilte UI-Helfer: `$`/`esc`/`NPCS`/`SMALLTALK`/`shuffled`/`CMD_MAX_ATTEMPTS`, vorab geladene Porträt-/Shop-Bilder (`sheetImgs`) + der `part()`-Helper (typisiert die Methodenbündel via ThisType-Muster). |
 | `src/ui/overlay.ts` | `overlayUI` | Event-Delegation, Blockierung, generische Modal-Tastatur (#283), Menü/Pause. |
 | `src/ui/hud.ts` | `hudUI` | HUD/Toasts/Alarm, Interaktion, Tastatur-Navigation der Antwort-Buttons. |

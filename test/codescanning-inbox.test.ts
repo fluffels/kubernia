@@ -151,7 +151,7 @@ describe("bekannteAlerts", () => {
     const b = C.bekannteAlerts({
       kommentare: [],
       owner: OWNER,
-      wiedervorlagen: [{ id: "codescanning-x", alerts: [7, "8", 1.5, null, NaN] }],
+      wiedervorlagen: [{ id: "codescanning-x", alerts: [7, "8", 1.5, null, NaN] as unknown as number[] }],
     });
     expect([...b.alerts]).toEqual([7]);
   });

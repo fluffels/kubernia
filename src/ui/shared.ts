@@ -4,7 +4,7 @@
 // Signaturen bleiben dabei erhalten (ThisType-Muster). Präsentationsschicht (DOM).
 import { KQContent } from "../content";
 import { KQAssets } from "../assets-data";
-import { esc } from "./html-escape";
+import { esc } from "../core/html-escape";
 
 /** this-Typ der UI-Methodenbündel: permissiv, da Methoden quer über Bündel auf this.* zugreifen.
  *  Bewusster ThisType-Escape-Hatch: die Index-Signatur lässt sich hier NICHT durch `unknown`

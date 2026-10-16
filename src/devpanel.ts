@@ -23,6 +23,7 @@
 import { Game } from "./game";
 import { SaveStore } from "./store";
 import { resolveOverlayKey } from "./hud/overlaykbd";
+import { esc } from "./core/html-escape";
 
 /* ---------- Pure Logik (Phaser-/DOM-frei, unit-getestet) ---------- */
 
@@ -150,11 +151,6 @@ export function roadmapToRows(roadmap: QuestRoadmapEntry[], currentIdx: number):
 }
 
 /* ---------- DOM-Anbindung (NUR unter import.meta.env.DEV aufgerufen) ---------- */
-
-/** HTML-Escape für die ins Panel gerenderten Quest-Titel (Text- und Attributkontext; die Anwendungsschicht darf `ui/html-escape.ts` nicht importieren). */
-export function esc(s: unknown): string {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
 
 /** Injiziert die minimalen Dev-Panel-Styles (bleiben im Dev-Chunk – kein Dev-CSS
  *  im Prod-Stylesheet). */
