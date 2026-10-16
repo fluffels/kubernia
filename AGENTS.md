@@ -38,7 +38,7 @@ Alle schnellen Gates laufen gebündelt in **`npm run verify`**; `npm run verify:
 - **Schichtung, Zyklen, verwaiste Module** erzwingt **`npm run check:arch`** (dependency-cruiser): Domäne und Anwendung importieren nur die Domäne (kein `phaser`, keine `scenes`/`ui`/`sfx`, kein Einstieg), keine Import-Zyklen (geteilten Zustand nach `runtime.ts`/`sim/state.ts` ziehen), kein toter Code. Schicht-SSOT: [`scripts/layers.cjs`](scripts/layers.cjs).
 - **Dateigröße:** `npm run check:size` (`src`-Module ≤ 800 LOC).
 - **AGENTS.md-Größe:** `npm run check:contextsize` (Zeichen-Budget je AGENTS.md).
-- **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base).
+- **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `KQ-Diffsize-Override: #<nr> warum` (eigener leerer Commit).
 - **Testabdeckung pro Schicht:** `npm run test:coverage` und `npm run check:diffcoverage`.
 - **Bundle-Byte-Budget:** `npm run check:bundle` (in `verify:full`).
 - **Abhängigkeiten:** Dependabot-PRs nach der Policy in [CONTRIBUTING.md](CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy) behandeln (grün → annehmen, rot/Major → nie blind); nach Hand-Änderung an `package.json` `npm install` und den Lockfile mitcommitten (`npm run check:lockfile`; ein Lockfile-Diff ohne `package.json`-Änderung ist rot, Ausnahme: Dependabot oder `KQ-Lockfile-Override: #<nr> warum`).
