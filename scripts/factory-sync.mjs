@@ -42,7 +42,7 @@ function wendeTeileAn(eintraege, srcText, zielLf) {
 }
 
 /** Selbstprüfung einer Teil-Datei: JSON parst, Besitz-Schlüssel = Quelle, alle anderen = Vorher; Block-Einheit = Quelle. */
-function pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis) {
+export function pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis) {
   const fehler = [];
   if (eintraege.some((e) => e.schluessel !== undefined)) {
     const neu = JSON.parse(ergebnis);

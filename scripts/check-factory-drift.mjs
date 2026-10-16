@@ -9,7 +9,7 @@ import { einheitHash, einheitId, pfadSicher, textHash } from "./besitz-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
-const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`npm run factory:sync -- --quelle <pfad>`), oder den Projektwert in `.factory/projekt.json` auslagern";
+const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad>`), oder den Projektwert in `.factory/projekt.json` auslagern";
 
 /**
  * Prüft den Besitz gegen den Sync-Stand. `lies(pfad)` liefert den Dateitext (relativ zur Projektwurzel) oder `null`.

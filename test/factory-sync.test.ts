@@ -195,6 +195,15 @@ describe("factory-sync (Fremdrepo-Fixture)", () => {
     assert.deepEqual(alleDateien(z), vorher);
   });
 
+  test("kaputter alter Sync-Stand im Ziel wird überschrieben, der Sync läuft durch", () => {
+    const q = baueQuelle();
+    const z = baueZiel();
+    schreibe(z, ".factory/sync-stand.json", "{kaputt");
+    const r = laufe(["--quelle", q, "--ziel", z]);
+    assert.equal(r.code, 0, r.err);
+    assert.equal((JSON.parse(lies(z, ".factory/sync-stand.json")) as { version: number }).version, 1);
+  });
+
   test("--trocken schreibt nichts", () => {
     const q = baueQuelle();
     const z = baueZiel();
@@ -287,6 +296,11 @@ describe("factory-sync (Fremdrepo-Fixture)", () => {
       schreibe(q, ".factory/besitz.json", JSON.stringify({ version: 1, eintraege: [{ pfad: ".factory/projekt.json", ring: "kern", quelle: "t" }] }));
       abgelehnt(q, baueZiel(), /nie Besitz/);
     });
+    test("Quell-Manifest ohne Liste eintraege: Exit 1 statt Absturz", () => {
+      const q = baueQuelle();
+      schreibe(q, ".factory/besitz.json", '{"version":1}');
+      abgelehnt(q, baueZiel(), /keine Liste 'eintraege'/);
+    });
     test("Quelle gleich Ziel", () => {
       const q = baueQuelle();
       const r = laufe(["--quelle", q, "--ziel", q]);
@@ -324,6 +338,26 @@ function drift1(z: string): { code: number; out: string; err: string } {
   const code = drift.cli(["--wurzel", z], { out: (s) => out.push(s), err: (s) => err.push(s) });
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
+
+describe("pruefeErgebnis (Selbstprüfung des Syncs)", () => {
+  const pe = (rawSync as unknown as { pruefeErgebnis(p: string, e: unknown[], src: string, ziel: string | null, erg: string): string[] }).pruefeErgebnis;
+  const ein = [{ pfad: "s.json", schluessel: "k" }];
+  const src = '{"k":1}';
+  test("korrektes Ergebnis ist grün", () => {
+    assert.deepEqual(pe("s.json", ein, src, '{"p":2,"k":0}', '{"p":2,"k":1}'), []);
+  });
+  test("Besitz-Schlüssel weicht ab, Projektschlüssel verändert, neuer Schlüssel ohne Besitz", () => {
+    assert.match(pe("s.json", ein, src, '{"p":2}', '{"p":2,"k":9}').join(), /Schlüssel 'k' weicht/);
+    assert.match(pe("s.json", ein, src, '{"p":2}', '{"p":3,"k":1}').join(), /Projektschlüssel 'p' wurde verändert/);
+    assert.match(pe("s.json", ein, src, '{"p":2}', '{"p":2,"k":1,"neu":1}').join(), /'neu' ist neu und kein Besitz/);
+  });
+  test("Block weicht von der Quelle ab", () => {
+    const b = [{ pfad: "a.md", block: "x" }];
+    const blk = (t: string): string => `${lib.markerStart("x")}${t}${lib.markerEnde("x")}`;
+    assert.deepEqual(pe("a.md", b, blk("1"), null, `vor${blk("1")}`), []);
+    assert.match(pe("a.md", b, blk("1"), null, `vor${blk("2")}`).join(), /a\.md#x: Block weicht/);
+  });
+});
 
 describe("check-factory-drift", () => {
   test("grün nach dem Sync; ohne Sync-Stand entfällt die Prüfung mit einer Zeile (Exit 0)", () => {
@@ -385,6 +419,16 @@ describe("check-factory-drift", () => {
     schreibe(z2, ".factory/sync-stand.json", '{"version":1}');
     rot(z2, /kaputt/);
   });
+  test("rot bei gelöschtem Manifest trotz Sync-Stand und bei Einheit ohne Eintrag im Sync-Stand", () => {
+    const z = gesyncterZiel();
+    const st = JSON.parse(lies(z, ".factory/sync-stand.json")) as { einheiten: Record<string, string> };
+    delete st.einheiten["scripts/a.mjs"];
+    schreibe(z, ".factory/sync-stand.json", JSON.stringify(st));
+    rot(z, /scripts\/a\.mjs: im Manifest, aber nicht im Sync-Stand/);
+    const z2 = gesyncterZiel();
+    rmSync(join(z2, ".factory/besitz.json"));
+    rot(z2, /besitz\.json fehlt/);
+  });
   test("Manifest und Sync-Stand listen verschiedene Einheiten", () => {
     const z = gesyncterZiel();
     const st = JSON.parse(lies(z, ".factory/sync-stand.json")) as { einheiten: Record<string, string> };
@@ -404,12 +448,16 @@ describe("check-factory-drift", () => {
     const stand = JSON.parse(lies(z, ".factory/sync-stand.json")) as { manifest: string; einheiten: Record<string, string> };
     const m = JSON.stringify({ version: 1, eintraege: [{ pfad: "../x", ring: "kern", quelle: "t" }] });
     stand.einheiten = { "../x": "sha256:00" };
-    const lesen = (p: string): string | null => (p === ".factory/besitz.json" ? m : p === ".factory/sync-stand.json" ? JSON.stringify(stand) : null);
-    // Manifest-Hash passt nicht zum Stand: rot; mit passendem Hash trifft die Pfad-Sperre.
-    const rawHash = (rawLib as unknown as { textHash(t: string): string }).textHash(m);
-    stand.manifest = rawHash;
+    const gelesen: string[] = [];
+    // Jeder andere Pfad liefert Text: nur die Pfad-Sperre verhindert, dass "../x" gelesen wird.
+    const lesen = (p: string): string | null => {
+      gelesen.push(p);
+      return p === ".factory/besitz.json" ? m : p === ".factory/sync-stand.json" ? JSON.stringify(stand) : "irgendein Text";
+    };
+    stand.manifest = (rawLib as unknown as { textHash(t: string): string }).textHash(m);
     const r = drift.pruefeDrift(lesen);
     assert.ok(r.fehler.some((f) => /\.\.\/x: Besitz fehlt/.test(f)), r.fehler.join("|"));
+    assert.ok(!gelesen.includes("../x"), "unsicherer Pfad wurde gelesen");
   });
   test("Aufruf mit unbekannter Option: Exit 2", () => {
     assert.equal(drift.cli(["--wat"], { err: () => undefined }), 2);
