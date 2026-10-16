@@ -4,7 +4,7 @@
  *   node scripts/langfuse-vorbedingung.mjs                 prüft GET <Langfuse>/api/public/health; Exit 0 = erreichbar, 1 = aus, 2 = Aufruffehler
  *   node scripts/langfuse-vorbedingung.mjs --sessionstart  SessionStart-Hook: Exit immer 0, bei Ausfall steht die Warnung als JSON auf stdout (`systemMessage` für die Nutzerin, `additionalContext` für die Session)
  *
- * Aufrufer: die Ticket-Skills (Schritt 0 bzw. vor dem Workflow-Start); bewusst NICHT im Board-Takt und im JS-Workflow.
+ * Aufrufer: der Ticket-Skill (Schritt 0); bewusst NICHT im Board-Takt.
  * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
 import { istDirektaufruf } from "./hook-io.mjs";

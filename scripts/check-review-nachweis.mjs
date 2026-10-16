@@ -41,7 +41,7 @@ import { meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
 export { parseNachweis };
 
-/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Workflow trägt dieselbe Zahl (Wächter-Test). */
+/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter review-nachweis.test.ts). */
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
