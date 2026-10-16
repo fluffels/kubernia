@@ -30,7 +30,7 @@ import { OUTPUT_FLAG } from "./kubectl/output";
 import { kubectlCreate, kubectlApply, kubectlDelete } from "./kubectl/lifecycle";
 import { kubectlScale, kubectlExpose, kubectlSet, kubectlRollout } from "./kubectl/ops";
 import { kubectlAuth, kubectlLabel } from "./kubectl/security";
-import { dispatchSub, flag, type Call, type Dispatch, type SubEntry } from "./cliargs";
+import { dispatchSub, flag, IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch, type SubEntry } from "./cliargs";
 import type { KubectlHost } from "./kubectl/host";
 
 // KubectlHost bleibt über den gewohnten Pfad (./sim/kubectl) erreichbar.
@@ -48,25 +48,26 @@ type SubCommand = (host: KubectlHost, c: Call) => string;
 export const KUBECTL: Dispatch<SubEntry<SubCommand>> = {
   cmd: "kubectl",
   table: {
-    get: { run: kubectlGet, flags: [NS, flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG] },
-    describe: { run: kubectlDescribe, flags: [NS] },
+    get: { run: kubectlGet, maxArgs: OFFENE_LISTE, flags: [NS, flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG] },
+    describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE, flags: [NS] },
     create: {
       run: kubectlCreate,
+      maxArgs: IM_HANDLER,
       flags: [
         NS, LITERAL_FLAG, SERVICEACCOUNT_FLAG,
         ...["--image", "--replicas", "--cert", "--key", "--verb", "--resource", "--role", "--clusterrole", "--user"].map(n => flag(true, n)),
       ],
     },
-    scale: { run: kubectlScale, flags: [NS, flag(true, "--replicas")] },
-    expose: { run: kubectlExpose, flags: [NS, PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")] },
-    delete: { run: kubectlDelete, flags: [NS, FILE] },
-    apply: { run: kubectlApply, flags: [NS, FILE] },
-    logs: { run: kubectlLogs, flags: [NS, flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] },
-    top: { run: kubectlTop, flags: [NS] },
-    set: { run: kubectlSet, flags: [NS, FROM_FLAG, LIMITS_FLAG, REQUESTS_FLAG] },
-    rollout: { run: kubectlRollout, flags: [NS, REVISION_FLAG] },
-    auth: { run: kubectlAuth, flags: [NS, flag(true, "--as")] },
-    label: { run: kubectlLabel, flags: [NS, flag(false, "--overwrite")] },
+    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [NS, flag(true, "--replicas")] },
+    expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [NS, PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")] },
+    delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [NS, FILE] },
+    apply: { run: kubectlApply, maxArgs: 0, flags: [NS, FILE] },
+    logs: { run: kubectlLogs, maxArgs: 1, flags: [NS, flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] },
+    top: { run: kubectlTop, maxArgs: 2, flags: [NS] },
+    set: { run: kubectlSet, maxArgs: IM_HANDLER, flags: [NS, FROM_FLAG, LIMITS_FLAG, REQUESTS_FLAG] },
+    rollout: { run: kubectlRollout, maxArgs: IM_HANDLER, flags: [NS, REVISION_FLAG] },
+    auth: { run: kubectlAuth, maxArgs: IM_HANDLER, flags: [NS, flag(true, "--as")] },
+    label: { run: kubectlLabel, maxArgs: IM_HANDLER, flags: [NS, flag(false, "--overwrite")] },
   },
   real: REAL_KUBECTL_COMMANDS,
   hints: FLAG_HINTS,
