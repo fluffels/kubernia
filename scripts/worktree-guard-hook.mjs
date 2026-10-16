@@ -56,6 +56,7 @@ import { statSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildDenyOutput, parseHookInput } from "./hook-io.mjs";
+import { namenOderGrund } from "./ticket-namen.mjs";
 import { analyse } from "./worktree-guard-eval.mjs";
 import { coarseProtected, fromMsysPath, pathFor } from "./worktree-guard-tabellen.mjs";
 
@@ -139,11 +140,18 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
   return { relevant: true, toplevel: mine.top, isMainWorktree };
 }
 
-const BLOCK_REASON = (top) =>
+/** Beispielzeile für den neuen Worktree aus der Projekt-Config; ohne nutzbare Config steht der Grund samt Fix-Zeile statt des Beispiels (der Block bleibt). */
+function neuerWorktreeHinweis(deps) {
+  const { namen, grund } = namenOderGrund("Worktree-Guard", deps);
+  if (grund) return grund;
+  return `\`git fetch origin && git worktree add .claude/worktrees/${namen.worktreeName("<nr>")} -b ${namen.branchName("<nr>", "<slug>")} origin/main\` (vom frischen origin/main, #772).`;
+}
+
+const BLOCK_REASON = (top, deps) =>
   `git commit/push würde im geteilten main-Checkout (${top}) laufen und ist blockiert. ` +
   `Aus einem worktree: \`git -C <worktree> …\` (ändert die Shell-cwd nicht) oder \`cd <worktree> && git …\`, ` +
   `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Git-Workflow): ` +
-  `\`git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main\` (vom frischen origin/main, #772). (#735)`;
+  `${neuerWorktreeHinweis(deps)} (#735)`;
 
 /** Gesamtentscheidung: `block` nur, wenn (a) das Kommando commit/push ist, (b) cwd bekannt ist, (c) mindestens ein
  *  Ziel-Verzeichnis zu diesem Repo gehört UND (d) dort der Haupt-Checkout liegt (kein Linked Worktree). `ask`, wenn
@@ -159,7 +167,7 @@ export function decide({ cwd, command, repoRoot, deps = {} }) {
   }
   for (const target of found.targets) {
     const ctx = resolveGitContext(target, repoRoot, d);
-    if (ctx.relevant && ctx.isMainWorktree) return { block: true, reason: BLOCK_REASON(ctx.toplevel) };
+    if (ctx.relevant && ctx.isMainWorktree) return { block: true, reason: BLOCK_REASON(ctx.toplevel, deps) };
   }
   for (const [dir, a] of found.asks) {
     const ctx = resolveGitContext(dir, repoRoot, d);

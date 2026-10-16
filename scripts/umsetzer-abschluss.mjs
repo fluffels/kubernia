@@ -1,6 +1,6 @@
 // Kein Shebang: wird vom Stop-Hook und vom Wächter-Test importiert.
 /**
- * Abschluss-Wächter des `kubernia-umsetzer` (#1331): ein offener PR mit Auto-Merge ist kein Ende.
+ * Abschluss-Wächter des Umsetzers (`agenten.umsetzer` der Projekt-Config, #1331): ein offener PR mit Auto-Merge ist kein Ende.
  *
  * Der SubagentStop-Hook (`stop-verify-hook.mjs`) fragt diese Prüfung bei jedem Ende des Umsetzers. Meldet er
  * `ERGEBNIS: gemergt` oder `abgebrochen`, obwohl sein PR noch offen ist und Auto-Merge hat (die CI läuft noch,
@@ -12,15 +12,16 @@
  * der Matcher ist wirkungslos, wenn er nie feuert, und R1 bis R3 gelten über `SubagentStop` ohnehin.
  * Zwei Abfangpunkte (#1342): `PreToolUse` auf `SubagentHandback` (vor der Zustellung, hier gilt zusätzlich die
  * Formatprüfung R0) und `SubagentStop` (nach der Zustellung, Nachricht aus dem Transkript). Neu: `festgefahren`
- * bei offenem PR geht nur mit dem Label `status:festgefahren` durch (R3).
+ * bei offenem PR geht nur mit dem Label `labels.festgefahren` der Config durch (R3).
  *
  * Reines Node-Skript (nur Builtins); `prStatus` ist injizierbar.
  */
 import { ghJson, ghText } from "./gh-cli.mjs";
 import { readFileSync } from "node:fs";
+import { namenOderGrund } from "./ticket-namen.mjs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 
-/** Erlaubte Werte hinter `ERGEBNIS:` (Format in `.claude/agents/kubernia-umsetzer.md`, Test bindet beides). */
+/** Erlaubte Werte hinter `ERGEBNIS:` (Format in der Umsetzer-Definition unter `.claude/agents/`, Test bindet beides). */
 export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren", "abgebrochen", "uebergabe"];
 
 /** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: die Umsetzer-Definition unter `.claude/agents/`). */
@@ -28,9 +29,6 @@ export const SCHNITTE = ["pr", "verify"];
 
 /** Art des Festgefahren-Berichts hinter `FESTGEFAHREN:` (optional, fehlt sie: `ci`). Nur `ci` verlangt das Label am offenen PR. */
 export const FESTGEFAHREN_ARTEN = ["review", "ci"];
-
-/** Label, das das Festgefahren-Protokoll setzt (SSOT: `check-festgefahren.mjs`, der Test bindet beide). */
-const STUCK_LABEL = "status:festgefahren";
 
 /**
  * Liest `ERGEBNIS:`, `PR:`, `SCHNITT:`, `FESTGEFAHREN:` (klein geschrieben, sonst `null`) und das Vorhandensein einer `UEBERGABE:`-Zeile aus einer Nachricht. `token` ist das führende Wort, falls es ein erlaubter Wert ist
@@ -97,16 +95,19 @@ const WARTEN = (nr) =>
  *  - R0 (nur PreToolUse): Format verletzt (kein gültiges Token, Zusatz, keine PR:-Zeile, keine BEFUNDE:-Zeile oder BEFUNDE als Angebot/Frage, #1723),
  *  - R1: `gemergt`/`abgebrochen` mit PR OPEN + Auto-Merge (CI läuft noch),
  *  - R2: `gemergt` mit einem PR, der nicht MERGED ist,
- *  - R3: `festgefahren` mit offenem PR ohne Label `status:festgefahren`; die optionale Zeile `FESTGEFAHREN: review|ci` (fehlt sie: `ci`)
+ *  - R3: `festgefahren` mit offenem PR ohne das Label `labels.festgefahren` der Config; die optionale Zeile `FESTGEFAHREN: review|ci` (fehlt sie: `ci`)
  *    befreit `review` vom Label, ein anderer Wert wird verweigert,
  *  - R4 (#1592, beide Ereignisse): `uebergabe` ohne gültiges `SCHNITT: pr|verify` oder ohne `UEBERGABE:`-Zeile,
  *  - R5 (#1592): `uebergabe` mit `SCHNITT: pr` braucht einen PR, der OPEN ist und Auto-Merge hat oder schon MERGED ist (gh-Fehler: frei);
  *    `SCHNITT: verify` ruft kein gh auf. R1 bis R3 gelten für `uebergabe` nicht.
  */
 export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage }, deps = {}) {
-  if (agentType !== "kubernia-umsetzer") return null;
   const vorher = hookEvent === "PreToolUse";
   if (vorher ? toolName !== "SubagentHandback" : hookEvent !== "SubagentStop") return null;
+  const { namen, config, grund } = namenOderGrund("Umsetzer-Abschluss", deps);
+  if (grund) return grund;
+  if (agentType !== namen.agenten.umsetzer) return null;
+  const stuckLabel = config.labels.festgefahren;
   const { token, zusatz, pr, schnitt, uebergabe, festgefahren } = parseErgebnis(lastMessage);
   if (vorher) {
     const fehler = [];
@@ -144,9 +145,9 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   if (token === "gemergt" && status.state !== "MERGED") {
     return `Umsetzer-Abschluss (#1331): ERGEBNIS: gemergt, aber PR #${nr} hat den Status ${status.state}. Erst nach dem Merge berichten.`;
   }
-  if (token === "festgefahren" && festgefahren !== "review" && offen && !(status.labels ?? []).some((l) => l?.name === STUCK_LABEL)) {
+  if (token === "festgefahren" && festgefahren !== "review" && offen && !(status.labels ?? []).some((l) => l?.name === stuckLabel)) {
     return (
-      `Umsetzer-Abschluss (#1342): ERGEBNIS: festgefahren bei offenem PR #${nr}, aber das Label ${STUCK_LABEL} fehlt. ` +
+      `Umsetzer-Abschluss (#1342): ERGEBNIS: festgefahren bei offenem PR #${nr}, aber das Label ${stuckLabel} fehlt. ` +
       `festgefahren gilt erst nach dem Protokoll (drei Fix-Versuche, ein konsolidierter PR-Kommentar, Label gesetzt). ` +
       `Wartest du nur auf die CI: ${WARTEN(nr)}`
     );
