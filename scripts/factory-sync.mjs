@@ -17,6 +17,7 @@ import {
   setzeBlock,
   setzeJsonSchluessel,
   textHash,
+  wirdVerteilt,
 } from "./besitz-lib.mjs";
 
 export const MANIFEST_PFAD = ".factory/besitz.json";
@@ -97,7 +98,8 @@ export function planeSync({ quelleLies, zielLies, quelleAusfuehrbar = () => fals
   if (res.fehler.length > 0) return res;
 
   const nachPfad = new Map();
-  for (const e of manifest.eintraege) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
+  const verteilt = manifest.eintraege.filter(wirdVerteilt);
+  for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
   const ziele = new Map(); // Pfad -> { ergebnis (LF), quelleText }
   for (const [pfad, eintraege] of nachPfad) {
     const srcText = normalisiereEol(quelleLies(pfad));
@@ -125,14 +127,20 @@ export function planeSync({ quelleLies, zielLies, quelleAusfuehrbar = () => fals
   ziehe(MANIFEST_PFAD, normalisiereEol(manifestText), zielLies(MANIFEST_PFAD), false);
 
   const einheiten = {};
-  for (const e of manifest.eintraege) einheiten[einheitId(e)] = einheitHash(e, ziele.get(e.pfad).srcText);
+  for (const e of verteilt) einheiten[einheitId(e)] = einheitHash(e, ziele.get(e.pfad).srcText);
   const sortiert = Object.fromEntries(Object.entries(einheiten).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   res.stand = { version: 1, quelle: { commit: quelleStand.commit, sauber: quelleStand.sauber }, manifest: textHash(manifestText), einheiten: sortiert };
   ziehe(STAND_PFAD, `${JSON.stringify(res.stand, null, 2)}\n`, zielLies(STAND_PFAD), false);
 
   const alt = leseAltStand(zielLies);
   for (const id of Object.keys(alt?.einheiten ?? {})) {
-    if (!(id in sortiert)) res.meldungen.push(`Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`);
+    if (id in sortiert) continue;
+    const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
+    res.meldungen.push(
+      nurFactory === undefined
+        ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
+        : `Einheit '${id}' wird nicht mehr verteilt (Ring ${nurFactory.ring}), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`,
+    );
   }
   return res;
 }
