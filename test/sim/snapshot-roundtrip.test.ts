@@ -195,7 +195,7 @@ test("Alt-Snapshot ohne Gateway-Felder lädt mit leeren Listen und besteht die S
   const alt = JSON.parse(JSON.stringify(new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] }).snapshot())) as Record<string, unknown>;
   delete alt.gatewayClasses;
   delete alt.gateways;
-  const sim = new KQSim(alt as Scenario);
+  const sim = new KQSim(alt);
   expect(sim.gatewayClasses).toEqual([]);
   expect(sim.gateways).toEqual([]);
   expect(sim.exec("kubectl get gateways").output).toBe("No resources found in default namespace.");
