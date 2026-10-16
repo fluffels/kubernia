@@ -137,6 +137,11 @@ describe("(c) übrige Familien: ein Flag eines Geschwister-Ziels wird abgelehnt"
     ["aws s3 rb s3://b --recursive", "--recursive", "aws s3 rb"],
     ["helm repo add a https://u --set x=1", "--set", "helm repo add"],
     ["terraform state list -var-file=x", "-var-file", "terraform state list"],
+    ["argocd app list --refresh", "--refresh", "argocd app list"],
+    ["argocd app get web --revision=x", "--revision", "argocd app get"],
+    ["argocd app sync web --prune", "--prune", "argocd app sync"],
+    ["glab ci status --branch=x", "--branch", "glab ci status"],
+    ["glab ci list --output=json", "--output", "glab ci list"],
   ])("%s", (cmd, name, ziel) => {
     const r = lauf(cmd);
     expect(r.error).toBe(true);
