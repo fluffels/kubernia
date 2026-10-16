@@ -21,6 +21,7 @@ import { nodeInternalIP, NODE_SYSTEM_INFO, CONTROL_PLANE_IP, CONTROL_PLANE_NODE 
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, type ResourcePlural } from "./resources";
 import { clusterPods, type ClusterPod } from "../pods";
+import { gatewayClassConditions, gatewayStatus, type GatewayCondition } from "../gateway";
 import { statefulPodNode } from "../workload";
 import { clusterPodStatus } from "../podstatus";
 
@@ -214,6 +215,23 @@ function getIngress(host: KubectlHost): GetTable {
     host.ingresses.map(i => [i.name, i.className, i.host, INGRESS_ADDRESS, i.tls ? "80, 443" : "80", host._age(i.created || 0)]));
 }
 
+/** Eine Condition als Tabellenzelle (`True`/`False`/`Unknown`). */
+const conditionCell = (conditions: readonly GatewayCondition[], type: string): string =>
+  conditions.find(c => c.type === type)?.status ?? "Unknown";
+
+function getGatewayClasses(host: KubectlHost): GetTable {
+  return withWide(tableOf(["NAME", "CONTROLLER", "ACCEPTED", "AGE", "DESCRIPTION"],
+    host.gatewayClasses.map(c => [c.name, c.controllerName, conditionCell(gatewayClassConditions(c), "Accepted"), host._age(c.created || 0), c.description ?? ""])), 1);
+}
+
+function getGateways(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "CLASS", "ADDRESS", "PROGRAMMED", "AGE"],
+    host.gateways.map(g => {
+      const st = gatewayStatus(g, host.gatewayClasses);
+      return [g.name, g.className, st.address ?? "", conditionCell(st.conditions, "Programmed"), host._age(g.created || 0)];
+    }));
+}
+
 function getNetworkPolicies(host: KubectlHost): GetTable {
   return tableOf(["NAME", "POD-SELECTOR", "AGE"],
     host.networkPolicies.map(n => [n.name, n.podSelector ? workloadSelector(n.podSelector) : "<none>", host._age(n.created || 0)]));
@@ -316,6 +334,8 @@ export const GET_RENDERERS: ReadonlyMap<ResourcePlural, GetEntry> = new Map<Reso
   ["secrets", { render: getSecrets }],
   ["configmaps", { render: getConfigMaps }],
   ["ingresses", { render: getIngress }],
+  ["gatewayclasses", { render: getGatewayClasses }],
+  ["gateways", { render: getGateways }],
   ["networkpolicies", { render: getNetworkPolicies }],
   ["servicemonitors", { render: getServiceMonitors }],
   ["prometheusrules", { render: getPrometheusRules }],
