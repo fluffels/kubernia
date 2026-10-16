@@ -119,6 +119,8 @@ Die Sim beschreibt bei `kubectl describe pod <dep>` alle Pods des Deployments oh
 | `src/content/drills/storage.ts` | Storage-Drills (StatefulSet/PVC/Snapshot, #457). |
 | `src/content/drills/werft.ts` | Werft-Capstone-Drills (Build→Deploy→Expose→Test, #457). |
 
+Variable Teile einer `accept`-Regex in Drills immer über `escapeRegExp` (`drills/shared.ts`), nie per Hand-`replace`; `test/drill-regex.test.ts` prüft, dass jeder Drill seine eigene Lösung akzeptiert.
+
 ## Weitere Inhalts-Module
 
 | Modul | Inhalt |
