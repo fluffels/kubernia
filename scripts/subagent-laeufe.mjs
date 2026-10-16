@@ -85,12 +85,19 @@ export function schnittZeile(prompt, schluessel) {
 }
 
 /**
- * Ticket eines Laufs (#1579): zuerst `kq-<nr>` aus dem Patch-Pfad (`patch.ticket`), dann der Worktree im Prompt (`worktrees/kq-<nr>`,
+ * Ticket eines Laufs (#1579): vor allem anderen die Kopfzeile `Ticket #<nr>:` in der ERSTEN Prompt-Zeile (#1593: ein Worktree-Pfad
+ * im Prompt ordnete Läufe sonst dem falschen Ticket zu), dann `kq-<nr>` aus dem Patch-Pfad (`patch.ticket`), dann der Worktree im Prompt (`worktrees/kq-<nr>`,
  * auch ein Lens-Worktree), erst zuletzt das erste `#<nr>` im Prompt; sonst `null`. Ein `#<nr>` aus Brillen- oder Diät-Text
  * (`schon erledigt durch #1349`, `(#1034)`) darf das Ticket nur zuordnen, wenn nichts Belastbareres da ist.
  */
 export function ticketAusLauf({ patch, prompt }) {
-  return patch?.ticket ?? ticketAusRef(prompt) ?? (Number(/#(\d+)/.exec(prompt)?.[1]) || null);
+  const kopf = Number(/^Ticket #(\d+)\b/.exec(erstesZeile(prompt))?.[1]) || null;
+  return kopf ?? patch?.ticket ?? ticketAusRef(prompt) ?? (Number(/#(\d+)/.exec(prompt)?.[1]) || null);
+}
+
+/** Erste Zeile eines Prompts (die Titelzeile `Ticket #<nr>: <Titel>` des Umsetzer-Auftrags, #1593). */
+export function erstesZeile(prompt) {
+  return String(prompt ?? "").split(/\r?\n/, 1)[0];
 }
 
 /** Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. */
@@ -119,7 +126,7 @@ export function laufAus({ meta, zeilen, datei }) {
     ersterCall: erster ? { input: erster.input ?? 0, cacheWrite: erster.cacheWrite ?? 0, cacheRead: erster.cacheRead ?? 0 } : null,
     patch,
     ticket: ticketAusLauf({ patch, prompt }),
-    sammel: /\(gesammelt\)/i.test(prompt),
+    sammel: /\(gesammelt\)/i.test(erstesZeile(prompt)),
     schnitt: schnittZeile(prompt, "Schnitt"),
     einstieg: schnittZeile(prompt, "Einstieg"),
     start,
