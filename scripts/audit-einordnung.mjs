@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { istVertraut } from "./fremdtext-lib.mjs";
+import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
 
 export const ALARM_PRAEFIX = "🔒 Security:";
@@ -169,7 +169,7 @@ function ladeAlerts() {
   }
 }
 
-const kommentareVon = (nr) => JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues/${nr}/comments?per_page=100`])).flat().map((k) => ({ body: k.body, user: k.user }));
+const kommentareVon = (nr) => issueKommentare(nr, (args) => JSON.parse(ghText(args)), REPO).map((k) => ({ body: k.body, user: k.user }));
 
 function main() {
   const trocken = process.argv.includes("--dry-run");

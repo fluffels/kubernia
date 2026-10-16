@@ -14,7 +14,7 @@
  */
 import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
-import { FREMDEINGANG_LABELS, issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
+import { FREMDEINGANG_LABELS, flach, issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
 const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${loginVon(user)}, ${url}]`;
@@ -84,11 +84,6 @@ export function parseArgs(argv) {
   const [flag, wert] = treffer[0];
   if (!/^[1-9][0-9]*$/.test(wert ?? "")) throw new Error(`${flag} braucht eine positive Ganzzahl`);
   return { art: flag.slice(2), nr: Number(wert) };
-}
-
-/** `gh api --paginate --slurp` liefert eine Liste von Seiten; flach machen. */
-export function flach(slurped) {
-  return Array.isArray(slurped) ? slurped.flat() : [];
 }
 
 const mitArt = (art, liste) => liste.map((b) => ({ art, user: b.user, body: b.body, html_url: b.html_url, created_at: b.created_at }));

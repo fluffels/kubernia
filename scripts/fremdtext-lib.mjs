@@ -13,11 +13,16 @@ export function istVertraut(user, owner) {
   return user.type === "Bot" && VERTRAUTE_BOTS.includes(user.login);
 }
 
+/** `gh api --paginate --slurp` liefert eine Liste von Seiten; flach machen (kein Array: leere Liste). */
+export function flach(slurped) {
+  return Array.isArray(slurped) ? slurped.flat() : [];
+}
+
 /**
  * Alle Kommentare eines Issues/PRs (paginiert, sonst nur die ersten 30) als flache Liste. `json(args)` führt `gh` mit den Argumenten aus und liefert
  * geparstes JSON (injiziert: die Lib bleibt ohne Importe); ein Fehler wirft weiter. `repo` ist `{owner}/{repo}` (gh setzt das Repo selbst ein) oder `owner/name`.
  */
 export function issueKommentare(nr, json, repo = "{owner}/{repo}") {
   const seiten = json(["api", "--paginate", "--slurp", `repos/${repo}/issues/${nr}/comments?per_page=100`]);
-  return Array.isArray(seiten) ? seiten.flat() : [];
+  return flach(seiten);
 }
