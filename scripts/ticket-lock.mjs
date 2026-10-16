@@ -36,7 +36,7 @@ import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, 
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
+import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
 import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
 
 export { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS };
@@ -106,12 +106,6 @@ function liesLock(deps, nr) {
     return null;
   }
 }
-
-/** Zeitpunkt des Herzschlags (`zuletzt.zeit`) in ms oder `null`; `erstellt` zählt hier bewusst nicht. */
-const herzschlagMs = (lock) => {
-  const t = Date.parse(lock?.zuletzt?.zeit);
-  return Number.isFinite(t) ? t : null;
-};
 
 /** Legt den Lock atomar an; `true` bei Gewinn, `false` bei vorhandener Datei, wirft sonst. */
 function legeAn(deps, nr, nonce) {

@@ -5,13 +5,20 @@
  *   node scripts/claims-pruefen.mjs [--stunden <n>]         # meldet und räumt auf
  *   node scripts/claims-pruefen.mjs --json [--stunden <n>]   # nur lesen: kein Aufräumen, keine Wiederaufnahme-Zeilen (Vertrag für das Cockpit)
  *
+ * Ohne `--json` räumt das Skript auf (nur Erledigtes, siehe `aufraeumbar`); mehrere gleichzeitige Läufe sind unkritisch, weil `git worktree remove`
+ * ohne `--force` läuft und vorher geprüft wird (der Verlierer meldet Exit 1).
+ *
  * Kandidaten sind alle Nummern mit einer lokalen Spur (Lock-Datei, registrierter Worktree, Ticket-Branch lokal oder remote) oder einer
- * offenen Zuweisung an die eigene Identität. Je Nummer ein Urteil (`beurteileClaim`, pur):
+ * offenen Zuweisung an die eigene Identität. Bewusste Grenzen: ein reiner Remote-Branch gilt nicht als lokale Spur (ein Klon ohne eigenen Lock
+ * übernimmt nichts); ein bewusst angehaltenes Ticket erkennt das Skript nur am Label `labels.festgefahren` (Projekt-Config) auf Issue oder PR, ein
+ * Hand-off nach dem Review-Cap ohne PR und ohne Label bleibt als verwaist sichtbar.
+ * Je Nummer ein Urteil (`beurteileClaim`, pur):
  *   unbekannt        GitHub-Daten fehlen: keine Aktion (fail-closed).
  *   lebendig         offen, Lebenszeichen (Lock `zuletzt`/`erstellt`/Übergabe/Stopp, Commit-Zeit der Branch-Köpfe) jünger als N Stunden (Standard 3).
  *   verwaist         offen, lokale Spur, Lebenszeichen älter als N Stunden oder keins feststellbar: Zeile `WIEDERAUFNAHME`; die Übernahme
  *                    geschieht atomar mit `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`. Ein fremd zugewiesenes Ticket wird behalten.
- *   ohne-lokale-spur offen und zugewiesen, aber ohne Lock, Worktree und Branch: nur Meldung (evtl. eine andere Maschine).
+ *   ohne-lokale-spur offen und zugewiesen, aber ohne Lock, Worktree und lokalen Branch: nur Meldung (evtl. eine andere Maschine).
+ *   (offen und festgefahren: `behalten`, keine Wiederaufnahme.)
  *   lock-unlesbar    nur Meldung, der Lock wird nie gelöscht.
  *   aufraeumbar      geschlossen: Lock löschen und, mit Worktree, den Worktree entfernen. Ein Worktree nur bei gemergtem PR, sauberem Stand,
  *                    HEAD gleich dem Kopf eines gemergten PR, nicht gesperrt und ohne Lebenszeichen der letzten 30 min (`git worktree remove`,
@@ -65,9 +72,10 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   if (c.lock === "unlesbar") return ergebnis("lock-unlesbar", "Lock unlesbar, nie löschen (von Hand prüfen)");
   const lz = c.lebenszeichenMs;
   const alter = Number.isFinite(lz) ? jetzt - lz : Number.POSITIVE_INFINITY;
-  const spur = Boolean(c.lock || c.worktree || c.branch);
+  const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
-    if (!spur) return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
+    if (!spur) return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
+    if (c.festgefahren) return ergebnis("behalten", "festgefahren (Label), bewusst angehalten: keine Wiederaufnahme");
     if (alter < schwelleMs) return ergebnis("lebendig", "Lebenszeichen jünger als die Schwelle");
     const fremd = c.issue.assignees.some((a) => a !== c.viewer);
     if (fremd) return ergebnis("behalten", "fremd zugewiesen, keine Wiederaufnahme");
@@ -109,7 +117,7 @@ export function aliasAbfragen(nummern, repo = REPO) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
   if (nummern.some((n) => !Number.isInteger(n) || n <= 0)) throw new Error("Nummern müssen positive Ganzzahlen sein");
   const [owner, name] = repo.split("/");
-  const felder = "state assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid } }";
+  const felder = "state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
   const bloecke = [];
   for (let von = 0; von < nummern.length; von += ALIAS_MAX) {
     const teil = nummern.slice(von, von + ALIAS_MAX);
@@ -125,7 +133,8 @@ export function issueAus(knoten) {
   return {
     zustand: knoten.state,
     assignees: (knoten.assignees?.nodes ?? []).map((a) => a.login),
-    prs: (knoten.closedByPullRequestsReferences?.nodes ?? []).map((p) => ({ nummer: p.number, zustand: p.state, headRefOid: p.headRefOid ?? null })),
+    labels: (knoten.labels?.nodes ?? []).map((l) => l.name),
+    prs: (knoten.closedByPullRequestsReferences?.nodes ?? []).map((p) => ({ nummer: p.number, zustand: p.state, headRefOid: p.headRefOid ?? null, labels: (p.labels?.nodes ?? []).map((l) => l.name) })),
   };
 }
 
@@ -153,12 +162,12 @@ export function sammle(deps) {
   const hauptcheckout = bloecke[0]?.pfad ?? "";
   const ticketWorktrees = bloecke.slice(1).filter((b) => !LENS_WORKTREE_NAME.test(basename(b.pfad)) && ticketAusRef(b.pfad) !== null);
   const refs = deps
-    .git(["for-each-ref", "--format=%(refname:short)\t%(committerdate:unix)", "refs/heads", "refs/remotes"])
+    .git(["for-each-ref", "--format=%(refname)\t%(committerdate:unix)", "refs/heads", "refs/remotes"])
     .split(/\r?\n/)
     .filter(Boolean)
     .map((z) => {
       const [name, sek] = z.split("\t");
-      return { nr: ticketAusRef(name), ms: Number(sek) * 1000 };
+      return { nr: ticketAusRef(name), ms: Number(sek) * 1000, lokal: name.startsWith("refs/heads/") };
     })
     .filter((r) => r.nr !== null);
   let dateien = [];
@@ -205,9 +214,11 @@ export function sammle(deps) {
       viewer,
       issue: issue && { zustand: issue.zustand, assignees: issue.assignees },
       prs: issue?.prs ?? [],
+      festgefahren: Boolean(deps.festgefahrenLabel && issue && (issue.labels.includes(deps.festgefahrenLabel) || issue.prs.some((p) => p.labels.includes(deps.festgefahrenLabel)))),
       lock,
       worktree: w && { pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked },
       branch: meine.length > 0,
+      branchLokal: meine.some((r) => r.lokal),
       lebenszeichenMs: lz.length ? Math.max(...lz) : null,
     };
   });
@@ -229,6 +240,8 @@ export function jsonDokument({ jetzt, viewer, schwelleStunden, urteile }) {
       lock: c.lock === null || c.lock === "unlesbar" ? c.lock : oeffentlicheSicht(c.lock),
       worktree: c.worktree && { pfad: c.worktree.pfad, branch: c.worktree.branch, sauber: c.worktree.sauber, head: c.worktree.head },
       branch: c.branch,
+      branchLokal: c.branchLokal,
+      festgefahren: c.festgefahren,
       prs: c.prs.map((p) => ({ nummer: p.nummer, zustand: p.zustand })),
       lebenszeichen: iso(c.lebenszeichenMs),
       urteil: urteil.urteil,
@@ -298,12 +311,18 @@ export function fuehreAus(argv, deps) {
 export function echteDeps() {
   const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   const gemeinsam = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
+  const config = ladeProjektConfig();
   return {
     jetzt: () => Date.now(),
     git,
     graphql: (query) => JSON.parse(ghText(["api", "graphql", "-f", `query=${query}`])),
-    zugewiesen: () => ghJson(["issue", "list", "--assignee", "@me", "--state", "open", "--json", "number", "--limit", "200"]).map((i) => i.number),
-    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: ladeProjektConfig().praefixe.worktree }),
+    zugewiesen: () => {
+      const liste = ghJson(["issue", "list", "--assignee", "@me", "--state", "open", "--json", "number", "--limit", "200"]);
+      if (liste.length >= 200) process.stderr.write("Warnung: 200 offene Zuweisungen, die Liste ist an der Grenze und kann unvollständig sein\n");
+      return liste.map((i) => i.number);
+    },
+    festgefahrenLabel: config.labels.festgefahren,
+    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: config.praefixe.worktree }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),
     loesche: unlinkSync,

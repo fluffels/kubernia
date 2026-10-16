@@ -33,6 +33,12 @@ export function lebenszeichenMs(lock) {
   return werte.length ? Math.max(...werte) : null;
 }
 
+/** Zeitpunkt des Herzschlags (`zuletzt.zeit`) in ms oder `null`; `erstellt` zählt hier bewusst nicht. Pur. */
+export function herzschlagMs(lock) {
+  const t = Date.parse(lock?.zuletzt?.zeit);
+  return Number.isFinite(t) ? t : null;
+}
+
 const stand = (v) => (!v ? "keine" : v.verbraucht ? "verbraucht" : "offen");
 
 /** Öffentliche Sicht eines Locks: alle Felder außer `nonce` und `nonceHash`, dazu der Stand von Übergabe und Stopp (`keine`, `offen`, `verbraucht`). Pur. */

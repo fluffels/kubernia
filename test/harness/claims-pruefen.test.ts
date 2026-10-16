@@ -15,6 +15,8 @@ interface Claim {
   lock: null | "unlesbar" | Record<string, unknown>;
   worktree: null | { pfad: string; branch: string | null; sauber: boolean; head: string | null; locked: boolean };
   branch: boolean;
+  branchLokal: boolean;
+  festgefahren: boolean;
   lebenszeichenMs: number | null;
 }
 type Urteil = { urteil: string; grund: string; aktion: { worktree: boolean; lock: boolean } };
@@ -44,6 +46,8 @@ const claim = (o: Partial<Claim> = {}): Claim => ({
   lock: { nonceHash: "h", erstellt: "2026-10-16T00:00:00.000Z" },
   worktree: null,
   branch: false,
+  branchLokal: false,
+  festgefahren: false,
   lebenszeichenMs: JETZT - 1 * H,
   ...o,
 });
@@ -53,6 +57,7 @@ const geschlossen = (o: Partial<Claim> = {}): Claim =>
     prs: [{ nummer: 9, zustand: "MERGED", headRefOid: OID }],
     worktree: { pfad: WTPFAD, branch: "feature/kq-1-x", sauber: true, head: OID, locked: false },
     branch: true,
+    branchLokal: true,
     lebenszeichenMs: JETZT - 8 * H,
     ...o,
   });
@@ -64,7 +69,7 @@ describe("beurteileClaim: je Urteil ein Fall", () => {
     ["lebendig: offen, Lebenszeichen vor 1 h", claim(), "lebendig"],
     ["verwaist: offen mit Lock, Lebenszeichen vor 4 h", claim({ lebenszeichenMs: JETZT - 4 * H }), "verwaist"],
     ["verwaist: offen mit Worktree, kein Lebenszeichen feststellbar", claim({ lock: null, worktree: { pfad: "/x", branch: null, sauber: true, head: null, locked: false }, lebenszeichenMs: null }), "verwaist"],
-    ["verwaist: offen, nur ein Branch, Lebenszeichen alt", claim({ lock: null, branch: true, lebenszeichenMs: JETZT - 9 * H }), "verwaist"],
+    ["verwaist: offen, nur ein Branch, Lebenszeichen alt", claim({ lock: null, branch: true, branchLokal: true, lebenszeichenMs: JETZT - 9 * H }), "verwaist"],
     ["ohne-lokale-spur: offen, zugewiesen, nichts lokal", claim({ lock: null }), "ohne-lokale-spur"],
     ["lock-unlesbar", claim({ lock: "unlesbar" }), "lock-unlesbar"],
     ["aufraeumbar: geschlossen, PR gemergt, Worktree sauber, HEAD gleich PR-Kopf", geschlossen(), "aufraeumbar"],
@@ -193,11 +198,25 @@ describe("reine Hilfen", () => {
   test("issueAus: unbekanntes Issue ist null, sonst Zustand, Assignees und PRs", () => {
     assert.equal(M.issueAus(null), null);
     assert.equal(M.issueAus({}), null);
-    assert.deepEqual(M.issueAus({ state: "CLOSED", assignees: { nodes: [{ login: "a" }] }, closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED", headRefOid: "x" }] } }), {
-      zustand: "CLOSED",
-      assignees: ["a"],
-      prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x" }],
+    assert.deepEqual(
+      M.issueAus({ state: "CLOSED", labels: { nodes: [{ name: "l" }] }, assignees: { nodes: [{ login: "a" }] }, closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED", headRefOid: "x", labels: { nodes: [{ name: "pl" }] } }] } }),
+      { zustand: "CLOSED", assignees: ["a"], labels: ["l"], prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x", labels: ["pl"] }] },
+    );
+  });
+
+  test("issueAus: fehlende Felder ergeben leere Listen und headRefOid null", () => {
+    assert.deepEqual(M.issueAus({ state: "OPEN" }), { zustand: "OPEN", assignees: [], labels: [], prs: [] });
+    assert.deepEqual(M.issueAus({ state: "OPEN", closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED" }] } }), {
+      zustand: "OPEN",
+      assignees: [],
+      labels: [],
+      prs: [{ nummer: 3, zustand: "MERGED", headRefOid: null, labels: [] }],
     });
+  });
+
+  test("aliasAbfragen: das Repo muss genau owner/name sein (Anker an beiden Enden, kein Zusatz in der Abfrage)", () => {
+    for (const repo of ['o/r"x', "o/r/x", "x o/r", "o/r y", "/r", "o/"]) assert.throws(() => M.aliasAbfragen([1], repo), /Ungültiges Repo/, repo);
+    assert.doesNotThrow(() => M.aliasAbfragen([1], "my-o.rg/re_po.x"));
   });
 
   test("pfadErlaubt: nur direkt unter <Hauptcheckout>/.claude/worktrees und mit passender Nummer; nie ein Lens-Worktree", () => {
@@ -219,7 +238,8 @@ type Wt = { pfad: string; head: string; branch?: string; locked?: boolean };
 interface IssueWelt {
   state: string;
   assignees?: string[];
-  prs?: { number: number; state: string; headRefOid: string }[];
+  labels?: string[];
+  prs?: { number: number; state: string; headRefOid: string; labels?: string[] }[];
 }
 interface Welt {
   worktrees?: Wt[];
@@ -231,6 +251,9 @@ interface Welt {
   removeFehler?: boolean;
   bleibtNachRemove?: boolean;
   ghFehler?: boolean;
+  bleibtInListe?: boolean;
+  bleibtAufPlatte?: boolean;
+  liesFehlerBei?: string;
   ghTeilantwort?: boolean;
   statusFehler?: boolean;
   loescheFehler?: boolean;
@@ -247,21 +270,21 @@ function baue(welt: Welt) {
   const deps = {
     jetzt: () => welt.jetzt ?? JETZT,
     lockDir: "/locks",
+    festgefahrenLabel: "status:festgefahren",
     git: (args: string[]) => {
       const a = args.join(" ");
       aufrufe.push(`git ${a}`);
-      if (a === "worktree list --porcelain") return worktrees.map((w) => `worktree ${w.pfad}\nHEAD ${w.head}\n${w.branch ? `branch refs/heads/${w.branch}` : "detached"}\n${w.locked ? "locked\n" : ""}`).join("\n");
-      if (a.startsWith("for-each-ref")) return (welt.refs ?? []).map(([n, s]) => `${n}\t${s}`).join("\n");
+      // Wie das echte git: jeder Block endet mit einer Leerzeile, auch der letzte (Ausgabe endet mit \n\n).
+      if (a === "worktree list --porcelain") return worktrees.map((w) => `worktree ${w.pfad}\nHEAD ${w.head}\n${w.branch ? `branch refs/heads/${w.branch}` : "detached"}\n${w.locked ? "locked\n" : ""}\n`).join("");
+      if (a.startsWith("for-each-ref")) return (welt.refs ?? []).map(([n, s]) => `${n.startsWith("origin/") ? "refs/remotes/" : "refs/heads/"}${n}\t${s}`).join("\n");
       const st = /^-C (\S+) status --porcelain$/.exec(a);
       if (st && welt.statusFehler) throw new Error("status kaputt");
       if (st) return welt.status?.[st[1]] ?? "";
       const rm = /^worktree remove (\S+)$/.exec(a);
       if (rm) {
         if (welt.removeFehler) throw new Error("Zugriff verweigert");
-        if (!welt.bleibtNachRemove) {
-          worktrees = worktrees.filter((w) => w.pfad !== rm[1]);
-          ordner.delete(rm[1]);
-        }
+        if (!welt.bleibtNachRemove && !welt.bleibtInListe) worktrees = worktrees.filter((w) => w.pfad !== rm[1]);
+        if (!welt.bleibtNachRemove && !welt.bleibtAufPlatte) ordner.delete(rm[1]);
         return "";
       }
       throw new Error(`unerwartet: ${a}`);
@@ -272,7 +295,15 @@ function baue(welt: Welt) {
       const repository: Record<string, unknown> = {};
       for (const m of query.matchAll(/i(\d+): issue\(number: (\d+)\)/g)) {
         const i = welt.issues?.[Number(m[2])];
-        repository[`i${m[1]}`] = i ? { state: i.state, assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) }, closedByPullRequestsReferences: { nodes: i.prs ?? [] } } : null;
+        const knoten = (namen: string[] = []) => ({ nodes: namen.map((name) => ({ name })) });
+        repository[`i${m[1]}`] = i
+          ? {
+              state: i.state,
+              labels: knoten(i.labels),
+              assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) },
+              closedByPullRequestsReferences: { nodes: (i.prs ?? []).map((p) => ({ ...p, labels: knoten(p.labels) })) },
+            }
+          : null;
       }
       const antwort = { data: { viewer: { login: "ich" }, repository } };
       if (welt.ghTeilantwort) throw Object.assign(new Error("Exit 1"), { stdout: JSON.stringify({ ...antwort, errors: [{ type: "NOT_FOUND" }] }) });
@@ -288,6 +319,7 @@ function baue(welt: Welt) {
     },
     liesDatei: (p: string) => {
       aufrufe.push(`lies ${vorwaerts(p)}`);
+      if (welt.liesFehlerBei && vorwaerts(p).endsWith(welt.liesFehlerBei)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       return welt.locks?.[vorwaerts(p).replace("/locks/", "")] ?? "";
     },
     loesche: (p: string) => {
@@ -307,6 +339,7 @@ const BELEG: Welt = {
     { pfad: WTPFAD, head: OID, branch: "feature/kq-1628-x" },
     { pfad: "/h/.claude/worktrees/kq-1530", head: "e530", branch: "feature/kq-1530-x" },
     { pfad: "/h/.claude/worktrees/kq-1628-lens-r1", head: OID },
+    { pfad: "/h/.claude/worktrees/scratch", head: "s0" },
   ],
   refs: [
     ["feature/kq-1628-x", sek("2026-10-16T00:21:00Z")],
@@ -517,6 +550,89 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     assert.equal(r.code, 1);
     assert.match(r.out, /FEHLER #1628: Lock nicht gelöscht/);
     assert.match(r.out, /WIEDERAUFNAHME #1672/);
+  });
+
+  const alterLock = lock({ erstellt: "2026-10-16T01:00:00.000Z" });
+
+  test("festgefahren (Label am Issue oder am PR): keine Wiederaufnahme, behalten; ohne Label dieselbe Lage verwaist", () => {
+    const ohne = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN" } } }).deps);
+    assert.match(ohne.out, /WIEDERAUFNAHME #20/);
+    for (const issue of [{ state: "OPEN", labels: ["status:festgefahren"] }, { state: "OPEN", prs: [{ number: 5, state: "OPEN", headRefOid: "x", labels: ["status:festgefahren"] }] }]) {
+      const r = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: issue } }).deps);
+      assert.match(r.out, /BEHALTEN #20: behalten, festgefahren/);
+      assert.doesNotMatch(r.out, /WIEDERAUFNAHME/);
+    }
+    const anderes = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN", labels: ["anderes"] } } }).deps);
+    assert.match(anderes.out, /WIEDERAUFNAHME #20/);
+  });
+
+  test("ein reiner Remote-Branch ist keine lokale Spur: keine Wiederaufnahme", () => {
+    const r = M.fuehreAus([], baue({ refs: [["origin/feature/kq-21-x", sek("2026-10-16T01:00:00Z")]], issues: { 21: { state: "OPEN" } } }).deps);
+    assert.match(r.out, /BEHALTEN #21: ohne-lokale-spur, zugewiesen, aber ohne Lock, Worktree und lokalen Branch/);
+    assert.doesNotMatch(r.out, /WIEDERAUFNAHME/);
+  });
+
+  test("ohne Lock entscheidet allein die Commit-Zeit des lokalen Branch-Kopfes: vor 1 h lebendig, vor 5 h verwaist", () => {
+    const welt = (iso: string): Welt => ({ refs: [["feature/kq-22-x", sek(iso)]], issues: { 22: { state: "OPEN" } } });
+    assert.match(M.fuehreAus([], baue(welt("2026-10-16T07:36:00Z")).deps).out, /BEHALTEN #22: lebendig/);
+    assert.match(M.fuehreAus([], baue(welt("2026-10-16T03:36:00Z")).deps).out, /WIEDERAUFNAHME #22: .*letztes Lebenszeichen 2026-10-16T03:36:00\.000Z \(vor 5 h\)/);
+  });
+
+  test("eine nur zugewiesene Nummer ohne jede Spur ist ohne-lokale-spur (Quelle: Zuweisung)", () => {
+    const r = M.fuehreAus([], baue({ zugewiesen: [23], issues: { 23: { state: "OPEN" } } }).deps);
+    assert.match(r.out, /BEHALTEN #23: ohne-lokale-spur, zugewiesen, aber ohne Lock, Worktree und lokalen Branch/);
+  });
+
+  test("--json: lock ist null ohne Lock und \"unlesbar\" bei kaputtem Lock, dazu branchLokal und festgefahren", () => {
+    const welt: Welt = { zugewiesen: [23], locks: { "24.json": "{kaputt" }, issues: { 23: { state: "OPEN" }, 24: { state: "OPEN", labels: ["status:festgefahren"] } } };
+    const d = JSON.parse(M.fuehreAus(["--json"], baue(welt).deps).out) as { claims: { nr: number; lock: unknown; branchLokal: boolean; festgefahren: boolean; urteil: string }[] };
+    assert.deepEqual(d.claims.map((c) => [c.nr, c.lock, c.branchLokal, c.festgefahren, c.urteil]), [
+      [23, null, false, false, "ohne-lokale-spur"],
+      [24, "unlesbar", false, true, "lock-unlesbar"],
+    ]);
+  });
+
+  test("Verifikation nach dem Entfernen: schon ein Eintrag nur in der Liste oder nur auf der Platte ist ein FEHLER, der Lock bleibt", () => {
+    for (const abw of [{ bleibtInListe: true }, { bleibtAufPlatte: true }] as Partial<Welt>[]) {
+      const { deps, geloescht } = baue({ ...BELEG, ...abw });
+      const r = M.fuehreAus([], deps);
+      assert.equal(r.code, 1, JSON.stringify(abw));
+      assert.match(r.out, /FEHLER #1628: .*noch da/);
+      assert.deepEqual(geloescht, []);
+    }
+  });
+
+  test("ein räumbarer Worktree ohne Lock wird entfernt, ohne einen Lock zu löschen (kein Fehler)", () => {
+    const welt: Welt = { ...BELEG, locks: { "1530.json": BELEG.locks?.["1530.json"] ?? "", "1672.json": BELEG.locks?.["1672.json"] ?? "" } };
+    const b = baue(welt);
+    const r = M.fuehreAus([], b.deps);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /AUFGERAEUMT #1628: Worktree \S+ \(/);
+    assert.doesNotMatch(r.out, /Lock/);
+    assert.deepEqual(b.geloescht, []);
+  });
+
+  test("die Lock-Datei muss <Ziffern>.json heißen (Anker am Anfang): x1.json wird ignoriert statt zu scheitern", () => {
+    const r = M.fuehreAus([], baue({ locks: { "x1.json": lock(), "1672.json": alterLock }, issues: { 1672: { state: "OPEN" } } }).deps);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /WIEDERAUFNAHME #1672/);
+  });
+
+  test("ein Lock ohne jedes Lebenszeichen steht zuerst und ohne Stundenangabe; die Sortierung ist numerisch", () => {
+    const welt: Welt = { locks: { "30.json": JSON.stringify({ nonceHash: "h" }), "1672.json": alterLock }, issues: { 30: { state: "OPEN" }, 1672: { state: "OPEN" } } };
+    const zeilen = M.fuehreAus([], baue(welt).deps).out.trim().split("\n");
+    assert.match(zeilen[0], /^WIEDERAUFNAHME #30: kein Lebenszeichen feststellbar, letztes Lebenszeichen unbekannt; Weg: /);
+    assert.doesNotMatch(zeilen[0], /\(vor/);
+    assert.match(zeilen[1], /^WIEDERAUFNAHME #1672: .*\(vor 7 h\)/);
+    const jung = lock({ erstellt: "2026-10-16T07:36:00.000Z" });
+    const d = JSON.parse(M.fuehreAus(["--json"], baue({ locks: { "1000.json": jung, "999.json": jung }, issues: { 999: { state: "OPEN" }, 1000: { state: "OPEN" } } }).deps).out) as { claims: { nr: number }[] };
+    assert.deepEqual(d.claims.map((c) => c.nr), [999, 1000]);
+  });
+
+  test("verschwindet eine Lock-Datei zwischen Auflisten und Lesen (ENOENT), gilt sie als unlesbar statt als Fehler", () => {
+    const r = M.fuehreAus([], baue({ locks: { "31.json": lock() }, liesFehlerBei: "31.json", issues: { 31: { state: "CLOSED" } } }).deps);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /BEHALTEN #31: lock-unlesbar/);
   });
 
   test("ohne Kandidaten: Exit 0 und leere Ausgabe", () => {

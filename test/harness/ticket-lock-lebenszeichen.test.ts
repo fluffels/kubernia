@@ -130,6 +130,24 @@ describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", 
     assert.equal(L.lebenszeichenMs({}), null);
   });
 
+  test.each([
+    ["uebergabe.gesetzt", { uebergabe: { gesetzt: iso(JETZT - 1 * MIN), verbraucht: null } }],
+    ["uebergabe.verbraucht", { uebergabe: { gesetzt: iso(JETZT - 9 * MIN), verbraucht: iso(JETZT - 1 * MIN) } }],
+    ["gestoppt.gesetzt", { gestoppt: { gesetzt: iso(JETZT - 1 * MIN), verbraucht: null } }],
+    ["gestoppt.verbraucht", { gestoppt: { gesetzt: iso(JETZT - 9 * MIN), verbraucht: iso(JETZT - 1 * MIN) } }],
+    ["zuletzt.zeit", { zuletzt: { zeit: iso(JETZT - 1 * MIN) } }],
+  ])("lebenszeichenMs zählt das Feld %s allein als Maximum", (_name, extra) => {
+    assert.equal(L.lebenszeichenMs({ erstellt: iso(JETZT - 60 * MIN), ...extra }), JETZT - 1 * MIN);
+  });
+
+  test("herzschlagMs: nur zuletzt.zeit zählt, erstellt nie; ungültig oder fehlend ergibt null", () => {
+    const h = (rawLib as unknown as { herzschlagMs: (l: Lock | null) => number | null }).herzschlagMs;
+    assert.equal(h({ erstellt: iso(JETZT), zuletzt: { zeit: iso(JETZT - 5 * MIN) } }), JETZT - 5 * MIN);
+    assert.equal(h({ erstellt: iso(JETZT) }), null);
+    assert.equal(h({ zuletzt: { zeit: "kein Datum" } }), null);
+    assert.equal(h(null), null);
+  });
+
   test("oeffentlicheSicht nennt nie nonce oder nonceHash und fasst Übergabe und Stopp zusammen", () => {
     const sicht = L.oeffentlicheSicht({ nr: 5, nonce: "geheim", nonceHash: "auch", erstellt: "x", uebergabe: { gesetzt: "a", verbraucht: null }, gestoppt: { gesetzt: "a", verbraucht: "b" } });
     assert.doesNotMatch(JSON.stringify(sicht), /geheim|"auch"|nonce/);
