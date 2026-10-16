@@ -238,6 +238,7 @@ describe("harnessQuellen: der Loader", () => {
     ["githook", { ...CONFIG, harness: { ...CONFIG.harness, gitHooks: undefined } }],
     ["mcp", { ...CONFIG, harness: { ...CONFIG.harness, mcp: undefined } }],
     ["ciworkflow", { ...CONFIG, kennzahlen: {} }],
+    ["ciworkflow", { ...CONFIG, kennzahlen: undefined }],
     ["gate", { ...CONFIG, gates: { ...CONFIG.gates, chains: "verify" } }],
     ["gate", { ...CONFIG, gates: { chains: CONFIG.gates.chains } }],
     ["gate", { ...CONFIG, gates: undefined }],
@@ -246,6 +247,11 @@ describe("harnessQuellen: der Loader", () => {
     const q = api.harnessQuellen(fixture(FILES()), config);
     assert.equal(q[binder], undefined);
     assert.deepEqual(Object.keys(q).sort(), api.HARNESS_BINDER.filter((b) => b !== binder).sort());
+  });
+
+  test("package.json ohne scripts ergibt eine leere Gate-Liste statt eines Wurfs", () => {
+    const q = api.harnessQuellen(fixture(FILES({ "package.json": "{}" })), CONFIG, ["gate"]);
+    assert.deepEqual(q.gate.eintraege, []);
   });
 
   test("eine Config ganz ohne harness-Block: die sechs Harness-Binder fehlen, CI und Gates bleiben (kein TypeError)", () => {
