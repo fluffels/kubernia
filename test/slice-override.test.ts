@@ -4,7 +4,7 @@
  * Reines Node-Tooling ohne Declaration-File: Namespace einmal auf eine lokale Oberfläche gebracht. */
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -247,5 +247,21 @@ describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem F
     expect(h[0]).toContain(`"${KEY}: #<nr> <warum>"`);
     expect(V.versetzteOverrideHinweis(KEY, [])).toEqual([]);
     expect(V.versetzteOverrideHinweis(KEY, undefined)).toEqual([]);
+  });
+});
+
+describe("Gates ohne Projekt-Config (#1741): kein Standardwert, Exit 1 mit der Meldung des Laders", { timeout: 60_000 }, () => {
+  it.each(["check-diffsize.mjs", "check-diffcoverage.mjs", "check-lockfile.mjs"])("%s", (skript) => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-gate-ohne-config-"));
+    try {
+      // Kopie der Skripte ohne .factory/projekt.json: der Lader sucht die Config relativ zu seinem Ort.
+      cpSync(join(__dirname, "..", "scripts"), join(dir, "scripts"), { recursive: true });
+      const r = spawnSync(process.execPath, [join(dir, "scripts", skript)], { cwd: dir, encoding: "utf8" });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain("Projekt-Config");
+      expect(r.stderr).toContain("Fix:");
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 });
