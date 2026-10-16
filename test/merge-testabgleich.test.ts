@@ -170,3 +170,84 @@ describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
     assert.match(r.text, /weder ein Merge in Arbeit/);
   });
 });
+
+describe("Wächter-Lauf-Hinweis (#1693 L63)", () => {
+  const W = M as unknown as { gemeinsameWaechterDateien: (u: string[], i: string[]) => string[] };
+  test("nur Dateien unter .claude/, docs/ und AGENTS.md, die BEIDE Seiten berühren", () => {
+    const u = [".claude/skills/a/SKILL.md", "docs/x.md", "AGENTS.md", "src/a.ts", "docs/nur-unsere.md", "README.md"];
+    const i = [".claude/skills/a/SKILL.md", "docs/x.md", "AGENTS.md", "src/a.ts", "docs/nur-ihre.md", "README.md"];
+    assert.deepEqual(W.gemeinsameWaechterDateien(u, i), [".claude/skills/a/SKILL.md", "AGENTS.md", "docs/x.md"]);
+  });
+  test("keine Überschneidung oder fremde Pfade (Präfix-Falle: docs-alt/, AGENTS.mdx): leer", () => {
+    assert.deepEqual(W.gemeinsameWaechterDateien(["docs/a.md"], ["docs/b.md"]), []);
+    assert.deepEqual(W.gemeinsameWaechterDateien(["docs-alt/a.md", "AGENTS.mdx", ".claudeX/a"], ["docs-alt/a.md", "AGENTS.mdx", ".claudeX/a"]), []);
+    assert.deepEqual(W.gemeinsameWaechterDateien([], []), []);
+  });
+});
+
+describe("pruefeMerge nennt den Wächter-Lauf (#1693 L63)", () => {
+  const ordner: string[] = [];
+  afterEach(() => {
+    for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const gitIn = (cwd: string) => (args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  /** Basis mit docs/a.md und docs/b.md; main ändert die Datei `mainDatei`, der Feature-Branch `featureDatei` (konfliktfrei, wenn verschieden). */
+  const merge = (featureDatei: string, mainDatei: string) => {
+    const root = mkdtempSync(join(tmpdir(), "kq-merge-w-"));
+    ordner.push(root);
+    const g = gitIn(root);
+    const schreibe = (p: string, t: string) => {
+      mkdirSync(dirname(join(root, p)), { recursive: true });
+      writeFileSync(join(root, p), t);
+    };
+    g(["init", "-q", "-b", "main"]);
+    schreibe("docs/a.md", "a\n");
+    schreibe("docs/b.md", "b\n");
+    g(["add", "-A"]);
+    g(["commit", "-q", "-m", "basis"]);
+    g(["checkout", "-q", "-b", "feature"]);
+    schreibe(featureDatei, "feature\n");
+    g(["commit", "-qam", "feature"]);
+    g(["checkout", "-q", "main"]);
+    schreibe(mainDatei, mainDatei === featureDatei ? "main\n" : "main-anders\n");
+    g(["commit", "-qam", "main"]);
+    g(["checkout", "-q", "feature"]);
+    g(["merge", "-q", "--no-edit", "main"]);
+    return { root, g };
+  };
+  const lies = (root: string) => (p: string) => (existsSync(join(root, p)) ? readFileSync(join(root, p), "utf8") : null);
+  const HINWEIS = /Wächter-Lauf nötig: npx vitest run test\/harness/;
+
+  test("verschiedene docs-Dateien je Seite: kein Hinweis", () => {
+    const { root, g } = merge("docs/a.md", "docs/b.md");
+    const r = M.pruefeMerge({ git: g, lies: lies(root) });
+    assert.equal(r.code, 0, r.text);
+    assert.doesNotMatch(r.text, HINWEIS);
+  });
+  test("beide Seiten berühren dieselbe Datei unter docs/ (ohne Test-Verlust): Hinweis bei Exit 0", () => {
+    const root = mkdtempSync(join(tmpdir(), "kq-merge-w2-"));
+    ordner.push(root);
+    const g = gitIn(root);
+    const schreibe = (p: string, t: string) => {
+      mkdirSync(dirname(join(root, p)), { recursive: true });
+      writeFileSync(join(root, p), t);
+    };
+    g(["init", "-q", "-b", "main"]);
+    schreibe("docs/a.md", "1\n2\n3\n4\n5\n6\n7\n8\n9\n");
+    g(["add", "-A"]);
+    g(["commit", "-q", "-m", "basis"]);
+    g(["checkout", "-q", "-b", "feature"]);
+    schreibe("docs/a.md", "eins\n2\n3\n4\n5\n6\n7\n8\n9\n");
+    g(["commit", "-qam", "feature"]);
+    g(["checkout", "-q", "main"]);
+    schreibe("docs/a.md", "1\n2\n3\n4\n5\n6\n7\n8\nneun\n");
+    g(["commit", "-qam", "main"]);
+    g(["checkout", "-q", "feature"]);
+    g(["merge", "-q", "--no-edit", "main"]);
+    const r = M.pruefeMerge({ git: g, lies: lies(root) });
+    assert.equal(r.code, 0, r.text);
+    assert.match(r.text, HINWEIS);
+    assert.match(r.text, /docs\/a\.md/);
+  });
+});

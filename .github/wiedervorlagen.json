@@ -1,5 +1,11 @@
 [
   {
+    "id": "review-cap-wirkung",
+    "faellig": "2026-11-06",
+    "titel": "Review-Cap-Wirkung nachmessen (Guard-Vollständigkeit in Runde 1)",
+    "text": "`node scripts/lauf-ergebnis.mjs --von 2026-10-17T00:00:00Z --bis <heute>` auswerten (Anteil `runden=3`, `runden>3` (Zusatzpass), Blocker je Brille). Basis 2026-10-09 bis 2026-10-16 (78 Läufe mit Nachweis): runden=1 12, =2 32, =3 24, >3 10; Blocker Test-Adäquanz 161 von 219. Ist die Quote `runden>=3` mit rund 44 % unverändert, ein Ticket für einen mechanischen Guard-Check anlegen (Guards je neuer Funktion maschinell auflisten, kein Stryker, ADR 0027: keine Regeländerung ohne Evidenz); sonst den Eintrag löschen."
+  },
+  {
     "id": "langfuse-takt-schwelle",
     "faellig": "2026-11-13",
     "titel": "Langfuse-Takt-Schwelle prüfen",
