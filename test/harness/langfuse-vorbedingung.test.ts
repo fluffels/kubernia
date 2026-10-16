@@ -127,6 +127,16 @@ describe("main", () => {
     await v.main([], { LANGFUSE_BASE_URL: "http://env:1" }, () => {}, () => {}, { fetchImpl: f, home: "/h", lies });
     expect(urls).toEqual(["http://plugin:3000/api/public/health", "http://env:1/api/public/health"]);
   });
+  test("die Vorbedingung liest nie eine Secret-Datei (.langfuse-secret, agent-secrets.env)", async () => {
+    const gelesen: string[] = [];
+    const lies = (pfad: string) => {
+      gelesen.push(pfad);
+      throw new Error("keine Datei");
+    };
+    await v.main([], {}, () => {}, () => {}, { fetchImpl: () => Promise.resolve({ status: 200 }), home: "/h", lies });
+    expect(gelesen.length).toBeGreaterThan(0);
+    expect(gelesen.filter((p) => /langfuse-secret|agent-secrets/.test(p))).toEqual([]);
+  });
   test("--sessionstart: erreichbar bleibt still", async () => {
     const r = await lauf(["--sessionstart"], antwort(200));
     expect(r.code).toBe(0);

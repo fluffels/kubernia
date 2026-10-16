@@ -42,6 +42,16 @@ export function lesePluginOptionen(text) {
   return out;
 }
 
+/** Basis-URL ohne Secret-Dateien: Umgebung (Vorrang), sonst die Plugin-Optionen der User-Settings; `undefined`, wenn keine da ist. */
+export function basisUrlAus(env, home, lies = (p) => readFileSync(p, "utf8")) {
+  if (env.LANGFUSE_BASE_URL) return env.LANGFUSE_BASE_URL;
+  try {
+    return lesePluginOptionen(lies(join(home, ".claude", "settings.json"))).LANGFUSE_BASE_URL;
+  } catch {
+    return undefined; // keine Settings: Aufrufer nimmt seinen Standard
+  }
+}
+
 /**
  * Umgebung des Kindes: fehlende Zugangsnamen kommen aus `~/.config/agent-secrets.env` (optional), den Plugin-Optionen in `~/.claude/settings.json`
  * (öffentlicher Key, URL) und `~/.langfuse-secret` (Secret-Key); ein Projekt-Hook sieht den Secret-Key sonst nicht. Die Umgebung hat Vorrang vor allem.
