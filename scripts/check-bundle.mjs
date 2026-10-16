@@ -115,7 +115,7 @@ export const BUNDLE_BUDGETS = [
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 591_000, // #1530: kubectl create/set/auth prüfen Eingaben wie kubectl (Namens-, Flag- und Argumentprüfung), +0,2 KB über dem Gateway-Stand
+    maxBytes: 591_000, // #1530: kubectl create/set/auth prüfen Eingaben wie kubectl (Namens-, Flag- und Argumentprüfung), Messwert 590135 B
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
