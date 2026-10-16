@@ -78,6 +78,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, #604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, #593) | `npm run check:lockfile` |
 | Bundle-Byte-Budget-Wächter (je Chunk-Art: Offline-HTML ohne Content, Spielcode, Content-Chunks, Phaser-vendor, NACH den Builds, #503/#595/#1408) | `npm run check:bundle` |
+| CycloneDX-SBOM aus dem Lockfile erzeugen und prüfen (CI-Artefakt `kubernia-sbom-cyclonedx`, #1617) | `npm run sbom` |
 | Duplikations-Report (jscpd, **weich/nicht-blockierend** — kein Gate, nur CI-Artefakt, #612) | `npm run check:duplication` |
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
 
