@@ -158,7 +158,7 @@ export const SCHICHTDATEN_AUSNAHMEN: Record<string, string> = {};
 const CODE_ENDUNG = /\.(?:mjs|cjs|js|ts)$/;
 
 /** Einheiten (Ganze-Datei-Einheiten beider Ringe), die die Schichtdaten statisch importieren. Nur direkte Importe
- *  (`IMPORT_FORM`), relativ zum Ordner der importierenden Datei aufgelöst; ein dynamisches `require(cfg.layers)` ist
+ *  (`relativeImporte`), relativ zum Ordner der importierenden Datei aufgelöst; ein dynamisches `require(cfg.layers)` ist
  *  der erlaubte Weg (der Kern lädt die Schichtdaten über den konfigurierten Pfad). */
 export function schichtdatenImporte(eintraege: Eintrag[], lies: (pfad: string) => string | null, schichtdatenPfad: string): string[] {
   const ziel = posix.normalize(schichtdatenPfad);
@@ -249,7 +249,10 @@ export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => 
     const text = lies(von);
     if (text === null) continue;
     for (const spec of relativeImporte(text)) {
-      const nach = posix.normalize(posix.join(posix.dirname(von), spec));
+      const roh = posix.normalize(posix.join(posix.dirname(von), spec));
+      // Endungslos (`require("./b")`) trifft eine Besitz-Datei mit beliebiger Code-Endung.
+      const mitEndung = /\.\w+$/.test(posix.basename(roh)) ? undefined : [".mjs", ".cjs", ".js"].map((x) => roh + x).find((p) => ganze.has(p));
+      const nach = mitEndung ?? roh;
       const id = `${von} -> ${nach}`;
       if (!ganze.has(nach) && nach !== PROJEKT_CONFIG_PFAD && !out.includes(id)) out.push(id);
     }
@@ -515,6 +518,11 @@ describe("huellenVerstoesse / pruefeHuelle (#1613)", () => {
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import c from "../.factory/projekt.json";' })), []);
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./proj.mjs";' })), ["scripts/a.mjs -> scripts/proj.mjs"]);
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const c = require("../x.cjs");' })), ["scripts/a.mjs -> x.cjs"]);
+  });
+  test("endungsloser Import wird gegen Besitz aufgelöst; auf Nicht-Besitz und ein .js-Import auf Nicht-Besitz sind Verstöße", () => {
+    assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const b = require("./b");' })), []);
+    assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const b = require("./proj");' })), ["scripts/a.mjs -> scripts/proj"]);
+    assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import "./x.js";' })), ["scripts/a.mjs -> scripts/x.js"]);
   });
   test("JSON-Importe zählen, fremde JSON-Dateien sind ein Verstoß", () => {
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import c from "./daten.json";' })), ["scripts/a.mjs -> scripts/daten.json"]);
