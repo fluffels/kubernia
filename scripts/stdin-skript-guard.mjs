@@ -4,7 +4,7 @@
  * (`python3 - <<EOF`, `node - <<EOF`, `node <<EOF`, `cat x | python3`, `node <<< '…'`).
  *
  * Anlass: ein solcher Aufruf wanderte unter Git-Bash in den Hintergrund und hielt den Worktree-Ordner, `git worktree remove`
- * scheiterte mit „Permission denied“. Die Regel stand nur als Bitte in kubernia-umsetzer.md und der FAQ; hier wird sie
+ * scheiterte mit „Permission denied“. Die Regel stand nur als Bitte in der Umsetzer-Definition und der FAQ; hier wird sie
  * zum deny. Ausweg (steht in der Begründung): Skript per Write in den Scratchpad, dann `node <pfad>` bzw. `python -I <pfad>`;
  * Einzeiler per `node -e`.
  *
