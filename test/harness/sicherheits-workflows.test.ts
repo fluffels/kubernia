@@ -4,10 +4,8 @@
  *
  * Erzwungen wird: minimale Permissions (oben kein `write`, `security-events: write` nur im Job mit `codeql-action/analyze`),
  * Actions per Commit-SHA mit Versionskommentar gepinnt, Scorecard ohne Veröffentlichung (`publish_results: false`, kein PAT,
- * kein `id-token`), keine PR-Trigger bei Scorecard, `persist-credentials: false` am Checkout und CodeQL-Jobnamen mit einem
- * Präfix aus `BERICHTEND` von `scripts/pr-warten.mjs` (die CI-Warteschleife meldet deren Rot nur als HINWEIS). Dass kein
- * Jobname einen Required-Check beschattet, erzwingt required-check-shadowing.test.ts für alle Workflows; hier nur, dass
- * kein Required-Kontext selbst mit einem BERICHTEND-Präfix beginnt.
+ * kein `id-token`), keine PR-Trigger bei Scorecard und `persist-credentials: false` am Checkout. Dass kein
+ * Jobname einen Required-Check beschattet, erzwingt required-check-shadowing.test.ts für alle Workflows.
  *
  * Gelesen wird mit der `yaml`-Bibliothek (Struktur: Trigger, Permissions, Jobs, Schritte, `with`). Ehrliche Grenzen:
  * (1) Die Pin-Prüfung liest zeilenweise, weil der Versionskommentar im Syntaxbaum nicht steht; sie kennt nur `uses:` in einer
@@ -21,21 +19,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rulesetSpiegel from "../../scripts/docs-gen/ruleset-spiegel.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as prWarten from "../../scripts/pr-warten.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const lies = (...teile: string[]) => readFileSync(join(ROOT, ...teile), "utf8");
 
 /** Workflows mit Pin-Pflicht; #983 erweitert die Liste auf alle. */
 const PIN_PFLICHT = ["codeql.yml", "scorecard.yml", "codescanning-inbox.yml"] as const;
-const BERICHTEND = (prWarten as unknown as { BERICHTEND: readonly string[] }).BERICHTEND;
-const REQUIRED = (rulesetSpiegel as unknown as { pruefeRulesetSpiegel: (r: unknown, p: string) => { requiredChecks: string[] } }).pruefeRulesetSpiegel(
-  JSON.parse(lies(".github", "ruleset-main-schutz.json")),
-  "Spiegel",
-).requiredChecks;
 
 type Obj = Record<string, unknown>;
 const istObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -103,8 +92,6 @@ function pruefe(yml: string, art: "codeql" | "scorecard"): string[] {
   for (const [name, j] of jobs) {
     const rechte = schreibRechte(j.permissions).filter((r) => r !== "security-events: write");
     if (rechte.length) fehler.push(`Job ${name}: unerlaubte Schreibrechte (${rechte.join(", ")})`);
-    const jobName = typeof j.name === "string" ? j.name : "";
-    if (art === "codeql" && !BERICHTEND.some((p) => jobName.startsWith(p))) fehler.push(`Job ${name}: Name beginnt mit keinem BERICHTEND-Präfix`);
     for (const s of schritte(j)) {
       if (typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && !(istObj(s.with) && s.with["persist-credentials"] === false)) {
         fehler.push(`Job ${name}: Checkout ohne persist-credentials: false`);
@@ -183,12 +170,6 @@ describe("echte Dateien", () => {
   test("PIN_PFLICHT: jede Datei der Liste ist komplett gepinnt", () => {
     for (const d of PIN_PFLICHT) expect(ungepinnteUses(lies(".github", "workflows", d)), d).toEqual([]);
   });
-  test("kein Required-Check-Kontext beginnt mit einem BERICHTEND-Präfix", () => {
-    for (const k of REQUIRED) for (const p of BERICHTEND) expect(k.startsWith(p), `${k} / ${p}`).toBe(false);
-  });
-  test("BERICHTEND ist nicht leer (sonst gäbe es keine berichtende Klasse)", () => {
-    expect(BERICHTEND.length).toBeGreaterThan(0);
-  });
 });
 
 describe("Fixtures: gültige Grundform", () => {
@@ -234,7 +215,6 @@ describe("Negativfälle: jede Regel verfälscht für sich", () => {
     const trig = ["  push:\n    branches: [main]", ...Object.entries(alle).filter(([n]) => n !== k).map(([, v]) => v)].join("\n");
     nur(pruefe(scorecard({ trig }), "scorecard"), `Trigger ${k} fehlt`);
   });
-  test("Jobname ohne BERICHTEND-Präfix",() => nur(pruefe(codeql({ name: "Analyse" }), "codeql"), "BERICHTEND"));
   test("Matrix ohne actions", () => nur(pruefe(codeql().replace("javascript-typescript, actions", "javascript-typescript"), "codeql"), "Matrix ohne actions"));
   test("Matrix ohne javascript-typescript", () => nur(pruefe(codeql().replace("javascript-typescript, actions", "actions"), "codeql"), "Matrix ohne javascript-typescript"));
   test("pull_request-Trigger fehlt bei CodeQL", () => nur(pruefe(codeql({ trig: "  push:\n    branches: [main]\n  schedule:\n    - cron: '1 1 * * 1'\n  workflow_dispatch:" }), "codeql"), "Trigger pull_request fehlt"));

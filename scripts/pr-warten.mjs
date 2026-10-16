@@ -5,23 +5,25 @@
  *   node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]
  *
  * Ein Aufruf pollt höchstens `--max-sekunden` (Standard 240, unter der 5-Minuten-Cache-TTL der Subagenten: eine längere
- * Pause baut den ganzen Kontext neu auf, docs/model-routing.md § Umsetzer-Kontext) und gibt eine kompakte Zeile aus (bei rotem berichtendem Check zusätzlich eine `HINWEIS`-Zeile):
+ * Pause baut den ganzen Kontext neu auf, docs/model-routing.md § Umsetzer-Kontext) und gibt eine kompakte Zeile aus (bei rotem Nicht-Pflicht-Check zusätzlich eine `HINWEIS`-Zeile):
  *   Exit 0  `MERGED <sha>`
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln)
- *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (berichtend, kein Merge-Gate)` je rotem Check aus `BERICHTEND` (kein ROT, zählt nicht mit).
+ *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (kein Pflicht-Check, kein Merge-Gate)` je rotem Check außerhalb der Pflicht-Checks (kein ROT, zählt nicht mit).
+ * Pflicht-Checks: `gh pr checks <pr> --required --json name`; nur sie gaten. Schlägt das Holen fehl oder ist die Liste leer, gatet jeder Check (fail-closed).
+ * `KONFLIKT` meldet erst eine zweite Abfrage im Abstand von mindestens 15 s (`mergeable` flackert, auch UNKNOWN).
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
  * `statusCheckRollup` liefert `gh` mit der Standardgrenze (rund 100 Einträge); die CI hat deutlich weniger Checks.
  * Der Kern `bewerte` ist pur; CLI und `ghJson`-Aufruf sind dünne, ungetestete IO.
  */
 import { pathToFileURL } from "node:url";
-import { ghJson } from "./gh-cli.mjs";
+import { ghJson, ghText } from "./gh-cli.mjs";
 
 const ROT = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"]);
 const GRUEN = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
-/** Berichtende Checks (Namenspräfix, case-sensitiv): ihr Rot sperrt den Merge nicht, `bewerte` meldet es als `HINWEIS` (#875). */
-export const BERICHTEND = ["CodeQL"];
+/** Mindestabstand der zwei Abfragen, bevor ein Konflikt gemeldet wird: `mergeable` ist kurz nach einem Push UNKNOWN oder flackert. */
+export const KONFLIKT_ABSTAND_MS = 15_000;
 export const FELDER = "state,mergeable,statusCheckRollup,autoMergeRequest,mergeCommit";
 
 /** Ein Rollup-Eintrag (CheckRun oder StatusContext) → `{ name, art: "rot" | "gruen" | "offen", url }`. */
@@ -35,14 +37,19 @@ function eintrag(e) {
   return { name: e?.name ?? "?", art: !fertig ? "offen" : ROT.has(c) ? "rot" : GRUEN.has(c) ? "gruen" : "rot", url: e?.detailsUrl ?? "" };
 }
 
-/** `gh pr view --json ${FELDER}` → `{ exit, zeilen }`. Exit 2 heißt: noch offen, weiter warten. */
-export function bewerte(pr) {
+/**
+ * `gh pr view --json ${FELDER}` → `{ exit, zeilen }`. Exit 2 heißt: noch offen, weiter warten.
+ * `pflicht`: Namen der Pflicht-Checks (exakt); nur sie gaten, ein rotes anderes Check wird ein `HINWEIS`. Fehlt die Liste
+ * oder ist sie leer, gatet jedes Check (fail-closed).
+ */
+export function bewerte(pr, pflicht = null) {
   if (pr?.state === "MERGED") return { exit: 0, zeilen: [`MERGED ${String(pr.mergeCommit?.oid ?? "").slice(0, 7)}`.trim()] };
   if (pr?.state === "CLOSED") return { exit: 3, zeilen: ["GESCHLOSSEN"] };
   const alle = (pr?.statusCheckRollup ?? []).map(eintrag);
-  // Berichtende Checks sperren den Merge nicht: sie zählen weder zu rot noch zu grün noch zu wartend.
-  const checks = alle.filter((c) => !BERICHTEND.some((p) => c.name.startsWith(p)));
-  const hinweise = alle.filter((c) => c.art === "rot" && !checks.includes(c)).map((c) => `HINWEIS ${c.name} ${c.url} (berichtend, kein Merge-Gate)`);
+  // Nicht-Pflicht-Checks sperren den Merge nicht: sie zählen weder zu rot noch zu grün noch zu wartend.
+  const gatet = Array.isArray(pflicht) && pflicht.length ? new Set(pflicht) : null;
+  const checks = gatet ? alle.filter((c) => gatet.has(c.name)) : alle;
+  const hinweise = alle.filter((c) => c.art === "rot" && !checks.includes(c)).map((c) => `HINWEIS ${c.name} ${c.url} (kein Pflicht-Check, kein Merge-Gate)`);
   const mit = (exit, zeilen) => ({ exit, zeilen: [...zeilen, ...hinweise] });
   if (pr?.mergeable === "CONFLICTING") return mit(3, ["KONFLIKT"]);
   const rot = checks.filter((c) => c.art === "rot");
@@ -57,22 +64,50 @@ export function bewerte(pr) {
 }
 
 /**
- * Pollt `hole()` bis ein Ergebnis ≠ Exit 2 kommt oder das Zeitbudget abläuft. Drei gh-Fehler in Folge → Exit 3.
- * @param {{ hole: () => object, schlafe: (ms: number) => void, jetzt: () => number, maxMs: number, intervallMs: number }} e
+ * Entscheidung über einen gesehenen Konflikt: `seit` ist der Zeitpunkt der ersten Beobachtung (null: noch keine).
+ * Bestätigt ist er erst, wenn die erste mindestens `KONFLIKT_ABSTAND_MS` zurückliegt. → `{ bestaetigt, seit }`.
  */
-export function warten({ hole, schlafe, jetzt, maxMs, intervallMs }) {
+export function konfliktStand(seit, jetzt) {
+  if (seit === null || seit === undefined) return { bestaetigt: false, seit: jetzt };
+  return { bestaetigt: jetzt - seit >= KONFLIKT_ABSTAND_MS, seit };
+}
+
+/**
+ * Pollt `hole()` bis ein Ergebnis ≠ Exit 2 kommt oder das Zeitbudget abläuft. Drei gh-Fehler in Folge → Exit 3.
+ * `pflicht()` liefert die Namen der Pflicht-Checks (einmal erfolgreich geholt, sonst bei jeder Abfrage neu; ein Fehler heißt: alle gaten).
+ * Ein Konflikt wird erst gemeldet, wenn eine zweite Abfrage mindestens `KONFLIKT_ABSTAND_MS` später ihn bestätigt (auch über das Budget hinaus).
+ * @param {{ hole: () => object, pflicht?: () => readonly string[], schlafe: (ms: number) => void, jetzt: () => number, maxMs: number, intervallMs: number }} e
+ */
+export function warten({ hole, pflicht = () => [], schlafe, jetzt, maxMs, intervallMs }) {
   const ende = jetzt() + maxMs;
   let fehler = 0;
   let letzte;
+  let liste = null;
+  let konfliktSeit = null;
   for (;;) {
     try {
-      letzte = bewerte(hole());
+      if (!liste) {
+        try {
+          liste = pflicht();
+        } catch {
+          liste = null;
+        }
+      }
+      letzte = bewerte(hole(), liste);
       fehler = 0;
     } catch (err) {
       fehler += 1;
       letzte = { exit: 2, zeilen: [`GH-FEHLER ${String(err?.message ?? err).split("\n")[0].slice(0, 120)}`] };
       if (fehler >= 3) return { exit: 3, zeilen: letzte.zeilen };
     }
+    if (letzte.exit === 3 && letzte.zeilen[0] === "KONFLIKT") {
+      const k = konfliktStand(konfliktSeit, jetzt());
+      if (k.bestaetigt) return letzte;
+      konfliktSeit = k.seit;
+      schlafe(KONFLIKT_ABSTAND_MS);
+      continue;
+    }
+    konfliktSeit = null;
     if (letzte.exit !== 2 || jetzt() + intervallMs >= ende) return letzte;
     schlafe(intervallMs);
   }
@@ -90,6 +125,18 @@ export function parseArgs(argv) {
   return a;
 }
 
+/** Namen der Pflicht-Checks. `gh pr checks` endet mit Exit 8, solange Checks laufen; die JSON-Ausgabe steht dann trotzdem in stdout. */
+function holePflicht(pr) {
+  let text;
+  try {
+    text = ghText(["pr", "checks", pr, "--required", "--json", "name"], { timeout: 30_000 });
+  } catch (err) {
+    text = String(err?.stdout ?? "");
+    if (!text.trim().startsWith("[")) throw err;
+  }
+  return JSON.parse(text).map((c) => c.name);
+}
+
 function main() {
   const a = parseArgs(process.argv.slice(2));
   if (!a.pr || !(a.maxSekunden > 0) || !(a.intervall > 0)) {
@@ -98,6 +145,7 @@ function main() {
   }
   const r = warten({
     hole: () => ghJson(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 }),
+    pflicht: () => holePflicht(a.pr),
     schlafe: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
     jetzt: () => Date.now(),
     maxMs: a.maxSekunden * 1000,

@@ -5,9 +5,9 @@ import * as raw from "../scripts/pr-warten.mjs";
 
 type Erg = { exit: number; zeilen: string[] };
 const P = raw as unknown as {
-  bewerte: (pr: object) => Erg;
-  BERICHTEND: readonly string[];
-  warten: (e: { hole: () => object; schlafe: (ms: number) => void; jetzt: () => number; maxMs: number; intervallMs: number }) => Erg;
+  bewerte: (pr: object, pflicht?: readonly string[] | null) => Erg;
+  konfliktStand: (seit: number | null, jetzt: number) => { bestaetigt: boolean; seit: number };
+  warten: (e: { hole: () => object; pflicht?: () => readonly string[]; schlafe: (ms: number) => void; jetzt: () => number; maxMs: number; intervallMs: number }) => Erg;
   parseArgs: (a: string[]) => { pr: string | null; maxSekunden: number; intervall: number };
 };
 
@@ -49,52 +49,89 @@ describe("bewerte", () => {
   });
 });
 
-describe("bewerte: berichtende Checks (#875)", () => {
-  const gruen = lauf("Tests, Typecheck & Builds", "COMPLETED", "SUCCESS");
-  const hinweis = (n: string) => `HINWEIS ${n} https://x/runs/${n} (berichtend, kein Merge-Gate)`;
-  test("BERICHTEND führt genau CodeQL", () => {
-    expect([...P.BERICHTEND]).toEqual(["CodeQL"]);
-  });
-  test("rotes CodeQL bei sonst grünem Stand: Exit 2 mit Merge steht aus plus HINWEIS", () => {
-    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "FAILURE")]));
+describe("bewerte: Check-Kategorie Pflicht gegen sonstig (#1663 L17)", () => {
+  const PFLICHT = ["Tests, Typecheck & Builds"];
+  const gruen = lauf(PFLICHT[0], "COMPLETED", "SUCCESS");
+  const hinweis = (n: string) => `HINWEIS ${n} https://x/runs/${n} (kein Pflicht-Check, kein Merge-Gate)`;
+  test("rotes Nicht-Pflicht-Check bei sonst grünem Stand: Exit 2 mit Merge steht aus plus HINWEIS", () => {
+    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "FAILURE")]), PFLICHT);
     expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus", hinweis("CodeQL")] });
   });
-  test("rotes CodeQL-Analyse plus anderer roter Check: nur der andere ist ROT, dazu HINWEIS", () => {
-    const r = P.bewerte(offen([lauf("CodeQL-Analyse (actions)", "COMPLETED", "FAILURE"), lauf("b", "COMPLETED", "FAILURE")]));
+  test("rotes Nicht-Pflicht-Check plus roter Pflicht-Check: nur der Pflicht-Check ist ROT, dazu HINWEIS", () => {
+    const r = P.bewerte(offen([lauf("Deploy", "COMPLETED", "FAILURE"), lauf(PFLICHT[0], "COMPLETED", "FAILURE")]), PFLICHT);
     expect(r.exit).toBe(1);
-    expect(r.zeilen).toEqual(["ROT b https://x/runs/b", hinweis("CodeQL-Analyse (actions)")]);
+    expect(r.zeilen).toEqual([`ROT ${PFLICHT[0]} https://x/runs/${PFLICHT[0]}`, hinweis("Deploy")]);
   });
-  test("laufendes CodeQL blockiert nicht und wird nicht als wartend gezählt", () => {
-    const r = P.bewerte(offen([gruen, lauf("CodeQL-Analyse (actions)", "IN_PROGRESS")]));
+  test("laufendes Nicht-Pflicht-Check blockiert nicht und wird nicht als wartend gezählt", () => {
+    const r = P.bewerte(offen([gruen, lauf("CodeQL-Analyse (actions)", "IN_PROGRESS")]), PFLICHT);
     expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus"] });
   });
-  test("grünes CodeQL ohne Auto-Merge zählt nicht zum grünen Stand", () => {
-    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }));
+  test("grünes Nicht-Pflicht-Check ohne Auto-Merge zählt nicht zum grünen Stand", () => {
+    const r = P.bewerte(offen([gruen, lauf("Deploy", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }), PFLICHT);
     expect(r).toEqual({ exit: 3, zeilen: ["GRÜN OHNE AUTO-MERGE"] });
   });
-  test("nur berichtende Checks zählen wie ein leerer Rollup", () => {
-    const r = P.bewerte(offen([lauf("CodeQL", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }));
+  test("nur Nicht-Pflicht-Checks zählen wie ein leerer Rollup", () => {
+    const r = P.bewerte(offen([lauf("Deploy", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }), PFLICHT);
     expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 0/0 grün, wartend: Checks starten"] });
   });
-  test("rotes CodeQL plus laufender Check: wartend plus HINWEIS", () => {
-    const r = P.bewerte(offen([gruen, lauf("b", "IN_PROGRESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]));
-    expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 1/2 grün, wartend: b", hinweis("CodeQL")] });
-  });
-  test("rotes CodeQL bei grünem Stand ohne Auto-Merge: GRÜN OHNE AUTO-MERGE plus HINWEIS", () => {
-    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "FAILURE")], { autoMergeRequest: null }));
-    expect(r).toEqual({ exit: 3, zeilen: ["GRÜN OHNE AUTO-MERGE", hinweis("CodeQL")] });
-  });
-  test("Konflikt mit rotem CodeQL: KONFLIKT plus HINWEIS", () => {
-    const r = P.bewerte(offen([lauf("CodeQL", "COMPLETED", "FAILURE")], { mergeable: "CONFLICTING" }));
-    expect(r).toEqual({ exit: 3, zeilen: ["KONFLIKT", hinweis("CodeQL")] });
+  test("rotes Nicht-Pflicht-Check plus laufender Pflicht-Check: wartend plus HINWEIS", () => {
+    const r = P.bewerte(offen([gruen, lauf("b", "IN_PROGRESS"), lauf("Deploy", "COMPLETED", "FAILURE")]), [...PFLICHT, "b"]);
+    expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 1/2 grün, wartend: b", hinweis("Deploy")] });
   });
   test("MERGED bleibt ohne HINWEIS", () => {
-    const r = P.bewerte({ state: "MERGED", mergeCommit: { oid: "abcdef1234567" }, statusCheckRollup: [lauf("CodeQL", "COMPLETED", "FAILURE")] });
+    const r = P.bewerte({ state: "MERGED", mergeCommit: { oid: "abcdef1234567" }, statusCheckRollup: [lauf("Deploy", "COMPLETED", "FAILURE")] }, PFLICHT);
     expect(r).toEqual({ exit: 0, zeilen: ["MERGED abcdef1"] });
   });
-  test.each(["XCodeQL", "codeql", "Tests, Typecheck & Builds"])("Negativ: %s bleibt ein ROT-Check", (n) => {
-    const r = P.bewerte(offen([lauf(n, "COMPLETED", "FAILURE")]));
-    expect(r).toEqual({ exit: 1, zeilen: [`ROT ${n} https://x/runs/${n}`] });
+  test.each(["XTests, Typecheck & Builds", "tests, typecheck & builds"])("Negativ: Namensvergleich ist exakt, %s ist kein Pflicht-Check", (n) => {
+    const r = P.bewerte(offen([lauf(n, "COMPLETED", "FAILURE")]), PFLICHT);
+    expect(r.zeilen[0]).not.toMatch(/^ROT/);
+  });
+  test.each([null, undefined, []])("Fail-closed: ohne Pflicht-Liste (%j) gatet jedes rote Check", (pflicht) => {
+    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "FAILURE")]), pflicht);
+    expect(r).toEqual({ exit: 1, zeilen: ["ROT CodeQL https://x/runs/CodeQL"] });
+  });
+  test("Konflikt mit rotem Nicht-Pflicht-Check: KONFLIKT plus HINWEIS", () => {
+    const r = P.bewerte(offen([lauf("Deploy", "COMPLETED", "FAILURE")], { mergeable: "CONFLICTING" }), PFLICHT);
+    expect(r).toEqual({ exit: 3, zeilen: ["KONFLIKT", hinweis("Deploy")] });
+  });
+});
+
+describe("warten: Pflicht-Checks holen (#1663 L17)", () => {
+  const u = () => {
+    let t = 0;
+    return { jetzt: () => t, schlafe: (ms: number) => void (t += ms) };
+  };
+  const rot = offen([lauf("Pflicht", "COMPLETED", "SUCCESS"), lauf("Deploy", "COMPLETED", "FAILURE")]);
+  test("die Pflicht-Liste kommt aus dem Aufruf und wird nur einmal geholt", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => rot, pflicht: () => (n++, ["Pflicht"]), ...u(), maxMs: 90_000, intervallMs: 30_000 });
+    expect(r.zeilen[0]).toBe("OFFEN 1/1 grün, Merge steht aus");
+    expect(n).toBe(1);
+  });
+  test("Fehler beim Holen der Pflicht-Liste: fail-closed, alle Checks gaten", () => {
+    const r = P.warten({
+      hole: () => rot,
+      pflicht: () => {
+        throw new Error("gh down");
+      },
+      ...u(),
+      maxMs: 90_000,
+      intervallMs: 30_000,
+    });
+    expect(r.exit).toBe(1);
+    expect(r.zeilen).toEqual(["ROT Deploy https://x/runs/Deploy"]);
+  });
+});
+
+describe("konfliktStand: KONFLIKT erst nach zweiter Abfrage im Abstand (#1663 L33)", () => {
+  test("erste Abfrage: unbestätigt, merkt sich den Zeitpunkt", () => {
+    expect(P.konfliktStand(null, 5000)).toEqual({ bestaetigt: false, seit: 5000 });
+  });
+  test("zweite Abfrage unter 15 s: weiter unbestätigt, der erste Zeitpunkt bleibt", () => {
+    expect(P.konfliktStand(5000, 19_999)).toEqual({ bestaetigt: false, seit: 5000 });
+  });
+  test("zweite Abfrage ab genau 15 s: bestätigt", () => {
+    expect(P.konfliktStand(5000, 20_000).bestaetigt).toBe(true);
   });
 });
 
@@ -140,6 +177,34 @@ describe("warten", () => {
       intervallMs: 30_000,
     });
     expect(aus).toEqual({ exit: 3, zeilen: ["GH-FEHLER API down"] });
+  });
+});
+
+describe("warten: Konflikt wird erst nach zweiter Abfrage gemeldet (#1663 L33)", () => {
+  const konflikt = offen([lauf("a", "IN_PROGRESS")], { mergeable: "CONFLICTING" });
+  const uhr = () => {
+    let t = 0;
+    return { jetzt: () => t, schlafe: (ms: number) => void (t += ms) };
+  };
+  test("flackernder Konflikt (einmal CONFLICTING, dann MERGEABLE): kein KONFLIKT", () => {
+    const folge = [konflikt, offen([lauf("a", "COMPLETED", "FAILURE")])];
+    let i = 0;
+    const r = P.warten({ hole: () => folge[i++], ...uhr(), maxMs: 240_000, intervallMs: 30_000 });
+    expect(r.exit).toBe(1);
+  });
+  test("zweimal CONFLICTING im Abstand von mindestens 15 s: KONFLIKT, genau zwei Abfragen", () => {
+    const u = uhr();
+    let n = 0;
+    const r = P.warten({ hole: () => (n++, konflikt), ...u, maxMs: 240_000, intervallMs: 5_000 });
+    expect(r).toEqual({ exit: 3, zeilen: ["KONFLIKT"] });
+    expect(n).toBe(2);
+    expect(u.jetzt()).toBeGreaterThanOrEqual(15_000);
+  });
+  test("ein kleines Budget verhindert die Bestätigung nicht: trotzdem zwei Abfragen", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => (n++, konflikt), ...uhr(), maxMs: 1_000, intervallMs: 30_000 });
+    expect(r.exit).toBe(3);
+    expect(n).toBe(2);
   });
 });
 
