@@ -345,3 +345,30 @@ describe("pruefe (CLI-Ablauf mit Fake-gh)", () => {
     assert.ok(r.out.includes("RK-sichtbar") && r.out.includes("Review-Kommentar von @fluffels"));
   });
 });
+
+describe("istFremdeingang (eine Entscheidung für alle Skripte)", () => {
+  const eigen = { login: "fluffels", type: "User" };
+  test("vertrauter Autor ohne Label: kein Fremdeingang", () => {
+    assert.deepEqual(fremdtextLib.istFremdeingang({ user: eigen, labels: [] }, "fluffels"), { fremdeingang: false, grund: "", label: undefined });
+  });
+  test("fremder Autor: Fremdeingang mit Autor im Grund", () => {
+    const r = fremdtextLib.istFremdeingang({ user: { login: "fremd", type: "User" }, labels: [] }, "fluffels");
+    assert.equal(r.fremdeingang, true);
+    assert.match(r.grund, /@fremd/);
+  });
+  test("fehlender Autor (null/ghost) ist fremd", () => {
+    assert.equal(fremdtextLib.istFremdeingang({ user: null, labels: [] }, "fluffels").fremdeingang, true);
+    assert.equal(fremdtextLib.istFremdeingang({ labels: [] }, "fluffels").fremdeingang, true);
+  });
+  test("Label forum (Objekt oder String) macht vertrauten Autor zum Fremdeingang", () => {
+    for (const labels of [[{ name: "forum" }], ["forum"]]) {
+      const r = fremdtextLib.istFremdeingang({ user: eigen, labels }, "fluffels");
+      assert.equal(r.fremdeingang, true);
+      assert.equal(r.label, "forum");
+    }
+  });
+  test("fehlende labels und fremdes Label: kein Fremdeingang", () => {
+    assert.equal(fremdtextLib.istFremdeingang({ user: eigen }, "fluffels").fremdeingang, false);
+    assert.equal(fremdtextLib.istFremdeingang({ user: eigen, labels: ["bug", { name: "x" }, null] }, "fluffels").fremdeingang, false);
+  });
+});

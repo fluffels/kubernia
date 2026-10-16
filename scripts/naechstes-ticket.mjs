@@ -27,7 +27,7 @@ import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem,
 
 // Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
 const PRODUKT_BOARD = boardFuerRolle("produkt");
-import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
+import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -155,8 +155,7 @@ const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kei
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
 function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb }) {
   if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
-  const label = c.labels.find((l) => FREMDEINGANG_LABELS.includes(l));
-  if (!istVertraut(c.autor, owner) || label) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
+  if (istFremdeingang({ user: c.autor, labels: c.labels }, owner).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
   const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
   const fenster = messfensterZeilen(c.body);
