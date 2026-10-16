@@ -10,19 +10,23 @@
  * verdrahtete pre-push-Hook bleibt als Restnetz für den Fall, dass die
  * Protection je gelockert wird: Bei einem Push auf `main` fährt er
  * `npm run verify` lokal und bricht bei Rot ab (Umgehung bewusst per
- * `git push --no-verify`). Feature-Branch-Pushes lässt er ungeprüft durch.
+ * `git push --no-verify`). Bei anderen Branches fährt er nur `check:diffsize` (#1740).
  *
  * Diese Fitness-Function sichert ab, dass der Schutz nicht leise wegbröckelt:
  *  - der Hook existiert und fährt die verify-Kette (nicht ein Einzel-Gate),
  *  - er greift nur beim Push auf main (Feature-Branches bleiben schnell),
  *  - `npm run setup` verdrahtet ihn über core.hooksPath → .githooks (kein husky),
+ *  - Pushes anderer Branches fahren `node scripts/check-diffsize.mjs` und brechen bei Rot ab (Verhaltens-Test mit Attrappe im Temp-Ordner),
  *  - die Umgehungs-Option ist dokumentiert (Notfall bleibt möglich).
  *
  * Rein struktureller Wächter (wie readme/docmap/verify-script) – kein
  * Verhaltens-Test. Ausführen mit:  npm test
  */
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { afterEach, describe, it, expect } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const readRepo = (rel: string) =>
@@ -94,5 +98,37 @@ describe("#528 pre-push-Hook: schnelle Gates vor Push auf main", () => {
       Object.keys(allDeps).some((d) => d === "husky"),
       "husky darf keine Abhängigkeit sein – Hook läuft nativ über core.hooksPath",
     ).toBe(false);
+  });
+});
+
+const hatSh = spawnSync("sh", ["-c", "exit 0"]).status === 0;
+const OID = "1".repeat(40);
+
+describe.skipIf(!hatSh)("#1740 pre-push-Hook: Diffsize bei Pushes anderer Branches", () => {
+  const dirs: string[] = [];
+  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  // Temp-Ordner mit Attrappe `scripts/check-diffsize.mjs`, die mit `exitCode` endet; der Hook läuft mit cwd dort.
+  const lauf = (exitCode: number, ref: string, oid = OID) => {
+    const d = mkdtempSync(join(tmpdir(), "kq-prepush-"));
+    dirs.push(d);
+    mkdirSync(join(d, "scripts"));
+    writeFileSync(join(d, "scripts", "check-diffsize.mjs"), `console.log("attrappe diffsize"); process.exit(${exitCode});`);
+    const hookPfad = fileURLToPath(new URL("../../.githooks/pre-push", import.meta.url)).replaceAll("\\", "/");
+    return spawnSync("sh", [hookPfad, "origin", "x"], { cwd: d, input: `${ref} ${oid} ${ref} ${"0".repeat(40)}\n`, encoding: "utf8" });
+  };
+  it("rotes check:diffsize bricht den Push eines Feature-Branches ab und nennt den Override", () => {
+    const r = lauf(1, "refs/heads/feature/x");
+    expect(r.status, r.stdout + r.stderr).toBe(1);
+    expect(r.stdout).toContain("KQ-Diffsize-Override");
+  });
+  it("grünes check:diffsize lässt den Feature-Branch-Push durch", () => {
+    const r = lauf(0, "refs/heads/feature/x");
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain("attrappe diffsize");
+  });
+  it("Branch-Löschung (lauter Nullen) prüft nichts", () => {
+    const r = lauf(1, "refs/heads/feature/x", "0".repeat(40));
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).not.toContain("attrappe diffsize");
   });
 });
