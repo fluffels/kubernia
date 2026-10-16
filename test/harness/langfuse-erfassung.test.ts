@@ -314,11 +314,9 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     const run = "        run: node scripts/board-takt.mjs\n";
     assert.ok(yml.includes(env + run), "env vor run in der Vorlage");
     assert.ok(taktWorkflowRobust(yml.replace(env + run, run + env)), "env nach run");
-    // Rot: Token nur im anderen Schritt
-    const nurAnderswo = yml.replace(tok, "").replace(
-      "          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n",
-      "          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n" + tok,
-    );
+    // Rot: Token nur in einem anderen Schritt (ein zweiter Schritt wird angehängt, der Token wandert dorthin)
+    const zweiterSchritt = "      - name: Anderer Schritt\n        env:\n          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n" + tok + "        run: echo ok\n";
+    const nurAnderswo = yml.replace(tok, "").replace(/\n*$/, "\n") + zweiterSchritt;
     assert.ok(nurAnderswo !== yml.replace(tok, ""), "Vorlage hat den zweiten Schritt");
     assert.ok(!taktWorkflowRobust(nurAnderswo), "Token nur im anderen Schritt");
   });

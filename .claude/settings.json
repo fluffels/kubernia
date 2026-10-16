@@ -33,6 +33,7 @@
       "Bash(uniq:*)",
       "Bash(diff:*)",
       "mcp__playwright",
+      "mcp__likec4",
       "mcp__langfuse__queryMetrics",
       "mcp__langfuse__getMetricsSchema",
       "mcp__langfuse__listObservations",
@@ -53,7 +54,8 @@
       "Bash(gh project delete:*)",
       "Bash(gh project item-delete:*)",
       "Bash(gh project field-delete:*)",
-      "mcp__playwright__browser_run_code_unsafe"
+      "mcp__playwright__browser_run_code_unsafe",
+      "mcp__likec4__apply-semantic-layout"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -229,7 +231,7 @@
     "data@synced": false,
     "cowork-plugin-management@synced": false
   },
-  "enabledMcpjsonServers": ["playwright"],
+  "enabledMcpjsonServers": ["playwright", "likec4"],
   "disableClaudeAiConnectors": true,
   "skillListingMaxDescChars": 300
 }

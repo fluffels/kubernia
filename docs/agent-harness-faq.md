@@ -85,6 +85,15 @@ Die Red-Green-Probe der Test-Lens ändert Dateien im Lens-Worktree (`.claude/wor
 - **Leerer Canvas oder Screenshot-Timeout (#1290):** Ursache ist meist `document.visibilityState === "hidden"` (Fenster minimiert oder verdeckt): Phaser rendert dann nicht, und `kqGame.scene.getScenes(true)` ist leer. Abhilfe: das Browserfenster sichtbar halten. `kqDev.state()` und `kqDev.advanceTime` gehen auch verdeckt. Bleibt eine Taste hängen (ein `keydown` ohne `keyup`), den passenden `keyup` per `browser_evaluate` dispatchen.
 - **Playwright findet den Chromium nicht** (`Executable doesn't exist ... chromium_headless_shell-<build>`): Das `node_modules` des Hauptrepos liegt hinter dem Lockfile, Playwright-Version und installierter Browser passen nicht zusammen. Abhilfe: `npm ci`, danach `npx playwright install chromium`.
 
+## Wie frage ich das Architekturmodell ab?
+
+Über den **LikeC4-MCP** (Server `likec4` in [`.mcp.json`](../.mcp.json), Modell: `docs/architektur/`, Glossar: Architekturmodell). Gestartet wird er über [`scripts/likec4-mcp.mjs`](../scripts/likec4-mcp.mjs) und die gemeinsame Startlogik [`scripts/mcp-launch.mjs`](../scripts/mcp-launch.mjs): die Version kommt aus dem Lockfile (devDependency `likec4`); passt die lokale Installation, startet sie, sonst `npx -y likec4@<exakte Version>` (erster Start lang; Abhilfe: im Haupt-Checkout einmal `npm ci`).
+
+- **Tools:** `search-element` (Element nach Text suchen), `read-element`, `read-view`, `find-relationships`, `query-graph`. `apply-semantic-layout` schreibt Layout in die Modelldateien und steht darum auf `ask`; ein Wächter (`test/harness/likec4-mcp.test.ts`) verlangt für jedes Tool ohne `readOnlyHint` einen `ask`-Eintrag.
+- **Grenze Worktree:** Der Server liest `docs/architektur/` des Checkouts, in dem die Session gestartet wurde (meist der Haupt-Checkout, ggf. hinter `origin/main`, siehe `scripts/haupt-sync.mjs`), **nicht** den Branch-Worktree. Änderungen am Modell im Worktree prüfst du mit `npm run check:c4` bzw. siehst sie mit `npm run c4:serve`, nicht über den MCP.
+- **Kein Gate:** Der MCP ist Abfragewerkzeug, nie Gate-Quelle ([ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md)); die Gates laufen über `check:c4`.
+- **Wo verfügbar:** im Hauptchat und in Workflow-Phasen ohne `tools:`-Whitelist; Subagenten mit Whitelist (Planer, Umsetzer, Lens) bekommen `mcp__likec4` bewusst nicht. Ein neu eingetragener Server lädt erst mit der nächsten Session. **Fehlerbild:** `claude mcp list` zeigt `likec4` als Failed, und die `mcp__likec4__*`-Tools fehlen.
+
 ## Warum unterscheiden sich die AGE-Werte zweier kubectl-Aufrufe?
 
 Jede Eingabe im Terminal lässt den Sim-Takt weiterlaufen: `src/sim.ts` zählt `clock` je Eingabe hoch (rund 20 s Spielzeit), die AGE-Spalte und andere zeitabhängige Werte rechnen daraus. Zwei Aufrufe nie direkt vergleichen; in Tests auf zeitunabhängige Spalten (Name, READY, STATUS) prüfen oder die Ausgabe nur auf die Form (`\d+[smhd]`) testen.

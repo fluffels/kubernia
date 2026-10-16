@@ -20,6 +20,11 @@
         "--allowed-origins",
         "http://localhost:*;http://127.0.0.1:*"
       ]
+    },
+    "likec4": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["scripts/likec4-mcp.mjs"]
     }
   }
 }

@@ -129,10 +129,10 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 |---|---|---|
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 117 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 78 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Skripte | 119 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 79 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 26 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -165,6 +165,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
 | Plugin | `langfuse-observability` | Marktplatz: langfuse-observability | `.claude/settings.json` |
 | Git-Hook | `pre-push` | — | `.githooks/pre-push` |
+| MCP-Server | `likec4` | stdio, node scripts/likec4-mcp.mjs | `.mcp.json` |
 | MCP-Server | `pixellab` | http, api.pixellab.ai | `.mcp.json` |
 | MCP-Server | `playwright` | stdio, node scripts/playwright-mcp.mjs | `.mcp.json` |
 
@@ -225,6 +226,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 15.10.2026 | [ADR 0024](/docs/adr/0024-hexagon-als-lesart.md): Hexagon als Lesart der bestehenden Schichtung, nicht als Ordnerstruktur |
 | 16.10.2026 | [ADR 0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md): Sandbox als austauschbare Laufumgebung |
 | 16.10.2026 | [ADR 0026](/docs/adr/0026-sammelticket-gruppen.md): Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum |
+| 16.10.2026 | [ADR 0027](/docs/adr/0027-regeln-lockern.md): Regeln, Gates und Lenses evidenzbasiert lockern |
 
 <!-- GEN:zeitleiste END -->
 
@@ -234,7 +236,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 
 ### Wohin es geht
 
-Das Ziel ist eine „Dark Factory“: der spielunabhängige Kern des Harness soll wiederverwendbar werden: Projekte beziehen ihn per Sync, menschliche Stopps bei Irreversiblem und Außenwirkung bleiben ([ADR 0022](docs/adr/0022-dark-factory-kern-und-verteilung.md)). **Stand 2026-10-15:** Gebaut ist, dass der Workflow [`board-takt.yml`](.github/workflows/board-takt.yml) das wiederkehrende Status-Ticket anlegt und ein Agent es nach einer Checkliste auswertet; die Läufe startet die Maintainerin von Hand. Das Budget-Pacing ([`budget-pacing.mjs`](scripts/budget-pacing.mjs)) taktet Mehr-Tickets-Läufe nach dem Wochenlimit des Kontos. Nicht gebaut sind das evidenzbasierte Lockern von Regeln ([#1357](https://github.com/fluffels/kubernia/issues/1357)) und der wöchentliche Release-Abgleich ([#1362](https://github.com/fluffels/kubernia/issues/1362); bisher gab es einen einmaligen Abgleich in [`docs/harness-inventar.md`](docs/harness-inventar.md)). Die Dark-Factory-Folgetickets sind nur entworfen, über eine Veröffentlichung ist nicht entschieden. Was dabei schiefging und was daraus wurde: [Lessons Learned](docs/lessons-learned.md); die Begriffe: [Harness-Glossar](docs/harness-glossar.md).
+Das Ziel ist eine „Dark Factory“: der spielunabhängige Kern des Harness soll wiederverwendbar werden: Projekte beziehen ihn per Sync, menschliche Stopps bei Irreversiblem und Außenwirkung bleiben ([ADR 0022](docs/adr/0022-dark-factory-kern-und-verteilung.md)). **Stand 2026-10-16:** Gebaut ist, dass der Workflow [`board-takt.yml`](.github/workflows/board-takt.yml) das wiederkehrende Status-Ticket anlegt und ein Agent es nach einer Checkliste auswertet; die Läufe startet die Maintainerin von Hand. Das Budget-Pacing ([`budget-pacing.mjs`](scripts/budget-pacing.mjs)) taktet Mehr-Tickets-Läufe nach dem Wochenlimit des Kontos. Wie gelockert wird, regelt [ADR 0027](docs/adr/0027-regeln-lockern.md); nicht gebaut ist der wöchentliche Release-Abgleich ([#1362](https://github.com/fluffels/kubernia/issues/1362); bisher gab es einen einmaligen Abgleich in [`docs/harness-inventar.md`](docs/harness-inventar.md)). Die Dark-Factory-Folgetickets sind nur entworfen, über eine Veröffentlichung ist nicht entschieden. Was dabei schiefging und was daraus wurde: [Lessons Learned](docs/lessons-learned.md); die Begriffe: [Harness-Glossar](docs/harness-glossar.md).
 
 > 📝 Die **kanonische Harness-Tiefendoku** — der KI-Agenten-Harness als System, „wie + warum" an einer Stelle — steht in **[docs/agent-harness.md](docs/agent-harness.md)**, konkrete Einzelfragen dazu in der **[Harness-FAQ](docs/agent-harness-faq.md)**. Beide sind die erklärende Gesamtsicht; die operative Arbeitsanweisung bleibt [AGENTS.md](AGENTS.md), die Referenz-Tabellen liegen unter [`docs/referenz/`](docs/referenz/anlaufstellen.md).
 
