@@ -21,11 +21,11 @@ import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 
 interface BesitzLib {
-  markerStart(id: string): string;
-  markerEnde(id: string): string;
-  einheitId(e: Eintrag): string;
-  einheitText(e: Eintrag, text: string): string | null;
-  pruefeManifest(m: Manifest, lies: (pfad: string) => string | null): string[];
+  markerStart: (id: string) => string;
+  markerEnde: (id: string) => string;
+  einheitId: (e: Eintrag) => string;
+  einheitText: (e: Eintrag, text: string) => string | null;
+  pruefeManifest: (m: Manifest, lies: (pfad: string) => string | null) => string[];
 }
 const { markerStart, markerEnde, einheitId, einheitText, pruefeManifest } = rawBesitz as unknown as BesitzLib;
 
