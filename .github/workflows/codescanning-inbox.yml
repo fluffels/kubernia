@@ -6,7 +6,7 @@ name: Code-Scanning-Inbox
 # Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.
 #
 # ⚠️ Das Board braucht wie dependabot-inbox.yml das Secret PROJECT_TOKEN (PAT mit project-Scope); ohne Token nur eine Warnung.
-# Kommentare postet github-actions[bot] (in scripts/fremdtext-lib.mjs vertraut, die Zeilen zählen für die Generationsgrenze).
+# Kommentare postet github-actions[bot] (in scripts/fremdtext-lib.mjs vertraut, die Zeilen zählen als offene Befundzeilen).
 # Alle Actions sind per Commit-SHA gepinnt (Wächter: test/harness/sicherheits-workflows.test.ts).
 
 on:
