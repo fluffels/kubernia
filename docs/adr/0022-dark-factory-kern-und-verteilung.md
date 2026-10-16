@@ -264,7 +264,7 @@ Teil 1 von F11 ist umgesetzt: das Factory-Board existiert, die Config führt bei
 
 Teil 3 von F11 ist umgesetzt: `node scripts/board-place.mjs --umzug [--dry-run]` setzt jedes offene Item, das gegen die Trennregel auf dem falschen Board steht, ans Ende des richtigen Boards und entfernt es danach vom falschen (`deleteProjectV2Item`, das Issue bleibt). Entscheidungen:
 
-- **Reihenfolge der Mutationen:** erst aufnehmen und positionieren, dann entfernen; ein Item steht nie auf keinem Board. Bei einem Fehler bricht der Lauf ab (kein Wiederholen um Mutationen: ein Wiederholen könnte doppelt aufnehmen) und wird per Neustart fortgesetzt, weil der Plan aus dem Ist-Stand beider Boards entsteht (`umzugsPlan`, pur, idempotent).
+- **Reihenfolge der Mutationen:** erst aufnehmen und positionieren, dann entfernen; ein Item steht nie auf keinem Board. Bei einem Fehler bricht der Lauf ab (kein Wiederholen um Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert) und wird per Neustart fortgesetzt, weil der Plan aus dem Ist-Stand beider Boards entsteht (`umzugsPlan`, pur, idempotent).
 - **Sonderfälle:** ein Item auf beiden Boards wird nur entfernt; ein Item mit Status ungleich Todo wird gemeldet (Exit 1) statt umgezogen; geschlossene Items bleiben als Historie.
 - **Ansichten:** „Spiel“ und „Agentic Engineering“ des Produkt-Boards sind gelöscht (freigegeben im Pre-Flight); beide Boards tragen nur „View 1“.
 - **Grenze:** die REST-Liste hinkt gelöschten Items hinterher; vor einem zweiten Live-Lauf `--umzug --dry-run` wiederholen, bis er „nichts zu tun“ meldet.

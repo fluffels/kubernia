@@ -260,6 +260,29 @@ describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
     expect(p.gemeldet[1].grund).toMatch(/leer/);
   });
 
+  test("steht ein Item auf beiden Boards, geht „entfernen“ dem Status-Test vor (kein Exit 1 wegen In Progress)", () => {
+    const p = plan([it(1, H, { status: "In Progress" })], [it(1, H)]);
+    expect(p.schritte.map((s) => s.aktion)).toEqual(["entfernen"]);
+    expect(p.gemeldet).toEqual([]);
+  });
+
+  test("beide Richtungen in einem Plan: erst Produkt-, dann Factory-Items; der Anker ist das letzte Item, das der Lauf nicht selbst entfernt", () => {
+    const p = plan([it(1), it(2, H)], [it(9, H), it(5)]);
+    expect(p.schritte.map((s) => [s.number, s.nach])).toEqual([[2, "factory"], [5, "produkt"]]);
+    // das letzte Item beider Boards zieht selbst um: der Anker ist das davor
+    expect(p.ende).toEqual({ produkt: "PVTI_1", factory: "PVTI_9" });
+  });
+
+  test("ein Board, dessen Items alle ausziehen, hat keinen Anker (Spitze)", () => {
+    expect(plan([it(2, H)], []).ende).toEqual({ produkt: null, factory: null });
+  });
+
+  test("Meldegrund bei fehlender Issue-ID und Titel wird durchgereicht", () => {
+    const p = plan([it(3, H, { contentId: "" }), it(4, H, { title: "Vier" })], []);
+    expect(p.gemeldet[0].grund).toMatch(/Issue-Node-ID/);
+    expect((p.schritte[0] as unknown as { title: string }).title).toBe("Vier");
+  });
+
   test("geschlossene Items bleiben als Historie, richtig stehende Items bleiben, ein Plan nach dem Umzug ist leer (idempotent)", () => {
     expect(plan([it(1, H, { state: "closed" }), it(2)], [it(3, H)])).toMatchObject({ schritte: [], gemeldet: [] });
     expect(plan([], [it(1, H), it(2, H)]).schritte).toEqual([]);
@@ -327,6 +350,30 @@ describe("fuehreUmzugAus: aufnehmen, positionieren, erst dann entfernen (#1730)"
     const { p, ruf } = lauf([um(1)], { positioniere: () => { throw new Error("boom"); } });
     await expect(p).rejects.toThrow(/#1 steht auf beiden Boards/);
     expect(ruf.some((x) => x.startsWith("weg"))).toBe(false);
+  });
+
+  test("scheitert das Aufnehmen, behauptet die Meldung keinen Doppelstand, sondern nur „möglicherweise“ (halb gescheitertes Aufnehmen)", async () => {
+    const { p } = lauf([um(1)], { aufnehmen: () => { throw new Error("rate limit"); } });
+    const fehler = await p.then(() => "", (e: Error) => e.message);
+    expect(fehler).not.toMatch(/steht auf beiden Boards/);
+    expect(fehler).toMatch(/möglicherweise schon auf dem Ziel-Board/);
+  });
+
+  test("scheitert das Entfernen: bei „umziehen“ Doppelstand gemeldet, bei einem reinen „entfernen“-Schritt keiner", async () => {
+    const boom = () => { throw new Error("boom"); };
+    const a = lauf([um(1)], { entferne: boom });
+    await expect(a.p).rejects.toThrow(/#1 steht auf beiden Boards/);
+    const b = lauf([entf(2)], { entferne: boom });
+    const fehler = await b.p.then(() => "", (e: Error) => e.message);
+    expect(fehler).toMatch(/#2 abgebrochen/);
+    expect(fehler).not.toMatch(/beiden Boards|möglicherweise/);
+  });
+
+  test("gemischte Richtungen: die Anker-Kette läuft je Ziel-Board getrennt", async () => {
+    const zurueck: S = { aktion: "umziehen", number: 5, title: "", von: "factory", nach: "produkt", quelleId: "Q5", contentId: "C5" };
+    const { p, ruf } = lauf([um(1), zurueck, um(2)]);
+    await p;
+    expect(ohneZzz(ruf).filter((x) => x.startsWith("pos"))).toEqual(["pos factory NC1 nach FE", "pos produkt NC5 nach PE", "pos factory NC2 nach NC1"]);
   });
 
   test("dry: keine Mutation, keine Pause", async () => {

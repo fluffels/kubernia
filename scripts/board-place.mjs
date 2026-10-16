@@ -244,6 +244,7 @@ export async function fuehreUmzugAus(plan, io) {
     let doppelt = false;
     try {
       if (s.aktion === "umziehen") {
+        // Aufnehmen sind zwei Mutationen (add, Status): scheitert die zweite, steht das Item schon auf dem Ziel-Board.
         const id = await aufnehmen(s.nach, s.contentId);
         doppelt = true;
         await schlafe();
@@ -254,7 +255,9 @@ export async function fuehreUmzugAus(plan, io) {
       await entferne(s.von, s.quelleId);
       await schlafe();
     } catch (e) {
-      const zusatz = doppelt ? ` #${s.number} steht auf beiden Boards, Position auf dem Ziel-Board prüfen.` : "";
+      const zusatz = doppelt
+        ? ` #${s.number} steht auf beiden Boards, Position auf dem Ziel-Board prüfen.`
+        : s.aktion === "umziehen" ? ` #${s.number} steht möglicherweise schon auf dem Ziel-Board (Status Todo prüfen).` : "";
       throw abbruch(`${abortMessage(e.message)}. Umzug bei #${s.number} abgebrochen.${zusatz} Offen bleiben ${rest}; erneut fahren (idempotent).`);
     }
   }
@@ -289,7 +292,7 @@ async function main(argv = process.argv.slice(2)) {
   mitKontingent("board-place");
   if (args.missing) return reportMissing();
   if (args.umzug) {
-    // Kein mitWiederholung um die Mutationen: ein Wiederholen könnte doppelt aufnehmen; der Lauf ist stattdessen idempotent.
+    // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {
       return await umziehen(args);
     } catch (e) {

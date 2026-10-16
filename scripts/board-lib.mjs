@@ -62,8 +62,8 @@ export function seitenListen(produkt, factory) {
  * Pur: der Umzug (#1730) aller offenen Items, die gegen die Trennregel auf dem falschen Board stehen. Reihenfolge: erst die Items des
  * Produkt-Boards, dann die des Factory-Boards, je in Board-Reihenfolge. Steht die Nummer auch auf dem Soll-Board, wird nur entfernt
  * (`aktion: "entfernen"`), sonst umgezogen (`"umziehen"`: aufnehmen, positionieren, dann entfernen). Ein Item mit Status ungleich Todo
- * (auch leer) oder ohne Issue-Node-ID wird gemeldet (`gemeldet`) und nicht angefasst. `ende`: ID des letzten Items je Board (null = leer),
- * der Anker für das erste umgezogene Item. Geschlossene Items bleiben als Historie. Eingaben bleiben unverändert.
+ * (auch leer) oder ohne Issue-Node-ID wird gemeldet (`gemeldet`) und nicht angefasst. `ende`: ID des letzten Items je Board, das der Lauf nicht
+ * selbst entfernt (null = leer), der Anker für das erste umgezogene Item. Geschlossene Items bleiben als Historie. Eingaben bleiben unverändert.
  */
 export function umzugsPlan(produkt, factory) {
   const stehtAuf = { produkt: new Set(produkt.map((i) => i.number)), factory: new Set(factory.map((i) => i.number)) };
@@ -80,7 +80,10 @@ export function umzugsPlan(produkt, factory) {
       else schritte.push({ aktion: "umziehen", ...kopf, contentId: i.contentId });
     }
   }
-  return { schritte, gemeldet, ende: { produkt: produkt.at(-1)?.id ?? null, factory: factory.at(-1)?.id ?? null } };
+  // Anker: das letzte Item je Board, das der Lauf nicht selbst entfernt (ein gelöschtes Item taugt nicht als `afterId`).
+  const weg = new Set(schritte.map((s) => s.quelleId));
+  const letztes = (liste) => liste.findLast((i) => !weg.has(i.id))?.id ?? null;
+  return { schritte, gemeldet, ende: { produkt: letztes(produkt), factory: letztes(factory) } };
 }
 
 /** Guard vor jedem gh-Aufruf: das Board muss ein Config-Eintrag sein (Objekt mit projectId), kein vergessener Parameter. */
