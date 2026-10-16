@@ -133,7 +133,10 @@ describe("main", () => {
       gelesen.push(pfad);
       throw new Error("keine Datei");
     };
-    await v.main([], {}, () => {}, () => {}, { fetchImpl: () => Promise.resolve({ status: 200 }), home: "/h", lies });
+    const urls: string[] = [];
+    const f: Fetch = (url) => (urls.push(url), Promise.resolve({ status: 200 }));
+    await v.main([], {}, () => {}, () => {}, { fetchImpl: f, home: "/h", lies });
+    expect(urls).toEqual(["http://localhost:3000/api/public/health"]);
     expect(gelesen.length).toBeGreaterThan(0);
     expect(gelesen.filter((p) => /langfuse-secret|agent-secrets/.test(p))).toEqual([]);
   });
