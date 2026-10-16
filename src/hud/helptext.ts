@@ -37,7 +37,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { use: "create <art> <name>", desc: "Ressource anlegen (deployment, secret, configmap, role …)" },
     { use: "apply -f <datei>", desc: "Manifest anwenden (deklarativer Soll-Zustand)" },
     { use: "delete <resource> <name>…", desc: "Ressourcen löschen" },
-    { use: "scale deployment <n>… --replicas=<n>", desc: "Anzahl der Replikas ändern" },
+    { use: "scale deployment <name>… --replicas=<anzahl>", desc: "Anzahl der Replikas ändern" },
     { use: "expose <deploy> --port=<p>", desc: "Deployment als Service veröffentlichen" },
     { use: "set image|env|resources <deploy>", desc: "Felder eines Deployments ändern" },
     { use: "rollout restart deployment <n>…", desc: "Pods neu ausrollen" },

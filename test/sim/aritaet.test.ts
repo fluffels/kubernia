@@ -110,6 +110,13 @@ describe("docker stop/rm: Mehrfachziele, je Ziel eine Zeile", () => {
     expect(r.out).toContain("Erst 'docker stop b'");
     expect(s.docker.containers.map(c => c.name)).toEqual(["b"]);
   });
+  test("docker rm a b mit zwei laufenden: beide Fehler, der Tipp kommt vom ersten", () => {
+    const r = lauf("docker rm a b", zwei());
+    expect(r.error).toBe(true);
+    expect(r.out.match(/Error: Container läuft noch\./g)).toHaveLength(2);
+    expect(r.out).toContain("Erst 'docker stop a'");
+    expect(r.out).not.toContain("Erst 'docker stop b'");
+  });
   test("ohne Ziel: die bisherige Rückfrage", () => {
     expect(lauf("docker stop").out).toContain("docker stop: Welcher Container?");
     expect(lauf("docker rm").out).toContain("docker rm: Welcher Container?");

@@ -25,7 +25,7 @@ Ein Eintrag je Modul, Leerzeile dazwischen, nach Pfad sortiert: parallele Änder
 
 - `src/sim/dns.ts` (#1403): Die EINE Cluster-DNS-Auflösung für `nslookup` und `curl`: `parseServiceName` (`<svc>[.<ns>[.svc[.cluster.local]]]`, auch mit Schlusspunkt) und `resolveService` (Service nur im Namespace `default` (Konstante aus `state.ts`), ExternalName liefert CNAME samt eigener IP, sonst ein Tipp). Rein, importiert nur `state`/`util`.
 
-- `src/sim/docker.ts` (#373 (2/7)): docker-Befehlsfamilie: `dockerCommand(sim, …)` (pull/build/tag/images/run/ps/stop/rm) + Tippfehler-Hilfe (`checkImageTypo` + `KNOWN_IMAGES`). Über `DockerHost`.
+- `src/sim/docker.ts` (#373 (2/7)): docker-Befehlsfamilie: `dockerCommand(sim, …)` (pull/build/tag/images/run/ps/stop/rm; stop/rm mit Mehrfachzielen, je Ziel eine Zeile, Fehler zuletzt) + Tippfehler-Hilfe (`checkImageTypo` + `KNOWN_IMAGES`). Über `DockerHost`.
 
 - `src/sim/eviction.ts` (#240): **Ephemeral Storage & Eviction**: `evaluateEviction(host)` (mutiert den Zustand) + die Bilanz-Helfer `depEphemeralUsed`/`nodeOf`/`nodeEphemeralUsed`/`resetEphemeral`. Wird – wie `reconcileAutoSync` – aus `exec()` + `reset()` des Kerns gerufen und über dünne `Sim._…`-Delegationen dem `KubectlHost` zugänglich gemacht. Ausgelagert, als `sim.ts` durch die Mechanik über 800 LOC ging.
 
