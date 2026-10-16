@@ -1383,7 +1383,7 @@ Melde am Ende, welche Optionen du zur Entscheidung gestellt hast.`,
   // ── Phase 8: Cleanup ──────────────────────────────────────────────────────
   phase('Cleanup')
 
-  // Hinweise, die der Review nicht blockierend fand, aber offen ließ (#1265: alle Brillen; #1723: werden eine Zeile, wenn sie zutreffen).
+  // Offene Hinweise aller Brillen (#1265); zutreffende werden eine Zeile (#1723).
   const offeneHinweise = lensEndstand().flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis').map((f) => `${f.befund} (${f.ort})`))
 
   const cleanup = await agent(
