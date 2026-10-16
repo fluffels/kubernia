@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Präzisiert [ADR 0008](0008-ki-agenten-harness.md) (das Entwicklungsmodell bleibt), Teil von #1350 (Baustein 8). Der ADR **ändert keine Regel**: [AGENTS.md](../../AGENTS.md) gilt unverändert, bis Folgetickets landen. **Nicht entschieden: die Veröffentlichung** (öffentliches Repo, Marketplace-Eintrag). Sie hat Außenwirkung und liegt bei der Maintainerin ([Checkpoints](../../AGENTS.md#git-pr-und-merge)). Folgetickets sind unten nur entworfen, nicht angelegt.
+**Akzeptiert.** Präzisiert [ADR 0008](0008-ki-agenten-harness.md) (das Entwicklungsmodell bleibt), Teil von #1350 (Baustein 8). Der ADR **ändert keine Regel**: [AGENTS.md](../../AGENTS.md) gilt unverändert, bis Folgetickets landen. **Nicht entschieden: die Veröffentlichung** (öffentliches Repo, Marketplace-Eintrag). Sie hat Außenwirkung und liegt bei der Maintainerin ([Checkpoints](../../AGENTS.md#git-pr-und-merge)). (Nachtrag 2026-10-16: entschieden, siehe [Fortschreibung #1706](#fortschreibung-1706-2026-10-16-veröffentlichungsentscheidung).) Folgetickets sind unten nur entworfen, nicht angelegt. (Nachtrag 2026-10-16: angelegt, Spalte „Ticket“ der [Folgeticket-Tabelle](#folgeticket-entwürfe).)
 
 ## Kontext
 
@@ -109,29 +109,29 @@ Der Kern wird zuerst in kubernia geschnitten (Extraktion = Umzug, kein Umbau). V
 
 ### 10. Offen für die Maintainerin
 
-Factory-Repo öffentlich oder privat; Marketplace-Eintrag (nur bei Plugin-Verpackung); Lizenz. Danach werden die Folgetickets angelegt.
+Factory-Repo öffentlich oder privat; Marketplace-Eintrag (nur bei Plugin-Verpackung); Lizenz. Danach werden die Folgetickets angelegt. Entschieden am 2026-10-16: [Fortschreibung #1706](#fortschreibung-1706-2026-10-16-veröffentlichungsentscheidung).
 
 ## Folgeticket-Entwürfe
 
 Alle `area:harness`, je eine Session unter `check:diffsize`, **angelegt erst nach der Veröffentlichungsentscheidung** wie Epic-Kinder. F1, F2, F7, F9, F12, F14 und F15 haben keine Außenwirkung und taugen auch ohne Veröffentlichung.
 
-| Nr | Titel | Ziel und Akzeptanz (mit Negativfall) | blockiert durch |
-|---|---|---|---|
-| F1 | Besitz-Manifest und Kern-Reinheits-Wächter | Wächter zählt Projektliterale je Kern-Datei; Baseline nur sinkend; ein neues Literal ist rot | — |
-| F2 | Projekt-Config mit Repo-, Owner- und Board-IDs | `board-lib.mjs` und die 7 Dateien lesen die Config; fehlende Config bricht klar ab, kein stiller kubernia-Default | F1 |
-| F3 | Labels, Branch-/Worktree-Präfix, Commit-Zeilen-Präfix `KQ-`, Agentennamen aus Config | bestehende Nachweise bleiben gültig | F2, #1067 |
-| F4 | AGENTS.md in Kern- und Projekt-Block | Stopp-Liste im Kern-Block, oberste Regel als Projekt-Leitfrage; Streichen eines Stopps im Projekt-Block ist rot | F1, #1363 |
-| F5 | Stardew-Regeln aus Planer, Umsetzer, `review-lenses`, Workflow herauslösen | Kern enthält keinen Stardew-Bezug (Wächter) | F4, #1067 |
-| F6 | Save-Migration ins Projekt | Kern-Registry enthält keinen Spiel-Generator (Wächter) | F4 |
-| F7 | `layers.cjs` teilen: Daten (Projekt), Ableitung und `pruefeModell` (Kern) | `check:arch`, `check:c4` und docs-gen grün, Fremdrepo-Test; Leitplanken-Pfad, also Audit-Kommentar | F1 |
-| F8 | Sprache als Projektwert | Kern-Texte bleiben deutsch | F4 |
-| F9 | Sync-Werkzeug und Drift-Gate | Besitz je Datei, Block, JSON-Schlüssel; idempotent; CRLF-neutral; Probe unter Git Bash und PowerShell; Fremdrepo-Fixture; Projektänderung an Besitz ist rot und nennt den Weg | F1, F2 |
-| F10 | Factory-Repo anlegen und Kern extrahieren | Pre-Flight, Dogfooding, kubernia per Sync von einem Tag, `check:internalrefs` grün, Langfuse-Erfassung nach #1293 belegt, FAQ-Antwort zur Übertragbarkeit nachziehen | Veröffentlichungsentscheidung, F2–F9, #993, #1067 |
-| F11 | Zwei Boards | Pre-Flight für Project-Felder und -Ansichten, Board-Liste in Config, Auswahl mit Quote (Fortschreibung ADR 0016), Trennregel in AGENTS.md, Umzug der Sammeltickets; danach trägt das Produkt-Board kein `area:harness`-Item mehr | F2 |
-| F12 | Spezifikations-Gate als pure Prüffunktion | Überspringen mit einmaligem Kommentar; Bestand berichtend | — |
-| F13 | Holdout-Abnahme | Szenario-Agent, Abnahme-Agent, Urteil je Kriterium, „nicht prüfbar“ stoppt den Merge | #1067, F12 |
-| F14 | Factory-Kennzahlen | fehlende Langfuse-Daten erscheinen als Lücke, nicht als 0 | — (Abnahme-Quote: F13) |
-| F15 | CycloneDX-SBOM in der CI | Werkzeug im Ticket belegen (`npm sbom --sbom-format cyclonedx`, [Doku](https://docs.npmjs.com/cli/v10/commands/npm-sbom)); Dependency-Track bewusst nicht | — |
+| Nr | Titel | Ziel und Akzeptanz (mit Negativfall) | blockiert durch | Ticket |
+|---|---|---|---|---|
+| F1 | Besitz-Manifest und Kern-Reinheits-Wächter | Wächter zählt Projektliterale je Kern-Datei; Baseline nur sinkend; ein neues Literal ist rot | — | #1610 |
+| F2 | Projekt-Config mit Repo-, Owner- und Board-IDs | `board-lib.mjs` und die 7 Dateien lesen die Config; fehlende Config bricht klar ab, kein stiller kubernia-Default | F1 | #1611 |
+| F3 | Labels, Branch-/Worktree-Präfix, Commit-Zeilen-Präfix `KQ-`, Agentennamen aus Config | bestehende Nachweise bleiben gültig | F2, #1067 | #1707 |
+| F4 | AGENTS.md in Kern- und Projekt-Block | Stopp-Liste im Kern-Block, oberste Regel als Projekt-Leitfrage; Streichen eines Stopps im Projekt-Block ist rot | F1, #1363 | #1708 |
+| F5 | Stardew-Regeln aus Planer, Umsetzer, `review-lenses`, Workflow herauslösen | Kern enthält keinen Stardew-Bezug (Wächter) | F4, #1067 | #1709 |
+| F6 | Save-Migration ins Projekt | Kern-Registry enthält keinen Spiel-Generator (Wächter) | F4 | #1710 |
+| F7 | `layers.cjs` teilen: Daten (Projekt), Ableitung und `pruefeModell` (Kern) | `check:arch`, `check:c4` und docs-gen grün, Fremdrepo-Test; Leitplanken-Pfad, also Audit-Kommentar | F1 | #1612 |
+| F8 | Sprache als Projektwert | Kern-Texte bleiben deutsch | F4 | #1711 |
+| F9 | Sync-Werkzeug und Drift-Gate | Besitz je Datei, Block, JSON-Schlüssel; idempotent; CRLF-neutral; Probe unter Git Bash und PowerShell; Fremdrepo-Fixture; Projektänderung an Besitz ist rot und nennt den Weg | F1, F2 | #1613 |
+| F10 | Factory-Repo anlegen und Kern extrahieren | Pre-Flight, Dogfooding, kubernia per Sync von einem Tag, `check:internalrefs` grün, Langfuse-Erfassung nach #1293 belegt, FAQ-Antwort zur Übertragbarkeit nachziehen | Veröffentlichungsentscheidung, F2–F9, #993, #1067 | #1715 |
+| F11 | Zwei Boards | Pre-Flight für Project-Felder und -Ansichten, Board-Liste in Config, Auswahl mit Quote (Fortschreibung ADR 0016), Trennregel in AGENTS.md, Umzug der Sammeltickets; danach trägt das Produkt-Board kein `area:harness`-Item mehr | F2 | #1712 |
+| F12 | Spezifikations-Gate als pure Prüffunktion | Überspringen mit einmaligem Kommentar; Bestand berichtend | — | #1615 |
+| F13 | Holdout-Abnahme | Szenario-Agent, Abnahme-Agent, Urteil je Kriterium, „nicht prüfbar“ stoppt den Merge | #1067, F12 | #1713 |
+| F14 | Factory-Kennzahlen | fehlende Langfuse-Daten erscheinen als Lücke, nicht als 0 | — (Abnahme-Quote: F13) | #1616 |
+| F15 | CycloneDX-SBOM in der CI | Werkzeug im Ticket belegen (`npm sbom --sbom-format cyclonedx`, [Doku](https://docs.npmjs.com/cli/v10/commands/npm-sbom)); Dependency-Track bewusst nicht | — | #1617 |
 
 Reihenfolge: F1 → F2 → (F7, F9, F12, F14, F15) → F3 → F4 → F5/F6/F8 → F11 → F13 → F10.
 
@@ -218,3 +218,14 @@ F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den B
 - **Lücken statt 0:** kein Zugang, keine Session, keine Calls oder Calls ohne Preis machen die Kosten eines Tickets zur Lücke (keine Teilsumme); sie gehen weder in den Median noch in eine Summe, „n von N gemessen“ nennt die Abdeckung.
 - **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
 - **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.
+
+## Fortschreibung #1706 (2026-10-16): Veröffentlichungsentscheidung
+
+Die Maintainerin hat §10 am 2026-10-16 entschieden; die Folgetickets sind angelegt (Spalte „Ticket“ der [Folgeticket-Tabelle](#folgeticket-entwürfe)). Entscheidungen:
+
+- **Sichtbarkeit:** Das Factory-Repo ist öffentlich, Owner zunächst `fluffels`; es entsteht erst mit F10 (#1715, Pre-Flight dort). Grund: die Entwicklung unter dem anonymen Account wahrt §7, und ein öffentliches Repo behält auf GitHub Free Rulesets und Branch-Schutz, auf denen die Gates aufbauen (Abwägung in #1038). Ob später ein getrenntes Repo nur für Release-Stände entsteht, entscheidet die Maintainerin im Pre-Flight von F10 und #1714 (Außenwirkung).
+- **Lizenz:** proprietär wie kubernia: alle Rechte vorbehalten, der Quelltext ist einsehbar, Nutzung, Kopie und Ableitung nur mit Erlaubnis der Rechteinhaberin. Grund: eine Lockerung (etwa Apache-2.0) ist jederzeit möglich, ein Zurücknehmen für verteilte Stände nicht; darum wird zum ersten Release neu entschieden (#1718, Pre-Flight). Lizenzdatei und Selbstbeschreibung liefert #1714. Keine Arbeitgeber- oder Firmennennung im Repo (§7).
+- **Marketplace:** kein Eintrag. Grund: ein Plugin trägt weder `permissions` noch `sandbox` noch Kontextdateien, die Verteilung bleibt der Sync; das Plugin bleibt eine spätere optionale Verpackung der Claude-Schicht (Inventar-Urteil „beobachten“, erster Trigger der Re-Evaluierung).
+- **Beiträge:** keine externen Beiträge (Showcase-Repo), Feedback über Discussions. Grund: nur die Maintainerin entwickelt; Fork-PRs werden nicht bearbeitet, Text Dritter ist Daten ([Sicherheit der Agenten](../sicherheit-agenten.md)). Gilt für kubernia und das Factory-Repo; README und CONTRIBUTING zieht #1038 nach.
+- **Produktanspruch:** Der Harness wird als Produkt gebaut; Maßstab sind prüfbare Kriterien in Produkt-Tickets (P1 bis P5 sind nur hier benannt: P1 #1716, P2 #1717, P3 #1718, P4 #1719, P5 #1714, dazu #1721 und #1722), nicht Adjektive. Grund: abnehmen lässt sich nur ein Kriterium mit Negativfall (§3, Spezifikations-Gate F12, Holdout F13).
+- **Folge für §9:** Das zweite Board entsteht mit F11 (#1712, Pre-Flight dort), ein Repo erst mit F10. Ein npm-Paket war nicht Gegenstand der Entscheidung und entsteht nicht ohne neue Entscheidung.
