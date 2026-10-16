@@ -106,13 +106,13 @@ export const BUNDLE_BUDGETS = [
     // Die Offline-Datei enthält den Content inline; er wird über `subtractChunksDir` abgezogen und
     // zählt allein bei den Content-Chunks (ADR 0018). Gemessen: Offline-HTML minus Summe der Chunks.
     subtractChunksDir: CONTENT_CHUNK_DIR_DIST,
-    maxBytes: 2_580_000, // #1664: Gateway API Teil 1 (Sim-Mapper, Objekte, Status), +5,2 KB
+    maxBytes: 2_590_000, // #1665: Gateway API Teil 2 (HTTPRoute: Mapper, Status, Renderer), +5,5 KB
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 580_000, // #1664: Gateway API Teil 1 (Sim-Mapper, Objekte, Status), +5,5 KB
+    maxBytes: 590_000, // #1665: Gateway API Teil 2 (HTTPRoute: Mapper, Status, Renderer), +5,8 KB
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
