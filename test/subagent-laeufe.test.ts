@@ -27,6 +27,17 @@ describe("ticketAusLauf", () => {
     const prompt = "Kontext-Diät (#1034) · Arbeitsverzeichnis: C:/x/.claude/worktrees/kq-1582-lens-r1 · Brille #907";
     expect(A.ticketAusLauf({ patch: null, prompt })).toBe(1582);
   });
+  test("Kopfzeile `Ticket #<nr>:` in Zeile 1 schlägt Worktree-Pfad und Patch (#1593)", () => {
+    const prompt = "Ticket #1729: Titel\nArbeitsverzeichnis: C:/x/.claude/worktrees/kq-1628 · Patch: /tmp/kq-1628-r1.patch";
+    expect(A.ticketAusLauf({ patch: { ticket: 1628 }, prompt })).toBe(1729);
+    expect(A.ticketAusLauf({ patch: null, prompt })).toBe(1729);
+  });
+  test("Kopfzeile nur in Zeile 1 und nur vollständig: Zeile 2, Satzmitte und `#12a` zählen nicht (#1593)", () => {
+    const wt = "C:/x/.claude/worktrees/kq-1628";
+    expect(A.ticketAusLauf({ patch: null, prompt: `Vorspann\nTicket #1729: T ${wt}` })).toBe(1628);
+    expect(A.ticketAusLauf({ patch: null, prompt: `Siehe Ticket #1729: T ${wt}` })).toBe(1628);
+    expect(A.ticketAusLauf({ patch: null, prompt: `Ticket #12a: T ${wt}` })).toBe(1628);
+  });
   test("ohne kq-Pfad der Rückfall auf das erste #<nr>, ohne alles null", () => {
     expect(A.ticketAusLauf({ patch: null, prompt: "Plane #1382 Langfuse-Befunde" })).toBe(1382);
     expect(A.ticketAusLauf({ patch: null, prompt: "kein Bezug" })).toBeNull();
@@ -42,6 +53,15 @@ describe("laufAus: Ticket und Modelle", () => {
   test("<synthetic> und leere Modelle fehlen in modelle, echte bleiben sortiert", () => {
     const zeilen = [zeile(0, undefined, "x"), zeile(1, "claude-opus-5-5"), zeile(2, "<synthetic>"), zeile(3, "claude-haiku-4-5")];
     expect(A.laufAus({ meta: {}, zeilen })?.modelle).toEqual(["claude-haiku-4-5", "claude-opus-5-5"]);
+  });
+});
+
+describe("laufAus: sammel nur aus der Titelzeile (#1593)", () => {
+  const sammel = (prompt: string) => (A.laufAus({ meta: {}, zeilen: [zeile(0, undefined, prompt), zeile(1, "claude-sonnet-5-5")] }) as unknown as { sammel: boolean }).sammel;
+  test("Titelzeile true, Body und Plan false, leerer Prompt false", () => {
+    expect(sammel("Ticket #1628: Harness-Härtung (gesammelt). Body:\nx")).toBe(true);
+    expect(sammel("Ticket #1490: Etwas. Body:\nTeil des Sammeltickets Harness-Härtung (gesammelt)")).toBe(false);
+    expect(sammel("")).toBe(false);
   });
 });
 
