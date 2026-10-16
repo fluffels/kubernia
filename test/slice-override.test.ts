@@ -69,6 +69,8 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
     so.ladeCommitZeilenOderBeende({ ...io, laden: () => { throw new Error("Config kaputt. Fix: x"); } });
     expect(meldungen).toEqual(["✖ Config kaputt. Fix: x"]);
     expect(codes).toEqual([1]);
+    // Ein Nicht-Error-Wurf (String) ist hier Absicht: er deckt den `String(e)`-Zweig.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
     so.ladeCommitZeilenOderBeende({ ...io, laden: () => { throw "roh"; } });
     expect(meldungen[1]).toBe("✖ roh");
   });

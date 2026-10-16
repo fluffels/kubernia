@@ -297,6 +297,42 @@ export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => str
   return out;
 }
 
+/** Einheiten im Ring kern-nach-entkopplung (Ganz-Datei-Code), die dort nicht gebraucht werden: keine Literal-Einträge in der Baseline
+ *  und alle lokalen Importe zeigen auf Besitz im Ring kern oder auf die Projekt-Config (Importe ohne Besitz-Ziel zählen als Grund zu bleiben).
+ *  Abhilfe: Ring auf `kern` setzen. Grenze: nur statische lokale Importe (`relativeImporte`) werden gesehen. */
+export function ueberfluessigeEntkopplung(eintraege: Eintrag[], baseline: Baseline, lies: (pfad: string) => string | null): string[] {
+  const ring = new Map(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => [e.pfad, e.ring]));
+  const out: string[] = [];
+  for (const [pfad, r] of ring) {
+    if (r !== "kern-nach-entkopplung" || !CODE_ENDUNG.test(pfad) || Object.keys(baseline[pfad] ?? {}).length > 0) continue;
+    const text = lies(pfad);
+    if (text === null) continue;
+    const nurKern = relativeImporte(text).every((spec) => {
+      const roh = posix.normalize(posix.join(posix.dirname(pfad), spec));
+      const nach = kandidatenPfade(roh).find((p) => ring.has(p));
+      return nach === undefined ? roh === PROJEKT_CONFIG_PFAD : ring.get(nach) === "kern";
+    });
+    if (nurKern) out.push(pfad);
+  }
+  return out;
+}
+
+/** Bestand der Einheiten, die ohne Grund in kern-nach-entkopplung stehen (Ring-Wechsel nach `kern` offen, Folgezeile im Sammelticket Harness-Härtung). Darf nur schrumpfen. */
+export const UEBERFLUESSIGE_ENTKOPPLUNG_OFFEN: string[] = [
+  "scripts/worktree-guard-git.mjs",
+  "scripts/quote-folge.mjs",
+  "scripts/ci-laeufe.mjs",
+  "scripts/brain-metrics.mjs",
+  "scripts/fremdtext-lib.mjs",
+  "scripts/check-basis.mjs",
+  "scripts/check-allowlists.mjs",
+  "scripts/check-any-suppressions.mjs",
+  "scripts/langfuse-vorbedingung.mjs",
+  "scripts/docs-gen/npm-ketten.mjs",
+  "scripts/docs-gen/harness-inventar.mjs",
+  "scripts/docs-gen/ruleset-spiegel.mjs",
+];
+
 /** Meldungen (leer = grün): Verstoß ohne Ausnahme, Ausnahme ohne Ticket/ADR-Schritt, Ausnahme im Ring kern, veraltete Ausnahme. */
 export function pruefeHuelle(verstoesse: string[], ausnahmen: Record<string, string>, ringVon: (pfad: string) => string | undefined): string[] {
   const out: string[] = [];
@@ -648,6 +684,31 @@ describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
   });
 });
 
+describe("ueberfluessigeEntkopplung (Ring ohne Grund, #1740)", () => {
+  const E = [
+    ein("scripts/n.mjs", { ring: "kern-nach-entkopplung" }),
+    ein("scripts/k.mjs"),
+    ein("scripts/m.mjs", { ring: "kern-nach-entkopplung" }),
+  ];
+  const mit = (m: Record<string, string>): ((p: string) => string | null) => (p) => m[p] ?? null;
+  test("ohne Baseline-Eintrag und nur Kern-Importe (oder keine): gemeldet, auch endungslos und mit Projekt-Config", () => {
+    assert.deepEqual(ueberfluessigeEntkopplung(E, {}, mit({ "scripts/n.mjs": 'import { x } from "./k.mjs";' })), ["scripts/n.mjs"]);
+    assert.deepEqual(ueberfluessigeEntkopplung(E, {}, mit({ "scripts/n.mjs": 'const k = require("./k");' })), ["scripts/n.mjs"]);
+    assert.deepEqual(ueberfluessigeEntkopplung([E[0]], {}, mit({ "scripts/n.mjs": 'import c from "../.factory/projekt.json";' })), ["scripts/n.mjs"]);
+    assert.deepEqual(ueberfluessigeEntkopplung([E[0]], {}, mit({ "scripts/n.mjs": "const x = 1;" })), ["scripts/n.mjs"]);
+  });
+  test("Baseline-Literale, ein Import auf Ring kern-nach-entkopplung oder auf Nicht-Besitz halten die Einheit im Ring", () => {
+    assert.deepEqual(ueberfluessigeEntkopplung(E, { "scripts/n.mjs": { Repo: 1 } }, mit({ "scripts/n.mjs": "const x = 1;" })), []);
+    assert.deepEqual(ueberfluessigeEntkopplung(E, {}, mit({ "scripts/n.mjs": 'import { x } from "./m.mjs";' })), []);
+    assert.deepEqual(ueberfluessigeEntkopplung(E, {}, mit({ "scripts/n.mjs": 'import { x } from "./fremd.mjs";' })), []);
+  });
+  test("Ring kern, Nicht-Code, Block-Einheit und fehlende Datei werden nicht gemeldet", () => {
+    assert.deepEqual(ueberfluessigeEntkopplung(E, {}, mit({ "scripts/k.mjs": "const x = 1;" })), []);
+    assert.deepEqual(ueberfluessigeEntkopplung([ein("scripts/n.md", { ring: "kern-nach-entkopplung" }), ein("A.md", { block: "s", ring: "kern-nach-entkopplung" })], {}, mit({ "scripts/n.md": "x", "A.md": "x" })), []);
+    assert.deepEqual(ueberfluessigeEntkopplung(E, {}, () => null), []);
+  });
+});
+
 // ── Reale Prüfungen ───────────────────────────────────────────────────────────
 
 const lesenWurzel = (pfad: string): string | null => {
@@ -690,6 +751,12 @@ describe("Kern-Reinheit (#1610)", () => {
 
   test("kein Importeur im Ring kern importiert Besitz im Ring kern-nach-entkopplung (Ring-Regel, #1663)", () => {
     assert.deepEqual(ringVerstoesse(manifest.eintraege, lesenWurzel), []);
+  });
+
+  test("keine Einheit bleibt im Ring kern-nach-entkopplung, die nichts entkoppeln muss (kein Baseline-Eintrag, nur Kern-Importe, #1740)", () => {
+    const kandidaten = ueberfluessigeEntkopplung(manifest.eintraege, baseline, lesenWurzel);
+    assert.deepEqual(kandidaten.filter((p) => !UEBERFLUESSIGE_ENTKOPPLUNG_OFFEN.includes(p)), [], "Ring auf kern setzen (neu ohne Grund in kern-nach-entkopplung)");
+    assert.deepEqual(UEBERFLUESSIGE_ENTKOPPLUNG_OFFEN.filter((p) => !kandidaten.includes(p)), [], "Eintrag veraltet (Ring gewechselt oder Literal/Import dazugekommen), entfernen");
   });
 
   test("kein Kern-Modul importiert die Schichtdaten statisch (Ausnahmen nur mit Ticket, nur schrumpfend, #1612)", () => {
