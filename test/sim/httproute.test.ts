@@ -157,11 +157,11 @@ describe("apply HTTPRoute", () => {
     expect(sim.httpRoutes).toEqual([]);
   });
   test("configured verändert das Szenario nicht (flacher Klon)", () => {
-    const szenario = { httpRoutes: [{ name: "r", parentRefs: ["tor"], hostnames: ["a.de"], rules: [{ path: "/", pathType: "PathPrefix" as const, backends: [] }] }] };
+    const szenario = { httpRoutes: [{ name: "r", parentRefs: ["alt"], hostnames: ["a.de"], rules: [{ path: "/", pathType: "PathPrefix" as const, backends: [] }] }] };
     const s = new KQSim(szenario);
     s.files["r.yaml"] = RT(VOLL);
     expect(s.exec("kubectl apply -f r.yaml").output).toContain("configured");
-    expect(szenario.httpRoutes[0]).toEqual({ name: "r", parentRefs: ["tor"], hostnames: ["a.de"], rules: [{ path: "/", pathType: "PathPrefix", backends: [] }] });
+    expect(szenario.httpRoutes[0]).toEqual({ name: "r", parentRefs: ["alt"], hostnames: ["a.de"], rules: [{ path: "/", pathType: "PathPrefix", backends: [] }] });
   });
 });
 

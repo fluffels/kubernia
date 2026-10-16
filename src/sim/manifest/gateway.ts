@@ -1,5 +1,6 @@
 /* ===== Kubernia – Manifest-Mapper für `gateway.networking.k8s.io/v1` (sim/manifest/gateway.ts, #1664) =====
- * Übersetzt GatewayClass und Gateway in den `ApplyEffect`. Gelesen werden nur die Felder, die das Sim-Modell
+ * Übersetzt GatewayClass, Gateway und HTTPRoute (#1665: `parentRefs`, `hostnames`, je Regel ein `match` mit
+ * `backendRefs`, Verweise nur im eigenen Namespace) in den `ApplyEffect`. Gelesen werden nur die Felder, die das Sim-Modell
  * kennt: `controllerName`, `description`, `gatewayClassName` und je Listener Name, Port, Protokoll,
  * `hostname` und das erste `tls.certificateRefs[].name`. Ein `status` im Manifest (z.B. aus `get -o yaml`)
  * wird ignoriert, der Status ist abgeleitet (../gateway).
