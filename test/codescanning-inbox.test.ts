@@ -8,7 +8,7 @@ import * as sammelRaw from "../scripts/sammelticket-anlegen.mjs";
 
 const zaehleBefundZeilen = (
   sammelRaw as unknown as {
-    zaehleBefundZeilen: (k: { user: string; body: string }[], o: { vertraut: () => boolean }) => number;
+    zaehleBefundZeilen: (k: { user: unknown; body: string }[], o: { vertraut: () => boolean }) => number;
   }
 ).zaehleBefundZeilen;
 
