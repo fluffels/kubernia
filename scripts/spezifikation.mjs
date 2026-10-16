@@ -14,6 +14,7 @@
  *
  * Exit 0 = angelegt/repariert/nichts zu tun/vollständig, 1 = Spezifikation unvollständig oder Inhaltsverlust (nichts geschrieben),
  * 2 = Aufruf- oder gh-Fehler (scheitert nach dem Anlegen nur das Einsortieren: Nummer und Nachhol-Befehl), 3 = Fremdeingang (nur `reparieren`).
+ * Grenze: Exit 3 meldet auch `mitKontingent` (API-Kontingent knapp, Meldung auf stderr) und ist dann kein Fremdeingang; die Meldung unterscheidet sie.
  * Grenze: zwei gleichzeitige Reparaturen desselben Tickets: der letzte Schreiber gewinnt.
  */
 import { execFileSync } from "node:child_process";
@@ -77,15 +78,16 @@ function pruefen(werte, io) {
   return maengel.length === 0 ? ergebnis(0, "Spezifikation vollständig\n") : ergebnis(1, "", `✖ Spezifikation unvollständig:\n${liste(maengel)}\n`);
 }
 
-function nachholBefehl(werte, nr) {
-  return werte.nach ? `node scripts/board-place.mjs --after ${werte.nach} ${nr}` : `node scripts/board-place.mjs --notfall ${werte.notfall} --top ${nr}`;
+function nachholBefehl(werte, nach, nr) {
+  return nach ? `node scripts/board-place.mjs --after ${nach} ${nr}` : `node scripts/board-place.mjs --notfall ${werte.notfall} --top ${nr}`;
 }
 
 function anlegen(werte, io) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   if (!werte.label.some((l) => /^area:\S+/.test(l))) return aufrufFehler("ein Label `area:<x>` ist Pflicht (--label area:<x>)");
   if (Boolean(werte.nach) === Boolean(werte.notfall)) return aufrufFehler("genau eines von --nach <nr> und --notfall <art> ist Pflicht");
-  if (werte.nach && positiveZahl(werte.nach) === null) return aufrufFehler("--nach braucht eine Ticketnummer");
+  const nach = werte.nach ? positiveZahl(werte.nach) : null; // einmal parsen: `#12` und `12` sind dieselbe Nummer
+  if (werte.nach && nach === null) return aufrufFehler("--nach braucht eine Ticketnummer");
   if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return aufrufFehler(`--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})`);
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
@@ -98,9 +100,9 @@ function anlegen(werte, io) {
     return aufrufFehler(`Anlegen fehlgeschlagen: ${fehlerText(e)}`);
   }
   try {
-    io.einsortiere({ nr: neu.number, nach: werte.nach ? Number(werte.nach) : null, notfall: werte.notfall ?? null });
+    io.einsortiere({ nr: neu.number, nach, notfall: werte.notfall ?? null });
   } catch (e) {
-    return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, neu.number)}`);
+    return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, nach, neu.number)}`);
   }
   return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`);
 }
@@ -120,6 +122,7 @@ function reparieren(werte, nrText, io) {
   }
   if (issue.pull_request) return aufrufFehler(`#${nr} ist ein PR`);
   if (issue.state !== "open") return aufrufFehler(`#${nr} ist nicht offen`);
+  if ((issue.assignees ?? []).length > 0) return aufrufFehler(`#${nr} hat einen Assignee (wird schon bearbeitet), nicht umschreiben`);
   const forum = labelNamen(issue).find((l) => FREMDEINGANG_LABELS.includes(l));
   if (!istVertraut(issue.user, io.owner) || forum !== undefined) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label forum): wird nie umgeschrieben, als Befund melden\n`);
   if (spezifikationsMaengel(issue.body).length === 0) return ergebnis(0, `#${nr}: Spezifikation schon vollständig, nichts zu tun\n`);

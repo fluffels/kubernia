@@ -95,6 +95,25 @@ describe("anlegen", () => {
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "abc"], io).code).toBe(2);
     expect(aufrufe.erzeuge).toEqual([]);
   });
+  test("leerer Titel (nur Leerzeichen) und leeres Label `area:` sind Aufrufdefekte: Exit 2, nichts angelegt", () => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT });
+    expect(S.fuehreAus(["anlegen", "--titel", "   ", "--body-datei", "b.md", "--label", "area:harness", "--nach", "12"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:", "--nach", "12"], io).code).toBe(2);
+    expect(aufrufe.erzeuge).toEqual([]);
+  });
+  test("`--nach #12` und `--nach 12` sind dieselbe Nummer: einsortiert wird mit 12 (nie NaN), der Nachhol-Befehl nennt 12", () => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT });
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "#12"], io).code).toBe(0);
+    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null }]);
+    const { io: kaputt } = umgebung({ "b.md": GUT }, {
+      einsortiere: () => {
+        throw new Error("x");
+      },
+    });
+    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "#12"], kaputt);
+    expect(r.err).toContain("--after 12 900");
+    expect(r.err).not.toContain("#12 900");
+  });
   test("Datei fehlt: Exit 2", () => {
     expect(S.fuehreAus(ANLEGEN, umgebung({}).io).code).toBe(2);
   });
@@ -155,6 +174,27 @@ describe("reparieren", () => {
     const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, labels: [{ name: "forum" }] }) });
     expect(S.fuehreAus(REP, io).code).toBe(3);
     expect(aufrufe.bearbeite).toEqual([]);
+  });
+  test("Label forum als String (nicht als Objekt) ist ebenfalls Fremdeingang: Exit 3, nie geschrieben", () => {
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, labels: ["forum"] }) });
+    expect(S.fuehreAus(REP, io).code).toBe(3);
+    expect(aufrufe.bearbeite).toEqual([]);
+  });
+  test("Ticket mit Assignee wird nicht umgeschrieben: Exit 2", () => {
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, assignees: [{ login: "fluffels" }] }) });
+    expect(S.fuehreAus(REP, io).code).toBe(2);
+    expect(aufrufe.bearbeite).toEqual([]);
+  });
+  test("Inhaltsverlust-Ausgabe: höchstens 10 Zeilen, lange Zeilen gekürzt, die Zahl im Kopf bleibt die volle", () => {
+    const alt = Array.from({ length: 12 }, (_, i) => `Zeile${i + 1}${i === 0 ? "x".repeat(200) : ""}`).join("\n");
+    const { io } = umgebung({ "b.md": GUT }, { ladeIssue: () => ({ state: "open", body: alt, user: { login: "fluffels", type: "User" } }) });
+    const r = S.fuehreAus(REP, io);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("12 Zeile(n)");
+    expect(r.err).toContain("Zeile10");
+    expect(r.err).not.toContain("Zeile11");
+    expect(r.err).not.toContain("x".repeat(121));
+    expect(r.err).toContain("…");
   });
   test("Spezifikation schon vollständig: Exit 0 „nichts zu tun“, ohne Schreibaufruf", () => {
     const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: GUT, user: { login: "fluffels", type: "User" } }) });

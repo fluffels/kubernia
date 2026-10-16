@@ -81,8 +81,9 @@ const norm = (z) =>
     .trim();
 
 /**
- * Inhaltsverlust beim Reparieren: jede nicht leere Nicht-Überschrift-Zeile des alten Bodys muss im neuen vorkommen. Normalisiert wird
- * (trimmen, Überschriften-Raute, Listenzeichen, Checkbox, Doppelpunkt am Ende; Fence-Zeilen zählen nicht); Überschriften des neuen Bodys sind Treffer.
+ * Inhaltsverlust beim Reparieren: jede nicht leere Inhaltszeile des alten Bodys muss im neuen vorkommen. Normalisiert wird
+ * (trimmen, Überschriften-Raute, Listenzeichen, Checkbox, Doppelpunkt am Ende); Fence-Zeilen, Trennlinien und Überschriften Ebene 1-2 des alten
+ * Bodys zählen nicht, `###` und tiefer schon; Überschriften des neuen Bodys sind Treffer.
  * Liefert die verlorenen Zeilen (getrimmt, Original). `null`/`undefined` als alter Body: nichts zu verlieren. Pur.
  */
 export function verloreneZeilen(alt, neu) {
@@ -90,7 +91,7 @@ export function verloreneZeilen(alt, neu) {
   const da = new Set(zeilen(neu).map(norm).filter(Boolean));
   return zeilen(alt)
     .map((z) => z.trim())
-    .filter((z) => z !== "" && !/^(?:```|~~~)/.test(z) && !/^#{1,6}\s/.test(z))
+    .filter((z) => z !== "" && !/^(?:```|~~~)/.test(z) && !/^#{1,2}\s/.test(z) && !/^[-*_=]+$/.test(z))
     .filter((z) => !da.has(norm(z)));
 }
 

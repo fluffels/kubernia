@@ -648,6 +648,14 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(r.out).toContain("hinweis #5");
     expect(r.out).not.toContain("reparieren");
   });
+  test("Reihenfolge der Ausgabe: Kopf, Hinweis, `reparieren`, übersprungen", () => {
+    const r = GateN.fuehreAus([], io([roh(200, { body: "" }), roh(5, { body: "" })], { hartAb: 100 }).eingang);
+    const zeilen = r.out.trim().split("\n");
+    expect(zeilen[0]).toBe("#5\tT5");
+    expect(zeilen[1]).toMatch(/^hinweis #5:/);
+    expect(zeilen[2]).toMatch(/^reparieren #200:/);
+    expect(zeilen[3]).toMatch(/^übersprungen #200:/);
+  });
   test("AK3: die Auswahl liest keine Kommentare und schreibt nichts (kein Kommentar-I/O im Vertrag)", () => {
     const gelesen: number[] = [];
     const gepostet: number[] = [];

@@ -133,6 +133,14 @@ describe("verloreneZeilen (Inhaltsverlust beim Reparieren)", () => {
   });
   test("Code-Fence-Inhalt zählt", () => {
     expect(S.verloreneZeilen("```\nnode x\n```", "## Ziel\nnichts")).toEqual(["node x"]);
+    expect(S.verloreneZeilen("~~~\nnode y\n~~~", "## Ziel\nnichts")).toEqual(["node y"]);
+  });
+  test("Überschrift Ebene 3 mit Inhalt geht nicht still verloren, Ebene 1-2 darf umbenannt werden", () => {
+    expect(S.verloreneZeilen("### Wichtig: nie X löschen\nText", "## Ziel\nText")).toEqual(["### Wichtig: nie X löschen"]);
+    expect(S.verloreneZeilen("# Titel\n## Alt\nText", "## Ziel\nText")).toEqual([]);
+  });
+  test("Trennlinien sind kein Inhalt", () => {
+    expect(S.verloreneZeilen("---\n-\n***\nText", "## Ziel\nText")).toEqual([]);
   });
   test("null und undefined als alter Body: nichts verloren", () => {
     expect(S.verloreneZeilen(null, "x")).toEqual([]);
