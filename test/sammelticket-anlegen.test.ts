@@ -245,7 +245,7 @@ describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
     expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, args\.notfall \? null : positionOderWarnung\(\)\)/);
     // Der Listen-Nachzug des Takts ist mit Fakes in test/board-takt-lauf.test.ts getestet (#1428 Z23), keine Quelltext-Regex mehr.
     const anlegen = lies("scripts/sammelticket-anlegen.mjs");
-    expect(anlegen).toMatch(/pruefSchritt\(\{ items: loadItems\(PRODUKT_BOARD\)/);
+    expect(anlegen).toMatch(/pruefSchritt\(\{ items: loadItems\(FACTORY_BOARD\)/);
     expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);
     expect(anlegen).not.toMatch(/from "\.\/board-place\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
   });

@@ -4,16 +4,16 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-takt.mjs";
 
-type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
+type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string; labels?: string[] };
 type Io = {
   ghJson: (args: string[]) => unknown;
-  loadItems: (o: { token: string }) => Item[];
+  loadItems: (rolle: string, o: { token: string }) => Item[];
   loadOpenIssuePages: (repo: string) => unknown[];
   positionLautAgentsMd: () => number;
   fuehreStatusAus: (e: { aktion: string; nr?: number }, ctx: unknown) => { ok: boolean; nr?: number; itemId?: string };
   fuehreHarnessAus: (h: { aktion: string; nr?: number }, items: Item[], token: string) => boolean;
-  itemsUeberIssues?: (nummern: number[], o: { token?: string }) => ({ number: number } | null)[];
-  addToBoardTodo?: (nodeId: string, o: { token?: string }) => string;
+  itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string }) => ({ number: number } | null)[];
+  addToBoardTodo?: (rolle: string, nodeId: string, o: { token?: string }) => string;
   log: (z: string) => void;
 };
 const T = raw as unknown as {
@@ -24,6 +24,8 @@ const T = raw as unknown as {
   fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io }) => { fehler: boolean };
 };
 
+/** Fake für `io.loadItems`: die Items stehen auf dem Factory-Board (dort arbeiten Status- und Harness-Takt), das Produkt-Board ist leer. */
+const nurFactory = (items: Item[]) => (rolle: string) => (rolle === "factory" ? items : []);
 const c = (message: string, date = "2026-10-07T10:00:00Z") => ({ author: { login: "fluffels" }, commit: { message, committer: { date } } });
 const H = new Set([102, 103]);
 
@@ -72,7 +74,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         }
         return [commits];
       },
-      loadItems: () => [it(10), it(11), sammel, it(50, { title: STATUS })],
+      loadItems: nurFactory([it(10), it(11), sammel, it(50, { title: STATUS })]),
       loadOpenIssuePages: () => [opts.offeneStatus ? [{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }] : []],
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: (e) => {
@@ -115,7 +117,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
           a.join(" ").includes("state=closed")
             ? [[{ number: 60, title: STATUS, created_at: vorgaengerCreated, closed_at: "2026-10-06T08:00:00Z" }]]
             : [commitDaten.map((d, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: d } }, author: { login: "fluffels", type: "User" } }))],
-        loadItems: () => [],
+        loadItems: nurFactory([]),
         loadOpenIssuePages: () => [offenCreatedAt ? [{ number: 70, title: STATUS, created_at: offenCreatedAt, assignees: [] }] : []],
         positionLautAgentsMd: () => 4,
         fuehreStatusAus: () => ({ ok: true }),
@@ -149,7 +151,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
   test("schlagen die Aktionen fehl (Status ok=false, Harness false), ist der Lauf ein Fehler", () => {
     const mk = (statusOk: boolean, harnessOk: boolean): Io => ({
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
-      loadItems: () => [it(10), it(11), sammel, it(50, { title: STATUS })],
+      loadItems: nurFactory([it(10), it(11), sammel, it(50, { title: STATUS })]),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ({ ok: statusOk }),
@@ -162,12 +164,45 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(T.fuehreTaktAus({ jetzt, token: "t", io: mk(true, false) }).fehler).toBe(true);
   });
 
+  describe("Status- und Harness-Takt arbeiten auf der Factory-Liste (#1729)", () => {
+    const mk = (produkt: Item[], factory: Item[], gesehen: { status: unknown[]; harness: number }): Io => ({
+      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
+      loadItems: (rolle) => (rolle === "factory" ? factory : produkt),
+      loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: (_e, ctx) => (gesehen.status.push((ctx as { items: Item[] }).items), { ok: true }),
+      fuehreHarnessAus: () => ((gesehen.harness += 1), true),
+      log: () => undefined,
+    });
+    const jetzt = new Date("2026-10-08T12:00:00Z");
+    test("ein Sammelticket nur auf dem Produkt-Board löst keine Harness-Aktion aus, auf dem Factory-Board schon", () => {
+      const nur = { status: [] as unknown[], harness: 0 };
+      T.fuehreTaktAus({ jetzt, token: "t", io: mk([it(10), it(11), sammel], [it(1)], nur) });
+      expect(nur.harness).toBe(0);
+      const auf = { status: [] as unknown[], harness: 0 };
+      T.fuehreTaktAus({ jetzt, token: "t", io: mk([], [it(10), it(11), sammel], auf) });
+      expect(auf.harness).toBe(1);
+    });
+    test("das Status-Ticket bekommt die Factory-Liste, nie die Produkt-Liste", () => {
+      const g = { status: [] as unknown[], harness: 0 };
+      T.fuehreTaktAus({ jetzt, token: "t", io: mk([it(900)], [it(1), it(2)], g) });
+      const listen = g.status as Item[][];
+      expect(listen).toHaveLength(1);
+      expect(listen[0].map((i) => i.number)).toEqual([1, 2]);
+    });
+    test("ein Item auf beiden Boards, das laut Trennregel auf das Produkt-Board gehört, zählt nicht in der Factory-Liste", () => {
+      const g = { status: [] as unknown[], harness: 0 };
+      T.fuehreTaktAus({ jetzt, token: "t", io: mk([it(5)], [it(5), it(6)], g) });
+      expect((g.status as Item[][])[0].map((i) => i.number)).toEqual([6]);
+    });
+  });
+
   test("--dry-run führt nichts aus", () => {
     const log: string[] = [];
     let gerufen = 0;
     const io: Io = {
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
-      loadItems: () => [it(10), it(11), sammel],
+      loadItems: nurFactory([it(10), it(11), sammel]),
       loadOpenIssuePages: () => [[]],
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ((gerufen += 1), { ok: true }),
@@ -181,7 +216,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
   test("ohne Token entfällt nur der Harness-Teil (Warnung, kein Fehler); ohne Position ist es ein Fehler", () => {
     const basis = {
       ghJson: (a: string[]) => (a.join(" ").includes("state=closed") ? [[]] : [[]]),
-      loadItems: () => [],
+      loadItems: nurFactory([]),
       loadOpenIssuePages: () => [[]],
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: () => true,
@@ -205,22 +240,22 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
   const offen = (...nrn: number[]) => [nrn.map((n) => ({ number: n, title: `T${n}`, created_at: "2026-10-02T00:00:00Z", assignees: [] }))];
   const issue = (n: number, extra: Record<string, unknown> = {}) => ({ number: n, state: "open", node_id: `N${n}`, title: `T${n}`, ...extra });
 
-  function lauf(opts: { offene: number[]; imBoard?: number[]; graphql?: (n: number[]) => ({ number: number } | null)[]; rest?: (n: number) => unknown; add?: () => string; dry?: boolean; token?: string }) {
+  function lauf(opts: { offene: number[]; imBoard?: number[]; produkt?: number[]; graphql?: (n: number[]) => ({ number: number } | null)[]; rest?: (n: number) => unknown; add?: () => string; dry?: boolean; token?: string }) {
     const log: string[] = [];
-    const zaehler = { graphql: 0, add: [] as string[], harness: [] as Item[][] };
+    const zaehler = { graphql: 0, add: [] as string[], rollen: [] as string[], harness: [] as Item[][] };
     const io: Io = {
       ghJson: (a) => {
         const m = /issues[/]([0-9]+)$/.exec(a.join(" "));
         if (m) return (opts.rest ?? issue)(Number(m[1]));
         return a.join(" ").includes("state=closed") ? [[]] : [[]];
       },
-      loadItems: () => [...(opts.imBoard ?? []).map(it), sammel],
+      loadItems: (rolle) => (rolle === "factory" ? [...(opts.imBoard ?? []).map(it), sammel] : (opts.produkt ?? []).map(it)),
       loadOpenIssuePages: () => offen(...opts.offene),
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: (_h, items) => (zaehler.harness.push(items), true),
-      itemsUeberIssues: (n) => ((zaehler.graphql += 1), (opts.graphql ?? (() => n.map(() => null)))(n)),
-      addToBoardTodo: (id) => (zaehler.add.push(id), (opts.add ?? (() => `PVTI_${id}`))()),
+      itemsUeberIssues: (_rolle, n) => ((zaehler.graphql += 1), (opts.graphql ?? (() => n.map(() => null)))(n)),
+      addToBoardTodo: (rolle, id) => (zaehler.add.push(id), zaehler.rollen.push(rolle), (opts.add ?? (() => `PVTI_${id}`))()),
       log: (z) => log.push(z),
     };
     const r = T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: opts.dry, token: "token" in opts ? opts.token : "t", io });
@@ -230,7 +265,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
   test("ein offenes Issue ohne Board-Item wird als Todo aufgenommen, mit Warnung samt Nummer, Lauf bleibt grün", () => {
     const { r, log, zaehler } = lauf({ offene: [10, 11], imBoard: [10] });
     expect(zaehler.add).toEqual(["N11"]);
-    expect(log.join("\n")).toMatch(/::warning::Board-Wächter: #11 fehlte im Board, als Todo aufgenommen/);
+    expect(log.join("\n")).toMatch(/::warning::Board-Wächter: #11 fehlte im Board, als Todo auf dem produkt-Board aufgenommen/);
     expect(r.fehler).toBe(false);
   });
   test("Fehlalarm der REST-Liste: GraphQL kennt das Item, es wird nicht aufgenommen", () => {
@@ -262,6 +297,31 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
     const { r, zaehler } = lauf({ offene: [11], imBoard: [], graphql: () => { throw new Error("rate limit"); } });
     expect(r.fehler).toBe(true);
     expect(zaehler.add).toEqual([]);
+  });
+  describe("zwei Boards (#1729)", () => {
+    const harnessIssue = (n: number) => issue(n, { labels: [{ name: "area:harness" }] });
+    test("ein fehlendes Harness-Issue kommt auf das Factory-Board, ein fehlendes Spiel-Issue auf das Produkt-Board", () => {
+      const { zaehler, log } = lauf({ offene: [20, 21], imBoard: [], rest: (n) => (n === 20 ? harnessIssue(n) : issue(n)) });
+      expect(zaehler.add).toEqual(["N20", "N21"]);
+      expect(zaehler.rollen).toEqual(["factory", "produkt"]);
+      expect(log.join("\n")).toMatch(/#20 fehlte im Board, als Todo auf dem factory-Board aufgenommen/);
+    });
+    test("ein Item, das auf dem Produkt-Board steht, gilt als vorhanden und wird nicht neu aufgenommen", () => {
+      const { zaehler, r } = lauf({ offene: [10, 11], imBoard: [10], produkt: [11] });
+      expect(zaehler.add).toEqual([]);
+      expect(zaehler.graphql).toBe(0);
+      expect(r.fehler).toBe(false);
+    });
+    test("die GraphQL-Gegenprobe fragt beide Boards; kennt nur das Produkt-Board das Item, wird nicht aufgenommen", () => {
+      const { zaehler } = lauf({ offene: [11], imBoard: [], graphql: () => [{ number: 11 }] });
+      expect(zaehler.graphql).toBe(2);
+      expect(zaehler.add).toEqual([]);
+    });
+    test("eine Nummer auf beiden Boards ist eine Warnung (kein Fehler) und zählt nur auf dem Board laut Trennregel", () => {
+      const { r, log } = lauf({ offene: [10], imBoard: [10], produkt: [10] });
+      expect(log.join("\n")).toMatch(/::warning::Board-Wächter: #10 steht auf beiden Boards/);
+      expect(r.fehler).toBe(false);
+    });
   });
   test("ein inzwischen geschlossenes Issue wird nicht aufgenommen (Warnung, kein Fehler)", () => {
     const { r, log, zaehler } = lauf({ offene: [11], imBoard: [], rest: (n) => issue(n, { state: "closed" }) });

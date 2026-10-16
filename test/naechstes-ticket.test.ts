@@ -15,11 +15,16 @@ type Fenster = { k: number; agent: string; nach: number };
 type Stand = { closedAt: string | null; n: number } | { fehler: string };
 type Eingabe = { items: unknown[]; offene: Set<number>; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
+type Quote = { seite: string; produktMerges: number | null; grund: string; rueckfall: boolean };
+type QuoteEingabe = { commits: unknown[]; harnessIssues: Set<number> | null };
+type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
+type Io = { lade: () => ZweiBoards; ladeQuote?: () => QuoteEingabe; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; hartAb?: number };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
   blockerNummern: (b: string) => number[];
   formatiere: (e: Ergebnis) => string;
-  fuehreAus: (argv: string[], io: { lade: () => Eingabe; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string }) => { code: number; out: string; err: string };
+  fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string };
+  waehleUeberBoards: (e: unknown) => Ergebnis & { quote: Quote; hinweise?: string[] };
   ticketAusArgv: (argv: string[]) => { ticket: number | null } | { fehler: string };
   itemAusIssue: (i: unknown) => { number: number; title: string; state: string; labels: string[]; body: string; blockedBy: number; autor: { login: string } | null };
   pruefeTicket: (e: Omit<Eingabe, "items"> & { item: unknown }) => Ergebnis;
@@ -43,6 +48,9 @@ const roh = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
   fields: [{ name: "Status", value: { name: { raw: status } } }],
   content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
 });
+// Zwei Boards (#1729): die Eingabe der alten Form (ein Board) steht auf dem Produkt-Board; Harness-Items rücken laut Trennregel auf die Factory-Seite.
+const QUOTE_NULL = () => ({ commits: [], harnessIssues: null });
+const zweiBoards = (e: Eingabe): ZweiBoards => ({ ...e, produkt: e.items, factory: [] });
 const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
   (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", ...extra });
 
@@ -131,8 +139,9 @@ describe("fuehreAus", () => {
     owner: "fluffels",
     lade: () => {
       if (eingabe instanceof Error) throw eingabe;
-      return eingabe;
+      return zweiBoards(eingabe);
     },
+    ladeQuote: QUOTE_NULL,
   });
   test("gefunden: Exit 0, erste Zeile `#nr<TAB>Titel`", () => {
     const r = N.fuehreAus([], io({ items: norm([item(7)]), offene: new Set() }));
@@ -160,8 +169,9 @@ describe("Bereich (#1552)", () => {
     owner: "fluffels",
     lade: () => {
       if (spion) spion.n++;
-      return { items: norm(items), offene: new Set<number>() };
+      return zweiBoards({ items: norm(items), offene: new Set<number>() });
     },
+    ladeQuote: QUOTE_NULL,
   });
 
   test("bereichAusArgv: ohne Schalter null, beide Schreibweisen, neben --json", () => {
@@ -344,11 +354,11 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
   });
   test("unlesbare Zeile: fail-closed, der Body-Text taucht nirgends auf", () => {
     const eingabe = { items: norm([item(1, { body: "Messfenster: n ≥ GEHEIM kubernia-umsetzer nach #1" })]), offene: new Set<number>() };
-    const r = N.fuehreAus(["--json"], { owner: "fluffels", lade: () => eingabe });
+    const r = N.fuehreAus(["--json"], { owner: "fluffels", lade: () => zweiBoards(eingabe), ladeQuote: QUOTE_NULL });
     expect(r.code).toBe(1);
     expect(r.out).toContain("unlesbar");
     expect(r.out).not.toContain("GEHEIM");
-    expect(N.fuehreAus([], { owner: "fluffels", lade: () => eingabe }).out).not.toContain("GEHEIM");
+    expect(N.fuehreAus([], { owner: "fluffels", lade: () => zweiBoards(eingabe), ladeQuote: QUOTE_NULL }).out).not.toContain("GEHEIM");
   });
 });
 
@@ -484,7 +494,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
       owner: "fluffels",
       lade: () => {
         aufrufe.lade++;
-        return { items: [], offene: new Set<number>() };
+        return { produkt: [], factory: [], offene: new Set<number>() };
       },
       ladeEinzeln: (nr: number) => {
         aufrufe.einzeln++;
@@ -522,7 +532,8 @@ describe("Spezifikations-Gate (#1615)", () => {
   type GateIo = {
     owner: string;
     hartAb?: number;
-    lade: () => Eingabe;
+    lade: () => ZweiBoards;
+    ladeQuote?: () => QuoteEingabe;
     ladeEinzeln?: (nr: number) => Eingabe & { item: unknown };
   };
   type GateErgebnis = Ergebnis & { uebersprungen: { nr: number; grund: string; fehlt?: string[] }[]; reparieren?: { nr: number; fehlt: string[] }[]; ticket: (Ergebnis["ticket"] & { spezifikation?: { bestand: boolean; fehlt: string[] } }) | null };
@@ -607,7 +618,8 @@ describe("Spezifikations-Gate (#1615)", () => {
   const io = (items: unknown[], extra: Partial<GateIo> = {}) => {
     const eingang: GateIo = {
       owner: "fluffels",
-      lade: () => ({ items: norm(items), offene: new Set<number>() }),
+      lade: () => zweiBoards({ items: norm(items), offene: new Set<number>() }),
+      ladeQuote: QUOTE_NULL,
       ...extra,
     };
     return { eingang };
@@ -618,8 +630,9 @@ describe("Spezifikations-Gate (#1615)", () => {
     const zeilen = r.out.split("\n");
     expect(r.code).toBe(0);
     expect(zeilen[0]).toBe("#2\tT2");
-    expect(zeilen[1]).toMatch(/^reparieren #1: .*kein Negativfall/);
-    expect(zeilen[2]).toMatch(/^übersprungen #1: Spezifikation unvollständig/);
+    expect(zeilen[1]).toMatch(/^Seite /);
+    expect(zeilen[2]).toMatch(/^reparieren #1: .*kein Negativfall/);
+    expect(zeilen[3]).toMatch(/^übersprungen #1: Spezifikation unvollständig/);
     expect(r.out).not.toContain("GEHEIM");
     expect(r.err).toBe("");
   });
@@ -635,7 +648,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     const r = GateN.fuehreAus([], io([roh(1, { body: OHNE_NEGATIV })]).eingang);
     expect(r.code).toBe(1);
     expect(r.out.split("\n")[0]).toBe("kein freies Ticket");
-    expect(r.out.split("\n")[1]).toMatch(/^reparieren #1: /);
+    expect(r.out.split("\n")[2]).toMatch(/^reparieren #1: /);
   });
   test("Ticket mit vollständiger Spezifikation: weder `reparieren` noch übersprungen", () => {
     const r = GateN.fuehreAus(["--json"], io([item(1)]).eingang);
@@ -652,9 +665,10 @@ describe("Spezifikations-Gate (#1615)", () => {
     const r = GateN.fuehreAus([], io([roh(200, { body: "" }), roh(5, { body: "" })], { hartAb: 100 }).eingang);
     const zeilen = r.out.trim().split("\n");
     expect(zeilen[0]).toBe("#5\tT5");
-    expect(zeilen[1]).toMatch(/^hinweis #5:/);
-    expect(zeilen[2]).toMatch(/^reparieren #200:/);
-    expect(zeilen[3]).toMatch(/^übersprungen #200:/);
+    expect(zeilen[1]).toMatch(/^Seite Produkt: /);
+    expect(zeilen[2]).toMatch(/^hinweis #5:/);
+    expect(zeilen[3]).toMatch(/^reparieren #200:/);
+    expect(zeilen[4]).toMatch(/^übersprungen #200:/);
   });
   test("AK3: die Auswahl liest keine Kommentare und schreibt nichts (kein Kommentar-I/O im Vertrag)", () => {
     const gelesen: number[] = [];
@@ -672,7 +686,7 @@ describe("Spezifikations-Gate (#1615)", () => {
   test("--ticket: nicht frei wegen Spezifikation zeigt `reparieren #nr` mit Exit 1", () => {
     const r = GateN.fuehreAus(["--ticket", "7"], {
       owner: "fluffels",
-      lade: () => ({ items: [], offene: new Set<number>() }),
+      lade: () => ({ produkt: [], factory: [], offene: new Set<number>() }),
       ladeEinzeln: () => ({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set<number>() }) as never,
     });
     expect(r.code).toBe(1);
@@ -685,5 +699,169 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(GateN.fuehreAus([], eingang).code).toBe(0);
     const { eingang: hart } = io([roh(5, { body: "" })], { hartAb: 5 });
     expect(GateN.fuehreAus([], hart).code).toBe(1);
+  });
+});
+
+describe("Zwei Boards und Spielquote (#1729)", () => {
+  const H = { labels: [{ name: "area:harness" }] };
+  const vergeben = { assignees: [{ login: "fluffels" }] };
+  const commit = (message: string, login = "fluffels") => ({ author: { login }, commit: { message, committer: { date: "2026-10-07T10:00:00Z" } } });
+  /** Commits von main, neueste zuerst: `n` Produkt-Merges, darunter ein Factory-Merge (#7). */
+  const quoteMit = (n: number): QuoteEingabe => ({ commits: [...Array.from({ length: n }, (_, k) => commit(`feat(sim): p${k} (#${300 + k})`)), commit("feat(harness): f (#7)")], harnessIssues: new Set([7]) });
+  type Opt = { merges?: number; argv?: string[]; spion?: { n: number }; quoteFehler?: boolean };
+  const lauf = (produkt: unknown[], factory: unknown[], o: Opt = {}) =>
+    N.fuehreAus(o.argv ?? ["--json"], {
+      owner: "fluffels",
+      lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene: new Set<number>() }),
+      ladeQuote: () => {
+        if (o.spion) o.spion.n++;
+        if (o.quoteFehler) throw new Error("kein Netz");
+        return quoteMit(o.merges ?? 0);
+      },
+    });
+  const json = (r: { out: string }) => JSON.parse(r.out) as Ergebnis & { quote: Quote; hinweise?: string[] };
+  const rot = { title: "🚨 CI rot auf main: x" };
+  const status = { title: "Langfuse-Status überprüfen", ...H };
+
+  test("Quote 3 wählt das oberste freie Factory-Item, Quote 2 das oberste freie Produkt-Item; quote nennt genau vier Schlüssel", () => {
+    const drei = json(lauf([item(1)], [item(10, H)], { merges: 3 }));
+    expect(drei.ticket?.nr).toBe(10);
+    expect(drei.quote).toEqual({ seite: "factory", produktMerges: 3, grund: "3 Produkt-Merges seit dem letzten Factory-Merge (Spielquote 1:3)", rueckfall: false });
+    const zwei = json(lauf([item(1)], [item(10, H)], { merges: 2 }));
+    expect(zwei.ticket?.nr).toBe(1);
+    expect(Object.keys(zwei.quote).sort()).toEqual(["grund", "produktMerges", "rueckfall", "seite"]);
+    expect(zwei.quote.seite).toBe("produkt");
+  });
+  test("Kopf vor Quote: ein 🚨 auf dem Factory-Board schlägt ein freies Produkt-Item, die Quote wird nicht geladen", () => {
+    const spion = { n: 0 };
+    const j = json(lauf([item(1)], [item(10, { ...rot, ...H })], { merges: 0, spion }));
+    expect(j.ticket?.nr).toBe(10);
+    expect(j.quote).toEqual({ seite: "factory", produktMerges: null, grund: "Kopf-Item, vor der Quote", rueckfall: false });
+    expect(spion.n).toBe(0);
+  });
+  test("Kopf-Rang: 🔒 (Produkt-Board) kommt vor dem Status-Ticket (Factory-Board), bei Gleichstand Produkt vor Factory", () => {
+    const sec = { title: "🔒 Security: y" };
+    expect(json(lauf([item(1, sec)], [item(2, status)])).ticket?.nr).toBe(1);
+    const zweiRot = json(lauf([item(1, rot)], [item(2, { ...rot, ...H })]));
+    expect(zweiRot.ticket?.nr).toBe(1);
+    expect(json(lauf([item(1, status)], [item(2, { ...rot, ...H })])).ticket?.nr).toBe(2);
+  });
+  test("ein geclaimtes Kopf-Item wird übersprungen, danach entscheidet die Quote", () => {
+    const j = json(lauf([item(1)], [item(10, { ...rot, ...H, ...vergeben }), item(11, H)], { merges: 0 }));
+    expect(j.ticket?.nr).toBe(1);
+    expect(j.uebersprungen.map((u) => u.nr)).toEqual([10]);
+  });
+  test("Factory in Arbeit (geclaimtes Nicht-Kopf-Item) lenkt bei 5 Merges auf Produkt, ohne die Quote zu laden", () => {
+    const spion = { n: 0 };
+    const j = json(lauf([item(1)], [item(10, { ...H, ...vergeben }), item(11, H)], { merges: 5, spion }));
+    expect(j.ticket?.nr).toBe(1);
+    expect(j.quote).toMatchObject({ seite: "produkt", produktMerges: null, grund: "Factory in Arbeit (#10)" });
+    expect(spion.n).toBe(0);
+  });
+  test("ein geclaimtes Status-Ticket (Kopf) zählt nicht als Factory in Arbeit", () => {
+    const j = json(lauf([item(1)], [item(2, { ...status, ...vergeben }), item(11, H)], { merges: 5 }));
+    expect(j.ticket?.nr).toBe(11);
+    expect(j.quote.seite).toBe("factory");
+  });
+  test("Rückfall: Quote verlangt Factory, das Factory-Board hat nichts Freies: oberstes freies Produkt-Item mit Hinweis", () => {
+    const j = json(lauf([item(1)], [], { merges: 3 }));
+    expect(j.ticket?.nr).toBe(1);
+    expect(j.quote).toMatchObject({ seite: "produkt", rueckfall: true });
+    expect(j.hinweise).toEqual(["Rückfall: kein freies Factory-Item, oberstes freies Produkt-Item"]);
+  });
+  test("Rückfall umgekehrt: Quote verlangt Produkt, das Produkt-Board hat nichts Freies: Factory-Item mit Hinweis", () => {
+    const j = json(lauf([item(1, vergeben)], [item(10, H)], { merges: 0 }));
+    expect(j.ticket?.nr).toBe(10);
+    expect(j.quote).toMatchObject({ seite: "factory", rueckfall: true });
+    expect(j.hinweise).toEqual(["Rückfall: kein freies Produkt-Item, oberstes freies Factory-Item"]);
+    expect(j.uebersprungen.map((u) => u.nr)).toEqual([1]);
+  });
+  test("beide Seiten ohne freies Item: Exit 1 und kein Rückfall-Flag", () => {
+    const r = lauf([item(1, vergeben)], [item(10, { ...H, ...vergeben })], { merges: 3, argv: [] });
+    expect(r.code).toBe(1);
+    expect(r.out.split("\n")[0]).toBe("kein freies Ticket");
+    expect(json(lauf([], [], { merges: 3 })).quote.rueckfall).toBe(false);
+  });
+  test("ein Item auf beiden Boards: Hinweis, gezählt nur auf dem Board laut Trennregel", () => {
+    const j = json(lauf([item(5, H), item(6)], [item(5, H)], { merges: 0 }));
+    expect(j.ticket?.nr).toBe(6);
+    expect(j.hinweise).toEqual(["#5 steht auf beiden Boards, gezählt auf dem Board laut Trennregel"]);
+    expect(j.uebersprungen).toEqual([]);
+  });
+  test("ein Harness-Item nur auf dem Produkt-Board zählt auf der Factory-Seite, hinter den Items des Factory-Boards, mit einem Sammelhinweis", () => {
+    const j = json(lauf([item(5, H), item(6)], [], { merges: 3 }));
+    expect(j.ticket?.nr).toBe(5);
+    expect(j.hinweise?.[0]).toBe("1 Items nur auf dem falschen Board (zählen auf ihrer Seite laut Trennregel): #5");
+    expect(json(lauf([item(5, H), item(6)], [item(10, H)], { merges: 3 })).ticket?.nr).toBe(10);
+  });
+  test("der Sammelhinweis nennt höchstens 10 Nummern", () => {
+    const viele = Array.from({ length: 12 }, (_, k) => item(20 + k, H));
+    const h = json(lauf(viele, [], { merges: 0 })).hinweise?.[0] ?? "";
+    expect(h).toContain("12 Items");
+    expect(h).toContain("#29, …");
+    expect(h).not.toContain("#30");
+  });
+  test("--bereich agentic: nur die Factory-Seite plus 🚨 vom Produkt-Board, ohne Quote und ohne Rückfall", () => {
+    const spion = { n: 0 };
+    const nur = json(lauf([item(1)], [item(10, H)], { argv: ["--json", "--bereich", "agentic"], merges: 0, spion }));
+    expect(nur.ticket?.nr).toBe(10);
+    expect(nur.quote).toEqual({ seite: "factory", produktMerges: null, grund: "--bereich agentic", rueckfall: false });
+    expect(json(lauf([item(1, rot)], [item(10, H)], { argv: ["--json", "--bereich", "agentic"], spion })).ticket?.nr).toBe(1);
+    const leer = lauf([item(1)], [], { argv: ["--bereich", "agentic"], spion });
+    expect(leer.code).toBe(1);
+    expect(leer.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Agentic Engineering");
+    expect(spion.n).toBe(0);
+  });
+  test("--bereich spiel: nur die Produkt-Seite, ein Factory-Item wird nie gewählt", () => {
+    const j = json(lauf([item(1)], [item(10, H)], { argv: ["--json", "--bereich", "spiel"], merges: 9 }));
+    expect(j.ticket?.nr).toBe(1);
+    expect(lauf([], [item(10, H)], { argv: ["--bereich", "spiel"] }).code).toBe(1);
+  });
+  test("ein Status-Ticket auf dem Factory-Board gehört nicht zum Bereich spiel", () => {
+    expect(lauf([item(1)], [item(2, status)], { argv: ["--bereich", "spiel"] }).out.split("\n")[0]).toBe("#1\tT1");
+  });
+  test("Quote nicht ladbar: Exit 2 mit Meldung, nie eine stille Seite; mit Kopf-Item wird sie gar nicht gebraucht", () => {
+    const r = lauf([item(1)], [item(10, H)], { quoteFehler: true });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("kein Netz");
+    expect(lauf([item(1, rot)], [], { quoteFehler: true }).code).toBe(0);
+  });
+  test("ein Lader ohne ladeQuote ist Exit 2 (kein stilles Produkt)", () => {
+    const r = N.fuehreAus([], { owner: "fluffels", lade: () => ({ produkt: norm([item(1)]), factory: norm([]), offene: new Set<number>() }) });
+    expect(r.code).toBe(2);
+  });
+  test("Text: Zeile 1 bleibt `#nr TAB Titel`, Zeile 2 nennt Seite und Zählung, danach Hinweise", () => {
+    const zeilen = lauf([item(5, H), item(6)], [item(10, H)], { merges: 3, argv: [] }).out.trim().split("\n");
+    expect(zeilen[0]).toBe("#10\tT10");
+    expect(zeilen[1]).toBe("Seite Factory: 3 Produkt-Merges seit dem letzten Factory-Merge (Spielquote 1:3)");
+    expect(zeilen[2]).toMatch(/^hinweis 1 Items nur auf dem falschen Board/);
+  });
+  test("Text: bei Rückfall endet die Infozeile auf „(Rückfall)“ und der Hinweis steht darunter", () => {
+    const zeilen = lauf([item(1)], [], { merges: 3, argv: [] }).out.trim().split("\n");
+    expect(zeilen[1]).toBe("Seite Produkt: 3 Produkt-Merges seit dem letzten Factory-Merge (Spielquote 1:3) (Rückfall)");
+    expect(zeilen[2]).toBe("hinweis Rückfall: kein freies Factory-Item, oberstes freies Produkt-Item");
+  });
+  test("ohne Hinweise fehlt der Schlüssel hinweise im JSON", () => {
+    expect("hinweise" in json(lauf([item(1)], [], { merges: 0 }))).toBe(false);
+  });
+  test("ladeQuoteEcht: eine Commit-Seite plus die geschlossenen Harness-Issues ab dem ältesten Commit minus 1 Tag", () => {
+    const Q = raw as unknown as { ladeQuoteEcht: (lade: (a: string[]) => unknown) => QuoteEingabe };
+    const aufrufe: string[] = [];
+    const alt = { ...commit("feat(harness): b (#7)"), commit: { message: "feat(harness): b (#7)", committer: { date: "2026-10-05T10:00:00Z" } } };
+    const q = Q.ladeQuoteEcht((a) => {
+      aufrufe.push(a.join(" "));
+      return a.includes("--slurp") ? [[{ number: 7 }, { number: 8, pull_request: {} }]] : [commit("feat(sim): a (#1)"), alt];
+    });
+    expect(aufrufe[0]).toContain("commits?sha=main&per_page=100");
+    expect(aufrufe[1]).toContain("labels=area:harness");
+    expect(aufrufe[1]).toContain("since=2026-10-04T10:00:00.000Z");
+    expect([...(q.harnessIssues ?? [])]).toEqual([7]);
+  });
+  test("ladeQuoteEcht wirft bei leerer oder kaputter Antwort (keine stille Seite)", () => {
+    const Q = raw as unknown as { ladeQuoteEcht: (lade: (a: string[]) => unknown) => QuoteEingabe };
+    expect(() => Q.ladeQuoteEcht(() => [])).toThrow(/keine Commits/);
+    expect(() => Q.ladeQuoteEcht(() => ({}))).toThrow(/keine Commits/);
+    expect(() => Q.ladeQuoteEcht(() => [{ commit: { committer: { date: "kaputt" } } }])).toThrow(/Datum/);
+    expect(() => Q.ladeQuoteEcht((a) => (a.includes("--slurp") ? {} : [commit("x")]))).toThrow(/Antwortform/);
   });
 });
