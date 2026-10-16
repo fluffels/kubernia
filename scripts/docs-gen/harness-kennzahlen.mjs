@@ -26,6 +26,9 @@ function dateienUnter(abs, rel = "") {
 /** Eine Kennzahl: Name, Wert, Zählregel in der Ausgabe. */
 const zeile = (name, wert, regel) => [name, String(wert), regel];
 
+/** Zählwert ab 10 auf Zehner abgerundet und als „≥ N“ angezeigt: ein Skript mehr oder weniger macht den Abschnitt sonst bei jedem PR veraltet (Textkonflikt paralleler PRs). */
+export const grob = (n) => (n >= 10 ? `≥ ${Math.floor(n / 10) * 10}` : n);
+
 /**
  * Generator `harness-kennzahlen`: Tabelle `Kennzahl | Wert | Zählregel`. Config-Block `kennzahlen`:
  * `package` + `chains` (npm-Ketten, die Schritte zählt `kettenSchritte`), `skripte` (Ordner, rekursiv) + `skriptEndungen`,
@@ -57,14 +60,14 @@ export function harnessKennzahlenGenerator({ rootDir, config }) {
   if (skriptOrdner.every((o) => brauche(rootDir, o, "Skript-Ordner", errors))) {
     const n = skriptOrdner.reduce((s, o) => s + dateienUnter(join(rootDir, o)).filter((f) => endungen.some((e) => f.endsWith(e))).length, 0);
     const endungsListe = endungen.map((e) => `\`${e}\``).join("/");
-    rows.push(zeile("Skripte", n, `Dateien ${endungsListe} unter ${skriptOrdner.map((o) => `\`${o}/\``).join(", ")} (rekursiv)`));
+    rows.push(zeile("Skripte", grob(n), `Dateien ${endungsListe} unter ${skriptOrdner.map((o) => `\`${o}/\``).join(", ")} (rekursiv)`));
   }
 
   const w = cfg.waechter;
   if (w && brauche(rootDir, w.ordner, "Wächter-Ordner", errors)) {
     const abs = join(rootDir, w.ordner);
     const n = dateienUnter(abs).filter((f) => f.endsWith(".test.ts") && WAECHTER_MARKER.test(readFileSync(join(abs, f), "utf8"))).length;
-    rows.push(zeile("Wächter-Tests", n, `\`*.test.ts\` unter \`${w.ordner}/\` (rekursiv) mit dem Marker \`@harness-waechter\` im Kopf`));
+    rows.push(zeile("Wächter-Tests", grob(n), `\`*.test.ts\` unter \`${w.ordner}/\` (rekursiv) mit dem Marker \`@harness-waechter\` im Kopf`));
   }
 
   if (cfg.workflows && brauche(rootDir, cfg.workflows, "Workflow-Ordner", errors)) {
