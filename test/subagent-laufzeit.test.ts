@@ -529,3 +529,131 @@ describe("laufzeiten: Grenzfälle Runde 1 (#1582)", () => {
     expect(eins("Lens Doku R1", `Patch: ${VOLL}`, sh(`type ${VOLL}`)).patch?.voll.komplett).toBe(true);
   });
 });
+
+type TypRow = { agentType: string; n: number; offen: number; requests: number; kostenSumme: number | null; kostenGeschaetztSumme: number | null; ohnePreis: number; modelle: string[] };
+type Typen = { modus: string; typen: TypRow[]; gesamt: TypRow };
+const T = raw as unknown as {
+  typenUebersicht: (e: { laeufe: Lauf[]; von?: string; bis?: string; tickets?: number[]; ohne?: number[] }) => Typen;
+  renderTypen: (r: Typen) => string;
+  parseArgs: (argv: string[]) => { typen?: boolean; agent: string; schnitt?: string; fehler?: string };
+};
+
+describe("typenUebersicht: Rollen-Übersicht je agentType (#1668)", () => {
+  const mix = () => [
+    lauf("Plane #1", 0, 4, { agentType: "kubernia-planner" }),
+    lauf("Lens #2", 0, 4, { agentType: "kubernia-lens" }),
+    lauf("Lens #3", 10, 14, { agentType: "kubernia-lens" }),
+    { meta: {}, zeilen: lauf("x #4", 0, 4).zeilen } as Lauf,
+    { meta: { agentType: "" }, zeilen: lauf("x #5", 0, 4).zeilen } as Lauf,
+    { meta: { agentType: 5 as unknown as string }, zeilen: lauf("x #6", 0, 4).zeilen } as Lauf,
+  ];
+  test("gruppiert je Typ, sortiert nach Typ, `unbekannt` (fehlend, leer, Nicht-String) am Ende", () => {
+    const r = T.typenUebersicht({ laeufe: mix() });
+    expect(r.typen.map((x) => [x.agentType, x.n])).toEqual([["kubernia-lens", 2], ["kubernia-planner", 1], ["unbekannt", 3]]);
+    expect(r.gesamt.n).toBe(6);
+    expect(r.modus).toBe("typen");
+  });
+  test("Σ Requests, Σ Kosten über bepreiste Läufe, Σ geschätzt getrennt, Modelle als sortierte Vereinigung", () => {
+    const sonnet = lauf("Lens #9", 0, 4, { agentType: "kubernia-lens" });
+    (sonnet.zeilen[1] as { message: { model: string } }).message.model = "claude-sonnet-5-5";
+    const r = T.typenUebersicht({ laeufe: [lauf("Lens #2", 0, 4, { agentType: "kubernia-lens" }), sonnet] });
+    const lens = r.typen[0];
+    expect(lens.requests).toBe(4);
+    expect(lens.kostenSumme).toBeGreaterThan(0);
+    expect(lens.kostenGeschaetztSumme).toBeGreaterThanOrEqual(lens.kostenSumme as number);
+    expect(lens.modelle).toEqual(["claude-opus-5-5", "claude-sonnet-5-5"]);
+  });
+  test("Lauf ohne Preis zählt in ohnePreis, nicht in die Summe; Typ nur ohne Preis: null statt 0", () => {
+    const o = ohnePreisLauf("Lens #1");
+    o.meta.agentType = "kubernia-lens";
+    const gemischt = T.typenUebersicht({ laeufe: [o, lauf("Lens #2", 0, 4, { agentType: "kubernia-lens" })] });
+    expect(gemischt.typen[0].ohnePreis).toBe(1);
+    expect(gemischt.typen[0].kostenSumme).toBeCloseTo(2 * CALL_KOSTEN, 8);
+    const nur = T.typenUebersicht({ laeufe: [o] });
+    expect(nur.typen[0].kostenSumme).toBeNull();
+    expect(nur.typen[0].kostenGeschaetztSumme).toBeNull();
+    expect(T.renderTypen(nur)).toMatch(/\| kubernia-lens \| 1 \| 0 \| 2 \| - \| - \| 1 \|/);
+  });
+  test("offene Läufe zählen in die Summen und in die Spalte offen", () => {
+    const offen = lauf("Plane #1", 0, 4, { tool: [2, 3] });
+    offen.zeilen.splice(offen.zeilen.length - 2, 2); // letzter tool_use ohne Ergebnis
+    const r = T.typenUebersicht({ laeufe: [offen, lauf("Plane #2", 0, 4)] });
+    expect(r.typen[0]).toMatchObject({ n: 2, offen: 1 });
+    expect(r.typen[0].requests).toBe(offen.zeilen.filter((z) => z.type === "assistant").length + 2);
+  });
+  test("Fenster [von, bis] nach Laufstart: Grenzlauf drin, kurz davor und danach draußen", () => {
+    const laeufe = [lauf("Plane #1", -1, 3), lauf("Plane #2", 0, 3), lauf("Plane #3", 10, 13), lauf("Plane #4", 11, 14)];
+    const r = T.typenUebersicht({ laeufe, von: t(0), bis: t(10) });
+    expect(r.gesamt.n).toBe(2);
+  });
+  test("leeres Fenster: keine Typen, gesamt.n 0, Ausgabe nennt es", () => {
+    const r = T.typenUebersicht({ laeufe: mix(), von: t(0, 20) });
+    expect(r.typen).toEqual([]);
+    expect(r.gesamt.n).toBe(0);
+    expect(T.renderTypen(r)).toContain("keine Läufe im Fenster");
+  });
+  test("Σ geschätzt weicht von Σ aufgezeichnet ab (Kontext-Zuwachs) und wird getrennt gerechnet", () => {
+    const wachsend = (agentType: string): Lauf => ({
+      meta: { agentType },
+      zeilen: [0, 1, 2].map((i) => ({ ...call(i), message: { id: `w${++seq}`, model: "claude-opus-5-5", usage: { input_tokens: 1000 + i * 3000, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: "text", text: "x" }] } })),
+    });
+    const z = T.typenUebersicht({ laeufe: [wachsend("kubernia-lens"), wachsend("kubernia-lens")] }).typen[0];
+    expect(z.kostenSumme).toBeCloseTo(2 * 0.0486, 6);
+    expect(z.kostenGeschaetztSumme).toBeCloseTo(2 * 0.1682, 6);
+  });
+  test("Sortierung: `unbekannt` steht auch hinter einem Typ, der alphabetisch danach kommt", () => {
+    const laeufe = [{ meta: {}, zeilen: lauf("x #1", 0, 4).zeilen } as Lauf, lauf("Lens #2", 0, 4, { agentType: "zz-typ" }), lauf("Lens #3", 0, 4, { agentType: "kubernia-lens" })];
+    expect(T.typenUebersicht({ laeufe }).typen.map((x) => x.agentType)).toEqual(["kubernia-lens", "zz-typ", "unbekannt"]);
+  });
+  test("renderTypen: Typ ohne echtes Modell zeigt `-` in der Spalte Modelle", () => {
+    const l = lauf("Lens #1", 0, 4, { agentType: "kubernia-lens" });
+    for (const z of l.zeilen) if ((z as { message?: { model?: string } }).message?.model) (z as { message: { model?: string } }).message.model = undefined;
+    expect(T.renderTypen(T.typenUebersicht({ laeufe: [l] }))).toMatch(/\| kubernia-lens \|.*\| 1 \| - \|$/m);
+  });
+  test("--ohne filtert vor der Summe, --ticket schränkt ein", () => {
+    expect(T.typenUebersicht({ laeufe: mix(), ohne: [2, 3] }).gesamt.n).toBe(4);
+    expect(T.typenUebersicht({ laeufe: mix(), tickets: [2] }).gesamt.n).toBe(1);
+  });
+  test("renderTypen: Spaltenkopf und Zeile alle", () => {
+    const md = T.renderTypen(T.typenUebersicht({ laeufe: mix() }));
+    expect(md).toContain("| agentType | Läufe | offen | Requests | Σ Kosten ($, aufgezeichnet) | Σ Kosten geschätzt ($) | ohne Preis | Modelle |");
+    expect(md).toMatch(/^\| alle \| 6 \|/m);
+  });
+  test("parseArgs: --typen setzt typen; mit --agent (beide Reihenfolgen) oder --schnitt ein Aufruf-Fehler; ohne --typen bleibt der Default", () => {
+    expect(T.parseArgs(["--typen", "--von", "x"])).toMatchObject({ typen: true });
+    expect(T.parseArgs(["--typen", "--agent", "kubernia-lens"]).fehler).toMatch(/--typen/);
+    expect(T.parseArgs(["--agent", "kubernia-lens", "--typen"]).fehler).toMatch(/--typen/);
+    expect(T.parseArgs(["--typen", "--agent", "kubernia-planner"]).fehler).toMatch(/--typen/);
+    expect(T.parseArgs(["--typen", "--schnitt", "2026-10-01T00:00:00Z"]).fehler).toMatch(/--typen/);
+    expect(T.parseArgs(["--von", "x"])).toMatchObject({ typen: false, agent: "kubernia-planner" });
+    expect(T.parseArgs(["--von", "x"]).fehler).toBeUndefined();
+    expect(T.parseArgs(["--typen", "--ohne", "5"]).fehler).toBeUndefined();
+  });
+});
+
+describe("ladeAlleLaeufe: alle Typen laden (#1668)", () => {
+  const L3 = rawLaeufe as unknown as { ladeAlleLaeufe: (dir: string, von?: string) => { meta: { agentType?: string }; datei: string }[]; ladeLaeufe: (dir: string, agent: string, von?: string) => unknown[] };
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  test("lädt Typen und Meta ohne agentType, überspringt kaputte Meta und Meta ohne jsonl; datei relativ", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-alle-"));
+    dirs.push(dir);
+    const sub = join(dir, "sess1", "subagents");
+    mkdirSync(sub, { recursive: true });
+    const jsonl = (n: string) => writeFileSync(join(sub, `${n}.jsonl`), JSON.stringify(user(0, "Lens #1")) + "\n");
+    writeFileSync(join(sub, "a.meta.json"), JSON.stringify({ agentType: "kubernia-lens" }));
+    jsonl("a");
+    writeFileSync(join(sub, "b.meta.json"), JSON.stringify({ agentType: "kubernia-planner" }));
+    jsonl("b");
+    writeFileSync(join(sub, "c.meta.json"), JSON.stringify({ description: "x" }));
+    jsonl("c");
+    writeFileSync(join(sub, "d.meta.json"), "{kaputt");
+    jsonl("d");
+    writeFileSync(join(sub, "e.meta.json"), JSON.stringify({ agentType: "kubernia-lens" })); // ohne jsonl
+    const r = L3.ladeAlleLaeufe(dir);
+    expect(r.map((x) => x.datei).sort()).toEqual(["sess1/subagents/a.jsonl", "sess1/subagents/b.jsonl", "sess1/subagents/c.jsonl"]);
+    expect(L3.ladeLaeufe(dir, "kubernia-lens")).toHaveLength(1);
+  });
+});
