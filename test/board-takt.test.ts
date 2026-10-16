@@ -303,6 +303,9 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
     expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
     expect(Number(/Spielquote 1:(\d+)/.exec(doc)?.[1])).toBe(T.SPIEL_QUOTE);
+    // #1663 T5: auch die Regel in AGENTS.md trägt beide Zahlen.
+    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+/.exec(agents)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/Spielquote 1:(\d+)/.exec(agents)?.[1])).toBe(T.SPIEL_QUOTE);
   });
   test("der Workflow löst auf Push nach main aus und ruft board-takt.mjs", () => {
     const yml = lies(".github/workflows/board-takt.yml");
