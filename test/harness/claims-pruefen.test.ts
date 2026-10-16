@@ -231,6 +231,10 @@ interface Welt {
   removeFehler?: boolean;
   bleibtNachRemove?: boolean;
   ghFehler?: boolean;
+  ghTeilantwort?: boolean;
+  statusFehler?: boolean;
+  loescheFehler?: boolean;
+  listeFehler?: boolean;
   jetzt?: number;
 }
 /** `join` hängt unter Windows Backslashes an; die Welt kennt nur `/`. */
@@ -249,6 +253,7 @@ function baue(welt: Welt) {
       if (a === "worktree list --porcelain") return worktrees.map((w) => `worktree ${w.pfad}\nHEAD ${w.head}\n${w.branch ? `branch refs/heads/${w.branch}` : "detached"}\n${w.locked ? "locked\n" : ""}`).join("\n");
       if (a.startsWith("for-each-ref")) return (welt.refs ?? []).map(([n, s]) => `${n}\t${s}`).join("\n");
       const st = /^-C (\S+) status --porcelain$/.exec(a);
+      if (st && welt.statusFehler) throw new Error("status kaputt");
       if (st) return welt.status?.[st[1]] ?? "";
       const rm = /^worktree remove (\S+)$/.exec(a);
       if (rm) {
@@ -269,18 +274,24 @@ function baue(welt: Welt) {
         const i = welt.issues?.[Number(m[2])];
         repository[`i${m[1]}`] = i ? { state: i.state, assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) }, closedByPullRequestsReferences: { nodes: i.prs ?? [] } } : null;
       }
-      return { data: { viewer: { login: "ich" }, repository } };
+      const antwort = { data: { viewer: { login: "ich" }, repository } };
+      if (welt.ghTeilantwort) throw Object.assign(new Error("Exit 1"), { stdout: JSON.stringify({ ...antwort, errors: [{ type: "NOT_FOUND" }] }) });
+      return antwort;
     },
     zugewiesen: () => {
       aufrufe.push("gh issue list");
       return welt.zugewiesen ?? [];
     },
-    liste: () => Object.keys(welt.locks ?? {}),
+    liste: () => {
+      if (welt.listeFehler) throw new Error("kein Verzeichnis");
+      return Object.keys(welt.locks ?? {});
+    },
     liesDatei: (p: string) => {
       aufrufe.push(`lies ${vorwaerts(p)}`);
       return welt.locks?.[vorwaerts(p).replace("/locks/", "")] ?? "";
     },
     loesche: (p: string) => {
+      if (welt.loescheFehler) throw new Error("gesperrt");
       geloescht.push(vorwaerts(p));
     },
     existiert: (p: string) => ordner.has(p),
@@ -469,6 +480,43 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     const { deps: d2, geloescht } = baue(alleNull);
     assert.equal(M.fuehreAus([], d2).code, 2);
     assert.deepEqual(geloescht, []);
+  });
+
+  test("eine GraphQL-Teilantwort mit NOT_FOUND (unbekanntes Issue) gilt, jeder andere Fehler bleibt Exit 2", () => {
+    const r = M.fuehreAus([], baue({ ...BELEG, issues: { ...BELEG.issues, 1672: null }, ghTeilantwort: true }).deps);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /BEHALTEN #1672: unbekannt/);
+    assert.match(r.out, /AUFGERAEUMT #1628/);
+  });
+
+  test("ein unlesbarer Lock (kein JSON) wird gemeldet und nie gelöscht, auch bei geschlossenem Issue", () => {
+    const welt: Welt = { locks: { "1737.json": "{kaputt" }, issues: { 1737: { state: "CLOSED" } } };
+    const { deps, geloescht } = baue(welt);
+    const r = M.fuehreAus([], deps);
+    assert.match(r.out, /BEHALTEN #1737: lock-unlesbar/);
+    assert.deepEqual(geloescht, []);
+  });
+
+  test("ohne Lock-Verzeichnis arbeitet die Prüfung mit Worktrees und Branches weiter", () => {
+    const r = M.fuehreAus([], baue({ ...BELEG, locks: {}, listeFehler: true }).deps);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /AUFGERAEUMT #1628: Worktree /);
+  });
+
+  test("unlesbarer git status gilt als nicht sauber: der Worktree bleibt", () => {
+    const { deps, aufrufe, geloescht } = baue({ ...BELEG, statusFehler: true });
+    const r = M.fuehreAus([], deps);
+    assert.match(r.out, /BEHALTEN #1628: behalten, Worktree mit uncommitteten Änderungen/);
+    assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
+    assert.deepEqual(geloescht, []);
+  });
+
+  test("scheitert das Löschen des Locks: FEHLER und Exit 1, der Rest läuft weiter", () => {
+    const welt: Welt = { ...BELEG, loescheFehler: true };
+    const r = M.fuehreAus([], baue(welt).deps);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /FEHLER #1628: Lock nicht gelöscht/);
+    assert.match(r.out, /WIEDERAUFNAHME #1672/);
   });
 
   test("ohne Kandidaten: Exit 0 und leere Ausgabe", () => {
