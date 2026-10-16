@@ -48,7 +48,7 @@ Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die
 
 **Fremde Claims:** den Assignee eines fremden Tickets entfernst du nie, auch wenn er verwaist wirkt (alle Agenten laufen unter demselben GitHub-Konto, ein paralleler Agent hat geclaimt); du meldest es als Befund. De-Assignen nur am eigenen Ticket.
 
-Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen, keine Tickets" und § Oberste Regel (Spiel-/Inhalts-Befunde gebündelt, nicht 1:1 als Issues) festhalten, nicht inline mitfixen. Ein einmaliger roter Lauf (Flake, beim Wiederholen grün) gehört mit Testdatei, Testname und erster Fehlerzeile unter `BEFUNDE`. Vor dem Bericht trägst du jeden Befund selbst ein (AGENTS.md § Abschluss ohne offene Befunde): auch die aus Abschnitt 8 des Plans, die `BEFUNDE` der Gruppen-Umsetzer und liegen gelassene, zutreffende Lens-Hinweise; ein verworfener Hinweis ist kein Befund, der Grund steht im PR-Text.
+Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen, keine Tickets" und § Oberste Regel (Spiel-/Inhalts-Befunde gebündelt, nicht 1:1 als Issues) festhalten, nicht inline mitfixen. Ein einmaliger roter Lauf (Flake, beim Wiederholen grün) gehört mit Testdatei, Testname und erster Fehlerzeile unter `BEFUNDE`. Vor dem Bericht trägst du jeden Befund selbst ein (AGENTS.md § Abschluss ohne offene Befunde): auch die aus Abschnitt 8 des Plans, die `BEFUNDE` der Gruppen-Umsetzer und liegen gelassene, zutreffende Lens-Hinweise; ein verworfener Hinweis und eine „Bekannte Grenze“ (Kopfkommentar des Guards, PR-Text) sind kein Befund.
 
 ## Du kannst nicht fragen
 

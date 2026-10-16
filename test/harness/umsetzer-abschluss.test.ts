@@ -236,6 +236,8 @@ describe("R0: Format des Handbacks vor der Zustellung (#1342)", () => {
         "BEFUNDE: X offen, sag Bescheid",
         "BEFUNDE: sag mir Bescheid, wenn es rein soll",
         "BEFUNDE: wenn du willst trage ich es ein",
+        "BEFUNDE: X offen, wenn du möchtest, trage ich es ein",
+        "BEFUNDE: soll ich das eintragen.",
         "BEFUNDE:\n  - Zeile A → #1\n  - Zeile B, tragen wir das ein?",
       ])
         assert.match(blockade(vorher(mit(w)), d) ?? "", /BEFUNDE bietet an statt einzutragen/, w);
@@ -245,6 +247,15 @@ describe("R0: Format des Handbacks vor der Zustellung (#1342)", () => {
       for (const w of ["BEFUNDE: keine", "BEFUNDE: -", "BEFUNDE: Messwert X → #1700", "BEFUNDE:\n  - A → #1\n  - B → #2\nLERNKANDIDATEN: -"])
         assert.equal(blockade(vorher(mit(w)), d), null, w);
       assert.equal(blockade(eingabe(mit(null)), d), null);
+    });
+
+    test("verweigert: leere BEFUNDE-Zeile (auch mit leeren Folgezeilen)", () => {
+      for (const w of ["BEFUNDE:", "BEFUNDE:   ", "BEFUNDE:\n\nLERNKANDIDATEN: -"]) assert.match(blockade(vorher(mit(w)), d) ?? "", /BEFUNDE: ist leer/, w);
+    });
+
+    test("durch: ? in Code oder URL ist keine Frage (nur ? am Wortende vor Leerraum oder Zeilenende)", () => {
+      for (const w of ["BEFUNDE: `a?.b` ohne Null-Test → #1700", "BEFUNDE: Trace https://x/y?observation=1 auffällig → #1700"]) assert.equal(blockade(vorher(mit(w)), d), null, w);
+      assert.match(blockade(vorher(mit("BEFUNDE: Warum flakt X? → #1700")), d) ?? "", /bietet an/);
     });
 
     test("eine Frage in der Zeile nach BEFUNDE (LERNKANDIDATEN) zählt nicht dazu", () => {

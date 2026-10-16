@@ -1384,7 +1384,7 @@ Melde am Ende, welche Optionen du zur Entscheidung gestellt hast.`,
   phase('Cleanup')
 
   // Offene Hinweise aller Brillen (#1265); zutreffende werden eine Zeile (#1723).
-  const offeneHinweise = lensEndstand().flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis').map((f) => `${f.befund} (${f.ort})`))
+  const offeneHinweise = lensEndstand().flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis' && !/Bekannte Grenze/i.test(`${f.befund} ${f.begruendung || ''}`)).map((f) => `${f.befund} (${f.ort})`))
 
   const cleanup = await agent(
     `${kopf}
@@ -1410,7 +1410,7 @@ stillschweigend weitermachen:
 
 ${
   ausserhalbScope.length || offeneHinweise.length
-    ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes oder offene Hinweise gefunden (Hinweise nur eintragen, wenn sie am Diff zutreffen und der gemergte PR sie nicht erledigt). Ordne jeden
+    ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes oder offene Hinweise gefunden (nur eintragen, wenn sie am Diff zutreffen und der gemergte PR sie nicht erledigt). Ordne jeden
 ein nach AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets (die Ausnahmen dort nachlesen, hier nicht kopiert): Harness → eine Zeile im ungeclaimten Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md), sonst ein Issue, gebündelt nach den Kriterien in
 AGENTS.md § Oberste Regel (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list --limit 500 auf Duplikate prüfen):

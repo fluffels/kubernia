@@ -63,7 +63,7 @@ export function befundeBlock(text) {
 }
 
 /** Angebot oder Frage statt eingetragener Befunde (#1723). */
-const BEFUNDE_ANGEBOT = /\?|soll ich|sag (mir )?Bescheid|wenn du (willst|möchtest)/i;
+const BEFUNDE_ANGEBOT = /\?(\s|$)|soll ich|sag (mir )?Bescheid|wenn du (willst|möchtest)/i;
 
 /** PR-Nummer aus `PR:`-Wert (URL oder `#123`); sonst `null` (z.B. `-`). */
 export function prNummer(pr) {
@@ -108,6 +108,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
     if (pr === null) fehler.push("PR:-Zeile fehlt");
     const befunde = befundeBlock(lastMessage);
     if (befunde === null) fehler.push("BEFUNDE:-Zeile fehlt");
+    else if (befunde === "") fehler.push("BEFUNDE: ist leer (je Befund „<Befund> → #<nr>“ oder keine)");
     else if (BEFUNDE_ANGEBOT.test(befunde)) fehler.push("BEFUNDE bietet an statt einzutragen: Befunde trägst du vor dem Bericht selbst ein (AGENTS.md § Abschluss ohne offene Befunde)");
     if (fehler.length)
       return (

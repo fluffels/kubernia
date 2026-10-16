@@ -81,7 +81,7 @@ Das Skript ist **idempotent**: gibt es schon ein ungeclaimtes Sammelticket diese
 
 Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** ungeclaimtes Sammelticket (`area:harness`); ein geclaimtes (Assignee) läuft daneben weiter.
 
-- **Evidenz und Quote (#1425):** die Regel „nur aus Evidenz“ steht in [AGENTS.md › Harness-Befunde sind Zeilen](../AGENTS.md#wo-die-todos-leben). Die Quote Harness zu Spiel (höchstens 1 zu 3) misst der Board-Takt je Lauf (`Spielquote:` im Protokoll).
+- **Evidenz und Quote (#1425):** die Regel „nur aus Evidenz“ steht in [AGENTS.md › Abschluss ohne offene Befunde](../AGENTS.md#wo-die-todos-leben). Die Quote Harness zu Spiel (höchstens 1 zu 3) misst der Board-Takt je Lauf (`Spielquote:` im Protokoll).
 - **Ansichten im Project (#1425):** neben „View 1“ (Auswahl, REST-Liste) gibt es „Spiel“ (Filter `-label:area:harness`) und „Agentic Engineering“ (Filter `label:area:harness`), per `createProjectV2View` und `updateProjectV2View(filter)` angelegt; die Auswahlmechanik bleibt ein Board.
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash
@@ -184,6 +184,6 @@ Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen. Der Abschluss is
 
 - **Wer trägt ein:** der Umsetzer vor seinem Handback (auch die Befunde aus Abschnitt 8 des Plans, die der Gruppen-Umsetzer und zutreffende, liegen gelassene Lens-Hinweise); der Hauptchat für Lücken, eigene Befunde und den Epic-Fall; im Workflow der `cleanup`-Agent für `ausserhalbScope` und offene Hinweise.
 - **Wohin:** Harness als Zeile im ungeclaimten Sammelticket (Mechanik oben), Langfuse-Daten ins Sammelticket „Langfuse-Befunde“, Spiel-/Inhalts-Befunde als gebündeltes Issue an die richtige Board-Stelle (Ausnahmen für ein eigenes Issue: AGENTS.md › Wo die TODOs leben).
-- **Wann keine Zeile:** bei einer Hypothese ohne Evidenz, bei einem Befund, den ein gemergter PR schon erledigt (`gh pr list --state merged --search "<Stichwort>"`), und bei einem verworfenen Lens-Hinweis. Der Bericht nennt sie dann auch nicht als offen.
+- **Wann keine Zeile:** bei einer Hypothese ohne Evidenz, bei einem Befund, den ein gemergter PR schon erledigt (Prüfung wie in „Schon erledigt?“ oben, mit `--limit 1000`), bei einem verworfenen Lens-Hinweis und bei einer „Bekannten Grenze“ von Guard- oder Parser-Code (gehört in den Kopfkommentar und den PR-Text). Beim Abarbeiten eines Sammeltickets gilt weiter: im selben PR erledigen, nicht erneut eintragen. Der Bericht nennt sie dann auch nicht als offen.
 - **Bericht:** der Umsetzer-Bericht trägt die Zeile `BEFUNDE:` mit je Befund `<Befund> → #<nr>` oder `keine`. Der PreToolUse-Hook (R0 in `scripts/umsetzer-abschluss.mjs`) verweigert einen Handback ohne die Zeile und einen mit Angebot oder Frage; ein Bericht ohne sie ist ein Zwischen-Hand-off. Der Wächter `test/harness/brain-input-abschluss.test.ts` bindet die Stellen in Skills, Workflow und Umsetzer.
 - **Danach** (in Claude Code, auch im Fortsetzungs-Pfad): `Skill({ skill: "brain-input" })` direkt nach dem Bericht (Ablauf: Skill `kubernia`, Schritt 5).

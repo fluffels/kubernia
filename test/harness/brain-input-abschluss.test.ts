@@ -45,7 +45,7 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
   ],
   ".claude/skills/kubernia/SKILL.md": [
     { name: "BEFUNDE:-Feld", muster: /BEFUNDE:/ },
-    { name: "Fortsetzungs-Pfad", muster: /Schritt 5[^]*?mach mit <nr> weiter|\*\*Sitzungsabschluss\.\*\*[^]*?mach mit <nr> weiter/ },
+    { name: "Fortsetzungs-Pfad im Schritt 5", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*mach mit <nr> weiter[^\n]*brain-input/ },
     { name: "brain-input im Abschluss", muster: /Skill\(\{ skill: "brain-input" \}\)/ },
     { name: "Verweis auf die Regel", muster: /AGENTS\.md § Abschluss ohne offene Befunde/ },
   ],
@@ -58,7 +58,10 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "BEFUNDE:-Zeile im Cleanup", muster: /BEFUNDE:/ },
     { name: "Feld befunde im Endstand", muster: /befunde:/ },
   ],
-  ".claude/agents/kubernia-umsetzer.md": [{ name: "Formatzeile mit Ziel-Ticket oder keine", muster: /^BEFUNDE: .*→ #<nr>.*keine/m }],
+  ".claude/agents/kubernia-umsetzer.md": [
+    { name: "Formatzeile mit Ziel-Ticket oder keine", muster: /^BEFUNDE: .*→ #<nr>.*keine/m },
+    { name: "Eintragspflicht vor dem Bericht", muster: /Vor dem Bericht trägst du jeden Befund selbst ein/ },
+  ],
 };
 
 /** Liste der fehlenden Pflichtstellen einer Datei (leer = vollständig). */
@@ -111,6 +114,24 @@ describe("Workflow-Cleanup trägt Befunde ein und meldet BEFUNDE (#1723)", () =>
     expect(p).toContain("Altlast ohne Test (a.ts:3)");
     expect(p).toMatch(/am Diff zutreffen/);
     expect(p).toMatch(/BEFUNDE: <je Befund/);
+    expect(endstand.hinweiseOffen).toBe(1);
+  });
+
+  test("Negativ: eine „Bekannte Grenze“ und ein blockierendes Finding landen nicht als Hinweis im Cleanup-Prompt", async () => {
+    const bericht = {
+      lens: "architektur",
+      verdikt: "hinweise",
+      findings: [
+        { schwere: "hinweis", befund: "Bekannte Grenze: Umweg X", ort: "g.mjs:1", begruendung: "b" },
+        { schwere: "hinweis", befund: "Altlast ohne Test", ort: "a.ts:3", begruendung: "Bekannte Grenze des Parsers" },
+        { schwere: "hinweis", befund: "Echter Hinweis", ort: "b.ts:2", begruendung: "b" },
+      ],
+    };
+    const { aufrufe, endstand } = await workflowLauf({ runden: [{ architektur: bericht }] });
+    const p = cleanupPrompt(aufrufe);
+    expect(p).toContain("Echter Hinweis (b.ts:2)");
+    expect(p).not.toContain("Umweg X");
+    expect(p).not.toContain("Altlast ohne Test");
     expect(endstand.hinweiseOffen).toBe(1);
   });
 
