@@ -110,8 +110,10 @@ const FELDER = ["prs", "ohneNacharbeit", "nachweisbareFenster", "nacharbeitOffen
 /** Prüft die JSON-Ausgabe von `lauf-ergebnis.mjs` gegen den Vertrag; Verstoß → `{ luecke }`, sonst `{ daten }`. Pure. */
 export function vertragPruefen(json) {
   if (!json || !Array.isArray(json.zeilen) || !json.kennzahlen) return { luecke: "lauf-ergebnis: Ausgabe ohne zeilen/kennzahlen (Vertrag verletzt)" };
-  const fehlt = FELDER.filter((f) => typeof json.kennzahlen[f] !== "number");
+  const fehlt = FELDER.filter((f) => !Number.isFinite(json.kennzahlen[f]));
   if (fehlt.length > 0) return { luecke: `lauf-ergebnis: Kennzahl-Feld fehlt: ${fehlt.join(", ")} (Vertrag verletzt)` };
+  const kaputt = json.zeilen.find((z) => !z || !Number.isFinite(z.pr) || !Number.isFinite(z.ciFix) || !gueltig(z.gemergt) || typeof z.nacharbeit !== "string");
+  if (kaputt !== undefined) return { luecke: "lauf-ergebnis: Zeile ohne pr/ciFix/gemergt/nacharbeit (Vertrag verletzt)" };
   return { daten: json };
 }
 
@@ -210,10 +212,8 @@ export function holeLauf(von, bis, run = runSkript) {
   }
 }
 
-/** Kosten eines Tickets über `token-baseline.mjs --json`; IO injizierbar. */
-export function holeKosten({ ticket, pr, claims, langfuse }, run = runSkript) {
-  if (!claims || claims.length === 0) return { luecke: "keine Session mit Claim-Zeile" };
-  const args = [...claims.flatMap((c) => ["--session", c.session]), "--issue", String(ticket), "--pr", String(pr), "--from", claims[0].ts, ...(langfuse ? ["--langfuse"] : []), "--json"];
+function kostenLauf(sessions, { ticket, pr, von, langfuse }, run) {
+  const args = [...sessions.flatMap((c) => ["--session", c.session]), "--issue", String(ticket), "--pr", String(pr), "--from", von, ...(langfuse ? ["--langfuse"] : []), "--json"];
   const r = run("token-baseline.mjs", args);
   if (r.status !== 0) return kostenAus({ fehler: r.stderr || `token-baseline Exit ${r.status}` });
   try {
@@ -223,6 +223,41 @@ export function holeKosten({ ticket, pr, claims, langfuse }, run = runSkript) {
   }
 }
 
+/**
+ * Kosten eines Tickets über `token-baseline.mjs --json`; IO injizierbar. Transkript: ein Lauf über alle Claim-Sessions.
+ * Langfuse: je Session ein Lauf, denn `token-baseline` führt Sessions zusammen und eine Session ohne Langfuse-Daten
+ * trüge still 0 $ bei; fehlt eine, ist das ganze Ticket eine Lücke (keine Teilsumme).
+ */
+export function holeKosten({ ticket, pr, claims, langfuse }, run = runSkript) {
+  if (!claims || claims.length === 0) return { luecke: "keine Session mit Claim-Zeile" };
+  const von = claims[0].ts;
+  if (!langfuse) return kostenLauf(claims, { ticket, pr, von, langfuse }, run);
+  let summe = 0;
+  for (const c of claims) {
+    const e = kostenLauf([c], { ticket, pr, von, langfuse }, run);
+    if (e.luecke !== undefined) return { luecke: claims.length > 1 ? `Session ${c.session}: ${e.luecke}` : e.luecke };
+    summe += e.kosten;
+  }
+  return { kosten: summe };
+}
+
+/**
+ * Setzt den Bericht zusammen; IO injiziert (`run` für die Unterprozesse, `claimKarte` liefert die Karte Ticket → Sessions).
+ * Exit 2, wenn Lauf-Ergebnis oder Nacharbeit-Lauf fehlen (der Block erscheint trotzdem). Nur mit gültigem `von`/`bis` rufen.
+ */
+export function erstelle({ von, bis, langfuse = false }, { run = runSkript, claimKarte }) {
+  const fenster = nacharbeitFenster(von, bis);
+  const lauf = holeLauf(von, bis, run);
+  const nacharbeit = holeLauf(fenster.von, fenster.bis, run);
+  let tickets = [];
+  if (lauf.daten) {
+    const claims = claimKarte();
+    tickets = ticketLaeufe(lauf.daten.zeilen).tickets.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
+  }
+  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript" });
+  return { bericht: b, exit: lauf.luecke || nacharbeit.luecke ? 2 : 0 };
+}
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.fehler) {
@@ -230,17 +265,10 @@ function main(argv) {
     process.exit(1);
   }
   const { von, bis, langfuse } = args;
-  const fenster = nacharbeitFenster(von, bis);
-  const lauf = holeLauf(von, bis);
-  const nacharbeit = holeLauf(fenster.von, fenster.bis);
-  let tickets = [];
-  if (lauf.daten) {
-    const claims = claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
-    tickets = ticketLaeufe(lauf.daten.zeilen).tickets.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }) }));
-  }
-  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript" });
-  console.log(args.json ? JSON.stringify(b, null, 2) : renderMarkdown(b));
-  if (lauf.luecke || nacharbeit.luecke) process.exit(2);
+  const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
+  const r = erstelle({ von, bis, langfuse }, { claimKarte });
+  console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
+  if (r.exit !== 0) process.exit(r.exit);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));

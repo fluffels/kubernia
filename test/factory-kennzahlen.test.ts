@@ -1,6 +1,8 @@
 /* Factory-Kennzahlen (#1616, ADR 0022 §6): pure Kernfunktionen, Lücken statt 0 (AK3), Verträge gegen die echten
  * Erzeuger `bewertePrs` (lauf-ergebnis.mjs) und `summarize` (token-baseline.mjs); die Unterprozesse sind injiziert. */
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/factory-kennzahlen.mjs";
@@ -89,9 +91,30 @@ describe("claimSessions", () => {
     ]);
     expect(karte.size).toBe(0);
   });
+  test("PowerShell-Tool zählt wie Bash", () => {
+    const z = claimZeile("gh issue edit 40 --add-assignee @me", "2026-10-14T07:00:00Z") as { message: { content: { name: string }[] } };
+    z.message.content[0].name = "PowerShell";
+    expect(F.claimSessions([sitzung("s", [z])]).get(40)).toEqual([{ session: "s", ts: "2026-10-14T07:00:00Z" }]);
+  });
+  test("Claim ohne gültigen Zeitstempel erzeugt keinen Eintrag", () => {
+    const ohne = claimZeile("gh issue edit 40 --add-assignee @me", "2026-10-14T07:00:00Z") as { timestamp?: string };
+    delete ohne.timestamp;
+    expect(F.claimSessions([sitzung("s", [ohne, claimZeile("gh issue edit 41 --add-assignee @me", "kein-datum")])]).size).toBe(0);
+  });
 });
 
 describe("ticketLaeufe", () => {
+  test("der neuere PR gewinnt unabhängig von der Reihenfolge im Array", () => {
+    const r = F.ticketLaeufe([ZEILE({ pr: 9, ticket: 5, gemergt: "2026-10-15T10:00:00Z" }), ZEILE({ pr: 10, ticket: 5, gemergt: "2026-10-14T10:00:00Z" })]);
+    expect(r.tickets.map((z) => z.pr)).toEqual([9]);
+  });
+  test("gleiche Merge-Zeit: die größere PR-Nummer gewinnt, auch wenn sie zuerst steht", () => {
+    const r = F.ticketLaeufe([ZEILE({ pr: 12, ticket: 5 }), ZEILE({ pr: 11, ticket: 5 })]);
+    expect(r.tickets.map((z) => z.pr)).toEqual([12]);
+  });
+  test("Tickets aufsteigend nach Nummer", () => {
+    expect(F.ticketLaeufe([ZEILE({ pr: 1, ticket: 30 }), ZEILE({ pr: 2, ticket: 7 })]).tickets.map((z) => z.ticket)).toEqual([7, 30]);
+  });
   test("PR ohne Ticket wird nur gezählt, kein Ticket-Eintrag", () => {
     const r = F.ticketLaeufe([ZEILE({ pr: 1, ticket: null }), ZEILE({ pr: 2, ticket: 5 })]);
     expect(r.ohneTicket).toBe(1);
@@ -121,6 +144,12 @@ describe("kostenAus (AK3: Lücke statt 0)", () => {
     expect(e.kosten).toBeUndefined();
     expect(e.luecke).toBe("2 Calls ohne Preis: claude-x (2)");
   });
+  test("hasCost false ohne unpriced ist trotzdem Lücke", () => {
+    expect(F.kostenAus({ json: { total: { calls: 2, cost: 0 }, hasCost: false, unpriced: 0 } }).luecke).toBe("Calls ohne Preis");
+  });
+  test("unpriced ohne Modellliste: Lücke ohne Doppelpunkt", () => {
+    expect(F.kostenAus({ json: { ...ok, unpriced: 1 } }).luecke).toBe("1 Calls ohne Preis");
+  });
   test("Meldung --langfuse braucht … wird zu „kein Langfuse-Zugang“", () => {
     expect(F.kostenAus({ fehler: "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; mehr Text\nzweite Zeile" }).luecke).toBe("kein Langfuse-Zugang");
   });
@@ -144,6 +173,29 @@ describe("vertragPruefen", () => {
   test("echtes bewertePrs aus lauf-ergebnis erfüllt den Vertrag", () => {
     const e = LAUF.bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt: new Date("2026-12-31T00:00:00Z") });
     expect(F.vertragPruefen(e).daten).toBeDefined();
+  });
+  test("echtes bewertePrs mit PR und Folge-Commit: Zeilenfelder tragen bis in den Bericht", () => {
+    const e = LAUF.bewertePrs({
+      prs: [{ number: 7, title: "feat: x (#40)", createdAt: "2026-09-30T00:00:00Z", mergedAt: "2026-10-01T00:00:00Z", mergeCommit: { oid: "abc1234" } }],
+      commits: [
+        { sha: "abc1234", datum: "2026-10-01T00:00:00Z", body: "feat: x (#40)" },
+        { sha: "def5678", datum: "2026-10-03T00:00:00Z", body: "fix: y\n\nFolge #40" },
+      ],
+      ci: {},
+      festgefahren: {},
+      jetzt: new Date("2026-12-31T00:00:00Z"),
+    });
+    const lage = F.vertragPruefen(e);
+    expect(lage.daten).toBeDefined();
+    const md = F.renderMarkdown(F.bericht({ von: "2026-09-28T00:00:00Z", bis: "2026-10-02T00:00:00Z", quelle: "Transkript", lauf: lage, nacharbeit: lage, tickets: [] }));
+    expect(md).toContain("Ohne CI-Fix: 100 % (1/1)");
+    expect(md).toContain("- Nacharbeit (folge): PR #7, Ticket #40");
+  });
+  test("NaN-Kennzahl und Zeile ohne ciFix verletzen den Vertrag", () => {
+    expect(F.vertragPruefen({ zeilen: [], kennzahlen: { ...KENN, ciFixSumme: Number.NaN } }).luecke).toMatch(/ciFixSumme/);
+    const ohneCiFix = { ...ZEILE(), ciFix: undefined } as unknown as Zeile;
+    expect(F.vertragPruefen({ zeilen: [ohneCiFix], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
+    expect(F.vertragPruefen({ zeilen: [ZEILE({ gemergt: "kaputt" })], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
   });
 });
 
@@ -192,6 +244,36 @@ describe("Unterprozesse (injiziert)", () => {
     expect(aufrufe[0]).toEqual(["--session", "s1", "--session", "s2", "--issue", "40", "--pr", "50", "--from", "2026-10-14T07:00:00Z", "--json"]);
     F.holeKosten({ ticket: 40, pr: 50, claims, langfuse: true }, run);
     expect(aufrufe[1]).toContain("--langfuse");
+  });
+  test("holeKosten: kaputte Ausgabe und Exit ≠ 0 ohne stderr sind Lücke, nie 0", () => {
+    const claims = [{ session: "s", ts: "2026-10-14T07:00:00Z" }];
+    expect(F.holeKosten({ ticket: 40, pr: 50, claims }, () => ({ status: 0, stdout: "kaputt", stderr: "" }))).toEqual({ luecke: "token-baseline: Ausgabe ist kein JSON" });
+    expect(F.holeKosten({ ticket: 40, pr: 50, claims }, () => ({ status: 3, stdout: "", stderr: "" }))).toEqual({ luecke: "token-baseline Exit 3" });
+  });
+  test("holeKosten Langfuse: je Session ein Lauf, eine Session ohne Daten macht das Ticket zur Lücke (keine Teilsumme)", () => {
+    const claims = [
+      { session: "s1", ts: "2026-10-14T07:00:00Z" },
+      { session: "s2", ts: "2026-10-14T09:00:00Z" },
+    ];
+    const aufrufe: string[][] = [];
+    const run: Run = (_n, a) => {
+      aufrufe.push(a);
+      const leer = a.includes("s2");
+      return { status: 0, stdout: JSON.stringify({ total: { calls: leer ? 0 : 2, cost: leer ? 0 : 3 }, hasCost: !leer, unpriced: 0 }), stderr: "" };
+    };
+    const e = F.holeKosten({ ticket: 40, pr: 50, claims, langfuse: true }, run);
+    expect(e.kosten).toBeUndefined();
+    expect(e.luecke).toBe("Session s2: keine Calls im Ticket-Fenster");
+    expect(aufrufe).toHaveLength(2);
+    expect(aufrufe[0]).toEqual(["--session", "s1", "--issue", "40", "--pr", "50", "--from", "2026-10-14T07:00:00Z", "--langfuse", "--json"]);
+  });
+  test("holeKosten Langfuse: alle Sessions mit Daten ergeben die Summe", () => {
+    const claims = [
+      { session: "s1", ts: "2026-10-14T07:00:00Z" },
+      { session: "s2", ts: "2026-10-14T09:00:00Z" },
+    ];
+    const run: Run = () => ({ status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 1.5 }, hasCost: true, unpriced: 0 }), stderr: "" });
+    expect(F.holeKosten({ ticket: 40, pr: 50, claims, langfuse: true }, run)).toEqual({ kosten: 3 });
   });
   test("holeKosten: ohne Langfuse-Key sind alle Kosten Lücke „kein Langfuse-Zugang“", () => {
     const run: Run = () => ({ status: 1, stdout: "", stderr: "--langfuse braucht LANGFUSE_PUBLIC_KEY + …" });
@@ -261,8 +343,88 @@ describe("Markdown-Block", () => {
   });
 });
 
+describe("Markdown-Block: Nenner 0 und leere Listen sind Lücke, nie 0 %", () => {
+  const von = "2026-10-12T00:00:00Z";
+  const bis = "2026-10-16T00:00:00Z";
+  const render = (e: { lauf: Lage; nacharbeit: Lage; tickets: { ticket: number; pr: number; ergebnis: Erg }[] }) => F.renderMarkdown(F.bericht({ von, bis, quelle: "Transkript", ...e }));
+  test("keine PRs und kein Blocker-Feld: „–“ statt 0 %", () => {
+    const md = render({ lauf: daten([], { mitBlockerFeld: 0, runde1MitBlocker: 0 }), nacharbeit: daten([]), tickets: [] });
+    expect(md).toContain("- Ohne CI-Fix: –");
+    expect(md).toContain("- Runde 1 mit Blocker: –");
+    expect(md).not.toMatch(/0 % \(0\/0\)/);
+  });
+  test("Lauf vorhanden, aber keine Tickets: Lücke, kein Median 0,00 $", () => {
+    const md = render({ lauf: daten([ZEILE({ ticket: null })]), nacharbeit: daten([]), tickets: [] });
+    expect(md).toContain("- Lücke: keine Tickets im Zeitraum");
+    expect(md).not.toContain("Median");
+    expect(md).not.toContain("0,00 $");
+  });
+  test("ohne offene Fenster steht keine „Fenster noch offen“-Zeile", () => {
+    expect(render({ lauf: daten([ZEILE()]), nacharbeit: daten([ZEILE()], { nacharbeitOffen: 0 }), tickets: [] })).not.toContain("Fenster noch offen");
+  });
+  test("Nacharbeit-Treffer ohne Ticket nennt nur den PR", () => {
+    const md = render({ lauf: daten([ZEILE()]), nacharbeit: daten([ZEILE({ pr: 7, ticket: null, nacharbeit: "revert" })]), tickets: [] });
+    expect(md).toContain("- Nacharbeit (revert): PR #7\n");
+    expect(md).not.toContain("PR #7, Ticket");
+  });
+  test("Tickets stehen aufsteigend in der Tabelle, so wie sie übergeben werden", () => {
+    const md = render({ lauf: daten([ZEILE()]), nacharbeit: daten([]), tickets: [{ ticket: 40, pr: 50, ergebnis: { kosten: 1 } }] });
+    expect(md).toContain("| #40 | #50 | 1,00 $ |");
+  });
+});
+
+describe("erstelle (Verdrahtung, Exit-Codes)", () => {
+  const von = "2026-10-12T00:00:00Z";
+  const bis = "2026-10-16T00:00:00Z";
+  const lauf = (zeilen: Zeile[]) => JSON.stringify({ zeilen, kennzahlen: { ...KENN, prs: zeilen.length } });
+  const claimKarte = () => new Map([[40, [{ session: "s1", ts: "2026-10-14T07:00:00Z" }]]]);
+  type Fn = (e: { von: string; bis: string; langfuse?: boolean }, d: { run: Run; claimKarte: () => Map<number, { session: string; ts: string }[]> }) => { bericht: { lauf: Lage; nacharbeit: Lage; tickets: { ticket: number; ergebnis: Erg }[] }; exit: number };
+  const erstelle = (raw as unknown as { erstelle: Fn }).erstelle;
+
+  test("Nacharbeit-Lauf scheitert allein: Exit 2, Block mit Lücke erscheint, Kosten laufen weiter; das zweite Fenster ist von − 14 T", () => {
+    const fenster: string[][] = [];
+    const run: Run = (name, a) => {
+      if (name === "token-baseline.mjs") return { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" };
+      fenster.push([a[1], a[3]]);
+      return fenster.length === 1 ? { status: 0, stdout: lauf([ZEILE()]), stderr: "" } : { status: 2, stdout: "", stderr: "gh weg" };
+    };
+    const r = erstelle({ von, bis }, { run, claimKarte });
+    expect(r.exit).toBe(2);
+    expect(r.bericht.nacharbeit.luecke).toMatch(/Exit 2/);
+    expect(r.bericht.lauf.daten).toBeDefined();
+    expect(r.bericht.tickets).toEqual([{ ticket: 40, pr: 50, ergebnis: { kosten: 2 } }]);
+    expect(fenster).toEqual([
+      [von, bis],
+      ["2026-09-28T00:00:00.000Z", "2026-10-02T00:00:00.000Z"],
+    ]);
+  });
+  test("alles da: Exit 0; Lauf-Ergebnis fehlt: Exit 2 ohne Claim-Karte und ohne Kosten-Prozess", () => {
+    const ok: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: lauf([ZEILE()]), stderr: "" });
+    expect(erstelle({ von, bis }, { run: ok, claimKarte }).exit).toBe(0);
+    const nie = () => {
+      throw new Error("darf nicht laufen");
+    };
+    const weg: Run = (name) => {
+      if (name === "token-baseline.mjs") return nie();
+      return { status: 1, stdout: "", stderr: "x" };
+    };
+    const r = erstelle({ von, bis }, { run: weg, claimKarte: nie });
+    expect(r.exit).toBe(2);
+    expect(r.bericht.tickets).toEqual([]);
+  });
+  test("Ticket ohne Claim in der Karte: Lücke, nicht 0", () => {
+    const run: Run = () => ({ status: 0, stdout: lauf([ZEILE({ ticket: 99 })]), stderr: "" });
+    expect(erstelle({ von, bis }, { run, claimKarte }).bericht.tickets[0].ergebnis).toEqual({ luecke: "keine Session mit Claim-Zeile" });
+  });
+  test("CLI: fehlendes --von ist Aufruffehler mit Exit 1", () => {
+    const r = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/factory-kennzahlen.mjs", import.meta.url)), "--bis", bis], { encoding: "utf8" });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/Aufruf: node scripts\/factory-kennzahlen\.mjs/);
+  });
+});
+
 describe("Einstiegsskript", () => {
-  test("literalfrei und ohne Import anderer Einstiegsskripte", () => {
+  test("ohne Import anderer Einstiegsskripte", () => {
     const src = readFileSync(new URL("../scripts/factory-kennzahlen.mjs", import.meta.url), "utf8");
     expect(src).not.toMatch(/from "\.\/(lauf-ergebnis|token-baseline|hauptchat-zerlegung)\.mjs"/);
   });
