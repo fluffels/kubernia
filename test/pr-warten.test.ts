@@ -330,3 +330,31 @@ describe("holePflicht (#1663 T4)", () => {
     expect(args).toContain("--required");
   });
 });
+
+describe("bewerte: Rerun überschreibt den früheren Lauf (#1740 L34)", () => {
+  const wf = (name: string, workflowName: string, status: string, conclusion: string | null, startedAt: string) => ({ __typename: "CheckRun", name, workflowName, status, conclusion, startedAt, completedAt: startedAt, detailsUrl: `https://x/${name}/${startedAt}` });
+  const alt = "2026-10-15T10:00:00Z";
+  const neu = "2026-10-15T11:00:00Z";
+  test("älterer CANCELLED plus neuerer SUCCESS desselben Workflows ist nicht rot (Reihenfolge egal)", () => {
+    for (const rollup of [[wf("verify", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "CI", "COMPLETED", "SUCCESS", neu)], [wf("verify", "CI", "COMPLETED", "SUCCESS", neu), wf("verify", "CI", "COMPLETED", "CANCELLED", alt)]]) {
+      expect(P.bewerte(offen(rollup))).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus"] });
+    }
+  });
+  test("älterer CANCELLED plus neuerer laufender Lauf (Nullwert startedAt) ist OFFEN, nicht rot", () => {
+    const r = P.bewerte(offen([wf("verify", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "CI", "QUEUED", null, "0001-01-01T00:00:00Z")]));
+    expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 0/1 grün, wartend: verify"] });
+  });
+  test("Negativ: alleinstehender CANCELLED bleibt rot (fail-closed)", () => {
+    expect(P.bewerte(offen([wf("verify", "CI", "COMPLETED", "CANCELLED", alt)])).exit).toBe(1);
+  });
+  test("Negativ: neuerer FAILURE nach älterem SUCCESS ist rot", () => {
+    expect(P.bewerte(offen([wf("verify", "CI", "COMPLETED", "SUCCESS", alt), wf("verify", "CI", "COMPLETED", "FAILURE", neu)])).exit).toBe(1);
+  });
+  test("gleicher Name in anderem Workflow zählt getrennt: roter Lauf bleibt rot", () => {
+    expect(P.bewerte(offen([wf("build", "CI", "COMPLETED", "CANCELLED", alt), wf("build", "Nightly", "COMPLETED", "SUCCESS", neu)])).exit).toBe(1);
+  });
+  test("StatusContext je context: der spätere Eintrag gilt", () => {
+    expect(P.bewerte(offen([ctx("ci", "FAILURE"), ctx("ci", "SUCCESS")])).exit).toBe(2);
+    expect(P.bewerte(offen([ctx("ci", "SUCCESS"), ctx("ci", "FAILURE")])).exit).toBe(1);
+  });
+});
