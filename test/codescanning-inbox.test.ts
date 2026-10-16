@@ -80,6 +80,21 @@ describe("alertsAus", () => {
   });
 });
 
+describe("slug", () => {
+  test.each([
+    ["js/path-injection", "js-path-injection"],
+    ["PinnedDependenciesID", "pinneddependenciesid"],
+    ["/js//foo/", "js-foo"],
+    ["a  b__c", "a-b-c"],
+  ])("%s -> %s", (regel, erwartet) => {
+    expect(C.slug(regel)).toBe(erwartet);
+  });
+  test("nicht lesbare Regel wird leer", () => {
+    expect(C.slug(undefined as unknown as string)).toBe("");
+    expect(C.slug("///")).toBe("");
+  });
+});
+
 describe("nummernIn", () => {
   test("liest Alerts-Listen", () => {
     expect(C.nummernIn("Code-Scanning: CodeQL x (high), Alerts 5, 6, 7. Vorschlag: …")).toEqual([5, 6, 7]);
