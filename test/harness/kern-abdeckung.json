@@ -25,5 +25,6 @@
   "scripts/budget-lib.mjs": {"art":"offen","grund":"#1663: Budget-Pacing ist im Inventar beschrieben, aber nicht eingeordnet"},
   "scripts/budget-pacing.mjs": {"art":"offen","grund":"#1663: Budget-Pacing ist im Inventar beschrieben, aber nicht eingeordnet"},
   "scripts/statusline.mjs": {"art":"offen","grund":"#1663: Budget-Pacing ist im Inventar beschrieben, aber nicht eingeordnet"},
+  "scripts/sbom.mjs": {"art":"offen","grund":"#1663: Einordnung fehlt im Inventar (SBOM-Werkzeug aus #1617)"},
   ".github/workflows/ci.yml": {"art":"offen","grund":"#1663: Einordnung fehlt im Inventar"}
 }
