@@ -4,12 +4,18 @@
  *
  * Echte Lock-Datei in einem Temp-Ordner (atomares `wx`), git und Uhr sind injiziert.
  */
-import { afterEach, beforeEach, describe, test } from "vitest";
+import { afterEach, beforeEach, describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+// Durchleitende Spione auf node:fs (Aufrufreihenfolge von ersetze belegen); alle anderen Tests laufen unverändert gegen das echte fs.
+vi.mock("node:fs", async (original) => {
+  const echt = await original<typeof import("node:fs")>();
+  return { ...echt, writeFileSync: vi.fn(echt.writeFileSync), renameSync: vi.fn(echt.renameSync), unlinkSync: vi.fn(echt.unlinkSync) };
+});
+import * as fsSpion from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/ticket-lock.mjs";
 
@@ -419,6 +425,34 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
     mkdirSync(join(dir, "kq-locks", "3.json"));
     assert.throws(() => echt.ersetze(join(dir, "kq-locks", "3.json"), "neu"));
     assert.deepEqual(readdirSync(join(dir, "kq-locks")).filter((n) => n.includes(".tmp-")), [], "Rest nach Fehlschlag aufgeräumt");
+  });
+
+  test("ersetze: erst Temp-Datei schreiben, dann auf das Ziel umbenennen, nie das Ziel direkt beschreiben (#1663 L44c)", () => {
+    const echt = echteDepsEinmal() as { ersetze: (p: string, t: string) => void };
+    const ziel = lockDatei("6.json", "alt");
+    const schreibe = vi.mocked(fsSpion.writeFileSync);
+    const benenne = vi.mocked(fsSpion.renameSync);
+    schreibe.mockClear();
+    benenne.mockClear();
+    echt.ersetze(ziel, "neu");
+    assert.equal(schreibe.mock.calls.length, 1);
+    const tmp = String(schreibe.mock.calls[0][0]);
+    assert.notEqual(tmp, ziel, "das Ziel wird nie direkt beschrieben");
+    assert.ok(tmp.startsWith(`${ziel}.tmp-`), "geschrieben wird in eine Temp-Datei neben dem Ziel");
+    assert.deepEqual(benenne.mock.calls.map((c) => [c[0], c[1]]), [[tmp, ziel]]);
+    assert.ok(schreibe.mock.invocationCallOrder[0] < benenne.mock.invocationCallOrder[0], "erst schreiben, dann umbenennen");
+  });
+
+  test("ersetze: scheitert das Umbenennen, bleibt das Ziel unverändert und die Temp-Datei wird gelöscht (#1663 L44c)", () => {
+    const echt = echteDepsEinmal() as { ersetze: (p: string, t: string) => void };
+    const ziel = lockDatei("7.json", "alt");
+    const benenne = vi.mocked(fsSpion.renameSync);
+    benenne.mockImplementationOnce(() => {
+      throw new Error("rename kaputt");
+    });
+    assert.throws(() => echt.ersetze(ziel, "neu"), /rename kaputt/);
+    assert.equal(readFileSync(ziel, "utf8"), "alt", "ein halber Schreibvorgang erreicht nie das Ziel");
+    assert.deepEqual(readdirSync(join(dir, "kq-locks")).filter((n) => n.includes(".tmp-")), []);
   });
 
   test("eine .tmp-Datei zählt nicht als Lock: weder claim noch pruefe lesen sie", () => {
