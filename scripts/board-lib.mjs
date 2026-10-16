@@ -154,7 +154,7 @@ export function imKopf(items, nr) {
   return idx >= 0 && idx < kopfEnde(items);
 }
 
-const ungeclaimt = (i) => (i.assignees ?? []).length === 0;
+export const ungeclaimt = (i) => (i.assignees ?? []).length === 0;
 
 /**
  * Das ungeclaimte Sammelticket: offen, ohne Assignee, Titel `SAMMELTICKET_TITEL`. Ein geclaimtes (zugewiesenes) oder
