@@ -64,14 +64,14 @@ describe("claimSessions", () => {
   const sitzung = (id: string, main: unknown[], sub: unknown[] = []) => ({ id, main, subagents: [{ datei: "a.jsonl", meta: {}, zeilen: sub }] });
   test("Claim in Haupt- und Subagenten-Zeilen, je Session der früheste, nach Zeit sortiert", () => {
     const karte = F.claimSessions(
-      (function* () {
+      [...(function* () {
         yield sitzung("s2", [claimZeile("gh issue edit 40 --add-assignee @me", "2026-10-14T09:00:00Z")]);
         yield sitzung(
           "s1",
           [claimZeile("gh issue edit 40 --add-assignee @me", "2026-10-14T08:00:00Z"), claimZeile("gh issue edit 40 --add-assignee @me", "2026-10-14T07:00:00Z")],
           [claimZeile("gh issue edit 41 --add-assignee @me", "2026-10-14T06:00:00Z")],
         );
-      })(),
+      })()],
     );
     expect(karte.get(40)).toEqual([
       { session: "s1", ts: "2026-10-14T07:00:00Z" },
