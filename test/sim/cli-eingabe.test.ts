@@ -933,3 +933,65 @@ describe("dispatchSub: Gruppen erben Stil und Hinweise, Flags vor dem Unterbefeh
     expect(sonst).not.toContain("Versionsanzeige");
   });
 });
+
+/* ---------- dispatchSub: persistente Flags der Ebene, Flags je Ziel (#1491) ---------- */
+describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
+  const A: SubEntry<string> = { run: "a", maxArgs: OFFENE_LISTE, flags: [flag(true, "--x")] };
+  const B: SubEntry<string> = { run: "b", maxArgs: OFFENE_LISTE, flags: [flag(true, "--y")], hints: { "--z": "Blatt-Hinweis." } };
+  const MB: SubEntry<string> = { run: "mb", maxArgs: 1, flags: [flag(false, "--w")] };
+  const grp: Dispatch<SubEntry<string>> = { cmd: "x grp", table: { mb: MB }, hints: { "--g": "Gruppen-Hinweis." } };
+  const GRP = { group: grp };
+  const d: Dispatch<SubEntry<string>> = {
+    cmd: "x",
+    flags: [flag(true, "-n", "--namespace"), flag(false, "-v")],
+    hints: { "--z": "Familien-Hinweis.", "--f": "Familien-Hinweis F." },
+    table: { a: A, b: B, grp: GRP, gruppe: GRP },
+  };
+  const lauf = (...t: string[]) => dispatchSub(host, d, ["x", ...t], 1);
+
+  test("ein persistentes Flag steht vor dem Ziel und wird im Ziel gelesen; sein Wert ist nicht das Ziel", () => {
+    const r = lauf("-n", "foo", "a", "--x=1");
+    expect(typeof r === "string" ? r : [r.sub, r.call.value("-n"), r.call.value("--x"), r.call.args]).toEqual(["a", "foo", "1", []]);
+    const r2 = lauf("-n", "a", "b");
+    expect(typeof r2 === "string" ? r2 : [r2.sub, r2.call.value("-n")]).toEqual(["b", "a"]);
+  });
+  test("ein Flag eines anderen Ziels wird abgelehnt (je Ziel eigene Tabelle)", () => {
+    expect(lauf("a", "--y=1")).toContain("das Flag '--y' bei 'x a'");
+    expect(lauf("b", "--x=1")).toContain("das Flag '--x' bei 'x b'");
+    expect(typeof lauf("a", "--x=1")).toBe("object");
+  });
+  test("ein nicht persistentes Flag vor dem Ziel bleibt „vor dem Unterbefehl“, auch wenn das Ziel es kennt", () => {
+    expect(lauf("--x=1", "a")).toContain("das Flag '--x' vor dem Unterbefehl");
+    expect(lauf("-n", "foo", "--x=1", "a")).toContain("das Flag '--x' vor dem Unterbefehl");
+  });
+  test("persistente Flags: fehlender Wert, ungültiger Bool, `--` vor dem Ziel", () => {
+    expect(lauf("-n")).toContain("flag needs an argument");
+    expect(lauf("-v=vielleicht", "a")).toContain("strconv.ParseBool");
+    expect(lauf("--", "a")).toContain("das Flag '--' vor dem Unterbefehl");
+    expect(lauf("-n", "foo")).toContain("x: Unterbefehl fehlt.");
+  });
+  test("Gruppen erben die persistenten Flags vor und hinter dem Gruppen-Namen", () => {
+    for (const t of [["-n", "f", "grp", "mb"], ["grp", "-n", "f", "mb"], ["grp", "mb", "-n", "f"]]) {
+      const r = lauf(...t);
+      expect(typeof r === "string" ? r : [r.sub, r.call.value("-n"), r.call.args]).toEqual(["mb", "f", []]);
+    }
+    expect(lauf("grp", "mb", "--x=1")).toContain("das Flag '--x' bei 'x grp mb'");
+    expect(typeof lauf("grp", "mb", "--w")).toBe("object");
+    const bool = lauf("-v", "a");
+    expect(typeof bool === "string" ? bool : [bool.sub, bool.call.has("-v")]).toEqual(["a", true]);
+  });
+  test("Hinweise werden je Schlüssel gemischt: Familie, Gruppe, Blatt; gleicher Schlüssel: der innere gewinnt", () => {
+    expect(lauf("b", "--z")).toContain("Blatt-Hinweis.");
+    expect(lauf("b", "--f")).toContain("Familien-Hinweis F.");
+    expect(lauf("grp", "mb", "--g")).toContain("Gruppen-Hinweis.");
+    expect(lauf("grp", "mb", "--z")).toContain("Familien-Hinweis.");
+  });
+  test("die Meldung nennt die persistenten Flags nicht doppelt", () => {
+    const e = { run: "e", maxArgs: 0, flags: [d.flags![0], flag(true, "--e")] };
+    const r = dispatchSub(host, { ...d, table: { e } }, ["x", "e", "--q"], 1) as string;
+    expect(r.match(/--namespace/g)).toHaveLength(1);
+  });
+  test("kannOf: eine Gruppe mit zwei Alias-Schlüsseln erscheint nur einmal", () => {
+    expect(kannOf(d)).toEqual(["x a, b", "x grp mb"]);
+  });
+});

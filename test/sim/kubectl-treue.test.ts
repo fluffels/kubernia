@@ -26,8 +26,8 @@ const NICHT_SIMULIERT: Record<string, RegExp> = {
   ...Object.fromEntries(["get", "describe", "delete", "top"].map(b => [b, /Nicht simuliert:|doesn't have a resource type|unknown command/])),
   // Bei set/rollout/auth ist das erste Wort eine Aktion, keine Art: ein unbekannter Ressourcentyp in den Zielen („treue-probe“) heißt „Aktion unterstützt“.
   ...Object.fromEntries(["set", "rollout", "auth"].map(b => [b, /Nicht simuliert:|unknown command/])),
-  // create/label haben tiefere „nicht simuliert“-Meldungen (Unterart des Secrets, anderes Label), die den Befehl selbst nicht ausschließen.
-  create: /Nicht simuliert: 'kubectl create (?!secret )|doesn't have a resource type/,
+  // create/label haben tiefere Meldungen (Unterart des Secrets, anderes Label), die den Befehl selbst nicht ausschließen: ein unbekannter Typ ist `unknown command "<typ>"`, die Probe-Unterart des Secrets (`treue-probe`) nicht.
+  create: /Nicht simuliert: 'kubectl create (?!secret )|doesn't have a resource type|unknown command "(?!treue-probe)/,
   label: /Nicht simuliert: 'kubectl label/,
 };
 

@@ -1,5 +1,5 @@
 /* ===== Kubernia – kubectl-Argumente: Flag-Bausteine, Wertprüfer und Parser-Helfer (sim/kubectl/args.ts, #1444) =====
- * Die Eingabegrenze von `kubectl`. Die Dispatch-Tabelle (Handler + Flags je Unterbefehl) liegt in ../kubectl.ts; hier
+ * Die Eingabegrenze von `kubectl`. Die Dispatch-Tabelle (Handler + Flags je Unterbefehl) liegt in ../kubectl.ts, die Tabellen der verschachtelten Ziele (`create`, `set`, `rollout`, `auth`, #1491) neben ihren Handlern in lifecycle.ts, ops.ts und security.ts; hier
  * liegen ihre Bausteine: `NS`, `FILE`, die `checkedFlag`-Konstanten, `FLAG_HINTS` (Lernhinweise zu Flags, die Spieler
  * aus dem echten kubectl kennen) und `REAL_KUBECTL_COMMANDS`. Parser und `notSimulated` sind generisch in ../cliargs.
  *
@@ -21,6 +21,9 @@ export const REAL_KUBECTL_COMMANDS: readonly string[] = [
   "kustomize", "label", "annotate", "completion", "alpha", "api-resources", "api-versions", "config", "plugin",
   "version", "help",
 ];
+
+/** Die Tippfehler-Zeile einer verschachtelten Ebene (`create`, `set`, `rollout`, `auth`): kubectl nennt dort nur das Ziel. */
+export const UNKNOWN_TARGET = (sub: string): string => 'error: unknown command "' + sub + '"';
 
 export const NS = flag(true, "-n", "--namespace");
 export const FILE = flag(true, "-f", "--filename");
