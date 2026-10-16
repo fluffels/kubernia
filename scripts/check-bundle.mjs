@@ -100,6 +100,8 @@ const HOST_HTML = "dist/index.html";
  *   • #1530 (kubectl create/set/auth prüfen Eingaben wie kubectl: Container-Modell, Paar-Reihenfolge, Registry-Auflösung,
  *     Literal-Schlüssel mit den echten Fehlertexten; neuer Domänen-Code, bewusst und legitim):
  *     Spielcode 590_000 → 591_000 (Ist 590_135 B), Offline-Build 2_590_000 → 2_593_000 (Ist 2_590_281 B in der CI).
+ *   • #1667 (Mehrfachziele und Aktionsgruppen: neuer Domänen-Code in cliargs, git, argocd, kubectl-ops; bewusst und legitim):
+ *     Spielcode 591_000 → 592_000 (Ist 591_669 B in der CI, zusammen mit dem Stand von main nach #1530).
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -115,7 +117,7 @@ export const BUNDLE_BUDGETS = [
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 591_000, // #1530: kubectl create/set/auth prüfen Eingaben wie kubectl (Namens-, Flag- und Argumentprüfung), Messwert 590135 B
+    maxBytes: 592_000, // #1667: Mehrfachziele und Aktionsgruppen auf der #1530-Prüfung (zusammen Messwert 591669 B in der CI); #1530: kubectl-Eingabeprüfung, Messwert 590135 B
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",

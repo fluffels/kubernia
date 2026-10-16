@@ -50,6 +50,27 @@ export function parseErgebnis(text) {
   return { token, zusatz: token ? m[2].trim() : roh, pr: zeile("PR"), schnitt: schnitt === null ? null : schnitt.toLowerCase(), uebergabe: /^[ \t]*UEBERGABE:/im.test(String(text ?? "")), festgefahren: art === null ? null : art.toLowerCase() };
 }
 
+/**
+ * Wert der `BEFUNDE:`-Zeile samt eingerückten Folgezeilen bis zur nächsten `SCHLÜSSEL:`-Zeile (#1723);
+ * `null`, wenn die Zeile fehlt.
+ */
+export function befundeBlock(text) {
+  const zeilen = String(text ?? "").split(/\r?\n/);
+  const start = zeilen.findIndex((z) => /^[ \t]*BEFUNDE:/i.test(z));
+  if (start < 0) return null;
+  const rest = [];
+  for (const z of zeilen.slice(start + 1)) {
+    if (/^[ \t]*[A-ZÄÖÜ]+:/.test(z)) break;
+    rest.push(z);
+  }
+  return [zeilen[start].replace(/^[ \t]*BEFUNDE:/i, ""), ...rest].join("\n").trim();
+}
+
+/** Angebot oder Frage statt eingetragener Befunde (#1723).
+ * Bewusste Grenzen: ein `?` zählt nur vor Leerraum oder Zeilenende (`a?.b` und URLs mit Query gehen durch); eine Frage mit `?` vor einem Satzzeichen („(rein?)“) geht durch.
+ */
+const BEFUNDE_ANGEBOT = /\?(\s|$)|soll ich|sag (mir )?Bescheid|wenn du (willst|möchtest)/i;
+
 /** PR-Nummer aus `PR:`-Wert (URL oder `#123`); sonst `null` (z.B. `-`). */
 export function prNummer(pr) {
   const m = /(?:\/pull\/|#)(\d+)/.exec(String(pr ?? "")) ?? /^(\d+)$/.exec(String(pr ?? "").trim());
@@ -65,7 +86,7 @@ export function ghPrStatus(nummer) {
 }
 
 const FORMAT =
-  "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -); uebergabe zusätzlich SCHNITT: pr|verify und eine UEBERGABE:-Zeile";
+  "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -) sowie BEFUNDE: (je Befund „<Befund> → #<nr>“, sonst keine); uebergabe zusätzlich SCHNITT: pr|verify und eine UEBERGABE:-Zeile";
 const WARTEN = (nr) =>
   `Warte im Vordergrund und blockierend: \`node scripts/pr-warten.mjs ${nr}\` (Bash-timeout: 300000), bei Exit 2 erneut, bis der PR MERGED ist. ` +
   `Ein Monitor hält deinen Lauf nicht offen. Hängt die CI (6 Aufrufe ohne Fortschritt), melde entscheidung-noetig.`;
@@ -73,7 +94,7 @@ const WARTEN = (nr) =>
 /**
  * Grund für die Blockade oder `null`. `input`: `{ hookEvent, agentType, toolName, lastMessage }`.
  * Gilt für den Umsetzer, an zwei Stellen: `SubagentStop` und `PreToolUse` auf `SubagentHandback`. Blockiert:
- *  - R0 (nur PreToolUse): Format verletzt (kein gültiges Token, Zusatz, keine PR:-Zeile),
+ *  - R0 (nur PreToolUse): Format verletzt (kein gültiges Token, Zusatz, keine PR:-Zeile, keine BEFUNDE:-Zeile oder BEFUNDE als Angebot/Frage, #1723),
  *  - R1: `gemergt`/`abgebrochen` mit PR OPEN + Auto-Merge (CI läuft noch),
  *  - R2: `gemergt` mit einem PR, der nicht MERGED ist,
  *  - R3: `festgefahren` mit offenem PR ohne Label `status:festgefahren`; die optionale Zeile `FESTGEFAHREN: review|ci` (fehlt sie: `ci`)
@@ -92,6 +113,10 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
     if (!token) fehler.push("kein gültiges ERGEBNIS-Token");
     else if (zusatz) fehler.push(`Zusatz hinter dem Token („${zusatz}“)`);
     if (pr === null) fehler.push("PR:-Zeile fehlt");
+    const befunde = befundeBlock(lastMessage);
+    if (befunde === null) fehler.push("BEFUNDE:-Zeile fehlt");
+    else if (befunde === "") fehler.push("BEFUNDE: ist leer (je Befund „<Befund> → #<nr>“ oder keine)");
+    else if (BEFUNDE_ANGEBOT.test(befunde)) fehler.push("BEFUNDE bietet an statt einzutragen: Befunde trägst du vor dem Bericht selbst ein (AGENTS.md § Abschluss ohne offene Befunde)");
     if (fehler.length)
       return (
         `Umsetzer-Abschluss (#1342): Handback abgelehnt (${fehler.join(", ")}). Format wörtlich: ${FORMAT}. ` +

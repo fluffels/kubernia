@@ -28,7 +28,7 @@ import { HEADLESS_CLUSTER_IP } from "./state";
 import { InvalidSpecError, resourceName } from "./names";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
-import { dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
+import { dispatchSub, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -330,19 +330,20 @@ function rootSyncFailure(host: ArgocdHost, app: ArgoApp, failed: { name: string;
   return host._err(head, "Details mit 'argocd app get " + failed[0].name + "'.");
 }
 
-/** `argocd app sync <name>` – zieht den Git-Soll in den Cluster (Pull-Prinzip). */
-function argoAppSync(host: ArgocdHost, c: Call): string {
-  const app = resolveArgoApp(host, "sync", c.args[0]);
-  if (typeof app === "string") return app;
+/** Der Sync EINER Application: die Ausgabe oder (`fehler`) die fertige Fehlerausgabe. `name` ist `undefined` ohne Argument
+ *  (die Rückfrage von `resolveArgoApp`). */
+function syncOne(host: ArgocdHost, name: string | undefined): { ok: string } | { fehler: string } {
+  const app = resolveArgoApp(host, "sync", name);
+  if (typeof app === "string") return { fehler: app };
   const before = argoSyncStatus(host, app);
   argoReconcile(host, app);
   if (before === "Synced") {
-    return "Application '" + app.name + "' ist bereits Synced ✅ – Cluster und Git-Soll stimmen überein, nichts zu tun. 🧘";
+    return { ok: "Application '" + app.name + "' ist bereits Synced ✅ – Cluster und Git-Soll stimmen überein, nichts zu tun. 🧘" };
   }
   const failed = failedChildren(host, app);
-  if (failed.length > 0) return rootSyncFailure(host, app, failed);
+  if (failed.length > 0) return { fehler: rootSyncFailure(host, app, failed) };
   const after = argoSyncStatus(host, app);
-  return [
+  return { ok: [
     "Synchronisiere Application '" + app.name + "' …",
     app.childApps
       ? "App-of-Apps: Argo legt aus dem '" + app.path + "'-Ordner jede Kind-Application an (eine Wurzel → die ganze Flotte)."
@@ -351,7 +352,19 @@ function argoAppSync(host: ArgocdHost, c: Call): string {
     app.childApps
       ? "▸ Schau mit 'argocd app list' – die ganze Flotte ist jetzt da."
       : "▸ Schau mit 'kubectl get deployments' – der Cluster entspricht jetzt wieder dem Git-Stand.",
-  ].join("\n");
+  ].join("\n") };
+}
+
+/** `argocd app sync <name> [<name> …]` – zieht den Git-Soll in den Cluster (Pull-Prinzip). Mehrere Apps laufen nacheinander;
+ *  der erste Fehler bricht ab (die CLI endet über `errors.CheckError`), die folgenden Apps bleiben unberührt. */
+function argoAppSync(host: ArgocdHost, c: Call): string {
+  const done: string[] = [];
+  for (const name of c.args.length > 0 ? c.args : [undefined]) {
+    const r = syncOne(host, name);
+    if ("fehler" in r) return [...done, r.fehler].join("\n");
+    done.push(r.ok);
+  }
+  return done.join("\n");
 }
 
 /** Alias → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `argocd app` keine Flags aus). Ein neuer
@@ -362,14 +375,14 @@ const ARGOCD_APP: Dispatch<SubEntry<ArgocdAppHandler>> = { cmd: "argocd app", ta
   list: LIST,
   ls: LIST,
   get: { run: argoAppGet, maxArgs: 1 },
-  sync: { run: argoAppSync, maxArgs: 1 },
+  sync: { run: argoAppSync, maxArgs: OFFENE_LISTE },
 },
   // Echte `argocd app`-Aktionen, die die Sim nicht kann.
   real: ["actions", "create", "delete", "delete-resource", "diff", "edit", "history", "logs", "manifests", "patch", "patch-resource", "resources", "rollback", "set", "terminate-op", "unset", "wait"],
 };
 
 /** Die `argocd`-Ebene: nur `app` ist simuliert; die übrigen Befehlsgruppen des echten CLI sind „nicht simuliert“. */
-const ARGOCD: Dispatch<SubEntry<ArgocdAppHandler>> = {
+export const ARGOCD: Dispatch<SubEntry<ArgocdAppHandler>> = {
   cmd: "argocd",
   table: { app: { group: ARGOCD_APP } },
   real: ["account", "admin", "appset", "cert", "cluster", "completion", "context", "gpg", "login", "logout", "proj", "relogin", "repo", "repocreds", "version"],

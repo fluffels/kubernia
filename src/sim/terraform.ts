@@ -292,7 +292,7 @@ const TF_STATE: Dispatch<SubEntry<TerraformHandler>> = {
 
 /** Die Dispatch-Tabelle (terraform nutzt Go-`flag`-Schreibweise). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
-const TERRAFORM: Dispatch<SubEntry<TerraformHandler>> = { cmd: "terraform", style: STYLE, table: {
+export const TERRAFORM: Dispatch<SubEntry<TerraformHandler>> = { cmd: "terraform", style: STYLE, table: {
   get: { run: tfGet, maxArgs: 0 },
   init: { run: tfInit, maxArgs: 0 },
   plan: { run: tfPlan, maxArgs: 0, flags: [VAR_FILE] },
