@@ -188,6 +188,6 @@ describe("harness-kennzahlen: grob rundet auf Zehner ab (Grenzfälle)", () => {
     [29, "≥ 20"],
     [30, "≥ 30"],
   ])("grob(%s)", (n, erwartet) => {
-    assert.equal(kennzahlen.grob(n), erwartet);
+    assert.equal((kennzahlen as unknown as { grob: (n: number) => string | number }).grob(n as number), erwartet);
   });
 });
