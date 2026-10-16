@@ -65,7 +65,7 @@ Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, de
 
 Entschieden: ein Factory-Repo als Quelle, verteilt per Sync mit Besitz-Manifest; Projektwerte kommen zur Laufzeit aus einer Projekt-Config. Es gibt kein eigenes docs-gen-Paket, der docs-gen-Kern ist ein Baustein des Kerns. Die Veröffentlichung ist entschieden: Factory-Repo öffentlich unter `fluffels`, alle Rechte vorbehalten, kein Marketplace-Eintrag, keine externen Beiträge ([Fortschreibung #1706](adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1706-2026-10-16-veröffentlichungsentscheidung)); das Repo entsteht mit F10.
 
-Der Produktname ist „Self-Improving Agent Harness and Factory“. Er gilt als source-available: der Quelltext ist einsehbar, die Nutzung bleibt vorbehalten (nicht als Open Source lizenziert).
+Der Produktname ist „Self-Improving Agent Harness and Factory“. Er gilt als source-available: der Quelltext ist einsehbar, die Nutzung bleibt vorbehalten, er ist nicht als Open Source lizenziert.
 
 Das Sync-Werkzeug (`npm run factory:sync`, ADR 0022 F9) überträgt den Besitz aus einem lokalen Arbeitsbaum der Quelle, das Drift-Gate (`npm run check:factorydrift`) hält ihn im Projekt unverändert; der Ist-Zustand bleibt eine Kopie, bis F10 die Quelle als eigenes Repo mit Tag-Sync einführt.
 
