@@ -23,6 +23,24 @@
       "todoOptionId": "f75ad846"
     }
   ],
+  "praefixe": {
+    "commitZeile": "KQ-",
+    "branch": "feature/kq-",
+    "worktree": "kq-"
+  },
+  "labels": {
+    "harness": "area:harness",
+    "festgefahren": "status:festgefahren",
+    "forum": "forum",
+    "dependabotInbox": "area:harness"
+  },
+  "agenten": {
+    "planer": "kubernia-planner",
+    "umsetzer": "kubernia-umsetzer",
+    "lens": "kubernia-lens",
+    "gruppe": "kubernia-gruppe",
+    "ticketSkill": "kubernia"
+  },
   "spezifikation": {
     "hartAb": 1
   },

@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
-import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
+import { ladeCommitZeilen, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 // Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
 // scripts/docs-gen/config.json › schichten.layers, ein Kern-Modul importiert sie nie statisch (Kern-Reinheit, ADR 0022 F7).
@@ -239,15 +239,14 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
   return { buckets, missing, below };
 }
 
-/** Schlüssel des Override-Trailers (#1269): eine Zeile `KQ-Diffcov-Override: #<nr> <warum>`
+/** Override-Trailer (#1269, Schlüssel aus `zeilen.diffcovOverride`): eine Zeile `<Präfix>Diffcov-Override: #<nr> <warum>` (Präfix aus der Projekt-Config)
  *  in einer Commit-Message des Slices. Parser und Slice-Bereich teilt es sich mit
  *  check:diffsize (scripts/slice-override.mjs), damit es lokal, im PR und auf main gleich wirkt. */
-export const OVERRIDE_KEY = "KQ-Diffcov-Override";
 
 /** Führt die komplette Prüfung aus (Basis → Diff → lcov → Bewertung → Override).
  *  `runGit`/`readFile`/`env` sind injizierbar, damit der Test ohne git, ohne
  *  Coverage-Lauf und ohne Repo-Zustand deterministisch läuft. */
-export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) {
+export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen = ladeCommitZeilen() } = {}) {
   const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
   const read = readFile ?? ((p) => readFileSync(p, "utf8"));
   const base = resolveBase(git, env);
@@ -272,7 +271,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
   // Kein Spielcode angefasst (reiner Doku-/Tooling-Slice) → nichts zu messen, grün.
   // Ein Override-Trailer ist dann überflüssig (stale, #1309): es gibt nichts durchzulassen.
   if (measuredFiles.length === 0) {
-    const { reason, invalid } = sliceOverride(git, base, OVERRIDE_KEY);
+    const { reason, invalid } = sliceOverride(git, base, zeilen.diffcovOverride);
     return { skipped: false, failed: reason !== null, base, nothingToMeasure: true, stale: reason !== null, reason, invalidOverrides: invalid };
   }
 
@@ -291,7 +290,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
   // MESSfehler — für diese Datei wurde gar nichts gemessen. Ihn durchzuwinken wäre
   // dasselbe „grün ohne Messung", das der noReport-Zweig verbietet: nicht override-bar.
   const violated = verdict.below.length > 0;
-  const { reason, invalid, versetzt } = sliceOverride(git, base, OVERRIDE_KEY);
+  const { reason, invalid, versetzt } = sliceOverride(git, base, zeilen.diffcovOverride);
   const allowed = violated && reason !== null;
   const stale = !violated && verdict.missing.length === 0 && reason !== null;
 
@@ -330,12 +329,20 @@ function renderBuckets(r, { dim, red, green }) {
 }
 
 function main() {
+  // Die Commit-Zeilen kommen aus der Projekt-Config; ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, Fix:).
+  let zeilen;
+  try {
+    zeilen = ladeCommitZeilen();
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const colors = { red: (s) => paint("31", s), green: (s) => paint("32", s), dim: (s) => paint("2", s) };
   const { red, green, dim } = colors;
 
-  const r = checkDiffCoverage();
+  const r = checkDiffCoverage({ zeilen });
 
   if (r.skipped) {
     console.log(dim("• check:diffcoverage übersprungen — keine Vergleichs-Basis (flacher Checkout / nichts gegenüber main)."));
@@ -343,7 +350,7 @@ function main() {
   }
   if (r.nothingToMeasure && r.stale) {
     meldeUngueltigeOverrides(r.invalidOverrides, { dim });
-    console.error(red(staleOverrideHinweis(OVERRIDE_KEY, "dieser Slice ändert keinen gemessenen Spielcode (src/**/*.ts)")));
+    console.error(red(staleOverrideHinweis(zeilen.diffcovOverride, "dieser Slice ändert keinen gemessenen Spielcode (src/**/*.ts)")));
     process.exit(1);
   }
   if (r.nothingToMeasure) {
@@ -377,7 +384,7 @@ function main() {
   meldeUngueltigeOverrides(r.invalidOverrides, { dim });
 
   if (r.stale) {
-    console.error(red(staleOverrideHinweis(OVERRIDE_KEY, "der Slice erfüllt die Floors")));
+    console.error(red(staleOverrideHinweis(zeilen.diffcovOverride, "der Slice erfüllt die Floors")));
     process.exit(1);
   }
 
@@ -388,12 +395,12 @@ function main() {
   }
 
   if (r.failed) {
-    for (const h of versetzteOverrideHinweis(OVERRIDE_KEY, r.versetzteOverrides)) console.error(h);
+    for (const h of versetzteOverrideHinweis(zeilen.diffcovOverride, r.versetzteOverrides)) console.error(h);
     console.error(
       `\nTests für genau diese Zeilen ergänzen (TDD: erst der fehlschlagende Test, AGENTS.md) —\n` +
         `ODER, wenn die Lücke bewusst ist, mit Pflicht-Begründung als Commit-Trailer im Slice\n` +
         `durchlassen (wirkt lokal, im PR und auf main gleich):\n` +
-        `  git commit --allow-empty -m "chore: Lücke bewusst (#<nr>)" -m "${OVERRIDE_KEY}: #<nr> warum ungetestet"`,
+        `  git commit --allow-empty -m "chore: Lücke bewusst (#<nr>)" -m "${zeilen.diffcovOverride}: #<nr> warum ungetestet"`,
     );
     process.exit(1);
   }
