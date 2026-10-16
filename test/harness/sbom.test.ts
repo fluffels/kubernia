@@ -44,7 +44,13 @@ describe("pruefeSbom", () => {
     ["components fehlt", bom({ components: undefined }), /components/],
     ["components leer", bom({ components: [] }), /components/],
     ["Komponente ohne version", bom({ components: [komp({ version: undefined })] }), /version/],
-    ["Komponente ohne purl", bom({ components: [komp({ purl: undefined })] }), /purl/],
+    ["Komponente ohne purl", bom({ components: [komp({ purl: undefined })] }), /^1 Komponente/m],
+    ["zweite Komponente ohne name", bom({ components: [komp(), komp({ name: undefined })] }), /^1 Komponente/m],
+    ["Komponente mit leerer version", bom({ components: [komp({ version: "" })] }), /^1 Komponente/m],
+    ["Komponente mit Leerzeichen-purl", bom({ components: [komp({ purl: "  " })] }), /^1 Komponente/m],
+    ["metadata.component.name leer", bom({ metadata: { component: { name: " " } } }), /metadata\.component/],
+    ["specVersion mit Suffix 1.5.1", bom({ specVersion: "1.5.1" }), /specVersion/],
+    ["specVersion mit Suffix 1.5-rc", bom({ specVersion: "1.5-rc" }), /specVersion/],
   ])("Fehlerfall: %s", (_n, text, muster) => {
     const fehler = S.pruefeSbom(text);
     expect(fehler.length).toBeGreaterThan(0);
@@ -88,6 +94,7 @@ describe("fuehreAus", () => {
     const t = io(() => ({ status: 0, stdout: bom(), stderr: "" }));
     expect(S.fuehreAus(["--aus", "x/y.json"], t.impl)).toBe(0);
     expect(t.geschrieben[0][0]).toBe("x/y.json");
+    expect(t.aufrufe[0]).toBe("entferne:x/y.json");
   });
   test("npm-Exit 1 (ESBOMPROBLEMS): Exit 1, Meldung mit Exit-Code und stderr, nichts geschrieben", () => {
     const t = io(() => ({ status: 1, stdout: "", stderr: "npm error code ESBOMPROBLEMS\nnpm error missing" }));
@@ -113,7 +120,7 @@ describe("fuehreAus", () => {
     expect(t.aufrufe[0]).toBe(`entferne:${S.STANDARD_AUS}`);
     expect(t.aufrufe[1]).toBe("lauf");
   });
-  test.each([[["--aus"]], [["--unbekannt"]]])("ungültige Argumente %j: Exit 2, lauf nicht aufgerufen", (argv) => {
+  test.each([[["--aus"]], [["--aus", ""]], [["--unbekannt"]]])("ungültige Argumente %j: Exit 2, lauf nicht aufgerufen", (argv) => {
     const t = io(() => ({ status: 0, stdout: bom(), stderr: "" }));
     expect(S.fuehreAus(argv, t.impl)).toBe(2);
     expect(t.aufrufe).not.toContain("lauf");
