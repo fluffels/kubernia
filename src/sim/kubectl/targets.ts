@@ -75,9 +75,5 @@ export function readTargets(host: ErrHost, args: readonly string[]): { targets: 
   return { targets: kinds.map(kind => ({ kind, names: [...names] })) };
 }
 
-/** Das Ergebnis eines Befehls mit mehreren Zielen (kubectl `ContinueOnError`): erst alle Erfolgszeilen, dann die
- *  Fehlerzeilen. Gibt es Fehler, ist die Ausgabe ein Fehler (`host._err`, mit dem Tipp, falls einer da ist), sonst reiner Text. */
-export function targetOutcome(host: ErrHost, ok: readonly string[], failed: readonly string[], tip?: string): string {
-  const text = [...ok, ...failed].join("\n");
-  return failed.length > 0 ? host._err(text, tip) : text;
-}
+/** Gehört zur gemeinsamen Eingabegrenze (docker und helm nutzen es mit); hier für die kubectl-Importe re-exportiert. */
+export { targetOutcome } from "../cliargs";

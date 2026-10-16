@@ -184,6 +184,16 @@ F2 ist umgesetzt. Entscheidungen:
 
 Präzisiert durch #1628: Die Workflows checken das volle Repo aus und setzen die Position über `scripts/board-place.mjs` (Wiederholung, rot bei endgültigem Scheitern); Sparse-Checkout und `set_board_top` entfallen für die Inbox-Workflows.
 
+## Fortschreibung #1615 (2026-10-16): Spezifikations-Gate (F12)
+
+F12 ist umgesetzt. Entscheidungen:
+
+- **Prüfung:** `scripts/spezifikation-lib.mjs` (Ring `kern`, literalfrei, ohne Importe) liefert die Mängelliste eines Bodys: `## Ziel` mit Inhalt, `## Akzeptanzkriterien` (oder `## Teil-Akzeptanzkriterien`, die Überschrift gebündelter Befund-Issues) als Liste, darin mindestens ein Kriterium mit dem Wort „Negativfall“. Das Wort ist deutsch und deterministisch; bei einem nicht deutschsprachigen Projekt wird es ein Projektwert (§8).
+- **Bestand und Neues:** Der Stichtag `spezifikation.hartAb` (Issue-Nummer) steht in `.factory/projekt.json`. Beim Einführen erfüllten 17 von 160 offenen Issues das Format; ohne Stichtag hätte das Gate das Board gesperrt. Darunter wird nur berichtet, ab der Nummer übersprungen. `hartAb` darf nur sinken (Bitte, kein Wächter); eine einmalige Anpassung auf die nächste freie Nummer ist nur vor dem Merge erlaubt, weil zwischen Messung und Merge neue Tickets entstehen (Stand beim Merge: 1673). Fehlt der Schlüssel, ist alles hart.
+- **Ausnahmen über §3 hinaus:** alle Kopf-Items (🚨, 🔒, 🤖, Forum, ⏰) haben eigene Formate, dazu Sammel- und Epic-/Phasen-Titel.
+- **Einmal-Kommentar:** `naechstes-ticket.mjs` kommentiert (I/O injiziert, Logik pur) nur, wenn die Spezifikation der ausschlaggebende Grund ist, und nur ohne den versteckten Marker `<!-- spezifikations-gate -->` im Kommentar eines vertrauten Autors; ein später anderer Mangel löst bewusst keinen zweiten Kommentar aus.
+- **Grenze:** Bei gleichzeitiger Auswahl können zwei Kommentare entstehen (der Marker wird direkt vor dem Posten geprüft, nicht atomar). Ein Ticket, das zwischen Festlegen des Stichtags und Merge entsteht, ist hart.
+
 ## Fortschreibung #1616 (2026-10-16): Factory-Kennzahlen (F14)
 
 F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den Bericht-Kommentar des Wochen-Status-Tickets (Definition, Lücken, Grenzen: [model-routing.md](../model-routing.md#factory-kennzahlen-1616)). Entscheidungen:

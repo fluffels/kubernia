@@ -378,7 +378,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(existsSync(b.state) && readdirSync(b.state).some((n) => n.includes("kaputt"))).toBe(false);
   });
 
-  test("mehrdeutig (Fingerabdruck: fehlend und Dubletten zugleich): nichts gesendet, bestätigt mit Befund", async () => {
+  test("mehrdeutig (Fingerabdruck: fehlend und Dubletten zugleich): nichts gesendet, unbestätigt mit Befund; der Folgelauf fragt erneut ab", async () => {
     const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
     const fremd = obsZu(sollZu("zz", 99));
     const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), fremd] });
@@ -386,8 +386,54 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(m.otlp).toHaveLength(0);
     expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1 });
     expect(r.protokoll.dubletten).toBe(1);
-    expect(ledgerVon(a.ledger).s1).toMatchObject({ bestaetigt: true, gesendet: [] });
+    expect(ledgerVon(a.ledger).s1).toMatchObject({ bestaetigt: false, gesendet: [] });
     expect(ledgerVon(a.ledger).s1.befund).toMatch(/mehrdeutig/);
+    const m2 = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), fremd] });
+    const r2 = await lauf(a, m2);
+    expect(m2.aufrufe.length).toBeGreaterThan(0);
+    expect(r2.protokoll.sessions[0].status).toBe("mehrdeutig");
+  });
+
+  describe("Altbestand im Ledger (#1659)", () => {
+    const leerObs = (id: string): Obs => ({ id, type: "GENERATION", providedModelName: "claude", usageDetails: {}, metadata: {} });
+    const mitAltbestand = (a: ReturnType<typeof aufbau>, extra: Partial<LedgerEintrag>) => {
+      const [s] = A.findeSessions({ projectsRoot: a.root, praefix: PRAEFIX });
+      mkdirLedger(a.state);
+      const e = { pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: true, gesendet: [], spans: [], beendet: true, ...extra };
+      writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: e } }));
+    };
+
+    test("alt als bestätigt vermerkte Mehrdeutigkeit wird neu geprüft: Lücke gesendet, leere Hook-Generationen gezählt", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3), msg("d", 4), msg("e", 5)]);
+      mitAltbestand(a, { befund: "mehrdeutig: Fehlend und Dubletten zugleich, nichts gesendet" });
+      const m = mock({ ist: 3, obs: [obsZu(sollZu("a", 1)), leerObs("leer1"), leerObs("leer2")] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(1);
+      expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 4, dubletten: 0, leer: 2 });
+      expect(r.protokoll.sessions[0].status).not.toBe("bestätigt");
+    });
+
+    test.each([
+      ["nur Dubletten", { befund: "nur Dubletten, nichts zu senden" }],
+      ["ohne Befund", {}],
+    ])("bestätigter Altbestand %s bleibt ohne Request übersprungen", async (_n, extra) => {
+      const a = aufbau([msg("a", 1), msg("b", 2)]);
+      mitAltbestand(a, extra);
+      const m = mock({ ist: 2 });
+      const r = await lauf(a, m);
+      expect(m.aufrufe).toHaveLength(0);
+      expect(r.protokoll.sessions[0].status).toBe("bestätigt");
+    });
+
+    test("echte Dubletten (mit Tokens) neben einer Lücke bleiben mehrdeutig: nichts gesendet, nicht bestätigt", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      mitAltbestand(a, { befund: "mehrdeutig: Fehlend und Dubletten zugleich, nichts gesendet" });
+      const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), obsZu(sollZu("zz", 99))] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(0);
+      expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1 });
+      expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(false);
+    });
   });
 
   test("Leere Hook-Generationen blockieren das Nachliefern nicht: Lücke wird gesendet, leer gezählt (#1639)", async () => {

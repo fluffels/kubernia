@@ -22,7 +22,7 @@
  */
 import { DEFAULT_NAMESPACE, type ClusterState, type Deployment, type ServiceRes, type ServiceSpec, type Broken, type HelmRepo } from "./state";
 import { table } from "./util";
-import { flag, notSimulated, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
+import { flag, notSimulated, dispatchSub, targetOutcome, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -70,26 +70,26 @@ function chartNameOf(ref: string): string {
  *  struktureller Kompatibilität bleiben sie zur Tabelle zuweisbar. */
 type HelmHandler = (host: HelmHost, c: Call) => string;
 
-/** `helm repo add|update|list` – die konfigurierten Chart-Repositories verwalten. */
-function helmRepo(host: HelmHost, c: Call): string {
-  const action = c.args[0];
-  if (action === "add") {
-    const name = c.args[1], url = c.args[2];
-    if (!name || !url) return host._err("helm repo add: Name und URL fehlen.", "z.B. 'helm repo add bitnami https://charts.bitnami.com/bitnami'");
-    if (!host.helmRepos.some((r: HelmRepo) => r.name === name)) host.helmRepos.push({ name, url });
-    return '"' + name + '" has been added to your repositories';
-  }
-  if (action === "update") {
-    if (host.helmRepos.length === 0) return host._err("Error: no repositories found.", "Erst ein Repo hinzufügen: 'helm repo add ...'");
-    return "Hang tight while we grab the latest from your chart repositories...\n" +
-      host.helmRepos.map((r: HelmRepo) => '...Successfully got an update from the "' + r.name + '" chart repository').join("\n") +
-      "\nUpdate Complete. ⎈Happy Helming!⎈";
-  }
-  if (action === "list") {
-    if (host.helmRepos.length === 0) return "Error: no repositories to show";
-    return table(["NAME", "URL"], host.helmRepos.map((r: HelmRepo) => [r.name, r.url]));
-  }
-  return host._err("helm repo: unbekannte Aktion '" + (action || "") + "'");
+/** `helm repo add <name> <url>` – ein Chart-Repository eintragen. */
+function helmRepoAdd(host: HelmHost, c: Call): string {
+  const [name, url] = c.args;
+  if (!name || !url) return host._err("helm repo add: Name und URL fehlen.", "z.B. 'helm repo add bitnami https://charts.bitnami.com/bitnami'");
+  if (!host.helmRepos.some((r: HelmRepo) => r.name === name)) host.helmRepos.push({ name, url });
+  return '"' + name + '" has been added to your repositories';
+}
+
+/** `helm repo update` – die Kataloge der eingetragenen Repositories auffrischen. */
+function helmRepoUpdate(host: HelmHost): string {
+  if (host.helmRepos.length === 0) return host._err("Error: no repositories found.", "Erst ein Repo hinzufügen: 'helm repo add ...'");
+  return "Hang tight while we grab the latest from your chart repositories...\n" +
+    host.helmRepos.map((r: HelmRepo) => '...Successfully got an update from the "' + r.name + '" chart repository').join("\n") +
+    "\nUpdate Complete. ⎈Happy Helming!⎈";
+}
+
+/** `helm repo list` – die eingetragenen Repositories. */
+function helmRepoList(host: HelmHost): string {
+  if (host.helmRepos.length === 0) return "Error: no repositories to show";
+  return table(["NAME", "URL"], host.helmRepos.map((r: HelmRepo) => [r.name, r.url]));
 }
 
 /** `helm search` – im (fiktiven) bitnami-Katalog nach Charts suchen. */
@@ -342,16 +342,24 @@ function helmRollback(host: HelmHost, c: Call): string {
   return "Rollback was a success! Happy Helming!";
 }
 
-/** `helm uninstall`/`delete <release>` – Release samt Deployment/Service entfernen. */
+/** `helm uninstall`/`delete <release>…` – Release samt Deployment/Service entfernen. Mehrere Releases laufen in
+ *  Eingabereihenfolge; wie das echte helm (`uninstall.go`) bricht der erste Fehler ab – die Releases davor sind weg,
+ *  die danach bleiben installiert. */
 function helmUninstall(host: HelmHost, c: Call): string {
-  const release = c.args[0];
-  const idx = host.releases.findIndex(r => r.name === release);
-  if (idx === -1) return host._err("Error: uninstall: Release not loaded: " + (release || "?") + ": release: not found", "Welche Releases es gibt: 'helm list'");
-  const rel = host.releases[idx];
-  removeDeployment(host, rel.depName);
-  host.services = host.services.filter(s => s.name !== rel.depName);
-  host.releases.splice(idx, 1);
-  return 'release "' + release + '" uninstalled';
+  const releases = c.args.length ? c.args : [""];
+  const done: string[] = [];
+  for (const release of releases) {
+    const idx = host.releases.findIndex(r => r.name === release);
+    if (idx === -1) {
+      return targetOutcome(host, done, ["Error: uninstall: Release not loaded: " + (release || "?") + ": release: not found"], "Welche Releases es gibt: 'helm list'");
+    }
+    const rel = host.releases[idx];
+    removeDeployment(host, rel.depName);
+    host.services = host.services.filter(s => s.name !== rel.depName);
+    host.releases.splice(idx, 1);
+    done.push('release "' + release + '" uninstalled');
+  }
+  return done.join("\n");
 }
 
 /** `helm status <release>` – Kurzstatus einer Release-Revision. */
@@ -389,24 +397,32 @@ const VALUES = flag(true, "--values", "-f");
 
 /** Die Dispatch-Tabelle: Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`helmCommand`) bleibt ein Aufruf und wächst nicht mit dem Befehlssatz. */
-const LIST: SubEntry<HelmHandler> = { run: helmList, hints: { "-A": "Der Simulator kennt nur einen Namespace – 'helm list' zeigt alle Releases." } };
-const UNINSTALL: SubEntry<HelmHandler> = { run: helmUninstall };
-const DEPENDENCY: SubEntry<HelmHandler> = { run: helmDependency };
+const LIST: SubEntry<HelmHandler> = { run: helmList, maxArgs: 0, hints: { "-A": "Der Simulator kennt nur einen Namespace – 'helm list' zeigt alle Releases." } };
+const UNINSTALL: SubEntry<HelmHandler> = { run: helmUninstall, maxArgs: OFFENE_LISTE };
+const DEPENDENCY: SubEntry<HelmHandler> = { run: helmDependency, maxArgs: 2 };
+
+/** `helm repo`: eine Gruppe, simuliert sind `add`, `update`, `list`. */
+const HELM_REPO: Dispatch<SubEntry<HelmHandler>> = {
+  cmd: "helm repo",
+  table: { add: { run: helmRepoAdd, maxArgs: 2 }, update: { run: helmRepoUpdate, maxArgs: 0 }, list: { run: helmRepoList, maxArgs: 0 } },
+  real: ["index", "remove"],
+};
+
 const HELM: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm", table: {
-  repo: { run: helmRepo },
-  search: { run: helmSearch },
-  create: { run: helmCreate },
-  template: { run: helmTemplate },
-  lint: { run: helmLint },
-  package: { run: helmPackage },
-  install: { run: helmInstall, flags: [SET, VALUES] },
+  repo: { group: HELM_REPO },
+  search: { run: helmSearch, maxArgs: 2 },
+  create: { run: helmCreate, maxArgs: 1 },
+  template: { run: helmTemplate, maxArgs: 2 },
+  lint: { run: helmLint, maxArgs: 1 },
+  package: { run: helmPackage, maxArgs: 1 },
+  install: { run: helmInstall, maxArgs: 2, flags: [SET, VALUES] },
   list: LIST,
   ls: LIST,
-  upgrade: { run: helmUpgrade, flags: [SET, VALUES] },
-  rollback: { run: helmRollback },
+  upgrade: { run: helmUpgrade, maxArgs: 2, flags: [SET, VALUES] },
+  rollback: { run: helmRollback, maxArgs: 2 },
   uninstall: UNINSTALL,
   delete: UNINSTALL,
-  status: { run: helmStatus },
+  status: { run: helmStatus, maxArgs: 1 },
   dependency: DEPENDENCY,
   dep: DEPENDENCY,
 },
