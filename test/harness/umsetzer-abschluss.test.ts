@@ -412,6 +412,31 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
   });
 });
 
+describe("Selbstcheck vor jedem Commit (#1625)", () => {
+  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/kubernia-gruppe.md"), "utf8");
+  const LENS = readFileSync(resolve(ROOT, ".claude/agents/kubernia-lens.md"), "utf8");
+  const SKILL = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
+  /** Verlangt der Text den sichtbaren Block `Selbstcheck:` mit den Urteilen ok/gefixt/n.a. und der Lens-3-Quelle? */
+  const verlangtSelbstcheck = (s: string) => /Block `Selbstcheck:`/.test(s) && /`ok`, `gefixt` oder `n.a.`/.test(s) && /Lens 3/.test(s);
+
+  test("Umsetzer und Gruppen-Rolle verlangen den Block, der Umsetzer übernimmt ihn in den PR-Text", () => {
+    assert.ok(verlangtSelbstcheck(UMSETZER), "kubernia-umsetzer.md");
+    assert.ok(/Selbstcheck/.test(GRUPPE), "kubernia-gruppe.md");
+    assert.match(UMSETZER, /derselbe Block steht im PR-Text, kein neues Gate/);
+  });
+
+  test("darf NICHT passieren: die Lenses bekommen den Selbstcheck als Vorgabe (sie prüfen unvoreingenommen)", () => {
+    assert.doesNotMatch(LENS, /Selbstcheck/);
+    assert.doesNotMatch(SKILL, /Selbstcheck/);
+  });
+
+  test("Red-Green: ohne die Urteile oder ohne Block-Kopf greift das Prädikat nicht", () => {
+    assert.ok(!verlangtSelbstcheck(UMSETZER.replace("`ok`, `gefixt` oder `n.a.`", "ein Urteil")));
+    assert.ok(!verlangtSelbstcheck(UMSETZER.replace("Block `Selbstcheck:`", "Hinweis")));
+    assert.ok(!verlangtSelbstcheck(""));
+  });
+});
+
 describe("Leitplanken-Audit (#1067)", () => {
   type Kommentare = { author?: { login: string }; comments?: { author?: { login: string }; body: string }[] };
   type AuditDeps = { prStatus?: (nr: string) => Status; prDateien?: (nr: string) => string[]; prKommentare?: (nr: string) => Kommentare };
