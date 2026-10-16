@@ -99,7 +99,7 @@ const HOST_HTML = "dist/index.html";
  *     Spielcode 566_000 → 570_000 (Ist 566_729 B).
  *   • #1530 (kubectl create/set/auth prüfen Eingaben wie kubectl: Container-Modell, Paar-Reihenfolge, Registry-Auflösung,
  *     Literal-Schlüssel mit den echten Fehlertexten; neuer Domänen-Code, bewusst und legitim):
- *     Spielcode 570_000 → 573_000 (Ist 571_349 B), Offline-Build 2_570_000 → 2_575_000 (Ist 2_571_051 B).
+ *     Spielcode 590_000 → 591_000 (Ist 590_135 B); der Offline-Build bleibt bei 2_590_000.
  */
 export const BUNDLE_BUDGETS = [
   {

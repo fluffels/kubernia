@@ -159,8 +159,7 @@ const createRoleOf = (cluster: boolean): CreateHandler => (host, c) => {
   if (given.length === 0) return host._err("error: at least one resource must be specified", "Häng z.B. '--resource=pods' an.");
   const resources = resolveRoleResources(host, given);
   if (typeof resources === "string") return resources;
-  const kind = cluster ? "clusterrole" : "role";
-  if (host.roles.some(r => sameRbac(r, { name: n.name, cluster }))) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
+  if (host.roles.some(r => sameRbac(r, { name: n.name, cluster }))) return host._err('error: ' + typ + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
   host.roles.push({ name: n.name, cluster, rules: [{ verbs, resources }], created: host.clock });
   const warnings = verbs.filter(v => !RESOURCE_VERBS.includes(v)).map(v => "Warning: '" + v + "' is not a standard resource verb\n");
   return warnings.join("") + typ + ".rbac.authorization.k8s.io/" + n.name + " created";
@@ -186,8 +185,6 @@ const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
   const clusterRoleName = c.value("--clusterrole");
   // RoleBinding (`Validate` in create_rolebinding.go): genau eines von --role und --clusterrole, beide oder keines ist derselbe Fehler.
   if (!cluster && !!roleName === !!clusterRoleName) return host._err("error: exactly one of clusterrole or role must be specified", "Häng entweder '--role=<name>' oder '--clusterrole=<name>' an.");
-  // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
-  if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
   if (cluster && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", "Häng '--clusterrole=<name>' an.");
   const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
   const subjects = collectRbacSubjects(c);
