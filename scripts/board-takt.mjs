@@ -51,8 +51,8 @@ export const SPIEL_QUOTE = 3;
 export const HARNESS_TAKT_MERGES = SPIEL_QUOTE;
 
 /**
- * Beginn des Aktivitätsfensters: 60 s nach dem Abschluss des Vorgängers (dessen eigener Squash-Commit soll nicht
- * zählen), ohne Vorgänger 7 Tage vor `jetzt`.
+ * Beginn des Aktivitätsfensters: 60 s nach `letzterAbschluss` (beim Status-Ticket das Anlegen des jüngsten Tickets, beim
+ * Harness-Sammelticket der Abschluss des letzten; deren eigener Squash-Commit soll nicht zählen), ohne Wert 7 Tage vor `jetzt`.
  */
 export function mergeFensterAb(letzterAbschluss, jetzt) {
   const j = alsDatum(jetzt, "jetzt");
