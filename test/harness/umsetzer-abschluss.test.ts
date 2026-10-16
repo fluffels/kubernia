@@ -238,6 +238,8 @@ describe("R0: Format des Handbacks vor der Zustellung (#1342)", () => {
         "BEFUNDE: wenn du willst trage ich es ein",
         "BEFUNDE: X offen, wenn du möchtest, trage ich es ein",
         "BEFUNDE: soll ich das eintragen.",
+        "BEFUNDE: Soll ich das eintragen.",
+        "BEFUNDE: Wenn du willst, trage ich es ein.",
         "BEFUNDE:\n  - Zeile A → #1\n  - Zeile B, tragen wir das ein?",
       ])
         assert.match(blockade(vorher(mit(w)), d) ?? "", /BEFUNDE bietet an statt einzutragen/, w);

@@ -62,7 +62,9 @@ export function befundeBlock(text) {
   return [zeilen[start].replace(/^[ \t]*BEFUNDE:/i, ""), ...rest].join("\n").trim();
 }
 
-/** Angebot oder Frage statt eingetragener Befunde (#1723). */
+/** Angebot oder Frage statt eingetragener Befunde (#1723).
+ * Bewusste Grenzen: ein `?` zählt nur vor Leerraum oder Zeilenende (`a?.b` und URLs mit Query gehen durch); eine Frage mit `?` vor einem Satzzeichen („(rein?)“) geht durch.
+ */
 const BEFUNDE_ANGEBOT = /\?(\s|$)|soll ich|sag (mir )?Bescheid|wenn du (willst|möchtest)/i;
 
 /** PR-Nummer aus `PR:`-Wert (URL oder `#123`); sonst `null` (z.B. `-`). */

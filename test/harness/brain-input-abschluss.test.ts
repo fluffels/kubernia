@@ -86,6 +86,7 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
   test("Gegenbeispiel: Schritt 5 ohne Fortsetzungs-Satz, AGENTS.md ohne brain-input und ohne Evidenz-Klausel werden rot", () => {
     const skill = ".claude/skills/kubernia/SKILL.md";
     expect(abschlussLuecken(skill, rohLesen(skill).replace(/mach mit <nr> weiter/g, "weiter")).length).toBeGreaterThan(0);
+    expect(abschlussLuecken(skill, rohLesen(skill).replace("weiter“, „weiter“) oder Ad-hoc-Auftrag", "weiter“, „weiter“)\n\n- oder Ad-hoc-Auftrag")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/`brain-input`/g, "`x`")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/nur aus Evidenz/g, "gern")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/gemergter PR/g, "PR")).length).toBeGreaterThan(0);
@@ -117,13 +118,14 @@ describe("Workflow-Cleanup trägt Befunde ein und meldet BEFUNDE (#1723)", () =>
     expect(endstand.hinweiseOffen).toBe(1);
   });
 
-  test("Negativ: eine „Bekannte Grenze“ und ein blockierendes Finding landen nicht als Hinweis im Cleanup-Prompt", async () => {
+  test("Negativ: eine „Bekannte Grenze“ (auch klein geschrieben) landen nicht als Hinweis im Cleanup-Prompt", async () => {
     const bericht = {
       lens: "architektur",
       verdikt: "hinweise",
       findings: [
         { schwere: "hinweis", befund: "Bekannte Grenze: Umweg X", ort: "g.mjs:1", begruendung: "b" },
         { schwere: "hinweis", befund: "Altlast ohne Test", ort: "a.ts:3", begruendung: "Bekannte Grenze des Parsers" },
+        { schwere: "hinweis", befund: "Kleinschreibung", ort: "k.ts:1", begruendung: "ist eine bekannte grenze des Parsers" },
         { schwere: "hinweis", befund: "Echter Hinweis", ort: "b.ts:2", begruendung: "b" },
       ],
     };
@@ -132,6 +134,7 @@ describe("Workflow-Cleanup trägt Befunde ein und meldet BEFUNDE (#1723)", () =>
     expect(p).toContain("Echter Hinweis (b.ts:2)");
     expect(p).not.toContain("Umweg X");
     expect(p).not.toContain("Altlast ohne Test");
+    expect(p).not.toContain("Kleinschreibung");
     expect(endstand.hinweiseOffen).toBe(1);
   });
 
