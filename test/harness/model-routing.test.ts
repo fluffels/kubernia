@@ -936,6 +936,15 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim"]);
   });
 
+  test("Sammelticket: Claim ohne Nonce gibt den Assignee frei, Nonce ohne verifizierten Claim gibt den Lock frei (#1646)", async () => {
+    const a = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: true } });
+    assert.deepEqual(a.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(a.aufrufe[1].prompt, /--remove-assignee @me/);
+    const b = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-2", auswahl: { claimVerifiziert: false } });
+    assert.deepEqual(b.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(b.aufrufe[1].prompt, /freigeben 42 --nonce abc-2/);
+  });
+
   test("Der Einstiegs-Skill kennt den Sonderausgang `skill-pfad` (#1646)", () => {
     const skill = readFileSync(new URL("../../.claude/skills/kubernia-workflow/SKILL.md", import.meta.url), "utf8");
     assert.match(skill, /^- \*\*`skill-pfad`\*\*/m);
