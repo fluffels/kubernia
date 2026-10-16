@@ -16,6 +16,8 @@ const MANGEL = {
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 const NEGATIVFALL = /negativ-?f(?:a|ä)ll/i;
+/** Überschrift der Kriterien; „Teil-Akzeptanzkriterien“ ist die Überschrift gebündelter Befund-Issues. */
+const AK_NAME = "(?:Teil-)?Akzeptanzkriterien";
 
 /** Zeilen je Abschnitt (Überschrift Ebene 2 mit exakt `name`); Code-Fences zählen nicht, `###` gehört zum Abschnitt. `null` = Abschnitt fehlt. */
 function abschnitt(body, name) {
@@ -45,7 +47,7 @@ export function spezifikationsMaengel(body) {
   const ziel = abschnitt(body, "Ziel");
   if (ziel === null) maengel.push(MANGEL.zielFehlt);
   else if (ziel.every((z) => z.trim() === "")) maengel.push(MANGEL.zielLeer);
-  const ak = abschnitt(body, "(?:Teil-)?Akzeptanzkriterien"); // „Teil-Akzeptanzkriterien“ ist die Überschrift gebündelter Befund-Issues
+  const ak = abschnitt(body, AK_NAME);
   if (ak === null) {
     maengel.push(MANGEL.akFehlt);
   } else {
@@ -53,6 +55,42 @@ export function spezifikationsMaengel(body) {
     if (!ak.some((z) => NEGATIVFALL.test(z))) maengel.push(MANGEL.keinNegativ);
   }
   return maengel;
+}
+
+const einzug = (z) => z.match(/^[ \t]*/)[0].replace(/\t/g, "    ").length;
+const ohneMarker = (z) => z.trim().replace(/^(?:[-*+]|\d+[.)])\s+/, "").replace(/^\[[ xX]\]\s*/, "");
+
+/**
+ * Die Akzeptanzkriterien als `[{k:"K1", text}, …]` (Abschnitt wie im Spezifikations-Gate). Ein Kriterium ist ein Listenpunkt der obersten Ebene
+ * (kleinster Einzug); tiefer eingerückte Listenpunkte und Folgezeilen (direkt anschließend oder nach einer Leerzeile eingerückt) gehören zu ihm, eine
+ * nicht eingerückte Prosazeile nach einer Leerzeile und eine `###`-Überschrift beenden es. Die Nummer ist die Position im Abschnitt, nicht die
+ * Ziffer des Autors. Fehlender Abschnitt oder keine Liste: `[]`. Pur.
+ */
+export function kriterien(body) {
+  const zeilen = abschnitt(body, AK_NAME);
+  const punkte = (zeilen ?? []).filter((z) => LISTENPUNKT.test(z));
+  if (punkte.length === 0) return [];
+  const oben = Math.min(...punkte.map(einzug));
+  const ergebnis = [];
+  let aktuell = null;
+  let leer = false;
+  for (const zeile of zeilen) {
+    if (zeile.trim() === "") {
+      leer = true;
+      continue;
+    }
+    const listenzeile = LISTENPUNKT.test(zeile);
+    if (listenzeile && einzug(zeile) === oben) {
+      aktuell = [ohneMarker(zeile)];
+      ergebnis.push(aktuell);
+    } else if (aktuell && !/^\s*#{3,}\s/.test(zeile) && (listenzeile || !leer || einzug(zeile) > oben)) {
+      aktuell.push(listenzeile ? ohneMarker(zeile) : zeile.trim());
+    } else {
+      aktuell = null;
+    }
+    leer = false;
+  }
+  return ergebnis.map((teile, i) => ({ k: `K${i + 1}`, text: teile.join("\n") }));
 }
 
 /** Epic- und Phasen-Titel (eigenes Format, vom Gate ausgenommen): beginnt mit „Epic“ oder „Phase“, optional hinter 📦. Pur. */

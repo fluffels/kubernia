@@ -79,6 +79,8 @@ Ort ist der Ticket-Workflow. Ein eigener Agent schreibt allein aus dem Ticket Pr
 - Die Lenses bleiben; ob sie schlanker werden, klärt #1357.
 - Ehrliche Grenze: der Holdout ist nur so stark wie die Trennung im Workflow.
 
+Präzisiert durch #1713: die Holdout-Abnahme läuft im Skill-Pfad, Format und Auswertung stehen in #1753 (Fortschreibung #1713 unten).
+
 ### 3. Eingang = Spezifikation
 
 Mindestformat: `## Ziel` und `## Akzeptanzkriterien` mit mindestens einem Negativfall. Geprüft bei der Auswahl; darunter wird übersprungen und einmal kommentiert, was fehlt. Sammel- und Epic-Tickets haben eigene Formate. Einführung nach der Transfer-Grundregel: Bestand berichtend, Neues hart.
@@ -281,3 +283,25 @@ Teil 1 von F3 ist umgesetzt: das Schema, die Quelle der Commit-Zeilen und die W�
 - **Commit-Zeilen aus dem Präfix:** `commitZeilen(praefix, planer)` in `scripts/slice-override.mjs` leitet Plan-, Review- und die vier Override-Schlüssel ab. Die puren Parser (`parseNachweis`, `bewerteNachweis`, `nachweisAusCommits`, `bewertePrs`) bekommen die Zeilen als Pflichtparameter, die Gates und Messskripte laden sie über `ladeCommitZeilen()` aus der echten Config (`lauf-ergebnis` über `ladeProjektConfig`, weil es auch `labels.festgefahren` braucht). Der Planer-Name in der Plan-Zeile ist `agenten.planer`. `--config <pfad>` gibt es nur an `check-review-nachweis` (Tests und fremde Projekte); die `KQ_*`-Umgebungsvariablen der Gates behalten ihre Namen.
 - **Wächter-Begriffe:** Praefix (Commit-Zeilen-Präfix), Branch, Worktree, Label (nur Werte mit `:`) und Agent, alle groß/klein-genau und wörtlich (Alternativen nach Länge absteigend, damit ein Kurzname nicht im Langnamen mitzählt). Die Baseline erfasst den Bestand und sinkt nur.
 - **Grenzen:** Ein Label ohne `:` (etwa `forum`) zählt nicht, weil es als Wort überall vorkommt. Der Worktree-Begriff steckt im Branch-Präfix, beides zählt (gewollte Doppelzählung); der Agent-Begriff deckt sich bei einem Ticket-Skill, der wie das Repo heißt, mit dem Repo-Begriff. Ein Wechsel des Commit-Zeilen-Präfixes lässt alte Zeilen aus `lauf-ergebnis` und `token-baseline` herausfallen (die Gates prüfen nur den Slice des PRs); historische Nachweise bleiben gültig, solange das Präfix gleich bleibt. Die `KQ_*`-Namen der Umgebungsvariablen zählt kein Begriff.
+
+## Fortschreibung #1713 (2026-10-16): Holdout-Abnahme im Skill-Pfad (F13)
+
+ADR 0028 hat den Workflow entfernt, auf den §2 verweist; die Holdout-Abnahme läuft deshalb im Skill-Pfad. Das Epic #1713 ist in vier Tickets geteilt (Format und Auswertung #1753, Agenten im Ablauf #1754, Erzwingung in der PR-CI #1755, Kennzahl #1756). #1753 liefert das Fundament: die Nummerierung K1…KN, die Commit-Zeile `KQ-Abnahme:` und `scripts/abnahme.mjs`. Entscheidungen:
+
+- **Ort und Laufzustand:** der Hauptchat des Skills `kubernia`; die Szenarien leben nur in seinem Kontext, ohne Datei. Er ist die einzige Instanz, die beide Agenten spawnt und selbst weder Planer noch Umsetzer ist. Geht die Session verloren, schreibt ein frischer Szenario-Agent sie neu.
+- **Zeitpunkt des PRs:** Entwurfs-PR vor der Abnahme, `gh pr ready` und Auto-Merge erst nach `bestanden`: kein Race in der CI, „nicht prüfbar“ stoppt den Merge schon vor #1755.
+- **Spur per Skript:** `abnahme.mjs` schreibt den PR-Kommentar und entscheidet, nicht der Fließtext des Hauptchats; das Marker-Format hat genau eine Quelle (`scripts/slice-override.mjs`).
+- **Cap-Kopplung:** `durchgaenge ≤ runden` statt eines eigenen Zählers, weil jede Abnahme-Fix-Runde einen Lens-Pass nach sich zieht.
+- **head-Regel:** der Abnahme-head ist Nachfahre (oder gleich) des Review-head, danach nur leere Commits und konfliktfreie Merges.
+- **Ausweg:** `entfaellt` nur, wenn das Ticket keine Kriterien hat; Ausnahmen nur über eine Override-Zeile mit Ticket (#1755).
+- **Namen und Modell:** `holdout-szenario` und `holdout-abnahme`, beide `opus`, `effort: medium`; der Szenario-Agent liest nur Doku (`Read, Grep, Glob`).
+- **CI-Einbindung und Übergang:** ein Schritt im bestehenden Required-Job, kein neuer Required-Check; kein Stichtag-Schlüssel, sondern Override mit Ticket. Der Phasen-Schnitt `pr` liegt nach der bestandenen Abnahme (Wechselwirkung mit der Messung #1593).
+- **Ehrliche Grenze:** Transkripte unter `~/.claude/projects` und dasselbe GitHub-Konto für alle Agenten machen die Trennung zu einer Disziplin- und Wächterfrage, nicht zu einer kryptografischen. Der Bericht des Abnahme-Agenten bleibt Selbstauskunft; `abnahme.mjs` prüft Form, Vollständigkeit und den unveränderten Worktree, nicht die Wahrheit der Belege.
+
+Umsetzungsentscheidungen in #1753:
+
+- **Marker und Urteil-Format** liegen in `scripts/slice-override.mjs` (`formatAbnahme`, `formatAbnahmeMarker`, `parseAbnahmeMarker`, `URTEILSWERTE`), nicht im Einstiegsskript: #1755 braucht denselben Parser, Einstiegsskripte importieren einander nicht, und es gibt eine Quelle statt zwei. Der Marker-Name folgt aus dem Commit-Zeilen-Präfix (klein geschrieben), kein Projektliteral im Kern.
+- **Durchgang** = gültige Marker vertrauter Autoren auf dem PR plus eins (derselbe Parser wie #1755; Fremde und der Hand-off-Marker zählen nicht). Scheitert nach dem PR-Kommentar der Hand-off-Kommentar, zählt ein Neuversuch als weiterer Durchgang (fail-closed).
+- **Kriterium K<i>** ist die Position im Abschnitt, nicht die Ziffer des Autors; Unterpunkte und Folgezeilen gehören zum Oberpunkt.
+- **Ticket ohne Kriterien:** `kriterien` liefert die `entfaellt`-Zeile (Exit 0), `auswerten` endet mit Exit 2.
+- **Hand-off-Hinweis:** der Reparaturweg `spezifikation.mjs reparieren` greift nur bei unvollständiger Spezifikation (verweigert Tickets mit Assignee und umformulierte Zeilen); ein nicht prüfbares Kriterium präzisiert die Maintainerin, das Verfahren klärt #1754.
