@@ -21,24 +21,61 @@ const istText = (v) => typeof v === "string" && v.trim() !== "";
 const istPositiv = (v) => Number.isInteger(v) && v > 0;
 const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 
+export const BOARD_ROLLEN = ["produkt", "factory"];
+
+/** Pur: prüft ein Board-Objekt; `praefix` ist der Schlüsselpfad für die Fehlermeldungen (z. B. `boards.1.`). */
+function pruefeBoard(b, praefix) {
+  const fehler = [];
+  if (!BOARD_ROLLEN.includes(b.rolle)) fehler.push(`${praefix}rolle muss eine von ${BOARD_ROLLEN.join(", ")} sein`);
+  if (!istText(b.besitzer)) fehler.push(`${praefix}besitzer muss ein nicht-leerer String sein`);
+  if (b.besitzerTyp !== "user" && b.besitzerTyp !== "org") fehler.push(`${praefix}besitzerTyp muss "user" oder "org" sein`);
+  if (!istPositiv(b.nummer)) fehler.push(`${praefix}nummer muss eine positive Ganzzahl sein`);
+  if (!istPositiv(b.statusFeldId)) fehler.push(`${praefix}statusFeldId muss eine positive Ganzzahl sein`);
+  for (const k of ["projectId", "statusFeldNodeId", "todoOptionId"]) {
+    if (!istText(b[k])) fehler.push(`${praefix}${k} muss ein nicht-leerer String sein`);
+  }
+  return fehler;
+}
+
+/** Pur: prüft die Board-Liste (Einzelprüfung, genau eins je Rolle, eindeutige projectId und REST-Pfad). */
+function pruefeBoards(boards) {
+  if (!Array.isArray(boards) || boards.length === 0) return ["boards muss eine nicht-leere Liste von Board-Objekten sein"];
+  const fehler = [];
+  const projekte = new Set();
+  const pfade = new Set();
+  const rollen = new Map();
+  boards.forEach((b, i) => {
+    if (!istObjekt(b)) {
+      fehler.push(`boards.${i} muss ein Objekt sein`);
+      return;
+    }
+    fehler.push(...pruefeBoard(b, `boards.${i}.`));
+    if (BOARD_ROLLEN.includes(b.rolle)) rollen.set(b.rolle, (rollen.get(b.rolle) ?? 0) + 1);
+    if (istText(b.projectId)) {
+      if (projekte.has(b.projectId)) fehler.push(`boards.${i}.projectId kommt mehrfach vor`);
+      projekte.add(b.projectId);
+    }
+    if (istText(b.besitzer) && istPositiv(b.nummer)) {
+      const pfad = boardPfad(b);
+      if (pfade.has(pfad)) fehler.push(`boards.${i}: Board ${pfad} kommt mehrfach vor`);
+      pfade.add(pfad);
+    }
+  });
+  for (const rolle of BOARD_ROLLEN) {
+    const n = rollen.get(rolle) ?? 0;
+    if (n === 0) fehler.push(`Rolle ${rolle} fehlt in boards (genau ein Board je Rolle)`);
+    if (n > 1) fehler.push(`Rolle ${rolle} kommt mehrfach in boards vor (genau ein Board je Rolle)`);
+  }
+  return fehler;
+}
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
   const fehler = [];
-  if (wert.version !== 1) fehler.push("version muss 1 sein");
+  if (wert.version !== 2) fehler.push("version muss 2 sein (Schema mit boards-Liste)");
   if (!istText(wert.repo) || !/^[^/\s]+\/[^/\s]+$/.test(wert.repo)) fehler.push("repo muss die Form owner/name haben");
-  const b = wert.board;
-  if (!istObjekt(b)) {
-    fehler.push("board muss ein Objekt sein");
-  } else {
-    if (!istText(b.besitzer)) fehler.push("board.besitzer muss ein nicht-leerer String sein");
-    if (b.besitzerTyp !== "user" && b.besitzerTyp !== "org") fehler.push('board.besitzerTyp muss "user" oder "org" sein');
-    if (!istPositiv(b.nummer)) fehler.push("board.nummer muss eine positive Ganzzahl sein");
-    if (!istPositiv(b.statusFeldId)) fehler.push("board.statusFeldId muss eine positive Ganzzahl sein");
-    for (const k of ["projectId", "statusFeldNodeId", "todoOptionId"]) {
-      if (!istText(b[k])) fehler.push(`board.${k} muss ein nicht-leerer String sein`);
-    }
-  }
+  fehler.push(...pruefeBoards(wert.boards));
   if (wert.projektliterale !== undefined) {
     if (!istObjekt(wert.projektliterale)) {
       fehler.push("projektliterale muss ein Objekt (Name → String) sein");
@@ -66,7 +103,7 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG } = {}
   try {
     roh = readFileSync(abs, "utf8");
   } catch {
-    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, board.*)`);
+    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, boards[])`);
   }
   let wert;
   try {
@@ -108,7 +145,8 @@ export function cli(argv, { rootDir = ROOT, out = console.log, err = console.err
   }
   let wert = cfg;
   for (const teil of schluessel.split(".")) {
-    wert = istObjekt(wert) && Object.hasOwn(wert, teil) ? wert[teil] : undefined;
+    if (Array.isArray(wert)) wert = /^(0|[1-9]\d*)$/.test(teil) && Number(teil) < wert.length ? wert[Number(teil)] : undefined;
+    else wert = istObjekt(wert) && Object.hasOwn(wert, teil) ? wert[teil] : undefined;
   }
   if (wert === undefined || istObjekt(wert) || Array.isArray(wert)) {
     err(`✖ Schlüssel nicht gefunden oder kein Skalar: ${schluessel}\n\nFix: Schlüssel in ${PROJEKT_CONFIG} prüfen`);

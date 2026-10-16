@@ -153,6 +153,11 @@ const UMSETZUNG_SCHEMA = {
       items: { type: 'string' },
       description: 'höchstens 3 Punkte, nur projektübergreifendes Wissen (wie LERNKANDIDATEN des Skill-Pfads); leer, wenn keins',
     },
+    befunde: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'je vor dem Ergebnis eingetragenem Befund „<Befund> → #<nr>“ (AGENTS.md § Abschluss ohne offene Befunde); leer, wenn keiner',
+    },
     abbruchgrund: { type: 'string' },
     selbstcheck: { type: 'string', description: 'der Block Selbstcheck: mit je Prüffrage einer Zeile ok, gefixt oder n.a.; geht unverändert in den PR-Text, nie an die Lenses' },
   },
@@ -900,7 +905,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   § Tests gegen False Positives absichern (Red-Green), § Mehr-Perspektiven-Review. ${SELBSTCHECK_AUFTRAG} Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
-  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Ausnahmen: Regeltext), Spiel-/Inhalts-Befund → gebündeltes Issue.
+  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Ausnahmen: Regeltext), Spiel-/Inhalts-Befund → gebündeltes Issue; trage sie vor dem Ergebnis selbst ein (§ Abschluss ohne offene Befunde), je Befund in befunde.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
 - § Projekt-Brain pflegen (AGENTS.md § Doku aktuell halten), zum Schluss VOR dem abschließenden npm run verify:kompakt
   und dem Commit: ist Übertragbares entstanden, nach Wissensart einordnen. Eingerahmt von
@@ -1378,6 +1383,9 @@ Melde am Ende, welche Optionen du zur Entscheidung gestellt hast.`,
   // ── Phase 8: Cleanup ──────────────────────────────────────────────────────
   phase('Cleanup')
 
+  // Offene Hinweise aller Brillen (#1265); zutreffende werden eine Zeile (#1723).
+  const offeneHinweise = lensEndstand().flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis' && !/Bekannte Grenze/i.test(`${f.befund} ${f.begruendung || ''}`)).map((f) => `${f.befund} (${f.ort})`))
+
   const cleanup = await agent(
     `${kopf}
 
@@ -1401,12 +1409,12 @@ stillschweigend weitermachen:
   schließt es automatisch)
 
 ${
-  ausserhalbScope.length
-    ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
+  ausserhalbScope.length || offeneHinweise.length
+    ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes oder offene Hinweise gefunden (nur eintragen, wenn sie am Diff zutreffen und der gemergte PR sie nicht erledigt). Ordne jeden
 ein nach AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets (die Ausnahmen dort nachlesen, hier nicht kopiert): Harness → eine Zeile im ungeclaimten Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md), sonst ein Issue, gebündelt nach den Kriterien in
 AGENTS.md § Oberste Regel (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list --limit 500 auf Duplikate prüfen):
-${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
+${[...ausserhalbScope, ...offeneHinweise].map((p) => `- ${p}`).join('\n')}`
     : ''
 }
 
@@ -1416,7 +1424,7 @@ tut (dieser Pfad hat keinen Umsetzer-Subagenten mit Hook): node scripts/cleanup-
 Waisen mit --fix. Ordner unter 5 Minuten meldet das Skript nur (eine parallele Session legt gerade ihren Worktree an),
 die löschst du nie von Hand.${lockFreigabe}
 
-Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
+Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length || offeneHinweise.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}, zum Schluss die Zeile BEFUNDE: <je Befund „Zeile → #<nr>“ oder keine>.`,
     { label: `cleanup:#${nr}`, phase: 'Cleanup', ...CODING },
   )
 
@@ -1433,8 +1441,9 @@ Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sow
     browserVerifiziert: umsetzung.browserVerifiziert,
     review: lensEndstand().map((b) => ({ lens: b.lens, verdikt: b.verdikt })),
     // Über alle Brillen (#1265): Hinweise einer Brille, die in Runde 2 nicht erneut lief, sind weiter offen.
-    hinweiseOffen: lensEndstand().flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis')).length,
+    hinweiseOffen: offeneHinweise.length,
     ausserhalbScope,
+    befunde: umsetzung.befunde || [],
     cleanup,
   }
 }
