@@ -27,6 +27,7 @@ type Ausfall = {
   serverNameFuerOrdner: (ordner: string, server: Server[]) => string | null;
   istNpxFallback: (text: string) => boolean;
   klassifiziere: (zeilen: string[]) => Befund[];
+  netzCode: (text: string) => string;
   buendeln: (b: (Befund & { server: string; suffix?: string })[]) => Gruppe[];
   neuSeit: (b: Befund[], stand: string) => Befund[];
   meldung: (g: Gruppe[], v: string[], seit: string) => string;

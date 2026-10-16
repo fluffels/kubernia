@@ -24,7 +24,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Skripte | ≥ 120 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 80 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 28 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 29 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -187,10 +187,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Kern-Abdeckung (#1613):** jede getrackte Datei direkt in einem Kern-Verzeichnis (Ordner einer Ganz-Datei-Einheit, nicht rekursiv) ist Besitz oder steht in `test/harness/kern-abdeckung.json` (`art` `projekt`, `modul` oder `offen`, mit Grund; `offen` braucht ein Ticket). Rot: Datei nicht eingeordnet, Eintrag ohne Treffer, Eintrag trifft Besitz, unbekannte Art, leerer Grund.
 - **Import-Hülle (#1613):** jeder lokale Import (Importformen aus `hook-importe.ts` plus `.json`) einer Ganz-Datei-Code-Einheit zeigt auf eine Ganz-Datei-Einheit oder auf `.factory/projekt.json`. Ausnahmen in `KERN_HUELLE_AUSNAHMEN` nur für Importeure im Ring `kern-nach-entkopplung`, mit `#<nr>` oder `ADR 0022 F<n>` im Grund; die Liste darf nur schrumpfen.
 - **Konflikte:** Wer auf einem Feature-Branch `origin/main` einmergt und in Kern-Dateien Konflikte auflöst, schreibt die Auflösung ohne Projektliterale, weil der Wächter auf `main` sofort greift.
+- **Ring-Regel (#1663, ADR 0029):** `RING_IMPORTE` in `scripts/besitz-lib.mjs` ist die SSOT, welche Ringe welche importieren dürfen (`kern` nur `kern`, `kern-nach-entkopplung` beide Kern-Ringe, `oberflaeche` alle drei; kein Kern-Ring importiert `oberflaeche`); ein Importeur mit unbekanntem Ring importiert nichts. Die Literalzählung gilt auch für den Ring `oberflaeche`.
 - **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1, F7, F9); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
 
 ### Drift-Gate (`npm run check:factorydrift`, #1613)
-- **WAS:** `scripts/check-factory-drift.mjs` vergleicht den Besitz des Projekts mit `.factory/sync-stand.json`, den der Sync (`npm run factory:sync -- --quelle <pfad>`) schreibt: Hash des Manifests und je Einheit (CRLF-neutral). Rot bei geändertem Manifest, geänderter, gelöschter oder nicht mehr auflösbarer Einheit und bei Einheiten, die Manifest und Sync-Stand verschieden listen; jede Meldung nennt den Weg (upstream ändern und neu syncen, oder den Projektwert in `.factory/projekt.json` auslagern). Ohne Sync-Stand ist das Projekt selbst die Quelle, die Prüfung entfällt mit einer Zeile.
+- **WAS:** `scripts/check-factory-drift.mjs` vergleicht den Besitz des Projekts mit `.factory/sync-stand.json`, den der Sync (`npm run factory:sync -- --quelle <pfad>`) schreibt: Hash des Manifests und je Einheit (CRLF-neutral). Rot bei geändertem Manifest, geänderter, gelöschter oder nicht mehr auflösbarer Einheit und bei Einheiten, die Manifest und Sync-Stand verschieden listen; jede Meldung nennt den Weg (upstream ändern und neu syncen, oder den Projektwert in `.factory/projekt.json` auslagern). Einheiten im Ring `oberflaeche` überträgt der Sync nie, das Gate erwartet sie nicht (ADR 0029). Ohne Sync-Stand ist das Projekt selbst die Quelle, die Prüfung entfällt mit einer Zeile.
 - **WARUM:** der Sync überschreibt nur Besitz; das Gate schließt die Gegenrichtung, damit ein Projekt Besitz nicht still ändert (ADR 0022 F9). Der Referenzstand liegt im Projekt, weil die CI ohne Zugriff auf das Factory-Repo prüft.
 - **Absicherung:** `test/factory-sync.test.ts` (synthetisches Fremdrepo, der echte Besitz dieses Repos in ein Temp-Ziel, das Gate aus der Zielkopie); Grenzen im [ADR 0022, Fortschreibung #1613](adr/0022-dark-factory-kern-und-verteilung.md).
 

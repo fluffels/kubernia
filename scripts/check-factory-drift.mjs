@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { einheitHash, einheitId, pfadSicher, textHash } from "./besitz-lib.mjs";
+import { einheitHash, einheitId, pfadSicher, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
@@ -39,7 +39,7 @@ export function pruefeDrift(lies) {
   }
   const fehler = [];
   const ids = new Set();
-  for (const e of manifest.eintraege ?? []) {
+  for (const e of (manifest.eintraege ?? []).filter(wirdVerteilt)) {
     const id = einheitId(e);
     ids.add(id);
     if (!(id in stand.einheiten)) {
