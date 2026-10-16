@@ -35,9 +35,9 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Was geschah:** Jedes Gate kostet Zeit und Tokens; ob es etwas findet, wurde lange nicht erfasst.
 
-**Geändert:** Die Status-Checkliste meldet Lockern-Kandidaten (Punkt 8: Kosten ohne Fund über mehrere Läufe in Folge).
+**Geändert:** Die Status-Checkliste meldet Lockern-Kandidaten (Punkt 8: Kosten ohne Fund über mehrere Läufe in Folge). Wie gelockert wird, regelt [ADR 0027](adr/0027-regeln-lockern.md).
 
-**Offen (Stand 2026-10-09):** die Entscheidung, wie gelockert wird ([#1357](https://github.com/fluffels/kubernia/issues/1357)), und die Fundquote je Gate ([#1360](https://github.com/fluffels/kubernia/issues/1360)).
+**Offen (Stand 2026-10-16):** die Fundquote je Gate ([#1360](https://github.com/fluffels/kubernia/issues/1360)).
 
 **Beleg:** [Checkliste, Punkt 8](model-routing.md#langfuse-status-überprüfen-1293).
 

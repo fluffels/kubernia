@@ -124,7 +124,7 @@ Das Sammelticket „Langfuse-Befunde (gesammelt)" (`area:harness`) bündelt Befu
   ```
   Zwei ungeclaimte ohne gegenseitigen Blocker-Bezug (Wettlauf): das jüngere schließen, seine Zeilen ins ältere übertragen; ein Nachfolger mit `blockiert durch #<vorgänger>` ist keiner, neue Zeilen kommen ins jüngste ungeclaimte.
 - **Anlegen nur bei Bedarf** (kein leeres Ticket, das sonst gezogen würde): `node scripts/sammelticket-anlegen.mjs langfuse` (siehe [Sammelticket anlegen](#sammelticket-anlegen)). Ohne `--top` bleibt es bewusst am Board-Ende (die „nie einfach ans Ende"-Regel gilt für Tickets, die sofort drankommen sollen); der Abschluss des nächsten Status-Laufs holt es mit `--top` nach oben, dabei klemmt der Anker hinter das ungeclaimte Harness-Sammelticket. Wer es beim Abschluss selbst anlegt, nimmt gleich `langfuse --top`.
-- **Abarbeiten:** komplett, wie beim Harness-Sammelticket (alle Zeilen in einem PR, je Zeile ein Ergebnis, nichts still auslagern). Ein **Lockern** (Gate, Lens, Regel) setzt der PR nur mit Messung vorher und nachher um, nie um ein Rot zu verstecken ([AGENTS.md › Kein Grün-durch-Aufweichen](../AGENTS.md#git-pr-und-merge)).
+- **Abarbeiten:** komplett, wie beim Harness-Sammelticket (alle Zeilen in einem PR, je Zeile ein Ergebnis, nichts still auslagern). Ein **Lockern** (Gate, Lens, Regel) setzt der PR nur nach [ADR 0027](adr/0027-regeln-lockern.md) um (Evidenz, Messung vorher und nachher, Ledger, Audit-Kommentar).
 
 ## Wiedervorlage (#1628)
 
