@@ -37,7 +37,7 @@ Vom Loader geladen + validiert, von Vite gebündelt; **kein Runtime-`fetch`**, d
 
 **Granularität immer mitdenken:** wird eine Regionen-Datei zu groß, in sinnvolle Unterdateien splitten — eine Umstellung ist nur etwas wert, wenn sie dem Wachstum standhält.
 
-> Quest hinzufügen/umbenennen/entfernen inkl. Save-Migrations-Regeln: siehe [`src/content/AGENTS.md`](../../src/content/AGENTS.md) (#483). Quest-Fortschritt persistiert seit #353/#354 per **Quest-ID** (`currentQuestId`), nicht per Zahl-Index — Einfügen/Umsortieren braucht keine Migration.
+> Quest hinzufügen/umbenennen/entfernen inkl. Save-Migrations-Regeln: siehe [`src/content/AGENTS.md`](../../src/content/AGENTS.md) (#483). Quest-Fortschritt persistiert per **Quest-ID** (`currentQuestId`, #353/#354), nicht per Zahl-Index — Einfügen/Umsortieren braucht keine Migration. Wer die Einfügestelle schon passiert hat, wird nicht zurückgeschickt (die neue Quest bleibt für ihn ungespielt; neue Spieler erleben sie in Reihenfolge).
 
 ### Wording-Leitlinie: Metapher vs. Fachbegriff (#309)
 
