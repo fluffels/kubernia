@@ -78,9 +78,12 @@ export function installationErsetzt(vorher, nachher) {
   return vorher.ino !== nachher.ino || vorher.birthtimeMs !== nachher.birthtimeMs || vorher.mtimeMs !== nachher.mtimeMs;
 }
 
+/** Signale, mit denen der Host den Server gewollt beendet (Fenster zu, Terminal weg): kein Ausfall. */
+const SIGNALE_VON_AUSSEN = ["SIGINT", "SIGTERM", "SIGHUP"];
+
 /** Stderr-Zeile für ein unerwartetes Ende des Servers (#1634) oder null: gewollte Beendigung und sauberer Exit 0 bleiben still. Pur. */
 export function exitMeldung({ code, signal, vonAussen, laufzeitMs, modus, ersetzt }) {
-  if (vonAussen || (code === 0 && !ersetzt)) return null;
+  if (vonAussen || (signal && SIGNALE_VON_AUSSEN.includes(signal)) || (code === 0 && !ersetzt)) return null;
   const ende = signal ? `Signal ${signal}` : `Exit ${code}`;
   const zusatz = ersetzt ? "; lokale Installation während der Laufzeit ersetzt, etwa durch npm ci" : "";
   return `playwright-mcp: Server beendet (${ende}, nach ${Math.round(laufzeitMs / 1000)} s, Modus ${modus}${zusatz})`;

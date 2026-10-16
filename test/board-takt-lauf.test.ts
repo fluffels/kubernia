@@ -12,6 +12,8 @@ type Io = {
   positionLautAgentsMd: () => number;
   fuehreStatusAus: (e: { aktion: string; nr?: number }, ctx: unknown) => { ok: boolean; nr?: number; itemId?: string };
   fuehreHarnessAus: (h: { aktion: string; nr?: number }, items: Item[], token: string) => boolean;
+  itemsUeberIssues?: (nummern: number[], o: { token?: string }) => ({ number: number } | null)[];
+  addToBoardTodo?: (nodeId: string, o: { token?: string }) => string;
   log: (z: string) => void;
 };
 const T = raw as unknown as {
@@ -105,10 +107,49 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(r.fehler).toBe(false);
   });
 
+  describe("Zählfenster beginnt mit dem Anlegen des jüngsten Status-Tickets (#1628)", () => {
+    const fensterLauf = (offenCreatedAt: string | null, vorgaengerCreated: string | null = "2026-10-05T08:00:00Z", commitDaten: string[] = [], ausloeser = "push") => {
+      const log: string[] = [];
+      const io: Io = {
+        ghJson: (a) =>
+          a.join(" ").includes("state=closed")
+            ? [[{ number: 60, title: STATUS, created_at: vorgaengerCreated, closed_at: "2026-10-06T08:00:00Z" }]]
+            : [commitDaten.map((d, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: d } }, author: { login: "fluffels", type: "User" } }))],
+        loadItems: () => [],
+        loadOpenIssuePages: () => [offenCreatedAt ? [{ number: 70, title: STATUS, created_at: offenCreatedAt, assignees: [] }] : []],
+        positionLautAgentsMd: () => 4,
+        fuehreStatusAus: () => ({ ok: true }),
+        fuehreHarnessAus: () => true,
+        log: (z) => log.push(z),
+      };
+      T.fuehreTaktAus({ jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, io, ausloeser });
+      return log.join("\n");
+    };
+
+    test("ungültiges oder fehlendes created_at: das Fenster fällt auf den Abschluss zurück", () => {
+      expect(fensterLauf(null, "kaputt")).toContain("Fenster ab 2026-10-06T08:01:00.000Z");
+      expect(fensterLauf(null, null)).toContain("Fenster ab 2026-10-06T08:01:00.000Z");
+    });
+    test("auch die 5 Commits des Montags-Cron zählen ab dem Anlegen (Commits zwischen Anlegen und Abschluss zählen mit)", () => {
+      const commits = Array.from({ length: 5 }, () => "2026-10-05T12:00:00Z");
+      expect(fensterLauf(null, "2026-10-05T08:00:00Z", commits, "schedule")).toContain("): anlegen");
+      expect(fensterLauf(null, "2026-10-06T08:00:00Z", commits, "schedule")).toContain("): nichts");
+    });
+    test("Vorgänger angelegt Mo, geschlossen Di: das Fenster beginnt beim Anlegen, nicht beim Abschluss", () => {
+      expect(fensterLauf(null)).toContain("Fenster ab 2026-10-05T08:01:00.000Z");
+    });
+    test("ein offenes Status-Ticket mit jüngerem createdAt gewinnt", () => {
+      expect(fensterLauf("2026-10-12T08:00:00Z")).toContain("Fenster ab 2026-10-12T08:01:00.000Z");
+    });
+    test("ein offenes Ticket mit älterem createdAt verschiebt das Fenster nicht", () => {
+      expect(fensterLauf("2026-10-01T08:00:00Z")).toContain("Fenster ab 2026-10-05T08:01:00.000Z");
+    });
+  });
+
   test("schlagen die Aktionen fehl (Status ok=false, Harness false), ist der Lauf ein Fehler", () => {
     const mk = (statusOk: boolean, harnessOk: boolean): Io => ({
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
-      loadItems: () => [it(10), it(11), sammel],
+      loadItems: () => [it(10), it(11), sammel, it(50, { title: STATUS })],
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ({ ok: statusOk }),
@@ -155,6 +196,78 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       io: { ...basis, positionLautAgentsMd: () => { throw new Error("keine Position"); }, log: () => undefined },
     });
     expect(ohnePos.fehler).toBe(true);
+  });
+});
+
+describe("Board-Wächter im Takt-Lauf (#1628)", () => {
+  const it = (number: number): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open" });
+  const sammel: Item = { ...it(12), title: "Harness-Härtung (gesammelt)" };
+  const offen = (...nrn: number[]) => [nrn.map((n) => ({ number: n, title: `T${n}`, created_at: "2026-10-02T00:00:00Z", assignees: [] }))];
+  const issue = (n: number, extra: Record<string, unknown> = {}) => ({ number: n, state: "open", node_id: `N${n}`, title: `T${n}`, ...extra });
+
+  function lauf(opts: { offene: number[]; imBoard?: number[]; graphql?: (n: number[]) => ({ number: number } | null)[]; rest?: (n: number) => unknown; add?: () => string; dry?: boolean; token?: string }) {
+    const log: string[] = [];
+    const zaehler = { graphql: 0, add: [] as string[], harness: [] as Item[][] };
+    const io: Io = {
+      ghJson: (a) => {
+        const m = /issues[/]([0-9]+)$/.exec(a.join(" "));
+        if (m) return (opts.rest ?? issue)(Number(m[1]));
+        return a.join(" ").includes("state=closed") ? [[]] : [[]];
+      },
+      loadItems: () => [...(opts.imBoard ?? []).map(it), sammel],
+      loadOpenIssuePages: () => offen(...opts.offene),
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: () => ({ ok: true }),
+      fuehreHarnessAus: (_h, items) => (zaehler.harness.push(items), true),
+      itemsUeberIssues: (n) => ((zaehler.graphql += 1), (opts.graphql ?? (() => n.map(() => null)))(n)),
+      addToBoardTodo: (id) => (zaehler.add.push(id), (opts.add ?? (() => `PVTI_${id}`))()),
+      log: (z) => log.push(z),
+    };
+    const r = T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: opts.dry, token: "token" in opts ? opts.token : "t", io });
+    return { r, log, zaehler };
+  }
+
+  test("ein offenes Issue ohne Board-Item wird als Todo aufgenommen, mit Warnung samt Nummer, Lauf bleibt grün", () => {
+    const { r, log, zaehler } = lauf({ offene: [10, 11], imBoard: [10] });
+    expect(zaehler.add).toEqual(["N11"]);
+    expect(log.join("\n")).toMatch(/::warning::Board-Wächter: #11 fehlte im Board, als Todo aufgenommen/);
+    expect(r.fehler).toBe(false);
+  });
+  test("Fehlalarm der REST-Liste: GraphQL kennt das Item, es wird nicht aufgenommen", () => {
+    const { r, zaehler } = lauf({ offene: [10, 11], imBoard: [10], graphql: () => [{ number: 11 }] });
+    expect(zaehler.add).toEqual([]);
+    expect(r.fehler).toBe(false);
+  });
+  test("keine Kandidaten: keine GraphQL-Abfrage", () => {
+    const { zaehler } = lauf({ offene: [10], imBoard: [10] });
+    expect(zaehler.graphql).toBe(0);
+    expect(zaehler.add).toEqual([]);
+  });
+  test("ohne Token (keine Board-Liste) läuft der Wächter nicht", () => {
+    const { zaehler } = lauf({ offene: [10, 11], imBoard: [], token: undefined });
+    expect(zaehler.graphql).toBe(0);
+    expect(zaehler.add).toEqual([]);
+  });
+  test("--dry-run nimmt nicht auf, meldet es aber", () => {
+    const { log, zaehler } = lauf({ offene: [11], imBoard: [], dry: true });
+    expect(zaehler.add).toEqual([]);
+    expect(log.join("\n")).toMatch(/#11 fehlt im Board, würde als Todo aufgenommen/);
+  });
+  test("scheitert die Aufnahme, ist der Lauf rot und die Meldung trägt Nummer und Ursache", () => {
+    const { r, log } = lauf({ offene: [11], imBoard: [], add: () => { throw new Error("Could not resolve to a node"); } });
+    expect(r.fehler).toBe(true);
+    expect(log.join("\n")).toMatch(/::error::Board-Wächter: #11 nicht aufgenommen: .*Could not resolve/);
+  });
+  test("scheitert die GraphQL-Gegenprobe, ist der Lauf rot und nichts wird aufgenommen", () => {
+    const { r, zaehler } = lauf({ offene: [11], imBoard: [], graphql: () => { throw new Error("rate limit"); } });
+    expect(r.fehler).toBe(true);
+    expect(zaehler.add).toEqual([]);
+  });
+  test("ein inzwischen geschlossenes Issue wird nicht aufgenommen (Warnung, kein Fehler)", () => {
+    const { r, log, zaehler } = lauf({ offene: [11], imBoard: [], rest: (n) => issue(n, { state: "closed" }) });
+    expect(zaehler.add).toEqual([]);
+    expect(log.join("\n")).toMatch(/#11 fehlt im Board, nicht aufgenommen: Issue ist geschlossen/);
+    expect(r.fehler).toBe(false);
   });
 });
 

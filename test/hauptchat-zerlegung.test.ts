@@ -344,7 +344,7 @@ describe("zerlegeHauptchat: Grenzfälle aus dem Review (R1)", () => {
   });
 });
 
-/** Subagent-Zeilen mit Kontext-Zuwachs: Call a hat 5 aufgezeichnete Output-Token, der Kontext wächst um 400 (kein Fremdtext), also steckt mehr Output darin. */
+/** Subagent-Zeilen mit Kontext-Zuwachs: Call a hat 5 aufgezeichnete Output-Token, der Kontext wächst um 40 000 (kein Fremdtext), also steckt mehr Output darin. */
 const zuwachsZeilen = (zuwachs: boolean, model = OPUS): Row[] => {
   const a = (id: string, ctx: number, min: number): Row => ({
     type: "assistant",

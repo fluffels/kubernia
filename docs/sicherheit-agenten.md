@@ -26,7 +26,7 @@ Das Repo ist öffentlich: jeder darf Issues eröffnen und kommentieren, es gibt 
 | Issues und Kommentare Dritter | `scripts/fremdtext.mjs` (Autor-Prüfung), Skill-Schritt 1, Planer, Umsetzer, Lens |
 | PR-Kommentare und Reviews Dritter (inkl. Review-Kommentare) | `scripts/fremdtext.mjs --pr`; Fork-PRs Dritter: kein `pull_request_target` in `.github/workflows`, Required-Checks gaten den Merge |
 | WebFetch/WebSearch | kein deterministisches Gate; Rahmung und Exfiltration per URL offen (#1447 a) |
-| npm-Pakete inkl. Lifecycle-Skripte | Dependabot-Policy, `npm audit`, `check:lockfile`; keine `.npmrc`, Lifecycle-Skripte laufen bei `npm ci` (#1447 b) |
+| npm-Pakete inkl. Lifecycle-Skripte | Dependabot-Policy, `npm audit` (täglich eingeordnet, [Audit-Einordnung](ticket-reihenfolge.md#audit-einordnung-1628)), `check:lockfile`; keine `.npmrc`, Lifecycle-Skripte laufen bei `npm ci` (#1447 b) |
 | Dependabot-PR-Texte | der Autor ist vertraut, die Release-Notes darin sind Text Dritter; der Ablauf liest nur Checks, erzwungen ist das nicht (#1447 c) |
 | MCP-Antworten | Whitelist je Agent (`tools`), `claude-in-chrome` gesperrt; Antworttext selbst ungefiltert (#1447 g). Auch Server-Anweisungen sind Fremdtext: PixelLab bewirbt Git-Zugriff über `list_projects`, das Tool steht in `deny` (#1476); der Toolname stammt aus der Server-Anweisung, die öffentliche Doku belegt ihn nicht |
 
@@ -38,7 +38,7 @@ Spalten: Risiko, vorhandenes Gate, Lücke, Folge, Bezug zu den Agentic Applicati
 |---|---|---|---|---|---|
 | LLM01 | Prompt Injection | Fremdtext-Gate (Skill, Planer, Kommentare), `forum-sanitize` mit Rahmung, `permissions` deny/ask, gh-guard, PR-Gate und Lenses | Web-Inhalte ungefiltert; Forum-Triage mit Schreibrechten; Zitat-Laundering (vertraute Instanz zitiert Fremdtext); Workflow-Variante nur weich gesichert; Board-Auswahl gibt Titel vor dem Gate aus | #1435, #1447 | ASI01 Agent Goal Hijack, ASI06 Memory and Context Poisoning, ASI07 Insecure Inter-Agent Communication |
 | LLM02 | Sensitive Information Disclosure | Secret-Scanning, Push-Protection, `check:internalrefs`, Anonymitätsregel, Key-Regel, `ask` für curl/wget | Secret-Dateien lesbar, keine Netz-Allowlist, Umfang von `PROJECT_TOKEN` | #1432, #1434, #1437, #985 | ASI03 Identity and Privilege Abuse |
-| LLM03 | Supply Chain | Dependabot und Policy, `npm audit` in `ci.yml`, `check:lockfile` | Lifecycle-Skripte, Actions per Tag statt SHA, kein CodeQL/Scorecard | #983, #875, #1447 | ASI04 Agentic Supply Chain Vulnerabilities |
+| LLM03 | Supply Chain | Dependabot und Policy, `npm audit` in `ci.yml` plus tägliche Audit-Einordnung (`audit-einordnung.yml`), `check:lockfile` | Lifecycle-Skripte, Actions per Tag statt SHA, kein CodeQL/Scorecard | #983, #875, #1447 | ASI04 Agentic Supply Chain Vulnerabilities |
 | LLM04 | Data and Model Poisoning | Entsprechung im Harness ist ein vergiftetes Projekt-Brain: geschützte Pfade, Audit-Kommentar (ADR 0014), Lenses | `docs/` ist nur durch Review geschützt | keine, bewusst | ASI06 Memory and Context Poisoning |
 | LLM05 | Improper Output Handling | `permissions`-Allowlist, Worktree-Guard, gh-guard, CI, `--body-file` | Shell ohne Isolation unter nativem Windows | #1432, #1437 | ASI05 Unexpected Code Execution, ASI02 Tool Misuse and Exploitation |
 | LLM06 | Excessive Agency | `tools`-Whitelists je Agent, `main` ohne Bypass, Pre-Flight, Festgefahren-Protokoll | Forum-Lauf mit Schreibrechten, keine Sandbox | #1435, #1432, #1437 | ASI02 Tool Misuse and Exploitation, ASI03 Identity and Privilege Abuse, ASI10 Rogue Agents |

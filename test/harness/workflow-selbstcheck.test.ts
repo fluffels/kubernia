@@ -45,6 +45,15 @@ describe("Selbstcheck im Workflow-Pfad (#1625)", () => {
     expect(prompt(aufrufe, "pr+merge")).toContain(SC1);
   });
 
+  test("fehlt die Kopfzeile `Selbstcheck:`, stellt der Workflow sie voran; ein vorhandener Kopf wird nicht verdoppelt", async () => {
+    const ohne = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { selbstcheck: "1. ok\n2. gefixt" } } });
+    expect(prompt(ohne.aufrufe, "pr+merge")).toContain("unverändert:\nSelbstcheck:\n1. ok\n2. gefixt");
+    const mit = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { selbstcheck: SC1 } } });
+    const p = prompt(mit.aufrufe, "pr+merge");
+    expect(p).toContain(`unverändert:\n${SC1}`);
+    expect(p).not.toContain("Selbstcheck:\nSelbstcheck:");
+  });
+
   test("kein Lens-Prompt enthält den Selbstcheck-Inhalt", async () => {
     const { aufrufe } = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { selbstcheck: SC1 } }, runden: [BLOCKER, {}], nachbessern: { selbstcheck: SC2 } });
     const lenses = aufrufe.filter((a) => a.label.startsWith("lens:"));

@@ -13,7 +13,8 @@ type Entscheidung = { aktion: "anlegen" | "nach-oben" | "nichts"; nr?: number; g
 type Takt = {
   STATUS_TITEL: string;
   MIN_MERGES: number;
-  entscheideTakt: (a: { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string; stundenSeitAbschluss?: number | null }) => Entscheidung;
+  entscheideTakt: (a: { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string; stundenSeitAbschluss?: number | null; jetzt?: string | Date }) => Entscheidung;
+  PUSH_RUHETAGE: number[];
   MIN_ABSTAND_STUNDEN: number;
   MIN_TICKET_MERGES_PUSH: number;
   wochenFenster: (jetzt: string | Date) => { letzte: { von: string; bis: string }; davor: { von: string; bis: string } };
@@ -155,21 +156,46 @@ describe("Bindungen und Sortierung (#1342)", () => {
 });
 
 describe("Push-Auslöser nach Aktivität (#1349 Z14)", () => {
-  const push = (ticketMerges: number, offene: Offen[] = []) => T.entscheideTakt({ offene, mergesSeit: 50, ticketMerges, ausloeser: "push" });
+  const DO = "2026-10-15T12:00:00Z"; // Donnerstag
+  const push = (ticketMerges: number, offene: Offen[] = [], jetzt: string | Date = DO) =>
+    T.entscheideTakt({ offene, mergesSeit: 99, ticketMerges, ausloeser: "push", jetzt });
 
-  test("Grenze 7/8: unter der Untergrenze nichts, ab 8 anlegen", () => {
-    expect(T.MIN_TICKET_MERGES_PUSH).toBe(8);
-    expect(push(7).aktion).toBe("nichts");
-    expect(push(8).aktion).toBe("anlegen");
+  test("Grenze 49/50 (#1628): unter der Untergrenze nichts, ab 50 anlegen", () => {
+    expect(T.MIN_TICKET_MERGES_PUSH).toBe(50);
+    expect(push(49).aktion).toBe("nichts");
+    expect(push(50).aktion).toBe("anlegen");
+    expect(push(51).aktion).toBe("anlegen");
   });
 
-  test("Push mit offenem ungeclaimtem Status-Ticket: unter 8 nichts (kein Hochschieben bei jedem Merge), ab 8 nach oben", () => {
-    expect(push(7, [offen(1304)]).aktion).toBe("nichts");
-    expect(push(8, [offen(1304)])).toMatchObject({ aktion: "nach-oben", nr: 1304 });
+  test("Push mit offenem ungeclaimtem Status-Ticket: unter 50 nichts (kein Hochschieben bei jedem Merge), ab 50 nach oben", () => {
+    expect(push(49, [offen(1304)]).aktion).toBe("nichts");
+    expect(push(50, [offen(1304)])).toMatchObject({ aktion: "nach-oben", nr: 1304 });
   });
 
   test("Push mit geclaimtem Status-Ticket: nichts", () => {
-    expect(push(20, [offen(1304, { assignees: ["fluffels"] })]).aktion).toBe("nichts");
+    expect(push(60, [offen(1304, { assignees: ["fluffels"] })]).aktion).toBe("nichts");
+  });
+
+  test("Push ruht Fr, Sa, So (UTC): auch mit 60 Merges nichts, Grund nennt die Ruhe; Grenzfälle Fr 00:00 und So 23:59", () => {
+    expect(T.PUSH_RUHETAGE).toEqual([5, 6, 0]);
+    for (const jetzt of ["2026-10-16T00:00:00Z", "2026-10-16T12:00:00Z", "2026-10-17T12:00:00Z", "2026-10-18T23:59:59Z"]) {
+      const e = push(60, [], jetzt);
+      expect(e.aktion).toBe("nichts");
+      expect(e.grund).toContain("ruht Fr–So, der Montag setzt zurück");
+    }
+    expect(push(60, [], "2026-10-15T23:59:59Z").aktion).toBe("anlegen"); // Do
+    expect(push(60, [], "2026-10-19T00:00:00Z").aktion).toBe("anlegen"); // Mo
+    expect(push(60, [offen(1304)], "2026-10-16T12:00:00Z").aktion).toBe("nichts"); // auch kein Hochschieben
+    expect(push(60, [], new Date("2026-10-16T12:00:00Z")).aktion).toBe("nichts");
+  });
+
+  test("Cron am Montag legt an; der Wochentag sperrt den Cron nicht", () => {
+    expect(T.entscheideTakt({ offene: [], mergesSeit: T.MIN_MERGES, ausloeser: "schedule", jetzt: "2026-10-19T05:00:00Z" }).aktion).toBe("anlegen");
+    expect(T.entscheideTakt({ offene: [], mergesSeit: T.MIN_MERGES, ausloeser: "schedule", jetzt: "2026-10-16T05:00:00Z" }).aktion).toBe("anlegen");
+  });
+
+  test("ungültiges jetzt wirft", () => {
+    expect(() => push(60, [], "kein-datum")).toThrow();
   });
 
   test("Cron bleibt bei MIN_MERGES und ignoriert ticketMerges", () => {
@@ -204,7 +230,7 @@ describe("Zuständigkeit (#1390): langfuse-takt.mjs ist die Status-Logik, der Ta
 
 describe("Mindestabstand und Wochenbudget (#1382)", () => {
   const an = (stundenSeitAbschluss: number | null, ausloeser = "schedule", offene: Offen[] = []) =>
-    T.entscheideTakt({ offene, mergesSeit: 50, ticketMerges: 20, ausloeser, stundenSeitAbschluss });
+    T.entscheideTakt({ offene, mergesSeit: 50, ticketMerges: 60, ausloeser, stundenSeitAbschluss, jetzt: "2026-10-15T12:00:00Z" });
 
   test("Grenze 23,9 h / 24 h beim Anlegen, bei beiden Auslösern", () => {
     expect(T.MIN_ABSTAND_STUNDEN).toBe(24);

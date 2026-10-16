@@ -352,7 +352,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
       kopfEnde: (items: B[]) => number;
       imKopf: (items: B[], nr: number) => boolean;
     };
-    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum"]);
+    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum", "wiedervorlage"]);
     expect(M.KOPF_MARKER).toEqual(M.NOTFAELLE.map((n) => n.marker));
     for (const n of M.NOTFAELLE) {
       const text = readFileSync(new URL(`../${n.quelle}`, import.meta.url), "utf8");

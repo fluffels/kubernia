@@ -29,7 +29,7 @@ type Ausfall = {
   neuSeit: (b: Befund[], stand: string) => Befund[];
   meldung: (g: Gruppe[], v: string[], seit: string) => string;
   parseSeit: (arg: string | undefined, jetzt: number) => string;
-  main: (argv: string[], env: Record<string, string | undefined>, out: (t: string) => void, o?: { plattform?: string; home?: string; jetzt?: number }) => number;
+  main: (argv: string[], env: Record<string, string | undefined>, out: (t: string) => void, o?: { plattform?: string; home?: string; jetzt?: number; err?: (t: string) => void }) => number;
 };
 const a = raw as unknown as Ausfall;
 const WURZEL = join(import.meta.dirname, "..", "..");
@@ -182,6 +182,23 @@ describe("main mit Temp-Logs", () => {
     expect(eins.aus.join("\n")).toContain("pw: reconnect ×1");
     expect((JSON.parse(readFileSync(join(d, "stand", "stand.json"), "utf8")) as { bis: string }).bis).toBe("2026-10-15T10:00:00.000Z");
     expect(lauf(["--sessionstart"], env, { jetzt: jetztNah + 60_000 }).aus).toEqual([]);
+  });
+  test("unbekanntes Argument und --seit ohne Wert: Aufruf-Zeile auf stderr, Exit 2, kein Stand", () => {
+    const { env, d } = aufbau();
+    for (const argv of [["--since", "6h"], ["--seit"], ["--seit", "--json"]]) {
+      const fehler: string[] = [];
+      const aus: string[] = [];
+      expect(a.main(argv, env, (t) => aus.push(t), { jetzt, err: (t: string) => fehler.push(t) })).toBe(2);
+      expect(fehler.join("\n")).toContain("Aufruf: node scripts/mcp-ausfall.mjs");
+      expect(aus).toEqual([]);
+    }
+    expect(() => readFileSync(join(d, "stand", "stand.json"))).toThrow();
+  });
+  test("--seit 6h --json ist erlaubt (Exit 0, keine Fehlerzeile)", () => {
+    const { env } = aufbau();
+    const fehler: string[] = [];
+    expect(lauf(["--seit", "6h", "--json"], env, { err: (t: string) => fehler.push(t) }).code).toBe(0);
+    expect(fehler).toEqual([]);
   });
   test("ohne Modus: --json liefert parsebare Rohzeilen und schreibt keinen Stand", () => {
     const { env, d } = aufbau();

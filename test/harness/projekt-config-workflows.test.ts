@@ -1,6 +1,7 @@
-/* Wächter der Projekt-Config in den Workflows (#1611): ci.yml und dependabot-inbox.yml checken nur die Config und den Lader
- * per Sparse-Checkout aus. Fehlt eine Datei der Import-Hülle von `scripts/projekt-config.mjs` in der Liste, scheitert der Lader
- * im Job mit ERR_MODULE_NOT_FOUND, `set_board_top` meldet nur `::error::` und die Board-Position bleibt still ungesetzt.
+/* Wächter der Projekt-Config in den Workflows (#1611): ein Workflow, der `scripts/projekt-config.mjs` direkt aufruft und nur sparse
+ * auscheckt, muss Config und die ganze Import-Hülle des Laders in die Sparse-Liste nehmen, sonst scheitert der Lader im Job mit
+ * ERR_MODULE_NOT_FOUND. Seit #1628 rufen ci, dependabot-inbox und forum-inbox `scripts/board-place.mjs` (große Import-Hülle) und
+ * checken darum das volle Repo aus: auch das bewacht dieser Test (kein Sparse-Checkout bei `board-place.mjs`).
  *
  * Bewusste Grenzen: `importHuelle` erkennt nur `from "<pfad>"` in doppelten Anführungszeichen (kein `import "./x.mjs"`, kein
  * dynamisches `import()`, keine einfachen Anführungszeichen); `sparseListe` liest nur den ersten Sparse-Block je Workflow.
@@ -83,8 +84,15 @@ describe("Sparse-Checkout der Projekt-Config in den Workflows", () => {
       const t = lies(`.github/workflows/${n}.yml`);
       return t.includes("projekt-config.mjs") && t.includes("sparse-checkout:");
     });
-  test("die Ableitung findet ci und dependabot-inbox", () => {
-    assert.ok(workflows.includes("ci") && workflows.includes("dependabot-inbox"), workflows.join(", "));
+  test("Workflows mit board-place.mjs checken das volle Repo aus und richten Node ein (#1628)", () => {
+    const nutzer = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml") && lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));
+    assert.deepEqual(nutzer.sort(), ["ci.yml", "dependabot-inbox.yml", "forum-inbox.yml"]);
+    for (const n of nutzer) {
+      const yml = lies(`.github/workflows/${n}`);
+      assert.ok(!yml.includes("sparse-checkout:"), `${n}: board-place.mjs braucht seine ganze Import-Hülle, kein Sparse-Checkout`);
+      assert.match(yml, /actions[/]checkout@v7/, `${n}: Checkout fehlt`);
+      assert.match(yml, /actions[/]setup-node@v7/, `${n}: setup-node fehlt`);
+    }
   });
   for (const wf of workflows) {
     const yml = lies(`.github/workflows/${wf}.yml`);

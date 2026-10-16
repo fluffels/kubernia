@@ -23,11 +23,15 @@ import {
   SAMMELTICKET_TITEL,
   STATUS_TITEL,
   TAG_MS,
+  addToBoardTodo,
   alsDatum,
+  aufnahmePlan,
   ghJson,
+  itemsUeberIssues,
   kopfEnde,
   loadItems,
   loadOpenIssuePages,
+  missingFromBoard,
   normalizeOffene,
   positionLautAgentsMd,
   sammelticketItem,
@@ -35,6 +39,7 @@ import {
   setPosition,
   todoItem,
   verschiebe,
+  wirklichFehlend,
 } from "./board-lib.mjs";
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 
@@ -46,8 +51,8 @@ export const SPIEL_QUOTE = 3;
 export const HARNESS_TAKT_MERGES = SPIEL_QUOTE;
 
 /**
- * Beginn des Aktivitätsfensters: 60 s nach dem Abschluss des Vorgängers (dessen eigener Squash-Commit soll nicht
- * zählen), ohne Vorgänger 7 Tage vor `jetzt`.
+ * Beginn des Aktivitätsfensters: 60 s nach `letzterAbschluss` (beim Status-Ticket das Anlegen des jüngsten Tickets, beim
+ * Harness-Sammelticket der Abschluss des letzten; deren eigener Squash-Commit soll nicht zählen), ohne Wert 7 Tage vor `jetzt`.
  */
 export function mergeFensterAb(letzterAbschluss, jetzt) {
   const j = alsDatum(jetzt, "jetzt");
@@ -203,9 +208,50 @@ export function fuehreHarnessAus(h, items, token, { setze = setPosition, log = c
   }
 }
 
+/**
+ * Board-Wächter (#1628): offene Issues ohne Board-Item (ein still gescheitertes Einsortieren, z.B. #1608 stand einen Tag nicht im Board)
+ * nimmt der Takt als Todo am Board-Ende auf. Die REST-Liste liefert frische Items verzögert: jeder Kandidat wird per GraphQL
+ * gegengeprüft (`wirklichFehlend`); ohne Kandidaten entfällt die Abfrage. Jede Aufnahme steht als `::warning::` mit Nummer im Log, jeder
+ * Fehler setzt `fehler` (Lauf rot). `dry`: nur Meldung. Liefert `{ items, fehler }` (`items` um die aufgenommenen Todos ergänzt).
+ */
+export function nimmFehlendeAuf({ offene, items, token, dry = false, repo = REPO }, io) {
+  const kandidaten = missingFromBoard(offene.map((i) => i.number), items);
+  if (kandidaten.length === 0) return { items, fehler: false };
+  let fehlend;
+  try {
+    fehlend = wirklichFehlend(kandidaten, io.itemsUeberIssues(kandidaten, { token }));
+  } catch (err) {
+    io.log(fehlerMeldung(err, { praefix: "Board-Wächter: GraphQL-Gegenprobe fehlgeschlagen: " }));
+    return { items, fehler: true };
+  }
+  let neu = items;
+  let fehler = false;
+  for (const nr of fehlend) {
+    try {
+      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) });
+      for (const a of abgelehnt) io.log(`::warning::Board-Wächter: #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
+      for (const a of aufnehmen) {
+        if (dry) {
+          io.log(`Board-Wächter: #${a.number} fehlt im Board, würde als Todo aufgenommen (--dry-run).`);
+          continue;
+        }
+        const id = io.addToBoardTodo(a.nodeId, { token });
+        io.log(`::warning::Board-Wächter: #${a.number} fehlte im Board, als Todo aufgenommen.`);
+        neu = [...neu, todoItem({ id, number: a.number, title: a.title })];
+      }
+    } catch (err) {
+      fehler = true;
+      io.log(fehlerMeldung(err, { praefix: `Board-Wächter: #${nr} nicht aufgenommen: ` }));
+    }
+  }
+  return { items: neu, fehler };
+}
+
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
 const ECHTE_IO = {
   ghJson,
+  itemsUeberIssues,
+  addToBoardTodo,
   loadItems,
   loadOpenIssuePages,
   positionLautAgentsMd,
@@ -239,7 +285,13 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     return g ? { number: g.number, closedAt: g.closed_at, createdAt: g.created_at } : null;
   };
   const vorgaenger = letzter(STATUS_TITEL);
-  const abStatus = mergeFensterAb(vorgaenger?.closedAt ?? null, jetzt).toISOString();
+  // Zählfenster (#1628): beginnt mit dem Anlegen des jüngsten Status-Tickets (offen oder geschlossen); jedes Anlegen setzt den Zähler auf 0.
+  const angelegt = [vorgaenger?.createdAt, ...offene.filter((i) => i.titel === STATUS_TITEL).map((i) => i.createdAt)]
+    .filter(Boolean)
+    .map((d) => new Date(d).getTime())
+    .filter((t) => !Number.isNaN(t));
+  const fensterStart = angelegt.length > 0 ? new Date(Math.max(...angelegt)) : (vorgaenger?.closedAt ?? null);
+  const abStatus = mergeFensterAb(fensterStart, jetzt).toISOString();
   const abHarness = mergeFensterAb(letzter(SAMMELTICKET_TITEL)?.closedAt ?? null, jetzt).toISOString();
   const fruehestens = abStatus < abHarness ? abStatus : abHarness;
   const commits = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
@@ -248,7 +300,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   let items = token ? io.loadItems({ token }) : null;
 
   const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
-  const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss });
+  const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
   for (const w of e.warnungen) io.log(`::warning::${w}`);
   io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
   let fehler = false;
@@ -256,6 +308,13 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [] });
     fehler = !r.ok;
     if (items) items = ziehListeNach(items, r);
+  }
+
+  // Board-Wächter (#1628): offene Issues ohne Board-Item aufnehmen.
+  if (items) {
+    const w = nimmFehlendeAuf({ offene, items, token, dry, repo }, io);
+    items = w.items;
+    if (w.fehler) fehler = true;
   }
 
   // Harness-Sammelticket: Aktivität (eigenes Fenster) und Positionskorrektur, auf der nachgezogenen Liste.

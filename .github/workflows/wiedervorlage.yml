@@ -1,0 +1,40 @@
+name: Wiedervorlage
+
+# Täglicher Lauf der Wiedervorlage (#1628): je fälligem Eintrag aus .github/wiedervorlagen.json ohne Ticket
+# (Dedupe über den Marker im Body) wird ein Ticket "⏰ Wiedervorlage: …" angelegt und per
+# `board-place.mjs --notfall wiedervorlage --top` ganz oben einsortiert. Bleibt ein fälliger Eintrag ohne
+# Ticket, wird der Lauf rot (Wächter). Mechanik: docs/ticket-reihenfolge.md › Wiedervorlage.
+#
+# ⚠️ Das Board braucht wie dependabot-inbox.yml das Secret PROJECT_TOKEN (PAT mit project-Scope);
+# das Standard-GITHUB_TOKEN legt nur das Issue an.
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch: {}
+
+concurrency: wiedervorlage
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  wiedervorlage:
+    runs-on: ubuntu-latest
+    steps:
+      # Volles Repo und Node für scripts/wiedervorlage.mjs und board-place.mjs (große Import-Hülle); kein npm ci nötig.
+      - name: Repo auschecken
+        uses: actions/checkout@v7
+
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Fällige Wiedervorlagen anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: node scripts/wiedervorlage.mjs

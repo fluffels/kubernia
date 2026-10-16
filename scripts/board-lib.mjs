@@ -71,6 +71,23 @@ export const LANGFUSE_SAMMELTICKET_TITEL = "Langfuse-Befunde (gesammelt)";
 /** Alle Sammeltickets, die das Einsortieren kennt (die Klemmung rechnet mit allen, nicht nur mit dem Harness-Sammelticket). */
 export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL];
 
+/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `nach`: der Vorgänger (`--vorgaenger`); nur strikt jüngere Tickets zählen (der Vorgänger und ältere volle Generationen sind kein „schon vorhanden“). Pur. */
+export function kandidatenSammelticket(offene, titel, { nach = null } = {}) {
+  return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0 && (nach === null || i.number > nach)).sort((a, b) => b.number - a.number);
+}
+
+/**
+ * Das höchste Ticket der absteigend geprüften `kandidaten`, das der Direktabruf `einzeln(nr)` (REST-Form: `state`, `assignees`) als offen und
+ * ungeclaimt bestätigt; sonst null. Die Listen-Abfrage hinkt nach, nur der Einzelabruf ist maßgeblich. Ein werfender Abruf wirft weiter. Pur bis auf `einzeln`.
+ */
+export function waehleBestaetigtes(kandidaten, einzeln) {
+  for (const k of [...kandidaten].sort((a, b) => b.number - a.number)) {
+    const e = einzeln(k.number);
+    if (e && e.state === "open" && (e.assignees ?? []).length === 0) return k;
+  }
+  return null;
+}
+
 /** Titel des wiederkehrenden Status-Tickets (Langfuse-Takt, ADR 0016). */
 export const STATUS_TITEL = "Langfuse-Status überprüfen";
 
@@ -84,6 +101,8 @@ export const NOTFAELLE = [
   { art: "security", marker: "🔒 Security:", quelle: "docs/ticket-reihenfolge.md" },
   { art: "dependabot", marker: "🤖 Dependabot-PRs auflösen", quelle: ".github/workflows/dependabot-inbox.yml" },
   { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },
+  // Der Titel entsteht in scripts/wiedervorlage.mjs (der Workflow ruft nur das Skript), darum steht der Marker dort.
+  { art: "wiedervorlage", marker: "⏰ Wiedervorlage:", quelle: "scripts/wiedervorlage.mjs" },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */
@@ -405,6 +424,41 @@ export function aufnahmePlan(fehlend, issues, ankerNr = null) {
 export function missingFromBoard(openNumbers, items) {
   const known = new Set(items.map((i) => i.number));
   return [...new Set(openNumbers)].filter((n) => !known.has(n)).sort((a, b) => a - b);
+}
+
+/**
+ * Fehlalarm-Filter (#1628): die REST-Board-Liste liefert frische Items verzögert und meldet sie fälschlich als fehlend. `restFehlend` =
+ * Nummern ohne REST-Item, `graphqlGefunden` = Ergebnis von `itemsUeberIssues` (Item oder null je Nummer). Nur was auch GraphQL nicht kennt,
+ * fehlt wirklich. Aufsteigend. Pur.
+ */
+export function wirklichFehlend(restFehlend, graphqlGefunden) {
+  const gefunden = new Set((graphqlGefunden ?? []).filter(Boolean).map((i) => i.number));
+  return [...new Set(restFehlend)].filter((n) => !gefunden.has(n)).sort((a, b) => a - b);
+}
+
+/** Vorübergehend (Wettlauf): ein frisches Issue hat noch keinen GraphQL-Node oder steht noch nicht in der Board-Abfrage. Rate-Limit gewinnt immer. Pur. */
+export function istVoruebergehend(err) {
+  const text = String(err?.message ?? err ?? "");
+  if (isRateLimit(text)) return false;
+  return /Could not resolve to a node/i.test(text) || /nicht im Board gefunden/i.test(text);
+}
+
+/**
+ * Führt `fn` bis zu `versuche`-mal aus (#1628): nach einem vorübergehenden Fehler Pause `pausenMs[n]`, jeder andere Fehler und der
+ * letzte Fehlschlag werfen sofort. `schlafe` ist für Tests injizierbar.
+ */
+export async function mitWiederholung(
+  fn,
+  { versuche = 4, pausenMs = [5000, 10000, 20000], istVoruebergehend: voruebergehend = istVoruebergehend, schlafe = (ms) => new Promise((r) => setTimeout(r, ms)) } = {},
+) {
+  for (let n = 1; ; n++) {
+    try {
+      return await fn(n);
+    } catch (e) {
+      if (n >= versuche || !voruebergehend(e)) throw e;
+      await schlafe(pausenMs[Math.min(n - 1, pausenMs.length - 1)]);
+    }
+  }
 }
 
 /** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
