@@ -121,7 +121,7 @@ export interface CertSecret { name: string; type?: string }
 
 /** Braucht der Listener ein gültiges Zertifikat und hat es keins (Secret fehlt oder falscher Typ)? */
 export function hasInvalidCertificateRef(l: GatewayListener, secrets: readonly CertSecret[]): boolean {
-  if (!l.tlsSecret && !TLS_PROTOCOLS.includes(l.protocol)) return false;
+  if (!TLS_PROTOCOLS.includes(l.protocol)) return false;
   const secret = l.tlsSecret ? secrets.find(s => s.name === l.tlsSecret) : undefined;
   return !secret || (secret.type !== undefined && secret.type !== TLS_SECRET_TYPE);
 }

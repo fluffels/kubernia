@@ -135,6 +135,25 @@ describe("Mapper Gateway", () => {
     const f = fail(GW("  gatewayClassName: envoy\n  listeners:\n    - name: a\n      port: " + port + "\n      protocol: HTTP\n"));
     expect(f.error).toBe("The Gateway \"tor\" is invalid: spec.listeners[0].port: Invalid value: " + port + ": spec.listeners[0].port in body should be " + grenze);
   });
+  const LST = (protocol: string, port: number, rest = ""): string =>
+    "  gatewayClassName: envoy\n  listeners:\n    - name: a\n      port: " + port + "\n      protocol: " + protocol + "\n" + rest;
+  test("Ports 1 und 65535 sind gültig", () => {
+    for (const port of [1, 65535]) expect(effect(GW(LST("HTTP", port))).gateway?.listeners[0].port).toBe(port);
+  });
+  test("tls ohne certificateRefs wird abgelehnt (leer, mode Terminate), Passthrough ist nicht simuliert", () => {
+    const CEL = "certificateRefs or options must be specified when mode is Terminate";
+    expect(fail(GW(LST("HTTPS", 443, "      tls: {}\n"))).error).toContain(CEL);
+    expect(fail(GW(LST("HTTPS", 443, "      tls:\n        mode: Terminate\n"))).error).toContain(CEL);
+    expect(fail(GW(LST("TLS", 443, "      tls:\n        mode: Passthrough\n"))).error).toContain("Passthrough wird vom Simulator nicht abgebildet");
+  });
+  test("tls an einem HTTP-Listener wird abgelehnt", () => {
+    const f = fail(GW(LST("HTTP", 80, "      tls:\n        certificateRefs:\n          - name: x\n")));
+    expect(f.error).toContain("tls must not be specified for protocols ['HTTP', 'TCP', 'UDP']");
+  });
+  test("tls-Zertifikatsverweis ohne name: Pflichtfeld", () => {
+    const f = fail(GW(LST("HTTPS", 443, "      tls:\n        certificateRefs:\n          - kind: Secret\n")));
+    expect(f.error).toContain("name: Pflichtfeld fehlt");
+  });
   test("HTTPS und TLS ohne tls-Block werden abgelehnt, HTTP braucht keinen", () => {
     for (const protocol of ["HTTPS", "TLS"]) {
       const f = fail(GW("  gatewayClassName: envoy\n  listeners:\n    - name: a\n      port: 443\n      protocol: " + protocol + "\n"));

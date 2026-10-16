@@ -48,7 +48,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ], grenzen: [
     { id: "ein-namespace", text: "Es gibt nur die Namespaces default und kube-system; -n und -A greifen nur dort." },
     { id: "keine-ausgabeformate", text: "Flags wie -l, -w, --show-labels, --sort-by und Formate wie -o json lehnt der Simulator ab." },
-    { id: "yaml-auswahl", text: "-o yaml: pods, deployments, replicasets, services, statefulsets, pvcs, gatewayclasses, gateways." },
+    { id: "yaml-auswahl", text: "yaml: pods, deployments, replicasets, services, statefulsets, pvcs, gatewayclasses, gateways; nie System-Pods." },
     { id: "yaml-gekuerzt", text: "-o yaml zeigt nur die modellierten Felder und einen Status-Auszug, ohne uid, Zeitstempel und managedFields." },
     { id: "rollout-historie", text: "rollout history zeigt nur die Liste (kein --revision); es bleiben fest 10 alte ReplicaSets." },
     { id: "undo-ohne-fehler", text: "rollout undo holt das alte Template zurück, ein seither behobener Fehler kehrt nicht zurück." },

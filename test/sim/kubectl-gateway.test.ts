@@ -49,6 +49,10 @@ describe("apply Gateway", () => {
     expect(apply("g.yaml", GW("    - name: http\n      port: 8080\n      protocol: HTTP\n", "andere")).output).toContain("configured");
     expect(sim.gateways[0].className).toBe("andere");
   });
+  test("unchanged auch bei anderer Schlüssel-Reihenfolge eines Szenario-Gateways", () => {
+    sim.gateways.push({ name: "tor", className: "envoy", listeners: [{ protocol: "HTTP", port: 80, name: "http" }] });
+    expect(apply("g.yaml", GW()).output).toBe("gateway.gateway.networking.k8s.io/tor unchanged");
+  });
   test("ein Gateway auf eine unbekannte Klasse wird angelegt", () => {
     expect(apply("g.yaml", GW(undefined, "gibt-es-nicht")).output).toContain("created");
     expect(sim.gateways).toHaveLength(1);
@@ -123,6 +127,7 @@ describe("describe", () => {
     apply("c.yaml", CLS("  description: Hafentor\n"));
     const d = out("describe gatewayclass envoy");
     expect(d).toMatch(/^Name:\s+envoy$/m);
+    expect(d).not.toMatch(/^Namespace:/m);
     expect(d).toMatch(/^Kind:\s+GatewayClass$/m);
     expect(d).toContain("  Controller Name:  " + SIM_GATEWAY_CONTROLLER);
     expect(d).toContain("  Description:      Hafentor");
