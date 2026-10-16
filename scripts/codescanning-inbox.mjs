@@ -103,7 +103,7 @@ export function issueBody(gruppen) {
     "",
     ...zeilen,
     "",
-    `Prüfauftrag: je Regel beheben oder mit Grund dismissen. Details: \`gh api repos/${REPO}/code-scanning/alerts/<nummer>\`. Dismiss: \`gh api -X PATCH repos/${REPO}/code-scanning/alerts/<nummer> -f state=dismissed -f dismissed_reason="won't fix" -f dismissed_comment="<Grund, Ticket>"\` (Gründe: \`won't fix\`, \`false positive\`, \`used in tests\`). Die Liste wird wöchentlich aktualisiert; bei null Funden schließt der Lauf dieses Ticket selbst. Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.`,
+    `Prüfauftrag: je Regel beheben, mit Grund dismissen oder per Wiedervorlage `codescanning-<slug>` zurückstellen. Details: \`gh api repos/${REPO}/code-scanning/alerts/<nummer>\`. Dismiss: \`gh api -X PATCH repos/${REPO}/code-scanning/alerts/<nummer> -f state=dismissed -f dismissed_reason="won't fix" -f dismissed_comment="<Grund, Ticket>"\` (Gründe: \`won't fix\`, \`false positive\`, \`used in tests\`). Die Liste wird wöchentlich aktualisiert; bei null Funden schließt der Lauf dieses Ticket selbst. Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.`,
   ].join("\n");
 }
 

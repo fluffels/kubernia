@@ -150,6 +150,15 @@ describe("plane", () => {
     expect(neu.issue.art).toBe("aktualisieren");
     expect(neu.issue.neue).toEqual([2]);
   });
+  test("Body mit CRLF (Handbearbeitung) aber gleichem Inhalt: nichts", () => {
+    const erst = C.plane({ alerts: [spitze(1)], bekannt: keine, offenesIssue: null });
+    const crlf = (erst.issue.body as string).replace(/\n/g, "\r\n");
+    expect(C.plane({ alerts: [spitze(1)], bekannt: keine, offenesIssue: { number: 9, body: crlf } }).issue.art).toBe("nichts");
+  });
+  test("Spitzen-Alert mit Nummer aus einer Sammelzeile (hochgestuft): trotzdem Spitze", () => {
+    const p = C.plane({ alerts: [spitze(5)], bekannt: { nummern: new Set([5]), regeln: new Set() }, offenesIssue: null });
+    expect(p.issue.art).toBe("anlegen");
+  });
   test("Regel per Wiedervorlage: weder Issue noch Zeile", () => {
     const b = { nummern: new Set<number>(), regeln: new Set([C.slug("js/path-injection"), C.slug("PinnedDependenciesID")]) };
     const p = C.plane({ alerts: [spitze(1), rest(2)], bekannt: b, offenesIssue: null });
@@ -243,6 +252,31 @@ describe("fuehreAus", () => {
     expect(fahre(plan({ zeilen: [GRUPPE] }), i)).toBe(1);
     expect(calls).not.toContain("postZeilen");
   });
+  test("legeIssueAn wirft: Exit 1, Zeilen werden trotzdem gepostet", () => {
+    const { calls, io: i } = io({
+      legeIssueAn: () => {
+        throw new Error("422");
+      },
+    });
+    expect(fahre(plan({ issue: { art: "anlegen", body: "b" }, zeilen: [GRUPPE] }), i)).toBe(1);
+    expect(calls).toContain("postZeilen");
+  });
+  test("postZeilen wirft: Exit 1", () => {
+    const { io: i } = io({
+      postZeilen: () => {
+        throw new Error("403");
+      },
+    });
+    expect(fahre(plan({ zeilen: [GRUPPE] }), i)).toBe(1);
+  });
+  test("zielSammelticket wirft: Exit 1", () => {
+    const { io: i } = io({
+      zielSammelticket: () => {
+        throw new Error("403");
+      },
+    });
+    expect(fahre(plan({ zeilen: [GRUPPE] }), i)).toBe(1);
+  });
   test("mehrere Zeilen: genau ein postZeilen", () => {
     const { calls, io: i } = io();
     expect(fahre(plan({ zeilen: [GRUPPE, { ...GRUPPE, regel: "Y" }] }), i)).toBe(0);
@@ -266,6 +300,32 @@ describe("lauf", () => {
     expect(C.lauf({ io: i, trocken: false })).toBe(1);
     expect(calls).toEqual([]);
     expect(logs.some((l) => l.startsWith("::error::"))).toBe(true);
+  });
+  test("Alerts nicht lesbar bei offenem Spitzen-Ticket: kein Schreib-Aufruf (fail-closed)", () => {
+    const calls: string[] = [];
+    const i = {
+      ladeAlerts: () => {
+        throw new Error("403");
+      },
+      ladeKontext: () => ({ ...kontext, offenesIssue: { number: 9, body: "x" } }),
+      schliesse: () => calls.push("schliesse"),
+      log: () => undefined,
+    };
+    expect(C.lauf({ io: i, trocken: false })).toBe(1);
+    expect(calls).toEqual([]);
+  });
+  test("Kontext nicht lesbar: Exit 1, kein Schreib-Aufruf", () => {
+    const calls: string[] = [];
+    const i = {
+      ladeAlerts: () => [],
+      ladeKontext: () => {
+        throw new Error("500");
+      },
+      schliesse: () => calls.push("schliesse"),
+      log: () => undefined,
+    };
+    expect(C.lauf({ io: i, trocken: false })).toBe(1);
+    expect(calls).toEqual([]);
   });
   test("lesbare Alerts ohne Funde und offenes Issue: schliesst", () => {
     const calls: string[] = [];
