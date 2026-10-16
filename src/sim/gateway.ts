@@ -19,6 +19,16 @@ export const GATEWAY_API_VERSION = GATEWAY_GROUP + "/v1";
 export const SIM_GATEWAY_CONTROLLER = "gateway.envoyproxy.io/gatewayclass-controller";
 /** Die Protokolle, die ein Zertifikat am Listener brauchen (CEL-Regel der echten API). */
 export const TLS_PROTOCOLS: readonly string[] = ["HTTPS", "TLS"];
+/** Die Protokolle, die keinen `tls`-Block tragen dürfen (CEL-Regel der echten API). */
+export const NO_TLS_PROTOCOLS: readonly string[] = ["HTTP", "TCP", "UDP"];
+/**
+ * Die eine TLS-Regel (Mapper und Szenario-Validierung teilen sie): HTTPS/TLS braucht ein Zertifikat (`"fehlt"`),
+ * HTTP/TCP/UDP darf keins tragen (`"verboten"`), ein eigenes Protokoll ist frei (`null`).
+ */
+export function tlsRuleViolation(protocol: string, hasTls: boolean): "fehlt" | "verboten" | null {
+  if (hasTls) return NO_TLS_PROTOCOLS.includes(protocol) ? "verboten" : null;
+  return TLS_PROTOCOLS.includes(protocol) ? "fehlt" : null;
+}
 /** Secret-Typ, den ein `certificateRef` verlangt. */
 export const TLS_SECRET_TYPE = "kubernetes.io/tls";
 
@@ -72,8 +82,9 @@ export interface GatewayCondition {
   message: string;
 }
 
-const accepted = (message: string): GatewayCondition => ({ type: "Accepted", status: "True", reason: "Accepted", message });
-const pendingAccepted = (message: string): GatewayCondition => ({ type: "Accepted", status: "Unknown", reason: "Pending", message });
+const cond = (type: string, status: ConditionStatus, reason: string, message: string): GatewayCondition => ({ type, status, reason, message });
+const accepted = (message: string): GatewayCondition => cond("Accepted", "True", "Accepted", message);
+const pendingAccepted = (message: string): GatewayCondition => cond("Accepted", "Unknown", "Pending", message);
 
 /** Ob der simulierte Controller die Klasse annimmt. */
 export function isClassAccepted(cls: GatewayClassRes): boolean {
@@ -84,37 +95,67 @@ export function gatewayClassConditions(cls: GatewayClassRes): GatewayCondition[]
   return [isClassAccepted(cls) ? accepted("Valid GatewayClass") : pendingAccepted("Waiting for controller")];
 }
 
-/** Die Adresse eines Gateways: stabil aus dem Namen, `203.0.113.20` bis `.99`. */
+/**
+ * Die Adresse eines Gateways: stabil aus dem Namen, `203.0.113.20` bis `.99`. Bei mehreren Gateways können zwei
+ * Namen dieselbe Adresse bekommen (80 Werte); der Simulator weist das nicht aus (Grenze `gateway-sofort`).
+ * Routet künftig `curl`/`nslookup` über Gateway-Adressen, ist die Kollision neu zu entscheiden.
+ */
 export function gatewayAddress(name: string): string {
   return "203.0.113." + (20 + (hashStr(name) % 80));
 }
+
+/** Der Status eines Listeners (nur bei akzeptierter Klasse). */
+export interface ListenerStatus { name: string; attachedRoutes: number; conditions: GatewayCondition[] }
 
 export interface GatewayStatus {
   conditions: GatewayCondition[];
   /** Die zugewiesene Adresse; `null`, solange keine akzeptierte Klasse das Gateway trägt. */
   address: string | null;
-  /** Ob die Klasse existiert und angenommen ist (der Rest hängt daran). */
-  classAccepted: boolean;
+  /** Listener-Status; `null`, solange keine akzeptierte Klasse das Gateway trägt. */
+  listeners: ListenerStatus[] | null;
 }
 
-export function gatewayStatus(gw: GatewayRes, classes: readonly GatewayClassRes[]): GatewayStatus {
+/** Was `gatewayStatus` aus dem Cluster braucht (`KubectlHost` erfüllt es strukturell). */
+export interface GatewayStatusEnv {
+  gatewayClasses: readonly GatewayClassRes[];
+  secrets: readonly CertSecret[];
+  httpRoutes: readonly HttpRouteRes[];
+}
+
+/** Ob die Klasse des Gateways existiert und der simulierte Controller sie angenommen hat. */
+export function gatewayClassAccepted(gw: GatewayRes, classes: readonly GatewayClassRes[]): boolean {
   const cls = classes.find(c => c.name === gw.className);
-  if (!cls || !isClassAccepted(cls)) {
+  return cls !== undefined && isClassAccepted(cls);
+}
+
+/** Gateway-`Accepted` bei angenommener Klasse (wie Envoy Gateway): ungültige Listener stehen in `ListenersNotValid`. */
+function acceptedByListeners(listeners: readonly ListenerStatus[]): GatewayCondition {
+  const bad = listeners.filter(l => l.conditions.some(c => c.status === "False")).map(l => l.name).sort();
+  if (bad.length === 0) return accepted("The Gateway has been scheduled by Envoy Gateway");
+  const all = bad.length === listeners.length;
+  return cond("Accepted", all ? "False" : "True", "ListenersNotValid", (all ? "No listeners are valid: " : "Listeners not valid: ") + bad.join(", "));
+}
+
+export function gatewayStatus(gw: GatewayRes, env: GatewayStatusEnv): GatewayStatus {
+  if (!gatewayClassAccepted(gw, env.gatewayClasses)) {
     return {
-      classAccepted: false,
+      listeners: null,
       address: null,
       conditions: [
         pendingAccepted("Waiting for controller"),
-        { type: "Programmed", status: "Unknown", reason: "Pending", message: "Waiting for controller" },
+        cond("Programmed", "Unknown", "Pending", "Waiting for controller"),
       ],
     };
   }
+  const listeners = gw.listeners.map(l => ({
+    name: l.name, attachedRoutes: attachedRoutes(gw, l, env.httpRoutes), conditions: listenerConditions(l, env.secrets),
+  }));
   return {
-    classAccepted: true,
+    listeners,
     address: gatewayAddress(gw.name),
     conditions: [
-      accepted("The Gateway has been scheduled by Envoy Gateway"),
-      { type: "Programmed", status: "True", reason: "Programmed", message: "Address assigned to the Gateway" },
+      acceptedByListeners(listeners),
+      cond("Programmed", "True", "Programmed", "Address assigned to the Gateway"),
     ],
   };
 }
@@ -132,13 +173,13 @@ export function hasInvalidCertificateRef(l: GatewayListener, secrets: readonly C
 export function listenerConditions(l: GatewayListener, secrets: readonly CertSecret[]): GatewayCondition[] {
   if (hasInvalidCertificateRef(l, secrets)) {
     return [
-      { type: "Programmed", status: "False", reason: "Invalid", message: "Listener is invalid, see other Conditions for details." },
-      { type: "ResolvedRefs", status: "False", reason: "InvalidCertificateRef", message: "Secret " + (l.tlsSecret ?? "<none>") + " does not exist or is not of type " + TLS_SECRET_TYPE + "." },
+      cond("Programmed", "False", "Invalid", "Listener is invalid, see other Conditions for details."),
+      cond("ResolvedRefs", "False", "InvalidCertificateRef", "Secret " + (l.tlsSecret ?? "<none>") + " does not exist or is not of type " + TLS_SECRET_TYPE + "."),
     ];
   }
   return [
-    { type: "Programmed", status: "True", reason: "Programmed", message: "Successfully programmed" },
-    { type: "ResolvedRefs", status: "True", reason: "ResolvedRefs", message: "Listeners' references are resolved" },
+    cond("Programmed", "True", "Programmed", "Successfully programmed"),
+    cond("ResolvedRefs", "True", "ResolvedRefs", "Listeners' references are resolved"),
   ];
 }
 
@@ -195,24 +236,23 @@ export interface HttpRouteStatus {
 function acceptedForGateway(gw: GatewayRes, route: HttpRouteRes): GatewayCondition {
   const matching = gw.listeners.filter(l => ROUTE_PROTOCOLS.includes(l.protocol));
   if (matching.length === 0) {
-    return { type: "Accepted", status: "False", reason: "NotAllowedByListeners", message: "No listener of Gateway " + gw.name + " accepts HTTP routes (HTTP or HTTPS)." };
+    return cond("Accepted", "False", "NotAllowedByListeners", "No listener of Gateway " + gw.name + " accepts HTTP routes (HTTP or HTTPS).");
   }
   if (!matching.some(l => hostnamesIntersect(l.hostname, route.hostnames))) {
-    return { type: "Accepted", status: "False", reason: "NoMatchingListenerHostname", message: "No listener hostname of Gateway " + gw.name + " matches the hostnames of the route." };
+    return cond("Accepted", "False", "NoMatchingListenerHostname", "No listener hostname of Gateway " + gw.name + " matches the hostnames of the route.");
   }
-  return { type: "Accepted", status: "True", reason: "Accepted", message: "Route is accepted" };
+  return cond("Accepted", "True", "Accepted", "Route is accepted");
 }
 
 function resolvedRefs(route: HttpRouteRes, services: readonly { name: string }[]): GatewayCondition {
   for (const [ri, rule] of route.rules.entries()) {
     for (const [bi, b] of rule.backends.entries()) {
       if (!services.some(s => s.name === b.service)) {
-        return { type: "ResolvedRefs", status: "False", reason: "BackendNotFound",
-          message: "Service " + b.service + " not found (rule " + (ri + 1) + ", backendRef " + (bi + 1) + ")" };
+        return cond("ResolvedRefs", "False", "BackendNotFound", "Service " + b.service + " not found (rule " + (ri + 1) + ", backendRef " + (bi + 1) + ")");
       }
     }
   }
-  return { type: "ResolvedRefs", status: "True", reason: "ResolvedRefs", message: "Resolved all the Object references for the Route" };
+  return cond("ResolvedRefs", "True", "ResolvedRefs", "Resolved all the Object references for the Route");
 }
 
 /** Der abgeleitete Status einer HTTPRoute je parentRef (nie gespeichert). */
@@ -224,7 +264,7 @@ export function httpRouteStatus(
   for (const ref of route.parentRefs) {
     const gw = gateways.find(g => g.name === ref);
     if (!gw) { unattached.push({ gateway: ref, reason: "NotFound" }); continue; }
-    if (!gatewayStatus(gw, classes).classAccepted) { unattached.push({ gateway: ref, reason: "NoController" }); continue; }
+    if (!gatewayClassAccepted(gw, classes)) { unattached.push({ gateway: ref, reason: "NoController" }); continue; }
     parents.push({ gateway: ref, controllerName: SIM_GATEWAY_CONTROLLER, conditions: [acceptedForGateway(gw, route), resolvedRefs(route, services)] });
   }
   return { parents, unattached };

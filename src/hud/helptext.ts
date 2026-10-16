@@ -49,12 +49,13 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ], grenzen: [
     { id: "ein-namespace", text: "Es gibt nur die Namespaces default und kube-system; -n und -A greifen nur dort." },
     { id: "keine-ausgabeformate", text: "Flags wie -l, -w, --show-labels, --sort-by und Formate wie -o json lehnt der Simulator ab." },
-    { id: "yaml-auswahl", text: "yaml: pods, deployments, replicasets, services, statefulsets, pvcs, gc, gtw, httproutes; nie System-Pods." },
+    { id: "yaml-auswahl", text: "-o yaml: pods, deploy, rs, svc, sts, pvc, gc, gtw, httproutes; sonst nur leer, nie System-Pods." },
     { id: "yaml-gekuerzt", text: "-o yaml zeigt nur die modellierten Felder und einen Status-Auszug, ohne uid, Zeitstempel und managedFields." },
     { id: "rollout-historie", text: "rollout history zeigt nur die Liste (kein --revision); es bleiben fest 10 alte ReplicaSets." },
     { id: "undo-ohne-fehler", text: "rollout undo holt das alte Template zurück, ein seither behobener Fehler kehrt nicht zurück." },
     { id: "apply-umfang", text: "apply -f liest Deployment, Service, GatewayClass, Gateway, HTTPRoute; andere Arten wie hinterlegt." },
-    { id: "gateway-sofort", text: "Gateway API: Status und Adresse stehen sofort fest; GatewayClass löschbar trotz Gateways." },
+    { id: "gateway-sofort", text: "Gateway API: Status sofort fest, Adresse aus dem Namen (ggf. doppelt); GatewayClass löschbar trotz Gateways." },
+    { id: "gateway-tls", text: "Gateway-TLS nur als Terminate mit certificateRefs; Passthrough und reine options lehnt der Simulator ab." },
     { id: "gateway-routen", text: "HTTPRoute: Refs nur im eigenen Namespace (kein ReferenceGrant), ohne sectionName; keine GRPC-/TLSRoute." },
     { id: "describe-gekuerzt", text: "describe kennt nur wenige Arten und zeigt gekürzte Abschnitte." },
     { id: "selektor-ueber-namen", text: "Selektoren gibt es nicht: ein Service wählt Pods über den Namen; describe zeigt das als app=<name>." },
@@ -76,7 +77,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ], grenzen: [
     { id: "kubeadm-eine-cp", text: "Es gibt eine Control-Plane und einen Token; Zertifikate, CA-Hash und Pod-Netz wertet der Simulator nicht aus." },
     { id: "kubeadm-ausgabe", text: "Die Ausgaben von init, join und reset sind gekürzt; Zeilen mit 💡 sind Lernhilfen des Spiels." },
-    { id: "kubeadm-reset", text: "reset fragt nicht nach und räumt den ganzen Cluster ab (Nodes, Workloads), nicht nur den lokalen Knoten." },
+    { id: "kubeadm-reset", text: "reset fragt nicht nach und räumt alle Nodes samt Control-Plane ab; Workloads bleiben gespeichert." },
   ] },
   { key: "helm", rows: [
     { use: "repo add <name> <url>", desc: "Chart-Repository hinzufügen" },

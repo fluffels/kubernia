@@ -16,6 +16,9 @@ import { parseServiceName, resolveService } from "./dns";
 import { serviceBackends, readyBackends, KUBERNETES_SERVICE, type EndpointsHost } from "./endpoints";
 import { parseCall, notSimulated, flag, checkedFlag, isFlagToken, type ArgSpec, type Call, type ErrHost } from "./cliargs";
 
+const HINT_INSECURE = "TLS simuliert der Simulator nicht: https:// prüft nur Port 443.";
+const HINT_LOCATION = "Im Simulator gibt es keine Weiterleitungen.";
+
 /** Was die net-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). `files` ist das
  *  Arbeitsverzeichnis: `curl -o <datei>` schreibt dorthin (`ls`/`cat`/`git status` sehen die Datei). */
 export interface NetHost extends EndpointsHost {
@@ -212,10 +215,10 @@ export const CURL_ARGS: ArgSpec = {
     checkedFlag(checkOutput, "-o", "--output"),
   ],
   hints: {
-    "-k": "TLS simuliert der Simulator nicht: https:// prüft nur Port 443.",
-    "--insecure": "TLS simuliert der Simulator nicht: https:// prüft nur Port 443.",
-    "-L": "Im Simulator gibt es keine Weiterleitungen.",
-    "--location": "Im Simulator gibt es keine Weiterleitungen.",
+    "-k": HINT_INSECURE,
+    "--insecure": HINT_INSECURE,
+    "-L": HINT_LOCATION,
+    "--location": HINT_LOCATION,
     "-w": "Die Statuszeile zeigt curl ohnehin.",
     "--write-out": "Die Statuszeile zeigt curl ohnehin.",
   },
