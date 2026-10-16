@@ -4,9 +4,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
 
-/** Escaped Zellinhalt für eine GFM-Tabelle (Backslash zuerst, dann `|` und Zeilenumbrüche). */
+/** Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Backslashes bleiben unverändert: in Code-Spans sind sie literal, eine Verdopplung zeigte sie doppelt (der CodeQL-Alert `js/incomplete-sanitization` dazu ist als „won't fix“ geschlossen). */
 export function cell(value) {
-  return String(value).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+  return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
 /** Rendert eine GFM-Tabelle (Kopfzeile + Zeilen; Zeilen sind Arrays aus Strings). */
