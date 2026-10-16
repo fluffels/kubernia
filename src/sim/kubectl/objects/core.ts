@@ -149,7 +149,7 @@ function podStatus(host: KubectlHost, c: ClusterPod, ip: string | null): YamlMap
   return compact({
     containerStatuses: shape.noContainer
       ? undefined
-      : [{ image: workload.image, lastState: shape.lastState ?? {}, name: workload.name, ready: shape.ready, restartCount: st.restarts, state: shape.state ?? {} }],
+      : [{ image: workload.image, lastState: shape.lastState ?? {}, name: c.owner === "Deployment" ? containerNameOf(c.dep) : workload.name, ready: shape.ready, restartCount: st.restarts, state: shape.state ?? {} }],
     message: evicted ? evicted.reason : undefined,
     phase: shape.phase,
     podIP: ip ?? undefined,

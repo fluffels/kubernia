@@ -1,6 +1,7 @@
 /* kubectl create, set und auth prüfen ihre Eingaben wie kubectl (#1530, Befunde aus #1487):
  *   Container-Modell, (a) Container-Name bei set image, (b) Paare hinter den Ressourcen, (c) Kurznamen bei role/can-i,
  *   (d) Literal-Schlüssel, (e) Secret/ConfigMap ohne Literal, (f) rolebinding mit role UND clusterrole. */
+import { readFileSync } from "node:fs";
 import { describe, test, expect } from "vitest";
 import { KQSim, freshSim } from "./helpers";
 import { containerNameFromImage } from "../../src/sim/util";
@@ -301,5 +302,92 @@ describe("Container-Name: apply auf ein bestehendes Deployment und Hash", () => 
     b.exec("kubectl apply -f d.yaml");
     const hash = (s: KQSim) => s.deployments[0].pods[0].name.split("-")[1];
     expect(hash(b)).toBe(hash(a));
+  });
+});
+
+describe("Runde 1 (#1530): Grenzfälle der Paar-Prädikate, Init-Container, Container-Name in describe/yaml/logs/rs", () => {
+  const web = () => mit("kubectl create deployment web --image=nginx:1.28");
+  const manifestOhneName = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  replicas: 1\n  template:\n    spec:\n      containers:\n        - image: nginx:1.28\n";
+  const manifestMitName = (name: string, image: string) => manifestOhneName.replace("- image:", "- name: " + name + "\n          image:").replace("nginx:1.28", image);
+
+  test("set image: '=' am Anfang ist kein Paar, hinter einem Paar also ein spätes Ressourcen-Token", () => {
+    const r = lauf("kubectl set image deployment/web web=nginx:2 =x", web());
+    expect(r.out).toContain("error: all resources must be specified before image changes: =x");
+  });
+  test("set image: ein einzelnes '-' ist kein Paar, set env: schon", () => {
+    expect(lauf("kubectl set image deployment/web web=nginx:2 -", web()).out).toContain("image changes: -");
+    expect(lauf("kubectl set env - deployment/web", web()).out).toContain("environment changes: - deployment/web");
+  });
+  test("set image vorbereiter=… auf ein Deployment OHNE initContainer: der Container existiert nicht", () => {
+    const sim = web();
+    const r = lauf("kubectl set image deployment/web vorbereiter=x", sim);
+    expect(r.out).toContain('unable to find container named "vorbereiter"');
+    expect(r.out).not.toContain("Nicht simuliert");
+  });
+  test("describe pod nennt den Container nach dem Image (Container-Block und Events)", () => {
+    const sim = web();
+    const pod = sim.deployments[0].pods[0].name;
+    const out = lauf("kubectl describe pod " + pod, sim).out;
+    expect(out).toContain("  nginx:\n");
+    expect(out).toContain("Started container nginx");
+    expect(out).not.toContain("container web");
+  });
+  test("get pod -o yaml: spec.containers und status.containerStatuses tragen denselben Namen", () => {
+    const sim = web();
+    const pod = sim.deployments[0].pods[0].name;
+    const out = lauf("kubectl get pod " + pod + " -o yaml", sim).out;
+    expect(out).toMatch(/containers:\n\s+- image: nginx:1\.28\n(.*\n)*?\s+name: nginx\n/);
+    expect(out).toMatch(/containerStatuses:\n(.*\n)*?\s+name: nginx\n/);
+    expect(out).not.toMatch(/name: web\n\s+(ready|resources|state)/);
+  });
+  test("logs-Fehlertext (imagepull) und --previous: der Container heißt wie in describe", () => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "ngnix", replicas: 1, containerName: "haupt", broken: { type: "imagepull", badImage: "ngnix" } }] });
+    const pod = sim.deployments[0].pods[0].name;
+    const r = lauf("kubectl logs " + pod, sim);
+    expect(r.out).toContain('container "haupt" in pod');
+    expect(r.out).not.toContain('container "kasse"');
+    expect(lauf("kubectl logs " + pod + " --previous", sim).out).toContain('"haupt"');
+  });
+  test("apply ohne containers[0].name lässt den Namen stehen: unchanged, Name bleibt", () => {
+    const sim = web();
+    sim.files["d.yaml"] = manifestOhneName;
+    expect(lauf("kubectl apply -f d.yaml", sim).out).toContain("deployment.apps/web unchanged");
+    expect(lauf("kubectl describe deployment web", sim).out).toContain("   nginx:\n");
+  });
+  test("altes ReplicaSet behält seinen Container-Namen, das aktuelle bekommt den des Manifests", () => {
+    const sim = web();
+    sim.exec("kubectl set image deployment/web nginx=nginx:2");
+    sim.files["d.yaml"] = manifestMitName("haupt", "nginx:2");
+    sim.exec("kubectl apply -f d.yaml");
+    const out = lauf("kubectl get rs -o wide", sim).out;
+    expect(out).toMatch(/nginx\s+nginx:1\.28/);
+    expect(out).toMatch(/haupt\s+nginx:2/);
+  });
+});
+
+describe("Quest- und Befehlskarten-Regex für set image (#1530, W8)", () => {
+  /** Die accept-Regex des set-image-Schritts: erste Zeichenkette in der JSON-Datei, die mit der Befehlsform beginnt und `marker` nennt. */
+  const acceptOf = (file: string, marker: string): RegExp => {
+    const found: string[] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === "string") { if (v.startsWith("^kubectl\\s+set\\s+image") && v.includes(marker)) found.push(v); }
+      else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") Object.values(v).forEach(walk);
+    };
+    walk(JSON.parse(readFileSync(file, "utf8")));
+    expect(found).toHaveLength(1);
+    return new RegExp(found[0]);
+  };
+  test("juno-Quest: Container leuchtfeuer oder '*' passt, ein fremder Container nicht", () => {
+    const re = acceptOf("src/content/data/quests/juno.json", "leuchtfeuer");
+    expect(re.test("kubectl set image deployment/leuchtfeuer leuchtfeuer=nginx")).toBe(true);
+    expect(re.test("kubectl set image deployment/leuchtfeuer *=nginx:1.28")).toBe(true);
+    expect(re.test("kubectl set image deployment/leuchtfeuer nginx=nginx")).toBe(false);
+  });
+  test("juno-Befehlskarte: Container shop oder '*' passt, ein fremder Container nicht", () => {
+    const re = acceptOf("src/content/data/cmdcards/juno.json", "shop");
+    expect(re.test("kubectl set image deployment/shop shop=nginx")).toBe(true);
+    expect(re.test("kubectl set image deployment/shop *=nginx")).toBe(true);
+    expect(re.test("kubectl set image deployment/shop nginx=nginx")).toBe(false);
   });
 });

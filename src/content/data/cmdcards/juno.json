@@ -4,7 +4,7 @@
     "chapter": "k8s-debug-imagepull",
     "q": "Tausche das Image des Deployments <code>shop</code> gegen <code>nginx</code> (Container heißt auch <code>shop</code>).",
     "accept": [
-      "^kubectl\\s+set\\s+image\\s+deployment\\/shop\\s+\\S+=nginx(:\\S+)?$"
+      "^kubectl\\s+set\\s+image\\s+deployment\\/shop\\s+(shop|\\*)=nginx(:\\S+)?$"
     ],
     "solution": "kubectl set image deployment/shop shop=nginx",
     "explain": "set image tauscht das Image; das Muster ist <container>=<image> – der Containername steht links vom Gleichheitszeichen."
