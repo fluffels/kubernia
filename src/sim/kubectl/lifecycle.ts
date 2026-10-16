@@ -204,7 +204,7 @@ const createRoleBinding: CreateHandler = (host, c) => {
   if (!cluster && !!roleName === !!clusterRoleName) return host._err("error: exactly one of clusterrole or role must be specified", "Häng entweder '--role=<name>' oder '--clusterrole=<name>' an.");
   // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
   if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
-  if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
+  if (cluster && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", "Häng '--clusterrole=<name>' an.");
   const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
   const subjects = collectRbacSubjects(c);
   if (subjects.length === 0) return host._err("error: at least one of --user or --serviceaccount must be specified", "Muster: '--serviceaccount=default:deploy-bot' oder '--user=alice'.");

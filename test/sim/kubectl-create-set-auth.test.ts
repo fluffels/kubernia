@@ -74,7 +74,7 @@ describe("(b) set image und set env: Ressourcen vor den Paaren", () => {
     expect(r.error).toBe(true);
     expect(r.out).toContain("error: all resources must be specified before environment changes: FOO=bar deployment/web");
   });
-  test("set env: KEY- zählt als Env-Argument, ein einzelnes '-' ebenfalls", () => {
+  test("set env: KEY- zählt als Env-Argument", () => {
     expect(lauf("kubectl set env FOO- deployment/web", web()).out).toContain("environment changes: FOO- deployment/web");
   });
   test("set env: Paar hinter der Ressource bleibt 'nicht simuliert'", () => {
@@ -207,6 +207,12 @@ describe("(d) --from-literal prüft den Schlüssel und meldet Duplikate", () => 
     expect(r.out).toContain('error: "bad/key" is not valid key name for a Secret ' + REGEX);
     expect(sim.secrets).toHaveLength(0);
   });
+  test("mehrere Verstöße in einem Schlüssel: Secret trennt mit ';', ConfigMap mit ','", () => {
+    const secret = lauf("kubectl create secret generic s --from-literal=..a/b=1", freshSim());
+    expect(secret.out).toContain('error: "..a/b" is not valid key name for a Secret ' + REGEX + ";must not start with '..'");
+    const cm = lauf("kubectl create configmap c --from-literal=..a/b=1", freshSim());
+    expect(cm.out).toContain('error: "..a/b" is not a valid key name for a ConfigMap: ' + REGEX + ",must not start with '..'");
+  });
   test("ConfigMap: ungültiger Schlüssel mit ': ' und ','", () => {
     const sim = freshSim();
     expect(lauf("kubectl create configmap c --from-literal=a:b=1", sim).out).toContain('error: "a:b" is not a valid key name for a ConfigMap: ' + REGEX);
@@ -313,6 +319,15 @@ describe("Runde 1 (#1530): Grenzfälle der Paar-Prädikate, Init-Container, Cont
   test("set image: '=' am Anfang ist kein Paar, hinter einem Paar also ein spätes Ressourcen-Token", () => {
     const r = lauf("kubectl set image deployment/web web=nginx:2 =x", web());
     expect(r.out).toContain("error: all resources must be specified before image changes: =x");
+  });
+  test("set image: '=x-' endet auf '-', fängt aber mit '=' an: invalid image format", () => {
+    const r = lauf("kubectl set image deployment/web =x-", web());
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: invalid image format: =x-");
+  });
+  test("set env: '=x' (Gleichheitszeichen an Position 0) ist kein Env-Argument", () => {
+    const r = lauf("kubectl set env =x deployment/web", web());
+    expect(r.out).not.toContain("all resources must be specified before environment changes");
   });
   test("set image: ein einzelnes '-' ist kein Paar, set env: schon", () => {
     expect(lauf("kubectl set image deployment/web web=nginx:2 -", web()).out).toContain("image changes: -");
