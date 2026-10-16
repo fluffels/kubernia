@@ -5,6 +5,7 @@
     {"pfad":"scripts/hook-io.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/stdin-skript-guard.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/langfuse-abgleich-hook.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"scripts/langfuse-zugang.mjs","ring":"kern","quelle":"Bibliothek des Ring-kern-Einstiegs langfuse-abgleich-hook.mjs (Regel ADR 0022 §1, Plan #1663)"},
     {"pfad":"scripts/langfuse-abgleich.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/langfuse-abgleich-kern.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/langfuse-lock.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},

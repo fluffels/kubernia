@@ -5,10 +5,10 @@
  *   node scripts/langfuse-vorbedingung.mjs --sessionstart  SessionStart-Hook: Exit immer 0, bei Ausfall steht die Warnung als JSON auf stdout (`systemMessage` für die Nutzerin, `additionalContext` für die Session)
  *
  * Aufrufer: die Ticket-Skills (Schritt 0 bzw. vor dem Workflow-Start); bewusst NICHT im Board-Takt und im JS-Workflow.
- * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen wie beim Abgleich-Hook via `kindEnv`), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
+ * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen wie beim Abgleich-Hook via `kindEnv` aus langfuse-zugang.mjs), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
-import { kindEnv } from "./langfuse-abgleich-hook.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
+import { kindEnv } from "./langfuse-zugang.mjs";
 
 export const HEALTH_PFAD = "/api/public/health";
 export const FRIST_MS = 3000;
