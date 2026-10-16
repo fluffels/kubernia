@@ -56,6 +56,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [arc42-architektur.md](../arc42-architektur.md) | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
 | [arc42 › Hexagonale Sicht](../arc42-architektur.md#hexagonale-sicht-ports--adapters) | wenn du einen neuen Adapter oder eine neue Ein- oder Ausgabe baust (Speicher, Eingabeart, Export, Content-Quelle): welcher Port, welche Schicht, welche Tabellenzeile |
 | [architektur/spiel.c4](../architektur/spiel.c4) | für das LikeC4-Architekturmodell (Kontext, Container, Schichten, Hauptmodule, Hexagon; ansehen mit `npm run c4:serve`, Wächter `check:c4`) |
+| [architektur/harness.c4](../architektur/harness.c4) | für die Harness-Sichten desselben Modells (Übersicht, Bausteine, Gates und Leitplanken, CI und Board, der Ticket-Lauf als dynamische View; Elemente gegen `.claude/`, Hooks, Gates, CI und `.mcp.json` abgeglichen) |
 | [glossar.md](../glossar.md) | wenn dir ein Spielbegriff fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md); Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 | [module/sim.md](../module/sim.md) | beim Arbeiten am Cluster-Simulator (`src/sim/*`) |

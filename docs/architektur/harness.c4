@@ -1,6 +1,7 @@
 // Harness-Sichten von Kubernia (#1421, ADR 0020). Titel der Arten agent/skill/workflow stammen aus .claude/ (harnessKatalog),
 // hook aus den Event-Namen in .claude/settings.json, githook aus .githooks/, gate aus den Blättern von verify und verify:full,
 // ciworkflow aus .github/workflows/, mcp aus .mcp.json (Abgleich: npm run check:c4). Ein Gate liegt unter der Kette, der es gehört.
+// IDs: ein verschachteltes Element darf nicht wie ein Element der obersten Ebene heißen (LikeC4 löst `kubernia` sonst auf den Skill auf).
 // Beziehungen und Beschreibungen sind Erzählung; Zahlen aus SSOT-Konstanten stehen nie in Labels (sie gehören den generierten Diagrammen).
 model {
   maintainerin = person 'Maintainerin' {

@@ -129,7 +129,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 |---|---|---|
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 116 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Skripte | 117 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 78 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 12 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 26 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
@@ -346,7 +346,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
   | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
   | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
-  | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein, die hexagonale Sicht in arc42 (Ports und Adapter) mit Pfaden, Schichten und Modell |
+  | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein, die hexagonale Sicht in arc42 (Ports und Adapter) mit Pfaden, Schichten und Modell, die Harness-Arten (Agenten, Skills, Workflows, Hooks, Git-Hooks, Gates, CI-Workflows, MCP-Server) mit `.claude/`, `package.json`, `.githooks/`, `.github/workflows/` und `.mcp.json`, die Pflicht-Views |
   | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
   | `npm run check:factorydrift` | `verify` | Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still; entfällt ohne Sync-Stand |
   | `npm run check:steuerbytes` | `verify` | keine Steuerbytes (NUL) in Textdateien |

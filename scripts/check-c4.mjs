@@ -7,7 +7,9 @@
  *   2. `likec4 format --check` (Layout-Drift; Fix: `npm run c4:format`),
  *   3. den Abgleich des Modells gegen scripts/layers.cjs und src/:
  *      Art `schicht`/`bibliothek` ↔ Labels von SCHICHT_MODELL, Beziehungen zwischen ihnen ↔ sollKanten (beide Richtungen),
- *      Art `modul` ↔ Top-Level von src/ unter der Schicht, die schichtVon liefert, View-Deckel.
+ *      Art `modul` ↔ Top-Level von src/ unter der Schicht, die schichtVon liefert, View-Deckel,
+ *      die Harness-Arten (agent, skill, workflow, hook, githook, gate, ciworkflow, mcp) ↔ ihre Quellen (scripts/check-c4-harness.mjs),
+ *      die Pflicht-Views (architektur.pflichtViews) und keine freistehende Zahl in Labels (SSOT-Konstanten gehören den generierten Diagrammen).
  * Gebunden wird über Art + Titel. Eine Art, die weder gebunden ist noch in `erzaehlung` steht, ist rot (fail-closed).
  * Pfade und Bindungen stehen im Block `architektur` von scripts/docs-gen/config.json (keine zweite Pfadliste).
  * Die LikeC4-Model-API steckt in genau einem Adapter (`ladeC4Modell`).
