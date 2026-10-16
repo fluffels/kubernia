@@ -74,7 +74,7 @@ const frischeSkill = teil(lensSkill, "⚠️ **Frische-Guard", "### Kontext-Diä
 const nenntPatchDatei = (s: string) => /Patch-Datei/.test(s) && /\.patch/.test(s);
 
 /** Verbietet der Text das erneute Vollöffnen der Kontextdateien und nennt Grep als Ersatz? */
-const haeltKontextDiaet = (s: string) => /bereits[\s\S]{0,60}Kontext/i.test(s) && /grep/i.test(s);
+const haeltKontextDiaet = (s: string) => /bereits[\s\S]{0,60}Kontext[\s\S]{0,300}grepp/i.test(s);
 
 /** Weist der Text an, Dateien gezielt statt vollständig zu öffnen? */
 const liestGezielt = (s: string) => /offset|limit/.test(s);
@@ -159,7 +159,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
 
 describe("Abschnittsprädikate: eine zurückgedrehte Regel im eigenen Abschnitt wird rot (#1067)", () => {
   test("Regel 1 der Kontext-Diät ohne Grep-Anweisung fällt durch", () => {
-    assert.ok(!haeltKontextDiaet(diaetSkill.replace("**punktuell greppen**", "**die Datei lesen**").replace(/grep/gi, "such")));
+    assert.ok(!haeltKontextDiaet(diaetSkill.replace("**punktuell greppen**", "**die Datei lesen**")));
   });
   test("Frische-Guard-Absatz ohne HEAD-Abgleich fällt durch", () => {
     assert.ok(!hatFrischeGuard(frischeSkill.replace(/`git rev-parse HEAD`/g, "den Stand")));
