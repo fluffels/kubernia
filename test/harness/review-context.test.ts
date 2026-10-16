@@ -224,8 +224,8 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
   test("hatRundenNummer und istDreiPunkt fallen bei Zwei-Punkt und fehlender Runde", () => {
     assert.ok(hatRundenNummer('git diff origin/main...HEAD > "$TMP/kq-<nr>-r<runde>.patch"'));
     assert.ok(!hatRundenNummer('git diff origin/main...HEAD > "$TMP/kq-<nr>.patch"'), "ohne Runde rot");
-    assert.ok(istDreiPunkt("git diff origin/main...HEAD"));
-    assert.ok(!istDreiPunkt("git diff main"), "Zwei-Punkt gegen main rot");
+    assert.ok(istDreiPunkt("git diff origin/main...HEAD > \"$TMP/x.patch\""));
+    assert.ok(!istDreiPunkt("git diff main > \"$TMP/x.patch\""), "Zwei-Punkt gegen main rot");
   });
 
   test("fordertSabotage fällt, wenn der Schritt entschärft wird", () => {
