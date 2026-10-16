@@ -227,7 +227,7 @@ function getGatewayClasses(host: KubectlHost): GetTable {
 function getGateways(host: KubectlHost): GetTable {
   return tableOf(["NAME", "CLASS", "ADDRESS", "PROGRAMMED", "AGE"],
     host.gateways.map(g => {
-      const st = gatewayStatus(g, host.gatewayClasses);
+      const st = gatewayStatus(g, host);
       return [g.name, g.className, st.address ?? "", conditionCell(st.conditions, "Programmed"), host._age(g.created || 0)];
     }));
 }

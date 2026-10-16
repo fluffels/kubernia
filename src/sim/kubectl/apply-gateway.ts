@@ -97,7 +97,7 @@ export function applyHttpRoute(host: KubectlHost, eff: ApplyEffect, out: string[
     out.push(routeLine(effRoute.name, "unchanged"));
     return;
   }
-  // Nur zuweisen, nie in place ändern: der Szenario-Klon ist flach.
+  // Nur zuweisen, nie in place ändern (gleiche Form wie die übrigen Apply-Handler).
   existing.parentRefs = [...effRoute.parentRefs];
   existing.hostnames = [...effRoute.hostnames];
   existing.rules = copyRules(effRoute.rules);

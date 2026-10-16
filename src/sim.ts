@@ -62,7 +62,7 @@ import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
 /* ---------- Ressourcen-Registry (#499) ----------
  * Eine Reihe von Ressourcentypen ist „einfach additiv": ihr Zustand ist eine flache Liste,
- * ein Eintrag wird per Shallow-Clone übernommen und per `.name` dedupliziert. Genau diese
+ * ein Eintrag wird tief geklont (`structuredClone`) übernommen und per `.name` dedupliziert. Genau diese
  * Typen standen bisher DREIMAL fast identisch da – in reset() (klonen), mergeScenario()
  * (per Name anhängen) und snapshot() (klonen). Neue solche Ressource = drei Blöcke konsistent
  * pflegen (iSAQB: Open-Closed verletzt). Als Registry ist jeder Typ EIN Eintrag hier; reset,
@@ -90,14 +90,14 @@ function setSimpleList(obj: object, key: SimpleResourceKey, list: NamedRes[]): v
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (obj as any)[key] = list;
 }
-/** Flacher Klon einer Ressourcen-Liste (reset/snapshot). */
+/** Tiefer Klon einer Ressourcen-Liste (reset/snapshot): reine Daten, kein geteiltes Array mit dem Szenario. */
 function cloneNamed(list: readonly NamedRes[]): NamedRes[] {
-  return list.map(x => Object.assign({}, x));
+  return list.map(x => structuredClone(x));
 }
 /** Additiv einmischen: hängt jeden Eintrag an, dessen `.name` in der Ziel-Liste noch fehlt. */
 function mergeByName(target: NamedRes[], specs: readonly NamedRes[] | undefined): void {
   for (const s of specs || []) {
-    if (!target.some(x => x.name === s.name)) target.push(Object.assign({}, s));
+    if (!target.some(x => x.name === s.name)) target.push(structuredClone(s));
   }
 }
 /** Snapshot der „einfach additiven" Ressourcen als getippter Record (Spread in snapshot()). */
@@ -730,7 +730,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
         nodes: this.nodes.map(nodeSnapshot),
         deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, ...snapshotPodTemplate(d), ...snapshotRolloutHistory(d) })), // Template-Felder (Ephemeral #240, Limits/securityContext #1300, SA): überleben den Reload; `evicted` wird beim Laden neu abgeleitet
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
-        // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
+        // Resource-Registry serialisieren (#499) – tiefer Klon, gespiegelt zu reset/mergeScenario.
         ...snapshotSimple(this),
         // storageClasses/pvs/volumeSnapshots/charts/argoApps über die Builder-Registry (#864).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

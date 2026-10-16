@@ -20,6 +20,8 @@ import type { ClusterState, Deployment, Broken } from "./state";
 import { runPipeline } from "./glab";
 import { flag, notSimulated, dispatchSub, IM_HANDLER, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
+const HINT_COMMIT_ALL = "Der Simulator kennt nur die Stage: erst 'git add <datei>', dann 'git commit --message \"…\"'.";
+
 /** Was die git-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
  *  die Kopplung von git an den Cluster-Zustand und vermeidet einen Import-Zyklus
@@ -41,13 +43,14 @@ export interface GitHost extends Pick<ClusterState, "git" | "files" | "ci" | "de
 type GitHandler = (host: GitHost, c: Call) => string;
 
 const COMMIT_HINTS: Readonly<Record<string, string>> = {
-  "-a": "Der Simulator kennt nur die Stage: erst 'git add <datei>', dann 'git commit --message \"…\"'.",
-  "--all": "Der Simulator kennt nur die Stage: erst 'git add <datei>', dann 'git commit --message \"…\"'.",
+  "-a": HINT_COMMIT_ALL,
+  "--all": HINT_COMMIT_ALL,
   "--amend": "Einen Commit nachträglich ändern gibt es nicht – committe die Änderung neu.",
 };
+const HINT_FORCE = "Erzwungenes Pushen gibt es nicht – hol erst die Neuigkeiten mit 'git pull'.";
 const PUSH_HINTS: Readonly<Record<string, string>> = {
-  "--force": "Erzwungenes Pushen gibt es nicht – hol erst die Neuigkeiten mit 'git pull'.",
-  "-f": "Erzwungenes Pushen gibt es nicht – hol erst die Neuigkeiten mit 'git pull'.",
+  "--force": HINT_FORCE,
+  "-f": HINT_FORCE,
 };
 
 /** Alias → Eintrag (Handler + Flag-Tabelle; alle NACH der `git init`-Wache, also im initialisierten Repo, `init`

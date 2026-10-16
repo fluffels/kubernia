@@ -13,6 +13,10 @@ export { notSimulated } from "../cliargs";
 import { parseMem, parseCpuMilli } from "../util";
 import { RESOURCE_KINDS, resolveKind } from "./resources";
 
+const HINT_OUTPUT = "Ausgabeformate gibt es im Simulator nur bei 'kubectl get' (-o wide); Details zeigt 'kubectl describe'.";
+const HINT_WATCH = "Live-Beobachtung gibt es nicht – wiederhole den Befehl einfach.";
+const HINT_SELECTOR = "Label-Selektoren gibt es nicht – filtere über den Namen, z.B. 'kubectl get pods <name>'.";
+
 /** Top-Level-Befehle von echtem kubectl: sie gibt es, die Sim kann sie nur (noch) nicht. */
 export const REAL_KUBECTL_COMMANDS: readonly string[] = [
   "create", "expose", "run", "set", "explain", "get", "edit", "delete", "rollout", "scale", "autoscale",
@@ -39,12 +43,12 @@ export const REQUESTS_FLAG = checkedFlag(checkResourceList, "--requests");
 
 /** Lernhinweise zu den Flags, die Spieler aus dem echten kubectl kennen. */
 export const FLAG_HINTS: Readonly<Record<string, string>> = {
-  "-o": "Ausgabeformate gibt es im Simulator nur bei 'kubectl get' (-o wide); Details zeigt 'kubectl describe'.",
-  "--output": "Ausgabeformate gibt es im Simulator nur bei 'kubectl get' (-o wide); Details zeigt 'kubectl describe'.",
-  "-w": "Live-Beobachtung gibt es nicht – wiederhole den Befehl einfach.",
-  "--watch": "Live-Beobachtung gibt es nicht – wiederhole den Befehl einfach.",
-  "-l": "Label-Selektoren gibt es nicht – filtere über den Namen, z.B. 'kubectl get pods <name>'.",
-  "--selector": "Label-Selektoren gibt es nicht – filtere über den Namen, z.B. 'kubectl get pods <name>'.",
+  "-o": HINT_OUTPUT,
+  "--output": HINT_OUTPUT,
+  "-w": HINT_WATCH,
+  "--watch": HINT_WATCH,
+  "-l": HINT_SELECTOR,
+  "--selector": HINT_SELECTOR,
   "--show-labels": "Labels zeigt der Simulator nicht an.",
   "--sort-by": "Sortieren kann der Simulator nicht – die Liste kommt in fester Reihenfolge.",
   "--revision": "Einzelne Revisionen zeigt der Simulator nicht; welches Image ein ReplicaSet hat, zeigt 'kubectl get rs -o wide'.",
