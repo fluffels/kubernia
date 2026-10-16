@@ -37,6 +37,13 @@ describe("pruefeEintraege", () => {
       expect(W.pruefeEintraege([e("codescanning-x", "2026-11-13", { alerts: a })]).join(), JSON.stringify(a)).toContain("„alerts“");
     }
   });
+  test("alerts nur an `codescanning-*`: andere id ist rot, `codescanning-…` mit alerts ok, ohne alerts jede id ok", () => {
+    const f = W.pruefeEintraege([e("dependabot-x", "2026-11-13", { alerts: [5] })]).join();
+    expect(f).toContain("„alerts“");
+    expect(f).toContain("codescanning-<slug>");
+    expect(W.pruefeEintraege([e("codescanning-x", "2026-11-13", { alerts: [5] })])).toEqual([]);
+    expect(W.pruefeEintraege([e("dependabot-x")])).toEqual([]);
+  });
   test("ungültige Daten: Monat 13, 30. Februar, falsches Format", () => {
     for (const d of ["2026-13-01", "2026-02-30", "13.11.2026", "2026-1-1"]) {
       expect(W.pruefeEintraege([e("a", d)]).join(), d).toContain("kein gültiges Datum");
