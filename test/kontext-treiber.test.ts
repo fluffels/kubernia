@@ -720,3 +720,28 @@ describe("Ticketliste je Gruppe (#1593)", () => {
     expect(KR.renderMarkdown(voll({ laeufe: [v, n] }))).not.toContain("Prompt-Zeichen Nachfolger");
   });
 });
+
+describe("Ticketliste je Gruppe: Summe über Nachfolger und Markdown-Zeilen (#1593)", () => {
+  type Zeile = { nachfolger: number; promptZeichenNachfolger: number };
+  const n2 = (nr: number, ab: number) => laufAb(ab, [`Ticket #${nr}: x`, "Lock: nonce=abc", "Einstieg: verify", "--- Übergabe ---", "SCHNITT: verify", "UEBERGABE:", "ein deutlich längerer zweiter Nachfolger-Prompt"].join(NL), [{ min: 1 }]);
+  test("zwei Nachfolger: Anzahl 2 und Σ der Prompt-Zeichen beider, nicht nur des ersten", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1 }]);
+    const a = nachfolger(5, "verify", 10, [{ min: 1 }]);
+    const b = n2(5, 20);
+    const z = (voll({ laeufe: [v, a, b], jeTicket: true }).laeufe as unknown as Zeile[])[0];
+    const zeichen = (l: Lauf) => (KI.analysiereLauf(l) as unknown as { promptZeichen: number }).promptZeichen;
+    expect(z.nachfolger).toBe(2);
+    expect(zeichen(b)).toBeGreaterThan(zeichen(a));
+    expect(z.promptZeichenNachfolger).toBe(zeichen(a) + zeichen(b));
+  });
+  test("Markdown-Zeile: Schnitt, Kosten, Nachfolger und Prompt-Zeichen stehen in den Spalten; ohne Preis steht `-`", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1 }]);
+    const zeichen = (KI.analysiereLauf(n) as unknown as { promptZeichen: number }).promptZeichen;
+    const md = KR.renderMarkdown(voll({ laeufe: [v, n], jeTicket: true }));
+    expect(md).toMatch(new RegExp(`\\| #5 \\| nein \\| geschlossen \\| verify \\| \\d+[.,]\\d+ \\| 1 \\| ${zeichen} \\|`));
+    const ohnePreis = vorgaenger(6, null, 30, [{ min: 1 }]);
+    (ohnePreis.zeilen[1] as { message: { model: string } }).message.model = "unbekannt";
+    expect(KR.renderMarkdown(voll({ laeufe: [ohnePreis], jeTicket: true }))).toMatch(/\| #6 \| nein \| geschlossen \| ohne \| - \| 0 \| 0 \|/);
+  });
+});
