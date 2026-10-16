@@ -4,6 +4,7 @@
 // Signaturen bleiben dabei erhalten (ThisType-Muster). Präsentationsschicht (DOM).
 import { KQContent } from "../content";
 import { KQAssets } from "../assets-data";
+import { esc } from "./html-escape";
 
 /** this-Typ der UI-Methodenbündel: permissiv, da Methoden quer über Bündel auf this.* zugreifen.
  *  Bewusster ThisType-Escape-Hatch: die Index-Signatur lässt sich hier NICHT durch `unknown`
@@ -48,9 +49,6 @@ export interface UIShopItem {
   unlockAt?: number;
 }
 
-function esc(s: unknown) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 // Befehls-Karten im Krabben-Quiz: so viele Tipp-Versuche, bevor die Lösung
 // gezeigt und die Karte als "nicht gekonnt" gewertet wird (#234). Jederzeit

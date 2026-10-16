@@ -294,7 +294,7 @@ export const overlayUI = part({
         : '<kbd class="key-cap">' + esc(keys[a].toUpperCase()) + "</kbd>";
       return '<div class="audio-row key-row">' +
         "<label>" + esc(ACTION_LABELS[a]) + "</label>" +
-        '<button data-action="rebindKey" data-arg="' + a + '"' + (capturing ? " disabled" : "") +
+        '<button data-action="rebindKey" data-arg="' + esc(a) + '"' + (capturing ? " disabled" : "") +
         ' aria-label="Taste für ' + esc(ACTION_LABELS[a]) + ' umbelegen">' + cap + "</button>" +
         "</div>";
     }).join("");

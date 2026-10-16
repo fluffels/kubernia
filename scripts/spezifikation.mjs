@@ -14,14 +14,14 @@
  *
  * Exit 0 = angelegt/repariert/nichts zu tun/vollständig, 1 = Spezifikation unvollständig oder Inhaltsverlust (nichts geschrieben),
  * 2 = Aufruf- oder gh-Fehler (scheitert nach dem Anlegen nur das Einsortieren: Nummer und Nachhol-Befehl), 3 = Fremdeingang (nur `reparieren`).
- * Grenze: Exit 3 meldet auch `mitKontingent` (API-Kontingent knapp, Meldung auf stderr) und ist dann kein Fremdeingang; die Meldung unterscheidet sie.
+ * Grenze: Exit 3 heißt hier immer Fremdeingang; ein knappes API-Kontingent meldet `mitKontingent` mit Exit 5.
  * Grenze: zwei gleichzeitige Reparaturen desselben Tickets: der letzte Schreiber gewinnt.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
-import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
+import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
@@ -107,8 +107,6 @@ function anlegen(werte, io) {
   return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`);
 }
 
-const labelNamen = (issue) => (issue.labels ?? []).map((l) => (typeof l === "string" ? l : l?.name));
-
 function reparieren(werte, nrText, io) {
   const nr = positiveZahl(nrText);
   if (nr === null) return aufrufFehler("reparieren braucht eine Ticketnummer");
@@ -122,9 +120,8 @@ function reparieren(werte, nrText, io) {
   }
   if (issue.pull_request) return aufrufFehler(`#${nr} ist ein PR`);
   if (issue.state !== "open") return aufrufFehler(`#${nr} ist nicht offen`);
+  if (istFremdeingang(issue, io.owner).fremdeingang) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label forum): wird nie umgeschrieben, als Befund melden\n`);
   if ((issue.assignees ?? []).length > 0) return aufrufFehler(`#${nr} hat einen Assignee (wird schon bearbeitet), nicht umschreiben`);
-  const forum = labelNamen(issue).find((l) => FREMDEINGANG_LABELS.includes(l));
-  if (!istVertraut(issue.user, io.owner) || forum !== undefined) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label forum): wird nie umgeschrieben, als Befund melden\n`);
   if (spezifikationsMaengel(issue.body).length === 0) return ergebnis(0, `#${nr}: Spezifikation schon vollständig, nichts zu tun\n`);
   const maengel = spezifikationsMaengel(b.body);
   if (maengel.length > 0) return ergebnis(1, "", `✖ neuer Body unvollständig, nichts geschrieben:\n${liste(maengel)}\n`);

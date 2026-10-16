@@ -24,6 +24,8 @@ type Ausfall = {
   logBasis: (o: { plattform: string; env: Record<string, string | undefined>; home: string }) => string;
   projektOrdner: (namen: string[], wurzel: string) => { ordner: string; suffix: string }[];
   serverOrdner: (n: string) => string;
+  serverNameFuerOrdner: (ordner: string, server: Server[]) => string | null;
+  istNpxFallback: (text: string) => boolean;
   klassifiziere: (zeilen: string[]) => Befund[];
   buendeln: (b: (Befund & { server: string; suffix?: string })[]) => Gruppe[];
   neuSeit: (b: Befund[], stand: string) => Befund[];
@@ -101,6 +103,18 @@ describe("Pfad-Helfer", () => {
   });
   test("serverOrdner schlägt den Namen wie Claude Code", () => {
     expect(a.serverOrdner("plugin:x y")).toBe("mcp-logs-plugin-x-y");
+  });
+  test("serverNameFuerOrdner: Konfig-Name bei Treffer, sonst der Ordnername; fremde Ordner ergeben null", () => {
+    const cfg = [{ name: "plugin:x y" }];
+    expect(a.serverNameFuerOrdner("mcp-logs-plugin-x-y", cfg)).toBe("plugin:x y");
+    expect(a.serverNameFuerOrdner("mcp-logs-langfuse", cfg)).toBe("langfuse");
+    expect(a.serverNameFuerOrdner("mcp-logs-", cfg)).toBeNull();
+    expect(a.serverNameFuerOrdner("anderes", cfg)).toBeNull();
+  });
+  test("istNpxFallback erkennt den Launcher-Hinweis, nicht beliebige stderr-Zeilen", () => {
+    expect(a.istNpxFallback("Server stderr: playwright-mcp: lokale Installation fehlt oder weicht ab → npx @playwright/mcp@1.2.3")).toBe(true);
+    expect(a.istNpxFallback("Server stderr: npx -y likec4@1.0.0")).toBe(true);
+    expect(a.istNpxFallback("Server stderr: Fehler beim Start")).toBe(false);
   });
 });
 
@@ -222,6 +236,26 @@ describe("main mit Temp-Logs", () => {
     const dir = join(d, "logs", a.slug(env.CLAUDE_PROJECT_DIR), "mcp-logs-pw");
     writeFileSync(join(dir, "notiz.txt"), `${dbg("Starting connection x")}\n${dbg("Starting connection x")}\n${dbg("Starting connection x")}\n`);
     expect(lauf(["--seit", "2026-10-15T00:00:00Z"], env).aus.join("\n")).toContain("reconnect ×1 ");
+  });
+  test("Server ohne Eintrag in .mcp.json (user-scope, z. B. langfuse) werden über ihren Log-Ordner gefunden", () => {
+    const { env, d } = aufbau();
+    const dir = join(d, "logs", a.slug(env.CLAUDE_PROJECT_DIR), "mcp-logs-langfuse");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "2026-10-15T09-00-00Z.jsonl"),
+      [
+        err("Connection failed (ECONNREFUSED): ECONNREFUSED: Unable to connect. Is the computer able to access the url?"),
+        err("TypeError: ECONNRESET: The socket connection was closed unexpectedly."),
+        dbg("tools/list failed (ECONNRESET: The socket connection was closed unexpectedly.)"),
+        dbg("Terminal connection error 1/3"),
+        dbg("HTTP connection dropped after 30s uptime"),
+      ].join("\n") + "\n",
+    );
+    const t = lauf(["--seit", "2026-10-15T00:00:00Z"], env).aus.join("\n");
+    expect(t).toContain("langfuse: fehler ×2");
+    expect(t).toContain("langfuse: abbruch ×1");
+    expect(t).not.toContain("Terminal connection");
+    expect(t).not.toContain("Server-Art");
   });
   test("--sessionstart mit --json bleibt Klartext", () => {
     const { env } = aufbau();

@@ -128,6 +128,12 @@ describe("verloreneZeilen (Inhaltsverlust beim Reparieren)", () => {
   test("Überschrift des neuen Bodys zählt als Treffer für eine Textzeile", () => {
     expect(S.verloreneZeilen("Ziel", "## Ziel\nx")).toEqual([]);
   });
+  test("Trennlinien auch mit Leerzeichen (- - -, * * *, ___) zählen nicht als Inhalt", () => {
+    expect(S.verloreneZeilen("A\n- - -\n* * *\n___\n  -  -  - \nB", "A\nB")).toEqual([]);
+  });
+  test("ein einzelnes Listenzeichen ohne Text und echter Text mit Strichen sind Inhalt", () => {
+    expect(S.verloreneZeilen("A\n- -x-", "A")).toEqual(["- -x-"]);
+  });
   test("CRLF und LF sind gleich", () => {
     expect(S.verloreneZeilen("A\r\nB", "A\nB")).toEqual([]);
   });

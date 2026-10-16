@@ -180,6 +180,13 @@ describe("reparieren", () => {
     expect(S.fuehreAus(REP, io).code).toBe(3);
     expect(aufrufe.bearbeite).toEqual([]);
   });
+  test("Fremdeingang vor Assignee: fremdes Ticket mit Assignee meldet Exit 3, nicht 2", () => {
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fremd", type: "User" }, assignees: [{ login: "fluffels" }] }) });
+    const r = S.fuehreAus(REP, io);
+    expect(r.code).toBe(3);
+    expect(r.err).toContain("Fremdeingang");
+    expect(aufrufe.bearbeite).toEqual([]);
+  });
   test("Ticket mit Assignee wird nicht umgeschrieben: Exit 2", () => {
     const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, assignees: [{ login: "fluffels" }] }) });
     expect(S.fuehreAus(REP, io).code).toBe(2);
@@ -187,9 +194,12 @@ describe("reparieren", () => {
   });
   test("Inhaltsverlust-Ausgabe: höchstens 10 Zeilen, lange Zeilen gekürzt, die Zahl im Kopf bleibt die volle", () => {
     const alt = Array.from({ length: 12 }, (_, i) => `Zeile${i + 1}${i === 0 ? "x".repeat(200) : ""}`).join("\n");
-    const { io } = umgebung({ "b.md": GUT }, { ladeIssue: () => ({ state: "open", body: alt, user: { login: "fluffels", type: "User" } }) });
+    const { io, aufrufe } = umgebung({ "b.md": GUT }, { ladeIssue: () => ({ state: "open", body: alt, user: { login: "fluffels", type: "User" } }) });
     const r = S.fuehreAus(REP, io);
     expect(r.code).toBe(1);
+    expect(aufrufe.bearbeite).toEqual([]);
+    expect(r.err).toContain(`Zeile1${"x".repeat(114)}…`);
+    expect(r.err).not.toContain("x".repeat(115));
     expect(r.err).toContain("12 Zeile(n)");
     expect(r.err).toContain("Zeile10");
     expect(r.err).not.toContain("Zeile11");

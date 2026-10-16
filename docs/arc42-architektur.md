@@ -267,7 +267,7 @@ Die **strukturellen** Querschnittskonzepte sind exzellent mechanisiert (Schichtu
 
 | Verhaltens-Governance | Heute | Gate-Ticket |
 |---|---|---|
-| Determinismus | ~~`Math.random` in der Domäne~~ ✅ Domäne + Anwendung durch seedbare RNG abgedeckt; Präsentation bewusst ausgenommen (`core/rng.ts`) | #492 ✓ / #876 ✓ |
+| Determinismus | Domäne + Anwendung laufen über die seedbare RNG; die Präsentation ist bewusst ausgenommen (`core/rng.ts`) | #492, #876 |
 | Coverage | 91 Tests, **0 Messung** | #495 |
 | Komplexität | nur LOC-Deckel (800), keine `complexity`-Regel | #502 |
 | Bundle-Größe | nur Warnung, kein Fail | #503 |
@@ -277,11 +277,10 @@ Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** �
 
 ### Nachtrag iSAQB 2026-07-14 — verifizierte Drifts (Doku ≠ Code)
 
-Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Claims gegen den Code geprüft. Die meisten halten (Schichtung, Determinismus-SSOT in der Domäne, `any`-Disziplin, Coverage-Messung). Vier **Drifts** — die Doku behauptet mehr, als der Code einlöst — sind zu korrigieren:
+Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Claims gegen den Code geprüft. Die meisten halten (Schichtung, Determinismus-SSOT in der Domäne, `any`-Disziplin, Coverage-Messung). Drei **Drifts** — die Doku behauptet mehr, als der Code einlöst — sind zu korrigieren:
 
 | Drift | Beleg | Ticket |
 |---|---|---|
-| ~~**Invarianten laufen nur in Dev/Test, nicht im Prod-Build**~~ → **erledigt (#862)**: Prod loggt via `console.error` statt zu werfen; `invariantChecks = true` immer aktiv. | ~~`sim.ts:235` `!import.meta.env.PROD`~~ | #862 ✓ |
 | **ACL „nur an zwei Stellen" verletzt** — die UI mappt Sim-interne Fehlertypen direkt (dritter Leak neben clustersync/markup). | `ui/hud.ts:320-327` | #872 |
 | **Stale Ticket-Referenz** — der sim.ts-Split wird als „#545 (Split offen)" geführt, #545 ist geschlossen; der Split ist untracked (`check:doctickets` non-blocking). | `scripts/check-size.mjs:39` | #864/#877 |
 | **`tsconfig.strict.json` ist ein No-op-Alias** — `typecheck` und `typecheck:strict` prüfen identisch. | `tsconfig.strict.json` | #877 |
@@ -324,7 +323,6 @@ Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](ht
 | Befund | Wirkung bei Stardew-Scope | Schwere | Ticket |
 |---|---|---|---|
 | Assets eager geladen, kein Lazy-Loading / Texture-Atlas | Lade-/Draw-Call-Problem bei vielen Welten/Sprites | mittel | #198/#339 |
-| ~~Ubiquitous Language nur implizit (kein Glossar/ACL-Doku)~~ → **erledigt**: [glossar.md](glossar.md) | Übersetzung Hafen↔K8s driftet mit mehr Beitragenden/Agenten | ~~mittel~~ | #477 ✓ |
 | Präsentation ohne Regressionsnetz (nur 1 Boot-Smoke + manuell) | Interaktions-Regressionen kommen durch | mittel | #480 |
 | Auslieferungsform (ADR 0005) offen | Färbt save-/asset-/build-nahe Entscheidungen | mittel | #355 |
 | Barrierefreiheit ungeprüft (Farb-Status, Tastatur, Kontraste) | Lernspiel schließt Nutzer:innen aus | niedrig | #481 |
@@ -340,13 +338,11 @@ Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](ht
 | Verhaltens-Governance fehlt (Komplexität/Bundle) | ungemessene Erosion bei Scale | mittel | #502/#503 (Fehler-Diagnostik #504 erledigt) |
 | Spiel-/Bewertungslogik in DOM-Methoden; `events.ts` ungetestet | Kernlogik nur e2e-testbar; `economyTick` läuft nicht in RegionScene | mittel | #500/#512/#501 |
 | Value Objects/Invarianten/Workload nur teilverdrahtet | Namensgrenzen/Aggregat-Mutationen umgangen | mittel | #507/#508/#509 |
-| ~~**Release-Image ohne Test-Gate + ohne Image-Scan/SBOM**~~ → **erledigt (#861)**: Verify-Job, Trivy-Scan und Syft-SBOM in `release.yml`. | ~~Ungeprüftes/verwundbares Artefakt kommt nach außen~~ | ~~hoch~~ | #861 ✓ |
-| ~~**Invarianten im Prod-Build aus**~~ → **erledigt (#862)**: Prod loggt `console.error` statt zu werfen; `warnClusterInvariants` immer aktiv. | ~~Zustands-Korruption erreicht Spieler:innen still~~ | ~~hoch~~ | #862 ✓ |
 | **WorldScene hafen-monolithisch trotz `mapId`-Fassade** | Zweite Überwelt-Karte nicht real möglich | hoch | #863 |
 | **Ressourcentyp-Erweiterung nicht Open-Closed** (3× reset/merge/snapshot, sim.ts God-File, #545-Split untracked) | sim.ts wächst mit jedem Typ; Haupt-Fehlerquelle | hoch | #864/#865 |
 | Monolithischer 5s-Vollserialisierungs-Autosave | CPU/GC-Bremse bei Stardew-Stand-Größe (Serialisierungs-, nicht Kapazitätskosten) | mittel | #869 |
-| ~~Zwei divergente Karten-Modelle~~ → **entschieden ([ADR 0010](adr/0010-karten-modell-tiled-vs-code-builder.md), #957)**: bewusst zwei Pipelines mit Grenzregel; die Renderer-Duplizierung (zwei `renderGround`) und die fragile Bodencode-Import-Kopplung bleiben als eigene Tickets offen | Doppelte Pipeline war die offene Weiche, jetzt per ADR geschlossen; Renderer-Duplizierung/Kopplung als Rest-Risiko | mittel | #958/#959 |
-| ~~NPCs ohne Entitäts-/System-Modell (Sprite+`splice(6)`)~~ → **entschieden ([ADR 0011](adr/0011-npc-system-fundament.md), #963)**: Datenmodell (Rolle/Zustand additiv, Beziehung als einzige Save-Migration) festgelegt; die Umsetzung selbst steht noch aus | Stardew-NPCs (Verhalten/Beziehungen) haben kein Zuhause; Datenmodell jetzt entschieden, Code folgt in #964–#968 | mittel | #871/#964-#968 |
+| Zwei Karten-Pipelines, bewusst getrennt (Grenzregel: [ADR 0010](adr/0010-karten-modell-tiled-vs-code-builder.md)) | Renderer-Duplizierung (zwei `renderGround`) und fragile Bodencode-Import-Kopplung bleiben als Rest-Risiko | mittel | #958/#959 |
+| NPC-Datenmodell entschieden ([ADR 0011](adr/0011-npc-system-fundament.md): Rolle/Zustand additiv, Beziehung als einzige Save-Migration), Umsetzung steht aus | Stardew-NPCs (Verhalten/Beziehungen) haben noch kein Zuhause im Code | mittel | #871/#964-#968 |
 | ESLint `recommended` statt `recommendedTypeChecked` | typed-lint-Kosten ohne Ertrag; `no-unsafe-*` aus | mittel | #868 |
 | Präsentation faktisch ungetestet (Floor 3 %, nur Chromium) + Copy-Paste-Minispiele | größte Codemenge im schwächsten Netz; UI skaliert nicht | mittel | #873/#874 |
 

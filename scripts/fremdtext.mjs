@@ -14,7 +14,7 @@
  */
 import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
-import { FREMDEINGANG_LABELS, flach, issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
+import { flach, issueKommentare, istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
 const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${loginVon(user)}, ${url}]`;
@@ -26,13 +26,7 @@ const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${
  */
 export function trenneFremdtext({ owner, art, eintrag, beitraege }) {
   const autorVertraut = istVertraut(eintrag.user, owner);
-  const label = (eintrag.labels ?? []).map((l) => (typeof l === "string" ? l : l?.name)).find((n) => FREMDEINGANG_LABELS.includes(n));
-  const fremdeingang = !autorVertraut || label !== undefined;
-  const grund = !autorVertraut
-    ? `Autor @${loginVon(eintrag.user)} ist nicht vertraut`
-    : label !== undefined
-      ? `Label ${label} (Text Dritter über das Forum)`
-      : "";
+  const { fremdeingang, grund } = istFremdeingang(eintrag, owner);
   const bodyVertraut = !fremdeingang;
   const teile = [
     {

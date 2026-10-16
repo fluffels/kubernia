@@ -7,6 +7,14 @@ export type McpTool = { name: string; annotations?: { readOnlyHint?: boolean } }
 export type McpAbfrage = { tools: McpTool[]; aufruf?: unknown };
 
 /**
+ * Tools ohne `readOnlyHint: true`, die weder in `ask` stehen (als `<praefix><name>`) noch in `bekannt` (bewusst ohne Rückfrage erlaubte
+ * Schreib-Tools, z.B. die Browser-Interaktion des Playwright-Servers). Ein neues Tool nach einem Dependabot-Bump fällt damit auf. Pur.
+ */
+export function schreibToolsOhneAsk(tools: McpTool[], ask: string[], praefix: string, bekannt: string[] = []): string[] {
+  return tools.filter((t) => t.annotations?.readOnlyHint !== true && !ask.includes(praefix + t.name) && !bekannt.includes(t.name)).map((t) => t.name);
+}
+
+/**
  * Startet `node <args>` im `cwd`, wartet höchstens `budgetMs` auf die Antworten (tools/list, optional ein tools/call).
  * `aufruf` ist das `result` des Calls (z.B. `structuredContent`). Löst erst nach dem Prozessende auf
  * (Windows: der laufende Server hält sein cwd offen, EBUSY beim Aufräumen).

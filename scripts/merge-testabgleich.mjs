@@ -30,6 +30,15 @@ export function testTitel(text) {
 
 const ohne = (a, b) => new Set([...a].filter((x) => !b.has(x)));
 
+// Pfade, deren Texte Wächter-Tests in `test/harness/` prüfen (#1693): `.claude/`, `docs/`, `AGENTS.md` (Grenze am Pfadsegment: nicht `docs-alt/`, nicht `AGENTS.mdx`).
+const WAECHTER_PFAD = /^(?:\.claude\/|docs\/|AGENTS\.md$)/;
+
+/** Dateien unter `.claude/`, `docs/` und `AGENTS.md`, die BEIDE Seiten eines Merges berühren (sortiert). Pur. */
+export function gemeinsameWaechterDateien(unsere, ihre) {
+  const i = new Set(ihre);
+  return [...new Set(unsere)].filter((p) => WAECHTER_PFAD.test(p) && i.has(p)).sort();
+}
+
 /**
  * Verlorene Tests: je Datei die Titel einer Seite (`ihre` = main, `unsere` = Feature-Branch), die im Ergebnis fehlen, ohne dass die andere Seite sie
  * bewusst entfernt hat (Titel in der Basis, aber nicht in ihrer Fassung). Eingaben: `{ [pfad]: text | null }` je Fassung (`null`/fehlend = Datei gibt es nicht).
@@ -88,7 +97,12 @@ export function pruefeMerge({ git, lies }) {
   const aus = (rev) => Object.fromEntries(dateien.map((p) => [p, versuch(["show", `${rev}:${p}`])]));
   const ergebnis = imMerge ? Object.fromEntries(dateien.map((p) => [p, lies(p)])) : aus("HEAD");
   const verloren = verloreneTests({ basis: aus(basisRev), unsere: aus(unsereRev), ihre: aus(ihreRev), ergebnis });
-  return { code: verloren.length ? 1 : 0, text: formatiere(verloren) };
+  const alle = (a, b) => (versuch(["diff", "--name-only", a, b]) ?? "").split("\n").filter(Boolean);
+  const gemeinsam = gemeinsameWaechterDateien(alle(basisRev, unsereRev), alle(basisRev, ihreRev));
+  const hinweis = gemeinsam.length
+    ? `\nWächter-Lauf nötig: npx vitest run test/harness (beide Seiten berühren ${gemeinsam.slice(0, 5).join(", ")}${gemeinsam.length > 5 ? ` und ${gemeinsam.length - 5} weitere` : ""}).`
+    : "";
+  return { code: verloren.length ? 1 : 0, text: formatiere(verloren) + hinweis };
 }
 
 function main() {

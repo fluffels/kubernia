@@ -26,3 +26,17 @@ export function issueKommentare(nr, json, repo = "{owner}/{repo}") {
   const seiten = json(["api", "--paginate", "--slurp", `repos/${repo}/issues/${nr}/comments?per_page=100`]);
   return flach(seiten);
 }
+
+const labelName = (l) => (typeof l === "string" ? l : l?.name);
+
+/**
+ * Die eine Fremdeingang-Entscheidung (Autor nicht vertraut ODER Fremdeingang-Label), gemeinsam für `fremdtext`, `naechstes-ticket` und `spezifikation`.
+ * `issue`: `{ user, labels }` (labels als Strings oder `{name}`). Liefert `{ fremdeingang, grund, label }`; `grund` ist `""`, wenn vertraut.
+ */
+export function istFremdeingang(issue, owner) {
+  const autorVertraut = istVertraut(issue?.user, owner);
+  const label = (issue?.labels ?? []).map(labelName).find((n) => FREMDEINGANG_LABELS.includes(n));
+  const login = typeof issue?.user?.login === "string" && issue.user.login !== "" ? issue.user.login : "unbekannt";
+  const grund = !autorVertraut ? `Autor @${login} ist nicht vertraut` : label !== undefined ? `Label ${label} (Text Dritter über das Forum)` : "";
+  return { fremdeingang: !autorVertraut || label !== undefined, grund, label };
+}

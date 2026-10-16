@@ -39,17 +39,24 @@ const zeitpunkt = (z) => (typeof z === "string" && /^[0-9TZ:.+-]{1,40}$/.test(z)
 
 const zaehler = (z) => (Number.isInteger(z) && z >= 0 ? z : null);
 
+/** Die geladenen Antworten eines Kommentars (kaputte Form: leere Liste). */
+const antwortenVon = (k) => (Array.isArray(k?.replies?.nodes) ? k.replies.nodes : []);
+
 /**
  * „Thread gekürzt: x von y Kommentaren/Antworten“, wenn der Thread mehr Beiträge hat, als die Abfrage lädt (Kommentare über `first:50`, Antworten
- * werden nur gezählt, nicht geladen); sonst ein leerer String. Pur; kaputte oder fehlende Zähler ergeben keinen Hinweis.
+ * je Kommentar über `first:20`); fehlen Antworten eines Kommentars, steht dahinter „weitere Antworten nicht geladen“. Sonst ein leerer String.
+ * Pur; kaputte oder fehlende Zähler ergeben keinen Hinweis.
  */
 export function kuerzungsHinweis(discussion) {
   const gesamt = zaehler(discussion?.comments?.totalCount);
   if (gesamt === null) return "";
   const nodes = discussion.comments.nodes ?? [];
-  const antworten = nodes.reduce((s, k) => s + (zaehler(k?.replies?.totalCount) ?? 0), 0);
-  const y = gesamt + antworten;
-  return y > nodes.length ? `Thread gekürzt: ${nodes.length} von ${y} Kommentaren/Antworten` : "";
+  const antwortenGesamt = nodes.reduce((s, k) => s + (zaehler(k?.replies?.totalCount) ?? 0), 0);
+  const antwortenGeladen = nodes.reduce((s, k) => s + antwortenVon(k).length, 0);
+  const y = gesamt + antwortenGesamt;
+  const x = nodes.length + antwortenGeladen;
+  if (y <= x) return "";
+  return `Thread gekürzt: ${x} von ${y} Kommentaren/Antworten${antwortenGesamt > antwortenGeladen ? " (weitere Antworten nicht geladen)" : ""}`;
 }
 
 /**
@@ -69,13 +76,14 @@ export function quarantaeneText(discussion, sanitize, nonce) {
     `=== BEITRAG 1 [${nonce}]: Eröffnung von @${login(discussion?.author)} ===`,
     sanitize(discussion?.bodyText ?? "", true),
   ];
-  kommentare.forEach((k, i) => {
-    teile.push(
-      "",
-      `=== BEITRAG ${i + 2} [${nonce}]: Kommentar von @${login(k?.author)}, ${zeitpunkt(k?.createdAt)} ===`,
-      sanitize(k?.bodyText ?? "", true),
-    );
-  });
+  let nr = 1;
+  for (const k of kommentare) {
+    const kommentarNr = ++nr;
+    teile.push("", `=== BEITRAG ${kommentarNr} [${nonce}]: Kommentar von @${login(k?.author)}, ${zeitpunkt(k?.createdAt)} ===`, sanitize(k?.bodyText ?? "", true));
+    for (const a of antwortenVon(k)) {
+      teile.push("", `=== BEITRAG ${++nr} [${nonce}]: Antwort auf Kommentar ${kommentarNr} von @${login(a?.author)}, ${zeitpunkt(a?.createdAt)} ===`, sanitize(a?.bodyText ?? "", true));
+    }
+  }
   teile.push("", `=== ENDE [${nonce}] ===`, "");
   return teile.join("\n");
 }
@@ -101,7 +109,8 @@ const gh = (args) => {
 
 const QUERY = `query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){
   discussion(number:$num){ title bodyText author{login}
-    comments(first:50){ totalCount nodes { author{login} bodyText createdAt replies{ totalCount } } } } } }`;
+    comments(first:50){ totalCount nodes { author{login} bodyText createdAt
+      replies(first:20){ totalCount nodes { author{login} bodyText createdAt } } } } } } }`;
 
 /** Abhängigkeiten von `main` (Tests injizieren gh, Entschärfer, Wurzel und Ausgabe). */
 const STANDARD = { gh, sanitize: sanitizeSpawn, wurzel: WURZEL, nonce: () => randomBytes(8).toString("hex"), log: console.log };
@@ -119,7 +128,7 @@ function inbox(nr, d) {
   mkdirSync(dirname(pfad), { recursive: true });
   writeFileSync(pfad, text, "utf8");
   const hinweis = kuerzungsHinweis(disc);
-  d.log(`Datei: ${pfad}\nDiscussion: #${n}\nBeiträge: ${1 + (disc.comments?.nodes?.length ?? 0)}\nZeichen: ${text.length}${hinweis ? `\n${hinweis}` : ""}`);
+  d.log(`Datei: ${pfad}\nDiscussion: #${n}\nBeiträge: ${1 + (disc.comments?.nodes ?? []).reduce((s, k) => s + 1 + antwortenVon(k).length, 0)}\nZeichen: ${text.length}${hinweis ? `\n${hinweis}` : ""}`);
 }
 
 /** CLI-Kern: wirft bei jedem Fehler, schreibt erst nach erfolgreichem Aufbau (keine Teildatei). */

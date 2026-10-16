@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/wiedervorlage.mjs";
 
-type E = { id: string; faellig: string; titel: string; text: string; label?: string };
+type E = { id: string; faellig: string; titel: string; text: string; label?: string; alerts?: unknown };
 type T = { number: number; state: string; body: string };
 type Aktion = { art: string; eintrag: E; nummer?: number };
 const W = raw as unknown as {
@@ -30,6 +30,12 @@ describe("pruefeEintraege", () => {
     expect(W.pruefeEintraege([e("a", "2026-11-13", { label: "" })]).join()).toContain("„label“");
     expect(W.pruefeEintraege([null]).join()).toContain("kein Objekt");
     expect(W.pruefeEintraege({})).toHaveLength(1);
+  });
+  test("alerts: gültige Nummernliste ok; leer, kein Array, Nicht-Ganzzahl, 0, negativ sind rot", () => {
+    expect(W.pruefeEintraege([e("codescanning-x", "2026-11-13", { alerts: [5, 7] })])).toEqual([]);
+    for (const a of [[], "5", [1.5], [0], [-3], ["5"], [5, null], 5]) {
+      expect(W.pruefeEintraege([e("codescanning-x", "2026-11-13", { alerts: a })]).join(), JSON.stringify(a)).toContain("„alerts“");
+    }
   });
   test("ungültige Daten: Monat 13, 30. Februar, falsches Format", () => {
     for (const d of ["2026-13-01", "2026-02-30", "13.11.2026", "2026-1-1"]) {

@@ -8,8 +8,12 @@
  * (3) Urteil und Spielunabhängig nutzen nur das feste Vokabular. Negativfälle gegen die pure Hilfsfunktionen.
  * Bewusste Grenzen: Der Generator benennt Hooks nur je Event, ein neuer Guard unter einem bestehenden Event verlangt keine neue Zeile;
  * eine Erwähnung des Namens in Backticks in der ersten Zelle genügt als Zeile; ein Marker in einem Codeblock zählt;
- * die Abschnitte B und C (Skripte, Regeln) sind Handlisten ohne Generator-Abgleich. */
+ * die Abschnitte B und C (Skripte, Regeln) sind Handlisten ohne Generator-Abgleich.
+ * Einordnung (#1693): jede Datei unter scripts/ aus Besitz-Manifest und Kern-Abdeckung (Art `modul`) steht in einer Zeile, jeder
+ * genannte Name ist auflösbar und eingeordnet, die Spalte „Modul“ stimmt mit der Art überein. Ring und ja/teilweise/nein werden
+ * bewusst nicht abgeglichen (ADR 0022 §1 Ausnahmen); das Manifest bleibt die Besitz-SSOT. */
 import { describe, expect, test } from "vitest";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -175,5 +179,114 @@ describe("harness-inventar.md: festes Vokabular (#1361)", () => {
     expect(vokabularProbleme([z("ersetzen", "ja (unklar)")]).join()).toContain("Spielunabhängig");
     expect(doppelt([z("a", "ja"), { zellen: ["`a`, `b`", "", "", "behalten", "ja"] }])).toEqual(["a"]);
     expect(vokabularProbleme([{ zellen: ["`a`", "z"] }]).join()).toContain("2 statt 5");
+  });
+});
+
+type Abdeckung = Record<string, { art: string }>;
+type Einordnung = { zeilen: Zeile[]; besitz: { pfad: string }[]; abdeckung: Abdeckung; dateien: string[] };
+
+/** Repo-Pfad eines Backtick-Tokens der ersten Zelle, oder null (Agent, Hook-Ereignis, Flag, Platzhalter). Pur. */
+function tokenPfad(token: string): string | null {
+  const name = token.split(/\s/)[0];
+  if (/^[\w.*-]+\.(mjs|cjs)$/.test(name)) return `scripts/${name}`;
+  if (/^[\w.*-]+\.yml$/.test(name)) return `.github/workflows/${name}`;
+  if (name.includes("/") && /^[\w.*/-]+$/.test(name)) return name;
+  return null;
+}
+
+/** Dateien, die ein Pfad, Glob (`*` = ein Segment) oder Verzeichnis (Endung `/`) trifft. Pur. */
+function treffer(pfad: string, dateien: string[]): string[] {
+  if (pfad.endsWith("/")) return dateien.filter((d) => d.startsWith(pfad));
+  const re = new RegExp(`^${pfad.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*")}$`);
+  return dateien.filter((d) => re.test(d));
+}
+
+/** Meldungen zur Einordnung der Skripte: Vollständigkeit (R1), Auflösbarkeit (R2), Spalte „Modul“ (R3). Pur. */
+function einordnungsProbleme({ zeilen, besitz, abdeckung, dateien }: Einordnung): string[] {
+  const probleme: string[] = [];
+  const modul = new Set(Object.entries(abdeckung).filter(([, v]) => v.art === "modul").map(([k]) => k));
+  const eingeordnet = new Set([...besitz.map((b) => b.pfad), ...Object.keys(abdeckung)]);
+  const genannt = new Set<string>();
+  for (const z of zeilen) {
+    const name = z.zellen[0];
+    const dieZeile = new Set<string>();
+    for (const m of name.matchAll(/`([^`]+)`/g)) {
+      const pfad = tokenPfad(m[1]);
+      if (pfad === null) continue;
+      const hits = treffer(pfad, dateien);
+      if (hits.length === 0) probleme.push(`${name}: ${pfad} nicht auflösbar`);
+      for (const h of hits) {
+        dieZeile.add(h);
+        genannt.add(h);
+        if (!eingeordnet.has(h)) probleme.push(`${name}: ${h} weder im Besitz-Manifest noch in der Kern-Abdeckung`);
+      }
+    }
+    const nichtModul = [...dieZeile].filter((d) => !modul.has(d));
+    const spalteModul = z.zellen[4]?.startsWith("Modul") ?? false;
+    if (spalteModul && nichtModul.length > 0) probleme.push(`${name}: Modul-Zeile nennt ${nichtModul.join(", ")}`);
+    if (!spalteModul && dieZeile.size > 0 && nichtModul.length === 0) probleme.push(`${name}: nennt nur Modul-Dateien, Spalte „${z.zellen[4]}“`);
+  }
+  const skripte = [...besitz.map((b) => b.pfad), ...modul].filter((p) => /^scripts\/.+\.(mjs|cjs)$/.test(p));
+  for (const p of new Set(skripte)) if (!genannt.has(p)) probleme.push(`${p} steht in keiner Inventarzeile`);
+  return probleme;
+}
+
+describe("harness-inventar.md: Einordnung der Skripte (#1693)", () => {
+  const dateien = ["scripts/a.mjs", "scripts/b.mjs", "scripts/lib/c.mjs", "scripts/worktree-guard-x.mjs", ".github/workflows/t.yml"];
+  const rolle = (name: string, ja = "teilweise"): Zeile => ({ zellen: [name, "z", "n", "behalten", ja] });
+  const lauf = (zeilen: Zeile[], over: Partial<Einordnung> = {}) =>
+    einordnungsProbleme({ zeilen, besitz: [{ pfad: "scripts/a.mjs" }], abdeckung: { "scripts/b.mjs": { art: "modul" } }, dateien, ...over });
+
+  test("die echten Quellen sind lückenlos eingeordnet", () => {
+    const besitz = (JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string }[] }).eintraege;
+    const abdeckung = JSON.parse(readFileSync(join(WURZEL, "test/harness/kern-abdeckung.json"), "utf8")) as Abdeckung;
+    const dateien = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8" }).split(/\r?\n/).filter((d) => d !== "");
+    expect(einordnungsProbleme({ zeilen: inventarZeilen(seite()), besitz, abdeckung, dateien })).toEqual([]);
+  });
+
+  test("Positiv: Name, Glob, Verzeichnis, Workflow, gemischte Zeile und Nicht-Dateien", () => {
+    const besitz = [{ pfad: "scripts/a.mjs" }, { pfad: "scripts/lib/c.mjs" }, { pfad: ".github/workflows/t.yml" }];
+    const zeilen = [rolle("Eins (`a.mjs`, `Hook`, `--flag`, `<x>`, `t.yml`)"), rolle("Zwei (`b.mjs`)", "Modul"), rolle("`scripts/lib/`")];
+    expect(lauf(zeilen, { besitz })).toEqual([]);
+    expect(lauf([rolle("`a.mjs --flag`"), rolle("`b.mjs`", "Modul")])).toEqual([]);
+    expect(lauf([rolle("`a.mjs`, `b.mjs`")])).toEqual([]);
+    expect(lauf([rolle("`a.mjs`, `b.mjs`", "Modul")]).join()).toContain("Modul-Zeile nennt scripts/a.mjs");
+  });
+
+  test("Negativ R1: eine Datei ohne Zeile wird gemeldet (Besitz und Modul)", () => {
+    expect(lauf([rolle("`a.mjs`")]).join()).toContain("scripts/b.mjs steht in keiner Inventarzeile");
+    expect(lauf([rolle("`b.mjs`", "Modul")]).join()).toContain("scripts/a.mjs steht in keiner Inventarzeile");
+    expect(lauf([rolle("`a.mjs`")], { abdeckung: { "scripts/b.mjs": { art: "projekt" } } })).toEqual([]);
+  });
+
+  test("Negativ R1: ein Glob oder Verzeichnis deckt nur seine Treffer", () => {
+    const o = { besitz: [{ pfad: "scripts/worktree-guard-x.mjs" }, { pfad: "scripts/lib/c.mjs" }], abdeckung: {} };
+    expect(lauf([rolle("`worktree-guard-*.mjs`"), rolle("`scripts/lib/`")], o)).toEqual([]);
+    expect(lauf([rolle("`guard-*.mjs`"), rolle("`scripts/lib/`")], o).join()).toContain("nicht auflösbar");
+    expect(lauf([rolle("`worktree-guard-*.mjs`")], o).join()).toContain("scripts/lib/c.mjs steht in keiner");
+    expect(lauf([rolle("`scripts/leer/`")], o).join()).toContain("scripts/leer/ nicht auflösbar");
+  });
+
+  test("Negativ R2: Tippfehler, nicht eingeordnete Datei, nicht eingeordneter Workflow", () => {
+    const grund = [rolle("`a.mjs`"), rolle("`b.mjs`", "Modul")];
+    expect(lauf([...grund, rolle("`aa.mjs`")]).join()).toContain("scripts/aa.mjs nicht auflösbar");
+    expect(lauf([...grund, rolle("`scripts/lib/c.mjs`")]).join()).toContain("weder im Besitz-Manifest");
+    expect(lauf([...grund, rolle("`t.yml`")]).join()).toContain(".github/workflows/t.yml");
+  });
+
+  test("Negativ R3: reine Modul-Zeile mit teilweise, Modul-Zeile mit Besitz-Datei, Zeile ohne Dateien bleibt frei", () => {
+    const sicher = rolle("`a.mjs`");
+    expect(lauf([sicher, rolle("`b.mjs`", "teilweise")]).join()).toContain("nennt nur Modul-Dateien, Spalte „teilweise“");
+    expect(lauf([rolle("`a.mjs`", "Modul"), rolle("`b.mjs`", "Modul")]).join()).toContain("Modul-Zeile nennt scripts/a.mjs");
+    expect(lauf([sicher, rolle("`b.mjs`", "Modul"), rolle("`Agent`", "Modul"), rolle("`Hook`", "ja")])).toEqual([]);
+    expect(lauf([sicher, rolle("`b.mjs`", "Modul"), { zellen: ["`Agent`"] }])).toEqual([]);
+  });
+
+  test("CRLF-Seiten ergeben dieselben Zeilen und Funde wie LF", () => {
+    const text = `${KOPF}\n|---|---|---|---|---|\n| \`a.mjs\` | z | n | behalten | ja |\n`;
+    const o = { abdeckung: {} };
+    expect(inventarZeilen(text.replace(/\n/g, "\r\n"))).toEqual(inventarZeilen(text));
+    expect(lauf(inventarZeilen(text.replace(/\n/g, "\r\n")), o)).toEqual([]);
+    expect(lauf([], o).join()).toContain("scripts/a.mjs steht in keiner");
   });
 });

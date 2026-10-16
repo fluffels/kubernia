@@ -120,6 +120,33 @@ function pruefe(yml: string, art: "codeql" | "scorecard"): string[] {
   return fehler;
 }
 
+/**
+ * Regeln für `codescanning-inbox.yml` (hält PROJECT_TOKEN): oberste `permissions` vorhanden und ohne `write` (Schreibrechte nur im Job, hier
+ * `issues`), jeder Checkout mit `persist-credentials: false`. Leer = ok.
+ */
+function pruefeInbox(yml: string): string[] {
+  let wf: unknown;
+  try {
+    wf = parse(String(yml ?? ""));
+  } catch {
+    return ["YAML nicht lesbar"];
+  }
+  if (!istObj(wf)) return ["kein Workflow-Objekt"];
+  const fehler: string[] = [];
+  if (wf.permissions === undefined) fehler.push("permissions: auf oberster Ebene fehlt");
+  else if (schreibRechte(wf.permissions).length) fehler.push("oberste permissions enthalten write");
+  const jobs = istObj(wf.jobs) ? Object.entries(wf.jobs).filter((e): e is [string, Obj] => istObj(e[1])) : [];
+  if (jobs.length === 0) fehler.push("keine Jobs gefunden");
+  for (const [name, j] of jobs) {
+    for (const s of Array.isArray(j.steps) ? j.steps.filter(istObj) : []) {
+      if (typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && !(istObj(s.with) && s.with["persist-credentials"] === false)) {
+        fehler.push(`Job ${name}: Checkout ohne persist-credentials: false`);
+      }
+    }
+  }
+  return fehler;
+}
+
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const CHECKOUT = `      - uses: actions/checkout@${SHA} # v7.0.1\n        with:\n          persist-credentials: false`;
 const ANALYZE = `      - uses: github/codeql-action/analyze@${SHA} # v4.39.0`;
@@ -167,6 +194,9 @@ describe("echte Dateien", () => {
       expect(pruefe(lies(".github", "workflows", datei), art)).toEqual([]);
     });
   }
+  test("codescanning-inbox.yml: oben kein write, Checkout ohne gespeicherte Zugangsdaten", () => {
+    expect(pruefeInbox(lies(".github", "workflows", "codescanning-inbox.yml"))).toEqual([]);
+  });
   test("PIN_PFLICHT: jede Datei der Liste ist komplett gepinnt", () => {
     for (const d of PIN_PFLICHT) expect(ungepinnteUses(lies(".github", "workflows", d)), d).toEqual([]);
   });
@@ -176,6 +206,34 @@ describe("Fixtures: gültige Grundform", () => {
   test("codeql und scorecard ohne Verstöße", () => {
     expect(pruefe(codeql(), "codeql")).toEqual([]);
     expect(pruefe(scorecard(), "scorecard")).toEqual([]);
+  });
+});
+
+describe("Inbox-Workflow: Fixtures", () => {
+  const inbox = (o: { top?: string; checkout?: string } = {}) =>
+    [
+      "name: Code-Scanning-Inbox",
+      "on:",
+      "  workflow_dispatch: {}",
+      o.top ?? "permissions: {}",
+      "jobs:",
+      "  inbox:",
+      "    permissions:",
+      "      contents: read",
+      "      issues: write",
+      "    steps:",
+      o.checkout ?? CHECKOUT,
+    ].join("\n");
+  test("gültige Grundform (Job darf issues: write)", () => expect(pruefeInbox(inbox())).toEqual([]));
+  test("oben write", () => expect(pruefeInbox(inbox({ top: "permissions:\n  issues: write" }))).toEqual(["oberste permissions enthalten write"]));
+  test("oben write-all", () => expect(pruefeInbox(inbox({ top: "permissions: write-all" }))).toEqual(["oberste permissions enthalten write"]));
+  test("oben permissions fehlen", () => expect(pruefeInbox(inbox({ top: "" }))).toEqual(["permissions: auf oberster Ebene fehlt"]));
+  test("Checkout ohne with", () => expect(pruefeInbox(inbox({ checkout: `      - uses: actions/checkout@${SHA} # v7.0.1` }))).toEqual([expect.stringContaining("persist-credentials")]));
+  test("Checkout mit persist-credentials: true", () =>
+    expect(pruefeInbox(inbox({ checkout: `      - uses: actions/checkout@${SHA} # v7.0.1\n        with:\n          persist-credentials: true` }))).toEqual([expect.stringContaining("persist-credentials")]));
+  test("kaputtes YAML, leere Eingabe: fail-closed", () => {
+    expect(pruefeInbox(":::\n\t- [").length).toBeGreaterThan(0);
+    expect(pruefeInbox("").length).toBeGreaterThan(0);
   });
 });
 

@@ -4,11 +4,11 @@
  * Das Stundenkontingent (core und graphql, je 5000 Punkte) teilen sich alle Agenten und Workflows eines Tokens.
  * Ist es leer, scheitern Board-Läufe mitten in einer Mutation. Dieses Modul
  *  - liest `gh api rate_limit` (zählt laut GitHub-Doku nicht gegen das Primärlimit),
- *  - bricht teure Läufe vorab sauber ab (lokal Exit 3 mit Reset-Zeit; unter GitHub Actions nur eine Warnung, damit `main` nicht rot wird),
+ *  - bricht teure Läufe vorab sauber ab (lokal Exit 5 mit Reset-Zeit; unter GitHub Actions nur eine Warnung, damit `main` nicht rot wird),
  *  - protokolliert die Kosten je Skriptlauf (Delta der `used`-Werte; enthält auch den Verbrauch paralleler Agenten desselben Tokens)
  *    als JSONL in `os.tmpdir()` (Override `KQ_GH_KOSTEN_LOG`), unter Actions als `::notice`.
  *
- * Aufruf: `node scripts/gh-kontingent.mjs` zeigt den Stand (Exit 3 bei < 10 %), `--bericht` aggregiert das Log je Skript.
+ * Aufruf: `node scripts/gh-kontingent.mjs` zeigt den Stand (Exit 5 bei < 10 %), `--bericht` aggregiert das Log je Skript.
  * Es liest nur über `gh-cli.mjs` (der Wächter `test/harness/gh-cli.test.ts` verbietet einen direkten `gh`-Aufruf).
  */
 import { existsSync, readFileSync } from "node:fs";

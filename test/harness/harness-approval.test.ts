@@ -81,7 +81,7 @@ function sourcePaths(src: ProtectedSource): Set<string> {
 // CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
 // AGENTS.md als geladene SSOT verdrängen und muss darum auditpflichtig sein.
 // Dasselbe gilt für CLAUDE.local.md (#1116) – der Abgleich matcht per Substring, `CLAUDE.md` trifft sie nicht.
-const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".mcp.json", "scripts/playwright-mcp.mjs", "scripts/mcp-launch.mjs", "scripts/likec4-mcp.mjs", ".agents/", "docs/agent-harness"];
+const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".mcp.json", "scripts/mcp-launch.mjs", ".agents/", "docs/agent-harness"];
 
 /**
  * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
@@ -187,6 +187,11 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
         fehlend.join("\n"),
     );
   });
+
+  test("MCP-Launcher sind per Namenskonvention `scripts/*-mcp.mjs` geschützt, in Quelle UND CODEOWNERS (#1693)", () => {
+    // Der Normalisierer schneidet am Glob ab (`scripts/`), darum prüft nur der Roh-Eintrag die Konvention; ein neuer Launcher braucht keinen eigenen Eintrag.
+    assert.ok(Object.values(quelle).flat().includes("/scripts/*-mcp.mjs"), "Quelle ohne /scripts/*-mcp.mjs");
+    assert.match(codeowners, /^\/scripts\/\*-mcp\.mjs\s+@/m, "CODEOWNERS ohne /scripts/*-mcp.mjs");  });
 
   test("jede AGENTS.md ist geschützt, auch modul-lokale – in Quelle UND CODEOWNERS (#1168)", () => {
     // Der Sync-Test oben fängt das nicht: `/AGENTS.md` und `AGENTS.md` normalisieren beide auf

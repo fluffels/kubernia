@@ -91,7 +91,7 @@ export function verloreneZeilen(alt, neu) {
   const da = new Set(zeilen(neu).map(norm).filter(Boolean));
   return zeilen(alt)
     .map((z) => z.trim())
-    .filter((z) => z !== "" && !/^(?:```|~~~)/.test(z) && !/^#{1,2}\s/.test(z) && !/^[-*_=]+$/.test(z))
+    .filter((z) => z !== "" && !/^(?:```|~~~)/.test(z) && !/^#{1,2}\s/.test(z) && !/^(?:[-*_=]+|(?:[-*_]\s*){3,})$/.test(z))
     .filter((z) => !da.has(norm(z)));
 }
 

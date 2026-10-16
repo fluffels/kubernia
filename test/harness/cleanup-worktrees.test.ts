@@ -1193,6 +1193,28 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
   });
 });
 
+describe("fixOrphans entfernt einen leeren, nicht registrierten Ordner wirklich (#1693 L64)", () => {
+  type Fix = (m: string, w: string, o: string[], d?: object) => { removed: string[]; errors: string[]; pending: string[] };
+  test("echtes Dateisystem: der leere Rest-Ordner verschwindet (Exit-Weg des Hauptchats nach cwd-Sperre), ein Nachbar bleibt", async () => {
+    const { mkdtempSync, mkdirSync, existsSync, rmSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = mkdtempSync(join(tmpdir(), "kq-leer-"));
+    try {
+      const wt = join(root, ".claude", "worktrees");
+      mkdirSync(join(wt, "kq-9"), { recursive: true });
+      mkdirSync(join(wt, "kq-8"), { recursive: true });
+      writeFileSync(join(wt, "kq-8", "datei.txt"), "x");
+      const r = (fixOrphans as unknown as Fix)(root, wt, ["kq-9"], { execSync: () => "" });
+      assert.deepEqual(r.removed, ["kq-9"]);
+      assert.equal(existsSync(join(wt, "kq-9")), false);
+      assert.equal(existsSync(join(wt, "kq-8", "datei.txt")), true, "nur der genannte Ordner wird angefasst");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("keine echten Prozessstarts (#1526)", () => {
   test("kein Test dieser Datei hat PowerShell gestartet (listProcesses ist überall injiziert)", () => {
     assert.equal(powershellStarts.n, 0, "ein deps-Objekt ohne `listProcesses` löst unter Windows einen echten PowerShell/WMI-Start aus (~600 ms)");
