@@ -421,6 +421,7 @@ describe("importeAus / lokaleImporteTransitiv (gemeinsamer Helfer, #1646)", () =
   test("importeAus erkennt alle Formen, auch die großzügige Aufruf-Form; dynamische Pfade nicht", () => {
     assert.deepEqual(importeAus('import { x } from "./a.mjs";'), ["./a.mjs"]);
     assert.deepEqual(importeAus("import './a.mjs';"), ["./a.mjs"]);
+    assert.deepEqual(importeAus('import y from "./c.mjs"; import z from "../d.mjs";'), ["./c.mjs", "../d.mjs"]);
     assert.deepEqual(importeAus('export { x } from "./a.mjs";'), ["./a.mjs"]);
     assert.deepEqual(importeAus('const m = await import("./a.mjs");'), ["./a.mjs"]);
     assert.deepEqual(importeAus("const q = require('../layers');"), ["../layers"]);

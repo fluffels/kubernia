@@ -42,6 +42,8 @@ export function importeAus(text: string): string[] {
   return [
     ...new Set([
       ...[...text.matchAll(/^\s*(?:import|export)\s+(?:[^;]*?\sfrom\s+)?["']([^"']+)["']/gm)].map((m) => m[1]),
+      ...[...text.matchAll(/\bfrom\s+["']([^"']+)["']/g)].map((m) => m[1]),
+      ...[...text.matchAll(/\bimport\s+["']([^"']+)["']/g)].map((m) => m[1]),
       ...[...text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
       ...[...text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
       ...[...text.matchAll(/\bcreateRequire\([^)]*\)\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
