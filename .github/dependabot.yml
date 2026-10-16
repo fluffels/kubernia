@@ -103,3 +103,15 @@ updates:
       prefix: "ci(actions)"
     labels:
       - "dependencies"
+
+  # Docker-Basis-Images (Dockerfile, Dockerfile.devpanel): halten die Digest-Pins aktuell, sobald #983 die Images pinnt.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(docker)"
+    labels:
+      - "dependencies"

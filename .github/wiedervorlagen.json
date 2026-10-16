@@ -16,5 +16,17 @@
     "faellig": "2026-11-15",
     "titel": "braces-Advisory GHSA-vfj7-8cjw-p6xm prüfen (bewusst akzeptiert)",
     "text": "Kein gepatchter Stand (`first_patched_version: null`, Stand 2026-10-16). Nur Dev: `vite-plugin-singlefile` 2.3.3 -> `micromatch` 4.0.8 -> `braces` 3.0.3, dazu `likec4` 1.59.4; `npm audit --omit=dev` meldet 0. Die Muster stammen aus der eigenen Build-Konfiguration, nicht aus Eingaben, nicht ausnutzbar. Prüfauftrag: gibt es ein gepatchtes `braces`/`micromatch`, dann per `overrides` oder Update einziehen."
+  },
+  {
+    "id": "codescanning-sastid",
+    "faellig": "2026-10-30",
+    "titel": "Code-Scanning SASTID (Alert 54) prüfen",
+    "text": "Der Scorecard-Fund SASTID heilt, sobald 30/30 Commits einen CodeQL-Lauf haben (Stand 22/30 am 2026-10-16). Ist Alert 54 dann zu, diesen Eintrag löschen; sonst Ursache klären (Lauf auf jedem Commit?) statt dismissen."
+  },
+  {
+    "id": "codescanning-pinneddependenciesid",
+    "faellig": "2026-11-13",
+    "titel": "Code-Scanning PinnedDependenciesID: Stand von #983 prüfen",
+    "text": "Pinning läuft in #983 (Alerts 6 bis 53 samt Docker-Basis-Images in `Dockerfile` und `Dockerfile.devpanel`). Ist #983 gemergt und sind die Alerts zu, Eintrag löschen; sonst den Stand in #983 klären."
   }
 ]
