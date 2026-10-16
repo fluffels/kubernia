@@ -254,8 +254,8 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(hinter([b(9), langfuse(2)]), "Langfuse hinten, kein Harness: keine Klemmung").toBeNull();
   });
 
-  test("der Titel, an dem die Klemmung das Sammelticket erkennt, steht wörtlich in AGENTS.md, Workflow und ticket-reihenfolge.md (keine stille Drift)", () => {
-    for (const datei of ["AGENTS.md", ".claude/workflows/kubernia-ticket.js", "docs/ticket-reihenfolge.md"]) {
+  test("der Titel, an dem die Klemmung das Sammelticket erkennt, steht wörtlich in AGENTS.md, Skill und ticket-reihenfolge.md (keine stille Drift)", () => {
+    for (const datei of ["AGENTS.md", ".claude/skills/kubernia/SKILL.md", "docs/ticket-reihenfolge.md"]) {
       expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.SAMMELTICKET_TITEL);
     }
     for (const datei of ["AGENTS.md", "docs/ticket-reihenfolge.md"]) {

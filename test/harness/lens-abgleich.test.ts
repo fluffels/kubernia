@@ -1,24 +1,17 @@
-/* Lens-Text-Abgleich (#1309, #1311) – Skill-Pfad und Workflow prüfen dieselben Punkte je Brille.
+/* Lens-Struktur im Skill (#1309, #1311) – der Skill `review-lenses` ist die einzige Quelle der Prüfpunkte je Brille.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Die Prüfpunkte jeder Review-Brille haben EINE Quelle: die Aufzählung im Skill
- * `.claude/skills/review-lenses/SKILL.md` (tool-neutral, Skill-Pfad). Der Workflow trägt sie wörtlich in
- * `LENSES[key].pruefpunkte` (normalisiert: ohne `**`, Backticks, Links, Doku-Nummerierung, mit zusammengefasstem
- * Leerraum) und baut den Auftrag daraus. Dieser Wächter verlangt Gleichheit je Brille, in derselben Reihenfolge: ein Punkt
- * nur im Workflow, nur im Skill, ein geändertes Wort oder eine Umordnung wird rot.
- *
- * Der Red-Green-Beweis läuft gegen die echten Texte (Skill und Workflow-Block), nicht gegen Attrappen.
+ * Die Prüfpunkte jeder Review-Brille stehen als Aufzählung im Skill `.claude/skills/review-lenses/SKILL.md`
+ * (tool-neutral). Dieser Wächter verlangt vier Brillen in fester Reihenfolge, je mit Überschrift, Folgeabschnitt und
+ * mindestens einem Prüfpunkt, damit eine umbenannte Überschrift oder ein leerer Abschnitt nicht still eine Brille
+ * entfernt (die Orchestrierung und der Nachweis-Wächter hängen an diesen vier Brillen).
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { blockFunktion, workflowBlock } from "./workflow-block";
 
 const SKILL = readFileSync(new URL("../../.claude/skills/review-lenses/SKILL.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-type Lens = { key: string; pruefpunkte: string[]; auftrag: string };
-// Aus dem vm-Kontext kopieren: Arrays dort haben einen fremden Prototyp (strictes deepEqual wäre sonst rot).
-const lensen: Lens[] = Array.from(blockFunktion<Lens[]>(workflowBlock("// ── Lens-Texte (#1309) — Anfang", "// ── Lens-Texte (#1309) — Ende").block, "LENSES")).map((l) => ({ key: l.key, pruefpunkte: [...l.pruefpunkte], auftrag: l.auftrag }));
 
 /** Je Brille: Skill-Überschrift, Folgeabschnitt und Zeilenform der Prüfpunkte. */
 const BRILLEN: { key: string; kopf: string; ende: string; punkt: RegExp }[] = [
@@ -36,77 +29,31 @@ function abschnitt(skill: string, kopf: string, ende: string): string {
   return skill.slice(von, bis);
 }
 
-/** Skill-Zeile → Workflow-Form (ohne Markdown-Zeichen, Leerraum zusammengefasst, Nummerierung entfernt). */
-const normalisiere = (zeile: string, punkt: RegExp): string =>
-  zeile
-    .replace(punkt, "")
-    .replace(/\*\*/g, "")
-    .replace(/`/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
+/** Die Prüfpunkte eines Skill-Abschnitts. */
+const skillPunkte = (abschn: string, punkt: RegExp): string[] => abschn.split("\n").filter((z) => punkt.test(z));
 
-/** Die normalisierten Prüfpunkte eines Skill-Abschnitts. */
-const skillPunkte = (abschn: string, punkt: RegExp): string[] =>
-  abschn
-    .split("\n")
-    .filter((z) => punkt.test(z))
-    .map((z) => normalisiere(z, punkt));
-
-describe("Lens-Texte: eine Quelle, Skill und Workflow gleich (#1311)", () => {
-  test("vier Brillen im Workflow, vier Überschriften im Skill, dieselben Schlüssel in derselben Reihenfolge", () => {
-    assert.deepEqual(lensen.map((l) => l.key), BRILLEN.map((b) => b.key));
+describe("Lens-Struktur im Skill (#1311)", () => {
+  test("vier Überschriften im Skill, in der Reihenfolge der Brillen", () => {
     const ueberschriften = SKILL.split("\n").filter((z) => /^\*\*Lens \d+ — /.test(z));
-    assert.equal(ueberschriften.length, BRILLEN.length, "eine fünfte Brille im Skill: BRILLEN und Workflow mitziehen");
+    assert.equal(ueberschriften.length, BRILLEN.length, "eine fünfte Brille im Skill: BRILLEN und den Nachweis-Wächter mitziehen");
+    BRILLEN.forEach((b, i) => assert.ok(ueberschriften[i].startsWith(b.kopf.replace(/\.\*\*$/, "")), b.key));
   });
 
   for (const b of BRILLEN) {
-    describe(b.key, () => {
-      const abschn = abschnitt(SKILL, b.kopf, b.ende);
-      const lens = lensen.find((l) => l.key === b.key);
-
-      test("pruefpunkte sind wörtlich gleich den normalisierten Skill-Punkten", () => {
-        assert.ok(lens && lens.pruefpunkte.length > 0, "Brille ohne Prüfpunkte");
-        assert.deepEqual(lens.pruefpunkte, skillPunkte(abschn, b.punkt));
-      });
-
-      test("der Auftrag enthält jeden Prüfpunkt als Listenzeile, Einleitung einzeilig ohne Fragezeichen, Regel-Zeile am Ende", () => {
-        const zeilen = (lens?.auftrag ?? "").split("\n");
-        for (const p of lens?.pruefpunkte ?? []) assert.ok(zeilen.includes(`- ${p}`), `Prüfpunkt fehlt im Auftrag: ${p}`);
-        assert.ok(zeilen[0].startsWith("Lens „"), "Einleitung zuerst");
-        assert.ok(!zeilen[0].includes("?"), "die Einleitung ist kein Prüfpunkt");
-        assert.equal(zeilen[1], "Prüfe:");
-        assert.ok(zeilen.some((z) => z.startsWith("Dein Regel-Ausschnitt")), "Regel-Zeile fehlt");
-        const listenzeilen = zeilen.filter((z) => z.startsWith("- "));
-        assert.equal(listenzeilen.length, lens?.pruefpunkte.length, "keine weiteren Listenpunkte außerhalb der Quelle");
-      });
-
-      test("Red-Green gegen die echten Texte: Wortänderung, Zusatzpunkt und Umordnung werden gemeldet", () => {
-        const echt = skillPunkte(abschn, b.punkt);
-        const wf = lens?.pruefpunkte ?? [];
-        const gleich = (a: string[], c: string[]) => JSON.stringify(a) === JSON.stringify(c);
-        assert.ok(gleich(echt, wf), "Ausgangslage grün");
-        // Wort im Skill geändert
-        const wort = echt[0].split(" ")[1];
-        const zeilen = abschn.split("\n");
-        const k = zeilen.findIndex((z) => b.punkt.test(z));
-        zeilen[k] = zeilen[k].replace(wort, "VERFAELSCHT");
-        assert.ok(!gleich(skillPunkte(zeilen.join("\n"), b.punkt), wf), "geändertes Wort im Skill");
-        // Punkt nur im Skill
-        assert.ok(!gleich(skillPunkte(abschn + (b.key === "doku" ? "\n9. neuer Punkt\n" : "\n- neuer Punkt\n"), b.punkt), wf), "Punkt nur im Skill");
-        // Punkt nur im Workflow
-        assert.ok(!gleich(echt, [...wf, "neuer Punkt"]), "Punkt nur im Workflow");
-        // Umordnung
-        assert.ok(!gleich(echt, [...wf].reverse()), "Umordnung");
-      });
+    test(`${b.key}: der Abschnitt nennt mindestens einen Prüfpunkt`, () => {
+      assert.ok(skillPunkte(abschnitt(SKILL, b.kopf, b.ende), b.punkt).length > 0, "Brille ohne Prüfpunkte");
     });
   }
 
-  test("der gebaute Auftrag trägt den Hinweis (Sabotage-Regel der Test-Lens, Doku-Lens ohne Test-Brille)", () => {
-    const auftrag = (key: string) => lensen.find((l) => l.key === key)?.auftrag ?? "";
-    assert.match(auftrag("test-adaequanz"), /NICHT wegoptimiert/);
-    assert.match(auftrag("test-adaequanz"), /leeren git status --porcelain/);
-    assert.match(auftrag("doku"), /Test-Brille entfällt/);
+  test("Red-Green: ein leerer Abschnitt und eine fehlende Brille werden gemeldet", () => {
+    const b = BRILLEN[0];
+    assert.equal(skillPunkte("**Lens 1 — Architektur.** nur Prosa\n", b.punkt).length, 0, "ohne Listenzeile keine Prüfpunkte");
+    assert.throws(() => abschnitt(SKILL.replace(b.kopf, "**Umbenannt**"), b.kopf, b.ende), /nicht gefunden/);
+  });
+
+  test("die Doku-Lens läuft ohne Test-Brille, die Sabotage-Probe verlangt einen sauberen Stand", () => {
+    assert.match(SKILL, /Test-Adäquanz entfällt, weil es ohne Code nichts zu sabotieren gibt/);
+    assert.match(SKILL, /git status --porcelain\s+# MUSS leer sein/);
   });
 
   test("fehlende Anker im Skill werden laut gemeldet", () => {

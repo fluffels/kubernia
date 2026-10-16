@@ -1,14 +1,13 @@
-/* Review-Nachweis-Wächter (#1270) – Kopplung Workflow ↔ Prüfskript ↔ CI ↔ Texte.
+/* Review-Nachweis-Wächter (#1270) – Kopplung Prüfskript ↔ CI ↔ Texte.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Das Prüfskript `scripts/check-review-nachweis.mjs` verlangt im PR-Slice die Commit-Zeilen `KQ-Plan:` /
- * `KQ-Review:`. Damit der Nachweis pfadunabhängig bleibt, muss der Workflow-Pfad dieselben Zeilen aus
- * Code-Werten schreiben, und alles, was das Skript an Workflow-Wissen dupliziert (Cap, Lens-Satz je
- * Diff-Art), darf nicht still auseinanderlaufen. Geprüft werden:
- *   (a) die Ausgabe von `nachweisZeilen` (Workflow-Block) wird vom Parser angenommen (Roundtrip),
- *   (b) MAX_REVIEW_RUNDEN im Workflow == MAX_FIX_RUNDEN im Skript,
- *   (c) `pflichtLenses` == `lensPlan` für Runde 1 (Block „Review-Staffel (#1265)“),
+ * `KQ-Review:`. Alles, was das Skript an Wissen aus Skill und Format-SSOT dupliziert (Cap, Lens-Satz je
+ * Diff-Art, Brillen-Keys), darf nicht still auseinanderlaufen. Geprüft werden:
+ *   (a) die Zeilen im Format der SSOT (`nachweisZeilen`) werden vom Parser angenommen (Roundtrip),
+ *   (b) MAX_FIX_RUNDEN im Skript == das Cap im Skill,
+ *   (c) `pflichtLenses` je Diff-Art == die Staffel im Skill,
  *   (d) der Required-Job build-test ruft das Skript als Schritt nach „Diff-Basis bestimmen“ auf, mit
  *       pull_request-Bedingung und Dependabot-Ausnahme,
  *   (e) review-lenses-Skill und kubernia-umsetzer verweisen auf das Skript.
@@ -20,7 +19,6 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { blockFunktion, workflowBlock } from "./workflow-block";
 
 type Nachweis = { plan: { art: string } | null; review: { head: string | null; runden: number; lenses: string[]; verdikt: string | null } | null };
 type Mod = {
@@ -38,11 +36,14 @@ const checkReviewNachweis = (raw as unknown as { checkReviewNachweis: (o: { runG
 const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 const SHA = "c".repeat(40);
 
-type Zeilen = (e: { head: string; runden: number; lenses: string[]; plan: unknown }) => string;
-const nachweisBlock = workflowBlock("// ── Review-Nachweis (#1270) — Anfang", "// ── Review-Nachweis (#1270) — Ende").block;
-const nachweisZeilen = blockFunktion<Zeilen>(nachweisBlock, "nachweisZeilen");
+const CODE = ["architektur", "requirement-treue", "test-adaequanz"];
+/** Die zwei Commit-Zeilen im Format der SSOT (docs/agent-harness.md §3a), wie sie der Umsetzer nach der Konvergenz setzt. */
+function nachweisZeilen({ head, runden, lenses, plan }: { head: string; runden: number; lenses: string[]; plan: unknown }): string {
+  const planZeile = plan ? "KQ-Plan: kubernia-planner" : "KQ-Plan: ohne — Planer lieferte keinen Plan";
+  return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(",")} verdikt=ok`;
+}
 
-describe("(a) Workflow schreibt, was das Skript liest", () => {
+describe("(a) Das Format der SSOT ist das, was das Skript liest", () => {
   test("Roundtrip: Planer vorhanden, drei Brillen, zwei Pässe", () => {
     const text = nachweisZeilen({ head: SHA, runden: 2, lenses: ["architektur", "requirement-treue", "test-adaequanz"], plan: "PLAN #1" });
     const n = parseNachweis(text);
@@ -61,29 +62,29 @@ describe("(a) Workflow schreibt, was das Skript liest", () => {
 });
 
 describe("(b) Cap", () => {
-  test("MAX_REVIEW_RUNDEN im Workflow == MAX_FIX_RUNDEN im Skript", () => {
-    const m = /const MAX_REVIEW_RUNDEN = (\d+)/.exec(read(".claude/workflows/kubernia-ticket.js"));
-    assert.ok(m, "MAX_REVIEW_RUNDEN nicht mehr im Workflow gefunden");
-    assert.equal(Number(m[1]), MAX_FIX_RUNDEN);
+  test("MAX_FIX_RUNDEN im Skript == 2 und der Skill nennt dasselbe Cap", () => {
+    assert.equal(MAX_FIX_RUNDEN, 2);
+    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /\*\*Cap 2\*\* Fix-Runden, also höchstens 3 Pässe/);
   });
 });
 
-describe("(c) Pflicht-Lenses == Runde-1-Plan des Workflows", () => {
-  const { block } = workflowBlock("// ── Review-Staffel (#1265) — Anfang", "// ── Review-Staffel (#1265) — Ende");
-  const lensPlan = blockFunktion<(e: { dateien?: unknown }) => { keys: string[] }>(block, "lensPlan");
-  const faelle: [string, unknown][] = [
-    ["nur Markdown", ["AGENTS.md", "docs/a.md"]],
-    ["gemischt", ["docs/a.md", "src/x.ts"]],
-    ["nur Code", ["src/x.ts"]],
-    ["leer", []],
-    ["fehlend", undefined],
-    ["kaputt", ["a.md", ""]],
+describe("(c) Pflicht-Lenses je Diff-Art", () => {
+  const faelle: [string, unknown, string[]][] = [
+    ["nur Markdown", ["AGENTS.md", "docs/a.md"], ["doku"]],
+    ["gemischt", ["docs/a.md", "src/x.ts"], CODE],
+    ["nur Code", ["src/x.ts"], CODE],
+    ["leer", [], CODE],
+    ["fehlend", undefined, CODE],
+    ["kaputt", ["a.md", ""], CODE],
   ];
-  for (const [name, dateien] of faelle) {
+  for (const [name, dateien, erwartet] of faelle) {
     test(name, () => {
-      assert.deepEqual([...pflichtLenses(dateien)], [...lensPlan({ dateien }).keys]);
+      assert.deepEqual([...pflichtLenses(dateien)], erwartet);
     });
   }
+  test("der Skill nennt dieselbe Staffel (reiner Markdown-Diff: eine Lens Doku, sonst drei)", () => {
+    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /nur `\*\.md`-Dateien\*\* [^\n]*Lens 4 — Doku\*\*\. Sonst laufen \*\*Lens 1–3\*\*/);
+  });
 });
 
 describe("(d) CI-Schritt im Required-Job", () => {
@@ -169,97 +170,24 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
   });
 });
 
-describe("Nachweis-Hilfen des Workflows (#1309)", () => {
-  type Stand = { paesse: number; ersteLenses: string[] | null; ersteBlocker?: Record<string, number> | null };
-  // `nachweisStand` zählt mit `blockerVon` aus der Review-Staffel (eine Definition von „Blocker“, #1398): beide Blöcke gemeinsam laden.
-  const staffel = workflowBlock("// ── Review-Staffel (#1265) — Anfang", "// ── Review-Staffel (#1265) — Ende").block;
-  const hilfen = `${staffel}\n${workflowBlock("// ── Review-Nachweis (#1270) — Anfang", "// ── Review-Nachweis (#1270) — Ende").block}`;
-  const nachweisStand = blockFunktion<(s: Stand, e: { modus: string; berichte: { lens: string; findings?: { schwere: string }[] }[] }) => Stand>(hilfen, "nachweisStand");
-  const nachweisFuerPr = blockFunktion<(e: { konvergiert: boolean; head?: string; stand: Stand; plan: unknown }) => string>(hilfen, "nachweisFuerPr");
-  const reviewKonvergiert = blockFunktion<(e: { verifyGruen: boolean; blockierend: unknown[]; fehlend: string[] }) => boolean>(hilfen, "reviewKonvergiert");
-  const fehlendeLenses = blockFunktion<(erwartet: string[], berichte: { lens: string }[]) => string[]>(hilfen, "fehlendeLenses");
-  const normal = (v: unknown) => JSON.parse(JSON.stringify(v)) as unknown;
-  const DREI3 = ["architektur", "requirement-treue", "test-adaequanz"].map((lens) => ({ lens }));
+describe("Das Feld blocker= im Nachweis (#1123)", () => {
+  const DREI = "lenses=architektur,requirement-treue,test-adaequanz";
+  const bewerteB = (review: string, dateien: string[]) =>
+    bewerteNachweis({ nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`), dateien, headBekannt: true, headImSlice: true });
 
-  test("ein voller Pass merkt die Brillen, ein Delta-Pass ersetzt sie nie, jeder zählt als Pass", () => {
-    const nachVoll = nachweisStand({ paesse: 0, ersteLenses: null }, { modus: "voll", berichte: DREI3 });
-    assert.deepEqual(normal(nachVoll), { paesse: 1, ersteLenses: DREI3.map((b) => b.lens), ersteBlocker: { architektur: 0, "requirement-treue": 0, "test-adaequanz": 0 } });
-    const nachDelta = nachweisStand(nachVoll, { modus: "delta", berichte: [{ lens: "architektur" }] });
-    assert.deepEqual(normal(nachDelta), normal({ ...nachVoll, paesse: 2 }));
-    const nachWiederholung = nachweisStand(nachDelta, { modus: "voll", berichte: [{ lens: "doku" }] });
-    assert.deepEqual(normal(nachWiederholung), { paesse: 3, ersteLenses: ["doku"], ersteBlocker: normal(nachVoll.ersteBlocker) }, "ein voller Wiederholungspass ersetzt die Brillen, nie die Runde-1-Blocker");
+  test("blocker= je Brille wird angenommen, auch mit null, und stört die Brillen-Erkennung nicht", () => {
+    const text = `KQ-Review: head=${SHA} runden=2 ${DREI} blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    assert.deepEqual(parseNachweis(text).review?.lenses, ["architektur", "requirement-treue", "test-adaequanz"]);
+    assert.deepEqual(bewerteB(`runden=2 ${DREI} blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok`, ["src/x.ts"]), []);
+    assert.deepEqual(bewerteB("runden=2 lenses=doku blocker=doku:1 verdikt=ok", ["docs/a.md"]), []);
   });
 
-  test("blocker (#1123): nur der erste Pass zählt, nur [blockierend]-Findings, Roundtrip ist gültig", () => {
-    const f = (schwere: string) => ({ schwere });
-    const r1 = DREI3.map((b) => ({ ...b, findings: b.lens === "architektur" ? [f("blockierend"), f("hinweis"), f("blockierend")] : [f("hinweis")] }));
-    const s1 = nachweisStand({ paesse: 0, ersteLenses: null }, { modus: "voll", berichte: r1 });
-    assert.deepEqual(normal(s1.ersteBlocker), { architektur: 2, "requirement-treue": 0, "test-adaequanz": 0 });
-    const s2 = nachweisStand(s1, { modus: "delta", berichte: [{ lens: "architektur", findings: [f("blockierend")] }] });
-    assert.deepEqual(normal(s2.ersteBlocker), normal(s1.ersteBlocker), "ein Delta-Pass überschreibt Runde 1 nie");
-    const text = nachweisFuerPr({ konvergiert: true, head: SHA, stand: s2, plan: "P" });
-    assert.match(text, /lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok/);
-    const n = parseNachweis(text);
-    assert.deepEqual(bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true }), []);
-    const ohne = nachweisFuerPr({ konvergiert: true, head: SHA, stand: { paesse: 2, ersteLenses: ["doku"] }, plan: "P" });
-    assert.ok(!ohne.includes("blocker="), "ohne ersteBlocker kein Feld");
-    const leer = nachweisFuerPr({ konvergiert: true, head: SHA, stand: { paesse: 2, ersteLenses: ["doku"], ersteBlocker: {} }, plan: "P" });
-    assert.ok(!leer.includes("blocker="), "ein leeres Objekt (keine Brille lieferte in Pass 1) schreibt kein leeres Feld");
-    assert.deepEqual(bewerteNachweis({ nachweis: parseNachweis(leer), dateien: ["docs/a.md"], headBekannt: true, headImSlice: true }), []);
+  test("darf NICHT passieren: blocker= nennt eine unbekannte Brille", () => {
+    assert.match(bewerteB(`runden=2 ${DREI} blocker=foo:1 verdikt=ok`, ["src/x.ts"]).join(" "), /unbekannte Brille/);
   });
 
-  test("blocker zählt wie die Schleife (blockerVon): null-Findings und fehlendes Array kippen nicht (#1398)", () => {
-    const berichte = [
-      { lens: "architektur", findings: [null, { schwere: "blockierend" }, undefined, { schwere: "hinweis" }] },
-      { lens: "requirement-treue", findings: "kaputt" },
-      { lens: "test-adaequanz" },
-    ] as unknown as { lens: string; findings?: { schwere: string }[] }[];
-    const s = nachweisStand({ paesse: 0, ersteLenses: null }, { modus: "voll", berichte });
-    assert.deepEqual(normal(s.ersteBlocker), { architektur: 1, "requirement-treue": 0, "test-adaequanz": 0 });
-    // eine Definition: dieselbe Zählung wie die Schleife
-    const blockerVon = blockFunktion<(b: unknown) => unknown[]>(hilfen, "blockerVon");
-    for (const b of berichte) assert.equal((s.ersteBlocker as Record<string, number>)[b.lens], blockerVon(b).length);
-  });
-
-  test("nachweisFuerPr: leer ohne Konvergenz, <SHA> ohne Head, sonst parsebar", () => {
-    const stand = { paesse: 2, ersteLenses: ["doku"] };
-    assert.equal(nachweisFuerPr({ konvergiert: false, head: SHA, stand, plan: "P" }), "");
-    assert.match(nachweisFuerPr({ konvergiert: true, stand, plan: "P" }), /head=<SHA> runden=2 lenses=doku/);
-    const n = parseNachweis(nachweisFuerPr({ konvergiert: true, head: SHA, stand, plan: "P" }));
-    assert.equal(n.review?.head, SHA);
-    assert.equal(n.review?.runden, 2);
-  });
-
-  test("Konvergenz verlangt grünes verify, keine Blocker UND keine fehlende Brille", () => {
-    assert.equal(reviewKonvergiert({ verifyGruen: true, blockierend: [], fehlend: [] }), true);
-    assert.equal(reviewKonvergiert({ verifyGruen: false, blockierend: [], fehlend: [] }), false);
-    assert.equal(reviewKonvergiert({ verifyGruen: true, blockierend: [{}], fehlend: [] }), false);
-    assert.equal(reviewKonvergiert({ verifyGruen: true, blockierend: [], fehlend: ["doku"] }), false);
-  });
-
-  type SchrittIn = { verifyGruen: boolean; blockierend: unknown[]; fehlend: string[]; paesse: number; verifyFixe: number; reviewRunden: number; maxVerifyFixe: number; maxReviewRunden: number };
-  const reviewSchritt = blockFunktion<(e: SchrittIn) => string>(hilfen, "reviewSchritt");
-  const MAX = { maxVerifyFixe: 3, maxReviewRunden: MAX_FIX_RUNDEN };
-  const schritt = (e: Partial<SchrittIn>) => reviewSchritt({ verifyGruen: true, blockierend: [], fehlend: [], paesse: 1, verifyFixe: 0, reviewRunden: 0, ...MAX, ...e });
-
-  test("reviewSchritt (#1331): die Schleifenentscheidung als Tabelle, Cap 2 Fix-Runden und 3 verify-Fixes", () => {
-    assert.equal(schritt({}), "konvergiert");
-    assert.equal(schritt({ blockierend: [{}] }), "nachbessern-review");
-    assert.equal(schritt({ blockierend: [{}], reviewRunden: 1 }), "nachbessern-review", "die zweite Fix-Runde ist erlaubt");
-    assert.equal(schritt({ blockierend: [{}], reviewRunden: 2 }), "review-handoff", "nach Cap 2 Hand-off, kein dritter Fix");
-    assert.equal(schritt({ fehlend: ["doku"] }), "lens-ausfall", "nur ein Lens-Ausfall: keine leere Fix-Runde");
-    assert.equal(schritt({ verifyGruen: false, paesse: 0 }), "nachbessern-verify", "rotes verify vor dem ersten Lens-Pass");
-    assert.equal(schritt({ verifyGruen: false, paesse: 0, verifyFixe: 2 }), "nachbessern-verify");
-    assert.equal(schritt({ verifyGruen: false, paesse: 0, verifyFixe: 3 }), "verify-handoff");
-    assert.equal(schritt({ verifyGruen: false, paesse: 0, reviewRunden: 2 }), "nachbessern-verify", "vor dem ersten Pass zählt der Review-Cap nicht");
-    assert.equal(schritt({ verifyGruen: false, paesse: 1, reviewRunden: 2 }), "review-handoff", "rotes verify nach einem Pass zählt gegen den Review-Cap");
-    assert.equal(schritt({ verifyGruen: false, paesse: 1, blockierend: [{}], reviewRunden: 0 }), "nachbessern-review");
-  });
-
-  test("fehlendeLenses nennt nur die ohne Bericht (auch bei null-Einträgen)", () => {
-    assert.deepEqual(normal(fehlendeLenses(["a", "b"], [{ lens: "a" }])), ["b"]);
-    assert.deepEqual(normal(fehlendeLenses(["a"], [null as unknown as { lens: string }])), ["a"]);
-    assert.deepEqual(normal(fehlendeLenses(["a"], [{ lens: "a" }])), []);
+  test("ohne Feld bleibt der Nachweis gültig (optional)", () => {
+    assert.deepEqual(bewerteB(`runden=1 ${DREI} verdikt=ok`, ["src/x.ts"]), []);
   });
 });
 
@@ -301,22 +229,23 @@ KQ-Review: head=${SHA} runden=1 lenses=doku verdikt=ok`;
   });
 });
 
-describe("(f) BEKANNTE_LENSES == die Brillen-Keys des Workflows (#1349)", () => {
-  const keysDesWorkflows = (quelle: string) => [...quelle.matchAll(/^\s+key: '([a-z-]+)',/gm)].map((m) => m[1]).sort();
-  const lensBlock = workflowBlock("// ── Lens-Texte (#1309) — Anfang", "// ── Lens-Texte (#1309) — Ende").block;
+describe("(f) BEKANNTE_LENSES == die Brillen-Keys der Format-SSOT (#1349)", () => {
+  /** Alle Brillen-Keys, die die Format-SSOT hinter `lenses=` nennt. */
+  const keysDerSsot = (md: string) => [...new Set([...md.matchAll(/lenses=([a-z-]+(?:,[a-z-]+)*)/g)].flatMap((m) => m[1].split(",")))].sort();
+  const ssot = read("docs/agent-harness.md");
 
-  test("die Menge im Skript gleicht den key:-Werten von LENS_QUELLE", () => {
+  test("die Menge im Skript gleicht den Brillen-Keys im Nachweis-Format von agent-harness.md §3a", () => {
     const { BEKANNTE_LENSES } = raw as { BEKANNTE_LENSES: string[] };
-    assert.deepEqual([...BEKANNTE_LENSES].sort(), keysDesWorkflows(lensBlock));
-    assert.ok(keysDesWorkflows(lensBlock).length >= 4, "Key-Extraktion greift (nicht still leer)");
+    assert.deepEqual([...BEKANNTE_LENSES].sort(), keysDerSsot(ssot));
+    assert.ok(keysDerSsot(ssot).length >= 4, "Key-Extraktion greift (nicht still leer)");
   });
 
-  test("darf NICHT passieren: eine umbenannte oder zusätzliche Brille im Workflow macht den Abgleich rot", () => {
+  test("darf NICHT passieren: eine umbenannte oder zusätzliche Brille in der SSOT macht den Abgleich rot", () => {
     const { BEKANNTE_LENSES } = raw as { BEKANNTE_LENSES: string[] };
-    const umbenannt = lensBlock.replace("key: 'doku',", "key: 'dokumentation',");
-    assert.notDeepEqual([...BEKANNTE_LENSES].sort(), keysDesWorkflows(umbenannt));
-    const zusaetzlich = `${lensBlock}\n  key: 'security',`;
-    assert.notDeepEqual([...BEKANNTE_LENSES].sort(), keysDesWorkflows(zusaetzlich));
+    const umbenannt = ssot.replace("lenses=doku ", "lenses=dokumentation ");
+    assert.notDeepEqual([...BEKANNTE_LENSES].sort(), keysDerSsot(umbenannt));
+    const zusaetzlich = `${ssot}\nlenses=security`;
+    assert.notDeepEqual([...BEKANNTE_LENSES].sort(), keysDerSsot(zusaetzlich));
   });
 });
 

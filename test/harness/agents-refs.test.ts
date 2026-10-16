@@ -3,7 +3,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Warum: Workflow-Skript, Skills und Planer-Agent schicken Phasen-Agenten per Freitext
+ * Warum: Skills und Planer-Agent schicken Phasen-Agenten per Freitext
  * auf Stellen in AGENTS.md (`AGENTS.md § Zu großes Ticket`, `§ Kein
  * Grün-durch-Aufweichen`, `§ „Worktree entfernen auf Windows – zwei Fallen"`,
  * `AGENTS.md › Mehr-Perspektiven-Review` …). Das sind meist **fette Bullet-Titel, keine
@@ -154,7 +154,7 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
         `keine Verweise der Form „${form}" extrahiert – Extraktion kaputt oder Form ausgestorben?`,
       );
     }
-    assert.ok(ECHTE_VERWEISE.some((v) => v.datei === ".claude/workflows/kubernia-ticket.js"));
+    assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/agents/")));
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/skills/")));
     // Bewusst KEINE Pflicht auf ein CLAUDE.md-Ziel: diese Verweise sollen mit #1086/#1087 aussterben.
   });

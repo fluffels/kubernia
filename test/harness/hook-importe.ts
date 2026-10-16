@@ -1,7 +1,7 @@
 /**
  * Gemeinsamer Helfer der Wächter (#1331, #1432): welche Skripte startet `.claude/settings.json` als Hook,
  * welche `.mcp.json` als MCP-Server, und welche lokalen Module ziehen sie transitiv nach.
- * Reiner Helfer ohne eigenen Test-Marker (wie `workflow-block.ts`); liegt in test/harness/, damit eine
+ * Reiner Helfer ohne eigenen Test-Marker; liegt in test/harness/, damit eine
  * Änderung an der Ketten-Logik eine Audit-Spur hinterlässt.
  */
 import { posix } from "node:path";

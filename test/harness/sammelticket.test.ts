@@ -11,7 +11,7 @@
  *      `sammelticketPosition` aus AGENTS.md, setzt und prüft die Position; die Zählung (N-1. Todo-Item ohne
  *      das neue Item) liegt getestet in scripts/board-lib.mjs › afterIdForPosition und sammelticketKorrektur.
  *      Die Doku nennt das Skript und keine eigene Zahl.
- *   3. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
+ *   3. Skill `kubernia` und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
  *   4. Das Sammelticket hat keine Zeilengrenze (#1687, ADR 0026): kein `--generation`, keine Grenzzahl, kein
@@ -90,10 +90,9 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.match(agents, /sammelticket-anlegen\.mjs harness/);
   });
 
-  test("der Workflow doppelt die Zahl nicht, sondern verweist auf AGENTS.md", () => {
-    const wf = lies(".claude/workflows/kubernia-ticket.js");
-    assert.doesNotMatch(wf, POSITION_EINZELN);
-    assert.match(wf, /Position laut AGENTS\.md/);
+  test("der Skill doppelt die Zahl nicht, sondern verweist für die Position auf AGENTS.md", () => {
+    const skill = lies(".claude/skills/kubernia/SKILL.md");
+    assert.doesNotMatch(skill, POSITION_EINZELN);
   });
 
   test("der Sammelticket-Abschnitt in ticket-reihenfolge.md doppelt die Zahl nicht", () => {
@@ -120,14 +119,6 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /setze ALLE Zeilen um/);
     assert.match(lies(".claude/agents/kubernia-planner.md"), /plane ALLE Zeilen/);
     assert.match(lies(".claude/skills/kubernia/SKILL.md"), /komplett umsetzen, kein Rest-Übertrag/);
-  });
-
-  test("Workflow-Pfad nimmt keine Sammeltickets (#1646): Titel-Prüfung im Code leitet auf den Skill-Pfad weiter", () => {
-    const wf = lies(".claude/workflows/kubernia-ticket.js");
-    assert.match(wf, /\\\(gesammelt\\\)\\s\*\$\/i\.test\(String\(auswahl\.titel/, "deterministische Titel-Prüfung direkt nach der Auswahl");
-    assert.match(wf, /return \{ ergebnis: 'skill-pfad', nummer/);
-    assert.match(wf, /enum: \['ticket-geclaimt', 'kein-freies-ticket', 'skill-pfad'\]/);
-    assert.doesNotMatch(wf, /setze ALLE Zeilen um/, "der Sammelticket-Absatz des Umsetzer-Prompts entfällt");
   });
 
   test("Negativfall: der alte Teil-Abarbeiten-Wortlaut steht nirgends mehr im Abschnitt oder in AGENTS.md", () => {

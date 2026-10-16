@@ -11,8 +11,8 @@
  *      Kommentar nach dem Selbst-Merge) lebt tool-neutral in AGENTS.md. Wird sie umformuliert bis
  *      der Marker fehlt, liest ein fremder Agent (der nur AGENTS.md kennt) sie nicht mehr.
  *   2. **Die Pfadlisten driften auseinander.** Die geschützten Pfade stehen genau einmal in
- *      `.github/protected-paths.json`; der Workflow-Auftrag `beruehrtHarness` gleicht per Substring
- *      gegen sie ab. `.github/CODEOWNERS` bleibt handgepflegt (GitHub kann keine Datei einbinden),
+ *      `.github/protected-paths.json`; der Abschluss-Wächter (`scripts/umsetzer-abschluss.mjs`) gleicht
+ *      CODEOWNERS-artig gegen sie ab. `.github/CODEOWNERS` bleibt handgepflegt (GitHub kann keine Datei einbinden),
  *      ist nur noch informativ und wird hier gegen die Quelle geprüft.
  *   3. **Die abgelöste Label-Mechanik kehrt zurück.** Ein Scan über die versionierten Dateien
  *      (außer ADRs als Historie) hält fest, dass der frühere CI-Riegel samt Label nirgends mehr
@@ -45,8 +45,8 @@ const read = (rel: string) => readFileSync(WURZEL + rel, "utf8");
 /**
  * Normalisiert einen geschützten Pfad auf seine Substring-Form: führenden `/` weg
  * (CODEOWNERS-Anker) und ab dem ersten Glob-`*` abschneiden. So werden die zwei
- * Schreibweisen vergleichbar – CODEOWNERS `/scripts/check-*.mjs` und der Substring-Abgleich
- * des Workflows (`beruehrtHarness`) landen beide auf `scripts/check-`.
+ * Schreibweisen vergleichbar – CODEOWNERS `/scripts/check-*.mjs` und die Substring-Form
+ * (Anker und Glob abgeschnitten) landen beide auf `scripts/check-`.
  */
 function normalizeProtected(p: string): string {
   return p.replace(/^\//, "").replace(/\*.*$/, "");
@@ -68,7 +68,7 @@ function codeownersPaths(text: string): Set<string> {
 /** Die Quelle der geschützten Pfade (#1157): Gruppe → Pfade in CODEOWNERS-Schreibweise. */
 type ProtectedSource = Record<string, string[]>;
 
-/** Alle Pfade der Quelle in Substring-Form – dieselbe Abbildung, die der Substring-Abgleich des Workflows vornimmt. */
+/** Alle Pfade der Quelle in Substring-Form (Anker und Glob abgeschnitten). */
 function sourcePaths(src: ProtectedSource): Set<string> {
   return new Set(Object.values(src).flat().map(normalizeProtected));
 }
@@ -144,7 +144,6 @@ const codeowners = read(".github/CODEOWNERS");
 const QUELLE = ".github/protected-paths.json";
 const quelle = JSON.parse(read(QUELLE)) as ProtectedSource;
 const agentsMd = read("AGENTS.md");
-const ticketWf = read(".claude/workflows/kubernia-ticket.js");
 
 describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #1157)", () => {
   test("die Quelle ist eine nicht-leere Gruppe→Pfade-Liste in CODEOWNERS-Schreibweise", () => {
@@ -242,12 +241,6 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
       if (!markiert && imOrdner) falsch.push(`${f}: liegt in ${WAECHTER_ORDNER}, aber ohne @harness-waechter im Kopf`);
     }
     assert.deepEqual(falsch, [], `Wächter-Tests falsch abgelegt (#1165):\n${falsch.join("\n")}`);
-  });
-
-
-  test("der Ticket-Workflow führt keine Spiegel-Liste mehr, sondern verweist auf die Quelle", () => {
-    assert.doesNotMatch(ticketWf, /HARNESS_PFADE/, "kubernia-ticket.js führt wieder eine eigene Pfadliste (HARNESS_PFADE)");
-    assert.ok(ticketWf.includes(QUELLE), `kubernia-ticket.js verweist im Umsetzungs-Prompt nicht auf ${QUELLE}`);
   });
 });
 

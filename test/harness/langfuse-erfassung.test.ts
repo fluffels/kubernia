@@ -259,7 +259,6 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
       ".claude/agents/kubernia-planner.md",
       ".claude/agents/kubernia-umsetzer.md",
       ".claude/skills/kubernia/SKILL.md",
-      ".claude/workflows/kubernia-ticket.js",
     ];
     assert.ok(keinePositionsRegel(dateien.map(read)));
     assert.ok(!keinePositionsRegel(["alles gut", "Nachfolger auf Position 20"]));
@@ -464,18 +463,16 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.ok(!resumeAbschlussDokuStimmig(hp.replaceAll("nicht garantiert", "garantiert")));
   });
 
-  test("Lens, Review-Skill und Workflow: Messbehauptungen nur gegen Rohwerte", () => {
+  test("Lens und Review-Skill: Messbehauptungen nur gegen Rohwerte", () => {
     assert.ok(messbehauptungsRegel(read(".claude/agents/kubernia-lens.md")), "kubernia-lens.md");
     assert.ok(messbehauptungsRegel(read(".claude/skills/review-lenses/SKILL.md")), "review-lenses/SKILL.md");
-    assert.ok(messbehauptungsRegel(read(".claude/workflows/kubernia-ticket.js")), "kubernia-ticket.js");
     assert.ok(!messbehauptungsRegel("Prüfe alles."));
     assert.ok(!messbehauptungsRegel("Messbehauptungen prüfst du gegen Rohwerte."), "ohne den Befund „nicht belegt“ unvollständig");
   });
 
-  test("Planer, Umsetzer und Workflow-Prompt: Zahlen aus dem Plan nur mit Rohwerten (#1322 Z12)", () => {
+  test("Planer und Umsetzer: Zahlen aus dem Plan nur mit Rohwerten (#1322 Z12)", () => {
     assert.ok(planerRohwerteRegel(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md");
     assert.ok(planUebernahmeRegel(read(".claude/agents/kubernia-umsetzer.md")), "kubernia-umsetzer.md");
-    assert.ok(planUebernahmeRegel(read(".claude/workflows/kubernia-ticket.js")), "kubernia-ticket.js (Umsetzen-Prompt)");
     // darf NICHT passieren: eine Hälfte der Regel fehlt
     assert.ok(!planerRohwerteRegel("Messbehauptungen im Plan nur mit Rohwerten."), "ohne die Kennzeichnung als Hypothese unvollständig");
     assert.ok(!planerRohwerteRegel("Zählungen sind schön."));

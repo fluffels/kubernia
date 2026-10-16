@@ -46,6 +46,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0025 Sandbox als Laufumgebung](../adr/0025-sandbox-als-austauschbare-laufumgebung.md) | wenn die Agenten-Sandbox gewechselt, `sandbox-doctor --streng` gebaut oder geprüft werden soll, ob eine Umgebung als gesandboxt gilt (Vertrag V0 bis V7, Docker Sandboxes, eigene Container-Sandbox) |
 | [0026 Sammeltickets in Gruppen](../adr/0026-sammelticket-gruppen.md) | wenn Sammeltickets zu groß oder teuer werden, ein Sammelticket aufgeteilt oder eine Zeilengrenze erwogen werden soll |
 | [0027 Evidenzbasiert lockern](../adr/0027-regeln-lockern.md) | wenn eine Regel, ein Gate, eine Lens, ein Hook, ein Workflow-Schritt oder Prompt-Text entfernt, eingeschränkt oder gekürzt werden soll, oder ein Status-Lauf einen Lockern-Kandidaten meldet |
+| [0028 Genau ein Ticket-Ablauf](../adr/0028-ein-ticket-ablauf.md) | wenn ein zweiter Ticket-Ablauf neben dem Skill `kubernia` (Workflow-Skript, Zeiger-Skill) vorgeschlagen wird, oder der Ersatz einer früher nur im Workflow deterministischen Garantie gesucht wird |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 

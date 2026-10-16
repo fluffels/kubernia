@@ -12,7 +12,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
@@ -48,7 +48,9 @@ export function toolsProbleme(tools: string | null): string[] {
 }
 
 const agenten = readdirSync(root + ".claude/agents").filter((f) => f.endsWith(".md"));
-const workflows = readdirSync(root + ".claude/workflows").filter((f) => f.endsWith(".js"));
+const workflowOrdner = root + ".claude/workflows";
+// Workflows sind optional: es gibt nur welche, wenn das Projekt welche pflegt.
+const workflows = existsSync(workflowOrdner) ? readdirSync(workflowOrdner).filter((f) => f.endsWith(".js")) : [];
 const skills = readdirSync(root + ".claude/skills", { withFileTypes: true })
   .filter((e) => e.isDirectory())
   .map((e) => e.name);
@@ -77,7 +79,6 @@ describe("Kontext-Sockel (#1198)", { timeout: 30_000 }, () => {
   });
 
   test("Workflow-whenToUse ist höchstens 300 Zeichen lang", () => {
-    assert.ok(workflows.length > 0);
     for (const w of workflows) {
       const m = /whenToUse:\s*'((?:[^'\\]|\\.)*)'/.exec(lies(`.claude/workflows/${w}`));
       assert.ok(m, `${w}: whenToUse nicht gefunden`);

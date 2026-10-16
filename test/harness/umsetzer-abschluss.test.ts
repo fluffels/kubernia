@@ -29,7 +29,9 @@ const abschluss = abschlussRaw as unknown as {
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
   letzteNachrichtAusTranskript: (p: string) => string | null;
 };
-const { abschlussBlockade: blockade, parseErgebnis, parseAbschlussInput } = abschluss;
+const { parseErgebnis, parseAbschlussInput } = abschluss;
+// hermetisch: ohne eigene Injektion ruft der Leitplanken-Audit (#1067) nie das echte gh auf
+const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { prDateien: () => [], ...d } as never);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const UMSETZER = readFileSync(resolve(ROOT, ".claude/agents/kubernia-umsetzer.md"), "utf8");
@@ -458,10 +460,9 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
   });
 });
 
-describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
-  // Die Workflow-Umsetzung nutzt nicht den Agenten `kubernia-umsetzer`, sondern einen eigenen Prompt: drei Regeln müssen dort
-  // genauso stehen wie in der Agenten-Definition, sonst driften sie auseinander.
-  const WORKFLOW = readFileSync(resolve(ROOT, ".claude/workflows/kubernia-ticket.js"), "utf8");
+describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
+  // Diese Regeln stehen in der Agenten-Definition; die Gruppen-Rolle trägt die Red-Green-Regel mit.
+  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/kubernia-gruppe.md"), "utf8");
   const KERNPHRASEN = [
     "nie über stdin", // Skripte nie über stdin starten
     "eigenen Negativtest, der genau diese Regel verfälscht", // je neue Guard-/Gate-Regel ein Negativtest
@@ -469,31 +470,16 @@ describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
     "git checkout <datei>", // Red-Green-Probe nie so zurücknehmen (verwirft ungesicherte Änderungen)
   ];
 
-  test("jede Kernphrase steht in der Agenten-Definition und im Workflow", () => {
-    for (const phrase of KERNPHRASEN) {
-      assert.ok(UMSETZER.includes(phrase), `kubernia-umsetzer.md ohne „${phrase}“`);
-      assert.ok(WORKFLOW.includes(phrase), `kubernia-ticket.js ohne „${phrase}“`);
-    }
+  test("jede Kernphrase steht in der Agenten-Definition, die Red-Green-Regel auch in der Gruppen-Rolle", () => {
+    for (const phrase of KERNPHRASEN) assert.ok(UMSETZER.includes(phrase), `kubernia-umsetzer.md ohne „${phrase}“`);
+    assert.ok(GRUPPE.includes("git checkout <datei>"), "kubernia-gruppe.md ohne die Red-Green-Rücknahme-Regel");
+    assert.ok(!UMSETZER.replace("nie über stdin", "").includes("nie über stdin"), "Negativfall: die Prüfung erkennt eine fehlende Phrase");
   });
 
-  test("Verschobener-Code-Prüfung: eine Konstante, Gates- und Push-Absatz interpolieren sie, Skill trägt dieselben Befehle (#1501, #1508)", () => {
-    const diffBefehl = "git diff <basis> <M>^2 -- <alte datei>";
-    const basisBefehl = "git merge-base <M>^1 <M>^2";
-    const def = WORKFLOW.match(/^const VERSCHOBEN_DIFF = `(.*)`/m)?.[1] ?? "";
-    assert.ok(def.includes(diffBefehl), "Konstante ohne Diff der alten Datei gegen die Merge-Basis");
-    assert.ok(def.includes(basisBefehl), "Konstante ohne Merge-Basis-Befehl");
-    // der Befehl steht im Workflow genau einmal (keine Literal-Kopie neben der Konstante)
-    assert.equal(WORKFLOW.split(diffBefehl).length - 1, 1, "Diff-Befehl außerhalb der Konstante kopiert");
-    const gates = WORKFLOW.slice(WORKFLOW.indexOf("Gates: vor dem ersten verify"), WORKFLOW.indexOf("Beim Iterieren gezielt prüfen"));
-    assert.match(gates, /\$\{VERSCHOBEN_DIFF\}/, "Gates-Absatz ohne die Konstante");
-    const von = WORKFLOW.indexOf("Vor dem Push: verschärft der Diff ein Gate oder Schema");
-    const bis = WORKFLOW.indexOf("Nachweis-Commit", von);
-    assert.ok(von >= 0 && bis > von, "Merge-Absatz vor dem Push nicht gefunden");
-    const absatz = WORKFLOW.slice(von, bis);
-    assert.match(absatz, /\$\{VERSCHOBEN_DIFF\}/, "Push-Absatz ohne die Konstante");
-    assert.match(absatz, /verschobene Funktion, ergebnis="fehler"/, "Fehler-Ergebnis für die geänderte verschobene Funktion fehlt");
+  test("Verschobener-Code-Prüfung: der Skill trägt die Befehle für Diff der alten Datei und Merge-Basis (#1501, #1508)", () => {
     const skill = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
-    assert.ok(skill.includes(diffBefehl) && skill.includes(basisBefehl), "review-lenses trägt andere Befehle als der Workflow");
+    assert.ok(skill.includes("git diff <basis> <M>^2 -- <alte datei>"), "review-lenses ohne Diff der alten Datei gegen die Merge-Basis");
+    assert.ok(skill.includes("git merge-base <M>^1 <M>^2"), "review-lenses ohne Merge-Basis-Befehl");
   });
 
   test("Red-Green-Rücknahme per git checkout gehört auch in AGENTS.md und die Langfassung (#1501)", () => {
@@ -504,5 +490,130 @@ describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
         assert.ok(text.includes(teil), `${datei} ohne „${teil}“`);
       }
     }
+  });
+});
+
+describe("Selbstcheck vor jedem Commit (#1625)", () => {
+  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/kubernia-gruppe.md"), "utf8");
+  const LENS = readFileSync(resolve(ROOT, ".claude/agents/kubernia-lens.md"), "utf8");
+  const SKILL = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
+  /** Verlangt der Text den sichtbaren Block `Selbstcheck:` mit den Urteilen ok/gefixt/n.a. und der Lens-3-Quelle? */
+  const verlangtSelbstcheck = (s: string) => /Block `Selbstcheck:`/.test(s) && /`ok`, `gefixt` oder `n.a.`/.test(s) && /Lens 3/.test(s);
+
+  test("Umsetzer und Gruppen-Rolle verlangen den Block, der Umsetzer übernimmt ihn in den PR-Text", () => {
+    assert.ok(verlangtSelbstcheck(UMSETZER), "kubernia-umsetzer.md");
+    assert.ok(/Selbstcheck/.test(GRUPPE), "kubernia-gruppe.md");
+    assert.match(UMSETZER, /derselbe Block steht im PR-Text, kein neues Gate/);
+  });
+
+  test("darf NICHT passieren: die Lenses bekommen den Selbstcheck als Vorgabe (sie prüfen unvoreingenommen)", () => {
+    assert.doesNotMatch(LENS, /Selbstcheck/);
+    assert.doesNotMatch(SKILL, /Selbstcheck/);
+  });
+
+  test("Red-Green: ohne die Urteile oder ohne Block-Kopf greift das Prädikat nicht", () => {
+    assert.ok(!verlangtSelbstcheck(UMSETZER.replace("`ok`, `gefixt` oder `n.a.`", "ein Urteil")));
+    assert.ok(!verlangtSelbstcheck(UMSETZER.replace("Block `Selbstcheck:`", "Hinweis")));
+    assert.ok(!verlangtSelbstcheck(""));
+  });
+});
+
+describe("Leitplanken-Audit (#1067)", () => {
+  type Kommentare = { author?: { login: string }; comments?: { author?: { login: string }; body: string }[] };
+  type AuditDeps = { prStatus?: (nr: string) => Status; prDateien?: (nr: string) => string[]; prKommentare?: (nr: string) => Kommentare };
+  const audit = abschlussRaw as unknown as {
+    trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
+    leitplankenMuster: () => string[];
+    AUDIT_KOPF: string;
+  };
+  const ruf = (text: string, d: AuditDeps) =>
+    (blockade as (i: Eingabe, d: AuditDeps) => string | null)({ hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: text }, {
+      prStatus: () => ({ state: "MERGED", autoMergeRequest: null }),
+      ...d,
+    });
+  const gemergt = (d: AuditDeps) => ruf("ERGEBNIS: gemergt\nPR: #7", d);
+  const mit = (body: string, login = "fluffels"): Kommentare => ({ author: { login: "fluffels" }, comments: [{ author: { login }, body }] });
+  const treffer = (pfad: string, muster: string[]) => audit.trifftLeitplanke(pfad, muster);
+
+  test("Matcher: verankert, Verzeichnis-Präfix, Stern, jede Ebene", () => {
+    assert.ok(treffer(".claude/agents/x.md", ["/.claude/"]));
+    assert.ok(treffer("AGENTS.md", ["AGENTS.md"]));
+    assert.ok(treffer("src/content/AGENTS.md", ["AGENTS.md"]));
+    assert.ok(treffer("scripts/check-size.mjs", ["/scripts/check-*.mjs"]));
+    assert.ok(!treffer("scripts/sub/check-x.mjs", ["/scripts/check-*.mjs"]));
+    assert.ok(treffer("scripts/docs-gen.mjs", ["/scripts/docs-gen*"]));
+    assert.ok(treffer("scripts/docs-gen/config.json", ["/scripts/docs-gen*"]));
+    assert.ok(!treffer("src/main.ts", ["/.claude/", "AGENTS.md", "/scripts/check-*.mjs"]));
+    assert.ok(!treffer("docs/CLAUDE.md", ["/CLAUDE.md"]));
+    assert.ok(!treffer(".claude", ["/.claude/"]));
+  });
+
+  test("echte Liste aus .github/protected-paths.json", () => {
+    const liste = audit.leitplankenMuster();
+    assert.ok(liste.includes("AGENTS.md") && liste.includes("/test/harness/"));
+    assert.ok(treffer("scripts/umsetzer-abschluss.mjs", liste));
+    assert.ok(!treffer("src/main.ts", liste));
+  });
+
+  test("Audit-Kopfzeile steht wörtlich in AGENTS.md", () => {
+    const agents = readFileSync(resolve(ROOT, "AGENTS.md"), "utf8");
+    assert.ok(agents.includes(`„${audit.AUDIT_KOPF}`), "AGENTS.md nennt die Kopfzeile nicht wörtlich");
+  });
+
+  test("gemergt + Leitplanke ohne Audit-Kommentar: blockiert, nennt Treffer", () => {
+    const r = gemergt({ prDateien: () => ["src/main.ts", "AGENTS.md", "scripts/check-x.mjs"], prKommentare: () => mit("LGTM") });
+    assert.match(r ?? "", /AGENTS\.md/);
+    assert.match(r ?? "", /scripts\/check-x\.mjs/);
+    assert.doesNotMatch(r ?? "", /src\/main\.ts/);
+  });
+
+  test("gemergt + Leitplanke mit Audit-Kommentar des PR-Autors: frei", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => mit(`${audit.AUDIT_KOPF}\n\nwas, warum, revert`) });
+    assert.equal(r, null);
+  });
+
+  test("Kopfzeile von anderem Login zählt nicht", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => mit(audit.AUDIT_KOPF, "fremder") });
+    assert.ok(r);
+  });
+
+  test("Kopfzeile nur mitten im Text zitiert: zählt nicht als Audit", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => mit(`fehlt noch: ${audit.AUDIT_KOPF}`) });
+    assert.ok(r);
+  });
+
+  test("PR ohne Autor-Angabe: Kommentar ohne Autor zählt nicht als Audit", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => ({ comments: [{ body: audit.AUDIT_KOPF }] }) });
+    assert.ok(r);
+  });
+
+  test("Muster mit innerem Schrägstrich ist verankert (nicht auf jeder Ebene)", () => {
+    assert.ok(treffer("test/harness/x.ts", ["test/harness/"]));
+    assert.ok(!treffer("src/test/harness/x.ts", ["test/harness/"]));
+  });
+
+  test("keine Treffer: frei, ohne Kommentare zu lesen", () => {
+    const r = gemergt({
+      prDateien: () => ["src/main.ts"],
+      prKommentare: () => {
+        throw new Error("nicht nötig");
+      },
+    });
+    assert.equal(r, null);
+  });
+
+  test("gh-Fehler: frei (fail-open)", () => {
+    const wirft = () => {
+      throw new Error("gh kaputt");
+    };
+    assert.equal(gemergt({ prDateien: wirft, prKommentare: () => mit("x") }), null);
+    assert.equal(gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: wirft }), null);
+  });
+
+  test("abgebrochen, festgefahren, uebergabe sind nicht betroffen", () => {
+    const deps: AuditDeps = { prDateien: () => ["AGENTS.md"], prKommentare: () => mit("x") };
+    assert.equal(ruf("ERGEBNIS: abgebrochen\nPR: #7", deps), null);
+    assert.equal(ruf("ERGEBNIS: festgefahren\nPR: #7", deps), null);
+    assert.equal(ruf("ERGEBNIS: uebergabe\nPR: #7\nSCHNITT: pr\nUEBERGABE: x", deps), null);
   });
 });

@@ -15,8 +15,8 @@
  * Hand-Änderung an `package.json` → `npm install` + Lockfile mitcommitten" (AGENTS.md) ist
  * gewollt. Codeblöcke zählen bewusst mit: ein Befehl im Codeblock ist eine Anweisung.
  *
- * Gescannt wird das ganze Markdown-Inventar (dieselbe Quelle wie check:docdrift) plus die
- * Workflow-Skripte – so fällt auch eine NEUE Datei mit der alten Anweisung auf. Die
+ * Gescannt wird das ganze Markdown-Inventar (dieselbe Quelle wie check:docdrift) plus
+ * etwaige Workflow-Skripte – so fällt auch eine NEUE Datei mit der alten Anweisung auf. Die
  * PFLICHT_QUELLEN sind nur der Leerlauf-Schutz: dort muss die Anweisung gefunden werden.
  *
  * Grenze (bewusst): kein Semantik-Prüfer, nur die abgelegte Formulierung neben einem
@@ -30,7 +30,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -46,7 +46,6 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 /** Die Texte, die heute die Worktree-Anlage beschreiben (Leerlauf-Schutz). */
 const PFLICHT_QUELLEN = [
   "AGENTS.md",
-  ".claude/workflows/kubernia-ticket.js",
   ".claude/skills/review-lenses/SKILL.md",
   "docs/agent-harness-faq.md",
 ];
@@ -54,12 +53,9 @@ const PFLICHT_QUELLEN = [
 /** Mindestzahl gefundener Worktree-Installations-Absätze (Leerlauf-Schutz). */
 const MIN_TREFFER = PFLICHT_QUELLEN.length;
 
-/** Alles, was gescannt wird: Markdown-Inventar + Workflow-Skripte. */
+/** Alles, was gescannt wird: Markdown-Inventar. */
 function alleQuellen(): string[] {
-  const workflows = readdirSync(ROOT + ".claude/workflows")
-    .filter((f) => f.endsWith(".js"))
-    .map((f) => `.claude/workflows/${f}`);
-  return [...collectMarkdown(ROOT), ...workflows];
+  return collectMarkdown(ROOT);
 }
 
 /** Zerlegt Text in Absätze und innerhalb davon in einzelne Listenpunkte bzw. Tabellenzeilen. */

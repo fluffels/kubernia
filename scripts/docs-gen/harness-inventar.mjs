@@ -202,13 +202,15 @@ export function harnessInventarGenerator({ rootDir, config }) {
   const parts = [
     ["Verzeichnis", "agents", agents],
     ["Verzeichnis", "skills", skills],
-    ["Verzeichnis", "workflows", workflows],
+    ["Verzeichnis", "workflows", workflows, true],
     ["Datei", "settings", (r, f) => hooks(r, f, [...(k.agents ?? []), ...(k.skills ?? [])])],
     ["Verzeichnis", "gitHooks", gitHooks],
     ["Datei", "mcp", mcp],
   ];
-  for (const [what, key, fn] of parts) {
+  for (const [what, key, fn, optional] of parts) {
     if (!h[key]) continue;
+    // Workflow-Skripte gibt es nur, wenn das Projekt welche pflegt: ein fehlender Ordner ist keine Zeile, kein Fehler.
+    if (optional && !existsSync(join(rootDir, h[key]))) continue;
     if (brauche(rootDir, h[key], `${what} (harness.${key})`, errors)) rows.push(...fn(rootDir, h[key]));
   }
   if (errors.length) throw new Error(errors.join("; "));

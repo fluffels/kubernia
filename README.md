@@ -88,8 +88,8 @@ flowchart TD
   lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
   lenses -- ja --> pr
   pr --> ci
-  ci -- "rot, Fix-Versuch unter 3" --> umsetzen
-  ci -- "rot nach 3 Fix-Versuchen" --> fest
+  ci -- "rot, unter 4 roten Commits" --> umsetzen
+  ci -- "4 rote Commits (festgefahren.yml)" --> fest
   ci -- grün --> merge --> cleanup
   merge -.->|"Push auf main: verify erneut"| alarm
   alarm -.->|"Fix per PR, geht vor"| board
@@ -113,7 +113,7 @@ Ein Agent nimmt **genau ein** Ticket vom Board und bringt es bis zum Merge. Dabe
 - **🔍 Mehr-Perspektiven-Review statt Selbstbewertung.** Vor jedem PR prüfen frische Kritiker den Diff durch getrennte Brillen (Architektur, Anforderungen, Tests, bei reiner Doku die Doku). Eine begrenzte Fix-Schleife sorgt für Konvergenz, und ein Nachweis im Commit (`KQ-Plan:`, `KQ-Review:`) wird von der CI erzwungen: wer nicht reviewt hat, kommt nicht durch.
 - **🛡️ Automatische Gates.** Die [Fitness-Functions unten](#-architektur--qualität) sichern die Autonomie ab: kein Schichtbruch, kein `any`, keine veraltete Doku, keine gebrochene Save-Migration schleicht sich unbemerkt ein, der Build wird rot.
 - **🪝 Hooks.** Vor jedem Shell-Befehl läuft ein Dispatcher mit Wächtern (Worktree-Pflicht, Guards für `gh`), vor der Übergabe des Umsetzers ein Abschluss-Wächter: ein offener PR ist kein Ende. Beim Sitzungsstart gleicht ein Hook den Hauptcheckout ab, am Ende räumt der Stop-Hook verwaiste Worktrees auf. Der lokale pre-push-Hook bleibt ein Zusatznetz; maßgeblich sind die Required Checks auf dem PR.
-- **🧩 Skills und Workflow.** Der immer gleiche Ticket-Ablauf ist als Skill kodifiziert, ebenso Review und Forum, dazu ein orchestrierter Workflow, der dieselben Phasen deterministisch fährt (vollständig im Inventar unten).
+- **🧩 Skills.** Der immer gleiche Ticket-Ablauf ist als Skill kodifiziert, ebenso Review und Forum (vollständig im Inventar unten).
 - **🔌 MCP, gezielt statt global.** Nur projektbezogene Server, etwa für Pixel-Art und die Browser-Prüfung; die vollständige Liste steht im Inventar.
 - **🚧 Leitplanken ohne Freigabe-Schritt.** Auch Änderungen an Harness und Gates mergt der Agent selbst, sobald CI und Review grün sind. Die Kontrolle läuft über eine Audit-Spur: ein Audit-Kommentar nennt Was, Warum und den Revert-Weg ([ADR 0014](docs/adr/0014-leitplanken-ohne-label-riegel.md)).
 - **📏 Messen mit Langfuse.** Ein Plugin erfasst jeden Agentenlauf, ein Messskript und ein wöchentlicher Takt ([ADR 0016](docs/adr/0016-langfuse-takt-woechentlich.md)) machen Kosten und Auffälligkeiten sichtbar.
@@ -132,7 +132,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 | Skripte | ≥ 120 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 80 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 28 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -151,9 +151,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/kubernia-umsetzer.md` |
 | Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
 | Skill | `kubernia` | model: sonnet | `.claude/skills/kubernia/SKILL.md` |
-| Skill | `kubernia-workflow` | model: Session-Modell | `.claude/skills/kubernia-workflow/SKILL.md` |
 | Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
-| Workflow | `kubernia-ticket` | — | `.claude/workflows/kubernia-ticket.js` |
 | Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs --danach scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
@@ -228,6 +226,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 16.10.2026 | [ADR 0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md): Sandbox als austauschbare Laufumgebung |
 | 16.10.2026 | [ADR 0026](/docs/adr/0026-sammelticket-gruppen.md): Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum |
 | 16.10.2026 | [ADR 0027](/docs/adr/0027-regeln-lockern.md): Regeln, Gates und Lenses evidenzbasiert lockern |
+| 16.10.2026 | [ADR 0028](/docs/adr/0028-ein-ticket-ablauf.md): Genau ein Ticket-Ablauf, der Workflow-Pfad entfällt |
 
 <!-- GEN:zeitleiste END -->
 

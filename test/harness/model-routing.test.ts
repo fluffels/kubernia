@@ -4,8 +4,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Vorgeschichte: AGENTS.md § Modellwahl (#910) verlangt den Coding-Tier für die
- * Umsetzung. Im Phasen-Workflow ist das gesetzt (`agent(..., {model:'sonnet'})`),
- * auf dem **Skill-Pfad** – dem tool-neutralen, maßgeblichen Weg – schreibt aber der
+ * Umsetzung. Auf dem **Skill-Pfad** schrieb aber der
  * **Hauptagent** den Code. Der lief auf dem Session-Modell: startet die Maintainerin
  * aus einer Opus-Session (der Normalfall, weil Planung/Review Opus verlangen), tippte
  * die gesamte Umsetzung auf Opus. Die Regel existierte, der Hebel war nicht gezogen.
@@ -16,7 +15,7 @@
  *      `kubernia-umsetzer` (Skill-Frontmatter greift wegen anthropics/claude-code#98898 nur bei
  *      `/kubernia`, ein Projekt-Default ließ sich per `/model` überstimmen; seit #1557 gilt `sonnet` als Projekt-Default nur für den Hauptchat). Es ist je eine Zeile –
  *      gelöscht/umformuliert fällt die Umsetzung wortlos aufs Session-Modell zurück.
- *   2. **Der Review wird still mitdemoviert.** Umsetzer und Workflow-Phasen laufen auf dem
+ *   2. **Der Review wird still mitdemoviert.** Der Umsetzer läuft auf dem
  *      Coding-Tier. Liefen die Lens-Pässe INLINE in einem orchestrierenden Agenten (Umsetzer oder
  *      Hauptagent), zöge die Coding-Tier-Zeile den Review von Opus auf Sonnet –
  *      Fix der einen Konventionshälfte, Regression der anderen. Darum spawnt
@@ -31,8 +30,7 @@
  * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review), dass kubernia-loop weg ist
  * und dass `.claude/settings.json` den Hauptchat auf `sonnet` setzt (#1557: Projekt-Default, Ad-hoc-Opus per `/model`).
  *
- * Seit #1065 gilt zusätzlich: jede `agent()`-Aufrufstelle im Workflow setzt `effort` und
- * `model` (oder `agentType`), es gibt keine festen Modell-IDs mehr und genau
+ * Seit #1065 gilt zusätzlich: `model` (oder `agentType`), es gibt keine festen Modell-IDs mehr und genau
  * eine Planungs-Oberfläche.
  *
  * Grenzen dieses Wächters (bewusst, ehrlich – ein Wächter, dessen Kopf mehr verspricht
@@ -44,21 +42,10 @@
  *     Bindestrich rutscht durch (bekannte Grenze des Begriffs-Ansatzes, identisch in
  *     test/harness/agents-md-native.test.ts).
  *   - Beim `effort:` wird meist nur die **Anwesenheit** geprüft, nicht die Stufe; bewusste
- *     Ausnahme ist der Planer (Wert im Frontmatter + Gleichheit mit der Workflow-Plan-Phase).
- *   - Der Workflow-Pfad wird nur auf Anwesenheit von `model`/`effort` je Aufrufstelle geprüft,
- *     nicht welche Phase welchen Alias bekommt – die Zuordnung steht in docs/model-routing.md.
- *     Ausnahme: der Plan-Effort im Workflow muss dem Frontmatter des kubernia-planner gleichen.
- *   - Die Optionen-Zählung paart Aufrufe und Optionsobjekte nur über die SUMME: ein Aufruf ohne
- *     Optionen plus ein überzähliges Optionsobjekt heben sich auf.
- *   - Spread-Konstanten (`{ label: …, ...CODING }`, #1311) löst der Text-Scan auf, indem er `...NAME` durch
- *     den Rumpf von `const NAME = { … }` ersetzt. Ein Spread, der sich nicht auflösen lässt, gilt als
- *     ungeroutet (rot). Er wertet den Workflow dafür nicht aus: Konstanten, die erst zur Laufzeit
- *     gebaut werden, sähe er nicht.
+ *     Ausnahme ist der Planer (Wert im Frontmatter).
  *   - `routingFiles()` liest das Dateisystem (nicht `git ls-files`, wie `collectMarkdown`, #1091):
  *     untrackte lokale Dateien in .claude/ werden mitgeprüft und können lokal rot machen, die CI nicht.
- *   - Die Sonderfall-Zweige (Epic, Dependabot) des Workflows werden per `node:vm` gegen Stub-Globals
- *     AUSGEFÜHRT (Epic-Aufteilung über den Planer, #1207); der Stub kennt nur die frühen Phasen und
- *     bricht bei unbekannten Labels laut ab. Der Skill-Pfad wird nur auf den Verweis im Text geprüft.
+ *   - Die Epic-Aufteilung auf dem Skill-Pfad wird nur auf den Verweis im Text geprüft.
  *   - Das Agent-Tool kennt `effort`, die Konvention setzt ihn nicht am Spawn (docs/model-routing.md §2): der
  *     Effort von Repo-Agenten (kubernia-lens, Explore) kommt aus ihrem Frontmatter; am Spawn wird geprüft, dass
  *     KEIN `model:` das Frontmatter überstimmt. `effort: low` am Explore wirkt, solange `haiku`
@@ -80,8 +67,6 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { blockFunktion, workflowBlock } from "./workflow-block";
-import { workflowLauf } from "./workflow-lauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -148,77 +133,16 @@ function unbekannteServer(regeln: string[], bekannt: string[]): string[] {
 /** Bezeichnet der Wert den Coding-Tier? Alias `sonnet` ODER eine gepinnte Sonnet-ID. */
 const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
 
-/** Alle versionierten Routing-Dateien: Agents, Skills, Workflows und die Projekt-Settings. */
+/** Alle versionierten Routing-Dateien: Agents, Skills und die Projekt-Settings. */
 function routingFiles(): string[] {
   const out = [".claude/settings.json"];
   for (const d of readdirSync(`${REPO_ROOT}.claude/agents`)) out.push(`.claude/agents/${d}`);
   for (const d of readdirSync(`${REPO_ROOT}.claude/skills`)) out.push(`.claude/skills/${d}/SKILL.md`);
-  for (const d of readdirSync(`${REPO_ROOT}.claude/workflows`)) out.push(`.claude/workflows/${d}`);
   return out.filter((f) => existsSync(`${REPO_ROOT}${f}`));
 }
 
 /** Trägt der Text eine feste Modell-ID (`model: claude-opus-5`, `"model": "claude-haiku-4-5-…"`)? */
 const hatHartenPin = (text: string) => /\bmodel["']?\s*:\s*["']?claude-(opus|sonnet|haiku|fable)-\d/i.test(text);
-
-/**
- * Die Optionsobjekte aller `agent()`-Aufrufe im Workflow: jedes `{ label: …}` bis zur passenden
- * schließenden Klammer (Klammern in `${…}` heben sich gegenseitig auf). Zusätzlich die Zahl der
- * echten Aufrufstellen (`agent(` mit Argument, Kommentarzeilen ausgenommen) – weicht sie von der
- * Zahl der Optionsobjekte ab, hat eine Aufrufstelle gar keine Optionen.
- */
-function workflowAgentCalls(js: string): { optionen: string[]; aufrufe: number } {
-  const code = js
-    .split(/\r?\n/)
-    .filter((l) => !l.trim().startsWith("//"))
-    .join("\n");
-  const aufrufe = [...code.matchAll(/\bagent\((?!\))/g)].length;
-  const optionen: string[] = [];
-  for (const m of code.matchAll(/\{\s*label:/g)) {
-    let depth = 0;
-    for (let i = m.index; i < code.length; i++) {
-      if (code[i] === "{") depth++;
-      else if (code[i] === "}" && --depth === 0) {
-        optionen.push(code.slice(m.index, i + 1));
-        break;
-      }
-    }
-  }
-  return { optionen, aufrufe };
-}
-
-/** Der Rumpf jeder einfachen `const NAME = { … }`-Konstante des Workflows (Tier-Konstanten, #1311). */
-function konstanten(js: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const m of js.matchAll(/^const ([A-Z][A-Z_]*) = \{([^{}]*)\}/gm)) out[m[1]] = m[2];
-  return out;
-}
-
-/** Ein Optionsobjekt mit eingesetzten Spreads (`...CODING` → Rumpf der Konstante); Unauflösbares bleibt stehen. */
-function aufgeloest(optionen: string, konst: Record<string, string>): string {
-  return optionen.replace(/\.\.\.([A-Z][A-Z_]*)/g, (voll, name: string) => konst[name] ?? voll);
-}
-
-/** Spreads, die sich nicht auf eine Konstante zurückführen lassen. */
-const unaufgeloeste = (aufgeloestText: string): string[] => [...aufgeloestText.matchAll(/\.\.\.[A-Za-z_]\w*/g)].map((m) => m[0]);
-
-/** Der Workflow-Text ohne `export const meta = { … }` (reine Anzeige-Labels) und ohne Kommentarzeilen. */
-function ohneMetaUndKommentare(js: string): string {
-  js = js.replace(/\r\n/g, "\n");
-  const von = js.indexOf("export const meta");
-  const bis = von >= 0 ? js.indexOf("\n}\n", von) + 3 : -1;
-  const code = von >= 0 && bis > von ? js.slice(0, von) + js.slice(bis) : js;
-  return code.split(/\r?\n/).filter((l) => !l.trim().startsWith("//")).join("\n");
-}
-
-/** Alle Optionsobjekte des Workflows mit aufgelösten Spreads. */
-function workflowOptionen(): string[] {
-  const js = read(".claude/workflows/kubernia-ticket.js");
-  const konst = konstanten(js);
-  return workflowAgentCalls(js).optionen.map((o) => aufgeloest(o, konst));
-}
-
-/** Der `effort:`-Wert aus einem Optionsobjekt (undefined, wenn keiner da ist). */
-const planEffort = (optionen: string) => /\beffort:\s*['"]([a-z]+)['"]/.exec(optionen)?.[1];
 
 /** Alle Agent-Definitionen unter .claude/agents, nach `name` (nicht Dateiname) mit ihrem Frontmatter. */
 function agentenNachName(): Record<string, Record<string, string>> {
@@ -231,30 +155,8 @@ function agentenNachName(): Record<string, Record<string, string>> {
 }
 
 /**
- * Verstöße einer Workflow-Aufrufstelle mit `agentType` gegen die Agent-Definition: der Typ muss
- * existieren, `effort` muss dem Frontmatter gleichen, ein `model:` daneben überstimmt es still.
- * Aufrufstellen ohne `agentType` sind nicht betroffen.
- */
-function agentTypeVerstoesse(optionen: string, agenten: Record<string, Record<string, string>>): string[] {
-  const typ = /agentType:\s*['"]([^'"]+)['"]/.exec(optionen)?.[1];
-  if (!typ) return [];
-  const kopf = optionen.slice(0, 80);
-  const fm = agenten[typ];
-  if (!fm) return [`${kopf}: agentType „${typ}" hat keine Agent-Definition`];
-  const out: string[] = [];
-  const effort = planEffort(optionen);
-  if (effort !== fm.effort) out.push(`${kopf}: effort ${effort ?? "(fehlt)"} ≠ Frontmatter ${fm.effort}`);
-  if (/\bmodel\s*:/.test(optionen)) out.push(`${kopf}: \`model:\` neben agentType überstimmt das Frontmatter`);
-  return out;
-}
-
-/** Eine Aufrufstelle ist geroutet: `effort` UND (`model` ODER `agentType`; der Agent trägt sein Modell selbst). */
-const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(model|agentType):/.test(optionen);
-
-/**
  * Die abgelegte Behauptung. Nach #1035 gibt es keinen wahren Satz mehr, in dem die
- * Umsetzung „auf dem Session-Default" läuft – der Coding-Tier ist auf BEIDEN Pfaden
- * gesetzt (Workflow per `agent({model})`, Skill per Frontmatter).
+ * Umsetzung „auf dem Session-Default" läuft – der Coding-Tier ist gesetzt (Subagent per Frontmatter).
  *
  * **Escape-Hatch** (gleiche Logik wie test/harness/agents-md-native.test.ts): Wer den Begriff
  * diskutieren muss, setzt ihn in Inline-Backticks oder einen Codeblock – Zitat ist
@@ -265,11 +167,11 @@ const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(mode
 const RETIRED_ROUTING_CLAIMS: { term: string; home: string; nurWenn?: RegExp; ausser?: RegExp }[] = [
   {
     term: "Opus-Standard-Effort",
-    home: "die Lenses tragen `effort: high` im Frontmatter von kubernia-lens und laufen auf beiden Pfaden damit (#1209)",
+    home: "die Lenses tragen `effort: high` im Frontmatter von kubernia-lens und laufen damit (#1209)",
   },
   {
     term: "Session-Default",
-    home: `die Umsetzung tippt auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad im Subagenten ${UMSETZER} (Frontmatter, #1280)`,
+    home: `die Umsetzung tippt den Coding-Tier – im Subagenten ${UMSETZER} (Frontmatter, #1280)`,
   },
   {
     // „Die Umsetzung läuft über den Projekt-Default sonnet" ist seit #1280 abgelegt (#1309); seit #1557 gilt der Projekt-Default
@@ -342,34 +244,6 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     assert.equal(lens.effort, "high", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
   });
 
-  test("der Workflow-Pfad routet weiterhin explizit (Umsetzung Sonnet, Lenses über kubernia-lens)", () => {
-    // AGENTS.md behauptet „BEIDE Ticket-Pfade setzen es explizit" – ein Wächter, der nur
-    // den Skill-Pfad prüft, ließe die halbe Aussage ungedeckt. Bewusst grob (Anwesenheit
-    // der Tier-Aliase je Phase): die Zuordnung Phase↔Aufruf ist Sache des Workflows,
-    // hier geht es nur darum, dass die Overrides nicht ersatzlos verschwinden.
-    // An den echten `agent(…)`-SPAWN gebunden (über sein Schema), nicht datei-weit: die
-    // `meta.phases`-Einträge oben tragen dieselben Tier-Namen als reine Anzeige-Labels
-    // fürs /workflows-Panel. Ein datei-weiter Match bliebe grün, wenn der Spawn sein
-    // `model` verliert und nur die Kosmetik stehen bleibt — ein Gate, das nichts gemessen
-    // hat, darf nicht grün melden.
-    const optionen = workflowOptionen();
-    const umsetzen = optionen.find((o) => /schema:\s*UMSETZUNG_SCHEMA/.test(o)) ?? "";
-    assert.match(
-      umsetzen,
-      /\bmodel:\s*["']sonnet["']/,
-      "Im Phasen-Workflow fehlt der Coding-Tier am Umsetzungs-`agent()` (`...CODING` bzw. `model: 'sonnet'`) – " +
-        "ohne ihn erbt der Umsetzungs-Subagent das Session-Modell (#910/#1035). " +
-        "Achtung: die `meta.phases`-Zeilen oben sind nur Anzeige-Labels und zählen nicht.",
-    );
-    const lens = optionen.find((o) => /schema:\s*LENS_SCHEMA/.test(o)) ?? "";
-    assert.match(
-      lens,
-      /\bagentType:\s*["']kubernia-lens["']/,
-      "Im Phasen-Workflow fehlt `agentType: 'kubernia-lens'` am Lens-`agent()` (`...REVIEW`) – " +
-        "der Review darf nicht auf den Coding-Tier absacken (#1012/#1035/#1209).",
-    );
-  });
-
   test("Erkennung greift wirklich (Red-Green): Frontmatter-Parser + Tier-Erkennung", () => {
     // No-op-Schutz: ein Wächter, der immer grün ist, wäre wertlos.
     assert.deepEqual(frontmatter("---\nname: x\nmodel: sonnet\neffort: medium\n---\nText"), {
@@ -385,57 +259,6 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
 });
 
 describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
-  test("jeder agent()-Aufruf im Workflow setzt effort und (model oder agentType)", () => {
-    const { aufrufe } = workflowAgentCalls(read(".claude/workflows/kubernia-ticket.js"));
-    const optionen = workflowOptionen();
-    assert.ok(optionen.length >= 10, `Der Scan fand nur ${optionen.length} Optionsobjekte – er misst nichts mehr.`);
-    assert.deepEqual(optionen.flatMap(unaufgeloeste), [], "Ein Spread im Optionsobjekt führt auf keine `const NAME = { … }`-Konstante.");
-    assert.equal(optionen.length, aufrufe, "Es gibt agent()-Aufrufe ohne Optionsobjekt – sie erben Session-Modell und -Effort.");
-    const ungeroutet = optionen.filter((o) => !istGeroutet(o)).map((o) => o.slice(0, 80));
-    assert.deepEqual(
-      ungeroutet,
-      [],
-      "Diese agent()-Aufrufe erben still Session-Modell oder -Effort. Jede Stelle braucht `effort` und `model` " +
-        `(bzw. \`agentType\`), Matrix in ${ROUTING_SSOT}:\n${ungeroutet.join("\n")}`,
-    );
-  });
-
-  test("Tier-Konstanten: Modell und Effort stehen je Tier genau einmal im Workflow-Code (#1311)", () => {
-    const code = ohneMetaUndKommentare(read(".claude/workflows/kubernia-ticket.js"));
-    const anzahl = (re: RegExp) => [...code.matchAll(re)].length;
-    assert.equal(anzahl(/\bmodel:\s*['"]sonnet['"]/g), 1, "`model: 'sonnet'` steht nur in CODING");
-    assert.equal(anzahl(/\beffort:\s*['"]medium['"]/g), 1, "`effort: 'medium'` steht nur in CODING");
-    assert.equal(anzahl(/\beffort:\s*['"]xhigh['"]/g), 1, "`effort: 'xhigh'` steht nur in PLANUNG");
-    assert.equal(anzahl(/\beffort:\s*['"]high['"]/g), 1, "`effort: 'high'` steht nur in REVIEW");
-    assert.equal(anzahl(/\bagentType:\s*['"]kubernia-planner['"]/g), 1);
-    assert.equal(anzahl(/\bagentType:\s*['"]kubernia-lens['"]/g), 1);
-  });
-
-  test("Erkennung greift wirklich (Red-Green): Spread wird aufgelöst, Unbekanntes und Stellen ohne Tier schlagen an", () => {
-    const konst = konstanten("const CODING = { model: 'sonnet', effort: 'medium' }\nconst X = { a: { b: 1 } }");
-    assert.deepEqual(Object.keys(konst), ["CODING"], "verschachtelte Objekte sind keine Tier-Konstanten");
-    const ok = aufgeloest("{ label: 'a', ...CODING }", konst);
-    assert.ok(istGeroutet(ok), "aufgelöster Spread zählt als geroutet");
-    const unbekannt = aufgeloest("{ label: 'a', ...UNBEKANNT }", konst);
-    assert.ok(!istGeroutet(unbekannt), "ein Spread auf eine unbekannte Konstante routet nichts");
-    assert.deepEqual(unaufgeloeste(unbekannt), ["...UNBEKANNT"]);
-    assert.ok(!istGeroutet(aufgeloest("{ label: 'neu', phase: 'P' }", konst)), "eine neue Stelle ohne Tier ist ungeroutet");
-    const meta = "export const meta = {\n  phases: [{ model: 'sonnet' }],\n}\n// model: 'sonnet'\nconst C = { model: 'sonnet' }";
-    assert.equal([...ohneMetaUndKommentare(meta).matchAll(/model:\s*'sonnet'/g)].length, 1, "meta-Labels und Kommentare zählen nicht");
-  });
-
-  test("Erkennung greift wirklich (Red-Green): fehlender effort bzw. model schlägt an", () => {
-    assert.ok(!istGeroutet("{ label: 'x', model: 'sonnet' }"), "model ohne effort ist ungeroutet");
-    assert.ok(!istGeroutet("{ label: 'x', phase: 'P' }"), "ohne beides ungeroutet");
-    assert.ok(!istGeroutet("{ label: 'x', effort: 'medium' }"), "effort ohne model/agentType ist ungeroutet");
-    assert.ok(istGeroutet("{ label: 'x', model: 'sonnet', effort: 'medium' }"));
-    assert.ok(istGeroutet("{ label: 'x', agentType: 'kubernia-planner', effort: 'xhigh' }"), "Agent trägt sein Modell selbst");
-    const fixture = "const a = await agent(`p ${x}`, { label: `a:${n}`, phase: 'A' })\n// agent() im Kommentar\nawait agent(`q`)";
-    const r = workflowAgentCalls(fixture);
-    assert.equal(r.optionen.length, 1);
-    assert.equal(r.aufrufe, 2, "ein Aufruf ohne Optionen fällt über die Zählung auf");
-  });
-
   test(".claude/settings.json setzt den Hauptchat auf sonnet (#1557)", () => {
     const settings = JSON.parse(read(".claude/settings.json")) as { model?: string; env?: Record<string, string> };
     assert.deepEqual(
@@ -472,40 +295,6 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
     assert.equal(planer.model, "opus");
     assert.equal(planer.effort, "xhigh");
-  });
-
-  test("genau eine Plan-Aufrufstelle im Workflow", () => {
-    const optionen = workflowOptionen();
-    const planCalls = optionen.filter((o) => /agentType:\s*['"]kubernia-planner['"]/.test(o));
-    assert.equal(planCalls.length, 1, "Genau eine Plan-Aufrufstelle im Workflow erwartet.");
-  });
-
-  test("jede agentType-Aufrufstelle im Workflow gleicht ihrem Agent-Frontmatter (Drift-Schutz)", () => {
-    const optionen = workflowOptionen();
-    const verstoesse = optionen.flatMap((o) => agentTypeVerstoesse(o, agentenNachName()));
-    assert.deepEqual(
-      verstoesse,
-      [],
-      "Der Workflow überstimmt sonst still das Frontmatter des Agenten – `agentType` muss existieren, `effort` " +
-        `gleich sein und ein \`model:\` darf nicht daneben stehen (#1209):\n${verstoesse.join("\n")}`,
-    );
-    assert.ok(
-      optionen.some((o) => /agentType:\s*['"]kubernia-lens['"]/.test(o)),
-      "Die Lens-Aufrufstelle muss agentType kubernia-lens tragen – sonst prüft der Test nichts.",
-    );
-  });
-
-  test("Erkennung greift wirklich (Red-Green): abweichender Effort, unbekannter Typ, model-Override", () => {
-    const agenten = { "kubernia-planner": { effort: "xhigh", model: "opus" }, "kubernia-lens": { effort: "high", model: "opus" } };
-    assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner', effort: 'xhigh' }"), "xhigh");
-    assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner' }"), undefined, "ohne effort ⇒ undefined");
-    assert.deepEqual(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', effort: 'high' }", agenten), [], "konsistent");
-    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', effort: 'medium' }", agenten).length, 1, "Effort weicht ab");
-    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens' }", agenten).length, 1, "Effort fehlt");
-    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'gibt-es-nicht', effort: 'high' }", agenten).length, 1, "unbekannter Typ");
-    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', model: 'opus', effort: 'high' }", agenten).length, 1, "model-Override");
-    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', model: opus, effort: 'high' }", agenten).length, 1, "unquotiertes model: überstimmt ebenso (#1309)");
-    assert.deepEqual(agentTypeVerstoesse("{ label: 'x', model: 'sonnet', effort: 'medium' }", agenten), [], "ohne agentType nicht betroffen");
   });
 
   test("Explore: Override des eingebauten Agenten auf haiku/low (#1209)", () => {
@@ -612,23 +401,23 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
   });
   test("Negativfälle: Umsetzer-Zelle `high` gegen Frontmatter `medium`, falscher Alias, unbekannte Zeile, fehlende Spalte", () => {
     const doku = read(ROUTING_SSOT);
-    const zeile = "| Umsetzung | `sonnet` | `medium` | `medium` |";
+    const zeile = "| Umsetzung | `sonnet` | `medium` |";
     assert.equal(doku.split(zeile).length, 2, "Anker genau einmal");
-    const effortFalsch = doku.replace(zeile, "| Umsetzung | `sonnet` | `medium` | `high` |");
+    const effortFalsch = doku.replace(zeile, "| Umsetzung | `sonnet` | `high` |");
     assert.match(matrixAbweichungen(effortFalsch, fmEcht).join("\n"), /Umsetzung: Effort Skill-Pfad „high“ ≠ Frontmatter umsetzer „medium“/);
-    const aliasFalsch = doku.replace(zeile, "| Umsetzung | `opus` | `medium` | `medium` |");
+    const aliasFalsch = doku.replace(zeile, "| Umsetzung | `opus` | `medium` |");
     assert.match(matrixAbweichungen(aliasFalsch, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter umsetzer „sonnet“/);
-    const gruppeZeile = "| Sammelticket-Gruppe | `sonnet` | – | `medium` |";
+    const gruppeZeile = "| Sammelticket-Gruppe | `sonnet` | `medium` |";
     assert.equal(doku.split(gruppeZeile).length, 2, "Gruppen-Zeile genau einmal");
-    const gruppeEffort = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `sonnet` | – | `high` |");
+    const gruppeEffort = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `sonnet` | `high` |");
     assert.match(matrixAbweichungen(gruppeEffort, fmEcht).join("\n"), /Sammelticket-Gruppe: Effort Skill-Pfad „high“ ≠ Frontmatter gruppe „medium“/);
-    const gruppeAlias = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `opus` | – | `medium` |");
+    const gruppeAlias = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `opus` | `medium` |");
     assert.match(matrixAbweichungen(gruppeAlias, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter gruppe „sonnet“/);
-    const forumZeile = "| Forum-Triage (Quarantäne) | `sonnet` | – | `medium` |";
+    const forumZeile = "| Forum-Triage (Quarantäne) | `sonnet` | `medium` |";
     assert.equal(doku.split(forumZeile).length, 2, "Forum-Zeile genau einmal");
-    const forumEffort = doku.replace(forumZeile, "| Forum-Triage (Quarantäne) | `sonnet` | – | `high` |");
+    const forumEffort = doku.replace(forumZeile, "| Forum-Triage (Quarantäne) | `sonnet` | `high` |");
     assert.match(matrixAbweichungen(forumEffort, fmEcht).join("\n"), /Forum-Triage \(Quarantäne\): Effort Skill-Pfad „high“ ≠ Frontmatter forumLeser „medium“/);
-    const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | – | `low` | n/a | irgendwer |\n| Explore / Recherche |");
+    const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | `low` | irgendwer |\n| Explore / Recherche |");
     assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);
     const ohneSpalte = doku.replace("| Effort Skill-Pfad |", "| Effort |");
     assert.match(matrixAbweichungen(ohneSpalte, fmEcht).join("\n"), /Spalte fehlt/);
@@ -781,13 +570,18 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     assert.equal(spawnFuer(md, "gibt-es-nicht"), "");
   });
 
+  test("genau ein Ticket-Ablauf: kubernia-workflow-Skill und kubernia-ticket-Workflow existieren nicht (ADR 0028)", () => {
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-workflow`), "der Skill kubernia ist der einzige Ticket-Ablauf");
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/workflows/kubernia-ticket.js`), "der Workflow ging im Skill kubernia auf");
+  });
+
   test("der Skill kubernia-loop existiert nicht mehr (ein Umsetzer pro Ticket ersetzt ihn)", () => {
     assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-loop`), "kubernia-loop ging im Umsetzer-Subagenten auf (#1280)");
   });
 });
 
 describe("Keine festen Modell-IDs, genau eine Planungs-Oberfläche (#1065)", () => {
-  test("keine harte Modell-ID in agents, skills, workflows und settings.json", () => {
+  test("keine harte Modell-ID in agents, skills und settings.json", () => {
     const treffer = routingFiles().filter((f) => hatHartenPin(read(f)));
     assert.deepEqual(treffer, [], `Feste Modell-IDs statt Alias (opus/sonnet/haiku) in:\n${treffer.join("\n")}`);
     assert.ok(routingFiles().length >= 7, "Der Datei-Walk darf nicht leer laufen");
@@ -827,7 +621,7 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
     assert.deepEqual(
       violations,
       [],
-      "Veraltete Routing-Beschreibung gefunden. Entweder nachziehen (der Coding-Tier ist auf beiden Pfaden " +
+      "Veraltete Routing-Beschreibung gefunden. Entweder nachziehen (der Coding-Tier ist " +
         `gesetzt) oder – wenn der Begriff bewusst zitiert wird – in Inline-Backticks setzen:\n${violations.join("\n")}`,
     );
   });
@@ -875,106 +669,6 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
 });
 
 describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
-  test("Epic: Planer (opus-Rolle, Frontmatter-Effort) schlägt vor, ein sonnet-Agent legt an", async () => {
-    const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
-    const { aufrufe, ergebnis } = await workflowLauf({ art: "epic" });
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
-    assert.equal(aufrufe[1].agentType, "kubernia-planner");
-    assert.equal(aufrufe[1].effort, planer.effort, "Effort der Aufteilung = Effort der Planung");
-    assert.match(aufrufe[1].prompt, /Epic/, "Der Planer muss wissen, dass er aufteilen soll");
-    assert.equal(aufrufe[2].model, "sonnet", "Das Anlegen ist Tipparbeit");
-    assert.equal(aufrufe[2].effort, "medium", "Das Anlegen ist Tipparbeit");
-    assert.match(aufrufe[2].prompt, /PLAN-TEXT/, "Der Anlege-Agent bekommt den Plan");
-    assert.equal(ergebnis, "epic");
-  });
-
-  test("Epic ohne verfügbaren Planer: kein Absturz, Anlege-Agent teilt selbst auf", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({ art: "epic", planerDa: false });
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
-    assert.doesNotMatch(aufrufe[2].prompt, /PLAN-TEXT/);
-    assert.match(aufrufe[2].prompt, /selbst auf/, "Der Fallback-Auftrag muss im Prompt stehen");
-    assert.equal(ergebnis, "epic");
-  });
-
-  test("Dependabot: darf KEINEN Planer-Lauf verbrennen", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({ art: "dependabot" });
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "dependabot:#42"]);
-    assert.equal(aufrufe[1].model, "sonnet");
-    assert.equal(aufrufe[1].effort, "medium");
-    assert.equal(ergebnis, "dependabot");
-  });
-
-  test("normales Ticket: Plan vor Pre-Flight, Planer-Prompt ohne Epic-Hinweis (Resume-Cache bleibt gültig)", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({ preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
-    assert.doesNotMatch(aufrufe[1].prompt, /Epic/);
-    assert.match(
-      aufrufe[1].prompt,
-      /^Ticket #42: Testticket\n[\s\S]*\n\nArbeitsort: [^\n]*\. Liefere den Plan wie in deiner Rolle beschrieben\.$/,
-      "Der Planer-Prompt normaler Tickets darf sich nicht ändern (Resume-Cache)",
-    );
-    assert.equal(ergebnis, "wartet-auf-klaerung");
-  });
-
-  test("Plan-Weiche „Weiche Epic: ja“ (#1309): aus einem normalen Ticket wird die Aufteilung, kein Pre-Flight, kein Umsetzen", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({ plan: "PLAN #42\n7. Weichen\nWeiche Epic: ja, weil zu groß" });
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
-    assert.match(aufrufe[2].prompt, /zu groß/, "Der Anlege-Agent bekommt den Plan mit der Aufteilung");
-    assert.equal(ergebnis, "epic");
-  });
-
-  test("Sammelticket („(gesammelt)“ im Titel) wird nie umgesetzt (#1646): Weiterleitung auf den Skill-Pfad, Claim und Lock frei, kein Plan", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-1", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß" });
-    assert.equal(ergebnis, "skill-pfad");
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
-    assert.match(aufrufe[1].prompt, /freigeben 42 --nonce abc-1/);
-    assert.match(aufrufe[1].prompt, /--remove-assignee @me/);
-  });
-
-  test("Meldet der Auswahl-Agent selbst `skill-pfad` (#1646), leitet der Workflow weiter, ohne Plan und ohne Umsetzen", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({ auswahl: { ergebnis: "skill-pfad" }, lockNonce: "abc-1" });
-    assert.equal(ergebnis, "skill-pfad");
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
-  });
-
-  test("Sammelticket ohne eigenen Claim (#1646): kein claim-frei, damit kein fremder Claim entfernt wird", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: false } });
-    assert.equal(ergebnis, "skill-pfad");
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim"]);
-  });
-
-  test("Sammelticket: Claim ohne Nonce gibt den Assignee frei, Nonce ohne verifizierten Claim gibt den Lock frei (#1646)", async () => {
-    const a = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: true } });
-    assert.deepEqual(a.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
-    assert.match(a.aufrufe[1].prompt, /--remove-assignee @me/);
-    const b = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-2", auswahl: { claimVerifiziert: false } });
-    assert.deepEqual(b.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
-    assert.match(b.aufrufe[1].prompt, /freigeben 42 --nonce abc-2/);
-  });
-
-  test("Der Einstiegs-Skill kennt den Sonderausgang `skill-pfad` (#1646)", () => {
-    const skill = readFileSync(new URL("../../.claude/skills/kubernia-workflow/SKILL.md", import.meta.url), "utf8");
-    assert.match(skill, /^- \*\*`skill-pfad`\*\*/m);
-  });
-
-  test("Titel mit „(gesammelt)“ nur mitten im Text ist kein Sammelticket: normaler Weg", async () => {
-    const { aufrufe } = await workflowLauf({ titel: "Kein Sammelticket (gesammelt) Doku", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
-  });
-
-  test("Plan-Weiche „Weiche Epic: nein“ oder fehlende Zeile: normaler Weg bis zum Pre-Flight", async () => {
-    for (const plan of ["PLAN #42\nWeiche Epic: nein", "PLAN #42\n(keine Zeile)"]) {
-      const { aufrufe } = await workflowLauf({ plan, preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
-      assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"], plan);
-    }
-  });
-
-  test("Plan-Weiche: pure Erkennung (Aufzählungszeichen und Fettdruck ja, Prosa und „nein“ nein)", () => {
-    const planSagtEpic = blockFunktion<(p: unknown) => boolean>(workflowBlock("// ── Plan-Weiche Epic (#1309) — Anfang", "// ── Plan-Weiche Epic (#1309) — Ende").block, "planSagtEpic");
-    for (const ja of ["Weiche Epic: ja", "- Weiche Epic: ja, weil x", "- **Weiche Epic:** ja", "* **Weiche Epic**: Ja, weil x", "text\n  Weiche Epic: ja", "7. Weiche Epic: ja, weil x", "7) **Weiche Epic:** ja", "  12. Weiche Epic: ja"]) assert.equal(planSagtEpic(ja), true, ja);
-    for (const nein of ["Weiche Epic: nein", "7. Weiche Epic: nein", "> Weiche Epic: ja", "> 7. Weiche Epic: ja", "Die Weiche Epic: ja steht oft im Text", "Weiche Epic: jahrelang", "", null, undefined, 42]) assert.equal(planSagtEpic(nein), false, String(nein));
-  });
-
   test("Prosa-Bindung (#1309): Planer-Rolle und Skill nennen die Pflichtzeile „Weiche Epic“", () => {
     assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: nein/);
     assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: ja/);
@@ -982,10 +676,11 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.match(read(UMSETZUNGS_SKILL), /Weiche Epic: ja/);
   });
 
-  test("Planer-Rolle: der vom Workflow-Prompt referenzierte Abschnitt „Bei einem Epic“ existiert und verbietet das Anlegen", () => {
+  test("Planer-Rolle: der vom Skill (Hinweis „Epic: liefere die Aufteilung“) referenzierte Abschnitt „Bei einem Epic“ existiert und verbietet das Anlegen", () => {
     const rolle = read(".claude/agents/kubernia-planner.md");
     assert.match(rolle, /^## Bei einem Epic/m);
     assert.match(rolle, /Lege keine Issues selbst an/);
+    assert.match(read(UMSETZUNGS_SKILL), /Epic: liefere die Aufteilung/, "der Skill gibt dem Planer den Epic-Hinweis");
   });
 
   test("Skill-Pfad: der Epic-Absatz delegiert die Aufteilung an den kubernia-planner", () => {
@@ -996,60 +691,6 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     const zeile = read(ROUTING_SSOT).split("\n").find((l) => /^\|\s*\*{0,2}Epic-Aufteilung/.test(l));
     assert.ok(zeile, "§1 braucht eine eigene Zeile „Epic-Aufteilung“");
     assert.match(zeile, /`opus`/);
-  });
-});
-
-describe("Pre-Flight-Weichen entscheidet der Agent selbst (#1279, #1276)", () => {
-  test("Weiche ohne Irreversibles: der Lauf hält NICHT an, die Entscheidung geht verbindlich in den Umsetzen-Prompt", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({
-      umsetzen: "abbrechen",
-      preflight: { brauchtKlaerung: false, entscheidungen: ["Weiche A: Variante X, weil sie bei 10× Inhalt trägt"] },
-    });
-    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42", "umsetzen:#42"]);
-    assert.equal(ergebnis, "umsetzung-abgebrochen", "der Stub beendet den Lauf nach dem Umsetzen-Aufruf");
-    const prompt = aufrufe[3].prompt;
-    assert.match(prompt, /Entscheidungen aus Plan\/Pre-Flight \(verbindlich\)/);
-    assert.match(prompt, /Weiche A: Variante X, weil sie bei 10× Inhalt trägt/);
-    assert.doesNotMatch(prompt, /im PR-Text als/, "der Umsetzen-Agent öffnet keinen PR und dokumentiert dort nichts (#1311)");
-  });
-
-  test("Resume mit klaerungAntworten UND entscheidungen: kein Halt, beide Blöcke stehen im Umsetzen-Prompt (#1311)", async () => {
-    const { aufrufe, ergebnis } = await workflowLauf({
-      umsetzen: "abbrechen",
-      args: { nummer: 42, klaerungAntworten: ["A: ja, löschen"] },
-      preflight: { brauchtKlaerung: true, grund: "Löschen", offeneFragen: ["?"], entscheidungen: ["Weiche B: Variante Y, weil Z"] },
-    });
-    assert.equal(ergebnis, "umsetzung-abgebrochen", "mit Antworten hält der Lauf nicht erneut an");
-    const prompt = aufrufe.find((a) => a.label === "umsetzen:#42")?.prompt ?? "";
-    assert.match(prompt, /Antworten der Maintainerin aus der Pre-Flight-Klärung \(verbindlich\)[\s\S]*A: ja, löschen/);
-    assert.match(prompt, /Entscheidungen aus Plan\/Pre-Flight \(verbindlich\)[\s\S]*Weiche B: Variante Y, weil Z/);
-  });
-
-  test("Resume-Gegenprobe: brauchtKlaerung ohne Antworten hält an (Red-Green für den Test davor)", async () => {
-    const { ergebnis } = await workflowLauf({
-      umsetzen: "abbrechen",
-      args: { nummer: 42 },
-      preflight: { brauchtKlaerung: true, grund: "Löschen", offeneFragen: ["?"], entscheidungen: ["Weiche B"] },
-    });
-    assert.equal(ergebnis, "wartet-auf-klaerung");
-  });
-
-  test("leere und null-Einträge in entscheidungen werden verworfen", async () => {
-    const { aufrufe } = await workflowLauf({ umsetzen: "abbrechen", preflight: { brauchtKlaerung: false, entscheidungen: ["", null] } });
-    assert.doesNotMatch(aufrufe[3].prompt, /Entscheidungen aus Plan\/Pre-Flight/);
-  });
-
-  test("ohne Entscheidungen kein leerer Block im Umsetzen-Prompt", async () => {
-    const { aufrufe } = await workflowLauf({ umsetzen: "abbrechen" });
-    assert.doesNotMatch(aufrufe[3].prompt, /Entscheidungen aus Plan\/Pre-Flight/);
-  });
-
-  test("Pre-Flight-Auftrag: Rückfrage nur bei Irreversiblem/Außenwirkung, Optik und Weichen entscheidet der Agent", () => {
-    const quelle = read(".claude/workflows/kubernia-ticket.js");
-    assert.doesNotMatch(quelle, /Triff selbst KEINE inhaltliche Entscheidung/);
-    assert.match(quelle, /entscheidungen: \{\s*type: 'array'/, "PREFLIGHT_SCHEMA braucht das Feld entscheidungen");
-    assert.match(quelle, /Irreversibles oder Außenwirkung/);
-    assert.match(quelle, /brauchtKlaerung = true NUR bei Irreversiblem oder Außenwirkung/, "die Prompt-Regel selbst");
   });
 });
 
@@ -1072,50 +713,9 @@ describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
   });
 });
 
-describe("Entscheidungen erreichen den PR-Text auch im Workflow (#1276, #1311)", () => {
-  test("der pr+merge-Prompt, der den PR öffnet, bekommt jede Entscheidung samt PR-Text-Auftrag", async () => {
-    const { aufrufe } = await workflowLauf({ preflight: { brauchtKlaerung: false, entscheidungen: ["Weiche A: X, weil Y", "Weiche B: P, weil Q"] } });
-    const prompt = aufrufe.find((a) => a.label === "pr+merge:#42")?.prompt ?? "";
-    assert.match(prompt, /Weiche A: X, weil Y/);
-    assert.match(prompt, /Weiche B: P, weil Q/);
-    assert.match(prompt, /im PR-Text als „Entscheidung: X, weil Y“/);
-  });
-
-  test("ohne Entscheidungen steht kein Block im pr+merge-Prompt", async () => {
-    const { aufrufe } = await workflowLauf();
-    assert.doesNotMatch(aufrufe.find((a) => a.label === "pr+merge:#42")?.prompt ?? "", /Entscheidungen aus Plan\/Pre-Flight/);
-  });
-
-  test("Umsetzen- und pr+merge-Prompt bauen den Block aus demselben Helfer (driftfest)", () => {
-    const quelle = read(".claude/workflows/kubernia-ticket.js");
-    assert.equal([...quelle.matchAll(/entscheidungsBlock\(\s*entscheidungen,/g)].length, 2);
-    assert.match(quelle, /entscheidungen\.map\(\(e, i\)/, "der Helfer nummeriert die Entscheidungen");
-  });
-});
-
-describe("Workflow-Pfad: Lernkandidaten und PixelLab (#1311)", () => {
-  test("der Endstand trägt die lernkandidaten des Umsetzers, leer wenn keine", async () => {
-    const mit = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { lernkandidaten: ["Lens-Spawn braucht X"] } } });
-    assert.deepEqual(mit.endstand.lernkandidaten, ["Lens-Spawn braucht X"]);
-    const ohne = await workflowLauf();
-    assert.deepEqual(ohne.endstand.lernkandidaten, []);
-  });
-
-  test("UMSETZUNG_SCHEMA deckelt lernkandidaten auf 3, der Umsetzen-Prompt nennt PixelLab und den Abbruch ohne Platzhalter", async () => {
-    const quelle = read(".claude/workflows/kubernia-ticket.js");
-    assert.match(quelle, /lernkandidaten: \{\s*type: 'array',\s*maxItems: 3/);
-    const { aufrufe } = await workflowLauf({ umsetzen: "abbrechen" });
-    const prompt = aufrufe.find((a) => a.label === "umsetzen:#42")?.prompt ?? "";
-    assert.match(prompt, /assets\/pixellab\//);
-    assert.match(prompt, /PixelLab-Asset fehlt/);
-    assert.match(prompt, /KEIN prozeduraler Platzhalter/);
-    assert.match(prompt, /höchstens 3 Punkte/);
-  });
-});
-
 /**
  * Prosa-Wächter für die Weichen-Regel auf dem Skill-Pfad (#1311): „Weichen selbst entscheiden, Rückfrage nur
- * bei Irreversiblem oder Außenwirkung“. Der Workflow-Pfad ist per Stub getestet (oben); der Skill-Pfad hat nur
+ * bei Irreversiblem oder Außenwirkung“. Der Skill-Pfad hat nur
  * Text (kubernia/SKILL.md Schritt 3, Planer Abschnitt 7, Umsetzer „entscheidung-noetig“). Ein Prädikat je Stelle,
  * jeweils mit rotem Gegenbeispiel.
  */
@@ -1155,16 +755,6 @@ describe("Weichen-Regel im Skill-Pfad (#1311)", () => {
   });
 });
 
-describe("Workflow-Pfad räumt Waisen auf wie der SubagentStop-Hook auf dem Skill-Pfad (#1311)", () => {
-  test("der cleanup-Agent bekommt den Waisen-Sweep samt Altersgrenze", async () => {
-    const { aufrufe } = await workflowLauf();
-    const prompt = aufrufe.find((a) => a.label === "cleanup:#42")?.prompt ?? "";
-    assert.match(prompt, /node scripts\/cleanup-worktrees\.mjs/);
-    assert.match(prompt, /--fix/);
-    assert.match(prompt, /unter 5 Minuten/);
-  });
-});
-
 describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   /** Marker eines Textes: Code-Spans mit `echo "pflege: …"`, als Bash-Event gewertet. */
   const markerIn = (text: string, nr: string) => {
@@ -1183,14 +773,7 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.equal(pflegeMarker({ tool: "Bash", input: { command: 'echo "pflege: startklar #1"' } }), null);
   });
 
-  test("Umsetzen-Prompt des Workflows trägt beide Marker, erkannt vom Messskript", async () => {
-    const { aufrufe } = await workflowLauf({ umsetzen: "abbrechen" });
-    const prompt = aufrufe.find((a) => a.label === "umsetzen:#42")?.prompt ?? "";
-    assert.deepEqual(markerIn(prompt, "42"), ["start", "ende"]);
-    assert.match(prompt, /VOR dem abschließenden npm run verify/);
-  });
-
-  /** Der kanonische Satz im Kopf von anlaufstellen.md, ohne Backticks (das Workflow-Template trägt keine). */
+  /** Der kanonische Satz im Kopf von anlaufstellen.md, ohne Backticks. */
   const konvention = () => {
     const m = /\*\*Lese-Konvention:\*\* erst hier die eine passende Seite wählen\. (.+?offset`\/`limit`\)\.)/.exec(read("docs/referenz/anlaufstellen.md"));
     assert.ok(m, "kanonischer Satz in anlaufstellen.md fehlt");
@@ -1198,34 +781,31 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   };
   const ohneBackticks = (t: string) => t.replace(/`/g, "");
 
-  test("Die Brain-Lese-Konvention steht wortgleich in Umsetzer, Lens und Workflow-Konstante (#1331)", () => {
+  test("Die Brain-Lese-Konvention steht wortgleich in Umsetzer und Lens (#1331)", () => {
     const satz = konvention();
     assert.match(satz, /Read-Tool.*nie per cat\/sed\/head\/Get-Content/);
-    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md", ".claude/workflows/kubernia-ticket.js"])
+    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"])
       assert.ok(ohneBackticks(read(datei)).includes(satz), `${datei} trägt den Satz aus anlaufstellen.md nicht wortgleich`);
   });
 
   test("Red-Green: eine um ein Wort abweichende Kopie fällt auf", () => {
     const satz = konvention();
     const gleich = (text: string) => text.includes(satz);
-    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md", ".claude/workflows/kubernia-ticket.js"]) {
+    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"]) {
       const text = ohneBackticks(read(datei));
       assert.ok(gleich(text), datei);
       assert.ok(!gleich(text.replace(satz, satz.replace("nie per", "nicht per"))), datei);
     }
   });
 
-  test("Der Merge-Prompt des Workflows verlangt gebündelte Befunde (#1331)", async () => {
-    const { aufrufe } = await workflowLauf({ runden: [{ architektur: { lens: "architektur", verdikt: "ok", findings: [], ausserhalbScope: ["Spiel-Befund A", "Spiel-Befund B"] } }] });
-    const prompt = aufrufe.find((a) => a.label === "cleanup:#42")?.prompt ?? "";
-    assert.match(prompt, /gebündelt/);
-    // keine Kopie der Kriterien (#1349 Z8): der Prompt verweist auf die Heimat in AGENTS.md
-    assert.match(prompt, /AGENTS\.md § Oberste Regel/);
-    assert.doesNotMatch(prompt, /Teil-Akzeptanzkriterien|Kleinkram eine Zeile|gleiches\s+Subsystem/);
-    assert.match(prompt, /gh issue list --limit 500/);
-    // die Ausnahmen zu „Harness-Befunde sind Zeilen“ stehen nur in AGENTS.md (#1486 Z3)
-    assert.match(prompt, /AGENTS.md § Harness-Befunde sind Zeilen/);
-    assert.doesNotMatch(prompt, /roter main|Datenverlust|allein nicht in eine Session/);
+  test("Der Umsetzer verlangt gebündelte Befunde und verweist auf die Heimat in AGENTS.md (#1331)", () => {
+    const t = read(UMSETZER);
+    assert.match(t, /gebündelt/);
+    // keine Kopie der Kriterien (#1349 Z8): die Rolle verweist auf die Heimat in AGENTS.md
+    assert.match(t, /AGENTS\.md § „Harness-Befunde sind Zeilen/);
+    assert.match(t, /§ Oberste Regel/);
+    assert.doesNotMatch(t, /Teil-Akzeptanzkriterien|Kleinkram eine Zeile|gleiches\s+Subsystem/);
+    assert.doesNotMatch(t, /roter main|Datenverlust|allein nicht in eine Session/);
   });
 
   test("Planer prüft den Stand des Checkouts gegen origin/main (#1331)", () => {
@@ -1235,19 +815,11 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.match(read(".claude/skills/kubernia/SKILL.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
   });
 
-  test("Brain-Lese-Konvention steht in Umsetzer, Lens, Umsetzen- und Nachbessern-Prompt", async () => {
+  test("Brain-Lese-Konvention steht in Umsetzer und Lens", () => {
     for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"]) {
       const t = read(datei);
       assert.match(t, /anlaufstellen\.md/, datei);
       assert.match(t, /`Read`/, datei);
-    }
-    const { aufrufe } = await workflowLauf({
-      runden: [{ architektur: { lens: "architektur", verdikt: "blockierend", findings: [{ schwere: "blockierend", befund: "B", ort: "a.ts:1", begruendung: "b" }] } }, {}],
-    });
-    for (const label of ["umsetzen:#42", "nachbessern 1/2:#42"]) {
-      const prompt = aufrufe.find((a) => a.label === label)?.prompt ?? "";
-      assert.match(prompt, /anlaufstellen\.md/, label);
-      assert.match(prompt, /Read-Tool/, label);
     }
   });
 

@@ -4,9 +4,9 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * WARUM: Auf einem Windows-Checkout mit `core.autocrlf=true` landete
- * `.claude/workflows/kubernia-ticket.js` mit CRLF im Working Tree. Claude Code übergibt
+ * ein Skript unter `.claude/` mit CRLF im Working Tree. Claude Code übergibt
  * den Skript-Text an den Permission-Dialog, und der lehnt Steuerzeichen ab (`\r` wäre im
- * Freigabe-Dialog unsichtbar) – der Workflow ließ sich dadurch gar nicht starten. Der
+ * Freigabe-Dialog unsichtbar) – das Skript ließ sich dadurch gar nicht starten. Der
  * Checkout-Zeilenumbruch ist hier also FUNKTIONAL, nicht kosmetisch (gleiche Begründung
  * wie die `*.sh`-/`.githooks/*`-Einträge in `.gitattributes`).
  *
@@ -14,7 +14,7 @@
  * Zeile per Regex zu suchen – so zählt die echte Attribut-Auflösung (Muster, Reihenfolge,
  * spätere Überschreibungen), nicht eine bestimmte Schreibweise. Geprüft werden alle
  * versionierten `.claude/`-Dateien plus ein paar noch NICHT existierende Beispielpfade:
- * eine neue Workflow-/Skill-Datei soll automatisch mit abgedeckt sein, nicht erst, wenn
+ * eine neue Skill-Datei soll automatisch mit abgedeckt sein, nicht erst, wenn
  * jemand die Regel nachzieht.
  *
  * #1476: Die globale Regel gilt für alle Textdateien, weil Doku-Wächter Dateien zeilenweise
@@ -105,16 +105,16 @@ describe(".claude/ wird mit LF ausgecheckt (#1026)", () => {
   const versioniert = git(["ls-files", "-z", "--", ".claude"]).split("\0").filter(Boolean);
 
   it("findet die versionierten .claude/-Dateien überhaupt (sonst prüft der Wächter nichts)", () => {
-    expect(versioniert).toContain(".claude/workflows/kubernia-ticket.js");
+    expect(versioniert).toContain(".claude/skills/kubernia/SKILL.md");
   });
 
   it("jede versionierte .claude/-Datei hat eol=lf", () => {
     expect(eolOhneLf(versioniert)).toEqual([]);
   });
 
-  it("deckt auch künftige Workflow-/Skill-/Agent-Dateien ab", () => {
+  it("deckt auch künftige Hook-/Skill-/Agent-Dateien ab", () => {
     const kuenftig = [
-      ".claude/workflows/neuer-workflow.js",
+      ".claude/hooks/neuer-hook.js",
       ".claude/skills/neuer-skill/SKILL.md",
       ".claude/agents/neuer-agent.md",
     ];

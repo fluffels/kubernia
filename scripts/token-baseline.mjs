@@ -55,7 +55,7 @@ export const PHASES = [
   "Nachlauf",
 ];
 
-/** Workflow-Labels (`.claude/workflows/kubernia-ticket.js`) → Phase, per Präfix. */
+/** Labels der Läufe des entfernten Workflow-Pfads (ADR 0028) → Phase, per Präfix; bleibt für historische Transkripte. */
 const WORKFLOW_LABELS = [
   [/^auswahl/i, "Auswahl"],
   [/^(plan|preflight):/i, "Planung"],

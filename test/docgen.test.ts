@@ -511,6 +511,12 @@ describe("Generator harness-inventar", () => {
     assert.ok(out.includes("| Workflow | `wf-name` |"));
     assert.ok(out.includes("| Workflow | `ohne` |"));
   });
+  test("fehlender Workflow-Ordner: keine Workflow-Zeile, kein Fehler", () => {
+    const ohne = Object.fromEntries(Object.entries(files).filter(([k]) => !k.startsWith(".claude/workflows/")));
+    const out = gen(ohne);
+    assert.ok(!out.includes("| Workflow |"));
+    assert.ok(out.includes("| Skill | `s1` |"));
+  });
   test("Hook: Matcher-Pipe escapet, CLAUDE_PROJECT_DIR entfernt; Git-Hook", () => {
     const out = gen(files);
     assert.ok(out.includes("matcher: `Bash\\|PowerShell`, `node scripts/h.mjs`"));

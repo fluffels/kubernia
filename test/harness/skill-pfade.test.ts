@@ -9,7 +9,7 @@
  *
  * Grenze: erkannt werden Windows-Laufwerkspfade (`C:\…`, `C:/…`), Git-Bash-/WSL-Laufwerkspfade
  * (`/c/…`, `/mnt/c/…`) und Home-Pfade (`/Users/…`, `/home/…`) in Markdown/JS/JSON unter
- * `.claude/skills`, `agents` und `workflows`. Relative Pfade und URLs (`https://…`) bleiben erlaubt.
+ * `.claude/skills`, und `agents`. Relative Pfade und URLs (`https://…`) bleiben erlaubt.
  * Nicht erkannt: UNC-Pfade, `~/…`, Umgebungsvariablen, Dateien außerhalb dieser drei Ordner
  * (`settings.json`, `scripts/`). Ein Laufwerks-Buchstabe, gefolgt von `\n`/`\r`/`\t` als eigenes Wort
  * (JS-Escape wie `"A:\n"`), zählt bewusst nicht als Pfad.
@@ -19,7 +19,7 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "..", "..");
-const SCAN = [".claude/skills", ".claude/agents", ".claude/workflows"];
+const SCAN = [".claude/skills", ".claude/agents"];
 const ABSOLUT =
   /\b[A-Za-z]:(?:\\{1,2}(?![nrt]\b)|\/(?!\/))\w|(?<![\w.:/-])\/(?:Users|home|mnt\/[a-z]|[a-z])\/\w/;
 
@@ -61,7 +61,7 @@ describe("Skill-Pfade (#1211)", { timeout: 30_000 }, () => {
     expect(findeAbsolutePfade("Termin 12:30 und foo:bar")).toEqual([]);
   });
 
-  it("kein absoluter Laufwerks- oder Home-Pfad unter .claude/skills, agents, workflows", () => {
+  it("kein absoluter Laufwerks- oder Home-Pfad unter .claude/skills und agents", () => {
     const treffer: string[] = [];
     for (const d of SCAN) {
       const liste = dateien(join(ROOT, d));

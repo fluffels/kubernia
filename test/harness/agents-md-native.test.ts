@@ -119,7 +119,7 @@ const RETIRED_ROLE_CLAIMS: { term: string; home: string; pattern?: RegExp }[] = 
 /**
  * Versionierte Agenten-Konfiguration (#1002/#1064): Skills, Agents, Workflows unter `.claude/`.
  * Deren Markdown erfasst seit #1091 auch `collectMarkdown`; nötig bleibt dieser Walk für
- * `.js`, weil die Workflow-Prompts als Freitext in `.claude/workflows/*.js` stehen. Quelle ist
+ * `.js`, weil ein Hilfsskript unter `.claude/` Prompt-Freitext tragen kann. Quelle ist
  * `git ls-files` (Worktrees sind nie versioniert); `.claude/worktrees/` zusätzlich explizit aus.
  */
 function isVersionedAgentConfig(path: string): boolean {
@@ -259,7 +259,7 @@ describe("Kein Markdown beschreibt CLAUDE.md noch in einer abgelegten Rolle (#99
 
   test("versionierte .claude/-Konfiguration wird mitgeprüft, Parallel-Worktrees nicht (#1002)", () => {
     assert.ok(isVersionedAgentConfig(".claude/skills/kubernia/SKILL.md"));
-    assert.ok(isVersionedAgentConfig(".claude/workflows/kubernia-ticket.js"), "Workflow-Prompts stehen in .js");
+    assert.ok(isVersionedAgentConfig(".claude/skills/kubernia/hilfe.js"), "Prompt-Freitext kann in .js stehen");
     assert.ok(!isVersionedAgentConfig(".claude/worktrees/kq-1/AGENTS.md"), "Worktrees paralleler Agenten nicht");
     assert.ok(!isVersionedAgentConfig(".claude/settings.json"));
     assert.ok(collectAgentConfig().includes(".claude/agents/kubernia-planner.md"), "Inventar ist nicht leer");

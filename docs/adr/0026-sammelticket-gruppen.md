@@ -1,7 +1,7 @@
 # ADR 0026: Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert, Entscheidung 3 abgelöst (#1687)** · Datum: 2026-10-16 · Ticket: #1647
+> Status: **akzeptiert, Entscheidung 3 abgelöst (#1687), Workflow-Pfad entfernt: präzisiert durch ADR 0028** · Datum: 2026-10-16 · Ticket: #1647
 
 ## Status
 

@@ -16,7 +16,7 @@ Das Repo ist öffentlich: jeder darf Issues eröffnen und kommentieren, es gibt 
 - **Gate:** `node scripts/fremdtext.mjs --issue <nr>` bzw. `--pr <nr>`. Fremde Beiträge erscheinen nur als `[Fremdtext ausgeblendet: <Art> von @<login>, <url>]`, Titel und Body eines fremden Eintrags verschwinden. Exit 0 vertraut, 3 Fremdeingang, 2 Fehler (fail-closed).
 - **Folgen:** Der Skill `kubernia` setzt ein Issue mit Exit 3 nicht um (überspringen, Befund an die Maintainerin, kein Kommentar und kein Label am fremden Issue). Der Planer verweigert den Plan mit `FREMDEINGANG #<nr> · kubernia-planner`. Planer, Umsetzer und Lens lesen Kommentare nur über das Skript.
 - **Übernahme durch die Maintainerin:** ein eigenes Issue anlegen, das auf das fremde verweist. Fremde Issues erreichen die Auswahl ohnehin nur, wenn jemand sie ins Board aufnimmt.
-- Entscheidung: Autor-Prüfung statt Sanitizing beliebiger Bodies, weil Sanitizing gegen Prompt-Injection unzuverlässig ist. Die Prüfung sitzt im Skill und in den Agenten-Anweisungen, nicht im Workflow-Skript `kubernia-ticket.js` (Größen-Ratchet).
+- Entscheidung: Autor-Prüfung statt Sanitizing beliebiger Bodies, weil Sanitizing gegen Prompt-Injection unzuverlässig ist. Die Prüfung sitzt im Skill und in den Agenten-Anweisungen.
 
 ## Kanäle für Fremdtext
 
@@ -36,7 +36,7 @@ Spalten: Risiko, vorhandenes Gate, Lücke, Folge, Bezug zu den Agentic Applicati
 
 | ID | Risiko | Vorhandenes Gate | Lücke | Folge | ASI (2026) |
 |---|---|---|---|---|---|
-| LLM01 | Prompt Injection | Fremdtext-Gate (Skill, Planer, Kommentare), `forum-sanitize` mit Rahmung, Forum-Quarantäne (`forum-leser`), `permissions` deny/ask, gh-guard, PR-Gate und Lenses | Web-Inhalte ungefiltert; Zitat-Laundering (vertraute Instanz zitiert Fremdtext); Workflow-Variante nur weich gesichert; Board-Auswahl gibt Titel vor dem Gate aus | #1447 | ASI01 Agent Goal Hijack, ASI06 Memory and Context Poisoning, ASI07 Insecure Inter-Agent Communication |
+| LLM01 | Prompt Injection | Fremdtext-Gate (Skill, Planer, Kommentare), `forum-sanitize` mit Rahmung, Forum-Quarantäne (`forum-leser`), `permissions` deny/ask, gh-guard, PR-Gate und Lenses | Web-Inhalte ungefiltert; Zitat-Laundering (vertraute Instanz zitiert Fremdtext); Board-Auswahl gibt Titel vor dem Gate aus | #1447 | ASI01 Agent Goal Hijack, ASI06 Memory and Context Poisoning, ASI07 Insecure Inter-Agent Communication |
 | LLM02 | Sensitive Information Disclosure | Secret-Scanning, Push-Protection, `check:internalrefs`, Anonymitätsregel, Key-Regel, `ask` für curl/wget | Secret-Dateien lesbar, keine Netz-Allowlist, Umfang von `PROJECT_TOKEN` | #1432, #1434, #1437, #985 | ASI03 Identity and Privilege Abuse |
 | LLM03 | Supply Chain | Dependabot und Policy, `npm audit` in `ci.yml` plus tägliche Audit-Einordnung (`audit-einordnung.yml`), `check:lockfile`, CodeQL und Scorecard berichtend, Funde per Code-Scanning-Inbox ins Board ([Abschnitt](agent-harness.md#code-scanning-und-posture-codeqlyml-scorecardyml-875)) | Lifecycle-Skripte, Actions per Tag statt SHA | #983, #1447 | ASI04 Agentic Supply Chain Vulnerabilities |
 | LLM04 | Data and Model Poisoning | Entsprechung im Harness ist ein vergiftetes Projekt-Brain: geschützte Pfade, Audit-Kommentar (ADR 0014), Lenses | `docs/` ist nur durch Review geschützt | keine, bewusst | ASI06 Memory and Context Poisoning |
@@ -52,7 +52,6 @@ ASI-Namen der Spalte nach der Sekundärquelle (siehe Quellen). Die Gate-Angaben 
 ## Grenzen (ehrlich)
 
 - Das Gate prüft den **Autor**, nicht den Inhalt. Eine vertraute Instanz, die Fremdtext zitiert (Zitat-Laundering), umgeht es; dagegen hilft nur Disziplin und das Review, bis #1447 d es löst.
-- Die Workflow-Variante (`kubernia-ticket.js`) hat keine harte Autor-Prüfung; der Haken ist der Planer, der bei Fremdeingang verweigert. Folgen: der Auswahl-Agent claimt das fremde Issue vor dem Gate (der Claim bleibt stehen), und der rohe Body steht schon im Planer-Prompt (#1447 e).
 - Ein Skript kann eine Agenten-Anweisung nicht erzwingen: ein Agent, der Kommentare doch roh liest, wird nur vom Wächter-Test (Anweisungstext) und vom Review erwischt, nicht zur Laufzeit.
 - Rule-of-Two (kein Teilsystem verarbeitet zugleich unvertrauten Input, hält Secrets und ändert Zustand oder kommuniziert nach außen) ist im [Forum-Skill](../.claude/skills/forum/SKILL.md) beschrieben und wird hier nicht wiederholt.
 - **Quarantäne-Muster (#1435):** Die Doku ([Subagenten-Frontmatter, Fehlerseite](https://code.claude.com/docs/en/errors), gelesen 2026-10-16) erlaubt für `forum-leser` auch eine leere `tools`-Liste (Subagent ohne Tools). Gewählt ist trotzdem `tools: Read` plus `disallowedTools` plus Read-Guard: ein werkzeugloser Agent bekäme den Thread nur über den Prompt des privilegierten Hauptagenten, und `tools:` ohne Wert ist YAML null und heißt „alle erben“. Frontmatter-Hooks laufen nur in vertrauten Ordnern; ohne Vertrauen bleiben die Whitelist und die Read-Denies aus `.claude/settings.json`. Der **Entwurf** und der Ticketvorschlag sind abgeleiteter Fremdtext im privilegierten Lauf (Zitat-Laundering): Gegenmittel ist der Freigabe-Stopp der Maintainerin, der Rest steht in #1447 d.

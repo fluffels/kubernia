@@ -88,12 +88,11 @@ describe("Dateigröße-Budget (#390)", () => {
 });
 
 describe("Deckel für Workflow-Skripte (#1349)", () => {
-  const WF = ".claude/workflows/kubernia-ticket.js";
+  const WF = ".claude/workflows/fixture.js";
   const deckel: Deckel[] = [{ file: WF, max: 1000, maxZeichen: 50000, reason: "Test" }];
 
-  test("das Repo hält seine Deckel (Ist-Zustand: Workflow auf den Deckel gemessen)", () => {
+  test("das Repo hält seine Deckel (Ist-Zustand: keine Workflow-Skripte über dem Budget)", () => {
     const wf = collectWorkflowSizes();
-    assert.ok(wf.some((w) => w.file === WF), "Workflow wird gefunden (sonst misst der Wächter nichts)");
     assert.deepEqual(pruefeDeckel(wf, DECKEL), []);
     assert.ok(DECKEL.every((d) => d.reason.length > 0 && typeof d.maxZeichen === "number"));
   });

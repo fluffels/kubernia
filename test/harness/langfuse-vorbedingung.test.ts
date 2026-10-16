@@ -161,11 +161,10 @@ describe("Kopplung", () => {
     const zeile = lies("AGENTS.md").split("\n").find((z) => z.includes("Langfuse-Erfassung erhalten"));
     expect(zeile).toContain("scripts/langfuse-vorbedingung.mjs");
   });
-  test.each([".claude/skills/kubernia/SKILL.md", ".claude/skills/kubernia-workflow/SKILL.md"])("%s ruft die Vorbedingung vor dem Start", (datei) => {
+  test.each([".claude/skills/kubernia/SKILL.md"])("%s ruft die Vorbedingung vor dem Start", (datei) => {
     expect(lies(datei)).toContain("node scripts/langfuse-vorbedingung.mjs");
   });
-  test("der Takt und der JS-Workflow prüfen sie nicht", () => {
-    expect(lies(".claude/workflows/kubernia-ticket.js")).not.toContain("langfuse-vorbedingung");
+  test("der Takt prüft sie nicht", () => {
     expect(lies(".github/workflows/board-takt.yml")).not.toContain("langfuse-vorbedingung");
   });
   test("das Glossar führt „Langfuse-Vorbedingung“", () => {

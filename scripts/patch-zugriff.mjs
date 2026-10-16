@@ -23,7 +23,7 @@ const VOLLLESER = /(?:^|[\s;&|(])(?:cat|type|Get-Content|gc)\s/i;
 /** Pfade aus dem Prompt als Basename: `Patch: <pfad>` (voll) und `Delta-Patch: <pfad>`, ohne Label der erste Pfad `kq-<nr>-r<n>[-delta].patch`. */
 export function patchPfade(prompt) {
   // Nur Pfade auf eine .patch-Datei: Fließtext wie "Patch:`" oder "Delta-Patch: ein" im Auftrag zählt nicht.
-  // Ohne Label (Workflow-Prompt: "Patch-Datei bereit … :\n  <pfad>") gilt der erste Pfad der Form kq-<nr>-r<n>[-delta].patch.
+  // Ohne Label (Prompt des entfernten Workflow-Pfads, ADR 0028, bleibt für historische Transkripte: "Patch-Datei bereit … :\n  <pfad>") gilt der erste Pfad der Form kq-<nr>-r<n>[-delta].patch.
   const voll = /(?<![\w-])Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? /\S*kq-\d+-r\d+\.patch(?![\w-])/i.exec(prompt)?.[0] ?? null;
   const delta = /Delta-Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? /\S*kq-\d+-r\d+-delta\.patch(?![\w-])/i.exec(prompt)?.[0] ?? null;
   // Ein Delta-Pfad im Feld "Patch:" (falsch gespawnt) ist der Delta-Patch, kein voller.

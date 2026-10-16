@@ -63,7 +63,6 @@ describe("Hilfsfunktionen", () => {
     expect(S.ordneHarnessAenderungen(["docs/x.md", "src/a.ts"])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
     expect(S.ordneHarnessAenderungen([])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
     expect(S.ordneHarnessAenderungen(["package-lock.json"]).lockGeaendert).toBe(true);
-    expect(S.ordneHarnessAenderungen([".claude/skills/kubernia-workflow/SKILL.md"]).skill).toEqual([]);
   });
   test("baueText (Hook-Modus): Sitzungsbasis immer, Neustart-Hinweis nur bei Harness-Änderungen, Meldung mit Zahl", () => {
     expect(S.baueText({ aktion: "nichts", basis: "abc" })).toBe("Sitzungsbasis: abc");

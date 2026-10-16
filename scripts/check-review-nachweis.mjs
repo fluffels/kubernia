@@ -4,8 +4,7 @@
  * Review- und Plan-Nachweis-Wächter (#1270) — macht Planungspass und Review-Konvergenz
  * pfadunabhängig prüfbar.
  *
- * Hintergrund: Review-Pflicht, Cap 2 Fix-Runden und der Planer waren nur im Workflow
- * (`.claude/workflows/kubernia-ticket.js`) im Code erzwungen. Im Skill-Pfad sind sie
+ * Hintergrund: Review-Pflicht, Cap 2 Fix-Runden und der Planer sind im Skill-Pfad
  * Verhaltensregeln: ein PR ohne Review-Runde, mit Überschreitung der Obergrenze oder ohne
  * Planer fiel nirgends auf. Dieser Wächter verlangt im Slice (Commits `<basis>..HEAD`) zwei
  * Zeilen am Zeilenanfang einer Commit-Message, gleiches Muster wie `KQ-Diffsize-Override`:
@@ -42,7 +41,7 @@ import { meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
 export { parseNachweis };
 
-/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Workflow trägt dieselbe Zahl (Wächter-Test). */
+/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter review-nachweis.test.ts). */
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
@@ -62,7 +61,7 @@ export const VORLAGE =
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche
- *  Regel wie `lensPlan` im Workflow (Wächter-Test). */
+ *  Regel der Review-Staffel (Skill `review-lenses`, Wächter review-staffel.test.ts). */
 export function pflichtLenses(dateien) {
   if (!Array.isArray(dateien) || dateien.length === 0) return [...CODE_LENSES];
   if (dateien.some((d) => typeof d !== "string" || d.trim() === "")) return [...CODE_LENSES];
