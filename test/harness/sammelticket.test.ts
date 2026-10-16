@@ -11,7 +11,7 @@
  *      `sammelticketPosition` aus AGENTS.md, setzt und prüft die Position; die Zählung (N-1. Todo-Item ohne
  *      das neue Item) liegt getestet in scripts/board-lib.mjs › afterIdForPosition und sammelticketKorrektur.
  *      Die Doku nennt das Skript und keine eigene Zahl.
- *   3. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
+ *   3. Skill `kubernia` und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
  *   4. Das Sammelticket hat keine Zeilengrenze (#1687, ADR 0026): kein `--generation`, keine Grenzzahl, kein

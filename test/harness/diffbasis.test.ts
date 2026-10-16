@@ -4,7 +4,7 @@
  *
  * In #1095 und #1105 stand in Harness-Texten jeweils ein Zwei-Punkt-Diff `git diff … main` gegen ein
  * womöglich veraltetes LOKALES `main`. Dabei zählen fremde main-Commits mit: der Review sieht Zeilen,
- * die gar nicht zum Slice gehören, und `beruehrtHarness`-artige Entscheidungen kippen. Beide Stellen
+ * die gar nicht zum Slice gehören, und Entscheidungen der Leitplanken-Erkennung kippen. Beide Stellen
  * wurden von Hand gefunden – dieser Wächter macht das maschinell. Kanonisch ist die Form, die auch
  * `check:diffsize`/`check:diffcoverage` messen: `git diff origin/main...HEAD` (Begründung:
  * docs/agent-harness.md § 2.5 und `.claude/skills/review-lenses/SKILL.md`).
