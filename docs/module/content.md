@@ -121,6 +121,22 @@ Die Sim beschreibt bei `kubectl describe pod <dep>` alle Pods des Deployments oh
 
 Variable Teile einer `accept`-Regex in Drills immer über `escapeRegExp` (`drills/shared.ts`), nie per Hand-`replace`; `test/drill-regex.test.ts` prüft, dass jeder Drill seine eigene Lösung akzeptiert.
 
+## Quiz-Karten und Golden-File (#368/#597)
+
+Quiz-Karten liegen pro Thema in `data/crabquiz/<thema>.json`. **Die richtige Antwort wird immer an Index 0 verfasst** (`"correct": 0`); die Anzeige mischt die Optionen erst beim Rendern (`ui/quiz.ts`), die Autoren-Reihenfolge ist spielerseitig also egal. Ein Wächter erzwingt genau das (`content/quizcheck.ts` + `test/quizcheck.test.ts`): `correct !== 0` fällt sofort auf, und ein **Golden-File** (`test/quiz-correct.golden.json`) hält die als korrekt markierte Antwort je Karte fest. Änderst du die korrekte Antwort (neuer Text, Options-Umsortierung, neue Karte), wird der Test rot: **bewusst reviewen** („lehrt sie das fachlich Richtige?"), dann `npm run quiz:golden` (schreibt das Golden aus dem Live-Content neu, der Diff zeigt genau die geänderte Antwort). Das schützt vor einer still vertauschten richtigen Antwort, die falsches K8s lehren würde.
+
+## Anzeigetexte und Platzhalter-Wächter (#311)
+
+Der Wächter-Test `content.test.ts` meldet Platzhalter (`<token>`), die `fmtCmd` nicht sichtbar macht, und echte Tags, die nicht geschlossen sind (Quest-Texte samt `why`, Smalltalk, Karten, Funk-Erklärungen, Drills, Quiz). Neue `KQContent`-Sammlung: Eintrag in `ANZEIGE_QUELLEN` (sonst Typfehler); neues Quest-Feld: Klassifikation in `test/support/anzeigetexte.ts` (`markup`/`escaped`/`daten`/`kinder`).
+
+## Loader und Granularität
+
+`src/content/loader.ts` + `src/content/entities.ts` laden und prüfen alles beim Start und werfen bei kaputten Daten explizit (`ContentValidationError`). Granularität immer mitdenken: wird eine Regionen-Datei zu groß, in sinnvolle Unterdateien splitten; eine Umstellung ist nur etwas wert, wenn sie dem Wachstum standhält. Die Leaves stehen unter „Loader-Leaves".
+
+## Content-Chunks (ADR 0018)
+
+Jede Datei unter `src/content/data/<dir>/` ist im Host-Build ein eigener Chunk mit Deckel (`check:bundle`, 128 KB je Chunk). Reißt eine Datei ihn, in Unterdateien splitten (z.B. `quests/knut-dns.json`); der Loader ist dateinamen-agnostisch. Neue Dateien direkt unter `data/` landen gemeinsam in `content-core`. Jede JSON unter `data/` und jede `.tmj` unter `assets/maps/` muss ins Spiel importiert werden (das Gate erwartet für jede einen Chunk); zwei Dateien mit gleichem bereinigten Namen (etwa `Knut_DNS` und `knut-dns`) sind ein Fehler, tiefere Verschachtelung als `data/<dir>/` ist nicht vorgesehen.
+
 ## Weitere Inhalts-Module
 
 | Modul | Inhalt |
