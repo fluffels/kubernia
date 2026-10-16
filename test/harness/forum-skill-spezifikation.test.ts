@@ -12,7 +12,7 @@ const schritt6 = skill.slice(skill.indexOf("**6. "), skill.indexOf("**7. "));
 describe("Forum-Skill Schritt 6: Ticket-Format (#1663 L4)", () => {
   test("Schritt 6 ist auffindbar und abgegrenzt", () => {
     assert.ok(schritt6.includes("Ticket anlegen"));
-    assert.ok(schritt6.includes("gh issue create"));
+    assert.ok(schritt6.includes("node scripts/spezifikation.mjs anlegen"), "Schritt 6 legt das Ticket über das Spezifikations-Skript an");
   });
   test("verlangt `## Ziel` und `## Akzeptanzkriterien` samt Negativfall", () => {
     assert.ok(schritt6.includes("## Ziel"));
