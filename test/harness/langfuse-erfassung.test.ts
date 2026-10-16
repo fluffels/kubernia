@@ -504,3 +504,45 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.match(zeile, /issuecomment-6019725674/, "der Sockel-Wert verlinkt den Beleg je Lauf");
   });
 });
+
+describe("Zuordnung in Langfuse (#1668)", () => {
+  const SKRIPT_ZEILEN = ["Brain-Arbeit", "Ticket", "Phase", "Rolle"];
+  const ALLE_ZEILEN = ["Projekt", ...SKRIPT_ZEILEN, "Usage-Schlüssel"];
+
+  /** Tabelle je Merkmal vollständig, die vier Skript-Merkmale tragen den Wortlaut, #1266 steht nur in der Überschrift. */
+  const hatZuordnung = (mr: string): boolean => {
+    const a = abschnitt(mr, /^### Zuordnung in Langfuse \(#1266\)/);
+    if (a === "") return false;
+    const zeile = (name: string): string => a.split("\n").find((z) => z.startsWith(`| ${name}`)) ?? "";
+    const übrig = mr.replace("### Zuordnung in Langfuse (#1266)", "");
+    return (
+      ALLE_ZEILEN.every((n) => zeile(n) !== "") &&
+      SKRIPT_ZEILEN.every((n) => zeile(n).includes("nur über das Skript messbar")) &&
+      !/#1266/.test(übrig)
+    );
+  };
+
+  /** Der Checklisten-Abschnitt nutzt die Rollen-Übersicht und gleicht gegen „Subagent LLM Call“ ab. */
+  const nutztRollenUebersicht = (mr: string): boolean => {
+    const a = abschnitt(mr, /^### Langfuse-Status überprüfen \(#1293\)/);
+    return a.includes("subagent-laufzeit.mjs --typen") && a.includes("Subagent LLM Call");
+  };
+
+  test("model-routing.md: Zuordnungs-Tabelle mit allen Merkmalen und dem Wortlaut „nur über das Skript messbar“", () => {
+    assert.ok(hatZuordnung(read("docs/model-routing.md")));
+  });
+
+  test("rote Gegenbeispiele: fehlende Zeile, fehlender Wortlaut, übrig gebliebenes #1266", () => {
+    const mr = read("docs/model-routing.md");
+    assert.equal(hatZuordnung(mr.replace(/^\| Phase \| nichts.*$/m, "")), false);
+    assert.equal(hatZuordnung(mr.replace(/^(\| Rolle \|.*)nur über das Skript messbar/m, "$1")), false);
+    assert.equal(hatZuordnung(`${mr}\nSiehe #1266.`), false);
+    assert.equal(hatZuordnung(mr.replace("### Zuordnung in Langfuse (#1266)", "### Zuordnung")), false);
+  });
+
+  test("Checkliste nutzt --typen und den Namen „Subagent LLM Call“, Gegenbeispiel rot", () => {
+    const mr = read("docs/model-routing.md");
+    assert.ok(nutztRollenUebersicht(mr));
+    assert.equal(nutztRollenUebersicht(mr.replaceAll("subagent-laufzeit.mjs --typen", "subagent-laufzeit.mjs")), false);
+  });
+});
