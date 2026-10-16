@@ -69,7 +69,12 @@ function ungepinnteUses(yml: string): string[] {
 /** Alle Schlüssel eines Syntaxbaums (beliebige Tiefe). */
 function schluessel(x: unknown, out: string[] = []): string[] {
   if (Array.isArray(x)) x.forEach((e) => schluessel(e, out));
-  else if (istObj(x)) for (const [k, v] of Object.entries(x)) (out.push(k), schluessel(v, out));
+  else if (istObj(x)) {
+    for (const [k, v] of Object.entries(x)) {
+      out.push(k);
+      schluessel(v, out);
+    }
+  }
   return out;
 }
 
@@ -110,7 +115,7 @@ function pruefe(yml: string, art: "codeql" | "scorecard"): string[] {
   if (art === "codeql") {
     const sprachen = jobs.flatMap(([, j]) => {
       const m = istObj(j.strategy) && istObj(j.strategy.matrix) ? j.strategy.matrix.language : undefined;
-      return Array.isArray(m) ? m : [];
+      return Array.isArray(m) ? (m as unknown[]) : [];
     });
     for (const sprache of ["javascript-typescript", "actions"]) if (!sprachen.includes(sprache)) fehler.push(`Matrix ohne ${sprache}`);
     const analyzeJobs = jobs.filter(([, j]) => mitAnalyze(j)).map(([n]) => n);
