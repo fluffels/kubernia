@@ -75,6 +75,14 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
   });
+
+  test("spezifikation.hartAb (#1615): optional, sonst positive Ganzzahl", () => {
+    const mit = (wert: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), spezifikation: wert });
+    assert.deepEqual(mit({ hartAb: 100 }), []);
+    for (const schlecht of [5, [], null, {}, { hartAb: 0 }, { hartAb: -3 }, { hartAb: 1.5 }, { hartAb: "7" }]) {
+      assert.match(mit(schlecht).join("\n"), /spezifikation\.hartAb/);
+    }
+  });
 });
 
 describe("boardPfad", () => {

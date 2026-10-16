@@ -15,16 +15,20 @@
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
  * `feature/kq-<nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
- * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
+ * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: `## Ziel` und
+ * `## Akzeptanzkriterien` mit Negativfall; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und einmal kommentiert,
+ * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
  * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); kein GraphQL. `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { NOTFAELLE, REPO, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
+import { NOTFAELLE, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istEpicTitel, pruefeEingang, schonKommentiert, spezKommentar } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
@@ -105,10 +109,11 @@ export function itemAusIssue(issue) {
  * Einzelprüfung einer vorgegebenen Nummer: dieselben Kriterien wie die Board-Auswahl (`ueberspringGrund`, auch Messfenster), aber ohne Status- und
  * Bereichsfilter; ein geschlossenes Issue ist nicht frei. `item` aus `itemAusIssue`. Liefert wie `waehleNaechstes` `{ ticket, uebersprungen }`. Pur.
  */
-export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER }) {
+export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0 }) {
   const nr = item.number;
-  const grund = item.state !== "open" ? "geschlossen" : ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }), owner, messfenster });
-  return grund ? { ticket: null, uebersprungen: [{ nr, grund }] } : { ticket: { nr, titel: item.title }, uebersprungen: [] };
+  if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
+  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }), owner, messfenster, hartAb });
+  return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
 }
 
 /** Gehört das Item zum Bereich? Ohne Bereich immer; 🚨 CI rot auf main und 🔒 Security zählen in beiden (Roter main geht vor). Pur. */
@@ -124,38 +129,47 @@ export function imBereich(item, bereich) {
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
  * Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0 }) {
   const belegt = belegteNummern({ refs, worktrees, prHeads });
   const uebersprungen = [];
   for (const item of items) {
     if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich)) continue;
-    const grund = ueberspringGrund(item, { offene, belegt, owner, messfenster });
-    if (grund) uebersprungen.push({ nr: item.number, grund });
-    else return { ticket: { nr: item.number, titel: item.title }, uebersprungen };
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, hartAb });
+    if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
+    else return { ticket: ticketVon(item, r), uebersprungen };
   }
   return { ticket: null, uebersprungen };
 }
 
+const uebersprungenEintrag = (nr, r) => ({ nr, grund: r.grund, ...(r.fehlt ? { fehlt: r.fehlt } : {}) });
+const ticketVon = (item, r) => ({ nr: item.number, titel: item.title, ...(r.bestandFehlt ? { spezifikation: { bestand: true, fehlt: r.bestandFehlt } } : {}) });
+
+/** Kopf-Items (Status-Ticket, Notfälle), Sammel- und Epic-Tickets haben eigene Formate und sind vom Spezifikations-Gate ausgenommen. */
+const spezAusgenommen = (t) => istKopfItem({ title: t.titel }) || SAMMELTICKET_TITEL_LISTE.includes(t.titel) || istEpicTitel(t.titel);
+
 const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kein Lader)" });
 
-function ueberspringGrund(c, { offene, belegt, owner, messfenster }) {
-  if (c.assignees.length > 0) return `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}`;
+/** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
+function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb }) {
+  if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
   const label = c.labels.find((l) => FREMDEINGANG_LABELS.includes(l));
-  if (!istVertraut(c.autor, owner) || label) return "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden";
+  if (!istVertraut(c.autor, owner) || label) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
   const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
-  if (offeneBlocker.length > 0) return `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}`;
+  if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
   const fenster = messfensterZeilen(c.body);
   const unlesbar = fenster.find((f) => "fehler" in f);
-  if (unlesbar) return unlesbar.fehler;
+  if (unlesbar) return { grund: unlesbar.fehler };
   const offenesFenster = fenster.find((f) => offene.has(f.nach));
-  if (offenesFenster) return messfensterGrund(offenesFenster, { closedAt: null, n: 0 });
-  if (c.blockedBy > 0) return "offener Blocker laut GitHub-Abhängigkeit";
-  if (belegt.has(c.number)) return "Branch, Worktree oder offener PR vorhanden";
+  if (offenesFenster) return { grund: messfensterGrund(offenesFenster, { closedAt: null, n: 0 }) };
+  if (c.blockedBy > 0) return { grund: "offener Blocker laut GitHub-Abhängigkeit" };
+  if (belegt.has(c.number)) return { grund: "Branch, Worktree oder offener PR vorhanden" };
+  const spez = pruefeEingang({ nummer: c.number, titel: c.title, body: c.body }, { ausgenommen: spezAusgenommen, hartAb });
+  if (spez.art === "hart") return { grund: `Spezifikation unvollständig: ${spez.fehlt.join("; ")}`, fehlt: spez.fehlt };
   for (const f of fenster) {
     const grund = messfensterGrund(f, messfenster(f, c.number)); // teuer (REST + Transkripte): erst für sonst freie Kandidaten
-    if (grund) return grund;
+    if (grund) return { grund };
   }
-  return "";
+  return spez.art === "bestand" ? { grund: "", bestandFehlt: spez.fehlt } : { grund: "" };
 }
 
 /** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach je übersprungenem Kandidaten eine Zeile. Pur. */
@@ -164,7 +178,8 @@ export function formatiere({ ticket, uebersprungen, bereich = null, einzel = nul
 `;
   const keins = bereich ? `kein freies Ticket im Bereich ${BEREICHE[bereich]}` : "kein freies Ticket";
   const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : keins;
-  return [kopf, ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
+  const hinweis = ticket?.spezifikation ? [`hinweis #${ticket.nr}: Spezifikation unvollständig (Bestand, nur berichtet): ${ticket.spezifikation.fehlt.join("; ")}`] : [];
+  return [kopf, ...hinweis, ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
 }
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
@@ -176,15 +191,38 @@ export function fuehreAus(argv, io) {
   if (t.ticket !== null && b.bereich) return fehlerErgebnis("--ticket und --bereich schließen sich aus");
   try {
     const einzel = t.ticket;
-    const ergebnis =
+    const roh =
       einzel === null
-        ? { ...waehleNaechstes({ ...io.lade(), owner: io.owner, bereich: b.bereich }), ...(b.bereich ? { bereich: b.bereich } : {}) }
-        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner });
+        ? { ...waehleNaechstes({ ...io.lade(), owner: io.owner, bereich: b.bereich, hartAb: io.hartAb }), ...(b.bereich ? { bereich: b.bereich } : {}) }
+        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb });
+    const { kommentiert, warnungen } = erinnereAnSpezifikation(roh.uebersprungen, io);
+    const ergebnis = kommentiert.length > 0 ? { ...roh, kommentiert } : roh;
     const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
-    return { code: ergebnis.ticket ? 0 : 1, out, err: "" };
+    return { code: ergebnis.ticket ? 0 : 1, out, err: warnungen.map((w) => `⚠ naechstes-ticket: ${w}\n`).join("") };
   } catch (e) {
     return fehlerErgebnis(e instanceof Error ? e.message : String(e));
   }
+}
+
+/**
+ * Einmal-Kommentar je hart übersprungenem Ticket (Spezifikations-Gate): erst die Kommentare lesen, nur ohne Marker eines vertrauten Autors posten.
+ * Ein Lese- oder Postfehler wird zur Warnung (nie ein Post auf Verdacht, der Exit-Code bleibt). Ohne `io.kommentareVon`/`io.kommentiere` passiert nichts.
+ */
+function erinnereAnSpezifikation(uebersprungen, io) {
+  const kommentiert = [];
+  const warnungen = [];
+  if (!io.kommentareVon || !io.kommentiere) return { kommentiert, warnungen };
+  const vertraut = (user) => istVertraut(user, io.owner);
+  for (const u of uebersprungen.filter((x) => x.fehlt)) {
+    try {
+      if (schonKommentiert(io.kommentareVon(u.nr), { vertraut })) continue;
+      io.kommentiere(u.nr, spezKommentar(u.fehlt));
+      kommentiert.push(u.nr);
+    } catch (e) {
+      warnungen.push(`Spezifikations-Kommentar zu #${u.nr} nicht gesetzt (${e instanceof Error ? e.message : String(e)})`);
+    }
+  }
+  return { kommentiert, warnungen };
 }
 
 const fehlerErgebnis = (text) => ({ code: 2, out: "", err: `✖ naechstes-ticket: ${text}\n` });
@@ -242,6 +280,10 @@ function ladeBelegung() {
   return { offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
 }
 
+/** Kommentare eines Issues (paginiert) und Einmal-Kommentar setzen (Spezifikations-Gate); Fehler werfen, `fuehreAus` macht Warnungen daraus. */
+const kommentareVon = (nr) => ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/issues/${nr}/comments?per_page=100`]).flat();
+const kommentiere = (nr, text) => ghJson(["api", "-X", "POST", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]);
+
 const ladeEcht = () => ({ items: normalizeItems(loadItemPages()), ...ladeBelegung() });
 
 /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
@@ -249,7 +291,8 @@ const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${RE
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
-  const { code, out, err } = fuehreAus(process.argv.slice(2), { lade: ladeEcht, ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0] });
+  const io = { lade: ladeEcht, ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: ladeProjektConfig().spezifikation?.hartAb, kommentareVon, kommentiere };
+  const { code, out, err } = fuehreAus(process.argv.slice(2), io);
   process.stdout.write(out);
   process.stderr.write(err);
   process.exitCode = code;

@@ -48,6 +48,9 @@ export function pruefeProjektConfig(wert) {
       }
     }
   }
+  if (wert.spezifikation !== undefined) {
+    if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
+  }
   return fehler;
 }
 
