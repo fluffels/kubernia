@@ -39,6 +39,7 @@
 import { pathToFileURL } from "node:url";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
+  ankerFehler,
   NOTFALL_ARTEN,
   REPO,
   abortMessage,
@@ -150,11 +151,8 @@ export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest
   const verschieden = new Set(rollen.values());
   if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };
   const rolle = [...verschieden][0];
-  const ziel = rolle === "factory" ? factory : produkt;
-  const fremd = rolle === "factory" ? produkt : factory;
-  if (anchor !== null && !stehtAuf(ziel, anchor) && stehtAuf(fremd, anchor)) {
-    return { fehler: `Anker #${anchor} steht nur auf dem ${rolle === "factory" ? "Produkt" : "Factory"}-Board, die Nummern gehören auf das ${rolle === "factory" ? "Factory" : "Produkt"}-Board` };
-  }
+  const fehler = anchor === null ? null : ankerFehler({ anchor, rolle, produkt, factory });
+  if (fehler) return { fehler };
   return { rolle, doppelt: numbers.filter((nr) => stehtAuf(produkt, nr) && stehtAuf(factory, nr)) };
 }
 

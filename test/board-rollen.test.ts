@@ -124,6 +124,21 @@ describe("kopfRang und aufnahmePlan.rolle (#1729)", () => {
   });
 });
 
+describe("ankerFehler: die Ankerregel von board-place und spezifikation (#1740)", () => {
+  const A = rawLib as unknown as { ankerFehler: (a: { anchor: number; rolle: string; produkt: Item[]; factory: Item[] }) => string | null };
+  const it = (nr: number): Item => ({ number: nr, labels: [] });
+  test("Anker nur auf dem anderen Board: Text mit beiden Boards, in beiden Richtungen", () => {
+    expect(A.ankerFehler({ anchor: 3, rolle: "factory", produkt: [it(3)], factory: [] })).toBe("Anker #3 steht nur auf dem Produkt-Board, die Nummern gehören auf das Factory-Board");
+    expect(A.ankerFehler({ anchor: 4, rolle: "produkt", produkt: [], factory: [it(4)] })).toBe("Anker #4 steht nur auf dem Factory-Board, die Nummern gehören auf das Produkt-Board");
+  });
+  test("Anker auf dem eigenen Board, auf beiden oder auf keinem: kein Fehler", () => {
+    expect(A.ankerFehler({ anchor: 3, rolle: "factory", produkt: [], factory: [it(3)] })).toBeNull();
+    expect(A.ankerFehler({ anchor: 3, rolle: "produkt", produkt: [it(3)], factory: [] })).toBeNull();
+    expect(A.ankerFehler({ anchor: 3, rolle: "factory", produkt: [it(3)], factory: [it(3)] })).toBeNull();
+    expect(A.ankerFehler({ anchor: 9, rolle: "factory", produkt: [it(3)], factory: [it(4)] })).toBeNull();
+  });
+});
+
 describe("zielRolle: das Board für board-place (#1729)", () => {
   const Z = rawPlace as unknown as { zielRolle: (a: { numbers: number[]; anchor?: number | null; produkt: Item[]; factory: Item[]; labelsRest?: Record<number, unknown> }) => { rolle?: string; doppelt?: number[]; fehler?: string } };
   const f = (nr: number): Item => ({ number: nr, labels: H });

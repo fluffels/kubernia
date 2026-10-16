@@ -203,10 +203,12 @@ export function ghPrDateien(nummer, status, diff = ghDiffNamen) {
   return diff(nummer).split("\n").map((z) => z.trim()).filter(Boolean);
 }
 
+const ghKommentareAnsicht = (nummer) => ghJson(["pr", "view", nummer, "--json", "author,comments"], { timeout: 20000 });
+
 /** Standard-`prKommentare`: Autor und Kommentare aus dem einen `gh pr view`; ohne sie (z.B. injizierter Status) ein eigener Aufruf; wirft bei jedem Fehler. */
-export function ghPrKommentare(nummer, status) {
+export function ghPrKommentare(nummer, status, ansicht = ghKommentareAnsicht) {
   if (status && "comments" in status && "author" in status) return status;
-  return ghJson(["pr", "view", nummer, "--json", "author,comments"], { timeout: 20000 });
+  return ansicht(nummer);
 }
 
 /** R6 (#1067): gemergter PR mit Leitplanken-Pfaden braucht den Audit-Kommentar des PR-Autors; Fehler: frei. */

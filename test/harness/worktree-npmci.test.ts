@@ -59,7 +59,7 @@ function workflowDateien(dir = ".claude/workflows"): string[] {
   return readdirSync(ROOT + dir).flatMap((n) =>
     statSync(ROOT + dir + "/" + n).isDirectory()
       ? workflowDateien(dir + "/" + n)
-      : /.(js|mjs|ts)$/.test(n) ? [dir + "/" + n] : [],
+      : /\.(js|mjs|ts)$/.test(n) ? [dir + "/" + n] : [],
   );
 }
 

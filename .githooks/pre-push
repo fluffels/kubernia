@@ -20,6 +20,8 @@
 #  - Auf `main` das volle `verify`, auf anderen Branches nur der Diffsize-Check — Feature-Branch-Pushes bleiben schnell.
 #  - Die lokale Basis (merge-base HEAD origin/main) zählt nie weniger als die CI-Basis (HEAD^1 des
 #    Merge-Checkouts); ein Trim-Commit nach dem Push kann also nur die CI-Messung verbessern.
+#  - Der Diffsize-Check misst HEAD, nicht den gepushten Ref: wer aus einem anderen Checkout einen Feature-Branch pusht, misst den
+#    falschen Slice (Zusatznetz, die CI bleibt der Riegel).
 #  - OHNE Builds/Boot-Smoke (das ist `verify:full`), damit der Hook zügig bleibt;
 #    die schweren Artefakt-Schritte deckt die CI ab.
 #  - Umgehung: `git push --no-verify` — greift aber NICHT an der Server-Protection

@@ -14,13 +14,13 @@
  *
  * Diese Fitness-Function sichert ab, dass der Schutz nicht leise wegbröckelt:
  *  - der Hook existiert und fährt die verify-Kette (nicht ein Einzel-Gate),
- *  - er greift nur beim Push auf main (Feature-Branches bleiben schnell),
+ *  - das volle verify greift nur beim Push auf main (Feature-Branches fahren nur den schnellen Diffsize-Check),
  *  - `npm run setup` verdrahtet ihn über core.hooksPath → .githooks (kein husky),
  *  - Pushes anderer Branches fahren `node scripts/check-diffsize.mjs` und brechen bei Rot ab (Verhaltens-Test mit Attrappe im Temp-Ordner),
  *  - die Umgehungs-Option ist dokumentiert (Notfall bleibt möglich).
  *
- * Rein struktureller Wächter (wie readme/docmap/verify-script) – kein
- * Verhaltens-Test. Ausführen mit:  npm test
+ * Strukturelle Wächter (wie readme/docmap/verify-script) plus ein Verhaltens-Test
+ * des Diffsize-Zweigs mit Attrappe. Ausführen mit:  npm test
  */
 import { afterEach, describe, it, expect } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

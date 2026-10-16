@@ -90,7 +90,7 @@ const workflowDateien = (dir = ".claude/workflows"): string[] =>
     : readdirSync(resolve(ROOT, dir)).flatMap((n) =>
         statSync(resolve(ROOT, dir, n)).isDirectory()
           ? workflowDateien(dir + "/" + n)
-          : /.(js|mjs|ts)$/.test(n) ? [dir + "/" + n] : [],
+          : /\.(js|mjs|ts)$/.test(n) ? [dir + "/" + n] : [],
       );
 const skillDateien = (): string[] =>
   readdirSync(resolve(ROOT, ".claude/skills")).map((d) => `.claude/skills/${d}/SKILL.md`).filter((p) => {

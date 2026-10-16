@@ -409,7 +409,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
     // Wie im Betrieb: nach dem Einmergen ist die Basis (merge-base mit main) die Spitze von main; deren Commits zählen nicht zum Slice.
     return { dir, basis: git(dir, "rev-parse", "main").trim() };
   }
-  const pruefe =(r: { dir: string; basis: string }) =>
+  const pruefe = (r: { dir: string; basis: string }) =>
     checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }), env: { KQ_DIFF_BASE: r.basis } });
 
   test("Merge von main mit echtem Konflikt nach dem Review ist rot", () => {

@@ -24,7 +24,7 @@ export const ROUTINE = /SSE stream disconnected|Terminal connection error|max co
 
 /** Netzabbruch-Code in einer Logzeile (`ECONNRESET`, `fetch failed`, `socket`) oder `""`. Pur. */
 export function netzCode(text) {
-  const m = /\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE)\b|fetch failed|socket/i.exec(text);
+  const m = /\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE)\b|fetch failed|\bsocket\b/i.exec(text);
   if (!m) return "";
   return m[1] ?? m[0].toLowerCase();
 }
@@ -108,8 +108,8 @@ export function klassifiziere(zeilen) {
       verbindungen += 1;
       if (verbindungen > 1) mk("reconnect");
     } else if (/^Tool '/.test(text)) {
-      // Tool-Fehler sind kein Serverausfall, außer der Netzcode zeigt eine gerissene Verbindung (MCP-Protokollfehler bleiben draußen).
-      if (/ failed/.test(text) && !/MCP error -32\d+/.test(text) && netzCode(text)) mk("abbruch", netzCode(text));
+      // Tool-Fehler sind kein Serverausfall, außer der Netzcode zeigt eine gerissene Verbindung (MCP-Protokollfehler und die `### Error`-Ausgabe eines Tools, etwa ein Browser-Tool ohne Dev-Server, bleiben draußen).
+      if (/ failed/.test(text) && !/MCP error -32\d+|### Error/.test(text) && netzCode(text)) mk("abbruch", netzCode(text));
     } else if (!ROUTINE.test(text) && (/fail|timed out/i.test(text) || (/connection closed/i.test(text) && !/\(cleanly\)/.test(text)))) {
       mk("abbruch", netzCode(text));
     }

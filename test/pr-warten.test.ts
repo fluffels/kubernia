@@ -344,6 +344,12 @@ describe("bewerte: Rerun überschreibt den früheren Lauf (#1740 L34)", () => {
     const r = P.bewerte(offen([wf("verify", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "CI", "QUEUED", null, "0001-01-01T00:00:00Z")]));
     expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 0/1 grün, wartend: verify"] });
   });
+  test("Gleichstand: bei gleichem Stempel gewinnt der spätere Eintrag; ohne startedAt zählt completedAt", () => {
+    expect(P.bewerte(offen([wf("verify", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "CI", "COMPLETED", "SUCCESS", alt)])).exit).toBe(2);
+    expect(P.bewerte(offen([wf("verify", "CI", "COMPLETED", "SUCCESS", alt), wf("verify", "CI", "COMPLETED", "CANCELLED", alt)])).exit).toBe(1);
+    const ohneStart = (conclusion: string, completedAt: string) => ({ __typename: "CheckRun", name: "verify", workflowName: "CI", status: "COMPLETED", conclusion, startedAt: "", completedAt, detailsUrl: "u" });
+    expect(P.bewerte(offen([ohneStart("SUCCESS", neu), ohneStart("CANCELLED", alt)])).exit).toBe(2);
+  });
   test("Negativ: alleinstehender CANCELLED bleibt rot (fail-closed)", () => {
     expect(P.bewerte(offen([wf("verify", "CI", "COMPLETED", "CANCELLED", alt)])).exit).toBe(1);
   });

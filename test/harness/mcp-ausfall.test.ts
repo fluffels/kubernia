@@ -76,6 +76,14 @@ describe("klassifiziere", () => {
     expect(a.klassifiziere([dbg("Tool 'listObservations' failed after 0s: MCP error -32602: Invalid params")])).toEqual([]);
     expect(a.klassifiziere([dbg("Tool 'listObservations' failed after 0s: MCP error -32602: socket ECONNRESET im Text")])).toEqual([]);
     expect(a.klassifiziere([dbg("Connection failed after 3s")])[0].code).toBe("");
+    // Die eigene Fehlerausgabe eines Tools (### Error) ist kein Serverausfall, auch mit Netzcode; `socket` zählt nur als ganzes Wort.
+    expect(a.klassifiziere([dbg("Tool 'browser_navigate' failed after 0s: ### Error\nError: connect ECONNREFUSED 127.0.0.1:5173")])).toEqual([]);
+    expect(a.klassifiziere([dbg("Tool 'browser_navigate' failed after 0s: net::ERR_SOCKET_NOT_CONNECTED")])).toEqual([]);
+    expect(a.klassifiziere([dbg("Tool 'x' failed after 0s: WebSocket is closed")])).toEqual([]);
+    expect(a.netzCode("the socket was closed")).toBe("socket");
+    expect(a.netzCode("ETIMEDOUT")).toBe("ETIMEDOUT");
+    expect(a.netzCode("write EPIPE")).toBe("EPIPE");
+    expect(a.netzCode("WebSocket")).toBe("");
   });
   test("buendeln trennt Abbrüche nach Code, meldung nennt ihn", () => {
     const mk = (code: string) => ({ klasse: "abbruch", zeit: "2026-10-15T10:00:00Z", sessionId: "a", text: "x", server: "lf", suffix: "", code });

@@ -57,7 +57,7 @@ export function ladeCommitZeilenOderBeende({ laden = ladeCommitZeilen, fehler = 
   }
 }
 
-const escapeRe =(t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main

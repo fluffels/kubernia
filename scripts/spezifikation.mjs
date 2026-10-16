@@ -20,7 +20,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
+import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -165,13 +165,14 @@ const echteIo = {
   erzeuge: ({ titel, body, labels }) =>
     ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
   pruefeAnker: ({ nach, labels }) => {
-    // Das neue Issue gibt es noch nicht, seine Rolle kommt aus den Labels (Trennregel wie `zielRolle` in board-place.mjs; ein Einstiegsskript importiert kein anderes).
-    const rolle = boardRolleFuer(labels);
-    const anders = rolle === "factory" ? "produkt" : "factory";
-    const steht = (r) => loadItems(boardFuerRolle(r)).some((i) => i.number === nach);
-    if (steht(rolle) || !steht(anders)) return null;
-    const name = (r) => (r === "factory" ? "Factory" : "Produkt");
-    return `Anker #${nach} steht auf dem ${name(anders)}-Board; einen Anker vom ${name(rolle)}-Board wählen`;
+    // Das neue Issue gibt es noch nicht, seine Rolle kommt aus den Labels; die Regel selbst (`ankerFehler`) teilt sich das Skript mit board-place.mjs über board-lib.mjs.
+    const fehler = ankerFehler({
+      anchor: nach,
+      rolle: boardRolleFuer(labels),
+      produkt: loadItems(boardFuerRolle("produkt")),
+      factory: loadItems(boardFuerRolle("factory")),
+    });
+    return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
   },
   einsortiere: ({ nr, nach, notfall }) => {
     const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];

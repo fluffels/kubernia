@@ -32,6 +32,7 @@ const abschluss = abschlussRaw as unknown as {
   AUDIT_KOPF: string;
   GRAPHQL_DATEIEN_GRENZE: number;
   ghPrDateien: (nr: string, status?: { files?: { path: string }[] }, diff?: (nr: string) => string) => string[];
+  ghPrKommentare: (nr: string, status?: object, ansicht?: (nr: string) => object) => object;
   PR_FELDER: string;
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
   letzteNachrichtAusTranskript: (p: string) => string | null;
@@ -617,6 +618,18 @@ describe("Leitplanken-Audit (#1067)", () => {
       assert.deepEqual(abschluss.ghPrDateien("7", undefined, () => "d.ts"), ["d.ts"]);
       assert.throws(() => abschluss.ghPrDateien("7", { files: dateien(100) }, nichtAufrufen), /kein gh pr diff/);
     });
+  });
+
+  test("ghPrKommentare: ein Status mit author und comments dient als Quelle; fehlt eines von beiden, kommt der eigene Aufruf", () => {
+    const nichtAufrufen = () => {
+      throw new Error("kein eigener Aufruf erwartet");
+    };
+    const voll = { author: { login: "a" }, comments: [] };
+    assert.equal(abschluss.ghPrKommentare("7", voll, nichtAufrufen), voll);
+    const eigen = { author: { login: "b" }, comments: [{ body: "x" }] };
+    assert.equal(abschluss.ghPrKommentare("7", { author: { login: "a" } }, () => eigen), eigen);
+    assert.equal(abschluss.ghPrKommentare("7", { comments: [] }, () => eigen), eigen);
+    assert.equal(abschluss.ghPrKommentare("7", undefined, () => eigen), eigen);
   });
 
   test("gemergt + Leitplanke ohne Audit-Kommentar: blockiert, nennt Treffer", () => {
