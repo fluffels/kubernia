@@ -1,15 +1,28 @@
 {
-  "version": 1,
+  "version": 2,
   "repo": "fluffels/kubernia",
-  "board": {
-    "besitzer": "fluffels",
-    "besitzerTyp": "user",
-    "nummer": 1,
-    "projectId": "PVT_kwHOD8746c4Barq_",
-    "statusFeldId": 358708531,
-    "statusFeldNodeId": "PVTSSF_lAHOD8746c4Barq_zhVhdTM",
-    "todoOptionId": "f75ad846"
-  },
+  "boards": [
+    {
+      "rolle": "produkt",
+      "besitzer": "fluffels",
+      "besitzerTyp": "user",
+      "nummer": 1,
+      "projectId": "PVT_kwHOD8746c4Barq_",
+      "statusFeldId": 358708531,
+      "statusFeldNodeId": "PVTSSF_lAHOD8746c4Barq_zhVhdTM",
+      "todoOptionId": "f75ad846"
+    },
+    {
+      "rolle": "factory",
+      "besitzer": "fluffels",
+      "besitzerTyp": "user",
+      "nummer": 2,
+      "projectId": "PVT_kwHOD8746c4BnXAE",
+      "statusFeldId": 427556399,
+      "statusFeldNodeId": "PVTSSF_lAHOD8746c4BnXAEzhl7_i8",
+      "todoOptionId": "f75ad846"
+    }
+  ],
   "spezifikation": {
     "hartAb": 1
   },

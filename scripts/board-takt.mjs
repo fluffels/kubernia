@@ -24,6 +24,7 @@ import {
   STATUS_TITEL,
   TAG_MS,
   addToBoardTodo,
+  boardFuerRolle,
   alsDatum,
   aufnahmePlan,
   ghJson,
@@ -42,6 +43,9 @@ import {
   verschiebe,
   wirklichFehlend,
 } from "./board-lib.mjs";
+
+// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
+const PRODUKT_BOARD = boardFuerRolle("produkt");
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 
 /** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
@@ -203,7 +207,7 @@ export function harnessVoraussetzung({ items, position, positionFehler }) {
 }
 
 /** Harness-Entscheidung ausführen; true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
-export function fuehreHarnessAus(h, items, token, { setze = setPosition, log = console.log } = {}) {
+export function fuehreHarnessAus(h, items, token, { setze = (id, afterId, opts) => setPosition(PRODUKT_BOARD, id, afterId, opts), log = console.log } = {}) {
   try {
     setze(items.find((i) => i.number === h.nr).id, h.afterId, { token });
     log("Sammelticket-Position gesetzt.");
@@ -256,9 +260,9 @@ export function nimmFehlendeAuf({ offene, items, token, dry = false, repo = REPO
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
 const ECHTE_IO = {
   ghJson,
-  itemsUeberIssues,
-  addToBoardTodo,
-  loadItems,
+  itemsUeberIssues: (nummern, opts) => itemsUeberIssues(PRODUKT_BOARD, nummern, opts),
+  addToBoardTodo: (nodeId, opts) => addToBoardTodo(PRODUKT_BOARD, nodeId, opts),
+  loadItems: (opts) => loadItems(PRODUKT_BOARD, opts),
   loadOpenIssuePages,
   positionLautAgentsMd,
   fuehreStatusAus,

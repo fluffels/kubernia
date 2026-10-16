@@ -20,11 +20,21 @@ const pc = rawPc as unknown as Pc;
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 
-type Cfg = Record<string, unknown> & { board?: Record<string, unknown> };
+type Cfg = Record<string, unknown> & { boards?: Record<string, unknown>[] };
+const mkBoard = (rolle: string, nummer: number, projectId: string): Record<string, unknown> => ({
+  rolle,
+  besitzer: "acme",
+  besitzerTyp: "org",
+  nummer,
+  projectId,
+  statusFeldId: 5,
+  statusFeldNodeId: "x_status",
+  todoOptionId: "abc",
+});
 const gueltig = (): Cfg => ({
-  version: 1,
+  version: 2,
   repo: "acme/demo",
-  board: { besitzer: "acme", besitzerTyp: "org", nummer: 7, projectId: "PVT_x", statusFeldId: 5, statusFeldNodeId: "PVTSSF_y", todoOptionId: "abc" },
+  boards: [mkBoard("produkt", 7, "p_eins"), mkBoard("factory", 8, "p_zwei")],
   projektliterale: { Zelda: "zelda" },
 });
 
@@ -57,23 +67,51 @@ describe("pruefeProjektConfig", () => {
     };
     assert.match(meld(null), /JSON-Objekt/);
     assert.match(meld([]), /JSON-Objekt/);
-    assert.match(mit((c) => (c.version = 2)), /version/);
+    const b1 = (c: Cfg): Record<string, unknown> => c.boards?.[1] ?? {};
+    assert.match(mit((c) => (c.version = 1)), /version/);
     assert.match(mit((c) => delete c.version), /version/);
     assert.match(mit((c) => delete c.repo), /repo/);
     assert.match(mit((c) => (c.repo = "ohneSchraegstrich")), /repo/);
     assert.match(mit((c) => (c.repo = 5)), /repo/);
-    assert.match(mit((c) => delete c.board), /board muss/);
-    assert.match(mit((c) => delete c.board?.besitzer), /board\.besitzer/);
-    assert.match(mit((c) => ((c.board ??= {}).besitzer = " ")), /board\.besitzer/);
-    assert.match(mit((c) => ((c.board ??= {}).besitzerTyp = "team")), /besitzerTyp/);
-    assert.match(mit((c) => ((c.board ??= {}).nummer = 0)), /board\.nummer/);
-    assert.match(mit((c) => ((c.board ??= {}).nummer = 1.5)), /board\.nummer/);
-    assert.match(mit((c) => ((c.board ??= {}).statusFeldId = "5")), /statusFeldId/);
-    assert.match(mit((c) => delete c.board?.projectId), /board\.projectId/);
-    assert.match(mit((c) => ((c.board ??= {}).statusFeldNodeId = "")), /statusFeldNodeId/);
-    assert.match(mit((c) => ((c.board ??= {}).todoOptionId = 3)), /todoOptionId/);
+    assert.match(mit((c) => delete b1(c).besitzer), /boards\.1\.besitzer/);
+    assert.match(mit((c) => (b1(c).besitzer = " ")), /boards\.1\.besitzer/);
+    assert.match(mit((c) => (b1(c).besitzerTyp = "team")), /boards\.1\.besitzerTyp/);
+    assert.match(mit((c) => (b1(c).nummer = 0)), /boards\.1\.nummer/);
+    assert.match(mit((c) => (b1(c).nummer = 1.5)), /boards\.1\.nummer/);
+    assert.match(mit((c) => (b1(c).statusFeldId = "5")), /boards\.1\.statusFeldId/);
+    assert.match(mit((c) => delete b1(c).projectId), /boards\.1\.projectId/);
+    assert.match(mit((c) => (b1(c).statusFeldNodeId = "")), /boards\.1\.statusFeldNodeId/);
+    assert.match(mit((c) => (b1(c).todoOptionId = 3)), /boards\.1\.todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+  });
+
+  test("boards (#1728): Liste, Rollen, Eindeutigkeit", () => {
+    const mit = (mut: (c: Cfg) => void): string => {
+      const c = gueltig();
+      mut(c);
+      return meld(c);
+    };
+    assert.match(mit((c) => delete c.boards), /boards muss/);
+    assert.match(mit((c) => ((c as Record<string, unknown>).boards = [])), /boards muss/);
+    assert.match(mit((c) => ((c as Record<string, unknown>).boards = {})), /boards muss/);
+    assert.match(
+      mit((c) => {
+        delete c.boards;
+        (c as Record<string, unknown>).board = mkBoard("produkt", 1, "x"); // altes v1-Schema
+      }),
+      /boards muss/,
+    );
+    assert.match(mit((c) => ((c.boards as unknown[])[0] = "kein Objekt")), /boards\.0 muss ein Objekt/);
+    assert.match(mit((c) => ((c.boards as Record<string, unknown>[])[1].rolle = "unbekannt")), /boards\.1\.rolle/);
+    assert.match(mit((c) => ((c.boards as Record<string, unknown>[])[1].rolle = "produkt")), /Rolle produkt kommt mehrfach/);
+    assert.match(mit((c) => (c.boards as unknown[]).pop()), /Rolle factory fehlt/);
+    assert.match(mit((c) => ((c.boards as Record<string, unknown>[])[1].projectId = "p_eins")), /projectId.*mehrfach/);
+    assert.match(mit((c) => ((c.boards as Record<string, unknown>[])[1].nummer = 7)), /Board.*mehrfach/);
+    // Grenzfall: gleiche Nummer bei verschiedenem Besitzer ist ein anderes Board
+    const anders = gueltig();
+    Object.assign((anders.boards as Record<string, unknown>[])[1], { nummer: 7, besitzer: "andere" });
+    assert.deepEqual(pc.pruefeProjektConfig(anders), []);
   });
 
   test("spezifikation.hartAb (#1615): optional, sonst positive Ganzzahl", () => {
@@ -87,11 +125,11 @@ describe("pruefeProjektConfig", () => {
 
 describe("boardPfad", () => {
   test("user ergibt users/…, org ergibt orgs/…; die echte Config bleibt beim bisherigen Board-Pfad", () => {
-    const b = gueltig().board;
+    const b = gueltig().boards?.[0];
     assert.equal(pc.boardPfad({ ...b, besitzerTyp: "user" }), "users/acme/projectsV2/7");
     assert.equal(pc.boardPfad({ ...b, besitzerTyp: "org" }), "orgs/acme/projectsV2/7");
-    const echt = pc.ladeProjektConfig() as unknown as { board: Record<string, unknown> };
-    assert.equal(pc.boardPfad(echt.board), `users/${String(echt.board.besitzer)}/projectsV2/1`);
+    const echt = pc.ladeProjektConfig() as unknown as { boards: Record<string, unknown>[] };
+    assert.equal(pc.boardPfad(echt.boards[0]), `users/${String(echt.boards[0].besitzer)}/projectsV2/1`);
   });
 });
 
@@ -111,9 +149,11 @@ describe("ladeProjektConfig", () => {
     writeFileSync(join(d, ".factory/projekt.json"), "[]");
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /JSON-Objekt/);
     const c = gueltig();
-    delete c.board?.projectId;
+    delete c.boards?.[0].projectId;
     writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify(c));
-    assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /board\.projectId[\s\S]*Fix:/);
+    assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /boards\.0\.projectId[\s\S]*Fix:/);
+    writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), version: 1, board: gueltig().boards?.[0], boards: undefined }));
+    assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /projekt\.json[\s\S]*version muss 2[\s\S]*boards[\s\S]*Fix:/);
   });
 });
 
@@ -132,14 +172,22 @@ describe("cli", () => {
   };
   test("gibt String- und Zahlwerte aus", () => {
     const p = mitConfig();
-    assert.deepEqual(lauf(["--config", p, "board.projectId"]), { code: 0, out: ["PVT_x"], err: [] });
-    assert.deepEqual(lauf(["board.nummer", "--config", p]).out, ["7"]);
+    assert.deepEqual(lauf(["--config", p, "boards.0.projectId"]), { code: 0, out: ["p_eins"], err: [] });
+    assert.deepEqual(lauf(["boards.1.nummer", "--config", p]).out, ["8"]);
+    assert.deepEqual(lauf(["boards.1.projectId", "--config", p]).out, ["p_zwei"]);
     assert.deepEqual(lauf(["repo", "--config", p]).out, ["acme/demo"]);
+  });
+  test("Listenindex nur als Ziffernfolge innerhalb der Liste (kein length, keine führende Null)", () => {
+    const p = mitConfig();
+    for (const k of ["boards.2.projectId", "boards.length", "boards.01.projectId", "boards.1", "boards.-1.projectId"]) {
+      assert.equal(lauf(["--config", p, k]).code, 1, k);
+    }
   });
   test("fehlender Schlüssel, Objekt statt Skalar, fehlende Config, fehlender Pfad: Exit 1; ohne Schlüssel Exit 2", () => {
     const p = mitConfig();
-    assert.equal(lauf(["--config", p, "board.gibtsnicht"]).code, 1);
-    assert.equal(lauf(["--config", p, "board"]).code, 1);
+    assert.equal(lauf(["--config", p, "boards.0.gibtsnicht"]).code, 1);
+    assert.equal(lauf(["--config", p, "boards"]).code, 1);
+    assert.equal(lauf(["--config", p, "boards.0"]).code, 1);
     assert.equal(lauf(["--config", p, "constructor"]).code, 1);
     const fehlt = lauf(["--config", join(tmp(), "nein.json"), "repo"]);
     assert.equal(fehlt.code, 1);
@@ -153,11 +201,11 @@ describe("Einstieg scripts/projekt-config.mjs", { timeout: 30_000 }, () => {
   const start = (...args: string[]): { status: number | null; stdout: string; stderr: string } =>
     spawnSync(process.execPath, [join(WURZEL, "scripts/projekt-config.mjs"), ...args], { encoding: "utf8" });
   test("gibt den Wert der echten Config aus; fehlender Schlüssel Exit 1, ohne Schlüssel Exit 2", () => {
-    const echt = JSON.parse(readFileSync(WURZEL + ".factory/projekt.json", "utf8")) as { board: { projectId: string } };
-    const r = start("board.projectId");
+    const echt = JSON.parse(readFileSync(WURZEL + ".factory/projekt.json", "utf8")) as { boards: { projectId: string }[] };
+    const r = start("boards.1.projectId");
     assert.equal(r.status, 0);
-    assert.equal(r.stdout.trim(), echt.board.projectId);
-    assert.equal(start("board.gibtsnicht").status, 1);
+    assert.equal(r.stdout.trim(), echt.boards[1].projectId);
+    assert.equal(start("boards.0.gibtsnicht").status, 1);
     assert.equal(start().status, 2);
   });
 });

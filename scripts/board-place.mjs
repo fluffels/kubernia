@@ -33,6 +33,7 @@ import {
   REPO,
   abortMessage,
   addToBoardTodo,
+  boardFuerRolle,
   aufnahmePlan,
   ergaenzeFehlende,
   fehlendeNummern,
@@ -49,6 +50,9 @@ import {
   todoItem,
   wirklichFehlend,
 } from "./board-lib.mjs";
+
+// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
+const PRODUKT_BOARD = boardFuerRolle("produkt");
 
 export { NOTFALL_ARTEN };
 
@@ -95,7 +99,7 @@ function parseOhneNotfall(rest, dry) {
  * `--after`-Anker nicht (Meldung „fehlt im Board, nicht aufgenommen: <Grund>“, am Ende Exit 1).
  */
 export function nimmFehlendeAuf(items, args, io = {}) {
-  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns = addToBoardTodo, log = console.log, warn = console.error } = io;
+  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns = (nodeId, opts) => addToBoardTodo(PRODUKT_BOARD, nodeId, opts), log = console.log, warn = console.error } = io;
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length === 0) return items;
   const issues = {};
@@ -122,8 +126,8 @@ export function nimmFehlendeAuf(items, args, io = {}) {
 /** Bericht: offene Issues, die nicht auf dem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
 function reportMissing() {
   try {
-    const rest = missingFromBoard(loadOpenIssueNumbers(), loadItems());
-    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, itemsUeberIssues(rest));
+    const rest = missingFromBoard(loadOpenIssueNumbers(), loadItems(PRODUKT_BOARD));
+    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, itemsUeberIssues(PRODUKT_BOARD, rest));
     console.log(missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
@@ -136,10 +140,10 @@ const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { e
 
 /** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
 async function einsortieren(args) {
-  let items = loadItems();
+  let items = loadItems(PRODUKT_BOARD);
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
-  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(fehlend));
+  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(PRODUKT_BOARD, fehlend));
   items = nimmFehlendeAuf(items, args);
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
@@ -152,7 +156,7 @@ async function einsortieren(args) {
   if (korrektur) {
     console.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
     if (!args.dry) {
-      setPosition(korrektur.id, korrektur.afterId);
+      setPosition(PRODUKT_BOARD, korrektur.id, korrektur.afterId);
       await sleep(PAUSE_MS);
     }
   }
@@ -160,7 +164,7 @@ async function einsortieren(args) {
     console.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
     if (args.dry) continue;
     try {
-      setPosition(item.id, afterId);
+      setPosition(PRODUKT_BOARD, item.id, afterId);
     } catch (e) {
       const rest = steps.slice(n).map((x) => `#${x.item.number}`).join(", ");
       throw abbruch(`${abortMessage(e.message)}. Offen bleiben ${rest}`);
