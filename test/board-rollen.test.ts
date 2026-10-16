@@ -49,7 +49,7 @@ describe("boardRolleFuer", () => {
     expect(L.boardRolleFuer([{ name: "area:harness" }])).toBe("factory");
     expect(L.boardRolleFuer(["area:spiel", { name: "bug" }, null])).toBe("produkt");
   });
-  test("nur exakte Gleichheit: area:harness-x und area:harnes zählen nicht", () => {
+  test("nur exakte Gleichheit: area:harness-x und xarea:harness zählen nicht", () => {
     expect(L.boardRolleFuer(["area:harness-x"])).toBe("produkt");
     expect(L.boardRolleFuer([{ name: "xarea:harness" }])).toBe("produkt");
   });
@@ -96,7 +96,7 @@ describe("Verdrahtung: jeder Aufrufer übergibt sein Board ausdrücklich", () =>
         const davor = q.slice(0, m.index).trimEnd();
         const danach = q.slice((m.index ?? 0) + m[0].length);
         if (davor.endsWith(".")) continue; // Zugriff auf ein Objekt (io.loadItems)
-        if (/^\s*[:,]/.test(danach) && !davor.endsWith("=>")) continue; // Objektschlüssel
+        if (/^\s*:/.test(danach) && !davor.endsWith("=>")) continue; // Objektschlüssel `name:`; Shorthand und `= name,` sind Verstöße
         expect(danach, `${f}: ${m[0]}`).toMatch(/^\(PRODUKT_BOARD\b/);
       }
     });
