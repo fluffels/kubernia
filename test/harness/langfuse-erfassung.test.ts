@@ -538,6 +538,36 @@ describe("Zuordnung in Langfuse (#1668)", () => {
     assert.equal(hatZuordnung(mr.replace("### Zuordnung in Langfuse (#1266)", "### Zuordnung")), false);
   });
 
+  /** Ticket-Zeile warnt vor Kosten je Ticket und nennt die Gründe (a) bis (d); Projekt-Zeile trägt das Schnitt-Datum; Glossar und Trace-Tag-Bullet verlinken nur. */
+  const hatTicketGruendeUndDatum = (mr: string, glossar: string): boolean => {
+    const a = abschnitt(mr, /^### Zuordnung in Langfuse \(#1266\)/);
+    const zeile = (name: string): string => a.split("\n").find((z) => z.startsWith(`| ${name}`)) ?? "";
+    const ticket = zeile("Ticket");
+    const tag = mr.split("\n").find((z) => z.startsWith("- **Trace-Tag:**")) ?? "";
+    const glossarZeile = glossar.split("\n").find((z) => z.startsWith("| Trace-Tag `kubernia`")) ?? "";
+    return (
+      /nicht für Kosten je Ticket verwenden/.test(ticket) &&
+      ["(a)", "(b)", "(c)", "(d)"].every((g) => ticket.includes(g)) &&
+      /ab 2026-10-05/.test(zeile("Projekt")) &&
+      /\*\*Vergleichsschnitt:\*\*[^\n]*2026-10-05/.test(a) &&
+      glossarZeile.includes("(model-routing.md#zuordnung-in-langfuse-1266)") &&
+      !/2026-10-05|Brain-Arbeit/.test(glossarZeile) &&
+      !/2026-10-05|Brain-Arbeit/.test(tag)
+    );
+  };
+
+  test("Ticket-Zeile (Warnung, Gründe a bis d), Schnitt-Datum und Verlinkung statt Text, Gegenbeispiele rot", () => {
+    const mr = read("docs/model-routing.md");
+    const gl = read("docs/harness-glossar.md");
+    assert.ok(hatTicketGruendeUndDatum(mr, gl));
+    assert.equal(hatTicketGruendeUndDatum(mr.replace("nicht für Kosten je Ticket verwenden", "ok"), gl), false);
+    for (const g of ["(a) `CC_", "(b) die Session", "(c) der Hook-Patch", "(d) mehrere Tickets"]) assert.equal(hatTicketGruendeUndDatum(mr.replace(g, "(x)"), gl), false, g);
+    assert.equal(hatTicketGruendeUndDatum(mr.replace(/(\*\*Vergleichsschnitt:\*\*[^\n]*?)2026-10-05/, "$1ab Oktober"), gl), false);
+    assert.equal(hatTicketGruendeUndDatum(mr, gl.replace("Projektfilter der Langfuse-Auswertung.", "Projektfilter, ab 2026-10-05.")), false);
+    assert.equal(hatTicketGruendeUndDatum(mr, gl.replace("(model-routing.md#zuordnung-in-langfuse-1266)", "(model-routing.md)")), false);
+    assert.equal(hatTicketGruendeUndDatum(mr.replace("beim Start fest an allen Traces;", "beim Start fest an allen Traces, auch an Brain-Arbeit;"), gl), false);
+  });
+
   test("Checkliste nutzt --typen und den Namen „Subagent LLM Call“, Gegenbeispiel rot", () => {
     const mr = read("docs/model-routing.md");
     assert.ok(nutztRollenUebersicht(mr));
