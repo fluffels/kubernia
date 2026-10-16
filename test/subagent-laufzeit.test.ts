@@ -623,6 +623,7 @@ describe("typenUebersicht: Rollen-Übersicht je agentType (#1668)", () => {
     expect(T.parseArgs(["--typen", "--von", "x"])).toMatchObject({ typen: true });
     expect(T.parseArgs(["--typen", "--agent", "kubernia-lens"]).fehler).toMatch(/--typen/);
     expect(T.parseArgs(["--agent", "kubernia-lens", "--typen"]).fehler).toMatch(/--typen/);
+    expect(T.parseArgs(["--typen", "--agent", "kubernia-planner"]).fehler).toMatch(/--typen/);
     expect(T.parseArgs(["--typen", "--schnitt", "2026-10-01T00:00:00Z"]).fehler).toMatch(/--typen/);
     expect(T.parseArgs(["--von", "x"])).toMatchObject({ typen: false, agent: "kubernia-planner" });
     expect(T.parseArgs(["--von", "x"]).fehler).toBeUndefined();
