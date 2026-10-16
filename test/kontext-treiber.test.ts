@@ -694,3 +694,54 @@ describe("ticketLauf: Gruppen-Kennzahlen über zwei Läufe (#1646)", () => {
     expect(g.kostenSumme).toBeCloseTo(einzeln[0] + einzeln[1], 10);
   });
 });
+
+describe("Ticketliste je Gruppe (#1593)", () => {
+  type Zeile = { ticket: number; schnitt: string; kosten: number | null; nachfolger: number; promptZeichenNachfolger: number; offen: boolean };
+  const liste = (laeufe: Lauf[]) => (voll({ laeufe, jeTicket: true }).laeufe as unknown as Zeile[]);
+  const v = vorgaenger(5, "verify", 0, [{ min: 1, ctx: 10_000 }, { min: 2, ctx: 20_000 }]);
+  const n = nachfolger(5, "verify", 10, [{ min: 1, ctx: 15_000 }]);
+  test("je Ticket: Schnitt, Kosten, Zahl und Prompt-Zeichen der Nachfolger; ohne Schnitt-Zeile ohne", () => {
+    const [a, b] = liste([v, n, vorgaenger(6, null, 30, [{ min: 1 }, { min: 2 }])]);
+    expect(a).toMatchObject({ ticket: 5, schnitt: "verify", nachfolger: 1 });
+    expect(a.kosten).toBeCloseTo(KI.analysiereLauf(v)!.kosten! + KI.analysiereLauf(n)!.kosten!, 10);
+    expect(a.promptZeichenNachfolger).toBe((KI.analysiereLauf(n) as unknown as { promptZeichen: number }).promptZeichen);
+    expect(a.promptZeichenNachfolger).toBeGreaterThan(50);
+    expect(b).toMatchObject({ ticket: 6, schnitt: "ohne", nachfolger: 0, promptZeichenNachfolger: 0 });
+  });
+  test("ein offenes Ticket steht mit offen in der Liste, aber in keinem Median", () => {
+    const offen = laufAb(50, "Ticket #7: x", [{ min: 1 }, { min: 2, tools: [bash("npm run verify", null)] }]);
+    const r = voll({ laeufe: [v, n, offen], jeTicket: true });
+    expect((r.laeufe as unknown as Zeile[]).map((z) => [z.ticket, z.offen])).toEqual([[5, false], [7, true]]);
+    expect(r.gesamt.gesamt!.n).toBe(1);
+    expect(r.gesamt.offen).toBe(1);
+  });
+  test("Markdown zeigt die zusätzlichen Spalten nur je Ticket, nicht je Lauf", () => {
+    expect(KR.renderMarkdown(voll({ laeufe: [v, n], jeTicket: true }))).toMatch(/\| Schnitt \| Kosten \(\$\) \| Nachfolger \|/);
+    expect(KR.renderMarkdown(voll({ laeufe: [v, n] }))).not.toContain("Prompt-Zeichen Nachfolger");
+  });
+});
+
+describe("Ticketliste je Gruppe: Summe über Nachfolger und Markdown-Zeilen (#1593)", () => {
+  type Zeile = { nachfolger: number; promptZeichenNachfolger: number };
+  const n2 = (nr: number, ab: number) => laufAb(ab, [`Ticket #${nr}: x`, "Lock: nonce=abc", "Einstieg: verify", "--- Übergabe ---", "SCHNITT: verify", "UEBERGABE:", "ein deutlich längerer zweiter Nachfolger-Prompt"].join(NL), [{ min: 1 }]);
+  test("zwei Nachfolger: Anzahl 2 und Σ der Prompt-Zeichen beider, nicht nur des ersten", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1 }]);
+    const a = nachfolger(5, "verify", 10, [{ min: 1 }]);
+    const b = n2(5, 20);
+    const z = (voll({ laeufe: [v, a, b], jeTicket: true }).laeufe as unknown as Zeile[])[0];
+    const zeichen = (l: Lauf) => (KI.analysiereLauf(l) as unknown as { promptZeichen: number }).promptZeichen;
+    expect(z.nachfolger).toBe(2);
+    expect(zeichen(b)).toBeGreaterThan(zeichen(a));
+    expect(z.promptZeichenNachfolger).toBe(zeichen(a) + zeichen(b));
+  });
+  test("Markdown-Zeile: Schnitt, Kosten, Nachfolger und Prompt-Zeichen stehen in den Spalten; ohne Preis steht `-`", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1 }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1 }]);
+    const zeichen = (KI.analysiereLauf(n) as unknown as { promptZeichen: number }).promptZeichen;
+    const md = KR.renderMarkdown(voll({ laeufe: [v, n], jeTicket: true }));
+    expect(md).toMatch(new RegExp(`\\| #5 \\| nein \\| geschlossen \\| verify \\| \\d+[.,]\\d+ \\| 1 \\| ${zeichen} \\|`));
+    const ohnePreis = vorgaenger(6, null, 30, [{ min: 1 }]);
+    (ohnePreis.zeilen[1] as { message: { model: string } }).message.model = "unbekannt";
+    expect(KR.renderMarkdown(voll({ laeufe: [ohnePreis], jeTicket: true }))).toMatch(/\| #6 \| nein \| geschlossen \| ohne \| - \| 0 \| 0 \|/);
+  });
+});
