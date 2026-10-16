@@ -72,6 +72,7 @@ model {
     }
     mcpServer = container 'MCP-Server' {
       pixellab = mcp 'pixellab'
+      likec4 = mcp 'likec4'
       playwright = mcp 'playwright'
     }
   }

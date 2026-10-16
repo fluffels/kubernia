@@ -209,7 +209,7 @@ describe("harnessQuellen: der Loader", () => {
   test("ein konfigurierter, aber fehlender Ordner für Agenten, Skills oder Workflows wirft mit dem Pfad (kein stilles leeres Verzeichnis)", () => {
     for (const [schluessel, ordner] of [["agents", ".claude/agents"], ["skills", ".claude/skills"], ["workflows", ".claude/workflows"]] as const) {
       const files = Object.fromEntries(Object.entries(FILES()).filter(([k]) => !k.startsWith(ordner + "/")));
-      assert.throws(() => api.harnessQuellen(fixture(files), CONFIG, [{ agents: "agent", skills: "skill", workflows: "workflow" }[schluessel]]), new RegExp(`${ordner.replace(".", "\.")} fehlt`));
+      assert.throws(() => api.harnessQuellen(fixture(files), CONFIG, [{ agents: "agent", skills: "skill", workflows: "workflow" }[schluessel]]), new RegExp(`${ordner.replace(".", "\\.")} fehlt`));
     }
   });
 
