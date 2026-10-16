@@ -152,6 +152,12 @@ export function ersterStartJeTicket(laeufe) {
   return erster;
 }
 
+/** Tickets, deren erster Lauf in [von, bis] startet (#1646, Ränder zählen), aufsteigend; ein Nachfolger im Fenster zählt nicht, wenn sein Vorgänger davor startete. */
+export function ticketsMitStartImFenster(laeufe, { von, bis }) {
+  const [v, b] = [Date.parse(von), Date.parse(bis)];
+  return [...ersterStartJeTicket(laeufe)].filter(([, start]) => start >= v && start <= b).map(([ticket]) => ticket).sort((x, y) => x - y);
+}
+
 /** Lädt die Läufe (Meta + Transkriptzeilen) eines Subagent-Typs aus `<projektordner>/<session>/subagents/`, nur Dateien jünger als `von`. */
 export function ladeLaeufe(dir, agent, von) {
   const laeufe = [];

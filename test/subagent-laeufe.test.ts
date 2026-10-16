@@ -65,3 +65,20 @@ describe("Vorlauf und ersterStartJeTicket (#1646)", () => {
     expect(V.ersterStartJeTicket([]).size).toBe(0);
   });
 });
+
+describe("ticketsMitStartImFenster (#1646)", () => {
+  const T = raw as unknown as { ticketsMitStartImFenster: (l: { ticket: number | null; start: number }[], f: { von: string; bis: string }) => number[] };
+  const von = "2026-10-07T10:00:00Z";
+  const bis = "2026-10-07T12:00:00Z";
+  const [v, b] = [Date.parse(von), Date.parse(bis)];
+  test("zählt den ersten Start: Start auf von und auf bis zählen, ein Tick davor oder danach nicht", () => {
+    expect(T.ticketsMitStartImFenster([{ ticket: 1, start: v - 1 }, { ticket: 2, start: v }, { ticket: 3, start: b }, { ticket: 4, start: b + 1 }], { von, bis })).toEqual([2, 3]);
+  });
+  test("ein Nachfolger im Fenster, dessen Vorgänger davor startete, gehört nicht dazu", () => {
+    expect(T.ticketsMitStartImFenster([{ ticket: 5, start: v - 1000 }, { ticket: 5, start: v + 1000 }], { von, bis })).toEqual([]);
+  });
+  test("Läufe ohne Ticket zählen nicht, jedes Ticket einmal, sortiert; leere Eingabe ergibt leere Liste", () => {
+    expect(T.ticketsMitStartImFenster([{ ticket: null, start: v + 1 }, { ticket: 9, start: v + 2 }, { ticket: 9, start: v + 3 }, { ticket: 7, start: v + 4 }], { von, bis })).toEqual([7, 9]);
+    expect(T.ticketsMitStartImFenster([], { von, bis })).toEqual([]);
+  });
+});
