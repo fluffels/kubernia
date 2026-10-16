@@ -167,7 +167,7 @@ const FILES = (extra: Record<string, string | null> = {}): Record<string, string
   const alle: Record<string, string | null> = {
     ".claude/agents/umsetzer.md": "---\nname: kubernia-umsetzer\nmodel: sonnet\n---\nText\n",
     ".claude/skills/kubernia/SKILL.md": "---\nname: kubernia\n---\nText\n",
-    ".claude/workflows/ticket.js": "export const meta = { name: 'kubernia-ticket' };\n",
+    ".claude/workflows/ticket.js": "export const meta = { name: 'wf-beispiel' };\n",
     ".claude/settings.json": JSON.stringify({ hooks: { Stop: [{ hooks: [] }], PreToolUse: [] } }),
     ".githooks/pre-push": "#!/bin/sh\n",
     ".github/workflows/a.yml": "name: a\n",
@@ -186,7 +186,7 @@ describe("harnessQuellen: der Loader", () => {
     const titel = (b: string) => q[b].eintraege.map((x) => x.titel);
     assert.deepEqual(titel("agent"), ["kubernia-umsetzer"], "Titel ist der Frontmatter-Name, nicht der Dateiname");
     assert.deepEqual(titel("skill"), ["kubernia"]);
-    assert.deepEqual(titel("workflow"), ["kubernia-ticket"]);
+    assert.deepEqual(titel("workflow"), ["wf-beispiel"]);
     assert.deepEqual(titel("hook"), ["Stop", "PreToolUse"]);
     assert.deepEqual(titel("githook"), ["pre-push"]);
     assert.deepEqual(titel("ciworkflow"), ["a.yml", "b.yaml"]);
