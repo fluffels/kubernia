@@ -3,6 +3,7 @@
 import { describe, test, expect, beforeEach } from "vitest";
 import { KQSim, freshSim } from "./helpers";
 import { SIM_GATEWAY_CONTROLLER, gatewayAddress } from "../../src/sim/gateway";
+import { reviveScenario } from "../../src/content/scenario";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -217,5 +218,22 @@ describe("bare metal", () => {
     sim.mergeScenario({ bareMetal: true });
     expect(sim.gatewayClasses).toEqual([]);
     expect(sim.gateways).toEqual([]);
+  });
+});
+
+describe("Szenario-Gateway (#1686)", () => {
+  test("ein validiertes Szenario-Gateway überlebt get -o yaml → apply ohne Fehler", () => {
+    const sc = reviveScenario({
+      gatewayClasses: [{ name: "envoy", controllerName: SIM_GATEWAY_CONTROLLER }],
+      gateways: [{ name: "tor", className: "envoy", listeners: [
+        { name: "http", port: 80, protocol: "HTTP" },
+        { name: "https", port: 443, protocol: "HTTPS", hostname: "hafen.example", tlsSecret: "hafen-tls" },
+      ] }],
+    }, "x");
+    const s = new KQSim(sc);
+    sim.files["g.yaml"] = s.exec("kubectl get gateway tor -o yaml").output ?? "";
+    const r = run("apply -f g.yaml");
+    expect(r.error).toBeFalsy();
+    expect(r.output).toContain("gateway.gateway.networking.k8s.io/tor created");
   });
 });

@@ -105,3 +105,41 @@ test("reviveScenario: die Allowlisten decken die real genutzten Felder ab", () =
     assert.ok(APPLY_EFFECT_KEY_NAMES.includes(k), `applyEffect-Schlüssel „${k}" fehlt in der Allowlist`);
   }
 });
+
+/* ---------- Gateways: die TLS-Invariante (#1686) ---------- */
+
+const gw = (listeners: unknown): unknown => ({ name: "tor", className: "envoy", listeners });
+const tlsFehler = (listener: Record<string, unknown>, pfad: RegExp): void => {
+  assert.throws(
+    () => reviveScenario({ gateways: [gw([listener])] }, "x"),
+    (e: unknown) => e instanceof ContentValidationError && pfad.test((e as Error).message),
+  );
+};
+
+test("reviveScenario: HTTPS-Listener ohne tlsSecret wird abgelehnt (bricht sonst den Round-Trip)", () => {
+  tlsFehler({ name: "https", port: 443, protocol: "HTTPS" }, /gateways\[0\]\.listeners\[0\].*tlsSecret/);
+  tlsFehler({ name: "t", port: 443, protocol: "TLS" }, /gateways\[0\]\.listeners\[0\]/);
+});
+
+test("reviveScenario: HTTP-Listener mit tlsSecret wird abgelehnt", () => {
+  tlsFehler({ name: "http", port: 80, protocol: "HTTP", tlsSecret: "s" }, /gateways\[0\]\.listeners\[0\].*tlsSecret/);
+});
+
+test("reviveScenario: gültige Gateway-Listener (HTTPS mit Secret, HTTP ohne, eigenes Protokoll frei) passen", () => {
+  const raw = {
+    gateways: [gw([
+      { name: "https", port: 443, protocol: "HTTPS", tlsSecret: "s" },
+      { name: "http", port: 80, protocol: "HTTP" },
+      { name: "eigen", port: 1, protocol: "example.com/x", tlsSecret: "s" },
+      { name: "eigen2", port: 2, protocol: "example.com/x" },
+    ])],
+  };
+  assert.deepEqual(reviveScenario(raw, "x"), raw);
+});
+
+test("reviveScenario: Gateway-Struktur: Element kein Objekt, listeners kein Array, Protokoll fehlt", () => {
+  assert.throws(() => reviveScenario({ gateways: ["tor"] }, "x"), ContentValidationError);
+  assert.throws(() => reviveScenario({ gateways: [{ name: "tor", className: "e", listeners: {} }] }, "x"), ContentValidationError);
+  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 80 }])] }, "x"), ContentValidationError);
+  assert.throws(() => reviveScenario({ gateways: {} }, "x"), /Array erwartet/);
+});
