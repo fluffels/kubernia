@@ -176,3 +176,18 @@ describe("harness-kennzahlen: Registry und eingecheckte Abschnitte", () => {
     assert.equal(GENERATORS["harness-kennzahlen"], gen);
   });
 });
+
+describe("harness-kennzahlen: grob rundet auf Zehner ab (Grenzfälle)", () => {
+  test.each([
+    [0, 0],
+    [9, 9],
+    [10, "≥ 10"],
+    [15, "≥ 10"],
+    [19, "≥ 10"],
+    [25, "≥ 20"],
+    [29, "≥ 20"],
+    [30, "≥ 30"],
+  ])("grob(%s)", (n, erwartet) => {
+    assert.equal(kennzahlen.grob(n), erwartet);
+  });
+});
