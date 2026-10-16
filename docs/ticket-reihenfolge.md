@@ -46,9 +46,10 @@ Der Eingang ist eine Spezifikation (ADR 0022 §3): ein Ticket ohne prüfbare Akz
 
 Kein vertrautes Ticket bleibt am Gate liegen: steht in der Ausgabe `reparieren #<nr>`, ist dieses Ticket dran (es steht über dem gewählten). Der auswählende Agent liest den Body per `node scripts/fremdtext.mjs --issue <nr>`, leitet `## Ziel` und `## Akzeptanzkriterien` samt Negativfall aus dem vorhandenen Text ab (keine Zeile streichen, nichts erfinden, Unklares als prüfbares Kriterium „klären, ob …“), schreibt den neuen Body in eine Scratchpad-Datei und fährt `node scripts/spezifikation.mjs reparieren <nr> --body-datei <datei>`. Das Skript schreibt nur, wenn:
 
-- der Autor vertraut ist und das Label `forum` fehlt (sonst Exit 3, nie umschreiben; als Befund melden),
+- das Ticket offen, kein PR und ohne Assignee ist (sonst Exit 2, nicht umschreiben),
+- der Autor vertraut ist und das Label `forum` fehlt (sonst Exit 3, nie umschreiben; als Befund melden; Exit 3 meldet auch ein knappes API-Kontingent, dann steht das auf stderr: Reset abwarten statt einen Befund zu melden),
 - der neue Body vollständig ist (sonst Exit 1, Mängel auf stderr),
-- jede nicht leere Nicht-Überschrift-Zeile des alten Bodys im neuen vorkommt (`verloreneZeilen`; Listenzeichen, Checkbox, Überschriften-Raute und Doppelpunkt am Ende werden ignoriert; sonst Exit 1 mit den verlorenen Zeilen).
+- jede nicht leere Inhaltszeile des alten Bodys im neuen vorkommt (`verloreneZeilen`; Listenzeichen, Checkbox, Überschriften-Raute und Doppelpunkt am Ende werden beim Vergleich ignoriert; Fence-Zeilen, Trennlinien und Überschriften Ebene 1-2 des alten Bodys zählen nicht, `###` und tiefer schon; sonst Exit 1 mit den verlorenen Zeilen).
 
 Hat das Ticket schon eine vollständige Spezifikation, passiert nichts (Exit 0, kein Kommentar). Bei Exit 1 bessert der Agent nach, höchstens zweimal; danach meldet er es der Maintainerin und macht mit dem gewählten Ticket weiter. Danach `naechstes-ticket.mjs --ticket <nr>`: bei Exit 0 wird dieses Ticket geclaimt, sonst läuft die Auswahl neu. Grenze: zwei gleichzeitige Reparaturen desselben Tickets, der letzte Schreiber gewinnt.
 
