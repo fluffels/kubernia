@@ -15,7 +15,11 @@ import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkTseslintTs7 from "../scripts/check-tseslint-ts7.mjs";
 
-const peerAllowsTs7: (range: string | null | undefined) => boolean = checkTseslintTs7.peerAllowsTs7;
+const lib = checkTseslintTs7 as unknown as {
+  registryUrl: (pkg: string) => string;
+  peerAllowsTs7: (range: string | null | undefined) => boolean;
+};
+const { registryUrl, peerAllowsTs7 } = lib;
 
 describe("TS-7-Freigabe-Wächter (#847)", () => {
   // ── Red-Green: der reale Ist-Zustand blockiert, plausible Freigaben lassen durch ──
@@ -57,5 +61,14 @@ describe("TS-7-Freigabe-Wächter (#847)", () => {
     assert.equal(peerAllowsTs7(undefined), true);
     assert.equal(peerAllowsTs7(""), true);
     assert.equal(peerAllowsTs7("*"), true);
+  });
+});
+
+describe("registryUrl (#1663)", () => {
+  test("kodiert den Scope-Schrägstrich", () => {
+    assert.equal(registryUrl("@typescript-eslint/typescript-estree"), "https://registry.npmjs.org/@typescript-eslint%2Ftypescript-estree/latest");
+  });
+  test("kodiert JEDEN Schrägstrich, nicht nur den ersten", () => {
+    assert.equal(registryUrl("@a/b/c"), "https://registry.npmjs.org/@a%2Fb%2Fc/latest");
   });
 });

@@ -8,6 +8,7 @@
  * Reines Node-Skript (nur Builtins), die Funktionen sind pur bzw. nehmen ihre Eingabe als Argument.
  */
 import { readFileSync } from "node:fs";
+import { posix } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /** Liest stdin komplett; bei Fehler (kein stdin) leerer Text. */
@@ -55,6 +56,28 @@ export const istDirektaufruf = (metaUrl) => Boolean(process.argv[1]) && metaUrl 
 export function emit(output) {
   if (output) console.log(JSON.stringify(output));
 }
+
+/** Pfad lexikalisch normalisieren (Backslashes → Slashes, `..` auflösen), relative Pfade gegen `cwd`. */
+export function normalisierePfad(pfad, cwd) {
+  const p = String(pfad).replace(/\\/g, "/");
+  const absolut = /^([a-z]:)?\//i.test(p);
+  const basis = String(cwd ?? "").replace(/\\/g, "/");
+  return posix.normalize(absolut || !basis ? p : `${basis}/${p}`);
+}
+
+/** Baut den Hook-Einstieg eines Pfad-Guards: stdin-Text → deny-Output oder null. `bewerte(pfad, cwd)` liefert
+ *  `{ block, reason? }`. Nur das genannte Tool wird geprüft (ohne `tool_name` immer); kaputter Input lässt durch. */
+export const pfadGuardHook = (tool, bewerte) => (text) => {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (data?.tool_name !== undefined && data.tool_name !== tool) return null;
+  const e = bewerte(data?.tool_input?.file_path, data?.cwd);
+  return e.block ? buildDenyOutput(e.reason) : null;
+};
 
 /** Rekursionstiefe für Interpreter-Strings (`bash -c`, `pwsh -c`, `eval`, Funktionen, Aliase): EINE Grenze für alle Guards. */
 export const MAX_INTERPRETER = 3;

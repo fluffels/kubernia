@@ -70,6 +70,26 @@ export function kuerze(text, schritt) {
   return [...zeilen.slice(0, KOPF), `… ${weg} Zeilen gekürzt, volle Ausgabe: npm run ${schritt}`, ...zeilen.slice(-ENDE)].join("\n");
 }
 
+const FARBCODE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
+/** Testdateien aus den `FAIL`-Zeilen der vitest-Ausgabe (auch Ladefehler einer Datei), je Datei einmal, in Reihenfolge. Pur. */
+export function fehlgeschlageneTests(ausgabe) {
+  const ohneFarbe = String(ausgabe ?? "").replace(FARBCODE, "");
+  const dateien = [];
+  for (const zeile of ohneFarbe.split(/\r?\n/)) {
+    const m = /^\s*FAIL\s+(\S+\.test\.ts)\b/.exec(zeile);
+    if (m && !dateien.includes(m[1])) dateien.push(m[1]);
+  }
+  return dateien;
+}
+
+/** Kopfzeile eines roten `test`-Blocks: die Dateien stehen vor dem Kürzen, sonst verschluckt es die FAIL-Zeilen in der Mitte. Pur. */
+const testDateienZeile = (e) => {
+  if (e.name !== "test") return "";
+  const d = fehlgeschlageneTests(e.ausgabe);
+  return `${d.length ? `fehlgeschlagene Testdateien: ${d.join(", ")}` : "keine Testdatei in der Ausgabe erkannt (Absturz oder Ladefehler: volle Ausgabe mit npm run test)"}\n`;
+};
+
 const sek = (ms) => `${Math.round(ms / 1000)} s`;
 
 /** Bericht aus den Schrittergebnissen `{ name, ok, ms, ausgabe, info, uebersprungen }`: grün eine Zeile, rot nur rote Blöcke + Summe. Pur. */
@@ -82,7 +102,7 @@ export function bericht(ergebnisse, { modus = "kompakt", hinweis = "" } = {}) {
   if (!rot.length) {
     return `${kopf} grün · ${ergebnisse.length}/${ergebnisse.length} · ${sek(gesamt)} · ${ergebnisse.map(teil).join(", ")}${zusatz}`;
   }
-  const blöcke = rot.map((e) => `── ${e.name}: rot (Exit ${e.exit ?? "?"}, ${sek(e.ms)}) ──\n${kuerze(e.ausgabe, e.name)}`);
+  const blöcke = rot.map((e) => `── ${e.name}: rot (Exit ${e.exit ?? "?"}, ${sek(e.ms)}) ──\n${testDateienZeile(e)}${kuerze(e.ausgabe, e.name)}`);
   const summe = `${kopf} ROT · ${ergebnisse.length - rot.length}/${ergebnisse.length} grün · ${sek(gesamt)} · rot: ${rot.map((e) => e.name).join(", ")}${zusatz}`;
   return `${blöcke.join("\n\n")}\n\n${summe}`;
 }

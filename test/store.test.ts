@@ -4,10 +4,15 @@
  * Jeder Test importiert das Modul frisch (resetModules), damit der In-Memory-
  * Fallback und der localStorage-Pfad sauber getrennt geprüft werden.
  */
-import { test, expect, vi, afterEach } from "vitest";
+import { test, expect, vi, afterEach, beforeAll } from "vitest";
 import { stubWindowLocalStorage } from "./support/browser-env";
 import { makeQuotaStub } from "./support/quota-stub";
 import { ABBREVS } from "../src/content/abbrev";
+
+// Der erste Import von src/store (samt Inhalts-Abkürzungen) kostet ~1,3 s kalt; er soll nicht im ersten Test gegen dessen 5 s laufen.
+beforeAll(async () => {
+  await import("../src/store");
+}, 30_000);
 
 afterEach(() => {
   vi.unstubAllGlobals();

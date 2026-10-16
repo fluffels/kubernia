@@ -18,7 +18,7 @@
  */
 import { afterAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -60,8 +60,30 @@ function externeLadestellen(text: string): string[] {
 // Die Temp-Ordner der Fixtures und des Handshakes liegen sonst je Lauf herum (#1309): am Ende alle löschen.
 const angelegt: string[] = [];
 afterAll(() => {
-  for (const d of angelegt) rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  for (const d of angelegt) {
+    try {
+      rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    } catch (e) {
+      // Windows hält das cwd eines nachlaufenden Enkelprozesses kurz offen (EBUSY): Aufräumen ist nur Kür, das Ergebnis der Tests zählt.
+      console.warn(`Temp-Ordner ${d} nicht gelöscht: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 });
+
+/** Beendet den Kindprozess samt Enkeln (Windows: `taskkill /T`, sonst hält ein Enkel das cwd offen) und löst nach `exit` auf. */
+function beende(child: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    child.once("exit", () => resolve());
+    if (process.platform === "win32" && child.pid) {
+      try {
+        execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      } catch {
+        child.kill();
+      }
+    } else child.kill();
+  });
+}
 const readJson = (rel: string): unknown => JSON.parse(readFileSync(join(root, rel), "utf8"));
 
 describe("planLaunch – Startentscheidung des Launchers", () => {
@@ -266,8 +288,7 @@ describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", 
       angelegt.push(cwd);
       const child = spawn(process.execPath, args, { cwd, stdio: ["pipe", "pipe", "ignore"] });
       const timer = setTimeout(() => {
-        child.kill();
-        reject(new Error(`tools/list-Handshake nach ${HANDSHAKE_MS / 1000} s ohne Antwort`));
+        void beende(child).then(() => reject(new Error(`tools/list-Handshake nach ${HANDSHAKE_MS / 1000} s ohne Antwort`)));
       }, HANDSHAKE_MS);
       let buf = "";
       const senden = (o: object) => child.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
@@ -284,8 +305,7 @@ describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", 
               clearTimeout(timer);
               const namen = (o.result?.tools ?? []).map((t) => t.name);
               // Erst nach dem Prozessende auflösen: auf Windows hält der laufende Server sein cwd offen (EBUSY beim Aufräumen).
-              child.once("exit", () => resolve(namen));
-              child.kill();
+              void beende(child).then(() => resolve(namen));
             }
           } catch {
             /* unvollständige Zeile */

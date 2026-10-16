@@ -31,6 +31,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | `gh`-Abfragen und Zählungen: Standardgrenzen beachten (#1349) | `gh issue list` ohne `--limit` liefert nur 30 Treffer (`--limit 500`), `gh api` ohne `--paginate` nur die erste Seite (`--paginate --slurp`); jede neue Abfrage oder Zählung darauf prüfen, auch im Delta eines Fixes (Architektur-Lens) |
 | Agenten-Sandbox prüfen (#1432, berichtend, Exit 0): Plattform, `bwrap`/`socat`, `wsl.conf`, User-Settings, Verhaltensprobe; `--vorlage` druckt die User-Settings-Vorlage (ohne Secret-Werte) | `node scripts/sandbox-doctor.mjs --check` / `--vorlage` / `--sessionstart` (SessionStart-Hook, meldet die Windows-Sperre) ([Doku](../agent-harness.md#agenten-sandbox-wsl2)) |
 | MCP-Ausfälle belegen (#1634, berichtend, Exit 0): wertet die Claude-Code-Logs der Server aus `.mcp.json` aus (Reconnect, npx-Ersatzweg, Abbruch, Server-stderr); `--seit <ISO\|Nh>` (Standard 24 h), `--json` Rohzeilen; der SessionStart-Hook ruft es mit `--sessionstart` | `node scripts/mcp-ausfall.mjs` |
+| Langfuse-Vorbedingung prüfen (#1663): `GET <LANGFUSE_BASE_URL>/api/public/health` mit 3 s Frist, Exit 0 erreichbar, 1 aus (Skills `kubernia` und `kubernia-workflow` stoppen dann); mit `--sessionstart` immer Exit 0 und Warnung auf stdout (SessionStart-Hook) | `node scripts/langfuse-vorbedingung.mjs [--sessionstart]` |
 | Erstinstallation | `npm install` |
 | Dev-Server | `npm run dev` |
 | Host-/Prod-Build (Multi-File nach `dist/`) | `npm run build` |

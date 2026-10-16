@@ -26,11 +26,14 @@ export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren",
 /** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: die Umsetzer-Definition unter `.claude/agents/`). */
 export const SCHNITTE = ["pr", "verify"];
 
+/** Art des Festgefahren-Berichts hinter `FESTGEFAHREN:` (optional, fehlt sie: `ci`). Nur `ci` verlangt das Label am offenen PR. */
+export const FESTGEFAHREN_ARTEN = ["review", "ci"];
+
 /** Label, das das Festgefahren-Protokoll setzt (SSOT: `check-festgefahren.mjs`, der Test bindet beide). */
 const STUCK_LABEL = "status:festgefahren";
 
 /**
- * Liest `ERGEBNIS:`, `PR:`, `SCHNITT:` und das Vorhandensein einer `UEBERGABE:`-Zeile aus einer Nachricht. `token` ist das führende Wort, falls es ein erlaubter Wert ist
+ * Liest `ERGEBNIS:`, `PR:`, `SCHNITT:`, `FESTGEFAHREN:` (klein geschrieben, sonst `null`) und das Vorhandensein einer `UEBERGABE:`-Zeile aus einer Nachricht. `token` ist das führende Wort, falls es ein erlaubter Wert ist
  * (sonst `null`), `zusatz` der Rest der Zeile (Klammern, Satzzeichen), `pr` der `PR:`-Wert; fehlende Zeile → `null`.
  */
 export function parseErgebnis(text) {
@@ -43,7 +46,8 @@ export function parseErgebnis(text) {
   const kandidat = m ? m[1].toLowerCase() : null;
   const token = kandidat && ERGEBNIS_WERTE.includes(kandidat) ? kandidat : null;
   const schnitt = zeile("SCHNITT");
-  return { token, zusatz: token ? m[2].trim() : roh, pr: zeile("PR"), schnitt: schnitt === null ? null : schnitt.toLowerCase(), uebergabe: /^[ \t]*UEBERGABE:/im.test(String(text ?? "")) };
+  const art = zeile("FESTGEFAHREN");
+  return { token, zusatz: token ? m[2].trim() : roh, pr: zeile("PR"), schnitt: schnitt === null ? null : schnitt.toLowerCase(), uebergabe: /^[ \t]*UEBERGABE:/im.test(String(text ?? "")), festgefahren: art === null ? null : art.toLowerCase() };
 }
 
 /**
@@ -93,7 +97,8 @@ const WARTEN = (nr) =>
  *  - R0 (nur PreToolUse): Format verletzt (kein gültiges Token, Zusatz, keine PR:-Zeile, keine BEFUNDE:-Zeile oder BEFUNDE als Angebot/Frage, #1723),
  *  - R1: `gemergt`/`abgebrochen` mit PR OPEN + Auto-Merge (CI läuft noch),
  *  - R2: `gemergt` mit einem PR, der nicht MERGED ist,
- *  - R3: `festgefahren` mit offenem PR ohne Label `status:festgefahren`,
+ *  - R3: `festgefahren` mit offenem PR ohne Label `status:festgefahren`; die optionale Zeile `FESTGEFAHREN: review|ci` (fehlt sie: `ci`)
+ *    befreit `review` vom Label, ein anderer Wert wird verweigert,
  *  - R4 (#1592, beide Ereignisse): `uebergabe` ohne gültiges `SCHNITT: pr|verify` oder ohne `UEBERGABE:`-Zeile,
  *  - R5 (#1592): `uebergabe` mit `SCHNITT: pr` braucht einen PR, der OPEN ist und Auto-Merge hat oder schon MERGED ist (gh-Fehler: frei);
  *    `SCHNITT: verify` ruft kein gh auf. R1 bis R3 gelten für `uebergabe` nicht.
@@ -102,7 +107,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   if (agentType !== "kubernia-umsetzer") return null;
   const vorher = hookEvent === "PreToolUse";
   if (vorher ? toolName !== "SubagentHandback" : hookEvent !== "SubagentStop") return null;
-  const { token, zusatz, pr, schnitt, uebergabe } = parseErgebnis(lastMessage);
+  const { token, zusatz, pr, schnitt, uebergabe, festgefahren } = parseErgebnis(lastMessage);
   if (vorher) {
     const fehler = [];
     if (!token) fehler.push("kein gültiges ERGEBNIS-Token");
@@ -120,6 +125,9 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   }
   if (!token) return null;
   if (token === "uebergabe") return uebergabeBlockade({ schnitt, uebergabe, pr }, deps);
+  if (token === "festgefahren" && festgefahren !== null && !FESTGEFAHREN_ARTEN.includes(festgefahren)) {
+    return `Umsetzer-Abschluss (#1663): FESTGEFAHREN: ${festgefahren} ist ungültig (erlaubt: ${FESTGEFAHREN_ARTEN.join(" | ")}; ohne die Zeile gilt ci).`;
+  }
   const nr = prNummer(pr);
   if (!nr) return null;
   let status;
@@ -136,7 +144,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   if (token === "gemergt" && status.state !== "MERGED") {
     return `Umsetzer-Abschluss (#1331): ERGEBNIS: gemergt, aber PR #${nr} hat den Status ${status.state}. Erst nach dem Merge berichten.`;
   }
-  if (token === "festgefahren" && offen && !(status.labels ?? []).some((l) => l?.name === STUCK_LABEL)) {
+  if (token === "festgefahren" && festgefahren !== "review" && offen && !(status.labels ?? []).some((l) => l?.name === STUCK_LABEL)) {
     return (
       `Umsetzer-Abschluss (#1342): ERGEBNIS: festgefahren bei offenem PR #${nr}, aber das Label ${STUCK_LABEL} fehlt. ` +
       `festgefahren gilt erst nach dem Protokoll (drei Fix-Versuche, ein konsolidierter PR-Kommentar, Label gesetzt). ` +

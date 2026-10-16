@@ -62,8 +62,9 @@ describe("Festgefahren-Wächter (#904)", () => {
 
   test("buildStuckComment enthält den Auslöser-Link", () => {
     const comment = buildStuckComment(4, "https://github.com/fluffels/kubernia/actions/runs/42");
+    const links = (comment.match(/https:\/\/[^\s)>"]+/g) ?? []).map((u) => new URL(u));
     assert.ok(
-      comment.includes("https://github.com/fluffels/kubernia/actions/runs/42"),
+      links.some((u) => u.host === "github.com" && u.pathname === "/fluffels/kubernia/actions/runs/42"),
       "Kommentar muss den RUN_URL enthalten.",
     );
   });

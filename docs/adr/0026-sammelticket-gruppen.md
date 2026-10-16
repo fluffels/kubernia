@@ -45,7 +45,7 @@ Regeln, die eine Aufteilung in mehrere PRs oder Tickets sperren: ein PR je Ticke
 
 **Wirkt, wenn über die ersten drei Gruppen-Läufe die Kosten je Zeile (Umsetzer plus `kubernia-gruppe`) unter dem Baseline-Median (0,43 $) liegen und Review-Runden und Nacharbeit nicht steigen.** Sonst eine Zeile in „Langfuse-Befunde (gesammelt)“ und eine neue Entscheidung. Auch die Grenze 12 steht dann zur Wahl.
 
-## Fortschreibung (#1646, 2026-10-16): Workflow-Pfad nimmt keine Sammeltickets
+## Fortschreibung #1646 (2026-10-16): Workflow-Pfad nimmt keine Sammeltickets
 
 Die Gruppen-Umsetzung (Plan je Gruppe, frischer Kontext je Gruppe) gibt es nur im Skill-Pfad. Der Workflow-Pfad (`.claude/workflows/kubernia-ticket.js`) setzt ein Sammelticket nicht um: der Auswahl-Prompt verlangt bei einem Ticket mit dem Titel „… (gesammelt)“ das Ergebnis `skill-pfad` ohne Claim (auch bei vorgegebenem Ticket), und eine deterministische Titel-Prüfung direkt nach der Auswahl fängt es auch dann ab, wenn der Agent trotzdem geclaimt hat: ein kurzer Agent gibt Lock und Assignee frei, der Lauf endet mit `{ ergebnis: 'skill-pfad', nummer }`. Der frühere Sammelticket-Absatz im Umsetzen-Prompt des Workflows entfällt. Der Board-Takt zieht außerdem kein Sammelticket vor, solange ein Vorgänger geclaimt in Arbeit ist: die Spielquote zählt ab dessen Abschluss.
 

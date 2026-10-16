@@ -32,7 +32,7 @@ import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei, projekteWurzel } from "./transkript.mjs";
-import { CACHE_TTL_MS, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
+import { CACHE_TTL_MS, istEchtesModell, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
@@ -142,7 +142,8 @@ function sockelOf(allCalls, windowCalls) {
   return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
 }
 
-const ohnePreis = (c) => c.cost === undefined || c.cost === null;
+/** Ohne Preis, aber nur echte Modelle: der Client-Platzhalter `<synthetic>` hat nie einen Preis (#1663). */
+const ohnePreis = (c) => (c.cost === undefined || c.cost === null) && (!c.model || istEchtesModell(c.model));
 
 /** Calls ohne Preis je Modell (#1441): der Wächter nennt das fehlende Modell, damit es in PRICES nachgetragen wird. */
 function unpricedModels(calls) {

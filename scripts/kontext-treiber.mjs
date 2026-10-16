@@ -23,7 +23,7 @@
  * dem ersten Lens-Spawn zu verify (konservativ gegen den Schnitt); Mehrkosten des Hauptchats für den zweiten Prompt sind nicht gemessen.
  * Offene Läufe (Tool-Aufruf ohne Ergebnis am Ende, #1646) zählen nur als `offen` und stehen in der Tabelle „Läufe"; in keinem Median, keiner Summe.
  * Ohne `--je-ticket` gelten die Mediane je Lauf: der Kopf jeder Gruppe nennt die Zahl der Tickets (`Tickets`), und hat ein Ticket mehrere Läufe, steht eine Warnzeile (`mehrlaufHinweis`, #1646).
- * Im `--je-ticket`-Modus lädt das CLI 48 h vor `--von` (`VORLAUF_MS`), damit der Vorgänger eines Nachfolgers im Fenster dabei ist.
+ * Im `--je-ticket`-Modus lädt das CLI 48 h vor `--von` (`mitVorlauf`), damit der Vorgänger eines Nachfolgers im Fenster dabei ist.
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laeufe; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
@@ -33,7 +33,7 @@ import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
 import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
-import { ladeLaeufe, laufAus, VORLAUF_MS } from "./subagent-laeufe.mjs";
+import { ladeLaeufe, laufAus, mitVorlauf } from "./subagent-laeufe.mjs";
 
 const MIN = 60_000;
 const PAUSE_MS = 5 * MIN;
@@ -416,7 +416,7 @@ export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, 
 }
 
 /** Beginn des Ladefensters (#1646): je Ticket 48 h früher, damit der Vorgänger eines Nachfolgers im Fenster mitgeladen wird. */
-export const ladeVon = (von, jeTicket) => (jeTicket ? new Date(Date.parse(von) - VORLAUF_MS).toISOString() : von);
+export const ladeVon = (von, jeTicket) => (jeTicket ? mitVorlauf(von) : von);
 
 const f = (x, d = 2) => (x === null || x === undefined ? "-" : x.toFixed(d));
 const k = (x) => (x === null || x === undefined ? "-" : `${Math.round(x / 1000)}k`);

@@ -54,7 +54,7 @@ describe("parseNachweis lebt im neutralen Modul (#1311)", () => {
   });
 });
 
-describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", () => {
+describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 30_000 }, () => {
   const SKRIPT = join(__dirname, "..", "scripts", "check-diffcoverage.mjs");
 
   /** Temp-Repo: Basis-Commit, dann ein Doku-Commit mit der gegebenen Nachricht; liefert Ergebnis des CLI-Laufs. */

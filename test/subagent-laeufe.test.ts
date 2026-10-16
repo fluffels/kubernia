@@ -55,9 +55,12 @@ describe("schnittZeile (#1646: CRLF)", () => {
 });
 
 describe("Vorlauf und ersterStartJeTicket (#1646)", () => {
-  const V = raw as unknown as { VORLAUF_MS: number; ersterStartJeTicket: (l: { ticket: number | null; start: number }[]) => Map<number, number> };
+  const V = raw as unknown as { VORLAUF_MS: number; mitVorlauf: (von: string) => string; ersterStartJeTicket: (l: { ticket: number | null; start: number }[]) => Map<number, number> };
   test("48 Stunden", () => {
     expect(V.VORLAUF_MS).toBe(48 * 3_600_000);
+  });
+  test("mitVorlauf zieht genau den Vorlauf ab (ISO)", () => {
+    expect(V.mitVorlauf("2026-10-10T12:00:00.000Z")).toBe("2026-10-08T12:00:00.000Z");
   });
   test("frühester Start je Ticket, Läufe ohne Ticket fallen weg, leer ergibt leere Map", () => {
     const m = V.ersterStartJeTicket([{ ticket: 5, start: 30 }, { ticket: 5, start: 10 }, { ticket: null, start: 1 }, { ticket: 6, start: 7 }]);

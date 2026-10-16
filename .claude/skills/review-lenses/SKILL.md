@@ -46,7 +46,7 @@ Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 
 ### Stufe 0 — deterministische Gates (der Short-Circuit)
 
-**Immer zuerst.** Vor der ersten Stufe 0: `git fetch origin`; ist `origin/main` weiter, `git merge origin/main` und Konflikte jetzt lösen (ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis); danach [Nach jedem Merge von `main`](#nach-jedem-merge-von-main). Dann das SSOT-Aggregat aller Gates (#527):
+**Immer zuerst.** Vor der ersten Stufe 0: `git fetch origin`; ist `origin/main` weiter, `git merge origin/main` und Konflikte jetzt lösen (ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis; ist `origin/main` bis dahin weitergezogen, wird es direkt vor dem Nachweis-Commit nochmals eingemergt, siehe unten); danach [Nach jedem Merge von `main`](#nach-jedem-merge-von-main). Dann das SSOT-Aggregat aller Gates (#527):
 
 ```bash
 npm run verify:kompakt   # Kette aus package.json › scripts.verify, alle Gates, Ausgabe nur bei Rot
@@ -164,7 +164,7 @@ Gilt für jeden Merge von `origin/main` in den Branch (Stufe 0, echter Konflikt,
 
 ### Nachweis nach Konvergenz (#1270)
 
-Sobald konvergiert ist, setzt der Orchestrator direkt danach einen **leeren Nachweis-Commit** mit den Zeilen `KQ-Plan:` und `KQ-Review:` (Format, Warum und Grenzen: [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064), nicht hier kopieren). `head` ist der zuletzt reviewte Stand, `runden` die Zahl der Pässe, `lenses` die Brillen des vollen Passes (Runde 1), `blocker` je Brille die Zahl ihrer `[❌ blockierend]`-Findings im ersten Pass (Runde 1), auch 0; ein von der Maintainerin freigegebener Pass über das Cap hinaus steht zusätzlich als `zusatzpass=<anzahl>:<grund>` in der Zeile. Lokal prüfen mit `node scripts/check-review-nachweis.mjs` (gibt bei Rot die Vorlage aus); die PR-CI erzwingt es als Required-Check. Danach kein Rebase/Amend mehr, sonst liegt `head` nicht mehr im PR.
+Sobald konvergiert ist, holt der Orchestrator `origin/main` und mergt es, falls es weitergezogen ist, nochmals ein (Testabgleich wie oben); ein konfliktfreier Merge braucht keine Lens, ein Konflikt-Merge vor dem Nachweis wird von der Merge-Delta-Lens (Stufe oben) geprüft, bevor der Nachweis gesetzt wird. Danach setzt er einen **leeren Nachweis-Commit** mit den Zeilen `KQ-Plan:` und `KQ-Review:` (Format, Warum und Grenzen: [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064), nicht hier kopieren). `head` ist der zuletzt reviewte Stand, `runden` die Zahl der Pässe, `lenses` die Brillen des vollen Passes (Runde 1), `blocker` je Brille die Zahl ihrer `[❌ blockierend]`-Findings im ersten Pass (Runde 1), auch 0; ein von der Maintainerin freigegebener Pass über das Cap hinaus steht zusätzlich als `zusatzpass=<anzahl>:<grund>` in der Zeile. Lokal prüfen mit `node scripts/check-review-nachweis.mjs` (gibt bei Rot die Vorlage aus); die PR-CI erzwingt es als Required-Check. Danach kein Rebase/Amend mehr, sonst liegt `head` nicht mehr im PR.
 
 Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md). Deterministisch verdrahtet ist die Schleife im Workflow [`.claude/workflows/kubernia-ticket.js`](../../workflows/kubernia-ticket.js) (`MAX_REVIEW_RUNDEN`).
 
