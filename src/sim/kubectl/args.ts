@@ -211,3 +211,39 @@ export function resolveRoleResources(host: ErrOnly, resources: readonly string[]
   }
   return out;
 }
+
+/** Die Fehler von `validation.IsConfigMapKey` (gilt für Secret- und ConfigMap-Schlüssel): Länge, Zeichen, `.`/`..`-Präfix. */
+function configMapKeyErrors(key: string): string[] {
+  const errs: string[] = [];
+  if (key.length > 253) errs.push("must be no more than 253 characters");
+  if (!/^[-._a-zA-Z0-9]+$/.test(key)) errs.push("a valid config key must consist of alphanumeric characters, '-', '_' or '.' (e.g. 'key.name',  or 'KEY_NAME',  or 'key-name', regex used for validation is '[-._a-zA-Z0-9]+')");
+  if (key === ".") errs.push("must not be '.'");
+  else if (key === "..") errs.push("must not be '..'");
+  else if (key.startsWith("..")) errs.push("must not start with '..'");
+  return errs;
+}
+
+/** Die Schlüssel der `--from-literal`-Angaben von `create secret generic`/`create configmap`, geprüft wie kubectl
+ *  (`addKeyFromLiteralToSecret`/`…ToConfigMap`): der erste Fehler in Eingabereihenfolge gewinnt, ungültiger Schlüssel vor
+ *  Duplikat. Die Form `key=value` hat die Flag-Tabelle schon geprüft. Ein String ist die fertige Fehlerausgabe. */
+export function literalKeysChecked(host: ErrOnly, c: Call, kind: "Secret" | "ConfigMap", name: string): string[] | string {
+  const keys: string[] = [];
+  for (const v of c.values("--from-literal")) {
+    const key = v.slice(0, v.indexOf("="));
+    const errs = configMapKeyErrors(key);
+    if (errs.length > 0) {
+      const text = kind === "Secret"
+        ? '"' + key + '" is not valid key name for a Secret ' + errs.join(";")
+        : '"' + key + '" is not a valid key name for a ConfigMap: ' + errs.join(",");
+      return host._err("error: " + text, "Schlüssel bestehen aus Buchstaben, Ziffern, '-', '_' oder '.', z.B. 'log_level'.");
+    }
+    if (keys.includes(key)) {
+      const text = kind === "Secret"
+        ? "cannot add key " + key + ", another key by that name already exists"
+        : 'cannot add key "' + key + '", another key by that name already exists in Data for ConfigMap "' + name + '"';
+      return host._err("error: " + text, "Jeder Schlüssel darf nur einmal vorkommen.");
+    }
+    keys.push(key);
+  }
+  return keys;
+}

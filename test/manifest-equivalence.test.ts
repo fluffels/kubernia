@@ -25,7 +25,9 @@ function projected(eff: ApplyEffect): ApplyEffect {
 /** Das Gemappte ohne `containerName`: der Container-Name steht im YAML, die hinterlegten Effekte kennen ihn nicht
  *  (ohne Feld heißt der Container wie das Deployment, `containerNameOf`). Der Name selbst ist in manifest.test.ts geprüft. */
 function mappedOf(text: string, file: string): ApplyEffect[] {
-  return effectsFromManifest(text, file).map(e => {
+  const r = effectsFromManifest(text, file);
+  if (!Array.isArray(r)) throw new Error(r.error);
+  return r.map(e => {
     if (!e.deployment) return e;
     const { containerName: _c, ...rest } = e.deployment;
     return { deployment: rest };

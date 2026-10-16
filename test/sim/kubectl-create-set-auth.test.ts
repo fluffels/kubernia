@@ -196,3 +196,91 @@ describe("(c) create role und auth can-i lösen Kurznamen über die Registry auf
     expect(lauf("kubectl auth can-i get secrets --as=" + SA, sim).out).toBe("no");
   });
 });
+
+describe("(d) --from-literal prüft den Schlüssel und meldet Duplikate", () => {
+  const REGEX = "a valid config key must consist of alphanumeric characters, '-', '_' or '.' (e.g. 'key.name',  or 'KEY_NAME',  or 'key-name', regex used for validation is '[-._a-zA-Z0-9]+')";
+  test("Secret: ungültiger Schlüssel (wörtlich 'is not valid key name for a Secret')", () => {
+    const sim = freshSim();
+    const r = lauf("kubectl create secret generic s --from-literal=ok=1 --from-literal=bad/key=2", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain('error: "bad/key" is not valid key name for a Secret ' + REGEX);
+    expect(sim.secrets).toHaveLength(0);
+  });
+  test("ConfigMap: ungültiger Schlüssel mit ': ' und ','", () => {
+    const sim = freshSim();
+    expect(lauf("kubectl create configmap c --from-literal=a:b=1", sim).out).toContain('error: "a:b" is not a valid key name for a ConfigMap: ' + REGEX);
+    expect(sim.configMaps).toHaveLength(0);
+  });
+  test.each([[".", "must not be '.'"], ["..", "must not be '..'"], ["..x", "must not start with '..'"]])("Schlüssel %s: %s", (key, text) => {
+    expect(lauf("kubectl create configmap c --from-literal=" + key + "=1", freshSim()).out).toContain(text);
+  });
+  test("Schlüssel über 253 Zeichen", () => {
+    expect(lauf("kubectl create configmap c --from-literal=" + "a".repeat(254) + "=1", freshSim()).out).toContain("must be no more than 253 characters");
+    expect(lauf("kubectl create configmap c --from-literal=" + "a".repeat(253) + "=1", freshSim()).error).toBe(false);
+  });
+  test("gültige Schlüssel mit '.', '-' und '_' werden angelegt", () => {
+    const sim = freshSim();
+    expect(lauf("kubectl create secret generic s --from-literal=a.b-c_D1=x", sim).out).toBe("secret/s created");
+    expect(sim.secrets[0].keys).toEqual(["a.b-c_D1"]);
+  });
+  test("Duplikat: Secret ohne, ConfigMap mit Anführungszeichen und Namen", () => {
+    expect(lauf("kubectl create secret generic s --from-literal=k=1 --from-literal=k=2", freshSim()).out).toContain("error: cannot add key k, another key by that name already exists");
+    expect(lauf("kubectl create configmap c --from-literal=k=1 --from-literal=k=2", freshSim()).out).toContain('error: cannot add key "k", another key by that name already exists in Data for ConfigMap "c"');
+  });
+  test("der erste Fehler in Eingabereihenfolge gewinnt", () => {
+    const r = lauf("kubectl create configmap c --from-literal=k=1 --from-literal=k=2 --from-literal=b/d=3", freshSim());
+    expect(r.out).toContain("cannot add key");
+    expect(r.out).not.toContain("not a valid key name");
+  });
+  test("Client-Prüfung vor Server-Prüfung: ungültiger Schlüssel schlägt einen ungültigen Namen", () => {
+    expect(lauf("kubectl create configmap Gross --from-literal=b/d=3", freshSim()).out).toContain("not a valid key name");
+    expect(lauf("kubectl create configmap Gross --from-literal=ok=3", freshSim()).out).toContain("Invalid value");
+  });
+  test("zwei NAMEn bleiben der Arity-Fehler, vor den Literalen", () => {
+    expect(lauf("kubectl create configmap a b --from-literal=b/d=3", freshSim()).out).toContain("exactly one NAME is required, got 2");
+  });
+});
+
+describe("(e) Secret und ConfigMap ohne Literal sind erlaubt", () => {
+  test("create secret generic s ohne Literal", () => {
+    const sim = freshSim();
+    expect(lauf("kubectl create secret generic s", sim).out).toBe("secret/s created");
+    expect(sim.secrets[0].keys).toEqual([]);
+    expect(lauf("kubectl get secrets", sim).out).toMatch(/^s\s+Opaque\s+0/m);
+  });
+  test("create configmap c ohne Literal", () => {
+    const sim = freshSim();
+    expect(lauf("kubectl create configmap c", sim).out).toBe("configmap/c created");
+    expect(sim.configMaps[0].keys).toEqual([]);
+    expect(lauf("kubectl get configmaps", sim).out).toMatch(/^c\s+0/m);
+  });
+  test("already exists trägt einen deutschen Tipp zum Löschen", () => {
+    const sim = mit("kubectl create secret generic s", "kubectl create configmap c");
+    const s = lauf("kubectl create secret generic s", sim);
+    expect(s.out).toContain('error: secrets "s" already exists');
+    expect(s.out).toContain("kubectl delete secret s");
+    expect(lauf("kubectl create configmap c", sim).out).toContain("kubectl delete configmap c");
+    expect(sim.secrets).toHaveLength(1);
+  });
+});
+
+describe("(f) create rolebinding mit --role und --clusterrole", () => {
+  const FEHLER = "error: exactly one of clusterrole or role must be specified";
+  test("beide zugleich", () => {
+    const sim = freshSim();
+    const r = lauf("kubectl create rolebinding rb --role=r --clusterrole=c --user=a", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain(FEHLER);
+    expect(sim.roleBindings).toHaveLength(0);
+  });
+  test("keines von beiden", () => {
+    expect(lauf("kubectl create rolebinding rb --user=a", freshSim()).out).toContain(FEHLER);
+  });
+  test("genau eines geht weiter (role oder clusterrole)", () => {
+    expect(lauf("kubectl create rolebinding rb --role=r --user=a", freshSim()).out).toBe("rolebinding.rbac.authorization.k8s.io/rb created");
+    expect(lauf("kubectl create rolebinding rb --clusterrole=c --user=a", freshSim()).out).toBe("rolebinding.rbac.authorization.k8s.io/rb created");
+  });
+  test("clusterrolebinding behält seine Meldungen", () => {
+    expect(lauf("kubectl create clusterrolebinding rb --user=a", freshSim()).out).not.toContain("exactly one of clusterrole or role");
+  });
+});

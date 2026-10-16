@@ -21,7 +21,7 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { exactlyOneName, notSimulated, replicasArg, resolveRoleResources } from "./args";
+import { exactlyOneName, literalKeysChecked, notSimulated, replicasArg, resolveRoleResources } from "./args";
 import { containerNameFromImage } from "../util";
 import { readTargets, targetOutcome, type Target } from "./targets";
 import { subEntry, type Call } from "../cliargs";
@@ -80,14 +80,29 @@ type CreateHandler = (host: KubectlHost, c: Call) => string;
 
 /** Der EINE Namens-Vorspann aller create-Handler: genau ein NAME (sonst der echte kubectl-Text samt deutschem
  *  Muster) und gültig nach DNS-1123. `names` sind die Argumente hinter dem Typ; ein String ist die Fehlerausgabe. */
-function createName(host: KubectlHost, names: readonly string[], kind: string, muster: string): { name: string } | string {
+function createName(host: KubectlHost, names: readonly string[], kind: string, muster: string, clientCheck?: () => string | null): { name: string } | string {
   const arity = exactlyOneName(host, names, muster);
   if (arity) return arity;
+  // Wie kubectl: erst die Prüfungen im Client (Literale), dann die des API-Servers (Name, already exists).
+  const client = clientCheck?.() ?? null;
+  if (client) return client;
   return invalidNameError(host, kind, names[0]) ?? { name: names[0] };
 }
 
-/** Die `<schluessel>`-Teile der `--from-literal=<schluessel>=<wert>`-Angaben (die Form hat die Flag-Tabelle schon geprüft). */
-const literalKeys = (c: Call): string[] => c.values("--from-literal").map(v => v.slice(0, v.indexOf("=")));
+/** Die geprüften Schlüssel der `--from-literal`-Angaben (Secret/ConfigMap) samt Fehlerausgabe; läuft als Client-Prüfung vor Namen und already exists. */
+function withLiterals(host: KubectlHost, c: Call, names: readonly string[], kind: "Secret" | "ConfigMap", muster: string): { name: string; keys: string[] } | string {
+  let keys: string[] = [];
+  const n = createName(host, names, kind, muster, () => {
+    const r = literalKeysChecked(host, c, kind, names[0]);
+    if (typeof r === "string") return r;
+    keys = r;
+    return null;
+  });
+  return typeof n === "string" ? n : { name: n.name, keys };
+}
+
+/** Der deutsche Tipp bei `already exists` (Secret, ConfigMap): löschen oder anderen Namen wählen. */
+const alreadyExistsTip = (art: string, name: string): string => "Lösche es zuerst ('kubectl delete " + art + " " + name + "') oder wähle einen anderen Namen.";
 
 /** secret tls <name> --cert=<datei> --key=<datei> */
 const SECRET_TLS_MUSTER = "Muster: kubectl create secret tls <name> --cert=tls.crt --key=tls.key";
@@ -102,12 +117,10 @@ function createSecretTls(host: KubectlHost, c: Call): string {
 
 /** secret generic <name> --from-literal=schluessel=wert */
 function createSecretGeneric(host: KubectlHost, c: Call): string {
-  const n = createName(host, c.args.slice(2), "Secret", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
+  const n = withLiterals(host, c, c.args.slice(2), "Secret", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
   if (typeof n === "string") return n;
-  const literals = literalKeys(c);
-  if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=passwort=geheim123' an.");
-  if (host.secrets.some(s => s.name === n.name)) return host._err('error: secrets "' + n.name + '" already exists');
-  host.secrets.push({ name: n.name, keys: literals, created: host.clock });
+  if (host.secrets.some(s => s.name === n.name)) return host._err('error: secrets "' + n.name + '" already exists', alreadyExistsTip("secret", n.name));
+  host.secrets.push({ name: n.name, keys: n.keys, created: host.clock });
   return "secret/" + n.name + " created";
 }
 
@@ -123,12 +136,10 @@ const createSecret: CreateHandler = (host, c) => {
 
 // kubectl create configmap <name> --from-literal=schluessel=wert
 const createConfigMap: CreateHandler = (host, c) => {
-  const n = createName(host, c.args.slice(1), "ConfigMap", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
+  const n = withLiterals(host, c, c.args.slice(1), "ConfigMap", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
   if (typeof n === "string") return n;
-  const literals = literalKeys(c);
-  if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=log_level=info' an.");
-  if (host.configMaps.some(m => m.name === n.name)) return host._err('error: configmaps "' + n.name + '" already exists');
-  host.configMaps.push({ name: n.name, keys: literals, created: host.clock });
+  if (host.configMaps.some(m => m.name === n.name)) return host._err('error: configmaps "' + n.name + '" already exists', alreadyExistsTip("configmap", n.name));
+  host.configMaps.push({ name: n.name, keys: n.keys, created: host.clock });
   return "configmap/" + n.name + " created";
 };
 
@@ -182,6 +193,8 @@ const createRoleBinding: CreateHandler = (host, c) => {
   if (typeof n === "string") return n;
   const roleName = c.value("--role");
   const clusterRoleName = c.value("--clusterrole");
+  // RoleBinding (`Validate` in create_rolebinding.go): genau eines von --role und --clusterrole, beide oder keines ist derselbe Fehler.
+  if (!cluster && !!roleName === !!clusterRoleName) return host._err("error: exactly one of clusterrole or role must be specified", "Häng entweder '--role=<name>' oder '--clusterrole=<name>' an.");
   // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
   if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
   if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
