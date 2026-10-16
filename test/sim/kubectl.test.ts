@@ -66,15 +66,16 @@ test("configmaps: create, get, delete – und Duplikat/leer werden abgelehnt (Ne
   assert.ok(!created.error);
   assert.match(created.output!, /configmap\/app-config created/);
   assert.match(sim.exec("kubectl get configmaps").output!, /app-config.*1/);
-  // Negativ: ohne --from-literal legt nichts an
+  // Wie kubectl: eine ConfigMap ohne --from-literal ist erlaubt (leer, #1530)
   const leer = sim.exec("kubectl create configmap leer");
-  assert.ok(leer.error, "ConfigMap ohne Daten wird abgelehnt");
-  assert.equal(sim.configMaps.length, 1, "fehlgeschlagenes create legt nichts an");
+  assert.ok(!leer.error, "ConfigMap ohne Daten wird angelegt");
+  assert.equal(sim.configMaps.length, 2);
   // Negativ: Duplikat
   const doppelt = sim.exec("kubectl create configmap app-config --from-literal=x=y");
   assert.ok(doppelt.error, "doppelte ConfigMap wird abgelehnt");
   assert.equal(sim.configMaps.filter(c => c.name === "app-config").length, 1);
   sim.exec("kubectl delete configmap app-config");
+  sim.exec("kubectl delete configmap leer");
   assert.match(sim.exec("kubectl get configmaps").output!, /No resources/);
 });
 

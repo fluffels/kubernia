@@ -97,6 +97,9 @@ const HOST_HTML = "dist/index.html";
  *     Spielcode 555_000 → 566_000 (Ist 562_252 B), Offline-HTML ohne Content 2_560_000 → 2_570_000 (Ist 2_562_363 B), jeweils mit dem Stand von main nach #1461.
  *   • #1553 (Tastenhinweis-Domäne, Token-Ersetzung in HUD/Dialog/Innenraum: neuer Code, bewusst und legitim):
  *     Spielcode 566_000 → 570_000 (Ist 566_729 B).
+ *   • #1530 (kubectl create/set/auth prüfen Eingaben wie kubectl: Container-Modell, Paar-Reihenfolge, Registry-Auflösung,
+ *     Literal-Schlüssel mit den echten Fehlertexten; neuer Domänen-Code, bewusst und legitim):
+ *     Spielcode 590_000 → 591_000 (Ist 590_135 B), Offline-Build 2_590_000 → 2_593_000 (Ist 2_590_281 B in der CI).
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -106,13 +109,13 @@ export const BUNDLE_BUDGETS = [
     // Die Offline-Datei enthält den Content inline; er wird über `subtractChunksDir` abgezogen und
     // zählt allein bei den Content-Chunks (ADR 0018). Gemessen: Offline-HTML minus Summe der Chunks.
     subtractChunksDir: CONTENT_CHUNK_DIR_DIST,
-    maxBytes: 2_590_000, // #1665: Gateway API Teil 2 (HTTPRoute: Mapper, Status, Renderer), +5,5 KB
+    maxBytes: 2_593_000, // #1665: Gateway API Teil 2, +5,5 KB; #1530: kubectl-Eingabeprüfung, Messwert 2_590_281 B
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 590_000, // #1665: Gateway API Teil 2 (HTTPRoute: Mapper, Status, Renderer), +5,8 KB
+    maxBytes: 591_000, // #1530: kubectl create/set/auth prüfen Eingaben wie kubectl (Namens-, Flag- und Argumentprüfung), Messwert 590135 B
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",

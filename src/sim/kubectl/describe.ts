@@ -24,7 +24,7 @@ import type { Call } from "../cliargs";
 import { workloadSelector, formatLabels } from "../util";
 import { clusterPods } from "../pods";
 import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
-import { statefulPodClaimName, STATEFUL_CLAIM_ACCESS_MODES } from "../workload";
+import { statefulPodClaimName, STATEFUL_CLAIM_ACCESS_MODES, containerNameOf } from "../workload";
 import { listWithMore, availableReplicas, statefulSetReadyReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
 import { accessModesLong, pvcPendingEvent } from "../pv-controller";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
@@ -81,7 +81,7 @@ function deploymentTemplate(host: KubectlHost, dep: Deployment): string[] {
     "  Labels:  " + workloadSelector(dep.name),
     ...(dep.serviceAccountName ? ["  Service Account:  " + dep.serviceAccountName] : []),
     "  Containers:",
-    "   " + dep.name + ":",
+    "   " + containerNameOf(dep) + ":",
     "    Image:  " + dep.image,
     "    Port:   " + (dep.containerPort !== undefined ? dep.containerPort + "/TCP" : "<none>"),
     ...podLimitLines(host, dep),

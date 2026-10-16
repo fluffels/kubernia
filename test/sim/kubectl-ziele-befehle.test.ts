@@ -237,8 +237,8 @@ describe("expose und set: weitere Ziele werden abgelehnt, nie still ignoriert", 
     ["kubectl set resources deployment/web deployment/api --limits=memory=1Gi", "mehrere Ziele bei 'kubectl set'"],
   ])("%s → Fehler, nichts angefasst", (cmd, text) => { ablehnen(cmd, text); });
 
-  test("ein Ziel, Paar vor der Referenz: weiter gültig", () => {
-    const r = lauf("kubectl set image nginx=ghcr.io/org/img:1 deployment/web");
+  test("ein Ziel, Paar hinter der Referenz: gültig", () => {
+    const r = lauf("kubectl set image deployment/web web=ghcr.io/org/img:1");
     expect(r.error).toBe(false);
     expect(r.out).toBe("deployment.apps/web image updated");
   });
