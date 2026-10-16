@@ -425,3 +425,88 @@ describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
     }
   });
 });
+
+describe("Leitplanken-Audit (#1067)", () => {
+  type Kommentare = { author?: { login: string }; comments?: { author?: { login: string }; body: string }[] };
+  type AuditDeps = { prStatus?: (nr: string) => Status; prDateien?: (nr: string) => string[]; prKommentare?: (nr: string) => Kommentare };
+  const audit = abschlussRaw as unknown as {
+    trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
+    leitplankenMuster: () => string[];
+    AUDIT_KOPF: string;
+  };
+  const ruf = (text: string, d: AuditDeps) =>
+    (blockade as (i: Eingabe, d: AuditDeps) => string | null)({ hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: text }, {
+      prStatus: () => ({ state: "MERGED", autoMergeRequest: null }),
+      ...d,
+    });
+  const gemergt = (d: AuditDeps) => ruf("ERGEBNIS: gemergt\nPR: #7", d);
+  const mit = (body: string, login = "fluffels"): Kommentare => ({ author: { login: "fluffels" }, comments: [{ author: { login }, body }] });
+  const treffer = (pfad: string, muster: string[]) => audit.trifftLeitplanke(pfad, muster);
+
+  test("Matcher: verankert, Verzeichnis-Präfix, Stern, jede Ebene", () => {
+    assert.ok(treffer(".claude/agents/x.md", ["/.claude/"]));
+    assert.ok(treffer("AGENTS.md", ["AGENTS.md"]));
+    assert.ok(treffer("src/content/AGENTS.md", ["AGENTS.md"]));
+    assert.ok(treffer("scripts/check-size.mjs", ["/scripts/check-*.mjs"]));
+    assert.ok(!treffer("scripts/sub/check-x.mjs", ["/scripts/check-*.mjs"]));
+    assert.ok(treffer("scripts/docs-gen.mjs", ["/scripts/docs-gen*"]));
+    assert.ok(treffer("scripts/docs-gen/config.json", ["/scripts/docs-gen*"]));
+    assert.ok(!treffer("src/main.ts", ["/.claude/", "AGENTS.md", "/scripts/check-*.mjs"]));
+    assert.ok(!treffer("docs/CLAUDE.md", ["/CLAUDE.md"]));
+    assert.ok(!treffer(".claude", ["/.claude/"]));
+  });
+
+  test("echte Liste aus .github/protected-paths.json", () => {
+    const liste = audit.leitplankenMuster();
+    assert.ok(liste.includes("AGENTS.md") && liste.includes("/test/harness/"));
+    assert.ok(treffer("scripts/umsetzer-abschluss.mjs", liste));
+    assert.ok(!treffer("src/main.ts", liste));
+  });
+
+  test("Audit-Kopfzeile steht wörtlich in AGENTS.md", () => {
+    const agents = readFileSync(resolve(ROOT, "AGENTS.md"), "utf8");
+    assert.ok(agents.includes(`„${audit.AUDIT_KOPF}`), "AGENTS.md nennt die Kopfzeile nicht wörtlich");
+  });
+
+  test("gemergt + Leitplanke ohne Audit-Kommentar: blockiert, nennt Treffer", () => {
+    const r = gemergt({ prDateien: () => ["src/main.ts", "AGENTS.md", "scripts/check-x.mjs"], prKommentare: () => mit("LGTM") });
+    assert.match(r ?? "", /AGENTS\.md/);
+    assert.match(r ?? "", /scripts\/check-x\.mjs/);
+    assert.doesNotMatch(r ?? "", /src\/main\.ts/);
+  });
+
+  test("gemergt + Leitplanke mit Audit-Kommentar des PR-Autors: frei", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => mit(`${audit.AUDIT_KOPF}\n\nwas, warum, revert`) });
+    assert.equal(r, null);
+  });
+
+  test("Kopfzeile von anderem Login zählt nicht", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => mit(audit.AUDIT_KOPF, "fremder") });
+    assert.ok(r);
+  });
+
+  test("keine Treffer: frei, ohne Kommentare zu lesen", () => {
+    const r = gemergt({
+      prDateien: () => ["src/main.ts"],
+      prKommentare: () => {
+        throw new Error("nicht nötig");
+      },
+    });
+    assert.equal(r, null);
+  });
+
+  test("gh-Fehler: frei (fail-open)", () => {
+    const wirft = () => {
+      throw new Error("gh kaputt");
+    };
+    assert.equal(gemergt({ prDateien: wirft, prKommentare: () => mit("x") }), null);
+    assert.equal(gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: wirft }), null);
+  });
+
+  test("abgebrochen, festgefahren, uebergabe sind nicht betroffen", () => {
+    const deps: AuditDeps = { prDateien: () => ["AGENTS.md"], prKommentare: () => mit("x") };
+    assert.equal(ruf("ERGEBNIS: abgebrochen\nPR: #7", deps), null);
+    assert.equal(ruf("ERGEBNIS: festgefahren\nPR: #7", deps), null);
+    assert.equal(ruf("ERGEBNIS: uebergabe\nPR: #7\nSCHNITT: pr\nUEBERGABE: x", deps), null);
+  });
+});
