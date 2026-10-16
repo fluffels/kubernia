@@ -5,7 +5,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
@@ -64,6 +64,15 @@ export function ladeSessionDatei(pfad) {
     }
   }
   return { id, main, subagents };
+}
+
+/** Sessions eines Projektordners, eine nach der anderen (Generator): nur die gerade verarbeitete liegt im Speicher. */
+export function* ladeSessions(dir, von) {
+  for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
+    const p = join(dir, f);
+    if (von && statSync(p).mtimeMs < Date.parse(von)) continue;
+    yield ladeSessionDatei(p);
+  }
 }
 
 /** Repo-Pfad ohne Worktree-Suffix `.claude/worktrees/…` und ohne abschließende Schrägstriche (ein Worktree zählt als Hauptrepo). */

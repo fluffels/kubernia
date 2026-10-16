@@ -266,6 +266,8 @@ describe("ohne Namen und Namenspräfix", () => {
       deployments: [dep("web")], services: [svc("web")], statefulSets: [sts({ replicas: 1 })],
       networkPolicies: [{ name: "mauer", podSelector: "web" }], ingresses: [{ name: "tor", host: "a.example", path: "/", service: "web", port: 80, className: "nginx" }],
       serviceAccounts: ["robo"],
+      gatewayClasses: [{ name: "envoy", controllerName: "gateway.envoyproxy.io/gatewayclass-controller" }],
+      gateways: [{ name: "eingang", className: "envoy", listeners: [{ name: "http", port: 80, protocol: "HTTP" }] }],
       roles: [{ name: "leser", cluster: false, rules: [], created: 0 }, { name: "weit", cluster: true, rules: [], created: 0 }],
     } as never);
     for (const [plural, entry] of DESCRIBE_ENTRIES) {

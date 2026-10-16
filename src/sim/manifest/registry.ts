@@ -13,6 +13,7 @@ import { parseYamlDocuments, YamlError, type YamlValue } from "../yaml";
 import { Leaf, ManifestError } from "./fields";
 import { mapDeployment } from "./apps";
 import { mapService } from "./core";
+import { mapGateway, mapGatewayClass } from "./gateway";
 
 type Mapper = (doc: Leaf) => ApplyEffect;
 
@@ -20,6 +21,8 @@ type Mapper = (doc: Leaf) => ApplyEffect;
 const MAPPERS: Readonly<Record<string, Mapper>> = {
   "apps/v1|Deployment": mapDeployment,
   "v1|Service": mapService,
+  "gateway.networking.k8s.io/v1|GatewayClass": mapGatewayClass,
+  "gateway.networking.k8s.io/v1|Gateway": mapGateway,
 };
 
 /** Ein Fehlschlag der Auflösung: kubectl-Text plus optionaler deutscher Tipp (für `host._err`). */

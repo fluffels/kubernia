@@ -206,3 +206,15 @@ F12 ist umgesetzt. Entscheidungen:
 - **Ausnahmen über §3 hinaus:** alle Kopf-Items (🚨, 🔒, 🤖, Forum, ⏰) haben eigene Formate, dazu Sammel- und Epic-/Phasen-Titel.
 - **Einmal-Kommentar:** `naechstes-ticket.mjs` kommentiert (I/O injiziert, Logik pur) nur, wenn die Spezifikation der ausschlaggebende Grund ist, und nur ohne den versteckten Marker `<!-- spezifikations-gate -->` im Kommentar eines vertrauten Autors; ein später anderer Mangel löst bewusst keinen zweiten Kommentar aus.
 - **Grenze:** Bei gleichzeitiger Auswahl können zwei Kommentare entstehen (der Marker wird direkt vor dem Posten geprüft, nicht atomar). Ein Ticket, das zwischen Festlegen des Stichtags und Merge entsteht, ist hart.
+
+## Fortschreibung #1616 (2026-10-16): Factory-Kennzahlen (F14)
+
+F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den Bericht-Kommentar des Wochen-Status-Tickets (Definition, Lücken, Grenzen: [model-routing.md](../model-routing.md#factory-kennzahlen-1616)). Entscheidungen:
+
+- **Kostenquelle:** Standard ist das Transkript, `--langfuse` schaltet Langfuse ausdrücklich zu; ein stiller Wechsel bei fehlendem Zugang gäbe zwei nicht vergleichbare Reihen. Das weicht vom Wortlaut „Kosten je Ticket mit `--langfuse`“ in §6 ab: Der Agentenlauf hat den Secret-Key nicht, der Standardweg muss dort Zahlen liefern.
+- **Verkettung:** Unterprozesse mit `--json` statt Bibliotheks-Extraktion (Einstiegsskripte importieren einander nicht); die Verträge sichern Tests gegen die echten Erzeuger `bewertePrs` und `summarize`, ein fehlendes Vertragsfeld ergibt Exit 2.
+- **Ticket → Session** über die Claim-Zeile `gh issue edit <nr> --add-assignee` im lokalen Transkript, bis #1266 Tickets an Traces hängt; Fenster je Ticket: Claim bis Merge, Kosten wie aufgezeichnet.
+- **Nacharbeit** über die im Zeitraum fälligen Fenster `[von − 14 T, bis − 14 T]`: nur abgelaufene Fristen gehen in die Quote.
+- **Lücken statt 0:** kein Zugang, keine Session, keine Calls oder Calls ohne Preis machen die Kosten eines Tickets zur Lücke (keine Teilsumme); sie gehen weder in den Median noch in eine Summe, „n von N gemessen“ nennt die Abdeckung.
+- **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
+- **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.

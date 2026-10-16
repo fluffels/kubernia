@@ -49,6 +49,7 @@ const CHECKLISTE = [
   "Wochenbudget",
   "Kosten gegen Nutzen",
   "Vermeidbare Arbeit",
+  "Factory-Kennzahlen",
 ];
 
 /** Der AGENTS.md-Bullet zur Erfassungsregel: nennt die vier Änderungsarten und verlinkt den Ablauf. */
@@ -203,7 +204,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatErfassungsRegel(""));
   });
 
-  test("model-routing.md: Checkliste mit allen neun Punkten", () => {
+  test("model-routing.md: Checkliste mit allen zehn Punkten", () => {
     assert.ok(hatChecklisteVollstaendig(mr));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Wochenbudget:**", "Wochenbudget:")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Kosten gegen Nutzen", "Kosten gegen Nutzen")));
@@ -218,11 +219,11 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
         .split("\n")
         .filter((z) => /^\d+\. \*\*/.test(z)).length;
     assert.equal(zaehle(mr), CHECKLISTE.length);
-    // Drift: ein zehnter Punkt ohne Eintrag in CHECKLISTE muss auffallen
-    const punkt9 = mr.indexOf("9. **Vermeidbare Arbeit");
-    const zeilenEnde = mr.indexOf("\n", punkt9);
-    const mitZehn = `${mr.slice(0, zeilenEnde)}\n10. **Neu:** x${mr.slice(zeilenEnde)}`;
-    assert.notEqual(zaehle(mitZehn), CHECKLISTE.length);
+    // Drift: ein elfter Punkt ohne Eintrag in CHECKLISTE muss auffallen
+    const punkt10 = mr.indexOf("10. **Factory-Kennzahlen");
+    const zeilenEnde = mr.indexOf("\n", punkt10);
+    const mitElf = `${mr.slice(0, zeilenEnde)}\n11. **Neu:** x${mr.slice(zeilenEnde)}`;
+    assert.notEqual(zaehle(mitElf), CHECKLISTE.length);
   });
 
   test("model-routing.md: Beleg-Ablauf mit Probe-Lauf und Usage", () => {

@@ -6,6 +6,12 @@
     "text": "50 Ticket-Merges an echten Merge-Zahlen prüfen (Konstante `MIN_TICKET_MERGES_PUSH`, ADR 0016 Fortschreibung #1628)."
   },
   {
+    "id": "factory-kennzahlen-schwellen",
+    "faellig": "2026-11-16",
+    "titel": "Factory-Kennzahlen: Schwellen nach 4 Wochen Baseline festlegen",
+    "text": "Mindestens 4 Status-Läufe mit dem Block aus `scripts/factory-kennzahlen.mjs` (ADR 0022 §6, #1616): je Kennzahl eine Schwelle festlegen oder begründet verschieben; fehlt ein Lauf, den Eintrag je fehlendem Lauf um eine Woche verschieben."
+  },
+  {
     "id": "audit-ghsa-vfj7-8cjw-p6xm",
     "faellig": "2026-11-15",
     "titel": "braces-Advisory GHSA-vfj7-8cjw-p6xm prüfen (bewusst akzeptiert)",

@@ -189,3 +189,17 @@ describe("ticketZaehlung und mehrlaufHinweis (#1646)", () => {
     expect(Z.mehrlaufHinweis(2)).toBe("Mediane je Lauf, nicht je Ticket (2 Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket");
   });
 });
+
+describe("claimNummer (#1616)", () => {
+  const C = raw as unknown as { claimNummer: (cmd: string) => number | null };
+  test("Claim-Zeile liefert die Ticketnummer", () => {
+    expect(C.claimNummer("gh issue edit 1616 --add-assignee @me")).toBe(1616);
+    expect(C.claimNummer("cd x && gh issue edit 12 --add-label a --add-assignee @me")).toBe(12);
+  });
+  test("kein Claim: Entfernen, Ansehen, leer", () => {
+    expect(C.claimNummer("gh issue edit 1616 --remove-assignee @me")).toBeNull();
+    expect(C.claimNummer("gh issue view 1616")).toBeNull();
+    expect(C.claimNummer("")).toBeNull();
+    expect(C.claimNummer(undefined as unknown as string)).toBeNull();
+  });
+});
