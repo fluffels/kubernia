@@ -77,7 +77,7 @@ const nenntPatchDatei = (s: string) => /Patch-Datei/.test(s) && /\.patch/.test(s
 const haeltKontextDiaet = (s: string) => /bereits[\s\S]{0,60}Kontext[\s\S]{0,300}grepp/i.test(s);
 
 /** Weist der Text an, Dateien gezielt statt vollständig zu öffnen? */
-const liestGezielt = (s: string) => /gezielt per Grep oder offset\/limit/.test(s);
+const liestGezielt = (s: string) => /gezielt per Grep oder offset\/limit/.test(s) && /gezielt um die Hunk-Zeilen, nicht die ganze Datei/.test(s);
 
 /** Lässt der Text den HEAD gegen den Patch-Stand abgleichen? */
 const hatFrischeGuard = (s: string) => /rev-parse/.test(s);
@@ -166,6 +166,9 @@ describe("Abschnittsprädikate: eine zurückgedrehte Regel im eigenen Abschnitt 
   });
   test("Patch-Schreibbefehl als Zwei-Punkt-Diff fällt durch (der --stat-Befehl trägt die Drei-Punkt-Form weiter)", () => {
     assert.ok(!istDreiPunkt(patchSkill.replace("git diff origin/main...HEAD > ", "git diff main > ")));
+  });
+  test("Regel 3 ohne den Hunk-Zeilen-Satz (Datei nur gezielt öffnen) fällt durch", () => {
+    assert.ok(!liestGezielt(diaetSkill.replace("dann gezielt um die Hunk-Zeilen, nicht die ganze Datei", "dann vollständig")));
   });
   test("Regel 3 der Kontext-Diät ohne die Gezielt-Anweisung fällt durch (kein größeres `limit` zählt nicht)", () => {
     assert.ok(!liestGezielt(diaetSkill.replace("danach nur gezielt per Grep oder offset/limit", "danach nach Belieben")));
