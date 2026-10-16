@@ -24,7 +24,7 @@ const WERKZEUGE = ["Claude Code", "Langfuse", "PixelLab", "Playwright", "GitHub"
 const MARKER = /^- Geprüft bis (Claude Code|Langfuse|PixelLab|Playwright|GitHub) (v?\d+\.\d+\.\d+|\d{4}-\d{2}-\d{2})$/gm;
 const KOPF = "| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |";
 const URTEIL = /^(behalten|ersetzen|beobachten)(:|$)/;
-const UNABHAENGIG = /^(ja|nein|teilweise)(:|$)/;
+const UNABHAENGIG = /^(ja|nein|teilweise|Modul)(:|$)/;
 
 const inventarApi = inventar as unknown as { harnessInventarGenerator: (ctx: { rootDir: string; config: Record<string, unknown> }) => string };
 const docsGenApi = docsGen as unknown as { loadConfig: (rootDir?: string) => Record<string, unknown> };
@@ -169,6 +169,8 @@ describe("harness-inventar.md: festes Vokabular (#1361)", () => {
     expect(vokabularProbleme([z("behalten: Grund", "teilweise")])).toEqual([]);
     expect(vokabularProbleme([z("ersetzten", "ja")]).join()).toContain("Urteil");
     expect(vokabularProbleme([z("vielleicht", "ja")]).join()).toContain("Urteil");
+    expect(vokabularProbleme([z("behalten", "Modul")])).toEqual([]);
+    expect(vokabularProbleme([z("behalten", "modul")]).join()).toContain("Spielunabhängig");
     expect(vokabularProbleme([z("ersetzen", "vielleicht")]).join()).toContain("Spielunabhängig");
     expect(vokabularProbleme([z("ersetzen", "ja (unklar)")]).join()).toContain("Spielunabhängig");
     expect(doppelt([z("a", "ja"), { zellen: ["`a`, `b`", "", "", "behalten", "ja"] }])).toEqual(["a"]);

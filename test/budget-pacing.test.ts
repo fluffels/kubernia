@@ -246,7 +246,7 @@ describe("liesSnapshot und CLI", () => {
 
   test("snapshotPfad: Env überschreibt, sonst OS-Temp", () => {
     expect(B.snapshotPfad({ KQ_RATE_LIMITS_SNAPSHOT: "/x/y.json" })).toBe("/x/y.json");
-    expect(B.snapshotPfad({})).toBe(join(tmpdir(), "kubernia-rate-limits.json"));
+    expect(B.snapshotPfad({})).toBe(join(tmpdir(), "kq-rate-limits.json"));
   });
 
   const cli = (snapshot: Snap | string | null, env: Record<string, string> = {}, args: string[] = ["--ohne-probe", "--json"]) => {
