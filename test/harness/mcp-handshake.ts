@@ -8,7 +8,7 @@ export type McpAbfrage = { tools: McpTool[]; aufruf?: unknown };
 
 /**
  * Startet `node <args>` im `cwd`, wartet höchstens `budgetMs` auf die Antworten (tools/list, optional ein tools/call).
- * `aufruf.ergebnis` ist das `result` des Calls (z.B. `structuredContent`). Löst erst nach dem Prozessende auf
+ * `aufruf` ist das `result` des Calls (z.B. `structuredContent`). Löst erst nach dem Prozessende auf
  * (Windows: der laufende Server hält sein cwd offen, EBUSY beim Aufräumen).
  */
 export function mcpAbfrage(args: string[], cwd: string, budgetMs: number, aufruf?: { name: string; arguments?: object }): Promise<McpAbfrage> {
@@ -16,7 +16,7 @@ export function mcpAbfrage(args: string[], cwd: string, budgetMs: number, aufruf
     const child = spawn(process.execPath, args, { cwd, stdio: ["pipe", "pipe", "ignore"] });
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error(`tools/list-Handshake nach ${budgetMs / 1000} s ohne Antwort`));
+      reject(new Error(`MCP-Handshake (tools/list bzw. tools/call) nach ${budgetMs / 1000} s ohne Antwort`));
     }, budgetMs);
     let buf = "";
     let tools: McpTool[] = [];
@@ -50,9 +50,4 @@ export function mcpAbfrage(args: string[], cwd: string, budgetMs: number, aufruf
     child.on("error", reject);
     senden({ id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "wachter", version: "1" } } });
   });
-}
-
-/** Nur die Tool-Liste (initialize + tools/list). */
-export async function mcpToolListe(args: string[], cwd: string, budgetMs: number): Promise<McpTool[]> {
-  return (await mcpAbfrage(args, cwd, budgetMs)).tools;
 }
