@@ -781,7 +781,7 @@ describe("Ring-Tabelle (ADR 0029)", () => {
   });
   test("istZaehlung: fehlende Datei und Block ohne Marker zählen nichts (null-Guards)", () => {
     const begriffe = { fremd: /Fremdwort/g };
-    const E = [ein("fehlt.mjs"), ein("a.md", { block: "b" })];
+    const E = [ein("fehlt.mjs"), ein("fehlt.md", { block: "b" }), ein("a.md", { block: "b" })];
     assert.deepEqual(istZaehlung(E, (p) => (p === "a.md" ? "Fremdwort ohne Marker" : null), begriffe), {});
   });
 });
