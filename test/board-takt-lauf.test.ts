@@ -242,7 +242,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
 
   function lauf(opts: { offene: number[]; imBoard?: number[]; produkt?: number[]; graphql?: (n: number[]) => ({ number: number } | null)[]; rest?: (n: number) => unknown; add?: () => string; dry?: boolean; token?: string }) {
     const log: string[] = [];
-    const zaehler = { graphql: 0, add: [] as string[], rollen: [] as string[], harness: [] as Item[][] };
+    const zaehler = { graphql: 0, graphqlRollen: [] as string[], add: [] as string[], rollen: [] as string[], harness: [] as Item[][] };
     const io: Io = {
       ghJson: (a) => {
         const m = /issues[/]([0-9]+)$/.exec(a.join(" "));
@@ -254,7 +254,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: (_h, items) => (zaehler.harness.push(items), true),
-      itemsUeberIssues: (_rolle, n) => ((zaehler.graphql += 1), (opts.graphql ?? (() => n.map(() => null)))(n)),
+      itemsUeberIssues: (rolle, n) => ((zaehler.graphql += 1), zaehler.graphqlRollen.push(rolle), (opts.graphql ?? (() => n.map(() => null)))(n)),
       addToBoardTodo: (rolle, id) => (zaehler.add.push(id), zaehler.rollen.push(rolle), (opts.add ?? (() => `PVTI_${id}`))()),
       log: (z) => log.push(z),
     };
@@ -315,7 +315,20 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
     test("die GraphQL-Gegenprobe fragt beide Boards; kennt nur das Produkt-Board das Item, wird nicht aufgenommen", () => {
       const { zaehler } = lauf({ offene: [11], imBoard: [], graphql: () => [{ number: 11 }] });
       expect(zaehler.graphql).toBe(2);
+      expect(zaehler.graphqlRollen).toEqual(["produkt", "factory"]);
       expect(zaehler.add).toEqual([]);
+    });
+    test("nimmFehlendeAuf trägt ein aufgenommenes Issue nur in die Liste seiner Rolle ein", () => {
+      const W = raw as unknown as { nimmFehlendeAuf: (a: unknown, io: unknown) => { listen: { produkt: Item[]; factory: Item[] } } };
+      const io = {
+        itemsUeberIssues: (_r: string, n: number[]) => n.map(() => null),
+        ghJson: (a: string[]) => (a.join(" ").endsWith("/20") ? harnessIssue(20) : issue(21)),
+        addToBoardTodo: (_r: string, id: string) => `PVTI_${id}`,
+        log: () => undefined,
+      };
+      const r = W.nimmFehlendeAuf({ offene: [{ number: 20 }, { number: 21 }], listen: { produkt: [], factory: [] }, token: "t" }, io);
+      expect(r.listen.factory.map((i) => i.number)).toEqual([20]);
+      expect(r.listen.produkt.map((i) => i.number)).toEqual([21]);
     });
     test("eine Nummer auf beiden Boards ist eine Warnung (kein Fehler) und zählt nur auf dem Board laut Trennregel", () => {
       const { r, log } = lauf({ offene: [10], imBoard: [10], produkt: [10] });

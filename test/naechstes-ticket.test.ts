@@ -758,6 +758,16 @@ describe("Zwei Boards und Spielquote (#1729)", () => {
     expect(j.quote).toMatchObject({ seite: "produkt", produktMerges: null, grund: "Factory in Arbeit (#10)" });
     expect(spion.n).toBe(0);
   });
+  test("ein geschlossenes, noch zugewiesenes Factory-Item ist nicht „in Arbeit“: die Quote entscheidet", () => {
+    const j = json(lauf([item(1)], [item(10, { ...H, ...vergeben, state: "closed" }), item(11, H)], { merges: 3 }));
+    expect(j.ticket?.nr).toBe(11);
+    expect(j.quote).toMatchObject({ seite: "factory", produktMerges: 3 });
+  });
+  test("--bereich agentic: ein freies Status-Ticket auf dem Factory-Board wird als Kopf-Item gewählt, vor dem Factory-Item davor", () => {
+    const j = json(lauf([item(1)], [item(10, H), item(2, status)], { argv: ["--json", "--bereich", "agentic"] }));
+    expect(j.ticket?.nr).toBe(2);
+    expect(j.quote.grund).toBe("Kopf-Item, vor der Quote");
+  });
   test("ein geclaimtes Status-Ticket (Kopf) zählt nicht als Factory in Arbeit", () => {
     const j = json(lauf([item(1)], [item(2, { ...status, ...vergeben }), item(11, H)], { merges: 5 }));
     expect(j.ticket?.nr).toBe(11);

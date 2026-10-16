@@ -200,6 +200,19 @@ describe("Verdrahtung: jeder Aufrufer übergibt sein Board ausdrücklich", () =>
       expect(q, f).not.toMatch(/PVT_/);
     }
   });
+  test("board-place wählt sein Board über zielRolle und meldet einen Fehler als Exit 2; board-takt bindet das Factory-Board über die Rolle", () => {
+    const q = readFileSync(new URL("../scripts/board-place.mjs", import.meta.url), "utf8");
+    expect(q).toContain("const board = boardFuerRolle(ziel.rolle);");
+    expect(q).toContain("let items = listen[ziel.rolle];");
+    expect(q).toContain("if (ziel.fehler) throw abbruch(ziel.fehler, 2);");
+    const takt = readFileSync(new URL("../scripts/board-takt.mjs", import.meta.url), "utf8");
+    expect(takt).toContain('const FACTORY_BOARD = boardFuerRolle("factory");');
+  });
+  test("kein Aufruf bindet ein festes Produkt-Board (boardFuerRolle(\"produkt\") am Aufruf) in Takt, Sammelticket und Status-Ticket", () => {
+    for (const f of ["board-takt", "sammelticket-anlegen", "langfuse-takt"]) {
+      expect(readFileSync(new URL(`../scripts/${f}.mjs`, import.meta.url), "utf8"), f).not.toContain('boardFuerRolle("produkt")');
+    }
+  });
   test("Sammel- und Status-Tickets leiten ihr Board aus dem eigenen Label ab und legen mit demselben Label an", () => {
     for (const f of ["sammelticket-anlegen", "langfuse-takt"]) {
       const q = readFileSync(new URL(`../scripts/${f}.mjs`, import.meta.url), "utf8");
