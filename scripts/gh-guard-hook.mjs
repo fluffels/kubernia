@@ -88,6 +88,14 @@ const REST_PFADE = [
   /\/git\/refs\//,
 ];
 
+/** Anlege-Sperre (#1693): neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Pflichtfelder, Board-Platz). */
+const ANLEGE_WEG = "neue Tickets nur über `node scripts/spezifikation.mjs anlegen`";
+/** Der Endpunkt `repos/<o>/<r>/issues` selbst (auch mit `?…`, führendem `/`, Quotes), nicht `/issues/<n>/…`. */
+const ISSUES_ENDPUNKT = /^["']?\/?repos\/[^/\s'"]+\/[^/\s'"]+\/issues\/?(?:\?[^\s'"]*)?["']?$/;
+/** Das Kommando `gh issue create` an Kommandoposition oder hinter Trennern (Text in Quotes ist maskiert). */
+const ISSUE_ANLEGEN = /(?:^|[\s(!{&;|])gh(?:\.exe)?\s+issue\s+create\b/;
+const GRAPHQL_ANLEGEN = /\bcreateIssue(?=\s*\()/;
+
 /** Befehle länger als das werden nicht mehr zerlegt (Laufzeit der Hook-Prüfung): enthält er `gh api`, wird gefragt. */
 const LAENGE_MAX = 50_000;
 /** Mehr Fundstellen (gh, Interpreter) je Segment werden nicht einzeln geprüft: es wird gefragt. */
@@ -250,7 +258,12 @@ const hatFelder = (segment) => /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)(?:
 function segmentGrund(segment) {
   const m = methode(segment);
   if (m === "DELETE") return "`gh api` mit Methode DELETE löscht etwas (unumkehrbar)";
+  if (m === "POST" || (m === null && hatFelder(segment))) {
+    const ep = endpunkt(segment);
+    if (ep !== null && ISSUES_ENDPUNKT.test(ep)) return `POST auf die Issue-Liste legt ein Ticket an: ${ANLEGE_WEG}`;
+  }
   const nachMutation = segment.includes("mutation") ? segment.slice(segment.indexOf("mutation")) : "";
+  if (GRAPHQL_ANLEGEN.test(nachMutation)) return `GraphQL-Mutation createIssue legt ein Ticket an: ${ANLEGE_WEG}`;
   for (const muster of MUTATIONEN) {
     const treffer = muster.exec(nachMutation);
     if (treffer) return `GraphQL-Mutation ${treffer[0]} (Außenwirkung oder Löschen)`;
@@ -380,6 +393,7 @@ function ersetzung(segment, tiefe, command) {
 /** Ein Segment bewerten: jedes offene `gh api` (Außenwirkung), dann Umwege und Ersetzungen. */
 function segmentUrteil(segment, command, tiefe) {
   const maske = ohneQuoteInhalt(segment);
+  if (ISSUE_ANLEGEN.test(maske)) return frage(`\`gh issue create\` legt ein Ticket an: ${ANLEGE_WEG}`, "#1693");
   const stellen = ghStellen(segment, maske);
   if (stellen.length > STELLEN_MAX) return frage("zu viele gh-api-Aufrufe für die Textprüfung");
   for (const start of stellen) {
@@ -430,7 +444,7 @@ function bewerteIntern(command, tiefe, kontext, d) {
   dialekt = d;
   try {
     if (!command || typeof command !== "string") return { ask: false };
-    if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && /\bapi\b/.test(kontext))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
+    if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && (/\bapi\b/.test(kontext) || /\bissue\s+create\b/.test(kontext)))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
     if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
     const text = ohneDatenHeredocs(command);
     for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
