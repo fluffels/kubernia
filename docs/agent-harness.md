@@ -19,10 +19,10 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 
 | Kennzahl | Wert | Zählregel |
 |---|---|---|
-| Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 108 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 75 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Skripte | 113 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 76 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 10 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 26 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -122,6 +122,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
 | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein, die hexagonale Sicht in arc42 (Ports und Adapter) mit Pfaden, Schichten und Modell |
 | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
+| `npm run check:factorydrift` | `verify` | Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still; entfällt ohne Sync-Stand |
 | `npm run check:steuerbytes` | `verify` | keine Steuerbytes (NUL) in Textdateien |
 | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
 | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
@@ -134,6 +135,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run test:smoke` | `verify:full` | Boot- und Interaktions-Smokes headless gegen Offline- und Host-Build (Playwright) |
 | `npm audit --omit=dev --audit-level=high` | CI | Security-Gate über die ausgelieferten Produktiv-Abhängigkeiten |
 | `node scripts/check-review-nachweis.mjs` | CI | Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR |
+| `npm run sbom` | CI | CycloneDX-SBOM der npm-Abhängigkeiten (aus dem Lockfile) als CI-Artefakt; rot, wenn Erzeugung oder Artefakt fehlt |
 
 <!-- GEN:gates END -->
 
@@ -186,7 +188,14 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 ### Kern-Reinheits-Wächter (`test/harness/kern-reinheit.test.ts`, #1610)
 - **WAS:** das Besitz-Manifest `.factory/besitz.json` listet den Factory-Besitz (Datei, Markdown-Block zwischen `factory-besitz`-Markern, JSON-Schlüssel); der Wächter zählt je Einheit Projektliterale (Owner, Repo, Board-ID und die `projektliterale` der Projekt-Config; die Begriffe leitet der Wächter aus `.factory/projekt.json` ab) gegen `test/harness/kern-literale-baseline.json`. Neues Literal, Wert über oder unter der Baseline und verwaiste Einträge sind rot; die Baseline darf gegen die Diff-Basis nicht steigen (CI fail-closed).
 - **Importregel (#1612):** keine Einheit des Manifests importiert die Schichtdaten (`schichten.layers` aus `scripts/docs-gen/config.json`) statisch; sie laden sie über den konfigurierten Pfad und nutzen Prüfung und Ableitung aus `scripts/schichten-kern.cjs`. Ausnahmen stehen mit Ticket in `SCHICHTDATEN_AUSNAHMEN` und dürfen nur schrumpfen.
-- **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1, F7); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
+- **Kern-Abdeckung (#1613):** jede getrackte Datei direkt in einem Kern-Verzeichnis (Ordner einer Ganz-Datei-Einheit, nicht rekursiv) ist Besitz oder steht in `test/harness/kern-abdeckung.json` (`art` `projekt`, `modul` oder `offen`, mit Grund; `offen` braucht ein Ticket). Rot: Datei nicht eingeordnet, Eintrag ohne Treffer, Eintrag trifft Besitz, unbekannte Art, leerer Grund.
+- **Import-Hülle (#1613):** jeder lokale Import (Importformen aus `hook-importe.ts` plus `.json`) einer Ganz-Datei-Code-Einheit zeigt auf eine Ganz-Datei-Einheit oder auf `.factory/projekt.json`. Ausnahmen in `KERN_HUELLE_AUSNAHMEN` nur für Importeure im Ring `kern-nach-entkopplung`, mit `#<nr>` oder `ADR 0022 F<n>` im Grund; die Liste darf nur schrumpfen.
+- **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1, F7, F9); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
+
+### Drift-Gate (`npm run check:factorydrift`, #1613)
+- **WAS:** `scripts/check-factory-drift.mjs` vergleicht den Besitz des Projekts mit `.factory/sync-stand.json`, den der Sync (`npm run factory:sync -- --quelle <pfad>`) schreibt: Hash des Manifests und je Einheit (CRLF-neutral). Rot bei geändertem Manifest, geänderter, gelöschter oder nicht mehr auflösbarer Einheit und bei Einheiten, die Manifest und Sync-Stand verschieden listen; jede Meldung nennt den Weg (upstream ändern und neu syncen, oder den Projektwert in `.factory/projekt.json` auslagern). Ohne Sync-Stand ist das Projekt selbst die Quelle, die Prüfung entfällt mit einer Zeile.
+- **WARUM:** der Sync überschreibt nur Besitz; das Gate schließt die Gegenrichtung, damit ein Projekt Besitz nicht still ändert (ADR 0022 F9). Der Referenzstand liegt im Projekt, weil die CI ohne Zugriff auf das Factory-Repo prüft.
+- **Absicherung:** `test/factory-sync.test.ts` (synthetisches Fremdrepo, der echte Besitz dieses Repos in ein Temp-Ziel, das Gate aus der Zielkopie); Grenzen im [ADR 0022, Fortschreibung #1613](adr/0022-dark-factory-kern-und-verteilung.md).
 
 ### Doku-Aktualitäts-Wächter (`npm run check:doctickets`, #610)
 - **WAS:** liest die zwischen den Markern `open-harness-tickets:start/end` in §5 als **„offen"** gelistete Roadmap-Tabelle und gleicht jede Nummer gegen den echten `gh issue`-Status ab — ist eine als offen dokumentierte Nummer auf GitHub bereits **CLOSED**, ist die Roadmap stale. Zusätzlich gleicht er das Ticket jeder `ALLOWLIST`-Ausnahme von `check:size` und `check:contextsize` ab (CLOSED oder ohne `#N` ist rot; die `DECKEL` sind Ratchet-Historie und zählen nicht). Die reine Logik (`parseOpenHarnessTickets`, `ausnahmeTickets`) testet `test/doctickets.test.ts` offline (Red-Green); dort steht auch der blockierende Teil „jede Ausnahme nennt ein `#N`“.
@@ -500,7 +509,7 @@ flowchart LR
   subgraph bitte["Bitte: lokal, umgehbar"]
     regeln["AGENTS.md: Regeln<br/>und Konventionen"]
     hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
-    verify["npm run verify<br/>15 Gates"]
+    verify["npm run verify<br/>16 Gates"]
     prepush["pre-push-Hook"]
   end
   subgraph mauer["Mauer: Server, nicht umgehbar"]

@@ -21,7 +21,7 @@
  */
 import type { Container } from "./state";
 import { randSuffix, table, suggest } from "./util";
-import { flag, isFlagToken, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
+import { flag, isFlagToken, dispatchSub, targetOutcome, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 import { hashStr, hashHex } from "../core/rng";
 
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
@@ -205,25 +205,41 @@ function dockerPs(sim: DockerHost, c: Call): string {
   );
 }
 
-/** `docker stop <name|id>` – hält einen laufenden Container an. */
-function dockerStop(sim: DockerHost, call: Call): string {
-  const name = call.args[0];
-  if (!name) return sim._err("docker stop: Welcher Container?", "Den Namen siehst du mit 'docker ps' in der Spalte NAMES.");
-  const c = sim.docker.containers.find(c => c.name === name || c.id === name);
-  if (!c) return sim._err("Error: No such container: " + name, "Mit 'docker ps' siehst du alle laufenden Container.");
-  c.running = false;
-  return name;
+/** Mehrfachziele wie die docker-CLI: jedes Ziel läuft für sich (`step` gibt den Fehlertext oder `null`), die Fehler
+ *  stehen zuletzt, der Tipp kommt vom ersten Fehler. */
+function eachContainer(sim: DockerHost, names: readonly string[], step: (name: string) => { error: string; tip?: string } | null): string {
+  const ok: string[] = [], failed: string[] = [];
+  let tip: string | undefined;
+  for (const name of names) {
+    const err = step(name);
+    if (!err) { ok.push(name); continue; }
+    failed.push(err.error);
+    tip ??= err.tip;
+  }
+  return targetOutcome(sim, ok, failed, tip);
 }
 
-/** `docker rm <name|id>` – löscht einen (gestoppten) Container. */
+/** `docker stop <name|id>…` – hält laufende Container an (je Ziel eine Zeile). */
+function dockerStop(sim: DockerHost, call: Call): string {
+  if (call.args.length === 0) return sim._err("docker stop: Welcher Container?", "Den Namen siehst du mit 'docker ps' in der Spalte NAMES.");
+  return eachContainer(sim, call.args, name => {
+    const c = sim.docker.containers.find(c => c.name === name || c.id === name);
+    if (!c) return { error: "Error: No such container: " + name, tip: "Mit 'docker ps' siehst du alle laufenden Container." };
+    c.running = false;
+    return null;
+  });
+}
+
+/** `docker rm <name|id>…` – löscht (gestoppte) Container (je Ziel eine Zeile). */
 function dockerRm(sim: DockerHost, call: Call): string {
-  const name = call.args[0];
-  if (!name) return sim._err("docker rm: Welcher Container?");
-  const idx = sim.docker.containers.findIndex(c => c.name === name || c.id === name);
-  if (idx === -1) return sim._err("Error: No such container: " + name);
-  if (sim.docker.containers[idx].running) return sim._err("Error: Container läuft noch.", "Erst 'docker stop " + name + "', dann löschen.");
-  sim.docker.containers.splice(idx, 1);
-  return name;
+  if (call.args.length === 0) return sim._err("docker rm: Welcher Container?");
+  return eachContainer(sim, call.args, name => {
+    const idx = sim.docker.containers.findIndex(c => c.name === name || c.id === name);
+    if (idx === -1) return { error: "Error: No such container: " + name };
+    if (sim.docker.containers[idx].running) return { error: "Error: Container läuft noch.", tip: "Erst 'docker stop " + name + "', dann löschen." };
+    sim.docker.containers.splice(idx, 1);
+    return null;
+  });
 }
 
 const ALL = flag(false, "-a", "--all");
@@ -234,14 +250,14 @@ const ALL = flag(false, "-a", "--all");
 const DOCKER: Dispatch<DockerEntry> = {
   cmd: "docker",
   table: {
-    pull: { run: dockerPull },
-    build: { run: dockerBuild, flags: [flag(true, "-t", "--tag"), flag(true, "-f", "--file")] },
-    tag: { run: dockerTag },
-    images: { run: dockerImages },
-    run: { run: dockerRun, flags: [flag(true, "--name"), flag(false, "-d", "--detach")], hints: RUN_HINTS, stopAtPositional: true },
-    ps: { run: dockerPs, flags: [ALL], hints: { "-q": "Nur die IDs zeigt der Simulator nicht – 'docker ps' zeigt die Tabelle mit ID und Namen." } },
-    stop: { run: dockerStop },
-    rm: { run: dockerRm, hints: { "-f": "Erzwingen gibt es nicht – erst 'docker stop <name>', dann 'docker rm <name>'." } },
+    pull: { run: dockerPull, maxArgs: 1 },
+    build: { run: dockerBuild, maxArgs: 1, flags: [flag(true, "-t", "--tag"), flag(true, "-f", "--file")] },
+    tag: { run: dockerTag, maxArgs: 2 },
+    images: { run: dockerImages, maxArgs: 0 },
+    run: { run: dockerRun, maxArgs: OFFENE_LISTE, flags: [flag(true, "--name"), flag(false, "-d", "--detach")], hints: RUN_HINTS, stopAtPositional: true },
+    ps: { run: dockerPs, maxArgs: 0, flags: [ALL], hints: { "-q": "Nur die IDs zeigt der Simulator nicht – 'docker ps' zeigt die Tabelle mit ID und Namen." } },
+    stop: { run: dockerStop, maxArgs: OFFENE_LISTE },
+    rm: { run: dockerRm, maxArgs: OFFENE_LISTE, hints: { "-f": "Erzwingen gibt es nicht – erst 'docker stop <name>', dann 'docker rm <name>'." } },
   },
   real: ["exec", "logs", "inspect", "start", "restart", "kill", "rmi", "push", "login", "logout", "network", "volume", "compose", "cp", "commit", "save", "load", "export", "import", "history", "info", "version", "search", "top", "stats", "pause", "unpause", "rename", "wait", "attach", "events", "diff", "port", "update", "create", "system", "container", "image", "builder", "buildx", "context", "manifest", "plugin", "swarm", "service", "stack", "node", "secret", "config", "trust"],
 };

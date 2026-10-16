@@ -32,10 +32,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
-// layers.cjs ist bewusst CommonJS (der dependency-cruiser-Config `require`t es) —
-// dasselbe createRequire-Muster wie in check-docmap.mjs / vite.config.ts.
-const require = createRequire(import.meta.url);
-const { LAYERS, layerOf } = require("./layers.cjs");
+// Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
+// scripts/docs-gen/config.json › schichten.layers, ein Kern-Modul importiert sie nie statisch (Kern-Reinheit, ADR 0022 F7).
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
+const schichtenPfad = JSON.parse(readFileSync(`${WURZEL}scripts/docs-gen/config.json`, "utf8")).schichten?.layers;
+if (typeof schichtenPfad !== "string") throw new Error("scripts/docs-gen/config.json: schichten.layers fehlt");
+const { LAYERS, layerOf } = createRequire(import.meta.url)(`${WURZEL}${schichtenPfad}`);
 
 /** Wo der v8-Reporter das lcov ablegt (reportsDirectory in vite.config.ts) — relativ zur
  *  Skript-Datei aufgelöst, damit der Wächter unabhängig vom cwd misst. */

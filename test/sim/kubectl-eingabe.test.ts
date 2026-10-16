@@ -903,7 +903,14 @@ describe("#1487: Arität mit echten kubectl-Texten", () => {
   test("label: Namespace-Name und Label kommen aus c.args; ein anderes Label ist nicht simuliert", () => {
     const s = freshSim();
     expect(lauf1487("kubectl label namespace default team=a", s).out).toContain(NICHT_SIMULIERT);
-    expect(lauf1487("kubectl label namespace default team=a pod-security.kubernetes.io/enforce=restricted", s).out).toBe("namespace/default labeled");
+    // #1490: ein weiteres Label neben dem enforce-Label wird nicht still ignoriert, und es ändert sich nichts
+    const fremd = lauf1487("kubectl label namespace default team=a pod-security.kubernetes.io/enforce=restricted", s).out;
+    expect(fremd).toContain("das Label 'team=a'");
+    expect(s.podSecurity).not.toBe("restricted");
+    const mehrere = lauf1487("kubectl label namespace default kube-system pod-security.kubernetes.io/enforce=restricted", s).out;
+    expect(mehrere).toContain("mehrere Namespaces ('kube-system')");
+    expect(s.podSecurity).not.toBe("restricted");
+    expect(lauf1487("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted", s).out).toBe("namespace/default labeled");
     expect(s.podSecurity).toBe("restricted");
     expect(lauf1487("kubectl label namespace default pod-security.kubernetes.io/enforce=hoch", s).out).toContain("unbekannte Pod-Security-Stufe");
     expect(s.podSecurity).toBe("restricted");
