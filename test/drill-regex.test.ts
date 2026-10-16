@@ -61,7 +61,8 @@ test("Drill-Ebene: ein Punkt in Datei-, Tag- und Registry-Namen ist kein Wildcar
   assert.ok(mitPunkt > 0, "keine Ziehung mit Punkt im Tag");
 });
 
-/** Fitness-Wächter (#1693 L34): in `new RegExp(...)` eines Drills darf kein variabler Teil (`+ name`) ohne `escapeRegExp(...)` stehen. Pur. */
+/** Fitness-Wächter (#1693 L34): in `new RegExp(...)` eines Drills darf kein variabler Teil (`+ name`) ohne `escapeRegExp(...)` stehen. Pur.
+ *  Bewusste Grenzen: erkannt wird nur `+ <Bezeichner>`; Template-Literale, eine Variable als erster Operand, `+ (x)` und `RegExp(...)` ohne `new` übersieht der Text-Scanner. */
 function ungeschuetzteTeile(quelltext: string): string[] {
   const funde: string[] = [];
   for (const m of quelltext.matchAll(/new RegExp\(/g)) {
@@ -103,6 +104,8 @@ test("Wächter ungeschuetzteTeile: erkennt ein vergessenes escapeRegExp (Negativ
   assert.equal(ungeschuetzteTeile('new RegExp("a" + o.name)').length, 1);
   assert.deepEqual(ungeschuetzteTeile('new RegExp("^docker\\s+" + escapeRegExp(f(x, "(")) + "$")'), []);
   assert.deepEqual(ungeschuetzteTeile("const x = 1;"), []);
+  // „+“ in einem String-Literal ist kein Verkettungsoperator (Literale werden vor der Suche geleert).
+  assert.deepEqual(ungeschuetzteTeile('new RegExp("^docker\\s+pull\\s+" + escapeRegExp(img))'), []);
 });
 
 test("Wächter: alle accept-Regex der Drills schützen variable Teile mit escapeRegExp", () => {
