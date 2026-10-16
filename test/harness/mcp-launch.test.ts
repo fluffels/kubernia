@@ -39,10 +39,10 @@ const fixture = (dateien: Record<string, string>): string => {
 };
 
 describe("launcherFuer", () => {
-  const l = launcherFuer({ name: "x-mcp", pkg: "@scope/x", bin: "x" });
+  const l = launcherFuer({ name: "x-mcp", pkg: "@scope/x", bin: "xbin" });
 
   test("trägt Paket, bin und Namen in Lockfile-Suche, Plan, Ausfallzeile und npx-Hinweis ein", () => {
-    expect([l.PKG, l.BIN, l.NAME]).toEqual(["@scope/x", "x", "x-mcp"]);
+    expect([l.PKG, l.BIN, l.NAME]).toEqual(["@scope/x", "xbin", "x-mcp"]);
     expect(l.readLockVersion(fixture({ "package-lock.json": JSON.stringify({ packages: { "node_modules/@scope/x": { version: "1.2.3" } } }) }))).toBe("1.2.3");
     expect(l.readLockVersion(fixture({ "package-lock.json": JSON.stringify({ packages: { "node_modules/anderes": { version: "9.9.9" } } }) }))).toBeUndefined();
     expect(l.planLaunch({ lockVersion: "1.2.3", installed: null })).toEqual({ mode: "npx", spec: "@scope/x@1.2.3" });
@@ -53,9 +53,9 @@ describe("launcherFuer", () => {
 
   test("readInstalled sucht den bin des eigenen Pakets: String-bin, Objekt-bin, fehlende Datei", () => {
     const pkg = (bin: unknown) => JSON.stringify({ version: "1.2.3", bin });
-    const dir = fixture({ "node_modules/@scope/x/package.json": pkg({ x: "cli.js" }), "node_modules/@scope/x/cli.js": "" });
+    const dir = fixture({ "node_modules/@scope/x/package.json": pkg({ xbin: "cli.js" }), "node_modules/@scope/x/cli.js": "" });
     expect(l.readInstalled(dir)).toEqual({ version: "1.2.3", binPath: join(dir, "node_modules/@scope/x", "cli.js") });
-    expect(l.readInstalled(fixture({ "node_modules/@scope/x/package.json": pkg({ x: "cli.js" }) }))).toBeNull();
+    expect(l.readInstalled(fixture({ "node_modules/@scope/x/package.json": pkg({ xbin: "cli.js" }) }))).toBeNull();
     expect(l.readInstalled(fixture({ "node_modules/@scope/x/package.json": pkg({ y: "cli.js" }), "node_modules/@scope/x/cli.js": "" }))).toBeNull();
   });
 
