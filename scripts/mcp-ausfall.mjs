@@ -22,6 +22,13 @@ export const BEKANNTE_ARTEN = ["stdio", "http"];
 /** Normaler Verbindungs-Betrieb von http/SSE-Servern, der kein Ausfall ist. */
 export const ROUTINE = /SSE stream disconnected|Terminal connection error|max consecutive terminal errors|HTTP connection dropped|attempting automatic reconnection|reconnection successful/i;
 
+/** Netzabbruch-Code in einer Logzeile (`ECONNRESET`, `fetch failed`, `socket`) oder `""`. Pur. */
+export function netzCode(text) {
+  const m = /\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE)\b|fetch failed|\bsocket\b/i.exec(text);
+  if (!m) return "";
+  return m[1] ?? m[0].toLowerCase();
+}
+
 const MAX_ZEILEN = 10;
 
 /** Server aus dem Text von `.mcp.json`: `[{ name, ...konfig }]`; kaputtes/leeres JSON ergibt `[]`. Pur. */
@@ -90,9 +97,9 @@ export function klassifiziere(zeilen) {
     }
     if (!z || typeof z !== "object") continue;
     const text = String(z.error ?? z.debug ?? "");
-    const mk = (klasse) => befunde.push({ klasse, zeit: z.timestamp ?? "", sessionId: z.sessionId ?? "", text });
+    const mk = (klasse, code = "") => befunde.push({ klasse, zeit: z.timestamp ?? "", sessionId: z.sessionId ?? "", text, code });
     if (typeof z.error === "string") {
-      if (z.error.startsWith("Server stderr:")) mk(istNpxFallback(z.error) ?"npx-fallback" : "stderr");
+      if (z.error.startsWith("Server stderr:")) mk(istNpxFallback(z.error) ? "npx-fallback" : "stderr");
       else if (!z.error.startsWith("###")) mk("fehler");
       continue;
     }
@@ -100,8 +107,11 @@ export function klassifiziere(zeilen) {
     if (/^Starting connection/.test(text)) {
       verbindungen += 1;
       if (verbindungen > 1) mk("reconnect");
-    } else if (!/^Tool '/.test(text) && !ROUTINE.test(text) && (/fail|timed out/i.test(text) || (/connection closed/i.test(text) && !/\(cleanly\)/.test(text)))) {
-      mk("abbruch");
+    } else if (/^Tool '/.test(text)) {
+      // Tool-Fehler sind kein Serverausfall, außer der Netzcode zeigt eine gerissene Verbindung (MCP-Protokollfehler und die `### Error`-Ausgabe eines Tools, etwa ein Browser-Tool ohne Dev-Server, bleiben draußen).
+      if (/ failed/.test(text) && !/MCP error -32\d+|### Error/.test(text) && netzCode(text)) mk("abbruch", netzCode(text));
+    } else if (!ROUTINE.test(text) && (/fail|timed out/i.test(text) || (/connection closed/i.test(text) && !/\(cleanly\)/.test(text)))) {
+      mk("abbruch", netzCode(text));
     }
   }
   return befunde;
@@ -111,8 +121,8 @@ export function klassifiziere(zeilen) {
 export function buendeln(befunde) {
   const gruppen = new Map();
   for (const b of befunde) {
-    const key = `${b.server}\u0000${b.klasse}\u0000${b.suffix ?? ""}`;
-    const g = gruppen.get(key) ?? { server: b.server, klasse: b.klasse, suffix: b.suffix ?? "", anzahl: 0, erste: b.zeit, letzte: b.zeit, sessions: [], beispiel: b.text.replace(/\s+/g, " ").slice(0, 160) };
+    const key = `${b.server}\u0000${b.klasse}\u0000${b.code ?? ""}\u0000${b.suffix ?? ""}`;
+    const g = gruppen.get(key) ?? { server: b.server, klasse: b.klasse, code: b.code ?? "", suffix: b.suffix ?? "", anzahl: 0, erste: b.zeit, letzte: b.zeit, sessions: [], beispiel: b.text.replace(/\s+/g, " ").slice(0, 160) };
     g.anzahl += 1;
     if (b.zeit && (!g.erste || b.zeit < g.erste)) g.erste = b.zeit;
     if (b.zeit > g.letzte) g.letzte = b.zeit;
@@ -130,7 +140,7 @@ export function meldung(gebuendelt, variablenBefunde, seit) {
   if (!gebuendelt.length && !variablenBefunde.length) return "";
   const zeilen = gebuendelt.slice(0, MAX_ZEILEN).map((g) => {
     const wo = g.suffix ? ` [Worktree${g.suffix}]` : "";
-    return `- ${g.server}${wo}: ${g.klasse} ×${g.anzahl} (${g.erste} bis ${g.letzte}; Session ${g.sessions.join(", ") || "?"}): ${g.beispiel}`;
+    return `- ${g.server}${wo}: ${g.klasse}${g.code ? ` (${g.code})` : ""} ×${g.anzahl} (${g.erste} bis ${g.letzte}; Session ${g.sessions.join(", ") || "?"}): ${g.beispiel}`;
   });
   if (gebuendelt.length > MAX_ZEILEN) zeilen.push(`- … ${gebuendelt.length - MAX_ZEILEN} weitere Gruppen (Rohwerte: --json)`);
   return [

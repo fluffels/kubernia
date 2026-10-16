@@ -110,13 +110,13 @@ export function festgefahrenAusAntwort(antwort, nummern, label) {
   return out;
 }
 
-/** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt, `zeilen` sind die Commit-Zeilen der Projekt-Config (`commitZeilen`). Pure. Liefert Zeilen und Kennzahlen. */
-export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, zeilen }) {
+/** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt, `konfigZeilen` sind die Commit-Zeilen der Projekt-Config (`commitZeilen`). Pure. Liefert Zeilen und Kennzahlen. */
+export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen }) {
   const eintraege = prs.map((pr) => {
     const mergeSha = pr.mergeCommit?.oid ?? "";
     const commit = commits.find((c) => c.sha === mergeSha);
     const ticket = ticketVon(pr);
-    const { review } = parseNachweis(commit?.body ?? "", zeilen);
+    const { review } = parseNachweis(commit?.body ?? "", konfigZeilen);
     return {
       pr: pr.number,
       ticket,
@@ -245,7 +245,7 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tick
       festgefahren = { ...festgefahren, ...festgefahrenAusAntwort(json, nummern, label) };
     }
   }
-  return bewertePrs({ prs, commits, ci, festgefahren, jetzt, zeilen });
+  return bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen: zeilen });
 }
 
 /**
@@ -254,7 +254,7 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tick
  */
 export function laufErgebnisStartAgent({ laeufe, von, bis, ohne = [], jetzt = new Date(), ladeConfig = ladeProjektConfig, ...io }) {
   const tickets = ticketsMitStartImFenster(laeufe.map(laufAus).filter(Boolean), { von, bis });
-  if (tickets.length === 0) return bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt, zeilen: konfigurationAus(ladeConfig).zeilen });
+  if (tickets.length === 0) return bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt, konfigZeilen: konfigurationAus(ladeConfig).zeilen });
   return laufErgebnis({ von, bis, jetzt, tickets, ohne, ladeConfig, ...io });
 }
 

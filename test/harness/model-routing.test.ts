@@ -65,7 +65,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
@@ -133,11 +133,31 @@ function unbekannteServer(regeln: string[], bekannt: string[]): string[] {
 /** Bezeichnet der Wert den Coding-Tier? Alias `sonnet` ODER eine gepinnte Sonnet-ID. */
 const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
 
+/** Workflow-Skripte unter .claude/workflows (rekursiv, repo-relativ); ohne den Ordner leer. */
+function workflowDateien(dir = ".claude/workflows"): string[] {
+  if (!existsSync(`${REPO_ROOT}${dir}`)) return [];
+  return readdirSync(`${REPO_ROOT}${dir}`).flatMap((n) =>
+    statSync(`${REPO_ROOT}${dir}/${n}`).isDirectory()
+      ? workflowDateien(`${dir}/${n}`)
+      : /\.(js|mjs|ts)$/.test(n) ? [`${dir}/${n}`] : [],
+  );
+}
+
+/** `agent({…})`-Aufrufe eines Skripts, je Aufruf der Text bis zur nächsten Aufruf-Grenze. */
+function agentAufrufe(text: string): string[] {
+  return text.split(/\bagent\(\s*\{/).slice(1).map((r) => r.split(/\bagent\(\s*\{/)[0]);
+}
+
+/** Aufrufe ohne `model:`/`agentType:` oder ohne `effort:`. */
+const unvollstaendigeAufrufe = (text: string) =>
+  agentAufrufe(text).filter((a) => !/\b(model|agentType)\s*:/.test(a) || !/\beffort\s*:/.test(a));
+
 /** Alle versionierten Routing-Dateien: Agents, Skills und die Projekt-Settings. */
 function routingFiles(): string[] {
   const out = [".claude/settings.json"];
   for (const d of readdirSync(`${REPO_ROOT}.claude/agents`)) out.push(`.claude/agents/${d}`);
   for (const d of readdirSync(`${REPO_ROOT}.claude/skills`)) out.push(`.claude/skills/${d}/SKILL.md`);
+  out.push(...workflowDateien());
   return out.filter((f) => existsSync(`${REPO_ROOT}${f}`));
 }
 
@@ -573,6 +593,21 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
   test("genau ein Ticket-Ablauf: kubernia-workflow-Skill und kubernia-ticket-Workflow existieren nicht (ADR 0028)", () => {
     assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-workflow`), "der Skill kubernia ist der einzige Ticket-Ablauf");
     assert.ok(!existsSync(`${REPO_ROOT}.claude/workflows/kubernia-ticket.js`), "der Workflow ging im Skill kubernia auf");
+  });
+
+  test("jeder agent({…})-Aufruf in .claude/workflows trägt model:/agentType: und effort: (#1740)", () => {
+    const fehler = workflowDateien().filter((f) => unvollstaendigeAufrufe(readFileSync(`${REPO_ROOT}${f}`, "utf8")).length > 0);
+    assert.deepEqual(fehler, []);
+  });
+
+  test("Erkennung greift (Red-Green): Aufruf ohne effort oder ohne model/agentType wird gemeldet", () => {
+    assert.equal(unvollstaendigeAufrufe('agent({ agentType: "x", effort: "high", prompt: "p" })').length, 0);
+    assert.equal(unvollstaendigeAufrufe('agent({ model: "sonnet", effort: "low" })').length, 0);
+    assert.equal(unvollstaendigeAufrufe('agent({ agentType: "x", prompt: "p" })').length, 1);
+    assert.equal(unvollstaendigeAufrufe('agent({ effort: "high", prompt: "p" })').length, 1);
+    const zwei = 'agent({ model: "sonnet", effort: "low" });\nagent({ prompt: "ohne" })';
+    assert.equal(unvollstaendigeAufrufe(zwei).length, 1, "der Nachbaraufruf deckt den zweiten nicht");
+    assert.equal(unvollstaendigeAufrufe("kein Aufruf").length, 0);
   });
 
   test("der Skill kubernia-loop existiert nicht mehr (ein Umsetzer pro Ticket ersetzt ihn)", () => {

@@ -1,12 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { esc } from "../src/ui/html-escape";
-import { esc as escDev } from "../src/devpanel";
+import { esc as f } from "../src/core/html-escape";
 
-/** HTML-Escape der UI (#1693 L11): muss Text- und Attributkontext (`"` und `'`) abdecken, sonst bricht ein Wert aus `data-arg="…"` aus. */
-describe.each([
-  ["ui/html-escape", esc],
-  ["devpanel (Kopie)", escDev],
-])("esc (%s)", (_name, f) => {
+/** HTML-Escape (einzige Quelle für UI und Dev-Panel): muss Text- und Attributkontext (`"` und `'`) abdecken, sonst bricht ein Wert aus `data-arg="…"` aus. */
+describe("esc", () => {
   test("maskiert & < > \" '", () => {
     expect(f(`a&b<c>d"e'f`)).toBe("a&amp;b&lt;c&gt;d&quot;e&#39;f");
   });

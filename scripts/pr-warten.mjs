@@ -37,6 +37,25 @@ function eintrag(e) {
   return { name: e?.name ?? "?", art: !fertig ? "offen" : ROT.has(c) ? "rot" : GRUEN.has(c) ? "gruen" : "rot", url: e?.detailsUrl ?? "" };
 }
 
+/** Zeitstempel für die Aktualität eines CheckRuns; ein noch nicht fertiger Lauf (queued/in progress) gilt als jüngster (sein startedAt kann der Nullwert sein). */
+const stempel = (e) => (String(e?.status ?? "").toUpperCase() === "COMPLETED" ? String(e?.startedAt || e?.completedAt || "") : "\uffff");
+
+/**
+ * Je (workflowName, name) nur der jüngste CheckRun, StatusContexts je context: ein Rerun überschreibt den früheren Lauf
+ * (ein alter CANCELLED neben einem neueren SUCCESS desselben Workflows ist kein Rot). Ein alleinstehender CANCELLED bleibt rot. Pur.
+ */
+export function juengste(rollup) {
+  const je = new Map();
+  for (const e of rollup ?? []) {
+    const status = e?.__typename === "StatusContext" || e?.context;
+    const key = status ? `ctx\u0000${e.context ?? "?"}` : `run\u0000${e?.workflowName ?? ""}\u0000${e?.name ?? "?"}`;
+    const alt = je.get(key);
+    // Bei gleichem Stempel gewinnt der spätere Eintrag der Liste (gh liefert sie in Startreihenfolge).
+    if (!alt || status || stempel(e) >= stempel(alt)) je.set(key, e);
+  }
+  return [...je.values()];
+}
+
 /**
  * `gh pr view --json ${FELDER}` → `{ exit, zeilen }`. Exit 2 heißt: noch offen, weiter warten.
  * `pflicht`: Namen der Pflicht-Checks (exakt); nur sie gaten, ein rotes anderes Check wird ein `HINWEIS`. Fehlt die Liste
@@ -45,7 +64,7 @@ function eintrag(e) {
 export function bewerte(pr, pflicht = null) {
   if (pr?.state === "MERGED") return { exit: 0, zeilen: [`MERGED ${String(pr.mergeCommit?.oid ?? "").slice(0, 7)}`.trim()] };
   if (pr?.state === "CLOSED") return { exit: 3, zeilen: ["GESCHLOSSEN"] };
-  const alle = (pr?.statusCheckRollup ?? []).map(eintrag);
+  const alle = juengste(pr?.statusCheckRollup).map(eintrag);
   // Nicht-Pflicht-Checks sperren den Merge nicht: sie zählen weder zu rot noch zu grün noch zu wartend.
   const gatet = Array.isArray(pflicht) && pflicht.length ? new Set(pflicht) : null;
   const checks = gatet ? alle.filter((c) => gatet.has(c.name)) : alle;

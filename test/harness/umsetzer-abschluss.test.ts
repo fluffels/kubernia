@@ -29,6 +29,10 @@ const abschluss = abschlussRaw as unknown as {
   abschlussBlockade: (i: Eingabe, d?: { prStatus?: (nr: string) => Status }) => string | null;
   parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null; schnitt: string | null; uebergabe: boolean; festgefahren: string | null };
   ERGEBNIS_WERTE: string[];
+  AUDIT_KOPF: string;
+  GRAPHQL_DATEIEN_GRENZE: number;
+  ghPrDateien: (nr: string, status?: { files?: { path: string }[] }, diff?: (nr: string) => string) => string[];
+  ghPrKommentare: (nr: string, status?: object, ansicht?: (nr: string) => object) => object;
   PR_FELDER: string;
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
   letzteNachrichtAusTranskript: (p: string) => string | null;
@@ -337,8 +341,21 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     const format = /^ERGEBNIS: (.+)$/m.exec(abschnitt(UMSETZER, /^## Letzte Nachricht/).split("```")[1])?.[1].split(" | ");
     assert.deepEqual(abschluss.ERGEBNIS_WERTE, format);
     // gh pr view muss die Felder liefern, die R1 bis R3 lesen; fehlte `labels`, verweigerte R3 jedes festgefahren (alle Tests injizieren prStatus).
-    assert.deepEqual([...abschluss.PR_FELDER.split(",")].sort(), ["autoMergeRequest", "labels", "state"]);
+    assert.deepEqual([...abschluss.PR_FELDER.split(",")].sort(), ["author", "autoMergeRequest", "comments", "files", "labels", "state"]);
     assert.match(readFileSync(resolve(ROOT, "scripts/umsetzer-abschluss.mjs"), "utf8"), /"--json", PR_FELDER/);
+  });
+
+  test("Bindung: jeder ERGEBNIS-Wert hat einen Bullet im kubernia-Skill (#1740 L1)", () => {
+    const skill = readFileSync(resolve(ROOT, ".claude/skills/kubernia/SKILL.md"), "utf8");
+    for (const wert of abschluss.ERGEBNIS_WERTE) {
+      assert.ok(skill.includes(`- **\`${wert}\`**`), `kubernia/SKILL.md ohne Bullet **\`${wert}\`**`);
+    }
+  });
+
+  // Bekannte Grenze: ob eine Entscheidung im konkreten PR-Text steht, ist nicht prüfbar; gebunden ist nur der Auftrag in der Prosa.
+  test("Bindung: Entscheidungen kommen in den PR-Text, auch die der Gruppen-Umsetzer (#1740 L3)", () => {
+    assert.match(UMSETZER, /im PR-Text \(„Entscheidung: X, weil Y“\)/);
+    assert.match(abschnitt(UMSETZER, /^\*\*Gruppen \(#1647/), /ENTSCHEIDUNGEN[^.]*PR-Text/);
   });
 });
 
@@ -563,6 +580,56 @@ describe("Leitplanken-Audit (#1067)", () => {
   test("Audit-Kopfzeile steht wörtlich in AGENTS.md", () => {
     const agents = readFileSync(resolve(ROOT, "AGENTS.md"), "utf8");
     assert.ok(agents.includes(`„${audit.AUDIT_KOPF}`), "AGENTS.md nennt die Kopfzeile nicht wörtlich");
+  });
+
+  describe("ein gh-Aufruf liefert Status, Dateien und Kommentare (#1740 L4)", () => {
+    const merged = { state: "MERGED", autoMergeRequest: null, labels: [] };
+    const alles = (files: string[], comments: Kommentare["comments"]) => ({ ...merged, files: files.map((path) => ({ path })), author: { login: "fluffels" }, comments });
+    const abschlussOhneInjektion = (status: object) => {
+      let aufrufe = 0;
+      const r = abschluss.abschlussBlockade(
+        { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
+        { prStatus: () => (aufrufe++, status) } as never,
+      );
+      return { r, aufrufe };
+    };
+
+    test("Leitplanken-Datei ohne Audit-Kommentar im selben Status: blockiert, genau ein Status-Aufruf", () => {
+      const { r, aufrufe } = abschlussOhneInjektion(alles(["src/main.ts", "AGENTS.md"], [{ author: { login: "fluffels" }, body: "LGTM" }]));
+      assert.match(r ?? "", /AGENTS\.md/);
+      assert.equal(aufrufe, 1);
+    });
+
+    test("Audit-Kommentar des Autors im selben Status: frei; PR ohne Leitplanken-Datei: frei", () => {
+      assert.equal(abschlussOhneInjektion(alles(["AGENTS.md"], [{ author: { login: "fluffels" }, body: audit.AUDIT_KOPF }])).r, null);
+      assert.equal(abschlussOhneInjektion(alles(["src/main.ts"], [])).r, null);
+    });
+
+    test("ghPrDateien: files unter der Grenze ohne Rückfall; genau 100 und fehlendes files lösen den Rückfall aus; ein Fehler wird weitergereicht", () => {
+      const nichtAufrufen = () => {
+        throw new Error("kein gh pr diff erwartet");
+      };
+      const dateien = (n: number) => Array.from({ length: n }, (_, i) => ({ path: `f${i}.ts` }));
+      assert.deepEqual(abschluss.ghPrDateien("7", { files: dateien(2) }, nichtAufrufen), ["f0.ts", "f1.ts"]);
+      assert.equal(abschluss.GRAPHQL_DATEIEN_GRENZE, 100);
+      assert.equal(abschluss.ghPrDateien("7", { files: dateien(99) }, nichtAufrufen).length, 99);
+      assert.deepEqual(abschluss.ghPrDateien("7", { files: dateien(100) }, () => "a.ts\n b.ts \n\n"), ["a.ts", "b.ts"]);
+      assert.deepEqual(abschluss.ghPrDateien("7", {}, () => "c.ts"), ["c.ts"]);
+      assert.deepEqual(abschluss.ghPrDateien("7", undefined, () => "d.ts"), ["d.ts"]);
+      assert.throws(() => abschluss.ghPrDateien("7", { files: dateien(100) }, nichtAufrufen), /kein gh pr diff/);
+    });
+  });
+
+  test("ghPrKommentare: ein Status mit author und comments dient als Quelle; fehlt eines von beiden, kommt der eigene Aufruf", () => {
+    const nichtAufrufen = () => {
+      throw new Error("kein eigener Aufruf erwartet");
+    };
+    const voll = { author: { login: "a" }, comments: [] };
+    assert.equal(abschluss.ghPrKommentare("7", voll, nichtAufrufen), voll);
+    const eigen = { author: { login: "b" }, comments: [{ body: "x" }] };
+    assert.equal(abschluss.ghPrKommentare("7", { author: { login: "a" } }, () => eigen), eigen);
+    assert.equal(abschluss.ghPrKommentare("7", { comments: [] }, () => eigen), eigen);
+    assert.equal(abschluss.ghPrKommentare("7", undefined, () => eigen), eigen);
   });
 
   test("gemergt + Leitplanke ohne Audit-Kommentar: blockiert, nennt Treffer", () => {

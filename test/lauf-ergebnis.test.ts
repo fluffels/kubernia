@@ -36,7 +36,7 @@ const roh = raw as {
   ticketVon: (pr: Partial<Pr>) => number | null;
   nacharbeitVon: (e: { pr: number; ticket: number | null; mergeSha: string; mergedAt: string; commits: Commit[]; jetzt: Date }) => string;
   ciFixRunden: (l: { sha: string; createdAt: string }[], von: string, bis: string) => number;
-  bewertePrs: (e: { prs: Pr[]; commits: Commit[]; ci: Record<number, { sha: string; createdAt: string }[]>; festgefahren: Record<number, number>; jetzt: Date; zeilen: Zeilen }) => Ergebnis;
+  bewertePrs: (e: { prs: Pr[]; commits: Commit[]; ci: Record<number, { sha: string; createdAt: string }[]>; festgefahren: Record<number, number>; jetzt: Date; konfigZeilen: Zeilen }) => Ergebnis;
   formatiere: (e: Ergebnis) => string;
   labelAbfrage: (n: number[]) => string;
   festgefahrenAusAntwort: (a: unknown, n: number[], label?: string) => Record<number, number>;
@@ -47,7 +47,7 @@ const roh = raw as {
 };
 const mod = {
   ...roh,
-  bewertePrs: (e: Omit<Parameters<typeof roh.bewertePrs>[0], "zeilen">) => roh.bewertePrs({ zeilen: Z, ...e }),
+  bewertePrs: (e: Omit<Parameters<typeof roh.bewertePrs>[0], "konfigZeilen">) => roh.bewertePrs({ konfigZeilen: Z, ...e }),
   festgefahrenAusAntwort: (a: unknown, n: number[]) => roh.festgefahrenAusAntwort(a, n, LABEL),
 };
 
@@ -227,7 +227,7 @@ describe("bewertePrs und Aggregate", () => {
     const cs = [commit(squash, MERGED, "1".repeat(40))];
     const basis = { prs: eins, commits: cs, ci: {}, festgefahren: {}, jetzt: SPAETER };
     assert.equal(mod.bewertePrs(basis).zeilen[0].runden, 3);
-    const ab = roh.bewertePrs({ ...basis, zeilen: commitZeilen("AB-", "kubernia-planner") });
+    const ab = roh.bewertePrs({ ...basis, konfigZeilen: commitZeilen("AB-", "kubernia-planner") });
     assert.equal(ab.zeilen[0].runden, null);
     assert.equal(ab.kennzahlen.ohneNachweis, 1);
   });

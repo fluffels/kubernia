@@ -18,6 +18,7 @@ import { parseCall, notSimulated, flag, checkedFlag, isFlagToken, type ArgSpec, 
 
 const HINT_INSECURE = "TLS simuliert der Simulator nicht: https:// prüft nur Port 443.";
 const HINT_LOCATION = "Im Simulator gibt es keine Weiterleitungen.";
+const HINT_WRITE_OUT = "Die Statuszeile zeigt curl ohnehin.";
 
 /** Was die net-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). `files` ist das
  *  Arbeitsverzeichnis: `curl -o <datei>` schreibt dorthin (`ls`/`cat`/`git status` sehen die Datei). */
@@ -219,8 +220,8 @@ export const CURL_ARGS: ArgSpec = {
     "--insecure": HINT_INSECURE,
     "-L": HINT_LOCATION,
     "--location": HINT_LOCATION,
-    "-w": "Die Statuszeile zeigt curl ohnehin.",
-    "--write-out": "Die Statuszeile zeigt curl ohnehin.",
+    "-w": HINT_WRITE_OUT,
+    "--write-out": HINT_WRITE_OUT,
   },
 };
 

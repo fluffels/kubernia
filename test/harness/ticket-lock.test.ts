@@ -501,6 +501,7 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
   test("eigene Nonce: Exit 0, Feld in der Datei; pruefe meldet trotz Aktivität uebernehmbar und verbraucht nichts, uebernehmen verbraucht die Übergabe (#1593)", () => {
     const a = lauf(["claim", "5"]);
     const n = nonceVon(a);
+    assert.equal(a.code, 0, `claim: ${JSON.stringify(a)}`);
     assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "aktiv\n", "Kontrolle: ohne Übergabe aktiv");
     assert.deepEqual(lauf(["uebergeben", "5", "--nonce", n]), { code: 0, out: "uebergeben\n", err: "" });
     assert.deepEqual(lockJson().uebergabe, { gesetzt: new Date(JETZT).toISOString(), verbraucht: null });
@@ -512,7 +513,7 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.equal(lockJson().uebergabe?.verbraucht, new Date(JETZT).toISOString());
     for (const befehl of ["uebernehmen", "pruefe"]) {
       const zweites = lauf([befehl, "5", "--nonce", n], aktiv);
-      assert.equal(zweites.code, 4, `${befehl}: die Übergabe ist verbraucht`);
+      assert.equal(zweites.code, 4, `${befehl}: die Übergabe ist verbraucht: ${JSON.stringify(zweites)}`);
       assert.equal(zweites.out, "aktiv\n");
     }
   });

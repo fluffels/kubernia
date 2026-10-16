@@ -30,7 +30,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -53,9 +53,19 @@ const PFLICHT_QUELLEN = [
 /** Mindestzahl gefundener Worktree-Installations-Absätze (Leerlauf-Schutz). */
 const MIN_TREFFER = PFLICHT_QUELLEN.length;
 
-/** Alles, was gescannt wird: Markdown-Inventar. */
+/** Workflow-Skripte unter .claude/workflows (rekursiv, repo-relativ); ohne den Ordner leer. */
+function workflowDateien(dir = ".claude/workflows"): string[] {
+  if (!existsSync(ROOT + dir)) return [];
+  return readdirSync(ROOT + dir).flatMap((n) =>
+    statSync(ROOT + dir + "/" + n).isDirectory()
+      ? workflowDateien(dir + "/" + n)
+      : /\.(js|mjs|ts)$/.test(n) ? [dir + "/" + n] : [],
+  );
+}
+
+/** Alles, was gescannt wird: Markdown-Inventar und Workflow-Skripte. */
 function alleQuellen(): string[] {
-  return collectMarkdown(ROOT);
+  return [...collectMarkdown(ROOT), ...workflowDateien()];
 }
 
 /** Zerlegt Text in Absätze und innerhalb davon in einzelne Listenpunkte bzw. Tabellenzeilen. */

@@ -48,6 +48,9 @@ export function pruefeEintraege(liste) {
     if (e.alerts !== undefined && (!Array.isArray(e.alerts) || e.alerts.length === 0 || !e.alerts.every((n) => Number.isInteger(n) && n > 0))) {
       fehler.push(`${name}: „alerts“ muss eine nicht leere Liste positiver Ganzzahlen (Code-Scanning-Alert-Nummern) sein.`);
     }
+    if (e.alerts !== undefined && typeof e.id === "string" && !e.id.startsWith("codescanning-")) {
+      fehler.push(`${name}: „alerts“ gibt es nur bei einer id „codescanning-<slug>“.`);
+    }
     if (typeof e.id === "string" && e.id !== "") {
       if (!/^[a-z0-9-]+$/.test(e.id)) fehler.push(`${name}: „id“ darf nur [a-z0-9-] enthalten.`);
       if (gesehen.has(e.id)) fehler.push(`${name}: „id“ ist doppelt.`);

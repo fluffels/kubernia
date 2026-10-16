@@ -42,6 +42,10 @@ const zaehler = (z) => (Number.isInteger(z) && z >= 0 ? z : null);
 /** Die geladenen Antworten eines Kommentars (kaputte Form: leere Liste). */
 const antwortenVon = (k) => (Array.isArray(k?.replies?.nodes) ? k.replies.nodes : []);
 
+/** Zahl der Beiträge einer Discussion: Eröffnungsbeitrag, geladene Kommentare und deren geladene Antworten. Pur. */
+export const beitragsZahl = (discussion) =>
+  1 + (discussion?.comments?.nodes ?? []).reduce((s, k) => s + 1 + antwortenVon(k).length, 0);
+
 /**
  * „Thread gekürzt: x von y Kommentaren/Antworten“, wenn der Thread mehr Beiträge hat, als die Abfrage lädt (Kommentare über `first:50`, Antworten
  * je Kommentar über `first:20`); fehlen Antworten eines Kommentars, steht dahinter „weitere Antworten nicht geladen“. Sonst ein leerer String.
@@ -128,7 +132,7 @@ function inbox(nr, d) {
   mkdirSync(dirname(pfad), { recursive: true });
   writeFileSync(pfad, text, "utf8");
   const hinweis = kuerzungsHinweis(disc);
-  d.log(`Datei: ${pfad}\nDiscussion: #${n}\nBeiträge: ${1 + (disc.comments?.nodes ?? []).reduce((s, k) => s + 1 + antwortenVon(k).length, 0)}\nZeichen: ${text.length}${hinweis ? `\n${hinweis}` : ""}`);
+  d.log(`Datei: ${pfad}\nDiscussion: #${n}\nBeiträge: ${beitragsZahl(disc)}\nZeichen: ${text.length}${hinweis ? `\n${hinweis}` : ""}`);
 }
 
 /** CLI-Kern: wirft bei jedem Fehler, schreibt erst nach erfolgreichem Aufbau (keine Teildatei). */

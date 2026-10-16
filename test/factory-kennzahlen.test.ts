@@ -174,7 +174,7 @@ describe("vertragPruefen", () => {
     expect(F.vertragPruefen(null).luecke).toMatch(/Vertrag/);
   });
   test("echtes bewertePrs aus lauf-ergebnis erfüllt den Vertrag", () => {
-    const e = LAUF.bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt: new Date("2026-12-31T00:00:00Z"), zeilen: ZEILEN });
+    const e = LAUF.bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt: new Date("2026-12-31T00:00:00Z"), konfigZeilen: ZEILEN });
     expect(F.vertragPruefen(e).daten).toBeDefined();
   });
   test("echtes bewertePrs mit PR und Folge-Commit: Zeilenfelder tragen bis in den Bericht", () => {
@@ -187,7 +187,7 @@ describe("vertragPruefen", () => {
       ci: {},
       festgefahren: {},
       jetzt: new Date("2026-12-31T00:00:00Z"),
-      zeilen: ZEILEN,
+      konfigZeilen: ZEILEN,
     });
     const lage = F.vertragPruefen(e);
     expect(lage.daten).toBeDefined();

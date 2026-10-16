@@ -44,6 +44,7 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 | `src/core/assert.ts` | `assertNever(wert, ort)` (#1426): `default`-Zweig vollständiger `switch`es über Unions, Compile-Fehler bei neuer Variante, Wurf mit Ort und gekürzter Variante zur Laufzeit. Für Anzeige-/Befehlslogik; nie im Save-/Validierungspfad (der heilt bzw. sammelt Fehler). |
 | `src/core/coins.ts` | Value Object für Dublonen (#490, Forts. #479): Regel „nicht-negativ + ganzzahlig" + zentrale Arithmetik (Rundung/Multiplikator/Affordability) als `Coins`-Brand + Fabriken/Operationen. |
 | `src/core/rng.ts` | Zufall/Determinismus-SSOT (#492): seedbarer PRNG `mulberry32`/`nextRandom`/`seedGlobalRng` + aus Namen abgeleitete stabile Werte `hashStr`/`hashHex`; ersetzt `Math.random` in `src/sim/**` + `src/content/**`. |
+| `src/core/html-escape.ts` | `esc()`: HTML-Escape für Text- und Attributkontext (`& < > " '`), pur und unit-getestet; einzige Quelle für `ui/shared.ts` und `devpanel.ts`. |
 | `src/core/keybindings.ts` | Umbelegbare Tastatur-Aktionen (#232): diskrete Aktionstasten (Reden/Funkgerät/Logbuch/Album) als frei konfigurierbare Bindings, Phaser-/DOM-frei. |
 
 ## HUD-/Eingabe-Logik (Phaser-/DOM-frei, dünn angebunden)
