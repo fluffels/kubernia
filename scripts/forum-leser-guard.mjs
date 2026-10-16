@@ -6,6 +6,9 @@
  * (geschrieben von `scripts/forum-quarantaene.mjs`); jeder andere Pfad, auch ein fehlender, ist `deny`.
  *
  * Bewusste Grenzen:
+ *   - Der Guard prüft nur den Pfadtail: eine gleichnamige Datei unter einer anderen Wurzel (z. B. im Benutzer-Home) wird erlaubt.
+ *   - Der privilegierte Lauf wird nicht technisch am Lesen der Datei gehindert (ein Read-Deny sperrte auch `forum-leser`);
+ *     „nie selbst lesen“ steht als Anweisung im Skill `forum`.
  *   - Lexikalische Prüfung: ein Symlink/Junction auf diesen Namen wird nicht aufgelöst.
  *   - Frontmatter-Hooks laufen nur in vertrauten Ordnern; ohne Vertrauen bleiben die Whitelist `tools: Read`
  *     und die Read-Denies aus `.claude/settings.json`.

@@ -64,7 +64,7 @@ export function quarantaeneText(discussion, sanitize, nonce) {
 }
 
 /** Echter Entschärfer: Spawn von `forum-sanitize.mjs` (Body mit `--body`, Titel ohne). */
-const sanitizeSpawn = (text, istBody) => {
+export const sanitizeSpawn = (text, istBody) => {
   const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "forum-sanitize.mjs"), ...(istBody ? ["--body"] : [])], {
     input: String(text),
     encoding: "utf8",
@@ -86,27 +86,32 @@ const QUERY = `query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:
   discussion(number:$num){ title bodyText author{login}
     comments(first:50){ nodes { author{login} bodyText createdAt } } } } }`;
 
-function inbox(nr) {
-  const issue = JSON.parse(gh(["issue", "view", String(nr), "--json", "title,labels"]));
+/** Abhängigkeiten von `main` (Tests injizieren gh, Entschärfer, Wurzel und Ausgabe). */
+const STANDARD = { gh, sanitize: sanitizeSpawn, wurzel: WURZEL, nonce: () => randomBytes(8).toString("hex"), log: console.log };
+
+function inbox(nr, d) {
+  const issue = JSON.parse(d.gh(["issue", "view", String(nr), "--json", "title,labels"]));
   if (!issue.labels?.some((l) => l.name === "forum")) throw new Error(`#${nr} trägt kein Label forum`);
   const n = discussionNummer(issue.title);
   if (n === null) throw new Error(`#${nr}: Titel nicht im Format „Forum #N: …“`);
   const args = ["api", "graphql", "-f", `query=${QUERY}`, "-F", "o={owner}", "-F", "n={repo}", "-F", `num=${n}`, "--jq", ".data.repository.discussion"];
-  const d = JSON.parse(gh(args));
-  if (!d || typeof d !== "object") throw new Error(`Discussion #${n} nicht gefunden`);
-  const text = quarantaeneText({ ...d, number: n }, sanitizeSpawn, randomBytes(8).toString("hex"));
-  const pfad = quarantaenePfad(WURZEL, nr);
+  const disc = JSON.parse(d.gh(args));
+  if (!disc || typeof disc !== "object") throw new Error(`Discussion #${n} nicht gefunden`);
+  const text = quarantaeneText({ ...disc, number: n }, d.sanitize, d.nonce());
+  const pfad = quarantaenePfad(d.wurzel, nr);
   mkdirSync(dirname(pfad), { recursive: true });
   writeFileSync(pfad, text, "utf8");
-  console.log(`Datei: ${pfad}\nDiscussion: #${n}\nBeiträge: ${1 + (d.comments?.nodes?.length ?? 0)}\nZeichen: ${text.length}`);
+  d.log(`Datei: ${pfad}\nDiscussion: #${n}\nBeiträge: ${1 + (disc.comments?.nodes?.length ?? 0)}\nZeichen: ${text.length}`);
 }
 
-function main(argv) {
+/** CLI-Kern: wirft bei jedem Fehler, schreibt erst nach erfolgreichem Aufbau (keine Teildatei). */
+export function main(argv, deps = {}) {
+  const d = { ...STANDARD, ...deps };
   const [modus, nr] = argv;
   const aufruf = "Aufruf: --inbox <issue-nr> | --entfernen <issue-nr>";
   if (!/^\d+$/.test(nr ?? "")) throw new Error(aufruf);
-  if (modus === "--inbox") return inbox(Number(nr));
-  if (modus === "--entfernen") return rmSync(quarantaenePfad(WURZEL, Number(nr)), { force: true });
+  if (modus === "--inbox") return inbox(Number(nr), d);
+  if (modus === "--entfernen") return rmSync(quarantaenePfad(d.wurzel, Number(nr)), { force: true });
   throw new Error(aufruf);
 }
 

@@ -7,7 +7,9 @@
  * Kopf des Guards und sind hier bewusst nicht getestet.
  */
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawGuard from "../../scripts/forum-leser-guard.mjs";
@@ -24,6 +26,8 @@ type Disc = { number?: number; title?: unknown; bodyText?: unknown; author?: unk
 const Q = rawQ as unknown as {
   discussionNummer: (t: unknown) => number | null;
   quarantaenePfad: (w: string, n: number) => string;
+  sanitizeSpawn: (t: string, body: boolean) => string;
+  main: (argv: string[], deps?: Record<string, unknown>) => void;
   quarantaeneText: (d: Disc, s: (t: string, body: boolean) => string, nonce: string) => string;
 };
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
@@ -73,6 +77,10 @@ describe("entscheideHook", () => {
     expect(hook("Read", `${WURZEL}/package.json`)?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(hook("Read", DATEI)).toBeNull();
     expect(hook("Read", undefined)?.hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+  test("fehlendes tool_name: wird trotzdem geprüft (fail-closed)", () => {
+    const text = JSON.stringify({ cwd: WURZEL, tool_input: { file_path: `${WURZEL}/package.json` } });
+    expect(G.entscheideHook(text)?.hookSpecificOutput.permissionDecision).toBe("deny");
   });
   test("anderes Tool und kaputtes stdin: durchgelassen (ein Hook blockiert nie alles)", () => {
     expect(hook("Grep", `${WURZEL}/package.json`)).toBeNull();
@@ -134,17 +142,22 @@ describe("quarantaeneText", () => {
     expect(Q.quarantaeneText({ number: 1 }, (t) => t, NONCE)).toContain("=== ENDE");
   });
 
-  test("Integration: echter Spawn von forum-sanitize.mjs --body neutralisiert Markup und kappt auf 2000 Zeichen", async () => {
-    const { spawnSync } = await import("node:child_process");
-    const script = fileURLToPath(new URL("../../scripts/forum-sanitize.mjs", import.meta.url));
-    const san = (t: string, body: boolean) => {
-      const r = spawnSync(process.execPath, [script, ...(body ? ["--body"] : [])], { input: t, encoding: "utf8" });
-      return r.stdout.replace(/\n$/, "");
-    };
-    const text = Q.quarantaeneText({ ...disc, bodyText: "<b>`code`</b> | x\n" + "a".repeat(3000) }, san, NONCE);
-    expect(text).not.toMatch(/<b>|`code`/);
-    expect(text).toContain("‹b›");
-    expect(text).not.toContain("a".repeat(2001));
+  test("sanitizeSpawn (Produktion): Titel einzeilig und auf 200 gekappt, Body mehrzeilig und auf 2000 gekappt, Markup neutralisiert", () => {
+    const titel = Q.sanitizeSpawn("Zeile eins\n<b>`x`</b> " + "t".repeat(400), false);
+    expect(titel).not.toContain("\n");
+    expect(titel).not.toMatch(/<b>|`x`/);
+    expect(titel.length).toBeLessThanOrEqual(200);
+    const body = Q.sanitizeSpawn("<b>`code`</b> | x\n" + "a".repeat(3000), true);
+    expect(body).toContain("‹b›");
+    expect(body).toContain("\n");
+    expect(body.length).toBeLessThanOrEqual(2000);
+    expect(body.length).toBeGreaterThan(1000);
+  });
+
+  test("gültiger Login und Zeitstempel stehen im Marker", () => {
+    const text = Q.quarantaeneText(disc, (t) => t, NONCE);
+    expect(text).toContain(`=== BEITRAG 1 [${NONCE}]: Eröffnung von @alice ===`);
+    expect(text).toContain(`=== BEITRAG 2 [${NONCE}]: Kommentar von @bob, 2026-10-01T10:00:00Z ===`);
   });
 });
 
@@ -156,11 +169,11 @@ const quarantaeneVerstoesse = (md: string): string[] => {
   const v: string[] = [];
   if (f.tools !== "Read") v.push(`tools muss genau „Read“ sein (ist „${f.tools}“)`);
   const verboten = liste(f.disallowedTools);
-  for (const t of ["Bash", "PowerShell", "Edit", "Write", "WebFetch", "Agent", "mcp__*"]) if (!verboten.includes(t)) v.push(`disallowedTools ohne ${t}`);
+  for (const t of ["Bash", "PowerShell", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Agent", "Skill", "mcp__*"]) if (!verboten.includes(t)) v.push(`disallowedTools ohne ${t}`);
   if (f.omitClaudeMd !== "true") v.push("omitClaudeMd: true fehlt");
   const turns = Number(f.maxTurns);
   if (!Number.isInteger(turns) || turns > 5) v.push("maxTurns fehlt oder über 5");
-  if (!/matcher:\s*"Read"[\s\S]*forum-leser-guard\.mjs/.test(kopf)) v.push("Hook auf Read mit forum-leser-guard.mjs fehlt");
+  if (!/PreToolUse:[\s\S]*matcher:\s*"Read"[\s\S]*forum-leser-guard\.mjs/.test(kopf)) v.push("Hook auf Read mit forum-leser-guard.mjs fehlt");
   if (/^(mcpServers|skills):/m.test(kopf)) v.push("mcpServers/skills sind verboten");
   if (!/^(sonnet|opus|haiku)$/.test(f.model ?? "")) v.push("model muss ein Alias sein");
   return v;
@@ -186,6 +199,10 @@ describe("Agent forum-leser", () => {
     ["maxTurns fehlt", mit("maxTurns: 4\n", ""), /maxTurns/],
     ["maxTurns zu hoch", mit("maxTurns: 4", "maxTurns: 40"), /maxTurns/],
     ["Hook fehlt", mit("${CLAUDE_PROJECT_DIR}/scripts/forum-leser-guard.mjs", "${CLAUDE_PROJECT_DIR}/scripts/anderer-guard.mjs"), /Hook auf Read/],
+    ["Hook unter PostToolUse", mit("  PreToolUse:", "  PostToolUse:"), /Hook auf Read/],
+    ["Skill nicht verboten", mit("Agent, Skill, mcp__*", "Agent, mcp__*"), /ohne Skill/],
+    ["WebSearch nicht verboten", mit("WebFetch, WebSearch, ", "WebFetch, "), /ohne WebSearch/],
+    ["NotebookEdit nicht verboten", mit("Write, NotebookEdit, ", "Write, "), /ohne NotebookEdit/],
     ["mcpServers", mit("maxTurns: 4\n", "maxTurns: 4\nmcpServers:\n  x: {}\n"), /mcpServers/],
     ["skills", mit("maxTurns: 4\n", "maxTurns: 4\nskills:\n  - x\n"), /mcpServers\/skills/],
     ["feste Modell-ID", mit("model: sonnet", "model: claude-sonnet-5-5"), /model muss ein Alias/],
@@ -203,6 +220,7 @@ const skillVerstoesse = (md: string): string[] => {
   else if (/\b(model|effort):/.test(spawn)) v.push("Spawn setzt model/effort");
   if (/bodyText/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, ""))) v.push("bodyText im Skill-Ablauf (Thread-Abruf im privilegierten Lauf)");
   if (/forum-sanitize\.mjs --body/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, "").replace(/über `scripts\/forum-sanitize\.mjs`/g, ""))) v.push("Pipe über forum-sanitize.mjs --body im Skill");
+  if (/gh issue view \S+ (?!--json)/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, ""))) v.push("gh issue view ohne --json (gibt Titel und Body aus)");
   if (/--json number,title/.test(md)) v.push("Schritt 1 gibt den Titel aus");
   if (!/Pflicht-Stopp/.test(md) || !/Erst nach ihrem OK/.test(md)) v.push("Freigabe-Stopp fehlt");
   if (!/^\| `forum-leser` \(Subagent\) \|/m.test(md)) v.push("Rule-of-Two-Tabelle ohne Zeile forum-leser");
@@ -226,9 +244,75 @@ describe("Skill forum orchestriert die Quarantäne", () => {
     ["wieder bodyText", mit("**2. Thread in Quarantäne legen.**", "**2. Thread lesen** (bodyText).**"), /bodyText/],
     ["Pipe über sanitize", mit("**8. Verifizieren**", "echo x | node scripts/forum-sanitize.mjs --body\n**8. Verifizieren**"), /Pipe über/],
     ["Titel in Schritt 1", mit("--json number --jq", "--json number,title --jq"), /Titel aus/],
+    ["Schritt 8 liest den Issue-Text", mit("gh issue view <Inbox-Nr> --json state --jq .state` zeigt `CLOSED`; nie ohne `--json`, denn", "gh issue view <Inbox-Nr>` zeigt `CLOSED`, denn"), /ohne --json/],
     ["Freigabe-Stopp fehlt", mit("Pflicht-Stopp", "Hinweis"), /Freigabe-Stopp/],
     ["Tabellenzeile fehlt", mit("| `forum-leser` (Subagent) |", "| `anderer` |"), /ohne Zeile forum-leser/],
   ])("Negativfall %s: rot", (_n, md, muster) => {
     expect(skillVerstoesse(md).join("\n")).toMatch(muster);
+  });
+});
+
+describe("main (CLI-Kern, gh und Entschärfer injiziert): fail-closed, keine Teildatei, kein Fremdtext auf stdout", () => {
+  const sicher = (t: string) => `[s]${t}`;
+  const issue = (title: string, labels: string[]) => JSON.stringify({ title, labels: labels.map((name) => ({ name })) });
+  const lauf = (gh: (a: string[]) => string, argv = ["--inbox", "7"], sanitize: (t: string, b: boolean) => string = sicher) => {
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-1435-"));
+    const ausgabe: string[] = [];
+    let fehler = "";
+    try {
+      Q.main(argv, { gh, sanitize, wurzel, nonce: () => "n0nce", log: (z: string) => ausgabe.push(z) });
+    } catch (e) {
+      fehler = (e as Error).message;
+    }
+    const dateien = existsSync(join(wurzel, ".claude", "forum-quarantaene")) ? readdirSync(join(wurzel, ".claude", "forum-quarantaene")) : [];
+    const inhalt = dateien.length ? readFileSync(join(wurzel, ".claude", "forum-quarantaene", dateien[0]), "utf8") : "";
+    rmSync(wurzel, { recursive: true, force: true });
+    return { fehler, ausgabe: ausgabe.join("\n"), dateien, inhalt };
+  };
+  const disc = JSON.stringify({ title: "GEHEIMTITEL", bodyText: "GEHEIMBODY", author: { login: "a" }, comments: { nodes: [] } });
+  const gh = (titel: string, labels: string[], d: string = disc) => (args: string[]) => (args[0] === "issue" ? issue(titel, labels) : d);
+
+  test("Happy Path: Datei forum-7.txt mit Nonce, stdout nur Metadaten", () => {
+    const r = lauf(gh("Forum #12: x", ["forum"]));
+    expect(r.fehler).toBe("");
+    expect(r.dateien).toEqual(["forum-7.txt"]);
+    expect(r.inhalt).toContain("[n0nce]");
+    expect(r.inhalt).toContain("[s]GEHEIMBODY");
+    expect(r.ausgabe).toMatch(/Discussion: #12/);
+    expect(r.ausgabe).not.toMatch(/GEHEIM/);
+  });
+  test.each([
+    ["ohne Label forum", gh("Forum #12: x", ["bug"]), /kein Label forum/],
+    ["falscher Titel", gh("Etwas anderes", ["forum"]), /Titel nicht im Format/],
+    ["Discussion null", gh("Forum #12: x", ["forum"], "null"), /nicht gefunden/],
+  ])("%s: Fehler, keine Datei", (_n, g, muster) => {
+    const r = lauf(g);
+    expect(r.fehler).toMatch(muster);
+    expect(r.dateien).toEqual([]);
+  });
+  test("Entschärfer wirft: Fehler, keine Teildatei", () => {
+    const r = lauf(gh("Forum #12: x", ["forum"]), ["--inbox", "7"], () => {
+      throw new Error("forum-sanitize.mjs fehlgeschlagen");
+    });
+    expect(r.fehler).toMatch(/forum-sanitize/);
+    expect(r.dateien).toEqual([]);
+  });
+  test.each([[["--inbox", "abc"]], [["--foo", "1"]], [["--entfernen", "../x"]], [[]], [["--inbox"]]])("Aufruf %j: Fehler vor jedem gh-Aufruf", (argv) => {
+    const r = lauf(() => {
+      throw new Error("gh darf nicht laufen");
+    }, argv);
+    expect(r.fehler).toMatch(/Aufruf/);
+  });
+  test("--entfernen löscht nur forum-<n>.txt", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-1435-"));
+    try {
+      const gh = (a: string[]) => (a[0] === "issue" ? issue("Forum #1: x", ["forum"]) : disc);
+      for (const nr of ["7", "8"]) Q.main(["--inbox", nr], { gh, sanitize: sicher, wurzel, nonce: () => "n", log: () => undefined });
+      Q.main(["--entfernen", "7"], { wurzel });
+      expect(readdirSync(join(wurzel, ".claude", "forum-quarantaene"))).toEqual(["forum-8.txt"]);
+      Q.main(["--entfernen", "7"], { wurzel });
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   });
 });
