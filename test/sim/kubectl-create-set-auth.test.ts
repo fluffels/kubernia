@@ -437,3 +437,19 @@ describe("Quest- und Befehlskarten-Regex für set image (#1530, W8)", () => {
     expect(re.test("kubectl set image deployment/shop nginx=nginx")).toBe(false);
   });
 });
+
+describe("Duplikate: create role, clusterrole und die Bindings melden 'already exists'", () => {
+  test.each([
+    ["kubectl create role r --verb=get --resource=pods", "roles.rbac.authorization.k8s.io", "roles"],
+    ["kubectl create clusterrole r --verb=get --resource=pods", "clusterroles.rbac.authorization.k8s.io", "roles"],
+    ["kubectl create rolebinding b --role=r --user=a", "rolebindings.rbac.authorization.k8s.io", "roleBindings"],
+    ["kubectl create clusterrolebinding b --clusterrole=r --user=a", "clusterrolebindings.rbac.authorization.k8s.io", "roleBindings"],
+  ] as const)("%s zweimal", (cmd, plural, liste) => {
+    const sim = freshSim();
+    expect(lauf(cmd, sim).error).toBe(false);
+    const zweites = lauf(cmd, sim);
+    expect(zweites.error).toBe(true);
+    expect(zweites.out).toContain('error: ' + plural + ' "' + (liste === "roles" ? "r" : "b") + '" already exists');
+    expect(sim[liste]).toHaveLength(1);
+  });
+});
