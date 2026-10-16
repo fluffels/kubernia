@@ -90,6 +90,26 @@ export function npxHinweis(name, spec) {
   return `${name}: lokale Installation fehlt oder weicht ab → npx ${spec}`;
 }
 
+/**
+ * Launcher-Bausteine für einen Server: Name, Paket und bin sind gebunden, `scripts/<server>-mcp.mjs` ist nur noch ein Einzeiler darüber.
+ * `main(args, cwd)` startet den Server aus dem Repo-Root (Elternordner von `scripts/`), `cwd` optional.
+ */
+export function launcherFuer({ name, pkg, bin }) {
+  return {
+    PKG: pkg,
+    BIN: bin,
+    NAME: name,
+    readLockVersion: (root) => readLockVersion(root, pkg),
+    readInstalled: (root) => readInstalled(root, pkg, bin),
+    planLaunch: ({ lockVersion, installed }) => planLaunch({ pkg, lockVersion, installed }),
+    statInstallation,
+    installationErsetzt,
+    exitMeldung: (o) => exitMeldung({ name, ...o }),
+    npxHinweis: (spec) => npxHinweis(name, spec),
+    starte: ({ root, args, cwd }) => starte({ name, pkg, bin, root, args, cwd }),
+  };
+}
+
 /** Startet den Server (lokal oder per npx) und reicht Exit-Code und Signale durch. `cwd` optional (sonst das der Session). */
 export function starte({ name, pkg, bin, root, args, cwd }) {
   const plan = planLaunch({ pkg, lockVersion: readLockVersion(root, pkg), installed: readInstalled(root, pkg, bin) });
