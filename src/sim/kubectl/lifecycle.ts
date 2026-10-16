@@ -124,14 +124,17 @@ function createSecretGeneric(host: KubectlHost, c: Call): string {
   return "secret/" + n.name + " created";
 }
 
-/** Die secret-Arten (`create secret <art> …`): ein Eintrag je Art, `CREATE_SECRET_KANN` leitet sich daraus ab. */
-const SECRET_KINDS: Readonly<Record<string, CreateHandler>> = { generic: createSecretGeneric, tls: createSecretTls };
-const CREATE_SECRET_KANN = ["kubectl create secret generic <name> --from-literal=k=v", "kubectl create secret tls <name> --cert=… --key=…"];
+/** Die secret-Arten (`create secret <art> …`): ein Eintrag je Art mit Handler und Muster, `CREATE_SECRET_KANN` leitet sich daraus ab. */
+const SECRET_KINDS: Readonly<Record<string, { run: CreateHandler; muster: string }>> = {
+  generic: { run: createSecretGeneric, muster: "--from-literal=k=v" },
+  tls: { run: createSecretTls, muster: "--cert=… --key=…" },
+};
+const CREATE_SECRET_KANN = Object.entries(SECRET_KINDS).map(([art, e]) => "kubectl create secret " + art + " <name> " + e.muster);
 
 const createSecret: CreateHandler = (host, c) => {
   const sub = c.args[1] ?? "";
-  const handler = subEntry(SECRET_KINDS, sub);
-  return handler ? handler(host, c) : notSimulated(host, "'kubectl create secret " + sub + "'.", CREATE_SECRET_KANN);
+  const art = subEntry(SECRET_KINDS, sub);
+  return art ? art.run(host, c) : notSimulated(host, "'kubectl create secret " + sub + "'.", CREATE_SECRET_KANN);
 };
 
 // kubectl create configmap <name> --from-literal=schluessel=wert
@@ -227,20 +230,32 @@ const createDeployment: CreateHandler = (host, c) => {
   return "deployment.apps/" + n.name + " created";
 };
 
-/** Ressourcentyp (erstes Argument, inkl. Kurz-Aliase) → create-Handler. Reihenfolge egal (Lookup). */
-const CREATE_HANDLERS: Readonly<Record<string, CreateHandler>> = {
-  secret: createSecret,
-  configmap: createConfigMap, cm: createConfigMap,
-  serviceaccount: createServiceAccount, sa: createServiceAccount,
-  role: createRole, clusterrole: createRole,
-  rolebinding: createRoleBinding, clusterrolebinding: createRoleBinding,
-  deployment: createDeployment, deploy: createDeployment,
-};
+/** Ressourcentyp (erstes Argument) → create-Handler: ein Eintrag je Art, der erste Name ist der volle, die weiteren sind
+ *  Kurzformen. Die „kann“-Liste unten leitet sich daraus ab (nur volle Namen), sie kann nicht abdriften. */
+const CREATE_ARTEN: readonly { readonly namen: readonly string[]; readonly run: CreateHandler }[] = [
+  { namen: ["deployment", "deploy"], run: createDeployment },
+  { namen: ["serviceaccount", "sa"], run: createServiceAccount },
+  { namen: ["role"], run: createRole },
+  { namen: ["clusterrole"], run: createRole },
+  { namen: ["rolebinding"], run: createRoleBinding },
+  { namen: ["clusterrolebinding"], run: createRoleBinding },
+  { namen: ["configmap", "cm"], run: createConfigMap },
+  { namen: ["secret"], run: createSecret },
+];
+const CREATE_HANDLERS: Readonly<Record<string, CreateHandler>> = Object.fromEntries(CREATE_ARTEN.flatMap(a => a.namen.map(n => [n, a.run])));
+const CREATE_KANN = [
+  "kubectl create " + CREATE_ARTEN.map(a => a.namen[0]).filter(n => n !== "secret").join("|") + " …",
+  ...CREATE_SECRET_KANN,
+];
 
 export function kubectlCreate(host: KubectlHost, c: Call): string {
   const typ = c.args[0] ?? "";
   const handler = subEntry(CREATE_HANDLERS, typ);
-  if (!handler) return notSimulated(host, "'kubectl create " + typ + "'.", ["kubectl create deployment|serviceaccount|role|clusterrole|rolebinding|clusterrolebinding …", ...CREATE_SECRET_KANN, "kubectl create configmap …"]);
+  if (!handler) return notSimulated(host, "'kubectl create " + typ + "'.", CREATE_KANN);
+  // Ein Befehl hinter `--` (`create deployment web --image=x -- sleep 1`) ist kein Name: kubectl liest ihn über ArgsLenAtDash.
+  if (c.dashAt !== null && c.args.length > c.dashAt) {
+    return notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + typ + "'.", ["'kubectl create " + typ + "' ohne '--'"]);
+  }
   return handler(host, c);
 }
 

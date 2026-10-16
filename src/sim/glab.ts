@@ -90,10 +90,10 @@ function glabCiList(host: GlabHost): string {
 type GlabCiHandler = (host: GlabHost, c: Call) => string;
 
 /** Aktion → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `glab ci` keine Flags aus). */
-const STATUS: SubEntry<GlabCiHandler> = { run: glabCiStatus };
+const STATUS: SubEntry<GlabCiHandler> = { run: glabCiStatus, maxArgs: 0 };
 const GLAB_CI: Dispatch<SubEntry<GlabCiHandler>> = {
   cmd: "glab ci",
-  table: { status: STATUS, view: STATUS, list: { run: glabCiList } },
+  table: { status: STATUS, view: STATUS, list: { run: glabCiList, maxArgs: 0 } },
   // Echte `glab ci`-Aktionen, die die Sim nicht kann.
   real: ["artifact", "cancel", "delete", "get", "lint", "retry", "run", "trace", "trigger"],
 };

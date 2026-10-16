@@ -102,6 +102,11 @@ export function kubectlLabel(host: KubectlHost, c: Call) {
   if (!nsName) return host._err("kubectl label namespace: Welcher Namespace?", "Muster: kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
   const label = c.args.slice(2).find(a => a.startsWith(ENFORCE_LABEL));
   if (label === undefined) return notSimulated(host, "dieses Label.", [LABEL_USAGE], "Nur 'pod-security.kubernetes.io/enforce=<stufe>' wertet der Simulator aus (z.B. baseline oder restricted).");
+  // Alles hinter dem Namespace außer dem enforce-Label wertet die Sim nicht aus (kein stilles Ignorieren).
+  const extra = c.args.slice(2).find(a => a !== label);
+  if (extra !== undefined) {
+    return notSimulated(host, extra.includes("=") ? "das Label '" + extra + "'." : "mehrere Namespaces ('" + extra + "').", [LABEL_USAGE], "Pro Aufruf ein Namespace und das eine enforce-Label.");
+  }
   const level = label.slice(ENFORCE_LABEL.length);
   if (level !== "privileged" && level !== "baseline" && level !== "restricted") {
     return host._err('error: unbekannte Pod-Security-Stufe "' + level + '"', "Erlaubt sind: privileged, baseline, restricted.");
