@@ -20,7 +20,7 @@ import * as checkSize from "../scripts/check-size.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as allowlists from "../scripts/check-allowlists.mjs";
 
-type Sized = { file: string; loc: number };
+type Sized = { file: string; loc: number; chars?: number };
 type Allow = { file: string; reason: string };
 
 const LOC_BUDGET: number = checkSize.LOC_BUDGET;
@@ -28,7 +28,7 @@ const ALLOWLIST: Allow[] = allowlists.SIZE_ALLOWLIST;
 const collectSizes: (rootDir?: string) => Sized[] = checkSize.collectSizes;
 const findOversized: (sizes: Sized[], budget?: number) => Sized[] = checkSize.findOversized;
 const countLines: (text: string) => number = checkSize.countLines;
-type Deckel = { file: string; max: number; reason: string };
+type Deckel = { file: string; max: number; maxZeichen?: number; reason: string };
 const deckelApi = checkSize as unknown as {
   DECKEL: Deckel[];
   collectWorkflowSizes: (rootDir?: string) => Sized[];
@@ -89,13 +89,13 @@ describe("Dateigröße-Budget (#390)", () => {
 
 describe("Deckel für Workflow-Skripte (#1349)", () => {
   const WF = ".claude/workflows/kubernia-ticket.js";
-  const deckel: Deckel[] = [{ file: WF, max: 1000, reason: "Test" }];
+  const deckel: Deckel[] = [{ file: WF, max: 1000, maxZeichen: 50000, reason: "Test" }];
 
   test("das Repo hält seine Deckel (Ist-Zustand: Workflow auf den Deckel gemessen)", () => {
     const wf = collectWorkflowSizes();
     assert.ok(wf.some((w) => w.file === WF), "Workflow wird gefunden (sonst misst der Wächter nichts)");
     assert.deepEqual(pruefeDeckel(wf, DECKEL), []);
-    assert.ok(DECKEL.every((d) => d.reason.length > 0));
+    assert.ok(DECKEL.every((d) => d.reason.length > 0 && typeof d.maxZeichen === "number"));
   });
 
   test("Wachstum über den Deckel: rot", () => {
@@ -116,7 +116,34 @@ describe("Deckel für Workflow-Skripte (#1349)", () => {
   });
 
   test("genau auf dem Deckel: ok", () => {
-    assert.deepEqual(pruefeDeckel([{ file: WF, loc: 1000 }], deckel), []);
+    assert.deepEqual(pruefeDeckel([{ file: WF, loc: 1000, chars: 50000 }], deckel), []);
+  });
+
+  test("Zeichen-Deckel (#1628): +1 über maxZeichen rot, genau am Deckel und bis 500 darunter ok, 501 darunter rot", () => {
+    const m = (chars: number) => pruefeDeckel([{ file: WF, loc: 1000, chars }], deckel);
+    assert.match(m(50001).join(" "), /50001 Zeichen > Deckel 50000/);
+    assert.deepEqual(m(50000), []);
+    assert.deepEqual(m(49500), []);
+    assert.match(m(49499).join(" "), /Deckel auf 49499 senken/);
+  });
+
+  test("Zeichen-Deckel: Eintrag ohne maxZeichen oder Messung ohne Zeichenzahl: rot", () => {
+    assert.match(pruefeDeckel([{ file: WF, loc: 1000, chars: 5 }], [{ file: WF, max: 1000, reason: "x" }]).join(" "), /ohne maxZeichen/);
+    assert.match(pruefeDeckel([{ file: WF, loc: 1000 }], deckel).join(" "), /ohne Zeichenzahl/);
+  });
+
+  test("collectWorkflowSizes liefert CR-neutrale Zeichen", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-size-"));
+    try {
+      mkdirSync(join(wurzel, ".claude", "workflows"), { recursive: true });
+      writeFileSync(join(wurzel, ".claude", "workflows", "a.js"), "ab\r\ncd\r\n");
+      assert.deepEqual(collectWorkflowSizes(wurzel), [{ file: ".claude/workflows/a.js", loc: 2, chars: 6 }]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   });
 
   test("neue Workflow-Datei über dem Budget ohne Eintrag: rot; unter dem Budget: ok", () => {
@@ -141,7 +168,7 @@ describe("collectWorkflowSizes: Randfälle (#1349)", () => {
       mkdirSync(join(wurzel, ".claude", "workflows"), { recursive: true });
       writeFileSync(join(wurzel, ".claude", "workflows", "a.js"), "x\ny\n");
       writeFileSync(join(wurzel, ".claude", "workflows", "b.md"), "x\n");
-      assert.deepEqual(collectWorkflowSizes(wurzel), [{ file: ".claude/workflows/a.js", loc: 2 }]);
+      assert.deepEqual(collectWorkflowSizes(wurzel), [{ file: ".claude/workflows/a.js", loc: 2, chars: 4 }]);
     } finally {
       rmSync(wurzel, { recursive: true, force: true });
     }

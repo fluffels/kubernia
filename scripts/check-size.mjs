@@ -36,8 +36,13 @@ export const LOC_BUDGET = 800
  * Skript, es hat keine Imports. Neue Workflow-Dateien über dem Budget brauchen einen eigenen Eintrag (mit Begründung).
  */
 export const DECKEL = [
-  { file: '.claude/workflows/kubernia-ticket.js', max: 1445, reason: '#1349: Workflow-Laufzeit wrappt das Skript, kein Import möglich; Abbau nur über echte Kürzung. #1392: +1 Zeile für den Lens-Prüfpunkt „echte Gate-Sabotage“ (der Skill ist die Quelle, der Wächter lens-abgleich verlangt Gleichheit). #1398: −1 (nachweisStand nutzt blockerVon); Prüfpunkte je Brille zusammenpacken ist bewusst nicht der Weg: die Workflow-Sandbox liest keine Dateien, die Prüfpunkte müssen wörtlich inline stehen (lens-abgleich), und Packen wäre Goodhart am Deckel statt Kürzung. #1486: −3 (Ausnahmen-Paraphrase im ausserhalbScope-Prompt durch Verweis auf AGENTS.md ersetzt). #1508: +1 Zeile für die gemeinsame Konstante VERSCHOBEN_DIFF statt zweier Prompt-Kopien. #1552: +7 Zeilen für args.bereich (Bereichswahl; Workflow-Laufzeit hat kein Mid-Run-Ask, darum über args). #1572: +3 Zeilen für die Lock-Nonce im Workflow-Zustand und die Freigabe im Cleanup und in den Sonderfällen (Ticket-Lock, Zeile 9); keine Zeilen zusammengepackt.' },
+  { file: '.claude/workflows/kubernia-ticket.js', max: 1445, maxZeichen: 86386, reason: '#1349: Workflow-Laufzeit wrappt das Skript, kein Import möglich; Abbau nur über echte Kürzung. #1392: +1 Zeile für den Lens-Prüfpunkt „echte Gate-Sabotage“ (der Skill ist die Quelle, der Wächter lens-abgleich verlangt Gleichheit). #1398: −1 (nachweisStand nutzt blockerVon); Prüfpunkte je Brille zusammenpacken ist bewusst nicht der Weg: die Workflow-Sandbox liest keine Dateien, die Prüfpunkte müssen wörtlich inline stehen (lens-abgleich), und Packen wäre Goodhart am Deckel statt Kürzung. #1486: −3 (Ausnahmen-Paraphrase im ausserhalbScope-Prompt durch Verweis auf AGENTS.md ersetzt). #1508: +1 Zeile für die gemeinsame Konstante VERSCHOBEN_DIFF statt zweier Prompt-Kopien. #1552: +7 Zeilen für args.bereich (Bereichswahl; Workflow-Laufzeit hat kein Mid-Run-Ask, darum über args). #1572: +3 Zeilen für die Lock-Nonce im Workflow-Zustand und die Freigabe im Cleanup und in den Sonderfällen (Ticket-Lock, Zeile 9); keine Zeilen zusammengepackt. #1628: Zeichen-Deckel (maxZeichen, CR-neutral wie check:contextsize), weil Zusammenziehen von Zeilen den Zeilen-Deckel aushebelt; Auslagerung unmöglich (Workflow-Sandbox liest keine Dateien).' },
 ]
+
+/** Zeichen ohne CR (CRLF zählt wie LF, wie check:contextsize). */
+export function countChars(text) {
+  return text.replace(/\r/g, '').length
+}
 
 /** Zählt physische Zeilen (wie `wc -l`; ein abschließender Zeilenumbruch zählt nicht doppelt). */
 export function countLines(text) {
@@ -73,7 +78,10 @@ export function collectWorkflowSizes(rootDir = ROOT) {
   }
   return eintraege
     .filter((e) => e.isFile() && e.name.endsWith('.js'))
-    .map((e) => ({ file: `.claude/workflows/${e.name}`, loc: countLines(readFileSync(join(rootDir, '.claude', 'workflows', e.name), 'utf8')) }))
+    .map((e) => {
+      const text = readFileSync(join(rootDir, '.claude', 'workflows', e.name), 'utf8')
+      return { file: `.claude/workflows/${e.name}`, loc: countLines(text), chars: countChars(text) }
+    })
     .sort((a, b) => b.loc - a.loc)
 }
 
@@ -83,13 +91,24 @@ export function collectWorkflowSizes(rootDir = ROOT) {
  */
 const REBASE_HINWEIS = " Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel auf die jetzt gemessene Zahl setzen (ein Konflikt in scripts/check-size.mjs ist dann erwartbar). Wächst die Datei durch den eigenen Diff, gilt weiter: kürzen oder bewusst per reviewtem Commit anheben."
 
+/** Zeichen-Deckel (#1628, jeder DECKEL-Eintrag): über `maxZeichen` rot, mehr als `ZEICHEN_TOLERANZ` darunter rot (Ratchet mit Spielraum). */
+export const ZEICHEN_TOLERANZ = 500
+function pruefeZeichen(file, chars, d) {
+  if (typeof d.maxZeichen !== 'number') return [`${file}: DECKEL-Eintrag ohne maxZeichen (Zeichen-Deckel, #1628) – gemessene Zeichenzahl eintragen.`]
+  if (typeof chars !== 'number') return [`${file}: Messung ohne Zeichenzahl.`]
+  if (chars > d.maxZeichen) return [`${file}: ${chars} Zeichen > Deckel ${d.maxZeichen}: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).${REBASE_HINWEIS}`]
+  if (chars < d.maxZeichen - ZEICHEN_TOLERANZ) return [`${file}: ${chars} Zeichen < Deckel ${d.maxZeichen} − ${ZEICHEN_TOLERANZ}: Deckel auf ${chars} senken (Ratchet, in scripts/check-size.mjs).${REBASE_HINWEIS}`]
+  return []
+}
+
 export function pruefeDeckel(workflowSizes, deckel = DECKEL, budget = LOC_BUDGET) {
   const meldungen = []
   const eintrag = new Map(deckel.map((d) => [d.file, d]))
   const bekannt = new Map(workflowSizes.map((w) => [w.file, w.loc]))
-  for (const { file, loc } of workflowSizes) {
+  for (const { file, loc, chars } of workflowSizes) {
     const d = eintrag.get(file)
     if (loc <= budget) continue
+    if (d) meldungen.push(...pruefeZeichen(file, chars, d))
     if (!d) meldungen.push(`${file}: ${loc} Zeilen > Budget ${budget} ohne Deckel (Eintrag DECKEL in scripts/check-size.mjs mit Begründung, oder kürzen).`)
     else if (loc > d.max) meldungen.push(`${file}: ${loc} Zeilen > Deckel ${d.max}: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).${REBASE_HINWEIS}`)
     else if (loc < d.max) meldungen.push(`${file}: ${loc} Zeilen < Deckel ${d.max}: Deckel auf ${loc} senken (Ratchet, in scripts/check-size.mjs).${REBASE_HINWEIS}`)
