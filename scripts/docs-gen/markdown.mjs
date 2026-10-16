@@ -4,9 +4,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
 
-/** Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). */
+/** Escaped Zellinhalt für eine GFM-Tabelle (Backslash zuerst, dann `|` und Zeilenumbrüche). */
 export function cell(value) {
-  return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+  return String(value).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
 /** Rendert eine GFM-Tabelle (Kopfzeile + Zeilen; Zeilen sind Arrays aus Strings). */
@@ -175,8 +175,8 @@ export function mermaidBloecke(markdown) {
 export const MERMAID_MAX_TEXT = 50_000;
 export const MERMAID_MAX_KANTEN = 500;
 
-// Link-Enden von flowchart/graph; bewusst großzügig (zu viel zählen = fail-closed).
-const MERMAID_KANTE = /-->|==>|\.->|---|===|-\.-|~~~|--[xo]/g;
+// Link-Enden von flowchart/graph; bewusst großzügig (zu viel zählen = fail-closed; `--!>` zählt als Kante mit, das ist kein Arrow, aber auch kein HTML-Kommentar-Ende, das hier ungeprüft bliebe).
+const MERMAID_KANTE = /--!?>|==>|\.->|---|===|-\.-|~~~|--[xo]/g;
 
 /**
  * Mermaid-Größenwächter: wirft, wenn `text` (ein Diagramm ohne Fence) die Standardgrenzen reißt. Kanten werden nur in

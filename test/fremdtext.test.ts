@@ -130,7 +130,8 @@ describe("trenneFremdtext", () => {
     assert.ok(r.grund.includes("angreifer"));
     const alles = JSON.stringify(r);
     assert.ok(!alles.includes("IGNORE"));
-    assert.ok(alles.includes("https://github.com/x/y/issues/7"));
+    const links = (alles.match(/https:\/\/[^\s)>"\\]+/g) ?? []).map((u) => new URL(u));
+    assert.ok(links.some((u) => u.host === "github.com" && u.pathname === "/x/y/issues/7"));
   });
   test("ghost als Autor ist Fremdeingang", () => {
     assert.equal(trenne(eintrag({ login: "ghost", type: "User" })).fremdeingang, true);

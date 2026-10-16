@@ -71,7 +71,7 @@ const read = (rel: string) => readFileSync(ROOT + rel, "utf8");
 
 /** Ein git-diff-Aufruf samt globaler Optionen und Argumenten; Backtick, Zeilenende und
  *  Shell-Trenner beenden ihn. */
-const AUFRUF = /\bgit(?:\s+(?:-C\s+\S+|--?[\w-]+))*\s+diff\b[^\n`;&|]*/g;
+const AUFRUF = /\bgit(?:[ \t]+-C[ \t]+\S+|[ \t]+-{1,2}(?!C(?![\w-]))\w[\w-]*)*[ \t]+diff\b[^\n`;&|]*/g;
 /** Kanonische Form: Drei-Punkt gegen die frisch geholte Remote-Ref. */
 const KANONISCH = /\borigin\/main\.\.\./;
 /** `main` als bare Revision – `origin/main`, `feature/main-x`, `main.ts`, `main/x` zählen NICHT;
@@ -177,6 +177,19 @@ describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
       { zeile: 2, aufruf: "git diff main" },
       { zeile: 2, aufruf: "git diff HEAD..main" },
     ]);
+  });
+
+  test("Optionen vor diff: -C <pfad> und Flags werden übersprungen, andere Wörter nicht", () => {
+    assert.equal(findeZweiPunktTreffer("git -C wt --no-pager diff main").length, 1);
+    assert.equal(findeZweiPunktTreffer("git -C -x diff main").length, 1);
+    assert.deepEqual(findeZweiPunktTreffer("git log diff main"), []);
+  });
+
+  test("lange Options-Ketten ohne diff laufen in linearer Zeit (kein ReDoS)", () => {
+    const start = Date.now();
+    findeZweiPunktTreffer(`git${" -C -a".repeat(5000)} nodiff`);
+    findeZweiPunktTreffer(`git${" -".repeat(20000)}x`);
+    assert.ok(Date.now() - start < 1000, "Regex-Backtracking: zu langsam");
   });
 });
 

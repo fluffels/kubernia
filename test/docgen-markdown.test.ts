@@ -10,6 +10,7 @@ import * as md from "../scripts/docs-gen/markdown.mjs";
 import * as ketten from "../scripts/docs-gen/npm-ketten.mjs";
 
 const api = md as unknown as {
+  cell: (v: unknown) => string;
   mermaidText: (s: string) => string;
   ganzzahlKonstante: (root: string, datei: string, name: string) => string;
 };
@@ -25,6 +26,14 @@ describe("mermaidText", () => {
   test("Zeilenumbrüche werden zu Leerzeichen, harmloser Text bleibt gleich", () => {
     assert.equal(api.mermaidText("a\r\nb"), "a b");
     assert.equal(api.mermaidText("Docker – Ö?"), "Docker – Ö?");
+  });
+});
+
+describe("cell", () => {
+  test("escaped | und Zeilenumbrüche, Backslash zuerst (#1663)", () => {
+    assert.equal(api.cell("a|b\nc"), "a\\|b c");
+    assert.equal(api.cell("a\\b"), "a\\\\b");
+    assert.equal(api.cell("a\\|b"), "a\\\\\\|b"); // ein Backslash vor | darf das | nicht entwerten
   });
 });
 

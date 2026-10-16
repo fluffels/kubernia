@@ -13,8 +13,8 @@
  */
 import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, join, normalize, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname, extname, join, normalize, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { mermaidBloecke } from "./docs-gen/markdown.mjs";
 
 export { mermaidBloecke };
@@ -42,6 +42,15 @@ document.body.dataset.fertig = "ja";
 </script></body></html>`;
 }
 
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Der aufgelöste Pfad, wenn er `basis` selbst oder darunter liegt, sonst `null` (kein Ausbruch per `..`, kein Geschwister mit gleichem Präfix). Pur. */
+export function unterhalb(basis, pfad) {
+  const b = resolve(basis);
+  const z = resolve(pfad);
+  return z === b || z.startsWith(b + sep) ? z : null;
+}
+
 const TYPEN = { ".mjs": "text/javascript", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".html": "text/html; charset=utf-8" };
 
 /** Löst `/mermaid/<pfad>` auf eine Datei unter `distDir` auf; `null` bei Ausbruch aus dem Ordner (`..`) oder fehlender Datei. Pur bis auf die Dateiprüfung. */
@@ -52,9 +61,8 @@ export function mermaidDatei(distDir, urlPfad) {
   } catch {
     return null; // kaputte Prozent-Kodierung: kein Treffer statt ungefangenem URIError im Server
   }
-  const basis = resolve(distDir);
-  const ziel = resolve(basis, normalize(rel));
-  if (ziel !== basis && !ziel.startsWith(basis + sep)) return null;
+  const ziel = unterhalb(distDir, resolve(distDir, normalize(rel)));
+  if (!ziel) return null;
   return existsSync(ziel) && statSync(ziel).isFile() ? ziel : null;
 }
 
@@ -71,13 +79,18 @@ function main(argv) {
     console.error(`mermaid fehlt unter ${dist}. Einmal: npm install --prefix ${argv[mi + 1]} mermaid@11`);
     process.exit(2);
   }
-  const html = vorschauHtml(mermaidBloecke(readFileSync(md, "utf8")));
+  const mdPfad = unterhalb(REPO, md);
+  if (!mdPfad) {
+    console.error(`Die Markdown-Datei muss im Repo liegen: ${md}`);
+    process.exit(2);
+  }
+  const html = vorschauHtml(mermaidBloecke(readFileSync(mdPfad, "utf8")));
   const port = pi >= 0 ? Number(argv[pi + 1]) : 4173;
   createServer((req, res) => {
     const url = req.url ?? "/";
     if (url.startsWith("/mermaid/")) {
       const datei = mermaidDatei(dist, url);
-      if (!datei) return void res.writeHead(404).end("nicht gefunden");
+      if (!datei || !unterhalb(dist, datei)) return void res.writeHead(404).end("nicht gefunden");
       res.writeHead(200, { "content-type": TYPEN[extname(datei)] ?? "application/octet-stream" });
       return void res.end(readFileSync(datei));
     }
