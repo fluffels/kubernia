@@ -68,6 +68,7 @@
       "Bash(git push -f:*)",
       "Bash(npm publish:*)",
       "Bash(gh repo delete:*)",
+      "Bash(gh issue create:*)",
       "mcp__claude-in-chrome",
       "mcp__pixellab__list_projects",
       "Read(~/.ssh/**)",

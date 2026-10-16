@@ -101,6 +101,13 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
     assert.ok(!allow.includes(rule), `${rule} darf nicht in allow stehen — sonst entfällt die Rückfrage (#1201)`);
   });
 
+  test("Issue-Anlegen per `gh issue create` ist gesperrt: neue Issues entstehen nur über `scripts/spezifikation.mjs anlegen` (#1698)", () => {
+    const rule = "Bash(gh issue create:*)";
+    assert.ok(deny.includes(rule), `deny muss ${rule} enthalten — sonst entstehen Issues ohne Spezifikations-Prüfung (#1686, #1684, #1678)`);
+    assert.ok(!ask.includes(rule) && !allow.includes(rule), `${rule} gehört nur in deny`);
+    assert.ok(allow.includes("Bash(gh issue:*)"), "das breite `Bash(gh issue:*)` bleibt in allow (deny hat Vorrang), sonst bräche Kommentieren/Schließen");
+  });
+
   test("allow deckt die bekannten Workflow-Kommandos ab (npm/git/gh), damit der Ablauf nicht ausgebremst wird", () => {
     for (const rule of ["Bash(npm:*)", "Bash(git:*)", "Bash(gh issue:*)", "Bash(gh pr:*)"]) {
       assert.ok(allow.includes(rule), `allow sollte ${rule} enthalten (kuratierte Workflow-Allowlist, #901)`);

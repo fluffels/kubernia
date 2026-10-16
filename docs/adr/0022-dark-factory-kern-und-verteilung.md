@@ -219,6 +219,15 @@ F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den B
 - **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
 - **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.
 
+## Fortschreibung #1698 (2026-10-16): Reparaturweg statt Einmal-Kommentar (F12)
+
+Der Einmal-Kommentar aus #1615 ist abgelöst; das Gate ließ trotzdem Tickets liegen (#1686, #1684, #1678 entstanden ohne Spezifikation, der Bestand lag bei 133 von 175 offenen Issues). Entscheidungen:
+
+- **Melden statt kommentieren:** `naechstes-ticket.mjs` schreibt nichts und liest keine Kommentare mehr (der Kommentar-Abruf wuchs mit jedem Lauf); ein hart übersprungenes, vertrautes Ticket erscheint als Zeile `reparieren #<nr>` (JSON: `reparieren`).
+- **Reparieren schreibt ein Skript, ausgedacht hat es der Agent:** `scripts/spezifikation.mjs reparieren` ersetzt den Body nur bei vollständiger Spezifikation, ohne verlorene Zeile des alten Bodys (`verloreneZeilen`) und nie bei einem Fremdeingang (Autor nicht vertraut oder Label `forum`). Die Leitplanken stehen im Code, nicht in einer Bitte.
+- **Anlegen nur geprüft:** `spezifikation.mjs anlegen` führt vorab `pruefeEingang` aus und sortiert ein; `gh issue create` ist in `.claude/settings.json` gesperrt, weil die Doku-Regel allein versagte. Grenze: der REST-Weg `gh api -X POST …/issues` bleibt offen.
+- **Bestand schrittweise:** `spezifikation.hartAb` steht auf 1; der Bestand wird mit jeder Auswahl um ein Ticket abgebaut, keine Massen-Reparatur.
+
 ## Fortschreibung #1706 (2026-10-16): Veröffentlichungsentscheidung
 
 Die Maintainerin hat §10 am 2026-10-16 entschieden; die Folgetickets sind angelegt (Spalte „Ticket“ der [Folgeticket-Tabelle](#folgeticket-entwürfe)). Entscheidungen:

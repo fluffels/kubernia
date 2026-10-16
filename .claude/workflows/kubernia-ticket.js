@@ -670,10 +670,10 @@ Tickets" und „Kollisionsschutz bei parallelen Agenten") sowie docs/ticket-reih
 ${
   gewuenscht
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
-prüfe es mit node scripts/naechstes-ticket.mjs --ticket ${gewuenscht} (alle Kriterien samt Messfenster; Exit 1 = nicht frei, Grund in der Ausgabe).
-Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
-    : `Nimm das oberste freie Item: node scripts/naechstes-ticket.mjs${eingabe.bereich ? ` --bereich ${eingabe.bereich}` : ''} (Assignee, Blocker, Branch,
-Worktree, offener PR in einem Lauf; erste Zeile = dran). Wähle NICHT nach Inhalt aus und
+prüfe es mit node scripts/naechstes-ticket.mjs --ticket ${gewuenscht} (alle Kriterien; Exit 1 = nicht frei, Grund in der Ausgabe;
+nennt sie reparieren #<nr>: ergebnis="skill-pfad"). Ist es sonst nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
+    : `Nimm das oberste freie Item: node scripts/naechstes-ticket.mjs${eingabe.bereich ? ` --bereich ${eingabe.bereich}` : ''} (ein Lauf; erste Zeile = dran;
+davor reparieren #<nr>: skill-pfad mit dieser nummer, nicht claimen). Wähle NICHT nach Inhalt aus und
 sortiere NICHT nach. Prüfe nur dieses eine Ticket gegen den Live-Stand, nicht die ganze
 Liste; ohne Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
 }
@@ -699,7 +699,7 @@ nicht selbst.`,
 
   const nonceArg = /^[\w-]+$/.test(auswahl.lockNonce || '') ? ` --nonce ${auswahl.lockNonce}` : '' // nur Wort-/Bindestrich-Zeichen: der Wert kommt aus einer Agenten-Antwort und landet in Shell-Befehlen
   if (auswahl.ergebnis === 'skill-pfad' || /\(gesammelt\)\s*$/i.test(String(auswahl.titel ?? ''))) {
-    log(`#${auswahl.nummer} ist ein Sammelticket — nur über den Skill-Pfad (ADR 0026).`)
+    log(`#${auswahl.nummer} ist ein Sammelticket oder muss repariert werden — nur über den Skill-Pfad (ADR 0026).`)
     if (auswahl.claimVerifiziert || nonceArg) await agent(`Claim von #${auswahl.nummer} freigeben: node scripts/ticket-lock.mjs freigeben ${auswahl.nummer}${nonceArg}, dann gh issue edit ${auswahl.nummer} --remove-assignee @me.`, { label: 'claim-frei', phase: 'Auswahl', ...CODING })
     return { ergebnis: 'skill-pfad', nummer: auswahl.nummer }
   }
@@ -795,7 +795,7 @@ Weichen samt Entscheidung aus dem Plan gehören in den Body des betroffenen Kind
 Dazu gehört auch der Pflichtschritt „Neue Issues sofort ins Board einsortieren"
 (Mechanik, auch für mehrere Tickets auf einmal: docs/ticket-reihenfolge.md) — ein neu
 angelegtes Issue liegt sonst in keinem Board.
-Neue Kindertickets ohne Assignee. Am Ende das Epic auf done schließen und die
+Neue Kindertickets nur über node scripts/spezifikation.mjs anlegen (ohne Assignee). Am Ende das Epic auf done schließen und die
 Schließung verifizieren.
 
 Berichte am Ende knapp, was entstanden ist und dass das Issue geschlossen und
