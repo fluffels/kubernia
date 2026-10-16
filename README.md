@@ -132,7 +132,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 | Skripte | ≥ 120 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 80 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 28 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 29 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -227,6 +227,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 16.10.2026 | [ADR 0026](/docs/adr/0026-sammelticket-gruppen.md): Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum |
 | 16.10.2026 | [ADR 0027](/docs/adr/0027-regeln-lockern.md): Regeln, Gates und Lenses evidenzbasiert lockern |
 | 16.10.2026 | [ADR 0028](/docs/adr/0028-ein-ticket-ablauf.md): Genau ein Ticket-Ablauf, der Workflow-Pfad entfällt |
+| 16.10.2026 | [ADR 0029](/docs/adr/0029-harness-cockpit.md): Harness-Cockpit als Ring „Oberfläche“ im Factory-Repo, Eigenbau, nur lesend |
 
 <!-- GEN:zeitleiste END -->
 

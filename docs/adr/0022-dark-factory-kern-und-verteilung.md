@@ -1,7 +1,7 @@
 # ADR 0022: Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Folgeticket-Entwürfe → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert, Workflow-Pfad entfernt: präzisiert durch ADR 0028** · Datum: 2026-10-08 · Ticket: #1366
+> Status: **akzeptiert, Workflow-Pfad entfernt: präzisiert durch ADR 0028, Ring Oberfläche: präzisiert durch ADR 0029** · Datum: 2026-10-08 · Ticket: #1366
 
 ## Status
 
@@ -66,6 +66,8 @@ Mechanik: Kern-Dateien sind in jedem Projekt byte-gleich. Projektwerte (Repo, Ow
 | Permissions und Sandbox | F9 (Besitz je JSON-Schlüssel) |
 
 Die Zeilen selbst stehen nur im Inventar (SSOT), nicht hier.
+
+Präzisiert durch [ADR 0029](0029-harness-cockpit.md): dritter Ring `oberflaeche`.
 
 ### 2. Verifikation ohne Mensch (Holdout)
 
