@@ -174,7 +174,7 @@ describe("Guard: jede I/O-Funktion verlangt ein Board-Objekt als ersten Paramete
 
 describe("Verdrahtung: jeder Aufrufer übergibt sein Board ausdrücklich", () => {
   const AUFRUFER = ["board-place", "board-takt", "sammelticket-anlegen", "langfuse-takt", "naechstes-ticket"];
-  const FUNKTIONEN = /\b(loadItems|loadItemPages|setPosition|addToBoardTodo|itemsUeberIssues)\b/g;
+  const FUNKTIONEN = /\b(loadItems|loadItemPages|setPosition|addToBoardTodo|itemsUeberIssues|entferneVomBoard)\b/g;
   /** Quelltext ohne Kommentare und ohne den Importblock aus board-lib. */
   const code = (f: string): string =>
     readFileSync(new URL(`../scripts/${f}.mjs`, import.meta.url), "utf8")
@@ -220,5 +220,199 @@ describe("Verdrahtung: jeder Aufrufer übergibt sein Board ausdrücklich", () =>
       expect(q, f).toContain("labels[]=${FACTORY_LABEL}");
       expect(q, f).not.toContain("PRODUKT_BOARD");
     }
+  });
+});
+
+describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
+  type U = Item & { id: string; status: string; state: string; contentId: string };
+  type Schritt = { aktion: string; number: number; title: string; von: string; nach: string; quelleId: string; contentId?: string };
+  type Plan = { schritte: Schritt[]; gemeldet: { number: number; grund: string }[]; ende: { produkt: string | null; factory: string | null } };
+  const plan = (p: U[], f: U[]): Plan => (L as unknown as { umzugsPlan: (p: U[], f: U[]) => Plan }).umzugsPlan(p, f);
+  const it = (number: number, labels: string[] = [], extra: Partial<U> = {}): U => ({ id: `PVTI_${number}`, number, status: "Todo", state: "open", contentId: `I_${number}`, labels, ...extra });
+  const H = ["area:harness"];
+
+  test("Harness-Items vom Produkt-Board ziehen in Quell-Reihenfolge nach Factory, Nicht-Harness dazwischen bleibt", () => {
+    const p = plan([it(1, H), it(2), it(3, H), it(4)], [it(9, H)]);
+    expect(p.schritte).toEqual([
+      { aktion: "umziehen", number: 1, title: "", von: "produkt", nach: "factory", quelleId: "PVTI_1", contentId: "I_1" },
+      { aktion: "umziehen", number: 3, title: "", von: "produkt", nach: "factory", quelleId: "PVTI_3", contentId: "I_3" },
+    ]);
+    expect(p.gemeldet).toEqual([]);
+    expect(p.ende).toEqual({ produkt: "PVTI_4", factory: "PVTI_9" });
+  });
+
+  test("Gegenrichtung: Nicht-Harness auf dem Factory-Board zieht aufs Produkt-Board", () => {
+    const p = plan([], [it(5), it(6, H)]);
+    expect(p.schritte.map((s) => [s.number, s.von, s.nach])).toEqual([[5, "factory", "produkt"]]);
+    expect(p.ende).toEqual({ produkt: null, factory: "PVTI_6" });
+  });
+
+  test("ein Item auf beiden Boards wird nur vom falschen entfernt, nicht doppelt angelegt", () => {
+    const p = plan([it(1, H)], [it(1, H)]);
+    expect(p.schritte).toEqual([{ aktion: "entfernen", number: 1, title: "", von: "produkt", nach: "factory", quelleId: "PVTI_1" }]);
+  });
+
+  test("Status ungleich Todo (auch leer) und fehlende Issue-ID werden gemeldet und nicht umgezogen", () => {
+    const p = plan([it(1, H, { status: "In Progress" }), it(2, H, { status: "" }), it(3, H, { contentId: "" }), it(4, H)], []);
+    expect(p.schritte.map((s) => s.number)).toEqual([4]);
+    expect(p.gemeldet.map((g) => g.number)).toEqual([1, 2, 3]);
+    expect(p.gemeldet[0].grund).toMatch(/In Progress/);
+    expect(p.gemeldet[1].grund).toMatch(/leer/);
+  });
+
+  test("steht ein Item auf beiden Boards, geht „entfernen“ dem Status-Test vor (kein Exit 1 wegen In Progress)", () => {
+    const p = plan([it(1, H, { status: "In Progress" })], [it(1, H)]);
+    expect(p.schritte.map((s) => s.aktion)).toEqual(["entfernen"]);
+    expect(p.gemeldet).toEqual([]);
+  });
+
+  test("beide Richtungen in einem Plan: erst Produkt-, dann Factory-Items; der Anker ist das letzte Item, das der Lauf nicht selbst entfernt", () => {
+    const p = plan([it(1), it(2, H)], [it(9, H), it(5)]);
+    expect(p.schritte.map((s) => [s.number, s.nach])).toEqual([[2, "factory"], [5, "produkt"]]);
+    // das letzte Item beider Boards zieht selbst um: der Anker ist das davor
+    expect(p.ende).toEqual({ produkt: "PVTI_1", factory: "PVTI_9" });
+  });
+
+  test("ein Board, dessen Items alle ausziehen, hat keinen Anker (Spitze)", () => {
+    expect(plan([it(2, H)], []).ende).toEqual({ produkt: null, factory: null });
+  });
+
+  test("Meldegrund bei fehlender Issue-ID", () => {
+    expect(plan([it(3, H, { contentId: "" })], []).gemeldet[0].grund).toMatch(/Issue-Node-ID/);
+  });
+
+  test("der Titel wird in den Schritt durchgereicht", () => {
+    expect(plan([it(4, H, { title: "Vier" })], []).schritte[0].title).toBe("Vier");
+  });
+
+  test("auch ein nur zu entfernendes Item ist als Anker ausgeschlossen (steht auf beiden Boards, letzte Position)", () => {
+    const p = plan([it(3), it(1, H)], [it(1, H), it(5)]);
+    expect(p.schritte.map((s) => [s.aktion, s.number])).toEqual([["entfernen", 1], ["umziehen", 5]]);
+    expect(p.ende.produkt).toBe("PVTI_3");
+  });
+
+  test("geschlossene Items bleiben als Historie, richtig stehende Items bleiben, ein Plan nach dem Umzug ist leer (idempotent)", () => {
+    expect(plan([it(1, H, { state: "closed" }), it(2)], [it(3, H)])).toMatchObject({ schritte: [], gemeldet: [] });
+    expect(plan([], [it(1, H), it(2, H)]).schritte).toEqual([]);
+  });
+
+  test("die Eingaben bleiben unverändert", () => {
+    const p = Object.freeze([Object.freeze(it(1, H))]) as unknown as U[];
+    const f = Object.freeze([]) as unknown as U[];
+    expect(() => plan(p, f)).not.toThrow();
+  });
+});
+
+describe("fuehreUmzugAus: aufnehmen, positionieren, erst dann entfernen (#1730)", () => {
+  type S = { aktion: string; number: number; title: string; von: string; nach: string; quelleId: string; contentId?: string };
+  type Plan = { schritte: S[]; gemeldet: { number: number; grund: string }[]; ende: { produkt: string | null; factory: string | null } };
+  const F = (rawPlace as unknown as { fuehreUmzugAus: (p: Plan, io: Record<string, unknown>) => Promise<number> }).fuehreUmzugAus;
+  const um = (number: number): S => ({ aktion: "umziehen", number, title: "", von: "produkt", nach: "factory", quelleId: `Q${number}`, contentId: `C${number}` });
+  const entf = (n: number): S => ({ aktion: "entfernen", number: n, title: "", von: "produkt", nach: "factory", quelleId: `Q${n}` });
+  const lauf = (schritte: S[], extra: Record<string, unknown> = {}, gemeldet: Plan["gemeldet"] = []) => {
+    const ruf: string[] = [];
+    const warn: string[] = [];
+    const io = {
+      dry: false,
+      aufnehmen: (r: string, c: string) => (ruf.push(`auf ${r} ${c}`), `N${c}`),
+      positioniere: (r: string, i: string, a: string | null) => void ruf.push(`pos ${r} ${i} nach ${a}`),
+      entferne: (r: string, i: string) => void ruf.push(`weg ${r} ${i}`),
+      schlafe: () => void ruf.push("zzz"),
+      log: () => undefined,
+      warn: (m: string) => void warn.push(m),
+      ...extra,
+    };
+    const p = F({ schritte, gemeldet, ende: { produkt: "PE", factory: "FE" } }, io);
+    return { p, ruf, warn };
+  };
+  const ohneZzz = (r: string[]) => r.filter((x) => x !== "zzz");
+
+  test("Reihenfolge je Item: aufnehmen, positionieren (Kette ab Board-Ende), entfernen; Pause nach jeder Mutation", async () => {
+    const { p, ruf } = lauf([um(1), um(2)]);
+    await p;
+    expect(ohneZzz(ruf)).toEqual(["auf factory C1", "pos factory NC1 nach FE", "weg produkt Q1", "auf factory C2", "pos factory NC2 nach NC1", "weg produkt Q2"]);
+    expect(ruf.filter((x) => x === "zzz")).toHaveLength(6);
+  });
+
+  test("ein Schritt „entfernen“ ruft nur entferne", async () => {
+    const { p, ruf } = lauf([entf(7)]);
+    await p;
+    expect(ohneZzz(ruf)).toEqual(["weg produkt Q7"]);
+  });
+
+  test("scheitert das Aufnehmen, bleibt das Item auf dem Quell-Board: kein Entfernen, nichts für die Rest-Items; das erste ist erledigt", async () => {
+    const ruf: string[] = [];
+    let n = 0;
+    const aufnehmen = (r: string, c: string): string => {
+      if (++n === 2) throw new Error("API rate limit exceeded");
+      ruf.push(`auf ${r} ${c}`);
+      return `N${c}`;
+    };
+    const { p, ruf: ruf2 } = lauf([um(1), um(2), um(3)], { aufnehmen });
+    await expect(p).rejects.toThrow(/#2 abgebrochen[\s\S]*Offen bleiben #2, #3[\s\S]*idempotent/);
+    expect(ohneZzz(ruf2)).toEqual(["pos factory NC1 nach FE", "weg produkt Q1"]);
+    expect(ruf).toEqual(["auf factory C1"]);
+  });
+
+  test("scheitert das Positionieren, wird nicht entfernt, und die Meldung nennt den Doppelstand", async () => {
+    const { p, ruf } = lauf([um(1)], { positioniere: () => { throw new Error("boom"); } });
+    await expect(p).rejects.toThrow(/#1 steht auf beiden Boards/);
+    expect(ruf.some((x) => x.startsWith("weg"))).toBe(false);
+  });
+
+  test("scheitert das Aufnehmen, behauptet die Meldung keinen Doppelstand, sondern nur „möglicherweise“ (halb gescheitertes Aufnehmen)", async () => {
+    const { p } = lauf([um(1)], { aufnehmen: () => { throw new Error("rate limit"); } });
+    const fehler = await p.then(() => "", (e: Error) => e.message);
+    expect(fehler).not.toMatch(/steht auf beiden Boards/);
+    expect(fehler).toMatch(/möglicherweise schon auf dem Ziel-Board/);
+  });
+
+  test("scheitert das Entfernen: bei „umziehen“ Doppelstand gemeldet, bei einem reinen „entfernen“-Schritt keiner", async () => {
+    const boom = () => { throw new Error("boom"); };
+    const a = lauf([um(1)], { entferne: boom });
+    await expect(a.p).rejects.toThrow(/#1 steht auf beiden Boards/);
+    const b = lauf([entf(2)], { entferne: boom });
+    const fehler = await b.p.then(() => "", (e: Error) => e.message);
+    expect(fehler).toMatch(/#2 abgebrochen/);
+    expect(fehler).not.toMatch(/beiden Boards|möglicherweise/);
+  });
+
+  test("gemischte Richtungen: die Anker-Kette läuft je Ziel-Board getrennt", async () => {
+    const zurueck: S = { aktion: "umziehen", number: 5, title: "", von: "factory", nach: "produkt", quelleId: "Q5", contentId: "C5" };
+    const { p, ruf } = lauf([um(1), zurueck, um(2)]);
+    await p;
+    expect(ohneZzz(ruf).filter((x) => x.startsWith("pos"))).toEqual(["pos factory NC1 nach FE", "pos produkt NC5 nach PE", "pos factory NC2 nach NC1"]);
+  });
+
+  test("dry: keine Mutation, keine Pause", async () => {
+    const { p, ruf } = lauf([um(1), entf(2)], { dry: true });
+    await p;
+    expect(ruf).toEqual([]);
+  });
+
+  test("gemeldete Items gehen als Warnung raus, die Zahl kommt zurück", async () => {
+    const { p, warn } = lauf([], {}, [{ number: 5, grund: "Status X" }]);
+    expect(await p).toBe(1);
+    expect(warn).toEqual(["⚠ #5: Status X."]);
+  });
+});
+
+describe("parseArgs --umzug und entferneVomBoard (#1730)", () => {
+  const P = (rawPlace as unknown as { parseArgs: (a: string[]) => unknown }).parseArgs;
+  test("--umzug allein oder mit --dry-run ist gültig", () => {
+    expect(P(["--umzug"])).toEqual({ umzug: true, dry: false });
+    expect(P(["--umzug", "--dry-run"])).toEqual({ umzug: true, dry: true });
+  });
+  test("jede Kombination mit Nummern oder anderen Flags ist ungültig", () => {
+    for (const a of [["--umzug", "12"], ["--umzug", "--top", "1"], ["--notfall", "rot-main", "--umzug"], ["--umzug", "--missing"]]) expect(P(a), a.join(" ")).toBeNull();
+  });
+  test("normalizeItems trägt die Issue-Node-ID, fehlend ist sie leer", () => {
+    const n = (L as unknown as { normalizeItems: (r: unknown) => { contentId: string }[] }).normalizeItems;
+    const roh = [[{ node_id: "PVTI_1", content_type: "Issue", content: { node_id: "I_1", number: 1 }, fields: [] }, { node_id: "PVTI_2", content_type: "Issue", content: { number: 2 }, fields: [] }]];
+    expect(n(roh).map((i) => i.contentId)).toEqual(["I_1", ""]);
+  });
+  test("entferneVomBoard ohne Board wirft vor jedem gh-Aufruf", () => {
+    const f = (L as unknown as { entferneVomBoard: (...a: unknown[]) => unknown }).entferneVomBoard;
+    for (const falsch of [undefined, null, "produkt", {}]) expect(() => f(falsch, "PVTI_1")).toThrow(/Board fehlt[\s\S]*Fix:/);
   });
 });

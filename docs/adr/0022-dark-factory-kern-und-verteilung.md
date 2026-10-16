@@ -262,6 +262,15 @@ Teil 1 von F11 ist umgesetzt: das Factory-Board existiert, die Config führt bei
 - **Factory-Board:** privates User-Project „Factory Backlog“, Kopie des Produkt-Boards (gleiches Status-Feld mit Todo, In Progress, Done), ohne die Ansichten „Spiel“ und „Agentic Engineering“; das Produkt-Board heißt jetzt „Kubernia Backlog“. „Auto-add sub-issues“ kann nur die Maintainerin in der Oberfläche einschalten.
 - **Grenze:** `board-lib` lädt die Config weiter beim Import, eine kaputte v2-Config bricht damit auch die anderen Board-Werkzeuge (gewollt, laut statt still). Die Option-IDs des kopierten Status-Feldes können denen des Produkt-Boards gleichen; darum gibt es keine Eindeutigkeitsprüfung für sie.
 
+## Fortschreibung #1730 (2026-10-16): Umzug (F11, Teil 3)
+
+Teil 3 von F11 ist umgesetzt: `node scripts/board-place.mjs --umzug [--dry-run]` setzt jedes offene Item, das gegen die Trennregel auf dem falschen Board steht, ans Ende des richtigen Boards und entfernt es danach vom falschen (`deleteProjectV2Item`, das Issue bleibt). Entscheidungen:
+
+- **Reihenfolge der Mutationen:** erst aufnehmen und positionieren, dann entfernen; ein Item steht nie auf keinem Board. Bei einem Fehler bricht der Lauf ab (kein Wiederholen um Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert) und wird per Neustart fortgesetzt, weil der Plan aus dem Ist-Stand beider Boards entsteht (`umzugsPlan`, pur, idempotent).
+- **Sonderfälle:** ein Item auf beiden Boards wird nur entfernt; ein Item mit Status ungleich Todo wird gemeldet (Exit 1) statt umgezogen; geschlossene Items bleiben als Historie.
+- **Ansichten:** „Spiel“ und „Agentic Engineering“ des Produkt-Boards sind gelöscht (freigegeben im Pre-Flight); beide Boards tragen nur „View 1“.
+- **Grenze:** die REST-Liste hinkt gelöschten Items hinterher; vor einem zweiten Live-Lauf `--umzug --dry-run` wiederholen, bis er „nichts zu tun“ meldet.
+
 ## Fortschreibung #1741 (2026-10-16): Präfixe, Labels und Agenten in der Projekt-Config (F3, Teil 1)
 
 Teil 1 von F3 ist umgesetzt: das Schema, die Quelle der Commit-Zeilen und die Wächter-Begriffe für alle F3-Werte. Die Teile K2 bis K8 (Epic #1707) senken nur noch die Baseline. Entscheidungen:
