@@ -233,7 +233,12 @@ const skillVerstoesse = (md: string): string[] => {
   else if (/\b(model|effort):/.test(spawn)) v.push("Spawn setzt model/effort");
   if (/bodyText/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, ""))) v.push("bodyText im Skill-Ablauf (Thread-Abruf im privilegierten Lauf)");
   if (/forum-sanitize\.mjs --body/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, "").replace(/über `scripts\/forum-sanitize\.mjs`/g, ""))) v.push("Pipe über forum-sanitize.mjs --body im Skill");
-  if (/gh issue view \S+ (?!--json)/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, ""))) v.push("gh issue view ohne --json (gibt Titel und Body aus)");
+  // Zeilenweise: der Rest der Zeile nach `gh issue view ` muss `--json` tragen (auch bei Aufruf am Zeilenende).
+  const ohneJson = md.replace(/^## Rule-of-Two[\s\S]*$/m, "").split("\n").some((z) => {
+    const i = z.indexOf("gh issue view ");
+    return i >= 0 && !z.slice(i).includes("--json");
+  });
+  if (ohneJson) v.push("gh issue view ohne --json (gibt Titel und Body aus)");
   if (/--json number,title/.test(md)) v.push("Schritt 1 gibt den Titel aus");
   if (!/Pflicht-Stopp/.test(md) || !/Erst nach ihrem OK/.test(md)) v.push("Freigabe-Stopp fehlt");
   if (!/^\| `forum-leser` \(Subagent\) \|/m.test(md)) v.push("Rule-of-Two-Tabelle ohne Zeile forum-leser");
@@ -257,6 +262,8 @@ describe("Skill forum orchestriert die Quarantäne", () => {
     ["wieder bodyText", mit("**2. Thread in Quarantäne legen.**", "**2. Thread lesen** (bodyText).**"), /bodyText/],
     ["Pipe über sanitize", mit("**8. Verifizieren**", "echo x | node scripts/forum-sanitize.mjs --body\n**8. Verifizieren**"), /Pipe über/],
     ["Titel in Schritt 1", mit("--json number --jq", "--json number,title --jq"), /Titel aus/],
+    ["Aufruf am Zeilenende ohne --json", mit("**8. Verifizieren**", "gh issue view 5\n**8. Verifizieren**"), /ohne --json/],
+    ["--json erst in einer späteren Zeile zählt nicht", mit("**8. Verifizieren**", "gh issue view 5 --state\n--json x\n**8. Verifizieren**"), /ohne --json/],
     ["Schritt 8 liest den Issue-Text", mit("gh issue view <Inbox-Nr> --json state --jq .state` zeigt `CLOSED`; nie ohne `--json`, denn", "gh issue view <Inbox-Nr>` zeigt `CLOSED`, denn"), /ohne --json/],
     ["Freigabe-Stopp fehlt", mit("Pflicht-Stopp", "Hinweis"), /Freigabe-Stopp/],
     ["Tabellenzeile fehlt", mit("| `forum-leser` (Subagent) |", "| `anderer` |"), /ohne Zeile forum-leser/],
