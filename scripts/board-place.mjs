@@ -9,12 +9,17 @@
  *   node scripts/board-place.mjs --after 1206 1240 1241      # in dieser Reihenfolge hinter #1206
  *   node scripts/board-place.mjs --dry-run --top 1240        # nur anzeigen
  *   node scripts/board-place.mjs --position 4 1312           # als N. Todo-Item (z.B. Sammelticket, Position laut AGENTS.md)
- *   node scripts/board-place.mjs --missing                   # offene Issues ohne Board-Item auf irgendeinem Board (nur Bericht)
+ *   node scripts/board-place.mjs --umzug [--dry-run]         # Items auf dem falschen Board umziehen (Trennregel)
+ *   node scripts/board-place.mjs --missing                  # offene Issues ohne Board-Item auf irgendeinem Board (nur Bericht)
  *
  * Zwei Boards (ADR 0022 F11, #1729): das Ziel-Board bestimmt die Trennregel (`boardRolleFuer` der Labels: `area:harness` Factory, sonst Produkt;
  * Labels aus dem Board-Item, für Nummern ohne Item aus der Issue-REST). Gemischte Nummern und ein `--after`-Anker nur auf dem anderen Board
  * sind Exit 2. Steht eine Nummer auf beiden Boards, meldet das Skript es und sortiert auf dem Board laut Trennregel; eine Nummer nur auf dem
- * anderen Board wird zusätzlich auf dem Ziel-Board aufgenommen (Entfernen ist nicht Aufgabe dieses Skripts).
+ * anderen Board wird zusätzlich auf dem Ziel-Board aufgenommen (Entfernen leistet nur `--umzug`).
+ *
+ * Umzug (#1730): `--umzug [--dry-run]` setzt jedes offene Item, das gegen die Trennregel auf dem falschen Board steht, in Quell-Reihenfolge
+ * ans Ende des Ziel-Boards (Status Todo) und entfernt es danach vom Quell-Board (das Issue bleibt). Steht die Nummer auf beiden Boards,
+ * wird nur entfernt; ein Item mit Status ungleich Todo wird gemeldet (Exit 1). Idempotent, Abbruch beim ersten Fehler, erneut fahren.
  *
  * Nie vor das ungeclaimte Sammelticket: `--top`, `--after` und `--position` klemmen den Anker hinter das offene, nicht zugewiesene
  * Sammelticket „Harness-Härtung (gesammelt)“ (sonst rückt es nicht nach vorn); die Ausgabe nennt die Klemmung. Nur echte Notfälle
@@ -41,6 +46,7 @@ import {
   boardFuerRolle,
   boardRolleFuer,
   aufnahmePlan,
+  entferneVomBoard,
   ergaenzeFehlende,
   fehlendeNummern,
   ghJson,
@@ -54,6 +60,7 @@ import {
   positionOderWarnung,
   setPosition,
   todoItem,
+  umzugsPlan,
   wirklichFehlend,
 } from "./board-lib.mjs";
 
@@ -81,6 +88,7 @@ export function parseArgs(argv) {
 }
 
 function parseOhneNotfall(rest, dry) {
+  if (rest.length === 1 && rest[0] === "--umzug") return { umzug: true, dry };
   if (rest.length === 1 && rest[0] === "--missing") return { missing: true, dry };
   if (rest[0] === "--position") {
     const [n, nr, ...more] = rest.slice(1).map((a) => Number(a.replace(/^#/, "")));
@@ -220,14 +228,75 @@ async function einsortieren(args) {
   if (missing.length > 0) throw abbruch(`Nicht im Board gefunden (auch nicht per GraphQL): ${missing.map((n) => `#${n}`).join(", ")}`);
 }
 
+/**
+ * Führt den Umzugsplan (#1730) aus. `io`: `dry`, `aufnehmen(rolle, contentId)` → Item-ID, `positioniere(rolle, itemId, afterId)`,
+ * `entferne(rolle, itemId)`, `schlafe()`, `log`, `warn`. Je Item: erst aufnehmen und positionieren (hinter das zuletzt umgezogene Item,
+ * zuerst hinter das Ende des Ziel-Boards), ERST DANN vom Quell-Board entfernen, damit ein Item nie auf keinem Board steht. Bricht beim
+ * ersten Fehler ab (Meldung nennt Rest und Doppelstand); gemeldete Items gehen am Ende als Warnung raus. Gibt die Zahl der Meldungen zurück.
+ */
+export async function fuehreUmzugAus(plan, io) {
+  const { dry, aufnehmen, positioniere, entferne, schlafe, log = console.log, warn = console.error } = io;
+  const letzte = { ...plan.ende };
+  for (const [n, s] of plan.schritte.entries()) {
+    const rest = plan.schritte.slice(n).map((x) => `#${x.number}`).join(", ");
+    log(`#${s.number} ${s.aktion === "umziehen" ? `${s.von} → ${s.nach}` : `nur von ${s.von} entfernen (steht schon auf ${s.nach})`}`);
+    if (dry) continue;
+    let doppelt = false;
+    try {
+      if (s.aktion === "umziehen") {
+        const id = await aufnehmen(s.nach, s.contentId);
+        doppelt = true;
+        await schlafe();
+        await positioniere(s.nach, id, letzte[s.nach]);
+        letzte[s.nach] = id;
+        await schlafe();
+      }
+      await entferne(s.von, s.quelleId);
+      await schlafe();
+    } catch (e) {
+      const zusatz = doppelt ? ` #${s.number} steht auf beiden Boards, Position auf dem Ziel-Board prüfen.` : "";
+      throw abbruch(`${abortMessage(e.message)}. Umzug bei #${s.number} abgebrochen.${zusatz} Offen bleiben ${rest}; erneut fahren (idempotent).`);
+    }
+  }
+  for (const g of plan.gemeldet) warn(`⚠ #${g.number}: ${g.grund}.`);
+  return plan.gemeldet.length;
+}
+
+async function umziehen(args) {
+  const [produkt, factory] = ["produkt", "factory"].map((r) => loadItems(boardFuerRolle(r)));
+  const plan = umzugsPlan(produkt, factory);
+  const u = plan.schritte.filter((s) => s.aktion === "umziehen").length;
+  if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return console.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
+  const gemeldet = await fuehreUmzugAus(plan, {
+    dry: args.dry,
+    aufnehmen: (r, c) => addToBoardTodo(boardFuerRolle(r), c),
+    positioniere: (r, i, a) => setPosition(boardFuerRolle(r), i, a),
+    entferne: (r, i) => entferneVomBoard(boardFuerRolle(r), i),
+    schlafe: () => sleep(PAUSE_MS),
+    log: console.log,
+    warn: console.error,
+  });
+  console.log(`Umzug: ${u} umziehen, ${plan.schritte.length - u} entfernen, ${gemeldet} gemeldet${args.dry ? " (Trockenlauf)" : ""}.`);
+  if (gemeldet > 0) throw abbruch(`${gemeldet} Item(s) nicht umgezogen (siehe Warnungen).`);
+}
+
 async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (!args) {
-    console.error("Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing)");
+    console.error("Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
     process.exit(2);
   }
   mitKontingent("board-place");
   if (args.missing) return reportMissing();
+  if (args.umzug) {
+    // Kein mitWiederholung um die Mutationen: ein Wiederholen könnte doppelt aufnehmen; der Lauf ist stattdessen idempotent.
+    try {
+      return await umziehen(args);
+    } catch (e) {
+      console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
+      process.exit(e.exitCode ?? 1);
+    }
+  }
   try {
     // Wettlauf (#1628): ein frisch angelegtes Issue hat teils noch keinen GraphQL-Node; vorübergehende Fehler werden mit Pause wiederholt.
     await mitWiederholung(

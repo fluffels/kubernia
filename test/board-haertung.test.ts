@@ -18,6 +18,7 @@ type Lib = {
   MUTATION_POSITION: string;
   MUTATION_ADD: string;
   MUTATION_STATUS: string;
+  MUTATION_DELETE: string;
   aliasAbfrage: (nummern: number[], repo?: string) => { nummern: number[]; query: string }[];
   afterIdForPosition: (items: Item[], n: number, ohneNr?: number | null) => string | null;
   sammelticketKorrektur: (items: Item[], n: number) => { nr: number; afterId: string | null } | null;
@@ -73,11 +74,12 @@ describe("GraphQL-Syntax-Wächter (#1392 Z10)", () => {
     for (const b of viele) expect(klammernBalanciert(b.query), b.nummern.join(",")).toBe(true);
   });
 
-  test("die drei Mutationen sind balanciert und tragen ihre Variablen", () => {
-    for (const m of [L.MUTATION_POSITION, L.MUTATION_ADD, L.MUTATION_STATUS]) expect(klammernBalanciert(m), m).toBe(true);
+  test("die vier Mutationen sind balanciert und tragen ihre Variablen", () => {
+    for (const m of [L.MUTATION_POSITION, L.MUTATION_ADD, L.MUTATION_STATUS, L.MUTATION_DELETE]) expect(klammernBalanciert(m), m).toBe(true);
     expect(L.MUTATION_POSITION).toContain("updateProjectV2ItemPosition");
     expect(L.MUTATION_ADD).toContain("addProjectV2ItemById");
     expect(L.MUTATION_STATUS).toContain("updateProjectV2ItemFieldValue");
+    expect(L.MUTATION_DELETE).toContain("deleteProjectV2Item");
   });
 });
 
