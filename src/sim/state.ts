@@ -10,12 +10,13 @@
  * Warum zuerst: die Folge-Schritte (#373 docker, #374 kubectl … #378 argocd) lagern
  * die Befehls-Handler in eigene Module aus – die brauchen genau diese Typen + den
  * State-Vertrag als gemeinsame Basis. Reine Typen und wenige Konstanten/Prüfungen → Phaser-frei,
- * nur vom Blattmodul ./names abhängig, vom Architektur-Wächter (#347) automatisch als Domäne geschützt.
+ * nur von den Blattmodulen ./names und ./gateway (nur Typen) abhängig, vom Architektur-Wächter (#347) automatisch als Domäne geschützt.
  *
  * Echte Interfaces für die simulierten Ressourcen (Pod/Deployment/Service …) statt
  * `any`. Sie sichern Felder + Mutationen im ganzen Simulator ab.
  */
 import { InvalidSpecError, type PodName } from "./names"; // Value Object (#479) + abgelehnte Spezifikation (assertServiceType); names.ts ist ein Blattmodul → kein Zyklus.
+import type { GatewayApplyFields, GatewayClusterFields, GatewayScenarioFields } from "./gateway"; // Gateway API (#1664): reine Typen, gateway.ts importiert state.ts nie zurück.
 
 /** Ergebnis einer simulierten Befehlszeile (`Sim.exec`). Lebt hier (Sim-Domänentyp)
  *  und nicht in `types.ts`, damit `sim.ts` nicht zurück auf `types.ts` zeigen muss –
@@ -440,7 +441,7 @@ export interface ArgoApp {
   created: number;
 }
 /** Wirkung eines `kubectl apply -f <datei>` (was die Datei im Cluster erzeugt). */
-export interface ApplyEffect {
+export interface ApplyEffect extends GatewayApplyFields {
   // #164 (Werft-Capstone): `requireBuiltImage` = das eigene Image muss vorher lokal gebaut/gezogen sein,
   // sonst landet der Pod im ImagePullBackOff (statt – wie sonst im Sim – einfach zu laufen).
   deployment?: { name: string; image: string; replicas: number; requireBuiltImage?: boolean } & PodTemplateSpec;
@@ -672,7 +673,7 @@ export interface Alert {
 }
 
 /** Eingabe-Szenario einer Quest-Welt. Alle Felder optional – reset() füllt Defaults. */
-export interface Scenario {
+export interface Scenario extends GatewayScenarioFields {
   dockerImages?: string[];
   dockerContainers?: Container[];
   nodes?: NodeSpec[];
@@ -748,7 +749,7 @@ export interface Scenario {
  *  die rein transienten Sitzungs-Marker der Sim (`_firingAlerts`/`_resolvedAlerts`,
  *  `lastError`, `lastDeletedPod`) – die sind kein Cluster-Zustand, sondern
  *  Laufzeit-Buchhaltung; `implements` erlaubt der Klasse solche Zusatzfelder. */
-export interface ClusterState {
+export interface ClusterState extends GatewayClusterFields {
   scenario: Scenario;
   clock: number;
   docker: { pulled: string[]; containers: Container[] };

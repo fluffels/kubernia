@@ -12,6 +12,7 @@ import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
 import { RESOURCE_KINDS } from "../../src/sim/kubectl/resources";
 import { simGrenzen } from "../../src/hud/helptext";
 import { formatLabels } from "../../src/sim/util";
+import { SIM_GATEWAY_CONTROLLER, gatewayAddress } from "../../src/sim/gateway";
 import { serviceSelector, servicesWithDefault } from "../../src/sim/endpoints";
 import { BROKEN_POD, isReady } from "../../src/sim/podstatus";
 import { deploymentYaml, serviceYaml } from "../factories/manifests";
@@ -31,7 +32,10 @@ const sts = (extra: object = {}) => ({ name: "speicher", image: "postgres:16", r
 const EMPTY_LIST = "apiVersion: v1\nitems: []\nkind: List\nmetadata:\n  resourceVersion: \"\"";
 
 function reich(): Scenario {
-  return { deployments: [dep("web", { containerPort: 8080 }), dep("api")], services: [svc("web", { targetPort: 8080 })], statefulSets: [sts()] };
+  return { deployments: [dep("web", { containerPort: 8080 }), dep("api")], services: [svc("web", { targetPort: 8080 })], statefulSets: [sts()],
+    gatewayClasses: [{ name: "envoy", controllerName: SIM_GATEWAY_CONTROLLER, description: "Envoy Gateway" }],
+    gateways: [{ name: "eingang", className: "envoy", listeners: [{ name: "http", port: 80, protocol: "HTTP" }, { name: "https", port: 443, protocol: "HTTPS", hostname: "hafen.example", tlsSecret: "hafen-tls" }] }],
+    httpRoutes: [{ name: "web-route", parentRefs: ["eingang"], hostnames: ["hafen.example"], rules: [{ path: "/web", pathType: "Exact", backends: [{ service: "web", port: 80 }] }, { path: "/", pathType: "PathPrefix", backends: [] }] }] };
 }
 
 describe("Einzelobjekt gegen List", () => {
@@ -607,5 +611,57 @@ describe("BROKEN_POD treibt alle Ausgaben (#1500)", () => {
     expect(desc).toContain("Status:       Failed");
     expect(desc).toContain("State:        Evicted");
     expect(desc).not.toContain("Last State:");
+  });
+});
+
+describe("Gateway API: Round-Trip und Status im YAML (#1664)", () => {
+  const CLASS_YAML = (extra = ""): string => "apiVersion: gateway.networking.k8s.io/v1\nkind: GatewayClass\nmetadata:\n  name: envoy\nspec:\n  controllerName: " + SIM_GATEWAY_CONTROLLER + "\n" + extra;
+  const GATEWAY_YAML = "apiVersion: gateway.networking.k8s.io/v1\nkind: Gateway\nmetadata:\n  name: eingang\nspec:\n  gatewayClassName: envoy\n  listeners:\n"
+    + "    - name: http\n      port: 80\n      protocol: HTTP\n"
+    + "    - name: https\n      port: 443\n      protocol: HTTPS\n      hostname: hafen.example\n      tls:\n        mode: Terminate\n        certificateRefs:\n          - kind: Secret\n            name: hafen-tls\n";
+
+  test.each([["ohne description", CLASS_YAML()], ["mit description", CLASS_YAML("  description: Hafentor\n")]])("GatewayClass %s: Mapper(Ausgabe) = Mapper(Original)", (_n, orig) => {
+    const sim = freshSim();
+    sim.files["a.yaml"] = orig;
+    expect(run(sim, "apply -f a.yaml").error).toBeFalsy();
+    expect(effectsFromManifest(out(sim, "get gatewayclass envoy -o yaml"), "b.yaml")).toEqual(effectsFromManifest(orig, "a.yaml"));
+  });
+
+  test.each([
+    ["minimal", "apiVersion: gateway.networking.k8s.io/v1\nkind: Gateway\nmetadata:\n  name: eingang\nspec:\n  gatewayClassName: envoy\n  listeners:\n    - name: http\n      port: 80\n      protocol: HTTP\n"],
+    ["HTTPS mit hostname und tls", GATEWAY_YAML],
+  ])("Gateway %s: Mapper(Ausgabe) = Mapper(Original)", (_n, orig) => {
+    const sim = freshSim();
+    sim.files["a.yaml"] = orig;
+    expect(run(sim, "apply -f a.yaml").error).toBeFalsy();
+    expect(effectsFromManifest(out(sim, "get gateway eingang -o yaml"), "b.yaml")).toEqual(effectsFromManifest(orig, "a.yaml"));
+  });
+
+  test("Status: Klasse und Adresse stehen in der Ausgabe, die Klasse ohne Namespace, Status-Werte als Text", () => {
+    const sim = freshSim();
+    sim.files["c.yaml"] = CLASS_YAML();
+    sim.files["g.yaml"] = GATEWAY_YAML;
+    run(sim, "apply -f c.yaml");
+    run(sim, "apply -f g.yaml");
+    const cls = doc(sim, "get gatewayclass envoy -o yaml");
+    expect(cls.metadata).toEqual({ name: "envoy" });
+    expect(((cls.status as Obj).conditions as Obj[])[0]).toMatchObject({ type: "Accepted", status: "True", reason: "Accepted" });
+    const gw = doc(sim, "get gateway eingang -o yaml");
+    expect(gw.status).toMatchObject({ addresses: [{ type: "IPAddress", value: gatewayAddress("eingang") }] });
+    const listeners = (gw.status as Obj).listeners as Obj[];
+    expect(listeners.map(l => l.name)).toEqual(["http", "https"]);
+    // hafen-tls fehlt: der HTTPS-Listener meldet InvalidCertificateRef, der HTTP-Listener ist heil.
+    expect(JSON.stringify(listeners[1])).toContain("InvalidCertificateRef");
+    expect(JSON.stringify(listeners[0])).not.toContain("InvalidCertificateRef");
+  });
+
+  test("ohne akzeptierte Klasse: keine Adresse im Status, keine Listener-Conditions", () => {
+    const sim = freshSim();
+    sim.files["g.yaml"] = GATEWAY_YAML;
+    run(sim, "apply -f g.yaml");
+    const st = doc(sim, "get gateway eingang -o yaml").status as Obj;
+    expect(st.addresses).toBeUndefined();
+    expect(st.listeners).toBeUndefined();
+    expect((st.conditions as Obj[]).map(c => c.status)).toEqual(["Unknown", "Unknown"]);
   });
 });

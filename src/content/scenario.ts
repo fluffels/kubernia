@@ -29,7 +29,7 @@ import type { Scenario, ApplyEffect } from "../sim";
  *  nachzieht (statt still im Sim-Verhalten aufzufallen, weil die JSON der Compiler nie sieht). */
 const APPLY_EFFECT_FIELDS: Record<keyof ApplyEffect, true> = {
   deployment: true, serviceAccount: true, role: true, roleBinding: true, service: true,
-  ingress: true, networkPolicy: true, application: true, serviceMonitor: true,
+  ingress: true, gatewayClass: true, gateway: true, httpRoute: true, networkPolicy: true, application: true, serviceMonitor: true,
   prometheusRule: true, grafanaDatasource: true, grafanaDashboard: true, statefulSet: true,
   pvc: true, pv: true, storageClass: true, volumeSnapshot: true,
 };
@@ -76,7 +76,7 @@ const scApplyEffects: ScenarioFieldCheck = (v, p) => {
 const SCENARIO_FIELDS: Record<keyof Scenario, ScenarioFieldCheck> = {
   // Ressourcen-Arrays (nur strukturell – Element-Semantik füllt/prüft reset()/die Sim)
   dockerImages: scArray, dockerContainers: scArray, nodes: scArray, deployments: scArray,
-  services: scArray, ingresses: scArray, networkPolicies: scArray, secrets: scArray,
+  services: scArray, ingresses: scArray, gatewayClasses: scArray, gateways: scArray, httpRoutes: scArray, networkPolicies: scArray, secrets: scArray,
   configMaps: scArray, serviceMonitors: scArray, prometheusRules: scArray,
   grafanaDatasources: scArray, grafanaDashboards: scArray, statefulSets: scArray,
   pvcs: scArray, pvs: scArray, storageClasses: scArray, volumeSnapshots: scArray,

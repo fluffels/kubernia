@@ -28,6 +28,8 @@ export interface LaufOptionen {
   titel?: string;
   /** Nonce aus `ticket-lock.mjs claim`, die der claim-Agent als `lockNonce` zurückgibt (Standard: keine). */
   lockNonce?: string;
+  /** Überschreibt `ergebnis` und `claimVerifiziert` der Auswahl-Antwort (Standard: `ticket-geclaimt`, verifiziert). */
+  auswahl?: { ergebnis?: string; claimVerifiziert?: boolean };
   /** Antwort des Pre-Flight-Agenten; Standard: keine Klärung nötig, keine Entscheidung. */
   preflight?: Record<string, unknown>;
   /** Wert des Workflow-Globals `args` (Standard: undefined). */
@@ -68,7 +70,7 @@ export async function workflowLauf(o: LaufOptionen = {}) {
     aufrufe.push({ prompt, label: opt.label, agentType: opt.agentType, model: opt.model, effort: opt.effort });
     const l = opt.label;
     if (l === "auswahl+claim") {
-      return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: o.titel ?? "Testticket", body: "Body", art, lockNonce: o.lockNonce });
+      return Promise.resolve({ ergebnis: o.auswahl?.ergebnis ?? "ticket-geclaimt", claimVerifiziert: o.auswahl?.claimVerifiziert ?? true, nummer: 42, titel: o.titel ?? "Testticket", body: "Body", art, lockNonce: o.lockNonce });
     }
     if (opt.agentType === "kubernia-planner") return Promise.resolve(planerDa ? (o.plan ?? "PLAN-TEXT") : null);
     if (l.startsWith("preflight")) return Promise.resolve(o.preflight ?? { brauchtKlaerung: false });
@@ -96,6 +98,7 @@ export async function workflowLauf(o: LaufOptionen = {}) {
     if (l.startsWith("review-festgefahren")) return Promise.resolve("ok");
     if (l.startsWith("pr+merge")) return Promise.resolve({ ergebnis: "gemergt", prNummer: 7 });
     if (l.startsWith("cleanup")) return Promise.resolve("ok");
+    if (l === "claim-frei") return Promise.resolve("ok");
     return Promise.reject(new Error(`Stub kennt das Label "${l}" nicht – in workflowLauf() erweitern.`));
   };
   const parallel = (thunks: (() => Promise<unknown>)[]) => Promise.all(thunks.map((t) => t()));

@@ -184,6 +184,19 @@ F2 ist umgesetzt. Entscheidungen:
 
 Präzisiert durch #1628: Die Workflows checken das volle Repo aus und setzen die Position über `scripts/board-place.mjs` (Wiederholung, rot bei endgültigem Scheitern); Sparse-Checkout und `set_board_top` entfallen für die Inbox-Workflows.
 
+## Fortschreibung #1613 (2026-10-16): Sync-Werkzeug und Drift-Gate (F9)
+
+F9 ist umgesetzt. Entscheidungen:
+
+- **Sync:** `scripts/factory-sync.mjs --quelle <pfad> [--ziel <pfad>] [--trocken]` überträgt den Besitz laut Manifest der Quelle: ganze Datei, Markdown-Block zwischen Markern, JSON-Schlüssel der obersten Ebene. Kein Merge: eine Einheit wird ersetzt, alles andere bleibt byte-gleich. Erst wird alles geprüft, dann geschrieben; bei einem Prüffehler bleibt das Ziel unberührt (ein Schreibfehler mitten im Lauf hinterlässt einen Zwischenstand, den ein erneuter Lauf repariert; der Sync-Stand wird zuletzt geschrieben). `.factory/besitz.json` wird mitkopiert, `.factory/projekt.json` nie (steht sie im Manifest, ist das ein Fehler).
+- **JSON-Ersatz als Textbereich:** der Werttext des Schlüssels wird wörtlich ersetzt, nicht neu serialisiert, weil `.claude/settings.json` nicht im `JSON.stringify`-Format steht. Eine Selbstprüfung je Datei belegt danach: Besitz-Schlüssel gleich der Quelle, alle anderen gleich dem Vorher. Fehlender Schlüssel wird als letzte Eigenschaft eingefügt, eine fehlende JSON-Datei mit den eigenen Schlüsseln angelegt, ein fehlender Marker im Ziel bricht ab.
+- **Zeilenenden:** Hash und Vergleich sind LF-normalisiert; geschrieben wird nur bei inhaltlicher Änderung, im Zeilenende-Stil der Zieldatei, neue Dateien mit LF. Idempotent: ein zweiter Lauf schreibt nichts.
+- **Entfallene Einheiten:** was im alten Sync-Stand stand und nicht mehr im Manifest steht, wird gemeldet, nicht gelöscht.
+- **Drift-Referenz im Projekt:** `.factory/sync-stand.json` (Quell-Commit mit Flag `sauber`, Hash des Manifests, Hash je Einheit, kein absoluter Pfad), weil die CI ohne Zugriff auf das Factory-Repo prüfen muss. `npm run check:factorydrift` (in `verify`) ist rot bei geändertem Manifest, geänderter, fehlender oder nicht auflösbarer Einheit und bei Einheiten, die Manifest und Sync-Stand verschieden listen; jede Meldung nennt den Weg (upstream ändern und neu syncen, oder den Projektwert nach `.factory/projekt.json` auslagern). Ohne Sync-Stand entfällt die Prüfung mit einer Zeile; dieses Repo ist bis F10 die Quelle.
+- **Kern-Abdeckung:** jede getrackte Datei direkt in einem Kern-Verzeichnis (Ordner einer Ganz-Datei-Einheit, nicht rekursiv) ist Besitz oder steht mit Art (`projekt`, `modul`, `offen`) und Grund in `test/harness/kern-abdeckung.json`. Damit wird die Aufnahme einer unveränderten Datei samt Baseline-Eintrag im Leitplanken-Diff sichtbar, weil der Eintrag in `kern-abdeckung.json` verschwinden muss. Die Einordnung der offenen Dateien steht im Sammelticket #1663.
+- **Import-Hülle:** jeder lokale Import einer Ganz-Datei-Code-Einheit zeigt auf eine Ganz-Datei-Einheit oder `.factory/projekt.json`. Ausnahmen (`KERN_HUELLE_AUSNAHMEN`) nur für Importeure im Ring `kern-nach-entkopplung`, mit Ticket oder ADR-Schritt; die Liste darf nur schrumpfen. Bestand: die Kern-Registry der Doku-Generatoren importiert zwei Spiel-Generatoren (F6). Die Schichtdaten-Ausnahme von F7 ist entfallen: `check-diffcoverage.mjs` liest den Pfad aus `scripts/docs-gen/config.json` (`schichten.layers`).
+- **Grenzen:** für die Schlüssel `permissions`, `sandbox` und `hooks` gibt es keinen Weg über die Projekt-Config (Claude Code liest sie dort nicht), ein Projekt ändert sie heute nur upstream (F4); die Import-Hülle sieht nur statische Importe, keine Aufrufe über einen Pfad in Text-Einheiten (Beleg und Zuordnung: #1663); `.factory/besitz.json` und `.factory/sync-stand.json` als Einheit des Manifests sind nicht abgewiesen; das Löschen des Sync-Stands schaltet das Gate ab (sichtbar nur im Leitplanken-Diff unter `.factory/`); ein neuer Unterordner (etwa ein neuer Skill) ist von der Abdeckung nicht erfasst; zusammengesetzte oder dynamische Importpfade sieht die Hülle nicht; BOM und Binärdateien sind nicht behandelt; der Ticket-Verweis einer Ausnahme wird nicht auf „offen“ geprüft; der Sync läuft aus einem Arbeitsbaum, nicht von einem Tag (F10).
+
 ## Fortschreibung #1615 (2026-10-16): Spezifikations-Gate (F12)
 
 F12 ist umgesetzt. Entscheidungen:
@@ -193,3 +206,15 @@ F12 ist umgesetzt. Entscheidungen:
 - **Ausnahmen über §3 hinaus:** alle Kopf-Items (🚨, 🔒, 🤖, Forum, ⏰) haben eigene Formate, dazu Sammel- und Epic-/Phasen-Titel.
 - **Einmal-Kommentar:** `naechstes-ticket.mjs` kommentiert (I/O injiziert, Logik pur) nur, wenn die Spezifikation der ausschlaggebende Grund ist, und nur ohne den versteckten Marker `<!-- spezifikations-gate -->` im Kommentar eines vertrauten Autors; ein später anderer Mangel löst bewusst keinen zweiten Kommentar aus.
 - **Grenze:** Bei gleichzeitiger Auswahl können zwei Kommentare entstehen (der Marker wird direkt vor dem Posten geprüft, nicht atomar). Ein Ticket, das zwischen Festlegen des Stichtags und Merge entsteht, ist hart.
+
+## Fortschreibung #1616 (2026-10-16): Factory-Kennzahlen (F14)
+
+F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den Bericht-Kommentar des Wochen-Status-Tickets (Definition, Lücken, Grenzen: [model-routing.md](../model-routing.md#factory-kennzahlen-1616)). Entscheidungen:
+
+- **Kostenquelle:** Standard ist das Transkript, `--langfuse` schaltet Langfuse ausdrücklich zu; ein stiller Wechsel bei fehlendem Zugang gäbe zwei nicht vergleichbare Reihen. Das weicht vom Wortlaut „Kosten je Ticket mit `--langfuse`“ in §6 ab: Der Agentenlauf hat den Secret-Key nicht, der Standardweg muss dort Zahlen liefern.
+- **Verkettung:** Unterprozesse mit `--json` statt Bibliotheks-Extraktion (Einstiegsskripte importieren einander nicht); die Verträge sichern Tests gegen die echten Erzeuger `bewertePrs` und `summarize`, ein fehlendes Vertragsfeld ergibt Exit 2.
+- **Ticket → Session** über die Claim-Zeile `gh issue edit <nr> --add-assignee` im lokalen Transkript, bis #1266 Tickets an Traces hängt; Fenster je Ticket: Claim bis Merge, Kosten wie aufgezeichnet.
+- **Nacharbeit** über die im Zeitraum fälligen Fenster `[von − 14 T, bis − 14 T]`: nur abgelaufene Fristen gehen in die Quote.
+- **Lücken statt 0:** kein Zugang, keine Session, keine Calls oder Calls ohne Preis machen die Kosten eines Tickets zur Lücke (keine Teilsumme); sie gehen weder in den Median noch in eine Summe, „n von N gemessen“ nennt die Abdeckung.
+- **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
+- **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.

@@ -102,6 +102,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
+    `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
     `- **Checkliste:** [docs/model-routing.md › Langfuse-Status überprüfen](${docs}/model-routing.md#langfuse-status-überprüfen-1293).`,
     `- **Mechanik:** [docs/ticket-reihenfolge.md](${docs}/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293).`,
     `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,

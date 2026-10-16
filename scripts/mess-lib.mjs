@@ -32,6 +32,9 @@ export function istNeuaufbau({ gapMs, pauseMs, call }) {
 
 const regexEscape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** Kern des Worktree-Pfads `/.claude/worktrees/kq-<nr>…` (Regex-Quelltext): `bereinige` und `normPfad` nutzen dieselbe Regel. */
+const WORKTREE_KERN = String.raw`/\.claude/worktrees/kq-\d+[\w-]*`;
+
 /** Beide Schreibweisen einer Repo-Wurzel (`C:/x/y` und Git-Bash `/c/x/y`) als Regex-Alternativen. */
 function wurzelVarianten(wurzel) {
   const roh = String(wurzel).replace(/\\/g, "/").replace(/\/+$/, "");
@@ -45,6 +48,16 @@ function wurzelVarianten(wurzel) {
 }
 
 /**
+ * Pfad vergleichbar machen: Schrägstriche, klein, ohne Worktree-Präfix `…/worktrees/kq-<nr>…/` und ohne die Repo-Wurzel (beide
+ * Schreibweisen aus `wurzelVarianten`, auch mit Backslash oder abschließendem Schrägstrich). Pfade außerhalb der Wurzel bleiben stehen.
+ */
+export function normPfad(pfad, { wurzel = null } = {}) {
+  const p = String(pfad).replace(/\\/g, "/").replace(new RegExp(`^.*?${WORKTREE_KERN}/`, "i"), "").toLowerCase();
+  const praefix = wurzelVarianten(wurzel ?? "").map((v) => `${v.toLowerCase()}/`).find((w) => p.startsWith(w));
+  return praefix ? p.slice(praefix.length) : p;
+}
+
+/**
  * Pfade und Befehle ohne Benutzerordner, Worktree-Präfix und Repo-Wurzel (das Repo ist öffentlich). Die Wurzel kommt von
  * außen (`git rev-parse --git-common-dir`, ohne `.git`), nie fest verdrahtet; beide Schreibweisen (`C:/…`, `/c/…`), mit und
  * ohne abschließenden Schrägstrich. Ohne `wurzel` bleibt nur die Wurzel-Ersetzung aus.
@@ -54,7 +67,7 @@ export function bereinige(text, { wurzel = null } = {}) {
     .replace(/\\/g, "/")
     .replace(/[A-Za-z]:\/Users\/[^/\s"']+/g, "~")
     .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~")
-    .replace(/\S*\/\.claude\/worktrees\/kq-\d+[\w-]*(?:\/|(?=\s|$))/g, "<wt>/");
+    .replace(new RegExp(`\\S*${WORKTREE_KERN}(?:/|(?=\\s|$))`, "g"), "<wt>/");
   const varianten = wurzel ? wurzelVarianten(wurzel) : [];
   if (varianten.length) t = t.replace(new RegExp(`(?:${varianten.map(regexEscape).join("|")})(?:/|(?=[\\s"']|$))`, "gi"), "<repo>/");
   return t.replace(/\s+/g, " ");
@@ -90,5 +103,24 @@ export function passtTicketFilter(ticket, { tickets = [], ohne = [] } = {}) {
   return (tickets.length === 0 || tickets.includes(ticket)) && !ohne.includes(ticket);
 }
 
+const CLAIM = /\bgh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--add-assignee)/;
+
+/** Ticketnummer einer Claim-Zeile (`gh issue edit <nr> … --add-assignee`), sonst `null` (#1616; Quelle für Hauptchat-Zerlegung und Factory-Kennzahlen). */
+export function claimNummer(command) {
+  const nr = CLAIM.exec(String(command ?? ""))?.[1];
+  return nr ? Number(nr) : null;
+}
+
 /** Ein echter Modellname: nicht leer und nicht der Client-Platzhalter `<synthetic>`. */
 export const istEchtesModell = (m) => Boolean(m) && m !== "<synthetic>";
+
+/** Zahl der verschiedenen Tickets und derer mit mehr als einem Lauf (#1646); Läufe ohne Ticket zählen in keiner der beiden Zahlen. */
+export function ticketZaehlung(laeufe) {
+  const je = new Map();
+  for (const { ticket } of laeufe) if (ticket !== null && ticket !== undefined) je.set(ticket, (je.get(ticket) ?? 0) + 1);
+  return { tickets: je.size, mehrlauf: [...je.values()].filter((n) => n > 1).length };
+}
+
+/** Warnzeile der Standardauswertungen (#1646): die Mediane gelten je Lauf, nicht je Ticket; leer ohne Ticket mit mehreren Läufen. */
+export const mehrlaufHinweis = (mehrlauf) =>
+  mehrlauf > 0 ? `Mediane je Lauf, nicht je Ticket (${mehrlauf} Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket` : "";

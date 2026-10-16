@@ -279,14 +279,28 @@ describe("uebergabe: Phasen-Schnitt (#1592)", () => {
     }
   });
 
-  test("R5: pr ohne Auto-Merge, MERGED/CLOSED oder ohne PR-Nummer blockiert; OPEN mit Auto-Merge frei; gh-Fehler frei", () => {
+  test("R5: pr ohne Auto-Merge, CLOSED oder ohne PR-Nummer blockiert; OPEN mit Auto-Merge frei; gh-Fehler frei", () => {
     assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: ohneAuto }) ?? "", /nicht OPEN mit Auto-Merge \(Status OPEN, Auto-Merge nein\)/);
-    for (const state of ["MERGED", "CLOSED"]) assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state, autoMergeRequest: { enabledAt: "x" } }) }) ?? "", new RegExp(`Status ${state}`));
+    for (const state of ["CLOSED"]) assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state, autoMergeRequest: { enabledAt: "x" } }) }) ?? "", new RegExp(`Status ${state}`));
     assert.match(blockade(eingabe(uebergabe("pr", "-")), { prStatus: nichtAufrufen }) ?? "", /braucht eine PR:-Zeile/);
     assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: offenMitAuto }), null);
     assert.equal(blockade(vorher(uebergabe("pr", PR)), { prStatus: offenMitAuto }), null, "R1 feuert für uebergabe nicht");
     assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: nichtAufrufen }), null, "gh-Fehler: fail-open");
     assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => null as unknown as Status }), null);
+  });
+
+  test("R5: ein schon gemergter PR gibt den Weg frei (#1646), CLOSED ohne Merge und OPEN ohne Auto-Merge sperren", () => {
+    assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state: "MERGED", autoMergeRequest: null }) }), null);
+    assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state: "MERGED", autoMergeRequest: { enabledAt: "x" } }) }), null);
+    assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state: "CLOSED", autoMergeRequest: null }) }) ?? "", /Status CLOSED/);
+    assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: ohneAuto }) ?? "", /Status OPEN/);
+  });
+
+  test("UEBERGABE: zählt nur am Zeilenanfang (eingerückt ok), nicht mitten in der Zeile", () => {
+    const text = (zeile: string) => ["ERGEBNIS: uebergabe", "PR: -", "SCHNITT: verify", zeile].join(String.fromCharCode(10));
+    assert.equal(parseErgebnis(text("Text UEBERGABE: x")).uebergabe, false);
+    assert.equal(parseErgebnis(text("  UEBERGABE: x")).uebergabe, true);
+    assert.match(blockade(eingabe(text("Text UEBERGABE: x")), { prStatus: nichtAufrufen }) ?? "", /UEBERGABE:-Zeile fehlt/);
   });
 
   test("verify mit PR: - ist frei und fragt gh nicht", () => {

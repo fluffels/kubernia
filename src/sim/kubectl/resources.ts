@@ -32,6 +32,7 @@ function kind<P extends string>(plural: P, singular: string, short: readonly str
 
 const RBAC = "rbac.authorization.k8s.io";
 const NETWORKING = "networking.k8s.io";
+const GATEWAY = "gateway.networking.k8s.io";
 const MONITORING = "monitoring.coreos.com";
 const GRAFANA = "grafana.integreatly.org";
 
@@ -50,6 +51,10 @@ const KINDS = [
   kind("secrets", "secret", [], "", true),
   kind("configmaps", "configmap", ["cm"], "", true),
   kind("ingresses", "ingress", ["ing"], NETWORKING, true),
+  // Gateway API (#1664): nicht in `get all` (keine Kategorie `all`); die GatewayClass ist cluster-weit.
+  kind("gatewayclasses", "gatewayclass", ["gc"], GATEWAY, false),
+  kind("gateways", "gateway", ["gtw"], GATEWAY, true),
+  kind("httproutes", "httproute", [], GATEWAY, true),
   kind("networkpolicies", "networkpolicy", ["netpol"], NETWORKING, true),
   kind("servicemonitors", "servicemonitor", ["smon"], MONITORING, true),
   kind("prometheusrules", "prometheusrule", ["promrule"], MONITORING, true),

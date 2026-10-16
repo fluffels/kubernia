@@ -67,6 +67,9 @@ export function applyBootstrapScenario(state: ClusterState, sc: Scenario): void 
     state.deployments.length = 0;
     state.services.length = 0;
     state.ingresses.length = 0;
+    state.gatewayClasses.length = 0;
+    state.gateways.length = 0;
+    state.httpRoutes.length = 0;
     state.networkPolicies.length = 0;
     state.statefulSets.length = 0;
     state.controlPlane = { up: false, token: null, node: null };

@@ -13,10 +13,9 @@ import * as rawBase from "../scripts/token-baseline.mjs";
 
 type Zeilen = Record<string, unknown>[];
 type Sitzung = { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] };
-const T = rawTranskript as unknown as { ladeSessionDatei: (pfad: string) => Sitzung };
+const T = rawTranskript as unknown as { ladeSessionDatei: (pfad: string) => Sitzung; ladeSessions: (dir: string, von?: string) => Generator<Sitzung> };
 const HC = rawHc as unknown as {
   istKubernia: (meta: Record<string, unknown> | undefined) => boolean;
-  ladeSessions: (dir: string, von?: string) => Generator<Sitzung>;
   zerlegeHauptchat: (e: { sessions: Iterable<Sitzung> }) => { rows: { kategorie: string; quelle: string; calls: number }[]; kubernia: { calls: number } };
 };
 const BASE = rawBase as unknown as { readTranscriptSession: (id: string, root: string) => { calls: { subagent?: { agentType?: string } }[]; questions: number } };
@@ -110,7 +109,7 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
     });
 
   test("liefert die Sessions einzeln und lazy (kein Array)", () => {
-    const gen = HC.ladeSessions(join(root(), "d"));
+    const gen = T.ladeSessions(join(root(), "d"));
     expect(typeof gen.next).toBe("function");
     expect(Array.isArray(gen)).toBe(false);
     const erste = gen.next();
@@ -122,8 +121,8 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
 
   test("ein einmal iterierbarer Generator liefert dasselbe Ergebnis wie ein Array", () => {
     const dir = join(root(), "d");
-    const ausGenerator = HC.zerlegeHauptchat({ sessions: HC.ladeSessions(dir) });
-    const ausArray = HC.zerlegeHauptchat({ sessions: [...HC.ladeSessions(dir)] });
+    const ausGenerator = HC.zerlegeHauptchat({ sessions: T.ladeSessions(dir) });
+    const ausArray = HC.zerlegeHauptchat({ sessions: [...T.ladeSessions(dir)] });
     expect(ausGenerator).toEqual(ausArray);
     expect(ausGenerator.kubernia.calls).toBe(1);
     expect(ausGenerator.rows.reduce((s, r) => s + r.calls, 0)).toBe(2);

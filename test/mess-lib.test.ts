@@ -150,3 +150,56 @@ describe("Ticketnummer und Ticketfilter (#1609)", () => {
     expect(T.passtTicketFilter(5, { tickets: [5], ohne: [5] })).toBe(false);
   });
 });
+
+describe("normPfad (#1646: eine Normalisierung für bereinige und Kontext-Treiber)", () => {
+  const N = raw as unknown as { normPfad: (p: string, o?: { wurzel?: string | null }) => string };
+  test("Worktree-Präfix und Wurzel fallen weg, klein, POSIX", () => {
+    expect(N.normPfad("C:\\Dev\\Proj\\.claude\\worktrees\\kq-5-x\\Scripts\\A.mjs", { wurzel: "C:/dev/proj" })).toBe("scripts/a.mjs");
+    expect(N.normPfad("C:/dev/proj/scripts/a.mjs", { wurzel: "C:/dev/proj" })).toBe("scripts/a.mjs");
+  });
+  test("Wurzel mit Backslash und mit Schrägstrich am Ende", () => {
+    expect(N.normPfad("C:/dev/proj/src/b.ts", { wurzel: "C:\\dev\\proj" })).toBe("src/b.ts");
+    expect(N.normPfad("C:/dev/proj/src/b.ts", { wurzel: "C:/dev/proj/" })).toBe("src/b.ts");
+  });
+  test("Git-Bash-Wurzel passt auf einen C:-Pfad und umgekehrt", () => {
+    expect(N.normPfad("C:/dev/proj/src/b.ts", { wurzel: "/c/dev/proj" })).toBe("src/b.ts");
+    expect(N.normPfad("/c/dev/proj/src/b.ts", { wurzel: "C:/dev/proj" })).toBe("src/b.ts");
+  });
+  test("Negativ: Pfad außerhalb der Wurzel, ähnlicher Präfix und fehlende Wurzel bleiben unverändert", () => {
+    expect(N.normPfad("D:/other/src/b.ts", { wurzel: "C:/dev/proj" })).toBe("d:/other/src/b.ts");
+    expect(N.normPfad("C:/dev/proj2/src/b.ts", { wurzel: "C:/dev/proj" })).toBe("c:/dev/proj2/src/b.ts");
+    expect(N.normPfad("C:/dev/proj/src/b.ts")).toBe("c:/dev/proj/src/b.ts");
+  });
+});
+
+describe("ticketZaehlung und mehrlaufHinweis (#1646)", () => {
+  const Z = raw as unknown as {
+    ticketZaehlung: (l: { ticket: number | null }[]) => { tickets: number; mehrlauf: number };
+    mehrlaufHinweis: (mehrlauf: number) => string;
+  };
+  test("zählt verschiedene Tickets und die mit mehr als einem Lauf; Läufe ohne Ticket zählen nicht", () => {
+    expect(Z.ticketZaehlung([{ ticket: 1 }, { ticket: 1 }, { ticket: 2 }, { ticket: null }])).toEqual({ tickets: 2, mehrlauf: 1 });
+  });
+  test("leere Liste und je ein Lauf: keine Mehrfachläufe", () => {
+    expect(Z.ticketZaehlung([])).toEqual({ tickets: 0, mehrlauf: 0 });
+    expect(Z.ticketZaehlung([{ ticket: 1 }, { ticket: 2 }])).toEqual({ tickets: 2, mehrlauf: 0 });
+  });
+  test("Warnzeile nur bei Mehrfachläufen, mit Zahl und Verweis auf --je-ticket", () => {
+    expect(Z.mehrlaufHinweis(0)).toBe("");
+    expect(Z.mehrlaufHinweis(2)).toBe("Mediane je Lauf, nicht je Ticket (2 Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket");
+  });
+});
+
+describe("claimNummer (#1616)", () => {
+  const C = raw as unknown as { claimNummer: (cmd: string) => number | null };
+  test("Claim-Zeile liefert die Ticketnummer", () => {
+    expect(C.claimNummer("gh issue edit 1616 --add-assignee @me")).toBe(1616);
+    expect(C.claimNummer("cd x && gh issue edit 12 --add-label a --add-assignee @me")).toBe(12);
+  });
+  test("kein Claim: Entfernen, Ansehen, leer", () => {
+    expect(C.claimNummer("gh issue edit 1616 --remove-assignee @me")).toBeNull();
+    expect(C.claimNummer("gh issue view 1616")).toBeNull();
+    expect(C.claimNummer("")).toBeNull();
+    expect(C.claimNummer(undefined as unknown as string)).toBeNull();
+  });
+});

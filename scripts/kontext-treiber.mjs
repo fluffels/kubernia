@@ -21,6 +21,9 @@
  * Kontext beim ersten Call des Nachfolgers, Nachlese-Calls (Read oder cat/sed/head des Nachfolgers auf Pfade, die ein Vorgänger per Edit/Write geändert hat;
  * grep und andere Lesewege zählen nicht), Kosten ab Phase X (Σ der Calls ab X in `PHASEN`-Reihenfolge). Grenzen: der Startzustand verify zählt Edits vor
  * dem ersten Lens-Spawn zu verify (konservativ gegen den Schnitt); Mehrkosten des Hauptchats für den zweiten Prompt sind nicht gemessen.
+ * Offene Läufe (Tool-Aufruf ohne Ergebnis am Ende, #1646) zählen nur als `offen` und stehen in der Tabelle „Läufe"; in keinem Median, keiner Summe.
+ * Ohne `--je-ticket` gelten die Mediane je Lauf: der Kopf jeder Gruppe nennt die Zahl der Tickets (`Tickets`), und hat ein Ticket mehrere Läufe, steht eine Warnzeile (`mehrlaufHinweis`, #1646).
+ * Im `--je-ticket`-Modus lädt das CLI 48 h vor `--von` (`VORLAUF_MS`), damit der Vorgänger eines Nachfolgers im Fenster dabei ist.
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laeufe; wird selbst nicht importiert.
  */
 import { readdirSync } from "node:fs";
@@ -28,9 +31,9 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { bereinige, istNeuaufbau, kontextVon, median, passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
+import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
-import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
+import { ladeLaeufe, laufAus, VORLAUF_MS } from "./subagent-laeufe.mjs";
 
 const MIN = 60_000;
 const PAUSE_MS = 5 * MIN;
@@ -136,14 +139,6 @@ function wartepausen(eintraege) {
     .map(({ vorher, gapMs }) => ({ ursache: ursacheVon(vorher), sekunden: Math.round(gapMs / 1000), ticks: Math.floor(gapMs / TICK_MS) }));
 }
 
-/** Pfad vergleichbar machen (#1592): Schrägstriche, klein, ohne Worktree-Präfix `…/worktrees/kq-<nr>…/` und ohne die Repo-Wurzel. */
-function normPfad(pfad, wurzel) {
-  let p = String(pfad).replace(/\\/g, "/").toLowerCase();
-  p = p.replace(/^.*?\/worktrees\/kq-\d+[^/]*\//, "");
-  const w = wurzel ? `${String(wurzel).replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "")}/` : null;
-  return w && p.startsWith(w) ? p.slice(w.length) : p;
-}
-
 const LESE_BEFEHL = /(^|[\s;&|(])(cat|sed|head)\s/;
 
 /**
@@ -156,8 +151,8 @@ function pfadZugriffe(eintraege, wurzel) {
   for (const { tools } of eintraege) {
     for (const tool of tools) {
       const datei = tool.input?.file_path;
-      if (EDIT_TOOLS.has(tool.tool) && typeof datei === "string") geaendertePfade.push(normPfad(datei, wurzel));
-      else if (tool.tool === "Read" && typeof datei === "string") leseAufrufe.push({ art: "read", pfad: normPfad(datei, wurzel) });
+      if (EDIT_TOOLS.has(tool.tool) && typeof datei === "string") geaendertePfade.push(normPfad(datei, { wurzel }));
+      else if (tool.tool === "Read" && typeof datei === "string") leseAufrufe.push({ art: "read", pfad: normPfad(datei, { wurzel }) });
       else if (LESE_BEFEHL.test(befehlVon(tool))) leseAufrufe.push({ art: "shell", befehl: befehlVon(tool).replace(/\\/g, "/").toLowerCase() });
     }
   }
@@ -211,6 +206,7 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
   return {
     ticket: kopf?.ticket ?? null,
     sammel: kopf?.sammel ?? false,
+    offen: Boolean(kopf?.offen),
     brille: kopf?.brille ?? null,
     schnitt: kopf?.schnitt ?? null,
     einstieg: kopf?.einstieg ?? null,
@@ -248,8 +244,11 @@ function uebergabeKennzahlen(tickets) {
   };
 }
 
-function gruppe(analysen, { jeTicket = false } = {}) {
-  if (!analysen.length) return { gesamt: null, top: [], phasen: {}, neuaufbau: {}, pausen: {}, wachstum: { ergebnis: 0, eingabe: 0, rest: 0 } };
+/** Offene Läufe (Tool-Aufruf ohne Ergebnis am Ende, #1646) zählen nur als `offen`, in keinem Median und keiner Summe. */
+function gruppe(alle, { jeTicket = false } = {}) {
+  const analysen = alle.filter((a) => !a.offen);
+  const offen = alle.length - analysen.length;
+  if (!analysen.length) return { gesamt: null, offen, top: [], phasen: {}, neuaufbau: {}, pausen: {}, wachstum: { ergebnis: 0, eingabe: 0, rest: 0 } };
   const requests = summe(analysen.map((a) => a.requests));
   const mitPreis = analysen.filter((a) => a.kosten !== null);
   const phasen = {};
@@ -284,6 +283,7 @@ function gruppe(analysen, { jeTicket = false } = {}) {
   return {
     gesamt: {
       n: analysen.length,
+      ...ticketZaehlung(analysen),
       requests,
       requestsMedian: median(analysen.map((a) => a.requests)),
       kontextCallGewichtet: summe(analysen.map((a) => a.kontextSumme)) / requests,
@@ -302,6 +302,7 @@ function gruppe(analysen, { jeTicket = false } = {}) {
       .flatMap((a) => a.ergebnisse.map((e) => ({ ...e, ticket: a.ticket })))
       .sort((x, y) => y.last - x.last)
       .slice(0, 10),
+    offen,
     phasen,
     neuaufbau,
     pausen,
@@ -312,6 +313,10 @@ function gruppe(analysen, { jeTicket = false } = {}) {
 
 /** Summiert zwei Zähl-Objekte gleicher Schlüssel. */
 const addiere = (a, b) => Object.fromEntries(Object.keys(a).map((key) => [key, a[key] + b[key]]));
+
+/** Felder, die ein Ticket-Lauf aus den Läufen summiert bzw. aneinanderhängt (`ersterKontext`, `start`, `ticket` kommen vom ersten Lauf). */
+const TICKET_SUMMEN = ["requests", "kontextSumme"];
+const TICKET_LISTEN = ["phasen", "ergebnisse", "neuaufbauten", "pausen"];
 
 /**
  * Legt alle Läufe eines Tickets zu einem Lauf zusammen (#1592, `--je-ticket`). Vorgänger = Läufe ohne `einstieg`, Nachfolger = mit;
@@ -328,24 +333,25 @@ function ticketLauf(laeufe) {
   const details = sortiert.flatMap((a) => a.phasenDetail);
   const kostenAb = {};
   for (const p of PHASEN) kostenAb[p] = summe(details.filter((d) => PHASEN.indexOf(d.phase) >= PHASEN.indexOf(p)).map((d) => d.kosten ?? 0));
+  const basis = { ...sortiert[0] };
+  const summen = Object.fromEntries(TICKET_SUMMEN.map((feld) => [feld, summe(sortiert.map((a) => a[feld]))]));
+  const listen = Object.fromEntries(TICKET_LISTEN.map((feld) => [feld, sortiert.flatMap((a) => a[feld])]));
   return {
-    ticket: sortiert[0].ticket,
+    ...basis,
+    ...summen,
+    ...listen,
     sammel: sortiert.some((a) => a.sammel),
+    offen: sortiert.some((a) => a.offen),
     brille: null,
     delta: false,
-    start: sortiert[0].start,
+    einstieg: null,
+    geaendertePfade: [],
+    leseAufrufe: [],
     schnitt: vor.find((a) => a.schnitt)?.schnitt ?? "ohne",
-    requests: summe(sortiert.map((a) => a.requests)),
-    ersterKontext: sortiert[0].ersterKontext,
     maxKontext: Math.max(...sortiert.map((a) => a.maxKontext)),
-    kontextSumme: summe(sortiert.map((a) => a.kontextSumme)),
     kosten: sortiert.some((a) => a.kosten === null) ? null : summe(sortiert.map((a) => a.kosten)),
     kostenTeile: sortiert.every((a) => a.kostenTeile) ? sortiert.map((a) => a.kostenTeile).reduce(addiere) : null,
-    phasen: sortiert.flatMap((a) => a.phasen),
     phasenDetail: details,
-    ergebnisse: sortiert.flatMap((a) => a.ergebnisse),
-    neuaufbauten: sortiert.flatMap((a) => a.neuaufbauten),
-    pausen: sortiert.flatMap((a) => a.pausen),
     wachstum: sortiert.map((a) => a.wachstum).reduce(addiere),
     nachfolgerN: nach.length,
     ersterKontextNachfolger: nach[0]?.ersterKontext ?? null,
@@ -353,6 +359,10 @@ function ticketLauf(laeufe) {
     kostenAb,
   };
 }
+
+/** Liste der gezählten Läufe bzw. Tickets (#1646): Start (ISO), Ticket, Sammel, offen. */
+const laeufeListe = (analysen) =>
+  [...analysen].sort((x, y) => x.start - y.start).map((a) => ({ ticket: a.ticket, start: new Date(a.start).toISOString(), sammel: a.sammel, offen: a.offen }));
 
 /** Je-Ticket-Bericht (#1592): Läufe pro Ticket zusammenlegen, Fenster am ersten Start des Tickets, Gruppen nach dem Schnitt des Vorgängers. */
 function jeTicketBericht(agent, analysen, { von, bis }) {
@@ -370,6 +380,7 @@ function jeTicketBericht(agent, analysen, { von, bis }) {
   return {
     agent,
     jeTicket: true,
+    laeufe: laeufeListe(tickets),
     gesamt: gr(tickets),
     ohneSammel: gr(tickets.filter((a) => !a.sammel)),
     sammel: gr(tickets.filter((a) => a.sammel)),
@@ -397,11 +408,15 @@ export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, 
   if (jeTicket) return jeTicketBericht(agent, analysen, { von, bis });
   return {
     agent,
+    laeufe: laeufeListe(analysen),
     gesamt: gruppe(analysen),
     ohneSammel: gruppe(analysen.filter((a) => !a.sammel)),
     sammel: gruppe(analysen.filter((a) => a.sammel)),
   };
 }
+
+/** Beginn des Ladefensters (#1646): je Ticket 48 h früher, damit der Vorgänger eines Nachfolgers im Fenster mitgeladen wird. */
+export const ladeVon = (von, jeTicket) => (jeTicket ? new Date(Date.parse(von) - VORLAUF_MS).toISOString() : von);
 
 const f = (x, d = 2) => (x === null || x === undefined ? "-" : x.toFixed(d));
 const k = (x) => (x === null || x === undefined ? "-" : `${Math.round(x / 1000)}k`);
@@ -411,8 +426,9 @@ function renderGruppe(titel, g) {
   const s = g.gesamt;
   const out = [`## ${titel}`, ""];
   out.push(
-    `n=${s.n}, Requests gesamt ${s.requests} (Median ${f(s.requestsMedian, 1)} je Lauf), Ø Kontext je Call (call-gewichtet) ${k(s.kontextCallGewichtet)}, Median der Lauf-Mittel ${k(s.kontextMedianLaeufe)}, erster Call (Median) ${k(s.ersterKontextMedian)}, max. Kontext (Median) ${k(s.maxKontextMedian)}`,
+    `n=${s.n}, Tickets ${s.tickets}, Requests gesamt ${s.requests} (Median ${f(s.requestsMedian, 1)} je Lauf), Ø Kontext je Call (call-gewichtet) ${k(s.kontextCallGewichtet)}, Median der Lauf-Mittel ${k(s.kontextMedianLaeufe)}, erster Call (Median) ${k(s.ersterKontextMedian)}, max. Kontext (Median) ${k(s.maxKontextMedian)}`,
     `Kosten je Lauf: Median ${f(s.kostenMedian)} $, Mittel ${f(s.kostenMittel)} $, Σ ${f(s.kostenSumme)} $ (ohne Preis: ${s.ohnePreis}); Read ${f(s.kostenRead)} $, Write ${f(s.kostenWrite)} $, Output ${f(s.kostenOutput)} $ (Output unterzählt)`,
+    ...(mehrlaufHinweis(s.mehrlauf) ? [mehrlaufHinweis(s.mehrlauf)] : []),
     "",
     "| Phase | Calls | Anteil | Σ Kontext (Tok) | Kosten ($) |",
     "|---|--:|--:|--:|--:|",
@@ -441,10 +457,17 @@ function renderUebergabe(g) {
   ];
 }
 
+/** Tabelle der gezählten Läufe (#1646). */
+function renderLaeufe(laeufe) {
+  if (!laeufe?.length) return [];
+  const zeilen = laeufe.map((l) => `| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : "nein"} | ${l.offen ? "offen" : "geschlossen"} |`);
+  return ["## Läufe", "", "| Start | Ticket | Sammel | Status |", "|---|--:|---|---|", ...zeilen, ""];
+}
+
 /** Markdown-Bericht (Top-10, Phasen, Neuaufbau) je Gruppe. */
 export function renderMarkdown(r) {
   if (r.jeTicket) {
-    const kopf = `Kontext-Treiber \`${r.agent}\` je Ticket (Läufe eines Tickets zusammengelegt; ohne Ticket: ${r.ohneTicket}, Nachfolger ohne Vorgänger: ${r.ohneVorgaenger})`;
+    const kopf = `Kontext-Treiber \`${r.agent}\` je Ticket (Läufe eines Tickets zusammengelegt; ohne Ticket: ${r.ohneTicket}, Nachfolger ohne Vorgänger: ${r.ohneVorgaenger}, offen: ${r.gesamt.offen})`;
     const gruppen = [
       ["Alle Tickets", r.gesamt],
       ["Ohne Sammeltickets", r.ohneSammel],
@@ -453,9 +476,9 @@ export function renderMarkdown(r) {
       ["Schnitt pr (Vorgänger mit Schnitt: pr)", r.schnitt.pr],
       ["Schnitt ohne (kein Schnitt)", r.schnitt.ohne],
     ];
-    return [kopf, "", ...gruppen.flatMap(([titel, g]) => [...renderGruppe(titel, g), ...renderUebergabe(g)])].join("\n");
+    return [kopf, "", ...gruppen.flatMap(([titel, g]) => [...renderGruppe(titel, g), ...renderUebergabe(g)]), ...renderLaeufe(r.laeufe)].join("\n");
   }
-  return [`Kontext-Treiber \`${r.agent}\``, "", ...renderGruppe("Alle Läufe", r.gesamt), ...renderGruppe("Ohne Sammeltickets", r.ohneSammel), ...renderGruppe("Sammeltickets", r.sammel)].join("\n");
+  return [`Kontext-Treiber \`${r.agent}\` (offen: ${r.gesamt.offen})`, "", ...renderGruppe("Alle Läufe", r.gesamt), ...renderGruppe("Ohne Sammeltickets", r.ohneSammel), ...renderGruppe("Sammeltickets", r.sammel), ...renderLaeufe(r.laeufe)].join("\n");
 }
 
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
@@ -500,7 +523,7 @@ function main() {
   }
   const dir = projektOrdner(args.projekt);
   readdirSync(dir);
-  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel(), delta: args.delta ?? null, brille: args.brille ?? null, jeTicket: Boolean(args.jeTicket) });
+  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, ladeVon(args.von, Boolean(args.jeTicket))), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel(), delta: args.delta ?? null, brille: args.brille ?? null, jeTicket: Boolean(args.jeTicket) });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
 

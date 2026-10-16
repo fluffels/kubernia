@@ -15,6 +15,7 @@ Die Hafen-Metapher ist die **Anti-Corruption-Layer** zwischen der Spieler:innen-
 | Kiste auf dem Steg | **Pod** | `sim/state.ts` (Typ) → `scenes/worldscene/clustersync.ts` (Kiste) | Pod löschen → Kiste platscht ins Wasser, der Kran setzt Ersatz |
 | Steg am Dock | **Node** | `sim/state.ts` → `world.ts` (Steg-Geometrie) | Drei Stege = drei Nodes |
 | Laterne | **Service** | `sim/kubectl/ops.ts` (`expose`) → `clustersync.ts` | leuchtet, wenn der Service erreichbar ist |
+| Hafentor | **Ingress** bzw. **Gateway** (Gateway API) | `sim/state.ts` (IngressRes), `sim/gateway.ts` | Eine HTTPRoute ohne passendes Gateway hängt an keinem Tor |
 | Flagge | **Helm-Release** | `sim/helm.ts` | Release hissen = Flagge setzen |
 | Fass am Dock | **Docker-Container** | `sim/docker.ts` | gestoppte Container wandern ins Lager (#303) |
 | Neues Land im Meer | **`terraform apply`** | `sim/terraform.ts` → Region-Warps | Provisionierung wird als sichtbar wachsendes Land gebaut |

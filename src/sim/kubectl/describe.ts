@@ -1,6 +1,6 @@
 /* ===== Kubernia – kubectl describe (sim/kubectl/describe.ts, #1465) =====
  * Der `describe`-Dispatcher und die Renderer für Deployment, Service, PVC und StatefulSet. Die
- * Renderer für Node, Ingress, NetworkPolicy, Role und ServiceAccount; der Pod-Renderer liegt in ./describe-pod.ts.
+ * Renderer für Node, Ingress, GatewayClass, Gateway, NetworkPolicy, Role und ServiceAccount; der Pod-Renderer liegt in ./describe-pod.ts.
  *
  * Echtes `kubectl describe TYPE [NAME_PREFIX]`: ohne Namen alle Objekte der Art, mit einem Namen der
  * exakte Treffer, sonst jedes Objekt mit diesem Präfix; die Slash-Form `typ/name` gilt nur exakt. Die
@@ -29,6 +29,10 @@ import { listWithMore, availableReplicas, statefulSetReadyReplicas, noResourcesI
 import { accessModesLong, pvcPendingEvent } from "../pv-controller";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
 import { sameRbac } from "../rbac";
+import {
+  GATEWAY_API_VERSION, GATEWAY_GROUP, attachedRoutes, gatewayClassConditions, gatewayStatus, httpRouteStatus, listenerConditions,
+  type GatewayCondition, type GatewayListener, type HttpRouteRes, type UnattachedParent,
+} from "../gateway";
 import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
 
 /** Eine beschreibbare Art: ihre Objektnamen (ohne Nebenwirkung) und der Renderer für ein Objekt. */
@@ -275,6 +279,128 @@ export function describeIngress(host: KubectlHost, name: string): string {
   ].join("\n");
 }
 
+// ===== GatewayClass und Gateway (#1664) =====
+
+/** Conditions im CRD-Stil (Reason, Status, Type), eingerückt um `indent` Leerzeichen. */
+function conditionLines(conditions: readonly GatewayCondition[], indent: number): string[] {
+  const pad = " ".repeat(indent);
+  return conditions.flatMap(c => [
+    pad + "Message:  " + c.message,
+    pad + "Reason:   " + c.reason,
+    pad + "Status:   " + c.status,
+    pad + "Type:     " + c.type,
+  ]);
+}
+
+function crdHead(kind: string, name: string, namespace?: string): string[] {
+  return [
+    kv("Name", name, 14),
+    ...(namespace ? [kv("Namespace", namespace, 14)] : []),
+    kv("Labels", "<none>", 14),
+    kv("Annotations", "<none>", 14),
+    kv("API Version", GATEWAY_API_VERSION, 14),
+    kv("Kind", kind, 14),
+  ];
+}
+
+export function describeGatewayClass(host: KubectlHost, name: string, kind: ResourceKind): string {
+  const cls = host.gatewayClasses.find(c => c.name === name);
+  if (!cls) return notFound(host, kind, name);
+  return [
+    ...crdHead("GatewayClass", cls.name),
+    "Spec:",
+    "  Controller Name:  " + cls.controllerName,
+    ...(cls.description === undefined ? [] : ["  Description:      " + cls.description]),
+    "Status:",
+    "  Conditions:",
+    ...conditionLines(gatewayClassConditions(cls), 4),
+    "Events:  <none>",
+  ].join("\n");
+}
+
+function listenerLines(l: GatewayListener): string[] {
+  return [
+    "    Name:      " + l.name,
+    ...(l.hostname === undefined ? [] : ["    Hostname:  " + l.hostname]),
+    "    Port:      " + l.port,
+    "    Protocol:  " + l.protocol,
+    ...(l.tlsSecret === undefined ? [] : [
+      "    Tls:",
+      "      Certificate Refs:",
+      "        Kind:  Secret",
+      "        Name:  " + l.tlsSecret,
+      "      Mode:    Terminate",
+    ]),
+  ];
+}
+
+export function describeGateway(host: KubectlHost, name: string, kind: ResourceKind): string {
+  const gw = host.gateways.find(g => g.name === name);
+  if (!gw) return notFound(host, kind, name);
+  const st = gatewayStatus(gw, host.gatewayClasses);
+  return [
+    ...crdHead("Gateway", gw.name, DEFAULT_NAMESPACE),
+    "Spec:",
+    "  Gateway Class Name:  " + gw.className,
+    "  Listeners:",
+    ...gw.listeners.flatMap(listenerLines),
+    "Status:",
+    ...(st.address === null ? [] : ["  Addresses:", "    Type:   IPAddress", "    Value:  " + st.address]),
+    "  Conditions:",
+    ...conditionLines(st.conditions, 4),
+    ...(st.classAccepted ? [
+      "  Listeners:",
+      ...gw.listeners.flatMap(l => [
+        "    Name:  " + l.name,
+        "    Attached Routes:  " + attachedRoutes(gw, l, host.httpRoutes),
+        "    Conditions:", ...conditionLines(listenerConditions(l, host.secrets), 6),
+      ]),
+    ] : []),
+    "Events:  <none>",
+  ].join("\n");
+}
+
+function routeRuleLines(route: HttpRouteRes): string[] {
+  return route.rules.flatMap(r => [
+    "    Backend Refs:",
+    ...r.backends.flatMap(b => ["      Kind:    Service", "      Name:    " + b.service, "      Port:    " + b.port, "      Weight:  1"]),
+    "    Matches:",
+    "      Path:",
+    "        Type:   " + r.pathType,
+    "        Value:  " + r.path,
+  ]);
+}
+
+/** Der deutsche Hinweis zu einem parentRef ohne Status (die Route ganz ohne parentRefs behandelt `describeHttpRoute`). */
+function unattachedHint(u: UnattachedParent): string {
+  return u.reason === "NotFound"
+    ? "💡 Gateway „" + u.gateway + "“ gibt es nicht: die Route hängt dort an keinem Tor."
+    : "💡 Gateway „" + u.gateway + "“ hat keine angenommene GatewayClass: die Route hängt dort an keinem Tor.";
+}
+
+export function describeHttpRoute(host: KubectlHost, name: string, kind: ResourceKind): string {
+  const route = host.httpRoutes.find(r => r.name === name);
+  if (!route) return notFound(host, kind, name);
+  const st = httpRouteStatus(route, host.gateways, host.gatewayClasses, servicesWithDefault(host));
+  return [
+    ...crdHead("HTTPRoute", route.name, DEFAULT_NAMESPACE),
+    "Spec:",
+    ...(route.hostnames.length ? ["  Hostnames:", ...route.hostnames.map(h => "    " + h)] : []),
+    ...(route.parentRefs.length ? ["  Parent Refs:", ...route.parentRefs.flatMap(n => ["    Group:  " + GATEWAY_GROUP, "    Kind:   Gateway", "    Name:   " + n])] : []),
+    "  Rules:",
+    ...routeRuleLines(route),
+    "Status:",
+    "  Parents:",
+    ...st.parents.flatMap(p => [
+      "    Conditions:", ...conditionLines(p.conditions, 6),
+      "    Controller Name:  " + p.controllerName,
+      "    Parent Ref:", "      Group:  " + GATEWAY_GROUP, "      Kind:   Gateway", "      Name:   " + p.gateway,
+    ]),
+    "Events:  <none>",
+    ...(route.parentRefs.length === 0 ? ["💡 Ohne parentRefs hängt die Route an keinem Tor."] : st.unattached.map(unattachedHint)),
+  ].join("\n");
+}
+
 export function describeNetworkPolicy(host: KubectlHost, name: string): string {
   const np = host.networkPolicies.find(n => n.name === name);
   if (!np) return host._err('Error from server (NotFound): networkpolicies.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get networkpolicies' kopieren.");
@@ -320,6 +446,9 @@ const fromList = (list: (host: KubectlHost) => readonly { name: string }[]) =>
 export const DESCRIBE_ENTRIES: ReadonlyMap<ResourcePlural, DescribeEntry> = new Map<ResourcePlural, DescribeEntry>([
   ["nodes", { names: fromList(h => h.nodes), render: describeNode }],
   ["ingresses", { names: fromList(h => h.ingresses), render: describeIngress }],
+  ["gatewayclasses", { names: fromList(h => h.gatewayClasses), render: describeGatewayClass }],
+  ["gateways", { names: fromList(h => h.gateways), render: describeGateway }],
+  ["httproutes", { names: fromList(h => h.httpRoutes), render: describeHttpRoute }],
   ["networkpolicies", { names: fromList(h => h.networkPolicies), render: describeNetworkPolicy }],
   ["roles", { names: (h, k) => h.roles.filter(r => !!r.cluster === (k.plural === "clusterroles")).map(r => r.name), render: describeRole }],
   ["clusterroles", { names: (h, k) => h.roles.filter(r => !!r.cluster === (k.plural === "clusterroles")).map(r => r.name), render: describeRole }],

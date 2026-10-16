@@ -6,27 +6,36 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../scripts/board-lib.mjs";
 
-type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean; generation: boolean };
+type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean };
+type User = { login: string; type?: string } | null;
+type Komm = { user: User; body: string };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Anlegen = {
   parseArgs: (argv: string[]) => Args | null;
-  sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerOffen?: boolean }) => string;
-  kandidatenSammelticket: (offene: Offen[], titel: string) => Offen[];
+  sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerZustand?: string }) => string;
+  zustandVonIssue: (issue: { state?: string; assignees?: unknown[] } | null) => string;
+  korrekturFuer: (a: { items: unknown[]; nr: number; position: number }) => { nr: number; id: string; afterId: string | null } | null;
+  kandidatenSammelticket: (offene: Offen[], titel: string, o?: { nach?: number | null }) => Offen[];
+  zaehleBefundZeilen: (k: Komm[], o: { vertraut: (u: User) => boolean; nurOffen?: boolean }) => number;
+  dublettenEntscheidung: (a: { eigenNr: number; titel: string; eigenKommentare: number; andere: Offen[]; vorgaenger?: number | null }) => { art: string; aelter?: number };
 };
 const A = raw as unknown as Anlegen;
+const ergaenzeFehlende = (rawLib as unknown as { ergaenzeFehlende: (items: unknown[], neu: unknown[]) => unknown[] }).ergaenzeFehlende;
 
 describe("parseArgs", () => {
   test("harness ohne und mit Vorgänger, langfuse ohne und mit --top, --dry-run an beliebiger Stelle", () => {
-    expect(A.parseArgs(["harness"])).toEqual({ art: "harness", vorgaenger: null, top: false, dry: false, generation: false });
-    expect(A.parseArgs(["harness", "--vorgaenger", "#1390"])).toEqual({ art: "harness", vorgaenger: 1390, top: false, dry: false, generation: false });
+    expect(A.parseArgs(["harness"])).toEqual({ art: "harness", vorgaenger: null, top: false, dry: false });
+    expect(A.parseArgs(["harness", "--vorgaenger", "#1390"])).toEqual({ art: "harness", vorgaenger: 1390, top: false, dry: false });
     expect(A.parseArgs(["--dry-run", "harness", "--vorgaenger", "7"])).toMatchObject({ vorgaenger: 7, dry: true });
-    expect(A.parseArgs(["langfuse"])).toEqual({ art: "langfuse", vorgaenger: null, top: false, dry: false, generation: false });
-    expect(A.parseArgs(["langfuse", "--top", "--dry-run"])).toEqual({ art: "langfuse", vorgaenger: null, top: true, dry: true, generation: false });
+    expect(A.parseArgs(["langfuse"])).toEqual({ art: "langfuse", vorgaenger: null, top: false, dry: false });
+    expect(A.parseArgs(["langfuse", "--top", "--dry-run"])).toEqual({ art: "langfuse", vorgaenger: null, top: true, dry: true });
   });
 
   test("falsche Benutzung → null", () => {
-    for (const bad of [[], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"]]) {
+    for (const bad of [["harness", "--generation"], ["--dry-run", "harness", "--generation"], ["langfuse", "--generation"], ["harness", "--vorgaenger", "5", "--generation"], [], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"]]) {
       expect(A.parseArgs(bad), bad.join(" ")).toBeNull();
     }
   });
@@ -40,17 +49,40 @@ describe("sammelticketBody", () => {
     expect(b).not.toMatch(/blockiert durch|Nachfolger/);
   });
 
-  test("offener Vorgänger: Nachfolger-Zeile UND „blockiert durch #N“", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerOffen: true });
+  test("Vorgänger in Arbeit: Nachfolger-Zeile mit „dort in Arbeit“ UND „blockiert durch #N“", () => {
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "in-arbeit" });
     expect(b).toContain("Nachfolger von #1390 (dort in Arbeit).");
     expect(b).toMatch(/^blockiert durch #1390 \(nur solange #1390 offen ist\)$/m);
   });
 
+  test("Vorgänger offen (ungeclaimt): Nachfolger-Zeile ohne Zusatz, Sperrzeile bleibt", () => {
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "offen" });
+    expect(b).toContain("Nachfolger von #1390.");
+    expect(b).not.toContain("dort in Arbeit");
+    expect(b).not.toContain("voll");
+    expect(b).toMatch(/^blockiert durch #1390 /m);
+  });
+
+  test("Vorgänger unlesbar: gilt als offen ohne Zusatz, Sperrzeile bleibt", () => {
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "unbekannt" });
+    expect(b).toContain("Nachfolger von #1390.");
+    expect(b).not.toMatch(/dort in Arbeit|voll/);
+    expect(b).toMatch(/^blockiert durch #1390 /m);
+  });
+
   test("geschlossener Vorgänger: genannt, aber ohne Blocker (kein stale „blockiert durch“)", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerOffen: false });
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "zu" });
     expect(b).toContain("Nachfolger von #1390.");
     expect(b).not.toContain("blockiert durch");
     expect(b).not.toContain("dort in Arbeit");
+  });
+
+  test("zustandVonIssue: offen+Assignee in-arbeit, offen ohne Assignee offen, geschlossen zu, unlesbar unbekannt", () => {
+    expect(A.zustandVonIssue({ state: "open", assignees: [{ login: "x" }] })).toBe("in-arbeit");
+    expect(A.zustandVonIssue({ state: "open", assignees: [] })).toBe("offen");
+    expect(A.zustandVonIssue({ state: "open" })).toBe("offen");
+    expect(A.zustandVonIssue({ state: "closed", assignees: [{ login: "x" }] })).toBe("zu");
+    expect(A.zustandVonIssue(null)).toBe("unbekannt");
   });
 
   test("Langfuse-Vorlage nennt Langfuse; unbekannte Art wirft", () => {
@@ -73,6 +105,63 @@ describe("kandidatenSammelticket", () => {
     expect(A.kandidatenSammelticket([o(5, `${T} x`), o(6, T.toLowerCase()), o(7, "Langfuse-Befunde (gesammelt)")], T)).toEqual([]);
     expect(A.kandidatenSammelticket([], T)).toEqual([]);
     expect(A.kandidatenSammelticket([o(5, T, ["fluffels"]), o(6, T)], T).map((i) => i.number)).toEqual([6]);
+  });
+});
+
+const fluffels = { login: "fluffels", type: "User" };
+const vertraut = (u: User) => u?.login === "fluffels";
+const k = (body: string, user: User = fluffels): Komm => ({ user, body });
+
+describe("zaehleBefundZeilen", () => {
+  test("leer → 0; Kommentar ohne Checkbox → 0", () => {
+    expect(A.zaehleBefundZeilen([], { vertraut })).toBe(0);
+    expect(A.zaehleBefundZeilen([k("Nur Text, kein Befund")], { vertraut })).toBe(0);
+  });
+
+  test("zählt `- [ ]`, auch mehrere je Kommentar, `*` und eingerückt", () => {
+    expect(A.zaehleBefundZeilen([k("- [ ] eins")], { vertraut })).toBe(1);
+    expect(A.zaehleBefundZeilen([k("Kopf\n- [ ] a\n- [ ] b\n  - [ ] c\n* [ ] d")], { vertraut })).toBe(4);
+    expect(A.zaehleBefundZeilen([k("- [ ] a"), k("- [ ] b\n- [ ] c")], { vertraut })).toBe(3);
+  });
+
+  test("`- [x]` zählt nur mit nurOffen: false", () => {
+    const kk = [k("- [ ] a\n- [x] b\n- [X] c")];
+    expect(A.zaehleBefundZeilen(kk, { vertraut })).toBe(1);
+    expect(A.zaehleBefundZeilen(kk, { vertraut, nurOffen: true })).toBe(1);
+    expect(A.zaehleBefundZeilen(kk, { vertraut, nurOffen: false })).toBe(3);
+  });
+
+  test("Kommentar eines nicht vertrauten Autors (auch ohne user) zählt nicht", () => {
+    expect(A.zaehleBefundZeilen([k("- [ ] fremd", { login: "fremder" }), k("- [ ] anonym", null), k("- [ ] eigen")], { vertraut })).toBe(1);
+  });
+
+  test("keine Checkbox, wenn `[ ]` mitten im Satz steht", () => {
+    expect(A.zaehleBefundZeilen([k("Text mit - [ ] mittendrin")], { vertraut })).toBe(0);
+  });
+});
+
+describe("Vorgänger-Ausschluss (--vorgaenger X, X ungeclaimt)", () => {
+  const T = "Harness-Härtung (gesammelt)";
+  const o = (number: number, assignees: string[] = []): Offen => ({ number, titel: T, assignees, createdAt: "2026-10-01T00:00:00Z" });
+
+  test("kandidatenSammelticket: nur strikt jüngere als der Vorgänger zählen (auch ältere Tickets davor nicht)", () => {
+    expect(A.kandidatenSammelticket([o(5), o(9), o(12)], T, { nach: 9 }).map((i) => i.number)).toEqual([12]);
+    expect(A.kandidatenSammelticket([o(5), o(9)], T, { nach: 9 }).map((i) => i.number)).toEqual([]);
+    expect(A.kandidatenSammelticket([o(5), o(9)], T, { nach: null }).map((i) => i.number)).toEqual([9, 5]);
+    expect(A.kandidatenSammelticket([o(5), o(9)], T).map((i) => i.number)).toEqual([9, 5]);
+  });
+
+  test("dublettenEntscheidung: der Vorgänger ist keine ältere Dublette", () => {
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(18)], vorgaenger: 18 }).art).toBe("keine");
+  });
+
+  test("ein älteres Ticket vor dem Vorgänger ist keine Dublette des Nachfolgers", () => {
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(15), o(18)], vorgaenger: 18 }).art).toBe("keine");
+  });
+
+  test("ein echtes älteres Duplikat (zwischen Vorgänger und Nachfolger) bleibt eine Dublette (Wettlauf #1560/#1561)", () => {
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(18), o(19)], vorgaenger: 18 })).toEqual({ art: "eigenes-schliessen", aelter: 19 });
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere: [o(15)] })).toEqual({ art: "eigenes-schliessen", aelter: 15 });
   });
 });
 
@@ -124,6 +213,29 @@ describe("pruefSchritt: der Prüf- und Retry-Kern (#1390 Z10, Lens R1)", () => {
   test("geclaimtes Ticket nr: nichts zu korrigieren", () => {
     expect(P({ items: [...fueller, sammel(20, { assignees: ["fluffels"] })], nr: 20, position: 4 }).art).toBe("ok");
   });
+});
+
+describe("korrekturFuer (#1646): die Korrektur gilt dem NEUEN Sammelticket, nie dem älteren", () => {
+  type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
+  const T = "Harness-Härtung (gesammelt)";
+  const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+  const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: T, ...extra });
+  const fueller = Array.from({ length: 10 }, (_, i) => b(i + 1));
+
+  test("älteres ungeclaimtes Sammelticket steht davor, das neue fehlt in der Liste und wird angehängt: Ziel ist das neue", () => {
+    const items = [b(1), b(2), sammel(5), ...fueller.slice(2)];
+    const mitNeu = ergaenzeFehlende(items, [sammel(20)]);
+    const k = A.korrekturFuer({ items: mitNeu, nr: 20, position: 4 });
+    expect(k).toMatchObject({ nr: 20, id: "I20" });
+    // das ältere würde laut sammelticketKorrektur allein bewertet: es steht auf Position, also keine Korrektur für dessen Nummer
+    expect(A.korrekturFuer({ items: mitNeu, nr: 5, position: 4 })).toBeNull();
+  });
+
+  test("steht auf Position oder davor → null; nicht in der Liste → null", () => {
+    expect(A.korrekturFuer({ items: [b(1), b(2), sammel(20), b(3)], nr: 20, position: 4 })).toBeNull();
+    expect(A.korrekturFuer({ items: fueller, nr: 20, position: 4 })).toBeNull();
+  });
+
 });
 
 describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {

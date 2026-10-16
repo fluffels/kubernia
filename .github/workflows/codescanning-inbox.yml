@@ -1,0 +1,47 @@
+name: Code-Scanning-Inbox
+
+# Wöchentlicher Lauf (#1436): macht neue offene Code-Scanning-Alerts (CodeQL, Scorecard) zu Board-Arbeit. CodeQL high/critical wird EIN
+# Ticket "🔒 Security: Code-Scanning-Befunde auflösen" ganz oben im Board (Dedupe über den Titel, Schließen bei null Funden); alles andere
+# eine Zeile je (Tool, Regel) im jüngsten ungeclaimten Harness-Sammelticket (Dedupe über die Alert-Nummer).
+# Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.
+#
+# ⚠️ Das Board braucht wie dependabot-inbox.yml das Secret PROJECT_TOKEN (PAT mit project-Scope); ohne Token nur eine Warnung.
+# Kommentare postet github-actions[bot] (in scripts/fremdtext-lib.mjs vertraut, die Zeilen zählen als offene Befundzeilen).
+# Alle Actions sind per Commit-SHA gepinnt (Wächter: test/harness/sicherheits-workflows.test.ts).
+
+on:
+  schedule:
+    - cron: "7 6 * * 1"
+  workflow_dispatch: {}
+
+concurrency: codescanning-inbox
+
+permissions: {}
+
+jobs:
+  inbox:
+    name: Code-Scanning-Inbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      security-events: read
+    steps:
+      # board-place.mjs braucht seine ganze Import-Hülle: volles Repo, kein Sparse-Checkout.
+      - name: Repo auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Code-Scanning-Funde einordnen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: node scripts/codescanning-inbox.mjs

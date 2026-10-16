@@ -9,16 +9,23 @@
  * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Definitionen und Grenzen: docs/model-routing.md
  * › Ergebnis je Ticket-Lauf.
  *
- *   node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--json]
+ *   node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--start-agent <typ>] [--json]
+ *
+ * `--start-agent <typ>` (#1646): statt aller PRs im Fenster nur die der Tickets, deren erster Lauf dieses Subagent-Typs in [von, bis] startet
+ * (aus den lokalen Transkripten, 48 h Vorlauf beim Laden). PRs ohne Ticket und Tickets mit früherem Start fallen heraus; `--ohne` bleibt kombinierbar,
+ * `--ticket` nicht. `von`/`bis` gelten zugleich für den Merge-Zeitpunkt. Fehlen die Transkripte des Typs, bricht das Skript ab (Exit 2).
  *
  * Exit 0 ok, 1 falscher Aufruf, 2 unvollständige Daten (nie still 0: abgeschnittene PR-Liste, lokal fehlender
  * Merge-Commit, gh-/git-Fehler). Reines Node-Skript; der Kern ist pur, git/gh sind injizierbar (Test).
  */
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
 import { passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
+import { ladeLaeufe, laufAus, ticketsMitStartImFenster, VORLAUF_MS } from "./subagent-laeufe.mjs";
+import { projektOrdner } from "./transkript.mjs";
 
 export const NACHARBEIT_TAGE = 14;
 /** `git log --since` filtert nach Commit-Datum, `mergedAt` kann eine Sekunde später liegen: Puffer vor `von` (Zuordnung läuft über die SHA, Zeitfilter macht `nacharbeitVon`). */
@@ -232,9 +239,32 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tick
   return bewertePrs({ prs, commits, ci, festgefahren, jetzt });
 }
 
-export const AUFRUFHILFE = "Aufruf: node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--json]";
+/**
+ * Wie `laufErgebnis`, aber die PR-Menge sind die Tickets mit erstem Lauf im Fenster (#1646). `laeufe` = geladene Transkripte `{ meta, zeilen }`.
+ * Eine leere Menge ergibt 0 PRs (leere `tickets` hießen im Filter „alle“) und braucht keinen gh-Aufruf.
+ */
+export function laufErgebnisStartAgent({ laeufe, von, bis, ohne = [], jetzt = new Date(), ...io }) {
+  const tickets = ticketsMitStartImFenster(laeufe.map(laufAus).filter(Boolean), { von, bis });
+  if (tickets.length === 0) return bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt });
+  return laufErgebnis({ von, bis, jetzt, tickets, ohne, ...io });
+}
 
-/** Argumente: `--von`, `--bis`, wiederholbar `--ticket <nr>` (nur diese) und `--ohne <nr>` (alle außer diesen), `--json`. Eine Nicht-Ganzzahl setzt `fehler`. */
+/** Lädt die Läufe des Typs ab `von` minus Vorlauf; fehlender Ordner oder kein einziger Lauf des Typs ist ein `DatenFehler` (fail-closed). */
+export function ladeStartLaeufe(dir, agent, von) {
+  if (!existsSync(dir)) throw new DatenFehler("Keine lokalen Transkripte (Projektordner fehlt).");
+  let laeufe;
+  try {
+    laeufe = ladeLaeufe(dir, agent, new Date(new Date(von).getTime() - VORLAUF_MS).toISOString());
+  } catch (e) {
+    throw new DatenFehler(`Transkripte nicht lesbar: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (laeufe.length === 0) throw new DatenFehler(`Keine Transkripte des Typs ${agent} gefunden.`);
+  return laeufe;
+}
+
+export const AUFRUFHILFE = "Aufruf: node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--start-agent <typ>] [--json]";
+
+/** Argumente: `--von`, `--bis`, wiederholbar `--ticket <nr>` (nur diese) und `--ohne <nr>` (alle außer diesen), `--json`. `--start-agent <typ>` (kein Default, nicht mit `--ticket`). Eine Nicht-Ganzzahl oder ein fehlender Wert setzt `fehler`. */
 export function parseArgs(argv) {
   const a = { von: undefined, bis: undefined, tickets: [], ohne: [], json: false, fehler: null };
   const nummer = (name, wert) => {
@@ -248,20 +278,26 @@ export function parseArgs(argv) {
     else if (x === "--bis") a.bis = argv[++i];
     else if (x === "--ticket") a.tickets.push(nummer(x, argv[++i]));
     else if (x === "--ohne") a.ohne.push(nummer(x, argv[++i]));
-    else if (x === "--json") a.json = true;
+    else if (x === "--start-agent") {
+      const wert = argv[i + 1];
+      if (!wert || wert.startsWith("--")) a.fehler ??= "--start-agent erwartet einen Agent-Typ";
+      else a.startAgent = argv[++i];
+    } else if (x === "--json") a.json = true;
   }
+  if (a.startAgent !== undefined && a.tickets.length > 0) a.fehler ??= "--start-agent und --ticket schließen sich aus";
   return a;
 }
 
 function main(argv) {
-  const { von, bis, tickets, ohne, json, fehler } = parseArgs(argv);
+  const { von, bis, tickets, ohne, json, fehler, startAgent } = parseArgs(argv);
   if (fehler || !von || !bis || [von, bis].some((d) => Number.isNaN(new Date(d).getTime()))) {
     console.error(fehler ? [fehler, AUFRUFHILFE].join("\n") : AUFRUFHILFE);
     process.exit(1);
   }
   try {
     const run = (cmd) => (args) => execFileSync(cmd, args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
-    const ergebnis = laufErgebnis({ von, bis, runGit: run("git"), runGh: ghText, tickets, ohne });
+    const io = { von, bis, runGit: run("git"), runGh: ghText, ohne };
+    const ergebnis = startAgent === undefined ? laufErgebnis({ ...io, tickets }) : laufErgebnisStartAgent({ ...io, laeufe: ladeStartLaeufe(projektOrdner(), startAgent, von) });
     console.log(json ? JSON.stringify(ergebnis, null, 2) : formatiere(ergebnis));
   } catch (e) {
     console.error(`✖ lauf-ergebnis: ${e instanceof Error ? e.message : String(e)}`);

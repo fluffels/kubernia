@@ -10,7 +10,7 @@ import type { Scenario } from "../../src/sim/state";
 // `alerts` ist eine Pseudoressource (eingebaute Regeln), also cluster-weit.
 const API_RESOURCES: Record<string, boolean> = {
   pods: true, deployments: true, replicasets: true, services: true, endpoints: true, endpointslices: true, nodes: false,
-  secrets: true, configmaps: true, ingresses: true, networkpolicies: true,
+  secrets: true, configmaps: true, ingresses: true, gatewayclasses: false, gateways: true, httproutes: true, networkpolicies: true,
   servicemonitors: true, prometheusrules: true, grafanadatasources: true, grafanadashboards: true,
   statefulsets: true, persistentvolumeclaims: true, persistentvolumes: false, storageclasses: false,
   volumesnapshots: true, serviceaccounts: true, roles: true, clusterroles: false,
@@ -20,7 +20,7 @@ const API_RESOURCES: Record<string, boolean> = {
 /** Name eines Objekts je Ressource (erster Alias), das im Szenario in `default` liegt. */
 const NAMEN: Record<string, string> = {
   pods: "zz-web", deployments: "zz-web", replicasets: "zz-web", services: "zz-svc", endpoints: "zz-svc", endpointslices: "zz-svc",
-  secrets: "zz-secret", configmaps: "zz-cm", ingresses: "zz-ing", networkpolicies: "zz-np",
+  secrets: "zz-secret", configmaps: "zz-cm", ingresses: "zz-ing", gatewayclasses: "zz-gc", gateways: "zz-gtw", httproutes: "zz-route", networkpolicies: "zz-np",
   servicemonitors: "zz-smon", prometheusrules: "zz-rule", grafanadatasources: "zz-ds",
   grafanadashboards: "zz-dash", statefulsets: "zz-db", persistentvolumeclaims: "zz-pvc",
   persistentvolumes: "zz-pv", storageclasses: "zz-sc", volumesnapshots: "zz-snap",
@@ -33,6 +33,9 @@ function voll(): Scenario {
     deployments: [{ name: "zz-web", image: "web:1", replicas: 1 }],
     services: [{ name: "zz-svc", type: "ClusterIP", clusterIP: "10.96.0.7", port: 80 }],
     ingresses: [{ name: "zz-ing", className: "nginx", host: "h.de", path: "/", service: "zz-svc", port: 80 }],
+    gatewayClasses: [{ name: "zz-gc", controllerName: "gateway.envoyproxy.io/gatewayclass-controller" }],
+    gateways: [{ name: "zz-gtw", className: "zz-gc", listeners: [{ name: "http", port: 80, protocol: "HTTP" }] }],
+    httpRoutes: [{ name: "zz-route", parentRefs: ["zz-gtw"], hostnames: [], rules: [] }],
     networkPolicies: [{ name: "zz-np", podSelector: "", allowFrom: "" }],
     secrets: [{ name: "zz-secret", keys: ["k"] }],
     configMaps: [{ name: "zz-cm", keys: ["k"] }],

@@ -1,7 +1,7 @@
 /* ===== Kubernia – kubectl get -o yaml: die Objekt-Bausteine (sim/kubectl/get-yaml.ts, #1467) =====
  * `kubectl get <typ> [<name>] -o yaml` druckt Objekte im kubectl-Stil, und zwar so, dass der Parser der Sim
  * (`yaml.ts`) sie wieder einliest (`yaml-emit.ts`). Diese Datei ist die Registry: je Art ein Baustein, der alle
- * Objekte der Art als Mapping liefert (./objects/core.ts für `v1`, ./objects/apps.ts für `apps/v1`). Eine neue
+ * Objekte der Art als Mapping liefert (./objects/core.ts für `v1`, ./objects/apps.ts für `apps/v1`, ./objects/gateway.ts für `gateway.networking.k8s.io/v1`). Eine neue
  * Art ist ein Registry-Eintrag plus ein Baustein in der Datei ihrer API-Gruppe; ein neuer Mapper ohne Baustein
  * macht den Fitness-Test rot (Wächter Mapper ↔ Ausgabe).
  *
@@ -17,6 +17,7 @@ import type { KubectlHost } from "./host";
 import { RESOURCE_KINDS, type ResourceKind, type ResourcePlural } from "./resources";
 import { podObjects, serviceObjects, pvcObjects, type ObjectsOf } from "./objects/core";
 import { deploymentObjects, replicaSetObjects, statefulSetObjects } from "./objects/apps";
+import { gatewayClassObjects, gatewayObjects, httpRouteObjects } from "./objects/gateway";
 
 /** Der Baustein je Art (Schlüssel = Plural aus ./resources). */
 export const YAML_BAUSTEINE: ReadonlyMap<ResourcePlural, ObjectsOf> = new Map<ResourcePlural, ObjectsOf>([
@@ -26,6 +27,9 @@ export const YAML_BAUSTEINE: ReadonlyMap<ResourcePlural, ObjectsOf> = new Map<Re
   ["replicasets", replicaSetObjects],
   ["statefulsets", statefulSetObjects],
   ["persistentvolumeclaims", pvcObjects],
+  ["gatewayclasses", gatewayClassObjects],
+  ["gateways", gatewayObjects],
+  ["httproutes", httpRouteObjects],
 ]);
 
 /** Die Arten mit Baustein, als Singular (für den Hinweistext). */

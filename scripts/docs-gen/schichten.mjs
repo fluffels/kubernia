@@ -25,13 +25,21 @@ export function ladeModell(rootDir, layersPfad) {
   return mod.SCHICHT_MODELL;
 }
 
-/** Ordnet einen (ggf. verdichteten) Pfad einer Schicht-/Extern-ID zu; `null` für alles andere. */
+const layerVonModell = new WeakMap();
+
+/**
+ * Ordnet einen (ggf. verdichteten) Pfad einer Schicht-/Extern-ID zu; `null` für alles andere.
+ * Externe Muster zuerst; die Schicht-Zuordnung selbst kommt aus dem Kern (`layerOfAus`, eine Quelle),
+ * je Modell einmal geprüft und gemerkt. Die Auffang-Schicht gilt nur unter der Quellwurzel des Modells.
+ */
 export function schichtVon(pfad, modell) {
   const p = String(pfad).replace(/\\/g, "/");
   for (const x of modell.extern) if (new RegExp(x.muster).test(p)) return x.id;
-  for (const s of modell.schichten) if (s.muster && new RegExp(s.muster).test(p)) return s.id;
+  if (!layerVonModell.has(modell)) layerVonModell.set(modell, kern.layerOfAus(modell));
+  const id = layerVonModell.get(modell)(p);
+  // Außerhalb der Quellwurzel gilt die Auffang-Schicht nicht (der Kern liefert sie als Rest).
   const auffang = modell.schichten.find((s) => s.muster === null);
-  return p.startsWith(modell.quellwurzel) && auffang ? auffang.id : null;
+  return id === auffang.id && !p.startsWith(modell.quellwurzel) ? null : id;
 }
 
 /** Reihenfolge-Index: Schichten in Modell-Reihenfolge, Externe dahinter. */

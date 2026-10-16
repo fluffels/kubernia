@@ -58,10 +58,16 @@ AGENTS.md                  @fluffels
 /.factory/                 @fluffels
 /.mcp.json                 @fluffels
 /scripts/playwright-mcp.mjs @fluffels
+/scripts/mcp-launch.mjs @fluffels
+/scripts/likec4-mcp.mjs @fluffels
 /scripts/mcp-ausfall.mjs @fluffels
+/scripts/besitz-lib.mjs @fluffels
+/scripts/factory-sync.mjs @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
 /scripts/hook-io.mjs @fluffels
+/scripts/forum-leser-guard.mjs @fluffels
+/scripts/forum-quarantaene.mjs @fluffels
 /scripts/bash-parser.mjs @fluffels
 /scripts/quote-folge.mjs @fluffels
 /scripts/shell-tabellen.mjs @fluffels

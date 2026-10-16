@@ -43,7 +43,7 @@ describe("Registry: nur echte Kurznamen (kubectl api-resources / CRD-Manifeste)"
     pods: ["po"], deployments: ["deploy"], replicasets: ["rs"], services: ["svc"], endpoints: ["ep"], nodes: ["no"], namespaces: ["ns"],
     configmaps: ["cm"], ingresses: ["ing"], networkpolicies: ["netpol"], statefulsets: ["sts"],
     persistentvolumeclaims: ["pvc"], persistentvolumes: ["pv"], storageclasses: ["sc"], volumesnapshots: ["vs"],
-    serviceaccounts: ["sa"], servicemonitors: ["smon"], prometheusrules: ["promrule"],
+    serviceaccounts: ["sa"], gatewayclasses: ["gc"], gateways: ["gtw"], servicemonitors: ["smon"], prometheusrules: ["promrule"],
   };
   test.each(RESOURCE_KINDS.map(k => [k.plural, k.short] as const))("%s: %j", (plural, short) => {
     expect([...short]).toEqual(ECHT[plural] ?? []);

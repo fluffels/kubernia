@@ -551,6 +551,7 @@ const MATRIX_ZIELE: Record<string, { datei: string; mitModel: boolean }> = {
   umsetzer: { datei: ".claude/agents/kubernia-umsetzer.md", mitModel: true },
   gruppe: { datei: ".claude/agents/kubernia-gruppe.md", mitModel: true },
   explore: { datei: ".claude/agents/explore.md", mitModel: true },
+  forumLeser: { datei: ".claude/agents/forum-leser.md", mitModel: true },
   hauptagent: { datei: UMSETZUNGS_SKILL, mitModel: false },
 };
 
@@ -576,9 +577,11 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
     const c = zellen(zeilen[i]);
     const phase = zelleOhneCode(c[0] ?? "");
     const skill = c[iSkill] ?? "";
-    const ziel = /`kubernia-planner`/.test(skill)
-      ? "planner"
-      : /`kubernia-lens`/.test(skill)
+    const ziel = /`forum-leser`/.test(skill)
+      ? "forumLeser"
+      : /`kubernia-planner`/.test(skill)
+        ? "planner"
+        : /`kubernia-lens`/.test(skill)
         ? "lens"
         : /`kubernia-gruppe`/.test(skill)
           ? "gruppe"
@@ -621,6 +624,10 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
     assert.match(matrixAbweichungen(gruppeEffort, fmEcht).join("\n"), /Sammelticket-Gruppe: Effort Skill-Pfad „high“ ≠ Frontmatter gruppe „medium“/);
     const gruppeAlias = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `opus` | – | `medium` |");
     assert.match(matrixAbweichungen(gruppeAlias, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter gruppe „sonnet“/);
+    const forumZeile = "| Forum-Triage (Quarantäne) | `sonnet` | – | `medium` |";
+    assert.equal(doku.split(forumZeile).length, 2, "Forum-Zeile genau einmal");
+    const forumEffort = doku.replace(forumZeile, "| Forum-Triage (Quarantäne) | `sonnet` | – | `high` |");
+    assert.match(matrixAbweichungen(forumEffort, fmEcht).join("\n"), /Forum-Triage \(Quarantäne\): Effort Skill-Pfad „high“ ≠ Frontmatter forumLeser „medium“/);
     const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | – | `low` | n/a | irgendwer |\n| Explore / Recherche |");
     assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);
     const ohneSpalte = doku.replace("| Effort Skill-Pfad |", "| Effort |");
@@ -916,8 +923,42 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.equal(ergebnis, "epic");
   });
 
-  test("Plan-Weiche greift nie bei einem Sammelticket („(gesammelt)“ im Titel): normaler Weg", async () => {
-    const { aufrufe } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
+  test("Sammelticket („(gesammelt)“ im Titel) wird nie umgesetzt (#1646): Weiterleitung auf den Skill-Pfad, Claim und Lock frei, kein Plan", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-1", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß" });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(aufrufe[1].prompt, /freigeben 42 --nonce abc-1/);
+    assert.match(aufrufe[1].prompt, /--remove-assignee @me/);
+  });
+
+  test("Meldet der Auswahl-Agent selbst `skill-pfad` (#1646), leitet der Workflow weiter, ohne Plan und ohne Umsetzen", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ auswahl: { ergebnis: "skill-pfad" }, lockNonce: "abc-1" });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
+  });
+
+  test("Sammelticket ohne eigenen Claim (#1646): kein claim-frei, damit kein fremder Claim entfernt wird", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: false } });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim"]);
+  });
+
+  test("Sammelticket: Claim ohne Nonce gibt den Assignee frei, Nonce ohne verifizierten Claim gibt den Lock frei (#1646)", async () => {
+    const a = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: true } });
+    assert.deepEqual(a.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(a.aufrufe[1].prompt, /--remove-assignee @me/);
+    const b = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-2", auswahl: { claimVerifiziert: false } });
+    assert.deepEqual(b.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(b.aufrufe[1].prompt, /freigeben 42 --nonce abc-2/);
+  });
+
+  test("Der Einstiegs-Skill kennt den Sonderausgang `skill-pfad` (#1646)", () => {
+    const skill = readFileSync(new URL("../../.claude/skills/kubernia-workflow/SKILL.md", import.meta.url), "utf8");
+    assert.match(skill, /^- \*\*`skill-pfad`\*\*/m);
+  });
+
+  test("Titel mit „(gesammelt)“ nur mitten im Text ist kein Sammelticket: normaler Weg", async () => {
+    const { aufrufe } = await workflowLauf({ titel: "Kein Sammelticket (gesammelt) Doku", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
   });
 

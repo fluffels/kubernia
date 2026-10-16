@@ -171,6 +171,13 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(md).toMatch(/ohne Sammel ab Schnitt/);
     expect(md).toContain("s/Req");
   });
+  test("Standardauswertung nennt die Ticket-Zahl und warnt bei Tickets mit mehreren Läufen (#1646)", () => {
+    const zwei = S.renderMarkdown(S.laufzeiten({ laeufe: [lauf("Plane #77", 0, 4), lauf("Plane #77", 10, 14), lauf("Plane #78", 20, 24)] }));
+    expect(zwei).toMatch(/\| alle gemessenen \| 3 \|.*\| 2 \|$/m);
+    expect(zwei).toContain("Mediane je Lauf, nicht je Ticket (1 Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket");
+    const je1 = S.renderMarkdown(S.laufzeiten({ laeufe: [lauf("Plane #77", 0, 4), lauf("Plane #78", 20, 24)] }));
+    expect(je1).not.toContain("Mediane je Lauf");
+  });
   test("renderMarkdown zeigt die Kosten-Spalte, `-` ohne Preis", () => {
     const md = S.renderMarkdown(S.laufzeiten({ laeufe: [lauf("Plane #77", 0, 4), lauf("Plane #79", 0, 4), ohnePreisLauf("Plane #78")] }));
     expect(md).toContain("Kosten ($)");

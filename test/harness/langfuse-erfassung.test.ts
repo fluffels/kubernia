@@ -49,6 +49,7 @@ const CHECKLISTE = [
   "Wochenbudget",
   "Kosten gegen Nutzen",
   "Vermeidbare Arbeit",
+  "Factory-Kennzahlen",
 ];
 
 /** Der AGENTS.md-Bullet zur Erfassungsregel: nennt die vier Änderungsarten und verlinkt den Ablauf. */
@@ -123,6 +124,12 @@ const hatLangfuseSammelticket = (ticketReihenfolge: string, agentsMd: string): b
   );
 };
 
+/** Der Schritt-Block (zwischen den `- name:`-Grenzen), dessen `run:` genau diesen Befehl ist; sonst "". */
+const schrittMitRun = (yml: string, befehl: string): string => {
+  const schritte = yml.split(/^\s+- (?=name:)/m);
+  return schritte.find((s) => s.split("\n").some((z) => z.trim() === `run: ${befehl}`)) ?? "";
+};
+
 /** Die Bedingungen, die den Takt-Workflow robust machen (serialisiert, nicht abbrechend, schreibend, mit Board-Token). */
 const taktWorkflowRobust = (yml: string): boolean => {
   const gruppe = /^concurrency:\s*\n\s+group:\s*(\S+)/m.exec(yml)?.[1] ?? "";
@@ -134,7 +141,7 @@ const taktWorkflowRobust = (yml: string): boolean => {
     !gruppe.includes("${{") &&
     /cancel-in-progress:\s*false/.test(yml) &&
     /issues:\s*write/.test(yml) &&
-    /PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}\s*\n\s+run:\s*node scripts\/board-takt\.mjs\s*$/m.test(yml) && // der Token gehört an den Takt-Schritt, nicht irgendwohin in die Datei
+    /^\s+PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}\s*$/m.test(schrittMitRun(yml, "node scripts/board-takt.mjs")) && // der Token gehört an den Takt-Schritt, in beliebiger Reihenfolge
     /^\s+run:\s*node scripts\/board-takt\.mjs\s*$/m.test(yml) &&
     !/--dry-run/.test(yml)
   );
@@ -197,7 +204,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatErfassungsRegel(""));
   });
 
-  test("model-routing.md: Checkliste mit allen neun Punkten", () => {
+  test("model-routing.md: Checkliste mit allen zehn Punkten", () => {
     assert.ok(hatChecklisteVollstaendig(mr));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Wochenbudget:**", "Wochenbudget:")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Kosten gegen Nutzen", "Kosten gegen Nutzen")));
@@ -212,11 +219,11 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
         .split("\n")
         .filter((z) => /^\d+\. \*\*/.test(z)).length;
     assert.equal(zaehle(mr), CHECKLISTE.length);
-    // Drift: ein zehnter Punkt ohne Eintrag in CHECKLISTE muss auffallen
-    const punkt9 = mr.indexOf("9. **Vermeidbare Arbeit");
-    const zeilenEnde = mr.indexOf("\n", punkt9);
-    const mitZehn = `${mr.slice(0, zeilenEnde)}\n10. **Neu:** x${mr.slice(zeilenEnde)}`;
-    assert.notEqual(zaehle(mitZehn), CHECKLISTE.length);
+    // Drift: ein elfter Punkt ohne Eintrag in CHECKLISTE muss auffallen
+    const punkt10 = mr.indexOf("10. **Factory-Kennzahlen");
+    const zeilenEnde = mr.indexOf("\n", punkt10);
+    const mitElf = `${mr.slice(0, zeilenEnde)}\n11. **Neu:** x${mr.slice(zeilenEnde)}`;
+    assert.notEqual(zaehle(mitElf), CHECKLISTE.length);
   });
 
   test("model-routing.md: Beleg-Ablauf mit Probe-Lauf und Usage", () => {
@@ -293,6 +300,25 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
       assert.ok(!taktWorkflowRobust(yml.replace(alt, neu)), was);
     }
     assert.ok(!taktWorkflowRobust(""));
+  });
+
+  test("Takt-Workflow: Token-Prüfung ist reihenfolgeunabhängig, aber an den Takt-Schritt gebunden", () => {
+    const yml = read(".github/workflows/board-takt.yml").replace(/\r\n/g, "\n");
+    const tok = "          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n";
+    const gh = "          GH_TOKEN: ${{ github.token }}\n";
+    assert.ok(yml.includes(gh + "          GITHUB_REPOSITORY: ${{ github.repository }}\n" + tok), "Vorlage");
+    // Grün: env-Zeilen vertauscht
+    assert.ok(taktWorkflowRobust(yml.replace(tok, "").replace(gh, tok + gh)), "Token zuerst");
+    // Grün: env nach run
+    const env = "        env:\n" + gh + "          GITHUB_REPOSITORY: ${{ github.repository }}\n" + tok;
+    const run = "        run: node scripts/board-takt.mjs\n";
+    assert.ok(yml.includes(env + run), "env vor run in der Vorlage");
+    assert.ok(taktWorkflowRobust(yml.replace(env + run, run + env)), "env nach run");
+    // Rot: Token nur in einem anderen Schritt (ein zweiter Schritt wird angehängt, der Token wandert dorthin)
+    const zweiterSchritt = "      - name: Anderer Schritt\n        env:\n          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n" + tok + "        run: echo ok\n";
+    const nurAnderswo = yml.replace(tok, "").replace(/\n*$/, "\n") + zweiterSchritt;
+    assert.ok(nurAnderswo !== yml.replace(tok, ""), "Vorlage hat den zweiten Schritt");
+    assert.ok(!taktWorkflowRobust(nurAnderswo), "Token nur im anderen Schritt");
   });
 
   test("Takt- und Anlege-Skripte nutzen keinen Such-Index (eventual consistent), nur REST-Listen", () => {
