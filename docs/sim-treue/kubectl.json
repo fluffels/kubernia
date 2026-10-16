@@ -1,6 +1,6 @@
 {
-  "hinweis": "Treue-Matrix kubectl (#1440): je Befehl und Ressourcenart bzw. Flag zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die offizielle Doku. Methode und Felder: docs/sim-treue.md. Geprüft gegen kubernetes.io (v1.37) am 2026-10-08.",
-  "stand": "2026-10-08",
+  "hinweis": "Treue-Matrix kubectl (#1440): je Befehl und Ressourcenart bzw. Flag zwei Zellen (verhalten, ausgabe) mit gleich, vereinfacht oder abweichend gegen die offizielle Doku. Methode und Felder: docs/sim-treue.md. Geprüft gegen kubernetes.io (v1.37) am 2026-10-08, create/set/auth zusätzlich gegen die kubectl-Quellen am 2026-10-16.",
+  "stand": "2026-10-16",
   "clusterVersion": "v1.37.1",
   "befehle": {
     "get": {"doku":"https://kubernetes.io/docs/reference/kubectl/generated/kubectl_get/"},
@@ -76,8 +76,8 @@
     {"befehl":"create","ziel":"serviceaccounts","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"create","ziel":"roles","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"create","ziel":"clusterroles","verhalten":"gleich","ausgabe":"gleich"},
-    {"befehl":"create","ziel":"rolebindings","verhalten":"gleich","ausgabe":"gleich"},
-    {"befehl":"create","ziel":"clusterrolebindings","verhalten":"gleich","ausgabe":"gleich"},
+    {"befehl":"create","ziel":"rolebindings","verhalten":"abweichend","ausgabe":"gleich","tickets":[1678]},
+    {"befehl":"create","ziel":"clusterrolebindings","verhalten":"abweichend","ausgabe":"gleich","tickets":[1678]},
     {"befehl":"delete","ziel":"pods","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"delete","ziel":"deployments","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"delete","ziel":"services","verhalten":"gleich","ausgabe":"gleich"},
