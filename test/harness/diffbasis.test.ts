@@ -71,7 +71,7 @@ const read = (rel: string) => readFileSync(ROOT + rel, "utf8");
 
 /** Ein git-diff-Aufruf samt globaler Optionen und Argumenten; Backtick, Zeilenende und
  *  Shell-Trenner beenden ihn. */
-const AUFRUF = /\bgit(?:\s+(?:-C\s+\S+|--?[\w-]+))*\s+diff\b[^\n`;&|]*/g;
+const AUFRUF = /\bgit(?:\s+(?:-C\s+[^\s-]\S*|-[\w-]+))*\s+diff\b[^\n`;&|]*/g;
 /** Kanonische Form: Drei-Punkt gegen die frisch geholte Remote-Ref. */
 const KANONISCH = /\borigin\/main\.\.\./;
 /** `main` als bare Revision – `origin/main`, `feature/main-x`, `main.ts`, `main/x` zählen NICHT;

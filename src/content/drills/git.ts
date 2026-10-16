@@ -1,5 +1,5 @@
 ﻿import type { Sim } from "../../sim";
-import { pick, rnd, ensureGit } from "./shared";
+import { pick, rnd, ensureGit, escapeRegExp } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const GIT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
@@ -11,26 +11,26 @@ export const GIT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     ensureGit(sim);
     const fn = "seekarte-" + sim.clock + "-" + rnd(100, 9999) + ".md";
     sim.files[fn] = "# Karte";
-    return { text: "Merke die neue Datei <code>" + fn + "</code> zum Commit vor.", accept: [new RegExp("^git\\s+add\\s+" + fn.replace(/[.-]/g, "\\$&") + "$")], solution: "git add " + fn, hint: "Muster: git add &lt;datei&gt;", why: "add merkt eine Datei für den nächsten Commit vor (Staging) – erst auswählen, dann mit commit festhalten. Muster: git add &lt;datei&gt;." };
+    return { text: "Merke die neue Datei <code>" + fn + "</code> zum Commit vor.", accept: [new RegExp("^git\\s+add\\s+" + escapeRegExp(fn) + "$")], solution: "git add " + fn, hint: "Muster: git add &lt;datei&gt;", why: "add merkt eine Datei für den nächsten Commit vor (Staging) – erst auswählen, dann mit commit festhalten. Muster: git add &lt;datei&gt;." };
   },
   "git-commit": sim => {
     ensureGit(sim);
     const fn = "notiz-" + sim.clock + "-" + rnd(100, 9999) + ".md";
     sim.files[fn] = "x"; sim.exec("git add " + fn);
     const msg = pick(["Seekarte ergänzt", "Tippfehler behoben", "Route aktualisiert", "Hafen kartiert"]);
-    return { text: "Halte die vorgemerkten Änderungen fest – Commit-Nachricht: <code>" + msg + "</code>.", accept: [new RegExp('^git\\s+commit\\s+(?:-m|--message)\\s+"' + msg + '"$')], solution: 'git commit --message "' + msg + '"', hint: 'Muster: git commit --message "Nachricht" (statt --message geht auch die Kurzform -m)', why: 'commit hält die vorgemerkten Änderungen als Schnappschuss mit Nachricht fest (lokal); hochgeladen wird erst mit push. Muster: git commit --message "Nachricht" – die Kurzform -m verdienst du dir durch Nutzung.' };
+    return { text: "Halte die vorgemerkten Änderungen fest – Commit-Nachricht: <code>" + msg + "</code>.", accept: [new RegExp('^git\\s+commit\\s+(?:-m|--message)\\s+"' + escapeRegExp(msg) + '"$')], solution: 'git commit --message "' + msg + '"', hint: 'Muster: git commit --message "Nachricht" (statt --message geht auch die Kurzform -m)', why: 'commit hält die vorgemerkten Änderungen als Schnappschuss mit Nachricht fest (lokal); hochgeladen wird erst mit push. Muster: git commit --message "Nachricht" – die Kurzform -m verdienst du dir durch Nutzung.' };
   },
   "git-branch": sim => {
     ensureGit(sim);
     let name = "karte-" + rnd(2, 99);
     while (sim.git.branches.includes(name)) name = "karte-" + rnd(100, 9999);
-    return { text: "Lege einen neuen Branch <code>" + name + "</code> an (nur anlegen, nicht wechseln).", accept: [new RegExp("^git\\s+branch\\s+" + name + "$")], solution: "git branch " + name, hint: "Muster: git branch &lt;name&gt;", why: "branch legt einen neuen Zweig an, ohne dorthin zu wechseln (das täte checkout) – Muster: git branch &lt;name&gt;." };
+    return { text: "Lege einen neuen Branch <code>" + name + "</code> an (nur anlegen, nicht wechseln).", accept: [new RegExp("^git\\s+branch\\s+" + escapeRegExp(name) + "$")], solution: "git branch " + name, hint: "Muster: git branch &lt;name&gt;", why: "branch legt einen neuen Zweig an, ohne dorthin zu wechseln (das täte checkout) – Muster: git branch &lt;name&gt;." };
   },
   "git-checkout": sim => {
     ensureGit(sim);
     let name = "feature-" + rnd(2, 99);
     while (sim.git.branches.includes(name)) name = "feature-" + rnd(100, 9999);
-    return { text: "Lege den Branch <code>" + name + "</code> an UND wechsle direkt hinein.", accept: [new RegExp("^git\\s+checkout\\s+-b\\s+" + name + "$")], solution: "git checkout -b " + name, hint: "Muster: git checkout -b &lt;name&gt;", why: "checkout -b macht beides in einem Schritt: Branch anlegen UND direkt hineinwechseln – Muster: git checkout -b &lt;name&gt;." };
+    return { text: "Lege den Branch <code>" + name + "</code> an UND wechsle direkt hinein.", accept: [new RegExp("^git\\s+checkout\\s+-b\\s+" + escapeRegExp(name) + "$")], solution: "git checkout -b " + name, hint: "Muster: git checkout -b &lt;name&gt;", why: "checkout -b macht beides in einem Schritt: Branch anlegen UND direkt hineinwechseln – Muster: git checkout -b &lt;name&gt;." };
   },
   "git-add-all": sim => {
     ensureGit(sim);
@@ -62,6 +62,6 @@ export const GIT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     sim.exec("git merge " + br);
     const side = pick(["--ours", "--theirs"]);
     const wer = side === "--ours" ? "<b>eigene</b>" : "<b>hereinkommende</b>";
-    return { text: "Merge-Konflikt in <code>" + fn + "</code>: übernimm die " + wer + " Version.", accept: [new RegExp("^git\\s+checkout\\s+" + side + "\\s+" + fn.replace(/[.-]/g, "\\$&") + "$")], solution: "git checkout " + side + " " + fn, hint: "Muster: git checkout --ours/--theirs &lt;datei&gt;", why: "Im Konflikt wählst du eine Seite: --ours ist deine, --theirs die hereinkommende Version. Hier ist die " + wer + " gefragt – Muster: git checkout " + side + " &lt;datei&gt;." };
+    return { text: "Merge-Konflikt in <code>" + fn + "</code>: übernimm die " + wer + " Version.", accept: [new RegExp("^git\\s+checkout\\s+" + escapeRegExp(side) + "\\s+" + escapeRegExp(fn) + "$")], solution: "git checkout " + side + " " + fn, hint: "Muster: git checkout --ours/--theirs &lt;datei&gt;", why: "Im Konflikt wählst du eine Seite: --ours ist deine, --theirs die hereinkommende Version. Hier ist die " + wer + " gefragt – Muster: git checkout " + side + " &lt;datei&gt;." };
   },
 };

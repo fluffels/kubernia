@@ -1,5 +1,5 @@
 import type { Sim } from "../../sim";
-import { pick, rnd, NETPOL_NAMES, NETPOL_APPS, DNS_SVC_NAMES, DNS_EXTERNAL_PAIRS, ensureNetworkPolicy, NETPOL_YAML, renamedManifest } from "./shared";
+import { pick, rnd, NETPOL_NAMES, NETPOL_APPS, DNS_SVC_NAMES, DNS_EXTERNAL_PAIRS, ensureNetworkPolicy, NETPOL_YAML, renamedManifest, escapeRegExp } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const NETWORK_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
@@ -17,18 +17,18 @@ export const NETWORK_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "k-describe-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe networkpolicy " + np.name, hint: "kubectl describe networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicy &lt;name&gt;." };
+    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol)\\s+" + escapeRegExp(np.name) + "$")], solution: "kubectl describe networkpolicy " + np.name, hint: "kubectl describe networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicy &lt;name&gt;." };
   },
   "k-delete-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicy " + np.name, hint: "kubectl delete networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicy &lt;name&gt;." };
+    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol)\\s+" + escapeRegExp(np.name) + "$")], solution: "kubectl delete networkpolicy " + np.name, hint: "kubectl delete networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicy &lt;name&gt;." };
   },
   "k-nslookup": sim => {
     const name = pick(DNS_SVC_NAMES);
     if (!sim.services.some(s => s.name === name)) {
       sim.mergeScenario({ services: [{ name, type: "ClusterIP", clusterIP: "10.96." + rnd(0, 250) + "." + rnd(1, 250), port: pick([80, 8080, 5432, 6379]) }] });
     }
-    return { text: "Frag das Adressbuch (CoreDNS) nach der Adresse des Service <code>" + name + "</code>.", accept: [new RegExp("^nslookup\\s+" + name + "(\\.default(\\.svc\\.cluster\\.local)?)?$")], solution: "nslookup " + name, hint: "Muster: nslookup &lt;service&gt; (oder voll &lt;service&gt;.default.svc.cluster.local)", why: "nslookup fragt CoreDNS nach der Adresse hinter einem Namen. Ein Service ist über den kurzen Namen, &lt;service&gt;.&lt;namespace&gt; oder den vollen FQDN &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local erreichbar – CoreDNS löst alle drei zur stabilen ClusterIP auf. So reden Pods über Namen, nicht über wechselnde Pod-IPs." };
+    return { text: "Frag das Adressbuch (CoreDNS) nach der Adresse des Service <code>" + name + "</code>.", accept: [new RegExp("^nslookup\\s+" + escapeRegExp(name) + "(\\.default(\\.svc\\.cluster\\.local)?)?$")], solution: "nslookup " + name, hint: "Muster: nslookup &lt;service&gt; (oder voll &lt;service&gt;.default.svc.cluster.local)", why: "nslookup fragt CoreDNS nach der Adresse hinter einem Namen. Ein Service ist über den kurzen Namen, &lt;service&gt;.&lt;namespace&gt; oder den vollen FQDN &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local erreichbar – CoreDNS löst alle drei zur stabilen ClusterIP auf. So reden Pods über Namen, nicht über wechselnde Pod-IPs." };
   },
   "k-nslookup-external": sim => {
     const [name, ext] = pick(DNS_EXTERNAL_PAIRS);
@@ -38,6 +38,6 @@ export const NETWORK_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
       sim.applyEffects[file] = { service: { name, type: "ExternalName", externalName: ext, port: "" } };
       sim.exec("kubectl apply -f " + file);
     }
-    return { text: "Löse den <b>ExternalName</b>-Service <code>" + name + "</code> auf – wohin zeigt sein CNAME?", accept: [new RegExp("^nslookup\\s+" + name + "(\\.default(\\.svc\\.cluster\\.local)?)?$")], solution: "nslookup " + name, hint: "Muster: nslookup &lt;service&gt; – hier " + name + ".", why: "Ein ExternalName-Service hat keine eigene ClusterIP – nslookup zeigt stattdessen einen CNAME auf den externen DNS-Namen, auf den er verweist. So sprechen Pods einen Dienst außerhalb des Clusters über den gewohnten Service-Namen an; ändert sich die externe Adresse, fasst man nur den Service an." };
+    return { text: "Löse den <b>ExternalName</b>-Service <code>" + name + "</code> auf – wohin zeigt sein CNAME?", accept: [new RegExp("^nslookup\\s+" + escapeRegExp(name) + "(\\.default(\\.svc\\.cluster\\.local)?)?$")], solution: "nslookup " + name, hint: "Muster: nslookup &lt;service&gt; – hier " + name + ".", why: "Ein ExternalName-Service hat keine eigene ClusterIP – nslookup zeigt stattdessen einen CNAME auf den externen DNS-Namen, auf den er verweist. So sprechen Pods einen Dienst außerhalb des Clusters über den gewohnten Service-Namen an; ändert sich die externe Adresse, fasst man nur den Service an." };
   },
 };
