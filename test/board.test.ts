@@ -65,7 +65,7 @@ describe("Einsortieren mehrerer Tickets (#1217)", () => {
 describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
   // Form wie von `gh api --paginate --slurp users/<owner>/projectsV2/1/items?fields=<Status-ID>` geliefert (Auszug einer echten Antwort).
   const status = (name: string) => [{ data_type: "single_select", id: 358708531, name: "Status", value: { id: "f75ad846", name: { raw: name, html: name } } }];
-  const issue = (node: string, number: number, st = "Todo") => ({ id: 1, node_id: node, content_type: "Issue", content: { number, title: "T", state: "open", assignees: [{ login: "fluffels" }] }, fields: status(st) });
+  const issue = (node: string, number: number, st = "Todo") => ({ id: 1, node_id: node, content_type: "Issue", content: { node_id: node === "PVTI_a" ? "I_a" : undefined, number, title: "T", state: "open", assignees: [{ login: "fluffels" }] }, fields: status(st) });
   const echt = [
     [
       issue("PVTI_a", 12),
@@ -84,11 +84,11 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
   };
 
   // Felder, die nur das Auswählen des nächsten Tickets liest (#1460 Z8): ohne sie im Rohitem leer bzw. 0.
-  const LEER = { body: "", labels: [], autor: null, blockedBy: 0 };
+  const LEER = { contentId: "", body: "", labels: [], autor: null, blockedBy: 0 };
 
   test("normalizeItems: nur Issues, über Seiten hinweg in Board-Reihenfolge, mit node_id, Nummer und Status", () => {
     expect(N.normalizeItems(echt)).toEqual([
-      { id: "PVTI_a", number: 12, status: "Todo", title: "T", assignees: ["fluffels"], state: "open", ...LEER },
+      { id: "PVTI_a", number: 12, status: "Todo", title: "T", assignees: ["fluffels"], state: "open", ...LEER, contentId: "I_a" },
       { id: "PVTI_d", number: 5, status: "", title: "", assignees: [], state: "", ...LEER },
       { id: "PVTI_e", number: 7, status: "In Progress", title: "T", assignees: ["fluffels"], state: "open", ...LEER },
     ]);
@@ -296,9 +296,9 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
 
   test("normalizeItems liefert Titel, Assignee-Logins und Zustand (Form einer echten REST-Antwort)", () => {
     const echt = [[{ node_id: "PVTI_x", content_type: "Issue", content: { number: 1331, title: TITEL, state: "open", assignees: [{ login: "fluffels", id: 1 }, null, { id: 2 }] }, fields: [] }]];
-    expect(K.normalizeItems(echt)).toEqual([{ id: "PVTI_x", number: 1331, status: "", title: TITEL, assignees: ["fluffels"], state: "open", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    expect(K.normalizeItems(echt)).toEqual([{ id: "PVTI_x", number: 1331, status: "", title: TITEL, assignees: ["fluffels"], state: "open", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
     const roh = [[{ node_id: "PVTI_y", content_type: "Issue", content: { number: 2, title: 5, assignees: "x" }, fields: [] }]];
-    expect(K.normalizeItems(roh)).toEqual([{ id: "PVTI_y", number: 2, status: "", title: "", assignees: [], state: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    expect(K.normalizeItems(roh)).toEqual([{ id: "PVTI_y", number: 2, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
   });
 
   test("normalizeItems liest Body, Label-Namen, Autor und GitHubs Blocker-Zähler (REST-Form samt issue_dependencies_summary, #1460 Z8)", () => {
@@ -318,11 +318,11 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
       fields: [],
     }]];
     expect(K.normalizeItems(echt)).toEqual([
-      { id: "PVTI_z", number: 7, status: "", title: "T", assignees: [], state: "open", body: "blockiert durch #3", labels: ["area:harness", "forum"], autor: { login: "fluffels", type: "User" }, blockedBy: 2 },
+      { id: "PVTI_z", number: 7, status: "", title: "T", assignees: [], state: "open", contentId: "", body: "blockiert durch #3", labels: ["area:harness", "forum"], autor: { login: "fluffels", type: "User" }, blockedBy: 2 },
     ]);
     // kaputte Felder werden abgehärtet statt zu werfen: Body kein Text, Autor ohne Login, Zähler keine Zahl
     const roh = [[{ node_id: "PVTI_y", content_type: "Issue", content: { number: 8, body: 5, user: { type: "User" }, labels: "x", issue_dependencies_summary: { blocked_by: "viel" } }, fields: [] }]];
-    expect(K.normalizeItems(roh)).toEqual([{ id: "PVTI_y", number: 8, status: "", title: "", assignees: [], state: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    expect(K.normalizeItems(roh)).toEqual([{ id: "PVTI_y", number: 8, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
   });
 
   test("Argumente: --notfall nur mit --top und mit bekannter Art", () => {

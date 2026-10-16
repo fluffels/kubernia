@@ -58,6 +58,34 @@ export function seitenListen(produkt, factory) {
   return { produkt: [...richtig.produkt, ...verirrt.produkt], factory: [...richtig.factory, ...verirrt.factory], doppelt, falsch };
 }
 
+/**
+ * Pur: der Umzug (#1730) aller offenen Items, die gegen die Trennregel auf dem falschen Board stehen. Reihenfolge: erst die Items des
+ * Produkt-Boards, dann die des Factory-Boards, je in Board-Reihenfolge. Steht die Nummer auch auf dem Soll-Board, wird nur entfernt
+ * (`aktion: "entfernen"`), sonst umgezogen (`"umziehen"`: aufnehmen, positionieren, dann entfernen). Ein Item mit Status ungleich Todo
+ * (auch leer) oder ohne Issue-Node-ID wird gemeldet (`gemeldet`) und nicht angefasst. `ende`: ID des letzten Items je Board, das der Lauf nicht
+ * selbst entfernt (null = leer), der Anker für das erste umgezogene Item. Geschlossene Items bleiben als Historie. Eingaben bleiben unverändert.
+ */
+export function umzugsPlan(produkt, factory) {
+  const stehtAuf = { produkt: new Set(produkt.map((i) => i.number)), factory: new Set(factory.map((i) => i.number)) };
+  const schritte = [];
+  const gemeldet = [];
+  for (const [von, liste] of [["produkt", produkt], ["factory", factory]]) {
+    for (const i of liste) {
+      const nach = boardRolleFuer(i.labels ?? []);
+      if (i.state !== "open" || nach === von) continue;
+      const kopf = { number: i.number, title: i.title ?? "", von, nach, quelleId: i.id };
+      if (stehtAuf[nach].has(i.number)) schritte.push({ aktion: "entfernen", ...kopf });
+      else if (i.status !== "Todo") gemeldet.push({ number: i.number, grund: `Status „${i.status === "" ? "leer" : i.status}“ statt Todo, nicht umgezogen` });
+      else if (!i.contentId) gemeldet.push({ number: i.number, grund: "keine Issue-Node-ID in der Board-Liste, nicht umgezogen" });
+      else schritte.push({ aktion: "umziehen", ...kopf, contentId: i.contentId });
+    }
+  }
+  // Anker: das letzte Item je Board, das der Lauf nicht selbst entfernt (ein gelöschtes Item taugt nicht als `afterId`).
+  const weg = new Set(schritte.map((s) => s.quelleId));
+  const letztes = (liste) => liste.findLast((i) => !weg.has(i.id))?.id ?? null;
+  return { schritte, gemeldet, ende: { produkt: letztes(produkt), factory: letztes(factory) } };
+}
+
 /** Guard vor jedem gh-Aufruf: das Board muss ein Config-Eintrag sein (Objekt mit projectId), kein vergessener Parameter. */
 function brauchtBoard(board, wo) {
   if (typeof board !== "object" || board === null || typeof board.projectId !== "string" || board.projectId === "") {
@@ -385,7 +413,7 @@ export function normalizeOffene(pages) {
 
 /**
  * Antwort von `gh api --paginate --slurp <Board-Pfad>/items` (Liste von Seiten) →
- * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), number, status, title, assignees, state, body, labels, autor, blockedBy }`
+ * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), contentId (node_id des Issues), number, status, title, assignees, state, body, labels, autor, blockedBy }`
  * (die letzten vier liest `naechstes-ticket.mjs`; Feldform `issue_dependencies_summary` belegt per Probe 2026-10-08: 151 von 151 Items tragen
  * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; ein Wert über 0 wurde noch nie beobachtet). Pur, damit die Form
  * mit einer echten JSON-Probe testbar ist. Bricht laut ab bei unerwarteter Form, statt Nummern still
@@ -401,6 +429,8 @@ export function normalizeItems(pages) {
     .filter((i) => i?.content_type === "Issue" && Number.isInteger(i.content?.number) && typeof i.node_id === "string")
     .map((i) => ({
       id: i.node_id,
+      // Node-ID des Issues (für addProjectV2ItemById, z.B. beim Umzug auf das andere Board); leer, wenn die REST-Liste sie nicht trägt.
+      contentId: typeof i.content.node_id === "string" ? i.content.node_id : "",
       number: i.content.number,
       status: i.fields?.find((f) => f?.name === "Status")?.value?.name?.raw ?? "",
       title: typeof i.content.title === "string" ? i.content.title : "",
@@ -539,6 +569,8 @@ export const MUTATION_ADD = "mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input
 export const MUTATION_STATUS =
   "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }";
 
+export const MUTATION_DELETE = "mutation($p:ID!,$i:ID!){ deleteProjectV2Item(input:{projectId:$p,itemId:$i}){ deletedItemId } }";
+
 const graphql = (query, vars, opts) => {
   const args = ["api", "graphql", "-f", `query=${query}`];
   for (const [k, v] of Object.entries(vars)) if (v !== null && v !== undefined) args.push("-f", `${k}=${v}`);
@@ -634,6 +666,12 @@ export function addToBoardTodo(board, nodeId, opts = {}) {
   const itemId = item.data.addProjectV2ItemById.item.id;
   graphql(MUTATION_STATUS, { p: board.projectId, i: itemId, f: board.statusFeldNodeId, o: board.todoOptionId }, opts);
   return itemId;
+}
+
+/** Item (`PVTI_…`) vom Board entfernen (#1730); das Issue bleibt bestehen. Nur für den Umzug. */
+export function entferneVomBoard(board, itemId, opts = {}) {
+  brauchtBoard(board, "entferneVomBoard");
+  graphql(MUTATION_DELETE, { p: board.projectId, i: itemId }, opts);
 }
 
 /**

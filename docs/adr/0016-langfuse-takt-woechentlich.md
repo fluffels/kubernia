@@ -136,3 +136,9 @@ Anlass: seit F11 gibt es ein Produkt- und ein Factory-Board (Trennregel: Label `
 Entscheidung: `naechstes-ticket` wählt nach 3 Produkt-Merges seit dem letzten Factory-Merge das oberste freie Factory-Item, sonst das oberste freie Produkt-Item; Kopf-Items beider Boards gehen vor der Quote, ein geclaimtes Nicht-Kopf-Factory-Item lenkt auf Produkt, eine leere Seite führt zum Rückfall auf die andere. `SPIEL_QUOTE` steht jetzt in `scripts/spielquote-lib.mjs` (mit `istHarnessCommit`, `zaehleTicketMerges` und `produktMergesSeitFactory`); `board-takt.mjs` und `naechstes-ticket.mjs` importieren sie von dort und nicht voneinander. Die Zählung bleibt ohne gespeicherten Zähler aus den Commits von `main` und den geschlossenen `area:harness`-Issues abgeleitet.
 
 Grenzen: Das Fenster ist eine Commit-Seite (100 Commits), ohne Factory-Merge darin zählt die Untergrenze; ein Notfall-Fix mit `area:harness` zählt als Factory-Merge; ein dauerhaft geclaimtes Factory-Item hält die Seite auf Produkt (Ausweg `--bereich agentic`); Commits ohne `#N` zählen über den Scope. Bis die Harness-Items auf das Factory-Board umgezogen sind, ordnet die Auswahl sie über ihre Labels der Factory-Seite zu.
+
+## Fortschreibung #1730 (2026-10-16): Ansichten entfernt, Umzug der Harness-Items
+
+Anlass: Teil 3 von F11. Die Teilung nach Ansicht („Spiel“, „Agentic Engineering“ auf dem Produkt-Board, Zeile oben zu den Ansichten) wird durch die zwei Boards abgelöst.
+
+Entscheidung: `board-place.mjs --umzug` hat alle offenen `area:harness`-Items auf das Factory-Board gesetzt und vom Produkt-Board entfernt; die beiden Ansichten sind per `deleteProjectV2View` gelöscht (ausdrücklich freigegeben). Beide Boards tragen nur „View 1“, die Auswahl läuft über beide Boards (Fortschreibung #1729). Mechanik und Grenzen: [ticket-reihenfolge.md](../ticket-reihenfolge.md#spielquote-über-zwei-boards-1729).
