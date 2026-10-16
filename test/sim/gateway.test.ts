@@ -71,6 +71,13 @@ describe("Listener-Conditions", () => {
     const c = listenerConditions(https(), [{ name: "tls", type: "Opaque" }]);
     expect(c.find(x => x.type === "ResolvedRefs")?.reason).toBe("InvalidCertificateRef");
   });
+  test("ein Listener ohne TLS-Protokoll, aber mit tlsSecret (Szenario-Daten, eigenes Protokoll) braucht das Secret trotzdem", () => {
+    for (const protocol of ["HTTP", "GRPC"]) {
+      const l = { name: "x", port: 80, protocol, tlsSecret: "fehlt" };
+      expect(listenerConditions(l, []).some(c => c.reason === "InvalidCertificateRef")).toBe(true);
+      expect(listenerConditions(l, [{ name: "fehlt" }]).every(c => c.status === "True")).toBe(true);
+    }
+  });
   test("HTTPS ohne tlsSecret ist ungültig, ein anderes Secret als das genannte hilft nicht", () => {
     expect(listenerConditions(https({ tlsSecret: undefined }), [{ name: "tls" }]).some(c => c.status === "False")).toBe(true);
     expect(listenerConditions(https({ tlsSecret: "anders" }), [{ name: "tls" }]).some(c => c.status === "False")).toBe(true);
@@ -147,8 +154,10 @@ describe("Mapper Gateway", () => {
     expect(fail(GW(LST("TLS", 443, "      tls:\n        mode: Passthrough\n"))).error).toContain("Passthrough wird vom Simulator nicht abgebildet");
   });
   test("tls an einem HTTP-Listener wird abgelehnt", () => {
-    const f = fail(GW(LST("HTTP", 80, "      tls:\n        certificateRefs:\n          - name: x\n")));
-    expect(f.error).toContain("tls must not be specified for protocols ['HTTP', 'TCP', 'UDP']");
+    for (const protocol of ["HTTP", "TCP", "UDP"]) {
+      const f = fail(GW(LST(protocol, 80, "      tls:\n        certificateRefs:\n          - name: x\n")));
+      expect(f.error).toContain("tls must not be specified for protocols ['HTTP', 'TCP', 'UDP']");
+    }
   });
   test("tls-Zertifikatsverweis ohne name: Pflichtfeld", () => {
     const f = fail(GW(LST("HTTPS", 443, "      tls:\n        certificateRefs:\n          - kind: Secret\n")));
