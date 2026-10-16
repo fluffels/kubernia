@@ -77,10 +77,10 @@ export function prNummer(pr) {
   return m ? m[1] : null;
 }
 
-/** `--json`-Felder von `gh pr view`; `labels` braucht R3 (der Test bindet die Liste). */
-export const PR_FELDER = "state,autoMergeRequest,labels";
+/** `--json`-Felder des einen `gh pr view`: R1 bis R3 lesen state/autoMergeRequest/labels, R6 files/author/comments (der Test bindet die Liste). */
+export const PR_FELDER = "state,autoMergeRequest,labels,files,author,comments";
 
-/** Standard-`prStatus`: `gh pr view <nr> --json state,autoMergeRequest,labels`; wirft bei jedem Fehler. */
+/** Standard-`prStatus`: ein `gh pr view <nr> --json <PR_FELDER>` liefert alles, was der Abschluss liest; wirft bei jedem Fehler. */
 export function ghPrStatus(nummer) {
   return ghJson(["pr", "view", nummer, "--json", PR_FELDER], { timeout: 20000 });
 }
@@ -151,7 +151,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
       `Wartest du nur auf die CI: ${WARTEN(nr)}`
     );
   }
-  if (token === "gemergt" && status.state === "MERGED") return auditBlockade(nr, deps);
+  if (token === "gemergt" && status.state === "MERGED") return auditBlockade(nr, deps, status);
   return null;
 }
 
@@ -187,23 +187,34 @@ export function trifftLeitplanke(pfad, muster) {
   });
 }
 
-/** Standard-`prDateien`: geänderte Dateien des PR; wirft bei jedem Fehler. */
-export function ghPrDateien(nummer) {
-  return ghText(["pr", "diff", nummer, "--name-only"], { timeout: 20000 }).split("\n").map((z) => z.trim()).filter(Boolean);
+/** GraphQL liefert in `files` höchstens so viele Einträge; genau so viele heißen: möglicherweise abgeschnitten. */
+export const GRAPHQL_DATEIEN_GRENZE = 100;
+
+const ghDiffNamen = (nummer) => ghText(["pr", "diff", nummer, "--name-only"], { timeout: 20000 });
+
+/**
+ * Standard-`prDateien`: geänderte Dateien des PR aus `status.files` (kein zweiter gh-Aufruf); fehlt `files` oder sind es
+ * genau `GRAPHQL_DATEIEN_GRENZE` Einträge (Abschneidegrenze), Rückfall auf `gh pr diff --name-only`; wirft bei jedem Fehler.
+ */
+export function ghPrDateien(nummer, status, diff = ghDiffNamen) {
+  const files = status?.files;
+  if (Array.isArray(files) && files.length < GRAPHQL_DATEIEN_GRENZE) return files.map((f) => f?.path).filter(Boolean);
+  return diff(nummer).split("\n").map((z) => z.trim()).filter(Boolean);
 }
 
-/** Standard-`prKommentare`: Autor und Kommentare des PR; wirft bei jedem Fehler. */
-export function ghPrKommentare(nummer) {
+/** Standard-`prKommentare`: Autor und Kommentare aus dem einen `gh pr view`; ohne sie (z.B. injizierter Status) ein eigener Aufruf; wirft bei jedem Fehler. */
+export function ghPrKommentare(nummer, status) {
+  if (status && "comments" in status && "author" in status) return status;
   return ghJson(["pr", "view", nummer, "--json", "author,comments"], { timeout: 20000 });
 }
 
 /** R6 (#1067): gemergter PR mit Leitplanken-Pfaden braucht den Audit-Kommentar des PR-Autors; Fehler: frei. */
-function auditBlockade(nr, deps) {
+function auditBlockade(nr, deps, status) {
   try {
     const muster = leitplankenMuster();
-    const treffer = (deps.prDateien ?? ghPrDateien)(nr).filter((d) => trifftLeitplanke(d, muster));
+    const treffer = (deps.prDateien ?? ghPrDateien)(nr, status).filter((d) => trifftLeitplanke(d, muster));
     if (!treffer.length) return null;
-    const info = (deps.prKommentare ?? ghPrKommentare)(nr);
+    const info = (deps.prKommentare ?? ghPrKommentare)(nr, status);
     const autor = info?.author?.login;
     const vorhanden = (info?.comments ?? []).some((c) => autor && c?.author?.login === autor && String(c?.body ?? "").trimStart().startsWith(AUDIT_KOPF));
     if (vorhanden) return null;
