@@ -123,6 +123,12 @@ const hatLangfuseSammelticket = (ticketReihenfolge: string, agentsMd: string): b
   );
 };
 
+/** Der Schritt-Block (zwischen den `- name:`-Grenzen), dessen `run:` genau diesen Befehl ist; sonst "". */
+const schrittMitRun = (yml: string, befehl: string): string => {
+  const schritte = yml.split(/^\s+- (?=name:)/m);
+  return schritte.find((s) => s.split("\n").some((z) => z.trim() === `run: ${befehl}`)) ?? "";
+};
+
 /** Die Bedingungen, die den Takt-Workflow robust machen (serialisiert, nicht abbrechend, schreibend, mit Board-Token). */
 const taktWorkflowRobust = (yml: string): boolean => {
   const gruppe = /^concurrency:\s*\n\s+group:\s*(\S+)/m.exec(yml)?.[1] ?? "";
@@ -134,7 +140,7 @@ const taktWorkflowRobust = (yml: string): boolean => {
     !gruppe.includes("${{") &&
     /cancel-in-progress:\s*false/.test(yml) &&
     /issues:\s*write/.test(yml) &&
-    /PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}\s*\n\s+run:\s*node scripts\/board-takt\.mjs\s*$/m.test(yml) && // der Token gehört an den Takt-Schritt, nicht irgendwohin in die Datei
+    /^\s+PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}\s*$/m.test(schrittMitRun(yml, "node scripts/board-takt.mjs")) && // der Token gehört an den Takt-Schritt, in beliebiger Reihenfolge
     /^\s+run:\s*node scripts\/board-takt\.mjs\s*$/m.test(yml) &&
     !/--dry-run/.test(yml)
   );
@@ -293,6 +299,27 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
       assert.ok(!taktWorkflowRobust(yml.replace(alt, neu)), was);
     }
     assert.ok(!taktWorkflowRobust(""));
+  });
+
+  test("Takt-Workflow: Token-Prüfung ist reihenfolgeunabhängig, aber an den Takt-Schritt gebunden", () => {
+    const yml = read(".github/workflows/board-takt.yml").replace(/\r\n/g, "\n");
+    const tok = "          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n";
+    const gh = "          GH_TOKEN: ${{ github.token }}\n";
+    assert.ok(yml.includes(gh + "          GITHUB_REPOSITORY: ${{ github.repository }}\n" + tok), "Vorlage");
+    // Grün: env-Zeilen vertauscht
+    assert.ok(taktWorkflowRobust(yml.replace(tok, "").replace(gh, tok + gh)), "Token zuerst");
+    // Grün: env nach run
+    const env = "        env:\n" + gh + "          GITHUB_REPOSITORY: ${{ github.repository }}\n" + tok;
+    const run = "        run: node scripts/board-takt.mjs\n";
+    assert.ok(yml.includes(env + run), "env vor run in der Vorlage");
+    assert.ok(taktWorkflowRobust(yml.replace(env + run, run + env)), "env nach run");
+    // Rot: Token nur im anderen Schritt
+    const nurAnderswo = yml.replace(tok, "").replace(
+      "          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n",
+      "          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}\n" + tok,
+    );
+    assert.ok(nurAnderswo !== yml.replace(tok, ""), "Vorlage hat den zweiten Schritt");
+    assert.ok(!taktWorkflowRobust(nurAnderswo), "Token nur im anderen Schritt");
   });
 
   test("Takt- und Anlege-Skripte nutzen keinen Such-Index (eventual consistent), nur REST-Listen", () => {
