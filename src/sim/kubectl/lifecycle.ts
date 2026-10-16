@@ -21,9 +21,9 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { exactlyOneName, notSimulated, replicasArg } from "./args";
+import { exactlyOneName, LITERAL_FLAG, notSimulated, NS, replicasArg, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
 import { readTargets, targetOutcome, type Target } from "./targets";
-import { subEntry, type Call } from "../cliargs";
+import { flag, IM_HANDLER, type Call, type Dispatch, type FlagSpec, type SubEntry } from "../cliargs";
 import { applyDeployment } from "./apply-deployment";
 import { applyGateway, applyGatewayClass, applyHttpRoute } from "./apply-gateway";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
@@ -72,13 +72,12 @@ const SIMPLE_DELETABLE: ReadonlyMap<ResourcePlural, (host: KubectlHost) => { nam
 ]);
 
 
-/* ===== `kubectl create <typ> …` – ein Handler je Ressourcentyp (#543) =====
- * Der frühere Monolith (complexity 63, ein `if (t[2] === …)`-Block je Typ) ist in fokussierte
- * Handler zerlegt, verdrahtet über die `CREATE_HANDLERS`-Tabelle (dieselbe Registry-Idee wie
- * `applyHandlers` / `SIMPLE_DELETABLE`). Ein neuer create-fähiger Typ = ein Handler + ein
- * Tabellen-Eintrag; `kubectlCreate` selbst bleibt ein dünner Dispatcher (Stardew-Scope: wächst
- * nicht in der Komplexität, egal wie viele Ressourcentypen dazukommen). Alle Handler bekommen den
- * `Call` (#1487): `c.args` ist die Eingabe ab dem Typ (`deployment web`), Flags stehen überall. */
+/* ===== `kubectl create <typ> …` – ein Eintrag je Ressourcentyp (#543, #1491) =====
+ * `KUBECTL_CREATE` ist eine verschachtelte Dispatch-Tabelle (cliargs `Group`): jedes Ziel hat seine EIGENEN Flags und
+ * seinen Handler, nur `-n` gilt für alle (persistentes Flag der Ebene). Ein Flag eines anderen Ziels
+ * (`create deployment web --verb=get`) lehnt der Dispatch ab, statt es still anzunehmen. Ein neuer create-fähiger Typ =
+ * ein Handler + ein Tabellen-Eintrag; die „kann“-Liste leitet sich aus den Schlüsseln ab. Alle Handler bekommen den
+ * `Call` (#1487): `c.args` sind die Namen hinter dem Typ (`web`), die Flags des Ziels stehen überall. */
 type CreateHandler = (host: KubectlHost, c: Call) => string;
 
 /** Der EINE Namens-Vorspann aller create-Handler: genau ein NAME (sonst der echte kubectl-Text samt deutschem
@@ -95,7 +94,7 @@ const literalKeys = (c: Call): string[] => c.values("--from-literal").map(v => v
 /** secret tls <name> --cert=<datei> --key=<datei> */
 const SECRET_TLS_MUSTER = "Muster: kubectl create secret tls <name> --cert=tls.crt --key=tls.key";
 function createSecretTls(host: KubectlHost, c: Call): string {
-  const n = createName(host, c.args.slice(2), "Secret", SECRET_TLS_MUSTER);
+  const n = createName(host, c.args, "Secret", SECRET_TLS_MUSTER);
   if (typeof n === "string") return n;
   if (!c.value("--cert") || !c.value("--key")) return host._err("error: key and cert must be specified", "Häng '--cert=tls.crt --key=tls.key' an.");
   if (host.secrets.some(s => s.name === n.name)) return host._err('error: secrets "' + n.name + '" already exists');
@@ -105,7 +104,7 @@ function createSecretTls(host: KubectlHost, c: Call): string {
 
 /** secret generic <name> --from-literal=schluessel=wert */
 function createSecretGeneric(host: KubectlHost, c: Call): string {
-  const n = createName(host, c.args.slice(2), "Secret", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
+  const n = createName(host, c.args, "Secret", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
   if (typeof n === "string") return n;
   const literals = literalKeys(c);
   if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=passwort=geheim123' an.");
@@ -114,22 +113,9 @@ function createSecretGeneric(host: KubectlHost, c: Call): string {
   return "secret/" + n.name + " created";
 }
 
-/** Die secret-Arten (`create secret <art> …`): ein Eintrag je Art mit Handler und Muster, `CREATE_SECRET_KANN` leitet sich daraus ab. */
-const SECRET_KINDS: Readonly<Record<string, { run: CreateHandler; muster: string }>> = {
-  generic: { run: createSecretGeneric, muster: "--from-literal=k=v" },
-  tls: { run: createSecretTls, muster: "--cert=… --key=…" },
-};
-const CREATE_SECRET_KANN = Object.entries(SECRET_KINDS).map(([art, e]) => "kubectl create secret " + art + " <name> " + e.muster);
-
-const createSecret: CreateHandler = (host, c) => {
-  const sub = c.args[1] ?? "";
-  const art = subEntry(SECRET_KINDS, sub);
-  return art ? art.run(host, c) : notSimulated(host, "'kubectl create secret " + sub + "'.", CREATE_SECRET_KANN);
-};
-
 // kubectl create configmap <name> --from-literal=schluessel=wert
 const createConfigMap: CreateHandler = (host, c) => {
-  const n = createName(host, c.args.slice(1), "ConfigMap", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
+  const n = createName(host, c.args, "ConfigMap", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
   if (typeof n === "string") return n;
   const literals = literalKeys(c);
   if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=log_level=info' an.");
@@ -139,7 +125,7 @@ const createConfigMap: CreateHandler = (host, c) => {
 };
 
 const createServiceAccount: CreateHandler = (host, c) => {
-  const n = createName(host, c.args.slice(1), "ServiceAccount", "Muster: kubectl create serviceaccount <name>");
+  const n = createName(host, c.args, "ServiceAccount", "Muster: kubectl create serviceaccount <name>");
   if (typeof n === "string") return n;
   if (host.serviceAccounts.some(s => s.name === n.name)) return host._err('error: serviceaccounts "' + n.name + '" already exists');
   host.serviceAccounts.push({ name: n.name, created: host.clock });
@@ -150,21 +136,19 @@ const createServiceAccount: CreateHandler = (host, c) => {
  *  Rolle trotzdem an (kubectl warnt seit v0.20 nur noch), die Sim zeigt dieselbe Warnung. */
 const RESOURCE_VERBS = ["*", "get", "delete", "list", "create", "update", "patch", "watch", "proxy", "deletecollection", "use", "bind", "escalate", "impersonate"];
 
-// kubectl create role|clusterrole <name> --verb=… --resource=… (cluster ergibt sich aus dem Typ)
-const createRole: CreateHandler = (host, c) => {
-  const typ = c.args[0];
-  const cluster = typ === "clusterrole";
-  const n = createName(host, c.args.slice(1), cluster ? "ClusterRole" : "Role", "Muster: kubectl create " + typ + " <name> --verb=get,list --resource=pods");
+// kubectl create role|clusterrole <name> --verb=… --resource=… (`cluster` ergibt sich aus dem Eintrag)
+const createRoleOf = (cluster: boolean): CreateHandler => (host, c) => {
+  const typ = cluster ? "clusterrole" : "role";
+  const n = createName(host, c.args, cluster ? "ClusterRole" : "Role", "Muster: kubectl create " + typ + " <name> --verb=get,list --resource=pods");
   if (typeof n === "string") return n;
   const verbs = c.list("--verb");
   const resources = c.list("--resource");
   if (verbs.length === 0) return host._err("error: at least one verb must be specified", "Häng z.B. '--verb=get,list' an.");
   if (resources.length === 0) return host._err("error: at least one resource must be specified", "Häng z.B. '--resource=pods' an.");
-  const kind = cluster ? "clusterrole" : "role";
-  if (host.roles.some(r => sameRbac(r, { name: n.name, cluster }))) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
+  if (host.roles.some(r => sameRbac(r, { name: n.name, cluster }))) return host._err('error: ' + typ + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
   host.roles.push({ name: n.name, cluster, rules: [{ verbs, resources }], created: host.clock });
   const warnings = verbs.filter(v => !RESOURCE_VERBS.includes(v)).map(v => "Warning: '" + v + "' is not a standard resource verb\n");
-  return warnings.join("") + kind + ".rbac.authorization.k8s.io/" + n.name + " created";
+  return warnings.join("") + typ + ".rbac.authorization.k8s.io/" + n.name + " created";
 };
 
 /** Die `--user`/`--serviceaccount`-Subjekte eines RoleBindings einsammeln (`<ns>:<sa>`, die Form hat die Flag-Tabelle
@@ -178,29 +162,25 @@ function collectRbacSubjects(c: Call): RbacSubject[] {
   return subjects;
 }
 
-// kubectl create rolebinding|clusterrolebinding <name> --role=… --serviceaccount=…
-const createRoleBinding: CreateHandler = (host, c) => {
-  const typ = c.args[0];
-  const cluster = typ === "clusterrolebinding";
-  const n = createName(host, c.args.slice(1), cluster ? "ClusterRoleBinding" : "RoleBinding", "Muster: kubectl create " + typ + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
+// kubectl create rolebinding|clusterrolebinding <name> --role=… --serviceaccount=… (ein ClusterRoleBinding kennt `--role` nicht)
+const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
+  const typ = cluster ? "clusterrolebinding" : "rolebinding";
+  const n = createName(host, c.args, cluster ? "ClusterRoleBinding" : "RoleBinding", "Muster: kubectl create " + typ + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
   if (typeof n === "string") return n;
   const roleName = c.value("--role");
   const clusterRoleName = c.value("--clusterrole");
-  // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
-  if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
   if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
   const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
   const subjects = collectRbacSubjects(c);
   if (subjects.length === 0) return host._err("error: at least one of --user or --serviceaccount must be specified", "Muster: '--serviceaccount=default:deploy-bot' oder '--user=alice'.");
-  const kind = cluster ? "clusterrolebinding" : "rolebinding";
-  if (host.roleBindings.some(b => sameRbac(b, { name: n.name, cluster }))) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
+  if (host.roleBindings.some(b => sameRbac(b, { name: n.name, cluster }))) return host._err('error: ' + typ + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
   host.roleBindings.push({ name: n.name, cluster, roleRef, subjects, created: host.clock });
-  return kind + ".rbac.authorization.k8s.io/" + n.name + " created";
+  return typ + ".rbac.authorization.k8s.io/" + n.name + " created";
 };
 
 // kubectl create deployment <name> --image=<image>
 const createDeployment: CreateHandler = (host, c) => {
-  const n = createName(host, c.args.slice(1), "Deployment", "z.B. 'kubectl create deployment kasse --image=nginx'");
+  const n = createName(host, c.args, "Deployment", "z.B. 'kubectl create deployment kasse --image=nginx'");
   if (typeof n === "string") return n;
   const images = c.list("--image");
   if (images.length === 0) return host._err("error: required flag(s) \"image\" not set", "Häng '--image=nginx' an.");
@@ -218,34 +198,52 @@ const createDeployment: CreateHandler = (host, c) => {
   return "deployment.apps/" + n.name + " created";
 };
 
-/** Ressourcentyp (erstes Argument) → create-Handler: ein Eintrag je Art, der erste Name ist der volle, die weiteren sind
- *  Kurzformen. Die „kann“-Liste unten leitet sich daraus ab (nur volle Namen), sie kann nicht abdriften. */
-const CREATE_ARTEN: readonly { readonly namen: readonly string[]; readonly run: CreateHandler }[] = [
-  { namen: ["deployment", "deploy"], run: createDeployment },
-  { namen: ["serviceaccount", "sa"], run: createServiceAccount },
-  { namen: ["role"], run: createRole },
-  { namen: ["clusterrole"], run: createRole },
-  { namen: ["rolebinding"], run: createRoleBinding },
-  { namen: ["clusterrolebinding"], run: createRoleBinding },
-  { namen: ["configmap", "cm"], run: createConfigMap },
-  { namen: ["secret"], run: createSecret },
-];
-const CREATE_HANDLERS: Readonly<Record<string, CreateHandler>> = Object.fromEntries(CREATE_ARTEN.flatMap(a => a.namen.map(n => [n, a.run])));
-const CREATE_KANN = [
-  "kubectl create " + CREATE_ARTEN.map(a => a.namen[0]).filter(n => n !== "secret").join("|") + " …",
-  ...CREATE_SECRET_KANN,
-];
+/** Ein Befehl hinter `--` (`create deployment web --image=x -- sleep 1`) ist kein Name: kubectl liest ihn über ArgsLenAtDash. */
+const ohneBefehl = (art: string, run: CreateHandler): CreateHandler => (host, c) =>
+  c.dashAt !== null && c.args.length > c.dashAt
+    ? notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + art + "'.", ["'kubectl create " + art + "' ohne '--'"])
+    : run(host, c);
 
-export function kubectlCreate(host: KubectlHost, c: Call): string {
-  const typ = c.args[0] ?? "";
-  const handler = subEntry(CREATE_HANDLERS, typ);
-  if (!handler) return notSimulated(host, "'kubectl create " + typ + "'.", CREATE_KANN);
-  // Ein Befehl hinter `--` (`create deployment web --image=x -- sleep 1`) ist kein Name: kubectl liest ihn über ArgsLenAtDash.
-  if (c.dashAt !== null && c.args.length > c.dashAt) {
-    return notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + typ + "'.", ["'kubectl create " + typ + "' ohne '--'"]);
-  }
-  return handler(host, c);
-}
+const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], hints?: Readonly<Record<string, string>>): SubEntry<CreateHandler> =>
+  ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, hints });
+
+const CREATE_DEPLOYMENT = createEntry("deployment", createDeployment, [flag(true, "--image"), flag(true, "--replicas")]);
+const CREATE_SERVICEACCOUNT = createEntry("serviceaccount", createServiceAccount);
+const CREATE_ROLE = createEntry("role", createRoleOf(false), [flag(true, "--verb"), flag(true, "--resource")]);
+const CREATE_CLUSTERROLE = createEntry("clusterrole", createRoleOf(true), [flag(true, "--verb"), flag(true, "--resource")]);
+const CREATE_ROLEBINDING = createEntry("rolebinding", createRoleBindingOf(false), [flag(true, "--role"), flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG]);
+const CREATE_CLUSTERROLEBINDING = createEntry("clusterrolebinding", createRoleBindingOf(true), [flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG],
+  { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." });
+const CREATE_CONFIGMAP = createEntry("configmap", createConfigMap, [LITERAL_FLAG]);
+
+/** `create secret <art>`: eine eigene Ebene, damit `tls` und `generic` je ihre Flags haben. */
+const KUBECTL_CREATE_SECRET: Dispatch<SubEntry<CreateHandler>> = {
+  cmd: "kubectl create secret",
+  table: {
+    generic: createEntry("secret generic", createSecretGeneric, [LITERAL_FLAG]),
+    tls: createEntry("secret tls", createSecretTls, [flag(true, "--cert"), flag(true, "--key")]),
+  },
+  real: ["docker-registry"],
+  unknown: UNKNOWN_TARGET,
+};
+
+/** Die Ziele von `kubectl create` (Aliase teilen den Eintrag, der volle Name steht zuerst). */
+export const KUBECTL_CREATE: Dispatch<SubEntry<CreateHandler>> = {
+  cmd: "kubectl create",
+  flags: [NS],
+  table: {
+    deployment: CREATE_DEPLOYMENT, deploy: CREATE_DEPLOYMENT,
+    serviceaccount: CREATE_SERVICEACCOUNT, sa: CREATE_SERVICEACCOUNT,
+    role: CREATE_ROLE, clusterrole: CREATE_CLUSTERROLE,
+    rolebinding: CREATE_ROLEBINDING, clusterrolebinding: CREATE_CLUSTERROLEBINDING,
+    configmap: CREATE_CONFIGMAP, cm: CREATE_CONFIGMAP,
+    secret: { group: KUBECTL_CREATE_SECRET },
+  },
+  // Echte Ziele von kubectl, die die Sim nicht anlegt: „Nicht simuliert“ statt „unknown command“.
+  real: ["cronjob", "ingress", "job", "namespace", "ns", "poddisruptionbudget", "pdb", "priorityclass", "pc", "quota", "resourcequota", "service", "svc", "token"],
+  unknown: UNKNOWN_TARGET,
+  hints: { "-f": "Aus einer Datei legt der Simulator mit 'kubectl apply -f <datei>' an.", "--filename": "Aus einer Datei legt der Simulator mit 'kubectl apply -f <datei>' an." },
+};
 
 
 /* ===== `kubectl delete -f <datei>` – Tabelle der aus einem Manifest löschbaren Ressourcen (#543) =====

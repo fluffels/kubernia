@@ -10,9 +10,9 @@
  *   - kubectl/top.ts, kubectl/logs.ts – top (Metriken) und logs
  *   - kubectl/args.ts      – Flag-Tabelle je Unterbefehl, Parser, Wertprüfer, der eine „nicht simuliert“-Text (#1444)
  *   - kubectl/resources.ts – die Ressourcentyp-Registry (Plural, Singular, echte Kurznamen)
- *   - kubectl/lifecycle.ts – create / apply -f / delete (Ressourcen-Lebenszyklus)
- *   - kubectl/ops.ts       – scale / expose / set / rollout (laufende Workloads tunen)
- *   - kubectl/security.ts  – auth can-i (RBAC #126) + label (Pod-Security #128)
+ *   - kubectl/lifecycle.ts – Tabelle `create` / apply -f / delete (Ressourcen-Lebenszyklus)
+ *   - kubectl/ops.ts       – scale / expose / Tabellen `set` und `rollout` (laufende Workloads tunen)
+ *   - kubectl/security.ts  – Tabelle `auth` (can-i, RBAC #126) + label (Pod-Security #128)
  *   - kubectl/host.ts      – das schmale KubectlHost-Interface (von der Sim-Klasse erfüllt)
  *
  * Phaser-frei (pure Domäne): kein Rückimport nach sim.ts (kein Zyklus). Aufgerufen aus
@@ -22,14 +22,11 @@ import { kubectlTop } from "./kubectl/top";
 import { kubectlLogs } from "./kubectl/logs";
 import { kubectlDescribe } from "./kubectl/describe";
 import { kubectlGet } from "./kubectl/get";
-import {
-  FILE, FLAG_HINTS, FROM_FLAG, LIMITS_FLAG, LITERAL_FLAG, NS, PORT_FLAG, REAL_KUBECTL_COMMANDS, REQUESTS_FLAG, REVISION_FLAG,
-  SERVICEACCOUNT_FLAG,
-} from "./kubectl/args";
+import { FILE, FLAG_HINTS, NS, PORT_FLAG, REAL_KUBECTL_COMMANDS } from "./kubectl/args";
 import { OUTPUT_FLAG } from "./kubectl/output";
-import { kubectlCreate, kubectlApply, kubectlDelete } from "./kubectl/lifecycle";
-import { kubectlScale, kubectlExpose, kubectlSet, kubectlRollout } from "./kubectl/ops";
-import { kubectlAuth, kubectlLabel } from "./kubectl/security";
+import { KUBECTL_CREATE, kubectlApply, kubectlDelete } from "./kubectl/lifecycle";
+import { kubectlScale, kubectlExpose, KUBECTL_SET, KUBECTL_ROLLOUT } from "./kubectl/ops";
+import { KUBECTL_AUTH, kubectlLabel } from "./kubectl/security";
 import { dispatchSub, flag, IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch, type SubEntry } from "./cliargs";
 import type { KubectlHost } from "./kubectl/host";
 
@@ -44,29 +41,23 @@ type SubCommand = (host: KubectlHost, c: Call) => string;
 
 /** Die Dispatch-Tabelle: Handler + die Flags, die die Sim je Unterbefehl auswertet (`-n/--namespace` gilt überall, die
  *  Semantik regelt namespace.ts). `real` (alle echten Top-Level-Befehle) macht „kenne ich, kann ich nicht“ zu
- *  „Nicht simuliert“; alles andere ist ein Tippfehler wie `unknown command` in kubectl. */
+ *  „Nicht simuliert“; alles andere ist ein Tippfehler wie `unknown command` in kubectl. `create`, `set`, `rollout` und
+ *  `auth` sind Gruppen (#1491): je Ziel eigene Flags und Arität, `-n` gilt persistent für alle Ziele. */
 export const KUBECTL: Dispatch<SubEntry<SubCommand>> = {
   cmd: "kubectl",
   table: {
     get: { run: kubectlGet, maxArgs: OFFENE_LISTE, flags: [NS, flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG] },
     describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE, flags: [NS] },
-    create: {
-      run: kubectlCreate,
-      maxArgs: IM_HANDLER,
-      flags: [
-        NS, LITERAL_FLAG, SERVICEACCOUNT_FLAG,
-        ...["--image", "--replicas", "--cert", "--key", "--verb", "--resource", "--role", "--clusterrole", "--user"].map(n => flag(true, n)),
-      ],
-    },
+    create: { group: KUBECTL_CREATE },
     scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [NS, flag(true, "--replicas")] },
     expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [NS, PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")] },
     delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [NS, FILE] },
     apply: { run: kubectlApply, maxArgs: 0, flags: [NS, FILE] },
     logs: { run: kubectlLogs, maxArgs: 1, flags: [NS, flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] },
     top: { run: kubectlTop, maxArgs: 2, flags: [NS] },
-    set: { run: kubectlSet, maxArgs: IM_HANDLER, flags: [NS, FROM_FLAG, LIMITS_FLAG, REQUESTS_FLAG] },
-    rollout: { run: kubectlRollout, maxArgs: IM_HANDLER, flags: [NS, REVISION_FLAG] },
-    auth: { run: kubectlAuth, maxArgs: IM_HANDLER, flags: [NS, flag(true, "--as")] },
+    set: { group: KUBECTL_SET },
+    rollout: { group: KUBECTL_ROLLOUT },
+    auth: { group: KUBECTL_AUTH },
     label: { run: kubectlLabel, maxArgs: IM_HANDLER, flags: [NS, flag(false, "--overwrite")] },
   },
   real: REAL_KUBECTL_COMMANDS,

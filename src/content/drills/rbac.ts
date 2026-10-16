@@ -1,5 +1,5 @@
 import type { Sim } from "../../sim";
-import { pick, rnd, SA_NAMES, ROLE_NAMES, CLUSTERROLE_NAMES, CANI_PAIRS, ensureRole, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, renamedManifest } from "./shared";
+import { pick, rnd, SA_NAMES, ROLE_NAMES, CLUSTERROLE_NAMES, CANI_PAIRS, ensureRole, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, renamedManifest, escapeRegExp } from "./shared";
 import type { DrillTask } from "./shared";
 import { sameRbac } from "../../sim/rbac";
 
@@ -7,12 +7,12 @@ export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "rbac-sa-create": sim => {
     let name = pick(SA_NAMES);
     while (sim.serviceAccounts.some(s => s.name === name)) name = pick(SA_NAMES) + rnd(2, 99);
-    return { text: "Stell einen eigenen Dienst-Ausweis aus: einen <b>ServiceAccount</b> namens <code>" + name + "</code>.", accept: [new RegExp("^kubectl\\s+create\\s+(serviceaccount|sa)\\s+" + name + "$")], solution: "kubectl create serviceaccount " + name, hint: "Muster: kubectl create serviceaccount &lt;name&gt;", why: "Ein ServiceAccount ist die Identität, unter der ein Pod ans Cluster-API klopft – statt der allmächtigen default-SA bekommt jeder Dienst seinen eigenen, knappen Ausweis (Least Privilege). Muster: kubectl create serviceaccount &lt;name&gt;." };
+    return { text: "Stell einen eigenen Dienst-Ausweis aus: einen <b>ServiceAccount</b> namens <code>" + name + "</code>.", accept: [new RegExp("^kubectl\\s+create\\s+(serviceaccount|sa)\\s+" + escapeRegExp(name) + "$")], solution: "kubectl create serviceaccount " + name, hint: "Muster: kubectl create serviceaccount &lt;name&gt;", why: "Ein ServiceAccount ist die Identität, unter der ein Pod ans Cluster-API klopft – statt der allmächtigen default-SA bekommt jeder Dienst seinen eigenen, knappen Ausweis (Least Privilege). Muster: kubectl create serviceaccount &lt;name&gt;." };
   },
   "rbac-sa-get": () => ({ text: "Kontrolliere, welche <b>ServiceAccounts</b> (Ausweise) im Namespace ausliegen.", accept: [/^kubectl\s+get\s+(serviceaccounts|serviceaccount|sa)$/], solution: "kubectl get serviceaccounts", hint: "kubectl get serviceaccounts (Kurzform sa geht auch).", why: "Gleiches get-Muster wie sonst: kubectl get serviceaccounts listet die Ausweise des Namespaces – die default-SA ist immer dabei, eigene kommen dazu." }),
   "rbac-can-i": _sim => {
     const [verb, res] = pick(CANI_PAIRS);
-    return { text: "Frag das Tor – ohne zu raten: Darf der ServiceAccount <code>wachdienst</code> <b>" + verb + "</b> auf <b>" + res + "</b>? Nutz <code>--as</code>.", accept: [new RegExp("^kubectl\\s+auth\\s+can-i\\s+" + verb + "\\s+" + res + "\\s+--as=system:serviceaccount:default:wachdienst$")], solution: "kubectl auth can-i " + verb + " " + res + " --as=system:serviceaccount:default:wachdienst", hint: "Muster: kubectl auth can-i &lt;verb&gt; &lt;ressource&gt; --as=system:serviceaccount:default:&lt;sa&gt;", why: "auth can-i beantwortet eine Rechte-Frage verbindlich mit yes/no, statt sie zu erraten; --as stellt die Frage aus Sicht eines anderen Subjekts (hier der SA wachdienst, geschrieben als system:serviceaccount:&lt;ns&gt;:&lt;name&gt;). Muster: kubectl auth can-i &lt;verb&gt; &lt;ressource&gt; --as=&lt;subjekt&gt;." };
+    return { text: "Frag das Tor – ohne zu raten: Darf der ServiceAccount <code>wachdienst</code> <b>" + verb + "</b> auf <b>" + res + "</b>? Nutz <code>--as</code>.", accept: [new RegExp("^kubectl\\s+auth\\s+can-i\\s+" + escapeRegExp(verb) + "\\s+" + escapeRegExp(res) + "\\s+--as=system:serviceaccount:default:wachdienst$")], solution: "kubectl auth can-i " + verb + " " + res + " --as=system:serviceaccount:default:wachdienst", hint: "Muster: kubectl auth can-i &lt;verb&gt; &lt;ressource&gt; --as=system:serviceaccount:default:&lt;sa&gt;", why: "auth can-i beantwortet eine Rechte-Frage verbindlich mit yes/no, statt sie zu erraten; --as stellt die Frage aus Sicht eines anderen Subjekts (hier der SA wachdienst, geschrieben als system:serviceaccount:&lt;ns&gt;:&lt;name&gt;). Muster: kubectl auth can-i &lt;verb&gt; &lt;ressource&gt; --as=&lt;subjekt&gt;." };
   },
   "rbac-apply-role": sim => {
     let name = pick(ROLE_NAMES);
@@ -33,7 +33,7 @@ export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "rbac-describe-role": sim => {
     const name = pick(ROLE_NAMES);
     ensureRole(sim, name, false);
-    return { text: "Sieh die Schlüsselliste im Klartext: beschreibe die Role <code>" + name + "</code> (Resources & Verbs).", accept: [new RegExp("^kubectl\\s+describe\\s+role\\s+" + name + "$")], solution: "kubectl describe role " + name, hint: "Muster: kubectl describe role &lt;name&gt;", why: "describe role zeigt die PolicyRule im Klartext – welche Resources mit welchen Verbs erlaubt sind. So prüfst du, ob eine Role wirklich nur so viel kann wie nötig (Least Privilege). Muster: kubectl describe role &lt;name&gt;." };
+    return { text: "Sieh die Schlüsselliste im Klartext: beschreibe die Role <code>" + name + "</code> (Resources & Verbs).", accept: [new RegExp("^kubectl\\s+describe\\s+role\\s+" + escapeRegExp(name) + "$")], solution: "kubectl describe role " + name, hint: "Muster: kubectl describe role &lt;name&gt;", why: "describe role zeigt die PolicyRule im Klartext – welche Resources mit welchen Verbs erlaubt sind. So prüfst du, ob eine Role wirklich nur so viel kann wie nötig (Least Privilege). Muster: kubectl describe role &lt;name&gt;." };
   },
   "rbac-apply-clusterrole": sim => {
     let name = pick(CLUSTERROLE_NAMES);

@@ -158,8 +158,8 @@ export function ticketsMitStartImFenster(laeufe, { von, bis }) {
   return [...ersterStartJeTicket(laeufe)].filter(([, start]) => start >= v && start <= b).map(([ticket]) => ticket).sort((x, y) => x - y);
 }
 
-/** Lädt die Läufe (Meta + Transkriptzeilen) eines Subagent-Typs aus `<projektordner>/<session>/subagents/`, nur Dateien jünger als `von`. */
-export function ladeLaeufe(dir, agent, von) {
+/** Gemeinsamer Lader: Läufe aus `<projektordner>/<session>/subagents/`, nur Dateien jünger als `von`; `passt(meta)` wählt die Metadaten. */
+function ladeLaeufeWo(dir, von, passt) {
   const laeufe = [];
   for (const id of readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)) {
     const subDir = join(dir, id, "subagents");
@@ -174,9 +174,15 @@ export function ladeLaeufe(dir, agent, von) {
       } catch {
         continue;
       }
-      if (meta?.agentType !== agent) continue;
+      if (!passt(meta)) continue;
       laeufe.push({ meta, zeilen: transkriptZeilen(readFileSync(jsonl, "utf8")), datei: `${id}/subagents/${basis}.jsonl` });
     }
   }
   return laeufe;
 }
+
+/** Lädt die Läufe (Meta + Transkriptzeilen) eines Subagent-Typs, nur Dateien jünger als `von`. */
+export const ladeLaeufe = (dir, agent, von) => ladeLaeufeWo(dir, von, (meta) => meta?.agentType === agent);
+
+/** Lädt die Läufe aller Typen (auch Meta ohne `agentType`), nur Dateien jünger als `von` (#1668). */
+export const ladeAlleLaeufe = (dir, von) => ladeLaeufeWo(dir, von, () => true);

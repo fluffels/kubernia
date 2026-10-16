@@ -216,3 +216,8 @@ export function freeWerftName(sim: Sim): string {
 // Re-export VOLUMESNAPSHOT_YAML für Drill-Dateien
 export { NETPOL_YAML, ARGO_APPLICATION_MANUAL_YAML, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML };
 export { pick, rnd };
+
+/** Escaped alle Regex-Metazeichen, damit variable Teile einer accept-Regex nie als Muster wirken. */
+export function escapeRegExp(s: string | number): string {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

@@ -190,7 +190,7 @@ describe("Unterbefehle: echte kubectl-Befehle sind „nicht simuliert“, Tippfe
 /* ---------- (f) EIN Text für „nicht simuliert“ ---------- */
 describe("(f) alle früheren Fundstellen nutzen den einen Helfer", () => {
   test.each([
-    "describe configmap web", "create frobnicate x", "create secret docker-registry x", "set frobnicate x", "rollout status deployment web",
+    "describe configmap web", "create job x", "create secret docker-registry x", "set selector x", "rollout status deployment web",
     "auth reconcile", "label pods x a=b", "label namespaces default foo=bar", "delete nodes x", "logs statefulset/db",
     "scale pods/x --replicas=2", "expose pods/x --port=80",
   ])("kubectl %s", cmd => {
@@ -198,6 +198,15 @@ describe("(f) alle früheren Fundstellen nutzen den einen Helfer", () => {
     expect(r.error).toBe(true);
     expect(r.out).toContain(NICHT_SIMULIERT);
     expect(r.out).toContain("Der Simulator kann:");
+  });
+  test("#1491: ein unbekanntes Ziel von create/set/rollout/auth/create secret ist ein Tippfehler, kein „nicht simuliert“", () => {
+    for (const cmd of ["create frobnicate x", "set frobnicate x", "rollout frobnicate x", "auth frobnicate", "create secret frobnicate x"]) {
+      const r = lauf("kubectl " + cmd);
+      expect(r.error, cmd).toBe(true);
+      expect(r.out, cmd).toContain('error: unknown command "frobnicate"');
+      expect(r.out, cmd).not.toContain(NICHT_SIMULIERT);
+    }
+    expect(lauf("kubectl create deploymnet x").out).toContain("Meintest du 'kubectl create deployment'?");
   });
   test("top kennt nur pods und nodes (echter Text)", () => {
     const r = lauf("kubectl top secrets");
@@ -855,9 +864,9 @@ describe("#1487: Arität mit echten kubectl-Texten", () => {
     expect(lauf1487("kubectl create deployment w --image=", s).out).toContain('required flag(s) "image" not set');
   });
   test("create ohne Typ / unbekannter Typ / secret ohne Art bleiben nicht simuliert", () => {
-    expect(lauf1487("kubectl create").out).toContain(NICHT_SIMULIERT);
-    expect(lauf1487("kubectl create pod x").out).toContain(NICHT_SIMULIERT);
-    expect(lauf1487("kubectl create secret").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl create").out).toContain("kubectl create: Unterbefehl fehlt.");
+    expect(lauf1487("kubectl create job x").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl create secret").out).toContain("kubectl create secret: Unterbefehl fehlt.");
     expect(lauf1487("kubectl create secret docker-registry x").out).toContain(NICHT_SIMULIERT);
   });
 
@@ -884,21 +893,17 @@ describe("#1487: Arität mit echten kubectl-Texten", () => {
   test("auth can-i: ein führendes / ist eine Non-Resource-URL (nicht simuliert); andere Aktionen sind nicht simuliert", () => {
     expect(lauf1487("kubectl auth can-i get /healthz").out).toContain(NICHT_SIMULIERT);
     expect(lauf1487("kubectl auth whoami").out).toContain(NICHT_SIMULIERT);
-    expect(lauf1487("kubectl auth").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl auth").out).toContain("kubectl auth: Unterbefehl fehlt.");
   });
 
   test("rollout/set: unbekannte Aktion nicht simuliert, die Liste kommt aus der Ziel-Tabelle", () => {
     const r = lauf1487("kubectl rollout status deployment web");
     expect(r.out).toContain(NICHT_SIMULIERT);
-    expect(r.out).toContain("kubectl rollout restart deployment <name>");
-    expect(r.out).toContain("kubectl rollout history deployment <name>");
-    expect(r.out).toContain("kubectl rollout undo deployment <name>");
+    expect(r.out).toContain("kubectl rollout restart, history, undo");
     const set = lauf1487("kubectl set selector x");
-    expect(set.out).toContain("kubectl set image …");
-    expect(set.out).toContain("kubectl set env …");
-    expect(set.out).toContain("kubectl set resources …");
-    expect(lauf1487("kubectl set -n default").out).toContain(NICHT_SIMULIERT);
-    expect(lauf1487("kubectl rollout constructor deployment web").out).toContain(NICHT_SIMULIERT);
+    expect(set.out).toContain("kubectl set image, env, resources");
+    expect(lauf1487("kubectl set -n default").out).toContain("kubectl set: Unterbefehl fehlt.");
+    expect(lauf1487("kubectl rollout constructor deployment web").out).toContain('error: unknown command "constructor"');
   });
   test("label: Namespace-Name und Label kommen aus c.args; ein anderes Label ist nicht simuliert", () => {
     const s = freshSim();

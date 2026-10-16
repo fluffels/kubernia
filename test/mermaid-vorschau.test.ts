@@ -50,8 +50,9 @@ describe("vorschauHtml", () => {
 
 describe("mermaidDatei: Pfadschutz", () => {
   test("liefert Dateien unter dem Ordner, nichts außerhalb und nichts Fehlendes", () => {
-    const root = fixture({ "dist/a.mjs": "x", "geheim.txt": "y" });
+    const root = fixture({ "dist/a.mjs": "x", "dist-evil/b.mjs": "z", "geheim.txt": "y" });
     const dist = `${root}/dist`;
+    expect(M.mermaidDatei(dist, "/mermaid/../dist-evil/b.mjs")).toBeNull(); // Geschwister mit gleichem Präfix
     expect(M.mermaidDatei(dist, "/mermaid/a.mjs")).toMatch(/a\.mjs$/);
     expect(M.mermaidDatei(dist, "/mermaid/..%2fgeheim.txt")).toBeNull();
     expect(M.mermaidDatei(dist, "/mermaid/../geheim.txt")).toBeNull();
