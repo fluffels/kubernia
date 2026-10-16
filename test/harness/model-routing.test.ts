@@ -551,6 +551,7 @@ const MATRIX_ZIELE: Record<string, { datei: string; mitModel: boolean }> = {
   umsetzer: { datei: ".claude/agents/kubernia-umsetzer.md", mitModel: true },
   gruppe: { datei: ".claude/agents/kubernia-gruppe.md", mitModel: true },
   explore: { datei: ".claude/agents/explore.md", mitModel: true },
+  forumLeser: { datei: ".claude/agents/forum-leser.md", mitModel: true },
   hauptagent: { datei: UMSETZUNGS_SKILL, mitModel: false },
 };
 
@@ -576,9 +577,11 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
     const c = zellen(zeilen[i]);
     const phase = zelleOhneCode(c[0] ?? "");
     const skill = c[iSkill] ?? "";
-    const ziel = /`kubernia-planner`/.test(skill)
-      ? "planner"
-      : /`kubernia-lens`/.test(skill)
+    const ziel = /`forum-leser`/.test(skill)
+      ? "forumLeser"
+      : /`kubernia-planner`/.test(skill)
+        ? "planner"
+        : /`kubernia-lens`/.test(skill)
         ? "lens"
         : /`kubernia-gruppe`/.test(skill)
           ? "gruppe"
@@ -621,6 +624,10 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
     assert.match(matrixAbweichungen(gruppeEffort, fmEcht).join("\n"), /Sammelticket-Gruppe: Effort Skill-Pfad „high“ ≠ Frontmatter gruppe „medium“/);
     const gruppeAlias = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `opus` | – | `medium` |");
     assert.match(matrixAbweichungen(gruppeAlias, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter gruppe „sonnet“/);
+    const forumZeile = "| Forum-Triage (Quarantäne) | `sonnet` | – | `medium` |";
+    assert.equal(doku.split(forumZeile).length, 2, "Forum-Zeile genau einmal");
+    const forumEffort = doku.replace(forumZeile, "| Forum-Triage (Quarantäne) | `sonnet` | – | `high` |");
+    assert.match(matrixAbweichungen(forumEffort, fmEcht).join("\n"), /Forum-Triage \(Quarantäne\): Effort Skill-Pfad „high“ ≠ Frontmatter forumLeser „medium“/);
     const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | – | `low` | n/a | irgendwer |\n| Explore / Recherche |");
     assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);
     const ohneSpalte = doku.replace("| Effort Skill-Pfad |", "| Effort |");

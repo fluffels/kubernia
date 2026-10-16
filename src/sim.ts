@@ -18,6 +18,7 @@ import type {
   RoleBindingRes, PodSecurityLevel, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState, PodTemplateSpec, RolloutHistorySpec,
 } from "./sim/state";
+import type { GatewayClassRes, GatewayRes } from "./sim/gateway";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
 import { HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
 export { BROKEN_POD } from "./sim/podstatus";
@@ -70,7 +71,7 @@ import { renderHelp, renderHelpTopic } from "./hud/helptext";
  * z.B. einen vorhandenen Service voraussetzen (#337), ohne dass eine frühere Quest ihn
  * exposed haben muss – additiv, ohne Doppler. */
 const SIMPLE_RESOURCE_KEYS = [
-  "services", "ingresses", "networkPolicies",
+  "services", "ingresses", "networkPolicies", "gatewayClasses", "gateways",
   "serviceMonitors", "prometheusRules", "grafanaDatasources", "grafanaDashboards",
 ] as const;
 type SimpleResourceKey = (typeof SIMPLE_RESOURCE_KEYS)[number];
@@ -227,6 +228,8 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
     deployments!: Deployment[];
     services!: ServiceRes[];
     ingresses!: IngressRes[];
+    gatewayClasses!: GatewayClassRes[];
+    gateways!: GatewayRes[];
     networkPolicies!: NetworkPolicyRes[];
     secrets!: Secret[];
     configMaps!: ConfigMap[];

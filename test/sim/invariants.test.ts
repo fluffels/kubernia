@@ -112,6 +112,14 @@ test("invariants (ROT): doppelter Service-Name wird genau EINMAL gemeldet", () =
   assert.equal(viol.length, 1); // ein Duplikat = eine Meldung, nicht pro Vorkommen
 });
 
+test("invariants (ROT): doppelte GatewayClass und doppeltes Gateway werden gemeldet (#1664)", () => {
+  sim.gatewayClasses.push({ name: "envoy", controllerName: "c" }, { name: "envoy", controllerName: "c" });
+  sim.gateways.push({ name: "tor", className: "envoy", listeners: [] }, { name: "tor", className: "envoy", listeners: [] });
+  const viol = clusterInvariantViolations(sim);
+  assert.equal(viol.filter(m => /GatewayClass "envoy".*doppelt/.test(m)).length, 1);
+  assert.equal(viol.filter(m => /Gateway "tor".*doppelt/.test(m)).length, 1);
+});
+
 test("invariants: gleiche Namen über VERSCHIEDENE Ressourcentypen sind legal", () => {
   // ein Deployment "web" und ein Service "web" dürfen koexistieren (je Typ eindeutig)
   sim.exec("kubectl create deployment web --image=nginx");
