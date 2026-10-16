@@ -96,6 +96,7 @@ model {
       boardTakt = ciworkflow 'board-takt.yml'
       ciYml = ciworkflow 'ci.yml'
       codeql = ciworkflow 'codeql.yml'
+      codescanningInbox = ciworkflow 'codescanning-inbox.yml'
       dependabotInbox = ciworkflow 'dependabot-inbox.yml'
       deployValidate = ciworkflow 'deploy-validate.yml'
       festgefahren = ciworkflow 'festgefahren.yml'
