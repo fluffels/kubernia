@@ -27,6 +27,7 @@ export function commitZeilen(praefix, planer) {
     planer,
     plan: `${praefix}Plan`,
     review: `${praefix}Review`,
+    abnahme: `${praefix}Abnahme`,
     reviewOverride: `${praefix}Review-Override`,
     diffsizeOverride: `${praefix}Diffsize-Override`,
     diffcovOverride: `${praefix}Diffcov-Override`,
@@ -205,7 +206,7 @@ function zusatzpassAus(reviewWert) {
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
 export function parseNachweis(text, zeilen) {
-  if (!zeilen || typeof zeilen.plan !== "string" || typeof zeilen.review !== "string" || typeof zeilen.planer !== "string") {
+  if (!zeilen || typeof zeilen.plan !== "string" || typeof zeilen.review !== "string" || typeof zeilen.planer !== "string" || typeof zeilen.abnahme !== "string") {
     throw new Error("parseNachweis braucht die Commit-Zeilen (commitZeilen(praefix, planer)), keinen Standardwert");
   }
   const planWert = lastLine(text, zeilen.plan);
@@ -234,5 +235,72 @@ export function parseNachweis(text, zeilen) {
       verdikt: felder.verdikt ?? null,
     };
   }
-  return { plan, review };
+  return { plan, review, abnahme: abnahmeAus(lastLine(text, zeilen.abnahme)) };
+}
+
+/** Urteilswerte der Holdout-Abnahme je Kriterium (ADR 0022 F13). */
+export const URTEILSWERTE = Object.freeze(["erfuellt", "nicht-erfuellt", "nicht-pruefbar"]);
+
+/** `K1:erfuellt,K2:nicht-erfuellt` → `[{k, wert}]`; `null` bei leerem Wert, ungültigem K (K0, Kx), doppeltem K oder unbekanntem Wert. */
+function urteilAus(wert) {
+  if (typeof wert !== "string" || wert.trim() === "") return null;
+  const urteil = [];
+  for (const teil of wert.split(",")) {
+    const m = /^\s*(K[1-9]\d*)\s*:\s*(\S+)\s*$/.exec(teil);
+    const w = m ? normalisiereLens(m[2]) : "";
+    if (!m || !URTEILSWERTE.includes(w) || urteil.some((u) => u.k === m[1])) return null;
+    urteil.push({ k: m[1], wert: w });
+  }
+  return urteil;
+}
+
+const urteilText = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).join(",");
+
+/** Wert der Abnahme-Zeile: `{art:"urteil", head, durchgaenge, urteil}` | `{art:"entfaellt", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). */
+function abnahmeAus(wert) {
+  if (wert === null) return null;
+  const entf = /^entf(?:ae|ä)llt\s*[—–-]+\s*(\S.*)$/.exec(wert);
+  if (entf) return { art: "entfaellt", grund: entf[1].trim() };
+  const head = (feldWert(wert, "head")?.trim() ?? "").toLowerCase();
+  const durch = feldWert(wert, "durchgaenge")?.trim() ?? "";
+  const urteil = urteilAus(feldWert(wert, "urteil"));
+  if (!/^[0-9a-f]{7,40}$/.test(head) || !/^\d+$/.test(durch) || Number(durch) < 1 || urteil === null) return { art: "ungueltig", zeile: wert };
+  return { art: "urteil", head, durchgaenge: Number(durch), urteil };
+}
+
+const HEX_HEAD = /^[0-9a-f]{7,40}$/;
+
+/** Die einzige Quelle der Abnahme-Zeile (ohne Schlüssel-Präfix der Message): `<Präfix>Abnahme: head=… durchgaenge=… urteil=…` bzw.
+ *  `<Präfix>Abnahme: entfaellt — <Grund>`. Wirft bei ungültiger Eingabe (head, durchgaenge ≥ 1, Urteilswerte, Grund einzeilig und nicht leer). Pur. */
+export function formatAbnahme(zeilen, abnahme) {
+  const key = `${zeilen.abnahme}:`;
+  if (abnahme?.art === "entfaellt") {
+    const grund = String(abnahme.grund ?? "").trim();
+    if (grund === "" || /[\r\n]/.test(grund)) throw new Error("Abnahme: entfaellt braucht einen einzeiligen Grund");
+    return `${key} entfaellt — ${grund}`;
+  }
+  const urteil = abnahme?.urteil;
+  const ok = abnahme?.art === "urteil" && HEX_HEAD.test(abnahme.head ?? "") && Number.isInteger(abnahme.durchgaenge) && abnahme.durchgaenge >= 1;
+  if (!ok || !Array.isArray(urteil) || urteilAus(urteilText(urteil)) === null) throw new Error("Abnahme: head (7-40 Hex), durchgaenge (≥ 1) und gültiges Urteil nötig");
+  return `${key} head=${abnahme.head} durchgaenge=${abnahme.durchgaenge} urteil=${urteilText(urteil)}`;
+}
+
+/** Name des Kommentar-Markers der Abnahme (aus dem Präfix, kleingeschrieben); der Hand-off-Marker hängt `-handoff` an. */
+export function abnahmeMarker(zeilen) {
+  return `${zeilen.praefix.toLowerCase()}abnahme`;
+}
+
+/** Marker-Kommentarzeile `<!-- <marker> durchgang=<d> head=<sha> urteil=K1:… -->`; wirft bei ungültiger Eingabe wie formatAbnahme. Pur. */
+export function formatAbnahmeMarker(zeilen, { durchgang, head, urteil }) {
+  formatAbnahme(zeilen, { art: "urteil", head, durchgaenge: durchgang, urteil });
+  return `<!-- ${abnahmeMarker(zeilen)} durchgang=${durchgang} head=${head} urteil=${urteilText(urteil)} -->`;
+}
+
+/** Liest den Marker aus einem Kommentartext: `{durchgang, head, urteil}` oder `null`. Der Hand-off-Marker zählt nie. Pur. */
+export function parseAbnahmeMarker(zeilen, text) {
+  const re = new RegExp(`<!--\\s*${escapeRe(abnahmeMarker(zeilen))}\\s+durchgang=(\\d+)\\s+head=([0-9a-f]{7,40})\\s+urteil=(\\S+)\\s*-->`);
+  const m = re.exec(String(text ?? ""));
+  const urteil = m ? urteilAus(m[3]) : null;
+  if (!m || urteil === null || Number(m[1]) < 1) return null;
+  return { durchgang: Number(m[1]), head: m[2], urteil };
 }
