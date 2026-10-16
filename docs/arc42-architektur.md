@@ -257,7 +257,7 @@ iSAQB ist **stil-neutral**: Architektur folgt Qualitätszielen, nicht Mode. Micr
 
 ### Weitere Querschnitts-Konzepte (Status)
 
-- **Sicherheit/Supply-Chain:** Dependabot + zweistufiges `npm audit`-CI-Gate (blockt nur ausgelieferte Deps). Dev-Panel aus Prod-Builds gestrippt + passwortgated. **Abgedeckt.**
+- **Sicherheit/Supply-Chain:** Dependabot + zweistufiges `npm audit`-CI-Gate (blockt nur ausgelieferte Deps); CycloneDX-SBOM der npm-Abhängigkeiten je CI-Build (`npm run sbom`, Artefakt `kubernia-sbom-cyclonedx`), Image-SBOM (SPDX, Syft) im Release. Dev-Panel aus Prod-Builds gestrippt + passwortgated. **Abgedeckt.**
 - **Determinismus/Zufall:** Tests brauchen Determinismus; `observability.ts` macht es per FNV-Hash vor. Die iSAQB-Analyse fand aber **ungeseedeten `Math.random` in 8 puren Domänen-/Content-Dateien** (`sim/util`, `docker`, `helm`, `argocd`, `kubectl/ops|lifecycle|inspect`, `content/util`) — Widerspruch zum eigenen Anspruch, blockiert Golden-/Snapshot-Tests. → **zentrale seedbare RNG + Fitness-Function (#492).** Bewusst ausgeklammert ist die Präsentation (`src/ui/**`, `src/scenes/**`): dort ist Zufall rein optisch (Quiz-Optionen-Reihenfolge, Dialog-Antwort-Reihenfolge, Möwen-Spawns, Tween-Jitter) und berührt keinen persistierten Zustand — dokumentiert in `core/rng.ts` (#876).
 - **Fehlerbehandlung/Diagnostik:** EIN globaler `window.onerror`/`unhandledrejection`-Handler in `main.ts` fängt jeden unbehandelten Laufzeitfehler zentral ab, loggt ihn an einer Stelle und zeigt statt eines stillen schwarzen Canvas ein lesbares Fallback-Overlay mit „Neu laden"-Knopf; die reine Aufbereitung des geworfenen Werts liegt DOM-frei/testbar in `src/crashreport.ts` (`buildCrashReport`). In JEDEM Build aktiv (auch der ausgelieferten Offline-Datei). Fitness-Function: `e2e/crash-overlay.spec.ts` feuert einen synthetischen Fehler gegen den Offline-Build und prüft das Overlay; der Boot-Smoke (#391) bleibt das Gegenstück (sauberer Boot ⇒ kein Fehler, kein Overlay). **Abgedeckt (#504).**
 
@@ -286,7 +286,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 | **Stale Ticket-Referenz** — der sim.ts-Split wird als „#545 (Split offen)" geführt, #545 ist geschlossen; der Split ist untracked (`check:doctickets` non-blocking). | `scripts/check-size.mjs:39` | #864/#877 |
 | **`tsconfig.strict.json` ist ein No-op-Alias** — `typecheck` und `typecheck:strict` prüfen identisch. | `tsconfig.strict.json` | #877 |
 
-**Supply-Chain-Präzisierung:** §8 oben nennt Supply-Chain „abgedeckt" — das gilt für npm-Deps, **nicht** für das ausgelieferte Container-Image (`release.yml` pusht ohne Test-Gate/Scan/SBOM, #861) und **nicht** für den eigenen Code (kein SAST/CodeQL, #875; Secret-Scanning samt Push-Schutz ist aktiv, Repo-API 2026-10-08). Volle Herleitung: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md).
+**Supply-Chain-Präzisierung:** §8 oben nennt Supply-Chain „abgedeckt" — das gilt für npm-Deps, **nicht** für das ausgelieferte Container-Image (~~`release.yml` pusht ohne Test-Gate/Scan/SBOM~~ → erledigt (#861): Verify-Job, Trivy-Scan und Syft-SBOM) und **nicht** für den eigenen Code (kein SAST/CodeQL, #875; Secret-Scanning samt Push-Schutz ist aktiv, Repo-API 2026-10-08). Volle Herleitung: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md).
 
 ## 9. Architekturentscheidungen (ADRs)
 
@@ -340,7 +340,7 @@ Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](ht
 | Verhaltens-Governance fehlt (Komplexität/Bundle) | ungemessene Erosion bei Scale | mittel | #502/#503 (Fehler-Diagnostik #504 erledigt) |
 | Spiel-/Bewertungslogik in DOM-Methoden; `events.ts` ungetestet | Kernlogik nur e2e-testbar; `economyTick` läuft nicht in RegionScene | mittel | #500/#512/#501 |
 | Value Objects/Invarianten/Workload nur teilverdrahtet | Namensgrenzen/Aggregat-Mutationen umgangen | mittel | #507/#508/#509 |
-| **Release-Image ohne Test-Gate + ohne Image-Scan/SBOM** (iSAQB 2026-07-14) | Ungeprüftes/verwundbares Artefakt kommt nach außen | hoch | #861 |
+| ~~**Release-Image ohne Test-Gate + ohne Image-Scan/SBOM**~~ → **erledigt (#861)**: Verify-Job, Trivy-Scan und Syft-SBOM in `release.yml`. | ~~Ungeprüftes/verwundbares Artefakt kommt nach außen~~ | ~~hoch~~ | #861 ✓ |
 | ~~**Invarianten im Prod-Build aus**~~ → **erledigt (#862)**: Prod loggt `console.error` statt zu werfen; `warnClusterInvariants` immer aktiv. | ~~Zustands-Korruption erreicht Spieler:innen still~~ | ~~hoch~~ | #862 ✓ |
 | **WorldScene hafen-monolithisch trotz `mapId`-Fassade** | Zweite Überwelt-Karte nicht real möglich | hoch | #863 |
 | **Ressourcentyp-Erweiterung nicht Open-Closed** (3× reset/merge/snapshot, sim.ts God-File, #545-Split untracked) | sim.ts wächst mit jedem Typ; Haupt-Fehlerquelle | hoch | #864/#865 |

@@ -36,6 +36,11 @@
         "command": "node scripts/check-review-nachweis.mjs",
         "source": ".github/workflows/ci.yml",
         "description": "Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR"
+      },
+      {
+        "command": "npm run sbom",
+        "source": ".github/workflows/ci.yml",
+        "description": "CycloneDX-SBOM der npm-Abhängigkeiten (aus dem Lockfile) als CI-Artefakt; rot, wenn Erzeugung oder Artefakt fehlt"
       }
     ]
   },

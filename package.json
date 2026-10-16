@@ -34,6 +34,7 @@
     "check:anysuppress": "node scripts/check-any-suppressions.mjs",
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
+    "sbom": "node scripts/sbom.mjs",
     "check:doctickets": "node scripts/check-doc-tickets.mjs",
     "check:tseslint-ts7": "node scripts/check-tseslint-ts7.mjs",
     "check:duplication": "jscpd src",
