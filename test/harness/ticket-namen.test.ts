@@ -80,6 +80,7 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(n.ticketAus("feature/ab-12")).toBe(12);
     expect(n.ticketAus("feature/ab-12 ")).toBe(12);
     expect(n.ticketAus("feature/ab-12x")).toBeNull();
+    expect(n.ticketAus(".claude/worktrees/ab-12/src")).toBe(12);
     expect(n.ticketAus(undefined as unknown as string)).toBeNull();
   });
   test("Namen entstehen aus den Präfixen", () => {
@@ -173,6 +174,9 @@ describe("lens-auftrag-guard mit Config", () => {
   test("ohne Schlüssel: deny mit Fix-Zeile", () => {
     expect(lensAuftrag.lensAuftragBlockade({ subagentType: "ab-lens", prompt: "ok" }, { config: OHNE_UMSETZER })).toMatch(/Fix:/);
   });
+  test("ohne Schlüssel blockiert auch ein fremder Spawn (fail-closed, kein Agentenvergleich davor)", () => {
+    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "Explore", prompt: "ok" }, { config: OHNE_UMSETZER })).toMatch(/Fix:/);
+  });
 });
 
 describe("umsetzer-abschluss mit Config", () => {
@@ -192,6 +196,11 @@ describe("umsetzer-abschluss mit Config", () => {
     const vorher = { hookEvent: "PreToolUse", toolName: "SubagentHandback", agentType: "ab-umsetzer", lastMessage: bericht };
     expect(abschluss.abschlussBlockade(vorher, { config: OHNE_UMSETZER })).toMatch(/Fix:/);
     expect(abschluss.abschlussBlockade(eingabe("ab-umsetzer"), { config: OHNE_UMSETZER })).toMatch(/Fix:/);
+  });
+  test("ohne Schlüssel blockiert auch ein fremder Agent (fail-closed)", () => {
+    const vorher = { hookEvent: "PreToolUse", toolName: "SubagentHandback", agentType: "ab-lens", lastMessage: bericht };
+    expect(abschluss.abschlussBlockade(vorher, { config: OHNE_UMSETZER })).toMatch(/Fix:/);
+    expect(abschluss.abschlussBlockade(eingabe("Explore"), { config: OHNE_UMSETZER })).toMatch(/Fix:/);
   });
   test("ein fremdes Ereignis braucht keine Config", () => {
     expect(abschluss.abschlussBlockade({ hookEvent: "Stop", agentType: "x", lastMessage: bericht }, { config: OHNE_UMSETZER })).toBeNull();
@@ -221,6 +230,9 @@ describe("stop-verify-hook ersetzt den Matcher durch den Vergleich mit agenten.u
     expect(r.stderr).toMatch(/Fix:/);
     expect((JSON.parse(r.stdout) as { decision: string }).decision).toBe("block");
     expect(lauf({ hook_event_name: "SubagentStop", agent_type: "ab-umsetzer", stop_hook_active: true }, OHNE_UMSETZER).r.exit).toBe(0);
+  });
+  test("ohne Schlüssel blockiert auch das SubagentStop eines fremden Agenten (fail-closed)", () => {
+    expect(lauf({ hook_event_name: "SubagentStop", agent_type: "Explore" }, OHNE_UMSETZER).r.exit).toBe(2);
   });
   test("der Stop des Hauptchats braucht die Config nicht und prüft weiter", () => {
     const { r, geprueft } = lauf({ hook_event_name: "Stop" }, OHNE_UMSETZER);
@@ -265,6 +277,11 @@ describe("patch-zugriff mit Namen aus der Config", () => {
   test("patchAus liest Ticket und Runde mit dem Präfix der Config", () => {
     expect(patch.patchAus("Patch: /t/ab-12-r3.patch", [], n)).toMatchObject({ ticket: 12, runde: 3 });
     expect(patch.patchAus("Patch: /t/kq-12-r3.patch", [], n)).toMatchObject({ ticket: null, runde: null });
+  });
+  test("Groß-/Kleinschreibung zählt nicht (Flag i)", () => {
+    expect(patch.patchPfade("Patch bereit:\n /t/AB-12-r3.patch", n).voll).toBe("AB-12-r3.patch");
+    expect(patch.patchPfade("x /t/AB-12-r3-delta.patch", n).delta).toBe("AB-12-r3-delta.patch");
+    expect(patch.patchAus("Patch: /t/AB-12-R3.patch", [], n)).toMatchObject({ ticket: 12, runde: 3 });
   });
   test("ohne übergebene Namen gilt die echte Config", () => {
     expect(patch.patchAus("Patch: /t/kq-12-r3.patch", [])).toMatchObject({ ticket: 12, runde: 3 });

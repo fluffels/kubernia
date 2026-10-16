@@ -8,7 +8,8 @@
  *  - PowerShell: Worktree-Guard für PowerShell (scripts/worktree-guard-powershell.mjs) und gh-Guard
  *  - SubagentHandback: Abschluss-Wächter des Umsetzers; Agent: Lens-Auftrag-Guard (`lens-auftrag-guard.mjs`)
  * Jeder Guard läuft im eigenen try/catch: ein werfender Guard legt den anderen nicht lahm und blockt nie selbst
- * (fail-open bei internem Fehler). Ausgabe: genau ein JSON, deny vor ask; fremde Tools und kaputtes JSON → nichts.
+ * (fail-open bei internem Fehler). Ausnahme: Lens-Auftrag- und Abschluss-Wächter verweigern bei fehlendem Config-Schlüssel
+ * (fail-closed mit Fix-Zeile, ADR 0022). Ausgabe: genau ein JSON, deny vor ask; fremde Tools und kaputtes JSON → nichts.
  *
  * Die drei Guard-Skripte bleiben einzeln aufrufbar (dünner Direktaufruf), weil laufende Sessions ihre
  * Hook-Konfiguration beim Start einfrieren.
