@@ -11,7 +11,7 @@ import { describe, expect, test } from "vitest";
 
 const norm = (t: string) => t.replace(/\s+/g, " ");
 const lies = (pfad: string) => norm(readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8"));
-const SKILLS = [".claude/skills/kubernia/SKILL.md", ".claude/skills/kubernia-workflow/SKILL.md"];
+const SKILLS = [".claude/skills/kubernia/SKILL.md"];
 
 describe("Sitzungsabschluss ruft brain-input immer auf (#1572)", () => {
   test.each(SKILLS)("%s: Aufruf-Wortlaut und Satz zur Skill-Liste stehen da", (pfad) => {

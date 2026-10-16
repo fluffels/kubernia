@@ -154,7 +154,7 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
         `keine Verweise der Form „${form}" extrahiert – Extraktion kaputt oder Form ausgestorben?`,
       );
     }
-    assert.ok(ECHTE_VERWEISE.some((v) => v.datei === ".claude/workflows/kubernia-ticket.js"));
+    assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/agents/")));
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/skills/")));
     // Bewusst KEINE Pflicht auf ein CLAUDE.md-Ziel: diese Verweise sollen mit #1086/#1087 aussterben.
   });

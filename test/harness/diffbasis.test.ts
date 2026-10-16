@@ -195,7 +195,6 @@ describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
 describe("Harness-Texte diffen nur gegen origin/main... (#1108)", () => {
   test("Scan-Umfang ist nicht leer und enthält die bekannten Artefakte", () => {
     for (const pflicht of [
-      ".claude/workflows/kubernia-ticket.js",
       ".claude/skills/review-lenses/SKILL.md",
       ".claude/agents/kubernia-planner.md",
       ".claude/settings.json",

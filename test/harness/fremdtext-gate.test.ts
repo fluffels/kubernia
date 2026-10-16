@@ -92,10 +92,6 @@ const skillDateien = (): string[] =>
       return false;
     }
   });
-const workflowDateien = (): string[] =>
-  readdirSync(resolve(ROOT, ".claude/workflows"))
-    .filter((f) => f.endsWith(".js"))
-    .map((f) => `.claude/workflows/${f}`);
 
 describe("Fremdtext-Gate (#1433)", () => {
   test("a) Skill Schritt 1 ruft das Gate mit Exit 3", () => {
@@ -114,8 +110,8 @@ describe("Fremdtext-Gate (#1433)", () => {
     assert.ok(!nenntSkript("Kommentare per gh lesen"));
   });
 
-  test("c) kein rohes Kommentar-Lesen in Agenten, Skills, Workflows, AGENTS.md, ticket-reihenfolge", () => {
-    const dateien = [...agentDateien(), ...skillDateien(), ...workflowDateien(), "AGENTS.md", "docs/ticket-reihenfolge.md"];
+  test("c) kein rohes Kommentar-Lesen in Agenten, Skills, AGENTS.md, ticket-reihenfolge", () => {
+    const dateien = [...agentDateien(), ...skillDateien(), "AGENTS.md", "docs/ticket-reihenfolge.md"];
     assert.ok(dateien.length > 8);
     for (const d of dateien) assert.ok(!liestKommentareRoh(read(d)), `${d} liest Kommentare roh`);
     // Gegenbeispiele: die verbotenen Formen werden erkannt
