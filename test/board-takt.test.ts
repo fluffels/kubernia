@@ -10,6 +10,8 @@ import * as raw from "../scripts/board-takt.mjs";
 import * as rawStatus from "../scripts/langfuse-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawQuote from "../scripts/spielquote-lib.mjs";
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
@@ -28,6 +30,13 @@ type Takt = {
   ziehListeNach: (items: Item[], ergebnis: { nr: number; itemId?: string | null } | null) => Item[];
 };
 const T = raw as unknown as Takt;
+const Q = rawQuote as unknown as {
+  SPIEL_QUOTE: number;
+  zaehleTicketMerges: Takt["zaehleTicketMerges"];
+  istHarnessCommit: Takt["istHarnessCommit"];
+  produktMergesSeitFactory: (commits: unknown, harnessIssues?: Set<number> | null) => number;
+  entscheideSeite: (a: { produktMerges: number | null; factoryInArbeit?: number | null }) => { seite: string; grund: string };
+};
 const normalizeOffene = (rawLib as unknown as { normalizeOffene: (pages: unknown) => Offen[] }).normalizeOffene;
 const STATUS_TITEL = (rawStatus as unknown as { STATUS_TITEL: string }).STATUS_TITEL;
 const verschiebe = (rawLib as unknown as { verschiebe: (i: Item[], id: string, after: string | null) => Item[] }).verschiebe;
@@ -275,6 +284,52 @@ function letzterTreffer(re: RegExp, text: string): string | undefined {
   return [...text.matchAll(re)].at(-1)?.[1];
 }
 
+describe("spielquote-lib (#1729)", () => {
+  const commit = (message: string, login = "fluffels") => ({ author: { login }, commit: { message, committer: { date: "2026-10-07T10:00:00Z" } } });
+  const P = (n: number) => commit(`feat(sim): p${n} (#${100 + n})`);
+  const F = commit("feat(harness): f (#7)");
+  const harness = new Set([7]);
+  test("die Bestandsfunktionen sind aus board-takt erreichbar und identisch (Re-Export)", () => {
+    expect(T.SPIEL_QUOTE).toBe(Q.SPIEL_QUOTE);
+    expect(T.zaehleTicketMerges).toBe(Q.zaehleTicketMerges);
+    expect(T.istHarnessCommit).toBe(Q.istHarnessCommit);
+  });
+  test("produktMergesSeitFactory zählt von neu nach alt bis zum ersten Factory-Merge", () => {
+    expect(Q.produktMergesSeitFactory([P(1), P(2), F, P(3)], harness)).toBe(2);
+    expect(Q.produktMergesSeitFactory([F, P(1)], harness)).toBe(0);
+    expect(Q.produktMergesSeitFactory([], harness)).toBe(0);
+  });
+  test("ohne Factory-Merge in der Liste zählen alle Produkt-Merges (Untergrenze)", () => {
+    expect(Q.produktMergesSeitFactory([P(1), P(2), P(3), P(4)], harness)).toBe(4);
+  });
+  test("Bot-Commits zählen nicht und stoppen nicht", () => {
+    const bot = commit("chore(deps): x (#9)", "dependabot[bot]");
+    expect(Q.produktMergesSeitFactory([P(1), bot, P(2), F], harness)).toBe(2);
+    expect(Q.produktMergesSeitFactory([P(1), commit("feat(harness): y (#7)", "github-actions[bot]"), P(2)], harness)).toBe(2);
+  });
+  test("ohne Menge der Harness-Issues entscheidet der Scope (harnessIssues null)", () => {
+    expect(Q.produktMergesSeitFactory([P(1), commit("feat(harness): x"), P(2)], null)).toBe(1);
+  });
+  test("keine Liste: wirft", () => {
+    expect(() => Q.produktMergesSeitFactory({}, harness)).toThrow(/Liste/);
+    expect(() => Q.produktMergesSeitFactory(null, harness)).toThrow(/Liste/);
+  });
+  test("entscheideSeite: unter der Quote Produkt, ab der Quote Factory (Grenze genau SPIEL_QUOTE)", () => {
+    expect(Q.entscheideSeite({ produktMerges: Q.SPIEL_QUOTE - 1 }).seite).toBe("produkt");
+    const ab = Q.entscheideSeite({ produktMerges: Q.SPIEL_QUOTE });
+    expect(ab.seite).toBe("factory");
+    expect(ab.grund).toBe(`${Q.SPIEL_QUOTE} Produkt-Merges seit dem letzten Factory-Merge (Spielquote 1:${Q.SPIEL_QUOTE})`);
+    expect(Q.entscheideSeite({ produktMerges: 0 }).seite).toBe("produkt");
+  });
+  test("entscheideSeite: Factory in Arbeit lenkt auf Produkt, auch bei vielen Produkt-Merges; Zähler darf dann null sein", () => {
+    expect(Q.entscheideSeite({ produktMerges: 9, factoryInArbeit: 12 })).toEqual({ seite: "produkt", grund: "Factory in Arbeit (#12)" });
+    expect(Q.entscheideSeite({ produktMerges: null, factoryInArbeit: 12 }).seite).toBe("produkt");
+  });
+  test("entscheideSeite: ungültige Zähler werfen (negativ, Bruch, Text, null ohne Factory-Arbeit)", () => {
+    for (const bad of [-1, 1.5, "3", null, undefined, Number.NaN]) expect(() => Q.entscheideSeite({ produktMerges: bad as number }), String(bad)).toThrow(/ganze Zahl/);
+  });
+});
+
 describe("letzterTreffer (#1428 Z21)", () => {
   test("alte Zahl vorn, aktuelle hinten: die aktuelle zählt; umgekehrt die hintere", () => {
     expect(letzterTreffer(/(\d+) Merges/g, "5 Merges ... 3 Merges")).toBe("3");
@@ -304,8 +359,21 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
     expect(Number(/Spielquote 1:(\d+)/.exec(doc)?.[1])).toBe(T.SPIEL_QUOTE);
     // #1663 T5: auch die Regel in AGENTS.md trägt beide Zahlen.
-    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+/.exec(agents)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/.exec(agents)?.[1])).toBe(Q.SPIEL_QUOTE);
     expect(Number(/Spielquote 1:(\d+)/.exec(agents)?.[1])).toBe(T.SPIEL_QUOTE);
+  });
+  test("die Auswahl-Regel (#1729) trägt dieselbe Zahl in ticket-reihenfolge.md und, als jüngster Stand, in ADR 0016", () => {
+    const wendung = /nach (\d+) Produkt-Merges \(Spielquote 1:\d+\) seit dem letzten Factory-Merge/;
+    expect(Number(wendung.exec(lies("docs/ticket-reihenfolge.md"))?.[1])).toBe(Q.SPIEL_QUOTE);
+    expect(Number(letzterTreffer(/nach (\d+) Produkt-Merges seit dem letzten Factory-Merge/g, lies("docs/adr/0016-langfuse-takt-woechentlich.md")))).toBe(Q.SPIEL_QUOTE);
+  });
+  test("Bibliothek statt Querimport: board-takt und naechstes-ticket importieren die Quote aus spielquote-lib, nicht voneinander", () => {
+    const takt = lies("scripts/board-takt.mjs");
+    const wahl = lies("scripts/naechstes-ticket.mjs");
+    expect(takt).toContain('from "./spielquote-lib.mjs"');
+    expect(wahl).toContain('from "./spielquote-lib.mjs"');
+    expect(takt).not.toMatch(/from "\.\/naechstes-ticket\.mjs"/);
+    expect(wahl).not.toMatch(/from "\.\/board-takt\.mjs"/);
   });
   test("der Workflow löst auf Push nach main aus und ruft board-takt.mjs", () => {
     const yml = lies(".github/workflows/board-takt.yml");

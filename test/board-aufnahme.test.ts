@@ -2,14 +2,14 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-lib.mjs";
 
-type Plan = { aufnehmen: { number: number; nodeId: string; title: string }[]; abgelehnt: { number: number; grund: string }[] };
+type Plan = { aufnehmen: { number: number; nodeId: string; title: string; rolle: string }[]; abgelehnt: { number: number; grund: string }[] };
 const aufnahmePlan = (raw as unknown as { aufnahmePlan: (f: number[], i: Record<number, unknown>, a?: number | null) => Plan }).aufnahmePlan;
 
 const issue = (number: number, extra: Record<string, unknown> = {}) => ({ number, state: "open", node_id: `I_${number}`, title: `T${number}`, ...extra });
 
 describe("aufnahmePlan (#1428 Z37)", () => {
   test("ein offenes Issue wird aufgenommen", () => {
-    expect(aufnahmePlan([5], { 5: issue(5) })).toEqual({ aufnehmen: [{ number: 5, nodeId: "I_5", title: "T5" }], abgelehnt: [] });
+    expect(aufnahmePlan([5], { 5: issue(5) })).toEqual({ aufnehmen: [{ number: 5, nodeId: "I_5", title: "T5", rolle: "produkt" }], abgelehnt: [] });
   });
   test("ein geschlossenes Issue wird abgelehnt, nie aufgenommen", () => {
     const p = aufnahmePlan([5], { 5: issue(5, { state: "closed" }) });

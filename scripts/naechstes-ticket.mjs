@@ -4,9 +4,14 @@
  * Blocker, Branch, Worktree und offenen PR einzeln prüfen“ (AGENTS.md § Auswahl des nächsten Tickets).
  *
  *   node scripts/naechstes-ticket.mjs          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten
- *   node scripts/naechstes-ticket.mjs --json   # { ticket, uebersprungen }
+ *   node scripts/naechstes-ticket.mjs --json   # { ticket, uebersprungen, quote, hinweise? }
  *   node scripts/naechstes-ticket.mjs --ticket <nr>   # Einzelprüfung einer vorgegebenen Nummer (#1621): alle Kriterien außer Status und Bereich; Exit 1 = nicht frei, Grund in der Ausgabe
- *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel   # nur Label `area:harness` bzw. nur ohne (#1552); Notfälle 🚨/🔒 zählen in beiden
+ *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel   # nur das Factory- bzw. nur das Produkt-Board (#1552, #1729); Notfälle 🚨/🔒 zählen in beiden
+ *
+ * Zwei Boards (ADR 0022 F11, #1729): zuerst die Kopf-Items beider Boards (Rang nach `kopfRang`), dann die Seite laut Spielquote
+ * (`spielquote-lib.mjs`: nach `SPIEL_QUOTE` Produkt-Merges seit dem letzten Factory-Merge Factory, sonst Produkt; ein geclaimtes offenes
+ * Nicht-Kopf-Factory-Item heißt „Factory in Arbeit“ und lenkt auf Produkt). Hat die gewählte Seite nichts Freies, wählt der Rückfall die andere
+ * (Hinweis „Rückfall“). Die Infozeile hinter der ersten Zeile und `--json` (`quote`) nennen Seite und Zählung. Die Commits lädt der Lauf nur bei Bedarf.
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 3 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Label `forum`) wird übersprungen und als „Befund melden“ ausgewiesen.
@@ -23,10 +28,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
-
-// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
-const PRODUKT_BOARD = boardFuerRolle("produkt");
+import { FACTORY_LABEL, NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen, ungeclaimt } from "./board-lib.mjs";
+import { entscheideSeite, produktMergesSeitFactory } from "./spielquote-lib.mjs";
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -119,29 +122,91 @@ export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads 
   return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
 }
 
-/** Gehört das Item zum Bereich? Ohne Bereich immer; 🚨 CI rot auf main und 🔒 Security zählen in beiden (Roter main geht vor). Pur. */
+/** 🚨 CI rot auf main und 🔒 Security gelten auf beiden Boards (Roter main geht vor). Pur. */
+export function istNotfallBeider(item) {
+  return NOTFAELLE.filter((n) => n.art === "rot-main" || n.art === "security").some((n) => String(item.title ?? "").startsWith(n.marker));
+}
+
+/** Gehört das Item zum Bereich? Ohne Bereich immer; Notfälle (`istNotfallBeider`) zählen in beiden. Pur. */
 export function imBereich(item, bereich) {
   if (!bereich) return true;
-  const notfall = NOTFAELLE.filter((n) => n.art === "rot-main" || n.art === "security");
-  if (notfall.some((n) => String(item.title ?? "").startsWith(n.marker))) return true;
-  return item.labels.includes("area:harness") === (bereich === "agentic");
+  return istNotfallBeider(item) || item.labels.includes(FACTORY_LABEL) === (bereich === "agentic");
 }
 
 /**
  * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
- * Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
+ * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0 }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, nur = () => true }) {
   const belegt = belegteNummern({ refs, worktrees, prHeads });
   const uebersprungen = [];
   for (const item of items) {
-    if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich)) continue;
+    if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich) || !nur(item)) continue;
     const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, hartAb });
     if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
     else return { ticket: ticketVon(item, r), uebersprungen };
   }
   return { ticket: null, uebersprungen };
+}
+
+const SEITENNAME = { produkt: "Produkt", factory: "Factory" };
+const andere = (seite) => (seite === "factory" ? "produkt" : "factory");
+
+/** Hinweise zu den Board-Listen: Nummern auf beiden Boards und Items nur auf dem falschen Board (Sammelhinweis mit bis zu 10 Nummern). Pur. */
+function listenHinweise({ doppelt, falsch }) {
+  const h = doppelt.map((n) => `#${n} steht auf beiden Boards, gezählt auf dem Board laut Trennregel`);
+  if (falsch.length > 0) h.push(`${falsch.length} Items nur auf dem falschen Board (zählen auf ihrer Seite laut Trennregel): ${falsch.slice(0, 10).map((n) => `#${n}`).join(", ")}${falsch.length > 10 ? ", …" : ""}`);
+  return h;
+}
+
+/** Kopf-Items beider Seiten, stabil nach `kopfRang`, bei Gleichstand Produkt vor Factory; mit Bereich nur die eigene Seite plus Notfälle beider. Pur. */
+function kopfKandidaten(listen, bereich) {
+  const eigene = bereich === null ? null : bereich === "agentic" ? "factory" : "produkt";
+  const mitSeite = (seite) => listen[seite].filter((i) => istKopfItem(i) && (eigene === null || eigene === seite || istNotfallBeider(i))).map((i) => ({ ...i, seite }));
+  return [...mitSeite("produkt"), ...mitSeite("factory")].sort((a, b) => kopfRang(a) - kopfRang(b));
+}
+
+/** Die Seite laut Spielquote: Quote nur laden, wenn keine Factory-Arbeit läuft (`ladeQuote` liefert `{ commits, harnessIssues }`, wirft bei Fehlern). */
+function waehleSeite(listen, ladeQuote) {
+  const inArbeit = listen.factory.find((i) => i.state === "open" && !ungeclaimt(i) && !istKopfItem(i));
+  if (inArbeit) return { ...entscheideSeite({ produktMerges: null, factoryInArbeit: inArbeit.number }), produktMerges: null };
+  const { commits, harnessIssues } = ladeQuote();
+  const produktMerges = produktMergesSeitFactory(commits, harnessIssues);
+  return { ...entscheideSeite({ produktMerges }), produktMerges };
+}
+
+/**
+ * Die Auswahl über beide Boards (#1729): 1. Kopf-Items beider Boards (Quote ruht), 2. mit `bereich` nur die eigene Seite (ohne Quote, ohne Rückfall),
+ * 3. sonst die Seite laut Spielquote, bei leerer Seite der Rückfall auf die andere. `produkt`/`factory`: normalisierte Items je Board; der Rest
+ * wie `waehleNaechstes`; `ladeQuote` nur bei Bedarf (wirft bei Fehlern, der Lauf endet mit Exit 2). Liefert
+ * `{ ticket, uebersprungen, quote: { seite, produktMerges, grund, rueckfall }, hinweise? }`. Pur bis auf `ladeQuote`.
+ */
+export function waehleUeberBoards({ produkt, factory, bereich = null, ladeQuote, ...belegung }) {
+  const listen = seitenListen(produkt, factory);
+  const hinweise = listenHinweise(listen);
+  const uebersprungen = [];
+  const lauf = (items, extra) => {
+    const r = waehleNaechstes({ ...belegung, items, ...extra });
+    uebersprungen.push(...r.uebersprungen);
+    return r.ticket;
+  };
+  const fertig = (ticket, quote) => ({ ticket, uebersprungen, quote, ...(hinweise.length > 0 ? { hinweise } : {}) });
+  const kopf = kopfKandidaten(listen, bereich);
+  const kopfTreffer = lauf(kopf, {});
+  if (kopfTreffer) return fertig(kopfTreffer, { seite: kopf.find((i) => i.number === kopfTreffer.nr).seite, produktMerges: null, grund: "Kopf-Item, vor der Quote", rueckfall: false });
+  const nichtKopf = (i) => !istKopfItem(i);
+  if (bereich) {
+    const seite = bereich === "agentic" ? "factory" : "produkt";
+    return fertig(lauf(listen[seite], { nur: nichtKopf }), { seite, produktMerges: null, grund: `--bereich ${bereich}`, rueckfall: false });
+  }
+  const wahl = waehleSeite(listen, ladeQuote);
+  const erste = lauf(listen[wahl.seite], { nur: nichtKopf });
+  if (erste) return fertig(erste, { seite: wahl.seite, produktMerges: wahl.produktMerges, grund: wahl.grund, rueckfall: false });
+  const zweite = lauf(listen[andere(wahl.seite)], { nur: nichtKopf });
+  if (!zweite) return fertig(null, { seite: wahl.seite, produktMerges: wahl.produktMerges, grund: wahl.grund, rueckfall: false });
+  hinweise.push(`Rückfall: kein freies ${SEITENNAME[wahl.seite]}-Item, oberstes freies ${SEITENNAME[andere(wahl.seite)]}-Item`);
+  return fertig(zweite, { seite: andere(wahl.seite), produktMerges: wahl.produktMerges, grund: wahl.grund, rueckfall: true });
 }
 
 const uebersprungenEintrag = (nr, r) => ({ nr, grund: r.grund, ...(r.fehlt ? { fehlt: r.fehlt } : {}) });
@@ -180,13 +245,14 @@ export const reparierenVon = (uebersprungen) => uebersprungen.filter((u) => u.fe
 
 const reparierenZeilen = (uebersprungen) => reparierenVon(uebersprungen).map((r) => `reparieren #${r.nr}: ${r.fehlt.join("; ")}`);
 
-/** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach Hinweis, `reparieren`-Zeilen und je übersprungenem Kandidaten eine Zeile. Pur. */
-export function formatiere({ ticket, uebersprungen, bereich = null, einzel = null }) {
+/** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach die Infozeile zu Seite und Zählung, Hinweise, `reparieren`-Zeilen und je übersprungenem Kandidaten eine Zeile. Pur. */
+export function formatiere({ ticket, uebersprungen, bereich = null, einzel = null, quote = null, hinweise = [] }) {
   if (einzel !== null && !ticket) return [`#${einzel} nicht frei: ${uebersprungen[0]?.grund ?? "unbekannt"}`, ...reparierenZeilen(uebersprungen)].join("\n") + "\n";
   const keins = bereich ? `kein freies Ticket im Bereich ${BEREICHE[bereich]}` : "kein freies Ticket";
   const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : keins;
   const hinweis = ticket?.spezifikation ? [`hinweis #${ticket.nr}: Spezifikation unvollständig (Bestand, nur berichtet): ${ticket.spezifikation.fehlt.join("; ")}`] : [];
-  return [kopf, ...hinweis, ...reparierenZeilen(uebersprungen), ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
+  const info = quote ? [`Seite ${SEITENNAME[quote.seite]}: ${quote.grund}${quote.rueckfall ? " (Rückfall)" : ""}`] : [];
+  return [kopf, ...info, ...hinweise.map((h) => `hinweis ${h}`), ...hinweis, ...reparierenZeilen(uebersprungen), ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
 }
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
@@ -200,7 +266,7 @@ export function fuehreAus(argv, io) {
     const einzel = t.ticket;
     const roh =
       einzel === null
-        ? { ...waehleNaechstes({ ...io.lade(), owner: io.owner, bereich: b.bereich, hartAb: io.hartAb }), ...(b.bereich ? { bereich: b.bereich } : {}) }
+        ? { ...waehleUeberBoards({ ...io.lade(), ladeQuote: io.ladeQuote, owner: io.owner, bereich: b.bereich, hartAb: io.hartAb }), ...(b.bereich ? { bereich: b.bereich } : {}) }
         : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb });
     const reparieren = reparierenVon(roh.uebersprungen);
     const ergebnis = reparieren.length > 0 ? { ...roh, reparieren } : roh;
@@ -266,14 +332,34 @@ function ladeBelegung() {
   return { offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
 }
 
-const ladeEcht = () => ({ items: normalizeItems(loadItemPages(PRODUKT_BOARD)), ...ladeBelegung() });
+const ladeEcht = () => ({
+  produkt: normalizeItems(loadItemPages(boardFuerRolle("produkt"))),
+  factory: normalizeItems(loadItemPages(boardFuerRolle("factory"))),
+  ...ladeBelegung(),
+});
+
+/**
+ * Die Quote-Eingabe (nur bei Bedarf): eine Commit-Seite von main (100 Commits, neueste zuerst) und die Nummern der geschlossenen `area:harness`-Issues
+ * ab dem ältesten dieser Commits (minus 1 Tag). Jeder Lade- oder Formfehler wirft (Exit 2), nie eine stille Seite.
+ */
+export function ladeQuoteEcht(lade = ghJson) {
+  const commits = lade(["api", `repos/${REPO}/commits?sha=main&per_page=100`]);
+  if (!Array.isArray(commits) || commits.length === 0) throw new Error("Spielquote: keine Commits von main geladen");
+  const datum = (c) => Date.parse(c?.commit?.committer?.date ?? c?.commit?.author?.date ?? "");
+  const aelteste = Math.min(...commits.map(datum));
+  if (!Number.isFinite(aelteste)) throw new Error("Spielquote: Commits ohne gültiges Datum");
+  const seit = new Date(aelteste - 24 * 60 * 60 * 1000).toISOString();
+  const seiten = lade(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=closed&labels=${FACTORY_LABEL}&since=${seit}&per_page=100`]);
+  if (!Array.isArray(seiten)) throw new Error("Spielquote: unerwartete Antwortform der geschlossenen Harness-Issues");
+  return { commits, harnessIssues: new Set(seiten.flat().filter((i) => !i.pull_request).map((i) => i.number)) };
+}
 
 /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
 const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung() });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
-  const io = { lade: ladeEcht, ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: ladeProjektConfig().spezifikation?.hartAb };
+  const io = { lade: ladeEcht, ladeQuote: () => ladeQuoteEcht(), ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: ladeProjektConfig().spezifikation?.hartAb };
   const { code, out, err } = fuehreAus(process.argv.slice(2), io);
   process.stdout.write(out);
   process.stderr.write(err);
