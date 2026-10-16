@@ -93,6 +93,7 @@ AGENTS.md                  @fluffels
 /scripts/fremdtext.mjs @fluffels
 /scripts/gh-cli.mjs @fluffels
 /scripts/naechstes-ticket.mjs @fluffels
+/scripts/spezifikation-lib.mjs @fluffels
 /scripts/subagent-laeufe.mjs @fluffels
 /scripts/mess-lib.mjs @fluffels
 /scripts/patch-zugriff.mjs @fluffels
