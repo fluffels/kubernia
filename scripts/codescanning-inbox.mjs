@@ -257,7 +257,7 @@ function main() {
       }
     },
     aktualisiere: (nr, body) => ghText(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
-    kommentiere: (nr, text) => ghText(["api", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]),
+    kommentiere: postZeilen,
     schliesse: (nr) =>
       ghText(["issue", "close", String(nr), "--repo", REPO, "--reason", "completed", "--comment", "Keine offenen Code-Scanning-Befunde high/critical mehr, automatisch geschlossen."]),
     zielSammelticket: () => waehleSammelticket(offene)?.number ?? null,
