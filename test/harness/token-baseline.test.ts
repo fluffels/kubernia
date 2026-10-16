@@ -20,6 +20,9 @@ import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceModule from "../../scripts/slice-override.mjs";
+const { commitZeilen } = sliceModule as unknown as { commitZeilen: (praefix: string, planer: string) => unknown };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as brainModule from "../../scripts/brain-metrics.mjs";
 
 const toolEventsFromLangfuse = (brainModule as { toolEventsFromLangfuse: (obs: unknown[], agentOf?: (o: never) => string | null) => PEv[] }).toolEventsFromLangfuse;
@@ -86,7 +89,7 @@ const m = baselineModule as {
   langfuseZugang: (env: Record<string, string | undefined>) => { baseUrl: string; publicKey: string; secretKey: string };
   periodAt: (entry: unknown, ts?: string) => Record<string, unknown> | null;
   countCacheRebuilds: (calls: Call[]) => { count: number; cacheWriteTokens: number };
-  nachweisAusCommits: (commits: unknown) => { runden: number; plan: boolean | null } | null;
+  nachweisAusCommits: (commits: unknown, zeilen: unknown) => { runden: number; plan: boolean | null } | null;
   parseArgs: (argv: string[]) => { sessions: string[]; issue?: string; pr?: string; from?: string; json: boolean; langfuse: boolean };
   fetchSessionObservations: (
     sessionId: string,
@@ -1050,17 +1053,21 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
 
 describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
   const SHA = "a".repeat(40);
+  const Z = commitZeilen("KQ-", "kubernia-planner");
   const nachweisCommit = (plan = "KQ-Plan: kubernia-planner", runden = 2) => ({
     messageHeadline: "chore: Nachweis",
     messageBody: `${plan}\nKQ-Review: head=${SHA} runden=${runden} lenses=architektur,requirement-treue,test-adaequanz verdikt=ok`,
   });
 
   test("nachweisAusCommits: Runden und Planer aus den Commit-Zeilen; ohne KQ-Review null", () => {
-    assert.deepEqual(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "" }, nachweisCommit()]), { runden: 2, plan: true });
-    assert.deepEqual(m.nachweisAusCommits([nachweisCommit("KQ-Plan: ohne — Planer lieferte keinen Plan", 3)]), { runden: 3, plan: false });
-    assert.equal(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "kein Nachweis" }]), null);
-    assert.equal(m.nachweisAusCommits(undefined), null, "kaputte Eingabe wirft nicht");
-    assert.equal(m.nachweisAusCommits([{ messageHeadline: "x", messageBody: "KQ-Review: head=kaputt runden=viele" }]), null, "kaputte Rundenzahl ist kein Nachweis");
+    assert.deepEqual(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "" }, nachweisCommit()], Z), { runden: 2, plan: true });
+    assert.deepEqual(m.nachweisAusCommits([nachweisCommit("KQ-Plan: ohne — Planer lieferte keinen Plan", 3)], Z), { runden: 3, plan: false });
+    assert.equal(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "kein Nachweis" }], Z), null);
+    assert.equal(m.nachweisAusCommits(undefined, Z), null, "kaputte Eingabe wirft nicht");
+    assert.equal(m.nachweisAusCommits([{ messageHeadline: "x", messageBody: "KQ-Review: head=kaputt runden=viele" }], Z), null, "kaputte Rundenzahl ist kein Nachweis");
+    // Präfix aus der Config (#1741): mit AB- zählen die KQ-Zeilen nicht, ohne Zeilen wirft die Funktion
+    assert.equal(m.nachweisAusCommits([nachweisCommit()], commitZeilen("AB-", "kubernia-planner")), null);
+    assert.throws(() => m.nachweisAusCommits([nachweisCommit()], undefined), /Commit-Zeilen/);
   });
 
   test("renderMarkdown: Nachweis ersetzt die Heuristik und nennt den Planer; ohne Nachweis steht Heuristik", () => {

@@ -51,13 +51,25 @@ type Baseline = Record<string, Zaehlung>;
 export interface ProjektConfig {
   repo: string;
   boards: { besitzer: string }[];
+  praefixe: { commitZeile: string; branch: string; worktree: string };
+  labels: Record<string, string>;
+  agenten: Record<string, string>;
   projektliterale?: Record<string, string>;
 }
 
 const escapeRe = (t: string): string => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611): Owner (Repo-Owner und Board-Besitzer),
- * Repo-Name, generisches Board-ID-Muster und die `projektliterale` der Config. */
+/** Alternative aus wörtlichen Werten: einmalig, längster zuerst (sonst zählt ein Kurzname im Langnamen mit), regex-escaped. */
+const alternative = (werte: string[]): string =>
+  [...new Set(werte)]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRe)
+    .join("|");
+
+/** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611, #1741): Owner (Repo-Owner und Board-Besitzer),
+ * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
+ * wie `forum` zählt nie), Agentennamen und die `projektliterale` der Config. Präfix, Branch, Worktree, Label und Agent zählen
+ * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix). */
 export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
   const [owner = "", name = ""] = config.repo.split("/");
   const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
@@ -65,7 +77,13 @@ export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
     Owner: new RegExp(owners.map(escapeRe).join("|"), "gi"),
     Repo: new RegExp(escapeRe(name), "gi"),
     "Board-ID": /\bPVT[A-Z]*_[A-Za-z0-9_-]+/g,
+    Praefix: new RegExp(escapeRe(config.praefixe.commitZeile), "g"),
+    Branch: new RegExp(escapeRe(config.praefixe.branch), "g"),
+    Worktree: new RegExp(escapeRe(config.praefixe.worktree), "g"),
   };
+  const labels = Object.values(config.labels).filter((l) => l.includes(":"));
+  if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
+  out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
   for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(escapeRe(literal), "gi");
   return out;
 }
@@ -298,7 +316,12 @@ export function pruefeHuelle(verstoesse: string[], ausnahmen: Record<string, str
 
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
 
-const FIXTURE: ProjektConfig = { repo: "acme/demo", boards: [{ besitzer: "acme" }], projektliterale: { Zelda: "zelda" } };
+const NEU = {
+  praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
+  labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
+  agenten: { planer: "wk-planer", umsetzer: "wk-umsetzer", lens: "wk-lens", gruppe: "wk-gruppe", ticketSkill: "wk" },
+};
+const FIXTURE: ProjektConfig = { repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Zelda: "zelda" } };
 const B = begriffeAus(FIXTURE);
 
 describe("zaehle", () => {
@@ -317,19 +340,41 @@ describe("zaehle", () => {
 
 describe("begriffeAus", () => {
   test("Regex-Zeichen im Repo-Namen sind wörtlich: my.repo zählt myxrepo nicht", () => {
-    const b = begriffeAus({ repo: "zz/my.repo", boards: [{ besitzer: "zz" }] });
+    const b = begriffeAus({ repo: "zz/my.repo", boards: [{ besitzer: "zz" }], ...NEU });
     assert.deepEqual(zaehle("my.repo myxrepo", b), { Repo: 1 });
   });
   test("Repo-Owner und abweichender Board-Besitzer zählen beide als Owner; gleicher Besitzer nicht doppelt", () => {
-    const zwei = begriffeAus({ repo: "alice/demo", boards: [{ besitzer: "bob" }] });
+    const zwei = begriffeAus({ repo: "alice/demo", boards: [{ besitzer: "bob" }], ...NEU });
     assert.deepEqual(zaehle("alice bob", zwei), { Owner: 2 });
     // alle Boards zählen (#1728): der Besitzer des zweiten Boards ist ebenfalls ein Owner-Literal
-    const drei = begriffeAus({ repo: "alice/demo", boards: [{ besitzer: "bob" }, { besitzer: "carol" }, { besitzer: "bob" }] });
+    const drei = begriffeAus({ repo: "alice/demo", boards: [{ besitzer: "bob" }, { besitzer: "carol" }, { besitzer: "bob" }], ...NEU });
     assert.deepEqual(zaehle("alice bob carol", drei), { Owner: 3 });
     assert.deepEqual(zaehle("acme", B), { Owner: 1 });
   });
   test("ohne projektliterale entfällt der Zusatzbegriff", () => {
-    assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }] })), {});
+    assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU })), {});
+  });
+  test("Praefix zählt groß/klein-genau (ZD- ja, zd- und ZD_ nein)", () => {
+    assert.deepEqual(zaehle("ZD-Plan zd-Plan ZD_X", B), { Praefix: 1, Worktree: 1 });
+  });
+  test("Branch und Worktree zählen wörtlich; der Branch enthält das Worktree-Präfix, beides zählt (gewollte Doppelzählung)", () => {
+    assert.deepEqual(zaehle("feature/zd-12", B), { Branch: 1, Worktree: 1 });
+    assert.deepEqual(zaehle("zd-12 und Feature/ZD-12", B), { Worktree: 1, Praefix: 1 });
+    assert.deepEqual(zaehle("zdx12", B), {});
+  });
+  test("Label zählt nur Werte mit Doppelpunkt, doppelte Werte einmal, forum nie, groß/klein-genau", () => {
+    assert.deepEqual(zaehle("area:werk status:steckt forum", B), { Label: 2 });
+    assert.deepEqual(zaehle("AREA:WERK", B), {});
+    const nur = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, labels: { forum: "forum", harness: "x:y" } });
+    assert.deepEqual(zaehle("forum x:y", nur), { Label: 1 });
+    const keins = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, labels: { forum: "forum" } });
+    assert.equal("Label" in keins, false);
+  });
+  test("Agent: längster Name zuerst (kein Doppeltreffer im Langnamen), groß/klein-genau", () => {
+    assert.deepEqual(zaehle("wk-planer wk-umsetzer wk Wk-planer", B), { Agent: 3 });
+    // Kurzname steht in der Config vor dem Langnamen, und der Rest des Langnamens ist selbst ein Name: ohne Längen-Sortierung zählte "wk-lens" doppelt.
+    const kurzZuerst = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, agenten: { planer: "wk", umsetzer: "wk-lens", lens: "lens", gruppe: "g", ticketSkill: "t" } });
+    assert.deepEqual(zaehle("wk-lens", kurzZuerst), { Agent: 1 });
   });
 });
 

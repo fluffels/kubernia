@@ -23,15 +23,22 @@ import { fileURLToPath } from "node:url";
 type Nachweis = { plan: { art: string } | null; review: { head: string | null; runden: number; lenses: string[]; verdikt: string | null } | null };
 type Mod = {
   MAX_FIX_RUNDEN: number;
-  parseNachweis: (t: string) => Nachweis;
+  parseNachweis: (t: string, z: unknown) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[] }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown }) => string[];
 };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/check-review-nachweis.mjs";
-const { MAX_FIX_RUNDEN, parseNachweis, pflichtLenses, bewerteNachweis } = raw as Mod;
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceRaw from "../../scripts/slice-override.mjs";
+const { MAX_FIX_RUNDEN, pflichtLenses } = raw as Mod;
+/** Zeilen der echten Config (KQ-, kubernia-planner); die Wrapper reichen sie durch. */
+const Z = (sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => unknown }).commitZeilen("KQ-", "kubernia-planner");
+const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
+const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen">) => (raw as Mod).bewerteNachweis({ zeilen: Z, ...o });
 const zusatzpassZeile = (raw as unknown as { zusatzpassZeile: (r: { zusatzpass: { grund: string } | null }) => string | null }).zusatzpassZeile;
-const checkReviewNachweis = (raw as unknown as { checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => { ok: boolean; zusatzpass: { grund: string } | null } }).checkReviewNachweis;
+const checkReviewNachweis = (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) =>
+  (raw as unknown as { checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen: () => unknown }) => { ok: boolean; zusatzpass: { grund: string } | null } }).checkReviewNachweis({ ladeZeilen: () => Z, ...o });
 
 const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 const SHA = "c".repeat(40);
@@ -285,7 +292,7 @@ describe("Zusatzpass: ein Pass über das Cap, ohne Rückfrage (#1561 Z2, #1693)"
     assert.deepEqual(n.review?.lenses, ["architektur", "requirement-treue", "test-adaequanz"]);
   });
   test("die Vorlage des Skripts führt kein Feld zusatzpass (kein Standardweg)", () => {
-    assert.doesNotMatch(read("scripts/check-review-nachweis.mjs").split("export const VORLAGE")[1].split(";")[0], /zusatzpass/);
+    assert.doesNotMatch(read("scripts/check-review-nachweis.mjs").split("export const vorlage")[1].split(";")[0], /zusatzpass/);
   });
 });
 

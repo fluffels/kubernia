@@ -27,7 +27,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseNachweis } from "./slice-override.mjs";
+import { ladeCommitZeilen, parseNachweis } from "./slice-override.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
@@ -420,14 +420,14 @@ function claimAt(issue) {
 }
 
 /**
- * Review-Runden und Planer aus den Nachweis-Zeilen der PR-Commits (`KQ-Review:`/`KQ-Plan:`, #1270) statt
- * aus der Transkript-Heuristik. null, wenn keine `KQ-Review:`-Zeile im PR steht (älterer Lauf).
+ * Review-Runden und Planer aus den Nachweis-Zeilen der PR-Commits (Review-/Plan-Zeile, #1270; Schlüssel aus `zeilen`, den Commit-Zeilen der
+ * Projekt-Config) statt aus der Transkript-Heuristik. null, wenn keine Review-Zeile im PR steht (älterer Lauf).
  */
-export function nachweisAusCommits(commits) {
+export function nachweisAusCommits(commits, zeilen) {
   const text = (Array.isArray(commits) ? commits : [])
     .map((c) => `${c?.messageHeadline ?? ""}\n${c?.messageBody ?? ""}`)
     .join("\n");
-  const { plan, review } = parseNachweis(text);
+  const { plan, review } = parseNachweis(text, zeilen);
   if (!review || !Number.isFinite(review.runden)) return null;
   return { runden: review.runden, plan: plan ? plan.art === "planer" : null };
 }
@@ -439,7 +439,7 @@ function prInfo(pr) {
     prCreatedAt: p.createdAt,
     mergedAt: p.mergedAt,
     failedPushes: zaehleRoteCommits(ghText, { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
-    nachweis: nachweisAusCommits(p.commits),
+    nachweis: nachweisAusCommits(p.commits, ladeCommitZeilen()),
     files: p.files ?? [],
   };
 }

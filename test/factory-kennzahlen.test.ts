@@ -9,6 +9,8 @@ import * as raw from "../scripts/factory-kennzahlen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLauf from "../scripts/lauf-ergebnis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawSlice from "../scripts/slice-override.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../scripts/token-baseline.mjs";
 
 type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string };
@@ -33,6 +35,7 @@ const LAUF = rawLauf as unknown as {
   NACHARBEIT_TAGE: number;
   bewertePrs: (e: unknown) => Daten;
 };
+const ZEILEN = (rawSlice as unknown as { commitZeilen: (praefix: string, planer: string) => unknown }).commitZeilen("KQ-", "kubernia-planner");
 const BASE = rawBase as unknown as { summarize: (run: { calls: unknown[]; questions: number; events?: unknown[] }, bounds?: unknown) => unknown };
 
 const ZEILE = (o: Partial<Zeile> = {}): Zeile => ({ pr: 50, ticket: 40, gemergt: "2026-10-14T10:00:00Z", runden: 1, ciFix: 0, festgefahren: 0, nacharbeit: "nein", ...o });
@@ -171,7 +174,7 @@ describe("vertragPruefen", () => {
     expect(F.vertragPruefen(null).luecke).toMatch(/Vertrag/);
   });
   test("echtes bewertePrs aus lauf-ergebnis erfüllt den Vertrag", () => {
-    const e = LAUF.bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt: new Date("2026-12-31T00:00:00Z") });
+    const e = LAUF.bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt: new Date("2026-12-31T00:00:00Z"), zeilen: ZEILEN });
     expect(F.vertragPruefen(e).daten).toBeDefined();
   });
   test("echtes bewertePrs mit PR und Folge-Commit: Zeilenfelder tragen bis in den Bericht", () => {
@@ -184,6 +187,7 @@ describe("vertragPruefen", () => {
       ci: {},
       festgefahren: {},
       jetzt: new Date("2026-12-31T00:00:00Z"),
+      zeilen: ZEILEN,
     });
     const lage = F.vertragPruefen(e);
     expect(lage.daten).toBeDefined();
