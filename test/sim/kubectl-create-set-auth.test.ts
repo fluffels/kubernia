@@ -284,3 +284,22 @@ describe("(f) create rolebinding mit --role und --clusterrole", () => {
     expect(lauf("kubectl create clusterrolebinding rb --user=a", freshSim()).out).not.toContain("exactly one of clusterrole or role");
   });
 });
+
+describe("Container-Name: apply auf ein bestehendes Deployment und Hash", () => {
+  const manifest = (container: string) => "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  replicas: 1\n  template:\n    spec:\n      containers:\n        - name: " + container + "\n          image: nginx\n";
+  test("anderer Container-Name im Manifest ist ein configured, derselbe ein unchanged", () => {
+    const sim = mit("kubectl create deployment web --image=nginx");
+    sim.files["d.yaml"] = manifest("haupt");
+    expect(lauf("kubectl apply -f d.yaml", sim).out).toContain("deployment.apps/web configured");
+    expect(lauf("kubectl describe deployment web", sim).out).toContain("   haupt:\n");
+    expect(lauf("kubectl apply -f d.yaml", sim).out).toContain("deployment.apps/web unchanged");
+  });
+  test("der Container-Name geht nicht in den pod-template-hash ein (Pod-Namen bleiben stabil)", () => {
+    const a = mit("kubectl create deployment web --image=nginx");
+    const b = mit("kubectl create deployment web --image=nginx");
+    b.files["d.yaml"] = manifest("haupt");
+    b.exec("kubectl apply -f d.yaml");
+    const hash = (s: KQSim) => s.deployments[0].pods[0].name.split("-")[1];
+    expect(hash(b)).toBe(hash(a));
+  });
+});
