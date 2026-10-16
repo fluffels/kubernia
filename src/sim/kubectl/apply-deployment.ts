@@ -13,7 +13,7 @@
  *
  * Phaser-frei (pure Domäne). Aufgerufen aus ./lifecycle (apply-Handler-Registry). */
 import { SECURITY_CONTEXT_KEYS, type ApplyEffect, type Deployment, type PodTemplateSpec, type SecurityContext } from "../state";
-import { addDeployment, changeImage, CPU_THROTTLED_NOTE, MEM_HEALED_NOTE, setCpuLimit, setMemoryLimit } from "../workload";
+import { addDeployment, changeImage, containerNameOf, CPU_THROTTLED_NOTE, MEM_HEALED_NOTE, setCpuLimit, setMemoryLimit } from "../workload";
 import { admitNewPods, rollOut, scaleTo } from "./rollout";
 import type { KubectlHost } from "./host";
 
@@ -97,6 +97,10 @@ const TEMPLATE_FIELD_TABLE = {
       return !!want && (d.initContainer?.fillsMi !== want.fillsMi || !!d.initContainer?.doubleStage !== !!want.doubleStage);
     },
     take(_host, d, e) { d.initContainer = normalizedInit(e); },
+  },
+  containerName: {
+    differs: (d, e) => e.containerName !== undefined && containerNameOf(d) !== e.containerName,
+    take(_host, d, e) { d.containerName = e.containerName; },
   },
   ephemeralUsedMi: null,
   // Die Annotation `restartedAt` setzt nur `rollout restart`; apply verwaltet sie nicht.

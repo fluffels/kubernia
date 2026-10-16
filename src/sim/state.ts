@@ -98,6 +98,8 @@ export interface PodTemplateSpec {
   initContainer?: { fillsMi?: number; doubleStage?: boolean };
   /** Annotation `kubectl.kubernetes.io/restartedAt` (#1468): `rollout restart` setzt sie und ergibt so einen neuen pod-template-hash. */
   restartedAt?: number;
+  /** Name des Containers (`containers[0].name`): `create deployment` benennt ihn nach dem Image, `apply -f` übernimmt ihn aus dem Manifest. Fehlt er, heißt der Container wie das Deployment (`containerNameOf` in ./workload). */
+  containerName?: string;
 }
 export interface Deployment {
   name: string;
@@ -161,6 +163,8 @@ export interface Deployment {
   evicted?: { reason: string } | null;
   /** Annotation `restartedAt` des Pod-Templates (#1468), siehe `PodTemplateSpec`. */
   restartedAt?: number;
+  /** Container-Name des Pod-Templates, siehe `PodTemplateSpec`. */
+  containerName?: string;
   /** Das ReplicaSet der laufenden Pods (#1468, `sim/replicasets.ts`): Hash, Erzeugungszeit, Revision und
    *  das eigene Template. Laufzeitwert, NICHT serialisiert (nur `revision` über `RolloutHistorySpec`);
    *  ändert sich nur beim Ausrollen eines neuen Templates. */

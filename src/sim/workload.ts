@@ -251,7 +251,12 @@ export const CPU_THROTTLED_NOTE = "💡 CPU-Limit gesetzt! Die Pods werden gedro
 
 /** Template-Felder, die als einfacher Wert (Zahl/String) gespiegelt werden. Die Objektfelder
  *  (securityContext, emptyDir, initContainer) laufen einzeln, weil sie als Kopie ankommen. */
-const SCALAR_TEMPLATE_KEYS = ["serviceAccountName", "containerPort", "memLimit", "cpuLimitMilli", "node", "ephemeralLimit", "ephemeralUsedMi", "restartedAt"] as const;
+const SCALAR_TEMPLATE_KEYS = ["serviceAccountName", "containerPort", "memLimit", "cpuLimitMilli", "node", "ephemeralLimit", "ephemeralUsedMi", "restartedAt", "containerName"] as const;
+
+/** Der Container-Name eines Deployments (oder Templates): `containerName`, wenn es ein nicht-leerer String ist, sonst der Deployment-Name. */
+export function containerNameOf(dep: { name: string; containerName?: unknown }): string {
+  return typeof dep.containerName === "string" && dep.containerName !== "" ? dep.containerName : dep.name;
+}
 
 /** Kopiert die gesetzten Skalarfelder von `from` nach `to`. */
 function copyScalars(from: PodTemplateSpec, to: PodTemplateSpec): void {

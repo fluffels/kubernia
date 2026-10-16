@@ -20,7 +20,7 @@ describe("kubectl create/set/auth: ein Flag eines anderen Ziels wird abgelehnt, 
     ["kubectl create configmap c --from-literal=a=b --image=nginx", "--image", "kubectl create configmap"],
     ["kubectl create secret generic s --from-literal=a=b --cert=x", "--cert", "kubectl create secret generic"],
     ["kubectl create secret tls t --cert=a --key=b --from-literal=a=b", "--from-literal", "kubectl create secret tls"],
-    ["kubectl set image deployment/web web=nginx:2 --limits=memory=1Gi", "--limits", "kubectl set image"],
+    ["kubectl set image deployment/web nginx=nginx:2 --limits=memory=1Gi", "--limits", "kubectl set image"],
     ["kubectl set env deployment/web --from=configmap/c --limits=memory=1Gi", "--limits", "kubectl set env"],
     ["kubectl set resources deployment/web --limits=memory=1Gi --from=configmap/c", "--from", "kubectl set resources"],
     ["kubectl auth can-i get pods --image=nginx", "--image", "kubectl auth can-i"],
@@ -46,9 +46,9 @@ describe("kubectl create/set/auth: ein Flag eines anderen Ziels wird abgelehnt, 
   test("set image mit --limits ändert das Image nicht", () => {
     const sim = freshSim();
     lauf("kubectl create deployment web --image=nginx", sim);
-    lauf("kubectl set image deployment/web web=nginx:2 --limits=memory=1Gi", sim);
+    lauf("kubectl set image deployment/web nginx=nginx:2 --limits=memory=1Gi", sim);
     expect(sim.snapshot().deployments.find(d => d.name === "web")?.image).toBe("nginx");
-    expect(lauf("kubectl set image deployment/web web=nginx:2", sim).error).toBe(false);
+    expect(lauf("kubectl set image deployment/web nginx=nginx:2", sim).error).toBe(false);
   });
   test("clusterrolebinding kennt --role nicht: der Hinweis nennt --clusterrole", () => {
     const r = lauf("kubectl create clusterrolebinding b --role=x --user=alice");
@@ -69,7 +69,7 @@ describe("kubectl: Flags vor und hinter dem Ziel, Aliase, Tippfehler", () => {
       "kubectl create secret -n default tls t2 --cert=a --key=b",
       "kubectl create secret tls t3 --cert=a --key=b -n default",
       "kubectl create --namespace default deployment d1 --image=nginx",
-      "kubectl set -n default image deployment/web web=nginx:3",
+      "kubectl set -n default image deployment/web nginx=nginx:3",
     ]) {
       const sim = freshSim();
       lauf("kubectl create deployment web --image=nginx", sim);
