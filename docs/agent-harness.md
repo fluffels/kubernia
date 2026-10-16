@@ -21,8 +21,8 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 108 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 75 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Skripte | 110 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 76 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 10 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 26 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -313,7 +313,7 @@ flowchart TD
   merge["Merge (squash)"]
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
-  forum["Forum-Eingang<br/>Skill forum"]
+  forum["Forum-Eingang<br/>Skill forum<br/>liest nur forum-leser"]
 
   board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
@@ -472,7 +472,7 @@ sequenceDiagram
   CI-->>U: grün: Merge, rot: Fix auf demselben Branch
   U-->>H: Bericht mit Ergebnis
   H-->>M: Zusammenfassung
-  Note over M,H: Forum: Skill forum. Thread lesen, Antwort als Entwurf zur Freigabe vorlegen, erst nach OK posten, bei Bug ein Ticket
+  Note over M,H: Forum: Skill forum. Thread nur vom Subagenten forum-leser in Quarantäne lesen lassen, Antwort als Entwurf zur Freigabe vorlegen, erst nach OK posten, bei Bug ein Ticket
 ```
 
 <!-- GEN:agenten-sequenz END -->

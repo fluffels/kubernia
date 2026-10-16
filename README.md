@@ -72,7 +72,7 @@ flowchart TD
   merge["Merge (squash)"]
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
-  forum["Forum-Eingang<br/>Skill forum"]
+  forum["Forum-Eingang<br/>Skill forum<br/>liest nur forum-leser"]
 
   board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
@@ -129,8 +129,8 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 108 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 75 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Skripte | 110 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Wächter-Tests | 76 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 10 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 26 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -144,6 +144,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Art | Name | Konfiguration | Quelle |
 |---|---|---|---|
 | Subagent | `Explore` | model: haiku, effort: low | `.claude/agents/explore.md` |
+| Subagent | `forum-leser` | model: sonnet, effort: medium | `.claude/agents/forum-leser.md` |
 | Subagent | `kubernia-gruppe` | model: sonnet, effort: medium | `.claude/agents/kubernia-gruppe.md` |
 | Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/kubernia-lens.md` |
 | Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/kubernia-planner.md` |
@@ -160,6 +161,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/mcp-ausfall.mjs --sessionstart` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
+| Hook | `PreToolUse` | matcher: `Read`, `node scripts/forum-leser-guard.mjs` | `.claude/agents/forum-leser.md` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
 | Plugin | `langfuse-observability` | Marktplatz: langfuse-observability | `.claude/settings.json` |
 | Git-Hook | `pre-push` | — | `.githooks/pre-push` |

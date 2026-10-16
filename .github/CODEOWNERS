@@ -62,6 +62,8 @@ AGENTS.md                  @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
 /scripts/hook-io.mjs @fluffels
+/scripts/forum-leser-guard.mjs @fluffels
+/scripts/forum-quarantaene.mjs @fluffels
 /scripts/bash-parser.mjs @fluffels
 /scripts/quote-folge.mjs @fluffels
 /scripts/shell-tabellen.mjs @fluffels

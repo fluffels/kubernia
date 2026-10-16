@@ -18,6 +18,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -72,10 +73,13 @@ const sanitizeSpawn = (text, istBody) => {
   return r.stdout.replace(/\n$/, "");
 };
 
+/** `gh` über den Wrapper; ein Fehler wird zu einer Meldung ohne Fremdtext. */
 const gh = (args) => {
-  const r = spawnSync("gh", args, { encoding: "utf8", cwd: WURZEL });
-  if (r.status !== 0) throw new Error(`gh ${args[0]} fehlgeschlagen`);
-  return r.stdout;
+  try {
+    return ghText(args);
+  } catch {
+    throw new Error(`gh ${args[0]} fehlgeschlagen`);
+  }
 };
 
 const QUERY = `query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){
