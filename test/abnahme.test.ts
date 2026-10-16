@@ -247,7 +247,7 @@ describe("Aufruf-, gh- und Vertrauensfehler", () => {
     expect(posts).toEqual([70, 7]);
   });
   test.each([
-    ["fremder Autor", { user: { login: "fremd", type: "User" } as User, labels: [] }],
+    ["fremder Autor", { user: { login: "fremd", type: "User" }, labels: [] }],
     ["Label forum", { user: VERTRAUT, labels: [{ name: "forum" }] }],
     ["Autor null", { user: null, labels: [] }],
   ])("Fremdeingang (%s): Exit 3 bei auswerten und kriterien, nichts gepostet, kein Body auf stderr", (_n, f) => {

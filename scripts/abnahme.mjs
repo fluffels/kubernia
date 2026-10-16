@@ -175,7 +175,7 @@ function pruefeWorktree(werte, io) {
   }
 }
 
-function ausgabe(entscheidung, urteile, kriterienListe, io, head, durchgang) {
+function ausgabe(entscheidung, urteile, io, head, durchgang) {
   if (entscheidung === "bestanden") {
     const zeile = formatAbnahme(io.zeilen, { art: "urteil", head, durchgaenge: durchgang, urteil: urteile.map(({ k, wert }) => ({ k, wert })) });
     return `ENTSCHEIDUNG: bestanden\n${zeile}\n`;
@@ -229,7 +229,7 @@ function auswerten(werte, nrText, io) {
       return aufrufFehler(`PR-Kommentar gepostet, Hand-off-Kommentar fehlt: ${fehlerText(e)}`);
     }
   }
-  return ergebnis(0, ausgabe(entscheidung, bericht.urteile, liste, io, wt.head, durchgang));
+  return ergebnis(0, ausgabe(entscheidung, bericht.urteile, io, wt.head, durchgang));
 }
 
 /** Ausführung mit injizierbarer I/O (`owner`, `zeilen`, `leseDatei`, `ladeIssue`, `ladeKommentare`, `poste`, `git`): `{ code, out, err }`. */
