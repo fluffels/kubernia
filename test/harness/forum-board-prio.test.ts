@@ -81,7 +81,7 @@ describe("Forum-Action fügt Issue zum Board hinzu (#644)", () => {
     "secrets.PROJECT_TOKEN",
   ]);
   const unerlaubteAusdruecke = (text: string): string[] =>
-    [...text.split("\n").filter((z) => !z.trimStart().startsWith("#")).join("\n").matchAll(/\$\{\{\s*([^}]*?)\s*\}\}/g)].map((m) => m[1]).filter((a) => !ERLAUBTE_AUSDRUECKE.has(a));
+    [...text.matchAll(/\$\{\{\s*([^}]*?)\s*\}\}/g)].map((m) => m[1]).filter((a) => !ERLAUBTE_AUSDRUECKE.has(a));
 
   test("nur Ausdrücke der Positivliste, kein eingebetteter Freitext (#1663 H8)", () => {
     assert.deepEqual(unerlaubteAusdruecke(yml), []);
@@ -89,7 +89,7 @@ describe("Forum-Action fügt Issue zum Board hinzu (#644)", () => {
 
   test("Negativfall: ein eingebettetes discussion.body oder discussion.title wird erkannt", () => {
     assert.deepEqual(unerlaubteAusdruecke("env:\n  X: ${{ github.event.discussion.body }}\n  Y: ${{github.event.discussion.title}}"), ["github.event.discussion.body", "github.event.discussion.title"]);
-    assert.deepEqual(unerlaubteAusdruecke("# ${{ github.event.discussion.body }}\n  A: ${{ github.repository }}"), [], "Kommentarzeilen zählen nicht");
+    assert.deepEqual(unerlaubteAusdruecke("run: |\n  # Titel: ${{ github.event.discussion.title }}\n  A: ${{ github.repository }}"), ["github.event.discussion.title"], "auch Kommentarzeilen: Actions setzt dort ein");
   });
 
   test("fügt das NEU angelegte Issue zum Board hinzu (Aufruf hängt an gh issue create)", () => {

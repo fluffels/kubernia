@@ -318,6 +318,12 @@ describe("holePflicht (#1663 T4)", () => {
     };
     expect(() => H.holePflicht("7", gh)).toThrow("kaputt");
   });
+  test("stdout beginnt mit [, ist aber kein gültiges JSON: wirft (fail-closed)", () => {
+    const gh = () => {
+      throw Object.assign(new Error("exit 8"), { stdout: "[{kaputt" });
+    };
+    expect(() => H.holePflicht("7", gh)).toThrow(SyntaxError);
+  });
   test("Erfolg: Namen aus der JSON-Ausgabe, Aufruf mit --required", () => {
     let args: string[] = [];
     expect(H.holePflicht("7", (a) => ((args = a), '[{"name":"C"}]'))).toEqual(["C"]);
