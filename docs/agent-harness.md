@@ -161,6 +161,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WAS:** jedes `src`-Modul über dem **Zeilen-Budget (800 LOC)** als God-File-Frühwarnung. Dieselbe Logik testet `test/filesize.test.ts` (also auch im `npm test`-Gate).
 - **WARUM:** God-Files sind bei Stardew-Scope die schleichende Wartungsschuld. Große Familien werden hinter einer Fassade/Barrel gesplittet (öffentliche API stabil, Innenstruktur skaliert).
 - **Absicherung:** eine Überschreitung ist nur mit offenem Split-Ticket in der `ALLOWLIST` erlaubt; fällt eine Datei wieder unter Budget, meldet der Wächter den Eintrag als **stale** (die Ausnahme kann nicht faul liegenbleiben).
+- **Workflow-Skripte** (`DECKEL`) haben je Eintrag zusätzlich einen Zeichen-Deckel `maxZeichen` (CR-neutral wie `check:contextsize`): mehr Zeichen rot, mehr als 500 darunter rot („Deckel senken"), fehlendes `maxZeichen` rot; so hebelt Zusammenziehen von Zeilen den Zeilen-Deckel nicht aus.
 
 ### Doku↔Code-Drift-Wächter (`npm run check:docmap`, #482)
 - **WAS:** meldet jede `src/`-Datei, die in **keinem** [`docs/module/`](module/)-Tiefendoc als Backtick-Pfad auftaucht, sowie jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`.
