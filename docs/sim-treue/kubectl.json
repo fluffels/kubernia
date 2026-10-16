@@ -136,7 +136,7 @@
     {"befehl":"set","ziel":"resources","verhalten":"abweichend","ausgabe":"gleich","tickets":[1343],"grenzen":["nur-deployments"]},
     {"befehl":"rollout","ziel":"restart","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["nur-deployments"]},
     {"befehl":"rollout","flag":"restart mehrere Ziele","verhalten":"gleich","ausgabe":"gleich"},
-    {"befehl":"rollout","flag":"restart ohne Namen","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1667]},
+    {"befehl":"rollout","flag":"restart ohne Namen","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"rollout","ziel":"history","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["nur-deployments","rollout-historie"]},
     {"befehl":"rollout","ziel":"undo","verhalten":"abweichend","ausgabe":"gleich","tickets":[1146],"grenzen":["nur-deployments","undo-ohne-fehler"]},
     {"befehl":"auth","ziel":"can-i","verhalten":"gleich","ausgabe":"gleich"},

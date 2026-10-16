@@ -99,7 +99,7 @@ const GLAB_CI: Dispatch<SubEntry<GlabCiHandler>> = {
 };
 
 /** Die `glab`-Ebene: nur `ci` ist simuliert; die übrigen Befehlsgruppen des echten CLI sind „nicht simuliert“. */
-const GLAB: Dispatch<SubEntry<GlabCiHandler>> = {
+export const GLAB: Dispatch<SubEntry<GlabCiHandler>> = {
   cmd: "glab",
   table: { ci: { group: GLAB_CI } },
   real: ["alias", "api", "auth", "changelog", "cluster", "completion", "config", "deploy-key", "incident", "issue", "job", "label", "mr", "release", "repo", "schedule", "snippet", "ssh-key", "user", "variable", "version"],

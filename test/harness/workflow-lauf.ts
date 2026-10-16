@@ -53,6 +53,7 @@ export interface Endstand {
   ausserhalbScope?: string[];
   hinweiseOffen?: number;
   lernkandidaten?: string[];
+  befunde?: string[];
 }
 
 export async function workflowLauf(o: LaufOptionen = {}) {

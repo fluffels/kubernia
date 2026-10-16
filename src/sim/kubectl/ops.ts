@@ -14,6 +14,9 @@ import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
 import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, notSimulated, NS, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
 import { readTargets, targetOutcome } from "./targets";
+import { foreignNamespace } from "./namespace";
+import { noResourcesIn } from "./inspect";
+import { DEFAULT_NAMESPACE } from "../state";
 import { IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch, type SubEntry } from "../cliargs";
 
 /** Die NotFound-Zeile eines Deployments (ohne Fehlerrahmen: die Mehrfachziel-Befehle sammeln sie in `failed`). */
@@ -24,12 +27,12 @@ const DEPLOYMENTS_TIP = "Welche Deployments es gibt: 'kubectl get deployments'";
 /** Die Deployment-Namen der Ziele, die scale/expose/set/rollout gemeinsam annehmen (`deploy/a deploy/b`, `deployment a b`;
  *  Zerlegung und Fehlertexte: ./targets). Eine andere Art als Deployment (`scale pods/x`) ist „nicht simuliert“ und
  *  lehnt den ganzen Befehl ab, bevor etwas geändert wird. Ohne Ziel ist die Liste leer. */
-function deploymentNames(host: KubectlHost, sub: string, args: readonly string[]): { names: string[] } | { error: string } {
+function deploymentNames(host: KubectlHost, sub: string, args: readonly string[]): { names: string[]; ohneName: boolean } | { error: string } {
   const parsed = readTargets(host, args);
   if ("error" in parsed) return parsed;
   const other = parsed.targets.find(t => t.kind.plural !== "deployments");
   if (other) return { error: notSimulated(host, "'kubectl " + sub + " " + other.kind.plural + "/<name>' – das geht nur für Deployments.", ["kubectl " + sub + " deployment <name> …"]) };
-  return { names: parsed.targets.flatMap(t => t.names) };
+  return { names: parsed.targets.flatMap(t => t.names), ohneName: parsed.targets.some(t => t.names.length === 0) };
 }
 
 /** Wie `deploymentNames`, aber für Befehle, die genau EIN Deployment ändern (expose, set): weitere Ziele lehnt die Sim ab,
@@ -283,15 +286,31 @@ function restartDeployment(host: KubectlHost, dep: Deployment): { ok: string } |
   return { ok: "deployment.apps/" + dep.name + " restarted" + (imageHealed ? IMAGE_FOUND_NOTE : "") };
 }
 
-/** kubectl rollout restart deployment <name> [<name> …] – je Ziel eine Zeile, ein fehlendes Ziel stoppt die übrigen nicht. */
+/** Alle Deployments des verlangten Namespace, nach Namen sortiert (die Liste des apiservers); in einem fremden Namespace gibt
+ *  es keine. Bytevergleich, kein `localeCompare`: die Reihenfolge hängt nicht an der Umgebung. */
+function allDeploymentNames(host: KubectlHost, c: Call): { names: string[]; namespace: string } {
+  const foreign = foreignNamespace(c, true);
+  const names = foreign === null ? host.deployments.map(d => d.name).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)) : [];
+  return { names, namespace: foreign ?? DEFAULT_NAMESPACE };
+}
+
+/** kubectl rollout restart deployment [<name> …] – je Ziel eine Zeile, ein fehlendes Ziel stoppt die übrigen nicht. Die Art
+ *  ohne Namen (`deployment`) meint wie in kubectl ALLE Deployments des Namespace (`rollout_restart.go`, Beispiel „Restart all
+ *  deployments“); gibt es keine, ist das kein Fehler (`No resources found in <ns> namespace.`). */
 function kubectlRolloutRestart(host: KubectlHost, c: Call) {
   const dn = deploymentNames(host, "rollout", c.args);
   if ("error" in dn) return dn.error;
-  if (dn.names.length === 0) return host._err("kubectl rollout restart: Welches Deployment?", "Muster: kubectl rollout restart deployment <name>");
+  if (c.args.length === 0) return host._err("kubectl rollout restart: Welches Deployment?", "Muster: kubectl rollout restart deployment <name>");
+  let names = dn.names;
+  if (dn.ohneName) {
+    const alle = allDeploymentNames(host, c);
+    if (alle.names.length === 0) return noResourcesIn(alle.namespace);
+    names = alle.names;
+  }
   const ok: string[] = [];
   const failed: string[] = [];
   let missing = false;
-  for (const name of dn.names) {
+  for (const name of names) {
     const dep = host.deployments.find(d => d.name === name);
     if (!dep) { failed.push(deploymentNotFound(name)); missing = true; continue; }
     const r = restartDeployment(host, dep);
