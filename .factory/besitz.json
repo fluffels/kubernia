@@ -55,6 +55,7 @@
     {"pfad":"scripts/tool-metriken.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/subagent-laufzeit.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/lauf-ergebnis.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"scripts/factory-kennzahlen.mjs","ring":"kern-nach-entkopplung","quelle":"ADR 0022 F14 (#1616)"},
     {"pfad":"scripts/ci-laeufe.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/brain-metrics.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/transkript.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},

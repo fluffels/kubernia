@@ -183,3 +183,15 @@ F2 ist umgesetzt. Entscheidungen:
 - **Grenze:** `scripts/board-lib.mjs` lädt die Config beim Import (AK3), auch die puren Helfer brauchen sie; ein Projekt ohne Board bräuchte ein lazy Laden (F7/F9). Der Repo-Begriff des Wächters ist ein Teilstring ohne Wortgrenze (gewollt für Zusammensetzungen), bei sehr kurzen Repo-Namen eines anderen Projekts zählt er Fehltreffer. Skills und Agenten benennen den Account und das Repo nur noch über die gh-Platzhalter `{owner}`/`{repo}` bzw. „den eigenen Account“. Die übrigen Repo-Literale in Kern-Dateien (vor allem der Repo-Name als Agentenname) räumt F3; Regeltexte in `AGENTS.md` und Docs F4/F11.
 
 Präzisiert durch #1628: Die Workflows checken das volle Repo aus und setzen die Position über `scripts/board-place.mjs` (Wiederholung, rot bei endgültigem Scheitern); Sparse-Checkout und `set_board_top` entfallen für die Inbox-Workflows.
+
+## Fortschreibung #1616 (2026-10-16): Factory-Kennzahlen (F14)
+
+F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den Bericht-Kommentar des Wochen-Status-Tickets (Definition, Lücken, Grenzen: [model-routing.md](../model-routing.md#factory-kennzahlen-1616)). Entscheidungen:
+
+- **Kostenquelle:** Standard ist das Transkript, `--langfuse` schaltet Langfuse ausdrücklich zu; ein stiller Wechsel bei fehlendem Zugang gäbe zwei nicht vergleichbare Reihen. Das weicht vom Wortlaut „Kosten je Ticket mit `--langfuse`“ in §6 ab: Der Agentenlauf hat den Secret-Key nicht, der Standardweg muss dort Zahlen liefern.
+- **Verkettung:** Unterprozesse mit `--json` statt Bibliotheks-Extraktion (Einstiegsskripte importieren einander nicht); die Verträge sichern Tests gegen die echten Erzeuger `bewertePrs` und `summarize`, ein fehlendes Vertragsfeld ergibt Exit 2.
+- **Ticket → Session** über die Claim-Zeile `gh issue edit <nr> --add-assignee` im lokalen Transkript, bis #1266 Tickets an Traces hängt; Fenster je Ticket: Claim bis Merge, Kosten wie aufgezeichnet.
+- **Nacharbeit** über die im Zeitraum fälligen Fenster `[von − 14 T, bis − 14 T]`: nur abgelaufene Fristen gehen in die Quote.
+- **Lücken statt 0:** kein Zugang, keine Session, keine Calls oder Calls ohne Preis machen die Kosten eines Tickets zur Lücke (keine Teilsumme); sie gehen weder in den Median noch in eine Summe, „n von N gemessen“ nennt die Abdeckung.
+- **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
+- **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.
