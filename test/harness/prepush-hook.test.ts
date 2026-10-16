@@ -119,7 +119,7 @@ describe.skipIf(!hatSh)("#1740 pre-push-Hook: Diffsize bei Pushes anderer Branch
   it("rotes check:diffsize bricht den Push eines Feature-Branches ab und nennt den Override", () => {
     const r = lauf(1, "refs/heads/feature/x");
     expect(r.status, r.stdout + r.stderr).toBe(1);
-    expect(r.stdout).toContain("KQ-Diffsize-Override");
+    expect(r.stdout).toContain("Diffsize-Override");
   });
   it("grünes check:diffsize lässt den Feature-Branch-Push durch", () => {
     const r = lauf(0, "refs/heads/feature/x");

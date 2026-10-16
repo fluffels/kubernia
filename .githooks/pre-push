@@ -13,7 +13,7 @@
 # package.json › scripts.verify) LOKAL, falls doch mal auf `main` gepusht wird, und bricht bei Rot ab.
 # Bei Pushes anderer Branches fährt er nur `node scripts/check-diffsize.mjs` (reines git, schnell):
 # ein zu breiter Slice scheitert sonst erst in der PR-CI. Bei Rot bricht der Push ab; bewusst breit
-# nur per Commit-Zeile `KQ-Diffsize-Override: #<nr> warum` (eigener leerer Commit), danach erneut pushen.
+# nur per Commit-Zeile `<Präfix>Diffsize-Override: #<nr> warum` (Präfix der Projekt-Config) (eigener leerer Commit), danach erneut pushen.
 # Für die schnelle Vorab-Rückmeldung VOR dem PR `npm run verify` einfach manuell fahren.
 #
 # Bewusste Grenzen:
@@ -53,8 +53,7 @@ if [ "$push_other" -eq 1 ]; then
 	if ! node scripts/check-diffsize.mjs; then
 		echo ""
 		echo "✖ pre-push: check:diffsize ist ROT — Push abgebrochen."
-		echo "  Slice verkleinern oder bewusst breit mit einem leeren Commit:"
-		echo "  git commit --allow-empty -m \"KQ-Diffsize-Override: #<nr> warum\""
+		echo "  Slice verkleinern oder bewusst breit: leerer Commit mit der Zeile <Präfix>Diffsize-Override: #<nr> warum"
 		exit 1
 	fi
 fi
