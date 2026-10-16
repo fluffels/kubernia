@@ -95,13 +95,13 @@ function anlegen(werte, io) {
   if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
   if (nach !== null) {
     // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
-    let ankerFehler;
+    let ankerText;
     try {
-      ankerFehler = io.pruefeAnker({ nach, labels: werte.label });
+      ankerText = io.pruefeAnker({ nach, labels: werte.label });
     } catch (e) {
       return aufrufFehler(`Anker #${nach} nicht prüfbar, nichts angelegt (${fehlerText(e)})`);
     }
-    if (ankerFehler) return aufrufFehler(`nichts angelegt: ${ankerFehler}`);
+    if (ankerText) return aufrufFehler(`nichts angelegt: ${ankerText}`);
   }
   let neu;
   try {

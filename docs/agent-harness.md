@@ -188,6 +188,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Import-Hülle (#1613):** jeder lokale Import (Importformen aus `hook-importe.ts` plus `.json`) einer Ganz-Datei-Code-Einheit zeigt auf eine Ganz-Datei-Einheit oder auf `.factory/projekt.json`. Ausnahmen in `KERN_HUELLE_AUSNAHMEN` nur für Importeure im Ring `kern-nach-entkopplung`, mit `#<nr>` oder `ADR 0022 F<n>` im Grund; die Liste darf nur schrumpfen.
 - **Konflikte:** Wer auf einem Feature-Branch `origin/main` einmergt und in Kern-Dateien Konflikte auflöst, schreibt die Auflösung ohne Projektliterale, weil der Wächter auf `main` sofort greift.
 - **Ring-Regel (#1663, ADR 0029):** `RING_IMPORTE` in `scripts/besitz-lib.mjs` ist die SSOT, welche Ringe welche importieren dürfen (`kern` nur `kern`, `kern-nach-entkopplung` beide Kern-Ringe, `oberflaeche` alle drei; kein Kern-Ring importiert `oberflaeche`); ein Importeur mit unbekanntem Ring importiert nichts. Die Literalzählung gilt auch für den Ring `oberflaeche`.
+- **Ring ohne Grund (#1740):** eine Ganz-Datei-Code-Einheit im Ring `kern-nach-entkopplung` ohne Eintrag in der Literal-Baseline, die lokal nur Besitz im Ring `kern` (oder die Projekt-Config) importiert, ist rot (Ring auf `kern` setzen); Block- und Schlüssel-Einheiten zählen nicht, ebenso Importe ohne Besitz-Ziel.
 - **WARUM:** misst, wie weit der Kern von Kubernia gelöst ist (ADR 0022 F1, F7, F9); Format und Regeln: [ADR 0022, Fortschreibung #1610](adr/0022-dark-factory-kern-und-verteilung.md).
 
 ### Drift-Gate (`npm run check:factorydrift`, #1613)

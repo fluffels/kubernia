@@ -85,6 +85,8 @@ describe("klassifiziere", () => {
     expect(a.netzCode("ETIMEDOUT")).toBe("ETIMEDOUT");
     expect(a.netzCode("write EPIPE")).toBe("EPIPE");
     expect(a.netzCode("WebSocket")).toBe("");
+    expect(a.netzCode("SocketError")).toBe("");
+    expect(a.klassifiziere([dbg("Tool 'x' failed after 0s: socketpath missing")])).toEqual([]);
   });
   test("buendeln trennt Abbrüche nach Code, meldung nennt ihn", () => {
     const mk = (code: string) => ({ klasse: "abbruch", zeit: "2026-10-15T10:00:00Z", sessionId: "a", text: "x", server: "lf", suffix: "", code });
