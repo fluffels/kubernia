@@ -18,7 +18,7 @@
  */
 import type { ClusterState, Deployment, Broken } from "./state";
 import { runPipeline } from "./glab";
-import { flag, notSimulated, dispatchSub, IM_HANDLER, type Dispatch, type Call, type SubEntry } from "./cliargs";
+import { flag, notSimulated, dispatchSub, IM_HANDLER, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die git-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -53,10 +53,10 @@ const PUSH_HINTS: Readonly<Record<string, string>> = {
 /** Alias → Eintrag (Handler + Flag-Tabelle; alle NACH der `git init`-Wache, also im initialisierten Repo, `init`
  *  selbst läuft davor). Ein neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion unten – der Dispatcher
  *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
-const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", table: {
+export const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", table: {
   init: { run: gitInit, maxArgs: 0 },
   status: { run: gitStatus, maxArgs: 0 },
-  add: { run: gitAdd, maxArgs: 1, flags: [flag(false, "-A", "--all")] },
+  add: { run: gitAdd, maxArgs: OFFENE_LISTE, flags: [flag(false, "-A", "--all")] },
   commit: { run: gitCommit, maxArgs: IM_HANDLER, flags: [flag(true, "-m", "--message")], hints: COMMIT_HINTS },
   log: { run: gitLog, maxArgs: 0 },
   branch: { run: gitBranch, maxArgs: 1 },
@@ -108,34 +108,52 @@ function gitStatus(host: GitHost): string {
   return s.trimEnd();
 }
 
-/** `git add` auf die Konfliktdatei: nur ohne Marker gilt der Konflikt als gelöst. */
+/** Stecken in der Konfliktdatei noch Marker? Dann die fertige Fehlerausgabe, sonst `null` (nur ohne Marker gilt der Konflikt als lösbar). */
+function conflictMarkerError(host: GitHost): string | null {
+  const file = host.git.conflict!.file;
+  if (!host.files[file] || !/^(<{7}|={7}|>{7})/m.test(host.files[file])) return null;
+  return host._err("git add: In '" + file + "' stecken noch Konfliktmarker (<<<<<<<, =======, >>>>>>>).",
+    "Wähle erst eine Seite: 'git checkout --ours " + file + "' oder '--theirs " + file + "'.");
+}
+
+/** Die Konfliktdatei vormerken und den Konflikt als gelöst markieren (die Marker-Prüfung ist vorher gelaufen). */
 function gitResolveConflict(host: GitHost): string {
   const g = host.git;
   const file = g.conflict!.file;
-  if (host.files[file] && /^(<{7}|={7}|>{7})/m.test(host.files[file])) {
-    return host._err("git add: In '" + file + "' stecken noch Konfliktmarker (<<<<<<<, =======, >>>>>>>).",
-      "Wähle erst eine Seite: 'git checkout --ours " + file + "' oder '--theirs " + file + "'.");
-  }
   if (!g.staged.includes(file)) g.staged.push(file);
   g.conflict = null;
   return "Konflikt in '" + file + "' als gelöst markiert (vorgemerkt). ▸ Schließe den Merge jetzt mit 'git commit --message \"…\"' ab.";
 }
 
+/** Die Pfade von `git add`: benannte Pfade, sonst mit `-A`/`--all` der ganze Ordner (`.`, der Sim-Arbeitsordner ist flach). */
+const addPfade = (c: Call): readonly string[] => (c.args.length ? c.args : c.has("-A", "--all") ? ["."] : []);
+
+/** Die Dateien, die `git add` wirklich vormerkt: `.` ist alles Unversionierte, ein benannter Pfad nur, wenn er neu oder
+ *  geändert ist (committet und unverändert heißt nichts); jede Datei einmal, die Konfliktdatei löst `gitResolveConflict`. */
+function addTargets(host: GitHost, pfade: readonly string[]): string[] {
+  const g = host.git;
+  const untracked = gitUntracked(host);
+  const files = pfade.flatMap(p => p === "." ? untracked : g.committed.includes(p) && !untracked.includes(p) ? [] : [p]);
+  return [...new Set(files)].filter(f => f !== g.conflict?.file);
+}
+
 function gitAdd(host: GitHost, c: Call): string {
   const g = host.git;
-  const arg = c.has("-A", "--all") ? "." : c.args[0]; // -A/--all gilt wie `.` (der Sim-Arbeitsordner ist flach)
-  if (!arg) return host._err("git add: Welche Datei?", "z.B. 'git add seekarte.md' – oder 'git add .' für alles.");
+  const pfade = addPfade(c);
+  if (pfade.length === 0) return host._err("git add: Welche Datei?", "z.B. 'git add seekarte.md' – oder 'git add .' für alles.");
+  // Erst alles prüfen, dann vormerken (wie `builtin/add.c`): ein fehlender Pfad merkt nichts vor.
+  const fehlt = pfade.find(p => p !== "." && p !== g.conflict?.file && !Object.hasOwn(host.files, p));
+  if (fehlt !== undefined) return host._err("git add: Die Datei '" + fehlt + "' gibt es hier nicht.", "Tippe 'ls' für die Dateien in diesem Ordner.");
   // Mitten im Konflikt markiert 'git add <konfliktdatei>' (oder 'git add .') ihn als gelöst.
-  if (g.conflict && (arg === "." || arg === g.conflict.file)) return gitResolveConflict(host);
-  let toAdd: string[];
-  if (arg === ".") {
-    toAdd = gitUntracked(host);
-  } else {
-    if (!host.files[arg]) return host._err("git add: Die Datei '" + arg + "' gibt es hier nicht.", "Tippe 'ls' für die Dateien in diesem Ordner.");
-    toAdd = g.committed.includes(arg) && !gitUntracked(host).includes(arg) ? [] : [arg];
-  }
+  const loest = !!g.conflict && pfade.some(p => p === "." || p === g.conflict!.file);
+  const marker = loest ? conflictMarkerError(host) : null;
+  if (marker) return marker;
+  const toAdd = addTargets(host, pfade);
+  const lines = loest ? [gitResolveConflict(host)] : [];
   for (const f of toAdd) if (!g.staged.includes(f)) g.staged.push(f);
-  return toAdd.length ? "Vorgemerkt: " + toAdd.join(", ") + " (bereit zum Commit)." : "Nichts Neues zum Vormerken.";
+  if (toAdd.length) lines.push("Vorgemerkt: " + toAdd.join(", ") + " (bereit zum Commit).");
+  else if (!loest) lines.push("Nichts Neues zum Vormerken.");
+  return lines.join("\n");
 }
 
 function gitCommit(host: GitHost, c: Call): string {
@@ -188,6 +206,10 @@ function gitCheckoutSide(host: GitHost, c: Call): string {
 function gitCheckout(host: GitHost, c: Call): string {
   const g = host.git;
   if (c.has("--ours") || c.has("--theirs")) return gitCheckoutSide(host, c);
+  // Der Pfad hinter `--` ist eine Datei, kein Branch: ehrlich ablehnen statt ihn als Branch zu lesen (`main --` wechselt weiter).
+  if (c.dashAt !== null && c.args.length > c.dashAt) {
+    return notSimulated(host, "'git checkout -- " + c.args[c.dashAt] + "' (Änderungen an einer Datei verwerfen).", ["git checkout <branch>", "git checkout -b <name>", "git checkout --ours|--theirs <datei>"]);
+  }
   const create = c.value("-b") !== null;
   const name = create ? c.value("-b") : c.args[0];
   if (create && c.args.length) return notSimulated(host, "einen Startpunkt bei 'git checkout -b' (" + c.args[0] + ").", ["git checkout -b <name>"], "Wechsle erst auf den Ausgangs-Branch, dann leg den neuen an.");

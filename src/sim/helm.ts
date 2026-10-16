@@ -416,7 +416,7 @@ const HELM_REPO: Dispatch<SubEntry<HelmHandler>> = {
   real: ["index", "remove"],
 };
 
-const HELM: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm", table: {
+export const HELM: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm", table: {
   repo: { group: HELM_REPO },
   search: { group: HELM_SEARCH },
   create: { run: helmCreate, maxArgs: 1 },

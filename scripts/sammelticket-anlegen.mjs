@@ -27,6 +27,7 @@ import {
   REPO,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
+  boardFuerRolle,
   ergaenzeFehlende,
   ghJson,
   kandidatenSammelticket,
@@ -41,6 +42,9 @@ import {
   setPosition,
   todoItem,
 } from "./board-lib.mjs";
+
+// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
+const PRODUKT_BOARD = boardFuerRolle("produkt");
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
 const PRUEF_VERSUCHE = 5;
@@ -179,11 +183,11 @@ export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false 
 async function setzeUndPruefe(nr, position, dry) {
   let neuGesetzt = 0;
   for (let versuch = 1; versuch <= PRUEF_VERSUCHE; versuch++) {
-    const schritt = pruefSchritt({ items: loadItems(), nr, position, neuGesetzt, dry });
+    const schritt = pruefSchritt({ items: loadItems(PRODUKT_BOARD), nr, position, neuGesetzt, dry });
     if (schritt.art === "ok" || schritt.art === "falsch") return schritt.art;
     if (schritt.art === "setze") {
       console.log(`Position stimmt noch nicht (Rang ${schritt.k.vonRang}, Ziel ${schritt.k.nachRang}): setze neu (${neuGesetzt + 1}/${NEU_SETZEN_MAX}).`);
-      setPosition(schritt.k.id, schritt.k.afterId);
+      setPosition(PRODUKT_BOARD, schritt.k.id, schritt.k.afterId);
       neuGesetzt++;
     }
     await sleep(PRUEF_PAUSE_MS);
@@ -217,18 +221,18 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`Angelegt: #${nr}`);
     await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
     if (schliesseWennDublette(nr, titel, vorgaenger)) return;
-    const itemId = addToBoardTodo(neu.node_id);
+    const itemId = addToBoardTodo(PRODUKT_BOARD, neu.node_id);
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(PRODUKT_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
-      if (k) setPosition(k.id, k.afterId);
+      if (k) setPosition(PRODUKT_BOARD, k.id, k.afterId);
     } else if (args.top) {
-      const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(PRODUKT_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
       // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
       // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
       const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
-      if (korrektur) setPosition(korrektur.id, korrektur.afterId);
-      for (const { item, afterId } of plan.steps) setPosition(item.id, afterId);
+      if (korrektur) setPosition(PRODUKT_BOARD, korrektur.id, korrektur.afterId);
+      for (const { item, afterId } of plan.steps) setPosition(PRODUKT_BOARD, item.id, afterId);
     }
   }
   if (args.art !== "harness") return;

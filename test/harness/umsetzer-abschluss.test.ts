@@ -113,6 +113,7 @@ describe("Umsetzer-Abschluss (#1308)", () => {
 const bericht = (ergebnis: string, pr = "https://github.com/x/y/pull/1330") => `ERGEBNIS: ${ergebnis}
 TICKET: #1
 PR: ${pr}
+BEFUNDE: keine
 `;
 const offenMitAuto = () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, labels: [] });
 const stuck = { name: "status:festgefahren" };
@@ -203,23 +204,71 @@ describe("R0: Format des Handbacks vor der Zustellung (#1342)", () => {
   const d = { prStatus: () => ({ state: "MERGED", autoMergeRequest: null }) };
 
   test("verweigert: Zusatz (echter #1334-Text), fehlende ERGEBNIS-Zeile, ungültiges Token, fehlende PR-Zeile", () => {
-    const g = blockade(vorher("ERGEBNIS: abgebrochen (Zwischenstand, kein Abschluss)\nTICKET: #1\nPR: -"), d);
+    const g = blockade(vorher("ERGEBNIS: abgebrochen (Zwischenstand, kein Abschluss)\nTICKET: #1\nPR: -\nBEFUNDE: keine"), d);
     assert.match(g ?? "", /Zusatz hinter dem Token/);
     assert.match(g ?? "", /Laufen deine Lenses noch, beende den Turn mit einer kurzen Statuszeile ohne SubagentHandback/);
     assert.match(blockade(vorher("Fertig, alles gemergt."), d) ?? "", /kein gültiges ERGEBNIS-Token/);
-    assert.match(blockade(vorher("ERGEBNIS: fertig\nPR: -"), d) ?? "", /kein gültiges ERGEBNIS-Token/);
-    assert.match(blockade(vorher("ERGEBNIS: abgebrochen\nTICKET: #1"), d) ?? "", /PR:-Zeile fehlt/);
+    assert.match(blockade(vorher("ERGEBNIS: fertig\nPR: -\nBEFUNDE: keine"), d) ?? "", /kein gültiges ERGEBNIS-Token/);
+    assert.match(blockade(vorher("ERGEBNIS: abgebrochen\nTICKET: #1\nBEFUNDE: keine"), d) ?? "", /PR:-Zeile fehlt/);
     assert.match(blockade(vorher(null), d) ?? "", /kein gültiges/);
   });
 
   test("durch: exaktes Token (auch groß geschrieben) mit PR-Zeile; nicht bei SubagentStop", () => {
-    assert.equal(blockade(vorher("ERGEBNIS: abgebrochen\nPR: -"), d), null);
-    assert.equal(blockade(vorher("ERGEBNIS: GEMERGT\nPR: https://github.com/x/y/pull/5"), d), null);
+    assert.equal(blockade(vorher("ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine"), d), null);
+    assert.equal(blockade(vorher("ERGEBNIS: GEMERGT\nPR: https://github.com/x/y/pull/5\nBEFUNDE: keine"), d), null);
     assert.equal(blockade(eingabe("ERGEBNIS: abgebrochen (Zwischenstand)\nPR: -"), d), null);
   });
 
   test("R1 greift auch vor der Zustellung", () => {
     assert.match(blockade(vorher(bericht("gemergt")), { prStatus: offenMitAuto }) ?? "", /noch offen und hat Auto-Merge/);
+  });
+
+  describe("BEFUNDE-Zeile (#1723)", () => {
+    const mit = (befunde: string | null) => ["ERGEBNIS: gemergt", "TICKET: #1", "PR: https://github.com/x/y/pull/5", ...(befunde === null ? [] : [befunde])].join("\n");
+
+    test("verweigert: BEFUNDE-Zeile fehlt (Zwischen-Hand-off), Grund nennt das Format", () => {
+      const g = blockade(vorher(mit(null)), d);
+      assert.match(g ?? "", /BEFUNDE:-Zeile fehlt/);
+      assert.match(g ?? "", /BEFUNDE: \(je Befund/);
+    });
+
+    test("verweigert: Angebot oder Frage statt eingetragener Befunde, auch in einer Folgezeile", () => {
+      for (const w of [
+        "BEFUNDE: Messauffälligkeit, soll ich das eintragen?",
+        "BEFUNDE: X offen, sag Bescheid",
+        "BEFUNDE: sag mir Bescheid, wenn es rein soll",
+        "BEFUNDE: wenn du willst trage ich es ein",
+        "BEFUNDE: X offen, wenn du möchtest, trage ich es ein",
+        "BEFUNDE: soll ich das eintragen.",
+        "BEFUNDE: Soll ich das eintragen.",
+        "BEFUNDE: Wenn du willst, trage ich es ein.",
+        "BEFUNDE:\n  - Zeile A → #1\n  - Zeile B, tragen wir das ein?",
+      ])
+        assert.match(blockade(vorher(mit(w)), d) ?? "", /BEFUNDE bietet an statt einzutragen/, w);
+    });
+
+    test("durch: keine, -, ein Befund mit Ziel, mehrzeilig eingerückt; SubagentStop prüft die Zeile nicht", () => {
+      for (const w of ["BEFUNDE: keine", "BEFUNDE: -", "BEFUNDE: Messwert X → #1700", "BEFUNDE:\n  - A → #1\n  - B → #2\nLERNKANDIDATEN: -"])
+        assert.equal(blockade(vorher(mit(w)), d), null, w);
+      assert.equal(blockade(eingabe(mit(null)), d), null);
+    });
+
+    test("verweigert: leere BEFUNDE-Zeile (auch mit leeren Folgezeilen)", () => {
+      for (const w of ["BEFUNDE:", "BEFUNDE:   ", "BEFUNDE:\n\nLERNKANDIDATEN: -"]) assert.match(blockade(vorher(mit(w)), d) ?? "", /BEFUNDE: ist leer/, w);
+    });
+
+    test("durch: ? in Code oder URL ist keine Frage (nur ? am Wortende vor Leerraum oder Zeilenende)", () => {
+      for (const w of ["BEFUNDE: `a?.b` ohne Null-Test → #1700", "BEFUNDE: Trace https://x/y?observation=1 auffällig → #1700"]) assert.equal(blockade(vorher(mit(w)), d), null, w);
+      assert.match(blockade(vorher(mit("BEFUNDE: Warum flakt X? → #1700")), d) ?? "", /bietet an/);
+    });
+
+    test("eine Frage in der Zeile nach BEFUNDE (LERNKANDIDATEN) zählt nicht dazu", () => {
+      assert.equal(blockade(vorher(mit("BEFUNDE: keine\nLERNKANDIDATEN: warum eigentlich?")), d), null);
+    });
+
+    test("FORMAT nennt BEFUNDE", () => {
+      assert.match(blockade(vorher("ERGEBNIS: fertig\nPR: -"), d) ?? "", /BEFUNDE: \(je Befund/);
+    });
   });
 });
 
@@ -258,7 +307,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
 
 describe("uebergabe: Phasen-Schnitt (#1592)", () => {
   const uebergabe = (schnitt: string | null, pr = "-", block = true) =>
-    ["ERGEBNIS: uebergabe", "TICKET: #1", `PR: ${pr}`, ...(schnitt === null ? [] : [`SCHNITT: ${schnitt}`]), ...(block ? ["UEBERGABE:", "  Worktree: /x", "  HEAD: abc"] : [])].join(String.fromCharCode(10));
+    ["ERGEBNIS: uebergabe", "TICKET: #1", `PR: ${pr}`, "BEFUNDE: keine", ...(schnitt === null ? [] : [`SCHNITT: ${schnitt}`]), ...(block ? ["UEBERGABE:", "  Worktree: /x", "  HEAD: abc"] : [])].join(String.fromCharCode(10));
   const PR = "https://github.com/x/y/pull/9";
   const ohneAuto = () => ({ state: "OPEN", autoMergeRequest: null });
   const nichtAufrufen = () => {

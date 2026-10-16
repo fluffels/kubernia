@@ -14,8 +14,8 @@ type Plan = { steps: { item: B; afterId: string | null }[]; klemmung: { geklemmt
 type Lib = {
   notfallTitelFehler: (items: B[], numbers: number[], art: string) => string | null;
   aliasAbfrage: (nummern: number[], repo?: string) => { nummern: number[]; query: string }[];
-  itemsAusAliasAntwort: (antwort: unknown, nummern: number[]) => (B | null)[];
-  PROJECT_ID: string;
+  itemsAusAliasAntwort: (board: unknown, antwort: unknown, nummern: number[]) => (B | null)[];
+  boardFuerRolle: (rolle: string) => { projectId: string };
   sammelticketPosition: (text: string) => number;
   verschiebe: (items: B[], id: string, afterId: string | null) => B[];
   sammelticketKorrektur: (items: B[], n: number) => Korrektur | null;
@@ -85,24 +85,25 @@ describe("Gebündelter GraphQL-Fallback (#1390 Z6d)", () => {
     for (const bad of ['a/b"){x', "kein-slash", "a/b/c", ""]) expect(() => L.aliasAbfrage([1], bad), bad).toThrow(/Repo/);
   });
 
+  const PRODUKT = L.boardFuerRolle("produkt");
   const issue = (number: number, nodes: unknown[]) => ({ number, title: `T${number}`, state: "OPEN", assignees: { nodes: [{ login: "fluffels" }] }, projectItems: { nodes } });
 
   test("itemsAusAliasAntwort: in Reihenfolge der Nummern; unbekanntes Issue, fremdes Projekt und leere Items → null", () => {
     const antwort = {
       data: {
         repository: {
-          i0: issue(5, [{ id: "PVTI_5", project: { id: L.PROJECT_ID } }]),
+          i0: issue(5, [{ id: "PVTI_5", project: { id: PRODUKT.projectId } }]),
           i1: null, // unbekanntes Issue (NOT_FOUND)
           i2: issue(7, [{ id: "PVTI_x", project: { id: "PVT_fremd" } }]),
           i3: issue(8, []),
         },
       },
     };
-    expect(L.itemsAusAliasAntwort(antwort, [5, 6, 7, 8])).toEqual([{ id: "PVTI_5", number: 5, status: "", title: "T5", assignees: ["fluffels"], state: "open" }, null, null, null]);
+    expect(L.itemsAusAliasAntwort(PRODUKT, antwort, [5, 6, 7, 8])).toEqual([{ id: "PVTI_5", number: 5, status: "", title: "T5", assignees: ["fluffels"], state: "open" }, null, null, null]);
   });
 
   test("kaputte Antwortform wirft, statt Nummern still als fehlend zu melden", () => {
-    for (const bad of [null, {}, { data: null }, { data: { repository: null } }, { data: { repository: "x" } }]) expect(() => L.itemsAusAliasAntwort(bad, [1]), JSON.stringify(bad)).toThrow(/Antwortform/);
+    for (const bad of [null, {}, { data: null }, { data: { repository: null } }, { data: { repository: "x" } }]) expect(() => L.itemsAusAliasAntwort(PRODUKT, bad, [1]), JSON.stringify(bad)).toThrow(/Antwortform/);
   });
 });
 

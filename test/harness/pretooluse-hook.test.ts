@@ -224,16 +224,16 @@ describe("SubagentHandback: Abschluss-Wächter des Umsetzers (#1342)", () => {
   const offen = { prStatus: () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, labels: [] }) };
 
   test("ein Handback mit Zusatz wird verweigert, ein exakter Bericht und fremde Agenten gehen durch", () => {
-    const grund = hook.dispatch(handback("ERGEBNIS: abgebrochen (Zwischenstand)\nPR: -"), WURZEL, undefined, undefined, offen);
+    const grund = hook.dispatch(handback("ERGEBNIS: abgebrochen (Zwischenstand)\nPR: -\nBEFUNDE: keine"), WURZEL, undefined, undefined, offen);
     assert.equal(grund?.hookSpecificOutput.permissionDecision, "deny");
     assert.match(grund?.hookSpecificOutput.permissionDecisionReason ?? "", /Zusatz/);
-    assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen\nPR: -"), WURZEL, undefined, undefined, offen), null);
+    assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine"), WURZEL, undefined, undefined, offen), null);
     assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen (x)\nPR: -", "kubernia-lens"), WURZEL, undefined, undefined, offen), null);
     assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen (x)\nPR: -", ""), WURZEL, undefined, undefined, offen), null);
   });
 
   test("festgefahren bei offenem PR ohne Label wird verweigert; ein werfender gh gibt frei", () => {
-    const nachricht = "ERGEBNIS: festgefahren\nPR: https://github.com/x/y/pull/9";
+    const nachricht = "ERGEBNIS: festgefahren\nPR: https://github.com/x/y/pull/9\nBEFUNDE: keine";
     assert.equal(hook.dispatch(handback(nachricht), WURZEL, undefined, undefined, offen)?.hookSpecificOutput.permissionDecision, "deny");
     const wirft = { prStatus: () => { throw new Error("kein gh"); } };
     assert.equal(hook.dispatch(handback(nachricht), WURZEL, undefined, undefined, wirft), null);
