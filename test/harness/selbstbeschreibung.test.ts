@@ -59,6 +59,7 @@ describe("offeneQuelleBehauptungen", () => {
     ["Das ist nicht alles. Der Harness ist Open Source.", 1],
     ["Nicht nur schnell, sondern auch Open Source", 1],
     ["Ist der Harness Open Source?", 1],
+    ["Das ist nicht so. Open Source.", 1],
   ])("Treffer: %j", (text, anzahl) => {
     assert.equal(offeneQuelleBehauptungen(text).length, anzahl);
   });
@@ -73,6 +74,12 @@ describe("offeneQuelleBehauptungen", () => {
     "Es wird KEINE Open-Source-\nLizenz gewährt.",
     "Das ist kein Open-Source-Projekt.",
     "It is not open source.",
+    "Das ist eine nicht-quelloffene Lösung.",
+    "Nicht-Open-Source-Software.",
+    "It is no open source.",
+    "It is non-open-source.",
+    "Wir gewähren keinen Open-Source-Code.",
+    "Er ist _nicht_ Open Source.",
     "",
   ])("erlaubt: %j", (text) => {
     assert.deepEqual(offeneQuelleBehauptungen(text), []);
