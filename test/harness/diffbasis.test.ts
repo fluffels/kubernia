@@ -71,7 +71,7 @@ const read = (rel: string) => readFileSync(ROOT + rel, "utf8");
 
 /** Ein git-diff-Aufruf samt globaler Optionen und Argumenten; Backtick, Zeilenende und
  *  Shell-Trenner beenden ihn. */
-const AUFRUF = /\bgit(?:\s+(?:-C\s+\S+|--?[\w-]+))*\s+diff\b[^\n`;&|]*/g;
+const AUFRUF = /\bgit(?:\s+(?:-C\s+[^\s-]\S*|-[\w-]+))*\s+diff\b[^\n`;&|]*/g;
 /** Kanonische Form: Drei-Punkt gegen die frisch geholte Remote-Ref. */
 const KANONISCH = /\borigin\/main\.\.\./;
 /** `main` als bare Revision – `origin/main`, `feature/main-x`, `main.ts`, `main/x` zählen NICHT;
@@ -121,6 +121,18 @@ const SCAN = [
     .map((n) => `docs/${n}`),
   "AGENTS.md",
 ].filter((rel) => existsSync(ROOT + rel));
+
+describe("AUFRUF-Regex ohne katastrophales Backtracking (#1703)", () => {
+  test("pathologische Option-Folge endet sofort (die alte Regex brauchte hier Minuten)", () => {
+    const start = performance.now();
+    assert.deepEqual(findeZweiPunktTreffer("git" + " -C --".repeat(26) + " x"), []);
+    assert.ok(performance.now() - start < 1000);
+  });
+  test("Treffer bleiben trotz -C-Argument erhalten", () => {
+    assert.equal(findeZweiPunktTreffer("git -C pfad --no-pager diff main").length, 1);
+    assert.equal(findeZweiPunktTreffer("git -C --x diff main").length, 1);
+  });
+});
 
 describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
   test.each([

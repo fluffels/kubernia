@@ -54,7 +54,8 @@ export function mermaidDatei(distDir, urlPfad) {
   }
   const basis = resolve(distDir);
   const ziel = resolve(basis, normalize(rel));
-  if (ziel !== basis && !ziel.startsWith(basis + sep)) return null;
+  // Containment als eigenständige Prüfung (ziel === basis ist ein Ordner und fällt unten an isFile()).
+  if (!ziel.startsWith(basis + sep)) return null;
   return existsSync(ziel) && statSync(ziel).isFile() ? ziel : null;
 }
 

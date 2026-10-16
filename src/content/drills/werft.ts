@@ -1,12 +1,12 @@
 ﻿import type { Sim } from "../../sim";
-import { ensureDockerfile, ensureBarePodAdmission, freeWerftName, renamedManifest } from "./shared";
+import { ensureDockerfile, ensureBarePodAdmission, freeWerftName, renamedManifest, escapeRegExp } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const WERFT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "werft-build": sim => {
     ensureDockerfile(sim);
     const name = freeWerftName(sim);
-    return { text: "Bau aus dem <code>Dockerfile</code> dein <b>eigenes</b> Image <code>" + name + ":1.0</code> (Punkt am Ende!).", accept: [new RegExp("^docker\\s+build\\s+(?:-t|--tag)\\s+" + name + ":1\\.0\\s+\\.$")], solution: "docker build --tag " + name + ":1.0 .", hint: "Muster: docker build --tag &lt;name&gt;:&lt;tag&gt; . (die Kurzform -t verdienst du dir durch Nutzung)", why: "Anders als <code>docker pull</code> (ein fremdes Image holen) schichtet <code>docker build</code> aus deinem Dockerfile dein eigenes Image. Der Punkt am Ende ist der Build-Kontext (der aktuelle Ordner mit dem Bauplan), <code>--tag</code> vergibt den Namen &lt;name&gt;:&lt;tag&gt;. Muster: docker build --tag &lt;name&gt;:&lt;tag&gt; ." };
+    return { text: "Bau aus dem <code>Dockerfile</code> dein <b>eigenes</b> Image <code>" + name + ":1.0</code> (Punkt am Ende!).", accept: [new RegExp("^docker\\s+build\\s+(?:-t|--tag)\\s+" + escapeRegExp(name) + ":1\\.0\\s+\\.$")], solution: "docker build --tag " + name + ":1.0 .", hint: "Muster: docker build --tag &lt;name&gt;:&lt;tag&gt; . (die Kurzform -t verdienst du dir durch Nutzung)", why: "Anders als <code>docker pull</code> (ein fremdes Image holen) schichtet <code>docker build</code> aus deinem Dockerfile dein eigenes Image. Der Punkt am Ende ist der Build-Kontext (der aktuelle Ordner mit dem Bauplan), <code>--tag</code> vergibt den Namen &lt;name&gt;:&lt;tag&gt;. Muster: docker build --tag &lt;name&gt;:&lt;tag&gt; ." };
   },
   "werft-deploy-imagepull": sim => {
     ensureBarePodAdmission(sim);
@@ -24,7 +24,7 @@ export const WERFT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
       dockerImages: [name + ":1.0"],
       deployments: [{ name, image: name + ":1.0", replicas: 1, containerPort: 8080, broken: { type: "imagepull", badImage: name + ":1.0", needsBuild: true } }],
     });
-    return { text: "Dein Image <code>" + name + ":1.0</code> ist gebaut, aber der Pod von <code>" + name + "</code> hängt noch im alten <b>ImagePullBackOff</b>. Zieh den Cluster neu: <code>kubectl rollout restart deployment " + name + "</code>.", accept: [new RegExp("^kubectl\\s+rollout\\s+restart\\s+deployment[\\/\\s]" + name + "$")], solution: "kubectl rollout restart deployment " + name, hint: "Muster: kubectl rollout restart deployment &lt;name&gt;", why: "Nach dem <code>docker build</code> liegt dein Image lokal, aber der Pod steckt noch im Fehlversuch. <code>rollout restart</code> ersetzt die Pods rollierend – die frischen finden das gebaute Image und laufen. Muster: kubectl rollout restart deployment &lt;name&gt;." };
+    return { text: "Dein Image <code>" + name + ":1.0</code> ist gebaut, aber der Pod von <code>" + name + "</code> hängt noch im alten <b>ImagePullBackOff</b>. Zieh den Cluster neu: <code>kubectl rollout restart deployment " + name + "</code>.", accept: [new RegExp("^kubectl\\s+rollout\\s+restart\\s+deployment[\\/\\s]" + escapeRegExp(name) + "$")], solution: "kubectl rollout restart deployment " + name, hint: "Muster: kubectl rollout restart deployment &lt;name&gt;", why: "Nach dem <code>docker build</code> liegt dein Image lokal, aber der Pod steckt noch im Fehlversuch. <code>rollout restart</code> ersetzt die Pods rollierend – die frischen finden das gebaute Image und laufen. Muster: kubectl rollout restart deployment &lt;name&gt;." };
   },
   "werft-expose": sim => {
     const name = freeWerftName(sim);
@@ -44,6 +44,6 @@ export const WERFT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
       deployments: [{ name, image: name + ":1.0", replicas: 1, containerPort: 8080 }],
       services: [{ name, type: "ClusterIP", clusterIP: "10.96.0.50", port: 80, targetPort: 8080, created: 0 }],
     });
-    return { text: "Mach den Klopftest an deinem eigenen Dienst: <code>curl http://" + name + "</code>. Läuft alles, kommt eine <b>200 OK</b> zurück.", accept: [new RegExp("^curl\\s+(?:http:\\/\\/)?" + name + "(?::80)?\\/?$")], solution: "curl http://" + name, hint: "curl http://&lt;service-name&gt; – der Name ist „" + name + "“.", why: "<code>curl</code> ist der Klopftest: er fragt einen Service ab und zeigt, ob wirklich etwas antwortet. Über Port 80 leitet der Service auf deinen Container (8080) – kommt <b>200 OK</b> zurück, schwimmt dein Dienst. Muster: curl http://&lt;service-name&gt;." };
+    return { text: "Mach den Klopftest an deinem eigenen Dienst: <code>curl http://" + name + "</code>. Läuft alles, kommt eine <b>200 OK</b> zurück.", accept: [new RegExp("^curl\\s+(?:http:\\/\\/)?" + escapeRegExp(name) + "(?::80)?\\/?$")], solution: "curl http://" + name, hint: "curl http://&lt;service-name&gt; – der Name ist „" + name + "“.", why: "<code>curl</code> ist der Klopftest: er fragt einen Service ab und zeigt, ob wirklich etwas antwortet. Über Port 80 leitet der Service auf deinen Container (8080) – kommt <b>200 OK</b> zurück, schwimmt dein Dienst. Muster: curl http://&lt;service-name&gt;." };
   },
 };
