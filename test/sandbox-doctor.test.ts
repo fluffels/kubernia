@@ -404,18 +404,20 @@ describe("Integration mit dem echten Projekt", () => {
 });
 
 describe("CLI", () => {
+  // Bei Rot zeigt die Assertion Ausgabe und Spawn-Fehler (ein Flake unter Last ist sonst nicht diagnostizierbar).
+  const diag = (r: { stdout: string; stderr: string; error?: Error; signal: string | null }) => `stdout=${r.stdout} stderr=${r.stderr} error=${String(r.error)} signal=${String(r.signal)}`;
   const lauf = (args: string[], env: Record<string, string> = {}) =>
     spawnSync(process.execPath, [SKRIPT, ...args], { encoding: "utf8", env: { ...process.env, LANGFUSE_BASE_URL: "", ...env } });
   test("--vorlage druckt gültiges JSON mit failIfUnavailable und ohne Secret-Werte", () => {
     const r = lauf(["--vorlage"], { LANGFUSE_BASE_URL: "https://lf.example", GH_TOKEN: "ghp_cli_geheim" });
-    expect(r.status).toBe(0);
+    expect(r.status, diag(r)).toBe(0);
     const json = JSON.parse(r.stdout) as Settings;
     expect(json.sandbox?.failIfUnavailable).toBe(true);
     expect(r.stdout).not.toContain("ghp_cli_geheim");
   });
   test("--check endet immer mit Exit 0 (berichtend) und druckt Statuszeilen", () => {
     const r = lauf(["--check"], { CLAUDE_CONFIG_DIR: fileURLToPath(new URL("./nicht-vorhanden", import.meta.url)) });
-    expect(r.status).toBe(0);
+    expect(r.status, diag(r)).toBe(0);
     expect(r.stdout).toMatch(/^(OK|FEHLT|HINWEIS)\b/m);
   });
   test("--check meldet kaputtes User-Settings-JSON als FEHLT und endet mit Exit 0", () => {
@@ -423,7 +425,7 @@ describe("CLI", () => {
     try {
       writeFileSync(join(dir, "settings.json"), "{");
       const r = lauf(["--check"], { CLAUDE_CONFIG_DIR: dir });
-      expect(r.status).toBe(0);
+      expect(r.status, diag(r)).toBe(0);
       expect(r.stdout).toMatch(/^FEHLT User-Settings: kein gültiges JSON$/m);
     } finally {
       rmSync(dir, { recursive: true, force: true });
