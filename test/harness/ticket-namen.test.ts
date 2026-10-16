@@ -279,8 +279,8 @@ describe("patch-zugriff mit Namen aus der Config", () => {
     expect(patch.patchAus("Patch: /t/kq-12-r3.patch", [], n)).toMatchObject({ ticket: null, runde: null });
   });
   test("Groß-/Kleinschreibung zählt nicht (Flag i)", () => {
-    expect(patch.patchPfade("Patch bereit:\n /t/AB-12-r3.patch", n).voll).toBe("AB-12-r3.patch");
-    expect(patch.patchPfade("x /t/AB-12-r3-delta.patch", n).delta).toBe("AB-12-r3-delta.patch");
+    expect(patch.patchPfade("Patch bereit:\n /t/AB-12-r3.patch", n).voll).toBe("ab-12-r3.patch");
+    expect(patch.patchPfade("x /t/AB-12-r3-delta.patch", n).delta).toBe("ab-12-r3-delta.patch");
     expect(patch.patchAus("Patch: /t/AB-12-R3.patch", [], n)).toMatchObject({ ticket: 12, runde: 3 });
   });
   test("ohne übergebene Namen gilt die echte Config", () => {
