@@ -62,6 +62,7 @@ describe("offeneQuelleBehauptungen", () => {
     ["Das ist nicht so. Open Source.", 1],
     ["Ist das nicht so? Open Source.", 1],
     ["Das ist nicht so; Open Source.", 1],
+    ["Das ist nicht so! Open Source.", 1],
     ["Nicht dass es schnell Open Source wäre", 1],
   ])("Treffer: %j", (text, anzahl) => {
     assert.equal(offeneQuelleBehauptungen(text).length, anzahl);
