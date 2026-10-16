@@ -65,7 +65,10 @@ describe("Emoji-Ratchet (#1311)", () => {
     const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Record<string, number>;
     assert.ok(Object.keys(baseline).length > 10, "Baseline ist leer – Datei kaputt?");
     assert.deepEqual(vergleiche(ist, baseline), []);
-  });
+    // Test-eigener Timeout (keine Gate-Schwelle, kein globaler Anstieg): der Test startet `git ls-files` und liest jede Datei
+    // im Scope von der Platte, das ist unter Last (parallele Vitest-Worker, Windows-Virenscanner) IO-gebunden und lässt
+    // sich nicht in-process oder per Fake-Uhr ersetzen; unbelastet dauert er ~100 ms.
+  }, 30_000);
 
   test("Red-Green: Wachstum, neue Datei, veralteter und verwaister Eintrag werden gemeldet", () => {
     assert.deepEqual(vergleiche({ "a.ts": 2 }, { "a.ts": 2 }), []);
