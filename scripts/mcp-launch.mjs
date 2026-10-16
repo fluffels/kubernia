@@ -92,7 +92,7 @@ export function npxHinweis(name, spec) {
 
 /**
  * Launcher-Bausteine für einen Server: Name, Paket und bin sind gebunden, `scripts/<server>-mcp.mjs` ist nur noch ein Einzeiler darüber.
- * `main(args, cwd)` startet den Server aus dem Repo-Root (Elternordner von `scripts/`), `cwd` optional.
+ * `starte({ root, args, cwd })` startet den Server; `root` (der Repo-Root, Elternordner von `scripts/`) übergibt der Aufrufer, `cwd` ist optional.
  */
 export function launcherFuer({ name, pkg, bin }) {
   return {
