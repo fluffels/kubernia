@@ -209,7 +209,7 @@ export function pruefeUserSettings(user, vorlage) {
 
 /** Schreibversuch ins Home: in der Sandbox muss er scheitern. Eine gelungene Probe-Datei wird sofort gelöscht. */
 export function verhaltensprobe({ home, schreibe, loesche }) {
-  const pfad = `${home.replace(/[\\/]+$/, "")}/.kq-sandbox-probe-${process.pid}`;
+  const pfad = `${home.replace(/[\\/]+$/, "")}/.factory-sandbox-probe-${process.pid}`;
   try {
     schreibe(pfad);
   } catch (e) {

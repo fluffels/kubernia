@@ -58,6 +58,7 @@
     "/scripts/spielquote-lib.mjs",
     "/scripts/projekt-config.mjs",
     "/scripts/projekt-config-lib.mjs",
+    "/scripts/ticket-namen.mjs",
     "/scripts/board-place.mjs",
     "/scripts/langfuse-takt.mjs",
     "/scripts/board-takt.mjs",

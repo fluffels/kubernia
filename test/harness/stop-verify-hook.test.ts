@@ -435,13 +435,14 @@ PR: https://github.com/x/y/pull/7`, ...extra });
 });
 
 describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)", () => {
-  test("SubagentStop mit Matcher kubernia-umsetzer startet stop-verify-hook.mjs", async () => {
+  test("SubagentStop ohne Matcher startet stop-verify-hook.mjs (der Agentenname kommt aus der Projekt-Config, #1742)", async () => {
     const { readFileSync } = await import("node:fs");
     const s = JSON.parse(readFileSync(fileURLToPath(new URL("../../.claude/settings.json", import.meta.url)), "utf8")) as {
       hooks: Record<string, { matcher?: string; hooks: { command: string; args: string[] }[] }[]>;
     };
-    const eintrag = s.hooks.SubagentStop?.find((e) => e.matcher === "kubernia-umsetzer");
-    assert.ok(eintrag, "hooks.SubagentStop mit matcher kubernia-umsetzer fehlt");
+    const eintrag = s.hooks.SubagentStop?.find((e) => e.hooks.some((h) => h.args.some((a) => a.endsWith("scripts/stop-verify-hook.mjs"))));
+    assert.ok(eintrag, "hooks.SubagentStop mit stop-verify-hook fehlt");
+    assert.equal(eintrag.matcher, undefined, "ein Matcher würde den Agentennamen in settings.json festschreiben");
     assert.ok(eintrag.hooks.some((h) => h.args.some((a) => a.endsWith("scripts/stop-verify-hook.mjs"))));
     assert.ok(s.hooks.Stop?.some((e) => e.hooks.some((h) => h.args.some((a) => a.endsWith("scripts/stop-verify-hook.mjs")))), "der Stop-Hook des Hauptchats bleibt");
   });

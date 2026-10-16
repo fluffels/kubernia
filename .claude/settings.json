@@ -225,7 +225,6 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "kubernia-umsetzer",
         "hooks": [
           {
             "type": "command",

@@ -159,7 +159,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/mcp-ausfall.mjs --sessionstart` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/langfuse-vorbedingung.mjs --sessionstart` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
-| Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
+| Hook | `SubagentStop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `PreToolUse` | matcher: `Read`, `node scripts/forum-leser-guard.mjs` | `.claude/agents/forum-leser.md` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
 | Plugin | `langfuse-observability` | Marktplatz: langfuse-observability | `.claude/settings.json` |
