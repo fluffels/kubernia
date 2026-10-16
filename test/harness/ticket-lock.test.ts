@@ -37,9 +37,13 @@ let fetchAufrufe: string[] = [];
 
 type Welt = { refs?: string[]; worktrees?: string[]; commitSek?: number; reflogSek?: number; status?: string[]; fetchFehler?: boolean };
 
+/** `echteDeps()` startet `git rev-parse`; einmal je Datei genügt (die Deps sind zustandslos). */
+let echteDepsCache: ReturnType<typeof M.echteDeps> | null = null;
+const echteDepsEinmal = (): ReturnType<typeof M.echteDeps> => (echteDepsCache ??= M.echteDeps());
+
 /** Deps mit echtem Dateisystem im Temp-Ordner und einem gefälschten git. */
 function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}): Deps {
-  const echt = M.echteDeps();
+  const echt = echteDepsEinmal();
   return {
     ...echt,
     lockDir: join(dir, "kq-locks"),
@@ -319,7 +323,7 @@ describe("Aufruf und reine Funktionen", () => {
   });
 
   test("die echte Lock-Datei liegt im gemeinsamen git-Verzeichnis, nicht unter .claude/worktrees", () => {
-    const echt = M.echteDeps() as { lockDir: string };
+    const echt = echteDepsEinmal() as { lockDir: string };
     assert.match(echt.lockDir.replace(/\\/g, "/"), /\.git\/kq-locks$/);
     assert.doesNotMatch(echt.lockDir.replace(/\\/g, "/"), /\.claude\/worktrees/);
   });
@@ -407,7 +411,7 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
   });
 
   test("ersetze schreibt atomar: voller Inhalt, danach keine .tmp-Datei; bei Fehlschlag auch keine", () => {
-    const echt = M.echteDeps() as { ersetze: (p: string, t: string) => void };
+    const echt = echteDepsEinmal() as { ersetze: (p: string, t: string) => void };
     const ziel = lockDatei("4.json", "alt");
     echt.ersetze(ziel, `${"x".repeat(5000)}\n`);
     assert.equal(readFileSync(ziel, "utf8"), `${"x".repeat(5000)}\n`);
