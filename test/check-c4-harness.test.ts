@@ -249,9 +249,10 @@ describe("harnessQuellen: der Loader", () => {
     assert.deepEqual(Object.keys(q).sort(), api.HARNESS_BINDER.filter((b) => b !== binder).sort());
   });
 
-  test("package.json ohne scripts ergibt eine leere Gate-Liste statt eines Wurfs", () => {
-    const q = api.harnessQuellen(fixture(FILES({ "package.json": "{}" })), CONFIG, ["gate"]);
-    assert.deepEqual(q.gate.eintraege, []);
+  test("package.json ohne scripts oder ohne eine konfigurierte Kette wirft mit Ketten- und Dateinamen statt eines TypeError", () => {
+    assert.throws(() => api.harnessQuellen(fixture(FILES({ "package.json": "{}" })), CONFIG, ["gate"]), /Gate-Kette verify fehlt in package\.json/);
+    const ohneFull = JSON.stringify({ scripts: { verify: "npm run lint" } });
+    assert.throws(() => api.harnessQuellen(fixture(FILES({ "package.json": ohneFull })), CONFIG, ["gate"]), /Gate-Kette verify:full fehlt in package\.json/);
   });
 
   test("eine Config ganz ohne harness-Block: die sechs Harness-Binder fehlen, CI und Gates bleiben (kein TypeError)", () => {

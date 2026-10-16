@@ -70,6 +70,7 @@ export function harnessQuellen(rootDir, config, binders = HARNESS_BINDER) {
     const gesehen = new Set();
     const eintraege = [];
     for (const kette of g.chains) {
+      if (typeof scripts[kette] !== "string") throw new Error(`Gate-Kette ${kette} fehlt in ${g.package} (scripts, Quelle der Harness-Bindung)`);
       for (const titel of kettenSchritte(scripts, g.chains, kette)) {
         if (gesehen.has(titel)) continue;
         gesehen.add(titel);
