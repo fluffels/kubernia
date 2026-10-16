@@ -56,17 +56,18 @@ export function messfensterZeilen(body) {
   return fenster;
 }
 
-/** Anzahl der Läufe (`{ start (ms), ticket }`) mit Start ≥ `closedAt`, ohne die des wartenden Tickets. Pur. */
-export function laeufeImFenster(laeufe, { closedAt, ohneTicket }) {
+/** Anzahl der verschiedenen Tickets (#1646) mit einem Lauf (`{ start (ms), ticket }`) ab `closedAt`, ohne das wartende Ticket. Läufe ohne Ticket zählen nicht: eine Untergrenze, die sichere Richtung. Pur. */
+export function ticketsImFenster(laeufe, { closedAt, ohneTicket }) {
   const ab = Date.parse(closedAt);
-  return laeufe.filter((l) => l.start >= ab && l.ticket !== ohneTicket).length;
+  const tickets = laeufe.filter((l) => l.start >= ab && l.ticket !== null && l.ticket !== undefined && l.ticket !== ohneTicket).map((l) => l.ticket);
+  return new Set(tickets).size;
 }
 
 /** Überspringgrund eines Messfensters (`""` = erfüllt); `stand`: `{ closedAt, n }` (closedAt `null` = #nach offen) oder `{ fehler }`. Pur. */
 export function messfensterGrund(fenster, stand) {
   if ("fehler" in stand) return stand.fehler;
   if (stand.closedAt === null) return `offener Blocker #${fenster.nach} (Messfenster)`;
-  if (stand.n < fenster.k) return `Messfenster offen (${stand.n}/${fenster.k} ${fenster.agent} nach #${fenster.nach})`;
+  if (stand.n < fenster.k) return `Messfenster offen (${stand.n}/${fenster.k} Tickets mit ${fenster.agent} nach #${fenster.nach})`;
   return "";
 }
 
@@ -206,7 +207,7 @@ export function messfensterLader({ dir, holeIssue = (nr) => ghJson(["api", `repo
     const r = memo.get(schluessel);
     if ("fehler" in r) return r;
     if (r.closedAt === null) return { closedAt: null, n: 0 };
-    return { closedAt: r.closedAt, n: laeufeImFenster(r.laeufe, { closedAt: r.closedAt, ohneTicket: wartend }) };
+    return { closedAt: r.closedAt, n: ticketsImFenster(r.laeufe, { closedAt: r.closedAt, ohneTicket: wartend }) };
   };
 }
 
