@@ -589,3 +589,81 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.equal(M.entscheidePruefung({ ...o, vorhanden: false, uebergabeOffen: true } as typeof o), "frei");
   });
 });
+
+describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
+  const wt = "/repo/.claude/worktrees/kq-5";
+  const aktiv: Welt = { worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: (JETZT - 1 * MIN) / 1000, reflogSek: (JETZT - 1 * MIN) / 1000 };
+  const lockDatei5 = () => join(dir, "kq-locks", "5.json");
+  const lockJson = () =>
+    JSON.parse(readFileSync(lockDatei5(), "utf8")) as { uebergabe?: unknown; gestoppt?: { gesetzt: string; verbraucht: string | null } };
+
+  test("eigene Nonce: Exit 0, das nächste pruefe meldet trotz Aktivität uebernehmbar und verbraucht den Vermerk, das zweite wieder aktiv", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "aktiv\n", "Kontrolle: ohne Vermerk aktiv");
+    assert.deepEqual(lauf(["gestoppt", "5", "--nonce", n]), { code: 0, out: "gestoppt\n", err: "" });
+    assert.deepEqual(lockJson().gestoppt, { gesetzt: new Date(JETZT).toISOString(), verbraucht: null });
+    assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
+    assert.equal(lockJson().gestoppt?.verbraucht, new Date(JETZT).toISOString());
+    const zweites = lauf(["pruefe", "5", "--nonce", n], aktiv);
+    assert.equal(zweites.code, 4);
+    assert.equal(zweites.out, "aktiv\n");
+  });
+
+  test("zählt nicht als Phasen-Schnitt: uebergeben bleibt danach möglich (eine Übergabe je Lock gilt weiter), gestoppt legt kein uebergabe-Feld an", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["gestoppt", "5", "--nonce", n]);
+    assert.equal(lockJson().uebergabe, undefined);
+    assert.equal(lauf(["uebergeben", "5", "--nonce", n]).code, 0);
+    assert.equal(lauf(["uebergeben", "5", "--nonce", n]).code, 4, "eine Übergabe je Lock");
+  });
+
+  test("fremde Nonce: Exit 4 ohne Änderung; pruefe mit der richtigen Nonce bleibt aktiv", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    const r = lauf(["gestoppt", "5", "--nonce", `${n}x`]);
+    assert.equal(r.code, 4);
+    assert.equal(lockJson().gestoppt, undefined);
+    assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "aktiv\n");
+  });
+
+  test("ohne Lock: Exit 4; ohne Nonce oder mit leerer Nonce: Usage (Exit 2)", () => {
+    assert.equal(lauf(["gestoppt", "5", "--nonce", "x"]).code, 4);
+    assert.equal(existsSync(lockDatei5()), false);
+    assert.equal(lauf(["gestoppt", "5"]).code, 2);
+    assert.equal(lauf(["gestoppt", "5", "--nonce="]).code, 2);
+  });
+
+  test("der Vermerk trägt ohne Nonce nicht: pruefe ohne --nonce bleibt aktiv, ohne den Vermerk zu verbrauchen", () => {
+    const n = nonceVon(lauf(["claim", "5"], {}, JETZT - 3 * 60 * MIN));
+    lauf(["gestoppt", "5", "--nonce", n], {}, JETZT - 3 * 60 * MIN);
+    assert.equal(lauf(["pruefe", "5"], aktiv).out, "aktiv\n");
+    assert.equal(lockJson().gestoppt?.verbraucht, null);
+  });
+
+  test("ohne Worktree (frei) verbraucht pruefe den Vermerk ebenfalls, damit er nicht später eine Aktivität überstimmt", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["gestoppt", "5", "--nonce", n]);
+    assert.equal(lauf(["pruefe", "5", "--nonce", n]).out, "frei\n");
+    assert.notEqual(lockJson().gestoppt?.verbraucht, null);
+    assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "aktiv\n");
+  });
+
+  test("ein erneutes gestoppt nach dem Verbrauch ist erlaubt (jeder TaskStop), und scheitert das Schreiben, ist es Exit 2", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["gestoppt", "5", "--nonce", n]);
+    lauf(["pruefe", "5", "--nonce", n], aktiv);
+    assert.equal(lauf(["gestoppt", "5", "--nonce", n]).code, 0);
+    assert.equal(lockJson().gestoppt?.verbraucht, null, "neuer, offener Vermerk");
+    const wirft = () => {
+      throw new Error("schreibgeschützt");
+    };
+    assert.equal(M.fuehreAus(["gestoppt", "5", "--nonce", n], { ...deps(), ersetze: wirft }).code, 2);
+  });
+
+  test("entscheidePruefung pur: gestopptOffen zählt nur mit eigener Nonce und vorhandenem Worktree", () => {
+    const o = { lock: { nonce: "a" }, nonce: "a", vorhanden: true, aktivitaet: JETZT - MIN, jetzt: JETZT };
+    assert.equal(M.entscheidePruefung({ ...o, gestopptOffen: true } as typeof o), "uebernehmbar");
+    assert.equal(M.entscheidePruefung({ ...o, nonce: "b", gestopptOffen: true } as typeof o), "fremd");
+    assert.equal(M.entscheidePruefung({ ...o, nonce: null, gestopptOffen: true } as unknown as typeof o), "aktiv");
+    assert.equal(M.entscheidePruefung({ ...o, vorhanden: false, gestopptOffen: true } as typeof o), "frei");
+  });
+});
