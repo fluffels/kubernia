@@ -11,9 +11,9 @@
 import { DEFAULT_NAMESPACE, type PodSecurityLevel, type RbacSubject, type SecurityContext } from "../state";
 import { roleMatchesRef } from "../rbac";
 import type { KubectlHost } from "./host";
-import { notSimulated } from "./args";
+import { NS, notSimulated, UNKNOWN_TARGET } from "./args";
 import { resolveKind } from "./resources";
-import { subEntry, type Call } from "../cliargs";
+import { flag, IM_HANDLER, type Call, type Dispatch, type SubEntry } from "../cliargs";
 
 /* ---- RBAC-Auswertung (#126) ---- */
 
@@ -55,21 +55,21 @@ function canI(host: KubectlHost, verb: string, resource: string, subjectKey: str
 /** `kubectl auth can-i <verb> <resource>` – genau zwei Argumente wie in kubectl (`cani.go`); `<resource>/<name>` wertet nur
  *  den Typ aus (die Sim-Rollen kennen keine `resourceNames`), ein führendes `/` ist eine Non-Resource-URL. */
 function authCanI(host: KubectlHost, c: Call): string {
-  const [verb, target] = c.args.slice(1);
-  if (c.args.length !== 3) return host._err("error: you must specify two arguments: verb resource or verb resource/resourceName.", "Muster: kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot");
+  const [verb, target] = c.args;
+  if (c.args.length !== 2) return host._err("error: you must specify two arguments: verb resource or verb resource/resourceName.", "Muster: kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot");
   if (target.startsWith("/")) return notSimulated(host, "'kubectl auth can-i " + verb + " " + target + "' (Non-Resource-URL).", ["kubectl auth can-i <verb> <resource>[/<name>] [--as=…]"]);
   const resource = target.split("/")[0];
   return canI(host, verb, resource, asKey(c.value("--as"))) ? "yes" : "no";
 }
 
-/** Die `auth`-Aktionen (#1487): ein Eintrag je Aktion; `c.args` beginnt bei der Aktion. */
-const AUTH_ACTIONS: Readonly<Record<string, (host: KubectlHost, c: Call) => string>> = { "can-i": authCanI };
-
-export function kubectlAuth(host: KubectlHost, c: Call) {
-  const action = c.args[0] ?? "";
-  const run = subEntry(AUTH_ACTIONS, action);
-  return run ? run(host, c) : notSimulated(host, "'kubectl auth " + action + "'.", ["kubectl auth can-i <verb> <resource> [--as=…]"]);
-}
+/** `kubectl auth <ziel>` (#1491): `can-i` mit `--as`; `c.args` sind die Argumente hinter der Aktion (`get pods`). */
+export const KUBECTL_AUTH: Dispatch<SubEntry<(host: KubectlHost, c: Call) => string>> = {
+  cmd: "kubectl auth",
+  flags: [NS],
+  table: { "can-i": { run: authCanI, maxArgs: IM_HANDLER, flags: [flag(true, "--as")] } },
+  real: ["reconcile", "whoami"],
+  unknown: UNKNOWN_TARGET,
+};
 
 /* ---- Pod-Security-Admission (#126) ---- */
 
