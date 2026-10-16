@@ -18,7 +18,7 @@
  */
 import type { ClusterState, Deployment, Broken } from "./state";
 import { runPipeline } from "./glab";
-import { flag, notSimulated, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
+import { flag, notSimulated, dispatchSub, IM_HANDLER, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die git-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -54,17 +54,17 @@ const PUSH_HINTS: Readonly<Record<string, string>> = {
  *  selbst läuft davor). Ein neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion unten – der Dispatcher
  *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
 const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", table: {
-  init: { run: gitInit },
-  status: { run: gitStatus },
-  add: { run: gitAdd, flags: [flag(false, "-A", "--all")] },
-  commit: { run: gitCommit, flags: [flag(true, "-m", "--message")], hints: COMMIT_HINTS },
-  log: { run: gitLog },
-  branch: { run: gitBranch },
-  checkout: { run: gitCheckout, flags: [flag(true, "-b"), flag(false, "--ours"), flag(false, "--theirs")] },
-  merge: { run: gitMerge },
-  push: { run: gitPush, flags: [flag(false, "-u", "--set-upstream")], hints: PUSH_HINTS },
-  fetch: { run: gitFetch },
-  pull: { run: gitPull },
+  init: { run: gitInit, maxArgs: 0 },
+  status: { run: gitStatus, maxArgs: 0 },
+  add: { run: gitAdd, maxArgs: 1, flags: [flag(false, "-A", "--all")] },
+  commit: { run: gitCommit, maxArgs: IM_HANDLER, flags: [flag(true, "-m", "--message")], hints: COMMIT_HINTS },
+  log: { run: gitLog, maxArgs: 0 },
+  branch: { run: gitBranch, maxArgs: 1 },
+  checkout: { run: gitCheckout, maxArgs: 1, flags: [flag(true, "-b"), flag(false, "--ours"), flag(false, "--theirs")] },
+  merge: { run: gitMerge, maxArgs: 1 },
+  push: { run: gitPush, maxArgs: 2, flags: [flag(false, "-u", "--set-upstream")], hints: PUSH_HINTS },
+  fetch: { run: gitFetch, maxArgs: 2 },
+  pull: { run: gitPull, maxArgs: 2 },
 },
   // Echte git-Unterbefehle, die die Sim nicht kann.
   real: ["stash", "rebase", "reset", "diff", "remote", "clone", "tag", "show", "switch", "restore", "rm", "mv", "cherry-pick", "revert"],
@@ -238,7 +238,7 @@ function remoteRef(host: GitHost, cmd: string, c: Call): string | null {
   if (remote !== undefined && remote !== "origin") {
     return host._err("fatal: '" + remote + "' does not appear to be a git repository", "Das einzige Remote heißt 'origin' (git push origin <branch>).");
   }
-  if (c.args.length > 2 || branch?.includes(":")) return notSimulated(host, "mehrere Branches oder Refspecs bei 'git " + cmd + "'.", ["git " + cmd + " [origin [<branch>]]"]);
+  if (branch?.includes(":")) return notSimulated(host, "mehrere Branches oder Refspecs bei 'git " + cmd + "'.", ["git " + cmd + " [origin [<branch>]]"]);
   if (branch === undefined || branch === g.branch || branch === "HEAD") return null;
   if (g.branches.includes(branch)) {
     return notSimulated(host, "'git " + cmd + " origin " + branch + "' für einen anderen Branch als den aktuellen.", ["git " + cmd + " [origin [" + g.branch + "]]"], "Wechsle erst mit 'git checkout " + branch + "'.");

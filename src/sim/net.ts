@@ -47,6 +47,7 @@ export const NSLOOKUP_ARGS: ArgSpec = {
   cmd: "nslookup",
   style: "goflag",
   flags: [checkedFlag(checkType, "-type", "-ty", "-querytype", "-query", "-qu", "-q")],
+  maxArgs: 2,
 };
 
 /** Optionsnamen sind bei nslookup nicht groß-/kleinschreibungsabhängig (`strncasecmp`): nur der Namensteil
@@ -60,13 +61,10 @@ function lowerOption(tok: string): string {
 function readNslookup(host: NetHost, t: string[]): { query: string } | string {
   const c = parseCall(host, NSLOOKUP_ARGS, t.map((tok, i) => (i > 0 && isFlagToken(tok) ? lowerOption(tok) : tok)), 1);
   if (typeof c === "string") return c;
-  const [name, server, ...rest] = c.args;
+  const [name, server] = c.args;
   if (!name) {
     return host._err("nslookup: Welchen Namen soll ich auflösen?",
       "z.B. 'nslookup kasse' oder voll 'nslookup kasse.default.svc.cluster.local'.");
-  }
-  if (rest.length > 0) {
-    return notSimulated(host, "mehr als zwei Argumente.", ["nslookup <name> [" + COREDNS + "]"]);
   }
   if (server !== undefined && server !== COREDNS) {
     return notSimulated(host, "der DNS-Server '" + server + "'.", ["nslookup <name> [" + COREDNS + "]"],
@@ -206,6 +204,7 @@ function checkOutput(host: ErrHost, value: string): string | null {
  *  curl-anfrage): jeder Dienst antwortet gleich. -o schreibt die Antwort in eine Datei. */
 export const CURL_ARGS: ArgSpec = {
   cmd: "curl",
+  maxArgs: 1,
   flags: [
     flag(false, "-s", "--silent"), flag(false, "-S", "--show-error"), flag(false, "-v", "--verbose"),
     flag(false, "-I", "--head"), flag(false, "-i", "--include"),
@@ -285,7 +284,6 @@ export function curlCommand(host: NetHost, t: string[]): string {
   const c = parseCall(host, CURL_ARGS, t, 1);
   if (typeof c === "string") return c;
   if (c.args.length === 0) return host._err("curl: Welche Adresse soll ich abfragen?", "z.B. 'curl http://kasse' oder 'curl kasse:8080'.");
-  if (c.args.length > 1) return notSimulated(host, "mehrere Adressen in einem Aufruf.", ["curl <adresse>"]);
   // Vor der Abfrage den Cluster nachführen (wie get/top): notready-Pods, die durch ein
   // inzwischen vorhandenes Secret bereit wurden, und nachgeschobene Nodes berücksichtigen.
   host._reschedulePending();

@@ -357,12 +357,12 @@ function argoAppSync(host: ArgocdHost, c: Call): string {
 /** Alias → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `argocd app` keine Flags aus). Ein neuer
  *  `argocd app`-Verb ist ein Eintrag hier + eine Funktion oben – der Dispatcher (`argocdCommand`) bleibt dünn
  *  und wächst nicht mit dem Befehlssatz. */
-const LIST: SubEntry<ArgocdAppHandler> = { run: argoAppList };
+const LIST: SubEntry<ArgocdAppHandler> = { run: argoAppList, maxArgs: 0 };
 const ARGOCD_APP: Dispatch<SubEntry<ArgocdAppHandler>> = { cmd: "argocd app", table: {
   list: LIST,
   ls: LIST,
-  get: { run: argoAppGet },
-  sync: { run: argoAppSync },
+  get: { run: argoAppGet, maxArgs: 1 },
+  sync: { run: argoAppSync, maxArgs: 1 },
 },
   // Echte `argocd app`-Aktionen, die die Sim nicht kann.
   real: ["actions", "create", "delete", "delete-resource", "diff", "edit", "history", "logs", "manifests", "patch", "patch-resource", "resources", "rollback", "set", "terminate-op", "unset", "wait"],

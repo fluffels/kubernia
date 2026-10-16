@@ -50,6 +50,22 @@ export interface ArgSpec {
   readonly hints?: Readonly<Record<string, string>>;
   /** Das erste Nicht-Flag beendet die Prüfung (`docker run IMAGE BEFEHL …`: danach gehört alles dem Container). */
   readonly stopAtPositional?: boolean;
+  /** Höchstzahl der Positionsargumente (Pflicht, #1490): mehr lehnt `parseCall` zentral ab. `0` = keine, `OFFENE_LISTE`
+   *  = Mehrfachziele oder Container-Befehl, `IM_HANDLER` = die Arität hängt an Art/Aktion, der Handler prüft. */
+  readonly maxArgs: number;
+}
+
+/** `maxArgs` für offene Listen: Mehrfachziele (`docker stop a b`) oder der Container-Befehl hinter dem Image. */
+export const OFFENE_LISTE = Infinity;
+/** `maxArgs` für Einträge, deren Arität an Art oder Aktion hängt (`kubectl create <typ> NAME`) oder deren echter Wortlaut
+ *  belegt ist: der Handler prüft selbst. */
+export const IM_HANDLER = Infinity;
+
+/** Das Ergebnis eines Befehls mit mehreren Zielen (kubectl `ContinueOnError`, `docker stop a b`): erst alle Erfolgszeilen,
+ *  dann die Fehlerzeilen. Gibt es Fehler, ist die Ausgabe ein Fehler (`host._err`, mit dem Tipp, falls einer da ist), sonst reiner Text. */
+export function targetOutcome(host: ErrHost, ok: readonly string[], failed: readonly string[], tip?: string): string {
+  const text = [...ok, ...failed].join("\n");
+  return failed.length > 0 ? host._err(text, tip) : text;
 }
 
 /** Der EINE Text für „das kann der Simulator nicht“: Meldung + Liste, was er stattdessen kann. */
@@ -90,7 +106,7 @@ type ScanError =
   | { kind: "unknown"; name: string }
   | { kind: "missing"; name: string }
   | { kind: "bool"; label: string; value: string };
-interface Walk { hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null }
+interface Walk { hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null; dashAt: number | null }
 interface Step { used: boolean; error: ScanError | null }
 
 /** Ein benanntes Flag lesen: Wert-Flags nehmen den angeklebten Wert oder den nächsten Token, Bool-Flags nur `=bool`. */
@@ -124,15 +140,22 @@ function scanChain(flags: readonly FlagSpec[], tok: string, next: string | undef
   return { used: false, error: null };
 }
 
+/** Ab welchem Index gehört alles den Positionsargumenten (`--`, bei `stopAtPositional` das erste Nicht-Flag)? `-1` = noch nicht. */
+function restFrom(spec: ArgSpec, tok: string, i: number): number {
+  if (tok === "--") return i + 1;
+  return !isFlagToken(tok) && spec.stopAtPositional ? i : -1;
+}
+
 /** Der EINE Scanner hinter Prüfung und Auslesen. `--` beendet die Flags; mit `stopAtPositional` gehört alles ab
  *  dem ersten Nicht-Flag (der Container-Befehl hinter dem Image) zu den Positionsargumenten. Der erste Fehler wird
  *  gemerkt, der Scan läuft weiter (so bleiben die Positionsargumente auch bei einem unbekannten Flag lesbar). */
 function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
   const style = styleOf(spec);
-  const w: Walk = { hits: [], entries: [], error: null };
+  const w: Walk = { hits: [], entries: [], error: null, dashAt: null };
   for (let i = from; i < t.length; i++) {
     const tok = t[i];
-    const rest = tok === "--" ? i + 1 : !isFlagToken(tok) && spec.stopAtPositional ? i : -1;
+    const rest = restFrom(spec, tok, i);
+    if (tok === "--") w.dashAt = w.entries.length;
     if (rest >= 0) { for (let k = rest; k < t.length; k++) w.entries.push({ tok: t[k], at: k }); break; }
     if (!isFlagToken(tok)) { w.entries.push({ tok, at: i }); continue; }
     const step = style === "pflag" && !tok.startsWith("--")
@@ -153,9 +176,12 @@ function flagList(specs: readonly FlagSpec[]): string[] {
   return specs.map(s => s.names.join("/") + (s.takesValue ? " <wert>" : ""));
 }
 
+const isHelpFlag = (name: string) => name === "-h" || name === "--help" || name === "-help";
+const helpHint = (cli: string) => "Hilfe zeigt der Simulator mit 'help " + cli + "'.";
+
 function rejectFlag(host: ErrHost, spec: ArgSpec, name: string): string {
   const cli = spec.cmd.split(" ")[0];
-  const hint = spec.hints?.[name] ?? (name === "-h" || name === "--help" ? "Hilfe zeigt der Simulator mit 'help " + cli + "'." : undefined);
+  const hint = spec.hints?.[name] ?? (isHelpFlag(name) ? helpHint(cli) : undefined);
   const kann = spec.flags.length ? "Flags: " + flagList(spec.flags).join(", ") : "'" + spec.cmd + "' ohne Flags";
   return notSimulated(host, "das Flag '" + name + "' bei '" + spec.cmd + "'.", [kann], hint);
 }
@@ -181,6 +207,9 @@ function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
 export interface Call {
   /** Die Nicht-Flag-Argumente in Eingabereihenfolge. */
   readonly args: readonly string[];
+  /** Anzahl der Positionsargumente vor einem `--` (wie cobra `ArgsLenAtDash`), `null` ohne `--`. Ein `--` im
+   *  Container-Befehl hinter `stopAtPositional` zählt nicht: es gehört dem Container. */
+  readonly dashAt: number | null;
   /** Ist das Flag gesetzt (Bool-Flags werten `=true|false` aus; der letzte Treffer gewinnt)? */
   has(...names: string[]): boolean;
   /** Der Wert eines Wert-Flags; bei mehrfacher Angabe der letzte (pflag), `null` ohne das Flag. */
@@ -196,6 +225,7 @@ function makeCall(w: Walk): Call {
   const match = (names: string[]) => w.hits.filter(h => h.spec.names.some(n => names.includes(n)));
   return {
     args: w.entries.map(e => e.tok),
+    dashAt: w.dashAt,
     has: (...names) => {
       const last = match(names).pop();
       if (!last) return false;
@@ -210,7 +240,15 @@ function makeCall(w: Walk): Call {
 /** Prüft die Flags (unbekannt, ohne Wert, ungültiger Bool, abgelehnter Wert) und liest dann die Eingabe: `Call` oder die fertige Fehlerausgabe. */
 export function parseCall(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): Call | string {
   const w = walk(spec, t, from);
-  return firstError(host, spec, w) ?? makeCall(w);
+  return firstError(host, spec, w) ?? tooMany(host, spec, w) ?? makeCall(w);
+}
+
+/** Das erste Positionsargument über `maxArgs` hinaus als „Nicht simuliert“ (Flag-Fehler haben Vorrang), sonst `null`. */
+function tooMany(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
+  const extra = w.entries[spec.maxArgs];
+  if (!extra) return null;
+  const muster = spec.maxArgs === 0 ? "'" + spec.cmd + "' ohne Argumente" : "'" + spec.cmd + "' mit höchstens " + spec.maxArgs + (spec.maxArgs === 1 ? " Argument" : " Argumenten");
+  return notSimulated(host, "das weitere Argument '" + extra.tok + "' bei '" + spec.cmd + "'.", [muster]);
 }
 
 /** Zerlegt eine Eingabezeile wie die Shell: `"…"` und `'…'` gruppieren (in `"…"` gelten `\"` und `\\`), `\x` außerhalb
@@ -275,7 +313,7 @@ export interface Dispatch<E extends SubEntry<unknown>> {
 /** Die Flag-Tabelle eines Dispatch-Eintrags als `ArgSpec` (`cmd` = der volle Befehl für Meldungen); `defaultStyle`
  *  und `defaultHints` sind die Familien-Werte, ein Eintrag mit eigenem Wert überschreibt sie. */
 function specOfSub(cmd: string, e: SubEntry<unknown>, defaultStyle?: FlagStyle, defaultHints?: Dispatch<SubEntry<unknown>>["hints"]): ArgSpec {
-  return { cmd, flags: e.flags ?? [], style: e.style ?? defaultStyle ?? "pflag", hints: e.hints ?? defaultHints, stopAtPositional: e.stopAtPositional };
+  return { cmd, flags: e.flags ?? [], style: e.style ?? defaultStyle ?? "pflag", hints: e.hints ?? defaultHints, stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
 }
 
 const isGroup = <E extends SubEntry<unknown>>(e: E | Group<E>): e is Group<E> => "group" in e;
@@ -295,25 +333,41 @@ export function kannOf<E extends SubEntry<unknown>>(d: Dispatch<E>): string[] {
   return own.length ? [d.cmd + " " + own.join(", "), ...nested] : nested;
 }
 
+/** Ein Unterbefehl, den die Tabelle nicht hat: echt aber nicht simuliert (`real`) oder Tippfehler mit Vorschlag. */
+function unknownSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, sub: string, kann: () => string[]): string {
+  if (d.real?.includes(sub)) return notSimulated(host, "'" + d.cmd + " " + sub + "'.", kann());
+  const guess = suggest(sub, [...Object.keys(d.table), ...(d.real ?? [])]);
+  return host._err(d.unknown?.(sub) ?? d.cmd + ": unbekannter Unterbefehl '" + sub + "'",
+    guess ? "Meintest du '" + d.cmd + " " + guess + "'?" : "Der Simulator kann: " + kann().join(" · "));
+}
+
+/** Der Lernhinweis zu einem Flag VOR dem Unterbefehl: Familien-Hinweis, Hilfe-Flag, Versions-Flag, sonst „dahinter setzen“. */
+function vorUnterbefehlHint(name: string, d: Dispatch<SubEntry<unknown>>): string {
+  const own = d.hints?.[name];
+  if (own) return own;
+  if (isHelpFlag(name)) return helpHint(d.cmd.split(" ")[0]);
+  if (name === "--version" || name === "-version") return "Eine Versionsanzeige gibt es im Simulator nicht.";
+  return "Setz Flags hinter den Unterbefehl.";
+}
+
 /** Der EINE Kopf jeder Befehlsfamilie: wählt den Eintrag zu `t[at]` und liest dessen Eingabe (`parseCall`).
  *  Reihenfolge: Unterbefehl fehlt, Flag vor dem Unterbefehl, Gruppe (rekursiv), echter aber nicht simulierter
  *  Unterbefehl, Tippfehler mit Vorschlag, dann `parseCall`. Ergebnis: `{ sub, entry, call }` oder die fertige
  *  Fehlerausgabe. Familien-Wachen (Control-Plane, init, Repo) laufen danach im Familien-Dispatcher. */
 export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispatch<E>, t: readonly string[], at: number): { sub: string; entry: E; call: Call } | string {
   const sub = t[at];
-  const kann = kannOf(d);
-  if (!sub) return host._err(d.cmd + ": Unterbefehl fehlt.", "Der Simulator kann: " + kann.join(" · "));
+  const kann = () => kannOf(d);
+  if (!sub) return host._err(d.cmd + ": Unterbefehl fehlt.", "Der Simulator kann: " + kann().join(" · "));
   if (isFlagToken(sub)) {
-    return notSimulated(host, "das Flag '" + flagNameOf(sub, d.style ?? "pflag") + "' vor dem Unterbefehl.", kann, "Setz Flags hinter den Unterbefehl.");
+    const name = flagNameOf(sub, d.style ?? "pflag");
+    return notSimulated(host, "das Flag '" + name + "' vor dem Unterbefehl.", kann(), vorUnterbefehlHint(name, d));
   }
   const entry = subEntry(d.table, sub);
-  if (entry && isGroup(entry)) return dispatchSub(host, entry.group, t, at + 1);
-  if (!entry) {
-    if (d.real?.includes(sub)) return notSimulated(host, "'" + d.cmd + " " + sub + "'.", kann);
-    const guess = suggest(sub, [...Object.keys(d.table), ...(d.real ?? [])]);
-    return host._err(d.unknown?.(sub) ?? d.cmd + ": unbekannter Unterbefehl '" + sub + "'",
-      guess ? "Meintest du '" + d.cmd + " " + guess + "'?" : "Der Simulator kann: " + kann.join(" · "));
+  // Eine Gruppe erbt Stil und Hinweise der Eltern (der eigene Wert gewinnt); `sub` im Ergebnis bleibt das Blatt.
+  if (entry && isGroup(entry)) {
+    return dispatchSub(host, { ...entry.group, style: entry.group.style ?? d.style, hints: entry.group.hints ?? d.hints }, t, at + 1);
   }
+  if (!entry) return unknownSub(host, d, sub, kann);
   const call = parseCall(host, specOfSub(d.cmd + " " + sub, entry, d.style, d.hints), t, at + 1);
   return typeof call === "string" ? call : { sub, entry, call };
 }
