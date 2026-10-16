@@ -33,6 +33,19 @@ export function boardRolleFuer(labels) {
 }
 
 /**
+ * Pur: Fehlertext, wenn der `--after`-Anker nur auf dem anderen Board der Rolle steht (auf dem eigenen oder auf keinem Board: `null`).
+ * `produkt`/`factory` sind die Item-Listen beider Boards; `rolle` ist die Rolle der einzuordnenden Nummern.
+ */
+export function ankerFehler({ anchor, rolle, produkt, factory }) {
+  const steht = (liste) => liste.some((i) => i.number === anchor);
+  const ziel = rolle === "factory" ? factory : produkt;
+  const fremd = rolle === "factory" ? produkt : factory;
+  if (steht(ziel) || !steht(fremd)) return null;
+  const name = (r) => (r === "factory" ? "Factory" : "Produkt");
+  return `Anker #${anchor} steht nur auf dem ${name(rolle === "factory" ? "produkt" : "factory")}-Board, die Nummern gehören auf das ${name(rolle)}-Board`;
+}
+
+/**
  * Pur: die Items beider Boards als zwei Auswahllisten nach der Trennregel (`boardRolleFuer` der Item-Labels). Items auf dem richtigen Board
  * behalten die Board-Reihenfolge; ein Item, das nur auf dem falschen Board steht (`falsch`, Nummern), zählt auf seiner Trennregel-Seite
  * und hängt hinten an; eine Nummer auf beiden Boards (`doppelt`, aufsteigend) zählt nur auf dem Board laut Trennregel. Eingaben bleiben unverändert.

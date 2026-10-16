@@ -23,7 +23,9 @@
  * Ein Merge von `main` NACH dem Review mit Konflikt-Auflösung ist ungeprüfter Code im PR: der Wächter holt jeden Merge in
  * `<head>..HEAD` und prüft ihn mit `git show --remerge-diff` (git ≥ 2.36). Zeigt der Merge eine Auflösung, ist der Check rot:
  * die Auflösung per Delta-Lens reviewen, dann einen neuen Nachweis setzen (head ≥ Merge). Konfliktfreie Merges (auch der synthetische
- * Merge-Commit des PR-Checkouts) bleiben grün; andere Commits nach dem Review werden weiter nur gemeldet. Ein git-Fehler ist rot.
+ * Merge-Commit des PR-Checkouts) bleiben grün. Ebenso rot ist jeder Nicht-Merge-Commit in `<head>..HEAD` (ohne die Commits der Basis) mit
+ * Baumänderung (`git diff-tree`): Code nach dem Review ist ungeprüft, der letzte Fixer gibt nie das finale OK. Leere Commits (Nachweis,
+ * Override-Zeilen) bleiben grün; ein Fix danach braucht Delta-Lens und neuen Nachweis mit head ≥ Fix. Ein git-Fehler ist rot.
  *
  * Druckventil: `<Präfix>Review-Override: #<nr> <warum>` (Pflicht-Begründung), z.B. für Revert-PRs.
  * Bewusst KEIN npm-`check:*`-Skript und nicht in `verify`: verify läuft vor dem Review, der
@@ -39,7 +41,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
-import { ladeCommitZeilen, meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
+import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
 
 // parseNachweis lebt im neutralen Modul slice-override.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
@@ -117,10 +119,18 @@ function bewerteRunden(review, zeilen) {
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], zeilen }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
   const fehler = [];
+  for (const { sha, dateien: geaendert } of aenderungsCommits) {
+    const namen = geaendert.slice(0, 5).join(", ") + (geaendert.length > 5 ? ", …" : "");
+    const kopf = nachweis.review?.head ? nachweis.review.head : "<head>";
+    fehler.push(
+      `Commit ${sha} nach dem Review ändert ${namen}: Delta-Lens der betroffenen Brillen auf ${kopf}..HEAD, dann neuer Nachweis (head ≥ ${sha}). ` +
+        `Schritte: Skill review-lenses › Nachweis nach Konvergenz.`,
+    );
+  }
   for (const sha of konfliktMerges) {
     fehler.push(
       `Konflikt-Merge ${sha} nach dem Review: Auflösung per Delta-Lens prüfen, dann neuer Nachweis (head ≥ ${sha}). ` +
@@ -175,6 +185,17 @@ export function konfliktMergesNach(git, headSha) {
   return merges.filter((sha) => git(["show", "--remerge-diff", "--format=", sha]).trim() !== "");
 }
 
+/**
+ * Nicht-Merge-Commits in `<headSha>..HEAD` mit Baumänderung, ohne die Commits der Basis (`^<base>`: eingemergte `main`-Commits zählen nicht):
+ * `[{ sha, dateien }]`, älteste zuerst. Leere Commits (Nachweis, Override) fehlen. Wirft bei einem git-Fehler; der Aufrufer wertet das als rot.
+ */
+export function aenderungsCommitsNach(git, headSha, base) {
+  const shas = git(["rev-list", "--reverse", "--no-merges", `${headSha}..HEAD`, `^${base}`]).split(/\r?\n/).filter((l) => l.trim() !== "");
+  return shas
+    .map((sha) => ({ sha, dateien: git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha]).split(/\r?\n/).filter((l) => l.trim() !== "") }))
+    .filter((c) => c.dateien.length > 0);
+}
+
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
  *  Fail-closed: ein Ladefehler der Config, eine nicht auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
 export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen } = {}) {
@@ -204,6 +225,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     let headImSlice = false;
     let commitsNachReview = null;
     let konfliktMerges = [];
+    let aenderungsCommits = [];
     if (nachweis.review?.head) {
       try {
         headSha = git(["rev-parse", "--verify", "--quiet", `${nachweis.review.head}^{commit}`]).trim() || null;
@@ -215,10 +237,11 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
         if (headImSlice) {
           commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${headSha}..HEAD`]).trim());
           konfliktMerges = konfliktMergesNach(git, headSha);
+          aenderungsCommits = aenderungsCommitsNach(git, headSha, base);
         }
       }
     }
-    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges, zeilen });
+    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges, aenderungsCommits, zeilen });
     return {
       ok: fehler.length === 0,
       fehler,
@@ -243,13 +266,7 @@ function main(argv = process.argv.slice(2)) {
     process.exit(1);
   }
   // Die Config wird vor jedem git-Aufruf geladen: ein Ladefehler endet mit Exit 1 und der Meldung des Laders (Pfad, Schlüssel, Fix:).
-  let zeilen;
-  try {
-    zeilen = ladeCommitZeilen({ pfad: getrennt.pfad });
-  } catch (e) {
-    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
-    process.exit(1);
-  }
+  const zeilen = ladeCommitZeilenOderBeende({ laden: () => ladeCommitZeilen({ pfad: getrennt.pfad }) });
   const r = checkReviewNachweis({ ladeZeilen: () => zeilen });
   if (r.skipped) {
     console.log("• check-review-nachweis: Basis == HEAD, nichts zu prüfen.");

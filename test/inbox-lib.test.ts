@@ -23,6 +23,9 @@ describe("offeneTitel", () => {
   test("PRs fallen weg, auch vertraute", () => {
     expect(L.offeneTitel([[issue("PR", bot, { pull_request: {} })]], OWNER)).toEqual([]);
   });
+  test("null-Einträge in den Seiten werden übersprungen, ohne zu werfen", () => {
+    expect(L.offeneTitel([[null, issue("🔒 Security: A", bot), undefined]], OWNER)).toEqual(["🔒 Security: A"]);
+  });
   test("keine Seitenliste wirft (nie still „keine Titel“)", () => {
     expect(() => L.offeneTitel({}, OWNER)).toThrow();
   });

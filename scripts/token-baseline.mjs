@@ -432,14 +432,15 @@ export function nachweisAusCommits(commits, zeilen) {
   return { runden: review.runden, plan: plan ? plan.art === "planer" : null };
 }
 
-/** CI-Fix-Runden = distinct head_sha mit rotem CI-Lauf zwischen PR-Erstellung und Merge (dieselbe Zählung wie #904, gemeinsamer Abruf: ci-laeufe.mjs). */
-function prInfo(pr) {
+/** `zeilen` (Commit-Zeilen der Projekt-Config) werden als Standardparameter VOR den gh-Aufrufen geladen: ein Config-Fehler bricht ohne Netzzugriff ab.
+ *  CI-Fix-Runden = distinct head_sha mit rotem CI-Lauf zwischen PR-Erstellung und Merge (dieselbe Zählung wie #904, gemeinsamer Abruf: ci-laeufe.mjs). */
+function prInfo(pr, zeilen = ladeCommitZeilen()) {
   const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits,files"]);
   return {
     prCreatedAt: p.createdAt,
     mergedAt: p.mergedAt,
     failedPushes: zaehleRoteCommits(ghText, { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
-    nachweis: nachweisAusCommits(p.commits, ladeCommitZeilen()),
+    nachweis: nachweisAusCommits(p.commits, zeilen),
     files: p.files ?? [],
   };
 }

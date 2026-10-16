@@ -147,6 +147,14 @@ describe("bekannteAlerts", () => {
     });
     expect([...b.alerts].sort()).toEqual([7, 8]);
   });
+  test("Feld alerts: nur ganze Zahlen zählen, Strings, Kommazahlen und null fallen weg", () => {
+    const b = C.bekannteAlerts({
+      kommentare: [],
+      owner: OWNER,
+      wiedervorlagen: [{ id: "codescanning-x", alerts: [7, "8", 1.5, null, NaN] as unknown as number[] }],
+    });
+    expect([...b.alerts]).toEqual([7]);
+  });
   test("Audit-Zeile eines vertrauten Kommentars macht die GHSA bekannt, die eines Fremden nicht (#1433)", () => {
     const audit = "- [ ] Audit: GHSA-aaaa-bbbb-cccc in x";
     const vertraut = C.bekannteAlerts({ kommentare: [{ user: bot, body: audit }], owner: OWNER, wiedervorlagen: [] });

@@ -30,6 +30,7 @@ const so = raw as unknown as {
   commitZeilen: (praefix?: unknown, planer?: unknown) => Zeilen;
   commitZeilenAus: (config: unknown) => Zeilen;
   ladeCommitZeilen: (opt?: { rootDir?: string; pfad?: string }) => Zeilen;
+  ladeCommitZeilenOderBeende: (o?: { laden?: () => Zeilen; fehler?: (s: string) => void; exit?: (code: number) => void }) => Zeilen | undefined;
   parseOverrideTrailers: (text: string, key: string) => { valid: { nr: number; reason: string }[]; invalid: string[] };
 };
 const gateModul = gate as unknown as { parseNachweis: unknown };
@@ -60,6 +61,21 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
     expect(so.commitZeilenAus({ praefixe: { commitZeile: "AB-" }, agenten: { planer: "p" } }).plan).toBe("AB-Plan");
     expect(() => so.commitZeilenAus({})).toThrow(/Präfix/);
     expect(() => so.commitZeilenAus(undefined)).toThrow(/Präfix/);
+  });
+  it("ladeCommitZeilenOderBeende: Erfolg liefert die Zeilen ohne Meldung, ein werfender Lader endet mit Meldung und exit(1)", () => {
+    const meldungen: string[] = [];
+    const codes: number[] = [];
+    const io = { fehler: (s: string) => meldungen.push(s), exit: (c: number) => codes.push(c) };
+    expect(so.ladeCommitZeilenOderBeende({ ...io, laden: () => Z })).toBe(Z);
+    expect(meldungen).toEqual([]);
+    expect(codes).toEqual([]);
+    so.ladeCommitZeilenOderBeende({ ...io, laden: () => { throw new Error("Config kaputt. Fix: x"); } });
+    expect(meldungen).toEqual(["✖ Config kaputt. Fix: x"]);
+    expect(codes).toEqual([1]);
+    // Ein Nicht-Error-Wurf (String) ist hier Absicht: er deckt den `String(e)`-Zweig.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    so.ladeCommitZeilenOderBeende({ ...io, laden: () => { throw "roh"; } });
+    expect(meldungen[1]).toBe("✖ roh");
   });
   it("ladeCommitZeilen liest die echte Config (KQ-) und wirft bei fehlender Datei mit Fix-Zeile", () => {
     expect(so.ladeCommitZeilen().praefix).toBe("KQ-");

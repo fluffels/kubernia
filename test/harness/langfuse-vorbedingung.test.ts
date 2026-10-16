@@ -162,7 +162,12 @@ describe("Kopplung", () => {
     expect(zeile).toContain("scripts/langfuse-vorbedingung.mjs");
   });
   test.each([".claude/skills/kubernia/SKILL.md"])("%s ruft die Vorbedingung vor dem Start", (datei) => {
-    expect(lies(datei)).toContain("node scripts/langfuse-vorbedingung.mjs");
+    // Der Aufruf gehört in Schritt 0 (Liste im Abschnitt „Im Hauptchat“), nicht irgendwohin in die Datei.
+    const zeilen = lies(datei).split("\n");
+    const start = zeilen.findIndex((z) => z.startsWith("0. "));
+    const ende = zeilen.findIndex((z, i) => i > start && /^\d+\. /.test(z));
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(zeilen.slice(start, ende < 0 ? undefined : ende).join("\n")).toContain("node scripts/langfuse-vorbedingung.mjs");
   });
   test("der Takt prüft sie nicht", () => {
     expect(lies(".github/workflows/board-takt.yml")).not.toContain("langfuse-vorbedingung");

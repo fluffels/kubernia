@@ -171,21 +171,50 @@ describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
   });
 });
 
-describe("Wächter-Lauf-Hinweis (#1693 L63)", () => {
-  const W = M as unknown as { gemeinsameWaechterDateien: (u: string[], i: string[]) => string[] };
-  test("nur Dateien unter .claude/, docs/ und AGENTS.md, die BEIDE Seiten berühren", () => {
-    const u = [".claude/skills/a/SKILL.md", "docs/x.md", "AGENTS.md", "src/a.ts", "docs/nur-unsere.md", "README.md"];
-    const i = [".claude/skills/a/SKILL.md", "docs/x.md", "AGENTS.md", "src/a.ts", "docs/nur-ihre.md", "README.md"];
-    assert.deepEqual(W.gemeinsameWaechterDateien(u, i), [".claude/skills/a/SKILL.md", "AGENTS.md", "docs/x.md"]);
+describe("Wächter-Lauf-Hinweis", () => {
+  const W = M as unknown as {
+    WAECHTER_PFAD: RegExp;
+    waechterDateien: (u: string[], i: string[]) => string[];
+    waechterHinweis: (d: string[]) => string;
+  };
+  test("Pfadliste: .claude/, .github/, docs/, test/harness/, README.md, jede AGENTS.md (auch modul-lokal)", () => {
+    for (const p of [".claude/a", ".github/workflows/x.yml", "docs/x.md", "test/harness/a.test.ts", "README.md", "AGENTS.md", "src/content/AGENTS.md"]) {
+      assert.ok(W.WAECHTER_PFAD.test(p), p);
+    }
   });
-  test("keine Überschneidung oder fremde Pfade (Präfix-Falle: docs-alt/, AGENTS.mdx): leer", () => {
-    assert.deepEqual(W.gemeinsameWaechterDateien(["docs/a.md"], ["docs/b.md"]), []);
-    assert.deepEqual(W.gemeinsameWaechterDateien(["docs-alt/a.md", "AGENTS.mdx", ".claudeX/a"], ["docs-alt/a.md", "AGENTS.mdx", ".claudeX/a"]), []);
-    assert.deepEqual(W.gemeinsameWaechterDateien([], []), []);
+  test("Pfadliste: Präfix-Fallen und fremde Pfade zählen nicht", () => {
+    for (const p of ["docs-alt/a.md", "AGENTS.mdx", "src/AGENTS.mdx", "xAGENTS.md", ".claudeX/a", ".githubx/a", "test/other.test.ts", "test/harnessx/a.ts", "src/README.md", "READMEx.md", "src/a.ts"]) {
+      assert.ok(!W.WAECHTER_PFAD.test(p), p);
+    }
+  });
+  test("dieselbe Datei auf beiden Seiten: Hinweis mit dieser Datei", () => {
+    assert.deepEqual(W.waechterDateien(["docs/x.md", "src/a.ts"], ["docs/x.md", "src/b.ts"]), ["docs/x.md"]);
+  });
+  test("Kopplung über zwei verschiedene Wächter-Dateien: beide stehen im Hinweis (sortiert)", () => {
+    assert.deepEqual(W.waechterDateien(["docs/b.md"], ["README.md"]), ["README.md", "docs/b.md"]);
+    assert.deepEqual(W.waechterDateien(["test/harness/a.test.ts", "src/a.ts"], ["src/ui/AGENTS.md"]), ["src/ui/AGENTS.md", "test/harness/a.test.ts"]);
+  });
+  test("nur eine Seite berührt Wächter-Dateien, oder keine: kein Hinweis", () => {
+    assert.deepEqual(W.waechterDateien(["docs/a.md", "docs/b.md"], ["src/a.ts"]), []);
+    assert.deepEqual(W.waechterDateien(["src/a.ts"], ["docs/a.md"]), []);
+    assert.deepEqual(W.waechterDateien(["docs-alt/a.md", "AGENTS.mdx"], ["docs-alt/a.md", "AGENTS.mdx"]), []);
+    assert.deepEqual(W.waechterDateien([], []), []);
+  });
+  test("waechterHinweis: leer ohne Dateien, bis 5 Dateien alle genannt, ab 6 gekürzt", () => {
+    assert.equal(W.waechterHinweis([]), "");
+    const fuenf = ["a", "b", "c", "d", "e"].map((n) => `docs/${n}.md`);
+    const t5 = W.waechterHinweis(fuenf);
+    assert.match(t5, /Wächter-Lauf nötig: npx vitest run test\/harness/);
+    assert.ok(fuenf.every((f) => t5.includes(f)));
+    assert.doesNotMatch(t5, /weitere/);
+    const t7 = W.waechterHinweis([...fuenf, "docs/f.md", "docs/g.md"]);
+    assert.match(t7, /und 2 weitere/);
+    assert.ok(!t7.includes("docs/f.md") && !t7.includes("docs/g.md"));
+    assert.match(W.waechterHinweis([...fuenf, "docs/f.md"]), /und 1 weitere/);
   });
 });
 
-describe("pruefeMerge nennt den Wächter-Lauf (#1693 L63)", () => {
+describe("pruefeMerge nennt den Wächter-Lauf", () => {
   const ordner: string[] = [];
   afterEach(() => {
     for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -211,7 +240,8 @@ describe("pruefeMerge nennt den Wächter-Lauf (#1693 L63)", () => {
     g(["commit", "-qam", "feature"]);
     g(["checkout", "-q", "main"]);
     schreibe(mainDatei, mainDatei === featureDatei ? "main\n" : "main-anders\n");
-    g(["commit", "-qam", "main"]);
+    g(["add", "-A"]);
+    g(["commit", "-qm", "main"]);
     g(["checkout", "-q", "feature"]);
     g(["merge", "-q", "--no-edit", "main"]);
     return { root, g };
@@ -219,11 +249,18 @@ describe("pruefeMerge nennt den Wächter-Lauf (#1693 L63)", () => {
   const lies = (root: string) => (p: string) => (existsSync(join(root, p)) ? readFileSync(join(root, p), "utf8") : null);
   const HINWEIS = /Wächter-Lauf nötig: npx vitest run test\/harness/;
 
-  test("verschiedene docs-Dateien je Seite: kein Hinweis", () => {
-    const { root, g } = merge("docs/a.md", "docs/b.md");
+  test("nur eine Seite berührt docs/: kein Hinweis", () => {
+    const { root, g } = merge("docs/a.md", "src/x.ts");
     const r = M.pruefeMerge({ git: g, lies: lies(root) });
     assert.equal(r.code, 0, r.text);
     assert.doesNotMatch(r.text, HINWEIS);
+  });
+  test("verschiedene Wächter-Dateien je Seite (Kopplung über zwei Dateien): Hinweis mit beiden", () => {
+    const { root, g } = merge("docs/a.md", "docs/b.md");
+    const r = M.pruefeMerge({ git: g, lies: lies(root) });
+    assert.equal(r.code, 0, r.text);
+    assert.match(r.text, HINWEIS);
+    assert.match(r.text, /docs\/a\.md, docs\/b\.md/);
   });
   test("beide Seiten berühren dieselbe Datei unter docs/ (ohne Test-Verlust): Hinweis bei Exit 0", () => {
     const root = mkdtempSync(join(tmpdir(), "kq-merge-w2-"));

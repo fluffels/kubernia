@@ -42,7 +42,7 @@ Entscheidung: **Der Workflow-Pfad wird entfernt, der Skill `kubernia` ist der ei
 | Leitplanken-Audit-Kommentar | Abschluss-Wächter `scripts/umsetzer-abschluss.mjs` |
 | Fortsetzung nach Abbruch | `ticket-lock` mit übernehmbarem Claim |
 
-Die generische Mechanik bleibt: Deckel-Logik in `check:size`, der AGENTS.md-Satz zu Workflow-Skripten, die Binder der Architektursichten und die `.gitignore`-Negation. Sie gilt für jedes künftige Skript unter `.claude/workflows/`. **Bekannte Grenze:** die Wächter für feste Modell-IDs, absolute Pfade, rohes Kommentar-Lesen und `npm ci` im Worktree sowie die Routing-Prüfung je `agent()`-Aufruf scannen den Ordner nicht mehr; ein neues Workflow-Skript bindet sie in seinem Ticket wieder ein. Der Abschluss-Wächter prüft den Audit-Kommentar nur für den Umsetzer-Subagenten (nicht für PRs, die der Hauptchat mergt) und gibt bei `gh`-Fehlern frei.
+Die generische Mechanik bleibt: Deckel-Logik in `check:size`, der AGENTS.md-Satz zu Workflow-Skripten, die Binder der Architektursichten und die `.gitignore`-Negation. Sie gilt für jedes künftige Skript unter `.claude/workflows/`. **Bekannte Grenze:** die Wächter für feste Modell-IDs, absolute Pfade, rohes Kommentar-Lesen und `npm ci` im Worktree sowie die Routing-Prüfung je `agent()`-Aufruf scannen den Ordner nicht mehr; ein neues Workflow-Skript bindet sie in seinem Ticket wieder ein. Der Abschluss-Wächter prüft den Audit-Kommentar nur für den Umsetzer-Subagenten (nicht für PRs, die der Hauptchat mergt) und gibt bei `gh`-Fehlern frei. Präzisiert durch #1740: die Kontext-Wächter scannen `.claude/workflows/` wieder.
 
 ## Konsequenzen
 

@@ -29,6 +29,11 @@
  * ist selbst Gate-Config – für rein doku-/config-strukturelle Wächter gibt es die etablierte
  * test-only-Familie (Präzedenz: `test/harness/agents-md-native.test.ts`).
  *
+ * Eine Semantik, die der Produktion: Abdeckungsfragen („schützt die Quelle X?“) beantwortet derselbe Matcher
+ * wie der Abschluss-Wächter (`trifftLeitplanke(pfad, leitplankenMuster())` aus `scripts/umsetzer-abschluss.mjs`),
+ * nicht ein eigener Substring-Abgleich. `normalizeProtected` bleibt nur für den String-Vergleich CODEOWNERS ↔ Quelle.
+ * Wird eine Abdeckungsfrage rot, ist die Ursache an der Quelle `.github/protected-paths.json` zu beheben, nicht am Test.
+ *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
@@ -38,6 +43,13 @@ import { join } from "node:path";
 import { hookSkripte, lokaleImporteTransitiv } from "./hook-importe";
 import { fileURLToPath } from "node:url";
 import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } from "./repo-texte";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
+
+const { trifftLeitplanke, leitplankenMuster } = abschlussRaw as unknown as {
+  trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
+  leitplankenMuster: () => string[];
+};
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(WURZEL + rel, "utf8");
@@ -75,13 +87,13 @@ function sourcePaths(src: ProtectedSource): Set<string> {
 
 /**
  * Leitplanken-Dateien, die über die reine Gate-Config hinaus als auditpflichtig gelten
- * (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
- * die Quelle sie nach der Normalisierung führen muss.
+ * (Ticket #1012 / Maintainerin-Entscheidung „breit"). Als konkrete Repo-Pfade: die Quelle muss sie
+ * nach der Semantik des Abschluss-Wächters (`trifftLeitplanke`) treffen.
  */
 // CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
 // AGENTS.md als geladene SSOT verdrängen und muss darum auditpflichtig sein.
-// Dasselbe gilt für CLAUDE.local.md (#1116) – der Abgleich matcht per Substring, `CLAUDE.md` trifft sie nicht.
-const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".mcp.json", "scripts/mcp-launch.mjs", ".agents/", "docs/agent-harness"];
+// Dasselbe gilt für CLAUDE.local.md (#1116) – `CLAUDE.md` trifft sie nicht (der Matcher der Produktion verankert Dateinamen).
+const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/agents/x.md", ".mcp.json", "scripts/mcp-launch.mjs", ".agents/x.md", "docs/agent-harness.md"];
 
 /**
  * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
@@ -120,12 +132,18 @@ function testDateien(): string[] {
 const TIEFENUNABHAENGIG = ["AGENTS.md"];
 
 /**
- * Deckt ein normalisierter Schutz-Eintrag den ganzen test/-Ordner ab? Das gilt für `test/` selbst,
- * jedes kürzere Präfix davon (`t`, aus `/t*`) und den Leer-String (aus `/*.test.ts` oder `/**`).
+ * Deckt ein Schutz-Muster den ganzen test/-Ordner ab? Ein Test direkt unter test/ (außerhalb des Wächter-Ordners)
+ * darf von keiner Muster-Menge getroffen werden; die Frage beantwortet der Matcher der Produktion.
  */
-function decktTestOrdnerAb(p: string): boolean {
-  return "test/".startsWith(p);
-}
+const UNGESCHUETZTER_TEST = "test/ungeschuetzt.test.ts";
+const decktTestOrdnerAb = (muster: string[]): boolean => trifftLeitplanke(UNGESCHUETZTER_TEST, muster);
+
+/** Die rohen Muster aus `.github/CODEOWNERS` (jeweils vor dem `@owner`). */
+const codeownersMuster = (text: string): string[] =>
+  text
+    .split(/\r?\n/)
+    .map((l) => l.trim().match(/^(\S+)\s+@\S+/)?.[1])
+    .filter((p): p is string => p !== undefined);
 
 /**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
@@ -174,12 +192,12 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
 
   test("die Quelle schützt sich selbst", () => {
     // Sonst streicht ein PR still einen Pfad aus der Quelle, ohne dass der Audit-Kommentar fällig wird.
-    assert.ok(sourcePaths(quelle).has(QUELLE), `${QUELLE} fehlt in sich selbst`);
+    assert.ok(trifftLeitplanke(QUELLE, leitplankenMuster()), `${QUELLE} fehlt in sich selbst`);
   });
 
   test("die Quelle deckt die Leitplanken-Dateien ab (nicht nur Gate-Config)", () => {
-    const sp = sourcePaths(quelle);
-    const fehlend = LEITPLANKEN.filter((p) => !sp.has(p));
+    const muster = leitplankenMuster();
+    const fehlend = LEITPLANKEN.filter((p) => !trifftLeitplanke(p, muster));
     assert.deepEqual(
       fehlend,
       [],
@@ -214,7 +232,7 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
 
   test("die Quelle schützt den Wächter-Ordner als Präfix (#1156, #1165)", () => {
     assert.ok(
-      sourcePaths(quelle).has(WAECHTER_ORDNER),
+      trifftLeitplanke(`${WAECHTER_ORDNER}x.test.ts`, leitplankenMuster()),
       `${QUELLE}: '/${WAECHTER_ORDNER}' fehlt – sonst lässt sich der Wächter ohne Audit-Spur abschwächen`,
     );
   });
@@ -222,9 +240,9 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
   test("kein Eintrag schützt pauschal den ganzen test/-Ordner (#1156)", () => {
     // Ein Muster wie /test/*harness*.test.ts normalisiert auf `test/` – dann wäre jeder PR mit
     // Teständerung auditpflichtig, und ein immer nötiger Audit-Kommentar markiert nichts mehr (Audit-Fatigue).
-    const alle = [...sourcePaths(quelle), ...codeownersPaths(codeowners)];
+    const alle = [...Object.values(quelle).flat(), ...codeownersMuster(codeowners)];
     assert.deepEqual(
-      alle.filter(decktTestOrdnerAb),
+      alle.filter((m) => decktTestOrdnerAb([m])),
       [],
       `Ein Schutz-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests stattdessen nach ${WAECHTER_ORDNER} legen (#1156, #1165)`,
     );
@@ -285,8 +303,8 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
   test("der unverankerte AGENTS.md-Eintrag ist für den Abgleich verhaltensneutral (#1168)", () => {
     // Beide Schreibweisen ergeben dasselbe Muster, und es trifft Modul-Dateien.
     assert.equal(normalizeProtected("AGENTS.md"), normalizeProtected("/AGENTS.md"));
-    assert.equal("src/content/AGENTS.md".includes(normalizeProtected("AGENTS.md")), true);
-    assert.equal(decktTestOrdnerAb(normalizeProtected("AGENTS.md")), false);
+    assert.equal(trifftLeitplanke("src/content/AGENTS.md", ["AGENTS.md"]), true);
+    assert.equal(decktTestOrdnerAb(["AGENTS.md"]), false);
     // Darum sieht der Sync-Test den Unterschied nie – der Anker-Test auf die rohe Schreibweise ist nötig.
     assert.deepEqual([...codeownersPaths("/AGENTS.md @fluffels")], [...codeownersPaths("AGENTS.md @fluffels")]);
   });
@@ -306,11 +324,11 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
   });
 
   test("der test/-Pauschal-Filter fängt auch breitere Muster, aber keine Einzelpfade (#1156)", () => {
-    for (const muster of ["/test/*x*", "/test", "/t*", "/*.test.ts", "/**"]) {
-      assert.equal(decktTestOrdnerAb(normalizeProtected(muster)), true, `nicht erkannt: ${muster}`);
+    for (const muster of ["/test/", "/test/*", "/test", "/t*", "*.test.ts", "/test/*.test.ts", "/**"]) {
+      assert.equal(decktTestOrdnerAb([muster]), true, `nicht erkannt: ${muster}`);
     }
-    for (const einzeln of ["/test/agents-md-native.test.ts", `/${WAECHTER_ORDNER}`, "/.claude/", "/AGENTS.md", "/tests-x/"]) {
-      assert.equal(decktTestOrdnerAb(normalizeProtected(einzeln)), false, `fälschlich erkannt: ${einzeln}`);
+    for (const einzeln of ["/test/agents-md-native.test.ts", `/${WAECHTER_ORDNER}`, "/.claude/", "/AGENTS.md", "/tests-x/", "/*.test.ts"]) {
+      assert.equal(decktTestOrdnerAb([einzeln]), false, `fälschlich erkannt: ${einzeln}`);
     }
   });
 });

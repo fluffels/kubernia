@@ -119,7 +119,7 @@ export const BUNDLE_BUDGETS = [
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 593_000, // #1693: gemeinsames esc() für HTML-Attribute (src/ui/html-escape.ts, maskiert auch " und '), Messwert 592027 B; #1667: Mehrfachziele und Aktionsgruppen auf der #1530-Prüfung (zusammen Messwert 591669 B in der CI); #1530: kubectl-Eingabeprüfung, Messwert 590135 B
+    maxBytes: 593_000, // #1693: gemeinsames esc() für HTML-Attribute (src/core/html-escape.ts, maskiert auch " und '), Messwert 592027 B; #1667: Mehrfachziele und Aktionsgruppen auf der #1530-Prüfung (zusammen Messwert 591669 B in der CI); #1530: kubectl-Eingabeprüfung, Messwert 590135 B
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",

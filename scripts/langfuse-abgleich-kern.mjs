@@ -19,7 +19,7 @@ export const ROW_LIMIT = 1000;
 
 // ── Stichtag, Fristen und Ledger (geteilt von Abgleich und Nachlieferer, Konvention #1398) ──
 
-/** Sessions mit einem Call vor diesem Zeitpunkt werden nur gezählt: davor fehlt die TTL-Aufteilung der Cache-Writes, der Fingerabdruck passt nicht zu Langfuse (vgl. langfuse-abgleich.mjs). */
+/** Sessions mit einem Call vor diesem Zeitpunkt werden nur gezählt: davor liegen die Cache-Write-Schlüssel 5m/1h nur teilweise vor (05./06.10.: LLM Call nur 1h, Subagent LLM Call nur 5m), der Fingerabdruck passt nicht zu Langfuse (#1599, vgl. langfuse-abgleich.mjs). */
 export const STICHTAG = "2026-10-07T00:00:00Z";
 /** Ohne bekanntes Ende gilt eine Session erst nach dieser Ruhe als beendet (eine untätig offene Parallelsession bleibt unberührt). */
 export const RUHEFRIST_OHNE_ENDE_H = 24;

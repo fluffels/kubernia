@@ -67,6 +67,14 @@ function schluessel(x: unknown, out: string[] = []): string[] {
   return out;
 }
 
+/** Jeder `actions/checkout@` eines Jobs braucht `persist-credentials: false` (gemeinsam für `pruefe` und `pruefeInbox`). */
+function checkoutFehler(name: string, job: Obj): string[] {
+  const schritte = Array.isArray(job.steps) ? job.steps.filter(istObj) : [];
+  return schritte
+    .filter((s) => typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && !(istObj(s.with) && s.with["persist-credentials"] === false))
+    .map(() => `Job ${name}: Checkout ohne persist-credentials: false`);
+}
+
 /** Alle Regelverstöße einer Datei als Liste (leer = ok). `art` wählt die dateispezifischen Regeln. */
 function pruefe(yml: string, art: "codeql" | "scorecard"): string[] {
   const fehler: string[] = [];
@@ -92,11 +100,7 @@ function pruefe(yml: string, art: "codeql" | "scorecard"): string[] {
   for (const [name, j] of jobs) {
     const rechte = schreibRechte(j.permissions).filter((r) => r !== "security-events: write");
     if (rechte.length) fehler.push(`Job ${name}: unerlaubte Schreibrechte (${rechte.join(", ")})`);
-    for (const s of schritte(j)) {
-      if (typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && !(istObj(s.with) && s.with["persist-credentials"] === false)) {
-        fehler.push(`Job ${name}: Checkout ohne persist-credentials: false`);
-      }
-    }
+    fehler.push(...checkoutFehler(name, j));
   }
   const alleSchluessel = schluessel(wf);
   if (art === "codeql") {
@@ -137,13 +141,7 @@ function pruefeInbox(yml: string): string[] {
   else if (schreibRechte(wf.permissions).length) fehler.push("oberste permissions enthalten write");
   const jobs = istObj(wf.jobs) ? Object.entries(wf.jobs).filter((e): e is [string, Obj] => istObj(e[1])) : [];
   if (jobs.length === 0) fehler.push("keine Jobs gefunden");
-  for (const [name, j] of jobs) {
-    for (const s of Array.isArray(j.steps) ? j.steps.filter(istObj) : []) {
-      if (typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && !(istObj(s.with) && s.with["persist-credentials"] === false)) {
-        fehler.push(`Job ${name}: Checkout ohne persist-credentials: false`);
-      }
-    }
-  }
+  for (const [name, j] of jobs) fehler.push(...checkoutFehler(name, j));
   return fehler;
 }
 
@@ -231,6 +229,10 @@ describe("Inbox-Workflow: Fixtures", () => {
   test("Checkout ohne with", () => expect(pruefeInbox(inbox({ checkout: `      - uses: actions/checkout@${SHA} # v7.0.1` }))).toEqual([expect.stringContaining("persist-credentials")]));
   test("Checkout mit persist-credentials: true", () =>
     expect(pruefeInbox(inbox({ checkout: `      - uses: actions/checkout@${SHA} # v7.0.1\n        with:\n          persist-credentials: true` }))).toEqual([expect.stringContaining("persist-credentials")]));
+  test("Workflow ohne Jobs: keine Jobs gefunden", () => {
+    expect(pruefeInbox("name: x\non:\n  workflow_dispatch: {}\npermissions: {}\n")).toEqual(["keine Jobs gefunden"]);
+    expect(pruefeInbox("name: x\non:\n  workflow_dispatch: {}\npermissions: {}\njobs:\n  a: 5\n")).toEqual(["keine Jobs gefunden"]);
+  });
   test("kaputtes YAML, leere Eingabe: fail-closed", () => {
     expect(pruefeInbox(":::\n\t- [").length).toBeGreaterThan(0);
     expect(pruefeInbox("").length).toBeGreaterThan(0);

@@ -14,12 +14,14 @@
  * (`settings.json`, `scripts/`). Ein Laufwerks-Buchstabe, gefolgt von `\n`/`\r`/`\t` als eigenes Wort
  * (JS-Escape wie `"A:\n"`), zählt bewusst nicht als Pfad.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "..", "..");
-const SCAN = [".claude/skills", ".claude/agents"];
+const SCAN = [".claude/skills", ".claude/agents", ".claude/workflows"];
+/** Ordner, die fehlen dürfen (heute kein Workflow-Skript); alle anderen müssen Dateien liefern. */
+const OPTIONAL = [".claude/workflows"];
 const ABSOLUT =
   /\b[A-Za-z]:(?:\\{1,2}(?![nrt]\b)|\/(?!\/))\w|(?<![\w.:/-])\/(?:Users|home|mnt\/[a-z]|[a-z])\/\w/;
 
@@ -33,10 +35,11 @@ function findeAbsolutePfade(text: string): string[] {
 
 function dateien(dir: string): string[] {
   const out: string[] = [];
+  if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out.push(...dateien(p));
-    else if (/\.(md|js|json)$/.test(name)) out.push(p);
+    else if (/\.(md|js|mjs|ts|json)$/.test(name)) out.push(p);
   }
   return out;
 }
@@ -65,7 +68,7 @@ describe("Skill-Pfade (#1211)", { timeout: 30_000 }, () => {
     const treffer: string[] = [];
     for (const d of SCAN) {
       const liste = dateien(join(ROOT, d));
-      expect(liste.length, `${d} ist leer – der Wächter prüfte nichts`).toBeGreaterThan(0);
+      expect(liste.length > 0 || OPTIONAL.includes(d), `${d} ist leer – der Wächter prüfte nichts`).toBe(true);
       for (const f of liste) {
         for (const z of findeAbsolutePfade(readFileSync(f, "utf8"))) {
           treffer.push(`${relative(ROOT, f).replace(/\\/g, "/")}: ${z}`);
