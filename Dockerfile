@@ -13,7 +13,7 @@
 #   → http://localhost:8080
 
 # --- Stage 1: Build (Node-Toolchain, erzeugt dist/) ---
-FROM node:22-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 # package*.json zuerst kopieren → Schicht wird bei reinen Code-Änderungen gecacht
 COPY package*.json ./

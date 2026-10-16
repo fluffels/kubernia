@@ -15,7 +15,7 @@
 # Containerstart. So enthält das Image kein Secret.
 
 # --- Stage 1: Build (Dev-Panel-Bundle, ohne eingebackenes Passwort) ---
-FROM node:22-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
