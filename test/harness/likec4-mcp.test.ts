@@ -19,7 +19,10 @@ import { join } from "node:path";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/playwright-mcp.mjs).
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as launcherModule from "../../scripts/likec4-mcp.mjs";
-import { mcpAbfrage, type McpAbfrage, type McpTool } from "./mcp-handshake";
+import { mcpAbfrage, schreibToolsOhneAsk as schreibToolsOhneAskRoh, type McpAbfrage, type McpTool } from "./mcp-handshake";
+// @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
+import * as ausfallModule from "../../scripts/mcp-ausfall.mjs";
+const istNpxFallback = (ausfallModule as unknown as { istNpxFallback: (text: string) => boolean }).istNpxFallback;
 
 type Installed = { version: string; binPath: string } | null;
 type Plan = { mode: "local"; binPath: string } | { mode: "npx"; spec: string };
@@ -44,10 +47,8 @@ afterAll(() => {
   for (const d of angelegt) rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
-/** Tools ohne `readOnlyHint: true`, die nicht in `ask` stehen (als `mcp__likec4__<name>`). Pur. */
-function schreibToolsOhneAsk(tools: McpTool[], ask: string[], praefix = "mcp__likec4__"): string[] {
-  return tools.filter((t) => t.annotations?.readOnlyHint !== true && !ask.includes(praefix + t.name)).map((t) => t.name);
-}
+/** Schreib-Tools des likec4-Servers ohne ask-Eintrag (`mcp__likec4__<name>`). */
+const schreibToolsOhneAsk = (tools: McpTool[], ask: string[]): string[] => schreibToolsOhneAskRoh(tools, ask, "mcp__likec4__");
 
 describe("Launcher-Bausteine (#1422)", () => {
   test("passende lokale Installation → lokal, sonst npx mit exakter Lockfile-Version", () => {
@@ -66,9 +67,7 @@ describe("Launcher-Bausteine (#1422)", () => {
   });
 
   test("npx-Hinweis hat das Format, das scripts/mcp-ausfall.mjs als npx-Fallback erkennt", () => {
-    // Das Muster spiegelt die Klassifikation in scripts/mcp-ausfall.mjs (dort nicht exportiert).
-    const muster = /→\s*npx\b|\bnpx -y\b/;
-    assert.match(launcher.npxHinweis("likec4@1.2.3"), muster);
+    assert.ok(istNpxFallback(`Server stderr: ${launcher.npxHinweis("likec4@1.2.3")}`));
     assert.equal(launcher.npxHinweis("likec4@1.2.3"), "likec4-mcp: lokale Installation fehlt oder weicht ab → npx likec4@1.2.3");
   });
 
@@ -134,6 +133,9 @@ describe("schreibToolsOhneAsk – Erkennung (Red-Green)", () => {
   });
   test("ask-Eintrag eines anderen Servers genügt nicht", () => {
     assert.deepEqual(schreibToolsOhneAsk([{ name: "x" }], ["mcp__playwright__x"]), ["x"]);
+  });
+  test("bekannte Schreib-Tools zählen nur mit Namen, nicht pauschal", () => {
+    assert.deepEqual(schreibToolsOhneAskRoh([{ name: "x" }, { name: "y" }], [], "mcp__s__", ["x"]), ["y"]);
   });
 });
 
