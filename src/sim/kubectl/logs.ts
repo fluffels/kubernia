@@ -12,7 +12,7 @@ import { slashRef, notSimulated, unknownResourceType } from "./args";
 import type { Call } from "../cliargs";
 import { podAddress } from "../endpoints";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
-import { statefulPodClaimName } from "../workload";
+import { statefulPodClaimName, containerNameOf } from "../workload";
 
 // --- kubectl logs: die (kaputt-abhängigen) Log-Texte + Vorab-Checks ausgelagert ---
 
@@ -27,7 +27,7 @@ function deploymentLogFacts(host: KubectlHost, dep: Deployment, name: string): P
     case "evicted":
       // Evicted = Phase Failed, Container beendet; der kubelet räumt tote Container samt Logs ab (wie bei Disk-Druck).
       return {
-        noLogs: host._err('Error from server (BadRequest): container "' + dep.name + '" in pod "' + name + '" is terminated',
+        noLogs: host._err('Error from server (BadRequest): container "' + containerNameOf(dep) + '" in pod "' + name + '" is terminated',
           "Der kubelet hat den Pod evicted: sein Container läuft nicht mehr, seine Logs sind weg. Den Grund zeigen die Events: kubectl describe pod " + name),
         crashLog: null,
       };
@@ -42,7 +42,7 @@ function brokenLogFacts(host: KubectlHost, dep: Deployment, b: Broken, name: str
   switch (b.type) {
     case "imagepull":
       return {
-        noLogs: host._err('Error from server (BadRequest): container "' + dep.name + '" in pod "' + name + '" is waiting to start: trying and failing to pull image',
+        noLogs: host._err('Error from server (BadRequest): container "' + containerNameOf(dep) + '" in pod "' + name + '" is waiting to start: trying and failing to pull image',
           "Keine Logs ohne Image! Die Ursache steht in den Events: kubectl describe pod " + name),
         crashLog: null,
       };
@@ -88,7 +88,7 @@ function logSource(host: KubectlHost, c: ClusterPod, name: string): LogSource {
     case "Deployment":
       return {
         ...deploymentLogFacts(host, c.dep, name),
-        container: c.dep.name,
+        container: containerNameOf(c.dep),
         normal: [
           "10.244.1.1 - - [12/Jun/2026:09:14:02 +0000] \"GET / HTTP/1.1\" 200 615",
           "10.244.1.1 - - [12/Jun/2026:09:14:05 +0000] \"GET /gesundheit HTTP/1.1\" 200 2",

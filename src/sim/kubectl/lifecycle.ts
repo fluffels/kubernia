@@ -21,7 +21,8 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { exactlyOneName, LITERAL_FLAG, notSimulated, NS, replicasArg, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
+import { exactlyOneName, literalKeysChecked, LITERAL_FLAG, notSimulated, NS, replicasArg, resolveRoleResources, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
+import { containerNameFromImage } from "../util";
 import { readTargets, targetOutcome, type Target } from "./targets";
 import { flag, IM_HANDLER, type Call, type Dispatch, type FlagSpec, type SubEntry } from "../cliargs";
 import { applyDeployment } from "./apply-deployment";
@@ -82,14 +83,29 @@ type CreateHandler = (host: KubectlHost, c: Call) => string;
 
 /** Der EINE Namens-Vorspann aller create-Handler: genau ein NAME (sonst der echte kubectl-Text samt deutschem
  *  Muster) und gültig nach DNS-1123. `names` sind die Argumente hinter dem Typ; ein String ist die Fehlerausgabe. */
-function createName(host: KubectlHost, names: readonly string[], kind: string, muster: string): { name: string } | string {
+function createName(host: KubectlHost, names: readonly string[], kind: string, muster: string, clientCheck?: () => string | null): { name: string } | string {
   const arity = exactlyOneName(host, names, muster);
   if (arity) return arity;
+  // Wie kubectl: erst die Prüfungen im Client (Literale), dann die des API-Servers (Name, already exists).
+  const client = clientCheck?.() ?? null;
+  if (client) return client;
   return invalidNameError(host, kind, names[0]) ?? { name: names[0] };
 }
 
-/** Die `<schluessel>`-Teile der `--from-literal=<schluessel>=<wert>`-Angaben (die Form hat die Flag-Tabelle schon geprüft). */
-const literalKeys = (c: Call): string[] => c.values("--from-literal").map(v => v.slice(0, v.indexOf("=")));
+/** Die geprüften Schlüssel der `--from-literal`-Angaben (Secret/ConfigMap) samt Fehlerausgabe; läuft als Client-Prüfung vor Namen und already exists. */
+function withLiterals(host: KubectlHost, c: Call, names: readonly string[], kind: "Secret" | "ConfigMap", muster: string): { name: string; keys: string[] } | string {
+  let keys: string[] = [];
+  const n = createName(host, names, kind, muster, () => {
+    const r = literalKeysChecked(host, c, kind, names[0]);
+    if (typeof r === "string") return r;
+    keys = r;
+    return null;
+  });
+  return typeof n === "string" ? n : { name: n.name, keys };
+}
+
+/** Der deutsche Tipp bei `already exists` (Secret, ConfigMap): löschen oder anderen Namen wählen. */
+const alreadyExistsTip = (art: string, name: string): string => "Lösche es zuerst ('kubectl delete " + art + " " + name + "') oder wähle einen anderen Namen.";
 
 /** secret tls <name> --cert=<datei> --key=<datei> */
 const SECRET_TLS_MUSTER = "Muster: kubectl create secret tls <name> --cert=tls.crt --key=tls.key";
@@ -104,23 +120,19 @@ function createSecretTls(host: KubectlHost, c: Call): string {
 
 /** secret generic <name> --from-literal=schluessel=wert */
 function createSecretGeneric(host: KubectlHost, c: Call): string {
-  const n = createName(host, c.args, "Secret", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
+  const n = withLiterals(host, c, c.args, "Secret", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
   if (typeof n === "string") return n;
-  const literals = literalKeys(c);
-  if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=passwort=geheim123' an.");
-  if (host.secrets.some(s => s.name === n.name)) return host._err('error: secrets "' + n.name + '" already exists');
-  host.secrets.push({ name: n.name, keys: literals, created: host.clock });
+  if (host.secrets.some(s => s.name === n.name)) return host._err('error: secrets "' + n.name + '" already exists', alreadyExistsTip("secret", n.name));
+  host.secrets.push({ name: n.name, keys: n.keys, created: host.clock });
   return "secret/" + n.name + " created";
 }
 
 // kubectl create configmap <name> --from-literal=schluessel=wert
 const createConfigMap: CreateHandler = (host, c) => {
-  const n = createName(host, c.args, "ConfigMap", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
+  const n = withLiterals(host, c, c.args, "ConfigMap", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
   if (typeof n === "string") return n;
-  const literals = literalKeys(c);
-  if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=log_level=info' an.");
-  if (host.configMaps.some(m => m.name === n.name)) return host._err('error: configmaps "' + n.name + '" already exists');
-  host.configMaps.push({ name: n.name, keys: literals, created: host.clock });
+  if (host.configMaps.some(m => m.name === n.name)) return host._err('error: configmaps "' + n.name + '" already exists', alreadyExistsTip("configmap", n.name));
+  host.configMaps.push({ name: n.name, keys: n.keys, created: host.clock });
   return "configmap/" + n.name + " created";
 };
 
@@ -142,9 +154,11 @@ const createRoleOf = (cluster: boolean): CreateHandler => (host, c) => {
   const n = createName(host, c.args, cluster ? "ClusterRole" : "Role", "Muster: kubectl create " + typ + " <name> --verb=get,list --resource=pods");
   if (typeof n === "string") return n;
   const verbs = c.list("--verb");
-  const resources = c.list("--resource");
+  const given = c.list("--resource");
   if (verbs.length === 0) return host._err("error: at least one verb must be specified", "Häng z.B. '--verb=get,list' an.");
-  if (resources.length === 0) return host._err("error: at least one resource must be specified", "Häng z.B. '--resource=pods' an.");
+  if (given.length === 0) return host._err("error: at least one resource must be specified", "Häng z.B. '--resource=pods' an.");
+  const resources = resolveRoleResources(host, given);
+  if (typeof resources === "string") return resources;
   if (host.roles.some(r => sameRbac(r, { name: n.name, cluster }))) return host._err('error: ' + typ + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
   host.roles.push({ name: n.name, cluster, rules: [{ verbs, resources }], created: host.clock });
   const warnings = verbs.filter(v => !RESOURCE_VERBS.includes(v)).map(v => "Warning: '" + v + "' is not a standard resource verb\n");
@@ -169,7 +183,9 @@ const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
   if (typeof n === "string") return n;
   const roleName = c.value("--role");
   const clusterRoleName = c.value("--clusterrole");
-  if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
+  // RoleBinding (`Validate` in create_rolebinding.go): genau eines von --role und --clusterrole, beide oder keines ist derselbe Fehler.
+  if (!cluster && !!roleName === !!clusterRoleName) return host._err("error: exactly one of clusterrole or role must be specified", "Häng entweder '--role=<name>' oder '--clusterrole=<name>' an.");
+  if (cluster && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", "Häng '--clusterrole=<name>' an.");
   const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
   const subjects = collectRbacSubjects(c);
   if (subjects.length === 0) return host._err("error: at least one of --user or --serviceaccount must be specified", "Muster: '--serviceaccount=default:deploy-bot' oder '--user=alice'.");
@@ -194,7 +210,7 @@ const createDeployment: CreateHandler = (host, c) => {
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).
   const denied = admitNewPods(host, n.name, undefined);
   if (denied) return denied;
-  addDeployment(host, host._makeDeployment(n.name, images[0], replicas));
+  addDeployment(host, host._makeDeployment(n.name, images[0], replicas, undefined, undefined, undefined, { containerName: containerNameFromImage(images[0], host.rng) }));
   return "deployment.apps/" + n.name + " created";
 };
 

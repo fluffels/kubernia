@@ -173,3 +173,13 @@ export function parseCpuMilli(spec: string): number | null {
 export function effectiveDefaultStorageClass<T extends { name: string; isDefault: boolean; created: number }>(classes: readonly T[]): T | undefined {
   return classes.filter(s => s.isDefault).sort((a, b) => b.created - a.created || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))[0];
 }
+
+/** Der Container-Name, den `kubectl create deployment` aus dem Image ableitet (`buildPodSpec` in `create_deployment.go`):
+ *  letztes `/`-Segment ohne `@digest` und `:tag`. Enthält der Name `_` oder `.`, werden beide zu `-` und ein
+ *  zufälliger 5-stelliger Suffix hängt dran (DNS-1123-Label). */
+export function containerNameFromImage(image: string, rng: () => number): string {
+  const base = image.split("/").pop() ?? image;
+  const name = base.split("@")[0].split(":")[0];
+  if (!/[_.]/.test(name)) return name;
+  return name.replace(/[_.]/g, "-") + "-" + randSuffix(GENERATED_SUFFIX_LEN, rng, K8S_ALPHANUMS);
+}
