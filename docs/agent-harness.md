@@ -22,7 +22,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | 121 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 79 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Wächter-Tests | 80 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -198,6 +198,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WAS:** `scripts/check-factory-drift.mjs` vergleicht den Besitz des Projekts mit `.factory/sync-stand.json`, den der Sync (`npm run factory:sync -- --quelle <pfad>`) schreibt: Hash des Manifests und je Einheit (CRLF-neutral). Rot bei geändertem Manifest, geänderter, gelöschter oder nicht mehr auflösbarer Einheit und bei Einheiten, die Manifest und Sync-Stand verschieden listen; jede Meldung nennt den Weg (upstream ändern und neu syncen, oder den Projektwert in `.factory/projekt.json` auslagern). Ohne Sync-Stand ist das Projekt selbst die Quelle, die Prüfung entfällt mit einer Zeile.
 - **WARUM:** der Sync überschreibt nur Besitz; das Gate schließt die Gegenrichtung, damit ein Projekt Besitz nicht still ändert (ADR 0022 F9). Der Referenzstand liegt im Projekt, weil die CI ohne Zugriff auf das Factory-Repo prüft.
 - **Absicherung:** `test/factory-sync.test.ts` (synthetisches Fremdrepo, der echte Besitz dieses Repos in ein Temp-Ziel, das Gate aus der Zielkopie); Grenzen im [ADR 0022, Fortschreibung #1613](adr/0022-dark-factory-kern-und-verteilung.md).
+
+### Selbstbeschreibungs-Wächter (`test/harness/selbstbeschreibung.test.ts`, #1714)
+- **WAS:** `offeneQuelleBehauptungen` sucht `open source`, `open-source`, `OpenSource` und `quelloffen` (ohne Beachtung der Schreibung, Markdown-Zeichen vorher entfernt) in den Flächen von `istSelbstbeschreibung`: `.factory/produkt/`, `README.md`, `LICENSE`, `package.json`, `docs/agent-harness*.md`, `docs/harness-*.md`, Agenten-Definitionen, Skills und Plugin-Manifeste. Ein Treffer ist erlaubt, wenn unter den drei Wörtern davor im selben Satz eine Verneinung steht (`nicht`, `kein…`, `not`, `no`, `non`). Dazu prüfen Tests die Entwürfe unter `.factory/produkt/`: Lizenz „Alle Rechte vorbehalten“ ohne Spiel- und Projektbezug, keine Fremdbeiträge; README nennt den Produktnamen und „source-available“, keine Behauptung, der Harness sei eine Dark Factory.
+- **WARUM:** der Harness wird als „source-available“ veröffentlicht (ADR 0022, Fortschreibungen #1706 und #1714); „Open Source“ wäre eine falsche Selbstbeschreibung, weil die Lizenz Nutzung, Kopie und Ableitung nicht gestattet. ADRs, Tests und Spiel-Texte sind bewusst nicht im Scope.
+- **Grenze:** nicht erkannt werden Kürzel und Umschreibungen (OSS, FOSS, freie Software), doppelte Verneinung und eine Verneinung weiter als drei Wörter davor; ein Fragesatz („Ist der Harness Open Source?“) zählt als Treffer. Der Scope ist eine feste Flächenliste, kein Scan des ganzen Repos.
 
 ### Doku-Aktualitäts-Wächter (`npm run check:doctickets`, #610)
 - **WAS:** liest die zwischen den Markern `open-harness-tickets:start/end` in §5 als **„offen"** gelistete Roadmap-Tabelle und gleicht jede Nummer gegen den echten `gh issue`-Status ab — ist eine als offen dokumentierte Nummer auf GitHub bereits **CLOSED**, ist die Roadmap stale. Zusätzlich gleicht er das Ticket jeder `ALLOWLIST`-Ausnahme von `check:size` und `check:contextsize` ab (CLOSED oder ohne `#N` ist rot; die `DECKEL` sind Ratchet-Historie und zählen nicht). Die reine Logik (`parseOpenHarnessTickets`, `ausnahmeTickets`) testet `test/doctickets.test.ts` offline (Red-Green); dort steht auch der blockierende Teil „jede Ausnahme nennt ein `#N`“.
