@@ -26,6 +26,10 @@ on:
     workflows: ["CI"]
     types: [completed]
 
+# Oberstes Minimum; der Job erweitert es gezielt.
+permissions:
+  contents: read
+
 jobs:
   stuck-check:
     # Nur bei failed CI-Läufen, die durch einen PR ausgelöst wurden.
@@ -40,6 +44,7 @@ jobs:
       # - pull-requests: write → Label + Kommentar auf dem PR
       # - contents: read → Checkout für das Skript (main-Branch)
       pull-requests: write
+      actions: read  # CI-Läufe des Branches per gh api zählen
       contents: read
 
     steps:

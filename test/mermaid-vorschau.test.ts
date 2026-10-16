@@ -9,6 +9,7 @@ const M = raw as unknown as {
   mermaidBloecke: (md: string) => string[];
   vorschauHtml: (b: string[]) => string;
   mermaidDatei: (dist: string, url: string) => string | null;
+  unterhalb: (basis: string, pfad: string) => string | null;
 };
 
 describe("mermaidBloecke", () => {
@@ -58,5 +59,17 @@ describe("mermaidDatei: Pfadschutz", () => {
     expect(M.mermaidDatei(dist, "/mermaid/fehlt.mjs")).toBeNull();
     expect(M.mermaidDatei(dist, "/mermaid/")).toBeNull();
     expect(M.mermaidDatei(dist, "/mermaid/%E0")).toBeNull(); // kaputte Prozent-Kodierung
+  });
+});
+
+describe("unterhalb: Pfad bleibt im Ordner (#1663)", () => {
+  test("Pfade im Ordner und der Ordner selbst gelten, Ausbruch und Geschwister nicht", () => {
+    const root = fixture({ "repo/docs/a.md": "x", "repo-fremd/b.md": "y" });
+    const repo = `${root}/repo`;
+    expect(M.unterhalb(repo, `${repo}/docs/a.md`)).toMatch(/a\.md$/);
+    expect(M.unterhalb(repo, repo)).not.toBeNull();
+    expect(M.unterhalb(repo, `${repo}/docs/../../repo-fremd/b.md`)).toBeNull();
+    expect(M.unterhalb(repo, `${repo}/../geheim.txt`)).toBeNull();
+    expect(M.unterhalb(repo, `${root}/repo-fremd/b.md`)).toBeNull(); // gleiches Präfix, anderer Ordner
   });
 });

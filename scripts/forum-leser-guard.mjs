@@ -15,26 +15,17 @@
  *
  * Nur Node-Builtins.
  */
-import { posix } from "node:path";
-import { buildDenyOutput, emit, istDirektaufruf, readStdin } from "./hook-io.mjs";
+import { emit, istDirektaufruf, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
 
 // Groß-/Kleinschreibung egal (Windows-Pfade); Dateiname exakt `forum-<Ziffern>.txt` im Ordner `.claude/forum-quarantaene/`.
 const QUARANTAENE_DATEI = /\/\.claude\/forum-quarantaene\/forum-\d+\.txt$/i;
-
-/** Pfad lexikalisch normalisieren (Backslashes → Slashes, `..` auflösen), relative Pfade gegen `cwd`. */
-const normalisiere = (pfad, cwd) => {
-  const p = String(pfad).replace(/\\/g, "/");
-  const absolut = /^([a-z]:)?\//i.test(p);
-  const basis = String(cwd ?? "").replace(/\\/g, "/");
-  return posix.normalize(absolut || !basis ? p : `${basis}/${p}`);
-};
 
 /** Darf `forum-leser` diese Datei lesen? Pur. Liefert `{ block: false }` oder `{ block: true, reason }`. */
 export function bewerteForumLeserRead(filePath, cwd = "") {
   if (typeof filePath !== "string" || filePath.trim() === "") {
     return { block: true, reason: "forum-leser: Read ohne Dateipfad ist nicht prüfbar, darum abgelehnt." };
   }
-  if (QUARANTAENE_DATEI.test(normalisiere(filePath, cwd))) return { block: false };
+  if (QUARANTAENE_DATEI.test(normalisierePfad(filePath, cwd))) return { block: false };
   return {
     block: true,
     reason:
@@ -44,16 +35,6 @@ export function bewerteForumLeserRead(filePath, cwd = "") {
 }
 
 /** Hook-stdin → Entscheidung. Kaputter Input: durchlassen (ein Hook darf nie selbst alles blockieren). */
-export function entscheideHook(text) {
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (data?.tool_name !== undefined && data.tool_name !== "Read") return null;
-  const e = bewerteForumLeserRead(data?.tool_input?.file_path, data?.cwd);
-  return e.block ? buildDenyOutput(e.reason) : null;
-}
+export const entscheideHook = pfadGuardHook("Read", bewerteForumLeserRead);
 
 if (istDirektaufruf(import.meta.url)) emit(entscheideHook(readStdin()));

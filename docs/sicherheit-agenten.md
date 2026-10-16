@@ -22,7 +22,7 @@ Das Repo ist öffentlich: jeder darf Issues eröffnen und kommentieren, es gibt 
 
 | Kanal | Heutiges Gate |
 |---|---|
-| Forum (GitHub Discussions) | Label `forum` gilt als Fremdeingang; `scripts/forum-sanitize.mjs` entschärft und rahmt den Text; Rule-of-Two-Audit im [Forum-Skill](../.claude/skills/forum/SKILL.md); Quarantäne: den Thread liest nur der Subagent [`forum-leser`](../.claude/agents/forum-leser.md) (nur `Read` auf die Quarantäne-Datei, `scripts/forum-quarantaene.mjs`, `scripts/forum-leser-guard.mjs`), der privilegierte Lauf sieht nur das feste Ergebnisformat; Antwort nur nach Freigabe der Maintainerin |
+| Forum (GitHub Discussions) | Label `forum` gilt als Fremdeingang; die Action legt das Inbox-Issue ohne Fremdtext an, `scripts/forum-sanitize.mjs` entschärft und rahmt den Text in der Quarantäne; Rule-of-Two-Audit im [Forum-Skill](../.claude/skills/forum/SKILL.md); Quarantäne: den Thread liest nur der Subagent [`forum-leser`](../.claude/agents/forum-leser.md) (nur `Read` auf die Quarantäne-Datei, `scripts/forum-quarantaene.mjs`, `scripts/forum-leser-guard.mjs`), der privilegierte Lauf sieht nur das feste Ergebnisformat; Antwort nur nach Freigabe der Maintainerin |
 | Issues und Kommentare Dritter | `scripts/fremdtext.mjs` (Autor-Prüfung), Skill-Schritt 1, Planer, Umsetzer, Lens |
 | PR-Kommentare und Reviews Dritter (inkl. Review-Kommentare) | `scripts/fremdtext.mjs --pr`; Fork-PRs Dritter: kein `pull_request_target` in `.github/workflows`, Required-Checks gaten den Merge |
 | WebFetch/WebSearch | kein deterministisches Gate; Rahmung und Exfiltration per URL offen (#1447 a) |

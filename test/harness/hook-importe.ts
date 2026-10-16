@@ -52,14 +52,23 @@ export function importeAus(text: string): string[] {
   ];
 }
 
-/** Relative Spezifizierer (`./`, `../`) eines Quelltexts. */
+/**
+ * Relative Spezifizierer (`./`, `../`) eines Quelltexts. Bekannte Grenze (fail-closed, keine Kommentar-Erkennung):
+ * ein String-Literal `require("./x")` in einem Kommentar zählt wie ein echter Import. Abhilfe: den Kommentar
+ * umformulieren (den Pfad ohne Klammer und Anführungszeichen nennen).
+ */
 export const relativeImporte = (text: string): string[] => [...new Set(importeAus(text).filter((s) => /^\.{1,2}\//.test(s)))];
 
 const ENDUNGEN = [".mjs", ".cjs", ".js"];
 
+/** Kandidaten-Dateipfade eines aufgelösten relativen Imports: mit Endung nur er selbst, endungslos je Code-Endung (.mjs/.cjs/.js). */
+export function kandidatenPfade(roh: string): string[] {
+  return /\.\w+$/.test(posix.basename(roh)) ? [roh] : ENDUNGEN.map((e) => roh + e);
+}
+
 /** Löst einen relativen Pfad auf eine lesbare Datei auf: mit Endung direkt, endungslos über .mjs/.cjs/.js; wirft, wenn nichts existiert. */
 function loese(pfad: string, lies: (rel: string) => string): string {
-  const kandidaten = /\.\w+$/.test(posix.basename(pfad)) ? [pfad] : ENDUNGEN.map((e) => pfad + e);
+  const kandidaten = kandidatenPfade(pfad);
   for (const k of kandidaten) {
     try {
       lies(k);

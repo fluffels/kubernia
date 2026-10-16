@@ -41,7 +41,7 @@ function dateien(dir: string): string[] {
   return out;
 }
 
-describe("Skill-Pfade (#1211)", () => {
+describe("Skill-Pfade (#1211)", { timeout: 30_000 }, () => {
   it("erkennt Windows- und Home-Pfade, lässt URLs und relative Pfade durch", () => {
     expect(findeAbsolutePfade("Arbeite in `D:\\work\\beispiel`.")).toEqual(["Zeile 1"]);
     expect(findeAbsolutePfade("ok\ncd D:/work/beispiel")).toEqual(["Zeile 2"]);

@@ -23,7 +23,7 @@ type Status = { state: string; autoMergeRequest: object | null; labels?: { name:
 type Eingabe = { hookEvent?: string; agentType?: string; toolName?: string; lastMessage?: string | null };
 const abschluss = abschlussRaw as unknown as {
   abschlussBlockade: (i: Eingabe, d?: { prStatus?: (nr: string) => Status }) => string | null;
-  parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null; schnitt: string | null; uebergabe: boolean };
+  parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null; schnitt: string | null; uebergabe: boolean; festgefahren: string | null };
   ERGEBNIS_WERTE: string[];
   PR_FELDER: string;
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
@@ -131,15 +131,16 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
   });
 
   test("parseErgebnis: Token, Zusatz und PR; fehlende Zeilen und unbekannte Werte sind null", () => {
-    assert.deepEqual(parseErgebnis(bericht("Gemergt")), { token: "gemergt", zusatz: "", pr: "https://github.com/x/y/pull/1330", schnitt: null, uebergabe: false });
+    assert.deepEqual(parseErgebnis(bericht("Gemergt")), { token: "gemergt", zusatz: "", pr: "https://github.com/x/y/pull/1330", schnitt: null, uebergabe: false, festgefahren: null });
     assert.deepEqual(parseErgebnis(bericht("festgefahren (NICHT gemergt, Lauf beendet)")), {
       token: "festgefahren",
       zusatz: "(NICHT gemergt, Lauf beendet)",
       pr: "https://github.com/x/y/pull/1330",
       schnitt: null,
       uebergabe: false,
+      festgefahren: null,
     });
-    assert.deepEqual(parseErgebnis("Text ohne Format"), { token: null, zusatz: null, pr: null, schnitt: null, uebergabe: false });
+    assert.deepEqual(parseErgebnis("Text ohne Format"), { token: null, zusatz: null, pr: null, schnitt: null, uebergabe: false, festgefahren: null });
     assert.equal(parseErgebnis(bericht("fertig")).token, null);
     assert.equal(parseErgebnis(bericht("gemergt | abgebrochen")).zusatz, "| abgebrochen");
   });
@@ -293,6 +294,37 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     for (const state of ["MERGED", "CLOSED"]) assert.equal(blockade(eingabe(festgefahren), { prStatus: () => ({ state, autoMergeRequest: null, labels: [] }) }), null, state);
   });
 
+  describe("FESTGEFAHREN: review|ci (#1663 L46)", () => {
+    const mitArt = (art: string) => bericht("festgefahren") + "FESTGEFAHREN: " + art + String.fromCharCode(10);
+    test("parseErgebnis liest den Wert klein geschrieben, fehlende Zeile ist null", () => {
+      assert.equal(parseErgebnis(mitArt("Review")).festgefahren, "review");
+      assert.equal(parseErgebnis(bericht("festgefahren")).festgefahren, null);
+    });
+    test("review braucht kein Label am offenen PR, in beiden Ereignissen", () => {
+      assert.equal(blockade(eingabe(mitArt("review")), { prStatus: offenMitAuto }), null);
+      assert.equal(blockade(vorher(mitArt("review")), { prStatus: offenMitAuto }), null);
+    });
+    test("ci und die fehlende Zeile verlangen das Label weiter (Standard ci)", () => {
+      assert.match(blockade(eingabe(mitArt("ci")), { prStatus: offenMitAuto }) ?? "", /Label status:festgefahren fehlt/);
+      assert.match(blockade(eingabe(festgefahren), { prStatus: offenMitAuto }) ?? "", /Label status:festgefahren fehlt/);
+      assert.equal(blockade(eingabe(mitArt("ci")), { prStatus: mitLabel }), null);
+    });
+    test("Negativ: ein ungültiger Wert wird verweigert, auch ohne PR-Aufruf und bei fehlendem PR", () => {
+      const nichts = () => {
+        throw new Error("kein gh");
+      };
+      for (const e of [eingabe, vorher]) {
+        const g = blockade(e(mitArt("egal")), { prStatus: nichts });
+        assert.match(g ?? "", /FESTGEFAHREN: egal/);
+        assert.match(g ?? "", /review | ci/);
+      }
+      assert.match(blockade(eingabe(bericht("festgefahren", "-") + "FESTGEFAHREN: x"), {}) ?? "", /FESTGEFAHREN: x/);
+    });
+    test("die Zeile gilt nur für festgefahren: bei anderen Ergebnissen bleibt ein beliebiger Wert unbeachtet", () => {
+      assert.equal(blockade(eingabe(bericht("gemergt", "-") + "FESTGEFAHREN: egal"), {}), null);
+    });
+  });
+
   test("Bindungen: STUCK_LABEL und ERGEBNIS_WERTE stimmen mit check-festgefahren und dem Formatblock überein", () => {
     const label = /export const STUCK_LABEL = "([^"]+)"/.exec(readFileSync(resolve(ROOT, "scripts/check-festgefahren.mjs"), "utf8"))?.[1];
     assert.equal(label, "status:festgefahren");
@@ -315,7 +347,7 @@ describe("uebergabe: Phasen-Schnitt (#1592)", () => {
   };
 
   test("parseErgebnis: Token, SCHNITT (case-insensitiv normalisiert) und UEBERGABE-Zeile", () => {
-    assert.deepEqual(parseErgebnis(uebergabe("pr", PR)), { token: "uebergabe", zusatz: "", pr: PR, schnitt: "pr", uebergabe: true });
+    assert.deepEqual(parseErgebnis(uebergabe("pr", PR)), { token: "uebergabe", zusatz: "", pr: PR, schnitt: "pr", uebergabe: true, festgefahren: null });
     assert.equal(parseErgebnis(uebergabe("Verify")).schnitt, "verify");
     assert.equal(parseErgebnis(uebergabe("pr", PR, false)).uebergabe, false);
     assert.equal(parseErgebnis(uebergabe(null)).schnitt, null);

@@ -410,6 +410,23 @@ describe("laufErgebnis (git und gh injiziert)", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     });
+    test("ladeStartLaeufe: Grenze des Vorlaufs: 47:59 h vor `von` wird geladen, 48:01 h nicht", () => {
+      const dir = mkdtempSync(join(tmpdir(), "kq-1663-grenze-"));
+      try {
+        const sub = join(dir, "s1", "subagents");
+        mkdirSync(sub, { recursive: true });
+        for (const [name, sekunden] of [["a-knapp-drin", 48 * 3600 - 60], ["a-knapp-draussen", 48 * 3600 + 60]] as const) {
+          writeFileSync(join(sub, `${name}.meta.json`), JSON.stringify({ agentType: "x-agent" }));
+          writeFileSync(join(sub, `${name}.jsonl`), "");
+          const t = new Date(Date.parse(von) - sekunden * 1000);
+          utimesSync(join(sub, `${name}.jsonl`), t, t);
+        }
+        const geladen = mod.ladeStartLaeufe(dir, "x-agent", von) as { datei: string }[];
+        assert.deepEqual(geladen.map((l) => l.datei), ["s1/subagents/a-knapp-drin.jsonl"]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
     test("ladeStartLaeufe: ein nicht lesbarer Projektordner (Datei statt Ordner) ist ein Datenfehler", () => {
       const dir = mkdtempSync(join(tmpdir(), "kq-1646-datei-"));
       try {

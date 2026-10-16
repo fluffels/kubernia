@@ -16,7 +16,9 @@ import { join } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawHook from "../../scripts/langfuse-abgleich-hook.mjs";
+import * as rawHookEinstieg from "../../scripts/langfuse-abgleich-hook.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawZugang from "../../scripts/langfuse-zugang.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNachEinstieg from "../../scripts/langfuse-nachliefern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -29,7 +31,8 @@ type Ergebnis = { exitCode: number; text: string; protokoll: Record<string, unkn
 type Lauf = (a: Args, o: { now: number }) => Promise<Ergebnis>;
 type Log = Record<string, unknown> & { ausloeser: string; lock: string; sessions: unknown[]; fehler: { meldung: string }[] };
 
-const H = rawHook as unknown as {
+// Zugangsdaten-Lesen (kindEnv u. a.) in der Lib langfuse-zugang.mjs, kindArgs und starte im Einstieg.
+const H = { ...rawHookEinstieg, ...rawZugang } as unknown as {
   kindArgs: (i: { event?: string; session?: unknown; source?: string }) => string[] | null;
   leseZugang: (t: string) => Record<string, string>;
   leseSecretDatei: (t: string) => string | undefined;

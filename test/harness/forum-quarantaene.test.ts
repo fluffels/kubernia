@@ -23,7 +23,7 @@ const G = rawGuard as unknown as {
   bewerteForumLeserRead: (p: unknown, cwd?: string) => { block: boolean; reason?: string };
   entscheideHook: (text: string) => { hookSpecificOutput: { permissionDecision: string } } | null;
 };
-type Disc = { number?: number; title?: unknown; bodyText?: unknown; author?: unknown; comments?: { nodes: unknown[] } };
+type Disc = { number?: number; title?: unknown; bodyText?: unknown; author?: unknown; comments?: { totalCount?: number; nodes: unknown[] } };
 const Q = rawQ as unknown as {
   discussionNummer: (t: unknown) => number | null;
   quarantaenePfad: (w: string, n: number) => string;
@@ -96,6 +96,50 @@ describe("discussionNummer", () => {
   });
   test("ohne Treffer: null (kein Präfix, keine Ziffern-Grenze, fremdes Präfix, kein String)", () => {
     for (const t of ["kein Titel", "Forum #12abc", "Re: Forum #3: x", "forum #3: x", "", null, undefined]) expect(Q.discussionNummer(t)).toBeNull();
+  });
+});
+
+describe("kuerzungsHinweis (#1663 L25)", () => {
+  const k = { author: { login: "b" }, bodyText: "k", createdAt: "2026-10-01T10:00:00Z" };
+  const hinweis = (d: unknown) => (Q as unknown as { kuerzungsHinweis: (d: unknown) => string }).kuerzungsHinweis(d);
+  test("vollständig geladen: kein Hinweis", () => {
+    expect(hinweis({ comments: { totalCount: 2, nodes: [{ ...k, replies: { totalCount: 0 } }, k] } })).toBe("");
+    expect(hinweis({ comments: { nodes: [] } })).toBe("");
+    expect(hinweis({})).toBe("");
+  });
+  test("mehr Kommentare als geladen: „Thread gekürzt: x von y“", () => {
+    expect(hinweis({ comments: { totalCount: 80, nodes: [k, k] } })).toBe("Thread gekürzt: 2 von 80 Kommentaren/Antworten");
+  });
+  test("Antworten zählen zur Gesamtzahl (sie werden nicht geladen)", () => {
+    expect(hinweis({ comments: { totalCount: 1, nodes: [{ ...k, replies: { totalCount: 3 } }] } })).toBe("Thread gekürzt: 1 von 4 Kommentaren/Antworten");
+  });
+  test("kaputte Zähler (kein Zahlwert, negativ): kein Hinweis, kein Wurf", () => {
+    expect(hinweis({ comments: { totalCount: "x", nodes: [k] } })).toBe("");
+    expect(hinweis({ comments: { totalCount: -5, nodes: [k] } })).toBe("");
+  });
+  test("quarantaeneText trägt den Hinweis in der Kopfzeile, ohne ihn nicht", () => {
+    const d = { number: 1, title: "t", bodyText: "b", author: { login: "a" }, comments: { totalCount: 60, nodes: [k] } };
+    expect(Q.quarantaeneText(d, (t) => t, "n")).toContain("Thread gekürzt: 1 von 60");
+    expect(Q.quarantaeneText({ ...d, comments: { totalCount: 1, nodes: [k] } }, (t) => t, "n")).not.toContain("gekürzt");
+  });
+  test("main: Metadaten nennen die Kürzung, die Abfrage holt totalCount von Kommentaren und Antworten", () => {
+    const ausgabe: string[] = [];
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-1663-"));
+    let query = "";
+    const d = JSON.stringify({ title: "T", bodyText: "B", author: { login: "a" }, comments: { totalCount: 70, nodes: [k] } });
+    const gh = (a: string[]) => {
+      if (a[0] === "issue") return JSON.stringify({ title: "Forum #5: x", labels: [{ name: "forum" }] });
+      query = a.join(" ");
+      return d;
+    };
+    try {
+      Q.main(["--inbox", "7"], { gh, sanitize: (t: string) => t, wurzel, nonce: () => "n", log: (z: string) => ausgabe.push(z) });
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+    expect(ausgabe.join("\n")).toContain("Thread gekürzt: 1 von 70");
+    expect(query).toMatch(/comments\(first:50\)\{\s*totalCount/);
+    expect(query).toMatch(/replies\{\s*totalCount/);
   });
 });
 
@@ -233,7 +277,12 @@ const skillVerstoesse = (md: string): string[] => {
   else if (/\b(model|effort):/.test(spawn)) v.push("Spawn setzt model/effort");
   if (/bodyText/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, ""))) v.push("bodyText im Skill-Ablauf (Thread-Abruf im privilegierten Lauf)");
   if (/forum-sanitize\.mjs --body/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, "").replace(/über `scripts\/forum-sanitize\.mjs`/g, ""))) v.push("Pipe über forum-sanitize.mjs --body im Skill");
-  if (/gh issue view \S+ (?!--json)/.test(md.replace(/^## Rule-of-Two[\s\S]*$/m, ""))) v.push("gh issue view ohne --json (gibt Titel und Body aus)");
+  // Zeilenweise: der Rest der Zeile nach `gh issue view ` muss `--json` tragen (auch bei Aufruf am Zeilenende).
+  const ohneJson = md.replace(/^## Rule-of-Two[\s\S]*$/m, "").split("\n").some((z) => {
+    const i = z.indexOf("gh issue view ");
+    return i >= 0 && !z.slice(i).includes("--json");
+  });
+  if (ohneJson) v.push("gh issue view ohne --json (gibt Titel und Body aus)");
   if (/--json number,title/.test(md)) v.push("Schritt 1 gibt den Titel aus");
   if (!/Pflicht-Stopp/.test(md) || !/Erst nach ihrem OK/.test(md)) v.push("Freigabe-Stopp fehlt");
   if (!/^\| `forum-leser` \(Subagent\) \|/m.test(md)) v.push("Rule-of-Two-Tabelle ohne Zeile forum-leser");
@@ -257,6 +306,8 @@ describe("Skill forum orchestriert die Quarantäne", () => {
     ["wieder bodyText", mit("**2. Thread in Quarantäne legen.**", "**2. Thread lesen** (bodyText).**"), /bodyText/],
     ["Pipe über sanitize", mit("**8. Verifizieren**", "echo x | node scripts/forum-sanitize.mjs --body\n**8. Verifizieren**"), /Pipe über/],
     ["Titel in Schritt 1", mit("--json number --jq", "--json number,title --jq"), /Titel aus/],
+    ["Aufruf am Zeilenende ohne --json", mit("**8. Verifizieren**", "gh issue view 5\n**8. Verifizieren**"), /ohne --json/],
+    ["--json erst in einer späteren Zeile zählt nicht", mit("**8. Verifizieren**", "gh issue view 5 --state\n--json x\n**8. Verifizieren**"), /ohne --json/],
     ["Schritt 8 liest den Issue-Text", mit("gh issue view <Inbox-Nr> --json state --jq .state` zeigt `CLOSED`; nie ohne `--json`, denn", "gh issue view <Inbox-Nr>` zeigt `CLOSED`, denn"), /ohne --json/],
     ["Freigabe-Stopp fehlt", mit("Pflicht-Stopp", "Hinweis"), /Freigabe-Stopp/],
     ["Tabellenzeile fehlt", mit("| `forum-leser` (Subagent) |", "| `anderer` |"), /ohne Zeile forum-leser/],

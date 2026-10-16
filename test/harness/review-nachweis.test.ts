@@ -30,6 +30,7 @@ type Mod = {
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/check-review-nachweis.mjs";
 const { MAX_FIX_RUNDEN, parseNachweis, pflichtLenses, bewerteNachweis } = raw as Mod;
+const zusatzpassZeile = (raw as unknown as { zusatzpassZeile: (r: { zusatzpass: { grund: string } | null }) => string | null }).zusatzpassZeile;
 const checkReviewNachweis = (raw as unknown as { checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => { ok: boolean; zusatzpass: { grund: string } | null } }).checkReviewNachweis;
 
 const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
@@ -342,8 +343,14 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     }
   }
 
-  test("CLI nennt den Zusatzpass samt Grund, ohne Zusatzpass keine solche Zeile", () => {
+  test("die CLI-Zeile nennt den Zusatzpass samt Grund, ohne Zusatzpass keine solche Zeile (im Prozess)", () => {
+    const zeile = (review: string) => zusatzpassZeile(checkReviewNachweis({ runGit: fakeGit(review), env: {} }));
+    assert.match(zeile(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`) ?? "", /^• Zusatzpass \(Freigabe der Maintainerin\): Maintainerin gab Pass frei$/);
+    assert.equal(zeile(`runden=1 ${LENSES} verdikt=ok`), null);
+  });
+
+  // Ein einziger echter Prozess-Smoke (Kaltstart von git und node unter Last braucht Luft).
+  test("CLI-Smoke: der Prozess gibt die Zusatzpass-Zeile aus", { timeout: 30_000 }, () => {
     assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass \(Freigabe der Maintainerin\): Maintainerin gab Pass frei/);
-    assert.doesNotMatch(cliAusgabe(`runden=1 ${LENSES} verdikt=ok`), /Zusatzpass/);
   });
 });

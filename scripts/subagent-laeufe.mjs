@@ -142,6 +142,9 @@ export function laufAus({ meta, zeilen, datei }) {
 /** Vorlauf beim Laden für `--je-ticket` (#1646): ein Nachfolger im Fenster hat seinen Vorgänger bis zu 48 h davor, dessen Datei sonst am mtime-Filter scheitert. */
 export const VORLAUF_MS = 48 * 60 * 60_000;
 
+/** Beginn des Ladefensters mit Vorlauf: `von` (ISO) minus `VORLAUF_MS`, als ISO-Zeit. */
+export const mitVorlauf = (von) => new Date(Date.parse(von) - VORLAUF_MS).toISOString();
+
 /** Frühester Start je Ticket (Map Ticket → ms); Läufe ohne Ticket fallen weg. */
 export function ersterStartJeTicket(laeufe) {
   const erster = new Map();

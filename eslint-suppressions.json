@@ -663,14 +663,6 @@
       "count": 1
     }
   },
-  "test/tseslint-ts7.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "test/werft-drills.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 5

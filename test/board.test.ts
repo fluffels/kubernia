@@ -157,10 +157,19 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     LANGFUSE_SAMMELTICKET_TITEL: string;
     SAMMELTICKET_TITEL_LISTE: string[];
     sammelblock: (items: B[], ohne?: number[]) => B[];
+    ungeclaimt: (i: { assignees?: string[] }) => boolean;
   };
   // Board-Reihenfolge: 10, 11, 12, Sammelticket 13 (Position 4), 14, 15
   const board3 = [b(10), b(11), b(12), sammel(13), b(14), b(15)];
 
+  test("ungeclaimt ist exportiert und die EINE Prüfung: board-takt führt keine Kopie (#1663 L41)", () => {
+    expect(K.ungeclaimt({ assignees: [] })).toBe(true);
+    expect(K.ungeclaimt({})).toBe(true);
+    expect(K.ungeclaimt({ assignees: ["fluffels"] })).toBe(false);
+    const takt = readFileSync(new URL("../scripts/board-takt.mjs", import.meta.url), "utf8");
+    expect(takt).toContain("ungeclaimt");
+    expect(takt).not.toContain("assignees ?? []).length");
+  });
   test("sammelticketItem: offen, ohne Assignee, richtiger Titel; geclaimt, geschlossen oder gerade einsortiert zählt nicht", () => {
     expect(K.SAMMELTICKET_TITEL).toBe(TITEL);
     expect(K.sammelticketItem(board3)?.number).toBe(13);

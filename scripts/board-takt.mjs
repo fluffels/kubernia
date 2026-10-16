@@ -39,6 +39,7 @@ import {
   sammelticketKorrektur,
   setPosition,
   todoItem,
+  ungeclaimt,
   verschiebe,
   wirklichFehlend,
 } from "./board-lib.mjs";
@@ -137,7 +138,7 @@ export function entscheideHarnessTakt({ items, spielMergesSeitAbschluss, positio
   const ende = kopfEnde(items);
   const idx = items.findIndex((i) => i.id === ticket.id);
   const direktHinterKopf = items.slice(ende, idx).every((i) => i.state !== "open");
-  const vorgaenger = items.find((i) => i.state === "open" && i.title === SAMMELTICKET_TITEL && (i.assignees ?? []).length > 0);
+  const vorgaenger = items.find((i) => i.state === "open" && i.title === SAMMELTICKET_TITEL && !ungeclaimt(i));
   if (spielMergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf && !vorgaenger) {
     return {
       aktion: "nach-oben",

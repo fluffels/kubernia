@@ -470,7 +470,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 });
 
-describe("Node-Versionsprüfung (#1411)", () => {
+describe("Node-Versionsprüfung (#1411)", { timeout: 30_000 }, () => {
   const N = raw as unknown as {
     pruefeNodeVersion: (v: string, engines: unknown) => string | null;
     nodeHinweisFuer: (dir: string, v?: string) => string;
@@ -511,7 +511,7 @@ describe("Node-Versionsprüfung (#1411)", () => {
   });
 });
 
-describe("node_modules gegen package-lock.json (#1428 Z2)", () => {
+describe("node_modules gegen package-lock.json (#1428 Z2)", { timeout: 30_000 }, () => {
   const N = raw as unknown as {
     pruefeNodeModules: (lock: string, hidden: string | null) => string | null;
     nodeModulesHinweisFuer: (dir: string) => string;

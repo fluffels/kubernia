@@ -801,6 +801,20 @@ describe("token-baseline: Preisstufen, Sonnet-Periode, Modelle ohne Preis, Langf
     assert.doesNotMatch(ok, /ohne Preis/);
   });
 
+  test("Wächter: der Client-Platzhalter <synthetic> zählt nicht als ohne Preis (#1663 L19); ein echtes unbepreistes Modell und ein fehlendes Modell schon", () => {
+    const text = [
+      row("a", "<synthetic>", { input_tokens: 5 }),
+      row("b", "<synthetic>", { input_tokens: 5 }),
+      row("c", "claude-neu-1", { input_tokens: 5 }),
+    ].join("\n");
+    const s = m.summarize(m.callsFromTranscript(text));
+    assert.equal(s.unpriced, 1);
+    assert.deepEqual(s.unpricedModels, { "claude-neu-1": 1 });
+    assert.doesNotMatch(m.renderMarkdown(m.summarize(m.callsFromTranscript(row("d", "<synthetic>", { input_tokens: 5 })))), /ohne Preis/);
+    const ohneModell = m.summarize({ calls: [{ ts: "2026-10-10T00:00:00Z", input: 1, cacheWrite: 0, cacheRead: 0, output: 0 }] });
+    assert.equal(ohneModell.unpriced, 1, "ein Call ganz ohne Modell bleibt sichtbar");
+  });
+
   test("langfuseZugang: ohne Secret-Key Wurf mit Hinweis auf queryMetrics, mit beiden Keys Default-Base-URL", () => {
     assert.throws(() => m.langfuseZugang({ LANGFUSE_PUBLIC_KEY: "pk" }), /queryMetrics.*usageByType/);
     assert.throws(() => m.langfuseZugang({ LANGFUSE_SECRET_KEY: "sk" }), /LANGFUSE_PUBLIC_KEY/);

@@ -18,18 +18,19 @@
  * zum Speed-Bump-Charakter der Leitplanken (#723).
  *
  * Bewusst über-approximierend (fail-closed, wie der Substring-Abgleich der Leitplanken-Pfade): gezählt wird
- * jede eingerückte `name:`-Zeile (Job- wie Step-Ebene, beliebige Einrückung), deren Wert mit einem
- * Kontext **beginnt**. Lieber ein Fehlalarm als ein still durchgerutschter Doppelgänger. Job-Keys
- * ohne `name:` sind kein Weg: Keys erlauben weder Leerzeichen noch Klammern, die Kontexte schon.
- * Ehrliche Grenzen: (1) Wirkung nur lokal – in CI läuft dieser Test im Job „Tests, Typecheck &
- * Builds", der per demselben Trick ebenfalls überschreibbar ist. (2) Der Regex-Parser liest nur
- * wörtlich notierte Namen: zur Laufzeit erzeugte (`${{ … }}`, Matrix), Block-Scalars, über
- * Folgezeilen gefaltete Werte, YAML-Escapes und Flow-Style (`{ name: … }`) erkennt er nicht (keine YAML-Lib im Projekt, Präzedenz
- * harness-approval.test.ts).
+ * der `name:` jedes Jobs und jedes Schritts (gelesen mit der `yaml`-Bibliothek, also auch Block-Scalars,
+ * gefaltete Werte, YAML-Escapes und Flow-Style), der mit einem Kontext **beginnt**. Enthält der Name `${{`,
+ * zählt er als Treffer, sobald sein wörtliches Präfix davor ein Anfang des Kontexts ist (ein komplett
+ * dynamischer Name passt damit auf jeden Kontext). Lieber ein Fehlalarm als ein still durchgerutschter
+ * Doppelgänger. Job-Keys ohne `name:` sind kein Weg: Keys erlauben weder Leerzeichen noch Klammern, die
+ * Kontexte schon.
+ * Ehrliche Grenze: Wirkung nur lokal – in CI läuft dieser Test im Job „Tests, Typecheck & Builds", der per
+ * demselben Trick ebenfalls überschreibbar ist.
  *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
+import { parse } from "yaml";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -51,19 +52,34 @@ function leseKontexte(json: string): string[] {
 }
 const REQUIRED_CONTEXTS: readonly string[] = leseKontexte(readFileSync(RULESET_SPIEGEL, "utf8"));
 
-/** Liest die Werte aller eingerückten `name:`-Zeilen so, wie YAML sie sieht: Kommentarzeilen raus,
- *  Listen-Präfix `- ` weg, Quotes abziehen, unquotete Werte an ` #` abschneiden (#984). */
+/** Liest die `name:`-Werte aller Jobs und Schritte strukturell mit der YAML-Bibliothek (der Workflow-Name auf
+ *  oberster Ebene zählt nicht; ein Parse-Fehler wirft, statt still nichts zu finden). */
 function nameWerte(workflow: string): string[] {
+  const doc = parse(workflow) as { jobs?: unknown } | null;
+  const jobs = doc?.jobs;
+  if (jobs === null || typeof jobs !== "object") return [];
   const werte: string[] = [];
-  for (const zeile of workflow.split(/\r?\n/)) {
-    const m = /^[ \t]+(?:-[ \t]+)?name:[ \t]*(.*)$/.exec(zeile);
-    if (!m) continue;
-    const roh = m[1].trim();
-    const quoted = /^(["'])(.*)\1/.exec(roh);
-    const wert = quoted ? quoted[2] : roh.split(/[ \t]#/)[0].trim();
-    if (wert !== "") werte.push(wert);
+  const nimm = (w: unknown) => {
+    if (typeof w === "string" && w.trim() !== "") werte.push(w.trim());
+  };
+  for (const job of Object.values(jobs as Record<string, unknown>)) {
+    if (job === null || typeof job !== "object") continue;
+    const j = job as { name?: unknown; steps?: unknown };
+    nimm(j.name);
+    if (Array.isArray(j.steps)) {
+      for (const schritt of j.steps) {
+        if (schritt !== null && typeof schritt === "object") nimm((schritt as { name?: unknown }).name);
+      }
+    }
   }
   return werte;
+}
+
+/** Beansprucht der Name den Kontext? Wörtlich: Name beginnt mit dem Kontext. Dynamisch (`${{`): das wörtliche
+ *  Präfix davor ist ein Anfang des Kontexts (fail-closed). */
+function beansprucht(wert: string, kontext: string): boolean {
+  const i = wert.indexOf("${{");
+  return i === -1 ? wert.startsWith(kontext) : kontext.startsWith(wert.slice(0, i));
 }
 
 /** Fundstellen je Kontext über ein Set von Workflow-Dateien (Datei → Inhalt). */
@@ -71,7 +87,7 @@ function fundstellen(workflows: Map<string, string>, kontexte: readonly string[]
   const treffer = new Map<string, string[]>(kontexte.map((k) => [k, []]));
   for (const [datei, inhalt] of workflows) {
     for (const wert of nameWerte(inhalt)) {
-      for (const k of kontexte) if (wert.startsWith(k)) treffer.get(k)?.push(`${datei}: ${wert}`);
+      for (const k of kontexte) if (beansprucht(wert, k)) treffer.get(k)?.push(`${datei}: ${wert}`);
     }
   }
   return treffer;
@@ -115,7 +131,19 @@ describe("nameWerte – liest name: wie YAML", () => {
     assert.deepEqual(nameWerte(`jobs:\n    a:\n        steps:\n          - name: Schritt\n`), ["Schritt"]);
   });
   test("Kommentare, Workflow-Name (Spalte 0) und leere Werte zählen NICHT", () => {
-    assert.deepEqual(nameWerte(`name: Workflow\n# name: A\n    # name: B\n    name:\n`), []);
+    assert.deepEqual(nameWerte(`name: Workflow\n# name: A\njobs:\n  a:\n    # name: B\n    name:\n`), []);
+  });
+  test("Block-Scalar, gefalteter Wert und Flow-Style werden gelesen", () => {
+    assert.deepEqual(nameWerte(`jobs:\n  a:\n    name: |\n      Block-Name\n`), ["Block-Name"]);
+    assert.deepEqual(nameWerte(`jobs:\n  a:\n    name: >-\n      Erste\n      Zweite\n`), ["Erste Zweite"]);
+    assert.deepEqual(nameWerte(`jobs:\n  a: { name: Flow-Name, runs-on: x }\n`), ["Flow-Name"]);
+    assert.deepEqual(nameWerte(`jobs:\n  a:\n    steps: [ { name: Flow-Schritt } ]\n`), ["Flow-Schritt"]);
+  });
+  test("YAML-Escapes im gequoteten Namen werden aufgelöst", () => {
+    assert.deepEqual(nameWerte(`jobs:\n  a:\n    name: "Tests,\\x20Typecheck"\n`), ["Tests, Typecheck"]);
+  });
+  test("kaputtes YAML wirft statt still nichts zu finden", () => {
+    assert.throws(() => nameWerte("jobs:\n  a: [\n"));
   });
   test("mehrere Jobs in einer Datei liefern alle Namen, CRLF eingeschlossen", () => {
     assert.deepEqual(nameWerte(`jobs:\r\n  a:\r\n    name: Eins\r\n  b:\r\n    name: Zwei\r\n`), ["Eins", "Zwei"]);
@@ -148,6 +176,18 @@ describe("verstoesse – gleichnamige Fremd-Jobs werden erkannt (#1172)", () => 
   test("zweiter gleichnamiger Job in DERSELBEN Datei ⇒ Verstoß", () => {
     const doppelt = `${MIT_RAUTE}  fake:\n    name: Beispiel-Check (Zusatz, #1)\n`;
     assert.equal(verstoesse(new Map([["beispiel.yml", doppelt]]), K).length, 1);
+  });
+  test("Block-Scalar- und Flow-Style-Doppelgänger ⇒ Verstoß", () => {
+    const block = `jobs:\n  x:\n    name: |\n      Beispiel-Check (Zusatz, #5)\n`;
+    const flow = `jobs:\n  x: { name: "Beispiel-Check (Zusatz, #5)" }\n`;
+    assert.equal(verstoesse(new Map([["beispiel.yml", MIT_RAUTE], ["fake.yml", block]]), K).length, 1);
+    assert.equal(verstoesse(new Map([["beispiel.yml", MIT_RAUTE], ["fake.yml", flow]]), K).length, 1);
+  });
+  test("dynamischer Name mit Kontext-Präfix ⇒ Verstoß (fail-closed); fremdes Präfix nicht", () => {
+    const dyn = (n: string) => `jobs:\n  x:\n    name: "${n}"\n`;
+    assert.equal(verstoesse(new Map([["beispiel.yml", MIT_RAUTE], ["fake.yml", dyn("Beispiel-Check ${{ matrix.x }}")]]), K).length, 1);
+    assert.equal(verstoesse(new Map([["beispiel.yml", MIT_RAUTE], ["fake.yml", dyn("${{ matrix.x }}")]]), K).length, 1);
+    assert.deepEqual(verstoesse(new Map([["beispiel.yml", MIT_RAUTE], ["ok.yml", dyn("Anderes ${{ matrix.x }}")]]), K), []);
   });
   test("Kontext ganz ohne Quelle ⇒ Verstoß (sonst prüfte der Wächter nach Umbenennung ins Leere)", () => {
     assert.match(verstoesse(new Map([["ci.yml", "jobs:\n  a:\n    name: Anderes\n"]]), K)[0], /0 Quellen/);

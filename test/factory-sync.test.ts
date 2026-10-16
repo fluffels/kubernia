@@ -466,7 +466,8 @@ describe("check-factory-drift", () => {
 
 // ── Echter Besitz dieses Repos in ein Fremdrepo ───────────────────────────────
 
-describe("echtes Fremdrepo mit dem Besitz dieses Repos", () => {
+// Prozess-Test (kopiert den Besitz, startet das Drift-Gate zweimal): unter Last braucht er mehr als die 5 s des Defaults.
+describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, () => {
   test("Sync, Drift-Gate aus der Zielkopie grün (Import-Hülle trägt), Besitz-Änderung macht es rot", () => {
     const z = tmp();
     schreibe(z, "AGENTS.md", `# Fremdes Projekt\n\n${blockText("alter Stopp")}\n`);

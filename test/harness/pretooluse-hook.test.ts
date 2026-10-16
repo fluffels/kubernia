@@ -26,7 +26,11 @@ import * as tabRaw from "../../scripts/shell-tabellen.mjs";
 const ghRaw = ghRaw0 as unknown as { GEPRUEFTE_TOOLS: string[]; bewerte: (c: string, o: unknown) => unknown };
 type Guards = Record<string, (o: never) => unknown>;
 type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null;
-const io = ioRaw as unknown as { mergeDecisions: (d: unknown[]) => Out };
+const io = ioRaw as unknown as {
+  mergeDecisions: (d: unknown[]) => Out;
+  normalisierePfad: (pfad: unknown, cwd?: unknown) => string;
+  pfadGuardHook: (tool: string, bewerte: (pfad: unknown, cwd?: string) => { block: boolean; reason?: string }) => (text: string) => Out;
+};
 const tabellen = tabRaw as unknown as { SHELL_VON_TOOL: Record<string, string> };
 const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Guards, shellVonTool?: Record<string, string>, abschlussDeps?: unknown) => Out };
 
@@ -127,6 +131,35 @@ describe("Routing und Entscheidung (#1311)", () => {
 
 // Jeder Test startet echte node-Prozesse (~60-100 ms je Start, unter Parallellast ein Vielfaches). Darum je Skript ein Test
 // mit wenigen Starts und ein großzügigeres Describe-Timeout statt des globalen 5-s-Limits (#1526; Präzedenz haupt-sync).
+describe("normalisierePfad / pfadGuardHook: gemeinsame Pfad-Guard-Hilfe (#1663)", () => {
+  test("normalisierePfad: Backslashes, Laufwerk, .. und relative Pfade gegen cwd", () => {
+    assert.equal(io.normalisierePfad(String.raw`C:\dev\kubernia\.claude\worktrees\kq-1\x.ts`), "C:/dev/kubernia/.claude/worktrees/kq-1/x.ts");
+    assert.equal(io.normalisierePfad("/a/b/../c/./d.txt", ""), "/a/c/d.txt");
+    assert.equal(io.normalisierePfad(String.raw`C:\a\..\b.txt`, "D:/ignoriert"), "C:/b.txt");
+    assert.equal(io.normalisierePfad("x/y.txt", "/w/r"), "/w/r/x/y.txt");
+    assert.equal(io.normalisierePfad("../y.txt", String.raw`C:\w\r`), "C:/w/y.txt");
+    assert.equal(io.normalisierePfad("x/y.txt"), "x/y.txt", "relativ ohne cwd bleibt relativ");
+    assert.equal(io.normalisierePfad("x/y.txt", null), "x/y.txt");
+  });
+  const bewerte = (pfad: unknown): { block: boolean; reason?: string } => (pfad === "ok" ? { block: false } : { block: true, reason: "nein" });
+  const hook = io.pfadGuardHook("Edit", bewerte);
+  const nutz = (tool: string | undefined, pfad: unknown): string => JSON.stringify({ tool_name: tool, cwd: "/w", tool_input: { file_path: pfad } });
+  test("pfadGuardHook: deny bei Block, null bei erlaubt, anderem Tool und kaputtem Input", () => {
+    assert.equal(hook(nutz("Edit", "ok")), null);
+    assert.equal(hook(nutz("Edit", "weg"))?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(hook(nutz("Edit", "weg"))?.hookSpecificOutput.permissionDecisionReason, "nein");
+    assert.equal(hook(nutz("Read", "weg")), null, "anderes Tool: durchlassen");
+    assert.equal(hook(nutz(undefined, "weg"))?.hookSpecificOutput.permissionDecision, "deny", "ohne tool_name wird geprüft");
+    assert.equal(hook("kein json"), null, "kaputter Input blockiert nie alles");
+    assert.equal(hook(JSON.stringify({ tool_name: "Edit" }))?.hookSpecificOutput.permissionDecision, "deny", "fehlender Pfad wird der Bewertung übergeben");
+  });
+  test("pfadGuardHook reicht cwd an die Bewertung durch", () => {
+    const gesehen: unknown[] = [];
+    io.pfadGuardHook("Read", (p, c) => (gesehen.push([p, c]), { block: false }))(nutz("Read", "a.txt"));
+    assert.deepEqual(gesehen, [["a.txt", "/w"]]);
+  });
+});
+
 describe("Prozess-Start (#1311)", { timeout: 30_000 }, () => {
   const start = (skript: string, eingabe: string) => execFileSync("node", [resolve(WURZEL, "scripts", skript)], { input: eingabe, encoding: "utf8", cwd: WURZEL });
 

@@ -286,7 +286,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 | **Stale Ticket-Referenz** — der sim.ts-Split wird als „#545 (Split offen)" geführt, #545 ist geschlossen; der Split ist untracked (`check:doctickets` non-blocking). | `scripts/check-size.mjs:39` | #864/#877 |
 | **`tsconfig.strict.json` ist ein No-op-Alias** — `typecheck` und `typecheck:strict` prüfen identisch. | `tsconfig.strict.json` | #877 |
 
-**Supply-Chain-Präzisierung:** §8 oben nennt Supply-Chain „abgedeckt" — das gilt für npm-Deps, **nicht** für das ausgelieferte Container-Image (~~`release.yml` pusht ohne Test-Gate/Scan/SBOM~~ → erledigt (#861): Verify-Job, Trivy-Scan und Syft-SBOM) und **nicht** für den eigenen Code (CodeQL und Scorecard laufen berichtend, Funde noch ohne Board-Anbindung, #875; Secret-Scanning samt Push-Schutz ist aktiv, Repo-API 2026-10-08). Volle Herleitung: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md).
+**Supply-Chain-Präzisierung:** §8 oben nennt Supply-Chain „abgedeckt“. Das gilt für npm-Deps und für das ausgelieferte Container-Image: `release.yml` baut es erst nach einem Verify-Job, scannt es mit Trivy und erzeugt eine Syft-SBOM, bevor es pusht. Der eigene Code läuft durch CodeQL und Scorecard (berichtend, nicht blockierend); neue high/critical-Funde macht `codescanning-inbox.yml` zu Board-Arbeit (#1436). Secret-Scanning samt Push-Schutz ist aktiv; die Meldeadresse für Schwachstellen steht in [SECURITY.md](../SECURITY.md). Volle Herleitung: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md).
 
 ## 9. Architekturentscheidungen (ADRs)
 

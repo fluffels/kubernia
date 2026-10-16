@@ -290,6 +290,7 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const adr = lies("docs/adr/0016-langfuse-takt-woechentlich.md");
     const yml = lies(".github/workflows/board-takt.yml");
     const doc = lies("docs/ticket-reihenfolge.md");
+    const agents = lies("AGENTS.md");
     expect(Number(/mindestens (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/nach (\d+) Spiel-Merges/.exec(yml)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
     // #1428 Z21: der ADR wächst durch Fortschreibungen nur am Ende; die Bindung gilt dem LETZTEN Treffer (dem jüngsten Stand).
@@ -300,8 +301,11 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
-    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+\) hinter den Kopf/.exec(lies("AGENTS.md"))?.[1])).toBe(T.HARNESS_TAKT_MERGES);
-    expect(Number(/Spielquote 1:(\d+)\)/.exec(lies("AGENTS.md"))?.[1])).toBe(T.SPIEL_QUOTE);
+    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/Spielquote 1:(\d+)/.exec(doc)?.[1])).toBe(T.SPIEL_QUOTE);
+    // #1663 T5: auch die Regel in AGENTS.md trägt beide Zahlen.
+    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+/.exec(agents)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/Spielquote 1:(\d+)/.exec(agents)?.[1])).toBe(T.SPIEL_QUOTE);
   });
   test("der Workflow löst auf Push nach main aus und ruft board-takt.mjs", () => {
     const yml = lies(".github/workflows/board-takt.yml");

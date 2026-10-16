@@ -61,6 +61,7 @@ AGENTS.md                  @fluffels
 /scripts/mcp-launch.mjs @fluffels
 /scripts/likec4-mcp.mjs @fluffels
 /scripts/mcp-ausfall.mjs @fluffels
+/scripts/langfuse-vorbedingung.mjs @fluffels
 /scripts/besitz-lib.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
@@ -106,6 +107,7 @@ AGENTS.md                  @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
 /scripts/langfuse-abgleich-hook.mjs @fluffels
+/scripts/langfuse-zugang.mjs @fluffels
 /scripts/langfuse-nachliefern.mjs @fluffels
 /scripts/langfuse-otlp.mjs @fluffels
 /scripts/langfuse-abgleich.mjs @fluffels
