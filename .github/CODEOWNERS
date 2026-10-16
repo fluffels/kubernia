@@ -58,6 +58,8 @@ AGENTS.md                  @fluffels
 /.factory/                 @fluffels
 /.mcp.json                 @fluffels
 /scripts/playwright-mcp.mjs @fluffels
+/scripts/mcp-launch.mjs @fluffels
+/scripts/likec4-mcp.mjs @fluffels
 /scripts/mcp-ausfall.mjs @fluffels
 /scripts/besitz-lib.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
