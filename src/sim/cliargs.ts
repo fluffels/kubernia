@@ -52,14 +52,16 @@ export interface ArgSpec {
   readonly stopAtPositional?: boolean;
   /** Höchstzahl der Positionsargumente (Pflicht, #1490): mehr lehnt `parseCall` zentral ab. `0` = keine, `OFFENE_LISTE`
    *  = Mehrfachziele oder Container-Befehl, `IM_HANDLER` = die Arität hängt an Art/Aktion, der Handler prüft. */
-  readonly maxArgs: number;
+  readonly maxArgs: Aritaet;
 }
 
 /** `maxArgs` für offene Listen: Mehrfachziele (`docker stop a b`) oder der Container-Befehl hinter dem Image. */
-export const OFFENE_LISTE = Infinity;
+export const OFFENE_LISTE = "offene-liste" as const;
 /** `maxArgs` für Einträge, deren Arität an Art oder Aktion hängt (`kubectl create <typ> NAME`) oder deren echter Wortlaut
  *  belegt ist: der Handler prüft selbst. */
-export const IM_HANDLER = Infinity;
+export const IM_HANDLER = "im-handler" as const;
+/** Die Arität eines Eintrags: eine Höchstzahl oder einer der beiden Marker (kein `Infinity`, das beide Fälle vermischte). */
+export type Aritaet = number | typeof OFFENE_LISTE | typeof IM_HANDLER;
 
 /** Das Ergebnis eines Befehls mit mehreren Zielen (kubectl `ContinueOnError`, `docker stop a b`): erst alle Erfolgszeilen,
  *  dann die Fehlerzeilen. Gibt es Fehler, ist die Ausgabe ein Fehler (`host._err`, mit dem Tipp, falls einer da ist), sonst reiner Text. */
@@ -245,6 +247,7 @@ export function parseCall(host: ErrHost, spec: ArgSpec, t: readonly string[], fr
 
 /** Das erste Positionsargument über `maxArgs` hinaus als „Nicht simuliert“ (Flag-Fehler haben Vorrang), sonst `null`. */
 function tooMany(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
+  if (typeof spec.maxArgs !== "number") return null;
   const extra = w.entries[spec.maxArgs];
   if (!extra) return null;
   const muster = spec.maxArgs === 0 ? "'" + spec.cmd + "' ohne Argumente" : "'" + spec.cmd + "' mit höchstens " + spec.maxArgs + (spec.maxArgs === 1 ? " Argument" : " Argumenten");

@@ -81,7 +81,7 @@ type KubeadmHandler = (host: KubeadmHost, c: Call) => string;
 
 // `--discovery-token-ca-cert-hash` wird angenommen, aber nicht ausgewertet: der von `init` gedruckte Join-Befehl trägt
 // ihn, und die Sim hat nur EINE Control-Plane – es gibt nichts, wogegen der Hash zu prüfen wäre.
-const KUBEADM: Dispatch<SubEntry<KubeadmHandler>> = { cmd: "kubeadm", table: {
+export const KUBEADM: Dispatch<SubEntry<KubeadmHandler>> = { cmd: "kubeadm", table: {
   init: { run: kubeadmInit, maxArgs: 0, flags: [flag(true, "--pod-network-cidr")] },
   join: { run: kubeadmJoin, maxArgs: IM_HANDLER, flags: [flag(true, "--token"), flag(true, "--discovery-token-ca-cert-hash")] },
   reset: { run: kubeadmReset, maxArgs: 0, flags: [flag(false, "-f", "--force")] },
