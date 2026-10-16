@@ -46,6 +46,8 @@
     "/scripts/lens-auftrag-guard.mjs",
     "/scripts/stdin-skript-guard.mjs",
     "/scripts/ticket-lock.mjs",
+    "/scripts/ticket-lock-lib.mjs",
+    "/scripts/claims-pruefen.mjs",
     "/scripts/ticket-refs.mjs",
     "/scripts/pretooluse-hook.mjs",
     "/scripts/worktree-guard-hook.mjs",

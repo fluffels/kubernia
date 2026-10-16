@@ -43,7 +43,7 @@
   "scripts/stop-verify-hook.mjs": {"Repo":1,"Worktree":5,"Agent":1},
   "scripts/subagent-laeufe.mjs": {"Worktree":3},
   "scripts/subagent-laufzeit.mjs": {"Repo":4,"Worktree":2,"Agent":4},
-  "scripts/ticket-lock.mjs": {"Branch":3,"Worktree":8},
+  "scripts/ticket-lock.mjs": {"Branch":3,"Worktree":6},
   "scripts/ticket-refs.mjs": {"Branch":1,"Worktree":8},
   "scripts/token-baseline.mjs": {"Repo":2,"Praefix":1,"Agent":1},
   "scripts/umsetzer-abschluss.mjs": {"Repo":3,"Label":3,"Agent":3},
