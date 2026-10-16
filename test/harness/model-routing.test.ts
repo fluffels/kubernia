@@ -570,6 +570,11 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     assert.equal(spawnFuer(md, "gibt-es-nicht"), "");
   });
 
+  test("genau ein Ticket-Ablauf: kubernia-workflow-Skill und kubernia-ticket-Workflow existieren nicht (ADR 0028)", () => {
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-workflow`), "der Skill kubernia ist der einzige Ticket-Ablauf");
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/workflows/kubernia-ticket.js`), "der Workflow ging im Skill kubernia auf");
+  });
+
   test("der Skill kubernia-loop existiert nicht mehr (ein Umsetzer pro Ticket ersetzt ihn)", () => {
     assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-loop`), "kubernia-loop ging im Umsetzer-Subagenten auf (#1280)");
   });
