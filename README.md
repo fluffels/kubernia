@@ -163,6 +163,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `PreToolUse` | matcher: `Read`, `node scripts/forum-leser-guard.mjs` | `.claude/agents/forum-leser.md` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
 | Plugin | `langfuse-observability` | Marktplatz: langfuse-observability | `.claude/settings.json` |
+| Git-Hook | `post-commit` | — | `.githooks/post-commit` |
 | Git-Hook | `pre-push` | — | `.githooks/pre-push` |
 | MCP-Server | `likec4` | stdio, node scripts/likec4-mcp.mjs | `.mcp.json` |
 | MCP-Server | `pixellab` | http, api.pixellab.ai | `.mcp.json` |

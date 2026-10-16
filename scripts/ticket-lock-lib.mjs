@@ -37,6 +37,6 @@ const stand = (v) => (!v ? "keine" : v.verbraucht ? "verbraucht" : "offen");
 
 /** Öffentliche Sicht eines Locks: alle Felder außer `nonce` und `nonceHash`, dazu der Stand von Übergabe und Stopp (`keine`, `offen`, `verbraucht`). Pur. */
 export function oeffentlicheSicht(lock) {
-  const { nonce: _nonce, nonceHash: _hash, ...rest } = lock ?? {};
-  return { ...rest, uebergabeStand: stand(lock?.uebergabe), gestopptStand: stand(lock?.gestoppt) };
+  const rest = Object.fromEntries(Object.entries(lock ?? {}).filter(([k]) => k !== "nonce" && k !== "nonceHash"));
+  return { ...rest,uebergabeStand: stand(lock?.uebergabe), gestopptStand: stand(lock?.gestoppt) };
 }
