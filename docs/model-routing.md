@@ -225,6 +225,8 @@ Planer-Sockel: ² Median über 2 Läufe mit Planer (der Planer fehlt in 1 von 3 
 | MCP-Instruktionen | 6,6k | User/claude.ai, PixelLab 1,0k |
 | Systemprompt-Snapshot, Agent-Listing, SessionStart-Hook | 12,8k | Claude Code/User |
 
+**Zuwachs durch den LikeC4-MCP (#1422), gemessen 2026-10-16:** Der Server `likec4` liefert 20 Tools; ihre Namen haben ohne Präfix 316 Zeichen, mit Präfix `mcp__likec4__` 576 (Handshake gegen `node_modules/likec4`, Version 1.59.4). Als verzögerte Tools stehen im Hauptagenten nur die Namen im Sockel (grob 150 Tokens, Schätzung aus 576 Zeichen), die Schemas laden erst bei Bedarf. Probe-Session `8e773c42-3ced-4e2e-9fb7-f446af4e6cd7` (`claude -p`, Sonnet, Worktree mit `likec4`): Sockel 48.881 (ohne Vorher-Basis, kein Zuwachsbeleg). Der Zuwachs wirkt nur in Kontexten ohne `tools:`-Whitelist (Hauptchat, Workflow-Phasen); Planer, Umsetzer, Lens und Explore bekommen `mcp__likec4` nicht.
+
 **Messung vorher/nachher** (`claude -p` im Projekt, Sonnet, gleicher Prompt; Headless liegt unter den interaktiven Werten, weil weniger Hooks und Tools laden, die Differenzen sind aber übertragbar):
 
 | Variante (Einzeleffekte gegen „vorher“, sie überlappen sich) | Sockel |
