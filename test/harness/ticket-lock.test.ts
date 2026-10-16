@@ -498,7 +498,7 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
   const lockDatei5 = () => join(dir, "kq-locks", "5.json");
   const lockJson = () => JSON.parse(readFileSync(lockDatei5(), "utf8")) as { nonceHash: string; uebergabe?: { gesetzt: string; verbraucht: string | null } };
 
-  test("eigene Nonce: Exit 0, Feld in der Datei; pruefe meldet trotz Aktivität uebernehmbar und verbraucht die Übergabe", () => {
+  test("eigene Nonce: Exit 0, Feld in der Datei; pruefe meldet trotz Aktivität uebernehmbar und verbraucht nichts, uebernehmen verbraucht die Übergabe (#1593)", () => {
     const a = lauf(["claim", "5"]);
     const n = nonceVon(a);
     assert.equal(a.code, 0, `claim: ${JSON.stringify(a)}`);
@@ -507,10 +507,28 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.deepEqual(lockJson().uebergabe, { gesetzt: new Date(JETZT).toISOString(), verbraucht: null });
     assert.equal(lockJson().nonceHash, sha(n), "der Lock selbst bleibt unverändert gültig");
     assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
+    assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" }, "pruefe ist lesend: auch das zweite Mal uebernehmbar");
+    assert.equal(lockJson().uebergabe?.verbraucht, null, "pruefe verbraucht nichts");
+    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
     assert.equal(lockJson().uebergabe?.verbraucht, new Date(JETZT).toISOString());
-    const zweites = lauf(["pruefe", "5", "--nonce", n], aktiv);
-    assert.equal(zweites.code, 4, `die Übergabe ist verbraucht: ${JSON.stringify(zweites)}`);
-    assert.equal(zweites.out, "aktiv\n");
+    for (const befehl of ["uebernehmen", "pruefe"]) {
+      const zweites = lauf([befehl, "5", "--nonce", n], aktiv);
+      assert.equal(zweites.code, 4, `${befehl}: die Übergabe ist verbraucht: ${JSON.stringify(zweites)}`);
+      assert.equal(zweites.out, "aktiv\n");
+    }
+  });
+
+  test("uebernehmen: fremde Nonce Exit 4 ohne Verbrauch, ohne oder mit leerer Nonce Usage (Exit 2), ohne Worktree frei und ohne Verbrauch der Übergabe (#1593)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["uebergeben", "5", "--nonce", n]);
+    const fremd = lauf(["uebernehmen", "5", "--nonce", "x-fremd"], aktiv);
+    assert.equal(fremd.code, 4);
+    assert.equal(fremd.out, "fremd\n");
+    assert.equal(lockJson().uebergabe?.verbraucht, null, "fremde Nonce verbraucht nichts");
+    assert.equal(lauf(["uebernehmen", "5"]).code, 2);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", ""]).code, 2);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", n]).out, "frei\n");
+    assert.equal(lockJson().uebergabe?.verbraucht, null, "ohne Worktree gibt es nichts zu übernehmen");
   });
 
   test("falsche Nonce: uebergeben Exit 4 ohne Änderung, pruefe fremd ohne Verbrauch, die richtige Nonce bleibt uebernehmbar", () => {
@@ -578,7 +596,8 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.equal(r.code, 2);
     assert.equal(lockJson().uebergabe, undefined);
     lauf(["uebergeben", "5", "--nonce", n]);
-    assert.equal(M.fuehreAus(["pruefe", "5", "--nonce", n], { ...deps(aktiv), ersetze: wirft }).code, 2);
+    assert.equal(M.fuehreAus(["uebernehmen", "5", "--nonce", n], { ...deps(aktiv), ersetze: wirft }).code, 2);
+    assert.equal(M.fuehreAus(["pruefe", "5", "--nonce", n], { ...deps(aktiv), ersetze: wirft }).code, 0, "pruefe schreibt nie");
   });
 
   test("entscheidePruefung pur: uebergabeOffen zählt nur mit eigener Nonce und vorhandenem Worktree", () => {
@@ -598,12 +617,14 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
   const lockJson = () =>
     JSON.parse(readFileSync(lockDatei5(), "utf8")) as { uebergabe?: unknown; gestoppt?: { gesetzt: string; verbraucht: string | null } };
 
-  test("eigene Nonce: Exit 0, das nächste pruefe meldet trotz Aktivität uebernehmbar und verbraucht den Vermerk, das zweite wieder aktiv", () => {
+  test("eigene Nonce: Exit 0, pruefe meldet trotz Aktivität uebernehmbar ohne Verbrauch, das nächste uebernehmen verbraucht den Vermerk, das zweite wieder aktiv (#1593)", () => {
     const n = nonceVon(lauf(["claim", "5"]));
     assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "aktiv\n", "Kontrolle: ohne Vermerk aktiv");
     assert.deepEqual(lauf(["gestoppt", "5", "--nonce", n]), { code: 0, out: "gestoppt\n", err: "" });
     assert.deepEqual(lockJson().gestoppt, { gesetzt: new Date(JETZT).toISOString(), verbraucht: null });
     assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
+    assert.equal(lockJson().gestoppt?.verbraucht, null, "pruefe verbraucht den Vermerk nicht");
+    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
     assert.equal(lockJson().gestoppt?.verbraucht, new Date(JETZT).toISOString());
     const zweites = lauf(["pruefe", "5", "--nonce", n], aktiv);
     assert.equal(zweites.code, 4);
@@ -640,10 +661,12 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
     assert.equal(lockJson().gestoppt?.verbraucht, null);
   });
 
-  test("ohne Worktree (frei) verbraucht pruefe den Vermerk ebenfalls, damit er nicht später eine Aktivität überstimmt", () => {
+  test("ohne Worktree (frei) verbraucht uebernehmen den Vermerk ebenfalls, damit er nicht später eine Aktivität überstimmt; pruefe nicht (#1593)", () => {
     const n = nonceVon(lauf(["claim", "5"]));
     lauf(["gestoppt", "5", "--nonce", n]);
     assert.equal(lauf(["pruefe", "5", "--nonce", n]).out, "frei\n");
+    assert.equal(lockJson().gestoppt?.verbraucht, null);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", n]).out, "frei\n");
     assert.notEqual(lockJson().gestoppt?.verbraucht, null);
     assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "aktiv\n");
   });
