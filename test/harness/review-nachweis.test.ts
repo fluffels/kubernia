@@ -163,7 +163,7 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
   const unpraezise = (text: string) => text.split(/\r?\n/).filter((z) => z.includes("Cap 2") && !z.includes("Fix-Runde"));
 
   test("jede getrackte Agenten-/Harness-/Doku-Zeile mit „Cap 2“ nennt Fix-Runden", () => {
-    const dateien = execFileSync("git", ["ls-files", ".claude", "AGENTS.md", "docs"], { encoding: "utf8" })
+    const dateien = execFileSync("git", ["ls-files", ".claude", "AGENTS.md", "docs"], { encoding: "utf8", cwd: fileURLToPath(new URL("../../", import.meta.url)) })
       .split(/\r?\n/)
       .filter((d) => /\.(md|js)$/.test(d) && !d.startsWith("docs/adr/"));
     assert.ok(dateien.length > 20, "Dateiliste unerwartet klein: git ls-files fehlgeschlagen?");
