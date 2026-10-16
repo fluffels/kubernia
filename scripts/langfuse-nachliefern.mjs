@@ -46,6 +46,12 @@ export const ENDE_SCHLUPF_MS = 5_000;
 export const GESENDET_ABLAUF_MS = 4 * RUHEFRIST_MIN * 60_000;
 /** Gesamtfrist eines Laufs: unter LOCK_VERALTET_MS (15 min), damit kein Lauf länger hängt als sein Lock; übrige Sessions folgen beim nächsten Lauf. */
 export const GESAMTFRIST_MS = 10 * 60_000;
+/** Befund einer Session mit Lücke und Dubletten zugleich: nichts gesendet, aber nie bestätigt (jeder Lauf prüft neu, z.B. nach einer geänderten Dublettenregel). */
+export const BEFUND_MEHRDEUTIG = "mehrdeutig: Fehlend und Dubletten zugleich, nichts gesendet";
+/** Ob ein Ledger-Eintrag als bestätigt gilt; ältere Stände vermerkten Mehrdeutigkeit als bestätigt, das gilt nicht mehr. */
+export function giltBestaetigt(eintrag) {
+  return Boolean(eintrag?.bestaetigt) && eintrag.befund !== BEFUND_MEHRDEUTIG;
+}
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]";
 export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, im Hook zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe haben den Secret-Key nicht).";
@@ -145,9 +151,9 @@ async function verarbeite(s, c) {
   rec.endeVerworfen = endeAngegeben && !endeGilt;
   const beendet = endeBekannt || endeGiltFuer(alt, s);
   // Bekanntes Ende vor jedem Fetch festhalten (auch wenn dieser wirft), sonst gälte beim nächsten Lauf wieder die 24-h-Frist.
-  if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: Boolean(alt?.bestaetigt && unveraendert), beendet: true };
+  if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: giltBestaetigt(alt) && unveraendert, beendet: true };
   if (nachliefererWartet({ mtime: s.mtime, now, beendet })) return Object.assign(rec, { status: "läuft" });
-  if (alt?.bestaetigt && unveraendert) return Object.assign(rec, { status: "bestätigt" });
+  if (giltBestaetigt(alt) && unveraendert) return Object.assign(rec, { status: "bestätigt" });
   // Sessions vor dem Stichtag und ohne Calls: der Vermerk spart bei unverändertem Stand das erneute Parsen und die Abfrage.
   if (alt?.vermerk && unveraendert) return Object.assign(rec, { status: alt.vermerk });
   const vermerke = (status) => {
@@ -197,11 +203,11 @@ async function verarbeite(s, c) {
     if (eintrag.gesendet.length || eintrag.spans.length) ledger.sessions[s.id] = { ...eintrag, bestaetigt: false, groesse: beendet ? s.groesse : (alt?.groesse ?? null), mtime: beendet ? s.mtime : (alt?.mtime ?? null) };
     return rec;
   }
-  // Nichts sendbar und nichts mehr unterwegs (Δ = 0 oder nur Dubletten/mehrdeutig): bestätigt, neue Prüfung erst bei Transkript-Änderung.
+  // Nichts sendbar und nichts mehr unterwegs (Δ = 0 oder nur Dubletten): bestätigt, neue Prüfung erst bei Transkript-Änderung; mehrdeutig bleibt unbestätigt und wird bei jedem Lauf neu geprüft.
   if (!sendbar.length && !eintrag.gesendet.length) {
-    rec.befund = mehrdeutig ? "mehrdeutig: Fehlend und Dubletten zugleich, nichts gesendet" : rec.dubletten ? "nur Dubletten, nichts zu senden" : null;
+    rec.befund = mehrdeutig ? BEFUND_MEHRDEUTIG : rec.dubletten ? "nur Dubletten, nichts zu senden" : null;
     if (!rec.befund) rec.status = "vollständig";
-    eintrag.bestaetigt = true;
+    eintrag.bestaetigt = !mehrdeutig;
   }
   ledger.sessions[s.id] = { ...eintrag, groesse: s.groesse, mtime: s.mtime };
   if (rec.befund) ledger.sessions[s.id].befund = rec.befund;
