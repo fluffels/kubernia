@@ -156,7 +156,9 @@ jobs:
   #      der bei Stardew-Scope verrottet.
   #   2) NUR BERICHT über den vollen Baum (inkl. Dev): macht Dev-Advisories
   #      sichtbar, hält den Build aber nicht rot. Dev-Findings greift zusätzlich
-  #      Dependabot als Security-PR auf (.github/dependabot.yml).
+  #      Dependabot als Security-PR auf (.github/dependabot.yml). Der Bericht
+  #      landet nur im Job-Log; eingeordnet wird er vom täglichen Workflow
+  #      audit-einordnung.yml (Zeile im Sammelticket, Alarm nur bei critical + prod).
   # npm audit liest den Lockfile direkt – kein `npm ci`/node_modules nötig.
   security-audit:
     name: Security-Audit (npm audit)
@@ -328,8 +330,8 @@ jobs:
   # Priorisierung über die Board-Position (#658/#747): Seit #627 sind die `prio:*`-Labels
   # entfernt, seit #747 ist auch das Board-`Prio`-Feld weg — die Reihenfolge ist die
   # manuelle Board-Position (oberstes freies Item = dran). Also wie in forum-inbox.yml:
-  # Issue mit einem existierenden Label (`area:architektur`) anlegen und per GraphQL an
-  # die OBERSTE Board-Position schieben (ein roter `main` blockiert jeden parallelen
+  # Issue mit einem existierenden Label (`area:architektur`) anlegen und per
+  # `board-place.mjs --notfall rot-main --top` an die OBERSTE Board-Position setzen (ein roter `main` blockiert jeden parallelen
   # Agenten → höchste Dringlichkeit). Dedup läuft über den Titel-Präfix, nicht über ein
   # Label. Board-Schreibzugriff braucht das Secret PROJECT_TOKEN (das Standard-
   # GITHUB_TOKEN kann kein User-Project V2 schreiben); fehlt es, entsteht das Issue

@@ -30,6 +30,8 @@ import {
   addToBoardTodo,
   ergaenzeFehlende,
   ghJson,
+  kandidatenSammelticket,
+  waehleBestaetigtes,
   loadItems,
   loadOpenIssuePages,
   normalizeOffene,
@@ -115,22 +117,8 @@ export function sammelticketBody({ art, vorgaenger = null, vorgaengerOffen = fal
   return zeilen.join("\n");
 }
 
-/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `nach`: der Vorgänger (`--vorgaenger`); nur strikt jüngere Tickets zählen (der Vorgänger und ältere volle Generationen sind kein „schon vorhanden“). Pur. */
-export function kandidatenSammelticket(offene, titel, { nach = null } = {}) {
-  return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0 && (nach === null || i.number > nach)).sort((a, b) => b.number - a.number);
-}
-
-/**
- * Das höchste Ticket der absteigend geprüften `kandidaten`, das der Direktabruf `einzeln(nr)` (REST-Form: `state`, `assignees`) als offen und
- * ungeclaimt bestätigt; sonst null. Die Listen-Abfrage hinkt nach, nur der Einzelabruf ist maßgeblich. Ein werfender Abruf wirft weiter. Pur bis auf `einzeln`.
- */
-export function waehleBestaetigtes(kandidaten, einzeln) {
-  for (const k of [...kandidaten].sort((a, b) => b.number - a.number)) {
-    const e = einzeln(k.number);
-    if (e && e.state === "open" && (e.assignees ?? []).length === 0) return k;
-  }
-  return null;
-}
+// `kandidatenSammelticket` und `waehleBestaetigtes` liegen in board-lib.mjs (auch audit-einordnung.mjs braucht sie; ein Einstiegsskript importiert kein anderes).
+export { kandidatenSammelticket, waehleBestaetigtes };
 
 /**
  * Dubletten-Entscheidung nach dem Anlegen von `eigenNr`: `andere` sind bestätigt offene Tickets (siehe `waehleBestaetigtes`). Gibt es ein

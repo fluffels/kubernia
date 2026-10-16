@@ -4,5 +4,11 @@
     "faellig": "2026-11-13",
     "titel": "Langfuse-Takt-Schwelle prüfen",
     "text": "50 Ticket-Merges an echten Merge-Zahlen prüfen (Konstante `MIN_TICKET_MERGES_PUSH`, ADR 0016 Fortschreibung #1628)."
+  },
+  {
+    "id": "audit-ghsa-vfj7-8cjw-p6xm",
+    "faellig": "2026-11-15",
+    "titel": "braces-Advisory GHSA-vfj7-8cjw-p6xm prüfen (bewusst akzeptiert)",
+    "text": "Kein gepatchter Stand (`first_patched_version: null`, Stand 2026-10-16). Nur Dev: `vite-plugin-singlefile` 2.3.3 -> `micromatch` 4.0.8 -> `braces` 3.0.3, dazu `likec4` 1.59.4; `npm audit --omit=dev` meldet 0. Die Muster stammen aus der eigenen Build-Konfiguration, nicht aus Eingaben, nicht ausnutzbar. Prüfauftrag: gibt es ein gepatchtes `braces`/`micromatch`, dann per `overrides` oder Update einziehen."
   }
 ]

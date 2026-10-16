@@ -15,8 +15,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
-import { kandidatenSammelticket, waehleBestaetigtes } from "./sammelticket-anlegen.mjs";
+import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
 
 export const ALARM_PRAEFIX = "🔒 Security:";
 const GHSA_MUSTER = /GHSA(?:-[a-z0-9]{4}){3}/gi;

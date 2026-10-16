@@ -71,6 +71,23 @@ export const LANGFUSE_SAMMELTICKET_TITEL = "Langfuse-Befunde (gesammelt)";
 /** Alle Sammeltickets, die das Einsortieren kennt (die Klemmung rechnet mit allen, nicht nur mit dem Harness-Sammelticket). */
 export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL];
 
+/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `nach`: der Vorgänger (`--vorgaenger`); nur strikt jüngere Tickets zählen (der Vorgänger und ältere volle Generationen sind kein „schon vorhanden“). Pur. */
+export function kandidatenSammelticket(offene, titel, { nach = null } = {}) {
+  return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0 && (nach === null || i.number > nach)).sort((a, b) => b.number - a.number);
+}
+
+/**
+ * Das höchste Ticket der absteigend geprüften `kandidaten`, das der Direktabruf `einzeln(nr)` (REST-Form: `state`, `assignees`) als offen und
+ * ungeclaimt bestätigt; sonst null. Die Listen-Abfrage hinkt nach, nur der Einzelabruf ist maßgeblich. Ein werfender Abruf wirft weiter. Pur bis auf `einzeln`.
+ */
+export function waehleBestaetigtes(kandidaten, einzeln) {
+  for (const k of [...kandidaten].sort((a, b) => b.number - a.number)) {
+    const e = einzeln(k.number);
+    if (e && e.state === "open" && (e.assignees ?? []).length === 0) return k;
+  }
+  return null;
+}
+
 /** Titel des wiederkehrenden Status-Tickets (Langfuse-Takt, ADR 0016). */
 export const STATUS_TITEL = "Langfuse-Status überprüfen";
 
