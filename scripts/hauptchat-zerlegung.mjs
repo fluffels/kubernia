@@ -15,19 +15,16 @@
  * Pur und ohne IO bis auf das CLI (liest `~/.claude/projects`, fragt `gh`); der Kern ist getestet.
  */
 
-import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { CACHE_TTL_MS, istEchtesModell, median } from "./mess-lib.mjs";
+import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
-import { ladeSessionDatei, projektOrdner } from "./transkript.mjs";
+import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
-const CLAIM = /\bgh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--add-assignee)/;
 const norm = (p) => String(p ?? "").replace(/\\/g, "/").toLowerCase();
 const gueltig = (ts) => Number.isFinite(Date.parse(ts));
 
@@ -99,8 +96,8 @@ function claimsAus(events, turnVon) {
   const claims = [];
   for (const ev of events) {
     if (ev.tool !== "Bash" && ev.tool !== "PowerShell") continue;
-    const nr = CLAIM.exec(String(ev.input?.command ?? ""))?.[1];
-    if (nr) claims.push({ nr: Number(nr), ts: ev.ts, turn: turnVon(ev) });
+    const nr = claimNummer(ev.input?.command);
+    if (nr) claims.push({ nr, ts: ev.ts, turn: turnVon(ev) });
   }
   return claims;
 }
@@ -337,15 +334,6 @@ export function parseArgs(argv) {
     else if (k === "--json") a.json = true;
   }
   return a;
-}
-
-/** Sessions eines Projektordners, eine nach der anderen (Generator): nur die gerade verarbeitete liegt im Speicher. */
-export function* ladeSessions(dir, von) {
-  for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
-    const p = join(dir, f);
-    if (von && statSync(p).mtimeMs < Date.parse(von)) continue;
-    yield ladeSessionDatei(p);
-  }
 }
 
 function closedAtViaGh(nr) {

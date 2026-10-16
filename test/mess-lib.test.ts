@@ -150,3 +150,17 @@ describe("Ticketnummer und Ticketfilter (#1609)", () => {
     expect(T.passtTicketFilter(5, { tickets: [5], ohne: [5] })).toBe(false);
   });
 });
+
+describe("claimNummer (#1616)", () => {
+  const C = raw as unknown as { claimNummer: (cmd: string) => number | null };
+  test("Claim-Zeile liefert die Ticketnummer", () => {
+    expect(C.claimNummer("gh issue edit 1616 --add-assignee @me")).toBe(1616);
+    expect(C.claimNummer("cd x && gh issue edit 12 --add-label a --add-assignee @me")).toBe(12);
+  });
+  test("kein Claim: Entfernen, Ansehen, leer", () => {
+    expect(C.claimNummer("gh issue edit 1616 --remove-assignee @me")).toBeNull();
+    expect(C.claimNummer("gh issue view 1616")).toBeNull();
+    expect(C.claimNummer("")).toBeNull();
+    expect(C.claimNummer(undefined as unknown as string)).toBeNull();
+  });
+});

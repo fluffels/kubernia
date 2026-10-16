@@ -90,5 +90,13 @@ export function passtTicketFilter(ticket, { tickets = [], ohne = [] } = {}) {
   return (tickets.length === 0 || tickets.includes(ticket)) && !ohne.includes(ticket);
 }
 
+const CLAIM = /\bgh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--add-assignee)/;
+
+/** Ticketnummer einer Claim-Zeile (`gh issue edit <nr> … --add-assignee`), sonst `null` (#1616; Quelle für Hauptchat-Zerlegung und Factory-Kennzahlen). */
+export function claimNummer(command) {
+  const nr = CLAIM.exec(String(command ?? ""))?.[1];
+  return nr ? Number(nr) : null;
+}
+
 /** Ein echter Modellname: nicht leer und nicht der Client-Platzhalter `<synthetic>`. */
 export const istEchtesModell = (m) => Boolean(m) && m !== "<synthetic>";
