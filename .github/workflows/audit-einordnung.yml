@@ -6,7 +6,7 @@ name: Audit-Einordnung
 # Ergänzt die Stufe 2 des Jobs security-audit in ci.yml (nur Bericht), die nirgends landet.
 #
 # ⚠️ Das Board braucht wie dependabot-inbox.yml das Secret PROJECT_TOKEN (PAT mit project-Scope); ohne Token nur eine Warnung zum Alarm.
-# Kommentare postet github-actions[bot] (in scripts/fremdtext-lib.mjs vertraut, die Zeilen zählen für die Generationsgrenze).
+# Kommentare postet github-actions[bot] (in scripts/fremdtext-lib.mjs vertraut, sonst blendet scripts/fremdtext.mjs die Zeilen aus).
 
 on:
   schedule:
