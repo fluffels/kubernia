@@ -4,26 +4,28 @@
  * durchlaufen haben: alle Agenten laufen unter demselben GitHub-Konto, der Assignee ist darum kein Lock (Evidenz: zwei Sessions im selben
  * Worktree `kq-1549`, eine löschte dem Gegenüber `node_modules`).
  *
- *   node scripts/ticket-lock.mjs claim <nr>                      # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
+ *   node scripts/ticket-lock.mjs claim <nr> [--wiederaufnahme]    # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
  *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # rein lesend: vor Spawn und vor Übernahme eines Worktrees
  *   node scripts/ticket-lock.mjs uebernehmen <nr> --nonce <x>    # Nachfolger/Fortsetzung (#1593): wie `pruefe`, verbraucht zusätzlich Übergabe bzw. Stopp-Vermerk
  *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup
  *   node scripts/ticket-lock.mjs uebergeben <nr> --nonce <x>     # Phasen-Schnitt (#1592): letzte Aktion des Vorgängers vor `ERGEBNIS: uebergabe`
  *   node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>       # nach `TaskStop` des eigenen Umsetzers (#1693): das nächste `pruefe --nonce` meldet `uebernehmbar`
+ *   node scripts/ticket-lock.mjs lebenszeichen <nr> --nonce <x> [--schritt <text>]   # Plan-Schritt (#1699): frischt `zuletzt` im eigenen Lock auf
+ *   node scripts/ticket-lock.mjs lebenszeichen --commit          # post-commit-Hook (#1699): frischt `zuletzt` des Locks zum Ticket-Branch auf, sonst stiller No-op
  *
  * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `freigeben`, `uebergeben`: erledigt), 4 = nicht anfassen (belegt, fremd,
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
- * Mechanik: die Lock-Datei `<git-common-dir>/kq-locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
- * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig).
+ * Mechanik: die Lock-Datei `<git-common-dir>/<Worktree-Präfix>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
+ * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt, sandbox }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig; `sandbox` = `AGENT_SANDBOX` oder `null`) plus bei Bedarf `zuletzt: { zeit, quelle: "commit"|"schritt" }` (+ `schritt`), `uebergabe`, `gestoppt`. Das Format (Pfad, Parser, `lebenszeichenMs`) steht in `ticket-lock-lib.mjs`.
  * `claim` prüft vorher, ob ein Worktree `kq-<nr>` oder ein Branch `feature/kq-<nr>-*` (lokal oder remote) existiert (Exit 4). Ein
- * fremder Lock jünger als `VERWAIST_MS` (2 h) gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<Hash-Präfix>`
+ * fremder Lock, dessen jüngstes Lebenszeichen (`lebenszeichenMs`) jünger als `VERWAIST_MS` (2 h) ist, gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<Hash-Präfix>`
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
- * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock jünger als 2 h `fremd`; existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
+ * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock, dessen `erstellt` jünger als 2 h ist, `fremd` (bewusste Grenze: hier zählt `zuletzt` nicht); existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
  * Köpfe, jüngstem Reflog-Eintrag, mtime der geänderten Dateien laut `git status` und mtime von `node_modules`): jünger als
- * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren); `pruefe` ändert nie etwas (#1593), erst `uebernehmen` (gleiche Prüfung, gleiche Exit-Codes) verbraucht die Übergabe bzw. den Stopp-Vermerk (`verbraucht` = Zeitpunkt, ein zweites `uebernehmen` oder `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
+ * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren); `pruefe` ändert nie etwas (#1593), erst `uebernehmen` (gleiche Prüfung, gleiche Exit-Codes) verbraucht die Übergabe bzw. den Stopp-Vermerk (`verbraucht` = Zeitpunkt, ein zweites `uebernehmen` oder `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h nach mtime: jedes Lebenszeichen schreibt die Datei neu, ein lebender Lauf behält seinen Lock). `lebenszeichen` setzt nur `zuletzt`/`schritt` am frisch gelesenen eigenen Lock (Lost-Update-Grenze: ein gleichzeitiges `uebergeben`/`gestoppt` kann überschrieben werden; der Hook ändert nie Besitzfelder). Ein `zuletzt` der letzten 30 min zählt bei `pruefe` als Aktivität (`aktiv`). `claim <nr> --wiederaufnahme` (#1699) übernimmt auch eine belegte Nummer (Worktree/Branch), wenn die Prüfung ohne Nonce `frei` oder `uebernehmbar` ergäbe (Lock ≥ 2 h ohne Lebenszeichen, Aktivität ≥ 30 min alt); der alte Lock wird wie bei einem verwaisten beiseite gelegt.
  *
- * Bewusste Grenzen: nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
+ * Bewusste Grenzen: `claim --wiederaufnahme` prüft kein Festgefahren-Label (das tut `claims-pruefen.mjs`; ein ausdrückliches „mach weiter“ der Maintainerin ist eine menschliche Entscheidung); nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre);
  * ein Lock eines gemergten, geschlossenen Tickets sperrt nichts (die Auswahl nimmt nur offene Todo-Items) und verfällt per `VERWAIST_MS`/`ALTLAST_MS`;
  * kein Freigabeweg ohne Nonce (Absicht);
@@ -36,15 +38,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
 import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
 
-/** Ein fremder Lock, der älter ist, gilt als verwaist (Session abgestürzt, bevor ein Worktree entstand). */
-export const VERWAIST_MS = 2 * 60 * 60_000;
-/** Ein vorhandener Worktree/Branch ohne Aktivität in dieser Zeit ist übernehmbar. */
-export const INAKTIV_MS = 30 * 60_000;
-
-/** Eine Lock-Datei, die älter ist, räumt `claim` ab (Session lange tot); über `VERWAIST_MS`, damit ein langer Lauf seinen Lock behält. */
-export const ALTLAST_MS = 24 * 60 * 60_000;
+export { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS };
 
 /**
  * Welche Dateien im Lock-Verzeichnis `claim` abräumt (#1572): jede `*.verwaist-*` (Rest eines Übernahme-Wettlaufs) und jede
@@ -63,8 +61,8 @@ export function entscheideClaim({ erstellt, jetzt, verwaistMs = VERWAIST_MS }) {
 }
 
 /** Jüngste Aktivität in ms aus allen Quellen (nicht endliche Werte entfallen); `null`, wenn keine bekannt ist. Pur. */
-export function letzteAktivitaet({ commitMs = [], reflogMs = [], dateiMs = [], nodeModulesMs = null } = {}) {
-  const alle = [...commitMs, ...reflogMs, ...dateiMs, nodeModulesMs].filter((w) => Number.isFinite(w));
+export function letzteAktivitaet({ commitMs = [], reflogMs = [], dateiMs = [], nodeModulesMs = null, lockMs = null } = {}) {
+  const alle = [...commitMs, ...reflogMs, ...dateiMs, nodeModulesMs, lockMs].filter((w) => Number.isFinite(w));
   return alle.length ? Math.max(...alle) : null;
 }
 
@@ -106,8 +104,7 @@ const lockPfad = (deps, nr) => join(deps.lockDir, `${nr}.json`);
 
 function liesLock(deps, nr) {
   try {
-    const l = JSON.parse(deps.liesDatei(lockPfad(deps, nr)));
-    return l && typeof l === "object" && (typeof l.nonce === "string" || typeof l.nonceHash === "string") ? l : null;
+    return parseLock(deps.liesDatei(lockPfad(deps, nr)));
   } catch {
     return null;
   }
@@ -116,7 +113,7 @@ function liesLock(deps, nr) {
 /** Legt den Lock atomar an; `true` bei Gewinn, `false` bei vorhandener Datei, wirft sonst. */
 function legeAn(deps, nr, nonce) {
   try {
-    deps.schreibeNeu(lockPfad(deps, nr), `${JSON.stringify({ nr, nonceHash: hashVon(nonce), erstellt: new Date(deps.jetzt()).toISOString() })}\n`);
+    deps.schreibeNeu(lockPfad(deps, nr), `${JSON.stringify({ nr, nonceHash: hashVon(nonce), erstellt: new Date(deps.jetzt()).toISOString(), sandbox: deps.sandbox ?? null })}\n`);
     return true;
   } catch (e) {
     if (e && e.code === "EEXIST") return false;
@@ -184,20 +181,26 @@ function raeumeAuf(deps) {
   }
 }
 
-function claim(deps, nr) {
+function claim(deps, nr, wiederaufnahme = false) {
   try {
     deps.git(["fetch", "-q", "--prune", "origin"]);
   } catch {
     /* fail-open: ohne Netz zählen die lokalen Refs */
   }
-  if (ermittleBelegung(deps, nr).belegt) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (feature/kq-${nr}-*): nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
+  const b = ermittleBelegung(deps, nr);
+  if (b.belegt) {
+    const lock = liesLock(deps, nr);
+    const urteil = wiederaufnahme ? entscheidePruefung({ lock, nonce: null, vorhanden: true, aktivitaet: letzteAktivitaet(sammleAktivitaet(deps, b)), jetzt: deps.jetzt() }) : "belegt";
+    // Ein Herzschlag (`zuletzt`) schützt hier über `entscheideClaim` im Weiterlauf unten (`lebenszeichenMs`), nicht über die Aktivität.
+    if (urteil !== "frei" && urteil !== "uebernehmbar") return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (feature/kq-${nr}-*)${wiederaufnahme ? ` mit Lebenszeichen oder jungem Lock (${urteil})` : ""}: nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
+  }
   deps.legeVerzeichnisAn(deps.lockDir);
   raeumeAuf(deps);
   const nonce = deps.nonce();
   if (legeAn(deps, nr, nonce)) return ergebnis(0, `nonce=${nonce}`);
   const vorhanden = liesLock(deps, nr);
-  const erstellt = vorhanden ? Date.parse(vorhanden.erstellt) : Number.NaN;
-  if (entscheideClaim({ erstellt, jetzt: deps.jetzt() }) === "fremd") return ergebnis(4, "", `✖ ticket-lock: #${nr} ist von einer anderen Session gelockt (gelockt seit ${vorhanden?.erstellt}, frei ab ${new Date(erstellt + VERWAIST_MS).toISOString()}): nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
+  const erstellt = lebenszeichenMs(vorhanden) ?? Number.NaN;
+  if (entscheideClaim({ erstellt, jetzt: deps.jetzt() }) === "fremd") return ergebnis(4, "", `✖ ticket-lock: #${nr} ist von einer anderen Session gelockt (letztes Lebenszeichen ${new Date(erstellt).toISOString()}, frei ab ${new Date(erstellt + VERWAIST_MS).toISOString()}): nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
   try {
     deps.benenneUm(lockPfad(deps, nr), `${lockPfad(deps, nr)}.verwaist-${hashVon(nonce).slice(0, 16)}`);
   } catch {
@@ -211,7 +214,7 @@ function claim(deps, nr) {
 function pruefe(deps, nr, nonce, verbrauche = false) {
   const lock = liesLock(deps, nr);
   const b = ermittleBelegung(deps, nr);
-  const aktivitaet = b.belegt ? letzteAktivitaet(sammleAktivitaet(deps, b)) : null;
+  const aktivitaet = b.belegt ? letzteAktivitaet({ ...sammleAktivitaet(deps, b), lockMs: herzschlagMs(lock) }) : null;
   const uebergabeOffen = Boolean(lock?.uebergabe && !lock.uebergabe.verbraucht);
   const gestopptOffen = Boolean(lock?.gestoppt && !lock.gestoppt.verbraucht);
   const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt(), uebergabeOffen, gestopptOffen });
@@ -248,6 +251,33 @@ function gestoppt(deps, nr, nonce) {
   return ergebnis(0, "gestoppt");
 }
 
+/** Kurztext für `schritt`: einzeilig, getrimmt, höchstens 80 Zeichen; leer wird `null`. Pur. */
+export function bereinigeSchritt(text) {
+  const s = String(text ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  return s === "" ? null : s;
+}
+
+/** Lebenszeichen eines Plan-Schritts (#1699): nur der eigene Lock, sonst Exit 4. Frisch gelesen, nur `zuletzt` und `schritt` gesetzt. */
+function lebenszeichen(deps, nr, nonce, schritt) {
+  const lock = liesLock(deps, nr);
+  if (!gehoertZu(lock, nonce)) return ergebnis(4, "", `✖ ticket-lock: der Lock zu #${nr} fehlt oder gehört einer anderen Session (eine andere Session hat den Claim übernommen?), kein Lebenszeichen. ${NICHT_VON_HAND}`);
+  const s = bereinigeSchritt(schritt);
+  schreibeLock(deps, nr, { ...lock, zuletzt: { zeit: new Date(deps.jetzt()).toISOString(), quelle: "schritt" }, ...(s ? { schritt: s } : {}) });
+  return ergebnis(0, "lebenszeichen");
+}
+
+/** Lebenszeichen eines Commits (#1699, post-commit-Hook): Nummer aus dem Branch, nur `zuletzt`; ohne Ticket-Branch, ohne Lock oder bei jedem Fehler ein stiller No-op (Exit 0, der Hook darf nie stören). */
+function lebenszeichenCommit(deps) {
+  try {
+    const nr = ticketAusRef(deps.git(["rev-parse", "--abbrev-ref", "HEAD"]).trim());
+    const lock = nr === null ? null : liesLock(deps, nr);
+    if (lock) schreibeLock(deps, nr, { ...lock, zuletzt: { zeit: new Date(deps.jetzt()).toISOString(), quelle: "commit" } });
+  } catch {
+    /* nie stören */
+  }
+  return ergebnis(0);
+}
+
 /** Schreibt eine bestehende Lock-Datei neu (nur für den eigenen Lock). */
 function schreibeLock(deps, nr, lock) {
   deps.ersetze(lockPfad(deps, nr), `${JSON.stringify(lock)}\n`);
@@ -261,17 +291,27 @@ function freigeben(deps, nr, nonce) {
   return ergebnis(0, "freigegeben");
 }
 
-/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, lockDir, liesDatei, schreibeNeu, ersetze, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
+/** Wert hinter `--schritt` (oder `--schritt=<x>`); `null`, wenn nicht angegeben. Pur. */
+export function schrittAus(argv) {
+  const i = argv.findIndex((a) => a === "--schritt" || a.startsWith("--schritt="));
+  if (i < 0) return null;
+  return argv[i].includes("=") ? argv[i].slice("--schritt=".length) : (argv[i + 1] ?? "");
+}
+
+/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, sandbox, lockDir, liesDatei, schreibeNeu, ersetze, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
 export function fuehreAus(argv, deps) {
   const [befehl, nrText, ...rest] = argv;
   const nonce = nonceAus(argv);
   const nr = NUMMER.test(nrText ?? "") ? Number(nrText) : null;
-  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x>");
-  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen"].includes(befehl)) return usage;
-  if ((befehl === "freigeben" || befehl === "uebergeben" || befehl === "gestoppt" || befehl === "uebernehmen") && !nonce) return usage;
-  if (nonce === "" || (befehl === "claim" && rest.length > 0)) return usage;
+  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit");
+  if (befehl === "lebenszeichen" && argv.length === 2 && argv[1] === "--commit") return lebenszeichenCommit(deps);
+  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"].includes(befehl)) return usage;
+  if (["freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"].includes(befehl) && !nonce) return usage;
+  const wiederaufnahme = befehl === "claim" && rest.length === 1 && rest[0] === "--wiederaufnahme";
+  if (nonce === "" || (befehl === "claim" && rest.length > 0 && !wiederaufnahme)) return usage;
   try {
-    if (befehl === "claim") return claim(deps, nr);
+    if (befehl === "claim") return claim(deps, nr, wiederaufnahme);
+    if (befehl === "lebenszeichen") return lebenszeichen(deps, nr, nonce, schrittAus(argv));
     if (befehl === "pruefe") return pruefe(deps, nr, nonce);
     if (befehl === "uebernehmen") return pruefe(deps, nr, nonce, true);
     if (befehl === "uebergeben") return uebergeben(deps, nr, nonce);
@@ -290,7 +330,8 @@ export function echteDeps() {
     git,
     jetzt: () => Date.now(),
     nonce: () => randomUUID(),
-    lockDir: join(gemeinsam, "kq-locks"),
+    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: ladeProjektConfig().praefixe.worktree }),
+    sandbox: process.env.AGENT_SANDBOX ?? null,
     liesDatei: (p) => readFileSync(p, "utf8"),
     schreibeNeu: (p, text) => {
       const fd = openSync(p, "wx");

@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+#
+# post-commit-Hook (#1699): frischt das Lebenszeichen `zuletzt` im Ticket-Lock auf.
+# Der Lock zum Ticket-Branch trägt nach jedem Commit `zuletzt: { zeit, quelle: "commit" }`,
+# damit eine Prüfung verwaister Claims eine laufende Session von einer toten unterscheidet.
+#
+# Bewusste Grenzen:
+#  - Stiller No-op ohne Ticket-Branch, ohne Lock oder bei jedem Fehler; der Hook bricht nie einen Commit.
+#  - Er ändert nur `zuletzt`, nie Besitzfelder (Nonce, Übergabe, Stopp).
+#  - Alte Worktrees ohne diesen Hook liefern kein Commit-Lebenszeichen; die Prüfung nimmt dann die Commit-Zeit der Branch-Köpfe.
+#
+# Verdrahtet über `core.hooksPath = .githooks` (gesetzt von `npm run setup`).
+node scripts/ticket-lock.mjs lebenszeichen --commit >/dev/null 2>&1 || true
+exit 0

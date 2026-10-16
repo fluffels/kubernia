@@ -35,6 +35,7 @@ model {
     }
     gitHooks = container 'Git-Hooks' {
       prePush = githook 'pre-push'
+      postCommit = githook 'post-commit'
     }
     verify = container 'verify' {
       description 'Schnelle Gates vor jedem Review und PR'
