@@ -38,3 +38,12 @@ test("jeder Drill akzeptiert seine eigene Lösung (8 Ziehungen)", () => {
   }
   assert.deepEqual(fehler, []);
 });
+
+test("Drill-Ebene: ein Punkt in Datei-, Tag- und Registry-Namen ist kein Wildcard", () => {
+  const add = KQContent.DRILLS["git-add"](new KQSim({}));
+  assert.ok(add.accept.some(re => re.test(add.solution)));
+  assert.equal(add.accept.some(re => re.test(add.solution.replace(".md", "xmd"))), false);
+  const reg = KQContent.DRILLS["docker-pull-registry"](new KQSim({}));
+  assert.ok(reg.accept.some(re => re.test(reg.solution)));
+  assert.equal(reg.accept.some(re => re.test(reg.solution.replace(".io", "xio"))), false);
+});
