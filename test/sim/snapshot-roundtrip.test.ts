@@ -30,7 +30,7 @@ import { deploymentYaml } from "../factories/manifests";
  *  abgeschrieben: wächst ClusterState um ein Feld, MUSS diese Liste (oder die Ausschluss-
  *  Liste unten) mitwachsen, sonst schlägt der Vollständigkeits-Test weiter unten fehl. */
 const CLUSTER_STATE_FIELDS = [
-  "docker", "nodes", "deployments", "services", "ingresses", "gatewayClasses", "gateways", "networkPolicies",
+  "docker", "nodes", "deployments", "services", "ingresses", "gatewayClasses", "gateways", "httpRoutes", "networkPolicies",
   "secrets", "configMaps", "files", "applyEffects",
   "serviceMonitors", "prometheusRules", "grafanaDatasources", "grafanaDashboards",
   "statefulSets", "pvcs", "pvs", "storageClasses", "volumeSnapshots", "objectStore",
@@ -75,6 +75,7 @@ const bigScenario: Scenario = {
   ingresses: [{ name: "kasse-ing", className: "nginx", host: "hafen.de", path: "/kasse", service: "kasse-svc", port: 80, tls: { secretName: "tls-secret" } }],
   gatewayClasses: [{ name: "envoy", controllerName: "gateway.envoyproxy.io/gatewayclass-controller", description: "Hafentor-Klasse", created: 3 }],
   gateways: [{ name: "hafentor", className: "envoy", listeners: [{ name: "https", port: 8443, protocol: "HTTPS", hostname: "hafen.de", tlsSecret: "tls-secret" }], created: 4 }],
+  httpRoutes: [{ name: "kasse-route", parentRefs: ["hafentor"], hostnames: ["hafen.de"], rules: [{ path: "/kasse", pathType: "Exact", backends: [{ service: "kasse-svc", port: 80 }] }], created: 5 }],
   networkPolicies: [{ name: "deny-all", podSelector: "", allowFrom: "" }],
   secrets: [{ name: "db-secret", keys: ["password"], type: "Opaque" }],
   configMaps: [{ name: "app-config", keys: ["LOG_LEVEL"] }],
@@ -191,13 +192,15 @@ test("Alt-Snapshot ohne serviceAccountName lädt heil und läuft unter der defau
   expect(sim.exec("kubectl describe pod " + sim.deployments[0].pods[0].name).output).toMatch(/Service Account:\s+default/);
 });
 
-test("Alt-Snapshot ohne Gateway-Felder lädt mit leeren Listen und besteht die Save-Härtung (#1664)", () => {
+test("Alt-Snapshot ohne Gateway- und HTTPRoute-Felder lädt mit leeren Listen und besteht die Save-Härtung (#1664, #1665)", () => {
   const alt = JSON.parse(JSON.stringify(new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] }).snapshot())) as Record<string, unknown>;
   delete alt.gatewayClasses;
   delete alt.gateways;
+  delete alt.httpRoutes;
   const sim = new KQSim(alt);
   expect(sim.gatewayClasses).toEqual([]);
   expect(sim.gateways).toEqual([]);
+  expect(sim.httpRoutes).toEqual([]);
   expect(sim.exec("kubectl get gateways").output).toBe("No resources found in default namespace.");
   // Der Snapshot übersteht sanitizeState unverändert (nicht auf null verworfen, kein Versions-Bump nötig).
   expect(sanitizeState({ clusterSnapshot: alt }).clusterSnapshot).toEqual(alt);

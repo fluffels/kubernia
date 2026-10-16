@@ -23,7 +23,7 @@ import type {
  *  der transiente Sitzungs-Marker `lastDeletedPod` und die in `sim.ts` verbleibenden
  *  Helfer/öffentlichen Methoden, die kubectl ruft. */
 export interface KubectlHost extends Pick<ClusterState,
-  | "clock" | "nodes" | "deployments" | "services" | "ingresses" | "networkPolicies" | "gatewayClasses" | "gateways"
+  | "clock" | "nodes" | "deployments" | "services" | "ingresses" | "networkPolicies" | "gatewayClasses" | "gateways" | "httpRoutes"
   | "secrets" | "configMaps" | "files" | "applyEffects" | "serviceMonitors"
   | "prometheusRules" | "grafanaDatasources" | "grafanaDashboards" | "statefulSets"
   | "pvcs" | "pvs" | "storageClasses" | "volumeSnapshots" | "serviceAccounts"

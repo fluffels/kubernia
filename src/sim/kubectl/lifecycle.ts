@@ -25,7 +25,7 @@ import { exactlyOneName, notSimulated, replicasArg } from "./args";
 import { readTargets, targetOutcome, type Target } from "./targets";
 import { subEntry, type Call } from "../cliargs";
 import { applyDeployment } from "./apply-deployment";
-import { applyGateway, applyGatewayClass } from "./apply-gateway";
+import { applyGateway, applyGatewayClass, applyHttpRoute } from "./apply-gateway";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
 import type { KubectlHost } from "./host";
 
@@ -64,6 +64,7 @@ const SIMPLE_DELETABLE: ReadonlyMap<ResourcePlural, (host: KubectlHost) => { nam
   ["ingresses", (h: KubectlHost) => h.ingresses],
   ["gatewayclasses", (h: KubectlHost) => h.gatewayClasses],
   ["gateways", (h: KubectlHost) => h.gateways],
+  ["httproutes", (h: KubectlHost) => h.httpRoutes],
   ["networkpolicies", (h: KubectlHost) => h.networkPolicies],
   ["persistentvolumes", (h: KubectlHost) => h.pvs],
   ["storageclasses", (h: KubectlHost) => h.storageClasses],
@@ -264,6 +265,7 @@ const FILE_DELETABLE: readonly {
   { pick: e => e.ingress, remove: (h, n) => spliceByName(h.ingresses, n), msg: n => 'ingress.networking.k8s.io "' + n + '" deleted' },
   { pick: e => e.gatewayClass, remove: (h, n) => spliceByName(h.gatewayClasses, n), msg: n => 'gatewayclass.gateway.networking.k8s.io "' + n + '" deleted' },
   { pick: e => e.gateway, remove: (h, n) => spliceByName(h.gateways, n), msg: n => 'gateway.gateway.networking.k8s.io "' + n + '" deleted' },
+  { pick: e => e.httpRoute, remove: (h, n) => spliceByName(h.httpRoutes, n), msg: n => 'httproute.gateway.networking.k8s.io "' + n + '" deleted' },
   { pick: e => e.networkPolicy, remove: (h, n) => spliceByName(h.networkPolicies, n), msg: n => 'networkpolicy.networking.k8s.io "' + n + '" deleted' },
   { pick: e => e.statefulSet, remove: (h, n) => !!removeStatefulSet(h, n), msg: n => 'statefulset.apps "' + n + '" deleted' },
   { pick: e => e.pvc, remove: (h, n) => spliceByName(h.pvcs, n), msg: n => 'persistentvolumeclaim "' + n + '" deleted' },
@@ -719,6 +721,7 @@ const applyHandlers: readonly ApplyHandler[] = [
   applyIngress,
   applyGatewayClass,
   applyGateway,
+  applyHttpRoute,
   applyNetworkPolicy,
   applyApplication,
   applyServiceMonitor,

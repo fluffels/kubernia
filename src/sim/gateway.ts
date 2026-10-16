@@ -49,16 +49,19 @@ export interface GatewayRes {
 export interface GatewayScenarioFields {
   gatewayClasses?: GatewayClassRes[];
   gateways?: GatewayRes[];
+  httpRoutes?: HttpRouteRes[];
 }
 /** Felder, die `ClusterState` übernimmt. */
 export interface GatewayClusterFields {
   gatewayClasses: GatewayClassRes[];
   gateways: GatewayRes[];
+  httpRoutes: HttpRouteRes[];
 }
 /** Felder, die `ApplyEffect` übernimmt (der Mapper setzt sie, `created` vergibt der Handler). */
 export interface GatewayApplyFields {
   gatewayClass?: Omit<GatewayClassRes, "created">;
   gateway?: Omit<GatewayRes, "created">;
+  httpRoute?: Omit<HttpRouteRes, "created">;
 }
 
 export type ConditionStatus = "True" | "False" | "Unknown";
@@ -137,4 +140,92 @@ export function listenerConditions(l: GatewayListener, secrets: readonly CertSec
     { type: "Programmed", status: "True", reason: "Programmed", message: "Successfully programmed" },
     { type: "ResolvedRefs", status: "True", reason: "ResolvedRefs", message: "Listeners' references are resolved" },
   ];
+}
+
+/** Die Protokolle, an die sich eine HTTPRoute hängen kann. */
+export const ROUTE_PROTOCOLS: readonly string[] = ["HTTP", "HTTPS"];
+
+export type HttpPathType = "PathPrefix" | "Exact";
+export interface HttpBackendRef { service: string; port: number }
+export interface HttpRouteRule {
+  path: string;
+  pathType: HttpPathType;
+  backends: HttpBackendRef[];
+}
+/** Eine HTTPRoute: Gateways im selben Namespace (`parentRefs`), Hostnamen und Regeln (ein Match je Regel). */
+export interface HttpRouteRes {
+  name: string;
+  parentRefs: string[];
+  hostnames: string[];
+  rules: HttpRouteRule[];
+  created?: number;
+}
+
+/** Passen zwei Hostnamen zusammen? Ein Wildcard `*.x` deckt jedes Suffix `.x` ab (nicht `x` selbst), in beide Richtungen. */
+function hostMatches(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.startsWith("*.") && b.endsWith(a.slice(1))) return true;
+  return b.startsWith("*.") && a.endsWith(b.slice(1));
+}
+
+/** Schneiden sich Listener-Hostname und Route-Hostnamen? Ein fehlender Hostname (Listener oder Route) passt auf alles. */
+export function hostnamesIntersect(listenerHost: string | undefined, routeHosts: readonly string[]): boolean {
+  if (!listenerHost || routeHosts.length === 0) return true;
+  return routeHosts.some(h => hostMatches(listenerHost, h));
+}
+
+/** Wie viele Routen am Listener hängen: Routen, deren parentRefs das Gateway nennen, nur bei HTTP-/HTTPS-Listenern. */
+export function attachedRoutes(gw: GatewayRes, listener: GatewayListener, routes: readonly HttpRouteRes[]): number {
+  if (!ROUTE_PROTOCOLS.includes(listener.protocol)) return 0;
+  return routes.filter(r => r.parentRefs.includes(gw.name)).length;
+}
+
+export interface RouteParentStatus {
+  gateway: string;
+  controllerName: string;
+  conditions: GatewayCondition[];
+}
+/** Ein parentRef, der keinen Status bekommt: das Gateway fehlt oder seine Klasse ist nicht angenommen. */
+export interface UnattachedParent { gateway: string; reason: "NotFound" | "NoController" }
+export interface HttpRouteStatus {
+  parents: RouteParentStatus[];
+  unattached: UnattachedParent[];
+}
+
+function acceptedForGateway(gw: GatewayRes, route: HttpRouteRes): GatewayCondition {
+  const matching = gw.listeners.filter(l => ROUTE_PROTOCOLS.includes(l.protocol));
+  if (matching.length === 0) {
+    return { type: "Accepted", status: "False", reason: "NotAllowedByListeners", message: "No listener of Gateway " + gw.name + " accepts HTTP routes (HTTP or HTTPS)." };
+  }
+  if (!matching.some(l => hostnamesIntersect(l.hostname, route.hostnames))) {
+    return { type: "Accepted", status: "False", reason: "NoMatchingListenerHostname", message: "No listener hostname of Gateway " + gw.name + " matches the hostnames of the route." };
+  }
+  return { type: "Accepted", status: "True", reason: "Accepted", message: "Route is accepted" };
+}
+
+function resolvedRefs(route: HttpRouteRes, services: readonly { name: string }[]): GatewayCondition {
+  for (const [ri, rule] of route.rules.entries()) {
+    for (const [bi, b] of rule.backends.entries()) {
+      if (!services.some(s => s.name === b.service)) {
+        return { type: "ResolvedRefs", status: "False", reason: "BackendNotFound",
+          message: "Service " + b.service + " not found (rule " + (ri + 1) + ", backendRef " + (bi + 1) + ")" };
+      }
+    }
+  }
+  return { type: "ResolvedRefs", status: "True", reason: "ResolvedRefs", message: "Resolved all the Object references for the Route" };
+}
+
+/** Der abgeleitete Status einer HTTPRoute je parentRef (nie gespeichert). */
+export function httpRouteStatus(
+  route: HttpRouteRes, gateways: readonly GatewayRes[], classes: readonly GatewayClassRes[], services: readonly { name: string }[],
+): HttpRouteStatus {
+  const parents: RouteParentStatus[] = [];
+  const unattached: UnattachedParent[] = [];
+  for (const ref of route.parentRefs) {
+    const gw = gateways.find(g => g.name === ref);
+    if (!gw) { unattached.push({ gateway: ref, reason: "NotFound" }); continue; }
+    if (!gatewayStatus(gw, classes).classAccepted) { unattached.push({ gateway: ref, reason: "NoController" }); continue; }
+    parents.push({ gateway: ref, controllerName: SIM_GATEWAY_CONTROLLER, conditions: [acceptedForGateway(gw, route), resolvedRefs(route, services)] });
+  }
+  return { parents, unattached };
 }

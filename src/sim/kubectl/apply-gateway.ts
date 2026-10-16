@@ -9,11 +9,19 @@
  *
  * Phaser-frei (pure Domäne). Aufgerufen aus ./lifecycle (apply-Handler-Registry). */
 import type { ApplyEffect } from "../state";
-import { GATEWAY_GROUP, type GatewayListener } from "../gateway";
+import { GATEWAY_GROUP, type GatewayListener, type HttpRouteRes } from "../gateway";
 import type { KubectlHost } from "./host";
 
 const classLine = (name: string, verb: string): string => "gatewayclass." + GATEWAY_GROUP + "/" + name + " " + verb;
 const gatewayLine = (name: string, verb: string): string => "gateway." + GATEWAY_GROUP + "/" + name + " " + verb;
+
+const routeLine = (name: string, verb: string): string => "httproute." + GATEWAY_GROUP + "/" + name + " " + verb;
+
+/** Die Route in fester Feldform (ohne `created`), damit der Vergleich nicht an der Schlüssel-Reihenfolge hängt. */
+const normalizedRoute = (r: Omit<HttpRouteRes, "created">): string => JSON.stringify({
+  parentRefs: r.parentRefs, hostnames: r.hostnames,
+  rules: r.rules.map(x => ({ path: x.path, pathType: x.pathType, backends: x.backends.map(b => ({ service: b.service, port: b.port })) })),
+});
 
 /** Ein Listener in fester Feldform, damit der Vergleich nicht an der Schlüssel-Reihenfolge hängt. */
 function normalized(l: GatewayListener): GatewayListener {
@@ -70,4 +78,28 @@ export function applyGateway(host: KubectlHost, eff: ApplyEffect, out: string[])
   existing.className = effGw.className;
   existing.listeners = listeners;
   out.push(gatewayLine(effGw.name, "configured"));
+}
+
+export function applyHttpRoute(host: KubectlHost, eff: ApplyEffect, out: string[]): string | void {
+  const effRoute = eff.httpRoute;
+  if (!effRoute) return;
+  const copyRules = (rules: HttpRouteRes["rules"]): HttpRouteRes["rules"] => rules.map(r => ({ ...r, backends: r.backends.map(b => ({ ...b })) }));
+  const existing = host.httpRoutes.find(r => r.name === effRoute.name);
+  if (!existing) {
+    host.httpRoutes.push({
+      name: effRoute.name, parentRefs: [...effRoute.parentRefs], hostnames: [...effRoute.hostnames],
+      rules: copyRules(effRoute.rules), created: host.clock,
+    });
+    out.push(routeLine(effRoute.name, "created"));
+    return;
+  }
+  if (normalizedRoute(existing) === normalizedRoute(effRoute)) {
+    out.push(routeLine(effRoute.name, "unchanged"));
+    return;
+  }
+  // Nur zuweisen, nie in place ändern: der Szenario-Klon ist flach.
+  existing.parentRefs = [...effRoute.parentRefs];
+  existing.hostnames = [...effRoute.hostnames];
+  existing.rules = copyRules(effRoute.rules);
+  out.push(routeLine(effRoute.name, "configured"));
 }

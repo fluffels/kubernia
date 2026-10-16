@@ -34,7 +34,8 @@ const EMPTY_LIST = "apiVersion: v1\nitems: []\nkind: List\nmetadata:\n  resource
 function reich(): Scenario {
   return { deployments: [dep("web", { containerPort: 8080 }), dep("api")], services: [svc("web", { targetPort: 8080 })], statefulSets: [sts()],
     gatewayClasses: [{ name: "envoy", controllerName: SIM_GATEWAY_CONTROLLER, description: "Envoy Gateway" }],
-    gateways: [{ name: "eingang", className: "envoy", listeners: [{ name: "http", port: 80, protocol: "HTTP" }, { name: "https", port: 443, protocol: "HTTPS", hostname: "hafen.example", tlsSecret: "hafen-tls" }] }] };
+    gateways: [{ name: "eingang", className: "envoy", listeners: [{ name: "http", port: 80, protocol: "HTTP" }, { name: "https", port: 443, protocol: "HTTPS", hostname: "hafen.example", tlsSecret: "hafen-tls" }] }],
+    httpRoutes: [{ name: "web-route", parentRefs: ["eingang"], hostnames: ["hafen.example"], rules: [{ path: "/web", pathType: "Exact", backends: [{ service: "web", port: 80 }] }, { path: "/", pathType: "PathPrefix", backends: [] }] }] };
 }
 
 describe("Einzelobjekt gegen List", () => {
