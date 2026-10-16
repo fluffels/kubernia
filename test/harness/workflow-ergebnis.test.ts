@@ -18,7 +18,7 @@ function werte(text: string): string[] {
 
 /** Werte, die im Skill nicht als Wort vorkommen. */
 function fehlend(vorhanden: string[], skill: string): string[] {
-  return vorhanden.filter((w) => !new RegExp(`(?<![a-z-])${w}(?![a-z-])`).test(skill));
+  return vorhanden.filter((w) => !new RegExp(`(?<![A-Za-z0-9-])${w}(?![A-Za-z0-9-])`).test(skill));
 }
 
 describe("ergebnis-Werte des Workflows stehen im Skill", () => {
