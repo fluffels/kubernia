@@ -1,0 +1,88 @@
+// Drift-Gate (ADR 0022 F9): ein Projekt ändert den Factory-Besitz nicht still.
+// `node scripts/check-factory-drift.mjs [--wurzel <pfad>]`; Exit 0 grün oder entfällt, 1 Drift, 2 Aufruf.
+// Referenz ist `.factory/sync-stand.json` (vom Sync geschrieben): Hash des Manifests und je Einheit. Ohne Sync-Stand ist das Projekt
+// selbst Quelle des Besitzes, die Prüfung entfällt mit einer Zeile.
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { einheitHash, einheitId, pfadSicher, textHash } from "./besitz-lib.mjs";
+
+const MANIFEST_PFAD = ".factory/besitz.json";
+const STAND_PFAD = ".factory/sync-stand.json";
+const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`npm run factory:sync -- --quelle <pfad>`), oder den Projektwert in `.factory/projekt.json` auslagern";
+
+/**
+ * Prüft den Besitz gegen den Sync-Stand. `lies(pfad)` liefert den Dateitext (relativ zur Projektwurzel) oder `null`.
+ * Rückgabe: `{ entfaellt, fehler, einheiten }`; jeder Fehler nennt den Weg.
+ */
+export function pruefeDrift(lies) {
+  const standText = lies(STAND_PFAD);
+  if (standText === null) return { entfaellt: true, fehler: [], einheiten: 0 };
+  const rot = (msg) => ({ entfaellt: false, fehler: [`${msg}. ${WEG}`], einheiten: 0 });
+  let stand;
+  try {
+    stand = JSON.parse(standText);
+  } catch {
+    return rot(`${STAND_PFAD} ist kein gültiges JSON`);
+  }
+  if (stand?.version !== 1 || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object") {
+    return rot(`${STAND_PFAD} ist kaputt (Version, Manifest-Hash oder Einheiten fehlen)`);
+  }
+  const manifestText = lies(MANIFEST_PFAD);
+  if (manifestText === null) return rot(`${MANIFEST_PFAD} fehlt`);
+  if (textHash(manifestText) !== stand.manifest) return rot(`${MANIFEST_PFAD} weicht vom Sync-Stand ab (Besitz-Liste verändert)`);
+  let manifest;
+  try {
+    manifest = JSON.parse(manifestText);
+  } catch {
+    return rot(`${MANIFEST_PFAD} ist kein gültiges JSON`);
+  }
+  const fehler = [];
+  const ids = new Set();
+  for (const e of manifest.eintraege ?? []) {
+    const id = einheitId(e);
+    ids.add(id);
+    if (!(id in stand.einheiten)) {
+      fehler.push(`${id}: im Manifest, aber nicht im Sync-Stand`);
+      continue;
+    }
+    const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
+    const hash = text === null ? null : einheitHash(e, text);
+    if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt)`);
+    else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert`);
+  }
+  for (const id of Object.keys(stand.einheiten)) if (!ids.has(id)) fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
+  return { entfaellt: false, fehler: fehler.map((f) => `${f}. ${WEG}`), einheiten: ids.size };
+}
+
+/** Kommandozeile; Rückgabe = Exit-Code. */
+export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)), ".."), out = (s) => console.log(s), err = (s) => console.error(s) } = {}) {
+  let w = wurzel;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--wurzel" && argv[i + 1] !== undefined) w = argv[++i];
+    else {
+      err("Aufruf: node scripts/check-factory-drift.mjs [--wurzel <pfad>]");
+      return 2;
+    }
+  }
+  const lies = (pfad) => {
+    const voll = join(w, ...pfad.split("/"));
+    return existsSync(voll) ? readFileSync(voll, "utf8") : null;
+  };
+  const r = pruefeDrift(lies);
+  if (r.entfaellt) {
+    out(`check-factory-drift: kein ${STAND_PFAD}, dieses Projekt ist Quelle des Besitzes, Prüfung entfällt`);
+    return 0;
+  }
+  if (r.fehler.length > 0) {
+    err(`check-factory-drift: ${r.fehler.length} Drift-Befund(e)`);
+    for (const f of r.fehler) err(`  ${f}`);
+    return 1;
+  }
+  out(`check-factory-drift: ${r.einheiten} Einheiten ohne Drift`);
+  return 0;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = cli(process.argv.slice(2));
+}

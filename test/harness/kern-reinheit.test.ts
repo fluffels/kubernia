@@ -17,11 +17,21 @@ import { IMPORT_FORM } from "./hook-importe";
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+
+interface BesitzLib {
+  markerStart(id: string): string;
+  markerEnde(id: string): string;
+  einheitId(e: Eintrag): string;
+  einheitText(e: Eintrag, text: string): string | null;
+  pruefeManifest(m: Manifest, lies: (pfad: string) => string | null): string[];
+}
+const { markerStart, markerEnde, einheitId, einheitText, pruefeManifest } = rawBesitz as unknown as BesitzLib;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const MANIFEST = ".factory/besitz.json";
 const BASELINE = "test/harness/kern-literale-baseline.json";
-const RINGE = ["kern", "kern-nach-entkopplung"];
 
 export interface Eintrag {
   pfad: string;
@@ -59,9 +69,6 @@ export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
   return out;
 }
 
-const markerStart = (id: string): string => `<!-- factory-besitz:start ${id} -->`;
-const markerEnde = (id: string): string => `<!-- factory-besitz:ende ${id} -->`;
-
 /** Zählung je Begriff (nur > 0), CRLF-neutral. */
 export function zaehle(text: string, begriffe: Record<string, RegExp>): Zaehlung {
   const t = text.replace(/\r\n/g, "\n");
@@ -70,69 +77,6 @@ export function zaehle(text: string, begriffe: Record<string, RegExp>): Zaehlung
     const n = (t.match(re) ?? []).length;
     if (n > 0) out[name] = n;
   }
-  return out;
-}
-
-export function einheitId(e: Eintrag): string {
-  if (e.block !== undefined) return `${e.pfad}#${e.block}`;
-  if (e.schluessel !== undefined) return `${e.pfad}#/${e.schluessel}`;
-  return e.pfad;
-}
-
-function zaehleVorkommen(text: string, s: string): number {
-  return text.split(s).length - 1;
-}
-
-/** Text der Einheit oder `null`, wenn Block/Schlüssel nicht auflösbar ist. */
-export function einheitText(e: Eintrag, text: string): string | null {
-  if (e.block !== undefined) {
-    const a = text.indexOf(markerStart(e.block));
-    const b = text.indexOf(markerEnde(e.block));
-    if (a < 0 || b < a) return null;
-    return text.slice(a, b + markerEnde(e.block).length);
-  }
-  if (e.schluessel !== undefined) {
-    try {
-      const j = JSON.parse(text) as Record<string, unknown>;
-      return e.schluessel in j ? JSON.stringify(j[e.schluessel]) : null;
-    } catch {
-      return null;
-    }
-  }
-  return text;
-}
-
-/** Manifest-Fehler (leer = gültig). `lies` liefert den Dateitext oder `null`. */
-export function pruefeManifest(m: Manifest, lies: (pfad: string) => string | null): string[] {
-  const out: string[] = [];
-  if (m.version !== 1) out.push(`version ${String(m.version)} unbekannt (erwartet 1)`);
-  const ids = new Set<string>();
-  const ganze = new Set<string>();
-  const teile = new Set<string>();
-  for (const e of m.eintraege) {
-    const id = einheitId(e);
-    if (ids.has(id)) out.push(`${id}: doppelte Einheit`);
-    ids.add(id);
-    if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
-    if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
-    if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
-    if (e.block === undefined && e.schluessel === undefined) ganze.add(e.pfad);
-    else teile.add(e.pfad);
-    const text = lies(e.pfad);
-    if (text === null) {
-      out.push(`${id}: Pfad existiert nicht`);
-      continue;
-    }
-    if (e.block !== undefined) {
-      const na = zaehleVorkommen(text, markerStart(e.block));
-      const nb = zaehleVorkommen(text, markerEnde(e.block));
-      if (na !== 1 || nb !== 1) out.push(`${id}: Marker müssen je genau einmal stehen (start ${na}, ende ${nb})`);
-      else if (einheitText(e, text) === null) out.push(`${id}: Ende-Marker steht vor dem Start-Marker`);
-    } else if (e.schluessel !== undefined && einheitText(e, text) === null) {
-      out.push(`${id}: JSON-Schlüssel fehlt oder Datei ist kein gültiges JSON`);
-    }
-  }
-  for (const p of ganze) if (teile.has(p)) out.push(`${p}: Datei ganz und als Teil-Einheit gelistet`);
   return out;
 }
 
@@ -322,6 +266,9 @@ describe("pruefeManifest", () => {
     assert.match(meld({ version: 2, eintraege: [] }, "t"), /version/);
     assert.match(meld(ok([ein("a", { quelle: " " })]), "t"), /quelle fehlt/);
     assert.match(meld(ok([ein("a", { block: "x", schluessel: "k" })]), "t"), /zugleich/);
+    for (const unsicher of ["/etc/x", "../x", "a/../x", "a\\b", "a//b", "C:/x", "", "a/./b"]) {
+      assert.match(meld(ok([ein(unsicher)]), "t"), /Pfad unsicher/, unsicher);
+    }
   });
 });
 
