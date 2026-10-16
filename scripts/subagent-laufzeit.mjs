@@ -15,13 +15,15 @@
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
  */
 import { pathToFileURL } from "node:url";
-import { median, passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
+import { median, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
 const tagVon = (t) => new Date(t).toISOString().slice(0, 10);
 const stat = (laeufe) => ({
   n: laeufe.length,
+  // Verschiedene Tickets und die mit mehr als einem Lauf (#1646): die Mediane gelten je Lauf, nicht je Ticket.
+  ...ticketZaehlung(laeufe),
   dauerMin: median(laeufe.map((l) => l.dauerMin)),
   modellMin: median(laeufe.map((l) => l.modellMin)),
   toolMin: median(laeufe.map((l) => l.toolMin)),
@@ -84,8 +86,8 @@ const f2 = (x) => (x === null ? "-" : x.toFixed(2));
 /** Markdown: Aggregat-Tabelle und Läufe. */
 export function renderMarkdown(r) {
   const out = [`Subagent-Typ \`${r.agent}\`: ${r.laeufe.length} Läufe (${r.aggregat.offen} offen, nicht in den Medianen)`, ""];
-  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | Σ Kosten geschätzt ($) | ohne Preis | s/Req (Modell) | parallel | max. Kontext | längster (min) |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
-  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${f2(s.kostenGeschaetztSumme ?? null)} | ${s.ohnePreis} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} |`);
+  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | Σ Kosten geschätzt ($) | ohne Preis | s/Req (Modell) | parallel | max. Kontext | längster (min) | Tickets |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
+  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${f2(s.kostenGeschaetztSumme ?? null)} | ${s.ohnePreis} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} | ${s.tickets} |`);
   z("alle gemessenen", r.aggregat.gesamt);
   z("ohne Sammeltickets", r.aggregat.ohneSammel);
   z("Sammeltickets", r.aggregat.sammel);
@@ -98,6 +100,8 @@ export function renderMarkdown(r) {
     z("Sammel vor Schnitt", r.aggregat.altSammel);
     z("Sammel ab Schnitt", r.aggregat.neuSammel);
   }
+  const hinweis = mehrlaufHinweis(r.aggregat.gesamt.mehrlauf);
+  if (hinweis) out.push("", hinweis);
   out.push("", "| Start | Ticket | Sammel | Dauer | Modellzeit | Modell | Tool | Requests | Kosten ($) | s/Req | max. Kontext | parallel |", "|---|--:|---|--:|--:|---|--:|--:|--:|--:|--:|--:|");
   for (const l of r.laeufe) {
     out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${l.modelle.length ? l.modelle.join(", ") : "-"} | ${f1(l.toolMin)} | ${l.requests} | ${f2(l.kosten)} | ${f1(l.sProRequest ?? null)} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);

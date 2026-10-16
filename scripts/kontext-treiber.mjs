@@ -30,7 +30,7 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { bereinige, istNeuaufbau, kontextVon, median, normPfad, passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
+import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, VORLAUF_MS } from "./subagent-laeufe.mjs";
 
@@ -282,6 +282,7 @@ function gruppe(alle, { jeTicket = false } = {}) {
   return {
     gesamt: {
       n: analysen.length,
+      ...ticketZaehlung(analysen),
       requests,
       requestsMedian: median(analysen.map((a) => a.requests)),
       kontextCallGewichtet: summe(analysen.map((a) => a.kontextSumme)) / requests,
@@ -424,8 +425,9 @@ function renderGruppe(titel, g) {
   const s = g.gesamt;
   const out = [`## ${titel}`, ""];
   out.push(
-    `n=${s.n}, Requests gesamt ${s.requests} (Median ${f(s.requestsMedian, 1)} je Lauf), Ø Kontext je Call (call-gewichtet) ${k(s.kontextCallGewichtet)}, Median der Lauf-Mittel ${k(s.kontextMedianLaeufe)}, erster Call (Median) ${k(s.ersterKontextMedian)}, max. Kontext (Median) ${k(s.maxKontextMedian)}`,
+    `n=${s.n}, Tickets ${s.tickets}, Requests gesamt ${s.requests} (Median ${f(s.requestsMedian, 1)} je Lauf), Ø Kontext je Call (call-gewichtet) ${k(s.kontextCallGewichtet)}, Median der Lauf-Mittel ${k(s.kontextMedianLaeufe)}, erster Call (Median) ${k(s.ersterKontextMedian)}, max. Kontext (Median) ${k(s.maxKontextMedian)}`,
     `Kosten je Lauf: Median ${f(s.kostenMedian)} $, Mittel ${f(s.kostenMittel)} $, Σ ${f(s.kostenSumme)} $ (ohne Preis: ${s.ohnePreis}); Read ${f(s.kostenRead)} $, Write ${f(s.kostenWrite)} $, Output ${f(s.kostenOutput)} $ (Output unterzählt)`,
+    ...(mehrlaufHinweis(s.mehrlauf) ? [mehrlaufHinweis(s.mehrlauf)] : []),
     "",
     "| Phase | Calls | Anteil | Σ Kontext (Tok) | Kosten ($) |",
     "|---|--:|--:|--:|--:|",

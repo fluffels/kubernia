@@ -212,6 +212,14 @@ describe("kontextTreiber (Aggregat)", () => {
     expect(md).toContain("Neuaufbau");
     expect(md).toContain("verify");
   });
+  test("Standardauswertung nennt die Ticket-Zahl und warnt bei Tickets mit mehreren Läufen (#1646)", () => {
+    const zwei = K.renderMarkdown(K.kontextTreiber({ laeufe: [lauf("#1 x", [{ min: 1 }, { min: 2 }]), lauf("#1 y", [{ min: 1 }, { min: 2 }]), lauf("#2 z", [{ min: 1 }, { min: 2 }])] }));
+    expect(zwei).toContain("n=3, Tickets 2,");
+    expect(zwei).toContain("Mediane je Lauf, nicht je Ticket (1 Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket");
+    const je1 = K.renderMarkdown(K.kontextTreiber({ laeufe: [lauf("#1 x", [{ min: 1 }, { min: 2 }]), lauf("#2 z", [{ min: 1 }, { min: 2 }])] }));
+    expect(je1).toContain("n=2, Tickets 2,");
+    expect(je1).not.toContain("Mediane je Lauf");
+  });
 });
 
 const verschiebe = (l: Lauf, minuten: number): Lauf => ({
