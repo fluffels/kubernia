@@ -99,6 +99,19 @@ describe("discussionNummer", () => {
   });
 });
 
+describe("beitragsZahl", () => {
+  const zahl = (d: unknown) => (Q as unknown as { beitragsZahl: (d: unknown) => number }).beitragsZahl(d);
+  const k = { bodyText: "k" };
+  test("Eröffnungsbeitrag plus Kommentare plus geladene Antworten", () => {
+    expect(zahl({ comments: { nodes: [{ ...k, replies: { nodes: [k, k] } }, k] } })).toBe(1 + 2 + 2);
+  });
+  test("kaputte Form zählt nur den Eröffnungsbeitrag", () => {
+    expect(zahl({})).toBe(1);
+    expect(zahl({ comments: { nodes: [] } })).toBe(1);
+    expect(zahl({ comments: { nodes: [{ replies: { nodes: "x" } }] } })).toBe(2);
+  });
+});
+
 describe("kuerzungsHinweis (#1663 L25)", () => {
   const k = { author: { login: "b" }, bodyText: "k", createdAt: "2026-10-01T10:00:00Z" };
   const hinweis = (d: unknown) => (Q as unknown as { kuerzungsHinweis: (d: unknown) => string }).kuerzungsHinweis(d);
