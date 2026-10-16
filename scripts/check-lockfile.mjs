@@ -38,7 +38,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { resolveBase } from "./check-basis.mjs";
-import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
+import { ladeCommitZeilen, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -148,9 +148,6 @@ export function checkLockfile(rootDir = ROOT) {
   return auditLockfile({ pkg, lock });
 }
 
-/** Schlüssel des Override-Trailers für die Slice-Prüfung unten. */
-export const OVERRIDE_KEY = "KQ-Lockfile-Override";
-
 /** Autor-Mails von Dependabot enthalten `dependabot[bot]` (`<id>+dependabot[bot]@users.noreply.github.com`). */
 const istDependabot = (mail) => mail.toLowerCase().includes("dependabot[bot]");
 
@@ -160,11 +157,11 @@ const istDependabot = (mail) => mail.toLowerCase().includes("dependabot[bot]");
  * Metadaten), fällt erst in `npm ci` auf. Darum: ändert der Slice `package-lock.json`, MUSS er auch `package.json` ändern
  * (der Lockfile ist dann Folge einer Dependency-Änderung). Reiner Lockfile-Diff ist rot, mit Ausnahmen: ein Slice, dessen
  * Commits alle von Dependabot stammen (Lockfile-only-Updates transitiver Pakete), und der Override
- * `KQ-Lockfile-Override: #<nr> warum` (Pflicht-Begründung, stale-Meldung wie bei den anderen Slice-Gates).
+ * `<Präfix>Lockfile-Override: #<nr> warum` (Präfix aus der Projekt-Config) (Pflicht-Begründung, stale-Meldung wie bei den anderen Slice-Gates).
  * Grenze (bewusst): eine Änderung nur im `scripts`-Block von `package.json` maskiert Drift; verglichen wird die Datei, nicht
  * die Dependency-Blöcke. Ohne auflösbare Basis oder ohne Slice: kein Urteil (grün, wie check:diffsize). `runGit`/`env` injizierbar.
  */
-export function checkLockfileSlice({ runGit, env = process.env } = {}) {
+export function checkLockfileSlice({ runGit, env = process.env, zeilen = ladeCommitZeilen() } = {}) {
   const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
   const base = resolveBase(git, env);
   if (!base) return { skipped: true, drift: false };
@@ -189,7 +186,7 @@ export function checkLockfileSlice({ runGit, env = process.env } = {}) {
     }
   }
   const dependabot = mails.length > 0 && mails.every(istDependabot);
-  const { reason, invalid, versetzt } = sliceOverride(git, base, OVERRIDE_KEY);
+  const { reason, invalid, versetzt } = sliceOverride(git, base, zeilen.lockfileOverride);
   const rot = drift && !dependabot;
   return {
     skipped: false,
@@ -206,6 +203,14 @@ export function checkLockfileSlice({ runGit, env = process.env } = {}) {
 
 // ── CLI ────────────────────────────────────────────────────────────────────────
 function main() {
+  // Die Commit-Zeilen kommen aus der Projekt-Config; ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, Fix:).
+  let zeilen;
+  try {
+    zeilen = ladeCommitZeilen();
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const red = (s) => paint("31", s);
@@ -222,21 +227,21 @@ function main() {
     process.exit(1);
   }
 
-  const s = checkLockfileSlice();
+  const s = checkLockfileSlice({ zeilen });
   if (!s.skipped) {
     const dim = (x) => paint("2", x);
     meldeUngueltigeOverrides(s.invalidOverrides, { dim });
     if (s.stale) {
-      console.error(red(staleOverrideHinweis(OVERRIDE_KEY, "der Slice enthält keinen reinen Lockfile-Diff")));
+      console.error(red(staleOverrideHinweis(zeilen.lockfileOverride, "der Slice enthält keinen reinen Lockfile-Diff")));
       process.exit(1);
     }
     if (s.allowed) console.log(dim(`• geduldet: package-lock.json ohne package.json geändert — bewusst durchgelassen: ${s.reason}`));
     else if (s.over) {
       console.error(red("✖ package-lock.json ist im Slice geändert, package.json nicht (Metadaten-Drift, z. B. ein anderer npm-Stand)."));
-      for (const h of versetzteOverrideHinweis(OVERRIDE_KEY, s.versetzteOverrides)) console.error(h);
+      for (const h of versetzteOverrideHinweis(zeilen.lockfileOverride, s.versetzteOverrides)) console.error(h);
       console.error(
         "\nFix: den Lockfile zurücksetzen (git checkout origin/main -- package-lock.json). Ist die Änderung bewusst\n" +
-          `(z. B. ein Lockfile-only-Update), mit Pflicht-Begründung als Commit-Zeile im Slice durchlassen:\n  git commit --allow-empty -m "chore: Lockfile bewusst geändert (#<nr>)" -m "${OVERRIDE_KEY}: #<nr> warum"`,
+          `(z. B. ein Lockfile-only-Update), mit Pflicht-Begründung als Commit-Zeile im Slice durchlassen:\n  git commit --allow-empty -m "chore: Lockfile bewusst geändert (#<nr>)" -m "${zeilen.lockfileOverride}: #<nr> warum"`,
       );
       process.exit(1);
     }

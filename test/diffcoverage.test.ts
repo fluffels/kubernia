@@ -42,8 +42,7 @@ type CheckDiffCoverageModule = {
     branches: Map<string, Map<number, { total: number; taken: number }>>,
   ) => { path: string; line: number; taken: number; total: number }[];
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
-  OVERRIDE_KEY: string;
-  checkDiffCoverage: (opts: { runGit: RunGit; readFile?: (p: string) => string; env?: Env }) => Record<string, unknown>;
+  checkDiffCoverage: (opts: { runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
 };
 
 // Tooling-Skript ohne Declaration-File (scripts/ ist nicht im tsconfig-include). Der
@@ -62,9 +61,14 @@ const {
   parseLcovBranches,
   teilweiseGetestet,
   evaluateByLayer,
-  OVERRIDE_KEY,
   checkDiffCoverage,
 } = checkCovRaw as CheckDiffCoverageModule;
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceRaw from "../scripts/slice-override.mjs";
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Record<string, string> };
+/** Zeilen der echten Config (KQ-); ein anderes Präfix darf die KQ-Zeile nicht zählen lassen. */
+const ZEILEN = commitZeilen("KQ-", "kubernia-planner");
+const ZEILEN_AB = commitZeilen("AB-", "kubernia-planner");
 
 /** Hängt an einen Fake-git einen Slice-Commit mit `line` als Message (Override-Trailer, #1269). */
 function mitTrailer(runGit: RunGit, line: string): RunGit {
@@ -354,7 +358,7 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
   });
 
   test("eigener Override-Schlüssel (#1269): ein Diffsize-Trailer gilt hier nicht", () => {
-    assert.equal(OVERRIDE_KEY, "KQ-Diffcov-Override");
+    assert.equal(ZEILEN.diffcovOverride, "KQ-Diffcov-Override");
     const runGit = mitTrailer(
       (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
       "KQ-Diffsize-Override: #1021 falsches Gate",
@@ -406,6 +410,16 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     assert.equal(r.skipped, false);
     assert.equal(r.noReport, true);
     assert.equal(r.failed, true); // die Leitregel: nichts gemessen ⇒ niemals grün
+  });
+
+  test("Präfix aus der Config (#1741): mit AB- zählt die KQ-Override-Zeile nicht, die AB-Zeile schon", () => {
+    const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
+    const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
+    const env = { KQ_DIFF_BASE: "basesha" };
+    const kq = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 bewusst"), readFile, env, zeilen: ZEILEN_AB });
+    assert.equal(kq.failed, true, "die KQ-Zeile zählt bei AB- nicht");
+    const ab = checkDiffCoverage({ runGit: mitTrailer(runGit, "AB-Diffcov-Override: #1021 bewusst"), readFile, env, zeilen: ZEILEN_AB });
+    assert.equal(ab.failed, false);
   });
 
   test("ungetesteter Domänen-Slice → rot; Override mit Begründung lässt ihn bewusst durch", () => {

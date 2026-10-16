@@ -33,7 +33,7 @@
  *
  * Override mit Pflicht-Begründung (#1269, gleiches Muster wie die check-size-ALLOWLIST,
  * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split) wird
- * über eine Zeile `KQ-Diffsize-Override: #<nr> <warum>` am Zeilenanfang einer Commit-
+ * über eine Zeile `<Präfix>Diffsize-Override: #<nr> <warum>` (Präfix `praefixe.commitZeile` der Projekt-Config) am Zeilenanfang einer Commit-
  * Message IM SLICE durchgelassen (am besten ein eigener leerer Commit). Gelesen wird
  * `git log <basis>..HEAD` mit derselben Basis wie der Diff. So wirkt derselbe Mechanismus
  * lokal, im PR (der Merge-Checkout enthält die PR-Commits) und auf push:main (der
@@ -58,7 +58,7 @@
 
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
-import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
+import { ladeCommitZeilen, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { leseJson, parseSections } from "./docs-gen/markdown.mjs";
@@ -200,9 +200,6 @@ export function evaluate({ fileCount, changedLines }, { maxFiles, maxLines }) {
   return { overFiles, overLines, over: overFiles || overLines };
 }
 
-/** Schlüssel des Override-Trailers für dieses Gate (#1269). */
-export const OVERRIDE_KEY = "KQ-Diffsize-Override";
-
 const SCRIPTS_ORDNER = dirname(fileURLToPath(import.meta.url));
 
 /** Die Wurzeln, die `check:docgen` liest (`markdown` der docs-gen-Config); nicht lesbar → keine (dann zählt alles). */
@@ -259,7 +256,7 @@ const zaehlZeilen = (f) => f.added + f.deleted - (f.gen ?? 0);
 /** Führt die komplette Prüfung aus (Basis auflösen → Diff messen → bewerten →
  *  Override/stale einordnen). `runGit`/`env` injizierbar für den Test. Rückgabe
  *  ist ein strukturiertes Ergebnis; das CLI rendert es nur noch. */
-export function checkDiffSize({ runGit, env = process.env, docgenWurzeln } = {}) {
+export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen = ladeCommitZeilen() } = {}) {
   const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
   const thresholds = readThresholds(env);
   const base = resolveBase(git, env);
@@ -302,7 +299,7 @@ export function checkDiffSize({ runGit, env = process.env, docgenWurzeln } = {})
   const fileCount = files.length;
   const changedLines = files.reduce((s, f) => s + zaehlZeilen(f), 0);
   const { overFiles, overLines, over } = evaluate({ fileCount, changedLines }, thresholds);
-  const { reason, invalid, versetzt } = sliceOverride(git, base, OVERRIDE_KEY);
+  const { reason, invalid, versetzt } = sliceOverride(git, base, zeilen.diffsizeOverride);
 
   return {
     skipped: false,
@@ -327,13 +324,21 @@ export function checkDiffSize({ runGit, env = process.env, docgenWurzeln } = {})
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
+  // Die Commit-Zeilen kommen aus der Projekt-Config; ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, Fix:).
+  let zeilen;
+  try {
+    zeilen = ladeCommitZeilen();
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
 
-  const r = checkDiffSize();
+  const r = checkDiffSize({ zeilen });
 
   if (r.skipped) {
     console.log(
@@ -363,7 +368,7 @@ function main() {
   meldeUngueltigeOverrides(r.invalidOverrides, { dim });
 
   if (r.stale) {
-    console.error(red(staleOverrideHinweis(OVERRIDE_KEY, `der Diff liegt im Budget (${measured} ≤ ${budget})`)));
+    console.error(red(staleOverrideHinweis(zeilen.diffsizeOverride, `der Diff liegt im Budget (${measured} ≤ ${budget})`)));
     process.exit(1);
   }
 
@@ -382,13 +387,13 @@ function main() {
     if (r.overFiles) parts.push(`${r.fileCount} Dateien > ${r.maxFiles}`);
     if (r.overLines) parts.push(`${r.changedLines} Zeilen > ${r.maxLines}`);
     console.error(red(`✖ Diff-Budget überschritten (${parts.join(", ")}).`));
-    for (const h of versetzteOverrideHinweis(OVERRIDE_KEY, r.versetzteOverrides)) console.error(h);
+    for (const h of versetzteOverrideHinweis(zeilen.diffsizeOverride, r.versetzteOverrides)) console.error(h);
     console.error(
       `\nDieser Slice ist zu breit für ein reviewbares Ticket. Aufteilen (ein Epic → session-große\n` +
         `Kinder, siehe AGENTS.md) — ODER, wenn die Breite bewusst und begründet ist (z.B. ein großer\n` +
         `God-File-Split), mit Pflicht-Begründung als Commit-Trailer im Slice durchlassen\n` +
         `(wirkt lokal, im PR und auf main gleich):\n` +
-        `  git commit --allow-empty -m "chore: Slice bewusst breit (#<nr>)" -m "${OVERRIDE_KEY}: #<nr> warum"`,
+        `  git commit --allow-empty -m "chore: Slice bewusst breit (#<nr>)" -m "${zeilen.diffsizeOverride}: #<nr> warum"`,
     );
     process.exit(1);
   }
