@@ -58,3 +58,90 @@ describe("Container-Modell: create deployment benennt den Container nach dem Ima
     expect(containerNameOf({ name: "web", containerName: "x" })).toBe("x");
   });
 });
+
+describe("(b) set image und set env: Ressourcen vor den Paaren", () => {
+  const web = () => mit("kubectl create deployment web --image=nginx:1.28");
+  test("set image: Paar vor der Ressource ist ein Reihenfolge-Fehler, nichts ändert sich", () => {
+    const sim = web();
+    const r = lauf("kubectl set image nginx=nginx:9 deployment/web", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: all resources must be specified before image changes: deployment/web");
+    expect(sim.deployments[0].image).toBe("nginx:1.28");
+  });
+  test("set env: alle Positionsargumente stehen im Fehler", () => {
+    const r = lauf("kubectl set env FOO=bar deployment/web", web());
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: all resources must be specified before environment changes: FOO=bar deployment/web");
+  });
+  test("set env: KEY- zählt als Env-Argument, ein einzelnes '-' ebenfalls", () => {
+    expect(lauf("kubectl set env FOO- deployment/web", web()).out).toContain("environment changes: FOO- deployment/web");
+  });
+  test("set env: Paar hinter der Ressource bleibt 'nicht simuliert'", () => {
+    const r = lauf("kubectl set env deployment/web FOO=bar", web());
+    expect(r.out).toContain("Nicht simuliert");
+    expect(r.out).not.toContain("all resources must");
+  });
+  test("set image: '=' am Anfang ist kein Paar (bleibt Ressourcen-Token)", () => {
+    const r = lauf("kubectl set image deployment/web =x web=nginx:2", web());
+    expect(r.out).not.toContain("all resources must be specified before");
+  });
+  test("set image: ohne Paar und ohne Ressource die Validate-Texte von kubectl", () => {
+    const sim = web();
+    expect(lauf("kubectl set image deployment/web", sim).out).toContain("error: at least one image update is required");
+    expect(lauf("kubectl set image nginx=nginx:2", sim).out).toContain("error: one or more resources must be specified as <resource> <name> or <resource>/<name>");
+    expect(lauf("kubectl set image", sim).out).toContain("error: [one or more resources must be specified as <resource> <name> or <resource>/<name>, at least one image update is required]");
+  });
+  test("set image: Paar ohne '=' (foo-) ist 'invalid image format'", () => {
+    const r = lauf("kubectl set image deployment/web foo-", web());
+    expect(r.out).toContain("error: invalid image format: foo-");
+  });
+  test("set image: '*' mit weiteren Paaren ist ein Fehler", () => {
+    const r = lauf("kubectl set image deployment/web *=a a=b", web());
+    expect(r.out).toContain("all containers are already specified by *, but saw more than one container_name=container_image pairs");
+  });
+});
+
+describe("(a) set image prüft den Container-Namen", () => {
+  const web = () => mit("kubectl create deployment web --image=nginx:1.28");
+  test("Deployment-Name als Container bei einem per create angelegten Deployment: Fehler, nichts ändert sich", () => {
+    const sim = web();
+    const rev = sim.deployments[0].replicaSet?.revision;
+    const pods = sim.deployments[0].pods.map(p => p.name);
+    const r = lauf("kubectl set image deployment/web web=nginx:9", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain('error: unable to find container named "web"');
+    expect(sim.deployments[0].image).toBe("nginx:1.28");
+    expect(sim.deployments[0].replicaSet?.revision).toBe(rev);
+    expect(sim.deployments[0].pods.map(p => p.name)).toEqual(pods);
+  });
+  test("der echte Container-Name wirkt, ebenso '*'", () => {
+    const sim = web();
+    expect(lauf("kubectl set image deployment/web nginx=nginx:2", sim).out).toBe("deployment.apps/web image updated");
+    expect(sim.deployments[0].image).toBe("nginx:2");
+    expect(lauf("kubectl set image deployment/web *=nginx:3", sim).error).toBe(false);
+    expect(sim.deployments[0].image).toBe("nginx:3");
+  });
+  test("Szenario-Deployment: der Deployment-Name ist der Container-Name", () => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }] });
+    expect(lauf("kubectl set image deployment/kasse nginx=x", sim).out).toContain('unable to find container named "nginx"');
+    expect(lauf("kubectl set image deployment/kasse kasse=x", sim).out).toBe("deployment.apps/kasse image updated");
+  });
+  test("initContainer 'vorbereiter' ist nicht simuliert", () => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, initContainer: { fillsMi: 10 } }] });
+    const r = lauf("kubectl set image deployment/kasse vorbereiter=x", sim);
+    expect(r.out).toContain("Nicht simuliert");
+    expect(sim.deployments[0].image).toBe("nginx");
+  });
+  test("unbekanntes Deployment bleibt NotFound vor der Container-Prüfung", () => {
+    const r = lauf("kubectl set image deployment/gibtsnicht x=y", web());
+    expect(r.out).toContain('deployments.apps "gibtsnicht" not found');
+    expect(r.out).not.toContain("unable to find container");
+  });
+  test("nach set image und rollout undo trägt das alte ReplicaSet den Container-Namen weiter", () => {
+    const sim = web();
+    sim.exec("kubectl set image deployment/web nginx=nginx:2");
+    expect(lauf("kubectl rollout undo deployment/web", sim).error).toBe(false);
+    expect(lauf("kubectl set image deployment/web nginx=nginx:3", sim).out).toBe("deployment.apps/web image updated");
+    expect(lauf("kubectl get rs -o wide", sim).out).toMatch(/nginx\s+nginx:/);
+  });
+});

@@ -543,11 +543,11 @@ describe("slashRef: eine Zerlegung für get, describe, delete, scale/expose/set/
     expect(lauf("kubectl describe node/ahoi-control").error).toBe(false);
     expect(lauf("kubectl scale deploy/web --replicas=3").out).toContain("scaled");
     expect(lauf("kubectl get deploy/web").error).toBe(false);
-    expect(lauf("kubectl set image deployment/web nginx=reg.io/img:1").error).toBe(false);
-    // Ein Image-Token mit mehreren Slashes VOR der Referenz ist keine Referenz, sondern wird übersprungen.
-    const r = lauf("kubectl set image nginx=ghcr.io/org/img:1 deployment/web");
+    expect(lauf("kubectl set image deployment/web web=reg.io/img:1").error).toBe(false);
+    // Ein Paar VOR der Referenz ist ein Reihenfolge-Fehler (#1530), kein Slash-Fehler des Image-Tokens.
+    const r = lauf("kubectl set image web=ghcr.io/org/img:1 deployment/web");
     expect(r.out).not.toContain("more than one slash");
-    expect(r.error).toBe(false);
+    expect(r.out).toContain("all resources must be specified before image changes: deployment/web");
   });
 });
 
@@ -801,7 +801,7 @@ describe("#1487: ungültige Werte werden abgelehnt statt verbogen", () => {
   });
   test("set image: das Paar steht in c.args; das Image darf = enthalten", () => {
     const s = new KQSim(szenario());
-    lauf1487("kubectl set image web=nginx:9 deployment/web", s);
+    lauf1487("kubectl set image deployment/web web=nginx:9", s);
     expect(s.deployments.find(d => d.name === "web")!.image).toBe("nginx:9");
     lauf1487("kubectl set image deployment/web web=reg.io/x=y", s);
     expect(s.deployments.find(d => d.name === "web")!.image).toBe("reg.io/x=y");

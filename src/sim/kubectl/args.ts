@@ -163,3 +163,22 @@ function checkFromRef(host: ErrOnly, v: string): string | null {
 export function exactlyOneName(host: ErrOnly, names: readonly string[], muster: string): string | null {
   return names.length === 1 ? null : host._err("error: exactly one NAME is required, got " + names.length, muster);
 }
+
+/** `GetResourcesAndPairs`/`SplitEnvironmentFromResources` aus kubectl: Ressourcen-Tokens stehen VOR den Paaren
+ *  (`KEY=wert`, `container=image`, `KEY-`). `isPair` entscheidet je Token; folgt auf ein Paar ein Ressourcen-Token,
+ *  kommt dieses als `late` zurück (der Aufrufer baut daraus den Fehlertext seiner Befehlsart). */
+export function splitResourcesAndPairs(args: readonly string[], isPair: (tok: string) => boolean): { resources: string[]; pairs: string[] } | { late: string } {
+  const resources: string[] = [];
+  const pairs: string[] = [];
+  for (const tok of args) {
+    if (isPair(tok)) pairs.push(tok);
+    else if (pairs.length > 0) return { late: tok };
+    else resources.push(tok);
+  }
+  return { resources, pairs };
+}
+
+/** `container=image` (`=` nicht am Anfang) oder `KEY-` (endet auf `-`, aber nicht `-` allein): `nonResource` in `GetResourcesAndPairs`. */
+export const isImagePairArg = (tok: string): boolean => (tok.includes("=") && tok[0] !== "=") || (tok.endsWith("-") && tok !== "-");
+/** `KEY=wert` (`IsEnvironmentArgument`) oder `KEY-`: `isEnv` in `SplitEnvironmentFromResources`. */
+export const isEnvArg = (tok: string): boolean => tok.lastIndexOf("=") > 0 || tok.endsWith("-");

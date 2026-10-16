@@ -22,6 +22,16 @@ function projected(eff: ApplyEffect): ApplyEffect {
   return { deployment: dep };
 }
 
+/** Das Gemappte ohne `containerName`: der Container-Name steht im YAML, die hinterlegten Effekte kennen ihn nicht
+ *  (ohne Feld heißt der Container wie das Deployment, `containerNameOf`). Der Name selbst ist in manifest.test.ts geprüft. */
+function mappedOf(text: string, file: string): ApplyEffect[] {
+  return effectsFromManifest(text, file).map(e => {
+    if (!e.deployment) return e;
+    const { containerName: _c, ...rest } = e.deployment;
+    return { deployment: rest };
+  });
+}
+
 function cases(): [string, string, ApplyEffect][] {
   const out: [string, string, ApplyEffect][] = [];
   for (const q of KQContent.QUESTS) {
@@ -44,7 +54,7 @@ describe("Parser + Mapper == hinterlegter Effekt (Quests)", () => {
     expect(all.length).toBeGreaterThanOrEqual(7);
   });
   it.each(all)("%s", (_n, text, eff) => {
-    const mapped = effectsFromManifest(text, "datei.yaml");
+    const mapped = mappedOf(text, "datei.yaml");
     expect(mapped).toStrictEqual([projected(eff)]);
   });
 });
@@ -73,7 +83,7 @@ describe("Parser + Mapper == hinterlegter Effekt (Drills)", () => {
     for (const id of ["k-apply", "werft-deploy-imagepull", "werft-expose", "pod-security-harden", "k-nslookup-external"]) expect(ids.has(id), id).toBe(true);
   });
   it.each(all)("%s %s", (_id, file, text, eff) => {
-    expect(effectsFromManifest(text, file)).toStrictEqual([projected(eff)]);
+    expect(mappedOf(text, file)).toStrictEqual([projected(eff)]);
   });
 });
 
