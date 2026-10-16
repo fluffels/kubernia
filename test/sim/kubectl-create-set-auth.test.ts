@@ -367,10 +367,11 @@ describe("Runde 1 (#1530): Grenzfälle der Paar-Prädikate, Init-Container, Cont
     expect(d).toContain("Stopping container haupt");
     expect(d).not.toContain("container kasse");
   });
-  test.each([["crashloop", { type: "crashloop" }], ["notready", { type: "notready" }]])("%s mit eigenem Container-Namen: describe pod 'Started container haupt'", (_n, broken) => {
+  test.each([["crashloop", { type: "crashloop" }, "Back-off"], ["notready", { type: "notready", needsSecret: "fehlt" }, "Readiness probe failed"]])("%s mit eigenem Container-Namen: describe pod nennt ihn im Zustandszweig", (_n, broken, ereignis) => {
     const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, containerName: "haupt", broken }] } as Scenario);
     const d = lauf("kubectl describe pod " + sim.deployments[0].pods[0].name, sim).out;
     expect(d).toContain("Started container haupt");
+    expect(d).toContain(ereignis);
     expect(d).not.toContain("container kasse");
   });
   test("apply ohne containers[0].name lässt den Namen stehen: unchanged, Name bleibt", () => {
