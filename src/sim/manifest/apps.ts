@@ -47,6 +47,8 @@ function podTemplateFields(pod: Leaf, container: Leaf): Partial<DeploymentEffect
   const out: Partial<DeploymentEffect> = {};
   const sa = pod.key("serviceAccountName").str();
   if (sa !== undefined) out.serviceAccountName = sa;
+  const cname = container.key("name").str();
+  if (cname !== undefined) out.containerName = cname;
   const port = container.key("ports").items()[0]?.key("containerPort").int();
   if (port !== undefined) out.containerPort = port;
   const node = pod.key("nodeName").str();

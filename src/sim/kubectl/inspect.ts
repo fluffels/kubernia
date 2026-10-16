@@ -22,7 +22,7 @@ import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, type ResourcePlural } from "./resources";
 import { clusterPods, type ClusterPod } from "../pods";
 import { gatewayClassConditions, gatewayStatus, type GatewayCondition } from "../gateway";
-import { statefulPodNode } from "../workload";
+import { statefulPodNode, containerNameOf } from "../workload";
 import { clusterPodStatus } from "../podstatus";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
@@ -122,7 +122,7 @@ function getDeployments(host: KubectlHost): GetTable {
   return withWide(tableOf(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"],
     host.deployments.map(d => {
       const ready = availableReplicas(host, d);
-      return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created), d.name, d.image, workloadSelector(d.name)];
+      return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created), containerNameOf(d), d.image, workloadSelector(d.name)];
     })), 3);
 }
 
@@ -131,7 +131,7 @@ function getReplicaSets(host: KubectlHost): GetTable {
   return withWide(tableOf(["NAME", "DESIRED", "CURRENT", "READY", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"],
     host.deployments.flatMap(d => replicaSetsOf(d).map(rs => {
       const zahlen = rs.current ? [d.replicas, d.pods.length, host._podReady(d) ? d.pods.length : 0] : [0, 0, 0];
-      return [rs.name, ...zahlen.map(String), host._age(rs.created), d.name, rs.image, formatLabels(podTemplateLabels(d, rs.hash))];
+      return [rs.name, ...zahlen.map(String), host._age(rs.created), containerNameOf({ name: d.name, containerName: (rs.template?.spec ?? d).containerName }), rs.image, formatLabels(podTemplateLabels(d, rs.hash))];
     }))), 3);
 }
 

@@ -7,12 +7,12 @@
  * Phaser-frei (pure Domäne): nutzt nur `makePodName` aus ../util und das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu, restoreRsTemplate, MEM_HEALED_NOTE, CPU_THROTTLED_NOTE } from "../workload";
+import { containerNameOf, changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu, restoreRsTemplate, MEM_HEALED_NOTE, CPU_THROTTLED_NOTE } from "../workload";
 import { maxRestartedAt, rolloutRevisions, undoTarget } from "../replicasets";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
-import { FROM_FLAG, LIMITS_FLAG, notSimulated, NS, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, UNKNOWN_TARGET, type ResourceList } from "./args";
+import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, notSimulated, NS, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
 import { readTargets, targetOutcome } from "./targets";
 import { foreignNamespace } from "./namespace";
 import { noResourcesIn } from "./inspect";
@@ -114,8 +114,10 @@ export const KUBECTL_SET: Dispatch<SubEntry<(host: KubectlHost, c: Call) => stri
 
 function kubectlSetEnv(host: KubectlHost, c: Call) {
   const rest = c.args;
-  if (rest.some(x => x.includes("="))) return notSimulated(host, "'KEY=wert' bei 'kubectl set env'.", ["kubectl set env deployment/<name> --from=configmap/<name>|secret/<name>"]);
-  const one = singleDeployment(host, "set", rest);
+  const split = splitResourcesAndPairs(rest, isEnvArg);
+  if ("late" in split) return host._err("error: all resources must be specified before environment changes: " + rest.join(" "), "Erst das Deployment, danach die Paare: 'kubectl set env deployment/<name> KEY=wert'.");
+  if (split.pairs.length > 0) return notSimulated(host, "'KEY=wert' bei 'kubectl set env'.", ["kubectl set env deployment/<name> --from=configmap/<name>|secret/<name>"]);
+  const one = singleDeployment(host, "set", split.resources);
   if ("error" in one) return one.error;
   const depName = one.name;
   if (!depName) return host._err("kubectl set env: Welches Deployment?", "Muster: kubectl set env deployment/<name> --from=configmap/<name>");
@@ -136,20 +138,44 @@ function kubectlSetEnv(host: KubectlHost, c: Call) {
   return "deployment.apps/" + depName + " env updated";
 }
 
-/** kubectl set image deployment/<name> <container>=<image> */
+/** Die Validate-Fehler von `set image` (`SetImageOptions.Validate`): ein Fehler steht allein, mehrere als `[a, b]`. */
+function setImageValidate(host: KubectlHost, resources: number, pairs: readonly string[]): string | null {
+  const errs: string[] = [];
+  if (resources < 1) errs.push("one or more resources must be specified as <resource> <name> or <resource>/<name>");
+  if (pairs.length < 1) errs.push("at least one image update is required");
+  else if (pairs.length > 1 && pairs.some(p => p.startsWith("*="))) errs.push("all containers are already specified by *, but saw more than one container_name=container_image pairs");
+  if (errs.length === 0) return null;
+  return host._err("error: " + (errs.length === 1 ? errs[0] : "[" + errs.join(", ") + "]"), "Muster: kubectl set image deployment/<name> <container>=<image>");
+}
+
+/** Der Container-Check von `set image` (`unable to find container named`): `*` trifft jeden, sonst zählt der Container-Name
+ *  des Deployments. Der initContainer der Sim heißt `vorbereiter` und ist nicht änderbar. `null` = Name passt. */
+function setImageContainerCheck(host: KubectlHost, dep: Deployment, container: string): string | null {
+  if (container === "*" || container === containerNameOf(dep)) return null;
+  if (dep.initContainer && container === "vorbereiter") return notSimulated(host, "das Image des initContainers '" + container + "'.", ["kubectl set image deployment/<name> " + containerNameOf(dep) + "=<image>"]);
+  return host._err('error: unable to find container named "' + container + '"', "Der Container dieses Deployments heißt '" + containerNameOf(dep) + "' (steht in 'kubectl describe deployment " + dep.name + "').");
+}
+
+/** kubectl set image deployment/<name> <container>=<image> – wie kubectl: erst die Ressourcen, dann die Paare. */
 
 function kubectlSetImage(host: KubectlHost, c: Call) {
-  // Der Deployment-Name enthält nie ein "=": Tokens mit "=" sind <container>=<image>-Paare, die übrigen die Ziele.
   const rest = c.args;
-  const pairs = rest.filter(x => x.includes("="));
-  if (pairs.length > 1) return notSimulated(host, "mehrere Container in 'kubectl set image'.", ["kubectl set image deployment/<name> <container>=<image>"]);
-  const one = singleDeployment(host, "set", rest.filter(x => !x.includes("=")));
+  const split = splitResourcesAndPairs(rest, isImagePairArg);
+  if ("late" in split) return host._err("error: all resources must be specified before image changes: " + split.late, "Erst das Deployment, danach die Paare: 'kubectl set image deployment/<name> <container>=<image>'.");
+  const invalid = split.pairs.filter(p => !p.includes("=") || p[0] === "=");
+  if (invalid.length > 0) return host._err("error: invalid image format: " + invalid.join(", "), "Muster: <container>=<image>, z.B. 'nginx=nginx:1.28'.");
+  const one = singleDeployment(host, "set", split.resources);
   if ("error" in one) return one.error;
+  const invalidSet = setImageValidate(host, split.resources.length, split.pairs);
+  if (invalidSet) return invalidSet;
+  if (split.pairs.length > 1) return notSimulated(host, "mehrere Container in 'kubectl set image'.", ["kubectl set image deployment/<name> <container>=<image>"]);
   const depName = one.name;
-  const kv = pairs[0];
-  if (!depName || !kv) return host._err("kubectl set image: So nicht ganz.", "Muster: kubectl set image deployment/<name> <container>=<image>");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
+  const kv = split.pairs[0];
+  const container = kv.slice(0, kv.indexOf("="));
+  const bad = setImageContainerCheck(host, dep, container);
+  if (bad) return bad;
   const newImage = kv.slice(kv.indexOf("=") + 1);
   const oldBad = dep.broken && dep.broken.type === "imagepull" ? dep.broken.badImage : null;
   // Anderes Image = neues Pod-Template = Rollout (Admission inklusive); gleiches Image: nichts.

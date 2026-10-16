@@ -16,7 +16,7 @@
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
  * `feature/kq-<nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
  * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: `## Ziel` und
- * `## Akzeptanzkriterien` mit Negativfall; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und einmal kommentiert,
+ * `## Akzeptanzkriterien` mit Negativfall; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
  * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); kein GraphQL. `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
  */
@@ -28,7 +28,7 @@ import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { istEpicTitel, pruefeEingang, schonKommentiert, spezKommentar } from "./spezifikation-lib.mjs";
+import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
@@ -172,14 +172,18 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb }) {
   return spez.art === "bestand" ? { grund: "", bestandFehlt: spez.fehlt } : { grund: "" };
 }
 
-/** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach je übersprungenem Kandidaten eine Zeile. Pur. */
+/** Reparaturaufträge (#1698): hart übersprungene Tickets mit Spezifikations-Mangel (`fehlt`), nur vertraute und freie (`ueberspringGrund` setzt `fehlt` erst nach Assignee-, Fremdeingangs-, Blocker- und Belegungsprüfung). Pur. */
+export const reparierenVon = (uebersprungen) => uebersprungen.filter((u) => u.fehlt).map((u) => ({ nr: u.nr, fehlt: u.fehlt }));
+
+const reparierenZeilen = (uebersprungen) => reparierenVon(uebersprungen).map((r) => `reparieren #${r.nr}: ${r.fehlt.join("; ")}`);
+
+/** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach Hinweis, `reparieren`-Zeilen und je übersprungenem Kandidaten eine Zeile. Pur. */
 export function formatiere({ ticket, uebersprungen, bereich = null, einzel = null }) {
-  if (einzel !== null && !ticket) return `#${einzel} nicht frei: ${uebersprungen[0]?.grund ?? "unbekannt"}
-`;
+  if (einzel !== null && !ticket) return [`#${einzel} nicht frei: ${uebersprungen[0]?.grund ?? "unbekannt"}`, ...reparierenZeilen(uebersprungen)].join("\n") + "\n";
   const keins = bereich ? `kein freies Ticket im Bereich ${BEREICHE[bereich]}` : "kein freies Ticket";
   const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : keins;
   const hinweis = ticket?.spezifikation ? [`hinweis #${ticket.nr}: Spezifikation unvollständig (Bestand, nur berichtet): ${ticket.spezifikation.fehlt.join("; ")}`] : [];
-  return [kopf, ...hinweis, ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
+  return [kopf, ...hinweis, ...reparierenZeilen(uebersprungen), ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
 }
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
@@ -195,34 +199,13 @@ export function fuehreAus(argv, io) {
       einzel === null
         ? { ...waehleNaechstes({ ...io.lade(), owner: io.owner, bereich: b.bereich, hartAb: io.hartAb }), ...(b.bereich ? { bereich: b.bereich } : {}) }
         : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb });
-    const { kommentiert, warnungen } = erinnereAnSpezifikation(roh.uebersprungen, io);
-    const ergebnis = kommentiert.length > 0 ? { ...roh, kommentiert } : roh;
+    const reparieren = reparierenVon(roh.uebersprungen);
+    const ergebnis = reparieren.length > 0 ? { ...roh, reparieren } : roh;
     const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
-    return { code: ergebnis.ticket ? 0 : 1, out, err: warnungen.map((w) => `⚠ naechstes-ticket: ${w}\n`).join("") };
+    return { code: ergebnis.ticket ? 0 : 1, out, err: "" };
   } catch (e) {
     return fehlerErgebnis(e instanceof Error ? e.message : String(e));
   }
-}
-
-/**
- * Einmal-Kommentar je hart übersprungenem Ticket (Spezifikations-Gate): erst die Kommentare lesen, nur ohne Marker eines vertrauten Autors posten.
- * Ein Lese- oder Postfehler wird zur Warnung (nie ein Post auf Verdacht, der Exit-Code bleibt). Ohne `io.kommentareVon`/`io.kommentiere` passiert nichts.
- */
-function erinnereAnSpezifikation(uebersprungen, io) {
-  const kommentiert = [];
-  const warnungen = [];
-  if (!io.kommentareVon || !io.kommentiere) return { kommentiert, warnungen };
-  const vertraut = (user) => istVertraut(user, io.owner);
-  for (const u of uebersprungen.filter((x) => x.fehlt)) {
-    try {
-      if (schonKommentiert(io.kommentareVon(u.nr), { vertraut })) continue;
-      io.kommentiere(u.nr, spezKommentar(u.fehlt));
-      kommentiert.push(u.nr);
-    } catch (e) {
-      warnungen.push(`Spezifikations-Kommentar zu #${u.nr} nicht gesetzt (${e instanceof Error ? e.message : String(e)})`);
-    }
-  }
-  return { kommentiert, warnungen };
 }
 
 const fehlerErgebnis = (text) => ({ code: 2, out: "", err: `✖ naechstes-ticket: ${text}\n` });
@@ -280,10 +263,6 @@ function ladeBelegung() {
   return { offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
 }
 
-/** Kommentare eines Issues (paginiert) und Einmal-Kommentar setzen (Spezifikations-Gate); Fehler werfen, `fuehreAus` macht Warnungen daraus. */
-const kommentareVon = (nr) => ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/issues/${nr}/comments?per_page=100`]).flat();
-const kommentiere = (nr, text) => ghJson(["api", "-X", "POST", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]);
-
 const ladeEcht = () => ({ items: normalizeItems(loadItemPages()), ...ladeBelegung() });
 
 /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
@@ -291,7 +270,7 @@ const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${RE
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
-  const io = { lade: ladeEcht, ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: ladeProjektConfig().spezifikation?.hartAb, kommentareVon, kommentiere };
+  const io = { lade: ladeEcht, ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: ladeProjektConfig().spezifikation?.hartAb };
   const { code, out, err } = fuehreAus(process.argv.slice(2), io);
   process.stdout.write(out);
   process.stderr.write(err);

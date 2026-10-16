@@ -42,6 +42,8 @@ const HASH_FORM = {
   ephemeralUsedMi: null,
   initContainer: t => t.initContainer ? [t.initContainer.fillsMi ?? 0, !!t.initContainer.doubleStage] : null,
   restartedAt: t => t.restartedAt ?? null,
+  // Vereinfachung: der Container-Name geht nicht in den Hash ein (Pod-Namen bleiben stabil; in Kubernetes ändert er ihn).
+  containerName: null,
 } satisfies Record<keyof PodTemplateSpec, ((t: HashInput) => unknown) | null>;
 
 /** Alle Pod-Template-Felder (typgewacht über `HASH_FORM`). */

@@ -10,7 +10,7 @@ import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, type Broken, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { currentReplicaSet } from "../replicasets";
 import { findClusterPod, type ClusterPod } from "../pods";
-import { statefulPodClaimName } from "../workload";
+import { statefulPodClaimName, containerNameOf } from "../workload";
 import { clusterPodStatus, deploymentPodEntry, deploymentPodState } from "../podstatus";
 import { podPlacement } from "./inspect";
 
@@ -21,7 +21,7 @@ import { podPlacement } from "./inspect";
 function brokenEvents(host: KubectlHost, pod: PodInstance, dep: Deployment, broken: Broken): string[] {
   const age = host._age(pod.created);
   const scheduled = "  Normal   Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name;
-  const started = "  Normal   Started    " + age + "   Started container " + dep.name;
+  const started = "  Normal   Started    " + age + "   Started container " + containerNameOf(dep);
   switch (broken.type) {
     case "imagepull":
       return [
@@ -59,12 +59,12 @@ function podDescribeEvents(host: KubectlHost, pod: PodInstance, dep: Deployment)
       // ephemeral-storage-Limit gesprengt hat. Der Grund steht – wie in echtem K8s – im Event.
       events.push("  Normal   Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
       events.push("  Warning  Evicted    " + age + "   " + s.evicted.reason);
-      events.push("  Normal   Killing    " + age + "   Stopping container " + dep.name);
+      events.push("  Normal   Killing    " + age + "   Stopping container " + containerNameOf(dep));
       break;
     case "healthy":
       events.push("  Normal  Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
       events.push("  Normal  Pulled     " + age + "   Container image \"" + dep.image + "\" already present");
-      events.push("  Normal  Started    " + age + "   Started container " + dep.name);
+      events.push("  Normal  Started    " + age + "   Started container " + containerNameOf(dep));
       break;
     case "broken":
       events.push(...brokenEvents(host, pod, dep, s.broken));
@@ -107,7 +107,7 @@ function podContainerBlock(host: KubectlHost, dep: Deployment, st: PodStatus): s
   const c = deploymentPodEntry(dep).container;
   const last = c?.lastTerminated;
   return [
-    "  " + dep.name + ":",
+    "  " + containerNameOf(dep) + ":",
     "    Image:        " + dep.image,
     "    State:        " + (c?.lastTerminated ? "Waiting (" + c.waiting + ")" : st.status),
     ...(last ? [
