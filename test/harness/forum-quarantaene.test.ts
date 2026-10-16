@@ -23,7 +23,7 @@ const G = rawGuard as unknown as {
   bewerteForumLeserRead: (p: unknown, cwd?: string) => { block: boolean; reason?: string };
   entscheideHook: (text: string) => { hookSpecificOutput: { permissionDecision: string } } | null;
 };
-type Disc = { number?: number; title?: unknown; bodyText?: unknown; author?: unknown; comments?: { nodes: unknown[] } };
+type Disc = { number?: number; title?: unknown; bodyText?: unknown; author?: unknown; comments?: { totalCount?: number; nodes: unknown[] } };
 const Q = rawQ as unknown as {
   discussionNummer: (t: unknown) => number | null;
   quarantaenePfad: (w: string, n: number) => string;
@@ -96,6 +96,50 @@ describe("discussionNummer", () => {
   });
   test("ohne Treffer: null (kein Präfix, keine Ziffern-Grenze, fremdes Präfix, kein String)", () => {
     for (const t of ["kein Titel", "Forum #12abc", "Re: Forum #3: x", "forum #3: x", "", null, undefined]) expect(Q.discussionNummer(t)).toBeNull();
+  });
+});
+
+describe("kuerzungsHinweis (#1663 L25)", () => {
+  const k = { author: { login: "b" }, bodyText: "k", createdAt: "2026-10-01T10:00:00Z" };
+  const hinweis = (d: unknown) => (Q as unknown as { kuerzungsHinweis: (d: unknown) => string }).kuerzungsHinweis(d);
+  test("vollständig geladen: kein Hinweis", () => {
+    expect(hinweis({ comments: { totalCount: 2, nodes: [{ ...k, replies: { totalCount: 0 } }, k] } })).toBe("");
+    expect(hinweis({ comments: { nodes: [] } })).toBe("");
+    expect(hinweis({})).toBe("");
+  });
+  test("mehr Kommentare als geladen: „Thread gekürzt: x von y“", () => {
+    expect(hinweis({ comments: { totalCount: 80, nodes: [k, k] } })).toBe("Thread gekürzt: 2 von 80 Kommentaren/Antworten");
+  });
+  test("Antworten zählen zur Gesamtzahl (sie werden nicht geladen)", () => {
+    expect(hinweis({ comments: { totalCount: 1, nodes: [{ ...k, replies: { totalCount: 3 } }] } })).toBe("Thread gekürzt: 1 von 4 Kommentaren/Antworten");
+  });
+  test("kaputte Zähler (kein Zahlwert, negativ): kein Hinweis, kein Wurf", () => {
+    expect(hinweis({ comments: { totalCount: "x", nodes: [k] } })).toBe("");
+    expect(hinweis({ comments: { totalCount: -5, nodes: [k] } })).toBe("");
+  });
+  test("quarantaeneText trägt den Hinweis in der Kopfzeile, ohne ihn nicht", () => {
+    const d = { number: 1, title: "t", bodyText: "b", author: { login: "a" }, comments: { totalCount: 60, nodes: [k] } };
+    expect(Q.quarantaeneText(d, (t) => t, "n")).toContain("Thread gekürzt: 1 von 60");
+    expect(Q.quarantaeneText({ ...d, comments: { totalCount: 1, nodes: [k] } }, (t) => t, "n")).not.toContain("gekürzt");
+  });
+  test("main: Metadaten nennen die Kürzung, die Abfrage holt totalCount von Kommentaren und Antworten", () => {
+    const ausgabe: string[] = [];
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-1663-"));
+    let query = "";
+    const d = JSON.stringify({ title: "T", bodyText: "B", author: { login: "a" }, comments: { totalCount: 70, nodes: [k] } });
+    const gh = (a: string[]) => {
+      if (a[0] === "issue") return JSON.stringify({ title: "Forum #5: x", labels: [{ name: "forum" }] });
+      query = a.join(" ");
+      return d;
+    };
+    try {
+      Q.main(["--inbox", "7"], { gh, sanitize: (t: string) => t, wurzel, nonce: () => "n", log: (z: string) => ausgabe.push(z) });
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+    expect(ausgabe.join("\n")).toContain("Thread gekürzt: 1 von 70");
+    expect(query).toMatch(/comments\(first:50\)\{\s*totalCount/);
+    expect(query).toMatch(/replies\{\s*totalCount/);
   });
 });
 
