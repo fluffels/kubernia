@@ -9,6 +9,9 @@
  * entfernten Pfads. Ausnahmen sind begründet (AUSNAHMEN): ADRs sind historisch und werden nie umgeschrieben, der
  * Absenz-Test nennt die Namen absichtlich, dieser Wächter trägt die Muster selbst.
  *
+ * Bewusste Grenze: freie Umschreibungen ohne einen der Namen („orchestrierter Workflow, der dieselben Phasen fährt“)
+ * fängt der Scan nicht; das Wort „Workflow“ allein wäre zu breit (GitHub-Actions-Workflows, generische Mechanik).
+ *
  * Ein neues Workflow-Skript unter `.claude/workflows/` heißt anders und löst diesen Wächter nicht aus; trägt ein Satz
  * künftig wieder den Namen `kubernia-ticket`, ist das ein Rückfall und rot.
  */
