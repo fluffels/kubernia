@@ -1,6 +1,6 @@
-/* Die Default-Verdrahtung der Takt-Skripte zeigt auf das Produkt-Board (#1693 L51): `ECHTE_IO` in board-takt, der Default-Parameter
- * `setze` in `fuehreHarnessAus`, `imBoardAnlegen`/`setze` in langfuse-takt und `aufnehmenIns` in board-place. Keiner darf das
- * Factory-Board treffen. gh wird gemockt; geprüft werden die Argumente, die an `gh` gehen, und das Board, dem die Antwort zugeordnet wird. */
+/* Die echte Verdrahtung der Takt-Skripte trifft das Board, das die Rolle bzw. die Trennregel vorgibt (#1693 L51, zwei Boards #1729): `ECHTE_IO` in
+ * board-takt löst die Rolle über `boardFuerRolle` auf, der Default-Parameter `setze` in `fuehreHarnessAus` und `imBoardAnlegen`/`setze` in langfuse-takt
+ * schreiben ins Factory-Board (Harness-Arbeit). Kein Wrapper vertauscht die Boards. gh wird gemockt; geprüft werden die Argumente, die an `gh` gehen. */
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const aufrufe: string[][] = [];
@@ -25,8 +25,6 @@ import * as rawLib from "../scripts/board-lib.mjs";
 import * as rawTakt from "../scripts/board-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLangfuse from "../scripts/langfuse-takt.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawPlace from "../scripts/board-place.mjs";
 
 type Board = { projectId: string; nummer: number; statusFeldId: number | string; statusFeldNodeId: string; todoOptionId: string };
 const L = rawLib as unknown as { boardFuerRolle: (r: string) => Board };
@@ -34,17 +32,14 @@ const produkt = L.boardFuerRolle("produkt");
 const factory = L.boardFuerRolle("factory");
 const T = rawTakt as unknown as {
   ECHTE_IO: {
-    itemsUeberIssues: (n: number[], o: object) => Array<{ id: string } | null>;
-    addToBoardTodo: (nodeId: string, o: object) => string;
-    loadItems: (o: object) => unknown[];
+    itemsUeberIssues: (r: string, n: number[], o: object) => Array<{ id: string } | null>;
+    addToBoardTodo: (r: string, nodeId: string, o: object) => string;
+    loadItems: (r: string, o: object) => unknown[];
   };
   fuehreHarnessAus: (h: object, items: object[], token: string, io: { log: () => void }) => boolean;
 };
 const LF = rawLangfuse as unknown as {
   fuehreStatusAus: (e: object, o: object) => { ok: boolean; itemId: string | null };
-};
-const P = rawPlace as unknown as {
-  nimmFehlendeAuf: (items: object[], args: object, io: object) => Array<{ id: string; number: number }>;
 };
 const flach = () => aufrufe.map((a) => a.join(" ")).join("\n");
 
@@ -63,11 +58,11 @@ const issueInBeidenBoards = {
   },
 };
 
-/** Beweist: ein Schreibzugriff ging an das Produkt-Board und nie an das Factory-Board. */
-function nurProdukt(): void {
+/** Beweist: ein Schreibzugriff ging an das gewünschte Board und nie an das andere. */
+function nur(soll: Board, fremd: Board): void {
   const t = flach();
-  expect(t).toContain(`p=${produkt.projectId}`);
-  expect(t).not.toContain(factory.projectId);
+  expect(t).toContain(`p=${soll.projectId}`);
+  expect(t).not.toContain(fremd.projectId);
 }
 
 beforeEach(() => {
@@ -75,54 +70,54 @@ beforeEach(() => {
   issueAntwort = issueInBeidenBoards;
 });
 
-describe("ECHTE_IO in board-takt zeigt auf das Produkt-Board", () => {
-  test("itemsUeberIssues ordnet das Produkt-Item zu, nie das des Factory-Boards", () => {
-    const [item] = T.ECHTE_IO.itemsUeberIssues([7], {});
-    expect(item?.id).toBe("PVTI_produkt");
-    expect(item?.id).not.toBe("PVTI_fremd");
+describe("ECHTE_IO in board-takt löst die Rolle auf das richtige Board auf", () => {
+  test("itemsUeberIssues ordnet je Rolle das Item des eigenen Boards zu", () => {
+    expect(T.ECHTE_IO.itemsUeberIssues("produkt", [7], {})[0]?.id).toBe("PVTI_produkt");
+    expect(T.ECHTE_IO.itemsUeberIssues("factory", [7], {})[0]?.id).toBe("PVTI_fremd");
   });
-  test("itemsUeberIssues: steht das Issue nur im Factory-Board, liefert es null (Negativfall)", () => {
+  test("itemsUeberIssues: steht das Issue nur im anderen Board, liefert es null (Negativfall)", () => {
     issueAntwort = { data: { repository: { i0: { ...issueInBeidenBoards.data.repository.i0, projectItems: { nodes: [{ id: "PVTI_fremd", project: { id: factory.projectId } }] } } } } };
-    expect(T.ECHTE_IO.itemsUeberIssues([7], {})).toEqual([null]);
+    expect(T.ECHTE_IO.itemsUeberIssues("produkt", [7], {})).toEqual([null]);
   });
-  test("addToBoardTodo sendet projectId, Status-Feld und Todo-Option des Produkt-Boards", () => {
-    expect(T.ECHTE_IO.addToBoardTodo("I_node", {})).toBe("PVTI_x");
-    nurProdukt();
-    const t = flach();
-    expect(t).toContain(`f=${produkt.statusFeldNodeId}`);
-    expect(t).toContain(`o=${produkt.todoOptionId}`);
-    expect(t).not.toContain(factory.statusFeldNodeId);
+  test("itemsUeberIssues: unbekannte Rolle wirft", () => {
+    expect(() => T.ECHTE_IO.itemsUeberIssues("nirgends", [7], {})).toThrow(/Unbekannte Board-Rolle/);
   });
-  test("loadItems liest Pfad und Status-Feld des Produkt-Boards", () => {
-    T.ECHTE_IO.loadItems({});
+  test.each([
+    ["produkt", produkt, factory],
+    ["factory", factory, produkt],
+  ] as const)("addToBoardTodo (%s) sendet projectId, Status-Feld und Todo-Option des eigenen Boards", (rolle, soll, fremd) => {
+    expect(T.ECHTE_IO.addToBoardTodo(rolle, "I_node", {})).toBe("PVTI_x");
+    nur(soll, fremd);
+    expect(flach()).toContain(`f=${soll.statusFeldNodeId}`);
+    expect(flach()).not.toContain(fremd.statusFeldNodeId);
+  });
+  test.each([
+    ["produkt", produkt, factory],
+    ["factory", factory, produkt],
+  ] as const)("loadItems (%s) liest Pfad und Status-Feld des eigenen Boards", (rolle, soll, fremd) => {
+    T.ECHTE_IO.loadItems(rolle, {});
     const t = flach();
-    expect(t).toContain(`/projectsV2/${produkt.nummer}/items`);
-    expect(t).toContain(`fields=${produkt.statusFeldId}`);
-    expect(t).not.toContain(`/projectsV2/${factory.nummer}/items`);
+    expect(t).toContain(`/projectsV2/${soll.nummer}/items`);
+    expect(t).toContain(`fields=${soll.statusFeldId}`);
+    expect(t).not.toContain(`/projectsV2/${fremd.nummer}/items`);
   });
 });
 
-describe("Default-Wrapper der Takt-Skripte schreiben ins Produkt-Board", () => {
-  test("fuehreHarnessAus: Default `setze` setzt die Position im Produkt-Board", () => {
+describe("Default-Wrapper der Takt-Skripte schreiben ins Factory-Board", () => {
+  test("fuehreHarnessAus: Default `setze` setzt die Position im Factory-Board", () => {
     expect(T.fuehreHarnessAus({ nr: 5, afterId: "PVTI_a" }, [{ number: 5, id: "PVTI_5" }], "tok", { log: () => {} })).toBe(true);
-    nurProdukt();
+    nur(factory, produkt);
     expect(flach()).toContain("i=PVTI_5");
   });
-  test("langfuse-takt fuehreStatusAus: Default `imBoardAnlegen` und `setze` treffen das Produkt-Board", () => {
+  test("langfuse-takt fuehreStatusAus: Default `imBoardAnlegen` und `setze` treffen das Factory-Board", () => {
     const r = LF.fuehreStatusAus(
       { aktion: "nach-oben", nr: 9 },
       { repo: "o/r", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "tok", items: [], io: { gh: () => ({ node_id: "I_n" }) } },
     );
     expect(r).toMatchObject({ ok: true, itemId: "PVTI_x" });
-    nurProdukt();
+    nur(factory, produkt);
     const t = flach();
     expect(t).toContain("updateProjectV2ItemPosition");
-    expect(t).toContain(`o=${produkt.todoOptionId}`);
-  });
-  test("board-place nimmFehlendeAuf: Default `aufnehmenIns` nimmt ins Produkt-Board auf", () => {
-    const issue = { number: 5, state: "open", node_id: "I_5", title: "T" };
-    const neu = P.nimmFehlendeAuf([], { numbers: [5], anchor: null, dry: false }, { ghJson: () => issue, log: () => {}, warn: () => {} });
-    expect(neu.map((i) => i.id)).toEqual(["PVTI_x"]);
-    nurProdukt();
+    expect(t).toContain(`o=${factory.todoOptionId}`);
   });
 });
