@@ -6,6 +6,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
+import { deploymentYaml } from "../factories/manifests";
 
 const JOIN = (t: string) => "kubeadm join 10.0.0.10:6443 --token " + t;
 let sim: KQSim;
@@ -154,6 +155,19 @@ test("kubeadm reset: räumt den Cluster ab, kubectl scheitert wieder", () => {
   assert.equal(bare.nodes.length, 0);
   assert.equal(bare.controlPlane.up, false);
   assert.match(bare.exec("kubectl get nodes").output!, /was refused/i);
+});
+
+test("kubeadm reset: Deployments bleiben gespeichert und sind nach erneutem init wieder da (#1686)", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  for (let i = 0; i < 3; i++) bare.exec(JOIN(bare.controlPlane.token!));
+  bare.files["d.yaml"] = deploymentYaml({ name: "web" });
+  assert.equal(bare.exec("kubectl apply -f d.yaml").error, false);
+  assert.equal(bare.deployments.length, 1);
+  bare.exec("kubeadm reset");
+  assert.equal(bare.deployments.length, 1, "reset räumt nur Nodes und Control-Plane ab");
+  bare.exec("kubeadm init");
+  assert.match(bare.exec("kubectl get deploy").output!, /web/);
 });
 
 /* ===== Integration: neuer Worker plant Pending-Pods ein ===== */
