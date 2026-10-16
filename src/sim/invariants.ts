@@ -131,6 +131,8 @@ function checkNameUniqueness(s: ClusterState): string[] {
     ["StatefulSet", s.statefulSets],
     ["Service", s.services],
     ["Ingress", s.ingresses],
+    ["GatewayClass", s.gatewayClasses],
+    ["Gateway", s.gateways],
     ["NetworkPolicy", s.networkPolicies],
     ["Secret", s.secrets],
     ["ConfigMap", s.configMaps],

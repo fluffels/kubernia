@@ -20,6 +20,7 @@
  */
 import { test, expect } from "vitest";
 import { KQSim } from "./helpers";
+import { sanitizeState } from "../../src/game/save";
 import type { ClusterState, Scenario } from "../../src/sim/state";
 import { deploymentYaml } from "../factories/manifests";
 
@@ -29,7 +30,7 @@ import { deploymentYaml } from "../factories/manifests";
  *  abgeschrieben: wächst ClusterState um ein Feld, MUSS diese Liste (oder die Ausschluss-
  *  Liste unten) mitwachsen, sonst schlägt der Vollständigkeits-Test weiter unten fehl. */
 const CLUSTER_STATE_FIELDS = [
-  "docker", "nodes", "deployments", "services", "ingresses", "networkPolicies",
+  "docker", "nodes", "deployments", "services", "ingresses", "gatewayClasses", "gateways", "networkPolicies",
   "secrets", "configMaps", "files", "applyEffects",
   "serviceMonitors", "prometheusRules", "grafanaDatasources", "grafanaDashboards",
   "statefulSets", "pvcs", "pvs", "storageClasses", "volumeSnapshots", "objectStore",
@@ -72,6 +73,8 @@ const bigScenario: Scenario = {
 
   services: [{ name: "kasse-svc", type: "ClusterIP", clusterIP: "10.96.0.5", port: 80, targetPort: 8080 }],
   ingresses: [{ name: "kasse-ing", className: "nginx", host: "hafen.de", path: "/kasse", service: "kasse-svc", port: 80, tls: { secretName: "tls-secret" } }],
+  gatewayClasses: [{ name: "envoy", controllerName: "gateway.envoyproxy.io/gatewayclass-controller", description: "Hafentor-Klasse", created: 3 }],
+  gateways: [{ name: "hafentor", className: "envoy", listeners: [{ name: "https", port: 8443, protocol: "HTTPS", hostname: "hafen.de", tlsSecret: "tls-secret" }], created: 4 }],
   networkPolicies: [{ name: "deny-all", podSelector: "", allowFrom: "" }],
   secrets: [{ name: "db-secret", keys: ["password"], type: "Opaque" }],
   configMaps: [{ name: "app-config", keys: ["LOG_LEVEL"] }],
@@ -186,4 +189,16 @@ test("Alt-Snapshot ohne serviceAccountName lädt heil und läuft unter der defau
   const sim = new KQSim(JSON.parse(JSON.stringify(snap)) as Scenario);
   expect(sim.deployments[0].serviceAccountName).toBeUndefined();
   expect(sim.exec("kubectl describe pod " + sim.deployments[0].pods[0].name).output).toMatch(/Service Account:\s+default/);
+});
+
+test("Alt-Snapshot ohne Gateway-Felder lädt mit leeren Listen und besteht die Save-Härtung (#1664)", () => {
+  const alt = JSON.parse(JSON.stringify(new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] }).snapshot())) as Record<string, unknown>;
+  delete alt.gatewayClasses;
+  delete alt.gateways;
+  const sim = new KQSim(alt as Scenario);
+  expect(sim.gatewayClasses).toEqual([]);
+  expect(sim.gateways).toEqual([]);
+  expect(sim.exec("kubectl get gateways").output).toBe("No resources found in default namespace.");
+  // Der Snapshot übersteht sanitizeState unverändert (nicht auf null verworfen, kein Versions-Bump nötig).
+  expect(sanitizeState({ clusterSnapshot: alt }).clusterSnapshot).toEqual(alt);
 });

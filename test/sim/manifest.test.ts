@@ -199,7 +199,7 @@ describe("Registry: effectsFromManifest", () => {
     const f = bad("apiVersion: v1\nkind: ConfigMap\nmetadata: x\n");
     expect(f.error).toMatch(/no matches for kind "ConfigMap"/);
     expect(f.error).toMatch(/name: "" namespace/);
-    expect(f.hint).toBe("Per Datei versteht dieses Sim zurzeit: Deployment (apps/v1), Service (v1).");
+    expect(f.hint).toBe("Per Datei versteht dieses Sim zurzeit: Deployment (apps/v1), Service (v1), GatewayClass (gateway.networking.k8s.io/v1), Gateway (gateway.networking.k8s.io/v1).");
   });
 
   it("Dockerfile-Inhalt ist ein Parse-Fehler", () => {

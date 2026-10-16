@@ -25,6 +25,7 @@ import { exactlyOneName, notSimulated, replicasArg } from "./args";
 import { readTargets, targetOutcome, type Target } from "./targets";
 import { subEntry, type Call } from "../cliargs";
 import { applyDeployment } from "./apply-deployment";
+import { applyGateway, applyGatewayClass } from "./apply-gateway";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
 import type { KubectlHost } from "./host";
 
@@ -61,6 +62,8 @@ const SIMPLE_DELETABLE: ReadonlyMap<ResourcePlural, (host: KubectlHost) => { nam
   ["configmaps", (h: KubectlHost) => h.configMaps],
   ["secrets", (h: KubectlHost) => h.secrets],
   ["ingresses", (h: KubectlHost) => h.ingresses],
+  ["gatewayclasses", (h: KubectlHost) => h.gatewayClasses],
+  ["gateways", (h: KubectlHost) => h.gateways],
   ["networkpolicies", (h: KubectlHost) => h.networkPolicies],
   ["persistentvolumes", (h: KubectlHost) => h.pvs],
   ["storageclasses", (h: KubectlHost) => h.storageClasses],
@@ -244,6 +247,8 @@ const FILE_DELETABLE: readonly {
   { pick: e => e.deployment, remove: (h, n) => !!removeDeployment(h, n), msg: n => 'deployment.apps "' + n + '" deleted' },
   { pick: e => e.service, remove: (h, n) => spliceByName(h.services, n), msg: n => 'service "' + n + '" deleted' },
   { pick: e => e.ingress, remove: (h, n) => spliceByName(h.ingresses, n), msg: n => 'ingress.networking.k8s.io "' + n + '" deleted' },
+  { pick: e => e.gatewayClass, remove: (h, n) => spliceByName(h.gatewayClasses, n), msg: n => 'gatewayclass.gateway.networking.k8s.io "' + n + '" deleted' },
+  { pick: e => e.gateway, remove: (h, n) => spliceByName(h.gateways, n), msg: n => 'gateway.gateway.networking.k8s.io "' + n + '" deleted' },
   { pick: e => e.networkPolicy, remove: (h, n) => spliceByName(h.networkPolicies, n), msg: n => 'networkpolicy.networking.k8s.io "' + n + '" deleted' },
   { pick: e => e.statefulSet, remove: (h, n) => !!removeStatefulSet(h, n), msg: n => 'statefulset.apps "' + n + '" deleted' },
   { pick: e => e.pvc, remove: (h, n) => spliceByName(h.pvcs, n), msg: n => 'persistentvolumeclaim "' + n + '" deleted' },
@@ -697,6 +702,8 @@ const applyHandlers: readonly ApplyHandler[] = [
   applyDeployment,
   applyService,
   applyIngress,
+  applyGatewayClass,
+  applyGateway,
   applyNetworkPolicy,
   applyApplication,
   applyServiceMonitor,
