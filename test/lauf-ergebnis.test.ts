@@ -3,6 +3,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/lauf-ergebnis.mjs";
@@ -31,7 +34,9 @@ const mod = raw as {
   labelAbfrage: (n: number[]) => string;
   festgefahrenAusAntwort: (a: unknown, n: number[]) => Record<number, number>;
   laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; tickets?: number[]; ohne?: number[] }) => Ergebnis;
-  parseArgs: (a: string[]) => { von?: string; bis?: string; tickets: number[]; ohne: number[]; json: boolean; fehler: string | null };
+  parseArgs: (a: string[]) => { von?: string; bis?: string; tickets: number[]; ohne: number[]; json: boolean; fehler: string | null; startAgent?: string };
+  laufErgebnisStartAgent: (e: { laeufe: unknown[]; von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; ohne?: number[] }) => Ergebnis;
+  ladeStartLaeufe: (dir: string, agent: string, von: string) => unknown[];
 };
 
 const SHA = "abcdef1234567890abcdef1234567890abcdef12";
@@ -341,6 +346,88 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.deepEqual(mod.parseArgs(["--von", "a", "--bis", "b", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--json"]), { von: "a", bis: "b", tickets: [1, 2], ohne: [3], json: true, fehler: null });
       for (const kaputt of [["--ticket", "abc"], ["--ohne", "1.5"], ["--ticket"], ["--ohne", "-2"], ["--ticket", ""]]) {
         assert.match(mod.parseArgs(kaputt).fehler ?? "", /erwartet eine Ticketnummer/, kaputt.join(" "));
+      }
+    });
+  });
+  describe("--start-agent: PR-Menge aus dem ersten Lauf je Ticket (#1646)", () => {
+    const drei = [
+      pr({ number: 50, headRefName: "feature/a", closingIssuesReferences: [{ number: 40 }] }),
+      pr({ number: 51, headRefName: "feature/b", closingIssuesReferences: [{ number: 41 }], mergeCommit: { oid: "1".repeat(40) } }),
+      pr({ number: 52, headRefName: "feature/c", title: "chore: ohne Ticket", closingIssuesReferences: [], mergeCommit: { oid: "2".repeat(40) } }),
+    ];
+    const sep = String.fromCharCode(31);
+    const ende = String.fromCharCode(30);
+    const dreiLog = [SHA, "1".repeat(40), "2".repeat(40)].map((s) => [s, MERGED, review("runden=1 lenses=doku") + ende].join(sep)).join("");
+    const t0 = Date.parse(von);
+    const lauf1 = (ticket: number | null, start: number) => ({
+      meta: { agentType: "x-agent" },
+      zeilen: [{ type: "user", timestamp: new Date(start).toISOString(), message: { role: "user", content: ticket === null ? "ohne Nummer" : `Ticket #${ticket}: x` } }],
+    });
+    const start = (laeufe: unknown[], extra: { ohne?: number[] } = {}, aufrufe: string[][] = []) =>
+      mod.laufErgebnisStartAgent({ laeufe, von, bis, runGit: git(dreiLog), runGh: gh({ liste: drei, aufrufe }), jetzt: SPAETER, ...extra });
+    test("nur PRs von Tickets mit erstem Start im Fenster; PRs ohne Ticket fallen heraus", () => {
+      assert.deepEqual(start([lauf1(41, t0 + 1000)]).zeilen.map((z) => z.pr), [51]);
+      assert.deepEqual(start([lauf1(40, t0 + 1), lauf1(41, t0 + 2)]).zeilen.map((z) => z.pr), [50, 51]);
+    });
+    test("Start vor von fällt heraus, Start genau auf bis zählt, auch bei späterem zweitem Lauf", () => {
+      assert.deepEqual(start([lauf1(40, t0 - 1), lauf1(40, t0 + 5), lauf1(41, Date.parse(bis))]).zeilen.map((z) => z.pr), [51]);
+    });
+    test("leere Menge ergibt 0 PRs statt aller (leere tickets hießen sonst alle) und ruft gh nicht auf", () => {
+      const aufrufe: string[][] = [];
+      for (const laeufe of [[lauf1(40, t0 - 10)], [lauf1(null, t0 + 1)]]) {
+        const e = start(laeufe, {}, aufrufe);
+        assert.deepEqual(e.zeilen, []);
+        assert.equal(e.kennzahlen.prs, 0);
+      }
+      assert.equal(aufrufe.length, 0);
+    });
+    test("--ohne bleibt kombinierbar", () => {
+      assert.deepEqual(start([lauf1(40, t0 + 1), lauf1(41, t0 + 2)], { ohne: [41] }).zeilen.map((z) => z.pr), [50]);
+    });
+    test("ladeStartLaeufe: fehlender Ordner und kein Lauf des Typs sind ein Datenfehler (fail-closed)", () => {
+      assert.throws(() => mod.ladeStartLaeufe(join(tmpdir(), "gibt-es-nicht-1646"), "x-agent", von), (e: Error) => e instanceof mod.DatenFehler && /Transkript/.test(e.message));
+      const dir = mkdtempSync(join(tmpdir(), "kq-1646-"));
+      try {
+        assert.throws(() => mod.ladeStartLaeufe(dir, "x-agent", von), mod.DatenFehler);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+    test("ladeStartLaeufe: lädt einen Vorgänger 30 h vor `von` (Vorlauf 48 h), nicht aber 60 h davor", () => {
+      const dir = mkdtempSync(join(tmpdir(), "kq-1646-vorlauf-"));
+      try {
+        const sub = join(dir, "s1", "subagents");
+        mkdirSync(sub, { recursive: true });
+        for (const [name, stunden] of [["a-alt", 60], ["a-neu", 30]] as const) {
+          writeFileSync(join(sub, `${name}.meta.json`), JSON.stringify({ agentType: "x-agent" }));
+          writeFileSync(join(sub, `${name}.jsonl`), "");
+          const t = new Date(Date.parse(von) - stunden * 3600_000);
+          utimesSync(join(sub, `${name}.jsonl`), t, t);
+        }
+        const geladen = mod.ladeStartLaeufe(dir, "x-agent", von) as { datei: string }[];
+        assert.deepEqual(geladen.map((l) => l.datei), ["s1/subagents/a-neu.jsonl"]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+    test("ladeStartLaeufe: ein nicht lesbarer Projektordner (Datei statt Ordner) ist ein Datenfehler", () => {
+      const dir = mkdtempSync(join(tmpdir(), "kq-1646-datei-"));
+      try {
+        const datei = join(dir, "keinordner");
+        writeFileSync(datei, "x");
+        assert.throws(() => mod.ladeStartLaeufe(datei, "x-agent", von), (e: Error) => e instanceof mod.DatenFehler && /nicht lesbar/.test(e.message));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+    test("parseArgs: --start-agent ohne Default, mit --ticket ein Aufruf-Fehler, mit --ohne ok, ohne Wert ein Fehler", () => {
+      assert.equal(mod.parseArgs(["--von", "a", "--bis", "b"]).startAgent, undefined);
+      assert.equal(mod.parseArgs(["--von", "a", "--bis", "b", "--start-agent", "x-agent", "--ohne", "3"]).startAgent, "x-agent");
+      assert.deepEqual(mod.parseArgs(["--start-agent", "x-agent", "--ohne", "3"]).ohne, [3]);
+      assert.equal(mod.parseArgs(["--start-agent", "x-agent", "--ohne", "3"]).fehler, null);
+      assert.match(mod.parseArgs(["--start-agent", "x-agent", "--ticket", "3"]).fehler ?? "", /--start-agent.*--ticket/);
+      for (const kaputt of [["--start-agent"], ["--start-agent", "--json"], ["--start-agent", ""]]) {
+        assert.match(mod.parseArgs(kaputt).fehler ?? "", /--start-agent erwartet/, kaputt.join(" "));
       }
     });
   });

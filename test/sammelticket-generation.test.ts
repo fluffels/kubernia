@@ -240,8 +240,9 @@ describe("Verdrahtung der Generationsgrenze (#1647)", () => {
 
   test("das Skript zählt Zeilen über die Vertrauensliste aus fremdtext-lib (keine eigene Liste) und paginiert die Kommentare", () => {
     const skript = lies("scripts/sammelticket-anlegen.mjs");
-    expect(skript).toMatch(/import \{ istVertraut \} from "\.\/fremdtext-lib\.mjs"/);
-    expect(skript).toMatch(/"--paginate", "--slurp", `repos\/\$\{REPO\}\/issues\/\$\{nr\}\/comments/);
+    expect(skript).toMatch(/import \{ issueKommentare, istVertraut \} from "\.\/fremdtext-lib\.mjs"/);
+    expect(skript).toMatch(/issueKommentare\(nr, ghJson, REPO\)/);
+    expect(lies("scripts/fremdtext-lib.mjs")).toMatch(/"--paginate", "--slurp", `repos\/\$\{repo\}\/issues\/\$\{nr\}\/comments/);
     expect(skript).not.toMatch(/from "\.\/fremdtext\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
   });
 

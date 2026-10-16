@@ -74,7 +74,7 @@ const WARTEN = (nr) =>
  *  - R2: `gemergt` mit einem PR, der nicht MERGED ist,
  *  - R3: `festgefahren` mit offenem PR ohne Label `status:festgefahren`,
  *  - R4 (#1592, beide Ereignisse): `uebergabe` ohne gültiges `SCHNITT: pr|verify` oder ohne `UEBERGABE:`-Zeile,
- *  - R5 (#1592): `uebergabe` mit `SCHNITT: pr` braucht einen PR, der OPEN ist und Auto-Merge hat (gh-Fehler: frei);
+ *  - R5 (#1592): `uebergabe` mit `SCHNITT: pr` braucht einen PR, der OPEN ist und Auto-Merge hat oder schon MERGED ist (gh-Fehler: frei);
  *    `SCHNITT: verify` ruft kein gh auf. R1 bis R3 gelten für `uebergabe` nicht.
  */
 export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage }, deps = {}) {
@@ -137,6 +137,7 @@ function uebergabeBlockade({ schnitt, uebergabe, pr }, deps) {
     return null; // fail-open
   }
   if (!status) return null;
+  if (status.state === "MERGED") return null; // schon gemergt: der Schnitt ist erreicht
   if (status.state !== "OPEN" || !status.autoMergeRequest)
     return `Umsetzer-Abschluss (#1592): SCHNITT: pr, aber PR #${nr} ist nicht OPEN mit Auto-Merge (Status ${status.state}, Auto-Merge ${status.autoMergeRequest ? "ja" : "nein"}). Erst gh pr merge ${nr} --squash --delete-branch --auto setzen, dann übergeben.`;
   return null;

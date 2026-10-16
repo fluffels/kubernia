@@ -14,7 +14,7 @@
  */
 import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
-import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
+import { FREMDEINGANG_LABELS, issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
 const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${loginVon(user)}, ${url}]`;
@@ -102,7 +102,7 @@ export function lade({ art, nr }, gh) {
   if (art === "issue") {
     const eintrag = json(["api", `repos/{owner}/{repo}/issues/${nr}`]);
     if (eintrag.pull_request) throw new Error(`#${nr} ist ein PR, nutze --pr ${nr}`);
-    return { owner, kopf: "Issue", eintrag, beitraege: mitArt("Kommentar", liste(`repos/{owner}/{repo}/issues/${nr}/comments?per_page=100`)) };
+    return { owner, kopf: "Issue", eintrag, beitraege: mitArt("Kommentar", issueKommentare(nr, json)) };
   }
   const eintrag = json(["api", `repos/{owner}/{repo}/pulls/${nr}`]);
   return {
@@ -110,7 +110,7 @@ export function lade({ art, nr }, gh) {
     kopf: "PR",
     eintrag,
     beitraege: [
-      ...mitArt("Kommentar", liste(`repos/{owner}/{repo}/issues/${nr}/comments?per_page=100`)),
+      ...mitArt("Kommentar", issueKommentare(nr, json)),
       ...mitArt("Review", liste(`repos/{owner}/{repo}/pulls/${nr}/reviews?per_page=100`)),
       ...mitArt("Review-Kommentar", liste(`repos/{owner}/{repo}/pulls/${nr}/comments?per_page=100`)),
     ],

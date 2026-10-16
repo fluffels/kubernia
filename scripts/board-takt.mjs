@@ -115,6 +115,7 @@ export function quotenBericht(commits, seit = null, harnessIssues = null) {
  * letzten Harness-Sammeltickets, `position` = Position laut AGENTS.md (`sammelticketPosition`). Reihenfolge der Regeln:
  *  1. Ab `HARNESS_TAKT_MERGES` kommt das erste ungeclaimte Harness-Sammelticket direkt hinter den zusammenhängenden Kopf ganz oben
  *     (Status-, Notfall-, Dependabot-, Forum-Ticket) → `nach-oben`. Steht es dort schon, ist der Lauf idempotent.
+ *     Ist ein Vorgänger (offenes Sammelticket mit Assignee) in Arbeit, entfällt die Regel: die Quote zählt ab dessen Abschluss.
  *  2. Sonst, und auch bei wenig Aktivität: steht es hinter der Position laut AGENTS.md, geht es dorthin zurück (`sammelticketKorrektur`:
  *     nur nach vorn, nie in den Kopf) → `auf-position`.
  *  3. Sonst nichts.
@@ -132,7 +133,8 @@ export function entscheideHarnessTakt({ items, spielMergesSeitAbschluss, positio
   const ende = kopfEnde(items);
   const idx = items.findIndex((i) => i.id === ticket.id);
   const direktHinterKopf = items.slice(ende, idx).every((i) => i.state !== "open");
-  if (spielMergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf) {
+  const vorgaenger = items.find((i) => i.state === "open" && i.title === SAMMELTICKET_TITEL && (i.assignees ?? []).length > 0);
+  if (spielMergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf && !vorgaenger) {
     return {
       aktion: "nach-oben",
       nr: ticket.number,
@@ -148,6 +150,9 @@ export function entscheideHarnessTakt({ items, spielMergesSeitAbschluss, positio
       afterId: k.afterId,
       grund: `#${k.nr} stand auf Rang ${k.vonRang}, zurück auf Rang ${k.nachRang} (Position ${position} laut AGENTS.md)`,
     };
+  }
+  if (vorgaenger && spielMergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf) {
+    return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, die Quote zählt ab dessen Abschluss` };
   }
   if (spielMergesSeitAbschluss < HARNESS_TAKT_MERGES) {
     return { aktion: "nichts", grund: `nur ${spielMergesSeitAbschluss} Spiel-Merges seit dem letzten Sammelticket (Untergrenze ${HARNESS_TAKT_MERGES}), Position stimmt` };

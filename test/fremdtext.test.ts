@@ -54,11 +54,12 @@ interface Api {
   formatiere: (e: Ergebnis, eintrag: Eintrag, art: string) => string;
   parseArgs: (argv: string[]) => { art: string; nr: number };
   flach: (slurped: unknown) => unknown[];
+  issueKommentare: (nr: number, json: (args: string[]) => unknown, repo?: string) => unknown[];
   pruefe: (argv: string[], gh: (args: string[]) => string) => { code: number; out: string; err: string };
 }
 // Die Vertrauensliste steht in scripts/fremdtext-lib.mjs (#1579), der Rest im CLI-Skript.
 const fremdtext = { ...fremdtextRoh, ...fremdtextLib } as unknown as Api;
-const { VERTRAUTE_BOTS, FREMDEINGANG_LABELS, istVertraut, trenneFremdtext, formatiere, parseArgs, flach, pruefe } = fremdtext;
+const { VERTRAUTE_BOTS, FREMDEINGANG_LABELS, istVertraut, trenneFremdtext, formatiere, parseArgs, flach, pruefe, issueKommentare } = fremdtext;
 
 const OWNER = "fluffels";
 const eigen: User = { login: "fluffels", type: "User" };
@@ -228,6 +229,32 @@ describe("flach", () => {
   test("macht gh --paginate --slurp (Liste von Seiten) flach", () => {
     assert.deepEqual(flach([[1, 2], [3]]), [1, 2, 3]);
     assert.deepEqual(flach([]), []);
+  });
+});
+
+describe("issueKommentare (#1646): ein Pfad für alle Kommentar-Abrufe", () => {
+  test("paginiert (--paginate --slurp, per_page=100) auf dem Platzhalter-Repo und macht die Seiten flach", () => {
+    const aufrufe: string[][] = [];
+    const r = issueKommentare(7, (args) => {
+      aufrufe.push(args);
+      return [[{ id: 1 }], [{ id: 2 }, { id: 3 }]];
+    });
+    assert.deepEqual(aufrufe, [["api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues/7/comments?per_page=100"]]);
+    assert.deepEqual(r, [{ id: 1 }, { id: 2 }, { id: 3 }]);
+  });
+
+  test("ein explizites Repo ersetzt den Platzhalter; ein Fehler des Abrufs wirft weiter, eine Nicht-Liste ergibt []", () => {
+    let pfad = "";
+    issueKommentare(9, (args) => ((pfad = args[3]), []), "o/r");
+    assert.equal(pfad, "repos/o/r/issues/9/comments?per_page=100");
+    assert.throws(
+      () =>
+        issueKommentare(9, () => {
+          throw new Error("gh kaputt");
+        }),
+      /gh kaputt/,
+    );
+    assert.deepEqual(issueKommentare(9, () => ({})), []);
   });
 });
 

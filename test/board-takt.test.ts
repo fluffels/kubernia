@@ -180,6 +180,22 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
     expect(h([it(10)], 9).aktion).toBe("nichts");
   });
 
+  test("Vorgänger in Arbeit (#1646): geclaimtes plus ungeclaimtes Sammelticket → Quote zählt erst ab dessen Abschluss, kein nach-oben", () => {
+    const board = [it(10), it(11), sammel(12, { assignees: ["fluffels"] }), sammel(13)];
+    const r = h(board, 5);
+    expect(r.aktion).not.toBe("nach-oben");
+    expect(r.grund).toMatch(/Vorgänger #12 in Arbeit/);
+    // ohne geclaimten Vorgänger bleibt es nach-oben
+    expect(h([it(10), it(11), sammel(13)], 5)).toMatchObject({ aktion: "nach-oben", nr: 13 });
+    // geschlossener Vorgänger zählt nicht
+    expect(h([it(10), it(11), sammel(12, { assignees: ["fluffels"], state: "closed" }), sammel(13)], 5)).toMatchObject({ aktion: "nach-oben", nr: 13 });
+  });
+
+  test("Vorgänger in Arbeit: Regel 2 (auf-position) bleibt", () => {
+    const board = [...fueller(1, 8), sammel(12, { assignees: ["fluffels"] }), sammel(13)];
+    expect(h(board, 5)).toMatchObject({ aktion: "auf-position", nr: 13 });
+  });
+
   test("ungültige Eingaben werfen (auch ein ungültiges position)", () => {
     expect(() => h([], -1)).toThrow();
     expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], spielMergesSeitAbschluss: 5, position: 4 })).toThrow();

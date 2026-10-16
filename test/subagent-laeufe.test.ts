@@ -44,3 +44,41 @@ describe("laufAus: Ticket und Modelle", () => {
     expect(A.laufAus({ meta: {}, zeilen })?.modelle).toEqual(["claude-haiku-4-5", "claude-opus-5-5"]);
   });
 });
+
+describe("schnittZeile (#1646: CRLF)", () => {
+  const S = raw as unknown as { schnittZeile: (p: string, k: string) => string | null };
+  test("CRLF-Zeilenenden liefern den Wert, Prosa und Großschrift nicht", () => {
+    expect(S.schnittZeile("a\r\nSchnitt: verify\r\nb", "Schnitt")).toBe("verify");
+    expect(S.schnittZeile("a\r\nSchnitt: pr \r\n", "Schnitt")).toBe("pr");
+    expect(S.schnittZeile("a\r\nSCHNITT: verify\r\n", "Schnitt")).toBeNull();
+  });
+});
+
+describe("Vorlauf und ersterStartJeTicket (#1646)", () => {
+  const V = raw as unknown as { VORLAUF_MS: number; ersterStartJeTicket: (l: { ticket: number | null; start: number }[]) => Map<number, number> };
+  test("48 Stunden", () => {
+    expect(V.VORLAUF_MS).toBe(48 * 3_600_000);
+  });
+  test("frühester Start je Ticket, Läufe ohne Ticket fallen weg, leer ergibt leere Map", () => {
+    const m = V.ersterStartJeTicket([{ ticket: 5, start: 30 }, { ticket: 5, start: 10 }, { ticket: null, start: 1 }, { ticket: 6, start: 7 }]);
+    expect([...m.entries()].sort()).toEqual([[5, 10], [6, 7]]);
+    expect(V.ersterStartJeTicket([]).size).toBe(0);
+  });
+});
+
+describe("ticketsMitStartImFenster (#1646)", () => {
+  const T = raw as unknown as { ticketsMitStartImFenster: (l: { ticket: number | null; start: number }[], f: { von: string; bis: string }) => number[] };
+  const von = "2026-10-07T10:00:00Z";
+  const bis = "2026-10-07T12:00:00Z";
+  const [v, b] = [Date.parse(von), Date.parse(bis)];
+  test("zählt den ersten Start: Start auf von und auf bis zählen, ein Tick davor oder danach nicht", () => {
+    expect(T.ticketsMitStartImFenster([{ ticket: 1, start: v - 1 }, { ticket: 2, start: v }, { ticket: 3, start: b }, { ticket: 4, start: b + 1 }], { von, bis })).toEqual([2, 3]);
+  });
+  test("ein Nachfolger im Fenster, dessen Vorgänger davor startete, gehört nicht dazu", () => {
+    expect(T.ticketsMitStartImFenster([{ ticket: 5, start: v - 1000 }, { ticket: 5, start: v + 1000 }], { von, bis })).toEqual([]);
+  });
+  test("Läufe ohne Ticket zählen nicht, jedes Ticket einmal, sortiert; leere Eingabe ergibt leere Liste", () => {
+    expect(T.ticketsMitStartImFenster([{ ticket: null, start: v + 1 }, { ticket: 9, start: v + 2 }, { ticket: 9, start: v + 3 }, { ticket: 7, start: v + 4 }], { von, bis })).toEqual([7, 9]);
+    expect(T.ticketsMitStartImFenster([], { von, bis })).toEqual([]);
+  });
+});

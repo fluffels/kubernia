@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { IMPORT_FORM } from "./hook-importe";
+import { importeAus, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -89,7 +89,7 @@ export function vergleiche(ist: Baseline, baseline: Baseline): string[] {
     for (const [begriff, n] of Object.entries(z)) {
       const bn = b[begriff];
       if (bn === undefined) out.push(`${einheit}: neues Projektliteral '${begriff}' (${n}x), Kern-Einheiten bleiben literalfrei`);
-      else if (n > bn) out.push(`${einheit}: '${begriff}' ${n}x über Baseline ${bn}`);
+      else if (n > bn) out.push(`${einheit}: '${begriff}' ${n}x über Baseline ${bn} (neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben (Baseline sinkt nur))`);
       else if (n < bn) out.push(`${einheit}: '${begriff}' nur noch ${n}x, Baseline auf ${n} senken (steht ${bn})`);
     }
     for (const begriff of Object.keys(b)) {
@@ -158,7 +158,7 @@ export const SCHICHTDATEN_AUSNAHMEN: Record<string, string> = {};
 const CODE_ENDUNG = /\.(?:mjs|cjs|js|ts)$/;
 
 /** Einheiten (Ganze-Datei-Einheiten beider Ringe), die die Schichtdaten statisch importieren. Nur direkte Importe
- *  (`IMPORT_FORM`), relativ zum Ordner der importierenden Datei aufgelöst; ein dynamisches `require(cfg.layers)` ist
+ *  (`relativeImporte`), relativ zum Ordner der importierenden Datei aufgelöst; ein dynamisches `require(cfg.layers)` ist
  *  der erlaubte Weg (der Kern lädt die Schichtdaten über den konfigurierten Pfad). */
 export function schichtdatenImporte(eintraege: Eintrag[], lies: (pfad: string) => string | null, schichtdatenPfad: string): string[] {
   const ziel = posix.normalize(schichtdatenPfad);
@@ -167,8 +167,10 @@ export function schichtdatenImporte(eintraege: Eintrag[], lies: (pfad: string) =
     if (e.block !== undefined || e.schluessel !== undefined || !CODE_ENDUNG.test(e.pfad)) continue;
     const text = lies(e.pfad);
     if (text === null) continue;
-    for (const m of text.matchAll(IMPORT_FORM)) {
-      if (posix.normalize(posix.join(posix.dirname(e.pfad), m[1] ?? "")) === ziel) {
+    for (const spec of relativeImporte(text)) {
+      const aufgeloest = posix.normalize(posix.join(posix.dirname(e.pfad), spec));
+      // Endungslos (`require("../layers")`) trifft das Ziel mit beliebiger Code-Endung.
+      if (aufgeloest === ziel || (!/\.\w+$/.test(posix.basename(aufgeloest)) && ziel.startsWith(aufgeloest + "."))) {
         out.push(e.pfad);
         break;
       }
@@ -232,17 +234,13 @@ export function pruefeAbdeckung(eintraege: Eintrag[], getrackt: string[], abdeck
 }
 
 const PROJEKT_CONFIG_PFAD = ".factory/projekt.json";
-// Importformen aus hook-importe, zusätzlich JSON (Datei-Import einer Config).
-const HUELLE_FORM = new RegExp(IMPORT_FORM.source.replace("(?:mjs|cjs)", "(?:mjs|cjs|json)"), "g");
-if (HUELLE_FORM.source === IMPORT_FORM.source) throw new Error("IMPORT_FORM hat sich geändert, HUELLE_FORM passt die Endungen nicht mehr an");
-
 /** Offene Ausnahmen der Import-Hülle: "<von> -> <nach>" → Grund mit Ticket oder ADR-Schritt. Darf nur schrumpfen; nur für Importeure im Ring kern-nach-entkopplung. */
 export const KERN_HUELLE_AUSNAHMEN: Record<string, string> = {
   "scripts/docs-gen/registry.mjs -> scripts/docs-gen/quests.mjs": "ADR 0022 F6: Kern-Registry ohne Spiel-Generator",
   "scripts/docs-gen/registry.mjs -> scripts/docs-gen/save-versionen.mjs": "ADR 0022 F6: Kern-Registry ohne Spiel-Generator",
 };
 
-/** Lokale Importe (`HUELLE_FORM`) jeder Ganz-Datei-Code-Einheit, die weder auf eine Ganz-Datei-Einheit noch auf die Projekt-Config zeigen: "<von> -> <nach>". */
+/** Lokale Importe (`relativeImporte` aus hook-importe, auch JSON) jeder Ganz-Datei-Code-Einheit, die weder auf eine Ganz-Datei-Einheit noch auf die Projekt-Config zeigen: "<von> -> <nach>". */
 export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
   const ganze = new Set(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => e.pfad));
   const out: string[] = [];
@@ -250,8 +248,11 @@ export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => 
     if (!CODE_ENDUNG.test(von)) continue;
     const text = lies(von);
     if (text === null) continue;
-    for (const m of text.matchAll(HUELLE_FORM)) {
-      const nach = posix.normalize(posix.join(posix.dirname(von), m[1] ?? ""));
+    for (const spec of relativeImporte(text)) {
+      const roh = posix.normalize(posix.join(posix.dirname(von), spec));
+      // Endungslos (`require("./b")`) trifft eine Besitz-Datei mit beliebiger Code-Endung.
+      const mitEndung = /\.\w+$/.test(posix.basename(roh)) ? undefined : [".mjs", ".cjs", ".js"].map((x) => roh + x).find((p) => ganze.has(p));
+      const nach = mitEndung ?? roh;
       const id = `${von} -> ${nach}`;
       if (!ganze.has(nach) && nach !== PROJEKT_CONFIG_PFAD && !out.includes(id)) out.push(id);
     }
@@ -374,6 +375,9 @@ describe("vergleiche", () => {
     assert.equal(m.length, 1);
     assert.match(m[0] ?? "", /^x\.mjs: neues Projektliteral 'Owner'/);
   });
+  test("über Baseline nennt den Weg: Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben", () => {
+    assert.match(vergleiche({ a: { Repo: 3 } }, { a: { Repo: 2 } }).join(), /neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben \(Baseline sinkt nur\)/);
+  });
   test("über Baseline, unter Baseline, verwaister Eintrag", () => {
     assert.match(vergleiche({ a: { Repo: 3 } }, { a: { Repo: 2 } }).join(), /'Repo' 3x über Baseline 2/);
     assert.match(vergleiche({ a: { Repo: 1 } }, { a: { Repo: 2 } }).join(), /Baseline auf 1 senken/);
@@ -423,6 +427,8 @@ describe("schichtdatenImporte / pruefeSchichtdatenRegel (#1612)", () => {
     assert.deepEqual(hits("scripts/docs-gen/x.mjs", 'const l = require("../layers.cjs");'), ["scripts/docs-gen/x.mjs"]);
     assert.deepEqual(hits("scripts/y.mjs", 'import { a } from "./layers.cjs";'), ["scripts/y.mjs"]);
     assert.deepEqual(hits("scripts/z.mjs", 'const m = createRequire(import.meta.url)("./layers.cjs");'), ["scripts/z.mjs"]);
+    assert.deepEqual(hits("scripts/docs-gen/w.mjs", 'const l = require("../layers");'), ["scripts/docs-gen/w.mjs"]);
+    assert.deepEqual(hits("scripts/docs-gen/v.mjs", 'const l = require("../layers-andere");'), []);
   });
   test("kein Verstoß: dynamischer Pfad, anderer aufgelöster Pfad, Markdown, Block- und Schlüssel-Einheit", () => {
     assert.deepEqual(hits("scripts/a.mjs", "const l = require(cfg.layers);"), []);
@@ -437,6 +443,39 @@ describe("schichtdatenImporte / pruefeSchichtdatenRegel (#1612)", () => {
     assert.match(pruefeSchichtdatenRegel(["scripts/a.mjs"], { "scripts/a.mjs": "später" }).join(), /Ausnahme ohne Ticket/);
     assert.match(pruefeSchichtdatenRegel([], { "scripts/a.mjs": "#9 x" }).join(), /Ausnahme veraltet/);
     assert.deepEqual(pruefeSchichtdatenRegel(["scripts/a.mjs"], { "scripts/a.mjs": "#9 x" }), []);
+  });
+});
+
+describe("importeAus / lokaleImporteTransitiv (gemeinsamer Helfer, #1646)", () => {
+  test("importeAus erkennt alle Formen, auch die großzügige Aufruf-Form; dynamische Pfade nicht", () => {
+    assert.deepEqual(importeAus('import { x } from "./a.mjs";'), ["./a.mjs"]);
+    assert.deepEqual(importeAus("import './a.mjs';"), ["./a.mjs"]);
+    assert.deepEqual(importeAus('import y from "./c.mjs"; import z from "../d.mjs";'), ["./c.mjs", "../d.mjs"]);
+    assert.deepEqual(importeAus('export { x } from "./a.mjs";'), ["./a.mjs"]);
+    assert.deepEqual(importeAus('const m = await import("./a.mjs");'), ["./a.mjs"]);
+    assert.deepEqual(importeAus("const q = require('../layers');"), ["../layers"]);
+    assert.deepEqual(importeAus('createRequire(import.meta.url)("./a.cjs")'), ["./a.cjs"]);
+    assert.deepEqual(importeAus('const x = f(a)("./b.cjs");'), ["./b.cjs"]);
+    assert.deepEqual(importeAus("const q = require(pfad);"), []);
+    assert.deepEqual(importeAus("const q = createRequire(import.meta.url)(layersPfad);"), []);
+  });
+  test("relativeImporte filtert Pakete und node:* heraus und entdoppelt", () => {
+    assert.deepEqual(relativeImporte('import "node:fs"; import x from "pkg"; require("./a.cjs"); createRequire(u)("./a.cjs");'), ["./a.cjs"]);
+  });
+  test("endungsloses require wird über lies aufgelöst und gehört zur Kette", () => {
+    const dateien: Record<string, string> = { "scripts/a.mjs": 'const l = require("./layers");', "scripts/layers.cjs": "module.exports = {};" };
+    const lies = (rel: string): string => {
+      if (!(rel in dateien)) throw new Error("ENOENT " + rel);
+      return dateien[rel] ?? "";
+    };
+    assert.deepEqual(lokaleImporteTransitiv(["scripts/a.mjs"], lies), ["scripts/a.mjs", "scripts/layers.cjs"]);
+  });
+  test("unauflösbarer endungsloser Import wirft (fail-closed)", () => {
+    const lies = (rel: string): string => {
+      if (rel === "scripts/a.mjs") return 'require("./fehlt")';
+      throw new Error("ENOENT " + rel);
+    };
+    assert.throws(() => lokaleImporteTransitiv(["scripts/a.mjs"], lies), /nicht auflösbar/);
   });
 });
 
@@ -479,6 +518,14 @@ describe("huellenVerstoesse / pruefeHuelle (#1613)", () => {
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import c from "../.factory/projekt.json";' })), []);
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./proj.mjs";' })), ["scripts/a.mjs -> scripts/proj.mjs"]);
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const c = require("../x.cjs");' })), ["scripts/a.mjs -> x.cjs"]);
+  });
+  test("endungsloser Import wird gegen Besitz aufgelöst; auf Nicht-Besitz und ein .js-Import auf Nicht-Besitz sind Verstöße", () => {
+    assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const b = require("./b");' })), []);
+    assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const b = require("./proj");' })), ["scripts/a.mjs -> scripts/proj"]);
+    assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import "./x.js";' })), ["scripts/a.mjs -> scripts/x.js"]);
+    // Jede aufgelöste Endung einzeln: .cjs und .js im Besitz.
+    const E2 = [...E, ein("scripts/c.cjs"), ein("scripts/d.js")];
+    assert.deepEqual(huellenVerstoesse(E2, mit({ "scripts/a.mjs": 'const c = require("./c"); const d = require("./d");' })), []);
   });
   test("JSON-Importe zählen, fremde JSON-Dateien sind ein Verstoß", () => {
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import c from "./daten.json";' })), ["scripts/a.mjs -> scripts/daten.json"]);

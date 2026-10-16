@@ -159,6 +159,6 @@ describe("Generator adr-liste (#1392)", () => {
     assert.throws(() => liste(base(), { adr: {} }), /Config-Block "adr"/);
   });
   test("pipe im Titel wird escaped", () => {
-    assert.match(liste(base({ "docs/adr/0002-p.md": adrNeu("0002", "A | B", "2026-07-01") })), /A \\| B/);
+    assert.match(liste(base({ "docs/adr/0002-p.md": adrNeu("0002", "A | B", "2026-07-01") })), /A \\\| B/);
   });
 });

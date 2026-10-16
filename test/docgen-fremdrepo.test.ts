@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixture } from "./support/tmp-fixture";
+import { importeAus } from "./harness/hook-importe";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as docsGen from "../scripts/docs-gen.mjs";
@@ -183,15 +184,16 @@ describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", 
   // Bekannte Grenze: erkannt werden statische `import`/`export … from`, `import("…")`, `require("…")` und `createRequire(…)("…")` mit
   // einfachen oder doppelten Anführungszeichen (#1428 Z12). Nicht erkannt: ein dynamischer Pfad (z.B. die Layers-Datei, die schichten.mjs
   // aus der Config lädt, bleibt erlaubt) und ein `createRequire`-Ergebnis, das erst in einer Variablen steht.
-  const KERN = ["markdown", "adr", "zeitleiste", "schichten"];
-  // Der Schicht-Kern (Prüfung und Ableitung, #1612) ist das einzige CommonJS-Kern-Modul, das schichten.mjs laden darf.
-  const KERN_CJS = ["../schichten-kern.cjs"];
-  const importeAus = (text: string): string[] => [
-    ...[...text.matchAll(/^\s*(?:import|export)\s+(?:[^;]*?\sfrom\s+)?["']([^"']+)["']/gm)].map((m) => m[1]),
-    ...[...text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
-    ...[...text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
-    ...[...text.matchAll(/\bcreateRequire\([^)]*\)\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
-  ];
+  // Die Kern-Module kommen aus dem Besitz-Manifest (Ring kern), nicht aus einer Handliste (kein Drift).
+  const besitz = JSON.parse(readFileSync(join(__dirname, "..", ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string; ring: string }[] };
+  const kernPfade = besitz.eintraege.filter((e) => e.ring === "kern").map((e) => e.pfad);
+  const KERN = kernPfade.flatMap((p) => /^scripts\/docs-gen\/([\w-]+)\.mjs$/.exec(p)?.[1] ?? []);
+  // Die CommonJS-Kern-Module (Schicht-Kern, #1612) darf schichten.mjs laden (relativer Spezifizierer aus scripts/docs-gen/).
+  const KERN_CJS = kernPfade.flatMap((p) => (/^scripts\/[\w-]+\.cjs$/.test(p) ? `../${p.slice("scripts/".length)}` : []));
+  test("die Ableitung aus dem Besitz-Manifest ist nicht leer und enthält den Schicht-Kern", () => {
+    assert.ok(KERN.includes("schichten"), KERN.join());
+    assert.ok(KERN_CJS.includes("../schichten-kern.cjs"), KERN_CJS.join());
+  });
   const importe = (rel: string): string[] => importeAus(readFileSync(join(__dirname, "..", rel), "utf8"));
   test.each(KERN)("scripts/docs-gen/%s.mjs: nur node:* und Kern-Module", (name) => {
     for (const spec of importe(`scripts/docs-gen/${name}.mjs`)) {

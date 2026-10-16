@@ -25,7 +25,7 @@ const N = raw as unknown as {
   pruefeTicket: (e: Omit<Eingabe, "items"> & { item: unknown }) => Ergebnis;
   bereichAusArgv: (argv: string[]) => { bereich: string | null } | { fehler: string };
   messfensterZeilen: (b: string) => (Fenster | { fehler: string })[];
-  laeufeImFenster: (l: { start: number; ticket: number | null }[], o: { closedAt: string; ohneTicket: number }) => number;
+  ticketsImFenster: (l: { start: number; ticket: number | null }[], o: { closedAt: string; ohneTicket: number }) => number;
   messfensterGrund: (f: Fenster, s: Stand) => string;
   messfensterLader: (o: { dir?: string; holeIssue?: (nr: number) => { state: string; closed_at: string | null } }) => (f: Fenster, wartend: number) => Stand;
 };
@@ -269,13 +269,18 @@ describe("messfensterZeilen (#1589)", () => {
   );
 });
 
-describe("laeufeImFenster (#1589)", () => {
+describe("ticketsImFenster (#1589, je Ticket #1646)", () => {
   const t0 = Date.parse("2026-10-15T16:00:00Z");
+  const ab = { closedAt: "2026-10-15T16:00:00Z", ohneTicket: 99 };
   test("Start < closedAt zählt nicht, Start == closedAt zählt", () => {
-    expect(N.laeufeImFenster([{ start: t0 - 1, ticket: 5 }, { start: t0, ticket: 5 }, { start: t0 + 1, ticket: 5 }], { closedAt: "2026-10-15T16:00:00Z", ohneTicket: 99 })).toBe(2);
+    expect(N.ticketsImFenster([{ start: t0 - 1, ticket: 5 }, { start: t0, ticket: 6 }, { start: t0 + 1, ticket: 7 }], ab)).toBe(2);
   });
-  test("Läufe des wartenden Tickets zählen nicht, unzuordenbare (null) schon", () => {
-    expect(N.laeufeImFenster([{ start: t0, ticket: 99 }, { start: t0, ticket: null }, { start: t0, ticket: 4 }], { closedAt: "2026-10-15T16:00:00Z", ohneTicket: 99 })).toBe(2);
+  test("zwei Läufe eines Tickets zählen als ein Ticket", () => {
+    expect(N.ticketsImFenster([{ start: t0, ticket: 5 }, { start: t0 + 5, ticket: 5 }], ab)).toBe(1);
+  });
+  test("das wartende Ticket und Läufe ohne Ticket zählen nicht (konservative Untergrenze)", () => {
+    expect(N.ticketsImFenster([{ start: t0, ticket: 99 }, { start: t0, ticket: null }, { start: t0, ticket: 4 }], ab)).toBe(1);
+    expect(N.ticketsImFenster([{ start: t0, ticket: null }], ab)).toBe(0);
   });
 });
 
@@ -286,7 +291,7 @@ describe("messfensterGrund (#1589)", () => {
     expect(N.messfensterGrund(F, { fehler: "Messfenster nicht prüfbar (x)" })).toContain("nicht prüfbar");
   });
   test("n = k−1 gesperrt mit exaktem Grund, n = k und n > k frei", () => {
-    expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 11 })).toBe("Messfenster offen (11/12 kubernia-umsetzer nach #1590)");
+    expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 11 })).toBe("Messfenster offen (11/12 Tickets mit kubernia-umsetzer nach #1590)");
     expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 12 })).toBe("");
     expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 13 })).toBe("");
   });
@@ -310,7 +315,7 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
     const zu = lader({ closedAt: frist, n: 4 });
     const r = frei([item(1, { body: zeile }), item(2)], { messfenster: zu.fn });
     expect(r.ticket?.nr).toBe(2);
-    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (4/12 kubernia-umsetzer nach #1590)");
+    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (4/12 Tickets mit kubernia-umsetzer nach #1590)");
     expect(zu.aufrufe).toEqual([1]);
     expect(frei([item(1, { body: zeile })], { messfenster: lader({ closedAt: frist, n: 12 }).fn }).ticket?.nr).toBe(1);
   });
@@ -324,7 +329,7 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
     const nachAgent = (f: Fenster) => (f.agent === "kubernia-lens" ? { closedAt: frist, n: 2 } : { closedAt: frist, n: 50 });
     const r = frei([item(1, { body }), item(2)], { messfenster: nachAgent });
     expect(r.ticket?.nr).toBe(2);
-    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (2/3 kubernia-lens nach #1600)");
+    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (2/3 Tickets mit kubernia-lens nach #1600)");
     expect(frei([item(1, { body })], { messfenster: () => ({ closedAt: frist, n: 50 }) }).ticket?.nr).toBe(1);
     const offen = frei([item(1, { body }), item(2)], { offene: new Set([1600]), messfenster: lader({ closedAt: frist, n: 50 }).fn });
     expect(offen.uebersprungen[0].grund).toBe("offener Blocker #1600 (Messfenster)");
@@ -467,7 +472,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
   });
   test("pruefeTicket: Messfenster zählt, auch fail-closed; ein anderer Status als Todo ist kein Grund", () => {
     const stand = (s: Stand) => () => s;
-    expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 4 }) }))).toBe("Messfenster offen (4/12 kubernia-umsetzer nach #1590)");
+    expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 4 }) }))).toBe("Messfenster offen (4/12 Tickets mit kubernia-umsetzer nach #1590)");
     expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ fehler: "Messfenster nicht prüfbar (x)" }) }))).toBe("Messfenster nicht prüfbar (x)");
     expect(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 12 }) }).ticket?.nr).toBe(7);
   });
