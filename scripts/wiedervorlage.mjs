@@ -97,6 +97,7 @@ function ladeEintraege() {
 }
 
 /** Alle Issues (offen und geschlossen) aus der konsistenten Listenabfrage, nicht aus dem verzögerten Such-Index. */
+// Grenze: die jüngsten 1000 Issues (alle Zustände). Ein Wiedervorlage-Ticket wird zeitnah abgearbeitet und der Eintrag im selben PR gelöscht; ein Ticket, das hinter die 1000 fällt, stünde nur bei vergessenem Löschen noch an (dann Dublette statt Warnung).
 const ladeTickets = () => ghJson(["issue", "list", "--repo", REPO, "--state", "all", "--limit", "1000", "--json", "number,state,body"]);
 
 function legeAn(e, label) {
