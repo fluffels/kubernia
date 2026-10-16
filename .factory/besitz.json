@@ -40,7 +40,7 @@
     {"pfad":"scripts/stop-verify-hook.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/cleanup-worktrees.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/ticket-lock.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
-    {"pfad":"scripts/ticket-lock-lib.mjs","ring":"kern-nach-entkopplung","quelle":"Plan #1699 (Regel ADR 0022 §1)"},
+    {"pfad":"scripts/ticket-lock-lib.mjs","ring":"kern","quelle":"Plan #1699 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/claims-pruefen.mjs","ring":"kern-nach-entkopplung","quelle":"Plan #1699 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/ticket-refs.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/worktree-aufraeumen.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
