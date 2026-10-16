@@ -286,7 +286,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 | **Stale Ticket-Referenz** — der sim.ts-Split wird als „#545 (Split offen)" geführt, #545 ist geschlossen; der Split ist untracked (`check:doctickets` non-blocking). | `scripts/check-size.mjs:39` | #864/#877 |
 | **`tsconfig.strict.json` ist ein No-op-Alias** — `typecheck` und `typecheck:strict` prüfen identisch. | `tsconfig.strict.json` | #877 |
 
-**Supply-Chain-Präzisierung:** §8 oben nennt Supply-Chain „abgedeckt" — das gilt für npm-Deps, **nicht** für das ausgelieferte Container-Image (`release.yml` pusht ohne Test-Gate/Scan/SBOM, #861) und **nicht** für den eigenen Code (kein SAST/CodeQL, #875; Secret-Scanning samt Push-Schutz ist aktiv, Repo-API 2026-10-08). Volle Herleitung: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md).
+**Supply-Chain-Präzisierung:** §8 oben nennt Supply-Chain „abgedeckt" — das gilt für npm-Deps, **nicht** für das ausgelieferte Container-Image (`release.yml` pusht ohne Test-Gate/Scan/SBOM, #861) und **nicht** für den eigenen Code (CodeQL und Scorecard laufen berichtend, Funde noch ohne Board-Anbindung; Secret-Scanning samt Push-Schutz ist aktiv, Repo-API 2026-10-08). Volle Herleitung: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md).
 
 ## 9. Architekturentscheidungen (ADRs)
 
@@ -305,7 +305,7 @@ Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](ht
 | Compatibility | Das Spiel läuft in den Browsern der Spieler:innen; die Smokes laufen bisher nur in Chromium | Boot-Smoke, Perf-Smoke | teilweise: Firefox/WebKit offen (#1131, Lücke 1) |
 | Interaction capability | Farb-unabhängige Statuscodierung, Tastaturbedienung, Kontraste | Browser-Verifikation je Änderung (Präsentation bewusst nicht gegatet), [barrierefreiheit-audit.md](barrierefreiheit-audit.md) | geprüft (#481), kein automatisches Gate (Lücke 3) |
 | Reliability | Laufzeitfehler oder Save-Fehler → sichtbarer Fallback statt schwarzem Canvas oder stillem Verlust; Save-Format ändert sich → Migrationskette plus Backup-Slot, Alt-Stand bricht nie; Domäne reproduzierbar (seedbare RNG, kein `Math.random` in `sim/`/`content/`/`game/`) | `sanitizeState`, Migrationstests, Fallback-Overlay | erfüllt (#492/#876, #497, #504) |
-| Security | Fremdtext, Abhängigkeiten, Container-Image, Agenten-Sandbox | `npm audit` (Produktiv-Deps), Secret-Scanning, geschützter `main`, `check:internalrefs` | teilweise: Agenten-Sandbox (#1432) und Fremdtext-Gate samt OWASP-Abgleich (#1433, [sicherheit-agenten.md](sicherheit-agenten.md)) gemergt; CodeQL und Scorecard offen (#875); Herleitung in #1429 |
+| Security | Fremdtext, Abhängigkeiten, Container-Image, Agenten-Sandbox | `npm audit` (Produktiv-Deps), Secret-Scanning, geschützter `main`, `check:internalrefs` | teilweise: Agenten-Sandbox (#1432) und Fremdtext-Gate samt OWASP-Abgleich (#1433, [sicherheit-agenten.md](sicherheit-agenten.md)) gemergt; CodeQL und Scorecard laufen berichtend (#875); Herleitung in #1429 |
 | Maintainability | Agent ändert Modul → Lint, Arch, Größe, Doku-Drift, Smoke fangen Fehler vor dem Merge; Sim-Regel ändern → Unit-Test gegen die pure Domäne ohne Engine (Suite unter 3 s); Coverage je Schicht und für die geänderten Zeilen | `npm run verify`, `check:diffcoverage`, `check:diffsize` | erfüllt (#482, #495) |
 | Flexibility | Neue Quest → eine JSON-Datei plus Reihenfolge-Eintrag, kein Code; 10× Inhalt wächst ohne Umbau; Spiel weitergeben → ein Doppelklick-HTML, offline (Installierbarkeit) | Content-as-Data ([ADR 0004](adr/0004-skalierungs-fundament.md)), Loader-Validierung, `build:offline` | erfüllt; i18n bewusst nicht (Randbedingung, §11) |
 | Safety | Kein physisches Risiko: Single-Player-Lernspiel ohne Aktorik; Datenverlust fällt unter Reliability | n. a. | nicht anwendbar |
@@ -316,7 +316,7 @@ Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](ht
 |---|---|---|---|
 | 2 | Die Simulation bildet die Befehlsfamilien mit Treue-Matrix (kubectl, kubeadm, curl, nslookup; Abbauliste `OHNE_MATRIX` im Wächter, [sim-treue.md](sim-treue.md)) mit Wächter-Test und Vereinfachungen in `help <befehl>` ab (#1440, #1444 geschlossen); Ressourcenarten und Befehlsfamilien außerhalb der Matrix (z.B. Namespaces #1430) und Einzelabweichungen (#1323, #1343) sind offene Sim-Tickets. | mittel | Matrix wächst mit den Sim-Tickets, der Wächter-Test hält sie an den Code gebunden |
 | 1 | Smokes laufen nur in Chromium; Firefox und Safari sind für Spieler:innen realistisch. | mittel | bestehendes Ticket #1131 |
-| 4 | Sicherheit gegen externe Kataloge: CodeQL und Scorecard fehlen (#875); Agenten-Sandbox (#1432) und OWASP-LLM-Abgleich (#1433) sind gemergt | mittel | bestehendes Ticket #875 |
+| 4 | Sicherheit gegen externe Kataloge: CodeQL und Scorecard (#875), Agenten-Sandbox (#1432) und OWASP-LLM-Abgleich (#1433) sind gemergt; Funde fließen noch nicht automatisch ins Board | mittel | Folge-Tickets des Epics #1429 |
 | 3 | Barrierefreiheit ist geprüft, aber ohne Gate; Regressionen fielen erst bei der nächsten Prüfung auf. | niedrig | akzeptiert, weil Präsentations-Code bewusst im Browser statt per Gate verifiziert wird (AGENTS.md) und das Audit datiert vorliegt |
 
 ## 11. Risiken und technische Schulden
