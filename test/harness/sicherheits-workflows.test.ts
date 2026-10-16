@@ -221,7 +221,20 @@ describe("Negativfälle: jede Regel verfälscht für sich", () => {
   test("Tag-Pin statt SHA", () => nur(pruefe(codeql({ uses: "      - uses: actions/checkout@v7\n        with:\n          persist-credentials: false" }), "codeql"), "nicht per SHA"));
   test("SHA ohne Versionskommentar", () => nur(pruefe(codeql({ uses: `      - uses: actions/checkout@${SHA}\n        with:\n          persist-credentials: false` }), "codeql"), "nicht per SHA"));
   test("Checkout ohne persist-credentials: false", () => nur(pruefe(codeql({ uses: `      - uses: actions/checkout@${SHA} # v7.0.1` }), "codeql"), "persist-credentials"));
-  test("Jobname ohne BERICHTEND-Präfix", () => nur(pruefe(codeql({ name: "Analyse" }), "codeql"), "BERICHTEND"));
+  test.each(["true", "false-ähnlich"])("Checkout mit persist-credentials: %s", (wert) =>
+    nur(pruefe(codeql({ uses: `      - uses: actions/checkout@${SHA} # v7.0.1\n        with:\n          persist-credentials: ${wert}` }), "codeql"), "persist-credentials"));
+  test("Checkout mit with, aber ohne persist-credentials", () =>
+    nur(pruefe(codeql({ uses: `      - uses: actions/checkout@${SHA} # v7.0.1\n        with:\n          fetch-depth: 0` }), "codeql"), "persist-credentials"));
+  test.each(["branches: [dev]", "branches: [main, dev]", "tags: [v1]"])("push-Trigger mit %s", (b) =>
+    nur(pruefe(codeql({ trig: `  push:\n    ${b}\n  pull_request:\n  schedule:\n    - cron: '1 1 * * 1'\n  workflow_dispatch:` }), "codeql"), "push-Trigger"));
+  test("push-Trigger als leeres Objekt", () =>
+    nur(pruefe(codeql({ trig: "  push: {}\n  pull_request:\n  schedule:\n    - cron: '1 1 * * 1'\n  workflow_dispatch:" }), "codeql"), "push-Trigger"));
+  test.each(["schedule", "workflow_dispatch"])("Scorecard ohne %s", (k) => {
+    const alle: Record<string, string> = { schedule: "  schedule:\n    - cron: '1 1 * * 1'", workflow_dispatch: "  workflow_dispatch:" };
+    const trig = ["  push:\n    branches: [main]", ...Object.entries(alle).filter(([n]) => n !== k).map(([, v]) => v)].join("\n");
+    nur(pruefe(scorecard({ trig }), "scorecard"), `Trigger ${k} fehlt`);
+  });
+  test("Jobname ohne BERICHTEND-Präfix",() => nur(pruefe(codeql({ name: "Analyse" }), "codeql"), "BERICHTEND"));
   test("Matrix ohne actions", () => nur(pruefe(codeql().replace("javascript-typescript, actions", "javascript-typescript"), "codeql"), "Matrix ohne actions"));
   test("Matrix ohne javascript-typescript", () => nur(pruefe(codeql().replace("javascript-typescript, actions", "actions"), "codeql"), "Matrix ohne javascript-typescript"));
   test("pull_request-Trigger fehlt bei CodeQL", () => nur(pruefe(codeql({ trig: "  push:\n    branches: [main]\n  schedule:\n    - cron: '1 1 * * 1'\n  workflow_dispatch:" }), "codeql"), "Trigger pull_request fehlt"));
@@ -254,9 +267,8 @@ describe("Grenzfälle", () => {
     expect(pruefe(codeql().replace(/\n/g, "\r\n"), "codeql")).toEqual([]);
     expect(pruefe(scorecard().replace(/\n/g, "\r\n"), "scorecard")).toEqual([]);
   });
-  test("Kommentare mit write, id-token, repo_token und secrets zählen nicht", () => {
-    expect(pruefe(codeql({ top: "permissions: {}\n# security-events: write" }), "codeql")).toEqual([]);
-    expect(pruefe(scorecard({ extra: "          # id-token / repo_token / secrets.X / publish_results: true" }), "scorecard")).toEqual([]);
+  test("Kommentare mit secrets zählen nicht (die übrigen Schlüssel liest die yaml-Bibliothek ohnehin ohne Kommentare)", () => {
+    expect(pruefe(scorecard({ extra: "          # id-token / repo_token / secrets.X" }), "scorecard")).toEqual([]);
     expect(ohneKommentare("a: 1 # secrets.X\n# secrets.Y")).not.toMatch(/secrets/);
   });
   test("lokale Action braucht keinen SHA", () => {
