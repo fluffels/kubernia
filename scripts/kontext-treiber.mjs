@@ -210,6 +210,7 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
     brille: kopf?.brille ?? null,
     schnitt: kopf?.schnitt ?? null,
     einstieg: kopf?.einstieg ?? null,
+    promptZeichen: kopf?.promptZeichen ?? 0,
     geaendertePfade,
     leseAufrufe,
     delta: Boolean(kopf?.deltaArt),
@@ -354,6 +355,7 @@ function ticketLauf(laeufe) {
     phasenDetail: details,
     wachstum: sortiert.map((a) => a.wachstum).reduce(addiere),
     nachfolgerN: nach.length,
+    promptZeichenNachfolger: summe(nach.map((a) => a.promptZeichen)),
     ersterKontextNachfolger: nach[0]?.ersterKontext ?? null,
     nachlese,
     kostenAb,
@@ -361,8 +363,15 @@ function ticketLauf(laeufe) {
 }
 
 /** Liste der gezählten Läufe bzw. Tickets (#1646): Start (ISO), Ticket, Sammel, offen. */
-const laeufeListe = (analysen) =>
-  [...analysen].sort((x, y) => x.start - y.start).map((a) => ({ ticket: a.ticket, start: new Date(a.start).toISOString(), sammel: a.sammel, offen: a.offen }));
+const laeufeListe = (analysen, jeTicket = false) =>
+  [...analysen].sort((x, y) => x.start - y.start).map((a) => ({
+    ticket: a.ticket,
+    start: new Date(a.start).toISOString(),
+    sammel: a.sammel,
+    offen: a.offen,
+    // Je Ticket (#1593): Gruppe, Kosten und Nachfolger je Zeile, damit die Ticketlisten je Gruppe aus einem Lauf des Werkzeugs stammen.
+    ...(jeTicket ? { schnitt: a.schnitt, kosten: a.kosten, nachfolger: a.nachfolgerN, promptZeichenNachfolger: a.promptZeichenNachfolger } : {}),
+  }));
 
 /** Je-Ticket-Bericht (#1592): Läufe pro Ticket zusammenlegen, Fenster am ersten Start des Tickets, Gruppen nach dem Schnitt des Vorgängers. */
 function jeTicketBericht(agent, analysen, { von, bis }) {
@@ -380,7 +389,7 @@ function jeTicketBericht(agent, analysen, { von, bis }) {
   return {
     agent,
     jeTicket: true,
-    laeufe: laeufeListe(tickets),
+    laeufe: laeufeListe(tickets, true),
     gesamt: gr(tickets),
     ohneSammel: gr(tickets.filter((a) => !a.sammel)),
     sammel: gr(tickets.filter((a) => a.sammel)),
@@ -460,8 +469,13 @@ function renderUebergabe(g) {
 /** Tabelle der gezählten Läufe (#1646). */
 function renderLaeufe(laeufe) {
   if (!laeufe?.length) return [];
-  const zeilen = laeufe.map((l) => `| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : "nein"} | ${l.offen ? "offen" : "geschlossen"} |`);
-  return ["## Läufe", "", "| Start | Ticket | Sammel | Status |", "|---|--:|---|---|", ...zeilen, ""];
+  const je = laeufe.some((l) => "schnitt" in l);
+  const zeilen = laeufe.map((l) => {
+    const basis = `| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : "nein"} | ${l.offen ? "offen" : "geschlossen"} |`;
+    return je ? `${basis} ${l.schnitt} | ${l.kosten == null ? "-" : f(l.kosten)} | ${l.nachfolger} | ${l.promptZeichenNachfolger} |` : basis;
+  });
+  const kopf = je ? ["| Start | Ticket | Sammel | Status | Schnitt | Kosten ($) | Nachfolger | Prompt-Zeichen Nachfolger |", "|---|--:|---|---|---|--:|--:|--:|"] : ["| Start | Ticket | Sammel | Status |", "|---|--:|---|---|"];
+  return ["## Läufe", "", ...kopf, ...zeilen, ""];
 }
 
 /** Markdown-Bericht (Top-10, Phasen, Neuaufbau) je Gruppe. */
