@@ -171,3 +171,21 @@ describe("normPfad (#1646: eine Normalisierung für bereinige und Kontext-Treibe
     expect(N.normPfad("C:/dev/proj/src/b.ts")).toBe("c:/dev/proj/src/b.ts");
   });
 });
+
+describe("ticketZaehlung und mehrlaufHinweis (#1646)", () => {
+  const Z = raw as unknown as {
+    ticketZaehlung: (l: { ticket: number | null }[]) => { tickets: number; mehrlauf: number };
+    mehrlaufHinweis: (mehrlauf: number) => string;
+  };
+  test("zählt verschiedene Tickets und die mit mehr als einem Lauf; Läufe ohne Ticket zählen nicht", () => {
+    expect(Z.ticketZaehlung([{ ticket: 1 }, { ticket: 1 }, { ticket: 2 }, { ticket: null }])).toEqual({ tickets: 2, mehrlauf: 1 });
+  });
+  test("leere Liste und je ein Lauf: keine Mehrfachläufe", () => {
+    expect(Z.ticketZaehlung([])).toEqual({ tickets: 0, mehrlauf: 0 });
+    expect(Z.ticketZaehlung([{ ticket: 1 }, { ticket: 2 }])).toEqual({ tickets: 2, mehrlauf: 0 });
+  });
+  test("Warnzeile nur bei Mehrfachläufen, mit Zahl und Verweis auf --je-ticket", () => {
+    expect(Z.mehrlaufHinweis(0)).toBe("");
+    expect(Z.mehrlaufHinweis(2)).toBe("Mediane je Lauf, nicht je Ticket (2 Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket");
+  });
+});

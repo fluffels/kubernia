@@ -105,3 +105,14 @@ export function passtTicketFilter(ticket, { tickets = [], ohne = [] } = {}) {
 
 /** Ein echter Modellname: nicht leer und nicht der Client-Platzhalter `<synthetic>`. */
 export const istEchtesModell = (m) => Boolean(m) && m !== "<synthetic>";
+
+/** Zahl der verschiedenen Tickets und derer mit mehr als einem Lauf (#1646); Läufe ohne Ticket zählen in keiner der beiden Zahlen. */
+export function ticketZaehlung(laeufe) {
+  const je = new Map();
+  for (const { ticket } of laeufe) if (ticket !== null && ticket !== undefined) je.set(ticket, (je.get(ticket) ?? 0) + 1);
+  return { tickets: je.size, mehrlauf: [...je.values()].filter((n) => n > 1).length };
+}
+
+/** Warnzeile der Standardauswertungen (#1646): die Mediane gelten je Lauf, nicht je Ticket; leer ohne Ticket mit mehreren Läufen. */
+export const mehrlaufHinweis = (mehrlauf) =>
+  mehrlauf > 0 ? `Mediane je Lauf, nicht je Ticket (${mehrlauf} Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket` : "";
