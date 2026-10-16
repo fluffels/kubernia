@@ -47,7 +47,7 @@ gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(in
   -F id="$discId" -F body=@<antwort-datei> --jq '.data.addDiscussionComment.comment.url'
 ```
 
-**6. Passendes Ticket anlegen** (nur bei Bug/Feature, nur der freigegebene Vorschlag, **ohne** Assignee, das ist der „frei"-Marker, siehe AGENTS.md). Titel und Text liegen als Dateien im Scratchpad; dem Text stellst du die vertraute Zeile `Aus dem Forum: https://github.com/<owner>/<repo>/discussions/<Discussion-Nr>` voran:
+**6. Passendes Ticket anlegen** (nur bei Bug/Feature, nur der freigegebene Vorschlag, **ohne** Assignee, das ist der „frei"-Marker, siehe AGENTS.md). Titel und Text liegen als Dateien im Scratchpad; dem Text stellst du die vertraute Zeile `Aus dem Forum: https://github.com/<owner>/<repo>/discussions/<Discussion-Nr>` voran. Der Text enthält `## Ziel` und `## Akzeptanzkriterien` samt Negativfall (sonst überspringt die Auswahl das Ticket):
 ```bash
 gh issue create --title "$(cat <titel-datei>)" --label "<bug|...>" --label "<area:...>" --body-file <text-datei>
 # danach im Board an die gewünschte Position ziehen
