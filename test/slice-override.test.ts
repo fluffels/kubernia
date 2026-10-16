@@ -86,6 +86,7 @@ describe("Präfix aus der Config steuert, welche Zeilen zählen (#1741, Red-Gree
   it("parseNachweis ohne Zeilen wirft, auch mit Teilobjekt", () => {
     expect(() => so.parseNachweis(text)).toThrow(/Commit-Zeilen/);
     expect(() => so.parseNachweis(text, { plan: "KQ-Plan" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/);
+    expect(() => so.parseNachweis(text, { plan: "KQ-Plan", review: "KQ-Review" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/); // ohne planer
   });
   it("Regex-Zeichen im Schlüssel sind wörtlich (kein Joker)", () => {
     expect(so.parseOverrideTrailers("AXB-Plan: #1 x", "A.B-Plan").valid).toEqual([]);
@@ -260,6 +261,7 @@ describe("Gates ohne Projekt-Config (#1741): kein Standardwert, Exit 1 mit der M
       expect(r.status).toBe(1);
       expect(r.stderr).toContain("Projekt-Config");
       expect(r.stderr).toContain("Fix:");
+      expect(r.stderr).not.toMatch(/\n\s+at /); // saubere Meldung statt Stacktrace (try/catch in main)
     } finally {
       rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }

@@ -193,7 +193,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     const messages = git(["log", "--reverse", "--format=%B", `${base}..HEAD`]);
     const ov = parseOverrideTrailers(messages, zeilen.reviewOverride);
     if (ov.valid.length > 0) {
-      return { ok: true, override: ov.valid[ov.valid.length - 1].reason, fehler: [], invalid: ov.invalid, zeilen };
+      return { ok: true, override: ov.valid[ov.valid.length - 1].reason, fehler: [], invalid: ov.invalid };
     }
     const nachweis = parseNachweis(messages, zeilen);
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])
@@ -222,7 +222,6 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       ok: fehler.length === 0,
       fehler,
       invalid: ov.invalid,
-      zeilen,
       commitsNachReview,
       blockerFehlt: nachweis.review?.blocker === null,
       zusatzpass: nachweis.review?.zusatzpass && "grund" in nachweis.review.zusatzpass ? nachweis.review.zusatzpass : null,

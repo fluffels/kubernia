@@ -428,7 +428,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       meta: { agentType: "x-agent" },
       zeilen: [{ type: "user", timestamp: new Date(start).toISOString(), message: { role: "user", content: ticket === null ? "ohne Nummer" : `Ticket #${ticket}: x` } }],
     });
-    const start = (laeufe: unknown[], extra: { ohne?: number[] } = {}, aufrufe: string[][] = []) =>
+    const start = (laeufe: unknown[], extra: { ohne?: number[]; ladeConfig?: () => unknown } = {}, aufrufe: string[][] = []) =>
       mod.laufErgebnisStartAgent({ laeufe, von, bis, runGit: git(dreiLog), runGh: gh({ liste: drei, aufrufe }), jetzt: SPAETER, ...extra });
     test("nur PRs von Tickets mit erstem Start im Fenster; PRs ohne Ticket fallen heraus", () => {
       assert.deepEqual(start([lauf1(41, t0 + 1000)]).zeilen.map((z) => z.pr), [51]);
@@ -445,6 +445,17 @@ describe("laufErgebnis (git und gh injiziert)", () => {
         assert.equal(e.kennzahlen.prs, 0);
       }
       assert.equal(aufrufe.length, 0);
+    });
+    test("ladeConfig (#1741): ein Ladefehler bricht auch bei leerer Menge ab, und das Präfix der Config gilt für die Tickets", () => {
+      const wirft = () => {
+        throw new Error("Projekt-Config ungültig: praefixe.commitZeile");
+      };
+      assert.throws(() => start([lauf1(40, t0 - 10)], { ladeConfig: wirft }), /praefixe\.commitZeile/);
+      assert.throws(() => start([lauf1(40, t0 + 1)], { ladeConfig: wirft }), /praefixe\.commitZeile/);
+      const ab = () => ({ praefixe: { commitZeile: "AB-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+      const e = start([lauf1(40, t0 + 1)], { ladeConfig: ab });
+      assert.equal(e.zeilen[0].runden, null, "KQ-Zeilen zählen bei AB- nicht");
+      assert.equal(e.kennzahlen.ohneNachweis, 1);
     });
     test("--ohne bleibt kombinierbar", () => {
       assert.deepEqual(start([lauf1(40, t0 + 1), lauf1(41, t0 + 2)], { ohne: [41] }).zeilen.map((z) => z.pr), [50]);
