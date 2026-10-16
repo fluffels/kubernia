@@ -44,11 +44,11 @@ export const ALTLAST_MS = 24 * 60 * 60_000;
 
 /**
  * Welche Dateien im Lock-Verzeichnis `claim` abräumt (#1572): jede `*.verwaist-*` (Rest eines Übernahme-Wettlaufs) und jede
- * `<nr>.json`, deren mtime älter als `ALTLAST_MS` ist (eine nicht lesbare mtime zählt als jung, nie löschen ohne Beleg). Pur.
+ * `<nr>.json` und jede `<nr>.json.tmp-*` (Rest eines abgebrochenen atomaren Schreibens), deren mtime älter als `ALTLAST_MS` ist (eine nicht lesbare mtime zählt als jung, nie löschen ohne Beleg). Pur.
  */
 export function aufzuraeumen({ eintraege, jetzt }) {
   return eintraege
-    .filter((e) => /\.json\.verwaist-/.test(e.name) || (/^\d+\.json$/.test(e.name) && Number.isFinite(e.mtime) && jetzt - e.mtime > ALTLAST_MS))
+    .filter((e) => /\.json\.verwaist-/.test(e.name) || (/^\d+\.json(\.tmp-.+)?$/.test(e.name) && Number.isFinite(e.mtime) && jetzt - e.mtime > ALTLAST_MS))
     .map((e) => e.name);
 }
 
@@ -274,7 +274,21 @@ export function echteDeps() {
         closeSync(fd);
       }
     },
-    ersetze: (p, text) => writeFileSync(p, text),
+    // Atomar: erst in eine Temp-Datei, dann umbenennen; ein Leser sieht nie einen halb geschriebenen Lock.
+    ersetze: (p, text) => {
+      const tmp = `${p}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`;
+      try {
+        writeFileSync(tmp, text);
+        renameSync(tmp, p);
+      } catch (e) {
+        try {
+          unlinkSync(tmp);
+        } catch {
+          /* nichts angelegt oder schon weg */
+        }
+        throw e;
+      }
+    },
     benenneUm: renameSync,
     loesche: unlinkSync,
     legeVerzeichnisAn: (d) => mkdirSync(d, { recursive: true }),
