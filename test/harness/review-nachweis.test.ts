@@ -316,6 +316,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     if (j.startsWith("rev-parse --verify")) return SHA;
     if (j.startsWith("rev-list --count")) return "1";
     if (j.startsWith("rev-list --merges")) return "";
+    if (j.startsWith("rev-list --reverse --no-merges")) return ""; // keine Commits nach dem Nachweis-head (#1740 L17)
     if (j.startsWith("rev-list")) return `${SHA}\n`;
     throw new Error(`unerwartet: ${j}`);
   };
