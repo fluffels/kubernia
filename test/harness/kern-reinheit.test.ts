@@ -50,7 +50,7 @@ type Baseline = Record<string, Zaehlung>;
 
 export interface ProjektConfig {
   repo: string;
-  board: { besitzer: string };
+  boards: { besitzer: string }[];
   projektliterale?: Record<string, string>;
 }
 
@@ -60,7 +60,7 @@ const escapeRe = (t: string): string => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
  * Repo-Name, generisches Board-ID-Muster und die `projektliterale` der Config. */
 export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
   const [owner = "", name = ""] = config.repo.split("/");
-  const owners = [...new Set([owner, config.board.besitzer])];
+  const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
   const out: Record<string, RegExp> = {
     Owner: new RegExp(owners.map(escapeRe).join("|"), "gi"),
     Repo: new RegExp(escapeRe(name), "gi"),
@@ -279,7 +279,7 @@ export function pruefeHuelle(verstoesse: string[], ausnahmen: Record<string, str
 
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
 
-const FIXTURE: ProjektConfig = { repo: "acme/demo", board: { besitzer: "acme" }, projektliterale: { Zelda: "zelda" } };
+const FIXTURE: ProjektConfig = { repo: "acme/demo", boards: [{ besitzer: "acme" }], projektliterale: { Zelda: "zelda" } };
 const B = begriffeAus(FIXTURE);
 
 describe("zaehle", () => {
@@ -298,16 +298,19 @@ describe("zaehle", () => {
 
 describe("begriffeAus", () => {
   test("Regex-Zeichen im Repo-Namen sind wörtlich: my.repo zählt myxrepo nicht", () => {
-    const b = begriffeAus({ repo: "zz/my.repo", board: { besitzer: "zz" } });
+    const b = begriffeAus({ repo: "zz/my.repo", boards: [{ besitzer: "zz" }] });
     assert.deepEqual(zaehle("my.repo myxrepo", b), { Repo: 1 });
   });
   test("Repo-Owner und abweichender Board-Besitzer zählen beide als Owner; gleicher Besitzer nicht doppelt", () => {
-    const zwei = begriffeAus({ repo: "alice/demo", board: { besitzer: "bob" } });
+    const zwei = begriffeAus({ repo: "alice/demo", boards: [{ besitzer: "bob" }] });
     assert.deepEqual(zaehle("alice bob", zwei), { Owner: 2 });
+    // alle Boards zählen (#1728): der Besitzer des zweiten Boards ist ebenfalls ein Owner-Literal
+    const drei = begriffeAus({ repo: "alice/demo", boards: [{ besitzer: "bob" }, { besitzer: "carol" }, { besitzer: "bob" }] });
+    assert.deepEqual(zaehle("alice bob carol", drei), { Owner: 3 });
     assert.deepEqual(zaehle("acme", B), { Owner: 1 });
   });
   test("ohne projektliterale entfällt der Zusatzbegriff", () => {
-    assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", board: { besitzer: "acme" } })), {});
+    assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }] })), {});
   });
 });
 

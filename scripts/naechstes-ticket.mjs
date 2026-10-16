@@ -23,7 +23,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { NOTFAELLE, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
+import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
+
+// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
+const PRODUKT_BOARD = boardFuerRolle("produkt");
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -263,7 +266,7 @@ function ladeBelegung() {
   return { offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
 }
 
-const ladeEcht = () => ({ items: normalizeItems(loadItemPages()), ...ladeBelegung() });
+const ladeEcht = () => ({ items: normalizeItems(loadItemPages(PRODUKT_BOARD)), ...ladeBelegung() });
 
 /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
 const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung() });

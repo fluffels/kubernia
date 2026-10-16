@@ -9,17 +9,35 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { boardPfad, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie, bricht schon der Import ab (kein stiller Standardwert, #1611).
 const PROJEKT = ladeProjektConfig();
 
 const gh = ghText;
 
-export const PROJECT_ID = PROJEKT.board.projectId;
+/** Das Board einer Rolle (`produkt` | `factory`) aus der Projekt-Config (eingefroren); wirft bei unbekannter Rolle. */
+export function boardFuerRolle(rolle) {
+  const b = BOARD_ROLLEN.includes(rolle) ? PROJEKT.boards.find((x) => x.rolle === rolle) : undefined;
+  if (!b) throw new Error(`Unbekannte Board-Rolle: ${String(rolle)}\nFix: eine von ${BOARD_ROLLEN.join(", ")} übergeben`);
+  return Object.freeze({ ...b });
+}
 
-/** REST-Pfad des Boards (`users|orgs/<besitzer>/projectsV2/<nr>`), aus der Projekt-Config. */
-export const BOARD_PFAD = boardPfad(PROJEKT.board);
+/** Label, das ein Issue dem Factory-Board zuordnet (Trennregel: Harness-Arbeit auf das Factory-Board, alles andere auf das Produkt-Board). */
+export const FACTORY_LABEL = "area:harness";
+
+/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `FACTORY_LABEL` ergibt `factory`, sonst `produkt`. Ohne Liste wirft sie. */
+export function boardRolleFuer(labels) {
+  if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
+  return labels.some((l) => (typeof l === "string" ? l : l?.name) === FACTORY_LABEL) ? "factory" : "produkt";
+}
+
+/** Guard vor jedem gh-Aufruf: das Board muss ein Config-Eintrag sein (Objekt mit projectId), kein vergessener Parameter. */
+function brauchtBoard(board, wo) {
+  if (typeof board !== "object" || board === null || typeof board.projectId !== "string" || board.projectId === "") {
+    throw new Error(`${wo}: Board fehlt oder ist kein Board-Objekt\nFix: Board per boardFuerRolle("produkt"|"factory") als ersten Parameter übergeben`);
+  }
+}
 
 /** Das Repository (`owner/name`): in GitHub Actions `GITHUB_REPOSITORY`, sonst das Repo der Projekt-Config. EINE Quelle für alle Board-Skripte. */
 export const REPO = process.env.GITHUB_REPOSITORY || PROJEKT.repo;
@@ -269,13 +287,14 @@ export function ergaenzeFehlende(items, gefunden) {
 }
 
 /**
- * Antwort der GraphQL-Abfrage `repository.issue.projectItems` → normalisiertes Item des eigenen Boards (`PROJECT_ID`) oder
+ * Antwort der GraphQL-Abfrage `repository.issue.projectItems` → normalisiertes Item des übergebenen Boards oder
  * null (Issue unbekannt, nicht im Board, nur in fremdem Projekt). Der Status ist leer (nur der Listenfall braucht ihn). Pur.
  */
-export function itemAusIssueAntwort(antwort) {
+export function itemAusIssueAntwort(board, antwort) {
+  brauchtBoard(board, "itemAusIssueAntwort");
   const issue = antwort?.data?.repository?.issue;
   if (!issue || !Number.isInteger(issue.number)) return null;
-  const node = (issue.projectItems?.nodes ?? []).find((n) => n?.project?.id === PROJECT_ID && typeof n.id === "string");
+  const node = (issue.projectItems?.nodes ?? []).find((n) => n?.project?.id === board.projectId && typeof n.id === "string");
   if (!node) return null;
   return {
     id: node.id,
@@ -330,11 +349,8 @@ export function normalizeOffene(pages) {
     });
 }
 
-/** Feld-ID von „Status“ im Board (REST braucht sie als `fields=`, sonst fehlt der Status). */
-export const STATUS_FIELD_ID = PROJEKT.board.statusFeldId;
-
 /**
- * Antwort von `gh api --paginate --slurp <BOARD_PFAD>/items` (Liste von Seiten) →
+ * Antwort von `gh api --paginate --slurp <Board-Pfad>/items` (Liste von Seiten) →
  * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), number, status, title, assignees, state, body, labels, autor, blockedBy }`
  * (die letzten vier liest `naechstes-ticket.mjs`; Feldform `issue_dependencies_summary` belegt per Probe 2026-10-08: 151 von 151 Items tragen
  * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; ein Wert über 0 wurde noch nie beobachtet). Pur, damit die Form
@@ -462,13 +478,14 @@ export async function mitWiederholung(
 }
 
 /** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
-export function loadItems(opts = {}) {
-  return normalizeItems(loadItemPages(opts));
+export function loadItems(board, opts = {}) {
+  return normalizeItems(loadItemPages(board, opts));
 }
 
 /** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues; `normalizeItems` macht daraus die Items (auch für naechstes-ticket.mjs). */
-export function loadItemPages(opts = {}) {
-  return JSON.parse(gh(["api", "--paginate", "--slurp", `${BOARD_PFAD}/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts));
+export function loadItemPages(board, opts = {}) {
+  brauchtBoard(board, "loadItemPages");
+  return JSON.parse(gh(["api", "--paginate", "--slurp", `${boardPfad(board)}/items?per_page=100&fields=${board.statusFeldId}`], opts));
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
@@ -522,10 +539,11 @@ export function aliasAbfrage(nummern, repo = REPO) {
  * Antwort EINES Alias-Blocks → normalisierte Items in der Reihenfolge von `nummern` (null: Issue unbekannt oder nicht im eigenen Board).
  * Wirft bei unerwarteter Antwortform, statt Nummern still als fehlend zu melden. Pur.
  */
-export function itemsAusAliasAntwort(antwort, nummern) {
+export function itemsAusAliasAntwort(board, antwort, nummern) {
+  brauchtBoard(board, "itemsAusAliasAntwort");
   const repository = antwort?.data?.repository;
   if (!repository || typeof repository !== "object") throw new Error("Unerwartete Antwortform des GraphQL-Fallbacks (kein repository).");
-  return nummern.map((_, k) => itemAusIssueAntwort({ data: { repository: { issue: repository[`i${k}`] } } }));
+  return nummern.map((_, k) => itemAusIssueAntwort(board, { data: { repository: { issue: repository[`i${k}`] } } }));
 }
 
 /**
@@ -564,27 +582,25 @@ export function teilantwortAusStdout(stdout) {
  * `nummern` per GraphQL (`issue.projectItems`, gebündelte Aliase), gefiltert auf das eigene Board; null-Einträge für Issues, die
  * nicht im Board stehen.
  */
-export function itemsUeberIssues(nummern, opts = {}, repo = REPO) {
-  return aliasAbfrage(nummern, repo).flatMap((b) => itemsAusAliasAntwort(graphqlTeilantwort(b.query, opts), b.nummern));
+export function itemsUeberIssues(board, nummern, opts = {}, repo = REPO) {
+  brauchtBoard(board, "itemsUeberIssues");
+  return aliasAbfrage(nummern, repo).flatMap((b) => itemsAusAliasAntwort(board, graphqlTeilantwort(b.query, opts), b.nummern));
 }
 
 /** Position setzen: hinter `afterId`, null = an die Spitze. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
-export function setPosition(itemId, afterId, opts = {}) {
-  graphql(MUTATION_POSITION, { p: PROJECT_ID, i: itemId, a: afterId }, opts);
+export function setPosition(board, itemId, afterId, opts = {}) {
+  brauchtBoard(board, "setPosition");
+  graphql(MUTATION_POSITION, { p: board.projectId, i: itemId, a: afterId }, opts);
 }
 
 /** Issue (node_id) ins Board holen (idempotent) und Status Todo setzen. Liefert die Item-ID `PVTI_…`. */
-export function addToBoardTodo(nodeId, opts = {}) {
-  const item = graphql(MUTATION_ADD, { p: PROJECT_ID, c: nodeId }, opts);
+export function addToBoardTodo(board, nodeId, opts = {}) {
+  brauchtBoard(board, "addToBoardTodo");
+  const item = graphql(MUTATION_ADD, { p: board.projectId, c: nodeId }, opts);
   const itemId = item.data.addProjectV2ItemById.item.id;
-  graphql(MUTATION_STATUS, { p: PROJECT_ID, i: itemId, f: STATUS_FIELD_NODE_ID, o: TODO_OPTION_ID }, opts);
+  graphql(MUTATION_STATUS, { p: board.projectId, i: itemId, f: board.statusFeldNodeId, o: board.todoOptionId }, opts);
   return itemId;
 }
-
-/** Node-ID des Single-Select-Feldes „Status“ (GraphQL-Mutationen; die REST-Liste nutzt `STATUS_FIELD_ID`). */
-export const STATUS_FIELD_NODE_ID = PROJEKT.board.statusFeldNodeId;
-/** Option „Todo“ des Status-Feldes. */
-export const TODO_OPTION_ID = PROJEKT.board.todoOptionId;
 
 /**
  * Der Planungsweg von main als pure Funktion (#1390): zuerst die Selbstkorrektur des ungeclaimten Harness-Sammeltickets (nicht bei
