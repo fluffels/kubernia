@@ -54,6 +54,7 @@ const KINDS = [
   // Gateway API (#1664): nicht in `get all` (keine Kategorie `all`); die GatewayClass ist cluster-weit.
   kind("gatewayclasses", "gatewayclass", ["gc"], GATEWAY, false),
   kind("gateways", "gateway", ["gtw"], GATEWAY, true),
+  kind("httproutes", "httproute", [], GATEWAY, true),
   kind("networkpolicies", "networkpolicy", ["netpol"], NETWORKING, true),
   kind("servicemonitors", "servicemonitor", ["smon"], MONITORING, true),
   kind("prometheusrules", "prometheusrule", ["promrule"], MONITORING, true),

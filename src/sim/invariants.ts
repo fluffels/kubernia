@@ -133,6 +133,7 @@ function checkNameUniqueness(s: ClusterState): string[] {
     ["Ingress", s.ingresses],
     ["GatewayClass", s.gatewayClasses],
     ["Gateway", s.gateways],
+    ["HTTPRoute", s.httpRoutes],
     ["NetworkPolicy", s.networkPolicies],
     ["Secret", s.secrets],
     ["ConfigMap", s.configMaps],

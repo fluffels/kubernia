@@ -13,6 +13,8 @@
   "scripts/mcp-launch.mjs": {"art":"modul","grund":"MCP-Launcher-Modul, kein Factory-Kern"},
   "scripts/likec4-mcp.mjs": {"art":"modul","grund":"Architekturmodell-Modul, kein Factory-Kern"},
   "scripts/forum-sanitize.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
+  ".github/workflows/codescanning-inbox.yml": {"art":"modul","grund":"Sicherheits-Modul, kein Factory-Kern"},
+  "scripts/codescanning-inbox.mjs": {"art":"modul","grund":"Sicherheits-Modul, kein Factory-Kern"},
   ".github/workflows/forum-inbox.yml": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
   "scripts/forum-quarantaene.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
   "scripts/forum-leser-guard.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
