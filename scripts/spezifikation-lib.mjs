@@ -1,13 +1,10 @@
-// Lib ohne Direktaufruf-Guard; der Aufrufer ist die Ticket-Auswahl (naechstes-ticket.mjs).
+// Lib ohne Direktaufruf-Guard; Aufrufer: die Ticket-Auswahl (naechstes-ticket.mjs) und der Anlege-/Reparaturweg (spezifikation.mjs).
 /**
  * Spezifikations-Gate (ADR 0022 F12): Der Eingang ist eine Spezifikation. Ein Ticket braucht `## Ziel` und `## Akzeptanzkriterien` (Liste)
  * mit mindestens einem Negativfall (ein Kriterium mit dem Wort „Negativfall“). Alles pur, ohne Importe und ohne Projektliterale.
  * Ausnahmen (Sammel-, Status-, Epic-Tickets) entscheidet der Aufrufer über das Prädikat `ausgenommen`; Bestand (Nummer unter `hartAb`)
  * wird nur berichtet, Neues ist hart.
  */
-
-/** Versteckter Marker im Kommentar: ein Kommentar vertrauter Autoren mit diesem Marker heißt „schon erinnert“. */
-export const SPEZ_MARKER = "<!-- spezifikations-gate -->";
 
 const MANGEL = {
   zielFehlt: "`## Ziel` fehlt",
@@ -74,19 +71,26 @@ export function pruefeEingang(ticket, { ausgenommen = () => false, hartAb = 0 } 
   return { art: ticket.nummer < hartAb ? "bestand" : "hart", fehlt };
 }
 
-/** Text des Einmal-Kommentars: Marker, die Mängel und die Vorgabe; zitiert nie den Body. Pur. */
-export function spezKommentar(fehlt) {
-  return [
-    SPEZ_MARKER,
-    "Die Ticket-Auswahl überspringt dieses Ticket, bis die Spezifikation vollständig ist. Es fehlt:",
-    "",
-    ...fehlt.map((f) => `- ${f}`),
-    "",
-    "Vorgabe: Abschnitt `## Ziel` und Abschnitt `## Akzeptanzkriterien` als Liste, darin mindestens ein Kriterium mit dem Wort „Negativfall“ (was darf nicht passieren).",
-  ].join("\n");
+const norm = (z) =>
+  z
+    .trim()
+    .replace(/^#+\s*/, "")
+    .replace(/^(?:[-*+]|\d+[.)])\s+/, "")
+    .replace(/^\[[ xX]\]\s*/, "")
+    .replace(/:$/, "")
+    .trim();
+
+/**
+ * Inhaltsverlust beim Reparieren: jede nicht leere Nicht-Überschrift-Zeile des alten Bodys muss im neuen vorkommen. Normalisiert wird
+ * (trimmen, Überschriften-Raute, Listenzeichen, Checkbox, Doppelpunkt am Ende; Fence-Zeilen zählen nicht); Überschriften des neuen Bodys sind Treffer.
+ * Liefert die verlorenen Zeilen (getrimmt, Original). `null`/`undefined` als alter Body: nichts zu verlieren. Pur.
+ */
+export function verloreneZeilen(alt, neu) {
+  const zeilen = (t) => String(t ?? "").split(/\r?\n/);
+  const da = new Set(zeilen(neu).map(norm).filter(Boolean));
+  return zeilen(alt)
+    .map((z) => z.trim())
+    .filter((z) => z !== "" && !/^(?:```|~~~)/.test(z) && !/^#{1,6}\s/.test(z))
+    .filter((z) => !da.has(norm(z)));
 }
 
-/** Steht der Marker schon in einem Kommentar eines vertrauten Autors (`vertraut(user)`, `user` = REST-Nutzer `{ login, type }`)? Unvollständige Kommentare werfen nicht. Pur. */
-export function schonKommentiert(kommentare, { vertraut }) {
-  return kommentare.some((k) => typeof k?.body === "string" && k.body.includes(SPEZ_MARKER) && typeof k?.user?.login === "string" && vertraut(k.user));
-}

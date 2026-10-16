@@ -21,7 +21,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 |---|---|---|
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 119 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Skripte | 120 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 79 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |

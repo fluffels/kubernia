@@ -4,14 +4,11 @@ import { describe, expect, test } from "vitest";
 import * as raw from "../scripts/spezifikation-lib.mjs";
 
 type Art = { art: "ausgenommen" | "ok" | "bestand" | "hart"; fehlt?: string[] };
-type Kommentar = { user?: { login?: string } | null; body?: string | null };
 const S = raw as unknown as {
-  SPEZ_MARKER: string;
   spezifikationsMaengel: (body: unknown) => string[];
   istEpicTitel: (titel: unknown) => boolean;
   pruefeEingang: (i: { nummer: number; titel: string; body: unknown }, o?: { ausgenommen?: (i: unknown) => boolean; hartAb?: number }) => Art;
-  spezKommentar: (fehlt: string[]) => string;
-  schonKommentiert: (kommentare: Kommentar[], o: { vertraut: (user: { login: string }) => boolean }) => boolean;
+  verloreneZeilen: (alt: unknown, neu: unknown) => string[];
 };
 
 const GUT = "## Ziel\nDas Gate prüft.\n\n## Akzeptanzkriterien\n1. Es prüft.\n2. Negativfall: ohne Format wird übersprungen.\n";
@@ -112,20 +109,36 @@ describe("pruefeEingang", () => {
   });
 });
 
-describe("Kommentar und Einmal-Marker", () => {
-  test("Kommentar beginnt mit dem Marker, nennt die Mängel und zitiert keinen Body", () => {
-    const k = S.spezKommentar(["`## Ziel` fehlt"]);
-    expect(k.startsWith(S.SPEZ_MARKER)).toBe(true);
-    expect(k).toContain("`## Ziel` fehlt");
+describe("verloreneZeilen (Inhaltsverlust beim Reparieren)", () => {
+  test("nichts verloren: leere Liste", () => {
+    expect(S.verloreneZeilen("Text\nzweite Zeile", "## Ziel\nText\nzweite Zeile\n")).toEqual([]);
   });
-  const vertraut = (u: { login: string }) => u.login === "fluffels";
-  test("Marker von vertrautem Autor: schon kommentiert", () => {
-    expect(S.schonKommentiert([{ user: { login: "fluffels" }, body: S.spezKommentar(["x"]) }], { vertraut })).toBe(true);
+  test("verlorene Zeile wird gemeldet", () => {
+    expect(S.verloreneZeilen("Alpha\nBeta", "## Ziel\nAlpha\n")).toEqual(["Beta"]);
   });
-  test("Marker von fremdem Autor zählt nicht", () => {
-    expect(S.schonKommentiert([{ user: { login: "fremd" }, body: S.spezKommentar(["x"]) }], { vertraut })).toBe(false);
+  test("ergänzte Listenzeichen und Checkboxen sind kein Verlust", () => {
+    expect(S.verloreneZeilen("Alpha\n[ ] Beta\n1. Gamma", "- Alpha\n- [x] Beta\n* Gamma")).toEqual([]);
   });
-  test("Kommentar ohne Marker, ohne user oder ohne body wirft nicht und zählt nicht", () => {
-    expect(S.schonKommentiert([{ user: { login: "fluffels" }, body: "hallo" }, { body: S.SPEZ_MARKER }, { user: { login: "fluffels" } }, { user: null, body: null }], { vertraut })).toBe(false);
+  test("Überschrift des Alten zählt nicht, eine umbenannte verliert nichts", () => {
+    expect(S.verloreneZeilen("## Alt\nAlpha", "## Neu\nAlpha")).toEqual([]);
+  });
+  test("„Akzeptanzkriterien:“ wird zur Überschrift", () => {
+    expect(S.verloreneZeilen("Akzeptanzkriterien:\n- Eins", "## Akzeptanzkriterien\n- Eins")).toEqual([]);
+  });
+  test("Überschrift des neuen Bodys zählt als Treffer für eine Textzeile", () => {
+    expect(S.verloreneZeilen("Ziel", "## Ziel\nx")).toEqual([]);
+  });
+  test("CRLF und LF sind gleich", () => {
+    expect(S.verloreneZeilen("A\r\nB", "A\nB")).toEqual([]);
+  });
+  test("Code-Fence-Inhalt zählt", () => {
+    expect(S.verloreneZeilen("```\nnode x\n```", "## Ziel\nnichts")).toEqual(["node x"]);
+  });
+  test("null und undefined als alter Body: nichts verloren", () => {
+    expect(S.verloreneZeilen(null, "x")).toEqual([]);
+    expect(S.verloreneZeilen(undefined, "x")).toEqual([]);
+  });
+  test("leerer neuer Body verliert alles", () => {
+    expect(S.verloreneZeilen("A", "")).toEqual(["A"]);
   });
 });

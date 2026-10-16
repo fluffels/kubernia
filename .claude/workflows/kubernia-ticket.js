@@ -670,10 +670,10 @@ Tickets" und „Kollisionsschutz bei parallelen Agenten") sowie docs/ticket-reih
 ${
   gewuenscht
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
-prüfe es mit node scripts/naechstes-ticket.mjs --ticket ${gewuenscht} (alle Kriterien samt Messfenster; Exit 1 = nicht frei, Grund in der Ausgabe).
+prüfe es mit node scripts/naechstes-ticket.mjs --ticket ${gewuenscht} (alle Kriterien; Exit 1 = nicht frei, Grund in der Ausgabe).
 Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
-    : `Nimm das oberste freie Item: node scripts/naechstes-ticket.mjs${eingabe.bereich ? ` --bereich ${eingabe.bereich}` : ''} (Assignee, Blocker, Branch,
-Worktree, offener PR in einem Lauf; erste Zeile = dran). Wähle NICHT nach Inhalt aus und
+    : `Nimm das oberste freie Item: node scripts/naechstes-ticket.mjs${eingabe.bereich ? ` --bereich ${eingabe.bereich}` : ''} (ein Lauf; erste Zeile = dran;
+davor reparieren #<nr>: skill-pfad mit dieser nummer, nicht claimen). Wähle NICHT nach Inhalt aus und
 sortiere NICHT nach. Prüfe nur dieses eine Ticket gegen den Live-Stand, nicht die ganze
 Liste; ohne Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
 }

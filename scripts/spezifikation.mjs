@@ -1,0 +1,171 @@
+#!/usr/bin/env node
+/**
+ * Spezifikations-Gate, Schreibseite (#1698, ADR 0022 F12): neue Befund-Issues entstehen nur geprüft, ein vertrautes Ticket ohne
+ * Spezifikation wird nachgezogen. Die Auswahl (`naechstes-ticket.mjs`) meldet nur (`reparieren #<nr>`), dieses Skript schreibt.
+ *
+ *   node scripts/spezifikation.mjs pruefen --body-datei <pfad>
+ *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)
+ *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
+ *
+ * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall), legt ohne Assignee an und sortiert
+ * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
+ * vertrauten Issues, wenn der neue Body vollständig ist und keine Zeile des alten verliert (`verloreneZeilen`); ein Fremdeingang
+ * (Autor nicht vertraut oder Label `forum`) wird nie umgeschrieben. Der Body wird nie ausgegeben, nur Mängel und verlorene Zeilen.
+ *
+ * Exit 0 = angelegt/repariert/nichts zu tun/vollständig, 1 = Spezifikation unvollständig oder Inhaltsverlust (nichts geschrieben),
+ * 2 = Aufruf- oder gh-Fehler (scheitert nach dem Anlegen nur das Einsortieren: Nummer und Nachhol-Befehl), 3 = Fremdeingang (nur `reparieren`).
+ * Grenze: zwei gleichzeitige Reparaturen desselben Tickets: der letzte Schreiber gewinnt.
+ */
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
+import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
+import { fehlerText, ghJson } from "./gh-cli.mjs";
+import { mitKontingent } from "./kontingent-lib.mjs";
+import { pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
+
+const AUFRUF = [
+  "Aufruf:",
+  "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)',
+  "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
+].join("\n");
+
+const ergebnis = (code, out = "", err = "") => ({ code, out, err });
+const aufrufFehler = (text) => ergebnis(2, "", `✖ spezifikation: ${text}\n`);
+const liste = (zeilen) => zeilen.map((z) => `  - ${z}`).join("\n");
+
+/** Flags aus argv: `--name wert`, `--label` mehrfach; alles andere ist positional. Pur. */
+export function parseArgs(argv) {
+  const werte = { label: [] };
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) {
+      positional.push(a);
+      continue;
+    }
+    const name = a.slice(2);
+    const wert = argv[i + 1];
+    if (wert === undefined || wert.startsWith("--")) return { fehler: `${a} braucht einen Wert` };
+    i++;
+    if (name === "label") werte.label.push(wert);
+    else werte[name] = wert;
+  }
+  return { werte, positional };
+}
+
+const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
+
+function leseBody(werte, io) {
+  if (!werte["body-datei"]) return { fehler: "--body-datei fehlt" };
+  let body;
+  try {
+    body = io.leseDatei(werte["body-datei"]);
+  } catch (e) {
+    return { fehler: `Body-Datei nicht lesbar (${e instanceof Error ? e.message : String(e)})` };
+  }
+  if (String(body).trim() === "") return { fehler: "Body-Datei ist leer" };
+  return { body: String(body) };
+}
+
+function pruefen(werte, io) {
+  const b = leseBody(werte, io);
+  if (b.fehler) return aufrufFehler(b.fehler);
+  const maengel = spezifikationsMaengel(b.body);
+  return maengel.length === 0 ? ergebnis(0, "Spezifikation vollständig\n") : ergebnis(1, "", `✖ Spezifikation unvollständig:\n${liste(maengel)}\n`);
+}
+
+function nachholBefehl(werte, nr) {
+  return werte.nach ? `node scripts/board-place.mjs --after ${werte.nach} ${nr}` : `node scripts/board-place.mjs --notfall ${werte.notfall} --top ${nr}`;
+}
+
+function anlegen(werte, io) {
+  if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
+  if (!werte.label.some((l) => /^area:\S+/.test(l))) return aufrufFehler("ein Label `area:<x>` ist Pflicht (--label area:<x>)");
+  if (Boolean(werte.nach) === Boolean(werte.notfall)) return aufrufFehler("genau eines von --nach <nr> und --notfall <art> ist Pflicht");
+  if (werte.nach && positiveZahl(werte.nach) === null) return aufrufFehler("--nach braucht eine Ticketnummer");
+  if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return aufrufFehler(`--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})`);
+  const b = leseBody(werte, io);
+  if (b.fehler) return aufrufFehler(b.fehler);
+  const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body: b.body }); // neu angelegt: nie Bestand, nie ausgenommen
+  if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
+  let neu;
+  try {
+    neu = io.erzeuge({ titel: werte.titel, body: b.body, labels: werte.label });
+  } catch (e) {
+    return aufrufFehler(`Anlegen fehlgeschlagen: ${fehlerText(e)}`);
+  }
+  try {
+    io.einsortiere({ nr: neu.number, nach: werte.nach ? Number(werte.nach) : null, notfall: werte.notfall ?? null });
+  } catch (e) {
+    return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, neu.number)}`);
+  }
+  return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`);
+}
+
+const labelNamen = (issue) => (issue.labels ?? []).map((l) => (typeof l === "string" ? l : l?.name));
+
+function reparieren(werte, nrText, io) {
+  const nr = positiveZahl(nrText);
+  if (nr === null) return aufrufFehler("reparieren braucht eine Ticketnummer");
+  const b = leseBody(werte, io);
+  if (b.fehler) return aufrufFehler(b.fehler);
+  let issue;
+  try {
+    issue = io.ladeIssue(nr);
+  } catch (e) {
+    return aufrufFehler(`#${nr} nicht ladbar: ${fehlerText(e)}`);
+  }
+  if (issue.pull_request) return aufrufFehler(`#${nr} ist ein PR`);
+  if (issue.state !== "open") return aufrufFehler(`#${nr} ist nicht offen`);
+  const forum = labelNamen(issue).find((l) => FREMDEINGANG_LABELS.includes(l));
+  if (!istVertraut(issue.user, io.owner) || forum !== undefined) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label forum): wird nie umgeschrieben, als Befund melden\n`);
+  if (spezifikationsMaengel(issue.body).length === 0) return ergebnis(0, `#${nr}: Spezifikation schon vollständig, nichts zu tun\n`);
+  const maengel = spezifikationsMaengel(b.body);
+  if (maengel.length > 0) return ergebnis(1, "", `✖ neuer Body unvollständig, nichts geschrieben:\n${liste(maengel)}\n`);
+  const verloren = verloreneZeilen(issue.body, b.body);
+  if (verloren.length > 0) {
+    const gezeigt = verloren.slice(0, 10).map((z) => (z.length > 120 ? `${z.slice(0, 120)}…` : z));
+    return ergebnis(1, "", `✖ Inhaltsverlust (${verloren.length} Zeile(n) des alten Bodys fehlen), nichts geschrieben:\n${liste(gezeigt)}\n`);
+  }
+  try {
+    io.bearbeite(nr, b.body);
+  } catch (e) {
+    return aufrufFehler(`#${nr} nicht geschrieben: ${fehlerText(e)}`);
+  }
+  return ergebnis(0, `repariert #${nr}\n`);
+}
+
+/** Ausführung mit injizierbarer I/O (`leseDatei`, `erzeuge`, `einsortiere`, `ladeIssue`, `bearbeite`, `owner`): `{ code, out, err }`. */
+export function fuehreAus(argv, io) {
+  const [befehl, ...rest] = argv;
+  const p = parseArgs(rest);
+  if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
+  if (befehl === "pruefen") return pruefen(p.werte, io);
+  if (befehl === "anlegen") return anlegen(p.werte, io);
+  if (befehl === "reparieren") return reparieren(p.werte, p.positional[0], io);
+  return aufrufFehler(`unbekannter Befehl ${befehl === undefined ? "(keiner)" : `„${befehl}“`}\n${AUFRUF}`);
+}
+
+const echteIo = {
+  owner: REPO.split("/")[0],
+  leseDatei: (pfad) => readFileSync(pfad, "utf8"),
+  erzeuge: ({ titel, body, labels }) =>
+    ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
+  einsortiere: ({ nr, nach, notfall }) => {
+    const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
+    execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
+  },
+  ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
+  bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
+};
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  mitKontingent("spezifikation", { arten: ["core"] });
+  const { code, out, err } = fuehreAus(process.argv.slice(2), echteIo);
+  process.stdout.write(out);
+  process.stderr.write(err);
+  process.exitCode = code;
+}
