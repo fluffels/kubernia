@@ -65,6 +65,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | GitHub-API-Kontingent anzeigen (Exit 3 bei < 10 %) bzw. Kosten je Skript aus dem Lauf-Log (#1549) | `node scripts/gh-kontingent.mjs [--bericht]` |
 | Budget-Pacing: darf das nächste Ticket starten? (Wochenlimit des Kontos, #1358; Exit 0 ok, 3 knapp, 4 stopp) | `node scripts/budget-pacing.mjs [--json] [--ohne-probe]` |
 | Neue Advisories aus `npm audit` und Dependabot einordnen: Zeile im Sammelticket, Alarm nur bei critical und Produktiv-Abhängigkeit (Trockenlauf mit `--dry-run`; läuft täglich als Workflow, #1628) | `node scripts/audit-einordnung.mjs [--dry-run]` |
+| Offene Code-Scanning-Alerts (CodeQL, Scorecard) einordnen: CodeQL high/critical ein Ticket an der Board-Spitze, sonst Zeilen im Sammelticket (Trockenlauf mit `--dry-run`; läuft wöchentlich als Workflow, #1436) | `node scripts/codescanning-inbox.mjs [--dry-run]` |
 | Fällige Wiedervorlagen als Ticket ganz oben anlegen (Trockenlauf mit `--dry-run`; läuft täglich als Workflow, Exit 1 bei fälligem Eintrag ohne Ticket, #1628) | `node scripts/wiedervorlage.mjs [--dry-run]` |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` (klemmt hinter das ungeclaimte Sammelticket; ganz oben nur `--notfall <art> --top`) |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets und `ALLOWLIST`-Ausnahmen gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |

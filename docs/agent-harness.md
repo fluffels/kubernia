@@ -21,9 +21,9 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 |---|---|---|
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | 118 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
+| Skripte | 119 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 79 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
-| CI-Workflows | 12 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
+| CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
@@ -221,7 +221,8 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WAS:** [`codeql.yml`](../.github/workflows/codeql.yml) fährt CodeQL (Default-Suite) für `javascript-typescript` und `actions` bei Push auf `main`, auf PRs, wöchentlich und per `workflow_dispatch`; [`scorecard.yml`](../.github/workflows/scorecard.yml) fährt die OpenSSF Scorecard bei Push auf `main`, wöchentlich und per Dispatch. Beide laden SARIF in den Security-Tab (Code-Scanning).
 - **WARUM:** SAST und Posture-Prüfung laufen regelmäßig und sichtbar, ohne eine Repo-Einstellung zu ändern: Advanced-Setup als versionierter, reviewbarer Workflow statt Default-Setup (das bleibt `not-configured`).
 - **Absicherung:** **berichtend**, kein Required Check. `scripts/pr-warten.mjs` filtert Checks mit einem Namenspräfix aus `BERICHTEND` (`CodeQL`) heraus und meldet ihr Rot als `HINWEIS` statt `ROT`: sonst bliebe der Merge in der Warteschleife der Agenten hängen. `security-events: write` hat nur der Analyse-Job, oberste Permissions sind leer, alle Actions sind per Commit-SHA mit Versionskommentar gepinnt. Scorecard läuft mit `publish_results: false`, ohne PAT, ohne `id-token`, nie auf PRs; `ossf/scorecard-action@*` steht dafür in der Actions-Allowlist des Repos. Der Wächter [`sicherheits-workflows.test.ts`](../test/harness/sicherheits-workflows.test.ts) hält das alles (Pin-Pflicht nur für `PIN_PFLICHT`).
-- **Grenze:** Funde fließen noch nicht automatisch ins Board (#1436); die übrigen Workflows sind noch per Tag gepinnt (#983, erweitert `PIN_PFLICHT`). Der Wächter liest per `yaml`-Bibliothek; zeilenbasiert ist nur die Pin-Prüfung (der Versionskommentar steht nicht im Syntaxbaum). Die Alerts bleiben offen als Messbasis, kein Dismiss.
+- **Funde ins Board:** [`codescanning-inbox.yml`](../.github/workflows/codescanning-inbox.yml) ordnet die offenen Alerts wöchentlich ein (CodeQL high/critical ein Ticket an der Board-Spitze, sonst eine Zeile je Regel im Harness-Sammelticket; [Mechanik](ticket-reihenfolge.md#code-scanning-inbox-1436)). Ein Alert wird beim Abarbeiten behoben, mit Grund dismisst oder per Wiedervorlage zurückgestellt (umkehrbar, kein Pre-Flight), nicht still offen gelassen.
+- **Grenze:** die übrigen Workflows sind noch per Tag gepinnt (#983, erweitert `PIN_PFLICHT`). Der Wächter liest per `yaml`-Bibliothek; zeilenbasiert ist nur die Pin-Prüfung (der Versionskommentar steht nicht im Syntaxbaum).
 
 > **Nicht auf der Liste, aber Teil des Netzes:** die **Save-nie-brechen-Regel** (jede Format-Änderung migriert, alter Stand vorher in den Backup-Slot, `sanitizeState` härtet kaputte Felder ab) und der **Determinismus-Anspruch** (seedbare Zufälligkeit statt `Math.random` in der Domäne) gehören zum selben Netz. Der Determinismus ist seit **#492** als ESLint-Gate (`no-restricted-properties` gegen `Math.random`) + `test/rng.test.ts` für `src/sim/**`+`src/content/**` **erzwungen**; die Ausweitung auf die übrige als „pur/deterministisch" deklarierte Logik (`game/**`, z.B. `spaced-repetition.ts`) ist mit #591 nachgezogen.
 

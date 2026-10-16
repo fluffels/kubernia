@@ -30,7 +30,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const lies = (...teile: string[]) => readFileSync(join(ROOT, ...teile), "utf8");
 
 /** Workflows mit Pin-Pflicht; #983 erweitert die Liste auf alle. */
-const PIN_PFLICHT = ["codeql.yml", "scorecard.yml"] as const;
+const PIN_PFLICHT = ["codeql.yml", "scorecard.yml", "codescanning-inbox.yml"] as const;
 const BERICHTEND = (prWarten as unknown as { BERICHTEND: readonly string[] }).BERICHTEND;
 const REQUIRED = (rulesetSpiegel as unknown as { pruefeRulesetSpiegel: (r: unknown, p: string) => { requiredChecks: string[] } }).pruefeRulesetSpiegel(
   JSON.parse(lies(".github", "ruleset-main-schutz.json")),
