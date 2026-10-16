@@ -196,6 +196,18 @@ describe("Mapper Gateway", () => {
     expect(fail(GW(LST("HTTPS", 443, "      tls:\n        mode: Terminate\n"))).error).toContain(CEL);
     expect(fail(GW(LST("TLS", 443, "      tls:\n        mode: Passthrough\n"))).error).toContain("Passthrough wird vom Simulator nicht abgebildet");
   });
+  test("unbekannter tls.mode: Server-Wortlaut mit Tipp, auch vor dem Passthrough-Check", () => {
+    const f = fail(GW(LST("HTTPS", 443, "      tls:\n        mode: Foo\n        certificateRefs:\n          - name: x\n")));
+    expect(f.error).toBe("The Gateway \"tor\" is invalid: spec.listeners[0].tls.mode: Unsupported value: \"Foo\": supported values: \"Terminate\", \"Passthrough\"");
+    expect(f.hint).toContain("Terminate");
+    expect(effect(GW(LST("HTTPS", 443, "      tls:\n        mode: Terminate\n        certificateRefs:\n          - name: x\n"))).gateway?.listeners[0].tlsSecret).toBe("x");
+  });
+  test("tls.options ohne certificateRefs wird vom Simulator nicht abgebildet", () => {
+    const f = fail(GW(LST("HTTPS", 443, "      tls:\n        options:\n          a.b/c: d\n")));
+    expect(f.error).toContain("spec.listeners[0].tls.options: ohne certificateRefs wird vom Simulator nicht abgebildet");
+    expect(f.hint).toContain("certificateRefs");
+    expect(effect(GW(LST("HTTPS", 443, "      tls:\n        options:\n          a.b/c: d\n        certificateRefs:\n          - name: x\n"))).gateway?.listeners[0].tlsSecret).toBe("x");
+  });
   test("tls an einem HTTP-Listener wird abgelehnt", () => {
     for (const protocol of ["HTTP", "TCP", "UDP"]) {
       const f = fail(GW(LST(protocol, 80, "      tls:\n        certificateRefs:\n          - name: x\n")));
