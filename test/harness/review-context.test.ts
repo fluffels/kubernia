@@ -54,6 +54,20 @@ const lensSkill = read(".claude/skills/review-lenses/SKILL.md");
 const planner = read(".claude/agents/kubernia-planner.md");
 const lensAgent = read(".claude/agents/kubernia-lens.md");
 
+/** Schneidet den Abschnitt von `von` bis (ohne) `bis` aus; wirft, wenn ein Anker fehlt (kein stilles Leerlaufen). */
+function teil(text: string, von: string, bis: string): string {
+  const a = text.indexOf(von);
+  const b = a < 0 ? -1 : text.indexOf(bis, a + von.length);
+  if (a < 0 || b < 0) throw new Error(`Skill-Abschnitt nicht gefunden: ${von} … ${bis}`);
+  return text.slice(a, b);
+}
+
+// Die Prädikate laufen über den jeweiligen Abschnitt, nicht über die ganze Datei: sonst trägt ein zweiter Treffer
+// an anderer Stelle (z. B. „greppen“ in Lens 4, `rev-parse` im Patch-Befehl) eine zurückgedrehte Regel.
+const patchSkill = teil(lensSkill, "## Was ist „der Diff", "### Kontext-Diät je Lens");
+const diaetSkill = teil(lensSkill, "### Kontext-Diät je Lens", "> **Was die Diät");
+const frischeSkill = teil(lensSkill, "⚠️ **Frische-Guard", "### Kontext-Diät je Lens");
+
 // ── Prädikate: EIN Ort je Regel, angewandt auf echtes Artefakt UND Gegenbeispiel ──
 
 /** Nennt der Text die vorbereitete Patch-Datei als Quelle? */
@@ -80,7 +94,7 @@ const fordertSabotage = (s: string) => /sabotier/i.test(s) && /\brot\b/i.test(s)
 describe("Der Diff wird einmal materialisiert statt pro Lens erhoben (#1034)", () => {
   test("der Skill schreibt den Diff einmal in eine Patch-Datei und übergibt den Pfad", () => {
     assert.ok(
-      nenntPatchDatei(lensSkill),
+      nenntPatchDatei(patchSkill),
       "review-lenses/SKILL.md nennt die Patch-Datei nicht. Akzeptanzkriterium von #1034: " +
         "die Lens-Agenten erheben den Diff NICHT selbst, sie lesen die einmal geschriebene Datei.",
     );
@@ -90,18 +104,18 @@ describe("Der Diff wird einmal materialisiert statt pro Lens erhoben (#1034)", (
     // Maintainerin-Entscheidung zu #1034: der Review soll denselben Slice sehen, den
     // check:diffsize/check:diffcoverage messen — nicht zusätzlich fremde main-Zeilen.
     assert.ok(
-      istDreiPunkt(lensSkill),
+      istDreiPunkt(patchSkill),
       "Der Skill erhebt nicht origin/main...HEAD. Zwei-Punkt gegen ein lokal veraltetes " +
         "main zieht fremde Zeilen in den Review (Entscheidung zu #1034).",
     );
-    assert.ok(hatRundenNummer(lensSkill), "Der Patch-Dateiname trägt keine Rundennummer");
+    assert.ok(hatRundenNummer(patchSkill), "Der Patch-Dateiname trägt keine Rundennummer");
   });
 });
 
 describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
   test("der Skill verbietet das erneute Vollöffnen der Kontextdateien", () => {
     assert.ok(
-      haeltKontextDiaet(lensSkill),
+      haeltKontextDiaet(diaetSkill),
       "Dem Lens-Skill fehlt der Hinweis, dass AGENTS.md schon vollständig im Kontext " +
         "liegt (Claude Code lädt sie nativ), oder die Anweisung, statt zu lesen punktuell zu greppen. " +
         "Das erneute Read ist der größte Einzelposten (~30k pro Lens).",
@@ -110,7 +124,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
 
   test("der Skill macht den Patch zur Primärquelle statt ganze Dateien zu öffnen", () => {
     assert.ok(
-      liestGezielt(lensSkill),
+      liestGezielt(diaetSkill),
       "Dem Lens-Skill fehlt die Anweisung, eine geänderte Datei nur gezielt (offset/limit um die " +
         "Hunk-Zeilen) statt vollständig zu öffnen.",
     );
@@ -143,10 +157,22 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
   });
 });
 
+describe("Abschnittsprädikate: eine zurückgedrehte Regel im eigenen Abschnitt wird rot (#1067)", () => {
+  test("Regel 1 der Kontext-Diät ohne Grep-Anweisung fällt durch", () => {
+    assert.ok(!haeltKontextDiaet(diaetSkill.replace("**punktuell greppen**", "**die Datei lesen**").replace(/grep/gi, "such")));
+  });
+  test("Frische-Guard-Absatz ohne HEAD-Abgleich fällt durch", () => {
+    assert.ok(!hatFrischeGuard(frischeSkill.replace(/`git rev-parse HEAD`/g, "den Stand")));
+  });
+  test("ein fehlender Abschnittsanker wirft statt leer zu laufen", () => {
+    assert.throws(() => teil(lensSkill, "### Nicht vorhanden", "> **Was die Diät"), /nicht gefunden/);
+  });
+});
+
 describe("Frische-Guard: keine Lens reviewt einen veralteten Patch (#1034)", () => {
   test("der Skill lässt den HEAD gegen den erwarteten Stand prüfen", () => {
     assert.ok(
-      hatFrischeGuard(lensSkill),
+      hatFrischeGuard(frischeSkill),
       "Dem Lens-Skill fehlt der HEAD-Abgleich (git rev-parse HEAD gegen den erwarteten HEAD).",
     );
   });
