@@ -7,6 +7,7 @@
  * Kopf des Guards und sind hier bewusst nicht getestet.
  */
 import { describe, expect, test } from "vitest";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,7 +27,7 @@ type Disc = { number?: number; title?: unknown; bodyText?: unknown; author?: unk
 const Q = rawQ as unknown as {
   discussionNummer: (t: unknown) => number | null;
   quarantaenePfad: (w: string, n: number) => string;
-  sanitizeSpawn: (t: string, body: boolean) => string;
+  sanitizeSpawn: (t: string, body: boolean, skript?: string) => string;
   main: (argv: string[], deps?: Record<string, unknown>) => void;
   quarantaeneText: (d: Disc, s: (t: string, body: boolean) => string, nonce: string) => string;
 };
@@ -152,7 +153,19 @@ describe("quarantaeneText", () => {
     expect(body).toContain("\n");
     expect(body.length).toBeLessThanOrEqual(2000);
     expect(body.length).toBeGreaterThan(1000);
-  });
+  }, 30000);
+
+  test("sanitizeSpawn: Entschärfer mit Exit ≠ 0 (Skript fehlt) wirft, kein stilles Leer-Ergebnis", () => {
+    expect(() => Q.sanitizeSpawn("x", true, join(tmpdir(), "kq-1435-gibt-es-nicht.mjs"))).toThrow(/forum-sanitize\.mjs fehlgeschlagen/);
+  }, 30000);
+
+  test("CLI-Hülle: Fehler endet mit Exit 2, Meldung auf stderr, stdout leer", () => {
+    const skript = fileURLToPath(new URL("../../scripts/forum-quarantaene.mjs", import.meta.url));
+    const r = spawnSync(process.execPath, [skript, "--foo", "1"], { encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/Aufruf/);
+    expect(r.stdout).toBe("");
+  }, 30000);
 
   test("gültiger Login und Zeitstempel stehen im Marker", () => {
     const text = Q.quarantaeneText(disc, (t) => t, NONCE);
@@ -264,10 +277,14 @@ describe("main (CLI-Kern, gh und Entschärfer injiziert): fail-closed, keine Tei
     } catch (e) {
       fehler = (e as Error).message;
     }
-    const dateien = existsSync(join(wurzel, ".claude", "forum-quarantaene")) ? readdirSync(join(wurzel, ".claude", "forum-quarantaene")) : [];
-    const inhalt = dateien.length ? readFileSync(join(wurzel, ".claude", "forum-quarantaene", dateien[0]), "utf8") : "";
-    rmSync(wurzel, { recursive: true, force: true });
-    return { fehler, ausgabe: ausgabe.join("\n"), dateien, inhalt };
+    try {
+      const ordner = join(wurzel, ".claude", "forum-quarantaene");
+      const dateien = existsSync(ordner) ? readdirSync(ordner) : [];
+      const inhalt = dateien.length ? readFileSync(join(ordner, dateien[0]), "utf8") : "";
+      return { fehler, ausgabe: ausgabe.join("\n"), dateien, inhalt };
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   };
   const disc = JSON.stringify({ title: "GEHEIMTITEL", bodyText: "GEHEIMBODY", author: { login: "a" }, comments: { nodes: [] } });
   const gh = (titel: string, labels: string[], d: string = disc) => (args: string[]) => (args[0] === "issue" ? issue(titel, labels) : d);

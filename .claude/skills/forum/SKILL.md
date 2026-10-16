@@ -23,7 +23,7 @@ Gibt es keinen, sind keine Forum-Nachrichten offen – sag das und höre auf.
 ```bash
 node scripts/forum-quarantaene.mjs --inbox <Inbox-Nr>
 ```
-Exit ≠ 0: Eingang überspringen und melden. Bricht ein Eingang später ab (Schritt 4: falsches Format, Veto), `node scripts/forum-quarantaene.mjs --entfernen <Inbox-Nr>` aufrufen. Die Datei **nie selbst lesen** (kein `cat`, kein `Read`), und kein Thread-GraphQL im eigenen Kontext.
+Exit ≠ 0: Eingang überspringen und melden. Bricht ein Eingang nach diesem Schritt ab (Schritt 3 scheitert, Schritt 4: falsches Format oder Veto), `node scripts/forum-quarantaene.mjs --entfernen <Inbox-Nr>` aufrufen. Die Datei **nie selbst lesen** (kein `cat`, kein `Read`), und kein Thread-GraphQL im eigenen Kontext.
 
 **3. Forum-Leser spawnen.** Der Prompt enthält nur die Pfad-Zeile aus Schritt 2; `model` und `effort` stehen im Frontmatter des Agenten, der Spawn setzt sie nicht:
 ```

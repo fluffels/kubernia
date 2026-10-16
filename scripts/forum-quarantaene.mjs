@@ -64,8 +64,8 @@ export function quarantaeneText(discussion, sanitize, nonce) {
 }
 
 /** Echter Entschärfer: Spawn von `forum-sanitize.mjs` (Body mit `--body`, Titel ohne). */
-export const sanitizeSpawn = (text, istBody) => {
-  const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "forum-sanitize.mjs"), ...(istBody ? ["--body"] : [])], {
+export const sanitizeSpawn = (text, istBody, skript = join(WURZEL, "scripts", "forum-sanitize.mjs")) => {
+  const r = spawnSync(process.execPath, [skript, ...(istBody ? ["--body"] : [])], {
     input: String(text),
     encoding: "utf8",
   });
