@@ -165,6 +165,75 @@ describe("apply HTTPRoute", () => {
   });
 });
 
+describe("apply HTTPRoute: jedes Feld einzeln (#1665)", () => {
+  test.each([
+    ["hostnames", VOLL.replace("hafen.de", "lager.de"), (r: HttpRouteRes) => r.hostnames, ["lager.de"]],
+    ["parentRefs", VOLL.replace("name: tor", "name: anderes"), (r: HttpRouteRes) => r.parentRefs, ["anderes"]],
+    ["backend-port", VOLL.replace("port: 80", "port: 8080"), (r: HttpRouteRes) => r.rules[0].backends[0].port, 8080],
+    ["Pfad", VOLL.replace("/api", "/neu"), (r: HttpRouteRes) => r.rules[0].path, "/neu"],
+  ])("nur %s geändert: configured und neuer Zustand", (_n, geaendert, pick, erwartet) => {
+    apply("r.yaml", RT(VOLL));
+    expect(apply("r.yaml", RT(geaendert)).output).toBe("httproute.gateway.networking.k8s.io/r configured");
+    expect(pick(sim.httpRoutes[0])).toEqual(erwartet);
+  });
+  test("andere Schlüssel-Reihenfolge im Szenario ergibt unchanged", () => {
+    const s = new KQSim({ httpRoutes: [{ rules: [{ backends: [{ port: 80, service: "web" }], pathType: "Exact", path: "/api" }], hostnames: ["hafen.de"], parentRefs: ["tor"], name: "r" }] } as never);
+    s.files["r.yaml"] = RT(VOLL);
+    expect(s.exec("kubectl apply -f r.yaml").output).toContain("unchanged");
+  });
+});
+
+describe("Status: weitere Zweige (#1665)", () => {
+  test("mehrere parentRefs gemischt: Status nur für das vorhandene Gateway, das fehlende ist unattached", () => {
+    const st = httpRouteStatus(route({ parentRefs: ["nix", "tor", "weg"] }), [tor()], [klasse], web);
+    expect(st.parents.map(p => p.gateway)).toEqual(["tor"]);
+    expect(st.unattached).toEqual([{ gateway: "nix", reason: "NotFound" }, { gateway: "weg", reason: "NotFound" }]);
+  });
+  test("ein HTTPS-Listener nimmt Routen an und zählt sie", () => {
+    const g = tor({ listeners: [{ name: "https", port: 443, protocol: "HTTPS", tlsSecret: "tls" }] });
+    expect(cond(route(), [g])[0]).toBe("Accepted=True/Accepted");
+    expect(attachedRoutes(g, g.listeners[0], [route()])).toBe(1);
+  });
+  test("mehrere Listener: ein passender Hostname reicht", () => {
+    const g = tor({ listeners: [{ name: "a", port: 80, protocol: "HTTP", hostname: "a.de" }, { name: "b", port: 81, protocol: "HTTP", hostname: "b.de" }] });
+    expect(cond(route({ hostnames: ["b.de"] }), [g])[0]).toBe("Accepted=True/Accepted");
+  });
+  test("ein TCP-Listener mit passendem Hostnamen nimmt keine Route an", () => {
+    const g = tor({ listeners: [{ name: "t", port: 1, protocol: "TCP", hostname: "b.de" }, { name: "h", port: 80, protocol: "HTTP", hostname: "a.de" }] });
+    expect(cond(route({ hostnames: ["b.de"] }), [g])[0]).toBe("Accepted=False/NoMatchingListenerHostname");
+  });
+  test("die Meldung nennt die Nummer der Regel und des backendRefs", () => {
+    const r = route({ rules: [
+      { path: "/", pathType: "PathPrefix", backends: [{ service: "web", port: 80 }] },
+      { path: "/x", pathType: "PathPrefix", backends: [{ service: "web", port: 80 }, { service: "weg", port: 80 }] },
+    ] });
+    expect(httpRouteStatus(r, [tor()], [klasse], web).parents[0].conditions[1].message).toContain("(rule 2, backendRef 2)");
+  });
+});
+
+describe("Mapper: eigener Namespace ausdrücklich (#1665)", () => {
+  test("namespace: default an parentRef und backendRef wird angenommen", () => {
+    const e = effect(RT("  parentRefs:\n    - name: tor\n      namespace: default\n  rules:\n    - backendRefs:\n        - name: web\n          port: 80\n          namespace: default\n")).httpRoute;
+    expect(e?.parentRefs).toEqual(["tor"]);
+    expect(e?.rules[0].backends).toEqual([{ service: "web", port: 80 }]);
+  });
+});
+
+describe("Sturm und describe-Abschnitte (#1665)", () => {
+  test("der Sturm (bareMetal) räumt HTTPRoutes ab", () => {
+    apply("r.yaml", RT(VOLL));
+    expect(sim.httpRoutes).toHaveLength(1);
+    sim.mergeScenario({ bareMetal: true });
+    expect(sim.httpRoutes).toEqual([]);
+  });
+  test("describe zeigt Hostnames und Parent Refs im Spec-Teil", () => {
+    apply("r.yaml", RT(VOLL));
+    const d = out("describe httproute r");
+    expect(d).toMatch(/Hostnames:\n\s+hafen\.de/);
+    expect(d).toMatch(/Parent Refs:\n\s+Group:\s+gateway\.networking\.k8s\.io\n\s+Kind:\s+Gateway\n\s+Name:\s+tor/);
+  });
+});
+
 describe("get httproute", () => {
   test("NAME HOSTNAMES AGE; leer: No resources found", () => {
     expect(out("get httproute")).toBe("No resources found in default namespace.");

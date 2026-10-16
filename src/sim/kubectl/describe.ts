@@ -371,7 +371,7 @@ function routeRuleLines(route: HttpRouteRes): string[] {
   ]);
 }
 
-/** Der deutsche Hinweis zu einem parentRef ohne Status oder zu einer Route ganz ohne parentRefs. */
+/** Der deutsche Hinweis zu einem parentRef ohne Status (die Route ganz ohne parentRefs behandelt `describeHttpRoute`). */
 function unattachedHint(u: UnattachedParent): string {
   return u.reason === "NotFound"
     ? "💡 Gateway „" + u.gateway + "“ gibt es nicht: die Route hängt dort an keinem Tor."
