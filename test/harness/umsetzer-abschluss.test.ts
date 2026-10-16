@@ -379,10 +379,9 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
   });
 });
 
-describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
-  // Die Workflow-Umsetzung nutzt nicht den Agenten `kubernia-umsetzer`, sondern einen eigenen Prompt: drei Regeln müssen dort
-  // genauso stehen wie in der Agenten-Definition, sonst driften sie auseinander.
-  const WORKFLOW = readFileSync(resolve(ROOT, ".claude/workflows/kubernia-ticket.js"), "utf8");
+describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
+  // Diese Regeln stehen in der Agenten-Definition; die Gruppen-Rolle trägt die Red-Green-Regel mit.
+  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/kubernia-gruppe.md"), "utf8");
   const KERNPHRASEN = [
     "nie über stdin", // Skripte nie über stdin starten
     "eigenen Negativtest, der genau diese Regel verfälscht", // je neue Guard-/Gate-Regel ein Negativtest
@@ -390,31 +389,16 @@ describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
     "git checkout <datei>", // Red-Green-Probe nie so zurücknehmen (verwirft ungesicherte Änderungen)
   ];
 
-  test("jede Kernphrase steht in der Agenten-Definition und im Workflow", () => {
-    for (const phrase of KERNPHRASEN) {
-      assert.ok(UMSETZER.includes(phrase), `kubernia-umsetzer.md ohne „${phrase}“`);
-      assert.ok(WORKFLOW.includes(phrase), `kubernia-ticket.js ohne „${phrase}“`);
-    }
+  test("jede Kernphrase steht in der Agenten-Definition, die Red-Green-Regel auch in der Gruppen-Rolle", () => {
+    for (const phrase of KERNPHRASEN) assert.ok(UMSETZER.includes(phrase), `kubernia-umsetzer.md ohne „${phrase}“`);
+    assert.ok(GRUPPE.includes("git checkout <datei>"), "kubernia-gruppe.md ohne die Red-Green-Rücknahme-Regel");
+    assert.ok(!UMSETZER.replace("nie über stdin", "").includes("nie über stdin"), "Negativfall: die Prüfung erkennt eine fehlende Phrase");
   });
 
-  test("Verschobener-Code-Prüfung: eine Konstante, Gates- und Push-Absatz interpolieren sie, Skill trägt dieselben Befehle (#1501, #1508)", () => {
-    const diffBefehl = "git diff <basis> <M>^2 -- <alte datei>";
-    const basisBefehl = "git merge-base <M>^1 <M>^2";
-    const def = WORKFLOW.match(/^const VERSCHOBEN_DIFF = `(.*)`/m)?.[1] ?? "";
-    assert.ok(def.includes(diffBefehl), "Konstante ohne Diff der alten Datei gegen die Merge-Basis");
-    assert.ok(def.includes(basisBefehl), "Konstante ohne Merge-Basis-Befehl");
-    // der Befehl steht im Workflow genau einmal (keine Literal-Kopie neben der Konstante)
-    assert.equal(WORKFLOW.split(diffBefehl).length - 1, 1, "Diff-Befehl außerhalb der Konstante kopiert");
-    const gates = WORKFLOW.slice(WORKFLOW.indexOf("Gates: vor dem ersten verify"), WORKFLOW.indexOf("Beim Iterieren gezielt prüfen"));
-    assert.match(gates, /\$\{VERSCHOBEN_DIFF\}/, "Gates-Absatz ohne die Konstante");
-    const von = WORKFLOW.indexOf("Vor dem Push: verschärft der Diff ein Gate oder Schema");
-    const bis = WORKFLOW.indexOf("Nachweis-Commit", von);
-    assert.ok(von >= 0 && bis > von, "Merge-Absatz vor dem Push nicht gefunden");
-    const absatz = WORKFLOW.slice(von, bis);
-    assert.match(absatz, /\$\{VERSCHOBEN_DIFF\}/, "Push-Absatz ohne die Konstante");
-    assert.match(absatz, /verschobene Funktion, ergebnis="fehler"/, "Fehler-Ergebnis für die geänderte verschobene Funktion fehlt");
+  test("Verschobener-Code-Prüfung: der Skill trägt die Befehle für Diff der alten Datei und Merge-Basis (#1501, #1508)", () => {
     const skill = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
-    assert.ok(skill.includes(diffBefehl) && skill.includes(basisBefehl), "review-lenses trägt andere Befehle als der Workflow");
+    assert.ok(skill.includes("git diff <basis> <M>^2 -- <alte datei>"), "review-lenses ohne Diff der alten Datei gegen die Merge-Basis");
+    assert.ok(skill.includes("git merge-base <M>^1 <M>^2"), "review-lenses ohne Merge-Basis-Befehl");
   });
 
   test("Red-Green-Rücknahme per git checkout gehört auch in AGENTS.md und die Langfassung (#1501)", () => {
