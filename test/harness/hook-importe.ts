@@ -33,14 +33,47 @@ export function mcpSkripte(mcpJsonText: string): string[] {
   return [...skripte];
 }
 
-// Die Importformen: `from "./x"`, Side-Effect-`import "./x"`, dynamisches `import("./x")`, `require("./x")` und
-// `createRequire(…)("./x")` (Aufruf-Klammer direkt vor dem Literal; bewusst großzügig, fail-closed).
-export const IMPORT_FORM = /(?:\bfrom\s+|\bimport\s*\(?\s*|\brequire\(\s*|\)\s*\(\s*)["'](\.{1,2}\/[\w./-]+\.(?:mjs|cjs))["']/g;
+/**
+ * Alle Importspezifizierer eines Quelltexts (ohne Auflösung, mit `node:*` und Paketnamen): statische
+ * `import`/`export … from` (auch Side-Effect), `import("…")`, `require("…")`, `createRequire(…)("…")` und die
+ * großzügige Aufruf-Form `)("…")` (fail-closed). Nicht erkannt: ein dynamischer Pfad (`require(pfad)`).
+ */
+export function importeAus(text: string): string[] {
+  return [
+    ...new Set([
+      ...[...text.matchAll(/^\s*(?:import|export)\s+(?:[^;]*?\sfrom\s+)?["']([^"']+)["']/gm)].map((m) => m[1]),
+      ...[...text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+      ...[...text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+      ...[...text.matchAll(/\bcreateRequire\([^)]*\)\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+      ...[...text.matchAll(/\)\s*\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+    ]),
+  ];
+}
+
+/** Relative Spezifizierer (`./`, `../`) eines Quelltexts. */
+export const relativeImporte = (text: string): string[] => [...new Set(importeAus(text).filter((s) => /^\.{1,2}\//.test(s)))];
+
+const ENDUNGEN = [".mjs", ".cjs", ".js"];
+
+/** Löst einen relativen Pfad auf eine lesbare Datei auf: mit Endung direkt, endungslos über .mjs/.cjs/.js; wirft, wenn nichts existiert. */
+function loese(pfad: string, lies: (rel: string) => string): string {
+  const kandidaten = /\.\w+$/.test(posix.basename(pfad)) ? [pfad] : ENDUNGEN.map((e) => pfad + e);
+  for (const k of kandidaten) {
+    try {
+      lies(k);
+      return k;
+    } catch {
+      /* nächste Variante */
+    }
+  }
+  throw new Error(`Import ${pfad} nicht auflösbar (kein ${kandidaten.join(" / ")}), Kette unvollständig`);
+}
 
 /**
- * Alle lokalen relativen Importe (`IMPORT_FORM`; transitiv) der Wurzel-Skripte,
+ * Alle lokalen relativen Importe (transitiv) der Wurzel-Skripte,
  * die Wurzeln eingeschlossen. Ein Import wird relativ zur IMPORTIERENDEN Datei aufgelöst, damit Module in
- * Unterordnern (`scripts/docs-gen/*.mjs`) und `../`-Importe nicht aus der Kette fallen (E1).
+ * Unterordnern (`scripts/docs-gen/*.mjs`) und `../`-Importe nicht aus der Kette fallen (E1). Endungslose
+ * Spezifizierer (`require("../layers")`) werden über `lies` aufgelöst; unauflösbar wirft (fail-closed).
  */
 export function lokaleImporteTransitiv(wurzeln: string[], lies: (rel: string) => string): string[] {
   const gesehen = new Set<string>();
@@ -49,8 +82,7 @@ export function lokaleImporteTransitiv(wurzeln: string[], lies: (rel: string) =>
     const rel = offen.pop() as string;
     if (gesehen.has(rel)) continue;
     gesehen.add(rel);
-    const importe = lies(rel).matchAll(IMPORT_FORM);
-    for (const m of importe) offen.push(posix.normalize(posix.join(posix.dirname(rel), m[1])));
+    for (const spec of relativeImporte(lies(rel))) offen.push(loese(posix.normalize(posix.join(posix.dirname(rel), spec)), lies));
   }
   return [...gesehen].sort();
 }
