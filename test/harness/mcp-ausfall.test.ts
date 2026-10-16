@@ -11,8 +11,8 @@ import { join } from "node:path";
 import * as raw from "../../scripts/mcp-ausfall.mjs";
 
 type Server = { name: string; type?: string; url?: string; headers?: Record<string, string> };
-type Befund = { klasse: string; zeit: string; sessionId: string; text: string };
-type Gruppe = { server: string; klasse: string; suffix: string; anzahl: number; erste: string; letzte: string; sessions: string[]; beispiel: string };
+type Befund = { klasse: string; zeit: string; sessionId: string; text: string; code?: string };
+type Gruppe = { server: string; klasse: string; code: string; suffix: string; anzahl: number; erste: string; letzte: string; sessions: string[]; beispiel: string };
 type Ausfall = {
   BEKANNTE_ARTEN: string[];
   ROUTINE: RegExp;
@@ -63,6 +63,25 @@ describe("klassifiziere", () => {
     expect(a.klassifiziere([dbg("SSE stream disconnected, attempting automatic reconnection"), dbg("Terminal connection error: max consecutive terminal errors failed")])).toEqual([]);
     const r = a.klassifiziere([dbg("Connection failed after 3s"), dbg("request timed out"), dbg("connection closed after 9s")]);
     expect(r.map((b) => b.klasse)).toEqual(["abbruch", "abbruch", "abbruch"]);
+  });
+  test("Netzabbruch mit Fehlercode (Tool-failed, tools/list, HTTP Connection) ist ein Abbruch mit Code, MCP-Protokollfehler nicht", () => {
+    const r = a.klassifiziere([
+      dbg("Tool 'getMetricsSchema' failed after 0s: ECONNRESET: The socket connection was closed unexpectedly"),
+      dbg("tools/list failed (ECONNRESET: The socket connection was closed)"),
+      dbg("HTTP Connection failed after 10560ms: ECONNRESET: boom"),
+      dbg("Tool 'x' failed after 1s: fetch failed"),
+    ]);
+    expect(r.map((b) => b.klasse)).toEqual(["abbruch", "abbruch", "abbruch", "abbruch"]);
+    expect(r.map((b) => b.code)).toEqual(["ECONNRESET", "ECONNRESET", "ECONNRESET", "fetch failed"]);
+    expect(a.klassifiziere([dbg("Tool 'listObservations' failed after 0s: MCP error -32602: Invalid params")])).toEqual([]);
+    expect(a.klassifiziere([dbg("Tool 'listObservations' failed after 0s: MCP error -32602: socket ECONNRESET im Text")])).toEqual([]);
+    expect(a.klassifiziere([dbg("Connection failed after 3s")])[0].code).toBe("");
+  });
+  test("buendeln trennt Abbrüche nach Code, meldung nennt ihn", () => {
+    const mk = (code: string) => ({ klasse: "abbruch", zeit: "2026-10-15T10:00:00Z", sessionId: "a", text: "x", server: "lf", suffix: "", code });
+    const g = a.buendeln([mk("ECONNRESET"), mk("ECONNRESET"), mk("ETIMEDOUT")]);
+    expect(g).toHaveLength(2);
+    expect(a.meldung(g, [], "S")).toContain("lf: abbruch (ECONNRESET) ×2");
   });
   test("kaputte und fremde Zeilen werfen nie", () => {
     expect(a.klassifiziere(["{kaputt", "null", "42", JSON.stringify({ x: 1 }), JSON.stringify({ debug: 5 })])).toEqual([]);
@@ -253,7 +272,7 @@ describe("main mit Temp-Logs", () => {
     );
     const t = lauf(["--seit", "2026-10-15T00:00:00Z"], env).aus.join("\n");
     expect(t).toContain("langfuse: fehler ×2");
-    expect(t).toContain("langfuse: abbruch ×1");
+    expect(t).toContain("langfuse: abbruch (ECONNRESET) ×1");
     expect(t).not.toContain("Terminal connection");
     expect(t).not.toContain("Server-Art");
   });
