@@ -490,9 +490,18 @@ describe("git add mit mehreren Pfaden (#1667 d): erst prüfen, dann vormerken", 
     expect(s.git.staged).toEqual([]);
     expect(s.git.conflict).not.toBeNull();
   });
+  test("mitten im Konflikt löst git add <andere Datei> den Konflikt NICHT (auch nicht mit Markern: keine Marker-Meldung)", () => {
+    const s = konflikt();
+    const r = lauf("git add neu.md", s);
+    expect(r.error).toBe(false);
+    expect(r.out).toBe("Vorgemerkt: neu.md (bereit zum Commit).");
+    expect(r.out).not.toContain("Konfliktmarker");
+    expect(s.git.staged).toEqual(["neu.md"]);
+    expect(s.git.conflict).not.toBeNull();
+  });
 });
 
-describe("persistentFlags: der Wert kommt beim Blatt an, auch über verschachtelte Gruppen", () => {
+describe("persistent Flags (Dispatch.flags): der Wert kommt beim Blatt an, auch über verschachtelte Gruppen", () => {
   test("kubectl rollout -n prod restart deployment: der Namespace prod gilt (nicht der Standard)", () => {
     const s = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
     const vorher = s.deployments[0].pods.map(p => p.name);
