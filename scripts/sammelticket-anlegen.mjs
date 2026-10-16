@@ -21,7 +21,7 @@
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
 import { pathToFileURL } from "node:url";
-import { istVertraut } from "./fremdtext-lib.mjs";
+import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
@@ -150,7 +150,7 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
 const einzelAbruf = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]);
 /** Alle Kommentare eines Issues (paginiert, sonst nur die ersten 30); ein Fehler wirft, damit `--generation` nichts auf Verdacht anlegt. */
-const kommentareVon = (nr) => ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/issues/${nr}/comments?per_page=100`]).flat();
+const kommentareVon = (nr) => issueKommentare(nr, ghJson, REPO);
 
 /** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
 function pruefeDublette(nr, titel, vorgaenger) {
