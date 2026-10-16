@@ -8,7 +8,7 @@
  * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
 import { istDirektaufruf } from "./hook-io.mjs";
-import { basisUrlAus } from "./langfuse-zugang.mjs";
+import { basisUrlAus, langfuseBasisUrl } from "./langfuse-zugang.mjs";
 
 export const HEALTH_PFAD = "/api/public/health";
 export const FRIST_MS = 3000;
@@ -23,7 +23,7 @@ export function bewerteHealth({ status, fehler } = {}) {
 }
 
 /** Basis-URL aus der Umgebung ohne Schrägstrich am Ende. Pur. */
-export const basisUrl = (env) => (env.LANGFUSE_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+export const basisUrl = langfuseBasisUrl;
 
 /** Fragt den Health-Endpunkt mit Frist ab und bewertet die Antwort. Wirft nie. */
 export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRIST_MS }) {
