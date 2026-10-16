@@ -12,9 +12,9 @@ import { maxRestartedAt, rolloutRevisions, undoTarget } from "../replicasets";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
-import { notSimulated, parseFromRef, parseResourceList, replicasArg, type ResourceList } from "./args";
+import { FROM_FLAG, LIMITS_FLAG, notSimulated, NS, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, UNKNOWN_TARGET, type ResourceList } from "./args";
 import { readTargets, targetOutcome } from "./targets";
-import { subEntry, type Call } from "../cliargs";
+import { IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch, type SubEntry } from "../cliargs";
 
 /** Die NotFound-Zeile eines Deployments (ohne Fehlerrahmen: die Mehrfachziel-Befehle sammeln sie in `failed`). */
 const deploymentNotFound = (name: string): string => 'Error from server (NotFound): deployments.apps "' + name + '" not found';
@@ -90,27 +90,27 @@ export function kubectlExpose(host: KubectlHost, c: Call) {
   return "service/" + name + " exposed";
 }
 
-/** Die `set`-Aktionen (#1487): ein Eintrag je Aktion; `c.args` beginnt bei der Aktion (`image deployment/web web=nginx`). */
-const SET_ACTIONS: Readonly<Record<string, (host: KubectlHost, c: Call) => string>> = {
-  image: (host, c) => kubectlSetImage(host, c),
-  env: (host, c) => kubectlSetEnv(host, c),
-  resources: (host, c) => kubectlSetResources(host, c),
+/** `kubectl set <ziel>` (#1491): ein Eintrag je Aktion mit EIGENEN Flags (`--from` nur bei `env`, `--limits`/`--requests` nur bei
+ *  `resources`); `c.args` sind die Argumente hinter der Aktion (`deployment/web web=nginx`). `-n` gilt überall. */
+export const KUBECTL_SET: Dispatch<SubEntry<(host: KubectlHost, c: Call) => string>> = {
+  cmd: "kubectl set",
+  flags: [NS],
+  table: {
+    image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER },
+    env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG] },
+    resources: { run: (host, c) => kubectlSetResources(host, c), maxArgs: IM_HANDLER, flags: [LIMITS_FLAG, REQUESTS_FLAG] },
+  },
+  real: ["selector", "serviceaccount", "sa", "subject"],
+  unknown: UNKNOWN_TARGET,
+  hints: { "--from": "Eine Quelle für Variablen kennt nur 'kubectl set env deployment/<name> --from=configmap/<name>'." },
 };
-
-/** kubectl set image|env|resources – dispatcht über `SET_ACTIONS`. */
-export function kubectlSet(host: KubectlHost, c: Call) {
-  const action = c.args[0] ?? "";
-  const run = subEntry(SET_ACTIONS, action);
-  if (run) return run(host, c);
-  return notSimulated(host, "'kubectl set " + action + "'.", Object.keys(SET_ACTIONS).map(a => "kubectl set " + a + " …"), "Muster: 'kubectl set env deployment/<name> --from=configmap/<name>'.");
-}
 
 /** kubectl set env deployment/<name> --from=configmap/<name> | --from=secret/<name>
  *  Bindet eine ConfigMap (harmlose Config) oder ein Secret (Vertrauliches) als
  *  Umgebungsvariablen in ein Deployment ein. */
 
 function kubectlSetEnv(host: KubectlHost, c: Call) {
-  const rest = c.args.slice(1);
+  const rest = c.args;
   if (rest.some(x => x.includes("="))) return notSimulated(host, "'KEY=wert' bei 'kubectl set env'.", ["kubectl set env deployment/<name> --from=configmap/<name>|secret/<name>"]);
   const one = singleDeployment(host, "set", rest);
   if ("error" in one) return one.error;
@@ -137,7 +137,7 @@ function kubectlSetEnv(host: KubectlHost, c: Call) {
 
 function kubectlSetImage(host: KubectlHost, c: Call) {
   // Der Deployment-Name enthält nie ein "=": Tokens mit "=" sind <container>=<image>-Paare, die übrigen die Ziele.
-  const rest = c.args.slice(1);
+  const rest = c.args;
   const pairs = rest.filter(x => x.includes("="));
   if (pairs.length > 1) return notSimulated(host, "mehrere Container in 'kubectl set image'.", ["kubectl set image deployment/<name> <container>=<image>"]);
   const one = singleDeployment(host, "set", rest.filter(x => !x.includes("=")));
@@ -191,7 +191,7 @@ const anySpecGiven = (...lists: ResourceList[]): boolean => lists.some(l => Obje
  *  (Speicher → CPU → ephemeral) bleibt wie zuvor. `--requests` wird akzeptiert, ändert
  *  aber didaktisch nichts – es zählt nur mit, ob überhaupt etwas angegeben wurde. */
 function kubectlSetResources(host: KubectlHost, c: Call) {
-  const one = singleDeployment(host, "set", c.args.slice(1));
+  const one = singleDeployment(host, "set", c.args);
   if ("error" in one) return one.error;
   const depName = one.name;
   const limits = parseResourceList(host, c.value("--limits"));
@@ -210,32 +210,28 @@ function kubectlSetResources(host: KubectlHost, c: Call) {
   return "deployment.apps/" + depName + " resource requirements updated" + notes.join("");
 }
 
-/** Die `rollout`-Aktionen (#1487): ein Eintrag je Aktion. */
-const ROLLOUT_ACTIONS: Readonly<Record<string, (host: KubectlHost, c: Call) => string>> = {
-  restart: (host, c) => kubectlRolloutRestart(host, c),
-  history: (host, c) => kubectlRolloutHistory(host, c),
-  undo: (host, c) => kubectlRolloutUndo(host, c),
+/** `kubectl rollout <ziel>` (#1491): ein Eintrag je Aktion; `--to-revision` kennt nur `undo`, bei `restart`/`history` lehnt es der
+ *  Dispatch ab (wie kubectl: unbekanntes Flag). `c.args` sind die Argumente hinter der Aktion (`deployment web`). */
+export const KUBECTL_ROLLOUT: Dispatch<SubEntry<(host: KubectlHost, c: Call) => string>> = {
+  cmd: "kubectl rollout",
+  flags: [NS],
+  table: {
+    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE },
+    history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER },
+    undo: { run: (host, c) => kubectlRolloutUndo(host, c), maxArgs: IM_HANDLER, flags: [REVISION_FLAG] },
+  },
+  real: ["pause", "resume", "status"],
+  unknown: UNKNOWN_TARGET,
+  hints: { "--to-revision": "Ein bestimmtes Ziel kennt nur 'kubectl rollout undo deployment <name> --to-revision=<n>'." },
 };
-
-export function kubectlRollout(host: KubectlHost, c: Call) {
-  const action = c.args[0] ?? "";
-  const run = subEntry(ROLLOUT_ACTIONS, action);
-  if (run) return run(host, c);
-  return notSimulated(host, "'kubectl rollout " + action + "'.", Object.keys(ROLLOUT_ACTIONS).map(a => "kubectl rollout " + a + " deployment <name>"));
-}
 
 /** Das eine Deployment einer `rollout`-Aktion (history/undo: kein Mehrfachziel) – oder der fertige Fehlertext. */
 function rolloutTarget(host: KubectlHost, c: Call, action: string): Deployment | string {
-  const one = singleDeployment(host, "rollout", c.args.slice(1));
+  const one = singleDeployment(host, "rollout", c.args);
   if ("error" in one) return one.error;
   if (!one.name) return host._err("kubectl rollout " + action + ": Welches Deployment?", "Muster: kubectl rollout " + action + " deployment <name>");
   const name = one.name;
   return host.deployments.find(d => d.name === name) ?? host._err(deploymentNotFound(name), DEPLOYMENTS_TIP);
-}
-
-/** `--to-revision` kennt nur `undo`; bei `restart`/`history` ist es für kubectl ein unbekanntes Flag. */
-function rejectToRevision(host: KubectlHost, c: Call): string | null {
-  return c.has("--to-revision") ? host._err("error: unknown flag: --to-revision", "Ein bestimmtes Ziel kennt nur 'kubectl rollout undo deployment <name> --to-revision=<n>'.") : null;
 }
 
 /** Heilt frisch erzeugte Pods wie ein Neustart: ein Secret, das dem crashloop fehlte, ist inzwischen da; ein
@@ -263,9 +259,7 @@ function restartDeployment(host: KubectlHost, dep: Deployment): { ok: string } |
 
 /** kubectl rollout restart deployment <name> [<name> …] – je Ziel eine Zeile, ein fehlendes Ziel stoppt die übrigen nicht. */
 function kubectlRolloutRestart(host: KubectlHost, c: Call) {
-  const unknown = rejectToRevision(host, c);
-  if (unknown) return unknown;
-  const dn = deploymentNames(host, "rollout", c.args.slice(1));
+  const dn = deploymentNames(host, "rollout", c.args);
   if ("error" in dn) return dn.error;
   if (dn.names.length === 0) return host._err("kubectl rollout restart: Welches Deployment?", "Muster: kubectl rollout restart deployment <name>");
   const ok: string[] = [];
@@ -282,8 +276,6 @@ function kubectlRolloutRestart(host: KubectlHost, c: Call) {
 
 /** kubectl rollout history deployment <name>: die Revisionen (ohne `--revision`-Detail, ohne CHANGE-CAUSE). */
 function kubectlRolloutHistory(host: KubectlHost, c: Call) {
-  const unknown = rejectToRevision(host, c);
-  if (unknown) return unknown;
   const dep = rolloutTarget(host, c, "history");
   if (typeof dep === "string") return dep;
   const revs = rolloutRevisions(dep);
