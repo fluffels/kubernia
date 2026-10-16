@@ -28,7 +28,7 @@ type Mod = {
   MAX_REVIEW_PAESSE: number;
   parseNachweis: (text: string, zeilen: Zeilen) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: Zeilen }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen }) => string[];
   konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
   vorlage: (zeilen: Zeilen) => string;
   checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen?: () => Zeilen }) => {
@@ -221,6 +221,8 @@ function fakeGit(o: {
   throws?: string;
   merges?: string[];
   remerge?: Record<string, string>;
+  /** Nicht-Merge-Commits nach dem reviewten Stand (#1740 L17): SHA → geänderte Dateien, älteste zuerst; leere Liste = leerer Commit. */
+  nach?: Record<string, string[]>;
 }) {
   const H = o.head ?? "h".repeat(40);
   const B = "b".repeat(40);
@@ -253,6 +255,12 @@ function fakeGit(o: {
     if (merges) return (o.merges ?? []).join("\n") + "\n";
     const remerge = /^show --remerge-diff --format= ([0-9a-f]{40})$/.exec(cmd);
     if (remerge) return o.remerge?.[remerge[1]] ?? "";
+    // Commits nach dem reviewten Stand (#1740 L17): `<head>..HEAD` ohne die Basis, die Dateien je Commit per diff-tree.
+    if (cmd.startsWith("rev-list --reverse --no-merges ") && cmd.endsWith(`..HEAD ^${B}`) && /^[0-9a-f]{40}$/.test(cmd.split(" ")[3].split("..")[0])) {
+      return Object.keys(o.nach ?? {}).join("\n") + "\n";
+    }
+    const baum = /^diff-tree --no-commit-id --name-only -r ([0-9a-f]{40})$/.exec(cmd);
+    if (baum) return (o.nach?.[baum[1]] ?? []).join("\n") + "\n";
     throw new Error(`unerwartet: ${cmd}`);
   };
 }
@@ -381,7 +389,6 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
     writeFileSync(join(dir, "b.txt"), "b\n");
     git(dir, "add", "-A");
     git(dir, "commit", "-q", "-m", "basis");
-    const basis = git(dir, "rev-parse", "HEAD").trim();
     git(dir, "checkout", "-q", "-b", "feature");
     writeFileSync(join(dir, "a.txt"), "EINS-feature\nzwei\ndrei\n");
     git(dir, "commit", "-q", "-am", "feature");
@@ -399,9 +406,10 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
       git(dir, "commit", "-q", "--no-edit");
     }
     git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
-    return { dir, basis };
+    // Wie im Betrieb: nach dem Einmergen ist die Basis (merge-base mit main) die Spitze von main; deren Commits zählen nicht zum Slice.
+    return { dir, basis: git(dir, "rev-parse", "main").trim() };
   }
-  const pruefe = (r: { dir: string; basis: string }) =>
+  const pruefe =(r: { dir: string; basis: string }) =>
     checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }), env: { KQ_DIFF_BASE: r.basis } });
 
   test("Merge von main mit echtem Konflikt nach dem Review ist rot", () => {
@@ -429,6 +437,123 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
     const reviewt = git(dir, "rev-parse", "HEAD").trim();
     git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
     assert.equal(pruefe({ dir, basis }).ok, true);
+  });
+});
+
+describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
+  const X = "e".repeat(40);
+  const Y = "f".repeat(40);
+
+  test("bewerteNachweis: je Commit ein Fehler mit Dateien (höchstens fünf, dann …) und Fix-Weg; ohne Commits unverändert", () => {
+    const n = parseNachweis(review());
+    const dateien = ["src/x.ts"];
+    assert.deepEqual(bewerteNachweis({ nachweis: n, dateien, headBekannt: true, headImSlice: true, aenderungsCommits: [] }), []);
+    const f = bewerteNachweis({
+      nachweis: n,
+      dateien,
+      headBekannt: true,
+      headImSlice: true,
+      aenderungsCommits: [
+        { sha: X, dateien: ["a.ts", "b.ts"] },
+        { sha: Y, dateien: ["1", "2", "3", "4", "5", "6"] },
+      ],
+    });
+    assert.equal(f.length, 2);
+    assert.match(f[0], new RegExp(`Commit ${X} nach dem Review ändert a\\.ts, b\\.ts: Delta-Lens der betroffenen Brillen auf ${SHA}\\.\\.HEAD, dann neuer Nachweis \\(head ≥ ${X}\\)`));
+    assert.match(f[1], /ändert 1, 2, 3, 4, 5, …:/);
+    assert.match(f[0], /review-lenses › Nachweis nach Konvergenz/);
+  });
+
+  test("checkReviewNachweis: ein leerer Commit nach head (Nachweis, Override) bleibt grün", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), nach: { [X]: [] } }), env });
+    assert.deepEqual(r.fehler, []);
+    assert.equal(r.ok, true);
+  });
+
+  test("checkReviewNachweis: ein Code-Commit nach head ist rot, auch zwischen leeren Commits", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), nach: { [Y]: [], [X]: ["src/a.ts"] } }), env });
+    assert.equal(r.ok, false);
+    assert.equal(r.fehler.length, 1);
+    assert.match(r.fehler[0], new RegExp(`Commit ${X} nach dem Review ändert src/a\\.ts`));
+  });
+
+  test("checkReviewNachweis: ein git-Fehler bei diff-tree ist rot", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), nach: { [X]: ["a.ts"] }, throws: "diff-tree" }), env });
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join(), /git-Fehler/);
+  });
+
+  describe("echtes git-Repo", { timeout: 30_000 }, () => {
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const nachweis = (dir: string, head: string, extra = "") =>
+      git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis${extra}\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${head} runden=1 lenses=${DREI} verdikt=ok`);
+    const sha = (dir: string) => git(dir, "rev-parse", "HEAD").trim();
+    const pruefe = (dir: string, basis: string) =>
+      checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }), env: { KQ_DIFF_BASE: basis } });
+
+    /** Basis auf main, ein Feature-Commit (reviewt) darauf. */
+    function repo() {
+      const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+      dirs.push(dir);
+      git(dir, "init", "-q", "-b", "main");
+      writeFileSync(join(dir, "a.txt"), "x\n");
+      git(dir, "add", "-A");
+      git(dir, "commit", "-q", "-m", "basis");
+      const basis = sha(dir);
+      git(dir, "checkout", "-q", "-b", "feature");
+      writeFileSync(join(dir, "a.txt"), "y\n");
+      git(dir, "commit", "-q", "-am", "feature");
+      return { dir, basis, reviewt: sha(dir) };
+    }
+
+    test("Code-Commit nach dem Nachweis ist rot, nennt Commit und Datei", () => {
+      const { dir, basis, reviewt } = repo();
+      nachweis(dir, reviewt);
+      writeFileSync(join(dir, "a.txt"), "z\n");
+      git(dir, "commit", "-q", "-am", "fix nach dem Review");
+      const fix = sha(dir);
+      const r = pruefe(dir, basis);
+      assert.equal(r.ok, false);
+      assert.match(r.fehler.join(), new RegExp(`Commit ${fix} nach dem Review ändert a\\.txt: Delta-Lens .* auf ${reviewt}\\.\\.HEAD`));
+    });
+
+    test("leere Commits nach dem Nachweis (Override-Zeile) bleiben grün", () => {
+      const { dir, basis, reviewt } = repo();
+      nachweis(dir, reviewt);
+      git(dir, "commit", "-q", "--allow-empty", "-m", "KQ-Diffsize-Override: #1 entfällt");
+      assert.deepEqual(pruefe(dir, basis).fehler, []);
+    });
+
+    test("neuer Nachweis mit head = Fix: grün; ein zweiter Fix danach wieder rot", () => {
+      const { dir, basis, reviewt } = repo();
+      nachweis(dir, reviewt);
+      writeFileSync(join(dir, "a.txt"), "z\n");
+      git(dir, "commit", "-q", "-am", "fix");
+      nachweis(dir, sha(dir), " 2");
+      const r = pruefe(dir, basis);
+      assert.deepEqual(r.fehler, []);
+      assert.equal(r.ok, true);
+      writeFileSync(join(dir, "a.txt"), "w\n");
+      git(dir, "commit", "-q", "-am", "noch ein fix");
+      assert.equal(pruefe(dir, basis).ok, false);
+    });
+
+    test("main-Commits eines konfliktfreien Merges zählen nicht, ein eigener Code-Commit danach schon", () => {
+      const { dir, reviewt } = repo();
+      git(dir, "checkout", "-q", "main");
+      writeFileSync(join(dir, "b.txt"), "b\n");
+      git(dir, "add", "b.txt");
+      git(dir, "commit", "-q", "-m", "main-aenderung");
+      git(dir, "checkout", "-q", "feature");
+      git(dir, "merge", "-q", "--no-edit", "main");
+      nachweis(dir, reviewt);
+      const basis = git(dir, "rev-parse", "main").trim();
+      assert.deepEqual(pruefe(dir, basis).fehler, []);
+      writeFileSync(join(dir, "a.txt"), "q\n");
+      git(dir, "commit", "-q", "-am", "eigener fix");
+      assert.equal(pruefe(dir, basis).ok, false);
+    });
   });
 });
 
