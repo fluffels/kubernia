@@ -92,6 +92,16 @@ describe("Ausfall-Meldung des Launchers (#1634)", () => {
     assert.equal(launcher.exitMeldung({ ...basis, vonAussen: true }), null);
     assert.equal(launcher.exitMeldung({ ...basis, code: 0 }), null);
   });
+  test("SIGINT, SIGTERM und SIGHUP ohne vonAussen sind gewollte Beendigung und bleiben still", () => {
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+      assert.equal(launcher.exitMeldung({ ...basis, code: null, signal }), null, signal);
+    }
+  });
+  test("SIGKILL und SIGSEGV melden weiter eine Zeile", () => {
+    for (const signal of ["SIGKILL", "SIGSEGV"]) {
+      assert.match(launcher.exitMeldung({ ...basis, code: null, signal }) ?? "", new RegExp(`Signal ${signal}`), signal);
+    }
+  });
   test("Exit ≠ 0, Signal und Exit 0 bei ersetzter Installation ergeben eine Zeile", () => {
     assert.equal(launcher.exitMeldung(basis), "playwright-mcp: Server beendet (Exit 1, nach 5 s, Modus local)");
     assert.match(launcher.exitMeldung({ ...basis, code: null, signal: "SIGKILL", modus: "npx" }) ?? "", /Signal SIGKILL, nach 5 s, Modus npx\)$/);

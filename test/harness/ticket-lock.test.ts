@@ -25,6 +25,7 @@ const M = raw as unknown as {
   fuehreAus: (argv: string[], deps: Deps) => Erg;
   echteDeps: () => Deps;
   ALTLAST_MS: number;
+  gehoertZu: (lock: Record<string, unknown> | null, nonce: string) => boolean;
   aufzuraeumen: (o: { eintraege: { name: string; mtime: number }[]; jetzt: number }) => string[];
 };
 
@@ -270,6 +271,12 @@ describe("Z4/Z5: Lock nie von Hand, pruefe ohne Nonce", () => {
 });
 
 describe("Aufruf und reine Funktionen", () => {
+  test("gehoertZu: eine leere Nonce gehört nie zu einem Lock (Hash- und Altformat)", () => {
+    assert.equal(M.gehoertZu({ nonceHash: sha("") }, ""), false, "Lock mit Hash der leeren Nonce");
+    assert.equal(M.gehoertZu({ nonce: "" }, ""), false, "Alt-Lock mit Klartext-Nonce leer");
+    assert.equal(M.gehoertZu({ nonceHash: sha("x") }, "x"), true, "Gegenprobe: echte Nonce passt");
+  });
+
   test("ungültige Nummer, unbekannter Befehl, fehlende Argumente → Exit 2", () => {
     for (const argv of [[], ["claim"], ["claim", "abc"], ["claim", "-1"], ["claim", "1.5"], ["foo", "5"], ["pruefe", "5", "--nonce"], ["claim", "5", "extra"]]) {
       assert.equal(lauf(argv).code, 2, JSON.stringify(argv));

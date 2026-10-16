@@ -550,7 +550,7 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
     assert.equal(treffer(lauf(c4), /adapter „Tastatur“: liegt unter „ui“/).length, 1);
   });
 
-  test("eine Überschrift der Ebene 2 beendet den Abschnitt: Pfade dahinter zählen nicht", () => {
+  test("eine Überschrift der Ebene 1 oder 2 beendet den Abschnitt: Pfade dahinter zählen nicht", () => {
     const text = hexText().replace("### Nächster Abschnitt", "## 6. Nächstes Kapitel");
     assert.deepEqual(texte(mitText(text)), []);
     assert.deepEqual(texte(mitText(hexText().replace("### Nächster Abschnitt", "# Anhang"))), [], "Ebene 1 beendet ihn ebenfalls");

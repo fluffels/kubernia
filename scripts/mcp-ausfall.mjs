@@ -175,7 +175,27 @@ function lies(basis, wurzel, server, seit) {
   return neuSeit(alle, seit);
 }
 
-export function main(argv = process.argv.slice(2), env = process.env, out = console.log, { plattform = process.platform, home = homedir(), jetzt = Date.now() } = {}) {
+const USAGE = "Aufruf: node scripts/mcp-ausfall.mjs [--sessionstart] [--json] [--seit <ISO|Nh>]";
+
+/** Argumente prüfen: erlaubt `--sessionstart`, `--json`, `--seit <wert>`; sonst die Fehlerzeile, sonst `null`. Pur. */
+export function argumentFehler(argv) {
+  for (let k = 0; k < argv.length; k++) {
+    if (argv[k] === "--sessionstart" || argv[k] === "--json") continue;
+    if (argv[k] === "--seit" && argv[k + 1] !== undefined && !argv[k + 1].startsWith("--")) {
+      k++;
+      continue;
+    }
+    return argv[k] === "--seit" ? `--seit braucht einen Wert. ${USAGE}` : `Unbekanntes Argument: ${argv[k]}. ${USAGE}`;
+  }
+  return null;
+}
+
+export function main(argv = process.argv.slice(2), env = process.env, out = console.log, { plattform = process.platform, home = homedir(), jetzt = Date.now(), err = console.error } = {}) {
+  const fehler = argumentFehler(argv);
+  if (fehler) {
+    err(fehler);
+    return 2;
+  }
   try {
     const wurzel = env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL("..", import.meta.url));
     const server = serverAusConfig(readFileSync(join(wurzel, ".mcp.json"), "utf8"));
