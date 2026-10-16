@@ -61,8 +61,9 @@ export function mermaidDatei(distDir, urlPfad) {
   } catch {
     return null; // kaputte Prozent-Kodierung: kein Treffer statt ungefangenem URIError im Server
   }
-  const ziel = unterhalb(distDir, resolve(distDir, normalize(rel)));
-  if (!ziel) return null;
+  const ziel = resolve(distDir, normalize(rel));
+  // Containment inline vor dem fs-Aufruf (kein Helfer): CodeQL erkennt nur die Prüfung in derselben Funktion als Barriere.
+  if (!ziel.startsWith(resolve(distDir) + sep)) return null;
   return existsSync(ziel) && statSync(ziel).isFile() ? ziel : null;
 }
 
@@ -90,7 +91,7 @@ function main(argv) {
     const url = req.url ?? "/";
     if (url.startsWith("/mermaid/")) {
       const datei = mermaidDatei(dist, url);
-      if (!datei || !unterhalb(dist, datei)) return void res.writeHead(404).end("nicht gefunden");
+      if (!datei || !datei.startsWith(resolve(dist) + sep)) return void res.writeHead(404).end("nicht gefunden");
       res.writeHead(200, { "content-type": TYPEN[extname(datei)] ?? "application/octet-stream" });
       return void res.end(readFileSync(datei));
     }
