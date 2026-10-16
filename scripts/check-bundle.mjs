@@ -97,6 +97,9 @@ const HOST_HTML = "dist/index.html";
  *     Spielcode 555_000 → 566_000 (Ist 562_252 B), Offline-HTML ohne Content 2_560_000 → 2_570_000 (Ist 2_562_363 B), jeweils mit dem Stand von main nach #1461.
  *   • #1553 (Tastenhinweis-Domäne, Token-Ersetzung in HUD/Dialog/Innenraum: neuer Code, bewusst und legitim):
  *     Spielcode 566_000 → 570_000 (Ist 566_729 B).
+ *   • #1530 (kubectl create/set/auth prüfen Eingaben wie kubectl: Container-Modell, Paar-Reihenfolge, Registry-Auflösung,
+ *     Literal-Schlüssel mit den echten Fehlertexten; neuer Domänen-Code, bewusst und legitim):
+ *     Spielcode 570_000 → 573_000 (Ist 571_349 B), Offline-Build 2_570_000 → 2_575_000 (Ist 2_571_051 B).
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -106,13 +109,13 @@ export const BUNDLE_BUDGETS = [
     // Die Offline-Datei enthält den Content inline; er wird über `subtractChunksDir` abgezogen und
     // zählt allein bei den Content-Chunks (ADR 0018). Gemessen: Offline-HTML minus Summe der Chunks.
     subtractChunksDir: CONTENT_CHUNK_DIR_DIST,
-    maxBytes: 2_570_000,
+    maxBytes: 2_575_000,
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 570_000,
+    maxBytes: 573_000,
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
