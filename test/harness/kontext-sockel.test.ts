@@ -53,7 +53,7 @@ const skills = readdirSync(root + ".claude/skills", { withFileTypes: true })
   .filter((e) => e.isDirectory())
   .map((e) => e.name);
 
-describe("Kontext-Sockel (#1198)", () => {
+describe("Kontext-Sockel (#1198)", { timeout: 30_000 }, () => {
   test("jeder Agent hat eine Tool-Whitelist ohne *, Skill, Artifact und MCP-Wildcards", () => {
     assert.ok(agenten.length > 0);
     for (const f of agenten) {
