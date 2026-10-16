@@ -112,7 +112,7 @@ const gw = (listeners: unknown): unknown => ({ name: "tor", className: "envoy", 
 const tlsFehler = (listener: Record<string, unknown>, pfad: RegExp): void => {
   assert.throws(
     () => reviveScenario({ gateways: [gw([listener])] }, "x"),
-    (e: unknown) => e instanceof ContentValidationError && pfad.test((e as Error).message),
+    (e: unknown) => e instanceof ContentValidationError && pfad.test(e.message),
   );
 };
 
