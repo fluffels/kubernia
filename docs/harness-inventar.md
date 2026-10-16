@@ -99,7 +99,7 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 | Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |
 |---|---|---|---|---|
 | Langfuse: Hook-Patch und `token-baseline.mjs --langfuse` | Erfassung und Messung | offizielles Plugin ([Integration](https://langfuse.com/integrations/developer-tools/claude-code)); ein offizieller Langfuse-MCP-Server ist nicht belegt (nur Community-Server); OTel-Traces von Claude Code sind Beta; verschachtelte Subagenten sendet das Plugin ab 1.2.1 selbst | beobachten: Patch-Teile #1311 und #1378 bleiben | ja |
-| MCP-Launcher: `scripts/mcp-launch.mjs` (Wrapper `playwright-mcp.mjs`, `likec4-mcp.mjs`) | Start mit festem Versionspin | [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp) mit `--config` und Optionen; Pin bleibt Projektpolitik | behalten | ja |
+| MCP-Launcher: `scripts/mcp-launch.mjs` (Wrapper `playwright-mcp.mjs`, `likec4-mcp.mjs`) | Start mit festem Versionspin | keines: Playwright ([`@playwright/mcp`](https://github.com/microsoft/playwright-mcp)) und LikeC4 bieten kein Versionspinning aus dem Lockfile; Pin bleibt Projektpolitik | behalten | ja |
 | GitHub: `gh`-/GraphQL-Board-Skripte | Board-Reihenfolge, Sammeltickets | [GitHub-MCP-Server](https://github.com/github/github-mcp-server) (Toolset `projects`, nicht Default; Reihenfolge nicht belegt), `gh project` ohne Positions-Flag | behalten | teilweise |
 | PixelLab: MCP-Zugriff | Pixel-Art-Erzeugung | gehosteter Server; die Tool-Liste ist auf der Website nicht belegt (nur die Server-Anweisung nennt `pixelart_workbench` und Git-Zugriff über `list_projects`) | beobachten: Außenwirkung der Git-Tools prüft die Befund-Zeile | ja |
 

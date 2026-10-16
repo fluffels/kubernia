@@ -19,7 +19,7 @@ import { join } from "node:path";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/playwright-mcp.mjs).
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as launcherModule from "../../scripts/likec4-mcp.mjs";
-import { mcpToolListe, type McpTool } from "./mcp-handshake";
+import { mcpAbfrage, type McpAbfrage, type McpTool } from "./mcp-handshake";
 
 type Installed = { version: string; binPath: string } | null;
 type Plan = { mode: "local"; binPath: string } | { mode: "npx"; spec: string };
@@ -142,18 +142,20 @@ const lokalInstalliert = launcher.readInstalled(root) !== null;
 const HANDSHAKE_MS = 30_000;
 
 describe.skipIf(!lokalInstalliert)("tools/list-Handshake (#1422)", () => {
-  let einmal: Promise<McpTool[]> | null = null;
-  const tools = (): Promise<McpTool[]> => {
+  let einmal: Promise<McpAbfrage> | null = null;
+  const abfrage = (): Promise<McpAbfrage> => {
     if (!einmal) {
       const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
       const args = cfg.mcpServers.likec4.args.map((a) => (a === "scripts/likec4-mcp.mjs" ? join(root, a) : a));
       const cwd = mkdtempSync(join(tmpdir(), "kq-likec4-hs-"));
       angelegt.push(cwd);
-      // Der Launcher startet den Server selbst mit cwd = Repo-Root, das cwd des Aufrufers ist egal.
-      einmal = mcpToolListe(args, cwd, HANDSHAKE_MS);
+      // Der Launcher startet den Server selbst mit cwd = Repo-Root, das cwd des Aufrufers ist egal; der Aufruf
+      // list-projects belegt es (tools/list ist statisch und bliebe auch ohne Modell grün).
+      einmal = mcpAbfrage(args, cwd, HANDSHAKE_MS, { name: "list-projects", arguments: {} });
     }
     return einmal;
   };
+  const tools = async (): Promise<McpTool[]> => (await abfrage()).tools;
 
   test("der Server nennt die Abfrage-Tools der FAQ", async () => {
     const namen = new Set((await tools()).map((t) => t.name));
@@ -164,6 +166,14 @@ describe.skipIf(!lokalInstalliert)("tools/list-Handshake (#1422)", () => {
   test("jedes Tool ohne readOnlyHint steht in permissions.ask, sonst liefe ein neues Schreib-Tool über mcp__likec4 ungefragt", async () => {
     const ask = (readJson(".claude/settings.json") as { permissions: { ask: string[] } }).permissions.ask;
     assert.deepEqual(schreibToolsOhneAsk(await tools(), ask), [], "Schreib-Tool ohne ask-Eintrag in .claude/settings.json");
+  }, HANDSHAKE_MS * 2);
+
+  test("der Server liest das Modell aus docs/architektur, auch wenn der Aufrufer woanders startet (cwd des Launchers)", async () => {
+    const r = (await abfrage()).aufruf as { structuredContent?: { projects?: { sources?: string[] }[] } } | undefined;
+    const quellen = (r?.structuredContent?.projects ?? []).flatMap((p) => p.sources ?? []).map((s) => s.replaceAll("\\", "/").toLowerCase());
+    assert.ok(quellen.some((s) => /\/docs\/architektur\/[^/]+\.c4$/.test(s)), `keine .c4-Quelle unter docs/architektur geladen: ${JSON.stringify(quellen)}`);
+    const temp = tmpdir().replaceAll("\\", "/").toLowerCase();
+    assert.ok(quellen.every((s) => !s.startsWith(temp)), "Modell darf nicht aus dem Temp-cwd des Aufrufers kommen");
   }, HANDSHAKE_MS * 2);
 
   test("Erkennung greift (Red-Green): ein erfundener Tool-Name fehlt im Server", async () => {
