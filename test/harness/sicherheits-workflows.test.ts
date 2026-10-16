@@ -17,7 +17,7 @@
  * Ausführen mit:  npm test
  */
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -276,5 +276,31 @@ describe("Grenzfälle", () => {
   });
   test("SHA mit falscher Länge ist ungepinnt", () => {
     expect(ungepinnteUses("      - uses: a/b@0123456789abcdef # v1")).toHaveLength(1);
+  });
+});
+
+/** Hat der Workflow ein `permissions:` auf oberster Ebene (Objekt oder `{}`)? Ohne gälte der Repo-Standard des Tokens. */
+function hatOberstePermissions(yml: string): boolean {
+  try {
+    const doc: unknown = parse(yml);
+    return istObj(doc) && istObj(doc.permissions);
+  } catch {
+    return false;
+  }
+}
+
+describe("jeder Workflow hat oberste permissions (#1663)", () => {
+  const dateien = readdirSync(join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
+  test("es gibt Workflows", () => expect(dateien.length).toBeGreaterThan(0));
+  test.each(dateien)("%s", (datei) => {
+    expect(hatOberstePermissions(lies(".github", "workflows", datei)), `${datei}: permissions: auf oberster Ebene fehlt`).toBe(true);
+  });
+  test("Negativfälle: fehlend, nur im Job, Flow-Skalar, kaputtes YAML", () => {
+    expect(hatOberstePermissions("on: push\njobs:\n  a:\n    runs-on: x\n")).toBe(false);
+    expect(hatOberstePermissions("on: push\njobs:\n  a:\n    permissions:\n      contents: read\n")).toBe(false);
+    expect(hatOberstePermissions("permissions: write-all\njobs: {}\n")).toBe(false);
+    expect(hatOberstePermissions("permissions: [\n")).toBe(false);
+    expect(hatOberstePermissions("permissions: {}\njobs: {}\n")).toBe(true);
+    expect(hatOberstePermissions("permissions:\n  contents: read\n")).toBe(true);
   });
 });

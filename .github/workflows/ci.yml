@@ -15,10 +15,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Oberstes Minimum: ohne Angabe gälte der Repo-Standard des Tokens. Jeder Job nennt seine Rechte zusätzlich selbst.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     name: Tests, Typecheck & Builds
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -176,6 +182,8 @@ jobs:
   security-audit:
     name: Security-Audit (npm audit)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -206,6 +214,9 @@ jobs:
   doc-freshness:
     name: Doku-Aktualität (Roadmap-Tickets, #610)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read  # check-doc-tickets.mjs liest Issue-Status per gh
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -234,6 +245,8 @@ jobs:
   ts7-readiness:
     name: TS-7-Freigabe (typescript-eslint-Peer, #847)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -262,6 +275,8 @@ jobs:
   duplication-report:
     name: Duplikations-Report (jscpd, nicht-blockierend, #612)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -308,6 +323,8 @@ jobs:
     name: Dev-Panel-Build (Kompilier-Gate, nur main/manuell)
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
