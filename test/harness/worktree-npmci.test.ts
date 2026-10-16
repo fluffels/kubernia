@@ -15,8 +15,8 @@
  * Hand-Änderung an `package.json` → `npm install` + Lockfile mitcommitten" (AGENTS.md) ist
  * gewollt. Codeblöcke zählen bewusst mit: ein Befehl im Codeblock ist eine Anweisung.
  *
- * Gescannt wird das ganze Markdown-Inventar (dieselbe Quelle wie check:docdrift) plus die
- * Workflow-Skripte – so fällt auch eine NEUE Datei mit der alten Anweisung auf. Die
+ * Gescannt wird das ganze Markdown-Inventar (dieselbe Quelle wie check:docdrift) plus
+ * etwaige Workflow-Skripte – so fällt auch eine NEUE Datei mit der alten Anweisung auf. Die
  * PFLICHT_QUELLEN sind nur der Leerlauf-Schutz: dort muss die Anweisung gefunden werden.
  *
  * Grenze (bewusst): kein Semantik-Prüfer, nur die abgelegte Formulierung neben einem

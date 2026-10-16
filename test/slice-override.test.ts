@@ -116,7 +116,7 @@ describe("PR-Log und Squash-Commit auf main lesen dasselbe (#1383)", () => {
     ["Override als Body-Zeile", [`feat: a\n\n${KEY}: #5 breit`, "fix: b"]],
     ["ungültiger Override als Betreff", ["feat: a", `${KEY}: ohne nummer`]],
     ["alter als Betreff, neuer als Body", [`${KEY}: #1 alt`, `feat: a\n\n${KEY}: #2 neu`]],
-    ["Nachweis wie im Workflow (KQ-Plan als Betreff)", ["feat: a", NACHWEIS]],
+    ["Nachweis mit KQ-Plan als Betreff", ["feat: a", NACHWEIS]],
     ["Nachweis wie im Skill (beide im Body)", ["feat: a", `chore: Nachweis\n\n${NACHWEIS}`]],
   ];
   it.each(szenarien)("%s", (_name, commits) => {
