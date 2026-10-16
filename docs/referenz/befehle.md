@@ -48,6 +48,8 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Kontextdatei-Wächter (Zeichen-Budget für jede AGENTS.md, Wurzel + modul-lokal, #719/#1064/#1088) | `npm run check:contextsize` |
 | Tiefendoc-Abdeckungs-Wächter (jede `src/`-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
+| Factory-Besitz in ein Projekt übertragen (nur Besitz laut `.factory/besitz.json`, kein Merge, idempotent; Trockenlauf mit `--trocken`, #1613) | `npm run factory:sync -- --quelle <pfad> [--ziel <pfad>] [--trocken]` |
+| Drift-Wächter (Besitz laut Sync-Stand unverändert, entfällt ohne `.factory/sync-stand.json`, #1613) | `npm run check:factorydrift` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Lebende-Doku-Wächter (generierte Abschnitte `<!-- GEN:<name> START/END -->` in README/docs gegen das Repo, #1355, [ADR 0017](../adr/0017-lebende-doku-generierte-abschnitte.md)) | `npm run check:docgen` |
 | Architekturmodell-Wächter (LikeC4-Modell `docs/architektur/` validiert, formatiert und gegen `scripts/layers.cjs`, `src/` und die hexagonale Sicht in arc42 abgeglichen, #1420, [ADR 0020](../adr/0020-architekturmodell-likec4.md)) | `npm run check:c4` (Format reparieren: `npm run c4:format`; im Browser ansehen: `npm run c4:serve`) |
