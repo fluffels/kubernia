@@ -2,9 +2,9 @@
 /**
  * Ergebnis je Ticket-Lauf (#1123) — deterministisch aus git und GitHub, nicht aus Langfuse.
  *
- * Je gemergtem PR im Zeitfenster: Review-Runden und Runde-1-Blocker je Brille (aus der `KQ-Review:`-Zeile der
- * Squash-Message), rote CI-Läufe (distinct Head-SHAs mit Fehlschlag zwischen PR-Erstellung und Merge), das Label
- * `status:festgefahren` (aus den Label-Events, zählt auch bei später entferntem Label) und Nacharbeit: ein Revert
+ * Je gemergtem PR im Zeitfenster: Review-Runden und Runde-1-Blocker je Brille (aus der Review-Zeile der
+ * Squash-Message, Präfix aus der Projekt-Config), rote CI-Läufe (distinct Head-SHAs mit Fehlschlag zwischen PR-Erstellung und Merge), das
+ * Label `labels.festgefahren` der Projekt-Config (aus den Label-Events, zählt auch bei später entferntem Label) und Nacharbeit: ein Revert
  * oder eine Folge-Fix-Commit-Zeile `Folge #<ticket-nr>` innerhalb von 14 Tagen nach dem Merge. Daraus die
  * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Definitionen und Grenzen: docs/model-routing.md
  * › Ergebnis je Ticket-Lauf.
@@ -21,7 +21,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { parseNachweis } from "./slice-override.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { commitZeilenAus, parseNachweis } from "./slice-override.mjs";
 import { passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf, ticketsMitStartImFenster } from "./subagent-laeufe.mjs";
@@ -90,12 +91,13 @@ export function labelAbfrage(nummern) {
 }
 
 /**
- * Anzahl der `status:festgefahren`-Label-Events je PR-Nummer aus der GraphQL-Antwort. Wirft DatenFehler, wenn ein PR
+ * Anzahl der Label-Events mit dem Namen `label` (Config: `labels.festgefahren`) je PR-Nummer aus der GraphQL-Antwort. Wirft DatenFehler, wenn ein PR
  * fehlt oder seine Label-Events über die erste Seite (`LABEL_EVENTS_JE_PR`) hinausgehen. `totalCount` taugt dafür nicht:
  * GitHub zählt damit ALLE Timeline-Einträge des PRs (gemessen 2026-10-07: totalCount 19 bei null Label-Events), nur
  * `nodes` und `pageInfo` folgen dem `itemTypes`-Filter. Pure.
  */
-export function festgefahrenAusAntwort(antwort, nummern) {
+export function festgefahrenAusAntwort(antwort, nummern, label) {
+  if (typeof label !== "string" || label === "") throw new Error("festgefahrenAusAntwort braucht den Label-Namen (labels.festgefahren der Projekt-Config)");
   const repo = antwort?.data?.repository;
   if (!repo) throw new DatenFehler("GraphQL-Antwort ohne data.repository.");
   const out = {};
@@ -103,18 +105,18 @@ export function festgefahrenAusAntwort(antwort, nummern) {
     const items = repo[`p${n}`]?.timelineItems;
     if (!items) throw new DatenFehler(`GraphQL: PR #${n} ohne Label-Events in der Antwort.`);
     if (items.pageInfo?.hasNextPage !== false) throw new DatenFehler(`PR #${n}: mehr als ${LABEL_EVENTS_JE_PR} Label-Events (oder pageInfo fehlt): abgeschnitten.`);
-    out[n] = (items.nodes ?? []).filter((e) => e?.label?.name === "status:festgefahren").length;
+    out[n] = (items.nodes ?? []).filter((e) => e?.label?.name === label).length;
   }
   return out;
 }
 
-/** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt. Pure. Liefert Zeilen und Kennzahlen. */
-export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
-  const zeilen = prs.map((pr) => {
+/** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt, `zeilen` sind die Commit-Zeilen der Projekt-Config (`commitZeilen`). Pure. Liefert Zeilen und Kennzahlen. */
+export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, zeilen }) {
+  const eintraege = prs.map((pr) => {
     const mergeSha = pr.mergeCommit?.oid ?? "";
     const commit = commits.find((c) => c.sha === mergeSha);
     const ticket = ticketVon(pr);
-    const { review } = parseNachweis(commit?.body ?? "");
+    const { review } = parseNachweis(commit?.body ?? "", zeilen);
     return {
       pr: pr.number,
       ticket,
@@ -126,7 +128,7 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
       nacharbeit: nacharbeitVon({ pr: pr.number, ticket, mergeSha, mergedAt: pr.mergedAt, commits, jetzt }),
     };
   });
-  const mitNachweis = zeilen.filter((z) => z.runden !== null);
+  const mitNachweis = eintraege.filter((z) => z.runden !== null);
   const brillen = {};
   for (const z of mitNachweis) {
     for (const b of z.blocker ?? []) {
@@ -138,13 +140,13 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
   }
   // Blocker je PR der Brille (Σ Blocker / PRs; #1441): die Zahl, an der die Wirkung der Selbstprüfung vor dem Commit gemessen wird.
   for (const e of Object.values(brillen)) e.jePr = e.prs > 0 ? e.summe / e.prs : null;
-  const zaehle = (art) => zeilen.filter((z) => z.nacharbeit === art).length;
-  const abgelaufen = zeilen.filter((z) => z.nacharbeit !== "offen");
+  const zaehle = (art) => eintraege.filter((z) => z.nacharbeit === art).length;
+  const abgelaufen = eintraege.filter((z) => z.nacharbeit !== "offen");
   return {
-    zeilen,
+    zeilen: eintraege,
     kennzahlen: {
-      prs: zeilen.length,
-      ohneNachweis: zeilen.length - mitNachweis.length,
+      prs: eintraege.length,
+      ohneNachweis: eintraege.length - mitNachweis.length,
       ohneBlockerFeld: mitNachweis.filter((z) => z.blocker === null).length,
       // Echte Zählung (#1609): PRs mit `blocker=`-Feld, in denen eine Brille in Runde 1 mindestens einen Blocker hatte; der Proxy (Runden ≥ 2) bleibt zum Vergleich.
       runde1MitBlocker: mitNachweis.filter((z) => z.blocker?.some((b) => b.n > 0)).length,
@@ -155,8 +157,8 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
       ohneNacharbeit: zaehle("nein"),
       nachweisbareFenster: abgelaufen.length,
       nacharbeitOffen: zaehle("offen"),
-      ciFixSumme: zeilen.reduce((a, z) => a + z.ciFix, 0),
-      festgefahrenSumme: zeilen.reduce((a, z) => a + z.festgefahren, 0),
+      ciFixSumme: eintraege.reduce((a, z) => a + z.ciFix, 0),
+      festgefahrenSumme: eintraege.reduce((a, z) => a + z.festgefahren, 0),
     },
   };
 }
@@ -170,7 +172,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   for (const z of zeilen) {
     out.push(`| #${z.pr} | ${z.ticket ? `#${z.ticket}` : "–"} | ${z.gemergt.slice(0, 10)} | ${z.runden ?? "ohne Nachweis"} | ${blocker(z)} | ${z.ciFix} | ${z.festgefahren} | ${z.nacharbeit} |`);
   }
-  out.push("", `PRs: ${k.prs} (ohne KQ-Review-Nachweis: ${k.ohneNachweis}, ohne blocker-Feld: ${k.ohneBlockerFeld})`);
+  out.push("", `PRs: ${k.prs} (ohne Review-Nachweis: ${k.ohneNachweis}, ohne blocker-Feld: ${k.ohneBlockerFeld})`);
   out.push(`Runde 1 mit Blocker (aus blocker=): ${prozent(k.runde1MitBlocker, k.mitBlockerFeld)}; Proxy Runden ≥ 2: ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
   for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
@@ -178,8 +180,15 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   return out.join("\n");
 }
 
+/** Commit-Zeilen und Festgefahren-Label aus der Projekt-Config (`ladeConfig`, Standard: die echte); wirft mit der Meldung des Laders. */
+function konfigurationAus(ladeConfig) {
+  const config = ladeConfig();
+  return { zeilen: commitZeilenAus(config), label: config.labels.festgefahren };
+}
+
 /** Holt die Daten über `runGit`/`runGh` (injizierbar) und bewertet. Wirft DatenFehler bei Lücken. */
-export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tickets = [], ohne = [] }) {
+export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tickets = [], ohne = [], ladeConfig = ladeProjektConfig }) {
+  const { zeilen, label } = konfigurationAus(ladeConfig);
   const gh = (args) => {
     try {
       return runGh(args);
@@ -233,20 +242,20 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tick
       } catch {
         throw new DatenFehler("GraphQL-Antwort ist kein JSON.");
       }
-      festgefahren = { ...festgefahren, ...festgefahrenAusAntwort(json, nummern) };
+      festgefahren = { ...festgefahren, ...festgefahrenAusAntwort(json, nummern, label) };
     }
   }
-  return bewertePrs({ prs, commits, ci, festgefahren, jetzt });
+  return bewertePrs({ prs, commits, ci, festgefahren, jetzt, zeilen });
 }
 
 /**
  * Wie `laufErgebnis`, aber die PR-Menge sind die Tickets mit erstem Lauf im Fenster (#1646). `laeufe` = geladene Transkripte `{ meta, zeilen }`.
  * Eine leere Menge ergibt 0 PRs (leere `tickets` hießen im Filter „alle“) und braucht keinen gh-Aufruf.
  */
-export function laufErgebnisStartAgent({ laeufe, von, bis, ohne = [], jetzt = new Date(), ...io }) {
+export function laufErgebnisStartAgent({ laeufe, von, bis, ohne = [], jetzt = new Date(), ladeConfig = ladeProjektConfig, ...io }) {
   const tickets = ticketsMitStartImFenster(laeufe.map(laufAus).filter(Boolean), { von, bis });
-  if (tickets.length === 0) return bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt });
-  return laufErgebnis({ von, bis, jetzt, tickets, ohne, ...io });
+  if (tickets.length === 0) return bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt, zeilen: konfigurationAus(ladeConfig).zeilen });
+  return laufErgebnis({ von, bis, jetzt, tickets, ohne, ladeConfig, ...io });
 }
 
 /** Lädt die Läufe des Typs ab `von` minus Vorlauf; fehlender Ordner oder kein einziger Lauf des Typs ist ein `DatenFehler` (fail-closed). */

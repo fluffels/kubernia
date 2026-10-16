@@ -13,6 +13,7 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
   ladeProjektConfig(opt?: { rootDir?: string; pfad?: string }): { repo: string };
+  trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
 }
@@ -35,6 +36,9 @@ const gueltig = (): Cfg => ({
   version: 2,
   repo: "acme/demo",
   boards: [mkBoard("produkt", 7, "p_eins"), mkBoard("factory", 8, "p_zwei")],
+  praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
+  labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
+  agenten: { planer: "demo-planer", umsetzer: "demo-umsetzer", lens: "demo-lens", gruppe: "demo-gruppe", ticketSkill: "demo" },
   projektliterale: { Zelda: "zelda" },
 });
 
@@ -84,6 +88,61 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (b1(c).todoOptionId = 3)), /boards\.1\.todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+  });
+
+  test("praefixe, labels, agenten (#1741): je Pflichtschlüssel ein Negativfall (fest verdrahtete Liste, kein Export)", () => {
+    const ohne = (pfad: string[]): string => {
+      const c = gueltig() as Record<string, unknown>;
+      let o = c;
+      for (const k of pfad.slice(0, -1)) o = o[k] as Record<string, unknown>;
+      delete o[pfad[pfad.length - 1]];
+      return meld(c);
+    };
+    const pflicht = [
+      ["praefixe"], ["praefixe", "commitZeile"], ["praefixe", "branch"], ["praefixe", "worktree"],
+      ["labels"], ["labels", "harness"], ["labels", "festgefahren"], ["labels", "forum"], ["labels", "dependabotInbox"],
+      ["agenten"], ["agenten", "planer"], ["agenten", "umsetzer"], ["agenten", "lens"], ["agenten", "gruppe"], ["agenten", "ticketSkill"],
+    ];
+    for (const pfad of pflicht) assert.ok(ohne(pfad).includes(pfad.join(".")), pfad.join("."));
+  });
+
+  test("praefixe: Muster (Commit-Zeilen-Präfix, Branch, Worktree)", () => {
+    const mit = (k: string, v: unknown): string => {
+      const c = gueltig() as Record<string, unknown>;
+      (c.praefixe as Record<string, unknown>)[k] = v;
+      return meld(c);
+    };
+    for (const schlecht of ["zd-", "ZD", "ZD--", "1D-", "", 5, "-", "Z D-", "ZD-x"]) {
+      assert.match(mit("commitZeile", schlecht), /praefixe\.commitZeile/, String(schlecht));
+    }
+    assert.equal(mit("commitZeile", "AB12-"), "");
+    for (const schlecht of [".", "a.b", "a*", "a(", "a\\b", "a b", "", 5, "a|b", "a+"]) assert.match(mit("branch", schlecht), /praefixe\.branch/, String(schlecht));
+    assert.equal(mit("branch", "feat/x-"), "");
+    for (const schlecht of [".", "a*", "a(", "a\\b", "a b", "", "a/b", 5]) assert.match(mit("worktree", schlecht), /praefixe\.worktree/, String(schlecht));
+    assert.equal(mit("worktree", "wt-"), "");
+  });
+
+  test("agenten: kein Doppelpunkt, kein Leerraum, nicht mit - am Anfang", () => {
+    const mit = (k: string, v: unknown): string => {
+      const c = gueltig() as Record<string, unknown>;
+      (c.agenten as Record<string, unknown>)[k] = v;
+      return meld(c);
+    };
+    for (const schlecht of ["a:b", "-x", "a b", "", 7]) assert.match(mit("lens", schlecht), /agenten\.lens/, String(schlecht));
+    assert.equal(mit("lens", "x-y_1"), "");
+  });
+
+  test("labels: leer oder kein String ist rot, weitere Labels mit gleicher Prüfung erlaubt", () => {
+    const mit = (k: string, v: unknown): string => {
+      const c = gueltig() as Record<string, unknown>;
+      (c.labels as Record<string, unknown>)[k] = v;
+      return meld(c);
+    };
+    assert.match(mit("harness", ""), /labels\.harness/);
+    assert.match(mit("forum", 3), /labels\.forum/);
+    assert.equal(mit("extra", "area:zusatz"), "");
+    assert.match(mit("extra", " "), /labels\.extra/);
+    assert.match(meld({ ...gueltig(), labels: [] }), /labels muss/);
   });
 
   test("boards (#1728): Liste, Rollen, Eindeutigkeit", () => {
@@ -140,6 +199,22 @@ describe("ladeProjektConfig", () => {
     writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify(gueltig()));
     assert.equal(pc.ladeProjektConfig({ rootDir: d }).repo, "acme/demo");
   });
+  test("fehlt praefixe.commitZeile, nennt die Meldung den absoluten Pfad, den Schlüssel und eine Fix-Zeile", () => {
+    const d = tmp();
+    mkdirSync(join(d, ".factory"));
+    const c = gueltig() as Record<string, unknown>;
+    delete (c.praefixe as Record<string, unknown>).commitZeile;
+    writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify(c));
+    let meldung = "";
+    try {
+      pc.ladeProjektConfig({ rootDir: d });
+    } catch (e) {
+      meldung = e instanceof Error ? e.message : String(e);
+    }
+    assert.ok(meldung.includes(join(d, ".factory/projekt.json")), meldung);
+    assert.match(meldung, /praefixe\.commitZeile/);
+    assert.match(meldung, /^Fix:/m);
+  });
   test("fehlende Datei, kaputtes JSON, Liste und fehlender Schlüssel werfen mit Pfad und Fix-Zeile", () => {
     const d = tmp();
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /\.factory[\\/]projekt\.json[\s\S]*Fix:/);
@@ -154,6 +229,14 @@ describe("ladeProjektConfig", () => {
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /boards\.0\.projectId[\s\S]*Fix:/);
     writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), version: 1, board: gueltig().boards?.[0], boards: undefined }));
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /projekt\.json[\s\S]*version muss 2[\s\S]*boards[\s\S]*Fix:/);
+  });
+});
+
+describe("trenneConfigArg", () => {
+  test("trennt --config samt Pfad ab, meldet fehlenden Pfad", () => {
+    assert.deepEqual(pc.trenneConfigArg(["a", "--config", "p.json", "b"]), { args: ["a", "b"], pfad: "p.json" });
+    assert.deepEqual(pc.trenneConfigArg(["a"]), { args: ["a"], pfad: undefined });
+    assert.match(pc.trenneConfigArg(["--config"]).fehler ?? "", /Pfad[\s\S]*Fix:/);
   });
 });
 

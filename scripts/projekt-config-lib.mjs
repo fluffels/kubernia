@@ -69,6 +69,56 @@ function pruefeBoards(boards) {
   return fehler;
 }
 
+/** Muster der Präfixe (#1741, F3): Commit-Zeilen-Präfix wie `<PRAEFIX>-` (Großbuchstabe, dann Großbuchstaben/Ziffern, Bindestrich am Ende);
+ *  Branch ohne Regex-Sonderzeichen und Leerraum, Worktree zusätzlich ohne Schrägstrich (ein Ordnername). */
+export const COMMIT_PRAEFIX_MUSTER = /^[A-Z][A-Z0-9]*-$/;
+const BRANCH_MUSTER = /^[A-Za-z0-9_/-]+$/;
+const WORKTREE_MUSTER = /^[A-Za-z0-9_-]+$/;
+/** Agentenname: kein Leerraum, kein `:` (Agent-Typ-Trenner), nicht mit `-` am Anfang. */
+export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
+
+/** Pflicht-Label-Schlüssel (weitere erlaubt, gleiche Prüfung) und Pflicht-Agenten. */
+export const PFLICHT_LABELS = ["harness", "festgefahren", "forum", "dependabotInbox"];
+export const PFLICHT_AGENTEN = ["planer", "umsetzer", "lens", "gruppe", "ticketSkill"];
+
+/** Pur: prüft `praefixe` (commitZeile, branch, worktree). */
+function pruefePraefixe(p) {
+  if (!istObjekt(p)) return ["praefixe muss ein Objekt mit commitZeile, branch und worktree sein"];
+  const fehler = [];
+  const regeln = [
+    ["commitZeile", COMMIT_PRAEFIX_MUSTER, "ein Präfix der Form <GROSSBUCHSTABEN>- (Muster ^[A-Z][A-Z0-9]*-$)"],
+    ["branch", BRANCH_MUSTER, "ein nicht-leerer Text aus Buchstaben, Ziffern, _, - und / (keine Regex-Sonderzeichen, kein Leerraum)"],
+    ["worktree", WORKTREE_MUSTER, "ein nicht-leerer Text aus Buchstaben, Ziffern, _ und - (kein /, keine Regex-Sonderzeichen, kein Leerraum)"],
+  ];
+  for (const [k, muster, soll] of regeln) {
+    if (typeof p[k] !== "string" || !muster.test(p[k])) fehler.push(`praefixe.${k} muss ${soll} sein`);
+  }
+  return fehler;
+}
+
+/** Pur: prüft `labels`: die Pflichtschlüssel und alle weiteren Werte sind nicht-leere Strings. */
+function pruefeLabels(l) {
+  if (!istObjekt(l)) return [`labels muss ein Objekt (Name → String) mit den Pflichtschlüsseln ${PFLICHT_LABELS.join(", ")} sein`];
+  const fehler = [];
+  for (const k of PFLICHT_LABELS) {
+    if (!Object.hasOwn(l, k)) fehler.push(`labels.${k} fehlt (Pflichtschlüssel)`);
+  }
+  for (const [k, v] of Object.entries(l)) {
+    if (!istText(v)) fehler.push(`labels.${k} muss ein nicht-leerer String sein`);
+  }
+  return fehler;
+}
+
+/** Pur: prüft `agenten`: je Pflichtschlüssel ein Name nach AGENT_MUSTER. */
+function pruefeAgenten(a) {
+  if (!istObjekt(a)) return [`agenten muss ein Objekt mit ${PFLICHT_AGENTEN.join(", ")} sein`];
+  const fehler = [];
+  for (const k of PFLICHT_AGENTEN) {
+    if (typeof a[k] !== "string" || !AGENT_MUSTER.test(a[k])) fehler.push(`agenten.${k} muss ein Name ohne Leerraum und ohne ":" sein, nicht mit "-" am Anfang`);
+  }
+  return fehler;
+}
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
@@ -76,6 +126,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.version !== 2) fehler.push("version muss 2 sein (Schema mit boards-Liste)");
   if (!istText(wert.repo) || !/^[^/\s]+\/[^/\s]+$/.test(wert.repo)) fehler.push("repo muss die Form owner/name haben");
   fehler.push(...pruefeBoards(wert.boards));
+  fehler.push(...pruefePraefixe(wert.praefixe), ...pruefeLabels(wert.labels), ...pruefeAgenten(wert.agenten));
   if (wert.projektliterale !== undefined) {
     if (!istObjekt(wert.projektliterale)) {
       fehler.push("projektliterale muss ein Objekt (Name → String) sein");
@@ -103,7 +154,7 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG } = {}
   try {
     roh = readFileSync(abs, "utf8");
   } catch {
-    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, boards[])`);
+    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, boards[], praefixe, labels, agenten)`);
   }
   let wert;
   try {
@@ -118,19 +169,26 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG } = {}
   return wert;
 }
 
+/** Trennt `--config <pfad>` aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)
+ *  oder `{ fehler }`, wenn der Pfad fehlt. */
+export function trenneConfigArg(argv) {
+  const args = [...argv];
+  const ci = args.indexOf("--config");
+  if (ci < 0) return { args, pfad: undefined };
+  const pfad = args[ci + 1];
+  if (!pfad) return { fehler: "✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen" };
+  args.splice(ci, 2);
+  return { args, pfad };
+}
+
 /** Kommandozeile; gibt den Exit-Code zurück. */
 export function cli(argv, { rootDir = ROOT, out = console.log, err = console.error } = {}) {
-  const args = [...argv];
-  let pfad;
-  const ci = args.indexOf("--config");
-  if (ci >= 0) {
-    pfad = args[ci + 1];
-    if (!pfad) {
-      err("✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen");
-      return 1;
-    }
-    args.splice(ci, 2);
+  const getrennt = trenneConfigArg(argv);
+  if (getrennt.fehler) {
+    err(getrennt.fehler);
+    return 1;
   }
+  const { args, pfad } = getrennt;
   const schluessel = args[0];
   if (!schluessel) {
     err("✖ Schlüssel fehlt\n\nFix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>");
