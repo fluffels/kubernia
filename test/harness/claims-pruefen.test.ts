@@ -299,9 +299,10 @@ function baue(welt: Welt) {
         repository[`i${m[1]}`] = i
           ? {
               state: i.state,
-              labels: knoten(i.labels),
+              // Wie GitHub: ein Feld kommt nur zurück, wenn die Abfrage es verlangt.
+              ...(query.includes("state labels(first:30){ nodes{ name } }") ? { labels: knoten(i.labels) } : {}),
               assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) },
-              closedByPullRequestsReferences: { nodes: (i.prs ?? []).map((p) => ({ ...p, labels: knoten(p.labels) })) },
+              closedByPullRequestsReferences: { nodes: (i.prs ?? []).map((p) => ({ ...p, ...(query.includes("headRefOid labels(first:30){ nodes{ name } }") ? { labels: knoten(p.labels) } : {}) })) },
             }
           : null;
       }
@@ -581,6 +582,20 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   test("eine nur zugewiesene Nummer ohne jede Spur ist ohne-lokale-spur (Quelle: Zuweisung)", () => {
     const r = M.fuehreAus([], baue({ zugewiesen: [23], issues: { 23: { state: "OPEN" } } }).deps);
     assert.match(r.out, /BEHALTEN #23: ohne-lokale-spur, zugewiesen, aber ohne Lock, Worktree und lokalen Branch/);
+  });
+
+  test("das Festgefahren-Label am Issue oder gemergten PR verhindert das Aufräumen eines geschlossenen Issues nicht", () => {
+    const welt: Welt = { ...BELEG, issues: { ...BELEG.issues, 1628: { state: "CLOSED", labels: ["status:festgefahren"], prs: [{ number: 1662, state: "MERGED", headRefOid: OID, labels: ["status:festgefahren"] }] } } };
+    const { deps, geloescht } = baue(welt);
+    const r = M.fuehreAus([], deps);
+    assert.match(r.out, /AUFGERAEUMT #1628: Worktree /);
+    assert.deepEqual(geloescht, ["/locks/1628.json"]);
+  });
+
+  test("--json: branchLokal ist true bei lokalem Branch und false bei reinem Remote-Branch", () => {
+    const welt: Welt = { refs: [["feature/kq-40-x", sek("2026-10-16T07:00:00Z")], ["origin/feature/kq-41-x", sek("2026-10-16T07:00:00Z")]], issues: { 40: { state: "OPEN" }, 41: { state: "OPEN" } } };
+    const d = JSON.parse(M.fuehreAus(["--json"], baue(welt).deps).out) as { claims: { nr: number; branch: boolean; branchLokal: boolean }[] };
+    assert.deepEqual(d.claims.map((c) => [c.nr, c.branch, c.branchLokal]), [[40, true, true], [41, true, false]]);
   });
 
   test("--json: lock ist null ohne Lock und \"unlesbar\" bei kaputtem Lock, dazu branchLokal und festgefahren", () => {

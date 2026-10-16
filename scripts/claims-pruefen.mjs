@@ -11,7 +11,8 @@
  * Kandidaten sind alle Nummern mit einer lokalen Spur (Lock-Datei, registrierter Worktree, Ticket-Branch lokal oder remote) oder einer
  * offenen Zuweisung an die eigene Identität. Bewusste Grenzen: ein reiner Remote-Branch gilt nicht als lokale Spur (ein Klon ohne eigenen Lock
  * übernimmt nichts); ein bewusst angehaltenes Ticket erkennt das Skript nur am Label `labels.festgefahren` (Projekt-Config) auf Issue oder PR, ein
- * Hand-off nach dem Review-Cap ohne PR und ohne Label bleibt als verwaist sichtbar.
+ * Hand-off nach dem Review-Cap ohne PR und ohne Label bleibt als verwaist sichtbar; Labels, Assignees und PRs je Issue sind auf 30, 10 und 5 begrenzt
+ * (darüber hinaus fail-open für das Label, fail-closed für das Aufräumen).
  * Je Nummer ein Urteil (`beurteileClaim`, pur):
  *   unbekannt        GitHub-Daten fehlen: keine Aktion (fail-closed).
  *   lebendig         offen, Lebenszeichen (Lock `zuletzt`/`erstellt`/Übergabe/Stopp, Commit-Zeit der Branch-Köpfe) jünger als N Stunden (Standard 3).
