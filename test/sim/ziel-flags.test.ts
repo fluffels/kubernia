@@ -29,6 +29,7 @@ describe("kubectl create/set/auth: ein Flag eines anderen Ziels wird abgelehnt, 
   ];
   test.each(FREMD)("%s", (cmd, name, ziel) => {
     const sim = freshSim();
+    lauf("kubectl create deployment web --image=nginx", sim);
     const vorher = zustand(sim);
     const r = lauf(cmd, sim);
     expect(r.error).toBe(true);
@@ -52,6 +53,9 @@ describe("kubectl create/set/auth: ein Flag eines anderen Ziels wird abgelehnt, 
   test("clusterrolebinding kennt --role nicht: der Hinweis nennt --clusterrole", () => {
     const r = lauf("kubectl create clusterrolebinding b --role=x --user=alice");
     expect(r.out).toContain("nutze '--clusterrole=<name>'");
+  });
+  test("set env/resources: der Hinweis zu --from nennt die Quelle", () => {
+    expect(lauf("kubectl set resources deployment/web --limits=memory=1Gi --from=configmap/c").out).toContain("Eine Quelle für Variablen kennt nur");
   });
   test("rollout restart/history: der Hinweis nennt undo", () => {
     expect(lauf("kubectl rollout restart deployment web --to-revision=1").out).toContain("kubectl rollout undo deployment <name> --to-revision=<n>");
@@ -111,6 +115,13 @@ describe("helm dependency und helm search: Ziele mit eigener Tabelle", () => {
     expect(lauf("helm dependency updat ./mein", sim).out).toContain("Meintest du 'helm dependency update'?");
     expect(lauf("helm search hub x", sim).out).toContain(NS + " 'helm search hub'.");
     expect(lauf("helm search", sim).out).toContain("helm search: Unterbefehl fehlt.");
+  });
+  test("dependency: Chart-Pfad fehlt, unbekannter Pfad, Zustand bleibt", () => {
+    const sim = freshSim();
+    const vorher = zustand(sim);
+    expect(lauf("helm dependency update", sim).out).toContain("helm dependency update: Chart-Pfad fehlt.");
+    expect(lauf("helm dep build ./gibtsnicht", sim).out).toContain('Error: path "./gibtsnicht" not found');
+    expect(zustand(sim)).toBe(vorher);
   });
   test("dependency und search lehnen Flags anderer Befehle ab", () => {
     const sim = freshSim();

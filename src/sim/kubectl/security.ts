@@ -1,7 +1,7 @@
 /* ===== Kubernia – kubectl Security (sim/kubectl/security.ts) =====
  * RBAC-Auswertung (#126) + Pod-Security-Admission (#128): die beiden Sicherheits-
  * Mechaniken der kubectl-Familie an EINEM Ort.
- *  - `kubectl auth can-i` (RBAC): `subjectKeyOf`/`asKey`/`canI` + `kubectlAuth`.
+ *  - `kubectl auth can-i` (RBAC): `subjectKeyOf`/`asKey`/`canI` + die Ziel-Tabelle `KUBECTL_AUTH`.
  *  - Pod-Security-Stufe per Namespace-Label setzen (`kubectlLabel`) und Pods dagegen
  *    prüfen (`admitPod`, Kern `podSecurityViolations`). `admitPod` ruft nur ./rollout.
  *

@@ -958,7 +958,7 @@ describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
   test("ein Flag eines anderen Ziels wird abgelehnt (je Ziel eigene Tabelle)", () => {
     expect(lauf("a", "--y=1")).toContain("das Flag '--y' bei 'x a'");
     expect(lauf("b", "--x=1")).toContain("das Flag '--x' bei 'x b'");
-    expect(lauf("a", "--x=1")).not.toContain(NS);
+    expect(typeof lauf("a", "--x=1")).toBe("object");
   });
   test("ein nicht persistentes Flag vor dem Ziel bleibt „vor dem Unterbefehl“, auch wenn das Ziel es kennt", () => {
     expect(lauf("--x=1", "a")).toContain("das Flag '--x' vor dem Unterbefehl");
@@ -976,7 +976,9 @@ describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
       expect(typeof r === "string" ? r : [r.sub, r.call.value("-n"), r.call.args]).toEqual(["mb", "f", []]);
     }
     expect(lauf("grp", "mb", "--x=1")).toContain("das Flag '--x' bei 'x grp mb'");
-    expect(lauf("grp", "mb", "--w")).not.toContain(NS);
+    expect(typeof lauf("grp", "mb", "--w")).toBe("object");
+    const bool = lauf("-v", "a");
+    expect(typeof bool === "string" ? bool : [bool.sub, bool.call.has("-v")]).toEqual(["a", true]);
   });
   test("Hinweise werden je Schlüssel gemischt: Familie, Gruppe, Blatt; gleicher Schlüssel: der innere gewinnt", () => {
     expect(lauf("b", "--z")).toContain("Blatt-Hinweis.");
