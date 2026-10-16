@@ -811,7 +811,7 @@ describe("token-baseline: Preisstufen, Sonnet-Periode, Modelle ohne Preis, Langf
     assert.equal(s.unpriced, 1);
     assert.deepEqual(s.unpricedModels, { "claude-neu-1": 1 });
     assert.doesNotMatch(m.renderMarkdown(m.summarize(m.callsFromTranscript(row("d", "<synthetic>", { input_tokens: 5 })))), /ohne Preis/);
-    const ohneModell = m.summarize({ calls: [{ ts: "2026-10-10T00:00:00Z", input: 1, cacheWrite: 0, cacheRead: 0, output: 0 } as Call] });
+    const ohneModell = m.summarize({ calls: [{ ts: "2026-10-10T00:00:00Z", input: 1, cacheWrite: 0, cacheRead: 0, output: 0 }] });
     assert.equal(ohneModell.unpriced, 1, "ein Call ganz ohne Modell bleibt sichtbar");
   });
 
