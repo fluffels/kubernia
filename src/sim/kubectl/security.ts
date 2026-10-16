@@ -44,7 +44,8 @@ function canI(host: KubectlHost, verb: string, resource: string, subjectKey: str
     if (!role) continue; // baumelnde Referenz: gewährt nichts
     for (const rule of role.rules) {
       const verbOk = rule.verbs.includes("*") || rule.verbs.includes(verb);
-      const resOk = rule.resources.includes("*") || rule.resources.includes(resource);
+      // Altstände können Kurznamen speichern (`po`): die Regel-Ressource läuft über dieselbe Registry wie die Abfrage.
+      const resOk = rule.resources.includes("*") || rule.resources.some(r => (resolveKind(r)?.plural ?? r) === resource);
       if (verbOk && resOk) return true;
     }
   }
@@ -52,14 +53,29 @@ function canI(host: KubectlHost, verb: string, resource: string, subjectKey: str
 }
 
 
+/** Die Typen, die `auth can-i` ohne Registry-Treffer ohne Warnung annimmt (`nonStandardResourceNames` in `cani.go`). */
+const NON_STANDARD_RESOURCES = ["users", "groups", "*"];
+
+/** Der Ressourcen-Token von `auth can-i` über die Registry (Kurzname, `<name>.<gruppe>` → Plural). Unbekannt: kubectl warnt
+ *  (`the server doesn't have a resource type`, mit Gruppe `… in group`) und wertet mit dem Rohwert aus. */
+function canIResource(token: string): { resource: string; warning: string } {
+  const kind = resolveKind(token);
+  if (kind) return { resource: kind.plural, warning: "" };
+  if (NON_STANDARD_RESOURCES.includes(token)) return { resource: token, warning: "" };
+  const dot = token.indexOf(".");
+  const res = dot < 0 ? token : token.slice(0, dot);
+  const group = dot < 0 ? "" : token.slice(dot + 1);
+  return { resource: token, warning: "Warning: the server doesn't have a resource type '" + res + "'" + (group ? " in group '" + group + "'" : "") + "\n" };
+}
+
 /** `kubectl auth can-i <verb> <resource>` – genau zwei Argumente wie in kubectl (`cani.go`); `<resource>/<name>` wertet nur
  *  den Typ aus (die Sim-Rollen kennen keine `resourceNames`), ein führendes `/` ist eine Non-Resource-URL. */
 function authCanI(host: KubectlHost, c: Call): string {
   const [verb, target] = c.args.slice(1);
   if (c.args.length !== 3) return host._err("error: you must specify two arguments: verb resource or verb resource/resourceName.", "Muster: kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot");
   if (target.startsWith("/")) return notSimulated(host, "'kubectl auth can-i " + verb + " " + target + "' (Non-Resource-URL).", ["kubectl auth can-i <verb> <resource>[/<name>] [--as=…]"]);
-  const resource = target.split("/")[0];
-  return canI(host, verb, resource, asKey(c.value("--as"))) ? "yes" : "no";
+  const { resource, warning } = canIResource(target.split("/")[0]);
+  return warning + (canI(host, verb, resource, asKey(c.value("--as"))) ? "yes" : "no");
 }
 
 /** Die `auth`-Aktionen (#1487): ein Eintrag je Aktion; `c.args` beginnt bei der Aktion. */

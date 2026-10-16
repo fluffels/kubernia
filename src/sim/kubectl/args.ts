@@ -182,3 +182,32 @@ export function splitResourcesAndPairs(args: readonly string[], isPair: (tok: st
 export const isImagePairArg = (tok: string): boolean => (tok.includes("=") && tok[0] !== "=") || (tok.endsWith("-") && tok !== "-");
 /** `KEY=wert` (`IsEnvironmentArgument`) oder `KEY-`: `isEnv` in `SplitEnvironmentFromResources`. */
 export const isEnvArg = (tok: string): boolean => tok.lastIndexOf("=") > 0 || tok.endsWith("-");
+
+/** `schema.ParseResourceArg`: `<ressource>.<gruppe>` am ERSTEN Punkt zerlegt (`deployments.apps` → `deployments` + `apps`). */
+function splitResourceGroup(token: string): { resource: string; group: string } {
+  const dot = token.indexOf(".");
+  return dot < 0 ? { resource: token, group: "" } : { resource: token.slice(0, dot), group: token.slice(dot + 1) };
+}
+
+/** `error: no matches for <gruppe>/, Resource=<ressource>` – der `NoResourceMatchError` von kubectl (leere Gruppe: `/`). */
+export function noResourceMatch(host: ErrOnly, token: string): string {
+  const { resource, group } = splitResourceGroup(token);
+  const typen = RESOURCE_KINDS.filter(k => !k.pseudo).map(k => k.plural).join(", ");
+  return host._err("error: no matches for " + group + "/, Resource=" + resource, "Gemeint war vielleicht: " + typen + "?");
+}
+
+/** Die Ressourcen einer Rolle (`create role --resource=po,deploy,pods/log`) über die Registry auflösen: Kurznamen und
+ *  `<name>.<gruppe>` werden zum Plural, `*` bleibt, eine Subressource (`pods/log`) löst nur den Teil vor dem `/` auf.
+ *  Ein unbekannter Typ ist `noResourceMatch` (die fertige Fehlerausgabe, ein String). */
+export function resolveRoleResources(host: ErrOnly, resources: readonly string[]): string[] | string {
+  const out: string[] = [];
+  for (const res of resources) {
+    const slash = res.indexOf("/");
+    const typ = slash < 0 ? res : res.slice(0, slash);
+    if (typ === "*") { out.push(res); continue; }
+    const kind = resolveKind(typ);
+    if (!kind) return noResourceMatch(host, typ);
+    out.push(kind.plural + (slash < 0 ? "" : res.slice(slash)));
+  }
+  return out;
+}

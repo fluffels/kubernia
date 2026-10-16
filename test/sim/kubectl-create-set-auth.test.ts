@@ -145,3 +145,54 @@ describe("(a) set image prüft den Container-Namen", () => {
     expect(lauf("kubectl get rs -o wide", sim).out).toMatch(/nginx\s+nginx:/);
   });
 });
+
+describe("(c) create role und auth can-i lösen Kurznamen über die Registry auf", () => {
+  const SA = "system:serviceaccount:default:bot";
+  const rolle = (sim: KQSim) => sim.roles.find(r => r.name === "r")!.rules[0].resources;
+  test("create role speichert die Plurale; Gruppen-Form und Doppelte bleiben erhalten", () => {
+    const sim = freshSim();
+    expect(lauf("kubectl create role r --verb=get --resource=po,deploy,svc,deployments.apps", sim).out).toBe("role.rbac.authorization.k8s.io/r created");
+    expect(rolle(sim)).toEqual(["pods", "deployments", "services", "deployments"]);
+  });
+  test("'*' bleibt, eine Subressource löst nur den Teil vor dem '/' auf", () => {
+    const sim = freshSim();
+    lauf("kubectl create role r --verb=get --resource=*,po/log", sim);
+    expect(rolle(sim)).toEqual(["*", "pods/log"]);
+  });
+  test("unbekannte Ressource: no matches, die Rolle entsteht nicht", () => {
+    const sim = freshSim();
+    const r = lauf("kubectl create role r --verb=get --resource=foo", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: no matches for /, Resource=foo");
+    expect(sim.roles).toHaveLength(0);
+    expect(lauf("kubectl create role r --verb=get --resource=foo.bar", sim).out).toContain("error: no matches for bar/, Resource=foo");
+    expect(lauf("kubectl create role r --verb=get --resource=deployments.falsch", sim).out).toContain("no matches for falsch/, Resource=deployments");
+  });
+  const mitBinding = (): KQSim => mit(
+    "kubectl create role r --verb=get --resource=po,deploy",
+    "kubectl create rolebinding rb --role=r --serviceaccount=default:bot",
+  );
+  test("can-i löst den Kurznamen auf", () => {
+    const sim = mitBinding();
+    expect(lauf("kubectl auth can-i get po --as=" + SA, sim).out).toBe("yes");
+    expect(lauf("kubectl auth can-i get pods --as=" + SA, sim).out).toBe("yes");
+    expect(lauf("kubectl auth can-i get deployments.apps --as=" + SA, sim).out).toBe("yes");
+    expect(lauf("kubectl auth can-i get svc --as=" + SA, sim).out).toBe("no");
+  });
+  test("unbekannte Ressource: Warnzeile, dann Auswertung mit dem Rohwert", () => {
+    const sim = mitBinding();
+    expect(lauf("kubectl auth can-i get foo --as=" + SA, sim).out).toBe("Warning: the server doesn't have a resource type 'foo'\nno");
+    expect(lauf("kubectl auth can-i get foo.bar --as=" + SA, sim).out).toBe("Warning: the server doesn't have a resource type 'foo' in group 'bar'\nno");
+  });
+  test("users, groups und '*' warnen nicht", () => {
+    const sim = mitBinding();
+    for (const r of ["users", "groups", "*"]) expect(lauf("kubectl auth can-i get " + r + " --as=" + SA, sim).out).not.toContain("Warning");
+  });
+  test("Altstand: eine Rolle mit gespeichertem Kurznamen 'po' erlaubt can-i get pods und get po", () => {
+    const sim = mitBinding();
+    sim.roles[0].rules[0].resources = ["po"];
+    expect(lauf("kubectl auth can-i get pods --as=" + SA, sim).out).toBe("yes");
+    expect(lauf("kubectl auth can-i get po --as=" + SA, sim).out).toBe("yes");
+    expect(lauf("kubectl auth can-i get secrets --as=" + SA, sim).out).toBe("no");
+  });
+});
