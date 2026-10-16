@@ -413,8 +413,14 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     }
   }
 
-  test("CLI nennt den Zusatzpass samt Grund, ohne Zusatzpass keine solche Zeile", () => {
+  test("die CLI-Zeile nennt den Zusatzpass samt Grund, ohne Zusatzpass keine solche Zeile (im Prozess)", () => {
+    const zeile = (review: string) => raw.zusatzpassZeile(checkReviewNachweis({ runGit: fakeGit(review), env: {} }));
+    assert.match(zeile(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /^• Zusatzpass \(Freigabe der Maintainerin\): Maintainerin gab Pass frei$/);
+    assert.equal(zeile(`runden=1 ${LENSES} verdikt=ok`), null);
+  });
+
+  // Ein einziger echter Prozess-Smoke (Kaltstart von git und node unter Last braucht Luft).
+  test("CLI-Smoke: der Prozess gibt die Zusatzpass-Zeile aus", { timeout: 30_000 }, () => {
     assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass \(Freigabe der Maintainerin\): Maintainerin gab Pass frei/);
-    assert.doesNotMatch(cliAusgabe(`runden=1 ${LENSES} verdikt=ok`), /Zusatzpass/);
   });
 });
