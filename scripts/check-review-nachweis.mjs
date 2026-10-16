@@ -220,6 +220,9 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
   }
 }
 
+/** CLI-Zeile zum Zusatzpass (Freigabe der Maintainerin); `null` ohne gültigen Zusatzpass. Pur. */
+export const zusatzpassZeile = (r) => (r.zusatzpass ? `• Zusatzpass (Freigabe der Maintainerin): ${r.zusatzpass.grund}` : null);
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
   const r = checkReviewNachweis();
@@ -238,7 +241,8 @@ function main() {
       console.log(`• ${r.commitsNachReview} Commit(s) nach dem reviewten Stand (inkl. Nachweis-Commit).`);
     }
     if (r.blockerFehlt) console.log("• Hinweis: blocker= fehlt (Messung #1123).");
-    if (r.zusatzpass) console.log(`• Zusatzpass (Freigabe der Maintainerin): ${r.zusatzpass.grund}`);
+    const zusatz = zusatzpassZeile(r);
+    if (zusatz) console.log(zusatz);
     console.log("✔ Review-/Plan-Nachweis ok.");
     return;
   }

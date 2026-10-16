@@ -9,6 +9,7 @@ const A = raw as unknown as {
   befundeAusNpmAudit: (j: unknown) => B[];
   befundeAusAlerts: (a: unknown) => B[];
   markiereProd: (voll: B[], prod: B[]) => B[];
+  vertrauteBodies: (kommentare: { body?: string | null; user?: { login?: string; type?: string } | null }[], owner: string) => string[];
   bekannteGhsa: (a: { kommentare: string[]; wiedervorlagen: { id: string }[]; offeneTitel: string[] }) => Set<string>;
 };
 
@@ -126,5 +127,29 @@ describe("bekannteGhsa", () => {
       offeneTitel: ["🔒 Security: GHSA-dddd-eeee-ffff in x", "Anderes GHSA-0000-0000-0000"],
     });
     expect([...menge].sort()).toEqual(["ghsa-1111-2222-3333", "ghsa-aaaa-bbbb-cccc", "ghsa-dddd-eeee-ffff"]);
+  });
+});
+
+describe("vertrauteBodies (#1663)", () => {
+  const owner = "fluffels";
+  const k = (login: string | null, body: string, type = "User") => ({ body, user: login === null ? null : { login, type } });
+  test("Owner und github-actions[bot] zählen, Fremde, Fake-Bots und fehlende User nicht", () => {
+    const bodies = A.vertrauteBodies(
+      [k("fluffels", "a"), k("github-actions[bot]", "b", "Bot"), k("angreifer", "c"), k("github-actions[bot]", "d", "User"), k(null, "e")],
+      owner,
+    );
+    expect(bodies).toEqual(["a", "b"]);
+  });
+  test("eine Audit-Zeile eines Fremden unterdrückt den Alarm nicht", () => {
+    const fremd = [k("angreifer", "- [ ] Audit: " + G1 + " braces (critical, prod)")];
+    const bekannt = A.bekannteGhsa({ kommentare: A.vertrauteBodies(fremd, owner), wiedervorlagen: [], offeneTitel: [] });
+    const [a] = A.ordneEin({ befunde: [befund({ schwere: "critical", prod: true })], bekannt });
+    expect(a.art).toBe("alarm");
+    const eigen = A.bekannteGhsa({ kommentare: A.vertrauteBodies([k("fluffels", fremd[0].body)], owner), wiedervorlagen: [], offeneTitel: [] });
+    expect(A.ordneEin({ befunde: [befund({ schwere: "critical", prod: true })], bekannt: eigen })).toEqual([]);
+  });
+  test("leere und kaputte Eingaben werfen nicht", () => {
+    expect(A.vertrauteBodies([], owner)).toEqual([]);
+    expect(A.vertrauteBodies([k("fluffels", null as unknown as string)], owner)).toEqual([""]);
   });
 });

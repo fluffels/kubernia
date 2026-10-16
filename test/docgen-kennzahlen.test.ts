@@ -72,6 +72,20 @@ describe("harness-kennzahlen: Zählung", () => {
   test("Wächter-Tests: nur *.test.ts mit dem Marker als eigener Kommentar-Zeile (rekursiv)", () => {
     assert.equal(wert(md, "Wächter-Tests"), "2");
   });
+  test("Skripte und Wächter-Tests ab 10 werden auf Zehner abgerundet (#1663 L22), darunter exakt", () => {
+    const viele: Record<string, string> = { ...REPO };
+    for (let i = 0; i < 19; i++) viele[`scripts/s${i}.mjs`] = "export {};"; // 3 + 19 = 22 Skripte
+    for (let i = 0; i < 8; i++) viele[`test/harness/w${i}.test.ts`] = marker(`W${i}`); // 2 + 8 = 10 Wächter
+    const m = gen({ rootDir: fixture(viele), config: KONFIG });
+    assert.equal(wert(m, "Skripte"), "≥ 20");
+    assert.equal(wert(m, "Wächter-Tests"), "≥ 10");
+    const neun: Record<string, string> = { ...REPO };
+    for (let i = 0; i < 6; i++) neun[`scripts/s${i}.mjs`] = "export {};"; // 3 + 6 = 9
+    assert.equal(wert(gen({ rootDir: fixture(neun), config: KONFIG }), "Skripte"), "9");
+    const zehn: Record<string, string> = { ...REPO };
+    for (let i = 0; i < 7; i++) zehn[`scripts/s${i}.mjs`] = "export {};"; // 3 + 7 = 10
+    assert.equal(wert(gen({ rootDir: fixture(zehn), config: KONFIG }), "Skripte"), "≥ 10");
+  });
   test("CI-Workflows: .yml und .yaml, keine anderen Dateien", () => {
     assert.equal(wert(md, "CI-Workflows"), "2");
   });
@@ -160,5 +174,20 @@ describe("harness-kennzahlen: Negativfall der Zeile (ein Skript ohne docs:gen ma
 describe("harness-kennzahlen: Registry und eingecheckte Abschnitte", () => {
   test("der Generator steht in der Registry", () => {
     assert.equal(GENERATORS["harness-kennzahlen"], gen);
+  });
+});
+
+describe("harness-kennzahlen: grob rundet auf Zehner ab (Grenzfälle)", () => {
+  test.each([
+    [0, 0],
+    [9, 9],
+    [10, "≥ 10"],
+    [15, "≥ 10"],
+    [19, "≥ 10"],
+    [25, "≥ 20"],
+    [29, "≥ 20"],
+    [30, "≥ 30"],
+  ])("grob(%s)", (n, erwartet) => {
+    assert.equal((kennzahlen as unknown as { grob: (n: number) => string | number }).grob(n), erwartet);
   });
 });

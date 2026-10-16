@@ -119,7 +119,7 @@ export function pacing(snapshot, { jetzt = Date.now(), zielquote = ZIELQUOTE_DEF
 
 /** Pfad des kontoweiten Snapshots (OS-Temp, für alle Worktrees gleich); `KQ_RATE_LIMITS_SNAPSHOT` überschreibt ihn. */
 export function snapshotPfad(env = process.env) {
-  return env.KQ_RATE_LIMITS_SNAPSHOT || join(tmpdir(), "kubernia-rate-limits.json");
+  return env.KQ_RATE_LIMITS_SNAPSHOT || join(tmpdir(), "kq-rate-limits.json");
 }
 
 /** Liest den Snapshot; fehlende oder kaputte Datei ergibt `{ snapshot: null, warnung }`. */

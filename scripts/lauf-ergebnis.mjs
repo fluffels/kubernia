@@ -24,7 +24,7 @@ import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
 import { passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
-import { ladeLaeufe, laufAus, ticketsMitStartImFenster, VORLAUF_MS } from "./subagent-laeufe.mjs";
+import { ladeLaeufe, laufAus, mitVorlauf, ticketsMitStartImFenster } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 
 export const NACHARBEIT_TAGE = 14;
@@ -254,7 +254,7 @@ export function ladeStartLaeufe(dir, agent, von) {
   if (!existsSync(dir)) throw new DatenFehler("Keine lokalen Transkripte (Projektordner fehlt).");
   let laeufe;
   try {
-    laeufe = ladeLaeufe(dir, agent, new Date(new Date(von).getTime() - VORLAUF_MS).toISOString());
+    laeufe = ladeLaeufe(dir, agent, mitVorlauf(von));
   } catch (e) {
     throw new DatenFehler(`Transkripte nicht lesbar: ${e instanceof Error ? e.message : String(e)}`);
   }

@@ -12,6 +12,7 @@ const vl = vlModule as {
   ketteAusPackage: (pkg: unknown) => string[];
   bestimmeEngung: (a: { base: string | null; dateien?: string[]; tests?: { pfad: string; text: string }[] }) => Eng;
   kuerze: (t: string, s: string) => string;
+  fehlgeschlageneTests: (t: string) => string[];
   bericht: (e: Erg[], o?: { modus?: string; hinweis?: string }) => string;
   exitCode: (e: Erg[]) => number;
   engungSicher: (lade: () => Eng) => Eng;
@@ -220,5 +221,29 @@ describe("main und IO-Verdrahtung (#1428 Z9)", () => {
     } finally {
       if (saved !== undefined) process.env.KQ_DIFF_BASE = saved;
     }
+  });
+});
+
+describe("fehlgeschlagene Testdateien im Bericht (#1663 L8)", () => {
+  const ESC = String.fromCharCode(27);
+  const mitte = [" FAIL  test/a.test.ts > Block > Fall", " FAIL  test/harness/b.test.ts [ test/harness/b.test.ts ]", " FAIL  test/a.test.ts > Block > noch ein Fall"];
+  test("fehlgeschlageneTests: jede Datei einmal, auch ein Ladefehler und Farbcodes; nur FAIL-Zeilen zählen", () => {
+    const text = [`${ESC}[31m FAIL ${ESC}[39m test/c.test.ts > x`, ...mitte, " ✓ test/ok.test.ts > grün", "siehe test/nur-erwaehnt.test.ts"].join("\n");
+    assert.deepEqual(vl.fehlgeschlageneTests(text), ["test/c.test.ts", "test/a.test.ts", "test/harness/b.test.ts"]);
+  });
+  test("fehlgeschlageneTests: ohne FAIL-Zeile und bei Müll leer", () => {
+    assert.deepEqual(vl.fehlgeschlageneTests("alles gut"), []);
+    assert.deepEqual(vl.fehlgeschlageneTests(undefined as unknown as string), []);
+  });
+  test("roter Schritt test nennt die Dateien auch, wenn das Kürzen die FAIL-Zeilen verschluckt", () => {
+    const lang = [...Array.from({ length: 150 }, () => "rauschen"), ...mitte, ...Array.from({ length: 150 }, () => "rauschen")].join("\n");
+    const b = vl.bericht([{ name: "test", ok: false, exit: 1, ms: 1000, ausgabe: lang }]);
+    assert.match(b, /fehlgeschlagene Testdateien: test\/a\.test\.ts, test\/harness\/b\.test\.ts/);
+    assert.ok(b.indexOf("fehlgeschlagene Testdateien") < b.indexOf("gekürzt"), "die Zeile steht vor dem gekürzten Block");
+  });
+  test("roter Schritt test ohne erkennbare Datei sagt das (statt zu schweigen); andere rote Schritte bekommen die Zeile nicht", () => {
+    assert.match(vl.bericht([{ name: "test", ok: false, exit: 1, ms: 1, ausgabe: "Absturz" }]), /keine Testdatei in der Ausgabe erkannt/);
+    assert.doesNotMatch(vl.bericht([{ name: "lint", ok: false, exit: 1, ms: 1, ausgabe: " FAIL  test/a.test.ts > x" }]), /Testdatei/);
+    assert.doesNotMatch(vl.bericht([{ name: "test", ok: true, ms: 1 }]), /Testdatei/);
   });
 });

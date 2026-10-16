@@ -98,10 +98,15 @@ export function peerAllowsTs7(range) {
 
 // ── Registry-Abgleich (nur in der CLI, nicht im Test) ────────────────────────────
 
+/** Registry-URL des neuesten Manifests eines (scoped) Pakets; jeder `/` im Namen wird kodiert. Pur. */
+export function registryUrl(pkg) {
+  return `https://registry.npmjs.org/${pkg.replaceAll("/", "%2F")}/latest`;
+}
+
 /** Holt Version + typescript-Peer des neuesten estree-Pakets aus der npm-Registry.
  *  Wirft bei Netz-/Parse-Fehlern (der Aufrufer degradiert dann graceful). */
 async function fetchLatestPeer() {
-  const url = `https://registry.npmjs.org/${ESTREE_PKG.replaceAll("/", "%2F")}/latest`;
+  const url = registryUrl(ESTREE_PKG);
   const res = await fetch(url, { headers: { accept: "application/json" } });
   if (!res.ok) throw new Error(`Registry HTTP ${res.status}`);
   const manifest = await res.json();

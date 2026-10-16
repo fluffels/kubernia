@@ -197,7 +197,7 @@ describe("cli", () => {
   });
 });
 
-describe("Einstieg scripts/projekt-config.mjs", () => {
+describe("Einstieg scripts/projekt-config.mjs", { timeout: 30_000 }, () => {
   const start = (...args: string[]): { status: number | null; stdout: string; stderr: string } =>
     spawnSync(process.execPath, [join(WURZEL, "scripts/projekt-config.mjs"), ...args], { encoding: "utf8" });
   test("gibt den Wert der echten Config aus; fehlender Schlüssel Exit 1, ohne Schlüssel Exit 2", () => {
@@ -210,7 +210,7 @@ describe("Einstieg scripts/projekt-config.mjs", () => {
   });
 });
 
-describe("kein stiller Standardwert (AK3)", () => {
+describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));

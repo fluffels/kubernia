@@ -21,7 +21,7 @@ if (unbekannt.length) {
   process.exit(2);
 }
 
-/** Headless-Probe: cwd im OS-Temp, damit weder Projekt-Hooks noch das kubernia-Tag greifen. `null` bei jedem Fehler. */
+/** Headless-Probe: cwd im OS-Temp, damit weder Projekt-Hooks noch das Langfuse-Tag des Projekts greifen. `null` bei jedem Fehler. */
 function probe() {
   // KQ_PACING_PROBE_SKRIPT ersetzt den Claude-Aufruf (nur für Tests: ein Skript, das stream-json-Zeilen ausgibt).
   const fake = process.env.KQ_PACING_PROBE_SKRIPT;

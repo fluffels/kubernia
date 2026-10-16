@@ -60,6 +60,38 @@ describe("Forum-Action fügt Issue zum Board hinzu (#644)", () => {
     assert.match(yml, /::warning::[^\n]*PROJECT_TOKEN/);
   });
 
+  test("Fremdtext nirgends eingebettet: kein Discussion-Titel in Env, Issue-Titel oder Body (#1663 L27)", () => {
+    const code = yml.split("\n").filter((z) => !z.trimStart().startsWith("#")).join("\n");
+    assert.doesNotMatch(code, /DISC_TITLE/, "der Titel der Discussion darf nicht in den Lauf");
+    assert.doesNotMatch(code, /discussion\.title/);
+    assert.doesNotMatch(code, /safe_title|forum-sanitize/, "ohne eingebetteten Fremdtext keine Entschärfung nötig");
+    assert.match(code, /--title "\$\{marker\}[^$"]*"/, "Issue-Titel nur Marker mit Nummer plus fester Text");
+  });
+
+  /* #1663 H8: Positivliste statt Titel-Bezeichner. Erlaubt sind nur Zahlen, URLs und Namen, die GitHub selbst vergibt; jedes Feld mit
+   * frei wählbarem Text (title, body, Labels, Branch- und Kommentartexte) wäre eingebetteter Fremdtext. */
+  const ERLAUBTE_AUSDRUECKE = new Set([
+    "github.token",
+    "github.repository",
+    "github.event_name",
+    "github.event.discussion.number",
+    "github.event.discussion.html_url",
+    "github.event.comment.html_url",
+    "github.event.sender.login",
+    "secrets.PROJECT_TOKEN",
+  ]);
+  const unerlaubteAusdruecke = (text: string): string[] =>
+    [...text.matchAll(/\$\{\{\s*([^}]*?)\s*\}\}/g)].map((m) => m[1]).filter((a) => !ERLAUBTE_AUSDRUECKE.has(a));
+
+  test("nur Ausdrücke der Positivliste, kein eingebetteter Freitext (#1663 H8)", () => {
+    assert.deepEqual(unerlaubteAusdruecke(yml), []);
+  });
+
+  test("Negativfall: ein eingebettetes discussion.body oder discussion.title wird erkannt", () => {
+    assert.deepEqual(unerlaubteAusdruecke("env:\n  X: ${{ github.event.discussion.body }}\n  Y: ${{github.event.discussion.title}}"), ["github.event.discussion.body", "github.event.discussion.title"]);
+    assert.deepEqual(unerlaubteAusdruecke("run: |\n  # Titel: ${{ github.event.discussion.title }}\n  A: ${{ github.repository }}"), ["github.event.discussion.title"], "auch Kommentarzeilen: Actions setzt dort ein");
+  });
+
   test("fügt das NEU angelegte Issue zum Board hinzu (Aufruf hängt an gh issue create)", () => {
     assert.ok(
       yml.includes("new_url=$(gh issue create"),

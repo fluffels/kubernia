@@ -122,3 +122,9 @@ Entscheidung (ersetzt die 8 aus der Fortschreibung #1349 und das Fenster ab Absc
 - **Ruhe:** der Push-Auslöser feuert nicht Freitag, Samstag, Sonntag (UTC, `PUSH_RUHETAGE`); der Montags-Cron (5 Commits, Mindestabstand 24 Stunden) bleibt und setzt zurück; auch seine 5 Commits zählen ab dem Anlegen des jüngsten Status-Tickets (ein Zählfenster für beide Auslöser, bewusst so entschieden).
 - **Zählfenster:** beginnt mit dem Anlegen des jüngsten Status-Tickets (offen oder geschlossen, je das spätere `createdAt`); jedes Anlegen setzt den Zähler auf 0. Der Mindestabstand von 24 Stunden misst weiter ab dem Abschluss.
 - **Abgrenzung:** gezählt werden Merges auf `main`, nicht Board-Positionen; das widerspricht der verworfenen Ticket-Zählung (Positionen driften) nicht.
+
+## Fortschreibung #1646 (2026-10-16): Spielquote ausgesetzt, solange ein Vorgänger-Sammelticket in Arbeit ist
+
+Anlass: ein Harness-Sammelticket ist geclaimt und in Arbeit, während sein ungeclaimter Nachfolger schon bereitsteht; der Takt soll ihn dann nicht zusätzlich nach vorn holen.
+
+Entscheidung: die Spielquote (`HARNESS_TAKT_MERGES`) greift nicht, solange ein offenes, zugewiesenes Sammelticket mit dem Harness-Titel existiert (`vorgaenger` in `entscheideHarnessTakt`, geclaimt nach `ungeclaimt` aus `board-lib.mjs`). Ihr Zähler läuft erst ab dem Abschluss dieses Vorgängers; das ungeclaimte Nachfolger-Ticket bleibt an seiner Board-Position, bis der Vorgänger geschlossen ist. Die Zahlen aus den früheren Fortschreibungen bleiben unverändert.

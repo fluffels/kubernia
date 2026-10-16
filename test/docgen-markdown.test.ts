@@ -10,6 +10,7 @@ import * as md from "../scripts/docs-gen/markdown.mjs";
 import * as ketten from "../scripts/docs-gen/npm-ketten.mjs";
 
 const api = md as unknown as {
+  cell: (v: unknown) => string;
   mermaidText: (s: string) => string;
   ganzzahlKonstante: (root: string, datei: string, name: string) => string;
 };
@@ -25,6 +26,13 @@ describe("mermaidText", () => {
   test("Zeilenumbrüche werden zu Leerzeichen, harmloser Text bleibt gleich", () => {
     assert.equal(api.mermaidText("a\r\nb"), "a b");
     assert.equal(api.mermaidText("Docker – Ö?"), "Docker – Ö?");
+  });
+});
+
+describe("cell", () => {
+  test("escaped | und Zeilenumbrüche; Backslashes bleiben literal (Code-Spans, #1663 H6)", () => {
+    assert.equal(api.cell("a|b\nc"), "a\\|b c");
+    assert.equal(api.cell("`a\\b`"), "`a\\b`");
   });
 });
 
@@ -84,6 +92,11 @@ describe("pruefeMermaid: Größenwächter (#1411)", () => {
     m.pruefeMermaid(`flowchart TB\n${kanten(500)}`);
     assert.throws(() => m.pruefeMermaid(`flowchart TB\n${kanten(501)}`), /501 Kanten/);
     assert.throws(() => m.pruefeMermaid(`graph LR\n${kanten(501)}`), /501 Kanten/);
+  });
+  test("`--!>` zählt als Kante (fail-closed): 501 davon werfen, 500 nicht (#1663 T6)", () => {
+    const bang = (n: number) => Array.from({ length: n }, (_, i) => `  a${i} --!> b${i}`).join("\n");
+    m.pruefeMermaid(`flowchart TB\n${bang(500)}`);
+    assert.throws(() => m.pruefeMermaid(`flowchart TB\n${bang(501)}`), /501 Kanten/);
   });
   test("alle Link-Enden zählen, auch gepunktet, dick und ohne Pfeil", () => {
     const sieben = ["a --> b", "a ==> b", "a .-> b", "a --- b", "a === b", "a -.- b", "a ~~~ b", "a --x b", "a --o b"].join("\n");
