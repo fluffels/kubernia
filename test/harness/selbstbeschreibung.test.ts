@@ -1,0 +1,168 @@
+/* Selbstbeschreibungs-Wächter (#1714, ADR 0022): der Harness nennt sich „source-available“, nie „Open Source“.
+ * Ein Treffer von „Open Source“ (auch „open-source“, „OpenSource“, „quelloffen“) in den Flächen der Selbstbeschreibung
+ * ist rot, außer er ist verneint („nicht Open Source“, „keine Open-Source-Lizenz“).
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
+ * Grenzen: nicht erkannt werden Kürzel und Umschreibungen (OSS, FOSS, freie Software), doppelte Verneinung und eine
+ * Verneinung weiter als drei Wörter vor dem Treffer; Fragesätze („Ist der Harness Open Source?“) zählen als Treffer. */
+import { describe, test } from "vitest";
+import assert from "node:assert/strict";
+import { lies, repoDateien } from "./repo-texte";
+
+export interface Behauptung {
+  zeile: number;
+  auszug: string;
+}
+
+const BEHAUPTUNG = /open[\s-]?source|quelloffen/gi;
+const NEGATION = /^(nicht|kein(e|en|er|es|em)?|not|no|non)$/i;
+const SATZ_ENDE = /[.!?;]\s/g;
+
+/** Alle Stellen, die den Text als Open Source beschreiben, ohne dass eine Verneinung (≤ 3 Wörter davor, gleicher Satz) davorsteht. */
+export function offeneQuelleBehauptungen(text: string): Behauptung[] {
+  const sauber = text.replace(/[*_„“"`]/g, "");
+  const out: Behauptung[] = [];
+  for (const m of sauber.matchAll(BEHAUPTUNG)) {
+    const davor = sauber.slice(0, m.index);
+    let satzStart = 0;
+    for (const s of davor.matchAll(SATZ_ENDE)) satzStart = s.index + s[0].length;
+    const woerter = davor.slice(satzStart).split(/[\s-]+/).filter(Boolean).slice(-3);
+    if (woerter.some((w) => NEGATION.test(w))) continue;
+    const zeile = davor.split("\n").length;
+    out.push({ zeile, auszug: m[0] });
+  }
+  return out;
+}
+
+/** Flächen, die den Harness selbst beschreiben (nicht: ADRs, Tests, Spielcode, Spiel-Glossar). */
+export function istSelbstbeschreibung(pfad: string): boolean {
+  return [
+    /^\.factory\/produkt\//,
+    /^README\.md$/,
+    /^LICENSE$/,
+    /^package\.json$/,
+    /^docs\/(agent-harness|harness-)[^/]*\.md$/,
+    /^\.claude\/agents\/[^/]+\.md$/,
+    /^\.claude\/skills\/[^/]+\/SKILL\.md$/,
+    /(^|\/)\.claude-plugin\/[^/]+\.json$/,
+  ].some((re) => re.test(pfad));
+}
+
+describe("offeneQuelleBehauptungen", () => {
+  test.each([
+    ["Der Harness ist Open Source.", 1],
+    ["Der Harness ist open-source.", 1],
+    ["Der Harness ist OpenSource.", 1],
+    ["Der Harness ist quelloffen.", 1],
+    ["Der Harness ist Open\nSource.", 1],
+    ["Das ist nicht alles. Der Harness ist Open Source.", 1],
+    ["Nicht nur schnell, sondern auch Open Source", 1],
+    ["Ist der Harness Open Source?", 1],
+    ["Das ist nicht so. Open Source.", 1],
+    ["Ist das nicht so? Open Source.", 1],
+    ["Das ist nicht so; Open Source.", 1],
+    ["Das ist nicht so! Open Source.", 1],
+    ["Nicht dass es schnell Open Source wäre", 1],
+  ])("Treffer: %j", (text, anzahl) => {
+    assert.equal(offeneQuelleBehauptungen(text).length, anzahl);
+  });
+
+  test("meldet die Zeile des Treffers", () => {
+    assert.equal(offeneQuelleBehauptungen("eins\nzwei\nDer Harness ist Open Source.")[0]?.zeile, 3);
+  });
+
+  test.each([
+    "Er ist nicht Open Source.",
+    "Er ist **nicht** Open Source.",
+    "Es wird KEINE Open-Source-\nLizenz gewährt.",
+    "Das ist kein Open-Source-Projekt.",
+    "It is not open source.",
+    "Das ist eine nicht-quelloffene Lösung.",
+    "Nicht-Open-Source-Software.",
+    "It is no open source.",
+    "It is non-open-source.",
+    "Wir gewähren keinen Open-Source-Code.",
+    "Er ist _nicht_ Open Source.",
+    "Er ist nicht ganz Open Source.",
+    "Das ist keine wirklich echte Open-Source-Lizenz.",
+    "Er hat keinem Open-Source-Code zugestimmt.",
+    "",
+  ])("erlaubt: %j", (text) => {
+    assert.deepEqual(offeneQuelleBehauptungen(text), []);
+  });
+});
+
+describe("istSelbstbeschreibung", () => {
+  test.each([
+    ".factory/produkt/README.md",
+    "README.md",
+    "LICENSE",
+    "package.json",
+    "docs/agent-harness.md",
+    "docs/agent-harness-faq.md",
+    "docs/harness-glossar.md",
+    ".claude/agents/x.md",
+    ".claude/skills/y/SKILL.md",
+    ".claude-plugin/plugin.json",
+  ])("im Scope: %s", (pfad) => {
+    assert.equal(istSelbstbeschreibung(pfad), true);
+  });
+
+  test.each([
+    "docs/adr/0022-dark-factory-kern-und-verteilung.md",
+    "test/harness/selbstbeschreibung.test.ts",
+    "src/main.ts",
+    "docs/glossar.md",
+    "docs/module/app.md",
+  ])("außerhalb: %s", (pfad) => {
+    assert.equal(istSelbstbeschreibung(pfad), false);
+  });
+});
+
+describe("Selbstbeschreibung des Harness", () => {
+  const scope = repoDateien().filter(istSelbstbeschreibung);
+
+  test("der Scope enthält die Entwürfe unter .factory/produkt/", () => {
+    assert.ok(scope.includes(".factory/produkt/README.md"), "README-Entwurf fehlt im Scope (nicht versioniert?)");
+    assert.ok(scope.includes(".factory/produkt/LICENSE"), "LICENSE-Entwurf fehlt im Scope (nicht versioniert?)");
+  });
+
+  test("keine Fläche nennt den Harness Open Source", () => {
+    const verstoesse = scope.flatMap((p) => offeneQuelleBehauptungen(lies(p)).map((b) => `${p}:${b.zeile}: „${b.auszug}“`));
+    assert.deepEqual(verstoesse, [], "Selbstbeschreibung ist „source-available“, nicht Open Source");
+  });
+});
+
+describe("Produkt-Entwürfe (#1714)", () => {
+  const lizenz = (): string => lies(".factory/produkt/LICENSE");
+  const readme = (): string => lies(".factory/produkt/README.md");
+
+  test("Lizenz-Entwurf: Alle Rechte vorbehalten, ohne Spiel- oder Projektbezug", () => {
+    assert.match(lizenz(), /Alle Rechte vorbehalten/);
+    assert.doesNotMatch(lizenz(), /\bspiel/i);
+    assert.doesNotMatch(lizenz(), /kubernia|kubequest/i);
+  });
+
+  test("Lizenz-Entwurf nimmt keine Fremdbeiträge an und untersagt den Einsatz", () => {
+    assert.match(lizenz(), /Beiträge Dritter werden nicht angenommen/);
+    assert.doesNotMatch(lizenz(), /Einreichen von Beiträgen als Pull Request/);
+    assert.match(lizenz(), /Ausführen oder Einsetzen/);
+  });
+
+  test("Namens-Grenzfall: „Beispiel“ trifft das Spiel-Muster nicht", () => {
+    assert.doesNotMatch("zum Beispiel", /\bspiel/i);
+    assert.match("das Spiel", /\bspiel/i);
+  });
+
+  test("README-Entwurf und Wurzel-README nennen den Harness source-available", () => {
+    assert.match(readme(), /source-available/);
+    assert.match(lies("README.md"), /source-available/);
+  });
+
+  test("README-Entwurf trägt den Produktnamen, ohne Projektnamen und ohne Dark-Factory-Behauptung", () => {
+    assert.match(readme(), /Self-Improving Agent Harness and Factory/);
+    assert.doesNotMatch(readme(), /kubernia/i);
+    assert.doesNotMatch(readme(), /ist eine Dark Factory/i);
+  });
+});

@@ -241,6 +241,15 @@ Die Maintainerin hat §10 am 2026-10-16 entschieden; die Folgetickets sind angel
 - **Produktanspruch:** Der Harness wird als Produkt gebaut; Maßstab sind prüfbare Kriterien in Produkt-Tickets (P1 bis P5 sind nur hier benannt: P1 #1716, P2 #1717, P3 #1718, P4 #1719, P5 #1714, dazu #1721 und #1722), nicht Adjektive. Grund: abnehmen lässt sich nur ein Kriterium mit Negativfall (§3, Spezifikations-Gate F12, Holdout F13).
 - **Folge für §9:** Das zweite Board entsteht mit F11 (#1712, Pre-Flight dort), ein Repo erst mit F10. Ein npm-Paket war nicht Gegenstand der Entscheidung und entsteht nicht ohne neue Entscheidung.
 
+## Fortschreibung #1714 (2026-10-16): Produktname und Lizenz-Entwurf
+
+Die Maintainerin hat den Pre-Flight von #1714 am 2026-10-16 geklärt. Entscheidungen:
+
+- **Name:** „Self-Improving Agent Harness and Factory“, Repo-Name `self-improving-agent-harness-and-factory`, Untertitel „Ein selbstoptimierender Harness für Coding-Agenten mit Claude Code“. Grund: ein beschreibender Name statt eines Fantasienamens; „Harness“ ist 2026 der etablierte Begriff der Gattung, Firmen wie Harness Inc. und Factory AI sitzen im selben Markt, darum steht die Gattung im Untertitel. Kein „Dark“ im Namen und keine Behauptung, der Harness sei eine Dark Factory: die Holdout-Abnahme (F13) fehlt, er strebt sie an. Die Kollisionsrecherche (npm, PyPI, GitHub frei; Wortgruppe rein beschreibend benutzt) steht im Ticket #1714; die Markenregister (DPMAregister, EUIPO, TMview) waren nicht abfragbar und sind offen.
+- **Lizenz-Entwurf** (`.factory/produkt/LICENSE`): „Alle Rechte vorbehalten“ nach der Vorlage der Wurzel-`LICENSE`, source-available, keine Fremdbeiträge. Abweichungen mit Grund: Das Recht, Beiträge als Pull Request einzureichen, und der Beitragsabsatz entfallen (Showcase-Repo, Fortschreibung #1706); ausdrücklich nicht gestattet ist das Ausführen oder Einsetzen der Software (der Harness soll nicht ohne Erlaubnis als Harness in fremden Projekten laufen); „Quellcode, Assets, Spielinhalte“ wird zu „Quellcode, Skripte, Prompts, Konfiguration und Dokumentation“. Die Lizenz bindet nur Dritte; die Maintainerin arbeitet als Rechteinhaberin frei daran. Der Text ist ein Entwurf ohne Rechtsberatung.
+- **Ablage:** `.factory/produkt/` (README und LICENSE) bis F10 das Factory-Repo anlegt; der Sync fasst den Ordner nicht an.
+- **Wächter:** [Selbstbeschreibungs-Wächter](../agent-harness.md#selbstbeschreibungs-wächter-testharnessselbstbeschreibungtestts-1714) lehnt „Open Source“ als Selbstbeschreibung ab. Grenzen stehen dort.
+
 ## Fortschreibung #1728 (2026-10-16): Board-Liste und Factory-Board (F11, Teil 1)
 
 Teil 1 von F11 ist umgesetzt: das Factory-Board existiert, die Config führt beide Boards, `board-lib` nimmt das Board als Parameter. Die Auswahl mit Quote, die Trennregel in `AGENTS.md` und der Umzug der Sammeltickets folgen in den Teilen 2 und 3. Entscheidungen:
