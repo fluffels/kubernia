@@ -32,6 +32,32 @@ export function boardRolleFuer(labels) {
   return labels.some((l) => (typeof l === "string" ? l : l?.name) === FACTORY_LABEL) ? "factory" : "produkt";
 }
 
+/**
+ * Pur: die Items beider Boards als zwei Auswahllisten nach der Trennregel (`boardRolleFuer` der Item-Labels). Items auf dem richtigen Board
+ * behalten die Board-Reihenfolge; ein Item, das nur auf dem falschen Board steht (`falsch`, Nummern), zählt auf seiner Trennregel-Seite
+ * und hängt hinten an; eine Nummer auf beiden Boards (`doppelt`, aufsteigend) zählt nur auf dem Board laut Trennregel. Eingaben bleiben unverändert.
+ */
+export function seitenListen(produkt, factory) {
+  const nr = (liste) => new Set(liste.map((i) => i.number));
+  const aufFactory = nr(factory);
+  const doppelt = [...nr(produkt)].filter((n) => aufFactory.has(n)).sort((a, b) => a - b);
+  const beide = new Set(doppelt);
+  const richtig = { produkt: [], factory: [] };
+  const verirrt = { produkt: [], factory: [] };
+  const falsch = [];
+  for (const [board, liste] of [["produkt", produkt], ["factory", factory]]) {
+    for (const i of liste) {
+      const soll = boardRolleFuer(i.labels ?? []);
+      if (board === soll) richtig[soll].push(i);
+      else if (!beide.has(i.number)) {
+        verirrt[soll].push(i);
+        falsch.push(i.number);
+      }
+    }
+  }
+  return { produkt: [...richtig.produkt, ...verirrt.produkt], factory: [...richtig.factory, ...verirrt.factory], doppelt, falsch };
+}
+
 /** Guard vor jedem gh-Aufruf: das Board muss ein Config-Eintrag sein (Objekt mit projectId), kein vergessener Parameter. */
 function brauchtBoard(board, wo) {
   if (typeof board !== "object" || board === null || typeof board.projectId !== "string" || board.projectId === "") {
@@ -150,6 +176,14 @@ export function notfallTitelFehler(items, numbers, art) {
 export function istKopfItem(i) {
   const t = String(i?.title ?? "");
   return t === STATUS_TITEL || KOPF_MARKER.some((m) => t.startsWith(m));
+}
+
+/** Rang eines Kopf-Items: Index seiner Notfall-Art in `NOTFAELLE`, danach das Status-Ticket, sonst `Infinity`. Pur. */
+export function kopfRang(i) {
+  const t = String(i?.title ?? "");
+  const k = NOTFAELLE.findIndex((n) => t.startsWith(n.marker));
+  if (k >= 0) return k;
+  return t === STATUS_TITEL ? NOTFAELLE.length : Infinity;
 }
 
 /**
@@ -419,7 +453,7 @@ export function ankerNummerFuerPosition(items, n, ohneNr = null) {
  * Aufnahme-Plan für Nummern, die weder die REST-Liste noch der GraphQL-Fallback im Board fand (#1428 Z37): ein frisch angelegtes Issue
  * stand nie im Board, `board-place` meldete nur „nicht gefunden“. `issues`: Nummer → REST-Antwort von `repos/<repo>/issues/<nr>` (oder
  * null/fehlend, wenn nicht ladbar). Aufgenommen werden nur offene Issues (keine PRs) mit `node_id`; der `--after`-Anker (`ankerNr`) nie
- * automatisch. Liefert `{ aufnehmen: [{ number, nodeId, title }], abgelehnt: [{ number, grund }] }`. Pur.
+ * automatisch. Liefert `{ aufnehmen: [{ number, nodeId, title, rolle }], abgelehnt: [{ number, grund }] }`. Pur.
  */
 export function aufnahmePlan(fehlend, issues, ankerNr = null) {
   const aufnehmen = [];
@@ -431,7 +465,7 @@ export function aufnahmePlan(fehlend, issues, ankerNr = null) {
     else if (i.pull_request) abgelehnt.push({ number: nr, grund: "ist ein Pull Request" });
     else if (i.state !== "open") abgelehnt.push({ number: nr, grund: "Issue ist geschlossen" });
     else if (typeof i.node_id !== "string" || i.node_id === "") abgelehnt.push({ number: nr, grund: "Antwort ohne node_id" });
-    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "" });
+    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? []) });
   }
   return { aufnehmen, abgelehnt };
 }

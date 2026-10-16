@@ -27,7 +27,9 @@ import {
   REPO,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
+  FACTORY_LABEL,
   boardFuerRolle,
+  boardRolleFuer,
   ergaenzeFehlende,
   ghJson,
   kandidatenSammelticket,
@@ -43,8 +45,8 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 
-// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
-const PRODUKT_BOARD = boardFuerRolle("produkt");
+// Zwei Boards (ADR 0022 F11, #1729): Status- und Sammeltickets tragen das Label `area:harness` und stehen laut Trennregel auf dem Factory-Board.
+const FACTORY_BOARD = boardFuerRolle(boardRolleFuer([FACTORY_LABEL]));
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
 const PRUEF_VERSUCHE = 5;
@@ -183,11 +185,11 @@ export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false 
 async function setzeUndPruefe(nr, position, dry) {
   let neuGesetzt = 0;
   for (let versuch = 1; versuch <= PRUEF_VERSUCHE; versuch++) {
-    const schritt = pruefSchritt({ items: loadItems(PRODUKT_BOARD), nr, position, neuGesetzt, dry });
+    const schritt = pruefSchritt({ items: loadItems(FACTORY_BOARD), nr, position, neuGesetzt, dry });
     if (schritt.art === "ok" || schritt.art === "falsch") return schritt.art;
     if (schritt.art === "setze") {
       console.log(`Position stimmt noch nicht (Rang ${schritt.k.vonRang}, Ziel ${schritt.k.nachRang}): setze neu (${neuGesetzt + 1}/${NEU_SETZEN_MAX}).`);
-      setPosition(PRODUKT_BOARD, schritt.k.id, schritt.k.afterId);
+      setPosition(FACTORY_BOARD, schritt.k.id, schritt.k.afterId);
       neuGesetzt++;
     }
     await sleep(PRUEF_PAUSE_MS);
@@ -216,23 +218,23 @@ async function main(argv = process.argv.slice(2)) {
     return;
   } else {
     const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger) });
-    const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", "labels[]=area:harness"]);
+    const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${FACTORY_LABEL}`]);
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);
     await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
     if (schliesseWennDublette(nr, titel, vorgaenger)) return;
-    const itemId = addToBoardTodo(PRODUKT_BOARD, neu.node_id);
+    const itemId = addToBoardTodo(FACTORY_BOARD, neu.node_id);
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(PRODUKT_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
-      if (k) setPosition(PRODUKT_BOARD, k.id, k.afterId);
+      if (k) setPosition(FACTORY_BOARD, k.id, k.afterId);
     } else if (args.top) {
-      const items = ergaenzeFehlende(loadItems(PRODUKT_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
       // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
       // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
       const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
-      if (korrektur) setPosition(PRODUKT_BOARD, korrektur.id, korrektur.afterId);
-      for (const { item, afterId } of plan.steps) setPosition(PRODUKT_BOARD, item.id, afterId);
+      if (korrektur) setPosition(FACTORY_BOARD, korrektur.id, korrektur.afterId);
+      for (const { item, afterId } of plan.steps) setPosition(FACTORY_BOARD, item.id, afterId);
     }
   }
   if (args.art !== "harness") return;

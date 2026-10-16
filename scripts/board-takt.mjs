@@ -25,6 +25,7 @@ import {
   TAG_MS,
   addToBoardTodo,
   boardFuerRolle,
+  boardRolleFuer,
   alsDatum,
   aufnahmePlan,
   ghJson,
@@ -37,6 +38,7 @@ import {
   positionLautAgentsMd,
   sammelticketItem,
   sammelticketKorrektur,
+  seitenListen,
   setPosition,
   todoItem,
   ungeclaimt,
@@ -44,12 +46,15 @@ import {
   wirklichFehlend,
 } from "./board-lib.mjs";
 
-// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
-const PRODUKT_BOARD = boardFuerRolle("produkt");
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
+import { SPIEL_QUOTE, istHarnessCommit, zaehleTicketMerges } from "./spielquote-lib.mjs";
 
-/** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
-export const SPIEL_QUOTE = 3;
+// Die Quote liegt in spielquote-lib.mjs (auch naechstes-ticket.mjs braucht sie); die API dieses Skripts bleibt stabil.
+export { SPIEL_QUOTE, istHarnessCommit, zaehleTicketMerges };
+
+// Zwei Boards (ADR 0022 F11, #1729): Status-Ticket, Harness-Sammelticket und ihre Selbstkorrektur laufen auf dem Factory-Board; der Wächter
+// nimmt fehlende Issues nach der Trennregel (`boardRolleFuer`) auf ihrem Board auf.
+const FACTORY_BOARD = boardFuerRolle("factory");
 
 /** Harness-Sammelticket: so viele SPIEL-Merges seit dem Abschluss des letzten Sammeltickets holen das ungeclaimte nach oben (hinter den Kopf).
  *  Gleich der Spielquote: Harness-Merges verdienen keinen weiteren Harness-Platz (#1425). */
@@ -63,38 +68,6 @@ export function mergeFensterAb(letzterAbschluss, jetzt) {
   const j = alsDatum(jetzt, "jetzt");
   if (letzterAbschluss === null || letzterAbschluss === undefined) return new Date(j.getTime() - 7 * TAG_MS);
   return new Date(alsDatum(letzterAbschluss, "letzterAbschluss").getTime() + 60_000);
-}
-
-/**
- * Zahl der Ticket-Merges in einer Commit-Liste von main (`repos/<repo>/commits`): Commits, deren Autor kein Bot ist
- * (Dependabot, github-actions: Login endet auf `[bot]`). Mit `seit` zählen nur Commits ab diesem Zeitpunkt. Pur.
- */
-export function zaehleTicketMerges(commits, seit = null) {
-  if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
-  const ab = seit === null ? null : alsDatum(seit, "seit").getTime();
-  return commits.filter((c) => {
-    if (/\[bot\]$/i.test(String(c?.author?.login ?? ""))) return false;
-    if (ab === null) return true;
-    const t = new Date(c?.commit?.committer?.date ?? c?.commit?.author?.date ?? "").getTime();
-    return Number.isFinite(t) && t >= ab;
-  }).length;
-}
-
-/**
- * Ist dieser Commit von main ein Harness-Merge? Der Squash-Commit trägt den PR-Titel `feat(<scope>): …`; Scope `harness` markiert
- * Harness-Arbeit (Konvention aus AGENTS.md, in den letzten 14 Tagen 86 von 125 Commits). Bot-Commits sind keine Ticket-Merges. Pur.
- * Seit #1428 zählt das Label: `harnessIssues` ist die Menge der Nummern geschlossener `area:harness`-Issues (90 Tage, lädt `main` ohnehin).
- * Nennt die Titelzeile `#N`-Referenzen, entscheiden sie allein: eine davon in der Menge = Harness, sonst Spiel (so zählen `docs(adr)`
- * und `fix(ci)` zu einem Harness-Issue als Harness, ein `feat(harness)` zu einem Spiel-Issue als Spiel). Ohne Referenz oder ohne Menge
- * (null) bleibt der Rückfall auf den COMMIT-SCOPE `(harness)`. Bewusste Grenze: ein Commit ohne `#N` im Titel (Handarbeit) zählt nur
- * über den Scope; ein Titel mit nur einer PR-Nummer zählt als Spiel (keine PR→Issue-Auflösung, #1460 Z6: von 139 Commits tragen 128 Issue und
- * PR, die 11 mit einer Nummer sind Dependabot, keiner ist ohne; der Scope-Rückfall greift praktisch nie).
- */
-export function istHarnessCommit(commit, harnessIssues = null) {
-  const kopf = String(commit?.commit?.message ?? "").split(/\r?\n/, 1)[0];
-  const refs = [...kopf.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
-  if (harnessIssues && refs.length > 0) return refs.some((n) => harnessIssues.has(n));
-  return /^[a-z]+\(harness\)!?:/i.test(kopf);
 }
 
 /** Spiel-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Commits (`istHarnessCommit`); mit `seit` nur ab diesem Zeitpunkt. Pur. */
@@ -174,6 +147,9 @@ export function harnessTaktAusCommits({ items, commits, seit, position, harnessI
   return entscheideHarnessTakt({ items, spielMergesSeitAbschluss: zaehleSpielMerges(commits, seit, harnessIssues), position });
 }
 
+/** Die Factory-Liste ohne Items, die auch auf dem Produkt-Board stehen und laut Trennregel dorthin gehören (`doppelt` aus `seitenListen`). Pur. */
+export const factoryListe = (factory, doppelt) => factory.filter((i) => !(doppelt.includes(i.number) && boardRolleFuer(i.labels ?? []) !== "factory"));
+
 /**
  * Zieht die im Speicher gehaltene Board-Liste nach einer Status-Aktion nach (statt sie neu zu laden): `ergebnis` = `{ nr, itemId }` aus
  * `fuehreStatusAus` bzw. null/ohne `itemId` (nichts bewegt). Das Status-Item steht danach an der Spitze, ein noch nicht gelistetes
@@ -207,7 +183,7 @@ export function harnessVoraussetzung({ items, position, positionFehler }) {
 }
 
 /** Harness-Entscheidung ausführen; true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
-export function fuehreHarnessAus(h, items, token, { setze = (id, afterId, opts) => setPosition(PRODUKT_BOARD, id, afterId, opts), log = console.log } = {}) {
+export function fuehreHarnessAus(h, items, token, { setze = (id, afterId, opts) => setPosition(FACTORY_BOARD, id, afterId, opts), log = console.log } = {}) {
   try {
     setze(items.find((i) => i.number === h.nr).id, h.afterId, { token });
     log("Sammelticket-Position gesetzt.");
@@ -219,22 +195,22 @@ export function fuehreHarnessAus(h, items, token, { setze = (id, afterId, opts) 
 }
 
 /**
- * Board-Wächter (#1628): offene Issues ohne Board-Item (ein still gescheitertes Einsortieren, z.B. #1608 stand einen Tag nicht im Board)
- * nimmt der Takt als Todo am Board-Ende auf. Die REST-Liste liefert frische Items verzögert: jeder Kandidat wird per GraphQL
+ * Board-Wächter (#1628, zwei Boards #1729): offene Issues ohne Board-Item auf IRGENDEINEM Board (ein still gescheitertes Einsortieren, z.B.
+ * #1608 stand einen Tag nicht im Board) nimmt der Takt als Todo am Ende des Boards laut Trennregel auf (`aufnahmePlan`: `rolle`). Die REST-Liste liefert frische Items verzögert: jeder Kandidat wird per GraphQL
  * gegengeprüft (`wirklichFehlend`); ohne Kandidaten entfällt die Abfrage. Jede Aufnahme steht als `::warning::` mit Nummer im Log, jeder
- * Fehler setzt `fehler` (Lauf rot). `dry`: nur Meldung. Liefert `{ items, fehler }` (`items` um die aufgenommenen Todos ergänzt).
+ * Fehler setzt `fehler` (Lauf rot). `dry`: nur Meldung. `listen` = `{ produkt, factory }`; liefert `{ listen, fehler }` (die Liste der Zielseite um die aufgenommenen Todos ergänzt).
  */
-export function nimmFehlendeAuf({ offene, items, token, dry = false, repo = REPO }, io) {
-  const kandidaten = missingFromBoard(offene.map((i) => i.number), items);
-  if (kandidaten.length === 0) return { items, fehler: false };
+export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REPO }, io) {
+  const kandidaten = missingFromBoard(offene.map((i) => i.number), [...listen.produkt, ...listen.factory]);
+  if (kandidaten.length === 0) return { listen, fehler: false };
   let fehlend;
   try {
-    fehlend = wirklichFehlend(kandidaten, io.itemsUeberIssues(kandidaten, { token }));
+    fehlend = wirklichFehlend(kandidaten, [...io.itemsUeberIssues("produkt", kandidaten, { token }), ...io.itemsUeberIssues("factory", kandidaten, { token })]);
   } catch (err) {
     io.log(fehlerMeldung(err, { praefix: "Board-Wächter: GraphQL-Gegenprobe fehlgeschlagen: " }));
-    return { items, fehler: true };
+    return { listen, fehler: true };
   }
-  let neu = items;
+  let neu = listen;
   let fehler = false;
   for (const nr of fehlend) {
     try {
@@ -245,24 +221,24 @@ export function nimmFehlendeAuf({ offene, items, token, dry = false, repo = REPO
           io.log(`Board-Wächter: #${a.number} fehlt im Board, würde als Todo aufgenommen (--dry-run).`);
           continue;
         }
-        const id = io.addToBoardTodo(a.nodeId, { token });
-        io.log(`::warning::Board-Wächter: #${a.number} fehlte im Board, als Todo aufgenommen.`);
-        neu = [...neu, todoItem({ id, number: a.number, title: a.title })];
+        const id = io.addToBoardTodo(a.rolle, a.nodeId, { token });
+        io.log(`::warning::Board-Wächter: #${a.number} fehlte im Board, als Todo auf dem ${a.rolle}-Board aufgenommen.`);
+        neu = { ...neu, [a.rolle]: [...neu[a.rolle], todoItem({ id, number: a.number, title: a.title })] };
       }
     } catch (err) {
       fehler = true;
       io.log(fehlerMeldung(err, { praefix: `Board-Wächter: #${nr} nicht aufgenommen: ` }));
     }
   }
-  return { items: neu, fehler };
+  return { listen: neu, fehler };
 }
 
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
 export const ECHTE_IO = {
   ghJson,
-  itemsUeberIssues: (nummern, opts) => itemsUeberIssues(PRODUKT_BOARD, nummern, opts),
-  addToBoardTodo: (nodeId, opts) => addToBoardTodo(PRODUKT_BOARD, nodeId, opts),
-  loadItems: (opts) => loadItems(PRODUKT_BOARD, opts),
+  itemsUeberIssues: (rolle, nummern, opts) => itemsUeberIssues(boardFuerRolle(rolle), nummern, opts),
+  addToBoardTodo: (rolle, nodeId, opts) => addToBoardTodo(boardFuerRolle(rolle), nodeId, opts),
+  loadItems: (rolle, opts) => loadItems(boardFuerRolle(rolle), opts),
   loadOpenIssuePages,
   positionLautAgentsMd,
   fuehreStatusAus,
@@ -306,8 +282,11 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   const fruehestens = abStatus < abHarness ? abStatus : abHarness;
   const commits = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
-  // Die Board-Liste einmal je Lauf (braucht den Projekt-Scope des Tokens).
-  let items = token ? io.loadItems({ token }) : null;
+  // Beide Board-Listen einmal je Lauf (brauchen den Projekt-Scope des Tokens); Status- und Harness-Takt arbeiten auf der Factory-Liste.
+  const roh = token ? { produkt: io.loadItems("produkt", { token }), factory: io.loadItems("factory", { token }) } : null;
+  const doppelt = roh ? seitenListen(roh.produkt, roh.factory).doppelt : [];
+  for (const nr of doppelt) io.log(`::warning::Board-Wächter: #${nr} steht auf beiden Boards, es zählt das Board laut Trennregel.`);
+  let items = roh ? factoryListe(roh.factory, doppelt) : null;
 
   const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
   const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
@@ -322,8 +301,8 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
 
   // Board-Wächter (#1628): offene Issues ohne Board-Item aufnehmen.
   if (items) {
-    const w = nimmFehlendeAuf({ offene, items, token, dry, repo }, io);
-    items = w.items;
+    const w = nimmFehlendeAuf({ offene, listen: { produkt: roh.produkt, factory: items }, token, dry, repo }, io);
+    items = w.listen.factory;
     if (w.fehler) fehler = true;
   }
 

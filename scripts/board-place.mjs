@@ -9,7 +9,12 @@
  *   node scripts/board-place.mjs --after 1206 1240 1241      # in dieser Reihenfolge hinter #1206
  *   node scripts/board-place.mjs --dry-run --top 1240        # nur anzeigen
  *   node scripts/board-place.mjs --position 4 1312           # als N. Todo-Item (z.B. Sammelticket, Position laut AGENTS.md)
- *   node scripts/board-place.mjs --missing                   # offene Issues ohne Board-Item (nur Bericht)
+ *   node scripts/board-place.mjs --missing                   # offene Issues ohne Board-Item auf irgendeinem Board (nur Bericht)
+ *
+ * Zwei Boards (ADR 0022 F11, #1729): das Ziel-Board bestimmt die Trennregel (`boardRolleFuer` der Labels: `area:harness` Factory, sonst Produkt;
+ * Labels aus dem Board-Item, für Nummern ohne Item aus der Issue-REST). Gemischte Nummern und ein `--after`-Anker nur auf dem anderen Board
+ * sind Exit 2. Steht eine Nummer auf beiden Boards, meldet das Skript es und sortiert auf dem Board laut Trennregel; eine Nummer nur auf dem
+ * anderen Board wird zusätzlich auf dem Ziel-Board aufgenommen (Entfernen ist nicht Aufgabe dieses Skripts).
  *
  * Nie vor das ungeclaimte Sammelticket: `--top`, `--after` und `--position` klemmen den Anker hinter das offene, nicht zugewiesene
  * Sammelticket „Harness-Härtung (gesammelt)“ (sonst rückt es nicht nach vorn); die Ausgabe nennt die Klemmung. Nur echte Notfälle
@@ -34,6 +39,7 @@ import {
   abortMessage,
   addToBoardTodo,
   boardFuerRolle,
+  boardRolleFuer,
   aufnahmePlan,
   ergaenzeFehlende,
   fehlendeNummern,
@@ -50,9 +56,6 @@ import {
   todoItem,
   wirklichFehlend,
 } from "./board-lib.mjs";
-
-// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
-const PRODUKT_BOARD = boardFuerRolle("produkt");
 
 export { NOTFALL_ARTEN };
 
@@ -99,7 +102,7 @@ function parseOhneNotfall(rest, dry) {
  * `--after`-Anker nicht (Meldung „fehlt im Board, nicht aufgenommen: <Grund>“, am Ende Exit 1).
  */
 export function nimmFehlendeAuf(items, args, io = {}) {
-  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns = (nodeId, opts) => addToBoardTodo(PRODUKT_BOARD, nodeId, opts), log = console.log, warn = console.error } = io;
+  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns, log = console.log, warn = console.error } = io;
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length === 0) return items;
   const issues = {};
@@ -123,15 +126,49 @@ export function nimmFehlendeAuf(items, args, io = {}) {
   return ergaenzeFehlende(items, neu);
 }
 
-/** Bericht: offene Issues, die nicht auf dem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
+/**
+ * Das Ziel-Board einer Einsortier-Aktion (Trennregel, #1729). `produkt`/`factory`: Items beider Boards (mit `labels`), `labelsRest`: Nummer → Labels aus
+ * der Issue-REST (für Nummern, deren Item keine Labels trägt). Liefert `{ rolle, doppelt }` (`doppelt`: Nummern auf beiden Boards) oder `{ fehler }`
+ * bei gemischten Rollen, einem `--after`-Anker nur auf dem anderen Board oder nicht bestimmbarer Rolle. Pur.
+ */
+export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {} }) {
+  const stehtAuf = (liste, nr) => liste.find((i) => i.number === nr);
+  const rollen = new Map();
+  for (const nr of numbers) {
+    const labels = [stehtAuf(produkt, nr), stehtAuf(factory, nr)].map((i) => i?.labels).find(Array.isArray) ?? labelsRest[nr];
+    if (!Array.isArray(labels)) return { fehler: `#${nr}: Board-Rolle nicht bestimmbar (weder Labels im Board-Item noch aus dem Issue)` };
+    rollen.set(nr, boardRolleFuer(labels));
+  }
+  const verschieden = new Set(rollen.values());
+  if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };
+  const rolle = [...verschieden][0];
+  const ziel = rolle === "factory" ? factory : produkt;
+  const fremd = rolle === "factory" ? produkt : factory;
+  if (anchor !== null && !stehtAuf(ziel, anchor) && stehtAuf(fremd, anchor)) {
+    return { fehler: `Anker #${anchor} steht nur auf dem ${rolle === "factory" ? "Produkt" : "Factory"}-Board, die Nummern gehören auf das ${rolle === "factory" ? "Factory" : "Produkt"}-Board` };
+  }
+  return { rolle, doppelt: numbers.filter((nr) => stehtAuf(produkt, nr) && stehtAuf(factory, nr)) };
+}
+
+/** Bericht: offene Issues, die auf keinem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
 function reportMissing() {
   try {
-    const rest = missingFromBoard(loadOpenIssueNumbers(), loadItems(PRODUKT_BOARD));
-    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, itemsUeberIssues(PRODUKT_BOARD, rest));
+    const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: loadItems(boardFuerRolle(rolle)) }));
+    const rest = missingFromBoard(loadOpenIssueNumbers(), beide.flatMap((b) => b.items));
+    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => itemsUeberIssues(boardFuerRolle(b.rolle), rest)));
     console.log(missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
     process.exit(1);
+  }
+}
+
+/** Labels eines Issues per REST (für Nummern ohne Board-Item mit Labels); `null` bei einem Ladefehler (dann ist die Rolle nicht bestimmbar). */
+function ladeLabels(nr) {
+  try {
+    return (ghJson(["api", `repos/${REPO}/issues/${nr}`]).labels ?? []).map((l) => (typeof l === "string" ? l : l?.name));
+  } catch {
+    return null;
   }
 }
 
@@ -140,11 +177,20 @@ const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { e
 
 /** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
 async function einsortieren(args) {
-  let items = loadItems(PRODUKT_BOARD);
+  const listen = { produkt: loadItems(boardFuerRolle("produkt")), factory: loadItems(boardFuerRolle("factory")) };
+  const labelsRest = {};
+  for (const nr of args.numbers) {
+    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr);
+  }
+  const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest });
+  if (ziel.fehler) throw abbruch(ziel.fehler, 2);
+  for (const nr of ziel.doppelt) console.error(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
+  const board = boardFuerRolle(ziel.rolle);
+  let items = listen[ziel.rolle];
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
-  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(PRODUKT_BOARD, fehlend));
-  items = nimmFehlendeAuf(items, args);
+  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(board, fehlend));
+  items = nimmFehlendeAuf(items, args, { addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, opts) });
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
@@ -156,7 +202,7 @@ async function einsortieren(args) {
   if (korrektur) {
     console.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
     if (!args.dry) {
-      setPosition(PRODUKT_BOARD, korrektur.id, korrektur.afterId);
+      setPosition(board, korrektur.id, korrektur.afterId);
       await sleep(PAUSE_MS);
     }
   }
@@ -164,7 +210,7 @@ async function einsortieren(args) {
     console.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
     if (args.dry) continue;
     try {
-      setPosition(PRODUKT_BOARD, item.id, afterId);
+      setPosition(board, item.id, afterId);
     } catch (e) {
       const rest = steps.slice(n).map((x) => `#${x.item.number}`).join(", ");
       throw abbruch(`${abortMessage(e.message)}. Offen bleiben ${rest}`);

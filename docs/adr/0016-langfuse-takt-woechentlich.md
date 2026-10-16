@@ -128,3 +128,11 @@ Entscheidung (ersetzt die 8 aus der Fortschreibung #1349 und das Fenster ab Absc
 Anlass: ein Harness-Sammelticket ist geclaimt und in Arbeit, während sein ungeclaimter Nachfolger schon bereitsteht; der Takt soll ihn dann nicht zusätzlich nach vorn holen.
 
 Entscheidung: die Spielquote (`HARNESS_TAKT_MERGES`) greift nicht, solange ein offenes, zugewiesenes Sammelticket mit dem Harness-Titel existiert (`vorgaenger` in `entscheideHarnessTakt`, geclaimt nach `ungeclaimt` aus `board-lib.mjs`). Ihr Zähler läuft erst ab dem Abschluss dieses Vorgängers; das ungeclaimte Nachfolger-Ticket bleibt an seiner Board-Position, bis der Vorgänger geschlossen ist. Die Zahlen aus den früheren Fortschreibungen bleiben unverändert.
+
+## Fortschreibung #1729 (2026-10-16): Spielquote in der Auswahl über zwei Boards (ADR 0022 F11)
+
+Anlass: seit F11 gibt es ein Produkt- und ein Factory-Board (Trennregel: Label `area:harness` ergibt das Factory-Board). Die Spielquote hat bisher nur den Takt gesteuert (das Sammelticket nach vorn holen); die Auswahl des nächsten Tickets kannte sie nicht.
+
+Entscheidung: `naechstes-ticket` wählt nach 3 Produkt-Merges seit dem letzten Factory-Merge das oberste freie Factory-Item, sonst das oberste freie Produkt-Item; Kopf-Items beider Boards gehen vor der Quote, ein geclaimtes Nicht-Kopf-Factory-Item lenkt auf Produkt, eine leere Seite führt zum Rückfall auf die andere. `SPIEL_QUOTE` steht jetzt in `scripts/spielquote-lib.mjs` (mit `istHarnessCommit`, `zaehleTicketMerges` und `produktMergesSeitFactory`); `board-takt.mjs` und `naechstes-ticket.mjs` importieren sie von dort und nicht voneinander. Die Zählung bleibt ohne gespeicherten Zähler aus den Commits von `main` und den geschlossenen `area:harness`-Issues abgeleitet.
+
+Grenzen: Das Fenster ist eine Commit-Seite (100 Commits), ohne Factory-Merge darin zählt die Untergrenze; ein Notfall-Fix mit `area:harness` zählt als Factory-Merge; ein dauerhaft geclaimtes Factory-Item hält die Seite auf Produkt (Ausweg `--bereich agentic`); Commits ohne `#N` zählen über den Scope. Bis die Harness-Items auf das Factory-Board umgezogen sind, ordnet die Auswahl sie über ihre Labels der Factory-Seite zu.
