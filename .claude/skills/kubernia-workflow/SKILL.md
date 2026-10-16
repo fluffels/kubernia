@@ -9,6 +9,8 @@ Dieser Skill ist **nur der Einstieg** in den Workflow [`kubernia-ticket`](../../
 
 **Bereich zuerst.** Wie im [`kubernia`-Skill](../kubernia/SKILL.md): beim Start per `AskUserQuestion` „Agentic Engineering oder Spielentwicklung?“ fragen, außer der Auslöser nennt den Bereich oder gibt eine Ticketnummer vor. Der Workflow kann mitten im Lauf nicht fragen, darum geht die Antwort als `args.bereich` hinein: `Workflow({ name: "kubernia-ticket", args: { bereich: "agentic" } })` bzw. `"spiel"` (ein reiner String `"spiel"` geht auch); „egal“ heißt ohne `args`. Bei `wartet-auf-klaerung` **denselben `bereich` beim Resume mitgeben**, sonst ändert sich der Auswahl-Prompt, der Cache greift nicht, und womöglich wird ein anderes Ticket geclaimt. Ein anderer Wert als `agentic`/`spiel` endet als `ungueltige-args`.
 
+**Vorbedingung vor dem Start:** `node scripts/langfuse-vorbedingung.mjs`; **Exit 1** (Langfuse nicht erreichbar, sonst wird nichts getrackt): stoppen, die Meldung der Maintainerin zeigen, den Workflow nicht starten.
+
 **Aufruf** (der Skill-Aufruf ist gleichzeitig das nötige Opt-in für das Workflow-Tool):
 
 ```

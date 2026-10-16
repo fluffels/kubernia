@@ -30,6 +30,7 @@
     "/scripts/mcp-launch.mjs",
     "/scripts/likec4-mcp.mjs",
     "/scripts/mcp-ausfall.mjs",
+    "/scripts/langfuse-vorbedingung.mjs",
     "/scripts/besitz-lib.mjs",
     "/scripts/factory-sync.mjs",
     "/scripts/sandbox-doctor.mjs",

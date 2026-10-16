@@ -171,6 +171,14 @@ Zwei Lastquellen in Wächter-Tests vermeidest du so: (1) **Repo-Scans** laufen �
 
 `utimesSync(pfad, Date, Date)` übergibt Sekunden als Float; libuv rundet auf Linux auf ganze Mikrosekunden ab, `statSync().mtimeMs` ist dann z.B. `…809.999` statt `…810`. Ein Test darf die mtime daher nie gegen `Date#getTime()` prüfen, sondern gegen das Orakel, das auch der Produktivcode vergleicht (`findeSessions(...)[0].mtime` bzw. `statSync`). Zum Provozieren den Seed mit einem Bruchteil unter einer Millisekunde setzen (`ms / 1000 + 0.0005`): so ist der Test auf jedem OS rot, wenn beim Schreiben gerundet wird.
 
+## Langfuse lokal aus
+
+Kein Ticketlauf startet ohne erreichbares Langfuse ([Glossar](harness-glossar.md)): `node scripts/langfuse-vorbedingung.mjs` fragt `GET <LANGFUSE_BASE_URL>/api/public/health` (Standard `http://localhost:3000`, 3 s Frist) und muss 200 liefern; der SessionStart-Hook warnt mit „Langfuse aus, bitte starten“.
+
+- **Befund 2026-10-16:** Rancher-Desktop-Backend `vmState: ERROR` (WSL-Distributionen `rancher-desktop` und `rancher-desktop-data` gestoppt), die Docker-Pipe `//./pipe/docker_engine` fehlte, `localhost:3000/api/public/health` lieferte 000, der MCP-Server `langfuse` meldete ECONNREFUSED und trennte sich mitten in der Session (Meldung „MCP server disconnected: mcp__langfuse__*“). Der Nachlieferer endete von 03:09Z bis 08:31Z bei 13 Sessions mit Exit 1 und „fetch failed“ (Spur: `langfuse-abgleich.log`), ohne dass es jemand sah. Die Ursache des VM-Fehlers blieb unbekannt (Hypothese: Neustart oder Ruhezustand des Rechners, nicht belegt).
+- **Behebung:** `rdctl shutdown`, dann `rdctl start`; danach holte der Nachlieferer um 08:32:23Z 1800 Calls und 71 Spans für 8 Sessions nach (Exit 0, `fehler: []`). Ein MCP-Server, der sich getrennt hat, verbindet sich erst nach `/mcp` wieder.
+- **Prüfen:** `node scripts/langfuse-vorbedingung.mjs` (Exit 0 = erreichbar), bei Rot Rancher Desktop und `docker ps` prüfen; fehlende Sessions nach dem Start holt der Nachlieferer selbst nach ([Hook-Patch](langfuse-hook-patch.md)), mit `node scripts/langfuse-abgleich.mjs --pruefen` (Prüfbericht) belegbar.
+
 ## Verwandte Dokumente
 
 - [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness

@@ -66,6 +66,7 @@
 
 | Begriff | Bedeutung | Mehr dazu |
 |---|---|---|
+| Langfuse-Vorbedingung | Kein Ticketlauf startet, solange Langfuse nicht erreichbar ist (`GET /api/public/health` muss 200 liefern), sonst bleibt der Lauf ungemessen. `scripts/langfuse-vorbedingung.mjs` prüft das mit 3 s Frist: Exit 1 stoppt die Skills `kubernia` und `kubernia-workflow`, als SessionStart-Hook (`--sessionstart`) warnt es nur. Nicht Teil von Takt und JS-Workflow. | [FAQ](agent-harness-faq.md#langfuse-lokal-aus) |
 | Langfuse | Die Messplattform für Agentenläufe: Tokens, Kosten und Läufe je Modell und Rolle. | [ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md), [Token- und Loop-Baseline](model-routing.md#5-token--und-loop-baseline-1068) |
 | Messfenster | Die Body-Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>` eines Nachmessungs-Tickets: frei erst, wenn #<nr> geschlossen ist und seit dessen `closedAt` mindestens k verschiedene Tickets (ohne das wartende) mit Läufen des Agent-Typs gestartet sind (Untergrenze, keine Messregel). | [Messfenster](ticket-reihenfolge.md#messfenster-1589) |
 | Langfuse-Abgleich | Der Vergleich Transkript gegen Langfuse je Call samt automatischer Nachlieferung fehlender Calls an SessionStart und SessionEnd. Das Transkript gilt als Wahrheit, Dubletten werden nur gemeldet; leere Hook-GENERATIONs des Plugins (Modell `claude`, keine Tokens) zählen nicht als Dublette, sondern als „leer“. | [ADR 0023](adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md), [Abgleich als Garantie](langfuse-hook-patch.md#abgleich-als-garantie-1578) |

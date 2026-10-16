@@ -24,10 +24,8 @@ const v = raw as unknown as Vorbedingung;
 const WURZEL = process.cwd();
 const lies = (p: string) => readFileSync(join(WURZEL, p), "utf8");
 
-const antwort = (status: number): Fetch => async () => ({ status });
-const verbindungAbgelehnt: Fetch = async () => {
-  throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
-};
+const antwort = (status: number): Fetch => () => Promise.resolve({ status });
+const verbindungAbgelehnt: Fetch = () => Promise.reject(Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } }));
 const haengt: Fetch = (_url, init) =>
   new Promise((_res, rej) => {
     init?.signal?.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" })));
@@ -62,7 +60,7 @@ describe("basisUrl", () => {
 describe("pruefeLangfuse", () => {
   test("ruft /api/public/health und bewertet 200 als ok", async () => {
     let url = "";
-    const f: Fetch = async (u) => ((url = u), { status: 200 });
+    const f: Fetch = (u) => ((url = u), Promise.resolve({ status: 200 }));
     expect((await v.pruefeLangfuse({ baseUrl: "http://h:1", fetchImpl: f })).ok).toBe(true);
     expect(url).toBe(`http://h:1${v.HEALTH_PFAD}`);
     expect(v.HEALTH_PFAD).toBe("/api/public/health");

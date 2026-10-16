@@ -61,6 +61,7 @@ AGENTS.md                  @fluffels
 /scripts/mcp-launch.mjs @fluffels
 /scripts/likec4-mcp.mjs @fluffels
 /scripts/mcp-ausfall.mjs @fluffels
+/scripts/langfuse-vorbedingung.mjs @fluffels
 /scripts/besitz-lib.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
