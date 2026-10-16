@@ -196,6 +196,9 @@ describe("vertragPruefen", () => {
     const ohneCiFix = { ...ZEILE(), ciFix: undefined } as unknown as Zeile;
     expect(F.vertragPruefen({ zeilen: [ohneCiFix], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
     expect(F.vertragPruefen({ zeilen: [ZEILE({ gemergt: "kaputt" })], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
+    for (const z of [null, { ...ZEILE(), pr: undefined }, { ...ZEILE(), pr: "7" }, { ...ZEILE(), nacharbeit: undefined }]) {
+      expect(F.vertragPruefen({ zeilen: [z], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
+    }
   });
 });
 
@@ -265,6 +268,7 @@ describe("Unterprozesse (injiziert)", () => {
     expect(e.kosten).toBeUndefined();
     expect(e.luecke).toBe("Session s2: keine Calls im Ticket-Fenster");
     expect(aufrufe).toHaveLength(2);
+    expect(aufrufe[1]).toEqual(["--session", "s2", "--issue", "40", "--pr", "50", "--from", "2026-10-14T07:00:00Z", "--langfuse", "--json"]);
     expect(aufrufe[0]).toEqual(["--session", "s1", "--issue", "40", "--pr", "50", "--from", "2026-10-14T07:00:00Z", "--langfuse", "--json"]);
   });
   test("holeKosten Langfuse: alle Sessions mit Daten ergeben die Summe", () => {
@@ -416,11 +420,27 @@ describe("erstelle (Verdrahtung, Exit-Codes)", () => {
     const run: Run = () => ({ status: 0, stdout: lauf([ZEILE({ ticket: 99 })]), stderr: "" });
     expect(erstelle({ von, bis }, { run, claimKarte }).bericht.tickets[0].ergebnis).toEqual({ luecke: "keine Session mit Claim-Zeile" });
   });
+  test("langfuse wird an die Kosten-Läufe weitergereicht und steht als Quelle im Bericht; ohne bleibt es Transkript", () => {
+    const aufrufe: string[][] = [];
+    const run: Run = (name, a) => {
+      if (name === "token-baseline.mjs") {
+        aufrufe.push(a);
+        return { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" };
+      }
+      return { status: 0, stdout: lauf([ZEILE()]), stderr: "" };
+    };
+    const mit = erstelle({ von, bis, langfuse: true }, { run, claimKarte }) as unknown as { bericht: { quelle: string } };
+    expect(mit.bericht.quelle).toBe("Langfuse");
+    expect(aufrufe[0]).toContain("--langfuse");
+    const ohne = erstelle({ von, bis }, { run, claimKarte }) as unknown as { bericht: { quelle: string } };
+    expect(ohne.bericht.quelle).toBe("Transkript");
+    expect(aufrufe[1]).not.toContain("--langfuse");
+  });
   test("CLI: fehlendes --von ist Aufruffehler mit Exit 1", () => {
     const r = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/factory-kennzahlen.mjs", import.meta.url)), "--bis", bis], { encoding: "utf8" });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/Aufruf: node scripts\/factory-kennzahlen\.mjs/);
-  });
+  }, 20_000);
 });
 
 describe("Einstiegsskript", () => {
