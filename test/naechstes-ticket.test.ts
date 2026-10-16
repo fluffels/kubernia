@@ -675,17 +675,33 @@ describe("Spezifikations-Gate (#1615)", () => {
     const { eingang } = io([roh(1, { body: OHNE_NEGATIV })], { kommentareVon: undefined, kommentiere: undefined });
     expect(GateN.fuehreAus([], eingang)).toMatchObject({ code: 1, err: "" });
   });
-  test("--ticket kommentiert ebenfalls einmal", () => {
+  test("--ticket kommentiert nie und liest keine Kommentare (#1663 L6)", () => {
     const gepostet: number[] = [];
+    const gelesen: number[] = [];
     const r = GateN.fuehreAus(["--ticket", "7"], {
       owner: "fluffels",
       lade: () => ({ items: [], offene: new Set<number>() }),
       ladeEinzeln: () => ({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set<number>() }) as never,
-      kommentareVon: () => [],
+      kommentareVon: (nr) => {
+        gelesen.push(nr);
+        return [];
+      },
       kommentiere: (nr) => void gepostet.push(nr),
     });
     expect(r.code).toBe(1);
-    expect(gepostet).toEqual([7]);
+    expect(r.out).toContain("kein Negativfall");
+    expect(gepostet).toEqual([]);
+    expect(gelesen).toEqual([]);
+  });
+  test("--ohne-kommentar: Board-Auswahl überspringt, ohne zu kommentieren; ohne den Schalter bleibt es beim Kommentar (#1663 L6)", () => {
+    const { eingang, gepostet, gelesen } = io([roh(1, { body: OHNE_NEGATIV })]);
+    const r = GateN.fuehreAus(["--ohne-kommentar", "--json"], eingang);
+    expect(r.code).toBe(1);
+    expect((JSON.parse(r.out) as GateErgebnis).kommentiert).toBeUndefined();
+    expect(gepostet).toEqual([]);
+    expect(gelesen).toEqual([]);
+    GateN.fuehreAus(["--json"], eingang);
+    expect(gepostet).toHaveLength(1);
   });
   test("hartAb aus io erreicht die Auswahl", () => {
     const { eingang, gepostet } = io([roh(5, { body: "" })], { hartAb: 100 });

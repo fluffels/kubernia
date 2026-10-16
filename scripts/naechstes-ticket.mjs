@@ -6,6 +6,7 @@
  *   node scripts/naechstes-ticket.mjs          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten
  *   node scripts/naechstes-ticket.mjs --json   # { ticket, uebersprungen }
  *   node scripts/naechstes-ticket.mjs --ticket <nr>   # Einzelprüfung einer vorgegebenen Nummer (#1621): alle Kriterien außer Status und Bereich; Exit 1 = nicht frei, Grund in der Ausgabe
+ *                                             # `--ticket` kommentiert nie; `--ohne-kommentar` unterdrückt den Spezifikations-Kommentar der Board-Auswahl (Trockenlauf)
  *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel   # nur Label `area:harness` bzw. nur ohne (#1552); Notfälle 🚨/🔒 zählen in beiden
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 3 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
@@ -195,7 +196,8 @@ export function fuehreAus(argv, io) {
       einzel === null
         ? { ...waehleNaechstes({ ...io.lade(), owner: io.owner, bereich: b.bereich, hartAb: io.hartAb }), ...(b.bereich ? { bereich: b.bereich } : {}) }
         : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb });
-    const { kommentiert, warnungen } = erinnereAnSpezifikation(roh.uebersprungen, io);
+    const still = einzel !== null || argv.includes("--ohne-kommentar"); // `--ticket` ist reine Prüfung, `--ohne-kommentar` ein Trockenlauf der Auswahl
+    const { kommentiert, warnungen } = erinnereAnSpezifikation(roh.uebersprungen, still ? {} : io);
     const ergebnis = kommentiert.length > 0 ? { ...roh, kommentiert } : roh;
     const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
     return { code: ergebnis.ticket ? 0 : 1, out, err: warnungen.map((w) => `⚠ naechstes-ticket: ${w}\n`).join("") };
