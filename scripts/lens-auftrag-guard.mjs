@@ -1,6 +1,6 @@
 // Kein Shebang: wird vom PreToolUse-Dispatcher (`scripts/pretooluse-hook.mjs`) und vom Wächter-Test importiert.
 /**
- * Lens-Auftrag-Guard (#1425): ein `kubernia-lens`-Spawn mit übrig gebliebenen Platzhaltern wird abgewiesen.
+ * Lens-Auftrag-Guard (#1425): ein Lens-Spawn (Agent `agenten.lens` der Projekt-Config) mit übrig gebliebenen Platzhaltern wird abgewiesen.
  *
  * Anlass: Beim Spawn einer Lens (Skill `review-lenses`) setzt der Orchestrator Handarbeit-Werte in den Prompt
  * (Worktree, Patch-Pfad, erwarteter HEAD) und kopiert die Blöcke wörtlich. Blieb ein `<…>` stehen, startete die Lens
@@ -9,17 +9,19 @@
  *
  * Bewusst KEIN generischer `<…>`-Test: das Findings-Format (`<Befund>`, `<warum>`), die Kontext-Diät
  * (`node <Arbeitsverzeichnis>/scripts/patch-abschnitte.mjs <patch>`) und der Lens-Worktree-Pfad
- * (`kq-<nr>-lens-r<runde>`) tragen absichtlich Platzhalter. Geprüft werden nur die Kopf-Felder des Auftrags:
+ * (`<worktree-präfix><nr>-lens-r<runde>`) tragen absichtlich Platzhalter. Geprüft werden nur die Kopf-Felder des Auftrags:
  *  R1  `WÖRTLICH>` irgendwo (der Platzhalter `<Brille WÖRTLICH>` / `<Kontext-Diät WÖRTLICH>` blieb stehen),
  *  R2  der Wert von `Arbeitsverzeichnis:`, `Patch:`, `Delta-Patch:` oder `erwarteter HEAD:` enthält noch `<…>`,
  *  R3  `erwarteter HEAD:` beginnt nicht mit einem Hex-Hash von 7 bis 40 Zeichen (Backticks und ein Zusatz dahinter sind erlaubt;
  *      ein Fließtext statt Hash wird verweigert).
- * Fehlende Felder bleiben Sache der Lens-Definition (`.claude/agents/kubernia-lens.md`).
+ * Fehlende Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
+ * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  * Bewusste Grenzen: die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie
  *  um, öffnet der Guard still, fail-open); ausgewertet wird je Feld der letzte Treffer im Prompt.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
+import { namenOderGrund } from "./ticket-namen.mjs";
 
 /** Kopf-Felder des Auftrags, deren Wert kein `<…>` mehr tragen darf. `(?<![\w-])` trennt `Patch:` von `Delta-Patch:`. */
 const FELDER = ["Arbeitsverzeichnis", "Delta-Patch", "Patch", "erwarteter HEAD"];
@@ -45,20 +47,22 @@ export function parseAgentInput(text) {
   }
 }
 
-/** Wird dieser Spawn als Lens-Spawn behandelt? Typ `kubernia-lens`, oder der Fallback (`general-purpose`/ohne Typ),
- *  dessen Prompt die Lens-Definition nennt. */
-function istLensSpawn(subagentType, prompt) {
-  if (subagentType === "kubernia-lens") return true;
+/** Wird dieser Spawn als Lens-Spawn behandelt? Typ `lens` (Agentenname aus der Config), oder der Fallback (`general-purpose`/ohne Typ),
+ *  dessen Prompt die Lens-Definition (`<lens>.md`) nennt. */
+function istLensSpawn(subagentType, prompt, lens) {
+  if (subagentType === lens) return true;
   const fallback = subagentType === undefined || subagentType === "general-purpose";
-  return fallback && String(prompt ?? "").includes("kubernia-lens.md");
+  return fallback && String(prompt ?? "").includes(`${lens}.md`);
 }
 
 const HINWEIS =
   "Setze die Werte aus Stufe 0 ein (Worktree, Patch-Pfad mit Runde, `git rev-parse HEAD`) und kopiere Brille, Kontext-Diät und Findings-Format wörtlich aus dem Skill `review-lenses`.";
 
 /** Grund für ein Deny oder `null` (durchlassen). Pure. */
-export function lensAuftragBlockade({ subagentType, prompt } = {}) {
-  if (!istLensSpawn(subagentType, prompt)) return null;
+export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
+  const { namen, grund } = namenOderGrund("Lens-Auftrag-Guard", deps);
+  if (grund) return grund;
+  if (!istLensSpawn(subagentType, prompt, namen.agenten.lens)) return null;
   const text = String(prompt ?? "");
   if (text.includes("WÖRTLICH>")) {
     return `Lens-Auftrag unvollständig: der Platzhalter „… WÖRTLICH>“ steht noch im Prompt (Brille, Kontext-Diät oder Findings-Format wurden nicht eingesetzt). ${HINWEIS}`;

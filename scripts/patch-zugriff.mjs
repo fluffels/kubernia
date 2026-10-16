@@ -7,10 +7,15 @@
  * ist gezielt (zählt als Zugriff, nicht als Zeilen). Ein Shell-Aufruf ist komplett, wenn `cat`/`Get-Content`/`type` den Patch ohne
  * Begrenzung ausgibt, sonst gezielt (`sed -n`, `head`, `tail`, `grep`, `Select-Object -First`/`-Last`, `-TotalCount`, `-Tail`).
  * `komplett` heißt: Anteil der gelesenen Zeilen (Vereinigung) ≥ 0,9, ein unbegrenzter `cat`, oder ein Read ohne offset/limit bei unbekannter Länge.
- * Pur, ohne IO.
+ * Pur bei übergebenem `namen` (Ticket-Namen aus der Projekt-Config, `ticket-namen.mjs`); ohne lädt es einmal die Projekt-Config
+ * und wirft, wenn ein Schlüssel fehlt (ein Messskript bricht dann laut ab).
  */
 
 import { vereinigungsLaenge } from "./mess-lib.mjs";
+import { ladeTicketNamen } from "./ticket-namen.mjs";
+
+let standard = null;
+const standardNamen = () => (standard ??= ladeTicketNamen());
 
 export const KOMPLETT_AB = 0.9;
 const STANDARD_LIMIT = 2000;
@@ -20,12 +25,12 @@ const basename = (p) => norm(p).split("/").pop() ?? "";
 const GEZIELT = /\b(?:sed|head|tail|grep|rg|awk)\b|Select-Object|Select-String|-TotalCount|-Tail|-First|-Last/i;
 const VOLLLESER = /(?:^|[\s;&|(])(?:cat|type|Get-Content|gc)\s/i;
 
-/** Pfade aus dem Prompt als Basename: `Patch: <pfad>` (voll) und `Delta-Patch: <pfad>`, ohne Label der erste Pfad `kq-<nr>-r<n>[-delta].patch`. */
-export function patchPfade(prompt) {
+/** Pfade aus dem Prompt als Basename: `Patch: <pfad>` (voll) und `Delta-Patch: <pfad>`, ohne Label der erste Pfad `<worktree-präfix><nr>-r<n>[-delta].patch`. */
+export function patchPfade(prompt, namen = standardNamen()) {
   // Nur Pfade auf eine .patch-Datei: Fließtext wie "Patch:`" oder "Delta-Patch: ein" im Auftrag zählt nicht.
-  // Ohne Label (Prompt des entfernten Workflow-Pfads, ADR 0028, bleibt für historische Transkripte: "Patch-Datei bereit … :\n  <pfad>") gilt der erste Pfad der Form kq-<nr>-r<n>[-delta].patch.
-  const voll = /(?<![\w-])Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? /\S*kq-\d+-r\d+\.patch(?![\w-])/i.exec(prompt)?.[0] ?? null;
-  const delta = /Delta-Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? /\S*kq-\d+-r\d+-delta\.patch(?![\w-])/i.exec(prompt)?.[0] ?? null;
+  // Ohne Label (Prompt des entfernten Workflow-Pfads, ADR 0028, bleibt für historische Transkripte: "Patch-Datei bereit … :\n  <pfad>") gilt der erste Pfad der Form <worktree-präfix><nr>-r<n>[-delta].patch.
+  const voll = /(?<![\w-])Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? namen.patchMuster.voll.exec(prompt)?.[0] ?? null;
+  const delta = /Delta-Patch:\s*(\S+?\.patch)(?![\w-])/i.exec(prompt)?.[1] ?? namen.patchMuster.delta.exec(prompt)?.[0] ?? null;
   // Ein Delta-Pfad im Feld "Patch:" (falsch gespawnt) ist der Delta-Patch, kein voller.
   if (voll && !delta && /-delta\.patch$/i.test(voll)) return { voll: null, delta: basename(voll), vollPfad: null };
   return { voll: voll ? basename(voll) : null, delta: delta ? basename(delta) : null, vollPfad: voll };
@@ -65,8 +70,8 @@ function readAuf(z, eingabe, ergebnis) {
  * Patch-Kennzahlen aus Prompt und Transkriptzeilen; `null` ohne Patch-Pfad im Prompt.
  * @returns {{ ticket: number|null, runde: number|null, voll: object, delta: object|null } | null}
  */
-export function patchAus(prompt, zeilen) {
-  const p = patchPfade(prompt);
+export function patchAus(prompt, zeilen, namen = standardNamen()) {
+  const p = patchPfade(prompt, namen);
   if (!p.voll && !p.delta) return null;
   const voll = neu();
   const delta = neu();
@@ -101,6 +106,6 @@ export function patchAus(prompt, zeilen) {
       }
     }
   }
-  const m = /kq-(\d+)-r(\d+)/.exec(p.voll ?? p.delta ?? "");
+  const m = namen.patchMuster.ticketRunde.exec(p.voll ?? p.delta ?? "");
   return { ticket: m ? Number(m[1]) : null, runde: m ? Number(m[2]) : null, voll: fertig(voll), delta: p.delta ? fertig(delta) : null };
 }

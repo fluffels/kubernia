@@ -91,6 +91,7 @@ AGENTS.md                  @fluffels
 /scripts/spielquote-lib.mjs @fluffels
 /scripts/projekt-config.mjs @fluffels
 /scripts/projekt-config-lib.mjs @fluffels
+/scripts/ticket-namen.mjs @fluffels
 /scripts/board-place.mjs @fluffels
 /scripts/langfuse-takt.mjs @fluffels
 /scripts/board-takt.mjs @fluffels
