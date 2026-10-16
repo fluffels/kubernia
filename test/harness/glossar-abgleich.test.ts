@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Die Lens-Fassung steht im Skill und wörtlich im Workflow (Gleichheit erzwingt lens-abgleich.test.ts); hier steht nur,
+ * Die Lens-Fassung steht im Skill und wörtlich im Skill (Struktur erzwingt lens-abgleich.test.ts); hier steht nur,
  * dass der Punkt überhaupt vorhanden ist und die Planer-Definition den Pflichtpunkt trägt.
  */
 import { describe, test } from "vitest";

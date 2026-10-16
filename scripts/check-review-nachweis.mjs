@@ -61,7 +61,7 @@ export const VORLAGE =
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche
- *  Regel wie `lensPlan` im Workflow (Wächter-Test). */
+ *  Regel der Review-Staffel (Skill `review-lenses`, Wächter review-staffel.test.ts). */
 export function pflichtLenses(dateien) {
   if (!Array.isArray(dateien) || dateien.length === 0) return [...CODE_LENSES];
   if (dateien.some((d) => typeof d !== "string" || d.trim() === "")) return [...CODE_LENSES];

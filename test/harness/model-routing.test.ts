@@ -167,11 +167,11 @@ function agentenNachName(): Record<string, Record<string, string>> {
 const RETIRED_ROUTING_CLAIMS: { term: string; home: string; nurWenn?: RegExp; ausser?: RegExp }[] = [
   {
     term: "Opus-Standard-Effort",
-    home: "die Lenses tragen `effort: high` im Frontmatter von kubernia-lens und laufen auf beiden Pfaden damit (#1209)",
+    home: "die Lenses tragen `effort: high` im Frontmatter von kubernia-lens und laufen damit (#1209)",
   },
   {
     term: "Session-Default",
-    home: `die Umsetzung tippt auf beiden Pfaden den Coding-Tier – im Subagenten ${UMSETZER} (Frontmatter, #1280)`,
+    home: `die Umsetzung tippt den Coding-Tier – im Subagenten ${UMSETZER} (Frontmatter, #1280)`,
   },
   {
     // „Die Umsetzung läuft über den Projekt-Default sonnet" ist seit #1280 abgelegt (#1309); seit #1557 gilt der Projekt-Default
@@ -621,7 +621,7 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
     assert.deepEqual(
       violations,
       [],
-      "Veraltete Routing-Beschreibung gefunden. Entweder nachziehen (der Coding-Tier ist auf beiden Pfaden " +
+      "Veraltete Routing-Beschreibung gefunden. Entweder nachziehen (der Coding-Tier ist " +
         `gesetzt) oder – wenn der Begriff bewusst zitiert wird – in Inline-Backticks setzen:\n${violations.join("\n")}`,
     );
   });

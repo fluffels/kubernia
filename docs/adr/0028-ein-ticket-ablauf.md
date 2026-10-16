@@ -9,7 +9,7 @@
 
 ## Kontext
 
-Der Ticket-Ablauf existierte zweimal: als Skill `kubernia` mit den Subagenten Planer, Umsetzer, Gruppen-Umsetzer und Lens, und als orchestriertes Workflow-Skript samt Einstiegs-Skill. Beide mussten bei jeder Änderung am Ablauf nachgezogen werden. Gezählt seit 2026-09-28: 63 Commits (+862/−481 Zeilen) am Workflow-Skript, 68 Commits an Skill, Umsetzer und Planer.
+Der Ticket-Ablauf existierte zweimal: als Skill `kubernia` mit den Subagenten Planer, Umsetzer, Gruppen-Umsetzer und Lens, und als orchestriertes Workflow-Skript samt Einstiegs-Skill. Beide mussten bei jeder Änderung am Ablauf nachgezogen werden. Gezählt seit 2026-09-28 (Stand 2026-10-16, `git log --since=2026-09-28 origin/main --numstat -- .claude/workflows/kubernia-ticket.js` bzw. `-- .claude/skills/kubernia .claude/agents/kubernia-umsetzer.md .claude/agents/kubernia-planner.md`; der Plan zählte am Tag davor 63 und 68): rund 64 Commits (+868/−487 Zeilen) am Workflow-Skript, rund 69 Commits an Skill, Umsetzer und Planer.
 
 Der Workflow hatte drei Lücken, die der Skill-Pfad nicht hat:
 
@@ -42,7 +42,7 @@ Entscheidung: **Der Workflow-Pfad wird entfernt, der Skill `kubernia` ist der ei
 | Leitplanken-Audit-Kommentar | Abschluss-Wächter `scripts/umsetzer-abschluss.mjs` |
 | Fortsetzung nach Abbruch | `ticket-lock` mit übernehmbarem Claim |
 
-Die generische Mechanik bleibt: Deckel-Logik in `check:size`, der AGENTS.md-Satz zu Workflow-Skripten, die Binder der Architektursichten und die `.gitignore`-Negation. Sie gilt für jedes künftige Skript unter `.claude/workflows/`.
+Die generische Mechanik bleibt: Deckel-Logik in `check:size`, der AGENTS.md-Satz zu Workflow-Skripten, die Binder der Architektursichten und die `.gitignore`-Negation. Sie gilt für jedes künftige Skript unter `.claude/workflows/`. **Bekannte Grenze:** die Wächter für feste Modell-IDs, absolute Pfade, rohes Kommentar-Lesen und `npm ci` im Worktree sowie die Routing-Prüfung je `agent()`-Aufruf scannen den Ordner nicht mehr; ein neues Workflow-Skript bindet sie in seinem Ticket wieder ein. Der Abschluss-Wächter prüft den Audit-Kommentar nur für den Umsetzer-Subagenten (nicht für PRs, die der Hauptchat mergt) und gibt bei `gh`-Fehlern frei.
 
 ## Konsequenzen
 
