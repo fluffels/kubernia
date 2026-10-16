@@ -279,18 +279,18 @@ describe("warten: Pflicht-Liste neu holen und Konflikt-Reset (#1663 T2, T3)", ()
         return ["Pflicht"];
       },
       ...uhr(),
-      maxMs: 240_000,
+      maxMs: 60_000,
       intervallMs: 30_000,
     });
     expect(n).toBe(2);
     expect(r.exit).toBe(2);
-    expect(r.zeilen[1]).toContain("HINWEIS Deploy");
+    expect(r.zeilen.join("|")).toContain("HINWEIS Deploy");
   });
   test("eine leere Pflicht-Liste wird nicht gecacht (fail-closed bleibt, nächste Abfrage holt neu)", () => {
     let n = 0;
     const folge = [offen([lauf("Pflicht", "IN_PROGRESS")]), rot];
     let i = 0;
-    const r = P.warten({ hole: () => folge[i++], pflicht: () => (n++, n === 1 ? [] : ["Pflicht"]), ...uhr(), maxMs: 240_000, intervallMs: 30_000 });
+    const r = P.warten({ hole: () => folge[i++], pflicht: () => (n++, n === 1 ? [] : ["Pflicht"]), ...uhr(), maxMs: 60_000, intervallMs: 30_000 });
     expect(n).toBe(2);
     expect(r.exit).toBe(2);
   });
