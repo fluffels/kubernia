@@ -7,7 +7,7 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ergaenzeFehlende } from "../scripts/board-lib.mjs";
+import * as rawLib from "../scripts/board-lib.mjs";
 
 type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean; generation: boolean };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
@@ -19,6 +19,7 @@ type Anlegen = {
   kandidatenSammelticket: (offene: Offen[], titel: string) => Offen[];
 };
 const A = raw as unknown as Anlegen;
+const ergaenzeFehlende = (rawLib as unknown as { ergaenzeFehlende: (items: unknown[], neu: unknown[]) => unknown[] }).ergaenzeFehlende;
 
 describe("parseArgs", () => {
   test("harness ohne und mit Vorgänger, langfuse ohne und mit --top, --dry-run an beliebiger Stelle", () => {
