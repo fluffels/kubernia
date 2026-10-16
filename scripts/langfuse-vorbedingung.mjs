@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+/* Langfuse-Vorbedingung (#1663 L36): ohne erreichbares Langfuse startet kein Entwicklungslauf, sonst wird nichts getrackt.
+ *
+ *   node scripts/langfuse-vorbedingung.mjs                 prüft GET <Langfuse>/api/public/health; Exit 0 = erreichbar, 1 = aus, 2 = Aufruffehler
+ *   node scripts/langfuse-vorbedingung.mjs --sessionstart  SessionStart-Hook: Exit immer 0, bei Ausfall steht die Warnung auf stdout (Kontext der Session)
+ *
+ * Aufrufer: die Skills `kubernia` (Schritt 0) und `kubernia-workflow` vor dem Start; bewusst NICHT im Board-Takt und im JS-Workflow.
+ * Adresse: `LANGFUSE_BASE_URL`, sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
+import { istDirektaufruf } from "./hook-io.mjs";
+
+export const HEALTH_PFAD = "/api/public/health";
+export const FRIST_MS = 3000;
+const HINWEIS = "Langfuse aus, bitte starten (lokal: Rancher Desktop prüfen, notfalls `rdctl shutdown` und `rdctl start`, FAQ „Langfuse lokal aus“).";
+
+/** Urteil aus HTTP-Status oder Verbindungsfehler; ohne beides gilt es als nicht erreichbar. Pur. */
+export function bewerteHealth({ status, fehler } = {}) {
+  if (status === 200) return { ok: true, grund: "Langfuse erreichbar (HTTP 200)" };
+  if (typeof status === "number") return { ok: false, grund: `Langfuse antwortet mit HTTP ${status}` };
+  if (fehler) return { ok: false, grund: `Langfuse nicht erreichbar: ${fehler}` };
+  return { ok: false, grund: "Langfuse nicht erreichbar: keine Antwort" };
+}
+
+/** Basis-URL aus der Umgebung ohne Schrägstrich am Ende. Pur. */
+export const basisUrl = (env) => (env.LANGFUSE_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+
+/** Fragt den Health-Endpunkt mit Frist ab und bewertet die Antwort. Wirft nie. */
+export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRIST_MS }) {
+  const abbruch = new AbortController();
+  const uhr = setTimeout(() => abbruch.abort(), fristMs);
+  try {
+    const res = await fetchImpl(`${baseUrl}${HEALTH_PFAD}`, { signal: abbruch.signal });
+    return bewerteHealth({ status: res.status });
+  } catch (e) {
+    if (abbruch.signal.aborted) return bewerteHealth({ fehler: `Timeout nach ${fristMs} ms` });
+    return bewerteHealth({ fehler: e?.cause?.code ?? e?.code ?? e?.message ?? String(e) });
+  } finally {
+    clearTimeout(uhr);
+  }
+}
+
+const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]";
+
+export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS } = {}) {
+  const unbekannt = argv.find((a) => a !== "--sessionstart");
+  if (unbekannt) {
+    err(`Unbekanntes Argument: ${unbekannt}. ${USAGE}`);
+    return 2;
+  }
+  const sessionstart = argv.includes("--sessionstart");
+  const urteil = await pruefeLangfuse({ baseUrl: basisUrl(env), fetchImpl, fristMs });
+  if (urteil.ok) return 0;
+  const text = `${urteil.grund}. ${HINWEIS}`;
+  if (sessionstart) {
+    out(`WARNUNG Langfuse-Vorbedingung: ${text} Ohne Langfuse startet kein Ticket.`);
+    return 0;
+  }
+  err(text);
+  return 1;
+}
+
+if (istDirektaufruf(import.meta.url)) process.exitCode = await main();
