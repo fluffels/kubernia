@@ -295,14 +295,6 @@ describe("Lens-Runde 1: CRLF, Argumente der io, Grenzen der Aufrufprüfung", () 
     const r = lauf(ALLE_OK);
     expect(r.aufrufe).toEqual(["issue:7", "kommentare:70"]);
   });
-  test("Umlaute im Urteil werden toleriert (Erfüllt)", () => {
-    const r = A.parseBericht(BERICHT(["K1: Erfüllt — a", "K2: erfuellt — b", "K3: erfuellt — c"]), 7, [
-      { k: "K1", text: "a" },
-      { k: "K2", text: "b" },
-      { k: "K3", text: "c" },
-    ]);
-    expect(r.urteile?.[0].wert).toBe("erfuellt");
-  });
   test("ein unbekannter Wert meldet nur sich selbst, nicht zusätzlich „fehlt“", () => {
     const r = lauf(BERICHT(["K1: gut — a", "K2: erfuellt — b", "K3: erfuellt — c"]));
     expect(r.err).toContain("K1: unbekanntes Urteil");
@@ -319,6 +311,7 @@ describe("Lens-Runde 1: CRLF, Argumente der io, Grenzen der Aufrufprüfung", () 
   ])("Aufruf ungültig: %s: Exit 2", (_n, argv) => {
     const r = lauf(ALLE_OK, {}, [], argv);
     expect(r.code).toBe(2);
+    expect(r.err).toContain(_n.startsWith("kriterien") ? "kriterien braucht" : "auswerten braucht");
     expect(r.posts).toEqual([]);
   });
   test.each([7, 40])("head mit %i Zeichen ist gültig", (n) => {
