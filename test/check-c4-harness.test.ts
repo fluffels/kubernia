@@ -42,7 +42,8 @@ const modell = (): C4 => ({
   elemente: [
     el("verify", "container", "verify"),
     el("verifyFull", "container", "verify:full"),
-    el("a", "agent", "umsetzer"),
+    el("sub", "container", "Subagenten"),
+    el("a", "agent", "umsetzer", "sub"),
     el("s", "skill", "kubernia"),
     el("w", "workflow", "ticket"),
     el("h", "hook", "Stop"),
@@ -173,7 +174,7 @@ const FILES = (extra: Record<string, string | null> = {}): Record<string, string
     ".github/workflows/b.yaml": "name: b\n",
     ".github/workflows/README.md": "kein Workflow\n",
     ".mcp.json": JSON.stringify({ mcpServers: { playwright: {}, pixellab: {} } }),
-    "package.json": JSON.stringify({ scripts: { verify: "npm run lint && npm run inner && npm test", inner: "npm run check:x && npm run lint", "verify:full": "npm run verify && npm run build && npm run build -- --x" } }),
+    "package.json": JSON.stringify({ scripts: { verify: "npm run lint && npm run inner && npm test", inner: "npm run check:x && npm run lint", "verify:full": "npm run verify && npm run build && npm run build -- --x && npm run lint" } }),
     ...extra,
   };
   return Object.fromEntries(Object.entries(alle).filter((e): e is [string, string] => e[1] !== null));
@@ -229,10 +230,20 @@ describe("harnessQuellen: der Loader", () => {
     assert.deepEqual(q.mcp.eintraege, []);
   });
 
-  test("nicht konfigurierter Schlüssel: der Binder fehlt in der Antwort (pruefeHarness meldet ihn rot)", () => {
-    const q = api.harnessQuellen(fixture(FILES()), { ...CONFIG, harness: { ...CONFIG.harness, mcp: undefined } });
-    assert.equal(q.mcp, undefined);
-    assert.ok(q.agent);
+  const OHNE: [string, unknown][] = [
+    ["agent", { ...CONFIG, harness: { ...CONFIG.harness, agents: undefined } }],
+    ["skill", { ...CONFIG, harness: { ...CONFIG.harness, skills: undefined } }],
+    ["workflow", { ...CONFIG, harness: { ...CONFIG.harness, workflows: undefined } }],
+    ["hook", { ...CONFIG, harness: { ...CONFIG.harness, settings: undefined } }],
+    ["githook", { ...CONFIG, harness: { ...CONFIG.harness, gitHooks: undefined } }],
+    ["mcp", { ...CONFIG, harness: { ...CONFIG.harness, mcp: undefined } }],
+    ["ciworkflow", { ...CONFIG, kennzahlen: {} }],
+    ["gate", { ...CONFIG, gates: { ...CONFIG.gates, chains: "verify" } }],
+  ];
+  test.each(OHNE)("nicht konfigurierter Schlüssel (%s): der Binder fehlt in der Antwort, die übrigen bleiben (pruefeHarness meldet ihn rot)", (binder, config) => {
+    const q = api.harnessQuellen(fixture(FILES()), config);
+    assert.equal(q[binder], undefined);
+    assert.deepEqual(Object.keys(q).sort(), api.HARNESS_BINDER.filter((b) => b !== binder).sort());
   });
 
   test("nur die angeforderten Binder werden gelesen (fehlende settings.json stört dann nicht)", () => {
