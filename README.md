@@ -88,8 +88,8 @@ flowchart TD
   lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
   lenses -- ja --> pr
   pr --> ci
-  ci -- "rot, Fix-Versuch unter 3" --> umsetzen
-  ci -- "rot nach 3 Fix-Versuchen" --> fest
+  ci -- "rot, unter 4 roten Commits" --> umsetzen
+  ci -- "4 rote Commits (festgefahren.yml)" --> fest
   ci -- grün --> merge --> cleanup
   merge -.->|"Push auf main: verify erneut"| alarm
   alarm -.->|"Fix per PR, geht vor"| board
@@ -130,7 +130,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | 120 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 79 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Wächter-Tests | 75 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -151,9 +151,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/kubernia-umsetzer.md` |
 | Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
 | Skill | `kubernia` | model: sonnet | `.claude/skills/kubernia/SKILL.md` |
-| Skill | `kubernia-workflow` | model: Session-Modell | `.claude/skills/kubernia-workflow/SKILL.md` |
 | Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
-| Workflow | `kubernia-ticket` | — | `.claude/workflows/kubernia-ticket.js` |
 | Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs --danach scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |

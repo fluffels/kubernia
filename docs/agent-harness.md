@@ -22,7 +22,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | 120 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
-| Wächter-Tests | 79 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
+| Wächter-Tests | 75 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -347,8 +347,8 @@ flowchart TD
   lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
   lenses -- ja --> pr
   pr --> ci
-  ci -- "rot, Fix-Versuch unter 3" --> umsetzen
-  ci -- "rot nach 3 Fix-Versuchen" --> fest
+  ci -- "rot, unter 4 roten Commits" --> umsetzen
+  ci -- "4 rote Commits (festgefahren.yml)" --> fest
   ci -- grün --> merge --> cleanup
   merge -.->|"Push auf main: verify erneut"| alarm
   alarm -.->|"Fix per PR, geht vor"| board
@@ -453,7 +453,6 @@ sequenceDiagram
   participant L3 as kubernia-lens · opus · high<br/>Brille Test-Adäquanz
   participant CI as CI und Required Checks
 
-  Note over H: alternativ Skill kubernia-workflow:<br/>Workflow kubernia-ticket fährt denselben Ablauf
   H->>H: Ticket wählen und claimen
   H->>P: Ticket planen
   opt breite Suche

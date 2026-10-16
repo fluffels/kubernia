@@ -74,6 +74,4 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 - **Rückfragen bleiben möglich.** Subagenten können nicht fragen (`AskUserQuestion` ist dort entfernt); die seltene Pflicht-Rückfrage (Irreversibles, Außenwirkung) liegt vor dem Coden im Hauptchat, und spätere Fragen laufen über `entscheidung-noetig` und `SendMessage`.
 - **Kein Self-Grading (#1012).** Der Review läuft im Umsetzer über eigene Lens-Subagenten, nie inline. Regel-Heimat: AGENTS.md › Mehr-Perspektiven-Review.
 
-**Variante mit Phasen-Fortschritt (nur Claude Code, optional).** Denselben Ablauf gibt es als orchestrierten Workflow — [`kubernia-workflow`](../kubernia-workflow/SKILL.md) bzw. [`.claude/workflows/kubernia-ticket.js`](../../workflows/kubernia-ticket.js): sichtbarer Phasen-Fortschritt (`/workflows`), Resume nach Abbruch, die Fix-Versuchsgrenze aus #710 als Schleifengrenze; Rückfragen nur per Halt und `resumeFromRunId`. **Dieser Skill bleibt der maßgebliche Weg**, weil eine fremde KI `.claude/` nicht liest und den Ablauf dann einfach aus `AGENTS.md` in einem Agenten fährt.
-
-**Inhaltliche Änderungen am Ablauf immer in der Repo-`AGENTS.md` machen, nicht in dieser Skill-Datei** — und erst recht nicht im Workflow-Skript, das bewusst nur Orchestrierung enthält (Reihenfolge, Parallelität, Abbruchbedingungen).
+**Inhaltliche Änderungen am Ablauf immer in der Repo-`AGENTS.md` machen, nicht in dieser Skill-Datei**.

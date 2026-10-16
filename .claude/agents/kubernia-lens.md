@@ -1,6 +1,6 @@
 ---
 name: kubernia-lens
-description: Review-Kritiker für genau eine Brille (Architektur, Requirement-Treue, Test-Adäquanz oder Doku) auf einem fertigen kubernia-Diff. Nur über den Skill review-lenses bzw. den kubernia-ticket-Workflow spawnen, nicht von sich aus delegieren.
+description: Review-Kritiker für genau eine Brille (Architektur, Requirement-Treue, Test-Adäquanz oder Doku) auf einem fertigen kubernia-Diff. Nur über den Skill review-lenses spawnen, nicht von sich aus delegieren.
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell, Edit
 effort: high
