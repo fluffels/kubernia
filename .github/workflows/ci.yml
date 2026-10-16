@@ -112,6 +112,19 @@ jobs:
           path: dist-offline/index.html
           if-no-files-found: error
 
+      # CycloneDX-SBOM (#1617, ADR 0022 F15): `npm sbom` aus dem Lockfile, geprüft von scripts/sbom.mjs;
+      # Erzeugung oder fehlendes Artefakt ist rot. Dependency-Track bewusst nicht.
+      - name: CycloneDX-SBOM erzeugen (#1617)
+        timeout-minutes: 5
+        run: npm run sbom
+
+      - name: SBOM als Artefakt hochladen
+        uses: actions/upload-artifact@v7
+        with:
+          name: kubernia-sbom-cyclonedx
+          path: sbom/bom.cdx.json
+          if-no-files-found: error
+
       # Boot-Smoke-Test (#391): die Builds oben werden gebaut, aber nie GESTARTET.
       # Unit-Tests fassen die Präsentation (Phaser/DOM) bewusst nicht an, also
       # käme ein erst beim echten Boot auftretender Fehler (Phaser-Init, Content-
