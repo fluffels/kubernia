@@ -8,7 +8,7 @@
  * Mapper mit dem Server-Wortlaut ab; ein Secret, das es nicht gibt, ist dagegen kein Apply-Fehler, sondern
  * eine Listener-Condition (`ResolvedRefs`, siehe ../gateway). */
 import type { ApplyEffect } from "../state";
-import { TLS_PROTOCOLS, type GatewayListener } from "../gateway";
+import { TLS_PROTOCOLS, type GatewayListener, type HttpBackendRef, type HttpPathType, type HttpRouteRule } from "../gateway";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { Leaf, ManifestError } from "./fields";
 
@@ -83,4 +83,84 @@ export function mapGateway(doc: Leaf): ApplyEffect {
     seen.add(l.name);
   }
   return { gateway: { name, className, listeners } };
+}
+
+const SAME_NS = "default";
+const routeInvalid = (route: string, path: string, rest: string, tip: string): ManifestError =>
+  new ManifestError("The HTTPRoute \"" + route + "\" is invalid: " + path + ": " + rest, tip, true);
+
+/** Verweise gehen nur in den eigenen Namespace (kein ReferenceGrant im Simulator). */
+function sameNamespace(leaf: Leaf, route: string): void {
+  const ns = leaf.key("namespace").str();
+  if (ns !== undefined && ns !== SAME_NS) {
+    throw new ManifestError(leaf.key("namespace").path + ": Verweise über Namespaces hinweg (ReferenceGrant) bildet der Simulator nicht ab",
+      "Lege die HTTPRoute in den Namespace des Verweisziels bzw. nutze nur Ziele im Namespace '" + SAME_NS + "' (Route '" + route + "').", true);
+  }
+}
+
+function refKind(leaf: Leaf, expected: string): void {
+  const kind = leaf.key("kind").str();
+  if (kind !== undefined && kind !== expected) {
+    throw new ManifestError(leaf.key("kind").path + ": nur kind '" + expected + "' wird abgebildet, gefunden '" + kind + "'",
+      "Der Simulator kennt hier nur " + expected + ".", true);
+  }
+}
+
+function parentRefOf(leaf: Leaf, route: string): string {
+  sameNamespace(leaf, route);
+  refKind(leaf, "Gateway");
+  for (const k of ["sectionName", "port"]) {
+    if (leaf.key(k).present) {
+      throw new ManifestError(leaf.key(k).path + ": wird vom Simulator nicht abgebildet", "Die Route hängt am ganzen Gateway, nicht an einem einzelnen Listener.", true);
+    }
+  }
+  return leaf.key("name").reqStr();
+}
+
+function backendOf(leaf: Leaf, route: string): HttpBackendRef {
+  sameNamespace(leaf, route);
+  refKind(leaf, "Service");
+  const service = leaf.key("name").reqStr();
+  const port = leaf.key("port").int();
+  if (port === undefined) {
+    throw routeInvalid(route, leaf.path, "Invalid value: \"object\": Must have port for Service reference", "Ein backendRef auf einen Service braucht 'port: <zahl>'.");
+  }
+  return { service, port };
+}
+
+/** Ein Match je Regel; ohne `matches` gilt der Default `PathPrefix /`. */
+function matchOf(rule: Leaf, route: string): { path: string; pathType: HttpPathType } {
+  const matches = rule.key("matches").items();
+  if (matches.length > 1) {
+    throw new ManifestError(rule.key("matches").path + ": mehr als ein match je Regel wird vom Simulator nicht abgebildet", "Teile die Regel in mehrere Regeln mit je einem match.", true);
+  }
+  const pathLeaf = matches.length ? matches[0].key("path") : new Leaf(undefined, rule.key("matches").path + "[0].path");
+  const type = pathLeaf.key("type").str() ?? "PathPrefix";
+  if (type === "RegularExpression") {
+    throw new ManifestError(pathLeaf.key("type").path + ": RegularExpression wird vom Simulator nicht abgebildet", "Nutze 'PathPrefix' oder 'Exact'.", true);
+  }
+  if (type !== "PathPrefix" && type !== "Exact") {
+    throw routeInvalid(route, pathLeaf.key("type").path, "Unsupported value: \"" + type + "\": supported values: \"Exact\", \"PathPrefix\", \"RegularExpression\"", "Der Pfad-Typ ist 'PathPrefix' oder 'Exact'.");
+  }
+  const path = pathLeaf.key("value").str() ?? "/";
+  if (!path.startsWith("/")) {
+    throw routeInvalid(route, pathLeaf.key("value").path, "Invalid value: \"" + path + "\": value must be an absolute path and start with '/' when type one of ['Exact', 'PathPrefix']", "Ein Pfad beginnt mit '/'.");
+  }
+  return { path, pathType: type };
+}
+
+function ruleOf(rule: Leaf, route: string): HttpRouteRule {
+  const backends = rule.key("backendRefs").items().map(b => backendOf(b, route));
+  return { ...matchOf(rule, route), backends };
+}
+
+export function mapHttpRoute(doc: Leaf): ApplyEffect {
+  const name = nameOf(doc, "HTTPRoute");
+  const spec = doc.key("spec");
+  const parentRefs = spec.key("parentRefs").items().map(p => parentRefOf(p, name));
+  const hostnames = spec.key("hostnames").items().map(h => h.reqStr());
+  const rulesLeaf = spec.key("rules");
+  // Ohne `rules` setzt die CRD genau eine Regel `PathPrefix /` (ohne Backends); `rules: []` bleibt leer.
+  const rules = rulesLeaf.present ? rulesLeaf.items().map(r => ruleOf(r, name)) : [{ path: "/", pathType: "PathPrefix" as const, backends: [] }];
+  return { httpRoute: { name, parentRefs, hostnames, rules } };
 }

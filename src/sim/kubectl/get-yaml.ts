@@ -17,7 +17,7 @@ import type { KubectlHost } from "./host";
 import { RESOURCE_KINDS, type ResourceKind, type ResourcePlural } from "./resources";
 import { podObjects, serviceObjects, pvcObjects, type ObjectsOf } from "./objects/core";
 import { deploymentObjects, replicaSetObjects, statefulSetObjects } from "./objects/apps";
-import { gatewayClassObjects, gatewayObjects } from "./objects/gateway";
+import { gatewayClassObjects, gatewayObjects, httpRouteObjects } from "./objects/gateway";
 
 /** Der Baustein je Art (Schlüssel = Plural aus ./resources). */
 export const YAML_BAUSTEINE: ReadonlyMap<ResourcePlural, ObjectsOf> = new Map<ResourcePlural, ObjectsOf>([
@@ -29,6 +29,7 @@ export const YAML_BAUSTEINE: ReadonlyMap<ResourcePlural, ObjectsOf> = new Map<Re
   ["persistentvolumeclaims", pvcObjects],
   ["gatewayclasses", gatewayClassObjects],
   ["gateways", gatewayObjects],
+  ["httproutes", httpRouteObjects],
 ]);
 
 /** Die Arten mit Baustein, als Singular (für den Hinweistext). */

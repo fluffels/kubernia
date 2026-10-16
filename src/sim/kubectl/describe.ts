@@ -29,7 +29,10 @@ import { listWithMore, availableReplicas, statefulSetReadyReplicas, noResourcesI
 import { accessModesLong, pvcPendingEvent } from "../pv-controller";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
 import { sameRbac } from "../rbac";
-import { GATEWAY_API_VERSION, gatewayClassConditions, gatewayStatus, listenerConditions, type GatewayCondition, type GatewayListener } from "../gateway";
+import {
+  GATEWAY_API_VERSION, GATEWAY_GROUP, attachedRoutes, gatewayClassConditions, gatewayStatus, httpRouteStatus, listenerConditions,
+  type GatewayCondition, type GatewayListener, type HttpRouteRes, type UnattachedParent,
+} from "../gateway";
 import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
 
 /** Eine beschreibbare Art: ihre Objektnamen (ohne Nebenwirkung) und der Renderer für ein Objekt. */
@@ -347,9 +350,54 @@ export function describeGateway(host: KubectlHost, name: string, kind: ResourceK
     ...conditionLines(st.conditions, 4),
     ...(st.classAccepted ? [
       "  Listeners:",
-      ...gw.listeners.flatMap(l => ["    Name:  " + l.name, "    Conditions:", ...conditionLines(listenerConditions(l, host.secrets), 6)]),
+      ...gw.listeners.flatMap(l => [
+        "    Name:  " + l.name,
+        "    Attached Routes:  " + attachedRoutes(gw, l, host.httpRoutes),
+        "    Conditions:", ...conditionLines(listenerConditions(l, host.secrets), 6),
+      ]),
     ] : []),
     "Events:  <none>",
+  ].join("\n");
+}
+
+function routeRuleLines(route: HttpRouteRes): string[] {
+  return route.rules.flatMap(r => [
+    "    Backend Refs:",
+    ...r.backends.flatMap(b => ["      Kind:    Service", "      Name:    " + b.service, "      Port:    " + b.port, "      Weight:  1"]),
+    "    Matches:",
+    "      Path:",
+    "        Type:   " + r.pathType,
+    "        Value:  " + r.path,
+  ]);
+}
+
+/** Der deutsche Hinweis zu einem parentRef ohne Status oder zu einer Route ganz ohne parentRefs. */
+function unattachedHint(u: UnattachedParent): string {
+  return u.reason === "NotFound"
+    ? "💡 Gateway „" + u.gateway + "“ gibt es nicht: die Route hängt dort an keinem Tor."
+    : "💡 Gateway „" + u.gateway + "“ hat keine angenommene GatewayClass: die Route hängt dort an keinem Tor.";
+}
+
+export function describeHttpRoute(host: KubectlHost, name: string, kind: ResourceKind): string {
+  const route = host.httpRoutes.find(r => r.name === name);
+  if (!route) return notFound(host, kind, name);
+  const st = httpRouteStatus(route, host.gateways, host.gatewayClasses, servicesWithDefault(host));
+  return [
+    ...crdHead("HTTPRoute", route.name, DEFAULT_NAMESPACE),
+    "Spec:",
+    ...(route.hostnames.length ? ["  Hostnames:", ...route.hostnames.map(h => "    " + h)] : []),
+    ...(route.parentRefs.length ? ["  Parent Refs:", ...route.parentRefs.flatMap(n => ["    Group:  " + GATEWAY_GROUP, "    Kind:   Gateway", "    Name:   " + n])] : []),
+    "  Rules:",
+    ...routeRuleLines(route),
+    "Status:",
+    "  Parents:",
+    ...st.parents.flatMap(p => [
+      "    Conditions:", ...conditionLines(p.conditions, 6),
+      "    Controller Name:  " + p.controllerName,
+      "    Parent Ref:", "      Group:  " + GATEWAY_GROUP, "      Kind:   Gateway", "      Name:   " + p.gateway,
+    ]),
+    "Events:  <none>",
+    ...(route.parentRefs.length === 0 ? ["💡 Ohne parentRefs hängt die Route an keinem Tor."] : st.unattached.map(unattachedHint)),
   ].join("\n");
 }
 
@@ -400,6 +448,7 @@ export const DESCRIBE_ENTRIES: ReadonlyMap<ResourcePlural, DescribeEntry> = new 
   ["ingresses", { names: fromList(h => h.ingresses), render: describeIngress }],
   ["gatewayclasses", { names: fromList(h => h.gatewayClasses), render: describeGatewayClass }],
   ["gateways", { names: fromList(h => h.gateways), render: describeGateway }],
+  ["httproutes", { names: fromList(h => h.httpRoutes), render: describeHttpRoute }],
   ["networkpolicies", { names: fromList(h => h.networkPolicies), render: describeNetworkPolicy }],
   ["roles", { names: (h, k) => h.roles.filter(r => !!r.cluster === (k.plural === "clusterroles")).map(r => r.name), render: describeRole }],
   ["clusterroles", { names: (h, k) => h.roles.filter(r => !!r.cluster === (k.plural === "clusterroles")).map(r => r.name), render: describeRole }],

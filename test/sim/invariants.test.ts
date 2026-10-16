@@ -112,12 +112,14 @@ test("invariants (ROT): doppelter Service-Name wird genau EINMAL gemeldet", () =
   assert.equal(viol.length, 1); // ein Duplikat = eine Meldung, nicht pro Vorkommen
 });
 
-test("invariants (ROT): doppelte GatewayClass und doppeltes Gateway werden gemeldet (#1664)", () => {
+test("invariants (ROT): doppelte GatewayClass, Gateway und HTTPRoute werden gemeldet (#1664, #1665)", () => {
   sim.gatewayClasses.push({ name: "envoy", controllerName: "c" }, { name: "envoy", controllerName: "c" });
   sim.gateways.push({ name: "tor", className: "envoy", listeners: [] }, { name: "tor", className: "envoy", listeners: [] });
+  sim.httpRoutes.push({ name: "route", parentRefs: [], hostnames: [], rules: [] }, { name: "route", parentRefs: [], hostnames: [], rules: [] });
   const viol = clusterInvariantViolations(sim);
   assert.equal(viol.filter(m => /GatewayClass "envoy".*doppelt/.test(m)).length, 1);
   assert.equal(viol.filter(m => /Gateway "tor".*doppelt/.test(m)).length, 1);
+  assert.equal(viol.filter(m => /HTTPRoute "route".*doppelt/.test(m)).length, 1);
 });
 
 test("invariants: gleiche Namen über VERSCHIEDENE Ressourcentypen sind legal", () => {
