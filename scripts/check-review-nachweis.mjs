@@ -7,10 +7,11 @@
  * Hintergrund: Review-Pflicht, Cap 2 Fix-Runden und der Planer sind im Skill-Pfad
  * Verhaltensregeln: ein PR ohne Review-Runde, mit Überschreitung der Obergrenze oder ohne
  * Planer fiel nirgends auf. Dieser Wächter verlangt im Slice (Commits `<basis>..HEAD`) zwei
- * Zeilen am Zeilenanfang einer Commit-Message, gleiches Muster wie `KQ-Diffsize-Override`:
+ * Zeilen am Zeilenanfang einer Commit-Message, gleiches Muster wie der Diffsize-Override (Präfix `praefixe.commitZeile`, Planer
+ * `agenten.planer` der Projekt-Config; kein Standardwert, ein fehlender Schlüssel ist rot):
  *
- *   KQ-Plan: kubernia-planner            |  KQ-Plan: ohne — <Begründung>
- *   KQ-Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
+ *   <Präfix>Plan: <Planer>               |  <Präfix>Plan: ohne — <Begründung>
+ *   <Präfix>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
  *   Optional `zusatzpass=<anzahl>:<grund>` (#1561): nur wenn die Maintainerin Pässe über das Cap hinaus freigab; erhöht die Obergrenze.
  *
@@ -24,10 +25,12 @@
  * die Auflösung per Delta-Lens reviewen, dann einen neuen Nachweis setzen (head ≥ Merge). Konfliktfreie Merges (auch der synthetische
  * Merge-Commit des PR-Checkouts) bleiben grün; andere Commits nach dem Review werden weiter nur gemeldet. Ein git-Fehler ist rot.
  *
- * Druckventil: `KQ-Review-Override: #<nr> <warum>` (Pflicht-Begründung), z.B. für Revert-PRs.
+ * Druckventil: `<Präfix>Review-Override: #<nr> <warum>` (Pflicht-Begründung), z.B. für Revert-PRs.
  * Bewusst KEIN npm-`check:*`-Skript und nicht in `verify`: verify läuft vor dem Review, der
  * Nachweis entsteht erst danach (Vorbild: check-festgefahren.mjs). Lokal:
  *   node scripts/check-review-nachweis.mjs
+ *
+ * Mit `--config <pfad>` liest der Wächter eine andere Projekt-Config (Test, fremdes Projekt), sonst die des Repos.
  *
  * Reines Node-Skript (nur Builtins + check-basis.mjs); die Bewertung ist pur exportiert.
  */
@@ -35,7 +38,8 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
-import { meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
+import { trenneConfigArg } from "./projekt-config-lib.mjs";
+import { ladeCommitZeilen, meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
 
 // parseNachweis lebt im neutralen Modul slice-override.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
@@ -46,15 +50,13 @@ export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
 
-export const OVERRIDE_KEY = "KQ-Review-Override";
-
 const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
 export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
 
-/** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: docs/agent-harness.md §3a). */
-export const VORLAGE =
-  `KQ-Plan: kubernia-planner\n` +
-  `KQ-Review: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
+/** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: docs/agent-harness.md §3a); Schlüssel und Planer aus `zeilen`. */
+export const vorlage = (zeilen) =>
+  `${zeilen.plan}: ${zeilen.planer}\n` +
+  `${zeilen.review}: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
   `lenses=architektur,requirement-treue,test-adaequanz ` +
   `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
   `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n>)`;
@@ -70,49 +72,53 @@ export function pflichtLenses(dateien) {
 
 /** Prüft das optionale Feld `blocker=` (#1123): je Brille die Zahl der Runde-1-Blocker. Fehlt es, ist die
  *  Zeile gültig (alte Zeilen). Pure. */
-function bewerteBlocker(review) {
+function bewerteBlocker(review, zeilen) {
+  const R = zeilen.review;
   const fehler = [];
   const eintraege = review.blocker;
-  if (eintraege.length === 0) return ["KQ-Review: blocker ist leer (erwartet: blocker=<brille>:<n>,… je Brille der Runde 1)."];
+  if (eintraege.length === 0) return [`${R}: blocker ist leer (erwartet: blocker=<brille>:<n>,… je Brille der Runde 1).`];
   const gesehen = new Set();
   for (const { lens, n } of eintraege) {
-    if (!BEKANNTE_LENSES.includes(lens)) fehler.push(`KQ-Review: blocker nennt unbekannte Brille "${lens}" (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
-    if (!Number.isInteger(n) || n < 0) fehler.push(`KQ-Review: blocker=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
-    if (gesehen.has(lens)) fehler.push(`KQ-Review: blocker nennt die Brille ${lens} doppelt.`);
+    if (!BEKANNTE_LENSES.includes(lens)) fehler.push(`${R}: blocker nennt unbekannte Brille "${lens}" (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
+    if (!Number.isInteger(n) || n < 0) fehler.push(`${R}: blocker=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
+    if (gesehen.has(lens)) fehler.push(`${R}: blocker nennt die Brille ${lens} doppelt.`);
     gesehen.add(lens);
   }
   if (review.runden === 1) {
     const summe = eintraege.reduce((a, e) => a + (Number.isInteger(e.n) ? e.n : 0), 0);
-    if (summe > 0) fehler.push("KQ-Review: Runde 1 meldete Blocker, aber es gab kein Fix-Pass (runden=1).");
+    if (summe > 0) fehler.push(`${R}: Runde 1 meldete Blocker, aber es gab kein Fix-Pass (runden=1).`);
     const gleich = eintraege.length === review.lenses.length && review.lenses.every((l) => gesehen.has(l));
-    if (!gleich) fehler.push(`KQ-Review: runden=1, aber die Brillen von blocker (${[...gesehen].join(",")}) weichen von lenses (${review.lenses.join(",")}) ab.`);
+    if (!gleich) fehler.push(`${R}: runden=1, aber die Brillen von blocker (${[...gesehen].join(",")}) weichen von lenses (${review.lenses.join(",")}) ab.`);
   }
   return fehler;
 }
 
 /** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<grund>` (#1561): nur die Maintainerin gibt Pässe
  *  über das Cap hinaus frei; der Nachweis bleibt Selbstauskunft. Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
-function bewerteRunden(review) {
+function bewerteRunden(review, zeilen) {
+  const R = zeilen.review;
   const zp = review.zusatzpass ?? null;
   if (zp && "ungueltig" in zp) {
-    return [`KQ-Review: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Grund der Freigabe>).`];
+    return [`${R}: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Grund der Freigabe>).`];
   }
   const erlaubt = MAX_REVIEW_PAESSE + (zp ? zp.anzahl : 0);
   if (review.runden > erlaubt) {
     return [
-      `KQ-Review: runden=${review.runden} überschreitet die Obergrenze (Cap ${MAX_FIX_RUNDEN} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
-        `Gab die Maintainerin einen Zusatzpass frei: zusatzpass=<anzahl>:<Grund> in die KQ-Review-Zeile.`,
+      `${R}: runden=${review.runden} überschreitet die Obergrenze (Cap ${MAX_FIX_RUNDEN} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
+        `Gab die Maintainerin einen Zusatzpass frei: zusatzpass=<anzahl>:<Grund> in die ${R}-Zeile.`,
     ];
   }
   if (zp && review.runden <= MAX_REVIEW_PAESSE) {
-    return [`KQ-Review: zusatzpass ist nur bei runden > ${MAX_REVIEW_PAESSE} zulässig (runden=${review.runden}).`];
+    return [`${R}: zusatzpass ist nur bei runden > ${MAX_REVIEW_PAESSE} zulässig (runden=${review.runden}).`];
   }
   return [];
 }
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [] }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], zeilen }) {
+  if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
+  const R = zeilen.review;
   const fehler = [];
   for (const sha of konfliktMerges) {
     fehler.push(
@@ -122,39 +128,39 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
     );
   }
   const { plan, review } = nachweis;
-  if (!plan) fehler.push("KQ-Plan-Zeile fehlt (Planungspass nicht nachgewiesen).");
+  if (!plan) fehler.push(`${zeilen.plan}-Zeile fehlt (Planungspass nicht nachgewiesen).`);
   else if (plan.art === "ungueltig") {
-    fehler.push(`KQ-Plan ungültig: "${plan.zeile}" (erlaubt: "kubernia-planner" oder "ohne — <Begründung>").`);
+    fehler.push(`${zeilen.plan} ungültig: "${plan.zeile}" (erlaubt: "${zeilen.planer}" oder "ohne — <Begründung>").`);
   }
   if (!review) {
-    fehler.push("KQ-Review-Zeile fehlt (Review-Konvergenz nicht nachgewiesen).");
+    fehler.push(`${R}-Zeile fehlt (Review-Konvergenz nicht nachgewiesen).`);
     return fehler;
   }
-  if (review.head === null) fehler.push("KQ-Review: head fehlt oder ist kein SHA.");
-  else if (!headBekannt) fehler.push(`KQ-Review: head=${review.head} ist kein bekannter Commit.`);
+  if (review.head === null) fehler.push(`${R}: head fehlt oder ist kein SHA.`);
+  else if (!headBekannt) fehler.push(`${R}: head=${review.head} ist kein bekannter Commit.`);
   else if (!headImSlice) {
-    fehler.push(`KQ-Review: head=${review.head} liegt nicht im Slice dieses PRs (Rebase/Amend nach dem Review?).`);
+    fehler.push(`${R}: head=${review.head} liegt nicht im Slice dieses PRs (Rebase/Amend nach dem Review?).`);
   }
   if (!Number.isInteger(review.runden) || review.runden < 1) {
-    fehler.push("KQ-Review: runden fehlt oder ist keine Zahl ≥ 1.");
+    fehler.push(`${R}: runden fehlt oder ist keine Zahl ≥ 1.`);
   } else {
-    fehler.push(...bewerteRunden(review));
+    fehler.push(...bewerteRunden(review, zeilen));
   }
   const pflicht = pflichtLenses(dateien);
   const fehlend = pflicht.filter((l) => !review.lenses.includes(l));
   const codeVoll = CODE_LENSES.every((l) => review.lenses.includes(l));
   if (fehlend.length > 0 && !codeVoll) {
     fehler.push(
-      `KQ-Review: lenses fehlt ${fehlend.join(", ")} (Pflicht für diese Diff-Art: ${pflicht.join(", ")}). ` +
+      `${R}: lenses fehlt ${fehlend.join(", ")} (Pflicht für diese Diff-Art: ${pflicht.join(", ")}). ` +
         `Erwartet: lenses=${pflicht.join(",")} (kleingeschrieben, ASCII, ae/oe/ue statt Umlaute).`,
     );
   }
   const unbekannt = review.lenses.filter((l) => !BEKANNTE_LENSES.includes(l));
   if (unbekannt.length > 0) {
-    fehler.push(`KQ-Review: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
+    fehler.push(`${R}: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
   }
-  if (review.blocker !== null) fehler.push(...bewerteBlocker(review));
-  if (review.verdikt !== "ok") fehler.push(`KQ-Review: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
+  if (review.blocker !== null) fehler.push(...bewerteBlocker(review, zeilen));
+  if (review.verdikt !== "ok") fehler.push(`${R}: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
 }
 
@@ -168,9 +174,15 @@ export function konfliktMergesNach(git, headSha) {
   return merges.filter((sha) => git(["show", "--remerge-diff", "--format=", sha]).trim() !== "");
 }
 
-/** Führt die Prüfung gegen git aus. `runGit`/`env` injizierbar (Test). Fail-closed: eine nicht
- *  auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
-export function checkReviewNachweis({ runGit, env = process.env } = {}) {
+/** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
+ *  Fail-closed: ein Ladefehler der Config, eine nicht auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
+export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen } = {}) {
+  let zeilen;
+  try {
+    zeilen = ladeZeilen();
+  } catch (e) {
+    return { ok: false, fehler: [e instanceof Error ? e.message : String(e)] };
+  }
   const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
   const base = resolveBase(git, env);
   if (!base) return { ok: false, fehler: ["Keine Vergleichs-Basis auflösbar (flacher Checkout?) — Nachweis nicht prüfbar."] };
@@ -179,11 +191,11 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
     if (head === base) return { ok: true, skipped: true, fehler: [] };
     // `--reverse`: chronologisch, damit der JÜNGSTE Nachweis (`lastLine`) und die jüngste Override-Zeile gelten (Z8a).
     const messages = git(["log", "--reverse", "--format=%B", `${base}..HEAD`]);
-    const ov = parseOverrideTrailers(messages, OVERRIDE_KEY);
+    const ov = parseOverrideTrailers(messages, zeilen.reviewOverride);
     if (ov.valid.length > 0) {
-      return { ok: true, override: ov.valid[ov.valid.length - 1].reason, fehler: [], invalid: ov.invalid };
+      return { ok: true, override: ov.valid[ov.valid.length - 1].reason, fehler: [], invalid: ov.invalid, zeilen };
     }
-    const nachweis = parseNachweis(messages);
+    const nachweis = parseNachweis(messages, zeilen);
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])
       .split(/\r?\n/)
       .filter((l) => l.trim() !== "");
@@ -205,11 +217,12 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
         }
       }
     }
-    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges });
+    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges, zeilen });
     return {
       ok: fehler.length === 0,
       fehler,
       invalid: ov.invalid,
+      zeilen,
       commitsNachReview,
       blockerFehlt: nachweis.review?.blocker === null,
       zusatzpass: nachweis.review?.zusatzpass && "grund" in nachweis.review.zusatzpass ? nachweis.review.zusatzpass : null,
@@ -223,14 +236,27 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
 export const zusatzpassZeile = (r) => (r.zusatzpass ? `• Zusatzpass (Freigabe der Maintainerin): ${r.zusatzpass.grund}` : null);
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-function main() {
-  const r = checkReviewNachweis();
+function main(argv = process.argv.slice(2)) {
+  const getrennt = trenneConfigArg(argv);
+  if (getrennt.fehler) {
+    console.error(getrennt.fehler);
+    process.exit(1);
+  }
+  // Die Config wird vor jedem git-Aufruf geladen: ein Ladefehler endet mit Exit 1 und der Meldung des Laders (Pfad, Schlüssel, Fix:).
+  let zeilen;
+  try {
+    zeilen = ladeCommitZeilen({ pfad: getrennt.pfad });
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+  const r = checkReviewNachweis({ ladeZeilen: () => zeilen });
   if (r.skipped) {
     console.log("• check-review-nachweis: Basis == HEAD, nichts zu prüfen.");
     return;
   }
   if (r.override) {
-    console.log(`• geduldet: ${OVERRIDE_KEY} — ${r.override}`);
+    console.log(`• geduldet: ${zeilen.reviewOverride} — ${r.override}`);
     console.log("✔ Review-/Plan-Nachweis ok (Override mit Begründung).");
     return;
   }
@@ -249,8 +275,8 @@ function main() {
   for (const f of r.fehler) console.error(`  - ${f}`);
   console.error(
     `\nNach Konvergenz des Reviews einen leeren Nachweis-Commit setzen (Format: docs/agent-harness.md §3a), ` +
-      `beide Zeilen in einer Commit-Message:\nVorlage:\n${VORLAGE.replace(/^/gm, "  ")}\n` +
-      `Bewusste Ausnahme (z.B. Revert-PR) mit Pflicht-Begründung: ${OVERRIDE_KEY}: #<nr> <warum>`,
+      `beide Zeilen in einer Commit-Message:\nVorlage:\n${vorlage(zeilen).replace(/^/gm, "  ")}\n` +
+      `Bewusste Ausnahme (z.B. Revert-PR) mit Pflicht-Begründung: ${zeilen.reviewOverride}: #<nr> <warum>`,
   );
   process.exit(1);
 }
