@@ -23,7 +23,7 @@ type Status = { state: string; autoMergeRequest: object | null; labels?: { name:
 type Eingabe = { hookEvent?: string; agentType?: string; toolName?: string; lastMessage?: string | null };
 const abschluss = abschlussRaw as unknown as {
   abschlussBlockade: (i: Eingabe, d?: { prStatus?: (nr: string) => Status }) => string | null;
-  parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null; schnitt: string | null; uebergabe: boolean };
+  parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null; schnitt: string | null; uebergabe: boolean; festgefahren: string | null };
   ERGEBNIS_WERTE: string[];
   PR_FELDER: string;
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
