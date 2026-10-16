@@ -4,7 +4,13 @@ import * as raw from "../scripts/codescanning-inbox.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { NOTFAELLE } from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { zaehleBefundZeilen } from "../scripts/sammelticket-anlegen.mjs";
+import * as sammelRaw from "../scripts/sammelticket-anlegen.mjs";
+
+const zaehleBefundZeilen = (
+  sammelRaw as unknown as {
+    zaehleBefundZeilen: (k: { user: string; body: string }[], o: { vertraut: () => boolean }) => number;
+  }
+).zaehleBefundZeilen;
 
 type Alert = { nummer: number; tool: string; regel: string; stufe: string | null; schwere: string; state: string };
 type Gruppe = { tool: string; regel: string; stufe: string | null; schwere: string; nummern: number[] };

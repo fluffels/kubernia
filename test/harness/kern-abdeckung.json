@@ -11,6 +11,8 @@
   ".github/workflows/release.yml": {"art":"projekt","grund":"Release des Projekts"},
   "scripts/playwright-mcp.mjs": {"art":"modul","grund":"Browser-Modul, kein Factory-Kern"},
   "scripts/forum-sanitize.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
+  ".github/workflows/codescanning-inbox.yml": {"art":"modul","grund":"Sicherheits-Modul, kein Factory-Kern"},
+  "scripts/codescanning-inbox.mjs": {"art":"modul","grund":"Sicherheits-Modul, kein Factory-Kern"},
   ".github/workflows/forum-inbox.yml": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
   "scripts/forum-quarantaene.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
   "scripts/forum-leser-guard.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
