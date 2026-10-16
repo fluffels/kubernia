@@ -35,8 +35,8 @@ flowchart TD
   lenses -- "Cap von ${konstante:lensCap} Fix-Runden erreicht" --> handoff
   lenses -- ja --> pr
   pr --> ci
-  ci -- "rot, Fix-Versuch unter ${konstante:fixVersuche}" --> umsetzen
-  ci -- "rot nach ${konstante:fixVersuche} Fix-Versuchen" --> fest
+  ci -- "rot, unter ${konstante:festgefahrenCommits} roten Commits" --> umsetzen
+  ci -- "${konstante:festgefahrenCommits} rote Commits (festgefahren.yml)" --> fest
   ci -- grün --> merge --> cleanup
   merge -.->|"Push auf main: verify erneut"| alarm
   alarm -.->|"Fix per PR, geht vor"| board

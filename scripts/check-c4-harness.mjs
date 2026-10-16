@@ -41,14 +41,21 @@ const dateien = (rootDir, ordner, was, filter) => {
 export function harnessQuellen(rootDir, config, binders = HARNESS_BINDER) {
   const h = config.harness ?? {};
   const q = {};
-  const katalog = (key, was, liste) => {
+  /** `optional`: ein fehlender Ordner heißt „keine Einträge“ (Workflows gibt es nur, wenn das Projekt welche hat). */
+  const katalog = (key, was, liste, optional = false) => {
     if (!h[key]) return;
-    if (!existsSync(join(rootDir, h[key]))) throw new Error(`${was} ${h[key]} fehlt (Quelle der Harness-Bindung)`);
+    if (!existsSync(join(rootDir, h[key]))) {
+      if (optional) {
+        q[liste.binder] = { herkunft: h[key], eintraege: [] };
+        return;
+      }
+      throw new Error(`${was} ${h[key]} fehlt (Quelle der Harness-Bindung)`);
+    }
     q[liste.binder] = { herkunft: h[key], eintraege: harnessKatalog(rootDir, { [key]: h[key] })[liste.feld].map((x) => ({ titel: x.name })) };
   };
   if (binders.includes("agent")) katalog("agents", "Agent-Ordner", { binder: "agent", feld: "agents" });
   if (binders.includes("skill")) katalog("skills", "Skill-Ordner", { binder: "skill", feld: "skills" });
-  if (binders.includes("workflow")) katalog("workflows", "Workflow-Ordner", { binder: "workflow", feld: "workflows" });
+  if (binders.includes("workflow")) katalog("workflows", "Workflow-Ordner", { binder: "workflow", feld: "workflows" }, true);
   if (binders.includes("hook") && h.settings) {
     const hooks = lesJson(rootDir, h.settings, "Hook-Einstellungen").hooks ?? {};
     q.hook = { herkunft: `${h.settings} (hooks)`, eintraege: Object.keys(hooks).map((titel) => ({ titel })) };

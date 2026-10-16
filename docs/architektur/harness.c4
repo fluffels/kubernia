@@ -24,11 +24,7 @@ model {
     skills = container 'Skills' {
       forum = skill 'forum'
       kuberniaSkill = skill 'kubernia'
-      kuberniaWorkflow = skill 'kubernia-workflow'
       reviewLenses = skill 'review-lenses'
-    }
-    workflows = container 'Workflows' {
-      kuberniaTicket = workflow 'kubernia-ticket'
     }
     claudeHooks = container 'Claude-Hooks' {
       sessionStart = hook 'SessionStart'
@@ -133,11 +129,10 @@ views {
   }
 
   view bausteine of harness {
-    title 'Agenten, Skills, Workflow und Hooks'
+    title 'Agenten, Skills und Hooks'
     include
       harness.subagenten.*,
       harness.skills.*,
-      harness.workflows.*,
       harness.claudeHooks.*,
       harness.gitHooks.*
     autoLayout LeftRight

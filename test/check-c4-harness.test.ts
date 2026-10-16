@@ -207,11 +207,16 @@ describe("harnessQuellen: der Loader", () => {
     assert.throws(() => api.harnessQuellen(fixture(FILES({ "package.json": null })), CONFIG), /package\.json fehlt/);
   });
 
-  test("ein konfigurierter, aber fehlender Ordner für Agenten, Skills oder Workflows wirft mit dem Pfad (kein stilles leeres Verzeichnis)", () => {
-    for (const [schluessel, ordner] of [["agents", ".claude/agents"], ["skills", ".claude/skills"], ["workflows", ".claude/workflows"]] as const) {
+  test("ein konfigurierter, aber fehlender Ordner für Agenten oder Skills wirft mit dem Pfad (kein stilles leeres Verzeichnis)", () => {
+    for (const [schluessel, ordner] of [["agents", ".claude/agents"], ["skills", ".claude/skills"]] as const) {
       const files = Object.fromEntries(Object.entries(FILES()).filter(([k]) => !k.startsWith(ordner + "/")));
-      assert.throws(() => api.harnessQuellen(fixture(files), CONFIG, [{ agents: "agent", skills: "skill", workflows: "workflow" }[schluessel]]), new RegExp(`${ordner.replace(".", "\\.")} fehlt`));
+      assert.throws(() => api.harnessQuellen(fixture(files), CONFIG, [{ agents: "agent", skills: "skill" }[schluessel]]), new RegExp(`${ordner.replace(".", "\\.")} fehlt`));
     }
+  });
+
+  test("ein fehlender Workflow-Ordner ist keine Fehlerquelle, sondern eine leere Liste", () => {
+    const files = Object.fromEntries(Object.entries(FILES()).filter(([k]) => !k.startsWith(".claude/workflows/")));
+    assert.deepEqual(api.harnessQuellen(fixture(files), CONFIG, ["workflow"]).workflow.eintraege, []);
   });
 
   test("Punktdateien unter .githooks und Unterordner unter .githooks oder .github/workflows zählen nicht", () => {
