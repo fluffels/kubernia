@@ -525,7 +525,7 @@ describe("Zuordnung in Langfuse (#1668)", () => {
   /** Der Checklisten-Abschnitt nutzt die Rollen-Übersicht und gleicht gegen „Subagent LLM Call“ ab. */
   const nutztRollenUebersicht = (mr: string): boolean => {
     const a = abschnitt(mr, /^### Langfuse-Status überprüfen \(#1293\)/);
-    return a.includes("subagent-laufzeit.mjs --typen") && a.includes("Subagent LLM Call");
+    return a.includes("subagent-laufzeit.mjs --typen") && a.includes("**Abgleich der Opus-Subagenten:**") && a.includes("Subagent LLM Call");
   };
 
   test("model-routing.md: Zuordnungs-Tabelle mit allen Merkmalen und dem Wortlaut „nur über das Skript messbar“", () => {
@@ -544,5 +544,6 @@ describe("Zuordnung in Langfuse (#1668)", () => {
     const mr = read("docs/model-routing.md");
     assert.ok(nutztRollenUebersicht(mr));
     assert.equal(nutztRollenUebersicht(mr.replaceAll("subagent-laufzeit.mjs --typen", "subagent-laufzeit.mjs")), false);
+    assert.equal(nutztRollenUebersicht(mr.replace("**Abgleich der Opus-Subagenten:**", "**Abgleich:**")), false);
   });
 });

@@ -8,7 +8,7 @@
  * Σ geschätzt getrennt (`-` ohne bepreisten Lauf), Läufe ohne Preis und Modelle; offene Läufe zählen mit. `--typen` mit `--agent` oder `--schnitt` ist ein Aufruf-Fehler.
  *
  * `--ticket`/`--ohne` (wiederholbar) lassen Läufe eines Tickets ein- bzw. ausschließen, bevor `parallel` und das Aggregat gerechnet werden (z. B. Gegenprobe-Läufe).
- * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` und deren JSONL (nicht alle Haupttranskripte).
+ * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` (mit `--typen` alle) und deren JSONL (nicht alle Haupttranskripte).
  * Je Lauf: Ticket (`kq-<nr>` im Patch-Pfad, sonst Worktree, sonst erstes `#<nr>` im Prompt; `ticketAusLauf`), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
  * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
  * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request), Kosten in $ (`kosten`, Summe der Call-Preise aus PRICES, `null` bei einem Call ohne Preis; nur
@@ -88,7 +88,7 @@ export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schni
 const TYP_UNBEKANNT = "unbekannt";
 const typZeile = (agentType, liste) => {
   const bepreist = liste.filter((l) => l.kosten !== null);
-  const geschaetzt = liste.filter((l) => l.kostenGeschaetzt !== null && l.kostenGeschaetzt !== undefined);
+  const geschaetzt = liste.filter((l) => l.kostenGeschaetzt !== null);
   return {
     agentType,
     n: liste.length,

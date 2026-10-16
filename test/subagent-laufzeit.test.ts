@@ -579,7 +579,7 @@ describe("typenUebersicht: Rollen-Übersicht je agentType (#1668)", () => {
     offen.zeilen.splice(offen.zeilen.length - 2, 2); // letzter tool_use ohne Ergebnis
     const r = T.typenUebersicht({ laeufe: [offen, lauf("Plane #2", 0, 4)] });
     expect(r.typen[0]).toMatchObject({ n: 2, offen: 1 });
-    expect(r.typen[0].requests).toBeGreaterThan(3);
+    expect(r.typen[0].requests).toBe(offen.zeilen.filter((z) => z.type === "assistant").length + 2);
   });
   test("Fenster [von, bis] nach Laufstart: Grenzlauf drin, kurz davor und danach draußen", () => {
     const laeufe = [lauf("Plane #1", -1, 3), lauf("Plane #2", 0, 3), lauf("Plane #3", 10, 13), lauf("Plane #4", 11, 14)];
@@ -591,6 +591,24 @@ describe("typenUebersicht: Rollen-Übersicht je agentType (#1668)", () => {
     expect(r.typen).toEqual([]);
     expect(r.gesamt.n).toBe(0);
     expect(T.renderTypen(r)).toContain("keine Läufe im Fenster");
+  });
+  test("Σ geschätzt weicht von Σ aufgezeichnet ab (Kontext-Zuwachs) und wird getrennt gerechnet", () => {
+    const wachsend = (agentType: string): Lauf => ({
+      meta: { agentType },
+      zeilen: [0, 1, 2].map((i) => ({ ...call(i), message: { id: `w${++seq}`, model: "claude-opus-5-5", usage: { input_tokens: 1000 + i * 3000, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: "text", text: "x" }] } })),
+    });
+    const z = T.typenUebersicht({ laeufe: [wachsend("kubernia-lens"), wachsend("kubernia-lens")] }).typen[0];
+    expect(z.kostenSumme).toBeCloseTo(2 * 0.0486, 6);
+    expect(z.kostenGeschaetztSumme).toBeCloseTo(2 * 0.1682, 6);
+  });
+  test("Sortierung: `unbekannt` steht auch hinter einem Typ, der alphabetisch danach kommt", () => {
+    const laeufe = [{ meta: {}, zeilen: lauf("x #1", 0, 4).zeilen } as Lauf, lauf("Lens #2", 0, 4, { agentType: "zz-typ" }), lauf("Lens #3", 0, 4, { agentType: "kubernia-lens" })];
+    expect(T.typenUebersicht({ laeufe }).typen.map((x) => x.agentType)).toEqual(["kubernia-lens", "zz-typ", "unbekannt"]);
+  });
+  test("renderTypen: Typ ohne echtes Modell zeigt `-` in der Spalte Modelle", () => {
+    const l = lauf("Lens #1", 0, 4, { agentType: "kubernia-lens" });
+    for (const z of l.zeilen) if ((z as { message?: { model?: string } }).message?.model) (z as { message: { model?: string } }).message.model = undefined;
+    expect(T.renderTypen(T.typenUebersicht({ laeufe: [l] }))).toMatch(/\| kubernia-lens \|.*\| 1 \| - \|$/m);
   });
   test("--ohne filtert vor der Summe, --ticket schränkt ein", () => {
     expect(T.typenUebersicht({ laeufe: mix(), ohne: [2, 3] }).gesamt.n).toBe(4);
