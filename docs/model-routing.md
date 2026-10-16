@@ -680,7 +680,7 @@ Basis (#1559): Σ ab verify 166 $ von 268 $ (62 %), Σ ab CI-Warten 62 $ von 259
 | #1590/#1591 (effort low, verworfen) | 2026-10-15T16:30:26Z bis 21:46:15Z, `--ohne` 1561 1588 1590 1591 1598 1568, 14 Läufe | 1,20 $ | 118,6k |
 | #1592 (Phasen-Schnitt, effort medium) | 2026-10-15T23:08:10Z bis 2026-10-16T20:53:55Z, 62 Läufe | 1,19 $ | 143,0k |
 
-Die Vergleichsbasis #1591 entscheidet nicht (effort low ist zurückgenommen); Primärkontrolle ist `ohne` im selben Fenster. Der Workflow-Pfad (`kubernia-ticket.js`) entfällt, er wurde mit #1739 entfernt. **Offenlegung:** der Planer sah vorläufige Zahlen; der Primärwert stand schon in #1592, Mechanik-Wächter und Qualitäts-Veto sind hier vor der Auswertung fixiert worden.
+Die Vergleichsbasis #1591 entscheidet nicht (effort low ist zurückgenommen); Primärkontrolle ist `ohne` im selben Fenster. **Offenlegung:** der Planer sah vorläufige Zahlen; der Primärwert stand schon in #1592, Mechanik-Wächter und Qualitäts-Veto sind hier vor der Auswertung fixiert worden.
 
 ### Sammelticket-Läufe (#1647)
 
