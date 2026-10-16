@@ -556,7 +556,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(waehle([roh(99, { body: "" })], { hartAb: 100 }).ticket?.nr).toBe(99);
   });
   test("ausgenommen: Sammel-, Status-, Notfall-, Forum-, Epic-Titel ohne Format bleiben frei", () => {
-    for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "📦 Epic: Welt", "Phase 2: Bau"]) {
+    for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "📦 Epic: Welt", "Phase 2: Bau", "Langfuse-Status überprüfen"]) {
       const r = waehle([roh(1, { title: titel, body: "" })]);
       expect(r.ticket?.nr, titel).toBe(1);
       expect(r.ticket?.spezifikation, titel).toBeUndefined();
@@ -566,6 +566,22 @@ describe("Spezifikations-Gate (#1615)", () => {
     const r = waehle([roh(1, { body: "blockiert durch #50" })], { offene: new Set([50]) });
     expect(r.uebersprungen[0].grund).toBe("offener Blocker #50");
     expect(r.uebersprungen[0].fehlt).toBeUndefined();
+  });
+  test("Belegung (Branch, Worktree, PR) schlägt die Spezifikation: Grund Belegung, kein fehlt", () => {
+    const r = waehle([roh(1, { body: OHNE_NEGATIV })], { refs: ["origin/feature/kq-1-x"] });
+    expect(r.uebersprungen[0].grund).toBe("Branch, Worktree oder offener PR vorhanden");
+    expect(r.uebersprungen[0].fehlt).toBeUndefined();
+  });
+  test("Assignee und Fremdeingang schlagen die Spezifikation: weder Kommentare lesen noch posten", () => {
+    const fremd = { body: OHNE_NEGATIV, user: { login: "fremd", type: "User" } };
+    const forum = { body: OHNE_NEGATIV, labels: [{ name: "forum" }] };
+    const vergeben = { body: OHNE_NEGATIV, assignees: [{ login: "fluffels" }] };
+    for (const c of [fremd, forum, vergeben]) {
+      const { eingang, gepostet, gelesen } = io([roh(1, c)]);
+      GateN.fuehreAus(["--json"], eingang);
+      expect(gepostet).toEqual([]);
+      expect(gelesen).toEqual([]);
+    }
   });
   test("der teure Messfenster-Lader läuft bei Spezifikations-Mangel nicht", () => {
     let n = 0;

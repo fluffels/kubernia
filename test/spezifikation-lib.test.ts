@@ -47,6 +47,16 @@ describe("spezifikationsMaengel", () => {
     expect(S.spezifikationsMaengel("## Ziel\nZ\n## Akzeptanzkriterien\n* Negativ-Fall: a\n")).toEqual([]);
     expect(S.spezifikationsMaengel("## Ziel\nZ\n## Akzeptanzkriterien\n- Negativfälle: a\n")).toEqual([]);
   });
+  test("zu breites Wort zählt nicht: „negativ“ ohne „Fall“ ist kein Negativfall", () => {
+    const m = S.spezifikationsMaengel("## Ziel\nZ\n## Akzeptanzkriterien\n- Negativer Saldo wird angezeigt\n- negative Zahl abgelehnt\n");
+    expect(m).toHaveLength(1);
+    expect(m[0]).toContain("kein Negativfall");
+  });
+  test("`## Teil-Akzeptanzkriterien` (gebündelte Befund-Issues) gilt als Akzeptanzkriterien", () => {
+    expect(S.spezifikationsMaengel("## Ziel\nZ\n## Teil-Akzeptanzkriterien\n- Negativfall: x\n")).toEqual([]);
+    expect(S.spezifikationsMaengel("## Ziel\nZ\n## Teil-Akzeptanzkriterien\n- Happy\n")).toHaveLength(1);
+    expect(S.spezifikationsMaengel("## Ziel\nZ\n## Teilakzeptanz\n- Negativfall: x\n")).toContain("`## Akzeptanzkriterien` fehlt");
+  });
   test("`## Zielgruppe` und `### Ziel` sind kein `## Ziel`", () => {
     expect(S.spezifikationsMaengel("## Zielgruppe\nX\n## Akzeptanzkriterien\n- Negativfall\n")).toContain("`## Ziel` fehlt");
     expect(S.spezifikationsMaengel("### Ziel\nX\n## Akzeptanzkriterien\n- Negativfall\n")).toContain("`## Ziel` fehlt");

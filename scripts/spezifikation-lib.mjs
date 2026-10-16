@@ -48,7 +48,7 @@ export function spezifikationsMaengel(body) {
   const ziel = abschnitt(body, "Ziel");
   if (ziel === null) maengel.push(MANGEL.zielFehlt);
   else if (ziel.every((z) => z.trim() === "")) maengel.push(MANGEL.zielLeer);
-  const ak = abschnitt(body, "Akzeptanzkriterien");
+  const ak = abschnitt(body, "(?:Teil-)?Akzeptanzkriterien"); // „Teil-Akzeptanzkriterien“ ist die Überschrift gebündelter Befund-Issues
   if (ak === null) {
     maengel.push(MANGEL.akFehlt);
   } else {
