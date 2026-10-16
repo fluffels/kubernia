@@ -360,6 +360,18 @@ describe("fuehreAus: Belegfall vom 2026-10-16", () => {
     assert.equal(d.claims.find((c) => c.nr === 1530)?.lock.uebergabeStand, "verbraucht");
   });
 
+  test("ein Lens-Worktree ist nie der Ticket-Worktree: auch vor dem echten gelistet oder allein wird er nie entfernt", () => {
+    const lens = { pfad: "/h/.claude/worktrees/kq-1628-lens-r1", head: OID };
+    const vorn = baue({ ...BELEG, worktrees: [lens, ...(BELEG.worktrees ?? []).filter((w) => !w.pfad.includes("lens"))] });
+    M.fuehreAus([], vorn.deps);
+    assert.deepEqual(vorn.aufrufe.filter((a) => a.includes("worktree remove")), ["git worktree remove /h/.claude/worktrees/kq-1628"]);
+    const allein = baue({ ...BELEG, worktrees: [lens], refs: [] });
+    const r = M.fuehreAus([], allein.deps);
+    assert.equal(allein.aufrufe.some((a) => a.includes("worktree remove")), false);
+    assert.match(r.out, /AUFGERAEUMT #1628: Lock /);
+    assert.deepEqual(allein.geloescht, ["/locks/1628.json"]);
+  });
+
   test("das JSON enthält weder nonce noch nonceHash, auch nicht bei einem Lock im Altformat mit Klartext-Nonce", () => {
     const welt: Welt = { ...BELEG, locks: { ...BELEG.locks, "1672.json": JSON.stringify({ nr: 1672, nonce: "KLARTEXT-NONCE", erstellt: "2026-10-16T03:11:00.000Z" }) } };
     const r = M.fuehreAus(["--json"], baue(welt).deps);

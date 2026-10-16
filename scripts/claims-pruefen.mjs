@@ -24,7 +24,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
-import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
@@ -143,7 +143,7 @@ function frageGraphql(deps, query) {
 /** Liegt `pfad` unter `<Hauptcheckout>/.claude/worktrees/` und gehört zur Nummer? Pur. */
 export function pfadErlaubt({ pfad, hauptcheckout, nr }) {
   const rel = relative(resolve(hauptcheckout, ".claude", "worktrees"), resolve(pfad));
-  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) && !/[\\/]/.test(rel) && ticketAusRef(`worktrees/${basename(rel)}`) === nr && !LENS_WORKTREE_NAME.test(basename(rel));
+  return !/[\\/]/.test(rel) && ticketAusRef(`worktrees/${rel}`) === nr && !LENS_WORKTREE_NAME.test(rel);
 }
 
 /** Sammelt Kandidaten und ihre Daten: `{ jetzt, viewer, hauptcheckout, claims }`. Wirft bei git-/gh-Fehlern. */

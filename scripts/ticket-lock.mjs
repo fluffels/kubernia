@@ -193,7 +193,8 @@ function claim(deps, nr, wiederaufnahme = false) {
   const b = ermittleBelegung(deps, nr);
   if (b.belegt) {
     const lock = liesLock(deps, nr);
-    const urteil = wiederaufnahme ? entscheidePruefung({ lock, nonce: null, vorhanden: true, aktivitaet: letzteAktivitaet({ ...sammleAktivitaet(deps, b), lockMs: herzschlagMs(lock) }), jetzt: deps.jetzt() }) : "belegt";
+    const urteil = wiederaufnahme ? entscheidePruefung({ lock, nonce: null, vorhanden: true, aktivitaet: letzteAktivitaet(sammleAktivitaet(deps, b)), jetzt: deps.jetzt() }) : "belegt";
+    // Ein Herzschlag (`zuletzt`) schützt hier über `entscheideClaim` im Weiterlauf unten (`lebenszeichenMs`), nicht über die Aktivität.
     if (urteil !== "frei" && urteil !== "uebernehmbar") return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (feature/kq-${nr}-*)${wiederaufnahme ? ` mit Lebenszeichen oder jungem Lock (${urteil})` : ""}: nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
   }
   deps.legeVerzeichnisAn(deps.lockDir);
