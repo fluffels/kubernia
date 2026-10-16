@@ -1,5 +1,5 @@
 /* ===== Kubernia – YAML-Bausteine der Gruppe gateway.networking.k8s.io/v1 (sim/kubectl/objects/gateway.ts, #1664) =====
- * Die Objekte für `kubectl get gatewayclass|gateway -o yaml`. Gespiegelt wird das Mapper-Paar in
+ * Die Objekte für `kubectl get gatewayclass|gateway|httproute -o yaml`. Gespiegelt wird das Mapper-Paar in
  * ../../manifest/gateway.ts: was der Mapper aus einem Manifest liest, schreibt dieser Baustein wieder hin
  * (Round-Trip-Test `apply -f` → `get -o yaml` → `effectsFromManifest`).
  *
@@ -9,9 +9,10 @@
  * Phaser-frei (pure Domäne); importiert nie ./get-yaml oder ../get (kein Zyklus). */
 import type { YamlMap } from "../../yaml-emit";
 import {
-  GATEWAY_API_VERSION, gatewayClassConditions, gatewayStatus, listenerConditions,
-  type GatewayClassRes, type GatewayCondition, type GatewayListener, type GatewayRes,
+  GATEWAY_API_VERSION, GATEWAY_GROUP, attachedRoutes, gatewayClassConditions, gatewayStatus, httpRouteStatus, listenerConditions,
+  type GatewayClassRes, type GatewayCondition, type GatewayListener, type GatewayRes, type HttpRouteRes, type HttpRouteRule,
 } from "../../gateway";
+import { servicesWithDefault } from "../../endpoints";
 import type { KubectlHost } from "../host";
 import { compact, metaOf, type ObjectsOf } from "./core";
 
@@ -46,11 +47,35 @@ function gatewayObject(host: KubectlHost, gw: GatewayRes): YamlMap {
       addresses: st.address === null ? undefined : [{ type: "IPAddress", value: st.address }],
       conditions: st.conditions.map(conditionObject),
       listeners: st.classAccepted
-        ? gw.listeners.map(l => ({ conditions: listenerConditions(l, host.secrets).map(conditionObject), name: l.name }))
+        ? gw.listeners.map(l => ({ attachedRoutes: attachedRoutes(gw, l, host.httpRoutes), conditions: listenerConditions(l, host.secrets).map(conditionObject), name: l.name }))
         : undefined,
     }),
   };
 }
 
+function ruleObject(r: HttpRouteRule): YamlMap {
+  return {
+    backendRefs: r.backends.map(b => ({ group: "", kind: "Service", name: b.service, port: b.port, weight: 1 })),
+    matches: [{ path: { type: r.pathType, value: r.path } }],
+  };
+}
+
+function httpRouteObject(host: KubectlHost, route: HttpRouteRes): YamlMap {
+  const st = httpRouteStatus(route, host.gateways, host.gatewayClasses, servicesWithDefault(host));
+  return {
+    apiVersion: GATEWAY_API_VERSION, kind: "HTTPRoute", metadata: metaOf(route.name),
+    spec: compact({
+      hostnames: route.hostnames.length ? route.hostnames : undefined,
+      parentRefs: route.parentRefs.length ? route.parentRefs.map(n => ({ group: GATEWAY_GROUP, kind: "Gateway", name: n })) : undefined,
+      rules: route.rules.map(ruleObject),
+    }),
+    status: { parents: st.parents.map(p => ({
+      conditions: p.conditions.map(conditionObject), controllerName: p.controllerName,
+      parentRef: { group: GATEWAY_GROUP, kind: "Gateway", name: p.gateway },
+    })) },
+  };
+}
+
 export const gatewayClassObjects: ObjectsOf = host => new Map(host.gatewayClasses.map(c => [c.name, gatewayClassObject(c)]));
 export const gatewayObjects: ObjectsOf = host => new Map(host.gateways.map(g => [g.name, gatewayObject(host, g)]));
+export const httpRouteObjects: ObjectsOf = host => new Map(host.httpRoutes.map(r => [r.name, httpRouteObject(host, r)]));

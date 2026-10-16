@@ -225,6 +225,8 @@ Planer-Sockel: ² Median über 2 Läufe mit Planer (der Planer fehlt in 1 von 3 
 | MCP-Instruktionen | 6,6k | User/claude.ai, PixelLab 1,0k |
 | Systemprompt-Snapshot, Agent-Listing, SessionStart-Hook | 12,8k | Claude Code/User |
 
+**Zuwachs durch den LikeC4-MCP (#1422), gemessen 2026-10-16:** Der Server `likec4` liefert 20 Tools; ihre Namen haben ohne Präfix 316 Zeichen, mit Präfix `mcp__likec4__` 576 (Handshake gegen `node_modules/likec4`, Version 1.59.4). Als verzögerte Tools stehen im Hauptagenten nur die Namen im Sockel (grob 150 Tokens, Schätzung aus 576 Zeichen), die Schemas laden erst bei Bedarf. Probe-Session `8e773c42-3ced-4e2e-9fb7-f446af4e6cd7` (`claude -p`, Sonnet, Worktree mit `likec4`): Sockel 48.881 (ohne Vorher-Basis, kein Zuwachsbeleg). Der Zuwachs wirkt nur in Kontexten ohne `tools:`-Whitelist (Hauptchat, Workflow-Phasen); Planer, Umsetzer, Lens und Explore bekommen `mcp__likec4` nicht.
+
 **Messung vorher/nachher** (`claude -p` im Projekt, Sonnet, gleicher Prompt; Headless liegt unter den interaktiven Werten, weil weniger Hooks und Tools laden, die Differenzen sind aber übertragbar):
 
 | Variante (Einzeleffekte gegen „vorher“, sie überlappen sich) | Sockel |
@@ -651,7 +653,7 @@ Entscheidung und Begründung: [ADR 0026](adr/0026-sammelticket-gruppen.md). Der 
 
 Zum Vergleich über alle Umsetzer-Läufe des Fensters mit „(gesammelt)“ im Prompt (Heuristik, n = 55, enthält Läufe, die ein Sammelticket nur erwähnen): Median 103 Requests, 254k Kontext, 3,38 $; ohne (n = 86): 71 Requests, 167k, 2,18 $.
 
-**Grenzen:** Workflow-Läufe (`kubernia-ticket.js`) sind kein `kubernia-umsetzer` und fehlen. Die Zeilenzahl ist der Stand beim Schließen (offene und erledigte Checkboxen). Eine Zeile ist nicht gleich groß; der Median je Zeile verdeckt die Streuung (0,13 $ bis 1,72 $). Ab 12 Zeilen ist die Zeile im Median billiger als darunter (feste Kosten je PR verteilen sich), die Generationsgrenze verteuert also kleine Generationen leicht; ob das die Gruppen ausgleichen, zeigt erst die Nachmessung. `kontext-treiber --ticket <Nrn>` wurde für die Baseline nicht gefahren (die Kosten stammen aus `subagent-laufzeit`); das Rezept bleibt für die Nachmessung.
+**Grenzen:** Workflow-Läufe (`kubernia-ticket.js`) sind kein `kubernia-umsetzer` und fehlen. Die Zeilenzahl ist der Stand beim Schließen (offene und erledigte Checkboxen). Eine Zeile ist nicht gleich groß; der Median je Zeile verdeckt die Streuung (0,13 $ bis 1,72 $). Ab 12 Zeilen ist die Zeile im Median billiger als darunter (feste Kosten je PR verteilen sich), ob die Gruppen den Kontext großer Tickets abfangen, zeigt die Nachmessung. `kontext-treiber --ticket <Nrn>` wurde für die Baseline nicht gefahren (die Kosten stammen aus `subagent-laufzeit`); das Rezept bleibt für die Nachmessung.
 
 **Nachmessen:** gleiche Befehle mit Fenster ab dem Merge von #1647. Gruppen-Läufe: `node scripts/subagent-laufzeit.mjs --agent kubernia-gruppe --von <ISO> --json` (über den Worktree im Prompt wird der Lauf dem Ticket zugeordnet); Kosten je Zeile = (Σ Umsetzer plus Σ `kubernia-gruppe` je Ticketnummer) / Zeilen. **Ziel (Hypothese, nicht gemessen):** −20 % je Zeile; bei Review-Runden und Nacharbeit kein Anstieg. **Auswertung:** über die ersten drei Gruppen-Läufe; Kriterium im ADR.
 

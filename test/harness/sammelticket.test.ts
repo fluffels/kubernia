@@ -14,13 +14,16 @@
  *   3. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
+ *   4. Das Sammelticket hat keine Zeilengrenze (#1687, ADR 0026): kein `--generation`, keine Grenzzahl, kein
+ *      Takt-Schritt; es gibt höchstens ein ungeclaimtes, beim Claim entsteht der Nachfolger (`--vorgaenger`).
+ *
  * Jede weitere „Position <N>“ (auch „Position: <N>“) in AGENTS.md macht den Test absichtlich rot,
  * auch in anderem Zusammenhang; darum hat das wiederkehrende Status-Ticket keine Position mehr:
  * seinen Takt hält der Board-Takt board-takt.yml (#1351, #1390).
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const lies = (rel: string): string => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
@@ -161,5 +164,29 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
     assert.ok(halbiert("die **zweite " + "Hälfte** ins nächste Sammelticket übertragen"));
     assert.ok(!halbiert("kein Teil, kein Rest-Übertrag"));
     assert.ok(!nenntErgebnisPflicht(""));
+  });
+});
+
+describe("keine Zeilengrenze für Sammeltickets (#1687, ADR 0026)", () => {
+  const VERBOTEN = /--generation\b|SAMMEL_ZEILEN_GRENZE|Generationsgrenze|planeGeneration|entscheideGeneration|generationsKommentar|Generation voll/;
+  const workflows = readdirSync(fileURLToPath(new URL("../../.github/workflows", import.meta.url)))
+    .filter((f) => f.endsWith(".yml"))
+    .map((f) => `.github/workflows/${f}`);
+  const dateien = ["scripts/sammelticket-anlegen.mjs", ...workflows, "docs/ticket-reihenfolge.md", "docs/referenz/befehle.md", "docs/harness-glossar.md"];
+
+  test("Skript, Workflows und Sammelticket-Doku kennen keine Zeilengrenze und kein --generation", () => {
+    for (const f of dateien) assert.doesNotMatch(lies(f), VERBOTEN, f);
+  });
+
+  test("Positivkontrolle: die Liste deckt die Workflows ab, und der Nachfolger beim Claim (--vorgaenger) bleibt", () => {
+    assert.ok(dateien.includes(".github/workflows/board-takt.yml") && dateien.includes(".github/workflows/audit-einordnung.yml"));
+    assert.match(lies("scripts/sammelticket-anlegen.mjs"), /--vorgaenger/);
+  });
+
+  test("Erkennung greift (Red-Green): jedes verbotene Muster fällt durch", () => {
+    for (const t of ["harness --gener" + "ation", "SAMMEL_ZEILEN_" + "GRENZE = 12", "Generations" + "grenze des Takts", "plane" + "Generation(", "entscheide" + "Generation(", "generations" + "Kommentar", "Generation " + "voll (12 Zeilen)"]) {
+      assert.match(t, VERBOTEN, t);
+    }
+    assert.doesNotMatch("harness --vorgaenger 5", VERBOTEN);
   });
 });

@@ -232,6 +232,11 @@ function getGateways(host: KubectlHost): GetTable {
     }));
 }
 
+function getHttpRoutes(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "HOSTNAMES", "AGE"],
+    host.httpRoutes.map(r => [r.name, r.hostnames.length ? JSON.stringify(r.hostnames) : "", host._age(r.created || 0)]));
+}
+
 function getNetworkPolicies(host: KubectlHost): GetTable {
   return tableOf(["NAME", "POD-SELECTOR", "AGE"],
     host.networkPolicies.map(n => [n.name, n.podSelector ? workloadSelector(n.podSelector) : "<none>", host._age(n.created || 0)]));
@@ -336,6 +341,7 @@ export const GET_RENDERERS: ReadonlyMap<ResourcePlural, GetEntry> = new Map<Reso
   ["ingresses", { render: getIngress }],
   ["gatewayclasses", { render: getGatewayClasses }],
   ["gateways", { render: getGateways }],
+  ["httproutes", { render: getHttpRoutes }],
   ["networkpolicies", { render: getNetworkPolicies }],
   ["servicemonitors", { render: getServiceMonitors }],
   ["prometheusrules", { render: getPrometheusRules }],

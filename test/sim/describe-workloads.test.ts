@@ -268,6 +268,7 @@ describe("ohne Namen und Namenspräfix", () => {
       serviceAccounts: ["robo"],
       gatewayClasses: [{ name: "envoy", controllerName: "gateway.envoyproxy.io/gatewayclass-controller" }],
       gateways: [{ name: "eingang", className: "envoy", listeners: [{ name: "http", port: 80, protocol: "HTTP" }] }],
+      httpRoutes: [{ name: "route", parentRefs: ["eingang"], hostnames: [], rules: [] }],
       roles: [{ name: "leser", cluster: false, rules: [], created: 0 }, { name: "weit", cluster: true, rules: [], created: 0 }],
     } as never);
     for (const [plural, entry] of DESCRIBE_ENTRIES) {
