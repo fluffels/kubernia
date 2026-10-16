@@ -335,6 +335,19 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     assert.deepEqual([...abschluss.PR_FELDER.split(",")].sort(), ["autoMergeRequest", "labels", "state"]);
     assert.match(readFileSync(resolve(ROOT, "scripts/umsetzer-abschluss.mjs"), "utf8"), /"--json", PR_FELDER/);
   });
+
+  test("Bindung: jeder ERGEBNIS-Wert hat einen Bullet im kubernia-Skill (#1740 L1)", () => {
+    const skill = readFileSync(resolve(ROOT, ".claude/skills/kubernia/SKILL.md"), "utf8");
+    for (const wert of abschluss.ERGEBNIS_WERTE) {
+      assert.ok(skill.includes(`- **\`${wert}\`**`), `kubernia/SKILL.md ohne Bullet **\`${wert}\`**`);
+    }
+  });
+
+  // Bekannte Grenze: ob eine Entscheidung im konkreten PR-Text steht, ist nicht prüfbar; gebunden ist nur der Auftrag in der Prosa.
+  test("Bindung: Entscheidungen kommen in den PR-Text, auch die der Gruppen-Umsetzer (#1740 L3)", () => {
+    assert.match(UMSETZER, /im PR-Text \(„Entscheidung: X, weil Y“\)/);
+    assert.match(abschnitt(UMSETZER, /^\*\*Gruppen \(#1647/), /ENTSCHEIDUNGEN[^.]*PR-Text/);
+  });
 });
 
 describe("uebergabe: Phasen-Schnitt (#1592)", () => {
