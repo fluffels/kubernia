@@ -27,7 +27,7 @@ Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (#1362) fo
 - **ersetzen:** die Doku belegt ein natives Feature, das den Zweck voll abdeckt, auch unter Windows/WSL2 ([ADR 0021](adr/0021-agenten-sandbox-wsl2.md)), mit parallelen Agenten und auf dem tool-neutralen Pfad.
 - **beobachten:** nur teilweise abgedeckt, Beta, unter Windows unbelegt oder durch einen offenen Bug blockiert. Kein Umbau.
 - **behalten:** kein Gegenstück, oder Projektpolitik statt Werkzeuglücke.
-- Eine Regel, die nur eine Modellschwäche ausgleicht, nennt in der Zelle den Lockern-Kandidaten für #1357.
+- Eine Regel, die nur eine Modellschwäche ausgleicht, nennt in der Zelle den Lockern-Kandidaten ([ADR 0027](adr/0027-regeln-lockern.md)).
 
 Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie in der README-Tabelle.
 
@@ -39,7 +39,7 @@ Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie 
 | Worktree-Guard (`worktree-guard-*.mjs`, `bash-parser.mjs`, `shell-tabellen.mjs`) | schützt Worktrees und Hauptcheckout vor falschen Befehlen | [Worktrees](https://code.claude.com/docs/en/worktrees.md), `isolation: worktree` ab v2.1.49, `WorktreeCreate`/`WorktreeRemove` ab v2.1.50 | beobachten: Prüfung der Worktree-Mechanik gehört zu #1066, nicht doppelt | teilweise |
 | gh-Guard (`gh-guard-hook.mjs`, `quote-folge.mjs`, `gh-cli.mjs`) | verweigert unsichere `gh`-Aufrufe, prüft Quoting | Permission-Regeln und `PreToolUse` ([Hooks](https://code.claude.com/docs/en/hooks.md)); kein natives Gegenstück für Projektpolitik | behalten | teilweise |
 | Umsetzer-Abschluss (`umsetzer-abschluss.mjs`, Matcher `SubagentHandback`) | prüft Berichtsformat und PR-Stand des Umsetzers | `SubagentStop` mit `last_assistant_message` ab v2.1.47 ([Hooks](https://code.claude.com/docs/en/hooks.md)) | behalten: Projektformat und PR-Zustand sind Politik | nein |
-| Lens-Auftrag-Guard (Matcher `Agent`) | verweigert unvollständige Lens-Aufträge | `PreToolUse` auf `Agent` ([Hooks](https://code.claude.com/docs/en/hooks.md)) | behalten: gleicht eine Modellschwäche aus (Platzhalter im Prompt); Lockern-Kandidat #1357 | nein |
+| Lens-Auftrag-Guard (Matcher `Agent`) | verweigert unvollständige Lens-Aufträge | `PreToolUse` auf `Agent` ([Hooks](https://code.claude.com/docs/en/hooks.md)) | behalten: gleicht eine Modellschwäche aus (Platzhalter im Prompt); Lockern-Kandidat ([ADR 0027](adr/0027-regeln-lockern.md)) | nein |
 | Lens-Edit-Guard (`lens-edit-guard.mjs`, Hook im Frontmatter von `kubernia-lens`) | begrenzt die Edits der Lens auf Sabotage-Proben | Hooks im Agent-Frontmatter ab v2.1.0 ([Subagents](https://code.claude.com/docs/en/sub-agents.md)), schon genutzt | behalten | nein |
 | `SessionEnd` (`langfuse-abgleich-hook.mjs`, an `SessionStart` über `haupt-sync.mjs --danach`) | stellt fehlende Langfuse-Calls aus dem Transkript nach, losgelöst, mit Lock und Log | `SessionEnd`-Hook nativ; Langfuse-Plugin allein verliert Calls (ADR 0023) | behalten | ja |
 | `SessionStart` (`haupt-sync.mjs`) | hält den Hauptcheckout aktuell | `SessionStart`-Hook nativ seit v1.0.62 | behalten | teilweise |
@@ -76,7 +76,7 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 | CI-Warten des Umsetzers (`pr-warten.mjs`) | pollt höchstens 240 s, eine kompakte Zeile, unter der 5-Minuten-Cache-TTL | `gh pr checks --watch` blockiert bis zu den Checks ohne Zeitbudget und ohne kompakte Statuszeile ([gh](https://cli.github.com/manual/gh_pr_checks)) | behalten: Grund [Umsetzer-Kontext](model-routing.md#umsetzer-kontext-1559) | ja |
 | Budget-Pacing (`budget-pacing.mjs`, `budget-lib.mjs`, `statusline.mjs`) | taktet Mehr-Tickets-Läufe nach dem Wochenlimit des Kontos (Snapshot aus Statusline oder Headless-Probe) | `statusLine` liefert `rate_limits` nur für Pro/Max ([Statusline](https://code.claude.com/docs/en/statusline), gelesen 2026-10-15); [Mods](https://code.claude.com/docs/en/plugins/mods/overview.md) laufen unsandboxed und sind neu | behalten: Mods beobachten | ja |
 | Lebende Doku (`docs-gen.mjs`, `scripts/docs-gen/`) | generierte Abschnitte | kein Gegenstück; Kern-Schnitt: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md) | behalten | ja |
-| `patch-abschnitte.mjs` | teilt einen Patch für die Lenses in Leseabschnitte | kein Gegenstück; gleicht den Lesezwang des Modells aus | behalten: Lockern-Kandidat #1357 | ja |
+| `patch-abschnitte.mjs` | teilt einen Patch für die Lenses in Leseabschnitte | kein Gegenstück; gleicht den Lesezwang des Modells aus | behalten: Lockern-Kandidat ([ADR 0027](adr/0027-regeln-lockern.md)) | ja |
 
 ## C. Regeln mit Modell- oder Werkzeugbezug
 
@@ -84,11 +84,11 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 |---|---|---|---|---|
 | Eine Root-Kontextdatei, kein `CLAUDE.md` | AGENTS.md als einzige Quelle, tool-neutral | [AGENTS.md-Unterstützung](https://code.claude.com/docs/en/memory.md) ab v2.1.277 (nur wenn kein `CLAUDE.md` existiert, genau diese Regel) | behalten | ja |
 | Alias-Routing und `effort` je `agent()` | Modell und Aufwand je Rolle | Alias-Auflösung `opus`/`sonnet`/`haiku` ([Subagents](https://code.claude.com/docs/en/sub-agents.md)); `effort` am Agent-Tool ab v2.1.292 (die Doku beschreibt es dort nicht, nur im Frontmatter); Haiku 5.5 als Default-Haiku ab v2.1.293 | behalten: der Wechsel auf Haiku 5.5 kam ohne Harness-Arbeit (Beleg Alias-Routing); `effort` je `agent()` im Workflow bleibt Regel, bis die Doku es belegt | ja |
-| Skill-Frontmatter-Grenze und Projekt-Default `sonnet` (#1557) | `model`/`effort` im Skill greifen nicht, wenn Claude den Skill aufruft | offener Bug anthropics/claude-code#98898 (Stand 2026-10-08: offen) | beobachten: bei Schließung Regel streichen, Lockern-Kandidat #1357 | ja |
-| Patch einmal lesen, Brain-Seiten per `Read`, Kontext-Diät, Planer-Laufzeitregeln | spart Tokens, verhindert Doppel-Lesen | kein Gegenstück; gleicht Modellverhalten aus | behalten: Lockern-Kandidat #1357 | ja |
+| Skill-Frontmatter-Grenze und Projekt-Default `sonnet` (#1557) | `model`/`effort` im Skill greifen nicht, wenn Claude den Skill aufruft | offener Bug anthropics/claude-code#98898 (Stand 2026-10-08: offen) | beobachten: bei Schließung Regel streichen, Lockern-Kandidat ([ADR 0027](adr/0027-regeln-lockern.md)) | ja |
+| Patch einmal lesen, Brain-Seiten per `Read`, Kontext-Diät, Planer-Laufzeitregeln | spart Tokens, verhindert Doppel-Lesen | kein Gegenstück; gleicht Modellverhalten aus | behalten: Lockern-Kandidat ([ADR 0027](adr/0027-regeln-lockern.md)) | ja |
 | Dev-Server-Reload nach Edit (#301) | verhindert Prüfung des alten Stands | Vite lädt JS/TS hier nicht neu (Projektfall) | behalten | nein |
 | Kollisionsschutz paralleler Agenten | Assignee plus Worktree-Check | Cross-Session-Nachrichten ([Doku](https://code.claude.com/docs/en/cross-session-messaging.md)): `SendMessage`/`ListAgents` ab v2.1.224 (macOS, Linux, WSL2), native Windows ab v2.1.234 | beobachten: Nachrichten sind Text, kein Lock; Assignee plus Worktree-Check funktioniert (Vorgabe der Maintainerin) | teilweise |
-| Review ohne Self-Grading, Festgefahren-Protokoll | unabhängiger Blick, begrenzte Fix-Schleifen | kein Gegenstück | behalten: gleicht eine Modellschwäche aus, Lockern-Kandidat #1357 | ja |
+| Review ohne Self-Grading, Festgefahren-Protokoll | unabhängiger Blick, begrenzte Fix-Schleifen | kein Gegenstück | behalten: gleicht eine Modellschwäche aus, Lockern-Kandidat ([ADR 0027](adr/0027-regeln-lockern.md)) | ja |
 | Worktree-Regeln | Isolation je Ticket | `--worktree` ab v2.1.49, `isolation: worktree` ab v2.1.49 | beobachten: siehe #1066 | teilweise |
 | Browser-Prüfung per Playwright-MCP, Claude in Chrome gesperrt | reproduzierbare Browser-Prüfung | `@playwright/mcp` selbst | behalten | ja |
 | Vorlage-Form: Plugin und Mods | Eingabe für die Form-Entscheidung ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md), #1366) | `claude plugin install --marketplace` ab v2.1.292 ([Plugins](https://code.claude.com/docs/en/plugins/install.md)); Mods ab v2.1.287 laufen auch in `claude -p`, nicht in WSL-Sitzungen der Desktop-App | beobachten | ja |
@@ -111,7 +111,7 @@ Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta,
 - #1362 liest die Marker und die Versionsquellen und meldet nur Changelog-Einträge, die eine Inventarzeile berühren.
 - [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md) (#1366) nimmt den Kern-Schnitt aus der Spalte „Spielunabhängig“.
 - `.factory/besitz.json` (#1610) hält den Factory-Besitz fest und ist ab jetzt die Besitz-SSOT; die Spalte „Spielunabhängig“ war nur der Startbestand.
-- #1357 nimmt die Zeilen, die nur eine Modellschwäche ausgleichen, als Lockern-Kandidaten.
+- [ADR 0027](adr/0027-regeln-lockern.md) führt diese Zeilen als Kandidaten-Klasse „Ausgleich einer Modellschwäche“; gelockert wird erst mit Evidenz (Release-Abgleich #1362 oder Gegenprobe).
 
 ## Sicherheit
 
