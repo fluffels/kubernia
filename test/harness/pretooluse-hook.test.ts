@@ -274,7 +274,7 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
 
   test("jeder Guard (Direktaufruf oder als Lib des Dispatchers gekennzeichnet) trägt im ersten Kommentarblock genau einmal den Abschnitt `Bewusste Grenzen:`", () => {
     const guards = readdirSync(resolve(WURZEL, "scripts")).filter((n) => /guard.*\.mjs$/.test(n) && (lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)") || lies(`scripts/${n}`).startsWith("// Kein Einstieg, kein Direktaufruf")));
-    assert.deepEqual(guards.sort(), ["gh-guard-hook.mjs", "lens-edit-guard.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs"]);
+    assert.deepEqual(guards.sort(), ["forum-leser-guard.mjs", "gh-guard-hook.mjs", "lens-edit-guard.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs"]);
     for (const n of guards) {
       const kopf = /\/\*\*[\s\S]*?\*\//.exec(lies(`scripts/${n}`))?.[0] ?? "";
       assert.equal(kopf.split("\n").filter((z) => /^ \* Bewusste Grenzen:\s*$/.test(z)).length, 1, `${n}: Abschnitt „Bewusste Grenzen:“ genau einmal im Kopfkommentar`);

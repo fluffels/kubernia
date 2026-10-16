@@ -19,7 +19,7 @@ flowchart TD
   merge["Merge (squash)"]
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
-  forum["Forum-Eingang<br/>Skill ${skill:forum}"]
+  forum["Forum-Eingang<br/>Skill ${skill:forum}<br/>liest nur ${agent:forum-leser}"]
 
   board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
