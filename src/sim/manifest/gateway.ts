@@ -15,6 +15,10 @@ import { Leaf, ManifestError } from "./fields";
 
 const TLS_MODES = ["Terminate", "Passthrough"];
 
+/** Ein gültiges, aber nicht simuliertes Feld (Fehlertext einheitlich). */
+const unsupported = (path: string, was: string, tip: string): ManifestError =>
+  new ManifestError(path + ": " + was + "wird vom Simulator nicht abgebildet", tip, true);
+
 function nameOf(doc: Leaf, kind: string): string {
   const name = doc.key("metadata").key("name").reqStr();
   if (!isResourceName(name)) throw new ManifestError(rfc1123ErrorText(name, kind), RFC1123_TIP, true);
@@ -33,12 +37,10 @@ export function mapGatewayClass(doc: Leaf): ApplyEffect {
 function checkTlsMode(tls: Leaf, gateway: string): void {
   const mode = tls.key("mode").str();
   if (mode !== undefined && !TLS_MODES.includes(mode)) {
-    throw new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + tls.path + ".mode: Unsupported value: \"" + mode + "\": supported values: "
-      + TLS_MODES.map(m => "\"" + m + "\"").join(", "), "Gültige Modi: 'Terminate' (Standard) oder 'Passthrough'.", true);
+    throw new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + tls.path + ".mode: Unsupported value: \"" + mode + "\": supported values: \"Terminate\", \"Passthrough\"", "Gültig: 'Terminate' (Standard) oder 'Passthrough'.", true);
   }
   if (mode === "Passthrough") {
-    throw new ManifestError(tls.path + ".mode: Passthrough wird vom Simulator nicht abgebildet",
-      "Nutze 'mode: Terminate' mit 'certificateRefs: [{name: <secret>}]'.", true);
+    throw unsupported(tls.path + ".mode", "Passthrough ", "Nutze 'mode: Terminate' mit 'certificateRefs: [{name: <secret>}]'.");
   }
 }
 
@@ -58,8 +60,7 @@ function tlsSecretOf(leaf: Leaf, protocol: string, gateway: string): string | un
   checkTlsMode(tls, gateway);
   const refs = tls.key("certificateRefs").items();
   if (refs.length === 0 && tls.key("options").present) {
-    throw new ManifestError(tls.path + ".options: ohne certificateRefs wird vom Simulator nicht abgebildet",
-      "Nutze 'certificateRefs: [{name: <secret>}]'; 'options' allein trägt kein Zertifikat.", true);
+    throw unsupported(tls.path + ".options", "ohne certificateRefs ", "Nutze 'certificateRefs: [{name: <secret>}]'; 'options' allein trägt kein Zertifikat.");
   }
   if (refs.length === 0) {
     throw invalid("certificateRefs or options must be specified when mode is Terminate", "Ein 'tls'-Block braucht 'certificateRefs: [{name: <secret>}]'.");
@@ -125,7 +126,7 @@ function parentRefOf(leaf: Leaf, route: string): string {
   refKind(leaf, "Gateway");
   for (const k of ["sectionName", "port"]) {
     if (leaf.key(k).present) {
-      throw new ManifestError(leaf.key(k).path + ": wird vom Simulator nicht abgebildet", "Die Route hängt am ganzen Gateway, nicht an einem einzelnen Listener.", true);
+      throw unsupported(leaf.key(k).path, "", "Die Route hängt am ganzen Gateway, nicht an einem einzelnen Listener.");
     }
   }
   return leaf.key("name").reqStr();
@@ -146,12 +147,12 @@ function backendOf(leaf: Leaf, route: string): HttpBackendRef {
 function matchOf(rule: Leaf, route: string): { path: string; pathType: HttpPathType } {
   const matches = rule.key("matches").items();
   if (matches.length > 1) {
-    throw new ManifestError(rule.key("matches").path + ": mehr als ein match je Regel wird vom Simulator nicht abgebildet", "Teile die Regel in mehrere Regeln mit je einem match.", true);
+    throw unsupported(rule.key("matches").path, "mehr als ein match je Regel ", "Teile die Regel in mehrere Regeln mit je einem match.");
   }
   const pathLeaf = matches.length ? matches[0].key("path") : new Leaf(undefined, rule.key("matches").path + "[0].path");
   const type = pathLeaf.key("type").str() ?? "PathPrefix";
   if (type === "RegularExpression") {
-    throw new ManifestError(pathLeaf.key("type").path + ": RegularExpression wird vom Simulator nicht abgebildet", "Nutze 'PathPrefix' oder 'Exact'.", true);
+    throw unsupported(pathLeaf.key("type").path, "RegularExpression ", "Nutze 'PathPrefix' oder 'Exact'.");
   }
   if (type !== "PathPrefix" && type !== "Exact") {
     throw routeInvalid(route, pathLeaf.key("type").path, "Unsupported value: \"" + type + "\": supported values: \"Exact\", \"PathPrefix\", \"RegularExpression\"", "Der Pfad-Typ ist 'PathPrefix' oder 'Exact'.");

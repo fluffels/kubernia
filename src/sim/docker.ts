@@ -24,6 +24,10 @@ import { randSuffix, table, suggest } from "./util";
 import { flag, isFlagToken, dispatchSub, targetOutcome, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 import { hashStr, hashHex } from "../core/rng";
 
+const HINT_PUBLISH = "Port-Weiterleitung gibt es bei 'docker run' im Simulator nicht – der Container läuft auch ohne.";
+const HINT_ENV = "Umgebungsvariablen setzt der Simulator bei 'docker run' nicht.";
+const HINT_VOLUME = "Volumes gibt es bei 'docker run' im Simulator nicht.";
+
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
 // Enthält alle im Spiel benutzten plus echte Tools, die man als DevOps kennt.
 export const KNOWN_IMAGES = [
@@ -71,12 +75,12 @@ type DockerHandler = (sim: DockerHost, c: Call) => string;
 type DockerEntry = SubEntry<DockerHandler>;
 
 const RUN_HINTS: Readonly<Record<string, string>> = {
-  "-p": "Port-Weiterleitung gibt es bei 'docker run' im Simulator nicht – der Container läuft auch ohne.",
-  "--publish": "Port-Weiterleitung gibt es bei 'docker run' im Simulator nicht – der Container läuft auch ohne.",
-  "-e": "Umgebungsvariablen setzt der Simulator bei 'docker run' nicht.",
-  "--env": "Umgebungsvariablen setzt der Simulator bei 'docker run' nicht.",
-  "-v": "Volumes gibt es bei 'docker run' im Simulator nicht.",
-  "--volume": "Volumes gibt es bei 'docker run' im Simulator nicht.",
+  "-p": HINT_PUBLISH,
+  "--publish": HINT_PUBLISH,
+  "-e": HINT_ENV,
+  "--env": HINT_ENV,
+  "-v": HINT_VOLUME,
+  "--volume": HINT_VOLUME,
   "--rm": "Automatisches Aufräumen gibt es nicht – lösche den Container mit 'docker rm <name>'.",
 };
 

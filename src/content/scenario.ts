@@ -55,11 +55,11 @@ const scObjOrNull: ScenarioFieldCheck = (v, p) => {
  *  (HTTPS/TLS braucht `tlsSecret`, HTTP/TCP/UDP darf keins tragen), sonst bricht der Round-Trip
  *  `get -o yaml` → `apply` (#1686). */
 const scGateways: ScenarioFieldCheck = (v, p) => {
-  if (!Array.isArray(v)) fail(p, "Array erwartet");
+  scArray(v, p);
   for (const [gi, g] of (v as unknown[]).entries()) {
     const gp = `${p}[${gi}]`;
     const listeners = asRecord(g, gp).listeners;
-    if (!Array.isArray(listeners)) fail(`${gp}.listeners`, "Array erwartet");
+    scArray(listeners, `${gp}.listeners`);
     for (const [li, l] of (listeners as unknown[]).entries()) {
       const lp = `${gp}.listeners[${li}]`;
       const rec = asRecord(l, lp);
@@ -67,8 +67,7 @@ const scGateways: ScenarioFieldCheck = (v, p) => {
       const hasSecret = rec.tlsSecret !== undefined;
       if (hasSecret) asNonEmptyString(rec.tlsSecret, `${lp}.tlsSecret`);
       const verstoss = tlsRuleViolation(protocol, hasSecret);
-      if (verstoss === "fehlt") fail(lp, `Listener mit Protokoll ${protocol} braucht tlsSecret, sonst bricht der Round-Trip get -o yaml → apply`);
-      if (verstoss === "verboten") fail(lp, `Listener mit Protokoll ${protocol} darf kein tlsSecret tragen (nur HTTPS und TLS)`);
+      if (verstoss) fail(lp, `${protocol}: tlsSecret ${verstoss}`);
     }
   }
 };
