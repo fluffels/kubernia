@@ -15,20 +15,11 @@
  *
  * Nur Node-Builtins.
  */
-import { posix } from "node:path";
-import { buildDenyOutput, emit, istDirektaufruf, readStdin } from "./hook-io.mjs";
+import { emit, istDirektaufruf, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
 import { LENS_NAME_KERN } from "./ticket-refs.mjs";
 
 // Pfadform: Groß-/Kleinschreibung egal (Windows-Pfade), der Ordnername selbst für das Aufräumen exakt (kein Flag oben).
 const LENS_WORKTREE = new RegExp(String.raw`/\.claude/worktrees/${LENS_NAME_KERN}/`, "i");
-
-/** Pfad lexikalisch normalisieren (Backslashes → Slashes, `..` auflösen), relative Pfade gegen `cwd`. */
-const normalisiere = (pfad, cwd) => {
-  const p = String(pfad).replace(/\\/g, "/");
-  const absolut = /^([a-z]:)?\//i.test(p);
-  const basis = String(cwd ?? "").replace(/\\/g, "/");
-  return posix.normalize(absolut || !basis ? p : `${basis}/${p}`);
-};
 
 /**
  * Darf `kubernia-lens` diese Datei per `Edit` ändern? Pur. Liefert `{ block: false }` oder `{ block: true, reason }`.
@@ -38,7 +29,7 @@ export function bewerteLensEdit(filePath, cwd = "") {
   if (typeof filePath !== "string" || filePath.trim() === "") {
     return { block: true, reason: "Lens-Edit ohne Dateipfad: nicht prüfbar, darum abgelehnt." };
   }
-  const norm = normalisiere(filePath, cwd);
+  const norm = normalisierePfad(filePath, cwd);
   if (LENS_WORKTREE.test(norm)) return { block: false };
   return {
     block: true,
@@ -50,16 +41,6 @@ export function bewerteLensEdit(filePath, cwd = "") {
 }
 
 /** Hook-stdin → Entscheidung. Kaputter Input: durchlassen (ein Hook darf nie selbst alles blockieren). */
-export function entscheideHook(text) {
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (data?.tool_name !== undefined && data.tool_name !== "Edit") return null;
-  const e = bewerteLensEdit(data?.tool_input?.file_path, data?.cwd);
-  return e.block ? buildDenyOutput(e.reason) : null;
-}
+export const entscheideHook = pfadGuardHook("Edit", bewerteLensEdit);
 
 if (istDirektaufruf(import.meta.url)) emit(entscheideHook(readStdin()));
