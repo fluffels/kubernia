@@ -2,7 +2,8 @@
 /**
  * Wiedervorlage (#1628): Prüfpunkte mit Fälligkeitsdatum tauchen automatisch als Ticket ganz oben im Board auf.
  *
- * Daten: `.github/wiedervorlagen.json` (Liste von { id, faellig, titel, text, label? }). Der tägliche Workflow
+ * Daten: `.github/wiedervorlagen.json` (Liste von { id, faellig, titel, text, label?, alerts? }; `alerts` nur für `codescanning-*`: Alert-Nummern,
+ * die die Code-Scanning-Inbox trotz Spitzen-Stufe still hält). Der tägliche Workflow
  * `.github/workflows/wiedervorlage.yml` legt je fälligem Eintrag ohne Ticket eines an (Dedupe über den Marker
  * `<!-- wiedervorlage:<id> -->` im Body, über alle Zustände) und sortiert es per `board-place.mjs --notfall wiedervorlage --top` ein.
  * Der Agent schließt das Ticket und löscht den Eintrag im selben PR. Wächter: bleibt ein fälliger Eintrag ohne Ticket, endet der Lauf mit Exit 1.
@@ -10,11 +11,11 @@
  * Aufruf: node scripts/wiedervorlage.mjs [--dry-run]
  * Die Funktionen oben sind pur und getestet (test/wiedervorlage.test.ts); die gh-Aufrufe unten nicht.
  */
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { REPO } from "./board-lib.mjs";
+import { platziereOben } from "./inbox-lib.mjs";
 
 /** Titel-Präfix der Wiedervorlage-Tickets; derselbe Marker steht als Notfall-Art `wiedervorlage` in `NOTFAELLE` (board-lib.mjs). */
 export const TITEL_PRAEFIX = "⏰ Wiedervorlage:";
@@ -44,6 +45,9 @@ export function pruefeEintraege(liste) {
       if (typeof e[feld] !== "string" || e[feld].trim() === "") fehler.push(`${name}: Pflichtfeld „${feld}“ fehlt oder ist leer.`);
     }
     if (e.label !== undefined && (typeof e.label !== "string" || e.label.trim() === "")) fehler.push(`${name}: „label“ muss eine nicht leere Zeichenkette sein.`);
+    if (e.alerts !== undefined && (!Array.isArray(e.alerts) || e.alerts.length === 0 || !e.alerts.every((n) => Number.isInteger(n) && n > 0))) {
+      fehler.push(`${name}: „alerts“ muss eine nicht leere Liste positiver Ganzzahlen (Code-Scanning-Alert-Nummern) sein.`);
+    }
     if (typeof e.id === "string" && e.id !== "") {
       if (!/^[a-z0-9-]+$/.test(e.id)) fehler.push(`${name}: „id“ darf nur [a-z0-9-] enthalten.`);
       if (gesehen.has(e.id)) fehler.push(`${name}: „id“ ist doppelt.`);
@@ -113,10 +117,7 @@ function sortiereEin(nr) {
     return false;
   }
   try {
-    execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), "--notfall", "wiedervorlage", "--top", String(nr)], {
-      env: { ...process.env, GH_TOKEN: token },
-      stdio: "inherit",
-    });
+    platziereOben(nr, "wiedervorlage", token);
     return true;
   } catch (err) {
     console.log(`::error::Board-Position für #${nr} nicht gesetzt: ${fehlerText(err)}`);

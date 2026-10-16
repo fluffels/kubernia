@@ -12,7 +12,8 @@ const zaehleBefundZeilen = (
   }
 ).zaehleBefundZeilen;
 
-type Alert = { nummer: number; tool: string; regel: string; stufe: string | null; schwere: string; state: string };
+type Alert = { nummer: number; tool: string; regel: string; stufe: string | null; schwere: string; state: string; pfad?: string; ghsa?: string[] };
+type Bekannt = { nummern: Set<number>; regeln: Set<string>; alerts?: Set<number>; ghsa?: Set<string> };
 type Gruppe = { tool: string; regel: string; stufe: string | null; schwere: string; nummern: number[] };
 type Plan = { issue: { art: string; body?: string; neue?: number[] }; zeilen: Gruppe[] };
 type Io = Record<string, (...a: never[]) => unknown>;
@@ -25,11 +26,12 @@ const C = raw as unknown as {
   bekannteAlerts: (a: {
     kommentare: { user: unknown; body: string }[];
     owner: string;
-    wiedervorlagen: { id: string }[];
-  }) => { nummern: Set<number>; regeln: Set<string> };
+    wiedervorlagen: { id: string; alerts?: number[] }[];
+    offeneTitel?: string[];
+  }) => Required<Bekannt>;
   zeilenText: (g: Gruppe) => string;
   issueBody: (g: Gruppe[]) => string;
-  plane: (a: { alerts: Alert[]; bekannt: { nummern: Set<number>; regeln: Set<string> }; offenesIssue: { number: number; body: string } | null }) => Plan;
+  plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null }) => Plan;
   fuehreAus: (a: Record<string, unknown>) => number;
   lauf: (a: Record<string, unknown>) => number;
 };
@@ -55,6 +57,10 @@ describe("klasse", () => {
     ["CodeQL error + medium: Stufe hat Vorrang", { stufe: "medium", schwere: "error" }, "zeile"],
     ["Scorecard error + high", { tool: "Scorecard", stufe: "high", schwere: "error" }, "zeile"],
     ["unbekanntes Tool + critical", { tool: "Foo", stufe: "critical" }, "zeile"],
+    ["CodeQL high im Test-Code: nicht ausgeliefert, nur Zeile", { pfad: "test/check-c4-harness.test.ts" }, "zeile"],
+    ["CodeQL high in test-ähnlichem Quellpfad bleibt Spitze", { pfad: "src/test/x.ts" }, "spitze"],
+    ["CodeQL high in `testbar/`: kein Präfix-Fehltreffer", { pfad: "testbar/x.ts" }, "spitze"],
+    ["CodeQL high unter scripts/: Spitze", { pfad: "scripts/mermaid-vorschau.mjs" }, "spitze"],
   ])("%s -> %s", (_n, o, erwartet) => {
     expect(C.klasse(alert(o as Partial<Alert>))).toBe(erwartet);
   });
@@ -63,7 +69,7 @@ describe("klasse", () => {
 describe("alertsAus", () => {
   test("normalisiert und behält nur offene", () => {
     const l = C.alertsAus([roh({ number: 3 }), roh({ number: 4, state: "fixed" }), roh({ number: 5, state: "dismissed" })]);
-    expect(l).toEqual([{ nummer: 3, tool: "CodeQL", regel: "js/path-injection", stufe: "high", schwere: "error", state: "open" }]);
+    expect(l).toEqual([{ nummer: 3, tool: "CodeQL", regel: "js/path-injection", stufe: "high", schwere: "error", state: "open", pfad: "", ghsa: [] }]);
   });
   test("kein Array oder fehlende Nummer wirft", () => {
     expect(() => C.alertsAus({})).toThrow();
@@ -73,6 +79,13 @@ describe("alertsAus", () => {
   test("Regel-ID wird bereinigt", () => {
     const [a] = C.alertsAus([roh({ rule: { id: "a\nb]*c", severity: "error" } })]);
     expect(a.regel).toBe("unbekannt");
+  });
+  test("Pfad und GHSA-IDs aus der jüngsten Instanz", () => {
+    const [a] = C.alertsAus([
+      roh({ most_recent_instance: { location: { path: "test/x.test.ts" }, message: { text: "osv.dev/GHSA-vfj7-8cjw-p6xm und GHSA-aaaa-bbbb-cccc" } } }),
+    ]);
+    expect(a.pfad).toBe("test/x.test.ts");
+    expect(a.ghsa).toEqual(["ghsa-vfj7-8cjw-p6xm", "ghsa-aaaa-bbbb-cccc"]);
   });
   test("fehlende Stufe wird null", () => {
     const [a] = C.alertsAus([roh({ rule: { id: "x/y", severity: "warning" } })]);
@@ -125,6 +138,23 @@ describe("bekannteAlerts", () => {
     });
     expect([...b.regeln]).toEqual(["js-path-injection"]);
   });
+  test("Feld alerts einer codescanning-Wiedervorlage liefert Nummern, bei audit- nichts", () => {
+    const b = C.bekannteAlerts({
+      kommentare: [],
+      owner: OWNER,
+      wiedervorlagen: [{ id: "codescanning-x", alerts: [7, 8] }, { id: "audit-ghsa-aaaa-bbbb-cccc", alerts: [9] }, { id: "codescanning-y" }],
+    });
+    expect([...b.alerts].sort()).toEqual([7, 8]);
+  });
+  test("GHSA aus audit-Wiedervorlage und aus Titel ist bekannt", () => {
+    const b = C.bekannteAlerts({
+      kommentare: [],
+      owner: OWNER,
+      wiedervorlagen: [{ id: "audit-ghsa-vfj7-8cjw-p6xm" }],
+      offeneTitel: ["🔒 Security: GHSA-aaaa-bbbb-cccc in x"],
+    });
+    expect([...b.ghsa].sort()).toEqual(["ghsa-aaaa-bbbb-cccc", "ghsa-vfj7-8cjw-p6xm"]);
+  });
 });
 
 describe("plane", () => {
@@ -174,11 +204,35 @@ describe("plane", () => {
     const p = C.plane({ alerts: [spitze(5)], bekannt: { nummern: new Set([5]), regeln: new Set() }, offenesIssue: null });
     expect(p.issue.art).toBe("anlegen");
   });
-  test("Regel per Wiedervorlage: weder Issue noch Zeile", () => {
+  test("Regel per Wiedervorlage unterdrückt nur die Zeilen-Klasse", () => {
     const b = { nummern: new Set<number>(), regeln: new Set([C.slug("js/path-injection"), C.slug("PinnedDependenciesID")]) };
     const p = C.plane({ alerts: [spitze(1), rest(2)], bekannt: b, offenesIssue: null });
-    expect(p.issue.art).toBe("nichts");
+    expect(p.issue.art).toBe("anlegen");
+    expect(p.issue.body).toContain("Alerts 1");
     expect(p.zeilen).toEqual([]);
+  });
+  test("Spitzen-Alert mit Nummer in alerts der Wiedervorlage: unterdrückt, ein anderer derselben Regel nicht", () => {
+    const b = { nummern: new Set<number>(), regeln: new Set([C.slug("js/path-injection")]), alerts: new Set([1]) };
+    const p = C.plane({ alerts: [spitze(1), spitze(2)], bekannt: b, offenesIssue: null });
+    expect(p.issue.art).toBe("anlegen");
+    expect(p.issue.body).toContain("Alerts 2");
+    expect(p.issue.body).not.toMatch(/Alerts 1\b/);
+  });
+  test("alerts-Nummer genügt auch ohne Regel in der Wiedervorlage", () => {
+    const p = C.plane({ alerts: [spitze(1)], bekannt: { ...keine, alerts: new Set([1]) }, offenesIssue: null });
+    expect(p.issue.art).toBe("nichts");
+  });
+  test("Test-Pfad-Alert wird nie Spitze, aber als Zeile gemeldet", () => {
+    const p = C.plane({ alerts: [{ ...spitze(94), pfad: "test/a.test.ts" }], bekannt: keine, offenesIssue: null });
+    expect(p.issue.art).toBe("nichts");
+    expect(p.zeilen[0].nummern).toEqual([94]);
+  });
+  test("VulnerabilitiesID: alle GHSA bekannt unterdrückt, eine unbekannte oder keine lässt den Alert offen", () => {
+    const v = (ghsa: string[]) => rest(5, { regel: "VulnerabilitiesID", ghsa });
+    const b = { ...keine, ghsa: new Set(["ghsa-a", "ghsa-b"]) };
+    expect(C.plane({ alerts: [v(["ghsa-a", "ghsa-b"])], bekannt: b, offenesIssue: null }).zeilen).toEqual([]);
+    expect(C.plane({ alerts: [v(["ghsa-a", "ghsa-x"])], bekannt: b, offenesIssue: null }).zeilen).toHaveLength(1);
+    expect(C.plane({ alerts: [v([])], bekannt: b, offenesIssue: null }).zeilen).toHaveLength(1);
   });
   test("Ausgabe ist sortiert und deterministisch", () => {
     const a = [rest(9, { regel: "Z" }), rest(3, { regel: "A" }), rest(1, { regel: "A" })];

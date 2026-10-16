@@ -7,17 +7,20 @@
  *      die sie dauerhaft belegen würden.
  *  (b) Alles andere: eine Zeile `- [ ] Code-Scanning: …` je (Tool, Regel) als Kommentar im jüngsten ungeclaimten Harness-Sammelticket.
  * Bekannt (also still) ist ein Alert, wenn seine Nummer in einer offenen Zeile eines Harness-Sammeltickets (nur vertraute Autoren) steht
- * oder seine Regel als `codescanning-<slug>` in `.github/wiedervorlagen.json` steht.
+ * oder seine Regel als `codescanning-<slug>` in `.github/wiedervorlagen.json` steht (nur für Zeilen-Alerts; ein Spitzen-Alert bleibt nur still, wenn
+ * seine Nummer im Feld `alerts` des Eintrags steht). Ein Alert mit GHSA-IDs im Meldungstext (VulnerabilitiesID) ist bekannt, wenn jede ID schon als
+ * Audit-Zeile, `audit-ghsa-<id>` oder Security-Ticket eingeordnet ist.
  *
  * Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]   (Workflow: .github/workflows/codescanning-inbox.yml)
  * Die Funktionen oben sind pur und getestet (test/codescanning-inbox.test.ts); die Aufrufe von gh unten nicht.
  */
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
+import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./audit-einordnung.mjs";
+import { offeneTitel as vertrauteTitel, platziereOben, postZeilen, vertrauteIssues, waehleSammelticket } from "./inbox-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
 const SPITZEN_TOOLS = ["CodeQL"];
@@ -51,14 +54,20 @@ export function alertsAus(liste) {
         stufe: typeof stufe === "string" && stufe !== "" ? stufe.toLowerCase() : null,
         schwere: String(a?.rule?.severity ?? "").toLowerCase(),
         state: String(a?.state ?? ""),
+        pfad: String(a?.most_recent_instance?.location?.path ?? ""),
+        ghsa: ghsaIn(a?.most_recent_instance?.message?.text),
       };
     })
     .filter((a) => a.state === "open");
 }
 
-/** `spitze` nur für CodeQL mit security-severity high/critical (ohne Stufe: severity error); alles andere `zeile`. Pur. */
+/**
+ * `spitze` nur für CodeQL mit security-severity high/critical (ohne Stufe: severity error); alles andere `zeile`. Funde in `test/` (nicht
+ * ausgeliefert) bleiben sichtbar, werden aber nie Security-Ticket an der Board-Spitze. Pur.
+ */
 export function klasse(a) {
   if (!SPITZEN_TOOLS.includes(a.tool)) return "zeile";
+  if (String(a.pfad ?? "").replace(/\\/g, "/").startsWith("test/")) return "zeile";
   if (a.stufe === null) return a.schwere === "error" ? "spitze" : "zeile";
   return STUFEN_SPITZE.includes(a.stufe) ? "spitze" : "zeile";
 }
@@ -74,9 +83,10 @@ export function nummernIn(text) {
  * Bekannte Alerts: Nummern aus offenen Zeilen `- [ ] Code-Scanning:` in Kommentaren VERTRAUTER Autoren (`istVertraut`), Regeln (als Slug) aus
  * Wiedervorlagen-IDs `codescanning-<slug>`. Pur.
  */
-export function bekannteAlerts({ kommentare, owner, wiedervorlagen }) {
+export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [] }) {
   const nummern = new Set();
   const regeln = new Set();
+  const alerts = new Set();
   for (const k of kommentare) {
     if (!istVertraut(k?.user ?? null, owner)) continue;
     for (const z of String(k?.body ?? "").split(/\r?\n/)) {
@@ -84,9 +94,12 @@ export function bekannteAlerts({ kommentare, owner, wiedervorlagen }) {
     }
   }
   for (const e of wiedervorlagen) {
-    if (typeof e?.id === "string" && e.id.startsWith(WV_PRAEFIX)) regeln.add(e.id.slice(WV_PRAEFIX.length));
+    if (typeof e?.id !== "string" || !e.id.startsWith(WV_PRAEFIX)) continue;
+    regeln.add(e.id.slice(WV_PRAEFIX.length));
+    if (Array.isArray(e.alerts)) e.alerts.filter(Number.isInteger).forEach((n) => alerts.add(n));
   }
-  return { nummern, regeln };
+  const ghsa = bekannteGhsa({ kommentare: vertrauteBodies(kommentare, owner), wiedervorlagen, offeneTitel });
+  return { nummern, regeln, alerts, ghsa };
 }
 
 const alertListe = (g) => `Alerts ${g.nummern.join(", ")}`;
@@ -120,14 +133,16 @@ function gruppiere(alerts) {
 }
 
 /**
- * Plan eines Laufs: `{ issue, zeilen }`. Spitze = offene `spitze`-Alerts ohne Regel in `bekannt.regeln`; leer: Issue schließen (falls offen),
+ * Plan eines Laufs: `{ issue, zeilen }`. Spitze = offene `spitze`-Alerts, deren Nummer nicht in `bekannt.alerts` steht (eine regelweite
+ * Wiedervorlage deckt sie nicht); leer: Issue schließen (falls offen),
  * sonst anlegen bzw. mit geändertem Body aktualisieren (`neue` = Nummern, die der alte Body noch nicht nannte). Zeilen = `zeile`-Alerts ohne
- * bekannte Nummer und ohne bekannte Regel, je (Tool, Regel) eine. Pur, deterministisch.
+ * bekannte Nummer, ohne bekannte Regel und ohne vollständig bekannte GHSA-IDs, je (Tool, Regel) eine. Pur, deterministisch.
  */
 export function plane({ alerts, bekannt, offenesIssue }) {
-  const ohneRegel = alerts.filter((a) => !bekannt.regeln.has(slug(a.regel)));
-  const spitze = gruppiere(ohneRegel.filter((a) => klasse(a) === "spitze"));
-  const zeilen = gruppiere(ohneRegel.filter((a) => klasse(a) === "zeile" && !bekannt.nummern.has(a.nummer)));
+  const ghsaBekannt = (a) => a.ghsa?.length > 0 && a.ghsa.every((g) => bekannt.ghsa?.has(g));
+  const stumm = (a) => bekannt.nummern.has(a.nummer) || bekannt.regeln.has(slug(a.regel)) || ghsaBekannt(a);
+  const spitze = gruppiere(alerts.filter((a) => klasse(a) === "spitze" && !bekannt.alerts?.has(a.nummer)));
+  const zeilen = gruppiere(alerts.filter((a) => klasse(a) === "zeile" && !stumm(a) && !bekannt.alerts?.has(a.nummer)));
   if (spitze.length === 0) return { issue: offenesIssue ? { art: "schliessen", nummer: offenesIssue.number } : { art: "nichts" }, zeilen };
   const body = issueBody(spitze);
   if (!offenesIssue) return { issue: { art: "anlegen", body }, zeilen };
@@ -218,23 +233,24 @@ function main() {
   const io = {
     ladeAlerts: () => seiten(`repos/${REPO}/code-scanning/alerts?state=open&per_page=100`),
     ladeKontext: () => {
-      offene = normalizeOffene(JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`])));
+      const owner = REPO.split("/")[0];
+      const rohe = JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`]));
+      offene = normalizeOffene(rohe);
+      const vertraut = new Set(vertrauteIssues(rohe, owner).map((i) => i.number));
       const sammel = offene.filter((i) => i.titel === SAMMELTICKET_TITEL);
       const kommentare = sammel.flatMap((i) => seiten(`repos/${REPO}/issues/${i.number}/comments?per_page=100`).map((k) => ({ user: k.user, body: k.body })));
-      const ziele = offene.filter((i) => i.titel === ZIEL_TITEL).sort((a, b) => a.number - b.number);
+      // Das Spitzen-Ticket legt github-actions[bot] an (GH_TOKEN = github.token); ein gleichnamiges Ticket eines Fremden zählt nicht.
+      const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) console.log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
       const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${REPO}/issues/${ziele[0].number}`]).body ?? "") } : null;
-      return { offenesIssue, kommentare, owner: REPO.split("/")[0], wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) };
+      return { offenesIssue, kommentare, owner, offeneTitel: vertrauteTitel(rohe, owner), wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) };
     },
     projectToken: process.env.PROJECT_TOKEN,
     log: console.log,
     legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", REPO, "--title", titel, "--label", "area:harness", "--body", body]).trim().split("/").pop(),
     sortiereEin: (nr) => {
       try {
-        execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), "--notfall", "security", "--top", String(nr)], {
-          env: { ...process.env, GH_TOKEN: process.env.PROJECT_TOKEN },
-          stdio: "inherit",
-        });
+        platziereOben(nr, "security", process.env.PROJECT_TOKEN);
         return true;
       } catch {
         return false;
@@ -244,8 +260,8 @@ function main() {
     kommentiere: (nr, text) => ghText(["api", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]),
     schliesse: (nr) =>
       ghText(["issue", "close", String(nr), "--repo", REPO, "--reason", "completed", "--comment", "Keine offenen Code-Scanning-Befunde high/critical mehr, automatisch geschlossen."]),
-    zielSammelticket: () => waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]))?.number ?? null,
-    postZeilen: (nr, text) => ghText(["api", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]),
+    zielSammelticket: () => waehleSammelticket(offene)?.number ?? null,
+    postZeilen,
   };
   process.exit(lauf({ io, trocken }));
 }
