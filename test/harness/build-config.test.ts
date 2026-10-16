@@ -41,7 +41,8 @@ const SINGLEFILE = "vite:singlefile";
 
 /* #1411: BEIDE Builds (Host und Offline) schreiben den Content-Stempel als Meta-Tag in ihre index.html; das
  * Bundle-Gate vergleicht sie. Fehlt das Plugin in einem Weg, wäre jeder Build „ohne Stempel" und das Gate rot. */
-describe("Content-Stempel-Plugin (#1411)", () => {
+// Timeout 30 s wie kontext-sockel/haupt-sync: der Hash liest alle Content-Quellen und riss unter Parallellast das 5-s-Standardlimit (#1663 R2).
+describe("Content-Stempel-Plugin (#1411)", { timeout: 30_000 }, () => {
   const stempelPlugin = (mode: string) =>
     ((resolve(mode).plugins ?? []).flat() as { name?: string; transformIndexHtml?: () => { tag: string; attrs: { name: string; content: string } }[] }[]).find(
       (p) => p.name === "kq-content-stempel",
