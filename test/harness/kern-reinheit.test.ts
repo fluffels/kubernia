@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { importeAus, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
+import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -169,8 +169,8 @@ export function schichtdatenImporte(eintraege: Eintrag[], lies: (pfad: string) =
     if (text === null) continue;
     for (const spec of relativeImporte(text)) {
       const aufgeloest = posix.normalize(posix.join(posix.dirname(e.pfad), spec));
-      // Endungslos (`require("../layers")`) trifft das Ziel mit beliebiger Code-Endung.
-      if (aufgeloest === ziel || (!/\.\w+$/.test(posix.basename(aufgeloest)) && ziel.startsWith(aufgeloest + "."))) {
+      // Endungslos (`require("../layers")`) trifft das Ziel mit einer Code-Endung.
+      if (kandidatenPfade(aufgeloest).includes(ziel)) {
         out.push(e.pfad);
         break;
       }
@@ -250,11 +250,30 @@ export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => 
     if (text === null) continue;
     for (const spec of relativeImporte(text)) {
       const roh = posix.normalize(posix.join(posix.dirname(von), spec));
-      // Endungslos (`require("./b")`) trifft eine Besitz-Datei mit beliebiger Code-Endung.
-      const mitEndung = /\.\w+$/.test(posix.basename(roh)) ? undefined : [".mjs", ".cjs", ".js"].map((x) => roh + x).find((p) => ganze.has(p));
-      const nach = mitEndung ?? roh;
+      // Endungslos (`require("./b")`) trifft eine Besitz-Datei mit einer Code-Endung.
+      const nach = kandidatenPfade(roh).find((p) => ganze.has(p)) ?? roh;
       const id = `${von} -> ${nach}`;
       if (!ganze.has(nach) && nach !== PROJEKT_CONFIG_PFAD && !out.includes(id)) out.push(id);
+    }
+  }
+  return out;
+}
+
+/** Ring-Regel (#1663): lokale Importe jeder Ganz-Datei-Code-Einheit im Ring `kern`, die auf Besitz in einem anderen Ring zeigen
+ *  ("<von> -> <nach>"). Ziele ohne Besitz (Nicht-Besitz, Projekt-Config) sind Sache von `huellenVerstoesse`. Ein Importeur
+ *  im Ring kern-nach-entkopplung darf beliebigen Besitz importieren. Abhilfe: Ziel nach `kern` ziehen (literalfrei, Importe nur
+ *  in `kern`) oder den Importeur nach `kern-nach-entkopplung`. */
+export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
+  const ring = new Map(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => [e.pfad, e.ring]));
+  const out: string[] = [];
+  for (const [von, ringVon] of ring) {
+    if (ringVon !== "kern" || !CODE_ENDUNG.test(von)) continue;
+    const text = lies(von);
+    if (text === null) continue;
+    for (const spec of relativeImporte(text)) {
+      const roh = posix.normalize(posix.join(posix.dirname(von), spec));
+      const nach = kandidatenPfade(roh).find((p) => ring.has(p));
+      if (nach !== undefined && ring.get(nach) !== "kern" && !out.includes(`${von} -> ${nach}`)) out.push(`${von} -> ${nach}`);
     }
   }
   return out;
@@ -462,6 +481,17 @@ describe("importeAus / lokaleImporteTransitiv (gemeinsamer Helfer, #1646)", () =
   test("relativeImporte filtert Pakete und node:* heraus und entdoppelt", () => {
     assert.deepEqual(relativeImporte('import "node:fs"; import x from "pkg"; require("./a.cjs"); createRequire(u)("./a.cjs");'), ["./a.cjs"]);
   });
+  test("kandidatenPfade: mit Endung nur der Pfad selbst, endungslos je Code-Endung", () => {
+    assert.deepEqual(kandidatenPfade("scripts/a.mjs"), ["scripts/a.mjs"]);
+    assert.deepEqual(kandidatenPfade("scripts/daten.json"), ["scripts/daten.json"]);
+    assert.deepEqual(kandidatenPfade("scripts/a"), ["scripts/a.mjs", "scripts/a.cjs", "scripts/a.js"]);
+    // Ein Punkt im Ordnernamen macht den Basisnamen nicht zu einem mit Endung.
+    assert.deepEqual(kandidatenPfade("scripts/v1.2/a"), ["scripts/v1.2/a.mjs", "scripts/v1.2/a.cjs", "scripts/v1.2/a.js"]);
+  });
+  test("bekannte Grenze (fail-closed): ein require-Literal im Kommentar zählt weiter als Import", () => {
+    assert.deepEqual(relativeImporte('// siehe require("./x") im Altcode\nconst a = 1;'), ["./x"]);
+    assert.deepEqual(relativeImporte("// require(pfad) und require ohne Literal"), []);
+  });
   test("endungsloses require wird über lies aufgelöst und gehört zur Kette", () => {
     const dateien: Record<string, string> = { "scripts/a.mjs": 'const l = require("./layers");', "scripts/layers.cjs": "module.exports = {};" };
     const lies = (rel: string): string => {
@@ -546,6 +576,30 @@ describe("huellenVerstoesse / pruefeHuelle (#1613)", () => {
   });
 });
 
+describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
+  const E = [
+    ein("scripts/a.mjs"),
+    ein("scripts/k.mjs"),
+    ein("scripts/n.mjs", { ring: "kern-nach-entkopplung" }),
+    ein("scripts/m.mjs", { ring: "kern-nach-entkopplung" }),
+    ein("AGENTS.md", { block: "s" }),
+  ];
+  const mit = (m: Record<string, string>): ((p: string) => string | null) => (p) => m[p] ?? null;
+  test("Kern importiert Kern oder die Projekt-Config: grün; Importeur im Ring kern-nach-entkopplung darf alles", () => {
+    assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./k.mjs"; import c from "../.factory/projekt.json";' })), []);
+    assert.deepEqual(ringVerstoesse(E, mit({ "scripts/n.mjs": 'import { x } from "./a.mjs"; import { y } from "./m.mjs";' })), []);
+  });
+  test("Negativfall: Kern importiert Besitz im Ring kern-nach-entkopplung, auch endungslos", () => {
+    assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./n.mjs";' })), ["scripts/a.mjs -> scripts/n.mjs"]);
+    assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'const n = require("./n");' })), ["scripts/a.mjs -> scripts/n.mjs"]);
+  });
+  test("Nicht-Besitz-Ziel ist Sache der Import-Hülle; Nicht-Code, Block-Einheit und fehlende Datei werden nicht gelesen", () => {
+    assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./fremd.mjs";' })), []);
+    assert.deepEqual(ringVerstoesse([ein("AGENTS.md", { block: "s" }), ein("scripts/n.md"), ein("scripts/n.mjs", { ring: "kern-nach-entkopplung" })], mit({ "AGENTS.md": 'from "./n.mjs"', "scripts/n.md": 'from "./n.mjs"' })), []);
+    assert.deepEqual(ringVerstoesse(E, () => null), []);
+  });
+});
+
 // ── Reale Prüfungen ───────────────────────────────────────────────────────────
 
 const lesenWurzel = (pfad: string): string | null => {
@@ -584,6 +638,10 @@ describe("Kern-Reinheit (#1610)", () => {
   test("jeder lokale Import einer Besitz-Datei ist selbst Besitz oder Projekt-Config (Import-Hülle, #1613)", () => {
     const ringVon = (pfad: string): string | undefined => manifest.eintraege.find((e) => e.pfad === pfad)?.ring;
     assert.deepEqual(pruefeHuelle(huellenVerstoesse(manifest.eintraege, lesenWurzel), KERN_HUELLE_AUSNAHMEN, ringVon), []);
+  });
+
+  test("kein Importeur im Ring kern importiert Besitz im Ring kern-nach-entkopplung (Ring-Regel, #1663)", () => {
+    assert.deepEqual(ringVerstoesse(manifest.eintraege, lesenWurzel), []);
   });
 
   test("kein Kern-Modul importiert die Schichtdaten statisch (Ausnahmen nur mit Ticket, nur schrumpfend, #1612)", () => {
