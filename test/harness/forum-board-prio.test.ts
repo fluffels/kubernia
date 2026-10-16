@@ -60,6 +60,14 @@ describe("Forum-Action fügt Issue zum Board hinzu (#644)", () => {
     assert.match(yml, /::warning::[^\n]*PROJECT_TOKEN/);
   });
 
+  test("Fremdtext nirgends eingebettet: kein Discussion-Titel in Env, Issue-Titel oder Body (#1663 L27)", () => {
+    const code = yml.split("\n").filter((z) => !z.trimStart().startsWith("#")).join("\n");
+    assert.doesNotMatch(code, /DISC_TITLE/, "der Titel der Discussion darf nicht in den Lauf");
+    assert.doesNotMatch(code, /discussion\.title/);
+    assert.doesNotMatch(code, /safe_title|forum-sanitize/, "ohne eingebetteten Fremdtext keine Entschärfung nötig");
+    assert.match(code, /--title "\$\{marker\}[^$"]*"/, "Issue-Titel nur Marker mit Nummer plus fester Text");
+  });
+
   test("fügt das NEU angelegte Issue zum Board hinzu (Aufruf hängt an gh issue create)", () => {
     assert.ok(
       yml.includes("new_url=$(gh issue create"),
