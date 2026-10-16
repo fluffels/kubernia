@@ -308,27 +308,39 @@ export interface Dispatch<E extends SubEntry<unknown>> {
   /** Familien-Stil und -Hinweise; ein Eintrag mit eigenem Wert überschreibt sie. */
   readonly style?: FlagStyle;
   readonly hints?: Readonly<Record<string, string>>;
+  /** Persistente Flags der Ebene (cobra PersistentFlags, #1491): dürfen vor dem Unterbefehl stehen (`kubectl create -n x deployment`)
+   *  und gelten in jedem Ziel darunter; alle anderen Flags kennt nur das Ziel, das sie in seiner eigenen Tabelle nennt. */
+  readonly flags?: readonly FlagSpec[];
 }
 
-/** Die Flag-Tabelle eines Dispatch-Eintrags als `ArgSpec` (`cmd` = der volle Befehl für Meldungen); `defaultStyle`
- *  und `defaultHints` sind die Familien-Werte, ein Eintrag mit eigenem Wert überschreibt sie. */
-function specOfSub(cmd: string, e: SubEntry<unknown>, defaultStyle?: FlagStyle, defaultHints?: Dispatch<SubEntry<unknown>>["hints"]): ArgSpec {
-  return { cmd, flags: e.flags ?? [], style: e.style ?? defaultStyle ?? "pflag", hints: e.hints ?? defaultHints, stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
+/** Die Flag-Tabelle eines Dispatch-Eintrags als `ArgSpec` (`cmd` = der volle Befehl für Meldungen): die persistenten
+ *  Flags der Ebene (`d.flags`) zuerst, dann die des Eintrags; Stil und Hinweise erbt der Eintrag von der Ebene (je Schlüssel,
+ *  der Eintrag gewinnt). */
+function specOfSub(cmd: string, e: SubEntry<unknown>, d: Dispatch<SubEntry<unknown>>): ArgSpec {
+  return { cmd, flags: mergeFlags(d.flags, e.flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
+}
+
+function mergeFlags(outer: readonly FlagSpec[] | undefined, inner: readonly FlagSpec[] | undefined): readonly FlagSpec[] | undefined {
+  if (!outer || !inner) return outer ?? inner;
+  return [...outer, ...inner.filter(f => !outer.includes(f))];
+}
+
+function mergeHints(outer: Readonly<Record<string, string>> | undefined, inner: Readonly<Record<string, string>> | undefined): Readonly<Record<string, string>> | undefined {
+  return outer && inner ? { ...outer, ...inner } : outer ?? inner;
 }
 
 const isGroup = <E extends SubEntry<unknown>>(e: E | Group<E>): e is Group<E> => "group" in e;
 
 /** „Der Simulator kann“, aus den Tabellenschlüsseln abgeleitet: je Ebene `<cmd> a, b, c` (Aliase desselben Eintrags
- *  nur einmal, mit dem ersten Schlüssel), Gruppen rekursiv. */
+ *  oder derselben Gruppe nur einmal, mit dem ersten Schlüssel), Gruppen rekursiv. */
 export function kannOf<E extends SubEntry<unknown>>(d: Dispatch<E>): string[] {
   const seen = new Set<unknown>();
   const own: string[] = [];
   const nested: string[] = [];
   for (const [key, e] of Object.entries(d.table)) {
-    if (isGroup(e)) { nested.push(...kannOf(e.group)); continue; }
     if (seen.has(e)) continue;
     seen.add(e);
-    own.push(key);
+    if (isGroup(e)) nested.push(...kannOf(e.group)); else own.push(key);
   }
   return own.length ? [d.cmd + " " + own.join(", "), ...nested] : nested;
 }
@@ -350,24 +362,41 @@ function vorUnterbefehlHint(name: string, d: Dispatch<SubEntry<unknown>>): strin
   return "Setz Flags hinter den Unterbefehl.";
 }
 
+/** Der Fehler eines Flags VOR dem Unterbefehl: unbekannt (auch `--`) heißt „vor dem Unterbefehl“, ohne Wert und ungültiger Bool wie im Blatt. */
+function vorUnterbefehlError(host: ErrHost, d: Dispatch<SubEntry<unknown>>, e: ScanError, kann: () => string[]): string {
+  if (e.kind !== "unknown") return scanErrorText(host, { cmd: d.cmd, flags: [], style: d.style, maxArgs: 0 }, e);
+  return notSimulated(host, "das Flag '" + e.name + "' vor dem Unterbefehl.", kann(), vorUnterbefehlHint(e.name, d));
+}
+
+/** Der Unterbefehl dieser Ebene samt der Eingabe ohne ihn. Vor ihm dürfen nur die persistenten Flags der Ebene stehen
+ *  (`d.flags`, wie cobra PersistentFlags); jedes andere Flag, auch `--`, ist ein Fehler. */
+function locateSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, t: readonly string[], at: number, kann: () => string[]): { sub: string; rest: readonly string[] } | string {
+  const w = walk({ cmd: d.cmd, flags: d.flags ?? [], style: d.style, maxArgs: OFFENE_LISTE, stopAtPositional: true }, t, at);
+  if (w.error) return vorUnterbefehlError(host, d, w.error, kann);
+  if (w.dashAt === 0) return vorUnterbefehlError(host, d, { kind: "unknown", name: "--" }, kann);
+  const target = w.entries[0];
+  if (!target) return host._err(d.cmd + ": Unterbefehl fehlt.", "Der Simulator kann: " + kann().join(" · "));
+  return { sub: target.tok, rest: [...t.slice(0, target.at), ...t.slice(target.at + 1)] };
+}
+
+/** Die Ebene einer Gruppe: erbt Flags, Stil und Hinweise der Eltern (der eigene Wert gewinnt; Hinweise je Schlüssel). */
+function inherit<E extends SubEntry<unknown>>(d: Dispatch<E>, g: Dispatch<E>): Dispatch<E> {
+  return { ...g, flags: mergeFlags(d.flags, g.flags), style: g.style ?? d.style, hints: mergeHints(d.hints, g.hints) };
+}
+
 /** Der EINE Kopf jeder Befehlsfamilie: wählt den Eintrag zu `t[at]` und liest dessen Eingabe (`parseCall`).
- *  Reihenfolge: Unterbefehl fehlt, Flag vor dem Unterbefehl, Gruppe (rekursiv), echter aber nicht simulierter
- *  Unterbefehl, Tippfehler mit Vorschlag, dann `parseCall`. Ergebnis: `{ sub, entry, call }` oder die fertige
- *  Fehlerausgabe. Familien-Wachen (Control-Plane, init, Repo) laufen danach im Familien-Dispatcher. */
+ *  Reihenfolge: Unterbefehl fehlt, Flag vor dem Unterbefehl, Gruppe (rekursiv, mit den Flags der Eltern), echter aber nicht
+ *  simulierter Unterbefehl, Tippfehler mit Vorschlag, dann `parseCall` mit den Flags GENAU dieses Ziels (#1491). Ergebnis:
+ *  `{ sub, entry, call }` oder die fertige Fehlerausgabe. Familien-Wachen (Control-Plane, init, Repo) laufen danach im
+ *  Familien-Dispatcher. */
 export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispatch<E>, t: readonly string[], at: number): { sub: string; entry: E; call: Call } | string {
-  const sub = t[at];
   const kann = () => kannOf(d);
-  if (!sub) return host._err(d.cmd + ": Unterbefehl fehlt.", "Der Simulator kann: " + kann().join(" · "));
-  if (isFlagToken(sub)) {
-    const name = flagNameOf(sub, d.style ?? "pflag");
-    return notSimulated(host, "das Flag '" + name + "' vor dem Unterbefehl.", kann(), vorUnterbefehlHint(name, d));
-  }
+  const loc = locateSub(host, d, t, at, kann);
+  if (typeof loc === "string") return loc;
+  const { sub, rest } = loc;
   const entry = subEntry(d.table, sub);
-  // Eine Gruppe erbt Stil und Hinweise der Eltern (der eigene Wert gewinnt); `sub` im Ergebnis bleibt das Blatt.
-  if (entry && isGroup(entry)) {
-    return dispatchSub(host, { ...entry.group, style: entry.group.style ?? d.style, hints: entry.group.hints ?? d.hints }, t, at + 1);
-  }
+  if (entry && isGroup(entry)) return dispatchSub(host, inherit(d, entry.group), rest, at);
   if (!entry) return unknownSub(host, d, sub, kann);
-  const call = parseCall(host, specOfSub(d.cmd + " " + sub, entry, d.style, d.hints), t, at + 1);
+  const call = parseCall(host, specOfSub(d.cmd + " " + sub, entry, d), rest, at);
   return typeof call === "string" ? call : { sub, entry, call };
 }
