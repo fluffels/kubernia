@@ -47,11 +47,11 @@ const RECURSIVE_HINT: Readonly<Record<string, string>> = {
 
 // `ls --recursive` wird angenommen, aber nicht ausgewertet: die Sim listet ohnehin flach alle Keys mit dem Präfix.
 const S3: Dispatch<SubEntry<S3Handler>> = { cmd: "aws s3", table: {
-  mb: { run: s3MakeBucket, hints: GLOBAL_HINTS },
-  rb: { run: s3RemoveBucket, flags: [flag(false, "--force")], hints: GLOBAL_HINTS },
-  ls: { run: s3List, flags: [flag(false, "--recursive")], hints: GLOBAL_HINTS },
-  cp: { run: s3Copy, hints: RECURSIVE_HINT },
-  rm: { run: s3Remove, hints: RECURSIVE_HINT },
+  mb: { run: s3MakeBucket, maxArgs: 1, hints: GLOBAL_HINTS },
+  rb: { run: s3RemoveBucket, maxArgs: 1, flags: [flag(false, "--force")], hints: GLOBAL_HINTS },
+  ls: { run: s3List, maxArgs: 1, flags: [flag(false, "--recursive")], hints: GLOBAL_HINTS },
+  cp: { run: s3Copy, maxArgs: 2, hints: RECURSIVE_HINT },
+  rm: { run: s3Remove, maxArgs: 1, hints: RECURSIVE_HINT },
 },
   // Echte `aws s3`-Verben, die die Sim nicht kann.
   real: ["sync", "mv", "presign", "website"],

@@ -11,7 +11,7 @@ import { KUBECTL_SUBCOMMANDS } from "../../src/sim/kubectl";
 import { KUBEADM_SUBCOMMANDS } from "../../src/sim/kubeadm";
 import { NODE_VERSION } from "../../src/sim/nodes";
 import { CURL_ARGS, NSLOOKUP_ARGS } from "../../src/sim/net";
-import { flag, type ArgSpec } from "../../src/sim/cliargs";
+import { flag, OFFENE_LISTE, type ArgSpec } from "../../src/sim/cliargs";
 import { simGrenzen, familienMitGrenzen } from "../../src/hud/helptext";
 import { ladeMatrix, ladeRoh, matrixFamilien, type TreueMatrix } from "../support/sim-treue";
 
@@ -248,7 +248,7 @@ describe("Vollständigkeits-Wächter: Negativfälle (synthetisch)", () => {
     expect(vollstaendigkeitProbleme("f", e, m(["f"], ["f", "g"]))).toEqual(["f: Zeile mit fremdem befehl g"]);
   });
   test("Einzelbefehl mit Flag-Tabelle: jedes Flag braucht eine Zeile (Name, `<name> …` oder `<name>=…`)", () => {
-    const args: ArgSpec = { cmd: "f", flags: [flag(false, "-s", "--silent"), flag(true, "-o"), flag(true, "-type")] };
+    const args: ArgSpec = { cmd: "f", maxArgs: OFFENE_LISTE, flags: [flag(false, "-s", "--silent"), flag(true, "-o"), flag(true, "-type")] };
     const e: Spec = { form: "einzel", args };
     const mit = (flags: string[]): TreueMatrix => ({ ...m(["f"], ["f"]), zeilen: flags.map(fl => ({ befehl: "f", flag: fl, verhalten: "gleich", ausgabe: "gleich" })) });
     expect(vollstaendigkeitProbleme("f", e, mit(["-s", "-o <datei>", "-type=A"]))).toEqual([]);
