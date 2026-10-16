@@ -18,7 +18,7 @@ type Vorbedingung = {
   bewerteHealth: (e: { status?: number; fehler?: string }) => Urteil;
   basisUrl: (env: Record<string, string | undefined>) => string;
   pruefeLangfuse: (o: { baseUrl: string; fetchImpl?: Fetch; fristMs?: number }) => Promise<Urteil>;
-  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number }) => Promise<number>;
+  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string }) => Promise<number>;
 };
 const v = raw as unknown as Vorbedingung;
 const WURZEL = process.cwd();
@@ -83,11 +83,15 @@ describe("pruefeLangfuse", () => {
   });
 });
 
+const keineDatei = () => {
+  throw new Error("keine Datei");
+};
+
 describe("main", () => {
   const lauf = async (argv: string[], fetchImpl: Fetch) => {
     const out: string[] = [];
     const err: string[] = [];
-    const code = await v.main(argv, {}, (s) => out.push(s), (s) => err.push(s), { fetchImpl, fristMs: 20 });
+    const code = await v.main(argv, {}, (s) => out.push(s), (s) => err.push(s), { fetchImpl, fristMs: 20, home: "/h", lies: keineDatei });
     return { code, out, err };
   };
   test("erreichbar: Exit 0", async () => {
@@ -102,6 +106,26 @@ describe("main", () => {
     const r = await lauf(["--sessionstart"], verbindungAbgelehnt);
     expect(r.code).toBe(0);
     expect(r.out.join("\n")).toContain("Langfuse aus, bitte starten");
+  });
+  test("--sessionstart: die Warnung ist JSON mit systemMessage (sichtbar) und additionalContext (Session), #1663 H1", async () => {
+    const r = await lauf(["--sessionstart"], verbindungAbgelehnt);
+    expect(r.out).toHaveLength(1);
+    const j = JSON.parse(r.out[0]) as { systemMessage: string; hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    expect(j.systemMessage).toContain("Langfuse aus, bitte starten");
+    expect(j.hookSpecificOutput.hookEventName).toBe("SessionStart");
+    expect(j.hookSpecificOutput.additionalContext).toContain("Ohne Langfuse startet kein Ticket");
+  });
+  test("die Basis-URL kommt wie beim Abgleich-Hook auch aus den Plugin-Optionen der User-Settings; die Umgebung hat Vorrang", async () => {
+    const settings = JSON.stringify({ pluginConfigs: { "langfuse@x": { options: { LANGFUSE_BASE_URL: "http://plugin:3000/" } } } });
+    const lies = (pfad: string) => {
+      if (pfad.includes("settings.json")) return settings;
+      throw new Error("keine Datei");
+    };
+    const urls: string[] = [];
+    const f: Fetch = (url) => (urls.push(url), Promise.resolve({ status: 200 }));
+    await v.main([], {}, () => {}, () => {}, { fetchImpl: f, home: "/h", lies });
+    await v.main([], { LANGFUSE_BASE_URL: "http://env:1" }, () => {}, () => {}, { fetchImpl: f, home: "/h", lies });
+    expect(urls).toEqual(["http://plugin:3000/api/public/health", "http://env:1/api/public/health"]);
   });
   test("--sessionstart: erreichbar bleibt still", async () => {
     const r = await lauf(["--sessionstart"], antwort(200));

@@ -2,10 +2,12 @@
 /* Langfuse-Vorbedingung (#1663 L36): ohne erreichbares Langfuse startet kein Entwicklungslauf, sonst wird nichts getrackt.
  *
  *   node scripts/langfuse-vorbedingung.mjs                 prüft GET <Langfuse>/api/public/health; Exit 0 = erreichbar, 1 = aus, 2 = Aufruffehler
- *   node scripts/langfuse-vorbedingung.mjs --sessionstart  SessionStart-Hook: Exit immer 0, bei Ausfall steht die Warnung auf stdout (Kontext der Session)
+ *   node scripts/langfuse-vorbedingung.mjs --sessionstart  SessionStart-Hook: Exit immer 0, bei Ausfall steht die Warnung als JSON auf stdout (`systemMessage` für die Nutzerin, `additionalContext` für die Session)
  *
  * Aufrufer: die Ticket-Skills (Schritt 0 bzw. vor dem Workflow-Start); bewusst NICHT im Board-Takt und im JS-Workflow.
- * Adresse: `LANGFUSE_BASE_URL`, sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
+ * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen wie beim Abgleich-Hook via `kindEnv`), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
+import { homedir } from "node:os";
+import { kindEnv } from "./langfuse-abgleich-hook.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
 
 export const HEALTH_PFAD = "/api/public/health";
@@ -40,18 +42,19 @@ export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRI
 
 const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]";
 
-export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS } = {}) {
+export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies } = {}) {
   const unbekannt = argv.find((a) => a !== "--sessionstart");
   if (unbekannt) {
     err(`Unbekanntes Argument: ${unbekannt}. ${USAGE}`);
     return 2;
   }
   const sessionstart = argv.includes("--sessionstart");
-  const urteil = await pruefeLangfuse({ baseUrl: basisUrl(env), fetchImpl, fristMs });
+  const urteil = await pruefeLangfuse({ baseUrl: basisUrl(kindEnv(env, home, lies)), fetchImpl, fristMs });
   if (urteil.ok) return 0;
   const text = `${urteil.grund}. ${HINWEIS}`;
   if (sessionstart) {
-    out(`WARNUNG Langfuse-Vorbedingung: ${text} Ohne Langfuse startet kein Ticket.`);
+    const warnung = `WARNUNG Langfuse-Vorbedingung: ${text} Ohne Langfuse startet kein Ticket.`;
+    out(JSON.stringify({ systemMessage: warnung, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: warnung } }));
     return 0;
   }
   err(text);
