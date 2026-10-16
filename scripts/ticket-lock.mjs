@@ -5,7 +5,8 @@
  * Worktree `kq-1549`, eine löschte dem Gegenüber `node_modules`).
  *
  *   node scripts/ticket-lock.mjs claim <nr>                      # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
- *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # vor Spawn und vor Übernahme eines Worktrees
+ *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # rein lesend: vor Spawn und vor Übernahme eines Worktrees
+ *   node scripts/ticket-lock.mjs uebernehmen <nr> --nonce <x>    # Nachfolger/Fortsetzung (#1593): wie `pruefe`, verbraucht zusätzlich Übergabe bzw. Stopp-Vermerk
  *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup
  *   node scripts/ticket-lock.mjs uebergeben <nr> --nonce <x>     # Phasen-Schnitt (#1592): letzte Aktion des Vorgängers vor `ERGEBNIS: uebergabe`
  *   node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>       # nach `TaskStop` des eigenen Umsetzers (#1693): das nächste `pruefe --nonce` meldet `uebernehmbar`
@@ -20,7 +21,7 @@
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
  * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock jünger als 2 h `fremd`; existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
  * Köpfe, jüngstem Reflog-Eintrag, mtime der geänderten Dateien laut `git status` und mtime von `node_modules`): jünger als
- * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren) und verbraucht die Übergabe (`verbraucht` = Zeitpunkt, ein zweites `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
+ * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren); `pruefe` ändert nie etwas (#1593), erst `uebernehmen` (gleiche Prüfung, gleiche Exit-Codes) verbraucht die Übergabe bzw. den Stopp-Vermerk (`verbraucht` = Zeitpunkt, ein zweites `uebernehmen` oder `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
  *
  * Bewusste Grenzen: nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre);
@@ -204,7 +205,8 @@ function claim(deps, nr) {
   return ergebnis(4, "", `✖ ticket-lock: #${nr} wurde beim Übernehmen des verwaisten Locks von einer anderen Session belegt. ${NICHT_VON_HAND}`);
 }
 
-function pruefe(deps, nr, nonce) {
+/** `verbrauche` (nur `uebernehmen`, #1593): verbraucht eine offene Übergabe bzw. einen Stopp-Vermerk; `pruefe` ist rein lesend. */
+function pruefe(deps, nr, nonce, verbrauche = false) {
   const lock = liesLock(deps, nr);
   const b = ermittleBelegung(deps, nr);
   const aktivitaet = b.belegt ? letzteAktivitaet(sammleAktivitaet(deps, b)) : null;
@@ -214,8 +216,8 @@ function pruefe(deps, nr, nonce) {
   if (urteil === "fremd") return ergebnis(4, urteil, `✖ ticket-lock: der Lock zu #${nr} gehört nicht zu dieser Nonce (fremd, fehlt oder ohne Nonce noch keine 2 h alt): nicht anfassen, Befund melden. ${NICHT_VON_HAND}`);
   if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen. ${NICHT_VON_HAND}`);
   const verbraucht = new Date(deps.jetzt()).toISOString();
-  const frischeUebergabe = urteil === "uebernehmbar" && uebergabeOffen && nonce;
-  const frischeStopp = (urteil === "uebernehmbar" || urteil === "frei") && gestopptOffen && nonce;
+  const frischeUebergabe = verbrauche && urteil === "uebernehmbar" && uebergabeOffen && nonce;
+  const frischeStopp = verbrauche && (urteil === "uebernehmbar" || urteil === "frei") && gestopptOffen && nonce;
   if (frischeUebergabe || frischeStopp) {
     schreibeLock(deps, nr, {
       ...lock,
@@ -262,13 +264,14 @@ export function fuehreAus(argv, deps) {
   const [befehl, nrText, ...rest] = argv;
   const nonce = nonceAus(argv);
   const nr = NUMMER.test(nrText ?? "") ? Number(nrText) : null;
-  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x>");
-  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben", "gestoppt"].includes(befehl)) return usage;
-  if ((befehl === "freigeben" || befehl === "uebergeben" || befehl === "gestoppt") && !nonce) return usage;
+  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x>");
+  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen"].includes(befehl)) return usage;
+  if ((befehl === "freigeben" || befehl === "uebergeben" || befehl === "gestoppt" || befehl === "uebernehmen") && !nonce) return usage;
   if (nonce === "" || (befehl === "claim" && rest.length > 0)) return usage;
   try {
     if (befehl === "claim") return claim(deps, nr);
     if (befehl === "pruefe") return pruefe(deps, nr, nonce);
+    if (befehl === "uebernehmen") return pruefe(deps, nr, nonce, true);
     if (befehl === "uebergeben") return uebergeben(deps, nr, nonce);
     if (befehl === "gestoppt") return gestoppt(deps, nr, nonce);
     return freigeben(deps, nr, nonce);
