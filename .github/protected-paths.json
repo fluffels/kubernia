@@ -62,6 +62,7 @@
     "/scripts/fremdtext.mjs",
     "/scripts/gh-cli.mjs",
     "/scripts/naechstes-ticket.mjs",
+    "/scripts/spezifikation-lib.mjs",
     "/scripts/subagent-laeufe.mjs",
     "/scripts/mess-lib.mjs",
     "/scripts/patch-zugriff.mjs",
