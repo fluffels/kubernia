@@ -547,6 +547,9 @@ describe("Ring oberflaeche (ADR 0029)", () => {
     const r = laufe(["--quelle", mitCockpit("oberflaeche"), "--ziel", z]);
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, /Einheit 'scripts\/cockpit\/o\.mjs' wird nicht mehr verteilt \(Ring oberflaeche\), im Ziel nicht gelöscht/);
+    const meldungen = (t: string): string[] => t.split("\n").filter((l) => /nicht mehr verteilt|kein Besitz mehr/.test(l));
+    assert.equal(meldungen(r.out).length, 1, "Meldung auch für weiter verteilte Einheiten");
+    assert.deepEqual(meldungen(laufe(["--quelle", mitCockpit("oberflaeche"), "--ziel", z]).out), [], "zweiter Sync ohne Ring-Wechsel meldet nichts");
     assert.ok(existsSync(join(z, COCKPIT)));
     assert.equal(drift1(z).code, 0);
   });

@@ -638,6 +638,11 @@ describe("huellenVerstoesse / pruefeHuelle (#1613)", () => {
     assert.match(pruefeHuelle([vk], { [vk]: "#12 Grund" }, ring).join(), /nur für Importeure im Ring kern-nach-entkopplung/);
     assert.match(pruefeHuelle([], { [v]: "#12 Grund" }, ring).join(), /Ausnahme veraltet/);
   });
+  test("Negativfall: ein Importeur im Ring oberflaeche bekommt keine Ausnahme (ADR 0029)", () => {
+    const vo = "scripts/cockpit/o.mjs -> scripts/proj.mjs";
+    const ringO = (p: string): string | undefined => (p === "scripts/cockpit/o.mjs" ? "oberflaeche" : ring(p));
+    assert.match(pruefeHuelle([vo], { [vo]: "#12 Grund" }, ringO).join(), /nur für Importeure im Ring kern-nach-entkopplung/);
+  });
 });
 
 describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
@@ -649,7 +654,7 @@ describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
     ein("AGENTS.md", { block: "s" }),
   ];
   const mit = (m: Record<string, string>): ((p: string) => string | null) => (p) => m[p] ?? null;
-  test("Kern importiert Kern oder die Projekt-Config: grün; Importeur im Ring kern-nach-entkopplung darf alles", () => {
+  test("Kern importiert Kern oder die Projekt-Config: grün; Importeur im Ring kern-nach-entkopplung darf beide Kern-Ringe importieren", () => {
     assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./k.mjs"; import c from "../.factory/projekt.json";' })), []);
     assert.deepEqual(ringVerstoesse(E, mit({ "scripts/n.mjs": 'import { x } from "./a.mjs"; import { y } from "./m.mjs";' })), []);
   });
@@ -753,7 +758,9 @@ describe("Ring-Tabelle (ADR 0029)", () => {
     for (const ziele of Object.values(RING_IMPORTE)) assert.ok(ziele.every((r) => RINGE.includes(r)), ziele.join());
     assert.ok(NUR_FACTORY.every((r) => RINGE.includes(r)));
     for (const [ring, ziele] of Object.entries(RING_IMPORTE)) assert.ok(ziele.includes(ring), `${ring} importiert den eigenen Ring`);
-    for (const ring of RINGE) if (ring !== "oberflaeche") assert.ok(!RING_IMPORTE[ring]?.includes("oberflaeche"), `${ring} importiert oberflaeche`);
+    for (const ring of RINGE.filter((r) => !NUR_FACTORY.includes(r))) {
+      assert.ok((RING_IMPORTE[ring] ?? []).every((z) => !NUR_FACTORY.includes(z)), `${ring} importiert einen Nur-Factory-Ring`);
+    }
   });
   test("pruefeManifest: oberflaeche ist ein Ring, andere Schreibweisen sind unbekannt", () => {
     const m = (ring: string): Manifest => ({ version: 1, eintraege: [ein("a.mjs", { ring })] });
@@ -771,5 +778,10 @@ describe("Ring-Tabelle (ADR 0029)", () => {
     const ist = istZaehlung(E, (p) => (p === "scripts/cockpit/o.mjs" ? "// Fremdwort" : "sauber"), begriffe);
     assert.deepEqual(Object.keys(ist), ["scripts/cockpit/o.mjs"]);
     assert.notDeepEqual(vergleiche(ist, {}), []);
+  });
+  test("istZaehlung: fehlende Datei und Block ohne Marker zählen nichts (null-Guards)", () => {
+    const begriffe = { fremd: /Fremdwort/g };
+    const E = [ein("fehlt.mjs"), ein("a.md", { block: "b" })];
+    assert.deepEqual(istZaehlung(E, (p) => (p === "a.md" ? "Fremdwort ohne Marker" : null), begriffe), {});
   });
 });

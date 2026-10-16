@@ -37,7 +37,7 @@ Das ersetzt den WSL2-Lauf aus #1722 AK1. Fremdwerkzeuge sind nur nach Doku bewer
 | Option | Bewertung |
 |---|---|
 | A1 eigenes Repo | Dritter Ort mit Versionskopplung an Factory-Bibliotheken (Langfuse-Zugang, Projekt-Config-Leser, Board-Skripte). Kern-Reinheits-Wächter und Import-Hülle wirken nicht über Repo-Grenzen. |
-| **A2 Ring `oberflaeche` im Factory-Repo (gewählt)** | Ein Ort, Wächter und Hülle gelten weiter. Das Cockpit liegt heute unter `scripts/cockpit/` und zieht mit dem Factory-Umzug (F10, #1715) unverändert um. Ein Cockpit soll per Option auf beliebig viele Projekte zeigen können. |
+| **A2 Ring `oberflaeche` im Factory-Repo (gewählt)** | Ein Ort, Wächter und Hülle gelten weiter. Das Cockpit entsteht unter `scripts/cockpit/` (Ort, den die Folgetickets von #1737 belegen) und zieht mit dem Factory-Umzug (F10, #1715) unverändert um. Ein Cockpit soll per Option auf beliebig viele Projekte zeigen können. |
 | A3 Kern in jedem Projekt | UI-Code und Sync-/Drift-Fläche in jedem Projekt, N Cockpits statt einem. Das Werkzeug gehört der Maintainerin, nicht dem Projekt. |
 
 ### (b) Bauweise
@@ -76,7 +76,7 @@ Ein Importeur mit unbekanntem Ring importiert keinen Besitz. `oberflaeche` bekom
 
 ## Konsequenzen
 
-- **Grenze:** ein Projekt trägt damit Manifest-Einträge, deren Dateien es nicht hat. `pruefeManifest` läuft heute nur in der Quelle (Sync); liefe der Wächter im Projekt, müsste er per `wirdVerteilt` filtern. F10 (#1715) entscheidet das.
+- **Grenze:** ein Projekt trägt damit Manifest-Einträge, deren Dateien es nicht hat. `pruefeManifest` läuft heute nur in der Quelle (Sync und Kern-Reinheits-Wächter); liefe der Wächter im Projekt, müsste er per `wirdVerteilt` filtern. F10 (#1715) entscheidet das.
 - Ein weiterer nicht verteilter Ring ist eine Zeile in `RINGE`, `RING_IMPORTE` und `NUR_FACTORY` plus ein Test.
 - Das Cockpit hängt an Agent View nur über `claude agents --json` und liest fehlende Felder als „unbekannt“. Ändert Claude Code den Vertrag, bricht höchstens eine Anzeige, nie ein Gate.
 - Der WSL2-Lauf aus #1722 AK1 entfällt (Probe oben).
