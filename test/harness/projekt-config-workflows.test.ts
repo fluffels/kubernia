@@ -115,6 +115,9 @@ describe("sparseProbleme", () => {
       `scripts/a.mjs: ${LIB} fehlt in sparse-checkout`,
     ]);
   });
+  test("derselbe Befund bei zwei Aufrufen (und gemeinsamer Lib zweier Skripte) wird nur einmal gemeldet", () => {
+    assert.deepEqual(sparseProbleme(yml(["scripts/a.mjs", ".factory/projekt.json"], "node scripts/a.mjs\n  - run: node scripts/a.mjs"), leser), [`scripts/a.mjs: ${LIB} fehlt in sparse-checkout`]);
+  });
   test("Workflow ohne Sparse-Checkout wird ignoriert", () => {
     assert.deepEqual(sparseProbleme("steps:\n  - run: node scripts/a.mjs\n", leser), []);
   });
