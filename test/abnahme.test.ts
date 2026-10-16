@@ -38,6 +38,7 @@ const ALLE_OK = BERICHT(["K1: erfuellt — Beleg eins", "K2: erfuellt — Beleg 
 type Aufruf = { nr: number; body: string };
 function umgebung(bericht: string, extra: Partial<Io> = {}, kommentare: Kommentar[] = []) {
   const posts: Aufruf[] = [];
+  const aufrufe: string[] = [];
   const io: Io = {
     owner: "fluffels",
     zeilen: Z,
@@ -45,18 +46,24 @@ function umgebung(bericht: string, extra: Partial<Io> = {}, kommentare: Kommenta
       if (p !== "b.md") throw new Error("ENOENT");
       return bericht;
     },
-    ladeIssue: () => ({ state: "open", body: BODY, user: VERTRAUT, labels: [] }),
-    ladeKommentare: () => kommentare,
+    ladeIssue: (nr) => {
+      aufrufe.push(`issue:${nr}`);
+      return { state: "open", body: BODY, user: VERTRAUT, labels: [] };
+    },
+    ladeKommentare: (pr) => {
+      aufrufe.push(`kommentare:${pr}`);
+      return kommentare;
+    },
     poste: (nr, body) => void posts.push({ nr, body }),
     git: (_cwd, args) => (args[0] === "status" ? "" : `${HEAD}\n`),
     ...extra,
   };
-  return { io, posts };
+  return { io, posts, aufrufe };
 }
 const AUSWERTEN = ["auswerten", "7", "--pr", "70", "--bericht", "b.md", "--worktree", "/wt", "--head", HEAD.slice(0, 7)];
 const lauf = (bericht: string, extra: Partial<Io> = {}, kommentare: Kommentar[] = [], argv = AUSWERTEN) => {
   const u = umgebung(bericht, extra, kommentare);
-  return { ...A.fuehreAus(argv, u.io), posts: u.posts };
+  return { ...A.fuehreAus(argv, u.io), posts: u.posts, aufrufe: u.aufrufe };
 };
 
 describe("auswerten: Entscheidung und Spur", () => {
@@ -109,7 +116,7 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(r.out).toContain("AB-Abnahme: head=");
   });
   test("tolerante Berichtswerte: Listenzeichen, Groß/Klein, Trenner", () => {
-    const r = A.parseBericht(BERICHT(["- K1: Erfüllt – ok", "* K2: NICHT-ERFUELLT - rot", "K3: erfuellt — x"]).replace("Erfüllt", "erfuellt"), 7, [
+    const r = A.parseBericht(BERICHT(["- K1: Erfüllt – ok", "* K2: NICHT-ERFUELLT - rot", "K3: erfuellt — x"]), 7, [
       { k: "K1", text: "a" },
       { k: "K2", text: "b" },
       { k: "K3", text: "c" },
@@ -275,5 +282,52 @@ describe("kriterien", () => {
   });
   test("ABNAHME_AGENT ist holdout-abnahme", () => {
     expect(A.ABNAHME_AGENT).toBe("holdout-abnahme");
+  });
+});
+
+describe("Lens-Runde 1: CRLF, Argumente der io, Grenzen der Aufrufprüfung", () => {
+  test("Bericht mit CRLF (Windows) wird gelesen", () => {
+    const r = lauf(ALLE_OK.replace(/\n/g, "\r\n"));
+    expect(r.code).toBe(0);
+    expect(r.out.split("\n")[0]).toBe("ENTSCHEIDUNG: bestanden");
+  });
+  test("Kommentare kommen vom PR (70), das Ticket ist #7: io bekommt die richtigen Nummern", () => {
+    const r = lauf(ALLE_OK);
+    expect(r.aufrufe).toEqual(["issue:7", "kommentare:70"]);
+  });
+  test("Umlaute im Urteil werden toleriert (Erfüllt)", () => {
+    const r = A.parseBericht(BERICHT(["K1: Erfüllt — a", "K2: erfuellt — b", "K3: erfuellt — c"]), 7, [
+      { k: "K1", text: "a" },
+      { k: "K2", text: "b" },
+      { k: "K3", text: "c" },
+    ]);
+    expect(r.urteile?.[0].wert).toBe("erfuellt");
+  });
+  test("ein unbekannter Wert meldet nur sich selbst, nicht zusätzlich „fehlt“", () => {
+    const r = lauf(BERICHT(["K1: gut — a", "K2: erfuellt — b", "K3: erfuellt — c"]));
+    expect(r.err).toContain("K1: unbekanntes Urteil");
+    expect(r.err).not.toContain("K1: fehlt");
+  });
+  test.each([
+    ["Nummer 0 bei auswerten", ["auswerten", "0", ...AUSWERTEN.slice(2)]],
+    ["Nummer fehlt bei auswerten", ["auswerten", ...AUSWERTEN.slice(2)]],
+    ["--pr 0", ["auswerten", "7", "--pr", "0", ...AUSWERTEN.slice(4)]],
+    ["--bericht fehlt", ["auswerten", "7", "--pr", "70", "--worktree", "/wt", "--head", HEAD]],
+    ["kriterien 0", ["kriterien", "0"]],
+    ["head 6 Zeichen", [...AUSWERTEN.slice(0, -1), "a".repeat(6)]],
+    ["head 41 Zeichen", [...AUSWERTEN.slice(0, -1), "a".repeat(41)]],
+  ])("Aufruf ungültig: %s: Exit 2", (_n, argv) => {
+    const r = lauf(ALLE_OK, {}, [], argv);
+    expect(r.code).toBe(2);
+    expect(r.posts).toEqual([]);
+  });
+  test.each([7, 40])("head mit %i Zeichen ist gültig", (n) => {
+    expect(lauf(ALLE_OK, {}, [], [...AUSWERTEN.slice(0, -1), "a".repeat(n)]).code).toBe(0);
+  });
+  test("lange Kriteriumstexte werden in der Tabelle gekürzt", () => {
+    const lang = "x".repeat(300);
+    const r = lauf(ALLE_OK, { ladeIssue: () => ({ body: `## Ziel\nZ\n\n## Akzeptanzkriterien\n1. ${lang}\n2. b\n3. c\n`, user: VERTRAUT }) });
+    expect(r.posts[0].body).toContain(`${"x".repeat(100)}…`);
+    expect(r.posts[0].body).not.toContain("x".repeat(101));
   });
 });

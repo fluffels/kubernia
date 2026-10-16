@@ -397,3 +397,28 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
     expect(() => so.parseNachweis("x", ohne as unknown as Zeilen)).toThrow(/Commit-Zeilen/);
   });
 });
+
+describe("KQ-Abnahme: Toleranzen und Validierung (Lens-Runde 1)", () => {
+  const A = raw as unknown as {
+    formatAbnahme: (z: Zeilen, a: unknown) => string;
+    formatAbnahmeMarker: (z: Zeilen, a: unknown) => string;
+  };
+  const lies = (zeile: string) => so.parseNachweis(zeile, Z).abnahme;
+  it.each([
+    ["entfällt — Grund", "entfällt — Grund"],
+    ["entfaellt - Grund", "entfaellt - Grund"],
+    ["entfaellt – Grund", "entfaellt – Grund"],
+  ])("entfaellt toleriert Umlaut und Trenner: %s", (_n, wert) => {
+    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "entfaellt", grund: "Grund" });
+  });
+  it("head in Großbuchstaben wird kleingeschrieben gelesen", () => {
+    expect(lies("KQ-Abnahme: head=ABC1234 durchgaenge=1 urteil=K1:erfuellt")).toMatchObject({ art: "urteil", head: "abc1234" });
+  });
+  it("formatAbnahmeMarker validiert wie formatAbnahme; formatAbnahme ohne Urteil wirft die Abnahme-Meldung", () => {
+    const urteil = [{ k: "K1", wert: "erfuellt" }];
+    expect(() => A.formatAbnahmeMarker(Z, { durchgang: 0, head: "abc1234", urteil })).toThrow(/Abnahme/);
+    expect(() => A.formatAbnahmeMarker(Z, { durchgang: 1, head: "xyz", urteil })).toThrow(/Abnahme/);
+    expect(() => A.formatAbnahmeMarker(Z, { durchgang: 1, head: "abc1234", urteil: [{ k: "K1", wert: "gut" }] })).toThrow(/Abnahme/);
+    expect(() => A.formatAbnahme(Z, { art: "urteil", head: "abc1234", durchgaenge: 1 })).toThrow(/Abnahme/);
+  });
+});

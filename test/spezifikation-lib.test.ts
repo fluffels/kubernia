@@ -199,3 +199,15 @@ describe("kriterien (#1753): K1…KN aus den Akzeptanzkriterien", () => {
     }
   });
 });
+
+describe("kriterien: Einzug und Fortsetzung (Lens-Runde 1)", () => {
+  const K = (S as unknown as { kriterien: (b: unknown) => { k: string; text: string }[] }).kriterien;
+  test("eingerückte Oberebene zählt, das Gate und kriterien stimmen überein (kein stilles „entfällt“)", () => {
+    const b = "## Ziel\nZ\n\n## Akzeptanzkriterien\n  - a\n  - b\n";
+    expect(S.spezifikationsMaengel(b).some((m) => /ohne Listenpunkt/.test(m))).toBe(false);
+    expect(K(b).map((e) => e.text)).toEqual(["a", "b"]);
+  });
+  test("nicht eingerückte Folgezeile direkt nach dem Punkt gehört dazu", () => {
+    expect(K("## Akzeptanzkriterien\n1. a\nFortsetzung\n2. b\n").map((e) => e.text)).toEqual(["a\nFortsetzung", "b"]);
+  });
+});
