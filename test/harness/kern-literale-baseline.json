@@ -5,7 +5,7 @@
   ".claude/agents/kubernia-planner.md": {"Repo":12,"Stardew":2},
   ".claude/agents/kubernia-umsetzer.md": {"Repo":12,"Stardew":1},
   ".claude/settings.json#/hooks": {"Repo":1},
-  ".claude/skills/kubernia/SKILL.md": {"Repo":18},
+  ".claude/skills/kubernia/SKILL.md": {"Repo":17},
   ".claude/skills/review-lenses/SKILL.md": {"Repo":17,"Stardew":1},
   ".githooks/pre-push": {"Repo":1},
   "scripts/check-context-size.mjs": {"Stardew":1},

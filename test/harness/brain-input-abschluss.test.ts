@@ -1,6 +1,6 @@
-/* Wächter für den Sitzungsabschluss (#1572 Z5, #1723): der kubernia-Skill (Schritt 5) und der Workflow-Skill rufen `brain-input`
- * IMMER auf; der Schritt entfällt nur, wenn dieser Aufruf mit unbekanntem Skill scheitert. Seit #1723 nennen AGENTS.md, beide Skills,
- * Workflow und Umsetzer auch das Feld `BEFUNDE:` und den Fortsetzungs-Pfad („mach mit <nr> weiter“), Workflow-Verhalten im letzten Block.
+/* Wächter für den Sitzungsabschluss (#1572 Z5, #1723): der kubernia-Skill (Schritt 5) ruft `brain-input`
+ * IMMER auf; der Schritt entfällt nur, wenn dieser Aufruf mit unbekanntem Skill scheitert. Seit #1723 nennen AGENTS.md, der Skill
+ * und der Umsetzer auch das Feld `BEFUNDE:` und den Fortsetzungs-Pfad („mach mit <nr> weiter“).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
  *
@@ -9,7 +9,6 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { workflowLauf } from "./workflow-lauf";
 
 const norm = (t: string) => t.replace(/\s+/g, " ");
 const lies = (pfad: string) => norm(readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8"));
@@ -49,15 +48,6 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "brain-input im Abschluss", muster: /Skill\(\{ skill: "brain-input" \}\)/ },
     { name: "Verweis auf die Regel", muster: /AGENTS\.md § Abschluss ohne offene Befunde/ },
   ],
-  ".claude/skills/kubernia-workflow/SKILL.md": [
-    { name: "BEFUNDE:-Feld", muster: /BEFUNDE:/ },
-    { name: "brain-input", muster: /Skill\(\{ skill: "brain-input" \}\)/ },
-    { name: "Verweis auf die Regel", muster: /AGENTS\.md § Abschluss ohne offene Befunde/ },
-  ],
-  ".claude/workflows/kubernia-ticket.js": [
-    { name: "BEFUNDE:-Zeile im Cleanup", muster: /BEFUNDE:/ },
-    { name: "Feld befunde im Endstand", muster: /befunde:/ },
-  ],
   ".claude/agents/kubernia-umsetzer.md": [
     { name: "Formatzeile mit Ziel-Ticket oder keine", muster: /^BEFUNDE: .*→ #<nr>.*keine/m },
     { name: "Eintragspflicht vor dem Bericht", muster: /Vor dem Bericht trägst du jeden Befund selbst ein/ },
@@ -76,7 +66,7 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
     expect(abschlussLuecken(pfad, rohLesen(pfad))).toEqual([]);
   });
 
-  test("Gegenbeispiel: Fassung ohne BEFUNDE: wird rot, in Skill, Workflow-Skill, Workflow und Umsetzer", () => {
+  test("Gegenbeispiel: Fassung ohne BEFUNDE: wird rot, in Skill und Umsetzer", () => {
     for (const pfad of Object.keys(PFLICHT).filter((p) => p !== "AGENTS.md")) {
       const ohne = rohLesen(pfad).replace(/BEFUNDE:/g, "BEFUND-");
       expect(abschlussLuecken(pfad, ohne).length, pfad).toBeGreaterThan(0);
@@ -92,55 +82,8 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/gemergter PR/g, "PR")).length).toBeGreaterThan(0);
   });
 
-  test("SSOT: „nie als Frage“ steht genau einmal in AGENTS.md und in keinem Skill-, Workflow- oder Agententext", () => {
+  test("SSOT: „nie als Frage“ steht genau einmal in AGENTS.md und in keinem Skill- oder Agententext", () => {
     expect(rohLesen("AGENTS.md").match(/nie als Frage/g)?.length).toBe(1);
     for (const pfad of Object.keys(PFLICHT).filter((p) => p !== "AGENTS.md")) expect(rohLesen(pfad), pfad).not.toMatch(/nie als Frage/);
-  });
-});
-
-describe("Workflow-Cleanup trägt Befunde ein und meldet BEFUNDE (#1723)", () => {
-  const hinweis = { lens: "architektur", verdikt: "hinweise", findings: [{ schwere: "hinweis", befund: "Altlast ohne Test", ort: "a.ts:3", begruendung: "b" }] };
-  const cleanupPrompt = (aufrufe: { label: string; prompt: string }[]) => aufrufe.find((a) => a.label === "cleanup:#42")?.prompt ?? "";
-
-  test("Feld befunde des Umsetzers landet im Endstand, ohne Feld ist es leer", async () => {
-    const mit = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { befunde: ["X → #1700"] } } });
-    expect(mit.endstand.befunde).toEqual(["X → #1700"]);
-    const ohne = await workflowLauf();
-    expect(ohne.endstand.befunde).toEqual([]);
-  });
-
-  test("ein liegen gelassener Lens-Hinweis steht im Cleanup-Prompt, samt Zeile BEFUNDE: und Prüfung am Diff", async () => {
-    const { aufrufe, endstand } = await workflowLauf({ runden: [{ architektur: hinweis }] });
-    const p = cleanupPrompt(aufrufe);
-    expect(p).toContain("Altlast ohne Test (a.ts:3)");
-    expect(p).toMatch(/am Diff zutreffen/);
-    expect(p).toMatch(/BEFUNDE: <je Befund/);
-    expect(endstand.hinweiseOffen).toBe(1);
-  });
-
-  test("Negativ: eine „Bekannte Grenze“ (auch klein geschrieben) landen nicht als Hinweis im Cleanup-Prompt", async () => {
-    const bericht = {
-      lens: "architektur",
-      verdikt: "hinweise",
-      findings: [
-        { schwere: "hinweis", befund: "Bekannte Grenze: Umweg X", ort: "g.mjs:1", begruendung: "b" },
-        { schwere: "hinweis", befund: "Altlast ohne Test", ort: "a.ts:3", begruendung: "Bekannte Grenze des Parsers" },
-        { schwere: "hinweis", befund: "Kleinschreibung", ort: "k.ts:1", begruendung: "ist eine bekannte grenze des Parsers" },
-        { schwere: "hinweis", befund: "Echter Hinweis", ort: "b.ts:2", begruendung: "b" },
-      ],
-    };
-    const { aufrufe, endstand } = await workflowLauf({ runden: [{ architektur: bericht }] });
-    const p = cleanupPrompt(aufrufe);
-    expect(p).toContain("Echter Hinweis (b.ts:2)");
-    expect(p).not.toContain("Umweg X");
-    expect(p).not.toContain("Altlast ohne Test");
-    expect(p).not.toContain("Kleinschreibung");
-    expect(endstand.hinweiseOffen).toBe(1);
-  });
-
-  test("Negativ: ohne Hinweise und ausserhalbScope kein Eintragsblock, nur die BEFUNDE:-Zeile", async () => {
-    const p = cleanupPrompt((await workflowLauf()).aufrufe);
-    expect(p).not.toMatch(/offene Hinweise gefunden/);
-    expect(p).toMatch(/BEFUNDE: <je Befund/);
   });
 });
