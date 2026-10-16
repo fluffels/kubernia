@@ -7,7 +7,7 @@
  *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)
  *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
  *
- * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall), legt ohne Assignee an und sortiert
+ * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
  * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
  * vertrauten Issues, wenn der neue Body vollständig ist und keine Zeile des alten verliert (`verloreneZeilen`); ein Fremdeingang
  * (Autor nicht vertraut oder Label `forum`) wird nie umgeschrieben. Der Body wird nie ausgegeben, nur Mängel und verlorene Zeilen.
@@ -20,7 +20,8 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
+import { boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
+import { zielRolle } from "./board-place.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -93,6 +94,16 @@ function anlegen(werte, io) {
   if (b.fehler) return aufrufFehler(b.fehler);
   const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body: b.body }); // neu angelegt: nie Bestand, nie ausgenommen
   if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
+  if (nach !== null) {
+    // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
+    let ankerFehler;
+    try {
+      ankerFehler = io.pruefeAnker({ nach, labels: werte.label });
+    } catch (e) {
+      return aufrufFehler(`Anker #${nach} nicht prüfbar, nichts angelegt (${fehlerText(e)})`);
+    }
+    if (ankerFehler) return aufrufFehler(`nichts angelegt: ${ankerFehler}`);
+  }
   let neu;
   try {
     neu = io.erzeuge({ titel: werte.titel, body: b.body, labels: werte.label });
@@ -138,7 +149,7 @@ function reparieren(werte, nrText, io) {
   return ergebnis(0, `repariert #${nr}\n`);
 }
 
-/** Ausführung mit injizierbarer I/O (`leseDatei`, `erzeuge`, `einsortiere`, `ladeIssue`, `bearbeite`, `owner`): `{ code, out, err }`. */
+/** Ausführung mit injizierbarer I/O (`leseDatei`, `erzeuge`, `pruefeAnker` (Fehlertext oder `null`), `einsortiere`, `ladeIssue`, `bearbeite`, `owner`): `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
   const [befehl, ...rest] = argv;
   const p = parseArgs(rest);
@@ -154,6 +165,16 @@ const echteIo = {
   leseDatei: (pfad) => readFileSync(pfad, "utf8"),
   erzeuge: ({ titel, body, labels }) =>
     ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
+  pruefeAnker: ({ nach, labels }) => {
+    const listen = { produkt: loadItems(boardFuerRolle("produkt")), factory: loadItems(boardFuerRolle("factory")) };
+    // Platzhalter-Nummer 0: das neue Issue gibt es noch nicht, seine Rolle kommt aus den Labels.
+    const ziel = zielRolle({ numbers: [0], anchor: nach, ...listen, labelsRest: { 0: labels } });
+    if (!ziel.fehler) return null;
+    const rolle = boardRolleFuer(labels);
+    const name = (r) => (r === "factory" ? "Factory" : "Produkt");
+    const anders = rolle === "factory" ? "produkt" : "factory";
+    return ziel.fehler.startsWith("Anker") ? `Anker #${nach} steht auf dem ${name(anders)}-Board; einen Anker vom ${name(rolle)}-Board wählen` : ziel.fehler;
+  },
   einsortiere: ({ nr, nach, notfall }) => {
     const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
     execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });

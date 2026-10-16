@@ -9,6 +9,7 @@ type Io = {
   owner: string;
   leseDatei: (p: string) => string;
   erzeuge: (a: { titel: string; body: string; labels: string[] }) => { number: number; html_url?: string };
+  pruefeAnker: (a: { nach: number; labels: string[] }) => string | null;
   einsortiere: (a: { nr: number; nach: number | null; notfall: string | null }) => void;
   ladeIssue: (nr: number) => Issue;
   bearbeite: (nr: number, body: string) => void;
@@ -31,6 +32,7 @@ function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
       aufrufe.erzeuge.push(a);
       return { number: 900, html_url: "https://x/900" };
     },
+    pruefeAnker: () => null,
     einsortiere: (a) => void aufrufe.einsortiere.push(a),
     ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, labels: [] }),
     bearbeite: (nr, body) => void aufrufe.bearbeite.push({ nr, body }),
@@ -143,6 +145,34 @@ describe("anlegen", () => {
     expect(r.err).toContain("#900");
     expect(r.err).toContain("node scripts/board-place.mjs --after 12 900");
     expect(r.err).toContain("Rate-Limit");
+  });
+  test("Anker auf dem falschen Board: Exit 2, nichts angelegt, Meldung mit Ursache und Ausweg", () => {
+    const geprueft: unknown[] = [];
+    const { io, aufrufe } = umgebung({ "b.md": GUT }, {
+      pruefeAnker: (a) => {
+        geprueft.push(a);
+        return "Anker #12 steht auf dem Produkt-Board; einen Anker vom Factory-Board wählen";
+      },
+    });
+    const r = S.fuehreAus(ANLEGEN, io);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("nichts angelegt");
+    expect(r.err).toContain("Anker #12 steht auf dem Produkt-Board; einen Anker vom Factory-Board wählen");
+    expect(geprueft).toEqual([{ nach: 12, labels: ["area:harness"] }]);
+    expect(aufrufe.erzeuge).toEqual([]);
+    expect(aufrufe.einsortiere).toEqual([]);
+  });
+  test("Ankerprüfung scheitert (gh): Exit 2, nichts angelegt; --notfall prüft keinen Anker", () => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT }, {
+      pruefeAnker: () => {
+        throw new Error("503");
+      },
+    });
+    const r = S.fuehreAus(ANLEGEN, io);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("503");
+    expect(aufrufe.erzeuge).toEqual([]);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--notfall", "rot-main"], io).code).toBe(0);
   });
   test("Anlegen scheitert: Exit 2, kein Einsortieren", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT }, {
