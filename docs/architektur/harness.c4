@@ -78,8 +78,8 @@ model {
     issues = container 'Issues' {
       description 'Tickets samt Assignee als Claim'
     }
-    board = container 'Board' {
-      description 'Die Position im Board ist die Reihenfolge'
+    board = container 'Boards' {
+      description 'Produkt-Board (Spiel) und Factory-Board (Label area:harness, Trennregel); die Position je Board ist die Reihenfolge'
     }
     pr = container 'Pull Request' {
       description 'Ein PR je Ticket, Auto-Merge nach grüner CI'

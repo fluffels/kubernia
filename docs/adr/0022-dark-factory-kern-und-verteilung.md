@@ -259,3 +259,12 @@ Teil 1 von F11 ist umgesetzt: das Factory-Board existiert, die Config führt bei
 - **Trennregel als pure Funktion:** `boardRolleFuer(labels)` ordnet genau das Label `area:harness` dem Factory-Board zu, alles andere dem Produkt-Board; ohne Label-Liste wirft sie. Eingesetzt wird sie erst in den Folgeteilen.
 - **Factory-Board:** privates User-Project „Factory Backlog“, Kopie des Produkt-Boards (gleiches Status-Feld mit Todo, In Progress, Done), ohne die Ansichten „Spiel“ und „Agentic Engineering“; das Produkt-Board heißt jetzt „Kubernia Backlog“. „Auto-add sub-issues“ kann nur die Maintainerin in der Oberfläche einschalten.
 - **Grenze:** `board-lib` lädt die Config weiter beim Import, eine kaputte v2-Config bricht damit auch die anderen Board-Werkzeuge (gewollt, laut statt still). Die Option-IDs des kopierten Status-Feldes können denen des Produkt-Boards gleichen; darum gibt es keine Eindeutigkeitsprüfung für sie.
+
+## Fortschreibung #1730 (2026-10-16): Umzug (F11, Teil 3)
+
+Teil 3 von F11 ist umgesetzt: `node scripts/board-place.mjs --umzug [--dry-run]` setzt jedes offene Item, das gegen die Trennregel auf dem falschen Board steht, ans Ende des richtigen Boards und entfernt es danach vom falschen (`deleteProjectV2Item`, das Issue bleibt). Entscheidungen:
+
+- **Reihenfolge der Mutationen:** erst aufnehmen und positionieren, dann entfernen; ein Item steht nie auf keinem Board. Bei einem Fehler bricht der Lauf ab (kein Wiederholen um Mutationen: ein Wiederholen könnte doppelt aufnehmen) und wird per Neustart fortgesetzt, weil der Plan aus dem Ist-Stand beider Boards entsteht (`umzugsPlan`, pur, idempotent).
+- **Sonderfälle:** ein Item auf beiden Boards wird nur entfernt; ein Item mit Status ungleich Todo wird gemeldet (Exit 1) statt umgezogen; geschlossene Items bleiben als Historie.
+- **Ansichten:** „Spiel“ und „Agentic Engineering“ des Produkt-Boards sind gelöscht (freigegeben im Pre-Flight); beide Boards tragen nur „View 1“.
+- **Grenze:** die REST-Liste hinkt gelöschten Items hinterher; vor einem zweiten Live-Lauf `--umzug --dry-run` wiederholen, bis er „nichts zu tun“ meldet.
