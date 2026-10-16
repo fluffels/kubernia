@@ -11,6 +11,9 @@
  * danach `HEAD` mit seinen zwei Eltern.
  *
  * Exit 0 = nichts verloren, 1 = verlorene Tests (Liste), 2 = kein Merge oder git-Fehler.
+ * Zusätzlich der Hinweis „Wächter-Lauf nötig“, wenn BEIDE Seiten Wächter-relevante Dateien berühren (`WAECHTER_PFAD`: `.claude/`, `.github/`, `docs/`,
+ * `test/harness/`, `README.md`, jede `AGENTS.md`), auch verschiedene (Kopplung über zwei Dateien); die Liste nennt höchstens 5 Dateien. Grenze: der Hinweis
+ * sagt nur, dass der Lauf nötig ist, er führt ihn nicht aus; Wächter über Pfade außerhalb der Liste (z.B. `src/`-Texte) erkennt er nicht.
  * Bewusste Grenzen: nur Titel, die als erstes Argument ein Zeichenketten-Literal tragen (`test.each([...])("%s", …)` mit Vorlage zählt als ein Titel, die
  * Tabelle nicht); ein umbenannter Test gilt als bewusst entfernt, wenn der alte Titel in der Fassung der entfernenden Seite fehlt; Dateien außerhalb von `test/` zählen nicht.
  * Pur bis auf das CLI; der Kern ist getestet.
@@ -30,13 +33,24 @@ export function testTitel(text) {
 
 const ohne = (a, b) => new Set([...a].filter((x) => !b.has(x)));
 
-// Pfade, deren Texte Wächter-Tests in `test/harness/` prüfen (#1693): `.claude/`, `docs/`, `AGENTS.md` (Grenze am Pfadsegment: nicht `docs-alt/`, nicht `AGENTS.mdx`).
-const WAECHTER_PFAD = /^(?:\.claude\/|docs\/|AGENTS\.md$)/;
+/** Pfade, deren Texte Wächter-Tests in `test/harness/` prüfen: `.claude/`, `.github/`, `docs/`, `test/harness/`, `README.md` und jede `AGENTS.md` (auch modul-lokal). Grenze am Pfadsegment (nicht `docs-alt/`, nicht `AGENTS.mdx`). */
+export const WAECHTER_PFAD = /^(?:\.claude\/|\.github\/|docs\/|test\/harness\/|README\.md$)|(?:^|\/)AGENTS\.md$/;
 
-/** Dateien unter `.claude/`, `docs/` und `AGENTS.md`, die BEIDE Seiten eines Merges berühren (sortiert). Pur. */
-export function gemeinsameWaechterDateien(unsere, ihre) {
-  const i = new Set(ihre);
-  return [...new Set(unsere)].filter((p) => WAECHTER_PFAD.test(p) && i.has(p)).sort();
+/**
+ * Wächter-relevante Dateien beider Seiten eines Merges (vereinigt, sortiert), wenn BEIDE Seiten mindestens eine berühren, sonst leer. Ein Wächter
+ * kann an der Kombination beider Seiten rot sein, auch wenn sie verschiedene Dateien ändern (Kopplung über zwei Dateien). Pur.
+ */
+export function waechterDateien(unsere, ihre) {
+  const u = unsere.filter((p) => WAECHTER_PFAD.test(p));
+  const i = ihre.filter((p) => WAECHTER_PFAD.test(p));
+  return u.length && i.length ? [...new Set([...u, ...i])].sort() : [];
+}
+
+/** Hinweiszeile (mit führendem Zeilenumbruch) für die Wächter-Dateien; ab 6 Dateien auf 5 gekürzt; ohne Dateien leer. Pur. */
+export function waechterHinweis(dateien) {
+  if (!dateien.length) return "";
+  const rest = dateien.length > 5 ? ` und ${dateien.length - 5} weitere` : "";
+  return `\nWächter-Lauf nötig: npx vitest run test/harness (beide Seiten berühren Wächter-Dateien: ${dateien.slice(0, 5).join(", ")}${rest}).`;
 }
 
 /**
@@ -98,10 +112,7 @@ export function pruefeMerge({ git, lies }) {
   const ergebnis = imMerge ? Object.fromEntries(dateien.map((p) => [p, lies(p)])) : aus("HEAD");
   const verloren = verloreneTests({ basis: aus(basisRev), unsere: aus(unsereRev), ihre: aus(ihreRev), ergebnis });
   const alle = (a, b) => (versuch(["diff", "--name-only", a, b]) ?? "").split("\n").filter(Boolean);
-  const gemeinsam = gemeinsameWaechterDateien(alle(basisRev, unsereRev), alle(basisRev, ihreRev));
-  const hinweis = gemeinsam.length
-    ? `\nWächter-Lauf nötig: npx vitest run test/harness (beide Seiten berühren ${gemeinsam.slice(0, 5).join(", ")}${gemeinsam.length > 5 ? ` und ${gemeinsam.length - 5} weitere` : ""}).`
-    : "";
+  const hinweis = waechterHinweis(waechterDateien(alle(basisRev, unsereRev), alle(basisRev, ihreRev)));
   return { code: verloren.length ? 1 : 0, text: formatiere(verloren) + hinweis };
 }
 
