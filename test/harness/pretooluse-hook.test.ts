@@ -334,11 +334,11 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234 (statt sha)`)), null);
   });
 
-  test("R3: `erwarteter HEAD:` ohne Hex-Hash (7 bis 40 Zeichen) wird verweigert, der Workflow-Fallback nicht", () => {
-    for (const head of ["abc", "xyz1234", "HEAD", "a".repeat(41)]) {
+  test("R3: `erwarteter HEAD:` ohne Hex-Hash (7 bis 40 Zeichen) wird verweigert (auch ein Fließtext statt Hash)", () => {
+    for (const head of ["abc", "xyz1234", "HEAD", "a".repeat(41), "der HEAD des Feature-Worktrees (git rev-parse HEAD)"]) {
       assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`))?.hookSpecificOutput.permissionDecision, "deny", head);
     }
-    for (const head of ["abc1234", "ABCDEF1234", "a".repeat(40), "der HEAD des Feature-Worktrees (git rev-parse HEAD)"]) {
+    for (const head of ["abc1234", "ABCDEF1234", "a".repeat(40)]) {
       assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`)), null, head);
     }
   });
