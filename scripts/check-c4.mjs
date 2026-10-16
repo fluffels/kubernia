@@ -7,7 +7,9 @@
  *   2. `likec4 format --check` (Layout-Drift; Fix: `npm run c4:format`),
  *   3. den Abgleich des Modells gegen scripts/layers.cjs und src/:
  *      Art `schicht`/`bibliothek` ↔ Labels von SCHICHT_MODELL, Beziehungen zwischen ihnen ↔ sollKanten (beide Richtungen),
- *      Art `modul` ↔ Top-Level von src/ unter der Schicht, die schichtVon liefert, View-Deckel.
+ *      Art `modul` ↔ Top-Level von src/ unter der Schicht, die schichtVon liefert, View-Deckel,
+ *      die Harness-Arten (agent, skill, workflow, hook, githook, gate, ciworkflow, mcp) ↔ ihre Quellen (scripts/check-c4-harness.mjs),
+ *      die Pflicht-Views (architektur.pflichtViews) und keine freistehende Zahl in Labels (SSOT-Konstanten gehören den generierten Diagrammen).
  * Gebunden wird über Art + Titel. Eine Art, die weder gebunden ist noch in `erzaehlung` steht, ist rot (fail-closed).
  * Pfade und Bindungen stehen im Block `architektur` von scripts/docs-gen/config.json (keine zweite Pfadliste).
  * Die LikeC4-Model-API steckt in genau einem Adapter (`ladeC4Modell`).
@@ -19,10 +21,12 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fenceMaske, leseConfigObjekt } from "./docs-gen/markdown.mjs";
 import { ladeModell, schichtVon, sollKanten } from "./docs-gen/schichten.mjs";
+import { HARNESS_BINDER, harnessQuellen, ortFuer, pruefeHarness } from "./check-c4-harness.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG = "scripts/docs-gen/config.json";
-const BINDER = ["schicht", "extern", "modul", "port", "adapter"];
+const SPIEL_BINDER = ["schicht", "extern", "modul", "port", "adapter"];
+const BINDER = [...SPIEL_BINDER, ...HARNESS_BINDER];
 
 /** Top-Level von `quelle`: Ordner plus `.ts`-Dateien (ohne `.d.ts`); ein Barrel `x.ts` neben `x/` ist dasselbe Modul. */
 export function srcModule(rootDir, quelle) {
@@ -49,7 +53,7 @@ const meld = (datei, zeile, art, element, text, fix) => ({ datei, zeile, art, el
 
 function pruefeConfig(cfg) {
   const f = (text, fix) => meld(CONFIG, 1, "architektur", "config", text, fix);
-  if (!cfg || typeof cfg !== "object") return [f(`Block "architektur" fehlt`, `Block "architektur" mit workspace, quelle, bindungen, erzaehlung und maxKnotenJeView in ${CONFIG} anlegen`)];
+  if (!cfg || typeof cfg !== "object") return [f(`Block "architektur" fehlt`, `Block "architektur" mit workspace, quelle, bindungen, erzaehlung, pflichtViews und maxKnotenJeView in ${CONFIG} anlegen`)];
   const probleme = [];
   const bindungen = cfg.bindungen ?? {};
   const erz = Array.isArray(cfg.erzaehlung) ? cfg.erzaehlung : [];
@@ -60,6 +64,9 @@ function pruefeConfig(cfg) {
   if (!cfg.workspace || !cfg.quelle) probleme.push(f(`workspace oder quelle fehlt`, `beide Pfade in "architektur" eintragen`));
   if (!cfg.hexagon || typeof cfg.hexagon.datei !== "string" || typeof cfg.hexagon.abschnitt !== "string") {
     probleme.push(f(`Block "hexagon" (datei, abschnitt) fehlt`, `"hexagon": { "datei": "docs/arc42-architektur.md", "abschnitt": "Hexagonale Sicht (Ports & Adapters)" } in "architektur" eintragen`));
+  }
+  if (!Array.isArray(cfg.pflichtViews) || cfg.pflichtViews.length === 0 || cfg.pflichtViews.some((v) => typeof v !== "string" || !v)) {
+    probleme.push(f(`pflichtViews ist keine nicht-leere Liste von View-Namen`, `"pflichtViews": ["ticket-lauf", …] in "architektur" eintragen (mindestens ticket-lauf)`));
   }
   if (!Number.isInteger(cfg.maxKnotenJeView) || cfg.maxKnotenJeView < 1) probleme.push(f(`maxKnotenJeView ist keine positive Zahl`, `eine Zahl eintragen (nur senken)`));
   return probleme;
@@ -82,18 +89,18 @@ function pruefeArten(c4, cfg) {
     .map((e) => meld(e.datei, e.zeile, e.kind, e.title, `Art "${e.kind}" ist weder gebunden noch Erzählung`, `Art in ${CONFIG} unter architektur.bindungen (mit Quelle) oder architektur.erzaehlung eintragen oder das Element umbenennen`));
 }
 
-function pruefeLabels(c4, quelle, binder, binderVon, ordner) {
+function pruefeLabels(c4, quelle, binder, binderVon, o) {
   const ms = [];
   const els = c4.elemente.filter((e) => binderVon(e.kind) === binder);
   for (const e of els) {
     if (!quelle.has(e.title)) {
-      ms.push(meld(e.datei, e.zeile, e.kind, e.title, `keine Quelle in scripts/layers.cjs (bekannt: ${[...quelle.keys()].join(", ")})`, `Titel auf ein Label aus scripts/layers.cjs ändern oder das Element entfernen`));
+      ms.push(meld(e.datei, e.zeile, e.kind, e.title, `keine Quelle in ${o.sq} (bekannt: ${[...quelle.keys()].join(", ")})`, `Titel auf ein Label aus ${o.sq} ändern oder das Element entfernen`));
     }
   }
   for (const label of quelle.keys()) {
     if (!els.some((e) => e.title === label)) {
       const art = binder === "extern" ? "bibliothek" : "schicht";
-      ms.push(meld(ordner, 1, art, label, `fehlt im Modell, steht aber in scripts/layers.cjs`, `Element ${art} '${label}' in docs/architektur/spiel.c4 anlegen`));
+      ms.push(meld(o.ordner, 1, art, label, `fehlt im Modell, steht aber in ${o.sq}`, `Element ${art} '${label}' in ${o.ordner} anlegen`));
     }
   }
   return ms;
@@ -113,7 +120,7 @@ function pruefeDoppelte(c4, binderVon) {
   return ms;
 }
 
-function pruefeKanten(c4, modell, byId, binderVon, labelId, ordner) {
+function pruefeKanten(c4, modell, byId, binderVon, labelId, o) {
   const ms = [];
   const soll = new Set(sollKanten(modell).map(([v, n]) => `${v}>${n}`));
   const ist = new Set();
@@ -125,7 +132,7 @@ function pruefeKanten(c4, modell, byId, binderVon, labelId, ordner) {
     const bv = binderVon(von.kind);
     const bn = binderVon(nach.kind);
     if (bv === "modul" || bn === "modul") {
-      ms.push(meld(b.datei, b.zeile, "beziehung", `${von.title} → ${nach.title}`, `Beziehung mit einem Modul-Ende ist nicht aus einer SSOT ableitbar`, `Beziehung entfernen (Modul-Abhängigkeiten liefert npm run check:arch, Schicht-Richtungen scripts/layers.cjs)`));
+      ms.push(meld(b.datei, b.zeile, "beziehung", `${von.title} → ${nach.title}`, `Beziehung mit einem Modul-Ende ist nicht aus einer SSOT ableitbar`, `Beziehung entfernen (Modul-Abhängigkeiten liefert npm run check:arch, Schicht-Richtungen ${o.sq})`));
       continue;
     }
     if (!["schicht", "extern"].includes(bv) || !["schicht", "extern"].includes(bn)) continue;
@@ -134,18 +141,18 @@ function pruefeKanten(c4, modell, byId, binderVon, labelId, ordner) {
     if (!vid || !nid) continue;
     ist.add(`${vid}>${nid}`);
     if (!soll.has(`${vid}>${nid}`)) {
-      ms.push(meld(b.datei, b.zeile, "beziehung", `${von.title} → ${nach.title}`, `Schicht-Richtung ${name(vid)} → ${name(nid)} ist verboten (nicht in SCHICHT_MODELL.darf)`, `Beziehung entfernen oder die Richtung bewusst in scripts/layers.cjs erlauben`));
+      ms.push(meld(b.datei, b.zeile, "beziehung", `${von.title} → ${nach.title}`, `Schicht-Richtung ${name(vid)} → ${name(nid)} ist verboten (nicht in SCHICHT_MODELL.darf)`, `Beziehung entfernen oder die Richtung bewusst in ${o.sq} erlauben`));
     }
   }
   for (const [v, n] of sollKanten(modell)) {
     if (ist.has(`${v}>${n}`)) continue;
     const ve = c4.elemente.find((e) => binderVon(e.kind) && labelId(binderVon(e.kind), e.title) === v && ["schicht", "extern"].includes(binderVon(e.kind)));
-    ms.push(meld(ve?.datei ?? ordner, ve?.zeile ?? 1, "beziehung", `${name(v)} → ${name(n)}`, `erlaubte Schicht-Richtung fehlt im Modell`, `Beziehung '${name(v)} → ${name(n)}' im Modell ergänzen`));
+    ms.push(meld(ve?.datei ?? o.ordner, ve?.zeile ?? 1, "beziehung", `${name(v)} → ${name(n)}`, `erlaubte Schicht-Richtung fehlt im Modell`, `Beziehung '${name(v)} → ${name(n)}' im Modell ergänzen`));
   }
   return ms;
 }
 
-function pruefeModule(c4, modell, module, byId, binderVon, ordner) {
+function pruefeModule(c4, modell, module, byId, binderVon, o) {
   const ms = [];
   const label = new Map(modell.schichten.map((s) => [s.id, s.label]));
   const els = c4.elemente.filter((e) => binderVon(e.kind) === "modul");
@@ -153,20 +160,20 @@ function pruefeModule(c4, modell, module, byId, binderVon, ordner) {
   for (const m of module) {
     const ids = new Set(m.pfade.map((p) => schichtVon(p, modell)));
     if (ids.size > 1) {
-      ms.push(meld(ordner, 1, "modul", m.name, `${m.pfade.join(" und ")} liegen in verschiedenen Schichten (${[...ids].join(", ")})`, `Datei und Ordner in dieselbe Schicht legen oder die wurzeln in scripts/layers.cjs angleichen`));
+      ms.push(meld(o.ordner, 1, "modul", m.name, `${m.pfade.join(" und ")} liegen in verschiedenen Schichten (${[...ids].join(", ")})`, `Datei und Ordner in dieselbe Schicht legen oder die wurzeln in ${o.sq} angleichen`));
       continue;
     }
     const soll = label.get([...ids][0]);
     const vorhanden = els.filter((e) => e.title === m.name);
     if (vorhanden.length === 0) {
       const s = schichtEl(soll);
-      ms.push(meld(s?.datei ?? ordner, s?.zeile ?? 1, "modul", m.name, `fehlt im Modell, steht aber als ${m.pfade.join(", ")} in src/`, `Element modul '${m.name}' unter der Schicht '${soll}' in docs/architektur/spiel.c4 anlegen`));
+      ms.push(meld(s?.datei ?? o.ordner, s?.zeile ?? 1, "modul", m.name, `fehlt im Modell, steht aber als ${m.pfade.join(", ")} in src/`, `Element modul '${m.name}' unter der Schicht '${soll}' in ${s?.datei ?? o.ordner} anlegen`));
       continue;
     }
     for (const e of vorhanden) {
       const eltern = byId.get(e.parentId);
       if (!eltern || binderVon(eltern.kind) !== "schicht" || eltern.title !== soll) {
-        ms.push(meld(e.datei, e.zeile, "modul", m.name, `liegt unter ${eltern ? `„${eltern.title}“` : "keinem Element"}, gehört laut layers.cjs aber unter die Schicht „${soll}“`, `Element in die Schicht '${soll}' verschieben`));
+        ms.push(meld(e.datei, e.zeile, "modul", m.name, `liegt unter ${eltern ? `„${eltern.title}“` : "keinem Element"}, gehört laut ${o.sq} aber unter die Schicht „${soll}“`, `Element in die Schicht '${soll}' verschieben`));
       }
     }
   }
@@ -234,7 +241,7 @@ const modulVon = (pfad, quelle) => {
 };
 
 /** Eine Tabellenzeile gegen Schicht-Modell: Schicht-Spalte ↔ schichtVon, genau ein Top-Level-Modul. Liefert { modul, schichtId } oder null (Meldungen in `ms`). */
-function pruefeHexZeile(z, art, { modell, quelle, datei, ms }) {
+function pruefeHexZeile(z, art, { modell, quelle, datei, ms, sq }) {
   const m = (text, fix) => ms.push(meld(datei, z.zeile, art, z.name, text, fix));
   if (z.ort.length === 0) return m(`Spalte Ort nennt keinen Backtick-Pfad`, `den Ort als \`src/…\` eintragen`), null;
   const module = new Set(z.ort.map((p) => modulVon(p, quelle)));
@@ -245,7 +252,7 @@ function pruefeHexZeile(z, art, { modell, quelle, datei, ms }) {
   const schicht = modell.schichten.find((s) => s.id === id);
   if (ids.size > 1 || !schicht) return m(`Ort liegt in verschiedenen oder unbekannten Schichten`, `Pfade einer Schicht angeben`), null;
   if (schicht.label !== z.schicht) {
-    return m(`Schicht-Spalte „${z.schicht}“ widerspricht scripts/layers.cjs (dort „${schicht.label}“)`, `Schicht-Spalte auf „${schicht.label}“ ändern`), null;
+    return m(`Schicht-Spalte „${z.schicht}“ widerspricht ${sq} (dort „${schicht.label}“)`, `Schicht-Spalte auf „${schicht.label}“ ändern`), null;
   }
   return { modul: [...module][0], schichtId: id };
 }
@@ -280,7 +287,7 @@ function pruefeHexElemente(hex, c4, info, ctx) {
     for (const [name, i] of info[art]) {
       const e = els.find((x) => x.title === name);
       if (!e) {
-        ms.push(meld(datei, i.z.zeile, art, name, `fehlt im Modell (docs/architektur/spiel.c4)`, `Element ${art} '${name}' unter dem Modul '${i.modul}' anlegen`));
+        ms.push(meld(datei, i.z.zeile, art, name, `fehlt im Modell`, `Element ${art} '${name}' unter dem Modul '${i.modul}' in ${ctx.ordner} anlegen`));
         continue;
       }
       const eltern = byId.get(e.parentId);
@@ -346,7 +353,7 @@ function pruefeHexKanten(hex, c4, info, ctx) {
  * Die hexagonale Sicht (#1567, ADR 0024): arc42-Tabellen ↔ Dateisystem, Schicht-Modell und C4-Modell. Reine Funktion:
  * `hexagon` = { text (arc42 oder null), existiert(pfad) }.
  */
-export function pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon }) {
+export function pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon, o }) {
   const datei = cfg.hexagon.datei;
   const ms = [];
   const hex = hexagon.text == null ? null : leseHexagon(hexagon.text, cfg.hexagon.abschnitt);
@@ -359,27 +366,62 @@ export function pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon }) {
   for (const p of hex.pfade) {
     if (!hexagon.existiert(p.pfad)) ms.push(meld(datei, p.zeile, "hexagon", p.pfad, `Pfad existiert nicht`, `Pfad korrigieren oder die Zeile entfernen`));
   }
-  const ctx = { ms, datei, byId, binderVon, modell, quelle: cfg.quelle };
+  const ctx = { ms, datei, byId, binderVon, modell, quelle: cfg.quelle, sq: o.sq, ordner: o.ordner };
   const info = pruefeHexTabellen(hex, ctx);
   pruefeHexElemente(hex, c4, info, ctx);
   pruefeHexKanten(hex, c4, info, ctx);
   return ms;
 }
 
-/** Der Abgleich. Reine Funktion: Adapter-Output, Modell (layers.cjs), src-Module, Hexagon-Eingang und Config rein, Meldungen raus. */
-export function pruefeArchitektur({ modell, module, c4, cfg, hexagon }) {
+const ZAHL = /(^|[^\p{L}\d])\d/u;
+
+/**
+ * Keine Zahl aus SSOT-Konstanten in Texten (ADR 0020): eine freistehende Zahl (Ziffer, vor der kein Buchstabe oder keine Ziffer steht)
+ * in Beschreibung, Technik, Beziehungs- und Schritt-Labels, View-Titeln und Titeln nicht gebundener Arten ist rot. Der Titel einer
+ * gebundenen Art steht in der SSOT und ist ausgenommen (`check:c4`). Zahlwörter (`drei`) erkennt die Regel nicht (Review-Sache).
+ */
+function pruefeZiffern(c4, binderVon) {
+  const ms = [];
+  const melde = (datei, zeile, art, element, feld, text) => {
+    if (typeof text === "string" && ZAHL.test(text)) {
+      ms.push(meld(datei, zeile, art, element, `${feld} „${text}“ enthält eine freistehende Zahl (Zahlen aus SSOT-Konstanten gehören den generierten Diagrammen)`, `Zahl aus dem Text nehmen oder die Aussage ohne Zahl formulieren`));
+    }
+  };
+  for (const e of c4.elemente) {
+    if (!binderVon(e.kind)) melde(e.datei, e.zeile, e.kind, e.title, "Titel", e.title);
+    melde(e.datei, e.zeile, e.kind, e.title, "Beschreibung", e.beschreibung);
+    melde(e.datei, e.zeile, e.kind, e.title, "Technik", e.technik);
+  }
+  for (const b of c4.beziehungen) {
+    melde(b.datei, b.zeile, "beziehung", `${b.von} → ${b.nach}`, "Titel", b.titel);
+    melde(b.datei, b.zeile, "beziehung", `${b.von} → ${b.nach}`, "Beschreibung", b.beschreibung);
+  }
+  for (const v of c4.views) {
+    melde(v.datei, v.zeile, "view", v.id, "Titel", v.titel);
+    for (const k of v.kanten ?? []) melde(v.datei, v.zeile, "view", v.id, "Schritt-Label", k.label);
+  }
+  return ms;
+}
+
+/** Der Abgleich. Reine Funktion: Adapter-Output, Modell (layers.cjs), src-Module, Hexagon-Eingang, Harness-Quellen und Config rein, Meldungen raus. `schichtQuelle` ist der Pfad der Schicht-Quelle (nur für Meldungstexte). */
+export function pruefeArchitektur({ modell, module, c4, cfg, hexagon, harness = null, schichtQuelle = "der Schicht-Quelle" }) {
   const probleme = pruefeConfig(cfg);
   if (probleme.length) return sortiere(probleme);
-  const ordner = c4.elemente[0]?.datei ?? cfg.workspace;
   const binderVon = (kind) => cfg.bindungen[kind] ?? null;
+  const o = { ordner: ortFuer(c4, binderVon, SPIEL_BINDER, cfg.workspace), sq: schichtQuelle };
   const q = quellen(modell);
   const byId = new Map(c4.elemente.map((e) => [e.id, e]));
   const labelId = (binder, titel) => q[binder]?.get(titel) ?? null;
   const ms = [...pruefeArten(c4, cfg), ...pruefeDoppelte(c4, binderVon)];
-  for (const binder of ["schicht", "extern"]) ms.push(...pruefeLabels(c4, q[binder], binder, binderVon, ordner));
-  ms.push(...pruefeKanten(c4, modell, byId, binderVon, labelId, ordner));
-  ms.push(...pruefeModule(c4, modell, module, byId, binderVon, ordner));
-  ms.push(...pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon }));
+  for (const binder of ["schicht", "extern"]) ms.push(...pruefeLabels(c4, q[binder], binder, binderVon, o));
+  ms.push(...pruefeKanten(c4, modell, byId, binderVon, labelId, o));
+  ms.push(...pruefeModule(c4, modell, module, byId, binderVon, o));
+  ms.push(...pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon, o }));
+  ms.push(...pruefeHarness({ c4, cfg, harness, binderVon }));
+  ms.push(...pruefeZiffern(c4, binderVon));
+  for (const id of cfg.pflichtViews) {
+    if (!c4.views.some((v) => v.id === id)) ms.push(meld(CONFIG, 1, "view", id, `Pflicht-View fehlt im Modell`, `View '${id}' unter ${cfg.workspace} anlegen oder bewusst aus architektur.pflichtViews nehmen`));
+  }
   for (const v of c4.views) {
     for (const k of v.kanten ?? []) {
       const von = byId.get(k.von);
@@ -414,9 +456,9 @@ export async function ladeC4Modell(rootDir, workspace) {
       throw new Error(`LikeC4-Modell hat Fehler:\n${fehler.join("\n")}`);
     }
     const model = await likec4.computedModel();
-    const elemente = [...model.elements()].map((e) => ({ id: e.id, kind: e.kind, title: e.title, parentId: e.parent?.id ?? null, tags: [...e.tags].map(String), ...ort({ element: e.id }) }));
-    const beziehungen = [...model.relationships()].map((r) => ({ von: r.source.id, nach: r.target.id, ...ort({ relation: r.id }) }));
-    const views = [...model.views()].map((v) => ({ id: v.id, titel: v.title ?? v.id, knoten: [...v.nodes()].length, kanten: [...v.edges()].map((e) => ({ von: e.source.id, nach: e.target.id })), ...ort({ view: v.id }) }));
+    const elemente = [...model.elements()].map((e) => ({ id: e.id, kind: e.kind, title: e.title, parentId: e.parent?.id ?? null, tags: [...e.tags].map(String), beschreibung: e.description?.text ?? null, technik: e.technology ?? null, ...ort({ element: e.id }) }));
+    const beziehungen = [...model.relationships()].map((r) => ({ von: r.source.id, nach: r.target.id, titel: r.title ?? null, beschreibung: r.description?.text ?? null, ...ort({ relation: r.id }) }));
+    const views = [...model.views()].map((v) => ({ id: v.id, titel: v.title ?? v.id, knoten: [...v.nodes()].length, kanten: [...v.edges()].map((e) => ({ von: e.source.id, nach: e.target.id, ...(v._type === "dynamic" ? { label: e.label ?? null } : {}) })), ...ort({ view: v.id }) }));
     return { elemente, beziehungen, views };
   } finally {
     await likec4.dispose();
@@ -468,14 +510,16 @@ export async function cli(argv, { rootDir = ROOT, out = console.log, err = conso
     if (`${cfg.quelle}/` !== modell.quellwurzel) throw new Error(`architektur.quelle „${cfg.quelle}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ des Schicht-Modells`);
     const hexDatei = join(rootDir, cfg.hexagon.datei);
     const hexagon = { text: existsSync(hexDatei) ? readFileSync(hexDatei, "utf8") : null, existiert: (p) => existsSync(join(rootDir, p)) };
-    const ms = pruefeArchitektur({ modell, module: srcModule(rootDir, cfg.quelle), c4: await ladeC4Modell(rootDir, ws), cfg, hexagon });
+    const binder = HARNESS_BINDER.filter((b) => Object.values(cfg.bindungen).includes(b));
+    const harness = binder.length ? harnessQuellen(rootDir, config, binder) : null;
+    const ms = pruefeArchitektur({ modell, module: srcModule(rootDir, cfg.quelle), c4: await ladeC4Modell(rootDir, ws), cfg, hexagon, harness, schichtQuelle: config.schichten.layers });
     for (const m of ms) err(formatiere(m));
     if (ms.length) rot = true;
   } catch (e) {
     err(`✖ ${ws}:1 abgleich „check:c4“: ${e instanceof Error ? e.message : e}. Fix: Ursache beheben`);
     rot = true;
   }
-  if (!rot) out(`check:c4: Architekturmodell stimmt mit scripts/layers.cjs und src/ überein.`);
+  if (!rot) out(`check:c4: Architekturmodell stimmt mit ${config.schichten.layers}, src/ und den Harness-Quellen überein.`);
   return rot ? 1 : 0;
 }
 

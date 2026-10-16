@@ -1,5 +1,5 @@
 ﻿import type { Sim } from "../../sim";
-import { pick, rnd, STS_NAMES, SC_NAMES, PVC_NAMES, SNAP_NAMES, ensureStorageClass, ensurePvc, ensureStatefulSet, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML } from "./shared";
+import { pick, rnd, STS_NAMES, SC_NAMES, PVC_NAMES, SNAP_NAMES, ensureStorageClass, ensurePvc, ensureStatefulSet, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML, escapeRegExp } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const STORAGE_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
@@ -20,7 +20,7 @@ export const STORAGE_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const name = ensureStatefulSet(sim);
     const sts = sim.statefulSets.find(s => s.name === name)!;
     const pod = sts.pods[0].name;
-    return { text: "Beweis der stabilen Identität: versenke den Pod <code>" + pod + "</code> – und beobachte, dass er mit GLEICHEM Namen zurückkommt.", accept: [new RegExp("^kubectl\\s+delete\\s+pods?\\s+" + pod.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete pod " + pod, hint: "kubectl delete pod &lt;name&gt; – nimm " + pod + ".", why: "Anders als beim Deployment (Ersatz-Pod mit neuem Zufallsnamen und leerem Volume) kommt ein StatefulSet-Pod mit EXAKT demselben Namen (…-0) und demselben PVC zurück – seine Daten überleben. Genau das ist der Sinn stabiler Identität. Muster: kubectl delete pod &lt;name&gt;." };
+    return { text: "Beweis der stabilen Identität: versenke den Pod <code>" + pod + "</code> – und beobachte, dass er mit GLEICHEM Namen zurückkommt.", accept: [new RegExp("^kubectl\\s+delete\\s+pods?\\s+" + escapeRegExp(pod) + "$")], solution: "kubectl delete pod " + pod, hint: "kubectl delete pod &lt;name&gt; – nimm " + pod + ".", why: "Anders als beim Deployment (Ersatz-Pod mit neuem Zufallsnamen und leerem Volume) kommt ein StatefulSet-Pod mit EXAKT demselben Namen (…-0) und demselben PVC zurück – seine Daten überleben. Genau das ist der Sinn stabiler Identität. Muster: kubectl delete pod &lt;name&gt;." };
   },
   "sc-apply": sim => {
     let name = pick(SC_NAMES);

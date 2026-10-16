@@ -101,7 +101,7 @@ export function peerAllowsTs7(range) {
 /** Holt Version + typescript-Peer des neuesten estree-Pakets aus der npm-Registry.
  *  Wirft bei Netz-/Parse-Fehlern (der Aufrufer degradiert dann graceful). */
 async function fetchLatestPeer() {
-  const url = `https://registry.npmjs.org/${ESTREE_PKG.replace("/", "%2F")}/latest`;
+  const url = `https://registry.npmjs.org/${ESTREE_PKG.replaceAll("/", "%2F")}/latest`;
   const res = await fetch(url, { headers: { accept: "application/json" } });
   if (!res.ok) throw new Error(`Registry HTTP ${res.status}`);
   const manifest = await res.json();

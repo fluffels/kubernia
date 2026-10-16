@@ -1,5 +1,5 @@
 import type { Sim } from "../../sim";
-import { pick, rnd, ensureDeployment, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML } from "./shared";
+import { pick, rnd, ensureDeployment, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, escapeRegExp } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const OBSERVABILITY_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
@@ -31,7 +31,7 @@ export const OBSERVABILITY_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     sim.mergeScenario({ deployments: [{ name, image: "nginx", replicas: 1, broken: { type: "crashloop", needsSecret: "config" } }] });
     const dep = sim.deployments.find(d => d.name === name)!;
     const pod = dep.pods[0].name;
-    return { text: "Der Dienst <code>" + name + "</code> ist im <b>CrashLoop</b>. Lies den Absturz-Log des Vorgängers: <code>kubectl logs --previous &lt;pod&gt;</code>.", accept: [new RegExp("^kubectl\\s+logs\\s+(?:--previous|-p)\\s+" + pod.replace(/[-]/g, "\\-") + "$"), new RegExp("^kubectl\\s+logs\\s+" + pod.replace(/[-]/g, "\\-") + "\\s+(?:--previous|-p)$")], solution: "kubectl logs --previous " + pod, hint: "kubectl logs --previous &lt;pod&gt; – oder -p als Kurzform.", why: "--previous (Kurzform -p) zeigt die Logs des zuletzt abgestürzten Containers – genau das, was er kurz vor dem Crash ausgegeben hat. Ohne das Flag siehst du nur den frisch gestarteten (oft noch leeren) Container." };
+    return { text: "Der Dienst <code>" + name + "</code> ist im <b>CrashLoop</b>. Lies den Absturz-Log des Vorgängers: <code>kubectl logs --previous &lt;pod&gt;</code>.", accept: [new RegExp("^kubectl\\s+logs\\s+(?:--previous|-p)\\s+" + escapeRegExp(pod) + "$"), new RegExp("^kubectl\\s+logs\\s+" + escapeRegExp(pod) + "\\s+(?:--previous|-p)$")], solution: "kubectl logs --previous " + pod, hint: "kubectl logs --previous &lt;pod&gt; – oder -p als Kurzform.", why: "--previous (Kurzform -p) zeigt die Logs des zuletzt abgestürzten Containers – genau das, was er kurz vor dem Crash ausgegeben hat. Ohne das Flag siehst du nur den frisch gestarteten (oft noch leeren) Container." };
   },
   "obs-alerts": sim => {
     if (!sim.alerts().some(a => a.state === "firing")) {

@@ -1,5 +1,5 @@
 import type { Sim } from "../../sim";
-import { pick, TF_FLOTTE_OUTPUTS, ensureTfOutputs } from "./shared";
+import { pick, TF_FLOTTE_OUTPUTS, ensureTfOutputs, escapeRegExp } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const TERRAFORM_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
@@ -47,7 +47,7 @@ export const TERRAFORM_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "tf-output-read": sim => {
     ensureTfOutputs(sim);
     const o = pick(TF_FLOTTE_OUTPUTS);
-    return { text: "Lies den deklarierten Output <code>" + o.name + "</code> gezielt aus.", accept: [new RegExp("^terraform\\s+output\\s+" + o.name + "$")], solution: "terraform output " + o.name, hint: "Muster: terraform output &lt;output-name&gt;", why: "Outputs sind die sauberen Rückgaben einer Konfiguration. terraform output &lt;name&gt; gibt einen einzelnen Wert gezielt (roh) aus – praktisch, um z.B. eine erzeugte Adresse weiterzuverwenden. Muster: terraform output &lt;name&gt;." };
+    return { text: "Lies den deklarierten Output <code>" + o.name + "</code> gezielt aus.", accept: [new RegExp("^terraform\\s+output\\s+" + escapeRegExp(o.name) + "$")], solution: "terraform output " + o.name, hint: "Muster: terraform output &lt;output-name&gt;", why: "Outputs sind die sauberen Rückgaben einer Konfiguration. terraform output &lt;name&gt; gibt einen einzelnen Wert gezielt (roh) aus – praktisch, um z.B. eine erzeugte Adresse weiterzuverwenden. Muster: terraform output &lt;name&gt;." };
   },
   "tf-output-list": sim => {
     ensureTfOutputs(sim);
