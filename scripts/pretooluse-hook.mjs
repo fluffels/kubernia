@@ -41,7 +41,7 @@ export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, b
     return grund ? buildDenyOutput(grund) : null;
   }
   if (tool === "Agent") {
-    // Lens-Auftrag-Guard (#1425): ein kubernia-lens-Spawn mit übrig gebliebenen Platzhaltern wird verweigert; alles andere läuft durch.
+    // Lens-Auftrag-Guard (#1425): ein Lens-Spawn mit übrig gebliebenen Platzhaltern wird verweigert; alles andere läuft durch.
     const grund = sicher(() => lensAuftragBlockade(parseAgentInput(text)));
     return grund ? buildDenyOutput(grund) : null;
   }

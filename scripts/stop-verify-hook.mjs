@@ -25,17 +25,17 @@
  * NICHT die `rm -rf`-Deny aufweichen — der Workaround über `fs.rmSync` (kein
  * Shell-`rm`) bleibt sauber innerhalb der Least-Privilege-Policy (#901).
  *
- * Lens-Worktrees (#1425): ein registrierter `kq-<nr>-lens-r<runde>` bzw. `-lens-m<n>` ohne `kq-<nr>` (der Umsetzer hat den Worktree
+ * Lens-Worktrees (#1425): ein registrierter `<worktree-präfix><nr>-lens-r<runde>` bzw. `-lens-m<n>` ohne `<worktree-präfix><nr>` (der Umsetzer hat den Worktree
  * entfernt, die Sabotage-Probe der Test-Lens aber nicht) wird entfernt, wenn er älter als 5 Minuten ist.
  *
- * Lose Dateien (#1476): eine reguläre Datei `kq-<nr>…` direkt unter `.claude/worktrees/`, deren `kq-<nr>` nicht mehr
+ * Lose Dateien (#1476): eine reguläre Datei `<worktree-präfix><nr>…` direkt unter `.claude/worktrees/`, deren `<worktree-präfix><nr>` nicht mehr
  * registriert und älter als 5 Minuten ist (z.B. eine Lens-Sicherungskopie), wird still entfernt. Fremde Dateien und eine
  * gescheiterte Löschung erzeugen nur eine Warnung (`systemMessage`), nie einen Block.
  *
  * Zweiter Zweck (#1331): beim `SubagentStop` des Umsetzers prüft `umsetzer-abschluss.mjs`, dass ein offener PR mit
  * Auto-Merge nicht als Ende gemeldet wird (`ERGEBNIS: gemergt|abgebrochen`); sonst blockiert der Hook.
  *
- * Läuft auch als `SubagentStop`-Hook mit Matcher `kubernia-umsetzer` (#1309): der Stop-Hook feuert nur am
+ * Läuft auch als `SubagentStop`-Hook ohne Matcher (#1309, #1742): der Stop-Hook feuert nur am
  * Ende des Hauptchats, das Ende des Umsetzers (der den Worktree anlegt und entfernt) sah er nie.
  *
  * Output bei blockiertem Stop: { "decision": "block", "reason": "…" } auf stdout UND derselbe Grund auf
@@ -48,6 +48,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { diagnoseOrphans, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./worktree-aufraeumen.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
+import { namenOderGrund } from "./ticket-namen.mjs";
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 
 /**
@@ -85,7 +86,7 @@ export function deletedTrackedPaths(cwd, deps = {}) {
 export function parseStopInput(text) {
   try {
     const data = JSON.parse(text);
-    return { stopHookActive: Boolean(data.stop_hook_active) };
+    return { stopHookActive: Boolean(data.stop_hook_active), hookEvent: data.hook_event_name, agentType: data.agent_type };
   } catch {
     return { stopHookActive: false };
   }
@@ -131,7 +132,7 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     }
   }
   if (foreignFiles.length > 0) {
-    warnungen.push(`Fremde lose Datei(en) unter .claude/worktrees/ (nicht kq-<nr>…, nie automatisch gelöscht): ${foreignFiles.join(", ")}. Herkunft klären und von Hand entfernen.`);
+    warnungen.push(`Fremde lose Datei(en) unter .claude/worktrees/ (nicht <worktree-präfix><nr>…, nie automatisch gelöscht): ${foreignFiles.join(", ")}. Herkunft klären und von Hand entfernen.`);
   }
 
   // Registrierte Lens-Worktrees ohne Feature-Worktree (#1425): per `git worktree remove --force`, Ergebnis geprüft.
@@ -226,13 +227,22 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
  * (injizierbar), damit der Test Stop UND SubagentStop ohne echten Worktree-Zustand fährt.
  */
 export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees, abschlussDeps = {}) {
-  const { stopHookActive } = parseStopInput(stdinText);
+  const { stopHookActive, hookEvent, agentType } = parseStopInput(stdinText);
   if (stopHookActive) return { exit: 0, stdout: "", stderr: "" }; // bereits einmal blockiert → diesmal freigeben
+  // SubagentStop läuft ohne Matcher: nur das Ende des Umsetzers (agenten.umsetzer der Projekt-Config) ist zuständig (#1742).
+  // Ohne nutzbare Config blockiert der Hook mit Fix-Zeile (fail-closed); der Stop des Hauptchats braucht sie nicht.
+  let deps = abschlussDeps;
+  if (hookEvent === "SubagentStop") {
+    const { namen, config, grund } = namenOderGrund("Stop-Hook", abschlussDeps);
+    if (grund) return { exit: 2, stdout: JSON.stringify({ decision: "block", reason: grund }), stderr: grund };
+    if (agentType !== namen.agenten.umsetzer) return { exit: 0, stdout: "", stderr: "" };
+    deps = { ...abschlussDeps, config };
+  }
   // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952) und den Umsetzer-Abschluss prüfen (#1331)
   const gruende = [];
   const orphanResult = check(repoRoot);
   if (orphanResult.blocked) gruende.push(orphanResult.reason);
-  const abschluss = abschlussBlockade(parseAbschlussInput(stdinText), abschlussDeps);
+  const abschluss = abschlussBlockade(parseAbschlussInput(stdinText), deps);
   if (abschluss) gruende.push(abschluss);
   if (gruende.length === 0) {
     // Nur eine Warnung (leerer, gesperrter Ordner): Stop freigeben, die Meldung geht als systemMessage an die Nutzerin (#1411).
