@@ -1,4 +1,4 @@
-// Kein Shebang, kein Direktaufruf: Lib für `naechstes-ticket.mjs`, `ticket-lock.mjs`, `worktree-aufraeumen.mjs` und `lens-edit-guard.mjs` (#1572, #1579, Konvention #1398: Einstiegsskripte
+// Kein Shebang, kein Direktaufruf: Lib für `naechstes-ticket.mjs`, `ticket-lock.mjs` und `worktree-aufraeumen.mjs` (#1572, #1579, Konvention #1398: Einstiegsskripte
 // importieren nicht voneinander, gemeinsamer Code steht in einer Lib). Rein, ohne Importe.
 
 /** Ticketnummer aus einem Branch-, Worktree- oder Ref-Namen `…feature/kq-<nr>-…` bzw. `…worktrees/kq-<nr>`; sonst null. Pur. */
@@ -13,7 +13,7 @@ export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }) {
 }
 
 /**
- * Name eines Lens-Worktrees (SSOT für lens-edit-guard und worktree-aufraeumen): `kq-<nr>-lens-r<runde>` (Lens-Runde) oder
+ * Name eines Lens-Worktrees (nur noch für worktree-aufraeumen; `lens-edit-guard` liest ihn aus `ticket-namen.mjs`, Umstellung hier in K3): `kq-<nr>-lens-r<runde>` (Lens-Runde) oder
  * `kq-<nr>-lens-m<n>` (Merge-Delta-Lens nach einem Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `kq-<nr>`.
  */
 export const LENS_NAME_KERN = String.raw`(kq-\d+)-lens-[rm]\d+`;
