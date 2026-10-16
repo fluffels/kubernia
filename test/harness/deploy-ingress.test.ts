@@ -6,19 +6,19 @@
  * gehen z.B. cert-manager-Annotationen still verloren. Die Negativtests verfälschen den echten Text. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const lies = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(`../../deploy/${rel}`, import.meta.url)), "utf8");
 
-const DATEIEN = [
-  "ingress.yaml",
-  "ingress-tls.yaml",
-  "chart/templates/ingress.yaml",
-  "chart/values.yaml",
-  "chart/ci/tls-values.yaml",
-] as const;
+/** Alle YAML-Dateien unter deploy/ (neue Manifeste fallen automatisch unter die Prüfung). */
+const DATEIEN: string[] = readdirSync(fileURLToPath(new URL("../../deploy", import.meta.url)), {
+  recursive: true,
+})
+  .map((p) => String(p).replace(/\\/g, "/"))
+  .filter((p) => /\.ya?ml$/.test(p))
+  .sort();
 
 /** Zeilen ohne YAML-/Template-Kommentare, die `rewrite-target` setzen. */
 function rewriteZeilen(text: string): string[] {
@@ -30,12 +30,40 @@ function rewriteZeilen(text: string): string[] {
 
 /** Das Chart-Template reicht `.Values.ingress.annotations` an `metadata.annotations` durch. */
 function reichtAnnotationenDurch(template: string): boolean {
-  return /\{\{-\s*with\s+\.Values\.ingress\.annotations\s*\}\}[\s\S]*annotations:[\s\S]*toYaml/.test(
+  // Nur der with-Block (bis zum ersten `{{- end }}`) zählt, nicht ein toYaml z.B. im TLS-Block.
+  const block = /\{\{-\s*with\s+\.Values\.ingress\.annotations\s*\}\}([\s\S]*?)\{\{-\s*end\s*\}\}/.exec(
     template,
-  );
+  )?.[1];
+  return block !== undefined && /annotations:/.test(block) && /toYaml\s+\./.test(block);
 }
 
 describe("deploy: Ingress-Annotationen", () => {
+  test("Guard: die bekannten Dateien sind in der Liste", () => {
+    assert.ok(DATEIEN.length > 0);
+    for (const d of [
+      "ingress.yaml",
+      "ingress-tls.yaml",
+      "chart/templates/ingress.yaml",
+      "chart/values.yaml",
+      "chart/ci/tls-values.yaml",
+    ]) {
+      assert.ok(DATEIEN.includes(d), d);
+    }
+  });
+
+  test("Kommentarzeilen mit rewrite-target zählen nicht", () => {
+    assert.deepEqual(rewriteZeilen("# nginx.ingress.kubernetes.io/rewrite-target: /"), []);
+    assert.deepEqual(rewriteZeilen("  # x: rewrite-target: /"), []);
+  });
+
+  test("Negativ: toYaml nur im Annotations-Block entfernt wird erkannt", () => {
+    const t = lies("chart/templates/ingress.yaml");
+    const m = /(\{\{-\s*with\s+\.Values\.ingress\.annotations\s*\}\}[\s\S]*?)toYaml \./.exec(t);
+    assert.ok(m, "Vorlage hat toYaml . im Block");
+    const kaputt = t.replace(m[0], m[1] + "x .");
+    assert.equal(reichtAnnotationenDurch(kaputt), false);
+  });
+
   for (const datei of DATEIEN) {
     test(`${datei} setzt kein rewrite-target`, () => {
       assert.deepEqual(rewriteZeilen(lies(datei)), []);

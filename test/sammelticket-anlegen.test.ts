@@ -6,15 +6,20 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../scripts/board-lib.mjs";
 
 type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean; generation: boolean };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Anlegen = {
   parseArgs: (argv: string[]) => Args | null;
-  sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerOffen?: boolean }) => string;
+  sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerZustand?: string }) => string;
+  zustandVonIssue: (issue: { state?: string; assignees?: unknown[] } | null) => string;
+  korrekturFuer: (a: { items: unknown[]; nr: number; position: number; hinter?: number | null }) => { nr: number; id: string; afterId: string | null } | null;
   kandidatenSammelticket: (offene: Offen[], titel: string) => Offen[];
 };
 const A = raw as unknown as Anlegen;
+const ergaenzeFehlende = (rawLib as unknown as { ergaenzeFehlende: (items: unknown[], neu: unknown[]) => unknown[] }).ergaenzeFehlende;
 
 describe("parseArgs", () => {
   test("harness ohne und mit Vorgänger, langfuse ohne und mit --top, --dry-run an beliebiger Stelle", () => {
@@ -40,17 +45,39 @@ describe("sammelticketBody", () => {
     expect(b).not.toMatch(/blockiert durch|Nachfolger/);
   });
 
-  test("offener Vorgänger: Nachfolger-Zeile UND „blockiert durch #N“", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerOffen: true });
+  test("Vorgänger in Arbeit: Nachfolger-Zeile mit „dort in Arbeit“ UND „blockiert durch #N“", () => {
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "in-arbeit" });
     expect(b).toContain("Nachfolger von #1390 (dort in Arbeit).");
     expect(b).toMatch(/^blockiert durch #1390 \(nur solange #1390 offen ist\)$/m);
   });
 
+  test("Vorgänger voll (offen, ungeclaimt): „Generation voll“ statt „in Arbeit“, Sperrzeile bleibt", () => {
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "voll" });
+    expect(b).toContain("Nachfolger von #1390 (Generation voll).");
+    expect(b).not.toContain("dort in Arbeit");
+    expect(b).toMatch(/^blockiert durch #1390 /m);
+  });
+
+  test("Vorgänger unlesbar: gilt als offen ohne Zusatz, Sperrzeile bleibt", () => {
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "unbekannt" });
+    expect(b).toContain("Nachfolger von #1390.");
+    expect(b).not.toMatch(/dort in Arbeit|Generation voll/);
+    expect(b).toMatch(/^blockiert durch #1390 /m);
+  });
+
   test("geschlossener Vorgänger: genannt, aber ohne Blocker (kein stale „blockiert durch“)", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerOffen: false });
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "zu" });
     expect(b).toContain("Nachfolger von #1390.");
     expect(b).not.toContain("blockiert durch");
     expect(b).not.toContain("dort in Arbeit");
+  });
+
+  test("zustandVonIssue: offen+Assignee in-arbeit, offen ohne voll, geschlossen zu, unlesbar unbekannt", () => {
+    expect(A.zustandVonIssue({ state: "open", assignees: [{ login: "x" }] })).toBe("in-arbeit");
+    expect(A.zustandVonIssue({ state: "open", assignees: [] })).toBe("voll");
+    expect(A.zustandVonIssue({ state: "open" })).toBe("voll");
+    expect(A.zustandVonIssue({ state: "closed", assignees: [{ login: "x" }] })).toBe("zu");
+    expect(A.zustandVonIssue(null)).toBe("unbekannt");
   });
 
   test("Langfuse-Vorlage nennt Langfuse; unbekannte Art wirft", () => {
@@ -123,6 +150,36 @@ describe("pruefSchritt: der Prüf- und Retry-Kern (#1390 Z10, Lens R1)", () => {
 
   test("geclaimtes Ticket nr: nichts zu korrigieren", () => {
     expect(P({ items: [...fueller, sammel(20, { assignees: ["fluffels"] })], nr: 20, position: 4 }).art).toBe("ok");
+  });
+});
+
+describe("korrekturFuer (#1646): die Korrektur gilt dem NEUEN Sammelticket, nie dem älteren", () => {
+  type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
+  const T = "Harness-Härtung (gesammelt)";
+  const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+  const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: T, ...extra });
+  const fueller = Array.from({ length: 10 }, (_, i) => b(i + 1));
+
+  test("älteres ungeclaimtes Sammelticket steht davor, das neue fehlt in der Liste und wird angehängt: Ziel ist das neue", () => {
+    const items = [b(1), b(2), sammel(5), ...fueller.slice(2)];
+    const mitNeu = ergaenzeFehlende(items, [sammel(20)]);
+    const k = A.korrekturFuer({ items: mitNeu, nr: 20, position: 4 });
+    expect(k).toMatchObject({ nr: 20, id: "I20" });
+    // das ältere würde laut sammelticketKorrektur allein bewertet: es steht auf Position, also keine Korrektur für dessen Nummer
+    expect(A.korrekturFuer({ items: mitNeu, nr: 5, position: 4 })).toBeNull();
+  });
+
+  test("steht auf Position oder davor → null; nicht in der Liste → null", () => {
+    expect(A.korrekturFuer({ items: [b(1), b(2), sammel(20), b(3)], nr: 20, position: 4 })).toBeNull();
+    expect(A.korrekturFuer({ items: fueller, nr: 20, position: 4 })).toBeNull();
+  });
+
+  test("hinter: ungeclaimter Vorgänger → direkt dahinter, sonst null wenn dort", () => {
+    const items = [b(1), sammel(5), b(2), sammel(20)];
+    expect(A.korrekturFuer({ items, nr: 20, position: 4, hinter: 5 })).toEqual({ nr: 20, id: "I20", afterId: "I5" });
+    expect(A.korrekturFuer({ items: [b(1), sammel(5), sammel(20)], nr: 20, position: 4, hinter: 5 })).toBeNull();
+    // Vorgänger geclaimt → es gilt die Position
+    expect(A.korrekturFuer({ items: [...fueller, sammel(50, { assignees: ["f"] }), sammel(20)], nr: 20, position: 4, hinter: 50 })).toMatchObject({ nr: 20, afterId: "I3" });
   });
 });
 

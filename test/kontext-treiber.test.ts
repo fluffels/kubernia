@@ -212,6 +212,14 @@ describe("kontextTreiber (Aggregat)", () => {
     expect(md).toContain("Neuaufbau");
     expect(md).toContain("verify");
   });
+  test("Standardauswertung nennt die Ticket-Zahl und warnt bei Tickets mit mehreren Läufen (#1646)", () => {
+    const zwei = K.renderMarkdown(K.kontextTreiber({ laeufe: [lauf("#1 x", [{ min: 1 }, { min: 2 }]), lauf("#1 y", [{ min: 1 }, { min: 2 }]), lauf("#2 z", [{ min: 1 }, { min: 2 }])] }));
+    expect(zwei).toContain("n=3, Tickets 2,");
+    expect(zwei).toContain("Mediane je Lauf, nicht je Ticket (1 Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket");
+    const je1 = K.renderMarkdown(K.kontextTreiber({ laeufe: [lauf("#1 x", [{ min: 1 }, { min: 2 }]), lauf("#2 z", [{ min: 1 }, { min: 2 }])] }));
+    expect(je1).toContain("n=2, Tickets 2,");
+    expect(je1).not.toContain("Mediane je Lauf");
+  });
 });
 
 const verschiebe = (l: Lauf, minuten: number): Lauf => ({
@@ -609,5 +617,80 @@ describe("je Ticket: Zusammenlegung und Fenster, Grenzfälle (#1592 Review R1)",
     const mit = (wurzel: string | null) => (K as unknown as { kontextTreiber: (e: JeEingabe & { wurzel: string | null }) => JeBericht }).kontextTreiber({ laeufe: [v, n], jeTicket: true, wurzel }).gesamt.nachlese!.summe;
     expect(mit("D:/projekt/repo")).toBe(1);
     expect(mit(null)).toBe(0);
+  });
+});
+
+// ── #1646: offene Läufe, Vorlauf, Übergabe ohne Nachfolger, Form des Ticket-Laufs ────────────────
+
+type Gr = { gesamt: { n: number; requests: number; requestsMedian: number | null; kontextCallGewichtet: number | null; kostenSumme: number } | null; offen: number };
+type Liste = { ticket: number | null; start: string; sammel: boolean; offen: boolean };
+type Voll = { gesamt: Gr; sammel: Gr; ohneSammel: Gr; laeufe: Liste[] };
+const voll = (e: { laeufe: Lauf[]; jeTicket?: boolean; von?: string }) => (K as unknown as { kontextTreiber: (e: object) => Voll }).kontextTreiber(e);
+const KR = K as unknown as { ladeVon: (von: string, jeTicket: boolean) => string; renderMarkdown: (r: Voll) => string };
+
+describe("offene Läufe (#1646)", () => {
+  const offenerLauf = (nr: number, ab: number) => laufAb(ab, `Ticket #${nr}: x`, [{ min: 1 }, { min: 2, tools: [bash("npm run verify", null)] }]);
+  const geschlossen = (nr: number, ab: number) => laufAb(ab, `Ticket #${nr}: x`, [{ min: 1 }, { min: 2, tools: [bash("npm run verify", "ok")] }]);
+  test("analysiereLauf übernimmt offen: Tool ohne Ergebnis ja, mit Ergebnis nein", () => {
+    const a = (l: Lauf) => (K.analysiereLauf(l) as unknown as { offen: boolean }).offen;
+    expect(a(offenerLauf(1, 0))).toBe(true);
+    expect(a(geschlossen(1, 0))).toBe(false);
+  });
+  test("ein offener Lauf ändert Mediane und Summen nicht, wird gezählt und steht in der Läufe-Liste", () => {
+    const ohneOffen = voll({ laeufe: [geschlossen(1, 0), geschlossen(2, 10)] });
+    const mitOffen = voll({ laeufe: [geschlossen(1, 0), geschlossen(2, 10), offenerLauf(3, 20)] });
+    expect(mitOffen.gesamt.gesamt).toEqual(ohneOffen.gesamt.gesamt);
+    expect(mitOffen.gesamt.offen).toBe(1);
+    expect(ohneOffen.gesamt.offen).toBe(0);
+    expect(mitOffen.laeufe.map((x) => [x.ticket, x.offen])).toEqual([[1, false], [2, false], [3, true]]);
+    expect(mitOffen.laeufe[0].start).toBe(t(0));
+  });
+  test("nur offene Läufe: keine Kennzahlen, aber gezählt; Je-Ticket: ein Ticket mit offenem Lauf gilt als offen", () => {
+    const r = voll({ laeufe: [offenerLauf(3, 0)] });
+    expect(r.gesamt.gesamt).toBeNull();
+    expect(r.gesamt.offen).toBe(1);
+    const je2 = voll({ laeufe: [vorgaenger(5, "verify", 0, [{ min: 1 }]), laufAb(10, `Ticket #5: x${NL}Einstieg: verify`, [{ min: 1, tools: [bash("x", null)] }]), vorgaenger(6, "pr", 20, [{ min: 1 }])], jeTicket: true });
+    expect(je2.gesamt.gesamt!.n).toBe(1);
+    expect(je2.gesamt.offen).toBe(1);
+    expect(je2.laeufe.map((x) => [x.ticket, x.offen])).toEqual([[5, true], [6, false]]);
+  });
+  test("Markdown: Kopf nennt offen, Tabelle Läufe zeigt offen/geschlossen", () => {
+    const md = KR.renderMarkdown(voll({ laeufe: [geschlossen(1, 0), offenerLauf(3, 20)] }));
+    expect(md).toContain("offen: 1");
+    expect(md).toContain("| Start | Ticket | Sammel | Status |");
+    expect(md).toMatch(/\| #3 \| nein \| offen \|/);
+    expect(md).toMatch(/\| #1 \| nein \| geschlossen \|/);
+  });
+});
+
+describe("ladeVon und Übergabe ohne Nachfolger (#1646)", () => {
+  test("je Ticket: Laden beginnt 48 h vor dem Fenster, sonst am Fenster selbst", () => {
+    expect(KR.ladeVon("2026-10-10T12:00:00.000Z", true)).toBe("2026-10-08T12:00:00.000Z");
+    expect(KR.ladeVon("2026-10-10T12:00:00.000Z", false)).toBe("2026-10-10T12:00:00.000Z");
+  });
+  test("Nachfolger mit Vorgänger 30 h vor dem Fenster: Ticket fällt aus dem Fenster, nicht in ohneVorgaenger; Start genau auf von zählt", () => {
+    const vor = vorgaenger(5, "verify", -30 * 60, [{ min: 1 }]);
+    const nach = nachfolger(5, "verify", 10, [{ min: 1 }]);
+    const r = je({ laeufe: [vor, nach], von: t(0), jeTicket: true });
+    expect(r.gesamt.gesamt).toBeNull();
+    expect(r.ohneVorgaenger).toBe(0);
+    expect(je({ laeufe: [vorgaenger(6, "pr", 0, [{ min: 1 }])], von: t(0), jeTicket: true }).gesamt.gesamt!.n).toBe(1);
+  });
+  test("renderUebergabe ohne Nachfolger: 0 mit Nachfolger, Striche, kein NaN", () => {
+    const md = KR.renderMarkdown(je({ laeufe: [vorgaenger(6, "pr", 0, [{ min: 1 }])], jeTicket: true }) as unknown as Voll);
+    expect(md).toContain("0 mit Nachfolger");
+    expect(md).toContain("Kontext erster Call Nachfolger (Median) -");
+    expect(md).not.toContain("NaN");
+  });
+});
+
+describe("ticketLauf: Gruppen-Kennzahlen über zwei Läufe (#1646)", () => {
+  test("Summen, Median und Kosten stimmen mit den Einzelläufen überein", () => {
+    const v = vorgaenger(5, "verify", 0, [{ min: 1, ctx: 10_000 }, { min: 2, ctx: 20_000, tools: [edit("a.ts")] }]);
+    const n = nachfolger(5, "verify", 10, [{ min: 1, ctx: 30_000, tools: [bash("cat a.ts")] }]);
+    const g = je({ laeufe: [v, n], jeTicket: true }).gesamt.gesamt as unknown as { n: number; requests: number; requestsMedian: number; kontextCallGewichtet: number; kostenSumme: number };
+    expect(g).toMatchObject({ n: 1, requests: 3, requestsMedian: 3, kontextCallGewichtet: 20_000 });
+    const einzeln = [v, n].map((l) => KI.analysiereLauf(l)!.kosten!);
+    expect(g.kostenSumme).toBeCloseTo(einzeln[0] + einzeln[1], 10);
   });
 });

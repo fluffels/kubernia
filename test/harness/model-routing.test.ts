@@ -923,8 +923,42 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.equal(ergebnis, "epic");
   });
 
-  test("Plan-Weiche greift nie bei einem Sammelticket („(gesammelt)“ im Titel): normaler Weg", async () => {
-    const { aufrufe } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
+  test("Sammelticket („(gesammelt)“ im Titel) wird nie umgesetzt (#1646): Weiterleitung auf den Skill-Pfad, Claim und Lock frei, kein Plan", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-1", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß" });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(aufrufe[1].prompt, /freigeben 42 --nonce abc-1/);
+    assert.match(aufrufe[1].prompt, /--remove-assignee @me/);
+  });
+
+  test("Meldet der Auswahl-Agent selbst `skill-pfad` (#1646), leitet der Workflow weiter, ohne Plan und ohne Umsetzen", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ auswahl: { ergebnis: "skill-pfad" }, lockNonce: "abc-1" });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
+  });
+
+  test("Sammelticket ohne eigenen Claim (#1646): kein claim-frei, damit kein fremder Claim entfernt wird", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: false } });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim"]);
+  });
+
+  test("Sammelticket: Claim ohne Nonce gibt den Assignee frei, Nonce ohne verifizierten Claim gibt den Lock frei (#1646)", async () => {
+    const a = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: true } });
+    assert.deepEqual(a.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(a.aufrufe[1].prompt, /--remove-assignee @me/);
+    const b = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-2", auswahl: { claimVerifiziert: false } });
+    assert.deepEqual(b.aufrufe.map((x) => x.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(b.aufrufe[1].prompt, /freigeben 42 --nonce abc-2/);
+  });
+
+  test("Der Einstiegs-Skill kennt den Sonderausgang `skill-pfad` (#1646)", () => {
+    const skill = readFileSync(new URL("../../.claude/skills/kubernia-workflow/SKILL.md", import.meta.url), "utf8");
+    assert.match(skill, /^- \*\*`skill-pfad`\*\*/m);
+  });
+
+  test("Titel mit „(gesammelt)“ nur mitten im Text ist kein Sammelticket: normaler Weg", async () => {
+    const { aufrufe } = await workflowLauf({ titel: "Kein Sammelticket (gesammelt) Doku", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
   });
 

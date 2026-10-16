@@ -209,6 +209,18 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     assert.equal(api.schichtVon("src/x/", lib), null);
     assert.equal(api.schichtVon("lib/x/", basis()), null);
   });
+  test("schichtVon delegiert an layerOfAus: innerhalb der Quellwurzel identisch, außerhalb null statt Auffang, Extern hat Vorrang", () => {
+    const m = basis();
+    const layerOf = (createRequire(import.meta.url)("../scripts/schichten-kern.cjs") as { layerOfAus: (x: Modell) => (f: string) => string }).layerOfAus(m);
+    for (const p of ["src/ui/a.ts", "src/game/x.ts", "src/uieval.ts", "src/sim/", "src/neu/ordner/y.ts"]) assert.equal(api.schichtVon(p, m), layerOf(p), p);
+    assert.equal(layerOf("tools/x.ts"), "domaene", "layerOfAus liefert außerhalb die Auffang-Schicht");
+    assert.equal(api.schichtVon("tools/x.ts", m), null);
+    const mitExtern: Modell = { ...m, extern: [{ id: "lib", label: "Lib", muster: "^src/ui/" }] };
+    assert.equal(api.schichtVon("src/ui/a.ts", mitExtern), "lib");
+  });
+  test("schichtVon wirft bei einem ungültigen Modell (fail-closed, wie layerOfAus)", () => {
+    assert.throws(() => api.schichtVon("src/x.ts", { ...basis(), schichten: [] }));
+  });
   test("Auffang-Text im Diagramm nennt die Quellwurzel", () => {
     const lib: Modell = { ...basis(), quellwurzel: "wetter/" };
     assert.match(api.renderDiagramm(lib, []), /alles übrige unter wetter\//);

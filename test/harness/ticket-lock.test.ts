@@ -397,6 +397,34 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
     assert.equal(M.ALTLAST_MS, 24 * H);
   });
 
+  test("aufzuraeumen: verwaiste *.tmp-* über ALTLAST_MS gehen mit, junge nicht", () => {
+    const eintraege = [
+      { name: "5.json.tmp-12-abc", mtime: JETZT - 25 * H },
+      { name: "6.json.tmp-12-abc", mtime: JETZT - 23 * H },
+      { name: "7.json.tmp-1-x", mtime: Number.NaN },
+    ];
+    assert.deepEqual(M.aufzuraeumen({ eintraege, jetzt: JETZT }), ["5.json.tmp-12-abc"]);
+  });
+
+  test("ersetze schreibt atomar: voller Inhalt, danach keine .tmp-Datei; bei Fehlschlag auch keine", () => {
+    const echt = M.echteDeps() as { ersetze: (p: string, t: string) => void };
+    const ziel = lockDatei("4.json", "alt");
+    echt.ersetze(ziel, `${"x".repeat(5000)}\n`);
+    assert.equal(readFileSync(ziel, "utf8"), `${"x".repeat(5000)}\n`);
+    assert.deepEqual(readdirSync(join(dir, "kq-locks")).filter((n) => n.includes(".tmp-")), []);
+    mkdirSync(join(dir, "kq-locks", "3.json"));
+    assert.throws(() => echt.ersetze(join(dir, "kq-locks", "3.json"), "neu"));
+    assert.deepEqual(readdirSync(join(dir, "kq-locks")).filter((n) => n.includes(".tmp-")), [], "Rest nach Fehlschlag aufgeräumt");
+  });
+
+  test("eine .tmp-Datei zählt nicht als Lock: weder claim noch pruefe lesen sie", () => {
+    const frisch = JSON.stringify({ nr: 5, nonceHash: "x", erstellt: new Date(JETZT).toISOString() });
+    lockDatei("5.json.tmp-1-abc", frisch);
+    lockDatei("8.json.tmp-1-abc", frisch);
+    assert.equal(lauf(["claim", "5"]).code, 0, "kein fremder Lock");
+    assert.equal(lauf(["pruefe", "8"]).out, "frei\n", "pruefe liest die Temp-Datei nicht als Lock");
+  });
+
   test("claim räumt eine verwaiste Datei ab", () => {
     const verwaist = lockDatei("9.json.verwaist-x");
     assert.equal(lauf(["claim", "5"]).code, 0);

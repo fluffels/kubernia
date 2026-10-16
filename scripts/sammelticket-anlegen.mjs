@@ -21,7 +21,7 @@
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
 import { pathToFileURL } from "node:url";
-import { istVertraut } from "./fremdtext-lib.mjs";
+import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
@@ -105,15 +105,30 @@ export function planeGeneration({ offene, einzeln, kommentareVon, vertraut, gren
   return { art: "nachfolger", vorgaenger: x.number, zeilen };
 }
 
-/** Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). `blockiert durch #N` nur bei offenem Vorgänger, mit dem Zusatz, dass die Sperre nur gilt, solange er offen ist (die Zeile bleibt nach dessen Merge stehen). Pur. */
-export function sammelticketBody({ art, vorgaenger = null, vorgaengerOffen = false }) {
+/**
+ * Zustand des Vorgängers aus seiner REST-Form: `in-arbeit` (offen, geclaimt), `voll` (offen, ungeclaimt: Generation voll), `zu`, `unbekannt` (unlesbar,
+ * `null`). Pur.
+ */
+export function zustandVonIssue(issue) {
+  if (!issue) return "unbekannt";
+  if (issue.state !== "open") return "zu";
+  return (issue.assignees ?? []).length > 0 ? "in-arbeit" : "voll";
+}
+
+const ZUSATZ = { "in-arbeit": " (dort in Arbeit)", voll: " (Generation voll)" };
+
+/**
+ * Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). `blockiert durch #N` bei jedem offenen (auch unlesbaren) Vorgänger, mit dem Zusatz,
+ * dass die Sperre nur gilt, solange er offen ist (die Zeile bleibt nach dessen Merge stehen); „(dort in Arbeit)“ nur bei `in-arbeit`, „(Generation voll)“ nur bei `voll`. Pur.
+ */
+export function sammelticketBody({ art, vorgaenger = null, vorgaengerZustand = "zu" }) {
   if (!Object.hasOwn(TITEL, art)) throw new Error(`Unbekannte Art: ${String(art)}`);
   const zeilen =
     art === "harness"
       ? ["Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). Befunde als Kommentar `- [ ] …` anhängen."]
       : ["Sammelticket für Befunde aus Langfuse-Daten (docs/ticket-reihenfolge.md › Langfuse-Befunde (gesammelt)). Befunde als Kommentar `- [ ] …` anhängen."];
-  if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${vorgaengerOffen ? " (dort in Arbeit)" : ""}.`;
-  if (vorgaenger !== null && vorgaengerOffen) zeilen.push("", `blockiert durch #${vorgaenger} (nur solange #${vorgaenger} offen ist)`);
+  if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${ZUSATZ[vorgaengerZustand] ?? ""}.`;
+  if (vorgaenger !== null && vorgaengerZustand !== "zu") zeilen.push("", `blockiert durch #${vorgaenger} (nur solange #${vorgaenger} offen ist)`);
   return zeilen.join("\n");
 }
 
@@ -135,7 +150,7 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
 const einzelAbruf = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]);
 /** Alle Kommentare eines Issues (paginiert, sonst nur die ersten 30); ein Fehler wirft, damit `--generation` nichts auf Verdacht anlegt. */
-const kommentareVon = (nr) => ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/issues/${nr}/comments?per_page=100`]).flat();
+const kommentareVon = (nr) => issueKommentare(nr, ghJson, REPO);
 
 /** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
 function pruefeDublette(nr, titel, vorgaenger) {
@@ -154,12 +169,12 @@ function schliesseWennDublette(nr, titel, vorgaenger) {
   console.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen (stand es schon im Board, bleibt das Item dort geschlossen liegen). Das Original ist #${d.aelter}.`);
   return true;
 }
-/** Zustand des Vorgängers (offen?) per REST; unlesbar zählt als offen (die Sperre ist die sichere Seite). */
-function vorgaengerOffen(nr) {
+/** Zustand des Vorgängers `nr` per REST (`zustandVonIssue`); unlesbar gilt als offen (die Sperre ist die sichere Seite). */
+function vorgaengerZustand(nr) {
   try {
-    return ghJson(["api", `repos/${REPO}/issues/${nr}`]).state === "open";
+    return zustandVonIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`]));
   } catch {
-    return true;
+    return "unbekannt";
   }
 }
 
@@ -170,25 +185,30 @@ export function offenerVorgaenger(items, nr) {
 }
 
 /**
- * Ein Prüfschritt: was ist mit dem Sammelticket `nr` auf der frisch geladenen Board-Liste `items` zu tun? Liefert
- * `{ art: "ok" }` (steht auf Position `position` oder davor), `{ art: "warte" }` (noch nicht in der Liste), `{ art: "setze", k }`
- * (neu setzen, `k` aus sammelticketKorrektur) oder `{ art: "falsch" }` (nach `NEU_SETZEN_MAX` Versuchen oder im Trockenlauf noch
- * falsch). Mit `hinter` (Generationsnachfolger, Vorgänger noch ungeclaimt im Board) ist das Ziel „direkt hinter dem Vorgänger“. Andere ungeclaimte Harness-Sammeltickets bleiben außen vor, damit die Prüfung die Position von `nr` bewertet und nicht die
- * des obersten. Pur.
+ * Die Korrektur für das Sammelticket `nr` auf `items`: `{ nr, id, afterId, … }` oder null (steht richtig, oder `nr` fehlt in der Liste). Mit `hinter`
+ * (Generationsnachfolger, Vorgänger noch ungeclaimt im Board) ist das Ziel „direkt hinter dem Vorgänger“, sonst die Position laut AGENTS.md
+ * (`sammelticketKorrektur`). Andere ungeclaimte Harness-Sammeltickets bleiben außen vor: bewertet wird `nr`, nicht das oberste; eine Korrektur
+ * für ein anderes Ticket gibt es nie. Pur.
  */
-export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false, hinter = null }) {
+export function korrekturFuer({ items, nr, position, hinter = null }) {
   const idx = items.findIndex((i) => i.number === nr);
-  if (idx < 0) return { art: "warte" };
+  if (idx < 0) return null;
   const x = offenerVorgaenger(items, hinter);
-  if (x) {
-    // Generationsnachfolger: das Ziel ist direkt hinter dem noch ungeclaimten Vorgänger, nicht die Position laut AGENTS.md.
-    if (items[items.indexOf(x) + 1]?.number === nr) return { art: "ok" };
-    if (dry || neuGesetzt >= NEU_SETZEN_MAX) return { art: "falsch" };
-    return { art: "setze", k: { nr, id: items[idx].id, afterId: x.id } };
-  }
+  if (x) return items[items.indexOf(x) + 1]?.number === nr ? null : { nr, id: items[idx].id, afterId: x.id };
   const ohneAndere = items.filter((i) => i.number === nr || !(i.title === SAMMELTICKET_TITEL && i.state === "open" && (i.assignees ?? []).length === 0));
   const k = sammelticketKorrektur(ohneAndere, position);
-  if (!k || k.nr !== nr) return { art: "ok" };
+  return k && k.nr === nr ? k : null;
+}
+
+/**
+ * Ein Prüfschritt: was ist mit dem Sammelticket `nr` auf der frisch geladenen Board-Liste `items` zu tun? Liefert
+ * `{ art: "ok" }` (steht richtig, `korrekturFuer` null), `{ art: "warte" }` (noch nicht in der Liste), `{ art: "setze", k }`
+ * (neu setzen) oder `{ art: "falsch" }` (nach `NEU_SETZEN_MAX` Versuchen oder im Trockenlauf noch falsch). Pur.
+ */
+export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false, hinter = null }) {
+  if (!items.some((i) => i.number === nr)) return { art: "warte" };
+  const k = korrekturFuer({ items, nr, position, hinter });
+  if (!k) return { art: "ok" };
   if (dry || neuGesetzt >= NEU_SETZEN_MAX) return { art: "falsch" };
   return { art: "setze", k };
 }
@@ -245,8 +265,7 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const offen = vorgaenger === null ? false : vorgaengerOffen(vorgaenger);
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerOffen: offen });
+    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger) });
     const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", "labels[]=area:harness"]);
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);
@@ -256,8 +275,7 @@ async function main(argv = process.argv.slice(2)) {
     if (hinter !== null) ghJson(["api", "-X", "POST", `repos/${REPO}/issues/${hinter}/comments`, "-f", `body=${generationsKommentar({ zeilen: generationsZeilen, nachfolger: nr })}`]);
     if (args.art === "harness") {
       const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
-      const x = offenerVorgaenger(items, hinter);
-      const k = x ? { id: itemId, afterId: x.id } : sammelticketKorrektur(items, position);
+      const k = korrekturFuer({ items, nr, position, hinter });
       if (k) setPosition(k.id, k.afterId);
     } else if (args.top) {
       const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
