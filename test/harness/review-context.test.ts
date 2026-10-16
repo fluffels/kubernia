@@ -11,14 +11,14 @@
  * maschinell festgenagelt wird.)
  *
  * Dieser Wächter nagelt die drei Maßnahmen fest, die sonst leise zurückdriften – jede von ihnen
- * würde beim Zurückdrehen NICHTS anderes rot machen (der Workflow lief vorher ja auch):
+ * würde beim Zurückdrehen NICHTS anderes rot machen (der Ablauf lief vorher ja auch):
  *
  *   1. **Materialisierung.** Der Diff wird einmal als Patch-Datei geschrieben und den Lenses als
- *      PFAD übergeben. Der Lens-Prompt darf den Diff im Primärpfad NICHT selbst erheben.
+ *      PFAD übergeben. Der Skill lässt den Diff nur einmal erheben.
  *   2. **Kontext-Diät.** Die Anweisung „AGENTS.md ist schon in deinem Kontext – nicht
  *      erneut lesen, punktuell greppen" ist der größte Einzelposten (~30k Tokens pro Lens).
- *   3. **Frische-Guard.** Der Patch trägt eine Rundennummer und den erwarteten HEAD, und der
- *      Orchestrator verwirft einen Vorrunden-Patch, statt ihn weiterzureichen. Ohne das reviewt
+ *   3. **Frische-Guard.** Der Patch trägt eine Rundennummer und den erwarteten HEAD, jede Lens
+ *      prüft ihn gegen `git rev-parse HEAD`. Ohne das reviewt
  *      Runde 2 den Stand von Runde 1 und attestiert Fixes, die sie nie gesehen hat – ein Review,
  *      der von außen grün aussieht, aber nichts geprüft hat. Das ist der gefährlichste Fehlerfall
  *      dieses Tickets, nicht bloß eine Ersparnis.
@@ -41,9 +41,6 @@
  * ist selbst Gate-Config – für doku-/prompt-strukturelle Wächter gibt es
  * die etablierte test-only-Familie (Präzedenz: `test/harness/agents-md-native.test.ts`).
  *
- * ⚠️ Das Workflow-Skript wird bewusst als TEXT gelesen, nicht importiert: es ruft auf Top-Level
- * `await ticketAbarbeiten()` gegen Globals, die nur die Workflow-Laufzeit bereitstellt.
- *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
@@ -53,94 +50,14 @@ import { fileURLToPath } from "node:url";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-const workflow = read(".claude/workflows/kubernia-ticket.js");
 const lensSkill = read(".claude/skills/review-lenses/SKILL.md");
 const planner = read(".claude/agents/kubernia-planner.md");
 const lensAgent = read(".claude/agents/kubernia-lens.md");
 
-// ── Ausschnitte aus dem Workflow ────────────────────────────────────────────────
-// Der Workflow ist eine Datei; die Zusicherungen gelten aber je Prompt/Block. Ein Regex über die
-// GANZE Datei wäre grün, sobald der gesuchte Text irgendwo sonst vorkommt – genau dieser Fehler
-// liess in der ersten Fassung einen zurueckgedrehten patchAuftrag durchgehen.
-
-/** Rumpf einer Template-String-Konstante (`const NAME = \`…\``). */
-function konstante(text: string, name: string): string {
-  const m = text.match(new RegExp(`const ${name} =\\s*\`([\\s\\S]*?)\``));
-  assert.ok(m, `Template-Konstante ${name} im Workflow nicht gefunden`);
-  return m[1];
-}
-
-/**
- * Rumpf einer Arrow-Funktion mit Template-Literal (`const NAME = (…) => \`…\``).
- * `\r?\n` statt `\n`: seit #1026 wird `.claude/` per `.gitattributes` mit LF ausgecheckt,
- * eine ältere Windows-Arbeitskopie kann aber noch CRLF tragen (git-Autoconversion) — ein
- * reines `\n` hinter dem schließenden Backtick fände den Block dort nie.
- */
-function templateFunktion(text: string, name: string): string {
-  const m = text.match(new RegExp(`const ${name} = \\([^)]*\\) =>\\s*\`([\\s\\S]*?)\`\\r?\\n`));
-  assert.ok(m, `Template-Funktion ${name} im Workflow nicht gefunden`);
-  return m[1];
-}
-
-/**
- * Der Lens-Prompt – von `const reviewPass` bis zum Options-Objekt des Lens-`agent()`-Aufrufs,
- * mit aufgelöstem Diät-Baustein. Die Auflösung ist nötig, weil der Diät-Text weiter oben in der
- * Datei steht: ohne sie würde der Wächter die Textform prüfen statt der Wirkung und wäre grün,
- * sobald der Baustein ausgehöhlt (aber weiter interpoliert) wird.
- */
-function lensPrompt(text: string): string {
-  const start = text.indexOf("const reviewPass");
-  assert.notEqual(start, -1, "reviewPass-Definition im Workflow nicht gefunden");
-  const end = text.indexOf("phase: 'Review'", start);
-  assert.notEqual(end, -1, "Ende des Lens-agent()-Aufrufs (phase: 'Review') nicht gefunden");
-  const roh = text.slice(start, end);
-  // Schnitt-Validierung. Der frühere „Ausschnitt trifft nur den Lens-Pass"-Test war VAKUANT: er
-  // suchte einen Text, der VOR `const reviewPass` steht und daher nie im Ausschnitt liegen kann.
-  // Also gegen Marker prüfen, die HINTER dem Lens-Pass stehen (Nachbessern-Phase).
-  assert.ok(roh.includes("lens.auftrag"), "Ausschnitt enthält den Lens-Auftrag nicht — Startmarke falsch");
-  assert.doesNotMatch(roh, /phase: 'Nachbessern'/, "Ausschnitt reicht in die Nachbessern-Phase hinein");
-  assert.doesNotMatch(roh, /NACHBESSERN_SCHEMA/, "Ausschnitt reicht über den Lens-Pass hinaus");
-  assert.match(roh, /\$\{KONTEXT_DIAET\}/, "Der Lens-Prompt interpoliert den Kontext-Diät-Block nicht mehr (#1034).");
-  return roh.replace("${KONTEXT_DIAET}", konstante(text, "KONTEXT_DIAET"));
-}
-
-/**
- * Der PRIMÄRPFAD des Lens-Prompts: der `diff.pfad ? … : …`-Zweig ohne seinen Fallback. Nur hier
- * gilt „erhebe den Diff nicht selbst" absolut — der Fallback-Zweig DARF eine Selbst-Erhebung
- * nennen (er greift ja gerade, wenn kein Patch da ist). Ohne diese Trennung musste die
- * Assertion die Drei-Punkt-Form per Lookahead durchlassen, und eine zusätzliche
- * Selbst-Erhebung in genau dieser Form blieb unentdeckt.
- */
-function primaerpfad(promptText: string): string {
-  const start = promptText.indexOf("Der Diff liegt bereits als Patch-Datei bereit");
-  assert.notEqual(start, -1, "Primärzweig (Patch-Datei-Anweisung) im Lens-Prompt nicht gefunden");
-  const end = promptText.indexOf("Es liegt KEINE vorbereitete Patch-Datei", start);
-  assert.notEqual(end, -1, "Fallback-Zweig im Lens-Prompt nicht gefunden — beide Zweige müssen existieren");
-  return promptText.slice(start, end);
-}
-
-/** Die diff-Zuweisung nach dem Nachbessern (der Frische-Guard im Kontrollfluss). */
-function diffZuweisung(text: string): string {
-  const start = text.indexOf("const vorherigerHead");
-  assert.notEqual(start, -1, "Die diff-Neuzuweisung nach dem Nachbessern wurde nicht gefunden");
-  return text.slice(start, text.indexOf("if (nachbesserung && nachbesserung.zusammenfassung) log", start));
-}
-
 // ── Prädikate: EIN Ort je Regel, angewandt auf echtes Artefakt UND Gegenbeispiel ──
 
-/** Fordert der Text den Leser auf, den Diff selbst per git diff zu erheben? (Beide Formen.) */
-const erhebtDiffSelbst = (s: string) => /git diff\s+(?:--\S+\s+)*(?:main|origin\/main)/.test(s);
-
 /** Nennt der Text die vorbereitete Patch-Datei als Quelle? */
-const nenntPatchDatei = (s: string) => /Patch-Datei/.test(s) && /diff\.pfad/.test(s);
-
-/**
- * Verzweigt der Prompt wirklich auf `diff.pfad` — oder nur auf etwas Konstantes?
- * Ohne diese Prüfung liess sich die Bedingung auf `false` setzen (alle Lenses fielen in den
- * Fallback und erhoben den Diff wieder selbst), ohne dass ein Test fiel: der Token `diff.pfad`
- * steht ja weiterhin im Rumpf des Zweigs.
- */
-const verzweigtAufPatch = (s: string) => /\$\{\s*diff\.pfad\s*\?/.test(s);
+const nenntPatchDatei = (s: string) => /Patch-Datei/.test(s) && /\.patch/.test(s);
 
 /** Verbietet der Text das erneute Vollöffnen der Kontextdateien und nennt Grep als Ersatz? */
 const haeltKontextDiaet = (s: string) => /bereits[\s\S]{0,60}Kontext/i.test(s) && /grep/i.test(s);
@@ -152,125 +69,59 @@ const liestGezielt = (s: string) => /offset|limit/.test(s);
 const hatFrischeGuard = (s: string) => /rev-parse/.test(s);
 
 /** Trägt der Patch-Dateiname eine Rundennummer? */
-const hatRundenNummer = (s: string) => /-r\$\{[^}]*runde[^}]*\}\.patch/i.test(s);
+const hatRundenNummer = (s: string) => /-r<runde>[^\s"]*\.patch/i.test(s);
 
 /** Erhebt der Text den Diff als Drei-Punkt-Diff gegen origin/main? */
 const istDreiPunkt = (s: string) => /origin\/main\.\.\.HEAD/.test(s);
 
-/** Verwirft die Zuweisung einen Vorrunden-Patch, statt auf ihn zurückzufallen? */
-const verwirftVorrundenPatch = (s: string) =>
-  /diff = diffAus\(nachbesserung\)/.test(s) && // die neue Runde ersetzt, statt zu ergänzen
-  !/\bdiff\s*=\s*[^\n]*\|\|\s*diff\b/.test(s) && // kein `|| diff`-Fallback
-  !/\?\s*[^\n]*:\s*diff\b/.test(s) && // kein `: diff` im Ternär
-  /diff\.head === vorherigerHead/.test(s); // identischer HEAD wird erkannt
-
 /** Bleibt die Sabotage-/Red-Green-Prüfung im Test-Lens-Auftrag? */
 const fordertSabotage = (s: string) => /sabotier/i.test(s) && /\brot\b/i.test(s);
 
-/**
- * Die Ausschnitte werden LAZY und gemerkt ermittelt, nicht im Modul-Scope. Grund: eine
- * Assertion im Modul-Scope lässt Vitest mit „no tests" enden — der Exit-Code ist zwar 1 (kein
- * False Positive), aber alle übrigen Zusicherungen inklusive der Sabotage-Schutzklausel laufen
- * dann nicht mehr, und die Diagnose steht ohne Test-Namen da. So bleibt jeder Fehlschlag lokal.
- */
-function memo<T>(f: () => T): () => T {
-  let wert: { v: T } | undefined;
-  return () => (wert ??= { v: f() }).v;
-}
-
-const prompt = memo(() => lensPrompt(workflow));
-const primaer = memo(() => primaerpfad(prompt()));
-const patchAuftrag = memo(() => templateFunktion(workflow, "patchAuftrag"));
-const zuweisung = memo(() => diffZuweisung(workflow));
-// Der LENSES-Eintrag selbst (`key: 'test-adaequanz'`), nicht die erste Erwähnung des Schlüssels: seit
-// #1265 nennt ihn die Review-Staffel weiter oben schon. Ende = Schluss dieses Objekt-Eintrags.
-const testLensAuftrag = memo(() => {
-  const start = workflow.indexOf("key: 'test-adaequanz'");
-  assert.notEqual(start, -1, "LENSES-Eintrag der Test-Lens nicht gefunden");
-  return workflow.slice(start, workflow.indexOf("\n  },", start));
-});
-
 describe("Der Diff wird einmal materialisiert statt pro Lens erhoben (#1034)", () => {
-  test("der Lens-Prompt übergibt die Patch-Datei als Pfad", () => {
+  test("der Skill schreibt den Diff einmal in eine Patch-Datei und übergibt den Pfad", () => {
     assert.ok(
-      nenntPatchDatei(prompt()),
-      "Der Lens-Prompt setzt den Pfad der Patch-Datei nicht ein. Akzeptanzkriterium von #1034: " +
+      nenntPatchDatei(lensSkill),
+      "review-lenses/SKILL.md nennt die Patch-Datei nicht. Akzeptanzkriterium von #1034: " +
         "die Lens-Agenten erheben den Diff NICHT selbst, sie lesen die einmal geschriebene Datei.",
     );
-    assert.ok(
-      verzweigtAufPatch(prompt()),
-      "Der Prompt verzweigt nicht auf diff.pfad. Eine konstante Bedingung würde ALLE Lenses in den " +
-        "Fallback schicken — sie erheben den Diff dann wieder selbst, und der Ticket-Zweck ist weg.",
-    );
   });
 
-  test("im Primärpfad fordert der Lens-Prompt KEINE eigene Diff-Erhebung", () => {
-    assert.ok(
-      !erhebtDiffSelbst(primaer()),
-      "Im Primärzweig des Lens-Prompts steht eine Anweisung, git diff selbst zu fahren — genau die " +
-        "fünffache Beschaffung, die #1034 beseitigt hat. (Der Fallback-Zweig darf das, dieser nicht.)",
-    );
-  });
-
-  test("der Fallback-Zweig existiert und erhebt den Diff einmal selbst", () => {
-    // Bewusste, LAUTE Degradation: fehlt der Patch, arbeitet die Lens weiter — aber sie meldet es.
-    // Ein Wächter, der nur die Ersparnis prüft, würde ein stilles Scheitern nicht bemerken.
-    const fallback = prompt().slice(prompt().indexOf("Es liegt KEINE vorbereitete Patch-Datei"));
-    assert.ok(erhebtDiffSelbst(fallback), "Der Fallback-Zweig sagt nicht, wie ohne Patch zu arbeiten ist");
-    assert.match(fallback, /Harness-Defekt/, "Der Fallback meldet das fehlende Artefakt nicht als Defekt");
-  });
-
-  test("Umsetzung und Nachbesserung liefern Pfad + HEAD im Schema", () => {
-    for (const name of ["UMSETZUNG_SCHEMA", "NACHBESSERN_SCHEMA"]) {
-      const start = workflow.indexOf(`const ${name}`);
-      // Bis zur NÄCHSTEN Top-Level-const schneiden statt mit festem Zeichen-Fenster: ein zu
-      // grosses Fenster blutet in den Folgecode aus und wäre ein latenter Falsch-Grün-Kanal.
-      const block = workflow.slice(start, workflow.indexOf("\nconst ", start + 1));
-      assert.match(block, /diffPfad/, `${name} führt kein diffPfad-Feld — der Review bekäme keinen Patch.`);
-      assert.match(block, /diffHead/, `${name} führt kein diffHead-Feld — der Frische-Guard hätte keinen Bezug.`);
-    }
-  });
-
-  test("der Patch wird als Drei-Punkt-Diff gegen origin/main erhoben", () => {
+  test("der Patch wird als Drei-Punkt-Diff gegen origin/main erhoben, mit Rundennummer", () => {
     // Maintainerin-Entscheidung zu #1034: der Review soll denselben Slice sehen, den
     // check:diffsize/check:diffcoverage messen — nicht zusätzlich fremde main-Zeilen.
-    // Geprüft wird der patchAuftrag SELBST, nicht die ganze Datei: sonst hält ein beliebiges
-    // anderes Vorkommen von origin/main...HEAD den Test grün.
     assert.ok(
-      istDreiPunkt(patchAuftrag()),
-      "Der Patch-Auftrag erhebt nicht origin/main...HEAD. Zwei-Punkt gegen ein lokal veraltetes " +
+      istDreiPunkt(lensSkill),
+      "Der Skill erhebt nicht origin/main...HEAD. Zwei-Punkt gegen ein lokal veraltetes " +
         "main zieht fremde Zeilen in den Review (Entscheidung zu #1034).",
     );
-    assert.ok(hatRundenNummer(patchAuftrag()), "Der Patch-Dateiname trägt keine Rundennummer");
+    assert.ok(hatRundenNummer(lensSkill), "Der Patch-Dateiname trägt keine Rundennummer");
   });
 });
 
 describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
-  test("der Lens-Prompt verbietet das erneute Vollöffnen der Kontextdateien", () => {
+  test("der Skill verbietet das erneute Vollöffnen der Kontextdateien", () => {
     assert.ok(
-      haeltKontextDiaet(prompt()),
-      "Dem Lens-Prompt fehlt der Hinweis, dass AGENTS.md schon vollständig im Kontext " +
+      haeltKontextDiaet(lensSkill),
+      "Dem Lens-Skill fehlt der Hinweis, dass AGENTS.md schon vollständig im Kontext " +
         "liegt (Claude Code lädt sie nativ), oder die Anweisung, statt zu lesen punktuell zu greppen. " +
         "Das erneute Read ist der größte Einzelposten (~30k pro Lens).",
     );
   });
 
-  test("der Lens-Prompt macht den Patch zur Primärquelle statt ganze Dateien zu öffnen", () => {
+  test("der Skill macht den Patch zur Primärquelle statt ganze Dateien zu öffnen", () => {
     assert.ok(
-      liestGezielt(prompt()),
-      "Dem Lens-Prompt fehlt die Anweisung, eine geänderte Datei nur gezielt (offset/limit um die " +
+      liestGezielt(lensSkill),
+      "Dem Lens-Skill fehlt die Anweisung, eine geänderte Datei nur gezielt (offset/limit um die " +
         "Hunk-Zeilen) statt vollständig zu öffnen.",
     );
   });
 
   test("jede Brille bekommt ihren eigenen Regel-Ausschnitt", () => {
-    // Aufgabe (2) des Tickets verlangt ausdrücklich einen ANDEREN Ausschnitt je Brille — sonst
-    // liest jede Lens wieder alles.
-    const lenses = workflow.slice(workflow.indexOf("const LENS_QUELLE"), workflow.indexOf("\nconst MAX_FIX_VERSUCHE"));
-    const treffer = lenses.match(/Dein Regel-Ausschnitt/g) || [];
-    const brillen = (lenses.match(/^ {4}key: '/gm) || []).length;
-    assert.ok(brillen >= 4, `Nur ${brillen} Brillen in LENSES gefunden, erwartet die drei Code-Brillen + Doku (#1265)`);
-    assert.equal(treffer.length, brillen, `Nur ${treffer.length} von ${brillen} Lens-Aufträgen benennen ihren Regel-Ausschnitt`);
+    // Sonst liest jede Lens wieder alles.
+    assert.match(lensSkill, /eigenen Regel-Ausschnitt/, "Der Skill nennt den Regel-Ausschnitt je Brille nicht");
+    for (const brille of ["Architektur", "Requirement-Treue", "Test-Adäquanz", "Doku"]) {
+      assert.match(lensSkill, new RegExp(`${brille} →`), `Kein Regel-Ausschnitt für die Brille ${brille}`);
+    }
   });
 
   test("auch der Planungs-Agent liest die Kontextdateien nicht erneut", () => {
@@ -293,33 +144,10 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
 });
 
 describe("Frische-Guard: keine Lens reviewt einen veralteten Patch (#1034)", () => {
-  test("der Lens-Prompt lässt den HEAD gegen den erwarteten Stand prüfen", () => {
+  test("der Skill lässt den HEAD gegen den erwarteten Stand prüfen", () => {
     assert.ok(
-      hatFrischeGuard(prompt()),
-      "Dem Lens-Prompt fehlt der HEAD-Abgleich (git rev-parse HEAD gegen diffHead).",
-    );
-  });
-
-  test("der Orchestrator verwirft einen Vorrunden-Patch, statt auf ihn zurückzufallen", () => {
-    // Das ist der Kontrollfluss, nicht die Prompt-Textform — und der gefährlichste Fehlerfall
-    // des Tickets. Eine reine Textprüfung liess hier zu, dass die Zuweisung auf den alten
-    // Patch zurückfällt, ohne dass ein Test fiel.
-    assert.ok(
-      verwirftVorrundenPatch(zuweisung()),
-      "Die diff-Zuweisung nach dem Nachbessern reicht den Patch der Vorrunde weiter (Fallback auf " +
-        "den alten Pfad oder fehlender HEAD-Vergleich). Dann attestiert Runde 2 Fixes, die sie nie " +
-        "gesehen hat — ein Review, der von außen grün aussieht und nichts geprüft hat.",
-    );
-  });
-
-  test("die Zusammenfassung an die Lenses ist die der aktuellen Runde", () => {
-    // Sonst liest Runde 2 einen als aktuell etikettierten Begleittext aus Runde 1 und meldet
-    // bewusst liegen gelassene Punkte erneut als blockierend.
-    assert.match(prompt(), /letzteZusammenfassung/, "Der Lens-Prompt reicht die Zusammenfassung der Vorrunde durch");
-    assert.match(
-      workflow,
-      /letzteZusammenfassung = nachbesserung\.zusammenfassung/,
-      "Die Nachbesserungs-Zusammenfassung erreicht die nächsten Kritiker nicht",
+      hatFrischeGuard(lensSkill),
+      "Dem Lens-Skill fehlt der HEAD-Abgleich (git rev-parse HEAD gegen den erwarteten HEAD).",
     );
   });
 });
@@ -327,16 +155,14 @@ describe("Frische-Guard: keine Lens reviewt einen veralteten Patch (#1034)", () 
 describe("Was NICHT gekürzt werden durfte (#1034)", () => {
   test("die Test-Lens prüft weiter per Sabotage auf False Positives", () => {
     assert.ok(
-      fordertSabotage(testLensAuftrag()),
-      "Der Test-Lens-Auftrag hat den Sabotage-/Red-Green-Schritt verloren. Das Ticket #1034 nennt " +
+      fordertSabotage(lensSkill),
+      "Der Test-Adäquanz-Auftrag im Skill hat den Sabotage-/Red-Green-Schritt verloren. Das Ticket #1034 nennt " +
         "ihn ausdrücklich als das, was die Kontext-Diät NICHT treffen darf — er fand in der " +
         "Messsession den einzigen echten Blocker.",
     );
   });
 
   test("der tool-neutrale Skill dokumentiert Materialisierung und Commit-Pflicht", () => {
-    // Eine fremde KI liest .claude/workflows/ nicht — sie folgt dem Skill. Steht die Mechanik nur
-    // im Workflow, gilt die Ersparnis nur unter Claude Code.
     assert.match(lensSkill, /\.patch/, "review-lenses/SKILL.md beschreibt die Patch-Materialisierung nicht.");
     assert.match(
       lensSkill,
@@ -349,28 +175,12 @@ describe("Was NICHT gekürzt werden durfte (#1034)", () => {
 
 describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
   // Jedes Gegenbeispiel läuft durch DASSELBE Prädikat wie das echte Artefakt oben. Wird ein
-  // Prädikat aufgeweicht, fällt hier sein eigener Gegenbeweis — anders als bei der ersten
-  // Fassung, die abgeschriebene Regex-Kopien auf String-Literale anwandte und damit nichts bewies.
+  // Prädikat aufgeweicht, fällt hier sein eigener Gegenbeweis.
 
-  test("erhebtDiffSelbst fängt BEIDE Erhebungs-Schreibweisen", () => {
-    assert.ok(erhebtDiffSelbst("Überblick: git diff main --stat, voller Diff: git diff main"), "Zwei-Punkt");
-    assert.ok(erhebtDiffSelbst("voller Diff: git diff origin/main...HEAD"), "Drei-Punkt");
-    assert.ok(erhebtDiffSelbst("erhebe ihn mit git diff --stat origin/main...HEAD"), "mit Flag");
-    assert.ok(!erhebtDiffSelbst("lies die Patch-Datei unter ${diff.pfad}"), "darf den Patch-Weg nicht treffen");
-  });
-
-  test("verzweigtAufPatch fällt bei konstanter Bedingung", () => {
-    assert.ok(verzweigtAufPatch("${\n  diff.pfad\n    ? `lies ${diff.pfad}`\n    : `kein Patch`\n}"));
-    assert.ok(
-      !verzweigtAufPatch("${\n  false\n    ? `lies ${diff.pfad}`\n    : `kein Patch`\n}"),
-      "konstant-falsche Bedingung muss rot sein — der Rumpf nennt diff.pfad ja weiterhin",
-    );
-  });
-
-  test("nenntPatchDatei verlangt Pfad UND Benennung", () => {
-    assert.ok(nenntPatchDatei("Die Patch-Datei liegt unter ${diff.pfad}"));
-    assert.ok(!nenntPatchDatei("Die Patch-Datei liegt irgendwo"), "ohne Pfad-Interpolation nicht grün");
-    assert.ok(!nenntPatchDatei("${diff.pfad}"), "ohne Benennung nicht grün");
+  test("nenntPatchDatei verlangt Benennung UND Dateiendung", () => {
+    assert.ok(nenntPatchDatei("Die Patch-Datei liegt unter kq-1-r1.patch"));
+    assert.ok(!nenntPatchDatei("Die Patch-Datei liegt irgendwo"), "ohne Dateiendung nicht grün");
+    assert.ok(!nenntPatchDatei("kq-1-r1.patch"), "ohne Benennung nicht grün");
   });
 
   test("haeltKontextDiaet fällt bei ausgehöhltem Baustein", () => {
@@ -379,36 +189,16 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
     assert.ok(!haeltKontextDiaet("Es liegt bereits im Kontext."), "ohne Grep-Anweisung nicht grün");
   });
 
-  test("verwirftVorrundenPatch fällt bei jeder der drei Aufweichungen", () => {
-    const gut =
-      "const vorherigerHead = diff.head\ndiff = diffAus(nachbesserung)\nif (diff.head && vorherigerHead && diff.head === vorherigerHead) { diff = diffAus(null) }";
-    assert.ok(verwirftVorrundenPatch(gut), "die echte Fassung muss grün sein");
-    assert.ok(
-      !verwirftVorrundenPatch(gut.replace("diff = diffAus(nachbesserung)", "diff = diffAus(nachbesserung) || diff")),
-      "`|| diff`-Fallback muss rot sein",
-    );
-    assert.ok(
-      !verwirftVorrundenPatch("const vorherigerHead = diff.head\ndiff = nachbesserung ? diffAus(nachbesserung) : diff"),
-      "`: diff`-Ternär muss rot sein",
-    );
-    assert.ok(
-      !verwirftVorrundenPatch("const vorherigerHead = diff.head\ndiff = diffAus(nachbesserung)"),
-      "fehlender HEAD-Vergleich muss rot sein",
-    );
+  test("hatRundenNummer und istDreiPunkt fallen bei Zwei-Punkt und fehlender Runde", () => {
+    assert.ok(hatRundenNummer('git diff origin/main...HEAD > "$TMP/kq-<nr>-r<runde>.patch"'));
+    assert.ok(!hatRundenNummer('git diff origin/main...HEAD > "$TMP/kq-<nr>.patch"'), "ohne Runde rot");
+    assert.ok(istDreiPunkt("git diff origin/main...HEAD"));
+    assert.ok(!istDreiPunkt("git diff main"), "Zwei-Punkt gegen main rot");
   });
 
   test("fordertSabotage fällt, wenn der Schritt entschärft wird", () => {
     assert.ok(fordertSabotage("sabotiere die Assertion kurz, sieh rot, setze zurück"));
     assert.ok(!fordertSabotage("prüfe die Assertion kritisch"), "entschärfte Fassung muss rot sein");
-  });
-
-  test("die Ausschnitt-Funktionen schneiden wirklich", () => {
-    // Gegen die frühere VAKUANTE Grenzprüfung: der Ausschnitt muss echt kleiner sein als die
-    // Datei, und der Primärpfad echt kleiner als der Prompt.
-    assert.ok(prompt().length < workflow.length, "Lens-Ausschnitt ist die ganze Datei");
-    assert.ok(primaer().length < prompt().length, "Primärpfad ist der ganze Prompt");
-    assert.ok(patchAuftrag().length < workflow.length, "patchAuftrag-Ausschnitt ist die ganze Datei");
-    assert.ok(zuweisung().length > 0 && zuweisung().length < 1500, "diff-Zuweisungs-Ausschnitt ist unplausibel groß");
   });
 });
 
@@ -416,7 +206,7 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
 describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1316 Z3)", () => {
   const harness = read("docs/agent-harness.md");
   const umsetzer = read(".claude/agents/kubernia-umsetzer.md");
-  /** Der Lens-Worktree ist in Definition, Workflow-Hinweis und Skill beschrieben (Pfadmuster, Detach, Entfernen). */
+  /** Der Lens-Worktree ist in Definition und Skill beschrieben (Pfadmuster, Detach, Entfernen). */
   const beschreibtLensWorktree = (s: string) => /kq-<nr>-lens-r<runde>/.test(s) && /worktree add --detach/.test(s) && /worktree remove --force/.test(s);
 
   test("die Lens-Definition verlangt die Sabotage im Lens-Worktree, nie im Feature-Worktree", () => {
@@ -425,13 +215,7 @@ describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1
     assert.match(lensAgent, /Test-Path/);
   });
 
-  test("der Workflow-Hinweis der Test-Lens trägt dieselbe Regel, der Cleanup räumt kq-<nr>-lens-* mit auf", () => {
-    assert.ok(beschreibtLensWorktree(workflow), "kubernia-ticket.js beschreibt den Lens-Worktree nicht");
-    assert.match(workflow, /NIE im Feature-Worktree/);
-    assert.match(workflow, /kq-\$\{nr\}-lens-\*/);
-  });
-
-  test("der Skill: keine falsche Aussage zum Workflow mehr, Lens-Worktree und Nachbessern erst nach allen Berichten", () => {
+  test("der Skill: keine falsche Aussage mehr, Lens-Worktree und Nachbessern erst nach allen Berichten", () => {
     assert.ok(!/Der Workflow hat das Problem nicht/.test(lensSkill), "die falsche Aussage steht noch im Skill");
     assert.ok(beschreibtLensWorktree(lensSkill), "SKILL.md beschreibt den Lens-Worktree nicht");
     assert.match(lensSkill, /alle Berichte der Runde da sind/);
