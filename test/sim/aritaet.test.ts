@@ -13,8 +13,8 @@ const GRENZEN: readonly [string, number][] = [
   ["git init", 0], ["git status", 0], ["git add", 1], ["git log", 0], ["git branch", 1], ["git checkout", 1],
   ["git merge", 1], ["git push", 2], ["git fetch", 2], ["git pull", 2],
   ["docker pull", 1], ["docker build", 1], ["docker tag", 2], ["docker images", 0], ["docker ps", 0],
-  ["helm search", 2], ["helm create", 1], ["helm template", 2], ["helm lint", 1], ["helm package", 1], ["helm install", 2],
-  ["helm list", 0], ["helm ls", 0], ["helm upgrade", 2], ["helm rollback", 2], ["helm status", 1], ["helm dependency", 2], ["helm dep", 2],
+  ["helm search repo", 1], ["helm create", 1], ["helm template", 2], ["helm lint", 1], ["helm package", 1], ["helm install", 2],
+  ["helm list", 0], ["helm ls", 0], ["helm upgrade", 2], ["helm rollback", 2], ["helm status", 1], ["helm dependency update", 1], ["helm dependency build", 1],
   ["helm repo add", 2], ["helm repo update", 0], ["helm repo list", 0],
   ["aws s3 mb", 1], ["aws s3 rb", 1], ["aws s3 ls", 1], ["aws s3 cp", 2], ["aws s3 rm", 1],
   ["argocd app list", 0], ["argocd app ls", 0], ["argocd app get", 1], ["argocd app sync", 1],
@@ -195,7 +195,7 @@ describe("kubectl: create hinter `--`, label, Liste der create-Arten", () => {
   });
   test("kubectl create foo: die Liste der Arten kommt aus der Tabelle, ohne Kurzformen", () => {
     const out = lauf("kubectl create foo").out;
-    for (const art of ["deployment", "serviceaccount", "clusterrole", "secret generic", "secret tls", "configmap"]) expect(out).toContain(art);
+    for (const art of ["deployment", "serviceaccount", "clusterrole", "kubectl create secret generic, tls", "configmap"]) expect(out).toContain(art);
     expect(out).not.toMatch(/\b(cm|sa|deploy)\b/);
   });
 });

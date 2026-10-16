@@ -92,9 +92,9 @@ function helmRepoList(host: HelmHost): string {
   return table(["NAME", "URL"], host.helmRepos.map((r: HelmRepo) => [r.name, r.url]));
 }
 
-/** `helm search` – im (fiktiven) bitnami-Katalog nach Charts suchen. */
+/** `helm search repo <begriff>` – im (fiktiven) bitnami-Katalog nach Charts suchen. */
 function helmSearch(host: HelmHost, c: Call): string {
-  const term = c.args[1] || ""; // `helm search repo <begriff>`
+  const term = c.args[0] || "";
   if (host.helmRepos.length === 0) return host._err("Error: no repositories configured", "Erst 'helm repo add bitnami https://charts.bitnami.com/bitnami'");
   const charts = [
     ["bitnami/nginx", "18.1.0", "1.27.0", "NGINX – der beliebte Webserver"],
@@ -370,25 +370,21 @@ function helmStatus(host: HelmHost, c: Call): string {
   return ["NAME: " + rel.name, "NAMESPACE: " + DEFAULT_NAMESPACE, "STATUS: deployed", "REVISION: " + rel.revision].join("\n");
 }
 
-/** `helm dependency`/`dep update|build|up <chart>` – Chart-Abhängigkeiten aktualisieren. */
-function helmDependency(host: HelmHost, c: Call): string {
-  const action = c.args[0];
-  const ref = c.args[1];
-  if (action === "update" || action === "build" || action === "up") {
-    if (!ref) return host._err("helm dependency " + action + ": Chart-Pfad fehlt.", "z.B. 'helm dependency update ./mein-chart'");
-    const name = chartNameOf(ref);
-    if (!host.charts.some(c => c.name === name)) return host._err('Error: path "' + ref + '" not found', "Chart erst mit 'helm create " + name + "' anlegen.");
-    return [
-      "Hang tight while we grab the latest from your chart repositories...",
-      "Saving " + name + " to " + ref + "/charts",
-      "Deleting outdated charts",
-      "",
-      "Successfully got an update from your chart repositories.",
-      "Chart.lock updated.",
-    ].join("\n");
-  }
-  return host._err("helm dependency: unbekannte Aktion '" + (action || "") + "'", "Gültig: update, build, up");
-}
+/** `helm dependency update|up|build <chart>` – Chart-Abhängigkeiten aktualisieren; `action` nennt der Eintrag (`c.args` = hinter der Aktion). */
+const helmDependency = (action: string): HelmHandler => (host, c) => {
+  const ref = c.args[0];
+  if (!ref) return host._err("helm dependency " + action + ": Chart-Pfad fehlt.", "z.B. 'helm dependency " + action + " ./mein-chart'");
+  const name = chartNameOf(ref);
+  if (!host.charts.some(c => c.name === name)) return host._err('Error: path "' + ref + '" not found', "Chart erst mit 'helm create " + name + "' anlegen.");
+  return [
+    "Hang tight while we grab the latest from your chart repositories...",
+    "Saving " + name + " to " + ref + "/charts",
+    "Deleting outdated charts",
+    "",
+    "Successfully got an update from your chart repositories.",
+    "Chart.lock updated.",
+  ].join("\n");
+};
 
 // `--set` wird ausgewertet (nur `replicaCount=<n>`); `--values/-f` wird angenommen, aber nicht ausgewertet:
 // die Quest und der Drill lehren die Schichtung mehrerer Werte-Dateien, der Simulator liest sie nicht.
@@ -399,7 +395,19 @@ const VALUES = flag(true, "--values", "-f");
  *  Funktion oben – der Dispatcher (`helmCommand`) bleibt ein Aufruf und wächst nicht mit dem Befehlssatz. */
 const LIST: SubEntry<HelmHandler> = { run: helmList, maxArgs: 0, hints: { "-A": "Der Simulator kennt nur einen Namespace – 'helm list' zeigt alle Releases." } };
 const UNINSTALL: SubEntry<HelmHandler> = { run: helmUninstall, maxArgs: OFFENE_LISTE };
-const DEPENDENCY: SubEntry<HelmHandler> = { run: helmDependency, maxArgs: 2 };
+
+/** `helm dependency`/`dep`: simuliert sind `update` (Kurzform `up`) und `build`, je mit eigener (leerer) Flag-Tabelle. */
+const DEP_UPDATE: SubEntry<HelmHandler> = { run: helmDependency("update"), maxArgs: 1 };
+const HELM_DEPENDENCY: Dispatch<SubEntry<HelmHandler>> = {
+  cmd: "helm dependency",
+  table: { update: DEP_UPDATE, up: DEP_UPDATE, build: { run: helmDependency("build"), maxArgs: 1 } },
+  real: ["list"],
+};
+/** `dependency` und `dep` teilen die Gruppe (die „kann“-Liste nennt sie einmal). */
+const DEPENDENCY = { group: HELM_DEPENDENCY };
+
+/** `helm search repo`: der Hub (`helm search hub`) ist ein echter, aber nicht simulierter Unterbefehl. */
+const HELM_SEARCH: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm search", table: { repo: { run: helmSearch, maxArgs: 1 } }, real: ["hub"] };
 
 /** `helm repo`: eine Gruppe, simuliert sind `add`, `update`, `list`. */
 const HELM_REPO: Dispatch<SubEntry<HelmHandler>> = {
@@ -410,7 +418,7 @@ const HELM_REPO: Dispatch<SubEntry<HelmHandler>> = {
 
 const HELM: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm", table: {
   repo: { group: HELM_REPO },
-  search: { run: helmSearch, maxArgs: 2 },
+  search: { group: HELM_SEARCH },
   create: { run: helmCreate, maxArgs: 1 },
   template: { run: helmTemplate, maxArgs: 2 },
   lint: { run: helmLint, maxArgs: 1 },

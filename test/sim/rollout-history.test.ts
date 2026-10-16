@@ -174,12 +174,13 @@ describe("Negativfälle", () => {
     expect(out(sim, "kubectl rollout undo statefulset/db")).toContain("nur für Deployments");
   });
 
-  test("--to-revision bei restart und history: unknown flag, nichts passiert", () => {
+  test("--to-revision bei restart und history: Flag des anderen Ziels abgelehnt (#1491), nichts passiert", () => {
     const sim = dreiRevisionen(); const vorher = pods(sim);
     for (const a of ["restart", "history"]) {
       const r = sim.exec("kubectl rollout " + a + " deployment/web --to-revision=1");
       expect(r.error).toBe(true);
-      expect(r.output).toContain("error: unknown flag: --to-revision");
+      expect(r.output).toContain("Nicht simuliert: das Flag '--to-revision' bei 'kubectl rollout " + a + "'");
+      expect(r.output).toContain("kubectl rollout undo deployment <name> --to-revision=<n>");
     }
     expect(pods(sim)).toEqual(vorher);
   });
@@ -506,7 +507,7 @@ describe("Mehrfachziele bei history und undo (Merge mit #1488)", () => {
     const sim = zwei(); const vorher = pods(sim);
     const r = sim.exec("kubectl rollout restart deployment web api --to-revision=1");
     expect(r.error).toBe(true);
-    expect(r.output).toContain("unknown flag: --to-revision");
+    expect(r.output).toContain("das Flag '--to-revision' bei 'kubectl rollout restart'");
     expect(pods(sim)).toEqual(vorher);
   });
 });

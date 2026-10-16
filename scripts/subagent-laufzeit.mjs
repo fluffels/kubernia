@@ -2,10 +2,13 @@
 /**
  * Laufzeit eines Subagent-Typs (#1382), z. B. der Planer-Laufzeit aus docs/model-routing.md § Planer-Laufzeit.
  *
- *   node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]
+ *   node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner | --typen] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]
+ *
+ * `--typen` (#1668) statt `--agent`: Rollen-Übersicht über alle Typen (`typenUebersicht`), je `agentType` (fehlend oder kein String: `unbekannt`) Läufe, offene, Requests, Σ Kosten (aufgezeichnet) und
+ * Σ geschätzt getrennt (`-` ohne bepreisten Lauf), Läufe ohne Preis und Modelle; offene Läufe zählen mit. `--typen` mit `--agent` oder `--schnitt` ist ein Aufruf-Fehler.
  *
  * `--ticket`/`--ohne` (wiederholbar) lassen Läufe eines Tickets ein- bzw. ausschließen, bevor `parallel` und das Aggregat gerechnet werden (z. B. Gegenprobe-Läufe).
- * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` und deren JSONL (nicht alle Haupttranskripte).
+ * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` (mit `--typen` alle) und deren JSONL (nicht alle Haupttranskripte).
  * Je Lauf: Ticket (`kq-<nr>` im Patch-Pfad, sonst Worktree, sonst erstes `#<nr>` im Prompt; `ticketAusLauf`), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
  * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
  * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request), Kosten in $ (`kosten`, Summe der Call-Preise aus PRICES, `null` bei einem Call ohne Preis; nur
@@ -19,7 +22,7 @@
 import { pathToFileURL } from "node:url";
 import { median, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
 import { projektOrdner } from "./transkript.mjs";
-import { ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
+import { ladeAlleLaeufe, ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
 const tagVon = (t) => new Date(t).toISOString().slice(0, 10);
 const stat = (laeufe) => ({
@@ -82,6 +85,44 @@ export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schni
   return { agent, laeufe: alle.map((l) => ({ ...l, start: new Date(l.start).toISOString(), ende: new Date(l.ende).toISOString() })), aggregat };
 }
 
+const TYP_UNBEKANNT = "unbekannt";
+const typZeile = (agentType, liste) => {
+  const bepreist = liste.filter((l) => l.kosten !== null);
+  const geschaetzt = liste.filter((l) => l.kostenGeschaetzt !== null);
+  return {
+    agentType,
+    n: liste.length,
+    offen: liste.filter((l) => l.offen).length,
+    requests: liste.reduce((n, l) => n + l.requests, 0),
+    // Summe nur über Läufe mit Preis; ohne einen solchen Lauf null (nie 0 $ für ein unbekanntes Modell).
+    kostenSumme: bepreist.length ? bepreist.reduce((s, l) => s + l.kosten, 0) : null,
+    kostenGeschaetztSumme: geschaetzt.length ? geschaetzt.reduce((s, l) => s + l.kostenGeschaetzt, 0) : null,
+    ohnePreis: liste.length - bepreist.length,
+    modelle: [...new Set(liste.flatMap((l) => l.modelle))].sort(),
+  };
+};
+
+/**
+ * Rollen-Übersicht (#1668): alle Läufe im Fenster [von, bis] (Start) je `agentType`, offene Läufe zählen mit.
+ * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], von?: string, bis?: string, tickets?: number[], ohne?: number[] }} e
+ */
+export function typenUebersicht({ laeufe, von, bis, tickets = [], ohne = [] }) {
+  const alle = laeufe
+    .map(laufAus)
+    .filter(Boolean)
+    .filter((l) => passtTicketFilter(l.ticket, { tickets, ohne }))
+    .filter((l) => (!von || l.start >= ms(von)) && (!bis || l.start <= ms(bis)));
+  const typ = (l) => (typeof l.agentType === "string" && l.agentType !== "" ? l.agentType : TYP_UNBEKANNT);
+  const namen = [...new Set(alle.map(typ))].sort((a, b) => (a === TYP_UNBEKANNT) - (b === TYP_UNBEKANNT) || (a < b ? -1 : a > b ? 1 : 0));
+  return {
+    modus: "typen",
+    von: von ?? null,
+    bis: bis ?? null,
+    typen: namen.map((n) => typZeile(n, alle.filter((l) => typ(l) === n))),
+    gesamt: typZeile("alle", alle),
+  };
+}
+
 const f1 = (x) => (x === null ? "-" : x.toFixed(1));
 const f2 = (x) => (x === null ? "-" : x.toFixed(2));
 
@@ -111,10 +152,18 @@ export function renderMarkdown(r) {
   return out.join("\n");
 }
 
+/** Markdown der Rollen-Übersicht. */
+export function renderTypen(r) {
+  if (!r.gesamt.n) return "keine Läufe im Fenster";
+  const out = ["| agentType | Läufe | offen | Requests | Σ Kosten ($, aufgezeichnet) | Σ Kosten geschätzt ($) | ohne Preis | Modelle |", "|---|--:|--:|--:|--:|--:|--:|---|"];
+  for (const z of [...r.typen, r.gesamt]) out.push(`| ${z.agentType} | ${z.n} | ${z.offen} | ${z.requests} | ${f2(z.kostenSumme)} | ${f2(z.kostenGeschaetztSumme)} | ${z.ohnePreis} | ${z.modelle.length ? z.modelle.join(", ") : "-"} |`);
+  return out.join("\n");
+}
+
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
 export function parseArgs(argv) {
-  const a = { agent: "kubernia-planner", json: false, tickets: [], ohne: [] };
+  const a = { agent: "kubernia-planner", json: false, typen: false, agentGesetzt: false, tickets: [], ohne: [] };
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
   const nummer = (name, wert) => {
     const { nr, fehler } = ticketNummer(name, wert);
@@ -125,13 +174,18 @@ export function parseArgs(argv) {
     const k = argv[i];
     if (k === "--von") a.von = argv[++i];
     else if (k === "--bis") a.bis = argv[++i];
-    else if (k === "--agent") a.agent = argv[++i];
+    else if (k === "--agent") {
+      a.agent = argv[++i];
+      a.agentGesetzt = true;
+    } else if (k === "--typen") a.typen = true;
     else if (k === "--ticket") a.tickets.push(nummer(k, argv[++i]));
     else if (k === "--ohne") a.ohne.push(nummer(k, argv[++i]));
     else if (k === "--schnitt") a.schnitt = argv[++i];
     else if (k === "--projekt") a.projekt = argv[++i];
     else if (k === "--json") a.json = true;
   }
+  // `--typen` zählt über alle Typen und kennt keinen Schnitt: die Kombination wäre still falsch.
+  if (a.typen && (a.agentGesetzt || a.schnitt)) a.fehler ??= "--typen gilt für alle Typen und verträgt sich nicht mit --agent oder --schnitt";
   return a;
 }
 
@@ -140,10 +194,15 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.fehler || !args.von) {
     if (args.fehler) console.error(args.fehler);
-    console.error("Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]");
+    console.error("Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner | --typen] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]");
     process.exit(2);
   }
   const dir = projektOrdner(args.projekt);
+  if (args.typen) {
+    const u = typenUebersicht({ laeufe: ladeAlleLaeufe(dir, args.von), von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne });
+    console.log(args.json ? JSON.stringify(u, null, 2) : renderTypen(u));
+    return;
+  }
   const r = laufzeiten({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, schnitt: args.schnitt, tickets: args.tickets, ohne: args.ohne });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
