@@ -239,11 +239,18 @@ describe("harnessQuellen: der Loader", () => {
     ["mcp", { ...CONFIG, harness: { ...CONFIG.harness, mcp: undefined } }],
     ["ciworkflow", { ...CONFIG, kennzahlen: {} }],
     ["gate", { ...CONFIG, gates: { ...CONFIG.gates, chains: "verify" } }],
+    ["gate", { ...CONFIG, gates: { chains: CONFIG.gates.chains } }],
+    ["gate", { ...CONFIG, gates: undefined }],
   ];
   test.each(OHNE)("nicht konfigurierter Schlüssel (%s): der Binder fehlt in der Antwort, die übrigen bleiben (pruefeHarness meldet ihn rot)", (binder, config) => {
     const q = api.harnessQuellen(fixture(FILES()), config);
     assert.equal(q[binder], undefined);
     assert.deepEqual(Object.keys(q).sort(), api.HARNESS_BINDER.filter((b) => b !== binder).sort());
+  });
+
+  test("eine Config ganz ohne harness-Block: die sechs Harness-Binder fehlen, CI und Gates bleiben (kein TypeError)", () => {
+    const q = api.harnessQuellen(fixture(FILES()), { gates: CONFIG.gates, kennzahlen: CONFIG.kennzahlen });
+    assert.deepEqual(Object.keys(q).sort(), ["ciworkflow", "gate"]);
   });
 
   test("nur die angeforderten Binder werden gelesen (fehlende settings.json stört dann nicht)", () => {
