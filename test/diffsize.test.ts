@@ -29,11 +29,10 @@ type Trailers = { valid: { nr: number; reason: string }[]; invalid: string[] };
 type CheckDiffSizeModule = {
   MAX_FILES: number;
   MAX_LINES: number;
-  OVERRIDE_KEY: string;
   readThresholds: (env?: Env) => Thresholds;
   parseNumstat: (text: string) => { files: { path: string; added: number; deleted: number; binary: boolean }[] } & Sums;
   evaluate: (sums: Sums, t: Thresholds) => Eval;
-  checkDiffSize: (opts: { runGit: RunGit; env?: Env }) => Record<string, unknown>;
+  checkDiffSize: (opts: { runGit: RunGit; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
   isGeneratedArtifact: (path: string) => boolean;
 };
 
@@ -59,13 +58,17 @@ const { parseOverrideTrailers, sliceOverride } = sliceRaw as {
 const {
   MAX_FILES,
   MAX_LINES,
-  OVERRIDE_KEY,
   readThresholds,
   parseNumstat,
   evaluate,
   checkDiffSize,
   isGeneratedArtifact,
 } = checkDiffRaw as CheckDiffSizeModule;
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Record<string, string> };
+/** Zeilen der echten Config (KQ-); ein anderes Präfix darf die KQ-Zeile nicht zählen lassen. */
+const ZEILEN = commitZeilen("KQ-", "kubernia-planner");
+const ZEILEN_AB = commitZeilen("AB-", "kubernia-planner");
+const OVERRIDE_KEY = ZEILEN.diffsizeOverride;
 
 describe("Diff-Größenbudget (#533)", () => {
   test("parseNumstat: summiert added+deleted, zählt Dateien, behandelt Binärdateien", () => {
@@ -234,6 +237,14 @@ describe("Diff-Größenbudget (#533)", () => {
   });
 
   const TRAILER = "chore: bewusst breit\n\nKQ-Diffsize-Override: #317 Epic-Split\n";
+
+  test("Präfix aus der Config (#1741): mit AB- zählt die KQ-Override-Zeile nicht, die AB-Zeile schon", () => {
+    const mitKq = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv, zeilen: ZEILEN_AB });
+    assert.equal(mitKq.over, true);
+    assert.equal(mitKq.allowed, false);
+    const mitAb = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER.replace("KQ-", "AB-")), env: tightEnv, zeilen: ZEILEN_AB });
+    assert.equal(mitAb.allowed, true);
+  });
 
   test("checkDiffSize: über Budget MIT Trailer im Slice → allowed (durchgelassen)", () => {
     const r = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv });

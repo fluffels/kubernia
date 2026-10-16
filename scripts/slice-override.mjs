@@ -3,21 +3,55 @@
 /**
  * Slice-Override per Commit-Zeile (#1269, #1309) — das gemeinsame Modul der Gate-Skripte.
  *
- * Vier Wächter lassen einen Slice mit Pflicht-Begründung durch (`KQ-Diffsize-Override`,
- * `KQ-Diffcov-Override`, `KQ-Lockfile-Override`, `KQ-Review-Override`): eine Zeile `<KEY>: #<nr> <warum>` am Zeilenanfang einer
+ * Vier Wächter lassen einen Slice mit Pflicht-Begründung durch (Diffsize-, Diffcov-, Lockfile- und Review-Override, Schlüssel aus
+ * `commitZeilen`, Präfix aus der Projekt-Config): eine Zeile `<KEY>: #<nr> <warum>` am Zeilenanfang einer
  * Commit-Message im Slice (`<basis>..HEAD`, als Betreff oder Body-Zeile). Parser, Slice-Lesen und die Ausgabe-Texte liegen hier genau
  * einmal, damit lokal, im PR und auf main dasselbe gilt und kein Wächter eine eigene Variante pflegt.
  *
  * Importiert bewusst nichts aus den check-Skripten (keine Zyklen); ein Wächter-Skript importiert dieses
  * Modul. Pfad steht in `.github/protected-paths.json` (Gate).
  */
+import { AGENT_MUSTER, COMMIT_PRAEFIX_MUSTER, ladeProjektConfig } from "./projekt-config-lib.mjs";
+
+/** Die Commit-Zeilen-Schlüssel eines Projekts (#1741, ADR 0022 F3): alle aus dem Präfix der Projekt-Config, kein Standardwert.
+ *  `praefix` muss COMMIT_PRAEFIX_MUSTER erfüllen, `planer` AGENT_MUSTER, sonst wirft die Funktion. Pur. */
+export function commitZeilen(praefix, planer) {
+  if (typeof praefix !== "string" || !COMMIT_PRAEFIX_MUSTER.test(praefix)) {
+    throw new Error(`Commit-Zeilen-Präfix ungültig: ${JSON.stringify(praefix)} (praefixe.commitZeile in der Projekt-Config, Muster ${COMMIT_PRAEFIX_MUSTER})`);
+  }
+  if (typeof planer !== "string" || !AGENT_MUSTER.test(planer)) {
+    throw new Error(`Planer-Name ungültig: ${JSON.stringify(planer)} (agenten.planer in der Projekt-Config)`);
+  }
+  return {
+    praefix,
+    planer,
+    plan: `${praefix}Plan`,
+    review: `${praefix}Review`,
+    reviewOverride: `${praefix}Review-Override`,
+    diffsizeOverride: `${praefix}Diffsize-Override`,
+    diffcovOverride: `${praefix}Diffcov-Override`,
+    lockfileOverride: `${praefix}Lockfile-Override`,
+  };
+}
+
+/** Commit-Zeilen aus einer geprüften Projekt-Config. Pur. */
+export function commitZeilenAus(config) {
+  return commitZeilen(config?.praefixe?.commitZeile, config?.agenten?.planer);
+}
+
+/** Lädt die Projekt-Config (Standard: die echte) und leitet die Commit-Zeilen ab; wirft mit der Meldung des Laders (Pfad, Schlüssel, `Fix:`). */
+export function ladeCommitZeilen({ rootDir, pfad } = {}) {
+  return commitZeilenAus(ladeProjektConfig({ rootDir, pfad }));
+}
+
+const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main
  *  jeden Commit-BETREFF schreibt; Body-Zeilen bleiben dort unverändert. Gruppe 1 = Zeile ohne Präfix,
- *  Gruppe 2 = Wert. `key` ist eine feste Konstante ohne Regex-Sonderzeichen. */
+ *  Gruppe 2 = Wert. `key` wird wörtlich eingesetzt (escaped). */
 function zeilenRe(key) {
-  return new RegExp(`^(?:\\* )?(${key}:[ \\t]*(.*))$`, "gm");
+  return new RegExp(`^(?:\\* )?(${escapeRe(key)}:[ \\t]*(.*))$`, "gm");
 }
 
 /** Sucht Zeilen `<key>: <wert>` am ZEILENANFANG (nicht eingerückt, nicht in Prosa) in
@@ -109,14 +143,14 @@ export function normalisiereLens(name) {
     .replace(/\s+/g, "-");
 }
 
-/** Wert eines Felds der `KQ-Review`-Zeile, tolerant (#1331): reicht bis zum nächsten ` key=`, damit auch
+/** Wert eines Felds der Review-Zeile, tolerant (#1331): reicht bis zum nächsten ` key=`, damit auch
  *  Leerzeichen nach Kommas gehen. `null`, wenn das Feld fehlt. */
 function feldWert(reviewWert, key) {
   const m = new RegExp(`(?:^|\\s)${key}=(.*?)(?=\\s+[a-z]+=|$)`).exec(reviewWert);
   return m ? m[1] : null;
 }
 
-/** Brillen der `KQ-Review`-Zeile; jeder Name wird normalisiert (Groß-/Kleinschreibung, Umlaute). */
+/** Brillen der Review-Zeile; jeder Name wird normalisiert (Groß-/Kleinschreibung, Umlaute). */
 function lensenAus(reviewWert) {
   return (feldWert(reviewWert, "lenses") ?? "")
     .split(",")
@@ -151,19 +185,22 @@ function zusatzpassAus(reviewWert) {
   return anzahl >= 1 && grund !== "" ? { anzahl, grund } : { ungueltig: wert };
 }
 
-/** Parst die letzte `KQ-Plan:`- und die letzte `KQ-Review:`-Zeile (am Zeilenanfang, nicht
- *  eingerückt) aus beliebigem Message-Text. Pure. Felder, die fehlen oder kaputt sind, bleiben
+/** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
+ *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
-export function parseNachweis(text) {
-  const planWert = lastLine(text, "KQ-Plan");
+export function parseNachweis(text, zeilen) {
+  if (!zeilen || typeof zeilen.plan !== "string" || typeof zeilen.review !== "string" || typeof zeilen.planer !== "string") {
+    throw new Error("parseNachweis braucht die Commit-Zeilen (commitZeilen(praefix, planer)), keinen Standardwert");
+  }
+  const planWert = lastLine(text, zeilen.plan);
   let plan = null;
   if (planWert !== null) {
     const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
-    if (planWert === "kubernia-planner") plan = { art: "planer" };
+    if (planWert === zeilen.planer) plan = { art: "planer" };
     else if (ohne) plan = { art: "ohne", grund: ohne[1].trim() };
     else plan = { art: "ungueltig", zeile: planWert };
   }
-  const reviewWert = lastLine(text, "KQ-Review");
+  const reviewWert = lastLine(text, zeilen.review);
   let review = null;
   if (reviewWert !== null) {
     const felder = {};

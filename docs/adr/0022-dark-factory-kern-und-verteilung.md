@@ -184,6 +184,8 @@ F2 ist umgesetzt. Entscheidungen:
 
 Präzisiert durch #1728: Schema `version` 2 mit der Liste `boards` statt `board`.
 
+Präzisiert durch #1741: Präfixe, Labels und Agentennamen stehen als Pflichtschlüssel in der Config (Fortschreibung #1741 unten).
+
 Präzisiert durch #1628: Die Workflows checken das volle Repo aus und setzen die Position über `scripts/board-place.mjs` (Wiederholung, rot bei endgültigem Scheitern); Sparse-Checkout und `set_board_top` entfallen für die Inbox-Workflows.
 
 ## Fortschreibung #1613 (2026-10-16): Sync-Werkzeug und Drift-Gate (F9)
@@ -268,3 +270,12 @@ Teil 3 von F11 ist umgesetzt: `node scripts/board-place.mjs --umzug [--dry-run]`
 - **Sonderfälle:** ein Item auf beiden Boards wird nur entfernt; ein Item mit Status ungleich Todo wird gemeldet (Exit 1) statt umgezogen; geschlossene Items bleiben als Historie.
 - **Ansichten:** „Spiel“ und „Agentic Engineering“ des Produkt-Boards sind gelöscht (freigegeben im Pre-Flight); beide Boards tragen nur „View 1“.
 - **Grenze:** die REST-Liste hinkt gelöschten Items hinterher; vor einem zweiten Live-Lauf `--umzug --dry-run` wiederholen, bis er „nichts zu tun“ meldet.
+
+## Fortschreibung #1741 (2026-10-16): Präfixe, Labels und Agenten in der Projekt-Config (F3, Teil 1)
+
+Teil 1 von F3 ist umgesetzt: das Schema, die Quelle der Commit-Zeilen und die Wächter-Begriffe für alle F3-Werte. Die Teile K2 bis K8 (Epic #1707) senken nur noch die Baseline. Entscheidungen:
+
+- **Schlüssel und Muster, kein Default:** `praefixe.commitZeile` (`^[A-Z][A-Z0-9]*-$`), `praefixe.branch` (Buchstaben, Ziffern, `_`, `-`, `/`) und `praefixe.worktree` (wie Branch, ohne `/`; kein Präfix darf Regex-Sonderzeichen oder Leerraum enthalten), `labels.harness|festgefahren|forum|dependabotInbox` (nicht-leere Texte; weitere Label-Schlüssel sind erlaubt und werden gleich geprüft; das Inbox-Label ist ein eigener Schlüssel, auch wenn es heute den Wert von `harness` trägt) und `agenten.planer|umsetzer|lens|gruppe|ticketSkill` (Name ohne Leerraum und `:`, nicht mit `-` am Anfang). Fehlt ein Schlüssel oder passt das Muster nicht, bricht der Lader mit Pfad, Schlüssel und „Fix:“-Zeile ab. `version` bleibt 2.
+- **Commit-Zeilen aus dem Präfix:** `commitZeilen(praefix, planer)` in `scripts/slice-override.mjs` leitet Plan-, Review- und die vier Override-Schlüssel ab. Die puren Parser (`parseNachweis`, `bewerteNachweis`, `nachweisAusCommits`, `bewertePrs`) bekommen die Zeilen als Pflichtparameter, die Gates und Messskripte laden sie über `ladeCommitZeilen()` aus der echten Config (`lauf-ergebnis` über `ladeProjektConfig`, weil es auch `labels.festgefahren` braucht). Der Planer-Name in der Plan-Zeile ist `agenten.planer`. `--config <pfad>` gibt es nur an `check-review-nachweis` (Tests und fremde Projekte); die `KQ_*`-Umgebungsvariablen der Gates behalten ihre Namen.
+- **Wächter-Begriffe:** Praefix (Commit-Zeilen-Präfix), Branch, Worktree, Label (nur Werte mit `:`) und Agent, alle groß/klein-genau und wörtlich (Alternativen nach Länge absteigend, damit ein Kurzname nicht im Langnamen mitzählt). Die Baseline erfasst den Bestand und sinkt nur.
+- **Grenzen:** Ein Label ohne `:` (etwa `forum`) zählt nicht, weil es als Wort überall vorkommt. Der Worktree-Begriff steckt im Branch-Präfix, beides zählt (gewollte Doppelzählung); der Agent-Begriff deckt sich bei einem Ticket-Skill, der wie das Repo heißt, mit dem Repo-Begriff. Ein Wechsel des Commit-Zeilen-Präfixes lässt alte Zeilen aus `lauf-ergebnis` und `token-baseline` herausfallen (die Gates prüfen nur den Slice des PRs); historische Nachweise bleiben gültig, solange das Präfix gleich bleibt. Die `KQ_*`-Namen der Umgebungsvariablen zählt kein Begriff.

@@ -25,6 +25,12 @@ import { dirname, join } from "node:path";
 // tsconfig-include) – der Laufzeit-Import genügt, Typen lokal deklariert.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkLock from "../scripts/check-lockfile.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceRaw from "../scripts/slice-override.mjs";
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Record<string, string> };
+/** Zeilen der echten Config (KQ-); ein anderes Präfix darf die KQ-Zeile nicht zählen lassen. */
+const ZEILEN = commitZeilen("KQ-", "kubernia-planner");
+const ZEILEN_AB = commitZeilen("AB-", "kubernia-planner");
 
 type Problem = { kind: string; [k: string]: unknown };
 type Audit = { ok: boolean; problems: Problem[] };
@@ -157,11 +163,10 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
     invalidOverrides?: string[];
   };
   const sliceModul = checkLock as unknown as {
-    checkLockfileSlice: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => Slice;
-    OVERRIDE_KEY: string;
+    checkLockfileSlice: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; zeilen?: Record<string, string> }) => Slice;
   };
   const checkLockfileSlice = sliceModul.checkLockfileSlice;
-  const OVERRIDE = sliceModul.OVERRIDE_KEY;
+  const OVERRIDE = ZEILEN.lockfileOverride;
   const DEPENDABOT = "49699333+dependabot[bot]@users.noreply.github.com";
   const MENSCH = "12345+fluffels@users.noreply.github.com";
 
@@ -220,6 +225,12 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
     assert.equal(ungueltig.allowed, false);
     assert.equal(ungueltig.over, true);
     assert.deepEqual(ungueltig.invalidOverrides, [`${OVERRIDE}: ohne nummer`]);
+  });
+
+  test("Präfix aus der Config (#1741): mit AB- zählt die KQ-Override-Zeile nicht, die AB-Zeile schon", () => {
+    const mitZeilen = (messages: string) => checkLockfileSlice({ runGit: gitMit({ geaendert: "package-lock.json\n", messages }), env: {}, zeilen: ZEILEN_AB });
+    assert.equal(mitZeilen(`chore\n\n${OVERRIDE}: #99 npm-Update bewusst\n`).allowed, false);
+    assert.equal(mitZeilen(`chore\n\nAB-Lockfile-Override: #99 npm-Update bewusst\n`).allowed, true);
   });
 
   test("Override ohne Drift (Lockfile mit package.json, Dependabot, kein Lockfile-Diff) ist stale", () => {

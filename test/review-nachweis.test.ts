@@ -7,10 +7,11 @@
  */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -21,14 +22,16 @@ type Nachweis = {
   plan: { art: string; grund?: string; zeile?: string } | null;
   review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; verdikt: string | null } | null;
 };
+type Zeilen = { praefix: string; planer: string; plan: string; review: string; reviewOverride: string };
 type Mod = {
   MAX_FIX_RUNDEN: number;
   MAX_REVIEW_PAESSE: number;
-  parseNachweis: (text: string) => Nachweis;
+  parseNachweis: (text: string, zeilen: Zeilen) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[] }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: Zeilen }) => string[];
   konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
-  checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => {
+  vorlage: (zeilen: Zeilen) => string;
+  checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen?: () => Zeilen }) => {
     ok: boolean;
     fehler: string[];
     override?: string;
@@ -38,7 +41,16 @@ type Mod = {
 };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/check-review-nachweis.mjs";
-const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis, pflichtLenses, bewerteNachweis, checkReviewNachweis, konfliktMergesNach } = raw as Mod;
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceRaw from "../scripts/slice-override.mjs";
+const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, pflichtLenses, konfliktMergesNach } = raw as Mod;
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
+
+/** Die Zeilen der echten Config (KQ-, kubernia-planner); die Wrapper reichen sie durch, damit die Bestandstests unverändert lesbar bleiben. */
+const Z = commitZeilen("KQ-", "kubernia-planner");
+const parseNachweis = (text: string) => (raw as Mod).parseNachweis(text, Z);
+const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen"> & { zeilen?: Zeilen }) => (raw as Mod).bewerteNachweis({ zeilen: Z, ...o });
+const checkReviewNachweis = (o: Parameters<Mod["checkReviewNachweis"]>[0]) => (raw as Mod).checkReviewNachweis({ ladeZeilen: () => Z, ...o });
 
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
@@ -417,5 +429,199 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
     const reviewt = git(dir, "rev-parse", "HEAD").trim();
     git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
     assert.equal(pruefe({ dir, basis }).ok, true);
+  });
+});
+
+// ── Commit-Zeilen-Präfix aus der Projekt-Config (#1741, ADR 0022 F3) ─────────────────────────────
+
+/** Wörtliche Commit-Message des gemergten Squash-Commits 1d193666 (Betreff als `* `-Zeilen, zwei Nachweise im Body). */
+const SQUASH_1D193666 = [
+  "feat(harness): Abschluss ohne offene Befunde, BEFUNDE-Zeile, brain-input im Fortsetzungs-Pfad (#1723) (#1733)",
+  "",
+  "* feat(harness): R0 verlangt BEFUNDE-Zeile im Umsetzer-Bericht (#1723)",
+  "",
+  "* feat(harness): Abschluss ohne offene Befunde in AGENTS, Skills, Workflow, Umsetzer (#1723)",
+  "",
+  "* docs(harness): Ticket-Ende-Mechanik, Glossar, Workflow-Deckel (#1723)",
+  "",
+  "* fix(harness): Review-Runde 1 (#1723)",
+  "",
+  "Runde 1: blocker=architektur:2,test-adaequanz:2",
+  "",
+  "* fix(harness): Review-Runde 2, i-Flags getestet (#1723)",
+  "",
+  "Runde 2: blocker=test-adaequanz:2",
+  "",
+  "* chore(harness): Review-Nachweis (#1723)",
+  "",
+  "KQ-Plan: kubernia-planner",
+  "KQ-Review: head=7e145d331598bb4009a8a504b87a7347930416be runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok",
+  "",
+  "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+  "Claude-Session: https://claude.ai/code/session_01LpXppXWFQtLt6rzgeapR9x",
+  "",
+  "* fix(harness): AGENTS.md-Bullet knapper für das Zeichenbudget (#1723)",
+  "",
+  "* chore(harness): Review-Nachweis nach Merge (#1723)",
+  "",
+  "KQ-Plan: kubernia-planner",
+  "KQ-Review: head=47da050d18478970b277ae0d9218482fdd79fd11 runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok",
+  "",
+  "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+  "Claude-Session: https://claude.ai/code/session_01LpXppXWFQtLt6rzgeapR9x",
+  "",
+  "---------",
+  "",
+  "Co-authored-by: Claude Sonnet 5.5 <noreply@anthropic.com>",
+].join("\n");
+
+describe("Präfix und Planer kommen aus der Config (#1741)", () => {
+  const bewerte = (text: string, zeilen: Zeilen) =>
+    (raw as Mod).bewerteNachweis({
+      nachweis: (raw as Mod).parseNachweis(text, zeilen),
+      dateien: ["src/x.ts"],
+      headBekannt: true,
+      headImSlice: true,
+      zeilen,
+    });
+
+  test("AK3: die wörtliche Squash-Message eines gemergten Commits ist mit der Config KQ- ein gültiger Nachweis", () => {
+    const n = parseNachweis(SQUASH_1D193666);
+    assert.deepEqual(n.plan, { art: "planer" });
+    assert.equal(n.review?.head, "47da050d18478970b277ae0d9218482fdd79fd11"); // der jüngste Nachweis gilt
+    assert.equal(n.review?.runden, 3);
+    assert.deepEqual(bewerte(SQUASH_1D193666, Z), []);
+  });
+
+  test("Red-Green: mit der Config AB- zählen dieselben KQ-Zeilen nicht, die Meldungen nennen das Präfix der Config", () => {
+    const ab = commitZeilen("AB-", "kubernia-planner");
+    const f = bewerte(SQUASH_1D193666, ab).join("\n");
+    assert.match(f, /AB-Plan-Zeile fehlt/);
+    assert.match(f, /AB-Review-Zeile fehlt/);
+    assert.doesNotMatch(f, /KQ-/);
+    assert.deepEqual(bewerte(SQUASH_1D193666.replaceAll("KQ-", "AB-"), ab), []);
+  });
+
+  test("ein ungültiger Plan nennt den Planer der Config, nicht einen festen Namen", () => {
+    const f = bewerte(`KQ-Plan: egal\nKQ-Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`, commitZeilen("KQ-", "mein-planer")).join("\n");
+    assert.match(f, /"mein-planer"/);
+    assert.doesNotMatch(f, /"kubernia-planner"/);
+  });
+
+  test("bewerteNachweis ohne Zeilen wirft (kein Standardwert)", () => {
+    assert.throws(
+      () => (raw as unknown as { bewerteNachweis: (o: unknown) => string[] }).bewerteNachweis({ nachweis: { plan: null, review: null }, dateien: [], headBekannt: false, headImSlice: false }),
+      /Commit-Zeilen/,
+    );
+  });
+
+  test("AK4: XQ-Plan und XQ-Review zählen bei der Config KQ- nicht", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review().replaceAll("KQ-", "XQ-") }), env });
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join("\n"), /KQ-Plan-Zeile fehlt/);
+  });
+
+  test("ein Override trägt das Präfix der Config: KQ-Review-Override gilt bei KQ-, bei AB- nicht", () => {
+    const text = "KQ-Review-Override: #5 Revert-PR";
+    assert.equal(checkReviewNachweis({ runGit: fakeGit({ messages: text }), env }).ok, true);
+    const ab = (raw as Mod).checkReviewNachweis({ ladeZeilen: () => commitZeilen("AB-", "kubernia-planner"), runGit: fakeGit({ messages: text }), env });
+    assert.equal(ab.ok, false);
+  });
+
+  test("ein Ladefehler der Config macht den Check rot, ohne dass git gefragt wird", () => {
+    const r = (raw as Mod).checkReviewNachweis({
+      ladeZeilen: () => {
+        throw new Error("Projekt-Config ungültig: praefixe.commitZeile fehlt\nFix: ergänzen");
+      },
+      runGit: () => {
+        throw new Error("git darf nicht aufgerufen werden");
+      },
+      env,
+    });
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join("\n"), /praefixe\.commitZeile/);
+    assert.doesNotMatch(r.fehler.join("\n"), /git darf nicht/);
+  });
+
+  test("die Vorlage trägt Präfix und Planer der Config", () => {
+    const v = (raw as Mod).vorlage(commitZeilen("AB-", "x-planer"));
+    assert.match(v, /^AB-Plan: x-planer\nAB-Review: head=/);
+    assert.doesNotMatch(v, /KQ-/);
+  });
+});
+
+describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, () => {
+  const SKRIPT = join(fileURLToPath(new URL("../", import.meta.url)), "scripts", "check-review-nachweis.mjs");
+  const echteConfig = (): Record<string, unknown> => ({
+    version: 2,
+    repo: "acme/demo",
+    boards: ["produkt", "factory"].map((rolle, i) => ({ rolle, besitzer: "acme", besitzerTyp: "org", nummer: i + 1, projectId: `p${i}`, statusFeldId: 5, statusFeldNodeId: "s", todoOptionId: "t" })),
+    praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
+    labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
+    agenten: { planer: "demo-planer", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
+  });
+  const lauf = (dir: string, args: string[], env: Record<string, string> = {}) =>
+    spawnSync(process.execPath, [SKRIPT, ...args], { cwd: dir, encoding: "utf8", env: { ...process.env, ...env } });
+  const mkdir = () => {
+    const d = mkdtempSync(join(tmpdir(), "kq-nw-cli-"));
+    dirs.push(d);
+    return d;
+  };
+
+  test("Config ohne praefixe.commitZeile: Exit ≠ 0 vor jedem git-Aufruf, stderr nennt Pfad, Schlüssel und Fix:", () => {
+    const d = mkdir(); // kein git-Repo: ein git-Aufruf würde anders scheitern
+    const c = echteConfig();
+    delete (c.praefixe as Record<string, unknown>).commitZeile;
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(c));
+    const r = lauf(d, ["--config", pfad]);
+    assert.notEqual(r.status, 0);
+    assert.ok(r.stderr.includes(pfad), r.stderr);
+    assert.match(r.stderr, /praefixe\.commitZeile/);
+    assert.match(r.stderr, /Fix:/);
+  });
+
+  test("Config ohne Label- oder Agentenschlüssel: Exit ≠ 0 mit Schlüssel und Fix:", () => {
+    const d = mkdir();
+    for (const [gruppe, schluessel] of [["labels", "forum"], ["agenten", "planer"]] as const) {
+      const c = echteConfig();
+      delete (c[gruppe] as Record<string, unknown>)[schluessel];
+      const pfad = join(d, `${gruppe}.json`);
+      writeFileSync(pfad, JSON.stringify(c));
+      const r = lauf(d, ["--config", pfad]);
+      assert.notEqual(r.status, 0, gruppe);
+      assert.match(r.stderr, new RegExp(`${gruppe}\\.${schluessel}`));
+      assert.match(r.stderr, /Fix:/);
+    }
+  });
+
+  test("--config ohne Pfad: Exit ≠ 0", () => {
+    const r = lauf(mkdir(), ["--config"]);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /--config braucht einen Pfad/);
+  });
+
+  test("mit der Config ZD- zählen ZD-Zeilen im Repo (Exit 0), KQ-Zeilen nicht (Exit 1)", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "a.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    writeFileSync(join(d, "a.md"), "y\n");
+    git("commit", "-q", "-am", "doku");
+    const reviewt = git("rev-parse", "HEAD").trim();
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(echteConfig()));
+    const nachweis = (p: string) => `${p}Plan: demo-planer\n${p}Review: head=${reviewt} runden=1 lenses=doku blocker=doku:0 verdikt=ok`;
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", nachweis("KQ-"));
+    const rot = lauf(d, ["--config", pfad], { KQ_DIFF_BASE: basis });
+    assert.equal(rot.status, 1, rot.stdout + rot.stderr);
+    assert.match(rot.stderr, /ZD-Plan-Zeile fehlt/);
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis ZD", "-m", nachweis("ZD-"));
+    const gruen = lauf(d, ["--config", pfad], { KQ_DIFF_BASE: basis });
+    assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
+    assert.match(gruen.stdout, /Nachweis ok/);
   });
 });
