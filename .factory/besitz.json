@@ -105,6 +105,7 @@
     {"pfad":".github/workflows/festgefahren.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".github/workflows/dependabot-inbox.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".github/workflows/internalrefs-pr-text.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"scripts/inbox-lib.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar-Einordnung (#1693)"},
     {"pfad":"scripts/wiedervorlage.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":".github/workflows/wiedervorlage.yml","ring":"kern-nach-entkopplung","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/merge-testabgleich.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},

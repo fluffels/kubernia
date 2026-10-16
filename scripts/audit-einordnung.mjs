@@ -15,16 +15,14 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
+import { issueKommentare } from "./fremdtext-lib.mjs";
 import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
 import { offeneTitel, platziereOben, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
+import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
-export const ALARM_PRAEFIX = "🔒 Security:";
-const GHSA_MUSTER = /GHSA(?:-[a-z0-9]{4}){3}/gi;
+export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
+
 const WIEDERVORLAGEN = fileURLToPath(new URL("../.github/wiedervorlagen.json", import.meta.url));
-
-/** Alle GHSA-IDs eines Textes, kleingeschrieben. Pur. */
-export const ghsaIn = (text) => (String(text ?? "").match(GHSA_MUSTER) ?? []).map((g) => g.toLowerCase());
 
 /**
  * Befunde aus einer `npm audit --json`-Ausgabe (Format ab npm 7). Ein Befund je Advisory (`via`-Objekt mit URL), das Paket ist das
@@ -125,26 +123,6 @@ export function ordneEin({ befunde, bekannt }) {
   return vereine(befunde)
     .filter((b) => !kenne.has(b.ghsa.toLowerCase()))
     .map((b) => (istAlarm(b) ? { art: "alarm", befund: b, ...alarmText(b) } : { art: "zeile", befund: b, text: zeilenText(b) }));
-}
-
-/** Bodies der Kommentare vertrauter Autoren (Owner, github-actions[bot]); eine `- [ ] Audit:`-Zeile eines Fremden darf keinen Alarm unterdrücken (#1433). Pur. */
-export function vertrauteBodies(kommentare, owner) {
-  return kommentare.filter((k) => istVertraut(k?.user, owner)).map((k) => String(k.body ?? ""));
-}
-
-/** Bekannte GHSA-IDs aus den Quellen: offene Audit-Zeilen in Kommentaren, Wiedervorlagen-Einträge `audit-<ghsa>`, Titel offener Security-Tickets. Pur. */
-export function bekannteGhsa({ kommentare, wiedervorlagen, offeneTitel }) {
-  const menge = new Set();
-  for (const k of kommentare) {
-    for (const z of String(k ?? "").split(/\r?\n/)) {
-      if (/^\s*[-*]\s+\[ \]\s+Audit:/.test(z)) ghsaIn(z).forEach((g) => menge.add(g));
-    }
-  }
-  for (const e of wiedervorlagen) {
-    if (typeof e?.id === "string" && e.id.startsWith("audit-")) ghsaIn(e.id.slice("audit-".length).replace(/^ghsa-/, "GHSA-")).forEach((g) => menge.add(g));
-  }
-  for (const t of offeneTitel) if (String(t).startsWith(ALARM_PRAEFIX)) ghsaIn(t).forEach((g) => menge.add(g));
-  return menge;
 }
 
 // ---- IO (ungetestet) ----

@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
-import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./audit-einordnung.mjs";
+import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { offeneTitel as vertrauteTitel, platziereOben, postZeilen, vertrauteIssues, waehleSammelticket } from "./inbox-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
