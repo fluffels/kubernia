@@ -340,7 +340,7 @@ function drift1(z: string): { code: number; out: string; err: string } {
 }
 
 describe("pruefeErgebnis (Selbstprüfung des Syncs)", () => {
-  const pe = (rawSync as unknown as { pruefeErgebnis(p: string, e: unknown[], src: string, ziel: string | null, erg: string): string[] }).pruefeErgebnis;
+  const pe = (rawSync as unknown as { pruefeErgebnis: (p: string, e: unknown[], src: string, ziel: string | null, erg: string) => string[] }).pruefeErgebnis;
   const ein = [{ pfad: "s.json", schluessel: "k" }];
   const src = '{"k":1}';
   test("korrektes Ergebnis ist grün", () => {
