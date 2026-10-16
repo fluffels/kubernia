@@ -9,6 +9,8 @@ import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/lauf-ergebnis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceRaw from "../scripts/slice-override.mjs";
 
 type Commit = { sha: string; datum: string; body: string };
 type Pr = {
@@ -22,21 +24,31 @@ type Pr = {
 };
 type Zeile = { pr: number; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string };
 type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }> } };
-const mod = raw as {
+type Zeilen = Record<string, string>;
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
+/** Zeilen der echten Config (KQ-); die Wrapper in `mod` reichen sie durch. */
+const Z = commitZeilen("KQ-", "kubernia-planner");
+const LABEL = "status:festgefahren";
+const roh = raw as {
   NACHARBEIT_TAGE: number;
   DatenFehler: new (m: string) => Error;
   parseCommits: (log: string) => Commit[];
   ticketVon: (pr: Partial<Pr>) => number | null;
   nacharbeitVon: (e: { pr: number; ticket: number | null; mergeSha: string; mergedAt: string; commits: Commit[]; jetzt: Date }) => string;
   ciFixRunden: (l: { sha: string; createdAt: string }[], von: string, bis: string) => number;
-  bewertePrs: (e: { prs: Pr[]; commits: Commit[]; ci: Record<number, { sha: string; createdAt: string }[]>; festgefahren: Record<number, number>; jetzt: Date }) => Ergebnis;
+  bewertePrs: (e: { prs: Pr[]; commits: Commit[]; ci: Record<number, { sha: string; createdAt: string }[]>; festgefahren: Record<number, number>; jetzt: Date; zeilen: Zeilen }) => Ergebnis;
   formatiere: (e: Ergebnis) => string;
   labelAbfrage: (n: number[]) => string;
-  festgefahrenAusAntwort: (a: unknown, n: number[]) => Record<number, number>;
-  laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; tickets?: number[]; ohne?: number[] }) => Ergebnis;
+  festgefahrenAusAntwort: (a: unknown, n: number[], label?: string) => Record<number, number>;
+  laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; tickets?: number[]; ohne?: number[]; ladeConfig?: () => unknown }) => Ergebnis;
   parseArgs: (a: string[]) => { von?: string; bis?: string; tickets: number[]; ohne: number[]; json: boolean; fehler: string | null; startAgent?: string };
-  laufErgebnisStartAgent: (e: { laeufe: unknown[]; von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; ohne?: number[] }) => Ergebnis;
+  laufErgebnisStartAgent: (e: { laeufe: unknown[]; von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; ohne?: number[]; ladeConfig?: () => unknown }) => Ergebnis;
   ladeStartLaeufe: (dir: string, agent: string, von: string) => unknown[];
+};
+const mod = {
+  ...roh,
+  bewertePrs: (e: Omit<Parameters<typeof roh.bewertePrs>[0], "zeilen">) => roh.bewertePrs({ zeilen: Z, ...e }),
+  festgefahrenAusAntwort: (a: unknown, n: number[]) => roh.festgefahrenAusAntwort(a, n, LABEL),
 };
 
 const SHA = "abcdef1234567890abcdef1234567890abcdef12";
@@ -200,6 +212,25 @@ describe("bewertePrs und Aggregate", () => {
     assert.equal(k.mitBlockerFeld, 2, "#52 hat kein blocker-Feld und fällt aus dem Nenner");
     assert.equal(k.mitNachweis, 3);
   });
+  test("AK3 (#1741): die wörtliche Squash-Message eines gemergten PRs ergibt Runden aus dem Nachweis; mit dem Präfix AB- fehlt der Nachweis", () => {
+    const squash = [
+      "feat(harness): x (#1723) (#1733)",
+      "",
+      "* chore(harness): Review-Nachweis (#1723)",
+      "",
+      "KQ-Plan: kubernia-planner",
+      `KQ-Review: head=${"a".repeat(40)} runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok`,
+      "",
+      "---------",
+    ].join("\n");
+    const eins = [pr({ number: 50, mergeCommit: { oid: "1".repeat(40) } })];
+    const cs = [commit(squash, MERGED, "1".repeat(40))];
+    const basis = { prs: eins, commits: cs, ci: {}, festgefahren: {}, jetzt: SPAETER };
+    assert.equal(mod.bewertePrs(basis).zeilen[0].runden, 3);
+    const ab = roh.bewertePrs({ ...basis, zeilen: commitZeilen("AB-", "kubernia-planner") });
+    assert.equal(ab.zeilen[0].runden, null);
+    assert.equal(ab.kennzahlen.ohneNachweis, 1);
+  });
   test("Folge-Commit macht Nacharbeit je PR mit passender Ticketnummer, offene Fenster zählen nicht in die Quote", () => {
     const f = mod.bewertePrs({ prs, commits, ci: {}, festgefahren: {}, jetzt: new Date(tage(3)) });
     assert.equal(f.zeilen.find((r) => r.pr === 50)?.nacharbeit, "folge");
@@ -212,7 +243,7 @@ describe("bewertePrs und Aggregate", () => {
     const t = mod.formatiere(e);
     assert.match(t, /\| #50 \| #40 \| 2026-10-01 \| 2 \| architektur:2,requirement-treue:0,test-adaequanz:1 \| 1 \| 0 \| folge \|/);
     assert.match(t, /Lens-Trefferquote architektur: 50 % \(1\/2\), Σ Blocker 2 \(1,00 je PR\)/);
-    assert.match(t, /ohne KQ-Review-Nachweis: 1/);
+    assert.match(t, /ohne Review-Nachweis: 1/);
   });
 });
 
@@ -229,6 +260,12 @@ describe("Label-Events per GraphQL (Z3c)", () => {
   test("festgefahrenAusAntwort zählt nur status:festgefahren, auch mehrfach", () => {
     const antwort = { data: { repository: { p1: { timelineItems: knoten("status:festgefahren", "x", "status:festgefahren") }, p2: { timelineItems: knoten("dependencies") } } } };
     assert.deepEqual(mod.festgefahrenAusAntwort(antwort, [1, 2]), { 1: 2, 2: 0 });
+  });
+  test("festgefahrenAusAntwort: das Label kommt als Parameter, ohne Label wirft die Funktion", () => {
+    const antwort = { data: { repository: { p1: { timelineItems: knoten("status:festgefahren", "anderes:label", "anderes:label") } } } };
+    assert.deepEqual(roh.festgefahrenAusAntwort(antwort, [1], "anderes:label"), { 1: 2 });
+    assert.deepEqual(roh.festgefahrenAusAntwort(antwort, [1], "status:festgefahren"), { 1: 1 });
+    for (const schlecht of [undefined, ""]) assert.throws(() => roh.festgefahrenAusAntwort(antwort, [1], schlecht), /Label-Namen/);
   });
   test("abgeschnittene Seite, fehlender PR, fehlende pageInfo und fehlendes repository sind Datenfehler", () => {
     const seite = { data: { repository: { p1: { timelineItems: { pageInfo: { hasNextPage: true }, nodes: [] } } } } };
@@ -282,6 +319,34 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.equal(e.zeilen[0].ciFix, 1);
     assert.equal(e.zeilen[0].festgefahren, 1);
     assert.equal(e.zeilen[0].runden, 1);
+  });
+  test("Config injiziert (#1741): ein anderes Präfix lässt die KQ-Zeile des Squash-Commits nicht zählen, das Label kommt aus der Config", () => {
+    const config = (praefix: string, label: string) => () => ({ praefixe: { commitZeile: praefix }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: label } });
+    const kq = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config("KQ-", LABEL) });
+    assert.equal(kq.zeilen[0].runden, 1);
+    assert.equal(kq.zeilen[0].festgefahren, 1);
+    const ab = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config("AB-", "anderes:label") });
+    assert.equal(ab.zeilen[0].runden, null, "KQ-Zeilen zählen bei AB- nicht");
+    assert.equal(ab.zeilen[0].festgefahren, 0, "ein anderes Label zählt das festgefahren-Label nicht");
+    assert.equal(ab.kennzahlen.ohneNachweis, 1);
+  });
+  test("ein Ladefehler der Config bricht ab, ohne git oder gh zu fragen", () => {
+    const nie = () => {
+      throw new Error("darf nicht aufgerufen werden");
+    };
+    assert.throws(
+      () =>
+        mod.laufErgebnis({
+          von,
+          bis,
+          runGit: nie,
+          runGh: nie,
+          ladeConfig: () => {
+            throw new Error("Projekt-Config ungültig: praefixe.commitZeile");
+          },
+        }),
+      /praefixe\.commitZeile/,
+    );
   });
   test("ohne PRs keine weiteren gh-Aufrufe (nur die Liste)", () => {
     const aufrufe: string[][] = [];
