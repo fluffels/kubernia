@@ -372,8 +372,9 @@ describe("begriffeAus", () => {
   });
   test("Agent: längster Name zuerst (kein Doppeltreffer im Langnamen), groß/klein-genau", () => {
     assert.deepEqual(zaehle("wk-planer wk-umsetzer wk Wk-planer", B), { Agent: 3 });
-    const kurzZuerst = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, agenten: { ...NEU.agenten, ticketSkill: "wk-p" } });
-    assert.deepEqual(zaehle("wk-planer", kurzZuerst), { Agent: 1 });
+    // Kurzname steht in der Config vor dem Langnamen, und der Rest des Langnamens ist selbst ein Name: ohne Längen-Sortierung zählte "wk-lens" doppelt.
+    const kurzZuerst = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, agenten: { planer: "wk", umsetzer: "wk-lens", lens: "lens", gruppe: "g", ticketSkill: "t" } });
+    assert.deepEqual(zaehle("wk-lens", kurzZuerst), { Agent: 1 });
   });
 });
 
