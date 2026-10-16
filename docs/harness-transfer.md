@@ -65,6 +65,8 @@ Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, de
 
 Entschieden: ein Factory-Repo als Quelle, verteilt per Sync mit Besitz-Manifest; Projektwerte kommen zur Laufzeit aus einer Projekt-Config. Es gibt kein eigenes docs-gen-Paket, der docs-gen-Kern ist ein Baustein des Kerns. Offen ist nur die Veröffentlichung (Außenwirkung, liegt bei der Maintainerin). Bis das Sync-Werkzeug steht, trägt die Übernahme per Kopie.
 
+Das Sync-Werkzeug (`npm run factory:sync`, ADR 0022 F9) überträgt den Besitz aus einem lokalen Arbeitsbaum der Quelle, das Drift-Gate (`npm run check:factorydrift`) hält ihn im Projekt unverändert; der Ist-Zustand bleibt eine Kopie, bis F10 die Quelle als eigenes Repo mit Tag-Sync einführt.
+
 Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md), [Sandbox anbinden](sandbox-anbinden.md)).
 
 ## Gliederung für Artikel oder Vortrag
