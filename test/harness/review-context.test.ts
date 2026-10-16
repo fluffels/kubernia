@@ -77,7 +77,7 @@ const nenntPatchDatei = (s: string) => /Patch-Datei/.test(s) && /\.patch/.test(s
 const haeltKontextDiaet = (s: string) => /bereits[\s\S]{0,60}Kontext[\s\S]{0,300}grepp/i.test(s);
 
 /** Weist der Text an, Dateien gezielt statt vollständig zu öffnen? */
-const liestGezielt = (s: string) => /offset|limit/.test(s);
+const liestGezielt = (s: string) => /gezielt per Grep oder offset\/limit/.test(s);
 
 /** Lässt der Text den HEAD gegen den Patch-Stand abgleichen? */
 const hatFrischeGuard = (s: string) => /rev-parse/.test(s);
@@ -86,7 +86,7 @@ const hatFrischeGuard = (s: string) => /rev-parse/.test(s);
 const hatRundenNummer = (s: string) => /-r<runde>[^\s"]*\.patch/i.test(s);
 
 /** Erhebt der Text den Diff als Drei-Punkt-Diff gegen origin/main? */
-const istDreiPunkt = (s: string) => /origin\/main\.\.\.HEAD/.test(s);
+const istDreiPunkt = (s: string) => /git diff origin\/main\.\.\.HEAD > /.test(s);
 
 /** Bleibt die Sabotage-/Red-Green-Prüfung im Test-Lens-Auftrag? */
 const fordertSabotage = (s: string) => /sabotier/i.test(s) && /\brot\b/i.test(s);
@@ -163,6 +163,12 @@ describe("Abschnittsprädikate: eine zurückgedrehte Regel im eigenen Abschnitt 
   });
   test("Frische-Guard-Absatz ohne HEAD-Abgleich fällt durch", () => {
     assert.ok(!hatFrischeGuard(frischeSkill.replace(/`git rev-parse HEAD`/g, "den Stand")));
+  });
+  test("Patch-Schreibbefehl als Zwei-Punkt-Diff fällt durch (der --stat-Befehl trägt die Drei-Punkt-Form weiter)", () => {
+    assert.ok(!istDreiPunkt(patchSkill.replace("git diff origin/main...HEAD > ", "git diff main > ")));
+  });
+  test("Regel 3 der Kontext-Diät ohne die Gezielt-Anweisung fällt durch (kein größeres `limit` zählt nicht)", () => {
+    assert.ok(!liestGezielt(diaetSkill.replace("danach nur gezielt per Grep oder offset/limit", "danach nach Belieben")));
   });
   test("ein fehlender Abschnittsanker wirft statt leer zu laufen", () => {
     assert.throws(() => teil(lensSkill, "### Nicht vorhanden", "> **Was die Diät"), /nicht gefunden/);
