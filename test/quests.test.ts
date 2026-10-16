@@ -183,7 +183,7 @@ test("Sturm-Szenario: Buchstabendreher-Image lässt sich immer heilen", () => {
     dep.broken = { type: "imagepull", badImage: bad };
     dep.image = bad;
     assert.notEqual(bad, img, img + ": der Buchstabendreher verändert den Namen wirklich");
-    sim.exec("kubectl set image deployment/app app=" + img);
+    sim.exec("kubectl set image deployment/app " + img + "=" + img);
     assert.equal(dep.broken, null, img + ": Heilung klappt");
   }
 });

@@ -47,10 +47,9 @@ gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(in
   -F id="$discId" -F body=@<antwort-datei> --jq '.data.addDiscussionComment.comment.url'
 ```
 
-**6. Passendes Ticket anlegen** (nur bei Bug/Feature, nur der freigegebene Vorschlag, **ohne** Assignee, das ist der „frei"-Marker, siehe AGENTS.md). Titel und Text liegen als Dateien im Scratchpad; dem Text stellst du die vertraute Zeile `Aus dem Forum: https://github.com/<owner>/<repo>/discussions/<Discussion-Nr>` voran. Der Text enthält `## Ziel` und `## Akzeptanzkriterien` samt Negativfall (sonst überspringt die Auswahl das Ticket):
+**6. Passendes Ticket anlegen** (nur bei Bug/Feature, nur der freigegebene Vorschlag, **ohne** Assignee, das ist der „frei"-Marker, siehe AGENTS.md). Der Text liegt als Datei im Scratchpad; er braucht `## Ziel` und `## Akzeptanzkriterien` samt Negativfall (sonst legt das Skript nichts an, Exit 1) und beginnt mit der vertrauten Zeile `Aus dem Forum: https://github.com/<owner>/<repo>/discussions/<Discussion-Nr>`; `gh issue create` ist gesperrt, das Skript prüft und sortiert ein:
 ```bash
-gh issue create --title "$(cat <titel-datei>)" --label "<bug|...>" --label "<area:...>" --body-file <text-datei>
-# danach im Board an die gewünschte Position ziehen
+node scripts/spezifikation.mjs anlegen --titel "<titel>" --body-datei <text-datei> --label "<bug|...>" --label "<area:...>" --nach <Ticketnummer, hinter der es stehen soll>
 ```
 
 **7. Inbox-Eintrag schließen** mit kurzem Ergebnis-Kommentar (was geantwortet, welches Ticket entstand), danach die Quarantäne-Datei entfernen:
