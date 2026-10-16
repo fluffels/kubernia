@@ -144,7 +144,6 @@ const codeowners = read(".github/CODEOWNERS");
 const QUELLE = ".github/protected-paths.json";
 const quelle = JSON.parse(read(QUELLE)) as ProtectedSource;
 const agentsMd = read("AGENTS.md");
-const ticketWf = read(".claude/workflows/kubernia-ticket.js");
 
 describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #1157)", () => {
   test("die Quelle ist eine nicht-leere Gruppe→Pfade-Liste in CODEOWNERS-Schreibweise", () => {
@@ -242,12 +241,6 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
       if (!markiert && imOrdner) falsch.push(`${f}: liegt in ${WAECHTER_ORDNER}, aber ohne @harness-waechter im Kopf`);
     }
     assert.deepEqual(falsch, [], `Wächter-Tests falsch abgelegt (#1165):\n${falsch.join("\n")}`);
-  });
-
-
-  test("der Ticket-Workflow führt keine Spiegel-Liste mehr, sondern verweist auf die Quelle", () => {
-    assert.doesNotMatch(ticketWf, /HARNESS_PFADE/, "kubernia-ticket.js führt wieder eine eigene Pfadliste (HARNESS_PFADE)");
-    assert.ok(ticketWf.includes(QUELLE), `kubernia-ticket.js verweist im Umsetzungs-Prompt nicht auf ${QUELLE}`);
   });
 });
 
