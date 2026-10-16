@@ -85,7 +85,7 @@
           "intro": "🆕 Neuer Befehl: <code>kubectl set image</code> – tauscht das Image eines Deployments aus.",
           "text": "Setze das richtige Image: <code>kubectl set image deployment/leuchtfeuer leuchtfeuer=nginx</code>",
           "accept": [
-            "^kubectl\\s+set\\s+image\\s+deployment\\/leuchtfeuer\\s+\(leuchtfeuer|\*)=nginx(:\\S+)?$"
+            "^kubectl\\s+set\\s+image\\s+deployment\\/leuchtfeuer\\s+(leuchtfeuer|\\*)=nginx(:\\S+)?$"
           ],
           "solution": "kubectl set image deployment/leuchtfeuer leuchtfeuer=nginx",
           "why": "Du reparierst am <b>Deployment</b>, nicht am einzelnen Pod: <code>set image</code> ändert den Wunschzustand an einer Stelle, und Kubernetes rollt die neuen Pods von selbst aus. Am Wunschzustand schrauben statt an flüchtigen Pods ist das Grundprinzip.",
