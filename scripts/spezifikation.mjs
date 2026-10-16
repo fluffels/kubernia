@@ -14,7 +14,7 @@
  *
  * Exit 0 = angelegt/repariert/nichts zu tun/vollständig, 1 = Spezifikation unvollständig oder Inhaltsverlust (nichts geschrieben),
  * 2 = Aufruf- oder gh-Fehler (scheitert nach dem Anlegen nur das Einsortieren: Nummer und Nachhol-Befehl), 3 = Fremdeingang (nur `reparieren`).
- * Grenze: Exit 3 meldet auch `mitKontingent` (API-Kontingent knapp, Meldung auf stderr) und ist dann kein Fremdeingang; die Meldung unterscheidet sie.
+ * Grenze: Exit 3 heißt hier immer Fremdeingang; ein knappes API-Kontingent meldet `mitKontingent` mit Exit 5.
  * Grenze: zwei gleichzeitige Reparaturen desselben Tickets: der letzte Schreiber gewinnt.
  */
 import { execFileSync } from "node:child_process";
