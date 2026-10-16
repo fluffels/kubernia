@@ -8,7 +8,10 @@
  *
  * Nur Node-Builtins, board-lib.mjs und gh-cli.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
-import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, ghJson, imKopf, setPosition } from "./board-lib.mjs";
+import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, ghJson, imKopf, setPosition } from "./board-lib.mjs";
+
+// Verhalten unverändert: diese Werkzeuge arbeiten auf dem Produkt-Board (die Rolle steht in der Projekt-Config).
+const PRODUKT_BOARD = boardFuerRolle("produkt");
 import { fehlerMeldung } from "./gh-cli.mjs";
 
 export { STATUS_TITEL };
@@ -116,7 +119,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
  * wurde (der Aufrufer zieht seine Liste damit im Speicher nach); `nr` ist die Nummer des Tickets.
  */
 export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {} }) {
-  const { gh = ghJson, imBoardAnlegen = addToBoardTodo, setze = setPosition } = io; // im Test injizierbar
+  const { gh = ghJson, imBoardAnlegen = (nodeId, opts) => addToBoardTodo(PRODUKT_BOARD, nodeId, opts), setze = (id, afterId, opts) => setPosition(PRODUKT_BOARD, id, afterId, opts) } = io; // im Test injizierbar
   let node;
   let nr = e.nr;
   if (e.aktion === "anlegen") {

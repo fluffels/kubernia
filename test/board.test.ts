@@ -385,16 +385,22 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
 
   test("GraphQL-Fallback (#1349 Z16): fehlende Items aus issue.projectItems, nur das eigene Board, fehlende bleiben fehlend", () => {
     const G = rawLib as unknown as {
-      PROJECT_ID: string;
-      itemAusIssueAntwort: (a: unknown) => B | null;
+      boardFuerRolle: (r: string) => { projectId: string };
+      itemAusIssueAntwort: (board: unknown, a: unknown) => B | null;
       ergaenzeFehlende: (items: B[], gefunden: (B | null)[]) => B[];
     };
     const antwort = (nodes: unknown[]) => ({ data: { repository: { issue: { number: 1360, title: "Kind", state: "OPEN", assignees: { nodes: [{ login: "fluffels" }] }, projectItems: { nodes } } } } });
-    expect(G.itemAusIssueAntwort(antwort([{ id: "PVTI_a", project: { id: G.PROJECT_ID } }]))).toEqual({ id: "PVTI_a", number: 1360, status: "", title: "Kind", assignees: ["fluffels"], state: "open" });
-    expect(G.itemAusIssueAntwort(antwort([{ id: "PVTI_x", project: { id: "PVT_fremd" } }])), "fremdes Projekt").toBeNull();
-    expect(G.itemAusIssueAntwort(antwort([])), "nicht im Board").toBeNull();
-    expect(G.itemAusIssueAntwort({ data: { repository: { issue: null } } }), "Issue unbekannt").toBeNull();
-    expect(G.itemAusIssueAntwort(null)).toBeNull();
+    const produkt = G.boardFuerRolle("produkt");
+    const factory = G.boardFuerRolle("factory");
+    expect(G.itemAusIssueAntwort(produkt, antwort([{ id: "PVTI_a", project: { id: produkt.projectId } }]))).toEqual({ id: "PVTI_a", number: 1360, status: "", title: "Kind", assignees: ["fluffels"], state: "open" });
+    expect(G.itemAusIssueAntwort(produkt, antwort([{ id: "PVTI_x", project: { id: "PVT_fremd" } }])), "fremdes Projekt").toBeNull();
+    const beide = antwort([{ id: "PVTI_p", project: { id: produkt.projectId } }, { id: "PVTI_f", project: { id: factory.projectId } }]);
+    expect(G.itemAusIssueAntwort(produkt, beide)?.id, "Produkt-Board gewählt").toBe("PVTI_p");
+    expect(G.itemAusIssueAntwort(factory, beide)?.id, "Factory-Board gewählt").toBe("PVTI_f");
+    expect(G.itemAusIssueAntwort(factory, antwort([{ id: "PVTI_p", project: { id: produkt.projectId } }])), "nur im anderen Board").toBeNull();
+    expect(G.itemAusIssueAntwort(produkt, antwort([])), "nicht im Board").toBeNull();
+    expect(G.itemAusIssueAntwort(produkt, { data: { repository: { issue: null } } }), "Issue unbekannt").toBeNull();
+    expect(G.itemAusIssueAntwort(produkt, null)).toBeNull();
     const neu = G.ergaenzeFehlende([b(10)], [{ ...b(1360), id: "PVTI_a" }, null, b(10, { id: "doppelt" })]);
     expect(neu.map((i) => i.id)).toEqual(["I10", "PVTI_a"]);
     const plan = L.planPlacements(neu, [1360], 10);
