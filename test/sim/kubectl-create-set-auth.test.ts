@@ -288,7 +288,12 @@ describe("(f) create rolebinding mit --role und --clusterrole", () => {
     expect(lauf("kubectl create rolebinding rb --clusterrole=c --user=a", freshSim()).out).toBe("rolebinding.rbac.authorization.k8s.io/rb created");
   });
   test("clusterrolebinding behält seine Meldungen", () => {
-    expect(lauf("kubectl create clusterrolebinding rb --user=a", freshSim()).out).not.toContain("exactly one of clusterrole or role");
+    const sim = freshSim();
+    const r = lauf("kubectl create clusterrolebinding rb --user=a", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: exactly one of --role or --clusterrole must be specified");
+    expect(r.out).not.toContain("exactly one of clusterrole or role");
+    expect(sim.roleBindings).toHaveLength(0);
   });
 });
 
