@@ -26,8 +26,12 @@ interface BesitzLib {
   einheitId: (e: Eintrag) => string;
   einheitText: (e: Eintrag, text: string) => string | null;
   pruefeManifest: (m: Manifest, lies: (pfad: string) => string | null) => string[];
+  RINGE: string[];
+  RING_IMPORTE: Record<string, string[]>;
+  NUR_FACTORY: string[];
+  wirdVerteilt: (e: Eintrag) => boolean;
 }
-const { markerStart, markerEnde, einheitId, einheitText, pruefeManifest } = rawBesitz as unknown as BesitzLib;
+const { markerStart, markerEnde, einheitId, einheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const MANIFEST = ".factory/besitz.json";
@@ -277,21 +281,22 @@ export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => 
   return out;
 }
 
-/** Ring-Regel (#1663): lokale Importe jeder Ganz-Datei-Code-Einheit im Ring `kern`, die auf Besitz in einem anderen Ring zeigen
- *  ("<von> -> <nach>"). Ziele ohne Besitz (Nicht-Besitz, Projekt-Config) sind Sache von `huellenVerstoesse`. Ein Importeur
- *  im Ring kern-nach-entkopplung darf beliebigen Besitz importieren. Abhilfe: Ziel nach `kern` ziehen (literalfrei, Importe nur
- *  in `kern`) oder den Importeur nach `kern-nach-entkopplung`. */
+/** Ring-Regel (#1663, ADR 0029): lokale Importe jeder Ganz-Datei-Code-Einheit, die auf Besitz in einem Ring zeigen, den ihr
+ *  Ring laut `RING_IMPORTE` (besitz-lib.mjs) nicht importieren darf ("<von> -> <nach>"). Ein Importeur mit unbekanntem Ring darf
+ *  keinen Besitz importieren (fail-closed). Ziele ohne Besitz (Nicht-Besitz, Projekt-Config) sind Sache von `huellenVerstoesse`.
+ *  Abhilfe: Ziel in einen erlaubten Ring ziehen (literalfrei) oder den Importeur in einen Ring mit mehr Rechten. */
 export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
   const ring = new Map(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => [e.pfad, e.ring]));
   const out: string[] = [];
   for (const [von, ringVon] of ring) {
-    if (ringVon !== "kern" || !CODE_ENDUNG.test(von)) continue;
+    if (!CODE_ENDUNG.test(von)) continue;
+    const erlaubt = RING_IMPORTE[ringVon] ?? [];
     const text = lies(von);
     if (text === null) continue;
     for (const spec of relativeImporte(text)) {
       const roh = posix.normalize(posix.join(posix.dirname(von), spec));
       const nach = kandidatenPfade(roh).find((p) => ring.has(p));
-      if (nach !== undefined && ring.get(nach) !== "kern" && !out.includes(`${von} -> ${nach}`)) out.push(`${von} -> ${nach}`);
+      if (nach !== undefined && !erlaubt.includes(ring.get(nach) ?? "") && !out.includes(`${von} -> ${nach}`)) out.push(`${von} -> ${nach}`);
     }
   }
   return out;
@@ -310,6 +315,17 @@ export function pruefeHuelle(verstoesse: string[], ausnahmen: Record<string, str
     if (!verstoesse.includes(id)) out.push(`${id}: Ausnahme veraltet (Import entfällt oder Ziel ist Besitz), Eintrag entfernen`);
   }
   return out;
+}
+
+/** Ist-Zählung der Projektliterale je Einheit, über alle Ringe (auch `oberflaeche`, ADR 0029). */
+export function istZaehlung(eintraege: Eintrag[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): Baseline {
+  const ist: Baseline = {};
+  for (const e of eintraege) {
+    const t = einheitText(e, lies(e.pfad) ?? "");
+    const z = zaehle(t ?? "", begriffe);
+    if (Object.keys(z).length > 0) ist[einheitId(e)] = z;
+  }
+  return ist;
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -641,6 +657,23 @@ describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
     assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./n.mjs";' })), ["scripts/a.mjs -> scripts/n.mjs"]);
     assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'const n = require("./n");' })), ["scripts/a.mjs -> scripts/n.mjs"]);
   });
+  test("oberflaeche darf kern, kern-nach-entkopplung und oberflaeche importieren (ADR 0029)", () => {
+    const O = [...E, ein("scripts/cockpit/o.mjs", { ring: "oberflaeche" }), ein("scripts/cockpit/p.mjs", { ring: "oberflaeche" })];
+    for (const ziel of ["../a.mjs", "../n.mjs", "./p.mjs"]) {
+      assert.deepEqual(ringVerstoesse(O, mit({ "scripts/cockpit/o.mjs": `import { x } from "${ziel}";` })), [], ziel);
+    }
+  });
+  test("Negativfall: kern und kern-nach-entkopplung importieren oberflaeche", () => {
+    const O = [...E, ein("scripts/cockpit/o.mjs", { ring: "oberflaeche" })];
+    assert.deepEqual(ringVerstoesse(O, mit({ "scripts/a.mjs": 'import { x } from "./cockpit/o.mjs";' })), ["scripts/a.mjs -> scripts/cockpit/o.mjs"]);
+    assert.deepEqual(ringVerstoesse(O, mit({ "scripts/n.mjs": 'import { x } from "./cockpit/o.mjs";' })), ["scripts/n.mjs -> scripts/cockpit/o.mjs"]);
+  });
+  test("Negativfall: ein Importeur mit unbekanntem Ring importiert keinen Besitz (fail-closed)", () => {
+    const U = [...E, ein("scripts/u.mjs", { ring: "unbekannt" })];
+    for (const ziel of ["./a.mjs", "./n.mjs"]) {
+      assert.deepEqual(ringVerstoesse(U, mit({ "scripts/u.mjs": `import { x } from "${ziel}";` })), [`scripts/u.mjs -> scripts/${ziel.slice(2)}`], ziel);
+    }
+  });
   test("Nicht-Besitz-Ziel ist Sache der Import-Hülle; Nicht-Code, Block-Einheit und fehlende Datei werden nicht gelesen", () => {
     assert.deepEqual(ringVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./fremd.mjs";' })), []);
     assert.deepEqual(ringVerstoesse([ein("AGENTS.md", { block: "s" }), ein("scripts/n.md"), ein("scripts/n.mjs", { ring: "kern-nach-entkopplung" })], mit({ "AGENTS.md": 'from "./n.mjs"', "scripts/n.md": 'from "./n.mjs"' })), []);
@@ -668,13 +701,7 @@ describe("Kern-Reinheit (#1610)", () => {
   });
 
   test("jede Einheit hält ihre Baseline an Projektliteralen, nur sinkend", () => {
-    const ist: Baseline = {};
-    for (const e of manifest.eintraege) {
-      const t = einheitText(e, lesenWurzel(e.pfad) ?? "");
-      const z = zaehle(t ?? "", echteBegriffe);
-      if (Object.keys(z).length > 0) ist[einheitId(e)] = z;
-    }
-    assert.deepEqual(vergleiche(ist, baseline), []);
+    assert.deepEqual(vergleiche(istZaehlung(manifest.eintraege, lesenWurzel, echteBegriffe), baseline), []);
   });
 
   test("jede getrackte Datei in einem Kern-Verzeichnis ist Besitz oder ausdrücklich eingeordnet (kern-abdeckung.json, #1613)", () => {
@@ -688,7 +715,7 @@ describe("Kern-Reinheit (#1610)", () => {
     assert.deepEqual(pruefeHuelle(huellenVerstoesse(manifest.eintraege, lesenWurzel), KERN_HUELLE_AUSNAHMEN, ringVon), []);
   });
 
-  test("kein Importeur im Ring kern importiert Besitz im Ring kern-nach-entkopplung (Ring-Regel, #1663)", () => {
+  test("kein Importeur verletzt die Ring-Importregel (RING_IMPORTE, #1663, ADR 0029)", () => {
     assert.deepEqual(ringVerstoesse(manifest.eintraege, lesenWurzel), []);
   });
 
@@ -717,5 +744,32 @@ describe("Kern-Reinheit (#1610)", () => {
     };
     const erl = erlaubt(manifest.eintraege, aend, basisText, echteBegriffe);
     assert.deepEqual(anhebungen(baseline, erl), []);
+  });
+});
+
+describe("Ring-Tabelle (ADR 0029)", () => {
+  test("RING_IMPORTE deckt genau die Ringe ab, jede Regel und NUR_FACTORY nennen nur bekannte Ringe", () => {
+    assert.deepEqual(Object.keys(RING_IMPORTE).sort(), [...RINGE].sort());
+    for (const ziele of Object.values(RING_IMPORTE)) assert.ok(ziele.every((r) => RINGE.includes(r)), ziele.join());
+    assert.ok(NUR_FACTORY.every((r) => RINGE.includes(r)));
+    for (const [ring, ziele] of Object.entries(RING_IMPORTE)) assert.ok(ziele.includes(ring), `${ring} importiert den eigenen Ring`);
+    for (const ring of RINGE) if (ring !== "oberflaeche") assert.ok(!RING_IMPORTE[ring]?.includes("oberflaeche"), `${ring} importiert oberflaeche`);
+  });
+  test("pruefeManifest: oberflaeche ist ein Ring, andere Schreibweisen sind unbekannt", () => {
+    const m = (ring: string): Manifest => ({ version: 1, eintraege: [ein("a.mjs", { ring })] });
+    const lies = (): string | null => "x";
+    assert.deepEqual(pruefeManifest(m("oberflaeche"), lies), []);
+    for (const ring of ["Oberflaeche", "oberfläche", "oberflaeche "]) assert.match(pruefeManifest(m(ring), lies).join(), /unbekannter Ring/, ring);
+  });
+  test("wirdVerteilt: nur oberflaeche bleibt in der Factory, ein unbekannter Ring wird verteilt (fail-closed)", () => {
+    assert.equal(wirdVerteilt(ein("a", { ring: "oberflaeche" })), false);
+    for (const ring of ["kern", "kern-nach-entkopplung", "unbekannt"]) assert.equal(wirdVerteilt(ein("a", { ring })), true, ring);
+  });
+  test("istZaehlung zählt Projektliterale auch in einer oberflaeche-Einheit (Baseline 0 wird rot)", () => {
+    const begriffe = { fremd: /Fremdwort/g };
+    const E = [ein("scripts/cockpit/o.mjs", { ring: "oberflaeche" }), ein("scripts/k.mjs")];
+    const ist = istZaehlung(E, (p) => (p === "scripts/cockpit/o.mjs" ? "// Fremdwort" : "sauber"), begriffe);
+    assert.deepEqual(Object.keys(ist), ["scripts/cockpit/o.mjs"]);
+    assert.notDeepEqual(vergleiche(ist, {}), []);
   });
 });

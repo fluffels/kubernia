@@ -3,7 +3,20 @@
 // Nur Node-Builtins; Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
 import { createHash } from "node:crypto";
 
-export const RINGE = ["kern", "kern-nach-entkopplung"];
+export const RINGE = ["kern", "kern-nach-entkopplung", "oberflaeche"];
+
+/** Ring-Importregel (ADR 0029): Ring des Importeurs -> Ringe, deren Besitz er lokal importieren darf. Ein weiterer Ring ist eine Zeile. */
+export const RING_IMPORTE = {
+  kern: ["kern"],
+  "kern-nach-entkopplung": ["kern", "kern-nach-entkopplung"],
+  oberflaeche: ["kern", "kern-nach-entkopplung", "oberflaeche"],
+};
+
+/** Ringe, die der Factory gehören und nie in ein Projekt verteilt werden (Deny-List: ein unbekannter Ring wird geprüft und verteilt). */
+export const NUR_FACTORY = ["oberflaeche"];
+
+/** Wird die Einheit in Projekte verteilt (Sync) und dort auf Drift geprüft? */
+export const wirdVerteilt = (e) => !NUR_FACTORY.includes(e.ring);
 
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;

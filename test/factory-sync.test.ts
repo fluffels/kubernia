@@ -494,3 +494,69 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     assert.ok((statSync(join(z, ".githooks/pre-push")).mode & 0o111) !== 0);
   });
 });
+
+// ── Ring oberflaeche (ADR 0029): gehört der Factory, wird nie verteilt ───────────
+
+describe("Ring oberflaeche (ADR 0029)", () => {
+  const COCKPIT = "scripts/cockpit/o.mjs";
+  const mitCockpit = (ring: string): string => {
+    const q = baueQuelle();
+    const m = { version: 1, eintraege: [...MANIFEST.eintraege, { pfad: COCKPIT, ring, quelle: "t" }] };
+    schreibe(q, ".factory/besitz.json", JSON.stringify(m, null, 2) + "\n");
+    schreibe(q, COCKPIT, "export const o = 1;\n");
+    return q;
+  };
+
+  test("der Sync legt keine oberflaeche-Datei im Ziel an, der Sync-Stand listet sie nicht, das Manifest geht ganz ins Ziel", () => {
+    const q = mitCockpit("oberflaeche");
+    const z = baueZiel();
+    const r = laufe(["--quelle", q, "--ziel", z]);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(!existsSync(join(z, COCKPIT)), "oberflaeche-Datei wurde ins Projekt übertragen");
+    assert.ok(!r.out.includes("scripts/cockpit/"), r.out);
+    const st = JSON.parse(lies(z, ".factory/sync-stand.json")) as { einheiten: Record<string, string> };
+    assert.ok(!(COCKPIT in st.einheiten), "Sync-Stand listet die oberflaeche-Einheit");
+    assert.equal(Object.keys(st.einheiten).length, 4);
+    assert.equal(lies(z, ".factory/besitz.json"), lies(q, ".factory/besitz.json"));
+    const d = drift1(z);
+    assert.equal(d.code, 0, d.err);
+    assert.match(d.out, /4 Einheiten ohne Drift/);
+  });
+
+  test("das Drift-Gate erwartet die oberflaeche-Datei nicht und ignoriert eine Handänderung im Projekt", () => {
+    const z = baueZiel();
+    assert.equal(laufe(["--quelle", mitCockpit("oberflaeche"), "--ziel", z]).code, 0);
+    schreibe(z, COCKPIT, "// im Projekt von Hand angelegt\n");
+    assert.equal(drift1(z).code, 0);
+  });
+
+  test("Negativfall: ein unbekannter Ring (Umlaut-Schreibweise) bleibt rot, nichts wird geschrieben", () => {
+    const z = baueZiel();
+    const vorher = alleDateien(z);
+    const r = laufe(["--quelle", mitCockpit("oberfläche"), "--ziel", z]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.err, /unbekannter Ring 'oberfläche'/);
+    assert.deepEqual(alleDateien(z), vorher);
+    assert.ok(!existsSync(join(z, COCKPIT)));
+  });
+
+  test("Ring-Wechsel kern -> oberflaeche: wird gemeldet, die Datei bleibt, das Drift-Gate bleibt grün", () => {
+    const z = baueZiel();
+    assert.equal(laufe(["--quelle", mitCockpit("kern"), "--ziel", z]).code, 0);
+    assert.ok(existsSync(join(z, COCKPIT)), "als kern verteilt");
+    const r = laufe(["--quelle", mitCockpit("oberflaeche"), "--ziel", z]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /Einheit 'scripts\/cockpit\/o\.mjs' wird nicht mehr verteilt \(Ring oberflaeche\), im Ziel nicht gelöscht/);
+    assert.ok(existsSync(join(z, COCKPIT)));
+    assert.equal(drift1(z).code, 0);
+  });
+
+  test("pruefeDrift ist fail-closed: ein Ring außerhalb der Nur-Factory-Liste wird geprüft", () => {
+    const m = JSON.stringify({ version: 1, eintraege: [{ pfad: "x.txt", ring: "irgendwas", quelle: "t" }] });
+    const lib2 = rawLib as unknown as { textHash(t: string): string; einheitHash(e: { pfad: string }, t: string): string };
+    const stand = { version: 1, manifest: lib2.textHash(m), einheiten: { "x.txt": lib2.einheitHash({ pfad: "x.txt" }, "alt") } };
+    const lesen = (text: string) => (p: string): string | null => (p === ".factory/besitz.json" ? m : p === ".factory/sync-stand.json" ? JSON.stringify(stand) : p === "x.txt" ? text : null);
+    assert.deepEqual(drift.pruefeDrift(lesen("alt")).fehler, []);
+    assert.match(drift.pruefeDrift(lesen("neu")).fehler.join(), /x\.txt: Besitz wurde im Projekt verändert/);
+  });
+});
