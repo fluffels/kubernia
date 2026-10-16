@@ -440,7 +440,7 @@ export function wirklichFehlend(restFehlend, graphqlGefunden) {
 export function istVoruebergehend(err) {
   const text = String(err?.message ?? err ?? "");
   if (isRateLimit(text)) return false;
-  return /Could not resolve to a node/i.test(text) || /fehlt im Board, nicht aufgenommen: unbekannt|nicht im Board gefunden/i.test(text);
+  return /Could not resolve to a node/i.test(text) || /nicht im Board gefunden/i.test(text);
 }
 
 /**

@@ -108,13 +108,13 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
   });
 
   describe("Zählfenster beginnt mit dem Anlegen des jüngsten Status-Tickets (#1628)", () => {
-    const fensterLauf = (offenCreatedAt: string | null) => {
+    const fensterLauf = (offenCreatedAt: string | null, vorgaengerCreated: string | null = "2026-10-05T08:00:00Z", commitDaten: string[] = [], ausloeser = "push") => {
       const log: string[] = [];
       const io: Io = {
         ghJson: (a) =>
           a.join(" ").includes("state=closed")
-            ? [[{ number: 60, title: STATUS, created_at: "2026-10-05T08:00:00Z", closed_at: "2026-10-06T08:00:00Z" }]]
-            : [[]],
+            ? [[{ number: 60, title: STATUS, created_at: vorgaengerCreated, closed_at: "2026-10-06T08:00:00Z" }]]
+            : [commitDaten.map((d, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: d } }, author: { login: "fluffels", type: "User" } }))],
         loadItems: () => [],
         loadOpenIssuePages: () => [offenCreatedAt ? [{ number: 70, title: STATUS, created_at: offenCreatedAt, assignees: [] }] : []],
         positionLautAgentsMd: () => 4,
@@ -122,10 +122,19 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         fuehreHarnessAus: () => true,
         log: (z) => log.push(z),
       };
-      T.fuehreTaktAus({ jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, io });
+      T.fuehreTaktAus({ jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, io, ausloeser });
       return log.join("\n");
     };
 
+    test("ungültiges oder fehlendes created_at: das Fenster fällt auf den Abschluss zurück", () => {
+      expect(fensterLauf(null, "kaputt")).toContain("Fenster ab 2026-10-06T08:01:00.000Z");
+      expect(fensterLauf(null, null)).toContain("Fenster ab 2026-10-06T08:01:00.000Z");
+    });
+    test("auch die 5 Commits des Montags-Cron zählen ab dem Anlegen (Commits zwischen Anlegen und Abschluss zählen mit)", () => {
+      const commits = Array.from({ length: 5 }, () => "2026-10-05T12:00:00Z");
+      expect(fensterLauf(null, "2026-10-05T08:00:00Z", commits, "schedule")).toContain("): anlegen");
+      expect(fensterLauf(null, "2026-10-06T08:00:00Z", commits, "schedule")).toContain("): nichts");
+    });
     test("Vorgänger angelegt Mo, geschlossen Di: das Fenster beginnt beim Anlegen, nicht beim Abschluss", () => {
       expect(fensterLauf(null)).toContain("Fenster ab 2026-10-05T08:01:00.000Z");
     });

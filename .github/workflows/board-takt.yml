@@ -2,7 +2,7 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 
 # Generischer Board-Takt (#1390, zuvor „Langfuse-Takt“ #1351/#1349, ADR 0016). Statt an einer driftenden Board-Position hängt der Takt
 # an der Zeit und an der Aktivität.
-# 1. Status-Ticket „Langfuse-Status überprüfen“: montags legt dieser Lauf das Ticket an (wenn seit dem letzten Abschluss
+# 1. Status-Ticket „Langfuse-Status überprüfen“: montags legt dieser Lauf das Ticket an (wenn seit dem Anlegen des jüngsten Status-Tickets
 #    mindestens 5 Commits auf main liegen) bzw. schiebt ein offenes ungeclaimtes an die Spitze des Boards; ein Push auf main tut
 #    dasselbe, sobald seit dem Anlegen des jüngsten Status-Tickets mindestens 50 Ticket-Merges (ohne Bots) dazukamen (Fr–So ruht
 #    der Push-Auslöser, der Montag setzt zurück; #1628). Angelegt wird nur mit einem

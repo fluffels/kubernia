@@ -55,6 +55,11 @@ describe("ordneEin", () => {
     expect(r[0].art).toBe("alarm");
   });
 
+  test("dieselbe GHSA: der Fix aus der zweiten Quelle wird übernommen", () => {
+    const [z] = A.ordneEin({ befunde: [befund({ fixVerfuegbar: false }), befund({ fixVerfuegbar: true, fixVersion: "3.0.4" })], bekannt: [] });
+    expect(z.text).toContain("Fix: ja v3.0.4");
+  });
+
   test("keine Befunde: leer", () => {
     expect(A.ordneEin({ befunde: [], bekannt: [] })).toEqual([]);
   });

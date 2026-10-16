@@ -13,7 +13,7 @@ import { fehlerMeldung } from "./gh-cli.mjs";
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
-/** Aktivitäts-Untergrenze: so viele Commits auf main seit dem Abschluss des Vorgängers, sonst kein neues Ticket. */
+/** Aktivitäts-Untergrenze: so viele Commits auf main seit dem Anlegen des jüngsten Status-Tickets (Zählfenster, #1628), sonst kein neues Ticket. */
 export const MIN_MERGES = 5;
 /** Push-Auslöser (Aktivität): so viele Ticket-Merges (ohne Bots) seit dem Anlegen des jüngsten Status-Tickets legen das Status-Ticket an bzw. holen es nach oben. */
 export const MIN_TICKET_MERGES_PUSH = 50;

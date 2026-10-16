@@ -119,6 +119,6 @@ Anlass: Status-Tickets entstanden am 06., 07., 08., 10. und 15.10., obwohl der P
 Entscheidung (ersetzt die 8 aus der Fortschreibung #1349 und das Fenster ab Abschluss):
 
 - **Schwelle:** der Push-Auslöser legt das Status-Ticket an bzw. holt es nach oben, sobald mindestens 50 Ticket-Merges (ohne Bots) im Zählfenster liegen. Die Zahl steht als benannte Konstante `MIN_TICKET_MERGES_PUSH`; sie ist ein Schätzwert aus zwei Messwochen und wird nach dem Befund des nächsten Status-Laufs angepasst, wenn der Takt zu selten oder zu oft feuert.
-- **Ruhe:** der Push-Auslöser feuert nicht Freitag, Samstag, Sonntag (UTC, `PUSH_RUHETAGE`); der Montags-Cron (5 Commits, Mindestabstand 24 Stunden) bleibt und setzt zurück.
+- **Ruhe:** der Push-Auslöser feuert nicht Freitag, Samstag, Sonntag (UTC, `PUSH_RUHETAGE`); der Montags-Cron (5 Commits, Mindestabstand 24 Stunden) bleibt und setzt zurück; auch seine 5 Commits zählen ab dem Anlegen des jüngsten Status-Tickets (ein Zählfenster für beide Auslöser, bewusst so entschieden).
 - **Zählfenster:** beginnt mit dem Anlegen des jüngsten Status-Tickets (offen oder geschlossen, je das spätere `createdAt`); jedes Anlegen setzt den Zähler auf 0. Der Mindestabstand von 24 Stunden misst weiter ab dem Abschluss.
 - **Abgrenzung:** gezählt werden Merges auf `main`, nicht Board-Positionen; das widerspricht der verworfenen Ticket-Zählung (Positionen driften) nicht.
