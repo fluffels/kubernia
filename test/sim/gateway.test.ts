@@ -2,14 +2,15 @@
  * `gateway.networking.k8s.io/v1` GatewayClass und Gateway (über die öffentliche `effectsFromManifest`). */
 import { describe, test, expect } from "vitest";
 import {
-  SIM_GATEWAY_CONTROLLER, gatewayAddress, gatewayClassConditions, gatewayStatus, listenerConditions,
-  type GatewayClassRes, type GatewayListener, type GatewayRes,
+  SIM_GATEWAY_CONTROLLER, gatewayAddress, gatewayClassConditions, gatewayStatus, listenerConditions, tlsRuleViolation,
+  type GatewayClassRes, type GatewayListener, type GatewayRes, type GatewayStatusEnv,
 } from "../../src/sim/gateway";
 import { effectsFromManifest, type ManifestFailure } from "../../src/sim/manifest/registry";
 import type { ApplyEffect } from "../../src/sim/state";
 
 const klasse = (extra: Partial<GatewayClassRes> = {}): GatewayClassRes => ({ name: "envoy", controllerName: SIM_GATEWAY_CONTROLLER, ...extra });
 const tor = (extra: Partial<GatewayRes> = {}): GatewayRes => ({ name: "tor", className: "envoy", listeners: [{ name: "http", port: 80, protocol: "HTTP" }], ...extra });
+const env = (extra: Partial<GatewayStatusEnv> = {}): GatewayStatusEnv => ({ gatewayClasses: [klasse()], secrets: [], httpRoutes: [], ...extra });
 const https = (extra: Partial<GatewayListener> = {}): GatewayListener => ({ name: "https", port: 443, protocol: "HTTPS", tlsSecret: "tls", ...extra });
 
 describe("Status der GatewayClass", () => {
@@ -24,20 +25,20 @@ describe("Status der GatewayClass", () => {
 
 describe("Status des Gateways", () => {
   test("mit akzeptierter Klasse: Accepted und Programmed True, Adresse im TEST-NET-3", () => {
-    const st = gatewayStatus(tor(), [klasse()]);
-    expect(st.classAccepted).toBe(true);
+    const st = gatewayStatus(tor(), env());
+    expect(st.listeners).not.toBeNull();
     expect(st.conditions.map(c => c.type + "=" + c.status + "/" + c.reason)).toEqual(["Accepted=True/Accepted", "Programmed=True/Programmed"]);
     expect(st.address).toBe(gatewayAddress("tor"));
   });
   test("unbekannte Klasse: Unknown / Pending, keine Adresse", () => {
-    const st = gatewayStatus(tor(), []);
-    expect(st.classAccepted).toBe(false);
+    const st = gatewayStatus(tor(), env({ gatewayClasses: [] }));
+    expect(st.listeners).toBeNull();
     expect(st.address).toBeNull();
     expect(st.conditions.map(c => c.status + "/" + c.reason)).toEqual(["Unknown/Pending", "Unknown/Pending"]);
   });
   test("Klasse mit fremdem Controller zählt wie nicht akzeptiert", () => {
-    const st = gatewayStatus(tor(), [klasse({ controllerName: "example.com/anderer" })]);
-    expect(st.classAccepted).toBe(false);
+    const st = gatewayStatus(tor(), env({ gatewayClasses: [klasse({ controllerName: "example.com/anderer" })] }));
+    expect(st.listeners).toBeNull();
     expect(st.address).toBeNull();
   });
   test("Eigenschaft: die Adresse ist stabil und liegt für jeden Namen in .20 bis .99", () => {
@@ -50,6 +51,48 @@ describe("Status des Gateways", () => {
       expect(last, name).toBeGreaterThanOrEqual(20);
       expect(last, name).toBeLessThanOrEqual(99);
     }
+  });
+});
+
+describe("tlsRuleViolation (die eine TLS-Regel)", () => {
+  test("HTTPS/TLS braucht ein Zertifikat, HTTP/TCP/UDP darf keins tragen, eigene Protokolle sind frei", () => {
+    expect(tlsRuleViolation("HTTPS", false)).toBe("fehlt");
+    expect(tlsRuleViolation("TLS", false)).toBe("fehlt");
+    expect(tlsRuleViolation("HTTP", true)).toBe("verboten");
+    expect(tlsRuleViolation("TCP", true)).toBe("verboten");
+    expect(tlsRuleViolation("UDP", true)).toBe("verboten");
+    expect(tlsRuleViolation("HTTPS", true)).toBeNull();
+    expect(tlsRuleViolation("TLS", true)).toBeNull();
+    expect(tlsRuleViolation("HTTP", false)).toBeNull();
+    expect(tlsRuleViolation("example.com/x", true)).toBeNull();
+    expect(tlsRuleViolation("example.com/x", false)).toBeNull();
+  });
+});
+
+describe("Gateway-Accepted bei ungültigen Listenern (ListenersNotValid)", () => {
+  const ok = { name: "http", port: 80, protocol: "HTTP" };
+  const accepted = (gw: GatewayRes) => gatewayStatus(gw, env()).conditions.find(c => c.type === "Accepted");
+  test("gemischt: Accepted True, ListenersNotValid nennt nur die ungültigen", () => {
+    const c = accepted(tor({ listeners: [ok, https({ name: "tls" })] }));
+    expect(c).toMatchObject({ status: "True", reason: "ListenersNotValid", message: "Listeners not valid: tls" });
+  });
+  test("alle ungültig: Accepted False, Namen sortiert und mit Komma getrennt", () => {
+    const c = accepted(tor({ listeners: [https({ name: "zeta" }), https({ name: "alpha" })] }));
+    expect(c).toMatchObject({ status: "False", reason: "ListenersNotValid", message: "No listeners are valid: alpha, zeta" });
+  });
+  test("keine Listener: Accepted True / Accepted; Programmed bleibt True", () => {
+    const st = gatewayStatus(tor({ listeners: [] }), env());
+    expect(st.conditions[0]).toMatchObject({ status: "True", reason: "Accepted" });
+    expect(st.conditions[1]).toMatchObject({ type: "Programmed", status: "True" });
+    expect(st.listeners).toEqual([]);
+  });
+  test("alle gültig: Accepted wie bisher", () => {
+    expect(accepted(tor())).toMatchObject({ status: "True", reason: "Accepted" });
+  });
+  test("ohne akzeptierte Klasse gibt es weder Listener-Status noch ListenersNotValid", () => {
+    const st = gatewayStatus(tor({ listeners: [https()] }), env({ gatewayClasses: [] }));
+    expect(st.listeners).toBeNull();
+    expect(st.conditions.some(c => c.reason === "ListenersNotValid")).toBe(false);
   });
 });
 

@@ -9,7 +9,7 @@
  * Phaser-frei (pure Domäne); importiert nie ./get-yaml oder ../get (kein Zyklus). */
 import type { YamlMap } from "../../yaml-emit";
 import {
-  GATEWAY_API_VERSION, GATEWAY_GROUP, attachedRoutes, gatewayClassConditions, gatewayStatus, httpRouteStatus, listenerConditions,
+  GATEWAY_API_VERSION, GATEWAY_GROUP, gatewayClassConditions, gatewayStatus, httpRouteStatus,
   type GatewayClassRes, type GatewayCondition, type GatewayListener, type GatewayRes, type HttpRouteRes, type HttpRouteRule,
 } from "../../gateway";
 import { servicesWithDefault } from "../../endpoints";
@@ -39,16 +39,14 @@ function listenerObject(l: GatewayListener): YamlMap {
 }
 
 function gatewayObject(host: KubectlHost, gw: GatewayRes): YamlMap {
-  const st = gatewayStatus(gw, host.gatewayClasses);
+  const st = gatewayStatus(gw, host);
   return {
     apiVersion: GATEWAY_API_VERSION, kind: "Gateway", metadata: metaOf(gw.name),
     spec: { gatewayClassName: gw.className, listeners: gw.listeners.map(listenerObject) },
     status: compact({
       addresses: st.address === null ? undefined : [{ type: "IPAddress", value: st.address }],
       conditions: st.conditions.map(conditionObject),
-      listeners: st.classAccepted
-        ? gw.listeners.map(l => ({ attachedRoutes: attachedRoutes(gw, l, host.httpRoutes), conditions: listenerConditions(l, host.secrets).map(conditionObject), name: l.name }))
-        : undefined,
+      listeners: st.listeners?.map(l => ({ attachedRoutes: l.attachedRoutes, conditions: l.conditions.map(conditionObject), name: l.name })),
     }),
   };
 }

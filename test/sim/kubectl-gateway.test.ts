@@ -151,6 +151,9 @@ describe("describe", () => {
     apply("g.yaml", GW(HTTPS));
     const d = out("describe gateway tor");
     expect(d).toMatch(/Reason:\s+InvalidCertificateRef\s+Status:\s+False\s+Type:\s+ResolvedRefs/);
+    expect(d).toMatch(/Message:\s+No listeners are valid: https/);
+    expect(d).toMatch(/Reason:\s+ListenersNotValid/);
+    expect(out("get gateway tor -o yaml")).toMatch(/reason: ListenersNotValid/);
   });
   test("Opaque-Secret statt kubernetes.io/tls: ebenfalls InvalidCertificateRef", () => {
     apply("c.yaml", CLS());
