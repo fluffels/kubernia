@@ -139,6 +139,19 @@ export function laufAus({ meta, zeilen, datei }) {
   };
 }
 
+/** Vorlauf beim Laden für `--je-ticket` (#1646): ein Nachfolger im Fenster hat seinen Vorgänger bis zu 48 h davor, dessen Datei sonst am mtime-Filter scheitert. */
+export const VORLAUF_MS = 48 * 60 * 60_000;
+
+/** Frühester Start je Ticket (Map Ticket → ms); Läufe ohne Ticket fallen weg. */
+export function ersterStartJeTicket(laeufe) {
+  const erster = new Map();
+  for (const { ticket, start } of laeufe) {
+    if (ticket === null || ticket === undefined) continue;
+    if (!erster.has(ticket) || start < erster.get(ticket)) erster.set(ticket, start);
+  }
+  return erster;
+}
+
 /** Lädt die Läufe (Meta + Transkriptzeilen) eines Subagent-Typs aus `<projektordner>/<session>/subagents/`, nur Dateien jünger als `von`. */
 export function ladeLaeufe(dir, agent, von) {
   const laeufe = [];

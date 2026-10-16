@@ -150,3 +150,24 @@ describe("Ticketnummer und Ticketfilter (#1609)", () => {
     expect(T.passtTicketFilter(5, { tickets: [5], ohne: [5] })).toBe(false);
   });
 });
+
+describe("normPfad (#1646: eine Normalisierung für bereinige und Kontext-Treiber)", () => {
+  const N = raw as unknown as { normPfad: (p: string, o?: { wurzel?: string | null }) => string };
+  test("Worktree-Präfix und Wurzel fallen weg, klein, POSIX", () => {
+    expect(N.normPfad("C:\\Dev\\Proj\\.claude\\worktrees\\kq-5-x\\Scripts\\A.mjs", { wurzel: "C:/dev/proj" })).toBe("scripts/a.mjs");
+    expect(N.normPfad("C:/dev/proj/scripts/a.mjs", { wurzel: "C:/dev/proj" })).toBe("scripts/a.mjs");
+  });
+  test("Wurzel mit Backslash und mit Schrägstrich am Ende", () => {
+    expect(N.normPfad("C:/dev/proj/src/b.ts", { wurzel: "C:\\dev\\proj" })).toBe("src/b.ts");
+    expect(N.normPfad("C:/dev/proj/src/b.ts", { wurzel: "C:/dev/proj/" })).toBe("src/b.ts");
+  });
+  test("Git-Bash-Wurzel passt auf einen C:-Pfad und umgekehrt", () => {
+    expect(N.normPfad("C:/dev/proj/src/b.ts", { wurzel: "/c/dev/proj" })).toBe("src/b.ts");
+    expect(N.normPfad("/c/dev/proj/src/b.ts", { wurzel: "C:/dev/proj" })).toBe("src/b.ts");
+  });
+  test("Negativ: Pfad außerhalb der Wurzel, ähnlicher Präfix und fehlende Wurzel bleiben unverändert", () => {
+    expect(N.normPfad("D:/other/src/b.ts", { wurzel: "C:/dev/proj" })).toBe("d:/other/src/b.ts");
+    expect(N.normPfad("C:/dev/proj2/src/b.ts", { wurzel: "C:/dev/proj" })).toBe("c:/dev/proj2/src/b.ts");
+    expect(N.normPfad("C:/dev/proj/src/b.ts")).toBe("c:/dev/proj/src/b.ts");
+  });
+});

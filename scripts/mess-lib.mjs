@@ -32,6 +32,9 @@ export function istNeuaufbau({ gapMs, pauseMs, call }) {
 
 const regexEscape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** Kern des Worktree-Pfads `/.claude/worktrees/kq-<nr>…` (Regex-Quelltext): `bereinige` und `normPfad` nutzen dieselbe Regel. */
+const WORKTREE_KERN = String.raw`/\.claude/worktrees/kq-\d+[\w-]*`;
+
 /** Beide Schreibweisen einer Repo-Wurzel (`C:/x/y` und Git-Bash `/c/x/y`) als Regex-Alternativen. */
 function wurzelVarianten(wurzel) {
   const roh = String(wurzel).replace(/\\/g, "/").replace(/\/+$/, "");
@@ -45,6 +48,16 @@ function wurzelVarianten(wurzel) {
 }
 
 /**
+ * Pfad vergleichbar machen: Schrägstriche, klein, ohne Worktree-Präfix `…/worktrees/kq-<nr>…/` und ohne die Repo-Wurzel (beide
+ * Schreibweisen aus `wurzelVarianten`, auch mit Backslash oder abschließendem Schrägstrich). Pfade außerhalb der Wurzel bleiben stehen.
+ */
+export function normPfad(pfad, { wurzel = null } = {}) {
+  const p = String(pfad).replace(/\\/g, "/").replace(new RegExp(`^.*?${WORKTREE_KERN}/`, "i"), "").toLowerCase();
+  const praefix = wurzelVarianten(wurzel ?? "").map((v) => `${v.toLowerCase()}/`).find((w) => p.startsWith(w));
+  return praefix ? p.slice(praefix.length) : p;
+}
+
+/**
  * Pfade und Befehle ohne Benutzerordner, Worktree-Präfix und Repo-Wurzel (das Repo ist öffentlich). Die Wurzel kommt von
  * außen (`git rev-parse --git-common-dir`, ohne `.git`), nie fest verdrahtet; beide Schreibweisen (`C:/…`, `/c/…`), mit und
  * ohne abschließenden Schrägstrich. Ohne `wurzel` bleibt nur die Wurzel-Ersetzung aus.
@@ -54,7 +67,7 @@ export function bereinige(text, { wurzel = null } = {}) {
     .replace(/\\/g, "/")
     .replace(/[A-Za-z]:\/Users\/[^/\s"']+/g, "~")
     .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~")
-    .replace(/\S*\/\.claude\/worktrees\/kq-\d+[\w-]*(?:\/|(?=\s|$))/g, "<wt>/");
+    .replace(new RegExp(`\\S*${WORKTREE_KERN}(?:/|(?=\\s|$))`, "g"), "<wt>/");
   const varianten = wurzel ? wurzelVarianten(wurzel) : [];
   if (varianten.length) t = t.replace(new RegExp(`(?:${varianten.map(regexEscape).join("|")})(?:/|(?=[\\s"']|$))`, "gi"), "<repo>/");
   return t.replace(/\s+/g, " ");
