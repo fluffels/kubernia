@@ -28,6 +28,8 @@
     "/.mcp.json",
     "/scripts/playwright-mcp.mjs",
     "/scripts/mcp-ausfall.mjs",
+    "/scripts/besitz-lib.mjs",
+    "/scripts/factory-sync.mjs",
     "/scripts/sandbox-doctor.mjs",
     "/scripts/gh-guard-hook.mjs",
     "/scripts/hook-io.mjs",
