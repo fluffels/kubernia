@@ -184,6 +184,8 @@ F2 ist umgesetzt. Entscheidungen:
 
 Präzisiert durch #1728: Schema `version` 2 mit der Liste `boards` statt `board`.
 
+Präzisiert durch #1741: Präfixe, Labels und Agentennamen stehen als Pflichtschlüssel in der Config (Fortschreibung #1741 unten).
+
 Präzisiert durch #1628: Die Workflows checken das volle Repo aus und setzen die Position über `scripts/board-place.mjs` (Wiederholung, rot bei endgültigem Scheitern); Sparse-Checkout und `set_board_top` entfallen für die Inbox-Workflows.
 
 ## Fortschreibung #1613 (2026-10-16): Sync-Werkzeug und Drift-Gate (F9)
@@ -259,3 +261,12 @@ Teil 1 von F11 ist umgesetzt: das Factory-Board existiert, die Config führt bei
 - **Trennregel als pure Funktion:** `boardRolleFuer(labels)` ordnet genau das Label `area:harness` dem Factory-Board zu, alles andere dem Produkt-Board; ohne Label-Liste wirft sie. Eingesetzt wird sie erst in den Folgeteilen.
 - **Factory-Board:** privates User-Project „Factory Backlog“, Kopie des Produkt-Boards (gleiches Status-Feld mit Todo, In Progress, Done), ohne die Ansichten „Spiel“ und „Agentic Engineering“; das Produkt-Board heißt jetzt „Kubernia Backlog“. „Auto-add sub-issues“ kann nur die Maintainerin in der Oberfläche einschalten.
 - **Grenze:** `board-lib` lädt die Config weiter beim Import, eine kaputte v2-Config bricht damit auch die anderen Board-Werkzeuge (gewollt, laut statt still). Die Option-IDs des kopierten Status-Feldes können denen des Produkt-Boards gleichen; darum gibt es keine Eindeutigkeitsprüfung für sie.
+
+## Fortschreibung #1741 (2026-10-16): Präfixe, Labels und Agenten in der Projekt-Config (F3, Teil 1)
+
+Teil 1 von F3 ist umgesetzt: das Schema, die Quelle der Commit-Zeilen und die Wächter-Begriffe für alle F3-Werte. Die Teile K2 bis K8 (Epic #1707) senken nur noch die Baseline. Entscheidungen:
+
+- **Schlüssel und Muster, kein Default:** `praefixe.commitZeile` (`^[A-Z][A-Z0-9]*-$`), `praefixe.branch` (Buchstaben, Ziffern, `_`, `-`, `/`) und `praefixe.worktree` (wie Branch, ohne `/`; kein Präfix darf Regex-Sonderzeichen oder Leerraum enthalten), `labels.harness|festgefahren|forum|dependabotInbox` (nicht-leere Texte; weitere Label-Schlüssel sind erlaubt und werden gleich geprüft; das Inbox-Label ist ein eigener Schlüssel, auch wenn es heute den Wert von `harness` trägt) und `agenten.planer|umsetzer|lens|gruppe|ticketSkill` (Name ohne Leerraum und `:`, nicht mit `-` am Anfang). Fehlt ein Schlüssel oder passt das Muster nicht, bricht der Lader mit Pfad, Schlüssel und „Fix:“-Zeile ab. `version` bleibt 2.
+- **Commit-Zeilen aus dem Präfix:** `commitZeilen(praefix, planer)` in `scripts/slice-override.mjs` leitet Plan-, Review- und die vier Override-Schlüssel ab. Die puren Parser (`parseNachweis`, `bewerteNachweis`, `nachweisAusCommits`, `bewertePrs`) bekommen die Zeilen als Pflichtparameter, die Gates und Messskripte laden sie über `ladeCommitZeilen()` aus der echten Config. Der Planer-Name in der Plan-Zeile ist `agenten.planer`. `--config <pfad>` gibt es nur an `check-review-nachweis` (Tests und fremde Projekte); die `KQ_*`-Umgebungsvariablen der Gates behalten ihre Namen.
+- **Wächter-Begriffe:** Praefix (Commit-Zeilen-Präfix), Branch, Worktree, Label (nur Werte mit `:`) und Agent, alle groß/klein-genau und wörtlich (Alternativen nach Länge absteigend, damit ein Kurzname nicht im Langnamen mitzählt). Die Baseline erfasst den Bestand und sinkt nur.
+- **Grenzen:** Ein Label ohne `:` (etwa `forum`) zählt nicht, weil es als Wort überall vorkommt. Der Worktree-Begriff steckt im Branch-Präfix, beides zählt (gewollte Doppelzählung); der Agent-Begriff deckt sich bei einem Ticket-Skill, der wie das Repo heißt, mit dem Repo-Begriff. Ein Wechsel des Commit-Zeilen-Präfixes lässt alte Zeilen aus `lauf-ergebnis` und `token-baseline` herausfallen (die Gates prüfen nur den Slice des PRs); historische Nachweise bleiben gültig, solange das Präfix gleich bleibt. Die `KQ_*`-Namen der Umgebungsvariablen zählt kein Begriff.
