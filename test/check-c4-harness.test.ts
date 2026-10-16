@@ -123,6 +123,8 @@ describe("pruefeHarness: Bindung je Art in beide Richtungen", () => {
       assert.ok(ms.length >= 1);
       assert.ok(ms.every((m) => /keine Quelle für die Bindung/.test(m.text)));
     }
+    const ohneListe = lauf(modell(), { ...QUELLEN, mcp: { herkunft: "x" } as unknown as Quelle });
+    assert.match(ohneListe[0].text, /keine Quelle für die Bindung/);
   });
 
   test("ohne gebundene Harness-Art wird nichts geprüft", () => {
@@ -202,6 +204,29 @@ describe("harnessQuellen: der Loader", () => {
     assert.throws(() => api.harnessQuellen(fixture(FILES({ ".mcp.json": null })), CONFIG), /\.mcp\.json fehlt/);
     assert.throws(() => api.harnessQuellen(fixture(FILES({ ".githooks/pre-push": null })), CONFIG), /\.githooks fehlt/);
     assert.throws(() => api.harnessQuellen(fixture(FILES({ "package.json": null })), CONFIG), /package\.json fehlt/);
+  });
+
+  test("ein konfigurierter, aber fehlender Ordner für Agenten, Skills oder Workflows wirft mit dem Pfad (kein stilles leeres Verzeichnis)", () => {
+    for (const [schluessel, ordner] of [["agents", ".claude/agents"], ["skills", ".claude/skills"], ["workflows", ".claude/workflows"]] as const) {
+      const files = Object.fromEntries(Object.entries(FILES()).filter(([k]) => !k.startsWith(ordner + "/")));
+      assert.throws(() => api.harnessQuellen(fixture(files), CONFIG, [{ agents: "agent", skills: "skill", workflows: "workflow" }[schluessel]]), new RegExp(`${ordner.replace(".", "\.")} fehlt`));
+    }
+  });
+
+  test("Punktdateien unter .githooks und Unterordner unter .githooks oder .github/workflows zählen nicht", () => {
+    const q = api.harnessQuellen(
+      fixture(FILES({ ".githooks/.gitkeep": "", ".githooks/_/h.sh": "x", ".github/workflows/lib.yml/a.txt": "x" })),
+      CONFIG,
+      ["githook", "ciworkflow"],
+    );
+    assert.deepEqual(q.githook.eintraege.map((x) => x.titel), ["pre-push"]);
+    assert.deepEqual(q.ciworkflow.eintraege.map((x) => x.titel), ["a.yml", "b.yaml"]);
+  });
+
+  test("settings.json ohne hooks und .mcp.json ohne mcpServers ergeben leere Listen statt eines Wurfs", () => {
+    const q = api.harnessQuellen(fixture(FILES({ ".claude/settings.json": "{}", ".mcp.json": "{}" })), CONFIG, ["hook", "mcp"]);
+    assert.deepEqual(q.hook.eintraege, []);
+    assert.deepEqual(q.mcp.eintraege, []);
   });
 
   test("nicht konfigurierter Schlüssel: der Binder fehlt in der Antwort (pruefeHarness meldet ihn rot)", () => {

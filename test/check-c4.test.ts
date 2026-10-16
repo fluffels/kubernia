@@ -205,6 +205,17 @@ describe("Ziffern-Regel: keine Zahlen aus SSOT-Konstanten in Labels (#1421)", ()
     assert.ok(t.some((x) => /view „index“: Titel „Ansicht 2“/.test(x)));
   });
 
+  test("Zahl nach Satzzeichen oder Bindestrich ist rot (Klammer, Doppelpunkt, Bindestrich), Zahl hinter einem Buchstaben nicht", () => {
+    for (const text of ["(3 Pässe)", "Cap:2", "Lens-Cap-2", "a/3", "x 12"]) {
+      const c4 = gueltig();
+      c4.elemente[0].beschreibung = text;
+      assert.equal(rot(c4).length, 1, text);
+    }
+    const ok = gueltig();
+    ok.elemente[0].beschreibung = "k8s, arc42, a1";
+    assert.equal(rot(ok).length, 0);
+  });
+
   test("Zahlen im Wort (arc42, k8s) und Zahlwörter sind grün; der Titel einer gebundenen Art ist ausgenommen", () => {
     const c4 = gueltig();
     c4.elemente[0].beschreibung = "arc42 und k8s, drei Brillen";
