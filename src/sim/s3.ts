@@ -58,7 +58,7 @@ const S3: Dispatch<SubEntry<S3Handler>> = { cmd: "aws s3", table: {
 };
 
 /** Die `aws`-Ebene: nur der Dienst `s3` ist simuliert, die anderen echten Dienste sind „nicht simuliert“. */
-const AWS: Dispatch<SubEntry<S3Handler>> = {
+export const AWS: Dispatch<SubEntry<S3Handler>> = {
   cmd: "aws",
   table: { s3: { group: S3 } },
   real: ["ec2", "iam", "sts", "s3api", "lambda", "ecr", "ecs", "eks", "dynamodb", "rds", "sqs", "sns", "cloudformation", "cloudwatch", "logs", "route53", "kms", "secretsmanager", "ssm", "configure"],

@@ -199,10 +199,12 @@ const createDeployment: CreateHandler = (host, c) => {
 };
 
 /** Ein Befehl hinter `--` (`create deployment web --image=x -- sleep 1`) ist kein Name: kubectl liest ihn über ArgsLenAtDash. */
-const ohneBefehl = (art: string, run: CreateHandler): CreateHandler => (host, c) =>
-  c.dashAt !== null && c.args.length > c.dashAt
-    ? notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + art + "'.", ["'kubectl create " + art + "' ohne '--'"])
-    : run(host, c);
+const ohneBefehl = (art: string, run: CreateHandler): CreateHandler => (host, c) => {
+  if (c.dashAt === null || c.args.length <= c.dashAt) return run(host, c);
+  // `NameFromCommandArgs` verlangt genau einen Namen VOR dem `--`.
+  const vorDash = exactlyOneName(host, c.args.slice(0, c.dashAt), "Muster: kubectl create " + art + " <name> …");
+  return vorDash ?? notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + art + "'.", ["'kubectl create " + art + "' ohne '--'"]);
+};
 
 const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], hints?: Readonly<Record<string, string>>): SubEntry<CreateHandler> =>
   ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, hints });

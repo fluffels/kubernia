@@ -206,7 +206,7 @@ function dockerPs(sim: DockerHost, c: Call): string {
 }
 
 /** Mehrfachziele wie die docker-CLI: jedes Ziel läuft für sich (`step` gibt den Fehlertext oder `null`), die Fehler
- *  stehen zuletzt, der Tipp kommt vom ersten Fehler. */
+ *  stehen zuletzt, der Tipp ist der erste vorhandene Tipp. */
 function eachContainer(sim: DockerHost, names: readonly string[], step: (name: string) => { error: string; tip?: string } | null): string {
   const ok: string[] = [], failed: string[] = [];
   let tip: string | undefined;
@@ -247,7 +247,7 @@ const ALL = flag(false, "-a", "--all");
 /** Die Dispatch-Tabelle: Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`dockerCommand`) bleibt ein Aufruf und wächst nicht mit dem Befehlssatz. `real` sind
  *  echte docker-Unterbefehle, die die Sim nicht kann. */
-const DOCKER: Dispatch<DockerEntry> = {
+export const DOCKER: Dispatch<DockerEntry> = {
   cmd: "docker",
   table: {
     pull: { run: dockerPull, maxArgs: 1 },
