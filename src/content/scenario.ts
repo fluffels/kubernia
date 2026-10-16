@@ -64,7 +64,9 @@ const scGateways: ScenarioFieldCheck = (v, p) => {
       const lp = `${gp}.listeners[${li}]`;
       const rec = asRecord(l, lp);
       const protocol = asNonEmptyString(rec.protocol, `${lp}.protocol`);
-      const verstoss = tlsRuleViolation(protocol, rec.tlsSecret !== undefined);
+      const hasSecret = rec.tlsSecret !== undefined;
+      if (hasSecret) asNonEmptyString(rec.tlsSecret, `${lp}.tlsSecret`);
+      const verstoss = tlsRuleViolation(protocol, hasSecret);
       if (verstoss === "fehlt") fail(lp, `Listener mit Protokoll ${protocol} braucht tlsSecret, sonst bricht der Round-Trip get -o yaml → apply`);
       if (verstoss === "verboten") fail(lp, `Listener mit Protokoll ${protocol} darf kein tlsSecret tragen (nur HTTPS und TLS)`);
     }

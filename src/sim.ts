@@ -62,7 +62,7 @@ import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
 /* ---------- Ressourcen-Registry (#499) ----------
  * Eine Reihe von Ressourcentypen ist „einfach additiv": ihr Zustand ist eine flache Liste,
- * ein Eintrag wird per Shallow-Clone übernommen und per `.name` dedupliziert. Genau diese
+ * ein Eintrag wird tief geklont (`structuredClone`) übernommen und per `.name` dedupliziert. Genau diese
  * Typen standen bisher DREIMAL fast identisch da – in reset() (klonen), mergeScenario()
  * (per Name anhängen) und snapshot() (klonen). Neue solche Ressource = drei Blöcke konsistent
  * pflegen (iSAQB: Open-Closed verletzt). Als Registry ist jeder Typ EIN Eintrag hier; reset,

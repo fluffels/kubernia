@@ -143,3 +143,10 @@ test("reviveScenario: Gateway-Struktur: Element kein Objekt, listeners kein Arra
   assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 80 }])] }, "x"), ContentValidationError);
   assert.throws(() => reviveScenario({ gateways: {} }, "x"), /Array erwartet/);
 });
+
+test("reviveScenario: null als Gateway- oder Listener-Element und ein leeres tlsSecret werden sauber abgelehnt", () => {
+  assert.throws(() => reviveScenario({ gateways: [null] }, "x"), /gateways\[0\].*Objekt erwartet/);
+  assert.throws(() => reviveScenario({ gateways: [gw([null])] }, "x"), /listeners\[0\].*Objekt erwartet/);
+  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 443, protocol: "HTTPS", tlsSecret: "" }])] }, "x"), ContentValidationError);
+  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 443, protocol: "HTTPS", tlsSecret: null }])] }, "x"), ContentValidationError);
+});

@@ -196,7 +196,7 @@ describe("Mapper Gateway", () => {
     expect(fail(GW(LST("HTTPS", 443, "      tls:\n        mode: Terminate\n"))).error).toContain(CEL);
     expect(fail(GW(LST("TLS", 443, "      tls:\n        mode: Passthrough\n"))).error).toContain("Passthrough wird vom Simulator nicht abgebildet");
   });
-  test("unbekannter tls.mode: Server-Wortlaut mit Tipp, auch vor dem Passthrough-Check", () => {
+  test("unbekannter tls.mode: Server-Wortlaut mit Tipp", () => {
     const f = fail(GW(LST("HTTPS", 443, "      tls:\n        mode: Foo\n        certificateRefs:\n          - name: x\n")));
     expect(f.error).toBe("The Gateway \"tor\" is invalid: spec.listeners[0].tls.mode: Unsupported value: \"Foo\": supported values: \"Terminate\", \"Passthrough\"");
     expect(f.hint).toContain("Terminate");
