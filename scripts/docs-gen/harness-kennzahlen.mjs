@@ -60,14 +60,14 @@ export function harnessKennzahlenGenerator({ rootDir, config }) {
   if (skriptOrdner.every((o) => brauche(rootDir, o, "Skript-Ordner", errors))) {
     const n = skriptOrdner.reduce((s, o) => s + dateienUnter(join(rootDir, o)).filter((f) => endungen.some((e) => f.endsWith(e))).length, 0);
     const endungsListe = endungen.map((e) => `\`${e}\``).join("/");
-    rows.push(zeile("Skripte", grob(n), `Dateien ${endungsListe} unter ${skriptOrdner.map((o) => `\`${o}/\``).join(", ")} (rekursiv)`));
+    rows.push(zeile("Skripte", grob(n), `Dateien ${endungsListe} unter ${skriptOrdner.map((o) => `\`${o}/\``).join(", ")} (rekursiv), ab 10 auf Zehner abgerundet`));
   }
 
   const w = cfg.waechter;
   if (w && brauche(rootDir, w.ordner, "Wächter-Ordner", errors)) {
     const abs = join(rootDir, w.ordner);
     const n = dateienUnter(abs).filter((f) => f.endsWith(".test.ts") && WAECHTER_MARKER.test(readFileSync(join(abs, f), "utf8"))).length;
-    rows.push(zeile("Wächter-Tests", grob(n), `\`*.test.ts\` unter \`${w.ordner}/\` (rekursiv) mit dem Marker \`@harness-waechter\` im Kopf`));
+    rows.push(zeile("Wächter-Tests", grob(n), `\`*.test.ts\` unter \`${w.ordner}/\` (rekursiv) mit dem Marker \`@harness-waechter\` im Kopf, ab 10 auf Zehner abgerundet`));
   }
 
   if (cfg.workflows && brauche(rootDir, cfg.workflows, "Workflow-Ordner", errors)) {
