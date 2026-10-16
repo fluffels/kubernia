@@ -12,7 +12,7 @@
  *   KQ-Plan: kubernia-planner            |  KQ-Plan: ohne — <Begründung>
  *   KQ-Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
- *   Optional `zusatzpass=<anzahl>:<grund>` (#1561): nur wenn die Maintainerin Pässe über das Cap hinaus freigab; erhöht die Obergrenze.
+ *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): ein Pass über das Cap hinaus ohne Rückfrage (Ursache im PR); weitere gibt nur die Maintainerin frei; erhöht die Obergrenze.
  *
  * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
  * Aus einer stillen Auslassung wird so eine bewusste Falschangabe; die unabhängige Prüfung
@@ -90,18 +90,19 @@ function bewerteBlocker(review) {
   return fehler;
 }
 
-/** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<grund>` (#1561): nur die Maintainerin gibt Pässe
- *  über das Cap hinaus frei; der Nachweis bleibt Selbstauskunft. Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
+/** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): einen Pass über das Cap
+ *  fährt der Umsetzer ohne Rückfrage, weitere gibt nur die Maintainerin frei; der Nachweis bleibt Selbstauskunft.
+ *  Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
 function bewerteRunden(review) {
   const zp = review.zusatzpass ?? null;
   if (zp && "ungueltig" in zp) {
-    return [`KQ-Review: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Grund der Freigabe>).`];
+    return [`KQ-Review: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Ursache>).`];
   }
   const erlaubt = MAX_REVIEW_PAESSE + (zp ? zp.anzahl : 0);
   if (review.runden > erlaubt) {
     return [
       `KQ-Review: runden=${review.runden} überschreitet die Obergrenze (Cap ${MAX_FIX_RUNDEN} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
-        `Gab die Maintainerin einen Zusatzpass frei: zusatzpass=<anzahl>:<Grund> in die KQ-Review-Zeile.`,
+        `Einen Zusatzpass nach dem Cap fährt der Umsetzer ohne Rückfrage: zusatzpass=<anzahl>:<Ursache> in die KQ-Review-Zeile.`,
     ];
   }
   if (zp && review.runden <= MAX_REVIEW_PAESSE) {
@@ -219,8 +220,8 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
   }
 }
 
-/** CLI-Zeile zum Zusatzpass (Freigabe der Maintainerin); `null` ohne gültigen Zusatzpass. Pur. */
-export const zusatzpassZeile = (r) => (r.zusatzpass ? `• Zusatzpass (Freigabe der Maintainerin): ${r.zusatzpass.grund}` : null);
+/** CLI-Zeile zum Zusatzpass; `null` ohne gültigen Zusatzpass. Pur. */
+export const zusatzpassZeile = (r) => (r.zusatzpass ? `• Zusatzpass: ${r.zusatzpass.grund}` : null);
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
