@@ -76,6 +76,14 @@ describe("bewerte: berichtende Checks (#875)", () => {
     const r = P.bewerte(offen([lauf("CodeQL", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }));
     expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 0/0 grün, wartend: Checks starten"] });
   });
+  test("rotes CodeQL plus laufender Check: wartend plus HINWEIS", () => {
+    const r = P.bewerte(offen([gruen, lauf("b", "IN_PROGRESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]));
+    expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 1/2 grün, wartend: b", hinweis("CodeQL")] });
+  });
+  test("rotes CodeQL bei grünem Stand ohne Auto-Merge: GRÜN OHNE AUTO-MERGE plus HINWEIS", () => {
+    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "FAILURE")], { autoMergeRequest: null }));
+    expect(r).toEqual({ exit: 3, zeilen: ["GRÜN OHNE AUTO-MERGE", hinweis("CodeQL")] });
+  });
   test("Konflikt mit rotem CodeQL: KONFLIKT plus HINWEIS", () => {
     const r = P.bewerte(offen([lauf("CodeQL", "COMPLETED", "FAILURE")], { mergeable: "CONFLICTING" }));
     expect(r).toEqual({ exit: 3, zeilen: ["KONFLIKT", hinweis("CodeQL")] });

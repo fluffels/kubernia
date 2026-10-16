@@ -5,12 +5,12 @@
  *   node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]
  *
  * Ein Aufruf pollt höchstens `--max-sekunden` (Standard 240, unter der 5-Minuten-Cache-TTL der Subagenten: eine längere
- * Pause baut den ganzen Kontext neu auf, docs/model-routing.md § Umsetzer-Kontext) und gibt EINE kompakte Zeile aus:
+ * Pause baut den ganzen Kontext neu auf, docs/model-routing.md § Umsetzer-Kontext) und gibt eine kompakte Zeile aus (bei rotem berichtendem Check zusätzlich eine `HINWEIS`-Zeile):
  *   Exit 0  `MERGED <sha>`
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
- *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (berichtend, kein Merge-Gate)` je rotem Check aus `BERICHTEND` (kein ROT, zählt nicht mit).
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln)
+ *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (berichtend, kein Merge-Gate)` je rotem Check aus `BERICHTEND` (kein ROT, zählt nicht mit).
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
  * `statusCheckRollup` liefert `gh` mit der Standardgrenze (rund 100 Einträge); die CI hat deutlich weniger Checks.
  * Der Kern `bewerte` ist pur; CLI und `ghJson`-Aufruf sind dünne, ungetestete IO.
