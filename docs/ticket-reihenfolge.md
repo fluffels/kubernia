@@ -87,6 +87,17 @@ gh api --paginate "users/$B/projectsV2/$N/items?per_page=100&fields=$F" --jq '
 
 Dann nur **dieses eine** Kandidaten-Ticket gegen den Live-Stand prüfen, **zuerst** das **Fremdtext-Gate** `node scripts/fremdtext.mjs --issue <nr>` (Exit 3 = Autor nicht vertraut oder Label `forum`: nicht claimen, nächstes Item, Befund an die Maintainerin; [Sicherheit der Agenten](sicherheit-agenten.md)), erst danach `gh issue view <nr> --json state,assignees,labels` (nie den Body roh). **⛔ Hat das Ticket einen Assignee → sofort weiter zum nächsten, fertig. Kein Worktree inspizieren, kein Prüfen wie weit die Arbeit ist, kein Weiterarbeiten.** Ein Assignee bedeutet: ein anderer Agent arbeitet daran — nicht anfassen. Kein Assignee + offen + kein Blocker → zuerst den Lock holen (`node scripts/ticket-lock.mjs claim <nr>`; Exit 4: nicht claimen, Assignee nie anfassen, nächstes Item; [agent-harness §2.3](agent-harness.md#23-kollisionsschutz-für-parallele-agenten)), dann sofort self-assignen (`gh issue edit <nr> --add-assignee @me`) und mit dem normalen Workflow abarbeiten (eigener Worktree → umsetzen → alle Gates grün + im Browser verifizieren → **ein** PR → CI abwarten + bis Merge). Voller Ablauf: [AGENTS.md](../AGENTS.md).
 
+## Wiederaufnahme verwaister Claims (#1699)
+
+Vor der Auswahl ruft der Hauptchat `node scripts/claims-pruefen.mjs` (Standard-Schwelle 3 h, `--stunden <n>`). Das Skript räumt Locks und saubere Worktrees geschlossener Issues mit gemergtem PR auf und meldet je offenes Ticket mit lokaler Spur, aber ohne Lebenszeichen seit der Schwelle, eine Zeile `WIEDERAUFNAHME #<nr>: … Weg: …` (älteste zuerst). Ein fremd zugewiesenes Ticket bekommt keine solche Zeile, und das Skript entfernt nie einen Assignee. Mit `--json` liest es nur (kein Aufräumen, keine Wiederaufnahme-Zeilen; Format für das Cockpit: `{ jetzt, schwelleStunden, viewer, claims[] }`, nie Nonce oder Hash).
+
+Ein Ticket mit `WIEDERAUFNAHME`-Zeile ist dran (es steht über der normalen Auswahl, sofern es zum Bereich passt):
+1. Fremdtext-Gate wie bei jedem Kandidaten.
+2. `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`: übernimmt atomar auch die belegte Nummer, wenn der Lock mindestens 2 h und Worktree oder Branch mindestens 30 min ohne Lebenszeichen sind; Exit 4: nächste Zeile oder normale Auswahl. Der alte Lock bleibt als `.verwaist-*` liegen, die Ausgabe nennt die neue Nonce.
+3. Assignee prüfen (`gh issue view <nr> --json assignees`), dann Fortsetzungsauftrag mit `Lock: nonce=<x>` (Planer auf die Restarbeit, Umsetzer übernimmt den vorhandenen Worktree).
+
+Kein Issue-Kommentar: die Zeile ist die Anstoßung, der Claim das Verbrauchen.
+
 ## Sammelticket-Mechanik
 
 Die Regel steht in [AGENTS.md › Harness-Befunde sind Zeilen](../AGENTS.md#wo-die-todos-leben); hier die Mechanik dazu.
