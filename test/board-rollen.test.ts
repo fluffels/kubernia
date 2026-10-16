@@ -54,7 +54,9 @@ describe("boardRolleFuer", () => {
     expect(L.boardRolleFuer([{ name: "xarea:harness" }])).toBe("produkt");
   });
   test("ohne Label-Liste wirft sie, statt still das Produkt-Board zu wählen", () => {
-    for (const bad of [null, undefined, "area:harness", {}]) expect(() => L.boardRolleFuer(bad), String(bad)).toThrow(/Label-Liste[\s\S]*Fix:/);
+    for (const bad of [null, undefined, "area:harness", {}]) expect(() => L.boardRolleFuer(bad), JSON.stringify(bad) ?? "undefined").toThrow(/Label-Liste[\s\S]*Fix:/);
+    // kein Zufallstreffer: eine echte Liste wirft nicht
+    expect(() => L.boardRolleFuer([])).not.toThrow();
   });
 });
 
