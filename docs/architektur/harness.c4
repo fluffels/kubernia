@@ -1,0 +1,189 @@
+// Harness-Sichten von Kubernia (#1421, ADR 0020). Titel der Arten agent/skill/workflow stammen aus .claude/ (harnessKatalog),
+// hook aus den Event-Namen in .claude/settings.json, githook aus .githooks/, gate aus den Blättern von verify und verify:full,
+// ciworkflow aus .github/workflows/, mcp aus .mcp.json (Abgleich: npm run check:c4). Ein Gate liegt unter der Kette, der es gehört.
+// Beziehungen und Beschreibungen sind Erzählung; Zahlen aus SSOT-Konstanten stehen nie in Labels (sie gehören den generierten Diagrammen).
+model {
+  maintainerin = person 'Maintainerin' {
+    description 'Setzt die Richtung, entscheidet Irreversibles'
+  }
+  harness = system 'Agenten-Harness' {
+    description 'Haupt- und Subagenten, Skills, Hooks und Gates, mit denen Kubernia entwickelt wird'
+
+    hauptchat = container 'Hauptchat' {
+      description 'Nimmt Aufträge an, wählt das Ticket, delegiert'
+    }
+    subagenten = container 'Subagenten' {
+      explore = agent 'Explore'
+      forumLeser = agent 'forum-leser'
+      kuberniaGruppe = agent 'kubernia-gruppe'
+      kuberniaLens = agent 'kubernia-lens'
+      kuberniaPlaner = agent 'kubernia-planner'
+      kuberniaUmsetzer = agent 'kubernia-umsetzer'
+    }
+    skills = container 'Skills' {
+      forum = skill 'forum'
+      kuberniaSkill = skill 'kubernia'
+      kuberniaWorkflow = skill 'kubernia-workflow'
+      reviewLenses = skill 'review-lenses'
+    }
+    workflows = container 'Workflows' {
+      kuberniaTicket = workflow 'kubernia-ticket'
+    }
+    claudeHooks = container 'Claude-Hooks' {
+      sessionStart = hook 'SessionStart'
+      sessionEnd = hook 'SessionEnd'
+      preToolUse = hook 'PreToolUse'
+      stop = hook 'Stop'
+      subagentStop = hook 'SubagentStop'
+    }
+    gitHooks = container 'Git-Hooks' {
+      prePush = githook 'pre-push'
+    }
+    verify = container 'verify' {
+      description 'Schnelle Gates vor jedem Review und PR'
+
+      typecheck = gate 'typecheck'
+      lint = gate 'lint'
+      checkArch = gate 'check:arch'
+      checkSize = gate 'check:size'
+      checkContextsize = gate 'check:contextsize'
+      checkAnysuppress = gate 'check:anysuppress'
+      checkDocmap = gate 'check:docmap'
+      checkDocdrift = gate 'check:docdrift'
+      checkDocgen = gate 'check:docgen'
+      checkC4 = gate 'check:c4'
+      checkInternalrefs = gate 'check:internalrefs'
+      checkFactorydrift = gate 'check:factorydrift'
+      checkSteuerbytes = gate 'check:steuerbytes'
+      checkLockfile = gate 'check:lockfile'
+      checkDiffsize = gate 'check:diffsize'
+      test = gate 'test'
+    }
+    verifyFull = container 'verify:full' {
+      description 'Ergänzt verify um Coverage, Builds, Bundle-Budget und Smokes'
+
+      testCoverage = gate 'test:coverage'
+      checkDiffcoverage = gate 'check:diffcoverage'
+      build = gate 'build'
+      buildOffline = gate 'build:offline'
+      checkBundle = gate 'check:bundle'
+      testSmoke = gate 'test:smoke'
+    }
+    mcpServer = container 'MCP-Server' {
+      pixellab = mcp 'pixellab'
+      playwright = mcp 'playwright'
+    }
+  }
+  github = system 'GitHub' {
+    description 'Erzählung: Issues, Board, Pull Requests und das Ruleset auf main'
+
+    issues = container 'Issues' {
+      description 'Tickets samt Assignee als Claim'
+    }
+    board = container 'Board' {
+      description 'Die Position im Board ist die Reihenfolge'
+    }
+    pr = container 'Pull Request' {
+      description 'Ein PR je Ticket, Auto-Merge nach grüner CI'
+    }
+    ruleset = container 'Ruleset'
+    ci = container 'CI' {
+      description 'Workflows unter .github/workflows'
+
+      auditEinordnung = ciworkflow 'audit-einordnung.yml'
+      boardTakt = ciworkflow 'board-takt.yml'
+      ciYml = ciworkflow 'ci.yml'
+      codeql = ciworkflow 'codeql.yml'
+      dependabotInbox = ciworkflow 'dependabot-inbox.yml'
+      deployValidate = ciworkflow 'deploy-validate.yml'
+      festgefahren = ciworkflow 'festgefahren.yml'
+      forumInbox = ciworkflow 'forum-inbox.yml'
+      internalrefsPrText = ciworkflow 'internalrefs-pr-text.yml'
+      release = ciworkflow 'release.yml'
+      scorecard = ciworkflow 'scorecard.yml'
+      wiedervorlage = ciworkflow 'wiedervorlage.yml'
+    }
+  }
+  langfuse = system 'Langfuse' {
+    description 'Erfasst die Läufe der Agenten als Traces'
+  }
+
+  maintainerin -> harness.hauptchat 'gibt Aufträge'
+  harness -> kubernia 'entwickelt'
+  harness -> langfuse 'sendet Traces'
+  harness.hauptchat -> harness.skills 'lädt'
+  harness.hauptchat -> harness.subagenten 'delegiert'
+  harness.subagenten.kuberniaUmsetzer -> harness.mcpServer.playwright 'prüft im Browser'
+  harness.gitHooks.prePush -> harness.verify 'führt aus'
+  harness.verifyFull -> harness.verify 'schließt ein'
+  github.ci.ciYml -> harness.verify 'führt aus'
+  github.ci.ciYml -> harness.verifyFull 'führt aus'
+  github.ruleset -> github.pr 'schützt main'
+  harness.hauptchat -> github.board 'liest die Reihenfolge'
+}
+
+views {
+  view harness of harness {
+    title 'Harness-Übersicht'
+    include *
+    autoLayout LeftRight
+  }
+
+  view bausteine of harness {
+    title 'Agenten, Skills, Workflow und Hooks'
+    include
+      harness.subagenten.*,
+      harness.skills.*,
+      harness.workflows.*,
+      harness.claudeHooks.*,
+      harness.gitHooks.*
+    autoLayout LeftRight
+  }
+
+  view leitplanken {
+    title 'Gates und Leitplanken'
+    include
+      harness.verify,
+      harness.verifyFull,
+      harness.gitHooks.prePush,
+      harness.claudeHooks.preToolUse,
+      harness.claudeHooks.stop,
+      harness.claudeHooks.subagentStop,
+      github.ruleset,
+      github.ci.ciYml,
+      github.pr
+    autoLayout LeftRight
+  }
+
+  view gates-verify of harness.verify {
+    title 'Gates von verify'
+    include *
+  }
+
+  view gates-full of harness.verifyFull {
+    title 'Gates von verify:full'
+    include *
+  }
+
+  view ci-board of github {
+    title 'CI und Board'
+    include *, github.ci.*
+    autoLayout LeftRight
+  }
+
+  dynamic view ticket-lauf {
+    title 'Ein Ticket läuft durch'
+    maintainerin -> harness.hauptchat 'Nächstes Ticket'
+    harness.hauptchat -> harness.skills.kuberniaSkill 'Skill kubernia'
+    harness.skills.kuberniaSkill -> github.board 'oberstes freies Item'
+    harness.skills.kuberniaSkill -> github.issues 'Claim: Ticket-Lock und Assignee'
+    harness.skills.kuberniaSkill -> harness.subagenten.kuberniaPlaner 'Plan'
+    harness.skills.kuberniaSkill -> harness.subagenten.kuberniaUmsetzer 'Umsetzen im Worktree'
+    harness.subagenten.kuberniaUmsetzer -> harness.verify 'verify'
+    harness.subagenten.kuberniaUmsetzer -> harness.subagenten.kuberniaLens 'Lenses'
+    harness.subagenten.kuberniaUmsetzer -> github.pr 'PR mit Auto-Merge'
+    github.pr -> github.ci.ciYml 'Required Checks'
+    github.ruleset -> github.pr 'Merge nach grüner CI'
+    harness.subagenten.kuberniaUmsetzer -> harness.claudeHooks.subagentStop 'Aufräumen geprüft'
+  }
+}

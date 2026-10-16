@@ -112,9 +112,10 @@
   "architektur": {
     "workspace": "docs/architektur",
     "quelle": "src",
-    "bindungen": { "schicht": "schicht", "bibliothek": "extern", "modul": "modul", "port": "port", "adapter": "adapter" },
+    "bindungen": { "schicht": "schicht", "bibliothek": "extern", "modul": "modul", "port": "port", "adapter": "adapter", "agent": "agent", "skill": "skill", "workflow": "workflow", "hook": "hook", "githook": "githook", "gate": "gate", "ciworkflow": "ciworkflow", "mcp": "mcp" },
     "hexagon": { "datei": "docs/arc42-architektur.md", "abschnitt": "Hexagonale Sicht (Ports & Adapters)" },
     "erzaehlung": ["person", "system", "container", "datenspeicher"],
+    "pflichtViews": ["index", "container", "schichten", "hauptmodule", "hexagon", "harness", "leitplanken", "ci-board", "ticket-lauf"],
     "maxKnotenJeView": 25
   }
 }
