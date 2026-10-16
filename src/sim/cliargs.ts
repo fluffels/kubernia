@@ -140,6 +140,12 @@ function scanChain(flags: readonly FlagSpec[], tok: string, next: string | undef
   return { used: false, error: null };
 }
 
+/** Ab welchem Index gehört alles den Positionsargumenten (`--`, bei `stopAtPositional` das erste Nicht-Flag)? `-1` = noch nicht. */
+function restFrom(spec: ArgSpec, tok: string, i: number): number {
+  if (tok === "--") return i + 1;
+  return !isFlagToken(tok) && spec.stopAtPositional ? i : -1;
+}
+
 /** Der EINE Scanner hinter Prüfung und Auslesen. `--` beendet die Flags; mit `stopAtPositional` gehört alles ab
  *  dem ersten Nicht-Flag (der Container-Befehl hinter dem Image) zu den Positionsargumenten. Der erste Fehler wird
  *  gemerkt, der Scan läuft weiter (so bleiben die Positionsargumente auch bei einem unbekannten Flag lesbar). */
@@ -148,7 +154,7 @@ function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
   const w: Walk = { hits: [], entries: [], error: null, dashAt: null };
   for (let i = from; i < t.length; i++) {
     const tok = t[i];
-    const rest = tok === "--" ? i + 1 : !isFlagToken(tok) && spec.stopAtPositional ? i : -1;
+    const rest = restFrom(spec, tok, i);
     if (tok === "--") w.dashAt = w.entries.length;
     if (rest >= 0) { for (let k = rest; k < t.length; k++) w.entries.push({ tok: t[k], at: k }); break; }
     if (!isFlagToken(tok)) { w.entries.push({ tok, at: i }); continue; }
@@ -327,6 +333,14 @@ export function kannOf<E extends SubEntry<unknown>>(d: Dispatch<E>): string[] {
   return own.length ? [d.cmd + " " + own.join(", "), ...nested] : nested;
 }
 
+/** Ein Unterbefehl, den die Tabelle nicht hat: echt aber nicht simuliert (`real`) oder Tippfehler mit Vorschlag. */
+function unknownSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, sub: string, kann: () => string[]): string {
+  if (d.real?.includes(sub)) return notSimulated(host, "'" + d.cmd + " " + sub + "'.", kann());
+  const guess = suggest(sub, [...Object.keys(d.table), ...(d.real ?? [])]);
+  return host._err(d.unknown?.(sub) ?? d.cmd + ": unbekannter Unterbefehl '" + sub + "'",
+    guess ? "Meintest du '" + d.cmd + " " + guess + "'?" : "Der Simulator kann: " + kann().join(" · "));
+}
+
 /** Der Lernhinweis zu einem Flag VOR dem Unterbefehl: Familien-Hinweis, Hilfe-Flag, Versions-Flag, sonst „dahinter setzen“. */
 function vorUnterbefehlHint(name: string, d: Dispatch<SubEntry<unknown>>): string {
   const own = d.hints?.[name];
@@ -353,12 +367,7 @@ export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispa
   if (entry && isGroup(entry)) {
     return dispatchSub(host, { ...entry.group, style: entry.group.style ?? d.style, hints: entry.group.hints ?? d.hints }, t, at + 1);
   }
-  if (!entry) {
-    if (d.real?.includes(sub)) return notSimulated(host, "'" + d.cmd + " " + sub + "'.", kann());
-    const guess = suggest(sub, [...Object.keys(d.table), ...(d.real ?? [])]);
-    return host._err(d.unknown?.(sub) ?? d.cmd + ": unbekannter Unterbefehl '" + sub + "'",
-      guess ? "Meintest du '" + d.cmd + " " + guess + "'?" : "Der Simulator kann: " + kann().join(" · "));
-  }
+  if (!entry) return unknownSub(host, d, sub, kann);
   const call = parseCall(host, specOfSub(d.cmd + " " + sub, entry, d.style, d.hints), t, at + 1);
   return typeof call === "string" ? call : { sub, entry, call };
 }

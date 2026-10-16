@@ -31,7 +31,7 @@ const args = (n: number) => Array.from({ length: n }, (_, i) => "a" + (i + 1)).j
 describe("maxArgs je Eintrag: 0 Argumente, genau maxArgs, maxArgs+1", () => {
   test.each(GRENZEN)("%s (höchstens %i)", (cmd, max) => {
     expect(lauf(cmd).out).not.toContain(WEITERES);
-    if (max > 0) expect(lauf(cmd + " " + args(max)).out).not.toContain(WEITERES);
+    expect(lauf(cmd + " " + args(max)).out).not.toContain(WEITERES);
     const zuviel = lauf(cmd + " " + args(max + 1));
     expect(zuviel.error).toBe(true);
     expect(zuviel.out).toContain(WEITERES + " 'a" + (max + 1) + "' bei '" + cmd + "'.");
