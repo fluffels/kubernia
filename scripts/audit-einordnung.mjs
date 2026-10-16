@@ -15,6 +15,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { istVertraut } from "./fremdtext-lib.mjs";
 import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
 
 export const ALARM_PRAEFIX = "🔒 Security:";
@@ -125,6 +126,11 @@ export function ordneEin({ befunde, bekannt }) {
     .map((b) => (istAlarm(b) ? { art: "alarm", befund: b, ...alarmText(b) } : { art: "zeile", befund: b, text: zeilenText(b) }));
 }
 
+/** Bodies der Kommentare vertrauter Autoren (Owner, github-actions[bot]); eine `- [ ] Audit:`-Zeile eines Fremden darf keinen Alarm unterdrücken (#1433). Pur. */
+export function vertrauteBodies(kommentare, owner) {
+  return kommentare.filter((k) => istVertraut(k?.user, owner)).map((k) => String(k.body ?? ""));
+}
+
 /** Bekannte GHSA-IDs aus den Quellen: offene Audit-Zeilen in Kommentaren, Wiedervorlagen-Einträge `audit-<ghsa>`, Titel offener Security-Tickets. Pur. */
 export function bekannteGhsa({ kommentare, wiedervorlagen, offeneTitel }) {
   const menge = new Set();
@@ -163,14 +169,14 @@ function ladeAlerts() {
   }
 }
 
-const kommentareVon = (nr) => JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues/${nr}/comments?per_page=100`])).flat().map((k) => k.body);
+const kommentareVon = (nr) => JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues/${nr}/comments?per_page=100`])).flat().map((k) => ({ body: k.body, user: k.user }));
 
 function main() {
   const trocken = process.argv.includes("--dry-run");
   const offene = normalizeOffene(JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`])));
   const sammel = offene.filter((i) => i.titel === SAMMELTICKET_TITEL);
   const bekannt = bekannteGhsa({
-    kommentare: sammel.flatMap((i) => kommentareVon(i.number)),
+    kommentare: vertrauteBodies(sammel.flatMap((i) => kommentareVon(i.number)), REPO.split("/")[0]),
     wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")),
     offeneTitel: offene.map((i) => i.titel),
   });
