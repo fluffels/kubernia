@@ -183,3 +183,13 @@ F2 ist umgesetzt. Entscheidungen:
 - **Grenze:** `scripts/board-lib.mjs` lädt die Config beim Import (AK3), auch die puren Helfer brauchen sie; ein Projekt ohne Board bräuchte ein lazy Laden (F7/F9). Der Repo-Begriff des Wächters ist ein Teilstring ohne Wortgrenze (gewollt für Zusammensetzungen), bei sehr kurzen Repo-Namen eines anderen Projekts zählt er Fehltreffer. Skills und Agenten benennen den Account und das Repo nur noch über die gh-Platzhalter `{owner}`/`{repo}` bzw. „den eigenen Account“. Die übrigen Repo-Literale in Kern-Dateien (vor allem der Repo-Name als Agentenname) räumt F3; Regeltexte in `AGENTS.md` und Docs F4/F11.
 
 Präzisiert durch #1628: Die Workflows checken das volle Repo aus und setzen die Position über `scripts/board-place.mjs` (Wiederholung, rot bei endgültigem Scheitern); Sparse-Checkout und `set_board_top` entfallen für die Inbox-Workflows.
+
+## Fortschreibung #1615 (2026-10-16): Spezifikations-Gate (F12)
+
+F12 ist umgesetzt. Entscheidungen:
+
+- **Prüfung:** `scripts/spezifikation-lib.mjs` (Ring `kern`, literalfrei, ohne Importe) liefert die Mängelliste eines Bodys: `## Ziel` mit Inhalt, `## Akzeptanzkriterien` als Liste, darin mindestens ein Kriterium mit dem Wort „Negativfall“. Das Wort ist deutsch und deterministisch; bei einem nicht deutschsprachigen Projekt wird es ein Projektwert (§8).
+- **Bestand und Neues:** Der Stichtag `spezifikation.hartAb` (Issue-Nummer) steht in `.factory/projekt.json`. Beim Einführen erfüllten 17 von 160 offenen Issues das Format; ohne Stichtag hätte das Gate das Board gesperrt. Darunter wird nur berichtet, ab der Nummer übersprungen. Ratchet: `hartAb` darf nur sinken; fehlt der Schlüssel, ist alles hart.
+- **Ausnahmen über §3 hinaus:** alle Kopf-Items (🚨, 🔒, 🤖, Forum, ⏰) haben eigene Formate, dazu Sammel- und Epic-/Phasen-Titel.
+- **Einmal-Kommentar:** `naechstes-ticket.mjs` kommentiert (I/O injiziert, Logik pur) nur, wenn die Spezifikation der ausschlaggebende Grund ist, und nur ohne den versteckten Marker `<!-- spezifikations-gate -->` im Kommentar eines vertrauten Autors; ein später anderer Mangel löst bewusst keinen zweiten Kommentar aus.
+- **Grenze:** Bei gleichzeitiger Auswahl können zwei Kommentare entstehen (der Marker wird direkt vor dem Posten geprüft, nicht atomar). Ein Ticket, das zwischen Festlegen des Stichtags und Merge entsteht, ist hart.

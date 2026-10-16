@@ -34,7 +34,10 @@ const N = raw as unknown as {
 const normalizeItems = (boardLib as unknown as { normalizeItems: (pages: unknown[][]) => unknown[] }).normalizeItems;
 const norm = (items: unknown[]) => normalizeItems([items]);
 
-const item = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
+const SPEZ = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n\n";
+// Standard-Item trägt eine gültige Spezifikation (Spezifikations-Gate, #1615); `roh` ohne.
+const item = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => roh(nr, { ...c, body: SPEZ + (typeof c.body === "string" ? c.body : "") }, status);
+const roh = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
   node_id: `PVTI_${nr}`,
   content_type: "Issue",
   fields: [{ name: "Status", value: { name: { raw: status } } }],
@@ -443,7 +446,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
   });
   test("itemAusIssue: REST-Issue wird normalisiert; PR und kaputte Form werfen", () => {
     const i = N.itemAusIssue(issue(7, { body: "b", labels: [{ name: "x" }], issue_dependencies_summary: { blocked_by: 2 } }));
-    expect(i).toMatchObject({ number: 7, title: "T7", state: "open", labels: ["x"], body: "b", blockedBy: 2, autor: { login: "fluffels" } });
+    expect(i).toMatchObject({ number: 7, title: "T7", state: "open", labels: ["x"], body: `${SPEZ}b`, blockedBy: 2, autor: { login: "fluffels" } });
     expect(() => N.itemAusIssue({ ...issue(7), pull_request: {} })).toThrow();
     expect(() => N.itemAusIssue({ title: "ohne Nummer" })).toThrow();
     expect(() => N.itemAusIssue(null)).toThrow();
@@ -507,5 +510,167 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     const r = N.fuehreAus(["--ticket", "7"], io(new Error("kein Netz")));
     expect(r.code).toBe(2);
     expect(r.err).toContain("kein Netz");
+  });
+});
+
+describe("Spezifikations-Gate (#1615)", () => {
+  type Kommentar = { user?: { login: string } | null; body?: string | null };
+  type GateIo = {
+    owner: string;
+    hartAb?: number;
+    lade: () => Eingabe;
+    ladeEinzeln?: (nr: number) => Eingabe & { item: unknown };
+    kommentareVon?: (nr: number) => Kommentar[];
+    kommentiere?: (nr: number, text: string) => void;
+  };
+  type GateErgebnis = Ergebnis & { uebersprungen: { nr: number; grund: string; fehlt?: string[] }[]; kommentiert?: number[]; ticket: (Ergebnis["ticket"] & { spezifikation?: { bestand: boolean; fehlt: string[] } }) | null };
+  const GateN = N as unknown as {
+    waehleNaechstes: (e: unknown) => GateErgebnis;
+    pruefeTicket: (e: unknown) => GateErgebnis;
+    formatiere: (e: unknown) => string;
+    fuehreAus: (argv: string[], io: GateIo) => { code: number; out: string; err: string };
+  };
+  const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- nur Happy Path\n";
+  const waehle = (items: unknown[], extra: Record<string, unknown> = {}) => GateN.waehleNaechstes({ items: norm(items), offene: new Set(), owner: "fluffels", ...extra });
+  const MARKER = "<!-- spezifikations-gate -->";
+
+  test("AK3: neues Ticket ohne Negativfall wird übersprungen, das nächste gewählt", () => {
+    const r = waehle([roh(1, { body: OHNE_NEGATIV }), item(2)]);
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen).toHaveLength(1);
+    expect(r.uebersprungen[0]).toMatchObject({ nr: 1 });
+    expect(r.uebersprungen[0].grund).toContain("Spezifikation unvollständig");
+    expect(r.uebersprungen[0].grund).toContain("kein Negativfall");
+    expect(r.uebersprungen[0].fehlt).toHaveLength(1);
+  });
+  test("Bestand (Nummer unter hartAb): gewählt, Hinweiszeile, erste Zeile bleibt `#nr TAB Titel`", () => {
+    const r = waehle([roh(5, { body: "" })], { hartAb: 100 });
+    expect(r.ticket).toMatchObject({ nr: 5, spezifikation: { bestand: true } });
+    expect(r.uebersprungen).toEqual([]);
+    const text = GateN.formatiere(r);
+    expect(text.split("\n")[0]).toBe("#5\tT5");
+    expect(text).toContain("hinweis #5: Spezifikation unvollständig (Bestand, nur berichtet): `## Ziel` fehlt");
+  });
+  test("Grenze: Nummer gleich hartAb ist hart", () => {
+    expect(waehle([roh(100, { body: "" })], { hartAb: 100 }).ticket).toBeNull();
+    expect(waehle([roh(99, { body: "" })], { hartAb: 100 }).ticket?.nr).toBe(99);
+  });
+  test("ausgenommen: Sammel-, Status-, Notfall-, Forum-, Epic-Titel ohne Format bleiben frei", () => {
+    for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "📦 Epic: Welt", "Phase 2: Bau"]) {
+      const r = waehle([roh(1, { title: titel, body: "" })]);
+      expect(r.ticket?.nr, titel).toBe(1);
+      expect(r.ticket?.spezifikation, titel).toBeUndefined();
+    }
+  });
+  test("ein offener Blocker schlägt die Spezifikation (Grund Blocker)", () => {
+    const r = waehle([roh(1, { body: "blockiert durch #50" })], { offene: new Set([50]) });
+    expect(r.uebersprungen[0].grund).toBe("offener Blocker #50");
+    expect(r.uebersprungen[0].fehlt).toBeUndefined();
+  });
+  test("der teure Messfenster-Lader läuft bei Spezifikations-Mangel nicht", () => {
+    let n = 0;
+    const r = waehle([roh(1, { body: "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590" })], {
+      messfenster: () => {
+        n++;
+        return { closedAt: "2026-10-15T10:00:00Z", n: 99 };
+      },
+    });
+    expect(r.ticket).toBeNull();
+    expect(n).toBe(0);
+  });
+  test("--ticket: dieselbe Prüfung", () => {
+    const r = GateN.pruefeTicket({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set(), owner: "fluffels" });
+    expect(r.ticket).toBeNull();
+    expect(r.uebersprungen[0].grund).toContain("kein Negativfall");
+  });
+
+  const io = (items: unknown[], extra: Partial<GateIo> = {}) => {
+    const gepostet: { nr: number; text: string }[] = [];
+    const gelesen: number[] = [];
+    const eingang: GateIo = {
+      owner: "fluffels",
+      lade: () => ({ items: norm(items), offene: new Set<number>() }),
+      kommentareVon: (nr) => {
+        gelesen.push(nr);
+        return [];
+      },
+      kommentiere: (nr, text) => void gepostet.push({ nr, text }),
+      ...extra,
+    };
+    return { eingang, gepostet, gelesen };
+  };
+  test("fuehreAus kommentiert einmal, was fehlt; der Kommentar trägt den Marker und keinen Body", () => {
+    const { eingang, gepostet } = io([roh(1, { body: `${OHNE_NEGATIV}GEHEIM` })]);
+    const r = GateN.fuehreAus(["--json"], eingang);
+    expect(gepostet).toHaveLength(1);
+    expect(gepostet[0].nr).toBe(1);
+    expect(gepostet[0].text.startsWith(MARKER)).toBe(true);
+    expect(gepostet[0].text).toContain("Negativfall");
+    expect(gepostet[0].text).not.toContain("GEHEIM");
+    expect(r.out).not.toContain("GEHEIM");
+    expect((JSON.parse(r.out) as GateErgebnis).kommentiert).toEqual([1]);
+  });
+  test("AK3: zweiter Lauf mit Marker-Kommentar des Owners kommentiert nicht erneut", () => {
+    const { eingang, gepostet } = io([roh(1, { body: OHNE_NEGATIV })], { kommentareVon: () => [{ user: { login: "fluffels" }, body: `${MARKER}\nFehlt: x` }] });
+    const r = GateN.fuehreAus(["--json"], eingang);
+    expect(gepostet).toEqual([]);
+    expect((JSON.parse(r.out) as GateErgebnis).kommentiert).toBeUndefined();
+  });
+  test("Marker nur von fremdem Autor zählt nicht: es wird kommentiert", () => {
+    const { eingang, gepostet } = io([roh(1, { body: OHNE_NEGATIV })], { kommentareVon: () => [{ user: { login: "fremd" }, body: MARKER }] });
+    GateN.fuehreAus([], eingang);
+    expect(gepostet).toHaveLength(1);
+  });
+  test("Bestand und freie Tickets lösen keinen Kommentar aus und lesen keine Kommentare", () => {
+    const { eingang, gepostet, gelesen } = io([roh(5, { body: "" })], { hartAb: 100 });
+    expect(GateN.fuehreAus([], eingang).code).toBe(0);
+    expect(gepostet).toEqual([]);
+    expect(gelesen).toEqual([]);
+  });
+  test("Lesefehler: kein Post, Warnung, Exit-Code unverändert", () => {
+    const { eingang, gepostet } = io([roh(1, { body: OHNE_NEGATIV }), item(2)], {
+      kommentareVon: () => {
+        throw new Error("kein Netz");
+      },
+    });
+    const r = GateN.fuehreAus([], eingang);
+    expect(gepostet).toEqual([]);
+    expect(r.code).toBe(0);
+    expect(r.err).toContain("kein Netz");
+  });
+  test("Postfehler: Warnung, Exit-Code unverändert, kein `kommentiert`", () => {
+    const { eingang } = io([roh(1, { body: OHNE_NEGATIV })], {
+      kommentiere: () => {
+        throw new Error("403");
+      },
+    });
+    const r = GateN.fuehreAus(["--json"], eingang);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("#1");
+    expect(r.err).toContain("403");
+    expect((JSON.parse(r.out) as GateErgebnis).kommentiert).toBeUndefined();
+  });
+  test("ohne Kommentar-I/O (io ohne kommentareVon): nur überspringen", () => {
+    const { eingang } = io([roh(1, { body: OHNE_NEGATIV })], { kommentareVon: undefined, kommentiere: undefined });
+    expect(GateN.fuehreAus([], eingang)).toMatchObject({ code: 1, err: "" });
+  });
+  test("--ticket kommentiert ebenfalls einmal", () => {
+    const gepostet: number[] = [];
+    const r = GateN.fuehreAus(["--ticket", "7"], {
+      owner: "fluffels",
+      lade: () => ({ items: [], offene: new Set<number>() }),
+      ladeEinzeln: () => ({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set<number>() }) as never,
+      kommentareVon: () => [],
+      kommentiere: (nr) => void gepostet.push(nr),
+    });
+    expect(r.code).toBe(1);
+    expect(gepostet).toEqual([7]);
+  });
+  test("hartAb aus io erreicht die Auswahl", () => {
+    const { eingang, gepostet } = io([roh(5, { body: "" })], { hartAb: 100 });
+    expect(GateN.fuehreAus([], eingang).code).toBe(0);
+    expect(gepostet).toEqual([]);
+    const { eingang: hart } = io([roh(5, { body: "" })], { hartAb: 5 });
+    expect(GateN.fuehreAus([], hart).code).toBe(1);
   });
 });
