@@ -332,13 +332,19 @@ describe("Runde 1 (#1530): Grenzfälle der Paar-Prädikate, Init-Container, Cont
     expect(out).toContain("Started container nginx");
     expect(out).not.toContain("container web");
   });
-  test("get pod -o yaml: spec.containers und status.containerStatuses tragen denselben Namen", () => {
+  test("get pod und get deploy -o yaml: spec.containers und status.containerStatuses tragen denselben Namen", () => {
     const sim = web();
     const pod = sim.deployments[0].pods[0].name;
+    /** Der erste `name:`-Schlüssel hinter einer Zeile `<key>:` (die Schlüssel sind alphabetisch, `name` folgt auf `image`/`lastState`). */
+    const nameAfter = (out: string, key: string): string | undefined => {
+      const l = out.split("\n");
+      const at = l.findIndex(x => x.trim() === key + ":");
+      return l.slice(at + 1).map(x => /^\s*(?:- )?name: (\S+)$/.exec(x)?.[1]).find(x => x !== undefined);
+    };
     const out = lauf("kubectl get pod " + pod + " -o yaml", sim).out;
-    expect(out).toMatch(/containers:\n\s+- image: nginx:1\.28\n(.*\n)*?\s+name: nginx\n/);
-    expect(out).toMatch(/containerStatuses:\n(.*\n)*?\s+name: nginx\n/);
-    expect(out).not.toMatch(/name: web\n\s+(ready|resources|state)/);
+    expect(nameAfter(out, "containers")).toBe("nginx");
+    expect(nameAfter(out, "containerStatuses")).toBe("nginx");
+    expect(nameAfter(lauf("kubectl get deploy web -o yaml", sim).out, "containers")).toBe("nginx");
   });
   test("logs-Fehlertext (imagepull) und --previous: der Container heißt wie in describe", () => {
     const sim = new KQSim({ deployments: [{ name: "kasse", image: "ngnix", replicas: 1, containerName: "haupt", broken: { type: "imagepull", badImage: "ngnix" } }] });
@@ -347,6 +353,25 @@ describe("Runde 1 (#1530): Grenzfälle der Paar-Prädikate, Init-Container, Cont
     expect(r.out).toContain('container "haupt" in pod');
     expect(r.out).not.toContain('container "kasse"');
     expect(lauf("kubectl logs " + pod + " --previous", sim).out).toContain('"haupt"');
+  });
+  test("gesunder Pod mit eigenem Container-Namen: logs --previous nennt ihn", () => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, containerName: "haupt" }] });
+    const r = lauf("kubectl logs " + sim.deployments[0].pods[0].name + " --previous", sim);
+    expect(r.out).toContain('previous terminated container "haupt"');
+  });
+  test("evicted mit eigenem Container-Namen: logs und describe pod nennen ihn", () => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, containerName: "haupt", ephemeralLimit: 512, emptyDir: { data: "riesig", usedMi: 600 } }] });
+    const pod = sim.deployments[0].pods[0].name;
+    expect(lauf("kubectl logs " + pod, sim).out).toContain('container "haupt"');
+    const d = lauf("kubectl describe pod " + pod, sim).out;
+    expect(d).toContain("Stopping container haupt");
+    expect(d).not.toContain("container kasse");
+  });
+  test.each([["crashloop", { type: "crashloop" }], ["notready", { type: "notready" }]])("%s mit eigenem Container-Namen: describe pod 'Started container haupt'", (_n, broken) => {
+    const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, containerName: "haupt", broken }] } as Scenario);
+    const d = lauf("kubectl describe pod " + sim.deployments[0].pods[0].name, sim).out;
+    expect(d).toContain("Started container haupt");
+    expect(d).not.toContain("container kasse");
   });
   test("apply ohne containers[0].name lässt den Namen stehen: unchanged, Name bleibt", () => {
     const sim = web();
@@ -374,7 +399,7 @@ describe("Quest- und Befehlskarten-Regex für set image (#1530, W8)", () => {
       else if (Array.isArray(v)) v.forEach(walk);
       else if (v && typeof v === "object") Object.values(v).forEach(walk);
     };
-    walk(JSON.parse(readFileSync(file, "utf8")));
+    walk(JSON.parse(readFileSync(new URL("../../" + file, import.meta.url), "utf8")));
     expect(found).toHaveLength(1);
     return new RegExp(found[0]);
   };
