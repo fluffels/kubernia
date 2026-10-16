@@ -438,17 +438,6 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     assert.equal(geduldet.reason, "#1021 bewusst");
   });
 
-  test("die alte Env KQ_DIFFCOV_OVERRIDE lässt NICHTS mehr durch (kam in der PR-CI nie an)", () => {
-    const r = checkDiffCoverage({
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
-      readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
-      env: { KQ_DIFF_BASE: "basesha", KQ_DIFFCOV_OVERRIDE: "#1021 bewusst" },
-    });
-    assert.equal(r.allowed, false);
-    assert.equal(r.failed, true);
-    assert.equal(r.legacyEnv, true);
-  });
-
   test("ungültige Override-Zeile (ohne #<nr>) lässt nichts durch und wird gemeldet", () => {
     const r = checkDiffCoverage({
       runGit: mitTrailer(

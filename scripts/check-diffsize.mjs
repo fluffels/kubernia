@@ -58,7 +58,7 @@
 
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
-import { ladeCommitZeilen, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
+import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { leseJson, parseSections } from "./docs-gen/markdown.mjs";
@@ -318,20 +318,13 @@ export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen
     stale: !over && reason !== null, // Override unnötig → melden
     invalidOverrides: invalid,
     versetzteOverrides: versetzt,
-    legacyEnv: (env.KQ_DIFFSIZE_OVERRIDE ?? "").trim() !== "", // alte Env: nur noch Hinweis
   };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
   // Die Commit-Zeilen kommen aus der Projekt-Config; ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, Fix:).
-  let zeilen;
-  try {
-    zeilen = ladeCommitZeilen();
-  } catch (e) {
-    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
-    process.exit(1);
-  }
+  const zeilen = ladeCommitZeilenOderBeende();
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const red = (s) => paint("31", s);
@@ -360,11 +353,6 @@ function main() {
     console.log(dim(`• ${r.genLines} Zeilen in GEN:-Abschnitten nicht mitgezählt (check:docgen prüft sie).`));
   }
 
-  if (r.legacyEnv) {
-    console.log(
-      dim(`• KQ_DIFFSIZE_OVERRIDE wird nicht mehr ausgewertet (kam in der PR-CI nie an) — Commit-Trailer nutzen, s.u.`),
-    );
-  }
   meldeUngueltigeOverrides(r.invalidOverrides, { dim });
 
   if (r.stale) {

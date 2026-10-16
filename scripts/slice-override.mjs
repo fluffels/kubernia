@@ -44,7 +44,19 @@ export function ladeCommitZeilen({ rootDir, pfad } = {}) {
   return commitZeilenAus(ladeProjektConfig({ rootDir, pfad }));
 }
 
-const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** CLI-Variante für die Gate-Skripte: ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, `Fix:`) und Exit 1.
+ *  `laden`, `fehler` und `exit` sind injizierbar (Test); nach einem (gemockten) Exit liefert die Funktion `undefined`. */
+export function ladeCommitZeilenOderBeende({ laden = ladeCommitZeilen, fehler = console.error, exit = process.exit } = {}) {
+  try {
+    return laden();
+  } catch (e) {
+    fehler(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    exit(1);
+    return undefined;
+  }
+}
+
+const escapeRe =(t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main

@@ -341,12 +341,6 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(r.over, true);
   });
 
-  test("checkDiffSize: die alte Env KQ_DIFFSIZE_OVERRIDE lässt NICHTS mehr durch (nur Hinweis)", () => {
-    const r = checkDiffSize({ runGit: gitWith("BASE", OVER), env: { ...tightEnv, KQ_DIFFSIZE_OVERRIDE: "#317 Epic" } });
-    assert.equal(r.allowed, false, "lokal grün, CI rot darf es nicht mehr geben");
-    assert.equal(r.legacyEnv, true);
-  });
-
   test("checkDiffSize: keine Basis → No-op-grün (skipped), niemals rot", () => {
     const r = checkDiffSize({ runGit: gitWith(null, OVER), env: tightEnv });
     assert.equal(r.skipped, true, "flacher Checkout / kein origin/main → übersprungen");

@@ -41,7 +41,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
-import { ladeCommitZeilen, meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
+import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
 
 // parseNachweis lebt im neutralen Modul slice-override.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
@@ -266,13 +266,7 @@ function main(argv = process.argv.slice(2)) {
     process.exit(1);
   }
   // Die Config wird vor jedem git-Aufruf geladen: ein Ladefehler endet mit Exit 1 und der Meldung des Laders (Pfad, Schlüssel, Fix:).
-  let zeilen;
-  try {
-    zeilen = ladeCommitZeilen({ pfad: getrennt.pfad });
-  } catch (e) {
-    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
-    process.exit(1);
-  }
+  const zeilen = ladeCommitZeilenOderBeende({ laden: () => ladeCommitZeilen({ pfad: getrennt.pfad }) });
   const r = checkReviewNachweis({ ladeZeilen: () => zeilen });
   if (r.skipped) {
     console.log("• check-review-nachweis: Basis == HEAD, nichts zu prüfen.");

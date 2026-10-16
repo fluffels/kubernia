@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
-import { ladeCommitZeilen, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
+import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 // Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
 // scripts/docs-gen/config.json › schichten.layers, ein Kern-Modul importiert sie nie statisch (Kern-Reinheit, ADR 0022 F7).
@@ -304,7 +304,6 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen 
     stale,
     invalidOverrides: invalid,
     versetzteOverrides: versetzt,
-    legacyEnv: (env.KQ_DIFFCOV_OVERRIDE ?? "").trim() !== "", // alte Env: nur noch Hinweis
     failed: (violated && !allowed) || stale || verdict.missing.length > 0,
   };
 }
@@ -330,13 +329,7 @@ function renderBuckets(r, { dim, red, green }) {
 
 function main() {
   // Die Commit-Zeilen kommen aus der Projekt-Config; ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, Fix:).
-  let zeilen;
-  try {
-    zeilen = ladeCommitZeilen();
-  } catch (e) {
-    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
-    process.exit(1);
-  }
+  const zeilen = ladeCommitZeilenOderBeende();
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const colors = { red: (s) => paint("31", s), green: (s) => paint("32", s), dim: (s) => paint("2", s) };
@@ -378,9 +371,6 @@ function main() {
     process.exit(1);
   }
 
-  if (r.legacyEnv) {
-    console.log(dim("• KQ_DIFFCOV_OVERRIDE wird nicht mehr ausgewertet (kam in der PR-CI nie an) — Commit-Trailer nutzen, s.u."));
-  }
   meldeUngueltigeOverrides(r.invalidOverrides, { dim });
 
   if (r.stale) {
