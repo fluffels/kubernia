@@ -22,6 +22,7 @@ import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
 import { exactlyOneName, notSimulated, replicasArg } from "./args";
+import { containerNameFromImage } from "../util";
 import { readTargets, targetOutcome, type Target } from "./targets";
 import { subEntry, type Call } from "../cliargs";
 import { applyDeployment } from "./apply-deployment";
@@ -207,7 +208,7 @@ const createDeployment: CreateHandler = (host, c) => {
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).
   const denied = admitNewPods(host, n.name, undefined);
   if (denied) return denied;
-  addDeployment(host, host._makeDeployment(n.name, images[0], replicas));
+  addDeployment(host, host._makeDeployment(n.name, images[0], replicas, undefined, undefined, undefined, { containerName: containerNameFromImage(images[0], host.rng) }));
   return "deployment.apps/" + n.name + " created";
 };
 

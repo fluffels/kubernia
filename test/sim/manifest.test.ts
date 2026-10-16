@@ -33,7 +33,7 @@ function bad(text: string): ManifestFailure {
 
 describe("Mapper: Deployment", () => {
   it("minimales Deployment, replicas-Default 1", () => {
-    expect(ok(DEP.replace("  replicas: 3\n", ""))).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 1 } }]);
+    expect(ok(DEP.replace("  replicas: 3\n", ""))).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 1, containerName: "web" } }]);
   });
 
   it("alle modellierten Felder", () => {
@@ -72,7 +72,7 @@ spec:
               cpu: 250m
 `;
     expect(ok(yaml)).toStrictEqual([{ deployment: {
-      name: "voll", image: "img:1", replicas: 2, serviceAccountName: "wachdienst", containerPort: 8080, node: "worker-1",
+      name: "voll", containerName: "c", image: "img:1", replicas: 2, serviceAccountName: "wachdienst", containerPort: 8080, node: "worker-1",
       ephemeralLimit: 1024, memLimit: 256, cpuLimitMilli: 250, emptyDir: {}, initContainer: {},
       securityContext: { runAsNonRoot: true, readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, privileged: false },
     } }]);
@@ -233,7 +233,7 @@ describe("Registry: fileEffects (Vorrang)", () => {
   });
   it("Deployment im YAML: das Gemappte gewinnt, ein abweichender Legacy-Wert wird ignoriert", () => {
     const r = fileEffects(legacyDep(), DEP, "x.yaml");
-    expect(r).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
+    expect(r).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3, containerName: "web" } }]);
   });
   it("Typ ohne Mapper (Ingress) läuft über den hinterlegten Effekt", () => {
     const legacy: ApplyEffect = { ingress: { name: "i", host: "h", service: "s", port: 80 } };
@@ -257,20 +257,20 @@ describe("Registry: fileEffects (Vorrang)", () => {
   it("Sim-Sonderfelder werden bei gleichem Namen überlagert", () => {
     const yaml = DEP.replace("      containers:", "      initContainers:\n        - name: i\n          image: busybox\n      volumes:\n        - name: v\n          emptyDir: {}\n      containers:");
     const legacy = legacyDep({ requireBuiltImage: true, ephemeralUsedMi: 40, emptyDir: { data: "d", usedMi: 700 }, initContainer: { fillsMi: 300, doubleStage: true } });
-    expect(fileEffects(legacy, yaml, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3,
+    expect(fileEffects(legacy, yaml, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3, containerName: "web",
       requireBuiltImage: true, ephemeralUsedMi: 40, emptyDir: { data: "d", usedMi: 700 }, initContainer: { fillsMi: 300, doubleStage: true } } }]);
   });
   it("kein Overlay bei anderem Ressourcen-Namen", () => {
     const legacy: ApplyEffect = { deployment: { name: "anders", image: "i", replicas: 1, requireBuiltImage: true, ephemeralUsedMi: 5 } };
-    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
+    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3, containerName: "web" } }]);
   });
   it("kein emptyDir/initContainer aus dem Legacy-Effekt, wenn das YAML keine deklariert", () => {
     const legacy = legacyDep({ emptyDir: { data: "d", usedMi: 1 }, initContainer: { fillsMi: 2 } });
-    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
+    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3, containerName: "web" } }]);
   });
   it("Legacy ohne Deployment-Schlüssel (nur Service) legt kein Overlay an", () => {
     const legacy: ApplyEffect = { service: { name: "web", port: 80 } };
-    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
+    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3, containerName: "web" } }]);
   });
   it("ohne Effekt wird der Inhalt gelesen", () => {
     expect(fileEffects(undefined, DEP, "x.yaml")).toHaveLength(1);
@@ -282,7 +282,7 @@ describe("Factory: deploymentYaml/serviceYaml (Roundtrip)", () => {
   it("deploymentYaml mit allen Optionen ergibt den erwarteten Effekt", () => {
     const y = deploymentYaml({ name: "a", image: "busybox", replicas: 2, serviceAccountName: "sa", containerPort: 80, nodeName: "n1",
       securityContext: { runAsNonRoot: true }, ephemeralLimitMi: 512, emptyDir: true, initContainer: true });
-    expect(ok(y)).toStrictEqual([{ deployment: { name: "a", image: "busybox", replicas: 2, serviceAccountName: "sa", containerPort: 80, node: "n1",
+    expect(ok(y)).toStrictEqual([{ deployment: { name: "a", containerName: "a", image: "busybox", replicas: 2, serviceAccountName: "sa", containerPort: 80, node: "n1",
       ephemeralLimit: 512, emptyDir: {}, initContainer: {}, securityContext: { runAsNonRoot: true } } }]);
   });
   it("serviceYaml: Port, targetPort und ExternalName", () => {

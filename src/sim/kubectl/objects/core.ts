@@ -22,7 +22,7 @@ import { clusterPods, type ClusterPod } from "../../pods";
 import { clusterPodStatus, deploymentPodEntry, isReady, type PodEntry } from "../../podstatus";
 import { podTemplateLabels } from "../../replicasets";
 import { workloadLabels, type Labels } from "../../util";
-import { statefulPodClaimName, snapshotPodTemplate } from "../../workload";
+import { statefulPodClaimName, snapshotPodTemplate, containerNameOf } from "../../workload";
 import { accessModesLong } from "../../pv-controller";
 import { podPlacement } from "../inspect";
 
@@ -82,6 +82,7 @@ const FIELD_WRITERS = {
   ephemeralUsedMi: () => undefined,
   initContainer: (t, p) => { if (t.initContainer) p.pod.initContainers = [{ name: "vorbereiter" }]; },
   restartedAt: () => undefined,
+  containerName: () => undefined, // steht als `name` am Container (podSpecOf)
 } satisfies Record<keyof PodTemplateSpec, FieldWriter>;
 
 /** `envFrom` des Containers aus den eingebundenen ConfigMaps und Secrets (leer → fehlt). */
@@ -107,7 +108,7 @@ export function podSpecOf(name: string, t: RsTemplate): YamlMap {
     ...parts.container,
     envFrom: envFromOf(t.envFrom),
     image: t.image,
-    name,
+    name: containerNameOf({ name, containerName: tpl.containerName }),
     resources: Object.keys(parts.limits).length > 0 ? { limits: parts.limits } : undefined,
   });
   return { ...parts.pod, containers: [container] };
