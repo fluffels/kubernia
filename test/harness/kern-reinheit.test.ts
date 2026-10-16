@@ -523,6 +523,9 @@ describe("huellenVerstoesse / pruefeHuelle (#1613)", () => {
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const b = require("./b");' })), []);
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'const b = require("./proj");' })), ["scripts/a.mjs -> scripts/proj"]);
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import "./x.js";' })), ["scripts/a.mjs -> scripts/x.js"]);
+    // Jede aufgelöste Endung einzeln: .cjs und .js im Besitz.
+    const E2 = [...E, ein("scripts/c.cjs"), ein("scripts/d.js")];
+    assert.deepEqual(huellenVerstoesse(E2, mit({ "scripts/a.mjs": 'const c = require("./c"); const d = require("./d");' })), []);
   });
   test("JSON-Importe zählen, fremde JSON-Dateien sind ein Verstoß", () => {
     assert.deepEqual(huellenVerstoesse(E, mit({ "scripts/a.mjs": 'import c from "./daten.json";' })), ["scripts/a.mjs -> scripts/daten.json"]);
