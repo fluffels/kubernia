@@ -50,7 +50,6 @@ Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie 
 | `kubernia-gruppe` | Gruppen-Umsetzer: setzt eine Gruppe von Sammelticket-Zeilen mit frischem Kontext um ([ADR 0026](adr/0026-sammelticket-gruppen.md)) | benutzerdefinierte Subagenten; kein natives Gegenstück für Gruppen eines Tickets | behalten | ja |
 | `kubernia-lens` | unabhängiger Review-Kritiker je Brille | benutzerdefinierte Subagenten; kein natives Mehr-Perspektiven-Review | behalten | ja |
 | `kubernia` | Ticket-Ablauf als Skill | [Skills](https://code.claude.com/docs/en/skills.md), Skript-Orchestrierung als [Workflows](https://code.claude.com/docs/en/workflows.md) | behalten | nein |
-| `kubernia-workflow`, `kubernia-ticket` (`.claude/workflows/kubernia-ticket.js`) | deterministische Ticket-Orchestrierung | [dynamische Workflows](https://code.claude.com/docs/en/workflows.md), `.claude/workflows/` nativ, Datei ist schon das native Format | behalten | nein |
 | `review-lenses` | Review-Ablauf mit Stufe 0 | Skills nativ; Code Review und `/ultrareview` sind Cloud-Funktionen anderer Art | behalten | teilweise |
 | `forum` | Forum-Eingang bearbeiten | Skills nativ, Freigabe-Stopp ist Politik | behalten | nein |
 | `forum-leser` | Quarantäne-Leser für Forum-Fremdtext: nur `Read` auf eine entschärfte Datei, liefert Triage und Antwortentwurf | benutzerdefinierte Subagenten (`tools`, `disallowedTools`, Frontmatter-Hooks); kein natives Quarantäne-Muster | behalten | ja |
