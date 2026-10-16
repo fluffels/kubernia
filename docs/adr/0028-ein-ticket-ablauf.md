@@ -49,6 +49,7 @@ Die generische Mechanik bleibt: Deckel-Logik in `check:size`, der AGENTS.md-Satz
 - Eine Quelle für den Ablauf; Änderungen am Ablauf gehen an einer Stelle durch.
 - Sammeltickets, Phasen-Schnitt und Autor-Prüfung gelten für jeden Lauf.
 - Die Spalten und Zeilen zum Workflow in [model-routing](../model-routing.md), [agent-harness](../agent-harness.md), [Glossar](../harness-glossar.md) und [Sicherheit der Agenten](../sicherheit-agenten.md) entfallen; ältere ADRs bleiben als Historie unverändert.
+- Textreste des entfernten Pfads fängt der Wächter `test/harness/entfernte-pfade.test.ts` (Namen und Umschreibungen in allen getrackten Dateien, Ausnahmen mit Grund: ADRs, der Absenz-Test, der Wächter selbst); dass die Dateien fehlen, prüft `test/harness/model-routing.test.ts`.
 - Rückweg: `git revert` des Entfernungs-PR (#1067).
 
 ## Re-Evaluierung
