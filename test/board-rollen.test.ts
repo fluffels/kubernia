@@ -225,7 +225,7 @@ describe("Verdrahtung: jeder Aufrufer übergibt sein Board ausdrücklich", () =>
 
 describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
   type U = Item & { id: string; status: string; state: string; contentId: string };
-  type Schritt = { aktion: string; number: number; von: string; nach: string; quelleId: string; contentId?: string };
+  type Schritt = { aktion: string; number: number; title: string; von: string; nach: string; quelleId: string; contentId?: string };
   type Plan = { schritte: Schritt[]; gemeldet: { number: number; grund: string }[]; ende: { produkt: string | null; factory: string | null } };
   const plan = (p: U[], f: U[]): Plan => (L as unknown as { umzugsPlan: (p: U[], f: U[]) => Plan }).umzugsPlan(p, f);
   const it = (number: number, labels: string[] = [], extra: Partial<U> = {}): U => ({ id: `PVTI_${number}`, number, status: "Todo", state: "open", contentId: `I_${number}`, labels, ...extra });
@@ -277,10 +277,18 @@ describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
     expect(plan([it(2, H)], []).ende).toEqual({ produkt: null, factory: null });
   });
 
-  test("Meldegrund bei fehlender Issue-ID und Titel wird durchgereicht", () => {
-    const p = plan([it(3, H, { contentId: "" }), it(4, H, { title: "Vier" })], []);
-    expect(p.gemeldet[0].grund).toMatch(/Issue-Node-ID/);
-    expect((p.schritte[0] as unknown as { title: string }).title).toBe("Vier");
+  test("Meldegrund bei fehlender Issue-ID", () => {
+    expect(plan([it(3, H, { contentId: "" })], []).gemeldet[0].grund).toMatch(/Issue-Node-ID/);
+  });
+
+  test("der Titel wird in den Schritt durchgereicht", () => {
+    expect(plan([it(4, H, { title: "Vier" })], []).schritte[0].title).toBe("Vier");
+  });
+
+  test("auch ein nur zu entfernendes Item ist als Anker ausgeschlossen (steht auf beiden Boards, letzte Position)", () => {
+    const p = plan([it(3), it(1, H)], [it(1, H), it(5)]);
+    expect(p.schritte.map((s) => [s.aktion, s.number])).toEqual([["entfernen", 1], ["umziehen", 5]]);
+    expect(p.ende.produkt).toBe("PVTI_3");
   });
 
   test("geschlossene Items bleiben als Historie, richtig stehende Items bleiben, ein Plan nach dem Umzug ist leer (idempotent)", () => {
