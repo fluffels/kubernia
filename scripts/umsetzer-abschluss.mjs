@@ -167,7 +167,8 @@ export function ghPrKommentare(nummer) {
 /** R6 (#1067): gemergter PR mit Leitplanken-Pfaden braucht den Audit-Kommentar des PR-Autors; Fehler: frei. */
 function auditBlockade(nr, deps) {
   try {
-    const treffer = (deps.prDateien ?? ghPrDateien)(nr).filter((d) => trifftLeitplanke(d, leitplankenMuster()));
+    const muster = leitplankenMuster();
+    const treffer = (deps.prDateien ?? ghPrDateien)(nr).filter((d) => trifftLeitplanke(d, muster));
     if (!treffer.length) return null;
     const info = (deps.prKommentare ?? ghPrKommentare)(nr);
     const autor = info?.author?.login;

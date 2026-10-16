@@ -496,6 +496,21 @@ describe("Leitplanken-Audit (#1067)", () => {
     assert.ok(r);
   });
 
+  test("Kopfzeile nur mitten im Text zitiert: zählt nicht als Audit", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => mit(`fehlt noch: ${audit.AUDIT_KOPF}`) });
+    assert.ok(r);
+  });
+
+  test("PR ohne Autor-Angabe: Kommentar ohne Autor zählt nicht als Audit", () => {
+    const r = gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: () => ({ comments: [{ body: audit.AUDIT_KOPF }] }) });
+    assert.ok(r);
+  });
+
+  test("Muster mit innerem Schrägstrich ist verankert (nicht auf jeder Ebene)", () => {
+    assert.ok(treffer("test/harness/x.ts", ["test/harness/"]));
+    assert.ok(!treffer("src/test/harness/x.ts", ["test/harness/"]));
+  });
+
   test("keine Treffer: frei, ohne Kommentare zu lesen", () => {
     const r = gemergt({
       prDateien: () => ["src/main.ts"],
