@@ -59,6 +59,8 @@ describe("Kommentare, Labels, Assignees und Lesen bleiben frei (Sammelticket-Zei
   test("PATCH und Lesen auf Issues", () => {
     laeuft("gh api -X PATCH repos/o/r/issues/5 -f state=closed");
     laeuft("gh api repos/o/r/issues");
+    laeuft("gh api -X GET repos/o/r/issues -f state=open");
+    laeuft("gh api --method GET repos/o/r/issues -f state=open");
     laeuft("gh api repos/o/r/issues?state=open --paginate");
     laeuft("gh api repos/o/r/issues/5");
   });

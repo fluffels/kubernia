@@ -61,6 +61,7 @@ describe("klasse", () => {
     ["CodeQL high in test-ähnlichem Quellpfad bleibt Spitze", { pfad: "src/test/x.ts" }, "spitze"],
     ["CodeQL high in `testbar/`: kein Präfix-Fehltreffer", { pfad: "testbar/x.ts" }, "spitze"],
     ["CodeQL high unter scripts/: Spitze", { pfad: "scripts/mermaid-vorschau.mjs" }, "spitze"],
+    ["CodeQL high im Test-Code mit Backslash-Pfad: nur Zeile", { pfad: "test\\x.test.ts" }, "zeile"],
   ])("%s -> %s", (_n, o, erwartet) => {
     expect(C.klasse(alert(o as Partial<Alert>))).toBe(erwartet);
   });
@@ -146,6 +147,13 @@ describe("bekannteAlerts", () => {
     });
     expect([...b.alerts].sort()).toEqual([7, 8]);
   });
+  test("Audit-Zeile eines vertrauten Kommentars macht die GHSA bekannt, die eines Fremden nicht (#1433)", () => {
+    const audit = "- [ ] Audit: GHSA-aaaa-bbbb-cccc in x";
+    const vertraut = C.bekannteAlerts({ kommentare: [{ user: bot, body: audit }], owner: OWNER, wiedervorlagen: [] });
+    expect([...vertraut.ghsa]).toEqual(["ghsa-aaaa-bbbb-cccc"]);
+    const fremd = C.bekannteAlerts({ kommentare: [{ user: { login: "fremd", type: "User" }, body: audit }], owner: OWNER, wiedervorlagen: [] });
+    expect(fremd.ghsa.size).toBe(0);
+  });
   test("GHSA aus audit-Wiedervorlage und aus Titel ist bekannt", () => {
     const b = C.bekannteAlerts({
       kommentare: [],
@@ -226,6 +234,11 @@ describe("plane", () => {
     const p = C.plane({ alerts: [{ ...spitze(94), pfad: "test/a.test.ts" }], bekannt: keine, offenesIssue: null });
     expect(p.issue.art).toBe("nichts");
     expect(p.zeilen[0].nummern).toEqual([94]);
+  });
+  test("Zeilen-Alert, dessen Nummer in bekannt.alerts steht, ergibt keine Zeile; andere Nummern bleiben", () => {
+    const b = { ...keine, alerts: new Set([5]) };
+    expect(C.plane({ alerts: [rest(5)], bekannt: b, offenesIssue: null }).zeilen).toEqual([]);
+    expect(C.plane({ alerts: [rest(6)], bekannt: b, offenesIssue: null }).zeilen).toHaveLength(1);
   });
   test("VulnerabilitiesID: alle GHSA bekannt unterdrückt, eine unbekannte oder keine lässt den Alert offen", () => {
     const v = (ghsa: string[]) => rest(5, { regel: "VulnerabilitiesID", ghsa });
