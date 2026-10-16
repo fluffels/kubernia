@@ -16,7 +16,7 @@
  *
  * Reines Node-Skript (nur Builtins); `prStatus` ist injizierbar.
  */
-import { ghJson } from "./gh-cli.mjs";
+import { ghJson, ghText } from "./gh-cli.mjs";
 import { readFileSync } from "node:fs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 
@@ -118,7 +118,68 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
       `Wartest du nur auf die CI: ${WARTEN(nr)}`
     );
   }
+  if (token === "gemergt" && status.state === "MERGED") return auditBlockade(nr, deps);
   return null;
+}
+
+/** Kopfzeile des Audit-Kommentars nach einem Leitplanken-Merge (steht wörtlich in AGENTS.md, der Test bindet beides). */
+export const AUDIT_KOPF = "\u{1F6E1}\uFE0F Leitplanken-Änderung selbst gemergt";
+
+/** Leitplanken-Muster: Vereinigung aller String-Arrays in `.github/protected-paths.json` (SSOT, nicht kopieren). */
+export function leitplankenMuster() {
+  const quelle = new URL("../.github/protected-paths.json", import.meta.url);
+  return Object.values(JSON.parse(readFileSync(quelle, "utf8"))).flatMap((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []));
+}
+
+const globSegment = (seg) => new RegExp("^" + seg.split("*").map((t) => t.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*") + "$");
+
+/**
+ * Trifft `pfad` (Repo-relativ, `/`) eines der Muster? CODEOWNERS-Teilmenge: führendes `/` verankert an der Wurzel;
+ * ohne `/` (außer am Ende) auf jeder Ebene; `/` am Ende = Verzeichnis-Präfix; `*` = beliebige Zeichen außer `/`;
+ * ein Muster, das ein Elternverzeichnis trifft, trifft alle Dateien darin.
+ */
+export function trifftLeitplanke(pfad, muster) {
+  const teile = String(pfad).split("/").filter(Boolean);
+  return muster.some((roh) => {
+    const verzeichnis = roh.endsWith("/");
+    const kern = roh.replace(/^\//, "").replace(/\/$/, "");
+    const segmente = kern.split("/").map(globSegment);
+    const verankert = roh.startsWith("/") || kern.includes("/");
+    const starts = verankert ? [0] : teile.map((_, i) => i);
+    return starts.some((start) => {
+      const rest = teile.slice(start);
+      if (rest.length < segmente.length + (verzeichnis ? 1 : 0)) return false;
+      return segmente.every((re, i) => re.test(rest[i]));
+    });
+  });
+}
+
+/** Standard-`prDateien`: geänderte Dateien des PR; wirft bei jedem Fehler. */
+export function ghPrDateien(nummer) {
+  return ghText(["pr", "diff", nummer, "--name-only"], { timeout: 20000 }).split("\n").map((z) => z.trim()).filter(Boolean);
+}
+
+/** Standard-`prKommentare`: Autor und Kommentare des PR; wirft bei jedem Fehler. */
+export function ghPrKommentare(nummer) {
+  return ghJson(["pr", "view", nummer, "--json", "author,comments"], { timeout: 20000 });
+}
+
+/** R6 (#1067): gemergter PR mit Leitplanken-Pfaden braucht den Audit-Kommentar des PR-Autors; Fehler: frei. */
+function auditBlockade(nr, deps) {
+  try {
+    const treffer = (deps.prDateien ?? ghPrDateien)(nr).filter((d) => trifftLeitplanke(d, leitplankenMuster()));
+    if (!treffer.length) return null;
+    const info = (deps.prKommentare ?? ghPrKommentare)(nr);
+    const autor = info?.author?.login;
+    const vorhanden = (info?.comments ?? []).some((c) => autor && c?.author?.login === autor && String(c?.body ?? "").trimStart().startsWith(AUDIT_KOPF));
+    if (vorhanden) return null;
+    return (
+      `Umsetzer-Abschluss (#1067): PR #${nr} ändert Leitplanken-Pfade (${treffer.slice(0, 5).join(", ")}${treffer.length > 5 ? ", …" : ""}), ` +
+      `aber der Audit-Kommentar fehlt. Poste auf dem PR einen Kommentar, dessen erste Zeile „${AUDIT_KOPF}“ lautet, mit was, warum und wie reverten (\`git revert <squash-sha>\` per PR), dann berichte.`
+    );
+  } catch {
+    return null; // fail-open
+  }
 }
 
 /** R4/R5 für `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592); `null` = frei. */

@@ -29,7 +29,9 @@ const abschluss = abschlussRaw as unknown as {
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
   letzteNachrichtAusTranskript: (p: string) => string | null;
 };
-const { abschlussBlockade: blockade, parseErgebnis, parseAbschlussInput } = abschluss;
+const { parseErgebnis, parseAbschlussInput } = abschluss;
+// hermetisch: ohne eigene Injektion ruft der Leitplanken-Audit (#1067) nie das echte gh auf
+const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { prDateien: () => [], ...d } as never);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const UMSETZER = readFileSync(resolve(ROOT, ".claude/agents/kubernia-umsetzer.md"), "utf8");
