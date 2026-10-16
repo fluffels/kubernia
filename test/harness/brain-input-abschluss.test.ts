@@ -43,7 +43,7 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "gemergter PR erledigt es nicht mehr", muster: /gemergter PR/ },
   ],
   ".claude/skills/kubernia/SKILL.md": [
-    { name: "BEFUNDE:-Feld", muster: /BEFUNDE:/ },
+    { name: "BEFUNDE:-Feld im Sitzungsabschluss", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*BEFUNDE:/ },
     { name: "Fortsetzungs-Pfad im Schritt 5", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*mach mit <nr> weiter[^\n]*brain-input/ },
     { name: "brain-input im Abschluss", muster: /Skill\(\{ skill: "brain-input" \}\)/ },
     { name: "Verweis auf die Regel", muster: /AGENTS\.md § Abschluss ohne offene Befunde/ },
@@ -51,6 +51,8 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
   ".claude/agents/kubernia-umsetzer.md": [
     { name: "Formatzeile mit Ziel-Ticket oder keine", muster: /^BEFUNDE: .*→ #<nr>.*keine/m },
     { name: "Eintragspflicht vor dem Bericht", muster: /Vor dem Bericht trägst du jeden Befund selbst ein/ },
+    { name: "liegen gelassene Lens-Hinweise", muster: /liegen gelassene, zutreffende Lens-Hinweise/ },
+    { name: "Bekannte Grenze ist kein Befund", muster: /„Bekannte Grenze“[^.]*sind kein Befund/ },
   ],
 };
 
@@ -80,6 +82,17 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/`brain-input`/g, "`x`")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/nur aus Evidenz/g, "gern")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/gemergter PR/g, "PR")).length).toBeGreaterThan(0);
+  });
+
+  test("Gegenbeispiel: Umsetzer ohne Lens-Hinweis-Satz oder ohne Bekannte-Grenze-Ausnahme wird rot", () => {
+    const umsetzer = ".claude/agents/kubernia-umsetzer.md";
+    expect(abschlussLuecken(umsetzer, rohLesen(umsetzer).replace("liegen gelassene, zutreffende Lens-Hinweise", "alle Lens-Hinweise")).length).toBeGreaterThan(0);
+    expect(abschlussLuecken(umsetzer, rohLesen(umsetzer).replace("„Bekannte Grenze“ (Kopfkommentar des Guards, PR-Text) sind kein Befund", "„Bekannte Grenze“ (Kopfkommentar des Guards, PR-Text) sind ein Hinweis")).length).toBeGreaterThan(0);
+  });
+
+  test("Gegenbeispiel: BEFUNDE: nur im Zwischen-Hand-off, nicht im Sitzungsabschluss, wird rot", () => {
+    const skill = ".claude/skills/kubernia/SKILL.md";
+    expect(abschlussLuecken(skill, rohLesen(skill).replace("jede `BEFUNDE:`-Zeile des Umsetzers", "jede Befund-Zeile des Umsetzers")).length).toBeGreaterThan(0);
   });
 
   test("SSOT: „nie als Frage“ steht genau einmal in AGENTS.md und in keinem Skill- oder Agententext", () => {
