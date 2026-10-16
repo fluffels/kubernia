@@ -25,6 +25,11 @@ import { projektOrdner } from "./transkript.mjs";
 import { ladeAlleLaeufe, ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
 const tagVon = (t) => new Date(t).toISOString().slice(0, 10);
+// Summe nur über vorhandene Werte; ohne einen solchen null (nie 0 $ für ein unbekanntes Modell), wie typZeile.
+const summeOderNull = (werte) => {
+  const da = werte.filter((x) => x !== null);
+  return da.length ? da.reduce((s, x) => s + x, 0) : null;
+};
 const stat = (laeufe) => ({
   n: laeufe.length,
   // Verschiedene Tickets und die mit mehr als einem Lauf (#1646): die Mediane gelten je Lauf, nicht je Ticket.
@@ -35,10 +40,10 @@ const stat = (laeufe) => ({
   requests: median(laeufe.map((l) => l.requests)),
   // Median und Summe nur über Läufe mit Preis; `ohnePreis` zählt die übrigen (kein 0 $ für ein unbekanntes Modell).
   kosten: median(laeufe.map((l) => l.kosten).filter((x) => x !== null)),
-  kostenSumme: laeufe.reduce((summe, l) => summe + (l.kosten ?? 0), 0),
+  kostenSumme: summeOderNull(laeufe.map((l) => l.kosten)),
   // Mit dem aus dem Kontext-Zuwachs geschätzten Output (#1568); `kosten` bleibt der aufgezeichnete Wert.
   kostenGeschaetzt: median(laeufe.map((l) => l.kostenGeschaetzt ?? null).filter((x) => x !== null)),
-  kostenGeschaetztSumme: laeufe.reduce((summe, l) => summe + (l.kostenGeschaetzt ?? 0), 0),
+  kostenGeschaetztSumme: summeOderNull(laeufe.map((l) => l.kostenGeschaetzt ?? null)),
   output: laeufe.reduce((n, l) => n + (l.output ?? 0), 0),
   outputGeschaetzt: laeufe.reduce((n, l) => n + (l.outputGeschaetzt ?? 0), 0),
   ohnePreis: laeufe.filter((l) => l.kosten === null).length,
@@ -49,6 +54,9 @@ const stat = (laeufe) => ({
   maxDauerMin: laeufe.length ? Math.max(...laeufe.map((l) => l.dauerMin)) : null,
 });
 
+/** Ein Lauf liegt im Fenster [von, bis] (Start) und passt zum Ticket-Filter (#1693, gemeinsam für laufzeiten und typenUebersicht). */
+const imFenster = (l, { von, bis, tickets, ohne }) => passtTicketFilter(l.ticket, { tickets, ohne }) && (!von || l.start >= ms(von)) && (!bis || l.start <= ms(bis));
+
 /**
  * Kern: Läufe aus `{ meta, zeilen }` des gewünschten `agentType` im Fenster [von, bis] (Start) → Läufe plus Aggregat.
  * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], agent?: string, von?: string, bis?: string, schnitt?: string, tickets?: number[], ohne?: number[] }} e
@@ -58,8 +66,7 @@ export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schni
     .filter((l) => l?.meta?.agentType === agent)
     .map(laufAus)
     .filter(Boolean)
-    .filter((l) => passtTicketFilter(l.ticket, { tickets, ohne }))
-    .filter((l) => (!von || l.start >= ms(von)) && (!bis || l.start <= ms(bis)))
+    .filter((l) => imFenster(l, { von, bis, tickets, ohne }))
     .sort((a, b) => a.start - b.start);
   for (const l of alle) l.parallel = alle.filter((o) => o !== l && o.start < l.ende && o.ende > l.start).length;
   const gemessen = alle.filter((l) => !l.offen);
@@ -110,8 +117,7 @@ export function typenUebersicht({ laeufe, von, bis, tickets = [], ohne = [] }) {
   const alle = laeufe
     .map(laufAus)
     .filter(Boolean)
-    .filter((l) => passtTicketFilter(l.ticket, { tickets, ohne }))
-    .filter((l) => (!von || l.start >= ms(von)) && (!bis || l.start <= ms(bis)));
+    .filter((l) => imFenster(l, { von, bis, tickets, ohne }));
   const typ = (l) => (typeof l.agentType === "string" && l.agentType !== "" ? l.agentType : TYP_UNBEKANNT);
   const namen = [...new Set(alle.map(typ))].sort((a, b) => (a === TYP_UNBEKANNT) - (b === TYP_UNBEKANNT) || (a < b ? -1 : a > b ? 1 : 0));
   return {

@@ -68,6 +68,15 @@ export function projektOrdner(namen, wurzel) {
 /** Log-Ordnername eines Servers. Pur. */
 export const serverOrdner = (name) => `mcp-logs-${slug(name)}`;
 
+/** Server-Name zu einem Log-Ordner: der Konfig-Name bei Treffer, sonst der Ordnername ohne Präfix (user-scope-Server wie langfuse stehen nicht in `.mcp.json`); kein `mcp-logs-`-Ordner ergibt `null`. Pur. */
+export function serverNameFuerOrdner(ordner, server) {
+  if (!ordner.startsWith("mcp-logs-") || ordner === "mcp-logs-") return null;
+  return server.find((s) => serverOrdner(s.name) === ordner)?.name ?? ordner.slice("mcp-logs-".length);
+}
+
+/** Der npx-Hinweis des Launchers (`scripts/mcp-launch.mjs` › `npxHinweis`) als stderr-Zeile des Servers: Pfeil + `npx` oder `npx -y`. Pur. */
+export const istNpxFallback = (text) => /→\s*npx\b|\bnpx -y\b/.test(text);
+
 /** Die Zeilen einer Log-Datei (Text) als Befunde `[{klasse, zeit, sessionId, text}]`; wirft nie, kaputte Zeilen entfallen. Pur. */
 export function klassifiziere(zeilen) {
   const befunde = [];
@@ -83,7 +92,7 @@ export function klassifiziere(zeilen) {
     const text = String(z.error ?? z.debug ?? "");
     const mk = (klasse) => befunde.push({ klasse, zeit: z.timestamp ?? "", sessionId: z.sessionId ?? "", text });
     if (typeof z.error === "string") {
-      if (z.error.startsWith("Server stderr:")) mk(/→\s*npx\b|\bnpx -y\b/.test(z.error) ? "npx-fallback" : "stderr");
+      if (z.error.startsWith("Server stderr:")) mk(istNpxFallback(z.error) ?"npx-fallback" : "stderr");
       else if (!z.error.startsWith("###")) mk("fehler");
       continue;
     }
@@ -153,8 +162,17 @@ function lies(basis, wurzel, server, seit) {
   }
   const seitMs = Date.parse(seit);
   for (const p of projektOrdner(namen, wurzel)) {
-    for (const s of server) {
-      const dir = join(basis, p.ordner, serverOrdner(s.name));
+    // Alle `mcp-logs-*`-Ordner des Projekts, nicht nur die Server aus `.mcp.json`: user-scope-Server (langfuse) haben dort keinen Eintrag.
+    let ordnerNamen;
+    try {
+      ordnerNamen = readdirSync(join(basis, p.ordner));
+    } catch {
+      continue;
+    }
+    for (const o of ordnerNamen) {
+      const name = serverNameFuerOrdner(o, server);
+      if (!name) continue;
+      const dir = join(basis, p.ordner, o);
       let dateien;
       try {
         dateien = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
@@ -165,7 +183,7 @@ function lies(basis, wurzel, server, seit) {
         try {
           if (statSync(join(dir, f)).mtimeMs < seitMs) continue;
           const zeilen = readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean);
-          for (const b of klassifiziere(zeilen)) alle.push({ ...b, server: s.name, suffix: p.suffix });
+          for (const b of klassifiziere(zeilen)) alle.push({ ...b, server: name, suffix: p.suffix });
         } catch {
           // unlesbare Datei überspringen
         }

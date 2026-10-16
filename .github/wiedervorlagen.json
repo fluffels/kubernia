@@ -1,5 +1,11 @@
 [
   {
+    "id": "review-cap-wirkung",
+    "faellig": "2026-11-06",
+    "titel": "Review-Cap-Wirkung nachmessen (Guard-Vollständigkeit in Runde 1)",
+    "text": "`node scripts/lauf-ergebnis.mjs --von 2026-10-17T00:00:00Z --bis <heute>` auswerten (Anteil `runden=3`, `runden>3` (Zusatzpass), Blocker je Brille). Basis 2026-10-09 bis 2026-10-16 (78 Läufe mit Nachweis): runden=1 12, =2 32, =3 24, >3 10; Blocker Test-Adäquanz 161 von 219. Ist die Quote `runden>=3` mit rund 44 % unverändert, ein Ticket für einen mechanischen Guard-Check anlegen (Guards je neuer Funktion maschinell auflisten, kein Stryker, ADR 0027: keine Regeländerung ohne Evidenz); sonst den Eintrag löschen."
+  },
+  {
     "id": "langfuse-takt-schwelle",
     "faellig": "2026-11-13",
     "titel": "Langfuse-Takt-Schwelle prüfen",
@@ -16,5 +22,17 @@
     "faellig": "2026-11-15",
     "titel": "braces-Advisory GHSA-vfj7-8cjw-p6xm prüfen (bewusst akzeptiert)",
     "text": "Kein gepatchter Stand (`first_patched_version: null`, Stand 2026-10-16). Nur Dev: `vite-plugin-singlefile` 2.3.3 -> `micromatch` 4.0.8 -> `braces` 3.0.3, dazu `likec4` 1.59.4; `npm audit --omit=dev` meldet 0. Die Muster stammen aus der eigenen Build-Konfiguration, nicht aus Eingaben, nicht ausnutzbar. Prüfauftrag: gibt es ein gepatchtes `braces`/`micromatch`, dann per `overrides` oder Update einziehen."
+  },
+  {
+    "id": "codescanning-sastid",
+    "faellig": "2026-10-30",
+    "titel": "Code-Scanning SASTID (Alert 54) prüfen",
+    "text": "Der Scorecard-Fund SASTID heilt, sobald 30/30 Commits einen CodeQL-Lauf haben (Stand 22/30 am 2026-10-16). Ist Alert 54 dann zu, diesen Eintrag löschen; sonst Ursache klären (Lauf auf jedem Commit?) statt dismissen."
+  },
+  {
+    "id": "codescanning-pinneddependenciesid",
+    "faellig": "2026-11-13",
+    "titel": "Code-Scanning PinnedDependenciesID: Stand von #983 prüfen",
+    "text": "Pinning läuft in #983 (Alerts 6 bis 53 samt Docker-Basis-Images in `Dockerfile` und `Dockerfile.devpanel`). Ist #983 gemergt und sind die Alerts zu, Eintrag löschen; sonst den Stand in #983 klären."
   }
 ]

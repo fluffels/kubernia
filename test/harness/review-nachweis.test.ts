@@ -256,7 +256,7 @@ describe("(f) BEKANNTE_LENSES == die Brillen-Keys der Format-SSOT (#1349)", () =
   });
 });
 
-describe("Zusatzpass nach Freigabe der Maintainerin (#1561 Z2)", () => {
+describe("Zusatzpass: ein Pass über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => {
   const bewerteZ = (review: string, dateien = ["src/a.ts"]) =>
     bewerteNachweis({
       nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`),
@@ -266,8 +266,10 @@ describe("Zusatzpass nach Freigabe der Maintainerin (#1561 Z2)", () => {
     });
   const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
 
-  test("runden=4 ohne Feld ist rot, die Meldung nennt zusatzpass=", () => {
-    assert.match(bewerteZ(`runden=4 ${LENSES} verdikt=ok`).join(" "), /zusatzpass=/);
+  test("runden=4 ohne Feld ist rot, die Meldung nennt zusatzpass= samt Ursache, ohne Freigabe der Maintainerin zu verlangen", () => {
+    const m = bewerteZ(`runden=4 ${LENSES} verdikt=ok`).join(" ");
+    assert.match(m, /zusatzpass=<anzahl>:<Ursache>/);
+    assert.doesNotMatch(m, /Maintainerin/);
   });
   test("runden=4 mit zusatzpass=1:<Grund> ist ok, der Grund darf Leerzeichen tragen", () => {
     assert.deepEqual(bewerteZ(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), []);
@@ -352,12 +354,12 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
 
   test("die CLI-Zeile nennt den Zusatzpass samt Grund, ohne Zusatzpass keine solche Zeile (im Prozess)", () => {
     const zeile = (review: string) => zusatzpassZeile(checkReviewNachweis({ runGit: fakeGit(review), env: {} }));
-    assert.match(zeile(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`) ?? "", /^• Zusatzpass \(Freigabe der Maintainerin\): Maintainerin gab Pass frei$/);
+    assert.match(zeile(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`) ?? "", /^• Zusatzpass: Maintainerin gab Pass frei$/);
     assert.equal(zeile(`runden=1 ${LENSES} verdikt=ok`), null);
   });
 
   // Ein einziger echter Prozess-Smoke (Kaltstart von git und node unter Last braucht Luft).
   test("CLI-Smoke: der Prozess gibt die Zusatzpass-Zeile aus", { timeout: 30_000 }, () => {
-    assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass \(Freigabe der Maintainerin\): Maintainerin gab Pass frei/);
+    assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass: Maintainerin gab Pass frei/);
   });
 });

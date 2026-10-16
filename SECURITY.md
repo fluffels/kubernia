@@ -9,7 +9,7 @@ Unterstützt wird der aktuelle Stand von `main` und das jeweils letzte Release (
 Bitte **nicht** öffentlich per Issue, Pull Request oder Discussion melden, sondern vertraulich über GitHub:
 
 1. Im Repository den Reiter **Security** öffnen.
-2. **Report a vulnerability** wählen (GitHub Private Vulnerability Reporting).
+2. **Report a vulnerability** wählen (GitHub Private Vulnerability Reporting) oder direkt <https://github.com/fluffels/kubernia/security/advisories/new> öffnen.
 3. Beschreiben, was betroffen ist, wie es sich nachstellen lässt und welche Wirkung es hat.
 
 Es gibt bewusst keinen Meldeweg per E-Mail.

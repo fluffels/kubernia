@@ -14,16 +14,15 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
-import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
+import { fehlerText, ghText } from "./gh-cli.mjs";
+import { issueKommentare } from "./fremdtext-lib.mjs";
+import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
+import { offeneTitel, platziereOben, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
+import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
-export const ALARM_PRAEFIX = "🔒 Security:";
-const GHSA_MUSTER = /GHSA(?:-[a-z0-9]{4}){3}/gi;
+export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
+
 const WIEDERVORLAGEN = fileURLToPath(new URL("../.github/wiedervorlagen.json", import.meta.url));
-
-/** Alle GHSA-IDs eines Textes, kleingeschrieben. Pur. */
-export const ghsaIn = (text) => (String(text ?? "").match(GHSA_MUSTER) ?? []).map((g) => g.toLowerCase());
 
 /**
  * Befunde aus einer `npm audit --json`-Ausgabe (Format ab npm 7). Ein Befund je Advisory (`via`-Objekt mit URL), das Paket ist das
@@ -126,26 +125,6 @@ export function ordneEin({ befunde, bekannt }) {
     .map((b) => (istAlarm(b) ? { art: "alarm", befund: b, ...alarmText(b) } : { art: "zeile", befund: b, text: zeilenText(b) }));
 }
 
-/** Bodies der Kommentare vertrauter Autoren (Owner, github-actions[bot]); eine `- [ ] Audit:`-Zeile eines Fremden darf keinen Alarm unterdrücken (#1433). Pur. */
-export function vertrauteBodies(kommentare, owner) {
-  return kommentare.filter((k) => istVertraut(k?.user, owner)).map((k) => String(k.body ?? ""));
-}
-
-/** Bekannte GHSA-IDs aus den Quellen: offene Audit-Zeilen in Kommentaren, Wiedervorlagen-Einträge `audit-<ghsa>`, Titel offener Security-Tickets. Pur. */
-export function bekannteGhsa({ kommentare, wiedervorlagen, offeneTitel }) {
-  const menge = new Set();
-  for (const k of kommentare) {
-    for (const z of String(k ?? "").split(/\r?\n/)) {
-      if (/^\s*[-*]\s+\[ \]\s+Audit:/.test(z)) ghsaIn(z).forEach((g) => menge.add(g));
-    }
-  }
-  for (const e of wiedervorlagen) {
-    if (typeof e?.id === "string" && e.id.startsWith("audit-")) ghsaIn(e.id.slice("audit-".length).replace(/^ghsa-/, "GHSA-")).forEach((g) => menge.add(g));
-  }
-  for (const t of offeneTitel) if (String(t).startsWith(ALARM_PRAEFIX)) ghsaIn(t).forEach((g) => menge.add(g));
-  return menge;
-}
-
 // ---- IO (ungetestet) ----
 
 /** `npm audit --json` liefert bei Funden Exit 1 mit gültigem JSON auf stdout. */
@@ -173,12 +152,15 @@ const kommentareVon = (nr) => issueKommentare(nr, (args) => JSON.parse(ghText(ar
 
 function main() {
   const trocken = process.argv.includes("--dry-run");
-  const offene = normalizeOffene(JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`])));
+  const rohe = JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`]));
+  const offene = normalizeOffene(rohe);
   const sammel = offene.filter((i) => i.titel === SAMMELTICKET_TITEL);
+  const owner = REPO.split("/")[0];
   const bekannt = bekannteGhsa({
-    kommentare: vertrauteBodies(sammel.flatMap((i) => kommentareVon(i.number)), REPO.split("/")[0]),
+    kommentare: vertrauteBodies(sammel.flatMap((i) => kommentareVon(i.number)), owner),
     wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")),
-    offeneTitel: offene.map((i) => i.titel),
+    // Nur Titel vertrauter Autoren: ein Fremder darf mit einem „🔒 Security: GHSA-…“-Titel keinen Alarm unterdrücken.
+    offeneTitel: offeneTitel(rohe, owner),
   });
   const voll = markiereProd(befundeAusNpmAudit(npmAudit()), befundeAusNpmAudit(npmAudit(["--omit=dev"])));
   const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(ladeAlerts())], bekannt });
@@ -196,24 +178,19 @@ function main() {
       const url = ghText(["issue", "create", "--repo", REPO, "--title", a.titel, "--body", a.body]).trim();
       const nr = url.split("/").pop();
       console.log(`Alarm angelegt: #${nr} (${a.befund.ghsa})`);
-      const token = process.env.PROJECT_TOKEN;
-      if (!token) throw new Error("PROJECT_TOKEN fehlt: das Ticket steht nicht oben im Board.");
-      execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), "--notfall", "security", "--top", nr], {
-        env: { ...process.env, GH_TOKEN: token },
-        stdio: "inherit",
-      });
+      platziereOben(nr, "security");
     } catch (err) {
       console.log(`::error::Alarm für ${a.befund.ghsa} unvollständig: ${fehlerText(err)}`);
       rot = true;
     }
   }
   if (zeilen.length > 0) {
-    const ziel = waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]));
+    const ziel = waehleSammelticket(offene);
     if (!ziel) {
       console.log("::error::Kein ungeclaimtes Harness-Sammelticket für die Audit-Zeilen.");
       rot = true;
     } else {
-      ghText(["api", `repos/${REPO}/issues/${ziel.number}/comments`, "-f", `body=${zeilen.map((z) => z.text).join("\n")}`]);
+      postZeilen(ziel.number, zeilen.map((z) => z.text).join("\n"));
       console.log(`${zeilen.length} Zeile(n) in #${ziel.number}.`);
     }
   }

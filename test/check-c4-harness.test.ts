@@ -70,7 +70,7 @@ describe("pruefeHarness: Bindung je Art in beide Richtungen", () => {
     assert.equal(ms.length, 1);
     assert.equal(ms[0].zeile, 42);
     assert.equal(ms[0].element, "unbekannt");
-    assert.match(ms[0].text, new RegExp(`keine Quelle in ${QUELLEN[binder].herkunft.replace(/[.()]/g, "\\$&")}`));
+    assert.ok(ms[0].text.includes(`keine Quelle in ${QUELLEN[binder].herkunft}`), ms[0].text);
   });
 
   test.each(api.HARNESS_BINDER)("%s: eine Quelle ohne Element ist rot und nennt Art, Titel, Herkunft und Fundort", (binder) => {

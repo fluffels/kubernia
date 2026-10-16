@@ -123,9 +123,9 @@ const SCAN = [
 ].filter((rel) => existsSync(ROOT + rel));
 
 describe("AUFRUF-Regex ohne katastrophales Backtracking (#1703)", () => {
-  test("pathologische Option-Folge endet sofort (die alte Regex brauchte hier Minuten)", () => {
+  test("pathologische Option-Folge endet sofort (die alte Regex brauchte hier einige Sekunden, je Wiederholung doppelt so lang)", () => {
     const start = performance.now();
-    assert.deepEqual(findeZweiPunktTreffer("git" + " -C --".repeat(26) + " x"), []);
+    assert.deepEqual(findeZweiPunktTreffer("git" + " -C --".repeat(21) + " x"), []);
     assert.ok(performance.now() - start < 1000);
   });
   test("Treffer bleiben trotz -C-Argument erhalten", () => {

@@ -84,6 +84,10 @@ export function versetzteOverrideZeilen(text, key) {
     .map((z) => z.trim());
 }
 
+/** Widerruf (#1693): `<key>: #<nr> entfällt` (genau das Wort) hebt den Override auf; die jüngste Zeile entscheidet, danach
+ *  misst das Gate normal gegen sein Budget (keine Lockerung). So bleibt die Historie unangetastet. */
+const WIDERRUF = /^#\d+\s+entfällt$/;
+
 /** Override für `key` aus den Commit-Messages des Slices (`<basis>..HEAD`, dieselbe Basis
  *  wie der Diff, damit kein fremder main-Commit einen Trailer einschleppt). Die NEUESTE
  *  gültige Zeile zählt: `--reverse` liest chronologisch (ältester zuerst), und im Squash-Body
@@ -98,7 +102,8 @@ export function sliceOverride(runGit, base, key) {
     messages = "";
   }
   const { valid, invalid } = parseOverrideTrailers(messages, key);
-  return { reason: valid.length > 0 ? valid[valid.length - 1].reason : null, invalid, versetzt: versetzteOverrideZeilen(messages, key) };
+  const juengste = valid.length > 0 ? valid[valid.length - 1].reason : null;
+  return { reason: juengste !== null && !WIDERRUF.test(juengste) ? juengste : null, invalid, versetzt: versetzteOverrideZeilen(messages, key) };
 }
 
 /** Meldet ungültige Override-Zeilen (ohne `#<nr> <warum>`): ignoriert, nur ein Hinweis. */
@@ -115,14 +120,13 @@ export function versetzteOverrideHinweis(key, zeilen) {
   );
 }
 
-/** Der Hinweis zu einer stale Override-Zeile: der Slice braucht sie nicht. Eine fremde Zeile im eigenen
- *  Slice (z.B. nach einem Merge von main) darf man durch Umschreiben des EIGENEN Feature-Branches
- *  entfernen, solange der Nachweis-Commit noch nicht gesetzt ist. */
+/** Der Hinweis zu einer stale Override-Zeile: der Slice braucht sie nicht. Weg: ein leerer Commit auf dem
+ *  Feature-Branch mit der Zeile `<key>: #<nr> entfällt` (Widerruf, die jüngste Zeile gilt), kein Umschreiben der Historie. */
 export function staleOverrideHinweis(key, warum) {
   return (
     `✖ ${key} steht im Slice, aber ${warum} — der Override ist stale.\n` +
-    `  Den Override-Commit wieder aus dem Branch entfernen (den eigenen Feature-Branch umzuschreiben ist erlaubt, ` +
-    `vor dem Nachweis-Commit).`
+    `  Widerrufen: leerer Commit auf dem Feature-Branch mit der Zeile "${key}: #<nr> entfällt" (die jüngste Zeile gilt; ` +
+    `danach misst das Gate normal gegen sein Budget).`
   );
 }
 
@@ -174,7 +178,7 @@ function blockerAus(reviewWert) {
     });
 }
 
-/** Optionales Feld `zusatzpass=<anzahl>:<grund>` (#1561): von der Maintainerin freigegebene Pässe über das Cap hinaus.
+/** Optionales Feld `zusatzpass=<anzahl>:<grund>` (#1561, #1693): Pässe über das Cap hinaus (einer ohne Rückfrage, weitere nur mit Freigabe der Maintainerin).
  *  `null`, wenn das Feld fehlt; `{ungueltig}`, wenn Anzahl (ganze Zahl ≥ 1) oder Grund fehlen; sonst `{anzahl, grund}`. */
 function zusatzpassAus(reviewWert) {
   const wert = feldWert(reviewWert, "zusatzpass");

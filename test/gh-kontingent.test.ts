@@ -144,10 +144,10 @@ describe("mitKontingent", () => {
     expect(JSON.parse(u.logZeilen[0])).toMatchObject({ skript: "board-place", core: 10, graphql: 200, coreRest: 3990, graphqlRest: 3800 });
     expect(u.aufrufe.every((a) => a.join(" ") === "api rate_limit")).toBe(true);
   });
-  test("knapp lokal: Abbruch mit Exit 3, Reset-Zeit in der Meldung, kein Log", () => {
+  test("knapp lokal: Abbruch mit Exit 5 (eigener Code, nie ein Fremdeingang-Exit 3), Reset-Zeit in der Meldung, kein Log", () => {
     const u = umgebung(rate(res(5000), res(300)), rate(res(5000), res(300)));
     expect(K.mitKontingent("board-place", u.opts).ok).toBe(false);
-    expect(u.exit()).toBe(3);
+    expect(u.exit()).toBe(5);
     expect(u.ausgaben.join("")).toContain("✖ Abbruch: GitHub-API-Kontingent knapp: graphql 300/5000 (6 %), Reset in 23 min. Später erneut fahren.");
     expect(u.handler).toHaveLength(0);
   });
@@ -198,7 +198,7 @@ describe("mitKontingent", () => {
     expect(u.exit()).toBeUndefined();
     const v = umgebung(rate(res(10), res(4000)), rate(res(10), res(4000)));
     expect(K.mitKontingent("naechstes-ticket", { ...v.opts, arten: ["core"] }).ok).toBe(false);
-    expect(v.exit()).toBe(3);
+    expect(v.exit()).toBe(5);
   });
 });
 

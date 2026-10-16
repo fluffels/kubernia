@@ -12,8 +12,8 @@ import { ghJson } from "./gh-cli.mjs";
 
 /** Unterhalb dieses Anteils am Limit gilt das Kontingent als knapp. */
 export const MIN_ANTEIL = 0.1;
-/** Exit-Code für „Kontingent knapp“ (frei neben den 1/2 der Board-Skripte). */
-export const EXIT_KNAPP = 3;
+/** Exit-Code für „Kontingent knapp“: eigener Code, frei neben 1/2 (Fehler), 3 (Fremdeingang) und 4 (Lock). */
+export const EXIT_KNAPP = 5;
 export const ARTEN = ["core", "graphql"];
 
 const zahl = (x) => (typeof x === "number" && Number.isFinite(x) ? x : null);

@@ -6,6 +6,9 @@ import { join } from "node:path";
 
 const ZUGANGSNAMEN = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"];
 
+/** Basis-URL von Langfuse aus der Umgebung: leerer String gilt als nicht gesetzt, abschließende Schrägstriche fallen weg, Standard `http://localhost:3000`. Pur. */
+export const langfuseBasisUrl = (env) => (env.LANGFUSE_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+
 /** Die drei Zugangsnamen aus dem Text einer `KEY=VALUE`-Datei (optional `export `, optional Anführungszeichen); alles andere wird ignoriert. */
 export function leseZugang(text) {
   const out = {};

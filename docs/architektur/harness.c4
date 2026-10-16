@@ -78,8 +78,11 @@ model {
     issues = container 'Issues' {
       description 'Tickets samt Assignee als Claim'
     }
-    board = container 'Board' {
-      description 'Die Position im Board ist die Reihenfolge'
+    board = container 'Produkt-Board' {
+      description 'Spiel- und Inhalts-Tickets, die Position im Board ist die Reihenfolge'
+    }
+    factoryBoard = container 'Factory-Board' {
+      description 'Harness-Arbeit (Label area:harness); die Trennregel boardRolleFuer in scripts/board-lib.mjs wählt das Board je Issue'
     }
     pr = container 'Pull Request' {
       description 'Ein PR je Ticket, Auto-Merge nach grüner CI'

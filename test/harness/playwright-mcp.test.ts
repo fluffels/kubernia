@@ -18,7 +18,6 @@
  */
 import { afterAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -44,6 +43,7 @@ const launcher = launcherModule as unknown as LauncherModule;
 const root = join(import.meta.dirname, "..", "..");
 
 import { lies, repoDateien } from "./repo-texte";
+import { mcpAbfrage, schreibToolsOhneAsk, type McpTool } from "./mcp-handshake";
 
 /** Stellen, die zur Laufzeit von einem externen Host laden: CSS `url(http…)`/`@import`, fetch/XHR/WebSocket mit http(s)/ws(s)-Ziel (nicht localhost). */
 function externeLadestellen(text: string): string[] {
@@ -70,20 +70,6 @@ afterAll(() => {
   }
 });
 
-/** Beendet den Kindprozess samt Enkeln (Windows: `taskkill /T`, sonst hält ein Enkel das cwd offen) und löst nach `exit` auf. */
-function beende(child: ChildProcess): Promise<void> {
-  return new Promise((resolve) => {
-    if (child.exitCode !== null || child.signalCode !== null) return resolve();
-    child.once("exit", () => resolve());
-    if (process.platform === "win32" && child.pid) {
-      try {
-        execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-      } catch {
-        child.kill();
-      }
-    } else child.kill();
-  });
-}
 const readJson = (rel: string): unknown => JSON.parse(readFileSync(join(root, rel), "utf8"));
 
 describe("planLaunch – Startentscheidung des Launchers", () => {
@@ -277,48 +263,35 @@ const lokalInstalliert = launcher.readInstalled(root) !== null;
 // Ein Budget für den Handshake: der innere Timer bricht mit klarer Meldung ab, das Test-Timeout (doppelt) fängt nur noch,
 // was der Timer nicht fängt. Gemessen: kalt ~2,7 s, warm ~0,5 s; die Reserve gilt der Parallellast (#1526).
 const HANDSHAKE_MS = 30_000;
+/** Browser-Interaktionen ohne `readOnlyHint`, die `mcp__playwright` bewusst ohne Rückfrage erlaubt (`browser_run_code_unsafe` steht auf ask). */
+const BEKANNTE_INTERAKTIONEN = [
+  "browser_close", "browser_resize", "browser_handle_dialog", "browser_emulate_media", "browser_evaluate", "browser_file_upload", "browser_drop",
+  "browser_fill_form", "browser_press_key", "browser_type", "browser_navigate", "browser_navigate_back", "browser_click", "browser_drag",
+  "browser_hover", "browser_select_option", "browser_tabs", "browser_resume",
+];
 
 describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", () => {
-  /** Startet den Launcher mit den Args aus .mcp.json, spricht initialize + tools/list und beendet ihn. */
-  const toolNamen = (): Promise<string[]> =>
-    new Promise((resolve, reject) => {
-      const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
-      const args = cfg.mcpServers.playwright.args.map((a) => (a === "scripts/playwright-mcp.mjs" ? join(root, a) : a));
-      const cwd = mkdtempSync(join(tmpdir(), "kq-pwmcp-hs-"));
-      angelegt.push(cwd);
-      const child = spawn(process.execPath, args, { cwd, stdio: ["pipe", "pipe", "ignore"] });
-      const timer = setTimeout(() => {
-        void beende(child).then(() => reject(new Error(`tools/list-Handshake nach ${HANDSHAKE_MS / 1000} s ohne Antwort`)));
-      }, HANDSHAKE_MS);
-      let buf = "";
-      const senden = (o: object) => child.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
-      child.stdout.on("data", (d: Buffer) => {
-        buf += d.toString();
-        for (const zeile of buf.split("\n").slice(0, -1)) {
-          try {
-            const o = JSON.parse(zeile) as { id?: number; result?: { tools?: { name: string }[] } };
-            if (o.id === 1) {
-              senden({ method: "notifications/initialized" });
-              senden({ id: 2, method: "tools/list", params: {} });
-            }
-            if (o.id === 2) {
-              clearTimeout(timer);
-              const namen = (o.result?.tools ?? []).map((t) => t.name);
-              // Erst nach dem Prozessende auflösen: auf Windows hält der laufende Server sein cwd offen (EBUSY beim Aufräumen).
-              void beende(child).then(() => resolve(namen));
-            }
-          } catch {
-            /* unvollständige Zeile */
-          }
-        }
-        buf = buf.slice(buf.lastIndexOf("\n") + 1);
-      });
-      child.on("error", reject);
-      senden({ id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "wachter", version: "1" } } });
-    });
+  /** Startet den Launcher mit den Args aus .mcp.json, spricht initialize + tools/list und beendet ihn (Helfer: `mcp-handshake.ts`). */
+  const toolsAbfragen = (): Promise<McpTool[]> => {
+    const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
+    const args = cfg.mcpServers.playwright.args.map((a) => (a === "scripts/playwright-mcp.mjs" ? join(root, a) : a));
+    const cwd = mkdtempSync(join(tmpdir(), "kq-pwmcp-hs-"));
+    angelegt.push(cwd);
+    return mcpAbfrage(args, cwd, HANDSHAKE_MS).then((r) => r.tools);
+  };
 
-  let einmal: Promise<string[]> | null = null;
-  const toolNamenEinmal = (): Promise<string[]> => (einmal ??= toolNamen());
+  let einmal: Promise<McpTool[]> | null = null;
+  const toolsEinmal = (): Promise<McpTool[]> => (einmal ??= toolsAbfragen());
+  const toolNamenEinmal = async (): Promise<string[]> => (await toolsEinmal()).map((t) => t.name);
+
+  test("jedes Tool ohne readOnlyHint steht in permissions.ask oder ist als Browser-Interaktion bewusst bekannt", async () => {
+    const ask = (readJson(".claude/settings.json") as { permissions: { ask: string[] } }).permissions.ask;
+    assert.deepEqual(
+      schreibToolsOhneAsk(await toolsEinmal(), ask, "mcp__playwright__", BEKANNTE_INTERAKTIONEN),
+      [],
+      "Neues Schreib-Tool im Playwright-Server (Dependabot-Bump?): in ask aufnehmen oder bewusst in BEKANNTE_INTERAKTIONEN",
+    );
+  }, HANDSHAKE_MS * 2);
 
   test("der Server nennt die Tools der FAQ und jedes mcp__playwright__-Tool der Umsetzer-Whitelist", async () => {
     const namen = new Set(await toolNamenEinmal());

@@ -13,7 +13,7 @@
  * Nicht-Kopf-Factory-Item heißt „Factory in Arbeit“ und lenkt auf Produkt). Hat die gewählte Seite nichts Freies, wählt der Rückfall die andere
  * (Hinweis „Rückfall“). Die Infozeile hinter der ersten Zeile und `--json` (`quote`) nennen Seite und Zählung. Die Commits lädt der Lauf nur bei Bedarf.
  *
- * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 3 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
+ * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 5 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Label `forum`) wird übersprungen und als „Befund melden“ ausgewiesen.
  *
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
@@ -30,7 +30,7 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { FACTORY_LABEL, NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen, ungeclaimt } from "./board-lib.mjs";
 import { entscheideSeite, produktMergesSeitFactory } from "./spielquote-lib.mjs";
-import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext-lib.mjs";
+import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -220,8 +220,7 @@ const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kei
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
 function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb }) {
   if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
-  const label = c.labels.find((l) => FREMDEINGANG_LABELS.includes(l));
-  if (!istVertraut(c.autor, owner) || label) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
+  if (istFremdeingang({ user: c.autor, labels: c.labels }, owner).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
   const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
   const fenster = messfensterZeilen(c.body);

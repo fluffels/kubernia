@@ -1,10 +1,12 @@
-/* Wächter der Projekt-Config in den Workflows (#1611): ein Workflow, der `scripts/projekt-config.mjs` direkt aufruft und nur sparse
- * auscheckt, muss Config und die ganze Import-Hülle des Laders in die Sparse-Liste nehmen, sonst scheitert der Lader im Job mit
- * ERR_MODULE_NOT_FOUND. Seit #1628 rufen ci, dependabot-inbox und forum-inbox `scripts/board-place.mjs` (große Import-Hülle) und
- * checken darum das volle Repo aus: auch das bewacht dieser Test (kein Sparse-Checkout bei `board-place.mjs`).
+/* Wächter der Sparse-Checkouts in den Workflows (#1611, #1693): ein Workflow mit `sparse-checkout:` muss für jedes `node scripts/<x>.mjs`
+ * die ganze Import-Hülle von <x> in der Sparse-Liste führen (`sparseProbleme`, pur, mit Fixtures getestet), sonst scheitert der Job mit
+ * ERR_MODULE_NOT_FOUND; steht `scripts/projekt-config-lib.mjs` in der Hülle, gehört auch `.factory/projekt.json` in die Liste.
+ * Heute checkt kein Workflow sparse aus; der Wächter greift, sobald einer es tut. ci, dependabot-inbox und forum-inbox rufen
+ * `scripts/board-place.mjs` (große Import-Hülle) auf und checken darum das volle Repo aus: auch das bewacht dieser Test.
  *
  * Bewusste Grenzen: `importHuelle` erkennt nur `from "<pfad>"` in doppelten Anführungszeichen (kein `import "./x.mjs"`, kein
- * dynamisches `import()`, keine einfachen Anführungszeichen); `sparseListe` liest nur den ersten Sparse-Block je Workflow.
+ * dynamisches `import()`, keine einfachen Anführungszeichen); `sparseListe` liest nur den ersten Sparse-Block je Workflow;
+ * erkannt werden nur Aufrufe der Form `node scripts/<name>.mjs`.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  */
@@ -16,6 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const EINSTIEG = "scripts/projekt-config.mjs";
+const LIB = "scripts/projekt-config-lib.mjs";
 const lies = (pfad: string): string => readFileSync(WURZEL + pfad, "utf8");
 
 /** Import-Hülle (Repo-Pfade) eines Skripts samt Einstieg; wirft bei einem Import, der weder `node:` noch relativ ist. Pur bis auf `leser`. */
@@ -40,6 +43,20 @@ export function importHuelle(einstieg: string, leser: (pfad: string) => string):
 export function sparseListe(yml: string): string[] {
   const m = /^([ \t]*)sparse-checkout: \|\n((?:\1[ \t]+\S[^\n]*\n)+)/m.exec(yml);
   return m ? (m[2] ?? "").split("\n").map((z) => z.trim()).filter(Boolean) : [];
+}
+
+/** Fehlende Sparse-Einträge je `node scripts/<x>.mjs`-Aufruf eines Workflows mit `sparse-checkout:`; ohne Sparse-Block leer. Pur bis auf `leser`. */
+export function sparseProbleme(yml: string, leser: (pfad: string) => string): string[] {
+  if (!yml.includes("sparse-checkout:")) return [];
+  const liste = sparseListe(yml);
+  const probleme: string[] = [];
+  for (const m of yml.matchAll(/\bnode scripts\/([\w.-]+\.mjs)/g)) {
+    const skript = `scripts/${m[1] ?? ""}`;
+    const huelle = importHuelle(skript, leser);
+    const noetig = huelle.includes(LIB) ? [".factory/projekt.json", ...huelle] : huelle;
+    for (const datei of noetig) if (!liste.includes(datei)) probleme.push(`${skript}: ${datei} fehlt in sparse-checkout`);
+  }
+  return [...new Set(probleme)];
 }
 
 describe("importHuelle / sparseListe", () => {
@@ -70,20 +87,45 @@ describe("importHuelle / sparseListe", () => {
   });
 });
 
-describe("Sparse-Checkout der Projekt-Config in den Workflows", () => {
-  const huelle = importHuelle(EINSTIEG, lies);
+describe("sparseProbleme", () => {
+  const quellen: Record<string, string> = {
+    "scripts/a.mjs": 'import { l } from "./projekt-config-lib.mjs";',
+    [LIB]: "",
+    "scripts/b.mjs": 'import { x } from "node:fs";',
+  };
+  const leser = (p: string): string => quellen[p] ?? "";
+  const yml = (liste: string[], aufruf: string): string =>
+    `steps:\n  - uses: x\n    with:\n      sparse-checkout: |\n${liste.map((z) => `        ${z}\n`).join("")}  - run: ${aufruf}\n`;
+  test("vollständige Liste (Skript, Lib, Config) ohne Befund", () => {
+    assert.deepEqual(sparseProbleme(yml(["scripts/a.mjs", LIB, ".factory/projekt.json"], "node scripts/a.mjs"), leser), []);
+  });
+  test("fehlende Lib wird gemeldet", () => {
+    assert.deepEqual(sparseProbleme(yml(["scripts/a.mjs", ".factory/projekt.json"], "node scripts/a.mjs"), leser), [`scripts/a.mjs: ${LIB} fehlt in sparse-checkout`]);
+  });
+  test("fehlende Config wird gemeldet, wenn die Lib in der Hülle steht", () => {
+    assert.deepEqual(sparseProbleme(yml(["scripts/a.mjs", LIB], "node scripts/a.mjs"), leser), ["scripts/a.mjs: .factory/projekt.json fehlt in sparse-checkout"]);
+  });
+  test("ohne Lib in der Hülle ist die Config nicht nötig", () => {
+    assert.deepEqual(sparseProbleme(yml(["scripts/b.mjs"], "node scripts/b.mjs"), leser), []);
+  });
+  test("das aufgerufene Skript selbst fehlt in der Liste", () => {
+    assert.deepEqual(sparseProbleme(yml(["scripts/b.mjs"], "node scripts/a.mjs"), leser), [
+      "scripts/a.mjs: .factory/projekt.json fehlt in sparse-checkout",
+      "scripts/a.mjs: scripts/a.mjs fehlt in sparse-checkout",
+      `scripts/a.mjs: ${LIB} fehlt in sparse-checkout`,
+    ]);
+  });
+  test("Workflow ohne Sparse-Checkout wird ignoriert", () => {
+    assert.deepEqual(sparseProbleme("steps:\n  - run: node scripts/a.mjs\n", leser), []);
+  });
+});
+
+describe("Sparse-Checkout der Workflows", () => {
   test("die Hülle des Einstiegs enthält die Lib und nur Dateien des Kerns", () => {
-    assert.ok(huelle.includes("scripts/projekt-config-lib.mjs"));
+    const huelle = importHuelle(EINSTIEG, lies);
+    assert.ok(huelle.includes(LIB));
     assert.ok(huelle.length <= 3, `Hülle wächst: ${huelle.join(", ")}`);
   });
-  // Alle Workflows, die den Lader aufrufen und nur sparse auschecken (abgeleitet, nicht hart codiert).
-  const workflows = readdirSync(WURZEL + ".github/workflows")
-    .filter((n) => n.endsWith(".yml"))
-    .map((n) => n.replace(/\.yml$/, ""))
-    .filter((n) => {
-      const t = lies(`.github/workflows/${n}.yml`);
-      return t.includes("projekt-config.mjs") && t.includes("sparse-checkout:");
-    });
   test("Workflows mit board-place.mjs checken das volle Repo aus und richten Node ein (#1628)", () => {
     const nutzer = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml") && lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));
     assert.deepEqual(nutzer.sort(), ["ci.yml", "dependabot-inbox.yml", "forum-inbox.yml"]);
@@ -94,12 +136,10 @@ describe("Sparse-Checkout der Projekt-Config in den Workflows", () => {
       assert.match(yml, /actions[/]setup-node@v7/, `${n}: setup-node fehlt`);
     }
   });
-  for (const wf of workflows) {
-    const yml = lies(`.github/workflows/${wf}.yml`);
-    test(`${wf}.yml: Sparse-Liste enthält Config und die ganze Import-Hülle, Checkout bricht den Job nicht ab`, () => {
-      const liste = sparseListe(yml);
-      for (const datei of [".factory/projekt.json", ...huelle]) assert.ok(liste.includes(datei), `${wf}.yml: ${datei} fehlt in sparse-checkout`);
-      assert.match(yml, /name: Projekt-Config auschecken\n\s+continue-on-error: true\n\s+uses: actions\/checkout/);
-    });
-  }
+  test("alle echten Workflows: jede Sparse-Liste trägt die Import-Hülle ihrer Skripte", () => {
+    const namen = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml"));
+    assert.ok(namen.length > 0, "keine Workflows gefunden");
+    const probleme = namen.flatMap((n) => sparseProbleme(lies(`.github/workflows/${n}`), lies).map((p) => `${n}: ${p}`));
+    assert.deepEqual(probleme, []);
+  });
 });

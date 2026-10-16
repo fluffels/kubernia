@@ -1,5 +1,5 @@
 /* Subagent-Laufzeit (#1382): Kern pur, synthetische Transkriptzeilen ohne IO. */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -11,7 +11,7 @@ import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[]; datei?: string };
 type L = { modelle: string[]; datei: string | null; kosten: number | null; kostenGeschaetzt: number | null; ticket: number | null; sammel: boolean; dauerMin: number; toolMin: number; modellMin: number; requests: number; sProRequest: number | null; maxKontext: number; parallel: number; offen: boolean; start: string };
-type Stat = { kostenGeschaetzt: number | null; kosten: number | null; kostenSumme: number; kostenGeschaetztSumme: number; output: number; outputGeschaetzt: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
+type Stat = { kostenGeschaetzt: number | null; kosten: number | null; kostenSumme: number | null; kostenGeschaetztSumme: number | null; output: number; outputGeschaetzt: number; ohnePreis: number; n: number; dauerMin: number | null; maxDauerMin: number | null; sProRequest: number | null; parallel: number | null };
 type Erg = { laeufe: L[]; aggregat: { gesamt: Stat; ohneSammel: Stat; sammel: Stat; jeTag: (Stat & { tag: string; sammelN: number })[]; alt?: Stat; neu?: Stat; altOhneSammel?: Stat; neuOhneSammel?: Stat; offen: number } };
 const S = raw as unknown as {
   laufzeiten: (e: { laeufe: Lauf[]; agent?: string; von?: string; bis?: string; schnitt?: string; tickets?: number[]; ohne?: number[] }) => Erg;
@@ -233,9 +233,10 @@ describe("laufzeiten: Kosten (#1558)", () => {
     expect(r.aggregat.gesamt.outputGeschaetzt).toBeGreaterThanOrEqual(r.aggregat.gesamt.output);
     expect(r.aggregat.gesamt.output).toBeGreaterThan(0);
   });
-  test("Gruppe ohne bepreiste Läufe: Median null, Summe 0", () => {
+  test("Gruppe ohne bepreiste Läufe: Median und Summen null (nie 0 $)", () => {
     const g = S.laufzeiten({ laeufe: [ohnePreisLauf("Plane #1")] }).aggregat.gesamt;
-    expect(g).toMatchObject({ kosten: null, kostenSumme: 0, ohnePreis: 1 });
+    expect(g).toMatchObject({ kosten: null, kostenSumme: null, kostenGeschaetztSumme: null, ohnePreis: 1 });
+    expect(S.renderMarkdown(S.laufzeiten({ laeufe: [ohnePreisLauf("Plane #1")] }))).toContain("| - | - | - | 1 |");
   });
   test("Median und Summe je Gruppe vor und ab dem Schnitt, auch ohne Sammeltickets", () => {
     const laeufe = [lauf("#1", 0, 4), lauf("#2 (gesammelt)", 0, 4, { tool: [1, 2] }), lauf("#3", 10, 20), lauf("#4", 12, 30), lauf("#5", 12, 30, { tool: [13, 14] })];
@@ -655,5 +656,34 @@ describe("ladeAlleLaeufe: alle Typen laden (#1668)", () => {
     const r = L3.ladeAlleLaeufe(dir);
     expect(r.map((x) => x.datei).sort()).toEqual(["sess1/subagents/a.jsonl", "sess1/subagents/b.jsonl", "sess1/subagents/c.jsonl"]);
     expect(L3.ladeLaeufe(dir, "kubernia-lens")).toHaveLength(1);
+  });
+});
+
+describe("Lader: nur Dateien jünger als von (#1693)", () => {
+  const L4 = rawLaeufe as unknown as { ladeAlleLaeufe: (dir: string, von?: string) => { datei: string }[]; ladeLaeufe: (dir: string, agent: string, von?: string) => { datei: string }[] };
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const fixture = () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-von-"));
+    dirs.push(dir);
+    const sub = join(dir, "sess1", "subagents");
+    mkdirSync(sub, { recursive: true });
+    for (const n of ["alt", "neu"]) {
+      writeFileSync(join(sub, `${n}.meta.json`), JSON.stringify({ agentType: "kubernia-lens" }));
+      writeFileSync(join(sub, `${n}.jsonl`), JSON.stringify(user(0, "Lens #1")) + "\n");
+    }
+    const alt = new Date("2026-01-01T00:00:00Z");
+    utimesSync(join(sub, "alt.jsonl"), alt, alt);
+    return dir;
+  };
+  test("ladeAlleLaeufe und ladeLaeufe schließen die ältere Datei aus, ohne von laden beide", () => {
+    const dir = fixture();
+    const von = "2026-06-01T00:00:00Z";
+    expect(L4.ladeAlleLaeufe(dir, von).map((x) => x.datei)).toEqual(["sess1/subagents/neu.jsonl"]);
+    expect(L4.ladeLaeufe(dir, "kubernia-lens", von).map((x) => x.datei)).toEqual(["sess1/subagents/neu.jsonl"]);
+    expect(L4.ladeAlleLaeufe(dir)).toHaveLength(2);
+    expect(L4.ladeLaeufe(dir, "kubernia-lens")).toHaveLength(2);
   });
 });

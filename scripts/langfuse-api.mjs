@@ -1,8 +1,9 @@
 // Kein Shebang: wird von Messskripten und Tests importiert.
 /**
- * Langfuse-REST-Zugriff (#1562, ausgelagert aus `token-baseline.mjs`). Nur Builtins und globales `fetch`:
+ * Langfuse-REST-Zugriff (#1562, ausgelagert aus `token-baseline.mjs`). Nur Builtins, `langfuse-zugang.mjs` und globales `fetch`:
  * der Abgleich läuft später als Hook, die gh-/git-Kette von `token-baseline.mjs` darf nicht mitkommen.
  */
+import { langfuseBasisUrl } from "./langfuse-zugang.mjs";
 
 /** Frist je Anfrage (das Signal gilt auch für das Lesen des Antworttexts; die lesbare Meldung gibt es nur für den Fetch selbst): danach bricht der Aufruf ab, damit kein Lauf länger hängt als sein Lock. */
 export const ANFRAGE_FRIST_MS = 30_000;
@@ -120,5 +121,5 @@ export async function sendeScore(score, { baseUrl, publicKey, secretKey, fetchIm
 export function langfuseZugang(env, meldung = "LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen.") {
   const { LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey } = env;
   if (!publicKey || !secretKey) throw new Error(meldung);
-  return { baseUrl: env.LANGFUSE_BASE_URL ?? "http://localhost:3000", publicKey, secretKey };
+  return { baseUrl: langfuseBasisUrl(env), publicKey, secretKey };
 }

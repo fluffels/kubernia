@@ -8,6 +8,7 @@
  *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # vor Spawn und vor Übernahme eines Worktrees
  *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup
  *   node scripts/ticket-lock.mjs uebergeben <nr> --nonce <x>     # Phasen-Schnitt (#1592): letzte Aktion des Vorgängers vor `ERGEBNIS: uebergabe`
+ *   node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>       # nach `TaskStop` des eigenen Umsetzers (#1693): das nächste `pruefe --nonce` meldet `uebernehmbar`
  *
  * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `freigeben`, `uebergeben`: erledigt), 4 = nicht anfassen (belegt, fremd,
  * aktiv), 2 = falscher Aufruf oder Fehler.
@@ -68,11 +69,11 @@ export function letzteAktivitaet({ commitMs = [], reflogMs = [], dateiMs = [], n
  * Ergebnis von `pruefe`. `lock`: Inhalt der Lock-Datei oder null; `nonce`: Argument oder null; `vorhanden`: Worktree oder Branch
  * existiert; `aktivitaet`: ms oder null; `uebergabeOffen`: der Lock trägt eine unverbrauchte Übergabe (#1592, zählt nur mit eigener Nonce, unabhängig von der Aktivität). Ohne Nonce gilt ein Lock jünger als `VERWAIST_MS` als `fremd` (#1625), sonst zählt nur die Aktivität; null (nichts feststellbar) ist fail-closed `aktiv`. Pur.
  */
-export function entscheidePruefung({ lock, nonce, vorhanden, aktivitaet, jetzt, inaktivMs = INAKTIV_MS, uebergabeOffen = false }) {
+export function entscheidePruefung({ lock, nonce, vorhanden, aktivitaet, jetzt, inaktivMs = INAKTIV_MS, uebergabeOffen = false, gestopptOffen = false }) {
   if (nonce && !gehoertZu(lock, nonce)) return "fremd";
   if (!nonce && lock && entscheideClaim({ erstellt: Date.parse(lock.erstellt), jetzt }) === "fremd") return "fremd";
   if (!vorhanden) return "frei";
-  if (nonce && uebergabeOffen) return "uebernehmbar";
+  if (nonce && (uebergabeOffen || gestopptOffen)) return "uebernehmbar";
   if (aktivitaet === null || jetzt - aktivitaet < inaktivMs) return "aktiv";
   return "uebernehmbar";
 }
@@ -208,10 +209,20 @@ function pruefe(deps, nr, nonce) {
   const b = ermittleBelegung(deps, nr);
   const aktivitaet = b.belegt ? letzteAktivitaet(sammleAktivitaet(deps, b)) : null;
   const uebergabeOffen = Boolean(lock?.uebergabe && !lock.uebergabe.verbraucht);
-  const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt(), uebergabeOffen });
+  const gestopptOffen = Boolean(lock?.gestoppt && !lock.gestoppt.verbraucht);
+  const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt(), uebergabeOffen, gestopptOffen });
   if (urteil === "fremd") return ergebnis(4, urteil, `✖ ticket-lock: der Lock zu #${nr} gehört nicht zu dieser Nonce (fremd, fehlt oder ohne Nonce noch keine 2 h alt): nicht anfassen, Befund melden. ${NICHT_VON_HAND}`);
   if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen. ${NICHT_VON_HAND}`);
-  if (urteil === "uebernehmbar" && uebergabeOffen && nonce) schreibeLock(deps, nr, { ...lock, uebergabe: { ...lock.uebergabe, verbraucht: new Date(deps.jetzt()).toISOString() } });
+  const verbraucht = new Date(deps.jetzt()).toISOString();
+  const frischeUebergabe = urteil === "uebernehmbar" && uebergabeOffen && nonce;
+  const frischeStopp = (urteil === "uebernehmbar" || urteil === "frei") && gestopptOffen && nonce;
+  if (frischeUebergabe || frischeStopp) {
+    schreibeLock(deps, nr, {
+      ...lock,
+      ...(frischeUebergabe ? { uebergabe: { ...lock.uebergabe, verbraucht } } : {}),
+      ...(frischeStopp ? { gestoppt: { ...lock.gestoppt, verbraucht } } : {}),
+    });
+  }
   return ergebnis(0, urteil);
 }
 
@@ -222,6 +233,15 @@ function uebergeben(deps, nr, nonce) {
   if (lock.uebergabe) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gab es schon eine Übergabe (eine je Lock), kein zweiter Schnitt. ${NICHT_VON_HAND}`);
   schreibeLock(deps, nr, { ...lock, uebergabe: { gesetzt: new Date(deps.jetzt()).toISOString(), verbraucht: null } });
   return ergebnis(0, "uebergeben");
+}
+
+/** Stopp-Vermerk (#1693): der Hauptchat hat den eigenen Umsetzer per `TaskStop` beendet. Das nächste `pruefe --nonce` meldet `uebernehmbar` statt `aktiv` und verbraucht den Vermerk.
+ *  Kein Phasen-Schnitt: das Feld `uebergabe` bleibt unberührt, "eine Übergabe je Lock" gilt weiter. Jeder TaskStop darf einen neuen Vermerk setzen; fremde Nonce oder fehlender Lock → Exit 4. */
+function gestoppt(deps, nr, nonce) {
+  const lock = liesLock(deps, nr);
+  if (!gehoertZu(lock, nonce)) return ergebnis(4, "", `✖ ticket-lock: der Lock zu #${nr} fehlt oder gehört einer anderen Session, kein Stopp vermerkt. ${NICHT_VON_HAND}`);
+  schreibeLock(deps, nr, { ...lock, gestoppt: { gesetzt: new Date(deps.jetzt()).toISOString(), verbraucht: null } });
+  return ergebnis(0, "gestoppt");
 }
 
 /** Schreibt eine bestehende Lock-Datei neu (nur für den eigenen Lock). */
@@ -242,14 +262,15 @@ export function fuehreAus(argv, deps) {
   const [befehl, nrText, ...rest] = argv;
   const nonce = nonceAus(argv);
   const nr = NUMMER.test(nrText ?? "") ? Number(nrText) : null;
-  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x>");
-  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben"].includes(befehl)) return usage;
-  if ((befehl === "freigeben" || befehl === "uebergeben") && !nonce) return usage;
+  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x>");
+  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben", "gestoppt"].includes(befehl)) return usage;
+  if ((befehl === "freigeben" || befehl === "uebergeben" || befehl === "gestoppt") && !nonce) return usage;
   if (nonce === "" || (befehl === "claim" && rest.length > 0)) return usage;
   try {
     if (befehl === "claim") return claim(deps, nr);
     if (befehl === "pruefe") return pruefe(deps, nr, nonce);
     if (befehl === "uebergeben") return uebergeben(deps, nr, nonce);
+    if (befehl === "gestoppt") return gestoppt(deps, nr, nonce);
     return freigeben(deps, nr, nonce);
   } catch (e) {
     return ergebnis(2, "", `✖ ticket-lock: ${e instanceof Error ? e.message : String(e)}`);

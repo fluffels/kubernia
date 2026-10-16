@@ -4,6 +4,8 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
+ * Scope: eine Positivliste (`istSelbstbeschreibung`); die Wurzel-LICENSE gehört nicht dazu, sie ist keine Harness-Fläche.
+ *
  * Grenzen: nicht erkannt werden Kürzel und Umschreibungen (OSS, FOSS, freie Software), doppelte Verneinung und eine
  * Verneinung weiter als drei Wörter vor dem Treffer; Fragesätze („Ist der Harness Open Source?“) zählen als Treffer. */
 import { describe, test } from "vitest";
@@ -18,6 +20,8 @@ export interface Behauptung {
 const BEHAUPTUNG = /open[\s-]?source|quelloffen/gi;
 const NEGATION = /^(nicht|kein(e|en|er|es|em)?|not|no|non)$/i;
 const SATZ_ENDE = /[.!?;]\s/g;
+/** Das Spiel-Muster der Lizenz-Entwürfe: „Spiel“ am Wortanfang, nicht „Beispiel“. */
+const SPIEL_MUSTER = /\bspiel/i;
 
 /** Alle Stellen, die den Text als Open Source beschreiben, ohne dass eine Verneinung (≤ 3 Wörter davor, gleicher Satz) davorsteht. */
 export function offeneQuelleBehauptungen(text: string): Behauptung[] {
@@ -40,7 +44,6 @@ export function istSelbstbeschreibung(pfad: string): boolean {
   return [
     /^\.factory\/produkt\//,
     /^README\.md$/,
-    /^LICENSE$/,
     /^package\.json$/,
     /^docs\/(agent-harness|harness-)[^/]*\.md$/,
     /^\.claude\/agents\/[^/]+\.md$/,
@@ -87,6 +90,8 @@ describe("offeneQuelleBehauptungen", () => {
     "Er ist nicht ganz Open Source.",
     "Das ist keine wirklich echte Open-Source-Lizenz.",
     "Er hat keinem Open-Source-Code zugestimmt.",
+    "Es gibt keiner Open-Source-Lizenz Raum.",
+    "Das Projekt kennt keines Open-Source-Modells.",
     "",
   ])("erlaubt: %j", (text) => {
     assert.deepEqual(offeneQuelleBehauptungen(text), []);
@@ -97,7 +102,6 @@ describe("istSelbstbeschreibung", () => {
   test.each([
     ".factory/produkt/README.md",
     "README.md",
-    "LICENSE",
     "package.json",
     "docs/agent-harness.md",
     "docs/agent-harness-faq.md",
@@ -115,6 +119,17 @@ describe("istSelbstbeschreibung", () => {
     "src/main.ts",
     "docs/glossar.md",
     "docs/module/app.md",
+    "LICENSE",
+    "docs/sub/agent-harness.md",
+    "docs/harness/x.md",
+    "docs/agent-harness.md.bak",
+    "sub/README.md",
+    "README.md.orig",
+    ".claude/agents/sub/x.md",
+    ".claude/skills/y/z/SKILL.md",
+    ".claude/skills/y/other.md",
+    "package.json.bak",
+    ".factory/produkt",
   ])("außerhalb: %s", (pfad) => {
     assert.equal(istSelbstbeschreibung(pfad), false);
   });
@@ -140,7 +155,7 @@ describe("Produkt-Entwürfe (#1714)", () => {
 
   test("Lizenz-Entwurf: Alle Rechte vorbehalten, ohne Spiel- oder Projektbezug", () => {
     assert.match(lizenz(), /Alle Rechte vorbehalten/);
-    assert.doesNotMatch(lizenz(), /\bspiel/i);
+    assert.doesNotMatch(lizenz(), SPIEL_MUSTER);
     assert.doesNotMatch(lizenz(), /kubernia|kubequest/i);
   });
 
@@ -151,8 +166,8 @@ describe("Produkt-Entwürfe (#1714)", () => {
   });
 
   test("Namens-Grenzfall: „Beispiel“ trifft das Spiel-Muster nicht", () => {
-    assert.doesNotMatch("zum Beispiel", /\bspiel/i);
-    assert.match("das Spiel", /\bspiel/i);
+    assert.doesNotMatch("zum Beispiel", SPIEL_MUSTER);
+    assert.match("das Spiel", SPIEL_MUSTER);
   });
 
   test("README-Entwurf und Wurzel-README nennen den Harness source-available", () => {

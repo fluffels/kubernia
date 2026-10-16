@@ -251,6 +251,40 @@ describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem F
   });
 });
 
+describe("Widerruf eines Overrides: `<key>: #<nr> entfällt` (#1693 L47)", () => {
+  const so2 = raw as unknown as {
+    sliceOverride: (runGit: (a: string[]) => string, base: string, key: string) => { reason: string | null; invalid: string[] };
+  };
+  const KEY = "KQ-Diffsize-Override";
+  const mit = (...nachrichten: string[]) => so2.sliceOverride(() => nachrichten.join("\n\n"), "base", KEY);
+
+  it("ohne Widerruf zählt der Override (Gegenprobe)", () => {
+    expect(mit(`${KEY}: #5 breit gewollt`).reason).toBe("#5 breit gewollt");
+  });
+  it("ein späterer Widerruf hebt den Override auf: kein Grund, nicht ungültig", () => {
+    const r = mit(`${KEY}: #5 breit gewollt`, "fix", `${KEY}: #5 entfällt`);
+    expect(r.reason).toBeNull();
+    expect(r.invalid).toEqual([]);
+  });
+  it("die jüngste Zeile gilt: Override nach dem Widerruf gilt wieder", () => {
+    expect(mit(`${KEY}: #5 a`, `${KEY}: #5 entfällt`, `${KEY}: #5 doch nötig`).reason).toBe("#5 doch nötig");
+  });
+  it("ein Widerruf vor dem Override gilt nicht (der Override ist jünger)", () => {
+    expect(mit(`${KEY}: #5 entfällt`, `${KEY}: #5 echt`).reason).toBe("#5 echt");
+  });
+  it("nur das exakte Wort `entfällt` widerruft: ein Grund, der damit beginnt, bleibt ein Override", () => {
+    expect(mit(`${KEY}: #5 a`, `${KEY}: #5 entfällt nicht, weil Merge`).reason).toBe("#5 entfällt nicht, weil Merge");
+  });
+  it("ein Widerruf ohne Override im Slice bleibt folgenlos", () => {
+    expect(mit(`${KEY}: #5 entfällt`).reason).toBeNull();
+  });
+  it("der Hinweis der stale-Meldung nennt den Widerruf statt Historien-Umschreiben", () => {
+    const t = so.staleOverrideHinweis(KEY, "der Diff liegt im Budget");
+    expect(t).toContain(`${KEY}: #<nr> entfällt`);
+    expect(t).not.toContain("umzuschreiben");
+  });
+});
+
 describe("Gates ohne Projekt-Config (#1741): kein Standardwert, Exit 1 mit der Meldung des Laders", { timeout: 60_000 }, () => {
   it.each(["check-diffsize.mjs", "check-diffcoverage.mjs", "check-lockfile.mjs"])("%s", (skript) => {
     const dir = mkdtempSync(join(tmpdir(), "kq-gate-ohne-config-"));

@@ -19,6 +19,7 @@
   "scripts/forum-quarantaene.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
   "scripts/forum-leser-guard.mjs": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
   ".claude/agents/forum-leser.md": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
+  "scripts/ghsa-lib.mjs": {"art":"modul","grund":"Sicherheits-Modul (GHSA-Bausteine), kein Factory-Kern"},
   "scripts/audit-einordnung.mjs": {"art":"modul","grund":"Sicherheits-Modul (Audit-Einordnung), kein Factory-Kern"},
   ".github/workflows/audit-einordnung.yml": {"art":"modul","grund":"Sicherheits-Modul (Audit-Einordnung), kein Factory-Kern"},
   "scripts/mermaid-vorschau.mjs": {"art":"modul","grund":"Doku-Modul (Mermaid-Vorschau), kein Factory-Kern"},
