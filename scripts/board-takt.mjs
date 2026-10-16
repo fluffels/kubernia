@@ -258,7 +258,7 @@ export function nimmFehlendeAuf({ offene, items, token, dry = false, repo = REPO
 }
 
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
-const ECHTE_IO = {
+export const ECHTE_IO = {
   ghJson,
   itemsUeberIssues: (nummern, opts) => itemsUeberIssues(PRODUKT_BOARD, nummern, opts),
   addToBoardTodo: (nodeId, opts) => addToBoardTodo(PRODUKT_BOARD, nodeId, opts),
