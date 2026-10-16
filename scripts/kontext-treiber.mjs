@@ -22,6 +22,7 @@
  * grep und andere Lesewege zählen nicht), Kosten ab Phase X (Σ der Calls ab X in `PHASEN`-Reihenfolge). Grenzen: der Startzustand verify zählt Edits vor
  * dem ersten Lens-Spawn zu verify (konservativ gegen den Schnitt); Mehrkosten des Hauptchats für den zweiten Prompt sind nicht gemessen.
  * Offene Läufe (Tool-Aufruf ohne Ergebnis am Ende, #1646) zählen nur als `offen` und stehen in der Tabelle „Läufe"; in keinem Median, keiner Summe.
+ * Ohne `--je-ticket` gelten die Mediane je Lauf: der Kopf jeder Gruppe nennt die Zahl der Tickets (`Tickets`), und hat ein Ticket mehrere Läufe, steht eine Warnzeile (`mehrlaufHinweis`, #1646).
  * Im `--je-ticket`-Modus lädt das CLI 48 h vor `--von` (`VORLAUF_MS`), damit der Vorgänger eines Nachfolgers im Fenster dabei ist.
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laeufe; wird selbst nicht importiert.
  */

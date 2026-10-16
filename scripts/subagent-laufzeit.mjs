@@ -12,6 +12,8 @@
  * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Für Lens-Läufe (#1582) zusätzlich: Beschreibung, `brille`, `runde`, `deltaArt` (`null` ohne Delta-Patch-Pfad im Prompt (gelabelt oder `kq-<nr>-r<n>-delta.patch`), `merge`, `fix`), `promptZeichen`, `ersterCall` und `patch` (Zugriffe auf den vollen und den Delta-Patch, siehe patch-zugriff.mjs). Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
+ * Je Gruppe nennt die Spalte `Tickets` die verschiedenen Tickets; hat ein Ticket mehrere Läufe, steht unter der Tabelle eine Warnzeile (Mediane je Lauf, nicht je Ticket; #1646).
+ *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
  */
 import { pathToFileURL } from "node:url";
