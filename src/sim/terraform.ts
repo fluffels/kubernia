@@ -30,7 +30,7 @@
  */
 import type { ClusterState } from "./state";
 import { provisionNode, removeNode, isControlPlane, workerNodeName, CONTROL_PLANE_NODE } from "./nodes";
-import { flag, notSimulated, dispatchSub, type Dispatch, type Call, type FlagStyle, type SubEntry } from "./cliargs";
+import { flag, dispatchSub, type Dispatch, type Call, type FlagStyle, type SubEntry } from "./cliargs";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -235,10 +235,7 @@ function tfDestroy(host: TerraformHost, c: Call): string {
 }
 
 /** `terraform state list` – Adressen im (ggf. remote liegenden) State. */
-function tfState(host: TerraformHost, c: Call): string {
-  const action = c.args[0];
-  if (!action) return host._err("terraform state: Unterbefehl fehlt.", "z.B. 'terraform state list'.");
-  if (action !== "list") return notSimulated(host, "'terraform state " + action + "'.", ["terraform state list"]);
+function tfStateList(host: TerraformHost): string {
   if (!host.tf.applied) return host._err("Noch nichts im State.", "Der State füllt sich erst nach 'terraform apply'.");
   // Liest aus dem (ggf. remote liegenden) State – die Adressen sind dieselben,
   // egal ob lokal oder im „Flotten-Lager". Die Quelle entscheidet der backend-Block.
@@ -286,19 +283,26 @@ const OUTPUT_HINT = "Der benannte Output ('terraform output <name>') kommt im Si
 /** Familien-Stil: terraform liest wie das Go-Paket `flag` (`-x=v`, `--x` ≙ `-x`); gilt für JEDEN Eintrag. */
 const STYLE: FlagStyle = "goflag";
 
+/** `terraform state`: eine Gruppe (Stil vom Elternkopf geerbt), simuliert ist nur `list`. */
+const TF_STATE: Dispatch<SubEntry<TerraformHandler>> = {
+  cmd: "terraform state",
+  table: { list: { run: tfStateList, maxArgs: 0 } },
+  real: ["mv", "pull", "push", "replace-provider", "rm", "show"],
+};
+
 /** Die Dispatch-Tabelle (terraform nutzt Go-`flag`-Schreibweise). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
 const TERRAFORM: Dispatch<SubEntry<TerraformHandler>> = { cmd: "terraform", style: STYLE, table: {
-  get: { run: tfGet },
-  init: { run: tfInit },
-  plan: { run: tfPlan, flags: [VAR_FILE] },
-  apply: { run: tfApply, flags: [VAR_FILE, AUTO_APPROVE] },
-  destroy: { run: tfDestroy, flags: [VAR_FILE, AUTO_APPROVE] },
-  state: { run: tfState },
-  output: { run: tfOutput, hints: { "-raw": OUTPUT_HINT, "-json": OUTPUT_HINT } },
-  "force-unlock": { run: tfForceUnlock, flags: [flag(false, "-force")] },
-  fmt: { run: () => "main.tf" },
-  validate: { run: () => "Success! The configuration is valid." },
+  get: { run: tfGet, maxArgs: 0 },
+  init: { run: tfInit, maxArgs: 0 },
+  plan: { run: tfPlan, maxArgs: 0, flags: [VAR_FILE] },
+  apply: { run: tfApply, maxArgs: 0, flags: [VAR_FILE, AUTO_APPROVE] },
+  destroy: { run: tfDestroy, maxArgs: 0, flags: [VAR_FILE, AUTO_APPROVE] },
+  state: { group: TF_STATE },
+  output: { run: tfOutput, maxArgs: 1, hints: { "-raw": OUTPUT_HINT, "-json": OUTPUT_HINT } },
+  "force-unlock": { run: tfForceUnlock, maxArgs: 1, flags: [flag(false, "-force")] },
+  fmt: { run: () => "main.tf", maxArgs: 0 },
+  validate: { run: () => "Success! The configuration is valid.", maxArgs: 0 },
 },
   real: ["console", "graph", "import", "login", "logout", "metadata", "modules", "providers", "refresh", "show", "taint", "test", "untaint", "version", "workspace"],
 };

@@ -7,7 +7,7 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkedFlag, parseCall, shellTokens, subEntry, notSimulated, dispatchSub, kannOf, type ArgSpec, type Dispatch, type FlagStyle, type SubEntry,
+  flag, checkedFlag, parseCall, shellTokens, subEntry, notSimulated, dispatchSub, kannOf, OFFENE_LISTE, type ArgSpec, type Dispatch, type FlagStyle, type SubEntry,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
@@ -27,20 +27,20 @@ function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): stri
 
 /** Der Wert eines Flags über `parseCall` (die EINE Stelle, an der Flags gelesen werden); `null` ohne das Flag oder ohne Wert. */
 function valueOf(t: string[], names: string[], style: FlagStyle = "pflag"): string | null {
-  const r = parseCall(host, { cmd: "x", style, flags: [flag(true, ...names)] }, t, 1);
+  const r = parseCall(host, { cmd: "x", maxArgs: OFFENE_LISTE, style, flags: [flag(true, ...names)] }, t, 1);
   return typeof r === "string" ? null : r.value(...names);
 }
 
 const PF: ArgSpec = {
-  cmd: "x run", flags: [flag(true, "-n", "--namespace"), flag(false, "-a", "--all"), flag(false, "-d", "--detach")],
+  cmd: "x run", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n", "--namespace"), flag(false, "-a", "--all"), flag(false, "-d", "--detach")],
   hints: { "-o": "Format gibt es nicht." },
 };
-const GO: ArgSpec = { cmd: "tf apply", style: "goflag", flags: [flag(true, "-var-file"), flag(false, "-auto-approve")] };
+const GO: ArgSpec = { cmd: "tf apply", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-var-file"), flag(false, "-auto-approve")] };
 
 describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
   const seen: string[] = [];
   const spec: ArgSpec = {
-    cmd: "x get",
+    cmd: "x get", maxArgs: OFFENE_LISTE,
     flags: [checkedFlag((_h, v) => { seen.push(v); return v === "bad" ? "FEHLER" : null; }, "-o", "--output"), flag(false, "-A")],
   };
   const run = (...t: string[]) => { seen.length = 0; return checkFlags(host, spec, ["x", "get", ...t], 2); };
@@ -68,7 +68,7 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
     expect(run("-o", "bad")).toBe("FEHLER");
   });
   test("ein Wert-Flag OHNE Prüfung bleibt in der Kette erlaubt (-An x)", () => {
-    const s: ArgSpec = { cmd: "x", flags: [flag(true, "-n"), flag(false, "-A")] };
+    const s: ArgSpec = { cmd: "x", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n"), flag(false, "-A")] };
     expect(checkFlags(host, s, ["x", "get", "-An", "a"], 2)).toBeNull();
   });
   test("ohne das Flag kein Aufruf; ein fehlender Wert bleibt 'flag needs an argument' ohne Aufruf", () => {
@@ -110,7 +110,7 @@ describe("cliargs: pflag-Stil", () => {
     expect(checkFlags(host, PF, ["x", "run", "-h"], 2)).toContain("'help x'");
   });
   test("leere Tabelle: 'ohne Flags'", () => {
-    expect(checkFlags(host, { cmd: "x list", flags: [] }, ["x", "list", "-q"], 2)).toContain("Der Simulator kann: 'x list' ohne Flags");
+    expect(checkFlags(host, { cmd: "x list", maxArgs: OFFENE_LISTE, flags: [] }, ["x", "list", "-q"], 2)).toContain("Der Simulator kann: 'x list' ohne Flags");
   });
   test("Flags vor `from` werden nicht geprüft", () => {
     expect(checkFlags(host, PF, ["x", "-q", "run"], 3)).toBeNull();
@@ -173,7 +173,7 @@ describe("cliargs: Flag-Werte über parseCall und Helfer", () => {
     expect(subEntry({ a: 1 }, "toString")).toBeUndefined();
   });
   test("dispatchSub: Eintrag ohne Flags lehnt jedes Flag ab", () => {
-    const d: Dispatch<SubEntry<string>> = { cmd: "x", table: { y: { run: "" } } };
+    const d: Dispatch<SubEntry<string>> = { cmd: "x", table: { y: { run: "", maxArgs: OFFENE_LISTE } } };
     expect(dispatchSub(host, d, ["x", "y", "-q"], 1)).toContain("'x y' ohne Flags");
   });
 });
@@ -373,7 +373,7 @@ const call = (spec: ArgSpec, ...t: string[]) => {
   if (typeof c === "string") throw new Error(c);
   return c;
 };
-const FOLLOW: ArgSpec = { cmd: "x logs", flags: [flag(true, "-n", "--namespace"), flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] };
+const FOLLOW: ArgSpec = { cmd: "x logs", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n", "--namespace"), flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] };
 
 describe("parseCall: Scanner", () => {
   test("`--` beendet die Flags: alles danach ist positional, auch ein -x", () => {
@@ -406,7 +406,7 @@ describe("parseCall: Scanner", () => {
     expect(call(FOLLOW).values("-n")).toEqual([]);
   });
   test("list (#1487): pflag-StringSlice – Komma-Split je Angabe, leerer Wert ergibt nichts, `a,,b` behält das leere Feld", () => {
-    const SL: ArgSpec = { cmd: "x c", flags: [flag(true, "--verb", "-v"), flag(true, "--user")] };
+    const SL: ArgSpec = { cmd: "x c", maxArgs: OFFENE_LISTE, flags: [flag(true, "--verb", "-v"), flag(true, "--user")] };
     expect(call(SL, "--verb=get,list", "--verb", "watch", "-v", "x").list("--verb", "-v")).toEqual(["get", "list", "watch", "x"]);
     expect(call(SL, "--verb=").list("--verb")).toEqual([]);
     expect(call(SL, "--verb=a,,b").list("--verb")).toEqual(["a", "", "b"]);
@@ -422,7 +422,7 @@ describe("parseCall: Scanner", () => {
     expect(checkFlags(host, FOLLOW, ["x", "logs", "-f=zwei"], 2)).toContain('invalid argument "zwei"');
   });
   test("goflag: `--` und -x=false", () => {
-    const tf: ArgSpec = { cmd: "tf x", style: "goflag", flags: [flag(false, "-force"), flag(true, "-var-file")] };
+    const tf: ArgSpec = { cmd: "tf x", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(false, "-force"), flag(true, "-var-file")] };
     const c = parseCall(host, tf, ["tf", "x", "-force=false", "-var-file", "a", "--", "-b"], 2) as ReturnType<typeof call>;
     expect(c.has("-force")).toBe(false);
     expect(c.value("-var-file")).toBe("a");
@@ -521,7 +521,8 @@ describe("Positionsargumente stehen hinter `--` (kein Handler liest feste Token-
     s.exec("terraform init");
     s.exec("terraform apply");
     expect(s.exec("terraform output -- n").output).toBe("v");
-    expect(s.exec("terraform state -- list").output).not.toContain(NS);
+    // hinter `--` zählt ein Argument mit: `state list -- x` hat ein überzähliges Argument (list nimmt keins)
+    expect(s.exec("terraform state list -- x").output).toContain("das weitere Argument 'x' bei 'terraform state list'");
   });
 });
 
@@ -580,7 +581,8 @@ describe("helm --set: Flag-Leser statt Regex auf der Rohzeile", () => {
 
 describe("terraform: goflag ist der Familien-Default, destroy nimmt -var-file", () => {
   test.each(["get", "init", "plan", "apply", "destroy", "state", "output", "force-unlock", "fmt", "validate"])("%s --bogus meldet '-bogus'", (sub) => {
-    expect(lauf("terraform " + sub + " --bogus").out).toContain("das Flag '-bogus' bei 'terraform " + sub + "'");
+    const voll = sub === "state" ? "state list" : sub; // `state` ist eine Gruppe, das Blatt heißt `state list`
+    expect(lauf("terraform " + voll + " --bogus").out).toContain("das Flag '-bogus' bei 'terraform " + voll + "'");
   });
   test("destroy -var-file: vorhandene Datei ok, fehlende ein Fehler", () => {
     const s = new KQSim({ files: { "prod.tfvars": "x = 1" }, tfResources: [{ addr: "local_file.n", desc: "x" }] });
@@ -703,11 +705,11 @@ describe("Inventur: jede Lösung aus Karten, Quests und Drills läuft ohne 'Nich
 
 /* ---------- dispatchSub: der EINE Familien-Kopf (#1489) ---------- */
 describe("dispatchSub: reiner Helfer", () => {
-  const LIST: SubEntry<string> = { run: "list", flags: [flag(true, "-n")] };
-  const inner: Dispatch<SubEntry<string>> = { cmd: "x grp", table: { mb: { run: "mb" }, rb: { run: "rb" } }, real: ["sync"] };
+  const LIST: SubEntry<string> = { run: "list", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n")] };
+  const inner: Dispatch<SubEntry<string>> = { cmd: "x grp", table: { mb: { run: "mb", maxArgs: OFFENE_LISTE }, rb: { run: "rb", maxArgs: OFFENE_LISTE } }, real: ["sync"] };
   const d: Dispatch<SubEntry<string>> = {
     cmd: "x",
-    table: { list: LIST, ls: LIST, get: { run: "get" }, grp: { group: inner } },
+    table: { list: LIST, ls: LIST, get: { run: "get", maxArgs: OFFENE_LISTE }, grp: { group: inner } },
     real: ["exec"],
     hints: { "-q": "Familien-Hinweis." },
   };
@@ -772,13 +774,13 @@ describe("dispatchSub: reiner Helfer", () => {
   });
   test("Flags des Eintrags werden geprüft; Familien-Hinweise gelten, ein Eintrag überschreibt sie", () => {
     expect(lauf2("list", "-q")).toContain("Familien-Hinweis.");
-    const own = dispatchSub(host, { ...d, table: { list: { run: "l", hints: { "-q": "Eigener Hinweis." } } } }, ["x", "list", "-q"], 1) as string;
+    const own = dispatchSub(host, { ...d, table: { list: { run: "l", maxArgs: OFFENE_LISTE, hints: { "-q": "Eigener Hinweis." } } } }, ["x", "list", "-q"], 1) as string;
     expect(own).toContain("Eigener Hinweis.");
     expect(own).not.toContain("Familien-Hinweis.");
     expect(lauf2("get", "-q")).toContain("'x get' ohne Flags");
   });
   test("Familien-Stil gilt je Eintrag, der Eintrag überschreibt ihn", () => {
-    const tf: Dispatch<SubEntry<string>> = { cmd: "t", style: "goflag", table: { a: { run: "", flags: [flag(true, "-var-file")] }, b: { run: "", style: "pflag", flags: [flag(true, "--x")] } } };
+    const tf: Dispatch<SubEntry<string>> = { cmd: "t", style: "goflag", table: { a: { run: "", maxArgs: OFFENE_LISTE, flags: [flag(true, "-var-file")] }, b: { run: "", maxArgs: OFFENE_LISTE, style: "pflag", flags: [flag(true, "--x")] } } };
     const a = dispatchSub(host, tf, ["t", "a", "--var-file=f"], 1);
     expect(typeof a === "string" ? a : a.call.value("-var-file")).toBe("f");
     const b = dispatchSub(host, tf, ["t", "b", "--x=1"], 1);
@@ -847,5 +849,87 @@ describe("Familien-Köpfe: Flag davor, Tippfehler, echter nicht simulierter Unte
   });
   test("kubeadm unterscheidet Groß- und Kleinschreibung (wie cobra)", () => {
     expect(lauf("kubeadm INIT").out).toContain("unbekannter Unterbefehl 'INIT'");
+  });
+});
+
+/* ---------- maxArgs und dashAt (#1490) ---------- */
+describe("parseCall: maxArgs (zentrale Arität) und dashAt", () => {
+  const mit = (maxArgs: number, extra: Partial<ArgSpec> = {}): ArgSpec => ({ cmd: "x go", flags: [flag(false, "-a")], maxArgs, ...extra });
+
+  test("maxArgs 0: kein Argument ok, eines abgelehnt mit Muster 'ohne Argumente'", () => {
+    expect(parseCall(host, mit(0), ["x", "go"], 2)).not.toBeTypeOf("string");
+    const r = parseCall(host, mit(0), ["x", "go", "b"], 2) as string;
+    expect(r).toContain("Nicht simuliert: das weitere Argument 'b' bei 'x go'.");
+    expect(r).toContain("Der Simulator kann: 'x go' ohne Argumente");
+  });
+  test("maxArgs 1: genau eins ok, das zweite wird als erstes überzähliges genannt; Muster im Singular", () => {
+    expect(parseCall(host, mit(1), ["x", "go", "a"], 2)).not.toBeTypeOf("string");
+    const r = parseCall(host, mit(1), ["x", "go", "a", "b", "c"], 2) as string;
+    expect(r).toContain("das weitere Argument 'b' bei 'x go'");
+    expect(r).toContain("'x go' mit höchstens 1 Argument");
+    expect(r).not.toContain("Argumenten");
+  });
+  test("maxArgs 2: Muster im Plural; Infinity lehnt nie ab", () => {
+    expect(parseCall(host, mit(2), ["x", "go", "a", "b", "c"], 2) as string).toContain("'x go' mit höchstens 2 Argumenten");
+    expect(parseCall(host, mit(Infinity), ["x", "go", ...Array.from({ length: 50 }, (_, i) => "a" + i)], 2)).not.toBeTypeOf("string");
+  });
+  test("Argumente hinter `--` zählen mit", () => {
+    expect(parseCall(host, mit(1), ["x", "go", "a", "--", "b"], 2) as string).toContain("das weitere Argument 'b'");
+    expect(parseCall(host, mit(1), ["x", "go", "--", "a"], 2)).not.toBeTypeOf("string");
+  });
+  test("ein Flag-Fehler hat Vorrang vor dem Aritätsfehler", () => {
+    const r = parseCall(host, mit(0), ["x", "go", "b", "-z"], 2) as string;
+    expect(r).toContain("das Flag '-z'");
+    expect(r).not.toContain("weitere Argument");
+  });
+  test("dashAt: null ohne `--`, sonst die Zahl der Argumente davor", () => {
+    const c0 = parseCall(host, mit(Infinity), ["x", "go", "a"], 2);
+    expect(typeof c0 === "string" ? c0 : c0.dashAt).toBeNull();
+    const c1 = parseCall(host, mit(Infinity), ["x", "go", "a", "b", "--", "c"], 2);
+    expect(typeof c1 === "string" ? c1 : c1.dashAt).toBe(2);
+    const c2 = parseCall(host, mit(Infinity), ["x", "go", "--", "c"], 2);
+    expect(typeof c2 === "string" ? c2 : c2.dashAt).toBe(0);
+  });
+  test("dashAt: ein `--` im Container-Befehl hinter stopAtPositional gehört dem Container", () => {
+    const c = parseCall(host, mit(Infinity, { stopAtPositional: true }), ["x", "go", "img", "cmd", "--", "y"], 2);
+    expect(typeof c === "string" ? c : c.dashAt).toBeNull();
+    expect(typeof c === "string" ? c : c.args).toEqual(["img", "cmd", "--", "y"]);
+  });
+});
+
+describe("dispatchSub: Gruppen erben Stil und Hinweise, Flags vor dem Unterbefehl", () => {
+  const leaf: SubEntry<string> = { run: "leaf", maxArgs: 0, flags: [flag(true, "-var-file")] };
+  const grp: Dispatch<SubEntry<string>> = { cmd: "t state", table: { list: leaf } };
+  const eltern = (extra: Partial<Dispatch<SubEntry<string>>> = {}): Dispatch<SubEntry<string>> =>
+    ({ cmd: "t", style: "goflag", hints: { "-q": "Eltern-Hinweis." }, table: { state: { group: grp } }, ...extra });
+
+  test("die Gruppe erbt den goflag-Stil (`-var-file=f`), `sub` bleibt das Blatt", () => {
+    const r = dispatchSub(host, eltern(), ["t", "state", "list", "-var-file=f"], 1);
+    expect(typeof r === "string" ? r : r.call.value("-var-file")).toBe("f");
+    expect(typeof r === "string" ? r : r.sub).toBe("list");
+  });
+  test("die Gruppe erbt die Hinweise; ein eigener Wert der Gruppe gewinnt", () => {
+    expect(dispatchSub(host, eltern(), ["t", "state", "list", "-q"], 1)).toContain("Eltern-Hinweis.");
+    const eigen = eltern({ table: { state: { group: { ...grp, hints: { "-q": "Gruppen-Hinweis." } } } } });
+    const r = dispatchSub(host, eigen, ["t", "state", "list", "-q"], 1) as string;
+    expect(r).toContain("Gruppen-Hinweis.");
+    expect(r).not.toContain("Eltern-Hinweis.");
+  });
+  test("die Gruppe mit eigenem Stil behält ihn", () => {
+    const eigen = eltern({ table: { state: { group: { ...grp, style: "pflag" } } } });
+    // pflag kennt `-var-file=f` nicht: dieselbe Eingabe, die mit dem geerbten goflag-Stil gilt, wird abgelehnt
+    expect(dispatchSub(host, eigen, ["t", "state", "list", "-var-file=f"], 1)).toContain("Nicht simuliert: das Flag");
+  });
+  test("Flag vor dem Unterbefehl: Hilfe, Version, Familien-Hinweis, sonst 'dahinter setzen'", () => {
+    const d = eltern();
+    expect(dispatchSub(host, d, ["t", "--help"], 1)).toContain("Hilfe zeigt der Simulator mit 'help t'.");
+    expect(dispatchSub(host, d, ["t", "-h"], 1)).toContain("Hilfe zeigt der Simulator mit 'help t'.");
+    expect(dispatchSub(host, d, ["t", "-help"], 1)).toContain("Hilfe zeigt der Simulator mit 'help t'.");
+    expect(dispatchSub(host, d, ["t", "--version"], 1)).toContain("Eine Versionsanzeige gibt es im Simulator nicht.");
+    expect(dispatchSub(host, d, ["t", "-version"], 1)).toContain("Eine Versionsanzeige gibt es im Simulator nicht.");
+    expect(dispatchSub(host, d, ["t", "-q"], 1)).toContain("Eltern-Hinweis.");
+    const sonst = dispatchSub(host, d, ["t", "-x"], 1) as string;
+    expect(sonst).toContain("Setz Flags hinter den Unterbefehl.");
+    expect(sonst).not.toContain("Versionsanzeige");
   });
 });
