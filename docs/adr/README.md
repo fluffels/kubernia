@@ -33,6 +33,7 @@
 | [0024](/docs/adr/0024-hexagon-als-lesart.md) | Hexagon als Lesart der bestehenden Schichtung, nicht als Ordnerstruktur | akzeptiert | 15.10.2026 |
 | [0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md) | Sandbox als austauschbare Laufumgebung | akzeptiert | 16.10.2026 |
 | [0026](/docs/adr/0026-sammelticket-gruppen.md) | Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum | akzeptiert, Entscheidung 3 abgelöst (#1687) | 16.10.2026 |
+| [0027](/docs/adr/0027-regeln-lockern.md) | Regeln, Gates und Lenses evidenzbasiert lockern | akzeptiert | 16.10.2026 |
 
 <!-- GEN:adr-liste END -->
 
