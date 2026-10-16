@@ -9,11 +9,15 @@
  * Mapper mit dem Server-Wortlaut ab; ein Secret, das es nicht gibt, ist dagegen kein Apply-Fehler, sondern
  * eine Listener-Condition (`ResolvedRefs`, siehe ../gateway). */
 import type { ApplyEffect } from "../state";
-import { TLS_PROTOCOLS, type GatewayListener, type HttpBackendRef, type HttpPathType, type HttpRouteRule } from "../gateway";
+import { tlsRuleViolation, type GatewayListener, type HttpBackendRef, type HttpPathType, type HttpRouteRule } from "../gateway";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { Leaf, ManifestError } from "./fields";
 
-const NO_TLS_PROTOCOLS = ["HTTP", "TCP", "UDP"];
+const TLS_MODES = ["Terminate", "Passthrough"];
+
+/** Ein gültiges, aber nicht simuliertes Feld (Fehlertext einheitlich). */
+const unsupported = (path: string, was: string, tip: string): ManifestError =>
+  new ManifestError(path + ": " + was + "wird vom Simulator nicht abgebildet", tip, true);
 
 function nameOf(doc: Leaf, kind: string): string {
   const name = doc.key("metadata").key("name").reqStr();
@@ -29,25 +33,35 @@ export function mapGatewayClass(doc: Leaf): ApplyEffect {
   return { gatewayClass: { name, controllerName, ...(description !== undefined && { description }) } };
 }
 
+/** `tls.mode`: nur `Terminate` (Standard) wird abgebildet; ein unbekannter Wert wird wie vom Server abgelehnt. */
+function checkTlsMode(tls: Leaf, gateway: string): void {
+  const mode = tls.key("mode").str();
+  if (mode !== undefined && !TLS_MODES.includes(mode)) {
+    throw new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + tls.path + ".mode: Unsupported value: \"" + mode + "\": supported values: \"Terminate\", \"Passthrough\"", "Gültig: 'Terminate' (Standard) oder 'Passthrough'.", true);
+  }
+  if (mode === "Passthrough") {
+    throw unsupported(tls.path + ".mode", "Passthrough ", "Nutze 'mode: Terminate' mit 'certificateRefs: [{name: <secret>}]'.");
+  }
+}
+
 /** Die CEL-Regeln rund um `tls` (Server-Wortlaut) und das erste Zertifikat-Secret des Listeners. */
 function tlsSecretOf(leaf: Leaf, protocol: string, gateway: string): string | undefined {
   const tls = leaf.key("tls");
   const invalid = (rest: string, tip: string): ManifestError =>
     new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + leaf.path.replace(/\[\d+\]$/, "") + ": Invalid value: \"array\": " + rest, tip, true);
-  if (!tls.present) {
-    if (TLS_PROTOCOLS.includes(protocol)) {
-      throw invalid("tls must be specified for protocols ['HTTPS', 'TLS']", "Ein HTTPS-Listener braucht 'tls: certificateRefs: [{name: <secret>}]'.");
-    }
-    return undefined;
+  const violation = tlsRuleViolation(protocol, tls.present);
+  if (violation === "fehlt") {
+    throw invalid("tls must be specified for protocols ['HTTPS', 'TLS']", "Ein HTTPS-Listener braucht 'tls: certificateRefs: [{name: <secret>}]'.");
   }
-  if (NO_TLS_PROTOCOLS.includes(protocol)) {
+  if (violation === "verboten") {
     throw invalid("tls must not be specified for protocols ['HTTP', 'TCP', 'UDP']", "Nur HTTPS- und TLS-Listener tragen einen 'tls'-Block.");
   }
-  if (tls.key("mode").str() === "Passthrough") {
-    throw new ManifestError(tls.path + ".mode: Passthrough wird vom Simulator nicht abgebildet",
-      "Nutze 'mode: Terminate' mit 'certificateRefs: [{name: <secret>}]'.", true);
-  }
+  if (!tls.present) return undefined;
+  checkTlsMode(tls, gateway);
   const refs = tls.key("certificateRefs").items();
+  if (refs.length === 0 && tls.key("options").present) {
+    throw unsupported(tls.path + ".options", "ohne certificateRefs ", "Nutze 'certificateRefs: [{name: <secret>}]'; 'options' allein trägt kein Zertifikat.");
+  }
   if (refs.length === 0) {
     throw invalid("certificateRefs or options must be specified when mode is Terminate", "Ein 'tls'-Block braucht 'certificateRefs: [{name: <secret>}]'.");
   }
@@ -112,7 +126,7 @@ function parentRefOf(leaf: Leaf, route: string): string {
   refKind(leaf, "Gateway");
   for (const k of ["sectionName", "port"]) {
     if (leaf.key(k).present) {
-      throw new ManifestError(leaf.key(k).path + ": wird vom Simulator nicht abgebildet", "Die Route hängt am ganzen Gateway, nicht an einem einzelnen Listener.", true);
+      throw unsupported(leaf.key(k).path, "", "Die Route hängt am ganzen Gateway, nicht an einem einzelnen Listener.");
     }
   }
   return leaf.key("name").reqStr();
@@ -133,12 +147,12 @@ function backendOf(leaf: Leaf, route: string): HttpBackendRef {
 function matchOf(rule: Leaf, route: string): { path: string; pathType: HttpPathType } {
   const matches = rule.key("matches").items();
   if (matches.length > 1) {
-    throw new ManifestError(rule.key("matches").path + ": mehr als ein match je Regel wird vom Simulator nicht abgebildet", "Teile die Regel in mehrere Regeln mit je einem match.", true);
+    throw unsupported(rule.key("matches").path, "mehr als ein match je Regel ", "Teile die Regel in mehrere Regeln mit je einem match.");
   }
   const pathLeaf = matches.length ? matches[0].key("path") : new Leaf(undefined, rule.key("matches").path + "[0].path");
   const type = pathLeaf.key("type").str() ?? "PathPrefix";
   if (type === "RegularExpression") {
-    throw new ManifestError(pathLeaf.key("type").path + ": RegularExpression wird vom Simulator nicht abgebildet", "Nutze 'PathPrefix' oder 'Exact'.", true);
+    throw unsupported(pathLeaf.key("type").path, "RegularExpression ", "Nutze 'PathPrefix' oder 'Exact'.");
   }
   if (type !== "PathPrefix" && type !== "Exact") {
     throw routeInvalid(route, pathLeaf.key("type").path, "Unsupported value: \"" + type + "\": supported values: \"Exact\", \"PathPrefix\", \"RegularExpression\"", "Der Pfad-Typ ist 'PathPrefix' oder 'Exact'.");

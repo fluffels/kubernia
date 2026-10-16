@@ -105,7 +105,7 @@
     {"befehl":"apply","ziel":"Deployment","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["apply-umfang"]},
     {"befehl":"apply","ziel":"Service","verhalten":"abweichend","ausgabe":"gleich","tickets":[1323]},
     {"befehl":"apply","ziel":"GatewayClass","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["apply-umfang","gateway-sofort"]},
-    {"befehl":"apply","ziel":"Gateway","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["apply-umfang","gateway-sofort"]},
+    {"befehl":"apply","ziel":"Gateway","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["apply-umfang","gateway-sofort","gateway-tls"]},
     {"befehl":"apply","ziel":"HTTPRoute","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["apply-umfang","gateway-sofort","gateway-routen"]},
     {"befehl":"apply","ziel":"Ingress","verhalten":"abweichend","ausgabe":"gleich","tickets":[1141],"grenzen":["apply-umfang"]},
     {"befehl":"apply","ziel":"NetworkPolicy","verhalten":"abweichend","ausgabe":"gleich","tickets":[1141],"grenzen":["apply-umfang"]},

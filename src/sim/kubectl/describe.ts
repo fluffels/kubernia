@@ -30,7 +30,7 @@ import { accessModesLong, pvcPendingEvent } from "../pv-controller";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
 import { sameRbac } from "../rbac";
 import {
-  GATEWAY_API_VERSION, GATEWAY_GROUP, attachedRoutes, gatewayClassConditions, gatewayStatus, httpRouteStatus, listenerConditions,
+  GATEWAY_API_VERSION, GATEWAY_GROUP, gatewayClassConditions, gatewayStatus, httpRouteStatus,
   type GatewayCondition, type GatewayListener, type HttpRouteRes, type UnattachedParent,
 } from "../gateway";
 import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
@@ -337,7 +337,7 @@ function listenerLines(l: GatewayListener): string[] {
 export function describeGateway(host: KubectlHost, name: string, kind: ResourceKind): string {
   const gw = host.gateways.find(g => g.name === name);
   if (!gw) return notFound(host, kind, name);
-  const st = gatewayStatus(gw, host.gatewayClasses);
+  const st = gatewayStatus(gw, host);
   return [
     ...crdHead("Gateway", gw.name, DEFAULT_NAMESPACE),
     "Spec:",
@@ -348,14 +348,14 @@ export function describeGateway(host: KubectlHost, name: string, kind: ResourceK
     ...(st.address === null ? [] : ["  Addresses:", "    Type:   IPAddress", "    Value:  " + st.address]),
     "  Conditions:",
     ...conditionLines(st.conditions, 4),
-    ...(st.classAccepted ? [
+    ...(st.listeners === null ? [] : [
       "  Listeners:",
-      ...gw.listeners.flatMap(l => [
+      ...st.listeners.flatMap(l => [
         "    Name:  " + l.name,
-        "    Attached Routes:  " + attachedRoutes(gw, l, host.httpRoutes),
-        "    Conditions:", ...conditionLines(listenerConditions(l, host.secrets), 6),
+        "    Attached Routes:  " + l.attachedRoutes,
+        "    Conditions:", ...conditionLines(l.conditions, 6),
       ]),
-    ] : []),
+    ]),
     "Events:  <none>",
   ].join("\n");
 }

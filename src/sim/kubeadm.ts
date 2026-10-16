@@ -10,7 +10,7 @@
  *                             taucht danach in `kubectl get nodes` auf). Endpoint ist Pflicht, der Token muss zum
  *                             init-Token passen; ein positionales Token lehnt der Sim wie echtes kubeadm ab.
  *   - `kubeadm reset`       → räumt den Cluster wieder auf „bare metal" ab (keine Nodes,
- *                             Control-Plane down) – die Sturm-Lage als Befehl.
+ *                             Control-Plane down; Deployments und andere Ressourcen bleiben gespeichert) – die Sturm-Lage als Befehl.
  *
  * Vor `kubeadm init` (bzw. nach dem Sturm) ist `controlPlane.up` false – dann scheitern
  * alle kubectl-Befehle mit „connection refused" (Gate sitzt im kubectl-Barrel).
@@ -218,7 +218,7 @@ function kubeadmJoin(host: KubeadmHost, c: Call): string {
   ].join("\n");
 }
 
-/** Cluster auf „bare metal" zurückräumen: keine Nodes, Control-Plane down, kein Token.
+/** Cluster auf „bare metal" zurückräumen: keine Nodes, Control-Plane down, kein Token; Workloads bleiben gespeichert.
  *  Macht die Sturm-/Neuanfang-Lage als Befehl verfügbar (und ist der Gegenpart zu init). */
 function kubeadmReset(host: KubeadmHost): string { // -f/--force: der Simulator fragt nie nach
   const wasUp = host.controlPlane.up;
