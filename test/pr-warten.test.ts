@@ -260,3 +260,67 @@ describe("Fail-closed und Fehlerzähler (Grenzfälle)", () => {
     expect(t).toBe(60_000);
   });
 });
+
+describe("warten: Pflicht-Liste neu holen und Konflikt-Reset (#1663 T2, T3)", () => {
+  const uhr = () => {
+    let t = 0;
+    return { jetzt: () => t, schlafe: (ms: number) => void (t += ms) };
+  };
+  const rot = offen([lauf("Pflicht", "COMPLETED", "SUCCESS"), lauf("Deploy", "COMPLETED", "FAILURE")]);
+  test("nach einem Fehlschlag wird die Pflicht-Liste neu geholt: zweite Abfrage meldet HINWEIS statt ROT", () => {
+    let n = 0;
+    const folge = [offen([lauf("Pflicht", "IN_PROGRESS")]), rot];
+    let i = 0;
+    const r = P.warten({
+      hole: () => folge[i++],
+      pflicht: () => {
+        n++;
+        if (n === 1) throw new Error("gh down");
+        return ["Pflicht"];
+      },
+      ...uhr(),
+      maxMs: 240_000,
+      intervallMs: 30_000,
+    });
+    expect(n).toBe(2);
+    expect(r.exit).toBe(2);
+    expect(r.zeilen[1]).toContain("HINWEIS Deploy");
+  });
+  test("eine leere Pflicht-Liste wird nicht gecacht (fail-closed bleibt, nächste Abfrage holt neu)", () => {
+    let n = 0;
+    const folge = [offen([lauf("Pflicht", "IN_PROGRESS")]), rot];
+    let i = 0;
+    const r = P.warten({ hole: () => folge[i++], pflicht: () => (n++, n === 1 ? [] : ["Pflicht"]), ...uhr(), maxMs: 240_000, intervallMs: 30_000 });
+    expect(n).toBe(2);
+    expect(r.exit).toBe(2);
+  });
+  test("Konflikt, dann konfliktfreie Abfrage, dann Konflikt: die Zeit der ersten Beobachtung ist zurückgesetzt (vier Abfragen)", () => {
+    const konflikt = offen([lauf("a", "IN_PROGRESS")], { mergeable: "CONFLICTING" });
+    const folge = [konflikt, offen([lauf("a", "IN_PROGRESS")]), konflikt, konflikt];
+    let i = 0;
+    const r = P.warten({ hole: () => folge[i++], ...uhr(), maxMs: 240_000, intervallMs: 5_000 });
+    expect(r).toEqual({ exit: 3, zeilen: ["KONFLIKT"] });
+    expect(i).toBe(4);
+  });
+});
+
+describe("holePflicht (#1663 T4)", () => {
+  const H = raw as unknown as { holePflicht: (pr: string, gh: (a: string[], o: object) => string) => string[] };
+  test("Exit 8 bei laufenden Checks: das JSON in stdout des Fehlers liefert die Namen", () => {
+    const gh = () => {
+      throw Object.assign(new Error("exit 8"), { stdout: '[{"name":"A"},{"name":"B"}]' });
+    };
+    expect(H.holePflicht("7", gh)).toEqual(["A", "B"]);
+  });
+  test("Fehler ohne JSON in stdout wird weitergeworfen", () => {
+    const gh = () => {
+      throw Object.assign(new Error("kaputt"), { stdout: "kein json" });
+    };
+    expect(() => H.holePflicht("7", gh)).toThrow("kaputt");
+  });
+  test("Erfolg: Namen aus der JSON-Ausgabe, Aufruf mit --required", () => {
+    let args: string[] = [];
+    expect(H.holePflicht("7", (a) => ((args = a), '[{"name":"C"}]'))).toEqual(["C"]);
+    expect(args).toContain("--required");
+  });
+});

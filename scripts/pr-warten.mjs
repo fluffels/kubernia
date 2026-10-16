@@ -15,7 +15,7 @@
  * `KONFLIKT` meldet erst eine zweite Abfrage im Abstand von mindestens 15 s (`mergeable` flackert, auch UNKNOWN).
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
  * `statusCheckRollup` liefert `gh` mit der Standardgrenze (rund 100 Einträge); die CI hat deutlich weniger Checks.
- * Der Kern `bewerte` ist pur; CLI und `ghJson`-Aufruf sind dünne, ungetestete IO.
+ * Der Kern `bewerte` ist pur, `holePflicht` nimmt den `gh`-Aufruf als Parameter (getestet); nur CLI und Schlaf sind dünne, ungetestete IO.
  */
 import { pathToFileURL } from "node:url";
 import { ghJson, ghText } from "./gh-cli.mjs";
@@ -74,7 +74,7 @@ export function konfliktStand(seit, jetzt) {
 
 /**
  * Pollt `hole()` bis ein Ergebnis ≠ Exit 2 kommt oder das Zeitbudget abläuft. Drei gh-Fehler in Folge → Exit 3.
- * `pflicht()` liefert die Namen der Pflicht-Checks (einmal erfolgreich geholt, sonst bei jeder Abfrage neu; ein Fehler heißt: alle gaten).
+ * `pflicht()` liefert die Namen der Pflicht-Checks (einmal nicht leer geholt, sonst bei jeder Abfrage neu; ein Fehler oder eine leere Liste heißt: alle gaten).
  * Ein Konflikt wird erst gemeldet, wenn eine zweite Abfrage mindestens `KONFLIKT_ABSTAND_MS` später ihn bestätigt (auch über das Budget hinaus).
  * @param {{ hole: () => object, pflicht?: () => readonly string[], schlafe: (ms: number) => void, jetzt: () => number, maxMs: number, intervallMs: number }} e
  */
@@ -88,7 +88,8 @@ export function warten({ hole, pflicht = () => [], schlafe, jetzt, maxMs, interv
     try {
       if (!liste) {
         try {
-          liste = pflicht();
+          const geholt = pflicht();
+          liste = geholt?.length ? geholt : null; // leer gilt wie ein Fehler: nicht cachen, nächste Abfrage holt neu
         } catch {
           liste = null;
         }
@@ -126,10 +127,10 @@ export function parseArgs(argv) {
 }
 
 /** Namen der Pflicht-Checks. `gh pr checks` endet mit Exit 8, solange Checks laufen; die JSON-Ausgabe steht dann trotzdem in stdout. */
-function holePflicht(pr) {
+export function holePflicht(pr, gh = ghText) {
   let text;
   try {
-    text = ghText(["pr", "checks", pr, "--required", "--json", "name"], { timeout: 30_000 });
+    text = gh(["pr", "checks", pr, "--required", "--json", "name"], { timeout: 30_000 });
   } catch (err) {
     text = String(err?.stdout ?? "");
     if (!text.trim().startsWith("[")) throw err;
