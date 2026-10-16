@@ -3,7 +3,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -389,6 +389,33 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       const dir = mkdtempSync(join(tmpdir(), "kq-1646-"));
       try {
         assert.throws(() => mod.ladeStartLaeufe(dir, "x-agent", von), mod.DatenFehler);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+    test("ladeStartLaeufe: lädt einen Vorgänger 30 h vor `von` (Vorlauf 48 h), nicht aber 60 h davor", () => {
+      const dir = mkdtempSync(join(tmpdir(), "kq-1646-vorlauf-"));
+      try {
+        const sub = join(dir, "s1", "subagents");
+        mkdirSync(sub, { recursive: true });
+        for (const [name, stunden] of [["a-alt", 60], ["a-neu", 30]] as const) {
+          writeFileSync(join(sub, `${name}.meta.json`), JSON.stringify({ agentType: "x-agent" }));
+          writeFileSync(join(sub, `${name}.jsonl`), "");
+          const t = new Date(Date.parse(von) - stunden * 3600_000);
+          utimesSync(join(sub, `${name}.jsonl`), t, t);
+        }
+        const geladen = mod.ladeStartLaeufe(dir, "x-agent", von) as { datei: string }[];
+        assert.deepEqual(geladen.map((l) => l.datei), ["s1/subagents/a-neu.jsonl"]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+    test("ladeStartLaeufe: ein nicht lesbarer Projektordner (Datei statt Ordner) ist ein Datenfehler", () => {
+      const dir = mkdtempSync(join(tmpdir(), "kq-1646-datei-"));
+      try {
+        const datei = join(dir, "keinordner");
+        writeFileSync(datei, "x");
+        assert.throws(() => mod.ladeStartLaeufe(datei, "x-agent", von), (e: Error) => e instanceof mod.DatenFehler && /nicht lesbar/.test(e.message));
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

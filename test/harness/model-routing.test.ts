@@ -924,6 +924,23 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.match(aufrufe[1].prompt, /--remove-assignee @me/);
   });
 
+  test("Meldet der Auswahl-Agent selbst `skill-pfad` (#1646), leitet der Workflow weiter, ohne Plan und ohne Umsetzen", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ auswahl: { ergebnis: "skill-pfad" }, lockNonce: "abc-1" });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
+  });
+
+  test("Sammelticket ohne eigenen Claim (#1646): kein claim-frei, damit kein fremder Claim entfernt wird", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", auswahl: { claimVerifiziert: false } });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim"]);
+  });
+
+  test("Der Einstiegs-Skill kennt den Sonderausgang `skill-pfad` (#1646)", () => {
+    const skill = readFileSync(new URL("../../.claude/skills/kubernia-workflow/SKILL.md", import.meta.url), "utf8");
+    assert.match(skill, /^- \*\*`skill-pfad`\*\*/m);
+  });
+
   test("Titel mit „(gesammelt)“ nur mitten im Text ist kein Sammelticket: normaler Weg", async () => {
     const { aufrufe } = await workflowLauf({ titel: "Kein Sammelticket (gesammelt) Doku", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
