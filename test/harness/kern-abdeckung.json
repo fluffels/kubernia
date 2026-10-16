@@ -28,6 +28,7 @@
   "scripts/mermaid-vorschau.mjs": {"art":"offen","grund":"#1663: Einordnung fehlt im Inventar"},
   "scripts/setup.mjs": {"art":"offen","grund":"#1663: Einordnung fehlt im Inventar"},
   "scripts/check-c4.mjs": {"art":"offen","grund":"#1663: Einordnung fehlt im Inventar"},
+  "scripts/check-c4-harness.mjs": {"art":"offen","grund":"#1663: Einordnung fehlt im Inventar"},
   "scripts/check-tseslint-ts7.mjs": {"art":"offen","grund":"#1663: Einordnung fehlt im Inventar"},
   "scripts/budget-lib.mjs": {"art":"offen","grund":"#1663: Budget-Pacing ist im Inventar beschrieben, aber nicht eingeordnet"},
   "scripts/budget-pacing.mjs": {"art":"offen","grund":"#1663: Budget-Pacing ist im Inventar beschrieben, aber nicht eingeordnet"},

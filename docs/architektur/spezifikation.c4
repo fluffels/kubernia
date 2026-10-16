@@ -1,5 +1,6 @@
 // Element-Arten des Architekturmodells (ADR 0020).
-// Gebunden an eine SSOT (check:c4 gleicht ab): schicht, bibliothek, modul, port, adapter.
+// Gebunden an eine SSOT (check:c4 gleicht ab): schicht, bibliothek, modul, port, adapter, dazu die Harness-Arten
+// agent, skill, workflow, hook, githook, gate, ciworkflow, mcp (Quellen: architektur.bindungen in scripts/docs-gen/config.json).
 // Erzählung (frei, nicht ableitbar): person, system, container, datenspeicher.
 // port/adapter: hexagonale Sicht (ADR 0024), gebunden an die Tabellen in docs/arc42-architektur.md.
 specification {
@@ -39,6 +40,46 @@ specification {
     style {
       shape rectangle
       color green
+    }
+  }
+  element agent {
+    style {
+      shape person
+    }
+  }
+  element skill {
+    style {
+      shape component
+    }
+  }
+  element workflow {
+    style {
+      shape component
+    }
+  }
+  element hook {
+    style {
+      shape queue
+    }
+  }
+  element githook {
+    style {
+      shape queue
+    }
+  }
+  element gate {
+    style {
+      shape rectangle
+    }
+  }
+  element ciworkflow {
+    style {
+      shape rectangle
+    }
+  }
+  element mcp {
+    style {
+      shape component
     }
   }
 }

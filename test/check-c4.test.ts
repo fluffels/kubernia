@@ -16,16 +16,16 @@ import * as schichten from "../scripts/docs-gen/schichten.mjs";
 
 type Schicht = { id: string; label: string; technik?: string; muster: string | null; wurzeln: string[]; darf: string[] };
 type Modell = { quellwurzel: string; schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
-type El = { id: string; kind: string; title: string; parentId: string | null; datei: string; zeile: number; tags?: string[] };
-type Bez = { von: string; nach: string; datei: string; zeile: number };
-type View = { id: string; titel: string; knoten: number; datei: string; zeile: number; kanten?: { von: string; nach: string }[] };
+type El = { id: string; kind: string; title: string; parentId: string | null; datei: string; zeile: number; tags?: string[]; beschreibung?: string | null; technik?: string | null };
+type Bez = { von: string; nach: string; datei: string; zeile: number; titel?: string | null; beschreibung?: string | null };
+type View = { id: string; titel: string; knoten: number; datei: string; zeile: number; kanten?: { von: string; nach: string; label?: string | null }[] };
 type C4 = { elemente: El[]; beziehungen: Bez[]; views: View[] };
 type Meldung = { datei: string; zeile: number; art: string; element: string; text: string; fix: string };
-type Cfg = { workspace: string; quelle: string; bindungen: Record<string, string>; erzaehlung: string[]; maxKnotenJeView: number; hexagon?: { datei: string; abschnitt: string } };
+type Cfg = { workspace: string; quelle: string; bindungen: Record<string, string>; erzaehlung: string[]; maxKnotenJeView: number; pflichtViews?: string[]; hexagon?: { datei: string; abschnitt: string } };
 type Hexagon = { text: string | null; existiert: (p: string) => boolean };
 const api = raw as unknown as {
   srcModule: (rootDir: string, quelle: string) => { name: string; pfade: string[] }[];
-  pruefeArchitektur: (a: { modell: Modell; module: { name: string; pfade: string[] }[]; c4: C4; cfg: Cfg; hexagon: Hexagon }) => Meldung[];
+  pruefeArchitektur: (a: { modell: Modell; module: { name: string; pfade: string[] }[]; c4: C4; cfg: Cfg; hexagon: Hexagon; schichtQuelle?: string }) => Meldung[];
   leseHexagon: (text: string, abschnitt: string) => { ports: { name: string; zwei: string; ort: string[]; schicht: string }[]; adapter: { name: string; zwei: string; ort: string[]; schicht: string }[]; pfade: { pfad: string; zeile: number }[] } | null;
   formatiere: (m: Meldung) => string;
   ladeC4Modell: (rootDir: string, workspace: string) => Promise<C4>;
@@ -80,6 +80,7 @@ const CFG: Cfg = {
   bindungen: { schicht: "schicht", bibliothek: "extern", modul: "modul", port: "port", adapter: "adapter" },
   erzaehlung: ["person", "system", "container", "datenspeicher"],
   maxKnotenJeView: 25,
+  pflichtViews: ["index"],
   hexagon: { datei: "docs/arc42.md", abschnitt: "Hexagonale Sicht" },
 };
 const ARC42 = "docs/arc42.md";
@@ -118,10 +119,122 @@ const gueltig = (): C4 => ({
 function lauf(c4: C4, extra: Record<string, string> = {}, cfg: Cfg | null = CFG, hexagon: Hexagon = { text: hexText(), existiert: hexVorhanden }): Meldung[] {
   const root = fixture(srcFiles(extra));
   const modell = ladeModell(root, "scripts/layers.cjs");
-  return api.pruefeArchitektur({ modell, module: api.srcModule(root, "src"), c4, cfg: cfg as unknown as Cfg, hexagon });
+  return api.pruefeArchitektur({ modell, module: api.srcModule(root, "src"), c4, cfg: cfg as unknown as Cfg, hexagon, schichtQuelle: "scripts/layers.cjs" });
 }
 const texte = (ms: Meldung[]) => ms.map((m) => api.formatiere(m));
 const treffer = (ms: Meldung[], re: RegExp) => texte(ms).filter((t) => re.test(t));
+
+describe("Fundort bei mehreren .c4-Dateien (#1421, Befund 2)", () => {
+  const HARNESS = "docs/architektur/harness.c4";
+  /** Modell, in dem harness.c4 vor spiel.c4 liegt (LikeC4 liefert alphabetisch) und das erste Element eine Person ist. */
+  const mehrere = (): C4 => {
+    const c4 = gueltig();
+    c4.elemente = [{ ...el("m", "person", "Maintainerin"), datei: HARNESS }, ...c4.elemente];
+    return c4;
+  };
+
+  test("fehlendes Modul und fehlende Bibliothek nennen die Datei der Spiel-Elemente, nicht die des ersten Elements", () => {
+    const c4 = mehrere();
+    c4.elemente = c4.elemente.filter((e) => e.id !== "k.app.an.game" && e.id !== "k.app.pr.ui" && e.id !== "k.app.pr.ui.t");
+    c4.beziehungen = c4.beziehungen.filter((b) => !b.von.includes("pr.ui") && !b.nach.includes("pr.ui"));
+    const modul = treffer(lauf(c4), /modul „(game|ui)“.*fehlt/);
+    assert.equal(modul.length, 2);
+    assert.ok(modul.every((x) => x.includes(`Fix: Element modul`) && x.includes(`in ${DATEI} anlegen`) && !x.includes(HARNESS)), modul.join("\n"));
+    const lib = mehrere();
+    lib.elemente = lib.elemente.filter((e) => e.kind !== "bibliothek");
+    lib.beziehungen = lib.beziehungen.filter((b) => b.nach !== "k.app.ph");
+    const t = treffer(lauf(lib), /bibliothek „Phaser“.*fehlt/);
+    assert.equal(t.length, 1);
+    assert.ok(t[0].includes(`Fix: Element bibliothek 'Phaser' in ${DATEI} anlegen`), t[0]);
+    assert.ok(t[0].startsWith(`✖ ${DATEI}:`), t[0]);
+  });
+
+  test("ohne irgendein Spiel-Element: der Workspace; die Datei von Harness-Elementen zählt nicht", () => {
+    const c4: C4 = { elemente: [{ ...el("m", "person", "Maintainerin"), datei: HARNESS }], beziehungen: [], views: [{ id: "index", titel: "Kontext", knoten: 1, datei: HARNESS, zeile: 1 }] };
+    const t = treffer(lauf(c4), /schicht „Präsentation“.*fehlt/);
+    assert.equal(t.length, 1);
+    assert.ok(t[0].startsWith("✖ docs/architektur:1 "), t[0]);
+  });
+
+  test("die Schicht-Quelle in den Texten kommt aus dem Eingabefeld, nicht fest aus dem Code", () => {
+    const c4 = gueltig();
+    c4.elemente.push(el("k.app.zz", "schicht", "Erfundene Schicht", "k.app", 9));
+    const root = fixture(srcFiles());
+    const ms = api.pruefeArchitektur({ modell: ladeModell(root, "scripts/layers.cjs"), module: api.srcModule(root, "src"), c4, cfg: CFG, hexagon: { text: hexText(), existiert: hexVorhanden }, schichtQuelle: "lib/mein-modell.cjs" });
+    const t = treffer(ms, /Erfundene Schicht/);
+    assert.equal(t.length, 1);
+    assert.match(t[0], /keine Quelle in lib\/mein-modell\.cjs/);
+    assert.doesNotMatch(t[0], /scripts\/layers\.cjs/);
+  });
+});
+
+describe("Pflicht-Views (#1421)", () => {
+  const mit = (pflicht: unknown): Cfg => ({ ...CFG, pflichtViews: pflicht as string[] });
+
+  test("alle vorhanden: grün; eine fehlt: rot mit Fix und Config-Fundort", () => {
+    const c4 = gueltig();
+    assert.deepEqual(texte(lauf(c4, {}, mit(["index"]))), []);
+    const t = texte(lauf(c4, {}, mit(["index", "ticket-lauf"])));
+    assert.equal(t.length, 1);
+    assert.match(t[0], /^✖ scripts\/docs-gen\/config\.json:1 view „ticket-lauf“: Pflicht-View fehlt im Modell\. Fix: View 'ticket-lauf' unter docs\/architektur anlegen/);
+  });
+
+  test("Config ohne pflichtViews, leer oder mit Nicht-Strings: rot, nur die Config-Meldung", () => {
+    for (const kaputt of [undefined, [], [""], [1], "index"]) {
+      const t = texte(lauf(gueltig(), {}, mit(kaputt)));
+      assert.equal(t.length, 1, JSON.stringify(kaputt));
+      assert.match(t[0], /pflichtViews ist keine nicht-leere Liste von View-Namen/, JSON.stringify(kaputt));
+    }
+  });
+});
+
+describe("Ziffern-Regel: keine Zahlen aus SSOT-Konstanten in Labels (#1421)", () => {
+  const rot = (c4: C4) => texte(lauf(c4)).filter((x) => /freistehende Zahl/.test(x));
+
+  test("freistehende Zahl in Beschreibung, Technik, Beziehungs-Titel und -Beschreibung, Schritt-Label und View-Titel ist rot", () => {
+    const c4 = gueltig();
+    c4.elemente[0].beschreibung = "drei Brillen, 3 Pässe";
+    c4.elemente[1].technik = "Cap 2";
+    c4.beziehungen[0].titel = "nach 3 Versuchen";
+    c4.beziehungen[1].beschreibung = "7";
+    c4.views[0].titel = "Ansicht 2";
+    c4.views.push({ id: "dyn", titel: "Lauf", knoten: 2, datei: DATEI, zeile: 90, kanten: [{ von: "k", nach: "k.app", label: "Cap 2" }] });
+    const t = rot(c4);
+    assert.equal(t.length, 6, t.join("\n"));
+    assert.ok(t.some((x) => /Schritt-Label „Cap 2“/.test(x)));
+    assert.ok(t.some((x) => /view „index“: Titel „Ansicht 2“/.test(x)));
+  });
+
+  test("Zahl nach Satzzeichen oder Bindestrich ist rot (Klammer, Doppelpunkt, Bindestrich), Zahl hinter einem Buchstaben nicht", () => {
+    for (const text of ["(3 Pässe)", "Cap:2", "Lens-Cap-2", "a/3", "x 12"]) {
+      const c4 = gueltig();
+      c4.elemente[0].beschreibung = text;
+      assert.equal(rot(c4).length, 1, text);
+    }
+    const ok = gueltig();
+    ok.elemente[0].beschreibung = "k8s, arc42, a1";
+    assert.equal(rot(ok).length, 0);
+  });
+
+  test("Zahlen im Wort (arc42, k8s) und Zahlwörter sind grün; der Titel einer gebundenen Art ist ausgenommen", () => {
+    const c4 = gueltig();
+    c4.elemente[0].beschreibung = "arc42 und k8s, drei Brillen";
+    c4.elemente.push(el("sy", "system", "Cluster k8s"));
+    c4.elemente.push(el("k.app.pr.ui.m3", "adapter", "Port 8080", "k.app.pr.ui"));
+    assert.deepEqual(rot(c4).filter((x) => !/Port 8080/.test(x)), []);
+    assert.equal(rot(c4).length, 0, "Titel einer gebundenen Art (adapter) wird nicht geprüft");
+  });
+
+  test("der Titel einer nicht gebundenen Art (Erzählung) mit freistehender Zahl ist rot; null und fehlende Felder sind grün", () => {
+    const c4 = gueltig();
+    c4.elemente.push(el("sy", "system", "System 2"));
+    c4.elemente[0].beschreibung = null;
+    c4.beziehungen[0].titel = null;
+    const t = rot(c4);
+    assert.equal(t.length, 1);
+    assert.match(t[0], /system „System 2“: Titel „System 2“/);
+  });
+});
 
 describe("srcModule: Top-Level von src/", () => {
   test("Ordner plus .ts-Dateien ohne gleichnamigen Ordner, ohne .d.ts (Barrel und vite-env.d.ts ergeben kein eigenes Modul)", () => {
@@ -525,7 +638,7 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
     c4.views = [{ id: "mod", titel: "Mod", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr.ui", nach: "k.app.an.game" }] }];
     const t = treffer(lauf(c4), /spiel\.c4:80 view „mod“: zeigt die abgeleitete Kante ui → game/);
     assert.equal(t.length, 1);
-    c4.views = [{ id: "ok", titel: "Ok", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr", nach: "k.app.an" }] }];
+    c4.views = [...gueltig().views, { id: "ok", titel: "Ok", knoten: 3, datei: DATEI, zeile: 80, kanten: [{ von: "k.app.pr", nach: "k.app.an" }] }];
     assert.deepEqual(texte(lauf(c4)), []);
   });
 
@@ -577,6 +690,39 @@ describe("ladeC4Modell: der Adapter", () => {
     assert.equal(c4.beziehungen[0].datei, "docs/architektur/m.c4");
     assert.deepEqual(c4.views.map((v) => [v.id, v.knoten]), [["index", 2]]);
     assert.deepEqual(c4.views[0].kanten, [{ von: "a", nach: "b" }]);
+  }, 30000);
+
+  test("Beschreibung, Technik, Beziehungs-Titel und Schritt-Label einer dynamischen View kommen an (#1421)", async () => {
+    const root = fixture({
+      "docs/architektur/spec.c4": SPEC,
+      "docs/architektur/m.c4": [
+        "model {",
+        "  a = schicht 'A' {",
+        "    description 'Beschreibung A'",
+        "    technology 'Technik A'",
+        "  }",
+        "  b = schicht 'B'",
+        "  a -> b 'Kante AB' 'Text AB'",
+        "}",
+        "views {",
+        "  view index {",
+        "    include *",
+        "  }",
+        "  dynamic view ablauf {",
+        "    a -> b 'Schritt eins'",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    });
+    const c4 = await api.ladeC4Modell(root, "docs/architektur");
+    const a = c4.elemente.find((e) => e.id === "a");
+    assert.equal(a?.beschreibung, "Beschreibung A");
+    assert.equal(a?.technik, "Technik A");
+    assert.equal(c4.elemente.find((e) => e.id === "b")?.beschreibung, null);
+    assert.deepEqual([c4.beziehungen[0].titel, c4.beziehungen[0].beschreibung], ["Kante AB", "Text AB"]);
+    assert.deepEqual(c4.views.find((v) => v.id === "ablauf")?.kanten, [{ von: "a", nach: "b", label: "Schritt eins" }]);
+    assert.equal(c4.views.find((v) => v.id === "index")?.kanten?.[0].label, undefined, "nur dynamische Views tragen Schritt-Labels");
   }, 30000);
 
   test("Tags eines Elements kommen als Namen ohne #", async () => {
@@ -634,6 +780,46 @@ async function cliLauf(root: string, spawn: (a: string[]) => number) {
   const code = await api.cli([], { rootDir: root, out: (s) => out.push(s), err: (s) => err.push(s), spawn });
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
+
+describe("cli: Harness-Bindung (#1421)", () => {
+  const SPEC_H = SPEC.replace("  element adapter\n", "  element adapter\n  element githook\n  element mcp\n");
+  const HARNESS_CFG = JSON.stringify({
+    schichten: { layers: "scripts/layers.cjs" },
+    harness: { gitHooks: ".githooks", mcp: ".mcp.json" },
+    architektur: { ...CFG, bindungen: { ...CFG.bindungen, githook: "githook", mcp: "mcp" } },
+  });
+  const harnessFixture = (modell: string, extra: Record<string, string> = {}) =>
+    cliFixture({
+      "scripts/docs-gen/config.json": HARNESS_CFG,
+      "docs/architektur/spec.c4": SPEC_H,
+      "docs/architektur/h.c4": modell,
+      ".githooks/pre-push": "#!/bin/sh\n",
+      ".mcp.json": JSON.stringify({ mcpServers: { playwright: {} } }),
+      ...extra,
+    });
+  const VOLL = "model {\n  gh = githook 'pre-push'\n  pw = mcp 'playwright'\n}\n";
+
+  test("alles abgeglichen: Exit 0, die Erfolgsmeldung nennt die Quellen aus der Config", async () => {
+    const r = await cliLauf(harnessFixture(VOLL), () => 0);
+    assert.equal(r.err, "");
+    assert.equal(r.code, 0);
+    assert.match(r.out, /scripts\/layers\.cjs, src\/ und den Harness-Quellen/);
+  }, 30000);
+
+  test("ein Git-Hook fehlt im Modell: Exit 1 mit Meldung", async () => {
+    const r = await cliLauf(harnessFixture(VOLL, { ".githooks/commit-msg": "#!/bin/sh\n" }), () => 0);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /githook „commit-msg“: fehlt im Modell, steht aber in \.githooks\. Fix: /);
+  }, 30000);
+
+  test("eine Quelle fehlt (.mcp.json weg): Exit 1 mit abgleich-Meldung statt Absturz", async () => {
+    const root = harnessFixture(VOLL);
+    rmSync(join(root, ".mcp.json"));
+    const r = await cliLauf(root, () => 0);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /abgleich.*\.mcp\.json fehlt/);
+  }, 30000);
+});
 
 describe("cli", () => {
   test("alles grün: Exit 0 und Erfolgsmeldung, validate dann format --check", async () => {
