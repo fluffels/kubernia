@@ -15,6 +15,7 @@
 | Tool | Eine Fähigkeit, die ein Agent aufrufen darf (Datei lesen, Shell, Suche). Welche Tools ein Subagent hat, steht in seiner Definition. | [.claude/agents/](../.claude/agents/) |
 | MCP-Server | Ein angebundener Dienst, der dem Agenten zusätzliche Tools liefert, etwa Browser-Steuerung oder Langfuse-Abfragen. | [.mcp.json](../.mcp.json) |
 | Skill | Ein wiederverwendbarer, versionierter Ablauf als Markdown, den ein Agent lädt, etwa der Ticket-Ablauf oder das Review. | [Skills und Setup](agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe) |
+| Skill-Pfad | Der Ticket-Ablauf über den Skill im Hauptchat mit Umsetzer-Subagent, im Unterschied zum Workflow-Pfad (ein Workflow-Skript startet die Phasen selbst). Sammeltickets laufen nur über den Skill-Pfad; der Workflow-Pfad leitet sie weiter. | [ADR 0026](adr/0026-sammelticket-gruppen.md) |
 | Hook | Ein Skript, das Claude Code bei einem Ereignis automatisch ausführt (vor einem Tool-Aufruf, beim Stopp) und das einen Vorgang verweigern kann. | [Harness-FAQ](agent-harness-faq.md) |
 
 ## Grenzen und Prüfungen

@@ -96,6 +96,7 @@ export async function workflowLauf(o: LaufOptionen = {}) {
     if (l.startsWith("review-festgefahren")) return Promise.resolve("ok");
     if (l.startsWith("pr+merge")) return Promise.resolve({ ergebnis: "gemergt", prNummer: 7 });
     if (l.startsWith("cleanup")) return Promise.resolve("ok");
+    if (l === "claim-frei") return Promise.resolve("ok");
     return Promise.reject(new Error(`Stub kennt das Label "${l}" nicht – in workflowLauf() erweitern.`));
   };
   const parallel = (thunks: (() => Promise<unknown>)[]) => Promise.all(thunks.map((t) => t()));

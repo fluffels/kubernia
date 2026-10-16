@@ -81,7 +81,7 @@ const AUSWAHL_SCHEMA = {
   properties: {
     ergebnis: {
       type: 'string',
-      enum: ['ticket-geclaimt', 'kein-freies-ticket'],
+      enum: ['ticket-geclaimt', 'kein-freies-ticket', 'skill-pfad'],
       description: 'kein-freies-ticket, wenn alle offenen Items assigned oder blockiert sind oder das Board leer ist',
     },
     nummer: { type: 'integer', description: 'Issue-Nummer ohne #' },
@@ -678,6 +678,7 @@ sortiere NICHT nach. Prüfe nur dieses eine Ticket gegen den Live-Stand, nicht d
 Liste; ohne Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
 }
 
+Ist das Ticket ein Sammelticket (Titel „… (gesammelt)"), nicht claimen: ergebnis="skill-pfad" (auch bei vorgegebenem Ticket).
 Claimen ist blockierende Pflicht: erst node scripts/ticket-lock.mjs claim <nr> (Exit 4: nicht claimen), dann gh issue edit <nr> --add-assignee @me, danach mit
 gh issue view <nr> die Zuweisung wirklich bestätigen. Ohne bestätigte Zuweisung ist
 claimVerifiziert=false — dann endet der Workflow hier. Gib das x der claim-Ausgabe nonce=<x> als lockNonce zurück.
@@ -696,6 +697,13 @@ nicht selbst.`,
     return { ergebnis: 'kein-freies-ticket' }
   }
 
+  const nonceArg = /^[\w-]+$/.test(auswahl.lockNonce || '') ? ` --nonce ${auswahl.lockNonce}` : '' // nur Wort-/Bindestrich-Zeichen: der Wert kommt aus einer Agenten-Antwort und landet in Shell-Befehlen
+  if (auswahl.ergebnis === 'skill-pfad' || /\(gesammelt\)\s*$/i.test(String(auswahl.titel ?? ''))) {
+    log(`#${auswahl.nummer} ist ein Sammelticket — nur über den Skill-Pfad (ADR 0026).`)
+    if (auswahl.claimVerifiziert || nonceArg) await agent(`Claim von #${auswahl.nummer} freigeben: node scripts/ticket-lock.mjs freigeben ${auswahl.nummer}${nonceArg}, dann gh issue edit ${auswahl.nummer} --remove-assignee @me.`, { label: 'claim-frei', phase: 'Auswahl', ...CODING })
+    return { ergebnis: 'skill-pfad', nummer: auswahl.nummer }
+  }
+
   if (!auswahl.claimVerifiziert) {
     log(`#${auswahl.nummer} konnte nicht bestätigt geclaimt werden — kein Implementieren ohne Claim. Workflow endet.`)
     return { ergebnis: 'claim-fehlgeschlagen', nummer: auswahl.nummer }
@@ -703,7 +711,6 @@ nicht selbst.`,
 
   const nr = auswahl.nummer
   const ticket = `#${nr} — ${auswahl.titel}`
-  const nonceArg = /^[\w-]+$/.test(auswahl.lockNonce || '') ? ` --nonce ${auswahl.lockNonce}` : '' // nur Wort-/Bindestrich-Zeichen: der Wert kommt aus einer Agenten-Antwort und landet in Shell-Befehlen
   const lockFreigabe = nonceArg ? `\nGanz zuletzt den Ticket-Lock freigeben: node scripts/ticket-lock.mjs freigeben ${nr}${nonceArg}; melde dessen Ausgabe.` : ''
   log(`Geclaimt: ${ticket} (art: ${auswahl.art})`)
 
@@ -761,8 +768,7 @@ Dieses Ticket ist als Epic klassifiziert: liefere die Aufteilung in session-gro�
     { label: `plan:#${nr}`, phase: 'Plan', ...PLANUNG },
   )
 
-  // Ein Sammelticket ist nie ein Epic (AGENTS.md: Harness-Befunde sind Zeilen): der Titel schließt die Plan-Weiche aus.
-  const epicAbspalten = istEpic || (planSagtEpic(plan) && !/\(gesammelt\)/i.test(String(auswahl.titel ?? '')))
+  const epicAbspalten = istEpic || planSagtEpic(plan)
   if (!istEpic && epicAbspalten) log(`Plan für ${ticket} meldet „Weiche Epic: ja" — Aufteilung statt Umsetzung (#1309).`)
   else if (plan) log(`Plan für ${ticket} liegt vor.`)
   else if (istEpic) log('Planungs-Agent nicht verfügbar — der Anlege-Agent teilt das Epic selbst auf (dokumentierter Fallback).')
@@ -914,10 +920,6 @@ KEIN prozeduraler Platzhalter.
 Lernkandidaten: gib in lernkandidaten höchstens 3 Punkte zurück, nur projektübergreifendes Wissen
 (Kubernia-Spezifisches gehört ins Projekt-Brain bzw. als Befund ins Sammelticket/Issue), sonst leer.
 Prüfe jeden vor dem Eintragen gegen gemergte PRs (gh pr list --state merged --limit 1000 --search "<Stichwort>"), Erledigtes entfällt. Für Lernkandidaten legst du nichts selbst ab.
-
-Ist das Ticket ein Sammelticket (Titel „… (gesammelt)": „Harness-Härtung" oder „Langfuse-Befunde"), setze ALLE Zeilen um (auch später
-dazugekommene und beim Arbeiten gefundene Befunde), nichts auslagern (AGENTS.md § Harness-Befunde sind
-Zeilen); zu groß: begründeter KQ-Diffsize-Override.
 
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
 

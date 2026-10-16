@@ -916,8 +916,16 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.equal(ergebnis, "epic");
   });
 
-  test("Plan-Weiche greift nie bei einem Sammelticket („(gesammelt)“ im Titel): normaler Weg", async () => {
-    const { aufrufe } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
+  test("Sammelticket („(gesammelt)“ im Titel) wird nie umgesetzt (#1646): Weiterleitung auf den Skill-Pfad, Claim und Lock frei, kein Plan", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", lockNonce: "abc-1", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß" });
+    assert.equal(ergebnis, "skill-pfad");
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "claim-frei"]);
+    assert.match(aufrufe[1].prompt, /freigeben 42 --nonce abc-1/);
+    assert.match(aufrufe[1].prompt, /--remove-assignee @me/);
+  });
+
+  test("Titel mit „(gesammelt)“ nur mitten im Text ist kein Sammelticket: normaler Weg", async () => {
+    const { aufrufe } = await workflowLauf({ titel: "Kein Sammelticket (gesammelt) Doku", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
   });
 

@@ -117,7 +117,14 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /setze ALLE Zeilen um/);
     assert.match(lies(".claude/agents/kubernia-planner.md"), /plane ALLE Zeilen/);
     assert.match(lies(".claude/skills/kubernia/SKILL.md"), /komplett umsetzen, kein Rest-Übertrag/);
-    assert.match(lies(".claude/workflows/kubernia-ticket.js"), /setze ALLE Zeilen um/);
+  });
+
+  test("Workflow-Pfad nimmt keine Sammeltickets (#1646): Titel-Prüfung im Code leitet auf den Skill-Pfad weiter", () => {
+    const wf = lies(".claude/workflows/kubernia-ticket.js");
+    assert.match(wf, /\\\(gesammelt\\\)\\s\*\$\/i\.test\(String\(auswahl\.titel/, "deterministische Titel-Prüfung direkt nach der Auswahl");
+    assert.match(wf, /return \{ ergebnis: 'skill-pfad', nummer/);
+    assert.match(wf, /enum: \['ticket-geclaimt', 'kein-freies-ticket', 'skill-pfad'\]/);
+    assert.doesNotMatch(wf, /setze ALLE Zeilen um/, "der Sammelticket-Absatz des Umsetzer-Prompts entfällt");
   });
 
   test("Negativfall: der alte Teil-Abarbeiten-Wortlaut steht nirgends mehr im Abschnitt oder in AGENTS.md", () => {
