@@ -6,6 +6,7 @@ import * as raw from "../scripts/pr-warten.mjs";
 type Erg = { exit: number; zeilen: string[] };
 const P = raw as unknown as {
   bewerte: (pr: object) => Erg;
+  BERICHTEND: readonly string[];
   warten: (e: { hole: () => object; schlafe: (ms: number) => void; jetzt: () => number; maxMs: number; intervallMs: number }) => Erg;
   parseArgs: (a: string[]) => { pr: string | null; maxSekunden: number; intervall: number };
 };
@@ -45,6 +46,47 @@ describe("bewerte", () => {
   test("grün ohne Auto-Merge → Exit 3, leerer Rollup ist nicht grün", () => {
     expect(P.bewerte(offen([lauf("a", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }))).toEqual({ exit: 3, zeilen: ["GRÜN OHNE AUTO-MERGE"] });
     expect(P.bewerte(offen([], { autoMergeRequest: null })).exit).toBe(2);
+  });
+});
+
+describe("bewerte: berichtende Checks (#875)", () => {
+  const gruen = lauf("Tests, Typecheck & Builds", "COMPLETED", "SUCCESS");
+  const hinweis = (n: string) => `HINWEIS ${n} https://x/runs/${n} (berichtend, kein Merge-Gate)`;
+  test("BERICHTEND führt genau CodeQL", () => {
+    expect([...P.BERICHTEND]).toEqual(["CodeQL"]);
+  });
+  test("rotes CodeQL bei sonst grünem Stand: Exit 2 mit Merge steht aus plus HINWEIS", () => {
+    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "FAILURE")]));
+    expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus", hinweis("CodeQL")] });
+  });
+  test("rotes CodeQL-Analyse plus anderer roter Check: nur der andere ist ROT, dazu HINWEIS", () => {
+    const r = P.bewerte(offen([lauf("CodeQL-Analyse (actions)", "COMPLETED", "FAILURE"), lauf("b", "COMPLETED", "FAILURE")]));
+    expect(r.exit).toBe(1);
+    expect(r.zeilen).toEqual(["ROT b https://x/runs/b", hinweis("CodeQL-Analyse (actions)")]);
+  });
+  test("laufendes CodeQL blockiert nicht und wird nicht als wartend gezählt", () => {
+    const r = P.bewerte(offen([gruen, lauf("CodeQL-Analyse (actions)", "IN_PROGRESS")]));
+    expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus"] });
+  });
+  test("grünes CodeQL ohne Auto-Merge zählt nicht zum grünen Stand", () => {
+    const r = P.bewerte(offen([gruen, lauf("CodeQL", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }));
+    expect(r).toEqual({ exit: 3, zeilen: ["GRÜN OHNE AUTO-MERGE"] });
+  });
+  test("nur berichtende Checks zählen wie ein leerer Rollup", () => {
+    const r = P.bewerte(offen([lauf("CodeQL", "COMPLETED", "SUCCESS")], { autoMergeRequest: null }));
+    expect(r).toEqual({ exit: 2, zeilen: ["OFFEN 0/0 grün, wartend: Checks starten"] });
+  });
+  test("Konflikt mit rotem CodeQL: KONFLIKT plus HINWEIS", () => {
+    const r = P.bewerte(offen([lauf("CodeQL", "COMPLETED", "FAILURE")], { mergeable: "CONFLICTING" }));
+    expect(r).toEqual({ exit: 3, zeilen: ["KONFLIKT", hinweis("CodeQL")] });
+  });
+  test("MERGED bleibt ohne HINWEIS", () => {
+    const r = P.bewerte({ state: "MERGED", mergeCommit: { oid: "abcdef1234567" }, statusCheckRollup: [lauf("CodeQL", "COMPLETED", "FAILURE")] });
+    expect(r).toEqual({ exit: 0, zeilen: ["MERGED abcdef1"] });
+  });
+  test.each(["XCodeQL", "codeql", "Tests, Typecheck & Builds"])("Negativ: %s bleibt ein ROT-Check", (n) => {
+    const r = P.bewerte(offen([lauf(n, "COMPLETED", "FAILURE")]));
+    expect(r).toEqual({ exit: 1, zeilen: [`ROT ${n} https://x/runs/${n}`] });
   });
 });
 

@@ -9,6 +9,7 @@
  *   Exit 0  `MERGED <sha>`
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
+ *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (berichtend, kein Merge-Gate)` je rotem Check aus `BERICHTEND` (kein ROT, zählt nicht mit).
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln)
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
  * `statusCheckRollup` liefert `gh` mit der Standardgrenze (rund 100 Einträge); die CI hat deutlich weniger Checks.
@@ -19,6 +20,8 @@ import { ghJson } from "./gh-cli.mjs";
 
 const ROT = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"]);
 const GRUEN = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
+/** Berichtende Checks (Namenspräfix, case-sensitiv): ihr Rot sperrt den Merge nicht, `bewerte` meldet es als `HINWEIS` (#875). */
+export const BERICHTEND = ["CodeQL"];
 export const FELDER = "state,mergeable,statusCheckRollup,autoMergeRequest,mergeCommit";
 
 /** Ein Rollup-Eintrag (CheckRun oder StatusContext) → `{ name, art: "rot" | "gruen" | "offen", url }`. */
@@ -36,17 +39,21 @@ function eintrag(e) {
 export function bewerte(pr) {
   if (pr?.state === "MERGED") return { exit: 0, zeilen: [`MERGED ${String(pr.mergeCommit?.oid ?? "").slice(0, 7)}`.trim()] };
   if (pr?.state === "CLOSED") return { exit: 3, zeilen: ["GESCHLOSSEN"] };
-  if (pr?.mergeable === "CONFLICTING") return { exit: 3, zeilen: ["KONFLIKT"] };
-  const checks = (pr?.statusCheckRollup ?? []).map(eintrag);
+  const alle = (pr?.statusCheckRollup ?? []).map(eintrag);
+  // Berichtende Checks sperren den Merge nicht: sie zählen weder zu rot noch zu grün noch zu wartend.
+  const checks = alle.filter((c) => !BERICHTEND.some((p) => c.name.startsWith(p)));
+  const hinweise = alle.filter((c) => c.art === "rot" && !checks.includes(c)).map((c) => `HINWEIS ${c.name} ${c.url} (berichtend, kein Merge-Gate)`);
+  const mit = (exit, zeilen) => ({ exit, zeilen: [...zeilen, ...hinweise] });
+  if (pr?.mergeable === "CONFLICTING") return mit(3, ["KONFLIKT"]);
   const rot = checks.filter((c) => c.art === "rot");
-  if (rot.length) return { exit: 1, zeilen: rot.map((c) => `ROT ${c.name} ${c.url}`.trim()) };
+  if (rot.length) return mit(1, rot.map((c) => `ROT ${c.name} ${c.url}`.trim()));
   const gruen = checks.filter((c) => c.art === "gruen").length;
   const offen = checks.filter((c) => c.art === "offen");
   // Ein leerer Rollup ist nicht grün: die Checks sind noch nicht gestartet.
   if (!offen.length && checks.length) {
-    return pr?.autoMergeRequest ? { exit: 2, zeilen: [`OFFEN ${gruen}/${checks.length} grün, Merge steht aus`] } : { exit: 3, zeilen: ["GRÜN OHNE AUTO-MERGE"] };
+    return pr?.autoMergeRequest ? mit(2, [`OFFEN ${gruen}/${checks.length} grün, Merge steht aus`]) : mit(3, ["GRÜN OHNE AUTO-MERGE"]);
   }
-  return { exit: 2, zeilen: [`OFFEN ${gruen}/${checks.length} grün, wartend: ${offen.map((c) => c.name).join(", ") || "Checks starten"}`] };
+  return mit(2, [`OFFEN ${gruen}/${checks.length} grün, wartend: ${offen.map((c) => c.name).join(", ") || "Checks starten"}`]);
 }
 
 /**
