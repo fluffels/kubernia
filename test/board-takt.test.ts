@@ -300,8 +300,8 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
-    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+\) hinter den Kopf/.exec(lies("AGENTS.md"))?.[1])).toBe(T.HARNESS_TAKT_MERGES);
-    expect(Number(/Spielquote 1:(\d+)\)/.exec(lies("AGENTS.md"))?.[1])).toBe(T.SPIEL_QUOTE);
+    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/Spielquote 1:(\d+)/.exec(doc)?.[1])).toBe(T.SPIEL_QUOTE);
   });
   test("der Workflow löst auf Push nach main aus und ruft board-takt.mjs", () => {
     const yml = lies(".github/workflows/board-takt.yml");
