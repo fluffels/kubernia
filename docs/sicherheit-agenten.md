@@ -16,7 +16,7 @@ Das Repo ist öffentlich: jeder darf Issues eröffnen und kommentieren, es gibt 
 - **Gate:** `node scripts/fremdtext.mjs --issue <nr>` bzw. `--pr <nr>`. Fremde Beiträge erscheinen nur als `[Fremdtext ausgeblendet: <Art> von @<login>, <url>]`, Titel und Body eines fremden Eintrags verschwinden. Exit 0 vertraut, 3 Fremdeingang, 2 Fehler (fail-closed).
 - **Folgen:** Der Skill `kubernia` setzt ein Issue mit Exit 3 nicht um (überspringen, Befund an die Maintainerin, kein Kommentar und kein Label am fremden Issue). Der Planer verweigert den Plan mit `FREMDEINGANG #<nr> · kubernia-planner`. Planer, Umsetzer und Lens lesen Kommentare nur über das Skript.
 - **Übernahme durch die Maintainerin:** ein eigenes Issue anlegen, das auf das fremde verweist. Fremde Issues erreichen die Auswahl ohnehin nur, wenn jemand sie ins Board aufnimmt.
-- Entscheidung: Autor-Prüfung statt Sanitizing beliebiger Bodies, weil Sanitizing gegen Prompt-Injection unzuverlässig ist. Die Prüfung sitzt im Skill und in den Agenten-Anweisungen, nicht im Workflow-Skript `kubernia-ticket.js` (Größen-Ratchet).
+- Entscheidung: Autor-Prüfung statt Sanitizing beliebiger Bodies, weil Sanitizing gegen Prompt-Injection unzuverlässig ist. Die Prüfung sitzt im Skill und in den Agenten-Anweisungen.
 
 ## Kanäle für Fremdtext
 
@@ -52,7 +52,6 @@ ASI-Namen der Spalte nach der Sekundärquelle (siehe Quellen). Die Gate-Angaben 
 ## Grenzen (ehrlich)
 
 - Das Gate prüft den **Autor**, nicht den Inhalt. Eine vertraute Instanz, die Fremdtext zitiert (Zitat-Laundering), umgeht es; dagegen hilft nur Disziplin und das Review, bis #1447 d es löst.
-- Die Workflow-Variante (`kubernia-ticket.js`) hat keine harte Autor-Prüfung; der Haken ist der Planer, der bei Fremdeingang verweigert. Folgen: der Auswahl-Agent claimt das fremde Issue vor dem Gate (der Claim bleibt stehen), und der rohe Body steht schon im Planer-Prompt (#1447 e).
 - Ein Skript kann eine Agenten-Anweisung nicht erzwingen: ein Agent, der Kommentare doch roh liest, wird nur vom Wächter-Test (Anweisungstext) und vom Review erwischt, nicht zur Laufzeit.
 - Rule-of-Two (kein Teilsystem verarbeitet zugleich unvertrauten Input, hält Secrets und ändert Zustand oder kommuniziert nach außen) ist im [Forum-Skill](../.claude/skills/forum/SKILL.md) beschrieben und wird hier nicht wiederholt.
 - **Quarantäne-Muster (#1435):** Die Doku ([Subagenten-Frontmatter, Fehlerseite](https://code.claude.com/docs/en/errors), gelesen 2026-10-16) erlaubt für `forum-leser` auch eine leere `tools`-Liste (Subagent ohne Tools). Gewählt ist trotzdem `tools: Read` plus `disallowedTools` plus Read-Guard: ein werkzeugloser Agent bekäme den Thread nur über den Prompt des privilegierten Hauptagenten, und `tools:` ohne Wert ist YAML null und heißt „alle erben“. Frontmatter-Hooks laufen nur in vertrauten Ordnern; ohne Vertrauen bleiben die Whitelist und die Read-Denies aus `.claude/settings.json`. Der **Entwurf** und der Ticketvorschlag sind abgeleiteter Fremdtext im privilegierten Lauf (Zitat-Laundering): Gegenmittel ist der Freigabe-Stopp der Maintainerin, der Rest steht in #1447 d.

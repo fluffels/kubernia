@@ -92,7 +92,7 @@ Die Red-Green-Probe der Test-Lens ändert Dateien im Lens-Worktree (`.claude/wor
 - **Tools:** `search-element` (Element nach Text suchen), `read-element`, `read-view`, `find-relationships`, `query-graph`. `apply-semantic-layout` schreibt Layout in die Modelldateien und steht darum auf `ask`; ein Wächter (`test/harness/likec4-mcp.test.ts`) verlangt für jedes Tool ohne `readOnlyHint` einen `ask`-Eintrag.
 - **Grenze Worktree:** Der Server liest `docs/architektur/` des Checkouts, in dem die Session gestartet wurde (meist der Haupt-Checkout, ggf. hinter `origin/main`, siehe `scripts/haupt-sync.mjs`), **nicht** den Branch-Worktree. Änderungen am Modell im Worktree prüfst du mit `npm run check:c4` bzw. siehst sie mit `npm run c4:serve`, nicht über den MCP.
 - **Kein Gate:** Der MCP ist Abfragewerkzeug, nie Gate-Quelle ([ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md)); die Gates laufen über `check:c4`.
-- **Wo verfügbar:** im Hauptchat und in Workflow-Phasen ohne `tools:`-Whitelist; Subagenten mit Whitelist (Planer, Umsetzer, Lens) bekommen `mcp__likec4` bewusst nicht. Ein neu eingetragener Server lädt erst mit der nächsten Session. **Fehlerbild:** `claude mcp list` zeigt `likec4` als Failed, und die `mcp__likec4__*`-Tools fehlen.
+- **Wo verfügbar:** im Hauptchat ohne `tools:`-Whitelist; Subagenten mit Whitelist (Planer, Umsetzer, Lens) bekommen `mcp__likec4` bewusst nicht. Ein neu eingetragener Server lädt erst mit der nächsten Session. **Fehlerbild:** `claude mcp list` zeigt `likec4` als Failed, und die `mcp__likec4__*`-Tools fehlen.
 
 ## Warum unterscheiden sich die AGE-Werte zweier kubectl-Aufrufe?
 

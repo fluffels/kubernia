@@ -28,12 +28,13 @@
 | [0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md) | Das Langfuse-Plugin bleibt auch im User-Scope aktiv | akzeptiert | 07.10.2026 |
 | [0020](/docs/adr/0020-architekturmodell-likec4.md) | Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs | akzeptiert | 08.10.2026 |
 | [0021](/docs/adr/0021-agenten-sandbox-wsl2.md) | Agenten-Sandbox über eine eigene WSL2-Distribution | akzeptiert | 08.10.2026 |
-| [0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md) | Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest | akzeptiert | 08.10.2026 |
+| [0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md) | Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest | akzeptiert, Workflow-Pfad entfernt: präzisiert durch ADR 0028 | 08.10.2026 |
 | [0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen | akzeptiert | 09.10.2026 |
 | [0024](/docs/adr/0024-hexagon-als-lesart.md) | Hexagon als Lesart der bestehenden Schichtung, nicht als Ordnerstruktur | akzeptiert | 15.10.2026 |
 | [0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md) | Sandbox als austauschbare Laufumgebung | akzeptiert | 16.10.2026 |
-| [0026](/docs/adr/0026-sammelticket-gruppen.md) | Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum | akzeptiert, Entscheidung 3 abgelöst (#1687) | 16.10.2026 |
+| [0026](/docs/adr/0026-sammelticket-gruppen.md) | Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum | akzeptiert, Entscheidung 3 abgelöst (#1687), Workflow-Pfad entfernt: präzisiert durch ADR 0028 | 16.10.2026 |
 | [0027](/docs/adr/0027-regeln-lockern.md) | Regeln, Gates und Lenses evidenzbasiert lockern | akzeptiert | 16.10.2026 |
+| [0028](/docs/adr/0028-ein-ticket-ablauf.md) | Genau ein Ticket-Ablauf, der Workflow-Pfad entfällt | akzeptiert | 16.10.2026 |
 
 <!-- GEN:adr-liste END -->
 

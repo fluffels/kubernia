@@ -132,7 +132,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 | Skripte | 120 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv) |
 | Wächter-Tests | 75 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 27 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 28 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -225,6 +225,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 16.10.2026 | [ADR 0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md): Sandbox als austauschbare Laufumgebung |
 | 16.10.2026 | [ADR 0026](/docs/adr/0026-sammelticket-gruppen.md): Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum |
 | 16.10.2026 | [ADR 0027](/docs/adr/0027-regeln-lockern.md): Regeln, Gates und Lenses evidenzbasiert lockern |
+| 16.10.2026 | [ADR 0028](/docs/adr/0028-ein-ticket-ablauf.md): Genau ein Ticket-Ablauf, der Workflow-Pfad entfällt |
 
 <!-- GEN:zeitleiste END -->
 

@@ -18,8 +18,8 @@
 | MCP-Launcher | Ein Startskript unter `scripts/`, das einen lokalen MCP-Server mit der Version aus dem Lockfile startet: lokal bei passender Version, sonst `npx -y <paket>@<exakte Version>`, nie ungepinnt. Die gemeinsame Logik steckt in `scripts/mcp-launch.mjs`, je Server ein dünner Wrapper (`playwright-mcp.mjs`, `likec4-mcp.mjs`). | [mcp-launch.mjs](../scripts/mcp-launch.mjs) |
 | Architekturmodell | Das LikeC4-Modell unter `docs/architektur/` (Spiel-App, Harness, Beziehungen). `check:c4` gleicht es mit dem Repo ab, Agenten fragen es über den LikeC4-MCP ab; der MCP ist nie Gate-Quelle. | [ADR 0020](adr/0020-architekturmodell-likec4.md), [FAQ](agent-harness-faq.md#wie-frage-ich-das-architekturmodell-ab) |
 | Skill | Ein wiederverwendbarer, versionierter Ablauf als Markdown, den ein Agent lädt, etwa der Ticket-Ablauf oder das Review. | [Skills und Setup](agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe) |
-| Workflow | Ein Ablauf-Skript unter `.claude/workflows/`, das die Phasen eines Tickets selbst startet (im Unterschied zum Skill, den ein Agent liest). | `kubernia-ticket.js` |
-| Skill-Pfad | Der Ticket-Ablauf über den Skill im Hauptchat mit Umsetzer-Subagent, im Unterschied zum Workflow-Pfad (ein Workflow-Skript startet die Phasen selbst). Sammeltickets laufen nur über den Skill-Pfad; der Workflow-Pfad leitet sie weiter. | [ADR 0026](adr/0026-sammelticket-gruppen.md) |
+| Workflow | Ein Ablauf-Skript unter `.claude/workflows/`, das die Phasen eines Tickets selbst startet (im Unterschied zum Skill, den ein Agent liest). | derzeit keiner; der Ticket-Ablauf ist der Skill-Pfad ([ADR 0028](adr/0028-ein-ticket-ablauf.md)) |
+| Skill-Pfad | Der Ticket-Ablauf über den Skill im Hauptchat mit Umsetzer-Subagent: der einzige Ticket-Ablauf ([ADR 0028](adr/0028-ein-ticket-ablauf.md)). | [ADR 0026](adr/0026-sammelticket-gruppen.md) |
 | Hook | Ein Skript, das Claude Code bei einem Ereignis automatisch ausführt (vor einem Tool-Aufruf, beim Stopp) und das einen Vorgang verweigern kann. | [Harness-FAQ](agent-harness-faq.md) |
 
 ## Grenzen und Prüfungen

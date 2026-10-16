@@ -1,7 +1,7 @@
 # ADR 0022: Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Folgeticket-Entwürfe → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert** · Datum: 2026-10-08 · Ticket: #1366
+> Status: **akzeptiert, Workflow-Pfad entfernt: präzisiert durch ADR 0028** · Datum: 2026-10-08 · Ticket: #1366
 
 ## Status
 
