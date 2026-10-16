@@ -28,6 +28,31 @@ export function mapGatewayClass(doc: Leaf): ApplyEffect {
   return { gatewayClass: { name, controllerName, ...(description !== undefined && { description }) } };
 }
 
+/** Die CEL-Regeln rund um `tls` (Server-Wortlaut) und das erste Zertifikat-Secret des Listeners. */
+function tlsSecretOf(leaf: Leaf, protocol: string, gateway: string): string | undefined {
+  const tls = leaf.key("tls");
+  const invalid = (rest: string, tip: string): ManifestError =>
+    new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + leaf.path.replace(/\[\d+\]$/, "") + ": Invalid value: \"array\": " + rest, tip, true);
+  if (!tls.present) {
+    if (TLS_PROTOCOLS.includes(protocol)) {
+      throw invalid("tls must be specified for protocols ['HTTPS', 'TLS']", "Ein HTTPS-Listener braucht 'tls: certificateRefs: [{name: <secret>}]'.");
+    }
+    return undefined;
+  }
+  if (NO_TLS_PROTOCOLS.includes(protocol)) {
+    throw invalid("tls must not be specified for protocols ['HTTP', 'TCP', 'UDP']", "Nur HTTPS- und TLS-Listener tragen einen 'tls'-Block.");
+  }
+  if (tls.key("mode").str() === "Passthrough") {
+    throw new ManifestError(tls.path + ".mode: Passthrough wird vom Simulator nicht abgebildet",
+      "Nutze 'mode: Terminate' mit 'certificateRefs: [{name: <secret>}]'.", true);
+  }
+  const refs = tls.key("certificateRefs").items();
+  if (refs.length === 0) {
+    throw invalid("certificateRefs or options must be specified when mode is Terminate", "Ein 'tls'-Block braucht 'certificateRefs: [{name: <secret>}]'.");
+  }
+  return refs[0].key("name").reqStr();
+}
+
 /** Ein Listener: Name, Port und Protokoll sind Pflicht; `tls` ist nur beim Zertifikat-Protokoll Pflicht (CEL). */
 function listenerOf(leaf: Leaf, gateway: string): GatewayListener {
   const name = leaf.key("name").reqStr();
@@ -40,28 +65,7 @@ function listenerOf(leaf: Leaf, gateway: string): GatewayListener {
     "Ein Listener-Port liegt zwischen 1 und 65535.", true);
   }
   const hostname = leaf.key("hostname").str();
-  const tls = leaf.key("tls");
-  if (!tls.present && TLS_PROTOCOLS.includes(protocol)) {
-    throw new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + leaf.path.replace(/\[\d+\]$/, "")
-      + ": Invalid value: \"array\": tls must be specified for protocols ['HTTPS', 'TLS']",
-    "Ein HTTPS-Listener braucht 'tls: certificateRefs: [{name: <secret>}]'.", true);
-  }
-  if (tls.present && NO_TLS_PROTOCOLS.includes(protocol)) {
-    throw new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + leaf.path.replace(/\[\d+\]$/, "")
-      + ": Invalid value: \"array\": tls must not be specified for protocols ['HTTP', 'TCP', 'UDP']",
-    "Nur HTTPS- und TLS-Listener tragen einen 'tls'-Block.", true);
-  }
-  if (tls.present && tls.key("mode").str() === "Passthrough") {
-    throw new ManifestError(tls.path + ".mode: Passthrough wird vom Simulator nicht abgebildet",
-      "Nutze 'mode: Terminate' mit 'certificateRefs: [{name: <secret>}]'.", true);
-  }
-  const refs = tls.key("certificateRefs").items();
-  if (tls.present && refs.length === 0) {
-    throw new ManifestError("The Gateway \"" + gateway + "\" is invalid: " + leaf.path.replace(/\[\d+\]$/, "")
-      + ": Invalid value: \"array\": certificateRefs or options must be specified when mode is Terminate",
-    "Ein 'tls'-Block braucht 'certificateRefs: [{name: <secret>}]'.", true);
-  }
-  const tlsSecret = refs[0]?.key("name").reqStr();
+  const tlsSecret = tlsSecretOf(leaf, protocol, gateway);
   return { name, port, protocol, ...(hostname !== undefined && { hostname }), ...(tlsSecret !== undefined && { tlsSecret }) };
 }
 
