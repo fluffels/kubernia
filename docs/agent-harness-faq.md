@@ -173,7 +173,7 @@ Zwei Lastquellen in Wächter-Tests vermeidest du so: (1) **Repo-Scans** laufen �
 
 ## Langfuse lokal aus
 
-Kein Ticketlauf startet ohne erreichbares Langfuse ([Glossar](harness-glossar.md)): `node scripts/langfuse-vorbedingung.mjs` fragt `GET <LANGFUSE_BASE_URL>/api/public/health` (Standard `http://localhost:3000`, 3 s Frist) und muss 200 liefern; der SessionStart-Hook warnt mit „Langfuse aus, bitte starten“.
+Kein Ticketlauf startet ohne erreichbares Langfuse ([Glossar](harness-glossar.md)): `node scripts/langfuse-vorbedingung.mjs` fragt `GET <LANGFUSE_BASE_URL>/api/public/health` (Umgebung, sonst die Plugin-Optionen aus `~/.claude/settings.json`, sonst `http://localhost:3000`; nie Secret-Dateien; 3 s Frist) und muss 200 liefern; der SessionStart-Hook warnt mit „Langfuse aus, bitte starten“.
 
 - **Typische Ursache:** das Rancher-Desktop-Backend steht (`vmState: ERROR`, WSL-Distributionen `rancher-desktop` und `rancher-desktop-data` gestoppt), die Docker-Pipe `//./pipe/docker_engine` fehlt, `localhost:3000/api/public/health` liefert keine Antwort. Folgen: der MCP-Server `langfuse` meldet ECONNREFUSED und trennt sich (`MCP server disconnected: mcp__langfuse__*`), der Nachlieferer endet mit Exit 1 und „fetch failed“ (Spur: `langfuse-abgleich.log`), ohne dass es jemand sieht. Die Ursache des VM-Fehlers ist nicht belegt (Hypothese: Neustart oder Ruhezustand des Rechners).
 - **Behebung:** `rdctl shutdown`, dann `rdctl start`; danach holt der Nachlieferer die verpassten Sessions nach (Exit 0, `fehler: []`). Ein MCP-Server, der sich getrennt hat, verbindet sich erst nach `/mcp` wieder.
