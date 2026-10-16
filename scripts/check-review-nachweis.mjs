@@ -4,8 +4,7 @@
  * Review- und Plan-Nachweis-Wächter (#1270) — macht Planungspass und Review-Konvergenz
  * pfadunabhängig prüfbar.
  *
- * Hintergrund: Review-Pflicht, Cap 2 Fix-Runden und der Planer waren nur im Workflow
- * (`.claude/workflows/kubernia-ticket.js`) im Code erzwungen. Im Skill-Pfad sind sie
+ * Hintergrund: Review-Pflicht, Cap 2 Fix-Runden und der Planer sind im Skill-Pfad
  * Verhaltensregeln: ein PR ohne Review-Runde, mit Überschreitung der Obergrenze oder ohne
  * Planer fiel nirgends auf. Dieser Wächter verlangt im Slice (Commits `<basis>..HEAD`) zwei
  * Zeilen am Zeilenanfang einer Commit-Message, gleiches Muster wie `KQ-Diffsize-Override`:

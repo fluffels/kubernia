@@ -13,11 +13,10 @@
  *  R1  `WÖRTLICH>` irgendwo (der Platzhalter `<Brille WÖRTLICH>` / `<Kontext-Diät WÖRTLICH>` blieb stehen),
  *  R2  der Wert von `Arbeitsverzeichnis:`, `Patch:`, `Delta-Patch:` oder `erwarteter HEAD:` enthält noch `<…>`,
  *  R3  `erwarteter HEAD:` beginnt nicht mit einem Hex-Hash von 7 bis 40 Zeichen (Backticks und ein Zusatz dahinter sind erlaubt;
- *      der Workflow-Fallback „der HEAD des Feature-Worktrees …“ ebenfalls).
+ *      ein Fließtext statt Hash wird verweigert).
  * Fehlende Felder bleiben Sache der Lens-Definition (`.claude/agents/kubernia-lens.md`).
  * Bewusste Grenzen: die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie
- *  um, öffnet der Guard still, fail-open); ausgewertet wird je Feld der letzte Treffer im Prompt; die R3-Ausnahme für den
- *  Workflow-Fallback ist eine Kopie seines Textes in `.claude/workflows/kubernia-ticket.js`.
+ *  um, öffnet der Guard still, fail-open); ausgewertet wird je Feld der letzte Treffer im Prompt.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
@@ -73,7 +72,7 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}) {
   const head = felder["erwarteter HEAD"];
   // Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt.
   const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];
-  if (head !== undefined && !/^[0-9a-f]{7,40}$/i.test(hash ?? "") && !head.startsWith("der HEAD des Feature-Worktrees")) {
+  if (head !== undefined && !/^[0-9a-f]{7,40}$/i.test(hash ?? "")) {
     return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
   }
   return null;

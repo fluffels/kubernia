@@ -22,7 +22,7 @@
  * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren) und verbraucht die Übergabe (`verbraucht` = Zeitpunkt, ein zweites `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h, bewusst über `VERWAIST_MS`: ein Lauf über 2 h soll bei `pruefe --nonce` nicht `fremd` werden).
  *
  * Bewusste Grenzen: nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
- * Sperre); der Workflow-Pfad (`.claude/workflows/kubernia-ticket.js`) hält die Nonce im Workflow-Zustand (`lockNonce`) und gibt den Lock im Cleanup frei;
+ * Sperre);
  * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer; aus der Lock-Datei ist sie nicht lesbar). Jede Exit-4-Ausgabe nennt: den Lock nie von Hand lösen.
  *
  * Reines Node-Skript (nur Builtins + git). Die Entscheidungen sind pur exportiert, git und Dateisystem injizierbar.
