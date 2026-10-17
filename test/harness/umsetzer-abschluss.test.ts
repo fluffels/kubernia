@@ -585,12 +585,19 @@ describe("Leitplanken-Audit (#1067)", () => {
   describe("ein gh-Aufruf liefert Status, Dateien und Kommentare (#1740 L4)", () => {
     const merged = { state: "MERGED", autoMergeRequest: null, labels: [] };
     const alles = (files: string[], comments: Kommentare["comments"]) => ({ ...merged, files: files.map((path) => ({ path })), author: { login: "fluffels" }, comments });
+    // Der Diff-Rückfall (`gh pr diff`) ist injiziert und zählt: der echte Aufruf liefe gegen das Netz; ein Status mit `files` darf ihn nie auslösen.
     const abschlussOhneInjektion = (status: object) => {
       let aufrufe = 0;
+      let diffAufrufe = 0;
+      const nichtAufrufen = () => {
+        diffAufrufe++;
+        throw new Error("kein gh pr diff erwartet");
+      };
       const r = abschluss.abschlussBlockade(
         { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
-        { prStatus: () => (aufrufe++, status) } as never,
+        { prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: unknown) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
       );
+      assert.equal(diffAufrufe, 0, "der Status trägt die Dateien, der Diff-Rückfall bleibt ungenutzt");
       return { r, aufrufe };
     };
 
