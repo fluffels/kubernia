@@ -13,7 +13,7 @@
  *   node scripts/ticket-lock.mjs lebenszeichen <nr> --nonce <x> [--schritt <text>]   # Plan-Schritt (#1699): frischt `zuletzt` im eigenen Lock auf
  *   node scripts/ticket-lock.mjs lebenszeichen --commit          # post-commit-Hook (#1699): frischt `zuletzt` des Locks zum Ticket-Branch auf, sonst stiller No-op
  *
- * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `freigeben`, `uebergeben`: erledigt), 4 = nicht anfassen (belegt, fremd,
+ * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `uebernehmen`: wie `pruefe`, verbraucht Übergabe bzw. Stopp-Vermerk; `freigeben`, `uebergeben`, `gestoppt`, `lebenszeichen`: erledigt), 4 = nicht anfassen (belegt, fremd,
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
  * Mechanik: die Lock-Datei `<git-common-dir>/<Worktree-Präfix>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
