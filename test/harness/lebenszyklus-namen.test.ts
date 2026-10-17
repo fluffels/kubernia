@@ -161,8 +161,9 @@ describe("stop-verify-hook: Namen aus der Config", () => {
     let gerufen = 0;
     const r = S.runHook('{"hook_event_name":"Stop"}', "/x", () => (++gerufen, { blocked: false }), { config: OHNE_WT });
     expect(r.exit).toBe(2);
-    expect(JSON.parse(r.stdout).decision).toBe("block");
-    LIES_FEHLER(JSON.parse(r.stdout).reason);
+    const antwort = JSON.parse(r.stdout) as { decision: string; reason: string };
+    expect(antwort.decision).toBe("block");
+    LIES_FEHLER(antwort.reason);
     expect(gerufen).toBe(0);
   });
   test("mit Config bekommt die Prüfung die Namen (Worktree-Präfix ab-)", () => {
