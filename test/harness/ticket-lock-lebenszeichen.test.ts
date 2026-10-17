@@ -63,7 +63,7 @@ function deps(welt: Welt = {}, jetzt = JETZT, sandbox?: string | null): Record<s
       if (a.startsWith("fetch")) return "";
       if (a.startsWith("rev-parse --abbrev-ref")) return `${welt.branch ?? "main"}\n`;
       if (a.startsWith("for-each-ref")) return (welt.refs ?? []).join("\n");
-      if (a.startsWith("worktree list")) return ["worktree /repo", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n");
+      if (a.startsWith("worktree list")) return ["worktree /repo", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n\n");
       if (a.startsWith("log -1")) return String(welt.commitSek ?? 0);
       if (a.includes("reflog")) return "0";
       if (a.includes("status --porcelain")) return "";

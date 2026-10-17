@@ -87,6 +87,11 @@ describe("parseNachweis", () => {
     assert.equal(n.review?.runden, 2);
     assert.equal(n.review?.verdikt, "ok");
   });
+  test("ein Head mit Großbuchstaben wird kleingeschrieben übernommen, ein zu kurzer bleibt leer", () => {
+    const n = parseNachweis(`KQ-Review: head=${"AB12CD3".repeat(5)}12345 runden=1 lenses=doku verdikt=ok`);
+    assert.equal(n.review?.head, `${"ab12cd3".repeat(5)}12345`);
+    assert.equal(parseNachweis("KQ-Review: head=ABC123 runden=1 lenses=doku verdikt=ok").review?.head, null);
+  });
   test("fehlende Felder bleiben leer, kaputte Zahl wird NaN", () => {
     const n = parseNachweis("KQ-Review: runden=zwei");
     assert.equal(n.review?.head, null);

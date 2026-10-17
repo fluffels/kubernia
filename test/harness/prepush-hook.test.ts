@@ -147,7 +147,7 @@ describe.skipIf(!hatSh)("#1762 L21c pre-push-Hook: welches Gate läuft bei welch
       join(d, "scripts", "check-diffsize.mjs"),
       `import { appendFileSync } from "node:fs"; appendFileSync(${JSON.stringify(log)}, "diffsize\\n"); process.exit(${diffsizeExit});`,
     );
-    writeFileSync(join(d, "bin", "npm"), `#!/bin/sh\necho "npm $*" >> "${log}"\nexit ${verifyExit}\n`);
+    writeFileSync(join(d, "bin", "npm"), `#!/bin/sh\necho "npm $*" >> "${log}"\nexit ${verifyExit}\n`, { mode: 0o755 });
     const hookPfad = fileURLToPath(new URL("../../.githooks/pre-push", import.meta.url)).replaceAll("\\", "/");
     const input = refs.map(({ ref, oid = OID }) => `${ref} ${oid} ${ref} ${"0".repeat(40)}\n`).join("");
     const r = spawnSync("sh", [hookPfad, "origin", "x"], {

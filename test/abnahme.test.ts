@@ -161,6 +161,41 @@ describe("Kommentar-Grenzen: Beleg und Gesamtkörper (#1762)", () => {
     expect(b).toContain("gekürzt");
     expect(nl.parseAbnahmeMarker(Z, b)?.urteil).toHaveLength(n);
   });
+  const viele = (n: number, belegLaenge: number) => {
+    const body = ["## Ziel", "Z", "", "## Akzeptanzkriterien", ...Array.from({ length: n }, (_, i) => `${i + 1}. Kriterium ${i + 1}.`), ""].join("\n");
+    const zeilen = Array.from({ length: n }, (_, i) => `K${i + 1}: erfuellt — ${beleg(belegLaenge)}`);
+    return lauf(BERICHT(zeilen), { ladeIssue: () => ({ state: "open", body, user: VERTRAUT, labels: [] }) }).posts[0].body;
+  };
+  test("der Hinweis auf entfallene Zeilen steht am Zeilenanfang und nennt die Zahl; die Belegkürzung allein löst ihn nicht aus", () => {
+    const b = viele(120, 2000);
+    expect(b).toMatch(/^… \(gekürzt\): \d+ weitere Zeilen entfallen \(die Urteile stehen im Marker\)$/m);
+    const ohne = viele(3, 2000);
+    expect(ohne).toContain("… (gekürzt)");
+    expect(ohne).not.toMatch(/weitere Zeilen entfallen/);
+  });
+  test("ein Körper knapp unter 65.000 Zeichen bleibt ungekürzt (untere Grenze der Kürzung)", () => {
+    const b = viele(55, 1000);
+    expect(b.length).toBeGreaterThan(55000);
+    expect(b.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
+    expect(b).not.toMatch(/weitere Zeilen entfallen/);
+    expect(b).not.toContain("… (gekürzt)");
+    expect(b.match(/^\| K\d+: /gm) ?? []).toHaveLength(55);
+  });
+  test("passt schon der Kopf mit dem Marker nicht, entfallen alle Zeilen und die Kürzung endet (kein Endlosschleifen-Fall)", () => {
+    const n = 7000;
+    const b = viele(n, 1);
+    expect(b).toContain(`${n} weitere Zeilen entfallen`);
+  });
+  test("Hand-off-Kommentar: der Schluss bleibt bei aktiver Kürzung erhalten", () => {
+    const zeilen = Array.from({ length: 80 }, (_, i) => `K${i + 1}: nicht-pruefbar — ${beleg(2000)}`);
+    const body = ["## Ziel", "Z", "", "## Akzeptanzkriterien", ...Array.from({ length: 80 }, (_, i) => `${i + 1}. Kriterium ${i + 1}.`), ""].join("\n");
+    const r = lauf(BERICHT(zeilen), { ladeIssue: () => ({ state: "open", body, user: VERTRAUT, labels: [] }) });
+    const h = r.posts.find((p) => p.nr === 7)?.body ?? "";
+    expect(h).toMatch(/^… \(gekürzt\): \d+ weitere Zeilen entfallen/m);
+    expect(h.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
+    expect(h).toContain("Der Reparaturweg");
+    expect(h.endsWith("\n")).toBe(true);
+  });
   test("Hand-off-Kommentar: Grund über 1.000 Zeichen gekürzt, Gesamtkörper begrenzt", () => {
     const r = lauf(BERICHT([`K1: nicht-pruefbar — ${beleg(5000)}`, "K2: erfuellt — b", "K3: erfuellt — c"]));
     const h = r.posts.find((p) => p.nr === 7)?.body ?? "";
