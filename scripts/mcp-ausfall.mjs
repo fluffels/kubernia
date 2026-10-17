@@ -84,10 +84,19 @@ export function serverNameFuerOrdner(ordner, server) {
 /** Der npx-Hinweis des Launchers (`scripts/mcp-launch.mjs` › `npxHinweis`) als stderr-Zeile des Servers: Pfeil + `npx` oder `npx -y`. Pur. */
 export const istNpxFallback = (text) => /→\s*npx\b|\bnpx -y\b/.test(text);
 
-/** Die Zeilen einer Log-Datei (Text) als Befunde `[{klasse, zeit, sessionId, text}]`; wirft nie, kaputte Zeilen entfallen. Pur. */
+/** Vorspann jedes (Wieder-)Verbindens in den Logs: er sagt nichts über den Anlass und zählt nicht als Ursache eines Reconnects. */
+const VORSPANN = /^(Initializing HTTP transport|Node version:|Environment:|HTTP transport (options|created)|Starting connection)/;
+
+/**
+ * Die Zeilen einer Log-Datei (Text) als Befunde `[{klasse, zeit, sessionId, text, code}]`; wirft nie, kaputte Zeilen entfallen. Pur.
+ * Ein `reconnect` (zweites `Starting connection`) trägt `ursache`: die letzte Logzeile davor ohne den Vorspann (≤ 160 Zeichen). Steht dort
+ * eine Routine-Meldung (`ROUTINE`, etwa „attempting automatic reconnection“ nach dem SSE-Leerlauf-Timeout), ist der Neustart der normale
+ * Wiederaufbau und entfällt.
+ */
 export function klassifiziere(zeilen) {
   const befunde = [];
   let verbindungen = 0;
+  let letzte = "";
   for (const roh of zeilen) {
     let z;
     try {
@@ -97,7 +106,9 @@ export function klassifiziere(zeilen) {
     }
     if (!z || typeof z !== "object") continue;
     const text = String(z.error ?? z.debug ?? "");
-    const mk = (klasse, code = "") => befunde.push({ klasse, zeit: z.timestamp ?? "", sessionId: z.sessionId ?? "", text, code });
+    const mk = (klasse, code = "", extra = {}) => befunde.push({ klasse, zeit: z.timestamp ?? "", sessionId: z.sessionId ?? "", text, code, ...extra });
+    const davor = letzte;
+    if (!VORSPANN.test(text)) letzte = text.replace(/\s+/g, " ").slice(0, 160);
     if (typeof z.error === "string") {
       if (z.error.startsWith("Server stderr:")) mk(istNpxFallback(z.error) ? "npx-fallback" : "stderr");
       else if (!z.error.startsWith("###")) mk("fehler");
@@ -106,7 +117,7 @@ export function klassifiziere(zeilen) {
     if (typeof z.debug !== "string") continue;
     if (/^Starting connection/.test(text)) {
       verbindungen += 1;
-      if (verbindungen > 1) mk("reconnect");
+      if (verbindungen > 1 && !ROUTINE.test(davor)) mk("reconnect", "", { ursache: davor });
     } else if (/^Tool '/.test(text)) {
       // Tool-Fehler sind kein Serverausfall, außer der Netzcode zeigt eine gerissene Verbindung (MCP-Protokollfehler und die `### Error`-Ausgabe eines Tools, etwa ein Browser-Tool ohne Dev-Server, bleiben draußen).
       if (/ failed/.test(text) && !/MCP error -32\d+|### Error/.test(text) && netzCode(text)) mk("abbruch", netzCode(text));
@@ -117,12 +128,18 @@ export function klassifiziere(zeilen) {
   return befunde;
 }
 
+/** Beispielzeile eines Befunds; ein Reconnect nennt seine Ursache („davor: …“). */
+const beispielText = (b) => {
+  const text = b.text.replace(/\s+/g, " ");
+  return (b.ursache ? `${text} (davor: ${b.ursache})` : text).slice(0, 160);
+};
+
 /** Befunde nach Server, Klasse und Ordner-Suffix bündeln: Anzahl, Zeitspanne, ≤ 3 Sessions, Beispielzeile. Pur. */
 export function buendeln(befunde) {
   const gruppen = new Map();
   for (const b of befunde) {
     const key = `${b.server}\u0000${b.klasse}\u0000${b.code ?? ""}\u0000${b.suffix ?? ""}`;
-    const g = gruppen.get(key) ?? { server: b.server, klasse: b.klasse, code: b.code ?? "", suffix: b.suffix ?? "", anzahl: 0, erste: b.zeit, letzte: b.zeit, sessions: [], beispiel: b.text.replace(/\s+/g, " ").slice(0, 160) };
+    const g = gruppen.get(key) ?? { server: b.server, klasse: b.klasse, code: b.code ?? "", suffix: b.suffix ?? "", anzahl: 0, erste: b.zeit, letzte: b.zeit, sessions: [], beispiel: beispielText(b) };
     g.anzahl += 1;
     if (b.zeit && (!g.erste || b.zeit < g.erste)) g.erste = b.zeit;
     if (b.zeit > g.letzte) g.letzte = b.zeit;

@@ -11,7 +11,7 @@ import { join } from "node:path";
 import * as raw from "../../scripts/mcp-ausfall.mjs";
 
 type Server = { name: string; type?: string; url?: string; headers?: Record<string, string> };
-type Befund = { klasse: string; zeit: string; sessionId: string; text: string; code?: string };
+type Befund = { klasse: string; zeit: string; sessionId: string; text: string; code?: string; ursache?: string };
 type Gruppe = { server: string; klasse: string; code: string; suffix: string; anzahl: number; erste: string; letzte: string; sessions: string[]; beispiel: string };
 type Ausfall = {
   BEKANNTE_ARTEN: string[];
@@ -56,6 +56,23 @@ describe("klassifiziere", () => {
     const r = a.klassifiziere([dbg("Starting connection with timeout of 30000ms"), dbg("Starting connection with timeout of 30000ms", "2026-10-15T11:00:00.000Z")]);
     expect(r).toHaveLength(1);
     expect(r[0]).toMatchObject({ klasse: "reconnect", zeit: "2026-10-15T11:00:00.000Z", sessionId: "s1" });
+  });
+  const START = "Starting connection with timeout of 30000ms";
+  const VORSPANN = ["Initializing HTTP transport to http://localhost:3000/api/public/mcp", "Node version: v26, Platform: win32", "Environment: {}", "HTTP transport options: {}", "HTTP transport created successfully"];
+  test("Reconnect trägt die letzte Logzeile vor dem Neustart als ursache (Vorspann ausgenommen, ≤ 160 Zeichen)", () => {
+    const lang = `Transient ECONNREFUSED on initial connect — retry 1/3 in 1000ms ${"x".repeat(300)}`;
+    const r = a.klassifiziere([dbg(START), dbg(lang), ...VORSPANN.map((t) => dbg(t)), dbg(START, "2026-10-15T11:00:00.000Z")]);
+    expect(r).toHaveLength(1);
+    expect(r[0].ursache).toHaveLength(160);
+    expect(r[0].ursache).toMatch(/^Transient ECONNREFUSED/);
+    expect(a.klassifiziere([dbg(START), dbg(START)])[0].ursache).toBe("");
+  });
+  test("Reconnect nach einer Routine-Meldung (automatische Wiederverbindung) ist kein Befund", () => {
+    const routine = [dbg("Closing transport (max consecutive terminal errors)"), dbg("HTTP transport closed/disconnected, attempting automatic reconnection"), ...VORSPANN.map((t) => dbg(t))];
+    expect(a.klassifiziere([dbg(START), ...routine, dbg(START, "2026-10-15T11:00:00.000Z")])).toEqual([]);
+    const nichtRoutine = a.klassifiziere([dbg(START), dbg("Successfully connected (transport: http) in 5ms"), ...VORSPANN.map((t) => dbg(t)), dbg(START)]);
+    expect(nichtRoutine).toHaveLength(1);
+    expect(nichtRoutine[0].ursache).toBe("Successfully connected (transport: http) in 5ms");
   });
   test("Tool-Fehler (### …, Tool '…' failed) sind kein Serverausfall", () => {
     expect(a.klassifiziere([err("### Error\nError: x"), dbg("Tool 'browser_navigate' failed after 0s: ### Error\nnet::ERR_BLOCKED_BY_CLIENT")])).toEqual([]);
@@ -155,6 +172,12 @@ describe("bündeln, filtern, melden", () => {
     expect(g).toHaveLength(2);
     expect(g[0]).toMatchObject({ anzahl: 4, erste: "2026-10-15T10:00:00Z", letzte: "2026-10-15T12:00:00Z", sessions: ["a", "b", "c"], beispiel: "Starting connection" });
     expect(g[1]).toMatchObject({ anzahl: 1, suffix: "--w" });
+  });
+  test("die Bündelzeile nennt die Ursache des Reconnects, ohne Ursache bleibt das Beispiel unverändert", () => {
+    const g = a.buendeln([{ ...b("2026-10-15T12:00:00Z", "a"), ursache: "Transient ECONNREFUSED on initial connect" }]);
+    expect(g[0].beispiel).toBe("Starting connection (davor: Transient ECONNREFUSED on initial connect)");
+    expect(a.meldung(g, [], "S")).toContain("davor: Transient ECONNREFUSED");
+    expect(a.buendeln([{ ...b("2026-10-15T12:00:00Z", "a"), ursache: "" }])[0].beispiel).toBe("Starting connection");
   });
   test("neuSeit lässt Älteres weg", () => {
     expect(a.neuSeit([b("2026-10-15T09:00:00Z", "a"), b("2026-10-15T11:00:00Z", "b")], "2026-10-15T10:00:00Z")).toHaveLength(1);
