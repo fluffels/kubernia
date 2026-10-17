@@ -20,6 +20,12 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawNamen from "../../scripts/ticket-namen.mjs";
+
+// Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const escapeRegex: (t: string) => string = rawNamen.escapeRegex;
 
 const readRepo = (rel: string) =>
   readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
@@ -85,7 +91,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
       const needle =
         gate === "test"
           ? /\bnpm test\b/
-          : new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+          : new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);
       expect(verify, `verify muss das Gate "${gate}" enthalten`).toMatch(needle);
     }
   });
@@ -102,7 +108,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
   it("build-abhängige Gates (#503 check:bundle) laufen in verify:full, NACH den Builds", () => {
     const full = scripts["verify:full"];
     for (const gate of BUILD_DEPENDENT_GATES) {
-      const needle = new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      const needle = new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);
       expect(full, `verify:full muss das build-abhängige Gate "${gate}" enthalten`).toMatch(needle);
       // ... und zwar hinter build:offline (sonst fehlt das gemessene Artefakt).
       expect(
@@ -111,7 +117,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
       ).toBe(true);
       // NICHT in der build-freien verify-Kette (dort gäbe es kein Artefakt zu messen).
       expect(
-        new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(scripts.verify),
+        new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`).test(scripts.verify),
         `"${gate}" darf NICHT in der build-freien verify-Kette stehen`,
       ).toBe(false);
     }
@@ -120,7 +126,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
   it("report-abhängige Gates (#1021 check:diffcoverage) laufen in verify:full, NACH ihrem Erzeuger", () => {
     const full = scripts["verify:full"];
     for (const [gate, producer] of REPORT_DEPENDENT_GATES) {
-      const needle = new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      const needle = new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);
       const ci = readRepo(".github/workflows/ci.yml");
       const nachErzeuger = (s: string) => s.indexOf(`npm run ${gate}`) > s.indexOf(`npm run ${producer}`);
       expect(full, `verify:full muss "${gate}" enthalten`).toMatch(needle);
@@ -135,7 +141,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
 
   it("netzabhängige Gates (#610 check:doctickets) laufen NICHT in verify, sondern als eigener CI-Job", () => {
     for (const gate of NETWORK_DEPENDENT_GATES) {
-      const needle = new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      const needle = new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);
       // Nicht in der hermetischen verify-Kette (dort gäbe es kein Netz/Token).
       expect(
         needle.test(scripts.verify),

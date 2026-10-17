@@ -23,10 +23,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { REPO } from "./board-lib.mjs";
-import { istFremdeingang, istVertraut, issueKommentare } from "./fremdtext-lib.mjs";
+import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, parseAbnahmeMarker, URTEILSWERTE } from "./nachweis-lib.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeCommitZeilen } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
@@ -89,8 +89,7 @@ export function entscheide(urteile) {
 
 /** Durchgang dieses Laufs: gültige Marker vertrauter Autoren auf dem PR plus 1; Marker Fremder und der Hand-off-Marker zählen nicht. Pur. */
 export function zaehleDurchgang(kommentare, owner, zeilen) {
-  const n = (kommentare ?? []).filter((c) => istVertraut(c?.user, owner) && parseAbnahmeMarker(zeilen, c?.body) !== null).length;
-  return n + 1;
+  return vertrauteAbnahmeMarker(kommentare, owner, zeilen).length + 1;
 }
 
 const zelle = (t) => String(t).replace(/\|/g, "\\|").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, " ");
@@ -105,14 +104,18 @@ const kuerzeBeleg = (t) => {
 /** Setzt Kopf, Zeilen und Schluss zusammen; passt der Körper nicht in `KOMMENTAR_MAX`, entfallen Zeilen von hinten (Kopf und Marker bleiben ganz). */
 function begrenze(kopf, zeilen, schluss) {
   const baue = (z, hinweis) => [...kopf, ...z, ...(hinweis ? [hinweis] : []), ...schluss].join("\n");
-  let text = baue(zeilen, null);
-  if (text.length <= KOMMENTAR_MAX) return text;
-  let n = zeilen.length;
-  do {
-    n -= 1;
-    text = baue(zeilen.slice(0, n), `${GEKUERZT}: ${zeilen.length - n} weitere Zeilen entfallen (die Urteile stehen im Marker)`);
-  } while (text.length > KOMMENTAR_MAX && n > 0);
-  return text;
+  const voll = baue(zeilen, null);
+  if (voll.length <= KOMMENTAR_MAX) return voll;
+  // Linear statt je Schritt neu zusammensetzen: die Länge des Joins ist Σ Teil-Längen + (Teile − 1), die Längen der Zeilen kommen aus Präfixsummen.
+  const laenge = (teile) => teile.reduce((summe, t) => summe + t.length, 0);
+  const praefix = [0];
+  for (const z of zeilen) praefix.push(praefix[praefix.length - 1] + z.length);
+  const fest = laenge(kopf) + laenge(schluss);
+  const hinweisFuer = (n) => `${GEKUERZT}: ${zeilen.length - n} weitere Zeilen entfallen (die Urteile stehen im Marker)`;
+  const laengeBei = (n) => fest + praefix[n] + hinweisFuer(n).length + (kopf.length + n + 1 + schluss.length - 1);
+  let n = zeilen.length - 1;
+  while (n > 0 && laengeBei(n) > KOMMENTAR_MAX) n -= 1;
+  return baue(zeilen.slice(0, n), hinweisFuer(n));
 }
 const kurz = (t) => {
   const z = String(t).split("\n")[0];

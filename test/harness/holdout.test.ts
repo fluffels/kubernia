@@ -2,12 +2,13 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Drei Regeln, alle statisch (kein Laufzeit-Guard; bekannte Grenze: ein Hauptchat, der die Vorlage ignoriert, wird hier nicht gesehen):
+ * Drei statische Regeln (die Laufzeit-Guards stehen in holdout-guard.test.ts; bekannte Grenze dieses Tests: ein Hauptchat, der die Vorlage ignoriert, wird hier nicht gesehen):
  *   1. Kein Übergabeprompt an Planer, Umsetzer, Nachfolger, Gruppen-Umsetzer oder Lens trägt einen Szenario-Platzhalter oder einen
  *      `SZENARIEN`-Kopf; nur die Vorlage der Abnahme darf ihn tragen. Und keine getrackte Datei trägt einen echten Kopf
  *      `SZENARIEN #<ziffern>`: die Szenarien liegen in keiner Datei.
  *   2. Die Tool-Mengen der beiden Agenten sind exakt festgelegt (Szenario-Agent ohne Schreib- und Shell-Tool, Abnahme-Agent ohne Edit und Agent).
  *   3. Im Skill steht der Szenario-Schritt vor dem Planer-Spawn.
+ * Dazu die Verdrahtung: beide Agenten tragen ihren Frontmatter-Hook (Matcher und Skript, siehe unten).
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -198,6 +199,28 @@ describe("Tool-Mengen der Holdout-Agenten (#1754 K2)", () => {
       assert.equal(kopf.model, "opus");
       assert.equal(kopf.effort, "medium");
     }
+  });
+});
+
+describe("Laufzeit-Hooks im Frontmatter beider Agenten (Sammelticket #1781)", () => {
+  const hookZeilen = (md: string): string => /^---\n([\s\S]*?)\n---/.exec(md.replace(/\r\n/g, NL))?.[1] ?? "";
+  const abnahmeKopf = hookZeilen(lies(".claude/agents/holdout-abnahme.md"));
+  const szenarioKopf = hookZeilen(lies(".claude/agents/holdout-szenario.md"));
+
+  test("holdout-abnahme: Matcher Write mit holdout-guard.mjs abnahme-write", () => {
+    assert.match(abnahmeKopf, /PreToolUse:\s*\n\s+- matcher: "Write"/);
+    assert.match(abnahmeKopf, /holdout-guard\.mjs\s*\n\s+- abnahme-write/);
+  });
+
+  test("holdout-szenario: Matcher Read|Grep|Glob mit holdout-guard.mjs szenario-lesen", () => {
+    assert.match(szenarioKopf, /PreToolUse:\s*\n\s+- matcher: "Read\|Grep\|Glob"/);
+    assert.match(szenarioKopf, /holdout-guard\.mjs\s*\n\s+- szenario-lesen/);
+  });
+
+  test("Negativ: ohne Hook, mit falschem Matcher oder vertauschtem Modus ist es rot", () => {
+    assert.doesNotMatch(abnahmeKopf.replace(/hooks:[\s\S]*$/, ""), /holdout-guard/);
+    assert.doesNotMatch(abnahmeKopf.replace('matcher: "Write"', 'matcher: "Edit"'), /matcher: "Write"/);
+    assert.doesNotMatch(szenarioKopf.replace("szenario-lesen", "abnahme-write"), /- szenario-lesen/);
   });
 });
 

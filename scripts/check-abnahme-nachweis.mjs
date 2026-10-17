@@ -24,10 +24,10 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
-import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
-import { parseNachweis, parseAbnahmeMarker } from "./nachweis-lib.mjs";
+import { issueKommentare } from "./fremdtext-lib.mjs";
+import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeProjektConfig, trenneConfigArg } from "./projekt-config-lib.mjs";
-import { aenderungsCommitsNach, commitZeilenAus, konfliktMergesNach, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
+import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
 /** Schließ-Referenzen eines PR-Bodys: verschiedene Ticketnummern zu close/fix/resolve (alle Beugungen, Groß-/Kleinschreibung egal, optional `:`). Pur. */
@@ -38,11 +38,7 @@ export function verknuepfteTickets(body) {
 
 /** Der jüngste Kommentar (Reihenfolge der API: chronologisch) eines vertrauten Autors mit gültigem Abnahme-Marker, sonst `null`. Pur. */
 export function vertrauterMarker(kommentare, owner, zeilen) {
-  const treffer = (kommentare ?? [])
-    .filter((c) => istVertraut(c?.user, owner))
-    .map((c) => parseAbnahmeMarker(zeilen, c?.body))
-    .filter((m) => m !== null);
-  return treffer.length > 0 ? treffer[treffer.length - 1] : null;
+  return vertrauteAbnahmeMarker(kommentare, owner, zeilen).at(-1) ?? null;
 }
 
 const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",");
@@ -71,7 +67,7 @@ function bewerteHead(a, review, abnahmeHead) {
   } else if (a.durchgaenge > review.runden) {
     fehler.push(
       `durchgaenge=${a.durchgaenge} ist größer als runden=${review.runden}: jeder Abnahme-Durchgang nach der Konvergenz zählt als Pass, ` +
-        `die Review-Zeile muss runden >= durchgaenge tragen (Cap 3 Pässe, darüber nur mit Zusatzpass).`,
+        `die Review-Zeile muss runden >= durchgaenge tragen (Cap ${MAX_REVIEW_PAESSE} Pässe, darüber nur mit Zusatzpass).`,
     );
   }
   if (!abnahmeHead.bekannt) return [...fehler, `Abnahme: head=${a.head} ist kein bekannter Commit.`];
@@ -100,7 +96,7 @@ function bewerteSpur(a, marker) {
 export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen }) {
   const a = nachweis.abnahme;
   if (!a) return [`${zeilen.abnahme}: Zeile fehlt. Ablauf: node scripts/abnahme.mjs kriterien <nr>; Vorlage: ${vorlage(zeilen)}`];
-  if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
+  if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.grund ? `${a.grund}: ` : ""}${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "entfaellt") {
     return ticket && ticket.kriterien > 0 ? [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien} Akzeptanzkriterien nicht erlaubt.`] : [];
   }
@@ -109,27 +105,19 @@ export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen }
 }
 
 const gitDefault = (args) => execFileSync("git", args, { encoding: "utf8" });
-const zeilenListe = (text) => text.split(/\r?\n/).filter((l) => l.trim() !== "");
 
 /** Liest die Daten zum Abnahme-head aus git: bekannt, im Slice, Nachfahre des Review-head, Konflikt-Merges und Änderungs-Commits danach. */
 function leseAbnahmeHead(git, base, abnahmeSha, reviewSha) {
-  const sha = (h) => {
-    try {
-      return git(["rev-parse", "--verify", "--quiet", `${h}^{commit}`]).trim() || null;
-    } catch {
-      return null;
-    }
-  };
-  const aSha = sha(abnahmeSha);
-  const leer = { bekannt: aSha !== null, imSlice: false, nachReviewHead: false, konfliktMerges: [], aenderungsCommits: [] };
-  if (!aSha || !zeilenListe(git(["rev-list", `${base}..HEAD`])).includes(aSha)) return leer;
-  const rSha = reviewSha ? sha(reviewSha) : null;
+  const a = commitImSlice(git, base, abnahmeSha);
+  const leer = { bekannt: a.bekannt, imSlice: false, nachReviewHead: false, konfliktMerges: [], aenderungsCommits: [] };
+  if (!a.imSlice) return leer;
+  const rSha = reviewSha ? loeseCommit(git, reviewSha) : null;
   return {
     ...leer,
     imSlice: true,
-    nachReviewHead: rSha !== null && git(["merge-base", rSha, aSha]).trim() === rSha,
-    konfliktMerges: konfliktMergesNach(git, aSha),
-    aenderungsCommits: aenderungsCommitsNach(git, aSha, base),
+    nachReviewHead: rSha !== null && git(["merge-base", rSha, a.sha]).trim() === rSha,
+    konfliktMerges: a.konfliktMerges,
+    aenderungsCommits: a.aenderungsCommits,
   };
 }
 

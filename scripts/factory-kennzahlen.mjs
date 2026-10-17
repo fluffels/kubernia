@@ -169,7 +169,7 @@ function kostenAbschnitt(tickets, quelle) {
 
 /** Abnahme-Quote im ersten Durchgang aus dem Lauf-Ergebnis; ohne Urteil im Zeitraum eine Lücke mit Grund, nie 0 %. */
 function abnahmeAbschnitt(lauf) {
-  if (lauf.luecke) return ["- Lücke: kein Lauf-Ergebnis"];
+  if (lauf.luecke) return [`- Lücke: kein Lauf-Ergebnis (${lauf.luecke})`];
   const a = lauf.daten.kennzahlen.abnahme;
   const overrides = lauf.daten.zeilen.filter((z) => z.abnahme === "override").map((z) => `#${z.pr}`);
   return [

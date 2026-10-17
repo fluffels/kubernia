@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER } from "./markdown.mjs";
+import { escapeRegex, MERMAID_FRONTMATTER } from "./markdown.mjs";
 
 const kern = createRequire(import.meta.url)("../schichten-kern.cjs");
 
@@ -151,8 +151,6 @@ function cruise(rootDir, args, pruefbefehl) {
   }
 }
 
-const escRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 /**
  * Konsistenz der `schichten.cruise`-Argumente mit der Quellwurzel des Modells (#1428 Z13): die Config nennt das Cruise-Ziel und das
  * `--collapse`-Muster als Text; stünde dort ein anderes Verzeichnis als `SCHICHT_MODELL.quellwurzel`, verdichtete das Diagramm
@@ -167,7 +165,7 @@ export function pruefeCruiseArgs(args, modell) {
     return `schichten.cruise: Ziel „${liste[bin + 1] ?? "(fehlt)"}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ des Schicht-Modells (erwartet: ${q})`;
   }
   const c = liste.indexOf("--collapse");
-  const soll = `^(${escRegex(q)}|node_modules)/[^/]+/`;
+  const soll = `^(${escapeRegex(q)}|node_modules)/[^/]+/`;
   if (c >= 0 && liste[c + 1] !== soll) {
     return `schichten.cruise: --collapse „${liste[c + 1] ?? "(fehlt)"}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ (erwartet: ${soll})`;
   }

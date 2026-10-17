@@ -96,6 +96,8 @@
     {"pfad":"scripts/umsetzer-abschluss.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/lens-auftrag-guard.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/lens-edit-guard.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"scripts/holdout-guard.mjs","ring":"kern","quelle":"Sammelticket #1781 (aus #1754)"},
+    {"pfad":"scripts/holdout-auftrag-guard.mjs","ring":"kern","quelle":"Sammelticket #1781 (aus #1754)"},
     {"pfad":"scripts/check-internalrefs.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/sandbox-doctor.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/mcp-ausfall.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1634)"},

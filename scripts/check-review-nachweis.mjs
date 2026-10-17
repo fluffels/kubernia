@@ -41,17 +41,15 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
-import { aenderungsCommitsNach, konfliktMergesNach, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { parseNachweis } from "./nachweis-lib.mjs";
+import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
+import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
 export { parseNachweis };
 
-/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter review-nachweis.test.ts). */
-export const MAX_FIX_RUNDEN = 2;
-/** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
-export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
+// Die Cap-Konstanten leben in nachweis-lib.mjs (auch das Abnahme-Gate nennt sie); hier bleibt der Export für Aufrufer und Tests.
+export { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE };
 
 const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
 export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
@@ -194,34 +192,30 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     // `--reverse`: chronologisch, damit der JÜNGSTE Nachweis (`lastLine`) und die jüngste Override-Zeile gelten (Z8a).
     const messages = git(["log", "--reverse", "--format=%B", `${base}..HEAD`]);
     const ov = parseOverrideTrailers(messages, zeilen.reviewOverride);
-    if (ov.valid.length > 0) {
-      return { ok: true, override: ov.valid[ov.valid.length - 1].reason, fehler: [], invalid: ov.invalid };
+    // Die jüngste gültige Zeile entscheidet; ein Widerruf (`#<nr> entfällt`) ist kein Override (wie bei den übrigen Gates).
+    const grund = aktiverOverride(messages, zeilen.reviewOverride);
+    if (grund !== null) {
+      return { ok: true, override: grund, fehler: [], invalid: ov.invalid };
     }
     const nachweis = parseNachweis(messages, zeilen);
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])
       .split(/\r?\n/)
       .filter((l) => l.trim() !== "");
-    let headSha = null;
-    let headImSlice = false;
+    let hd = { bekannt: false, imSlice: false, konfliktMerges: [], aenderungsCommits: [] };
     let commitsNachReview = null;
-    let konfliktMerges = [];
-    let aenderungsCommits = [];
     if (nachweis.review?.head) {
-      try {
-        headSha = git(["rev-parse", "--verify", "--quiet", `${nachweis.review.head}^{commit}`]).trim() || null;
-      } catch {
-        headSha = null;
-      }
-      if (headSha) {
-        headImSlice = git(["rev-list", `${base}..HEAD`]).split(/\r?\n/).includes(headSha);
-        if (headImSlice) {
-          commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${headSha}..HEAD`]).trim());
-          konfliktMerges = konfliktMergesNach(git, headSha);
-          aenderungsCommits = aenderungsCommitsNach(git, headSha, base);
-        }
-      }
+      hd = commitImSlice(git, base, nachweis.review.head);
+      if (hd.imSlice) commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${hd.sha}..HEAD`]).trim());
     }
-    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges, aenderungsCommits, zeilen });
+    const fehler = bewerteNachweis({
+      nachweis,
+      dateien,
+      headBekannt: hd.bekannt,
+      headImSlice: hd.imSlice,
+      konfliktMerges: hd.konfliktMerges,
+      aenderungsCommits: hd.aenderungsCommits,
+      zeilen,
+    });
     return {
       ok: fehler.length === 0,
       fehler,

@@ -107,14 +107,22 @@ describe("Dev-Umgebung: Node-Version & Port halten zusammen (#388)", () => {
 
 describe("Dependabot: Node-Major nur von Hand (#1762)", () => {
   const dependabot = read(".github/dependabot.yml");
-  const dockerBlock = dependabot.slice(dependabot.indexOf(`package-ecosystem: "docker"`));
+  /** Ein Eintrag je `- package-ecosystem:` (Name -> Text bis zum nächsten Eintrag). */
+  const bloecke = new Map(
+    dependabot
+      .split(/^ {2}- package-ecosystem: /m)
+      .slice(1)
+      .map((b) => [/^"([^"]+)"/.exec(b)?.[1] ?? "", b] as const),
+  );
+  const NODE_IGNORE = /ignore:\s*\n\s*- dependency-name: "node"\s*\n\s*update-types: \["version-update:semver-major"\]/;
 
-  test("der Docker-Block ignoriert Node-Major-Updates (alle Pins ziehen gemeinsam nach)", () => {
-    assert.ok(dockerBlock.startsWith("package-ecosystem"), "dependabot.yml hat keinen Docker-Block.");
+  test.each(["docker", "docker-compose"])("der Block `%s` ignoriert Node-Major-Updates (alle Pins ziehen gemeinsam nach)", (name) => {
+    const block = bloecke.get(name);
+    assert.ok(block, `dependabot.yml hat keinen Block package-ecosystem "${name}".`);
     assert.match(
-      dockerBlock,
-      /ignore:\s*\n\s*- dependency-name: "node"\s*\n\s*update-types: \["version-update:semver-major"\]/,
-      "Der Docker-Block braucht die Ignore-Regel für node (semver-major), sonst kommt ein Einzel-PR, der die Node-Pins auseinanderzieht.",
+      block,
+      NODE_IGNORE,
+      `Der Block "${name}" braucht die Ignore-Regel für node (semver-major), sonst kommt ein Einzel-PR, der die Node-Pins auseinanderzieht.`,
     );
   });
 });

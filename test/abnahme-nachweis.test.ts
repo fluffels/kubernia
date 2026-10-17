@@ -34,7 +34,7 @@ interface Mod {
 }
 const m = raw as unknown as Mod;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen & Record<string, string> };
-const { parseNachweis, abnahmeMarker } = nlRaw as unknown as { parseNachweis: (t: string, z: unknown) => Nachweis; abnahmeMarker: (z: unknown) => string };
+const { parseNachweis, abnahmeMarker, MAX_REVIEW_PAESSE } = nlRaw as unknown as { parseNachweis: (t: string, z: unknown) => Nachweis; abnahmeMarker: (z: unknown) => string; MAX_REVIEW_PAESSE: number };
 const Z = commitZeilen("KQ-", "kubernia-planner");
 const CONFIG = { repo: "owner/repo", praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" } };
 
@@ -73,11 +73,13 @@ describe("K1: Zeile und Urteil je Kriterium", () => {
   test("ungültige Zeile", () => rot(bewerte({ abnahme: { art: "ungueltig", zeile: "Unsinn" } }), /ungültig \(Unsinn\)/));
   test("Urteil für ein Kriterium fehlt", () => rot(bewerte({ ticket: { nr: 9, kriterien: 3 } }), /K3: Urteil fehlt/));
   test("unbekanntes Kriterium (über der Anzahl)", () => rot(bewerte({ ticket: { nr: 9, kriterien: 1 } }), /K2: unbekannt/));
-  test("doppeltes K und unbekannter Wert macht schon der Parser ungültig", () => {
-    for (const urteil of ["K1:erfuellt,K1:erfuellt", "K1:vielleicht"]) {
-      const n = parseNachweis(`${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`, Z);
-      rot(bewerte({ abnahme: n.abnahme }), /ungültig/);
-    }
+  test("doppeltes K macht schon der Parser ungültig, die Meldung nennt den Grund (L6a)", () => {
+    const n = parseNachweis(`${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt,K2:nicht-erfuellt`, Z);
+    rot(bewerte({ abnahme: n.abnahme }), /ungültig \(K2 doppelt: /);
+  });
+  test("unbekannter Urteilswert macht schon der Parser ungültig, die Meldung nennt den Grund (L6a)", () => {
+    const n = parseNachweis(`${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:gut`, Z);
+    rot(bewerte({ abnahme: n.abnahme }), /ungültig \(unbekannter Wert „gut“ bei K1: /);
   });
 });
 
@@ -90,6 +92,10 @@ describe("K2: nicht erfüllt, nicht prüfbar", () => {
 
 describe("K3: Cap", () => {
   test("durchgaenge > runden ist rot", () => rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 2, marker: marker({ durchgang: 3 }) }), /durchgaenge=3 ist größer als runden=2/));
+  test("die Cap-Meldung nennt den Wert der Konstante MAX_REVIEW_PAESSE (L5c)", () => {
+    expect(MAX_REVIEW_PAESSE).toBeGreaterThan(0);
+    rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 2, marker: marker({ durchgang: 3 }) }), new RegExp(`Cap ${MAX_REVIEW_PAESSE} Pässe, darüber nur mit Zusatzpass`));
+  });
   test("Review-Zeile fehlt oder runden keine Zahl", () => {
     rot(bewerte({ review: false }), /Review-Zeile fehlt/);
     rot(bewerte({ runden: Number.NaN }), /runden ist keine Zahl/);

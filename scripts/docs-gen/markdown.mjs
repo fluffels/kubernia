@@ -123,7 +123,10 @@ export function mermaidText(s) {
     .replace(/\r?\n/g, " ");
 }
 
-const escRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Maskiert die Regex-Metazeichen der Kern-Funktion ohne `/` und `-`, wie bisher in docs-gen (Kopie der Kern-Funktion: der docs-gen-Kern importiert nur `node:*` und sich selbst). Pur. */
+export function escapeRegex(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
 
 /**
  * Liest die Konstante `const <name> = <Ganzzahl>` aus `datei` (relativ zu `rootDir`) als Ziffern-String.
@@ -133,10 +136,10 @@ export function ganzzahlKonstante(rootDir, datei, name) {
   const abs = join(rootDir, datei);
   if (!existsSync(abs)) throw new Error(`Datei ${datei} nicht gefunden`);
   const text = readFileSync(abs, "utf8");
-  const treffer = text.match(new RegExp(`^\\s*(?:export\\s+)?const\\s+${escRegex(name)}\\s*=`, "gm")) ?? [];
+  const treffer = text.match(new RegExp(`^\\s*(?:export\\s+)?const\\s+${escapeRegex(name)}\\s*=`, "gm")) ?? [];
   if (treffer.length === 0) throw new Error(`${name} fehlt in ${datei}`);
   if (treffer.length > 1) throw new Error(`${name} steht mehrfach in ${datei}`);
-  const zahl = new RegExp(`^\\s*(?:export\\s+)?const\\s+${escRegex(name)}\\s*=\\s*(\\d+)\\s*(?:;|//|$)`, "m").exec(text);
+  const zahl = new RegExp(`^\\s*(?:export\\s+)?const\\s+${escapeRegex(name)}\\s*=\\s*(\\d+)\\s*(?:;|//|$)`, "m").exec(text);
   if (!zahl) throw new Error(`${name} in ${datei} ist kein Ganzzahl-Literal`);
   return zahl[1];
 }

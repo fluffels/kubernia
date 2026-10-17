@@ -110,6 +110,8 @@ AGENTS.md                  @fluffels
 /scripts/patch-zugriff.mjs @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
+/scripts/holdout-guard.mjs @fluffels
+/scripts/holdout-auftrag-guard.mjs @fluffels
 /scripts/langfuse-abgleich-hook.mjs @fluffels
 /scripts/langfuse-zugang.mjs @fluffels
 /scripts/langfuse-nachliefern.mjs @fluffels

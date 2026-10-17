@@ -29,8 +29,11 @@ export function repoDateien(): string[] {
   return dateienCache;
 }
 
+/** Ordner der Workflow-Skripte (gleich `harness.workflows` in scripts/docs-gen/config.json, vom Test gehalten). */
+export const WORKFLOW_ORDNER = ".claude/workflows";
+
 /** Workflow-Skripte (`.js`/`.mjs`/`.ts`) unter `dir` (rekursiv, repo-relativ), nur versionierte; ohne den Ordner leer. */
-export function workflowDateien(dir = ".claude/workflows"): string[] {
+export function workflowDateien(dir = WORKFLOW_ORDNER): string[] {
   return repoDateien().filter((f) => f.startsWith(dir + "/") && /\.(js|mjs|ts)$/.test(f));
 }
 

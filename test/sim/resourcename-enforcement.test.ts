@@ -10,6 +10,7 @@
 import { test, describe, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
+import { escapeRegExp } from "../../src/content/drills/shared";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -17,7 +18,7 @@ beforeEach(() => { sim = freshSim(); });
 /** Die zentrale Meldung enthält den beanstandeten Namen + den RFC-1123-Text. */
 function assertRfc1123Error(out: string | null, badName: string) {
   assert.ok(out, "es sollte eine Ausgabe geben");
-  assert.match(out!, new RegExp(badName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "nennt den beanstandeten Namen");
+  assert.match(out!, new RegExp(escapeRegExp(badName)), "nennt den beanstandeten Namen");
   assert.match(out!, /RFC 1123 subdomain/, "gibt die DNS-1123-Fehlermeldung");
 }
 
