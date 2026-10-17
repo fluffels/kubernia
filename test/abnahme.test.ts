@@ -248,7 +248,7 @@ describe("Kommentar-Grenzen: Beleg und Gesamtkörper (#1762)", () => {
     const n = 7000;
     const b = viele(n, 1);
     expect(b).toContain(`${n} weitere Zeilen entfallen`);
-  }, 60_000); // 7.000 Kriterien: die Kürzung läuft zeilenweise, unter Coverage sprengt das die 5 s
+  });
   test("Hand-off-Kommentar: der Schluss bleibt bei aktiver Kürzung erhalten", () => {
     const zeilen = Array.from({ length: 80 }, (_, i) => `K${i + 1}: nicht-pruefbar — ${beleg(2000)}`);
     const body = ["## Ziel", "Z", "", "## Akzeptanzkriterien", ...Array.from({ length: 80 }, (_, i) => `${i + 1}. Kriterium ${i + 1}.`), ""].join("\n");
