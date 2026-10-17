@@ -297,6 +297,8 @@ Die neun Hooks und Guards (`worktree-guard-hook`, `stop-verify-hook`, `lens-auft
 - **`patch-zugriff`:** ohne übergebene `namen` lädt es einmal die Config (lazy, wirft ohne Schlüssel); mit `namen` bleibt die Funktion pur.
 - **Grenzen:** `ticket-refs.mjs` und `worktree-aufraeumen.mjs` behalten bis K3 ihr eigenes Muster. Ein Agent-Typ mit Plugin-Namensraum (`<plugin>:<name>`) wird exakt verglichen und nicht erkannt (F10). Ein `SubagentHandback`-Deny bei kaputter Config kennt keine `stop_hook_active`-Freigabe: gewollt laut statt still.
 
+Präzisiert durch #1743: `ticket-refs.mjs` und `worktree-aufraeumen.mjs` leiten ihre Muster seitdem aus der Config ab (die Grenze „behalten bis K3“ ist eingelöst), und auch der Stop des Hauptchats braucht `praefixe.worktree` (Fortschreibung #1743 unten).
+
 ## Fortschreibung #1713 (2026-10-16): Holdout-Abnahme im Skill-Pfad (F13)
 
 ADR 0028 hat den Workflow entfernt, auf den §2 verweist; die Holdout-Abnahme läuft deshalb im Skill-Pfad. Das Epic #1713 ist in vier Tickets geteilt (Format und Auswertung #1753, Agenten im Ablauf #1754, Erzwingung in der PR-CI #1755, Kennzahl #1756). #1753 liefert das Fundament: die Nummerierung K1…KN, die Commit-Zeile `KQ-Abnahme:` und `scripts/abnahme.mjs`. Entscheidungen:
@@ -348,3 +350,14 @@ Umsetzungsentscheidungen in #1756 (Abnahme-Quote in den Factory-Kennzahlen):
 - **Ungültige Zeile:** zählt als `null` („ohne“), die vier Werte des Tickets bleiben unverändert.
 - **Vertrag:** `vertragPruefen` verlangt das Aggregat samt Unterfeldern und je Zeile ein gültiges Abnahme-Feld; fehlt es, endet `factory-kennzahlen` mit Exit 2 (Test gegen das echte `bewertePrs`).
 - **Darstellung:** eine Aggregatzeile in `lauf-ergebnis` statt einer Tabellenspalte, keine Spalte in der Verdichtungszeile.
+
+## Fortschreibung #1743 (2026-10-17): Ticket-Lebenszyklus (F3, Teil 3)
+
+`ticket-refs`, `worktree-aufraeumen`, `cleanup-worktrees`, `ticket-lock`, `claims-pruefen`, `naechstes-ticket`, `budget-lib`, `mcp-ausfall`, `haupt-sync` und `.githooks/pre-push` tragen kein Branch- oder Worktree-Präfix und keine Repo-Prosa mehr; die Baseline sinkt, und `ticket-refs`, `haupt-sync`, `mcp-ausfall`, `worktree-aufraeumen`, `stop-verify-hook`, `cleanup-worktrees` und `ticket-lock` sind Ring `kern`. `claims-pruefen` (über `board-lib`) und `naechstes-ticket` bleiben Ring `kern-nach-entkopplung`. Entscheidungen:
+
+- **Form der API:** `namen` bzw. `config` sind optionale Parameter. Fehlen sie, lädt die Funktion die echte Config je Aufruf und wirft ohne Schlüssel (kein Standardwert, Vorbild `patch-zugriff`); die Produktivpfade (`echteDeps`, `echteIo`, `main`) lösen die Namen einmal je Lauf auf und reichen sie weiter. `LENS_WORKTREE_NAME` und `LENS_NAME_KERN` entfallen (eine Konstante bräuchte die Config beim Import); an ihre Stelle tritt `lensWorktreeName(namen)`.
+- **Lock-Verzeichnis:** kein eigener Config-Schlüssel; `lockVerzeichnis` leitet es aus `praefixe.worktree` ab (Pfad für das Projekt unverändert).
+- **Temp- und Stand-Dateien:** `<Worktree-Präfix>rate-limits.json` (`budget-lib`) und `<Worktree-Präfix>mcp-ausfall-<Slug>.json` (`mcp-ausfall`) behalten für das Projekt ihren Pfad; ein neutraler Name hätte bestehende Stände verwaist. Die Umgebungsvariablen `KQ_*` gewinnen auch ohne Config.
+- **Fail-closed, außer wo das Werkzeug nie stören darf:** `cleanup-worktrees`, `ticket-lock`, `naechstes-ticket` und `budget-pacing` brechen ohne Schlüssel mit Fix-Zeile ab; `stop-verify-hook` blockt den Stop des Hauptchats nur ohne `praefixe.worktree` (`worktreeNamenOderGrund`: ein fehlender Agentenname stört das Aufräumen nicht), `SubagentStop` braucht die volle Config (der zweite Stop mit `stop_hook_active` gibt frei, keine Schleife); `mcp-ausfall` meldet eine Zeile mit Grund und arbeitet ohne Stand-Datei weiter (Exit 0); `haupt-sync` pullt weiter (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
+- **Skill-Verzeichnis:** `haupt-sync` leitet es als `.claude/skills/<agenten.ticketSkill>/` ab. Der Fitness-Test in `test/harness/lebenszyklus-namen.test.ts` prüft, dass es existiert, und wird rot, sobald K8 (#1748) das Verzeichnis umbenennt, ohne dass `ticketSkill` mitzieht.
+- **Grenzen:** Das Label-Literal in `naechstes-ticket` (`Label:2`) fällt in K4 (#1744), `subagent-laeufe` ruft `ticketAusRef(prompt)` weiter ohne `namen` auf (lädt die Config je Lauf, K5 #1745), die Umgebungsvariablen `KQ_*` heißen weiter so (#1745). Die Statusline lässt den Rate-Limit-Snapshot ohne vollständige Config still weg (ihr catch schluckt den Wurf), `budget-pacing` bricht danach laut ab. Ein Scan-Wächter über alle Skripte entfällt, die Baseline erzwingt die Freiheit von Literalen.

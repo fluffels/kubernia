@@ -4,7 +4,8 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { LENS_WORKTREE_NAME } from "./ticket-refs.mjs";
+import { escapeRegex, ladeTicketNamen } from "./ticket-namen.mjs";
+import { lensWorktreeName } from "./ticket-refs.mjs";
 
 /** Pfad-Normalisierung: Backslashes → Slashes, kein Trailing-Slash. Real entstehen
  *  gemischte Pfade (`mainRoot` slash-normalisiert, `join()` hängt auf Windows
@@ -66,18 +67,21 @@ export function localWorktreeFiles(worktreesDir, deps = {}) {
     .map((e) => e.name);
 }
 
-/** Dateiname `kq-<nr>` gefolgt von `-`, `.` oder Ende: Gruppe 1 ist der Eltern-Worktree (`kq-13610-x` gehört zu `kq-13610`, nicht `kq-1361`). */
-const KQ_DATEI = /^(kq-\d+)(?=[-.]|$)/;
+/** Dateiname `<Worktree-Präfix><nr>` gefolgt von `-`, `.` oder Ende: Gruppe 1 ist der Eltern-Worktree (`<Präfix>13610-x` gehört zu `<Präfix>13610`, nicht `<Präfix>1361`). */
+function dateiMuster(namen) {
+  return new RegExp(`^(${escapeRegex(namen.praefixe.worktree)}\\d+)(?=[-.]|$)`);
+}
 
 /**
- * Teilt lose Dateien (#1476): `verwaist` (`kq-<nr>` nicht registriert, älter als 5 Minuten, löschbar), `jung` (verwaist,
- * aber jünger, nur melden) und `fremd` (Name nicht `kq-<nr>…`, nur melden). Dateien eines registrierten Worktrees fehlen.
+ * Teilt lose Dateien (#1476): `verwaist` (`<Worktree-Präfix><nr>` nicht registriert, älter als 5 Minuten, löschbar), `jung` (verwaist,
+ * aber jünger, nur melden) und `fremd` (Name nicht `<Worktree-Präfix><nr>…`, nur melden). Dateien eines registrierten Worktrees fehlen.
  */
 export function sortiereDateien(worktreesDir, dateien, registered, deps = {}) {
   const kandidaten = [];
   const fremd = [];
+  const muster = dateiMuster(deps.namen ?? ladeTicketNamen());
   for (const name of dateien) {
-    const m = KQ_DATEI.exec(name);
+    const m = muster.exec(name);
     if (!m) fremd.push(name);
     else if (!registered.has(join(worktreesDir, m[1]).replace(/\\/g, "/"))) kandidaten.push(name);
   }
@@ -132,7 +136,7 @@ export function suspiciousWorktreeEntries(worktreesDir, deps = {}) {
 /**
  * Schutzgurt vor dem `rmSync` (#1051) — `{ safe, reason? }`.
  *
- * Anlass: Beim Aufräumen von `kq-1027` wurden ALLE versionierten Dateien unter
+ * Anlass: Beim Aufräumen eines Ticket-Worktrees wurden ALLE versionierten Dateien unter
  * `.claude/` im Haupt-Checkout gelöscht, obwohl der Code dem Wortlaut nach nur
  * den Waisen-Pfad anfasst; die Ursache bleibt offen (#1058). Der Guard sichert
  * daher URSACHENUNABHÄNGIG und **fail-closed** ab: gelöscht wird nur, was
@@ -232,6 +236,8 @@ export function computeOrphans(worktreesDir, dirs, registered) {
  * Worktree aus dieser Check läuft (#952).
  */
 export function diagnoseOrphans(cwd, deps = {}) {
+  // Namen vor dem git-Versuch auflösen: ein Config-Fehler darf nicht im fail-open `ok:false` verschwinden.
+  const namen = deps.namen ?? ladeTicketNamen();
   let allPaths;
   try {
     allPaths = registeredWorktreePaths(cwd, deps);
@@ -247,21 +253,22 @@ export function diagnoseOrphans(cwd, deps = {}) {
   const registered = new Set(allPaths);
   const dirs = localWorktreeDirs(worktreesDir, deps);
   const { alt: orphans, jung: young } = splitByAge(worktreesDir, computeOrphans(worktreesDir, dirs, registered), deps);
-  const { alt: lensOrphans, jung: lensYoung } = splitByAge(worktreesDir, verwaisteLensWorktrees(allPaths, worktreesDir), deps);
-  const dateien = sortiereDateien(worktreesDir, localWorktreeFiles(worktreesDir, deps), registered, deps);
+  const { alt: lensOrphans, jung: lensYoung } = splitByAge(worktreesDir, verwaisteLensWorktrees(allPaths, worktreesDir, namen), deps);
+  const dateien = sortiereDateien(worktreesDir, localWorktreeFiles(worktreesDir, deps), registered, { ...deps, namen });
   return { ok: true, orphans, young, lensOrphans, lensYoung, orphanFiles: dateien.verwaist, youngFiles: dateien.jung, foreignFiles: dateien.fremd, mainRoot, worktreesDir };
 }
 
 /**
- * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `kq-<nr>` NICHT mehr registriert ist (#1425).
+ * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `<Worktree-Präfix><nr>` NICHT mehr registriert ist (#1425).
  * `registeredPaths` sind die absoluten Pfade aus `git worktree list`. Pure; liefert Ordnernamen (nicht Pfade).
  */
-export function verwaisteLensWorktrees(registeredPaths, worktreesDir) {
+export function verwaisteLensWorktrees(registeredPaths, worktreesDir, namen = ladeTicketNamen()) {
+  const lensName = lensWorktreeName(namen);
   const basis = norm(worktreesDir) + "/";
   const registriert = new Set(registeredPaths.map(norm));
-  const namen = [...registriert].filter((p) => p.startsWith(basis) && !p.slice(basis.length).includes("/")).map((p) => p.slice(basis.length));
-  return namen.filter((name) => {
-    const m = LENS_WORKTREE_NAME.exec(name);
+  const ordner = [...registriert].filter((p) => p.startsWith(basis) && !p.slice(basis.length).includes("/")).map((p) => p.slice(basis.length));
+  return ordner.filter((name) => {
+    const m = lensName.exec(name);
     return m !== null && !registriert.has(basis + m[1]);
   });
 }
@@ -463,9 +470,6 @@ function istLeer(absPath, deps = {}) {
 
 // ── Lokale Branches nach dem Squash-Merge (#1579) ─────────────────────────────
 
-/** Branch-Namensraum der Ticket-Branches; nur darunter wird je etwas gelöscht. */
-const TICKET_BRANCH = /^feature\/kq-\d+/;
-
 /**
  * Ausgabe von `git for-each-ref --format=%(refname:short)%09%(upstream:track)%09%(objectname) refs/heads/…` →
  * `[{ name, gone, sha }]` (`gone`: der Upstream ist nach dem Merge entfernt, `[gone]`). Zeilen ohne Namen oder Hash entfallen.
@@ -484,16 +488,17 @@ export function worktreeBranchen(porcelain) {
 }
 
 /**
- * Welche lokalen Branches sind nach einem Squash-Merge sicher löschbar? Alle Bedingungen zugleich: Name `feature/kq-<nr>…`,
+ * Welche lokalen Branches sind nach einem Squash-Merge sicher löschbar? Alle Bedingungen zugleich: Name `<Branch-Präfix><nr>…` (nur darunter wird je etwas gelöscht),
  * `[gone]` (Remote nach dem Merge gelöscht), in keinem Worktree ausgecheckt, und die Spitze gleicht dem Kopf-Commit eines gemergten
  * PR desselben Branch-Namens (`gemergteHeads`: `[{ headRefName, headRefOid }]`): lokale Nach-Commits bleiben also stehen.
  * Fehlt `gemergteHeads` (gh scheiterte), wird nichts gelöscht (fail-closed). `git branch --merged` erkennt Squash-Merges nicht.
  */
-export function aufraeumbareBranches({ refs, worktreeBranches, gemergteHeads }) {
+export function aufraeumbareBranches({ refs, worktreeBranches, gemergteHeads, namen = ladeTicketNamen() }) {
   if (!Array.isArray(gemergteHeads)) return [];
+  const ticketBranch = new RegExp(`^${escapeRegex(namen.praefixe.branch)}\\d+`);
   const belegt = worktreeBranches instanceof Set ? worktreeBranches : new Set(worktreeBranches ?? []);
   return refs
-    .filter((r) => TICKET_BRANCH.test(r.name) && r.gone && !belegt.has(r.name))
+    .filter((r) => ticketBranch.test(r.name) && r.gone && !belegt.has(r.name))
     .filter((r) => gemergteHeads.some((h) => h?.headRefName === r.name && h?.headRefOid === r.sha))
     .map((r) => r.name);
 }
@@ -505,12 +510,12 @@ export const PR_LIMIT = 1000;
  * Räumt gemergte lokale Ticket-Branches auf (nur CLI, nie im Stop-Hook). `git(args)` und `gh()` sind injiziert (`gh` liefert die
  * gemergten PRs `[{ headRefName, headRefOid }]`). Ohne `loeschen` nur die Liste. Rückgabe `{ ok, grund?, kandidaten, geloescht, behalten, fehler, warnung }`.
  */
-export function branchesAufraeumen({ git, gh, loeschen = false }) {
+export function branchesAufraeumen({ git, gh, loeschen = false, namen = ladeTicketNamen() }) {
   const leer = { kandidaten: [], geloescht: [], behalten: 0, fehler: [] };
   let refsText;
   let worktrees;
   try {
-    refsText = git(["for-each-ref", "--format=%(refname:short)%09%(upstream:track)%09%(objectname)", "refs/heads/feature/kq-*"]);
+    refsText = git(["for-each-ref", "--format=%(refname:short)%09%(upstream:track)%09%(objectname)", `refs/heads/${namen.praefixe.branch}*`]);
     worktrees = git(["worktree", "list", "--porcelain"]);
   } catch (e) {
     return { ...leer, ok: false, grund: `git: ${e.message}` };
@@ -522,7 +527,7 @@ export function branchesAufraeumen({ git, gh, loeschen = false }) {
     return { ...leer, ok: false, grund: `gh: ${e.message} (nichts gelöscht)` };
   }
   const refs = parseBranchRefs(refsText);
-  const kandidaten = aufraeumbareBranches({ refs, worktreeBranches: worktreeBranchen(worktrees), gemergteHeads });
+  const kandidaten = aufraeumbareBranches({ refs, worktreeBranches: worktreeBranchen(worktrees), gemergteHeads, namen });
   const geloescht = [];
   const fehler = [];
   if (loeschen) {

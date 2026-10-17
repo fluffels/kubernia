@@ -11,7 +11,7 @@
  *
  * Lokale Branches nach dem Squash-Merge (#1579; Liste, mit `--fix` löschen; nie im Stop-Hook):
  *   node scripts/cleanup-worktrees.mjs --branches [--fix]
- * Gelöscht wird nur ein `feature/kq-<nr>…`-Branch, dessen Remote weg ist (`[gone]`), der in keinem Worktree ausgecheckt ist und dessen
+ * Gelöscht wird nur ein `<Branch-Präfix><nr>…`-Branch, dessen Remote weg ist (`[gone]`), der in keinem Worktree ausgecheckt ist und dessen
  * Spitze dem Kopf-Commit eines gemergten PR entspricht; scheitert `gh`, wird nichts gelöscht.
  *
  * Geister = Ordner in .claude/worktrees/, die git worktree list nicht kennt.
@@ -21,16 +21,16 @@
  * Skript räumt stattdessen über `fs.rmSync` auf (kein Shell-`rm`, `Bash(node:*)`
  * bleibt erlaubt).
  *
- * Lens-Worktrees (#1425): die Test-Lens sabotiert in `kq-<nr>-lens-r<runde>` bzw. `kq-<nr>-lens-m<n>` (Merge-Delta-Lens, Skill `review-lenses`). Bleibt so ein
- * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `kq-<nr>` weg ist, fehlt er in der Waisen-Sicht oben
+ * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<Worktree-Präfix><nr>-lens-r<runde>` bzw. `<Worktree-Präfix><nr>-lens-m<n>` (Merge-Delta-Lens, Skill `review-lenses`). Bleibt so ein
+ * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `<Worktree-Präfix><nr>` weg ist, fehlt er in der Waisen-Sicht oben
  * (die kennt nur unregistrierte Ordner). `verwaisteLensWorktrees` findet sie, `entferneLensWorktrees` räumt sie per
  * `git worktree remove --force` und prüft das Ergebnis.
- * Bewusste Grenzen: ein Feature-Worktree, der nicht `kq-<nr>` heißt, hat keinen erkennbaren Eltern-Worktree; seine
+ * Bewusste Grenzen: ein Feature-Worktree, der nicht `<Worktree-Präfix><nr>` heißt, hat keinen erkennbaren Eltern-Worktree; seine
  * Lens-Worktrees gelten nach 5 Minuten als verwaist. Ein junger Lens-Worktree wird nur gemeldet.
  *
  * Lose Dateien (#1476): direkt unter `.claude/worktrees/` liegende reguläre Dateien (z.B. eine Sicherungskopie
- * `kq-<nr>-…-orig.bak`, die eine Lens neben ihren Worktree legte) hält `git worktree remove` nicht auf. Verwaist ist
- * eine Datei `kq-<nr>[-.]…`, deren `kq-<nr>` nicht mehr registriert und die älter als 5 Minuten ist; nur sie wird
+ * `<Worktree-Präfix><nr>-…-orig.bak`, die eine Lens neben ihren Worktree legte) hält `git worktree remove` nicht auf. Verwaist ist
+ * eine Datei `<Worktree-Präfix><nr>[-.]…`, deren `<Worktree-Präfix><nr>` nicht mehr registriert und die älter als 5 Minuten ist; nur sie wird
  * entfernt (nicht rekursiv, keine Links, Schutzgurt wie bei Ordnern). Junge und fremd benannte Dateien werden nur gemeldet.
  *
  * Entscheidungslogik ist pure/exportiert und testbar (execSync/fs injizierbar) —
@@ -42,6 +42,8 @@ import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ghJson } from "./gh-cli.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ticketNamen } from "./ticket-namen.mjs";
 import {
   MIN_ORPHAN_AGE_MS,
   PR_LIMIT,
@@ -59,20 +61,32 @@ import {
 
 /**
  * `--branches [--fix]`: gemergte lokale Ticket-Branches aufräumen (#1579); ohne `--fix` nur die Liste. Nie im Stop-Hook.
- * Liefert den Exit-Code (0 = ok, 1 = Abbruch oder Löschfehler) statt `process.exit`; `git`, `gh`, `out` und `err` sind injizierbar (Tests).
+ * Liefert den Exit-Code (0 = ok, 1 = Abbruch oder Löschfehler) statt `process.exit`; `config` (oder fertige `namen`), `git`, `gh` (oder nur `ghJson`), `out` und `err` sind injizierbar (Tests).
+ * Ein unvollständiger Config-Eintrag bricht ab, bevor git oder gh laufen (kein Standardwert).
  */
 export function branchenModus(root, loeschen, {
+  config,
+  namen: namenIn,
   git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }),
-  gh = () => ghJson(["pr", "list", "--state", "merged", "--search", "head:feature/kq-", "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]),
+  gh: ghIn,
+  ghJson: ghJsonFn = ghJson,
   out = console.log,
   err = console.error,
 } = {}) {
-  const r = branchesAufraeumen({ git, gh, loeschen });
+  let namen;
+  try {
+    namen = namenIn ?? ticketNamen(config ?? ladeProjektConfig());
+  } catch (e) {
+    err(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${e instanceof Error ? e.message : e}`);
+    return 1;
+  }
+  const gh = ghIn ?? (() => ghJsonFn(["pr", "list", "--state", "merged", "--search", `head:${namen.praefixe.branch}`, "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]));
+  const r = branchesAufraeumen({ git, gh, loeschen, namen });
   if (r.grund) {
     err(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${r.grund}`);
     return 1;
   }
-  out(`Lokale feature/kq-*-Branches: ${r.kandidaten.length} gemergt und löschbar ([gone], nicht ausgecheckt, Spitze = gemergter PR-Kopf), ${r.behalten} bleiben.`);
+  out(`Lokale ${namen.praefixe.branch}*-Branches: ${r.kandidaten.length} gemergt und löschbar ([gone], nicht ausgecheckt, Spitze = gemergter PR-Kopf), ${r.behalten} bleiben.`);
   for (const n of r.kandidaten) out(`  ${loeschen && r.geloescht.includes(n) ? "gelöscht" : "löschbar "} ${n}`);
   if (!loeschen && r.kandidaten.length > 0) out("Zum Löschen: node scripts/cleanup-worktrees.mjs --branches --fix");
   for (const f of r.fehler) err(`  ✗ ${f}`);
@@ -83,15 +97,22 @@ export function branchenModus(root, loeschen, {
 function main() {
   const FIX = process.argv.includes("--fix");
   const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+  let namen;
+  try {
+    namen = ticketNamen(ladeProjektConfig());
+  } catch (e) {
+    console.error(`Worktree-Aufräumen abgebrochen: ${e instanceof Error ? e.message : e}`);
+    process.exit(1);
+  }
   if (process.argv.includes("--branches")) {
-    process.exitCode = branchenModus(ROOT, FIX);
+    process.exitCode = branchenModus(ROOT, FIX, { namen });
     return;
   }
 
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);
 
-  const { ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = diagnoseOrphans(ROOT);
+  const { ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = diagnoseOrphans(ROOT, { namen });
   if (!ok) {
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
     process.exit(1);
@@ -141,10 +162,10 @@ function main() {
     console.log(`Lose Dateien, verwaist, aber unter ${MIN_ORPHAN_AGE_MS / 60_000} Minuten alt (nur gemeldet): ${youngFiles.join(", ")}`);
   }
   if (foreignFiles.length > 0) {
-    console.log(`Fremde lose Dateien (Name nicht kq-<nr>…, nie automatisch gelöscht): ${foreignFiles.join(", ")}`);
+    console.log(`Fremde lose Dateien (Name nicht ${namen.praefixe.worktree}<nr>…, nie automatisch gelöscht): ${foreignFiles.join(", ")}`);
   }
   if (orphanFiles.length > 0) {
-    console.log(`Verwaiste lose Dateien (kq-<nr> nicht mehr registriert, ${orphanFiles.length}):`);
+    console.log(`Verwaiste lose Dateien (${namen.praefixe.worktree}<nr> nicht mehr registriert, ${orphanFiles.length}):`);
     for (const name of orphanFiles) console.log(`  ✗ ${name}`);
     console.log();
   }

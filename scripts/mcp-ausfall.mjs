@@ -15,6 +15,8 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./hook-io.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ticketNamen } from "./ticket-namen.mjs";
 
 /** Server-Arten aus `.mcp.json`, die das Skript kennt (ein Wächter-Test hält `.mcp.json` dagegen). */
 export const BEKANNTE_ARTEN = ["stdio", "http"];
@@ -62,8 +64,11 @@ export function logBasis({ plattform, env, home }) {
 /** Pfad des Hauptcheckouts zu einer Wurzel, die auch ein Worktree darunter sein darf. Pur. */
 export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").replace(/[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/, "");
 
-/** Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees); `KQ_MCP_AUSFALL_STAND` hat Vorrang. Pur. */
-export const standPfad = (wurzel, env, tmp) => env.KQ_MCP_AUSFALL_STAND || join(tmp, `kq-mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
+/**
+ * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<Worktree-Präfix>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
+ * `KQ_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es keine Config). Ohne vollständige Config (`ticketNamen` prüft `praefixe.*` und `agenten.*`) wirft die Funktion mit Fix-Zeile.
+ */
+export const standPfad = (wurzel, env, tmp, config) => env.KQ_MCP_AUSFALL_STAND || join(tmp, `${ticketNamen(config ?? ladeProjektConfig()).praefixe.worktree}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
 
 /** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. Pur. */
 export function projektOrdner(namen, wurzel) {
@@ -239,7 +244,7 @@ export function argumentFehler(argv) {
   return null;
 }
 
-export function main(argv = process.argv.slice(2), env = process.env, out = console.log, { plattform = process.platform, home = homedir(), jetzt = Date.now(), err = console.error } = {}) {
+export function main(argv = process.argv.slice(2), env = process.env, out = console.log, { plattform = process.platform, home = homedir(), jetzt = Date.now(), err = console.error, config } = {}) {
   const fehler = argumentFehler(argv);
   if (fehler) {
     err(fehler);
@@ -249,9 +254,15 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
     const wurzel = env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL("..", import.meta.url));
     const server = serverAusConfig(readFileSync(join(wurzel, ".mcp.json"), "utf8"));
     const sessionstart = argv.includes("--sessionstart");
-    const stand = standPfad(wurzel, env, tmpdir());
+    // Ohne nutzbare Config: eine Zeile mit Grund (statt stiller Auslassung), die Auswertung läuft ohne Stand-Datei weiter (nichts lesen, nichts schreiben; die `&& stand`-Guards machen das sichtbar, das äußere catch würde es auch abfangen).
+    let stand = null;
+    try {
+      stand = standPfad(wurzel, env, tmpdir(), config);
+    } catch (e) {
+      out(`MCP-Ausfall-Hinweis ohne Stand-Datei: ${e instanceof Error ? e.message : String(e)}`);
+    }
     let standSeit;
-    if (sessionstart) {
+    if (sessionstart && stand) {
       try {
         standSeit = JSON.parse(readFileSync(stand, "utf8")).bis;
       } catch {
@@ -273,7 +284,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
       const text = meldung(buendeln(befunde), [...variablen, ...unbekannt], seit);
       if (text) out(text);
     }
-    if (sessionstart) {
+    if (sessionstart && stand) {
       mkdirSync(join(stand, ".."), { recursive: true });
       writeFileSync(stand, JSON.stringify({ bis: new Date(jetzt).toISOString() }));
     }

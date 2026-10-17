@@ -19,7 +19,7 @@
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
- * `feature/kq-<nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
+ * `<Branch-Präfix><nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
  * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: `## Ziel` und
  * `## Akzeptanzkriterien` mit Negativfall; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
@@ -37,6 +37,7 @@ import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
+import { ticketNamen } from "./ticket-namen.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
@@ -116,10 +117,10 @@ export function itemAusIssue(issue) {
  * Einzelprüfung einer vorgegebenen Nummer: dieselben Kriterien wie die Board-Auswahl (`ueberspringGrund`, auch Messfenster), aber ohne Status- und
  * Bereichsfilter; ein geschlossenes Issue ist nicht frei. `item` aus `itemAusIssue`. Liefert wie `waehleNaechstes` `{ ticket, uebersprungen }`. Pur.
  */
-export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0 }) {
+export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen }) {
   const nr = item.number;
   if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
-  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }), owner, messfenster, hartAb });
+  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb });
   return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
 }
 
@@ -139,8 +140,8 @@ export function imBereich(item, bereich) {
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, nur = () => true }) {
-  const belegt = belegteNummern({ refs, worktrees, prHeads });
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, nur = () => true, namen }) {
+  const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const uebersprungen = [];
   for (const item of items) {
     if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich) || !nur(item)) continue;
@@ -266,8 +267,8 @@ export function fuehreAus(argv, io) {
     const einzel = t.ticket;
     const roh =
       einzel === null
-        ? { ...waehleUeberBoards({ ...io.lade(), ladeQuote: io.ladeQuote, owner: io.owner, bereich: b.bereich, hartAb: io.hartAb }), ...(b.bereich ? { bereich: b.bereich } : {}) }
-        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb });
+        ? { ...waehleUeberBoards({ ...io.lade(), ladeQuote: io.ladeQuote, owner: io.owner, bereich: b.bereich, hartAb: io.hartAb, namen: io.namen }), ...(b.bereich ? { bereich: b.bereich } : {}) }
+        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb, namen: io.namen });
     const reparieren = reparierenVon(roh.uebersprungen);
     const ergebnis = reparieren.length > 0 ? { ...roh, reparieren } : roh;
     const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
@@ -357,9 +358,21 @@ export function ladeQuoteEcht(lade = ghJson) {
 /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
 const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung() });
 
+/** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). */
+export function echteIo({ config } = {}) {
+  const cfg = config ?? ladeProjektConfig();
+  return { lade: ladeEcht, ladeQuote: () => ladeQuoteEcht(), ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: cfg.spezifikation?.hartAb, namen: ticketNamen(cfg) };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
-  const io = { lade: ladeEcht, ladeQuote: () => ladeQuoteEcht(), ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: ladeProjektConfig().spezifikation?.hartAb };
+  let io;
+  try {
+    io = echteIo();
+  } catch (e) {
+    process.stderr.write(`✖ naechstes-ticket: ${e instanceof Error ? e.message : String(e)}\n`);
+    process.exit(2);
+  }
   const { code, out, err } = fuehreAus(process.argv.slice(2), io);
   process.stdout.write(out);
   process.stderr.write(err);

@@ -11,14 +11,14 @@
  *   - nur fast-forward (hat `main` lokale Commits, wird nicht angefasst).
  *
  * Sonst bleibt alles liegen, und der Hook meldet „N Commits hinter origin/main“ samt Grund in den Kontext der Session.
- * Als SessionStart-Hook gibt er IMMER `Sitzungsbasis: <HEAD vor dem Pull>` aus: der Skill `kubernia` prüft damit vor dem
+ * Als SessionStart-Hook gibt er IMMER `Sitzungsbasis: <HEAD vor dem Pull>` aus: der Ticket-Skill prüft damit vor dem
  * Spawn, ob sich Agenten-Definitionen seit dem Start der Session geändert haben (der Hook-/Definitions-Snapshot wird beim
  * Start eingefroren, ein Pull ändert die laufende Session nicht). Nur diese Zeile ist die Sitzungsbasis: der Haupt-Checkout
  * ist geteilt, ein späterer Aufruf (`--text`, auch aus einer anderen Session) sieht einen schon gehobenen `main` und darum
  * einen falschen Stand; `--text` nennt deshalb nur „Stand vor diesem Sync“ (HEAD des Checkouts beim Aufruf) und behauptet nichts über die Basis der Session, die nur der SessionStart-Kontext nennt. Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
  * zusätzlich ausdrücklich. Fail-open: jeder Fehler (kein Netz, kein git) ergibt nur eine kurze Notiz, nie einen Abbruch.
  *
- * `--text --streng` ist der erste Schritt des Skills `kubernia` (#1392): derselbe Sync (entspricht `git pull --ff-only`, aber mit Stopp
+ * `--text --streng` ist der erste Schritt des Ticket-Skills (#1392): derselbe Sync (entspricht `git pull --ff-only`, aber mit Stopp
  * bei getrackten Resten), nur dass jede Abweichung vom sauberen `main` Exit 1 ergibt (`exitCodeFuer`): der Hauptchat startet dann kein
  * Ticket. Hat der Sync `.claude/skills`, `.claude/agents` oder `AGENTS.md` geändert, sagt der Text „Skill neu lesen“: der Skill-Text
  * der laufenden Session stammt noch vom alten Stand.
@@ -30,6 +30,7 @@ import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
+import { namenOderGrund } from "./ticket-namen.mjs";
 
 /**
  * Was tut der Sync? Pur. `hinter`/`vor` = Commits, die `main` gegenüber `origin/main` hinten/vorn liegt.
@@ -62,15 +63,29 @@ export function exitCodeFuer(ergebnis) {
 }
 
 /**
- * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: der kubernia-Skill und die Wurzel-AGENTS.md (der Hauptchat
+ * Verzeichnis des Ticket-Skills (`.claude/skills/<agenten.ticketSkill>/`) aus der Projekt-Config; `null`, wenn die Config nicht nutzbar ist
+ * (kein Wurf: der Hook ist fail-open, den Grund liefert `configGrund`). `deps.config` ersetzt das Laden (Test).
+ */
+export function ticketSkillVerzeichnis(deps = {}) {
+  const r = namenOderGrund("haupt-sync", deps);
+  return r.grund ? null : `.claude/skills/${r.namen.agenten.ticketSkill}/`;
+}
+
+/** Grund, warum die Projekt-Config nicht nutzbar ist (mit Fix-Zeile), sonst `null`. Wirft nie. */
+export function configGrund(deps = {}) {
+  return namenOderGrund("haupt-sync", deps).grund ?? null;
+}
+
+/**
+ * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: der Ticket-Skill (Verzeichnis aus `agenten.ticketSkill` der Projekt-Config) und die Wurzel-AGENTS.md (der Hauptchat
  * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien und
  * modul-lokale AGENTS.md; `lockGeaendert`: package-lock.json. Pur, wirft nie.
  */
-export function ordneHarnessAenderungen(dateien) {
+export function ordneHarnessAenderungen(dateien, skillVerzeichnis = ticketSkillVerzeichnis()) {
   const ordnung = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
   for (const d of Array.isArray(dateien) ? dateien : []) {
     if (d === "package-lock.json") ordnung.lockGeaendert = true;
-    else if (d === "AGENTS.md" || d.startsWith(".claude/skills/kubernia/")) ordnung.skill.push(d);
+    else if (d === "AGENTS.md" || (skillVerzeichnis !== null && d.startsWith(skillVerzeichnis))) ordnung.skill.push(d);
     else if (d.startsWith(".claude/agents/")) ordnung.agenten.push(d);
     else if (d.startsWith(".claude/") || /(^|\/)AGENTS\.md$/.test(d)) ordnung.sonstige.push(d);
   }
@@ -180,7 +195,8 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
       zeilen.push(`Geändert (Harness): ${pfadListe(alle)}`);
       if (h.skill.length) {
         const agentsMd = h.skill.includes("AGENTS.md") ? " Die Wurzel-AGENTS.md hat sich geändert: zusätzlich `git diff <Stand vor diesem Sync> HEAD -- AGENTS.md` lesen." : "";
-        zeilen.push(`Skill neu lesen: ${h.skill.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. \`.claude/skills/kubernia/SKILL.md\` jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
+        const skillDatei = h.skill.find((d) => d.endsWith("/SKILL.md"));
+        zeilen.push(`Skill neu lesen: ${h.skill.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. ${skillDatei ? `\`${skillDatei}\`` : "Den Ticket-Skill"} jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
       }
       if (h.agenten.length) zeilen.push("Agent-Definitionen geändert: gelten erst nach Session-Neustart; beim Umsetzer-Spawn den Umsetzer-Zusatz setzen (Skill § Vor dem Spawn).");
       if (h.sonstige.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) gelten erst nach einem Session-Neustart.");
@@ -198,7 +214,7 @@ const git = (dir, args, opts = {}) =>
   execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: opts.timeout ?? 8_000 }).trim();
 
 /** Die ganze Ablaufkette gegen ein echtes Repo in `dir` (nur CLI). Wirft nie; Fehler landen in `notiz`. */
-export function fuehreSyncAus(dir) {
+export function fuehreSyncAus(dir, deps = {}) {
   const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: "", branch: "", sauber: undefined };
   try {
     ergebnis.basis = git(dir, ["rev-parse", "HEAD"]);
@@ -217,7 +233,11 @@ export function fuehreSyncAus(dir) {
     if (e.aktion === "pull") {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
-      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean));
+      // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
+      const { namen, grund } = namenOderGrund("haupt-sync", deps);
+      if (grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${grund}`;
+      const skillVerzeichnis = grund ? null : `.claude/skills/${namen.agenten.ticketSkill}/`;
+      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean), skillVerzeichnis);
     }
   } catch (e) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;

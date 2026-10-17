@@ -22,7 +22,8 @@ const S = raw as unknown as {
   entscheideSync: (e: Eingabe) => { aktion: "pull" | "melden" | "nichts"; grund: string };
   ordneHarnessAenderungen: (d: string[]) => { skill: string[]; agenten: string[]; sonstige: string[]; lockGeaendert: boolean };
   baueText: (e: Partial<Ergebnis>) => string;
-  fuehreSyncAus: (dir: string) => Ergebnis;
+  fuehreSyncAus: (dir: string, deps?: { config?: Record<string, unknown> }) => Ergebnis;
+  exitCodeFuer: (e: Partial<Ergebnis>) => number;
   ausgabe: (e: Partial<Ergebnis>, text: boolean) => string;
 };
 
@@ -181,6 +182,22 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
       expect(e.harness).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
       expect(git(t.haupt, "rev-parse", "HEAD")).not.toBe(alt);
       expect(git(t.haupt, "rev-parse", "HEAD")).toBe(git(t.haupt, "rev-parse", "origin/main"));
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("Pull ohne nutzbare Config (agenten.ticketSkill fehlt): Fast-Forward bleibt, der Grund steht in notiz und macht --streng rot, nur AGENTS.md gilt als Skill (#1743)", () => {
+    const t = aufbau();
+    try {
+      t.schiebe(".claude/skills/kubernia/SKILL.md", "neu\n");
+      const e = S.fuehreSyncAus(t.haupt, { config: { praefixe: { branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } } });
+      expect(e.gepullt).toBe(true);
+      expect(e.notiz).toContain("agenten.ticketSkill");
+      expect(e.notiz).toContain("Fix:");
+      expect(S.exitCodeFuer(e)).toBe(1);
+      expect(e.harness?.skill).toEqual([]);
+      expect(e.harness?.sonstige).toEqual([".claude/skills/kubernia/SKILL.md"]);
     } finally {
       t.aufraeumen();
     }

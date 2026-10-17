@@ -48,7 +48,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { diagnoseOrphans, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./worktree-aufraeumen.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
-import { namenOderGrund } from "./ticket-namen.mjs";
+import { namenOderGrund, worktreeNamenOderGrund } from "./ticket-namen.mjs";
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 
 /**
@@ -229,18 +229,26 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
 export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees, abschlussDeps = {}) {
   const { stopHookActive, hookEvent, agentType } = parseStopInput(stdinText);
   if (stopHookActive) return { exit: 0, stdout: "", stderr: "" }; // bereits einmal blockiert → diesmal freigeben
-  // SubagentStop läuft ohne Matcher: nur das Ende des Umsetzers (agenten.umsetzer der Projekt-Config) ist zuständig (#1742).
-  // Ohne nutzbare Config blockiert der Hook mit Fix-Zeile (fail-closed); der Stop des Hauptchats braucht sie nicht.
+  // Ohne nutzbare Config blockiert der Hook mit Fix-Zeile (fail-closed, #1742/#1743). SubagentStop läuft ohne Matcher: nur das Ende des Umsetzers
+  // (agenten.umsetzer) ist zuständig und braucht die volle Config; der Stop des Hauptchats räumt nur Worktrees auf und braucht allein praefixe.worktree.
+  // Ein zweiter Stop mit stop_hook_active (oben) gibt frei, es gibt keine Schleife.
+  const blockiere = (grund) => ({ exit: 2, stdout: JSON.stringify({ decision: "block", reason: grund }), stderr: grund });
   let deps = abschlussDeps;
+  let namen;
   if (hookEvent === "SubagentStop") {
-    const { namen, config, grund } = namenOderGrund("Stop-Hook", abschlussDeps);
-    if (grund) return { exit: 2, stdout: JSON.stringify({ decision: "block", reason: grund }), stderr: grund };
-    if (agentType !== namen.agenten.umsetzer) return { exit: 0, stdout: "", stderr: "" };
-    deps = { ...abschlussDeps, config };
+    const voll = namenOderGrund("Stop-Hook", abschlussDeps);
+    if (voll.grund) return blockiere(voll.grund);
+    if (agentType !== voll.namen.agenten.umsetzer) return { exit: 0, stdout: "", stderr: "" };
+    namen = voll.namen;
+    deps = { ...abschlussDeps, config: voll.config };
+  } else {
+    const teil = worktreeNamenOderGrund("Stop-Hook", abschlussDeps);
+    if (teil.grund) return blockiere(teil.grund);
+    namen = teil.namen; // Teilobjekt: die Aufräumlogik liest daraus nur `praefixe.worktree` und `lensNameKern`
   }
   // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952) und den Umsetzer-Abschluss prüfen (#1331)
   const gruende = [];
-  const orphanResult = check(repoRoot);
+  const orphanResult = check(repoRoot, { namen });
   if (orphanResult.blocked) gruende.push(orphanResult.reason);
   const abschluss = abschlussBlockade(parseAbschlussInput(stdinText), deps);
   if (abschluss) gruende.push(abschluss);

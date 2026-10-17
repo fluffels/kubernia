@@ -39,7 +39,8 @@ import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
-import { LENS_WORKTREE_NAME, ticketAusRef } from "./ticket-refs.mjs";
+import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
+import { lensWorktreeName, ticketAusRef } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
 /** Standard-Schwelle in Stunden: ohne Lebenszeichen darüber gilt ein offener Claim als verwaist (über `VERWAIST_MS` von 2 h). */
@@ -137,24 +138,26 @@ function frageGraphql(deps, query) {
 }
 
 /** Liegt `pfad` unter `<Hauptcheckout>/.claude/worktrees/` und gehört zur Nummer? Pur. */
-export function pfadErlaubt({ pfad, hauptcheckout, nr }) {
+export function pfadErlaubt({ pfad, hauptcheckout, nr, namen = ladeTicketNamen() }) {
   const rel = relative(resolve(hauptcheckout, ".claude", "worktrees"), resolve(pfad));
-  return !/[\\/]/.test(rel) && ticketAusRef(`worktrees/${rel}`) === nr && !LENS_WORKTREE_NAME.test(rel);
+  return !/[\\/]/.test(rel) && ticketAusRef(`worktrees/${rel}`, namen) === nr && !lensWorktreeName(namen).test(rel);
 }
 
 /** Sammelt Kandidaten und ihre Daten: `{ jetzt, viewer, hauptcheckout, claims }`. Wirft bei git-/gh-Fehlern. */
 export function sammle(deps) {
   const jetzt = deps.jetzt();
+  const namen = deps.namen ?? ladeTicketNamen();
+  const lensName = lensWorktreeName(namen);
   const bloecke = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"]));
   const hauptcheckout = bloecke[0]?.pfad ?? "";
-  const ticketWorktrees = bloecke.slice(1).filter((b) => !LENS_WORKTREE_NAME.test(basename(b.pfad)) && ticketAusRef(b.pfad) !== null);
+  const ticketWorktrees = bloecke.slice(1).filter((b) => !lensName.test(basename(b.pfad)) && ticketAusRef(b.pfad, namen) !== null);
   const refs = deps
     .git(["for-each-ref", "--format=%(refname)\t%(committerdate:unix)", "refs/heads", "refs/remotes"])
     .split(/\r?\n/)
     .filter(Boolean)
     .map((z) => {
       const [name, sek] = z.split("\t");
-      return { nr: ticketAusRef(name), ms: Number(sek) * 1000, lokal: name.startsWith("refs/heads/") };
+      return { nr: ticketAusRef(name, namen), ms: Number(sek) * 1000, lokal: name.startsWith("refs/heads/") };
     })
     .filter((r) => r.nr !== null);
   let dateien = [];
@@ -174,7 +177,7 @@ export function sammle(deps) {
       return [Number(n.replace(".json", "")), lock];
     }),
   );
-  const nummern = [...new Set([...locks.keys(), ...ticketWorktrees.map((b) => ticketAusRef(b.pfad)), ...refs.map((r) => r.nr), ...deps.zugewiesen()])].sort((a, b) => a - b);
+  const nummern = [...new Set([...locks.keys(), ...ticketWorktrees.map((b) => ticketAusRef(b.pfad, namen)), ...refs.map((r) => r.nr), ...deps.zugewiesen()])].sort((a, b) => a - b);
   const issues = new Map();
   let viewer = null;
   for (const b of aliasAbfragen(nummern)) {
@@ -183,7 +186,7 @@ export function sammle(deps) {
     b.nummern.forEach((nr, k) => issues.set(nr, issueAus(antwort?.data?.repository?.[`i${k}`])));
   }
   const claims = nummern.map((nr) => {
-    const w = ticketWorktrees.find((b) => ticketAusRef(b.pfad) === nr) ?? null;
+    const w = ticketWorktrees.find((b) => ticketAusRef(b.pfad, namen) === nr) ?? null;
     let sauber = false;
     if (w) {
       try {
@@ -241,7 +244,7 @@ export function jsonDokument({ jetzt, viewer, schwelleStunden, urteile }) {
 function raeumeAuf(deps, c, urteil, lockPfad, hauptcheckout) {
   const getan = [];
   if (urteil.aktion.worktree) {
-    if (!pfadErlaubt({ pfad: c.worktree.pfad, hauptcheckout, nr: c.nr })) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree-Pfad liegt nicht unter dem Worktree-Ordner des Hauptcheckouts, nichts entfernt` };
+    if (!pfadErlaubt({ pfad: c.worktree.pfad, hauptcheckout, nr: c.nr, namen: deps.namen ?? ladeTicketNamen() })) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree-Pfad liegt nicht unter dem Worktree-Ordner des Hauptcheckouts, nichts entfernt` };
     try {
       deps.git(["worktree", "remove", c.worktree.pfad]);
       const noch = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"])).some((b) => b.pfad === c.worktree.pfad);
@@ -300,6 +303,7 @@ export function echteDeps() {
   const gemeinsam = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
   const config = ladeProjektConfig();
   return {
+    namen: ticketNamen(config),
     jetzt: () => Date.now(),
     git,
     graphql: (query) => JSON.parse(ghText(["api", "graphql", "-f", `query=${query}`])),

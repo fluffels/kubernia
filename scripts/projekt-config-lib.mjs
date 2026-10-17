@@ -147,8 +147,11 @@ export function boardPfad(board) {
   return `${board.besitzerTyp === "org" ? "orgs" : "users"}/${board.besitzer}/projectsV2/${board.nummer}`;
 }
 
-/** Liest und prüft die Config; wirft mit Pfad, allen Fehlern und einer „Fix:“-Zeile. */
-export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG } = {}) {
+/**
+ * Liest und prüft die Config; wirft mit Pfad, allen Fehlern und einer „Fix:“-Zeile. `pruefen: false` liest nur und parst (ohne Schema-Prüfung):
+ * für Werkzeuge, die genau einen Schlüssel brauchen und ihn selbst prüfen (`worktreeNamenOderGrund`).
+ */
+export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG, pruefen = true } = {}) {
   const abs = isAbsolute(pfad) ? pfad : resolve(rootDir, pfad);
   let roh;
   try {
@@ -162,7 +165,7 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG } = {}
   } catch (e) {
     throw new Error(`Projekt-Config ist kein gültiges JSON: ${abs} (${e instanceof Error ? e.message : e})\nFix: JSON-Syntax korrigieren`, { cause: e });
   }
-  const fehler = pruefeProjektConfig(wert);
+  const fehler = pruefen ? pruefeProjektConfig(wert) : [];
   if (fehler.length) {
     throw new Error(`Projekt-Config ungültig: ${abs}\n- ${fehler.join("\n- ")}\nFix: Pflichtschlüssel in ${PROJEKT_CONFIG} ergänzen bzw. korrigieren`);
   }
