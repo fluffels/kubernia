@@ -169,6 +169,12 @@ describe("Kommentar-Grenzen: Beleg und Gesamtkörper (#1762)", () => {
   test("der Hinweis auf entfallene Zeilen steht am Zeilenanfang und nennt die Zahl; die Belegkürzung allein löst ihn nicht aus", () => {
     const b = viele(120, 2000);
     expect(b).toMatch(/^… \(gekürzt\): \d+ weitere Zeilen entfallen \(die Urteile stehen im Marker\)$/m);
+    // Es entfallen nur so viele Zeilen wie nötig: die Zahl stimmt mit den verbliebenen Zeilen überein, und die nächste hätte nicht mehr gepasst.
+    const entfallen = Number(/^… \(gekürzt\): (\d+) weitere/m.exec(b)?.[1]);
+    const verblieben = (b.match(/^\| K\d+: /gm) ?? []).length;
+    expect(verblieben).toBeGreaterThan(0);
+    expect(verblieben + entfallen).toBe(120);
+    expect(b.length).toBeGreaterThan(A2.KOMMENTAR_MAX - 1100);
     const ohne = viele(3, 2000);
     expect(ohne).toContain("… (gekürzt)");
     expect(ohne).not.toMatch(/weitere Zeilen entfallen/);
