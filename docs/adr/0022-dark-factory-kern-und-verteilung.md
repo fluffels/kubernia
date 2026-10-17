@@ -225,6 +225,8 @@ F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den B
 - **Nacharbeit** über die im Zeitraum fälligen Fenster `[von − 14 T, bis − 14 T]`: nur abgelaufene Fristen gehen in die Quote.
 - **Lücken statt 0:** kein Zugang, keine Session, keine Calls oder Calls ohne Preis machen die Kosten eines Tickets zur Lücke (keine Teilsumme); sie gehen weder in den Median noch in eine Summe, „n von N gemessen“ nennt die Abdeckung.
 - **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
+
+Präzisiert durch #1756: die Abnahme-Quote ist keine feste Lücke mehr, sie wird aus dem Lauf-Ergebnis gemessen (Fortschreibung #1713, Umsetzungsentscheidungen in #1756).
 - **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.
 
 ## Fortschreibung #1698 (2026-10-16): Reparaturweg statt Einmal-Kommentar (F12)
@@ -338,3 +340,11 @@ Umsetzungsentscheidungen in #1755 (die CI erzwingt die Abnahme):
 - **W6, Details:** head-Vergleich Marker gegen Zeile per Präfix (klein geschrieben, mindestens 7 Hex); eine verknüpfte PR-Nummer statt eines Issues ist rot; ohne PR-Nummer in der Umgebung ist die Spur nicht prüfbar, also rot; der Override wird vor jedem gh-Aufruf ausgewertet.
 - **W7, Verdrahtung:** die Prüfung der CI-Verdrahtung steht im bestehenden Block (d) von `test/harness/review-nachweis.test.ts`, kein neuer Wächter.
 - **Einführung:** PRs von Sitzungen, die vor dem Laden der Abnahme-Agenten gestartet sind, tragen `KQ-Abnahme-Override: #<ticket> <warum>`; Hand-PRs ohne Ticket die Zeile `entfaellt` mit Grund. Dieser PR trägt seine eigene Abnahme.
+
+Umsetzungsentscheidungen in #1756 (Abnahme-Quote in den Factory-Kennzahlen):
+
+- **Vorrang des Overrides:** `lauf-ergebnis.mjs` wertet `KQ-Abnahme-Override` vor der Abnahme-Zeile aus, wie das Gate; die Zeile ist dann ungeprüft und darf nicht als Urteil zählen. Ein Widerruf hebt den Override auf. Die Logik liegt als `aktiverOverride` in `slice-override.mjs`, statt die Widerruf-Regex zu kopieren (Drift); `sliceOverride` ruft sie auf.
+- **Fünftes Kennzahlfeld `override`:** `{gemessen, ersterDurchgang, entfaellt, override, ohne}`, weil Override-PRs genannt werden müssen (K4); das ist bindend gegenüber dem Wortlaut mit vier Feldern.
+- **Ungültige Zeile:** zählt als `null` („ohne“), die vier Werte des Tickets bleiben unverändert.
+- **Vertrag:** `vertragPruefen` verlangt das Aggregat samt Unterfeldern und je Zeile ein gültiges Abnahme-Feld; fehlt es, endet `factory-kennzahlen` mit Exit 2 (Test gegen das echte `bewertePrs`).
+- **Darstellung:** eine Aggregatzeile in `lauf-ergebnis` statt einer Tabellenspalte, keine Spalte in der Verdichtungszeile.
