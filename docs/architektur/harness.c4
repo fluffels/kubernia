@@ -127,8 +127,8 @@ model {
   github.ruleset -> github.pr 'schützt main'
   harness.hauptchat -> github.board 'liest die Reihenfolge'
   harness.hauptchat -> github.factoryBoard 'liest die Reihenfolge (area:harness)'
-  github.ci.boardTakt -> github.board 'nimmt fehlende Issues als Todo auf (Board-Wächter)'
-  github.ci.boardTakt -> github.factoryBoard 'pflegt Status-Ticket und Harness-Sammelticket'
+  github.ci.boardTakt -> github.board 'nimmt fehlende Issues ohne area:harness als Todo auf (Board-Wächter)'
+  github.ci.boardTakt -> github.factoryBoard 'pflegt Status-Ticket und Harness-Sammelticket, nimmt fehlende area:harness-Issues als Todo auf (Board-Wächter)'
 }
 
 views {

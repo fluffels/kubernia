@@ -262,6 +262,17 @@ describe("Abnahme-Quote (#1756)", () => {
     const lage = F.vertragPruefen(echt([body(urteil(1)), body(urteil(1)), body(urteil(2))]));
     expect(md(lage)).toContain("- 2 von 3 im ersten Durchgang (67 %)");
   });
+  test("Prozent wird gerundet, nicht aufgerundet: 1 von 3 sind 33 %", () => {
+    const lage = F.vertragPruefen(echt([body(urteil(1)), body(urteil(2)), body(urteil(2))]));
+    expect(md(lage)).toContain("- 1 von 3 im ersten Durchgang (33 %)");
+  });
+  test("Negativfall: bei verletztem Vertrag nennt die Abnahme-Quote den Vertragsbruch statt ihn zu verschweigen", () => {
+    const lage = F.vertragPruefen({});
+    expect(lage.luecke).toBeDefined();
+    const a = md(lage);
+    expect(a).toContain("- Lücke: kein Lauf-Ergebnis");
+    expect(a).toContain("Vertrag verletzt");
+  });
   test("Negativfall: ohne Abnahme-Urteil steht eine Lücke mit Grund, nie 0 %", () => {
     const lage = F.vertragPruefen(echt([body("nichts"), body("KQ-Abnahme: entfaellt — Hand-PR")]));
     const a = md(lage);

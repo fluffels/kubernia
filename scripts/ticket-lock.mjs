@@ -243,7 +243,7 @@ function uebergeben(deps, nr, nonce) {
   return ergebnis(0, "uebergeben");
 }
 
-/** Stopp-Vermerk (#1693): der Hauptchat hat den eigenen Umsetzer per `TaskStop` beendet. Das nächste `pruefe --nonce` meldet `uebernehmbar` statt `aktiv` und verbraucht den Vermerk.
+/** Stopp-Vermerk (#1693): der Hauptchat hat den eigenen Umsetzer per `TaskStop` beendet. Das nächste `pruefe --nonce` meldet `uebernehmbar` statt `aktiv`; erst `uebernehmen` verbraucht den Vermerk (`pruefe` ändert nie etwas).
  *  Kein Phasen-Schnitt: das Feld `uebergabe` bleibt unberührt, "eine Übergabe je Lock" gilt weiter. Jeder TaskStop darf einen neuen Vermerk setzen; fremde Nonce oder fehlender Lock → Exit 4. */
 function gestoppt(deps, nr, nonce) {
   const lock = liesLock(deps, nr);

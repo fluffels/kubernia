@@ -522,6 +522,15 @@ describe("Fehler", () => {
     expect(m.aufrufe).toHaveLength(0);
   });
 
+  test("ohne Keys (auch mit --trocken) nennt die Meldung den Übergabeweg über die Session-ID im PR-Text", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const m = mock({ ist: 0 });
+    const r = await N.nachliefern(N.parseArgs(["--trocken"]), { env: {}, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
+    expect(r.exitCode).toBe(2);
+    expect(r.text).toContain("Session-ID in den PR-Text");
+    expect(r.text).toContain("node scripts/langfuse-nachliefern.mjs --session <id>");
+  });
+
   test("Score-Fehler: Exit 1, das Ledger der gesendeten Calls bleibt", async () => {
     const a = aufbau([msg("a", 1)]);
     const r = await lauf(a, mock({ ist: 0, scoreStatus: 500 }));
