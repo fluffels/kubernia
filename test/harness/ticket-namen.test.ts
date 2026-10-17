@@ -14,6 +14,8 @@ import { lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as docsGenRaw from "../../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as lensEditRaw from "../../scripts/lens-edit-guard.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as lensAuftragRaw from "../../scripts/lens-auftrag-guard.mjs";
@@ -36,6 +38,7 @@ type Namen = {
   ticketAus: (t: string) => number | null;
   patchMuster: { ticketRunde: RegExp; voll: RegExp; delta: RegExp };
 };
+const docsGen = docsGenRaw as unknown as { escapeRegex: (t: string) => string };
 const N = namenRaw as unknown as {
   escapeRegex: (t: string) => string;
   ticketNamen: (c: Cfg) => Namen;
@@ -300,6 +303,7 @@ describe("patch-zugriff mit Namen aus der Config", () => {
 
 describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
   // Nadel per Verkettung gebaut, damit dieser Wächter sich nicht selbst trifft.
+  // Bekannte Grenze: gefunden wird nur die wörtliche Zeichenklasse; eine umgestellte oder umgeordnete Klasse rutscht durch.
   const NADEL = "[.*+?^$" + "{}()|[\\]\\\\";
   // Die erlaubten Quellen: Kern, docs-gen-Kern (darf nur node:* und sich selbst importieren) und die Produkt-Funktion;
   // `.dependency-cruiser.cjs` ist ein CommonJS-Config, die den ESM-Kern nicht laden kann.
@@ -318,6 +322,9 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
   test("Wächter erkennt eine Kopie, erlaubte Quellen zählen nicht", () => {
     const inhalt: Record<string, string> = { "test/x.ts": `s.replace(/${NADEL}]/g, "")`, "scripts/ticket-namen.mjs": NADEL, "docs/a.md": NADEL };
     expect(kopien(Object.keys(inhalt), (p) => inhalt[p])).toEqual(["test/x.ts"]);
+  });
+  test("docs-gen-Kopie maskiert dieselben Metazeichen wie der Kern (Drift-Schutz)", () => {
+    for (const z of ".*+?^$" + "{}()|[]\\") expect(docsGen.escapeRegex(z), z).toBe(N.escapeRegex(z));
   });
   test("die erlaubten Quellen existieren und tragen die Zeichenklasse wirklich", () => {
     for (const f of ERLAUBT) expect(lies(f), f).toContain(NADEL);

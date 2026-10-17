@@ -94,7 +94,7 @@ describe("K3: Cap", () => {
   test("durchgaenge > runden ist rot", () => rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 2, marker: marker({ durchgang: 3 }) }), /durchgaenge=3 ist größer als runden=2/));
   test("die Cap-Meldung nennt den Wert der Konstante MAX_REVIEW_PAESSE (L5c)", () => {
     expect(MAX_REVIEW_PAESSE).toBeGreaterThan(0);
-    rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 2, marker: marker({ durchgang: 3 }) }), new RegExp(`Cap ${MAX_REVIEW_PAESSE} Pässe`));
+    rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 2, marker: marker({ durchgang: 3 }) }), new RegExp(`Cap ${MAX_REVIEW_PAESSE} Pässe, darüber nur mit Zusatzpass`));
   });
   test("Review-Zeile fehlt oder runden keine Zahl", () => {
     rot(bewerte({ review: false }), /Review-Zeile fehlt/);

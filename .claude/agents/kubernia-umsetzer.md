@@ -77,7 +77,7 @@ ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe
 TICKET: #<nr>
 PR: <url oder ->
 SCHNITT: <nur bei uebergabe: pr oder verify>
-FESTGEFAHREN: <nur bei festgefahren, optional: review (Review-Schleife am Cap), ci (Standard, Protokoll samt Label); review braucht das Label ebenso oder abnahme (Hand-off nach der Abnahme, Entwurf ohne Auto-Merge, Label am PR)>
+FESTGEFAHREN: <nur bei festgefahren, optional: review (Review-Schleife am Cap, Label nötig), ci (Standard, Protokoll samt Label) oder abnahme (Hand-off nach der Abnahme, Entwurf ohne Auto-Merge, Label am PR)>
 ABNAHME: <nur bei abnahme: head=<sha> worktree=<abs. Pfad>>
 UEBERGABE: <nur bei uebergabe; darunter eingerückt Worktree, Branch, HEAD (SHA), Entscheidungen, Browser-Belege, Offenes>
 WORKTREE: <pfad | entfernt | leer zurückgelassen (cwd-Sperre)>

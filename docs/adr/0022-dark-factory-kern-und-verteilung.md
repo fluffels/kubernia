@@ -309,7 +309,7 @@ ADR 0028 hat den Workflow entfernt, auf den §2 verweist; die Holdout-Abnahme l�
 - **Ausweg:** `entfaellt` nur, wenn das Ticket keine Kriterien hat; Ausnahmen nur über eine Override-Zeile mit Ticket (#1755).
 - **Namen und Modell:** `holdout-szenario` und `holdout-abnahme`, beide `opus`, `effort: medium`; der Szenario-Agent liest nur Doku (`Read, Grep, Glob`).
 - **CI-Einbindung und Übergang:** ein Schritt im bestehenden Required-Job, kein neuer Required-Check; kein Stichtag-Schlüssel, sondern Override mit Ticket. Der Phasen-Schnitt `pr` liegt nach der bestandenen Abnahme (Wechselwirkung mit der Messung #1593).
-- **Ehrliche Grenze:** Transkripte unter `~/.claude/projects` und dasselbe GitHub-Konto für alle Agenten machen die Trennung zu einer Disziplin- und Wächterfrage, nicht zu einer kryptografischen. Der Bericht des Abnahme-Agenten bleibt Selbstauskunft; `abnahme.mjs` prüft Form, Vollständigkeit und den unveränderten Worktree, nicht die Wahrheit der Belege.
+- **Ehrliche Grenze:** Transkripte unter `~/.claude/projects` und dasselbe GitHub-Konto für alle Agenten machen die Trennung zu einer Disziplin- und Wächterfrage, nicht zu einer kryptografischen. Der Bericht des Abnahme-Agenten bleibt Selbstauskunft; `abnahme.mjs` prüft Form, Vollständigkeit und den unveränderten Worktree, nicht die Wahrheit der Belege. Präzisiert durch #1781: die drei Laufzeit-Guards stehen (Auftrags-Guard im Dispatcher, Pfad-Hooks der beiden Holdout-Agenten); offen bleibt nur Schreiben über Bash, das die Worktree-Probe abfängt.
 
 Umsetzungsentscheidungen in #1753:
 

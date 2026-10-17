@@ -88,6 +88,8 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
     ["K0:erfuellt", /Kriterium „K0“ ungültig/],
     ["Kx:erfuellt", /Kriterium „Kx“ ungültig/],
     ["K1", /Eintrag „K1“ ungültig/],
+    ["K1:", /Eintrag „K1:“ ungültig/],
+    ["K1:a b", /Eintrag „K1:a b“ ungültig/],
     ["", /Urteil ist leer/],
     ["  ", /Urteil ist leer/],
   ])("urteilFehler(%j)", (wert, erwartet) => {

@@ -33,7 +33,7 @@ export function bewerteAbnahmeWrite(filePath, cwd = "", deps = {}) {
   if (typeof filePath !== "string" || filePath.trim() === "") return { block: true, reason: "Abnahme-Write ohne Dateipfad: nicht prüfbar, darum abgelehnt." };
   const tmp = normalisierePfad(deps.tmp ?? tmpdir(), "");
   const norm = normalisierePfad(filePath, cwd);
-  if (istAbsolut(norm) && liegtUnter(norm, tmp)) return { block: false };
+  if (liegtUnter(norm, tmp)) return { block: false };
   return {
     block: true,
     reason: `${ABNAHME_EMPFAENGER} schreibt nichts im Repo oder Worktree: Write gilt nur im Scratchpad unter dem Temp-Verzeichnis (${tmp}). Probe-Skripte und Ausgaben dort ablegen.`,

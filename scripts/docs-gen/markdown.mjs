@@ -123,9 +123,9 @@ export function mermaidText(s) {
     .replace(/\r?\n/g, " ");
 }
 
-/** Maskiert alle Regex-Metazeichen (Kopie der Kern-Funktion: der docs-gen-Kern importiert nur `node:*` und sich selbst). Pur. */
+/** Maskiert die Regex-Metazeichen der Kern-Funktion ohne `/` und `-`, wie bisher in docs-gen (Kopie der Kern-Funktion: der docs-gen-Kern importiert nur `node:*` und sich selbst). Pur. */
 export function escapeRegex(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**

@@ -83,6 +83,14 @@ describe("bewerteAbnahmeWrite", () => {
   test("relativer Pfad, der per cwd im Temp-Verzeichnis liegt: erlaubt", () => {
     expect(w("a.mjs", "C:/Temp/s").block).toBe(false);
   });
+  test("Temp-Verzeichnis mit Schrägstrich am Ende: ein Pfad darunter ist erlaubt", () => {
+    expect(G.bewerteAbnahmeWrite("C:/Temp/a.mjs", "", { tmp: "C:/Temp/" }).block).toBe(false);
+    expect(G.bewerteAbnahmeWrite("C:/Temp2/a.mjs", "", { tmp: "C:/Temp/" }).block).toBe(true);
+  });
+  test.runIf(process.platform === "win32")("Windows: Groß-/Kleinschreibung des Laufwerks und Ordners zählt nicht", () => {
+    expect(w("c:/temp/a.mjs").block).toBe(false);
+    expect(G.bewerteSzenarioLesen("Read", { file_path: "c:/dev/repo/docs/x.md" }, "", { root: "C:/dev/repo" }).block).toBe(false);
+  });
   test("echtes os.tmpdir() ohne Test-Eingabe: ein Pfad darunter ist erlaubt", () => {
     expect(G.bewerteAbnahmeWrite(`${tmpdir()}/x/a.mjs`, "").block).toBe(false);
   });
@@ -118,6 +126,10 @@ describe("bewerteSzenarioLesen", () => {
     expect(l("Glob", { pattern: "/etc/*", path: `${root}/docs` }).block).toBe(true);
     expect(l("Glob", { pattern: "**/*.md", path: `${root}/docs` }).block).toBe(false);
   });
+  test("ohne deps.root gilt cwd als Wurzel (Hook ohne CLAUDE_PROJECT_DIR)", () => {
+    expect(G.bewerteSzenarioLesen("Read", { file_path: `${root}/docs/a.md` }, root, {}).block).toBe(false);
+    expect(G.bewerteSzenarioLesen("Read", { file_path: `${root}/src/a.ts` }, root, {}).block).toBe(true);
+  });
   test("fehlende Eingabe: abgelehnt", () => {
     expect(l("Read", undefined).block).toBe(true);
     expect(l("Read", {}).block).toBe(true);
@@ -137,6 +149,12 @@ describe("entscheideHook", () => {
     expect(G.entscheideHook("szenario-lesen", p("Read", { file_path: "C:/dev/repo/src/a.ts" }), d)?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(G.entscheideHook("szenario-lesen", p("Read", { file_path: "C:/dev/repo/docs/a.md" }), d)).toBeNull();
     expect(G.entscheideHook("szenario-lesen", p("Bash", { command: "x" }), d)).toBeNull();
+    for (const tool of ["Grep", "Glob"]) {
+      expect(G.entscheideHook("szenario-lesen", p(tool, { pattern: "x", path: "C:/dev/repo/src" }), d)?.hookSpecificOutput.permissionDecision, tool).toBe("deny");
+      expect(G.entscheideHook("szenario-lesen", p(tool, { pattern: "x", path: "C:/dev/repo/docs" }), d), tool).toBeNull();
+    }
+    // Payload ohne tool_name im Modus abnahme-write wird als Write behandelt (fail-closed für den Pfad)
+    expect(G.entscheideHook("abnahme-write", JSON.stringify({ cwd: "C:/dev/repo", tool_input: { file_path: "C:/dev/repo/a.ts" } }), d)?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(G.entscheideHook("unbekannt", p("Read", { file_path: "C:/dev/repo/src/a.ts" }), d)).toBeNull();
     expect(G.entscheideHook("szenario-lesen", "{kaputt", d)).toBeNull();
   });
