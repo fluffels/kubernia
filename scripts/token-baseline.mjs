@@ -433,15 +433,17 @@ export function nachweisAusCommits(commits, zeilen) {
   return { runden: review.runden, plan: plan ? plan.art === "planer" : null };
 }
 
-/** `zeilen` (Commit-Zeilen der Projekt-Config) werden als Standardparameter VOR den gh-Aufrufen geladen: ein Config-Fehler bricht ohne Netzzugriff ab.
+/** `zeilen` (Commit-Zeilen der Projekt-Config; ohne Angabe lädt `lade`) werden VOR den gh-Aufrufen geladen: ein Config-Fehler bricht ohne Netzzugriff ab.
+ *  `gh`/`ghT`/`lade` sind injizierbar (Tests).
  *  CI-Fix-Runden = distinct head_sha mit rotem CI-Lauf zwischen PR-Erstellung und Merge (dieselbe Zählung wie #904, gemeinsamer Abruf: ci-laeufe.mjs). */
-function prInfo(pr, zeilen = ladeCommitZeilen()) {
-  const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits,files"]);
+export function prInfo(pr, zeilen, { gh = ghJson, ghT = ghText, lade = ladeCommitZeilen } = {}) {
+  const z = zeilen ?? lade();
+  const p = gh(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits,files"]);
   return {
     prCreatedAt: p.createdAt,
     mergedAt: p.mergedAt,
-    failedPushes: zaehleRoteCommits(ghText, { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
-    nachweis: nachweisAusCommits(p.commits, zeilen),
+    failedPushes: zaehleRoteCommits(ghT, { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
+    nachweis: nachweisAusCommits(p.commits, z),
     files: p.files ?? [],
   };
 }
