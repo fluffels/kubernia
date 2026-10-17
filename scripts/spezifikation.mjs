@@ -159,21 +159,26 @@ export function fuehreAus(argv, io) {
   return aufrufFehler(`unbekannter Befehl ${befehl === undefined ? "(keiner)" : `„${befehl}“`}\n${AUFRUF}`);
 }
 
+/**
+ * Ankerprüfung mit injiziertem Lader (`lade(rolle)` → Items): zuerst nur das Ziel-Board (Rolle aus den Labels, das Issue gibt es noch
+ * nicht); steht der Anker dort, ist nichts zu prüfen. Nur sonst kommt das andere Board dazu, damit die Regel (`ankerFehler`, geteilt mit
+ * board-place.mjs) „steht nur auf dem anderen Board“ melden kann. Liefert den Fehlertext oder `null`.
+ */
+export function ankerPruefung({ nach, labels }, lade) {
+  const rolle = boardRolleFuer(labels);
+  const andere = rolle === "factory" ? "produkt" : "factory";
+  const ziel = lade(rolle);
+  if (ziel.some((i) => i.number === nach)) return null;
+  const fehler = ankerFehler({ anchor: nach, rolle, [rolle]: ziel, [andere]: lade(andere) });
+  return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
+}
+
 const echteIo = {
   owner: REPO.split("/")[0],
   leseDatei: (pfad) => readFileSync(pfad, "utf8"),
   erzeuge: ({ titel, body, labels }) =>
     ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
-  pruefeAnker: ({ nach, labels }) => {
-    // Das neue Issue gibt es noch nicht, seine Rolle kommt aus den Labels; die Regel selbst (`ankerFehler`) teilt sich das Skript mit board-place.mjs über board-lib.mjs.
-    const fehler = ankerFehler({
-      anchor: nach,
-      rolle: boardRolleFuer(labels),
-      produkt: loadItems(boardFuerRolle("produkt")),
-      factory: loadItems(boardFuerRolle("factory")),
-    });
-    return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
-  },
+  pruefeAnker: (a) => ankerPruefung(a, (rolle) => loadItems(boardFuerRolle(rolle))),
   einsortiere: ({ nr, nach, notfall }) => {
     const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
     execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
