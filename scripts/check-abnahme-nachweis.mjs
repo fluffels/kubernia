@@ -27,7 +27,7 @@ import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 import { MAX_REVIEW_PAESSE, parseNachweis, parseAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeProjektConfig, trenneConfigArg } from "./projekt-config-lib.mjs";
-import { aenderungsCommitsNach, commitZeilenAus, konfliktMergesNach, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
+import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
 /** Schließ-Referenzen eines PR-Bodys: verschiedene Ticketnummern zu close/fix/resolve (alle Beugungen, Groß-/Kleinschreibung egal, optional `:`). Pur. */
@@ -109,27 +109,19 @@ export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen }
 }
 
 const gitDefault = (args) => execFileSync("git", args, { encoding: "utf8" });
-const zeilenListe = (text) => text.split(/\r?\n/).filter((l) => l.trim() !== "");
 
 /** Liest die Daten zum Abnahme-head aus git: bekannt, im Slice, Nachfahre des Review-head, Konflikt-Merges und Änderungs-Commits danach. */
 function leseAbnahmeHead(git, base, abnahmeSha, reviewSha) {
-  const sha = (h) => {
-    try {
-      return git(["rev-parse", "--verify", "--quiet", `${h}^{commit}`]).trim() || null;
-    } catch {
-      return null;
-    }
-  };
-  const aSha = sha(abnahmeSha);
-  const leer = { bekannt: aSha !== null, imSlice: false, nachReviewHead: false, konfliktMerges: [], aenderungsCommits: [] };
-  if (!aSha || !zeilenListe(git(["rev-list", `${base}..HEAD`])).includes(aSha)) return leer;
-  const rSha = reviewSha ? sha(reviewSha) : null;
+  const a = commitImSlice(git, base, abnahmeSha);
+  const leer = { bekannt: a.bekannt, imSlice: false, nachReviewHead: false, konfliktMerges: [], aenderungsCommits: [] };
+  if (!a.imSlice) return leer;
+  const rSha = reviewSha ? loeseCommit(git, reviewSha) : null;
   return {
     ...leer,
     imSlice: true,
-    nachReviewHead: rSha !== null && git(["merge-base", rSha, aSha]).trim() === rSha,
-    konfliktMerges: konfliktMergesNach(git, aSha),
-    aenderungsCommits: aenderungsCommitsNach(git, aSha, base),
+    nachReviewHead: rSha !== null && git(["merge-base", rSha, a.sha]).trim() === rSha,
+    konfliktMerges: a.konfliktMerges,
+    aenderungsCommits: a.aenderungsCommits,
   };
 }
 

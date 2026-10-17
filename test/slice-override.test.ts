@@ -34,6 +34,12 @@ const so = raw as unknown as {
   ladeCommitZeilen: (opt?: { rootDir?: string; pfad?: string }) => Zeilen;
   ladeCommitZeilenOderBeende: (o?: { laden?: () => Zeilen; fehler?: (s: string) => void; exit?: (code: number) => void }) => Zeilen | undefined;
   parseOverrideTrailers: (text: string, key: string) => { valid: { nr: number; reason: string }[]; invalid: string[] };
+  loeseCommit: (git: (a: string[]) => string, ref: string) => string | null;
+  commitImSlice: (
+    git: (a: string[]) => string,
+    base: string,
+    ref: string,
+  ) => { sha: string | null; bekannt: boolean; imSlice: boolean; konfliktMerges: string[]; aenderungsCommits: { sha: string; dateien: string[] }[] };
 };
 const nl = nlRaw as unknown as { parseNachweis: (text: string, zeilen?: Zeilen) => { plan: unknown; review: { runden: number; lenses: string[] } | null; abnahme: unknown } };
 const gateModul = gate as unknown as { parseNachweis: unknown };
@@ -345,5 +351,63 @@ describe("Gates ohne Projekt-Config (#1741): kein Standardwert, Exit 1 mit der M
     } finally {
       rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
+  });
+});
+
+describe("commitImSlice / loeseCommit (#1781 L5a): head im Slice an einer Stelle", () => {
+  const BASE = "b".repeat(40);
+  const IM_SLICE = "1".repeat(40);
+  const MERGE = "2".repeat(40);
+  const FIX = "3".repeat(40);
+  /** Fake-git: `known` löst Refs auf, `slice` ist `<base>..HEAD`; Aufrufe werden mitgeschrieben. */
+  const fake = (o: { known?: string[]; slice?: string[]; wirft?: boolean }) => {
+    const aufrufe: string[] = [];
+    const git = (args: string[]): string => {
+      const cmd = args.join(" ");
+      aufrufe.push(cmd);
+      if (cmd.startsWith("rev-parse --verify --quiet")) {
+        if (o.wirft) throw new Error("git kaputt");
+        const ref = args[3].replace("^{commit}", "");
+        return (o.known ?? []).includes(ref) ? `${ref}\n` : "";
+      }
+      if (cmd === `rev-list ${BASE}..HEAD`) return (o.slice ?? []).join("\n") + "\n";
+      if (cmd === `rev-list --merges ${IM_SLICE}..HEAD`) return `${MERGE}\n`;
+      if (cmd === `show --remerge-diff --format= ${MERGE}`) return "diff --cc datei\n";
+      if (cmd === `rev-list --reverse --no-merges ${IM_SLICE}..HEAD ^${BASE}`) return `${FIX}\n`;
+      if (cmd === `diff-tree --no-commit-id --name-only -r ${FIX}`) return "src/x.ts\n";
+      throw new Error(`unerwarteter git-Aufruf: ${cmd}`);
+    };
+    return { git, aufrufe };
+  };
+
+  it("unbekannter Ref: nicht bekannt, nichts weiter gelesen", () => {
+    const { git, aufrufe } = fake({ known: [], slice: [IM_SLICE] });
+    expect(so.commitImSlice(git, BASE, "deadbee")).toEqual({ sha: null, bekannt: false, imSlice: false, konfliktMerges: [], aenderungsCommits: [] });
+    expect(aufrufe).toHaveLength(1);
+  });
+  it("git-Fehler beim Auflösen zählt als unbekannt (kein Wurf)", () => {
+    expect(so.loeseCommit(fake({ wirft: true }).git, "abc1234")).toBeNull();
+    expect(so.commitImSlice(fake({ wirft: true }).git, BASE, "abc1234").bekannt).toBe(false);
+  });
+  it("bekannt, aber außerhalb des Slice: Merges und Änderungen werden nicht gelesen", () => {
+    const { git, aufrufe } = fake({ known: [IM_SLICE], slice: [FIX] });
+    const r = so.commitImSlice(git, BASE, IM_SLICE);
+    expect(r).toEqual({ sha: IM_SLICE, bekannt: true, imSlice: false, konfliktMerges: [], aenderungsCommits: [] });
+    expect(aufrufe.some((c) => c.includes("--merges") || c.startsWith("diff-tree"))).toBe(false);
+  });
+  it("im Slice: Konflikt-Merge und Änderungs-Commit nach dem Ref, der Kurz-Ref wird zum vollen SHA", () => {
+    const { git } = fake({ known: ["1111111"], slice: [IM_SLICE, FIX] });
+    const loese = (a: string[]) => (a[0] === "rev-parse" ? `${IM_SLICE}\n` : git(a));
+    expect(so.commitImSlice(loese, BASE, "1111111")).toEqual({
+      sha: IM_SLICE,
+      bekannt: true,
+      imSlice: true,
+      konfliktMerges: [MERGE],
+      aenderungsCommits: [{ sha: FIX, dateien: ["src/x.ts"] }],
+    });
+  });
+  it("Teil-SHA ist kein Treffer im Slice (volle Gleichheit)", () => {
+    const { git } = fake({ known: [IM_SLICE], slice: [IM_SLICE.slice(0, 7)] });
+    expect(so.commitImSlice(git, BASE, IM_SLICE).imSlice).toBe(false);
   });
 });

@@ -151,6 +151,29 @@ export function konfliktMergesNach(git, headSha) {
   return merges.filter((sha) => git(["show", "--remerge-diff", "--format=", sha]).trim() !== "");
 }
 
+/** Der volle SHA des Commits `ref`, `null` wenn `ref` kein Commit ist (leere Ausgabe oder git-Fehler von `rev-parse --verify`). */
+export function loeseCommit(git, ref) {
+  try {
+    return git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Löst `ref` zu einem Commit auf und prüft, ob er im Slice (`<base>..HEAD`) liegt; nur dann kommen die Merges mit Konflikt-Auflösung und
+ * die Änderungs-Commits nach ihm dazu. Die eine Stelle für „head im Slice" der Review- und Abnahme-Gates.
+ * `{ sha, bekannt, imSlice, konfliktMerges, aenderungsCommits }`; `sha` ist `null`, wenn `ref` kein Commit ist (ein git-Fehler dabei zählt als unbekannt).
+ * Andere git-Fehler wirft die Funktion; der Aufrufer wertet das als rot (fail-closed).
+ */
+export function commitImSlice(git, base, ref) {
+  const sha = loeseCommit(git, ref);
+  const leer = { sha, bekannt: sha !== null, imSlice: false, konfliktMerges: [], aenderungsCommits: [] };
+  if (sha === null) return leer;
+  if (!git(["rev-list", `${base}..HEAD`]).split(/\r?\n/).includes(sha)) return leer;
+  return { ...leer, imSlice: true, konfliktMerges: konfliktMergesNach(git, sha), aenderungsCommits: aenderungsCommitsNach(git, sha, base) };
+}
+
 /**
  * Nicht-Merge-Commits in `<headSha>..HEAD` mit Baumänderung, ohne die Commits der Basis (`^<base>`: eingemergte `main`-Commits zählen nicht):
  * `[{ sha, dateien }]`, älteste zuerst. Leere Commits (Nachweis, Override) fehlen. Wirft bei einem git-Fehler; der Aufrufer wertet das als rot.

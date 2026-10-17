@@ -41,7 +41,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
-import { aenderungsCommitsNach, aktiverOverride, konfliktMergesNach, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
+import { aktiverOverride, commitImSlice,ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
 import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -201,27 +201,21 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])
       .split(/\r?\n/)
       .filter((l) => l.trim() !== "");
-    let headSha = null;
-    let headImSlice = false;
+    let hd = { bekannt: false, imSlice: false, konfliktMerges: [], aenderungsCommits: [] };
     let commitsNachReview = null;
-    let konfliktMerges = [];
-    let aenderungsCommits = [];
     if (nachweis.review?.head) {
-      try {
-        headSha = git(["rev-parse", "--verify", "--quiet", `${nachweis.review.head}^{commit}`]).trim() || null;
-      } catch {
-        headSha = null;
-      }
-      if (headSha) {
-        headImSlice = git(["rev-list", `${base}..HEAD`]).split(/\r?\n/).includes(headSha);
-        if (headImSlice) {
-          commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${headSha}..HEAD`]).trim());
-          konfliktMerges = konfliktMergesNach(git, headSha);
-          aenderungsCommits = aenderungsCommitsNach(git, headSha, base);
-        }
-      }
+      hd = commitImSlice(git, base, nachweis.review.head);
+      if (hd.imSlice) commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${hd.sha}..HEAD`]).trim());
     }
-    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges, aenderungsCommits, zeilen });
+    const fehler = bewerteNachweis({
+      nachweis,
+      dateien,
+      headBekannt: hd.bekannt,
+      headImSlice: hd.imSlice,
+      konfliktMerges: hd.konfliktMerges,
+      aenderungsCommits: hd.aenderungsCommits,
+      zeilen,
+    });
     return {
       ok: fehler.length === 0,
       fehler,
