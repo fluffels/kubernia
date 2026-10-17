@@ -137,3 +137,30 @@ describe("KQ-Abnahme: Toleranzen und Validierung (Lens-Runde 1)", () => {
     expect(() => A.formatAbnahme(Z, { art: "urteil", head: "abc1234", durchgaenge: 1 })).toThrow(/Abnahme/);
   });
 });
+
+describe("Hex-Muster und Wert-Normalisierung (#1762 L11)", () => {
+  const L = raw as unknown as { HEX: string; HEX_HEAD: RegExp; normalisiereWert: (t: unknown) => string; normalisiereLens: (t: unknown) => string };
+  it("HEX_HEAD nimmt 7 bis 40 kleine Hex-Zeichen, sonst nichts", () => {
+    expect(L.HEX_HEAD.test("a".repeat(7))).toBe(true);
+    expect(L.HEX_HEAD.test("a1b2c3d4e5".repeat(4))).toBe(true);
+    for (const falsch of ["a".repeat(6), "a".repeat(41), "ABCDEF1", "abcdefg", "", "abc1234\n", " abc1234"]) {
+      expect(L.HEX_HEAD.test(falsch), JSON.stringify(falsch)).toBe(false);
+    }
+  });
+  it("HEX ist die Quelle des Marker-Musters: ein Marker mit Großbuchstaben oder 6 Zeichen zählt nicht", () => {
+    const urteil = [{ k: "K1", wert: "erfuellt" }];
+    const m = (head: string) => `<!-- kq-abnahme durchgang=1 head=${head} urteil=K1:erfuellt -->`;
+    const A = raw as unknown as { parseAbnahmeMarker: (z: Zeilen, t: string) => unknown };
+    expect(A.parseAbnahmeMarker(Z, m("abc1234"))).toEqual({ durchgang: 1, head: "abc1234", urteil });
+    expect(A.parseAbnahmeMarker(Z, m("abc123"))).toBeNull();
+    expect(A.parseAbnahmeMarker(Z, m("a".repeat(41)))).toBeNull();
+  });
+  it("normalisiereWert: trim, klein, Umlaute in ASCII, Leerraum wird Bindestrich", () => {
+    expect(L.normalisiereWert("Nicht-Erfüllt ")).toBe("nicht-erfuellt");
+    expect(L.normalisiereWert("  Größe  Maß ")).toBe("groesse-mass");
+    expect(L.normalisiereWert(undefined)).toBe("undefined");
+  });
+  it("normalisiereLens bleibt dieselbe Funktion in anderer Hülle", () => {
+    expect(L.normalisiereLens("Test Adäquanz")).toBe("test-adaequanz");
+  });
+});

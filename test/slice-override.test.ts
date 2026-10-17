@@ -38,7 +38,6 @@ const nl = nlRaw as unknown as { parseNachweis: (text: string, zeilen?: Zeilen) 
 const gateModul = gate as unknown as { parseNachweis: unknown };
 const Z = so.commitZeilen("KQ-", "kubernia-planner");
 const HEAD40 = "a".repeat(40);
-const HEX = "abc1234";
 
 describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwert", () => {
   it("leitet Plan, Review und die vier Override-Schlüssel aus dem Präfix ab", () => {

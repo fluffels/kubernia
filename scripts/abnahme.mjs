@@ -26,7 +26,7 @@ import { REPO } from "./board-lib.mjs";
 import { istFremdeingang, istVertraut, issueKommentare } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, normalisiereLens, parseAbnahmeMarker, URTEILSWERTE } from "./nachweis-lib.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, parseAbnahmeMarker, URTEILSWERTE } from "./nachweis-lib.mjs";
 import { ladeCommitZeilen } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
@@ -69,7 +69,7 @@ export function parseBericht(text, nr, kriterienListe) {
       fehler.push(`${k}: Zeile ohne Beleg oder ohne Urteil („K<i>: <urteil> — <Beleg>“)`);
       continue;
     }
-    const wert = normalisiereLens(m[2]);
+    const wert = normalisiereWert(m[2]);
     if (!bekannt.has(k)) fehler.push(`${k}: unbekanntes Kriterium`);
     else if (!URTEILSWERTE.includes(wert)) fehler.push(`${k}: unbekanntes Urteil „${m[2]}“ (${URTEILSWERTE.join(" | ")})`);
     else if (gefunden.has(k)) fehler.push(`${k}: doppelt`);
@@ -192,7 +192,7 @@ function ausgabe(entscheidung, urteile, io, head, durchgang) {
 function auswerten(werte, nrText, io) {
   const nr = positiveZahl(nrText);
   const pr = positiveZahl(werte.pr);
-  if (nr === null || pr === null || !werte.bericht || !werte.worktree || !/^[0-9a-f]{7,40}$/i.test(werte.head ?? "")) {
+  if (nr === null || pr === null || !werte.bericht || !werte.worktree || !HEX_HEAD.test((werte.head ?? "").toLowerCase())) {
     return aufrufFehler(`auswerten braucht <nr>, --pr, --bericht, --worktree und --head (7-40 Hex)\n${AUFRUF}`);
   }
   const t = ladeTicket(nr, io);

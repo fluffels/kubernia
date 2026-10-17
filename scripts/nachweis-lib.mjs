@@ -27,9 +27,9 @@ function lastLine(text, key) {
   return all.length > 0 ? all[all.length - 1][2].trim() : null;
 }
 
-/** Normalisiert einen Brillennamen (#1331): Kleinbuchstaben, Umlaute und ß in ASCII, Leerraum wird `-`. */
-export function normalisiereLens(name) {
-  return String(name)
+/** Normalisiert einen Wert für den Vergleich: trim, Kleinbuchstaben, Umlaute und ß in ASCII, Leerraum wird `-`. */
+export function normalisiereWert(wert) {
+  return String(wert)
     .trim()
     .toLowerCase()
     .replace(/ä/g, "ae")
@@ -38,6 +38,9 @@ export function normalisiereLens(name) {
     .replace(/ß/g, "ss")
     .replace(/\s+/g, "-");
 }
+
+/** Normalisiert einen Brillennamen (#1331); dünne Hülle um normalisiereWert. */
+export const normalisiereLens = (name) => normalisiereWert(name);
 
 /** Wert eines Felds der Review-Zeile, tolerant (#1331): reicht bis zum nächsten ` key=`, damit auch
  *  Leerzeichen nach Kommas gehen. `null`, wenn das Feld fehlt. */
@@ -106,7 +109,7 @@ export function parseNachweis(text, zeilen) {
     }
     review = {
       zeile: reviewWert,
-      head: /^[0-9a-f]{7,40}$/i.test(felder.head ?? "") ? felder.head.toLowerCase() : null,
+      head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
       runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
       lenses: lensenAus(reviewWert),
       blocker: blockerAus(reviewWert),
@@ -126,7 +129,7 @@ function urteilAus(wert) {
   const urteil = [];
   for (const teil of wert.split(",")) {
     const m = /^\s*(K[1-9]\d*)\s*:\s*(\S+)\s*$/.exec(teil);
-    const w = m ? normalisiereLens(m[2]) : "";
+    const w = m ? normalisiereWert(m[2]) : "";
     if (!m || !URTEILSWERTE.includes(w) || urteil.some((u) => u.k === m[1])) return null;
     urteil.push({ k: m[1], wert: w });
   }
@@ -143,7 +146,7 @@ function abnahmeAus(wert) {
   const head = (feldWert(wert, "head")?.trim() ?? "").toLowerCase();
   const durch = feldWert(wert, "durchgaenge")?.trim() ?? "";
   const urteil = urteilAus(feldWert(wert, "urteil"));
-  if (!/^[0-9a-f]{7,40}$/.test(head) || !/^\d+$/.test(durch) || Number(durch) < 1 || urteil === null) return { art: "ungueltig", zeile: wert };
+  if (!HEX_HEAD.test(head) || !/^\d+$/.test(durch) || Number(durch) < 1 || urteil === null) return { art: "ungueltig", zeile: wert };
   return { art: "urteil", head, durchgaenge: Number(durch), urteil };
 }
 
@@ -175,7 +178,7 @@ export function formatAbnahmeMarker(zeilen, { durchgang, head, urteil }) {
 
 /** Liest den Marker aus einem Kommentartext: `{durchgang, head, urteil}` oder `null`. Der Hand-off-Marker zählt nie. Pur. */
 export function parseAbnahmeMarker(zeilen, text) {
-  const re = new RegExp(`<!--\\s*${escapeRe(abnahmeMarker(zeilen))}\\s+durchgang=(\\d+)\\s+head=([0-9a-f]{7,40})\\s+urteil=(\\S+)\\s*-->`);
+  const re = new RegExp(`<!--\\s*${escapeRe(abnahmeMarker(zeilen))}\\s+durchgang=(\\d+)\\s+head=(${HEX})\\s+urteil=(\\S+)\\s*-->`);
   const m = re.exec(String(text ?? ""));
   const urteil = m ? urteilAus(m[3]) : null;
   if (!m || urteil === null || Number(m[1]) < 1) return null;
