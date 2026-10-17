@@ -2,7 +2,7 @@
 /**
  * Holdout-Abnahme, Auswertung (ADR 0022 F13): ein Abnahme-Agent (`holdout-abnahme`) prüft das Ergebnis eines Tickets gegen dessen
  * Akzeptanzkriterien und schreibt je Kriterium ein Urteil in einen Bericht. Dieses Skript nummeriert die Kriterien, prüft den Bericht,
- * schreibt die Spur als PR-Kommentar und entscheidet über bestanden, Fix-Runde oder Hand-off. Format der Zeile und der Marker: slice-override.mjs
+ * schreibt die Spur als PR-Kommentar und entscheidet über bestanden, Fix-Runde oder Hand-off. Format der Zeile und der Marker: nachweis-lib.mjs
  * (`formatAbnahme`, `formatAbnahmeMarker`), Beschreibung: docs/agent-harness.md §3a.
  *
  *   node scripts/abnahme.mjs kriterien <nr>
@@ -26,7 +26,8 @@ import { REPO } from "./board-lib.mjs";
 import { istFremdeingang, istVertraut, issueKommentare } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, ladeCommitZeilen, normalisiereLens, parseAbnahmeMarker, URTEILSWERTE } from "./slice-override.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, parseAbnahmeMarker, URTEILSWERTE } from "./nachweis-lib.mjs";
+import { ladeCommitZeilen } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
 /** Name des Abnahme-Agenten im Berichtskopf. */
@@ -68,7 +69,7 @@ export function parseBericht(text, nr, kriterienListe) {
       fehler.push(`${k}: Zeile ohne Beleg oder ohne Urteil („K<i>: <urteil> — <Beleg>“)`);
       continue;
     }
-    const wert = normalisiereLens(m[2]);
+    const wert = normalisiereWert(m[2]);
     if (!bekannt.has(k)) fehler.push(`${k}: unbekanntes Kriterium`);
     else if (!URTEILSWERTE.includes(wert)) fehler.push(`${k}: unbekanntes Urteil „${m[2]}“ (${URTEILSWERTE.join(" | ")})`);
     else if (gefunden.has(k)) fehler.push(`${k}: doppelt`);
@@ -93,6 +94,26 @@ export function zaehleDurchgang(kommentare, owner, zeilen) {
 }
 
 const zelle = (t) => String(t).replace(/\|/g, "\\|").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, " ");
+/** Grenzen der Kommentare (GitHub lehnt Körper ab 65.536 Zeichen ab): je Beleg höchstens `BELEG_MAX`, gesamt `KOMMENTAR_MAX`. */
+export const BELEG_MAX = 1000;
+export const KOMMENTAR_MAX = 65000;
+const GEKUERZT = "… (gekürzt)";
+const kuerzeBeleg = (t) => {
+  const b = String(t);
+  return b.length > BELEG_MAX ? `${b.slice(0, BELEG_MAX)}${GEKUERZT}` : b;
+};
+/** Setzt Kopf, Zeilen und Schluss zusammen; passt der Körper nicht in `KOMMENTAR_MAX`, entfallen Zeilen von hinten (Kopf und Marker bleiben ganz). */
+function begrenze(kopf, zeilen, schluss) {
+  const baue = (z, hinweis) => [...kopf, ...z, ...(hinweis ? [hinweis] : []), ...schluss].join("\n");
+  let text = baue(zeilen, null);
+  if (text.length <= KOMMENTAR_MAX) return text;
+  let n = zeilen.length;
+  do {
+    n -= 1;
+    text = baue(zeilen.slice(0, n), `${GEKUERZT}: ${zeilen.length - n} weitere Zeilen entfallen (die Urteile stehen im Marker)`);
+  } while (text.length > KOMMENTAR_MAX && n > 0);
+  return text;
+}
 const kurz = (t) => {
   const z = String(t).split("\n")[0];
   return z.length > 100 ? `${z.slice(0, 100)}…` : z;
@@ -102,23 +123,21 @@ const kurz = (t) => {
 export function prKommentar({ zeilen, nr, durchgang, head, urteile, kriterienListe }) {
   const marker = formatAbnahmeMarker(zeilen, { durchgang, head, urteil: urteile.map(({ k, wert }) => ({ k, wert })) });
   const text = new Map(kriterienListe.map((c) => [c.k, c.text]));
-  const zeilenTabelle = urteile.map((u) => `| ${zelle(`${u.k}: ${kurz(text.get(u.k) ?? "")}`)} | ${u.wert} | ${zelle(u.beleg)} |`);
-  return [marker, `### Holdout-Abnahme #${nr}, Durchgang ${durchgang}`, "", `Stand \`${head.slice(0, 7)}\``, "", "| Kriterium | Urteil | Beleg |", "| --- | --- | --- |", ...zeilenTabelle, ""].join("\n");
+  const zeilenTabelle = urteile.map((u) => `| ${zelle(`${u.k}: ${kurz(text.get(u.k) ?? "")}`)} | ${u.wert} | ${zelle(kuerzeBeleg(u.beleg))} |`);
+  const kopf = [marker, `### Holdout-Abnahme #${nr}, Durchgang ${durchgang}`, "", `Stand \`${head.slice(0, 7)}\``, "", "| Kriterium | Urteil | Beleg |", "| --- | --- | --- |"];
+  return begrenze(kopf, zeilenTabelle, [""]);
 }
 
 /** Ticket-Kommentar bei `nicht-pruefbar`: Hand-off-Marker, alle nicht prüfbaren Kriterien mit Text und Grund. Pur. */
 export function handoffKommentar({ zeilen, nr, urteile, kriterienListe }) {
   const text = new Map(kriterienListe.map((c) => [c.k, c.text]));
-  const punkte = urteile.filter((u) => u.wert === "nicht-pruefbar").map((u) => `- **${u.k}** ${zelle(kurz(text.get(u.k) ?? ""))}\n  Grund: ${zelle(u.beleg)}`);
-  return [
-    `<!-- ${abnahmeMarker(zeilen)}-handoff -->`,
-    `### Holdout-Abnahme #${nr}: Kriterium nicht prüfbar`,
-    "",
-    ...punkte,
+  const punkte = urteile.filter((u) => u.wert === "nicht-pruefbar").map((u) => `- **${u.k}** ${zelle(kurz(text.get(u.k) ?? ""))}\n  Grund: ${zelle(kuerzeBeleg(u.beleg))}`);
+  const kopf = [`<!-- ${abnahmeMarker(zeilen)}-handoff -->`, `### Holdout-Abnahme #${nr}: Kriterium nicht prüfbar`, ""];
+  return begrenze(kopf, punkte, [
     "",
     "Das Kriterium im Ticket präzisieren (Entscheidung der Maintainerin). Der Reparaturweg `node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>` greift nur bei unvollständiger Spezifikation (nicht bei einem Ticket mit Assignee und nicht bei Umformulierungen).",
     "",
-  ].join("\n");
+  ]);
 }
 
 /** Flags `--name wert`; alles andere ist positional. Pur. */
@@ -191,7 +210,7 @@ function ausgabe(entscheidung, urteile, io, head, durchgang) {
 function auswerten(werte, nrText, io) {
   const nr = positiveZahl(nrText);
   const pr = positiveZahl(werte.pr);
-  if (nr === null || pr === null || !werte.bericht || !werte.worktree || !/^[0-9a-f]{7,40}$/i.test(werte.head ?? "")) {
+  if (nr === null || pr === null || !werte.bericht || !werte.worktree || !HEX_HEAD.test((werte.head ?? "").toLowerCase())) {
     return aufrufFehler(`auswerten braucht <nr>, --pr, --bericht, --worktree und --head (7-40 Hex)\n${AUFRUF}`);
   }
   const t = ladeTicket(nr, io);

@@ -105,6 +105,20 @@ describe("Dev-Umgebung: Node-Version & Port halten zusammen (#388)", () => {
   });
 });
 
+describe("Dependabot: Node-Major nur von Hand (#1762)", () => {
+  const dependabot = read(".github/dependabot.yml");
+  const dockerBlock = dependabot.slice(dependabot.indexOf(`package-ecosystem: "docker"`));
+
+  test("der Docker-Block ignoriert Node-Major-Updates (alle Pins ziehen gemeinsam nach)", () => {
+    assert.ok(dockerBlock.startsWith("package-ecosystem"), "dependabot.yml hat keinen Docker-Block.");
+    assert.match(
+      dockerBlock,
+      /ignore:\s*\n\s*- dependency-name: "node"\s*\n\s*update-types: \["version-update:semver-major"\]/,
+      "Der Docker-Block braucht die Ignore-Regel für node (semver-major), sonst kommt ein Einzel-PR, der die Node-Pins auseinanderzieht.",
+    );
+  });
+});
+
 describe("Dev-Panel-Docker: Laufzeit-Passwort statt Build-Zeit (#334)", () => {
   test("baut den Dev-Panel-Build und serviert ihn schlank per nginx", () => {
     assert.match(devpanelDockerfile, /npm run build:devpanel/, "Dockerfile.devpanel muss das Dev-Panel-Bundle bauen.");

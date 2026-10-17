@@ -3,14 +3,15 @@
 // Nur Node-Builtins; Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
 import { createHash } from "node:crypto";
 
-export const RINGE = ["kern", "kern-nach-entkopplung", "oberflaeche"];
-
 /** Ring-Importregel (ADR 0029): Ring des Importeurs -> Ringe, deren Besitz er lokal importieren darf. Ein weiterer Ring ist eine Zeile. */
 export const RING_IMPORTE = {
   kern: ["kern"],
   "kern-nach-entkopplung": ["kern", "kern-nach-entkopplung"],
   oberflaeche: ["kern", "kern-nach-entkopplung", "oberflaeche"],
 };
+
+/** Alle Ringe: die Schlüssel der Importregel (eine Quelle). */
+export const RINGE = Object.keys(RING_IMPORTE);
 
 /** Ringe, die der Factory gehören und nie in ein Projekt verteilt werden (Deny-List: ein unbekannter Ring wird geprüft und verteilt). */
 export const NUR_FACTORY = ["oberflaeche"];

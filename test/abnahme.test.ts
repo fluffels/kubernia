@@ -5,6 +5,8 @@ import { describe, expect, test } from "vitest";
 import * as raw from "../scripts/abnahme.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as so from "../scripts/slice-override.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawNl from "../scripts/nachweis-lib.mjs";
 
 type User = { login: string; type?: string } | null;
 type Issue = { state?: string; body?: string | null; user?: User; labels?: ({ name: string } | string)[]; pull_request?: object };
@@ -26,7 +28,8 @@ const A = raw as unknown as {
   zaehleDurchgang: (k: Kommentar[], owner: string, z: Zeilen) => number;
   ABNAHME_AGENT: string;
 };
-const commitZeilen = (so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
+const nl = rawNl as unknown as { parseAbnahmeMarker: (z: Zeilen, text: string) => { urteil: unknown[] } | null };
+const commitZeilen =(so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
 const Z = commitZeilen("KQ-", "kubernia-planner");
 
 const HEAD = "a".repeat(40);
@@ -75,7 +78,7 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(r.posts[0].body).toContain(`<!-- kq-abnahme durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt -->`);
     expect(r.posts[0].body).toContain("| K1: Erstes Kriterium. | erfuellt | Beleg eins |");
     expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\nKQ-Abnahme: head=${HEAD} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt\n`);
-    const gelesen = (so as unknown as { parseNachweis: (t: string, z: Zeilen) => { abnahme: { art: string } } }).parseNachweis(r.out, Z);
+    const gelesen = (nl as unknown as { parseNachweis: (t: string, z: Zeilen) => { abnahme: { art: string } } }).parseNachweis(r.out, Z);
     expect(gelesen.abnahme.art).toBe("urteil");
   });
   test("fix: PR-Kommentar, Belege der nicht erfüllten Kriterien, kein Ticket-Kommentar", () => {
@@ -122,6 +125,88 @@ describe("auswerten: Entscheidung und Spur", () => {
       { k: "K3", text: "c" },
     ]);
     expect(r.urteile?.map((u) => u.wert)).toEqual(["erfuellt", "nicht-erfuellt", "erfuellt"]);
+  });
+});
+
+describe("Kommentar-Grenzen: Beleg und Gesamtkörper (#1762)", () => {
+  const A2 = A as unknown as { BELEG_MAX: number; KOMMENTAR_MAX: number };
+  const beleg = (n: number) => "x".repeat(n);
+  const mitBeleg = (b: string) => lauf(BERICHT([`K1: erfuellt — ${b}`, "K2: erfuellt — b", "K3: erfuellt — c"])).posts[0].body;
+  test("Konstanten: 1.000 je Beleg, 65.000 gesamt (unter dem GitHub-Limit 65.536)", () => {
+    expect(A2.BELEG_MAX).toBe(1000);
+    expect(A2.KOMMENTAR_MAX).toBe(65000);
+  });
+  test("ein Beleg mit genau 1.000 Zeichen bleibt, mit 1.001 wird gekürzt", () => {
+    expect(mitBeleg(beleg(1000))).not.toContain("gekürzt");
+    const b = mitBeleg(beleg(1001));
+    expect(b).toContain("… (gekürzt)");
+    expect(b).not.toContain(beleg(1001));
+    expect(b).toContain(beleg(1000));
+  });
+  test("ein Beleg mit 70.000 Zeichen: Body unter 65.536, Marker und Kopf vollständig", () => {
+    const b = mitBeleg(beleg(70000));
+    expect(b.length).toBeLessThanOrEqual(65536);
+    expect(b).toContain("gekürzt");
+    expect(b).toContain("| Kriterium | Urteil | Beleg |");
+    expect(nl.parseAbnahmeMarker(Z, b)?.urteil).toHaveLength(3);
+  });
+  test("sehr viele Kriterien: Gesamtkörper ≤ 65.000, Tabellenkopf und Marker nie gekürzt, Hinweis auf entfallene Zeilen", () => {
+    const n = 120;
+    const body = ["## Ziel", "Z", "", "## Akzeptanzkriterien", ...Array.from({ length: n }, (_, i) => `${i + 1}. Kriterium ${i + 1}.`), ""].join("\n");
+    const zeilen = Array.from({ length: n }, (_, i) => `K${i + 1}: erfuellt — ${beleg(2000)}`);
+    const r = lauf(BERICHT(zeilen), { ladeIssue: () => ({ state: "open", body, user: VERTRAUT, labels: [] }) });
+    const b = r.posts[0].body;
+    expect(b.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
+    expect(b).toContain("| Kriterium | Urteil | Beleg |");
+    expect(b).toContain("gekürzt");
+    expect(nl.parseAbnahmeMarker(Z, b)?.urteil).toHaveLength(n);
+  });
+  const viele = (n: number, belegLaenge: number) => {
+    const body = ["## Ziel", "Z", "", "## Akzeptanzkriterien", ...Array.from({ length: n }, (_, i) => `${i + 1}. Kriterium ${i + 1}.`), ""].join("\n");
+    const zeilen = Array.from({ length: n }, (_, i) => `K${i + 1}: erfuellt — ${beleg(belegLaenge)}`);
+    return lauf(BERICHT(zeilen), { ladeIssue: () => ({ state: "open", body, user: VERTRAUT, labels: [] }) }).posts[0].body;
+  };
+  test("der Hinweis auf entfallene Zeilen steht am Zeilenanfang und nennt die Zahl; die Belegkürzung allein löst ihn nicht aus", () => {
+    const b = viele(120, 2000);
+    expect(b).toMatch(/^… \(gekürzt\): \d+ weitere Zeilen entfallen \(die Urteile stehen im Marker\)$/m);
+    // Es entfallen nur so viele Zeilen wie nötig: die Zahl stimmt mit den verbliebenen Zeilen überein, und die nächste hätte nicht mehr gepasst.
+    const entfallen = Number(/^… \(gekürzt\): (\d+) weitere/m.exec(b)?.[1]);
+    const verblieben = (b.match(/^\| K\d+: /gm) ?? []).length;
+    expect(verblieben).toBeGreaterThan(0);
+    expect(verblieben + entfallen).toBe(120);
+    expect(b.length).toBeGreaterThan(A2.KOMMENTAR_MAX - 1100);
+    const ohne = viele(3, 2000);
+    expect(ohne).toContain("… (gekürzt)");
+    expect(ohne).not.toMatch(/weitere Zeilen entfallen/);
+  });
+  test("ein Körper knapp unter 65.000 Zeichen bleibt ungekürzt (untere Grenze der Kürzung)", () => {
+    const b = viele(55, 1000);
+    expect(b.length).toBeGreaterThan(55000);
+    expect(b.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
+    expect(b).not.toMatch(/weitere Zeilen entfallen/);
+    expect(b).not.toContain("… (gekürzt)");
+    expect(b.match(/^\| K\d+: /gm) ?? []).toHaveLength(55);
+  });
+  test("passt schon der Kopf mit dem Marker nicht, entfallen alle Zeilen und die Kürzung endet (kein Endlosschleifen-Fall)", () => {
+    const n = 7000;
+    const b = viele(n, 1);
+    expect(b).toContain(`${n} weitere Zeilen entfallen`);
+  }, 60_000); // 7.000 Kriterien: die Kürzung läuft zeilenweise, unter Coverage sprengt das die 5 s
+  test("Hand-off-Kommentar: der Schluss bleibt bei aktiver Kürzung erhalten", () => {
+    const zeilen = Array.from({ length: 80 }, (_, i) => `K${i + 1}: nicht-pruefbar — ${beleg(2000)}`);
+    const body = ["## Ziel", "Z", "", "## Akzeptanzkriterien", ...Array.from({ length: 80 }, (_, i) => `${i + 1}. Kriterium ${i + 1}.`), ""].join("\n");
+    const r = lauf(BERICHT(zeilen), { ladeIssue: () => ({ state: "open", body, user: VERTRAUT, labels: [] }) });
+    const h = r.posts.find((p) => p.nr === 7)?.body ?? "";
+    expect(h).toMatch(/^… \(gekürzt\): \d+ weitere Zeilen entfallen/m);
+    expect(h.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
+    expect(h).toContain("Der Reparaturweg");
+    expect(h.endsWith("\n")).toBe(true);
+  });
+  test("Hand-off-Kommentar: Grund über 1.000 Zeichen gekürzt, Gesamtkörper begrenzt", () => {
+    const r = lauf(BERICHT([`K1: nicht-pruefbar — ${beleg(5000)}`, "K2: erfuellt — b", "K3: erfuellt — c"]));
+    const h = r.posts.find((p) => p.nr === 7)?.body ?? "";
+    expect(h).toContain("… (gekürzt)");
+    expect(h.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
   });
 });
 

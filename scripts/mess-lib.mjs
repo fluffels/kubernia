@@ -1,6 +1,7 @@
 // Gemeinsame Bausteine der Mess-Skripte (token-baseline, subagent-laufzeit, hauptchat-zerlegung, kontext-treiber,
 // lauf-ergebnis): Median, Cache-Pausen-Schwellen, Ticketnummer und Ticketfilter stehen genau einmal hier, damit die
 // Skripte nicht auseinanderlaufen.
+import { escapeRegex } from "./ticket-namen.mjs";
 
 /** Median einer Zahlenliste (gerade Anzahl: Mittel der beiden mittleren), nicht endliche Werte ignoriert, `null` bei leerer Liste. */
 export function median(werte) {
@@ -30,7 +31,6 @@ export function istNeuaufbau({ gapMs, pauseMs, call }) {
   return gapMs > pauseMs && kontext > 0 && zahl(call.cacheRead) < kontext / 2;
 }
 
-const regexEscape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Kern des Worktree-Pfads `/.claude/worktrees/kq-<nr>…` (Regex-Quelltext): `bereinige` und `normPfad` nutzen dieselbe Regel. */
 const WORKTREE_KERN = String.raw`/\.claude/worktrees/kq-\d+[\w-]*`;
@@ -69,7 +69,7 @@ export function bereinige(text, { wurzel = null } = {}) {
     .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~")
     .replace(new RegExp(`\\S*${WORKTREE_KERN}(?:/|(?=\\s|$))`, "g"), "<wt>/");
   const varianten = wurzel ? wurzelVarianten(wurzel) : [];
-  if (varianten.length) t = t.replace(new RegExp(`(?:${varianten.map(regexEscape).join("|")})(?:/|(?=[\\s"']|$))`, "gi"), "<repo>/");
+  if (varianten.length) t = t.replace(new RegExp(`(?:${varianten.map(escapeRegex).join("|")})(?:/|(?=[\\s"']|$))`, "gi"), "<repo>/");
   return t.replace(/\s+/g, " ");
 }
 

@@ -111,6 +111,12 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # Node-Major wechselt von Hand: .nvmrc, devcontainer, docker-compose und beide Dockerfiles
+    # ziehen gemeinsam nach (Wächter test/harness/devcontainer.test.ts). Ein Einzel-PR für nur
+    # ein Image bräche diese Kopplung; Minor/Patch laufen weiter.
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "ci(docker)"
     labels:

@@ -7,9 +7,11 @@
  */
 import { afterEach, beforeEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLock from "../../scripts/ticket-lock.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -61,7 +63,7 @@ function deps(welt: Welt = {}, jetzt = JETZT, sandbox?: string | null): Record<s
       if (a.startsWith("fetch")) return "";
       if (a.startsWith("rev-parse --abbrev-ref")) return `${welt.branch ?? "main"}\n`;
       if (a.startsWith("for-each-ref")) return (welt.refs ?? []).join("\n");
-      if (a.startsWith("worktree list")) return ["worktree /repo", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n");
+      if (a.startsWith("worktree list")) return ["worktree /repo", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n\n");
       if (a.startsWith("log -1")) return String(welt.commitSek ?? 0);
       if (a.includes("reflog")) return "0";
       if (a.includes("status --porcelain")) return "";
@@ -357,5 +359,108 @@ describe("claim --wiederaufnahme", () => {
     const welt = { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt };
     assert.equal(lauf(["claim", "9", "--wiederaufnahme"], welt).code, 0);
     assert.equal(lauf(["claim", "9", "--wiederaufnahme"], welt).code, 4);
+  });
+});
+
+// ---------- Ende-zu-Ende und echte Deps (#1762 L24) ----------
+
+const WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+/** Statisch importierte `./`-Skripte eines Einstiegs, transitiv (Dateinamen relativ zu `scripts/`). */
+function skriptHuelle(einstieg: string, gesehen = new Set<string>()): string[] {
+  if (gesehen.has(einstieg)) return [...gesehen];
+  gesehen.add(einstieg);
+  const text = readFileSync(join(WURZEL, "scripts", einstieg), "utf8");
+  for (const m of text.matchAll(/from "\.\/([^"]+\.mjs)"/g)) skriptHuelle(m[1], gesehen);
+  return [...gesehen];
+}
+
+/** Pfad vergleichbar machen: Backslashes zu /, Kleinschreibung (Windows). */
+const klein = (p: string) => p.split(String.fromCharCode(92)).join("/").toLowerCase();
+const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+const node = (cwd: string, args: string[], env: Record<string, string | undefined> = {}) =>
+  execFileSync(process.execPath, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: { ...process.env, AGENT_SANDBOX: undefined, ...env } });
+
+/** Temp-Repo mit Kopie der Skripte, der Projekt-Config und des post-commit-Hooks; `core.hooksPath` zeigt auf `.githooks`. */
+function tempRepo(einstiege: string[]): string {
+  const repo = realpathSync(mkdtempSync(join(dir, "repo-")));
+  git(repo, "init", "-q", "-b", "main");
+  git(repo, "config", "user.name", "Test");
+  git(repo, "config", "user.email", "test@example.invalid");
+  git(repo, "config", "commit.gpgsign", "false");
+  git(repo, "config", "core.hooksPath", ".githooks");
+  mkdirSync(join(repo, "scripts"), { recursive: true });
+  mkdirSync(join(repo, ".factory"), { recursive: true });
+  mkdirSync(join(repo, ".githooks"), { recursive: true });
+  const dateien = new Set(einstiege.flatMap((e) => skriptHuelle(e)));
+  for (const f of dateien) copyFileSync(join(WURZEL, "scripts", f), join(repo, "scripts", f));
+  copyFileSync(join(WURZEL, ".factory/projekt.json"), join(repo, ".factory/projekt.json"));
+  copyFileSync(join(WURZEL, ".githooks/post-commit"), join(repo, ".githooks/post-commit"));
+  return repo;
+}
+
+describe("post-commit-Hook Ende zu Ende (#1762)", () => {
+  test("ein Commit im Ticket-Worktree setzt zuletzt.quelle commit im Lock", () => {
+    const repo = tempRepo(["ticket-lock.mjs"]);
+    git(repo, "add", "-A");
+    git(repo, "update-index", "--chmod=+x", ".githooks/post-commit");
+    git(repo, "commit", "-q", "-m", "init");
+    const claim = node(repo, ["scripts/ticket-lock.mjs", "claim", "5"]);
+    assert.match(claim, /nonce=/);
+    git(repo, "worktree", "add", "-q", ".claude/worktrees/kq-5", "-b", "feature/kq-5-x");
+    const wt = join(repo, ".claude", "worktrees", "kq-5");
+    const lockDatei = join(repo, ".git", "kq-locks", "5.json");
+    assert.equal((JSON.parse(readFileSync(lockDatei, "utf8")) as Lock).zuletzt, undefined);
+    git(wt, "commit", "-q", "--allow-empty", "-m", "arbeit");
+    const lock = JSON.parse(readFileSync(lockDatei, "utf8")) as { zuletzt?: { quelle?: string; zeit?: string } };
+    assert.equal(lock.zuletzt?.quelle, "commit");
+    assert.ok(Number.isFinite(Date.parse(lock.zuletzt?.zeit ?? "")));
+  });
+
+  test("Kontrolle: ohne Hook-Verdrahtung bleibt zuletzt leer (der Test sieht den Hook wirklich)", () => {
+    const repo = tempRepo(["ticket-lock.mjs"]);
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "init", "--no-verify");
+    node(repo, ["scripts/ticket-lock.mjs", "claim", "5"]);
+    git(repo, "worktree", "add", "-q", ".claude/worktrees/kq-5", "-b", "feature/kq-5-x");
+    git(repo, "config", "core.hooksPath", "kein-ordner");
+    git(join(repo, ".claude", "worktrees", "kq-5"), "commit", "-q", "--allow-empty", "-m", "arbeit");
+    const lock = JSON.parse(readFileSync(join(repo, ".git", "kq-locks", "5.json"), "utf8")) as Lock;
+    assert.equal(lock.zuletzt, undefined);
+  });
+});
+
+describe("echteDeps: Smoke im Temp-Repo (#1762)", () => {
+  const lade = (repo: string, datei: string, env: Record<string, string | undefined> = {}) =>
+    JSON.parse(
+      node(
+        repo,
+        ["--input-type=module", "-e", `const m = await import("./scripts/${datei}"); const d = m.echteDeps(); console.log(JSON.stringify({ keys: Object.keys(d).sort(), lockDir: d.lockDir, sandbox: d.sandbox ?? null, label: d.festgefahrenLabel ?? null, top: d.git(["rev-parse", "--show-toplevel"]).trim() }));`],
+        env,
+      ),
+    ) as { keys: string[]; lockDir: string; sandbox: string | null; label: string | null; top: string };
+
+  test("ticket-lock: Schlüssel vorhanden, git läuft im Temp-Repo, lockDir unter dessen .git", () => {
+    const repo = tempRepo(["ticket-lock.mjs"]);
+    git(repo, "commit", "-q", "--allow-empty", "-m", "init", "--no-verify");
+    const r = lade(repo, "ticket-lock.mjs");
+    for (const k of ["git", "jetzt", "nonce", "lockDir", "sandbox", "liesDatei", "schreibeNeu", "ersetze", "benenneUm", "loesche", "legeVerzeichnisAn", "liste", "mtime"]) assert.ok(r.keys.includes(k), k);
+    assert.equal(klein(r.top), klein(repo));
+    assert.equal(klein(r.lockDir), `${klein(repo)}/.git/kq-locks`);
+  });
+
+  test("ticket-lock: sandbox folgt der Umgebungsvariable AGENT_SANDBOX", () => {
+    const repo = tempRepo(["ticket-lock.mjs"]);
+    assert.equal(lade(repo, "ticket-lock.mjs", { AGENT_SANDBOX: "docker" }).sandbox, "docker");
+    assert.equal(lade(repo, "ticket-lock.mjs").sandbox, null);
+  });
+
+  test("claims-pruefen: Schlüssel vorhanden, Label aus der Projekt-Config, git im Temp-Repo", () => {
+    const repo = tempRepo(["claims-pruefen.mjs"]);
+    const cfg = JSON.parse(readFileSync(join(repo, ".factory/projekt.json"), "utf8")) as { labels: { festgefahren: string } };
+    const r = lade(repo, "claims-pruefen.mjs");
+    for (const k of ["jetzt", "git", "graphql", "zugewiesen", "festgefahrenLabel", "lockDir", "liste", "liesDatei", "loesche", "existiert"]) assert.ok(r.keys.includes(k), k);
+    assert.equal(r.label, cfg.labels.festgefahren);
+    assert.equal(klein(r.top), klein(repo));
   });
 });

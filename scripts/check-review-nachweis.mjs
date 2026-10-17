@@ -41,9 +41,10 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
-import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
+import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
+import { parseNachweis } from "./nachweis-lib.mjs";
 
-// parseNachweis lebt im neutralen Modul slice-override.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
+// parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
 export { parseNachweis };
 

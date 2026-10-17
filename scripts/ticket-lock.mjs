@@ -13,7 +13,7 @@
  *   node scripts/ticket-lock.mjs lebenszeichen <nr> --nonce <x> [--schritt <text>]   # Plan-Schritt (#1699): frischt `zuletzt` im eigenen Lock auf
  *   node scripts/ticket-lock.mjs lebenszeichen --commit          # post-commit-Hook (#1699): frischt `zuletzt` des Locks zum Ticket-Branch auf, sonst stiller No-op
  *
- * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `freigeben`, `uebergeben`: erledigt), 4 = nicht anfassen (belegt, fremd,
+ * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `uebernehmen`: wie `pruefe`, verbraucht Übergabe bzw. Stopp-Vermerk; `freigeben`, `uebergeben`, `gestoppt`, `lebenszeichen`: erledigt), 4 = nicht anfassen (belegt, fremd,
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
  * Mechanik: die Lock-Datei `<git-common-dir>/<Worktree-Präfix>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
@@ -41,6 +41,7 @@ import { pathToFileURL } from "node:url";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
 import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
+import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
 export { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS };
 
@@ -124,10 +125,10 @@ function legeAn(deps, nr, nonce) {
 /** Gibt es einen Worktree `kq-<nr>` oder einen Branch `feature/kq-<nr>-*`? */
 function ermittleBelegung(deps, nr) {
   const refs = deps.git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
-  const wtZeilen = deps.git(["worktree", "list", "--porcelain"]).split(/\r?\n/);
-  const worktrees = wtZeilen.filter((z) => /^(worktree|branch) /.test(z));
+  const bloecke = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"]));
+  const worktrees = bloecke.flatMap((b) => [b.pfad, b.branch].filter(Boolean));
   const belegt = belegteNummern({ refs, worktrees }).has(nr);
-  const wtPfad = wtZeilen.find((z) => z.startsWith("worktree ") && ticketAusRef(z) === nr)?.slice("worktree ".length) ?? null;
+  const wtPfad = bloecke.find((b) => ticketAusRef(b.pfad) === nr)?.pfad ?? null;
   return { belegt, refs: refs.filter((r) => ticketAusRef(r) === nr), wtPfad };
 }
 

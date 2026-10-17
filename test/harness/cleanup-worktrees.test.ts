@@ -131,6 +131,46 @@ describe("parseWorktreeListPorcelain (#952)", () => {
   });
 });
 
+describe("parseWorktreeBloecke (#1762)", () => {
+  type Block = { pfad: string; head: string | null; branch: string | null; locked: boolean };
+  const bloecke = (t: string) => (cleanupModule as unknown as { parseWorktreeBloecke: (t: string) => Block[] }).parseWorktreeBloecke(t);
+  const kurz = (t: string) => bloecke(t).map((x) => [x.pfad, x.head, x.branch, x.locked]);
+
+  test("liest Pfad, HEAD, Branch; Backslashes werden zu /", () => {
+    const text = "worktree C:\\h\nHEAD aaa\nbranch refs/heads/main\n\nworktree /h/w\nHEAD bbb\nbranch refs/heads/feature/kq-5-x\n";
+    assert.deepEqual(kurz(text), [
+      ["C:/h", "aaa", "main", false],
+      ["/h/w", "bbb", "feature/kq-5-x", false],
+    ]);
+  });
+
+  test("locked mit und ohne Grund wird erkannt, ein Branch namens locked-x nicht", () => {
+    assert.equal(bloecke("worktree /a\nlocked\n")[0].locked, true);
+    assert.equal(bloecke("worktree /a\nlocked grund\n")[0].locked, true);
+    assert.equal(bloecke("worktree /a\nbranch refs/heads/locked-x\n")[0].locked, false);
+  });
+
+  test("detached: kein branch-Eintrag ergibt null", () => {
+    assert.deepEqual(kurz("worktree /a\nHEAD ccc\ndetached\n"), [["/a", "ccc", null, false]]);
+  });
+
+  test("prunable-Zeile stört nicht und ist kein locked", () => {
+    assert.deepEqual(kurz("worktree /a\nHEAD ccc\ndetached\nprunable gitdir file points to non-existent location\n"), [["/a", "ccc", null, false]]);
+  });
+
+  test("CRLF und Leerzeile am Ende", () => {
+    assert.deepEqual(kurz("worktree /a\r\nHEAD x\r\nbranch refs/heads/m\r\n\r\nworktree /b\r\nHEAD y\r\ndetached\r\n\r\n"), [
+      ["/a", "x", "m", false],
+      ["/b", "y", null, false],
+    ]);
+  });
+
+  test("leere Ausgabe ergibt leere Liste", () => {
+    assert.deepEqual(bloecke(""), []);
+    assert.deepEqual(bloecke("\n\n"), []);
+  });
+});
+
 describe("registeredWorktreePaths (#952)", () => {
   test("gibt geparste Pfade zurueck", () => {
     const deps = {

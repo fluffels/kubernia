@@ -21,6 +21,7 @@
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
+import { HEX_HEAD } from "./nachweis-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 /** Kopf-Felder des Auftrags, deren Wert kein `<…>` mehr tragen darf. `(?<![\w-])` trennt `Patch:` von `Delta-Patch:`. */
@@ -76,7 +77,7 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   const head = felder["erwarteter HEAD"];
   // Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt.
   const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];
-  if (head !== undefined && !/^[0-9a-f]{7,40}$/i.test(hash ?? "")) {
+  if (head !== undefined && !HEX_HEAD.test((hash ?? "").toLowerCase())) {
     return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
   }
   return null;

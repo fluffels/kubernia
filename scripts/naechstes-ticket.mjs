@@ -38,6 +38,7 @@ import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
+import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
 /** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
 export function blockerNummern(body) {
@@ -326,7 +327,7 @@ function ladeBelegung() {
     /* lokale Refs genügen */
   }
   const refs = git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
-  const worktrees = git(["worktree", "list", "--porcelain"]).split(/\r?\n/).filter((z) => /^(worktree|branch) /.test(z));
+  const worktrees = parseWorktreeBloecke(git(["worktree", "list", "--porcelain"])).flatMap((b) => [b.pfad, b.branch].filter(Boolean));
   const prHeads = prHeadsAus(ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/pulls?state=open&per_page=100`]));
   return { offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
 }

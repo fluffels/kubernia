@@ -23,9 +23,9 @@
  * des Diffsize-Zweigs mit Attrappe. Ausführen mit:  npm test
  */
 import { afterEach, describe, it, expect } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -130,5 +130,69 @@ describe.skipIf(!hatSh)("#1740 pre-push-Hook: Diffsize bei Pushes anderer Branch
     const r = lauf(1, "refs/heads/feature/x", "0".repeat(40));
     expect(r.status, r.stdout + r.stderr).toBe(0);
     expect(r.stdout).not.toContain("attrappe diffsize");
+  });
+});
+
+describe.skipIf(!hatSh)("#1762 L21c pre-push-Hook: welches Gate läuft bei welchem Push", () => {
+  const dirs: string[] = [];
+  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  // Temp-Ordner mit Attrappe `scripts/check-diffsize.mjs` und einem falschen `npm` vorn im PATH; beide protokollieren ihren Aufruf.
+  const lauf = (refs: { ref: string; oid?: string }[], { verifyExit = 0, diffsizeExit = 0 } = {}) => {
+    const d = mkdtempSync(join(tmpdir(), "kq-prepush-"));
+    dirs.push(d);
+    const log = join(d, "aufrufe.log").replaceAll("\\", "/");
+    mkdirSync(join(d, "scripts"));
+    mkdirSync(join(d, "bin"));
+    writeFileSync(
+      join(d, "scripts", "check-diffsize.mjs"),
+      `import { appendFileSync } from "node:fs"; appendFileSync(${JSON.stringify(log)}, "diffsize\\n"); process.exit(${diffsizeExit});`,
+    );
+    writeFileSync(join(d, "bin", "npm"), `#!/bin/sh\necho "npm $*" >> "${log}"\nexit ${verifyExit}\n`, { mode: 0o755 });
+    const hookPfad = fileURLToPath(new URL("../../.githooks/pre-push", import.meta.url)).replaceAll("\\", "/");
+    const input = refs.map(({ ref, oid = OID }) => `${ref} ${oid} ${ref} ${"0".repeat(40)}\n`).join("");
+    const r = spawnSync("sh", [hookPfad, "origin", "x"], {
+      cwd: d,
+      input,
+      encoding: "utf8",
+      env: { ...process.env, PATH: join(d, "bin") + delimiter + (process.env.PATH ?? "") },
+    });
+    const aufrufe = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : [];
+    return { r, aufrufe };
+  };
+
+  it("Push auf main fährt npm run verify und keinen Diffsize-Check", () => {
+    const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }]);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(aufrufe).toEqual(["npm run verify"]);
+  });
+
+  it("rotes verify bricht den Push auf main ab", () => {
+    const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }], { verifyExit: 1 });
+    expect(r.status, r.stdout + r.stderr).toBe(1);
+    expect(aufrufe).toEqual(["npm run verify"]);
+  });
+
+  it("Push eines anderen Branches fährt check-diffsize und kein verify", () => {
+    const { r, aufrufe } = lauf([{ ref: "refs/heads/feature/x" }]);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(aufrufe).toEqual(["diffsize"]);
+  });
+
+  it("Löschung von main (nur Nullen) fährt weder verify noch Diffsize", () => {
+    const { r, aufrufe } = lauf([{ ref: "refs/heads/main", oid: "0".repeat(40) }]);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(aufrufe).toEqual([]);
+  });
+
+  it("main und Feature-Branch zugleich: erst Diffsize, dann verify", () => {
+    const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }, { ref: "refs/heads/feature/x" }]);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(aufrufe).toEqual(["diffsize", "npm run verify"]);
+  });
+
+  it("rotes Diffsize bricht ab, bevor verify läuft", () => {
+    const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }, { ref: "refs/heads/feature/x" }], { diffsizeExit: 1 });
+    expect(r.status, r.stdout + r.stderr).toBe(1);
+    expect(aufrufe).toEqual(["diffsize"]);
   });
 });

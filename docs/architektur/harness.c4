@@ -123,6 +123,9 @@ model {
   github.ci.ciYml -> harness.verifyFull 'führt aus'
   github.ruleset -> github.pr 'schützt main'
   harness.hauptchat -> github.board 'liest die Reihenfolge'
+  harness.hauptchat -> github.factoryBoard 'liest die Reihenfolge (area:harness)'
+  github.ci.boardTakt -> github.board 'nimmt fehlende Issues als Todo auf (Board-Wächter)'
+  github.ci.boardTakt -> github.factoryBoard 'pflegt Status-Ticket und Harness-Sammelticket'
 }
 
 views {
@@ -178,6 +181,7 @@ views {
     maintainerin -> harness.hauptchat 'Nächstes Ticket'
     harness.hauptchat -> harness.skills.kuberniaSkill 'Skill kubernia'
     harness.skills.kuberniaSkill -> github.board 'oberstes freies Item'
+    harness.skills.kuberniaSkill -> github.factoryBoard 'oberstes freies Item (Spielquote)'
     harness.skills.kuberniaSkill -> github.issues 'Claim: Ticket-Lock und Assignee'
     harness.skills.kuberniaSkill -> harness.subagenten.kuberniaPlaner 'Plan'
     harness.skills.kuberniaSkill -> harness.subagenten.kuberniaUmsetzer 'Umsetzen im Worktree'

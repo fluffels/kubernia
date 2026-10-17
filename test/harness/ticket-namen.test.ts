@@ -102,6 +102,13 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(N.escapeRegex("a.b+c")).toBe(String.raw`a\.b\+c`);
     expect(new RegExp(N.escapeRegex("a.b+c(d)[e]{f}|g^h$i?j*k\\l")).test("a.b+c(d)[e]{f}|g^h$i?j*k\\l")).toBe(true);
   });
+
+  test("escapeRegex: jedes Sonderzeichen läuft als Literal durch, ein escaptes Zeichen ist kein Platzhalter", () => {
+    const alle = ".*+?^${}()|[]\\/-";
+    for (const z of alle) expect(new RegExp("^" + N.escapeRegex(z) + "$").test(z), z).toBe(true);
+    expect(new RegExp("^" + N.escapeRegex(alle) + "$").test(alle)).toBe(true);
+    expect(new RegExp("^" + N.escapeRegex(".") + "$").test("x")).toBe(false);
+  });
 });
 
 describe("ticketNamen: fehlender Schlüssel (AK3)", () => {

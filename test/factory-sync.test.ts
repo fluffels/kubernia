@@ -562,4 +562,15 @@ describe("Ring oberflaeche (ADR 0029)", () => {
     assert.deepEqual(drift.pruefeDrift(lesen("alt")).fehler, []);
     assert.match(drift.pruefeDrift(lesen("neu")).fehler.join(), /x\.txt: Besitz wurde im Projekt verändert/);
   });
+
+  test("pruefeDrift: eine oberflaeche-Einheit im Sync-Stand bekommt eine eigene Meldung, eine echte Waise bleibt 'nicht im Manifest'", () => {
+    const m = JSON.stringify({ version: 1, eintraege: [{ pfad: "o.txt", ring: "oberflaeche", quelle: "t" }] });
+    const lib2 = rawLib as unknown as { textHash(t: string): string };
+    const stand = { version: 1, manifest: lib2.textHash(m), einheiten: { "o.txt": "sha256:00", "waise.txt": "sha256:00" } };
+    const lesen = (p: string): string | null => (p === ".factory/besitz.json" ? m : p === ".factory/sync-stand.json" ? JSON.stringify(stand) : null);
+    const f = drift.pruefeDrift(lesen).fehler.join("|");
+    assert.match(f, /o\.txt: im Sync-Stand, wird aber nicht verteilt \(Ring oberflaeche\)/);
+    assert.doesNotMatch(f, /o\.txt: im Sync-Stand, aber nicht im Manifest/);
+    assert.match(f, /waise\.txt: im Sync-Stand, aber nicht im Manifest/);
+  });
 });

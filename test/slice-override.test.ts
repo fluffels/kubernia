@@ -10,6 +10,8 @@ import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as nlRaw from "../scripts/nachweis-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gate from "../scripts/check-review-nachweis.mjs";
 
 interface Zeilen {
@@ -26,17 +28,16 @@ interface Zeilen {
 const so = raw as unknown as {
   meldeUngueltigeOverrides: (invalid: string[] | undefined, o?: { dim?: (s: string) => string; log?: (s: string) => void }) => void;
   staleOverrideHinweis: (key: string, warum: string) => string;
-  parseNachweis: (text: string, zeilen?: Zeilen) => { plan: unknown; review: { runden: number; lenses: string[] } | null; abnahme: unknown };
   commitZeilen: (praefix?: unknown, planer?: unknown) => Zeilen;
   commitZeilenAus: (config: unknown) => Zeilen;
   ladeCommitZeilen: (opt?: { rootDir?: string; pfad?: string }) => Zeilen;
   ladeCommitZeilenOderBeende: (o?: { laden?: () => Zeilen; fehler?: (s: string) => void; exit?: (code: number) => void }) => Zeilen | undefined;
   parseOverrideTrailers: (text: string, key: string) => { valid: { nr: number; reason: string }[]; invalid: string[] };
 };
+const nl = nlRaw as unknown as { parseNachweis: (text: string, zeilen?: Zeilen) => { plan: unknown; review: { runden: number; lenses: string[] } | null; abnahme: unknown } };
 const gateModul = gate as unknown as { parseNachweis: unknown };
 const Z = so.commitZeilen("KQ-", "kubernia-planner");
 const HEAD40 = "a".repeat(40);
-const HEX = "abc1234";
 
 describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwert", () => {
   it("leitet Plan, Review und die vier Override-Schlüssel aus dem Präfix ab", () => {
@@ -92,20 +93,20 @@ describe("Präfix aus der Config steuert, welche Zeilen zählen (#1741, Red-Gree
   const text = `KQ-Plan: kubernia-planner\nKQ-Review: head=${HEAD40} runden=1 lenses=doku blocker=doku:0 verdikt=ok\nKQ-Diffsize-Override: #5 weil`;
   it("mit AB- zählen echte KQ-Zeilen nicht, AB-Zeilen schon", () => {
     const ab = so.commitZeilen("AB-", "kubernia-planner");
-    const n = so.parseNachweis(text, ab);
+    const n = nl.parseNachweis(text, ab);
     expect(n.plan).toBeNull();
     expect(n.review).toBeNull();
-    expect(so.parseNachweis(text.replaceAll("KQ-", "AB-"), ab).plan).toEqual({ art: "planer" });
+    expect(nl.parseNachweis(text.replaceAll("KQ-", "AB-"), ab).plan).toEqual({ art: "planer" });
     expect(so.parseOverrideTrailers(text, ab.diffsizeOverride).valid).toEqual([]);
     expect(so.parseOverrideTrailers(text, Z.diffsizeOverride).valid).toHaveLength(1);
   });
   it("der Planer kommt aus der Config: ein anderer Name ist ungültig", () => {
-    expect(so.parseNachweis(text, so.commitZeilen("KQ-", "anderer")).plan).toEqual({ art: "ungueltig", zeile: "kubernia-planner" });
+    expect(nl.parseNachweis(text, so.commitZeilen("KQ-", "anderer")).plan).toEqual({ art: "ungueltig", zeile: "kubernia-planner" });
   });
   it("parseNachweis ohne Zeilen wirft, auch mit Teilobjekt", () => {
-    expect(() => so.parseNachweis(text)).toThrow(/Commit-Zeilen/);
-    expect(() => so.parseNachweis(text, { plan: "KQ-Plan" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/);
-    expect(() => so.parseNachweis(text, { plan: "KQ-Plan", review: "KQ-Review" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/); // ohne planer
+    expect(() => nl.parseNachweis(text)).toThrow(/Commit-Zeilen/);
+    expect(() => nl.parseNachweis(text, { plan: "KQ-Plan" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/);
+    expect(() => nl.parseNachweis(text, { plan: "KQ-Plan", review: "KQ-Review" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/); // ohne planer
   });
   it("Regex-Zeichen im Schlüssel sind wörtlich (kein Joker)", () => {
     expect(so.parseOverrideTrailers("AXB-Plan: #1 x", "A.B-Plan").valid).toEqual([]);
@@ -138,10 +139,10 @@ describe("staleOverrideHinweis", () => {
   });
 });
 
-describe("parseNachweis lebt im neutralen Modul (#1311)", () => {
-  it("das Gate re-exportiert dieselbe Funktion; das Messskript liest sie aus slice-override", () => {
-    expect(gateModul.parseNachweis).toBe(so.parseNachweis);
-    const n = so.parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${"a".repeat(40)} runden=2 lenses=architektur,doku verdikt=ok`, Z);
+describe("parseNachweis lebt im neutralen Modul nachweis-lib (#1311)", () => {
+  it("das Gate re-exportiert dieselbe Funktion; das Messskript liest sie aus nachweis-lib", () => {
+    expect(gateModul.parseNachweis).toBe(nl.parseNachweis);
+    const n = nl.parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${"a".repeat(40)} runden=2 lenses=architektur,doku verdikt=ok`, Z);
     expect(n.review?.runden).toBe(2);
     expect(n.review?.lenses).toEqual(["architektur", "doku"]);
   });
@@ -216,7 +217,7 @@ describe("PR-Log und Squash-Commit auf main lesen dasselbe (#1383)", () => {
     const pr = branchLog(commits);
     const main = squash("titel (#9)", commits);
     expect(so.parseOverrideTrailers(main, KEY)).toEqual(so.parseOverrideTrailers(pr, KEY));
-    expect(so.parseNachweis(main, Z)).toEqual(so.parseNachweis(pr, Z));
+    expect(nl.parseNachweis(main, Z)).toEqual(nl.parseNachweis(pr, Z));
   });
 
   it("neuester gewinnt in beiden Formen", () => {
@@ -318,123 +319,5 @@ describe("Gates ohne Projekt-Config (#1741): kein Standardwert, Exit 1 mit der M
     } finally {
       rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
-  });
-});
-
-describe("KQ-Abnahme (#1753): lesen, formatieren, Marker", () => {
-  const A = raw as unknown as {
-    URTEILSWERTE: string[];
-    formatAbnahme: (z: Zeilen, a: unknown) => string;
-    abnahmeMarker: (z: Zeilen) => string;
-    formatAbnahmeMarker: (z: Zeilen, a: unknown) => string;
-    parseAbnahmeMarker: (z: Zeilen, t: string) => unknown;
-  };
-  const urteil = [
-    { k: "K1", wert: "erfuellt" },
-    { k: "K2", wert: "nicht-erfuellt" },
-    { k: "K3", wert: "nicht-pruefbar" },
-  ];
-  const ok = { art: "urteil", head: HEX, durchgaenge: 2, urteil };
-  const lies = (zeile: string) => so.parseNachweis(zeile, Z).abnahme;
-  it("Roundtrip Urteil und entfaellt", () => {
-    const z = A.formatAbnahme(Z, ok);
-    expect(z).toBe(`KQ-Abnahme: head=${HEX} durchgaenge=2 urteil=K1:erfuellt,K2:nicht-erfuellt,K3:nicht-pruefbar`);
-    expect(lies(z)).toEqual(ok);
-    const e = A.formatAbnahme(Z, { art: "entfaellt", grund: "Ticket ohne Kriterien" });
-    expect(e).toBe("KQ-Abnahme: entfaellt — Ticket ohne Kriterien");
-    expect(lies(e)).toEqual({ art: "entfaellt", grund: "Ticket ohne Kriterien" });
-  });
-  it("ohne Zeile null; die jüngste Zeile gilt, auch eine ungültige; Squash-Präfix; eingerückt zählt nicht", () => {
-    const alt = A.formatAbnahme(Z, ok);
-    expect(lies("feat: x")).toBeNull();
-    expect(lies(`${alt}
-KQ-Abnahme: kaputt`)).toEqual({ art: "ungueltig", zeile: "kaputt" });
-    expect(lies(`KQ-Abnahme: kaputt
-${alt}`)).toEqual(ok);
-    expect(lies(`* ${alt}`)).toEqual(ok);
-    expect(lies(`  ${alt}`)).toBeNull();
-  });
-  it("Präfix steuert Zeile und Marker; Marker-Roundtrip, Hand-off-Marker zählt nie", () => {
-    const ab = so.commitZeilen("AB-", "p");
-    expect(A.formatAbnahme(ab, ok).startsWith("AB-Abnahme: head=")).toBe(true);
-    expect(A.abnahmeMarker(ab)).toBe("ab-abnahme");
-    const m = A.formatAbnahmeMarker(ab, { durchgang: 3, head: HEX, urteil });
-    expect(m).toBe(`<!-- ab-abnahme durchgang=3 head=${HEX} urteil=K1:erfuellt,K2:nicht-erfuellt,K3:nicht-pruefbar -->`);
-    expect(A.parseAbnahmeMarker(ab, `Text
-${m}
-Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
-    expect(A.parseAbnahmeMarker(Z, m)).toBeNull();
-    expect(A.parseAbnahmeMarker(ab, "<!-- ab-abnahme-handoff -->")).toBeNull();
-    expect(A.parseAbnahmeMarker(ab, `<!-- ab-abnahme durchgang=0 head=${HEX} urteil=K1:erfuellt -->`)).toBeNull();
-    expect(A.parseAbnahmeMarker(ab, `<!-- ab-abnahme durchgang=1 head=${HEX} urteil=K1:vielleicht -->`)).toBeNull();
-    expect(A.parseAbnahmeMarker(ab, undefined as unknown as string)).toBeNull();
-  });
-  it.each([
-    ["unbekannter Urteilswert", `head=${HEX} durchgaenge=1 urteil=K1:gut`],
-    ["entfaellt ohne Grund", "entfaellt"],
-    ["entfaellt mit leerem Grund", "entfaellt —"],
-    ["head fehlt", "durchgaenge=1 urteil=K1:erfuellt"],
-    ["head kein Hex", "head=xyz durchgaenge=1 urteil=K1:erfuellt"],
-    ["durchgaenge 0", `head=${HEX} durchgaenge=0 urteil=K1:erfuellt`],
-    ["durchgaenge fehlt", `head=${HEX} urteil=K1:erfuellt`],
-    ["doppeltes K", `head=${HEX} durchgaenge=1 urteil=K1:erfuellt,K1:erfuellt`],
-    ["K0", `head=${HEX} durchgaenge=1 urteil=K0:erfuellt`],
-    ["leeres Urteil", `head=${HEX} durchgaenge=1 urteil=`],
-  ])("ungueltig: %s", (_n, wert) => {
-    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert });
-  });
-  it("Urteil toleriert Leerzeichen nach Kommas und Groß-/Kleinschreibung", () => {
-    expect(lies(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:Erfuellt, K2:nicht-erfuellt`)).toEqual({
-      art: "urteil",
-      head: HEX,
-      durchgaenge: 1,
-      urteil: [
-        { k: "K1", wert: "erfuellt" },
-        { k: "K2", wert: "nicht-erfuellt" },
-      ],
-    });
-  });
-  it("formatAbnahme wirft bei ungültiger Eingabe", () => {
-    for (const a of [
-      { ...ok, head: "xyz" },
-      { ...ok, durchgaenge: 0 },
-      { ...ok, durchgaenge: 1.5 },
-      { ...ok, urteil: [{ k: "K1", wert: "gut" }] },
-      { ...ok, urteil: [] },
-      { art: "entfaellt", grund: "" },
-      { art: "entfaellt", grund: ["a", "b"].join("\n") },
-      { art: "x" },
-      null,
-    ]) expect(() => A.formatAbnahme(Z, a), JSON.stringify(a)).toThrow(/Abnahme/);
-    expect(A.URTEILSWERTE).toEqual(["erfuellt", "nicht-erfuellt", "nicht-pruefbar"]);
-  });
-  it("parseNachweis ohne Abnahme-Schlüssel wirft", () => {
-    const { abnahme: _weg, ...ohne } = Z;
-    expect(() => so.parseNachweis("x", ohne as unknown as Zeilen)).toThrow(/Commit-Zeilen/);
-  });
-});
-
-describe("KQ-Abnahme: Toleranzen und Validierung (Lens-Runde 1)", () => {
-  const A = raw as unknown as {
-    formatAbnahme: (z: Zeilen, a: unknown) => string;
-    formatAbnahmeMarker: (z: Zeilen, a: unknown) => string;
-  };
-  const lies = (zeile: string) => so.parseNachweis(zeile, Z).abnahme;
-  it.each([
-    ["entfällt — Grund", "entfällt — Grund"],
-    ["entfaellt - Grund", "entfaellt - Grund"],
-    ["entfaellt – Grund", "entfaellt – Grund"],
-  ])("entfaellt toleriert Umlaut und Trenner: %s", (_n, wert) => {
-    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "entfaellt", grund: "Grund" });
-  });
-  it("head in Großbuchstaben wird kleingeschrieben gelesen", () => {
-    expect(lies("KQ-Abnahme: head=ABC1234 durchgaenge=1 urteil=K1:erfuellt")).toMatchObject({ art: "urteil", head: "abc1234" });
-  });
-  it("formatAbnahmeMarker validiert wie formatAbnahme; formatAbnahme ohne Urteil wirft die Abnahme-Meldung", () => {
-    const urteil = [{ k: "K1", wert: "erfuellt" }];
-    expect(() => A.formatAbnahmeMarker(Z, { durchgang: 0, head: "abc1234", urteil })).toThrow(/Abnahme/);
-    expect(() => A.formatAbnahmeMarker(Z, { durchgang: 1, head: "xyz", urteil })).toThrow(/Abnahme/);
-    expect(() => A.formatAbnahmeMarker(Z, { durchgang: 1, head: "abc1234", urteil: [{ k: "K1", wert: "gut" }] })).toThrow(/Abnahme/);
-    expect(() => A.formatAbnahme(Z, { art: "urteil", head: "abc1234", durchgaenge: 1 })).toThrow(/Abnahme/);
   });
 });

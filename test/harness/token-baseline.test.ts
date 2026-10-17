@@ -89,6 +89,13 @@ const m = baselineModule as {
   langfuseZugang: (env: Record<string, string | undefined>) => { baseUrl: string; publicKey: string; secretKey: string };
   periodAt: (entry: unknown, ts?: string) => Record<string, unknown> | null;
   countCacheRebuilds: (calls: Call[]) => { count: number; cacheWriteTokens: number };
+  prInfo: (pr: number | string, zeilen?: unknown, deps?: { gh?: (a: string[]) => unknown; ghT?: (a: string[]) => string; lade?: () => unknown }) => {
+    prCreatedAt: string;
+    mergedAt: string;
+    failedPushes: number;
+    nachweis: { runden: number; plan: boolean | null } | null;
+    files: unknown[];
+  };
   nachweisAusCommits: (commits: unknown, zeilen: unknown) => { runden: number; plan: boolean | null } | null;
   parseArgs: (argv: string[]) => { sessions: string[]; issue?: string; pr?: string; from?: string; json: boolean; langfuse: boolean };
   fetchSessionObservations: (
@@ -1068,6 +1075,38 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
     // Präfix aus der Config (#1741): mit AB- zählen die KQ-Zeilen nicht, ohne Zeilen wirft die Funktion
     assert.equal(m.nachweisAusCommits([nachweisCommit()], commitZeilen("AB-", "kubernia-planner")), null);
     assert.throws(() => m.nachweisAusCommits([nachweisCommit()], undefined), /Commit-Zeilen/);
+  });
+
+  test("prInfo: ein werfender Config-Lader bricht ab, bevor gh angefasst wird (#1762 L21b)", () => {
+    const aufrufe: string[][] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a);
+      return {};
+    };
+    const ghT = (a: string[]) => {
+      aufrufe.push(a);
+      return "";
+    };
+    const lade = () => {
+      throw new Error("Config kaputt");
+    };
+    assert.throws(() => m.prInfo(7, undefined, { gh, ghT, lade }), /Config kaputt/);
+    assert.deepEqual(aufrufe, [], "kein gh-Aufruf vor dem Laden der Config");
+  });
+
+  test("prInfo: gegebene Zeilen werden genutzt (Lader nie gerufen), gh liefert Fenster, Nachweis und Dateien", () => {
+    const pr = { createdAt: "2026-09-29T12:00:00Z", mergedAt: "2026-09-29T13:00:00Z", headRefName: "feature/x", commits: [nachweisCommit()], files: [{ path: "a.ts" }] };
+    const lade = () => {
+      throw new Error("darf nicht geladen werden");
+    };
+    const info = m.prInfo(7, Z, { gh: () => pr, ghT: () => "", lade });
+    assert.deepEqual(info, { prCreatedAt: pr.createdAt, mergedAt: pr.mergedAt, failedPushes: 0, nachweis: { runden: 2, plan: true }, files: pr.files });
+    assert.deepEqual(m.prInfo(7, Z, { gh: () => ({ ...pr, files: undefined }), ghT: () => "", lade }).files, [], "fehlende Dateien: leere Liste");
+  });
+
+  test("prInfo: ohne Zeilen lädt der Lader sie", () => {
+    const pr = { createdAt: "2026-09-29T12:00:00Z", mergedAt: null, headRefName: "feature/x", commits: [nachweisCommit()] };
+    assert.deepEqual(m.prInfo(7, undefined, { gh: () => pr, ghT: () => "", lade: () => Z }).nachweis, { runden: 2, plan: true });
   });
 
   test("renderMarkdown: Nachweis ersetzt die Heuristik und nennt den Planer; ohne Nachweis steht Heuristik", () => {

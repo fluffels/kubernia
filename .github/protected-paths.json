@@ -44,6 +44,7 @@
     "/scripts/worktree-guard-git.mjs",
     "/scripts/worktree-guard-tabellen.mjs",
     "/scripts/lens-auftrag-guard.mjs",
+    "/scripts/nachweis-lib.mjs",
     "/scripts/stdin-skript-guard.mjs",
     "/scripts/ticket-lock.mjs",
     "/scripts/ticket-lock-lib.mjs",

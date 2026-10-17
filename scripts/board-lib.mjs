@@ -387,7 +387,7 @@ export function fehlendeNummern(items, args) {
   return [...args.numbers, ...(args.anchor ? [args.anchor] : [])].filter((n) => !bekannt.has(n));
 }
 
-/** True bei GitHubs Rate-Limit-Fehler (Meldung der gh-CLI/GraphQL). */
+/** True bei GitHubs Rate-Limit-Fehler (Meldung der gh-CLI/GraphQL), auch beim Secondary-Rate-Limit („secondary rate limit“). */
 export const isRateLimit = (message) => /rate limit/i.test(String(message ?? ""));
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
@@ -457,16 +457,21 @@ export function normalizeItems(pages) {
     }));
 }
 
+const ABBRUCH_MAX = 600;
+
 /**
  * Eine gemeinsame Abbruch-Meldung. `gh` meldet bei erschöpftem GraphQL-Limit auch „unknown owner type“;
- * das ist irreführend und wird hier als Rate-Limit gezeigt.
+ * das ist irreführend und wird hier als Rate-Limit gezeigt. Bei `execFileSync` steht vorn „Command failed: gh …“, der gh-Text folgt in
+ * den stderr-Zeilen: dann lässt die Meldung diese Zeile aus, führt die Zeilen zusammen und kürzt auf ≈600 Zeichen; sonst gilt die erste Zeile.
  */
 export function abortMessage(message) {
-  const first = String(message ?? "").split("\n")[0];
-  if (isRateLimit(first) || /unknown owner type/i.test(first)) {
-    return `API-Rate-Limit (oder Owner/Scope: gh meldet ein erschöpftes GraphQL-Limit teils als „unknown owner type“): ${first}`;
+  const zeilen = String(message ?? "").split("\n").map((z) => z.trim()).filter(Boolean);
+  const gh = /^Command failed/i.test(zeilen[0] ?? "") && zeilen.length > 1;
+  const text = (gh ? zeilen.slice(1).join(" ") : (zeilen[0] ?? "")).slice(0, ABBRUCH_MAX);
+  if (isRateLimit(text) || /unknown owner type/i.test(text)) {
+    return `API-Rate-Limit (oder Owner/Scope: gh meldet ein erschöpftes GraphQL-Limit teils als „unknown owner type“): ${text}`;
   }
-  return first;
+  return text;
 }
 
 /** Freies Todo-Item (zählt im Rang): Status „Todo“, offen, ohne Assignee, nicht das Ticket `ohneNr`. Pur. */
@@ -672,12 +677,20 @@ export function setPosition(board, itemId, afterId, opts = {}) {
   graphql(MUTATION_POSITION, { p: board.projectId, i: itemId, a: afterId }, opts);
 }
 
-/** Issue (node_id) ins Board holen (idempotent) und Status Todo setzen. Liefert die Item-ID `PVTI_…`. */
+/** Synchrones Schlafen (Muster pr-warten.mjs). */
+const schlafeSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/**
+ * Issue (node_id) ins Board holen (idempotent) und Status Todo setzen. Liefert die Item-ID `PVTI_…`. `opts.pauseMs` (Standard 0) schläft
+ * zwischen den zwei Mutationen (Secondary-Rate-Limit), `opts.schlafe` ersetzt das Schlafen im Test; der Rest geht an `gh`.
+ */
 export function addToBoardTodo(board, nodeId, opts = {}) {
   brauchtBoard(board, "addToBoardTodo");
-  const item = graphql(MUTATION_ADD, { p: board.projectId, c: nodeId }, opts);
+  const { pauseMs = 0, schlafe = schlafeSync, ...ghOpts } = opts;
+  const item = graphql(MUTATION_ADD, { p: board.projectId, c: nodeId }, ghOpts);
   const itemId = item.data.addProjectV2ItemById.item.id;
-  graphql(MUTATION_STATUS, { p: board.projectId, i: itemId, f: board.statusFeldNodeId, o: board.todoOptionId }, opts);
+  if (pauseMs > 0) schlafe(pauseMs);
+  graphql(MUTATION_STATUS, { p: board.projectId, i: itemId, f: board.statusFeldNodeId, o: board.todoOptionId }, ghOpts);
   return itemId;
 }
 
