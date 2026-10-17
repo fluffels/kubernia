@@ -22,6 +22,14 @@ type Io = {
   git: (cwd: string, args: string[]) => string;
 };
 const A = raw as unknown as {
+  prKommentar: (o: {
+    zeilen: Zeilen;
+    nr: number;
+    durchgang: number;
+    head: string;
+    urteile: { k: string; wert: string; beleg: string }[];
+    kriterienListe: { k: string; text: string }[];
+  }) => string;
   fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string };
   parseBericht: (t: string, nr: number, k: { k: string; text: string }[]) => { urteile?: { k: string; wert: string; beleg: string }[]; fehler?: string[] };
   entscheide: (u: { wert: string }[]) => string;
@@ -174,10 +182,59 @@ describe("Kommentar-Grenzen: Beleg und Gesamtkörper (#1762)", () => {
     const verblieben = (b.match(/^\| K\d+: /gm) ?? []).length;
     expect(verblieben).toBeGreaterThan(0);
     expect(verblieben + entfallen).toBe(120);
-    expect(b.length).toBeGreaterThan(A2.KOMMENTAR_MAX - 1100);
+    // Die nächste Zeile hätte nicht mehr gepasst: Schwelle aus der längsten verbliebenen Zeile (+1 Zeilenumbruch, +1 für den Ziffernsprung des Hinweises).
+    const laengste = Math.max(...(b.match(/^\| K\d+: .*$/gm) ?? []).map((z) => z.length));
+    expect(b.length).toBeGreaterThan(A2.KOMMENTAR_MAX - (laengste + 2));
     const ohne = viele(3, 2000);
     expect(ohne).toContain("… (gekürzt)");
     expect(ohne).not.toMatch(/weitere Zeilen entfallen/);
+  });
+  test("Grenze der Kürzung über prKommentar: genau KOMMENTAR_MAX bleibt ungekürzt, ein Zeichen mehr lässt eine Zeile entfallen (L2a)", () => {
+    const n = 63;
+    const kriterienListe = Array.from({ length: n }, (_, i) => ({ k: `K${i + 1}`, text: "t" }));
+    const bau = (letzterBeleg: number) =>
+      A.prKommentar({
+        zeilen: Z,
+        nr: 7,
+        durchgang: 1,
+        head: HEAD,
+        urteile: kriterienListe.map(({ k }, i) => ({ k, wert: "erfuellt", beleg: beleg(i === n - 1 ? letzterBeleg : 1000) })),
+        kriterienListe,
+      });
+    const grundLaenge = bau(1).length;
+    expect(grundLaenge).toBeLessThan(A2.KOMMENTAR_MAX);
+    const luecke = A2.KOMMENTAR_MAX - grundLaenge;
+    expect(1 + luecke).toBeLessThanOrEqual(A2.BELEG_MAX);
+    const genau = bau(1 + luecke);
+    expect(genau.length).toBe(A2.KOMMENTAR_MAX);
+    expect(genau).not.toMatch(/weitere Zeilen entfallen/);
+    const eins = bau(2 + luecke);
+    expect(eins).toMatch(/^… \(gekürzt\): 1 weitere Zeilen entfallen/m);
+    expect(eins.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
+    expect(eins.match(/^\| K\d+: /gm) ?? []).toHaveLength(n - 1);
+  });
+  test("Zeichengenau: passt der gekürzte Körper mit Hinweis auf genau KOMMENTAR_MAX, bleibt die Zeile; ein Zeichen mehr, entfällt sie (L2a)", () => {
+    const n = 64;
+    const kriterienListe = Array.from({ length: n }, (_, i) => ({ k: `K${i + 1}`, text: "t" }));
+    // Alle Belege 1.000 (der Körper ist zu lang, die letzte Zeile entfällt); `x` stellt den Beleg der vorletzten, noch verbleibenden Zeile ein.
+    const bau = (x: number) =>
+      A.prKommentar({
+        zeilen: Z,
+        nr: 7,
+        durchgang: 1,
+        head: HEAD,
+        urteile: kriterienListe.map(({ k }, i) => ({ k, wert: "erfuellt", beleg: beleg(i === n - 2 ? x : 1000) })),
+        kriterienListe,
+      });
+    const x = 1 + (A2.KOMMENTAR_MAX - bau(1).length);
+    expect(x).toBeGreaterThan(1);
+    expect(x).toBeLessThanOrEqual(A2.BELEG_MAX);
+    const genau = bau(x);
+    expect(genau.length).toBe(A2.KOMMENTAR_MAX);
+    expect(genau).toMatch(/^… \(gekürzt\): 1 weitere Zeilen entfallen/m);
+    const eins = bau(x + 1);
+    expect(eins).toMatch(/^… \(gekürzt\): 2 weitere Zeilen entfallen/m);
+    expect(eins.length).toBeLessThanOrEqual(A2.KOMMENTAR_MAX);
   });
   test("ein Körper knapp unter 65.000 Zeichen bleibt ungekürzt (untere Grenze der Kürzung)", () => {
     const b = viele(55, 1000);
