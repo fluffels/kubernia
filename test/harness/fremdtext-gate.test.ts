@@ -13,7 +13,8 @@
  * rotes Gegenbeispiel (Vorbild langfuse-erfassung.test.ts).
  */
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { workflowDateien } from "./repo-texte.ts";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
@@ -83,15 +84,6 @@ const agentDateien = (): string[] => {
     .filter((f) => f.endsWith(".md"))
     .map((f) => `.claude/agents/${f}`);
 };
-/** Workflow-Skripte unter .claude/workflows (rekursiv); ohne den Ordner leer. */
-const workflowDateien = (dir = ".claude/workflows"): string[] =>
-  !existsSync(resolve(ROOT, dir))
-    ? []
-    : readdirSync(resolve(ROOT, dir)).flatMap((n) =>
-        statSync(resolve(ROOT, dir, n)).isDirectory()
-          ? workflowDateien(dir + "/" + n)
-          : /\.(js|mjs|ts)$/.test(n) ? [dir + "/" + n] : [],
-      );
 const skillDateien = (): string[] =>
   readdirSync(resolve(ROOT, ".claude/skills")).map((d) => `.claude/skills/${d}/SKILL.md`).filter((p) => {
     try {

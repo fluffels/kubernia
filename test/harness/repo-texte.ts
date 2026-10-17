@@ -29,6 +29,11 @@ export function repoDateien(): string[] {
   return dateienCache;
 }
 
+/** Workflow-Skripte (`.js`/`.mjs`/`.ts`) unter `dir` (rekursiv, repo-relativ), nur versionierte; ohne den Ordner leer. */
+export function workflowDateien(dir = ".claude/workflows"): string[] {
+  return repoDateien().filter((f) => f.startsWith(dir + "/") && /\.(js|mjs|ts)$/.test(f));
+}
+
 /** Inhalt einer Datei (relativ zum Repo-Root), je Pfad einmal gelesen. */
 export function lies(pfad: string): string {
   let text = inhaltCache.get(pfad);

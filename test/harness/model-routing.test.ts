@@ -65,7 +65,8 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { workflowDateien } from "./repo-texte.ts";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
@@ -132,16 +133,6 @@ function unbekannteServer(regeln: string[], bekannt: string[]): string[] {
 
 /** Bezeichnet der Wert den Coding-Tier? Alias `sonnet` ODER eine gepinnte Sonnet-ID. */
 const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
-
-/** Workflow-Skripte unter .claude/workflows (rekursiv, repo-relativ); ohne den Ordner leer. */
-function workflowDateien(dir = ".claude/workflows"): string[] {
-  if (!existsSync(`${REPO_ROOT}${dir}`)) return [];
-  return readdirSync(`${REPO_ROOT}${dir}`).flatMap((n) =>
-    statSync(`${REPO_ROOT}${dir}/${n}`).isDirectory()
-      ? workflowDateien(`${dir}/${n}`)
-      : /\.(js|mjs|ts)$/.test(n) ? [`${dir}/${n}`] : [],
-  );
-}
 
 /** `agent({…})`-Aufrufe eines Skripts, je Aufruf der Text bis zur nächsten Aufruf-Grenze. */
 function agentAufrufe(text: string): string[] {

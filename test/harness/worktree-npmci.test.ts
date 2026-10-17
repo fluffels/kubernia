@@ -30,7 +30,8 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { workflowDateien } from "./repo-texte.ts";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -52,16 +53,6 @@ const PFLICHT_QUELLEN = [
 
 /** Mindestzahl gefundener Worktree-Installations-Absätze (Leerlauf-Schutz). */
 const MIN_TREFFER = PFLICHT_QUELLEN.length;
-
-/** Workflow-Skripte unter .claude/workflows (rekursiv, repo-relativ); ohne den Ordner leer. */
-function workflowDateien(dir = ".claude/workflows"): string[] {
-  if (!existsSync(ROOT + dir)) return [];
-  return readdirSync(ROOT + dir).flatMap((n) =>
-    statSync(ROOT + dir + "/" + n).isDirectory()
-      ? workflowDateien(dir + "/" + n)
-      : /\.(js|mjs|ts)$/.test(n) ? [dir + "/" + n] : [],
-  );
-}
 
 /** Alles, was gescannt wird: Markdown-Inventar und Workflow-Skripte. */
 function alleQuellen(): string[] {
