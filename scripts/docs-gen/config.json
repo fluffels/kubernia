@@ -87,7 +87,7 @@
     },
     "vollstaendig": ["agenten-ablauf", "agenten-sequenz"],
     "konstanten": {
-      "lensCap": { "datei": "scripts/check-review-nachweis.mjs", "name": "MAX_FIX_RUNDEN" },
+      "lensCap": { "datei": "scripts/nachweis-lib.mjs", "name": "MAX_FIX_RUNDEN" },
       "festgefahrenCommits": { "datei": "scripts/check-festgefahren.mjs", "name": "MAX_FAILED_PUSHES" }
     },
     "ruleset": ".github/ruleset-main-schutz.json",

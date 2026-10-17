@@ -42,16 +42,14 @@ import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { aenderungsCommitsNach, aktiverOverride, konfliktMergesNach, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { parseNachweis } from "./nachweis-lib.mjs";
+import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
 export { parseNachweis };
 
-/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter review-nachweis.test.ts). */
-export const MAX_FIX_RUNDEN = 2;
-/** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
-export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
+// Die Cap-Konstanten leben in nachweis-lib.mjs (auch das Abnahme-Gate nennt sie); hier bleibt der Export für Aufrufer und Tests.
+export { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE };
 
 const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
 export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];

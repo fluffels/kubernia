@@ -12,6 +12,11 @@ import { escapeRegex } from "./ticket-namen.mjs";
 export const HEX = "[0-9a-f]{7,40}";
 export const HEX_HEAD = new RegExp(`^${HEX}$`);
 
+/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter test/harness/review-nachweis.test.ts). */
+export const MAX_FIX_RUNDEN = 2;
+/** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
+export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
+
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main
  *  jeden Commit-BETREFF schreibt; Body-Zeilen bleiben dort unverändert. Gruppe 1 = Zeile ohne Präfix,
