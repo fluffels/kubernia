@@ -134,3 +134,24 @@ export function staleOverrideHinweis(key, warum) {
     `danach misst das Gate normal gegen sein Budget).`
   );
 }
+
+/**
+ * Merges in `<headSha>..HEAD`, deren Auflösung vom automatischen Merge abweicht (Konflikt-Auflösung). `git show --remerge-diff` zeigt
+ * genau diese Abweichung; die Ausgabe ist bei einem konfliktfreien Merge leer. Wirft bei einem git-Fehler (z.B. git < 2.36), der
+ * Aufrufer wertet das als rot (fail-closed).
+ */
+export function konfliktMergesNach(git, headSha) {
+  const merges = git(["rev-list", "--merges", `${headSha}..HEAD`]).split(/\r?\n/).filter((l) => l.trim() !== "");
+  return merges.filter((sha) => git(["show", "--remerge-diff", "--format=", sha]).trim() !== "");
+}
+
+/**
+ * Nicht-Merge-Commits in `<headSha>..HEAD` mit Baumänderung, ohne die Commits der Basis (`^<base>`: eingemergte `main`-Commits zählen nicht):
+ * `[{ sha, dateien }]`, älteste zuerst. Leere Commits (Nachweis, Override) fehlen. Wirft bei einem git-Fehler; der Aufrufer wertet das als rot.
+ */
+export function aenderungsCommitsNach(git, headSha, base) {
+  const shas = git(["rev-list", "--reverse", "--no-merges", `${headSha}..HEAD`, `^${base}`]).split(/\r?\n/).filter((l) => l.trim() !== "");
+  return shas
+    .map((sha) => ({ sha, dateien: git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha]).split(/\r?\n/).filter((l) => l.trim() !== "") }))
+    .filter((c) => c.dateien.length > 0);
+}

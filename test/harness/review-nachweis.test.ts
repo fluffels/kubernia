@@ -180,7 +180,7 @@ describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#
     assert.match(skill, /git diff <basis> <M>\^2 -- <alte datei>/, "der Skill trägt den Prüfschritt für verschobenen Code");
   });
   test("das Rezept im Skill ist an die Erkennung im Skript gekoppelt", () => {
-    assert.match(read("scripts/check-review-nachweis.mjs"), /\["show", "--remerge-diff", "--format=", sha\]/);
+    assert.match(read("scripts/slice-override.mjs"), /\["show", "--remerge-diff", "--format=", sha\]/);
   });
 });
 

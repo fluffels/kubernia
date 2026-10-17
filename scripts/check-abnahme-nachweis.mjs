@@ -27,8 +27,7 @@ import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 import { parseNachweis, parseAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeProjektConfig, trenneConfigArg } from "./projekt-config-lib.mjs";
-import { commitZeilenAus, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
-import { aenderungsCommitsNach, konfliktMergesNach, MAX_REVIEW_PAESSE } from "./check-review-nachweis.mjs";
+import { aenderungsCommitsNach, commitZeilenAus, konfliktMergesNach, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
 /** Schließ-Referenzen eines PR-Bodys: verschiedene Ticketnummern zu close/fix/resolve (alle Beugungen, Groß-/Kleinschreibung egal, optional `:`). Pur. */
@@ -72,7 +71,7 @@ function bewerteHead(a, review, abnahmeHead) {
   } else if (a.durchgaenge > review.runden) {
     fehler.push(
       `durchgaenge=${a.durchgaenge} ist größer als runden=${review.runden}: jeder Abnahme-Durchgang nach der Konvergenz zählt als Pass, ` +
-        `die Review-Zeile muss runden >= durchgaenge tragen (Cap ${MAX_REVIEW_PAESSE} Pässe, darüber nur mit Zusatzpass).`,
+        `die Review-Zeile muss runden >= durchgaenge tragen (Cap 3 Pässe, darüber nur mit Zusatzpass).`,
     );
   }
   if (!abnahmeHead.bekannt) return [...fehler, `Abnahme: head=${a.head} ist kein bekannter Commit.`];

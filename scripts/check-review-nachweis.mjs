@@ -41,12 +41,14 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
-import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
+import { aenderungsCommitsNach, konfliktMergesNach, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
 export { parseNachweis };
+// Die git-Helfer nach dem Review stehen in slice-override.mjs (auch das Abnahme-Gate liest sie; Einstiegsskripte importieren nicht voneinander, #1398).
+export { aenderungsCommitsNach, konfliktMergesNach };
 
 /** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter review-nachweis.test.ts). */
 export const MAX_FIX_RUNDEN = 2;
@@ -174,27 +176,6 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   if (review.blocker !== null) fehler.push(...bewerteBlocker(review, zeilen));
   if (review.verdikt !== "ok") fehler.push(`${R}: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
-}
-
-/**
- * Merges in `<headSha>..HEAD`, deren Auflösung vom automatischen Merge abweicht (Konflikt-Auflösung). `git show --remerge-diff` zeigt
- * genau diese Abweichung; die Ausgabe ist bei einem konfliktfreien Merge leer. Wirft bei einem git-Fehler (z.B. git < 2.36), der
- * Aufrufer wertet das als rot (fail-closed).
- */
-export function konfliktMergesNach(git, headSha) {
-  const merges = git(["rev-list", "--merges", `${headSha}..HEAD`]).split(/\r?\n/).filter((l) => l.trim() !== "");
-  return merges.filter((sha) => git(["show", "--remerge-diff", "--format=", sha]).trim() !== "");
-}
-
-/**
- * Nicht-Merge-Commits in `<headSha>..HEAD` mit Baumänderung, ohne die Commits der Basis (`^<base>`: eingemergte `main`-Commits zählen nicht):
- * `[{ sha, dateien }]`, älteste zuerst. Leere Commits (Nachweis, Override) fehlen. Wirft bei einem git-Fehler; der Aufrufer wertet das als rot.
- */
-export function aenderungsCommitsNach(git, headSha, base) {
-  const shas = git(["rev-list", "--reverse", "--no-merges", `${headSha}..HEAD`, `^${base}`]).split(/\r?\n/).filter((l) => l.trim() !== "");
-  return shas
-    .map((sha) => ({ sha, dateien: git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha]).split(/\r?\n/).filter((l) => l.trim() !== "") }))
-    .filter((c) => c.dateien.length > 0);
 }
 
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
