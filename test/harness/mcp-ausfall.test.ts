@@ -58,6 +58,15 @@ describe("klassifiziere", () => {
     expect(r[0]).toMatchObject({ klasse: "reconnect", zeit: "2026-10-15T11:00:00.000Z", sessionId: "s1" });
   });
   const START = "Starting connection with timeout of 30000ms";
+  const inSession = (sessionId: string, debug = START, zeit = "2026-10-15T10:00:00.000Z") => JSON.stringify({ debug, timestamp: zeit, sessionId, cwd: "C:\\x" });
+  test("ein Start einer anderen Session in derselben Logdatei ist kein Reconnect; derselbe Start der neuen Session danach schon", () => {
+    expect(a.klassifiziere([inSession("s1"), inSession("s2", START, "2026-10-15T11:00:00.000Z")])).toEqual([]);
+    const r = a.klassifiziere([inSession("s1"), inSession("s2"), inSession("s2", START, "2026-10-15T12:00:00.000Z")]);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ klasse: "reconnect", sessionId: "s2", zeit: "2026-10-15T12:00:00.000Z" });
+    // Zeilen ohne sessionId gelten als dieselbe (leere) Session wie zuvor.
+    expect(a.klassifiziere([JSON.stringify({ debug: START }), JSON.stringify({ debug: START })])).toHaveLength(1);
+  });
   const VORSPANN = ["Initializing HTTP transport to http://localhost:3000/api/public/mcp", "Node version: v26, Platform: win32", "Environment: {}", "HTTP transport options: {}", "HTTP transport created successfully"];
   test("Reconnect trägt die letzte Logzeile vor dem Neustart als ursache (Vorspann ausgenommen, ≤ 160 Zeichen)", () => {
     const lang = `Transient ECONNREFUSED on initial connect — retry 1/3 in 1000ms ${"x".repeat(300)}`;

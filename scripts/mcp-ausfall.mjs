@@ -89,13 +89,14 @@ const VORSPANN = /^(Initializing HTTP transport|Node version:|Environment:|HTTP 
 
 /**
  * Die Zeilen einer Log-Datei (Text) als Befunde `[{klasse, zeit, sessionId, text, code}]`; wirft nie, kaputte Zeilen entfallen. Pur.
- * Ein `reconnect` (zweites `Starting connection`) trägt `ursache`: die letzte Logzeile davor ohne den Vorspann (≤ 160 Zeichen). Steht dort
+ * Ein `reconnect` (zweites `Starting connection` unter derselben `sessionId` wie der vorige Start; ein neuer Session-Wert in derselben Datei beginnt neu) trägt `ursache`: die letzte Logzeile davor ohne den Vorspann (≤ 160 Zeichen). Steht dort
  * eine Routine-Meldung (`ROUTINE`, etwa „attempting automatic reconnection“ nach dem SSE-Leerlauf-Timeout), ist der Neustart der normale
  * Wiederaufbau und entfällt.
  */
 export function klassifiziere(zeilen) {
   const befunde = [];
   let verbindungen = 0;
+  let startSession = "";
   let letzte = "";
   for (const roh of zeilen) {
     let z;
@@ -117,7 +118,10 @@ export function klassifiziere(zeilen) {
     if (typeof z.debug !== "string") continue;
     if (/^Starting connection/.test(text)) {
       verbindungen += 1;
-      if (verbindungen > 1 && !ROUTINE.test(davor)) mk("reconnect", "", { ursache: davor });
+      const session = z.sessionId ?? "";
+      // Ein Start unter neuer sessionId (Session-Wechsel, die Logdatei läuft weiter) ist der erste Start dieser Session.
+      if (verbindungen > 1 && session === startSession && !ROUTINE.test(davor)) mk("reconnect", "", { ursache: davor });
+      startSession = session;
     } else if (/^Tool '/.test(text)) {
       // Tool-Fehler sind kein Serverausfall, außer der Netzcode zeigt eine gerissene Verbindung (MCP-Protokollfehler und die `### Error`-Ausgabe eines Tools, etwa ein Browser-Tool ohne Dev-Server, bleiben draußen).
       if (/ failed/.test(text) && !/MCP error -32\d+|### Error/.test(text) && netzCode(text)) mk("abbruch", netzCode(text));
