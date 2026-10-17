@@ -73,11 +73,13 @@ describe("K1: Zeile und Urteil je Kriterium", () => {
   test("ungültige Zeile", () => rot(bewerte({ abnahme: { art: "ungueltig", zeile: "Unsinn" } }), /ungültig \(Unsinn\)/));
   test("Urteil für ein Kriterium fehlt", () => rot(bewerte({ ticket: { nr: 9, kriterien: 3 } }), /K3: Urteil fehlt/));
   test("unbekanntes Kriterium (über der Anzahl)", () => rot(bewerte({ ticket: { nr: 9, kriterien: 1 } }), /K2: unbekannt/));
-  test("doppeltes K und unbekannter Wert macht schon der Parser ungültig", () => {
-    for (const urteil of ["K1:erfuellt,K1:erfuellt", "K1:vielleicht"]) {
-      const n = parseNachweis(`${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`, Z);
-      rot(bewerte({ abnahme: n.abnahme }), /ungültig/);
-    }
+  test("doppeltes K macht schon der Parser ungültig, die Meldung nennt den Grund (L6a)", () => {
+    const n = parseNachweis(`${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt,K2:nicht-erfuellt`, Z);
+    rot(bewerte({ abnahme: n.abnahme }), /ungültig \(K2 doppelt: /);
+  });
+  test("unbekannter Urteilswert macht schon der Parser ungültig, die Meldung nennt den Grund (L6a)", () => {
+    const n = parseNachweis(`${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:gut`, Z);
+    rot(bewerte({ abnahme: n.abnahme }), /ungültig \(unbekannter Wert „gut“ bei K1: /);
   });
 });
 

@@ -126,31 +126,52 @@ export function parseNachweis(text, zeilen) {
 /** Urteilswerte der Holdout-Abnahme je Kriterium (ADR 0022 F13). */
 export const URTEILSWERTE = Object.freeze(["erfuellt", "nicht-erfuellt", "nicht-pruefbar"]);
 
-/** `K1:erfuellt,K2:nicht-erfuellt` → `[{k, wert}]`; `null` bei leerem Wert, ungültigem K (K0, Kx), doppeltem K oder unbekanntem Wert. */
-function urteilAus(wert) {
-  if (typeof wert !== "string" || wert.trim() === "") return null;
+/** `K1:erfuellt,K2:nicht-erfuellt` → `{urteil: [{k, wert}]}`; sonst `{fehler}` mit dem ersten Grund (leer, ungültiges K wie K0/Kx, unbekannter Wert, doppeltes K). */
+function parseUrteil(wert) {
+  if (typeof wert !== "string" || wert.trim() === "") return { fehler: "Urteil ist leer" };
   const urteil = [];
   for (const teil of wert.split(",")) {
     const m = /^\s*(K[1-9]\d*)\s*:\s*(\S+)\s*$/.exec(teil);
-    const w = m ? normalisiereWert(m[2]) : "";
-    if (!m || !URTEILSWERTE.includes(w) || urteil.some((u) => u.k === m[1])) return null;
+    if (!m) {
+      const [name, ...rest] = teil.split(":");
+      const k = name.trim();
+      return { fehler: rest.length > 0 && !/^K[1-9]\d*$/.test(k) ? `Kriterium „${k}“ ungültig` : `Eintrag „${teil.trim()}“ ungültig (erwartet K<n>:<wert>)` };
+    }
+    const w = normalisiereWert(m[2]);
+    if (!URTEILSWERTE.includes(w)) return { fehler: `unbekannter Wert „${m[2]}“ bei ${m[1]}` };
+    if (urteil.some((u) => u.k === m[1])) return { fehler: `${m[1]} doppelt` };
     urteil.push({ k: m[1], wert: w });
   }
-  return urteil;
+  return { urteil };
 }
+
+/** `[{k, wert}]` oder `null` bei jedem Fehler von parseUrteil. */
+const urteilAus = (wert) => parseUrteil(wert).urteil ?? null;
+
+/** Der Grund, warum ein Urteilswert ungültig ist (z.B. „K2 doppelt“), `null` bei gültigem Wert. Pur. */
+export const urteilFehler = (wert) => parseUrteil(wert).fehler ?? null;
 
 const urteilText = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).join(",");
 
-/** Wert der Abnahme-Zeile: `{art:"urteil", head, durchgaenge, urteil}` | `{art:"entfaellt", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). */
+/** Erster Grund, warum eine Abnahme-Zeile (außer entfaellt mit Grund) ungültig ist; `null`, wenn head, durchgaenge und Urteil passen. */
+function abnahmeFehler(wert, head, durch, u) {
+  if (/^entf(?:ae|ä)llt/.test(wert)) return "entfaellt braucht einen Grund (entfaellt — <Grund>)";
+  if (!HEX_HEAD.test(head)) return "head fehlt oder ist kein Hex";
+  if (!/^\d+$/.test(durch) || Number(durch) < 1) return "durchgaenge fehlt oder ist kleiner als 1";
+  return u.fehler ?? null;
+}
+
+/** Wert der Abnahme-Zeile: `{art:"urteil", head, durchgaenge, urteil}` | `{art:"entfaellt", grund}` | `{art:"ungueltig", zeile, grund}` | `null` (keine Zeile). */
 function abnahmeAus(wert) {
   if (wert === null) return null;
   const entf = /^entf(?:ae|ä)llt\s*[—–-]+\s*(\S.*)$/.exec(wert);
   if (entf) return { art: "entfaellt", grund: entf[1].trim() };
   const head = (feldWert(wert, "head")?.trim() ?? "").toLowerCase();
   const durch = feldWert(wert, "durchgaenge")?.trim() ?? "";
-  const urteil = urteilAus(feldWert(wert, "urteil"));
-  if (!HEX_HEAD.test(head) || !/^\d+$/.test(durch) || Number(durch) < 1 || urteil === null) return { art: "ungueltig", zeile: wert };
-  return { art: "urteil", head, durchgaenge: Number(durch), urteil };
+  const u = parseUrteil(feldWert(wert, "urteil"));
+  const grund = abnahmeFehler(wert, head, durch, u);
+  if (grund !== null) return { art: "ungueltig", zeile: wert, grund };
+  return { art: "urteil", head, durchgaenge: Number(durch), urteil: u.urteil };
 }
 
 /** Die einzige Quelle der Abnahme-Zeile (ohne Schlüssel-Präfix der Message): `<Präfix>Abnahme: head=… durchgaenge=… urteil=…` bzw.

@@ -100,7 +100,7 @@ function bewerteSpur(a, marker) {
 export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen }) {
   const a = nachweis.abnahme;
   if (!a) return [`${zeilen.abnahme}: Zeile fehlt. Ablauf: node scripts/abnahme.mjs kriterien <nr>; Vorlage: ${vorlage(zeilen)}`];
-  if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
+  if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.grund ? `${a.grund}: ` : ""}${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "entfaellt") {
     return ticket && ticket.kriterien > 0 ? [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien} Akzeptanzkriterien nicht erlaubt.`] : [];
   }

@@ -47,7 +47,7 @@ describe("KQ-Abnahme (#1753): lesen, formatieren, Marker", () => {
     const alt = A.formatAbnahme(Z, ok);
     expect(lies("feat: x")).toBeNull();
     expect(lies(`${alt}
-KQ-Abnahme: kaputt`)).toEqual({ art: "ungueltig", zeile: "kaputt" });
+KQ-Abnahme: kaputt`)).toEqual({ art: "ungueltig", zeile: "kaputt", grund: "head fehlt oder ist kein Hex" });
     expect(lies(`KQ-Abnahme: kaputt
 ${alt}`)).toEqual(ok);
     expect(lies(`* ${alt}`)).toEqual(ok);
@@ -69,18 +69,35 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
     expect(A.parseAbnahmeMarker(ab, undefined as unknown as string)).toBeNull();
   });
   it.each([
-    ["unbekannter Urteilswert", `head=${HEX} durchgaenge=1 urteil=K1:gut`],
-    ["entfaellt ohne Grund", "entfaellt"],
-    ["entfaellt mit leerem Grund", "entfaellt —"],
-    ["head fehlt", "durchgaenge=1 urteil=K1:erfuellt"],
-    ["head kein Hex", "head=xyz durchgaenge=1 urteil=K1:erfuellt"],
-    ["durchgaenge 0", `head=${HEX} durchgaenge=0 urteil=K1:erfuellt`],
-    ["durchgaenge fehlt", `head=${HEX} urteil=K1:erfuellt`],
-    ["doppeltes K", `head=${HEX} durchgaenge=1 urteil=K1:erfuellt,K1:erfuellt`],
-    ["K0", `head=${HEX} durchgaenge=1 urteil=K0:erfuellt`],
-    ["leeres Urteil", `head=${HEX} durchgaenge=1 urteil=`],
-  ])("ungueltig: %s", (_n, wert) => {
-    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert });
+    ["unbekannter Urteilswert", `head=${HEX} durchgaenge=1 urteil=K1:gut`, /unbekannter Wert „gut“ bei K1/],
+    ["entfaellt ohne Grund", "entfaellt", /entfaellt braucht einen Grund/],
+    ["entfaellt mit leerem Grund", "entfaellt —", /entfaellt braucht einen Grund/],
+    ["head fehlt", "durchgaenge=1 urteil=K1:erfuellt", /head fehlt oder ist kein Hex/],
+    ["head kein Hex", "head=xyz durchgaenge=1 urteil=K1:erfuellt", /head fehlt oder ist kein Hex/],
+    ["durchgaenge 0", `head=${HEX} durchgaenge=0 urteil=K1:erfuellt`, /durchgaenge fehlt oder ist kleiner als 1/],
+    ["durchgaenge fehlt", `head=${HEX} urteil=K1:erfuellt`, /durchgaenge fehlt oder ist kleiner als 1/],
+    ["doppeltes K", `head=${HEX} durchgaenge=1 urteil=K1:erfuellt,K1:erfuellt`, /K1 doppelt/],
+    ["K0", `head=${HEX} durchgaenge=1 urteil=K0:erfuellt`, /Kriterium „K0“ ungültig/],
+    ["leeres Urteil", `head=${HEX} durchgaenge=1 urteil=`, /Urteil ist leer/],
+  ])("ungueltig: %s (mit Grund)", (_n, wert, grund) => {
+    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert, grund: expect.stringMatching(grund) });
+  });
+  it.each([
+    ["K1:erfuellt,K2:nicht-pruefbar", null],
+    ["K1:gut", /unbekannter Wert „gut“ bei K1/],
+    ["K1:erfuellt,K2:erfuellt,K2:nicht-erfuellt", /K2 doppelt/],
+    ["K0:erfuellt", /Kriterium „K0“ ungültig/],
+    ["Kx:erfuellt", /Kriterium „Kx“ ungültig/],
+    ["K1", /Eintrag „K1“ ungültig/],
+    ["", /Urteil ist leer/],
+    ["  ", /Urteil ist leer/],
+  ])("urteilFehler(%j)", (wert, erwartet) => {
+    const f = (raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler(wert);
+    if (erwartet === null) expect(f).toBeNull();
+    else expect(f).toMatch(erwartet);
+  });
+  it("urteilFehler: kein String ist leer", () => {
+    expect((raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler(undefined)).toMatch(/Urteil ist leer/);
   });
   it("Urteil toleriert Leerzeichen nach Kommas und Groß-/Kleinschreibung", () => {
     expect(lies(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:Erfuellt, K2:nicht-erfuellt`)).toEqual({
