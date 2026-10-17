@@ -317,7 +317,7 @@ describe("Abnahme je PR (#1756)", () => {
   });
   test("laufErgebnis liefert das Feld je Zeile und das Aggregat", () => {
     const body = nachricht(urteil(1));
-    const log = `${SHA}${MERGED}${body}`;
+    const log = `${SHA}\x1f${MERGED}\x1f${body}\x1e`;
     const gh = (a: string[]): string => {
       if (a[0] === "pr") return JSON.stringify([pr()]);
       if (a.join(" ").includes("actions/workflows")) return "";

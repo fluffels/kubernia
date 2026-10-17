@@ -263,7 +263,7 @@ describe("Abnahme-Quote (#1756)", () => {
   test("K3: fehlt das Aggregat oder das Zeilenfeld im echten bewertePrs-Ergebnis, endet erstelle mit Exit 2", () => {
     const erstelle = (raw as unknown as { erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]> }) => { bericht: { lauf: Lage }; exit: number } }).erstelle;
     const fahre = (verderbe: (j: { zeilen: Record<string, unknown>[]; kennzahlen: Record<string, unknown> }) => void) => {
-      const j = JSON.parse(JSON.stringify(echt([body(urteil(1))])));
+      const j = JSON.parse(JSON.stringify(echt([body(urteil(1))]))) as { zeilen: Record<string, unknown>[]; kennzahlen: Record<string, unknown> };
       verderbe(j);
       const run: Run = () => ({ status: 0, stdout: JSON.stringify(j), stderr: "" });
       return erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte: () => new Map() });
