@@ -2,7 +2,7 @@
 /**
  * Holdout-Abnahme, Auswertung (ADR 0022 F13): ein Abnahme-Agent (`holdout-abnahme`) prüft das Ergebnis eines Tickets gegen dessen
  * Akzeptanzkriterien und schreibt je Kriterium ein Urteil in einen Bericht. Dieses Skript nummeriert die Kriterien, prüft den Bericht,
- * schreibt die Spur als PR-Kommentar und entscheidet über bestanden, Fix-Runde oder Hand-off. Format der Zeile und der Marker: slice-override.mjs
+ * schreibt die Spur als PR-Kommentar und entscheidet über bestanden, Fix-Runde oder Hand-off. Format der Zeile und der Marker: nachweis-lib.mjs
  * (`formatAbnahme`, `formatAbnahmeMarker`), Beschreibung: docs/agent-harness.md §3a.
  *
  *   node scripts/abnahme.mjs kriterien <nr>
@@ -26,7 +26,8 @@ import { REPO } from "./board-lib.mjs";
 import { istFremdeingang, istVertraut, issueKommentare } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, ladeCommitZeilen, normalisiereLens, parseAbnahmeMarker, URTEILSWERTE } from "./slice-override.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, normalisiereLens, parseAbnahmeMarker, URTEILSWERTE } from "./nachweis-lib.mjs";
+import { ladeCommitZeilen } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
 /** Name des Abnahme-Agenten im Berichtskopf. */

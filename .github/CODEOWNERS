@@ -33,6 +33,7 @@
 /scripts/content-chunks.cjs @fluffels
 /scripts/check-*.mjs       @fluffels
 /scripts/slice-override.mjs @fluffels
+/scripts/nachweis-lib.mjs @fluffels
 /scripts/ci-laeufe.mjs     @fluffels
 /scripts/verify-lauf.mjs   @fluffels
 /scripts/docs-gen*        @fluffels

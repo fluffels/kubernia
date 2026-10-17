@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import * as raw from "../scripts/abnahme.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as so from "../scripts/slice-override.mjs";
+import * as nl from "../scripts/nachweis-lib.mjs";
 
 type User = { login: string; type?: string } | null;
 type Issue = { state?: string; body?: string | null; user?: User; labels?: ({ name: string } | string)[]; pull_request?: object };
@@ -75,7 +76,7 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(r.posts[0].body).toContain(`<!-- kq-abnahme durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt -->`);
     expect(r.posts[0].body).toContain("| K1: Erstes Kriterium. | erfuellt | Beleg eins |");
     expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\nKQ-Abnahme: head=${HEAD} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt\n`);
-    const gelesen = (so as unknown as { parseNachweis: (t: string, z: Zeilen) => { abnahme: { art: string } } }).parseNachweis(r.out, Z);
+    const gelesen = (nl as unknown as { parseNachweis: (t: string, z: Zeilen) => { abnahme: { art: string } } }).parseNachweis(r.out, Z);
     expect(gelesen.abnahme.art).toBe("urteil");
   });
   test("fix: PR-Kommentar, Belege der nicht erfüllten Kriterien, kein Ticket-Kommentar", () => {

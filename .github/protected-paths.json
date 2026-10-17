@@ -6,6 +6,7 @@
     "/scripts/content-chunks.cjs",
     "/scripts/check-*.mjs",
     "/scripts/slice-override.mjs",
+    "/scripts/nachweis-lib.mjs",
     "/scripts/ci-laeufe.mjs",
     "/scripts/verify-lauf.mjs",
     "/scripts/docs-gen*",

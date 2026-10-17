@@ -27,7 +27,8 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { ladeCommitZeilen, parseNachweis } from "./slice-override.mjs";
+import { ladeCommitZeilen } from "./slice-override.mjs";
+import { parseNachweis } from "./nachweis-lib.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
