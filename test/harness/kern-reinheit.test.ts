@@ -19,6 +19,12 @@ import * as checkBasis from "../../scripts/check-basis.mjs";
 import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawNamen from "../../scripts/ticket-namen.mjs";
+
+// Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const escapeRe: (t: string) => string = rawNamen.escapeRegex;
 
 interface BesitzLib {
   markerStart: (id: string) => string;
@@ -61,7 +67,6 @@ export interface ProjektConfig {
   projektliterale?: Record<string, string>;
 }
 
-const escapeRe = (t: string): string => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Alternative aus wörtlichen Werten: einmalig, längster zuerst (sonst zählt ein Kurzname im Langnamen mit), regex-escaped. */
 const alternative = (werte: string[]): string =>

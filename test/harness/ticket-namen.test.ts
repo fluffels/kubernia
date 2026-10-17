@@ -10,6 +10,7 @@ import { describe, expect, test } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -294,5 +295,31 @@ describe("patch-zugriff mit Namen aus der Config", () => {
   });
   test("ohne übergebene Namen gilt die echte Config", () => {
     expect(patch.patchAus("Patch: /t/kq-12-r3.patch", [])).toMatchObject({ ticket: 12, runde: 3 });
+  });
+});
+
+describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
+  // Nadel per Verkettung gebaut, damit dieser Wächter sich nicht selbst trifft.
+  const NADEL = "[.*+?^$" + "{}()|[\\]\\\\";
+  // Die erlaubten Quellen: Kern, docs-gen-Kern (darf nur node:* und sich selbst importieren) und die Produkt-Funktion;
+  // `.dependency-cruiser.cjs` ist ein CommonJS-Config, die den ESM-Kern nicht laden kann.
+  const ERLAUBT = [
+    "scripts/ticket-namen.mjs",
+    "scripts/docs-gen/markdown.mjs",
+    "src/content/drills/shared.ts",
+    ".dependency-cruiser.cjs",
+  ];
+  const kopien = (dateien: string[], lesen: (p: string) => string): string[] =>
+    dateien.filter((f) => /\.(?:ts|mjs|js|cjs)$/.test(f) && !ERLAUBT.includes(f) && lesen(f).includes(NADEL));
+
+  test("außerhalb der erlaubten Quellen steht die Zeichenklasse nirgends im Code", () => {
+    expect(kopien(repoDateien(), lies)).toEqual([]);
+  });
+  test("Wächter erkennt eine Kopie, erlaubte Quellen zählen nicht", () => {
+    const inhalt: Record<string, string> = { "test/x.ts": `s.replace(/${NADEL}]/g, "")`, "scripts/ticket-namen.mjs": NADEL, "docs/a.md": NADEL };
+    expect(kopien(Object.keys(inhalt), (p) => inhalt[p])).toEqual(["test/x.ts"]);
+  });
+  test("die erlaubten Quellen existieren und tragen die Zeichenklasse wirklich", () => {
+    for (const f of ERLAUBT) expect(lies(f), f).toContain(NADEL);
   });
 });

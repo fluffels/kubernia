@@ -14,12 +14,10 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { Sim } from "../src/sim";
 import { KQContent } from "../src/content";
+import { escapeRegExp as escapeRe } from "../src/content/drills/shared";
 import { getTfConfigs, parseQuests, ContentValidationError, type TfConfig } from "../src/content/loader";
 
 const CONFIGS = getTfConfigs();
-
-/** RegExp-Sonderzeichen in einem Bezeichner entschärfen (Adressen können `[0]` o.ä. tragen). */
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Sammelt Text↔Modell-Abweichungen einer Konfig (leer = konsistent). Bewusst eine reine
  *  Funktion, damit sie unten an einer kaputten Konfig gegengetestet werden kann. */

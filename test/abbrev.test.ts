@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { resolveKind } from "../src/sim/kubectl/resources";
 import { ABBREVS, findAbbrevByShort, lockedAbbrevInInput, abbrevLockHint, flagNearMiss, flagNearMissHint, longFormsInInput } from "../src/content/abbrev";
 import { KQContent } from "../src/content";
+import { escapeRegExp as escapeReg } from "../src/content/drills/shared";
 import { Sim as KQSim } from "../src/sim";
 import { questAnzeigeFelder } from "./support/anzeigetexte";
 
@@ -32,7 +33,6 @@ function allAcceptSources(): string[] {
   return out;
 }
 
-const escapeReg = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Kommt `token` als eigenständige Alternative in der Regex-Quelle vor? Grenzen
  *  sind Nicht-Wort-/Nicht-Bindestrich-Zeichen, damit `po` NICHT im Inneren von
  *  `pods` und `-d` NICHT in `--detach` fälschlich matcht. */
