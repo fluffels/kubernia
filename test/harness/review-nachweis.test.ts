@@ -113,10 +113,36 @@ describe("(d) CI-Schritt im Required-Job", () => {
     assert.match(text, /github\.event_name == 'pull_request'/);
     assert.match(text, /dependabot\[bot\]/);
   });
-  test("der Schritt ist der letzte des Jobs", () => {
-    const vorher = job.lastIndexOf("- name:", schritt);
-    assert.ok(!job.slice(schritt).includes("\n      - name:"), "nach dem Nachweis-Schritt darf kein weiterer Schritt folgen");
-    assert.ok(vorher !== -1);
+  test("der Review-Schritt ist vorletzt: danach folgt genau der Abnahme-Schritt", () => {
+    const rest = job.slice(schritt);
+    assert.equal(rest.split("\n      - name:").length - 1, 1, "nach dem Review-Schritt darf nur der Abnahme-Schritt folgen");
+    assert.ok(rest.indexOf("check-abnahme-nachweis.mjs") > 0, "der folgende Schritt ist der Abnahme-Nachweis");
+  });
+  describe("Abnahme-Schritt (#1755, K7)", () => {
+    const abn = job.indexOf("check-abnahme-nachweis.mjs");
+    const kopf = job.lastIndexOf("      - name:", abn);
+    const text = job.slice(kopf, abn + "check-abnahme-nachweis.mjs".length);
+    test("im Required-Job build-test, nach dem Review-Schritt, als letzter Schritt, ohne eigenen Job", () => {
+      assert.ok(abn > schritt, "muss nach dem Review-Schritt stehen");
+      assert.ok(!job.slice(abn).includes("\n      - name:"), "nach dem Abnahme-Schritt darf kein weiterer Schritt folgen");
+      assert.ok(!/\n {2}[a-z-]*abnahme[a-z-]*:/.test(ci), "kein eigener Job für die Abnahme");
+    });
+    test("Bedingung: !cancelled(), nur pull_request, Dependabot ausgenommen", () => {
+      assert.match(text, /!cancelled\(\)/);
+      assert.match(text, /github\.event_name == 'pull_request'/);
+      assert.match(text, /dependabot\[bot\]/);
+    });
+    test("env: liefert Token, PR-Nummer, Entwurfs-Status und Body; im run: kein Ausdruck", () => {
+      for (const k of ["GH_TOKEN", "KQ_PR_NUMBER", "KQ_PR_DRAFT", "KQ_PR_BODY"]) assert.match(text, new RegExp(`\n {10}${k}: \\$\\{\\{ `));
+      const run = /\n\s+run: ([^\n]*)/.exec(text)?.[1] ?? "";
+      assert.ok(run.includes("check-abnahme-nachweis.mjs") && !run.includes("${{"), "run: ohne Ausdruck");
+    });
+    test("Job-Rechte: pull-requests und issues lesend", () => {
+      assert.match(job, /permissions:\n {6}contents: read\n {6}pull-requests: read\n {6}issues: read\n/);
+    });
+    test("pull_request löst auch bei ready_for_review aus", () => {
+      assert.match(ci, /pull_request:\n {4}types: \[[^\]]*\bopened\b[^\]]*\bsynchronize\b[^\]]*\breopened\b[^\]]*\bready_for_review\b[^\]]*\]/);
+    });
   });
 });
 
@@ -154,7 +180,7 @@ describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#
     assert.match(skill, /git diff <basis> <M>\^2 -- <alte datei>/, "der Skill trägt den Prüfschritt für verschobenen Code");
   });
   test("das Rezept im Skill ist an die Erkennung im Skript gekoppelt", () => {
-    assert.match(read("scripts/check-review-nachweis.mjs"), /\["show", "--remerge-diff", "--format=", sha\]/);
+    assert.match(read("scripts/slice-override.mjs"), /\["show", "--remerge-diff", "--format=", sha\]/);
   });
 });
 

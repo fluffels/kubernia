@@ -43,7 +43,8 @@ type Mod = {
 import * as raw from "../scripts/check-review-nachweis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
-const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, pflichtLenses, konfliktMergesNach } = raw as Mod;
+const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, pflichtLenses } = raw as Mod;
+const { konfliktMergesNach } = sliceRaw as unknown as Pick<Mod, "konfliktMergesNach">;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
 
 /** Die Zeilen der echten Config (KQ-, kubernia-planner); die Wrapper reichen sie durch, damit die Bestandstests unverändert lesbar bleiben. */

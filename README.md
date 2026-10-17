@@ -374,6 +374,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run test:smoke` | `verify:full` | Boot- und Interaktions-Smokes headless gegen Offline- und Host-Build (Playwright) |
   | `npm audit --omit=dev --audit-level=high` | CI | Security-Gate über die ausgelieferten Produktiv-Abhängigkeiten |
   | `node scripts/check-review-nachweis.mjs` | CI | Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR |
+  | `node scripts/check-abnahme-nachweis.mjs` | CI | Abnahme-Nachweis (`KQ-Abnahme:` plus PR-Kommentar) im PR |
   | `npm run sbom` | CI | CycloneDX-SBOM der npm-Abhängigkeiten (aus dem Lockfile) als CI-Artefakt; rot, wenn Erzeugung oder Artefakt fehlt |
 
   <!-- GEN:gates END -->

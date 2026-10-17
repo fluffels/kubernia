@@ -21,6 +21,7 @@ interface Zeilen {
   review: string;
   abnahme: string;
   reviewOverride: string;
+  abnahmeOverride: string;
   diffsizeOverride: string;
   diffcovOverride: string;
   lockfileOverride: string;
@@ -40,7 +41,7 @@ const Z = so.commitZeilen("KQ-", "kubernia-planner");
 const HEAD40 = "a".repeat(40);
 
 describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwert", () => {
-  it("leitet Plan, Review und die vier Override-Schlüssel aus dem Präfix ab", () => {
+  it("leitet Plan, Review und die fünf Override-Schlüssel aus dem Präfix ab", () => {
     expect(so.commitZeilen("AB-", "x-planer")).toEqual({
       praefix: "AB-",
       planer: "x-planer",
@@ -48,6 +49,7 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
       review: "AB-Review",
       abnahme: "AB-Abnahme",
       reviewOverride: "AB-Review-Override",
+      abnahmeOverride: "AB-Abnahme-Override",
       diffsizeOverride: "AB-Diffsize-Override",
       diffcovOverride: "AB-Diffcov-Override",
       lockfileOverride: "AB-Lockfile-Override",
