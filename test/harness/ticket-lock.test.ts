@@ -64,7 +64,7 @@ function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}
         return "";
       }
       if (a.startsWith("for-each-ref")) return (welt.refs ?? []).join("\n");
-      if (a.startsWith("worktree list")) return ["worktree /repo", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n");
+      if (a.startsWith("worktree list")) return ["worktree /repo", ...(welt.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n\n"); // wie git: Blöcke durch Leerzeile
       if (a.startsWith("log -1")) return String(welt.commitSek ?? 0);
       if (a.includes("reflog")) return String(welt.reflogSek ?? 0);
       if (a.includes("status --porcelain")) return (welt.status ?? []).join("\n");

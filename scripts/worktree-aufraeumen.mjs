@@ -18,13 +18,22 @@ function norm(p) {
  *  der Haupt-Checkout, unabhängig davon, aus welchem Worktree der Befehl lief —
  *  wichtig, weil dieser Hook aus JEDEM Linked Worktree heraus feuern kann. */
 export function parseWorktreeListPorcelain(output) {
-  const paths = [];
-  for (const line of String(output).split(/\r?\n/)) {
-    if (line.startsWith("worktree ")) {
-      paths.push(line.slice("worktree ".length).trim().replace(/\\/g, "/"));
-    }
-  }
-  return paths;
+  return parseWorktreeBloecke(output).map((b) => b.pfad);
+}
+
+/** Blöcke aus `git worktree list --porcelain`: `{ pfad, head, branch, locked }` (Pfade mit `/`, Branch ohne `refs/heads/`). Pur.
+ *  Einzige SSOT des Porcelain-Parsers; Claims-Prüfung, Ticket-Lock und Ticket-Auswahl nutzen sie. */
+export function parseWorktreeBloecke(text) {
+  return String(text ?? "")
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) => {
+      const zeilen = block.split(/\r?\n/);
+      const wert = (k) => zeilen.find((z) => z.startsWith(`${k} `))?.slice(k.length + 1).trim();
+      const pfad = wert("worktree")?.replace(/\\/g, "/");
+      const branch = wert("branch");
+      return { pfad, head: wert("HEAD") ?? null, branch: branch ? branch.replace(/^refs\/heads\//, "") : null, locked: zeilen.some((z) => z === "locked" || z.startsWith("locked ")) };
+    })
+    .filter((b) => b.pfad);
 }
 
 /** Fragt `git worktree list --porcelain` ab (cwd egal welcher Worktree, gleiche
@@ -471,12 +480,7 @@ export function parseBranchRefs(text) {
 
 /** Namen der in einem Worktree (auch dem Hauptcheckout) ausgecheckten Branches aus `git worktree list --porcelain`. */
 export function worktreeBranchen(porcelain) {
-  return new Set(
-    String(porcelain ?? "")
-      .split(/\r?\n/)
-      .map((z) => /^branch refs\/heads\/(.+)$/.exec(z)?.[1])
-      .filter(Boolean),
-  );
+  return new Set(parseWorktreeBloecke(porcelain).map((b) => b.branch).filter(Boolean));
 }
 
 /**

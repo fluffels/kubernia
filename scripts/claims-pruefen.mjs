@@ -40,7 +40,7 @@ import { mitKontingent } from "./kontingent-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { LENS_WORKTREE_NAME, ticketAusRef } from "./ticket-refs.mjs";
-import { parseWorktreeListPorcelain } from "./worktree-aufraeumen.mjs";
+import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
 /** Standard-Schwelle in Stunden: ohne Lebenszeichen darüber gilt ein offener Claim als verwaist (über `VERWAIST_MS` von 2 h). */
 export const STANDARD_STUNDEN = 3;
@@ -97,20 +97,6 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   if (alter < inaktivMs) return ergebnis("behalten", "Lock mit Lebenszeichen der letzten 30 min");
   if (c.branch && gemergt.length === 0) return ergebnis("behalten", "Lock mit Branch, aber ohne gemergten PR");
   return ergebnis("aufraeumbar", c.branch ? "geschlossen, PR gemergt, Lock ohne Worktree" : "geschlossen, Lock ohne Worktree und Branch", { worktree: false, lock: true });
-}
-
-/** Blöcke aus `git worktree list --porcelain`: `{ pfad, head, branch, locked }` (Pfade mit `/`). Pur. */
-export function parseWorktreeBloecke(text) {
-  return String(text)
-    .split(/\r?\n\s*\r?\n/)
-    .map((block) => {
-      const zeilen = block.split(/\r?\n/);
-      const wert = (k) => zeilen.find((z) => z.startsWith(`${k} `))?.slice(k.length + 1).trim();
-      const pfad = wert("worktree")?.replace(/\\/g, "/");
-      const branch = wert("branch");
-      return { pfad, head: wert("HEAD") ?? null, branch: branch ? branch.replace(/^refs\/heads\//, "") : null, locked: zeilen.some((z) => z === "locked" || z.startsWith("locked ")) };
-    })
-    .filter((b) => b.pfad);
 }
 
 /** Gebündelte GraphQL-Abfragen (`viewer` und je Nummer ein Alias `i<k>`), je bis zu `ALIAS_MAX` Nummern. Pur. */
@@ -258,7 +244,7 @@ function raeumeAuf(deps, c, urteil, lockPfad, hauptcheckout) {
     if (!pfadErlaubt({ pfad: c.worktree.pfad, hauptcheckout, nr: c.nr })) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree-Pfad liegt nicht unter dem Worktree-Ordner des Hauptcheckouts, nichts entfernt` };
     try {
       deps.git(["worktree", "remove", c.worktree.pfad]);
-      const noch = parseWorktreeListPorcelain(deps.git(["worktree", "list", "--porcelain"])).includes(c.worktree.pfad);
+      const noch = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"])).some((b) => b.pfad === c.worktree.pfad);
       if (noch || deps.existiert(c.worktree.pfad)) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree ${c.worktree.pfad} ist nach dem Entfernen noch da (Lock bleibt)` };
     } catch (e) {
       return { ok: false, zeile: `FEHLER #${c.nr}: git worktree remove scheiterte (${String(e?.message ?? e).split("\n")[0]}); Lock bleibt` };

@@ -25,7 +25,6 @@ const M = raw as unknown as {
   STANDARD_STUNDEN: number;
   parseArgs: (a: string[]) => { json?: boolean; stunden?: number; fehler?: string };
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
-  parseWorktreeBloecke: (t: string) => { pfad: string; head: string | null; branch: string | null; locked: boolean }[];
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
   pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number }) => boolean;
@@ -169,17 +168,6 @@ describe("reine Hilfen", () => {
     for (const a of [["--stunden", "0"], ["--stunden", "-1"], ["--stunden", "abc"], ["--stunden"], ["--stunden", ""], ["--stunden=Infinity"], ["--unbekannt"]]) {
       assert.ok(M.parseArgs(a).fehler, JSON.stringify(a));
     }
-  });
-
-  test("parseWorktreeBloecke liest Pfad, HEAD, Branch und locked; Backslashes werden zu /", () => {
-    const text = "worktree C:\\h\nHEAD aaa\nbranch refs/heads/main\n\nworktree /h/.claude/worktrees/kq-5\nHEAD bbb\nbranch refs/heads/feature/kq-5-x\nlocked grund\n\nworktree /h/x\nHEAD ccc\ndetached\n";
-    const b = M.parseWorktreeBloecke(text);
-    assert.deepEqual(b.map((x) => [x.pfad, x.head, x.branch, x.locked]), [
-      ["C:/h", "aaa", "main", false],
-      ["/h/.claude/worktrees/kq-5", "bbb", "feature/kq-5-x", true],
-      ["/h/x", "ccc", null, false],
-    ]);
-    assert.equal(M.parseWorktreeBloecke("worktree /a\nlocked\n")[0].locked, true);
   });
 
   test("aliasAbfragen: je 40 Nummern eine Abfrage, ungültige Eingaben werfen", () => {
