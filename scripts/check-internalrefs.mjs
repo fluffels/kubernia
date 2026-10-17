@@ -45,6 +45,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -71,11 +72,6 @@ export function decodeTerms(encoded = ENCODED_TERMS) {
 /** Klartext → base64 (Gegenstück zu decodeTerms, für `--add`). */
 export function encodeTerm(term) {
   return Buffer.from(String(term), "utf8").toString("base64");
-}
-
-/** Escaped Regex-Metazeichen in einem Literal. */
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** Baut das Suchmuster für einen Begriff: case-insensitive, mit Wortgrenzen — aber nur an den

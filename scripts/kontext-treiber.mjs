@@ -30,6 +30,7 @@ import { readdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
 import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
@@ -159,12 +160,11 @@ function pfadZugriffe(eintraege, wurzel) {
   return { geaendertePfade: [...new Set(geaendertePfade)], leseAufrufe };
 }
 
-const maskiere = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Liest der Aufruf diesen (normalisierten) Pfad? Read: gleicher Pfad oder Suffix nach `/`; Shell: Pfad im Befehl, davor kein `[\w.-]`, dahinter kein `\w`. */
 function liestPfad(aufruf, pfad) {
   if (aufruf.art === "read") return aufruf.pfad === pfad || aufruf.pfad.endsWith(`/${pfad}`);
-  return new RegExp(`(?<![\\w.-])${maskiere(pfad)}(?!\\w)`).test(aufruf.befehl);
+  return new RegExp(`(?<![\\w.-])${escapeRegex(pfad)}(?!\\w)`).test(aufruf.befehl);
 }
 
 /** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. */

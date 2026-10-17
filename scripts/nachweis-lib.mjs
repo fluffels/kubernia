@@ -3,23 +3,21 @@
  * Nachweis-Lib (#1762): Parser und Formate der Commit-Zeilen `Plan`, `Review` und `Abnahme` samt Abnahme-Marker.
  *
  * Eine Quelle für Zeilen-Regex, Hex-Muster (`HEX`, `HEX_HEAD`, streng klein), Wert-Normalisierung und Urteilswerte,
- * damit Gate, Messskript, Abnahme-Skript und Hook dasselbe lesen. Rein (keine I/O auf oberster Ebene, keine Importe);
+ * damit Gate, Messskript, Abnahme-Skript und Hook dasselbe lesen. Rein (keine I/O auf oberster Ebene, einziger Import `escapeRegex`);
  * die Commit-Zeilen kommen als Parameter (`commitZeilen` in slice-override.mjs). Pfad steht in `.github/protected-paths.json`.
  */
+import { escapeRegex } from "./ticket-namen.mjs";
 
 /** Hex-Hash eines Commits (7 bis 40 Zeichen, nur klein); Eingaben mit Großbuchstaben vorher mit `.toLowerCase()` angleichen. */
 export const HEX = "[0-9a-f]{7,40}";
 export const HEX_HEAD = new RegExp(`^${HEX}$`);
-
-/** Maskiert einen Text für den wörtlichen Einsatz in einer RegExp. */
-export const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main
  *  jeden Commit-BETREFF schreibt; Body-Zeilen bleiben dort unverändert. Gruppe 1 = Zeile ohne Präfix,
  *  Gruppe 2 = Wert. `key` wird wörtlich eingesetzt (escaped). */
 export function zeilenRe(key) {
-  return new RegExp(`^(?:\\* )?(${escapeRe(key)}:[ \\t]*(.*))$`, "gm");
+  return new RegExp(`^(?:\\* )?(${escapeRegex(key)}:[ \\t]*(.*))$`, "gm");
 }
 
 function lastLine(text, key) {
@@ -178,7 +176,7 @@ export function formatAbnahmeMarker(zeilen, { durchgang, head, urteil }) {
 
 /** Liest den Marker aus einem Kommentartext: `{durchgang, head, urteil}` oder `null`. Der Hand-off-Marker zählt nie. Pur. */
 export function parseAbnahmeMarker(zeilen, text) {
-  const re = new RegExp(`<!--\\s*${escapeRe(abnahmeMarker(zeilen))}\\s+durchgang=(\\d+)\\s+head=(${HEX})\\s+urteil=(\\S+)\\s*-->`);
+  const re = new RegExp(`<!--\\s*${escapeRegex(abnahmeMarker(zeilen))}\\s+durchgang=(\\d+)\\s+head=(${HEX})\\s+urteil=(\\S+)\\s*-->`);
   const m = re.exec(String(text ?? ""));
   const urteil = m ? urteilAus(m[3]) : null;
   if (!m || urteil === null || Number(m[1]) < 1) return null;
