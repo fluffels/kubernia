@@ -13,6 +13,8 @@ import { lies } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as refsRaw from "../../scripts/ticket-refs.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as aufraeumenRaw from "../../scripts/worktree-aufraeumen.mjs";
@@ -36,7 +38,8 @@ import * as boardRaw from "../../scripts/board-lib.mjs";
 type Cfg = Record<string, unknown>;
 type Namen = { praefixe: { branch: string; worktree: string } };
 const ticketNamen = (namenRaw as unknown as { ticketNamen: (c: Cfg) => Namen }).ticketNamen;
-const worktreeNamenOderGrund = (namenRaw as unknown as { worktreeNamenOderGrund: (w: string, d?: { config?: Cfg }) => { namen?: Namen & { lensNameKern: string }; grund?: string } }).worktreeNamenOderGrund;
+const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: (o?: { pfad?: string; pruefen?: boolean }) => Cfg }).ladeProjektConfig;
+const worktreeNamenOderGrund = (namenRaw as unknown as { worktreeNamenOderGrund: (w: string, d?: { config?: Cfg; pfad?: string }) => { namen?: Namen & { lensNameKern: string }; grund?: string } }).worktreeNamenOderGrund;
 const R = refsRaw as unknown as {
   ticketAusRef: (t: string, n?: Namen) => number | null;
   belegteNummern: (e: { refs?: string[]; worktrees?: string[]; prHeads?: string[] }, n?: Namen) => Set<number>;
@@ -202,6 +205,30 @@ describe("stop-verify-hook: Namen aus der Config", () => {
     expect(r.exit).toBe(0);
     expect(namen?.praefixe.worktree).toBe("ab-");
   });
+  test("echter Lader: eine Config-Datei ohne agenten.umsetzer blockt den Stop des Hauptchats nicht, SubagentStop und der volle Lader schon", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lz-cfg-"));
+    try {
+      const echt = JSON.parse(lies(".factory/projekt.json")) as { agenten: Record<string, unknown> };
+      delete echt.agenten.umsetzer;
+      const pfad = join(dir, "projekt.json");
+      writeFileSync(pfad, JSON.stringify(echt));
+      let namen: Namen | undefined;
+      const r = S.runHook('{"hook_event_name":"Stop"}', "/x", (_root, d) => ((namen = d?.namen), { blocked: false }), { pfad });
+      expect(r.exit).toBe(0);
+      expect(namen?.praefixe.worktree).toBe((echt as unknown as { praefixe: { worktree: string } }).praefixe.worktree);
+      expect(S.runHook('{"hook_event_name":"SubagentStop","agent_type":"x"}', "/x", () => ({ blocked: false }), { config: echt }).exit).toBe(2);
+      expect(() => ladeProjektConfig({ pfad })).toThrow(/agenten\.umsetzer/);
+      expect(() => ladeProjektConfig({ pfad, pruefen: false })).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("SubagentStop reicht die Namen der Config an die Prüfung weiter", () => {
+    let namen: Namen | undefined;
+    const r = S.runHook('{"hook_event_name":"SubagentStop","agent_type":"ab-umsetzer"}', "/x", (_root, d) => ((namen = d?.namen), { blocked: false }), { config: AB, prStatus: () => ({ state: "MERGED", autoMergeRequest: null, labels: [] }) });
+    expect(r.exit).toBe(0);
+    expect(namen?.praefixe.worktree).toBe("ab-");
+  });
   test("SubagentStop braucht dagegen die volle Config (fehlender Agentenname blockt)", () => {
     const ohneUmsetzer = { ...AB, agenten: { ...(AB.agenten as object), umsetzer: undefined } };
     expect(S.runHook('{"hook_event_name":"SubagentStop","agent_type":"x"}', "/x", () => ({ blocked: false }), { config: ohneUmsetzer }).exit).toBe(2);
@@ -212,6 +239,12 @@ describe("stop-verify-hook: Namen aus der Config", () => {
     expect(new RegExp(`^${r.namen?.lensNameKern}$`).test("a.b-3-lens-r1")).toBe(true);
     expect(new RegExp(`^${r.namen?.lensNameKern}$`).test("aXb-3-lens-r1")).toBe(false);
     LIES_FEHLER(worktreeNamenOderGrund("T", { config: OHNE_WT }).grund ?? "");
+    LIES_FEHLER(worktreeNamenOderGrund("T", { config: {} }).grund ?? "");
+  });
+  test("Vertrag: das Teilobjekt reicht für die Lens-Waisen-Prüfung von worktree-aufraeumen", () => {
+    const teil = worktreeNamenOderGrund("T", { config: AB }).namen;
+    expect(A.verwaisteLensWorktrees(["/r/.claude/worktrees/ab-3-lens-r1", "/r/.claude/worktrees/kq-3-lens-r1"], "/r/.claude/worktrees", teil)).toEqual(["ab-3-lens-r1"]);
+    expect(A.sortiereDateien("/r/.claude/worktrees", ["ab-7-x.bak", "kq-7-x.bak"], new Set(), { now: 10 * 60_000, statSync: () => ({ mtimeMs: 0 }), namen: teil }).fremd).toEqual(["kq-7-x.bak"]);
   });
   test("stop_hook_active gibt auch bei kaputter Config frei (keine Schleife)", () => {
     expect(S.runHook('{"hook_event_name":"Stop","stop_hook_active":true}', "/x", () => ({ blocked: true, reason: "x" }), { config: OHNE_WT }).exit).toBe(0);

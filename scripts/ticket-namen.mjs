@@ -61,11 +61,13 @@ export function ticketNamen(config) {
 
 /**
  * Wie `namenOderGrund`, aber nur mit dem Worktree-Präfix: `{ namen: { praefixe: { worktree }, lensNameKern } }` oder `{ grund }`. Für Werkzeuge, die nur
- * Worktree-Ordner aufräumen (Stop des Hauptchats): ein fehlender Agentenname soll sie nicht blockieren. Wirft nie.
+ * Worktree-Ordner aufräumen (Stop des Hauptchats): ein fehlender Agentenname soll sie nicht blockieren, darum liest sie die Config ohne Schema-Prüfung
+ * (`deps.pfad` ersetzt den Pfad, `deps.config` das Laden; Test) und prüft allein `praefixe.worktree`. Das Teilobjekt trägt nur `praefixe.worktree` und `lensNameKern`:
+ * Empfänger dürfen keine anderen Felder lesen. Wirft nie.
  */
 export function worktreeNamenOderGrund(werkzeug, deps = {}) {
   try {
-    const config = deps.config ?? ladeProjektConfig();
+    const config = deps.config ?? ladeProjektConfig({ pruefen: false, ...(deps.pfad ? { pfad: deps.pfad } : {}) });
     const worktree = config?.praefixe?.worktree;
     if (!istText(worktree)) {
       throw new Error(`Projekt-Config unvollständig: praefixe.worktree fehlt\nFix: praefixe.worktree in ${PROJEKT_CONFIG} ergänzen`);

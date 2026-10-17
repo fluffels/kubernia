@@ -244,7 +244,7 @@ export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees,
   } else {
     const teil = worktreeNamenOderGrund("Stop-Hook", abschlussDeps);
     if (teil.grund) return blockiere(teil.grund);
-    namen = teil.namen;
+    namen = teil.namen; // Teilobjekt: die Aufräumlogik liest daraus nur `praefixe.worktree` und `lensNameKern`
   }
   // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952) und den Umsetzer-Abschluss prüfen (#1331)
   const gruende = [];
