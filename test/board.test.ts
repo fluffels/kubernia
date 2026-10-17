@@ -77,6 +77,7 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
   const N = rawLib as unknown as {
     normalizeItems: (raw: unknown) => (Item & { status: string })[];
     abortMessage: (message: string) => string;
+    isRateLimit: (message: string) => boolean;
     afterIdForPosition: (items: (Item & { status: string })[], n: number, ohneNr?: number | null) => string | null;
     missingFromBoard: (open: number[], items: Item[]) => number[];
     ankerNummerFuerPosition: (items: (Item & { status: string })[], n: number, ohneNr?: number | null) => number | null;
@@ -139,6 +140,27 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
 
   test("abortMessage: andere Fehler bleiben ihre erste Zeile", () => {
     expect(N.abortMessage("HTTP 404\nzweite Zeile")).toBe("HTTP 404");
+  });
+
+  test("abortMessage: bei execFileSync-Text steht der gh-Text statt „Command failed“ (stderr-Zeilen zusammengeführt)", () => {
+    const m = N.abortMessage("Command failed: gh api graphql -f query=…\nGraphQL: Could not resolve to a node\nzweite stderr-Zeile");
+    expect(m).toBe("GraphQL: Could not resolve to a node zweite stderr-Zeile");
+    expect(m).not.toMatch(/Command failed/);
+  });
+
+  test("abortMessage: Secondary-Rate-Limit in einer späteren Zeile wird als Rate-Limit gemeldet", () => {
+    const m = N.abortMessage("Command failed: gh api graphql\nGraphQL: You have exceeded a secondary rate limit. Please wait.");
+    expect(m).toMatch(/Rate-Limit/);
+    expect(m).toContain("secondary rate limit");
+    expect(N.isRateLimit("You have exceeded a secondary rate limit")).toBe(true);
+    expect(N.isRateLimit("HTTP 404")).toBe(false);
+  });
+
+  test("abortMessage: leer, undefiniert und eine „Command failed“-Zeile allein bleiben stabil; lange Meldung auf ≈600 Zeichen gekürzt", () => {
+    expect(N.abortMessage("")).toBe("");
+    expect(N.abortMessage(undefined as unknown as string)).toBe("");
+    expect(N.abortMessage("Command failed: gh api x")).toBe("Command failed: gh api x");
+    expect(N.abortMessage(`Command failed: gh\n${"a".repeat(2000)}`).length).toBeLessThanOrEqual(601);
   });
 });
 

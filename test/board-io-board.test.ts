@@ -24,7 +24,7 @@ const L = rawLib as unknown as {
   boardFuerRolle: (r: string) => Board;
   loadItemPages: (b: Board) => unknown;
   setPosition: (b: Board, i: string, a: string | null) => void;
-  addToBoardTodo: (b: Board, n: string) => string;
+  addToBoardTodo: (b: Board, n: string, o?: { pauseMs?: number; schlafe?: (ms: number) => void }) => string;
 };
 const produkt = L.boardFuerRolle("produkt");
 const factory = L.boardFuerRolle("factory");
@@ -56,5 +56,13 @@ describe("Board-I/O nutzt das übergebene Board", () => {
     expect(t).toContain(`f=${factory.statusFeldNodeId}`);
     expect(t).toContain(`o=${factory.todoOptionId}`);
     for (const fremd of [produkt.projectId, produkt.statusFeldNodeId]) expect(t).not.toContain(fremd);
+  });
+  test("addToBoardTodo: mit pauseMs schläft es zwischen Aufnehmen und Status, ohne (Standard 0) nicht", () => {
+    L.addToBoardTodo(factory, "I_node", { pauseMs: 1000, schlafe: (ms) => void aufrufe.push(["schlafe", String(ms)]) });
+    const namen = aufrufe.map((a) => (a[0] === "schlafe" ? `schlafe(${a[1]})` : a.join(" ").includes("addProjectV2ItemById") ? "add" : "status"));
+    expect(namen).toEqual(["add", "schlafe(1000)", "status"]);
+    aufrufe.length = 0;
+    L.addToBoardTodo(factory, "I_node", { schlafe: (ms) => void aufrufe.push(["schlafe", String(ms)]) });
+    expect(aufrufe.some((a) => a[0] === "schlafe")).toBe(false);
   });
 });

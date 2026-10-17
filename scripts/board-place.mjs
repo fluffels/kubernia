@@ -196,7 +196,7 @@ async function einsortieren(args) {
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(board, fehlend));
-  items = nimmFehlendeAuf(items, args, { addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, opts) });
+  items = nimmFehlendeAuf(items, args, { addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, ...opts }) });
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
@@ -270,7 +270,7 @@ async function umziehen(args) {
   if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return console.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
   const gemeldet = await fuehreUmzugAus(plan, {
     dry: args.dry,
-    aufnehmen: (r, c) => addToBoardTodo(boardFuerRolle(r), c),
+    aufnehmen: (r, c) => addToBoardTodo(boardFuerRolle(r), c, { pauseMs: PAUSE_MS }),
     positioniere: (r, i, a) => setPosition(boardFuerRolle(r), i, a),
     entferne: (r, i) => entferneVomBoard(boardFuerRolle(r), i),
     schlafe: () => sleep(PAUSE_MS),
