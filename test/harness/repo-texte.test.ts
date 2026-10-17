@@ -3,7 +3,21 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { workflowDateien } from "./repo-texte";
+import { spawnSync } from "node:child_process";
+import { WORKFLOW_ORDNER, WURZEL, lies, workflowDateien } from "./repo-texte";
+
+/** Leerlauf-Schutz (ADR 0028: Leerlaufen ist gewollt, aber der Ordner darf nicht still ignoriert oder umbenannt sein). */
+describe("Workflow-Ordner", () => {
+  test.each([`${WORKFLOW_ORDNER}/probe.js`, `${WORKFLOW_ORDNER}/x/probe.mjs`])("%s ist nicht von .gitignore erfasst", (pfad) => {
+    const r = spawnSync("git", ["check-ignore", "-q", pfad], { cwd: WURZEL });
+    assert.equal(r.status, 1, `${pfad} wäre ignoriert (Exit ${String(r.status)}); die Wächter über workflowDateien liefen leer`);
+  });
+
+  test("WORKFLOW_ORDNER ist der Ordner aus der docs-gen-Config (harness.workflows)", () => {
+    const config = JSON.parse(lies("scripts/docs-gen/config.json")) as { harness: { workflows: string } };
+    assert.equal(WORKFLOW_ORDNER, config.harness.workflows);
+  });
+});
 
 describe("workflowDateien", () => {
   test("liefert versionierte Skripte unter dem Ordner, auch rekursiv", () => {
