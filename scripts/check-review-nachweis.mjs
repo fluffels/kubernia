@@ -41,7 +41,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
-import { aenderungsCommitsNach, konfliktMergesNach, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
+import { aenderungsCommitsNach, aktiverOverride, konfliktMergesNach, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -194,8 +194,10 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     // `--reverse`: chronologisch, damit der JÜNGSTE Nachweis (`lastLine`) und die jüngste Override-Zeile gelten (Z8a).
     const messages = git(["log", "--reverse", "--format=%B", `${base}..HEAD`]);
     const ov = parseOverrideTrailers(messages, zeilen.reviewOverride);
-    if (ov.valid.length > 0) {
-      return { ok: true, override: ov.valid[ov.valid.length - 1].reason, fehler: [], invalid: ov.invalid };
+    // Die jüngste gültige Zeile entscheidet; ein Widerruf (`#<nr> entfällt`) ist kein Override (wie bei den übrigen Gates).
+    const grund = aktiverOverride(messages, zeilen.reviewOverride);
+    if (grund !== null) {
+      return { ok: true, override: grund, fehler: [], invalid: ov.invalid };
     }
     const nachweis = parseNachweis(messages, zeilen);
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])

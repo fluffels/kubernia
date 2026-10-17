@@ -320,6 +320,20 @@ describe("checkReviewNachweis (git injiziert)", () => {
     assert.equal(g("KQ-Review-Override: Revert").ok, false);
     assert.equal(g("KQ-Review-Override: #1270").ok, false);
   });
+  test("Widerruf (#<nr> entfällt) hebt den Review-Override auf: der Nachweis wird geprüft (L7)", () => {
+    const g = (m: string) => checkReviewNachweis({ runGit: fakeGit({ messages: m }), env });
+    const widerrufen = g("revert\n\nKQ-Review-Override: #1270 Revert-PR\n\nKQ-Review-Override: #1270 entfällt");
+    assert.equal(widerrufen.ok, false);
+    assert.equal(widerrufen.override, undefined);
+    assert.match(widerrufen.fehler.join(), /KQ-Review-Zeile fehlt/);
+    const allein = g("KQ-Review-Override: #1270 entfällt");
+    assert.equal(allein.ok, false);
+    assert.equal(allein.override, undefined);
+    // Mit gültigem Nachweis bleibt ein widerrufener Override grün (der Nachweis trägt).
+    const mitNachweis = g(`${review()}\n\nKQ-Review-Override: #1270 Revert-PR\n\nKQ-Review-Override: #1270 entfällt`);
+    assert.equal(mitNachweis.ok, true);
+    assert.equal(mitNachweis.override, undefined);
+  });
   test("git-Fehler ist rot (fail-closed)", () => {
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), throws: "diff" }), env });
     assert.equal(r.ok, false);
