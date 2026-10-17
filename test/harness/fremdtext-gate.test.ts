@@ -14,7 +14,7 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { workflowDateien } from "./repo-texte.ts";
+import { workflowDateien } from "./repo-texte";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";

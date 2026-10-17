@@ -595,7 +595,7 @@ describe("Leitplanken-Audit (#1067)", () => {
       };
       const r = abschluss.abschlussBlockade(
         { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
-        { prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: unknown) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
+        { prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: never) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
       );
       assert.equal(diffAufrufe, 0, "der Status trägt die Dateien, der Diff-Rückfall bleibt ungenutzt");
       return { r, aufrufe };
