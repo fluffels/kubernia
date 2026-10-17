@@ -258,6 +258,10 @@ describe("Abnahme-Quote (#1756)", () => {
     expect(a).toContain("- 1 von 2 im ersten Durchgang (50 %)");
     expect(a).toContain("- Nicht in der Quote: entfällt 1, Override 1 (PR #4), ohne gültige Abnahme-Zeile 1");
   });
+  test("Prozent wird gerundet: 2 von 3 sind 67 %", () => {
+    const lage = F.vertragPruefen(echt([body(urteil(1)), body(urteil(1)), body(urteil(2))]));
+    expect(md(lage)).toContain("- 2 von 3 im ersten Durchgang (67 %)");
+  });
   test("Negativfall: ohne Abnahme-Urteil steht eine Lücke mit Grund, nie 0 %", () => {
     const lage = F.vertragPruefen(echt([body("nichts"), body("KQ-Abnahme: entfaellt — Hand-PR")]));
     const a = md(lage);
