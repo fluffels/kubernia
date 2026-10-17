@@ -4,6 +4,15 @@ description: Schreibt Prüfszenarien (Gegeben/Wenn/Dann, Negativfall, Beobachtun
 model: opus
 effort: medium
 tools: Read, Grep, Glob
+hooks:
+  PreToolUse:
+    - matcher: "Read|Grep|Glob"
+      hooks:
+        - type: command
+          command: node
+          args:
+            - ${CLAUDE_PROJECT_DIR}/scripts/holdout-guard.mjs
+            - szenario-lesen
 ---
 
 # Szenario-Agent der Holdout-Abnahme
@@ -19,6 +28,7 @@ Der Prompt enthält den Ticket-Body und die nummerierte Kriterienliste (`K1: …
 - **Kein Code.** Du liest nichts unter `src/`, `scripts/`, `test/` und keinen Plan, keinen Diff, keinen PR.
 - Nur Begriffe nachschlagen: Glossare und Brain-Seiten unter `docs/` (zum Beispiel `docs/glossar.md`, `docs/harness-glossar.md`), damit ein Szenario die Fachwörter richtig verwendet.
 - Du hast kein Schreib- und kein Shell-Tool und legst keine Datei an; deine Antwort ist der Bericht.
+- Der Frontmatter-Hook `scripts/holdout-guard.mjs` erzwingt das Leseverbot: `Read`, `Grep` und `Glob` sind nur unter `docs/` und für `README.md` erlaubt, `Grep` und `Glob` brauchen einen `path` dort.
 
 ## Ausgabe
 

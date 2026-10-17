@@ -161,7 +161,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
 | Skill | `kubernia` | model: sonnet | `.claude/skills/kubernia/SKILL.md` |
 | Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
-| Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
+| Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent\|SendMessage`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs --danach scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/sandbox-doctor.mjs --sessionstart` | `.claude/settings.json` |
@@ -170,6 +170,8 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `PreToolUse` | matcher: `Read`, `node scripts/forum-leser-guard.mjs` | `.claude/agents/forum-leser.md` |
+| Hook | `PreToolUse` | matcher: `Write`, `node scripts/holdout-guard.mjs abnahme-write` | `.claude/agents/holdout-abnahme.md` |
+| Hook | `PreToolUse` | matcher: `Read\|Grep\|Glob`, `node scripts/holdout-guard.mjs szenario-lesen` | `.claude/agents/holdout-szenario.md` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
 | Plugin | `langfuse-observability` | Marktplatz: langfuse-observability | `.claude/settings.json` |
 | Git-Hook | `post-commit` | — | `.githooks/post-commit` |

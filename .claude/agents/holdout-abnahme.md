@@ -4,6 +4,15 @@ description: Prüft das fertige Ergebnis eines Tickets gegen dessen Akzeptanzkri
 model: opus
 effort: medium
 tools: Read, Grep, Glob, Bash, PowerShell, Write, mcp__playwright__browser_navigate, mcp__playwright__browser_evaluate, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_snapshot, mcp__playwright__browser_press_key, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_resize, mcp__playwright__browser_tabs, mcp__playwright__browser_close, mcp__playwright__browser_handle_dialog
+hooks:
+  PreToolUse:
+    - matcher: "Write"
+      hooks:
+        - type: command
+          command: node
+          args:
+            - ${CLAUDE_PROJECT_DIR}/scripts/holdout-guard.mjs
+            - abnahme-write
 ---
 
 # Abnahme-Agent der Holdout-Abnahme
@@ -21,7 +30,7 @@ Zuerst `git -C <worktree> status --porcelain` (muss leer sein) und `git -C <work
 ## Wie du prüfst
 
 - **Beobachtung statt Lektüre.** Du liest weder den Diff noch Quellcode zur Urteilsbildung noch den Plan oder den PR-Text. Erlaubt sind Aufrufe der öffentlichen Schnittstellen im Worktree: CLI-Skripte mit ihren Argumenten, exportierte Funktionen per absolutem Import aus einem Probe-Skript, `npx vitest run <datei>` mit dem Worktree als Arbeitsverzeichnis, und die Oberfläche im Browser.
-- **Nichts im Worktree schreiben.** Probe-Skripte und Ausgaben legst du nur im übergebenen Scratchpad an (`Write` gilt nur dort). Ignorierte Caches des Werkzeugs zählen nicht als Änderung.
+- **Nichts im Worktree schreiben.** Probe-Skripte und Ausgaben legst du nur im übergebenen Scratchpad an (`Write` gilt nur dort; der Frontmatter-Hook `scripts/holdout-guard.mjs` lehnt jedes `Write` außerhalb des Temp-Verzeichnisses ab, Schreiben per Shell ins Repo fängt die Worktree-Probe der Auswertung). Ignorierte Caches des Werkzeugs zählen nicht als Änderung.
 - **Keine Außenwirkung.** Keine Schreibbefehle von `gh`, kein `git commit/push/checkout/reset/stash`, kein `abnahme.mjs auswerten` (das macht der Hauptchat).
 - **Browser.** Starte für eine Browser-Prüfung einen eigenen Dev-Server aus dem Worktree auf einem freien Port mit `--strictPort`; den Zustand liest du zuerst über den Dev-Zustands-Helfer der Browser-Prüfung (`browser_evaluate`), Screenshots nur für die Optik (mit `filename` im Scratchpad). Danach `browser_close`, den Server per PID beenden (`taskkill /PID <pid> /T /F` bzw. in Git-Bash `taskkill //PID <pid> //T //F`, nie per Name) und prüfen, dass der Port frei ist.
 - Jeder Negativfall der Szenarien wird wirklich ausgeführt.

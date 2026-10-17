@@ -79,6 +79,8 @@
     "/scripts/patch-zugriff.mjs",
     "/scripts/haupt-sync.mjs",
     "/scripts/lens-edit-guard.mjs",
+    "/scripts/holdout-guard.mjs",
+    "/scripts/holdout-auftrag-guard.mjs",
     "/scripts/langfuse-abgleich-hook.mjs",
     "/scripts/langfuse-zugang.mjs",
     "/scripts/langfuse-nachliefern.mjs",
