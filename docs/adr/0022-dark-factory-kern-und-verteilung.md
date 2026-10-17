@@ -225,9 +225,9 @@ F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den B
 - **Nacharbeit** über die im Zeitraum fälligen Fenster `[von − 14 T, bis − 14 T]`: nur abgelaufene Fristen gehen in die Quote.
 - **Lücken statt 0:** kein Zugang, keine Session, keine Calls oder Calls ohne Preis machen die Kosten eines Tickets zur Lücke (keine Teilsumme); sie gehen weder in den Median noch in eine Summe, „n von N gemessen“ nennt die Abdeckung.
 - **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
+- **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.
 
 Präzisiert durch #1756: die Abnahme-Quote ist keine feste Lücke mehr, sie wird aus dem Lauf-Ergebnis gemessen (Fortschreibung #1713, Umsetzungsentscheidungen in #1756).
-- **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.
 
 ## Fortschreibung #1698 (2026-10-16): Reparaturweg statt Einmal-Kommentar (F12)
 

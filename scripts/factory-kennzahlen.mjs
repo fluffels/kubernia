@@ -106,7 +106,7 @@ export function kostenAus({ json, fehler }) {
 
 const ABNAHME_FELDER = ["gemessen", "ersterDurchgang", "entfaellt", "override", "ohne"];
 /** Abnahme-Feld einer Zeile von `lauf-ergebnis.mjs`: null, "entfaellt", "override" oder { durchgaenge: Ganzzahl ≥ 1 }. */
-const abnahmeGueltig = (a) => a === null || a === "entfaellt" || a === "override" || (typeof a === "object" && a !== undefined && Number.isInteger(a.durchgaenge) && a.durchgaenge >= 1);
+const abnahmeGueltig = (a) => a === null || a === "entfaellt" || a === "override" || (typeof a === "object" && Number.isInteger(a.durchgaenge) && a.durchgaenge >= 1);
 
 const FELDER = ["prs", "ohneNacharbeit", "nachweisbareFenster", "nacharbeitOffen", "ciFixSumme", "festgefahrenSumme", "runde1MitBlocker", "mitBlockerFeld"];
 
@@ -174,7 +174,7 @@ function abnahmeAbschnitt(lauf) {
   const overrides = lauf.daten.zeilen.filter((z) => z.abnahme === "override").map((z) => `#${z.pr}`);
   return [
     a.gemessen === 0 ? "- Lücke: keine PR mit Abnahme-Urteil im Zeitraum" : `- ${a.ersterDurchgang} von ${a.gemessen} im ersten Durchgang (${Math.round((a.ersterDurchgang / a.gemessen) * 100)} %)`,
-    `- Nicht in der Quote: entfällt ${a.entfaellt}, Override ${a.override}${overrides.length > 0 ? ` (PR ${overrides.join(", ")})` : ""}, ohne Abnahme-Zeile ${a.ohne}`,
+    `- Nicht in der Quote: entfällt ${a.entfaellt}, Override ${a.override}${overrides.length > 0 ? ` (PR ${overrides.join(", ")})` : ""}, ohne gültige Abnahme-Zeile ${a.ohne}`,
   ];
 }
 

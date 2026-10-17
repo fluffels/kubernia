@@ -271,6 +271,13 @@ describe("Abnahme je PR (#1756)", () => {
   test("Vorrang: Override schlägt eine gültige Abnahme-Zeile", () => {
     assert.equal(ab("KQ-Abnahme-Override: #1755 Sitzung vor den Agenten", urteil(1)), "override");
   });
+  test("Vorrang gilt auch gegenüber entfaellt", () => {
+    assert.equal(ab("KQ-Abnahme-Override: #1755 grund", "KQ-Abnahme: entfaellt — Hand-PR"), "override");
+  });
+  test("Prozent wird gerundet: 2 von 3 sind 67 %", () => {
+    const e = bewerte([nachricht(urteil(1)), nachricht(urteil(1)), nachricht(urteil(2))]);
+    assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 67 %/);
+  });
   test("Widerruf hebt den Override auf, die Abnahme-Zeile zählt wieder", () => {
     assert.deepEqual(ab("KQ-Abnahme-Override: #1755 grund", "KQ-Abnahme-Override: #1755 entfällt", urteil(1)), { durchgaenge: 1 });
   });
@@ -304,7 +311,7 @@ describe("Abnahme je PR (#1756)", () => {
     const a = e.kennzahlen.abnahme as Record<string, number>;
     assert.deepEqual(a, { gemessen: 2, ersterDurchgang: 1, entfaellt: 1, override: 1, ohne: 1 });
     assert.equal(a.gemessen + a.entfaellt + a.override + a.ohne, e.kennzahlen.prs);
-    assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 50 % \(1\/2\); entfällt 1, Override 1, ohne Abnahme-Zeile 1/);
+    assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 50 % \(1\/2\); entfällt 1, Override 1, ohne gültige Abnahme-Zeile 1/);
   });
   test("leer: alle Werte 0, Darstellung ohne Prozent", () => {
     const e = bewerte([]);

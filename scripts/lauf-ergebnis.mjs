@@ -196,7 +196,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   const a = k.abnahme;
-  out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne Abnahme-Zeile ${a.ohne}`);
+  out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne gültige Abnahme-Zeile ${a.ohne}`);
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
   return out.join("\n");
 }

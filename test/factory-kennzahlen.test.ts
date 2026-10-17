@@ -202,8 +202,13 @@ describe("vertragPruefen", () => {
     const ohne: Kennzahlen = { ...KENN };
     delete ohne.abnahme;
     expect(F.vertragPruefen({ zeilen: [], kennzahlen: ohne }).luecke).toMatch(/abnahme/);
-    const teil = { ...(KENN.abnahme as AbnahmeKenn), ersterDurchgang: Number.NaN };
-    expect(F.vertragPruefen({ zeilen: [], kennzahlen: { ...KENN, abnahme: teil } }).luecke).toMatch(/abnahme.ersterDurchgang/);
+    for (const feld of ["gemessen", "ersterDurchgang", "entfaellt", "override", "ohne"]) {
+      const nan = { ...(KENN.abnahme as AbnahmeKenn), [feld]: Number.NaN };
+      expect(F.vertragPruefen({ zeilen: [], kennzahlen: { ...KENN, abnahme: nan } }).luecke).toContain("abnahme." + feld);
+      const weg: Record<string, number> = { ...(KENN.abnahme as AbnahmeKenn) };
+      delete weg[feld];
+      expect(F.vertragPruefen({ zeilen: [], kennzahlen: { ...KENN, abnahme: weg } }).luecke).toContain("abnahme." + feld);
+    }
     const ohneFeld = { ...ZEILE(), abnahme: undefined };
     for (const z of [ohneFeld, ZEILE({ abnahme: { durchgaenge: 0 } }), { ...ZEILE(), abnahme: "x" }, ZEILE({ abnahme: { durchgaenge: 1.5 } })]) {
       expect(F.vertragPruefen({ zeilen: [z], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
@@ -251,7 +256,7 @@ describe("Abnahme-Quote (#1756)", () => {
     expect(lage.daten).toBeDefined();
     const a = md(lage);
     expect(a).toContain("- 1 von 2 im ersten Durchgang (50 %)");
-    expect(a).toContain("- Nicht in der Quote: entfällt 1, Override 1 (PR #4), ohne Abnahme-Zeile 1");
+    expect(a).toContain("- Nicht in der Quote: entfällt 1, Override 1 (PR #4), ohne gültige Abnahme-Zeile 1");
   });
   test("Negativfall: ohne Abnahme-Urteil steht eine Lücke mit Grund, nie 0 %", () => {
     const lage = F.vertragPruefen(echt([body("nichts"), body("KQ-Abnahme: entfaellt — Hand-PR")]));
@@ -259,6 +264,8 @@ describe("Abnahme-Quote (#1756)", () => {
     expect(a).toContain("- Lücke: keine PR mit Abnahme-Urteil im Zeitraum");
     expect(a).not.toMatch(/0 %/);
     expect(a).not.toContain("im ersten Durchgang");
+    expect(a).toContain("- Nicht in der Quote: entfällt 1, Override 0, ohne gültige Abnahme-Zeile 1");
+    expect(a).not.toContain("(PR");
   });
   test("K3: fehlt das Aggregat oder das Zeilenfeld im echten bewertePrs-Ergebnis, endet erstelle mit Exit 2", () => {
     const erstelle = (raw as unknown as { erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]> }) => { bericht: { lauf: Lage }; exit: number } }).erstelle;
