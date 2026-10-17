@@ -205,20 +205,32 @@ describe("stop-verify-hook: Namen aus der Config", () => {
     expect(r.exit).toBe(0);
     expect(namen?.praefixe.worktree).toBe("ab-");
   });
-  test("echter Lader: eine Config-Datei ohne agenten.umsetzer blockt den Stop des Hauptchats nicht, SubagentStop und der volle Lader schon", () => {
+  test("echter Lader: eine Config-Datei ohne agenten.umsetzer blockt den Stop des Hauptchats nicht; SubagentStop (volle Config) und der volle Lader schon", () => {
     const dir = mkdtempSync(join(tmpdir(), "lz-cfg-"));
     try {
       const echt = JSON.parse(lies(".factory/projekt.json")) as { agenten: Record<string, unknown> };
       delete echt.agenten.umsetzer;
+      (echt as unknown as { praefixe: { worktree: string } }).praefixe.worktree = "zz-";
       const pfad = join(dir, "projekt.json");
       writeFileSync(pfad, JSON.stringify(echt));
       let namen: Namen | undefined;
       const r = S.runHook('{"hook_event_name":"Stop"}', "/x", (_root, d) => ((namen = d?.namen), { blocked: false }), { pfad });
       expect(r.exit).toBe(0);
-      expect(namen?.praefixe.worktree).toBe((echt as unknown as { praefixe: { worktree: string } }).praefixe.worktree);
+      expect(namen?.praefixe.worktree).toBe("zz-"); // aus der Temp-Datei, nicht aus der echten Config
       expect(S.runHook('{"hook_event_name":"SubagentStop","agent_type":"x"}', "/x", () => ({ blocked: false }), { config: echt }).exit).toBe(2);
       expect(() => ladeProjektConfig({ pfad })).toThrow(/agenten\.umsetzer/);
       expect(() => ladeProjektConfig({ pfad, pruefen: false })).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("eine Config-Datei mit Inhalt null: Grund mit Schlüssel und Fix-Zeile statt TypeError", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lz-null-"));
+    try {
+      const pfad = join(dir, "projekt.json");
+      writeFileSync(pfad, "null");
+      LIES_FEHLER(worktreeNamenOderGrund("T", { pfad }).grund ?? "");
+      expect(S.runHook('{"hook_event_name":"Stop"}', "/x", () => ({ blocked: false }), { pfad }).exit).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
