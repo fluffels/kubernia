@@ -71,7 +71,7 @@ function bewerteHead(a, review, abnahmeHead) {
   } else if (a.durchgaenge > review.runden) {
     fehler.push(
       `durchgaenge=${a.durchgaenge} ist größer als runden=${review.runden}: jeder Abnahme-Durchgang nach der Konvergenz zählt als Pass, ` +
-        `die Review-Zeile muss runden >= durchgaenge tragen (Cap 4 Pässe, darüber nur mit Zusatzpass).`,
+        `die Review-Zeile muss runden >= durchgaenge tragen (Cap ${MAX_REVIEW_PAESSE} Pässe,darüber nur mit Zusatzpass).`,
     );
   }
   if (!abnahmeHead.bekannt) return [...fehler, `Abnahme: head=${a.head} ist kein bekannter Commit.`];
