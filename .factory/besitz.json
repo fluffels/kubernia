@@ -23,6 +23,8 @@
     {"pfad":"scripts/docs-gen/zeitleiste.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/docs-gen/schichten.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".claude/agents/explore.md","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":".claude/agents/holdout-szenario.md","ring":"kern","quelle":"ADR 0022 F13 (#1754)"},
+    {"pfad":".claude/agents/holdout-abnahme.md","ring":"kern","quelle":"ADR 0022 F13 (#1754)"},
     {"pfad":".claude/agents/kubernia-lens.md","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".githooks/pre-push","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".githooks/post-commit","ring":"kern","quelle":"Plan #1699 (Regel ADR 0022 §1)"},

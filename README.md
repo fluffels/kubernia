@@ -55,6 +55,7 @@ flowchart TD
   board["Board: oberstes freies Ticket"]
   claim["Claim: self-assign, verifizieren"]
   wt["Worktree von origin/main"]
+  szen["Szenarien (nur Tickets mit Kriterien)<br/>holdout-szenario"]
   plan["Plan<br/>kubernia-planner"]
   epic{"zu groß für eine Session?"}
   kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
@@ -66,7 +67,10 @@ flowchart TD
   lenses{"Lenses ohne Blocker?<br/>kubernia-lens"}
   fix["Fix-Runde"]
   handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
-  pr["PR + Auto-Merge"]
+  entwurf["Entwurfs-PR ohne Auto-Merge"]
+  abnahme{"Abnahme bestanden?<br/>holdout-abnahme"}
+  handoff2["Hand-off: festgefahren<br/>(nicht prüfbar, Abnahme)"]
+  pr["gh pr ready + Auto-Merge"]
   ci{"CI grün?"}
   fest["Label status:festgefahren,<br/>ein Kommentar mit Optionen"]
   merge["Merge (squash)"]
@@ -74,7 +78,7 @@ flowchart TD
   alarm["Alarm-Issue: CI rot auf main"]
   forum["Forum-Eingang<br/>Skill forum<br/>liest nur forum-leser"]
 
-  board --> claim --> plan --> epic
+  board --> claim --> szen --> plan --> epic
   epic -- ja --> kinder --> board
   epic -- nein --> pre
   pre -- ja --> frage --> wt
@@ -86,7 +90,10 @@ flowchart TD
   verify -- ja --> lenses
   lenses -- "Blocker, Runde unter 2" --> fix --> lenses
   lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
-  lenses -- ja --> pr
+  lenses -- ja --> entwurf --> abnahme
+  abnahme -- "nicht erfüllt: Fix-Runde zählt gegen das Cap" --> fix
+  abnahme -- "nicht prüfbar" --> handoff2
+  abnahme -- ja --> pr
   pr --> ci
   ci -- "rot, unter 4 roten Commits" --> umsetzen
   ci -- "4 rote Commits (festgefahren.yml)" --> fest
@@ -97,8 +104,8 @@ flowchart TD
 
   classDef schleife fill:#f3e3c3,stroke:#8a6a3f,color:#2b2118
   classDef stopp fill:#f2c9c0,stroke:#9a4a3a,color:#2b2118
-  class verify,lenses,ci schleife
-  class handoff,fest,alarm stopp
+  class verify,lenses,abnahme,ci schleife
+  class handoff,handoff2,fest,alarm stopp
 ```
 
 <!-- GEN:agenten-ablauf END -->
@@ -130,7 +137,7 @@ In Zahlen (aus dem Repo gezählt, die Zählregel steht je Zeile in der Tabelle):
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | ≥ 130 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
-| Wächter-Tests | ≥ 80 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
+| Wächter-Tests | ≥ 90 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 29 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -145,6 +152,8 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 |---|---|---|---|
 | Subagent | `Explore` | model: haiku, effort: low | `.claude/agents/explore.md` |
 | Subagent | `forum-leser` | model: sonnet, effort: medium | `.claude/agents/forum-leser.md` |
+| Subagent | `holdout-abnahme` | model: opus, effort: medium | `.claude/agents/holdout-abnahme.md` |
+| Subagent | `holdout-szenario` | model: opus, effort: medium | `.claude/agents/holdout-szenario.md` |
 | Subagent | `kubernia-gruppe` | model: sonnet, effort: medium | `.claude/agents/kubernia-gruppe.md` |
 | Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/kubernia-lens.md` |
 | Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/kubernia-planner.md` |

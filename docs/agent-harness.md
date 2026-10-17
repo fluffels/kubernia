@@ -22,7 +22,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | ≥ 130 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
-| Wächter-Tests | ≥ 80 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
+| Wächter-Tests | ≥ 90 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 13 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 29 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -325,6 +325,7 @@ flowchart TD
   board["Board: oberstes freies Ticket"]
   claim["Claim: self-assign, verifizieren"]
   wt["Worktree von origin/main"]
+  szen["Szenarien (nur Tickets mit Kriterien)<br/>holdout-szenario"]
   plan["Plan<br/>kubernia-planner"]
   epic{"zu groß für eine Session?"}
   kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
@@ -336,7 +337,10 @@ flowchart TD
   lenses{"Lenses ohne Blocker?<br/>kubernia-lens"}
   fix["Fix-Runde"]
   handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
-  pr["PR + Auto-Merge"]
+  entwurf["Entwurfs-PR ohne Auto-Merge"]
+  abnahme{"Abnahme bestanden?<br/>holdout-abnahme"}
+  handoff2["Hand-off: festgefahren<br/>(nicht prüfbar, Abnahme)"]
+  pr["gh pr ready + Auto-Merge"]
   ci{"CI grün?"}
   fest["Label status:festgefahren,<br/>ein Kommentar mit Optionen"]
   merge["Merge (squash)"]
@@ -344,7 +348,7 @@ flowchart TD
   alarm["Alarm-Issue: CI rot auf main"]
   forum["Forum-Eingang<br/>Skill forum<br/>liest nur forum-leser"]
 
-  board --> claim --> plan --> epic
+  board --> claim --> szen --> plan --> epic
   epic -- ja --> kinder --> board
   epic -- nein --> pre
   pre -- ja --> frage --> wt
@@ -356,7 +360,10 @@ flowchart TD
   verify -- ja --> lenses
   lenses -- "Blocker, Runde unter 2" --> fix --> lenses
   lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
-  lenses -- ja --> pr
+  lenses -- ja --> entwurf --> abnahme
+  abnahme -- "nicht erfüllt: Fix-Runde zählt gegen das Cap" --> fix
+  abnahme -- "nicht prüfbar" --> handoff2
+  abnahme -- ja --> pr
   pr --> ci
   ci -- "rot, unter 4 roten Commits" --> umsetzen
   ci -- "4 rote Commits (festgefahren.yml)" --> fest
@@ -367,8 +374,8 @@ flowchart TD
 
   classDef schleife fill:#f3e3c3,stroke:#8a6a3f,color:#2b2118
   classDef stopp fill:#f2c9c0,stroke:#9a4a3a,color:#2b2118
-  class verify,lenses,ci schleife
-  class handoff,fest,alarm stopp
+  class verify,lenses,abnahme,ci schleife
+  class handoff,handoff2,fest,alarm stopp
 ```
 
 <!-- GEN:agenten-ablauf END -->
@@ -455,6 +462,8 @@ sequenceDiagram
   autonumber
   actor M as Maintainerin
   participant H as Hauptchat<br/>Skill kubernia · sonnet · medium
+  participant S as holdout-szenario<br/>opus · medium
+  participant A as holdout-abnahme<br/>opus · medium
   participant P as kubernia-planner<br/>opus · xhigh
   participant E as Explore<br/>haiku · low
   participant U as kubernia-umsetzer<br/>sonnet · medium
@@ -465,6 +474,10 @@ sequenceDiagram
   participant CI as CI und Required Checks
 
   H->>H: Ticket wählen und claimen
+  opt Ticket mit Akzeptanzkriterien
+    H->>S: Ticket und Kriterien
+    S-->>H: Szenarien (bleiben im Hauptchat)
+  end
   H->>P: Ticket planen
   opt breite Suche
     P->>E: Fundstellen suchen
@@ -496,7 +509,14 @@ sequenceDiagram
     L3-->>U: Befunde
     U->>U: Blocker beheben
   end
-  U->>CI: PR mit Auto-Merge
+  opt Ticket mit Akzeptanzkriterien
+    U->>CI: Entwurfs-PR ohne Auto-Merge
+    U-->>H: ERGEBNIS abnahme
+    H->>A: Kriterien, Szenarien, PR, Worktree, head
+    A-->>H: Bericht je Kriterium
+    H-->>U: bestanden, fix oder handoff
+  end
+  U->>CI: PR bereit, Auto-Merge
   CI-->>U: grün: Merge, rot: Fix auf demselben Branch
   U-->>H: Bericht mit Ergebnis
   H-->>M: Zusammenfassung

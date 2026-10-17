@@ -316,3 +316,14 @@ Umsetzungsentscheidungen in #1753:
 - **Kriterium K<i>** ist die Position im Abschnitt, nicht die Ziffer des Autors; Unterpunkte und Folgezeilen gehören zum Oberpunkt.
 - **Ticket ohne Kriterien:** `kriterien` liefert die `entfaellt`-Zeile (Exit 0), `auswerten` endet mit Exit 2.
 - **Hand-off-Hinweis:** der Reparaturweg `spezifikation.mjs reparieren` greift nur bei unvollständiger Spezifikation (verweigert Tickets mit Assignee und umformulierte Zeilen); ein nicht prüfbares Kriterium präzisiert die Maintainerin, das Verfahren klärt #1754.
+
+Umsetzungsentscheidungen in #1754 (präzisiert: das Marker-Format aus #1753 liegt seit #1762 in `scripts/nachweis-lib.mjs`, nicht mehr in `scripts/slice-override.mjs`):
+
+- **Nachbessern von „nicht prüfbar“ ist Handarbeit:** kein Kriterien-Modus für `spezifikation.mjs reparieren`. Ein Kriterium ist die Anforderung; ein Modus ließe denselben Lauf, der an ihm scheitert, seinen Maßstab umschreiben (Grün-durch-Aufweichen, bricht die Holdout-Trennung). Der Hand-off-Kommentar von `abnahme.mjs` geht an die Maintainerin, sie präzisiert den Body, danach läuft das Ticket weiter.
+- **Agentennamen bleiben eine Konstante** (`ABNAHME_AGENT`), nicht in `agenten` der Projekt-Config: jeder `agenten`-Wert zählt in der Kern-Reinheit als Projektliteral, und kein Hook braucht den Typnamen.
+- **Hand-off ohne Deduplizierung:** er beendet den Lauf; ein zweiter Kommentar entsteht nur in einem neuen Lauf nach geänderter Spezifikation.
+- **Fix-Runde:** eine Abnahme-Fix-Runde nutzt denselben Zähler, dasselbe Cap und denselben Zusatzpass wie der Review; „Cap erschöpft“ heißt nach dem Zusatzpass, dann `festgefahren` mit `FESTGEFAHREN: review`.
+- **Wiederholung:** genau ein Neuversuch je Durchgang bei Abbruch (Werkzeug) oder ungültigem Bericht, danach `FESTGEFAHREN: abnahme` plus Harness-Zeile; fällt der Szenario-Agent aus, läuft die Abnahme nach einem Neuversuch allein gegen die Kriterien.
+- **Wächter R8:** `FESTGEFAHREN: abnahme` verlangt einen Entwurf ohne Auto-Merge (statt des Labels); gh-Fehler geben frei.
+- **Übergang:** #1754 selbst läuft ohne Abnahme, weil die neuen Agenten in der laufenden Session nicht geladen sind; die CI erzwingt die Zeile erst mit #1755.
+- **Ehrliche Grenze:** erzwungen sind nur die statischen Wächter (Vorlagen, Tool-Mengen, Abschluss-Token) und die Worktree-Prüfung nach der Abnahme; ein Laufzeit-Guard gegen Szenarien in fremden Prompts und gegen Schreibzugriffe des Abnahme-Agenten außerhalb seines Scratchpads steht als Harness-Zeile aus.

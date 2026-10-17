@@ -2,6 +2,7 @@ flowchart TD
   board["Board: oberstes freies Ticket"]
   claim["Claim: self-assign, verifizieren"]
   wt["Worktree von origin/main"]
+  szen["Szenarien (nur Tickets mit Kriterien)<br/>${agent:holdout-szenario}"]
   plan["Plan<br/>${agent:kubernia-planner}"]
   epic{"zu groß für eine Session?"}
   kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
@@ -13,7 +14,10 @@ flowchart TD
   lenses{"Lenses ohne Blocker?<br/>${agent:kubernia-lens}"}
   fix["Fix-Runde"]
   handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
-  pr["PR + Auto-Merge"]
+  entwurf["Entwurfs-PR ohne Auto-Merge"]
+  abnahme{"Abnahme bestanden?<br/>${agent:holdout-abnahme}"}
+  handoff2["Hand-off: festgefahren<br/>(nicht prüfbar, Abnahme)"]
+  pr["gh pr ready + Auto-Merge"]
   ci{"CI grün?"}
   fest["Label status:festgefahren,<br/>ein Kommentar mit Optionen"]
   merge["Merge (squash)"]
@@ -21,7 +25,7 @@ flowchart TD
   alarm["Alarm-Issue: CI rot auf main"]
   forum["Forum-Eingang<br/>Skill ${skill:forum}<br/>liest nur ${agent:forum-leser}"]
 
-  board --> claim --> plan --> epic
+  board --> claim --> szen --> plan --> epic
   epic -- ja --> kinder --> board
   epic -- nein --> pre
   pre -- ja --> frage --> wt
@@ -33,7 +37,10 @@ flowchart TD
   verify -- ja --> lenses
   lenses -- "Blocker, Runde unter ${konstante:lensCap}" --> fix --> lenses
   lenses -- "Cap von ${konstante:lensCap} Fix-Runden erreicht" --> handoff
-  lenses -- ja --> pr
+  lenses -- ja --> entwurf --> abnahme
+  abnahme -- "nicht erfüllt: Fix-Runde zählt gegen das Cap" --> fix
+  abnahme -- "nicht prüfbar" --> handoff2
+  abnahme -- ja --> pr
   pr --> ci
   ci -- "rot, unter ${konstante:festgefahrenCommits} roten Commits" --> umsetzen
   ci -- "${konstante:festgefahrenCommits} rote Commits (festgefahren.yml)" --> fest
@@ -44,5 +51,5 @@ flowchart TD
 
   classDef schleife fill:#f3e3c3,stroke:#8a6a3f,color:#2b2118
   classDef stopp fill:#f2c9c0,stroke:#9a4a3a,color:#2b2118
-  class verify,lenses,ci schleife
-  class handoff,fest,alarm stopp
+  class verify,lenses,abnahme,ci schleife
+  class handoff,handoff2,fest,alarm stopp

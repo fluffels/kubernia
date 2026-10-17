@@ -23,7 +23,7 @@ import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 
 const ladeProjektConfig = () => (pcRaw as unknown as { ladeProjektConfig: () => { labels: { festgefahren: string } } }).ladeProjektConfig();
 
-type Status = { state: string; autoMergeRequest: object | null; labels?: { name: string }[] };
+type Status = { state: string; autoMergeRequest: object | null; labels?: { name: string }[]; isDraft?: boolean };
 type Eingabe = { hookEvent?: string; agentType?: string; toolName?: string; lastMessage?: string | null };
 const abschluss = abschlussRaw as unknown as {
   abschlussBlockade: (i: Eingabe, d?: { prStatus?: (nr: string) => Status }) => string | null;
@@ -34,6 +34,8 @@ const abschluss = abschlussRaw as unknown as {
   ghPrDateien: (nr: string, status?: { files?: { path: string }[] }, diff?: (nr: string) => string) => string[];
   ghPrKommentare: (nr: string, status?: object, ansicht?: (nr: string) => object) => object;
   PR_FELDER: string;
+  FESTGEFAHREN_ARTEN: string[];
+  parseAbnahme: (t: string) => { head: string; worktree: string } | null;
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
   letzteNachrichtAusTranskript: (p: string) => string | null;
 };
@@ -341,7 +343,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     const format = /^ERGEBNIS: (.+)$/m.exec(abschnitt(UMSETZER, /^## Letzte Nachricht/).split("```")[1])?.[1].split(" | ");
     assert.deepEqual(abschluss.ERGEBNIS_WERTE, format);
     // gh pr view muss die Felder liefern, die R1 bis R3 lesen; fehlte `labels`, verweigerte R3 jedes festgefahren (alle Tests injizieren prStatus).
-    assert.deepEqual([...abschluss.PR_FELDER.split(",")].sort(), ["author", "autoMergeRequest", "comments", "files", "labels", "state"]);
+    assert.deepEqual([...abschluss.PR_FELDER.split(",")].sort(), ["author", "autoMergeRequest", "comments", "files", "isDraft", "labels", "state"]);
     assert.match(readFileSync(resolve(ROOT, "scripts/umsetzer-abschluss.mjs"), "utf8"), /"--json", PR_FELDER/);
   });
 
@@ -423,6 +425,83 @@ describe("uebergabe: Phasen-Schnitt (#1592)", () => {
     assert.match(block, /SCHNITT: .*pr.*verify|SCHNITT: .*verify.*pr/);
     assert.match(block, /^UEBERGABE:/m);
     assert.deepEqual((abschluss as unknown as { SCHNITTE: string[] }).SCHNITTE, ["pr", "verify"]);
+  });
+});
+
+describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
+  const NL = String.fromCharCode(10);
+  const PR = "https://github.com/x/y/pull/9";
+  const SHA = "0123456789abcdef0123456789abcdef01234567";
+  const abnahme = (zeile: string | null = `ABNAHME: head=${SHA} worktree=/w/kq-1`, pr = PR) => [`ERGEBNIS: abnahme`, "TICKET: #1", `PR: ${pr}`, "BEFUNDE: keine", ...(zeile === null ? [] : [zeile])].join(NL);
+  const entwurf = () => ({ state: "OPEN", autoMergeRequest: null, isDraft: true });
+  const keinGh = () => {
+    throw new Error("kein gh");
+  };
+
+  test("parseErgebnis kennt das Token; parseAbnahme liest head und Worktree (Rest der Zeile, auch mit Leerzeichen)", () => {
+    assert.equal(parseErgebnis(abnahme()).token, "abnahme");
+    assert.deepEqual(abschluss.parseAbnahme(abnahme()), { head: SHA, worktree: "/w/kq-1" });
+    assert.deepEqual(abschluss.parseAbnahme(abnahme(`ABNAHME: head=abc1234 worktree=C:/dev/mein ordner/w`)), { head: "abc1234", worktree: "C:/dev/mein ordner/w" });
+  });
+
+  test("parseAbnahme: fehlende Zeile, zu kurzer oder kein Hex-Head, fehlender Worktree, Zeile mitten im Satz sind null", () => {
+    assert.equal(abschluss.parseAbnahme(abnahme(null)), null);
+    assert.equal(abschluss.parseAbnahme(abnahme("ABNAHME: head=abc123 worktree=/w")), null, "6 Zeichen sind zu kurz");
+    assert.equal(abschluss.parseAbnahme(abnahme(`ABNAHME: head=${SHA}0 worktree=/w`)), null, "41 Zeichen sind zu lang");
+    assert.equal(abschluss.parseAbnahme(abnahme("ABNAHME: head=xyzxyzxyz worktree=/w")), null);
+    assert.equal(abschluss.parseAbnahme(abnahme(`ABNAHME: head=${SHA}`)), null);
+    assert.equal(abschluss.parseAbnahme(abnahme(`Text ABNAHME: head=${SHA} worktree=/w`)), null);
+  });
+
+  test("R7: Entwurf ohne Auto-Merge mit ABNAHME-Zeile ist frei, in beiden Ereignissen", () => {
+    assert.equal(blockade(eingabe(abnahme()), { prStatus: entwurf }), null);
+    assert.equal(blockade(vorher(abnahme()), { prStatus: entwurf }), null);
+  });
+
+  test("R7: ohne ABNAHME-Zeile, ohne PR-Nummer, mit Auto-Merge, ohne Entwurf oder bei MERGED/CLOSED blockiert", () => {
+    for (const mk of [eingabe, vorher]) {
+      assert.match(blockade(mk(abnahme(null)), { prStatus: entwurf }) ?? "", /ABNAHME:-Zeile fehlt oder ist ungültig/);
+      assert.match(blockade(mk(abnahme("ABNAHME: head=zz worktree=/w")), { prStatus: entwurf }) ?? "", /ABNAHME:-Zeile fehlt oder ist ungültig/);
+      assert.match(blockade(mk(abnahme(undefined, "-")), { prStatus: keinGh }) ?? "", /braucht eine PR:-Zeile/);
+      assert.match(blockade(mk(abnahme()), { prStatus: () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, isDraft: true }) }) ?? "", /Auto-Merge ja/);
+      assert.match(blockade(mk(abnahme()), { prStatus: () => ({ state: "OPEN", autoMergeRequest: null, isDraft: false }) }) ?? "", /Entwurf nein/);
+      for (const state of ["MERGED", "CLOSED"]) assert.match(blockade(mk(abnahme()), { prStatus: () => ({ state, autoMergeRequest: null, isDraft: true }) }) ?? "", new RegExp(`Status ${state}`));
+    }
+  });
+
+  test("R7: gh-Fehler und leerer Status geben frei (fail-open); R1 bis R3 feuern für abnahme nicht", () => {
+    assert.equal(blockade(eingabe(abnahme()), { prStatus: keinGh }), null);
+    assert.equal(blockade(eingabe(abnahme()), { prStatus: () => null as unknown as Status }), null);
+    assert.equal(blockade(eingabe(abnahme()), { prStatus: entwurf }), null, "kein Label verlangt");
+  });
+
+  test("R0 gilt weiter: abnahme mit Zusatz oder ohne PR-Zeile wird vor der Zustellung verweigert", () => {
+    assert.match(blockade(vorher(abnahme().replace("abnahme", "abnahme (bereit)")), { prStatus: keinGh }) ?? "", /Zusatz hinter dem Token/);
+    assert.match(blockade(vorher(abnahme().split("PR: " + PR).join("")), { prStatus: keinGh }) ?? "", /PR:-Zeile fehlt/);
+  });
+
+  const stuckAbnahme = (pr = PR) => bericht("festgefahren", pr) + "FESTGEFAHREN: abnahme" + NL;
+  test("R8: festgefahren/abnahme braucht kein Label am Entwurf ohne Auto-Merge, in beiden Ereignissen", () => {
+    assert.equal(blockade(eingabe(stuckAbnahme()), { prStatus: entwurf }), null);
+    assert.equal(blockade(vorher(stuckAbnahme()), { prStatus: entwurf }), null);
+    assert.equal(parseErgebnis(stuckAbnahme()).festgefahren, "abnahme");
+  });
+
+  test("R8: festgefahren/abnahme bei Auto-Merge oder ohne Entwurf wird abgelehnt; gh-Fehler, ohne PR und MERGED/CLOSED frei", () => {
+    assert.match(blockade(eingabe(stuckAbnahme()), { prStatus: () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, isDraft: true }) }) ?? "", /FESTGEFAHREN: abnahme.*Auto-Merge ja/);
+    assert.match(blockade(eingabe(stuckAbnahme()), { prStatus: () => ({ state: "OPEN", autoMergeRequest: null, isDraft: false }) }) ?? "", /Entwurf nein/);
+    assert.equal(blockade(eingabe(stuckAbnahme()), { prStatus: keinGh }), null);
+    assert.equal(blockade(eingabe(stuckAbnahme("-")), { prStatus: keinGh }), null);
+    for (const state of ["MERGED", "CLOSED"]) assert.equal(blockade(eingabe(stuckAbnahme()), { prStatus: () => ({ state, autoMergeRequest: null, isDraft: false }) }), null, state);
+  });
+
+  test("Bindungen: FESTGEFAHREN_ARTEN, ABNAHME-Zeile und Entwurf-Befehle stehen im Formatblock und in der Umsetzer-Definition", () => {
+    assert.deepEqual(abschluss.FESTGEFAHREN_ARTEN, ["review", "ci", "abnahme"]);
+    const block = abschnitt(UMSETZER, /^## Letzte Nachricht/).split("```")[1] ?? "";
+    assert.match(block, /^ABNAHME:/m);
+    assert.match(block, /FESTGEFAHREN: .*review.*ci.*abnahme/);
+    assert.match(UMSETZER, /gh pr create --draft/);
+    assert.match(UMSETZER, /gh pr ready/);
   });
 });
 
