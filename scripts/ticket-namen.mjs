@@ -18,6 +18,9 @@ export function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
 }
 
+/** Muster eines Lens-Worktree-Namens aus dem (rohen) Worktree-Präfix; Gruppe 1 ist `<wt><nr>`. */
+const lensKern = (worktree) => String.raw`(${escapeRegex(worktree)}\d+)-lens-[rm]\d+`;
+
 /** Pur: leitet die Namen aus einer Config ab; wirft mit Schlüssel und Fix-Zeile, wenn ein benötigter Schlüssel fehlt. */
 export function ticketNamen(config) {
   const fehlend = [];
@@ -41,7 +44,7 @@ export function ticketNamen(config) {
     worktreeName: (nr) => `${worktree}${nr}`,
     branchName: (nr, slug) => `${branch}${nr}-${slug}`,
     /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>` oder `-lens-m<n>`); Gruppe 1 ist `<wt><nr>`. */
-    lensNameKern: String.raw`(${w}\d+)-lens-[rm]\d+`,
+    lensNameKern: lensKern(worktree),
     /** Ticketnummer aus Branch-, Worktree- oder Ref-Namen; sonst null. */
     ticketAus: (text) => {
       const m = ticketRef.exec(String(text ?? ""));
@@ -54,6 +57,24 @@ export function ticketNamen(config) {
       delta: new RegExp(String.raw`\S*${w}\d+-r\d+-delta\.patch(?![\w-])`, "i"),
     },
   };
+}
+
+/**
+ * Wie `namenOderGrund`, aber nur mit dem Worktree-Präfix: `{ namen: { praefixe: { worktree }, lensNameKern } }` oder `{ grund }`. Für Werkzeuge, die nur
+ * Worktree-Ordner aufräumen (Stop des Hauptchats): ein fehlender Agentenname soll sie nicht blockieren. Wirft nie.
+ */
+export function worktreeNamenOderGrund(werkzeug, deps = {}) {
+  try {
+    const config = deps.config ?? ladeProjektConfig();
+    const worktree = config?.praefixe?.worktree;
+    if (!istText(worktree)) {
+      throw new Error(`Projekt-Config unvollständig: praefixe.worktree fehlt\nFix: praefixe.worktree in ${PROJEKT_CONFIG} ergänzen`);
+    }
+    return { namen: { praefixe: { worktree }, lensNameKern: lensKern(worktree) } };
+  } catch (e) {
+    const text = e instanceof Error ? e.message : String(e);
+    return { grund: `${werkzeug}: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ${text}` };
+  }
 }
 
 /** Lädt die Config und leitet die Namen ab; wirft wie `ladeProjektConfig` bzw. `ticketNamen`. */

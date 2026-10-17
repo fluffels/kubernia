@@ -36,6 +36,7 @@ import * as boardRaw from "../../scripts/board-lib.mjs";
 type Cfg = Record<string, unknown>;
 type Namen = { praefixe: { branch: string; worktree: string } };
 const ticketNamen = (namenRaw as unknown as { ticketNamen: (c: Cfg) => Namen }).ticketNamen;
+const worktreeNamenOderGrund = (namenRaw as unknown as { worktreeNamenOderGrund: (w: string, d?: { config?: Cfg }) => { namen?: Namen & { lensNameKern: string }; grund?: string } }).worktreeNamenOderGrund;
 const R = refsRaw as unknown as {
   ticketAusRef: (t: string, n?: Namen) => number | null;
   belegteNummern: (e: { refs?: string[]; worktrees?: string[]; prHeads?: string[] }, n?: Namen) => Set<number>;
@@ -193,6 +194,24 @@ describe("stop-verify-hook: Namen aus der Config", () => {
     const r = S.runHook('{"hook_event_name":"Stop"}', "/x", (_root, d) => ((namen = d?.namen), { blocked: false }), { config: AB });
     expect(r.exit).toBe(0);
     expect(namen?.praefixe.worktree).toBe("ab-");
+  });
+  test("der Stop des Hauptchats braucht nur praefixe.worktree: ein fehlender Agentenname blockt ihn nicht", () => {
+    let namen: Namen | undefined;
+    const ohneUmsetzer = { ...AB, agenten: { ...(AB.agenten as object), umsetzer: undefined } };
+    const r = S.runHook('{"hook_event_name":"Stop"}', "/x", (_root, d) => ((namen = d?.namen), { blocked: false }), { config: ohneUmsetzer });
+    expect(r.exit).toBe(0);
+    expect(namen?.praefixe.worktree).toBe("ab-");
+  });
+  test("SubagentStop braucht dagegen die volle Config (fehlender Agentenname blockt)", () => {
+    const ohneUmsetzer = { ...AB, agenten: { ...(AB.agenten as object), umsetzer: undefined } };
+    expect(S.runHook('{"hook_event_name":"SubagentStop","agent_type":"x"}', "/x", () => ({ blocked: false }), { config: ohneUmsetzer }).exit).toBe(2);
+  });
+  test("worktreeNamenOderGrund: liefert Präfix und Lens-Muster, ohne Schlüssel einen Grund mit Fix-Zeile", () => {
+    const r = worktreeNamenOderGrund("T", { config: { praefixe: { worktree: "a.b-" } } });
+    expect(r.namen?.praefixe.worktree).toBe("a.b-");
+    expect(new RegExp(`^${r.namen?.lensNameKern}$`).test("a.b-3-lens-r1")).toBe(true);
+    expect(new RegExp(`^${r.namen?.lensNameKern}$`).test("aXb-3-lens-r1")).toBe(false);
+    LIES_FEHLER(worktreeNamenOderGrund("T", { config: OHNE_WT }).grund ?? "");
   });
   test("stop_hook_active gibt auch bei kaputter Config frei (keine Schleife)", () => {
     expect(S.runHook('{"hook_event_name":"Stop","stop_hook_active":true}', "/x", () => ({ blocked: true, reason: "x" }), { config: OHNE_WT }).exit).toBe(0);

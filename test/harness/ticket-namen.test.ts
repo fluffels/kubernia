@@ -245,10 +245,10 @@ describe("stop-verify-hook ersetzt den Matcher durch den Vergleich mit agenten.u
   test("ohne Schlüssel blockiert auch das SubagentStop eines fremden Agenten (fail-closed)", () => {
     expect(lauf({ hook_event_name: "SubagentStop", agent_type: "Explore" }, OHNE_UMSETZER).r.exit).toBe(2);
   });
-  test("auch der Stop des Hauptchats braucht die Config (Worktree-Präfix, #1743) und blockt ohne sie fail-closed", () => {
+  test("der Stop des Hauptchats braucht die Config nicht und prüft weiter", () => {
     const { r, geprueft } = lauf({ hook_event_name: "Stop" }, OHNE_UMSETZER);
-    expect(r.exit).toBe(2);
-    expect(geprueft).toBe(0);
+    expect(r.exit).toBe(0);
+    expect(geprueft).toBe(1);
   });
 });
 
