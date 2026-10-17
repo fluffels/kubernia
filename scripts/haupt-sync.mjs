@@ -214,7 +214,7 @@ const git = (dir, args, opts = {}) =>
   execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: opts.timeout ?? 8_000 }).trim();
 
 /** Die ganze Ablaufkette gegen ein echtes Repo in `dir` (nur CLI). Wirft nie; Fehler landen in `notiz`. */
-export function fuehreSyncAus(dir) {
+export function fuehreSyncAus(dir, deps = {}) {
   const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: "", branch: "", sauber: undefined };
   try {
     ergebnis.basis = git(dir, ["rev-parse", "HEAD"]);
@@ -234,9 +234,10 @@ export function fuehreSyncAus(dir) {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
       // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
-      const grund = configGrund();
+      const { namen, grund } = namenOderGrund("haupt-sync", deps);
       if (grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${grund}`;
-      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean), grund ? null : undefined);
+      const skillVerzeichnis = grund ? null : `.claude/skills/${namen.agenten.ticketSkill}/`;
+      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean), skillVerzeichnis);
     }
   } catch (e) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;

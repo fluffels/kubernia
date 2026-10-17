@@ -61,7 +61,7 @@ import {
 
 /**
  * `--branches [--fix]`: gemergte lokale Ticket-Branches aufräumen (#1579); ohne `--fix` nur die Liste. Nie im Stop-Hook.
- * Liefert den Exit-Code (0 = ok, 1 = Abbruch oder Löschfehler) statt `process.exit`; `config` (oder fertige `namen`), `git`, `gh`, `out` und `err` sind injizierbar (Tests).
+ * Liefert den Exit-Code (0 = ok, 1 = Abbruch oder Löschfehler) statt `process.exit`; `config` (oder fertige `namen`), `git`, `gh` (oder nur `ghJson`), `out` und `err` sind injizierbar (Tests).
  * Ein unvollständiger Config-Eintrag bricht ab, bevor git oder gh laufen (kein Standardwert).
  */
 export function branchenModus(root, loeschen, {
@@ -69,6 +69,7 @@ export function branchenModus(root, loeschen, {
   namen: namenIn,
   git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }),
   gh: ghIn,
+  ghJson: ghJsonFn = ghJson,
   out = console.log,
   err = console.error,
 } = {}) {
@@ -79,7 +80,7 @@ export function branchenModus(root, loeschen, {
     err(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${e instanceof Error ? e.message : e}`);
     return 1;
   }
-  const gh = ghIn ?? (() => ghJson(["pr", "list", "--state", "merged", "--search", `head:${namen.praefixe.branch}`, "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]));
+  const gh = ghIn ?? (() => ghJsonFn(["pr", "list", "--state", "merged", "--search", `head:${namen.praefixe.branch}`, "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]));
   const r = branchesAufraeumen({ git, gh, loeschen, namen });
   if (r.grund) {
     err(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${r.grund}`);

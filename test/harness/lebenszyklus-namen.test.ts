@@ -48,7 +48,7 @@ const A = aufraeumenRaw as unknown as {
   branchesAufraeumen: (o: { git: (a: string[]) => string; gh: () => unknown[]; namen?: Namen }) => { ok?: boolean; kandidaten: string[] };
 };
 const C = cleanupRaw as unknown as {
-  branchenModus: (root: string, loeschen: boolean, o: { config?: Cfg; git?: (a: string[]) => string; gh?: () => unknown[]; out?: (t: string) => void; err?: (t: string) => void }) => number;
+  branchenModus: (root: string, loeschen: boolean, o: { config?: Cfg; ghJson?: (a: string[]) => unknown[]; git?: (a: string[]) => string; gh?: () => unknown[]; out?: (t: string) => void; err?: (t: string) => void }) => number;
 };
 const S = stopRaw as unknown as {
   runHook: (stdin: string, root: string, check?: (r: string, d?: { namen?: Namen }) => Record<string, unknown>, d?: Record<string, unknown>) => { exit: number; stdout: string; stderr: string };
@@ -70,6 +70,7 @@ const H = syncRaw as unknown as {
   ordneHarnessAenderungen: (d: string[], verz?: string | null) => { skill: string[]; sonstige: string[] };
   ticketSkillVerzeichnis: (d?: { config?: Cfg }) => string | null;
   configGrund: (d?: { config?: Cfg }) => string | null;
+  baueText: (e: Record<string, unknown>, o?: { sitzungsbasis?: boolean }) => string;
 };
 const normalizeItems = (boardRaw as unknown as { normalizeItems: (p: unknown[][]) => unknown[] }).normalizeItems;
 
@@ -138,6 +139,21 @@ describe("worktree-aufraeumen: Präfixe aus der Config", () => {
   });
 });
 
+describe("Präfixe mit Regex-Sonderzeichen werden maskiert", () => {
+  const PUNKT = ticketNamen({ ...AB, praefixe: { commitZeile: "AB-", branch: "feature/a.b-", worktree: "a.b-" } });
+  test("aufraeumbareBranches: feature/aXb-1 ist kein Ticket-Branch, feature/a.b-1 schon", () => {
+    const sha = "a".repeat(40);
+    const refs = [{ name: "feature/a.b-1-x", gone: true, sha }, { name: "feature/aXb-2-x", gone: true, sha }];
+    const gemergt = refs.map((r) => ({ headRefName: r.name, headRefOid: sha }));
+    expect(A.aufraeumbareBranches({ refs, worktreeBranches: [], gemergteHeads: gemergt, namen: PUNKT })).toEqual(["feature/a.b-1-x"]);
+  });
+  test("sortiereDateien: aXb-5.bak ist fremd, a.b-5.bak Kandidat", () => {
+    const r = A.sortiereDateien("/r/.claude/worktrees", ["aXb-5.bak", "a.b-5.bak"], new Set(), { now: 10 * 60_000, statSync: () => ({ mtimeMs: 0 }), namen: PUNKT });
+    expect(r.fremd).toEqual(["aXb-5.bak"]);
+    expect(r.verwaist).toEqual(["a.b-5.bak"]);
+  });
+});
+
 describe("cleanup-worktrees --branches", () => {
   test("Meldung und gh-Suche tragen das Präfix der Config", () => {
     const aus: string[] = [];
@@ -145,6 +161,12 @@ describe("cleanup-worktrees --branches", () => {
     expect(C.branchenModus("/r", false, { config: AB, git, gh: () => [], out: (t) => aus.push(t), err: () => undefined })).toBe(0);
     expect(aus.join("\n")).toContain("feature/ab-*");
     expect(aus.join("\n")).not.toContain("kq-");
+  });
+  test("die gh-Suche nach gemergten PRs trägt das Branch-Präfix der Config", () => {
+    let argumente: string[] = [];
+    const ghJson = (a: string[]) => ((argumente = a), []);
+    C.branchenModus("/r", false, { config: AB, git: () => "", ghJson, out: () => undefined, err: () => undefined });
+    expect(argumente[argumente.indexOf("--search") + 1]).toBe("head:feature/ab-");
   });
   test("ohne praefixe.worktree: Abbruch mit Schlüssel und Fix-Zeile, git und gh bleiben unberührt", () => {
     let aufrufe = 0;
@@ -279,6 +301,13 @@ describe("haupt-sync: Skill-Verzeichnis aus agenten.ticketSkill", () => {
     const ohne = H.ordneHarnessAenderungen(dateien, null);
     expect(ohne.skill).toEqual(["AGENTS.md"]);
     expect(ohne.sonstige).toHaveLength(2);
+  });
+  test("baueText nennt die SKILL.md aus dem Diff; nur AGENTS.md ergibt den allgemeinen Hinweis ohne erfundenen Pfad", () => {
+    const mit = H.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/demo/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } }, { sitzungsbasis: false });
+    expect(mit).toContain("`.claude/skills/demo/SKILL.md` jetzt neu lesen");
+    const nurAgents = H.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: ["AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } }, { sitzungsbasis: false });
+    expect(nurAgents).toContain("Den Ticket-Skill jetzt neu lesen");
+    expect(nurAgents).not.toContain("SKILL.md");
   });
   test("ticketSkillVerzeichnis: aus der Config; ohne den Schlüssel null und ein Grund mit Fix-Zeile", () => {
     expect(H.ticketSkillVerzeichnis({ config: AB })).toBe(".claude/skills/ab/");
