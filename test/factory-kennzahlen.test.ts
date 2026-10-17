@@ -13,8 +13,11 @@ import * as rawSlice from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../scripts/token-baseline.mjs";
 
-type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string };
-type Daten = { zeilen: Zeile[]; kennzahlen: Record<string, number> };
+type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
+type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string; abnahme: Abnahme };
+type AbnahmeKenn = { gemessen: number; ersterDurchgang: number; entfaellt: number; override: number; ohne: number };
+type Kennzahlen = Record<string, number | AbnahmeKenn>;
+type Daten = { zeilen: Zeile[]; kennzahlen: Kennzahlen };
 type Erg = { kosten?: number; luecke?: string };
 type Lage = { daten?: Daten; luecke?: string };
 type Run = (name: string, args: string[]) => { status: number; stdout: string; stderr: string };
@@ -38,9 +41,9 @@ const LAUF = rawLauf as unknown as {
 const ZEILEN = (rawSlice as unknown as { commitZeilen: (praefix: string, planer: string) => unknown }).commitZeilen("KQ-", "kubernia-planner");
 const BASE = rawBase as unknown as { summarize: (run: { calls: unknown[]; questions: number; events?: unknown[] }, bounds?: unknown) => unknown };
 
-const ZEILE = (o: Partial<Zeile> = {}): Zeile => ({ pr: 50, ticket: 40, gemergt: "2026-10-14T10:00:00Z", runden: 1, ciFix: 0, festgefahren: 0, nacharbeit: "nein", ...o });
-const KENN = { prs: 1, ohneNacharbeit: 1, nachweisbareFenster: 1, nacharbeitOffen: 0, ciFixSumme: 0, festgefahrenSumme: 0, runde1MitBlocker: 0, mitBlockerFeld: 1 };
-const daten = (zeilen: Zeile[], k: Record<string, number> = {}): Lage => ({ daten: { zeilen, kennzahlen: { ...KENN, prs: zeilen.length, ...k } } });
+const ZEILE = (o: Partial<Zeile> = {}): Zeile => ({ pr: 50, ticket: 40, gemergt: "2026-10-14T10:00:00Z", runden: 1, ciFix: 0, festgefahren: 0, nacharbeit: "nein", abnahme: null, ...o });
+const KENN: Kennzahlen = { prs: 1, ohneNacharbeit: 1, nachweisbareFenster: 1, nacharbeitOffen: 0, ciFixSumme: 0, festgefahrenSumme: 0, runde1MitBlocker: 0, mitBlockerFeld: 1, abnahme: { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 1 } };
+const daten = (zeilen: Zeile[], k: Kennzahlen = {}): Lage => ({ daten: { zeilen, kennzahlen: { ...KENN, prs: zeilen.length, ...k } } });
 const claimZeile = (cmd: string, ts: string) => ({ type: "assistant", timestamp: ts, message: { id: ts, content: [{ type: "tool_use", id: `t${ts}`, name: "Bash", input: { command: cmd } }] } });
 
 describe("parseArgs", () => {
@@ -167,7 +170,7 @@ describe("kostenAus (AK3: Lücke statt 0)", () => {
 
 describe("vertragPruefen", () => {
   test("fehlendes Kennzahl-Feld nennt das Feld", () => {
-    const k: Record<string, number> = { ...KENN };
+    const k: Kennzahlen = { ...KENN };
     delete k.ohneNacharbeit;
     expect(F.vertragPruefen({ zeilen: [], kennzahlen: k }).luecke).toMatch(/ohneNacharbeit/);
     expect(F.vertragPruefen({}).luecke).toMatch(/Vertrag/);
@@ -195,6 +198,20 @@ describe("vertragPruefen", () => {
     expect(md).toContain("Ohne CI-Fix: 100 % (1/1)");
     expect(md).toContain("- Nacharbeit (folge): PR #7, Ticket #40");
   });
+  test("Abnahme-Vertrag (#1756): fehlendes Aggregat, fehlendes Unterfeld und ungültiges Zeilenfeld sind Lücken", () => {
+    const ohne: Kennzahlen = { ...KENN };
+    delete ohne.abnahme;
+    expect(F.vertragPruefen({ zeilen: [], kennzahlen: ohne }).luecke).toMatch(/abnahme/);
+    const teil = { ...(KENN.abnahme as AbnahmeKenn), ersterDurchgang: Number.NaN };
+    expect(F.vertragPruefen({ zeilen: [], kennzahlen: { ...KENN, abnahme: teil } }).luecke).toMatch(/abnahme.ersterDurchgang/);
+    const ohneFeld = { ...ZEILE(), abnahme: undefined };
+    for (const z of [ohneFeld, ZEILE({ abnahme: { durchgaenge: 0 } }), { ...ZEILE(), abnahme: "x" }, ZEILE({ abnahme: { durchgaenge: 1.5 } })]) {
+      expect(F.vertragPruefen({ zeilen: [z], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
+    }
+    for (const a of [null, "entfaellt", "override", { durchgaenge: 2 }] as Abnahme[]) {
+      expect(F.vertragPruefen({ zeilen: [ZEILE({ abnahme: a })], kennzahlen: KENN }).daten).toBeDefined();
+    }
+  });
   test("NaN-Kennzahl und Zeile ohne ciFix verletzen den Vertrag", () => {
     expect(F.vertragPruefen({ zeilen: [], kennzahlen: { ...KENN, ciFixSumme: Number.NaN } }).luecke).toMatch(/ciFixSumme/);
     const ohneCiFix = { ...ZEILE(), ciFix: undefined } as unknown as Zeile;
@@ -203,6 +220,61 @@ describe("vertragPruefen", () => {
     for (const z of [null, { ...ZEILE(), pr: undefined }, { ...ZEILE(), pr: "7" }, { ...ZEILE(), nacharbeit: undefined }]) {
       expect(F.vertragPruefen({ zeilen: [z], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
     }
+  });
+});
+
+describe("Abnahme-Quote (#1756)", () => {
+  const prNr = (n: number) => ({ number: n, title: "feat: x (#40)", createdAt: "2026-09-30T00:00:00Z", mergedAt: "2026-10-01T00:00:00Z", mergeCommit: { oid: String(n) + "abc1234" } });
+  const body = (...zeilen: string[]) => ["feat: x (#40)", "", ...zeilen].join(String.fromCharCode(10));
+  const h = "c".repeat(40);
+  const urteil = (d: number) => "KQ-Abnahme: head=" + h + " durchgaenge=" + d + " urteil=K1:erfuellt";
+  const echt = (bodies: string[]) =>
+    LAUF.bewertePrs({
+      prs: bodies.map((_, i) => prNr(i + 1)),
+      commits: bodies.map((b, i) => ({ sha: String(i + 1) + "abc1234", datum: "2026-10-01T00:00:00Z", body: b })),
+      ci: {},
+      festgefahren: {},
+      jetzt: new Date("2026-12-31T00:00:00Z"),
+      konfigZeilen: ZEILEN,
+    });
+  const md = (lauf: Lage) => F.renderMarkdown(F.bericht({ von: "2026-09-28T00:00:00Z", bis: "2026-10-02T00:00:00Z", quelle: "Transkript", lauf, nacharbeit: lauf, tickets: [] })).split("**Abnahme-Quote**")[1];
+
+  test("echtes bewertePrs: k von n im ersten Durchgang, entfällt, Override mit PR-Nummer und ohne getrennt genannt", () => {
+    const e = echt([
+      body(urteil(1)),
+      body(urteil(2)),
+      body("KQ-Abnahme: entfaellt — Hand-PR"),
+      body("KQ-Abnahme-Override: #1755 grund"),
+      body("nichts"),
+    ]);
+    const lage = F.vertragPruefen(e);
+    expect(lage.daten).toBeDefined();
+    const a = md(lage);
+    expect(a).toContain("- 1 von 2 im ersten Durchgang (50 %)");
+    expect(a).toContain("- Nicht in der Quote: entfällt 1, Override 1 (PR #4), ohne Abnahme-Zeile 1");
+  });
+  test("Negativfall: ohne Abnahme-Urteil steht eine Lücke mit Grund, nie 0 %", () => {
+    const lage = F.vertragPruefen(echt([body("nichts"), body("KQ-Abnahme: entfaellt — Hand-PR")]));
+    const a = md(lage);
+    expect(a).toContain("- Lücke: keine PR mit Abnahme-Urteil im Zeitraum");
+    expect(a).not.toMatch(/0 %/);
+    expect(a).not.toContain("im ersten Durchgang");
+  });
+  test("K3: fehlt das Aggregat oder das Zeilenfeld im echten bewertePrs-Ergebnis, endet erstelle mit Exit 2", () => {
+    const erstelle = (raw as unknown as { erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]> }) => { bericht: { lauf: Lage }; exit: number } }).erstelle;
+    const fahre = (verderbe: (j: { zeilen: Record<string, unknown>[]; kennzahlen: Record<string, unknown> }) => void) => {
+      const j = JSON.parse(JSON.stringify(echt([body(urteil(1))])));
+      verderbe(j);
+      const run: Run = () => ({ status: 0, stdout: JSON.stringify(j), stderr: "" });
+      return erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte: () => new Map() });
+    };
+    expect(fahre(() => undefined).exit).toBe(0);
+    const a = fahre((j) => delete j.kennzahlen.abnahme);
+    expect(a.exit).toBe(2);
+    expect(a.bericht.lauf.luecke).toMatch(/abnahme/);
+    const b = fahre((j) => delete j.zeilen[0].abnahme);
+    expect(b.exit).toBe(2);
+    expect(b.bericht.lauf.luecke).toMatch(/Zeile/);
   });
 });
 
@@ -337,7 +409,9 @@ describe("Markdown-Block", () => {
     const md = render({ lauf: { luecke: "lauf-ergebnis Exit 2: gh weg" }, nacharbeit: { luecke: "lauf-ergebnis Exit 2: gh weg" }, tickets: [] });
     expect(md).toContain("- Lücke: lauf-ergebnis Exit 2: gh weg");
     expect(md).toContain("kein Lauf-Ergebnis");
-    expect(md).toContain("**Abnahme-Quote:** – (folgt mit F13)");
+    expect(md).toContain("**Abnahme-Quote**");
+    expect(md.split("**Abnahme-Quote**")[1]).toContain("- Lücke: kein Lauf-Ergebnis");
+    expect(md).not.toContain("folgt mit F13");
   });
   test("Lauf-Ergebnis: Ohne CI-Fix, Runde 1 mit Blocker, Summen", () => {
     const md = render({
@@ -451,5 +525,7 @@ describe("Einstiegsskript", () => {
   test("ohne Import anderer Einstiegsskripte", () => {
     const src = readFileSync(new URL("../scripts/factory-kennzahlen.mjs", import.meta.url), "utf8");
     expect(src).not.toMatch(/from "\.\/(lauf-ergebnis|token-baseline|hauptchat-zerlegung)\.mjs"/);
+    expect(src).not.toContain("ABNAHME_ZEILE");
+    expect(src).not.toContain("folgt mit F13");
   });
 });

@@ -22,7 +22,8 @@ type Pr = {
   headRefName: string;
   closingIssuesReferences: { number: number }[];
 };
-type Zeile = { pr: number; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string };
+type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
+type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string };
 type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }> } };
 type Zeilen = Record<string, string>;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
@@ -244,6 +245,89 @@ describe("bewertePrs und Aggregate", () => {
     assert.match(t, /\| #50 \| #40 \| 2026-10-01 \| 2 \| architektur:2,requirement-treue:0,test-adaequanz:1 \| 1 \| 0 \| folge \|/);
     assert.match(t, /Lens-Trefferquote architektur: 50 % \(1\/2\), Σ Blocker 2 \(1,00 je PR\)/);
     assert.match(t, /ohne Review-Nachweis: 1/);
+  });
+});
+
+describe("Abnahme je PR (#1756)", () => {
+  const NL = String.fromCharCode(10);
+  const H = "b".repeat(40);
+  const urteil = (d: number) => `KQ-Abnahme: head=${H} durchgaenge=${d} urteil=K1:erfuellt`;
+  const nachricht = (...zeilen: string[]) => ["feat: y (#40) (#50)", "", "KQ-Plan: kubernia-planner", ...zeilen].join(NL);
+  const bewerte = (bodies: string[], konfig: Zeilen = Z) => {
+    const prs = bodies.map((_, i) => pr({ number: 50 + i, mergeCommit: { oid: String(i + 1).repeat(40) } }));
+    const commits = bodies.map((b, i) => commit(b, MERGED, String(i + 1).repeat(40)));
+    return roh.bewertePrs({ prs, commits, ci: {}, festgefahren: {}, jetzt: SPAETER, konfigZeilen: konfig });
+  };
+  const ab = (...zeilen: string[]) => bewerte([nachricht(...zeilen)]).zeilen[0].abnahme;
+
+  test("gültiges Urteil: durchgaenge übernommen", () => {
+    assert.deepEqual(ab(urteil(1)), { durchgaenge: 1 });
+    assert.deepEqual(ab(urteil(2)), { durchgaenge: 2 });
+  });
+  test("entfaellt und Override", () => {
+    assert.equal(ab("KQ-Abnahme: entfaellt — Hand-PR"), "entfaellt");
+    assert.equal(ab("KQ-Abnahme-Override: #1755 Sitzung vor den Agenten"), "override");
+  });
+  test("Vorrang: Override schlägt eine gültige Abnahme-Zeile", () => {
+    assert.equal(ab("KQ-Abnahme-Override: #1755 Sitzung vor den Agenten", urteil(1)), "override");
+  });
+  test("Widerruf hebt den Override auf, die Abnahme-Zeile zählt wieder", () => {
+    assert.deepEqual(ab("KQ-Abnahme-Override: #1755 grund", "KQ-Abnahme-Override: #1755 entfällt", urteil(1)), { durchgaenge: 1 });
+  });
+  test("ungültig (durchgaenge=0, ohne head) und ohne Zeile: null", () => {
+    assert.equal(ab(`KQ-Abnahme: head=${H} durchgaenge=0 urteil=K1:erfuellt`), null);
+    assert.equal(ab("KQ-Abnahme: durchgaenge=1 urteil=K1:erfuellt"), null);
+    assert.equal(ab(), null);
+  });
+  test("Squash-Betreff mit Stern-Präfix wird erkannt", () => {
+    assert.deepEqual(ab(`* ${urteil(1)}`), { durchgaenge: 1 });
+  });
+  test("nur der Merge-Commit zählt: eine Abnahme-Zeile in einem späteren Commit nicht", () => {
+    const e = roh.bewertePrs({
+      prs: [pr({ mergeCommit: { oid: "1".repeat(40) } })],
+      commits: [commit(nachricht(), MERGED, "1".repeat(40)), commit(urteil(1), tage(1), "2".repeat(40))],
+      ci: {},
+      festgefahren: {},
+      jetzt: SPAETER,
+      konfigZeilen: Z,
+    });
+    assert.equal(e.zeilen[0].abnahme, null);
+  });
+  test("Aggregat: exakte Zahlen, die Klassen summieren sich zu prs", () => {
+    const e = bewerte([
+      nachricht(urteil(1)),
+      nachricht(urteil(2)),
+      nachricht("KQ-Abnahme: entfaellt — Hand-PR"),
+      nachricht("KQ-Abnahme-Override: #1755 grund"),
+      nachricht(),
+    ]);
+    const a = e.kennzahlen.abnahme as Record<string, number>;
+    assert.deepEqual(a, { gemessen: 2, ersterDurchgang: 1, entfaellt: 1, override: 1, ohne: 1 });
+    assert.equal(a.gemessen + a.entfaellt + a.override + a.ohne, e.kennzahlen.prs);
+    assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 50 % \(1\/2\); entfällt 1, Override 1, ohne Abnahme-Zeile 1/);
+  });
+  test("leer: alle Werte 0, Darstellung ohne Prozent", () => {
+    const e = bewerte([]);
+    assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 0 });
+    assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: –;/);
+  });
+  test("Präfix aus der Config: bei AB- wird KQ-Abnahme nicht gelesen", () => {
+    const e = bewerte([nachricht(urteil(1), "KQ-Abnahme-Override: #1755 grund")], commitZeilen("AB-", "kubernia-planner"));
+    assert.equal(e.zeilen[0].abnahme, null);
+  });
+  test("laufErgebnis liefert das Feld je Zeile und das Aggregat", () => {
+    const body = nachricht(urteil(1));
+    const log = `${SHA}${MERGED}${body}`;
+    const gh = (a: string[]): string => {
+      if (a[0] === "pr") return JSON.stringify([pr()]);
+      if (a.join(" ").includes("actions/workflows")) return "";
+      const nummern = [...(a.find((x) => x.startsWith("query=")) ?? "").matchAll(/p(\d+): pullRequest/g)].map((m) => Number(m[1]));
+      const repository = Object.fromEntries(nummern.map((n) => [`p${n}`, { timelineItems: { pageInfo: { hasNextPage: false }, nodes: [] } }]));
+      return JSON.stringify({ data: { repository } });
+    };
+    const e = mod.laufErgebnis({ von: "2026-10-01T00:00:00Z", bis: "2026-10-02T00:00:00Z", runGit: () => log, runGh: gh, jetzt: SPAETER });
+    assert.deepEqual(e.zeilen[0].abnahme, { durchgaenge: 1 });
+    assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 1, ersterDurchgang: 1, entfaellt: 0, override: 0, ohne: 0 });
   });
 });
 

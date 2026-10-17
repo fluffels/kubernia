@@ -273,6 +273,30 @@ describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem F
   });
 });
 
+describe("aktiverOverride: jüngste Zeile mit Widerruf-Logik (#1756)", () => {
+  const ao = raw as unknown as { aktiverOverride: (text: string, key: string) => string | null };
+  const KEY = "KQ-Abnahme-Override";
+  const text = (...zeilen: string[]) => zeilen.join(String.fromCharCode(10));
+  it("ohne Zeile: null", () => {
+    expect(ao.aktiverOverride("nur Text", KEY)).toBeNull();
+  });
+  it("gültige Zeile liefert den Grund", () => {
+    expect(ao.aktiverOverride(text("x", `${KEY}: #5 Sitzung vor den Agenten`), KEY)).toBe("#5 Sitzung vor den Agenten");
+  });
+  it("Widerruf als jüngste Zeile: null", () => {
+    expect(ao.aktiverOverride(text(`${KEY}: #5 a`, `${KEY}: #5 entfällt`), KEY)).toBeNull();
+  });
+  it("Override nach dem Widerruf gilt wieder", () => {
+    expect(ao.aktiverOverride(text(`${KEY}: #5 a`, `${KEY}: #5 entfällt`, `${KEY}: #5 doch`), KEY)).toBe("#5 doch");
+  });
+  it("ungültige Zeile ohne #nr und Grund: null", () => {
+    expect(ao.aktiverOverride(`${KEY}: einfach so`, KEY)).toBeNull();
+  });
+  it("Betreff-Präfix `* <key>:` zählt", () => {
+    expect(ao.aktiverOverride(`* ${KEY}: #5 x`, KEY)).toBe("#5 x");
+  });
+});
+
 describe("Widerruf eines Overrides: `<key>: #<nr> entfällt` (#1693 L47)", () => {
   const so2 = raw as unknown as {
     sliceOverride: (runGit: (a: string[]) => string, base: string, key: string) => { reason: string | null; invalid: string[] };

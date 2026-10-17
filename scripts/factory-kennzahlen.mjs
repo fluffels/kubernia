@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Factory-Kennzahlen (ADR 0022 §6, F14): Lauf-Ergebnis, Nacharbeit und Kosten je Ticket als ein Markdown-Block
- * für den Bericht-Kommentar des Wochen-Status-Tickets. Fehlende Daten erscheinen als Lücke mit Grund, nie als 0.
+ * für den Bericht-Kommentar des Wochen-Status-Tickets, dazu die Abnahme-Quote im ersten Durchgang. Fehlende Daten erscheinen als Lücke mit Grund, nie als 0.
  *
  *   node scripts/factory-kennzahlen.mjs --von <ISO> --bis <ISO> [--langfuse] [--json]
  *
@@ -22,7 +22,6 @@ import { ladeSessions, projektOrdner } from "./transkript.mjs";
 /** Nacharbeitsfenster von `lauf-ergebnis.mjs` (NACHARBEIT_TAGE dort; ein Einstiegsskript importiert das andere nicht, Test `vertrag` hält beide gleich). */
 export const NACHARBEIT_TAGE = 14;
 const TAG_MS = 24 * 3600 * 1000;
-export const ABNAHME_ZEILE = "– (folgt mit F13)";
 export const AUFRUFHILFE = "Aufruf: node scripts/factory-kennzahlen.mjs --von <ISO> --bis <ISO> [--langfuse] [--json]";
 
 const gueltig = (iso) => Number.isFinite(Date.parse(String(iso ?? "")));
@@ -105,6 +104,10 @@ export function kostenAus({ json, fehler }) {
   return { kosten: total.cost };
 }
 
+const ABNAHME_FELDER = ["gemessen", "ersterDurchgang", "entfaellt", "override", "ohne"];
+/** Abnahme-Feld einer Zeile von `lauf-ergebnis.mjs`: null, "entfaellt", "override" oder { durchgaenge: Ganzzahl ≥ 1 }. */
+const abnahmeGueltig = (a) => a === null || a === "entfaellt" || a === "override" || (typeof a === "object" && a !== undefined && Number.isInteger(a.durchgaenge) && a.durchgaenge >= 1);
+
 const FELDER = ["prs", "ohneNacharbeit", "nachweisbareFenster", "nacharbeitOffen", "ciFixSumme", "festgefahrenSumme", "runde1MitBlocker", "mitBlockerFeld"];
 
 /** Prüft die JSON-Ausgabe von `lauf-ergebnis.mjs` gegen den Vertrag; Verstoß → `{ luecke }`, sonst `{ daten }`. Pure. */
@@ -112,8 +115,12 @@ export function vertragPruefen(json) {
   if (!json || !Array.isArray(json.zeilen) || !json.kennzahlen) return { luecke: "lauf-ergebnis: Ausgabe ohne zeilen/kennzahlen (Vertrag verletzt)" };
   const fehlt = FELDER.filter((f) => !Number.isFinite(json.kennzahlen[f]));
   if (fehlt.length > 0) return { luecke: `lauf-ergebnis: Kennzahl-Feld fehlt: ${fehlt.join(", ")} (Vertrag verletzt)` };
-  const kaputt = json.zeilen.find((z) => !z || !Number.isFinite(z.pr) || !Number.isFinite(z.ciFix) || !gueltig(z.gemergt) || typeof z.nacharbeit !== "string");
-  if (kaputt !== undefined) return { luecke: "lauf-ergebnis: Zeile ohne pr/ciFix/gemergt/nacharbeit (Vertrag verletzt)" };
+  const ab = json.kennzahlen.abnahme;
+  if (!ab || typeof ab !== "object") return { luecke: "lauf-ergebnis: Kennzahl-Feld fehlt: abnahme (Vertrag verletzt)" };
+  const abFehlt = ABNAHME_FELDER.filter((f) => !Number.isFinite(ab[f]));
+  if (abFehlt.length > 0) return { luecke: `lauf-ergebnis: Kennzahl-Feld fehlt: ${abFehlt.map((f) => `abnahme.${f}`).join(", ")} (Vertrag verletzt)` };
+  const kaputt = json.zeilen.find((z) => !z || !Number.isFinite(z.pr) || !Number.isFinite(z.ciFix) || !gueltig(z.gemergt) || typeof z.nacharbeit !== "string" || !abnahmeGueltig(z.abnahme));
+  if (kaputt !== undefined) return { luecke: "lauf-ergebnis: Zeile ohne pr/ciFix/gemergt/nacharbeit/abnahme (Vertrag verletzt)" };
   return { daten: json };
 }
 
@@ -160,6 +167,17 @@ function kostenAbschnitt(tickets, quelle) {
   ];
 }
 
+/** Abnahme-Quote im ersten Durchgang aus dem Lauf-Ergebnis; ohne Urteil im Zeitraum eine Lücke mit Grund, nie 0 %. */
+function abnahmeAbschnitt(lauf) {
+  if (lauf.luecke) return ["- Lücke: kein Lauf-Ergebnis"];
+  const a = lauf.daten.kennzahlen.abnahme;
+  const overrides = lauf.daten.zeilen.filter((z) => z.abnahme === "override").map((z) => `#${z.pr}`);
+  return [
+    a.gemessen === 0 ? "- Lücke: keine PR mit Abnahme-Urteil im Zeitraum" : `- ${a.ersterDurchgang} von ${a.gemessen} im ersten Durchgang (${Math.round((a.ersterDurchgang / a.gemessen) * 100)} %)`,
+    `- Nicht in der Quote: entfällt ${a.entfaellt}, Override ${a.override}${overrides.length > 0 ? ` (PR ${overrides.join(", ")})` : ""}, ohne Abnahme-Zeile ${a.ohne}`,
+  ];
+}
+
 /** Bericht als Daten: `lauf`/`nacharbeit` = `vertragPruefen`-Ergebnis, `tickets` = `[{ticket, pr, ergebnis}]`. Pure. */
 export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle }) {
   return {
@@ -169,7 +187,6 @@ export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle }) {
     lauf,
     nacharbeit,
     tickets,
-    abnahmeQuote: ABNAHME_ZEILE,
   };
 }
 
@@ -188,7 +205,8 @@ export function renderMarkdown(b) {
     "**Kosten je Ticket**",
     ...kosten,
     "",
-    `**Abnahme-Quote:** ${b.abnahmeQuote}`,
+    "**Abnahme-Quote**",
+    ...abnahmeAbschnitt(b.lauf),
   ].join("\n");
 }
 
