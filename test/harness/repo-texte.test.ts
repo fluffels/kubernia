@@ -1,4 +1,6 @@
-/* Test des Scan-Helfers `workflowDateien` (#1762 L20a): nur versionierte Skripte unter dem Ordner, rekursiv, ohne Fremdendungen. */
+/* Test des Scan-Helfers `workflowDateien` (#1762 L20a): nur versionierte Skripte unter dem Ordner, rekursiv, ohne Fremdendungen.
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { workflowDateien } from "./repo-texte";
