@@ -3,9 +3,10 @@
  * Nachweis-Lib (#1762): Parser und Formate der Commit-Zeilen `Plan`, `Review` und `Abnahme` samt Abnahme-Marker.
  *
  * Eine Quelle für Zeilen-Regex, Hex-Muster (`HEX`, `HEX_HEAD`, streng klein), Wert-Normalisierung und Urteilswerte,
- * damit Gate, Messskript, Abnahme-Skript und Hook dasselbe lesen. Rein (keine I/O auf oberster Ebene, einziger Import `escapeRegex`);
+ * damit Gate, Messskript, Abnahme-Skript und Hook dasselbe lesen. Rein (keine I/O auf oberster Ebene, Importe nur `escapeRegex` und `istVertraut`);
  * die Commit-Zeilen kommen als Parameter (`commitZeilen` in slice-override.mjs). Pfad steht in `.github/protected-paths.json`.
  */
+import { istVertraut } from "./fremdtext-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 
 /** Hex-Hash eines Commits (7 bis 40 Zeichen, nur klein); Eingaben mit Großbuchstaben vorher mit `.toLowerCase()` angleichen. */
@@ -207,4 +208,13 @@ export function parseAbnahmeMarker(zeilen, text) {
   const urteil = m ? urteilAus(m[3]) : null;
   if (!m || urteil === null || Number(m[1]) < 1) return null;
   return { durchgang: Number(m[1]), head: m[2], urteil };
+}
+
+/** Die gültigen Abnahme-Marker der Kommentare vertrauter Autoren (`owner` plus vertraute Bots), in der Reihenfolge der API; Marker Fremder
+ *  und der Hand-off-Marker fehlen. Die eine Stelle für „Durchgang zählen“ (abnahme.mjs) und „jüngste Spur lesen“ (Wächter). Pur. */
+export function vertrauteAbnahmeMarker(kommentare, owner, zeilen) {
+  return (Array.isArray(kommentare) ? kommentare : [])
+    .filter((c) => istVertraut(c?.user, owner))
+    .map((c) => parseAbnahmeMarker(zeilen, c?.body))
+    .filter((m) => m !== null);
 }

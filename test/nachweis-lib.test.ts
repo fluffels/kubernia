@@ -80,10 +80,9 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
     ["K0", `head=${HEX} durchgaenge=1 urteil=K0:erfuellt`, /Kriterium „K0“ ungültig/],
     ["leeres Urteil", `head=${HEX} durchgaenge=1 urteil=`, /Urteil ist leer/],
   ])("ungueltig: %s (mit Grund)", (_n, wert, grund) => {
-    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert, grund: expect.stringMatching(grund) });
+    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert, grund: expect.stringMatching(grund) as string });
   });
   it.each([
-    ["K1:erfuellt,K2:nicht-pruefbar", null],
     ["K1:gut", /unbekannter Wert „gut“ bei K1/],
     ["K1:erfuellt,K2:erfuellt,K2:nicht-erfuellt", /K2 doppelt/],
     ["K0:erfuellt", /Kriterium „K0“ ungültig/],
@@ -92,9 +91,10 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
     ["", /Urteil ist leer/],
     ["  ", /Urteil ist leer/],
   ])("urteilFehler(%j)", (wert, erwartet) => {
-    const f = (raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler(wert);
-    if (erwartet === null) expect(f).toBeNull();
-    else expect(f).toMatch(erwartet);
+    expect((raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler(wert)).toMatch(erwartet);
+  });
+  it("urteilFehler: ein gültiges Urteil hat keinen Fehler", () => {
+    expect((raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler("K1:erfuellt,K2:nicht-pruefbar")).toBeNull();
   });
   it("urteilFehler: kein String ist leer", () => {
     expect((raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler(undefined)).toMatch(/Urteil ist leer/);
@@ -180,4 +180,33 @@ describe("Hex-Muster und Wert-Normalisierung (#1762 L11)", () => {
   it("normalisiereLens bleibt dieselbe Funktion in anderer Hülle", () => {
     expect(L.normalisiereLens("Test Adäquanz")).toBe("test-adaequanz");
   });
+});
+
+describe("vertrauteAbnahmeMarker (#1781 L5b): das Prädikat „vertraut + gültiger Marker“ an einer Stelle", () => {
+  const A = raw as unknown as {
+    formatAbnahmeMarker: (z: Zeilen, a: unknown) => string;
+    vertrauteAbnahmeMarker: (k: unknown, owner: string, z: Zeilen) => { durchgang: number; head: string; urteil: unknown[] }[];
+  };
+  const urteil = [{ k: "K1", wert: "erfuellt" }];
+  const marker = (durchgang: number) => A.formatAbnahmeMarker(Z, { durchgang, head: HEX, urteil });
+  const von = (login: string, body: string, type = "User") => ({ user: { login, type }, body });
+
+  it("liefert die Marker vertrauter Autoren in API-Reihenfolge", () => {
+    const r = A.vertrauteAbnahmeMarker([von("owner", marker(1)), von("owner", "Text"), von("github-actions[bot]", marker(2), "Bot")], "owner", Z);
+    expect(r.map((m) => m.durchgang)).toEqual([1, 2]);
+  });
+  it("Marker eines fremden Autors zählt nicht, auch nicht mit gültigem Format", () => {
+    expect(A.vertrauteAbnahmeMarker([von("fremd", marker(1))], "owner", Z)).toEqual([]);
+  });
+  it("Hand-off-Marker und kaputte Marker zählen nicht", () => {
+    const handoff = `<!-- ${abnahmeMarkerName()}-handoff -->`;
+    expect(A.vertrauteAbnahmeMarker([von("owner", handoff), von("owner", `<!-- kq-abnahme durchgang=0 head=${HEX} urteil=K1:erfuellt -->`)], "owner", Z)).toEqual([]);
+  });
+  it("kein Array, null-Einträge und Einträge ohne user/body sind leer statt Fehler", () => {
+    expect(A.vertrauteAbnahmeMarker(undefined, "owner", Z)).toEqual([]);
+    expect(A.vertrauteAbnahmeMarker([null, {}, { user: null, body: marker(1) }], "owner", Z)).toEqual([]);
+  });
+  function abnahmeMarkerName() {
+    return (raw as unknown as { abnahmeMarker: (z: Zeilen) => string }).abnahmeMarker(Z);
+  }
 });

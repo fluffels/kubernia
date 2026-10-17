@@ -23,10 +23,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { REPO } from "./board-lib.mjs";
-import { istFremdeingang, istVertraut, issueKommentare } from "./fremdtext-lib.mjs";
+import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, parseAbnahmeMarker, URTEILSWERTE } from "./nachweis-lib.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeCommitZeilen } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
@@ -89,8 +89,7 @@ export function entscheide(urteile) {
 
 /** Durchgang dieses Laufs: gültige Marker vertrauter Autoren auf dem PR plus 1; Marker Fremder und der Hand-off-Marker zählen nicht. Pur. */
 export function zaehleDurchgang(kommentare, owner, zeilen) {
-  const n = (kommentare ?? []).filter((c) => istVertraut(c?.user, owner) && parseAbnahmeMarker(zeilen, c?.body) !== null).length;
-  return n + 1;
+  return vertrauteAbnahmeMarker(kommentare, owner, zeilen).length + 1;
 }
 
 const zelle = (t) => String(t).replace(/\|/g, "\\|").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, " ");

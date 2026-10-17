@@ -24,8 +24,8 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
-import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
-import { MAX_REVIEW_PAESSE, parseNachweis, parseAbnahmeMarker } from "./nachweis-lib.mjs";
+import { issueKommentare } from "./fremdtext-lib.mjs";
+import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeProjektConfig, trenneConfigArg } from "./projekt-config-lib.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
@@ -38,11 +38,7 @@ export function verknuepfteTickets(body) {
 
 /** Der jüngste Kommentar (Reihenfolge der API: chronologisch) eines vertrauten Autors mit gültigem Abnahme-Marker, sonst `null`. Pur. */
 export function vertrauterMarker(kommentare, owner, zeilen) {
-  const treffer = (kommentare ?? [])
-    .filter((c) => istVertraut(c?.user, owner))
-    .map((c) => parseAbnahmeMarker(zeilen, c?.body))
-    .filter((m) => m !== null);
-  return treffer.length > 0 ? treffer[treffer.length - 1] : null;
+  return vertrauteAbnahmeMarker(kommentare, owner, zeilen).at(-1) ?? null;
 }
 
 const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",");
