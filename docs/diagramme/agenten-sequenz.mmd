@@ -2,6 +2,8 @@ sequenceDiagram
   autonumber
   actor M as Maintainerin
   participant H as Hauptchat<br/>Skill ${skill:kubernia} · ${skill-modell:kubernia}
+  participant S as ${agent:holdout-szenario}<br/>${agent-modell:holdout-szenario}
+  participant A as ${agent:holdout-abnahme}<br/>${agent-modell:holdout-abnahme}
   participant P as ${agent:kubernia-planner}<br/>${agent-modell:kubernia-planner}
   participant E as ${agent:Explore}<br/>${agent-modell:Explore}
   participant U as ${agent:kubernia-umsetzer}<br/>${agent-modell:kubernia-umsetzer}
@@ -12,6 +14,10 @@ sequenceDiagram
   participant CI as CI und Required Checks
 
   H->>H: Ticket wählen und claimen
+  opt Ticket mit Akzeptanzkriterien
+    H->>S: Ticket und Kriterien
+    S-->>H: Szenarien (bleiben im Hauptchat)
+  end
   H->>P: Ticket planen
   opt breite Suche
     P->>E: Fundstellen suchen
@@ -43,7 +49,14 @@ sequenceDiagram
     L3-->>U: Befunde
     U->>U: Blocker beheben
   end
-  U->>CI: PR mit Auto-Merge
+  opt Ticket mit Akzeptanzkriterien
+    U->>CI: Entwurfs-PR ohne Auto-Merge
+    U-->>H: ERGEBNIS abnahme
+    H->>A: Kriterien, Szenarien, PR, Worktree, head
+    A-->>H: Bericht je Kriterium
+    H-->>U: bestanden, fix oder handoff
+  end
+  U->>CI: PR bereit, Auto-Merge
   CI-->>U: grün: Merge, rot: Fix auf demselben Branch
   U-->>H: Bericht mit Ergebnis
   H-->>M: Zusammenfassung

@@ -50,6 +50,8 @@ Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie 
 | `kubernia-planner` | Plan vor dem Coden | Plan-Modus und eingebauter Plan-Agent | behalten: Planformat und Fremdtext-Gate sind Politik | teilweise |
 | `kubernia-umsetzer` | setzt ein Ticket bis zum Merge um | benutzerdefinierte Subagenten ([Subagents](https://code.claude.com/docs/en/sub-agents.md)), `isolation: worktree` ab v2.1.49 | behalten | teilweise |
 | `kubernia-gruppe` | Gruppen-Umsetzer: setzt eine Gruppe von Sammelticket-Zeilen mit frischem Kontext um ([ADR 0026](adr/0026-sammelticket-gruppen.md)) | benutzerdefinierte Subagenten; kein natives Gegenstück für Gruppen eines Tickets | behalten | ja |
+| `holdout-szenario` | Szenario-Agent der Holdout-Abnahme: schreibt Prüfszenarien allein aus Ticket und Kriterien (nur `Read`, `Grep`, `Glob`) ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md)) | benutzerdefinierte Subagenten; kein natives Gegenstück zur Holdout-Trennung | behalten | ja |
+| `holdout-abnahme` | Abnahme-Agent: prüft das fertige Ergebnis durch Beobachtung gegen Kriterien und Szenarien, ohne Edit | benutzerdefinierte Subagenten; Browser über den Playwright-Server | behalten | ja |
 | `kubernia-lens` | unabhängiger Review-Kritiker je Brille | benutzerdefinierte Subagenten; kein natives Mehr-Perspektiven-Review | behalten | ja |
 | `kubernia` | Ticket-Ablauf als Skill | [Skills](https://code.claude.com/docs/en/skills.md), Skript-Orchestrierung als [Workflows](https://code.claude.com/docs/en/workflows.md) | behalten | nein |
 | `review-lenses` | Review-Ablauf mit Stufe 0 | Skills nativ; Code Review und `/ultrareview` sind Cloud-Funktionen anderer Art | behalten | teilweise |

@@ -22,13 +22,13 @@ import { namenOderGrund } from "./ticket-namen.mjs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 
 /** Erlaubte Werte hinter `ERGEBNIS:` (Format in der Umsetzer-Definition unter `.claude/agents/`, Test bindet beides). */
-export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren", "abgebrochen", "uebergabe"];
+export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren", "abgebrochen", "uebergabe", "abnahme"];
 
 /** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: die Umsetzer-Definition unter `.claude/agents/`). */
 export const SCHNITTE = ["pr", "verify"];
 
-/** Art des Festgefahren-Berichts hinter `FESTGEFAHREN:` (optional, fehlt sie: `ci`). Nur `ci` verlangt das Label am offenen PR. */
-export const FESTGEFAHREN_ARTEN = ["review", "ci"];
+/** Art des Festgefahren-Berichts hinter `FESTGEFAHREN:` (optional, fehlt sie: `ci`). Nur `ci` verlangt das Label am offenen PR; `abnahme` (#1754) verlangt stattdessen einen Entwurf ohne Auto-Merge (R8). */
+export const FESTGEFAHREN_ARTEN = ["review", "ci", "abnahme"];
 
 /**
  * Liest `ERGEBNIS:`, `PR:`, `SCHNITT:`, `FESTGEFAHREN:` (klein geschrieben, sonst `null`) und das Vorhandensein einer `UEBERGABE:`-Zeile aus einer Nachricht. `token` ist das führende Wort, falls es ein erlaubter Wert ist
@@ -46,6 +46,15 @@ export function parseErgebnis(text) {
   const schnitt = zeile("SCHNITT");
   const art = zeile("FESTGEFAHREN");
   return { token, zusatz: token ? m[2].trim() : roh, pr: zeile("PR"), schnitt: schnitt === null ? null : schnitt.toLowerCase(), uebergabe: /^[ \t]*UEBERGABE:/im.test(String(text ?? "")), festgefahren: art === null ? null : art.toLowerCase() };
+}
+
+/**
+ * Liest die `ABNAHME:`-Zeile (`head=<7-40 hex> worktree=<Rest der Zeile>`, #1754) des Tokens `abnahme`; `null`, wenn sie fehlt oder ungültig ist.
+ * Die Zeile steht am Zeilenanfang (eingerückt ok), ein Treffer mitten im Satz zählt nicht.
+ */
+export function parseAbnahme(text) {
+  const m = /^[ \t]*ABNAHME:[ \t]*head=([0-9a-f]{7,40})[ \t]+worktree=(\S.*?)[ \t]*$/im.exec(String(text ?? ""));
+  return m ? { head: m[1].toLowerCase(), worktree: m[2] } : null;
 }
 
 /**
@@ -75,8 +84,8 @@ export function prNummer(pr) {
   return m ? m[1] : null;
 }
 
-/** `--json`-Felder des einen `gh pr view`: R1 bis R3 lesen state/autoMergeRequest/labels, R6 files/author/comments (der Test bindet die Liste). */
-export const PR_FELDER = "state,autoMergeRequest,labels,files,author,comments";
+/** `--json`-Felder des einen `gh pr view`: R1 bis R3 lesen state/autoMergeRequest/labels, R7/R8 zusätzlich isDraft, R6 files/author/comments (der Test bindet die Liste). */
+export const PR_FELDER = "state,isDraft,autoMergeRequest,labels,files,author,comments";
 
 /** Standard-`prStatus`: ein `gh pr view <nr> --json <PR_FELDER>` liefert alles, was der Abschluss liest; wirft bei jedem Fehler. */
 export function ghPrStatus(nummer) {
@@ -84,7 +93,7 @@ export function ghPrStatus(nummer) {
 }
 
 const FORMAT =
-  "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -) sowie BEFUNDE: (je Befund „<Befund> → #<nr>“, sonst keine); uebergabe zusätzlich SCHNITT: pr|verify und eine UEBERGABE:-Zeile";
+  "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe | abnahme (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -) sowie BEFUNDE: (je Befund „<Befund> → #<nr>“, sonst keine); uebergabe zusätzlich SCHNITT: pr|verify und eine UEBERGABE:-Zeile; abnahme zusätzlich ABNAHME: head=<sha> worktree=<pfad>";
 const WARTEN = (nr) =>
   `Warte im Vordergrund und blockierend: \`node scripts/pr-warten.mjs ${nr}\` (Bash-timeout: 300000), bei Exit 2 erneut, bis der PR MERGED ist. ` +
   `Ein Monitor hält deinen Lauf nicht offen. Hängt die CI (6 Aufrufe ohne Fortschritt), melde entscheidung-noetig.`;
@@ -99,7 +108,9 @@ const WARTEN = (nr) =>
  *    befreit `review` vom Label, ein anderer Wert wird verweigert,
  *  - R4 (#1592, beide Ereignisse): `uebergabe` ohne gültiges `SCHNITT: pr|verify` oder ohne `UEBERGABE:`-Zeile,
  *  - R5 (#1592): `uebergabe` mit `SCHNITT: pr` braucht einen PR, der OPEN ist und Auto-Merge hat oder schon MERGED ist (gh-Fehler: frei);
- *    `SCHNITT: verify` ruft kein gh auf. R1 bis R3 gelten für `uebergabe` nicht.
+ *    `SCHNITT: verify` ruft kein gh auf. R1 bis R3 gelten für `uebergabe` nicht,
+ *  - R7 (#1754): `abnahme` braucht eine gültige `ABNAHME:`-Zeile und einen PR, der OPEN und Entwurf ist, ohne Auto-Merge (gh-Fehler: frei); R1 bis R3 gelten nicht,
+ *  - R8 (#1754): `festgefahren` mit `FESTGEFAHREN: abnahme` braucht kein Label, aber (bei erreichbarem PR, OPEN) einen Entwurf ohne Auto-Merge.
  */
 export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage }, deps = {}) {
   const vorher = hookEvent === "PreToolUse";
@@ -126,6 +137,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   }
   if (!token) return null;
   if (token === "uebergabe") return uebergabeBlockade({ schnitt, uebergabe, pr }, deps);
+  if (token === "abnahme") return abnahmeBlockade({ ablauf: parseAbnahme(lastMessage), pr }, deps);
   if (token === "festgefahren" && festgefahren !== null && !FESTGEFAHREN_ARTEN.includes(festgefahren)) {
     return `Umsetzer-Abschluss (#1663): FESTGEFAHREN: ${festgefahren} ist ungültig (erlaubt: ${FESTGEFAHREN_ARTEN.join(" | ")}; ohne die Zeile gilt ci).`;
   }
@@ -139,6 +151,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   }
   if (!status) return null;
   const offen = status.state === "OPEN";
+  if (token === "festgefahren" && festgefahren === "abnahme") return offen ? entwurfBlockade(nr, status, "FESTGEFAHREN: abnahme") : null;
   if (offen && status.autoMergeRequest && (token === "gemergt" || token === "abgebrochen")) {
     return `Umsetzer-Abschluss (#1331): PR #${nr} ist noch offen und hat Auto-Merge, die CI läuft noch. Das ist kein Ende (ERGEBNIS: ${token}). ${WARTEN(nr)} Danach Audit-Kommentar, Aufräumen und erst dann der Bericht.`;
   }
@@ -228,6 +241,27 @@ function auditBlockade(nr, deps, status) {
   } catch {
     return null; // fail-open
   }
+}
+
+/** Entwurf ohne Auto-Merge (R7/R8): `null` = frei. */
+function entwurfBlockade(nr, status, was) {
+  if (status.state === "OPEN" && status.isDraft === true && !status.autoMergeRequest) return null;
+  return `Umsetzer-Abschluss (#1754): ${was}, aber PR #${nr} ist nicht OPEN als Entwurf ohne Auto-Merge (Status ${status.state}, Entwurf ${status.isDraft ? "ja" : "nein"}, Auto-Merge ${status.autoMergeRequest ? "ja" : "nein"}). ` +
+    `Vor der Abnahme: gh pr create --draft, ohne Auto-Merge; erst nach bestandener Abnahme gh pr ready und Auto-Merge.`;
+}
+
+/** R7 für `ERGEBNIS: abnahme` (#1754); `null` = frei. */
+function abnahmeBlockade({ ablauf, pr }, deps) {
+  if (!ablauf) return `Umsetzer-Abschluss (#1754): ERGEBNIS: abnahme abgelehnt (ABNAHME:-Zeile fehlt oder ist ungültig). Format wörtlich: ${FORMAT}.`;
+  const nr = prNummer(pr);
+  if (!nr) return "Umsetzer-Abschluss (#1754): ERGEBNIS: abnahme braucht eine PR:-Zeile mit dem Entwurfs-PR.";
+  let status;
+  try {
+    status = (deps.prStatus ?? ghPrStatus)(nr);
+  } catch {
+    return null; // fail-open
+  }
+  return status ? entwurfBlockade(nr, status, "ERGEBNIS: abnahme") : null;
 }
 
 /** R4/R5 für `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592); `null` = frei. */

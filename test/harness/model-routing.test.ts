@@ -352,6 +352,8 @@ const MATRIX_ZIELE: Record<string, { datei: string; mitModel: boolean }> = {
   gruppe: { datei: ".claude/agents/kubernia-gruppe.md", mitModel: true },
   explore: { datei: ".claude/agents/explore.md", mitModel: true },
   forumLeser: { datei: ".claude/agents/forum-leser.md", mitModel: true },
+  holdoutSzenario: { datei: ".claude/agents/holdout-szenario.md", mitModel: true },
+  holdoutAbnahme: { datei: ".claude/agents/holdout-abnahme.md", mitModel: true },
   hauptagent: { datei: UMSETZUNGS_SKILL, mitModel: false },
 };
 
@@ -359,7 +361,7 @@ const zelleOhneCode = (z: string) => z.replace(/`/g, "").trim();
 
 /**
  * Prüft die Phasen-Matrix (§1) gegen die Frontmatter ihrer Ziele (#1609): je Zeile Ziel über die Skill-Pfad-Zelle bestimmen
- * (Reihenfolge `kubernia-planner`, `kubernia-lens`, `kubernia-gruppe`, `kubernia-umsetzer`/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
+ * (Reihenfolge `holdout-szenario`, `holdout-abnahme`, `forum-leser`, `kubernia-planner`, `kubernia-lens`, `kubernia-gruppe`, `kubernia-umsetzer`/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
  * (Spalte „Effort Skill-Pfad“) und bei Subagenten `model` (Spalte „Alias“) gleich dem Frontmatter. Liefert die Verstöße;
  * eine fehlende Spalte, eine fehlende Tabelle oder eine nicht zuordenbare Zeile ist ein Verstoß.
  */
@@ -377,7 +379,11 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
     const c = zellen(zeilen[i]);
     const phase = zelleOhneCode(c[0] ?? "");
     const skill = c[iSkill] ?? "";
-    const ziel = /`forum-leser`/.test(skill)
+    const ziel = /`holdout-szenario`/.test(skill)
+      ? "holdoutSzenario"
+      : /`holdout-abnahme`/.test(skill)
+        ? "holdoutAbnahme"
+        : /`forum-leser`/.test(skill)
       ? "forumLeser"
       : /`kubernia-planner`/.test(skill)
         ? "planner"
@@ -428,6 +434,14 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
     assert.equal(doku.split(forumZeile).length, 2, "Forum-Zeile genau einmal");
     const forumEffort = doku.replace(forumZeile, "| Forum-Triage (Quarantäne) | `sonnet` | `high` |");
     assert.match(matrixAbweichungen(forumEffort, fmEcht).join("\n"), /Forum-Triage \(Quarantäne\): Effort Skill-Pfad „high“ ≠ Frontmatter forumLeser „medium“/);
+    const abnahmeZeile = "| Holdout-Abnahme (nach dem Lens-Review) | `opus` | `medium` |";
+    assert.equal(doku.split(abnahmeZeile).length, 2, "Abnahme-Zeile genau einmal");
+    const abnahmeEffort = doku.replace(abnahmeZeile, "| Holdout-Abnahme (nach dem Lens-Review) | `opus` | `high` |");
+    assert.match(matrixAbweichungen(abnahmeEffort, fmEcht).join("\n"), /Holdout-Abnahme \(nach dem Lens-Review\): Effort Skill-Pfad „high“ ≠ Frontmatter holdoutAbnahme „medium“/);
+    const szenarioZeile = "| Holdout-Szenarien (vor dem Planen) | `opus` | `medium` |";
+    assert.equal(doku.split(szenarioZeile).length, 2, "Szenario-Zeile genau einmal");
+    const szenarioAlias = doku.replace(szenarioZeile, "| Holdout-Szenarien (vor dem Planen) | `sonnet` | `medium` |");
+    assert.match(matrixAbweichungen(szenarioAlias, fmEcht).join("\n"), /Alias „sonnet“ ≠ Frontmatter holdoutSzenario „opus“/);
     const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | `low` | irgendwer |\n| Explore / Recherche |");
     assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);
     const ohneSpalte = doku.replace("| Effort Skill-Pfad |", "| Effort |");
