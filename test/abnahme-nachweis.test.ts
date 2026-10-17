@@ -406,9 +406,15 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.stdout).toMatch(/KQ-Abnahme-Override — #9 Sitzung vor dem Werkzeug/);
   });
   test("kaputte Config und --config ohne Pfad: Exit 1", () => {
-    const k = cliRepo("nur Code");
+    // Mit der echten Config wäre diese Message grün (entfaellt ohne Ticket): Exit 1 kommt nur aus dem --config-Zweig.
+    const k = cliRepo("x\n\nKQ-Abnahme: entfaellt — kein Ticket");
+    expect(cli(k).status).toBe(0);
     writeFileSync(k.pfad, "{}");
-    expect(cli(k).status).toBe(1);
-    expect(cli(k, {}, ["--config"]).status).toBe(1);
+    const kaputt = cli(k);
+    expect(kaputt.status).toBe(1);
+    expect(kaputt.stderr).toMatch(/Projekt-Config/);
+    const ohnePfad = cli(k, {}, ["--config"]);
+    expect(ohnePfad.status).toBe(1);
+    expect(ohnePfad.stderr).toMatch(/--config/);
   });
 });
