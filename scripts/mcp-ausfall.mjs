@@ -66,7 +66,7 @@ export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").rep
 
 /**
  * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<Worktree-Präfix>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
- * `KQ_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es keine Config). Ohne nutzbares `praefixe.worktree` wirft die Funktion mit Fix-Zeile.
+ * `KQ_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es keine Config). Ohne vollständige Config (`ticketNamen` prüft `praefixe.*` und `agenten.*`) wirft die Funktion mit Fix-Zeile.
  */
 export const standPfad = (wurzel, env, tmp, config) => env.KQ_MCP_AUSFALL_STAND || join(tmp, `${ticketNamen(config ?? ladeProjektConfig()).praefixe.worktree}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
 
@@ -254,7 +254,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
     const wurzel = env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL("..", import.meta.url));
     const server = serverAusConfig(readFileSync(join(wurzel, ".mcp.json"), "utf8"));
     const sessionstart = argv.includes("--sessionstart");
-    // Ohne nutzbare Config: eine Zeile mit Grund (statt stiller Auslassung), die Auswertung läuft ohne Stand-Datei weiter (nichts lesen, nichts schreiben).
+    // Ohne nutzbare Config: eine Zeile mit Grund (statt stiller Auslassung), die Auswertung läuft ohne Stand-Datei weiter (nichts lesen, nichts schreiben; die `&& stand`-Guards machen das sichtbar, das äußere catch würde es auch abfangen).
     let stand = null;
     try {
       stand = standPfad(wurzel, env, tmpdir(), config);
