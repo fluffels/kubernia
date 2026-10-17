@@ -1,8 +1,9 @@
 /* Abnahme-Nachweis-Wächter (ADR 0022 F13, #1755): die PR-CI erzwingt Urteil je Kriterium, Cap, head-Regel und Spur.
  * Logik aus scripts/check-abnahme-nachweis.mjs importiert; git und gh sind injiziert, ein Fall nutzt echtes git. */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -128,6 +129,10 @@ describe("vertrauterMarker", () => {
     expect(m.vertrauterMarker([{ user: { login: "github-actions[bot]", type: "User" }, body: text() }], "owner", Z)).toBeNull();
     expect(m.vertrauterMarker([{ user: owner, body: text() }], "owner", Z)?.durchgang).toBe(1);
   });
+  test("ein späterer Kommentar ohne Marker verdrängt den Marker nicht", () => {
+    const k = [{ user: owner, body: text({ durchgang: 1 }) }, { user: owner, body: "LGTM, kein Marker" }];
+    expect(m.vertrauterMarker(k, "owner", Z)?.durchgang).toBe(1);
+  });
   test("ohne Kommentarliste: kein Marker", () => {
     expect(m.vertrauterMarker(undefined as unknown as unknown[], "owner", Z)).toBeNull();
   });
@@ -143,6 +148,12 @@ describe("verknuepfteTickets", () => {
     expect(m.verknuepfteTickets("Closes #5\nfixes #6, Resolved: #7\nCloses #5")).toEqual([5, 6, 7]);
     expect(m.verknuepfteTickets("Closes other/repo#8 und Siehe #9")).toEqual([]);
     expect(m.verknuepfteTickets(undefined as unknown as string)).toEqual([]);
+    expect(m.verknuepfteTickets("close #1, Fix #2, fixed #3, resolve #4, resolves #5, RESOLVED #6")).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+  test("Wortgrenzen: Unclosed, Anhang an der Nummer und Zeilenumbruch zählen nicht", () => {
+    expect(m.verknuepfteTickets("Unclosed #5")).toEqual([]);
+    expect(m.verknuepfteTickets("Closes #5x")).toEqual([]);
+    expect(m.verknuepfteTickets("Closes\n#5")).toEqual([]);
   });
 });
 
@@ -189,6 +200,11 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     rot(lauf({ messages }).r.fehler, /entfaellt ist bei Ticket #9/);
     expect(lauf({ messages, issue: { body: "ohne" } }).r.ok).toBe(true);
     expect(lauf({ messages, env: { KQ_PR_BODY: "kein Ticket" } }).r.ok).toBe(true);
+  });
+  test("entfaellt braucht weder PR-Nummer noch Kommentar-Abruf", () => {
+    const { r, ghAufrufe } = lauf({ messages: `${Z.abnahme}: entfaellt — kein Kriterium`, issue: { body: "ohne" }, env: { KQ_PR_NUMBER: "" } });
+    expect(r.ok).toBe(true);
+    expect(ghAufrufe.some((a) => a.join(" ").includes("/comments"))).toBe(false);
   });
   test("Urteil ohne verknüpftes Ticket ist rot", () => rot(lauf({ env: { KQ_PR_BODY: "" } }).r.fehler, /braucht ein verknüpftes Ticket/));
   test("mehrere Tickets und ein PR statt Ticket sind rot", () => {
@@ -261,7 +277,7 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 
   /** Basis, Feature-Commit (Review-head), Abnahme-Zeile als leerer Commit; `nachher` baut weitere Commits dahinter. */
-  function repo(nachher: (dir: string) => void, abnahmeVorReview = false) {
+  function repo(nachher: (dir: string) => string | void, abnahmeVorReview = false, abnahmeWahl?: (s: { basis: string; erster: string; review: string }) => string) {
     const dir = mkdtempSync(join(tmpdir(), "kq-abnahme-"));
     dirs.push(dir);
     git(dir, "init", "-q", "-b", "main");
@@ -276,10 +292,10 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
     git(dir, "commit", "-q", "-am", "feature");
     const review = git(dir, "rev-parse", "HEAD");
     git(dir, "commit", "-q", "--allow-empty", "-m", `Abnahme\n\n${Z.abnahme}: head=${review} durchgaenge=1 urteil=K1:erfuellt`);
-    const abnahmeSha = abnahmeVorReview ? erster : review;
+    const abnahmeSha = abnahmeWahl ? abnahmeWahl({ basis, erster, review }) : abnahmeVorReview ? erster : review;
     git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: kubernia-planner\n${Z.review}: head=${abnahmeVorReview ? review : erster} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${abnahmeSha} durchgaenge=1 urteil=K1:erfuellt`);
-    nachher(dir);
-    return { dir, basis, abn: abnahmeSha };
+    const neueBasis = nachher(dir);
+    return { dir, basis: neueBasis || basis, abn: abnahmeSha };
   }
   const pruefe = (r: { dir: string; basis: string; abn: string }) => {
     const abn = r.abn;
@@ -306,4 +322,93 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
       ).fehler,
       /ändert Dateien \(a\.txt\)/,
     ));
+  /** Seitenzweig ab der Wurzel mit einer Änderung an `datei`, dann Merge in main; die Basis ist danach die Spitze des Seitenzweigs (wie im Betrieb die Spitze von main). */
+  const mergeVonMain = (datei: string, inhalt: string, loesung?: string) => (dir: string) => {
+    const wurzel = git(dir, "rev-list", "--max-parents=0", "HEAD");
+    git(dir, "checkout", "-q", "-b", "side", wurzel);
+    writeFileSync(join(dir, datei), inhalt);
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", "main-aenderung");
+    const spitze = git(dir, "rev-parse", "HEAD");
+    git(dir, "checkout", "-q", "main");
+    try {
+      git(dir, "merge", "-q", "--no-edit", "side");
+    } catch {
+      writeFileSync(join(dir, datei), loesung ?? "");
+      git(dir, "add", "-A");
+      git(dir, "commit", "-q", "--no-edit");
+    }
+    return spitze;
+  };
+  test("konfliktfreier Merge von main nach dem Abnahme-head bleibt grün", () => {
+    const r = pruefe(repo(mergeVonMain("b.txt", "b\n")));
+    expect(r.fehler).toEqual([]);
+  });
+  test("Konflikt-Merge nach dem Abnahme-head ist rot", () => {
+    rot(pruefe(repo(mergeVonMain("a.txt", "SEITE\n", "aufgeloest\n"))).fehler, /Konflikt-Merge [0-9a-f]{40} nach dem Abnahme-head/);
+  });
+  test("Abnahme-head außerhalb von base..HEAD ist rot (nicht im Slice)", () => {
+    rot(pruefe(repo(() => undefined, false, ({ basis }) => basis)).fehler, /liegt nicht im Slice/);
+  });
+});
+
+describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => {
+  test("keine Vergleichs-Basis auflösbar ist rot (fail-closed)", () => {
+    const r = m.checkAbnahmeNachweis({ runGit: () => { throw new Error("kein git"); }, gh: () => ({}), env: {}, ladeConfig: () => CONFIG });
+    expect(r.ok).toBe(false);
+    rot(r.fehler, /Keine Vergleichs-Basis/);
+  });
+
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const SKRIPT = fileURLToPath(new URL("../scripts/check-abnahme-nachweis.mjs", import.meta.url));
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  /** Temp-Repo mit Basis und einem Feature-Commit, dessen Message `nachricht` trägt; liefert Ordner, Basis und Config-Pfad. */
+  function cliRepo(nachricht: string) {
+    const dir = mkdtempSync(join(tmpdir(), "kq-abnahme-cli-"));
+    dirs.push(dir);
+    git(dir, "init", "-q", "-b", "main");
+    writeFileSync(join(dir, "a.txt"), "x\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", "basis");
+    const basis = git(dir, "rev-parse", "HEAD");
+    git(dir, "commit", "-q", "--allow-empty", "-m", nachricht);
+    const pfad = join(dir, "config.json");
+    writeFileSync(pfad, readFileSync(fileURLToPath(new URL("../.factory/projekt.json", import.meta.url)), "utf8")); // die echte, vollständige Config
+    return { dir, basis, pfad };
+  }
+  const cli = (r: { dir: string; basis: string; pfad: string }, env: Record<string, string> = {}, args: string[] = ["--config", r.pfad]) =>
+    spawnSync(process.execPath, [SKRIPT, ...args], { cwd: r.dir, encoding: "utf8", env: { ...process.env, KQ_DIFF_BASE: r.basis, GH_TOKEN: "", KQ_PR_BODY: "", KQ_PR_NUMBER: "", KQ_PR_DRAFT: "", ...env } });
+
+  test("rot: Exit 1, stderr nennt Fehler und Override-Hinweis", () => {
+    const r = cli(cliRepo("nur Code"));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/Abnahme-Nachweis fehlt oder ist ungültig/);
+    expect(r.stderr).toMatch(/KQ-Abnahme: Zeile fehlt/);
+  });
+  test("grün: entfaellt ohne Ticket, Exit 0", () => {
+    const r = cli(cliRepo("x\n\nKQ-Abnahme: entfaellt — kein Ticket"));
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/Abnahme-Nachweis ok/);
+  });
+  test("Entwurf: nur Bericht, Exit 0", () => {
+    const r = cli(cliRepo("nur Code"), { KQ_PR_DRAFT: "true" });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/Entwurf, nur Bericht/);
+    expect(r.stdout).toMatch(/Zeile fehlt/);
+  });
+  test("Override: Exit 0 und die Begründung steht in der Ausgabe", () => {
+    const r = cli(cliRepo("x\n\nKQ-Abnahme-Override: #9 Sitzung vor dem Werkzeug"));
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/KQ-Abnahme-Override — #9 Sitzung vor dem Werkzeug/);
+  });
+  test("kaputte Config und --config ohne Pfad: Exit 1", () => {
+    const k = cliRepo("nur Code");
+    writeFileSync(k.pfad, "{}");
+    expect(cli(k).status).toBe(1);
+    expect(cli(k, {}, ["--config"]).status).toBe(1);
+  });
 });

@@ -47,8 +47,6 @@ import { parseNachweis } from "./nachweis-lib.mjs";
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
 export { parseNachweis };
-// Die git-Helfer nach dem Review stehen in slice-override.mjs (auch das Abnahme-Gate liest sie; Einstiegsskripte importieren nicht voneinander, #1398).
-export { aenderungsCommitsNach, konfliktMergesNach };
 
 /** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter review-nachweis.test.ts). */
 export const MAX_FIX_RUNDEN = 2;
