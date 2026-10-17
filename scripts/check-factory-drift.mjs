@@ -51,7 +51,12 @@ export function pruefeDrift(lies) {
     if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt)`);
     else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert`);
   }
-  for (const id of Object.keys(stand.einheiten)) if (!ids.has(id)) fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
+  const nichtVerteilt = new Map((manifest.eintraege ?? []).filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
+  for (const id of Object.keys(stand.einheiten)) {
+    if (ids.has(id)) continue;
+    if (nichtVerteilt.has(id)) fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
+    else fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
+  }
   return { entfaellt: false, fehler: fehler.map((f) => `${f}. ${WEG}`), einheiten: ids.size };
 }
 

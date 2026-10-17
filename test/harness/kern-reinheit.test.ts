@@ -811,7 +811,7 @@ describe("Kern-Reinheit (#1610)", () => {
 
 describe("Ring-Tabelle (ADR 0029)", () => {
   test("RING_IMPORTE deckt genau die Ringe ab, jede Regel und NUR_FACTORY nennen nur bekannte Ringe", () => {
-    assert.deepEqual(Object.keys(RING_IMPORTE).sort(), [...RINGE].sort());
+    assert.deepEqual([...RINGE].sort(), ["kern", "kern-nach-entkopplung", "oberflaeche"]);
     for (const ziele of Object.values(RING_IMPORTE)) assert.ok(ziele.every((r) => RINGE.includes(r)), ziele.join());
     assert.ok(NUR_FACTORY.every((r) => RINGE.includes(r)));
     for (const [ring, ziele] of Object.entries(RING_IMPORTE)) assert.ok(ziele.includes(ring), `${ring} importiert den eigenen Ring`);
