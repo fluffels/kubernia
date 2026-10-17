@@ -27,7 +27,7 @@ export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren",
 /** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: die Umsetzer-Definition unter `.claude/agents/`). */
 export const SCHNITTE = ["pr", "verify"];
 
-/** Art des Festgefahren-Berichts hinter `FESTGEFAHREN:` (optional, fehlt sie: `ci`). Nur `ci` verlangt das Label am offenen PR; `abnahme` (#1754) verlangt stattdessen einen Entwurf ohne Auto-Merge (R8). */
+/** Art des Festgefahren-Berichts hinter `FESTGEFAHREN:` (optional, fehlt sie: `ci`). Jede Art verlangt bei offenem PR das Label am PR (R3); `abnahme` (#1754) verlangt zusätzlich einen Entwurf ohne Auto-Merge (R8). Ohne PR gehört das Label an das Issue (Prosa der Umsetzer-Definition, der Hook sieht dann keinen PR). */
 export const FESTGEFAHREN_ARTEN = ["review", "ci", "abnahme"];
 
 /**
@@ -104,13 +104,13 @@ const WARTEN = (nr) =>
  *  - R0 (nur PreToolUse): Format verletzt (kein gültiges Token, Zusatz, keine PR:-Zeile, keine BEFUNDE:-Zeile oder BEFUNDE als Angebot/Frage, #1723),
  *  - R1: `gemergt`/`abgebrochen` mit PR OPEN + Auto-Merge (CI läuft noch),
  *  - R2: `gemergt` mit einem PR, der nicht MERGED ist,
- *  - R3: `festgefahren` mit offenem PR ohne das Label `labels.festgefahren` der Config; die optionale Zeile `FESTGEFAHREN: review|ci` (fehlt sie: `ci`)
- *    befreit `review` vom Label, ein anderer Wert wird verweigert,
+ *  - R3: `festgefahren` mit offenem PR ohne das Label `labels.festgefahren` der Config, für jede Art (`FESTGEFAHREN: review|ci|abnahme`, fehlt die Zeile: `ci`);
+ *    ein anderer Wert wird verweigert. Mit `PR: -` prüft der Hook nichts (das Label am Issue deckt die Prosa ab),
  *  - R4 (#1592, beide Ereignisse): `uebergabe` ohne gültiges `SCHNITT: pr|verify` oder ohne `UEBERGABE:`-Zeile,
  *  - R5 (#1592): `uebergabe` mit `SCHNITT: pr` braucht einen PR, der OPEN ist und Auto-Merge hat oder schon MERGED ist (gh-Fehler: frei);
  *    `SCHNITT: verify` ruft kein gh auf. R1 bis R3 gelten für `uebergabe` nicht,
  *  - R7 (#1754): `abnahme` braucht eine gültige `ABNAHME:`-Zeile und einen PR, der OPEN und Entwurf ist, ohne Auto-Merge (gh-Fehler: frei); R1 bis R3 gelten nicht,
- *  - R8 (#1754): `festgefahren` mit `FESTGEFAHREN: abnahme` braucht kein Label, aber (bei erreichbarem PR, OPEN) einen Entwurf ohne Auto-Merge.
+ *  - R8 (#1754): `festgefahren` mit `FESTGEFAHREN: abnahme` braucht (bei erreichbarem PR, OPEN) einen Entwurf ohne Auto-Merge und das Label.
  */
 export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage }, deps = {}) {
   const vorher = hookEvent === "PreToolUse";
@@ -151,19 +151,16 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   }
   if (!status) return null;
   const offen = status.state === "OPEN";
-  if (token === "festgefahren" && festgefahren === "abnahme") return offen ? entwurfBlockade(nr, status, "FESTGEFAHREN: abnahme") : null;
+  if (token === "festgefahren" && festgefahren === "abnahme") return offen ? (entwurfBlockade(nr, status, "FESTGEFAHREN: abnahme") ?? labelBlockade(nr, status, stuckLabel, "FESTGEFAHREN: abnahme")) : null;
   if (offen && status.autoMergeRequest && (token === "gemergt" || token === "abgebrochen")) {
     return `Umsetzer-Abschluss (#1331): PR #${nr} ist noch offen und hat Auto-Merge, die CI läuft noch. Das ist kein Ende (ERGEBNIS: ${token}). ${WARTEN(nr)} Danach Audit-Kommentar, Aufräumen und erst dann der Bericht.`;
   }
   if (token === "gemergt" && status.state !== "MERGED") {
     return `Umsetzer-Abschluss (#1331): ERGEBNIS: gemergt, aber PR #${nr} hat den Status ${status.state}. Erst nach dem Merge berichten.`;
   }
-  if (token === "festgefahren" && festgefahren !== "review" && offen && !(status.labels ?? []).some((l) => l?.name === stuckLabel)) {
-    return (
-      `Umsetzer-Abschluss (#1342): ERGEBNIS: festgefahren bei offenem PR #${nr}, aber das Label ${stuckLabel} fehlt. ` +
-      `festgefahren gilt erst nach dem Protokoll (drei Fix-Versuche, ein konsolidierter PR-Kommentar, Label gesetzt). ` +
-      `Wartest du nur auf die CI: ${WARTEN(nr)}`
-    );
+  if (token === "festgefahren" && offen) {
+    const fehlt = labelBlockade(nr, status, stuckLabel, "ERGEBNIS: festgefahren");
+    if (fehlt) return `${fehlt} festgefahren gilt erst nach dem Protokoll (drei Fix-Versuche, ein konsolidierter PR-Kommentar, Label gesetzt). Wartest du nur auf die CI: ${WARTEN(nr)}`;
   }
   if (token === "gemergt" && status.state === "MERGED") return auditBlockade(nr, deps, status);
   return null;
@@ -248,6 +245,12 @@ function entwurfBlockade(nr, status, was) {
   if (status.state === "OPEN" && status.isDraft === true && !status.autoMergeRequest) return null;
   return `Umsetzer-Abschluss (#1754): ${was}, aber PR #${nr} ist nicht OPEN als Entwurf ohne Auto-Merge (Status ${status.state}, Entwurf ${status.isDraft ? "ja" : "nein"}, Auto-Merge ${status.autoMergeRequest ? "ja" : "nein"}). ` +
     `Vor der Abnahme: gh pr create --draft, ohne Auto-Merge; erst nach bestandener Abnahme gh pr ready und Auto-Merge.`;
+}
+
+/** Label-Prüfung für `festgefahren` (R3, R8): das Label `stuckLabel` muss am offenen PR stehen; `null` = vorhanden. */
+function labelBlockade(nr, status, stuckLabel, was) {
+  if ((status.labels ?? []).some((l) => l?.name === stuckLabel)) return null;
+  return `Umsetzer-Abschluss (#1342): ${was} bei offenem PR #${nr}, aber das Label ${stuckLabel} fehlt. Setze es am PR: gh pr edit ${nr} --add-label ${stuckLabel}.`;
 }
 
 /** R7 für `ERGEBNIS: abnahme` (#1754); `null` = frei. */

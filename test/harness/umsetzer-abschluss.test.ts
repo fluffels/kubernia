@@ -310,9 +310,11 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
       assert.equal(parseErgebnis(mitArt("Review")).festgefahren, "review");
       assert.equal(parseErgebnis(bericht("festgefahren")).festgefahren, null);
     });
-    test("review braucht kein Label am offenen PR, in beiden Ereignissen", () => {
-      assert.equal(blockade(eingabe(mitArt("review")), { prStatus: offenMitAuto }), null);
-      assert.equal(blockade(vorher(mitArt("review")), { prStatus: offenMitAuto }), null);
+    test("review verlangt das Label am offenen PR wie ci, in beiden Ereignissen (L3d, umgedreht: früher ohne Label frei)", () => {
+      for (const e of [eingabe, vorher]) assert.match(blockade(e(mitArt("review")), { prStatus: offenMitAuto }) ?? "", /Label status:festgefahren fehlt/);
+      assert.equal(blockade(eingabe(mitArt("review")), { prStatus: mitLabel }), null);
+      assert.equal(blockade(vorher(mitArt("review")), { prStatus: mitLabel }), null);
+      assert.equal(blockade(eingabe(bericht("festgefahren", "-") + "FESTGEFAHREN: review" + String.fromCharCode(10)), { prStatus: offenMitAuto }), null, "ohne PR kann der Hook nichts prüfen");
     });
     test("ci und die fehlende Zeile verlangen das Label weiter (Standard ci)", () => {
       assert.match(blockade(eingabe(mitArt("ci")), { prStatus: offenMitAuto }) ?? "", /Label status:festgefahren fehlt/);
@@ -486,9 +488,11 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
   });
 
   const stuckAbnahme = (pr = PR) => bericht("festgefahren", pr) + "FESTGEFAHREN: abnahme" + NL;
-  test("R8: festgefahren/abnahme braucht kein Label am Entwurf ohne Auto-Merge, in beiden Ereignissen", () => {
-    assert.equal(blockade(eingabe(stuckAbnahme()), { prStatus: entwurf }), null);
-    assert.equal(blockade(vorher(stuckAbnahme()), { prStatus: entwurf }), null);
+  const entwurfMitLabel = () => ({ state: "OPEN", autoMergeRequest: null, isDraft: true, labels: [stuck] });
+  test("R8: festgefahren/abnahme braucht den Entwurf ohne Auto-Merge UND das Label, in beiden Ereignissen (L3g, umgedreht: früher ohne Label frei)", () => {
+    assert.equal(blockade(eingabe(stuckAbnahme()), { prStatus: entwurfMitLabel }), null);
+    assert.equal(blockade(vorher(stuckAbnahme()), { prStatus: entwurfMitLabel }), null);
+    for (const e of [eingabe, vorher]) assert.match(blockade(e(stuckAbnahme()), { prStatus: entwurf }) ?? "", /FESTGEFAHREN: abnahme.*Label status:festgefahren fehlt/);
     assert.equal(parseErgebnis(stuckAbnahme()).festgefahren, "abnahme");
   });
 

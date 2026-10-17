@@ -5,7 +5,7 @@
  * jeder andere `Agent`-Spawn und jede `SendMessage` (dort alle String-Werte der Eingabe) mit so einem Text wird verweigert.
  * Die Pfad-Guards der beiden Holdout-Agenten (Frontmatter-Hooks) stehen in `holdout-guard.mjs`.
  *
- * Bewusste Grenzen: ein Ticket-Body, der wörtlich `SZENARIEN #1234` zitiert, blockiert den Planer-Spawn (dann das Zitat umformulieren);
+ * Bewusste Grenzen: ein Ticket-Body, der wörtlich einen Szenario-Kopf mit Ticketnummer zitiert, blockiert den Planer-Spawn (dann das Zitat umformulieren);
  * ein Hauptchat, der die Szenarien in eine Datei schreibt oder anders umschreibt, wird hier nicht gesehen.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen, keine I/O beim Import.
