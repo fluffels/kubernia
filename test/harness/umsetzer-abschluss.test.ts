@@ -451,6 +451,12 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
     assert.equal(abschluss.parseAbnahme(abnahme("ABNAHME: head=xyzxyzxyz worktree=/w")), null);
     assert.equal(abschluss.parseAbnahme(abnahme(`ABNAHME: head=${SHA}`)), null);
     assert.equal(abschluss.parseAbnahme(abnahme(`Text ABNAHME: head=${SHA} worktree=/w`)), null);
+    assert.equal(abschluss.parseAbnahme(null as unknown as string), null);
+  });
+
+  test("parseAbnahme: eingerückte Zeile gilt, Großbuchstaben im Head werden klein, Leerzeichen am Zeilenende fallen weg", () => {
+    assert.deepEqual(abschluss.parseAbnahme(abnahme(`  ABNAHME: head=ABC1234 worktree=/w/x   `)), { head: "abc1234", worktree: "/w/x" });
+    assert.deepEqual(abschluss.parseAbnahme(abnahme(`	ABNAHME: head=abc1234 worktree=/w`)), { head: "abc1234", worktree: "/w" });
   });
 
   test("R7: Entwurf ohne Auto-Merge mit ABNAHME-Zeile ist frei, in beiden Ereignissen", () => {
@@ -472,7 +478,6 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
   test("R7: gh-Fehler und leerer Status geben frei (fail-open); R1 bis R3 feuern für abnahme nicht", () => {
     assert.equal(blockade(eingabe(abnahme()), { prStatus: keinGh }), null);
     assert.equal(blockade(eingabe(abnahme()), { prStatus: () => null as unknown as Status }), null);
-    assert.equal(blockade(eingabe(abnahme()), { prStatus: entwurf }), null, "kein Label verlangt");
   });
 
   test("R0 gilt weiter: abnahme mit Zusatz oder ohne PR-Zeile wird vor der Zustellung verweigert", () => {
@@ -502,6 +507,7 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
     assert.match(block, /FESTGEFAHREN: .*review.*ci.*abnahme/);
     assert.match(UMSETZER, /gh pr create --draft/);
     assert.match(UMSETZER, /gh pr ready/);
+    assert.match(UMSETZER, /handoff[^\n]*Festgefahren-Label[^\n]*labels\.festgefahren/);
   });
 });
 

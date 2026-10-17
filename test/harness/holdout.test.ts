@@ -124,6 +124,14 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
     assert.match(uebergabeProbleme(SKILL.replace("<Szenarien aus Schritt 2>", "nichts"), LENSES, UMSETZER).join(NL), /vakuös/);
   });
 
+  test("Negativ: zwei Abnahme-Vorlagen, fehlender Nachfolger-Bullet und fehlender Gruppen-Absatz sind rot (kein stilles Nichtprüfen)", () => {
+    const bloecke = agentBloecke(SKILL).filter((b) => spawnTyp(b) === "holdout-abnahme");
+    assert.equal(bloecke.length, 1);
+    assert.match(uebergabeProbleme(SKILL + NL + bloecke[0], LENSES, UMSETZER).join(NL), /genau eine Abnahme-Vorlage, gefunden 2/);
+    assert.match(uebergabeProbleme(SKILL.replace("- **`uebergabe`** (Phasen-Schnitt", "- **`xuebergabe`** (Phasen-Schnitt"), LENSES, UMSETZER).join(NL), /Bullet uebergabe .* fehlt/);
+    assert.match(uebergabeProbleme(SKILL, LENSES, UMSETZER.replace("**Gruppen (#1647", "**Gruppe (#1647")).join(NL), /Absatz Gruppen fehlt/);
+  });
+
   test("szenarioBezug: Platzhalter und Kopf zählen, gewöhnliche Wörter und Fremdplatzhalter nicht", () => {
     assert.equal(szenarioBezug("<Szenarien>"), true);
     assert.equal(szenarioBezug("<die Szenario-Liste>"), true);
@@ -133,6 +141,15 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
 
   test("keine getrackte Datei trägt einen echten Kopf SZENARIEN #<ziffern>", () => {
     assert.deepEqual(szenarienKoepfe(ROOT), []);
+  });
+
+  test("Negativ: szenarienKoepfe wirft bei einem git-Fehler (kein Repo) statt still grün zu sein", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-holdout-kein-repo-"));
+    try {
+      assert.throws(() => szenarienKoepfe(dir));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("Negativ: szenarienKoepfe findet einen echten Kopf in einer getrackten Datei, einen Platzhalter nicht", () => {
