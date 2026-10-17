@@ -325,6 +325,7 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
   });
   test("docs-gen-Kopie maskiert dieselben Metazeichen wie der Kern (Drift-Schutz)", () => {
     for (const z of ".*+?^$" + "{}()|[]\\") expect(docsGen.escapeRegex(z), z).toBe(N.escapeRegex(z));
+    expect(docsGen.escapeRegex("a/b-c")).toBe("a/b-c"); // wie bisher in docs-gen: `/` und `-` bleiben unmaskiert
   });
   test("die erlaubten Quellen existieren und tragen die Zeichenklasse wirklich", () => {
     for (const f of ERLAUBT) expect(lies(f), f).toContain(NADEL);

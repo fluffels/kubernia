@@ -87,9 +87,28 @@ describe("bewerteAbnahmeWrite", () => {
     expect(G.bewerteAbnahmeWrite("C:/Temp/a.mjs", "", { tmp: "C:/Temp/" }).block).toBe(false);
     expect(G.bewerteAbnahmeWrite("C:/Temp2/a.mjs", "", { tmp: "C:/Temp/" }).block).toBe(true);
   });
-  test.runIf(process.platform === "win32")("Windows: Groß-/Kleinschreibung des Laufwerks und Ordners zählt nicht", () => {
-    expect(w("c:/temp/a.mjs").block).toBe(false);
-    expect(G.bewerteSzenarioLesen("Read", { file_path: "c:/dev/repo/docs/x.md" }, "", { root: "C:/dev/repo" }).block).toBe(false);
+  /** Führt `fn` mit gesetzter Plattform aus (der Vergleich liest `process.platform` bei jedem Aufruf), danach zurück. */
+  const auf = (plattform: string, fn: () => void) => {
+    const alt = process.platform;
+    Object.defineProperty(process, "platform", { value: plattform });
+    try {
+      fn();
+    } finally {
+      Object.defineProperty(process, "platform", { value: alt });
+    }
+  };
+  test("Windows: Groß-/Kleinschreibung des Laufwerks und Ordners zählt nicht", () => {
+    auf("win32", () => {
+      expect(w("c:/temp/a.mjs").block).toBe(false);
+      expect(G.bewerteSzenarioLesen("Read", { file_path: "c:/dev/repo/docs/x.md" }, "", { root: "C:/dev/repo" }).block).toBe(false);
+    });
+  });
+  test("POSIX: Groß-/Kleinschreibung zählt (/TMP ist nicht /tmp)", () => {
+    auf("linux", () => {
+      expect(G.bewerteAbnahmeWrite("/tmp/a.mjs", "", { tmp: "/tmp" }).block).toBe(false);
+      expect(G.bewerteAbnahmeWrite("/TMP/a.mjs", "", { tmp: "/tmp" }).block).toBe(true);
+      expect(G.bewerteSzenarioLesen("Read", { file_path: "/home/u/Repo/docs/x.md" }, "", { root: "/home/u/repo" }).block).toBe(true);
+    });
   });
   test("echtes os.tmpdir() ohne Test-Eingabe: ein Pfad darunter ist erlaubt", () => {
     expect(G.bewerteAbnahmeWrite(`${tmpdir()}/x/a.mjs`, "").block).toBe(false);
