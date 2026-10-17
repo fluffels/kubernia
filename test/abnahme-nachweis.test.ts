@@ -109,6 +109,9 @@ describe("K4: head-Regel", () => {
 
 describe("K5: Spur", () => {
   test("ohne Marker rot", () => rot(bewerte({ marker: null }), /Spur fehlt/));
+  test("kurzer Zeilen-head gegen langen Marker-head ist grün (Präfix in beide Richtungen)", () => {
+    expect(bewerte({ abnahme: { ...urteilZeile(), head: H.slice(0, 8) } })).toEqual([]);
+  });
   test("head, Durchgang oder Urteil weichen ab", () => {
     rot(bewerte({ marker: marker({ head: "c".repeat(40) }) }), /Marker-head/);
     rot(bewerte({ marker: marker({ durchgang: 2 }) }), /Marker-Durchgang 2/);
@@ -124,6 +127,9 @@ describe("vertrauterMarker", () => {
     expect(m.vertrauterMarker([{ user: { login: "fremd", type: "User" }, body: text() }], "owner", Z)).toBeNull();
     expect(m.vertrauterMarker([{ user: { login: "github-actions[bot]", type: "User" }, body: text() }], "owner", Z)).toBeNull();
     expect(m.vertrauterMarker([{ user: owner, body: text() }], "owner", Z)?.durchgang).toBe(1);
+  });
+  test("ohne Kommentarliste: kein Marker", () => {
+    expect(m.vertrauterMarker(undefined as unknown as unknown[], "owner", Z)).toBeNull();
   });
   test("Hand-off-Marker zählt nicht, der jüngste vertraute Marker gewinnt", () => {
     expect(m.vertrauterMarker([{ user: owner, body: text({ handoff: true }) }], "owner", Z)).toBeNull();
@@ -198,6 +204,26 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     rot(lauf({ ghFehler: "issue" }).r.fehler, /gh kaputt/);
     rot(lauf({ ghFehler: "kommentare" }).r.fehler, /gh kaputt/);
     rot(lauf({ gitFehler: true }).r.fehler, /git kaputt/);
+  });
+  test("GITHUB_REPOSITORY bestimmt Repo und vertrauten Owner; ohne Fehler ist es kein Entwurf; KQ_PR_DRAFT=false ist rot", () => {
+    const { r, ghAufrufe } = lauf({ env: { GITHUB_REPOSITORY: "x/y" } });
+    expect(ghAufrufe[0][1]).toBe("repos/x/y/issues/9");
+    rot(r.fehler, /Spur fehlt/); // Kommentar von „owner“, vertraut wäre nur „x“
+    const gruen = lauf({ env: { KQ_PR_DRAFT: "true" } }).r;
+    expect(gruen.entwurf).toBe(false);
+    rot(lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "false" } }).r.fehler, /Zeile fehlt/);
+    expect(lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "false" } }).r.ok).toBe(false);
+  });
+  test("unbekannter Abnahme-head (rev-parse scheitert) ist rot", () => {
+    const git = (a: string[]): string => {
+      if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);
+      if (a[0] === "rev-parse" && a[3].startsWith(H)) throw new Error("unknown revision");
+      if (a[0] === "rev-parse") return a[3].slice(0, 40);
+      if (a[0] === "log") return `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
+      return "";
+    };
+    const r = m.checkAbnahmeNachweis({ runGit: git, gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: AK }), env: { KQ_DIFF_BASE: "1".repeat(40), KQ_PR_BODY: BODY(), KQ_PR_NUMBER: "42" }, ladeConfig: () => CONFIG });
+    rot(r.fehler, /kein bekannter Commit/);
   });
   test("Entwurf: nur Bericht, ok mit Fehlern; auch bei gh-Fehler", () => {
     const { r } = lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "true" } });
