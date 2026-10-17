@@ -464,6 +464,17 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
     assert.match(f[0], /review-lenses › Nachweis nach Konvergenz/);
   });
 
+  test("bewerteNachweis: genau fünf Dateien ohne …, sechs mit … und nur fünf Namen (Grenze)", () => {
+    const n = parseNachweis(review());
+    const meldung = (dateien: string[]) =>
+      bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, aenderungsCommits: [{ sha: X, dateien }] })[0];
+    assert.match(meldung(["1", "2", "3", "4", "5"]), /ändert 1, 2, 3, 4, 5: Delta-Lens/);
+    assert.doesNotMatch(meldung(["1", "2", "3", "4", "5"]), /…/);
+    const sechs = meldung(["1", "2", "3", "4", "5", "6"]);
+    assert.match(sechs, /ändert 1, 2, 3, 4, 5, …: Delta-Lens/);
+    assert.doesNotMatch(sechs, /ändert [^:]*6/);
+  });
+
   test("checkReviewNachweis: ein leerer Commit nach head (Nachweis, Override) bleibt grün", () => {
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), nach: { [X]: [] } }), env });
     assert.deepEqual(r.fehler, []);
