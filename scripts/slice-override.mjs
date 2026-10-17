@@ -106,9 +106,15 @@ export function sliceOverride(runGit, base, key) {
   } catch {
     messages = "";
   }
-  const { valid, invalid } = parseOverrideTrailers(messages, key);
+  const { invalid } = parseOverrideTrailers(messages, key);
+  return { reason: aktiverOverride(messages, key), invalid, versetzt: versetzteOverrideZeilen(messages, key) };
+}
+
+/** Der gültige Override-Grund für `key` in `text` (jüngste gültige Zeile gewinnt), `null` ohne Zeile oder nach einem Widerruf. Pure. */
+export function aktiverOverride(text, key) {
+  const { valid } = parseOverrideTrailers(text, key);
   const juengste = valid.length > 0 ? valid[valid.length - 1].reason : null;
-  return { reason: juengste !== null && !WIDERRUF.test(juengste) ? juengste : null, invalid, versetzt: versetzteOverrideZeilen(messages, key) };
+  return juengste !== null && !WIDERRUF.test(juengste) ? juengste : null;
 }
 
 /** Meldet ungültige Override-Zeilen (ohne `#<nr> <warum>`): ignoriert, nur ein Hinweis. */

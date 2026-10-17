@@ -6,7 +6,7 @@
  * Squash-Message, Präfix aus der Projekt-Config), rote CI-Läufe (distinct Head-SHAs mit Fehlschlag zwischen PR-Erstellung und Merge), das
  * Label `labels.festgefahren` der Projekt-Config (aus den Label-Events, zählt auch bei später entferntem Label) und Nacharbeit: ein Revert
  * oder eine Folge-Fix-Commit-Zeile `Folge #<ticket-nr>` innerhalb von 14 Tagen nach dem Merge. Daraus die
- * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Definitionen und Grenzen: docs/model-routing.md
+ * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Dazu je PR die Abnahme (`{durchgaenge}` | "entfaellt" | "override" | null) und die Quote im ersten Durchgang. Definitionen und Grenzen: docs/model-routing.md
  * › Ergebnis je Ticket-Lauf.
  *
  *   node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--start-agent <typ>] [--json]
@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { commitZeilenAus } from "./slice-override.mjs";
+import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
 import { passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
@@ -111,19 +111,29 @@ export function festgefahrenAusAntwort(antwort, nummern, label) {
   return out;
 }
 
+/** Abnahme eines PRs aus dem Merge-Body: `"override"` (hat Vorrang, wie im Gate; ein Widerruf hebt ihn auf), `{durchgaenge}` bei gültigem Urteil, `"entfaellt"`, sonst `null` (keine oder ungültige Zeile). Pure. */
+export function abnahmeVon(body, abnahme, zeilen) {
+  if (aktiverOverride(body, zeilen.abnahmeOverride) !== null) return "override";
+  if (abnahme?.art === "urteil") return { durchgaenge: abnahme.durchgaenge };
+  if (abnahme?.art === "entfaellt") return "entfaellt";
+  return null;
+}
+
 /** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt, `konfigZeilen` sind die Commit-Zeilen der Projekt-Config (`commitZeilen`). Pure. Liefert Zeilen und Kennzahlen. */
 export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen }) {
   const eintraege = prs.map((pr) => {
     const mergeSha = pr.mergeCommit?.oid ?? "";
     const commit = commits.find((c) => c.sha === mergeSha);
     const ticket = ticketVon(pr);
-    const { review } = parseNachweis(commit?.body ?? "", konfigZeilen);
+    const body = commit?.body ?? "";
+    const { review, abnahme } = parseNachweis(body, konfigZeilen);
     return {
       pr: pr.number,
       ticket,
       gemergt: pr.mergedAt,
       runden: review && Number.isInteger(review.runden) ? review.runden : null,
       blocker: review?.blocker ?? null,
+      abnahme: abnahmeVon(body, abnahme, konfigZeilen),
       ciFix: ciFixRunden(ci[pr.number] ?? [], pr.createdAt, pr.mergedAt),
       festgefahren: festgefahren[pr.number] ?? 0,
       nacharbeit: nacharbeitVon({ pr: pr.number, ticket, mergeSha, mergedAt: pr.mergedAt, commits, jetzt }),
@@ -160,6 +170,14 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
       nacharbeitOffen: zaehle("offen"),
       ciFixSumme: eintraege.reduce((a, z) => a + z.ciFix, 0),
       festgefahrenSumme: eintraege.reduce((a, z) => a + z.festgefahren, 0),
+      // Abnahme (ADR 0022 F13): gemessen = PRs mit gültigem Urteil, davon im ersten Durchgang; entfällt/override zählen nicht in die Quote, ohne = keine oder ungültige Zeile.
+      abnahme: {
+        gemessen: eintraege.filter((z) => typeof z.abnahme === "object" && z.abnahme !== null).length,
+        ersterDurchgang: eintraege.filter((z) => z.abnahme?.durchgaenge === 1).length,
+        entfaellt: eintraege.filter((z) => z.abnahme === "entfaellt").length,
+        override: eintraege.filter((z) => z.abnahme === "override").length,
+        ohne: eintraege.filter((z) => z.abnahme === null).length,
+      },
     },
   };
 }
@@ -177,6 +195,8 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   out.push(`Runde 1 mit Blocker (aus blocker=): ${prozent(k.runde1MitBlocker, k.mitBlockerFeld)}; Proxy Runden ≥ 2: ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
   for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
+  const a = k.abnahme;
+  out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne gültige Abnahme-Zeile ${a.ohne}`);
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
   return out.join("\n");
 }
