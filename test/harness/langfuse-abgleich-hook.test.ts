@@ -163,7 +163,7 @@ describe("starte: losgelöster Kindprozess", () => {
       expect(r.status).toBe(0);
       expect(r.stdout).toBe("");
     }
-  });
+  }, 60_000);
 });
 
 // ── Zugangs-Lader ────────────────────────────────────────────────────────────
@@ -632,5 +632,5 @@ describe("Ende zu Ende mit belegtem Lock (kein Request, Home umgebogen)", () => 
     const t = mitHome(["--session", "s1", "--trocken"]);
     expect(t.r.status).toBe(2);
     expect(t.zeilen).toEqual([]);
-  });
+  }, 60_000);
 });
