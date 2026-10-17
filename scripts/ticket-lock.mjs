@@ -2,7 +2,7 @@
 /**
  * Ticket-Lock (#1561 Z4) — verhindert, dass zwei Agenten-Sessions dasselbe Ticket bearbeiten, obwohl beide „claim und verifiziere“
  * durchlaufen haben: alle Agenten laufen unter demselben GitHub-Konto, der Assignee ist darum kein Lock (Evidenz: zwei Sessions im selben
- * Worktree `kq-1549`, eine löschte dem Gegenüber `node_modules`).
+ * Worktree, eine löschte dem Gegenüber `node_modules`).
  *
  *   node scripts/ticket-lock.mjs claim <nr> [--wiederaufnahme]    # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
  *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # rein lesend: vor Spawn und vor Übernahme eines Worktrees
@@ -18,7 +18,7 @@
  *
  * Mechanik: die Lock-Datei `<git-common-dir>/<Worktree-Präfix>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
  * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt, sandbox }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig; `sandbox` = `AGENT_SANDBOX` oder `null`) plus bei Bedarf `zuletzt: { zeit, quelle: "commit"|"schritt" }` (+ `schritt`), `uebergabe`, `gestoppt`. Das Format (Pfad, Parser, `lebenszeichenMs`) steht in `ticket-lock-lib.mjs`.
- * `claim` prüft vorher, ob ein Worktree `kq-<nr>` oder ein Branch `feature/kq-<nr>-*` (lokal oder remote) existiert (Exit 4). Ein
+ * `claim` prüft vorher, ob ein Worktree `<Worktree-Präfix><nr>` oder ein Branch `<Branch-Präfix><nr>-*` (lokal oder remote) existiert (Exit 4). Ein
  * fremder Lock, dessen jüngstes Lebenszeichen (`lebenszeichenMs`) jünger als `VERWAIST_MS` (2 h) ist, gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<Hash-Präfix>`
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
  * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock, dessen `erstellt` jünger als 2 h ist, `fremd` (bewusste Grenze: hier zählt `zuletzt` nicht); existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
@@ -40,6 +40,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
+import { ticketNamen, ladeTicketNamen } from "./ticket-namen.mjs";
 import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
@@ -122,14 +123,18 @@ function legeAn(deps, nr, nonce) {
   }
 }
 
-/** Gibt es einen Worktree `kq-<nr>` oder einen Branch `feature/kq-<nr>-*`? */
+/** Namen aus den Deps (Test) oder aus der echten Projekt-Config; ein fehlender Schlüssel wirft (kein Standardwert). */
+const namenVon = (deps) => deps.namen ?? ladeTicketNamen();
+
+/** Gibt es einen Worktree `<Worktree-Präfix><nr>` oder einen Branch `<Branch-Präfix><nr>-*`? */
 function ermittleBelegung(deps, nr) {
+  const namen = namenVon(deps);
   const refs = deps.git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
   const bloecke = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"]));
   const worktrees = bloecke.flatMap((b) => [b.pfad, b.branch].filter(Boolean));
-  const belegt = belegteNummern({ refs, worktrees }).has(nr);
-  const wtPfad = bloecke.find((b) => ticketAusRef(b.pfad) === nr)?.pfad ?? null;
-  return { belegt, refs: refs.filter((r) => ticketAusRef(r) === nr), wtPfad };
+  const belegt = belegteNummern({ refs, worktrees }, namen).has(nr);
+  const wtPfad = bloecke.find((b) => ticketAusRef(b.pfad, namen) === nr)?.pfad ?? null;
+  return { belegt, refs: refs.filter((r) => ticketAusRef(r, namen) === nr), wtPfad };
 }
 
 /** Sammelt die Aktivitäts-Zeitpunkte (ms) zu Branch-Köpfen, Reflog, geänderten Dateien und `node_modules`. */
@@ -193,7 +198,7 @@ function claim(deps, nr, wiederaufnahme = false) {
     const lock = liesLock(deps, nr);
     const urteil = wiederaufnahme ? entscheidePruefung({ lock, nonce: null, vorhanden: true, aktivitaet: letzteAktivitaet(sammleAktivitaet(deps, b)), jetzt: deps.jetzt() }) : "belegt";
     // Ein Herzschlag (`zuletzt`) schützt hier über `entscheideClaim` im Weiterlauf unten (`lebenszeichenMs`), nicht über die Aktivität.
-    if (urteil !== "frei" && urteil !== "uebernehmbar") return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (feature/kq-${nr}-*)${wiederaufnahme ? ` mit Lebenszeichen oder jungem Lock (${urteil})` : ""}: nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
+    if (urteil !== "frei" && urteil !== "uebernehmbar") return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Worktree oder Branch (${namenVon(deps).branchName(nr, "*")})${wiederaufnahme ? ` mit Lebenszeichen oder jungem Lock (${urteil})` : ""}: nicht claimen, nächstes Item. ${NICHT_VON_HAND}`);
   }
   deps.legeVerzeichnisAn(deps.lockDir);
   raeumeAuf(deps);
@@ -270,7 +275,7 @@ function lebenszeichen(deps, nr, nonce, schritt) {
 /** Lebenszeichen eines Commits (#1699, post-commit-Hook): Nummer aus dem Branch, nur `zuletzt`; ohne Ticket-Branch, ohne Lock oder bei jedem Fehler ein stiller No-op (Exit 0, der Hook darf nie stören). */
 function lebenszeichenCommit(deps) {
   try {
-    const nr = ticketAusRef(deps.git(["rev-parse", "--abbrev-ref", "HEAD"]).trim());
+    const nr = ticketAusRef(deps.git(["rev-parse", "--abbrev-ref", "HEAD"]).trim(), namenVon(deps));
     const lock = nr === null ? null : liesLock(deps, nr);
     if (lock) schreibeLock(deps, nr, { ...lock, zuletzt: { zeit: new Date(deps.jetzt()).toISOString(), quelle: "commit" } });
   } catch {
@@ -324,14 +329,16 @@ export function fuehreAus(argv, deps) {
 }
 
 /** Echte I/O: git per `execFileSync`, Lock-Verzeichnis im gemeinsamen git-Verzeichnis aller Worktrees. */
-export function echteDeps() {
+export function echteDeps({ config } = {}) {
+  const namen = ticketNamen(config ?? ladeProjektConfig());
   const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
   const gemeinsam = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
   return {
     git,
     jetzt: () => Date.now(),
     nonce: () => randomUUID(),
-    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: ladeProjektConfig().praefixe.worktree }),
+    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: namen.praefixe.worktree }),
+    namen,
     sandbox: process.env.AGENT_SANDBOX ?? null,
     liesDatei: (p) => readFileSync(p, "utf8"),
     schreibeNeu: (p, text) => {

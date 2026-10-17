@@ -229,18 +229,19 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
 export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees, abschlussDeps = {}) {
   const { stopHookActive, hookEvent, agentType } = parseStopInput(stdinText);
   if (stopHookActive) return { exit: 0, stdout: "", stderr: "" }; // bereits einmal blockiert → diesmal freigeben
-  // SubagentStop läuft ohne Matcher: nur das Ende des Umsetzers (agenten.umsetzer der Projekt-Config) ist zuständig (#1742).
-  // Ohne nutzbare Config blockiert der Hook mit Fix-Zeile (fail-closed); der Stop des Hauptchats braucht sie nicht.
+  // Ohne nutzbare Config blockiert der Hook mit Fix-Zeile (fail-closed, #1742/#1743): auch der Stop des Hauptchats braucht sie für die Worktree-Präfixe.
+  // Ein zweiter Stop mit stop_hook_active (oben) gibt frei, es gibt keine Schleife. SubagentStop läuft ohne Matcher: nur das Ende des
+  // Umsetzers (agenten.umsetzer der Projekt-Config) ist zuständig.
+  const { namen, config, grund } = namenOderGrund("Stop-Hook", abschlussDeps);
+  if (grund) return { exit: 2, stdout: JSON.stringify({ decision: "block", reason: grund }), stderr: grund };
   let deps = abschlussDeps;
   if (hookEvent === "SubagentStop") {
-    const { namen, config, grund } = namenOderGrund("Stop-Hook", abschlussDeps);
-    if (grund) return { exit: 2, stdout: JSON.stringify({ decision: "block", reason: grund }), stderr: grund };
     if (agentType !== namen.agenten.umsetzer) return { exit: 0, stdout: "", stderr: "" };
     deps = { ...abschlussDeps, config };
   }
   // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952) und den Umsetzer-Abschluss prüfen (#1331)
   const gruende = [];
-  const orphanResult = check(repoRoot);
+  const orphanResult = check(repoRoot, { namen });
   if (orphanResult.blocked) gruende.push(orphanResult.reason);
   const abschluss = abschlussBlockade(parseAbschlussInput(stdinText), deps);
   if (abschluss) gruende.push(abschluss);

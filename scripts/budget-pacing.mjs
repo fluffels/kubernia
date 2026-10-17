@@ -38,7 +38,13 @@ function probe() {
 }
 
 const jetzt = Date.now();
-const pfad = snapshotPfad();
+let pfad;
+try {
+  pfad = snapshotPfad();
+} catch (e) {
+  console.error(`✖ budget-pacing: ${e instanceof Error ? e.message : String(e)}`);
+  process.exit(2);
+}
 const { zielquote, warnung: zielWarnung } = zielquoteAusEnv(process.env);
 const gelesen = liesSnapshot(pfad);
 let snapshot = gelesen.snapshot;
