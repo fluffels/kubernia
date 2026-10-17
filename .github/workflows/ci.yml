@@ -8,6 +8,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 # Veraltete Runs desselben Branches/PRs abbrechen, sobald ein neuer startet.
@@ -25,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
+      issues: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -156,7 +159,7 @@ jobs:
 
       # Review- und Plan-Nachweis (#1270): jeder Agenten-PR trägt per Commit-Zeilen `KQ-Plan:` /
       # `KQ-Review:` den Beleg für Planungspass und konvergierten Lens-Review (Format:
-      # docs/agent-harness.md §3a). Bewusst LETZTER Schritt: der Nachweis entsteht erst nach dem
+      # docs/agent-harness.md §3a). Bewusst vorletzter Schritt (danach nur der Abnahme-Nachweis): der Nachweis entsteht erst nach dem
       # Review, und der Schritt darf die Ausführung der Gates davor nicht beeinflussen. Er läuft auch
       # nach einem roten Schritt davor (`!cancelled()`), damit ein fehlender Nachweis neben einem
       # anderen Rot sichtbar bleibt. Nur auf PRs; Dependabot-PRs haben weder Plan noch Review.
@@ -164,6 +167,19 @@ jobs:
       - name: Review- und Plan-Nachweis prüfen (#1270)
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         run: node scripts/check-review-nachweis.mjs
+
+      # Abnahme-Nachweis (#1755, ADR 0022 F13): Urteil je Akzeptanzkriterium des verknüpften Tickets plus Spur als PR-Kommentar
+      # (Format: docs/agent-harness.md §3a). Letzter Schritt, im Required-Job (kein neuer Required-Check). Ein Entwurf wird nur
+      # berichtet, maßgeblich ist der Lauf nach `ready_for_review`. Werte aus dem Ereignis nur über `env:`, nie per Ausdruck
+      # im `run:` (Script-Injection). GH_TOKEN liest Issue und Kommentare (Rechte `pull-requests` und `issues` read oben).
+      - name: Abnahme-Nachweis prüfen (#1755)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KQ_PR_NUMBER: ${{ github.event.pull_request.number }}
+          KQ_PR_DRAFT: ${{ github.event.pull_request.draft }}
+          KQ_PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-abnahme-nachweis.mjs
 
   # Security-Audit (#396): npm audit als CI-Gate. Bewusst ZWEISTUFIG, um die
   # ⚠️-Falle aus dem Ticket zu vermeiden – ein hartes high+-Gate über den GANZEN
