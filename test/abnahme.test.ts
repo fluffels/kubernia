@@ -518,14 +518,14 @@ describe("Beleg-Escaping (CodeQL js/incomplete-sanitization, #1796)", () => {
   });
 
   test("Zeilenumbruch im Beleg wird zu einem Leerzeichen: Tabellenzeile und Listenpunkt bleiben eine Zeile", () => {
-    expect(baue(["z1\nz2"])).toMatch(/^\| K1: .* \| erfuellt \| z1 z2 \|$/m);
+    expect(baue(["z1\nz2\nz3"])).toMatch(/^\| K1: .* \| erfuellt \| z1 z2 z3 \|$/m);
     const body = B.handoffKommentar({
       zeilen: Z,
       nr: 7,
-      urteile: [{ k: "K1", wert: "nicht-pruefbar", beleg: "z1\r\nz2" }],
+      urteile: [{ k: "K1", wert: "nicht-pruefbar", beleg: "z1\r\nz2\r\nz3" }],
       kriterienListe: [{ k: "K1", text: "t" }],
     });
-    expect(body).toMatch(/Grund: z1 z2$/m);
+    expect(body).toMatch(/Grund: z1 z2 z3$/m);
     expect(body).not.toContain("\r");
   });
 });
