@@ -7,8 +7,8 @@
  *
  * Getestet wird die reine, offline + deterministische Logik:
  *   - isStuck(n): Schwellen-Check
- *   - buildStuckComment(count, url): Kommentartext-Wächter
- *   - Konstanten MAX_FAILED_PUSHES + STUCK_LABEL
+ *   - buildStuckComment(count, url, label): Kommentartext-Wächter
+ *   - Konstante MAX_FAILED_PUSHES, stuckLabel() (aus labels.festgefahren der Projekt-Config)
  *
  * Ausführen mit:  npm test
  */
@@ -23,9 +23,10 @@ import { dirname, join } from "node:path";
 import * as festgefahren from "../scripts/check-festgefahren.mjs";
 
 const isStuck: (n: number) => boolean = festgefahren.isStuck;
-const buildStuckComment: (count: number, url: string) => string = festgefahren.buildStuckComment;
+const buildStuckComment: (count: number, url: string, label: string) => string = festgefahren.buildStuckComment;
 const MAX_FAILED_PUSHES: number = festgefahren.MAX_FAILED_PUSHES;
-const STUCK_LABEL: string = festgefahren.STUCK_LABEL;
+const stuckLabel: (config?: unknown) => string = festgefahren.stuckLabel;
+const STUCK_LABEL = "status:festgefahren";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -36,8 +37,8 @@ describe("Festgefahren-Wächter (#904)", () => {
     assert.strictEqual(MAX_FAILED_PUSHES, 4);
   });
 
-  test("STUCK_LABEL ist 'status:festgefahren'", () => {
-    assert.strictEqual(STUCK_LABEL, "status:festgefahren");
+  test("stuckLabel() liefert labels.festgefahren der Projekt-Config", () => {
+    assert.strictEqual(stuckLabel(), STUCK_LABEL);
   });
 
   // ── isStuck: Schwellen-Check ─────────────────────────────────────────────
@@ -61,7 +62,7 @@ describe("Festgefahren-Wächter (#904)", () => {
   // ── buildStuckComment: Kommentartext-Wächter ─────────────────────────────
 
   test("buildStuckComment enthält den Auslöser-Link", () => {
-    const comment = buildStuckComment(4, "https://github.com/fluffels/kubernia/actions/runs/42");
+    const comment = buildStuckComment(4, "https://github.com/fluffels/kubernia/actions/runs/42", STUCK_LABEL);
     const links = (comment.match(/https:\/\/[^\s)>"]+/g) ?? []).map((u) => new URL(u));
     assert.ok(
       links.some((u) => u.host === "github.com" && u.pathname === "/fluffels/kubernia/actions/runs/42"),
@@ -70,26 +71,26 @@ describe("Festgefahren-Wächter (#904)", () => {
   });
 
   test("buildStuckComment nennt die Anzahl der Fehlschläge", () => {
-    const comment = buildStuckComment(5, "https://example.com/run");
+    const comment = buildStuckComment(5, "https://example.com/run", STUCK_LABEL);
     assert.ok(comment.includes("5"), "Kommentar muss die Fehlschlag-Zahl nennen.");
   });
 
   test("buildStuckComment nennt die Anzahl der Fix-Versuche (failedCount - 1)", () => {
-    const comment = buildStuckComment(4, "https://example.com/run");
+    const comment = buildStuckComment(4, "https://example.com/run", STUCK_LABEL);
     // 4 distinct Fehlschläge = 3 Fix-Versuche nach dem Initial-Fehlschlag
     assert.ok(comment.includes("3"), "Kommentar muss die Anzahl der Fix-Versuche nennen.");
   });
 
-  test("buildStuckComment enthält das Label 'status:festgefahren'", () => {
-    const comment = buildStuckComment(4, "https://example.com/run");
+  test("buildStuckComment enthält das übergebene Label", () => {
+    const comment = buildStuckComment(4, "https://example.com/run", STUCK_LABEL);
     assert.ok(
-      comment.includes("status:festgefahren"),
+      comment.includes(STUCK_LABEL),
       "Kommentar muss das gesetzte Label erwähnen.",
     );
   });
 
   test("buildStuckComment enthält Handlungsanweisung für den Agenten", () => {
-    const comment = buildStuckComment(4, "https://example.com/run");
+    const comment = buildStuckComment(4, "https://example.com/run", STUCK_LABEL);
     assert.ok(
       comment.includes("Nicht weiterfixen"),
       "Kommentar muss die Handlungsanweisung 'Nicht weiterfixen' enthalten.",
@@ -97,7 +98,7 @@ describe("Festgefahren-Wächter (#904)", () => {
   });
 
   test("buildStuckComment ist ein nicht-leerer String", () => {
-    const comment = buildStuckComment(4, "");
+    const comment = buildStuckComment(4, "", STUCK_LABEL);
     assert.ok(typeof comment === "string" && comment.length > 0);
   });
 

@@ -20,8 +20,11 @@ import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as fremdtextRoh from "../../scripts/fremdtext-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektRoh from "../../scripts/projekt-config-lib.mjs";
 
-const fremdtext = fremdtextRoh as unknown as { VERTRAUTE_BOTS: string[]; FREMDEINGANG_LABELS: string[] };
+const fremdtext = fremdtextRoh as unknown as { VERTRAUTE_BOTS: string[]; fremdeingangLabels: (c: unknown) => string[] };
+const ladeProjektConfig = (projektRoh as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
@@ -135,7 +138,7 @@ describe("Fremdtext-Gate (#1433)", () => {
 
   test("e) Vertrauensliste des Skripts entspricht dem Literal, die Brain-Seite nennt sie", () => {
     assert.ok(listenGleich(fremdtext.VERTRAUTE_BOTS, ERWARTET_BOTS));
-    assert.ok(listenGleich(fremdtext.FREMDEINGANG_LABELS, ERWARTET_LABELS));
+    assert.ok(listenGleich(fremdtext.fremdeingangLabels(ladeProjektConfig()), ERWARTET_LABELS));
     assert.ok(!listenGleich([...ERWARTET_BOTS, "evil[bot]"], ERWARTET_BOTS), "zusätzlicher Bot fällt auf");
     const seite = read("docs/sicherheit-agenten.md");
     for (const eintrag of [...ERWARTET_BOTS, ...ERWARTET_LABELS]) assert.ok(seite.includes(eintrag), eintrag);

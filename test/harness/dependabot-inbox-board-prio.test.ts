@@ -39,7 +39,8 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
 
   test("checkt das Repo aus und richtet Node ein (Voraussetzung für board-place.mjs)", () => {
     assert.match(yml, /actions\/checkout@v7/);
-    assert.match(yml, /actions\/setup-node@v7\n\s+(?:continue-on-error: true\n\s+)?with:\n\s+node-version-file: \.nvmrc/);
+    assert.match(yml, /actions\/setup-node@v7\n\s+with:\n\s+node-version-file: \.nvmrc/);
+    assert.doesNotMatch(yml, /continue-on-error/, "ein gescheiterter Checkout oder Node-Schritt macht den Lauf rot (das Label kommt aus der Config)");
     assert.doesNotMatch(yml, /sparse-checkout:/, "die Import-Hülle von board-place.mjs ist groß: volles Repo");
   });
 
@@ -82,8 +83,9 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
     );
   });
 
-  test("legt das Sammel-Issue mit area:harness an, nicht area:architektur (#1628)", () => {
-    assert.match(yml, /INBOX_LABEL: area:harness/);
+  test("legt das Sammel-Issue mit dem Label aus der Projekt-Config an, nicht area:architektur (#1628, #1744)", () => {
+    assert.ok(yml.includes("INBOX_LABEL: ${{ steps.label.outputs.wert }}"));
+    assert.doesNotMatch(yml, /INBOX_LABEL: area:/);
     assert.doesNotMatch(yml, /area:architektur/);
   });
 });

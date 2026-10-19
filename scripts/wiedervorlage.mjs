@@ -14,13 +14,15 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { REPO } from "./board-lib.mjs";
+import { FACTORY_LABEL, REPO } from "./board-lib.mjs";
 import { platziereOben } from "./inbox-lib.mjs";
 
 /** Titel-Präfix der Wiedervorlage-Tickets; derselbe Marker steht als Notfall-Art `wiedervorlage` in `NOTFAELLE` (board-lib.mjs). */
 export const TITEL_PRAEFIX = "⏰ Wiedervorlage:";
 
-const STANDARD_LABEL = "area:harness";
+/** Pur: das Label eines Eintrags; ohne eigenes `label` das Standard-Label (im Lauf das Harness-Label der Projekt-Config). */
+export const labelFuer = (eintrag, standard) => eintrag.label ?? standard;
+
 const DATEI = fileURLToPath(new URL("../.github/wiedervorlagen.json", import.meta.url));
 
 /** Der Marker im Ticket-Body, über den ein Eintrag sein Ticket wiederfindet. Pur. */
@@ -164,7 +166,7 @@ function main() {
     heute: new Date().toISOString().slice(0, 10),
     tickets: ladeTickets(),
     trocken: process.argv.includes("--dry-run"),
-    anlegen: (e) => legeAn(e, e.label ?? STANDARD_LABEL),
+    anlegen: (e) => legeAn(e, labelFuer(e, FACTORY_LABEL)),
     sortiereEin,
   });
   process.exit(code);

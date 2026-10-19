@@ -20,7 +20,10 @@ import { describe, test } from "vitest";
 import * as pcRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as festRaw from "../../scripts/check-festgefahren.mjs";
 
+const stuckLabel = (c: unknown) => (festRaw as unknown as { stuckLabel: (c: unknown) => string }).stuckLabel(c);
 const ladeProjektConfig = () => (pcRaw as unknown as { ladeProjektConfig: () => { labels: { festgefahren: string } } }).ladeProjektConfig();
 
 type Status = { state: string; autoMergeRequest: object | null; labels?: { name: string }[]; isDraft?: boolean };
@@ -337,11 +340,13 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     });
   });
 
-  test("Bindungen: STUCK_LABEL und ERGEBNIS_WERTE stimmen mit check-festgefahren und dem Formatblock überein", () => {
-    const label = /export const STUCK_LABEL = "([^"]+)"/.exec(readFileSync(resolve(ROOT, "scripts/check-festgefahren.mjs"), "utf8"))?.[1];
-    assert.equal(label, "status:festgefahren");
-    // umsetzer-abschluss liest das Label aus der Projekt-Config (#1742); der Wert dort muss dem Protokoll-Label entsprechen.
-    assert.equal(ladeProjektConfig().labels.festgefahren, label, "Projekt-Config und check-festgefahren nutzen dasselbe Label");
+  test("Bindungen: stuckLabel und ERGEBNIS_WERTE stimmen mit check-festgefahren und dem Formatblock überein", () => {
+    // Beide Skripte lesen das Label aus der Projekt-Config (#1742, #1744): ein Fixture-Label muss bei check-festgefahren ankommen.
+    const fixture = { labels: { festgefahren: "zustand:fest" } };
+    assert.equal(stuckLabel(fixture), fixture.labels.festgefahren, "check-festgefahren liest labels.festgefahren");
+    assert.equal(stuckLabel(ladeProjektConfig()), ladeProjektConfig().labels.festgefahren);
+    assert.match(readFileSync(resolve(ROOT, "scripts/umsetzer-abschluss.mjs"), "utf8"), /labels\.festgefahren/);
+    assert.match(readFileSync(resolve(ROOT, "scripts/check-festgefahren.mjs"), "utf8"), /labelAus\(config, "festgefahren"\)/);
     const format = /^ERGEBNIS: (.+)$/m.exec(abschnitt(UMSETZER, /^## Letzte Nachricht/).split("```")[1])?.[1].split(" | ");
     assert.deepEqual(abschluss.ERGEBNIS_WERTE, format);
     // gh pr view muss die Felder liefern, die R1 bis R3 lesen; fehlte `labels`, verweigerte R3 jedes festgefahren (alle Tests injizieren prStatus).

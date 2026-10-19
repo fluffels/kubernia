@@ -2,7 +2,7 @@
 /**
  * Die Spielquote (ADR 0016, F11 aus ADR 0022 in #1729): höchstens 1 Factory-Merge auf `SPIEL_QUOTE` Produkt-Merges. Pur, ohne I/O,
  * damit der Takt (Sammelticket nach vorn) und die Auswahl (welche Seite ist dran) dieselbe Zählung benutzen.
- * Ein Factory-Merge ist ein Commit auf main, dessen Titel ein `area:harness`-Issue referenziert (`istHarnessCommit`); Bots zählen nicht.
+ * Ein Factory-Merge ist ein Commit auf main, dessen Titel ein Issue mit dem Harness-Label der Config referenziert (`istHarnessCommit`); Bots zählen nicht.
  */
 import { alsDatum } from "./board-lib.mjs";
 
@@ -29,7 +29,7 @@ const istBot = (c) => /\[bot\]$/i.test(String(c?.author?.login ?? ""));
 /**
  * Ist dieser Commit von main ein Harness-Merge? Der Squash-Commit trägt den PR-Titel `feat(<scope>): …`; Scope `harness` markiert
  * Harness-Arbeit (Konvention aus AGENTS.md, in den letzten 14 Tagen 86 von 125 Commits). Bot-Commits sind keine Ticket-Merges. Pur.
- * Seit #1428 zählt das Label: `harnessIssues` ist die Menge der Nummern geschlossener `area:harness`-Issues (90 Tage, lädt `main` ohnehin).
+ * Seit #1428 zählt das Label: `harnessIssues` ist die Menge der Nummern geschlossener Harness-Issues (90 Tage, lädt `main` ohnehin).
  * Nennt die Titelzeile `#N`-Referenzen, entscheiden sie allein: eine davon in der Menge = Harness, sonst Spiel (so zählen `docs(adr)`
  * und `fix(ci)` zu einem Harness-Issue als Harness, ein `feat(harness)` zu einem Spiel-Issue als Spiel). Ohne Referenz oder ohne Menge
  * (null) bleibt der Rückfall auf den COMMIT-SCOPE `(harness)`. Bewusste Grenze: ein Commit ohne `#N` im Titel (Handarbeit) zählt nur

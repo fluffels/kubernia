@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie, bricht schon der Import ab (kein stiller Standardwert, #1611).
 const PROJEKT = ladeProjektConfig();
@@ -24,12 +24,13 @@ export function boardFuerRolle(rolle) {
 }
 
 /** Label, das ein Issue dem Factory-Board zuordnet (Trennregel: Harness-Arbeit auf das Factory-Board, alles andere auf das Produkt-Board). */
-export const FACTORY_LABEL = "area:harness";
+export const FACTORY_LABEL = labelAus(PROJEKT, "harness");
 
-/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `FACTORY_LABEL` ergibt `factory`, sonst `produkt`. Ohne Liste wirft sie. */
-export function boardRolleFuer(labels) {
+/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste oder ohne Schlüssel wirft sie. */
+export function boardRolleFuer(labels, config = PROJEKT) {
   if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
-  return labels.some((l) => (typeof l === "string" ? l : l?.name) === FACTORY_LABEL) ? "factory" : "produkt";
+  const harness = labelAus(config, "harness");
+  return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
 }
 
 /**

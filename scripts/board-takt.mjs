@@ -19,6 +19,7 @@ import { pathToFileURL } from "node:url";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
 import {
+  FACTORY_LABEL,
   REPO,
   SAMMELTICKET_TITEL,
   STATUS_TITEL,
@@ -78,7 +79,7 @@ export function zaehleSpielMerges(commits, seit = null, harnessIssues = null) {
 
 /**
  * Die Spielquote des Fensters als Zahlen und Zeile für das Protokoll: `harness` und `spiel` = Ticket-Merges (ohne Bots) mit bzw. ohne
- * Harness-Zuordnung (`istHarnessCommit`), `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security gelten als Harness, sofern ihr Issue `area:harness` trägt, und
+ * Harness-Zuordnung (`istHarnessCommit`), `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security gelten als Harness, sofern ihr Issue das Harness-Label der Config trägt, und
  * zählen hier mit; das Protokoll ist Information, kein Gate). Pur.
  */
 export function quotenBericht(commits, seit = null, harnessIssues = null) {
@@ -250,7 +251,7 @@ export const ECHTE_IO = {
  * Der ganze Lauf (#1428 Z23, vorher `main`): Fenster berechnen, Status-Ticket und Harness-Sammelticket entscheiden und ausführen.
  * `io` bündelt jeden Zugriff nach außen (siehe `ECHTE_IO`). Liefert `{ fehler }`; der Aufrufer setzt daraus den Exit-Code.
  */
-export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO }) {
+export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, harnessLabel = FACTORY_LABEL }) {
   let position = null;
   let positionFehler = null;
   try {
@@ -260,7 +261,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   }
   const offene = normalizeOffene(io.loadOpenIssuePages(repo));
   const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
-  const geschlossen = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=area:harness&since=${seit}&per_page=100`])
+  const geschlossen = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=${encodeURIComponent(harnessLabel)}&since=${seit}&per_page=100`])
     .flat()
     .filter((i) => !i.pull_request && typeof i.closed_at === "string")
     .sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at));

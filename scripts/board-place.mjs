@@ -12,7 +12,7 @@
  *   node scripts/board-place.mjs --umzug [--dry-run]         # Items auf dem falschen Board umziehen (Trennregel)
  *   node scripts/board-place.mjs --missing                  # offene Issues ohne Board-Item auf irgendeinem Board (nur Bericht)
  *
- * Zwei Boards (ADR 0022 F11, #1729): das Ziel-Board bestimmt die Trennregel (`boardRolleFuer` der Labels: `area:harness` Factory, sonst Produkt;
+ * Zwei Boards (ADR 0022 F11, #1729): das Ziel-Board bestimmt die Trennregel (`boardRolleFuer` der Labels: Harness-Label der Config: Factory, sonst Produkt;
  * Labels aus dem Board-Item, für Nummern ohne Item aus der Issue-REST). Gemischte Nummern und ein `--after`-Anker nur auf dem anderen Board
  * sind Exit 2. Steht eine Nummer auf beiden Boards, meldet das Skript es und sortiert auf dem Board laut Trennregel; eine Nummer nur auf dem
  * anderen Board wird zusätzlich auf dem Ziel-Board aufgenommen (Entfernen leistet nur `--umzug`).
