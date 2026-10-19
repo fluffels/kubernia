@@ -26,7 +26,7 @@ COPY . .
 RUN npm run build:devpanel
 
 # --- Stage 2: Serve (schlankes nginx, Laufzeit-Injektion per Entrypoint) ---
-FROM nginx:1.29-alpine AS serve
+FROM nginx:1.31-alpine AS serve
 # Die self-contained index.html (alle Assets inline) ins nginx-Wurzelverzeichnis.
 COPY --from=build /app/dist-devpanel/ /usr/share/nginx/html/
 # Das offizielle nginx-Image führt /docker-entrypoint.d/*.sh vor dem Start aus –
