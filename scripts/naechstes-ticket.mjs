@@ -14,7 +14,7 @@
  * (Hinweis „Rückfall“). Die Infozeile hinter der ersten Zeile und `--json` (`quote`) nennen Seite und Zählung. Die Commits lädt der Lauf nur bei Bedarf.
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 5 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
- * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Label `forum`) wird übersprungen und als „Befund melden“ ausgewiesen.
+ * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Forum-Label der Config) wird übersprungen und als „Befund melden“ ausgewiesen.
  *
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
@@ -33,7 +33,7 @@ import { entscheideSeite, produktMergesSeitFactory } from "./spielquote-lib.mjs"
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -83,7 +83,7 @@ export function messfensterGrund(fenster, stand) {
   return "";
 }
 
-/** Nutzersichtbare Bereichsnamen (#1552); das Label für „agentic“ bleibt `area:harness`. */
+/** Nutzersichtbare Bereichsnamen (#1552); das Label für „agentic“ ist `labels.harness` der Projekt-Config. */
 export const BEREICHE = { agentic: "Agentic Engineering", spiel: "Spielentwicklung" };
 
 /** `--bereich <wert>` bzw. `--bereich=<wert>` aus argv: `{ bereich }` (null ohne Schalter) oder `{ fehler }`. Pur. */
@@ -117,10 +117,10 @@ export function itemAusIssue(issue) {
  * Einzelprüfung einer vorgegebenen Nummer: dieselben Kriterien wie die Board-Auswahl (`ueberspringGrund`, auch Messfenster), aber ohne Status- und
  * Bereichsfilter; ein geschlossenes Issue ist nicht frei. `item` aus `itemAusIssue`. Liefert wie `waehleNaechstes` `{ ticket, uebersprungen }`. Pur.
  */
-export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen }) {
+export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config }) {
   const nr = item.number;
   if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
-  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb });
+  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config });
   return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
 }
 
@@ -129,10 +129,10 @@ export function istNotfallBeider(item) {
   return NOTFAELLE.filter((n) => n.art === "rot-main" || n.art === "security").some((n) => String(item.title ?? "").startsWith(n.marker));
 }
 
-/** Gehört das Item zum Bereich? Ohne Bereich immer; Notfälle (`istNotfallBeider`) zählen in beiden. Pur. */
-export function imBereich(item, bereich) {
+/** Gehört das Item zum Bereich? Ohne Bereich immer; Notfälle (`istNotfallBeider`) zählen in beiden. `harness` ist das Harness-Label der Config. Pur. */
+export function imBereich(item, bereich, harness = FACTORY_LABEL) {
   if (!bereich) return true;
-  return istNotfallBeider(item) || item.labels.includes(FACTORY_LABEL) === (bereich === "agentic");
+  return istNotfallBeider(item) || item.labels.includes(harness) === (bereich === "agentic");
 }
 
 /**
@@ -140,12 +140,13 @@ export function imBereich(item, bereich) {
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, nur = () => true, namen }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, nur = () => true, namen, config }) {
+  const harness = config === undefined ? FACTORY_LABEL : labelAus(config, "harness");
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const uebersprungen = [];
   for (const item of items) {
-    if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich) || !nur(item)) continue;
-    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, hartAb });
+    if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich, harness) || !nur(item)) continue;
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, hartAb, config });
     if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
     else return { ticket: ticketVon(item, r), uebersprungen };
   }
@@ -220,9 +221,9 @@ const spezAusgenommen = (t) => istKopfItem({ title: t.titel }) || SAMMELTICKET_T
 const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kein Lader)" });
 
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
-function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb }) {
+function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, config }) {
   if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
-  if (istFremdeingang({ user: c.autor, labels: c.labels }, owner).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
+  if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
   const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
   const fenster = messfensterZeilen(c.body);
@@ -267,8 +268,8 @@ export function fuehreAus(argv, io) {
     const einzel = t.ticket;
     const roh =
       einzel === null
-        ? { ...waehleUeberBoards({ ...io.lade(), ladeQuote: io.ladeQuote, owner: io.owner, bereich: b.bereich, hartAb: io.hartAb, namen: io.namen }), ...(b.bereich ? { bereich: b.bereich } : {}) }
-        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb, namen: io.namen });
+        ? { ...waehleUeberBoards({ ...io.lade(), ladeQuote: io.ladeQuote, owner: io.owner, bereich: b.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config }), ...(b.bereich ? { bereich: b.bereich } : {}) }
+        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config });
     const reparieren = reparierenVon(roh.uebersprungen);
     const ergebnis = reparieren.length > 0 ? { ...roh, reparieren } : roh;
     const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
@@ -340,17 +341,17 @@ const ladeEcht = () => ({
 });
 
 /**
- * Die Quote-Eingabe (nur bei Bedarf): eine Commit-Seite von main (100 Commits, neueste zuerst) und die Nummern der geschlossenen `area:harness`-Issues
+ * Die Quote-Eingabe (nur bei Bedarf): eine Commit-Seite von main (100 Commits, neueste zuerst) und die Nummern der geschlossenen Issues mit dem Harness-Label der Config
  * ab dem ältesten dieser Commits (minus 1 Tag). Jeder Lade- oder Formfehler wirft (Exit 2), nie eine stille Seite.
  */
-export function ladeQuoteEcht(lade = ghJson) {
+export function ladeQuoteEcht(lade = ghJson, harness = FACTORY_LABEL) {
   const commits = lade(["api", `repos/${REPO}/commits?sha=main&per_page=100`]);
   if (!Array.isArray(commits) || commits.length === 0) throw new Error("Spielquote: keine Commits von main geladen");
   const datum = (c) => Date.parse(c?.commit?.committer?.date ?? c?.commit?.author?.date ?? "");
   const aelteste = Math.min(...commits.map(datum));
   if (!Number.isFinite(aelteste)) throw new Error("Spielquote: Commits ohne gültiges Datum");
   const seit = new Date(aelteste - 24 * 60 * 60 * 1000).toISOString();
-  const seiten = lade(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=closed&labels=${FACTORY_LABEL}&since=${seit}&per_page=100`]);
+  const seiten = lade(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=closed&labels=${encodeURIComponent(harness)}&since=${seit}&per_page=100`]);
   if (!Array.isArray(seiten)) throw new Error("Spielquote: unerwartete Antwortform der geschlossenen Harness-Issues");
   return { commits, harnessIssues: new Set(seiten.flat().filter((i) => !i.pull_request).map((i) => i.number)) };
 }
@@ -361,7 +362,9 @@ const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${RE
 /** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). */
 export function echteIo({ config } = {}) {
   const cfg = config ?? ladeProjektConfig();
-  return { lade: ladeEcht, ladeQuote: () => ladeQuoteEcht(), ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: cfg.spezifikation?.hartAb, namen: ticketNamen(cfg) };
+  const harness = labelAus(cfg, "harness");
+  labelAus(cfg, "forum"); // fail-fast: das Fremdeingang-Label gehört zur Eingabe der Auswahl
+  return { lade: ladeEcht, ladeQuote: () => ladeQuoteEcht(ghJson, harness), ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: cfg.spezifikation?.hartAb, namen: ticketNamen(cfg), config: cfg };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

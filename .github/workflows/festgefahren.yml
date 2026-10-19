@@ -7,7 +7,7 @@ name: Festgefahren-Wächter
 # Fix-Versuchen technisch. Dieser Workflow schließt genau diese Lücke:
 # Er zählt, wie viele distinct Commits auf einem PR zu einem failed CI-Lauf
 # geführt haben. Wird die Schwelle (4 = 1 initial + 3 Fix-Versuche) erreicht,
-# setzt er das Label `status:festgefahren` und postet einen Konsolidierungs-
+# setzt er das Festgefahren-Label der Projekt-Config (`labels.festgefahren`) und postet einen Konsolidierungs-
 # Kommentar — unabhängig davon, ob der Agent die Verhaltensregel befolgt.
 #
 # Design:

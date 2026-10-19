@@ -10,7 +10,7 @@
  */
 import { FACTORY_LABEL, LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 
-// Zwei Boards (ADR 0022 F11, #1729): Status- und Sammeltickets tragen das Label `area:harness` und stehen laut Trennregel auf dem Factory-Board.
+// Zwei Boards (ADR 0022 F11, #1729): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
 const FACTORY_BOARD = boardFuerRolle(boardRolleFuer([FACTORY_LABEL]));
 import { fehlerMeldung } from "./gh-cli.mjs";
 

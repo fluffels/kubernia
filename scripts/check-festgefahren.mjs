@@ -13,7 +13,7 @@
  * (= Pushes, identifiziert über die head_sha) auf einem PR zu einem failed CI-Lauf
  * geführt haben. Erreicht die Zahl die Schwelle MAX_FAILED_PUSHES (1 initial +
  * 3 Fix-Versuche = 4 distinct gescheiterte Pushes), setzt es das Label
- * `status:festgefahren` auf den PR und postet den Konsolidierungs-Kommentar.
+ * das Festgefahren-Label der Projekt-Config (`labels.festgefahren`) auf den PR und postet den Konsolidierungs-Kommentar.
  *
  * Bewusst NICHT in `npm run verify`: der gh-Aufruf braucht Netz + Auth und ist
  * nicht deterministisch. Läuft als CI-Job in `.github/workflows/festgefahren.yml`,
@@ -27,12 +27,15 @@
 import { pathToFileURL } from "node:url";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 /** Schwelle: 1 initialer Fehlschlag + 3 gescheiterte Fix-Versuche = „dreimal" aus AGENTS.md. */
 export const MAX_FAILED_PUSHES = 4;
 
-/** Das Label, das der Wächter bei Erreichen der Schwelle setzt. */
-export const STUCK_LABEL = "status:festgefahren";
+/** Das Label, das der Wächter bei Erreichen der Schwelle setzt (`labels.festgefahren`); wirft ohne den Schlüssel, kein stiller Standardwert. */
+export function stuckLabel(config = ladeProjektConfig()) {
+  return labelAus(config, "festgefahren");
+}
 
 /**
  * Reine Logik: Ist die Schwelle überschritten?
@@ -51,16 +54,17 @@ export function isStuck(distinctFailedPushes) {
  *
  * @param {number} failedCount - Anzahl distinct Fehlschläge (>= MAX_FAILED_PUSHES)
  * @param {string} runUrl - URL des auslösenden CI-Laufs
+ * @param {string} label - das gesetzte Festgefahren-Label (`stuckLabel()`)
  * @returns {string}
  */
-export function buildStuckComment(failedCount, runUrl) {
+export function buildStuckComment(failedCount, runUrl, label) {
   const fixAttempts = failedCount - 1;
   return [
     `## ⚓ Festgefahren-Wächter hat angeschlagen (#904)`,
     ``,
     `Dieser PR hat **${failedCount} distinct fehlgeschlagene CI-Läufe** auf diesem Branch — das entspricht **${fixAttempts} gescheiterten Fix-Versuchen** nach dem ersten Fehlschlag.`,
     ``,
-    `Das Festgefahren-Protokoll aus [AGENTS.md](../AGENTS.md) (Schwelle: ${MAX_FAILED_PUSHES - 1} Fix-Versuche) ist damit erreicht. Das Label \`${STUCK_LABEL}\` ist gesetzt.`,
+    `Das Festgefahren-Protokoll aus [AGENTS.md](../AGENTS.md) (Schwelle: ${MAX_FAILED_PUSHES - 1} Fix-Versuche) ist damit erreicht. Das Label \`${label}\` ist gesetzt.`,
     ``,
     `**Als Agent: Nicht weiterfixen auf diesem Branch. Stattdessen:**`,
     `1. Den aktuellen Fehlerbefund hier zusammenfassen (was wurde versucht, warum greift es nicht)`,
@@ -78,7 +82,16 @@ function ghRun(args) {
   ghText(args, { stdio: "inherit" });
 }
 
-function main() {
+/** Der CI-Lauf. Liefert den Exit-Code 1, wenn `labels.festgefahren` fehlt (vor jedem gh-Aufruf); `config` ist für den Test injizierbar. */
+export function main({ config } = {}) {
+  // Config zuerst, vor jedem gh-Aufruf: fehlt `labels.festgefahren`, ist der Lauf rot (kein stiller Standardwert; Netzfehler bleiben graceful).
+  let label;
+  try {
+    label = stuckLabel(config);
+  } catch (err) {
+    console.error(`✖ ${err.message}`);
+    return 1;
+  }
   const repo = process.env.REPO;
   const headBranch = process.env.HEAD_BRANCH;
   const runUrl = process.env.RUN_URL ?? "(unbekannt)";
@@ -106,9 +119,9 @@ function main() {
   const prNumber = pr.number;
 
   // 2. Schon festgefahren? Kein Doppel-Kommentar.
-  const alreadyStuck = (pr.labels ?? []).some((l) => l.name === STUCK_LABEL);
+  const alreadyStuck = (pr.labels ?? []).some((l) => l.name === label);
   if (alreadyStuck) {
-    console.log(`PR #${prNumber}: Label '${STUCK_LABEL}' ist bereits gesetzt — übersprungen.`);
+    console.log(`PR #${prNumber}: Label '${label}' ist bereits gesetzt — übersprungen.`);
     return;
   }
 
@@ -135,15 +148,18 @@ function main() {
 
   // 4. Schwelle erreicht: Label setzen.
   console.log(
-    `Schwelle erreicht (${failedCount} >= ${MAX_FAILED_PUSHES}) — setze '${STUCK_LABEL}' auf PR #${prNumber}.`,
+    `Schwelle erreicht (${failedCount} >= ${MAX_FAILED_PUSHES}) — setze '${label}' auf PR #${prNumber}.`,
   );
-  ghRun(["pr", "edit", String(prNumber), "--repo", repo, "--add-label", STUCK_LABEL]);
+  ghRun(["pr", "edit", String(prNumber), "--repo", repo, "--add-label", label]);
 
   // 5. Konsolidierungs-Kommentar posten.
-  const comment = buildStuckComment(failedCount, runUrl);
+  const comment = buildStuckComment(failedCount, runUrl, label);
   ghRun(["pr", "comment", String(prNumber), "--repo", repo, "--body", comment]);
 
-  console.log(`Festgefahren-Wächter: PR #${prNumber} als '${STUCK_LABEL}' markiert.`);
+  console.log(`Festgefahren-Wächter: PR #${prNumber} als '${label}' markiert.`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const code = main();
+  if (code) process.exit(code);
+}

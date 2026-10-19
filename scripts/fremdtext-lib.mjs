@@ -1,10 +1,14 @@
 // Kein Shebang, kein Direktaufruf: Lib für `fremdtext.mjs` und `naechstes-ticket.mjs` (#1579, Konvention #1398: Einstiegsskripte
-// importieren nicht voneinander, gemeinsamer Code steht in einer Lib). Die Vertrauensliste des Fremdtext-Gates (#1433) und der gemeinsame Kommentar-Abruf (`issueKommentare`), pur, ohne Importe.
+// importieren nicht voneinander, gemeinsamer Code steht in einer Lib). Die Vertrauensliste des Fremdtext-Gates (#1433) und der gemeinsame Kommentar-Abruf (`issueKommentare`), pur;
+// einziger Import ist die Projekt-Config (das Fremdeingang-Label steht in `labels.forum`, #1744).
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 /** REST-Logins vertrauter Bots (zusätzlich zum Repo-Owner); gelten nur mit `type === "Bot"`. */
 export const VERTRAUTE_BOTS = Object.freeze(["github-actions[bot]", "dependabot[bot]"]);
-/** Labels, die einen Eintrag als Fremdeingang kennzeichnen, egal wer ihn anlegte. */
-export const FREMDEINGANG_LABELS = Object.freeze(["forum"]);
+/** Labels, die einen Eintrag als Fremdeingang kennzeichnen, egal wer ihn anlegte (aus der Config; wirft ohne `labels.forum`, fail-closed). */
+export function fremdeingangLabels(config) {
+  return Object.freeze([labelAus(config, "forum")]);
+}
 
 /** Ist der REST-User `{login, type}` vertraut? Alles Unbekannte, auch `null`, ist fremd. */
 export function istVertraut(user, owner) {
@@ -32,10 +36,12 @@ const labelName = (l) => (typeof l === "string" ? l : l?.name);
 /**
  * Die eine Fremdeingang-Entscheidung (Autor nicht vertraut ODER Fremdeingang-Label), gemeinsam für `fremdtext`, `naechstes-ticket` und `spezifikation`.
  * `issue`: `{ user, labels }` (labels als Strings oder `{name}`). Liefert `{ fremdeingang, grund, label }`; `grund` ist `""`, wenn vertraut.
+ * Das Label kommt aus `config` (ohne: die echte Config, nur auf `labels.forum` geprüft); fehlt der Schlüssel, wirft die Funktion.
  */
-export function istFremdeingang(issue, owner) {
+export function istFremdeingang(issue, owner, { config, lade = ladeProjektConfig } = {}) {
+  const labels = fremdeingangLabels(config ?? lade({ pruefen: false }));
   const autorVertraut = istVertraut(issue?.user, owner);
-  const label = (issue?.labels ?? []).map(labelName).find((n) => FREMDEINGANG_LABELS.includes(n));
+  const label = (issue?.labels ?? []).map(labelName).find((n) => labels.includes(n));
   const login = typeof issue?.user?.login === "string" && issue.user.login !== "" ? issue.user.login : "unbekannt";
   const grund = !autorVertraut ? `Autor @${login} ist nicht vertraut` : label !== undefined ? `Label ${label} (Text Dritter über das Forum)` : "";
   return { fremdeingang: !autorVertraut || label !== undefined, grund, label };

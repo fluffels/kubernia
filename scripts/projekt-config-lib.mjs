@@ -96,6 +96,15 @@ function pruefePraefixe(p) {
   return fehler;
 }
 
+/** Pur: das Label zum Schlüssel `labels.<schluessel>` der Config; wirft ohne nicht-leeren String (kein stiller Standardwert, #1744). */
+export function labelAus(config, schluessel) {
+  const wert = config?.labels?.[schluessel];
+  if (typeof wert !== "string" || wert.trim() === "") {
+    throw new Error(`labels.${schluessel} fehlt oder ist kein nicht-leerer String in ${PROJEKT_CONFIG}\nFix: den Schlüssel labels.${schluessel} in ${PROJEKT_CONFIG} eintragen`);
+  }
+  return wert;
+}
+
 /** Pur: prüft `labels`: die Pflichtschlüssel und alle weiteren Werte sind nicht-leere Strings. */
 function pruefeLabels(l) {
   if (!istObjekt(l)) return [`labels muss ein Objekt (Name → String) mit den Pflichtschlüsseln ${PFLICHT_LABELS.join(", ")} sein`];

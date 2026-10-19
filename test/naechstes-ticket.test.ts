@@ -863,7 +863,7 @@ describe("Zwei Boards und Spielquote (#1729)", () => {
       return a.includes("--slurp") ? [[{ number: 7 }, { number: 8, pull_request: {} }]] : [commit("feat(sim): a (#1)"), alt];
     });
     expect(aufrufe[0]).toContain("commits?sha=main&per_page=100");
-    expect(aufrufe[1]).toContain("labels=area:harness");
+    expect(aufrufe[1]).toContain("labels=area%3Aharness");
     expect(aufrufe[1]).toContain("since=2026-10-04T10:00:00.000Z");
     expect([...(q.harnessIssues ?? [])]).toEqual([7]);
   });

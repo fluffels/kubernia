@@ -8,7 +8,7 @@
  *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top hinter den Sammelblock)
  *
  * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` korrigiert es nur die
- * Position). Sonst: Issue per REST anlegen (Label `area:harness`, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
+ * Position). Sonst: Issue per REST anlegen (Harness-Label der Config, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
  * auf Position bringen (`sammelticketKorrektur`), dann prüfen: die Board-Liste liefert Neues verzögert, darum bis zu 5 Ladeversuche mit
  * Pause; steht das Ticket falsch, wird es bis zu zweimal neu gesetzt (sonst Exit 1). Erscheint es nie in der Liste, warnt das Skript
  * (Exit 0): `board-place.mjs` und der Board-Takt (`board-takt.mjs`) korrigieren die Position beim nächsten Lauf selbst.
@@ -45,7 +45,7 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 
-// Zwei Boards (ADR 0022 F11, #1729): Status- und Sammeltickets tragen das Label `area:harness` und stehen laut Trennregel auf dem Factory-Board.
+// Zwei Boards (ADR 0022 F11, #1729): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
 const FACTORY_BOARD = boardFuerRolle(boardRolleFuer([FACTORY_LABEL]));
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };

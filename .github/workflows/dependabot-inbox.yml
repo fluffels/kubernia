@@ -30,16 +30,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Volles Repo und Node für scripts/board-place.mjs (Board-Position mit Wiederholung, #1628); kein npm ci nötig.
-      # continue-on-error: scheitert der Checkout, entsteht das Issue trotzdem, die Positionierung scheitert dann sichtbar rot.
+      # Das Label kommt aus der Projekt-Config; ohne Checkout gäbe es keines, darum bricht ein gescheiterter Schritt den Lauf sichtbar rot ab.
       - name: Repo auschecken
-        continue-on-error: true
         uses: actions/checkout@v7
 
       - name: Node einrichten
-        continue-on-error: true
         uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+
+      - name: Label der Sammel-Issues aus der Projekt-Config lesen
+        id: label
+        run: |
+          if ! wert=$(node scripts/projekt-config.mjs labels.dependabotInbox); then
+            echo "::error::labels.dependabotInbox fehlt oder .factory/projekt.json ist ungültig (Fix: Schlüssel in .factory/projekt.json eintragen)"
+            exit 1
+          fi
+          echo "wert=$wert" >> "$GITHUB_OUTPUT"
 
       - name: Sammel-Issue anlegen, aktualisieren oder schließen
         env:
@@ -49,7 +56,7 @@ jobs:
           # GITHUB_TOKEN kann NICHT in ein User-Project V2 schreiben – dafür ein PAT mit
           # project-Scope als Secret PROJECT_TOKEN. Fehlt es, wird nur gewarnt.
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          INBOX_LABEL: area:harness
+          INBOX_LABEL: ${{ steps.label.outputs.wert }}
         run: |
           set -euo pipefail
           marker="🤖 Dependabot-PRs auflösen"
@@ -57,7 +64,7 @@ jobs:
           count=$(gh pr list --repo "$REPO" --state open --author "app/dependabot" --json number --jq 'length')
 
           # Gibt es schon ein OFFENES Sammel-Issue? (Titel-Exakt-Match über die offenen
-          # area:harness-Issues — dasselbe robuste Muster wie forum-inbox.yml.)
+          # Issues mit dem Label der Config — dasselbe robuste Muster wie forum-inbox.yml.)
           existing=$(gh issue list --repo "$REPO" --state open --label "$INBOX_LABEL" \
             --json number,title \
             --jq "[.[] | select(.title == \"$marker\")][0].number // empty")

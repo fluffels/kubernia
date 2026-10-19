@@ -48,7 +48,7 @@ interface Ergebnis {
 
 interface Api {
   VERTRAUTE_BOTS: readonly string[];
-  FREMDEINGANG_LABELS: readonly string[];
+  fremdeingangLabels: (config: unknown) => readonly string[];
   istVertraut: (user: User | null | undefined, owner: string) => boolean;
   istFremdeingang: (issue: { user?: User | null; labels?: unknown[] }, owner: string) => { fremdeingang: boolean; grund: string; label: string | undefined };
   trenneFremdtext: (e: { owner: string; art: string; eintrag: Eintrag; beitraege: Beitrag[] }) => Ergebnis;
@@ -60,7 +60,7 @@ interface Api {
 }
 // Die Vertrauensliste steht in scripts/fremdtext-lib.mjs (#1579), der Rest im CLI-Skript.
 const fremdtext = { ...fremdtextRoh, ...fremdtextLib } as unknown as Api;
-const { VERTRAUTE_BOTS, FREMDEINGANG_LABELS, istVertraut, istFremdeingang, trenneFremdtext, formatiere, parseArgs, flach, pruefe, issueKommentare } = fremdtext;
+const { VERTRAUTE_BOTS, fremdeingangLabels, istVertraut, istFremdeingang, trenneFremdtext, formatiere, parseArgs, flach, pruefe, issueKommentare } = fremdtext;
 
 const OWNER = "fluffels";
 const eigen: User = { login: "fluffels", type: "User" };
@@ -114,8 +114,8 @@ describe("istVertraut", () => {
   });
   test("Listen sind eingefroren", () => {
     assert.deepEqual([...VERTRAUTE_BOTS], ["github-actions[bot]", "dependabot[bot]"]);
-    assert.deepEqual([...FREMDEINGANG_LABELS], ["forum"]);
-    assert.ok(Object.isFrozen(VERTRAUTE_BOTS) && Object.isFrozen(FREMDEINGANG_LABELS));
+    assert.deepEqual([...fremdeingangLabels({ labels: { forum: "forum" } })], ["forum"]);
+    assert.ok(Object.isFrozen(VERTRAUTE_BOTS) && Object.isFrozen(fremdeingangLabels({ labels: { forum: "forum" } })));
   });
 });
 
