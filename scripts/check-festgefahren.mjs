@@ -82,14 +82,15 @@ function ghRun(args) {
   ghText(args, { stdio: "inherit" });
 }
 
-function main() {
+/** Der CI-Lauf. Liefert den Exit-Code 1, wenn `labels.festgefahren` fehlt (vor jedem gh-Aufruf); `ladeLabel` ist für den Test injizierbar. */
+export function main({ ladeLabel = stuckLabel } = {}) {
   // Config zuerst, vor jedem gh-Aufruf: fehlt `labels.festgefahren`, ist der Lauf rot (kein stiller Standardwert; Netzfehler bleiben graceful).
   let label;
   try {
-    label = stuckLabel();
+    label = ladeLabel();
   } catch (err) {
     console.error(`✖ ${err.message}`);
-    process.exit(1);
+    return 1;
   }
   const repo = process.env.REPO;
   const headBranch = process.env.HEAD_BRANCH;
@@ -158,4 +159,7 @@ function main() {
   console.log(`Festgefahren-Wächter: PR #${prNumber} als '${label}' markiert.`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const code = main();
+  if (code) process.exit(code);
+}

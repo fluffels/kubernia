@@ -186,6 +186,8 @@ F2 ist umgesetzt. Entscheidungen:
 - **Absicherung der Workflows:** `test/harness/projekt-config-workflows.test.ts` ermittelt die Import-Hülle des Einstiegs (nur `node:` und relative Importe) und verlangt, dass jede Sparse-Liste in `ci.yml` und `dependabot-inbox.yml` sie samt Config enthält; der Checkout läuft mit `continue-on-error`, damit das Alarm- bzw. Inbox-Issue auch bei einem gescheiterten Checkout entsteht.
 - **Grenze:** `scripts/board-lib.mjs` lädt die Config beim Import (AK3), auch die puren Helfer brauchen sie; ein Projekt ohne Board bräuchte ein lazy Laden (F7/F9). Der Repo-Begriff des Wächters ist ein Teilstring ohne Wortgrenze (gewollt für Zusammensetzungen), bei sehr kurzen Repo-Namen eines anderen Projekts zählt er Fehltreffer. Skills und Agenten benennen den Account und das Repo nur noch über die gh-Platzhalter `{owner}`/`{repo}` bzw. „den eigenen Account“. Die übrigen Repo-Literale in Kern-Dateien (vor allem der Repo-Name als Agentenname) räumt F3; Regeltexte in `AGENTS.md` und Docs F4/F11.
 
+Präzisiert durch #1744: der Checkout in `dependabot-inbox.yml` läuft ohne `continue-on-error`; fehlt `labels.dependabotInbox`, ist der Lauf rot und es entsteht kein Issue (Fortschreibung #1744 unten).
+
 Präzisiert durch #1728: Schema `version` 2 mit der Liste `boards` statt `board`.
 
 Präzisiert durch #1741: Präfixe, Labels und Agentennamen stehen als Pflichtschlüssel in der Config (Fortschreibung #1741 unten).

@@ -38,8 +38,8 @@ const labelName = (l) => (typeof l === "string" ? l : l?.name);
  * `issue`: `{ user, labels }` (labels als Strings oder `{name}`). Liefert `{ fremdeingang, grund, label }`; `grund` ist `""`, wenn vertraut.
  * Das Label kommt aus `config` (ohne: die echte Config, nur auf `labels.forum` geprüft); fehlt der Schlüssel, wirft die Funktion.
  */
-export function istFremdeingang(issue, owner, { config } = {}) {
-  const labels = fremdeingangLabels(config ?? ladeProjektConfig({ pruefen: false }));
+export function istFremdeingang(issue, owner, { config, lade = ladeProjektConfig } = {}) {
+  const labels = fremdeingangLabels(config ?? lade({ pruefen: false }));
   const autorVertraut = istVertraut(issue?.user, owner);
   const label = (issue?.labels ?? []).map(labelName).find((n) => labels.includes(n));
   const login = typeof issue?.user?.login === "string" && issue.user.login !== "" ? issue.user.login : "unbekannt";

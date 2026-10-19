@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "vitest";
 import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { lies } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
@@ -32,9 +33,9 @@ const P = projektRaw as unknown as { labelAus: (c: unknown, k: string) => string
 const B = boardRaw as unknown as { boardRolleFuer: (l: unknown, c?: unknown) => string; FACTORY_LABEL: string };
 const F = fremdRaw as unknown as {
   fremdeingangLabels: (c: unknown) => string[];
-  istFremdeingang: (i: unknown, owner: string, o?: { config?: unknown }) => { fremdeingang: boolean; label?: string };
+  istFremdeingang: (i: unknown, owner: string, o?: { config?: unknown; lade?: (o: unknown) => unknown }) => { fremdeingang: boolean; label?: string };
 };
-const FEST = festRaw as unknown as { stuckLabel: (c?: unknown) => string; buildStuckComment: (n: number, url: string, label: string) => string };
+const FEST = festRaw as unknown as { main: (o?: { ladeLabel?: () => string }) => number | undefined; stuckLabel: (c?: unknown) => string; buildStuckComment: (n: number, url: string, label: string) => string };
 const W = wiedervorlageRaw as unknown as { labelFuer: (e: { label?: string }, standard: string) => string };
 const N = naechstesRaw as unknown as {
   echteIo: (o?: { config?: Cfg }) => { config: Cfg };
@@ -185,6 +186,53 @@ describe("board-takt: Harness-Label der Abfrage", () => {
     expect(abfrage).toContain("labels=bereich%3Afabrik&since=");
     expect(abfrage).not.toContain("harness");
   });
+
+  test("ohne harnessLabel (Produktionspfad) kommt das Label aus der echten Config, kodiert", () => {
+    const aufrufe: string[] = [];
+    const io = {
+      ghJson: (a: string[]) => {
+        aufrufe.push(a.join(" "));
+        return [[]];
+      },
+      loadItems: () => [],
+      loadOpenIssuePages: () => [[]],
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: () => ({ ok: true }),
+      fuehreHarnessAus: () => true,
+      log: () => undefined,
+    };
+    T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, io });
+    const abfrage = aufrufe.find((a) => a.includes("state=closed")) ?? "";
+    expect(abfrage).toContain(`labels=${encodeURIComponent(P.ladeProjektConfig().labels.harness)}&since=`);
+  });
+});
+
+describe("check-festgefahren main: fehlendes Label ist rot (K2)", () => {
+  test("ohne labels.festgefahren: Exit-Code 1, Meldung mit Schlüssel, kein gh-Aufruf", () => {
+    const fehler: string[] = [];
+    const orig = console.error;
+    console.error = (...a: unknown[]) => void fehler.push(a.join(" "));
+    try {
+      expect(FEST.main({ ladeLabel: () => FEST.stuckLabel(OHNE_FESTGEFAHREN) })).toBe(1);
+    } finally {
+      console.error = orig;
+    }
+    expect(fehler.join("\n")).toContain("labels.festgefahren");
+  });
+});
+
+describe("fremdtext-lib: Config nur auf labels.forum geprüft", () => {
+  const issue = { user: { login: "fluffels" }, labels: ["f"] };
+  test("der Lader wird mit pruefen:false aufgerufen", () => {
+    const opts: unknown[] = [];
+    const r = F.istFremdeingang(issue, "fluffels", { lade: (o: unknown) => (opts.push(o), FAB) });
+    expect(opts).toEqual([{ pruefen: false }]);
+    expect(r.fremdeingang).toBe(true);
+    expect(r.label).toBe("f");
+  });
+  test("fehlt labels.forum im geladenen Config, wirft die Funktion", () => {
+    expect(() => F.istFremdeingang(issue, "fluffels", { lade: () => OHNE_FORUM })).toThrow(/forum/);
+  });
 });
 
 /* ---- Workflow-Wächter (K2): jeder Config-Aufruf in der Guard-Form, kein stiller Standardwert ---- */
@@ -252,7 +300,8 @@ const SKRIPTE = [
   "check-festgefahren", "naechstes-ticket", "spielquote-lib",
 ].map((n) => `scripts/${n}.mjs`);
 const WORKFLOWS = ["festgefahren", "wiedervorlage", "dependabot-inbox", "board-takt", "internalrefs-pr-text"].map((n) => `.github/workflows/${n}.yml`);
-const ALLE_WORKFLOWS = readdirSync(".github/workflows").filter((n) => n.endsWith(".yml")).map((n) => `.github/workflows/${n}`);
+const WORKFLOW_ORDNER = fileURLToPath(new URL("../../.github/workflows", import.meta.url));
+const ALLE_WORKFLOWS = readdirSync(WORKFLOW_ORDNER).filter((n) => n.endsWith(".yml")).map((n) => `.github/workflows/${n}`);
 
 /** Pur: Fundstellen der Label-Werte im Text. Werte mit `:` überall verboten, Werte ohne `:` nur in Anführungszeichen, Backticks oder nach `--label `. */
 function labelLiterale(rohText: string, werte: string[]): string[] {
