@@ -24,6 +24,8 @@ import * as wiedervorlageRaw from "../../scripts/wiedervorlage.mjs";
 import * as naechstesRaw from "../../scripts/naechstes-ticket.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as taktRaw from "../../scripts/board-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRaw from "../../scripts/ticket-namen.mjs";
 
 type Cfg = Record<string, unknown>;
 const P = projektRaw as unknown as { labelAus: (c: unknown, k: string) => string; ladeProjektConfig: () => { labels: Record<string, string> } };
@@ -40,6 +42,7 @@ const N = naechstesRaw as unknown as {
   ladeQuoteEcht: (lade: (a: string[]) => unknown, harness?: string) => unknown;
   waehleNaechstes: (e: Record<string, unknown>) => { ticket: { nr: number } | null; uebersprungen: { nr: number; grund: string }[] };
 };
+const esc = (namenRaw as unknown as { escapeRegex: (t: string) => string }).escapeRegex;
 const T = taktRaw as unknown as { fuehreTaktAus: (a: Record<string, unknown>) => { fehler: boolean } };
 
 const BASIS = {
@@ -190,7 +193,7 @@ describe("board-takt: Harness-Label der Abfrage", () => {
 function configAufrufProbleme(yml: string): string[] {
   const probleme: string[] = [];
   const aufruf = /node scripts\/projekt-config\.mjs [\w.]+/g;
-  const guard = /if ! \w+=\$\(node scripts\/projekt-config\.mjs [\w.]+\); then\n(?:[^\n]*\n)*?\s*echo "::error::[^\n]*"\n\s*exit 1\n\s*fi/g;
+  const guard = /if ! \w+=\$\(node scripts\/projekt-config\.mjs [\w.]+\); then\n\s*echo "::error::[^\n]*"\n\s*exit 1\n\s*fi/g;
   const anzahlAufrufe = yml.match(aufruf)?.length ?? 0;
   if (anzahlAufrufe === 0) return []; // ohne Config-Aufruf gibt es keinen Standardwert zu verbieten
   const anzahlGuards = yml.match(guard)?.length ?? 0;
@@ -256,7 +259,6 @@ function labelLiterale(rohText: string, werte: string[]): string[] {
   const treffer: string[] = [];
   // Der Schlüsselname im Aufruf `labelAus(cfg, "forum")` und die Notfall-Art `art: "forum"` sind keine Label-Werte.
   const text = rohText.replace(/labelAus\([^)]*\)/g, "").replace(/art: "[\w-]+"/g, "");
-  const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const w of werte) {
     const muster = w.includes(":") ? new RegExp(esc(w)) : new RegExp(`["'\`]${esc(w)}["'\`]|--label ${esc(w)}\\b`);
     if (muster.test(text)) treffer.push(w);
