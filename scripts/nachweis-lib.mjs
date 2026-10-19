@@ -149,9 +149,6 @@ function parseUrteil(wert) {
 /** `[{k, wert}]` oder `null` bei jedem Fehler von parseUrteil. */
 const urteilAus = (wert) => parseUrteil(wert).urteil ?? null;
 
-/** Der Grund, warum ein Urteilswert ungültig ist (z.B. „K2 doppelt“), `null` bei gültigem Wert. Pur. */
-export const urteilFehler = (wert) => parseUrteil(wert).fehler ?? null;
-
 const urteilText = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).join(",");
 
 /** Erster Grund, warum eine Abnahme-Zeile (außer entfaellt mit Grund) ungültig ist; `null`, wenn head, durchgaenge und Urteil passen. */

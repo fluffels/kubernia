@@ -79,27 +79,13 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
     ["doppeltes K", `head=${HEX} durchgaenge=1 urteil=K1:erfuellt,K1:erfuellt`, /K1 doppelt/],
     ["K0", `head=${HEX} durchgaenge=1 urteil=K0:erfuellt`, /Kriterium „K0“ ungültig/],
     ["leeres Urteil", `head=${HEX} durchgaenge=1 urteil=`, /Urteil ist leer/],
+    ["Urteil fehlt ganz", `head=${HEX} durchgaenge=1`, /Urteil ist leer/],
+    ["Kriterium Kx", `head=${HEX} durchgaenge=1 urteil=Kx:erfuellt`, /Kriterium „Kx“ ungültig/],
+    ["Eintrag ohne Doppelpunkt", `head=${HEX} durchgaenge=1 urteil=K1`, /Eintrag „K1“ ungültig/],
+    ["Eintrag ohne Wert", `head=${HEX} durchgaenge=1 urteil=K1:`, /Eintrag „K1:“ ungültig/],
+    ["Wert mit Leerzeichen", `head=${HEX} durchgaenge=1 urteil=K1:a b`, /Eintrag „K1:a b“ ungültig/],
   ])("ungueltig: %s (mit Grund)", (_n, wert, grund) => {
     expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert, grund: expect.stringMatching(grund) as string });
-  });
-  it.each([
-    ["K1:gut", /unbekannter Wert „gut“ bei K1/],
-    ["K1:erfuellt,K2:erfuellt,K2:nicht-erfuellt", /K2 doppelt/],
-    ["K0:erfuellt", /Kriterium „K0“ ungültig/],
-    ["Kx:erfuellt", /Kriterium „Kx“ ungültig/],
-    ["K1", /Eintrag „K1“ ungültig/],
-    ["K1:", /Eintrag „K1:“ ungültig/],
-    ["K1:a b", /Eintrag „K1:a b“ ungültig/],
-    ["", /Urteil ist leer/],
-    ["  ", /Urteil ist leer/],
-  ])("urteilFehler(%j)", (wert, erwartet) => {
-    expect((raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler(wert)).toMatch(erwartet);
-  });
-  it("urteilFehler: ein gültiges Urteil hat keinen Fehler", () => {
-    expect((raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler("K1:erfuellt,K2:nicht-pruefbar")).toBeNull();
-  });
-  it("urteilFehler: kein String ist leer", () => {
-    expect((raw as unknown as { urteilFehler: (w: unknown) => string | null }).urteilFehler(undefined)).toMatch(/Urteil ist leer/);
   });
   it("Urteil toleriert Leerzeichen nach Kommas und Groß-/Kleinschreibung", () => {
     expect(lies(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:Erfuellt, K2:nicht-erfuellt`)).toEqual({

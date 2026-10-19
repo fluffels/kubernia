@@ -5,14 +5,15 @@
  * jeder andere `Agent`-Spawn und jede `SendMessage` (dort alle String-Werte der Eingabe) mit so einem Text wird verweigert.
  * Die Pfad-Guards der beiden Holdout-Agenten (Frontmatter-Hooks) stehen in `holdout-guard.mjs`.
  *
- * Bewusste Grenzen: ein Re-Spawn des Szenario-Agenten, dessen Prompt den erwarteten Kopf mit echter Nummer vorgibt, wird verweigert (den Kopf ohne Ziffern beschreiben);
- * ein Ticket-Body, der wörtlich einen Szenario-Kopf mit Ticketnummer zitiert, blockiert den Planer-Spawn (dann das Zitat umformulieren);
- * ein Hauptchat, der die Szenarien in eine Datei schreibt oder anders umschreibt, wird hier nicht gesehen.
+ * Bewusste Grenzen:
+ *  - Ein Re-Spawn des Szenario-Agenten, dessen Prompt den erwarteten Kopf mit echter Nummer vorgibt, wird verweigert (den Kopf ohne Ziffern beschreiben).
+ *  - Ein Ticket-Body, der wörtlich einen Szenario-Kopf mit Ticketnummer zitiert, blockiert den Planer-Spawn (dann das Zitat umformulieren).
+ *  - Ein Hauptchat, der die Szenarien in eine Datei schreibt oder anders umschreibt, wird hier nicht gesehen.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen, keine I/O beim Import.
  */
 
-/** Name des Abnahme-Agenten (= `ABNAHME_AGENT` in abnahme.mjs und Dateiname `.claude/agents/<name>.md`; der Test bindet alle drei). */
+/** Name des Abnahme-Agenten (eine Quelle: `abnahme.mjs` exportiert ihn als `ABNAHME_AGENT`; Dateiname `.claude/agents/<name>.md`, der Test prüft ihn). */
 export const ABNAHME_EMPFAENGER = "holdout-abnahme";
 
 const SZENARIO_KOPF = /SZENARIEN #\d+/;

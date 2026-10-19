@@ -16,16 +16,8 @@
  */
 import { tmpdir } from "node:os";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
-import { buildDenyOutput, emit, istDirektaufruf, normalisierePfad, readStdin } from "./hook-io.mjs";
+import { emit, istDirektaufruf, liegtUnter, normalisierePfad, readStdin, toolGuardHook } from "./hook-io.mjs";
 
-const ohneSlash = (p) => p.replace(/\/+$/, "");
-const vergleichsform = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
-/** Liegt `norm` unter (oder gleich) `basis`? Segmentgrenze beachtet, auf Windows ohne Groß-/Kleinschreibung. */
-function liegtUnter(norm, basis) {
-  const n = vergleichsform(ohneSlash(norm));
-  const b = vergleichsform(ohneSlash(basis));
-  return n === b || n.startsWith(`${b}/`);
-}
 const istAbsolut = (p) => /^([a-z]:)?\//i.test(p);
 
 /** Darf der Abnahme-Agent hier per `Write` schreiben? Nur unter dem Temp-Verzeichnis. Pure (`deps.tmp` für Tests). */
@@ -60,23 +52,11 @@ export function bewerteSzenarioLesen(toolName, toolInput, cwd = "", deps = {}) {
   return { block: true, reason: lesenGrund(`${ziel} liegt außerhalb`) };
 }
 
-/** Hook-stdin → Entscheidung für die zwei Frontmatter-Hooks. Kaputter Input: durchlassen. */
+/** Hook-stdin → Entscheidung für die zwei Frontmatter-Hooks. Kaputter Input: durchlassen. Der Abnahme-Hook prüft auch ohne `tool_name`. */
 export function entscheideHook(modus, text, deps = {}) {
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  const e =
-    modus === "abnahme-write"
-      ? data?.tool_name === "Write" || data?.tool_name === undefined
-        ? bewerteAbnahmeWrite(data?.tool_input?.file_path, data?.cwd, deps)
-        : { block: false }
-      : modus === "szenario-lesen" && ["Read", "Grep", "Glob"].includes(data?.tool_name)
-        ? bewerteSzenarioLesen(data.tool_name, data.tool_input, data.cwd, deps)
-        : { block: false };
-  return e.block ? buildDenyOutput(e.reason) : null;
+  if (modus === "abnahme-write") return toolGuardHook(["Write"], (_tool, eingabe, cwd) => bewerteAbnahmeWrite(eingabe?.file_path, cwd, deps), true)(text);
+  if (modus === "szenario-lesen") return toolGuardHook(["Read", "Grep", "Glob"], (tool, eingabe, cwd) => bewerteSzenarioLesen(tool, eingabe, cwd, deps))(text);
+  return null;
 }
 
 if (istDirektaufruf(import.meta.url)) emit(entscheideHook(process.argv[2], readStdin(), { root: process.env.CLAUDE_PROJECT_DIR }));

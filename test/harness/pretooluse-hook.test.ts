@@ -29,6 +29,8 @@ type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisio
 const io = ioRaw as unknown as {
   mergeDecisions: (d: unknown[]) => Out;
   normalisierePfad: (pfad: unknown, cwd?: unknown) => string;
+  liegtUnter: (pfad: string, basis: string, plattform?: string) => boolean;
+  toolGuardHook: (tools: string[], bewerte: (tool: string, input: unknown, cwd?: string) => { block: boolean; reason?: string }, ohneToolName?: boolean) => (text: string) => Out;
   pfadGuardHook: (tool: string, bewerte: (pfad: unknown, cwd?: string) => { block: boolean; reason?: string }) => (text: string) => Out;
 };
 const tabellen = tabRaw as unknown as { SHELL_VON_TOOL: Record<string, string> };
@@ -157,6 +159,34 @@ describe("normalisierePfad / pfadGuardHook: gemeinsame Pfad-Guard-Hilfe (#1663)"
     const gesehen: unknown[] = [];
     io.pfadGuardHook("Read", (p, c) => (gesehen.push([p, c]), { block: false }))(nutz("Read", "a.txt"));
     assert.deepEqual(gesehen, [["a.txt", "/w"]]);
+  });
+});
+
+describe("liegtUnter / toolGuardHook: gemeinsame Guard-Helfer (#1787)", () => {
+  test("liegtUnter: gleich, darunter, Slash am Ende, Segmentgrenze", () => {
+    assert.equal(io.liegtUnter("/a/b", "/a/b", "linux"), true);
+    assert.equal(io.liegtUnter("/a/b/c.txt", "/a/b", "linux"), true);
+    assert.equal(io.liegtUnter("/a/b/c", "/a/b/", "linux"), true);
+    assert.equal(io.liegtUnter("/a/b/", "/a/b", "linux"), true);
+    assert.equal(io.liegtUnter("/a/bc", "/a/b", "linux"), false, "Segmentgrenze");
+    assert.equal(io.liegtUnter("/a", "/a/b", "linux"), false);
+  });
+  test("liegtUnter: nur auf win32 ohne Groß-/Kleinschreibung", () => {
+    assert.equal(io.liegtUnter("C:/Temp/X", "c:/temp", "win32"), true);
+    assert.equal(io.liegtUnter("C:/Temp/X", "c:/temp", "linux"), false);
+    assert.equal(io.liegtUnter("C:/Tempo", "c:/temp", "win32"), false);
+  });
+  const bew = (tool: string, input: unknown, cwd?: string) => (JSON.stringify([tool, input, cwd]) === JSON.stringify(["Read", { path: "p" }, "/w"]) ? { block: true, reason: "x" } : { block: false });
+  const nutz = (tool: string | undefined) => JSON.stringify({ tool_name: tool, cwd: "/w", tool_input: { path: "p" } });
+  test("toolGuardHook: nur genannte Tools, Name, Eingabe und cwd gehen an die Bewertung", () => {
+    const h = io.toolGuardHook(["Read", "Grep"], bew);
+    assert.equal(h(nutz("Read"))?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(h(nutz("Write")), null, "anderes Tool");
+    assert.equal(h(nutz(undefined)), null, "ohne tool_name durchlassen, wenn nicht verlangt");
+    assert.equal(h("kein json"), null);
+  });
+  test("toolGuardHook: ohneToolName prüft auch ohne tool_name", () => {
+    assert.equal(io.toolGuardHook(["Read"], () => ({ block: true, reason: "y" }), true)(nutz(undefined))?.hookSpecificOutput.permissionDecision, "deny");
   });
 });
 
@@ -305,9 +335,15 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
     for (const tool of ["constructor", "toString", "__proto__", "bash"]) assert.equal(hook.dispatch(payload(tool, "x"), WURZEL, guards as never), null, tool);
   });
 
-  test("jeder Guard (Direktaufruf oder als Lib des Dispatchers gekennzeichnet) trägt im ersten Kommentarblock genau einmal den Abschnitt `Bewusste Grenzen:`", () => {
-    const guards = readdirSync(resolve(WURZEL, "scripts")).filter((n) => /guard.*\.mjs$/.test(n) && (lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)") || lies(`scripts/${n}`).startsWith("// Kein Einstieg, kein Direktaufruf")));
-    assert.deepEqual(guards.sort(), ["forum-leser-guard.mjs", "gh-guard-hook.mjs", "holdout-guard.mjs", "lens-edit-guard.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs"]);
+  test("jeder Guard (Direktaufruf, als Lib des Dispatchers gekennzeichnet oder vom Dispatcher importiert) trägt im ersten Kommentarblock genau einmal den Abschnitt `Bewusste Grenzen:`", () => {
+    const vomDispatcher = new Set([...lies("scripts/pretooluse-hook.mjs").matchAll(/from "\.\/([\w-]+\.mjs)"/g)].map((m) => m[1]));
+    const guards = readdirSync(resolve(WURZEL, "scripts")).filter(
+      (n) => /guard.*\.mjs$/.test(n) && (vomDispatcher.has(n) || lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)") || lies(`scripts/${n}`).startsWith("// Kein Einstieg, kein Direktaufruf")),
+    );
+    assert.deepEqual(guards.sort(), [
+      "forum-leser-guard.mjs", "gh-guard-hook.mjs", "holdout-auftrag-guard.mjs", "holdout-guard.mjs", "lens-auftrag-guard.mjs", "lens-edit-guard.mjs",
+      "stdin-skript-guard.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs",
+    ]);
     for (const n of guards) {
       const kopf = /\/\*\*[\s\S]*?\*\//.exec(lies(`scripts/${n}`))?.[0] ?? "";
       assert.equal(kopf.split("\n").filter((z) => /^ \* Bewusste Grenzen:\s*$/.test(z)).length, 1, `${n}: Abschnitt „Bewusste Grenzen:“ genau einmal im Kopfkommentar`);

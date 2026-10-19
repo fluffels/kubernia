@@ -25,13 +25,14 @@ import { pathToFileURL } from "node:url";
 import { REPO } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
+import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeCommitZeilen } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
-/** Name des Abnahme-Agenten im Berichtskopf. */
-export const ABNAHME_AGENT = "holdout-abnahme";
+/** Name des Abnahme-Agenten im Berichtskopf (eine Quelle: `ABNAHME_EMPFAENGER` des Auftrags-Guards). */
+export const ABNAHME_AGENT = ABNAHME_EMPFAENGER;
 
 const AUFRUF = [
   "Aufruf:",
