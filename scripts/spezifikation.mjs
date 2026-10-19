@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
@@ -130,7 +131,7 @@ function reparieren(werte, nrText, io) {
   }
   if (issue.pull_request) return aufrufFehler(`#${nr} ist ein PR`);
   if (issue.state !== "open") return aufrufFehler(`#${nr} ist nicht offen`);
-  if (istFremdeingang(issue, io.owner).fremdeingang) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label forum): wird nie umgeschrieben, als Befund melden\n`);
+  if (istFremdeingang(issue, io.owner, { config: io.config }).fremdeingang) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label forum): wird nie umgeschrieben, als Befund melden\n`);
   if ((issue.assignees ?? []).length > 0) return aufrufFehler(`#${nr} hat einen Assignee (wird schon bearbeitet), nicht umschreiben`);
   if (spezifikationsMaengel(issue.body).length === 0) return ergebnis(0, `#${nr}: Spezifikation schon vollständig, nichts zu tun\n`);
   const maengel = spezifikationsMaengel(b.body);
@@ -173,8 +174,9 @@ export function ankerPruefung({ nach, labels }, lade) {
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
-const echteIo = {
+const echteIo = () => ({
   owner: REPO.split("/")[0],
+  config: ladeProjektConfig(),
   leseDatei: (pfad) => readFileSync(pfad, "utf8"),
   erzeuge: ({ titel, body, labels }) =>
     ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
@@ -185,11 +187,11 @@ const echteIo = {
   },
   ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
   bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
-};
+});
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mitKontingent("spezifikation", { arten: ["core"] });
-  const { code, out, err } = fuehreAus(process.argv.slice(2), echteIo);
+  const { code, out, err } = fuehreAus(process.argv.slice(2), echteIo());
   process.stdout.write(out);
   process.stderr.write(err);
   process.exitCode = code;

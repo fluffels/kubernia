@@ -18,8 +18,8 @@
 import { pathToFileURL } from "node:url";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import {
-  FACTORY_LABEL,
   REPO,
   SAMMELTICKET_TITEL,
   STATUS_TITEL,
@@ -251,7 +251,8 @@ export const ECHTE_IO = {
  * Der ganze Lauf (#1428 Z23, vorher `main`): Fenster berechnen, Status-Ticket und Harness-Sammelticket entscheiden und ausführen.
  * `io` bündelt jeden Zugriff nach außen (siehe `ECHTE_IO`). Liefert `{ fehler }`; der Aufrufer setzt daraus den Exit-Code.
  */
-export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, harnessLabel = FACTORY_LABEL }) {
+export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, config }) {
+  const harnessLabel = labelAus(config, "harness");
   let position = null;
   let positionFehler = null;
   try {
@@ -329,6 +330,7 @@ function main() {
     repo: REPO,
     ausloeser: process.env.GITHUB_EVENT_NAME || "schedule",
     token: process.env.PROJECT_TOKEN,
+    config: ladeProjektConfig(),
   });
   if (fehler) process.exitCode = 1;
 }

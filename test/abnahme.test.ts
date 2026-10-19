@@ -14,6 +14,7 @@ type Kommentar = { user: User; body: string };
 type Zeilen = unknown;
 type Io = {
   owner: string;
+  config: unknown;
   zeilen: Zeilen;
   leseDatei: (p: string) => string;
   ladeIssue: (nr: number) => Issue;
@@ -52,6 +53,7 @@ function umgebung(bericht: string, extra: Partial<Io> = {}, kommentare: Kommenta
   const aufrufe: string[] = [];
   const io: Io = {
     owner: "fluffels",
+    config: { labels: { forum: "forum" } },
     zeilen: Z,
     leseDatei: (p) => {
       if (p !== "b.md") throw new Error("ENOENT");

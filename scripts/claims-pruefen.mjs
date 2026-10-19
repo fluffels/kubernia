@@ -37,7 +37,7 @@ import { pathToFileURL } from "node:url";
 import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
 import { lensWorktreeName, ticketAusRef } from "./ticket-refs.mjs";
@@ -312,7 +312,7 @@ export function echteDeps() {
       if (liste.length >= 200) process.stderr.write("Warnung: 200 offene Zuweisungen, die Liste ist an der Grenze und kann unvollständig sein\n");
       return liste.map((i) => i.number);
     },
-    festgefahrenLabel: config.labels.festgefahren,
+    festgefahrenLabel: labelAus(config, "festgefahren"),
     lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: worktreePraefix(config) }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),

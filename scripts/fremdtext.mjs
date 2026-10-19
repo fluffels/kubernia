@@ -10,10 +10,11 @@
  *   node scripts/fremdtext.mjs --issue <nr> | --pr <nr>
  *
  * Exit 0 = Eingang vertraut, 3 = Fremdeingang (nicht automatisch umsetzen), 2 = Aufruf- oder gh-Fehler
- * (fail-closed). Brain-Seite: docs/sicherheit-agenten.md. Der Kern ist pur, gh ist injizierbar (Test).
+ * (fail-closed). Brain-Seite: docs/sicherheit-agenten.md. Der Kern ist pur, gh und die Projekt-Config (`labels.forum`, Pflicht) werden injiziert (Test).
  */
 import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { flach, issueKommentare, istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
@@ -24,9 +25,9 @@ const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${
  * `beitraege`: `[{art, user, body, html_url, created_at?}]` (Kommentar, Review, Review-Kommentar).
  * Liefert `{fremdeingang, grund, autorVertraut, teile: [{art, autor, vertraut, text, url, datum}]}`.
  */
-export function trenneFremdtext({ owner, art, eintrag, beitraege }) {
+export function trenneFremdtext({ owner, art, eintrag, beitraege, config }) {
   const autorVertraut = istVertraut(eintrag.user, owner);
-  const { fremdeingang, grund } = istFremdeingang(eintrag, owner);
+  const { fremdeingang, grund } = istFremdeingang(eintrag, owner, { config });
   const bodyVertraut = !fremdeingang;
   const teile = [
     {
@@ -110,11 +111,11 @@ export function lade({ art, nr }, gh) {
 export const exitCodeFuer = (ergebnis) => (ergebnis.fremdeingang ? 3 : 0);
 
 /** Ganzer Ablauf ohne Prozess-Seiteneffekte: `{code, out, err}`; jeder Fehler ist Exit 2 (fail-closed). */
-export function pruefe(argv, gh) {
+export function pruefe(argv, gh, config) {
   try {
     const ziel = parseArgs(argv);
     const { owner, kopf, eintrag, beitraege } = lade(ziel, gh);
-    const ergebnis = trenneFremdtext({ owner, art: kopf, eintrag, beitraege });
+    const ergebnis = trenneFremdtext({ owner, art: kopf, eintrag, beitraege, config });
     return { code: exitCodeFuer(ergebnis), out: formatiere(ergebnis, eintrag, kopf), err: "" };
   } catch (e) {
     return { code: 2, out: "", err: `✖ fremdtext: ${e instanceof Error ? e.message : String(e)}\n` };
@@ -122,7 +123,13 @@ export function pruefe(argv, gh) {
 }
 
 function main(argv) {
-  const { code, out, err } = pruefe(argv, (args) => ghText(args));
+  let config;
+  try {
+    config = ladeProjektConfig({ pruefen: false });
+  } catch {
+    config = undefined; // fail-closed: `pruefe` wirft ohne Config mit „labels.forum“ (Exit 2)
+  }
+  const { code, out, err } = pruefe(argv, (args) => ghText(args), config);
   process.stdout.write(out);
   process.stderr.write(err);
   process.exitCode = code;

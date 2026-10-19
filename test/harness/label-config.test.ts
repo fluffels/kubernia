@@ -33,14 +33,18 @@ const P = projektRaw as unknown as { labelAus: (c: unknown, k: string) => string
 const B = boardRaw as unknown as { boardRolleFuer: (l: unknown, c?: unknown) => string; FACTORY_LABEL: string };
 const F = fremdRaw as unknown as {
   fremdeingangLabels: (c: unknown) => string[];
-  istFremdeingang: (i: unknown, owner: string, o?: { config?: unknown; lade?: (o: unknown) => unknown }) => { fremdeingang: boolean; label?: string };
+  istFremdeingang: (i: unknown, owner: string, o?: { config?: unknown }) => { fremdeingang: boolean; label?: string };
 };
 const FEST = festRaw as unknown as { main: (o?: { config?: unknown }) => number | undefined; stuckLabel: (c?: unknown) => string; buildStuckComment: (n: number, url: string, label: string) => string };
-const W = wiedervorlageRaw as unknown as { labelFuer: (e: { label?: string }, standard: string) => string };
+const W = wiedervorlageRaw as unknown as {
+  labelFuer: (e: { label?: string }, standard: string) => string;
+  ioAus: (c: unknown, o?: { legen?: (e: { label?: string }, label: string) => number }) => { anlegen: (e: { label?: string }) => number };
+};
 const N = naechstesRaw as unknown as {
-  echteIo: (o?: { config?: Cfg }) => { config: Cfg };
-  imBereich: (item: { title: string; labels: string[] }, bereich: string | null, harness?: string) => boolean;
-  ladeQuoteEcht: (lade: (a: string[]) => unknown, harness?: string) => unknown;
+  echteIo: (o?: { config?: Cfg; gh?: (a: string[]) => unknown }) => { config: Cfg; ladeQuote: () => unknown };
+  imBereich: (item: { title: string; labels: string[] }, bereich: string | null, config?: unknown) => boolean;
+  ladeQuoteEcht: (lade: (a: string[]) => unknown, config?: unknown) => unknown;
+  waehleUeberBoards: (e: Record<string, unknown>) => unknown;
   waehleNaechstes: (e: Record<string, unknown>) => { ticket: { nr: number } | null; uebersprungen: { nr: number; grund: string }[] };
 };
 const esc = (namenRaw as unknown as { escapeRegex: (t: string) => string }).escapeRegex;
@@ -60,6 +64,21 @@ const OHNE_HARNESS = ohne("harness");
 const OHNE_FESTGEFAHREN = ohne("festgefahren");
 const OHNE_FORUM = ohne("forum");
 const FIX = /labels\.\w+[\s\S]*Fix:/;
+
+describe("wiedervorlage: Standard-Label aus der Config (ioAus)", () => {
+  const eintrag: { label?: string } = { label: undefined };
+  test("anlegen nutzt das Fixture-Label, ein Eintrags-Label geht vor", () => {
+    const labels: string[] = [];
+    const io = W.ioAus(FAB, { legen: (_e, l) => (labels.push(l), 1) });
+    io.anlegen(eintrag);
+    io.anlegen({ ...eintrag, label: "area:spiel" });
+    expect(labels).toEqual(["bereich:fabrik", "area:spiel"]);
+  });
+  test("ohne Config oder ohne labels.harness wirft die Fabrik", () => {
+    expect(() => W.ioAus(OHNE_HARNESS)).toThrow(/labels.harness/);
+    expect(() => W.ioAus(undefined)).toThrow(/labels.harness/);
+  });
+});
 
 describe("labelAus", () => {
   test("liefert den Wert der Fixture-Config", () => {
@@ -143,9 +162,17 @@ describe("naechstes-ticket: Harness- und Forum-Label aus der Config", () => {
   });
   test("imBereich ordnet agentic nach dem Fixture-Label zu", () => {
     const item = { title: "T", labels: ["bereich:fabrik"] };
-    expect(N.imBereich(item, "agentic", "bereich:fabrik")).toBe(true);
-    expect(N.imBereich(item, "spiel", "bereich:fabrik")).toBe(false);
-    expect(N.imBereich({ title: "T", labels: ["area:harness"] }, "agentic", "bereich:fabrik")).toBe(false);
+    expect(N.imBereich(item, "agentic", FAB)).toBe(true);
+    expect(N.imBereich(item, "spiel", FAB)).toBe(false);
+    expect(N.imBereich({ title: "T", labels: ["area:harness"] }, "agentic", FAB)).toBe(false);
+  });
+  test("imBereich und waehleNaechstes ohne Config oder ohne labels.harness werfen (kein stiller Standardwert)", () => {
+    const item = { title: "T", labels: ["area:harness"] };
+    for (const c of [undefined, OHNE_HARNESS]) {
+      expect(() => N.imBereich(item, "agentic", c)).toThrow(/labels.harness/);
+      expect(() => N.waehleNaechstes({ items: [], offene: new Set(), config: c })).toThrow(/labels.harness/);
+    }
+    expect(N.imBereich(item, null, undefined)).toBe(true); // ohne Bereich wird kein Label gebraucht
   });
   test("waehleNaechstes mit Fixture-Config: bereich:fabrik ist Factory, das Forum-Label f ein Fremdeingang", () => {
     const eigen = "fluffels";
@@ -160,9 +187,26 @@ describe("naechstes-ticket: Harness- und Forum-Label aus der Config", () => {
       aufrufe.push(a.join(" "));
       return aufrufe.length === 1 ? [{ commit: { committer: { date: "2026-10-01T00:00:00Z" } } }] : [[{ number: 7 }]];
     };
-    N.ladeQuoteEcht(lade, "bereich:fabrik");
+    N.ladeQuoteEcht(lade, FAB);
     expect(aufrufe[1]).toContain("labels=bereich%3Afabrik");
     expect(aufrufe[1]).not.toContain("harness");
+  });
+  test("ladeQuoteEcht ohne labels.harness wirft vor jedem Aufruf", () => {
+    const lade = () => {
+      throw new Error("kein gh-Aufruf erwartet");
+    };
+    expect(() => N.ladeQuoteEcht(lade, OHNE_HARNESS)).toThrow(/labels.harness/);
+    expect(() => N.ladeQuoteEcht(lade, undefined)).toThrow(/labels.harness/);
+  });
+  test("echteIo reicht das Fixture-Label an die Quote-Abfrage durch (ladeQuote nutzt x in der URL)", () => {
+    const aufrufe: string[] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a.join(" "));
+      return aufrufe.length === 1 ? [{ commit: { committer: { date: "2026-10-01T00:00:00Z" } } }] : [[{ number: 7 }]];
+    };
+    const io = N.echteIo({ config: { ...FAB, labels: { ...(FAB.labels as object), harness: "x" } }, gh });
+    io.ladeQuote();
+    expect(aufrufe[1]).toContain("labels=x&since=");
   });
 });
 
@@ -181,29 +225,21 @@ describe("board-takt: Harness-Label der Abfrage", () => {
       fuehreHarnessAus: () => true,
       log: () => undefined,
     };
-    T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, harnessLabel: "bereich:fabrik", io });
+    T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, config: FAB, io });
     const abfrage = aufrufe.find((a) => a.includes("state=closed")) ?? "";
     expect(abfrage).toContain("labels=bereich%3Afabrik&since=");
     expect(abfrage).not.toContain("harness");
   });
 
-  test("ohne harnessLabel (Produktionspfad) kommt das Label aus der echten Config, kodiert", () => {
-    const aufrufe: string[] = [];
+  test("ohne Config oder ohne labels.harness wirft der Lauf, bevor gh aufgerufen wird", () => {
     const io = {
-      ghJson: (a: string[]) => {
-        aufrufe.push(a.join(" "));
-        return [[]];
+      ghJson: () => {
+        throw new Error("kein gh-Aufruf erwartet");
       },
-      loadItems: () => [],
-      loadOpenIssuePages: () => [[]],
-      positionLautAgentsMd: () => 4,
-      fuehreStatusAus: () => ({ ok: true }),
-      fuehreHarnessAus: () => true,
-      log: () => undefined,
     };
-    T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, io });
-    const abfrage = aufrufe.find((a) => a.includes("state=closed")) ?? "";
-    expect(abfrage).toContain(`labels=${encodeURIComponent(P.ladeProjektConfig().labels.harness)}&since=`);
+    for (const config of [undefined, OHNE_HARNESS]) {
+      expect(() => T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, config, io })).toThrow(/labels.harness/);
+    }
   });
 });
 
@@ -221,17 +257,17 @@ describe("check-festgefahren main: fehlendes Label ist rot (K2)", () => {
   });
 });
 
-describe("fremdtext-lib: Config nur auf labels.forum geprüft", () => {
+describe("fremdtext-lib: Config ist Pflicht", () => {
   const issue = { user: { login: "fluffels" }, labels: ["f"] };
-  test("der Lader wird mit pruefen:false aufgerufen", () => {
-    const opts: unknown[] = [];
-    const r = F.istFremdeingang(issue, "fluffels", { lade: (o: unknown) => (opts.push(o), FAB) });
-    expect(opts).toEqual([{ pruefen: false }]);
+  test("ohne Config oder ohne labels.forum wirft die Funktion (kein Rückfall auf die Platte)", () => {
+    expect(() => F.istFremdeingang(issue, "fluffels")).toThrow(/labels.forum/);
+    expect(() => F.istFremdeingang(issue, "fluffels", {})).toThrow(/labels.forum/);
+    expect(() => F.istFremdeingang(issue, "fluffels", { config: OHNE_FORUM })).toThrow(/forum/);
+  });
+  test("mit Config liefert sie das Fixture-Label", () => {
+    const r = F.istFremdeingang(issue, "fluffels", { config: FAB });
     expect(r.fremdeingang).toBe(true);
     expect(r.label).toBe("f");
-  });
-  test("fehlt labels.forum im geladenen Config, wirft die Funktion", () => {
-    expect(() => F.istFremdeingang(issue, "fluffels", { lade: () => OHNE_FORUM })).toThrow(/forum/);
   });
 });
 

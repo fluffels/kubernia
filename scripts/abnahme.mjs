@@ -24,6 +24,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { REPO } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -171,7 +172,7 @@ function ladeTicket(nr, io) {
     return { ergebnis: aufrufFehler(`#${nr} nicht ladbar: ${fehlerText(e)}`) };
   }
   if (issue.pull_request) return { ergebnis: aufrufFehler(`#${nr} ist ein PR`) };
-  const f = istFremdeingang(issue, io.owner);
+  const f = istFremdeingang(issue, io.owner, { config: io.config });
   if (f.fremdeingang) return { ergebnis: ergebnis(3, "", `✖ abnahme: #${nr} ist ein Fremdeingang (${f.grund}): nichts wird ausgewertet\n`) };
   return { issue };
 }
@@ -273,6 +274,7 @@ export function fuehreAus(argv, io) {
 
 const echteIo = () => ({
   owner: REPO.split("/")[0],
+  config: ladeProjektConfig(),
   zeilen: ladeCommitZeilen(),
   leseDatei: (pfad) => readFileSync(pfad, "utf8"),
   ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),

@@ -28,7 +28,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { FACTORY_LABEL, NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen, ungeclaimt } from "./board-lib.mjs";
+import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen, ungeclaimt } from "./board-lib.mjs";
 import { entscheideSeite, produktMergesSeitFactory } from "./spielquote-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
@@ -129,10 +129,10 @@ export function istNotfallBeider(item) {
   return NOTFAELLE.filter((n) => n.art === "rot-main" || n.art === "security").some((n) => String(item.title ?? "").startsWith(n.marker));
 }
 
-/** Gehört das Item zum Bereich? Ohne Bereich immer; Notfälle (`istNotfallBeider`) zählen in beiden. `harness` ist das Harness-Label der Config. Pur. */
-export function imBereich(item, bereich, harness = FACTORY_LABEL) {
+/** Gehört das Item zum Bereich? Ohne Bereich immer; Notfälle (`istNotfallBeider`) zählen in beiden. Das Harness-Label kommt aus `config` (Pflicht, wirft ohne `labels.harness`). Pur. */
+export function imBereich(item, bereich, config) {
   if (!bereich) return true;
-  return istNotfallBeider(item) || item.labels.includes(harness) === (bereich === "agentic");
+  return istNotfallBeider(item) || item.labels.includes(labelAus(config, "harness")) === (bereich === "agentic");
 }
 
 /**
@@ -141,11 +141,11 @@ export function imBereich(item, bereich, harness = FACTORY_LABEL) {
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
 export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, nur = () => true, namen, config }) {
-  const harness = config === undefined ? FACTORY_LABEL : labelAus(config, "harness");
+  labelAus(config, "harness"); // fail-fast, auch ohne Bereich: ohne Config gibt es keine Auswahl
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const uebersprungen = [];
   for (const item of items) {
-    if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich, harness) || !nur(item)) continue;
+    if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich, config) || !nur(item)) continue;
     const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, hartAb, config });
     if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
     else return { ticket: ticketVon(item, r), uebersprungen };
@@ -344,7 +344,8 @@ const ladeEcht = () => ({
  * Die Quote-Eingabe (nur bei Bedarf): eine Commit-Seite von main (100 Commits, neueste zuerst) und die Nummern der geschlossenen Issues mit dem Harness-Label der Config
  * ab dem ältesten dieser Commits (minus 1 Tag). Jeder Lade- oder Formfehler wirft (Exit 2), nie eine stille Seite.
  */
-export function ladeQuoteEcht(lade = ghJson, harness = FACTORY_LABEL) {
+export function ladeQuoteEcht(lade, config) {
+  const harness = labelAus(config, "harness");
   const commits = lade(["api", `repos/${REPO}/commits?sha=main&per_page=100`]);
   if (!Array.isArray(commits) || commits.length === 0) throw new Error("Spielquote: keine Commits von main geladen");
   const datum = (c) => Date.parse(c?.commit?.committer?.date ?? c?.commit?.author?.date ?? "");
@@ -360,11 +361,11 @@ export function ladeQuoteEcht(lade = ghJson, harness = FACTORY_LABEL) {
 const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung() });
 
 /** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). */
-export function echteIo({ config } = {}) {
+export function echteIo({ config, gh = ghJson } = {}) {
   const cfg = config ?? ladeProjektConfig();
-  const harness = labelAus(cfg, "harness");
+  labelAus(cfg, "harness");
   labelAus(cfg, "forum"); // fail-fast: das Fremdeingang-Label gehört zur Eingabe der Auswahl
-  return { lade: ladeEcht, ladeQuote: () => ladeQuoteEcht(ghJson, harness), ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: cfg.spezifikation?.hartAb, namen: ticketNamen(cfg), config: cfg };
+  return { lade: ladeEcht, ladeQuote: () => ladeQuoteEcht(gh, cfg), ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: cfg.spezifikation?.hartAb, namen: ticketNamen(cfg), config: cfg };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

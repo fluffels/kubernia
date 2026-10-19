@@ -18,6 +18,7 @@
  */
 import { ghJson, ghText } from "./gh-cli.mjs";
 import { readFileSync } from "node:fs";
+import { labelAus } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 
@@ -118,7 +119,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   const { namen, config, grund } = namenOderGrund("Umsetzer-Abschluss", deps);
   if (grund) return grund;
   if (agentType !== namen.agenten.umsetzer) return null;
-  const stuckLabel = config.labels.festgefahren;
+  const stuckLabel = labelAus(config, "festgefahren");
   const { token, zusatz, pr, schnitt, uebergabe, festgefahren } = parseErgebnis(lastMessage);
   if (vorher) {
     const fehler = [];
