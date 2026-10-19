@@ -213,7 +213,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
     expect(h([it(10)], 9).aktion).toBe("nichts");
   });
 
-  test("Vorgänger in Arbeit (#1646): geclaimtes plus ungeclaimtes Sammelticket → Quote zählt erst ab dessen Abschluss, kein nach-oben", () => {
+  test("Vorgänger in Arbeit (#1646): geclaimtes plus ungeclaimtes Sammelticket → Takt zählt erst ab dessen Abschluss, kein nach-oben", () => {
     const board = [it(10), it(11), sammel(12, { assignees: ["fluffels"] }), sammel(13)];
     const r = h(board, 5);
     expect(r.aktion).not.toBe("nach-oben");
@@ -242,7 +242,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
     expect(h(ende, 2).aktion).toBe("auf-position");
   });
 
-  test("viel Aktivität hat Vorrang: ≥ 3 Spiel-Merges und nicht hinter dem Kopf → nach-oben, nicht auf-position", () => {
+  test("viel Aktivität hat Vorrang: ≥ 5 Ticket-Merges und nicht hinter dem Kopf → nach-oben, nicht auf-position", () => {
     expect(h([...fueller(1, 10), sammel(20)], 5)).toMatchObject({ aktion: "nach-oben", nr: 20, afterId: null });
   });
 

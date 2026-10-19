@@ -9,7 +9,7 @@
  *
  * Bewusste Grenzen: nur diese beiden Aufrufformen; ein `--limit` in einem anderen Befehl derselben zusammengefügten Zeile
  * (Pipe, `&&`) zählt mit, und das Limit selbst wird nicht auf Sinnhaftigkeit geprüft. `gh api` hat eine eigene Grenze
- * (`--paginate`) und ist nicht Teil dieser Regel. */
+ * (`--paginate`) und ist nicht Teil dieser Regel. Gelesen wird nur die oberste Ebene von `scripts/` (kein `scripts/**`), erkannt nur Argument-Arrays mit doppelten Anführungszeichen; Template-Strings und einfache Anführungszeichen sieht er nicht (heute ohne Treffer). */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";

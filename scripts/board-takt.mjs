@@ -128,7 +128,7 @@ export function entscheideHarnessTakt({ items, mergesSeitAbschluss, position }) 
     };
   }
   if (vorgaenger && mergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf) {
-    return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, die Quote zählt ab dessen Abschluss` };
+    return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt zählt ab dessen Abschluss` };
   }
   if (mergesSeitAbschluss < HARNESS_TAKT_MERGES) {
     return { aktion: "nichts", grund: `nur ${mergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket (Untergrenze ${HARNESS_TAKT_MERGES}), Position stimmt` };
