@@ -16,7 +16,10 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
+import { REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE } from "./board-lib.mjs";
+import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { claimNummer, median } from "./mess-lib.mjs";
+import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, istHarnessCommit, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
 /** Nacharbeitsfenster von `lauf-ergebnis.mjs` (NACHARBEIT_TAGE dort; ein Einstiegsskript importiert das andere nicht, Test `vertrag` hält beide gleich). */
@@ -179,8 +182,9 @@ function abnahmeAbschnitt(lauf) {
 }
 
 /** Bericht als Daten: `lauf`/`nacharbeit` = `vertragPruefen`-Ergebnis, `tickets` = `[{ticket, pr, ergebnis}]`. Pure. */
-export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle }) {
+export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle, audit }) {
   return {
+    ...(audit ? { audit } : {}),
     zeitraum: { von, bis },
     nacharbeitFenster: nacharbeitFenster(von, bis),
     quelle,
@@ -207,7 +211,114 @@ export function renderMarkdown(b) {
     "",
     "**Abnahme-Quote**",
     ...abnahmeAbschnitt(b.lauf),
+    ...(b.audit ? ["", "**Selbst-Audit**", ...auditAbschnitt(b.audit)] : []),
   ].join("\n");
+}
+
+// ── Selbst-Audit (#1787): das Harness hinterfragt seine Mechanismen selbst ───────────────────────────────
+
+/** Abweichung des Härtungs-Takts ab dem Vielfachen der Takt-Schwelle (das Sammelticket hätte längst vorn stehen müssen). */
+export const TAKT_ABWEICHUNG_FAKTOR = 2;
+/** Lens-Zahl: Obergrenze der Review-Runden je PR (Cap 2 Fix-Runden = 3 Pässe plus höchstens ein Zusatzpass). */
+export const MAX_RUNDEN = 4;
+/** CI-Fix-Runden, ab denen das Festgefahren-Protokoll greifen muss (nach dem dritten Fix-Versuch). */
+export const FESTGEFAHREN_AB_CI_FIX = 4;
+/** Spielquote: unter so vielen Ticket-Merges im Fenster gibt es keine Aussage. */
+export const QUOTE_MIN_MERGES = 4;
+
+const nrListe = (zs) => zs.map((z) => `#${z.pr}`).join(", ");
+
+function auditQuote(commits, luecke) {
+  const soll = `höchstens 1 Factory- auf ${SPIEL_QUOTE} Produkt-Merges`;
+  if (luecke) return { mechanismus: "Spielquote", messung: luecke, soll, status: "Lücke" };
+  const ticket = commits.filter((c) => zaehleTicketMerges([c]) === 1);
+  const harness = ticket.filter((c) => istHarnessCommit(c, null)).length;
+  const spiel = ticket.length - harness;
+  const messung = `${harness} Factory- auf ${spiel} Produkt-Merges seit dem letzten Sammelticket-Abschluss (Zuordnung nach Commit-Scope)`;
+  if (ticket.length < QUOTE_MIN_MERGES) return { mechanismus: "Spielquote", messung: `${messung}, nur ${ticket.length} Merges: keine Aussage`, soll, status: "Lücke" };
+  return { mechanismus: "Spielquote", messung, soll, status: harness * SPIEL_QUOTE <= spiel ? "ok" : "ABWEICHUNG" };
+}
+
+function auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }) {
+  const soll = `Sammelticket nach ${HARNESS_TAKT_MERGES} Ticket-Merges vorn, Abweichung ab ${TAKT_ABWEICHUNG_FAKTOR * HARNESS_TAKT_MERGES}`;
+  if (luecke) return { mechanismus: "Härtungs-Takt", messung: luecke, soll, status: "Lücke" };
+  if (sammelInArbeit) return { mechanismus: "Härtungs-Takt", messung: `Vorgänger #${sammelInArbeit} in Arbeit, der Takt zählt erst ab dessen Abschluss`, soll, status: "ok" };
+  if (!sammelAbschluss) return { mechanismus: "Härtungs-Takt", messung: "kein abgeschlossenes Sammelticket gefunden, kein Zählanfang", soll, status: "Lücke" };
+  const n = zaehleTaktMerges(commits, null, sammelIssues);
+  const messung = `${n} Ticket-Merges seit dem Abschluss des letzten Sammeltickets (${String(sammelAbschluss).slice(0, 10)})`;
+  return { mechanismus: "Härtungs-Takt", messung, soll, status: n >= TAKT_ABWEICHUNG_FAKTOR * HARNESS_TAKT_MERGES ? "ABWEICHUNG" : "ok" };
+}
+
+function auditFestgefahren(zeilen) {
+  const soll = `jeder PR mit ${FESTGEFAHREN_AB_CI_FIX} und mehr CI-Fix-Runden trägt das Festgefahren-Label`;
+  if (!zeilen) return { mechanismus: "Festgefahren-Protokoll", messung: "kein Lauf-Ergebnis", soll, status: "Lücke" };
+  const vollstaendig = (z) => Number.isFinite(z.ciFix) && Number.isFinite(z.festgefahren);
+  const fehlen = zeilen.filter((z) => !vollstaendig(z));
+  const luecken = zeilen.filter((z) => vollstaendig(z) && z.ciFix >= FESTGEFAHREN_AB_CI_FIX && z.festgefahren === 0);
+  if (luecken.length > 0) return { mechanismus: "Festgefahren-Protokoll", messung: `${luecken.length} PRs mit ≥ ${FESTGEFAHREN_AB_CI_FIX} CI-Fix-Runden ohne Label: ${nrListe(luecken)}`, soll, status: "ABWEICHUNG" };
+  if (fehlen.length > 0) return { mechanismus: "Festgefahren-Protokoll", messung: `bei ${fehlen.length} von ${zeilen.length} PRs fehlt ciFix oder festgefahren`, soll, status: "Lücke" };
+  return { mechanismus: "Festgefahren-Protokoll", messung: `${zeilen.length} PRs geprüft, keiner mit ≥ ${FESTGEFAHREN_AB_CI_FIX} CI-Fix-Runden ohne Label`, soll, status: "ok" };
+}
+
+function auditLens(zeilen) {
+  const soll = `höchstens ${MAX_RUNDEN} Review-Runden je PR`;
+  if (!zeilen) return { mechanismus: "Lens-Zahl", messung: "kein Lauf-Ergebnis", soll, status: "Lücke" };
+  const gemessen = zeilen.filter((z) => Number.isInteger(z.runden));
+  const zuviel = gemessen.filter((z) => z.runden > MAX_RUNDEN);
+  if (zuviel.length > 0) return { mechanismus: "Lens-Zahl", messung: `${zuviel.length} PRs mit mehr als ${MAX_RUNDEN} Runden: ${zuviel.map((z) => `#${z.pr} (${z.runden})`).join(", ")}`, soll, status: "ABWEICHUNG" };
+  if (gemessen.length === 0) return { mechanismus: "Lens-Zahl", messung: `kein PR mit Review-Nachweis (${zeilen.length} PRs ohne Review-Nachweiszeile)`, soll, status: "Lücke" };
+  return { mechanismus: "Lens-Zahl", messung: `${gemessen.length} von ${zeilen.length} PRs mit Nachweis, höchste Rundenzahl ${Math.max(...gemessen.map((z) => z.runden))}`, soll, status: "ok" };
+}
+
+/**
+ * Selbst-Audit: je Mechanismus (Spielquote, Härtungs-Takt, Festgefahren-Protokoll, Lens-Zahl) eine Messung gegen das Ziel, als
+ * `{ mechanismus, messung, soll, status: "ok" | "ABWEICHUNG" | "Lücke" }`. `commits` = Commits von main seit dem Abschluss des letzten Sammeltickets
+ * (`null` plus `commitsLuecke` = Grund, wenn nicht ladbar), `sammelAbschluss` = dessen Abschlusszeit, `sammelIssues` = Nummern
+ * aller Sammeltickets, `sammelInArbeit` = Nummer eines geclaimten offenen Sammeltickets oder null, `zeilen` = Zeilen von `lauf-ergebnis --json`
+ * (`null` ohne). Fehlende Daten sind immer eine Lücke mit Grund, nie 0. Pur.
+ */
+export function selbstAudit({ commits = null, commitsLuecke = null, sammelAbschluss = null, sammelIssues = new Set(), sammelInArbeit = null, zeilen = null }) {
+  const luecke = Array.isArray(commits) ? null : (commitsLuecke ?? "Commits von main nicht geladen");
+  return [
+    auditQuote(commits, luecke),
+    auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }),
+    auditFestgefahren(zeilen),
+    auditLens(zeilen),
+  ];
+}
+
+/** Markdown-Zeilen des Selbst-Audits: `Mechanismus: Messung · Soll: … · Status`. Pur. */
+export function auditAbschnitt(audit) {
+  return audit.map((a) => `- ${a.mechanismus}: ${a.messung} · Soll: ${a.soll} · ${a.status}`);
+}
+
+/**
+ * Lädt die Rohdaten des Selbst-Audits mit zwei gh-Aufrufen (Sammeltickets mit `--limit`, Commits von main seit deren letztem Abschluss paginiert;
+ * keine Modell-Tokens). `gh` ist injizierbar. Ein Ladefehler wird zur Lücke mit Grund (`commitsLuecke`), nie zu leeren Daten.
+ */
+export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO } = {}) {
+  let issues;
+  try {
+    issues = gh(["issue", "list", "--repo", repo, "--state", "all", "--search", "in:title \"gesammelt\"", "--json", "number,title,state,closedAt,assignees", "--limit", "200"]);
+  } catch (err) {
+    return { commits: null, commitsLuecke: `Sammeltickets nicht ladbar: ${fehlerText(err, 200)}` };
+  }
+  const sammel = issues.filter((i) => SAMMELTICKET_TITEL_LISTE.includes(i.title));
+  const sammelIssues = new Set(sammel.map((i) => i.number));
+  const geschlossen = sammel
+    .filter((i) => i.title === SAMMELTICKET_TITEL && i.state === "CLOSED" && gueltig(i.closedAt))
+    .sort((a, b) => Date.parse(b.closedAt) - Date.parse(a.closedAt));
+  const sammelAbschluss = geschlossen[0]?.closedAt ?? null;
+  const inArbeit = sammel.find((i) => i.title === SAMMELTICKET_TITEL && i.state === "OPEN" && (i.assignees ?? []).length > 0);
+  const rest = { sammelAbschluss, sammelIssues, sammelInArbeit: inArbeit?.number ?? null };
+  const since = sammelAbschluss ? new Date(Date.parse(sammelAbschluss) + 60_000).toISOString() : new Date(Date.parse(bis) - 28 * TAG_MS).toISOString();
+  try {
+    const seiten = gh(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${since}&per_page=100`]);
+    const commits = seiten.flat().filter((c) => !gueltig(c?.commit?.committer?.date) || Date.parse(c.commit.committer.date) <= Date.parse(bis));
+    return { commits, ...rest };
+  } catch (err) {
+    return { commits: null, commitsLuecke: `Commits von main nicht ladbar: ${fehlerText(err, 200)}`, ...rest };
+  }
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
@@ -263,7 +374,7 @@ export function holeKosten({ ticket, pr, claims, langfuse }, run = runSkript) {
  * Setzt den Bericht zusammen; IO injiziert (`run` für die Unterprozesse, `claimKarte` liefert die Karte Ticket → Sessions).
  * Exit 2, wenn Lauf-Ergebnis oder Nacharbeit-Lauf fehlen (der Block erscheint trotzdem). Nur mit gültigem `von`/`bis` rufen.
  */
-export function erstelle({ von, bis, langfuse = false }, { run = runSkript, claimKarte }) {
+export function erstelle({ von, bis, langfuse = false }, { run = runSkript, claimKarte, auditLader = null }) {
   const fenster = nacharbeitFenster(von, bis);
   const lauf = holeLauf(von, bis, run);
   const nacharbeit = holeLauf(fenster.von, fenster.bis, run);
@@ -272,7 +383,8 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
     const claims = claimKarte();
     tickets = ticketLaeufe(lauf.daten.zeilen).tickets.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
   }
-  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript" });
+  const audit = auditLader ? selbstAudit({ ...auditLader({ bis }), zeilen: lauf.daten?.zeilen ?? null }) : undefined;
+  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit });
   return { bericht: b, exit: lauf.luecke || nacharbeit.luecke ? 2 : 0 };
 }
 
@@ -284,7 +396,7 @@ function main(argv) {
   }
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
-  const r = erstelle({ von, bis, langfuse }, { claimKarte });
+  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: ladeAuditDaten });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);
 }

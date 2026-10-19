@@ -3,7 +3,7 @@
 /**
  * Generischer Board-Takt (#1390, ursprünglich #1351/#1349): der Workflow `.github/workflows/board-takt.yml` ruft dieses Skript. Es pflegt
  *  1. das Status-Ticket „Langfuse-Status überprüfen“ (Entscheidung und Anlegen: scripts/langfuse-takt.mjs, ADR 0016) und
- *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach `HARNESS_TAKT_MERGES` Spiel-Merges (Spielquote, #1425) hinter den Kopf
+ *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach `HARNESS_TAKT_MERGES` Ticket-Merges jeder Art (Härtungs-Takt, ohne Bots und Sammelticket-Merges) hinter den Kopf
  *     holen und, unabhängig von der Aktivität, auf die Position laut AGENTS.md zurückschieben, wenn es dahinter steht (Selbstkorrektur,
  *     nur nach vorn, nie in den Kopf).
  * Die Entscheidungen sind pur und getestet (test/board-takt.test.ts, test/langfuse-takt.test.ts), nur die gh-Aufrufe in `main` sind es nicht.
@@ -22,6 +22,7 @@ import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,
+  SAMMELTICKET_TITEL_LISTE,
   STATUS_TITEL,
   TAG_MS,
   addToBoardTodo,
@@ -48,18 +49,14 @@ import {
 } from "./board-lib.mjs";
 
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
-import { SPIEL_QUOTE, istHarnessCommit, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, istHarnessCommit, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
 
 // Die Quote liegt in spielquote-lib.mjs (auch naechstes-ticket.mjs braucht sie); die API dieses Skripts bleibt stabil.
-export { SPIEL_QUOTE, istHarnessCommit, zaehleTicketMerges };
+export { HARNESS_TAKT_MERGES, SPIEL_QUOTE, istHarnessCommit, zaehleTaktMerges, zaehleTicketMerges };
 
 // Zwei Boards (ADR 0022 F11, #1729): Status-Ticket, Harness-Sammelticket und ihre Selbstkorrektur laufen auf dem Factory-Board; der Wächter
 // nimmt fehlende Issues nach der Trennregel (`boardRolleFuer`) auf ihrem Board auf.
 const FACTORY_BOARD = boardFuerRolle("factory");
-
-/** Harness-Sammelticket: so viele SPIEL-Merges seit dem Abschluss des letzten Sammeltickets holen das ungeclaimte nach oben (hinter den Kopf).
- *  Gleich der Spielquote: Harness-Merges verdienen keinen weiteren Harness-Platz (#1425). */
-export const HARNESS_TAKT_MERGES = SPIEL_QUOTE;
 
 /**
  * Beginn des Aktivitätsfensters: 60 s nach `letzterAbschluss` (beim Status-Ticket das Anlegen des jüngsten Tickets, beim
@@ -90,21 +87,21 @@ export function quotenBericht(commits, seit = null, harnessIssues = null) {
 }
 
 /**
- * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `spielMergesSeitAbschluss` = Spiel-Merges (`zaehleSpielMerges`) seit dem Abschluss des
+ * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `mergesSeitAbschluss` = Ticket-Merges jeder Art (`zaehleTaktMerges`) seit dem Abschluss des
  * letzten Harness-Sammeltickets, `position` = Position laut AGENTS.md (`sammelticketPosition`). Reihenfolge der Regeln:
  *  1. Ab `HARNESS_TAKT_MERGES` kommt das erste ungeclaimte Harness-Sammelticket direkt hinter den zusammenhängenden Kopf ganz oben
  *     (Status-, Notfall-, Dependabot-, Forum-Ticket) → `nach-oben`. Steht es dort schon, ist der Lauf idempotent.
- *     Ist ein Vorgänger (offenes Sammelticket mit Assignee) in Arbeit, entfällt die Regel: die Quote zählt ab dessen Abschluss.
+ *     Ist ein Vorgänger (offenes Sammelticket mit Assignee) in Arbeit, entfällt die Regel: der Takt zählt ab dessen Abschluss.
  *  2. Sonst, und auch bei wenig Aktivität: steht es hinter der Position laut AGENTS.md, geht es dorthin zurück (`sammelticketKorrektur`:
  *     nur nach vorn, nie in den Kopf) → `auf-position`.
  *  3. Sonst nichts.
  * Grenze: ein Kopf-Item, das nicht zusammenhängend oben steht, zählt nicht zum Kopf. Liefert `{ aktion: "nach-oben" | "auf-position" | "nichts", nr?, afterId?, grund }`.
  * Ungültige Eingaben (auch ein `position` unter 1) werfen. Pur.
  */
-export function entscheideHarnessTakt({ items, spielMergesSeitAbschluss, position }) {
+export function entscheideHarnessTakt({ items, mergesSeitAbschluss, position }) {
   if (!Array.isArray(items)) throw new Error("items muss eine Liste sein.");
-  if (!Number.isInteger(spielMergesSeitAbschluss) || spielMergesSeitAbschluss < 0) {
-    throw new Error(`spielMergesSeitAbschluss muss eine ganze Zahl ≥ 0 sein, war ${String(spielMergesSeitAbschluss)}`);
+  if (!Number.isInteger(mergesSeitAbschluss) || mergesSeitAbschluss < 0) {
+    throw new Error(`mergesSeitAbschluss muss eine ganze Zahl ≥ 0 sein, war ${String(mergesSeitAbschluss)}`);
   }
   if (!Number.isInteger(position) || position < 1) throw new RangeError(`position muss eine ganze Zahl ≥ 1 sein, war ${String(position)}`);
   const ticket = sammelticketItem(items);
@@ -113,12 +110,12 @@ export function entscheideHarnessTakt({ items, spielMergesSeitAbschluss, positio
   const idx = items.findIndex((i) => i.id === ticket.id);
   const direktHinterKopf = items.slice(ende, idx).every((i) => i.state !== "open");
   const vorgaenger = items.find((i) => i.state === "open" && i.title === SAMMELTICKET_TITEL && !ungeclaimt(i));
-  if (spielMergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf && !vorgaenger) {
+  if (mergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf && !vorgaenger) {
     return {
       aktion: "nach-oben",
       nr: ticket.number,
       afterId: ende > 0 ? items[ende - 1].id : null,
-      grund: `${spielMergesSeitAbschluss} Spiel-Merges seit dem letzten Sammelticket, #${ticket.number} kommt hinter den Kopf`,
+      grund: `${mergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket, #${ticket.number} kommt hinter den Kopf`,
     };
   }
   const k = sammelticketKorrektur(items, position);
@@ -130,22 +127,22 @@ export function entscheideHarnessTakt({ items, spielMergesSeitAbschluss, positio
       grund: `#${k.nr} stand auf Rang ${k.vonRang}, zurück auf Rang ${k.nachRang} (Position ${position} laut AGENTS.md)`,
     };
   }
-  if (vorgaenger && spielMergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf) {
+  if (vorgaenger && mergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf) {
     return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, die Quote zählt ab dessen Abschluss` };
   }
-  if (spielMergesSeitAbschluss < HARNESS_TAKT_MERGES) {
-    return { aktion: "nichts", grund: `nur ${spielMergesSeitAbschluss} Spiel-Merges seit dem letzten Sammelticket (Untergrenze ${HARNESS_TAKT_MERGES}), Position stimmt` };
+  if (mergesSeitAbschluss < HARNESS_TAKT_MERGES) {
+    return { aktion: "nichts", grund: `nur ${mergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket (Untergrenze ${HARNESS_TAKT_MERGES}), Position stimmt` };
   }
   return { aktion: "nichts", grund: `#${ticket.number} steht schon direkt hinter dem Kopf` };
 }
 
 /**
- * Die Harness-Entscheidung aus der Commit-Liste von main: zählt NUR Spiel-Merges seit `seit` (dem Fenster ab dem Abschluss des letzten
- * Sammeltickets) und fragt damit `entscheideHarnessTakt`. Eigene pure Funktion, damit die Verdrahtung (Spiel- statt aller Merges)
+ * Die Harness-Entscheidung aus der Commit-Liste von main: zählt alle Ticket-Merges (Spiel und Agentic, ohne Bots, ohne Commits zu `sammelIssues`)
+ * seit `seit` (dem Fenster ab dem Abschluss des letzten Sammeltickets) und fragt damit `entscheideHarnessTakt`. Eigene pure Funktion, damit die Verdrahtung
  * getestet ist und `main` nichts anderes tut als sie aufzurufen. Pur.
  */
-export function harnessTaktAusCommits({ items, commits, seit, position, harnessIssues = null }) {
-  return entscheideHarnessTakt({ items, spielMergesSeitAbschluss: zaehleSpielMerges(commits, seit, harnessIssues), position });
+export function harnessTaktAusCommits({ items, commits, seit, position, sammelIssues = new Set() }) {
+  return entscheideHarnessTakt({ items, mergesSeitAbschluss: zaehleTaktMerges(commits, seit, sammelIssues), position });
 }
 
 /** Die Factory-Liste ohne Items, die auch auf dem Produkt-Board stehen und laut Trennregel dorthin gehören (`doppelt` aus `seitenListen`). Pur. */
@@ -268,6 +265,11 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     .sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at));
   // Die Nummern aller geschlossenen Harness-Issues: die Spielquote ordnet einen Commit über seine `#N`-Referenz zu (istHarnessCommit).
   const harnessIssues = new Set(geschlossen.map((i) => i.number));
+  // Alle Sammeltickets (beide Titel, geschlossen wie offen): ihr Abschluss-Commit zählt für den Härtungs-Takt nicht als Ticket-Merge.
+  const sammelIssues = new Set([
+    ...geschlossen.filter((i) => SAMMELTICKET_TITEL_LISTE.includes(i.title)).map((i) => i.number),
+    ...offene.filter((i) => SAMMELTICKET_TITEL_LISTE.includes(i.titel)).map((i) => i.number),
+  ]);
   const letzter = (titel) => {
     const g = geschlossen.find((i) => i.title === titel);
     return g ? { number: g.number, closedAt: g.closed_at, createdAt: g.created_at } : null;
@@ -314,7 +316,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     io.log(voraussetzung.meldung);
     if (voraussetzung.fehler) fehler = true;
   } else {
-    const h = harnessTaktAusCommits({ items, commits, seit: abHarness, position, harnessIssues });
+    const h = harnessTaktAusCommits({ items, commits, seit: abHarness, position, sammelIssues });
     io.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Fenster ab ${abHarness}`);
     io.log(quotenBericht(commits, abHarness, harnessIssues).zeile);
     if (!dry && h.aktion !== "nichts" && !io.fuehreHarnessAus(h, items, token)) fehler = true;

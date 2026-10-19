@@ -9,6 +9,10 @@ import { alsDatum } from "./board-lib.mjs";
 /** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
 export const SPIEL_QUOTE = 3;
 
+/** Härtungs-Takt: so viele Ticket-Merges jeder Art (Spiel und Agentic, ohne Bots, ohne Sammelticket-Merges) seit dem Abschluss des letzten
+ *  Sammeltickets holen das ungeclaimte Harness-Sammelticket hinter den Kopf. Eigene Zahl, nicht an die Seitenwahl (`SPIEL_QUOTE`) gekoppelt. */
+export const HARNESS_TAKT_MERGES = 5;
+
 /**
  * Zahl der Ticket-Merges in einer Commit-Liste von main (`repos/<repo>/commits`): Commits, deren Autor kein Bot ist
  * (Dependabot, github-actions: Login endet auf `[bot]`). Mit `seit` zählen nur Commits ab diesem Zeitpunkt. Pur.
@@ -38,9 +42,24 @@ const istBot = (c) => /\[bot\]$/i.test(String(c?.author?.login ?? ""));
  */
 export function istHarnessCommit(commit, harnessIssues = null) {
   const kopf = String(commit?.commit?.message ?? "").split(/\r?\n/, 1)[0];
-  const refs = [...kopf.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
+  const refs = commitRefs(commit);
   if (harnessIssues && refs.length > 0) return refs.some((n) => harnessIssues.has(n));
   return /^[a-z]+\(harness\)!?:/i.test(kopf);
+}
+
+/** Die `#N`-Referenzen der Titelzeile eines Commits (Issue und PR) als Zahlen. Pur. */
+export function commitRefs(commit) {
+  const kopf = String(commit?.commit?.message ?? "").split(/\r?\n/, 1)[0];
+  return [...kopf.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
+}
+
+/**
+ * Ticket-Merges für den Härtungs-Takt: `zaehleTicketMerges` (ohne Bots, ab `seit`) ohne Commits, deren Titel ein Sammelticket
+ * (`sammelIssues`: Menge der Nummern, geschlossen wie offen) referenziert; der Abschluss eines Sammeltickets zählt nicht als Ticket. Pur.
+ */
+export function zaehleTaktMerges(commits, seit = null, sammelIssues = new Set()) {
+  if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
+  return zaehleTicketMerges(commits.filter((c) => !commitRefs(c).some((n) => sammelIssues.has(n))), seit);
 }
 
 /**
