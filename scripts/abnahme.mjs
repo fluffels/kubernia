@@ -92,7 +92,10 @@ export function zaehleDurchgang(kommentare, owner, zeilen) {
   return vertrauteAbnahmeMarker(kommentare, owner, zeilen).length + 1;
 }
 
-const zelle = (t) => String(t).replace(/\|/g, "\\|").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, " ");
+/** Text in Listenpunkten: spitze Klammern maskiert (der Marker bleibt nicht fälschbar), Zeilenumbruch zu Leerzeichen; Pipe und Backslash bleiben, in Listen gibt es nichts zu maskieren. */
+const listenText = (t) => String(t).replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, " ");
+/** Text in Tabellenzellen: Backslash zuerst maskieren, dann die Pipe (sonst öffnete `\|` im Rohtext eine Zelle, GFM nimmt die Pipe-Maskierung vor dem Inline-Parsen zurück). Normaler Text erscheint exakt, in Code-Spans doppelte Backslashes (bewusst, die Urteile stehen im Marker). */
+const zelle = (t) => listenText(String(t).replace(/\\/g, "\\\\").replace(/\|/g, "\\|"));
 /** Grenzen der Kommentare (GitHub lehnt Körper ab 65.536 Zeichen ab): je Beleg höchstens `BELEG_MAX`, gesamt `KOMMENTAR_MAX`. */
 export const BELEG_MAX = 1000;
 export const KOMMENTAR_MAX = 65000;
@@ -134,7 +137,7 @@ export function prKommentar({ zeilen, nr, durchgang, head, urteile, kriterienLis
 /** Ticket-Kommentar bei `nicht-pruefbar`: Hand-off-Marker, alle nicht prüfbaren Kriterien mit Text und Grund. Pur. */
 export function handoffKommentar({ zeilen, nr, urteile, kriterienListe }) {
   const text = new Map(kriterienListe.map((c) => [c.k, c.text]));
-  const punkte = urteile.filter((u) => u.wert === "nicht-pruefbar").map((u) => `- **${u.k}** ${zelle(kurz(text.get(u.k) ?? ""))}\n  Grund: ${zelle(kuerzeBeleg(u.beleg))}`);
+  const punkte = urteile.filter((u) => u.wert === "nicht-pruefbar").map((u) => `- **${u.k}** ${listenText(kurz(text.get(u.k) ?? ""))}\n  Grund: ${listenText(kuerzeBeleg(u.beleg))}`);
   const kopf = [`<!-- ${abnahmeMarker(zeilen)}-handoff -->`, `### Holdout-Abnahme #${nr}: Kriterium nicht prüfbar`, ""];
   return begrenze(kopf, punkte, [
     "",

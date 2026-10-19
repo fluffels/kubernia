@@ -466,3 +466,66 @@ describe("Lens-Runde 1: CRLF, Argumente der io, Grenzen der Aufrufprüfung", () 
     expect(r.posts[0].body).not.toContain("x".repeat(101));
   });
 });
+
+describe("Beleg-Escaping (CodeQL js/incomplete-sanitization, #1796)", () => {
+  const B = raw as unknown as {
+    BELEG_MAX: number;
+    KOMMENTAR_MAX: number;
+    handoffKommentar: (o: { zeilen: Zeilen; nr: number; urteile: { k: string; wert: string; beleg: string }[]; kriterienListe: { k: string; text: string }[] }) => string;
+  };
+  const baue = (belege: string[]) => {
+    const kriterienListe = belege.map((_, i) => ({ k: `K${i + 1}`, text: "t" }));
+    return A.prKommentar({
+      zeilen: Z,
+      nr: 7,
+      durchgang: 1,
+      head: HEAD,
+      urteile: kriterienListe.map(({ k }, i) => ({ k, wert: "erfuellt", beleg: belege[i] })),
+      kriterienListe,
+    });
+  };
+  const ROH = ["a\\|b", "x\\\\|y", "ende\\", "C:\\x", "a | b <b>"];
+
+  test("Backslash vor Pipe öffnet keine Zelle: je Zeile genau die 4 Tabellen-Pipes", () => {
+    const zeilen = baue(ROH).match(/^\| K\d+: .*$/gm) ?? [];
+    expect(zeilen).toHaveLength(ROH.length);
+    for (const z of zeilen) expect(z.match(/(?<!\\)(?:\\\\)*\|/g)).toHaveLength(4);
+  });
+
+  test("Round-Trip: die maskierte Beleg-Zelle ergibt den Rohbeleg zurück", () => {
+    const zeilen = baue(ROH).match(/^\| K\d+: .*$/gm) ?? [];
+    const zellen = zeilen.map((z) => (/ \| erfuellt \| (.*) \|$/.exec(z) as RegExpExecArray)[1]);
+    const dekodiert = zellen.map((c) => c.replace(/\\([\\|])/g, "$1").replace(/&lt;/g, "<").replace(/&gt;/g, ">"));
+    expect(dekodiert).toEqual(ROH);
+  });
+
+  test("Grenzfall Länge: Belege aus lauter Backslashes bleiben unter KOMMENTAR_MAX, der Marker ganz", () => {
+    const body = baue(Array.from({ length: 70 }, () => "\\".repeat(B.BELEG_MAX)));
+    expect(body.length).toBeLessThanOrEqual(B.KOMMENTAR_MAX);
+    expect(body.match(/<!--/g)).toHaveLength(1);
+    expect(body).toMatch(/weitere Zeilen entfallen/);
+  });
+
+  test("Hand-off-Liste: kein Pipe- und kein Backslash-Escaping, spitze Klammern bleiben maskiert", () => {
+    const body = B.handoffKommentar({
+      zeilen: Z,
+      nr: 7,
+      urteile: [{ k: "K1", wert: "nicht-pruefbar", beleg: "`a|b` C:\\x <!-- y -->" }],
+      kriterienListe: [{ k: "K1", text: "t" }],
+    });
+    expect(body).toContain("Grund: `a|b` C:\\x &lt;!-- y --&gt;");
+    expect(body.match(/<!--/g)).toHaveLength(1);
+  });
+
+  test("Zeilenumbruch im Beleg wird zu einem Leerzeichen: Tabellenzeile und Listenpunkt bleiben eine Zeile", () => {
+    expect(baue(["z1\nz2\nz3"])).toMatch(/^\| K1: .* \| erfuellt \| z1 z2 z3 \|$/m);
+    const body = B.handoffKommentar({
+      zeilen: Z,
+      nr: 7,
+      urteile: [{ k: "K1", wert: "nicht-pruefbar", beleg: "z1\r\nz2\r\nz3" }],
+      kriterienListe: [{ k: "K1", text: "t" }],
+    });
+    expect(body).toMatch(/Grund: z1 z2 z3$/m);
+    expect(body).not.toContain("\r");
+  });
+});
