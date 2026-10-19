@@ -5,7 +5,7 @@
  * schreibt die Spur als PR-Kommentar und entscheidet über bestanden, Fix-Runde oder Hand-off. Format der Zeile und der Marker: nachweis-lib.mjs
  * (`formatAbnahme`, `formatAbnahmeMarker`), Beschreibung: docs/agent-harness.md §3a.
  *
- *   node scripts/abnahme.mjs kriterien <nr>
+ *   node scripts/abnahme.mjs kriterien <nr>   (Kriterien mit Präfix `Nach dem Merge:` stehen als „(nach dem Merge, nicht prüfen)“ da)
  *   node scripts/abnahme.mjs auswerten <nr> --pr <pr> --bericht <datei> --worktree <pfad> --head <sha>
  *
  * Bericht: erste nicht leere Zeile `ABNAHME #<nr> · holdout-abnahme`, dann je Kriterium `K<i>: erfuellt|nicht-erfuellt|nicht-pruefbar — <Beleg>`
@@ -48,12 +48,15 @@ const positiveZahl = (t) => (/^\d+$/.test(String(t ?? "")) && Number(t) > 0 ? Nu
 
 const KOPF = new RegExp(`^ABNAHME\\s+#(\\d+)\\s*·\\s*${ABNAHME_AGENT}\\s*$`);
 const URTEILSZEILE = /^\s*(?:[-*]\s+)?K(\d+):\s*(.+?)\s+[—–-]\s+(\S.*)$/;
-const KANDIDAT = /^\s*(?:[-*]\s+)?K\d+:/;
+/** Beleg des Skripts für ein Nach-Merge-Kriterium (den echten Beleg liefert der Umsetzer nach dem Merge als PR-Kommentar). */
+const NACH_MERGE_BELEG = "Beleg folgt nach dem Merge als PR-Kommentar des Umsetzers";
+const KANDIDAT =/^\s*(?:[-*]\s+)?K\d+:/;
 
 /**
  * Prüft den Bericht gegen die Kriterien `[{k, text}]`: `{urteile:[{k, wert, beleg}]}` (in der Reihenfolge der Kriterien) oder `{fehler:[…]}`.
  * Kopf streng (Nummer und Agentenname), Werte tolerant (Groß-/Kleinschreibung, Umlaute), Beleg Pflicht; ein Kriterium fehlt, ist doppelt
- * oder unbekannt → Fehler. Pur.
+ * oder unbekannt → Fehler. Ein Nach-Merge-Kriterium (`nachMerge`) braucht keine Zeile, eine vorhandene wird ignoriert; das Skript setzt dort selbst
+ * `nach-merge` (der Agent kann den Wert nicht setzen: `URTEILSWERTE` kennt ihn nicht). Pur.
  */
 export function parseBericht(text, nr, kriterienListe) {
   const fehler = [];
@@ -62,11 +65,13 @@ export function parseBericht(text, nr, kriterienListe) {
   const km = kopf === undefined ? null : KOPF.exec(kopf.trim());
   if (!km || Number(km[1]) !== nr) fehler.push(`Kopf fehlt oder falsch (erwartet: ABNAHME #${nr} · ${ABNAHME_AGENT})`);
   const bekannt = new Set(kriterienListe.map((c) => c.k));
+  const nachMerge = new Set(kriterienListe.filter((c) => c.nachMerge).map((c) => c.k));
   const gefunden = new Map();
   for (const zeile of zeilen) {
     if (!KANDIDAT.test(zeile)) continue;
     const m = URTEILSZEILE.exec(zeile);
     const k = `K${/K(\d+):/.exec(zeile)[1]}`;
+    if (nachMerge.has(k)) continue;
     if (!m) {
       fehler.push(`${k}: Zeile ohne Beleg oder ohne Urteil („K<i>: <urteil> — <Beleg>“)`);
       continue;
@@ -77,12 +82,12 @@ export function parseBericht(text, nr, kriterienListe) {
     else if (gefunden.has(k)) fehler.push(`${k}: doppelt`);
     else gefunden.set(k, { k, wert, beleg: m[3].trim() });
   }
-  for (const { k } of kriterienListe) if (!gefunden.has(k) && !fehler.some((f) => f.startsWith(`${k}:`))) fehler.push(`${k}: fehlt im Bericht`);
+  for (const { k } of kriterienListe) if (!nachMerge.has(k) && !gefunden.has(k) &&!fehler.some((f) => f.startsWith(`${k}:`))) fehler.push(`${k}: fehlt im Bericht`);
   if (fehler.length > 0) return { fehler };
-  return { urteile: kriterienListe.map(({ k }) => gefunden.get(k)) };
+  return { urteile: kriterienListe.map(({ k }) => (nachMerge.has(k) ? { k, wert: "nach-merge", beleg: NACH_MERGE_BELEG } : gefunden.get(k))) };
 }
 
-/** Vorrang handoff > fix > bestanden. Pur. */
+/** Vorrang handoff > fix > bestanden; `nach-merge` zählt nicht mit. Pur. */
 export function entscheide(urteile) {
   if (urteile.some((u) => u.wert === "nicht-pruefbar")) return "handoff";
   if (urteile.some((u) => u.wert === "nicht-erfuellt")) return "fix";
@@ -96,7 +101,12 @@ export function zaehleDurchgang(kommentare, owner, zeilen) {
 
 /** Text in Listenpunkten: spitze Klammern maskiert (der Marker bleibt nicht fälschbar), Zeilenumbruch zu Leerzeichen; Pipe und Backslash bleiben, in Listen gibt es nichts zu maskieren. */
 const listenText = (t) => String(t).replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, " ");
-/** Text in Tabellenzellen: Backslash zuerst maskieren, dann die Pipe (sonst öffnete `\|` im Rohtext eine Zelle, GFM nimmt die Pipe-Maskierung vor dem Inline-Parsen zurück). Normaler Text erscheint exakt, in Code-Spans doppelte Backslashes (bewusst, die Urteile stehen im Marker). */
+/**
+ * Text in Tabellenzellen. Richtlinie (Gegenstück: `cell` in docs-gen/markdown.mjs): Freitext aus fremder Quelle (hier die Belege des Agenten) wird mit `zelle`
+ * maskiert, Backslash zuerst, dann die Pipe (sonst öffnete `\|` im Rohtext eine Zelle, GFM nimmt die Pipe-Maskierung vor dem Inline-Parsen zurück); normaler Text
+ * erscheint exakt, in Code-Spans doppelte Backslashes (bewusst, die Urteile stehen im Marker). Generierte Zellen mit Code-Spans maskiert `cell`: nur die Pipe,
+ * weil GFM Backslash-Escapes in Code-Spans nicht auflöst.
+ */
 const zelle = (t) => listenText(String(t).replace(/\\/g, "\\\\").replace(/\|/g, "\\|"));
 /** Grenzen der Kommentare (GitHub lehnt Körper ab 65.536 Zeichen ab): je Beleg höchstens `BELEG_MAX`, gesamt `KOMMENTAR_MAX`. */
 export const BELEG_MAX = 1000;
@@ -106,11 +116,11 @@ const kuerzeBeleg = (t) => {
   const b = String(t);
   return b.length > BELEG_MAX ? `${b.slice(0, BELEG_MAX)}${GEKUERZT}` : b;
 };
-/** Setzt Kopf, Zeilen und Schluss zusammen; passt der Körper nicht in `KOMMENTAR_MAX`, entfallen Zeilen von hinten (Kopf und Marker bleiben ganz). */
-function begrenze(kopf, zeilen, schluss) {
+/** Setzt Kopf, Zeilen und Schluss zusammen; passt der Körper nicht in `max` (die Aufrufer `prKommentar` und `handoffKommentar` setzen `KOMMENTAR_MAX`, überschreibbar), entfallen Zeilen von hinten (Kopf und Marker bleiben ganz). */
+function begrenze(kopf, zeilen, schluss, max) {
   const baue = (z, hinweis) => [...kopf, ...z, ...(hinweis ? [hinweis] : []), ...schluss].join("\n");
   const voll = baue(zeilen, null);
-  if (voll.length <= KOMMENTAR_MAX) return voll;
+  if (voll.length <= max) return voll;
   // Linear statt je Schritt neu zusammensetzen: die Länge des Joins ist Σ Teil-Längen + (Teile − 1), die Längen der Zeilen kommen aus Präfixsummen.
   const laenge = (teile) => teile.reduce((summe, t) => summe + t.length, 0);
   const praefix = [0];
@@ -119,7 +129,7 @@ function begrenze(kopf, zeilen, schluss) {
   const hinweisFuer = (n) => `${GEKUERZT}: ${zeilen.length - n} weitere Zeilen entfallen (die Urteile stehen im Marker)`;
   const laengeBei = (n) => fest + praefix[n] + hinweisFuer(n).length + (kopf.length + n + 1 + schluss.length - 1);
   let n = zeilen.length - 1;
-  while (n > 0 && laengeBei(n) > KOMMENTAR_MAX) n -= 1;
+  while (n > 0 && laengeBei(n) > max) n -= 1;
   return baue(zeilen.slice(0, n), hinweisFuer(n));
 }
 const kurz = (t) => {
@@ -128,16 +138,16 @@ const kurz = (t) => {
 };
 
 /** PR-Kommentar: Marker, Tabelle Kriterium, Urteil, Beleg (keine anderen Berichtszeilen, keine Szenarien). Pur. */
-export function prKommentar({ zeilen, nr, durchgang, head, urteile, kriterienListe }) {
+export function prKommentar({ zeilen, nr, durchgang, head, urteile, kriterienListe, max = KOMMENTAR_MAX }) {
   const marker = formatAbnahmeMarker(zeilen, { durchgang, head, urteil: urteile.map(({ k, wert }) => ({ k, wert })) });
   const text = new Map(kriterienListe.map((c) => [c.k, c.text]));
   const zeilenTabelle = urteile.map((u) => `| ${zelle(`${u.k}: ${kurz(text.get(u.k) ?? "")}`)} | ${u.wert} | ${zelle(kuerzeBeleg(u.beleg))} |`);
   const kopf = [marker, `### Holdout-Abnahme #${nr}, Durchgang ${durchgang}`, "", `Stand \`${head.slice(0, 7)}\``, "", "| Kriterium | Urteil | Beleg |", "| --- | --- | --- |"];
-  return begrenze(kopf, zeilenTabelle, [""]);
+  return begrenze(kopf, zeilenTabelle, [""], max);
 }
 
 /** Ticket-Kommentar bei `nicht-pruefbar`: Hand-off-Marker, alle nicht prüfbaren Kriterien mit Text und Grund. Pur. */
-export function handoffKommentar({ zeilen, nr, urteile, kriterienListe }) {
+export function handoffKommentar({ zeilen, nr, urteile, kriterienListe, max = KOMMENTAR_MAX }) {
   const text = new Map(kriterienListe.map((c) => [c.k, c.text]));
   const punkte = urteile.filter((u) => u.wert === "nicht-pruefbar").map((u) => `- **${u.k}** ${listenText(kurz(text.get(u.k) ?? ""))}\n  Grund: ${listenText(kuerzeBeleg(u.beleg))}`);
   const kopf = [`<!-- ${abnahmeMarker(zeilen)}-handoff -->`, `### Holdout-Abnahme #${nr}: Kriterium nicht prüfbar`, ""];
@@ -145,7 +155,7 @@ export function handoffKommentar({ zeilen, nr, urteile, kriterienListe }) {
     "",
     "Das Kriterium im Ticket präzisieren (Entscheidung der Maintainerin). Der Reparaturweg `node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>` greift nur bei unvollständiger Spezifikation (nicht bei einem Ticket mit Assignee und nicht bei Umformulierungen).",
     "",
-  ]);
+  ], max);
 }
 
 /** Flags `--name wert`; alles andere ist positional. Pur. */
@@ -187,7 +197,8 @@ function zeigeKriterien(nr, io) {
     const zeile = formatAbnahme(io.zeilen, { art: "entfaellt", grund: "Ticket ohne Akzeptanzkriterien" });
     return ergebnis(0, `Keine Akzeptanzkriterien im Ticket; die Abnahme entfällt. Zeile für den Nachweis-Commit:\n${zeile}\n`);
   }
-  return ergebnis(0, `${liste.map((c) => `${c.k}: ${einrueckung(c.text)}`).join("\n")}\n`);
+  const kopf = (c) => (c.nachMerge ? `${c.k} (nach dem Merge, nicht prüfen)` : c.k);
+  return ergebnis(0, `${liste.map((c) => `${kopf(c)}: ${einrueckung(c.text)}`).join("\n")}\n`);
 }
 
 function pruefeWorktree(werte, io) {

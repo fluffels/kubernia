@@ -126,6 +126,8 @@ export function parseNachweis(text, zeilen) {
 
 /** Urteilswerte der Holdout-Abnahme je Kriterium (ADR 0022 F13). */
 export const URTEILSWERTE = Object.freeze(["erfuellt", "nicht-erfuellt", "nicht-pruefbar"]);
+/** Werte in Abnahme-Zeile und Marker: die Urteile des Agenten plus `nach-merge`, das nur das Skript für Nach-Merge-Kriterien setzt (der Agent darf es nicht). */
+export const ZEILENWERTE = Object.freeze([...URTEILSWERTE, "nach-merge"]);
 
 /** `K1:erfuellt,K2:nicht-erfuellt` → `{urteil: [{k, wert}]}`; sonst `{fehler}` mit dem ersten Grund (leer, ungültiges K wie K0/Kx, unbekannter Wert, doppeltes K). */
 function parseUrteil(wert) {
@@ -139,7 +141,7 @@ function parseUrteil(wert) {
       return { fehler: rest.length > 0 && !/^K[1-9]\d*$/.test(k) ? `Kriterium „${k}“ ungültig` : `Eintrag „${teil.trim()}“ ungültig (erwartet K<n>:<wert>)` };
     }
     const w = normalisiereWert(m[2]);
-    if (!URTEILSWERTE.includes(w)) return { fehler: `unbekannter Wert „${m[2]}“ bei ${m[1]}` };
+    if (!ZEILENWERTE.includes(w)) return { fehler: `unbekannter Wert „${m[2]}“ bei ${m[1]}` };
     if (urteil.some((u) => u.k === m[1])) return { fehler: `${m[1]} doppelt` };
     urteil.push({ k: m[1], wert: w });
   }

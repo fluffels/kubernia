@@ -30,6 +30,7 @@ const A = raw as unknown as {
     head: string;
     urteile: { k: string; wert: string; beleg: string }[];
     kriterienListe: { k: string; text: string }[];
+    max?: number;
   }) => string;
   fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string };
   parseBericht: (t: string, nr: number, k: { k: string; text: string }[]) => { urteile?: { k: string; wert: string; beleg: string }[]; fehler?: string[] };
@@ -247,9 +248,26 @@ describe("Kommentar-Grenzen: Beleg und Gesamtkörper (#1762)", () => {
     expect(b.match(/^\| K\d+: /gm) ?? []).toHaveLength(55);
   });
   test("passt schon der Kopf mit dem Marker nicht, entfallen alle Zeilen und die Kürzung endet (kein Endlosschleifen-Fall)", () => {
-    const n = 7000;
-    const b = viele(n, 1);
+    // Kleiner Grenzwert statt 7.000 Zeilen (die große Fixture lief unter Coverage ins 5-s-Limit): `max` ist über prKommentar injizierbar.
+    const n = 60;
+    const kriterienListe = Array.from({ length: n }, (_, i) => ({ k: `K${i + 1}`, text: "t" }));
+    const bau = (max: number) =>
+      A.prKommentar({ zeilen: Z, nr: 7, durchgang: 1, head: HEAD, urteile: kriterienListe.map(({ k }) => ({ k, wert: "erfuellt", beleg: "b" })), kriterienListe, max });
+    const b = bau(100); // schon Kopf mit Marker (60 Urteile) sprengt 100 Zeichen: alle Zeilen entfallen, Kopf und Marker bleiben
     expect(b).toContain(`${n} weitere Zeilen entfallen`);
+    expect(b.match(/^\| K\d+: /gm)).toBeNull();
+    expect(nl.parseAbnahmeMarker(Z, b)?.urteil).toHaveLength(n);
+    // Gegenprobe: mit Standard-Grenzwert bleibt alles stehen.
+    expect(bau(A2.KOMMENTAR_MAX)).not.toMatch(/weitere Zeilen entfallen/);
+  });
+  test("Hand-off-Kommentar nimmt denselben injizierbaren Grenzwert", () => {
+    const A3 = A as unknown as { handoffKommentar: (o: { zeilen: Zeilen; nr: number; urteile: { k: string; wert: string; beleg: string }[]; kriterienListe: { k: string; text: string }[]; max?: number }) => string };
+    const kriterienListe = [{ k: "K1", text: "t" }, { k: "K2", text: "t" }];
+    const urteile = kriterienListe.map(({ k }) => ({ k, wert: "nicht-pruefbar", beleg: "grund" }));
+    const knapp = A3.handoffKommentar({ zeilen: Z, nr: 7, urteile, kriterienListe, max: 200 });
+    expect(knapp).toMatch(/weitere Zeilen entfallen/);
+    expect(knapp).toContain("Der Reparaturweg");
+    expect(A3.handoffKommentar({ zeilen: Z, nr: 7, urteile, kriterienListe })).not.toMatch(/weitere Zeilen entfallen/);
   });
   test("Hand-off-Kommentar: der Schluss bleibt bei aktiver Kürzung erhalten", () => {
     const zeilen = Array.from({ length: 80 }, (_, i) => `K${i + 1}: nicht-pruefbar — ${beleg(2000)}`);

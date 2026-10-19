@@ -24,7 +24,7 @@ type Nachweis = { review: { head: string | null; runden: number } | null; abnahm
 interface Mod {
   verknuepfteTickets: (body: string) => number[];
   vertrauterMarker: (k: unknown[], owner: string, z: Zeilen) => Marker;
-  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: number } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen }) => string[];
+  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen }) => string[];
   checkAbnahmeNachweis: (o: {
     runGit: (a: string[]) => string;
     gh: (a: string[]) => unknown;
@@ -41,14 +41,15 @@ const CONFIG = { repo: "owner/repo", praefixe: { commitZeile: "KQ-" }, agenten: 
 const H = "b".repeat(40);
 const R = "a".repeat(40);
 const GUT: AbnahmeHead = { bekannt: true, imSlice: true, nachReviewHead: true, konfliktMerges: [], aenderungsCommits: [] };
+const kr = (n: number) => Array.from({ length: n }, (_, i) => ({ k: `K${i + 1}`, text: `t${i + 1}`, nachMerge: false }));
 const ur = (...w: string[]): Urteil => w.map((wert, i) => ({ k: `K${i + 1}`, wert }));
 const marker = (o: Partial<NonNullable<Marker>> = {}): Marker => ({ durchgang: 1, head: H, urteil: ur("erfuellt", "erfuellt"), ...o });
 const nachweis = (abnahme: unknown, runden = 2): Nachweis => ({ review: { head: R, runden }, abnahme });
 const urteilZeile = (o: { urteil?: Urteil; durchgaenge?: number } = {}) => ({ art: "urteil", head: H, durchgaenge: o.durchgaenge ?? 1, urteil: o.urteil ?? ur("erfuellt", "erfuellt") });
-const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: number } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean }) =>
+const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean }) =>
   m.bewerteAbnahme({
     nachweis: o.review === false ? { review: null, abnahme: "abnahme" in o ? o.abnahme : urteilZeile() } : nachweis("abnahme" in o ? o.abnahme : urteilZeile(), o.runden),
-    ticket: o.ticket === undefined ? { nr: 9, kriterien: 2 } : o.ticket,
+    ticket: o.ticket === undefined ? { nr: 9, kriterien: kr(2) } : o.ticket,
     marker: o.marker === undefined ? marker() : o.marker,
     abnahmeHead: { ...GUT, ...o.abnahmeHead },
     zeilen: Z,
@@ -71,8 +72,8 @@ describe("bewerteAbnahme: grün", () => {
 describe("K1: Zeile und Urteil je Kriterium", () => {
   test("Zeile fehlt", () => rot(bewerte({ abnahme: null }), /Zeile fehlt.*abnahme\.mjs kriterien/));
   test("ungültige Zeile", () => rot(bewerte({ abnahme: { art: "ungueltig", zeile: "Unsinn" } }), /ungültig \(Unsinn\)/));
-  test("Urteil für ein Kriterium fehlt", () => rot(bewerte({ ticket: { nr: 9, kriterien: 3 } }), /K3: Urteil fehlt/));
-  test("unbekanntes Kriterium (über der Anzahl)", () => rot(bewerte({ ticket: { nr: 9, kriterien: 1 } }), /K2: unbekannt/));
+  test("Urteil für ein Kriterium fehlt", () => rot(bewerte({ ticket: { nr: 9, kriterien: kr(3) } }), /K3: Urteil fehlt/));
+  test("unbekanntes Kriterium (über der Anzahl)", () => rot(bewerte({ ticket: { nr: 9, kriterien: kr(1) } }), /K2: unbekannt/));
   test("doppeltes K macht schon der Parser ungültig, die Meldung nennt den Grund (L6a)", () => {
     const n = parseNachweis(`${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt,K2:nicht-erfuellt`, Z);
     rot(bewerte({ abnahme: n.abnahme }), /ungültig \(K2 doppelt: /);

@@ -43,6 +43,19 @@ describe("KQ-Abnahme (#1753): lesen, formatieren, Marker", () => {
     expect(e).toBe("KQ-Abnahme: entfaellt — Ticket ohne Kriterien");
     expect(lies(e)).toEqual({ art: "entfaellt", grund: "Ticket ohne Kriterien" });
   });
+  it("`nach-merge` ist ein Zeilen- und Markerwert (ZEILENWERTE), aber kein Urteilswert des Agenten; Nachbarwerte bleiben ungültig", () => {
+    const Z2 = raw as unknown as { ZEILENWERTE: string[] };
+    expect(Z2.ZEILENWERTE).toEqual([...A.URTEILSWERTE, "nach-merge"]);
+    expect(A.URTEILSWERTE).not.toContain("nach-merge");
+    const nm = { art: "urteil", head: HEX, durchgaenge: 1, urteil: [{ k: "K1", wert: "erfuellt" }, { k: "K2", wert: "nach-merge" }] };
+    const z = A.formatAbnahme(Z, nm);
+    expect(z).toBe(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:erfuellt,K2:nach-merge`);
+    expect(lies(z)).toEqual(nm);
+    const m = A.formatAbnahmeMarker(Z, { durchgang: 1, head: HEX, urteil: nm.urteil });
+    expect(A.parseAbnahmeMarker(Z, m)).toEqual({ durchgang: 1, head: HEX, urteil: nm.urteil });
+    expect(lies(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:nach-merges`)).toMatchObject({ art: "ungueltig", grund: "unbekannter Wert „nach-merges“ bei K1" });
+    expect(() => A.formatAbnahme(Z, { ...nm, urteil: [{ k: "K1", wert: "nach_merge" }] })).toThrow(/Abnahme/);
+  });
   it("ohne Zeile null; die jüngste Zeile gilt, auch eine ungültige; Squash-Präfix; eingerückt zählt nicht", () => {
     const alt = A.formatAbnahme(Z, ok);
     expect(lies("feat: x")).toBeNull();

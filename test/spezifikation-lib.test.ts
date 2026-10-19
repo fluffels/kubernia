@@ -158,24 +158,24 @@ describe("verloreneZeilen (Inhaltsverlust beim Reparieren)", () => {
 });
 
 describe("kriterien (#1753): K1…KN aus den Akzeptanzkriterien", () => {
-  const K = (S as unknown as { kriterien: (b: unknown) => { k: string; text: string }[] }).kriterien;
+  const K = (S as unknown as { kriterien: (b: unknown) => { k: string; text: string; nachMerge: boolean }[] }).kriterien;
   const ak = (liste: string) => `## Ziel\nZ\n\n## Akzeptanzkriterien\n${liste}`;
   test("nummerierte und Strich-Listen, Position statt Autorenziffer", () => {
     expect(K(ak("1. a\n3. b\n3. c\n"))).toEqual([
-      { k: "K1", text: "a" },
-      { k: "K2", text: "b" },
-      { k: "K3", text: "c" },
+      { k: "K1", text: "a", nachMerge: false },
+      { k: "K2", text: "b", nachMerge: false },
+      { k: "K3", text: "c", nachMerge: false },
     ]);
     expect(K(ak("- x\n* y\n"))).toEqual([
-      { k: "K1", text: "x" },
-      { k: "K2", text: "y" },
+      { k: "K1", text: "x", nachMerge: false },
+      { k: "K2", text: "y", nachMerge: false },
     ]);
   });
   test("Unterpunkte, lazy und eingerückte Folgezeilen gehören zum Oberpunkt", () => {
     const r = K(ak("1. erst\n   - unter\n   weiter\n\n   nach Leerzeile\n2. zweit\n"));
     expect(r).toHaveLength(2);
     expect(r[0].text).toBe("erst\nunter\nweiter\nnach Leerzeile");
-    expect(r[1]).toEqual({ k: "K2", text: "zweit" });
+    expect(r[1]).toEqual({ k: "K2", text: "zweit", nachMerge: false });
   });
   test("Tab-Einzug zählt als Unterpunkt, Checkbox wird entfernt", () => {
     expect(K(ak("- [ ] a\n\t- b\n- [x] c\n")).map((e) => e.text)).toEqual(["a\nb", "c"]);
@@ -186,7 +186,7 @@ describe("kriterien (#1753): K1…KN aus den Akzeptanzkriterien", () => {
   });
   test("Überschrift Teil-Akzeptanzkriterien und Liste im Code-Fence", () => {
     expect(K("## Teil-Akzeptanzkriterien\n- a\n")).toHaveLength(1);
-    expect(K(ak("```\n- im Fence\n```\n- echt\n"))).toEqual([{ k: "K1", text: "echt" }]);
+    expect(K(ak("```\n- im Fence\n```\n- echt\n"))).toEqual([{ k: "K1", text: "echt", nachMerge: false }]);
   });
   test("Negativfall: fehlender Abschnitt, Abschnitt ohne Liste, null und leer ergeben eine leere Liste", () => {
     for (const b of [null, undefined, "", "## Ziel\nZ\n", ak("nur Prosa\n"), ak("```\n- fence\n```\n")]) expect(K(b), String(b)).toEqual([]);
@@ -201,7 +201,7 @@ describe("kriterien (#1753): K1…KN aus den Akzeptanzkriterien", () => {
 });
 
 describe("kriterien: Einzug und Fortsetzung (Lens-Runde 1)", () => {
-  const K = (S as unknown as { kriterien: (b: unknown) => { k: string; text: string }[] }).kriterien;
+  const K = (S as unknown as { kriterien: (b: unknown) => { k: string; text: string; nachMerge: boolean }[] }).kriterien;
   test("eingerückte Oberebene zählt, das Gate und kriterien stimmen überein (kein stilles „entfällt“)", () => {
     const b = "## Ziel\nZ\n\n## Akzeptanzkriterien\n  - a\n  - b\n";
     expect(S.spezifikationsMaengel(b).some((m) => /ohne Listenpunkt/.test(m))).toBe(false);
