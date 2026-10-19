@@ -35,7 +35,7 @@ const F = fremdRaw as unknown as {
   fremdeingangLabels: (c: unknown) => string[];
   istFremdeingang: (i: unknown, owner: string, o?: { config?: unknown; lade?: (o: unknown) => unknown }) => { fremdeingang: boolean; label?: string };
 };
-const FEST = festRaw as unknown as { main: (o?: { ladeLabel?: () => string }) => number | undefined; stuckLabel: (c?: unknown) => string; buildStuckComment: (n: number, url: string, label: string) => string };
+const FEST = festRaw as unknown as { main: (o?: { config?: unknown }) => number | undefined; stuckLabel: (c?: unknown) => string; buildStuckComment: (n: number, url: string, label: string) => string };
 const W = wiedervorlageRaw as unknown as { labelFuer: (e: { label?: string }, standard: string) => string };
 const N = naechstesRaw as unknown as {
   echteIo: (o?: { config?: Cfg }) => { config: Cfg };
@@ -208,12 +208,12 @@ describe("board-takt: Harness-Label der Abfrage", () => {
 });
 
 describe("check-festgefahren main: fehlendes Label ist rot (K2)", () => {
-  test("ohne labels.festgefahren: Exit-Code 1, Meldung mit Schlüssel, kein gh-Aufruf", () => {
+  test("ohne labels.festgefahren: Exit-Code 1, Meldung mit Schlüssel", () => {
     const fehler: string[] = [];
     const orig = console.error;
     console.error = (...a: unknown[]) => void fehler.push(a.join(" "));
     try {
-      expect(FEST.main({ ladeLabel: () => FEST.stuckLabel(OHNE_FESTGEFAHREN) })).toBe(1);
+      expect(FEST.main({ config: OHNE_FESTGEFAHREN })).toBe(1);
     } finally {
       console.error = orig;
     }

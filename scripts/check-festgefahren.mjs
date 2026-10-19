@@ -82,12 +82,12 @@ function ghRun(args) {
   ghText(args, { stdio: "inherit" });
 }
 
-/** Der CI-Lauf. Liefert den Exit-Code 1, wenn `labels.festgefahren` fehlt (vor jedem gh-Aufruf); `ladeLabel` ist für den Test injizierbar. */
-export function main({ ladeLabel = stuckLabel } = {}) {
+/** Der CI-Lauf. Liefert den Exit-Code 1, wenn `labels.festgefahren` fehlt (vor jedem gh-Aufruf); `config` ist für den Test injizierbar. */
+export function main({ config } = {}) {
   // Config zuerst, vor jedem gh-Aufruf: fehlt `labels.festgefahren`, ist der Lauf rot (kein stiller Standardwert; Netzfehler bleiben graceful).
   let label;
   try {
-    label = ladeLabel();
+    label = stuckLabel(config);
   } catch (err) {
     console.error(`✖ ${err.message}`);
     return 1;
