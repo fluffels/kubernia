@@ -340,6 +340,15 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     });
   });
 
+  test("Negativfall: eine Config ohne labels.festgefahren bricht ab und nennt den Schlüssel (kein stiller Standardwert)", () => {
+    const echt = ladeProjektConfig() as unknown as { labels: Record<string, string> };
+    const { festgefahren: _weg, ...rest } = echt.labels;
+    const ohneLabel = { ...echt, labels: rest };
+    const eingabe = { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "ERGEBNIS: abgebrochen\nPR: -" };
+    assert.throws(() => abschluss.abschlussBlockade(eingabe, { config: ohneLabel, prDateien: () => [] } as never), /labels\.festgefahren/);
+    // mit der Config samt Label läuft derselbe Aufruf durch
+    assert.doesNotThrow(() => abschluss.abschlussBlockade(eingabe, { config: echt, prDateien: () => [] } as never));
+  });
   test("Bindungen: stuckLabel und ERGEBNIS_WERTE stimmen mit check-festgefahren und dem Formatblock überein", () => {
     // Beide Skripte lesen das Label aus der Projekt-Config (#1742, #1744): ein Fixture-Label muss bei check-festgefahren ankommen.
     const fixture = { labels: { festgefahren: "zustand:fest" } };

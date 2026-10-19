@@ -10,8 +10,6 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { ticketNamen } from "./ticket-namen.mjs";
 
 export const ZIELQUOTE_DEFAULT = 65;
 export const TOLERANZ_PP = 5;
@@ -120,11 +118,11 @@ export function pacing(snapshot, { jetzt = Date.now(), zielquote = ZIELQUOTE_DEF
 }
 
 /**
- * Pfad des kontoweiten Snapshots (OS-Temp, für alle Worktrees gleich, Name `<Worktree-Präfix>rate-limits.json` aus der Projekt-Config);
- * `KQ_RATE_LIMITS_SNAPSHOT` überschreibt ihn (dann braucht es keine Config). Ohne vollständige Config (`ticketNamen` prüft `praefixe.*` und `agenten.*`) wirft die Funktion mit Fix-Zeile; die Statusline fängt das und lässt den Snapshot dann weg.
+ * Pfad des kontoweiten Snapshots (OS-Temp, für alle Worktrees gleich, projektneutraler Name `claude-rate-limits.json`, keine Config nötig);
+ * `KQ_RATE_LIMITS_SNAPSHOT` überschreibt ihn.
  */
-export function snapshotPfad(env = process.env, config) {
-  return env.KQ_RATE_LIMITS_SNAPSHOT || join(tmpdir(), `${ticketNamen(config ?? ladeProjektConfig()).praefixe.worktree}rate-limits.json`);
+export function snapshotPfad(env = process.env) {
+  return env.KQ_RATE_LIMITS_SNAPSHOT || join(tmpdir(), "claude-rate-limits.json");
 }
 
 /** Liest den Snapshot; fehlende oder kaputte Datei ergibt `{ snapshot: null, warnung }`. */

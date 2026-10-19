@@ -4,7 +4,11 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
 
-/** Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Backslashes bleiben unverändert: in Code-Spans sind sie literal, eine Verdopplung zeigte sie doppelt (der CodeQL-Alert `js/incomplete-sanitization` dazu ist als „won't fix“ geschlossen). */
+/**
+ * Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Richtlinie (Gegenstück: `zelle` in scripts/abnahme.mjs): `cell` maskiert generierte Zellen mit
+ * Code-Spans, darum nur die Pipe: in Code-Spans sind Backslashes literal, eine Verdopplung zeigte sie doppelt (der CodeQL-Alert `js/incomplete-sanitization`
+ * dazu ist als „won't fix“ geschlossen). Freitext aus fremder Quelle maskiert `zelle` mit Backslash zuerst, dann Pipe.
+ */
 export function cell(value) {
   return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }

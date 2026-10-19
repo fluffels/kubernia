@@ -1,7 +1,7 @@
 // Kein Shebang, kein Direktaufruf: Lib für `fremdtext.mjs` und `naechstes-ticket.mjs` (#1579, Konvention #1398: Einstiegsskripte
 // importieren nicht voneinander, gemeinsamer Code steht in einer Lib). Die Vertrauensliste des Fremdtext-Gates (#1433) und der gemeinsame Kommentar-Abruf (`issueKommentare`), pur;
-// einziger Import ist die Projekt-Config (das Fremdeingang-Label steht in `labels.forum`, #1744).
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+// einziger Import ist `labelAus` (das Fremdeingang-Label steht in `labels.forum`); die Config übergibt der Aufrufer, die Lib liest nie von der Platte.
+import { labelAus } from "./projekt-config-lib.mjs";
 
 /** REST-Logins vertrauter Bots (zusätzlich zum Repo-Owner); gelten nur mit `type === "Bot"`. */
 export const VERTRAUTE_BOTS = Object.freeze(["github-actions[bot]", "dependabot[bot]"]);
@@ -36,10 +36,10 @@ const labelName = (l) => (typeof l === "string" ? l : l?.name);
 /**
  * Die eine Fremdeingang-Entscheidung (Autor nicht vertraut ODER Fremdeingang-Label), gemeinsam für `fremdtext`, `naechstes-ticket` und `spezifikation`.
  * `issue`: `{ user, labels }` (labels als Strings oder `{name}`). Liefert `{ fremdeingang, grund, label }`; `grund` ist `""`, wenn vertraut.
- * Das Label kommt aus `config` (ohne: die echte Config, nur auf `labels.forum` geprüft); fehlt der Schlüssel, wirft die Funktion.
+ * Das Label kommt aus `config` (Pflicht); fehlt die Config oder `labels.forum`, wirft die Funktion (fail-closed).
  */
-export function istFremdeingang(issue, owner, { config, lade = ladeProjektConfig } = {}) {
-  const labels = fremdeingangLabels(config ?? lade({ pruefen: false }));
+export function istFremdeingang(issue, owner, { config } = {}) {
+  const labels = fremdeingangLabels(config);
   const autorVertraut = istVertraut(issue?.user, owner);
   const label = (issue?.labels ?? []).map(labelName).find((n) => labels.includes(n));
   const login = typeof issue?.user?.login === "string" && issue.user.login !== "" ? issue.user.login : "unbekannt";

@@ -14,7 +14,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { FACTORY_LABEL, REPO } from "./board-lib.mjs";
+import { REPO } from "./board-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { platziereOben } from "./inbox-lib.mjs";
 
 /** Titel-Präfix der Wiedervorlage-Tickets; derselbe Marker steht als Notfall-Art `wiedervorlage` in `NOTFAELLE` (board-lib.mjs). */
@@ -159,6 +160,12 @@ export function lauf({ eintraege, heute, tickets, trocken = false, anlegen, sort
   return rot ? 1 : 0;
 }
 
+/** Die Verdrahtung von `lauf` mit dem Standard-Label aus der Config (`labels.harness`, wirft ohne); Eintrags-Label geht vor. */
+export function ioAus(config, { legen = legeAn } = {}) {
+  const standard = labelAus(config, "harness");
+  return { anlegen: (e) => legen(e, labelFuer(e, standard)), sortiereEin };
+}
+
 function main() {
   const eintraege = ladeEintraege();
   const code = lauf({
@@ -166,8 +173,7 @@ function main() {
     heute: new Date().toISOString().slice(0, 10),
     tickets: ladeTickets(),
     trocken: process.argv.includes("--dry-run"),
-    anlegen: (e) => legeAn(e, labelFuer(e, FACTORY_LABEL)),
-    sortiereEin,
+    ...ioAus(ladeProjektConfig()),
   });
   process.exit(code);
 }

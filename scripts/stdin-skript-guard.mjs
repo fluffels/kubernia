@@ -15,7 +15,7 @@
  * --test --run -c --check -v --version -h --help). `node f.mjs - <<EOF` (Datei, stdin als Daten) bleibt erlaubt, ebenso
  * `python3 -I f.py < daten.json`. Greift auch in `$(…)`, Backticks und Heredoc-Bodies mit Ersetzungen.
  *
- * Bewusste Grenzen (Bekannte Grenzen, kein Fehler des Guards):
+ * Bewusste Grenzen:
  *  - Nur Bash: PowerShell-Pipes in `node -` (`'…' | node -`) sieht der Guard nicht.
  *  - Wörter in Strings (`bash -c '… python3 - …'`) sind nicht zerlegt.
  *  - Unbekannte Optionen mit Wert (z.B. `node --env-file x -`) lesen das Wert-Wort als Programm: der Aufruf wird durchgelassen.

@@ -37,9 +37,9 @@ import { pathToFileURL } from "node:url";
 import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
-import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
+import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
 import { lensWorktreeName, ticketAusRef } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
@@ -298,10 +298,10 @@ export function fuehreAus(argv, deps) {
 }
 
 /** Echte I/O: git und gh über die gemeinsamen Wrapper, Lock-Verzeichnis im gemeinsamen git-Verzeichnis. */
-export function echteDeps() {
+export function echteDeps({ config: vorgabe } = {}) {
   const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   const gemeinsam = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
-  const config = ladeProjektConfig();
+  const config = vorgabe ?? ladeProjektConfig();
   return {
     namen: ticketNamen(config),
     jetzt: () => Date.now(),
@@ -312,8 +312,8 @@ export function echteDeps() {
       if (liste.length >= 200) process.stderr.write("Warnung: 200 offene Zuweisungen, die Liste ist an der Grenze und kann unvollständig sein\n");
       return liste.map((i) => i.number);
     },
-    festgefahrenLabel: config.labels.festgefahren,
-    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: config.praefixe.worktree }),
+    festgefahrenLabel: labelAus(config, "festgefahren"),
+    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: worktreePraefix(config) }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),
     loesche: unlinkSync,

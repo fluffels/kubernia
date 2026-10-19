@@ -65,19 +65,39 @@ export function normalisierePfad(pfad, cwd) {
   return posix.normalize(absolut || !basis ? p : `${basis}/${p}`);
 }
 
+/** Liegt `pfad` unter (oder gleich) `basis`? Beide schon normalisiert (`normalisierePfad`, Slashes). Segmentgrenze
+ *  beachtet (`/a/bc` liegt nicht unter `/a/b`), auf Windows ohne Groß-/Kleinschreibung. Git-Pfade (case-sensitiv) hat
+ *  `istDocgenDatei` in check-diffsize.mjs bewusst eigen. */
+export function liegtUnter(pfad, basis, plattform = process.platform) {
+  const form = (p) => {
+    const ohne = String(p).replace(/\/+$/, "");
+    return plattform === "win32" ? ohne.toLowerCase() : ohne;
+  };
+  const n = form(pfad);
+  const b = form(basis);
+  return n === b || n.startsWith(`${b}/`);
+}
+
+/** Baut den Hook-Einstieg eines Tool-Guards: stdin-Text → deny-Output oder null. `bewerte(toolName, toolInput, cwd)` liefert
+ *  `{ block, reason? }`. Nur die genannten Tools werden geprüft (ohne `tool_name` nur mit `ohneToolName`); kaputter Input lässt durch. */
+export const toolGuardHook =
+  (tools, bewerte, ohneToolName = false) =>
+  (text) => {
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return null;
+    }
+    const name = data?.tool_name;
+    if (name === undefined ? !ohneToolName : !tools.includes(name)) return null;
+    const e = bewerte(name, data?.tool_input, data?.cwd);
+    return e.block ? buildDenyOutput(e.reason) : null;
+  };
+
 /** Baut den Hook-Einstieg eines Pfad-Guards: stdin-Text → deny-Output oder null. `bewerte(pfad, cwd)` liefert
  *  `{ block, reason? }`. Nur das genannte Tool wird geprüft (ohne `tool_name` immer); kaputter Input lässt durch. */
-export const pfadGuardHook = (tool, bewerte) => (text) => {
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (data?.tool_name !== undefined && data.tool_name !== tool) return null;
-  const e = bewerte(data?.tool_input?.file_path, data?.cwd);
-  return e.block ? buildDenyOutput(e.reason) : null;
-};
+export const pfadGuardHook = (tool, bewerte) => toolGuardHook([tool], (_name, eingabe, cwd) => bewerte(eingabe?.file_path, cwd), true);
 
 /** Rekursionstiefe für Interpreter-Strings (`bash -c`, `pwsh -c`, `eval`, Funktionen, Aliase): EINE Grenze für alle Guards. */
 export const MAX_INTERPRETER = 3;

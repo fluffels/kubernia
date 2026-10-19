@@ -21,7 +21,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
 import { passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
@@ -204,7 +204,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
 /** Commit-Zeilen und Festgefahren-Label aus der Projekt-Config (`ladeConfig`, Standard: die echte); wirft mit der Meldung des Laders. */
 function konfigurationAus(ladeConfig) {
   const config = ladeConfig();
-  return { zeilen: commitZeilenAus(config), label: config.labels.festgefahren };
+  return { zeilen: commitZeilenAus(config), label: labelAus(config, "festgefahren") };
 }
 
 /** Holt die Daten über `runGit`/`runGh` (injizierbar) und bewertet. Wirft DatenFehler bei Lücken. */

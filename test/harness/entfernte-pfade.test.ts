@@ -29,6 +29,7 @@ export const RESTE: { name: string; muster: RegExp }[] = [
   { name: "Workflow-Variante", muster: /Workflow-Variante/ },
   { name: "cleanup-Agent des Workflows", muster: /im Workflow der `?cleanup/ },
   { name: "beruehrtHarness", muster: /beruehrtHarness/ },
+  { name: "urteilFehler (entfernter Export von nachweis-lib)", muster: /urteilFehler/ },
 ];
 
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
@@ -83,6 +84,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Workflow-Variante": "Workflow-Variante nur weich gesichert",
       "cleanup-Agent des Workflows": "im Workflow der `cleanup`-Agent trägt ein",
       beruehrtHarness: "Auftrag beruehrtHarness",
+      "urteilFehler (entfernter Export von nachweis-lib)": "import { urteilFehler } from nachweis-lib",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);

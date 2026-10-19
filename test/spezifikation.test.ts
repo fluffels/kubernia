@@ -7,6 +7,7 @@ import * as raw from "../scripts/spezifikation.mjs";
 type Issue = { state?: string; body?: string | null; user?: { login: string; type?: string } | null; labels?: ({ name: string } | string)[]; pull_request?: object };
 type Io = {
   owner: string;
+  config: unknown;
   leseDatei: (p: string) => string;
   erzeuge: (a: { titel: string; body: string; labels: string[] }) => { number: number; html_url?: string };
   pruefeAnker: (a: { nach: number; labels: string[] }) => string | null;
@@ -23,6 +24,7 @@ const ALT = "Das ist der alte Text.\nZweite Zeile des alten Texts.";
 function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
   const aufrufe = { erzeuge: [] as unknown[], einsortiere: [] as unknown[], bearbeite: [] as unknown[] };
   const io: Io = {
+    config: { labels: { forum: "forum" } },
     owner: "fluffels",
     leseDatei: (p) => {
       if (!(p in dateien)) throw new Error("ENOENT");

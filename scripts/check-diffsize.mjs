@@ -142,7 +142,8 @@ export function genKoerperZeilen(text) {
   return maske;
 }
 
-/** True, wenn `pfad` eine Markdown-Datei unter einer der Wurzeln ist, die `check:docgen` prüft (Datei oder Ordner). Pure. */
+/** (Pfad-Prüfung bewusst eigen: Git-Pfade sind case-sensitiv, `.` heißt alles; die Guards nutzen `liegtUnter` aus hook-io.mjs.)
+ * True, wenn `pfad` eine Markdown-Datei unter einer der Wurzeln ist, die `check:docgen` prüft (Datei oder Ordner). Pure. */
 export function istDocgenDatei(pfad, wurzeln) {
   const p = String(pfad).replaceAll("\\", "/");
   if (!p.endsWith(".md")) return false;

@@ -68,7 +68,7 @@ jobs:
 
           # Gibt es schon ein OFFENES Inbox-Issue für genau diesen Thread?
           # (Titel-Präfix-Match über alle offenen forum-Issues – robuster als die Suche.)
-          existing=$(gh issue list --repo "$REPO" --state open --label forum \
+          existing=$(gh issue list --repo "$REPO" --state open --label forum --limit 1000 \
             --json number,title \
             --jq "[.[] | select(.title | startswith(\"$marker\"))][0].number // empty")
 

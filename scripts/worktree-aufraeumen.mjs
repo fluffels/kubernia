@@ -4,7 +4,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { escapeRegex, ladeTicketNamen } from "./ticket-namen.mjs";
+import { ladeTicketNamen } from "./ticket-namen.mjs";
 import { lensWorktreeName } from "./ticket-refs.mjs";
 
 /** Pfad-Normalisierung: Backslashes → Slashes, kein Trailing-Slash. Real entstehen
@@ -69,7 +69,7 @@ export function localWorktreeFiles(worktreesDir, deps = {}) {
 
 /** Dateiname `<Worktree-Präfix><nr>` gefolgt von `-`, `.` oder Ende: Gruppe 1 ist der Eltern-Worktree (`<Präfix>13610-x` gehört zu `<Präfix>13610`, nicht `<Präfix>1361`). */
 function dateiMuster(namen) {
-  return new RegExp(`^(${escapeRegex(namen.praefixe.worktree)}\\d+)(?=[-.]|$)`);
+  return namen.dateiMuster;
 }
 
 /**
@@ -495,7 +495,7 @@ export function worktreeBranchen(porcelain) {
  */
 export function aufraeumbareBranches({ refs, worktreeBranches, gemergteHeads, namen = ladeTicketNamen() }) {
   if (!Array.isArray(gemergteHeads)) return [];
-  const ticketBranch = new RegExp(`^${escapeRegex(namen.praefixe.branch)}\\d+`);
+  const ticketBranch = namen.ticketBranchMuster;
   const belegt = worktreeBranches instanceof Set ? worktreeBranches : new Set(worktreeBranches ?? []);
   return refs
     .filter((r) => ticketBranch.test(r.name) && r.gone && !belegt.has(r.name))

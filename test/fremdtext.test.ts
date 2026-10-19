@@ -50,17 +50,19 @@ interface Api {
   VERTRAUTE_BOTS: readonly string[];
   fremdeingangLabels: (config: unknown) => readonly string[];
   istVertraut: (user: User | null | undefined, owner: string) => boolean;
-  istFremdeingang: (issue: { user?: User | null; labels?: unknown[] }, owner: string) => { fremdeingang: boolean; grund: string; label: string | undefined };
-  trenneFremdtext: (e: { owner: string; art: string; eintrag: Eintrag; beitraege: Beitrag[] }) => Ergebnis;
+  istFremdeingang: (issue: { user?: User | null; labels?: unknown[] }, owner: string, o?: { config?: unknown }) => { fremdeingang: boolean; grund: string; label: string | undefined };
+  trenneFremdtext: (e: { owner: string; art: string; eintrag: Eintrag; beitraege: Beitrag[]; config?: unknown }) => Ergebnis;
   formatiere: (e: Ergebnis, eintrag: Eintrag, art: string) => string;
   parseArgs: (argv: string[]) => { art: string; nr: number };
   flach: (slurped: unknown) => unknown[];
   issueKommentare: (nr: number, json: (args: string[]) => unknown, repo?: string) => unknown[];
-  pruefe: (argv: string[], gh: (args: string[]) => string) => { code: number; out: string; err: string };
+  pruefe: (argv: string[], gh: (args: string[]) => string, config?: unknown) => { code: number; out: string; err: string };
 }
 // Die Vertrauensliste steht in scripts/fremdtext-lib.mjs (#1579), der Rest im CLI-Skript.
 const fremdtext = { ...fremdtextRoh, ...fremdtextLib } as unknown as Api;
-const { VERTRAUTE_BOTS, fremdeingangLabels, istVertraut, istFremdeingang, trenneFremdtext, formatiere, parseArgs, flach, pruefe, issueKommentare } = fremdtext;
+const CFG = { labels: { forum: "forum" } };
+const { VERTRAUTE_BOTS, fremdeingangLabels, istVertraut, istFremdeingang, trenneFremdtext, formatiere, parseArgs, flach, issueKommentare } = fremdtext;
+const pruefe = (argv: string[], gh: (args: string[]) => string, config: unknown = CFG) => fremdtext.pruefe(argv, gh, config);
 
 const OWNER = "fluffels";
 const eigen: User = { login: "fluffels", type: "User" };
@@ -80,7 +82,7 @@ const kommentar = (u: User | null, body: string | null, n = 1): Beitrag => ({
   html_url: `https://github.com/x/y/issues/7#issuecomment-${n}`,
 });
 const trenne = (e: Eintrag, b: Beitrag[] = []): Ergebnis =>
-  trenneFremdtext({ owner: OWNER, art: "Issue", eintrag: e, beitraege: b });
+  trenneFremdtext({ owner: OWNER, art: "Issue", eintrag: e, beitraege: b, config: CFG });
 
 describe("istVertraut", () => {
   test("Owner ist vertraut, auch in anderer Schreibweise", () => {
@@ -327,6 +329,11 @@ describe("pruefe (CLI-Ablauf mit Fake-gh)", () => {
     };
     assert.equal(pruefe(["--issue", "7"], kaputt).code, 2);
     assert.equal(pruefe(["--issue"], gh(ALLE(7))).code, 2);
+    for (const config of [undefined, {}, { labels: {} }]) {
+      const r = fremdtext.pruefe(["--issue", "7"], gh(ALLE(7)), config);
+      assert.equal(r.code, 2, JSON.stringify(config));
+      assert.match(r.err, /labels.forum/);
+    }
   });
   test("PR-Pfad: Kommentar, Review und Review-Kommentar je mit Art und eigenem Autor", () => {
     const r = pruefe(
@@ -350,26 +357,26 @@ describe("pruefe (CLI-Ablauf mit Fake-gh)", () => {
 describe("istFremdeingang (eine Entscheidung für alle Skripte)", () => {
   const eigen = { login: "fluffels", type: "User" };
   test("vertrauter Autor ohne Label: kein Fremdeingang", () => {
-    assert.deepEqual(istFremdeingang({ user: eigen, labels: [] }, "fluffels"), { fremdeingang: false, grund: "", label: undefined });
+    assert.deepEqual(istFremdeingang({ user: eigen, labels: [] }, "fluffels", { config: CFG }), { fremdeingang: false, grund: "", label: undefined });
   });
   test("fremder Autor: Fremdeingang mit Autor im Grund", () => {
-    const r = istFremdeingang({ user: { login: "fremd", type: "User" }, labels: [] }, "fluffels");
+    const r = istFremdeingang({ user: { login: "fremd", type: "User" }, labels: [] }, "fluffels", { config: CFG });
     assert.equal(r.fremdeingang, true);
     assert.match(r.grund, /@fremd/);
   });
   test("fehlender Autor (null/ghost) ist fremd", () => {
-    assert.equal(istFremdeingang({ user: null, labels: [] }, "fluffels").fremdeingang, true);
-    assert.equal(istFremdeingang({ labels: [] }, "fluffels").fremdeingang, true);
+    assert.equal(istFremdeingang({ user: null, labels: [] }, "fluffels", { config: CFG }).fremdeingang, true);
+    assert.equal(istFremdeingang({ labels: [] }, "fluffels", { config: CFG }).fremdeingang, true);
   });
   test("Label forum (Objekt oder String) macht vertrauten Autor zum Fremdeingang", () => {
     for (const labels of [[{ name: "forum" }], ["forum"]]) {
-      const r = istFremdeingang({ user: eigen, labels }, "fluffels");
+      const r = istFremdeingang({ user: eigen, labels }, "fluffels", { config: CFG });
       assert.equal(r.fremdeingang, true);
       assert.equal(r.label, "forum");
     }
   });
   test("fehlende labels und fremdes Label: kein Fremdeingang", () => {
-    assert.equal(istFremdeingang({ user: eigen }, "fluffels").fremdeingang, false);
-    assert.equal(istFremdeingang({ user: eigen, labels: ["bug", { name: "x" }, null] }, "fluffels").fremdeingang, false);
+    assert.equal(istFremdeingang({ user: eigen }, "fluffels", { config: CFG }).fremdeingang, false);
+    assert.equal(istFremdeingang({ user: eigen, labels: ["bug", { name: "x" }, null] }, "fluffels", { config: CFG }).fremdeingang, false);
   });
 });

@@ -16,8 +16,10 @@
  *      ein Fließtext statt Hash wird verweigert).
  * Fehlende Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
- * Bewusste Grenzen: die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie
- *  um, öffnet der Guard still, fail-open); ausgewertet wird je Feld der letzte Treffer im Prompt.
+ *
+ * Bewusste Grenzen:
+ *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
+ *  - Ausgewertet wird je Feld der letzte Treffer im Prompt.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */

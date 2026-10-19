@@ -551,3 +551,180 @@ describe("Einstiegsskript", () => {
     expect(src).not.toContain("folgt mit F13");
   });
 });
+
+describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lücke statt 0", () => {
+  type A = { mechanismus: string; messung: string; soll: string; status: "ok" | "ABWEICHUNG" | "Lücke" };
+  type Eingabe = { commits?: unknown[] | null; commitsLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null; zeilen?: Partial<Zeile>[] | null };
+  const S = raw as unknown as {
+    selbstAudit: (e: Eingabe) => A[];
+    auditAbschnitt: (a: A[]) => string[];
+    ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[]) => unknown; repo?: string }) => { commits: unknown[] | null; commitsLuecke?: string; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
+    erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]>; auditLader?: (e: { bis: string }) => Eingabe }) => { bericht: { audit?: A[] }; exit: number };
+    renderMarkdown: (b: unknown) => string;
+  };
+  const commit = (message: string, login = "fluffels") => ({ author: { login }, commit: { message, committer: { date: "2026-10-12T10:00:00Z" } } });
+  const spiel = (n: number) => commit(`feat(sim): s${n} (#${100 + n}) (#${200 + n})`);
+  const harness = (n: number) => commit(`feat(harness): h${n} (#${300 + n}) (#${400 + n})`);
+  const von = (e: Eingabe, name: string) => S.selbstAudit({ commits: [], sammelAbschluss: "2026-10-01T00:00:00Z", zeilen: [], ...e }).find((a) => a.mechanismus === name)!;
+
+  test("Spielquote: 1:3 ok, 2:2 ABWEICHUNG, unter 4 Merges Lücke (keine Aussage), Bots zählen nicht", () => {
+    expect(von({ commits: [harness(1), spiel(1), spiel(2), spiel(3)] }, "Spielquote").status).toBe("ok");
+    expect(von({ commits: [harness(1), harness(2), spiel(1), spiel(2)] }, "Spielquote").status).toBe("ABWEICHUNG");
+    const wenig = von({ commits: [harness(1), spiel(1), spiel(2)] }, "Spielquote");
+    expect(wenig.status).toBe("Lücke");
+    expect(wenig.messung).toMatch(/keine Aussage/);
+    // vier Commits, davon zwei von Bots: nur zwei zählen, also keine Aussage statt ok
+    expect(von({ commits: [spiel(1), spiel(2), commit("feat(sim): x (#1)", "dependabot[bot]"), commit("feat(sim): y (#2)", "dependabot[bot]")] }, "Spielquote").status).toBe("Lücke");
+  });
+
+  test("Härtungs-Takt: 9 ok, 10 ABWEICHUNG; Sammelticket-Merges zählen nicht; Vorgänger in Arbeit pausiert; ohne Abschluss Lücke", () => {
+    const n = (k: number) => Array.from({ length: k }, (_, i) => spiel(i));
+    expect(von({ commits: n(9) }, "Härtungs-Takt").status).toBe("ok");
+    const zehn = von({ commits: n(10) }, "Härtungs-Takt");
+    expect(zehn.status).toBe("ABWEICHUNG");
+    expect(zehn.messung).toMatch(/10 Ticket-Merges/);
+    const sammel = commit("feat(harness): Härtung (#40) (#41)");
+    expect(von({ commits: [...n(9), sammel], sammelIssues: new Set([40]) }, "Härtungs-Takt").status).toBe("ok");
+    expect(von({ commits: [...n(9), sammel] }, "Härtungs-Takt").status).toBe("ABWEICHUNG");
+    const pause = von({ commits: n(20), sammelInArbeit: 77 }, "Härtungs-Takt");
+    expect(pause.status).toBe("ok");
+    expect(pause.messung).toContain("#77 in Arbeit");
+    expect(von({ commits: n(20), sammelAbschluss: null }, "Härtungs-Takt").status).toBe("Lücke");
+  });
+
+  test("Ladefehler der Commits: Quote und Takt sind Lücken mit dem Grund, nie ok", () => {
+    const e = { commits: null, commitsLuecke: "Commits von main nicht ladbar: gh weg" };
+    for (const m of ["Spielquote", "Härtungs-Takt"]) expect(von(e, m)).toMatchObject({ status: "Lücke", messung: "Commits von main nicht ladbar: gh weg" });
+    expect(von({ commits: null }, "Spielquote").messung).toMatch(/nicht geladen/);
+  });
+
+  test("Festgefahren-Protokoll: ≥ 4 CI-Fix ohne Label ABWEICHUNG, mit Label oder darunter ok, fehlende Felder Lücke", () => {
+    const ohneLabel = von({ zeilen: [ZEILE({ pr: 61, ciFix: 4, festgefahren: 0 })] }, "Festgefahren-Protokoll");
+    expect(ohneLabel.status).toBe("ABWEICHUNG");
+    expect(ohneLabel.messung).toContain("#61");
+    expect(von({ zeilen: [ZEILE({ ciFix: 3, festgefahren: 0 }), ZEILE({ ciFix: 5, festgefahren: 1 })] }, "Festgefahren-Protokoll").status).toBe("ok");
+    expect(von({ zeilen: [{ pr: 7, ciFix: 9 }] }, "Festgefahren-Protokoll").status).toBe("Lücke");
+    expect(von({ zeilen: null }, "Festgefahren-Protokoll").status).toBe("Lücke");
+  });
+
+  test("Lens-Zahl: 5 Runden ABWEICHUNG, 4 ok, ohne Nachweis (runden null) Lücke und nie 0", () => {
+    const zuviel = von({ zeilen: [ZEILE({ pr: 62, runden: 5 })] }, "Lens-Zahl");
+    expect(zuviel.status).toBe("ABWEICHUNG");
+    expect(zuviel.messung).toContain("#62 (5)");
+    expect(von({ zeilen: [ZEILE({ runden: 4 }), ZEILE({ runden: null })] }, "Lens-Zahl").status).toBe("ok");
+    const ohne = von({ zeilen: [ZEILE({ runden: null })] }, "Lens-Zahl");
+    expect(ohne.status).toBe("Lücke");
+    expect(ohne.messung).toMatch(/ohne Review-Nachweiszeile/);
+    expect(von({ zeilen: null }, "Lens-Zahl")).toMatchObject({ status: "Lücke", messung: "kein Lauf-Ergebnis" });
+  });
+
+  test("auditAbschnitt: je Mechanismus eine Zeile Messung · Soll · Status; renderMarkdown hängt den Abschnitt nur mit Audit an", () => {
+    const audit = S.selbstAudit({ commits: [], zeilen: [] });
+    expect(audit.map((a) => a.mechanismus)).toEqual(["Spielquote", "Härtungs-Takt", "Festgefahren-Protokoll", "Lens-Zahl"]);
+    const zeilen = S.auditAbschnitt(audit);
+    expect(zeilen).toHaveLength(4);
+    for (const z of zeilen) expect(z).toMatch(/^- .+: .+ · Soll: .+ · (ok|ABWEICHUNG|Lücke)$/);
+    const lage: Lage = { luecke: "x" };
+    const b = (extra: object) => F.bericht({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z", quelle: "Transkript", lauf: lage, nacharbeit: lage, tickets: [], ...extra });
+    expect(S.renderMarkdown(b({ audit }))).toContain("**Selbst-Audit**\n- Spielquote:");
+    expect(S.renderMarkdown(b({}))).not.toContain("Selbst-Audit");
+  });
+
+  test("ladeAuditDaten: Sammeltickets und Commits über zwei gh-Aufrufe; jüngster Abschluss, geclaimter Vorgänger, Commits bis `bis`", () => {
+    const aufrufe: string[][] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a);
+      if (a[0] === "issue") {
+        return [
+          { number: 10, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-01T00:00:00Z", assignees: [] },
+          { number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] },
+          { number: 12, title: "Langfuse-Befunde (gesammelt)", state: "CLOSED", closedAt: "2026-10-09T00:00:00Z", assignees: [] },
+          { number: 13, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null, assignees: [{ login: "fluffels" }] },
+          { number: 15, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: "2026-10-08T00:00:00Z", assignees: [] }, // wieder geöffnet: zählt nicht als Abschluss
+          { number: 14, title: "Etwas anderes (gesammelt)", state: "OPEN", closedAt: null, assignees: [] },
+        ];
+      }
+      return [[spiel(1), { ...spiel(2), commit: { message: "feat: spät (#9)", committer: { date: "2026-10-20T00:00:00Z" } } }]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r" });
+    expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
+    expect([...d.sammelIssues!].sort()).toEqual([10, 11, 12, 13, 15]);
+    expect(d.sammelInArbeit).toBe(13);
+    expect(d.commits).toHaveLength(1);
+    expect(aufrufe[0]).toContain("--limit");
+    expect(aufrufe[1].join(" ")).toMatch(/--paginate --slurp repos\/o\/r\/commits\?sha=main&since=2026-10-05T00:01:00\.000Z/);
+  });
+
+  test("ladeAuditDaten: ohne abgeschlossenes Sammelticket ist das Fenster 28 Tage vor `bis`, nichts in Arbeit", () => {
+    const aufrufe: string[][] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a);
+      if (a[0] === "issue") return [{ number: 20, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null, assignees: [] }];
+      return [[spiel(1)]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-29T00:00:00Z" }, { gh, repo: "o/r" });
+    expect(d.sammelAbschluss).toBeNull();
+    expect(d.sammelInArbeit).toBeNull();
+    expect(aufrufe).toHaveLength(2);
+    expect(aufrufe[1].join(" ")).toContain("since=2026-10-01T00:00:00.000Z");
+    expect(d.commits).toHaveLength(1);
+  });
+
+  test("ladeAuditDaten: kaputtes closedAt eines geschlossenen Tickets und fehlendes assignees-Feld stören nicht; Commits ohne gültiges Datum bleiben drin", () => {
+    const gh = (a: string[]) => {
+      if (a[0] === "issue") {
+        return [
+          { number: 30, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "kein-datum", assignees: [] },
+          { number: 31, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] },
+          { number: 32, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null },
+        ];
+      }
+      return [[{ author: { login: "fluffels" }, commit: { message: "feat(sim): ohne Datum (#1)" } }, spiel(1)]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r" });
+    expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
+    expect(d.sammelInArbeit).toBeNull();
+    expect(d.commits).toHaveLength(2);
+    const nurKaputt = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: (a) => (a[0] === "issue" ? [{ number: 30, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "kein-datum" }] : [[]]) });
+    expect(nurKaputt.sammelAbschluss).toBeNull();
+  });
+
+  test("Festgefahren-Protokoll: eine Abweichung hat Vorrang vor einer unvollständigen Zeile", () => {
+    const r = von({ zeilen: [{ pr: 7, ciFix: 9 }, ZEILE({ pr: 61, ciFix: 4, festgefahren: 0 })] }, "Festgefahren-Protokoll");
+    expect(r.status).toBe("ABWEICHUNG");
+    expect(r.messung).toContain("#61");
+  });
+
+  test("Härtungs-Takt: nur die Titelzeile entscheidet, ein Sammelticket im Body schließt einen Merge nicht aus", () => {
+    const n = (k: number) => Array.from({ length: k }, (_, i) => spiel(i));
+    const imBody = commit("feat(sim): normal (#50)\n\nFolge #40, siehe #40");
+    expect(von({ commits: [...n(9), imBody], sammelIssues: new Set([40]) }, "Härtungs-Takt").status).toBe("ABWEICHUNG");
+  });
+
+  test("ladeAuditDaten: gh-Fehler wird zur Lücke mit Grund, nie zu leeren Commits", () => {
+    const weg = () => {
+      throw new Error("gh weg");
+    };
+    const ohneIssues = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: weg });
+    expect(ohneIssues.commits).toBeNull();
+    expect(ohneIssues.commitsLuecke).toContain("Sammeltickets nicht ladbar");
+    const nurCommitsKaputt = (a: string[]) => {
+      if (a[0] === "issue") return [];
+      throw new Error("api weg");
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: nurCommitsKaputt });
+    expect(d.commits).toBeNull();
+    expect(d.commitsLuecke).toMatch(/Commits von main nicht ladbar/);
+  });
+
+  test("erstelle mit auditLader trägt das Audit in den Bericht; ohne Lader bleibt es weg; ohne Lauf-Ergebnis sind Lens und Festgefahren Lücken", () => {
+    const run: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: JSON.stringify({ zeilen: [ZEILE({ pr: 70, runden: 6 })], kennzahlen: { ...KENN, prs: 1 } }), stderr: "" });
+    const claimKarte = () => new Map([[40, [{ session: "s1", ts: "2026-10-14T07:00:00Z" }]]]);
+    const mit = S.erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte, auditLader: () => ({ commits: [] }) });
+    expect(mit.bericht.audit!.find((a) => a.mechanismus === "Lens-Zahl")).toMatchObject({ status: "ABWEICHUNG" });
+    expect(S.erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte }).bericht.audit).toBeUndefined();
+    const kaputt: Run = () => ({ status: 2, stdout: "", stderr: "gh weg" });
+    const ohne = S.erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run: kaputt, claimKarte: () => new Map(), auditLader: () => ({ commits: [] }) });
+    expect(ohne.bericht.audit!.filter((a) => a.status === "Lücke").map((a) => a.mechanismus)).toEqual(expect.arrayContaining(["Festgefahren-Protokoll", "Lens-Zahl"]));
+  });
+});

@@ -425,7 +425,7 @@ jobs:
           # area:architektur-Issues — dasselbe robuste Muster wie forum-inbox.yml; kein
           # prio:hoch-Label mehr, das gibt es seit #627 nicht.) Solange main rot bleibt,
           # hängen weitere rote Läufe nur einen Kommentar an, statt zu spammen.
-          existing=$(gh issue list --repo "$REPO" --state open --label "$ALARM_LABEL" \
+          existing=$(gh issue list --repo "$REPO" --state open --label "$ALARM_LABEL" --limit 1000 \
             --json number,title \
             --jq "[.[] | select(.title | startswith(\"$marker\"))][0].number // empty")
 

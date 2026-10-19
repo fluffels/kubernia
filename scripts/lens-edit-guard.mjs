@@ -20,7 +20,7 @@ import { emit, istDirektaufruf, normalisierePfad, pfadGuardHook, readStdin } fro
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 // Pfadform: Groß-/Kleinschreibung egal (Windows-Pfade), der Ordnername selbst für das Aufräumen exakt (kein Flag oben).
-const lensWorktree = (namen) => new RegExp(String.raw`/\.claude/worktrees/${namen.lensNameKern}/`, "i");
+const lensWorktree = (namen) => namen.lensPfadMuster;
 
 /**
  * Darf die Lens diese Datei per `Edit` ändern? Pur (die Config kommt über `deps.config` oder wird geladen). Liefert `{ block: false }` oder `{ block: true, reason }`.

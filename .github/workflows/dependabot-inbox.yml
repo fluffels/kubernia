@@ -61,11 +61,11 @@ jobs:
           set -euo pipefail
           marker="🤖 Dependabot-PRs auflösen"
 
-          count=$(gh pr list --repo "$REPO" --state open --author "app/dependabot" --json number --jq 'length')
+          count=$(gh pr list --repo "$REPO" --state open --author "app/dependabot" --limit 1000 --json number --jq 'length')
 
           # Gibt es schon ein OFFENES Sammel-Issue? (Titel-Exakt-Match über die offenen
           # Issues mit dem Label der Config — dasselbe robuste Muster wie forum-inbox.yml.)
-          existing=$(gh issue list --repo "$REPO" --state open --label "$INBOX_LABEL" \
+          existing=$(gh issue list --repo "$REPO" --state open --label "$INBOX_LABEL" --limit 1000 \
             --json number,title \
             --jq "[.[] | select(.title == \"$marker\")][0].number // empty")
 
@@ -80,7 +80,7 @@ jobs:
             exit 0
           fi
 
-          list=$(gh pr list --repo "$REPO" --state open --author "app/dependabot" --json number,title,url \
+          list=$(gh pr list --repo "$REPO" --state open --author "app/dependabot" --limit 1000 --json number,title,url \
             --jq '.[] | "- #\(.number) \(.title) (\(.url))"')
 
           if [ -n "$existing" ]; then

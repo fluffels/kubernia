@@ -65,7 +65,7 @@ const N = naechstesRaw as unknown as {
   waehleNaechstes: (e: Record<string, unknown>) => { ticket: { nr: number } | null };
   echteIo: (o?: { config?: Cfg }) => { namen: Namen };
 };
-const B = budgetRaw as unknown as { snapshotPfad: (env?: Record<string, string | undefined>, c?: Cfg) => string };
+const B = budgetRaw as unknown as { snapshotPfad: (env?: Record<string, string | undefined>) => string };
 const M = ausfallRaw as unknown as {
   standPfad: (w: string, env: Record<string, string | undefined>, tmp: string, c?: Cfg) => string;
   main: (argv: string[], env: Record<string, string | undefined>, out: (t: string) => void, o?: { config?: Cfg; jetzt?: number }) => number;
@@ -86,6 +86,8 @@ const AB: Cfg = {
 const OHNE_WT: Cfg = { ...AB, praefixe: { commitZeile: "AB-", branch: "feature/ab-" } };
 const OHNE_SKILL: Cfg = { ...AB, agenten: { ...(AB.agenten as object), ticketSkill: undefined } };
 const NAMEN = ticketNamen(AB);
+/** Zeile mit new RegExp( und escapeRegex( auf praefixe: der Musterbau gehört zentral in ticket-namen.mjs. */
+const verstreuterMusterbau = (text: string) => text.split("\n").some((z) => z.includes("new RegExp(") && z.includes("escapeRegex(") && z.includes("praefixe"));
 const LIES_FEHLER = (text: string) => {
   expect(text).toContain("praefixe.worktree");
   expect(text).toContain("Fix:");
@@ -304,7 +306,7 @@ describe("naechstes-ticket: Namen aus der Config", () => {
     fields: [{ name: "Status", value: { name: { raw: "Todo" } } }],
     content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n", issue_dependencies_summary: { blocked_by: 0 } },
   });
-  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: "fluffels", refs, namen: NAMEN });
+  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: "fluffels", refs, namen: NAMEN, config: { labels: { harness: "area:harness", forum: "forum" } } });
   test("ein Branch mit dem Präfix der Config überspringt das Ticket, der des echten Projekts nicht", () => {
     expect(waehle(["feature/ab-5-x"]).ticket).toBeNull();
     expect(waehle(["feature/kq-5-x"]).ticket?.nr).toBe(5);
@@ -315,11 +317,64 @@ describe("naechstes-ticket: Namen aus der Config", () => {
   });
 });
 
+describe("worktreePraefix und zentrale Muster in ticketNamen", () => {
+  const praefixVon = (namenRaw as unknown as { worktreePraefix: (c: Cfg) => string }).worktreePraefix;
+  const N2 = namenRaw as unknown as { namenOderGrund: (w: string, d?: { config?: Cfg; pfad?: string }) => { namen?: Namen; grund?: string } };
+  test("worktreePraefix prüft nur praefixe.worktree: Branch-Präfix und Agenten dürfen fehlen, ohne Schlüssel Abbruch mit Fix-Zeile", () => {
+    expect(praefixVon({ praefixe: { worktree: "ab-" } })).toBe("ab-");
+    expect(() => praefixVon({ praefixe: { branch: "feature/ab-" } })).toThrow(/praefixe\.worktree[\s\S]*Fix:/);
+    expect(() => praefixVon({})).toThrow(/praefixe\.worktree/);
+  });
+  test("ticketNamen trägt dateiMuster, lensWorktreeMuster, lensPfadMuster, ticketBranchMuster (Präfix ab-, kq- passt nicht)", () => {
+    const n = ticketNamen(AB) as unknown as Record<string, RegExp>;
+    expect(n.dateiMuster.exec("ab-13610-x.bak")?.[1]).toBe("ab-13610");
+    expect(n.dateiMuster.test("kq-7.bak")).toBe(false);
+    expect(n.lensWorktreeMuster.test("ab-3-lens-r2")).toBe(true);
+    expect(n.lensWorktreeMuster.test("x-ab-3-lens-r2")).toBe(false);
+    expect(n.lensPfadMuster.test("C:/R/.Claude/worktrees/ab-3-lens-m1/src/a.ts")).toBe(true);
+    expect(n.lensPfadMuster.test("/r/.claude/worktrees/kq-3-lens-r1/a.ts")).toBe(false);
+    expect(n.ticketBranchMuster.test("feature/ab-12-x")).toBe(true);
+    expect(n.ticketBranchMuster.test("feature/kq-12-x")).toBe(false);
+    expect(n.ticketBranchMuster.test("ab-12-x")).toBe(false);
+  });
+  test("namenOderGrund liest deps.pfad: vollständige Datei liefert Namen (Präfix zz-), unvollständige einen Grund", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lz-pfad-"));
+    try {
+      const echt = JSON.parse(lies(".factory/projekt.json")) as { praefixe: { worktree: string }; agenten: Record<string, unknown> };
+      echt.praefixe.worktree = "zz-";
+      const voll = join(dir, "voll.json");
+      writeFileSync(voll, JSON.stringify(echt));
+      expect(N2.namenOderGrund("T", { pfad: voll }).namen?.praefixe.worktree).toBe("zz-");
+      delete echt.agenten.umsetzer;
+      const teil = join(dir, "teil.json");
+      writeFileSync(teil, JSON.stringify(echt));
+      expect(N2.namenOderGrund("T", { pfad: teil }).grund).toMatch(/agenten\.umsetzer/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("Wächter: außerhalb von ticket-namen.mjs baut kein Skript Muster aus praefixe (new RegExp mit escapeRegex auf praefixe)", () => {
+    const treffer = readdirSync("scripts")
+      .filter((f) => f.endsWith(".mjs") && f !== "ticket-namen.mjs")
+      .filter((f) => verstreuterMusterbau(lies("scripts/" + f)));
+    expect(treffer).toEqual([]);
+  });
+  test("Wächter-Probe: erkennt den verstreuten Musterbau im Fixture-Text, nicht den zentralen Zugriff", () => {
+    expect(verstreuterMusterbau("return new RegExp(escapeRegex(namen.praefixe.branch));")).toBe(true);
+    expect(verstreuterMusterbau("return namen.ticketBranchMuster;")).toBe(false);
+    expect(verstreuterMusterbau("new RegExp(escapeRegex(term))")).toBe(false);
+  });
+});
+
 describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
-  test("snapshotPfad: <Präfix>rate-limits.json; die Umgebungsvariable gewinnt auch ohne Config; ohne Schlüssel Abbruch", () => {
-    expect(B.snapshotPfad({}, AB)).toBe(join(tmpdir(), "ab-rate-limits.json"));
-    expect(B.snapshotPfad({ KQ_RATE_LIMITS_SNAPSHOT: "/x/s.json" }, OHNE_WT)).toBe("/x/s.json");
-    expect(() => B.snapshotPfad({}, OHNE_WT)).toThrow(/praefixe\.worktree[\s\S]*Fix:/);
+  test("snapshotPfad: kontoweit und projektneutral (kein Präfix, keine Config nötig); die Umgebungsvariable gewinnt", () => {
+    expect(B.snapshotPfad({})).toBe(join(tmpdir(), "claude-rate-limits.json"));
+    expect(B.snapshotPfad({ KQ_RATE_LIMITS_SNAPSHOT: "/x/s.json" })).toBe("/x/s.json");
+  });
+  test("standPfad braucht nur praefixe.worktree: ohne Agenten-, Branch- und Label-Schlüssel entsteht der Pfad, ohne Worktree-Präfix nicht", () => {
+    const nurWt: Cfg = { praefixe: { worktree: "ab-" } };
+    expect(M.standPfad("/dev/proj", {}, "/tmp", nurWt)).toContain(join("/tmp", "ab-mcp-ausfall-"));
+    expect(() => M.standPfad("/dev/proj", {}, "/tmp", { praefixe: { branch: "feature/ab-" }, agenten: AB.agenten })).toThrow(/praefixe\.worktree/);
   });
   test("standPfad: <Präfix>mcp-ausfall-…; ohne Schlüssel Abbruch; die Umgebungsvariable gewinnt", () => {
     expect(M.standPfad("/dev/proj", {}, "/tmp", AB)).toContain(join("/tmp", "ab-mcp-ausfall-"));

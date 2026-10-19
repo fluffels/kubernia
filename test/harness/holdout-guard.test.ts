@@ -13,8 +13,6 @@ import * as raw from "../../scripts/holdout-guard.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as auftrag from "../../scripts/holdout-auftrag-guard.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ABNAHME_AGENT } from "../../scripts/abnahme.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { dispatch } from "../../scripts/pretooluse-hook.mjs";
 
 type Urteil = { block: boolean; reason?: string };
@@ -60,8 +58,7 @@ describe("holdoutAuftragBlockade", () => {
     expect(A.holdoutAuftragBlockade()).toBeNull();
     expect(A.parseHoldoutInput("{kaputt")).toEqual({});
   });
-  test("der Empfängername ist der Abnahme-Agent: abnahme.mjs und Dateiname stimmen überein", () => {
-    expect(A.ABNAHME_EMPFAENGER).toBe(ABNAHME_AGENT);
+  test("der Empfängername ist der Abnahme-Agent: die Agent-Datei trägt den Namen (abnahme.mjs teilt die Quelle)", () => {
     expect(lies(`.claude/agents/${A.ABNAHME_EMPFAENGER}.md`)).toMatch(new RegExp(`^---\\nname: ${A.ABNAHME_EMPFAENGER}\\n`));
   });
 });

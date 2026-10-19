@@ -439,6 +439,14 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       /praefixe\.commitZeile/,
     );
   });
+  test("Negativfall: eine Config ohne labels.festgefahren bricht ab (auch bei leerer Menge), ohne git oder gh zu fragen", () => {
+    const nie = () => {
+      throw new Error("darf nicht aufgerufen werden");
+    };
+    const ohneLabel = () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: {} });
+    assert.throws(() => mod.laufErgebnis({ von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
+    assert.throws(() => mod.laufErgebnisStartAgent({ laeufe: [], von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
+  });
   test("ohne PRs keine weiteren gh-Aufrufe (nur die Liste)", () => {
     const aufrufe: string[][] = [];
     const e = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh({ liste: [], aufrufe }), jetzt: SPAETER });

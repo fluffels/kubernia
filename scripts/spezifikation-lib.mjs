@@ -12,7 +12,11 @@ const MANGEL = {
   akFehlt: "`## Akzeptanzkriterien` fehlt",
   akOhneListe: "`## Akzeptanzkriterien` ohne Listenpunkt",
   keinNegativ: "kein Negativfall in den Akzeptanzkriterien (ein Kriterium mit dem Wort „Negativfall“)",
+  alleNachMerge: "alle Akzeptanzkriterien beginnen mit „Nach dem Merge:“: die Abnahme hätte nichts zu prüfen (mindestens ein Kriterium muss vor dem Merge prüfbar sein)",
 };
+
+/** Präfix eines Kriteriums, das erst nach dem Merge erfüllbar ist; die Abnahme prüft es nicht, der Umsetzer liefert den Beleg als PR-Kommentar. */
+export const NACH_MERGE_PRAEFIX = "Nach dem Merge:";
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 const NEGATIVFALL = /negativ-?f(?:a|ä)ll/i;
@@ -53,6 +57,8 @@ export function spezifikationsMaengel(body) {
   } else {
     if (!ak.some((z) => LISTENPUNKT.test(z))) maengel.push(MANGEL.akOhneListe);
     if (!ak.some((z) => NEGATIVFALL.test(z))) maengel.push(MANGEL.keinNegativ);
+    const liste = kriterien(body);
+    if (liste.length > 0 && liste.every((c) => c.nachMerge)) maengel.push(MANGEL.alleNachMerge);
   }
   return maengel;
 }
@@ -64,7 +70,7 @@ const ohneMarker = (z) => z.trim().replace(/^(?:[-*+]|\d+[.)])\s+/, "").replace(
  * Die Akzeptanzkriterien als `[{k:"K1", text}, …]` (Abschnitt wie im Spezifikations-Gate). Ein Kriterium ist ein Listenpunkt der obersten Ebene
  * (kleinster Einzug); tiefer eingerückte Listenpunkte und Folgezeilen (direkt anschließend oder nach einer Leerzeile eingerückt) gehören zu ihm, eine
  * nicht eingerückte Prosazeile nach einer Leerzeile und eine `###`-Überschrift beenden es. Die Nummer ist die Position im Abschnitt, nicht die
- * Ziffer des Autors. Fehlender Abschnitt oder keine Liste: `[]`. Pur.
+ * Ziffer des Autors. `nachMerge` ist wahr, wenn der Text mit `NACH_MERGE_PRAEFIX` beginnt. Fehlender Abschnitt oder keine Liste: `[]`. Pur.
  */
 export function kriterien(body) {
   const zeilen = abschnitt(body, AK_NAME);
@@ -90,7 +96,7 @@ export function kriterien(body) {
     }
     leer = false;
   }
-  return ergebnis.map((teile, i) => ({ k: `K${i + 1}`, text: teile.join("\n") }));
+  return ergebnis.map((teile, i) => ({ k: `K${i + 1}`, text: teile.join("\n"), nachMerge: teile[0].startsWith(NACH_MERGE_PRAEFIX) }));
 }
 
 /** Epic- und Phasen-Titel (eigenes Format, vom Gate ausgenommen): beginnt mit „Epic“ oder „Phase“, optional hinter 📦. Pur. */

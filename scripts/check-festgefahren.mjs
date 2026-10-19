@@ -107,6 +107,7 @@ export function main({ config } = {}) {
     "--repo", repo,
     "--head", headBranch,
     "--state", "open",
+    "--limit", "1000",
     "--json", "number,labels,createdAt",
   ]);
 

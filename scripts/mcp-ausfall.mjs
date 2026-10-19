@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./hook-io.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { ticketNamen } from "./ticket-namen.mjs";
+import { worktreePraefix } from "./ticket-namen.mjs";
 
 /** Server-Arten aus `.mcp.json`, die das Skript kennt (ein Wächter-Test hält `.mcp.json` dagegen). */
 export const BEKANNTE_ARTEN = ["stdio", "http"];
@@ -66,9 +66,9 @@ export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").rep
 
 /**
  * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<Worktree-Präfix>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
- * `KQ_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es keine Config). Ohne vollständige Config (`ticketNamen` prüft `praefixe.*` und `agenten.*`) wirft die Funktion mit Fix-Zeile.
+ * `KQ_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es keine Config). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
  */
-export const standPfad = (wurzel, env, tmp, config) => env.KQ_MCP_AUSFALL_STAND || join(tmp, `${ticketNamen(config ?? ladeProjektConfig()).praefixe.worktree}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
+export const standPfad = (wurzel, env, tmp, config) => env.KQ_MCP_AUSFALL_STAND || join(tmp, `${worktreePraefix(config ?? ladeProjektConfig())}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
 
 /** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. Pur. */
 export function projektOrdner(namen, wurzel) {

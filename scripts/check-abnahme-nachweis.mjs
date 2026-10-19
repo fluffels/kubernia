@@ -6,6 +6,7 @@
  * Verlangt im Slice (Commits `<basis>..HEAD`) die Abnahme-Zeile (Schlüssel `abnahme` der Commit-Zeilen) und prüft sie gegen das verknüpfte Ticket:
  *  - ein Urteil je Akzeptanzkriterium (`kriterien()` des Issue-Bodys): fehlend, unbekannt (über der Anzahl) → rot; doppelte Nummern und
  *    unbekannte Werte fängt der Parser (`ungueltig`); jeder Wert ≠ erfuellt → rot (nicht-erfuellt, nicht-pruefbar);
+ *    `nach-merge` ist nur an einem Kriterium mit dem Präfix `Nach dem Merge:` erlaubt (dort auch `erfuellt`), an einem normalen rot;
  *  - `1 ≤ durchgaenge ≤ runden` der Review-Zeile (Abnahme-Fix-Runden zählen gegen das Cap, auch eine Delta-Lens nach CI-Fix oder Konflikt-Merge
  *    hinter einer bestandenen Abnahme ist ein Pass);
  *  - head-Regel: `head` liegt im Slice, ist gleich oder Nachfahre des Review-head, danach nur leere Commits und konfliktfreie Merges;
@@ -28,7 +29,7 @@ import { issueKommentare } from "./fremdtext-lib.mjs";
 import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeProjektConfig, trenneConfigArg } from "./projekt-config-lib.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
-import { kriterien } from "./spezifikation-lib.mjs";
+import { kriterien, NACH_MERGE_PRAEFIX } from "./spezifikation-lib.mjs";
 
 /** Schließ-Referenzen eines PR-Bodys: verschiedene Ticketnummern zu close/fix/resolve (alle Beugungen, Groß-/Kleinschreibung egal, optional `:`). Pur. */
 export function verknuepfteTickets(body) {
@@ -47,13 +48,16 @@ const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",")
 const vorlage = (zeilen) =>
   `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>`;
 
-/** Urteil je Kriterium gegen die Anzahl der Kriterien des Tickets und gegen `erfuellt`. */
-function bewerteUrteil(urteil, n) {
+/** Urteil je Kriterium gegen die Kriterien des Tickets (`[{k, nachMerge}]`) und gegen `erfuellt`; `nach-merge` gilt nur an einem Nach-Merge-Kriterium. */
+function bewerteUrteil(urteil, liste) {
+  const n = liste.length;
   const fehler = [];
   for (const u of urteil) {
     const nr = Number(u.k.slice(1));
     if (nr > n) fehler.push(`${u.k}: unbekannt, das Ticket hat nur ${n} Kriterium/Kriterien.`);
-    else if (u.wert !== "erfuellt") fehler.push(`${u.k}: ${u.wert} (Merge gestoppt, Abnahme nicht bestanden).`);
+    else if (u.wert === "nach-merge") {
+      if (!liste[nr - 1].nachMerge) fehler.push(`${u.k}: nach-merge ist nur bei einem Kriterium mit dem Präfix \`${NACH_MERGE_PRAEFIX}\` erlaubt.`);
+    } else if (u.wert !== "erfuellt") fehler.push(`${u.k}: ${u.wert} (Merge gestoppt, Abnahme nicht bestanden).`);
   }
   for (let i = 1; i <= n; i++) if (!urteil.some((u) => u.k === `K${i}`)) fehler.push(`K${i}: Urteil fehlt.`);
   return fehler;
@@ -91,14 +95,14 @@ function bewerteSpur(a, marker) {
 
 /**
  * Bewertet den Abnahme-Nachweis; liefert `fehler[]` (leer = grün). Pur.
- * `ticket` = `{nr, kriterien: <Anzahl>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
+ * `ticket` = `{nr, kriterien: <Liste aus kriterien()>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
  */
 export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen }) {
   const a = nachweis.abnahme;
   if (!a) return [`${zeilen.abnahme}: Zeile fehlt. Ablauf: node scripts/abnahme.mjs kriterien <nr>; Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.grund ? `${a.grund}: ` : ""}${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "entfaellt") {
-    return ticket && ticket.kriterien > 0 ? [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien} Akzeptanzkriterien nicht erlaubt.`] : [];
+    return ticket && ticket.kriterien.length > 0 ? [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt.`] : [];
   }
   if (!ticket) return [`${zeilen.abnahme}: ein Urteil braucht ein verknüpftes Ticket (Schließ-Referenz im PR-Body).`];
   return [...bewerteUrteil(a.urteil, ticket.kriterien), ...bewerteHead(a, nachweis.review, abnahmeHead), ...bewerteSpur(a, marker)];
@@ -161,7 +165,7 @@ function pruefe({ git, gh, env, config, zeilen, base }) {
   if (nummern.length === 1) {
     const issue = gh(["api", `repos/${repo}/issues/${nummern[0]}`]);
     if (issue?.pull_request) return [`#${nummern[0]} im PR-Body ist ein PR, kein Ticket.`];
-    ticket = { nr: nummern[0], kriterien: kriterien(issue?.body ?? "").length };
+    ticket = { nr: nummern[0], kriterien: kriterien(issue?.body ?? "") };
   }
   let marker = null;
   if (nachweis.abnahme?.art === "urteil") {

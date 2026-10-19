@@ -13,12 +13,12 @@ import * as boardLib from "../scripts/board-lib.mjs";
 
 type Fenster = { k: number; agent: string; nach: number };
 type Stand = { closedAt: string | null; n: number } | { fehler: string };
-type Eingabe = { items: unknown[]; offene: Set<number>; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; messfenster?: (f: Fenster, wartend: number) => Stand };
+type Eingabe = { items: unknown[]; offene: Set<number>; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 type Quote = { seite: string; produktMerges: number | null; grund: string; rueckfall: boolean };
 type QuoteEingabe = { commits: unknown[]; harnessIssues: Set<number> | null };
 type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
-type Io = { lade: () => ZweiBoards; ladeQuote?: () => QuoteEingabe; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; hartAb?: number };
+type Io = { lade: () => ZweiBoards; ladeQuote?: () => QuoteEingabe; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; config?: unknown; hartAb?: number };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
   blockerNummern: (b: string) => number[];
@@ -49,10 +49,11 @@ const roh = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
   content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
 });
 // Zwei Boards (#1729): die Eingabe der alten Form (ein Board) steht auf dem Produkt-Board; Harness-Items rücken laut Trennregel auf die Factory-Seite.
+const CFG = { labels: { harness: "area:harness", forum: "forum" } };
 const QUOTE_NULL = () => ({ commits: [], harnessIssues: null });
 const zweiBoards = (e: Eingabe): ZweiBoards => ({ ...e, produkt: e.items, factory: [] });
 const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
-  (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", ...extra });
+  (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
 
 describe("blockerNummern", () => {
   test("mehrfach, case-insensitiv, mehrere Nummern je Zeile; Klammertext zählt nicht", () => {
@@ -137,6 +138,7 @@ describe("waehleNaechstes: jedes Kriterium mit Negativfall", () => {
 describe("fuehreAus", () => {
   const io = (eingabe: Eingabe | Error) => ({
     owner: "fluffels",
+    config: CFG,
     lade: () => {
       if (eingabe instanceof Error) throw eingabe;
       return zweiBoards(eingabe);
@@ -167,6 +169,7 @@ describe("Bereich (#1552)", () => {
   const harness = { labels: [{ name: "area:harness" }] };
   const io = (items: unknown[], spion?: { n: number }) => ({
     owner: "fluffels",
+    config: CFG,
     lade: () => {
       if (spion) spion.n++;
       return zweiBoards({ items: norm(items), offene: new Set<number>() });
@@ -354,11 +357,11 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
   });
   test("unlesbare Zeile: fail-closed, der Body-Text taucht nirgends auf", () => {
     const eingabe = { items: norm([item(1, { body: "Messfenster: n ≥ GEHEIM kubernia-umsetzer nach #1" })]), offene: new Set<number>() };
-    const r = N.fuehreAus(["--json"], { owner: "fluffels", lade: () => zweiBoards(eingabe), ladeQuote: QUOTE_NULL });
+    const r = N.fuehreAus(["--json"], { owner: "fluffels", lade: () => zweiBoards(eingabe), config: CFG, ladeQuote: QUOTE_NULL });
     expect(r.code).toBe(1);
     expect(r.out).toContain("unlesbar");
     expect(r.out).not.toContain("GEHEIM");
-    expect(N.fuehreAus([], { owner: "fluffels", lade: () => zweiBoards(eingabe), ladeQuote: QUOTE_NULL }).out).not.toContain("GEHEIM");
+    expect(N.fuehreAus([], { owner: "fluffels", lade: () => zweiBoards(eingabe), config: CFG, ladeQuote: QUOTE_NULL }).out).not.toContain("GEHEIM");
   });
 });
 
@@ -448,7 +451,7 @@ describe("messfensterLader (#1589)", () => {
 describe("Einzelprüfung --ticket (#1621)", () => {
   const issue = (nr: number, c: Record<string, unknown> = {}) => item(nr, c).content;
   const pruefe = (nr: number, c: Record<string, unknown> = {}, extra: Partial<Eingabe> = {}) =>
-    N.pruefeTicket({ item: N.itemAusIssue(issue(nr, c)), offene: new Set(), owner: "fluffels", ...extra });
+    N.pruefeTicket({ item: N.itemAusIssue(issue(nr, c)), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
   const grund = (r: Ergebnis) => r.uebersprungen[0]?.grund;
   const zeile = "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590";
 
@@ -492,6 +495,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     return {
       aufrufe,
       owner: "fluffels",
+      config: CFG,
       lade: () => {
         aufrufe.lade++;
         return { produkt: [], factory: [], offene: new Set<number>() };
@@ -531,6 +535,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
 describe("Spezifikations-Gate (#1615)", () => {
   type GateIo = {
     owner: string;
+    config?: unknown;
     hartAb?: number;
     lade: () => ZweiBoards;
     ladeQuote?: () => QuoteEingabe;
@@ -544,7 +549,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     fuehreAus: (argv: string[], io: GateIo) => { code: number; out: string; err: string };
   };
   const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- nur Happy Path\n";
-  const waehle = (items: unknown[], extra: Record<string, unknown> = {}) => GateN.waehleNaechstes({ items: norm(items), offene: new Set(), owner: "fluffels", ...extra });
+  const waehle = (items: unknown[], extra: Record<string, unknown> = {}) => GateN.waehleNaechstes({ items: norm(items), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
 
   test("AK3: neues Ticket ohne Negativfall wird übersprungen, das nächste gewählt", () => {
     const r = waehle([roh(1, { body: OHNE_NEGATIV }), item(2)]);
@@ -610,7 +615,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(n).toBe(0);
   });
   test("--ticket: dieselbe Prüfung", () => {
-    const r = GateN.pruefeTicket({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set(), owner: "fluffels" });
+    const r = GateN.pruefeTicket({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set(), owner: "fluffels", config: CFG });
     expect(r.ticket).toBeNull();
     expect(r.uebersprungen[0].grund).toContain("kein Negativfall");
   });
@@ -618,6 +623,7 @@ describe("Spezifikations-Gate (#1615)", () => {
   const io = (items: unknown[], extra: Partial<GateIo> = {}) => {
     const eingang: GateIo = {
       owner: "fluffels",
+      config: CFG,
       lade: () => zweiBoards({ items: norm(items), offene: new Set<number>() }),
       ladeQuote: QUOTE_NULL,
       ...extra,
@@ -686,6 +692,7 @@ describe("Spezifikations-Gate (#1615)", () => {
   test("--ticket: nicht frei wegen Spezifikation zeigt `reparieren #nr` mit Exit 1", () => {
     const r = GateN.fuehreAus(["--ticket", "7"], {
       owner: "fluffels",
+      config: CFG,
       lade: () => ({ produkt: [], factory: [], offene: new Set<number>() }),
       ladeEinzeln: () => ({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set<number>() }) as never,
     });
@@ -712,6 +719,7 @@ describe("Zwei Boards und Spielquote (#1729)", () => {
   const lauf = (produkt: unknown[], factory: unknown[], o: Opt = {}) =>
     N.fuehreAus(o.argv ?? ["--json"], {
       owner: "fluffels",
+      config: CFG,
       lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene: new Set<number>() }),
       ladeQuote: () => {
         if (o.spion) o.spion.n++;
@@ -837,7 +845,7 @@ describe("Zwei Boards und Spielquote (#1729)", () => {
     expect(lauf([item(1, rot)], [], { quoteFehler: true }).code).toBe(0);
   });
   test("ein Lader ohne ladeQuote ist Exit 2 (kein stilles Produkt)", () => {
-    const r = N.fuehreAus([], { owner: "fluffels", lade: () => ({ produkt: norm([item(1)]), factory: norm([]), offene: new Set<number>() }) });
+    const r = N.fuehreAus([], { owner: "fluffels", config: CFG, lade: () => ({ produkt: norm([item(1)]), factory: norm([]), offene: new Set<number>() }) });
     expect(r.code).toBe(2);
   });
   test("Text: Zeile 1 bleibt `#nr TAB Titel`, Zeile 2 nennt Seite und Zählung, danach Hinweise", () => {
@@ -855,23 +863,23 @@ describe("Zwei Boards und Spielquote (#1729)", () => {
     expect("hinweise" in json(lauf([item(1)], [], { merges: 0 }))).toBe(false);
   });
   test("ladeQuoteEcht: eine Commit-Seite plus die geschlossenen Harness-Issues ab dem ältesten Commit minus 1 Tag", () => {
-    const Q = raw as unknown as { ladeQuoteEcht: (lade: (a: string[]) => unknown) => QuoteEingabe };
+    const Q = raw as unknown as { ladeQuoteEcht: (lade: (a: string[]) => unknown, config: unknown) => QuoteEingabe };
     const aufrufe: string[] = [];
     const alt = { ...commit("feat(harness): b (#7)"), commit: { message: "feat(harness): b (#7)", committer: { date: "2026-10-05T10:00:00Z" } } };
     const q = Q.ladeQuoteEcht((a) => {
       aufrufe.push(a.join(" "));
       return a.includes("--slurp") ? [[{ number: 7 }, { number: 8, pull_request: {} }]] : [commit("feat(sim): a (#1)"), alt];
-    });
+    }, CFG);
     expect(aufrufe[0]).toContain("commits?sha=main&per_page=100");
     expect(aufrufe[1]).toContain("labels=area%3Aharness");
     expect(aufrufe[1]).toContain("since=2026-10-04T10:00:00.000Z");
     expect([...(q.harnessIssues ?? [])]).toEqual([7]);
   });
   test("ladeQuoteEcht wirft bei leerer oder kaputter Antwort (keine stille Seite)", () => {
-    const Q = raw as unknown as { ladeQuoteEcht: (lade: (a: string[]) => unknown) => QuoteEingabe };
-    expect(() => Q.ladeQuoteEcht(() => [])).toThrow(/keine Commits/);
-    expect(() => Q.ladeQuoteEcht(() => ({}))).toThrow(/keine Commits/);
-    expect(() => Q.ladeQuoteEcht(() => [{ commit: { committer: { date: "kaputt" } } }])).toThrow(/Datum/);
-    expect(() => Q.ladeQuoteEcht((a) => (a.includes("--slurp") ? {} : [commit("x")]))).toThrow(/Antwortform/);
+    const Q = raw as unknown as { ladeQuoteEcht: (lade: (a: string[]) => unknown, config: unknown) => QuoteEingabe };
+    expect(() => Q.ladeQuoteEcht(() => [], CFG)).toThrow(/keine Commits/);
+    expect(() => Q.ladeQuoteEcht(() => ({}), CFG)).toThrow(/keine Commits/);
+    expect(() => Q.ladeQuoteEcht(() => [{ commit: { committer: { date: "kaputt" } } }], CFG)).toThrow(/Datum/);
+    expect(() => Q.ladeQuoteEcht((a) => (a.includes("--slurp") ? {} : [commit("x")]), CFG)).toThrow(/Antwortform/);
   });
 });

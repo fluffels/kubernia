@@ -20,9 +20,11 @@ const T = raw as unknown as {
   istHarnessCommit: (c: unknown, h?: Set<number> | null) => boolean;
   zaehleSpielMerges: (c: unknown[], seit?: string | null, h?: Set<number> | null) => number;
   quotenBericht: (c: unknown[], seit?: string | null, h?: Set<number> | null) => { harness: number; spiel: number };
-  harnessTaktAusCommits: (a: { items: Item[]; commits: unknown[]; seit?: string | null; position: number; harnessIssues?: Set<number> | null }) => { aktion: string };
-  fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io }) => { fehler: boolean };
+  harnessTaktAusCommits: (a: { items: Item[]; commits: unknown[]; seit?: string | null; position: number; sammelIssues?: Set<number> }) => { aktion: string };
+  fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io; config?: unknown }) => { fehler: boolean };
 };
+
+const CFG = { labels: { harness: "area:harness", forum: "forum" } };
 
 /** Fake für `io.loadItems`: die Items stehen auf dem Factory-Board (dort arbeiten Status- und Harness-Takt), das Produkt-Board ist leer. */
 const nurFactory = (items: Item[]) => (rolle: string) => (rolle === "factory" ? items : []);
@@ -60,7 +62,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
   const sammel = it(12, { title: "Harness-Härtung (gesammelt)" });
   const STATUS = "Langfuse-Status überprüfen";
 
-  function lauf(commits: unknown[], opts: { offeneStatus?: boolean } = {}) {
+  function lauf(commits: unknown[], opts: { offeneStatus?: boolean; offeneSammel?: boolean } = {}) {
     const log: string[] = [];
     const aufrufe: { harness: { items: Item[] }[]; status: unknown[]; ghArgs: string[] } = { harness: [], status: [], ghArgs: [] };
     const io: Io = {
@@ -75,7 +77,10 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         return [commits];
       },
       loadItems: nurFactory([it(10), it(11), sammel, it(50, { title: STATUS })]),
-      loadOpenIssuePages: () => [opts.offeneStatus ? [{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }] : []],
+      loadOpenIssuePages: () => [[
+        ...(opts.offeneStatus ? [{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }] : []),
+        ...(opts.offeneSammel ? [{ number: 160, title: "Langfuse-Befunde (gesammelt)", created_at: "2026-10-02T00:00:00Z", assignees: ["fluffels"] }] : []),
+      ]],
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: (e) => {
         aufrufe.status.push(e);
@@ -87,26 +92,38 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       },
       log: (z) => log.push(z),
     };
-    const r = T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), token: "t", io });
+    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), token: "t", io });
     return { r, log, aufrufe };
   }
 
   const spiel = (n: number) => c(`feat(sim): s${n} (#${200 + n})`, "2026-10-06T10:00:00Z");
   const doku = c("docs(adr): Wächter (#102)", "2026-10-06T11:00:00Z");
 
-  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Spiel-Merges plus ein Harness-Doku-Commit holen nichts", () => {
+  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Spiel-Merges plus ein Harness-Doku-Commit (drei Ticket-Merges) holen nichts", () => {
     const { log, aufrufe } = lauf([spiel(1), spiel(2), doku]);
     expect(aufrufe.harness).toHaveLength(0);
     expect(log.join("\n")).toContain("Fenster ab 2026-10-01T00:01:00.000Z");
     expect(log.join("\n")).toMatch(/1 Harness- auf 2 Spiel-Merges/);
   });
 
-  test("drei Spiel-Merges holen das Sammelticket; die Liste ist nach der Status-Aktion nachgezogen (Status-Ticket vorn)", () => {
-    const { r, aufrufe } = lauf([spiel(1), spiel(2), spiel(3), doku], { offeneStatus: true });
+  test("fünf Ticket-Merges jeder Art (vier Spiel, ein Harness-Doku) holen das Sammelticket; die Liste ist nach der Status-Aktion nachgezogen (Status-Ticket vorn)", () => {
+    const { r, aufrufe } = lauf([spiel(1), spiel(2), spiel(3), spiel(4), doku], { offeneStatus: true });
     expect(aufrufe.status).toHaveLength(1);
     expect(aufrufe.harness).toHaveLength(1);
     expect(aufrufe.harness[0].items[0].number).toBe(50);
     expect(r.fehler).toBe(false);
+  });
+
+  test("der Abschluss-Commit eines Sammeltickets (#100, geschlossen, Sammeltitel) zählt nicht: vier Spiel-Merges plus er holen nichts", () => {
+    const abschluss = c("feat(harness): Härtung komplett (#100) (#150)", "2026-10-06T12:00:00Z");
+    const { aufrufe } = lauf([spiel(1), spiel(2), spiel(3), spiel(4), abschluss]);
+    expect(aufrufe.harness).toHaveLength(0);
+  });
+
+  test("auch der Commit eines noch offenen Sammeltickets (Langfuse-Titel, #160) zählt nicht", () => {
+    const offen = c("feat(harness): Langfuse-Zeilen (#160) (#161)", "2026-10-06T12:00:00Z");
+    expect(lauf([spiel(1), spiel(2), spiel(3), spiel(4), offen], { offeneSammel: true }).aufrufe.harness).toHaveLength(0);
+    expect(lauf([spiel(1), spiel(2), spiel(3), spiel(4), offen]).aufrufe.harness).toHaveLength(1); // ohne das offene Sammelticket zählt er mit
   });
 
   describe("Zählfenster beginnt mit dem Anlegen des jüngsten Status-Tickets (#1628)", () => {
@@ -124,7 +141,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         fuehreHarnessAus: () => true,
         log: (z) => log.push(z),
       };
-      T.fuehreTaktAus({ jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, io, ausloeser });
+      T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, io, ausloeser });
       return log.join("\n");
     };
 
@@ -150,7 +167,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
 
   test("schlagen die Aktionen fehl (Status ok=false, Harness false), ist der Lauf ein Fehler", () => {
     const mk = (statusOk: boolean, harnessOk: boolean): Io => ({
-      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
+      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3), spiel(4), spiel(5)]]),
       loadItems: nurFactory([it(10), it(11), sammel, it(50, { title: STATUS })]),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
       positionLautAgentsMd: () => 4,
@@ -159,14 +176,14 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       log: () => undefined,
     });
     const jetzt = new Date("2026-10-08T12:00:00Z");
-    expect(T.fuehreTaktAus({ jetzt, token: "t", io: mk(true, true) }).fehler).toBe(false);
-    expect(T.fuehreTaktAus({ jetzt, token: "t", io: mk(false, true) }).fehler).toBe(true);
-    expect(T.fuehreTaktAus({ jetzt, token: "t", io: mk(true, false) }).fehler).toBe(true);
+    expect(T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk(true, true) }).fehler).toBe(false);
+    expect(T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk(false, true) }).fehler).toBe(true);
+    expect(T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk(true, false) }).fehler).toBe(true);
   });
 
   describe("Status- und Harness-Takt arbeiten auf der Factory-Liste (#1729)", () => {
     const mk = (produkt: Item[], factory: Item[], gesehen: { status: unknown[]; harness: number }): Io => ({
-      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
+      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3), spiel(4), spiel(5)]]),
       loadItems: (rolle) => (rolle === "factory" ? factory : produkt),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
       positionLautAgentsMd: () => 4,
@@ -177,22 +194,22 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     const jetzt = new Date("2026-10-08T12:00:00Z");
     test("ein Sammelticket nur auf dem Produkt-Board löst keine Harness-Aktion aus, auf dem Factory-Board schon", () => {
       const nur = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ jetzt, token: "t", io: mk([it(10), it(11), sammel], [it(1)], nur) });
+      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([it(10), it(11), sammel], [it(1)], nur) });
       expect(nur.harness).toBe(0);
       const auf = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ jetzt, token: "t", io: mk([], [it(10), it(11), sammel], auf) });
+      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([], [it(10), it(11), sammel], auf) });
       expect(auf.harness).toBe(1);
     });
     test("das Status-Ticket bekommt die Factory-Liste, nie die Produkt-Liste", () => {
       const g = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ jetzt, token: "t", io: mk([it(900)], [it(1), it(2)], g) });
+      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([it(900)], [it(1), it(2)], g) });
       const listen = g.status as Item[][];
       expect(listen).toHaveLength(1);
       expect(listen[0].map((i) => i.number)).toEqual([1, 2]);
     });
     test("ein Item auf beiden Boards, das laut Trennregel auf das Produkt-Board gehört, zählt nicht in der Factory-Liste", () => {
       const g = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ jetzt, token: "t", io: mk([it(5)], [it(5), it(6)], g) });
+      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([it(5)], [it(5), it(6)], g) });
       expect((g.status as Item[][])[0].map((i) => i.number)).toEqual([6]);
     });
   });
@@ -201,7 +218,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     const log: string[] = [];
     let gerufen = 0;
     const io: Io = {
-      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
+      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3), spiel(4), spiel(5)]]),
       loadItems: nurFactory([it(10), it(11), sammel]),
       loadOpenIssuePages: () => [[]],
       positionLautAgentsMd: () => 4,
@@ -209,7 +226,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       fuehreHarnessAus: () => ((gerufen += 1), true),
       log: (z) => log.push(z),
     };
-    expect(T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, token: "t", io }).fehler).toBe(false);
+    expect(T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, token: "t", io }).fehler).toBe(false);
     expect(gerufen).toBe(0);
   });
 
@@ -222,10 +239,11 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       fuehreHarnessAus: () => true,
     };
     const log: string[] = [];
-    const ohneToken = T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), io: { ...basis, positionLautAgentsMd: () => 4, log: (z: string) => log.push(z) } });
+    const ohneToken = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), io: { ...basis, positionLautAgentsMd: () => 4, log: (z: string) => log.push(z) } });
     expect(ohneToken.fehler).toBe(false);
     expect(log.join("\n")).toContain("PROJECT_TOKEN fehlt");
     const ohnePos = T.fuehreTaktAus({
+      config: CFG,
       jetzt: new Date("2026-10-08T12:00:00Z"),
       token: "t",
       io: { ...basis, positionLautAgentsMd: () => { throw new Error("keine Position"); }, log: () => undefined },
@@ -258,7 +276,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
       addToBoardTodo: (rolle, id) => (zaehler.add.push(id), zaehler.rollen.push(rolle), (opts.add ?? (() => `PVTI_${id}`))()),
       log: (z) => log.push(z),
     };
-    const r = T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: opts.dry, token: "token" in opts ? opts.token : "t", io });
+    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), dry: opts.dry, token: "token" in opts ? opts.token : "t", io });
     return { r, log, zaehler };
   }
 
