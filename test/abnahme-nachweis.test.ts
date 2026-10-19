@@ -237,6 +237,17 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     rot(lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "false" } }).r.fehler, /Zeile fehlt/);
     expect(lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "false" } }).r.ok).toBe(false);
   });
+  test("Nach-Merge-Kriterium Ende-zu-Ende: nach-merge am markierten Kriterium grün, an einem normalen rot", () => {
+    const NM = "## Akzeptanzkriterien\n1. eins\n2. Nach dem Merge: zwei\n";
+    const mit = (urteil: string) => ({
+      messages: `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`,
+      kommentare: [{ ...kommentar, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=${urteil} -->` }],
+      issue: { body: NM },
+    });
+    expect(lauf(mit("K1:erfuellt,K2:nach-merge")).r.fehler).toEqual([]);
+    rot(lauf(mit("K1:nach-merge,K2:nach-merge")).r.fehler, /K1: nach-merge ist nur bei einem Kriterium/);
+    rot(lauf({ ...mit("K1:erfuellt,K2:nach-merge"), issue: { body: AK } }).r.fehler, /K2: nach-merge ist nur bei einem Kriterium/);
+  });
   test("unbekannter Abnahme-head (rev-parse scheitert) ist rot", () => {
     const git = (a: string[]): string => {
       if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);

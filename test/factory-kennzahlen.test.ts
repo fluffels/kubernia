@@ -655,6 +655,52 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(aufrufe[1].join(" ")).toMatch(/--paginate --slurp repos\/o\/r\/commits\?sha=main&since=2026-10-05T00:01:00\.000Z/);
   });
 
+  test("ladeAuditDaten: ohne abgeschlossenes Sammelticket ist das Fenster 28 Tage vor `bis`, nichts in Arbeit", () => {
+    const aufrufe: string[][] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a);
+      if (a[0] === "issue") return [{ number: 20, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null, assignees: [] }];
+      return [[spiel(1)]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-29T00:00:00Z" }, { gh, repo: "o/r" });
+    expect(d.sammelAbschluss).toBeNull();
+    expect(d.sammelInArbeit).toBeNull();
+    expect(aufrufe).toHaveLength(2);
+    expect(aufrufe[1].join(" ")).toContain("since=2026-10-01T00:00:00.000Z");
+    expect(d.commits).toHaveLength(1);
+  });
+
+  test("ladeAuditDaten: kaputtes closedAt eines geschlossenen Tickets und fehlendes assignees-Feld stören nicht; Commits ohne gültiges Datum bleiben drin", () => {
+    const gh = (a: string[]) => {
+      if (a[0] === "issue") {
+        return [
+          { number: 30, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "kein-datum", assignees: [] },
+          { number: 31, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] },
+          { number: 32, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null },
+        ];
+      }
+      return [[{ author: { login: "fluffels" }, commit: { message: "feat(sim): ohne Datum (#1)" } }, spiel(1)]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r" });
+    expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
+    expect(d.sammelInArbeit).toBeNull();
+    expect(d.commits).toHaveLength(2);
+    const nurKaputt = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: (a) => (a[0] === "issue" ? [{ number: 30, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "kein-datum" }] : [[]]) });
+    expect(nurKaputt.sammelAbschluss).toBeNull();
+  });
+
+  test("Festgefahren-Protokoll: eine Abweichung hat Vorrang vor einer unvollständigen Zeile", () => {
+    const r = von({ zeilen: [{ pr: 7, ciFix: 9 }, ZEILE({ pr: 61, ciFix: 4, festgefahren: 0 })] }, "Festgefahren-Protokoll");
+    expect(r.status).toBe("ABWEICHUNG");
+    expect(r.messung).toContain("#61");
+  });
+
+  test("Härtungs-Takt: nur die Titelzeile entscheidet, ein Sammelticket im Body schließt einen Merge nicht aus", () => {
+    const n = (k: number) => Array.from({ length: k }, (_, i) => spiel(i));
+    const imBody = commit("feat(sim): normal (#50)\n\nFolge #40, siehe #40");
+    expect(von({ commits: [...n(9), imBody], sammelIssues: new Set([40]) }, "Härtungs-Takt").status).toBe("ABWEICHUNG");
+  });
+
   test("ladeAuditDaten: gh-Fehler wird zur Lücke mit Grund, nie zu leeren Commits", () => {
     const weg = () => {
       throw new Error("gh weg");

@@ -371,6 +371,11 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
     expect(B.snapshotPfad({})).toBe(join(tmpdir(), "claude-rate-limits.json"));
     expect(B.snapshotPfad({ KQ_RATE_LIMITS_SNAPSHOT: "/x/s.json" })).toBe("/x/s.json");
   });
+  test("standPfad braucht nur praefixe.worktree: ohne Agenten-, Branch- und Label-Schlüssel entsteht der Pfad, ohne Worktree-Präfix nicht", () => {
+    const nurWt: Cfg = { praefixe: { worktree: "ab-" } };
+    expect(M.standPfad("/dev/proj", {}, "/tmp", nurWt)).toContain(join("/tmp", "ab-mcp-ausfall-"));
+    expect(() => M.standPfad("/dev/proj", {}, "/tmp", { praefixe: { branch: "feature/ab-" }, agenten: AB.agenten })).toThrow(/praefixe\.worktree/);
+  });
   test("standPfad: <Präfix>mcp-ausfall-…; ohne Schlüssel Abbruch; die Umgebungsvariable gewinnt", () => {
     expect(M.standPfad("/dev/proj", {}, "/tmp", AB)).toContain(join("/tmp", "ab-mcp-ausfall-"));
     expect(() => M.standPfad("/dev/proj", {}, "/tmp", OHNE_WT)).toThrow(/praefixe\.worktree/);

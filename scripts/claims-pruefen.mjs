@@ -298,10 +298,10 @@ export function fuehreAus(argv, deps) {
 }
 
 /** Echte I/O: git und gh über die gemeinsamen Wrapper, Lock-Verzeichnis im gemeinsamen git-Verzeichnis. */
-export function echteDeps() {
+export function echteDeps({ config: vorgabe } = {}) {
   const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   const gemeinsam = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
-  const config = ladeProjektConfig();
+  const config = vorgabe ?? ladeProjektConfig();
   return {
     namen: ticketNamen(config),
     jetzt: () => Date.now(),

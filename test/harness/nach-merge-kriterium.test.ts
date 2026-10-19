@@ -84,6 +84,25 @@ describe("Regel 2: Abnahme-Auswertung", () => {
     expect(A.entscheide([{ wert: "nach-merge" }, { wert: "nicht-erfuellt" }])).toBe("fix");
     expect(A.entscheide([{ wert: "nach-merge" }, { wert: "nicht-pruefbar" }, { wert: "nicht-erfuellt" }])).toBe("handoff");
   });
+  test("`auswerten` Ende-zu-Ende: Ergebnis bestanden, Abnahme-Zeile und Marker tragen K2:nach-merge", () => {
+    const HEAD = "a".repeat(40);
+    const posts: { nr: number; body: string }[] = [];
+    const io = {
+      owner: "fluffels",
+      config: { labels: { forum: "forum" } },
+      zeilen: Z,
+      leseDatei: () => bericht(["K1: erfuellt — a", "K3: erfuellt — c"]),
+      ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }),
+      ladeKommentare: () => [],
+      poste: (nr: number, body: string) => void posts.push({ nr, body }),
+      git: (_cwd: string, args: string[]) => (args[0] === "status" ? "" : `${HEAD}\n`),
+    };
+    const r = A.fuehreAus(["auswerten", "7", "--pr", "70", "--bericht", "b.md", "--worktree", "/wt", "--head", HEAD.slice(0, 7)], io);
+    expect(r.code).toBe(0);
+    expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\nKQ-Abnahme: head=${HEAD} durchgaenge=1 urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt\n`);
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toContain(`<!-- kq-abnahme durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt -->`);
+  });
   test("`kriterien <nr>` kennzeichnet das Kriterium für den Abnahme-Agenten", () => {
     const io = { owner: "fluffels", config: { labels: { forum: "forum" } }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
     const out = A.fuehreAus(["kriterien", "7"], io).out;

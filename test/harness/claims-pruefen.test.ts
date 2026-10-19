@@ -29,6 +29,7 @@ const M = raw as unknown as {
   issueAus: (k: unknown) => unknown;
   pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number }) => boolean;
   fuehreAus: (argv: string[], deps: Record<string, unknown>) => Erg;
+  echteDeps: (o?: { config?: unknown }) => { festgefahrenLabel: string; lockDir: string };
 };
 
 const H = 60 * 60_000;
@@ -647,5 +648,22 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     const r = M.fuehreAus(argv, deps);
     assert.equal(r.code, 2);
     assert.deepEqual(aufrufe, []);
+  });
+});
+
+describe("echteDeps: Config", () => {
+  const AB = {
+    praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" },
+    agenten: { planer: "ab-planer", umsetzer: "ab-umsetzer", lens: "ab-lens", gruppe: "ab-gruppe", ticketSkill: "ab" },
+    labels: { harness: "h", festgefahren: "zustand:fest", forum: "f", dependabotInbox: "h" },
+  };
+  test("Label und Lock-Verzeichnis kommen aus der Config", () => {
+    const d = M.echteDeps({ config: AB });
+    assert.equal(d.festgefahrenLabel, "zustand:fest");
+    assert.match(d.lockDir, /ab-locks$/);
+  });
+  test("Negativfall: ohne labels.festgefahren bricht echteDeps ab und nennt den Schlüssel", () => {
+    const { festgefahren: _weg, ...rest } = AB.labels;
+    assert.throws(() => M.echteDeps({ config: { ...AB, labels: rest } }), /labels\.festgefahren/);
   });
 });
