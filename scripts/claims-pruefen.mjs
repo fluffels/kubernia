@@ -39,7 +39,7 @@ import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
-import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
+import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
 import { lensWorktreeName, ticketAusRef } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
@@ -313,7 +313,7 @@ export function echteDeps() {
       return liste.map((i) => i.number);
     },
     festgefahrenLabel: config.labels.festgefahren,
-    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: config.praefixe.worktree }),
+    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: worktreePraefix(config) }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),
     loesche: unlinkSync,

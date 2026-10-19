@@ -18,5 +18,5 @@ export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }, name
  * Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `<Worktree-Präfix><nr>`.
  */
 export function lensWorktreeName(namen = ladeTicketNamen()) {
-  return new RegExp(`^${namen.lensNameKern}$`);
+  return namen.lensWorktreeMuster;
 }

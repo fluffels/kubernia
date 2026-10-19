@@ -18,8 +18,34 @@ export function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
 }
 
-/** Muster eines Lens-Worktree-Namens aus dem (rohen) Worktree-Präfix; Gruppe 1 ist `<wt><nr>`. */
-const lensKern = (worktree) => String.raw`(${escapeRegex(worktree)}\d+)-lens-[rm]\d+`;
+/** Fehler mit Schlüsseln und Fix-Zeile. */
+const unvollstaendig = (fehlend) => new Error(`Projekt-Config unvollständig: ${fehlend.join(", ")} fehlt\nFix: ${fehlend.join(", ")} in ${PROJEKT_CONFIG} ergänzen`);
+
+/**
+ * Pur: das rohe Worktree-Präfix, geprüft allein auf `praefixe.worktree` (kein Zwang zu Branch-Präfix oder Agenten). Für Pfad- und Dateinamen,
+ * die nur dieses Präfix brauchen; wirft mit Schlüssel und Fix-Zeile.
+ */
+export function worktreePraefix(config) {
+  const worktree = config?.praefixe?.worktree;
+  if (!istText(worktree)) throw unvollstaendig(["praefixe.worktree"]);
+  return worktree;
+}
+
+/** Alle Worktree-Muster aus dem rohen Präfix (einzige Stelle, die es maskiert und baut). Pur. */
+function worktreeTeil(worktree) {
+  const w = escapeRegex(worktree);
+  const lensNameKern = String.raw`(${w}\d+)-lens-[rm]\d+`;
+  return {
+    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>` oder `-lens-m<n>`); Gruppe 1 ist `<wt><nr>`. */
+    lensNameKern,
+    /** Ganzer Lens-Worktree-Name (`^…$`). */
+    lensWorktreeMuster: new RegExp(`^${lensNameKern}$`),
+    /** Pfadform `/.claude/worktrees/<Lens-Name>/`, Groß-/Kleinschreibung egal (Windows-Pfade). */
+    lensPfadMuster: new RegExp(String.raw`/\.claude/worktrees/${lensNameKern}/`, "i"),
+    /** Lose Datei `<wt><nr>` gefolgt von `-`, `.` oder Ende; Gruppe 1 ist der Eltern-Worktree. */
+    dateiMuster: new RegExp(String.raw`^(${w}\d+)(?=[-.]|$)`),
+  };
+}
 
 /** Pur: leitet die Namen aus einer Config ab; wirft mit Schlüssel und Fix-Zeile, wenn ein benötigter Schlüssel fehlt. */
 export function ticketNamen(config) {
@@ -32,7 +58,7 @@ export function ticketNamen(config) {
     if (!istText(config?.agenten?.[rolle])) fehlend.push(`agenten.${rolle}`);
   }
   if (fehlend.length) {
-    throw new Error(`Projekt-Config unvollständig: ${fehlend.join(", ")} fehlt\nFix: ${fehlend.join(", ")} in ${PROJEKT_CONFIG} ergänzen`);
+    throw unvollstaendig(fehlend);
   }
   const b = escapeRegex(branch);
   const w = escapeRegex(worktree);
@@ -43,8 +69,9 @@ export function ticketNamen(config) {
     agenten: { ...config.agenten },
     worktreeName: (nr) => `${worktree}${nr}`,
     branchName: (nr, slug) => `${branch}${nr}-${slug}`,
-    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>` oder `-lens-m<n>`); Gruppe 1 ist `<wt><nr>`. */
-    lensNameKern: lensKern(worktree),
+    ...worktreeTeil(worktree),
+    /** Ticket-Branch `<branch><nr>` am Namensanfang. */
+    ticketBranchMuster: new RegExp(String.raw`^${b}\d+`),
     /** Ticketnummer aus Branch-, Worktree- oder Ref-Namen; sonst null. */
     ticketAus: (text) => {
       const m = ticketRef.exec(String(text ?? ""));
@@ -60,19 +87,16 @@ export function ticketNamen(config) {
 }
 
 /**
- * Wie `namenOderGrund`, aber nur mit dem Worktree-Präfix: `{ namen: { praefixe: { worktree }, lensNameKern } }` oder `{ grund }`. Für Werkzeuge, die nur
+ * Wie `namenOderGrund`, aber nur mit dem Worktree-Präfix: `{ namen: { praefixe: { worktree }, <Worktree-Muster> } }` oder `{ grund }`. Für Werkzeuge, die nur
  * Worktree-Ordner aufräumen (Stop des Hauptchats): ein fehlender Agentenname soll sie nicht blockieren, darum liest sie die Config ohne Schema-Prüfung
- * (`deps.pfad` ersetzt den Pfad, `deps.config` das Laden; Test) und prüft allein `praefixe.worktree`. Das Teilobjekt trägt nur `praefixe.worktree` und `lensNameKern`:
+ * (`deps.pfad` ersetzt den Pfad, `deps.config` das Laden; Test) und prüft allein `praefixe.worktree`. Das Teilobjekt trägt nur `praefixe.worktree` und die Worktree-Muster (`lensNameKern`, `lensWorktreeMuster`, `lensPfadMuster`, `dateiMuster`):
  * Empfänger dürfen keine anderen Felder lesen. Wirft nie.
  */
 export function worktreeNamenOderGrund(werkzeug, deps = {}) {
   try {
     const config = deps.config ?? ladeProjektConfig({ pruefen: false, ...(deps.pfad ? { pfad: deps.pfad } : {}) });
-    const worktree = config?.praefixe?.worktree;
-    if (!istText(worktree)) {
-      throw new Error(`Projekt-Config unvollständig: praefixe.worktree fehlt\nFix: praefixe.worktree in ${PROJEKT_CONFIG} ergänzen`);
-    }
-    return { namen: { praefixe: { worktree }, lensNameKern: lensKern(worktree) } };
+    const worktree = worktreePraefix(config);
+    return { namen: { praefixe: { worktree }, ...worktreeTeil(worktree) } };
   } catch (e) {
     const text = e instanceof Error ? e.message : String(e);
     return { grund: `${werkzeug}: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ${text}` };
@@ -85,11 +109,11 @@ export function ladeTicketNamen(opts) {
 }
 
 /**
- * Wirft nie: `{ namen, config }` oder `{ grund }` (Text für deny/block, mit Fix-Zeile). `deps.config` ersetzt das Laden (Test).
+ * Wirft nie: `{ namen, config }` oder `{ grund }` (Text für deny/block, mit Fix-Zeile). `deps.config` ersetzt das Laden, `deps.pfad` den Config-Pfad (Test).
  */
 export function namenOderGrund(werkzeug, deps = {}) {
   try {
-    const config = deps.config ?? ladeProjektConfig();
+    const config = deps.config ?? ladeProjektConfig(deps.pfad ? { pfad: deps.pfad } : undefined);
     return { namen: ticketNamen(config), config };
   } catch (e) {
     const text = e instanceof Error ? e.message : String(e);
