@@ -10,6 +10,7 @@ import { MERMAID_FRONTMATTER, ganzzahlKonstante, leseJson } from "./markdown.mjs
 import { kettenSchritte } from "./npm-ketten.mjs";
 import { harnessKatalog } from "./harness-inventar.mjs";
 import { ladeRulesetSpiegel } from "./ruleset-spiegel.mjs";
+import { PROJEKT_CONFIG, ladeProjektConfig } from "../projekt-config-lib.mjs";
 
 const PLATZHALTER = /\$\{([a-z-]+):([^}]*)\}/g;
 /** Zeichen, die ein Mermaid-Label oder einen Sequenztext brechen können. */
@@ -72,12 +73,22 @@ function ciJobNamen(rootDir, dir) {
 }
 
 /**
- * Der Spiegel des Rulesets `main-schutz` (`config.diagramme.ruleset`, Datei unter `.github/`, geschützt): Name, die
+ * Pfad des Ruleset-Spiegels: `rulesetSpiegel` der Projekt-Config (`.factory/projekt.json`, ein Zeiger für Doctor und Docs-Gen).
+ * Liest nur diesen einen Schlüssel (`pruefen: false`) und prüft ihn selbst.
+ */
+function rulesetPfad(rootDir) {
+  const pfad = ladeProjektConfig({ rootDir, pruefen: false }).rulesetSpiegel;
+  if (typeof pfad !== "string" || pfad.trim() === "") {
+    throw new Error(`rulesetSpiegel fehlt in ${PROJEKT_CONFIG} (Pfad der Ruleset-Spiegeldatei)\nFix: "rulesetSpiegel": "<pfad>" in ${PROJEKT_CONFIG} eintragen`);
+  }
+  return pfad;
+}
+
+/**
+ * Der Spiegel des Rulesets (Pfad aus `rulesetSpiegel`, Datei unter `.github/`, geschützt): Name, die
  * Required-Check-Kontexte und die Bypass-Akteure, wie sie `gh api repos/{owner}/{repo}/rulesets/<id>` liefert.
  */
-function ladeRuleset(rootDir, cfg) {
-  const pfad = cfg.ruleset;
-  if (!pfad) throw new Error("config.diagramme.ruleset fehlt (Pfad der Ruleset-Spiegeldatei)");
+function ladeRuleset(rootDir, pfad) {
   return ladeRulesetSpiegel(rootDir, pfad);
 }
 
@@ -116,7 +127,11 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
   const katalog = harnessKatalog(rootDir, config.harness);
   let ciNamen = null;
   let ruleset = null;
-  const rulesetDaten = () => (ruleset ??= ladeRuleset(rootDir, cfg));
+  let spiegelPfad = null;
+  const rulesetDaten = () => {
+    spiegelPfad ??= rulesetPfad(rootDir);
+    return (ruleset ??= ladeRuleset(rootDir, spiegelPfad));
+  };
   const genannteChecks = new Set();
   const aufloesen = (art, wert) => {
     if (wert.trim() === "") throw new Error(`Platzhalter "${art}" ohne Wert`);
@@ -138,7 +153,7 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
       case "required-check": {
         // Ein Required Check gilt nur, wenn ihn das Ruleset (Spiegel) UND ein Workflow-Job führt (Z2c).
         const r = rulesetDaten();
-        if (!r.requiredChecks.includes(wert)) throw new Error(`Required Check "${wert}" steht nicht im Ruleset-Spiegel ${cfg.ruleset} (bekannt: ${r.requiredChecks.join(", ")})`);
+        if (!r.requiredChecks.includes(wert)) throw new Error(`Required Check "${wert}" steht nicht im Ruleset-Spiegel ${spiegelPfad} (bekannt: ${r.requiredChecks.join(", ")})`);
         if (!cfg.ciWorkflows) throw new Error("config.diagramme.ciWorkflows fehlt (Ordner der CI-Workflows, kein fester Standardpfad)");
         ciNamen ??= ciJobNamen(rootDir, cfg.ciWorkflows);
         if (!ciNamen.has(wert)) throw new Error(`Required Check "${wert}" hat keine passende Job-name:-Zeile in ${cfg.ciWorkflows}`);
@@ -150,7 +165,7 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
         if (wert === "name") return r.name;
         if (wert === "bypass") {
           // „ohne Bypass“ ist eine Aussage über die echte Konfiguration: der Spiegel muss sie tragen.
-          if (r.bypassActors.length > 0) throw new Error(`Ruleset ${r.name} hat Bypass-Akteure (${cfg.ruleset}): „ohne Bypass“ wäre falsch`);
+          if (r.bypassActors.length > 0) throw new Error(`Ruleset ${r.name} hat Bypass-Akteure (${spiegelPfad}): „ohne Bypass“ wäre falsch`);
           return "ohne Bypass";
         }
         throw new Error(`unbekannter Ruleset-Wert "${wert}" (erlaubt: name, bypass)`);
