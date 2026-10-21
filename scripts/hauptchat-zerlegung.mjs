@@ -19,6 +19,7 @@ import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
@@ -324,15 +325,11 @@ export function renderMarkdown(r) {
 // ── CLI (dünn, ungetestet: Dateisuche und gh) ────────────────────────────────
 
 export function parseArgs(argv) {
-  const a = { brain: [], json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (k === "--von") a.von = argv[++i];
-    else if (k === "--bis") a.bis = argv[++i];
-    else if (k === "--brain") a.brain.push(argv[++i]);
-    else if (k === "--projekt") a.projekt = argv[++i];
-    else if (k === "--json") a.json = true;
-  }
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, brain: { type: "string", multiple: true }, projekt: { type: "string" }, json: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen);
+  const a = { brain: werte.brain ?? [], json: werte.json === true };
+  for (const name of ["von", "bis", "projekt"]) if (werte[name] !== undefined) a[name] = werte[name];
+  if (fehler) a.fehler = fehler.text;
   return a;
 }
 
@@ -348,7 +345,8 @@ function closedAtViaGh(nr) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.von || !args.bis) {
+  if (args.fehler || !args.von || !args.bis) {
+    if (args.fehler) console.error(args.fehler);
     console.error("Aufruf: node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }

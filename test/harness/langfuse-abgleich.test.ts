@@ -53,10 +53,11 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
   renderMarkdown: (b: Record<string, unknown>[], sum: unknown) => string;
   OHNE_ZUGANG: string;
+  AUFRUFHILFE: string;
   bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null }) => Bewertung;
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
-    args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[] },
+    args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string },
     d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null },
   ) => Promise<{ exitCode: number; text: string }>;
   parseArgs: (a: string[]) => { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[] };
@@ -807,5 +808,23 @@ describe("pruefen (Ablauf)", () => {
 
   test("parseArgs: --ist wiederholbar", () => {
     expect(A.parseArgs(["--pruefen", "--ist", "a", "--ist", "b", "--seit", "2026-10-01", "--session", "s", "--json"])).toEqual({ pruefen: true, json: true, seit: "2026-10-01", session: "s", ist: ["a", "b"] });
+  });
+});
+
+describe("strikte Argumente (#1790)", () => {
+  test("parseArgs: unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
+    const fehler = (argv: string[]) => (A.parseArgs(argv) as { fehler?: string }).fehler ?? "";
+    expect(fehler(["--pruefen", "--bogus"])).toMatch(/Unbekanntes Argument: --bogus/);
+    expect(fehler(["--seit"])).toMatch(/--seit braucht einen Wert/);
+    expect(fehler(["--session", "a", "--session", "b"])).toMatch(/--session ist doppelt/);
+    expect(fehler(["--pruefen", "--pruefen"])).toMatch(/--pruefen ist doppelt/);
+    expect(fehler(["--pruefen", "--ist", "a", "--ist", "b"])).toBe("");
+  });
+  test("pruefen: ein Aufruf-Fehler endet mit Exit 2 und Aufrufzeile vor jedem I/O (kein Zugang nötig)", async () => {
+    const wirft = () => {
+      throw new Error("kein I/O erlaubt");
+    };
+    const r = await A.pruefen({ pruefen: true, json: false, seit: null, session: null, ist: [], fehler: "X" } as Parameters<typeof A.pruefen>[0], { env: {}, projectsRoot: "X:/gibt-es-nicht", repoRoot: "X:/repo", fetchImpl: wirft, leseDatei: wirft });
+    expect(r).toEqual({ exitCode: 2, text: `X\n${A.AUFRUFHILFE}` });
   });
 });

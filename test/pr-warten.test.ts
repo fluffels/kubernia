@@ -364,3 +364,21 @@ describe("bewerte: Rerun überschreibt den früheren Lauf (#1740 L34)", () => {
     expect(P.bewerte(offen([ctx("ci", "SUCCESS"), ctx("ci", "FAILURE")])).exit).toBe(1);
   });
 });
+
+describe("parseArgs: strikt (#1790)", () => {
+  const PF = P as unknown as { parseArgs: (a: string[]) => { pr: string | null; maxSekunden: number; intervall: number; fehler?: string } };
+  test("alle Flags gesetzt: Form ohne fehler-Feld", () => {
+    expect(PF.parseArgs(["--max-sekunden", "60", "--intervall", "10", "7"])).toEqual({ pr: "7", maxSekunden: 60, intervall: 10 });
+  });
+  test("unbekanntes Flag, Flag ohne Wert, doppeltes Flag und zweites Positionsargument setzen fehler", () => {
+    expect(PF.parseArgs(["--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);
+    expect(PF.parseArgs(["--intervall"]).fehler).toMatch(/--intervall braucht einen Wert/);
+    expect(PF.parseArgs(["--intervall", "5", "--intervall", "6"]).fehler).toMatch(/--intervall ist doppelt/);
+    expect(PF.parseArgs(["12", "13"]).fehler).toBe("Unbekanntes Argument: 13");
+  });
+  test("nicht-numerische PR-Nummer ist ein Aufruf-Fehler, fehlende nur pr null", () => {
+    expect(PF.parseArgs(["abc"]).fehler).toBe("PR-Nummer erwartet, nicht abc");
+    expect(PF.parseArgs(["1a"]).fehler).toMatch(/PR-Nummer/);
+    expect(PF.parseArgs([])).toEqual({ pr: null, maxSekunden: 240, intervall: 30 });
+  });
+});
