@@ -88,7 +88,8 @@ describe("Abruf", () => {
     ["String", "boom", "Fehler: boom"],
     ["null", null, "Fehler: null"],
   ])("Wurf eines Nicht-Error-Werts (%s) wird zum Ausfall statt zum Abbruch des Abrufs", async (_n, wert, grund) => {
-    const [p] = await erzeugeAbruf({ quellen: [quelle(() => Promise.reject(wert))] })();
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- genau der Nicht-Error-Wert ist der Testgegenstand
+    const [p] = await erzeugeAbruf({ quellen: [quelle(() => new Promise((_, nein) => nein(wert)))] })();
     expect(p.ergebnis).toMatchObject({ status: "ausfall", daten: null, grund });
   });
 
