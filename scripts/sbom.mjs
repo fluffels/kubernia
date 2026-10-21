@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
+import { flagsLesen } from "./flag-lib.mjs";
 
 export const NPM_ARGS = ["sbom", "--sbom-format", "cyclonedx", "--sbom-type", "application", "--package-lock-only"];
 export const STANDARD_AUS = "sbom/bom.cdx.json";
@@ -42,12 +43,10 @@ export function pruefeSbom(text) {
 }
 
 function parseArgs(argv) {
-  let aus = STANDARD_AUS;
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--aus" && istText(argv[i + 1])) aus = argv[++i];
-    else return null;
-  }
-  return aus;
+  const { werte, fehler } = flagsLesen(argv, { aus: { type: "string" } });
+  if (fehler) return null;
+  if (werte.aus === undefined) return STANDARD_AUS;
+  return istText(werte.aus) ? werte.aus : null;
 }
 
 /** `io = { lauf, schreibe, entferne, log }` ist injizierbar (Tests rufen kein echtes npm). */

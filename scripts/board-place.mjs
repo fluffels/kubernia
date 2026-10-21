@@ -64,6 +64,7 @@ import {
   umzugsPlan,
   wirklichFehlend,
 } from "./board-lib.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 export { NOTFALL_ARTEN };
@@ -71,38 +72,42 @@ export { NOTFALL_ARTEN };
 const PAUSE_MS = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const MODI = ["top", "after", "position", "missing", "umzug"];
+
 /**
  * Argumente → { anchor, numbers, dry } bzw. { position, numbers, dry } bzw. { missing } oder null bei falscher Benutzung.
- * `--notfall <art>` (Art aus NOTFALL_ARTEN) gilt nur zusammen mit `--top` und setzt `notfall` im Ergebnis.
+ * Grammatik (ohne `--dry-run`, das überall stehen darf): `[--notfall <art>] <modus> <nr>...`, genau ein Modus, danach nur Positionsargumente.
+ * `--notfall <art>` (Art aus NOTFALL_ARTEN) steht nur unmittelbar vor `--top` und setzt `notfall` im Ergebnis. Unbekannte, fehlende
+ * oder doppelte Flags und ein Options-Terminator `--` (er steht nicht unter den Positionsargumenten) sind ungültig.
  */
 export function parseArgs(argv) {
-  const dry = argv.includes("--dry-run");
-  let rest = argv.filter((a) => a !== "--dry-run");
-  const nIdx = rest.indexOf("--notfall");
+  const optionen = { "dry-run": { type: "boolean" }, notfall: { type: "string" } };
+  for (const m of MODI) optionen[m] = { type: "boolean" };
+  const { werte, positionale, tokens, fehler } = flagsLesen(argv, optionen, { positionale: true });
+  if (fehler) return null;
+  const dry = werte["dry-run"] === true;
+  const reihe = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
+  let i = 0;
   let notfall = null;
-  if (nIdx >= 0) {
-    notfall = rest[nIdx + 1];
-    rest = [...rest.slice(0, nIdx), ...rest.slice(nIdx + 2)];
-    if (!NOTFALL_ARTEN.includes(notfall) || rest[0] !== "--top") return null;
+  if (reihe[0]?.kind === "option" && reihe[0].name === "notfall") {
+    notfall = werte.notfall;
+    if (!NOTFALL_ARTEN.includes(notfall) || reihe[1]?.name !== "top") return null;
+    i = 1;
   }
-  const geparst = parseOhneNotfall(rest, dry);
+  const modus = reihe[i];
+  if (modus?.kind !== "option") return null;
+  if (!reihe.slice(i + 1).every((t) => t.kind === "positional")) return null;
+  const geparst = parseModus(modus.name, positionale, dry);
   return geparst && notfall ? { ...geparst, notfall } : geparst;
 }
 
-function parseOhneNotfall(rest, dry) {
-  if (rest.length === 1 && rest[0] === "--umzug") return { umzug: true, dry };
-  if (rest.length === 1 && rest[0] === "--missing") return { missing: true, dry };
-  if (rest[0] === "--position") {
-    const [n, nr, ...more] = rest.slice(1).map((a) => Number(a.replace(/^#/, "")));
-    if (more.length > 0 || ![n, nr].every((x) => Number.isInteger(x) && x > 0)) return null;
-    return { anchor: null, position: n, numbers: [nr], dry };
-  }
-  const top = rest[0] === "--top";
-  const after = rest[0] === "--after";
-  if (!top && !after) return null;
-  const nums = rest.slice(1).map((a) => Number(a.replace(/^#/, "")));
+function parseModus(modus, positionale, dry) {
+  if (modus === "umzug") return positionale.length === 0 ? { umzug: true, dry } : null;
+  if (modus === "missing") return positionale.length === 0 ? { missing: true, dry } : null;
+  const nums = positionale.map((a) => Number(a.replace(/^#/, "")));
   if (nums.length === 0 || nums.some((n) => !Number.isInteger(n) || n <= 0)) return null;
-  if (top) return { anchor: null, numbers: nums, dry };
+  if (modus === "position") return nums.length === 2 ? { anchor: null, position: nums[0], numbers: [nums[1]], dry } : null;
+  if (modus === "top") return { anchor: null, numbers: nums, dry };
   return nums.length < 2 ? null : { anchor: nums[0], numbers: nums.slice(1), dry };
 }
 

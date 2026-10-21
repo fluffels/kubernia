@@ -1,4 +1,4 @@
-/* Aufruf-Fehler der über `flagsLesen` migrierten Skripte (#1789, #1790): jedes Skript wird als Prozess gestartet, mit
+/* Aufruf-Fehler der über `flagsLesen` migrierten Skripte (#1789, #1790, #1791): jedes Skript wird als Prozess gestartet, mit
  * unbekanntem Flag, mit einem Flag ohne Wert und mit einem doppelten Einzel-Flag. Geprüft werden Exit-Code und der
  * stderr-Rahmen (Präfix, Meldung, Aufrufzeile). PATH enthält nur den Ordner von node: ohne gh, git und Netz. */
 import { describe, expect, test } from "vitest";
@@ -14,10 +14,15 @@ interface Zeile {
   aufruf: RegExp;
   faelle: { unbekannt: string[]; ohneWert: string[]; doppelt: string[] };
   meldungen: { unbekannt: string; ohneWert: string; doppelt: string };
+  /** Kanal des Aufruf-Fehlers; Standard stderr (sbom meldet über stdout, #1791). */
+  kanal?: "stdout";
 }
 
 const BEIDE = ["--von", "2026-01-01", "--bis", "2026-02-01"];
 const STD = { unbekannt: "Unbekanntes Argument: --bogus" };
+const BOARD_USAGE = "Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)";
+const SAMMEL_USAGE = "Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run]";
+const SBOM_USAGE = "Aufruf: node scripts/sbom.mjs [--aus <pfad>]";
 
 const ZEILEN: Zeile[] = [
   {
@@ -67,6 +72,47 @@ const ZEILEN: Zeile[] = [
     aufruf: /^Aufruf: node scripts\/token-baseline\.mjs --session <id>/m,
     faelle: { unbekannt: ["--bogus"], ohneWert: ["--session"], doppelt: ["--issue", "1", "--issue", "2"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--session braucht einen Wert", doppelt: "--issue ist doppelt angegeben" },
+  },
+  {
+    skript: "abnahme",
+    exit: 2,
+    erste: (m) => `✖ abnahme: ${m}`,
+    aufruf: /^ {2}node scripts\/abnahme\.mjs auswerten/m,
+    faelle: { unbekannt: ["auswerten", "--bogus"], ohneWert: ["auswerten", "7", "--pr"], doppelt: ["auswerten", "7", "--pr", "1", "--pr", "2"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--pr braucht einen Wert", doppelt: "--pr ist doppelt angegeben" },
+  },
+  {
+    skript: "spezifikation",
+    exit: 2,
+    erste: (m) => `✖ spezifikation: ${m}`,
+    aufruf: /^ {2}node scripts\/spezifikation\.mjs pruefen/m,
+    faelle: { unbekannt: ["pruefen", "--bogus"], ohneWert: ["pruefen", "--body-datei"], doppelt: ["pruefen", "--body-datei", "a", "--body-datei", "b"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--body-datei braucht einen Wert", doppelt: "--body-datei ist doppelt angegeben" },
+  },
+  {
+    skript: "board-place",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: /^Aufruf: board-place\.mjs /m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--notfall"], doppelt: ["--dry-run", "--dry-run", "--top", "1"] },
+    meldungen: { unbekannt: BOARD_USAGE, ohneWert: BOARD_USAGE, doppelt: BOARD_USAGE },
+  },
+  {
+    skript: "sammelticket-anlegen",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: /^Aufruf: sammelticket-anlegen\.mjs /m,
+    faelle: { unbekannt: ["harness", "--bogus"], ohneWert: ["harness", "--vorgaenger"], doppelt: ["harness", "--dry-run", "--dry-run"] },
+    meldungen: { unbekannt: SAMMEL_USAGE, ohneWert: SAMMEL_USAGE, doppelt: SAMMEL_USAGE },
+  },
+  {
+    skript: "sbom",
+    kanal: "stdout",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: /^Aufruf: node scripts\/sbom\.mjs \[--aus <pfad>\]$/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--aus"], doppelt: ["--aus", "a", "--aus", "b"] },
+    meldungen: { unbekannt: SBOM_USAGE, ohneWert: SBOM_USAGE, doppelt: SBOM_USAGE },
   },
   {
     skript: "hauptchat-zerlegung",
@@ -126,9 +172,9 @@ function umgebung(): NodeJS.ProcessEnv {
   return env;
 }
 
-function starte(skript: string, argv: string[]): { status: number | null; stderr: string } {
+function starte(skript: string, argv: string[]): { status: number | null; stderr: string; stdout: string } {
   const r = spawnSync(process.execPath, [`scripts/${skript}.mjs`, ...argv], { encoding: "utf8", env: umgebung(), timeout: 60_000 });
-  return { status: r.status, stderr: r.stderr };
+  return { status: r.status, stderr: r.stderr, stdout: r.stdout };
 }
 
 const FAELLE = ZEILEN.flatMap((z) => (["unbekannt", "ohneWert", "doppelt"] as const).map((fall) => [z.skript, fall, z] as const));
@@ -137,9 +183,10 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
   test.concurrent.each(FAELLE)("%s: %s", { timeout: 60_000 }, (_skript, fall, z) => {
     const r = starte(z.skript, z.faelle[fall]);
     expect(r.status).toBe(z.exit);
-    const zeilen = r.stderr.split("\n");
-    expect(zeilen[0]).toBe(z.erste(z.meldungen[fall]));
-    expect(r.stderr).toMatch(z.aufruf);
+    const text = z.kanal === "stdout" ? r.stdout : r.stderr;
+    expect(text.split("\n")[0]).toBe(z.erste(z.meldungen[fall]));
+    expect(text).toMatch(z.aufruf);
+    expect(z.kanal === "stdout" ? r.stderr : "").toBe(""); // stdout-Skripte schreiben nichts auf stderr
   });
 
   const ZUSATZ: [string, string[], number, string][] = [
@@ -148,6 +195,9 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["factory-kennzahlen", ["--bis", "2026-01-01"], 1, "--von und --bis brauchen je ein gültiges ISO-Datum."],
     ["claims-pruefen", ["x"], 2, "✖ claims-pruefen: unbekanntes Argument: x"],
     ["langfuse-nachliefern", ["--bogus", "--ausloeser", "x"], 2, "Unbekanntes Argument: --bogus"],
+    ["board-place", ["--top", "5", "--notfall", "rot-main"], 2, BOARD_USAGE], // --notfall nur unmittelbar vor --top
+    ["abnahme", ["kriterien", "7", "8"], 2, "✖ abnahme: Unbekanntes Argument: 8"],
+    ["spezifikation", ["gibtsnicht", "--bogus"], 2, "✖ spezifikation: unbekannter Befehl „gibtsnicht“"],
     ["hauptchat-zerlegung", ["x"], 2, "Unbekanntes Argument: x"],
     ["kontext-treiber", ["x"], 2, "Unbekanntes Argument: x"],
     ["langfuse-abgleich", ["x"], 2, "Unbekanntes Argument: x"],

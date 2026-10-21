@@ -31,6 +31,7 @@ export const RESTE: { name: string; muster: RegExp }[] = [
   { name: "beruehrtHarness", muster: /beruehrtHarness/ },
   { name: "urteilFehler (entfernter Export von nachweis-lib)", muster: /urteilFehler/ },
   { name: "Konstante FACTORY_LABEL", muster: /\bFACTORY_LABEL\b/ },
+  { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/ },
 ];
 
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
@@ -87,6 +88,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       beruehrtHarness: "Auftrag beruehrtHarness",
       "urteilFehler (entfernter Export von nachweis-lib)": "import { urteilFehler } from nachweis-lib",
       "Konstante FACTORY_LABEL": "import { FACTORY_LABEL } from board-lib",
+      "Ausnahmeliste des Flag-Parser-Wächters": "die noch nicht migrierten Skripte stehen dort als Liste",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);

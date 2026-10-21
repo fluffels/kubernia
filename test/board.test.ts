@@ -349,7 +349,11 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
 
   test("Argumente: --notfall nur mit --top und mit bekannter Art", () => {
     expect(P.parseArgs(["--notfall", "rot-main", "--top", "5"])).toEqual({ anchor: null, numbers: [5], dry: false, notfall: "rot-main" });
-    expect(P.parseArgs(["--top", "5", "--notfall", "security"])).toMatchObject({ notfall: "security", numbers: [5] });
+    // --notfall nur unmittelbar vor --top (#1791)
+    expect(P.parseArgs(["--top", "5", "--notfall", "security"])).toBeNull();
+    expect(P.parseArgs(["--notfall", "rot-main", "--dry-run", "--top", "5"])).toMatchObject({ notfall: "rot-main", dry: true, numbers: [5] });
+    expect(P.parseArgs(["--top", "5", "--dry-run"])).toEqual({ anchor: null, numbers: [5], dry: true });
+    expect(P.parseArgs(["--missing", "--dry-run"])).toEqual({ missing: true, dry: true });
     for (const art of ["rot-main", "security", "dependabot", "forum"]) expect(P.parseArgs(["--notfall", art, "--top", "1"])).toMatchObject({ notfall: art });
     expect(P.parseArgs(["--top", "5"])).not.toHaveProperty("notfall");
     for (const bad of [
@@ -359,6 +363,16 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
       ["--notfall", "forum", "--after", "1", "2"], // nur mit --top
       ["--notfall", "forum", "--position", "4", "5"],
       ["--notfall", "forum", "--missing"],
+      ["--top", "--notfall", "rot-main", "5"], // --notfall hinter --top
+      ["--dry-run", "--dry-run", "--top", "5"], // doppeltes boolean-Flag
+      ["--top", "5", "--bogus"], // unbekanntes Flag
+      ["--top", "5", "--top", "6"], // doppelter Modus
+      ["--top=5"], // Inline-Wert an boolean
+      ["5", "--top"], // Positionsargument vor dem Modus
+      ["--top", "--", "5"], // Options-Terminator
+      ["--missing", "--umzug"], // zwei Modi
+      ["--missing", "5"], // Modus ohne Zahlen mit Zahl
+      ["--notfall", "rot-main", "--dry-run", "--after", "1", "2"], // dry-run zwischen notfall und Modus ändert nichts
     ])
       expect(P.parseArgs(bad), bad.join(" ")).toBeNull();
   });

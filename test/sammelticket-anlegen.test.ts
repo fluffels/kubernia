@@ -34,8 +34,12 @@ describe("parseArgs", () => {
     expect(A.parseArgs(["langfuse", "--top", "--dry-run"])).toEqual({ art: "langfuse", vorgaenger: null, top: true, dry: true });
   });
 
+  test("Inline-Wert --vorgaenger=7 wird angenommen (node:util)", () => {
+    expect(A.parseArgs(["harness", "--vorgaenger=7"])).toMatchObject({ art: "harness", vorgaenger: 7 });
+  });
+
   test("falsche Benutzung → null", () => {
-    for (const bad of [["harness", "--generation"], ["--dry-run", "harness", "--generation"], ["langfuse", "--generation"], ["harness", "--vorgaenger", "5", "--generation"], [], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"]]) {
+    for (const bad of [["harness", "--generation"], ["--dry-run", "harness", "--generation"], ["langfuse", "--generation"], ["harness", "--vorgaenger", "5", "--generation"], [], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"], ["harness", "--dry-run", "--dry-run"], ["harness", "--vorgaenger", "5", "--vorgaenger", "6"], ["--vorgaenger", "5", "harness"], ["harness", "--"], ["harness", "--vorgaenger", "--dry-run"], ["harness", "--vorgaenger="]]) {
       expect(A.parseArgs(bad), bad.join(" ")).toBeNull();
     }
   });
