@@ -259,7 +259,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
       "docs/model-routing.md",
       ".claude/agents/kubernia-planner.md",
       ".claude/agents/kubernia-umsetzer.md",
-      ".claude/skills/kubernia/SKILL.md",
+      ".claude/skills/factory/ablauf.md",
     ];
     assert.ok(keinePositionsRegel(dateien.map(read)));
     assert.ok(!keinePositionsRegel(["alles gut", "Nachfolger auf Position 20"]));

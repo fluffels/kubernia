@@ -81,6 +81,7 @@ const pflegeMarker = (brainMetrics as { pflegeMarker: (ev: { tool: string; input
 import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
+import { liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
 // Begründete Ausnahme, identisch zu test/harness/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed". Eng begrenzter
@@ -95,6 +96,8 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`,
 
 /** Der Einstiegs-Skill im Hauptchat; sein Frontmatter gilt nur bei /kubernia (#1035, #1280). */
 const UMSETZUNGS_SKILL = ".claude/skills/kubernia/SKILL.md";
+/** Der zweite Ticket-Skill (Bereich agentic); der Ablauf selbst steht in `.claude/skills/factory/ablauf.md` (#1806). */
+const FACTORY_SKILL = ".claude/skills/factory/SKILL.md";
 /** Der Subagent, der auf dem Skill-Pfad tatsächlich umsetzt (#1280). */
 const UMSETZER = ".claude/agents/kubernia-umsetzer.md";
 /** Der Skill, dessen Lenses trotz Coding-Tier-Umsetzung auf dem starken Tier bleiben müssen. */
@@ -213,11 +216,11 @@ function retiredRoutingClaims(md: string): { line: number; term: string; home: s
 }
 
 describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#1035)", () => {
-  test(`${UMSETZUNGS_SKILL} routet per Frontmatter auf den Coding-Tier`, () => {
-    const fm = frontmatter(read(UMSETZUNGS_SKILL));
+  test.each([UMSETZUNGS_SKILL, FACTORY_SKILL])("%s routet per Frontmatter auf den Coding-Tier", (skillDatei) => {
+    const fm = frontmatter(read(skillDatei));
     assert.ok(
       fm.model && istCodingTier(fm.model),
-      `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt ein \`model:\` auf dem Coding-Tier (Alias \`sonnet\`). ` +
+      `Im Frontmatter von ${skillDatei} fehlt ein \`model:\` auf dem Coding-Tier (Alias \`sonnet\`). ` +
         "Die Zeile wirkt nur bei Aufruf als `/kubernia` (anthropics/claude-code#98898); der eigentliche Hebel " +
         `ist der Subagent ${UMSETZER} (#1280). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
     );
@@ -226,7 +229,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     // Test-Änderung bewegen – gebunden wäre nur eine Doppelpflege.
     assert.ok(
       fm.effort,
-      `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt \`effort:\` – der Reasoning-Aufwand der Umsetzungsphase ` +
+      `Im Frontmatter von ${skillDatei} fehlt \`effort:\` – der Reasoning-Aufwand der Umsetzungsphase ` +
         "wird sonst ebenfalls von der Session geerbt (#1035).",
     );
   });
@@ -571,14 +574,15 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
   });
 
   test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {
-    const spawn = spawnFuer(read(UMSETZUNGS_SKILL), "kubernia-umsetzer");
+    const spawn = spawnFuer(liesTicketAblauf(), "kubernia-umsetzer");
     assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
     assert.doesNotMatch(spawn, /\bmodel:/, "Ein `model:` am Spawn (auch ohne Anführungszeichen) überstimmt das Frontmatter des Umsetzers");
   });
 
   test("kein Agent-Spawn in den Skills setzt effort: oder model: (Effort steht im Frontmatter, #1342)", () => {
-    for (const skill of [REVIEW_SKILL, UMSETZUNGS_SKILL]) {
-      const bloecke = spawnBloecke(read(skill));
+    const skills: [string, string][] = [[REVIEW_SKILL, read(REVIEW_SKILL)], [`${UMSETZUNGS_SKILL} (Ablauf ${TICKET_ABLAUF})`, liesTicketAblauf()]];
+    for (const [skill, text] of skills) {
+      const bloecke = spawnBloecke(text);
       assert.ok(bloecke.length > 0, `${skill} hat Agent-Spawns`);
       for (const b of bloecke) assert.doesNotMatch(b.replace(/\/\/[^\n]*/g, ""), /\b(effort|model)\s*:/, `${skill}: Spawn setzt effort:/model: und überstimmte das Frontmatter`);
     }
@@ -713,18 +717,18 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: nein/);
     assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: ja/);
     assert.match(read(".claude/agents/kubernia-planner.md"), /verbindliches Format: eine eigene Zeile, nicht zitiert mit `>`/, "Format der Pflichtzeile ist verbindlich vorgeschrieben (#1311)");
-    assert.match(read(UMSETZUNGS_SKILL), /Weiche Epic: ja/);
+    assert.match(liesTicketAblauf(), /Weiche Epic: ja/);
   });
 
   test("Planer-Rolle: der vom Skill (Hinweis „Epic: liefere die Aufteilung“) referenzierte Abschnitt „Bei einem Epic“ existiert und verbietet das Anlegen", () => {
     const rolle = read(".claude/agents/kubernia-planner.md");
     assert.match(rolle, /^## Bei einem Epic/m);
     assert.match(rolle, /Lege keine Issues selbst an/);
-    assert.match(read(UMSETZUNGS_SKILL), /Epic: liefere die Aufteilung/, "der Skill gibt dem Planer den Epic-Hinweis");
+    assert.match(liesTicketAblauf(), /Epic: liefere die Aufteilung/, "der Skill gibt dem Planer den Epic-Hinweis");
   });
 
   test("Skill-Pfad: der Epic-Absatz delegiert die Aufteilung an den kubernia-planner", () => {
-    assert.match(read(UMSETZUNGS_SKILL), /\*\*Sonderfall zu großes Epic[^\n]*kubernia-planner/);
+    assert.match(liesTicketAblauf(), /\*\*Sonderfall zu großes Epic[^\n]*kubernia-planner/);
   });
 
   test("Doku: die Matrix-Zeile der Epic-Aufteilung trägt opus", () => {
@@ -736,7 +740,7 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
 
 describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
   const rolle = read(UMSETZER);
-  const skill = read(UMSETZUNGS_SKILL);
+  const skill = liesTicketAblauf();
 
   test("das feste Berichtsformat trägt die Zeile LERNKANDIDATEN, nach BEFUNDE", () => {
     assert.match(rolle, /^LERNKANDIDATEN: <max\. 3 Punkte, nur projektübergreifendes Wissen, oder ->$/m);
@@ -776,13 +780,13 @@ const umsetzerRegelOk = (md: string): boolean =>
 
 describe("Weichen-Regel im Skill-Pfad (#1311)", () => {
   test("Skill, Planer und Umsetzer tragen die Regel", () => {
-    assert.ok(skillRegelOk(read(UMSETZUNGS_SKILL)), `${UMSETZUNGS_SKILL} Schritt 3`);
+    assert.ok(skillRegelOk(liesTicketAblauf()), `${UMSETZUNGS_SKILL} Schritt 3`);
     assert.ok(planerRegelOk(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md Abschnitt 7");
     assert.ok(umsetzerRegelOk(read(UMSETZER)), `${UMSETZER}`);
   });
 
   test("Red-Green: eine aufgeweichte Fassung wird erkannt", () => {
-    const skill = read(UMSETZUNGS_SKILL);
+    const skill = liesTicketAblauf();
     assert.ok(!skillRegelOk(skill.replace("`AskUserQuestion` nur, wenn", "`AskUserQuestion` immer, wenn")), "Skill: Rückfrage nicht mehr eingeschränkt");
     assert.ok(!skillRegelOk(skill.replace("als verbindlich", "als Vorschlag")), "Skill: Entscheidungen nicht mehr verbindlich");
     const planer = read(".claude/agents/kubernia-planner.md");
@@ -852,7 +856,7 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     const t = read(".claude/agents/kubernia-planner.md");
     assert.match(t, /git diff --name-only HEAD origin\/main/);
     assert.match(t, /MSYS_NO_PATHCONV=1 git show origin\/main:<pfad>/);
-    assert.match(read(".claude/skills/kubernia/SKILL.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
+    assert.match(liesTicketAblauf(), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
   });
 
   test("Brain-Lese-Konvention steht in Umsetzer und Lens", () => {
