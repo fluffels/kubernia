@@ -34,7 +34,7 @@ const C = raw as unknown as {
   deckendesIssue: (a: Partial<Alert>, issues: { number: number; titel: string; body: string }[]) => { number: number; grund: string } | null;
   zeilenText: (g: Gruppe) => string;
   issueBody: (g: Gruppe[], repo?: string) => string;
-  plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null }) => Plan;
+  plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null; repo?: string }) => Plan;
   fuehreAus: (a: Record<string, unknown>) => number;
   lauf: (a: Record<string, unknown>) => number;
 };
@@ -306,6 +306,10 @@ describe("plane", () => {
     expect(p.issue.art).toBe("nichts");
     expect(p.zeilen).toHaveLength(1);
     expect(p.zeilen[0].nummern).toEqual([1, 2]);
+  });
+  test("das Repo des Plans landet im Body des neuen Spitzen-Tickets", () => {
+    const p = C.plane({ alerts: [spitze(1)], bekannt: keine, offenesIssue: null, repo: "eigner/projekt" });
+    expect(p.issue.body).toContain("repos/eigner/projekt/code-scanning/alerts/");
   });
   test("Spitze ohne Issue: anlegen mit allen Nummern im Body", () => {
     const p = C.plane({ alerts: [spitze(1), spitze(2)], bekannt: keine, offenesIssue: null });
