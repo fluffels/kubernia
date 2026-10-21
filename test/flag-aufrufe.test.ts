@@ -231,8 +231,8 @@ const ZEILEN: Zeile[] = [
   {
     skript: "langfuse-vorbedingung",
     exit: 2,
-    erste: (m) => `${m}. Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]`,
-    aufruf: new RegExp(maskiere(". Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]")),
+    erste: (m) => `${m}. Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart | --json]`,
+    aufruf: new RegExp(maskiere(". Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart | --json]")),
     faelle: { unbekannt: ["--bogus"], ohneWert: ["--sessionstart=x"], doppelt: ["--sessionstart", "--sessionstart"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "Unbekanntes Argument: --sessionstart=x", doppelt: "--sessionstart ist doppelt angegeben" },
   },
