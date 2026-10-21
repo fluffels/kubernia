@@ -26,6 +26,16 @@ test("escapeRegExp: Wildcard-Punkt und Quantor wirken nicht als Muster", () => {
   assert.equal(new RegExp("^" + escapeRegExp("a|b") + "$").test("a"), false);
 });
 
+test("Negativfall: mehrfaches Metazeichen wird an jeder Stelle escaped (#1684)", () => {
+  assert.equal(escapeRegExp("a\\b\\c"), "a\\\\b\\\\c");
+  assert.equal(escapeRegExp("1.2.3"), "1\\.2\\.3");
+  const re = new RegExp("^" + escapeRegExp("1.2.3") + "$");
+  assert.ok(re.test("1.2.3"));
+  assert.equal(re.test("1.2x3"), false);
+  assert.equal(re.test("1x2.3"), false);
+  assert.ok(new RegExp("^" + escapeRegExp("((x))") + "$").test("((x))"));
+});
+
 test("escapeRegExp nimmt auch Zahlen", () => {
   assert.equal(escapeRegExp(3), "3");
 });

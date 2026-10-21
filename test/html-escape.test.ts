@@ -18,4 +18,8 @@ describe("esc", () => {
     expect(f(null)).toBe("null");
     expect(f("")).toBe("");
   });
+  test("Negativfall: jedes Vorkommen wird maskiert, nicht nur das erste (#1684)", () => {
+    expect(f(`""''&&<<>>`)).toBe("&quot;&quot;&#39;&#39;&amp;&amp;&lt;&lt;&gt;&gt;");
+    expect(f(`a="1" b="2"`)).toBe("a=&quot;1&quot; b=&quot;2&quot;");
+  });
 });
