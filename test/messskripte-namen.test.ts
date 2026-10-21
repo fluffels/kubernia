@@ -107,7 +107,7 @@ describe("repoName (Namensteil von repo)", () => {
   test("owner/name ergibt den Namen", () => {
     expect(P.repoName(CFG)).toBe("acme");
   });
-  test.each([[undefined], [{}], [{ repo: "acme" }], [{ repo: "a/b/c" }], [{ repo: "" }], [{ repo: 5 }], [{ repo: "o/" }], [{ repo: "/acme" }], [{ repo: "o/ac me" }], [{ repo: ["o/acme"] }]])("kaputtes repo %j wirft mit Fix-Zeile", (c) => {
+  test.each([[undefined], [{}], [{ repo: "acme" }], [{ repo: "a/b/c" }], [{ repo: "" }], [{ repo: 5 }], [{ repo: "o/" }], [{ repo: "/acme" }], [{ repo: "o/ac me" }], [{ repo: "o x/acme" }], [{ repo: ["o/acme"] }]])("kaputtes repo %j wirft mit Fix-Zeile", (c) => {
     expect(() => P.repoName(c)).toThrow(/repo[\s\S]*Fix:/);
   });
 });
