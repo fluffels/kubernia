@@ -383,10 +383,10 @@ function projektDateien(wurzel) {
 
 /**
  * Prüft (oder schreibt mit `schreiben`) alle Projektwert-Stellen unter `wurzel`. `ladeConfig` wird nur gerufen, wenn eine Datei Stellen hat.
- * Rückgabe: `{ dateien (Zahl der Dateien mit Stellen), fehler, geaendert }`. Geschrieben wird nur, wenn kein Fehler vorliegt.
+ * Rückgabe: `{ dateien (Zahl der Dateien mit Stellen), fehler, geaendert, abweichungen }`; `abweichungen` sind nur die Funde "Wert weicht von der Config ab" (im Prüfmodus auch in `fehler`), die Aufrufer schlagen daran den `--write`-Fix vor. Geschrieben wird nur, wenn kein Fehler vorliegt.
  */
 export function projektwertLauf(wurzel, ladeConfig, { schreiben = false } = {}) {
-  const res = { dateien: 0, fehler: [], geaendert: [] };
+  const res = { dateien: 0, fehler: [], geaendert: [], abweichungen: [] };
   const lies = (rel) => {
     const voll = join(wurzel, ...rel.split("/"));
     return existsSync(voll) ? readFileSync(voll, "utf8") : null;
@@ -420,6 +420,7 @@ export function projektwertLauf(wurzel, ladeConfig, { schreiben = false } = {}) 
       if (st.bloecke.length + st.zeilen.length === 0) continue;
       res.dateien++;
       const abw = projektwertAbweichungen(pfad, text, configLaden);
+      res.abweichungen.push(...abw);
       if (!schreiben) res.fehler.push(...abw);
       if (abw.length > 0) neu.set(pfad, { roh, text: rendereProjektwerte(text, configLaden, pfad) });
     } catch (err) {
