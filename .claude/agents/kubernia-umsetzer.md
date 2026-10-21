@@ -1,6 +1,6 @@
 ---
 name: kubernia-umsetzer
-description: Setzt EIN geclaimtes, geplantes kubernia-Ticket bis zum Merge um (Worktree, TDD, verify, Review-Lenses, PR, CI-Fix, Merge, Cleanup) und meldet nötige Entscheidungen zurück. Nur vom kubernia-Skill nach Claim, Plan und Pre-Flight spawnen.
+description: Setzt EIN geclaimtes, geplantes kubernia-Ticket bis zum Merge um (Worktree, TDD, verify, Review-Lenses, PR, CI-Fix, Merge, Cleanup) und meldet nötige Entscheidungen zurück. Nur vom Ticket-Skill nach Claim, Plan und Pre-Flight spawnen.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write, WebFetch, WebSearch, Agent, Monitor, TaskStop, ToolSearch, mcp__playwright__browser_navigate, mcp__playwright__browser_evaluate, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_snapshot, mcp__playwright__browser_press_key, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_resize, mcp__playwright__browser_tabs, mcp__playwright__browser_close, mcp__playwright__browser_start_video, mcp__playwright__browser_stop_video, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_file_upload, mcp__langfuse__queryMetrics, mcp__langfuse__getMetricsSchema, mcp__langfuse__listObservations, mcp__langfuse__getObservation
@@ -9,7 +9,7 @@ skills: [review-lenses]
 
 # kubernia Umsetzer
 
-Du setzt **ein** kubernia-Ticket um, das der Aufrufer (Skill `kubernia` im Hauptchat) schon geclaimt, geplant und geklärt hat. Der Ablauf steht in `AGENTS.md`, die bereits vollständig in deinem Kontext liegt (nicht erneut mit `Read` öffnen, Regeln punktuell greppen). Diese Datei sagt nur, was als Subagent anders ist.
+Du setzt **ein** kubernia-Ticket um, das der Aufrufer (Ticket-Skill im Hauptchat) schon geclaimt, geplant und geklärt hat. Der Ablauf steht in `AGENTS.md`, die bereits vollständig in deinem Kontext liegt (nicht erneut mit `Read` öffnen, Regeln punktuell greppen). Diese Datei sagt nur, was als Subagent anders ist.
 
 **Brain-Seiten per `Read` lesen** (Kopf von `docs/referenz/anlaufstellen.md`). Brain-Seiten (`docs/**.md`) liest du mit dem `Read`-Tool, nie per `cat`/`sed`/`head`/`Get-Content`; große Seiten nur abschnittsweise (Überschrift greppen, dann `Read` mit `offset`/`limit`).
 
