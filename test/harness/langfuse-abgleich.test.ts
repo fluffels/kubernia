@@ -819,6 +819,7 @@ describe("strikte Argumente (#1790)", () => {
     expect(fehler(["--session", "a", "--session", "b"])).toMatch(/--session ist doppelt/);
     expect(fehler(["--pruefen", "--pruefen"])).toMatch(/--pruefen ist doppelt/);
     expect(fehler(["--pruefen", "--ist", "a", "--ist", "b"])).toBe("");
+    expect(A.parseArgs(["--pruefen"])).toEqual({ pruefen: true, json: false, seit: null, session: null, ist: [] });
   });
   test("pruefen: ein Aufruf-Fehler endet mit Exit 2 und Aufrufzeile vor jedem I/O (kein Zugang nötig)", async () => {
     const wirft = () => {

@@ -697,6 +697,8 @@ describe("parseArgs strikt (#1790)", () => {
   test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
     expect(PA(["--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);
     expect(PA(["--schnitt"]).fehler).toMatch(/--schnitt braucht einen Wert/);
+    expect(PA(["--ohne"]).fehler).toBe("--ohne erwartet eine Ticketnummer, nicht nichts");
+    expect(PA(["--ticket", "abc", "--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);
     expect(PA(["--agent", "a", "--agent", "b"]).fehler).toMatch(/--agent ist doppelt/);
     expect(PA(["--typen", "--typen"]).fehler).toMatch(/--typen ist doppelt/);
     expect(PA(["--typen", "--agent", "a"]).fehler).toMatch(/--typen gilt für alle Typen/);

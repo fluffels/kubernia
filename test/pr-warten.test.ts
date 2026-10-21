@@ -379,6 +379,7 @@ describe("parseArgs: strikt (#1790)", () => {
   test("nicht-numerische PR-Nummer ist ein Aufruf-Fehler, fehlende nur pr null", () => {
     expect(PF.parseArgs(["abc"]).fehler).toBe("PR-Nummer erwartet, nicht abc");
     expect(PF.parseArgs(["1a"]).fehler).toMatch(/PR-Nummer/);
+    expect(PF.parseArgs(["a1"]).fehler).toBe("PR-Nummer erwartet, nicht a1");
     expect(PF.parseArgs([])).toEqual({ pr: null, maxSekunden: 240, intervall: 30 });
   });
 });
