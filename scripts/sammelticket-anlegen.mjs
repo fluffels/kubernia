@@ -244,7 +244,7 @@ async function main(argv = process.argv.slice(2)) {
     }
   }
   if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe(nr, position, args.dry);
+  const stand = await setzeUndPruefe(nr, position, args.dry, FACTORY_BOARD);
   if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);

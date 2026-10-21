@@ -1,0 +1,41 @@
+name: Harness-Doctor (Wochenlauf)
+
+# Meldet Lücken der Factory-Voraussetzungen (scripts/harness-doctor.mjs) einmal pro Woche als Zeile im Harness-Sammelticket, mit Abgleich
+# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN, gepostet mit github.token; fehlt das Secret,
+# meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).
+
+on:
+  schedule:
+    - cron: "47 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      trocken:
+        description: "Nur ausgeben, nichts ins Sammelticket schreiben"
+        type: boolean
+        default: false
+
+concurrency:
+  group: harness-doctor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  doctor:
+    name: "Harness-Doctor: Lücken ins Sammelticket"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Voraussetzungen prüfen und Lücken melden
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          TROCKEN: ${{ inputs.trocken == true }}
+        run: |
+          if [ "$TROCKEN" = "true" ]; then node scripts/harness-doctor-melden.mjs --dry-run; else node scripts/harness-doctor-melden.mjs; fi

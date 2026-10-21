@@ -6,6 +6,7 @@
  *   3. Project-Felder: jeder Board-Schlüssel der Config, den ein Skript liest (außer `rolle`), ist ein Prüfpunkt; jedes Feld, das ein Skript
  *      per Name liest (REST `fields.find((f) => f.name === "X")`, GraphQL `field(name: "X")`), heißt wie das Status-Feld des Doctors; die
  *      Statusvergleiche der Board-Skripte (nennen `statusFeld` oder importieren `board-lib.mjs`) sind die Todo-Option des Doctors.
+ *   4. Die Vorlage der Wochenlauf-Datei, die `--einrichten` installiert (WOCHENLAUF_WORKFLOW), ist die Datei im Repo (Zeilenenden egal).
  * Bekannte Grenzen: nur Literale und die genannten Schreibweisen; ein Label aus einer Berechnung oder `secrets[...]` sieht kein Scanner.
  * Gescannt wird `scripts/*.mjs` auf oberster Ebene (nicht rekursiv, keine `.cjs`). Feldzugriffe mit einfachen Anführungszeichen,
  * umgedrehtem Vergleich, Destructuring, `.filter`/`.some` oder einer Variablen als Feldname erkennt der Feld-Scanner nicht.
@@ -25,6 +26,8 @@ interface Doctor {
   BOARD_PRUEFPUNKTE: string[];
   STATUS_FELD_NAME: string;
   TODO_OPTION_NAME: string;
+  WOCHENLAUF_PFAD: string;
+  WOCHENLAUF_WORKFLOW: string;
 }
 const doctor = rawDoctor as unknown as Doctor;
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -130,5 +133,9 @@ describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () =>
     const funde = skripte.filter((s) => boardSkript(s.text)).flatMap((s) => optionVergleiche(s.text));
     assert.ok(funde.length > 0, "Scanner fand keinen Vergleich: vakuös");
     for (const o of funde) assert.equal(o, doctor.TODO_OPTION_NAME);
+  });
+
+  test("die Vorlage der Wochenlauf-Datei ist die Datei im Repo (#1800)", () => {
+    assert.equal(lies(doctor.WOCHENLAUF_PFAD).replace(/\r\n/g, "\n"), doctor.WOCHENLAUF_WORKFLOW);
   });
 });
