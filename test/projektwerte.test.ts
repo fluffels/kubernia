@@ -199,6 +199,7 @@ describe("projektwerte CLI", () => {
   });
   test("--check schlägt bei einem Marker ohne Ende keinen --write-Fix vor", () => {
     const w = projekt();
+    assert.equal(lauf(["--write"], w).code, 0);
     schreibe(w, ".claude/skills/s/SKILL.md", `${S}\nohne Ende\n`);
     const r = lauf(["--check"], w);
     assert.equal(r.code, 1);
