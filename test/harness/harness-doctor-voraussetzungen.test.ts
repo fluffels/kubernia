@@ -44,10 +44,12 @@ const gelesenerSchluessel = (text: string): string[] => [
   ...[...text.matchAll(/\b(?:config|PROJEKT|cfg)\??\.labels\??\.(\w+)/g)].map((m) => m[1]),
 ];
 const boardSchluesselGelesen = (text: string, schluessel: string[]): string[] => schluessel.filter((k) => new RegExp(`\\.${k}\\b`).test(text));
-const vergleiche = (text: string): { feld: string[]; option: string[] } => ({
-  feld: [...text.matchAll(/\bf\??\.name\s*===\s*"([^"]+)"/g)].map((m) => m[1]),
-  option: [...text.matchAll(/\bstatus\s*[!=]==\s*"([^"]+)"/g)].map((m) => m[1]),
-});
+/** Feldnamen, die ein Skript liest: `fields.find((f) => f.name === "X")` (REST-Items) und `field(name: "X")`/`fieldValueByName(name: "X")` (GraphQL). */
+const feldNamen = (text: string): string[] => [
+  ...[...text.matchAll(/\bfields\??\.find\(\s*\(?\s*(\w+)\s*\)?\s*=>\s*\1\??\.name\s*===\s*"([^"]+)"/g)].map((m) => m[2]),
+  ...[...text.matchAll(/\bfield(?:ValueByName)?\(\s*name:\s*\\?"([^"\\]+)\\?"/g)].map((m) => m[1]),
+];
+const optionVergleiche = (text: string): string[] => [...text.matchAll(/\bstatus\s*[!=]==\s*"([^"]+)"/g)].map((m) => m[1]);
 
 const config = JSON.parse(lies(".factory/projekt.json")) as { labels: Record<string, string>; boards: Record<string, unknown>[] };
 const workflows = dateien(".github/workflows", /\.ya?ml$/);
@@ -66,7 +68,10 @@ describe("Scanner (Fixtures, nicht vakuös)", () => {
   });
   test("Board-Schlüssel und Vergleichsliterale", () => {
     assert.deepEqual(boardSchluesselGelesen("b.projectId + x.rolle", ["projectId", "neu", "rolle"]), ["projectId", "rolle"]);
-    assert.deepEqual(vergleiche('f?.name === "Status" && i.status !== "Todo"'), { feld: ["Status"], option: ["Todo"] });
+    assert.deepEqual(feldNamen('i.fields?.find((f) => f?.name === "Status")?.value; fields.find(f => f.name === "Aufwand")'), ["Status", "Aufwand"]);
+    assert.deepEqual(feldNamen('gql(`{ field(name: "Aufwand") { id } fieldValueByName(name: \\"Prio\\") }`)'), ["Aufwand", "Prio"]);
+    assert.deepEqual(feldNamen('x.find((c) => c.name === "npm")'), []);
+    assert.deepEqual(optionVergleiche('i.status !== "Todo"'), ["Todo"]);
   });
   test("ein ungedecktes vars.FOO fällt auf (Negativfall)", () => {
     const v = doctor.voraussetzungenAus({ config, workflows: [{ pfad: "x.yml", text: "a: ${{ vars.FOO }}" }] });
@@ -105,13 +110,15 @@ describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () =>
     for (const k of gelesen) assert.ok(doctor.BOARD_PRUEFPUNKTE.includes(k), `Board-Schlüssel ${k} wird gelesen, hat aber keinen Prüfpunkt im Harness-Doctor`);
   });
 
-  test("Status-Feld und Todo-Option: die Vergleichsliterale der Board-Skripte sind die des Doctors", () => {
-    const boardSkripte = skripte.filter((s) => s.text.includes("statusFeld"));
-    const v = boardSkripte.map((s) => vergleiche(s.text));
-    assert.ok(v.some((x) => x.feld.length > 0) && v.some((x) => x.option.length > 0), "Scanner fand keinen Vergleich: vakuös");
-    for (const x of v) {
-      for (const f of x.feld) assert.equal(f, doctor.STATUS_FELD_NAME);
-      for (const o of x.option) assert.equal(o, doctor.TODO_OPTION_NAME);
-    }
+  test("jedes Project-Feld, das ein Skript per Name liest, ist das Status-Feld des Doctors", () => {
+    const funde = skripte.flatMap((s) => feldNamen(s.text).map((name) => ({ pfad: s.pfad, name })));
+    assert.ok(funde.length > 0, "Scanner fand kein Feld: vakuös");
+    for (const f of funde) assert.equal(f.name, doctor.STATUS_FELD_NAME, `${f.pfad} liest das Project-Feld "${f.name}", das der Harness-Doctor nicht prüft`);
+  });
+
+  test("Todo-Option: die Statusvergleiche der Board-Skripte sind die des Doctors", () => {
+    const funde = skripte.filter((s) => s.text.includes("statusFeld")).flatMap((s) => optionVergleiche(s.text));
+    assert.ok(funde.length > 0, "Scanner fand keinen Vergleich: vakuös");
+    for (const o of funde) assert.equal(o, doctor.TODO_OPTION_NAME);
   });
 });
