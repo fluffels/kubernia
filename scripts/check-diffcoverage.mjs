@@ -18,7 +18,7 @@
  * teilt es sich mit check:diffsize (#533): `resolveBase` steht in check-basis.mjs.
  *
  * Die volle Begründung (Floors je Schicht, asymmetrische Degradation, Ratchet) steht als
- * Regel in AGENTS.md › Testabdeckung. Reines Node-Skript (nur Builtins); die Parse-/
+ * Regel in AGENTS.md › Abdeckung und Bundle. Reines Node-Skript (nur Builtins); die Parse-/
  * Bewertungslogik ist als pure, IO-freie Funktionen exportiert und wird von
  * test/diffcoverage.test.ts importiert — EINE Quelle der Wahrheit.
  *

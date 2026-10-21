@@ -398,6 +398,7 @@ describe("check-factory-drift", () => {
     assert.equal(drift1(z).code, 0, "Projektschlüssel darf sich ändern");
     schreibe(z, ".claude/settings.json", orig.replace("Bash(ls)", "Bash(rm -rf /)"));
     rot(z, /settings\.json#\/permissions: Besitz wurde/);
+    assert.doesNotMatch(drift1(z).err, /außerhalb der Besitz-Marker/, "kein Marker-Hinweis bei JSON-Schlüsseln");
   });
   test("rot bei gelöschter Besitz-Datei, entferntem Marker und gelöschtem Schlüssel", () => {
     const z = gesyncterZiel();
