@@ -77,7 +77,7 @@ const ZEILEN: Zeile[] = [
     skript: "abnahme",
     exit: 2,
     erste: (m) => `✖ abnahme: ${m}`,
-    aufruf: /^  node scripts\/abnahme\.mjs auswerten/m,
+    aufruf: /^ {2}node scripts\/abnahme\.mjs auswerten/m,
     faelle: { unbekannt: ["auswerten", "--bogus"], ohneWert: ["auswerten", "7", "--pr"], doppelt: ["auswerten", "7", "--pr", "1", "--pr", "2"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--pr braucht einen Wert", doppelt: "--pr ist doppelt angegeben" },
   },
@@ -85,7 +85,7 @@ const ZEILEN: Zeile[] = [
     skript: "spezifikation",
     exit: 2,
     erste: (m) => `✖ spezifikation: ${m}`,
-    aufruf: /^  node scripts\/spezifikation\.mjs pruefen/m,
+    aufruf: /^ {2}node scripts\/spezifikation\.mjs pruefen/m,
     faelle: { unbekannt: ["pruefen", "--bogus"], ohneWert: ["pruefen", "--body-datei"], doppelt: ["pruefen", "--body-datei", "a", "--body-datei", "b"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--body-datei braucht einen Wert", doppelt: "--body-datei ist doppelt angegeben" },
   },
@@ -186,7 +186,7 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     const text = z.kanal === "stdout" ? r.stdout : r.stderr;
     expect(text.split("\n")[0]).toBe(z.erste(z.meldungen[fall]));
     expect(text).toMatch(z.aufruf);
-    if (z.kanal === "stdout") expect(r.stderr).toBe("");
+    expect(z.kanal === "stdout" ? r.stderr : "").toBe(""); // stdout-Skripte schreiben nichts auf stderr
   });
 
   const ZUSATZ: [string, string[], number, string][] = [
