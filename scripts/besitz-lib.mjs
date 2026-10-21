@@ -263,7 +263,10 @@ export function projektwertStellen(text, pfad = "<text>") {
       }
     } else {
       const m = PROJEKTWERT_ZEILE.exec(zeilen[i].trimEnd());
-      if (m === null) continue;
+      if (m === null) {
+        if (t.startsWith("# " + PROJEKTWERT_KENNUNG)) melde(i, "kaputter Projektwert-Zeilen-Marker (erwartet `# factory:projektwert <schlüssel>` allein auf der Zeile, ohne Einrückung)");
+        continue;
+      }
       const folge = i + 1 < zeilen.length ? PROJEKTWERT_FOLGE.exec(zeilen[i + 1]) : null;
       if (fmEnde < 0 || i >= fmEnde) melde(i, "Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters");
       else if (i + 1 >= fmEnde || folge === null) melde(i, "auf den Projektwert-Zeilen-Marker muss im Frontmatter eine Zeile `schlüssel:` folgen");
@@ -310,7 +313,8 @@ function blockZeilen(config) {
   return out;
 }
 
-const yamlWert = (w) => (YAML_BLANK.test(w) ? w : JSON.stringify(w));
+const YAML_WORT = /^(true|false|null|yes|no|on|off|y|n|~|[0-9].*)$/i;
+const yamlWert = (w) => (YAML_BLANK.test(w) && !YAML_WORT.test(w) ? w : JSON.stringify(w));
 const zeilenSoll = (z, config) => `${z.einrueckung}${z.name}: ${yamlWert(projektwertWert(config, z.schluessel))}`;
 const mitOrt = (pfad, zeile, fn) => {
   try {

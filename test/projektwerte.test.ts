@@ -220,4 +220,69 @@ describe("projektwerte CLI", () => {
     assert.equal(lauf(["--check", "--write"], w).code, 2);
     assert.equal(lauf(["--wat"], w).code, 2);
   });
+  test("ein kaputtes Manifest und eine Datei direkt unter .claude/skills/ stürzen das Gate nicht ab", () => {
+    const w = projekt();
+    schreibe(w, ".factory/besitz.json", "{kaputt");
+    schreibe(w, ".claude/skills/README.md", "# nur Text\n");
+    assert.equal(lauf(["--write"], w).code, 0);
+    assert.equal(lauf(["--check"], w).code, 0);
+    schreibe(w, ".factory/besitz.json", "{}");
+    assert.equal(lauf(["--check"], w).code, 0);
+    schreibe(w, ".claude/agents/planer.md", FM.replace("wk-planer", "anders"));
+    assert.equal(lauf(["--check"], w).code, 1);
+  });
+  test("eine fehlende Config wird bei mehreren Dateien mit Stellen genau einmal gemeldet", () => {
+    const w = projekt();
+    rmSync(join(w, ".factory/projekt.json"));
+    const r = lauf(["--check"], w);
+    assert.equal(r.code, 1);
+    assert.equal(r.err.split("\n").filter((z) => z.includes("Projekt-Config")).length, 1, r.err);
+  });
+  test("--wurzel als Flag wählt das Projekt", () => {
+    const w = projekt();
+    const out: string[] = [];
+    assert.equal(cli.cli(["--write", "--wurzel", w], { out: (s) => out.push(s), err: () => undefined }), 0);
+    assert.match(lies(w, ".claude/agents/planer.md"), /\nname: wk-planer\n/);
+  });
+});
+
+describe("Grenzfälle der Lib", () => {
+  test("leerer Wert und Zeilenumbruch im Wert brechen ab", () => {
+    assert.throws(() => lib.projektwertWert({ agenten: { planer: "" } }, "agenten.planer"), /kein nichtleerer Text/);
+    assert.throws(() => lib.projektwertWert({ agenten: { planer: "a\nb" } }, "agenten.planer"), /Zeilenumbruch/);
+    assert.throws(() => lib.projektwertWert({ agenten: { planer: "a\rb" } }, "agenten.planer"), /Zeilenumbruch/);
+  });
+  test("mehrere Blöcke und Zeilen in einer Datei werden je einzeln geleert, gerendert und geprüft", () => {
+    const roh = `A\n${S}\nalt1\nalt2\n${E}\nB\n${S}\nalt3\n${E}\nC\n`;
+    assert.equal(lib.leereProjektwerte(roh), `A\n${S}\n${E}\nB\n${S}\n${E}\nC\n`);
+    const ok = lib.rendereProjektwerte(roh, CONFIG);
+    assert.ok(ok.startsWith("A\n") && ok.endsWith(`${E}\nC\n`) && ok.includes(`${E}\nB\n${S}`), ok);
+    assert.equal(ok.split(S).length, 3);
+    assert.deepEqual(lib.projektwertAbweichungen("a.md", ok, CONFIG), []);
+    assert.equal(lib.projektwertAbweichungen("a.md", roh, CONFIG).length, 2);
+  });
+  test("Text mit der Kennung in Backticks, aber ohne Stelle, braucht keine Config", () => {
+    const t = "Beispiel `# factory:projektwert agenten.planer` hier\n";
+    const nie = (): Cfg => {
+      throw new Error("nicht rufen");
+    };
+    assert.equal(lib.rendereProjektwerte(t, nie), t);
+    assert.deepEqual(lib.projektwertAbweichungen("a.md", t, nie as unknown as Cfg), []);
+    assert.equal(lib.leereProjektwerte(t), t);
+  });
+  test("ein kaputter Zeilen-Marker bricht mit Ort ab (ohne Schlüssel, Zusatz, eingerückt)", () => {
+    for (const marker of ["# factory:projektwert", "# factory:projektwert agenten.planer # x", "  # factory:projektwert agenten.planer"]) {
+      assert.throws(() => lib.projektwertStellen(`---\n${marker}\nname: x\n---\n`, "x.md"), /x\.md:2: kaputter Projektwert-Zeilen-Marker/, marker);
+    }
+  });
+  test("YAML-Schlüsselwörter und Zahlen als Wert werden zitiert", () => {
+    const t = "---\n# factory:projektwert agenten.planer\nname: x\n---\n";
+    for (const wert of ["true", "null", "123", "No"]) {
+      assert.equal(lib.rendereProjektwerte(t, { agenten: { planer: wert } }).split("\n")[2], `name: "${wert}"`, wert);
+    }
+  });
+  test("fehlende oder leere Gruppe nennt den Ort des Blocks; Gruppe null bricht mit Meldung ab", () => {
+    assert.throws(() => lib.rendereProjektwerte(`a\n${S}\n${E}\n`, { praefixe: {}, agenten: {} }, "a.md"), /a\.md:2: .*Gruppe 'labels'/s);
+    assert.throws(() => lib.rendereProjektwerte(`${S}\n${E}\n`, { praefixe: {}, agenten: null, labels: {} }, "a.md"), /Gruppe 'agenten'/);
+  });
 });
