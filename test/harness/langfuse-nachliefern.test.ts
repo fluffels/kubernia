@@ -18,6 +18,8 @@ import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawOtlp from "../../scripts/langfuse-otlp.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawProjekt from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleich from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawApi from "../../scripts/langfuse-api.mjs";
@@ -48,7 +50,10 @@ const N = rawNach as unknown as {
   fehlerText: (e: unknown) => string;
   nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
 };
-const O = rawOtlp as unknown as {
+// Der Repo-Name (Scope, Service und erstes Tag) kommt aus der Projekt-Config; der Wrapper reicht ihn durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const REPO_NAME = (rawProjekt as unknown as { repoName: (c: unknown) => string; ladeProjektConfig: () => unknown }).repoName((rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig());
+const otlpRoh = rawOtlp as unknown as { bauePayloads: (s: string, e: unknown, o: object) => unknown };
+const O = { ...rawOtlp, bauePayloads: (s: string, e: unknown, o: object) => otlpRoh.bauePayloads(s, e, { repoName: REPO_NAME, ...o }) } as unknown as {
   MAX_SPANS_JE_REQUEST: number;
   nanos: (ts: string) => string;
   attr: (k: string, v: string | string[]) => Attr;
@@ -186,10 +191,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, projekt-config-lib, ticket-namen (nur Builtins) nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "projekt-config-lib", "ticket-namen"]));
   });
 });
 

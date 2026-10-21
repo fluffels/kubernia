@@ -7,27 +7,27 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as lzRaw from "../../scripts/subagent-laufzeit.mjs";
+import * as lzRaw from "../scripts/subagent-laufzeit.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as ktRaw from "../../scripts/kontext-treiber.mjs";
+import * as ktRaw from "../scripts/kontext-treiber.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as hzRaw from "../../scripts/hauptchat-zerlegung.mjs";
+import * as hzRaw from "../scripts/hauptchat-zerlegung.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as tbRaw from "../../scripts/token-baseline.mjs";
+import * as tbRaw from "../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as akRaw from "../../scripts/langfuse-abgleich-kern.mjs";
+import * as akRaw from "../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as otRaw from "../../scripts/langfuse-otlp.mjs";
+import * as otRaw from "../scripts/langfuse-otlp.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as klRaw from "../../scripts/kontingent-lib.mjs";
+import * as klRaw from "../scripts/kontingent-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
+import * as projektRaw from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRaw from "../../scripts/ticket-namen.mjs";
+import * as namenRaw from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as sliceRaw from "../../scripts/slice-override.mjs";
+import * as sliceRaw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as faelleRaw from "../support/mess-golden-faelle.mjs";
+import * as faelleRaw from "./support/mess-golden-faelle.mjs";
 
 type Fn = (...a: unknown[]) => unknown;
 type Modul = Record<string, Fn>;
@@ -41,11 +41,11 @@ const kl = klRaw as unknown as Modul;
 const messGoldenFaelle = (faelleRaw as unknown as { messGoldenFaelle: (s: Record<string, Fn>) => Record<string, string> }).messGoldenFaelle;
 
 const projekt = projektRaw as unknown as Modul;
-const CONFIG = projekt.ladeProjektConfig() as unknown as { agenten: { umsetzer: string } };
+const CONFIG = projekt.ladeProjektConfig() as { agenten: { umsetzer: string } };
 const NAMEN = (namenRaw as unknown as Modul).ticketNamen(CONFIG);
-const ZEILEN = (sliceRaw as unknown as Modul).commitZeilenAus(CONFIG) as unknown as { plan: string };
-const REPO = projekt.repoName(CONFIG) as unknown as string;
-const WORKTREE = (namenRaw as unknown as Modul).worktreePraefix(CONFIG) as unknown as string;
+const ZEILEN = (sliceRaw as Modul).commitZeilenAus(CONFIG) as { plan: string };
+const REPO = projekt.repoName(CONFIG) as string;
+const WORKTREE = (namenRaw as Modul).worktreePraefix(CONFIG) as string;
 
 const S: Record<string, Fn> = {
   laufzeiten: (e) => lz.laufzeiten({ namen: NAMEN, ...(e as object) }),
@@ -64,7 +64,7 @@ const S: Record<string, Fn> = {
   logPfad: (env) => kl.logPfad(env),
 };
 
-const golden = JSON.parse(readFileSync(join(__dirname, "../fixtures/mess-golden.json"), "utf8")) as Record<string, string>;
+const golden = JSON.parse(readFileSync(join(__dirname, "./fixtures/mess-golden.json"), "utf8")) as Record<string, string>;
 const ist = messGoldenFaelle(S);
 
 describe("Messskripte: Ausgaben für dieses Projekt byte-gleich (Golden)", () => {

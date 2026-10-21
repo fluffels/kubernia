@@ -18,6 +18,8 @@ import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawKern from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawNamen from "../../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPreise from "../../scripts/preise.mjs";
@@ -34,7 +36,15 @@ type Ist = { calls: number | null; tokens: { input: number; output: number; cach
 type Bewertung = { status: string; score: string | null; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>;
 // Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
-const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
+// Das Worktree-Präfix kommt aus der Projekt-Config; die Wrapper reichen es durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const WORKTREE = (rawNamen as unknown as { ladeTicketNamen: () => { praefixe: { worktree: string } } }).ladeTicketNamen().praefixe.worktree;
+const kernRoh = rawKern as unknown as { sollEintraege: (s: unknown, o: object) => unknown; ticketAusBranch: (b: unknown, w: string) => unknown };
+const A = {
+  ...rawAbgleichEinstieg,
+  ...rawKern,
+  sollEintraege: (s: unknown, o?: object) => kernRoh.sollEintraege(s, { worktree: WORKTREE, ...o }),
+  ticketAusBranch: (b: unknown) => kernRoh.ticketAusBranch(b, WORKTREE),
+} as unknown as {
   RUHEFRIST_MIN: number;
   ROW_LIMIT: number;
   STICHTAG: string;

@@ -96,9 +96,9 @@ export function kontingentLesen({ token, exec, timeout = 15_000 } = {}) {
  */
 export const logPfad = (env = process.env, { lade = () => ladeProjektConfig({ pruefen: false }) } = {}) => env.KQ_GH_KOSTEN_LOG || join(tmpdir(), `${repoName(lade())}-gh-kosten.jsonl`);
 
-function logPfadOderNull(env) {
+function logPfadOderNull(env, lade) {
   try {
-    return logPfad(env);
+    return logPfad(env, { lade });
   } catch {
     return null;
   }
@@ -108,11 +108,11 @@ function logPfadOderNull(env) {
  * Vorab-Prüfung am Anfang eines Skripts und Kostenmessung beim Beenden. Gibt `{ ok }` zurück.
  * Knapp lokal: Meldung, `beende(3)` (Standard `process.exit`). Unter GitHub Actions nur `::warning::`, damit ein Takt auf `main` nicht rot wird.
  * `arten` begrenzt die Vorab-Prüfung auf die Kontingente, die das Skript verbraucht (`naechstes-ticket` läuft nur über REST: `["core"]`).
- * Alles injizierbar (`exec`, `schreibe`, `schreibeLog`, `registriere`, `beende`, `env`, `jetzt`) für Tests.
+ * Alles injizierbar (`exec`, `schreibe`, `schreibeLog`, `registriere`, `beende`, `env`, `jetzt`, `lade` für die Projekt-Config des Log-Pfads) für Tests.
  */
 export function mitKontingent(name, opts = {}) {
   // Der Log-Pfad entsteht einmal am Start (Env-Variable oder Repo-Name aus der Projekt-Config); ist er nicht bestimmbar, entfällt nur das Protokoll (die Messung ist Beiwerk).
-  const logDatei = opts.schreibeLog ? null : logPfadOderNull(opts.env ?? process.env);
+  const logDatei = opts.schreibeLog ? null : logPfadOderNull(opts.env ?? process.env, opts.lade);
   const {
     token,
     exec,

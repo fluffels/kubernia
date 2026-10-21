@@ -60,14 +60,15 @@ describe("kontextVon und istNeuaufbau (#1572: ein Prädikat für countCacheRebui
 });
 
 describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)", () => {
-  const B = raw as unknown as { bereinige: (t: string, o?: { wurzel?: string | null }) => string };
+  const B = raw as unknown as { bereinige: (t: string, o?: { wurzel?: string | null; worktree?: string | null }) => string };
+  const WT = "kq-"; // das Worktree-Präfix kommt aus der Projekt-Config (praefixe.worktree)
   const WURZEL = "C:/work/projekt";
   test("Home und Worktree-Präfix werden ersetzt, Backslashes zu Schrägstrichen", () => {
     expect(B.bereinige("C:/Users/Max/dev/x.ts")).toBe("~/dev/x.ts");
     expect(B.bereinige("C:\\Users\\Max\\dev\\x.ts")).toBe("~/dev/x.ts");
     expect(B.bereinige("cat /c/Users/Max/x.md")).toBe("cat ~/x.md");
-    expect(B.bereinige("C:/work/projekt/.claude/worktrees/kq-1559/src/a.ts")).toBe("<wt>/src/a.ts");
-    expect(B.bereinige("cd /c/work/projekt/.claude/worktrees/kq-1469 && ls")).toBe("cd <wt>/ && ls");
+    expect(B.bereinige("C:/work/projekt/.claude/worktrees/kq-1559/src/a.ts", { worktree: WT })).toBe("<wt>/src/a.ts");
+    expect(B.bereinige("cd /c/work/projekt/.claude/worktrees/kq-1469 && ls", { worktree: WT })).toBe("cd <wt>/ && ls");
     expect(B.bereinige("a   b\n c")).toBe("a b c");
   });
   test("Wurzel in beiden Schreibweisen, mit und ohne Schrägstrich am Ende der Wurzel und im Text", () => {
@@ -152,9 +153,9 @@ describe("Ticketnummer und Ticketfilter (#1609)", () => {
 });
 
 describe("normPfad (#1646: eine Normalisierung für bereinige und Kontext-Treiber)", () => {
-  const N = raw as unknown as { normPfad: (p: string, o?: { wurzel?: string | null }) => string };
+  const N = raw as unknown as { normPfad: (p: string, o?: { wurzel?: string | null; worktree?: string | null }) => string };
   test("Worktree-Präfix und Wurzel fallen weg, klein, POSIX", () => {
-    expect(N.normPfad("C:\\Dev\\Proj\\.claude\\worktrees\\kq-5-x\\Scripts\\A.mjs", { wurzel: "C:/dev/proj" })).toBe("scripts/a.mjs");
+    expect(N.normPfad("C:\\Dev\\Proj\\.claude\\worktrees\\kq-5-x\\Scripts\\A.mjs", { wurzel: "C:/dev/proj", worktree: "kq-" })).toBe("scripts/a.mjs");
     expect(N.normPfad("C:/dev/proj/scripts/a.mjs", { wurzel: "C:/dev/proj" })).toBe("scripts/a.mjs");
   });
   test("Wurzel mit Backslash und mit Schrägstrich am Ende", () => {

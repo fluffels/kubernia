@@ -1,12 +1,18 @@
 /* Läufe aus Transkripten (#1579): Ticket-Zuordnung, Modelle ohne Platzhalter. Kern pur, synthetische Zeilen ohne IO. */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as raw from "../scripts/subagent-laeufe.mjs";
+import * as laeufeRoh from "../scripts/subagent-laeufe.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRoh from "../scripts/ticket-namen.mjs";
 
 type Row = Record<string, unknown>;
-const A = raw as unknown as {
-  ticketAusLauf: (e: { patch: { ticket: number | null } | null; prompt: string }) => number | null;
-  laufAus: (e: { meta: Record<string, unknown>; zeilen: Row[]; datei?: string }) => { ticket: number | null; modelle: string[] } | null;
+// Die Namen kommen aus der Projekt-Config; die Wrapper reichen sie durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const NAMEN = (namenRoh as unknown as { ladeTicketNamen: () => unknown }).ladeTicketNamen();
+const raw = laeufeRoh as object;
+const roh = laeufeRoh as unknown as { ticketAusLauf: (e: object, namen: unknown) => number | null; laufAus: (e: object, namen: unknown) => unknown };
+const A = {
+  ticketAusLauf: (e: { patch: { ticket: number | null } | null; prompt: string }) => roh.ticketAusLauf(e, NAMEN),
+  laufAus: (e: { meta: Record<string, unknown>; zeilen: Row[]; datei?: string }) => roh.laufAus(e, NAMEN) as { ticket: number | null; modelle: string[] } | null,
 };
 
 const zeile = (min: number, model: string | undefined, text?: string): Row =>
