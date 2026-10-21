@@ -388,7 +388,7 @@ describe("umgebungsWert: Standardwerte (eigener Prozess)", { timeout: 30_000 }, 
   test("Config nicht ladbar: kein Wurf, keine Alt-Prüfung", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));
-    copyFileSync(join(WURZEL, "scripts", "projekt-config-lib.mjs"), join(d, "scripts", "projekt-config-lib.mjs"));
+    for (const f of ["projekt-config-lib.mjs", "flag-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const code = `import(LIB).then(m => console.log(String(m.umgebungsWert({ ZD_Z_Y: "a" }, "FACTORY_Z_Y"))))`;
     const r = lauf(join(d, "scripts/projekt-config-lib.mjs"), code, {});
     assert.equal(r.status, 0, r.stderr);
