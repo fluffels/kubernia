@@ -3,7 +3,7 @@
  * @harness-waechter – einziger Durchsetzer dieser Marker-Liste, darum im geschützten test/harness/ (#1165).
  *
  * Fehlt ein Zeilen-Marker (Frontmatter-Name aus der Config) oder ein Block, prüft `projektwertLauf` die Stelle nicht mehr und das
- * Drift-Gate bleibt grün, obwohl der Wert von Hand gepflegt wird. Dateinamen und Schlüssel kommen aus `.factory/projekt.json`,
+ * Drift-Gate bleibt grün, obwohl der Wert von Hand gepflegt wird. Die Dateinamen folgen der Rolle (`factory-<rolle>.md`, `factory-ticket/`), die Schlüssel stehen in `.factory/projekt.json`;
  * der Wächter trägt keine Projektliterale.
  */
 import { describe, expect, test } from "vitest";
@@ -26,13 +26,12 @@ const P = rawPc as unknown as {
   PROJEKT_CONFIG: string;
 };
 
-const agenten = P.ladeProjektConfig().agenten;
-const agentPfad = (k: string): string => `.claude/agents/${agenten[k]}.md`;
+const agentPfad = (k: string): string => `.claude/agents/factory-${k}.md`;
 
 /** Dateien mit Frontmatter-Zeilen-Marker: Pfad -> erwarteter Schlüssel. */
 const ZEILEN: [string, string][] = [
   ...["planer", "umsetzer", "lens", "gruppe"].map((k): [string, string] => [agentPfad(k), `agenten.${k}`]),
-  [`.claude/skills/${agenten.ticketSkill}/SKILL.md`, "agenten.ticketSkill"],
+  [".claude/skills/factory-ticket/SKILL.md", "agenten.ticketSkill"],
 ];
 
 /** Dateien mit Projektwert-Block (geschlossene Liste). */
