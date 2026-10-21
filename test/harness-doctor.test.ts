@@ -59,7 +59,9 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
   }
   writeFileSync(join(root, "ruleset.json"), JSON.stringify(opt.spiegel ?? SPIEGEL));
   writeFileSync(join(root, "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
-  const welt = { ...GESUND, ...over };
+  const welt: Record<string, unknown> = { ...GESUND, ...over };
+  // Regeln liefert `gh api --paginate --slurp` als Seiten; eine flache Regelliste in den Fixtures ist eine Seite (Seitenform steht in "Regeln über zwei Seiten").
+  for (const [k, w] of Object.entries(welt)) if (k.includes("/rules/branches/") && Array.isArray(w) && !w.some(Array.isArray)) welt[k] = [w];
   const aufrufe: string[] = [];
   const gh = (args: string[]): string => {
     const k = args.join(" ");
@@ -148,9 +150,26 @@ describe("harness-doctor --pruefen", () => {
     assert.match(luecken(r)[0], /Ruleset:.*trunk/);
   });
 
+  test("Regeln über zwei Seiten (--slurp): Checks beider Seiten zählen, ein Check nur auf Seite 2 fehlend ist eine Lücke", () => {
+    const seite = (c: string) => [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: c }] } }];
+    const k = "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100";
+    assert.equal(lauf({ [k]: [seite("CI"), seite("Audit")] }).code, 0);
+    const r = lauf({ [k]: [seite("CI"), seite("Anderes")] });
+    assert.equal(r.code, 1);
+    assert.match(luecken(r)[0], /Required-Check "Audit" fehlt/);
+  });
+
+  test("Regel ohne parameters zählt als ohne Checks", () => {
+    const r = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks" }] });
+    assert.equal(r.code, 1);
+    assert.match(luecken(r)[0], /Ruleset: kein Required status check/);
+  });
+
   test("Option mit Text-Namen statt { raw } gilt auch", () => {
     assert.equal(lauf({ "api orgs/acme/projectsV2/7/fields/5": { ...feld, options: [{ id: "abc", name: "Todo" }] } }).code, 0);
-    assert.equal(lauf({ "api orgs/acme/projectsV2/7/fields/5": { name: "Status", node_id: "x_status" } }).code, 1);
+    const r = lauf({ "api orgs/acme/projectsV2/7/fields/5": { name: "Status", node_id: "x_status" } });
+    assert.equal(r.code, 1);
+    assert.match(luecken(r)[0], /todoOptionId/);
   });
 
   test("ohne Ordner .github/workflows wird trotzdem geprüft (Einrichtungsfall)", () => {
@@ -205,6 +224,7 @@ describe("harness-doctor --pruefen", () => {
     const kaputt = lauf({}, { argv: ["--pruefen", "--config", "/gibt/es/nicht.json"] });
     assert.equal(kaputt.code, 2);
     assert.match(kaputt.err.join("\n"), /Fix:/);
+    assert.doesNotMatch(kaputt.err.join("\n"), /Ruleset-Spiegel/);
     assert.equal(kaputt.aufrufe.length, 0);
     const ungueltig = lauf({}, { config: { version: 2 } });
     assert.equal(ungueltig.code, 2);
