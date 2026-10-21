@@ -3,6 +3,7 @@
  *
  *   node scripts/langfuse-vorbedingung.mjs                 prüft GET <Langfuse>/api/public/health; Exit 0 = erreichbar, 1 = aus, 2 = Aufruffehler
  *   node scripts/langfuse-vorbedingung.mjs --sessionstart  SessionStart-Hook: Exit immer 0, bei Ausfall steht die Warnung als JSON auf stdout (`systemMessage` für die Nutzerin, `additionalContext` für die Session)
+ *   node scripts/langfuse-vorbedingung.mjs --json         maschinenlesbar für das Cockpit: stdout `{"erreichbar":bool,"grund":string|null}`, Exit-Codes wie ohne Flag; nicht mit --sessionstart kombinierbar (Exit 2)
  *
  * Aufrufer: der Ticket-Skill (Schritt 0); bewusst NICHT im Board-Takt.
  * Bekannte Grenze: prüft nur /api/public/health, nicht die MCP-Verbindung der Session; die verbindet beim Session-Start vor Schritt 0 (Ausfall: mcp-ausfall.mjs).
@@ -42,16 +43,21 @@ export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRI
   }
 }
 
-const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]";
+const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart | --json]";
 
 export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies } = {}) {
-  const { werte, fehler } = flagsLesen(argv, { sessionstart: { type: "boolean" } });
-  if (fehler) {
-    err(`${fehler.text}. ${USAGE}`);
+  const { werte, fehler } = flagsLesen(argv, { sessionstart: { type: "boolean" }, json: { type: "boolean" } });
+  const aufrufFehler = fehler?.text ?? (werte.sessionstart && werte.json ? "--json und --sessionstart schließen sich aus" : null);
+  if (aufrufFehler) {
+    err(`${aufrufFehler}. ${USAGE}`);
     return AUFRUF_EXIT;
   }
   const sessionstart = werte.sessionstart === true;
   const urteil = await pruefeLangfuse({ baseUrl: basisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) }), fetchImpl, fristMs });
+  if (werte.json === true) {
+    out(JSON.stringify({ erreichbar: urteil.ok, grund: urteil.ok ? null : urteil.grund }));
+    return urteil.ok ? 0 : 1;
+  }
   if (urteil.ok) return 0;
   const text = `${urteil.grund}. ${HINWEIS}`;
   if (sessionstart) {
