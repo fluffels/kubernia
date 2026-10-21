@@ -44,9 +44,17 @@ export const RESTE: { name: string; muster: RegExp }[] = [
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
 export const AUSNAHMEN: { praefix: string; grund: string }[] = [
   { praefix: "docs/adr/", grund: "ADRs sind historisch und werden nie umgeschrieben (AGENTS.md § Projekt-Brain pflegen)" },
-  { praefix: "docs/referenz/befehle.md", grund: "das Inventar der Umgebungsvariablen nennt die Altnamen bewusst in einer eigenen Spalte (#1824)" },
   { praefix: "test/harness/model-routing.test.ts", grund: "Absenz-Test: prüft, dass die entfernten Dateien nicht mehr existieren (ADR 0028)" },
   { praefix: "test/harness/entfernte-pfade.test.ts", grund: "dieser Wächter trägt die Muster selbst" },
+];
+
+/** Ausnahmen für genau eine Regel in genau einer Datei (exakter Pfad); alle anderen Regeln prüfen die Datei weiter. */
+export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] = [
+  {
+    pfad: "docs/referenz/befehle.md",
+    regel: "Kern-Umgebungsvariable mit Projektpräfix",
+    grund: "das Inventar der Umgebungsvariablen nennt die Altnamen bewusst in einer eigenen Spalte (#1824)",
+  },
 ];
 
 /** Findet Reste in den übergebenen Dateien; leer = sauber. */
@@ -54,8 +62,9 @@ export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[
   const treffer: string[] = [];
   for (const d of dateien) {
     if (AUSNAHMEN.some((a) => d.pfad.startsWith(a.praefix))) continue;
+    const regeln = RESTE.filter((r) => !REGEL_AUSNAHMEN.some((a) => a.pfad === d.pfad && a.regel === r.name));
     d.inhalt.split("\n").forEach((zeile, i) => {
-      for (const r of RESTE) if (r.muster.test(zeile)) treffer.push(`${d.pfad}:${i + 1}: ${r.name}`);
+      for (const r of regeln) if (r.muster.test(zeile)) treffer.push(`${d.pfad}:${i + 1}: ${r.name}`);
     });
   }
   return treffer;
@@ -123,7 +132,16 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.ok(findeReste([{ pfad: "docs/modul.md", inhalt: text }]).length > 0);
   });
 
+  test("Regel-Ausnahme: das Inventar darf Altnamen tragen, jeder andere Rest dort und jede andere Datei bleibt rot", () => {
+    const inv = "docs/referenz/befehle.md";
+    assert.deepEqual(findeReste([{ pfad: inv, inhalt: "KQ_DIFF_BASE" }]), []);
+    assert.equal(findeReste([{ pfad: inv, inhalt: "der Skill kubernia-workflow" }]).length, 1);
+    assert.ok(findeReste([{ pfad: inv + ".bak", inhalt: "KQ_DIFF_BASE" }]).length > 0);
+    assert.ok(findeReste([{ pfad: "docs/x.md", inhalt: "KQ_DIFF_BASE" }]).length > 0);
+  });
+
   test("jede Ausnahme nennt einen Grund", () => {
+    for (const a of REGEL_AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.pfad} ohne Grund`);
     for (const a of AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.praefix} ohne Grund`);
   });
 });

@@ -103,25 +103,25 @@ Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-
 
 | Name (neu) | Altname | Ring | Wer setzt ihn | Wer liest ihn |
 | --- | --- | --- | --- | --- |
-| `FACTORY_DIFF_BASE` | `KQ_DIFF_BASE` | Kern | Workflow `ci.yml` (Schritt „Diff-Basis bestimmen“); lokal optional die Maintainerin; in Tests `test/diffsize.test.ts`, `test/diffcoverage.test.ts`, `test/review-nachweis.test.ts`, `test/abnahme-nachweis.test.ts` | `resolveBase` (`scripts/check-basis.mjs`): `check-diffsize`, `check-diffcoverage`, `check-lockfile`, `check-review-nachweis`, `check-abnahme-nachweis`, `verify-lauf` |
+| `FACTORY_DIFF_BASE` | `KQ_DIFF_BASE` | Kern | Workflow `ci.yml` (Schritt „Diff-Basis bestimmen“); lokal optional die Maintainerin; in Tests `test/diffsize.test.ts`, `test/diffcoverage.test.ts`, `test/review-nachweis.test.ts`, `test/abnahme-nachweis.test.ts`, `test/slice-override.test.ts` | `resolveBase` (`scripts/check-basis.mjs`): `check-diffsize`, `check-diffcoverage`, `check-lockfile`, `check-review-nachweis`, `check-abnahme-nachweis`, `verify-lauf` |
 | `FACTORY_DIFFSIZE_MAX_FILES` | `KQ_DIFFSIZE_MAX_FILES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
 | `FACTORY_DIFFSIZE_MAX_LINES` | `KQ_DIFFSIZE_MAX_LINES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
-| `FACTORY_PR_NUMBER` | `KQ_PR_NUMBER` | Kern | Workflow `ci.yml` | `check-abnahme-nachweis` |
-| `FACTORY_PR_DRAFT` | `KQ_PR_DRAFT` | Kern | Workflow `ci.yml` | `check-abnahme-nachweis` |
-| `FACTORY_PR_BODY` | `KQ_PR_BODY` | Kern | Workflow `ci.yml` | `check-abnahme-nachweis` |
+| `FACTORY_PR_NUMBER` | `KQ_PR_NUMBER` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
+| `FACTORY_PR_DRAFT` | `KQ_PR_DRAFT` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
+| `FACTORY_PR_BODY` | `KQ_PR_BODY` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
 | `FACTORY_GH_KOSTEN_LOG` | `KQ_GH_KOSTEN_LOG` | Kern | die Maintainerin (optional); Testskripte `test/messskripte-namen.test.ts`, `test/support/mess-golden-faelle.mjs` | `kontingent-lib`, `gh-kontingent` |
-| `FACTORY_MCP_LOG_DIR` | `KQ_MCP_LOG_DIR` | Kern | Testskript `test/harness/mcp-ausfall.test.ts` | `mcp-ausfall` |
+| `FACTORY_MCP_LOG_DIR` | `KQ_MCP_LOG_DIR` | Kern | Testskripte `test/harness/mcp-ausfall.test.ts`, `test/harness/lebenszyklus-namen.test.ts` | `mcp-ausfall` |
 | `FACTORY_MCP_AUSFALL_STAND` | `KQ_MCP_AUSFALL_STAND` | Kern | Testskript `test/harness/mcp-ausfall.test.ts` | `mcp-ausfall` |
-| `FACTORY_PACING_ZIELQUOTE` | `KQ_PACING_ZIELQUOTE` | Kern | die Maintainerin (Shell oder `env` in `.claude/settings.local.json`) | `budget-lib` |
+| `FACTORY_PACING_ZIELQUOTE` | `KQ_PACING_ZIELQUOTE` | Kern | die Maintainerin (Shell oder `env` in `.claude/settings.local.json`); Testskript `test/budget-pacing.test.ts` | `budget-lib` |
 | `FACTORY_PACING_PROBE_SKRIPT` | `KQ_PACING_PROBE_SKRIPT` | Kern | Testskript `test/budget-pacing.test.ts` | `budget-pacing` |
 | `FACTORY_RATE_LIMITS_SNAPSHOT` | `KQ_RATE_LIMITS_SNAPSHOT` | Kern | Testskripte `test/budget-pacing.test.ts`, `test/statusline.test.ts` | `budget-lib` |
 | `FACTORY_STATUSLINE_DURCHREICHEN` | `KQ_STATUSLINE_DURCHREICHEN` | Kern | Skript `statusline` (Schleifenschutz für die durchgereichte Statusline) | `statusline` |
 | `FACTORY_USER_SETTINGS` | `KQ_USER_SETTINGS` | Kern | Testskript `test/statusline.test.ts` | `statusline` |
-| `FACTORY_TEST_FEHLT` | `KQ_TEST_FEHLT` | Kern | nie gesetzt (Absenz-Fixture im Testskript `test/harness/mcp-ausfall.test.ts`) | `mcp-ausfall` (Test des Fehlerpfads) |
+| `FACTORY_TEST_FEHLT` | – (nur Platzhalter-Name, ohne Altnamen-Weiterleitung) | Kern | nie gesetzt (Absenz-Fixture im Testskript `test/harness/mcp-ausfall.test.ts`) | `mcp-ausfall` (Test des Fehlerpfads) |
 | `KQ_UPDATE_QUIZ_GOLDEN` | – | Projekt | Skript `quiz-golden` | Test `quizcheck` |
 | `KQ_GIT_SAFECRLF` | – | Projekt | Testskript `test/support/git-umgebung.ts` (Guard) | `test/support/git-umgebung.ts` (liest und setzt) |
 | `VITE_KQ_DEVPANEL_PW` | – | Projekt | die Maintainerin (Repo-Variable, `docker run -e`) | Vite-Build |
 
-**Zählung:** 18 Variablen (15 Kern, 3 Projekt), eine Zeile je Variable; die 15 Kern-Variablen haben je einen Altnamen, zusammen 33 Namen. Das Ticket nannte 21; nachzählbar sind 19 verschiedene `KQ_`-Zeichenketten auf `origin/main` außerhalb von ADRs und Analysen (`git grep -hoE '\b[A-Z_]*KQ_[A-Z0-9_]*[A-Z0-9]\b' origin/main -- . ':!docs/adr' ':!docs/architektur-analyse*'`): die 15 Kern-Namen, die 3 Projekt-Namen und der entfallene `KQ_DIFFSIZE_OVERRIDE`. Die Abweichung zu 21 ist nicht reproduzierbar (weitere Treffer stehen nur in ADRs).
+**Zählung:** 18 Variablen (15 Kern, 3 Projekt), eine Zeile je Variable; 14 der 15 Kern-Variablen haben einen Altnamen (`FACTORY_TEST_FEHLT` ist nur ein Platzhalter-Name), zusammen 32 Namen. Das Ticket nannte 21; nachzählbar sind 19 verschiedene `KQ_`-Zeichenketten auf `origin/main` außerhalb von ADRs und Analysen (`git grep -hoE '\b[A-Z_]*KQ_[A-Z0-9_]*[A-Z0-9]\b' origin/main -- . ':!docs/adr' ':!docs/architektur-analyse*'`): die 15 Kern-Namen, die 3 Projekt-Namen und der entfallene `KQ_DIFFSIZE_OVERRIDE`. Die Abweichung zu 21 ist nicht reproduzierbar (weitere Treffer stehen nur in ADRs).
 
 `__KQ_DEVPANEL__` und `__KQ_CONFIG__` sind Vite-Konstanten, keine Umgebungsvariablen. Die Override-Variablen der Slice-Gates sind entfallen: dafür gibt es Commit-Zeilen (siehe [agent-harness](../agent-harness.md)).
