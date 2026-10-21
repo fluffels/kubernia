@@ -145,7 +145,7 @@ Klassen: `ja (Probe)`, `ja (Doku/Konfiguration)`, `nein` (laut Quelle nicht mach
 
 Ergänzungen:
 
-- **WSL2, Worktree:** benannte Lücke: `config`/`hooks` in `.git` bleiben schreibgeschützt [S]; das betrifft den Upstream bei `git worktree add -b … origin/main` und `push -u`. Abhilfe: ein eng gefasstes `excludedCommands` [S], entschieden in #1434 (AK4). Den npm-Cache ins Sandbox-TMPDIR legen, `npm ci` nur im Worktree [R].
+- **WSL2, Worktree:** benannte Lücke: `config`/`hooks` in `.git` bleiben schreibgeschützt [S]; das betrifft den Upstream bei `git worktree add -b … origin/main` und `push -u`. Abhilfe: ein eng gefasstes `excludedCommands` [S], entschieden in #1434 (AK4). `npm ci` nur im Worktree [R]; wohin der npm-Cache gehört, ist unbelegt (klärt #1434).
 - **WSL2, `gh` und Auto-Merge:** Probe #1434 (AK3).
 - **Cloud, Auto-Merge:** nein über `gh pr merge --auto` (GraphQL); Branch-Löschungen weist der Proxy ab [C2]. Auto-fix für PRs gibt es, braucht die Claude-GitHub-App [C1].
 
