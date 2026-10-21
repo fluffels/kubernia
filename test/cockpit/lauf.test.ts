@@ -3,7 +3,8 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLauf from "../../scripts/cockpit/lauf.mjs";
 
-const { fehlerText, laufe } = rawLauf as unknown as {
+const { fehlerText, ergebnisAus, laufe } = rawLauf as unknown as {
+  ergebnisAus: (err: unknown, out: string, errOut: string) => { code: number | null; fehler: string | null };
   fehlerText: (err: unknown) => string;
   laufe: (id: string, o?: { signal?: AbortSignal }) => Promise<{ code: number | null; fehler: string | null }>;
 };
@@ -36,5 +37,15 @@ describe("laufe meldet einen Abbruch mit lesbarem Grund", () => {
     const r = await laufe("langfuse-vorbedingung", { signal: AbortSignal.abort() });
     expect(r.code).toBeNull();
     expect(r.fehler).toBe("ABORT_ERR");
+  });
+});
+
+describe("ergebnisAus", () => {
+  test("Signal-Ende (code null, signal SIGTERM): fehler ist das Signal, nicht \"null\"", () => {
+    expect(ergebnisAus({ code: null, signal: "SIGTERM", message: "x" }, "", "")).toMatchObject({ code: null, fehler: "SIGTERM" });
+  });
+  test("Exit-Code: kein fehler; Erfolg: code 0", () => {
+    expect(ergebnisAus({ code: 3 }, "", "")).toMatchObject({ code: 3, fehler: null });
+    expect(ergebnisAus(null, "o", "")).toMatchObject({ code: 0, fehler: null });
   });
 });
