@@ -78,13 +78,13 @@ const MODI = ["top", "after", "position", "missing", "umzug"];
  * Argumente → { anchor, numbers, dry } bzw. { position, numbers, dry } bzw. { missing } oder null bei falscher Benutzung.
  * Grammatik (ohne `--dry-run`, das überall stehen darf): `[--notfall <art>] <modus> <nr>...`, genau ein Modus, danach nur Positionsargumente.
  * `--notfall <art>` (Art aus NOTFALL_ARTEN) steht nur unmittelbar vor `--top` und setzt `notfall` im Ergebnis. Unbekannte, fehlende
- * oder doppelte Flags und ein Options-Terminator `--` sind ungültig.
+ * oder doppelte Flags und ein Options-Terminator `--` (er steht nicht unter den Positionsargumenten) sind ungültig.
  */
 export function parseArgs(argv) {
   const optionen = { "dry-run": { type: "boolean" }, notfall: { type: "string" } };
   for (const m of MODI) optionen[m] = { type: "boolean" };
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, optionen, { positionale: true });
-  if (fehler || tokens.some((t) => t.kind === "option-terminator")) return null;
+  if (fehler) return null;
   const dry = werte["dry-run"] === true;
   const reihe = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
   let i = 0;
