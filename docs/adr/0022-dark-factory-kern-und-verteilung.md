@@ -404,4 +404,4 @@ Umsetzungsentscheidungen in #1756 (Abnahme-Quote in den Factory-Kennzahlen):
 
 ## Fortschreibung #1814 (2026-10-21): Factory-Seiten bleiben unter docs/
 
-Die Factory-Seiten bleiben unter `docs/` (kein Verschieben nach `docs/factory/`, kein Ring `kern`). Gründe: Verweise in ADRs werden nie umgeschrieben, die Seiten mischen Projektwerte mit Kernwissen, und dieser ADR sieht Markdown-Blöcke als Kernbestandteil vor, nicht ganze Seiten.
+Die Factory-Seiten bleiben unter `docs/` (kein Verschieben nach `docs/factory/`, kein Ring `kern`). Gründe: Verweise in ADRs werden nie umgeschrieben, die Seiten mischen Projektwerte mit Kernwissen, und die Regelzeilen kommen laut F4 als Markdown-Blöcke in den Kern, ganze Brain-Seiten sind dafür nicht vorgesehen.

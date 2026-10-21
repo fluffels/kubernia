@@ -69,7 +69,7 @@ Mehrere Chats/Agenten können **gleichzeitig** laufen. Damit sich zwei nie dasse
 
 Fallstricke (Windows-Cleanup: laufende Dev-Server killen, nicht in den Worktree `cd`en; `node_modules` nicht per Junction verlinken): [AGENTS.md › Kollisionsschutz](../AGENTS.md#wo-die-todos-leben).
 
-**Lokale Branches nach dem Squash-Merge:** `--merged` erkennt Squash-Merges nicht, nach dem Merge bleibt der lokale Branch stehen (Remote gelöscht, lokal `[gone]`). Als Teil des Aufräumens nach dem Merge löscht `node scripts/cleanup-worktrees.mjs --branches --fix` nur Branches `feature/kq-<nr>…`, die `[gone]` und in keinem Worktree ausgecheckt sind und deren Spitze dem Kopf-Commit eines gemergten PR entspricht (lokale Nach-Commits bleiben, scheitert `gh`, wird nichts gelöscht); ohne `--fix` nur die Liste. Nie im Stop-Hook.
+**Lokale Branches nach dem Squash-Merge:** `--merged` erkennt Squash-Merges nicht, nach dem Merge bleibt der lokale Branch stehen (Remote gelöscht, lokal `[gone]`). Als Teil des Aufräumens nach dem Merge löscht `node scripts/cleanup-worktrees.mjs --branches --fix` (holt vorher selbst `git fetch --prune origin`; scheitert der Fetch, Exit 1 ohne Löschen) nur Branches `feature/kq-<nr>…`, die `[gone]` und in keinem Worktree ausgecheckt sind und deren Spitze dem Kopf-Commit eines gemergten PR entspricht (lokale Nach-Commits bleiben, scheitert `gh`, wird nichts gelöscht); ohne `--fix` nur die Liste. Nie im Stop-Hook.
 
 ### 2.4 Automatische Gates (Fitness-Functions)
 

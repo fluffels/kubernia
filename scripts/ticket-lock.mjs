@@ -27,7 +27,7 @@
  *
  * Bewusste Grenzen: `claim --wiederaufnahme` prüft kein Festgefahren-Label (das tut `claims-pruefen.mjs`; ein ausdrückliches „mach weiter“ der Maintainerin ist eine menschliche Entscheidung); nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre);
- * ein Lock eines gemergten, geschlossenen Tickets sperrt nichts (die Auswahl nimmt nur offene Todo-Items), wird aber nur durch das Aufräumen (`freigeben` mit der Nonce) oder den Verfall per `VERWAIST_MS`/`ALTLAST_MS` frei; `pruefe` kann nach dem Merge bis dahin `aktiv` melden, solange Worktree oder Branch noch existieren (erst `cleanup-worktrees.mjs --branches --fix` nach `git fetch --prune`);
+ * ein Lock eines gemergten, geschlossenen Tickets sperrt nichts (die Auswahl nimmt nur offene Todo-Items), wird aber nur durch das Aufräumen (`freigeben` mit der Nonce) oder den Verfall per `VERWAIST_MS`/`ALTLAST_MS` frei; `pruefe` kann nach dem Merge bis dahin `aktiv` melden, solange Worktree oder Branch noch existieren (erst `cleanup-worktrees.mjs --branches --fix`, das selbst `git fetch --prune` fährt);
  * kein Freigabeweg ohne Nonce (Absicht);
  * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer; aus der Lock-Datei ist sie nicht lesbar). Jede Exit-4-Ausgabe nennt: den Lock nie von Hand lösen.
  *
