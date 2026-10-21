@@ -40,6 +40,13 @@ interface BesitzLib {
 }
 const { markerStart, markerEnde, einheitId, einheitText, normalisierterEinheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
 
+interface PcLib {
+  ROLLEN_PFADE: Record<string, string>;
+  PFLICHT_AGENTEN: string[];
+}
+const { ROLLEN_PFADE, PFLICHT_AGENTEN } = rawPc as unknown as PcLib;
+const { projektwertStellen } = rawBesitz as unknown as { projektwertStellen: (text: string, pfad?: string) => { zeilen: { schluessel: string; name: string }[] } };
+
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const MANIFEST = ".factory/besitz.json";
 const BASELINE = "test/harness/kern-literale-baseline.json";
@@ -95,6 +102,17 @@ export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
   if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
   for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(escapeRe(literal), "gi");
+  return out;
+}
+
+/** Pfade (#1748): je Pfad und Begriff, der im Pfad vorkommt, eine Meldung. Pur; die Regex der Begriffe sind global, darum `match` statt `test`. */
+export function pfadLiterale(pfade: string[], begriffe: Record<string, RegExp>): string[] {
+  const out: string[] = [];
+  for (const pfad of pfade) {
+    for (const [name, re] of Object.entries(begriffe)) {
+      if ((pfad.match(re) ?? []).length > 0) out.push(`${pfad}: Projektliteral '${name}' im Pfad`);
+    }
+  }
   return out;
 }
 
@@ -855,5 +873,27 @@ describe("Ring-Tabelle (ADR 0029)", () => {
     const begriffe = { fremd: /Fremdwort/g };
     const E = [ein("fehlt.mjs"), ein("fehlt.md", { block: "b" }), ein("a.md", { block: "b" })];
     assert.deepEqual(istZaehlung(E, (p) => (p === "a.md" ? "Fremdwort ohne Marker" : null), begriffe), {});
+  });
+});
+
+describe("Kern-Pfade ohne Projektliteral (#1748)", () => {
+  // Grenze: geprüft werden nur die Pfade des Manifests und die Rollen-Pfade. Der Repo-Begriff zählt ohne Wortgrenze: ein sehr kurzer Repo-Name kann einen Pfad zufällig treffen.
+  test("pfadLiterale: ein Einheitspfad mit Repo-Namen oder Agentennamen ist rot (Negativfall)", () => {
+    assert.deepEqual(pfadLiterale([".claude/agents/demo-planer.md"], B), [".claude/agents/demo-planer.md: Projektliteral 'Repo' im Pfad"]);
+    assert.deepEqual(pfadLiterale([".claude/agents/wk-planer.md"], B), [".claude/agents/wk-planer.md: Projektliteral 'Agent' im Pfad"]);
+    assert.deepEqual(pfadLiterale([".claude/agents/factory-planer.md", ".claude/skills/factory-ticket/SKILL.md"], B), []);
+    assert.deepEqual(pfadLiterale([], B), []);
+  });
+  test("echt: kein Manifest- und kein Rollen-Pfad trägt ein Projektliteral", () => {
+    assert.deepEqual(pfadLiterale([...manifest.eintraege.map((e) => e.pfad), ...Object.values(ROLLEN_PFADE)], echteBegriffe), []);
+  });
+  test("Fitness: die Rollen-Pfade decken genau die Pflicht-Agenten ab, jede Datei existiert und setzt den Namen aus agenten.<rolle>", () => {
+    assert.deepEqual(Object.keys(ROLLEN_PFADE), PFLICHT_AGENTEN);
+    for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
+      const text = lesenWurzel(pfad);
+      assert.notEqual(text, null, `${pfad} fehlt`);
+      const stellen = projektwertStellen((text ?? "").replace(/\r\n/g, "\n"), pfad).zeilen;
+      assert.ok(stellen.some((s) => s.schluessel === `agenten.${rolle}` && s.name === "name"), `${pfad} setzt name: nicht aus agenten.${rolle}`);
+    }
   });
 });

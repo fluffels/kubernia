@@ -3,7 +3,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * `python3 - <<EOF` und Verwandte wanderten unter Git-Bash in den Hintergrund und hielten den Worktree-Ordner; die Regel
- * stand nur als Bitte in kubernia-umsetzer.md und der FAQ. Der Hook `scripts/stdin-skript-guard.mjs` macht daraus ein deny.
+ * stand nur als Bitte in factory-umsetzer.md und der FAQ. Der Hook `scripts/stdin-skript-guard.mjs` macht daraus ein deny.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";

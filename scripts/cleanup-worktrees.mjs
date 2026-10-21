@@ -11,7 +11,7 @@
  *
  * Lokale Branches nach dem Squash-Merge (#1579; Liste, mit `--fix` löschen; nie im Stop-Hook):
  *   node scripts/cleanup-worktrees.mjs --branches [--fix]
- * Gelöscht wird nur ein `<Branch-Präfix><nr>…`-Branch, dessen Remote weg ist (`[gone]`), der in keinem Worktree ausgecheckt ist und dessen
+ * Gelöscht wird nur ein `<praefixe.branch><nr>…`-Branch, dessen Remote weg ist (`[gone]`), der in keinem Worktree ausgecheckt ist und dessen
  * Spitze dem Kopf-Commit eines gemergten PR entspricht; scheitert `gh`, wird nichts gelöscht.
  *
  * Geister = Ordner in .claude/worktrees/, die git worktree list nicht kennt.
@@ -21,16 +21,16 @@
  * Skript räumt stattdessen über `fs.rmSync` auf (kein Shell-`rm`, `Bash(node:*)`
  * bleibt erlaubt).
  *
- * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<Worktree-Präfix><nr>-lens-r<runde>` bzw. `<Worktree-Präfix><nr>-lens-m<n>` (Merge-Delta-Lens, Skill `review-lenses`). Bleibt so ein
- * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `<Worktree-Präfix><nr>` weg ist, fehlt er in der Waisen-Sicht oben
+ * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<praefixe.worktree><nr>-lens-r<runde>` bzw. `<praefixe.worktree><nr>-lens-m<n>` (Merge-Delta-Lens, Skill `review-lenses`). Bleibt so ein
+ * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `<praefixe.worktree><nr>` weg ist, fehlt er in der Waisen-Sicht oben
  * (die kennt nur unregistrierte Ordner). `verwaisteLensWorktrees` findet sie, `entferneLensWorktrees` räumt sie per
  * `git worktree remove --force` und prüft das Ergebnis.
- * Bewusste Grenzen: ein Feature-Worktree, der nicht `<Worktree-Präfix><nr>` heißt, hat keinen erkennbaren Eltern-Worktree; seine
+ * Bewusste Grenzen: ein Feature-Worktree, der nicht `<praefixe.worktree><nr>` heißt, hat keinen erkennbaren Eltern-Worktree; seine
  * Lens-Worktrees gelten nach 5 Minuten als verwaist. Ein junger Lens-Worktree wird nur gemeldet.
  *
  * Lose Dateien (#1476): direkt unter `.claude/worktrees/` liegende reguläre Dateien (z.B. eine Sicherungskopie
- * `<Worktree-Präfix><nr>-…-orig.bak`, die eine Lens neben ihren Worktree legte) hält `git worktree remove` nicht auf. Verwaist ist
- * eine Datei `<Worktree-Präfix><nr>[-.]…`, deren `<Worktree-Präfix><nr>` nicht mehr registriert und die älter als 5 Minuten ist; nur sie wird
+ * `<praefixe.worktree><nr>-…-orig.bak`, die eine Lens neben ihren Worktree legte) hält `git worktree remove` nicht auf. Verwaist ist
+ * eine Datei `<praefixe.worktree><nr>[-.]…`, deren `<praefixe.worktree><nr>` nicht mehr registriert und die älter als 5 Minuten ist; nur sie wird
  * entfernt (nicht rekursiv, keine Links, Schutzgurt wie bei Ordnern). Junge und fremd benannte Dateien werden nur gemeldet.
  *
  * Entscheidungslogik ist pure/exportiert und testbar (execSync/fs injizierbar) —

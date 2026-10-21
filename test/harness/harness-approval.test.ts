@@ -503,7 +503,7 @@ describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
 
   test("Red-Green: eine Kopie außerhalb von AGENTS.md wird gemeldet, AGENTS.md und ADRs nicht", () => {
     const text = "Rückfrage nötig bei (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum)";
-    assert.equal(kriterienKopien({ ".claude/agents/kubernia-planner.md": text }).length, 2);
+    assert.equal(kriterienKopien({ ".claude/agents/factory-planer.md": text }).length, 2);
     assert.equal(kriterienKopien({ "AGENTS.md": text, "docs/adr/0012-x.md": text }).length, 0);
     assert.equal(kriterienKopien({ "x.md": "Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints" }).length, 0);
     assert.equal(kriterienKopien({ "x.js": "Ruleset und Secrets sind Außenwirkung" }).length, 0, "Erwähnung ohne die ausgeschriebene Liste");

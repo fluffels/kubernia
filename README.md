@@ -151,16 +151,16 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Art | Name | Konfiguration | Quelle |
 |---|---|---|---|
 | Subagent | `Explore` | model: haiku, effort: low | `.claude/agents/explore.md` |
+| Subagent | `kubernia-gruppe` | model: sonnet, effort: medium | `.claude/agents/factory-gruppe.md` |
+| Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/factory-lens.md` |
+| Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/factory-planer.md` |
+| Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/factory-umsetzer.md` |
 | Subagent | `forum-leser` | model: sonnet, effort: medium | `.claude/agents/forum-leser.md` |
 | Subagent | `holdout-abnahme` | model: opus, effort: medium | `.claude/agents/holdout-abnahme.md` |
 | Subagent | `holdout-szenario` | model: opus, effort: medium | `.claude/agents/holdout-szenario.md` |
-| Subagent | `kubernia-gruppe` | model: sonnet, effort: medium | `.claude/agents/kubernia-gruppe.md` |
-| Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/kubernia-lens.md` |
-| Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/kubernia-planner.md` |
-| Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/kubernia-umsetzer.md` |
 | Skill | `factory` | model: sonnet | `.claude/skills/factory/SKILL.md` |
+| Skill | `kubernia` | model: sonnet | `.claude/skills/factory-ticket/SKILL.md` |
 | Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
-| Skill | `kubernia` | model: sonnet | `.claude/skills/kubernia/SKILL.md` |
 | Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
 | Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent\|SendMessage`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
@@ -170,10 +170,10 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/langfuse-vorbedingung.mjs --sessionstart` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
+| Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/factory-lens.md` |
 | Hook | `PreToolUse` | matcher: `Read`, `node scripts/forum-leser-guard.mjs` | `.claude/agents/forum-leser.md` |
 | Hook | `PreToolUse` | matcher: `Write`, `node scripts/holdout-guard.mjs abnahme-write` | `.claude/agents/holdout-abnahme.md` |
 | Hook | `PreToolUse` | matcher: `Read\|Grep\|Glob`, `node scripts/holdout-guard.mjs szenario-lesen` | `.claude/agents/holdout-szenario.md` |
-| Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
 | Plugin | `langfuse-observability` | Marktplatz: langfuse-observability | `.claude/settings.json` |
 | Git-Hook | `post-commit` | — | `.githooks/post-commit` |
 | Git-Hook | `pre-push` | — | `.githooks/pre-push` |

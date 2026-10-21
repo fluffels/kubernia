@@ -239,7 +239,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
   return { buckets, missing, below };
 }
 
-/** Override-Trailer (#1269, Schlüssel aus `zeilen.diffcovOverride`): eine Zeile `<Präfix>Diffcov-Override: #<nr> <warum>` (Präfix aus der Projekt-Config)
+/** Override-Trailer (#1269, Schlüssel aus `zeilen.diffcovOverride`): eine Zeile `<praefixe.commitZeile>Diffcov-Override: #<nr> <warum>` (Präfix aus der Projekt-Config)
  *  in einer Commit-Message des Slices. Parser und Slice-Bereich teilt es sich mit
  *  check:diffsize (scripts/slice-override.mjs), damit es lokal, im PR und auf main gleich wirkt. */
 

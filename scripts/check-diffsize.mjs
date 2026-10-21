@@ -33,7 +33,7 @@
  *
  * Override mit Pflicht-Begründung (#1269, gleiches Muster wie die check-size-ALLOWLIST,
  * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split) wird
- * über eine Zeile `<Präfix>Diffsize-Override: #<nr> <warum>` (Präfix `praefixe.commitZeile` der Projekt-Config) am Zeilenanfang einer Commit-
+ * über eine Zeile `<praefixe.commitZeile>Diffsize-Override: #<nr> <warum>` (Präfix `praefixe.commitZeile` der Projekt-Config) am Zeilenanfang einer Commit-
  * Message IM SLICE durchgelassen (am besten ein eigener leerer Commit). Gelesen wird
  * `git log <basis>..HEAD` mit derselben Basis wie der Diff. So wirkt derselbe Mechanismus
  * lokal, im PR (der Merge-Checkout enthält die PR-Commits) und auf push:main (der

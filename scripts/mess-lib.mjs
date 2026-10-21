@@ -32,7 +32,7 @@ export function istNeuaufbau({ gapMs, pauseMs, call }) {
 }
 
 
-/** Kern des Worktree-Pfads `/.claude/worktrees/<Worktree-Präfix><nr>…` (Regex-Quelltext) zum Präfix aus der Projekt-Config: `bereinige` und `normPfad` nutzen dieselbe Regel. */
+/** Kern des Worktree-Pfads `/.claude/worktrees/<praefixe.worktree><nr>…` (Regex-Quelltext) zum Präfix aus der Projekt-Config: `bereinige` und `normPfad` nutzen dieselbe Regel. */
 const worktreeKern = (worktree) => String.raw`/\.claude/worktrees/${escapeRegex(worktree)}\d+[\w-]*`;
 
 /** Beide Schreibweisen einer Repo-Wurzel (`C:/x/y` und Git-Bash `/c/x/y`) als Regex-Alternativen. */
@@ -48,7 +48,7 @@ function wurzelVarianten(wurzel) {
 }
 
 /**
- * Pfad vergleichbar machen: Schrägstriche, klein, ohne Worktree-Pfad `…/worktrees/<Worktree-Präfix><nr>…/` und ohne die Repo-Wurzel (beide
+ * Pfad vergleichbar machen: Schrägstriche, klein, ohne Worktree-Pfad `…/worktrees/<praefixe.worktree><nr>…/` und ohne die Repo-Wurzel (beide
  * Schreibweisen aus `wurzelVarianten`, auch mit Backslash oder abschließendem Schrägstrich). Pfade außerhalb der Wurzel bleiben stehen.
  * `worktree` ist das Worktree-Präfix der Projekt-Config (`praefixe.worktree`); ohne Angabe entfällt nur die Worktree-Ersetzung (wie bei `wurzel`).
  */

@@ -190,7 +190,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
   const agents = read("AGENTS.md");
   const mr = read("docs/model-routing.md");
   const tr = read("docs/ticket-reihenfolge.md");
-  const um = read(".claude/agents/kubernia-umsetzer.md");
+  const um = read(".claude/agents/factory-umsetzer.md");
 
   test("AGENTS.md: Erfassungsregel nennt Agenten, Subagenten, MCP, Hooks, Plugins und den Ablauf", () => {
     assert.ok(hatErfassungsRegel(agents));
@@ -257,8 +257,8 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
       "AGENTS.md",
       "docs/ticket-reihenfolge.md",
       "docs/model-routing.md",
-      ".claude/agents/kubernia-planner.md",
-      ".claude/agents/kubernia-umsetzer.md",
+      ".claude/agents/factory-planer.md",
+      ".claude/agents/factory-umsetzer.md",
       ".claude/skills/factory/ablauf.md",
     ];
     assert.ok(keinePositionsRegel(dateien.map(read)));
@@ -465,15 +465,15 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
   });
 
   test("Lens und Review-Skill: Messbehauptungen nur gegen Rohwerte", () => {
-    assert.ok(messbehauptungsRegel(read(".claude/agents/kubernia-lens.md")), "kubernia-lens.md");
+    assert.ok(messbehauptungsRegel(read(".claude/agents/factory-lens.md")), "factory-lens.md");
     assert.ok(messbehauptungsRegel(read(".claude/skills/review-lenses/SKILL.md")), "review-lenses/SKILL.md");
     assert.ok(!messbehauptungsRegel("Prüfe alles."));
     assert.ok(!messbehauptungsRegel("Messbehauptungen prüfst du gegen Rohwerte."), "ohne den Befund „nicht belegt“ unvollständig");
   });
 
   test("Planer und Umsetzer: Zahlen aus dem Plan nur mit Rohwerten (#1322 Z12)", () => {
-    assert.ok(planerRohwerteRegel(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md");
-    assert.ok(planUebernahmeRegel(read(".claude/agents/kubernia-umsetzer.md")), "kubernia-umsetzer.md");
+    assert.ok(planerRohwerteRegel(read(".claude/agents/factory-planer.md")), "factory-planer.md");
+    assert.ok(planUebernahmeRegel(read(".claude/agents/factory-umsetzer.md")), "factory-umsetzer.md");
     // darf NICHT passieren: eine Hälfte der Regel fehlt
     assert.ok(!planerRohwerteRegel("Messbehauptungen im Plan nur mit Rohwerten."), "ohne die Kennzeichnung als Hypothese unvollständig");
     assert.ok(!planerRohwerteRegel("Zählungen sind schön."));
@@ -482,14 +482,14 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
   });
 
   test("Planer und Lens: Lauf-Historie aus PR/Issue statt Transkript-Suche (#1322 Z18)", () => {
-    assert.ok(historieRegel(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md");
-    assert.ok(historieRegel(read(".claude/agents/kubernia-lens.md")), "kubernia-lens.md");
+    assert.ok(historieRegel(read(".claude/agents/factory-planer.md")), "factory-planer.md");
+    assert.ok(historieRegel(read(".claude/agents/factory-lens.md")), "factory-lens.md");
     assert.ok(!historieRegel("Lauf-Historie holst du irgendwoher."));
     assert.ok(!historieRegel("Lauf-Historie aus gh pr view, Transkripte per --session."), "ohne das Verbot der Suche unvollständig");
   });
 
   test("die Lens hat keine Langfuse-Tools (darum liefert der Auftrag die Rohwerte)", () => {
-    assert.doesNotMatch(read(".claude/agents/kubernia-lens.md"), /^tools:.*mcp__langfuse/m);
+    assert.doesNotMatch(read(".claude/agents/factory-lens.md"), /^tools:.*mcp__langfuse/m);
   });
 
   test("Gruppe C ist dauerhaft definiert, „Haupt“ meint den dünnen Hauptchat, der Vermerk steht nicht mehr in der Verdichtungszeile", () => {
