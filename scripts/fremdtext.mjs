@@ -16,6 +16,7 @@ import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { flach, issueKommentare, istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
 const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${loginVon(user)}, ${url}]`;
@@ -68,17 +69,16 @@ export function formatiere(ergebnis, eintrag, art) {
   return out.join("\n") + "\n";
 }
 
-/** Genau eines von `--issue <nr>` / `--pr <nr>` mit positiver Ganzzahl, sonst Fehler. */
+const AUFRUF = "Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>";
+
+/** Genau eines von `--issue <nr>` / `--pr <nr>` mit positiver Ganzzahl, sonst Fehler (jede Auffälligkeit beim Lesen ist ein Aufruf-Fehler). */
 export function parseArgs(argv) {
-  const treffer = [];
-  for (const flag of ["--issue", "--pr"]) {
-    const i = argv.indexOf(flag);
-    if (i >= 0) treffer.push([flag, argv[i + 1]]);
-  }
-  if (treffer.length !== 1 || argv.length !== 2) throw new Error("Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>");
-  const [flag, wert] = treffer[0];
-  if (!/^[1-9][0-9]*$/.test(wert ?? "")) throw new Error(`${flag} braucht eine positive Ganzzahl`);
-  return { art: flag.slice(2), nr: Number(wert) };
+  const { werte, tokens, fehler } = flagsLesen(argv, { issue: { type: "string" }, pr: { type: "string" } });
+  const [name] = ["issue", "pr"].filter((n) => werte[n] !== undefined);
+  if (fehler || tokens.length !== 1) throw new Error(AUFRUF);
+  const wert = werte[name];
+  if (!/^[1-9][0-9]*$/.test(wert)) throw new Error(`--${name} braucht eine positive Ganzzahl`);
+  return { art: name, nr: Number(wert) };
 }
 
 const mitArt = (art, liste) => liste.map((b) => ({ art, user: b.user, body: b.body, html_url: b.html_url, created_at: b.created_at }));

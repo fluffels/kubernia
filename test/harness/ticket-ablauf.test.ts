@@ -100,6 +100,7 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
     assert.deepEqual(doppelterAblauf("Kurzer Satz hier.", { "a.md": "Kurzer Satz hier." }), []);
   });
   test("Einstiegsform: Unterüberschrift, fremder fetter Absatz und zu langer Rumpf werden gemeldet", () => {
+    assert.equal(MAX_RUMPF, 700, "das Rumpfbudget wird nur gesenkt, nie angehoben");
     const kopf = "---\nname: x\n---\n\n# Titel\n\n**Bereich: `spiel`.** Text.\n";
     assert.deepEqual(einstiegAbweichungen(kopf), []);
     assert.equal(einstiegAbweichungen(kopf + "\n## Umsetzer\n\nDer Umsetzer wird ohne Planer gestartet.\n").length, 1);

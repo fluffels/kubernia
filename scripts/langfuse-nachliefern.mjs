@@ -14,6 +14,7 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { flagsLesen } from "./flag-lib.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { hauptrepoPfad, ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import {
@@ -57,20 +58,21 @@ export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--ses
 export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, im Hook zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe haben den Secret-Key nicht). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (docs/model-routing.md › Langfuse-Erfassung belegen).";
 const AUSLOESER = ["sessionstart", "sessionend"];
 
+/** Fehlertext fürs Protokoll: Node meldet bei Netzfehlern nur „fetch failed“, die Ursache steckt in `cause` (Code oder Meldung). */
+export function fehlerText(e) {
+  const meldung = e instanceof Error ? e.message : String(e);
+  const ursache = e instanceof Error && e.cause ? (e.cause.code ?? e.cause.message) : null;
+  return ursache ? `${meldung} (${ursache})` : meldung;
+}
+
 /** Unbekanntes Flag oder fehlender Wert: `fehler` gesetzt (der Aufrufer meldet Exit 2). */
 export function parseArgs(argv) {
-  const a = { session: null, seit: null, aktuell: null, beendet: null, ausloeser: null, trocken: false, json: false, fehler: null };
-  const mitWert = { "--session": "session", "--seit": "seit", "--aktuell": "aktuell", "--beendet": "beendet", "--ausloeser": "ausloeser" };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (k === "--trocken") a.trocken = true;
-    else if (k === "--json") a.json = true;
-    else if (k in mitWert) {
-      const wert = argv[++i];
-      if (wert === undefined || wert.startsWith("--")) a.fehler = `${k} braucht einen Wert`;
-      else if (k === "--ausloeser" && !AUSLOESER.includes(wert)) a.fehler = `--ausloeser: erlaubt sind ${AUSLOESER.join(", ")}`;
-      else a[mitWert[k]] = wert;
-    } else a.fehler = `Unbekanntes Argument: ${k}`;
+  const optionen = { session: { type: "string" }, seit: { type: "string" }, aktuell: { type: "string" }, beendet: { type: "string" }, ausloeser: { type: "string" }, trocken: { type: "boolean" }, json: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen);
+  const a = { session: werte.session ?? null, seit: werte.seit ?? null, aktuell: werte.aktuell ?? null, beendet: werte.beendet ?? null, ausloeser: werte.ausloeser ?? null, trocken: werte.trocken === true, json: werte.json === true, fehler: fehler?.text ?? null };
+  if (a.fehler === null && a.ausloeser !== null && !AUSLOESER.includes(a.ausloeser)) {
+    a.fehler = `--ausloeser: erlaubt sind ${AUSLOESER.join(", ")}`;
+    a.ausloeser = null;
   }
   return a;
 }
@@ -122,7 +124,7 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
     try {
       await sendeOtlp(chunk.payload, { ...zugang, fetchImpl });
     } catch (e) {
-      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: e.message });
+      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
       return false;
     }
     eintrag.gesendet.push(...chunk.generationIds);
@@ -216,7 +218,7 @@ async function verarbeite(s, c) {
   try {
     for (const score of scoresFuer({ s, soll, observations, rest, ledgerGesendet: alt?.gesendet ?? [], env })) await sendeScore(score, { ...zugang, fetchImpl });
   } catch (e) {
-    protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: `Score: ${e.message}` });
+    protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: `Score: ${fehlerText(e)}` });
   }
   return rec;
 }
@@ -270,7 +272,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
     try {
       await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll });
     } catch (e) {
-      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: e.message });
+      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
     }
   }
   protokoll.dubletten = protokoll.sessions.reduce((n, r) => n + r.dubletten, 0);

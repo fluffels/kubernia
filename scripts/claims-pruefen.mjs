@@ -37,6 +37,7 @@ import { pathToFileURL } from "node:url";
 import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
@@ -51,19 +52,17 @@ const ALIAS_MAX = 40;
 
 /** Argumente: `{ json, stunden }` oder `{ fehler }`. Pur. */
 export function parseArgs(argv) {
-  let json = false;
+  const meldung = (art, flag) =>
+    art === "ohne-wert" ? "--stunden braucht eine positive Zahl (bekam: nichts)" : art === "unbekannt" || art === "positional" ? `unbekanntes Argument: ${flag}` : undefined;
+  const { werte, fehler } = flagsLesen(argv, { json: { type: "boolean" }, stunden: { type: "string" } }, { meldung });
+  if (fehler) return { fehler: fehler.text };
   let stunden = STANDARD_STUNDEN;
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--json") json = true;
-    else if (a === "--stunden" || a.startsWith("--stunden=")) {
-      const wert = a.includes("=") ? a.slice("--stunden=".length) : argv[++i];
-      const n = Number(wert);
-      if (wert === undefined || wert.trim() === "" || !Number.isFinite(n) || n <= 0) return { fehler: `--stunden braucht eine positive Zahl (bekam: ${wert ?? "nichts"})` };
-      stunden = n;
-    } else return { fehler: `unbekanntes Argument: ${a}` };
+  if (werte.stunden !== undefined) {
+    const n = Number(werte.stunden);
+    if (werte.stunden.trim() === "" || !Number.isFinite(n) || n <= 0) return { fehler: `--stunden braucht eine positive Zahl (bekam: ${werte.stunden})` };
+    stunden = n;
   }
-  return { json, stunden };
+  return { json: werte.json === true, stunden };
 }
 
 /** Das Urteil zu einem Claim (`{ urteil, grund, aktion }`); `aktion`: was aufzuräumen ist (`worktree`, `lock`). Pur, Eingabe siehe `sammle`. */
@@ -265,6 +264,8 @@ function raeumeAuf(deps, c, urteil, lockPfad, hauptcheckout) {
   return { ok: true, zeile: `AUFGERAEUMT #${c.nr}: ${getan.join(", ")} (${urteil.grund})` };
 }
 
+const aufrufFehler = (fehler) => `✖ claims-pruefen: ${fehler}
+Aufruf: claims-pruefen [--json] [--stunden <n>]`;
 const ergebnisAus = (code, out = "", err = "") => ({ code, out: out ? `${out}\n` : "", err: err ? `${err}\n` : "" });
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
@@ -322,6 +323,13 @@ export function echteDeps({ config: vorgabe } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // Ein Aufruf-Fehler kommt vor Kontingent-Messung und Deps (gh, git, Config) zurück.
+  const vorab = parseArgs(process.argv.slice(2));
+  if (vorab.fehler) {
+    process.stderr.write(`${aufrufFehler(vorab.fehler)}
+`);
+    process.exit(AUFRUF_EXIT);
+  }
   mitKontingent("claims-pruefen");
   let r;
   try {
