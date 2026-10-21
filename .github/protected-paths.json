@@ -93,6 +93,7 @@
     "/scripts/langfuse-lock.mjs",
     "/scripts/worktree-aufraeumen.mjs",
     "/scripts/fremdtext-lib.mjs",
+    "/scripts/flag-lib.mjs",
     "/.agents/",
     "/.githooks/",
     "/docs/agent-harness*"

@@ -75,6 +75,7 @@
     {"pfad":"scripts/spezifikation.mjs","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, #1693)"},
     {"pfad":"scripts/abnahme.mjs","ring":"kern-nach-entkopplung","quelle":"ADR 0022 F13 (#1753)"},
     {"pfad":"scripts/fremdtext-lib.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"scripts/flag-lib.mjs","ring":"kern","quelle":"Plan #1789 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/verify-lauf.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/slice-override.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/nachweis-lib.mjs","ring":"kern","quelle":"Split aus slice-override, Sammelticket #1762"},

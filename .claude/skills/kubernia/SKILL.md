@@ -61,7 +61,7 @@ Agent({
 })
 ```
 
-**Phasen-Schnitt (#1592):** die Zeile `Schnitt:` nur im Erst-Spawn: `verify` bei gerader, `pr` bei ungerader Ticketnummer (A/B im selben Fenster, gilt, bis die Nachmessung (Zeile in #1775) entscheidet; Vertrag und Messrezept: [docs/model-routing.md](../../../docs/model-routing.md#phasen-schnitt-1592-vertrag-ab-regel-messrezept)). Ein Ticket, dessen Umsetzer-Definition diese Session noch nicht kennt (Sitzungsbasis veraltet), bekommt keine `Schnitt:`-Zeile.
+**Phasen-Schnitt (#1592):** die Zeile `Schnitt:` nur im Erst-Spawn: `verify` bei gerader, `pr` bei ungerader Ticketnummer (A/B im selben Fenster, gilt, bis die Nachmessung (Wiedervorlage `phasen-schnitt-nachmessung`) entscheidet; Vertrag und Messrezept: [docs/model-routing.md](../../../docs/model-routing.md#phasen-schnitt-1592-vertrag-ab-regel-messrezept)). Ein Ticket, dessen Umsetzer-Definition diese Session noch nicht kennt (Sitzungsbasis veraltet), bekommt keine `Schnitt:`-Zeile.
 
 Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers und gelten unabhängig vom Modell der Session. Der Umsetzer setzt um, pflegt das Projekt-Brain (AGENTS.md § Projekt-Brain pflegen), iteriert gezielt (AGENTS.md § Zwei-Stufen-Prüfung) und fährt als Stufe 0 des [review-lenses](../review-lenses/SKILL.md)-Reviews genau einmal `npm run verify:kompakt`, den Review (spawnt selbst die `kubernia-lens`-Subagenten), PR, CI-Fix, Merge und Cleanup. Seine letzte Nachricht beginnt mit `ERGEBNIS:`:
 

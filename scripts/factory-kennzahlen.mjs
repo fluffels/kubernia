@@ -15,6 +15,7 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { flagsLesen } from "./flag-lib.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
@@ -32,15 +33,10 @@ const gueltig = (iso) => Number.isFinite(Date.parse(String(iso ?? "")));
 
 /** Argumente; ein fehlendes oder ungültiges `--von`/`--bis` setzt `fehler`. Pure. */
 export function parseArgs(argv) {
-  const a = { von: undefined, bis: undefined, langfuse: false, json: false, fehler: null };
-  for (let i = 0; i < argv.length; i++) {
-    const x = argv[i];
-    if (x === "--von") a.von = argv[++i];
-    else if (x === "--bis") a.bis = argv[++i];
-    else if (x === "--langfuse") a.langfuse = true;
-    else if (x === "--json") a.json = true;
-    else a.fehler ??= `Unbekanntes Argument: ${x}`;
-  }
+  const meldung = (art) => (art === "ohne-wert" || art === "fehlt" ? "--von und --bis brauchen je ein gültiges ISO-Datum." : undefined);
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, langfuse: { type: "boolean" }, json: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["von", "bis"], meldung });
+  const a = { von: werte.von, bis: werte.bis, langfuse: werte.langfuse === true, json: werte.json === true, fehler: fehler?.text ?? null };
   if (!gueltig(a.von) || !gueltig(a.bis)) a.fehler ??= "--von und --bis brauchen je ein gültiges ISO-Datum.";
   return a;
 }

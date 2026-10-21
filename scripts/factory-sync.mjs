@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { flagsLesen } from "./flag-lib.mjs";
 import {
   einheitHash,
   einheitId,
@@ -160,18 +161,10 @@ const liesDatei = (wurzel) => (pfad) => {
 };
 
 function parseArgs(argv) {
-  const opt = { quelle: null, ziel: null, trocken: false, fehler: null };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--trocken") opt.trocken = true;
-    else if (a === "--quelle" || a === "--ziel") {
-      const v = argv[++i];
-      if (v === undefined || v.startsWith("--")) opt.fehler = `${a} braucht einen Pfad`;
-      else opt[a.slice(2)] = v;
-    } else opt.fehler = `unbekannte Option '${a}'`;
-  }
-  if (opt.fehler === null && opt.quelle === null) opt.fehler = "--quelle <pfad> fehlt";
-  return opt;
+  const meldung = (art, flag) => (art === "unbekannt" || art === "positional" ? `unbekannte Option '${flag}'` : art === "ohne-wert" ? `${flag} braucht einen Pfad` : art === "fehlt" ? "--quelle <pfad> fehlt" : undefined);
+  const optionen = { quelle: { type: "string" }, ziel: { type: "string" }, trocken: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["quelle"], meldung });
+  return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, trocken: werte.trocken === true, fehler: fehler?.text ?? null };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
