@@ -94,7 +94,6 @@ export function parseArgs(argv) {
     if (!NOTFALL_ARTEN.includes(notfall) || reihe[1]?.name !== "top") return null;
     i = 1;
   }
-  if (notfall === null && werte.notfall !== undefined) return null;
   const modus = reihe[i];
   if (modus?.kind !== "option" || !MODI.includes(modus.name)) return null;
   if (!reihe.slice(i + 1).every((t) => t.kind === "positional")) return null;
