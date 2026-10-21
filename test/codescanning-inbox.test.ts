@@ -123,8 +123,8 @@ describe("deckendesIssue", () => {
   const A = { nummer: 74, regel: "js/incomplete-sanitization", pfad: "src/content/drills/docker.ts" };
   const iss = (body: string) => ({ number: 1703, titel: "Sanitization", body });
   test("Alert-Nummer im Body deckt ab, auch in einer Liste", () => {
-    expect(C.deckendesIssue(A, [iss("Alert 74")])).toEqual({ number: 1703, grund: "nummer" });
-    expect(C.deckendesIssue(A, [iss("Alerts 70, 74, 75")])).toEqual({ number: 1703, grund: "nummer" });
+    expect(C.deckendesIssue(A, [iss("Code-Scanning-Alert 74")])).toEqual({ number: 1703, grund: "nummer" });
+    expect(C.deckendesIssue(A, [iss("Code-Scanning-Alerts 70, 74, 75")])).toEqual({ number: 1703, grund: "nummer" });
   });
   test("nur #74 (Issue-Link) deckt nicht ab", () => {
     expect(C.deckendesIssue(A, [iss("siehe #74")])).toBeNull();
@@ -161,6 +161,24 @@ describe("deckendesIssue", () => {
     expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in -${D}`)])).toBeNull();
     expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in ${D}`)])).toEqual({ number: 1703, grund: "regel+verzeichnis" });
   });
+  test("rechte Grenze der Regel-ID: Satzzeichen und Backticks danach decken weiter ab", () => {
+    const D = "src/content/drills/";
+    for (const nach of [".", ",", ")", "`", ":", ";"]) {
+      expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization${nach} in ${D}`)]), nach).toEqual({ number: 1703, grund: "regel+verzeichnis" });
+    }
+    expect(C.deckendesIssue(A, [iss(`Regel \`js/incomplete-sanitization\` in \`${D}\``)])).toEqual({ number: 1703, grund: "regel+verzeichnis" });
+    expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization_ in ${D}`)])).toBeNull();
+  });
+  test("Nummern nur mit der Konvention `Code-Scanning-Alert N`: fremde Alert-Nummern decken nicht ab", () => {
+    expect(C.deckendesIssue(A, [iss("Alert 74")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("Dependabot-Alert 74")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("Alerts 70, 74")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("Code-Scanning-Alert 75")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("Code-Scanning-Alerts 70, 75")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("xCode-Scanning-Alert 74")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("Code-Scanning-Alert 740")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("Code-Scanning-Alert 74.")])).toEqual({ number: 1703, grund: "nummer" });
+  });
   test("leere Regel deckt über das Verzeichnis allein nie ab", () => {
     expect(C.deckendesIssue({ ...A, regel: "" }, [iss("src/content/drills/ überall")])).toBeNull();
   });
@@ -170,7 +188,7 @@ describe("deckendesIssue", () => {
 });
 
 describe("bekannteAlerts offene Issues", () => {
-  const offen = (o: Record<string, unknown> = {}) => ({ number: 1703, title: "Sanitization", body: "Alert 74", user: { login: OWNER, type: "User" }, ...o });
+  const offen = (o: Record<string, unknown> = {}) => ({ number: 1703, title: "Sanitization", body: "Code-Scanning-Alert 74", user: { login: OWNER, type: "User" }, ...o });
   const mit = (i: unknown[]) => C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], offeneIssues: i as never }).issues.map((x) => x.number);
   test("offene Issues vertrauter Autoren werden übernommen", () => {
     expect(mit([offen()])).toEqual([1703]);
@@ -193,7 +211,7 @@ describe("bekannteAlerts offene Issues", () => {
 });
 
 describe("plane mit deckenden Issues", () => {
-  const issues = [{ number: 1703, titel: "S", body: "Alerts 5" }];
+  const issues = [{ number: 1703, titel: "S", body: "Code-Scanning-Alerts 5" }];
   const bekannt = { ...keine, issues };
   test("abgedeckter Spitzen-Alert fällt aus Spitze, wird gemeldet; offenes Ticket wird geschlossen mit abgedecktDurch", () => {
     const p = C.plane({ alerts: [alert({ nummer: 5 })], bekannt, offenesIssue: { number: 9, body: "x" } }) as unknown as { issue: Record<string, unknown>; abgedeckt: unknown[] };
@@ -206,7 +224,7 @@ describe("plane mit deckenden Issues", () => {
     expect(p.zeilen.flatMap((g) => g.nummern)).toEqual([6]);
   });
   test("abgedecktDurch ist ohne Doppel und aufsteigend (mehrere Alerts, mehrere Issues, beide Gründe)", () => {
-    const D = { nummern: new Set<number>(), regeln: new Set<string>(), issues: [{ number: 1704, titel: "A", body: "Alerts 5, 6" }, { number: 1703, titel: "B", body: "js/path-injection in src/game/" }] };
+    const D = { nummern: new Set<number>(), regeln: new Set<string>(), issues: [{ number: 1704, titel: "A", body: "Code-Scanning-Alerts 5, 6" }, { number: 1703, titel: "B", body: "js/path-injection in src/game/" }] };
     const p = C.plane({ alerts: [alert({ nummer: 5 }), alert({ nummer: 6 }), alert({ nummer: 7, pfad: "src/game/x.ts" })], bekannt: D, offenesIssue: { number: 9, body: "x" } }) as unknown as { issue: Record<string, unknown> };
     expect(p.issue).toEqual({ art: "schliessen", nummer: 9, abgedecktDurch: [1703, 1704] });
   });
@@ -521,7 +539,7 @@ describe("lauf", () => {
     const kommentare: string[] = [];
     const i = {
       ladeAlerts: () => [roh({ number: 5 })],
-      ladeKontext: () => ({ ...kontext, offenesIssue: { number: 9, body: "x" }, offeneIssues: [{ number: 1703, title: "S", body: "Alert 5", user: { login: OWNER, type: "User" } }] }),
+      ladeKontext: () => ({ ...kontext, offenesIssue: { number: 9, body: "x" }, offeneIssues: [{ number: 1703, title: "S", body: "Code-Scanning-Alert 5", user: { login: OWNER, type: "User" } }] }),
       schliesse: (_n: number, k: string) => kommentare.push(k),
       log: (m: string) => logs.push(m),
       projectToken: "t",
@@ -535,7 +553,7 @@ describe("lauf", () => {
     const logs: string[] = [];
     const i = {
       ladeAlerts: () => [roh({ number: 6 }), roh({ number: 5 }), roh({ number: 7, most_recent_instance: { location: { path: "src/game/x.ts" } } })],
-      ladeKontext: () => ({ ...kontext, offenesIssue: { number: 9, body: "x" }, offeneIssues: [{ number: 1704, title: "A", body: "Alerts 5, 6", user: { login: OWNER, type: "User" } }, { number: 1703, title: "B", body: "js/path-injection in src/game/", user: { login: OWNER, type: "User" } }] }),
+      ladeKontext: () => ({ ...kontext, offenesIssue: { number: 9, body: "x" }, offeneIssues: [{ number: 1704, title: "A", body: "Code-Scanning-Alerts 5, 6", user: { login: OWNER, type: "User" } }, { number: 1703, title: "B", body: "js/path-injection in src/game/", user: { login: OWNER, type: "User" } }] }),
       schliesse: () => undefined,
       log: (m: string) => logs.push(m),
       projectToken: "t",
@@ -547,7 +565,7 @@ describe("lauf", () => {
     const logs: string[] = [];
     const i = {
       ladeAlerts: () => [roh({ number: 5, tool: { name: "Scorecard" }, rule: { id: "X", severity: "warning" } })],
-      ladeKontext: () => ({ ...kontext, offeneIssues: [{ number: 1703, title: "S", body: "Alert 5", user: { login: OWNER, type: "User" } }] }),
+      ladeKontext: () => ({ ...kontext, offeneIssues: [{ number: 1703, title: "S", body: "Code-Scanning-Alert 5", user: { login: OWNER, type: "User" } }] }),
       log: (m: string) => logs.push(m),
       projectToken: "t",
     };
