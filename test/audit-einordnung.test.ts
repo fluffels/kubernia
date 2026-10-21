@@ -153,3 +153,37 @@ describe("vertrauteBodies (#1663)", () => {
     expect(A.vertrauteBodies([k("fluffels", null as unknown as string)], owner)).toEqual([""]);
   });
 });
+
+describe("main: --dry-run über Deps (#1837)", () => {
+  type Libs = Record<string, unknown>;
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const auditJson = { vulnerabilities: { braces: { severity: "high", via: [{ url: `https://github.com/advisories/${G1}`, name: "braces", severity: "high" }] } } };
+  const aufbau = () => {
+    const gepostet: [number, string][] = [];
+    const log: string[] = [];
+    const libs: Libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5 }], kommentare: [] }),
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
+      waehleSammelticket: (offene: { number: number }[]) => offene[0],
+    };
+    const deps = { ladeLibs: async () => libs, npmAuditLaden: () => auditJson, alertsLaden: () => [], log: (m: string) => log.push(m), err: () => undefined };
+    return { gepostet, log, deps };
+  };
+  test("mit Flag: [dry-run]-Zeile im Log, nichts gepostet", async () => {
+    const { gepostet, log, deps } = aufbau();
+    expect(await main(["--dry-run"], deps)).toBe(0);
+    expect(log.join("\n")).toContain("[dry-run]");
+    expect(gepostet).toEqual([]);
+  });
+  test("ohne Flag: Zeile ins Sammelticket gepostet, kein [dry-run]", async () => {
+    const { gepostet, log, deps } = aufbau();
+    expect(await main([], deps)).toBe(0);
+    expect(gepostet).toHaveLength(1);
+    expect(gepostet[0][0]).toBe(5);
+    expect(log.join("\n")).not.toContain("[dry-run]");
+  });
+});

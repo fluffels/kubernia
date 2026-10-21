@@ -174,18 +174,19 @@ export function ioAus(config, { legen = legeAn, repo, platziereOben } = {}) {
   return { anlegen: (e) => legen(e, labelFuer(e, standard), repo), sortiereEin: (nr) => sortiereEin(nr, platziereOben) };
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `platziereOben`), `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeConfig, ladeLibs, log = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `platziereOben`), `eintraegeLaden()`, `ticketsLaden(repo)`, `legen(eintrag, label, repo)`, `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeConfig, ladeLibs, eintraegeLaden = ladeEintraege, ticketsLaden = ladeTickets, legen, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "wiedervorlage", praefix: "Wiedervorlage: Projekt-Config nicht lesbar: ", ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config, libs } = start;
   const { REPO, platziereOben } = libs;
   return lauf({
-    eintraege: ladeEintraege(),
+    eintraege: eintraegeLaden(),
     heute: new Date().toISOString().slice(0, 10),
-    tickets: ladeTickets(REPO),
+    tickets: ticketsLaden(REPO),
     trocken,
-    ...ioAus(config, { repo: REPO, platziereOben }),
+    log,
+    ...ioAus(config, { legen, repo: REPO, platziereOben }),
   });
 }
 

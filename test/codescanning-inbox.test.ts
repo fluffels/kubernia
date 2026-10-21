@@ -625,3 +625,43 @@ describe("lauf", () => {
     expect(calls).toEqual(["schliesse"]);
   });
 });
+
+describe("main: --dry-run über Deps (#1837)", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const aufbau = () => {
+    const gepostet: [number, string][] = [];
+    const log: string[] = [];
+    const libs = {
+      OWNER: OWNER,
+      REPO: "o/r",
+      SAMMELTICKET_TITEL_LISTE,
+      ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5, titel: "Sammel" }], kommentare: [] }),
+      vertrauteIssues: () => [],
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
+      waehleSammelticket: (offene: { number: number }[]) => offene[0],
+    };
+    const deps = {
+      ladeConfig: () => ({ labels: { harness: "area:harness" } }),
+      ladeLibs: async () => libs,
+      ladeSeiten: () => [roh({ tool: { name: "Semgrep" } })],
+      log: (m: string) => log.push(m),
+      err: () => undefined,
+    };
+    return { gepostet, log, deps };
+  };
+  test("mit Flag: [dry-run]-Zeile im Log, nichts gepostet", async () => {
+    const { gepostet, log, deps } = aufbau();
+    expect(await main(["--dry-run"], deps)).toBe(0);
+    expect(log.join("\n")).toContain("[dry-run]");
+    expect(gepostet).toEqual([]);
+  });
+  test("ohne Flag: Zeile ins Sammelticket gepostet, kein [dry-run]", async () => {
+    const { gepostet, log, deps } = aufbau();
+    expect(await main([], deps)).toBe(0);
+    expect(gepostet).toHaveLength(1);
+    expect(gepostet[0][0]).toBe(5);
+    expect(log.join("\n")).not.toContain("[dry-run]");
+  });
+});
