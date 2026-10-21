@@ -111,7 +111,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
   });
 
   test("Negativfall: Projektnamen, entfallene Override-Namen und die neuen Namen lösen die Umgebungsvariablen-Regel nicht aus", () => {
-    const sauber = "KQ_UPDATE_QUIZ_GOLDEN KQ_GIT_SAFECRLF VITE_KQ_DEVPANEL_PW KQ_DIFFSIZE_OVERRIDE KQ_DIFF_BASE_X FACTORY_DIFF_BASE";
+    const sauber = "KQ_UPDATE_QUIZ_GOLDEN KQ_GIT_SAFECRLF VITE_KQ_DEVPANEL_PW KQ_DIFFSIZE_OVERRIDE KQ_DIFF_BASE_X VITE_KQ_DIFF_BASE __KQ_DIFF_BASE__ FACTORY_DIFF_BASE";
     assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
   });
 

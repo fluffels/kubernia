@@ -54,7 +54,7 @@ export function fehlendeVariablen(server, env) {
 /** Ordnername, wie Claude Code ihn aus einem Pfad bildet. Pur. */
 export const slug = (pfad) => String(pfad).replace(/[^a-zA-Z0-9]/g, "-");
 
-/** Basisordner der Claude-Code-Logs je Plattform; `FACTORY_MCP_LOG_DIR` hat Vorrang. Pur. */
+/** Basisordner der Claude-Code-Logs je Plattform; `FACTORY_MCP_LOG_DIR` hat Vorrang. Liest den Altpräfix lazy aus der Config (Fehler egal). */
 export function logBasis({ plattform, env, home }) {
   const dir = umgebungsWert(env, "FACTORY_MCP_LOG_DIR");
   if (dir) return dir;
@@ -68,7 +68,7 @@ export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").rep
 
 /**
  * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<Worktree-Präfix>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
- * `FACTORY_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es keine Config). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
+ * `FACTORY_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es nur den lazy gelesenen Altpräfix, keine Worktree-Angabe). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
  */
 export const standPfad = (wurzel, env, tmp, config) => umgebungsWert(env, "FACTORY_MCP_AUSFALL_STAND") || join(tmp, `${worktreePraefix(config ?? ladeProjektConfig())}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
 

@@ -113,9 +113,9 @@ Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-
 | `FACTORY_RATE_LIMITS_SNAPSHOT` | Kern | Tests | `budget-lib` |
 | `FACTORY_STATUSLINE_DURCHREICHEN` | Kern | Skript `statusline` (Schleifenschutz für die durchgereichte Statusline) | `statusline` |
 | `FACTORY_USER_SETTINGS` | Kern | Tests | `statusline` |
-| `FACTORY_TEST_FEHLT` | Test | nie gesetzt (Fixture in `test/harness/mcp-ausfall.test.ts`) | – |
+| `FACTORY_TEST_FEHLT` | Test-Fixture, weder Kern noch Projekt | nie gesetzt (Fixture in `test/harness/mcp-ausfall.test.ts`) | – |
 | `KQ_UPDATE_QUIZ_GOLDEN` | Projekt | Skript `quiz-golden` | Test `quizcheck` |
-| `KQ_GIT_SAFECRLF` | Projekt | `test/support/git-umgebung.ts` (Guard) | – |
+| `KQ_GIT_SAFECRLF` | Projekt | `test/support/git-umgebung.ts` (Guard) | `test/support/git-umgebung.ts` (liest und setzt) |
 | `VITE_KQ_DEVPANEL_PW` | Projekt | die Maintainerin (Repo-Variable, `docker run -e`) | Vite-Build |
 
 `__KQ_DEVPANEL__` und `__KQ_CONFIG__` sind Vite-Konstanten, keine Umgebungsvariablen. Die Override-Variablen der Slice-Gates sind entfallen: dafür gibt es Commit-Zeilen (siehe [agent-harness](../agent-harness.md)).

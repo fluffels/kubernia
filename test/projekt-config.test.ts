@@ -358,6 +358,8 @@ describe("umgebungsWert", () => {
   test("Name ohne FACTORY_-Präfix oder nur das Präfix: Wurf", () => {
     assert.throws(() => pc.umgebungsWert({}, "ZD_X_Y", { altPraefix: "ZD_" }), /FACTORY_/);
     assert.throws(() => pc.umgebungsWert({}, "FACTORY_", { altPraefix: "ZD_" }), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, undefined as unknown as string, { altPraefix: "ZD_" }), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, 5 as unknown as string, { altPraefix: "ZD_" }), /FACTORY_/);
   });
 });
 

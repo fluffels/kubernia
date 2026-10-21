@@ -2,7 +2,7 @@
 // Einstiegsskripte importieren nicht voneinander, gemeinsamer Code steht in einer Lib).
 /**
  * Budget-Pacing: Entscheidung ok / knapp / stopp aus dem Rate-Limit-Snapshot des Kontos (7-Tage- und 5-Stunden-Fenster).
- * Pur: `pacing`, `ausStatusline`, `ausProbe`, `zielquoteAusEnv`. I/O: `snapshotPfad`, `liesSnapshot`, `schreibeSnapshot`.
+ * Pur: `pacing`, `ausStatusline`, `ausProbe`. Env/Config: `zielquoteAusEnv`. I/O: `snapshotPfad`, `liesSnapshot`, `schreibeSnapshot`.
  * Fail-open: ein unbekannter oder unlesbarer Stand ergibt `ok` mit Warnung (Pacing ist kein Sicherheits-Gate).
  * Ein Snapshot hat die Form `{ stand, quelle, sevenDay?, fiveHour? }` mit `stand` in ms und je Fenster
  * `{ pct (0-100), resetsAt (Unix-Sekunden) }`. Regeln und Defaults: docs/model-routing.md §6.
@@ -59,7 +59,7 @@ export function ausProbe(zeilen, jetzt = Date.now()) {
   return sevenDay || fiveHour ? { stand: jetzt, quelle: "probe", ...(sevenDay && { sevenDay }), ...(fiveHour && { fiveHour }) } : null;
 }
 
-/** Zielquote aus `FACTORY_PACING_ZIELQUOTE` (1-100); ungültig ergibt den Default samt Warnung. Pur. */
+/** Zielquote aus `FACTORY_PACING_ZIELQUOTE` (1-100); ungültig ergibt den Default samt Warnung. Liest bei Bedarf den Altpräfix lazy aus der Config (Fehler egal). */
 export function zielquoteAusEnv(env) {
   const roh = umgebungsWert(env ?? {}, "FACTORY_PACING_ZIELQUOTE");
   if (roh === undefined) return { zielquote: ZIELQUOTE_DEFAULT };
