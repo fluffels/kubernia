@@ -3,16 +3,16 @@
 import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 
 interface Pc {
-  altEnvPraefix(config: unknown): string | null;
+  altEnvName(name: string, config: unknown): string | null;
   ladeProjektConfig(opt?: { pruefen?: boolean }): unknown;
 }
 const pc = rawPc as unknown as Pc;
 
 /** Der Altname zu einem neuen Namen (`FACTORY_DIFF_BASE` → Projektpräfix + `DIFF_BASE`). */
 export function altName(neu: string): string {
-  const alt = pc.altEnvPraefix(pc.ladeProjektConfig({ pruefen: false }));
-  if (alt === null || !neu.startsWith("FACTORY_")) throw new Error(`kein Altname für ${neu}`);
-  return alt + neu.slice("FACTORY_".length);
+  const alt = pc.altEnvName(neu, pc.ladeProjektConfig({ pruefen: false }));
+  if (alt === null) throw new Error(`kein Altname für ${neu}`);
+  return alt;
 }
 
 /** Entfernt den neuen und den alten Namen aus einer Umgebung, damit die Umgebung der Maintainerin einen Test nicht verschiebt. */

@@ -222,6 +222,17 @@ export function altEnvPraefix(config) {
   return typeof p === "string" && COMMIT_PRAEFIX_MUSTER.test(p) ? `${p.slice(0, -1)}_` : null;
 }
 
+function altNameZuPraefix(name, alt) {
+  if (alt === null || alt === undefined || typeof name !== "string") return null;
+  if (!name.startsWith(KERN_ENV_PRAEFIX) || name.length === KERN_ENV_PRAEFIX.length) return null;
+  return alt + name.slice(KERN_ENV_PRAEFIX.length);
+}
+
+/** Pur: der Altname zu einem neuen Namen (`FACTORY_<NAME>` → `<Altpräfix><NAME>`); `null`, wenn der Altpräfix fehlt oder `name` nicht mit `FACTORY_` plus Rest beginnt. */
+export function altEnvName(name, config) {
+  return altNameZuPraefix(name, altEnvPraefix(config));
+}
+
 let standardAltPraefix;
 function ladeAltPraefix() {
   if (standardAltPraefix === undefined) {
@@ -253,7 +264,7 @@ export function umgebungsWert(env, name, { altPraefix, warn = standardWarnung } 
   const alt = altPraefix === undefined ? ladeAltPraefix() : altPraefix;
   const neu = env[name];
   if (alt === null) return neu;
-  const altName = alt + name.slice(KERN_ENV_PRAEFIX.length);
+  const altName = altNameZuPraefix(name, alt);
   const altWert = env[altName];
   if (altWert === undefined) return neu;
   if (neu !== undefined) {

@@ -17,6 +17,7 @@ interface Pc {
   boardPfad(board: Record<string, unknown>): string;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
+  altEnvName(name: string, config: unknown): string | null;
   umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
 }
 const pc = rawPc as unknown as Pc;
@@ -317,6 +318,27 @@ describe("altEnvPraefix", () => {
     for (const c of [undefined, null, {}, { praefixe: {} }, { praefixe: { commitZeile: "" } }, { praefixe: { commitZeile: "-" } }, { praefixe: { commitZeile: 5 } }, { praefixe: { commitZeile: "zd-" } }]) {
       assert.equal(pc.altEnvPraefix(c), null, JSON.stringify(c));
     }
+  });
+});
+
+describe("altEnvName", () => {
+  const config = { praefixe: { commitZeile: "ZD-" } };
+  test("Normalfall: Kernpräfix wird durch den Altpräfix ersetzt", () => {
+    assert.equal(pc.altEnvName("FACTORY_DIFF_BASE", config), "ZD_DIFF_BASE");
+  });
+  test("fehlender Altpräfix: null", () => {
+    assert.equal(pc.altEnvName("FACTORY_DIFF_BASE", {}), null);
+    assert.equal(pc.altEnvName("FACTORY_DIFF_BASE", undefined), null);
+  });
+  test("Name ohne Kernpräfix: null", () => {
+    assert.equal(pc.altEnvName("DIFF_BASE", config), null);
+    assert.equal(pc.altEnvName("ZD_DIFF_BASE", config), null);
+  });
+  test("Kernpräfix allein: null", () => {
+    assert.equal(pc.altEnvName("FACTORY_", config), null);
+  });
+  test("kein String: null", () => {
+    assert.equal(pc.altEnvName(5 as unknown as string, config), null);
   });
 });
 
