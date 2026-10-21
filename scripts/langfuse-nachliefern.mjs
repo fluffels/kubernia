@@ -60,7 +60,7 @@ const AUSLOESER = ["sessionstart", "sessionend"];
 /** Fehlertext fürs Protokoll: Node meldet bei Netzfehlern nur „fetch failed“, die Ursache steckt in `cause` (Code oder Meldung). */
 export function fehlerText(e) {
   const meldung = e instanceof Error ? e.message : String(e);
-  const ursache = e instanceof Error && e.cause && typeof e.cause === "object" ? (e.cause.code ?? e.cause.message) : null;
+  const ursache = e instanceof Error && e.cause ? (e.cause.code ?? e.cause.message) : null;
   return ursache ? `${meldung} (${ursache})` : meldung;
 }
 

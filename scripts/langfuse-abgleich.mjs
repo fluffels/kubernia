@@ -131,7 +131,7 @@ export function renderMarkdown(bewertungen, sum) {
   }
   const zaehlDubletten = bewertungen.filter((x) => x.schluessel === "zählung" && x.dubletten > 0);
   if (zaehlDubletten.length) {
-    out.push("", `Hinweis: ${zaehlDubletten.length} Session(s) mit Dubletten auf der Zählebene (${zaehlDubletten.map((x) => String(x.session).slice(0, 8)).join(", ")}): leere Hook-GENERATIONs (ohne Message-ID und Tokens) zählen dort mit. Genau prüfen lässt sich das mit dem Secret-Key (Observations je Session), dort trennt der Abgleich sie als „leer“ ab.`);
+    out.push("", `Hinweis: ${zaehlDubletten.length} Session(s) mit Dubletten auf der Zählebene (${zaehlDubletten.map((x) => String(x.session).slice(0, 8)).join(", ")}): leere Hook-GENERATIONs (ohne Message-ID und Tokens) können dort mitzählen (ein Export mit dem Filter providedModelName none of [\"claude\"] schließt sie aus). Genau prüfen lässt sich das auch mit dem Secret-Key (Observations je Session), dort trennt der Abgleich sie als „leer“ ab.`);
   }
   out.push("", `Hinweis: Aufzeichnungen ohne TTL-Aufteilung der Cache-Writes (vor dem Hook-Patch, vor ${STICHTAG.slice(0, 10)}) passen nicht auf den Fingerabdruck und erscheinen als fehlend plus Dublette.`);
   return out.join("\n");

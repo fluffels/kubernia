@@ -658,6 +658,8 @@ describe("pruefen (Ablauf)", () => {
       return A.pruefen(args({ ist: ["z.json", "t.json"] }), { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: (p: string) => dateien[p] });
     };
     expect((await lauf(2)).text).toContain("leere Hook-GENERATIONs");
+    expect((await lauf(2)).text).toContain("1 Session(s) mit Dubletten auf der Zählebene (s1)");
+    expect((await lauf(2)).text).toContain("providedModelName none of");
     expect((await lauf(1)).text).not.toContain("leere Hook-GENERATIONs");
     const b = { session: "s1", status: "Dublette", score: null, tickets: [], callsTranskript: 1, callsLangfuse: 2, tokensTranskript: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, tokensLangfuse: null, fehlend: 0, dubletten: 1, leer: 0, quote: 1, fehlendeCalls: null, schluessel: "fingerprint" };
     const sum = A.summenzeile([b]);
