@@ -1,4 +1,4 @@
-/* Kaputte oder fehlende Projekt-Config bei den Inbox-Skripten (#1821): `audit-einordnung` und `codescanning-inbox` importieren
+/* Kaputte oder fehlende Projekt-Config bei den Inbox-Skripten (#1821): `audit-einordnung`, `codescanning-inbox` und `wiedervorlage` importieren
  * `board-lib`/`inbox-lib` erst in `main`; die Config-Ursache kommt als `::error::`-Meldung mit `Fix:`-Zeile, nie als Stacktrace
  * („    at …“). Der Test startet die Skripte aus einer Kopie von `scripts/` ohne `.factory/projekt.json` (PATH nur mit node: kein gh, kein Netz). */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -30,6 +30,7 @@ function starte(skript: string, argv: string[]): { status: number | null; stdout
 describe.each([
   ["audit-einordnung", "Audit-Einordnung"],
   ["codescanning-inbox", "Code-Scanning-Inbox"],
+  ["wiedervorlage", "Wiedervorlage"],
 ])("%s mit fehlender Projekt-Config", (skript, name) => {
   test("Exit 2, ::error:: mit Fix-Zeile, kein Stacktrace", () => {
     const r = starte(skript, ["--dry-run"]);
