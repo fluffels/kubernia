@@ -242,8 +242,7 @@ describe("projektwerte CLI", () => {
   });
   test("--wurzel als Flag wählt das Projekt", () => {
     const w = projekt();
-    const out: string[] = [];
-    assert.equal(cli.cli(["--write", "--wurzel", w], { wurzel: join(w, "gibt-es-nicht"), out: (s) => out.push(s), err: () => undefined }), 0);
+    assert.equal(cli.cli(["--write", "--wurzel", w], { wurzel: join(w, "gibt-es-nicht"), out: () => undefined, err: () => undefined }), 0);
     assert.match(lies(w, ".claude/agents/planer.md"), /\nname: wk-planer\n/);
   });
 });
@@ -265,9 +264,7 @@ describe("Grenzfälle der Lib", () => {
   });
   test("Text mit der Kennung in Backticks, aber ohne Stelle, braucht keine Config", () => {
     const t = "Beispiel `# factory:projektwert agenten.planer` hier\n";
-    const nie = (): Cfg => {
-      throw new Error("nicht rufen");
-    };
+    const nie = (): Cfg => { throw new Error("nicht rufen"); };
     assert.equal(lib.rendereProjektwerte(t, nie), t);
     assert.deepEqual(lib.projektwertAbweichungen("a.md", t, nie as unknown as Cfg), []);
     assert.equal(lib.leereProjektwerte(t), t);
