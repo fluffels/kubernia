@@ -51,7 +51,7 @@ export function toolAbweichungen(ist: string[], erwartet: string[]): string[] {
 /** Getrackte Dateien mit einem echten Kopf `SZENARIEN #<ziffern>` (`git grep`; Exit 1 = keine Treffer). */
 export function szenarienKoepfe(cwd: string): string[] {
   try {
-    return execFileSync("git", ["grep", "-n", "-E", "SZENARIEN #" + "[0-9]+"], { cwd, encoding: "utf8" }).split(NL).filter(Boolean);
+    return execFileSync("git", ["grep", "-n", "-E", "SZENARIEN #" + "[0-9]+"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).split(NL).filter(Boolean);
   } catch (e) {
     if ((e as { status?: number }).status === 1) return [];
     throw e;
