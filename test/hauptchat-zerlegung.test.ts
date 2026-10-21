@@ -14,7 +14,11 @@ const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => u
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as hcModule from "../scripts/hauptchat-zerlegung.mjs";
+import * as hcRoh from "../scripts/hauptchat-zerlegung.mjs";
+
+// Der Repo-Name (Schlüssel der eigenen Subagenten im Ergebnis) kommt aus der Projekt-Config; der Wrapper reicht ihn an renderMarkdown durch.
+const REPO_NAME = (projektRaw as unknown as { repoName: (c: unknown) => string }).repoName(ladeProjektConfig());
+const hcModule = { ...(hcRoh as object), renderMarkdown: (r: unknown) => (hcRoh as unknown as { renderMarkdown: (r: unknown, o: object) => string }).renderMarkdown(r, { repoName: REPO_NAME }) };
 
 type Row = Record<string, unknown>;
 type Zeile = { kategorie: string; quelle: string; modell: string; calls: number; cost: number };
@@ -29,14 +33,14 @@ type Eingabe = {
   closedAtOf?: (nr: number) => string | null;
   config?: Record<string, unknown>;
 };
-const hcRoh = hcModule as {
+const hcTyp = hcModule as {
   zerlegeHauptchat: (e: Eingabe) => Ergebnis;
   ticketSkillsAusConfig: (deps?: { config?: Record<string, unknown> }) => string[];
   renderMarkdown: (r: Ergebnis) => string;
 };
 /** Der Kern lädt die Config nie selbst (der Einstiegspunkt reicht sie durch); die Tests reichen die echte durch. */
 const ECHTE_CONFIG = ladeProjektConfig() as Record<string, unknown>;
-const hc = { ...hcRoh, zerlegeHauptchat: (e: Eingabe) => hcRoh.zerlegeHauptchat({ config: ECHTE_CONFIG, ...e }) };
+const hc = { ...hcTyp, zerlegeHauptchat: (e: Eingabe) => hcTyp.zerlegeHauptchat({ config: ECHTE_CONFIG, ...e }) };
 
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";

@@ -1,14 +1,16 @@
 // Kein Shebang: wird per `node scripts/kontext-treiber.mjs` gestartet UND von test/kontext-treiber.test.ts importiert.
 /**
- * Kontext-Treiber eines Subagent-Typs (#1559), Standard `kubernia-umsetzer`: was macht den Kontext je Call groß und was kostet es?
+ * Kontext-Treiber eines Subagent-Typs (#1559), Standard der Umsetzer der Projekt-Config (`agenten.umsetzer`): was macht den Kontext je Call groß und was kostet es?
  *
- *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket] [--json]
+ *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent <name>] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket] [--json]
+ *
+ * Die Agentennamen (`agenten.umsetzer` als Standard, `agenten.lens` für die Review-Phase) und das Worktree-Präfix kommen aus der Projekt-Config; fehlt sie oder ein Schlüssel, endet das CLI mit Exit 1 und der Meldung samt `Fix:`-Zeile (fail-closed).
  *
  * Je Lauf (Transkript unter `<session>/subagents/`): Requests, Kontext je Call (input + cacheWrite + cacheRead), Kosten (aus PRICES,
  * nur aufgezeichnete Usage: Output unterzählt), Phase je Call, Tool-Ergebnisse mit Größe und Last, Cache-Neuaufbauten mit Ursache.
  *  - Phase (Heuristik, Vorrang von oben): CI-Warten (`gh pr checks`, `pr-warten`, `gh run watch`, `until`-Schleife mit `gh pr view`),
  *    verify (`verify:*`, `vitest`, `eslint`, `typecheck`, `check:*`), sonst der Zustand: Umsetzung → Pflege (zwischen den Markern
- *    `pflege: start/ende`) → Review (ab dem ersten `kubernia-lens`-Spawn) → Lens-Fix (Edit/Write im Review) → ab `gh pr create` CI-Fix
+ *    `pflege: start/ende`) → Review (ab dem ersten Spawn des Lens-Agenten) → Lens-Fix (Edit/Write im Review) → ab `gh pr create` CI-Fix
  *    (Edit/Write) bzw. Merge/Cleanup. Calls ohne Tool erben den Zustand. Grenze: ein Befehl mit mehreren Zwecken zählt zum ersten Treffer.
  *  - Tokens eines Tool-Ergebnisses = Zeichen / 4 (Konvention aus docs/model-routing.md § Planer-Kosten); Last = Tokens × Zahl der
  *    späteren Calls des Laufs (so oft wird das Ergebnis erneut aus dem Cache gelesen).
@@ -34,6 +36,7 @@ import { escapeRegex } from "./ticket-namen.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
 import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
+import { namenOderGrund } from "./ticket-namen.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf } from "./subagent-laeufe.mjs";
 
@@ -50,17 +53,17 @@ const num = (x) => (Number.isFinite(x) ? x : 0);
 const summe = (liste) => liste.reduce((s, x) => s + x, 0);
 
 const befehlVon = (tool) => (SHELL_TOOLS.has(tool.tool) ? String(tool.input?.command ?? "") : "");
-const istLinse = (tool) => tool.tool === "Agent" && String(tool.input?.subagent_type ?? "") === "kubernia-lens";
+const istLinse = (tool, namen) => tool.tool === "Agent" && String(tool.input?.subagent_type ?? "") === namen.agenten.lens;
 
 /** Kurzbeschreibung eines Tool-Aufrufs für die Top-10 (Tool plus ~60 Zeichen Befehl, Pfad oder Muster). */
-function labelVon(tool, wurzel) {
+function labelVon(tool, wurzel, namen) {
   const i = tool.input ?? {};
   const detail = i.command ?? i.file_path ?? i.path ?? i.pattern ?? i.description ?? i.subagent_type ?? "";
-  return bereinige(`${tool.tool} ${detail}`, { wurzel }).slice(0, 70).trim();
+  return bereinige(`${tool.tool} ${detail}`, { wurzel, worktree: namen.praefixe.worktree }).slice(0, 70).trim();
 }
 
 /** Calls des Laufs mit ihren Tool-Aufrufen und der Phase je Call. */
-function phasenUndTools(zeilen, einstieg = null) {
+function phasenUndTools(zeilen, einstieg, namen) {
   const { calls } = callsFromTranscript(zeilen);
   const events = toolEventsFromTranscript(zeilen);
   const jeCall = new Map();
@@ -83,7 +86,7 @@ function phasenUndTools(zeilen, einstieg = null) {
       if (/pflege:\s*start/.test(befehl)) pflege = true;
       if (/pflege:\s*ende/.test(befehl)) pflege = false;
       if (/gh\s+pr\s+create/.test(befehl)) pr = true;
-      if (istLinse(tool)) {
+      if (istLinse(tool, namen)) {
         review = true;
         zustand = "Review";
       }
@@ -100,14 +103,14 @@ function phasenUndTools(zeilen, einstieg = null) {
 }
 
 /** Phase je Call (gleiche Reihenfolge wie `callsFromTranscript`). */
-export function phaseDerCalls(zeilen, einstieg = null) {
-  return phasenUndTools(zeilen, einstieg).map((e) => e.phase);
+export function phaseDerCalls(zeilen, einstieg, namen) {
+  return phasenUndTools(zeilen, einstieg ?? null, namen).map((e) => e.phase);
 }
 
-function ursacheVon(vorher) {
+function ursacheVon(vorher, namen) {
   if (!vorher) return "sonstiges";
   if (vorher.phase === "CI-Warten") return "CI-Warten";
-  if (vorher.tools.some(istLinse) || (!vorher.tools.length && (vorher.phase === "Review" || vorher.phase === "Lens-Fix"))) return "Lens-Warten";
+  if (vorher.tools.some((t) => istLinse(t, namen)) || (!vorher.tools.length && (vorher.phase === "Review" || vorher.phase === "Lens-Fix"))) return "Lens-Warten";
   if (vorher.phase === "verify") return "verify";
   return "sonstiges";
 }
@@ -121,13 +124,13 @@ function paare(eintraege) {
   return liste;
 }
 
-function neuaufbauten(eintraege) {
+function neuaufbauten(eintraege, namen) {
   return paare(eintraege)
     .filter(({ call, gapMs }) => istNeuaufbau({ gapMs, pauseMs: PAUSE_MS, call }))
     .map(({ vorher, call }) => {
       const preis = priceFor(call.model, PRICES, call.ts);
       return {
-        ursache: ursacheVon(vorher),
+        ursache: ursacheVon(vorher, namen),
         tokens: num(call.cacheWrite),
         mehrkosten: preis ? (num(call.cacheWrite) * (preis.cacheWrite5m - preis.cacheRead)) / 1e6 : null,
       };
@@ -135,10 +138,10 @@ function neuaufbauten(eintraege) {
 }
 
 /** Lücken über 240 s zwischen zwei Calls (#1588): Ursache des Vorgängers, Sekunden, Ticks eines 4-min-Keep-alive. */
-function wartepausen(eintraege) {
+function wartepausen(eintraege, namen) {
   return paare(eintraege)
     .filter(({ gapMs }) => gapMs > TICK_MS)
-    .map(({ vorher, gapMs }) => ({ ursache: ursacheVon(vorher), sekunden: Math.round(gapMs / 1000), ticks: Math.floor(gapMs / TICK_MS) }));
+    .map(({ vorher, gapMs }) => ({ ursache: ursacheVon(vorher, namen), sekunden: Math.round(gapMs / 1000), ticks: Math.floor(gapMs / TICK_MS) }));
 }
 
 const LESE_BEFEHL = /(^|[\s;&|(])(cat|sed|head)\s/;
@@ -147,14 +150,15 @@ const LESE_BEFEHL = /(^|[\s;&|(])(cat|sed|head)\s/;
  * Pfade, die der Lauf per Edit/Write geändert hat, und seine Lese-Aufrufe (`Read` sowie Shell-Befehle mit cat/sed/head), beide
  * normalisiert (#1592). Grundlage der Nachlese-Calls: ein Nachfolger, der geänderte Dateien des Vorgängers erneut liest.
  */
-function pfadZugriffe(eintraege, wurzel) {
+function pfadZugriffe(eintraege, wurzel, namen) {
+  const worktree = namen.praefixe.worktree;
   const geaendertePfade = [];
   const leseAufrufe = [];
   for (const { tools } of eintraege) {
     for (const tool of tools) {
       const datei = tool.input?.file_path;
-      if (EDIT_TOOLS.has(tool.tool) && typeof datei === "string") geaendertePfade.push(normPfad(datei, { wurzel }));
-      else if (tool.tool === "Read" && typeof datei === "string") leseAufrufe.push({ art: "read", pfad: normPfad(datei, { wurzel }) });
+      if (EDIT_TOOLS.has(tool.tool) && typeof datei === "string") geaendertePfade.push(normPfad(datei, { wurzel, worktree }));
+      else if (tool.tool === "Read" && typeof datei === "string") leseAufrufe.push({ art: "read", pfad: normPfad(datei, { wurzel, worktree }) });
       else if (LESE_BEFEHL.test(befehlVon(tool))) leseAufrufe.push({ art: "shell", befehl: befehlVon(tool).replace(/\\/g, "/").toLowerCase() });
     }
   }
@@ -168,12 +172,12 @@ function liestPfad(aufruf, pfad) {
   return new RegExp(`(?<![\\w.-])${escapeRegex(pfad)}(?!\\w)`).test(aufruf.befehl);
 }
 
-/** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. */
-export function analysiereLauf(lauf, { wurzel = null } = {}) {
-  const kopf = laufAus(lauf);
-  const eintraege = phasenUndTools(lauf.zeilen, kopf?.einstieg ?? null);
+/** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. `namen` (Ticket-Namen aus der Projekt-Config) ist Pflicht, ohne wirft `laufAus`. */
+export function analysiereLauf(lauf, { wurzel = null, namen } = {}) {
+  const kopf = laufAus(lauf, namen);
+  const eintraege = phasenUndTools(lauf.zeilen, kopf?.einstieg ?? null, namen);
   if (!eintraege.length) return null;
-  const { geaendertePfade, leseAufrufe } = pfadZugriffe(eintraege, wurzel);
+  const { geaendertePfade, leseAufrufe } = pfadZugriffe(eintraege, wurzel, namen);
   const ctx = eintraege.map((e) => kontextVon(e.call));
   const ergebnisse = [];
   const wachstum = { ergebnis: 0, eingabe: 0, rest: 0 };
@@ -185,7 +189,7 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
       const tokens = Math.round(tool.resultChars / 4);
       ergTokens += tokens;
       einTokens += Math.round(JSON.stringify(tool.input ?? {}).length / 4);
-      ergebnisse.push({ label: labelVon(tool, wurzel), tokens, last: tokens * spaeter, phase: e.phase });
+      ergebnisse.push({ label: labelVon(tool, wurzel, namen), tokens, last: tokens * spaeter, phase: e.phase });
     }
     const naechster = idx + 1 < eintraege.length ? ctx[idx + 1] - ctx[idx] : 0;
     if (naechster <= 0) return;
@@ -226,8 +230,8 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
     phasen: eintraege.map((e) => e.phase),
     phasenDetail: eintraege.map((e, i) => ({ phase: e.phase, kontext: ctx[i], kosten: e.call.cost ?? null })),
     ergebnisse,
-    neuaufbauten: neuaufbauten(eintraege),
-    pausen: wartepausen(eintraege),
+    neuaufbauten: neuaufbauten(eintraege, namen),
+    pausen: wartepausen(eintraege, namen),
     wachstum,
   };
 }
@@ -406,13 +410,14 @@ function jeTicketBericht(agent, analysen, { von, bis }) {
 /**
  * Kern: Läufe des Typs im Start-Fenster [von, bis] (optional nur/ohne bestimmte Tickets) → Bericht je Gruppe (alle, ohne Sammeltickets, Sammeltickets).
  * `delta` (true = nur Läufe mit Delta-Patch-Pfad im Prompt, false = nur ohne) und `brille` (Name wie in `laufAus`, z. B. `Architektur`) filtern zusätzlich (#1582).
- * @param {{ laeufe: { meta: object, zeilen: object[] }[], agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[], delta?: boolean|null, brille?: string|null, jeTicket?: boolean }} e
+ * @param {{ laeufe: { meta: object, zeilen: object[] }[], namen: object, agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[], delta?: boolean|null, brille?: string|null, jeTicket?: boolean }} e
  * `jeTicket` (#1592): alle Läufe eines Tickets sind ein Lauf (Vorgänger und Nachfolger nach einer Übergabe), das Fenster gilt für den ersten Start.
  */
-export function kontextTreiber({ laeufe, agent = "kubernia-umsetzer", von, bis, tickets = [], ohne = [], wurzel = null, delta = null, brille = null, jeTicket = false }) {
+export function kontextTreiber({ laeufe, namen, agent = namen?.agenten?.umsetzer, von, bis, tickets = [], ohne = [], wurzel = null, delta = null, brille = null, jeTicket = false }) {
+  if (typeof agent !== "string" || agent === "") throw new Error("kontextTreiber braucht den Agenten-Typ: `agent` oder namen.agenten.umsetzer");
   const analysen = laeufe
     .filter((l) => l?.meta?.agentType === agent)
-    .map((l) => analysiereLauf(l, { wurzel }))
+    .map((l) => analysiereLauf(l, { wurzel, namen }))
     .filter(Boolean)
     .filter((a) => jeTicket || ((!von || a.start >= Date.parse(von)) && (!bis || a.start <= Date.parse(bis))))
     .filter((a) => passtTicketFilter(a.ticket, { tickets, ohne }))
@@ -501,12 +506,13 @@ export function renderMarkdown(r) {
 
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
-export function parseArgs(argv) {
+/** `namen` liefert den Standard-Agenten (`agenten.umsetzer`), wenn `--agent` fehlt. */
+export function parseArgs(argv, namen) {
   const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string" }, ...TICKET_OPTIONEN, projekt: { type: "string" }, brille: { type: "string" }, delta: { type: "string" }, "je-ticket": { type: "boolean" }, json: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { meldung: ticketMeldung });
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
   const { tickets, ohne, fehler: ticketFehler } = ticketFilterAus(werte);
-  const a = { agent: werte.agent ?? "kubernia-umsetzer", tickets, ohne, json: werte.json === true };
+  const a = { agent: werte.agent ?? namen?.agenten?.umsetzer, tickets, ohne, json: werte.json === true };
   for (const name of ["von", "bis", "projekt", "brille"]) if (werte[name] !== undefined) a[name] = werte[name];
   if (werte["je-ticket"] === true) a.jeTicket = true;
   const gefunden = fehler?.text ?? ticketFehler;
@@ -517,17 +523,28 @@ export function parseArgs(argv) {
   return a;
 }
 
-function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.fehler || !args.von) {
-    if (args.fehler) console.error(args.fehler);
-    console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket] [--json]");
-    process.exit(2);
+/**
+ * Das CLI als Funktion: gibt den Exit-Code zurück (0 ok, 1 Projekt-Config nicht nutzbar, 2 Aufruf-Fehler). Die Namen kommen aus der Projekt-Config
+ * (`config` ersetzt das Laden, Test) und werden vor allem anderen geprüft: ohne `agenten.umsetzer` liest es kein Transkript.
+ */
+export function hauptlauf(argv, { config, ordner = projektOrdner, ladeTyp = ladeLaeufe, wurzel = hauptrepoWurzel, out = console.log, err = console.error } = {}) {
+  const r = namenOderGrund("kontext-treiber", { config });
+  if (r.grund) {
+    err(r.grund);
+    return 1;
   }
-  const dir = projektOrdner(args.projekt);
+  const namen = r.namen;
+  const args = parseArgs(argv, namen);
+  if (args.fehler || !args.von) {
+    if (args.fehler) err(args.fehler);
+    err(`Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent ${namen.agenten.umsetzer}] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket] [--json]`);
+    return 2;
+  }
+  const dir = ordner(args.projekt);
   readdirSync(dir);
-  const r = kontextTreiber({ laeufe: ladeLaeufe(dir, args.agent, ladeVon(args.von, Boolean(args.jeTicket))), agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: hauptrepoWurzel(), delta: args.delta ?? null, brille: args.brille ?? null, jeTicket: Boolean(args.jeTicket) });
-  console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
+  const bericht = kontextTreiber({ laeufe: ladeTyp(dir, args.agent, ladeVon(args.von, Boolean(args.jeTicket))), namen, agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: wurzel(), delta: args.delta ?? null, brille: args.brille ?? null, jeTicket: Boolean(args.jeTicket) });
+  out(args.json ? JSON.stringify(bericht, null, 2) : renderMarkdown(bericht));
+  return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = hauptlauf(process.argv.slice(2));

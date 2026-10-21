@@ -37,14 +37,16 @@ const bm = bmModule as {
   mitEingabe: (meta: Obs[], io: { id?: string; input?: unknown }[]) => Obs[];
   EINGABE_TOOLS: string[];
 };
-const baseline = baselineModule as {
+const baselineRoh = baselineModule as {
   renderMarkdown: (s: object, loop?: object) => string;
-  summarize: (run: object, bounds?: object, prFiles?: object[] | null) => { brain?: Metrics & { rechercheTokens: number } };
+  summarize: (run: object, bounds?: object, prFiles?: object[] | null, namen?: { umsetzer: string }) => { brain?: Metrics & { rechercheTokens: number } };
   fensterLage: (ts: string, bounds?: object) => string;
   ladeLangfuseSession: (id: string, o: object) => Promise<{ events: Ev[] }>;
   callsFromTranscript: (textOderZeilen: string | object[]) => { calls: unknown[]; questions: number };
   fetchSessionObservations: (id: string, o: object) => Promise<unknown[]>;
 };
+// Der Umsetzer-Name kommt aus der Projekt-Config; der Wrapper reicht ihn durch (die Tests hier prüfen die Brain-Kennzahlen, nicht ihn).
+const baseline = { ...baselineRoh, summarize: (run: object, bounds?: object, prFiles?: object[] | null) => baselineRoh.summarize(run, bounds, prFiles, { umsetzer: "umsetzer-x" }) };
 const { isBrainPage, classifyShell, toolEventsFromTranscript, toolEventsFromLangfuse, brainMetrics, pflegeMarker, pflegeIntervals } = bm;
 
 const ev = (ts: string, tool: string, input: Record<string, unknown> = {}, resultChars = 0): Ev => ({ ts, tool, input, resultChars });

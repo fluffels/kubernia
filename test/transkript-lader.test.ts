@@ -17,9 +17,12 @@ type Zeilen = Record<string, unknown>[];
 type Sitzung = { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] };
 const T = rawTranskript as unknown as { ladeSessionDatei: (pfad: string) => Sitzung; ladeSessions: (dir: string, von?: string) => Generator<Sitzung> };
 const HC = rawHc as unknown as {
-  istKubernia: (meta: Record<string, unknown> | undefined) => boolean;
+  istTicketLauf: (meta: Record<string, unknown> | undefined, ticketAgenten: Set<string>) => boolean;
+  hauptchatNamen: (deps: { config: unknown }) => { ticketAgenten: Set<string> };
   zerlegeHauptchat: (e: { sessions: Iterable<Sitzung>; config: unknown }) => { rows: { kategorie: string; quelle: string; calls: number }[]; kubernia: { calls: number } };
 };
+const AGENTEN = HC.hauptchatNamen({ config: (rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig() }).ticketAgenten;
+const istTicketLauf = (meta: Record<string, unknown> | undefined) => HC.istTicketLauf(meta, AGENTEN);
 const BASE = rawBase as unknown as { readTranscriptSession: (id: string, root: string) => { calls: { subagent?: { agentType?: string } }[]; questions: number } };
 
 const zeile = (o: Record<string, unknown>) => JSON.stringify(o);
@@ -80,23 +83,31 @@ describe("ladeSessionDatei (#1392 Z29)", () => {
   });
 });
 
-describe("istKubernia (#1392 Z30)", () => {
-  test("nur agentType mit Präfix kubernia- oder ein verschachtelter Agent", () => {
-    expect(HC.istKubernia({ agentType: "kubernia-planner" })).toBe(true);
-    expect(HC.istKubernia({ agentType: "kubernia-umsetzer" })).toBe(true);
-    expect(HC.istKubernia({ agentType: "general-purpose", parentAgentId: "x" })).toBe(true);
+describe("istTicketLauf (#1392 Z30)", () => {
+  test("nur agentType aus den Agenten der Projekt-Config (Planer, Umsetzer, Lens, Gruppe) oder ein verschachtelter Agent", () => {
+    expect(istTicketLauf({ agentType: "kubernia-planner" })).toBe(true);
+    expect(istTicketLauf({ agentType: "kubernia-umsetzer" })).toBe(true);
+    expect(istTicketLauf({ agentType: "kubernia-lens" })).toBe(true);
+    expect(istTicketLauf({ agentType: "kubernia-gruppe" })).toBe(true);
+    expect(istTicketLauf({ agentType: "general-purpose", parentAgentId: "x" })).toBe(true);
+  });
+
+  test("ein Name mit dem Präfix, aber ohne Eintrag in der Config, ist kein Ticketlauf (Menge statt Präfix)", () => {
+    expect(istTicketLauf({ agentType: "kubernia-unbekannt" })).toBe(false);
+    expect(HC.istTicketLauf({ agentType: "acme-lens" }, new Set(["acme-lens"]))).toBe(true);
+    expect(HC.istTicketLauf({ agentType: "kubernia-lens" }, new Set(["acme-lens"]))).toBe(false);
   });
 
   test("general-purpose mit Beschreibung „Review des Plans“ ist ein Fork (die alte Beschreibungsheuristik zählte ihn als kubernia)", () => {
-    expect(HC.istKubernia({ agentType: "general-purpose", description: "Review des Plans" })).toBe(false);
-    expect(HC.istKubernia({ agentType: "general-purpose", description: "Lens R1" })).toBe(false);
+    expect(istTicketLauf({ agentType: "general-purpose", description: "Review des Plans" })).toBe(false);
+    expect(istTicketLauf({ agentType: "general-purpose", description: "Lens R1" })).toBe(false);
   });
 
   test("Explore aus dem Hauptchat, fehlendes Meta und ähnliche Typnamen sind keine kubernia-Subagenten", () => {
-    expect(HC.istKubernia({ agentType: "Explore" })).toBe(false);
-    expect(HC.istKubernia({ agentType: "my-kubernia-x" })).toBe(false);
-    expect(HC.istKubernia({})).toBe(false);
-    expect(HC.istKubernia(undefined)).toBe(false);
+    expect(istTicketLauf({ agentType: "Explore" })).toBe(false);
+    expect(istTicketLauf({ agentType: "my-kubernia-x" })).toBe(false);
+    expect(istTicketLauf({})).toBe(false);
+    expect(istTicketLauf(undefined)).toBe(false);
   });
 });
 

@@ -3,7 +3,7 @@
 /**
  * Läufe eines Subagent-Typs aus den Claude-Code-Transkripten: `laufAus` (Kennzahlen eines Laufs aus `{ meta, zeilen }`) und
  * `ladeLaeufe` (Meta und Zeilen unter `<projektordner>/<session>/subagents/`). Felder und Heuristiken: Kopf von subagent-laufzeit.mjs.
- * Das Ticket eines Laufs kommt aus `ticketAusLauf`: erst `kq-<nr>` im Patch-Pfad, dann der Worktree im Prompt, erst zuletzt das erste `#<nr>`.
+ * Das Ticket eines Laufs kommt aus `ticketAusLauf`: erst `<Worktree-Präfix><nr>` im Patch-Pfad, dann der Worktree im Prompt, erst zuletzt das erste `#<nr>`.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -73,7 +73,7 @@ export function beschreibungAus(beschreibung) {
 }
 
 /** Art des Delta-Auftrags: `null` ohne Delta-Patch-Pfad im Prompt, `"merge"` bei Konflikt-Auflösung (Merge-Lens), sonst `"fix"`. */
-const deltaArtAus = (prompt, merge) => (!patchPfade(prompt).delta ? null : merge || /Konflikt-Aufl(?:ö|oe)sung/i.test(prompt) ? "merge" : "fix");
+const deltaArtAus = (prompt, merge, namen) => (!patchPfade(prompt, namen).delta ? null : merge || /Konflikt-Aufl(?:ö|oe)sung/i.test(prompt) ? "merge" : "fix");
 
 /**
  * Wert einer Prompt-Zeile `<Schlüssel>: pr|verify` (Phasen-Schnitt #1592): case-sensitiv und als ganze Zeile, sonst `null`. Ein
@@ -86,13 +86,13 @@ export function schnittZeile(prompt, schluessel) {
 
 /**
  * Ticket eines Laufs (#1579): vor allem anderen die Kopfzeile `Ticket #<nr>:` in der ERSTEN Prompt-Zeile (#1593: ein Worktree-Pfad
- * im Prompt ordnete Läufe sonst dem falschen Ticket zu), dann `kq-<nr>` aus dem Patch-Pfad (`patch.ticket`), dann der Worktree im Prompt (`worktrees/kq-<nr>`,
+ * im Prompt ordnete Läufe sonst dem falschen Ticket zu), dann `<Worktree-Präfix><nr>` aus dem Patch-Pfad (`patch.ticket`), dann der Worktree im Prompt (`worktrees/<Worktree-Präfix><nr>`,
  * auch ein Lens-Worktree), erst zuletzt das erste `#<nr>` im Prompt; sonst `null`. Ein `#<nr>` aus Brillen- oder Diät-Text
  * (`schon erledigt durch #1349`, `(#1034)`) darf das Ticket nur zuordnen, wenn nichts Belastbareres da ist.
  */
-export function ticketAusLauf({ patch, prompt }) {
+export function ticketAusLauf({ patch, prompt }, namen) {
   const kopf = Number(/^Ticket #(\d+)\b/.exec(erstesZeile(prompt))?.[1]) || null;
-  return kopf ?? patch?.ticket ?? ticketAusRef(prompt) ?? (Number(/#(\d+)/.exec(prompt)?.[1]) || null);
+  return kopf ?? patch?.ticket ?? ticketAusRef(prompt, namen) ?? (Number(/#(\d+)/.exec(prompt)?.[1]) || null);
 }
 
 /** Erste Zeile eines Prompts (die Titelzeile `Ticket #<nr>: <Titel>` des Umsetzer-Auftrags, #1593). */
@@ -100,8 +100,12 @@ export function erstesZeile(prompt) {
   return String(prompt ?? "").split(/\r?\n/, 1)[0];
 }
 
-/** Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. */
-export function laufAus({ meta, zeilen, datei }) {
+/**
+ * Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. `namen` (Ticket-Namen aus der Projekt-Config, `ticket-namen.mjs`) ist Pflicht: ein fehlendes
+ * Objekt wirft, auch der Index aus `.map(laufAus)` (statt `.map((l) => laufAus(l, namen))`) zählt als fehlend.
+ */
+export function laufAus({ meta, zeilen, datei }, namen) {
+  if (!namen?.patchMuster) throw new Error("laufAus braucht die Ticket-Namen (ticketNamen(config)) als zweites Argument");
   const zeiten = zeilen.map((r) => r?.timestamp).filter(gueltig).map(ms);
   if (!zeiten.length) return null;
   const start = Math.min(...zeiten);
@@ -111,7 +115,7 @@ export function laufAus({ meta, zeilen, datei }) {
   const { intervalle, offeneTools } = toolIntervalle(zeilen);
   const dauer = ende - start;
   const beschr = beschreibungAus(meta?.description);
-  const patch = patchAus(prompt, zeilen);
+  const patch = patchAus(prompt, zeilen, namen);
   const erster = calls[0];
   const tool = Math.min(vereinigungsLaenge(intervalle), dauer);
   return {
@@ -121,11 +125,11 @@ export function laufAus({ meta, zeilen, datei }) {
     beschreibung: typeof meta?.description === "string" ? meta.description : null,
     brille: beschr.brille,
     runde: beschr.runde ?? (beschr.merge ? null : patch?.runde) ?? null,
-    deltaArt: deltaArtAus(prompt, beschr.merge),
+    deltaArt: deltaArtAus(prompt, beschr.merge, namen),
     promptZeichen: prompt.length,
     ersterCall: erster ? { input: erster.input ?? 0, cacheWrite: erster.cacheWrite ?? 0, cacheRead: erster.cacheRead ?? 0 } : null,
     patch,
-    ticket: ticketAusLauf({ patch, prompt }),
+    ticket: ticketAusLauf({ patch, prompt }, namen),
     sammel: /\(gesammelt\)/i.test(erstesZeile(prompt)),
     schnitt: schnittZeile(prompt, "Schnitt"),
     einstieg: schnittZeile(prompt, "Einstieg"),

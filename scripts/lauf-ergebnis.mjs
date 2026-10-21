@@ -29,6 +29,7 @@ import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } fr
 import { flagsLesen } from "./flag-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf, ticketsMitStartImFenster } from "./subagent-laeufe.mjs";
+import { ticketNamen } from "./ticket-namen.mjs";
 import { projektOrdner } from "./transkript.mjs";
 
 export const NACHARBEIT_TAGE = 14;
@@ -215,7 +216,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
 function konfigurationAus(ladeConfig) {
   const config = ladeConfig();
   const owner = typeof config?.repo === "string" ? config.repo.split("/")[0] : undefined;
-  return { zeilen: commitZeilenAus(config), label: labelAus(config, "festgefahren"), owner };
+  return { zeilen: commitZeilenAus(config), label: labelAus(config, "festgefahren"), owner, config };
 }
 
 /** Höchster gültiger Abnahme-Durchgang aus den Kommentaren (nur vertraute Autoren, der Hand-off-Marker zählt nie); 0 ohne Marker. Pure. */
@@ -315,8 +316,10 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tick
  * Eine leere Menge ergibt 0 PRs (leere `tickets` hießen im Filter „alle“) und braucht keinen gh-Aufruf.
  */
 export function laufErgebnisStartAgent({ laeufe, von, bis, ohne = [], jetzt = new Date(), ladeConfig = ladeProjektConfig, ...io }) {
-  const tickets = ticketsMitStartImFenster(laeufe.map(laufAus).filter(Boolean), { von, bis });
-  if (tickets.length === 0) return bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt, konfigZeilen: konfigurationAus(ladeConfig).zeilen });
+  const { zeilen, config } = konfigurationAus(ladeConfig);
+  const namen = ticketNamen(config);
+  const tickets = ticketsMitStartImFenster(laeufe.map((l) => laufAus(l, namen)).filter(Boolean), { von, bis });
+  if (tickets.length === 0) return bewertePrs({ prs: [], commits: [], ci: {}, festgefahren: {}, jetzt, konfigZeilen: zeilen });
   return laufErgebnis({ von, bis, jetzt, tickets, ohne, ladeConfig, ...io });
 }
 

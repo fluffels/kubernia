@@ -18,6 +18,8 @@ import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawOtlp from "../../scripts/langfuse-otlp.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawProjekt from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleich from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawApi from "../../scripts/langfuse-api.mjs";
@@ -46,9 +48,12 @@ const N = rawNach as unknown as {
   GESAMTFRIST_MS: number;
   parseArgs: (a: string[]) => Args;
   fehlerText: (e: unknown) => string;
-  nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
+  nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string; config?: unknown }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
 };
-const O = rawOtlp as unknown as {
+// Der Repo-Name (Scope, Service und erstes Tag) kommt aus der Projekt-Config; der Wrapper reicht ihn durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const REPO_NAME = (rawProjekt as unknown as { repoName: (c: unknown) => string; ladeProjektConfig: () => unknown }).repoName((rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig());
+const otlpRoh = rawOtlp as unknown as { bauePayloads: (s: string, e: unknown, o: object) => unknown };
+const O = { ...rawOtlp, bauePayloads: (s: string, e: unknown, o: object) => otlpRoh.bauePayloads(s, e, { repoName: REPO_NAME, ...o }) } as unknown as {
   MAX_SPANS_JE_REQUEST: number;
   nanos: (ts: string) => string;
   attr: (k: string, v: string | string[]) => Attr;
@@ -186,10 +191,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, projekt-config-lib, ticket-namen (nur Builtins) nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "projekt-config-lib", "ticket-namen"]));
   });
 });
 
@@ -455,6 +460,26 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 2, dubletten: 1 });
   });
 
+  test("Fremd-Config (#1745): Worktree-Präfix und Repo-Name der Config bestimmen Ticket, Scope und erstes Tag der gesendeten Spans", async () => {
+    const cfg = { repo: "o/acme", praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" } };
+    const a = aufbau([msg("a", 1, { gitBranch: "feature/ab-9-x" })]);
+    const m = mock({ ist: 0, obs: [] });
+    await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state, config: cfg });
+    expect(m.otlp).toHaveLength(1);
+    expect(attrs(spansVon(m.otlp[0])[0])["langfuse.trace.tags"]).toEqual(["acme", "abgleich", "ab-9"]);
+    expect(m.otlp[0].resourceSpans[0].scopeSpans[0].scope.name).toBe("acme-abgleich");
+  });
+  test("Negativfall: eine Config ohne Worktree-Präfix oder ohne repo bricht ab, bevor ein Request oder eine Ledger-Datei entsteht", async () => {
+    for (const cfg of [{ repo: "o/acme", praefixe: {} }, { praefixe: { worktree: "ab-" } }]) {
+      const a = aufbau([msg("a", 1)]);
+      const m = mock({ ist: 0, obs: [] });
+      const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state, config: cfg });
+      expect(r.exitCode).toBe(1);
+      expect(r.text).toMatch(/Fix:/);
+      expect(m.aufrufe).toHaveLength(0);
+      expect(existsSync(a.ledger)).toBe(false);
+    }
+  });
   test("Subagent-Span je Session nur einmal; Kind-Call hängt am Span des Subagenten", async () => {
     const meta = JSON.stringify({ agentType: "kubernia-lens", description: "Lens R1" });
     const sub = (ids: string[]) => ids.map((i, n) => msg(i, 20 + n)).join("\n");

@@ -18,6 +18,8 @@ import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawKern from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawNamen from "../../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPreise from "../../scripts/preise.mjs";
@@ -34,7 +36,15 @@ type Ist = { calls: number | null; tokens: { input: number; output: number; cach
 type Bewertung = { status: string; score: string | null; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>;
 // Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
-const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
+// Das Worktree-Präfix kommt aus der Projekt-Config; die Wrapper reichen es durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const WORKTREE = (rawNamen as unknown as { ladeTicketNamen: () => { praefixe: { worktree: string } } }).ladeTicketNamen().praefixe.worktree;
+const kernRoh = rawKern as unknown as { sollEintraege: (s: unknown, o: object) => unknown; ticketAusBranch: (b: unknown, w: string) => unknown };
+const A = {
+  ...rawAbgleichEinstieg,
+  ...rawKern,
+  sollEintraege: (s: unknown, o?: object) => kernRoh.sollEintraege(s, { worktree: WORKTREE, ...o }),
+  ticketAusBranch: (b: unknown) => kernRoh.ticketAusBranch(b, WORKTREE),
+} as unknown as {
   RUHEFRIST_MIN: number;
   ROW_LIMIT: number;
   STICHTAG: string;
@@ -58,7 +68,7 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string },
-    d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null },
+    d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null; config?: unknown },
   ) => Promise<{ exitCode: number; text: string }>;
   parseArgs: (a: string[]) => { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string };
 };
@@ -577,6 +587,15 @@ describe("pruefen (Ablauf)", () => {
     expect(j.sessions[0].status).toBe("läuft");
     expect(j.summe).toMatchObject({ sessions: 0, laeuft: 1 });
     expect(m.aufrufe.some((a) => a.url.includes("/v2/observations"))).toBe(false);
+  });
+
+  test("Negativfall (#1745): eine Config ohne Worktree-Präfix bricht mit Exit 1 und Fix-Zeile ab, ohne ein Transkript oder Langfuse zu fragen", async () => {
+    const root = mitSession([msg("a")]);
+    const m = mock({ zaehlung: [] });
+    const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl, config: { repo: "o/acme", praefixe: {} } });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/praefixe\.worktree[\s\S]*Fix:/);
+    expect(m.aufrufe).toHaveLength(0);
   });
 
   test("HTTP 500 ergibt Exit 1", async () => {

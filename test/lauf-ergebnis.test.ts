@@ -628,10 +628,21 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       };
       assert.throws(() => start([lauf1(40, t0 - 10)], { ladeConfig: wirft }), /praefixe\.commitZeile/);
       assert.throws(() => start([lauf1(40, t0 + 1)], { ladeConfig: wirft }), /praefixe\.commitZeile/);
-      const ab = () => ({ praefixe: { commitZeile: "AB-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+      // Die Läufe werden mit den Ticket-Namen der Config zugeordnet (ticketNamen): die Config ist vollständig, nur die Commit-Zeile weicht ab.
+      const ab = () => ({ praefixe: { commitZeile: "AB-", branch: "feature/kq-", worktree: "kq-" }, agenten: { planer: "kubernia-planner", umsetzer: "kubernia-umsetzer", lens: "kubernia-lens", gruppe: "kubernia-gruppe", ticketSkill: "kubernia" }, labels: { festgefahren: LABEL } });
       const e = start([lauf1(40, t0 + 1)], { ladeConfig: ab });
       assert.equal(e.zeilen[0].runden, null, "KQ-Zeilen zählen bei AB- nicht");
       assert.equal(e.kennzahlen.ohneNachweis, 1);
+    });
+    test("Ticket-Namen aus der Config (#1745): der Worktree-Pfad mit dem Präfix der Config ordnet den Lauf zu, mit einer anderen Config nicht", () => {
+      const imWorktree = { meta: { agentType: "x-agent" }, zeilen: [{ type: "user", timestamp: new Date(t0 + 1).toISOString(), message: { role: "user", content: "Arbeit in C:/r/.claude/worktrees/ab-40/src" } }] };
+      const namen = (worktree: string) => () => ({
+        praefixe: { commitZeile: "KQ-", branch: "feature/kq-", worktree },
+        agenten: { planer: "kubernia-planner", umsetzer: "kubernia-umsetzer", lens: "kubernia-lens", gruppe: "kubernia-gruppe", ticketSkill: "kubernia" },
+        labels: { festgefahren: LABEL },
+      });
+      assert.deepEqual(start([imWorktree], { ladeConfig: namen("ab-") }).zeilen.map((z) => z.pr), [50]);
+      assert.deepEqual(start([imWorktree], { ladeConfig: namen("kq-") }).zeilen, []);
     });
     test("--ohne bleibt kombinierbar", () => {
       assert.deepEqual(start([lauf1(40, t0 + 1), lauf1(41, t0 + 2)], { ohne: [41] }).zeilen.map((z) => z.pr), [50]);

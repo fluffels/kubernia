@@ -15,6 +15,8 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
+import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
+import { worktreePraefix } from "./ticket-namen.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { hauptrepoPfad, ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import {
@@ -139,7 +141,7 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
 
 /** Eine Session bis zum Ledger-Stand; mutiert `ledger.sessions[id]` nur um angenommene Chunks und eine vollständige Bestätigung. */
 async function verarbeite(s, c) {
-  const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll } = c;
+  const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo } = c;
   const alt = ledger.sessions[s.id];
   const unveraendert = standUnveraendert(alt, s);
   const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false };
@@ -161,7 +163,7 @@ async function verarbeite(s, c) {
   const vermerke = (status) => {
     if (!args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], gesendetAm: {}, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet, vermerk: status };
   };
-  const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id });
+  const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
   if (!soll.length) {
     vermerke("ohne Calls");
     return Object.assign(rec, { status: "ohne Calls" });
@@ -194,7 +196,7 @@ async function verarbeite(s, c) {
   eintrag.gesendetAm = Object.fromEntries(eintrag.gesendet.map((id) => [id, eintrag.gesendetAm[id]]));
   let ok = true;
   if (sendbar.length) {
-    const { chunks } = bauePayloads(s.id, sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(hauptrepoPfad(repoRoot)) });
+    const { chunks } = bauePayloads(s.id, sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(hauptrepoPfad(repoRoot)), repoName: repo });
     ok = await sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec, now });
   }
   rec.status = mehrdeutig ? "mehrdeutig" : ok ? "gesendet" : "Fehler";
@@ -241,7 +243,7 @@ function bericht(args, protokoll) {
  * Nachliefern ausführen: `{ exitCode, text, protokoll }`. 0 = Bericht, 1 = mindestens ein Fehler (übrige Sessions liefen weiter),
  * 2 = Aufruf oder Zugang fehlt (vor jedem Request).
  */
-export async function nachliefern(args, { env = process.env, now = Date.now(), uhr = Date.now, fetchImpl = fetch, projectsRoot, repoRoot, stateDir } = {}) {
+export async function nachliefern(args, { env = process.env, now = Date.now(), uhr = Date.now, fetchImpl = fetch, projectsRoot, repoRoot, stateDir, config } = {}) {
   const protokoll = { zugang: null, geprueft: 0, uebrig: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] };
   if (args.fehler) return { exitCode: 2, text: `${args.fehler}\n${AUFRUFHILFE}`, protokoll };
   const seitMs = args.seit ? Date.parse(args.seit) : now - 7 * 86_400_000;
@@ -253,6 +255,15 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
   } catch (e) {
     protokoll.zugang = false;
     return { exitCode: 2, text: e.message, protokoll };
+  }
+  let worktree;
+  let repo;
+  try {
+    const cfg = config ?? ladeProjektConfig({ pruefen: false });
+    worktree = worktreePraefix(cfg);
+    repo = repoName(cfg);
+  } catch (e) {
+    return { exitCode: 1, text: `Fehler: ${e.message}`, protokoll };
   }
   const ledgerDatei = join(stateDir, LEDGER_NAME);
   const { ledger, kaputt } = ledgerLesen(ledgerDatei);
@@ -270,7 +281,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
     }
     protokoll.geprueft += 1;
     try {
-      await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll });
+      await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo });
     } catch (e) {
       protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
     }

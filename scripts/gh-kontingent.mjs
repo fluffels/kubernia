@@ -24,7 +24,14 @@ function ausgabeBericht(b) {
 
 function main() {
   if (process.argv.includes("--bericht")) {
-    const pfad = logPfad();
+    let pfad;
+    try {
+      pfad = logPfad();
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exitCode = 1;
+      return;
+    }
     console.log(ausgabeBericht(berichtAus(existsSync(pfad) ? readFileSync(pfad, "utf8").split(/\r?\n/) : [])));
     return;
   }

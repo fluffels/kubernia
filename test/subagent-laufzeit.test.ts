@@ -4,9 +4,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as raw from "../scripts/subagent-laufzeit.mjs";
+import * as laufzeitRoh from "../scripts/subagent-laufzeit.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRoh from "../scripts/ticket-namen.mjs";
+
+// Die Namen kommen aus der Projekt-Config; die Wrapper reichen sie an die Kern-Funktionen durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const NAMEN = (namenRoh as unknown as { ladeTicketNamen: () => unknown }).ladeTicketNamen();
+type Offen = (e: object) => unknown;
+const laufzeitModul = laufzeitRoh as unknown as { laufzeiten: Offen; typenUebersicht: Offen; parseArgs: (argv: string[], namen: unknown) => unknown };
+const raw = {
+  ...(laufzeitRoh as object),
+  laufzeiten: (e: object) => laufzeitModul.laufzeiten({ namen: NAMEN, ...e }),
+  typenUebersicht: (e: object) => laufzeitModul.typenUebersicht({ namen: NAMEN, ...e }),
+  parseArgs: (argv: string[]) => laufzeitModul.parseArgs(argv, NAMEN),
+};
 
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[]; datei?: string };

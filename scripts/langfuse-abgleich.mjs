@@ -23,6 +23,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { worktreePraefix } from "./ticket-namen.mjs";
 import {
   ROW_LIMIT,
   LEDGER_NAME,
@@ -175,7 +177,7 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
 }
 
 /** `--pruefen` ausführen: `{ exitCode, text }`. 0 = Bericht (auch mit Lücken: Messwerkzeug, kein Gate), 1 = Fehler beim Lesen/Abfragen, 2 = Aufruf oder Zugang fehlt. */
-export async function pruefen(args, { env = process.env, now = Date.now(), projectsRoot, repoRoot, fetchImpl = fetch, leseDatei = readFileSync, stateDir = null } = {}) {
+export async function pruefen(args, { env = process.env, now = Date.now(), projectsRoot, repoRoot, fetchImpl = fetch, leseDatei = readFileSync, stateDir = null, config } = {}) {
   if (args.fehler) return { exitCode: 2, text: `${args.fehler}\n${AUFRUFHILFE}` };
   if (!args.pruefen) return { exitCode: 2, text: AUFRUFHILFE };
   const seitMs = args.seit ? Date.parse(args.seit) : now - 7 * 86_400_000;
@@ -186,12 +188,18 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
   } catch (e) {
     if (!args.ist.length) return { exitCode: 2, text: e.message };
   }
+  let worktree;
+  try {
+    worktree = worktreePraefix(config ?? ladeProjektConfig({ pruefen: false }));
+  } catch (e) {
+    return { exitCode: 1, text: `Fehler: ${e.message}` };
+  }
   try {
     const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
     const soll = new Map();
     const staende = new Map();
     for (const s of sessions) {
-      const eintraege = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id });
+      const eintraege = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
       if (eintraege.length) soll.set(s.id, eintraege);
       staende.set(s.id, { mtime: s.mtime, groesse: s.groesse });
     }

@@ -6,6 +6,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import * as raw from "../scripts/naechstes-ticket.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as refs from "../scripts/ticket-refs.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRoh from "../scripts/ticket-namen.mjs";
+
+const ticketNamen = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 
 const R = refs as unknown as { ticketAusRef: (t: string) => number | null; belegteNummern: (e: { refs?: string[]; worktrees?: string[]; prHeads?: string[] }) => Set<number> };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -29,7 +33,7 @@ const N = raw as unknown as {
   messfensterZeilen: (b: string) => (Fenster | { fehler: string })[];
   ticketsImFenster: (l: { start: number; ticket: number | null }[], o: { closedAt: string; ohneTicket: number }) => number;
   messfensterGrund: (f: Fenster, s: Stand) => string;
-  messfensterLader: (o: { dir?: string; holeIssue?: (nr: number) => { state: string; closed_at: string | null } }) => (f: Fenster, wartend: number) => Stand;
+  messfensterLader: (o: { dir?: string; holeIssue?: (nr: number) => { state: string; closed_at: string | null }; ladeNamen?: () => unknown }) => (f: Fenster, wartend: number) => Stand;
 };
 
 // Ein Parse-Pfad (#1460 Z8): die Roh-Fixtures (REST-Form) laufen wie im Echtbetrieb durch normalizeItems, waehleNaechstes sieht nur Normalisiertes.
@@ -397,6 +401,24 @@ describe("messfensterLader (#1589)", () => {
     lauf(d, "d", "kubernia-lens", 1602, "2026-10-15T13:00:00Z");
     lauf(d, "e", "kubernia-umsetzer", 1603, "2026-10-15T09:00:00Z");
     expect(N.messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
+  });
+  test("Ticket-Namen aus der Config (#1745): der Worktree-Pfad mit dem Präfix der Config ordnet den Lauf zu", () => {
+    const d = tmp();
+    const sub = join(d, "sess", "subagents");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, "w.meta.json"), JSON.stringify({ agentType: "kubernia-umsetzer" }));
+    writeFileSync(join(sub, "w.jsonl"), `${JSON.stringify({ type: "user", timestamp: "2026-10-15T11:00:00Z", message: { role: "user", content: "Arbeit in C:/r/.claude/worktrees/ab-1700/src" } })}\n`);
+    const mit = (worktree: string) => () => ticketNamen({ praefixe: { branch: `feature/${worktree}`, worktree }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" } });
+    expect(N.messfensterLader({ dir: d, holeIssue: zu, ladeNamen: mit("ab-") })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+    expect(N.messfensterLader({ dir: d, holeIssue: zu, ladeNamen: mit("kq-") })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 0 });
+  });
+  test("Negativfall: sind die Ticket-Namen nicht ladbar, ist das Fenster unprüfbar (fail-closed, ohne Text der Config)", () => {
+    const d = tmp();
+    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
+    const wirft = () => {
+      throw new Error("Projekt-Config unvollständig: agenten.umsetzer fehlt");
+    };
+    expect(N.messfensterLader({ dir: d, holeIssue: zu, ladeNamen: wirft })(F, 1591)).toEqual({ fehler: "Messfenster nicht prüfbar (Projekt-Config nicht nutzbar)" });
   });
   test("offenes Issue: closedAt null; Abruffehler: fehler", () => {
     const d = tmp();
