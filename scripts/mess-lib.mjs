@@ -98,6 +98,28 @@ export function ticketNummer(name, wert) {
   return { nr: Number(wert), fehler: ok ? null : `${name} erwartet eine Ticketnummer, nicht ${wert ?? "nichts"}` };
 }
 
+/** Optionen der wiederholbaren Ticketfilter `--ticket` und `--ohne` für `flagsLesen` (#1790). */
+export const TICKET_OPTIONEN = { ticket: { type: "string", multiple: true }, ohne: { type: "string", multiple: true } };
+
+/** Meldung für `flagsLesen`: fehlt der Wert von `--ticket`/`--ohne`, der Text von `ticketNummer`; sonst `undefined` (Standardtext). */
+export function ticketMeldung(art, flag) {
+  return art === "ohne-wert" && (flag === "--ticket" || flag === "--ohne") ? ticketNummer(flag, undefined).fehler : undefined;
+}
+
+/** Ticketlisten aus den `flagsLesen`-Werten: `{ tickets, ohne, fehler }`; der erste ungültige Wert setzt `fehler` (`null` sonst). */
+export function ticketFilterAus(werte) {
+  let fehler = null;
+  const lies = (name) =>
+    (werte[name] ?? []).map((w) => {
+      const r = ticketNummer(`--${name}`, w);
+      fehler ??= r.fehler;
+      return r.nr;
+    });
+  const tickets = lies("ticket");
+  const ohne = lies("ohne");
+  return { tickets, ohne, fehler };
+}
+
 /** Ticketfilter (#1609): `tickets` = nur diese (leer = alle), `ohne` = alle außer diesen; ein Ticket ohne Nummer fällt bei `tickets` heraus. */
 export function passtTicketFilter(ticket, { tickets = [], ohne = [] } = {}) {
   return (tickets.length === 0 || tickets.includes(ticket)) && !ohne.includes(ticket);

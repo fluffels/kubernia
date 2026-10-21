@@ -20,7 +20,8 @@
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
  */
 import { pathToFileURL } from "node:url";
-import { median, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
+import { median, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeAlleLaeufe, ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
@@ -169,27 +170,14 @@ export function renderTypen(r) {
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
 export function parseArgs(argv) {
-  const a = { agent: "kubernia-planner", json: false, typen: false, agentGesetzt: false, tickets: [], ohne: [] };
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string" }, typen: { type: "boolean" }, ...TICKET_OPTIONEN, schnitt: { type: "string" }, projekt: { type: "string" }, json: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen, { meldung: ticketMeldung });
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
-  const nummer = (name, wert) => {
-    const { nr, fehler } = ticketNummer(name, wert);
-    if (fehler) a.fehler ??= fehler;
-    return nr;
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (k === "--von") a.von = argv[++i];
-    else if (k === "--bis") a.bis = argv[++i];
-    else if (k === "--agent") {
-      a.agent = argv[++i];
-      a.agentGesetzt = true;
-    } else if (k === "--typen") a.typen = true;
-    else if (k === "--ticket") a.tickets.push(nummer(k, argv[++i]));
-    else if (k === "--ohne") a.ohne.push(nummer(k, argv[++i]));
-    else if (k === "--schnitt") a.schnitt = argv[++i];
-    else if (k === "--projekt") a.projekt = argv[++i];
-    else if (k === "--json") a.json = true;
-  }
+  const { tickets, ohne, fehler: ticketFehler } = ticketFilterAus(werte);
+  const a = { agent: werte.agent ?? "kubernia-planner", json: werte.json === true, typen: werte.typen === true, agentGesetzt: werte.agent !== undefined, tickets, ohne };
+  for (const name of ["von", "bis", "schnitt", "projekt"]) if (werte[name] !== undefined) a[name] = werte[name];
+  const gefunden = fehler?.text ?? ticketFehler;
+  if (gefunden) a.fehler = gefunden;
   // `--typen` zählt über alle Typen und kennt keinen Schnitt: die Kombination wäre still falsch.
   if (a.typen && (a.agentGesetzt || a.schnitt)) a.fehler ??= "--typen gilt für alle Typen und verträgt sich nicht mit --agent oder --schnitt";
   return a;
