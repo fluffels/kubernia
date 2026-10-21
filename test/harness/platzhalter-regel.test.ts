@@ -28,6 +28,7 @@ interface Lib {
   projektwertDateien(manifest: string[], liste: string[]): string[];
   projektDateien(wurzel: string): string[];
   PROJEKTWERT_GRUPPEN: string[];
+  platzhalterMuster(): RegExp;
 }
 interface DriftCli {
   cli(argv: string[], opt?: { wurzel?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
@@ -66,10 +67,9 @@ const driftLauf = (w: string): { code: number; err: string } => {
   return { code, err: err.join("\n") };
 };
 
-const PLATZHALTER = new RegExp(`<(${lib.PROJEKTWERT_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
 /** Befunde zur Regel (leer = in Ordnung): Platzhalter ohne genau einen Block, Schlüssel ohne Wert in der Config. */
 function platzhalterBefunde(pfad: string, text: string, config: Cfg): string[] {
-  const treffer = [...text.matchAll(PLATZHALTER)];
+  const treffer = [...text.matchAll(lib.platzhalterMuster())];
   if (treffer.length === 0) return [];
   const out: string[] = [];
   const bloecke = lib.projektwertStellen(text, pfad).bloecke.length;
@@ -126,6 +126,17 @@ describe("Projektwert-Block der Kern-Texte (#1747)", () => {
     assert.match(rot.err, /Projektwert-Block weicht von/);
   });
 
+  test("platzhalterMuster: trifft <agenten.lens>, nicht <foo.bar>; jeder Aufruf liefert eine frische Instanz ohne geteilten Zustand", () => {
+    const m = lib.platzhalterMuster();
+    assert.equal(m.flags, "g");
+    assert.deepEqual([...("a <agenten.lens> b <foo.bar> <labels.x>").matchAll(m)].map((t) => t[0]), ["<agenten.lens>", "<labels.x>"]);
+    const a = lib.platzhalterMuster();
+    const b = lib.platzhalterMuster();
+    assert.notEqual(a, b);
+    a.test("<agenten.lens>");
+    assert.ok(a.lastIndex > 0);
+    assert.equal(b.lastIndex, 0);
+  });
   test("Platzhalter-Regel: Fixtures", () => {
     const block = `${S}\n${E}\n`;
     assert.deepEqual(platzhalterBefunde("a.md", `Spawn <agenten.planer>\n${block}`, CONFIG), []);
@@ -164,7 +175,7 @@ describe("Projektwert-Block der Kern-Texte (#1747)", () => {
       dateien.flatMap((p) => platzhalterBefunde(p, echt(p), echteConfig)),
       [],
     );
-    const mitPlatzhalter = dateien.filter((p) => new RegExp(PLATZHALTER.source).test(echt(p)));
+    const mitPlatzhalter = dateien.filter((p) => lib.platzhalterMuster().test(echt(p)));
     for (const p of BLOCK_DATEIEN) assert.ok(mitPlatzhalter.includes(p), `${p} trägt Platzhalter`);
   });
 });

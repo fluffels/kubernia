@@ -15,6 +15,8 @@
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
@@ -182,5 +184,26 @@ describe("Forum-Body-Entschärfung (#902)", () => {
     // Exakt zwei Code-Fences: der öffnende und der schließende Rahmen
     const fenceCount = (q.match(/```/g) ?? []).length;
     assert.equal(fenceCount, 2, "genau zwei Fences — kein Ausbruch durch Body-Backticks");
+  });
+});
+
+describe("CLI-Flag --body (#1837)", () => {
+  const SKRIPT = fileURLToPath(new URL("../scripts/forum-sanitize.mjs", import.meta.url));
+  const lauf = (argv: string[], input: string) => spawnSync(process.execPath, [SKRIPT, ...argv], { input, encoding: "utf8" });
+  const MEHRZEILIG = "Zeile 1\nZeile 2\n\nAbsatz 2";
+
+  test("mit --body bleibt die Zeilenstruktur (wie sanitizeForumBody), ohne Flag wird einzeilig entschärft", () => {
+    const mit = lauf(["--body"], MEHRZEILIG);
+    assert.equal(mit.status, 0);
+    assert.equal(mit.stdout, sanitizeForumBody(MEHRZEILIG));
+    assert.ok(mit.stdout.includes("\n"), "Zeilenumbrüche bleiben erhalten");
+    const ohne = lauf([], MEHRZEILIG);
+    assert.equal(ohne.status, 0);
+    assert.equal(ohne.stdout, sanitizeForumText(MEHRZEILIG));
+    assert.ok(!ohne.stdout.includes("\n"), "ohne --body gibt es keinen Zeilenumbruch");
+  });
+
+  test("unbekanntes Flag: Aufruf-Fehler mit Exit 2", () => {
+    assert.equal(lauf(["--gibtsnicht"], "x").status, 2);
   });
 });

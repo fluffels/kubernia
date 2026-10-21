@@ -73,7 +73,7 @@ const AUFRUF = "Aufruf: node scripts/mermaid-vorschau.mjs <datei.md> --mermaid <
 function main(argv) {
   const { werte, positionale, fehler } = flagsLesen(argv, { mermaid: { type: "string" }, port: { type: "string" } }, { positionale: true, pflicht: ["mermaid"] });
   const port = werte.port === undefined ? 4173 : Number(werte.port);
-  const problem = fehler?.text ?? (positionale.length !== 1 ? "genau eine Markdown-Datei erwartet" : !Number.isInteger(port) || port < 0 || port > 65535 ? `--port erwartet eine Portnummer, nicht ${werte.port}` : null);
+  const problem = fehler?.text ?? (positionale.length !== 1 ? "genau eine Markdown-Datei erwartet" : !Number.isInteger(port) || port < 1 || port > 65535 ? `--port erwartet eine Portnummer, nicht ${werte.port}` : null);
   if (problem) {
     console.error(`${problem}
 ${AUFRUF}`);

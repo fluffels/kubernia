@@ -27,7 +27,7 @@ import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
-import { ladeProjektConfig, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, trenneConfigArg, umgebungsWert, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien, NACH_MERGE_PRAEFIX } from "./spezifikation-lib.mjs";
 
@@ -157,7 +157,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
 function pruefe({ git, gh, env, config, zeilen, base }) {
   const repo = env.GITHUB_REPOSITORY || config.repo;
-  const owner = String(repo).split("/")[0];
+  const { owner } = zerlegeRepo(repo);
   const nachweis = parseNachweis(git(["log", "--reverse", "--format=%B", `${base}..HEAD`]), zeilen);
   const nummern = verknuepfteTickets(umgebungsWert(env, "FACTORY_PR_BODY"));
   if (nummern.length > 1) return [`Mehr als ein verknüpftes Ticket im PR-Body (${nummern.map((n) => `#${n}`).join(", ")}): ein PR gehört zu einem Ticket.`];
@@ -167,12 +167,13 @@ function pruefe({ git, gh, env, config, zeilen, base }) {
     if (issue?.pull_request) return [`#${nummern[0]} im PR-Body ist ein PR, kein Ticket.`];
     ticket = { nr: nummern[0], kriterien: kriterien(issue?.body ?? "") };
   }
+  const abnahmeHead = nachweis.abnahme?.art === "urteil" ? leseAbnahmeHead(git, base, nachweis.abnahme.head, nachweis.review?.head) : null;
   let marker = null;
   if (nachweis.abnahme?.art === "urteil") {
-    if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return ["PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
+    // Ohne PR-Nummer bleibt es rot (fail-closed), zeigt aber vorher die Head-Fehler (Konflikt-Merge hinter der Abnahme), damit der lokale Lauf sie sieht.
+    if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return [...bewerteHead(nachweis.abnahme, nachweis.review, abnahmeHead), "PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
     marker = vertrauterMarker(issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo), owner, zeilen);
   }
-  const abnahmeHead = nachweis.abnahme?.art === "urteil" ? leseAbnahmeHead(git, base, nachweis.abnahme.head, nachweis.review?.head) : null;
   return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen });
 }
 

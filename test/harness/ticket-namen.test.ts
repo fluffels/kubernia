@@ -187,7 +187,8 @@ describe("lens-auftrag-guard mit Config", () => {
     expect(lensAuftrag.lensAuftragBlockade({ subagentType: "kubernia-lens", prompt: kopf }, { config: AB })).toBeNull();
   });
   test("Fallback general-purpose mit der Lens-Definition der Config im Prompt", () => {
-    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies ab-lens.md\n${kopf}` }, { config: AB })).toMatch(/Arbeitsverzeichnis/);
+    // kein Übergangs-Zweig mehr: `<lens>.md` aus der Config macht den Fallback nicht zum Lens-Spawn
+    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies ab-lens.md\n${kopf}` }, { config: AB })).toBeNull();
     expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies fremd-lens.md\n${kopf}` }, { config: AB })).toBeNull();
     // Kern-Dateiname (#1748): gilt unabhängig vom Agentennamen der Config
     expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies .claude/agents/factory-lens.md\n${kopf}` }, { config: AB })).toMatch(/Arbeitsverzeichnis/);

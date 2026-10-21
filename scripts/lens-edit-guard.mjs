@@ -2,7 +2,7 @@
 /**
  * Lens-Sabotage-Guard (#1349): die Lens (`agenten.lens` der Projekt-Config) hat das Tool `Edit`, ausschließlich für die Sabotage-Probe der Test-Lens
  * (Implementierung testweise verfälschen, Test wird rot?). Die Probe gehört in einen eigenen Lens-Worktree
- * (`.claude/worktrees/<worktree-präfix><nr>-lens-r<runde>`, bei der Merge-Delta-Lens `…-lens-m<n>`); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
+ * (`.claude/worktrees/<worktree-präfix><nr>-lens-r<runde>`, bei der Merge-Delta-Lens `…-lens-m<n>`, bei der Delta-Lens nach einem Abnahme-Fix `…-lens-a<n>`); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
  * anderen Lenses (so passiert im Review von #1331). Die Regel stand bisher nur als Text in der Lens-Definition.
  *
  * Dieser Hook (Frontmatter der Lens-Definition unter `.claude/agents/`, Matcher `Edit`, gilt nur für diesen Subagenten) erzwingt sie:
@@ -39,7 +39,7 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
     block: true,
     reason:
       `${namen.agenten.lens} ändert nichts im Feature-Worktree: Edit ist nur im eigenen Lens-Worktree erlaubt ` +
-      `(.claude/worktrees/${namen.worktreeName("<nr>")}-lens-r<runde> bzw. ${namen.worktreeName("<nr>")}-lens-m<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
+      `(.claude/worktrees/${namen.worktreeName("<nr>")}-lens-r<runde> bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
       "Ist der Lens-Worktree nicht anlegbar: Befund „Sabotage nicht möglich“ melden, kein Ersatz.",
   };
 }

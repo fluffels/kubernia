@@ -15,7 +15,7 @@ export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }, name
 
 /**
  * Muster eines Lens-Worktree-Namens: `<praefixe.worktree><nr>-lens-r<runde>` (Lens-Runde) oder `<praefixe.worktree><nr>-lens-m<n>` (Merge-Delta-Lens nach einem
- * Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `<praefixe.worktree><nr>`.
+ * Konflikt-Merge von main, n = laufende Merge-Nummer) oder `<praefixe.worktree><nr>-lens-a<n>` (Delta-Lens nach einem Abnahme-Fix, n = laufende Nummer). Gruppe 1 ist `<praefixe.worktree><nr>`.
  */
 export function lensWorktreeName(namen = ladeTicketNamen()) {
   return namen.lensWorktreeMuster;

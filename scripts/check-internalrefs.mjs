@@ -176,12 +176,13 @@ export function addTerm(term, selfPath = SELF, listName = "ENCODED_TERMS") {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-function main(argv = process.argv.slice(2)) {
+/** Einstieg. `deps` (Tests): `self` (die Datei, in die `--add`/`--add-name` schreiben), `out`, `err`. Rückgabe: Exit-Code. */
+export function main(argv = process.argv.slice(2), { self = SELF, out = console.log, err = console.error } = {}) {
   const { werte, fehler } = flagsLesen(argv, { add: { type: "string" }, "add-name": { type: "string" }, text: { type: "boolean" } });
   if (fehler) {
-    console.error(`${fehler.text}
+    err(`${fehler.text}
 Aufruf: node scripts/check-internalrefs.mjs [--add <begriff> | --add-name <begriff> | --text]`);
-    process.exit(AUFRUF_EXIT);
+    return AUFRUF_EXIT;
   }
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -191,45 +192,44 @@ Aufruf: node scripts/check-internalrefs.mjs [--add <begriff> | --add-name <begri
 
   for (const [flag, listName] of [["add", "ENCODED_TERMS"], ["add-name", "ENCODED_NAME_TERMS"]]) {
     if (werte[flag] === undefined) continue;
-    const result = addTerm(werte[flag], SELF, listName);
+    const result = addTerm(werte[flag], self, listName);
     if (!result.ok) {
-      console.error(red(`✖ --${flag} fehlgeschlagen: ${result.reason}`));
-      process.exit(1);
+      err(red(`✖ --${flag} fehlgeschlagen: ${result.reason}`));
+      return 1;
     }
-    console.log(green(`✔ Begriff kodiert aufgenommen (${result.count} in der Liste).`));
-    console.log(dim("  Der Klartext steht bewusst nirgends im Repo — auch nicht in der Commit-Message."));
-    return;
+    out(green(`✔ Begriff kodiert aufgenommen (${result.count} in der Liste).`));
+    out(dim("  Der Klartext steht bewusst nirgends im Repo — auch nicht in der Commit-Message."));
+    return 0;
   }
 
   // `--text`: Text von stdin prüfen (PR-Titel/-Body vor dem `gh pr create`/`gh pr edit`), z.B.
   //   gh pr view <nr> --json title,body --jq '.title, .body' | node scripts/check-internalrefs.mjs --text
   if (werte.text) {
     const text = readFileSync(0, "utf8");
-    reportAndExit(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, red, green, checkedLabel("text"));
-    return;
+    return bericht(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, { red, green, label: checkedLabel("text"), out, err });
   }
 
   const { files, violations } = runCheck();
-  reportAndExit(violations, files.length, red, green, checkedLabel("repo"));
+  return bericht(violations, files.length, { red, green, label: checkedLabel("repo"), out, err });
 }
 
-/** Gemeinsame Ausgabe. Der Begriff selbst wird NICHT ausgegeben — die Fundstelle genügt, und eine
+/** Gemeinsame Ausgabe, Rückgabe: Exit-Code. Der Begriff selbst wird NICHT ausgegeben — die Fundstelle genügt, und eine
  *  Fehlermeldung landet leicht in Logs/CI-Ausgaben, die wieder öffentlich sind. */
-function reportAndExit(violations, checked, red, green, label) {
+function bericht(violations, checked, { red, green, label, out, err }) {
   if (violations.length === 0) {
-    console.log(green(`✔ Keine internen Referenzen (${checked} Quellen geprüft: ${label}).`));
-    return;
+    out(green(`✔ Keine internen Referenzen (${checked} Quellen geprüft: ${label}).`));
+    return 0;
   }
 
   for (const v of violations) {
     const what = v.kind === "name" ? "Namensbezug im Text" : "interner Bezug im Text";
-    console.error(red(`✖ ${v.file}:${v.line} — ${what}`));
+    err(red(`✖ ${v.file}:${v.line} — ${what}`));
   }
 
   const names = violations.filter((v) => v.kind === "name").length;
   const refs = violations.filter((v) => v.kind === "ref").length;
   if (refs > 0) {
-    console.error(
+    err(
       `\n${refs} interne Referenz(en) gefunden. Bitte neutral umformulieren ` +
         `(die Sache benennen, nicht die Herkunft) — Begründung siehe Kopf von ` +
         `scripts/check-internalrefs.mjs und AGENTS.md › Konventionen. Einmal gemergt lässt sich das ` +
@@ -237,12 +237,12 @@ function reportAndExit(violations, checked, red, green, label) {
     );
   }
   if (names > 0) {
-    console.error(
+    err(
       `\n${names} Namensbezug/-bezüge gefunden. Neutral „die Maintainerin“ schreiben; in Commits ` +
         `und PR-Texten genauso (AGENTS.md › Anonymität wahren).`,
     );
   }
-  process.exit(1);
+  return 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();

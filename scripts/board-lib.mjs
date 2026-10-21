@@ -108,6 +108,9 @@ function brauchtBoard(board, wo) {
 /** Das Repository (`owner/name`): in GitHub Actions `GITHUB_REPOSITORY`, sonst das Repo der Projekt-Config. EINE Quelle für alle Board-Skripte. */
 export const REPO = process.env.GITHUB_REPOSITORY || PROJEKT.repo;
 
+/** Der Besitzerteil von `REPO` (`owner/name` → `owner`); wirft beim Import wie `zerlegeRepo`, wenn `REPO` nicht diese Form hat. */
+export const OWNER = zerlegeRepo(REPO).owner;
+
 /** Item-Literal eines frisch angelegten, ungeclaimten Todo-Tickets (die REST-Liste liefert es verzögert; der Aufrufer ergänzt es per `ergaenzeFehlende`). */
 export const todoItem = ({ id, number, title }) => ({ id, number, status: "Todo", title, assignees: [], state: "open" });
 

@@ -6,7 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ghJson, ghText } from "./gh-cli.mjs";
-import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
+import { OWNER, REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
 import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 
 const BOARD_PLACE = fileURLToPath(new URL("./board-place.mjs", import.meta.url));
@@ -33,7 +33,7 @@ export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN) {
 
 /** Das jüngste offene, ungeclaimte Harness-Sammelticket (per Einzelabruf bestätigt) oder null. `offene` aus `normalizeOffene`. */
 export const waehleSammelticket = (offene) =>
-  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]), REPO.split("/")[0]);
+  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]), OWNER);
 
 /** Postet `text` als Kommentar unter Issue `nr`. */
 export const postZeilen = (nr, text) => ghText(["api", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]);

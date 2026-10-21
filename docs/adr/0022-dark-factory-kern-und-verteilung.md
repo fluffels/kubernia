@@ -483,3 +483,15 @@ Die `AGENTS.md` besteht aus dem Kopf, einem zusammenhängenden Kern-Block `kern`
 - **Bleibt im Projekt-Block:** Regeln ohne Zeile im Inventar (Abschnitt C), etwa Kein-Grün-durch-Aufweichen, Fremdtext, Zwei-Stufen-Prüfung, Harness-Befunde als Zeilen; ihr Zuschnitt folgt mit F5 (#1709). Ausnahmen im Kern trotz fehlender Zeile: die Stopps (§4 verlangt sie im Kern) und die Regel zu internen Bezügen (gehört zur Anonymität).
 - **Browser-Prüfung, Skill-Frontmatter-Grenze, Kontext sparen:** die spielunabhängigen Inventarzeilen (Abschnitt C) stehen als kurze Zeilen im Kern; der Projektteil (`kqDev.state()`, Dev-Server-Reload) bleibt im Projekt-Block. Die Planer-Laufzeitregeln stehen in der Planer-Agentendatei, nicht in der AGENTS.md; „Vorlage-Form: Plugin und Mods“ ist eine Entscheidungseingabe und keine Agentenregel, darum nicht im Kern. Platz kam aus gekürzten Verweisen und Doppelungen, das Budget wuchs nicht.
 - **Grenzen:** Eine Lockerung in einem Wort außerhalb der Stopp-Wörter fängt kein Wächter, im Projekt-Block nur die Pin-Zeile und die Stopp-Wort-Prüfung; Links im Kern-Block auf Projekt-Docs sind in einem neuen Projekt tot (Befund für F10); die Platzhalter löst das Modell beim Lesen selbst auf.
+
+## Fortschreibung #1837 (2026-10-21): Präzisierungen zu #1748 und #1824
+
+Die Überschrift von #1824 zählt dort als „Teil 8“; gemeint ist F3 **Teil 9** (Teil 8 ist #1748). Die Anker bleiben, ein ADR wird nicht umgeschrieben.
+
+- **Standard-Config neben dem Skript:** gemeint ist `.factory/projekt.json` in der Wurzel des Repos, in dem das Skript liegt (`ROOT` in `scripts/projekt-config-lib.mjs`), nicht im Arbeitsverzeichnis. `--config <pfad>` ändert den Altpräfix der Umgebungsvariablen nicht.
+- **Ausnahmen des Wächters `entfernte-pfade.test.ts`, vollständig:** die Pfad-Präfixe `docs/adr/`, `test/harness/model-routing.test.ts`, `test/harness/entfernte-pfade.test.ts` und `docs/lens-gegenprobe-`; Schnappschuss-Blöcke zwischen `<!-- schnappschuss:start -->` und `<!-- schnappschuss:ende -->`; die Regel-Ausnahme für `docs/referenz/befehle.md` (nur die Regel der Kern-Umgebungsvariablen, wegen der Altnamen-Spalte im Inventar).
+- **Lens-Guard ohne Übergangs-Zweig:** ein Fallback-Spawn gilt nur noch als Lens, wenn der Prompt den Kern-Dateinamen `factory-lens.md` nennt; `<agenten.lens>.md` zählt nicht mehr (ersetzt den „Übergang, fail-closed“ aus #1748).
+- **`hauptchat-zerlegung`:** zählt den Verzeichnisnamen des festen Rollen-Pfads (`factory-ticket`) als Ticket-Skill, per Slash und per Skill-Tool (ersetzt die Grenze „zählt nicht“ aus #1748).
+- **`ordneHarnessAenderungen(dateien)`** hat keinen zweiten Parameter mehr: Skill ist `AGENTS.md`, `KERN_SKILL_VERZEICHNIS` oder `TICKET_SKILL_VERZEICHNIS`.
+- **Platzhalter-Muster:** `platzhalterMuster()` in `scripts/besitz-lib.mjs` liefert die Regex der `<gruppe.schluessel>`-Platzhalter (frische Instanz je Aufruf); Platzhalter-Regel und Test-Support nutzen sie.
+- **Inventar-Wächter:** `test/harness/umgebungsvariablen-inventar.test.ts` hält das Inventar der Umgebungsvariablen und den Quelltext in Einklang. Das Ende des Rückfalls auf den Altnamen steht in #1715 (F10).

@@ -14,8 +14,8 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
-import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { fehlerText, ghText } from "./gh-cli.mjs";
+import { ladeBoardLibs, inboxStart } from "./inbox-start-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
 export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
@@ -146,39 +146,21 @@ function ladeAlerts(repo) {
   }
 }
 
-// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst in `main`, nach dem Aufruf-Check, importieren, sonst bräche eine
-// kaputte Config als Stacktrace statt als `::error::` mit Fix-Zeile.
-const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
-
-const AUFRUF = "Aufruf: node scripts/audit-einordnung.mjs [--dry-run]";
-
-/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, log = console.log, err = console.error } = {}) {
-  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
-  if (fehler) {
-    err(`${fehler.text}
-${AUFRUF}`);
-    return AUFRUF_EXIT;
-  }
-  const trocken = werte["dry-run"] === true;
-  let libs;
-  try {
-    libs = await ladeLibs();
-  } catch (e) {
-    log(fehlerMeldung(e, { praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: " }));
-    return AUFRUF_EXIT;
-  }
-  const { REPO, ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } = libs;
+/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, log = console.log, err = console.error } = {}) {
+  const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
+  if (start.code !== undefined) return start.code;
+  const { trocken, libs } = start;
+  const { OWNER, REPO, ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } = libs;
   const { rohe, offene, kommentare } = ladeSammelKontext();
-  const owner = REPO.split("/")[0];
   const bekannt = bekannteGhsa({
-    kommentare: vertrauteBodies(kommentare, owner),
+    kommentare: vertrauteBodies(kommentare, OWNER),
     wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")),
     // Nur Titel vertrauter Autoren: ein Fremder darf mit einem „🔒 Security: GHSA-…“-Titel keinen Alarm unterdrücken.
-    offeneTitel: offeneTitel(rohe, owner),
+    offeneTitel: offeneTitel(rohe, OWNER),
   });
-  const voll = markiereProd(befundeAusNpmAudit(npmAudit()), befundeAusNpmAudit(npmAudit(["--omit=dev"])));
-  const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(ladeAlerts(REPO))], bekannt });
+  const voll = markiereProd(befundeAusNpmAudit(npmAuditLaden()), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"])));
+  const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(alertsLaden(REPO))], bekannt });
   if (aktionen.length === 0) {
     log("Audit-Einordnung: nichts Neues.");
     return 0;

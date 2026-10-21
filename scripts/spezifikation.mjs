@@ -20,7 +20,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
+import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -175,7 +175,7 @@ export function ankerPruefung({ nach, labels }, lade, config) {
 const echteIo = () => { // Fabrik: erst nach bestandener Aufruf-Prüfung aufgerufen (`direktaufruf`)
   const config = ladeProjektConfig();
   return {
-    owner: REPO.split("/")[0],
+    owner: OWNER,
     config,
     leseDatei: (pfad) => readFileSync(pfad, "utf8"),
     erzeuge: ({ titel, body, labels }) =>

@@ -13,9 +13,9 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { inboxStart } from "./inbox-start-lib.mjs";
+import { labelAus } from "./projekt-config-lib.mjs";
 
 /** Titel-Präfix der Wiedervorlage-Tickets; derselbe Marker steht als Notfall-Art `wiedervorlage` in `NOTFAELLE` (board-lib.mjs). */
 export const TITEL_PRAEFIX = "⏰ Wiedervorlage:";
@@ -174,36 +174,20 @@ export function ioAus(config, { legen = legeAn, repo, platziereOben } = {}) {
   return { anlegen: (e) => legen(e, labelFuer(e, standard), repo), sortiereEin: (nr) => sortiereEin(nr, platziereOben) };
 }
 
-// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst in `main`, nach dem Aufruf-Check, importieren, sonst bräche eine
-// kaputte Config als Stacktrace statt als `::error::` mit Fix-Zeile.
-const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
-
-async function main(argv = process.argv.slice(2)) {
-  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
-  if (fehler) {
-    console.error(`${fehler.text}
-Aufruf: node scripts/wiedervorlage.mjs [--dry-run]`);
-    process.exit(AUFRUF_EXIT);
-  }
-  let libs;
-  let config;
-  try {
-    config = ladeProjektConfig();
-    libs = await ladeBoardLibs();
-  } catch (e) {
-    console.log(fehlerMeldung(e, { praefix: "Wiedervorlage: Projekt-Config nicht lesbar: " }));
-    process.exit(AUFRUF_EXIT);
-  }
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `platziereOben`), `eintraegeLaden()`, `ticketsLaden(repo)`, `legen(eintrag, label, repo)`, `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeConfig, ladeLibs, eintraegeLaden = ladeEintraege, ticketsLaden = ladeTickets, legen, log = console.log, err = console.error } = {}) {
+  const start = await inboxStart(argv, { skript: "wiedervorlage", praefix: "Wiedervorlage: Projekt-Config nicht lesbar: ", ladeConfig, ladeLibs, log, err });
+  if (start.code !== undefined) return start.code;
+  const { trocken, config, libs } = start;
   const { REPO, platziereOben } = libs;
-  const eintraege = ladeEintraege();
-  const code = lauf({
-    eintraege,
+  return lauf({
+    eintraege: eintraegeLaden(),
     heute: new Date().toISOString().slice(0, 10),
-    tickets: ladeTickets(REPO),
-    trocken: werte["dry-run"] === true,
-    ...ioAus(config, { repo: REPO, platziereOben }),
+    tickets: ticketsLaden(REPO),
+    trocken,
+    log,
+    ...ioAus(config, { legen, repo: REPO, platziereOben }),
   });
-  process.exit(code);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main();

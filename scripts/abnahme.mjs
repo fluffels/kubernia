@@ -22,7 +22,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { REPO } from "./board-lib.mjs";
+import { OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
@@ -281,7 +281,7 @@ export function fuehreAus(argv, io) {
 }
 
 const echteIo = () => ({ // Fabrik: erst nach bestandener Aufruf-Prüfung aufgerufen (`direktaufruf`)
-  owner: REPO.split("/")[0],
+  owner: OWNER,
   config: ladeProjektConfig(),
   zeilen: ladeCommitZeilen(),
   leseDatei: (pfad) => readFileSync(pfad, "utf8"),

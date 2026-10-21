@@ -1288,6 +1288,19 @@ describe("fixOrphans entfernt einen leeren, nicht registrierten Ordner wirklich 
   });
 });
 
+describe("CLI main: --branches und --fix (#1837)", () => {
+  const main = (cliModule as unknown as { main: (argv: string[], deps: { modus: (root: string, loeschen: boolean) => number; root: string }) => number | undefined }).main;
+  const aufruf = (argv: string[]) => {
+    const calls: [string, boolean][] = [];
+    const code = main(argv, { modus: (root, loeschen) => (calls.push([root, loeschen]), 7), root: "/wurzel" });
+    return { calls, code };
+  };
+  test("--branches allein listet nur (loeschen=false), --branches --fix löscht (loeschen=true); der Exit-Code kommt von modus", () => {
+    assert.deepEqual(aufruf(["--branches"]), { calls: [["/wurzel", false]], code: 7 });
+    assert.deepEqual(aufruf(["--branches", "--fix"]), { calls: [["/wurzel", true]], code: 7 });
+  });
+});
+
 describe("keine echten Prozessstarts (#1526)", () => {
   test("kein Test dieser Datei hat PowerShell gestartet (listProcesses ist überall injiziert)", () => {
     assert.equal(powershellStarts.n, 0, "ein deps-Objekt ohne `listProcesses` löst unter Windows einen echten PowerShell/WMI-Start aus (~600 ms)");

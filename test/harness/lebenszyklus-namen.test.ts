@@ -71,7 +71,7 @@ const M = ausfallRaw as unknown as {
   main: (argv: string[], env: Record<string, string | undefined>, out: (t: string) => void, o?: { config?: Cfg; jetzt?: number }) => number;
 };
 const H = syncRaw as unknown as {
-  ordneHarnessAenderungen: (d: string[], verz?: string | null) => { skill: string[]; sonstige: string[] };
+  ordneHarnessAenderungen: (d: string[]) => { skill: string[]; sonstige: string[] };
   TICKET_SKILL_VERZEICHNIS: string;
   configGrund: (d?: { config?: Cfg }) => string | null;
   baueText: (e: Record<string, unknown>, o?: { sitzungsbasis?: boolean }) => string;
@@ -134,7 +134,7 @@ describe("worktree-aufraeumen: Präfixe aus der Config", () => {
     const gemergt = refs.map((r) => ({ headRefName: r.name, headRefOid: sha }));
     expect(A.aufraeumbareBranches({ refs, worktreeBranches: [], gemergteHeads: gemergt, namen: NAMEN })).toEqual(["feature/ab-1-a"]);
   });
-  test("branchesAufraeumen fragt git nach refs/heads/<Branch-Präfix>*", () => {
+  test("branchesAufraeumen fragt git nach refs/heads/<praefixe.branch>*", () => {
     const befehle: string[][] = [];
     const git = (a: string[]) => {
       befehle.push(a);
@@ -376,7 +376,7 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
     expect(M.standPfad("/dev/proj", {}, "/tmp", nurWt)).toContain(join("/tmp", "ab-mcp-ausfall-"));
     expect(() => M.standPfad("/dev/proj", {}, "/tmp", { praefixe: { branch: "feature/ab-" }, agenten: AB.agenten })).toThrow(/praefixe\.worktree/);
   });
-  test("standPfad: <Präfix>mcp-ausfall-…; ohne Schlüssel Abbruch; die Umgebungsvariable gewinnt", () => {
+  test("standPfad: <praefixe.worktree>mcp-ausfall-…; ohne Schlüssel Abbruch; die Umgebungsvariable gewinnt", () => {
     expect(M.standPfad("/dev/proj", {}, "/tmp", AB)).toContain(join("/tmp", "ab-mcp-ausfall-"));
     expect(() => M.standPfad("/dev/proj", {}, "/tmp", OHNE_WT)).toThrow(/praefixe\.worktree/);
     expect(M.standPfad("/dev/proj", { FACTORY_MCP_AUSFALL_STAND: "/y/s.json" }, "/tmp", OHNE_WT)).toBe("/y/s.json");
@@ -412,14 +412,13 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
 });
 
 describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
-  test("ordneHarnessAenderungen: nur das übergebene Verzeichnis zählt als Skill; null: nur AGENTS.md", () => {
+  test("ordneHarnessAenderungen: der feste Rollen-Pfad factory-ticket/ zählt als Skill, ein anderes Skill-Verzeichnis (demo/) als sonstige", () => {
     const dateien = [".claude/skills/demo/SKILL.md", ".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"];
-    const r = H.ordneHarnessAenderungen(dateien, ".claude/skills/demo/");
-    expect(r.skill).toEqual([".claude/skills/demo/SKILL.md", "AGENTS.md"]);
-    expect(r.sonstige).toEqual([".claude/skills/factory-ticket/SKILL.md"]);
-    const ohne = H.ordneHarnessAenderungen(dateien, null);
-    expect(ohne.skill).toEqual(["AGENTS.md"]);
-    expect(ohne.sonstige).toHaveLength(2);
+    const r = H.ordneHarnessAenderungen(dateien);
+    expect(r.skill).toEqual([".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"]);
+    expect(r.sonstige).toEqual([".claude/skills/demo/SKILL.md"]);
+    const mitZweitem = H.ordneHarnessAenderungen as (d: string[], verz: string) => { skill: string[]; sonstige: string[] };
+    expect(mitZweitem(dateien, ".claude/skills/demo/")).toEqual(r);
   });
   test("baueText nennt die SKILL.md aus dem Diff; nur AGENTS.md ergibt den allgemeinen Hinweis ohne erfundenen Pfad", () => {
     const mit = H.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/demo/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } }, { sitzungsbasis: false });

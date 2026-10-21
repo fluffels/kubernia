@@ -21,7 +21,7 @@
  * Skript räumt stattdessen über `fs.rmSync` auf (kein Shell-`rm`, `Bash(node:*)`
  * bleibt erlaubt).
  *
- * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<praefixe.worktree><nr>-lens-r<runde>` bzw. `<praefixe.worktree><nr>-lens-m<n>` (Merge-Delta-Lens, Skill `review-lenses`). Bleibt so ein
+ * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<praefixe.worktree><nr>-lens-r<runde>` bzw. `-lens-m<n>` (Merge-Delta-Lens) bzw. `-lens-a<n>` (Abnahme-Fix-Delta-Lens, Skill `review-lenses`). Bleibt so ein
  * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `<praefixe.worktree><nr>` weg ist, fehlt er in der Waisen-Sicht oben
  * (die kennt nur unregistrierte Ordner). `verwaisteLensWorktrees` findet sie, `entferneLensWorktrees` räumt sie per
  * `git worktree remove --force` und prüft das Ergebnis.
@@ -101,7 +101,11 @@ export function branchenModus(root, loeschen, {
   return r.ok ? 0 : 1;
 }
 
-function main(argv = process.argv.slice(2)) {
+/**
+ * Einstieg. `--branches` liefert den Exit-Code von `modus(root, loeschen, { namen })` zurück (`loeschen` nur mit `--fix`); die übrigen Pfade
+ * beenden den Prozess selbst. `deps` (Tests): `modus`, `root`.
+ */
+export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))) } = {}) {
   const { werte, fehler } = flagsLesen(argv, { fix: { type: "boolean" }, branches: { type: "boolean" } });
   if (fehler) {
     console.error(`${fehler.text}
@@ -109,7 +113,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     process.exit(AUFRUF_EXIT);
   }
   const FIX = werte.fix === true;
-  const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+  const ROOT = root;
   let namen;
   try {
     namen = ticketNamen(ladeProjektConfig());
@@ -118,8 +122,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     process.exit(1);
   }
   if (werte.branches) {
-    process.exitCode = branchenModus(ROOT, FIX, { namen });
-    return;
+    return modus(ROOT, FIX, { namen });
   }
 
   console.log("=== Worktree-Diagnose ===\n");
@@ -246,4 +249,4 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   if (suspicious.length > 0) process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();

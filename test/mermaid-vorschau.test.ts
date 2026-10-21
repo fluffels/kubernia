@@ -1,6 +1,8 @@
 /* Mermaid-Vorschau (#1392): Block-Erkennung, Seite und der Pfadschutz des localhost-Servers sind pur und werden getestet;
  * das Rendern selbst prüft man einmal im Playwright-MCP (docs/agent-harness-faq.md). */
 import { describe, expect, test } from "vitest";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { fixture } from "./support/tmp-fixture";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/mermaid-vorschau.mjs";
@@ -71,5 +73,21 @@ describe("unterhalb: Pfad bleibt im Ordner (#1663)", () => {
     expect(M.unterhalb(repo, `${repo}/docs/../../repo-fremd/b.md`)).toBeNull();
     expect(M.unterhalb(repo, `${repo}/../geheim.txt`)).toBeNull();
     expect(M.unterhalb(repo, `${root}/repo-fremd/b.md`)).toBeNull(); // gleiches Präfix, anderer Ordner
+  });
+});
+
+describe("CLI: --port prüft die Portnummer vor dem Start (#1837)", () => {
+  const SKRIPT = fileURLToPath(new URL("../scripts/mermaid-vorschau.mjs", import.meta.url));
+  const lauf = (port: string) => spawnSync(process.execPath, [SKRIPT, "docs/x.md", "--mermaid", "kein-ordner", "--port", port], { encoding: "utf8", timeout: 20000 });
+  test.each(["0", "65536", "-1", "1.5", "abc"])("--port %s: Aufruf-Fehler mit Exit 2 und Portmeldung", (port) => {
+    const r = lauf(port);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--port erwartet eine Portnummer");
+  });
+  test("ein gültiger Port ist kein Aufruf-Fehler (weiter bis zur fehlenden mermaid-Installation)", () => {
+    const r = lauf("1");
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("mermaid fehlt unter");
+    expect(r.stderr).not.toContain("--port erwartet");
   });
 });

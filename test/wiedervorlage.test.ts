@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/wiedervorlage.mjs";
@@ -150,5 +150,41 @@ describe("Wächter", () => {
     expect(log.join("\n")).toContain("Eintrag löschen");
     expect(W.lauf({ ...basis, eintraege: [e("a")], heute: "2026-11-13", tickets: [], trocken: true })).toBe(0);
     expect(log.join("\n")).toContain("[dry-run]");
+  });
+});
+
+describe("main: --dry-run über Deps (#1837)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const aufbau = () => {
+    const sortiert: number[] = [];
+    const angelegt: [string, string, string][] = [];
+    const log: string[] = [];
+    const deps = {
+      ladeConfig: () => ({ labels: { harness: "area:harness" } }),
+      ladeLibs: () => Promise.resolve({ REPO: "o/r", platziereOben: (nr: number) => sortiert.push(nr) }),
+      eintraegeLaden: () => [e("a", "2000-01-01")],
+      ticketsLaden: () => [] as T[],
+      legen: (eintrag: E, label: string, repo: string) => (angelegt.push([eintrag.id, label, repo]), 7),
+      log: (m: string) => log.push(m),
+      err: () => undefined,
+    };
+    return { sortiert, angelegt, log, deps };
+  };
+  test("mit Flag: [dry-run] im Log, nichts angelegt oder einsortiert", async () => {
+    const { sortiert, angelegt, log, deps } = aufbau();
+    expect(await main(["--dry-run"], deps)).toBe(0);
+    expect(log.join("\n")).toContain("[dry-run]");
+    expect(angelegt).toEqual([]);
+    expect(sortiert).toEqual([]);
+  });
+  test("ohne Flag: legt an und sortiert ein, kein [dry-run]", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "t");
+    const { sortiert, angelegt, log, deps } = aufbau();
+    expect(await main([], deps)).toBe(0);
+    expect(angelegt).toEqual([["a", "area:harness", "o/r"]]);
+    expect(sortiert).toEqual([7]);
+    expect(log.join("\n")).toContain("Angelegt: #7");
+    expect(log.join("\n")).not.toContain("[dry-run]");
   });
 });
