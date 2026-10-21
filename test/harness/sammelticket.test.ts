@@ -116,8 +116,8 @@ describe("Sammelticket-Position (#1276)", () => {
   });
 
   test("Komplett-Regel: Umsetzer, Planer und Skill nennen sie", () => {
-    assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /setze ALLE Zeilen um/);
-    assert.match(lies(".claude/agents/kubernia-planner.md"), /plane ALLE Zeilen/);
+    assert.match(lies(".claude/agents/factory-umsetzer.md"), /setze ALLE Zeilen um/);
+    assert.match(lies(".claude/agents/factory-planer.md"), /plane ALLE Zeilen/);
     assert.match(lies(".claude/skills/factory/ablauf.md"), /komplett umsetzen, kein Rest-Übertrag/);
   });
 

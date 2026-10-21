@@ -209,7 +209,7 @@ describe("Harness-Texte diffen nur gegen origin/main... (#1108)", () => {
   test("Scan-Umfang ist nicht leer und enthält die bekannten Artefakte", () => {
     for (const pflicht of [
       ".claude/skills/review-lenses/SKILL.md",
-      ".claude/agents/kubernia-planner.md",
+      ".claude/agents/factory-planer.md",
       ".claude/settings.json",
       "docs/agent-harness.md",
       "docs/agent-harness-faq.md",

@@ -24,7 +24,7 @@ import * as fremdtextRoh from "../../scripts/fremdtext-lib.mjs";
 import * as projektRoh from "../../scripts/projekt-config-lib.mjs";
 
 const fremdtext = fremdtextRoh as unknown as { VERTRAUTE_BOTS: string[]; fremdeingangLabels: (c: unknown) => string[] };
-const ladeProjektConfig = (projektRoh as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
+const { ladeProjektConfig, ROLLEN_PFADE } = projektRoh as unknown as { ladeProjektConfig: () => unknown; ROLLEN_PFADE: Record<string, string> };
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
@@ -108,8 +108,8 @@ describe("Fremdtext-Gate (#1433)", () => {
   });
 
   test("b) Planer, Umsetzer und Lens nennen das Skript", () => {
-    for (const a of ["planner", "umsetzer", "lens"]) {
-      assert.ok(nenntSkript(read(`.claude/agents/kubernia-${a}.md`)), a);
+    for (const a of ["planer", "umsetzer", "lens"]) {
+      assert.ok(nenntSkript(read(ROLLEN_PFADE[a] ?? "")), a);
     }
     assert.ok(!nenntSkript("Kommentare per gh lesen"));
   });

@@ -16,9 +16,9 @@
  * Exit 0 = ok (`claim`: gewonnen; `pruefe`: `frei` oder `uebernehmbar`; `uebernehmen`: wie `pruefe`, verbraucht Übergabe bzw. Stopp-Vermerk; `freigeben`, `uebergeben`, `gestoppt`, `lebenszeichen`: erledigt), 4 = nicht anfassen (belegt, fremd,
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
- * Mechanik: die Lock-Datei `<git-common-dir>/<Worktree-Präfix>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
+ * Mechanik: die Lock-Datei `<git-common-dir>/<praefixe.worktree>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
  * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt, sandbox }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig; `sandbox` = `AGENT_SANDBOX` oder `null`) plus bei Bedarf `zuletzt: { zeit, quelle: "commit"|"schritt" }` (+ `schritt`), `uebergabe`, `gestoppt`. Das Format (Pfad, Parser, `lebenszeichenMs`) steht in `ticket-lock-lib.mjs`.
- * `claim` prüft vorher, ob ein Worktree `<Worktree-Präfix><nr>` oder ein Branch `<Branch-Präfix><nr>-*` (lokal oder remote) existiert (Exit 4). Ein
+ * `claim` prüft vorher, ob ein Worktree `<praefixe.worktree><nr>` oder ein Branch `<praefixe.branch><nr>-*` (lokal oder remote) existiert (Exit 4). Ein
  * fremder Lock, dessen jüngstes Lebenszeichen (`lebenszeichenMs`) jünger als `VERWAIST_MS` (2 h) ist, gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<Hash-Präfix>`
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
  * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock, dessen `erstellt` jünger als 2 h ist, `fremd` (bewusste Grenze: hier zählt `zuletzt` nicht); existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
@@ -120,7 +120,7 @@ function legeAn(deps, nr, nonce) {
 /** Namen aus den Deps (Test) oder aus der echten Projekt-Config; ein fehlender Schlüssel wirft (kein Standardwert). */
 const namenVon = (deps) => deps.namen ?? ladeTicketNamen();
 
-/** Gibt es einen Worktree `<Worktree-Präfix><nr>` oder einen Branch `<Branch-Präfix><nr>-*`? */
+/** Gibt es einen Worktree `<praefixe.worktree><nr>` oder einen Branch `<praefixe.branch><nr>-*`? */
 function ermittleBelegung(deps, nr) {
   const namen = namenVon(deps);
   const refs = deps.git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);

@@ -96,7 +96,7 @@ npm run verify:kompakt   # Kette aus package.json › scripts.verify, alle Gates
 Agent({
   subagent_type: "<agenten.lens>",
   description: "Lens <Architektur|Requirement-Treue|Test-Adäquanz|Doku> R<runde>",   // R<runde> zählt die Messung (token-baseline)
-  // kein model/effort am Spawn: beides steht im Frontmatter von .claude/agents/<agenten.lens>.md (opus/high, docs/model-routing.md §1)
+  // kein model/effort am Spawn: beides steht im Frontmatter von .claude/agents/factory-lens.md (opus/high, docs/model-routing.md §1)
   prompt: "<Brille WÖRTLICH> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/<praefixe.worktree><nr>-r<runde>.patch · erwarteter HEAD: <sha> · ab Runde 2: Delta-Patch + Vorrunden-Blocker dieser Brille · <Kontext-Diät WÖRTLICH> · <Findings-Format WÖRTLICH>"
 })
 ```
@@ -105,7 +105,7 @@ Ein PreToolUse-Guard (`scripts/lens-auftrag-guard.mjs`) verweigert den Spawn, we
 
 **Pflichtsatz am Ende jedes Lens-Prompts, wörtlich:** „Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach.“ Fehlt trotzdem ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an, ohne Neu-Spawn.
 
-Kennt das Agent-Tool `<agenten.lens>` nicht („Agent type '<agenten.lens>' not found“, eine Session, die vor dem Anlegen der Definition gestartet wurde): einmal mit `general-purpose` und `model: "opus"` spawnen, der Prompt beginnt „Lies zuerst `.claude/agents/<agenten.lens>.md` im Worktree und befolge deren Rumpf“, und der Bericht vermerkt den Fallback.
+Kennt das Agent-Tool `<agenten.lens>` nicht („Agent type '<agenten.lens>' not found“, eine Session, die vor dem Anlegen der Definition gestartet wurde): einmal mit `general-purpose` und `model: "opus"` spawnen, der Prompt beginnt „Lies zuerst `.claude/agents/factory-lens.md` im Worktree und befolge deren Rumpf“, und der Bericht vermerkt den Fallback.
 
 ⚠️ **Die Lenses lesen, sie schreiben nicht — mit genau einer Ausnahme.** Parallele Subagenten teilen sich **einen** Worktree. Fährt einer Sabotage-Proben (die Red-Green-Prüfung der Test-Lens, s.o.) oder „hilft" mit einem Edit, prüfen die anderen gegen eine veränderte Basis und melden Findings, die gegen den echten Stand nicht reproduzierbar sind — beim Einführungs-PR dieses Umbaus (#1035) genau so passiert. Darum: **jeder Lens-Prompt sagt ausdrücklich „du liest nur, du änderst nichts"**, und die **Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde in einem eigenen **Lens-Worktree** (`git -C <feature-worktree> worktree add --detach <hauptrepo>/.claude/worktrees/<praefixe.worktree><nr>-lens-r<runde> <erwarteter HEAD>`, darin einmal `npm ci`, Tests per `npm --prefix <lens-worktree> test -- <datei>`, danach `git worktree remove --force`). Belegt wird das Entfernen mit `git worktree list` ohne den Pfad und `Test-Path` = `False` (Git-Bash: `test -e <pfad>` scheitert), die Unversehrtheit mit leerem `git status --porcelain` im Feature-Worktree. Bleibt ein Lens-Worktree stehen, entfernt ihn der Stop-Hook, sobald `<praefixe.worktree><nr>` weg und er älter als 5 Minuten ist. Die Lens-Definition trägt die Regel; ein Spawn ohne diese Definition (Fallback `general-purpose`) bekommt sie wörtlich im Prompt.
 

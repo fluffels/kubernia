@@ -235,7 +235,7 @@ export const PROJEKTWERT_ENDE = "<!-- factory:projektwerte:end -->";
 const PROJEKTWERT_KENNUNG = "factory:projektwert";
 const PROJEKTWERT_ZEILE = /^# factory:projektwert (\S+)$/;
 const PROJEKTWERT_FOLGE = /^(\s*)([A-Za-z_][\w-]*):/;
-const PROJEKTWERT_GRUPPEN = ["praefixe", "agenten", "labels"];
+export const PROJEKTWERT_GRUPPEN = ["praefixe", "agenten", "labels"];
 const YAML_BLANK = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
 const CONFIG_PFAD = ".factory/projekt.json";
 
@@ -368,7 +368,8 @@ export function projektwertDateien(manifestPfade, liste) {
   return [...new Set([...manifestPfade.filter((p) => pfadSicher(p) && p.endsWith(".md")), ...aus])].sort();
 }
 
-function projektDateien(wurzel) {
+/** Alle Agenten- und Skill-Dateien unter `wurzel` (Schrägstrich-Form, unsortiert). */
+export function projektDateien(wurzel) {
   const out = [];
   const unter = (rel) => {
     const voll = join(wurzel, ...rel.split("/"));

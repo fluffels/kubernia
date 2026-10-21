@@ -154,7 +154,7 @@ describe("(d) CI-Schritt im Required-Job", () => {
 });
 
 describe("(e) Texte verweisen auf das Skript", () => {
-  for (const datei of [".claude/skills/review-lenses/SKILL.md", ".claude/agents/kubernia-umsetzer.md", "docs/agent-harness.md"]) {
+  for (const datei of [".claude/skills/review-lenses/SKILL.md", ".claude/agents/factory-umsetzer.md", "docs/agent-harness.md"]) {
     test(datei, () => assert.match(read(datei), /check-review-nachweis/));
   }
 });
@@ -183,7 +183,7 @@ describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#
     assert.doesNotMatch(skill, /wird der Check rot/, "keine zweite Kopie der Erklärung im Skill");
     assert.doesNotMatch(skill, /git ≥ 2\.36/, "keine zweite Kopie der Erklärung im Skill");
     assert.match(skill, /git show --remerge-diff --format= <M>/, "der Skill trägt das Rezept");
-    assert.match(read(".claude/agents/kubernia-umsetzer.md"), /`review-lenses` › Nach jedem Merge von `main`/, "der Umsetzer verweist auf den Skill-Abschnitt");
+    assert.match(read(".claude/agents/factory-umsetzer.md"), /`review-lenses` › Nach jedem Merge von `main`/, "der Umsetzer verweist auf den Skill-Abschnitt");
     assert.match(skill, /git diff <basis> <M>\^2 -- <alte datei>/, "der Skill trägt den Prüfschritt für verschobenen Code");
   });
   test("das Rezept im Skill ist an die Erkennung im Skript gekoppelt", () => {
@@ -372,7 +372,7 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
   test("Skill, Format-SSOT und Umsetzer nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /abnahmefix=/);
     assert.match(read(".claude/skills/review-lenses/SKILL.md"), /abnahmefix=/);
-    assert.match(read(".claude/agents/kubernia-umsetzer.md"), /abnahmefix=/);
+    assert.match(read(".claude/agents/factory-umsetzer.md"), /abnahmefix=/);
   });
 });
 

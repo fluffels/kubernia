@@ -157,7 +157,7 @@ const istDependabot = (mail) => mail.toLowerCase().includes("dependabot[bot]");
  * Metadaten), fällt erst in `npm ci` auf. Darum: ändert der Slice `package-lock.json`, MUSS er auch `package.json` ändern
  * (der Lockfile ist dann Folge einer Dependency-Änderung). Reiner Lockfile-Diff ist rot, mit Ausnahmen: ein Slice, dessen
  * Commits alle von Dependabot stammen (Lockfile-only-Updates transitiver Pakete), und der Override
- * `<Präfix>Lockfile-Override: #<nr> warum` (Präfix aus der Projekt-Config) (Pflicht-Begründung, stale-Meldung wie bei den anderen Slice-Gates).
+ * `<praefixe.commitZeile>Lockfile-Override: #<nr> warum` (Präfix aus der Projekt-Config) (Pflicht-Begründung, stale-Meldung wie bei den anderen Slice-Gates).
  * Grenze (bewusst): eine Änderung nur im `scripts`-Block von `package.json` maskiert Drift; verglichen wird die Datei, nicht
  * die Dependency-Blöcke. Ohne auflösbare Basis oder ohne Slice: kein Urteil (grün, wie check:diffsize). `runGit`/`env` injizierbar.
  */

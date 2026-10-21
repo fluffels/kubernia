@@ -52,8 +52,8 @@ import { liesMitProjektwerten } from "../support/ticket-ablauf";
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 const lensSkill = liesMitProjektwerten(".claude/skills/review-lenses/SKILL.md");
-const planner = liesMitProjektwerten(".claude/agents/kubernia-planner.md");
-const lensAgent = liesMitProjektwerten(".claude/agents/kubernia-lens.md");
+const planner = liesMitProjektwerten(".claude/agents/factory-planer.md");
+const lensAgent = liesMitProjektwerten(".claude/agents/factory-lens.md");
 
 /** Schneidet den Abschnitt von `von` bis (ohne) `bis` aus; wirft, wenn ein Anker fehlt (kein stilles Leerlaufen). */
 function teil(text: string, von: string, bis: string): string {
@@ -241,12 +241,12 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
 // ── Lens-Worktree und Blocker-Maßstab (#1316) ───────────────────────────────────
 describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1316 Z3)", () => {
   const harness = read("docs/agent-harness.md");
-  const umsetzer = liesMitProjektwerten(".claude/agents/kubernia-umsetzer.md");
+  const umsetzer = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
   /** Der Lens-Worktree ist in Definition und Skill beschrieben (Pfadmuster, Detach, Entfernen). */
   const beschreibtLensWorktree = (s: string) => /kq-<nr>-lens-r<runde>/.test(s) && /worktree add --detach/.test(s) && /worktree remove --force/.test(s);
 
   test("die Lens-Definition verlangt die Sabotage im Lens-Worktree, nie im Feature-Worktree", () => {
-    assert.ok(beschreibtLensWorktree(lensAgent), "kubernia-lens.md beschreibt den Lens-Worktree nicht");
+    assert.ok(beschreibtLensWorktree(lensAgent), "factory-lens.md beschreibt den Lens-Worktree nicht");
     assert.match(lensAgent, /nie im Feature-Worktree/);
     assert.match(lensAgent, /Test-Path/);
   });
@@ -275,7 +275,7 @@ describe("Blocker-Maßstab für Guard-/Parser-Code (#1316 Z4)", () => {
   const hatMassstab = (s: string) => /Blocker-Maßstab/.test(s) && /Regression/.test(s) && /Bekannte Grenze/.test(s) && /Akzeptanzkriterien/.test(s);
 
   test("Lens-Definition, Harness-Doku und Skill tragen den Maßstab", () => {
-    assert.ok(hatMassstab(lensAgent), "kubernia-lens.md hat den Abschnitt Blocker-Maßstab verloren");
+    assert.ok(hatMassstab(lensAgent), "factory-lens.md hat den Abschnitt Blocker-Maßstab verloren");
     assert.ok(hatMassstab(harness), "agent-harness.md §4 hat den Blocker-Maßstab verloren");
     assert.match(lensSkill, /Blocker-Maßstab/);
   });

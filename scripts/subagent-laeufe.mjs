@@ -3,7 +3,7 @@
 /**
  * Läufe eines Subagent-Typs aus den Claude-Code-Transkripten: `laufAus` (Kennzahlen eines Laufs aus `{ meta, zeilen }`) und
  * `ladeLaeufe` (Meta und Zeilen unter `<projektordner>/<session>/subagents/`). Felder und Heuristiken: Kopf von subagent-laufzeit.mjs.
- * Das Ticket eines Laufs kommt aus `ticketAusLauf`: erst `<Worktree-Präfix><nr>` im Patch-Pfad, dann der Worktree im Prompt, erst zuletzt das erste `#<nr>`.
+ * Das Ticket eines Laufs kommt aus `ticketAusLauf`: erst `<praefixe.worktree><nr>` im Patch-Pfad, dann der Worktree im Prompt, erst zuletzt das erste `#<nr>`.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -86,7 +86,7 @@ export function schnittZeile(prompt, schluessel) {
 
 /**
  * Ticket eines Laufs (#1579): vor allem anderen die Kopfzeile `Ticket #<nr>:` in der ERSTEN Prompt-Zeile (#1593: ein Worktree-Pfad
- * im Prompt ordnete Läufe sonst dem falschen Ticket zu), dann `<Worktree-Präfix><nr>` aus dem Patch-Pfad (`patch.ticket`), dann der Worktree im Prompt (`worktrees/<Worktree-Präfix><nr>`,
+ * im Prompt ordnete Läufe sonst dem falschen Ticket zu), dann `<praefixe.worktree><nr>` aus dem Patch-Pfad (`patch.ticket`), dann der Worktree im Prompt (`worktrees/<praefixe.worktree><nr>`,
  * auch ein Lens-Worktree), erst zuletzt das erste `#<nr>` im Prompt; sonst `null`. Ein `#<nr>` aus Brillen- oder Diät-Text
  * (`schon erledigt durch #1349`, `(#1034)`) darf das Ticket nur zuordnen, wenn nichts Belastbareres da ist.
  */

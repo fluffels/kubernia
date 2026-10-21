@@ -10,8 +10,8 @@
  * Zeilen am Zeilenanfang einer Commit-Message, gleiches Muster wie der Diffsize-Override (Präfix `praefixe.commitZeile`, Planer
  * `agenten.planer` der Projekt-Config; kein Standardwert, ein fehlender Schlüssel ist rot):
  *
- *   <Präfix>Plan: <Planer>               |  <Präfix>Plan: ohne — <Begründung>
- *   <Präfix>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
+ *   <praefixe.commitZeile>Plan: <Planer>               |  <praefixe.commitZeile>Plan: ohne — <Begründung>
+ *   <praefixe.commitZeile>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
  *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR); mehr gibt nur die Maintainerin frei; erhöht die Obergrenze.
  *   Optional `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, eigenes Budget neben dem Cap (Obergrenze + 1, nur bei überschrittenem Review-Cap).
@@ -28,7 +28,7 @@
  * Baumänderung (`git diff-tree`): Code nach dem Review ist ungeprüft, der letzte Fixer gibt nie das finale OK. Leere Commits (Nachweis,
  * Override-Zeilen) bleiben grün; ein Fix danach braucht Delta-Lens und neuen Nachweis mit head ≥ Fix. Ein git-Fehler ist rot.
  *
- * Druckventil: `<Präfix>Review-Override: #<nr> <warum>` (Pflicht-Begründung), z.B. für Revert-PRs.
+ * Druckventil: `<praefixe.commitZeile>Review-Override: #<nr> <warum>` (Pflicht-Begründung), z.B. für Revert-PRs.
  * Bewusst KEIN npm-`check:*`-Skript und nicht in `verify`: verify läuft vor dem Review, der
  * Nachweis entsteht erst danach (Vorbild: check-festgefahren.mjs). Lokal:
  *   node scripts/check-review-nachweis.mjs
