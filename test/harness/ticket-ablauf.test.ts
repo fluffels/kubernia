@@ -202,6 +202,7 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     assert.ok(m, "Absatz „Mehrere Tickets“ vorhanden");
     assert.match(m[0], /festgefahren/);
     assert.match(m[0], /nächste freie Ticket/);
+    assert.match(m[0], /je festgefahrenem Ticket[^.]*FESTGEFAHREN:/);
   });
   test("join-Pfad des Ablaufs existiert", () => {
     assert.ok(statSync(join(ROOT, TICKET_ABLAUF)).isFile());

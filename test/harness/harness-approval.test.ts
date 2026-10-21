@@ -542,6 +542,11 @@ function fehlendeRiegel(settings: Permissions): string[] {
 describe("Feste Stopps bleiben (#1363)", () => {
   const agents = read("AGENTS.md");
 
+  test("die Soll-Listen sind festgenagelt (ein geleerter Wächter wäre sonst vakuös)", () => {
+    assert.equal(FESTE_STOPPS.length, 5);
+    assert.equal(fehlendeRiegel({ permissions: { ask: [], deny: [] } }).length, 6);
+  });
+
   test("der Block `stopps` der AGENTS.md trägt jeden festen Stopp", () => {
     assert.deepEqual(festeStoppsFehlend(agents), []);
   });

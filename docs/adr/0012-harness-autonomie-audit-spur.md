@@ -119,14 +119,14 @@ Bewusst **keine** harte Token-Schwelle als Bedingung: eine nie erreichte Schwell
 | 13 | `ablauf.md` Schritt 0 `haupt-sync --streng` Exit 1 | stoppen, melden | Schutz fremder Arbeit im geteilten Checkout | bleibt |
 | 14 | AGENTS.md § Langfuse-Erfassung, `ablauf.md` Schritt 0 | stoppen, melden | Vorbedingung, die der Agent nicht herstellen kann | bleibt |
 | 15 | `ablauf.md` Schritt 1 Exit 2/Exit 5 | stoppen | technischer Abbruch/API-Kontingent | bleibt, kein Entscheidungs-Stopp |
-| 16 | `ablauf.md` Reparaturweg („der Maintainerin melden und weitermachen“) | keiner | | schon asynchron |
+| 16 | `ablauf.md` Reparaturweg („der Maintainerin melden und weitermachen“) | keiner | kein Wartepunkt | schon asynchron |
 | 17 | `ablauf.md` Schritt 2 Blocker („stoppen, kein Griff zum nächsten Ticket“) | der Lauf endet | Board-Hoheit, ausdrücklicher Wunsch der Maintainerin | bleibt, neu bewerten mit #1365 |
 | 18 | `ablauf.md` „Mehrere Tickets“ (Anzahl N) | Rückfrage ohne Zahl | Pacing | bleibt bis #1365 |
 | 19 | `ablauf.md` Budget-Pacing Exit 3/4 | Pause bis Reset | Kostendeckel | bleibt, wartet auf keine Entscheidung |
 | 20 | AGENTS.md § Kollisionsschutz (Worktree entfernen: „sonst stoppen und melden“) | stoppen | Datenverlust-Schutz | bleibt |
-| 21 | AGENTS.md § Mehr-Perspektiven-Review (strittige Blocker) | Hand-off | | entfällt: der Hauptchat entscheidet nach dem Entscheidungsprotokoll |
-| 22 | Skill `kubernia-workflow`, Workflow-Ausgänge `wartet-auf-klaerung`/`festgefahren` | | | entfallen mit #1067; Nachfolger sind Zeile 6 und 10 (`ERGEBNIS`-Token `festgefahren`/`entscheidung-noetig`) |
-| 23 | Skill `kubernia` | keiner | | delegiert an `ablauf.md` |
+| 21 | AGENTS.md § Mehr-Perspektiven-Review (strittige Blocker) | Hand-off | Entscheidung | entfällt: der Hauptchat entscheidet nach dem Entscheidungsprotokoll |
+| 22 | Skill `kubernia-workflow`, Workflow-Ausgänge `wartet-auf-klaerung`/`festgefahren` | entfallen | Ablauf | entfallen mit #1067; Nachfolger sind Zeile 6 und 10 (`ERGEBNIS`-Token `festgefahren`/`entscheidung-noetig`) |
+| 23 | Skill `kubernia` | keiner | kein Wartepunkt | delegiert an `ablauf.md` |
 
 **Wächter.** `test/harness/harness-approval.test.ts` (Abschnitt „Feste Stopps bleiben“) prüft die fünf Anker im Block `stopps`, den Freigabe-Stopp im Skill `forum` und die Permission-Regeln (`ask` für `gh issue delete`, `deny` für `npm publish` und `gh repo delete`, je Bash und PowerShell). Ein gestrichener fester Stopp wird damit rot. Grenze: der Wächter prüft Anker und Einträge, nicht die Bedeutung; ein Abschwächen im Wortlaut bei erhaltenem Anker fängt er nicht.
 

@@ -103,8 +103,8 @@ describe("Festgefahren-Wächter (#904)", () => {
 
   test("buildStuckComment lässt den Mehr-Ticket-Lauf weiterlaufen und verweist auf das Entscheidungsprotokoll (#1363)", () => {
     const comment = buildStuckComment(4, "https://example.com/run", STUCK_LABEL);
-    assert.ok(comment.includes("nächsten freien Ticket"), "Weiterlauf fehlt");
-    assert.ok(comment.includes("Entscheidungsprotokoll"), "Entscheidungsprotokoll fehlt");
+    assert.match(comment, /^3. .*nächsten freien Ticket/m, "Weiterlauf fehlt");
+    assert.match(comment, /^2. .*Entscheidungsprotokoll/m, "Entscheidungsprotokoll fehlt");
   });
 
   test("buildStuckComment ist ein nicht-leerer String", () => {
