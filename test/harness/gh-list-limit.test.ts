@@ -9,7 +9,7 @@
  *
  * Bewusste Grenzen: nur diese beiden Aufrufformen; ein `--limit` in einem anderen Befehl derselben zusammengefügten Zeile
  * (Pipe, `&&`) zählt mit, und das Limit selbst wird nicht auf Sinnhaftigkeit geprüft. `gh api` hat eine eigene Grenze
- * (`--paginate`) und ist nicht Teil dieser Regel. Gelesen wird nur die oberste Ebene von `scripts/` (kein `scripts/**`), erkannt nur Argument-Arrays mit doppelten Anführungszeichen; Template-Strings und einfache Anführungszeichen sieht er nicht (heute ohne Treffer). */
+ * (`--paginate`) und ist nicht Teil dieser Regel. Gelesen wird `scripts/` rekursiv; erkannt werden Argument-Arrays mit einfachen oder doppelten Anführungszeichen und Befehls-Strings `gh issue|pr list` auf Nicht-Kommentarzeilen (je Zeile bewertet: steht das Limit erst auf einer Folgezeile, ist das ein Fund); dynamisch zusammengesetzte Argumente (`["issue", sub]`) sieht er nicht. */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -25,11 +25,15 @@ function ohneLimitImWorkflow(text: string): string[] {
 /** Pur: Argument-Arrays in Skripten mit `"issue", "list"` bzw. `"pr", "list"` ohne `"--limit"` (bis zum schließenden `])`). */
 function ohneLimitImSkript(text: string): string[] {
   const aus: string[] = [];
-  const re = /"(?:issue|pr)",\s*"list"/g;
+  const re = /["'](?:issue|pr)["'],\s*["']list["']/g;
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const ende = text.indexOf("])", m.index);
     const aufruf = text.slice(m.index, ende === -1 ? undefined : ende);
-    if (!/"--limit"/.test(aufruf)) aus.push(aufruf.replace(/\s+/g, " ").trim());
+    if (!/["']--limit["']/.test(aufruf)) aus.push(aufruf.replace(/\s+/g, " ").trim());
+  }
+  for (const zeile of text.split(/\r?\n/)) {
+    if (/^\s*(\*|\/\/|\/\*)/.test(zeile)) continue;
+    if (/\bgh\s+(issue|pr)\s+list\b/.test(zeile) && !/--limit\b/.test(zeile)) aus.push(zeile.trim());
   }
   return aus;
 }
@@ -81,7 +85,7 @@ describe("gh list: jeder Aufruf im Repo trägt --limit (#1787 L7)", () => {
 
   test("scripts/: kein \"issue\"/\"pr\", \"list\" ohne \"--limit\"", () => {
     const dir = join(WURZEL, "scripts");
-    const dateien = readdirSync(dir).filter((n) => /\.(mjs|cjs|js)$/.test(n));
+    const dateien = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((n) => /\.(mjs|cjs|js)$/.test(n));
     const fehler = dateien.flatMap((n) => ohneLimitImSkript(readFileSync(join(dir, n), "utf8")).map((z) => `${n}: ${z}`));
     expect(fehler).toEqual([]);
   });
