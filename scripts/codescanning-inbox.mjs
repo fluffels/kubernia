@@ -93,10 +93,11 @@ export function codeScanningNummernIn(text) {
 
 /**
  * Bekannte Alerts: Nummern aus offenen Zeilen `- [ ] Code-Scanning:` in Kommentaren VERTRAUTER Autoren (`istVertraut`), Regeln (als Slug) aus
- * Wiedervorlagen-IDs `codescanning-<slug>`. `sammelTitel`: Titel der Sammeltickets (deckt kein Alert ab; der Aufrufer liefert sie aus
+ * Wiedervorlagen-IDs `codescanning-<slug>`. `sammelTitel` (Pflicht, Liste): Titel der Sammeltickets (deckt kein Alert ab; der Aufrufer liefert sie aus
  * `board-lib`, das beim Import die Config liest). Pur.
  */
-export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [], offeneIssues = [], sammelTitel = [] }) {
+export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [], offeneIssues = [], sammelTitel }) {
+  if (!Array.isArray(sammelTitel)) throw new TypeError("bekannteAlerts: sammelTitel muss eine Liste sein (kein stiller Default, sonst zählten Sammeltickets als deckend)");
   const nummern = new Set();
   const regeln = new Set();
   const alerts = new Set();
@@ -285,6 +286,22 @@ export function lauf({ io, trocken = false }) {
   return code;
 }
 
+/**
+ * Der Kontext für `bekannteAlerts` aus den geladenen Libs und Rohdaten. Pur; `libs` liefert `SAMMELTICKET_TITEL_LISTE`, `vertrauteIssues`, `offeneTitel`.
+ * Eine fehlende Sammeltitel-Liste ist ein Fehler, nie ein leerer Default.
+ */
+export function kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wiedervorlagen }) {
+  return {
+    offenesIssue,
+    kommentare,
+    owner,
+    sammelTitel: libs.SAMMELTICKET_TITEL_LISTE,
+    offeneIssues: libs.vertrauteIssues(rohe, owner),
+    offeneTitel: libs.offeneTitel(rohe, owner),
+    wiedervorlagen,
+  };
+}
+
 // ---- IO (ungetestet) ----
 
 const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad])).flat();
@@ -312,7 +329,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
     log(fehlerMeldung(e, { praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: " }));
     return AUFRUF_EXIT;
   }
-  const { REPO, SAMMELTICKET_TITEL_LISTE, offeneTitel: vertrauteTitel, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
+  const { REPO, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
   let offene = [];
   const io = {
     repo: REPO,
@@ -327,7 +344,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
       const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${REPO}/issues/${ziele[0].number}`]).body ?? "") } : null;
-      return { offenesIssue, kommentare, owner, sammelTitel: SAMMELTICKET_TITEL_LISTE, offeneIssues: vertrauteIssues(rohe, owner), offeneTitel: vertrauteTitel(rohe, owner), wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) };
+      return kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) });
     },
     projectToken: process.env.PROJECT_TOKEN,
     log,
