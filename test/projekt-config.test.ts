@@ -16,6 +16,8 @@ interface Pc {
   trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
+  altEnvPraefix(config: unknown): string | null;
+  umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
 }
 const pc = rawPc as unknown as Pc;
 
@@ -303,6 +305,95 @@ describe("Einstieg scripts/projekt-config.mjs", { timeout: 30_000 }, () => {
     assert.equal(r.stdout.trim(), echt.boards[1].projectId);
     assert.equal(start("boards.0.gibtsnicht").status, 1);
     assert.equal(start().status, 2);
+  });
+});
+
+describe("altEnvPraefix", () => {
+  test("Commit-Zeilen-Präfix: Bindestrich wird zum Unterstrich", () => {
+    assert.equal(pc.altEnvPraefix({ praefixe: { commitZeile: "ZD-" } }), "ZD_");
+    assert.equal(pc.altEnvPraefix({ praefixe: { commitZeile: "AB1-" } }), "AB1_");
+  });
+  test("fehlend oder ungültig: null", () => {
+    for (const c of [undefined, null, {}, { praefixe: {} }, { praefixe: { commitZeile: "" } }, { praefixe: { commitZeile: "-" } }, { praefixe: { commitZeile: 5 } }, { praefixe: { commitZeile: "zd-" } }]) {
+      assert.equal(pc.altEnvPraefix(c), null, JSON.stringify(c));
+    }
+  });
+});
+
+describe("umgebungsWert", () => {
+  const sammle = () => {
+    const w: string[] = [];
+    return { w, warn: (t: string) => w.push(t) };
+  };
+  test("nur der neue Name: Wert, keine Warnung", () => {
+    const { w, warn } = sammle();
+    assert.equal(pc.umgebungsWert({ FACTORY_X_Y: "neu" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "neu");
+    assert.deepEqual(w, []);
+  });
+  test("nur der Altname: Altwert und genau eine Warnung mit dem neuen Namen", () => {
+    const { w, warn } = sammle();
+    assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "alt");
+    assert.equal(w.length, 1);
+    assert.match(w[0], /FACTORY_X_Y/);
+    assert.match(w[0], /ZD_X_Y/);
+  });
+  test("beide gesetzt: der neue Wert gilt, die Warnung nennt beide und „ignoriert“", () => {
+    const { w, warn } = sammle();
+    assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt", FACTORY_X_Y: "neu" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "neu");
+    assert.equal(w.length, 1);
+    assert.match(w[0], /ignoriert/);
+    assert.match(w[0], /ZD_X_Y/);
+    assert.match(w[0], /FACTORY_X_Y/);
+  });
+  test("keiner gesetzt: undefined, keine Warnung", () => {
+    const { w, warn } = sammle();
+    assert.equal(pc.umgebungsWert({}, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), undefined);
+    assert.deepEqual(w, []);
+  });
+  test("leerer neuer Name zählt als gesetzt und schlägt den Altwert", () => {
+    const { w, warn } = sammle();
+    assert.equal(pc.umgebungsWert({ FACTORY_X_Y: "", ZD_X_Y: "alt" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "");
+    assert.equal(w.length, 1);
+  });
+  test("leerer Altname zählt als gesetzt", () => {
+    const { w, warn } = sammle();
+    assert.equal(pc.umgebungsWert({ ZD_X_Y: "" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "");
+    assert.equal(w.length, 1);
+  });
+  test("altPraefix null: keine Alt-Prüfung", () => {
+    const { w, warn } = sammle();
+    assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt" }, "FACTORY_X_Y", { altPraefix: null, warn }), undefined);
+    assert.deepEqual(w, []);
+  });
+  test("Name ohne FACTORY_-Präfix oder nur das Präfix: Wurf", () => {
+    assert.throws(() => pc.umgebungsWert({}, "ZD_X_Y", { altPraefix: "ZD_" }), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, "FACTORY_", { altPraefix: "ZD_" }), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, undefined as unknown as string, { altPraefix: "ZD_" }), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, 5 as unknown as string, { altPraefix: "ZD_" }), /FACTORY_/);
+  });
+});
+
+describe("umgebungsWert: Standardwerte (eigener Prozess)", { timeout: 30_000 }, () => {
+  const lauf = (cwdLib: string, code: string, env: Record<string, string>) =>
+    spawnSync(process.execPath, ["-e", code.replace("LIB", JSON.stringify(pathToFileURL(cwdLib).href))], { encoding: "utf8", env: { PATH: process.env.PATH ?? "", ...env } });
+  test("Standard-Warnung geht nach stderr, einmal je Name und Prozess, Altpräfix aus der echten Config", () => {
+    const alt = pc.altEnvPraefix(pc.ladeProjektConfig()) ?? "";
+    const code = `import(LIB).then(m => { const e = { ["${alt}Z_Y"]: "a" }; console.log(m.umgebungsWert(e, "FACTORY_Z_Y")); console.log(m.umgebungsWert(e, "FACTORY_Z_Y")); })`;
+    const r = lauf(join(WURZEL, "scripts/projekt-config-lib.mjs"), code, {});
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), "a\na");
+    assert.equal(r.stderr.trim().split("\n").length, 1);
+    assert.match(r.stderr, /FACTORY_Z_Y/);
+  });
+  test("Config nicht ladbar: kein Wurf, keine Alt-Prüfung", () => {
+    const d = tmp();
+    mkdirSync(join(d, "scripts"));
+    copyFileSync(join(WURZEL, "scripts", "projekt-config-lib.mjs"), join(d, "scripts", "projekt-config-lib.mjs"));
+    const code = `import(LIB).then(m => console.log(String(m.umgebungsWert({ ZD_Z_Y: "a" }, "FACTORY_Z_Y"))))`;
+    const r = lauf(join(d, "scripts/projekt-config-lib.mjs"), code, {});
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), "undefined");
+    assert.equal(r.stderr, "");
   });
 });
 

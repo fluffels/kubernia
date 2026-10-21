@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ausProbe, brauchtProbe, liesSnapshot, pacing, schreibeSnapshot, snapshotPfad, zielquoteAusEnv } from "./budget-lib.mjs";
+import { umgebungsWert } from "./projekt-config-lib.mjs";
 
 const EXIT = { ok: 0, knapp: 3, stopp: 4 };
 const { werte, fehler } = flagsLesen(process.argv.slice(2), { json: { type: "boolean" }, "ohne-probe": { type: "boolean" } });
@@ -22,8 +23,8 @@ if (fehler) {
 
 /** Headless-Probe: cwd im OS-Temp, damit weder Projekt-Hooks noch das Langfuse-Tag des Projekts greifen. `null` bei jedem Fehler. */
 function probe() {
-  // KQ_PACING_PROBE_SKRIPT ersetzt den Claude-Aufruf (nur für Tests: ein Skript, das stream-json-Zeilen ausgibt).
-  const fake = process.env.KQ_PACING_PROBE_SKRIPT;
+  // FACTORY_PACING_PROBE_SKRIPT ersetzt den Claude-Aufruf (nur für Tests: ein Skript, das stream-json-Zeilen ausgibt).
+  const fake = umgebungsWert(process.env, "FACTORY_PACING_PROBE_SKRIPT");
   const [datei, args] = fake
     ? [process.execPath, [fake]]
     : ["claude", ["-p", "Antworte nur mit: ok", "--model", "haiku", "--output-format", "stream-json", "--verbose", "--max-turns", "1"]];

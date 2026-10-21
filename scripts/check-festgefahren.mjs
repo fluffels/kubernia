@@ -68,8 +68,8 @@ export function buildStuckComment(failedCount, runUrl, label) {
     ``,
     `**Als Agent: Nicht weiterfixen auf diesem Branch. Stattdessen:**`,
     `1. Den aktuellen Fehlerbefund hier zusammenfassen (was wurde versucht, warum greift es nicht)`,
-    `2. 2–3 konkrete Entscheidungsoptionen für die Maintainerin benennen`,
-    `3. Den PR offen lassen und ASSIGNED bleiben, bis die Maintainerin entschieden hat`,
+    `2. 2–3 konkrete Optionen benennen; der Hauptchat entscheidet sie nach dem Entscheidungsprotokoll, vorgelegt wird nur Irreversibles oder Außenwirkung`,
+    `3. Den PR offen lassen und ASSIGNED bleiben; ein Mehr-Ticket-Lauf geht mit dem nächsten freien Ticket weiter`,
     ``,
     `Letzter fehlgeschlagener CI-Lauf: ${runUrl}`,
   ].join("\n");

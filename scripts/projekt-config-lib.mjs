@@ -201,6 +201,57 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG, pruef
   return wert;
 }
 
+/** Präfix der Umgebungsvariablen, die ein Kern-Werkzeug liest (#1824): `FACTORY_<NAME>`. */
+export const KERN_ENV_PRAEFIX = "FACTORY_";
+
+/** Pur: der Altpräfix einer Umgebungsvariable aus `praefixe.commitZeile` (`<PRAEFIX>-` → `<PRAEFIX>_`); `null` bei fehlendem oder ungültigem Präfix. */
+export function altEnvPraefix(config) {
+  const p = config?.praefixe?.commitZeile;
+  return typeof p === "string" && COMMIT_PRAEFIX_MUSTER.test(p) ? `${p.slice(0, -1)}_` : null;
+}
+
+let standardAltPraefix;
+function ladeAltPraefix() {
+  if (standardAltPraefix === undefined) {
+    try {
+      standardAltPraefix = altEnvPraefix(ladeProjektConfig({ pruefen: false }));
+    } catch {
+      standardAltPraefix = null;
+    }
+  }
+  return standardAltPraefix;
+}
+
+const gewarnt = new Set();
+function standardWarnung(text) {
+  if (gewarnt.has(text)) return;
+  gewarnt.add(text);
+  process.stderr.write(`${text}\n`);
+}
+
+/**
+ * Liest eine Kern-Umgebungsvariable (#1824). `name` ist der volle neue Name (`FACTORY_<NAME>`). Ein noch gesetzter Altname
+ * (Projektpräfix statt `FACTORY_`) gilt übergangsweise weiter und warnt mit dem neuen Namen; sind beide gesetzt, gewinnt der neue Name.
+ * „Gesetzt“ heißt `!== undefined`. Wirft nie, außer bei einem Namen ohne `FACTORY_`-Präfix.
+ */
+export function umgebungsWert(env, name, { altPraefix, warn = standardWarnung } = {}) {
+  if (typeof name !== "string" || !name.startsWith(KERN_ENV_PRAEFIX) || name.length === KERN_ENV_PRAEFIX.length) {
+    throw new Error(`Umgebungsvariable ${String(name)} muss mit ${KERN_ENV_PRAEFIX} beginnen`);
+  }
+  const alt = altPraefix === undefined ? ladeAltPraefix() : altPraefix;
+  const neu = env[name];
+  if (alt === null) return neu;
+  const altName = alt + name.slice(KERN_ENV_PRAEFIX.length);
+  const altWert = env[altName];
+  if (altWert === undefined) return neu;
+  if (neu !== undefined) {
+    warn(`⚠ ${altName} wird ignoriert, ${name} ist gesetzt (der Altname ist veraltet: ${name} verwenden)`);
+    return neu;
+  }
+  warn(`⚠ ${altName} ist veraltet: bitte ${name} verwenden (der Altwert gilt vorerst weiter)`);
+  return altWert;
+}
+
 /** Trennt `--config <pfad>` (auch `--config=<pfad>`) aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)
  *  oder `{ fehler }`, wenn der Pfad fehlt. Andere Argumente bleiben unberührt in `args`; das erste `--config` zählt. */
 export function trenneConfigArg(argv) {

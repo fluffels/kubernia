@@ -24,7 +24,7 @@ function lauf(stdin: string, kommando: string | null, env: Record<string, string
   const snapshot = join(dir, "snap.json");
   const r = spawnSync(process.execPath, ["scripts/statusline.mjs"], {
     input: stdin,
-    env: { ...process.env, KQ_USER_SETTINGS: settings, KQ_RATE_LIMITS_SNAPSHOT: snapshot, KQ_STATUSLINE_DURCHREICHEN: "", ...env },
+    env: { ...process.env, FACTORY_USER_SETTINGS: settings, FACTORY_RATE_LIMITS_SNAPSHOT: snapshot, FACTORY_STATUSLINE_DURCHREICHEN: "", ...env },
   });
   return { code: r.status, out: r.stdout.toString("utf8"), snapshot };
 }
@@ -46,7 +46,7 @@ describe("scripts/statusline.mjs", () => {
     writeFileSync(settings, "{}");
     const r = spawnSync(process.execPath, ["scripts/statusline.mjs"], {
       input: '{"model":"x"}',
-      env: { ...process.env, KQ_USER_SETTINGS: settings, KQ_RATE_LIMITS_SNAPSHOT: snapshot },
+      env: { ...process.env, FACTORY_USER_SETTINGS: settings, FACTORY_RATE_LIMITS_SNAPSHOT: snapshot },
     });
     expect(r.status).toBe(0);
     expect(readFileSync(snapshot, "utf8")).toBe('{"alt":true}');
@@ -59,7 +59,7 @@ describe("scripts/statusline.mjs", () => {
     writeFileSync(settings, "{}");
     const alt = '{"stand":1,"quelle":"probe","sevenDay":{"pct":5,"resetsAt":1792184400}}';
     writeFileSync(snapshot, alt);
-    const env = { ...process.env, KQ_USER_SETTINGS: settings, KQ_RATE_LIMITS_SNAPSHOT: snapshot };
+    const env = { ...process.env, FACTORY_USER_SETTINGS: settings, FACTORY_RATE_LIMITS_SNAPSHOT: snapshot };
     spawnSync(process.execPath, ["scripts/statusline.mjs"], { input: '{"rate_limits":{"five_hour":{"used_percentage":9,"resets_at":1792098000}}}', env });
     expect(readFileSync(snapshot, "utf8")).toBe(alt);
     spawnSync(process.execPath, ["scripts/statusline.mjs"], { input: PAYLOAD, env });
@@ -73,7 +73,7 @@ describe("scripts/statusline.mjs", () => {
     writeFileSync(r.snapshot, '{"stand":1,"quelle":"probe","fiveHour":{"pct":1,"resetsAt":1}}');
     spawnSync(process.execPath, ["scripts/statusline.mjs"], {
       input: teil,
-      env: { ...process.env, KQ_USER_SETTINGS: join(dir, "settings.json"), KQ_RATE_LIMITS_SNAPSHOT: r.snapshot },
+      env: { ...process.env, FACTORY_USER_SETTINGS: join(dir, "settings.json"), FACTORY_RATE_LIMITS_SNAPSHOT: r.snapshot },
     });
     expect(JSON.parse(readFileSync(r.snapshot, "utf8"))).toMatchObject({ quelle: "statusline", fiveHour: { pct: 9 } });
   });
@@ -92,8 +92,8 @@ describe("scripts/statusline.mjs", () => {
     expect(existsSync(r.snapshot)).toBe(false);
   });
 
-  test("Schleifenschutz: im Kind (KQ_STATUSLINE_DURCHREICHEN=1) wird nichts durchgereicht", () => {
-    const r = lauf(PAYLOAD, KOPIE, { KQ_STATUSLINE_DURCHREICHEN: "1" });
+  test("Schleifenschutz: im Kind (FACTORY_STATUSLINE_DURCHREICHEN=1) wird nichts durchgereicht", () => {
+    const r = lauf(PAYLOAD, KOPIE, { FACTORY_STATUSLINE_DURCHREICHEN: "1" });
     expect(r.code).toBe(0);
     expect(r.out).toBe("");
   });
