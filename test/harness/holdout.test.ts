@@ -260,7 +260,7 @@ describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
 
   test("Fehlerwege: fehlender Bericht einmal per SendMessage anfordern, fehlendes Werkzeug ohne Neuversuch", () => {
     assert.match(SKILL, /[Ff]ehlt ein Bericht[^\n]*einmal per `SendMessage`[^\n]*kein Neu-Spawn/);
-    assert.match(SKILL, /fehlt dem Typ ein Werkzeug[^\n]*kein Neuversuch/);
+    assert.match(SKILL, /fehlt dem Typ ein Werkzeug[^\n]*?kein Neuversuch, direkt der Hand-off/);
   });
 
   test("Werkzeug-Abbruch entscheidet der Hauptchat nach Entscheidungsprotokoll, nicht die Maintainerin", () => {
