@@ -242,3 +242,27 @@ describe("Reihenfolge im Skill (#1754)", () => {
     assert.match(SKILL, /Keine Akzeptanzkriterien[^\n]*entfaellt/);
   });
 });
+
+describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
+  const PFLICHT = /Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach\./;
+
+  test("der Pflichtsatz steht in Lens-Spawn-Vorlage, Abnahme- und Szenario-Agent", () => {
+    assert.match(LENSES, PFLICHT);
+    assert.match(abnahme, PFLICHT);
+    assert.match(szenario, PFLICHT);
+  });
+
+  test("Negativ: ohne den Satz ist der Wächter rot", () => {
+    assert.doesNotMatch(abnahme.replace("nicht wiederholen", "wiederholen"), PFLICHT);
+  });
+
+  test("Fehlerwege: fehlender Bericht einmal per SendMessage anfordern, fehlendes Werkzeug ohne Neuversuch", () => {
+    assert.match(SKILL, /fehlt ein Bericht[^\n]*einmal per `SendMessage`[^\n]*kein Neu-Spawn/);
+    assert.match(SKILL, /fehlt dem Typ ein Werkzeug[^\n]*kein Neuversuch/);
+  });
+
+  test("Werkzeug-Abbruch entscheidet der Hauptchat nach Entscheidungsprotokoll, nicht die Maintainerin", () => {
+    assert.doesNotMatch(SKILL, /bei einem Werkzeug-Abbruch repariert sie das Werkzeug/);
+    assert.match(lies("docs/factory/entscheidungsprotokoll.md"), /Werkzeug-Abbruch der Abnahme/);
+  });
+});
