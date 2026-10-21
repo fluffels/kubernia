@@ -260,11 +260,14 @@ describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
 
   test("Fehlerwege: fehlender Bericht einmal per SendMessage anfordern, fehlendes Werkzeug ohne Neuversuch", () => {
     assert.match(SKILL, /[Ff]ehlt ein Bericht[^\n]*einmal per `SendMessage`[^\n]*kein Neu-Spawn/);
-    assert.match(SKILL, /fehlt dem Typ ein Werkzeug[^\n]*?kein Neuversuch, direkt der Hand-off/);
+    assert.match(SKILL, /fehlt dem Typ ein Werkzeug[^\n]*?keinen Neuversuch, direkt der Hand-off/);
   });
 
-  test("Werkzeug-Abbruch entscheidet der Hauptchat nach Entscheidungsprotokoll, nicht die Maintainerin", () => {
+  test("Werkzeug-Abbruch entscheidet der Hauptchat nach Entscheidungsprotokoll, nicht die Maintainerin (Skill und Umsetzer)", () => {
+    const umsetzer = lies(".claude/agents/kubernia-umsetzer.md");
     assert.doesNotMatch(SKILL, /bei einem Werkzeug-Abbruch repariert sie das Werkzeug/);
+    assert.doesNotMatch(umsetzer, /Maintainerin repariert das Werkzeug/);
+    assert.match(umsetzer, /Werkzeug-Abbruch[^\n]*?entscheidet der Hauptchat nach `docs\/factory\/entscheidungsprotokoll\.md`/);
     assert.match(lies("docs/factory/entscheidungsprotokoll.md"), /Werkzeug-Abbruch der Abnahme/);
   });
 });

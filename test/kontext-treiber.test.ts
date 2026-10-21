@@ -388,6 +388,11 @@ describe("Wartepausen über 240 s (#1588)", () => {
     expect(() => K.analysiereLauf(l)).not.toThrow();
     expect(K.analysiereLauf(l)?.pausen).toEqual([]);
   });
+  test("Phasen-Erkennung ohne Ticket-Namen bricht mit lesbarer Meldung ab", () => {
+    const { zeilen } = lauf("#1 x", [{ min: 1 }]);
+    expect(() => kontextModul.phaseDerCalls(zeilen, null, {})).toThrow(/Phasen-Erkennung braucht die Ticket-Namen/);
+    expect(() => kontextModul.phaseDerCalls(zeilen, null, undefined)).toThrow(/Phasen-Erkennung braucht die Ticket-Namen/);
+  });
   test("Aggregat trennt die Ursachen in eigene Buckets, leere Gruppe hat pausen {}", () => {
     const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 16 }];
     const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls)] });

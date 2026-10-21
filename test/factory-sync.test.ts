@@ -600,7 +600,9 @@ describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
     assert.match(rot.err, /\.factory\/projekt\.json/);
     schreibe(z, ".claude/agents/w.md", lies(z, ".claude/agents/w.md").replace("name: von-hand", "name: wk-planer"));
     schreibe(z, "docs/d.md", lies(z, "docs/d.md").replace("`wk-planer` |", "`manipuliert` |"));
-    assert.match(drift1(z).err, /Projektwert-Block weicht/);
+    const block = drift1(z);
+    assert.match(block.err, /Projektwert-Block weicht/);
+    assert.match(block.err, /projektwerte\.mjs --write/);
     schreibe(z, "docs/d.md", `${lies(z, "docs/d.md")}\n<!-- factory:projektwerte:start -->\nohne Ende\n`);
     const kaputt = drift1(z);
     assert.equal(kaputt.code, 1);

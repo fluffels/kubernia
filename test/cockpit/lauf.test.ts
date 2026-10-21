@@ -1,6 +1,12 @@
 import { execFile } from "node:child_process";
 import { describe, expect, test } from "vitest";
-import { fehlerText, laufe } from "../../scripts/cockpit/lauf.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLauf from "../../scripts/cockpit/lauf.mjs";
+
+const { fehlerText, laufe } = rawLauf as unknown as {
+  fehlerText: (err: unknown) => string;
+  laufe: (id: string, o?: { signal?: AbortSignal }) => Promise<{ code: number | null; fehler: string | null }>;
+};
 
 const fehlerVon = (abbruch: boolean): Promise<NodeJS.ErrnoException> =>
   new Promise((resolve) => {

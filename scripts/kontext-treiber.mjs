@@ -64,7 +64,7 @@ function labelVon(tool, wurzel, namen) {
 
 /** Calls des Laufs mit ihren Tool-Aufrufen und der Phase je Call. */
 function phasenUndTools(zeilen, einstieg, namen) {
-  if (!namen?.agenten?.lens) throw new Error("phaseDerCalls braucht die Ticket-Namen (ticketNamen(config)) als drittes Argument");
+  if (!namen?.agenten?.lens) throw new Error("Phasen-Erkennung braucht die Ticket-Namen (ticketNamen(config)) als drittes Argument");
   const { calls } = callsFromTranscript(zeilen);
   const events = toolEventsFromTranscript(zeilen);
   const jeCall = new Map();

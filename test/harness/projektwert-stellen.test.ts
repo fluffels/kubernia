@@ -64,7 +64,7 @@ describe("Projektwert-Stellen in Agenten und Skills", () => {
     expect(B.projektwertStellen(ohne).zeilen).toEqual([]);
   });
 
-  test("besitz-lib bleibt bei Builtins und führt denselben Config-Pfad wie projekt-config-lib", () => {
+  test("besitz-lib trägt denselben Config-Pfad wie projekt-config-lib", () => {
     expect(lies("scripts/besitz-lib.mjs")).toContain(`"${P.PROJEKT_CONFIG}"`);
   });
 });
