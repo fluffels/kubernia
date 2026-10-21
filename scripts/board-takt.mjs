@@ -22,7 +22,6 @@ import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,
-  SAMMELTICKET_TITEL_LISTE,
   STATUS_TITEL,
   TAG_MS,
   addToBoardTodo,
@@ -49,7 +48,7 @@ import {
 } from "./board-lib.mjs";
 
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
-import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, istHarnessCommit, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
 
 // Die Quote liegt in spielquote-lib.mjs (auch naechstes-ticket.mjs braucht sie); die API dieses Skripts bleibt stabil.
 export { HARNESS_TAKT_MERGES, SPIEL_QUOTE, istHarnessCommit, zaehleTaktMerges, zaehleTicketMerges };
@@ -259,16 +258,16 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   }
   const offene = normalizeOffene(io.loadOpenIssuePages(repo));
   const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
-  const geschlossen = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=${encodeURIComponent(harnessLabel)}&since=${seit}&per_page=100`])
+  const geschlossen = io.ghJson(harnessIssuesAnfrage({ repo, label: harnessLabel, seit }))
     .flat()
     .filter((i) => !i.pull_request && typeof i.closed_at === "string")
     .sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at));
   // Die Nummern aller geschlossenen Harness-Issues: die Spielquote ordnet einen Commit über seine `#N`-Referenz zu (istHarnessCommit).
   const harnessIssues = new Set(geschlossen.map((i) => i.number));
   // Alle Sammeltickets (beide Titel, geschlossen wie offen): ihr Abschluss-Commit zählt für den Härtungs-Takt nicht als Ticket-Merge.
-  const sammelIssues = new Set([
-    ...geschlossen.filter((i) => SAMMELTICKET_TITEL_LISTE.includes(i.title)).map((i) => i.number),
-    ...offene.filter((i) => SAMMELTICKET_TITEL_LISTE.includes(i.titel)).map((i) => i.number),
+  const { abschluss, sammelIssues } = sammelStand([
+    ...geschlossen.map((i) => ({ number: i.number, title: i.title, state: "closed", closedAt: i.closed_at })),
+    ...offene.map((i) => ({ number: i.number, title: i.titel, state: "open" })),
   ]);
   const letzter = (titel) => {
     const g = geschlossen.find((i) => i.title === titel);
@@ -282,7 +281,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     .filter((t) => !Number.isNaN(t));
   const fensterStart = angelegt.length > 0 ? new Date(Math.max(...angelegt)) : (vorgaenger?.closedAt ?? null);
   const abStatus = mergeFensterAb(fensterStart, jetzt).toISOString();
-  const abHarness = mergeFensterAb(letzter(SAMMELTICKET_TITEL)?.closedAt ?? null, jetzt).toISOString();
+  const abHarness = mergeFensterAb(abschluss?.closedAt ?? null, jetzt).toISOString();
   const fruehestens = abStatus < abHarness ? abStatus : abHarness;
   const commits = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
