@@ -106,6 +106,7 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
     assert.equal(einstiegAbweichungen(kopf + "\n## Umsetzer\n\nDer Umsetzer wird ohne Planer gestartet.\n").length, 1);
     assert.equal(einstiegAbweichungen(kopf + "\n**Der Umsetzer wird ohne Planer gestartet.**\n").length, 1);
     assert.equal(einstiegAbweichungen(kopf + "\n**Lies `.claude/skills/factory/ablauf.md` und folge ihm.**\n").length, 0);
+    assert.equal(einstiegAbweichungen(kopf + "\n**Lies `docs/x.md`.**\n**Bereichsleiter.**\n").length, 2);
     assert.equal(einstiegAbweichungen(kopf + "x".repeat(MAX_RUMPF)).length, 1);
     assert.equal(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF)).length, 0);
     assert.equal(einstiegAbweichungen("---\r\nname: x\r\n---\r\n## A\r\n").length, 1);
