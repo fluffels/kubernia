@@ -21,7 +21,8 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
-import { KERN_TICKET_SKILL, PROJEKT_CONFIG, repoName } from "./projekt-config-lib.mjs";
+import { posix } from "node:path";
+import { KERN_TICKET_SKILL, PROJEKT_CONFIG, ROLLEN_PFADE, repoName } from "./projekt-config-lib.mjs";
 import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
@@ -30,7 +31,7 @@ import { ladeSessions, projektOrdner } from "./transkript.mjs";
 export const ERGEBNIS_SCHLUESSEL = Object.freeze(["rows", "fenster", "ohnePreis", "ohnePreisModelle", "ohneBrainWurzel", "modellanteil", "ttl"]);
 
 /**
- * Die Namen der Zerlegung aus der Projekt-Config: die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill` und der Kern-Skill, #1806; ihr Aufruf per Slash oder
+ * Die Namen der Zerlegung aus der Projekt-Config: die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill`, der Kern-Skill und der Verzeichnisname des festen Rollen-Pfads `ROLLEN_PFADE.ticketSkill`; ihr Aufruf per Slash oder
  * Skill-Tool ist ein Ticketlauf), die Menge der Ticketlauf-Agenten (`agenten.planer|umsetzer|lens|gruppe`) und der Repo-Name (Schlüssel und Label der eigenen Subagenten).
  * Wirft mit Grund, wenn die Config fehlt oder nicht nutzbar ist (Datenfehler statt falscher Zählung). Die Config lädt der Einstiegspunkt und reicht sie
  * als `deps.config` durch; dieser Kern lädt nie selbst.
@@ -43,7 +44,8 @@ export function hauptchatNamen(deps = {}) {
   if (ERGEBNIS_SCHLUESSEL.includes(name)) throw new Error(`Repo-Name "${name}" (repo der Projekt-Config) kollidiert mit dem Ergebnisschlüssel gleichen Namens der Zerlegung
 Fix: repo in ${PROJEKT_CONFIG} auf einen Namen außerhalb von ${ERGEBNIS_SCHLUESSEL.join(", ")} ändern`);
   const { planer, umsetzer, lens, gruppe, ticketSkill } = r.namen.agenten;
-  return { ticketSkills: [ticketSkill, KERN_TICKET_SKILL], ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: name, config: r.config };
+  const ticketSkills = [...new Set([ticketSkill, KERN_TICKET_SKILL, posix.basename(posix.dirname(ROLLEN_PFADE.ticketSkill))])];
+  return { ticketSkills, ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: name, config: r.config };
 }
 
 /** Die Ticket-Skills aus der Projekt-Config (siehe `hauptchatNamen`). */

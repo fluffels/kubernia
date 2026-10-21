@@ -217,6 +217,15 @@ describe("Ticket-Skills aus der Projekt-Config", () => {
     assert.equal(art([slash(0, "kubernia"), call(1, SONNET, claim(1))], c), "frei");
     assert.equal(art([slash(0, "factory"), call(1, SONNET, claim(1))], c), "Slash");
   });
+  test("der Verzeichnisname des festen Rollen-Pfads (factory-ticket) zählt als Ticket-Skill, ein anderer Name nicht, ohne Doppelung", () => {
+    const c = mitSkill("ab");
+    assert.equal(art([slash(0, "factory-ticket"), call(1, SONNET, claim(1))], c), "Slash");
+    assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("factory-ticket")), call(2, OPUS, claim(1))], c), "Skill-Tool");
+    assert.equal(art([slash(0, "factory-forum"), call(1, SONNET, claim(1))], c), "frei");
+    assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("forum")), call(2, OPUS, claim(1))], c), "frei");
+    const skills = hc.ticketSkillsAusConfig({ config: mitSkill("factory-ticket") });
+    assert.equal(skills.filter((s) => s === "factory-ticket").length, 1);
+  });
   test("unbrauchbare Config ist ein Datenfehler mit Grund, keine stille Zählung", () => {
     assert.throws(() => hc.ticketSkillsAusConfig({ config: { agenten: {} } }), /Projekt-Config nicht nutzbar/);
     assert.throws(() => hc.zerlegeHauptchat({ sessions: [], config: {} }), /hauptchat-zerlegung/);
