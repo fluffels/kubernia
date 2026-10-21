@@ -24,6 +24,9 @@ import { priceParts } from "./preise.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
+/** Die Ticket-Skills (Produkt-Skill und der Kern-Skill `factory`, #1806): ihr Aufruf (Slash oder Skill-Tool) ist ein Ticketlauf. */
+const TICKET_SKILLS = ["kubernia", "factory"];
+
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
 const norm = (p) => String(p ?? "").replace(/\\/g, "/").toLowerCase();
@@ -75,9 +78,9 @@ function turnsAus(zeilen, wurzeln) {
   return gruppen.map((g, idx) => {
     const events = toolEventsFromTranscript(g.rows);
     const { calls } = callsFromTranscript(g.rows);
-    const skillGeladen = events.some((e) => e.tool === "Skill" && e.input?.skill === "kubernia");
+    const skillGeladen = events.some((e) => e.tool === "Skill" && TICKET_SKILLS.includes(e.input?.skill));
     const workflow = events.some((e) => /workflow/i.test(e.tool));
-    const art = g.start?.slash === "kubernia" ? "Slash" : skillGeladen ? "Skill-Tool" : workflow ? "Workflow" : "frei";
+    const art = TICKET_SKILLS.includes(g.start?.slash) ? "Slash" : skillGeladen ? "Skill-Tool" : workflow ? "Workflow" : "frei";
     // Brain gilt ab dem ersten Brain-Ereignis bis Turn-Ende (#1382); ein Turn mit /brain-input ist ganz Brain.
     const brainTs = events.filter((e) => eventBeruehrtBrain(e, wurzeln)).map((e) => (gueltig(e.ts) ? Date.parse(e.ts) : -Infinity));
     const brainAb = g.start?.slash === "brain-input" ? -Infinity : brainTs.length ? Math.min(...brainTs) : null;

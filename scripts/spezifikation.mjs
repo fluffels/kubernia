@@ -165,8 +165,8 @@ export function fuehreAus(argv, io) {
  * nicht); steht der Anker dort, ist nichts zu prüfen. Nur sonst kommt das andere Board dazu, damit die Regel (`ankerFehler`, geteilt mit
  * board-place.mjs) „steht nur auf dem anderen Board“ melden kann. Liefert den Fehlertext oder `null`.
  */
-export function ankerPruefung({ nach, labels }, lade) {
-  const rolle = boardRolleFuer(labels);
+export function ankerPruefung({ nach, labels }, lade, config) {
+  const rolle = boardRolleFuer(labels, config);
   const andere = rolle === "factory" ? "produkt" : "factory";
   const ziel = lade(rolle);
   if (ziel.some((i) => i.number === nach)) return null;
@@ -174,20 +174,23 @@ export function ankerPruefung({ nach, labels }, lade) {
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
-const echteIo = () => ({
+const echteIo = () => {
+  const config = ladeProjektConfig();
+  return {
   owner: REPO.split("/")[0],
-  config: ladeProjektConfig(),
+  config,
   leseDatei: (pfad) => readFileSync(pfad, "utf8"),
   erzeuge: ({ titel, body, labels }) =>
     ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
-  pruefeAnker: (a) => ankerPruefung(a, (rolle) => loadItems(boardFuerRolle(rolle))),
+  pruefeAnker: (a) => ankerPruefung(a, (rolle) => loadItems(boardFuerRolle(rolle)), config),
   einsortiere: ({ nr, nach, notfall }) => {
     const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
     execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
   },
   ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
   bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
-});
+  };
+};
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mitKontingent("spezifikation", { arten: ["core"] });

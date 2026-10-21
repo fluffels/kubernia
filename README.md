@@ -158,6 +158,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/kubernia-lens.md` |
 | Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/kubernia-planner.md` |
 | Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/kubernia-umsetzer.md` |
+| Skill | `factory` | model: sonnet | `.claude/skills/factory/SKILL.md` |
 | Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
 | Skill | `kubernia` | model: sonnet | `.claude/skills/kubernia/SKILL.md` |
 | Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |

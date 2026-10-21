@@ -27,7 +27,6 @@ import {
   REPO,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
-  FACTORY_LABEL,
   boardFuerRolle,
   boardRolleFuer,
   ergaenzeFehlende,
@@ -44,9 +43,7 @@ import {
   setPosition,
   todoItem,
 } from "./board-lib.mjs";
-
-// Zwei Boards (ADR 0022 F11, #1729): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
-const FACTORY_BOARD = boardFuerRolle(boardRolleFuer([FACTORY_LABEL]));
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
 const PRUEF_VERSUCHE = 5;
@@ -182,7 +179,7 @@ export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false 
 }
 
 /** Setzt die Position des Sammeltickets `nr` nach `pruefSchritt` und prüft sie gegen die frisch geladene Board-Liste. Liefert `ok`, `falsch` oder `unbekannt` (nie in der Liste). */
-async function setzeUndPruefe(nr, position, dry) {
+async function setzeUndPruefe(nr, position, dry, FACTORY_BOARD) {
   let neuGesetzt = 0;
   for (let versuch = 1; versuch <= PRUEF_VERSUCHE; versuch++) {
     const schritt = pruefSchritt({ items: loadItems(FACTORY_BOARD), nr, position, neuGesetzt, dry });
@@ -204,6 +201,10 @@ async function main(argv = process.argv.slice(2)) {
     process.exit(2);
   }
   mitKontingent("sammelticket-anlegen");
+  const config = ladeProjektConfig();
+  const harness = labelAus(config, "harness");
+  // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
+  const FACTORY_BOARD = boardFuerRolle(boardRolleFuer([harness], config));
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
@@ -218,7 +219,7 @@ async function main(argv = process.argv.slice(2)) {
     return;
   } else {
     const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger) });
-    const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${FACTORY_LABEL}`]);
+    const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`]);
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);
     await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt

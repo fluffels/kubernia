@@ -30,7 +30,13 @@ import * as namenRaw from "../../scripts/ticket-namen.mjs";
 
 type Cfg = Record<string, unknown>;
 const P = projektRaw as unknown as { labelAus: (c: unknown, k: string) => string; ladeProjektConfig: () => { labels: Record<string, string> } };
-const B = boardRaw as unknown as { boardRolleFuer: (l: unknown, c?: unknown) => string; FACTORY_LABEL: string };
+type It = { number: number; labels: string[]; id?: string; state?: string; status?: string; contentId?: string };
+const B = boardRaw as unknown as {
+  boardRolleFuer: (l: unknown, c?: unknown) => string;
+  seitenListen: (p: It[], f: It[], c?: unknown) => { produkt: It[]; factory: It[]; doppelt: number[]; falsch: number[] };
+  umzugsPlan: (p: It[], f: It[], c?: unknown) => { schritte: { number: number; nach: string }[] };
+  aufnahmePlan: (n: number[], i: Record<number, unknown>, o?: { config?: unknown }) => { aufnehmen: { rolle: string }[] };
+};
 const F = fremdRaw as unknown as {
   fremdeingangLabels: (c: unknown) => string[];
   istFremdeingang: (i: unknown, owner: string, o?: { config?: unknown }) => { fremdeingang: boolean; label?: string };
@@ -116,9 +122,25 @@ describe("boardRolleFuer (K3: Fixture-Label bereich:fabrik)", () => {
   test("ohne labels.harness wirft die Funktion statt still produkt zu liefern", () => {
     expect(() => B.boardRolleFuer([], OHNE_HARNESS)).toThrow(FIX);
   });
-  test("ohne Config-Argument gilt die echte Projekt-Config", () => {
-    expect(B.boardRolleFuer([P.ladeProjektConfig().labels.harness])).toBe("factory");
-    expect(B.FACTORY_LABEL).toBe(P.ladeProjektConfig().labels.harness);
+  test("ohne Config-Argument wirft sie mit Schlüssel und Fix-Zeile, ein Standardwert fehlt", () => {
+    expect(() => B.boardRolleFuer([P.ladeProjektConfig().labels.harness])).toThrow(FIX);
+  });
+  test("Board-Funktionen mit Fixture-Config: Fixture-Label ist factory, das echte Label produkt", () => {
+    const fab = (nr: number): It => ({ number: nr, labels: ["bereich:fabrik"], id: `I${nr}`, state: "open", status: "Todo", contentId: `C${nr}` });
+    const echt = (nr: number): It => ({ number: nr, labels: ["area:harness"], id: `E${nr}`, state: "open", status: "Todo", contentId: `D${nr}` });
+    const s = B.seitenListen([fab(1), echt(2)], [echt(3), fab(4)], FAB);
+    expect(s.factory.map((i) => i.number)).toEqual([4, 1]);
+    expect(s.produkt.map((i) => i.number)).toEqual([2, 3]);
+    expect(B.umzugsPlan([fab(1), echt(2)], [], FAB).schritte.map((x) => [x.number, x.nach])).toEqual([[1, "factory"]]);
+    const issue = (n: number, labels: string[]) => ({ number: n, state: "open", node_id: `N${n}`, labels });
+    const a = B.aufnahmePlan([1, 2], { 1: issue(1, ["bereich:fabrik"]), 2: issue(2, ["area:harness"]) }, { config: FAB });
+    expect(a.aufnehmen.map((x) => x.rolle)).toEqual(["factory", "produkt"]);
+  });
+  test("seitenListen, umzugsPlan und aufnahmePlan ohne Config werfen", () => {
+    const i: It = { number: 1, labels: [], id: "I", state: "open" };
+    expect(() => B.seitenListen([i], [], undefined)).toThrow(FIX);
+    expect(() => B.umzugsPlan([i], [], undefined)).toThrow(FIX);
+    expect(() => B.aufnahmePlan([1], { 1: { number: 1, state: "open", node_id: "N", labels: [] } })).toThrow(FIX);
   });
 });
 
@@ -139,6 +161,7 @@ describe("check-festgefahren: Label aus labels.festgefahren", () => {
   test("stuckLabel liefert das Fixture-Label, ohne Schlüssel wirft es", () => {
     expect(FEST.stuckLabel(FAB)).toBe("zustand:fest");
     expect(() => FEST.stuckLabel(OHNE_FESTGEFAHREN)).toThrow(FIX);
+    expect(() => FEST.stuckLabel()).toThrow(FIX);
   });
   test("der Kommentar nennt das übergebene Label, nicht das echte", () => {
     const text = FEST.buildStuckComment(4, "https://example.com/run", "zustand:fest");

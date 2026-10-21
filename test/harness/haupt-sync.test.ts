@@ -20,7 +20,7 @@ type Eingabe = { istLinkedWorktree: boolean; branch: string; sauber: boolean; hi
 type Ergebnis = { aktion: string; grund: string; hinter: number; basis: string; gepullt: boolean; harness?: { skill: string[]; agenten: string[]; sonstige: string[] }; notiz: string };
 const S = raw as unknown as {
   entscheideSync: (e: Eingabe) => { aktion: "pull" | "melden" | "nichts"; grund: string };
-  ordneHarnessAenderungen: (d: string[]) => { skill: string[]; agenten: string[]; sonstige: string[]; lockGeaendert: boolean };
+  ordneHarnessAenderungen: (d: string[], skillVerzeichnis?: string | null) => { skill: string[]; agenten: string[]; sonstige: string[]; lockGeaendert: boolean };
   baueText: (e: Partial<Ergebnis>) => string;
   fuehreSyncAus: (dir: string, deps?: { config?: Record<string, unknown> }) => Ergebnis;
   exitCodeFuer: (e: Partial<Ergebnis>) => number;
@@ -64,6 +64,12 @@ describe("Hilfsfunktionen", () => {
     expect(S.ordneHarnessAenderungen(["docs/x.md", "src/a.ts"])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
     expect(S.ordneHarnessAenderungen([])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
     expect(S.ordneHarnessAenderungen(["package-lock.json"]).lockGeaendert).toBe(true);
+  });
+  test("ordneHarnessAenderungen: der Kern-Ticket-Skill factory samt Ablauf zählt immer als Skill, auch ohne nutzbare Config (#1806)", () => {
+    const f = [".claude/skills/factory/ablauf.md", ".claude/skills/factory/SKILL.md"];
+    expect(S.ordneHarnessAenderungen(f, null)).toMatchObject({ skill: f, sonstige: [] });
+    expect(S.ordneHarnessAenderungen(f)).toMatchObject({ skill: f, sonstige: [] });
+    expect(S.ordneHarnessAenderungen([".claude/skills/factoryx/SKILL.md"], null)).toMatchObject({ skill: [], sonstige: [".claude/skills/factoryx/SKILL.md"] });
   });
   test("baueText (Hook-Modus): Sitzungsbasis immer, Neustart-Hinweis nur bei Harness-Änderungen, Meldung mit Zahl", () => {
     expect(S.baueText({ aktion: "nichts", basis: "abc" })).toBe("Sitzungsbasis: abc");
@@ -476,7 +482,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("der Skill kubernia beginnt mit Schritt 0 (haupt-sync --streng), nennt Stopp bei Exit 1 und die Neu-Lesen-Regel; kein „nie ein eigenes git pull“ mehr", () => {
-    const skill = readFileSync(new URL("../../.claude/skills/kubernia/SKILL.md", import.meta.url), "utf8");
+    const skill = readFileSync(new URL("../../.claude/skills/factory/ablauf.md", import.meta.url), "utf8");
     const schritt0 = /^0\. \*\*Hauptcheckout heben[^\n]*\n/m.exec(skill)?.[0] ?? "";
     expect(schritt0).toContain("node scripts/haupt-sync.mjs --text --streng");
     expect(schritt0).toMatch(/Exit 1/);

@@ -64,6 +64,7 @@ import {
   umzugsPlan,
   wirklichFehlend,
 } from "./board-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 export { NOTFALL_ARTEN };
 
@@ -111,7 +112,7 @@ function parseOhneNotfall(rest, dry) {
  * `--after`-Anker nicht (Meldung „fehlt im Board, nicht aufgenommen: <Grund>“, am Ende Exit 1).
  */
 export function nimmFehlendeAuf(items, args, io = {}) {
-  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns, log = console.log, warn = console.error } = io;
+  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns, config, log = console.log, warn = console.error } = io;
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length === 0) return items;
   const issues = {};
@@ -122,7 +123,7 @@ export function nimmFehlendeAuf(items, args, io = {}) {
       issues[nr] = null;
     }
   }
-  const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, args.anchor);
+  const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, { config, ankerNr: args.anchor });
   for (const a of abgelehnt) warn(`⚠ #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
   const neu = aufnehmen.map((a) => {
     if (args.dry) {
@@ -140,13 +141,13 @@ export function nimmFehlendeAuf(items, args, io = {}) {
  * der Issue-REST (für Nummern, deren Item keine Labels trägt). Liefert `{ rolle, doppelt }` (`doppelt`: Nummern auf beiden Boards) oder `{ fehler }`
  * bei gemischten Rollen, einem `--after`-Anker nur auf dem anderen Board oder nicht bestimmbarer Rolle. Pur.
  */
-export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {} }) {
+export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {}, config }) {
   const stehtAuf = (liste, nr) => liste.find((i) => i.number === nr);
   const rollen = new Map();
   for (const nr of numbers) {
     const labels = [stehtAuf(produkt, nr), stehtAuf(factory, nr)].map((i) => i?.labels).find(Array.isArray) ?? labelsRest[nr];
     if (!Array.isArray(labels)) return { fehler: `#${nr}: Board-Rolle nicht bestimmbar (weder Labels im Board-Item noch aus dem Issue)` };
-    rollen.set(nr, boardRolleFuer(labels));
+    rollen.set(nr, boardRolleFuer(labels, config));
   }
   const verschieden = new Set(rollen.values());
   if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };
@@ -182,13 +183,13 @@ function ladeLabels(nr) {
 const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { exitCode });
 
 /** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
-async function einsortieren(args) {
+async function einsortieren(args, config) {
   const listen = { produkt: loadItems(boardFuerRolle("produkt")), factory: loadItems(boardFuerRolle("factory")) };
   const labelsRest = {};
   for (const nr of args.numbers) {
     if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr);
   }
-  const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest });
+  const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest, config });
   if (ziel.fehler) throw abbruch(ziel.fehler, 2);
   for (const nr of ziel.doppelt) console.error(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
   const board = boardFuerRolle(ziel.rolle);
@@ -196,7 +197,7 @@ async function einsortieren(args) {
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(board, fehlend));
-  items = nimmFehlendeAuf(items, args, { addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, ...opts }) });
+  items = nimmFehlendeAuf(items, args, { config, addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, ...opts }) });
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
@@ -263,9 +264,9 @@ export async function fuehreUmzugAus(plan, io) {
   return plan.gemeldet.length;
 }
 
-async function umziehen(args) {
+async function umziehen(args, config) {
   const [produkt, factory] = ["produkt", "factory"].map((r) => loadItems(boardFuerRolle(r)));
-  const plan = umzugsPlan(produkt, factory);
+  const plan = umzugsPlan(produkt, factory, config);
   const u = plan.schritte.filter((s) => s.aktion === "umziehen").length;
   if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return console.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
   const gemeldet = await fuehreUmzugAus(plan, {
@@ -288,11 +289,12 @@ async function main(argv = process.argv.slice(2)) {
     process.exit(2);
   }
   mitKontingent("board-place");
+  const config = ladeProjektConfig();
   if (args.missing) return reportMissing();
   if (args.umzug) {
     // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {
-      return await umziehen(args);
+      return await umziehen(args, config);
     } catch (e) {
       console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
       process.exit(e.exitCode ?? 1);
@@ -301,7 +303,7 @@ async function main(argv = process.argv.slice(2)) {
   try {
     // Wettlauf (#1628): ein frisch angelegtes Issue hat teils noch keinen GraphQL-Node; vorübergehende Fehler werden mit Pause wiederholt.
     await mitWiederholung(
-      () => einsortieren(args),
+      () => einsortieren(args, config),
       { schlafe: sleep },
     );
   } catch (e) {

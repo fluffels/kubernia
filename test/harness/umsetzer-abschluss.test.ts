@@ -23,6 +23,13 @@ import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as festRaw from "../../scripts/check-festgefahren.mjs";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as stopRaw from "../../scripts/stop-verify-hook.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as preRaw from "../../scripts/pretooluse-hook.mjs";
+
+const stopHookRaw = stopRaw as unknown as { runHook: (s: string, r: string, c: () => object, d: object) => { exit: number; stdout: string; stderr: string } };
+const preHookRaw = preRaw as unknown as { dispatch: (t: string, r: string, g?: unknown, s?: unknown, d?: object) => { hookSpecificOutput: { permissionDecision: string } } | null };
 const stuckLabel = (c: unknown) => (festRaw as unknown as { stuckLabel: (c: unknown) => string }).stuckLabel(c);
 const ladeProjektConfig = () => (pcRaw as unknown as { ladeProjektConfig: () => { labels: { festgefahren: string } } }).ladeProjektConfig();
 
@@ -340,14 +347,32 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     });
   });
 
-  test("Negativfall: eine Config ohne labels.festgefahren bricht ab und nennt den Schlüssel (kein stiller Standardwert)", () => {
-    const echt = ladeProjektConfig() as unknown as { labels: Record<string, string> };
+  test("Negativfall: eine Config ohne labels.festgefahren blockiert fail-closed mit Fix-Zeile, ohne zu werfen, in Wächter und beiden Hooks (kein stiller Standardwert)", () => {
+    const echt = ladeProjektConfig() as unknown as { labels: Record<string, string>; agenten: { umsetzer: string } };
     const { festgefahren: _weg, ...rest } = echt.labels;
     const ohneLabel = { ...echt, labels: rest };
-    const eingabe = { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "ERGEBNIS: abgebrochen\nPR: -" };
-    assert.throws(() => abschluss.abschlussBlockade(eingabe, { config: ohneLabel, prDateien: () => [] } as never), /labels\.festgefahren/);
-    // mit der Config samt Label läuft derselbe Aufruf durch
-    assert.doesNotThrow(() => abschluss.abschlussBlockade(eingabe, { config: echt, prDateien: () => [] } as never));
+    const eingaben = [
+      { hookEvent: "SubagentStop", agentType: echt.agenten.umsetzer, lastMessage: "ERGEBNIS: abgebrochen\nPR: -" },
+      { hookEvent: "PreToolUse", toolName: "SubagentHandback", agentType: echt.agenten.umsetzer, lastMessage: "ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine" },
+    ];
+    for (const e of eingaben) {
+      const g = abschluss.abschlussBlockade(e, { config: ohneLabel, prDateien: () => [] } as never);
+      assert.match(g ?? "", /fail-closed/);
+      assert.match(g ?? "", /labels\.festgefahren/);
+      assert.match(g ?? "", /Fix:/);
+      // mit der Config samt Label läuft derselbe Aufruf ohne Blockade durch
+      assert.equal(abschluss.abschlussBlockade(e, { config: echt, prDateien: () => [] } as never), null);
+    }
+    // stop-verify-hook: Exit 2 mit decision block statt Wurf
+    const stop = stopHookRaw.runHook(JSON.stringify({ hook_event_name: "SubagentStop", agent_type: echt.agenten.umsetzer, last_assistant_message: "ERGEBNIS: abgebrochen\nPR: -" }), "/x", () => ({ blocked: false }), { config: ohneLabel });
+    assert.equal(stop.exit, 2);
+    assert.equal((JSON.parse(stop.stdout) as { decision: string }).decision, "block");
+    assert.match(stop.stderr, /labels\.festgefahren/);
+    // pretooluse-hook: deny statt stillem Durchlass
+    const payload = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: echt.agenten.umsetzer, tool_input: { message: "ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine" } });
+    const deny = preHookRaw.dispatch(payload, "/x", undefined, undefined, { config: ohneLabel });
+    assert.equal(deny?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(preHookRaw.dispatch(payload, "/x", undefined, undefined, { config: echt, prDateien: () => [] }), null);
   });
   test("Bindungen: stuckLabel und ERGEBNIS_WERTE stimmen mit check-festgefahren und dem Formatblock überein", () => {
     // Beide Skripte lesen das Label aus der Projekt-Config (#1742, #1744): ein Fixture-Label muss bei check-festgefahren ankommen.
@@ -364,7 +389,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
   });
 
   test("Bindung: jeder ERGEBNIS-Wert hat einen Bullet im kubernia-Skill (#1740 L1)", () => {
-    const skill = readFileSync(resolve(ROOT, ".claude/skills/kubernia/SKILL.md"), "utf8");
+    const skill = readFileSync(resolve(ROOT, ".claude/skills/factory/ablauf.md"), "utf8");
     for (const wert of abschluss.ERGEBNIS_WERTE) {
       assert.ok(skill.includes(`- **\`${wert}\`**`), `kubernia/SKILL.md ohne Bullet **\`${wert}\`**`);
     }
