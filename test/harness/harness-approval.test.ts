@@ -574,7 +574,7 @@ describe("Feste Stopps bleiben (#1363)", () => {
     const settings = JSON.parse(read(".claude/settings.json")) as Permissions;
     for (const art of ["ask", "deny"] as const) {
       for (const eintrag of fehlendeRiegel({ permissions: { ask: [], deny: [] } }).filter((f) => f.startsWith(art))) {
-        const ohne: Permissions = JSON.parse(JSON.stringify(settings));
+        const ohne: Permissions = structuredClone(settings);
         ohne.permissions[art] = ohne.permissions[art].filter((e) => `${art}: ${e}` !== eintrag);
         assert.deepEqual(fehlendeRiegel(ohne), [eintrag]);
       }
