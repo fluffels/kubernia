@@ -53,6 +53,7 @@ const H = hauptchatRoh as unknown as {
   hauptchatNamen: (d: { config: unknown }) => { ticketAgenten: Set<string>; repoName: string };
   zerlegeHauptchat: (e: object) => Record<string, { calls: number }> & { rows: { quelle: string; calls: number }[] };
   renderMarkdown: (r: unknown, o?: object) => string;
+  ERGEBNIS_SCHLUESSEL: readonly string[];
 };
 const B = baselineRoh as unknown as {
   summarize: (run: object, bounds?: object, prFiles?: unknown, namen?: object) => { pflegeFehlt?: boolean };
@@ -238,6 +239,12 @@ describe("mess-lib: Worktree-Präfix als Option", () => {
 
 describe("kontext-treiber: Namen aus der Config", () => {
   const spawn = (typ: string) => mitTool(2, "Agent", { subagent_type: typ, description: "Lens Doku R1" });
+  test("Negativfall (#1821 L11): phaseDerCalls ohne Ticket-Namen wirft mit Meldung statt eines nackten TypeError", () => {
+    const mitTool_ = [user(0, "Ticket #1: x"), call(1), ...mitTool(2, "Bash", { command: "ls" }), call(3)];
+    expect(() => K.phaseDerCalls(mitTool_, null, undefined)).toThrow(/Ticket-Namen/);
+    expect(() => K.phaseDerCalls(mitTool_, null, {})).toThrow(/Ticket-Namen/);
+    expect(K.phaseDerCalls(mitTool_, null, NAMEN)).toHaveLength(2);
+  });
   test("die Review-Phase beginnt beim Spawn des Lens-Agenten der Config, nicht beim alten Namen", () => {
     const mitLinse = [user(0, "Ticket #1: x"), call(1), ...spawn("acme-lens"), call(3)];
     expect(K.phaseDerCalls(mitLinse, null, NAMEN)).toEqual(["Umsetzung", "Review", "Review"]);
@@ -280,6 +287,16 @@ describe("hauptchat-zerlegung: Agenten und Repo-Name aus der Config", () => {
     const n = H.hauptchatNamen({ config: CFG });
     expect([...n.ticketAgenten].sort()).toEqual(["acme-gruppe", "acme-lens", "acme-planer", "acme-umsetzer"]);
     expect(n.repoName).toBe("acme");
+  });
+  test("Negativfall (#1821 L11): ein Repo-Name, der einem festen Ergebnisschlüssel gleicht, wirft statt still zu kollidieren", () => {
+    for (const schluessel of H.ERGEBNIS_SCHLUESSEL) {
+      expect(() => H.hauptchatNamen({ config: { ...CFG, repo: "o/" + schluessel } }), schluessel).toThrow(/Ergebnisschlüssel/);
+    }
+    expect(H.hauptchatNamen({ config: { ...CFG, repo: "o/rows2" } }).repoName).toBe("rows2");
+  });
+  test("die festen Ergebnisschlüssel sind genau die der Zerlegung (kein Drift gegen den Ergebnisbau)", () => {
+    const r = H.zerlegeHauptchat({ sessions: [], config: CFG });
+    expect(Object.keys(r).filter((k) => k !== "acme").sort()).toEqual([...H.ERGEBNIS_SCHLUESSEL].sort());
   });
   test("Negativfall: ohne repo oder ohne Agentenname wirft hauptchatNamen mit Fix", () => {
     expect(() => H.hauptchatNamen({ config: { ...CFG, repo: undefined } })).toThrow(/repo[\s\S]*Fix:/);
