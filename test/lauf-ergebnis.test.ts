@@ -466,6 +466,23 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
     assert.throws(() => mod.laufErgebnisStartAgent({ laeufe: [], von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
   });
+  test("Negativfall: laufErgebnisStartAgent ohne vollständige Ticket-Namen bricht ab, ohne git oder gh zu fragen (#1821 L12)", () => {
+    const nie = () => {
+      throw new Error("darf nicht aufgerufen werden");
+    };
+    const ohneWorktree = () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+    assert.throws(() => mod.laufErgebnisStartAgent({ laeufe: [], von, bis, runGit: nie, runGh: nie, ladeConfig: ohneWorktree }), /praefixe\.worktree/);
+  });
+  test("Besitzer aus repo der Config (#1821 L20): ohne repo undefined (Abnahme-Marker nicht prüfbar), kaputtes repo wirft mit Fix-Zeile", () => {
+    const nie = () => {
+      throw new Error("darf nicht aufgerufen werden");
+    };
+    const mitRepo = (repo: unknown) => () => ({ repo, praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+    for (const kaputt of ["x", "a/b/c", "", "/b"]) {
+      assert.throws(() => mod.laufErgebnis({ von, bis, runGit: nie, runGh: nie, ladeConfig: mitRepo(kaputt) }), /owner\/name[\s\S]*Fix:/, kaputt);
+    }
+    assert.doesNotThrow(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh({ liste: [] }), ladeConfig: mitRepo("o/n") }));
+  });
   test("ohne PRs keine weiteren gh-Aufrufe (nur die Liste)", () => {
     const aufrufe: string[][] = [];
     const e = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh({ liste: [], aufrufe }), jetzt: SPAETER });
@@ -525,7 +542,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.equal((lauf(conf("fluffels/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1);
       assert.equal((lauf(conf("anderer/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 0, "Autor fluffels ist dann nicht vertraut");
       assert.throws(() => lauf(conf()), /Besitzer/);
-      assert.throws(() => lauf(conf(42)), /Besitzer/);
+      assert.throws(() => lauf(conf(42)), /owner\/name/); // kaputtes repo: wirft schon beim Zerlegen
       const leer = { liste: [], offen: [] };
       assert.doesNotThrow(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(leer), jetzt: SPAETER, ladeConfig: conf() }));
     });
