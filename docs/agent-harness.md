@@ -97,6 +97,15 @@ Das eigentliche Sicherheitsnetz: eine Reihe von Prüfungen, die **lokal und in d
   - **SSOT (#910, #1065):** Phasen-Matrix (Modell-Alias × Effort × Aufrufstelle), Aliase statt fester IDs und die Grenzen: [docs/model-routing.md](model-routing.md).
   - **Gemessen, nicht nur konfiguriert (#1068):** die [Token-/Loop-Baseline](model-routing.md#5-token--und-loop-baseline-1068) zeigt, dass der Frontmatter-Override der Umsetzung in der Praxis **nicht** greift (Hauptagent in allen Läufen auf Opus), Subagent-Modelle dagegen schon. Nachmessen: `node scripts/token-baseline.mjs`.
 
+## 2a. Harness-Cockpit (ADR 0029)
+
+Lokale, nur lesende Sicht auf die Harness-Quellen (Ring `oberflaeche`, nie in ein Projekt verteilt; Ort `scripts/cockpit/`). Start: `npm run cockpit [-- --projekt <pfad>] [--port <n>]` (Projektwurzel Standard cwd, Port Standard 4180); der Server bindet nur 127.0.0.1 und nimmt nur GET und HEAD an. Die Seite rendert serverseitig ein Panel je Quelle mit Stand-Zeit und lädt per `meta refresh` neu, ohne Client-Skript, alle Werte escaped.
+
+- **Quellen-Vertrag** (`quelle.mjs`): `{ id, titel, ttlMs, sammeln(ctx) }` mit Ergebnis `{ status: ok|ausfall, stand, daten|null, grund|null }`; `ok` braucht mindestens einen Wert in `daten`. Der Kontext trägt `jetzt()`, `signal`, `projekt` (absoluter Projektpfad) und `lauf(id)`. Der Abruf läuft parallel mit Timeout je Quelle (5 s) und In-Memory-TTL, ohne eigene Persistenz.
+- **Neue Quelle:** eine Datei unter `scripts/cockpit/quellen/` plus eine Zeile in `registry.mjs` plus ein Eintrag in `.factory/besitz.json` (Ring `oberflaeche`, sonst wird die Kern-Abdeckung rot), kein zentrales `switch`; braucht sie einen neuen Unterprozess, zusätzlich eine Zeile in der Allowlist von `lauf.mjs` (die eine Prüfstelle für „nur lesend“; `lauf.mjs` steht in den geschützten Pfaden, und der Wächter `test/harness/cockpit-lesend.test.ts` verbietet Unterprozess-Importe außerhalb von `lauf.mjs` und schreibende `fs`-Funktionen unter `scripts/cockpit/`).
+- **Ausfall-Anzeige:** wirft eine Quelle, läuft sie ins Timeout oder liefert eine ungültige Form, zeigt das Panel „Ausfall: <Grund>, zuletzt ok <Zeit>“ ohne Werte, nie alte Werte als aktuell. Erste Quelle: Langfuse-Erreichbarkeit über `langfuse-vorbedingung.mjs --json` (stdout `{"erreichbar":bool,"grund":string|null}`, Exit-Codes wie ohne Flag; unlesbare Ausgabe ist ein Ausfall). Der Grund erscheint ohne Schlusspunkt.
+- Sicherheit (Host-Prüfung, CSP, Grenzen): [Sicherheit der Agenten](sicherheit-agenten.md).
+
 ## 3. Die Fitness-Functions im Detail
 
 Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM es existiert · wie es gegen False Positives abgesichert ist. Reihenfolge wie in den Ketten `verify` und `verify:full`, danach die reinen CI-Gates (Tabelle generiert, siehe unten).
@@ -584,15 +593,6 @@ Die Schleife oben ist ein Mechanismus – hier drei echte, verlinkte Vorher/Nach
 - **Eine Schichtverletzung schlich sich unbemerkt ein** (Befund [#292](https://github.com/fluffels/kubernia/issues/292), Fix [#344](https://github.com/fluffels/kubernia/issues/344)): Ein Architektur-Review deckte auf, dass `game.ts` (Anwendung) `sfx.ts` (Präsentation) importierte — für einen einzigen Aufruf `SFX.applyConfig()`. Zu dem Zeitpunkt gab es dafür **keine automatische Grenze**, nur Review-Disziplin. Der Fix löste die Kopplung über einen neuen Audio-Sink in `runtime.ts` und führte `test/layering.test.ts` als Regressions-Guard ein — der wäre vor dem Fix rot gewesen. Der Befund motivierte direkt den dauerhaften Architektur-Wächter `check:arch` (#347, §3): aus einem einmaligen Fund wurde eine permanente, maschinelle Grenze statt eines erneuten Einzelfalls.
 
 Aktuelle Durchsatz-Zahlen (gemergte PRs, offen vs. geschlossen) stehen bewusst **nicht** hier verankert — ein hartcodierter Zählwert würde bei jedem weiteren Ticket sofort veralten (dieselbe Philosophie wie `check:docdrift`/`check:doctickets`, §3). Live nachschlagen: `gh pr list --state merged --limit 1000 | wc -l`, bzw. sobald gelandet über die README-Badges aus [#700](https://github.com/fluffels/kubernia/issues/700).
-
-### Cockpit (`npm run cockpit`, ADR 0029)
-
-Lokale, nur lesende Sicht auf die Harness-Quellen (Ring `oberflaeche`, nie in ein Projekt verteilt; Ort `scripts/cockpit/`). Start: `npm run cockpit [-- --projekt <pfad>] [--port <n>]` (Projektwurzel Standard cwd, Port Standard 4180); der Server bindet nur 127.0.0.1 und nimmt nur GET und HEAD an. Die Seite rendert serverseitig ein Panel je Quelle mit Stand-Zeit und lädt per `meta refresh` neu, ohne Client-Skript, alle Werte escaped.
-
-- **Quellen-Vertrag** (`quelle.mjs`): `{ id, titel, ttlMs, sammeln(ctx) }` mit Ergebnis `{ status: ok|ausfall, stand, daten|null, grund|null }`. Der Abruf läuft parallel mit Timeout je Quelle (5 s) und In-Memory-TTL, ohne eigene Persistenz.
-- **Neue Quelle:** eine Datei unter `scripts/cockpit/quellen/` plus eine Zeile in `registry.mjs` plus ein Eintrag in `.factory/besitz.json` (Ring `oberflaeche`, sonst wird die Kern-Abdeckung rot), kein zentrales `switch`; braucht sie einen neuen Unterprozess, zusätzlich eine Zeile in der Allowlist von `lauf.mjs` (die eine Prüfstelle für „nur lesend“).
-- **Ausfall-Anzeige:** wirft eine Quelle, läuft sie ins Timeout oder liefert eine ungültige Form, zeigt das Panel „Ausfall: <Grund>, zuletzt ok <Zeit>“ ohne Werte, nie alte Werte als aktuell. Erste Quelle: Langfuse-Erreichbarkeit über `langfuse-vorbedingung.mjs`.
-- Sicherheit (Host-Prüfung, CSP, Grenzen): [Sicherheit der Agenten](sicherheit-agenten.md).
 
 ## 5. Roadmap / bekannte Lücken
 

@@ -3,7 +3,7 @@
  *
  *   npm run cockpit [-- --projekt <pfad>] [--port <n>]    Standard: cwd und Port 4180; --port 0 wählt einen freien
  *
- * `main` liefert eine Exit-Zahl (2 Aufruf-Fehler, 1 Startfehler, z.B. belegter Port) oder im Erfolg `schliessen` (der laufende Server). Quellen: registry.mjs; Vertrag: quelle.mjs; Ablauf: docs/agent-harness.md › Cockpit. */
+ * `main` liefert eine Exit-Zahl (2 Aufruf-Fehler, 1 Startfehler, z.B. belegter Port) oder im Erfolg `schliessen` (der laufende Server). Quellen: registry.mjs; Vertrag: quelle.mjs; Ablauf: docs/agent-harness.md › §2a. */
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "../flag-lib.mjs";

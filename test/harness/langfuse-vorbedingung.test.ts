@@ -151,13 +151,13 @@ describe("main", () => {
   test("--json erreichbar: Exit 0 und {erreichbar:true, grund:null} auf stdout, stderr leer", async () => {
     const r = await lauf(["--json"], antwort(200));
     expect(r.code).toBe(0);
-    expect(r.out.map((z) => JSON.parse(z))).toEqual([{ erreichbar: true, grund: null }]);
+    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: true, grund: null }]);
     expect(r.err).toEqual([]);
   });
   test("--json nicht erreichbar: Exit 1, stdout nennt den Grund, stderr bleibt leer", async () => {
     const r = await lauf(["--json"], antwort(500));
     expect(r.code).toBe(1);
-    expect(r.out.map((z) => JSON.parse(z))).toEqual([{ erreichbar: false, grund: "Langfuse antwortet mit HTTP 500" }]);
+    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: false, grund: "Langfuse antwortet mit HTTP 500" }]);
     expect(r.err).toEqual([]);
   });
   test("--json zusammen mit --sessionstart ist ein Aufruf-Fehler (Exit 2, nichts auf stdout)", async () => {
