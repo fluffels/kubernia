@@ -104,6 +104,7 @@ model {
       deployValidate = ciworkflow 'deploy-validate.yml'
       festgefahren = ciworkflow 'festgefahren.yml'
       forumInbox = ciworkflow 'forum-inbox.yml'
+      harnessDoctor = ciworkflow 'harness-doctor.yml'
       internalrefsPrText = ciworkflow 'internalrefs-pr-text.yml'
       release = ciworkflow 'release.yml'
       scorecard = ciworkflow 'scorecard.yml'
@@ -130,6 +131,7 @@ model {
   harness.hauptchat -> github.factoryBoard 'liest die Reihenfolge (area:harness)'
   github.ci.boardTakt -> github.board 'nimmt fehlende Issues ohne area:harness als Todo auf (Board-Wächter)'
   github.ci.boardTakt -> github.factoryBoard 'pflegt Status-Ticket und Harness-Sammelticket, nimmt fehlende area:harness-Issues als Todo auf (Board-Wächter)'
+  github.ci.harnessDoctor -> github.factoryBoard 'schreibt Lücken der Factory-Voraussetzungen als Zeile ins Harness-Sammelticket'
 }
 
 views {

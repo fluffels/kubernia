@@ -322,3 +322,10 @@ describe("Echt-Repo", () => {
     assert.ok(out.includes("Tests, Typecheck & Builds"));
   });
 });
+
+describe("Docs-Gen-Config: der Ruleset-Spiegel kommt aus der Projekt-Config (#1800)", () => {
+  test("die echte docs-gen-Config trägt keinen eigenen Ruleset-Zeiger", () => {
+    const echt = JSON.parse(readFileSync(new URL("../scripts/docs-gen/config.json", import.meta.url), "utf8")) as { diagramme: object };
+    assert.equal(Object.hasOwn(echt.diagramme, "ruleset"), false);
+  });
+});
