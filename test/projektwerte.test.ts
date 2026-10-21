@@ -237,11 +237,13 @@ describe("projektwerte CLI", () => {
     const r = lauf(["--check"], w);
     assert.equal(r.code, 1);
     assert.equal(r.err.split("\n").filter((z) => z.includes("Projekt-Config")).length, 1, r.err);
+    assert.match(r.err, /: 1 Befund\(e\)/);
+    assert.doesNotMatch(r.err, /fehlt oder ist kein/);
   });
   test("--wurzel als Flag wählt das Projekt", () => {
     const w = projekt();
     const out: string[] = [];
-    assert.equal(cli.cli(["--write", "--wurzel", w], { out: (s) => out.push(s), err: () => undefined }), 0);
+    assert.equal(cli.cli(["--write", "--wurzel", w], { wurzel: join(w, "gibt-es-nicht"), out: (s) => out.push(s), err: () => undefined }), 0);
     assert.match(lies(w, ".claude/agents/planer.md"), /\nname: wk-planer\n/);
   });
 });
@@ -252,7 +254,7 @@ describe("Grenzfälle der Lib", () => {
     assert.throws(() => lib.projektwertWert({ agenten: { planer: "a\nb" } }, "agenten.planer"), /Zeilenumbruch/);
     assert.throws(() => lib.projektwertWert({ agenten: { planer: "a\rb" } }, "agenten.planer"), /Zeilenumbruch/);
   });
-  test("mehrere Blöcke und Zeilen in einer Datei werden je einzeln geleert, gerendert und geprüft", () => {
+  test("mehrere Blöcke in einer Datei werden je einzeln geleert, gerendert und geprüft", () => {
     const roh = `A\n${S}\nalt1\nalt2\n${E}\nB\n${S}\nalt3\n${E}\nC\n`;
     assert.equal(lib.leereProjektwerte(roh), `A\n${S}\n${E}\nB\n${S}\n${E}\nC\n`);
     const ok = lib.rendereProjektwerte(roh, CONFIG);
@@ -277,6 +279,9 @@ describe("Grenzfälle der Lib", () => {
   });
   test("YAML-Schlüsselwörter und Zahlen als Wert werden zitiert", () => {
     const t = "---\n# factory:projektwert agenten.planer\nname: x\n---\n";
+    for (const wert of ["nobody", "agent2", "yes-agent"]) {
+      assert.equal(lib.rendereProjektwerte(t, { agenten: { planer: wert } }).split("\n")[2], `name: ${wert}`, wert);
+    }
     for (const wert of ["true", "null", "123", "No"]) {
       assert.equal(lib.rendereProjektwerte(t, { agenten: { planer: wert } }).split("\n")[2], `name: "${wert}"`, wert);
     }
