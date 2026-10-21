@@ -559,6 +559,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     selbstAudit: (e: Eingabe) => A[];
     auditAbschnitt: (a: A[]) => string[];
     ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[]) => unknown; repo?: string; config?: unknown }) => { commits: unknown[] | null; commitsLuecke?: string; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
+    configOderFehler: (lade?: () => unknown) => { config: unknown; configFehler?: string };
     erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]>; auditLader?: (e: { bis: string }) => Eingabe }) => { bericht: { audit?: A[] }; exit: number };
     renderMarkdown: (b: unknown) => string;
   };
@@ -713,7 +714,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     const geladen = S.configOderFehler(() => { throw new Error("agenten.planer fehlt"); });
     expect(geladen).toEqual({ config: null, configFehler: "agenten.planer fehlt" });
     expect(S.configOderFehler(() => ({ x: 1 }))).toEqual({ config: { x: 1 } });
-    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", ...geladen } as never);
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", ...geladen });
     expect(d.harnessIssues ?? null).toBeNull();
     expect(d.harnessLuecke).toBe("Projekt-Config nicht ladbar: agenten.planer fehlt");
     expect(d.commits).toHaveLength(1);
