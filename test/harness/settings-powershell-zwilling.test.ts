@@ -38,7 +38,7 @@ describe.each<Art>(["deny", "ask"])("jede Bash-%s-Regel hat einen PowerShell-Zwi
   const ausnahmen = OHNE_ZWILLING[art];
 
   test(`es gibt Bash-${art}-Regeln (der Wächter prüft nicht ins Leere)`, () => {
-    assert.ok(befehle.length >= 10,`nur ${befehle.length} Bash-${art}-Regeln gefunden`);
+    assert.ok(befehle.length >= 10, `nur ${befehle.length} Bash-${art}-Regeln gefunden`);
   });
 
   test.each(befehle)("%s", (befehl) => {

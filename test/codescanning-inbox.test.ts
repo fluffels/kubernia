@@ -657,6 +657,13 @@ describe("main: --dry-run über Deps (#1837)", () => {
     expect(log.join("\n")).toContain("[dry-run]");
     expect(gepostet).toEqual([]);
   });
+  test("ladeConfig wird an den Start durchgereicht: eine nicht lesbare Config ist Exit 2 mit Meldung", async () => {
+    const { gepostet, log, deps } = aufbau();
+    const kaputt = { ...deps, ladeConfig: () => { throw new Error("kaputt"); } };
+    expect(await main([], kaputt)).toBe(2);
+    expect(log.join("\n")).toContain("Code-Scanning-Inbox: Projekt-Config nicht lesbar");
+    expect(gepostet).toEqual([]);
+  });
   test("ohne Flag: Zeile ins Sammelticket gepostet, kein [dry-run]", async () => {
     const { gepostet, log, deps } = aufbau();
     expect(await main([], deps)).toBe(0);
