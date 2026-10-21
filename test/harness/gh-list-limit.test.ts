@@ -16,6 +16,11 @@ import { describe, expect, test } from "vitest";
 
 const WURZEL = process.cwd();
 
+/** Alle Skriptdateien unter scripts/ samt Unterordnern (relativ zu scripts/); der Test unten prüft genau diese Liste. */
+function skriptDateien(): string[] {
+  return readdirSync(join(WURZEL, "scripts"), { recursive: true, encoding: "utf8" }).filter((n) => /\.(mjs|cjs|js)$/.test(n));
+}
+
 /** Pur: Zeilen eines Workflow-Texts mit `gh issue|pr list` ohne `--limit` (Fortsetzungszeilen mit `\` zusammengefügt). */
 function ohneLimitImWorkflow(text: string): string[] {
   const zusammen = text.replace(/\\\r?\n\s*/g, " ");
@@ -78,14 +83,13 @@ describe("gh list: jeder Aufruf im Repo trägt --limit (#1787 L7)", () => {
     expect(fehler).toEqual([]);
   });
 
-  test("scripts/: die Dateiliste enthält auch Unterordner (docs-gen)", () => {
-    const dateien = readdirSync(join(WURZEL, "scripts"), { recursive: true, encoding: "utf8" });
-    expect(dateien.some((n) => /[\\/]/.test(n) && /\.mjs$/.test(n))).toBe(true);
+  test("scripts/: die Dateiliste des Tests enthält auch Unterordner (docs-gen)", () => {
+    expect(skriptDateien().some((n) => /[\\/]/.test(n))).toBe(true);
   });
 
   test("scripts/: kein \"issue\"/\"pr\", \"list\" ohne \"--limit\"", () => {
     const dir = join(WURZEL, "scripts");
-    const dateien = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((n) => /\.(mjs|cjs|js)$/.test(n));
+    const dateien = skriptDateien();
     const fehler = dateien.flatMap((n) => ohneLimitImSkript(readFileSync(join(dir, n), "utf8")).map((z) => `${n}: ${z}`));
     expect(fehler).toEqual([]);
   });
