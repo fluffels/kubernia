@@ -10,6 +10,10 @@ describe("medianAus (Perf-Smoke, #1821)", () => {
   test("ein Ausreißer nach unten kippt den Median nicht", () => {
     expect(medianAus([60, 3, 58])).toBe(58);
   });
+  test("gerade Anzahl: der untere der beiden mittleren Werte", () => {
+    expect(medianAus([60, 20])).toBe(20);
+    expect(medianAus([10, 40, 30, 20])).toBe(20);
+  });
   test("leere Liste ist ein Fehler, kein stilles NaN", () => {
     expect(() => medianAus([])).toThrow();
   });
@@ -27,6 +31,9 @@ describe("anlaufMedian: nur Proben innerhalb von Phasers Anlauf zählen", () => 
   });
   test("Grenzwert: genau 120 Frames zählt noch zum Anlauf", () => {
     expect(anlaufMedian([{ fps: 44, frames: 120 }], 120)).toBe(44);
+  });
+  test("zwei Proben im Anlauf: der untere Wert, nicht der Mittelwert", () => {
+    expect(anlaufMedian([{ fps: 60, frames: 40 }, { fps: 20, frames: 80 }], 120)).toBe(20);
   });
   test("keine Probe im Anlauf: null (der Anlauf-Boden greift dann nicht)", () => {
     expect(anlaufMedian([{ fps: 38, frames: 154 }], 120)).toBeNull();

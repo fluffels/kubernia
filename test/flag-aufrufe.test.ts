@@ -338,6 +338,9 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["haupt-sync", ["x"], 2, "haupt-sync: Unbekanntes Argument: x"],
     ["mermaid-vorschau", ["a.md", "b.md", "--mermaid", "x"], 2, "genau eine Markdown-Datei erwartet"],
     ["mermaid-vorschau", ["a.md", "--mermaid", "x", "--port", "abc"], 2, "--port erwartet eine Portnummer, nicht abc"],
+    ["mermaid-vorschau", ["a.md", "--mermaid", "x", "--port", "65536"], 2, "--port erwartet eine Portnummer, nicht 65536"],
+    ["mermaid-vorschau", ["a.md", "--mermaid", "x", "--port=-1"], 2, "--port erwartet eine Portnummer, nicht -1"],
+    ["mermaid-vorschau", ["--mermaid", "x"], 2, "genau eine Markdown-Datei erwartet"],
     ["projekt-config", ["repo", "zwei"], 2, "✖ Unbekanntes Argument: zwei"],
     ["projekt-config", [], 2, "✖ Schlüssel fehlt"],
     ["board-takt", ["--bogus"], 2, "board-takt: Unbekanntes Argument: --bogus"],
@@ -350,7 +353,14 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     expect(r.stdout).toBe("");
   });
 
-  const WIEDERHOLBAR: [string, string[], number, RegExp][] = [
+  test.concurrent("mermaid-vorschau: --port 65535 (Obergrenze) ist gültig, scheitert erst am fehlenden mermaid-Ordner", { timeout: 60_000 }, () => {
+    const r = starte("mermaid-vorschau", ["a.md", "--mermaid", "x", "--port", "65535"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("mermaid fehlt unter");
+    expect(r.stderr).not.toContain("--port erwartet");
+  });
+
+  const WIEDERHOLBAR:[string, string[], number, RegExp][] = [
     ["kontext-treiber", ["--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4"], 2, /^Aufruf: node scripts\/kontext-treiber\.mjs/],
     ["subagent-laufzeit", ["--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4"], 2, /^Aufruf: node scripts\/subagent-laufzeit\.mjs/],
     ["lauf-ergebnis", ["--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4"], 1, /^Aufruf: node scripts\/lauf-ergebnis\.mjs/],
