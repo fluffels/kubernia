@@ -167,6 +167,7 @@ describe("Platzhalter: Rot-Fälle", () => {
     rot(ALLE_CHECKS, /requiredChecks muss eine nicht leere Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: [] }) }));
     rot(ALLE_CHECKS, /requiredChecks muss eine nicht leere Liste aus Texten/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: ["a", 3] }) }));
     assert.throws(() => ersetze(ALLE_CHECKS, basis({ ".factory/projekt.json": "{}" })), /rulesetSpiegel fehlt[\s\S]*Fix:/);
+    for (const leer of ["", "  "]) assert.throws(() => ersetze(ALLE_CHECKS, basis({ ".factory/projekt.json": JSON.stringify({ rulesetSpiegel: leer }) })), /rulesetSpiegel fehlt[\s\S]*Fix:/);
     const ohneProjekt = basis();
     delete ohneProjekt[".factory/projekt.json"];
     assert.throws(() => ersetze(ALLE_CHECKS, ohneProjekt), /Projekt-Config fehlt/);

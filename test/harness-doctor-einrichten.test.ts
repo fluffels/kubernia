@@ -59,7 +59,8 @@ const neuerRoot = (workflow: string | null = WORKFLOW): string => {
 interface Welt { labels: string[]; over: Record<string, unknown>; postFehler: Set<string> }
 interface Ergebnis { code: number; out: string[]; err: string[]; posts: string[]; schreibend: string[]; sammel: string[][]; ghAufrufe: number }
 const welt = (labels = ["area:werk", "status:steckt", "forum"], over: Record<string, unknown> = {}): Welt => ({ labels, over, postFehler: new Set() });
-function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0): Ergebnis {
+const SCHON = "Ungeclaimtes „Harness-Härtung (gesammelt)“ gibt es schon: #1, nichts wird angelegt.\n";
+function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0, sammelAusgabe = SCHON): Ergebnis {
   const r: Ergebnis = { code: -1, out: [], err: [], posts: [], schreibend: [], sammel: [], ghAufrufe: 0 };
   const gh = (args: string[]): string => {
     r.ghAufrufe++;
@@ -72,14 +73,14 @@ function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0): Ergebni
       w.labels.push(name);
       return "{}";
     }
-    const antwort = k === LABEL_KEY ? [w.labels.map((name) => ({ name }))] : (w.over[k] ?? GESUND[k]);
+    const antwort = w.over[k] ?? (k === LABEL_KEY ? [w.labels.map((name) => ({ name }))] : GESUND[k]);
     if (antwort instanceof Error) throw antwort;
     if (antwort === undefined) throw new Error(`HTTP 404: ${k}`);
     return typeof antwort === "string" ? antwort : JSON.stringify(antwort);
   };
   const spawn = (args: string[]) => {
     r.sammel.push(args);
-    return { status: sammelStatus, stdout: "Ungeclaimtes „Harness-Härtung (gesammelt)“ gibt es schon: #1, nichts wird angelegt.\n", stderr: "" };
+    return { status: sammelStatus, stdout: sammelAusgabe, stderr: "" };
   };
   r.code = doctor.main(argv, { rootDir: root, gh, spawn, langfuse: () => assert.fail("Langfuse wird bei --einrichten nicht geprüft"), out: (s: string) => r.out.push(s), err: (s: string) => r.err.push(s) });
   return r;
@@ -165,6 +166,33 @@ describe("harness-doctor --einrichten", () => {
     assert.equal(r.code, 1);
     assert.ok(r.out.some((z) => z.startsWith('FEHLER Label "area:werk"')));
     assert.deepEqual(r.posts, ["forum"]);
+  });
+
+  test("das Sammelticket zählt: im Dry-Run „Würde … anlegen“ als geplant (Exit 1), im echten Lauf „Angelegt:“ als angelegt (Exit 0)", () => {
+    const geplant = fahre(neuerRoot(), welt(), EINR(neuerRoot(), "--dry-run"), 0, "Würde „Harness-Härtung (gesammelt)“ anlegen.\n");
+    assert.match(geplant.out.at(-1) ?? "", /: 0 angelegt, 2 geplant, /); // Workflow-Datei und Sammelticket
+    assert.ok(geplant.out.includes("Sammelticket: Würde „Harness-Härtung (gesammelt)“ anlegen."));
+    const root = neuerRoot();
+    const echt = fahre(root, welt(), EINR(root), 0, "Angelegt: #5\n");
+    assert.equal(echt.code, 0);
+    assert.match(echt.out.at(-1) ?? "", /: 2 angelegt, 0 geplant, /); // Workflow-Datei und Sammelticket
+  });
+
+  test("eine Anleitung ohne Link bleibt ohne „Link:“ (Labels nicht lesbar)", () => {
+    const root = neuerRoot();
+    const r = fahre(root, welt(undefined, { [LABEL_KEY]: new Error("HTTP 500") }), EINR(root));
+    const z = r.out.find((x) => x.startsWith("ANLEITUNG Labels:")) ?? "";
+    assert.match(z, /Fix: /);
+    assert.doesNotMatch(z, /Link:/);
+  });
+
+  test("eine Wochenlauf-Datei mit Windows-Zeilenenden gleicht der Vorlage (OK, kein HINWEIS)", () => {
+    const root = neuerRoot();
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(datei(root), doctor.WOCHENLAUF_WORKFLOW.replace(/\n/g, "\r\n"));
+    const r = fahre(root, welt(), EINR(root));
+    assert.ok(r.out.includes(`OK Workflow ${doctor.WOCHENLAUF_PFAD}`));
+    assert.equal(r.out.some((z) => z.startsWith("HINWEIS")), false);
   });
 
   test("ein fehlschlagendes Sammelticket ist FEHLER mit Exit 1", () => {
