@@ -13,7 +13,8 @@
  *
  * Grenzen: gescannt wird der Quelltext samt Kommentaren (ein Treffer im Kommentar ist ein Fund); transitive Importe
  * außerhalb von `scripts/cockpit/` prüft dieser Test nicht; ein nicht-literaler Modulname im require/import() gilt als
- * nicht prüfbar und ist verboten. Das ist eine Lint-Schranke gegen Versehen, keine Sandbox.
+ * nicht prüfbar und ist verboten. Bekannte Grenze: die Ausnahme für Unterprozesse gilt nur nach Dateiname (`lauf.mjs`),
+ * nicht nach Pfad; eine verschachtelte `quellen/lauf.mjs` wäre ebenfalls ausgenommen. Das ist eine Lint-Schranke gegen Versehen, keine Sandbox.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -90,6 +91,7 @@ describe("Cockpit bleibt nur lesend (ADR 0029 (d))", () => {
         'const { spawn } = require("node:child_process");',
         'const m = await import("child_process");',
         'export { spawn } from "node:child_process";',
+        'import "node:child_process";',
       ]) assert.equal(verstoesse("seite.mjs", q).length, 1, q);
     });
 
