@@ -8,6 +8,7 @@
  *   3. Kein Ablauf-Werkzeug (Agent-Spawn, Skripte des Ablaufs) steht in einer Ticket-Skill-Datei.
  *   4. Kein Satz von 60 oder mehr Zeichen aus dem Ablauf steht wortgleich in einer anderen Skill-Datei.
  *   5. Die Auslöser der beiden `description:` überschneiden sich nicht.
+ *   6. Ein Ticket-Skill bleibt Einstieg: keine Unterüberschrift, nur die fetten Absätze „Bereich“ und „Lies … ablauf.md“, Rumpf höchstens 900 Zeichen.
  * Bekannte Grenze: eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich.
  */
 import assert from "node:assert/strict";
@@ -39,6 +40,21 @@ export function doppelterAblauf(ablauf: string, dateien: Record<string, string>)
     const n = norm(text);
     for (const s of saetze) if (n.includes(s)) out.push(`${pfad}: ${s.slice(0, 60)}`);
   }
+  return out;
+}
+
+const MAX_RUMPF = 900;
+const ERLAUBTE_FETTE_ABSAETZE = ["**Bereich:", "**Lies `.claude/skills/factory/ablauf.md`"];
+
+/** Abweichungen eines Ticket-Skills von der Einstiegsform (Rumpf nach dem Frontmatter). */
+export function einstiegAbweichungen(skillText: string): string[] {
+  const rumpf = skillText.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  const out: string[] = [];
+  for (const zeile of rumpf.split(/\r?\n/)) {
+    if (/^#{2,}\s/.test(zeile)) out.push(`Unterüberschrift: ${zeile.slice(0, 40)}`);
+    if (zeile.startsWith("**") && !ERLAUBTE_FETTE_ABSAETZE.some((p) => zeile.startsWith(p))) out.push(`fetter Absatz: ${zeile.slice(0, 40)}`);
+  }
+  if (rumpf.length > MAX_RUMPF) out.push(`Rumpf ${rumpf.length} > ${MAX_RUMPF} Zeichen`);
   return out;
 }
 
@@ -82,6 +98,16 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
   });
   test("Satz unter 60 Zeichen wird nicht gemeldet", () => {
     assert.deepEqual(doppelterAblauf("Kurzer Satz hier.", { "a.md": "Kurzer Satz hier." }), []);
+  });
+  test("Einstiegsform: Unterüberschrift, fremder fetter Absatz und zu langer Rumpf werden gemeldet", () => {
+    const kopf = "---\nname: x\n---\n\n# Titel\n\n**Bereich: `spiel`.** Text.\n";
+    assert.deepEqual(einstiegAbweichungen(kopf), []);
+    assert.equal(einstiegAbweichungen(kopf + "\n## Umsetzer\n\nDer Umsetzer wird ohne Planer gestartet.\n").length, 1);
+    assert.equal(einstiegAbweichungen(kopf + "\n**Der Umsetzer wird ohne Planer gestartet.**\n").length, 1);
+    assert.equal(einstiegAbweichungen(kopf + "\n**Lies `.claude/skills/factory/ablauf.md` und folge ihm.**\n").length, 0);
+    assert.equal(einstiegAbweichungen(kopf + "x".repeat(MAX_RUMPF)).length, 1);
+    assert.equal(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF)).length, 0);
+    assert.equal(einstiegAbweichungen("---\r\nname: x\r\n---\r\n## A\r\n").length, 1);
   });
   test("Satzgrenze: genau 60 Zeichen werden gemeldet, 59 nicht", () => {
     const s60 = "a".repeat(60);
@@ -128,6 +154,9 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     assert.ok(!lies(PRODUKT).includes("--bereich agentic"));
     assert.ok(lies(FACTORY).includes("--bereich agentic"));
     assert.ok(!lies(FACTORY).includes("--bereich spiel"));
+  });
+  test("jeder Ticket-Skill bleibt in Einstiegsform", () => {
+    for (const skill of [PRODUKT, FACTORY]) assert.deepEqual(einstiegAbweichungen(lies(skill)), [], skill);
   });
   test("keine Ablauf-Werkzeuge in den Ticket-Skills", () => {
     for (const skill of [PRODUKT, FACTORY]) assert.deepEqual(ablaufSignaturen(lies(skill)), [], skill);
