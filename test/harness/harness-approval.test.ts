@@ -530,11 +530,11 @@ function festeStoppsFehlend(agentsText: string): string[] {
 
 type Permissions = { permissions: { ask: string[]; deny: string[] } };
 
-/** Permission-Regeln für feste Stopps, die in `ask` bzw. `deny` fehlen (Bash- und PowerShell-Schreibweise). */
+/** Permission-Regeln für feste Stopps, die in `ask` bzw. `deny` fehlen (Bash-Schreibweise; die PowerShell-Zwillinge erzwingt settings-powershell-zwilling.test.ts für deny und ask). */
 function fehlendeRiegel(settings: Permissions): string[] {
   const soll: Record<"ask" | "deny", string[]> = {
-    ask: ["Bash(gh issue delete:*)", "PowerShell(gh issue delete *)"],
-    deny: ["Bash(npm publish:*)", "PowerShell(npm publish *)", "Bash(gh repo delete:*)", "PowerShell(gh repo delete *)"],
+    ask: ["Bash(gh issue delete:*)"],
+    deny: ["Bash(npm publish:*)", "Bash(gh repo delete:*)"],
   };
   return (["ask", "deny"] as const).flatMap((art) => soll[art].filter((e) => !settings.permissions[art].includes(e)).map((e) => `${art}: ${e}`));
 }
@@ -543,8 +543,8 @@ describe("Feste Stopps bleiben (#1363)", () => {
   const agents = read("AGENTS.md");
 
   test("die Soll-Listen sind festgenagelt (ein geleerter Wächter wäre sonst vakuös)", () => {
-    assert.equal(FESTE_STOPPS.length, 5);
-    assert.equal(fehlendeRiegel({ permissions: { ask: [], deny: [] } }).length, 6);
+    assert.deepEqual(FESTE_STOPPS, ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen", "Forum-Antwort", "PixelLab-Key"]);
+    assert.deepEqual(fehlendeRiegel({ permissions: { ask: [], deny: [] } }), ["ask: Bash(gh issue delete:*)", "deny: Bash(npm publish:*)", "deny: Bash(gh repo delete:*)"]);
   });
 
   test("der Block `stopps` der AGENTS.md trägt jeden festen Stopp", () => {
@@ -570,7 +570,7 @@ describe("Feste Stopps bleiben (#1363)", () => {
     assert.match(skill, /Nie ungefragt posten/);
   });
 
-  test("Permissions: Löschen im ask, Veröffentlichen und Repo-Löschen im deny, je für Bash und PowerShell", () => {
+  test("Permissions: Löschen im ask, Veröffentlichen und Repo-Löschen im deny", () => {
     const settings = JSON.parse(read(".claude/settings.json")) as Permissions;
     assert.deepEqual(fehlendeRiegel(settings), []);
   });
