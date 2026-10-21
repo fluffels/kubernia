@@ -10,7 +10,11 @@ const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => u
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as hcModule from "../scripts/hauptchat-zerlegung.mjs";
+import * as hcRoh from "../scripts/hauptchat-zerlegung.mjs";
+
+// Der Repo-Name (Schlüssel der eigenen Subagenten im Ergebnis) kommt aus der Projekt-Config; der Wrapper reicht ihn an renderMarkdown durch.
+const REPO_NAME = (projektRaw as unknown as { repoName: (c: unknown) => string }).repoName(ladeProjektConfig());
+const hcModule = { ...(hcRoh as object), renderMarkdown: (r: unknown) => (hcRoh as unknown as { renderMarkdown: (r: unknown, o: object) => string }).renderMarkdown(r, { repoName: REPO_NAME }) };
 
 type Row = Record<string, unknown>;
 type Zeile = { kategorie: string; quelle: string; modell: string; calls: number; cost: number };

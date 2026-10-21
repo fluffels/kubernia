@@ -1,7 +1,20 @@
 /* Kontext-Treiber (#1559): Kern pur, synthetische Transkriptzeilen ohne IO. */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as raw from "../scripts/kontext-treiber.mjs";
+import * as kontextRoh from "../scripts/kontext-treiber.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRoh from "../scripts/ticket-namen.mjs";
+
+// Die Namen kommen aus der Projekt-Config; die Wrapper reichen sie an die Kern-Funktionen durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const NAMEN = (namenRoh as unknown as { ladeTicketNamen: () => unknown }).ladeTicketNamen();
+const kontextModul = kontextRoh as unknown as { kontextTreiber: (e: object) => unknown; analysiereLauf: (l: unknown, o?: object) => unknown; phaseDerCalls: (z: unknown, einstieg: unknown, namen: unknown) => unknown; parseArgs: (a: string[], namen: unknown) => unknown };
+const raw = {
+  ...(kontextRoh as object),
+  kontextTreiber: (e: object) => kontextModul.kontextTreiber({ namen: NAMEN, ...e }),
+  analysiereLauf: (l: unknown) => kontextModul.analysiereLauf(l, { namen: NAMEN }),
+  phaseDerCalls: (z: unknown) => kontextModul.phaseDerCalls(z, null, NAMEN),
+  parseArgs: (a: string[]) => kontextModul.parseArgs(a, NAMEN),
+};
 
 type Row = Record<string, unknown>;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[] };

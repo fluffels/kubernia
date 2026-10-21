@@ -30,7 +30,8 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ladeCommitZeilen } from "./slice-override.mjs";
+import { commitZeilenAus, ladeCommitZeilen } from "./slice-override.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
@@ -166,8 +167,10 @@ function unpricedModels(calls) {
  *   questions: Anzahl AskUserQuestion-Aufrufe
  * Review-Runden zählen nur Subagenten mit Calls IM Ticket-Fenster — sonst
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
+ * `umsetzer` (Agentenname des Umsetzers, `agenten.umsetzer` der Projekt-Config) ist mit Tool-Events Pflicht: er erkennt den Ticketlauf ohne Pflege-Marker.
  */
-export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null) {
+export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null, { umsetzer } = {}) {
+  if (events && (typeof umsetzer !== "string" || umsetzer === "")) throw new Error("summarize braucht mit Tool-Events den Umsetzer-Namen (agenten.umsetzer der Projekt-Config)");
   // Events vor `--from` (früheres Ticket derselben Session) und nach dem Merge zählen nicht (auch nicht die Pflege-Marker).
   const imFenster = (events ?? []).filter((e) => fensterLage(e.ts, bounds) === "ticket");
   const { intervals, unpaired } = events ? pflegeIntervals(imFenster) : { intervals: [], unpaired: 0 };
@@ -202,7 +205,7 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     out.lesen = wiederlesen(imFenster);
     out.pruef = pruefLaeufe(imFenster);
     // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
-    out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && ticket.some((c) => c.subagent?.agentType === "kubernia-umsetzer");
+    out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && ticket.some((c) => c.subagent?.agentType === umsetzer);
     out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
   }
   return out;
@@ -477,8 +480,8 @@ function werkzeugZeilen(summary) {
   return out;
 }
 
-/** Markdown-Report (Tabelle Phase × Modell + Loop-Zeile). */
-export function renderMarkdown(summary, loop = {}) {
+/** Markdown-Report (Tabelle Phase × Modell + Loop-Zeile). `planZeile` ist der Schlüssel der Plan-Zeile (`commitZeilen(config).plan`), Pflicht bei einem Nachweis mit Planer-Angabe. */
+export function renderMarkdown(summary, loop = {}, { planZeile } = {}) {
   const cost = (v) => (summary.hasCost ? v.toFixed(2) : "–");
   const lines = [
     "| Phase | Modell | Calls | Input | Cache-Write | Cache-Read | Output | Kosten $ |",
@@ -531,7 +534,8 @@ export function renderMarkdown(summary, loop = {}) {
   if (summary.unpriced > 0) lines.push(ohnePreisZeile(summary));
   const nw = loop.nachweis;
   const runden = nw ? `${nw.runden} (Nachweis)` : `${summary.reviewRounds} (Heuristik)`;
-  const planer = nw && nw.plan !== null ? ` · Planer: ${nw.plan ? "ja" : "nein"} (KQ-Plan)` : "";
+  if (nw && nw.plan !== null && !planZeile) throw new Error("renderMarkdown braucht planZeile (Commit-Zeile der Projekt-Config) für die Planer-Angabe");
+  const planer = nw && nw.plan !== null ? ` · Planer: ${nw.plan ? "ja" : "nein"} (${planZeile})` : "";
   lines.push(
     "",
     `Review-Runden: ${runden} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne CI-Fix: ${merged}${planer}`,
@@ -589,7 +593,7 @@ async function loadRun(args) {
  * Eine Session aus Langfuse: Calls aus den GENERATIONs, Tool-Events in zwei Stufen. Stufe 1 holt alle TOOL-Observations schlank
  * (Name, Zeit, `orig_len`), Stufe 2 die Eingabe (`io`; v2 liefert sie nur samt Ausgabe) nur für die Tools aus `EINGABE_TOOLS`.
  * Die Namen für Stufe 2 kommen aus Stufe 1 (`metadata.tool_name` → tatsächlicher Span-Name): der Hook hängt Datei-Tools einen
- * Bereichs-Qualifier an (`Tool: Read [Kubernia-Doku]`), ein fester Name träfe sie nie. `fetchImpl` ist für Tests injizierbar.
+ * Bereichs-Qualifier an (`Tool: Read [<Bereich>]`), ein fester Name träfe sie nie. `fetchImpl` ist für Tests injizierbar.
  */
 export async function ladeLangfuseSession(sessionId, opts) {
   const observations = await fetchSessionObservations(sessionId, opts);
@@ -618,17 +622,19 @@ ${AUFRUF}`);
     console.error(AUFRUF);
     process.exit(AUFRUF_EXIT);
   }
+  const config = ladeProjektConfig();
+  const zeilen = commitZeilenAus(config);
   const run = await loadRun(args);
-  const loop = args.pr ? prInfo(args.pr) : {};
+  const loop = args.pr ? prInfo(args.pr, zeilen) : {};
   const bounds = {
     from: args.from,
     claimAt: args.issue ? claimAt(args.issue) : undefined,
     prCreatedAt: loop.prCreatedAt,
     mergedAt: loop.mergedAt,
   };
-  const summary = summarize(run, bounds, loop.files ?? null);
+  const summary = summarize(run, bounds, loop.files ?? null, { umsetzer: config.agenten.umsetzer });
   if (args.json) console.log(JSON.stringify({ bounds, loop, ...summary }, null, 2));
-  else console.log(renderMarkdown(summary, loop));
+  else console.log(renderMarkdown(summary, loop, { planZeile: zeilen.plan }));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

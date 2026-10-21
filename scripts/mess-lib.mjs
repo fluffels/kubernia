@@ -32,8 +32,8 @@ export function istNeuaufbau({ gapMs, pauseMs, call }) {
 }
 
 
-/** Kern des Worktree-Pfads `/.claude/worktrees/kq-<nr>…` (Regex-Quelltext): `bereinige` und `normPfad` nutzen dieselbe Regel. */
-const WORKTREE_KERN = String.raw`/\.claude/worktrees/kq-\d+[\w-]*`;
+/** Kern des Worktree-Pfads `/.claude/worktrees/<Worktree-Präfix><nr>…` (Regex-Quelltext) zum Präfix aus der Projekt-Config: `bereinige` und `normPfad` nutzen dieselbe Regel. */
+const worktreeKern = (worktree) => String.raw`/\.claude/worktrees/${escapeRegex(worktree)}\d+[\w-]*`;
 
 /** Beide Schreibweisen einer Repo-Wurzel (`C:/x/y` und Git-Bash `/c/x/y`) als Regex-Alternativen. */
 function wurzelVarianten(wurzel) {
@@ -48,26 +48,29 @@ function wurzelVarianten(wurzel) {
 }
 
 /**
- * Pfad vergleichbar machen: Schrägstriche, klein, ohne Worktree-Präfix `…/worktrees/kq-<nr>…/` und ohne die Repo-Wurzel (beide
+ * Pfad vergleichbar machen: Schrägstriche, klein, ohne Worktree-Pfad `…/worktrees/<Worktree-Präfix><nr>…/` und ohne die Repo-Wurzel (beide
  * Schreibweisen aus `wurzelVarianten`, auch mit Backslash oder abschließendem Schrägstrich). Pfade außerhalb der Wurzel bleiben stehen.
+ * `worktree` ist das Worktree-Präfix der Projekt-Config (`praefixe.worktree`); ohne Angabe entfällt nur die Worktree-Ersetzung (wie bei `wurzel`).
  */
-export function normPfad(pfad, { wurzel = null } = {}) {
-  const p = String(pfad).replace(/\\/g, "/").replace(new RegExp(`^.*?${WORKTREE_KERN}/`, "i"), "").toLowerCase();
+export function normPfad(pfad, { wurzel = null, worktree = null } = {}) {
+  const ohneBackslash = String(pfad).replace(/\\/g, "/");
+  const p = (worktree ? ohneBackslash.replace(new RegExp(`^.*?${worktreeKern(worktree)}/`, "i"), "") : ohneBackslash).toLowerCase();
   const praefix = wurzelVarianten(wurzel ?? "").map((v) => `${v.toLowerCase()}/`).find((w) => p.startsWith(w));
   return praefix ? p.slice(praefix.length) : p;
 }
 
 /**
- * Pfade und Befehle ohne Benutzerordner, Worktree-Präfix und Repo-Wurzel (das Repo ist öffentlich). Die Wurzel kommt von
+ * Pfade und Befehle ohne Benutzerordner, Worktree-Pfad und Repo-Wurzel (das Repo ist öffentlich). Die Wurzel kommt von
  * außen (`git rev-parse --git-common-dir`, ohne `.git`), nie fest verdrahtet; beide Schreibweisen (`C:/…`, `/c/…`), mit und
- * ohne abschließenden Schrägstrich. Ohne `wurzel` bleibt nur die Wurzel-Ersetzung aus.
+ * ohne abschließenden Schrägstrich. Das Worktree-Präfix (`worktree`) kommt aus der Projekt-Config. Ohne `wurzel` bleibt nur die
+ * Wurzel-Ersetzung aus, ohne `worktree` nur die Worktree-Ersetzung.
  */
-export function bereinige(text, { wurzel = null } = {}) {
+export function bereinige(text, { wurzel = null, worktree = null } = {}) {
   let t = String(text)
     .replace(/\\/g, "/")
     .replace(/[A-Za-z]:\/Users\/[^/\s"']+/g, "~")
-    .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~")
-    .replace(new RegExp(`\\S*${WORKTREE_KERN}(?:/|(?=\\s|$))`, "g"), "<wt>/");
+    .replace(/\/[a-z]\/Users\/[^/\s"']+/gi, "~");
+  if (worktree) t = t.replace(new RegExp(`\\S*${worktreeKern(worktree)}(?:/|(?=\\s|$))`, "g"), "<wt>/");
   const varianten = wurzel ? wurzelVarianten(wurzel) : [];
   if (varianten.length) t = t.replace(new RegExp(`(?:${varianten.map(escapeRegex).join("|")})(?:/|(?=[\\s"']|$))`, "gi"), "<repo>/");
   return t.replace(/\s+/g, " ");

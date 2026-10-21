@@ -10,7 +10,7 @@
  * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
  * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
  * vertrauten Issues, wenn der neue Body vollständig ist und keine Zeile des alten verliert (`verloreneZeilen`); ein Fremdeingang
- * (Autor nicht vertraut oder Label `forum`) wird nie umgeschrieben. Der Body wird nie ausgegeben, nur Mängel und verlorene Zeilen.
+ * (Autor nicht vertraut oder Forum-Label der Projekt-Config) wird nie umgeschrieben. Der Body wird nie ausgegeben, nur Mängel und verlorene Zeilen.
  *
  * Exit 0 = angelegt/repariert/nichts zu tun/vollständig, 1 = Spezifikation unvollständig oder Inhaltsverlust (nichts geschrieben),
  * 2 = Aufruf- oder gh-Fehler (scheitert nach dem Anlegen nur das Einsortieren: Nummer und Nachhol-Befehl), 3 = Fremdeingang (nur `reparieren`).
@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
@@ -135,7 +135,7 @@ function reparieren(werte, nrText, io) {
   }
   if (issue.pull_request) return aufrufFehler(`#${nr} ist ein PR`);
   if (issue.state !== "open") return aufrufFehler(`#${nr} ist nicht offen`);
-  if (istFremdeingang(issue, io.owner, { config: io.config }).fremdeingang) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label forum): wird nie umgeschrieben, als Befund melden\n`);
+  if (istFremdeingang(issue, io.owner, { config: io.config }).fremdeingang) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label ${labelAus(io.config, "forum")}): wird nie umgeschrieben, als Befund melden\n`);
   if ((issue.assignees ?? []).length > 0) return aufrufFehler(`#${nr} hat einen Assignee (wird schon bearbeitet), nicht umschreiben`);
   if (spezifikationsMaengel(issue.body).length === 0) return ergebnis(0, `#${nr}: Spezifikation schon vollständig, nichts zu tun\n`);
   const maengel = spezifikationsMaengel(b.body);

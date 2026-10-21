@@ -108,6 +108,14 @@ export function labelAus(config, schluessel) {
   return wert;
 }
 
+/** Pur: der Namensteil von `repo` (`owner/name` → `name`); wirft mit Fix-Zeile, wenn `repo` nicht diese Form hat (kein stiller Standardwert, #1745). */
+export function repoName(config) {
+  const repo = config?.repo;
+  const m = typeof repo === "string" ? /^[^/\s]+\/([^/\s]+)$/.exec(repo) : null;
+  if (!m) throw new Error(`repo fehlt oder hat nicht die Form owner/name in ${PROJEKT_CONFIG}\nFix: den Schlüssel repo in ${PROJEKT_CONFIG} als owner/name eintragen`);
+  return m[1];
+}
+
 /** Pur: prüft `labels`: die Pflichtschlüssel und alle weiteren Werte sind nicht-leere Strings. */
 function pruefeLabels(l) {
   if (!istObjekt(l)) return [`labels muss ein Objekt (Name → String) mit den Pflichtschlüsseln ${PFLICHT_LABELS.join(", ")} sein`];

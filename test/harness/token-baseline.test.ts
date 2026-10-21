@@ -71,17 +71,17 @@ type Obs = {
 };
 
 /** Modul-Form EINMAL deklarieren und genau hier casten (Muster wie cleanup-worktrees.test.ts). */
-const m = baselineModule as {
+const mRoh = baselineModule as {
   classifySubagent: (agentType?: string, description?: string) => string | null;
   classifyMainByTime: (ts: string, bounds?: Bounds) => string;
   countReviewRounds: (descriptions: string[]) => number;
-  summarize: (run: Run & { events?: PEv[] }, bounds?: Bounds) => Summary & { pflegeUnpaired?: number };
+  summarize: (run: Run & { events?: PEv[] }, bounds?: Bounds, prFiles?: unknown, namen?: { umsetzer: string }) => Summary & { pflegeUnpaired?: number };
   toolAgentResolver: (obs: Obs[]) => (o: Obs) => string | null;
   callsFromTranscript: (jsonl: string, subagent?: Sub | null) => { calls: Call[]; questions: number };
   readTranscriptSession: (sessionId: string, projectsRoot: string) => { calls: Call[]; questions: number };
   callsFromLangfuse: (obs: Obs[]) => Run & { questions: number };
   mergedWithoutRework: (mergedAt: string | null | undefined, failedPushes: number) => boolean;
-  renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null; nachweis?: { runden: number; plan: boolean | null } | null }) => string;
+  renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null; nachweis?: { runden: number; plan: boolean | null } | null }, namen?: { planZeile?: string }) => string;
   priceCall: (c: Call, prices?: unknown) => number | null;
   priceParts: (c: Call, prices?: unknown) => Parts | null;
   windowCalls: (calls: Call[], bounds?: Bounds, intervals?: { agent: string | null; from: string; to: string }[]) => { call: Call; phase: string }[];
@@ -102,6 +102,15 @@ const m = baselineModule as {
     sessionId: string,
     opts: { baseUrl: string; publicKey: string; secretKey: string; fetchImpl: typeof fetch },
   ) => Promise<Obs[]>;
+};
+
+// Umsetzer-Name und Plan-Zeile kommen aus der Projekt-Config; die Wrapper reichen sie durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const UMSETZER = "kubernia-umsetzer";
+const PLAN_ZEILE = (commitZeilen("KQ-", "kubernia-planner") as { plan: string }).plan;
+const m: typeof mRoh = {
+  ...mRoh,
+  summarize: (run, bounds) => mRoh.summarize(run, bounds, null, { umsetzer: UMSETZER }),
+  renderMarkdown: (s, loop) => mRoh.renderMarkdown(s, loop, { planZeile: PLAN_ZEILE }),
 };
 
 const BOUNDS: Bounds = {

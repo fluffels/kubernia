@@ -4,7 +4,7 @@
  * Liest ein Issue (`--issue <nr>`) oder einen PR (`--pr <nr>`) samt Kommentaren und gibt vertrauten Text
  * (Repo-Owner, `github-actions[bot]`, `dependabot[bot]`, je mit REST-Typ `Bot`) unverändert aus. Jeder Text
  * anderer Autoren wird zu einem Platzhalter mit Autor und URL; Titel und Body eines fremden Eintrags
- * verschwinden ganz. Ein Eintrag mit Label `forum` gilt als Fremdeingang (Text Dritter über die Discussions),
+ * verschwinden ganz. Ein Eintrag mit dem Forum-Label der Projekt-Config (`labels.forum`) gilt als Fremdeingang (Text Dritter über die Discussions),
  * auch wenn die Action ihn anlegte. Die Prüfung ist deterministisch (Autor), kein Sanitizing beliebiger Bodies.
  *
  *   node scripts/fremdtext.mjs --issue <nr> | --pr <nr>

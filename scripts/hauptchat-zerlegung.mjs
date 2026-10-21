@@ -9,8 +9,8 @@
  * Ticket-Orchestrierung (vom Claim-Turn bis `closedAt`), Nachlauf (nach dem Merge bis zum nächsten Claim),
  * Ad-hoc. Turn = Nutzerzeile (kein tool_result, keine Benachrichtigung); Benachrichtigungs-Turns bleiben im Turn davor.
  * Kennzahlen der Ticket-Orchestrierung (#1557): Zeile `Modellanteil` (Sonnet-Anteil, Median je Fenster) und Zeile `TTL` (1h-Ist gegen 5m-Simulation).
- * Calls ohne gültigen Zeitstempel stehen in „ohne Zeit“. kubernia-Subagenten und verschachtelte zählen nicht zum
- * Hauptchat (ihre Zeile nennt Kosten und Output auch geschätzt, `costGeschaetzt`/`outputGeschaetzt` aus der Output-Schätzung, #1568; die Tabelle führt je Zeile `Kosten geschätzt`); andere Subagenten (Forks) folgen der Kategorie des Turns, in dem sie starten (eigene Quelle „Fork“).
+ * Calls ohne gültigen Zeitstempel stehen in „ohne Zeit“. Ticketlauf-Subagenten (Planer, Umsetzer, Lens, Gruppe aus `agenten` der Projekt-Config) und verschachtelte zählen nicht zum
+ * Hauptchat (ihre Zeile heißt `<Repo-Name>-Subagenten (nicht Hauptchat)`, der JSON-Schlüssel ist der Repo-Name aus `repo`; sie nennt Kosten und Output auch geschätzt, `costGeschaetzt`/`outputGeschaetzt` aus der Output-Schätzung, #1568; die Tabelle führt je Zeile `Kosten geschätzt`); andere Subagenten (Forks) folgen der Kategorie des Turns, in dem sie starten (eigene Quelle „Fork“).
  *
  * Pur und ohne IO bis auf das CLI (liest `~/.claude/projects`, fragt `gh`); der Kern ist getestet.
  */
@@ -21,20 +21,25 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
-import { KERN_TICKET_SKILL } from "./projekt-config-lib.mjs";
+import { KERN_TICKET_SKILL, repoName } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
 /**
- * Die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill` der Projekt-Config und der Kern-Skill, #1806): ihr Aufruf (Slash oder Skill-Tool) ist ein Ticketlauf.
+ * Die Namen der Zerlegung aus der Projekt-Config: die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill` und der Kern-Skill, #1806; ihr Aufruf per Slash oder
+ * Skill-Tool ist ein Ticketlauf), die Menge der Ticketlauf-Agenten (`agenten.planer|umsetzer|lens|gruppe`) und der Repo-Name (Schlüssel und Label der eigenen Subagenten).
  * Wirft mit Grund, wenn die Config nicht nutzbar ist (Datenfehler statt falscher Zählung). `deps.config` ersetzt das Laden (Test).
  */
-export function ticketSkillsAusConfig(deps = {}) {
+export function hauptchatNamen(deps = {}) {
   const r = namenOderGrund("hauptchat-zerlegung", deps);
   if (r.grund) throw new Error(r.grund);
-  return [r.namen.agenten.ticketSkill, KERN_TICKET_SKILL];
+  const { planer, umsetzer, lens, gruppe, ticketSkill } = r.namen.agenten;
+  return { ticketSkills: [ticketSkill, KERN_TICKET_SKILL], ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: repoName(r.config), config: r.config };
 }
+
+/** Die Ticket-Skills aus der Projekt-Config (siehe `hauptchatNamen`). */
+export const ticketSkillsAusConfig = (deps = {}) => hauptchatNamen(deps).ticketSkills;
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
@@ -116,10 +121,10 @@ function claimsAus(events, turnVon) {
 }
 
 /**
- * kubernia-Subagent im Sinn der Zerlegung: ein verschachtelter Agent (`parentAgentId`) oder ein `agentType` mit dem Präfix `kubernia-`
- * (Planer, Umsetzer, Lens). Explore und andere Subagenten, die der Hauptchat selbst startet, sind Arbeit des Hauptchats (Forks).
+ * Ticketlauf-Subagent im Sinn der Zerlegung: ein verschachtelter Agent (`parentAgentId`) oder ein `agentType` aus `ticketAgenten` (die Namen von Planer, Umsetzer,
+ * Lens und Gruppe aus der Projekt-Config, `hauptchatNamen`). Explore und andere Subagenten, die der Hauptchat selbst startet, sind Arbeit des Hauptchats (Forks).
  */
-export const istKubernia = (meta) => Boolean(meta?.parentAgentId) || /^kubernia-/.test(meta?.agentType ?? "");
+export const istTicketLauf = (meta, ticketAgenten) => Boolean(meta?.parentAgentId) || ticketAgenten.has(meta?.agentType);
 
 /**
  * Modellanteil der Ticket-Orchestrierung (#1557): Calls je Familie über das Präfix `claude-<familie>-`, über alle Fenster mit Calls.
@@ -194,7 +199,7 @@ export function ttlVergleich(calls) {
  *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config?: object }} e
  */
 export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, config }) {
-  const ticketSkills = ticketSkillsAusConfig({ config });
+  const { ticketSkills, ticketAgenten, repoName: name } = hauptchatNamen({ config });
   const wurzeln = brainRoots.map((r) => norm(r).replace(/\/+$/, "")).filter(Boolean);
   const summen = new Map();
   const fenster = [];
@@ -274,7 +279,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     for (const sa of subs) {
       for (const c of sa.calls) {
         if (!imFenster(c.ts)) continue;
-        if (istKubernia(sa.meta)) {
+        if (istTicketLauf(sa.meta, ticketAgenten)) {
           eigene.calls += 1;
           eigene.cost += c.cost ?? 0;
           eigene.costGeschaetzt += c.costGeschaetzt ?? c.cost ?? 0;
@@ -294,7 +299,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
-  return { rows, fenster, kubernia: eigene, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0, modellanteil: modellAnteil(fenster), ttl: ttlVergleich(hauptCalls) };
+  return { rows, fenster, [name]: eigene, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0, modellanteil: modellAnteil(fenster), ttl: ttlVergleich(hauptCalls) };
 }
 
 const de = (n, stellen = 1) => n.toFixed(stellen).replace(".", ",");
@@ -313,8 +318,9 @@ function kennzahlZeilen(r) {
   ];
 }
 
-/** Markdown-Tabelle Kategorie × Modell (Hauptchat und Forks getrennt) plus Fensterliste. */
-export function renderMarkdown(r) {
+/** Markdown-Tabelle Kategorie × Modell (Hauptchat und Forks getrennt) plus Fensterliste. `repoName` ist der Schlüssel der eigenen Subagenten in `r` (Repo-Name aus der Projekt-Config). */
+export function renderMarkdown(r, { repoName: name } = {}) {
+  if (typeof name !== "string" || !(name in r)) throw new Error("renderMarkdown braucht repoName: den Schlüssel der eigenen Subagenten in r");
   const $ = (n) => `${n.toFixed(2)} $`;
   const out = ["| Kategorie | Quelle | Modell | Calls | Kosten | Kosten geschätzt |", "|---|---|---|--:|--:|--:|"];
   for (const z of r.rows) out.push(`| ${z.kategorie} | ${z.quelle} | \`${z.modell}\` | ${z.calls} | ${$(z.cost)} | ${$(z.costGeschaetzt ?? z.cost)} |`);
@@ -322,8 +328,8 @@ export function renderMarkdown(r) {
   const n = r.rows.reduce((s, z) => s + z.calls, 0);
   const totalGeschaetzt = r.rows.reduce((s, z) => s + (z.costGeschaetzt ?? z.cost), 0);
   out.push(`| **Summe** | | | ${n} | ${$(total)} | ${$(totalGeschaetzt)} |`, "");
-  const k = r.kubernia;
-  out.push(`kubernia-Subagenten (nicht Hauptchat): ${k.calls} Calls, ${$(k.cost)}, geschätzt ${$(k.costGeschaetzt ?? k.cost)} (Output geschätzt ${k.outputGeschaetzt ?? k.output ?? 0} statt ${k.output ?? 0} Tokens)`);
+  const k = r[name];
+  out.push(`${name}-Subagenten (nicht Hauptchat): ${k.calls} Calls, ${$(k.cost)}, geschätzt ${$(k.costGeschaetzt ?? k.cost)} (Output geschätzt ${k.outputGeschaetzt ?? k.output ?? 0} statt ${k.output ?? 0} Tokens)`);
   if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
   if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen oder Zeitpunkt fehlt), nicht als 0 $ zu lesen.`);
   out.push(...kennzahlZeilen(r));
@@ -363,11 +369,18 @@ function main() {
     console.error("Aufruf: node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }
+  let namen;
+  try {
+    namen = hauptchatNamen();
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
   const dir = projektOrdner(args.projekt);
   const cache = new Map();
   const closedAtOf = (nr) => (cache.has(nr) ? cache.get(nr) : cache.set(nr, closedAtViaGh(nr)).get(nr));
-  const r = zerlegeHauptchat({ sessions: ladeSessions(dir, args.von), von: args.von, bis: args.bis, brainRoots: args.brain, closedAtOf });
-  console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
+  const r = zerlegeHauptchat({ sessions: ladeSessions(dir, args.von), von: args.von, bis: args.bis, brainRoots: args.brain, closedAtOf, config: namen.config });
+  console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r, { repoName: namen.repoName }));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
