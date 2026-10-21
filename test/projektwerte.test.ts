@@ -2,7 +2,7 @@
  * Dateien entstehen nur in Temp-Ordnern. */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 import * as rawLib from "../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawCli from "../scripts/projektwerte.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawDrift from "../scripts/check-factory-drift.mjs";
 
 type Cfg = Record<string, unknown>;
 interface Lib {
@@ -297,3 +299,124 @@ describe("Grenzfälle der Lib", () => {
     assert.throws(() => lib.rendereProjektwerte(`${S}\n${E}\n`, { praefixe: {}, agenten: null, labels: {} }, "a.md"), /Gruppe 'agenten'/);
   });
 });
+
+// ── Projektwert-Block der Kern-Texte (#1747) ─────────────────────────────────
+
+interface DriftCli {
+  cli(argv: string[], opt?: { wurzel?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
+}
+const drift = rawDrift as unknown as DriftCli;
+const driftLauf = (w: string): { code: number; err: string } => {
+  const err: string[] = [];
+  const code = drift.cli([], { wurzel: w, out: () => undefined, err: (s) => err.push(s) });
+  return { code, err: err.join("\n") };
+};
+
+/** Alle Agenten- und Skill-Markdown-Pfade (Schrägstrich-Form) unter `wurzel`. */
+function agentenUndSkillPfade(wurzel: string): string[] {
+  const out: string[] = [];
+  const dateien = (rel: string): string[] => readdirSync(join(wurzel, ...rel.split("/")), { withFileTypes: true }).filter((d) => d.isFile()).map((d) => `${rel}/${d.name}`);
+  out.push(...dateien(".claude/agents"));
+  for (const s of readdirSync(join(wurzel, ".claude", "skills"), { withFileTypes: true })) if (s.isDirectory()) out.push(...dateien(`.claude/skills/${s.name}`));
+  return out;
+}
+
+const PLATZHALTER = /<(agenten|labels|praefixe)\.(\w+)>/g;
+/* Fitness-Regel: ein Platzhalter `<gruppe.schlüssel>` steht nur in Dateien mit genau einem Projektwert-Block (dort stehen die Werte),
+ * und sein Schlüssel löst in der Config auf. Grenze: nur die Prüf-Fläche von `projektwertDateien` (Manifest-Markdown, Agenten- und
+ * Skill-Markdown) und nur die Schlüssel-Form mit den drei Gruppen; `<agenten.…>` mit Auslassungszeichen beschreibt nur und zählt nicht. */
+function platzhalterBefunde(pfad: string, text: string, config: Cfg): string[] {
+  const treffer = [...text.matchAll(PLATZHALTER)];
+  if (treffer.length === 0) return [];
+  const out: string[] = [];
+  const bloecke = lib.projektwertStellen(text, pfad).bloecke.length;
+  if (bloecke !== 1) out.push(`${pfad}: ${treffer.length} Platzhalter, aber ${bloecke} Projektwert-Blöcke (genau einer verlangt)`);
+  for (const schluessel of new Set(treffer.map((m) => `${m[1]}.${m[2]}`))) {
+    try {
+      lib.projektwertWert(config, schluessel);
+    } catch {
+      out.push(`${pfad}: Platzhalter <${schluessel}> löst in der Config nicht auf`);
+    }
+  }
+  return out;
+}
+
+const BLOCK_DATEIEN = [
+  ".claude/agents/kubernia-planner.md",
+  ".claude/agents/kubernia-umsetzer.md",
+  ".claude/agents/kubernia-lens.md",
+  ".claude/skills/review-lenses/SKILL.md",
+  ".claude/skills/factory/ablauf.md",
+];
+
+describe("Projektwert-Block der Kern-Texte (#1747)", () => {
+  const echteConfig = JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as Cfg;
+
+  test("echtes Repo: Drift-Gate grün, jede Block-Datei trägt genau einen Block", () => {
+    const r = driftLauf(WURZEL);
+    assert.equal(r.code, 0, r.err);
+    for (const p of BLOCK_DATEIEN) {
+      const t = readFileSync(join(WURZEL, ...p.split("/")), "utf8");
+      assert.equal(lib.projektwertStellen(t, p).bloecke.length, 1, p);
+    }
+  });
+
+  test("ein abweichender Block des Umsetzer-Texts macht das Drift-Gate rot (Negativfall)", () => {
+    const w = mkdtempSync(join(tmpdir(), "kq-pw-"));
+    temps.push(w);
+    const echt = readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8");
+    const umsetzer = readFileSync(join(WURZEL, ".claude/agents/kubernia-umsetzer.md"), "utf8");
+    schreibe(w, ".factory/projekt.json", echt);
+    schreibe(w, ".claude/agents/kubernia-umsetzer.md", umsetzer);
+    assert.equal(driftLauf(w).code, 0);
+    const verfaelscht = umsetzer.replace(/^(\| `agenten\.umsetzer` \| `)[^`]+(` \|)$/m, "$1fremd-umsetzer$2");
+    assert.notEqual(verfaelscht, umsetzer, "Anker `agenten.umsetzer` muss genau eine Tabellenzeile treffen");
+    schreibe(w, ".claude/agents/kubernia-umsetzer.md", verfaelscht);
+    const rot = driftLauf(w);
+    assert.equal(rot.code, 1);
+    assert.match(rot.err, /Projektwert-Block weicht von/);
+  });
+
+  test("eine abweichende Config macht den echten Text rot", () => {
+    const w = mkdtempSync(join(tmpdir(), "kq-pw-"));
+    temps.push(w);
+    const cfg = JSON.parse(JSON.stringify(echteConfig)) as { agenten: Record<string, string> };
+    cfg.agenten.planer = "wk-planer";
+    schreibe(w, ".factory/projekt.json", JSON.stringify(cfg, null, 2));
+    schreibe(w, ".claude/agents/kubernia-umsetzer.md", readFileSync(join(WURZEL, ".claude/agents/kubernia-umsetzer.md"), "utf8"));
+    const rot = driftLauf(w);
+    assert.equal(rot.code, 1);
+    assert.match(rot.err, /Projektwert-Block weicht von/);
+  });
+
+  test("Platzhalter-Regel: Fixtures", () => {
+    const block = `${S}\n${E}\n`;
+    assert.deepEqual(platzhalterBefunde("a.md", `Spawn <agenten.planer>\n${block}`, CONFIG), []);
+    assert.deepEqual(platzhalterBefunde("a.md", "Spawn `<agenten.…>` und <gruppe.schlüssel>\n", CONFIG), []);
+    assert.deepEqual(platzhalterBefunde("a.md", "kein Platzhalter\n", CONFIG), []);
+    const ohneBlock = platzhalterBefunde("a.md", "Spawn <agenten.planer>\n", CONFIG);
+    assert.equal(ohneBlock.length, 1);
+    assert.match(ohneBlock[0] ?? "", /0 Projektwert-Blöcke/);
+    const zwei = platzhalterBefunde("a.md", `<agenten.planer>\n${block}${block}`, CONFIG);
+    assert.match(zwei.join("\n"), /2 Projektwert-Blöcke/);
+    const unbekannt = platzhalterBefunde("a.md", `<agenten.planner>\n${block}`, CONFIG);
+    assert.equal(unbekannt.length, 1);
+    assert.match(unbekannt[0] ?? "", /<agenten\.planner> löst in der Config nicht auf/);
+    const gruppeFehlt = platzhalterBefunde("a.md", `<labels.festgefahren>\n${block}`, CONFIG);
+    assert.match(gruppeFehlt.join("\n"), /<labels\.festgefahren>/);
+  });
+
+  test("Platzhalter-Regel: das echte Repo hat keinen Befund", () => {
+    const manifest = JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string }[] };
+    const dateien = projektwertDateienVonRepo(manifest.eintraege.map((e) => e.pfad));
+    assert.ok(dateien.length > 5, "Prüf-Fläche darf nicht leer sein");
+    const befunde = dateien.flatMap((p) => platzhalterBefunde(p, readFileSync(join(WURZEL, ...p.split("/")), "utf8"), echteConfig));
+    assert.deepEqual(befunde, []);
+    const mitPlatzhalter = dateien.filter((p) => new RegExp(PLATZHALTER.source).test(readFileSync(join(WURZEL, ...p.split("/")), "utf8")));
+    for (const p of BLOCK_DATEIEN) assert.ok(mitPlatzhalter.includes(p), `${p} trägt Platzhalter`);
+  });
+});
+
+function projektwertDateienVonRepo(manifestPfade: string[]): string[] {
+  return lib.projektwertDateien(manifestPfade, agentenUndSkillPfade(WURZEL)).filter((p) => existsSync(join(WURZEL, ...p.split("/"))));
+}

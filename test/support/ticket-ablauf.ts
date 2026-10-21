@@ -1,5 +1,6 @@
-/* Der gemeinsame Ticket-Ablauf der Ticket-Skills (#1806): eine Datei im Kern mit Platzhaltern `<agenten.…>`,
- * die der Hauptchat aus `.factory/projekt.json` einsetzt. Tests, die den Ablauftext prüfen, lesen ihn hier mit eingesetzten Werten. */
+/* Der gemeinsame Ticket-Ablauf der Ticket-Skills (#1806): eine Datei im Kern mit Platzhaltern `<gruppe.schlüssel>`
+ * (Gruppen `agenten`, `labels`, `praefixe`), deren Werte im Projektwert-Block derselben Datei stehen (#1747). Tests, die einen Kern-Text
+ * (Ablauf, Agenten-Definition, Skill) prüfen, lesen ihn hier mit eingesetzten Werten aus `.factory/projekt.json`. */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -10,17 +11,28 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 export const TICKET_ABLAUF = ".claude/skills/factory/ablauf.md";
 
-/** Ersetzt `<agenten.schluessel>` durch den Wert aus der Projekt-Config; ein unbekannter Schlüssel ist ein Fehler. */
-export function setzeAgentenWerte(text: string, agenten: Record<string, string>): string {
-  return text.replace(/<agenten\.(\w+)>/g, (_m, key: string) => {
-    const wert = agenten[key];
-    if (wert === undefined) throw new Error(`Unbekannter Platzhalter <agenten.${key}> im Ticket-Ablauf`);
+type Gruppen = Record<string, Record<string, string>>;
+
+/** Ersetzt `<gruppe.schluessel>` (Gruppen `agenten`, `labels`, `praefixe`) durch den Wert aus der Projekt-Config; ein unbekannter Schlüssel ist ein Fehler. */
+export function setzeProjektwerte(text: string, cfg: Gruppen): string {
+  return text.replace(/<(agenten|labels|praefixe)\.(\w+)>/g, (_m, gruppe: string, key: string) => {
+    const wert = cfg[gruppe]?.[key];
+    if (wert === undefined) throw new Error(`Unbekannter Platzhalter <${gruppe}.${key}>`);
     return wert;
   });
 }
 
-/** Der Ablauftext mit den Agentennamen aus `.factory/projekt.json`. */
+/** Wie `setzeProjektwerte`, nur für die Gruppe `agenten`. */
+export function setzeAgentenWerte(text: string, agenten: Record<string, string>): string {
+  return setzeProjektwerte(text, { agenten, labels: {}, praefixe: {} });
+}
+
+/** Eine Projektdatei (Pfad relativ zur Wurzel, Schrägstrich-Form) mit eingesetzten Projektwerten. */
+export function liesMitProjektwerten(rel: string): string {
+  return setzeProjektwerte(readFileSync(ROOT + rel, "utf8"), ladeProjektConfig() as Gruppen);
+}
+
+/** Der Ablauftext mit den Werten aus `.factory/projekt.json`. */
 export function liesTicketAblauf(): string {
-  const cfg = ladeProjektConfig() as { agenten: Record<string, string> };
-  return setzeAgentenWerte(readFileSync(ROOT + TICKET_ABLAUF, "utf8"), cfg.agenten);
+  return liesMitProjektwerten(TICKET_ABLAUF);
 }

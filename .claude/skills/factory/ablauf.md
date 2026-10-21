@@ -2,7 +2,26 @@
 
 Gemeinsamer Ablauf der Ticket-Skills: der Produkt-Skill (Name `agenten.ticketSkill`, Bereich `spiel`) und `factory` (Bereich `agentic`). Die Skill-Dateien legen nur Bereich und Auslöser fest; jede Ablaufregel steht nur hier (Wächter `test/harness/ticket-ablauf.test.ts`).
 
-**Projektwerte.** `<agenten.…>`, `<labels.…>`, `<Branch-Präfix>` (`praefixe.branch`) und `<Commit-Präfix>` (`praefixe.commitZeile`) sind Werte aus `.factory/projekt.json`; der Hauptchat liest die Datei nach Schritt 0 einmal je Skill-Aufruf und setzt sie in Vorlagen und Befehle ein.
+**Projektwerte.** Die Platzhalter `<agenten.…>`, `<labels.…>` und `<praefixe.…>` stehen mit ihren Werten im Block darunter; der Hauptchat setzt sie in Vorlagen und Befehle ein, ohne `.factory/projekt.json` zu lesen.
+
+<!-- factory:projektwerte:start -->
+Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwerte.mjs --write`, nicht von Hand ändern).
+
+| Schlüssel | Wert |
+| --- | --- |
+| `praefixe.commitZeile` | `KQ-` |
+| `praefixe.branch` | `feature/kq-` |
+| `praefixe.worktree` | `kq-` |
+| `agenten.planer` | `kubernia-planner` |
+| `agenten.umsetzer` | `kubernia-umsetzer` |
+| `agenten.lens` | `kubernia-lens` |
+| `agenten.gruppe` | `kubernia-gruppe` |
+| `agenten.ticketSkill` | `kubernia` |
+| `labels.harness` | `area:harness` |
+| `labels.festgefahren` | `status:festgefahren` |
+| `labels.forum` | `forum` |
+| `labels.dependabotInbox` | `area:harness` |
+<!-- factory:projektwerte:end -->
 
 **Bereich.** Der aufrufende Skill legt ihn fest; er geht als `--bereich <bereich>` an `naechstes-ticket.mjs`, ohne `AskUserQuestion` und ohne Spielquote; er gilt für alle Tickets dieses Aufrufs; eine Ticketnummer im Auslöser braucht keinen Bereich (`--ticket`).
 
@@ -87,7 +106,7 @@ Fehlerwege: Exit 1 „Bericht ungültig“ oder Kopf `ABNAHME-ABGEBROCHEN`: gena
 
 **Eigenen Umsetzer stoppen:** Beendest du deinen Umsetzer per `TaskStop`, rufst du danach `node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>` (nur mit der eigenen Nonce, sonst Exit 4); der nächste Umsetzer übernimmt mit `uebernehmen … --nachfolger` (du selbst prüfst nur mit `pruefe`). Das ist kein Phasen-Schnitt. Semantik: Kopf von `scripts/ticket-lock.mjs`.
 
-**Fortsetzungsauftrag** („mach mit <nr> weiter“, „weiter“, ein abgebrochener oder gestoppter Lauf): der Hauptchat setzt nicht selbst um. (1) Zustand lesen: `git worktree list`, `git branch -a --list "*<Branch-Präfix><nr>-*" "--format=%(refname:short)"` (der Branch-Name, auch als Remote-Branch; ein vorangestelltes `origin/` weglassen), `gh pr list --head <branch-name> --state all` (`--head` kennt kein Muster), `git log --oneline origin/main..<branch>`, die Nachweis-Zeilen per `git log --grep "^<Commit-Präfix>" --format=%B origin/main..<branch>` und `node scripts/ticket-lock.mjs pruefe <nr>` (mit `--nonce <x>`, falls die Nonce bekannt ist; Exit 4: nichts anfassen, melden; ohne bekannte Nonce holt `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme` eine neue, Exit 4: nichts anfassen, statt den Umsetzer ohne Lock laufen zu lassen); danach das Festgefahren-Label (`labels.festgefahren`) von Issue und PR entfernen (`gh issue edit <nr> --remove-label <labels.festgefahren>`, `gh pr edit <pr> --remove-label <labels.festgefahren>`; die Wiederaufnahme ist der Fortsetzungsauftrag, `lauf-ergebnis` zählt das Label-Event trotzdem). (2) Hat das Ticket Kriterien, schreibt ein frischer Szenario-Agent die Szenarien neu (Schritt 2; sie sind mit der Session verloren). Den Planer auf die **Restarbeit** rufen, Prompt-Block `Fortsetzung: Stand …` (Worktree, Branch, Commits, offener PR, vorhandene Nachweis-Zeilen, was fehlt) zusätzlich zu Ticket und Body. (3) Den Umsetzer spawnen wie im Erst-Spawn (Plan mit Kopfzeile, `Lock: nonce=<x>`); sein Schritt 1 übernimmt den vorhandenen Worktree, sobald sein `uebernehmen … --nachfolger` `uebernehmbar` meldet. Weil der Planer vor der Übernahme lief, ist die Plan-Nachweis-Zeile mit dem Planer wahr; einen Wert wie `nachtraeglich` gibt es nicht. Der Abschluss (Befunde eintragen, `brain-input`) gilt wie im Ticketlauf.
+**Fortsetzungsauftrag** („mach mit <nr> weiter“, „weiter“, ein abgebrochener oder gestoppter Lauf): der Hauptchat setzt nicht selbst um. (1) Zustand lesen: `git worktree list`, `git branch -a --list "*<praefixe.branch><nr>-*" "--format=%(refname:short)"` (der Branch-Name, auch als Remote-Branch; ein vorangestelltes `origin/` weglassen), `gh pr list --head <branch-name> --state all` (`--head` kennt kein Muster), `git log --oneline origin/main..<branch>`, die Nachweis-Zeilen per `git log --grep "^<praefixe.commitZeile>" --format=%B origin/main..<branch>` und `node scripts/ticket-lock.mjs pruefe <nr>` (mit `--nonce <x>`, falls die Nonce bekannt ist; Exit 4: nichts anfassen, melden; ohne bekannte Nonce holt `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme` eine neue, Exit 4: nichts anfassen, statt den Umsetzer ohne Lock laufen zu lassen); danach das Festgefahren-Label (`labels.festgefahren`) von Issue und PR entfernen (`gh issue edit <nr> --remove-label <labels.festgefahren>`, `gh pr edit <pr> --remove-label <labels.festgefahren>`; die Wiederaufnahme ist der Fortsetzungsauftrag, `lauf-ergebnis` zählt das Label-Event trotzdem). (2) Hat das Ticket Kriterien, schreibt ein frischer Szenario-Agent die Szenarien neu (Schritt 2; sie sind mit der Session verloren). Den Planer auf die **Restarbeit** rufen, Prompt-Block `Fortsetzung: Stand …` (Worktree, Branch, Commits, offener PR, vorhandene Nachweis-Zeilen, was fehlt) zusätzlich zu Ticket und Body. (3) Den Umsetzer spawnen wie im Erst-Spawn (Plan mit Kopfzeile, `Lock: nonce=<x>`); sein Schritt 1 übernimmt den vorhandenen Worktree, sobald sein `uebernehmen … --nachfolger` `uebernehmbar` meldet. Weil der Planer vor der Übernahme lief, ist die Plan-Nachweis-Zeile mit dem Planer wahr; einen Wert wie `nachtraeglich` gibt es nicht. Der Abschluss (Befunde eintragen, `brain-input`) gilt wie im Ticketlauf.
 
 **Mehrere Tickets:** Anzahl N aus der Auslöse-Nachricht übernehmen, sonst kurz fragen. Dann nacheinander je Ticket der ganze Ablauf oben mit einem frischen Umsetzer, nie parallel (Merge-Kollision auf `main`); kein freies Ticket mehr ⇒ sofort aufhören. **Vor jedem Ticket, auch dem ersten,** `node scripts/budget-pacing.mjs` (Budget-Pacing, [docs/model-routing.md §6](../../../docs/model-routing.md#6-budget-pacing-1358)). Exit 0: weiter; eine `Warnung:`-Zeile kommt in die Schlussübersicht. Anderer Exit (2, Absturz): weiter, die Meldung kommt in die Schlussübersicht. Exit 3 (knapp) oder 4 (stopp): kein neues Ticket, der Lauf endet mit der Schlussübersicht und der Zeile „Pause bis <Zeit>“ aus der Ausgabe. Die Prüfung läuft nur zwischen Tickets, ein laufender Umsetzer wird nie abgebrochen. Zum Schluss eine Übersicht: erledigte Tickets, wie viele von N. Der Hauptchat wächst pro Ticket nur um Plan, Szenarien, Abnahme-Berichte und Bericht.
 

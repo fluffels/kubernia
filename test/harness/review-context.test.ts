@@ -48,11 +48,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { liesMitProjektwerten } from "../support/ticket-ablauf";
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-const lensSkill = read(".claude/skills/review-lenses/SKILL.md");
-const planner = read(".claude/agents/kubernia-planner.md");
-const lensAgent = read(".claude/agents/kubernia-lens.md");
+const lensSkill = liesMitProjektwerten(".claude/skills/review-lenses/SKILL.md");
+const planner = liesMitProjektwerten(".claude/agents/kubernia-planner.md");
+const lensAgent = liesMitProjektwerten(".claude/agents/kubernia-lens.md");
 
 /** Schneidet den Abschnitt von `von` bis (ohne) `bis` aus; wirft, wenn ein Anker fehlt (kein stilles Leerlaufen). */
 function teil(text: string, von: string, bis: string): string {
@@ -240,7 +241,7 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
 // ── Lens-Worktree und Blocker-Maßstab (#1316) ───────────────────────────────────
 describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1316 Z3)", () => {
   const harness = read("docs/agent-harness.md");
-  const umsetzer = read(".claude/agents/kubernia-umsetzer.md");
+  const umsetzer = liesMitProjektwerten(".claude/agents/kubernia-umsetzer.md");
   /** Der Lens-Worktree ist in Definition und Skill beschrieben (Pfadmuster, Detach, Entfernen). */
   const beschreibtLensWorktree = (s: string) => /kq-<nr>-lens-r<runde>/.test(s) && /worktree add --detach/.test(s) && /worktree remove --force/.test(s);
 

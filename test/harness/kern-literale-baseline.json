@@ -1,10 +1,7 @@
 {
-  ".claude/agents/explore.md": {"Repo":2,"Agent":2},
-  ".claude/agents/kubernia-gruppe.md": {"Repo":4,"Agent":4},
-  ".claude/agents/kubernia-lens.md": {"Repo":3,"Praefix":1,"Worktree":5,"Agent":3},
-  ".claude/agents/kubernia-planner.md": {"Repo":8,"Praefix":1,"Agent":7,"Stardew":2},
-  ".claude/agents/kubernia-umsetzer.md": {"Repo":9,"Praefix":7,"Worktree":2,"Label":1,"Agent":8,"Stardew":1},
-  ".claude/skills/review-lenses/SKILL.md": {"Repo":15,"Praefix":5,"Worktree":7,"Agent":15,"Stardew":1},
+  ".claude/agents/kubernia-planner.md": {"Stardew":2},
+  ".claude/agents/kubernia-umsetzer.md": {"Stardew":1},
+  ".claude/skills/review-lenses/SKILL.md": {"Stardew":1},
   "scripts/check-context-size.mjs": {"Stardew":1},
   "scripts/check-docmap.mjs": {"Stardew":2},
   "scripts/check-lockfile.mjs": {"Stardew":1},
