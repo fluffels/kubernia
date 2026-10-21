@@ -320,12 +320,12 @@ describe("Abnahme je PR (#1756)", () => {
     const e = roh.bewertePrs({ prs, commits, ci: {}, festgefahren: { 50: 1, 51: 1, 53: 0 }, jetzt: SPAETER, konfigZeilen: Z });
     // PR 50: kein Fix (festgefahren zählt nicht); 51: Fix + festgefahren; 52: Fix ohne Eintrag; 53: Fix, 0 festgefahren; 54: entfällt
     assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 3, mitFixUndFestgefahren: 1 });
-    assert.match(mod.formatiere(e), /Abnahme-Fix: 3 PRs, davon 1 mit Hand-off \(33 %\)/);
+    assert.match(mod.formatiere(e), /Abnahme-Fix: 3 PRs, davon mit Hand-off: 33 % \(1\/3\)/);
   });
   test("Abnahme-Fix leer: 0 PRs, Darstellung ohne Prozent", () => {
     const e = bewerte([]);
     assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 0, mitFixUndFestgefahren: 0 });
-    assert.match(mod.formatiere(e), /Abnahme-Fix: 0 PRs, davon 0 mit Hand-off \(–\)/);
+    assert.match(mod.formatiere(e), /Abnahme-Fix: 0 PRs, davon mit Hand-off: –/);
   });
   test("leer: alle Werte 0, Darstellung ohne Prozent", () => {
     const e = bewerte([]);
