@@ -4,6 +4,10 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektRaw from "../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
+
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as hcModule from "../scripts/hauptchat-zerlegung.mjs";
@@ -19,9 +23,11 @@ type Eingabe = {
   bis?: string;
   brainRoots?: string[];
   closedAtOf?: (nr: number) => string | null;
+  config?: Record<string, unknown>;
 };
 const hc = hcModule as {
   zerlegeHauptchat: (e: Eingabe) => Ergebnis;
+  ticketSkillsAusConfig: (deps?: { config?: Record<string, unknown> }) => string[];
   renderMarkdown: (r: Ergebnis) => string;
 };
 
@@ -185,6 +191,23 @@ describe("zerlegeHauptchat: Brain-Erkennung", () => {
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], brainRoots: ["/x/notizen"], closedAtOf: () => iso(10) });
     assert.equal(calls(r, "Brain", OPUS), 1);
     assert.equal(calls(r, "Nachlauf", OPUS), 0);
+  });
+});
+
+describe("Ticket-Skills aus der Projekt-Config", () => {
+  const cfg = ladeProjektConfig() as { agenten: Record<string, string> };
+  const mitSkill = (name: string) => ({ ...cfg, agenten: { ...cfg.agenten, ticketSkill: name } });
+  const art = (main: Row[], config: Record<string, unknown>) => hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], config }).fenster[0].art;
+  test("der konfigurierte Produkt-Skill zählt, der alte Name nicht, der Kern-Skill immer", () => {
+    const c = mitSkill("ab");
+    assert.equal(art([slash(0, "ab"), call(1, SONNET, claim(1))], c), "Slash");
+    assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("ab")), call(2, OPUS, claim(1))], c), "Skill-Tool");
+    assert.equal(art([slash(0, "kubernia"), call(1, SONNET, claim(1))], c), "frei");
+    assert.equal(art([slash(0, "factory"), call(1, SONNET, claim(1))], c), "Slash");
+  });
+  test("unbrauchbare Config ist ein Datenfehler mit Grund, keine stille Zählung", () => {
+    assert.throws(() => hc.ticketSkillsAusConfig({ config: { agenten: {} } }), /Projekt-Config nicht nutzbar/);
+    assert.throws(() => hc.zerlegeHauptchat({ sessions: [], config: {} }), /hauptchat-zerlegung/);
   });
 });
 

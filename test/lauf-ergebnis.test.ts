@@ -313,6 +313,20 @@ describe("Abnahme je PR (#1756)", () => {
     assert.equal(a.gemessen + a.entfaellt + a.override + a.ohne, e.kennzahlen.prs);
     assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 50 % \(1\/2\); entfällt 1, Override 1, ohne gültige Abnahme-Zeile 1/);
   });
+  test("Abnahme-Fix und Hand-off (#1808): PRs mit durchgaenge ≥ 2, davon mit festgefahren-Label; ohne Fix/override/entfällt zählen nicht", () => {
+    const bodies = [nachricht(urteil(1)), nachricht(urteil(2)), nachricht(urteil(2)), nachricht(urteil(3)), nachricht("KQ-Abnahme: entfaellt — Hand-PR")];
+    const prs = bodies.map((_, i) => pr({ number: 50 + i, mergeCommit: { oid: String(i + 1).repeat(40) } }));
+    const commits = bodies.map((b, i) => commit(b, MERGED, String(i + 1).repeat(40)));
+    const e = roh.bewertePrs({ prs, commits, ci: {}, festgefahren: { 50: 1, 51: 1, 53: 0 }, jetzt: SPAETER, konfigZeilen: Z });
+    // PR 50: kein Fix (festgefahren zählt nicht); 51: Fix + festgefahren; 52: Fix ohne Eintrag; 53: Fix, 0 festgefahren; 54: entfällt
+    assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 3, mitFixUndFestgefahren: 1 });
+    assert.match(mod.formatiere(e), /Abnahme-Fix: 3 PRs, davon mit Hand-off: 33 % \(1\/3\)/);
+  });
+  test("Abnahme-Fix leer: 0 PRs, Darstellung ohne Prozent", () => {
+    const e = bewerte([]);
+    assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 0, mitFixUndFestgefahren: 0 });
+    assert.match(mod.formatiere(e), /Abnahme-Fix: 0 PRs, davon mit Hand-off: –/);
+  });
   test("leer: alle Werte 0, Darstellung ohne Prozent", () => {
     const e = bewerte([]);
     assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 0 });

@@ -43,7 +43,7 @@ const config: Cfg = {
       weg: { datei: "nix.js", name: "MAX_X" },
       keine: { datei: "leer.js", name: "MAX_X" },
     },
-    ruleset: ".github/ruleset-main-schutz.json",
+    projektConfig: ".factory/projekt.json",
     ciWorkflows: ".github/workflows",
   },
 };
@@ -58,6 +58,7 @@ const basis = (extra: Record<string, string> = {}): Record<string, string> => ({
   "package.json": JSON.stringify({ scripts: { verify: "npm run a && npm run b && npm test", "verify:full": "npm run verify && npm run c", a: "x", b: "x", c: "x" } }),
   ".github/workflows/x.yml": 'name: CI\njobs:\n  t:\n    name: "Tests, Typecheck & Builds"\n  s:\n    name: Security-Audit (npm audit)\n',
   ".github/ruleset-main-schutz.json": JSON.stringify(RULESET),
+  ".factory/projekt.json": JSON.stringify({ rulesetSpiegel: ".github/ruleset-main-schutz.json" }),
   "wf.js": "export const MAX_X = 2;\n",
   "dop.js": "const MAX_X = 1;\nconst MAX_X = 2;\n",
   "sum.js": "const MAX_X = 1 + 2;\n",
@@ -154,7 +155,7 @@ describe("Platzhalter: Rot-Fälle", () => {
   test("required-check: Name nicht im Ruleset-Spiegel ist rot, auch wenn ein Job so heißt", () => {
     const f = basis({ ".github/workflows/y.yml": "jobs:\n  z:\n    name: Nur im Workflow\n" });
     rot("${required-check:Nur im Workflow}", /Required Check "Nur im Workflow" steht nicht im Ruleset-Spiegel/, f);
-    rot("${required-check:Gibt es nicht}", /steht nicht im Ruleset-Spiegel .*bekannt: Tests, Typecheck & Builds, Security-Audit/);
+    rot("${required-check:Gibt es nicht}", /steht nicht im Ruleset-Spiegel \.github\/ruleset-main-schutz\.json \(bekannt: Tests, Typecheck & Builds, Security-Audit/);
   });
   test("required-check: fehlender Workflow-Ordner, fehlender oder kaputter Spiegel", () => {
     const f = basis();
@@ -166,8 +167,10 @@ describe("Platzhalter: Rot-Fälle", () => {
     rot(ALLE_CHECKS, /kein gültiges JSON/, basis({ ".github/ruleset-main-schutz.json": "{kaputt" }));
     rot(ALLE_CHECKS, /requiredChecks muss eine nicht leere Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: [] }) }));
     rot(ALLE_CHECKS, /requiredChecks muss eine nicht leere Liste aus Texten/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: ["a", 3] }) }));
-    const ohneConfig = { ...config, diagramme: { ...(config.diagramme as Cfg), ruleset: undefined } } as Cfg;
-    assert.throws(() => ersetze(ALLE_CHECKS, basis(), ohneConfig), /config\.diagramme\.ruleset fehlt/);
+    assert.throws(() => ersetze(ALLE_CHECKS, basis({ ".factory/projekt.json": "{}" })), /rulesetSpiegel fehlt in der Projekt-Config/);
+    assert.throws(() => ersetze(ALLE_CHECKS, basis({ ".factory/projekt.json": JSON.stringify({ rulesetSpiegel: "  " }) })), /rulesetSpiegel fehlt/);
+    const ohnePfad = { ...config, diagramme: { ...(config.diagramme as Cfg), projektConfig: undefined } } as Cfg;
+    assert.throws(() => ersetze(ALLE_CHECKS, basis(), ohnePfad), /config\.diagramme\.projektConfig fehlt/);
     rot(ALLE_CHECKS, /bypassActors muss eine Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ name: "x", requiredChecks: ["a"] }) }));
     rot("${ruleset:name}", /name fehlt/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ requiredChecks: ["a"], bypassActors: [] }) }));
   });

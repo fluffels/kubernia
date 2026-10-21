@@ -28,7 +28,7 @@ const M = raw as unknown as {
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
   pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number }) => boolean;
-  fuehreAus: (argv: string[], deps: Record<string, unknown>) => Erg;
+  fuehreAus: (argv: string[], deps: Record<string, unknown> | (() => Record<string, unknown>)) => Erg;
   echteDeps: (o?: { config?: unknown }) => { festgefahrenLabel: string; lockDir: string };
 };
 
@@ -648,6 +648,36 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     const r = M.fuehreAus(argv, deps);
     assert.equal(r.code, 2);
     assert.deepEqual(aufrufe, []);
+  });
+
+  test.each([[["--bogus"]], [["--stunden"]], [["--json", "--json"]]])("Deps-Fabrik: Aufruf-Fehler %j meldet Exit 2 mit Aufrufzeile, die Fabrik wird nie gerufen", (argv) => {
+    let gerufen = 0;
+    const r = M.fuehreAus(argv, () => {
+      gerufen += 1;
+      return baue(BELEG).deps;
+    });
+    assert.equal(r.code, 2);
+    assert.equal(gerufen, 0);
+    assert.match(r.err, /^✖ claims-pruefen: .+\nAufruf: claims-pruefen \[--json\] \[--stunden <n>\]\n$/);
+    assert.equal(r.out, "");
+  });
+
+  test("Deps-Fabrik: gültiger Aufruf ruft die Fabrik genau einmal", () => {
+    let gerufen = 0;
+    const r = M.fuehreAus(["--json"], () => {
+      gerufen += 1;
+      return baue(BELEG).deps;
+    });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(gerufen, 1);
+  });
+
+  test("Deps-Fabrik: wirft die Fabrik (kaputte Config), kommt Exit 2 statt Absturz", () => {
+    const r = M.fuehreAus([], () => {
+      throw new Error("Config kaputt");
+    });
+    assert.equal(r.code, 2);
+    assert.match(r.err, /Config kaputt/);
   });
 });
 

@@ -179,18 +179,18 @@ export function ankerPruefung({ nach, labels }, lade, config) {
 const echteIo = () => {
   const config = ladeProjektConfig();
   return {
-  owner: REPO.split("/")[0],
-  config,
-  leseDatei: (pfad) => readFileSync(pfad, "utf8"),
-  erzeuge: ({ titel, body, labels }) =>
-    ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
-  pruefeAnker: (a) => ankerPruefung(a, (rolle) => loadItems(boardFuerRolle(rolle)), config),
-  einsortiere: ({ nr, nach, notfall }) => {
-    const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
-    execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
-  },
-  ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
-  bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
+    owner: REPO.split("/")[0],
+    config,
+    leseDatei: (pfad) => readFileSync(pfad, "utf8"),
+    erzeuge: ({ titel, body, labels }) =>
+      ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
+    pruefeAnker: (a) => ankerPruefung(a, (rolle) => loadItems(boardFuerRolle(rolle)), config),
+    einsortiere: ({ nr, nach, notfall }) => {
+      const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
+      execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
+    },
+    ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
+    bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
   };
 };
 

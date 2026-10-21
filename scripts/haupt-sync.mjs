@@ -30,6 +30,7 @@ import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
+import { KERN_TICKET_SKILL } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 /**
@@ -77,7 +78,7 @@ export function configGrund(deps = {}) {
 }
 
 /** Verzeichnis des Kern-Ticket-Skills samt gemeinsamem Ablauf (#1806): zählt immer als Skill, unabhängig von der Projekt-Config. */
-export const KERN_SKILL_VERZEICHNIS = ".claude/skills/factory/";
+export const KERN_SKILL_VERZEICHNIS = `.claude/skills/${KERN_TICKET_SKILL}/`;
 
 /**
  * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: die Ticket-Skills (Verzeichnis aus `agenten.ticketSkill` der Projekt-Config und der Kern-Skill `factory` samt Ablauf) und die Wurzel-AGENTS.md (der Hauptchat

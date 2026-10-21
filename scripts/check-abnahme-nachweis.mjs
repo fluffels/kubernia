@@ -7,7 +7,7 @@
  *  - ein Urteil je Akzeptanzkriterium (`kriterien()` des Issue-Bodys): fehlend, unbekannt (über der Anzahl) → rot; doppelte Nummern und
  *    unbekannte Werte fängt der Parser (`ungueltig`); jeder Wert ≠ erfuellt → rot (nicht-erfuellt, nicht-pruefbar);
  *    `nach-merge` ist nur an einem Kriterium mit dem Präfix `Nach dem Merge:` erlaubt (dort auch `erfuellt`), an einem normalen rot;
- *  - `1 ≤ durchgaenge ≤ runden` der Review-Zeile (Abnahme-Fix-Runden zählen gegen das Cap, auch eine Delta-Lens nach CI-Fix oder Konflikt-Merge
+ *  - `1 ≤ durchgaenge ≤ runden` der Review-Zeile (auch die Delta-Lens nach einem Abnahme-Fix zählt als Pass, über dem Cap mit `abnahmefix=1` der Review-Zeile, auch eine Delta-Lens nach CI-Fix oder Konflikt-Merge
  *    hinter einer bestandenen Abnahme ist ein Pass);
  *  - head-Regel: `head` liegt im Slice, ist gleich oder Nachfahre des Review-head, danach nur leere Commits und konfliktfreie Merges;
  *  - die Spur: der jüngste vertraute Kommentar mit Abnahme-Marker auf dem PR trägt gleichen head, Durchgang == `durchgaenge`, gleiches Urteil;

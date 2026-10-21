@@ -20,6 +20,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LOGIN = /^[A-Za-z0-9-]{1,39}$/;
@@ -121,7 +122,8 @@ const STANDARD = { gh, sanitize: sanitizeSpawn, wurzel: WURZEL, nonce: () => ran
 
 function inbox(nr, d) {
   const issue = JSON.parse(d.gh(["issue", "view", String(nr), "--json", "title,labels"]));
-  if (!issue.labels?.some((l) => l.name === "forum")) throw new Error(`#${nr} trägt kein Label forum`);
+  const forumLabel = labelAus(d.config ?? ladeProjektConfig(), "forum");
+  if (!issue.labels?.some((l) => l.name === forumLabel)) throw new Error(`#${nr} trägt kein Label ${forumLabel}`);
   const n = discussionNummer(issue.title);
   if (n === null) throw new Error(`#${nr}: Titel nicht im Format „Forum #N: …“`);
   const args = ["api", "graphql", "-f", `query=${QUERY}`, "-F", "o={owner}", "-F", "n={repo}", "-F", `num=${n}`, "--jq", ".data.repository.discussion"];

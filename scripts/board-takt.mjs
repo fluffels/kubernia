@@ -50,7 +50,7 @@ import {
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
 
-// Die Quote liegt in spielquote-lib.mjs (auch naechstes-ticket.mjs braucht sie); die API dieses Skripts bleibt stabil.
+// Die Quote liegt in spielquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
 export { HARNESS_TAKT_MERGES, SPIEL_QUOTE, istHarnessCommit, zaehleTaktMerges, zaehleTicketMerges };
 
 // Zwei Boards (ADR 0022 F11, #1729): Status-Ticket, Harness-Sammelticket und ihre Selbstkorrektur laufen auf dem Factory-Board; der Wächter

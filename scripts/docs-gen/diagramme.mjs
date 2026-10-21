@@ -72,13 +72,14 @@ function ciJobNamen(rootDir, dir) {
 }
 
 /**
- * Der Spiegel des Rulesets `main-schutz` (`config.diagramme.ruleset`, Datei unter `.github/`, geschützt): Name, die
+ * Der Spiegel des Rulesets `main-schutz` (Pfad: Schlüssel `rulesetSpiegel` der Projekt-Config, deren Datei `config.diagramme.projektConfig` nennt; Datei unter `.github/`, geschützt): Name, die
  * Required-Check-Kontexte und die Bypass-Akteure, wie sie `gh api repos/{owner}/{repo}/rulesets/<id>` liefert.
  */
-function ladeRuleset(rootDir, cfg) {
-  const pfad = cfg.ruleset;
-  if (!pfad) throw new Error("config.diagramme.ruleset fehlt (Pfad der Ruleset-Spiegeldatei)");
-  return ladeRulesetSpiegel(rootDir, pfad);
+function rulesetPfad(rootDir, cfg) {
+  if (!cfg.projektConfig) throw new Error("config.diagramme.projektConfig fehlt (Pfad der Projekt-Config)");
+  const pfad = leseJson(rootDir, cfg.projektConfig, "Projekt-Config").rulesetSpiegel;
+  if (typeof pfad !== "string" || pfad.trim() === "") throw new Error("rulesetSpiegel fehlt in der Projekt-Config (Pfad der Ruleset-Spiegeldatei)");
+  return pfad;
 }
 
 function konstante(rootDir, cfg, schluessel) {
@@ -116,7 +117,9 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
   const katalog = harnessKatalog(rootDir, config.harness);
   let ciNamen = null;
   let ruleset = null;
-  const rulesetDaten = () => (ruleset ??= ladeRuleset(rootDir, cfg));
+  let rulesetPfadWert = null;
+  const rulesetDatei = () => (rulesetPfadWert ??= rulesetPfad(rootDir, cfg));
+  const rulesetDaten = () => (ruleset ??= ladeRulesetSpiegel(rootDir, rulesetDatei()));
   const genannteChecks = new Set();
   const aufloesen = (art, wert) => {
     if (wert.trim() === "") throw new Error(`Platzhalter "${art}" ohne Wert`);
@@ -138,7 +141,7 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
       case "required-check": {
         // Ein Required Check gilt nur, wenn ihn das Ruleset (Spiegel) UND ein Workflow-Job führt (Z2c).
         const r = rulesetDaten();
-        if (!r.requiredChecks.includes(wert)) throw new Error(`Required Check "${wert}" steht nicht im Ruleset-Spiegel ${cfg.ruleset} (bekannt: ${r.requiredChecks.join(", ")})`);
+        if (!r.requiredChecks.includes(wert)) throw new Error(`Required Check "${wert}" steht nicht im Ruleset-Spiegel ${rulesetDatei()} (bekannt: ${r.requiredChecks.join(", ")})`);
         if (!cfg.ciWorkflows) throw new Error("config.diagramme.ciWorkflows fehlt (Ordner der CI-Workflows, kein fester Standardpfad)");
         ciNamen ??= ciJobNamen(rootDir, cfg.ciWorkflows);
         if (!ciNamen.has(wert)) throw new Error(`Required Check "${wert}" hat keine passende Job-name:-Zeile in ${cfg.ciWorkflows}`);
@@ -150,7 +153,7 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
         if (wert === "name") return r.name;
         if (wert === "bypass") {
           // „ohne Bypass“ ist eine Aussage über die echte Konfiguration: der Spiegel muss sie tragen.
-          if (r.bypassActors.length > 0) throw new Error(`Ruleset ${r.name} hat Bypass-Akteure (${cfg.ruleset}): „ohne Bypass“ wäre falsch`);
+          if (r.bypassActors.length > 0) throw new Error(`Ruleset ${r.name} hat Bypass-Akteure (${rulesetDatei()}): „ohne Bypass“ wäre falsch`);
           return "ohne Bypass";
         }
         throw new Error(`unbekannter Ruleset-Wert "${wert}" (erlaubt: name, bypass)`);

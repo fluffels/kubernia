@@ -18,6 +18,12 @@ export function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
 }
 
+/** Der eine fail-closed-Text für Hooks und Wächter, wenn die Projekt-Config nicht nutzbar ist. Pur; `fehler` darf ein Error oder beliebiger Wert sein. */
+export function failClosedGrund(werkzeug, fehler) {
+  const text = fehler instanceof Error ? fehler.message : String(fehler);
+  return `${werkzeug}: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ${text}`;
+}
+
 /** Fehler mit Schlüsseln und Fix-Zeile. */
 const unvollstaendig = (fehlend) => new Error(`Projekt-Config unvollständig: ${fehlend.join(", ")} fehlt\nFix: ${fehlend.join(", ")} in ${PROJEKT_CONFIG} ergänzen`);
 
@@ -98,8 +104,7 @@ export function worktreeNamenOderGrund(werkzeug, deps = {}) {
     const worktree = worktreePraefix(config);
     return { namen: { praefixe: { worktree }, ...worktreeTeil(worktree) } };
   } catch (e) {
-    const text = e instanceof Error ? e.message : String(e);
-    return { grund: `${werkzeug}: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ${text}` };
+    return { grund: failClosedGrund(werkzeug, e) };
   }
 }
 
@@ -116,7 +121,6 @@ export function namenOderGrund(werkzeug, deps = {}) {
     const config = deps.config ?? ladeProjektConfig(deps.pfad ? { pfad: deps.pfad } : undefined);
     return { namen: ticketNamen(config), config };
   } catch (e) {
-    const text = e instanceof Error ? e.message : String(e);
-    return { grund: `${werkzeug}: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ${text}` };
+    return { grund: failClosedGrund(werkzeug, e) };
   }
 }

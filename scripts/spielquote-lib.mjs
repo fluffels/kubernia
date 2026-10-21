@@ -1,7 +1,7 @@
-// Kein Shebang: Bibliothek für board-takt.mjs und naechstes-ticket.mjs (Einstiegsskripte importieren nicht voneinander).
+// Kein Shebang: Bibliothek für board-takt.mjs und factory-kennzahlen.mjs (Einstiegsskripte importieren nicht voneinander).
 /**
  * Die Spielquote (ADR 0016, F11 aus ADR 0022 in #1729): höchstens 1 Factory-Merge auf `SPIEL_QUOTE` Produkt-Merges. Pur, ohne I/O,
- * damit der Takt (Sammelticket nach vorn) und die Auswahl (welche Seite ist dran) dieselbe Zählung benutzen.
+ * damit der Takt (Sammelticket nach vorn) und die Kennzahlen dieselbe Zählung benutzen. Die Quote ist Kennzahl, sie wählt keine Seite.
  * Ein Factory-Merge ist ein Commit auf main, dessen Titel ein Issue mit dem Harness-Label der Config referenziert (`istHarnessCommit`); Bots zählen nicht.
  */
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
@@ -60,34 +60,6 @@ export function commitRefs(commit) {
 export function zaehleTaktMerges(commits, seit = null, sammelIssues = new Set()) {
   if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
   return zaehleTicketMerges(commits.filter((c) => !commitRefs(c).some((n) => sammelIssues.has(n))), seit);
-}
-
-/**
- * Produkt-Merges seit dem letzten Factory-Merge: `commits` neueste zuerst (wie `repos/<repo>/commits`, nicht sortiert). Bot-Commits
- * zählen nicht und stoppen nicht; beim ersten Harness-Commit (`istHarnessCommit`) ist Schluss. Ohne Factory-Merge in der Liste zählen alle
- * Produkt-Merges (Untergrenze des Fensters). Wirft, wenn `commits` keine Liste ist. Pur.
- */
-export function produktMergesSeitFactory(commits, harnessIssues = null) {
-  if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
-  let n = 0;
-  for (const c of commits) {
-    if (istBot(c)) continue;
-    if (istHarnessCommit(c, harnessIssues)) break;
-    n += 1;
-  }
-  return n;
-}
-
-/**
- * Welche Seite ist dran? `factoryInArbeit` (Nummer eines geclaimten offenen Nicht-Kopf-Factory-Items oder null) lenkt auf Produkt; sonst
- * Factory ab `SPIEL_QUOTE` Produkt-Merges seit dem letzten Factory-Merge, sonst Produkt. Liefert `{ seite, grund }`. Wirft bei einer
- * `produktMerges`, die keine ganze Zahl ≥ 0 ist (bei `factoryInArbeit` darf sie null sein). Pur.
- */
-export function entscheideSeite({ produktMerges, factoryInArbeit = null }) {
-  if (factoryInArbeit !== null && factoryInArbeit !== undefined) return { seite: "produkt", grund: `Factory in Arbeit (#${factoryInArbeit})` };
-  if (!Number.isInteger(produktMerges) || produktMerges < 0) throw new Error(`produktMerges muss eine ganze Zahl ≥ 0 sein, war ${String(produktMerges)}`);
-  const seite = produktMerges >= SPIEL_QUOTE ? "factory" : "produkt";
-  return { seite, grund: `${produktMerges} Produkt-Merges seit dem letzten Factory-Merge (Spielquote 1:${SPIEL_QUOTE})` };
 }
 
 /**

@@ -98,4 +98,16 @@ describe("flagsLesen", () => {
     expect(text(["--a"], { meldung })).toBe("eigen --a");
     expect(text(["--x"], { meldung })).toBe("Unbekanntes Argument: --x");
   });
+
+  test("meldung als Objekt: Text oder Funktion je Art, fehlende Art bleibt Standard", () => {
+    const text = (argv: string[], meldung: Record<string, unknown>, extra: Record<string, unknown> = {}) => lies(argv, { meldung, ...extra }).fehler?.text;
+    const karte = { "ohne-wert": "eigener Text", unbekannt: (flag: string) => `fremd ${flag}` };
+    expect(text(["--a"], karte)).toBe("eigener Text");
+    expect(text(["--x"], karte)).toBe("fremd --x");
+    expect(text(["--json", "--json"], karte)).toBe("--json ist doppelt angegeben");
+    expect(text([], karte, { pflicht: ["a"] })).toBe("--a fehlt");
+    // Negativfall: ein Objekt ohne die Art fällt nie auf Prototyp-Schlüssel zurück.
+    expect(text(["--a"], {})).toBe("--a braucht einen Wert");
+    expect(text(["--a"], Object.create({ "ohne-wert": "geerbt" }) as Record<string, unknown>)).toBe("--a braucht einen Wert");
+  });
 });

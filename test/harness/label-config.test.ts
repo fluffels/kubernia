@@ -47,9 +47,8 @@ const W = wiedervorlageRaw as unknown as {
   ioAus: (c: unknown, o?: { legen?: (e: { label?: string }, label: string) => number }) => { anlegen: (e: { label?: string }) => number };
 };
 const N = naechstesRaw as unknown as {
-  echteIo: (o?: { config?: Cfg; gh?: (a: string[]) => unknown }) => { config: Cfg; ladeQuote: () => unknown };
+  echteIo: (o?: { config?: Cfg }) => { config: Cfg };
   imBereich: (item: { title: string; labels: string[] }, bereich: string | null, config?: unknown) => boolean;
-  ladeQuoteEcht: (lade: (a: string[]) => unknown, config?: unknown) => unknown;
   waehleUeberBoards: (e: Record<string, unknown>) => unknown;
   waehleNaechstes: (e: Record<string, unknown>) => { ticket: { nr: number } | null; uebersprungen: { nr: number; grund: string }[] };
 };
@@ -203,33 +202,6 @@ describe("naechstes-ticket: Harness- und Forum-Label aus der Config", () => {
     const r = N.waehleNaechstes({ items: [mk(1, ["f"]), mk(2, ["area:harness"]), mk(3, ["bereich:fabrik"])], offene: new Set(), owner: eigen, bereich: "agentic", config: FAB, hartAb: 1_000_000 });
     expect(r.ticket?.nr).toBe(3);
     expect(N.waehleNaechstes({ items: [mk(1, ["f"])], offene: new Set(), owner: eigen, config: FAB }).uebersprungen[0]?.grund).toMatch(/Fremdeingang/);
-  });
-  test("ladeQuoteEcht fragt das URL-kodierte Fixture-Label ab", () => {
-    const aufrufe: string[] = [];
-    const lade = (a: string[]) => {
-      aufrufe.push(a.join(" "));
-      return aufrufe.length === 1 ? [{ commit: { committer: { date: "2026-10-01T00:00:00Z" } } }] : [[{ number: 7 }]];
-    };
-    N.ladeQuoteEcht(lade, FAB);
-    expect(aufrufe[1]).toContain("labels=bereich%3Afabrik");
-    expect(aufrufe[1]).not.toContain("harness");
-  });
-  test("ladeQuoteEcht ohne labels.harness wirft vor jedem Aufruf", () => {
-    const lade = () => {
-      throw new Error("kein gh-Aufruf erwartet");
-    };
-    expect(() => N.ladeQuoteEcht(lade, OHNE_HARNESS)).toThrow(/labels.harness/);
-    expect(() => N.ladeQuoteEcht(lade, undefined)).toThrow(/labels.harness/);
-  });
-  test("echteIo reicht das Fixture-Label an die Quote-Abfrage durch (ladeQuote nutzt x in der URL)", () => {
-    const aufrufe: string[] = [];
-    const gh = (a: string[]) => {
-      aufrufe.push(a.join(" "));
-      return aufrufe.length === 1 ? [{ commit: { committer: { date: "2026-10-01T00:00:00Z" } } }] : [[{ number: 7 }]];
-    };
-    const io = N.echteIo({ config: { ...FAB, labels: { ...(FAB.labels as object), harness: "x" } }, gh });
-    io.ladeQuote();
-    expect(aufrufe[1]).toContain("labels=x&since=");
   });
 });
 
