@@ -17,6 +17,8 @@ export const HEX_HEAD = new RegExp(`^${HEX}$`);
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
+/** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; das Gate erzwingt die Zahl nicht). */
+export const MAX_ZUSATZPAESSE = 3;
 
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main
@@ -88,6 +90,14 @@ function zusatzpassAus(reviewWert) {
   return anzahl >= 1 && grund !== "" ? { anzahl, grund } : { ungueltig: wert };
 }
 
+/** Optionales Feld `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, die nicht gegen das Review-Cap zählt.
+ *  `null`, wenn das Feld fehlt; `{ungueltig}`, wenn der Wert nicht genau `1` ist; sonst `1`. */
+function abnahmefixAus(reviewWert) {
+  const wert = feldWert(reviewWert, "abnahmefix");
+  if (wert === null) return null;
+  return wert.trim() === "1" ? 1 : { ungueltig: wert };
+}
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -118,6 +128,7 @@ export function parseNachweis(text, zeilen) {
       lenses: lensenAus(reviewWert),
       blocker: blockerAus(reviewWert),
       zusatzpass: zusatzpassAus(reviewWert),
+      abnahmefix: abnahmefixAus(reviewWert),
       verdikt: felder.verdikt ?? null,
     };
   }

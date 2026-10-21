@@ -13,7 +13,8 @@
  *   <Präfix>Plan: <Planer>               |  <Präfix>Plan: ohne — <Begründung>
  *   <Präfix>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
- *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): ein Pass über das Cap hinaus ohne Rückfrage (Ursache im PR); weitere gibt nur die Maintainerin frei; erhöht die Obergrenze.
+ *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR); mehr gibt nur die Maintainerin frei; erhöht die Obergrenze.
+ *   Optional `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, eigenes Budget neben dem Cap (Obergrenze + 1, nur bei überschrittenem Review-Cap).
  *
  * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
  * Aus einer stillen Auslassung wird so eine bewusste Falschangabe; die unabhängige Prüfung
@@ -42,7 +43,7 @@ import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis } from "./nachweis-lib.mjs";
+import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
@@ -94,8 +95,8 @@ function bewerteBlocker(review, zeilen) {
   return fehler;
 }
 
-/** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): einen Pass über das Cap
- *  fährt der Umsetzer ohne Rückfrage, weitere gibt nur die Maintainerin frei; der Nachweis bleibt Selbstauskunft.
+/** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap
+ *  fährt der Umsetzer ohne Rückfrage, mehr gibt nur die Maintainerin frei; der Nachweis bleibt Selbstauskunft.
  *  Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
 function bewerteRunden(review, zeilen) {
   const R = zeilen.review;
@@ -103,15 +104,24 @@ function bewerteRunden(review, zeilen) {
   if (zp && "ungueltig" in zp) {
     return [`${R}: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Ursache>).`];
   }
-  const erlaubt = MAX_REVIEW_PAESSE + (zp ? zp.anzahl : 0);
+  const af = review.abnahmefix ?? null;
+  if (af && typeof af === "object") {
+    return [`${R}: abnahmefix=${af.ungueltig} ungültig (erwartet: abnahmefix=1, die eine Delta-Runde nach einem Abnahme-Fix).`];
+  }
+  const reviewErlaubt = MAX_REVIEW_PAESSE + (zp ? zp.anzahl : 0);
+  const erlaubt = reviewErlaubt + (af ? 1 : 0);
   if (review.runden > erlaubt) {
     return [
       `${R}: runden=${review.runden} überschreitet die Obergrenze (Cap ${MAX_FIX_RUNDEN} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
-        `Einen Zusatzpass nach dem Cap fährt der Umsetzer ohne Rückfrage: zusatzpass=<anzahl>:<Ursache> in die ${R}-Zeile.`,
+        `Bis zu ${MAX_ZUSATZPAESSE} Zusatzpässe nach dem Cap fährt der Umsetzer ohne Rückfrage (mehr nur mit Freigabe): zusatzpass=<anzahl>:<Ursache> in die ${R}-Zeile; ` +
+        `die eine Delta-Runde nach einem Abnahme-Fix steht als abnahmefix=1.`,
     ];
   }
   if (zp && review.runden <= MAX_REVIEW_PAESSE) {
     return [`${R}: zusatzpass ist nur bei runden > ${MAX_REVIEW_PAESSE} zulässig (runden=${review.runden}).`];
+  }
+  if (af && review.runden <= reviewErlaubt) {
+    return [`${R}: abnahmefix ist nur bei runden > ${reviewErlaubt} zulässig (das Review-Cap ist nicht überschritten, runden=${review.runden}).`];
   }
   return [];
 }

@@ -46,7 +46,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0025 Sandbox als Laufumgebung](../adr/0025-sandbox-als-austauschbare-laufumgebung.md) | wenn die Agenten-Sandbox gewechselt, `sandbox-doctor --streng` gebaut oder geprüft werden soll, ob eine Umgebung als gesandboxt gilt (Vertrag V0 bis V7, Docker Sandboxes, eigene Container-Sandbox) |
 | [0026 Sammeltickets in Gruppen](../adr/0026-sammelticket-gruppen.md) | wenn Sammeltickets zu groß oder teuer werden, ein Sammelticket aufgeteilt oder eine Zeilengrenze erwogen werden soll |
 | [0027 Evidenzbasiert lockern](../adr/0027-regeln-lockern.md) | wenn eine Regel, ein Gate, eine Lens, ein Hook, ein Workflow-Schritt oder Prompt-Text entfernt, eingeschränkt oder gekürzt werden soll, oder ein Status-Lauf einen Lockern-Kandidaten meldet |
-| [0028 Genau ein Ticket-Ablauf](../adr/0028-ein-ticket-ablauf.md) | wenn ein zweiter Ticket-Ablauf neben dem Skill `kubernia` (Workflow-Skript, Zeiger-Skill) vorgeschlagen wird, oder der Ersatz einer früher nur im Workflow deterministischen Garantie gesucht wird |
+| [0028 Genau ein Ticket-Ablauf](../adr/0028-ein-ticket-ablauf.md) | wenn ein zweiter Ablauf neben dem Ticket-Ablauf (Ticket-Skills mit gemeinsamem ablauf.md; Workflow-Skript, Zeiger-Skill) vorgeschlagen wird, oder der Ersatz einer früher nur im Workflow deterministischen Garantie gesucht wird |
 | [0029 Harness-Cockpit](../adr/0029-harness-cockpit.md) | wenn eine Oberfläche, ein Dashboard oder ein Werkzeug zur Agenten-Übersicht gebaut, ein Bausatz erwogen oder etwas der Factory zugeordnet wird, das nicht in Projekte verteilt wird |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
@@ -95,6 +95,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
+| [factory/entscheidungsprotokoll.md](../factory/entscheidungsprotokoll.md) | wenn du vor einer Ermessens-Weiche oder einem Hand-off (`festgefahren`, Zusatzpass, Override) stehst und entscheiden willst, ob und womit du sie selbst klärst |
 | [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
 | [lens-gegenprobe-2026-10-09.md](../lens-gegenprobe-2026-10-09.md) | Momentaufnahme: Rohwerte und Rezept der Lens-Gegenprobe (Opus gegen Sonnet gegen Haiku je Brille); die Entscheidung steht in model-routing.md |
 | [lens-gegenprobe-2026-10-15.md](../lens-gegenprobe-2026-10-15.md) | Momentaufnahme: Gegenprobe `omitClaudeMd: true` für die Lens (Kontextdateien mit und ohne), Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |

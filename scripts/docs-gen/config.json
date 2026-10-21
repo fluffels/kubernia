@@ -90,6 +90,7 @@
       "lensCap": { "datei": "scripts/nachweis-lib.mjs", "name": "MAX_FIX_RUNDEN" },
       "festgefahrenCommits": { "datei": "scripts/check-festgefahren.mjs", "name": "MAX_FAILED_PUSHES" }
     },
+    "projektConfig": ".factory/projekt.json",
     "ciWorkflows": ".github/workflows"
   },
   "harness": {

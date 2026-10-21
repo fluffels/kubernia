@@ -211,3 +211,41 @@ describe("kriterien: Einzug und Fortsetzung (Lens-Runde 1)", () => {
     expect(K("## Akzeptanzkriterien\n1. a\nFortsetzung\n2. b\n").map((e) => e.text)).toEqual(["a\nFortsetzung", "b"]);
   });
 });
+
+describe("Allquantor-Kriterien auf Heuristik-Wächter (#1808)", () => {
+  const mit = (k: string) => `## Ziel\nZ\n\n## Akzeptanzkriterien\n1. ${k}\n2. Negativfall: x.\n`;
+  test("„jede … die … liest“ ohne Begrenzung ist ein Mangel mit K-Nummer", () => {
+    const m = S.spezifikationsMaengel(mit("Der Wächter findet jede Voraussetzung, die ein Skript liest."));
+    expect(m).toHaveLength(1);
+    expect(m[0]).toContain("K1");
+    expect(m[0]).toContain("bekannte Muster");
+  });
+  test("„alle … die … verwendet“, Folgezeile und „gelesen werden“ zählen", () => {
+    expect(S.spezifikationsMaengel(mit("Er erkennt alle Variablen,\n   die ein Workflow verwendet."))).toHaveLength(1);
+    expect(S.spezifikationsMaengel(mit("Er meldet alle Dateien, die gelesen werden."))).toHaveLength(1);
+  });
+  test("Begrenzung „bekannte Muster:“ im Kriterium: kein Mangel", () => {
+    expect(S.spezifikationsMaengel(mit("Er findet jede Voraussetzung, die ein Skript liest (bekannte Muster: A, B; Grenze im Kopfkommentar)."))).toEqual([]);
+  });
+  test("ohne Relativsatz und ohne echten Allquantor (Wortgrenze): kein Mangel", () => {
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird vom Skript gelesen."))).toEqual([]);
+    // linke Wortgrenze von „alle“ und Grenzen um die Artikelwörter („oder“, „wieder“ enthalten „der“)
+    expect(S.spezifikationsMaengel(mit("Er prüft Intervalle, die das Skript liest."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird vom Skript oder Hook gelesen."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird wieder gelesen."))).toEqual([]);
+    // rechte Grenze der Artikelwörter und beide Grenzen um das Lesewort
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird derzeit gelesen."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Jede Nachricht, die ungelesen bleibt, wird markiert."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Alle Texte, die lesenswert sind, stehen oben."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Allerdings meldet der Wächter die Datei, die er liest."))).toEqual([]);
+  });
+  test("Kriterium ohne Allquantor: kein Mangel", () => {
+    expect(S.spezifikationsMaengel(mit("Der Wächter findet die Voraussetzung, die das Skript liest."))).toEqual([]);
+  });
+  test("Allquantor ohne „liest“-Kontext: kein Mangel", () => {
+    expect(S.spezifikationsMaengel(mit("Alle Tests, die laufen, sind grün."))).toEqual([]);
+  });
+  test("Allquantor und Lesewort in getrennten Sätzen: kein Mangel", () => {
+    expect(S.spezifikationsMaengel(mit("Jede Datei, die geprüft wird. Das Skript liest sie."))).toEqual([]);
+  });
+});

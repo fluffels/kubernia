@@ -4,6 +4,9 @@
  * mit mindestens einem Negativfall (ein Kriterium mit dem Wort „Negativfall“). Alles pur, ohne Importe und ohne Projektliterale.
  * Ausnahmen (Sammel-, Status-, Epic-Tickets) entscheidet der Aufrufer über das Prädikat `ausgenommen`; Bestand (Nummer unter `hartAb`)
  * wird nur berichtet, Neues ist hart.
+ * Ticketzuschnitt (#1808): ein Allquantor-Kriterium auf einen Heuristik-Wächter („jede/alle … die … liest/verwendet/gelesen“ im selben Satz)
+ * ist unbegrenzt und mit Mustern nie vollständig; es braucht die Begrenzung „bekannte Muster:“. Grenze: nur dieses kleine Satzmuster
+ * (Allquantor, Relativsatz, Lesewort ohne Satzende dazwischen); andere Formulierungen desselben Anspruchs erkennt das Gate nicht.
  */
 
 const MANGEL = {
@@ -17,6 +20,10 @@ const MANGEL = {
 
 /** Präfix eines Kriteriums, das erst nach dem Merge erfüllbar ist; die Abnahme prüft es nicht, der Umsetzer liefert den Beleg als PR-Kommentar. */
 export const NACH_MERGE_PRAEFIX = "Nach dem Merge:";
+
+const ALLQUANTOR_LESEN = /\b(?:jede[rsnm]?|alle[nrsm]?)\b[^.!?]*\b(?:die|der|das|den)\b[^.!?]*\b(?:liest|lesen|gelesen|verwendet|verwenden)\b/i;
+const BEGRENZUNG = /bekannte\s+Muster\s*:/i;
+const maengelAllquantor =(k) => `${k}: Allquantor („jede/alle … die … liest“) auf einen Heuristik-Wächter ist unbegrenzt: die Begrenzung als geschlossene Liste nennen („bekannte Muster: …“)`;
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 const NEGATIVFALL = /negativ-?f(?:a|ä)ll/i;
@@ -59,6 +66,7 @@ export function spezifikationsMaengel(body) {
     if (!ak.some((z) => NEGATIVFALL.test(z))) maengel.push(MANGEL.keinNegativ);
     const liste = kriterien(body);
     if (liste.length > 0 && liste.every((c) => c.nachMerge)) maengel.push(MANGEL.alleNachMerge);
+    for (const c of liste) if (ALLQUANTOR_LESEN.test(c.text.replace(/\s+/g, " ")) && !BEGRENZUNG.test(c.text)) maengel.push(maengelAllquantor(c.k));
   }
   return maengel;
 }

@@ -190,8 +190,6 @@ describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", 
   const KERN = kernPfade.flatMap((p) => /^scripts\/docs-gen\/([\w-]+)\.mjs$/.exec(p)?.[1] ?? []);
   // Die CommonJS-Kern-Module (Schicht-Kern, #1612) darf schichten.mjs laden (relativer Spezifizierer aus scripts/docs-gen/).
   const KERN_CJS = kernPfade.flatMap((p) => (/^scripts\/[\w-]+\.cjs$/.test(p) ? `../${p.slice("scripts/".length)}` : []));
-  // Die Projekt-Config-Lib ist Kern und der eine Zeiger auf den Ruleset-Spiegel (#1800): diagramme.mjs darf sie laden.
-  if (kernPfade.includes("scripts/projekt-config-lib.mjs")) KERN_CJS.push("../projekt-config-lib.mjs");
   test("die Ableitung aus dem Besitz-Manifest ist nicht leer und enthält den Schicht-Kern", () => {
     assert.ok(KERN.includes("schichten"), KERN.join());
     assert.ok(KERN_CJS.includes("../schichten-kern.cjs"), KERN_CJS.join());

@@ -10,7 +10,8 @@
  * oder seine Regel als `codescanning-<slug>` in `.github/wiedervorlagen.json` steht (nur für Zeilen-Alerts; ein Spitzen-Alert bleibt nur still, wenn
  * seine Nummer im Feld `alerts` des Eintrags steht). Ein Alert mit GHSA-IDs im Meldungstext (VulnerabilitiesID) ist bekannt, wenn jede ID schon als
  * Audit-Zeile, `audit-ghsa-<id>` oder Security-Ticket eingeordnet ist. Außerdem deckt ein OFFENES Issue eines vertrauten Autors einen Alert ab
- * (nicht Spitzen-Ticket, nicht Sammeltickets), wenn sein Body `Alert N` nennt oder die Regel-ID (Wortgrenze) samt Verzeichnis des Alert-Pfads;
+ * (nicht Spitzen-Ticket, nicht Sammeltickets), wenn sein Body `Code-Scanning-Alert N` (bzw. `Code-Scanning-Alerts N, M`; ein
+ * bloßes `Alert N` anderer Werkzeuge zählt nicht) nennt oder die Regel-ID (Wortgrenze) samt Verzeichnis des Alert-Pfads;
  * der Lauf loggt die Abdeckung, nach dem Schließen taucht der Alert wieder auf.
  * Bekannte Grenze: Regel+Verzeichnis hält auch einen NEUEN Alert derselben Regel im selben Verzeichnis still, solange das deckende Issue offen ist.
  *
@@ -84,6 +85,13 @@ export function nummernIn(text) {
   return nummern;
 }
 
+/** Alert-Nummern nur aus `Code-Scanning-Alert 5` bzw. `Code-Scanning-Alerts 5, 6` (Konvention deckender Issues; `Alert 5` anderer Werkzeuge zählt nicht). Pur. */
+export function codeScanningNummernIn(text) {
+  const nummern = [];
+  for (const m of String(text ?? "").matchAll(/(?<![\w-])Code-Scanning-Alerts?\s+(\d+(?:\s*,\s*\d+)*)/g)) nummern.push(...m[1].split(",").map((n) => Number(n.trim())));
+  return nummern;
+}
+
 /**
  * Bekannte Alerts: Nummern aus offenen Zeilen `- [ ] Code-Scanning:` in Kommentaren VERTRAUTER Autoren (`istVertraut`), Regeln (als Slug) aus
  * Wiedervorlagen-IDs `codescanning-<slug>`. Pur.
@@ -114,7 +122,7 @@ export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel 
 
 /**
  * Das erste offene Issue (`issues` aus `bekannteAlerts`), das den Alert abdeckt: `{ number, grund }` oder null. Grund `nummer`: der Body nennt
- * `Alert N`; `regel+verzeichnis`: der Body nennt die Regel-ID (Wortgrenze) und `dirname(pfad)/` (ohne Verzeichnis im Pfad keine Abdeckung). Pur.
+ * `Code-Scanning-Alert N`; `regel+verzeichnis`: der Body nennt die Regel-ID (Wortgrenze) und `dirname(pfad)/` (ohne Verzeichnis im Pfad keine Abdeckung). Pur.
  */
 export function deckendesIssue(alert, issues) {
   const dir = String(alert.pfad ?? "").replace(/\\/g, "/").split("/").slice(0, -1).join("/");
@@ -123,7 +131,7 @@ export function deckendesIssue(alert, issues) {
   const regelRe = regel && regel !== "unbekannt" ? new RegExp(String.raw`(?<![\w/.-])${escapeRegex(regel)}(?![\w/-])`) : null;
   const dirRe = dir ? new RegExp(String.raw`(?<![\w.-])${escapeRegex(dir)}/`) : null;
   for (const i of issues ?? []) {
-    if (nummernIn(i.body).includes(alert.nummer)) return { number: i.number, grund: "nummer" };
+    if (codeScanningNummernIn(i.body).includes(alert.nummer)) return { number: i.number, grund: "nummer" };
     if (regelRe && dirRe && regelRe.test(i.body) && dirRe.test(i.body)) return { number: i.number, grund: "regel+verzeichnis" };
   }
   return null;

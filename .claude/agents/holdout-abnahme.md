@@ -34,6 +34,7 @@ Zuerst `git -C <worktree> status --porcelain` (muss leer sein) und `git -C <work
 - **Keine Außenwirkung.** Keine Schreibbefehle von `gh`, kein `git commit/push/checkout/reset/stash`, kein `abnahme.mjs auswerten` (das macht der Hauptchat).
 - **Browser.** Starte für eine Browser-Prüfung einen eigenen Dev-Server aus dem Worktree auf einem freien Port mit `--strictPort`; den Zustand liest du zuerst über den Dev-Zustands-Helfer der Browser-Prüfung (`browser_evaluate`), Screenshots nur für die Optik (mit `filename` im Scratchpad). Danach `browser_close`, den Server per PID beenden (`taskkill /PID <pid> /T /F` bzw. in Git-Bash `taskkill //PID <pid> //T //F`, nie per Name) und prüfen, dass der Port frei ist.
 - Jeder Negativfall der Szenarien wird wirklich ausgeführt.
+- Bei einem Heuristik-Wächter mit geschlossener Musterliste („bekannte Muster: …“) ist ein weiteres denkbares Muster kein Fehler: melde nur Fehler an den definierten Mustern, Fehlalarme und Lücken bei den genannten Quellen, alles andere als „Bekannte Grenze“.
 
 ## Bericht (letzte Nachricht)
 

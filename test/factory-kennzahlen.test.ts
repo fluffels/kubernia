@@ -559,6 +559,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     selbstAudit: (e: Eingabe) => A[];
     auditAbschnitt: (a: A[]) => string[];
     ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[]) => unknown; repo?: string; config?: unknown }) => { commits: unknown[] | null; commitsLuecke?: string; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
+    configOderFehler: (lade?: () => unknown) => { config: unknown; configFehler?: string };
     erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]>; auditLader?: (e: { bis: string }) => Eingabe }) => { bericht: { audit?: A[] }; exit: number };
     renderMarkdown: (b: unknown) => string;
   };
@@ -635,11 +636,11 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(von({ zeilen: null }, "Festgefahren-Protokoll").status).toBe("Lücke");
   });
 
-  test("Lens-Zahl: 5 Runden ABWEICHUNG, 4 ok, ohne Nachweis (runden null) Lücke und nie 0", () => {
-    const zuviel = von({ zeilen: [ZEILE({ pr: 62, runden: 5 })] }, "Lens-Zahl");
+  test("Lens-Zahl: 8 Runden ABWEICHUNG, 7 (3 Pässe, 3 Zusatzpässe, 1 Abnahme-Fix) ok, ohne Nachweis (runden null) Lücke und nie 0", () => {
+    const zuviel = von({ zeilen: [ZEILE({ pr: 62, runden: 8 })] }, "Lens-Zahl");
     expect(zuviel.status).toBe("ABWEICHUNG");
-    expect(zuviel.messung).toContain("#62 (5)");
-    expect(von({ zeilen: [ZEILE({ runden: 4 }), ZEILE({ runden: null })] }, "Lens-Zahl").status).toBe("ok");
+    expect(zuviel.messung).toContain("#62 (8)");
+    expect(von({ zeilen: [ZEILE({ runden: 7 }), ZEILE({ runden: null })] }, "Lens-Zahl").status).toBe("ok");
     const ohne = von({ zeilen: [ZEILE({ runden: null })] }, "Lens-Zahl");
     expect(ohne.status).toBe("Lücke");
     expect(ohne.messung).toMatch(/ohne Review-Nachweiszeile/);
@@ -702,6 +703,25 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     const ohneLabel = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: (a) => (a[0] === "issue" ? [] : [[spiel(1)]]), config: { labels: {} } });
     expect(ohneLabel.harnessLuecke).toMatch(/labels.harness/);
     expect(ohneLabel.commits).toHaveLength(1);
+  });
+
+  test("ladeAuditDaten: scheiterte das Laden der Config, nennt die Lücke deren Fehlertext statt labels.harness; Commits bleiben, keine Issue-Abfrage (L17)", () => {
+    const aufrufe: string[] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a[3] ?? a[0] ?? "");
+      return a[0] === "issue" ? [] : [[spiel(1)]];
+    };
+    const geladen = S.configOderFehler(() => { throw new Error("agenten.planer fehlt"); });
+    expect(geladen).toEqual({ config: null, configFehler: "agenten.planer fehlt" });
+    expect(S.configOderFehler(() => ({ x: 1 }))).toEqual({ config: { x: 1 } });
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", ...geladen });
+    expect(d.harnessIssues ?? null).toBeNull();
+    expect(d.harnessLuecke).toBe("Projekt-Config nicht ladbar: agenten.planer fehlt");
+    expect(d.commits).toHaveLength(1);
+    expect(aufrufe.some((a) => a.includes("/issues?"))).toBe(false);
+    // Negativfall: ohne Fehlertext und ohne Config bleibt es beim bisherigen Hinweis auf das Label.
+    const ohne = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: null });
+    expect(ohne.harnessLuecke).toMatch(/labels\.harness/);
   });
 
   test("ladeAuditDaten: ohne abgeschlossenes Sammelticket ist das Fenster 28 Tage vor `bis`, nichts in Arbeit", () => {
@@ -767,7 +787,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
   });
 
   test("erstelle mit auditLader trägt das Audit in den Bericht; ohne Lader bleibt es weg; ohne Lauf-Ergebnis sind Lens und Festgefahren Lücken", () => {
-    const run: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: JSON.stringify({ zeilen: [ZEILE({ pr: 70, runden: 6 })], kennzahlen: { ...KENN, prs: 1 } }), stderr: "" });
+    const run: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: JSON.stringify({ zeilen: [ZEILE({ pr: 70, runden: 8 })], kennzahlen: { ...KENN, prs: 1 } }), stderr: "" });
     const claimKarte = () => new Map([[40, [{ session: "s1", ts: "2026-10-14T07:00:00Z" }]]]);
     const mit = S.erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte, auditLader: () => ({ commits: [] }) });
     expect(mit.bericht.audit!.find((a) => a.mechanismus === "Lens-Zahl")).toMatchObject({ status: "ABWEICHUNG" });

@@ -20,7 +20,7 @@
 import { ghJson, ghText } from "./gh-cli.mjs";
 import { readFileSync } from "node:fs";
 import { labelAus } from "./projekt-config-lib.mjs";
-import { namenOderGrund } from "./ticket-namen.mjs";
+import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 
 /** Erlaubte Werte hinter `ERGEBNIS:` (Format in der Umsetzer-Definition unter `.claude/agents/`, Test bindet beides). */
@@ -125,7 +125,7 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
     stuckLabel = labelAus(config, "festgefahren");
   } catch (e) {
     // Config-Fehler blockieren mit Fix-Zeile (fail-closed, wie namenOderGrund); ein Wurf ließe beide Hooks durch.
-    return `Umsetzer-Abschluss: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ${e instanceof Error ? e.message : String(e)}`;
+    return failClosedGrund("Umsetzer-Abschluss", e);
   }
   const { token, zusatz, pr, schnitt, uebergabe, festgefahren } = parseErgebnis(lastMessage);
   if (vorher) {

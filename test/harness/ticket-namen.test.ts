@@ -43,6 +43,7 @@ const N = namenRaw as unknown as {
   escapeRegex: (t: string) => string;
   ticketNamen: (c: Cfg) => Namen;
   ladeTicketNamen: (o?: { pfad?: string }) => Namen;
+  failClosedGrund: (werkzeug: string, fehler: unknown) => string;
   namenOderGrund: (w: string, d?: { config?: Cfg }) => { namen?: Namen; config?: Cfg; grund?: string };
 };
 const lensEdit = lensEditRaw as unknown as { bewerteLensEdit: (f: string, cwd?: string, d?: { config?: Cfg }) => { block: boolean; reason?: string } };
@@ -146,6 +147,13 @@ describe("ticketNamen: fehlender Schlüssel (AK3)", () => {
     expect(ok.grund).toBeUndefined();
     expect(ok.namen?.agenten.umsetzer).toBe("ab-umsetzer");
     expect(ok.config).toBe(AB);
+  });
+  test("failClosedGrund: ein Text für Fehler und Nicht-Fehler, wörtlich gleich in allen Aufrufern", () => {
+    const kopf = "Mein-Hook: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ";
+    expect(N.failClosedGrund("Mein-Hook", new Error("labels.festgefahren fehlt"))).toBe(`${kopf}labels.festgefahren fehlt`);
+    expect(N.failClosedGrund("Mein-Hook", "nur Text")).toBe(`${kopf}nur Text`);
+    expect(N.failClosedGrund("Mein-Hook", undefined)).toBe(`${kopf}undefined`);
+    expect(N.namenOderGrund("Mein-Hook", { config: OHNE_UMSETZER }).grund).toBe(N.failClosedGrund("Mein-Hook", (() => { try { N.ticketNamen(OHNE_UMSETZER); } catch (e) { return e; } })()));
   });
   test("die echte Config trägt alle Schlüssel (Standard ohne deps)", () => {
     const r = N.namenOderGrund("x");

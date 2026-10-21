@@ -79,6 +79,9 @@ export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
 
 /** Pflicht-Label-Schlüssel (weitere erlaubt, gleiche Prüfung) und Pflicht-Agenten. */
 export const PFLICHT_LABELS = ["harness", "festgefahren", "forum", "dependabotInbox"];
+/** Name des Kern-Ticket-Skills (`.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
+export const KERN_TICKET_SKILL = "factory";
+
 export const PFLICHT_AGENTEN = ["planer", "umsetzer", "lens", "gruppe", "ticketSkill"];
 
 /** Pur: prüft `praefixe` (commitZeile, branch, worktree). */

@@ -21,11 +21,20 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
+import { KERN_TICKET_SKILL } from "./projekt-config-lib.mjs";
+import { namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
-/** Die Ticket-Skills (Produkt-Skill und der Kern-Skill `factory`, #1806): ihr Aufruf (Slash oder Skill-Tool) ist ein Ticketlauf. */
-const TICKET_SKILLS = ["kubernia", "factory"];
+/**
+ * Die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill` der Projekt-Config und der Kern-Skill, #1806): ihr Aufruf (Slash oder Skill-Tool) ist ein Ticketlauf.
+ * Wirft mit Grund, wenn die Config nicht nutzbar ist (Datenfehler statt falscher Zählung). `deps.config` ersetzt das Laden (Test).
+ */
+export function ticketSkillsAusConfig(deps = {}) {
+  const r = namenOderGrund("hauptchat-zerlegung", deps);
+  if (r.grund) throw new Error(r.grund);
+  return [r.namen.agenten.ticketSkill, KERN_TICKET_SKILL];
+}
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
@@ -68,7 +77,7 @@ function eventBeruehrtBrain(ev, wurzeln) {
 }
 
 /** Eine Session in Turns zerlegen: jede Zeile gehört zum zuletzt begonnenen Turn. */
-function turnsAus(zeilen, wurzeln) {
+function turnsAus(zeilen, wurzeln, ticketSkills) {
   const gruppen = [{ start: null, rows: [] }];
   for (const row of zeilen) {
     const s = turnStart(row);
@@ -78,9 +87,9 @@ function turnsAus(zeilen, wurzeln) {
   return gruppen.map((g, idx) => {
     const events = toolEventsFromTranscript(g.rows);
     const { calls } = callsFromTranscript(g.rows);
-    const skillGeladen = events.some((e) => e.tool === "Skill" && TICKET_SKILLS.includes(e.input?.skill));
+    const skillGeladen = events.some((e) => e.tool === "Skill" && ticketSkills.includes(e.input?.skill));
     const workflow = events.some((e) => /workflow/i.test(e.tool));
-    const art = TICKET_SKILLS.includes(g.start?.slash) ? "Slash" : skillGeladen ? "Skill-Tool" : workflow ? "Workflow" : "frei";
+    const art = ticketSkills.includes(g.start?.slash) ? "Slash" : skillGeladen ? "Skill-Tool" : workflow ? "Workflow" : "frei";
     // Brain gilt ab dem ersten Brain-Ereignis bis Turn-Ende (#1382); ein Turn mit /brain-input ist ganz Brain.
     const brainTs = events.filter((e) => eventBeruehrtBrain(e, wurzeln)).map((e) => (gueltig(e.ts) ? Date.parse(e.ts) : -Infinity));
     const brainAb = g.start?.slash === "brain-input" ? -Infinity : brainTs.length ? Math.min(...brainTs) : null;
@@ -182,9 +191,10 @@ export function ttlVergleich(calls) {
 /**
  * Kern: Sessions (Hauptzeilen + Subagenten) → Summen je Kategorie × Modell × Quelle plus Ticket-Fenster.
  * @param {{ sessions: Iterable<{ id: string, main: object[], subagents?: { meta: object, zeilen: object[] }[] }>,
- *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null }} e
+ *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config?: object }} e
  */
-export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null }) {
+export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, config }) {
+  const ticketSkills = ticketSkillsAusConfig({ config });
   const wurzeln = brainRoots.map((r) => norm(r).replace(/\/+$/, "")).filter(Boolean);
   const summen = new Map();
   const fenster = [];
@@ -210,7 +220,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   };
 
   for (const s of sessions) {
-    const turns = turnsAus(s.main, wurzeln);
+    const turns = turnsAus(s.main, wurzeln, ticketSkills);
     const subs = (s.subagents ?? []).map((sa) => ({
       meta: sa.meta ?? {},
       calls: callsFromTranscript(sa.zeilen).calls,

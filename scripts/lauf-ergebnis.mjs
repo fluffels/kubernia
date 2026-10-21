@@ -179,6 +179,12 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
         override: eintraege.filter((z) => z.abnahme === "override").length,
         ohne: eintraege.filter((z) => z.abnahme === null).length,
       },
+      // Abnahme-Fix (#1808): PRs mit mehr als einem Abnahme-Durchgang (der Fix nach Urteil `fix`), davon mit Festgefahren-Label (Hand-off).
+      // Nur gemergte PRs: ein nie gemergter Hand-off-PR fehlt in dieser Zahl.
+      abnahmeFix: {
+        mitFix: eintraege.filter((z) => z.abnahme?.durchgaenge >= 2).length,
+        mitFixUndFestgefahren: eintraege.filter((z) => z.abnahme?.durchgaenge >= 2 && z.festgefahren > 0).length,
+      },
     },
   };
 }
@@ -198,6 +204,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   const a = k.abnahme;
   out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne gültige Abnahme-Zeile ${a.ohne}`);
+  out.push(`Abnahme-Fix: ${k.abnahmeFix.mitFix} PRs, davon mit Hand-off: ${prozent(k.abnahmeFix.mitFixUndFestgefahren, k.abnahmeFix.mitFix)}`);
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
   return out.join("\n");
 }

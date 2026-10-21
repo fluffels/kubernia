@@ -389,12 +389,12 @@ describe("Skill forum orchestriert die Quarantäne", () => {
 describe("main (CLI-Kern, gh und Entschärfer injiziert): fail-closed, keine Teildatei, kein Fremdtext auf stdout", () => {
   const sicher = (t: string) => `[s]${t}`;
   const issue = (title: string, labels: string[]) => JSON.stringify({ title, labels: labels.map((name) => ({ name })) });
-  const lauf = (gh: (a: string[]) => string, argv = ["--inbox", "7"], sanitize: (t: string, b: boolean) => string = sicher) => {
+  const lauf = (gh: (a: string[]) => string, argv = ["--inbox", "7"], sanitize: (t: string, b: boolean) => string = sicher, config?: unknown) => {
     const wurzel = mkdtempSync(join(tmpdir(), "kq-1435-"));
     const ausgabe: string[] = [];
     let fehler = "";
     try {
-      Q.main(argv, { gh, sanitize, wurzel, nonce: () => "n0nce", log: (z: string) => ausgabe.push(z) });
+      Q.main(argv, { gh, sanitize, wurzel, nonce: () => "n0nce", log: (z: string) => ausgabe.push(z), ...(config ? { config } : {}) });
     } catch (e) {
       fehler = (e as Error).message;
     }
@@ -426,6 +426,18 @@ describe("main (CLI-Kern, gh und Entschärfer injiziert): fail-closed, keine Tei
   ])("%s: Fehler, keine Datei", (_n, g, muster) => {
     const r = lauf(g);
     expect(r.fehler).toMatch(muster);
+    expect(r.dateien).toEqual([]);
+  });
+  test("Forum-Label kommt aus der Config (labels.forum), nicht aus einem Literal", () => {
+    const cfg = { labels: { forum: "eingang" } };
+    expect(lauf(gh("Forum #12: x", ["eingang"]), ["--inbox", "7"], sicher, cfg).fehler).toBe("");
+    const r = lauf(gh("Forum #12: x", ["forum"]), ["--inbox", "7"], sicher, cfg);
+    expect(r.fehler).toMatch(/kein Label eingang/);
+    expect(r.dateien).toEqual([]);
+  });
+  test("Config ohne labels.forum: Fehler, keine Datei", () => {
+    const r = lauf(gh("Forum #12: x", ["forum"]), ["--inbox", "7"], sicher, { labels: {} });
+    expect(r.fehler).toMatch(/labels\.forum/);
     expect(r.dateien).toEqual([]);
   });
   test("Entschärfer wirft: Fehler, keine Teildatei", () => {

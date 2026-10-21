@@ -183,18 +183,25 @@ export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false 
   return { art: "setze", k };
 }
 
-/** Setzt die Position des Sammeltickets `nr` nach `pruefSchritt` und prüft sie gegen die frisch geladene Board-Liste. Liefert `ok`, `falsch` oder `unbekannt` (nie in der Liste). */
-async function setzeUndPruefe(nr, position, dry, FACTORY_BOARD) {
+/**
+ * Setzt die Position des Sammeltickets `nr` nach `pruefSchritt` und prüft sie gegen die frisch geladene Board-Liste auf `board` (Pflicht, wirft sonst vor jedem Laden).
+ * Liefert `ok`, `falsch` oder `unbekannt` (nie in der Liste). `io` ist für Tests austauschbar (Default: echtes Board und echtes Warten).
+ */
+export async function setzeUndPruefe({ nr, position, dry = false, board }, io = {}) {
+  if (!board) throw new Error("setzeUndPruefe: board fehlt");
+  const lade = io.loadItems ?? (() => loadItems(board)); // Standard: immer das ausdrücklich übergebene Board
+  const setze = io.setPosition ?? ((_board, id, afterId) => setPosition(board, id, afterId));
+  const warte = io.sleep ?? sleep;
   let neuGesetzt = 0;
   for (let versuch = 1; versuch <= PRUEF_VERSUCHE; versuch++) {
-    const schritt = pruefSchritt({ items: loadItems(FACTORY_BOARD), nr, position, neuGesetzt, dry });
+    const schritt = pruefSchritt({ items: lade(board), nr, position, neuGesetzt, dry });
     if (schritt.art === "ok" || schritt.art === "falsch") return schritt.art;
     if (schritt.art === "setze") {
       console.log(`Position stimmt noch nicht (Rang ${schritt.k.vonRang}, Ziel ${schritt.k.nachRang}): setze neu (${neuGesetzt + 1}/${NEU_SETZEN_MAX}).`);
-      setPosition(FACTORY_BOARD, schritt.k.id, schritt.k.afterId);
+      setze(board, schritt.k.id, schritt.k.afterId);
       neuGesetzt++;
     }
-    await sleep(PRUEF_PAUSE_MS);
+    await warte(PRUEF_PAUSE_MS);
   }
   return neuGesetzt === 0 ? "unbekannt" : "falsch";
 }
@@ -244,7 +251,7 @@ async function main(argv = process.argv.slice(2)) {
     }
   }
   if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe(nr, position, args.dry, FACTORY_BOARD);
+  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: FACTORY_BOARD });
   if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);

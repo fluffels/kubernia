@@ -249,7 +249,7 @@ describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
     expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, args\.notfall \? null : positionOderWarnung\(\)\)/);
     // Der Listen-Nachzug des Takts ist mit Fakes in test/board-takt-lauf.test.ts getestet (#1428 Z23), keine Quelltext-Regex mehr.
     const anlegen = lies("scripts/sammelticket-anlegen.mjs");
-    expect(anlegen).toMatch(/pruefSchritt\(\{ items: loadItems\(FACTORY_BOARD\)/);
+    expect(anlegen).toMatch(/pruefSchritt\(\{ items: lade\(board\)/);
     expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);
     expect(anlegen).not.toMatch(/from "\.\/board-place\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
   });
@@ -318,5 +318,45 @@ describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist id
     expect(skript.match(/schliesseWennDublette\(/g)?.length).toBeGreaterThanOrEqual(3); // Definition und zwei Aufrufe
     expect(skript).toMatch(/Dublette von #/);
     expect(skript).toMatch(/state_reason=not_planned/);
+  });
+});
+
+describe("setzeUndPruefe: das Board kommt als Parameter (L24)", () => {
+  type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
+  type Io = { loadItems: (b: string) => B[]; setPosition: (b: string, id: string, after: string | null) => void; sleep: (ms: number) => Promise<void> };
+  const S = (raw as unknown as { setzeUndPruefe: (a: { nr: number; position: number; dry?: boolean; board?: string }, io?: Partial<Io>) => Promise<string> }).setzeUndPruefe;
+  const b = (number: number): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open" });
+  const sammel = (): B => ({ ...b(20), title: "Harness-Härtung (gesammelt)" });
+  const items = [b(1), b(2), b(3), b(4), b(5), b(6), sammel()];
+
+  test("loadItems und setPosition bekommen genau das übergebene Board; nach dem Setzen steht es richtig", async () => {
+    const geladen: string[] = [];
+    const gesetzt: string[] = [];
+    let stand = items;
+    const io: Partial<Io> = {
+      loadItems: (board) => {
+        geladen.push(board);
+        return stand;
+      },
+      setPosition: (board, id) => {
+        gesetzt.push(`${board}:${id}`);
+        stand = [b(1), sammel(), b(2), b(3), b(4), b(5), b(6)];
+      },
+      sleep: async () => {},
+    };
+    expect(await S({ nr: 20, position: 3, board: "FB" }, io)).toBe("ok");
+    expect(gesetzt).toEqual(["FB:I20"]);
+    expect(new Set(geladen)).toEqual(new Set(["FB"]));
+  });
+
+  test("ohne board wirft sie vor dem ersten Laden", async () => {
+    let geladen = 0;
+    await expect(S({ nr: 20, position: 3 }, { loadItems: () => (geladen++, items), sleep: async () => {} })).rejects.toThrow(/board fehlt/);
+    expect(geladen).toBe(0);
+  });
+
+  test("Verdrahtung: der Aufruf in main übergibt das Factory-Board", () => {
+    const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
+    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*FACTORY_BOARD/);
   });
 });

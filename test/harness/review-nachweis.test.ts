@@ -322,6 +322,49 @@ describe("Zusatzpass: ein Pass über das Cap, ohne Rückfrage (#1561 Z2, #1693)"
   });
 });
 
+describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap (#1808)", () => {
+  const bewerteA = (review: string) =>
+    bewerteNachweis({
+      nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`),
+      dateien: ["src/a.ts"],
+      headBekannt: true,
+      headImSlice: true,
+    });
+  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
+
+  test("runden=4 mit abnahmefix=1 ist ok (Review-Cap voll, Abnahme-Fix als eigene Runde)", () => {
+    assert.deepEqual(bewerteA(`runden=4 abnahmefix=1 ${LENSES} verdikt=ok`), []);
+  });
+  test("runden=5 mit abnahmefix=1 bleibt rot: ein zweiter Abnahme-Fix-Pass gehört nicht zum Budget", () => {
+    assert.match(bewerteA(`runden=5 abnahmefix=1 ${LENSES} verdikt=ok`).join(" "), /überschreitet/);
+  });
+  test("Review-Zusatzpass und Abnahme-Fix addieren sich: runden=5 mit zusatzpass=1 und abnahmefix=1 ist ok, runden=6 rot", () => {
+    assert.deepEqual(bewerteA(`runden=5 zusatzpass=1:x abnahmefix=1 ${LENSES} verdikt=ok`), []);
+    assert.match(bewerteA(`runden=6 zusatzpass=1:x abnahmefix=1 ${LENSES} verdikt=ok`).join(" "), /überschreitet/);
+  });
+  test("rot: Wert ungleich 1 (0, 2, keine Zahl, leer)", () => {
+    for (const w of ["0", "2", "abc", ""]) {
+      assert.match(bewerteA(`runden=4 abnahmefix=${w} ${LENSES} verdikt=ok`).join(" "), /abnahmefix/, w);
+    }
+  });
+  test("rot: abnahmefix ohne Überschreitung des Review-Caps (runden ≤ 3, oder ≤ 3 + zusatzpass)", () => {
+    assert.match(bewerteA(`runden=3 abnahmefix=1 ${LENSES} verdikt=ok`).join(" "), /abnahmefix ist nur/);
+    assert.match(bewerteA(`runden=4 zusatzpass=1:x abnahmefix=1 ${LENSES} verdikt=ok`).join(" "), /abnahmefix ist nur/);
+  });
+  test("ohne das Feld bleibt runden=4 rot (Abnahme-Fix ist kein Freibrief für Review-Pässe)", () => {
+    assert.match(bewerteA(`runden=4 ${LENSES} verdikt=ok`).join(" "), /überschreitet/);
+  });
+  test("der Parser liefert das Feld, die Vorlage führt es nicht", () => {
+    assert.equal((parseNachweis(`KQ-Review: head=${SHA} runden=4 abnahmefix=1 ${LENSES} verdikt=ok`).review as { abnahmefix?: unknown } | null)?.abnahmefix, 1);
+    assert.doesNotMatch(read("scripts/check-review-nachweis.mjs").split("export const vorlage")[1].split(";")[0], /abnahmefix/);
+  });
+  test("Skill, Format-SSOT und Umsetzer nennen das Feld", () => {
+    assert.match(read("docs/agent-harness.md"), /abnahmefix=/);
+    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /abnahmefix=/);
+    assert.match(read(".claude/agents/kubernia-umsetzer.md"), /abnahmefix=/);
+  });
+});
+
 describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
   test("Format-SSOT und Skill nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /zusatzpass=/);
