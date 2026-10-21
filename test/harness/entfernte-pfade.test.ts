@@ -108,6 +108,16 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(treffer, [`docs/beispiel.md:2: ${r.name}`]);
   });
 
+  // Je Alternative der Muster mit „|“ ein eigenes Beispiel (#1748): sonst bliebe eine gestrichene Alternative unbemerkt
+  test.each([
+    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-planner.md"],
+    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-umsetzer.md"],
+    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-gruppe.md"],
+    ["Platzhalter als Dateiname, die Datei heißt nach der Rolle", ".claude/skills/<agenten.ticketSkill>/SKILL.md"],
+  ])("Negativfall: jede Alternative wird gefunden (%s: %s)", (name, text) => {
+    assert.deepEqual(findeReste([{ pfad: "docs/b.md", inhalt: text }]), [`docs/b.md:1: ${name}`]);
+  });
+
   test("Negativfall: harmlose Nachbarn lösen nicht aus (kubernia-Ticket groß, Workflows der CI)", () => {
     const sauber = "Der kubernia-Ticket-Ablauf ist der Skill kubernia; die CI läuft in .github/workflows/ci.yml.";
     assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);

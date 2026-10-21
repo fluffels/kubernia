@@ -30,6 +30,9 @@ describe("bewerteLensEdit", () => {
       const e = G.bewerteLensEdit(p);
       expect(e.block, p).toBe(true);
       expect(e.reason).toMatch(/Lens-Worktree/);
+      // #1748: der Verweis nennt den festen Rollen-Pfad, nicht eine aus dem Agentennamen abgeleitete Datei
+      expect(e.reason).toContain(".claude/agents/factory-lens.md");
+      expect(e.reason).not.toContain(["kubernia", "lens.md"].join("-")); // alter Dateiname, zusammengesetzt (Rückfall-Wächter)
     }
   });
 
