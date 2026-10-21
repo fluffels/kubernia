@@ -208,6 +208,7 @@ export function analysiereLauf(lauf, { wurzel = null } = {}) {
     ticket: kopf?.ticket ?? null,
     sammel: kopf?.sammel ?? false,
     offen: Boolean(kopf?.offen),
+    sessions: kopf?.datei ? [String(kopf.datei).split("/")[0]] : [],
     brille: kopf?.brille ?? null,
     schnitt: kopf?.schnitt ?? null,
     einstieg: kopf?.einstieg ?? null,
@@ -344,6 +345,7 @@ function ticketLauf(laeufe) {
     ...listen,
     sammel: sortiert.some((a) => a.sammel),
     offen: sortiert.some((a) => a.offen),
+    sessions: [...new Set(sortiert.flatMap((a) => a.sessions))].sort(),
     brille: null,
     delta: false,
     einstieg: null,
@@ -370,6 +372,7 @@ const laeufeListe = (analysen, jeTicket = false) =>
     start: new Date(a.start).toISOString(),
     sammel: a.sammel,
     offen: a.offen,
+    sessions: a.sessions,
     // Je Ticket (#1593): Gruppe, Kosten und Nachfolger je Zeile, damit die Ticketlisten je Gruppe aus einem Lauf des Werkzeugs stammen.
     ...(jeTicket ? { schnitt: a.schnitt, kosten: a.kosten, nachfolger: a.nachfolgerN, promptZeichenNachfolger: a.promptZeichenNachfolger } : {}),
   }));
