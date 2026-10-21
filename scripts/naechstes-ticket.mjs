@@ -28,6 +28,7 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -83,23 +84,34 @@ export function messfensterGrund(fenster, stand) {
 /** Nutzersichtbare Bereichsnamen (#1552); das Label für „agentic“ ist `labels.harness` der Projekt-Config. */
 export const BEREICHE = { agentic: "Agentic Engineering", spiel: "Spielentwicklung" };
 
-/** `--bereich <wert>` bzw. `--bereich=<wert>` aus argv: `{ bereich }` (null ohne Schalter) oder `{ fehler }`. Pur. */
-export function bereichAusArgv(argv) {
-  const i = argv.findIndex((a) => a === "--bereich" || a.startsWith("--bereich="));
-  if (i < 0) return { bereich: null };
-  const wert = argv[i].includes("=") ? argv[i].slice("--bereich=".length) : argv[i + 1];
-  if (Object.hasOwn(BEREICHE, wert ?? "")) return { bereich: wert };
-  return { fehler: `--bereich erwartet agentic oder spiel (bekommen: ${wert === undefined ? "nichts" : `„${wert}“`})` };
-}
+/** Skript-eigene Texte für einen fehlenden Wert (die übrigen Arten nehmen die Standardtexte von `flagsLesen`). */
+const OHNE_WERT = {
+  "--bereich": "--bereich erwartet agentic oder spiel (bekommen: nichts)",
+  "--ticket": "--ticket erwartet eine Ticketnummer (bekommen: nichts)",
+};
 
-/** `--ticket <nr>`, `--ticket=<nr>` bzw. `--ticket #<nr>` aus argv: `{ ticket }` (null ohne Schalter) oder `{ fehler }`. Pur. */
-export function ticketAusArgv(argv) {
-  const i = argv.findIndex((a) => a === "--ticket" || a.startsWith("--ticket="));
-  if (i < 0) return { ticket: null };
-  const wert = argv[i].includes("=") ? argv[i].slice("--ticket=".length) : argv[i + 1];
-  const m = /^#?(\d+)$/.exec(wert ?? "");
-  if (m && Number(m[1]) > 0) return { ticket: Number(m[1]) };
-  return { fehler: `--ticket erwartet eine Ticketnummer (bekommen: ${wert === undefined ? "nichts" : `„${wert}“`})` };
+/**
+ * Liest den Aufruf über `flagsLesen` (`--bereich <wert>`, `--ticket <nr>` auch als `--x=<wert>` und `#<nr>`, `--json`) und prüft die Werte:
+ * `{ bereich, ticket, json }` (`bereich` und `ticket` null ohne Schalter) oder `{ fehler }`. Pur, ohne I/O.
+ * Schließt `--ticket` und `--bereich` gegenseitig aus und verlangt genau eines davon.
+ */
+export function aufrufLesen(argv) {
+  const r = flagsLesen(argv, { bereich: { type: "string" }, ticket: { type: "string" }, json: { type: "boolean" } }, {
+    meldung: (art, flag) => (art === "ohne-wert" ? OHNE_WERT[flag] : undefined),
+  });
+  if (r.fehler) return { fehler: r.fehler.text };
+  const { bereich: roh, ticket: nr, json } = r.werte;
+  if (roh !== undefined && !Object.hasOwn(BEREICHE, roh)) return { fehler: `--bereich erwartet agentic oder spiel (bekommen: „${roh}“)` };
+  let ticket = null;
+  if (nr !== undefined) {
+    const m = /^#?(\d+)$/.exec(nr);
+    if (!m || Number(m[1]) <= 0) return { fehler: `--ticket erwartet eine Ticketnummer (bekommen: „${nr}“)` };
+    ticket = Number(m[1]);
+  }
+  const bereich = roh ?? null;
+  if (ticket !== null && bereich) return { fehler: "--ticket und --bereich schließen sich aus" };
+  if (ticket === null && !bereich) return { fehler: "Aufruf ohne Auswahl: --bereich agentic|spiel (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)" };
+  return { bereich, ticket, json: json === true };
 }
 
 /** Normalisiertes Item aus der REST-Antwort `repos/<repo>/issues/<nr>` (gleiche Felder wie ein Board-Item, ohne Status). Wirft bei einem PR oder unerwarteter Form. Pur. */
@@ -229,21 +241,17 @@ export function formatiere({ ticket, uebersprungen, bereich = null, einzel = nul
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
-  const b = bereichAusArgv(argv);
-  if ("fehler" in b) return fehlerErgebnis(b.fehler);
-  const t = ticketAusArgv(argv);
-  if ("fehler" in t) return fehlerErgebnis(t.fehler);
-  if (t.ticket !== null && b.bereich) return fehlerErgebnis("--ticket und --bereich schließen sich aus");
-  if (t.ticket === null && !b.bereich) return fehlerErgebnis("Aufruf ohne Auswahl: --bereich agentic|spiel (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)");
+  const aufruf = aufrufLesen(argv);
+  if (aufruf.fehler) return fehlerErgebnis(aufruf.fehler);
   try {
-    const einzel = t.ticket;
+    const einzel = aufruf.ticket;
     const roh =
       einzel === null
-        ? { ...waehleUeberBoards({ ...io.lade(), owner: io.owner, bereich: b.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config }), bereich: b.bereich }
+        ? { ...waehleUeberBoards({ ...io.lade(), owner: io.owner, bereich: aufruf.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config }), bereich: aufruf.bereich }
         : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config });
     const reparieren = reparierenVon(roh.uebersprungen);
     const ergebnis = reparieren.length > 0 ? { ...roh, reparieren } : roh;
-    const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
+    const out = aufruf.json ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
     return { code: ergebnis.ticket ? 0 : 1, out, err: "" };
   } catch (e) {
     return fehlerErgebnis(e instanceof Error ? e.message : String(e));
@@ -323,6 +331,12 @@ export function echteIo({ config } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
+  const vorab = aufrufLesen(process.argv.slice(2));
+  if (vorab.fehler) {
+    process.stderr.write(`✖ naechstes-ticket: ${vorab.fehler}\n`);
+    process.exit(AUFRUF_EXIT);
+  }
   mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
   let io;
   try {

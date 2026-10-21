@@ -23,12 +23,15 @@
  * Ticket. Hat der Sync `.claude/skills`, `.claude/agents` oder `AGENTS.md` geändert, sagt der Text „Skill neu lesen“: der Skill-Text
  * der laufenden Session stammt noch vom alten Stand.
  *
+ * Aufruf-Fehler (unbekanntes Flag, fehlender Wert, doppeltes Flag, Positionsargument): Exit 2 vor Sync und Folge-Skript.
+ *
  * Hook-Ausgabe: `hookSpecificOutput.additionalContext` (SessionStart). Wächter: test/harness/haupt-sync.test.ts.
  * Nur Node-Builtins.
  */
 import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
 import { KERN_TICKET_SKILL } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -256,11 +259,18 @@ export function ausgabe(ergebnis, text) {
   return text ? t : JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: t } });
 }
 
-/** Wert hinter `--danach`: das Skript, das der Hook nach dem Sync mit demselben stdin startet. Im Modus `--text` (Skill-Schritt 0) nie. */
-export function danachSkript(argv) {
-  if (argv.includes("--text")) return null;
-  const i = argv.indexOf("--danach");
-  return i >= 0 && typeof argv[i + 1] === "string" && argv[i + 1] !== "" ? argv[i + 1] : null;
+const USAGE = "Aufruf: node scripts/haupt-sync.mjs [--text] [--streng] [--danach <skript>]";
+
+/**
+ * Liest den Aufruf (`flagsLesen`): `{ text, streng, danach }` oder `{ fehler }`. `danach` ist das Skript, das der Hook nach dem Sync mit demselben
+ * stdin startet; im Modus `--text` (Skill-Schritt 0) und bei leerem Wert nie (`null`). Pur.
+ */
+export function aufrufLesen(argv) {
+  const r = flagsLesen(argv, { text: { type: "boolean" }, streng: { type: "boolean" }, danach: { type: "string" } });
+  if (r.fehler) return { fehler: r.fehler.text };
+  const text = r.werte.text === true;
+  const danach = !text && typeof r.werte.danach === "string" && r.werte.danach !== "" ? r.werte.danach : null;
+  return { text, streng: r.werte.streng === true, danach };
 }
 
 /**
@@ -277,15 +287,22 @@ export function starteDanach(skript, text, { spawnSync = spawnSyncEcht, execPath
 }
 
 function main() {
-  const danach = danachSkript(process.argv.slice(2));
+  // Aufruf-Fehler vor stdin, Sync und Folge-Skript (#1817).
+  const aufruf = aufrufLesen(process.argv.slice(2));
+  if (aufruf.fehler) {
+    console.error(`haupt-sync: ${aufruf.fehler}\n${USAGE}`);
+    process.exitCode = AUFRUF_EXIT;
+    return;
+  }
+  const { danach } = aufruf;
   // Der Folge-Hook (Langfuse-Abgleich, #1568) braucht den Stand NACH dem Fast-Forward: sonst lädt er den alten Code des Hauptcheckouts. Darum läuft er im `finally`, auch bei Abbruch.
   const stdinText = danach ? readStdin() : "";
   try {
     const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) };
-    const out = ausgabe(ergebnis, process.argv.includes("--text"));
+    const out = ausgabe(ergebnis, aufruf.text);
     if (out) console.log(out);
-    if (process.argv.includes("--streng") && exitCodeFuer(ergebnis) !== 0) {
+    if (aufruf.streng && exitCodeFuer(ergebnis) !== 0) {
       console.log("Haupt-Sync (streng): STOPP, den Hauptcheckout hebt erst die Maintainerin (Reste committen oder verwerfen, auf main wechseln). Kein Ticket starten.");
       process.exitCode = 1;
     }
