@@ -13,8 +13,8 @@
  *
  * Grenzen: gescannt wird der Quelltext samt Kommentaren (ein Treffer im Kommentar ist ein Fund); transitive Importe
  * außerhalb von `scripts/cockpit/` prüft dieser Test nicht; ein nicht-literaler Modulname im require/import() gilt als
- * nicht prüfbar und ist verboten. Bekannte Grenze: die Ausnahme für Unterprozesse gilt nur nach Dateiname (`lauf.mjs`),
- * nicht nach Pfad; eine verschachtelte `quellen/lauf.mjs` wäre ebenfalls ausgenommen. Das ist eine Lint-Schranke gegen Versehen, keine Sandbox.
+ * nicht prüfbar und ist verboten. Die Ausnahme für Unterprozesse gilt nach Pfad relativ zu `scripts/cockpit/` (nur `lauf.mjs`
+ * direkt dort, eine verschachtelte `quellen/lauf.mjs` nicht). Das ist eine Lint-Schranke gegen Versehen, keine Sandbox.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -36,12 +36,12 @@ const KIND_MODULE = "child_process";
 
 const modul = (roh: string): string => roh.replace(/^node:/u, "");
 
-/** Funde (Text je Verstoß) einer Datei; `name` ist der Dateiname ohne Pfad. Pur. */
-function verstoesse(name: string, quelle: string): string[] {
+/** Funde (Text je Verstoß) einer Datei; `rel` ist der Pfad relativ zu `scripts/cockpit/`. Pur. */
+function verstoesse(rel: string, quelle: string): string[] {
   const funde: string[] = [];
   const meldeModul = (m: string, form: string, klammer: string | null): void => {
     const mod = modul(m);
-    if (mod === KIND_MODULE && name !== "lauf.mjs") funde.push(`${KIND_MODULE} außerhalb von lauf.mjs (${form})`);
+    if (mod === KIND_MODULE && rel !== "lauf.mjs") funde.push(`${KIND_MODULE} außerhalb von lauf.mjs (${form})`);
     if (!FS_MODULE.has(mod)) return;
     if (klammer === null) {
       funde.push(`${mod} nicht prüfbar (${form})`);
@@ -77,8 +77,7 @@ describe("Cockpit bleibt nur lesend (ADR 0029 (d))", () => {
 
   test("keine Datei startet Unterprozesse (außer lauf.mjs) oder schreibt ins Dateisystem", () => {
     const alle = cockpitDateien().flatMap((p) => {
-      const name = p.split("/").pop() ?? p;
-      return verstoesse(name, readFileSync(resolve(ROOT, p), "utf8")).map((f) => `${p}: ${f}`);
+      return verstoesse(p.slice("scripts/cockpit/".length),readFileSync(resolve(ROOT, p), "utf8")).map((f) => `${p}: ${f}`);
     });
     assert.deepEqual(alle, []);
   });
@@ -97,6 +96,10 @@ describe("Cockpit bleibt nur lesend (ADR 0029 (d))", () => {
 
     test("child_process in lauf.mjs ist erlaubt", () => {
       assert.deepEqual(verstoesse("lauf.mjs", 'import { execFile } from "node:child_process";'), []);
+    });
+
+    test("eine verschachtelte lauf.mjs ist nicht ausgenommen", () => {
+      assert.equal(verstoesse("quellen/lauf.mjs", 'import { execFile } from "node:child_process";').length, 1);
     });
 
     test("schreibende fs-Funktionen, auch mit Alias und Sync", () => {
