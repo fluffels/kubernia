@@ -3,6 +3,10 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../scripts/projekt-config-lib.mjs";
@@ -700,4 +704,22 @@ describe("parseArgs (#1790: strikt über flagsLesen)", () => {
     assert.match(pa(["--von", "a", "--von", "b"]).fehler ?? "", /--von ist doppelt/);
     assert.match(pa(["--json", "--json"]).fehler ?? "", /--json ist doppelt/);
   });
+});
+
+describe("Einstiegspunkt übergibt die Projekt-Config an den Kern (#1814)", () => {
+  test("Prozesslauf mit leerem Projektordner endet mit Exit 0 und gültigem JSON, nicht mit der Config-Abbruchmeldung", () => {
+    const home = mkdtempSync(join(tmpdir(), "kq-1814-home-"));
+    try {
+      mkdirSync(join(home, ".claude", "projects", "leer"), { recursive: true });
+      const skript = join(process.cwd(), "scripts", "hauptchat-zerlegung.mjs");
+      const r = spawnSync(process.execPath, [skript, "--von", "2026-01-01T00:00:00Z", "--bis", "2026-01-02T00:00:00Z", "--projekt", "leer", "--json"], {
+        encoding: "utf8",
+        env: { ...process.env, USERPROFILE: home, HOME: home },
+      });
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(Array.isArray((JSON.parse(r.stdout) as { rows: unknown[] }).rows));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

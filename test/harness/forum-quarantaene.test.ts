@@ -228,6 +228,14 @@ describe("quarantaeneText", () => {
     expect(r.stdout).toBe("");
   }, 30000);
 
+  test("Einstiegspunkt übergibt die Projekt-Config an den Kern: --inbox scheitert an gh, nicht an fehlender Config (#1814)", () => {
+    const skript = fileURLToPath(new URL("../../scripts/forum-quarantaene.mjs", import.meta.url));
+    const r = spawnSync(process.execPath, [skript, "--inbox", "999999999"], { encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/^forum-quarantaene: /);
+    expect(r.stderr).not.toMatch(/keine Projekt-Config übergeben/);
+  }, 30000);
+
   describe("Antworten auf Kommentare (#1693 L56)", () => {
     const r = (login: string, bodyText: string) => ({ author: { login }, bodyText, createdAt: "2026-10-03T10:00:00Z" });
     const mitAntworten: Disc = {
