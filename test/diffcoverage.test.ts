@@ -5,7 +5,7 @@
  * aus scripts/check-diffcoverage.mjs — EINE Quelle der Wahrheit, kein Drift zwischen
  * Test und CLI). git und Dateisystem bleiben unangetastet: `runGit`/`readFile` sind
  * injiziert, damit der Test ohne Repo-/Coverage-Zustand deterministisch läuft. Das
- * Warum des Gates steht in AGENTS.md › Testabdeckung.
+ * Warum des Gates steht in AGENTS.md › Abdeckung und Bundle.
  *
  * Ausführen mit:  npm test   (oder gezielt: npm run check:diffcoverage)
  */
