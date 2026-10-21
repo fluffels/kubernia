@@ -128,14 +128,14 @@ describe("Projektwert-Block der Kern-Texte (#1747)", () => {
 
   test("platzhalterMuster: trifft <agenten.lens>, nicht <foo.bar>; jeder Aufruf liefert eine frische Instanz ohne geteilten Zustand", () => {
     const m = lib.platzhalterMuster();
-    expect(m.flags).toBe("g");
-    expect([...("a <agenten.lens> b <foo.bar> <labels.x>").matchAll(m)].map((t) => t[0])).toEqual(["<agenten.lens>", "<labels.x>"]);
+    assert.equal(m.flags, "g");
+    assert.deepEqual([...("a <agenten.lens> b <foo.bar> <labels.x>").matchAll(m)].map((t) => t[0]), ["<agenten.lens>", "<labels.x>"]);
     const a = lib.platzhalterMuster();
     const b = lib.platzhalterMuster();
-    expect(a).not.toBe(b);
+    assert.notEqual(a, b);
     a.test("<agenten.lens>");
-    expect(a.lastIndex).toBeGreaterThan(0);
-    expect(b.lastIndex).toBe(0);
+    assert.ok(a.lastIndex > 0);
+    assert.equal(b.lastIndex, 0);
   });
   test("Platzhalter-Regel: Fixtures", () => {
     const block = `${S}\n${E}\n`;
