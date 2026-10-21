@@ -48,6 +48,17 @@ describe("gh list: Fixtures (Red-Green der Prüfer)", () => {
     expect(ohneLimitImSkript('ghJson([\n  "pr", "list",\n  "--limit", "1000",\n])')).toEqual([]);
     expect(ohneLimitImSkript('ghJson(["issue", "view", "3"])')).toEqual([]);
   });
+  test("Skript: einfache Anführungszeichen und Befehls-Strings sind Funde, Limit und Kommentarzeilen nicht", () => {
+    expect(ohneLimitImSkript("ghJson(['issue', 'list', '--state', 'open'])")).toHaveLength(1);
+    expect(ohneLimitImSkript("ghJson(['pr', 'list', '--limit', '50'])")).toEqual([]);
+    expect(ohneLimitImSkript("ghJson(['pr', 'list', \"--limit\", '50'])")).toEqual([]);
+    expect(ohneLimitImSkript("execSync(`gh pr list --state open`)")).toHaveLength(1);
+    expect(ohneLimitImSkript('execSync("gh issue list --state open")')).toHaveLength(1);
+    expect(ohneLimitImSkript("execSync(`gh pr list --limit 100 --state open`)")).toEqual([]);
+    expect(ohneLimitImSkript(" * Doku: gh pr list zeigt offene PRs")).toEqual([]);
+    expect(ohneLimitImSkript("// gh issue list --state open")).toEqual([]);
+    expect(ohneLimitImSkript("/* gh issue list */")).toEqual([]);
+  });
 });
 
 describe("gh list: jeder Aufruf im Repo trägt --limit (#1787 L7)", () => {
@@ -61,6 +72,11 @@ describe("gh list: jeder Aufruf im Repo trägt --limit (#1787 L7)", () => {
   test("Workflows: kein gh issue/pr list ohne --limit", () => {
     const fehler = workflows.flatMap((n) => ohneLimitImWorkflow(readFileSync(join(wfDir, n), "utf8")).map((z) => `${n}: ${z}`));
     expect(fehler).toEqual([]);
+  });
+
+  test("scripts/: die Dateiliste enthält auch Unterordner (docs-gen)", () => {
+    const dateien = readdirSync(join(WURZEL, "scripts"), { recursive: true, encoding: "utf8" });
+    expect(dateien.some((n) => /[\\/]/.test(n) && /\.mjs$/.test(n))).toBe(true);
   });
 
   test("scripts/: kein \"issue\"/\"pr\", \"list\" ohne \"--limit\"", () => {
