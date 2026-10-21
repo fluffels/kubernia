@@ -204,7 +204,7 @@ export function ttlVergleich(calls) {
 /**
  * Kern: Sessions (Hauptzeilen + Subagenten) → Summen je Kategorie × Modell × Quelle plus Ticket-Fenster.
  * @param {{ sessions: Iterable<{ id: string, main: object[], subagents?: { meta: object, zeilen: object[] }[] }>,
- *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config?: object }} e
+ *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config: object }} e Die Projekt-Config (`config`) ist Pflicht, ohne wirft `hauptchatNamen`.
  */
 export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, config }) {
   const { ticketSkills, ticketAgenten, repoName: name } = hauptchatNamen({ config });

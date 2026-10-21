@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../scripts/projekt-config-lib.mjs";
@@ -715,7 +716,7 @@ describe("Einstiegspunkt übergibt die Projekt-Config an den Kern (#1814)", () =
     const home = mkdtempSync(join(tmpdir(), "kq-1814-home-"));
     try {
       mkdirSync(join(home, ".claude", "projects", "leer"), { recursive: true });
-      const skript = join(process.cwd(), "scripts", "hauptchat-zerlegung.mjs");
+      const skript = fileURLToPath(new URL("../scripts/hauptchat-zerlegung.mjs", import.meta.url));
       const r = spawnSync(process.execPath, [skript, "--von", "2026-01-01T00:00:00Z", "--bis", "2026-01-02T00:00:00Z", "--projekt", "leer", "--json"], {
         encoding: "utf8",
         env: { ...process.env, USERPROFILE: home, HOME: home },
