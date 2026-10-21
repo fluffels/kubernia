@@ -21,7 +21,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 |---|---|---|
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | ≥ 130 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
+| Skripte | ≥ 140 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 90 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 14 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 29 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
@@ -584,6 +584,15 @@ Die Schleife oben ist ein Mechanismus – hier drei echte, verlinkte Vorher/Nach
 - **Eine Schichtverletzung schlich sich unbemerkt ein** (Befund [#292](https://github.com/fluffels/kubernia/issues/292), Fix [#344](https://github.com/fluffels/kubernia/issues/344)): Ein Architektur-Review deckte auf, dass `game.ts` (Anwendung) `sfx.ts` (Präsentation) importierte — für einen einzigen Aufruf `SFX.applyConfig()`. Zu dem Zeitpunkt gab es dafür **keine automatische Grenze**, nur Review-Disziplin. Der Fix löste die Kopplung über einen neuen Audio-Sink in `runtime.ts` und führte `test/layering.test.ts` als Regressions-Guard ein — der wäre vor dem Fix rot gewesen. Der Befund motivierte direkt den dauerhaften Architektur-Wächter `check:arch` (#347, §3): aus einem einmaligen Fund wurde eine permanente, maschinelle Grenze statt eines erneuten Einzelfalls.
 
 Aktuelle Durchsatz-Zahlen (gemergte PRs, offen vs. geschlossen) stehen bewusst **nicht** hier verankert — ein hartcodierter Zählwert würde bei jedem weiteren Ticket sofort veralten (dieselbe Philosophie wie `check:docdrift`/`check:doctickets`, §3). Live nachschlagen: `gh pr list --state merged --limit 1000 | wc -l`, bzw. sobald gelandet über die README-Badges aus [#700](https://github.com/fluffels/kubernia/issues/700).
+
+### Cockpit (`npm run cockpit`, ADR 0029)
+
+Lokale, nur lesende Sicht auf die Harness-Quellen (Ring `oberflaeche`, nie in ein Projekt verteilt; Ort `scripts/cockpit/`). Start: `npm run cockpit [-- --projekt <pfad>] [--port <n>]` (Projektwurzel Standard cwd, Port Standard 4180); der Server bindet nur 127.0.0.1 und nimmt nur GET und HEAD an. Die Seite rendert serverseitig ein Panel je Quelle mit Stand-Zeit und lädt per `meta refresh` neu, ohne Client-Skript, alle Werte escaped.
+
+- **Quellen-Vertrag** (`quelle.mjs`): `{ id, titel, ttlMs, sammeln(ctx) }` mit Ergebnis `{ status: ok|ausfall, stand, daten|null, grund|null }`. Der Abruf läuft parallel mit Timeout je Quelle (5 s) und In-Memory-TTL, ohne eigene Persistenz.
+- **Neue Quelle:** eine Datei unter `scripts/cockpit/quellen/` plus eine Zeile in `registry.mjs` plus ein Eintrag in `.factory/besitz.json` (Ring `oberflaeche`, sonst wird die Kern-Abdeckung rot), kein zentrales `switch`; braucht sie einen neuen Unterprozess, zusätzlich eine Zeile in der Allowlist von `lauf.mjs` (die eine Prüfstelle für „nur lesend“).
+- **Ausfall-Anzeige:** wirft eine Quelle, läuft sie ins Timeout oder liefert eine ungültige Form, zeigt das Panel „Ausfall: <Grund>, zuletzt ok <Zeit>“ ohne Werte, nie alte Werte als aktuell. Erste Quelle: Langfuse-Erreichbarkeit über `langfuse-vorbedingung.mjs`.
+- Sicherheit (Host-Prüfung, CSP, Grenzen): [Sicherheit der Agenten](sicherheit-agenten.md).
 
 ## 5. Roadmap / bekannte Lücken
 
