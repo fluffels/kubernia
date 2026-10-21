@@ -17,6 +17,8 @@ export const HEX_HEAD = new RegExp(`^${HEX}$`);
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
+/** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; das Gate erzwingt die Zahl nicht). */
+export const MAX_ZUSATZPAESSE = 3;
 
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main

@@ -21,6 +21,7 @@ import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { claimNummer, median } from "./mess-lib.mjs";
 import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } from "./nachweis-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
@@ -217,8 +218,8 @@ export function renderMarkdown(b) {
 
 /** Abweichung des Härtungs-Takts ab dem Vielfachen der Takt-Schwelle (das Sammelticket hätte längst vorn stehen müssen). */
 export const TAKT_ABWEICHUNG_FAKTOR = 2;
-/** Lens-Zahl: Obergrenze der Review-Runden je PR (Cap 2 Fix-Runden = 3 Pässe plus höchstens ein Zusatzpass). */
-export const MAX_RUNDEN = 4;
+/** Lens-Zahl: Obergrenze der Review-Runden je PR: Cap-Pässe, höchstens `MAX_ZUSATZPAESSE` Zusatzpässe und die eine Delta-Runde nach einem Abnahme-Fix. */
+export const MAX_RUNDEN = MAX_REVIEW_PAESSE + MAX_ZUSATZPAESSE + 1;
 /** CI-Fix-Runden, ab denen das Festgefahren-Protokoll greifen muss (nach dem dritten Fix-Versuch). */
 export const FESTGEFAHREN_AB_CI_FIX = 4;
 /** Spielquote: unter so vielen Ticket-Merges im Fenster gibt es keine Aussage. */

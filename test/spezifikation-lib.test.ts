@@ -229,6 +229,10 @@ describe("Allquantor-Kriterien auf Heuristik-Wächter (#1808)", () => {
   });
   test("ohne Relativsatz und ohne echten Allquantor (Wortgrenze): kein Mangel", () => {
     expect(S.spezifikationsMaengel(mit("Jede Datei wird vom Skript gelesen."))).toEqual([]);
+    // linke Wortgrenze von „alle“ und Grenzen um die Artikelwörter („oder“, „wieder“ enthalten „der“)
+    expect(S.spezifikationsMaengel(mit("Er prüft Intervalle, die das Skript liest."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird vom Skript oder Hook gelesen."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird wieder gelesen."))).toEqual([]);
     expect(S.spezifikationsMaengel(mit("Allerdings meldet der Wächter die Datei, die er liest."))).toEqual([]);
   });
   test("Kriterium ohne Allquantor: kein Mangel", () => {

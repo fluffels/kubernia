@@ -636,11 +636,11 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(von({ zeilen: null }, "Festgefahren-Protokoll").status).toBe("Lücke");
   });
 
-  test("Lens-Zahl: 5 Runden ABWEICHUNG, 4 ok, ohne Nachweis (runden null) Lücke und nie 0", () => {
-    const zuviel = von({ zeilen: [ZEILE({ pr: 62, runden: 5 })] }, "Lens-Zahl");
+  test("Lens-Zahl: 8 Runden ABWEICHUNG, 7 (3 Pässe, 3 Zusatzpässe, 1 Abnahme-Fix) ok, ohne Nachweis (runden null) Lücke und nie 0", () => {
+    const zuviel = von({ zeilen: [ZEILE({ pr: 62, runden: 8 })] }, "Lens-Zahl");
     expect(zuviel.status).toBe("ABWEICHUNG");
-    expect(zuviel.messung).toContain("#62 (5)");
-    expect(von({ zeilen: [ZEILE({ runden: 4 }), ZEILE({ runden: null })] }, "Lens-Zahl").status).toBe("ok");
+    expect(zuviel.messung).toContain("#62 (8)");
+    expect(von({ zeilen: [ZEILE({ runden: 7 }), ZEILE({ runden: null })] }, "Lens-Zahl").status).toBe("ok");
     const ohne = von({ zeilen: [ZEILE({ runden: null })] }, "Lens-Zahl");
     expect(ohne.status).toBe("Lücke");
     expect(ohne.messung).toMatch(/ohne Review-Nachweiszeile/);
@@ -787,7 +787,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
   });
 
   test("erstelle mit auditLader trägt das Audit in den Bericht; ohne Lader bleibt es weg; ohne Lauf-Ergebnis sind Lens und Festgefahren Lücken", () => {
-    const run: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: JSON.stringify({ zeilen: [ZEILE({ pr: 70, runden: 6 })], kennzahlen: { ...KENN, prs: 1 } }), stderr: "" });
+    const run: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: JSON.stringify({ zeilen: [ZEILE({ pr: 70, runden: 8 })], kennzahlen: { ...KENN, prs: 1 } }), stderr: "" });
     const claimKarte = () => new Map([[40, [{ session: "s1", ts: "2026-10-14T07:00:00Z" }]]]);
     const mit = S.erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte, auditLader: () => ({ commits: [] }) });
     expect(mit.bericht.audit!.find((a) => a.mechanismus === "Lens-Zahl")).toMatchObject({ status: "ABWEICHUNG" });
