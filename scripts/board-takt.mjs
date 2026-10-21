@@ -146,7 +146,7 @@ export function harnessTaktAusCommits({ items, commits, seit, position, sammelIs
 }
 
 /** Die Factory-Liste ohne Items, die auch auf dem Produkt-Board stehen und laut Trennregel dorthin gehören (`doppelt` aus `seitenListen`). Pur. */
-export const factoryListe = (factory, doppelt) => factory.filter((i) => !(doppelt.includes(i.number) && boardRolleFuer(i.labels ?? []) !== "factory"));
+export const factoryListe = (factory, doppelt, config) => factory.filter((i) => !(doppelt.includes(i.number) && boardRolleFuer(i.labels ?? [], config) !== "factory"));
 
 /**
  * Zieht die im Speicher gehaltene Board-Liste nach einer Status-Aktion nach (statt sie neu zu laden): `ergebnis` = `{ nr, itemId }` aus
@@ -198,7 +198,7 @@ export function fuehreHarnessAus(h, items, token, { setze = (id, afterId, opts) 
  * gegengeprüft (`wirklichFehlend`); ohne Kandidaten entfällt die Abfrage. Jede Aufnahme steht als `::warning::` mit Nummer im Log, jeder
  * Fehler setzt `fehler` (Lauf rot). `dry`: nur Meldung. `listen` = `{ produkt, factory }`; liefert `{ listen, fehler }` (die Liste der Zielseite um die aufgenommenen Todos ergänzt).
  */
-export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REPO }, io) {
+export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REPO, config }, io) {
   const kandidaten = missingFromBoard(offene.map((i) => i.number), [...listen.produkt, ...listen.factory]);
   if (kandidaten.length === 0) return { listen, fehler: false };
   let fehlend;
@@ -212,7 +212,7 @@ export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REP
   let fehler = false;
   for (const nr of fehlend) {
     try {
-      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) });
+      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) }, { config });
       for (const a of abgelehnt) io.log(`::warning::Board-Wächter: #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
       for (const a of aufnehmen) {
         if (dry) {
@@ -288,9 +288,9 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
   // Beide Board-Listen einmal je Lauf (brauchen den Projekt-Scope des Tokens); Status- und Harness-Takt arbeiten auf der Factory-Liste.
   const roh = token ? { produkt: io.loadItems("produkt", { token }), factory: io.loadItems("factory", { token }) } : null;
-  const doppelt = roh ? seitenListen(roh.produkt, roh.factory).doppelt : [];
+  const doppelt = roh ? seitenListen(roh.produkt, roh.factory, config).doppelt : [];
   for (const nr of doppelt) io.log(`::warning::Board-Wächter: #${nr} steht auf beiden Boards, es zählt das Board laut Trennregel.`);
-  let items = roh ? factoryListe(roh.factory, doppelt) : null;
+  let items = roh ? factoryListe(roh.factory, doppelt, config) : null;
 
   const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
   const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
@@ -298,14 +298,14 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
   let fehler = false;
   if (!dry && e.aktion !== "nichts") {
-    const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [] });
+    const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [], config });
     fehler = !r.ok;
     if (items) items = ziehListeNach(items, r);
   }
 
   // Board-Wächter (#1628): offene Issues ohne Board-Item aufnehmen.
   if (items) {
-    const w = nimmFehlendeAuf({ offene, listen: { produkt: roh.produkt, factory: items }, token, dry, repo }, io);
+    const w = nimmFehlendeAuf({ offene, listen: { produkt: roh.produkt, factory: items }, token, dry, repo, config }, io);
     items = w.listen.factory;
     if (w.fehler) fehler = true;
   }

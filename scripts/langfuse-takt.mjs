@@ -8,11 +8,9 @@
  *
  * Nur Node-Builtins, board-lib.mjs und gh-cli.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
-import { FACTORY_LABEL, LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
-
-// Zwei Boards (ADR 0022 F11, #1729): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
-const FACTORY_BOARD = boardFuerRolle(boardRolleFuer([FACTORY_LABEL]));
+import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 import { fehlerMeldung } from "./gh-cli.mjs";
+import { labelAus } from "./projekt-config-lib.mjs";
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
@@ -118,14 +116,17 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
  * Liefert `{ ok, nr, itemId }`: `ok` bei Erfolg (oder fehlendem Token, das nur warnt), `itemId` nur, wenn das Item an die Spitze gesetzt
  * wurde (der Aufrufer zieht seine Liste damit im Speicher nach); `nr` ist die Nummer des Tickets.
  */
-export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {} }) {
-  const { gh = ghJson, imBoardAnlegen = (nodeId, opts) => addToBoardTodo(FACTORY_BOARD, nodeId, opts), setze = (id, afterId, opts) => setPosition(FACTORY_BOARD, id, afterId, opts) } = io; // im Test injizierbar
+export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {}, config }) {
+  // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
+  const harness = labelAus(config, "harness");
+  const board = boardFuerRolle(boardRolleFuer([harness], config));
+  const { gh = ghJson, imBoardAnlegen = (nodeId, opts) => addToBoardTodo(board, nodeId, opts), setze = (id, afterId, opts) => setPosition(board, id, afterId, opts) } = io; // im Test injizierbar
   let node;
   let nr = e.nr;
   if (e.aktion === "anlegen") {
     const neu = gh([
       "api", "-X", "POST", `repos/${repo}/issues`,
-      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo })}`, "-f", `labels[]=${FACTORY_LABEL}`,
+      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo })}`, "-f", `labels[]=${harness}`,
     ]);
     console.log(`Angelegt: #${neu.number}`);
     node = neu.node_id;

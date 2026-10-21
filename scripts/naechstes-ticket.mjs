@@ -185,12 +185,12 @@ function waehleSeite(listen, ladeQuote) {
  * wie `waehleNaechstes`; `ladeQuote` nur bei Bedarf (wirft bei Fehlern, der Lauf endet mit Exit 2). Liefert
  * `{ ticket, uebersprungen, quote: { seite, produktMerges, grund, rueckfall }, hinweise? }`. Pur bis auf `ladeQuote`.
  */
-export function waehleUeberBoards({ produkt, factory, bereich = null, ladeQuote, ...belegung }) {
-  const listen = seitenListen(produkt, factory);
+export function waehleUeberBoards({ produkt, factory, bereich = null, ladeQuote, config, ...belegung }) {
+  const listen = seitenListen(produkt, factory, config);
   const hinweise = listenHinweise(listen);
   const uebersprungen = [];
   const lauf = (items, extra) => {
-    const r = waehleNaechstes({ ...belegung, items, ...extra });
+    const r = waehleNaechstes({ ...belegung, config, items, ...extra });
     uebersprungen.push(...r.uebersprungen);
     return r.ticket;
   };
