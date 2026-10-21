@@ -66,6 +66,8 @@ describe("aufrufPruefen", () => {
     [["reparieren", "5", "--label", "a"], "Unbekanntes Argument: --label"],
     [["gibtsnicht", "--bogus"], "unbekannter Befehl „gibtsnicht“"],
     [[], "unbekannter Befehl (keiner)"],
+    [["toString"], "unbekannter Befehl „toString“"], // Prototyp-Schlüssel ist kein Befehl
+    [["constructor", "7"], "unbekannter Befehl „constructor“"],
   ])("ungültiger Aufruf %j: Fehler %s", (argv, text) => {
     expect(S.aufrufPruefen(argv).fehler).toBe(text);
   });

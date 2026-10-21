@@ -95,7 +95,7 @@ export function parseArgs(argv) {
     i = 1;
   }
   const modus = reihe[i];
-  if (modus?.kind !== "option" || !MODI.includes(modus.name)) return null;
+  if (modus?.kind !== "option") return null;
   if (!reihe.slice(i + 1).every((t) => t.kind === "positional")) return null;
   const geparst = parseModus(modus.name, positionale, dry);
   return geparst && notfall ? { ...geparst, notfall } : geparst;

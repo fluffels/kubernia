@@ -388,6 +388,10 @@ describe("Aufruf-, gh- und Vertrauensfehler", () => {
     ["zweite Nummer bei kriterien", ["kriterien", "7", "8"], "Unbekanntes Argument: 8"],
     ["zweite Nummer bei auswerten", [...AUSWERTEN, "8"], "Unbekanntes Argument: 8"],
     ["Flag ohne Wert", ["auswerten", "7", "--pr"], "--pr braucht einen Wert"],
+    ["unbekannter Befehl", ["foo"], "unbekannter Befehl „foo“"],
+    ["kein Befehl", [], "unbekannter Befehl (keiner)"],
+    ["Prototyp-Schlüssel toString", ["toString"], "unbekannter Befehl „toString“"],
+    ["Prototyp-Schlüssel constructor", ["constructor", "7"], "unbekannter Befehl „constructor“"],
   ])("Aufruf-Fehler %s: Exit 2 mit Text und Aufruf, nichts gepostet", (_n, argv, text) => {
     const r = lauf(ALLE_OK, {}, [], argv);
     expect(r.code).toBe(2);
