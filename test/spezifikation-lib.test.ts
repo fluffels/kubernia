@@ -233,6 +233,10 @@ describe("Allquantor-Kriterien auf Heuristik-Wächter (#1808)", () => {
     expect(S.spezifikationsMaengel(mit("Er prüft Intervalle, die das Skript liest."))).toEqual([]);
     expect(S.spezifikationsMaengel(mit("Jede Datei wird vom Skript oder Hook gelesen."))).toEqual([]);
     expect(S.spezifikationsMaengel(mit("Jede Datei wird wieder gelesen."))).toEqual([]);
+    // rechte Grenze der Artikelwörter und beide Grenzen um das Lesewort
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird derzeit gelesen."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Jede Nachricht, die ungelesen bleibt, wird markiert."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Alle Texte, die lesenswert sind, stehen oben."))).toEqual([]);
     expect(S.spezifikationsMaengel(mit("Allerdings meldet der Wächter die Datei, die er liest."))).toEqual([]);
   });
   test("Kriterium ohne Allquantor: kein Mangel", () => {

@@ -155,7 +155,7 @@ describe("Platzhalter: Rot-Fälle", () => {
   test("required-check: Name nicht im Ruleset-Spiegel ist rot, auch wenn ein Job so heißt", () => {
     const f = basis({ ".github/workflows/y.yml": "jobs:\n  z:\n    name: Nur im Workflow\n" });
     rot("${required-check:Nur im Workflow}", /Required Check "Nur im Workflow" steht nicht im Ruleset-Spiegel/, f);
-    rot("${required-check:Gibt es nicht}", /steht nicht im Ruleset-Spiegel .*bekannt: Tests, Typecheck & Builds, Security-Audit/);
+    rot("${required-check:Gibt es nicht}", /steht nicht im Ruleset-Spiegel \.github\/ruleset-main-schutz\.json \(bekannt: Tests, Typecheck & Builds, Security-Audit/);
   });
   test("required-check: fehlender Workflow-Ordner, fehlender oder kaputter Spiegel", () => {
     const f = basis();

@@ -43,7 +43,7 @@ import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis } from "./nachweis-lib.mjs";
+import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
@@ -113,7 +113,7 @@ function bewerteRunden(review, zeilen) {
   if (review.runden > erlaubt) {
     return [
       `${R}: runden=${review.runden} überschreitet die Obergrenze (Cap ${MAX_FIX_RUNDEN} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
-        `Einen Zusatzpass nach dem Cap fährt der Umsetzer ohne Rückfrage: zusatzpass=<anzahl>:<Ursache> in die ${R}-Zeile; ` +
+        `Bis zu ${MAX_ZUSATZPAESSE} Zusatzpässe nach dem Cap fährt der Umsetzer ohne Rückfrage (mehr nur mit Freigabe): zusatzpass=<anzahl>:<Ursache> in die ${R}-Zeile; ` +
         `die eine Delta-Runde nach einem Abnahme-Fix steht als abnahmefix=1.`,
     ];
   }
