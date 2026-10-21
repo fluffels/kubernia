@@ -15,6 +15,8 @@ const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
 const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad>`), oder den Projektwert in `.factory/projekt.json` auslagern";
 
+const BLOCK_HINWEIS = " (Projektergänzungen gehören außerhalb der Besitz-Marker)";
+
 /**
  * Prüft den Besitz gegen den Sync-Stand. `lies(pfad)` liefert den Dateitext (relativ zur Projektwurzel) oder `null`.
  * Rückgabe: `{ entfaellt, fehler, einheiten }`; jeder Fehler nennt den Weg.
@@ -53,7 +55,7 @@ export function pruefeDrift(lies) {
     const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
     const hash = text === null ? null : einheitHash(e, text);
     if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`);
-    else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert`);
+    else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert${e.block !== undefined ? BLOCK_HINWEIS : ""}`);
   }
   const nichtVerteilt = new Map((manifest.eintraege ?? []).filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
   for (const id of Object.keys(stand.einheiten)) {

@@ -515,17 +515,30 @@ describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
 // ── Feste Stopps bleiben (#1363) ─────────────────────────────────────────────
 
 /**
- * Die geschlossene Liste der festen Pflicht-Stopps (Irreversibles, Außenwirkung), je Anker ein Name und ein Text im Block
- * `stopps` der AGENTS.md. Grenze: der Wächter prüft Anker-Text und Permission-Einträge, nicht die Bedeutung; ein Abschwächen
- * im Wortlaut, bei dem der Anker bleibt, fängt er nicht. Die Ankerliste steht nur hier (der `KRITERIEN`-Scan nimmt diese Datei aus).
+ * Die geschlossene Liste der festen Pflicht-Stopps (Irreversibles, Außenwirkung), je Anker ein Name und ein Text. Die Kern-Stopps
+ * stehen im Kern-Block `kern` der AGENTS.md (Besitz der Factory, zwischen den Besitz-Markern), die Projekt-Stopps im Projekt-Block
+ * (zwischen den Projekt-Markern) als eine wörtlich festgenagelte Zeile; ein Kern-Anker im Projekt-Block zählt nicht. Grenze: der
+ * Wächter prüft Anker-Text und Permission-Einträge, nicht die Bedeutung; ein Abschwächen im Wortlaut, bei dem der Anker bleibt,
+ * fängt er nicht (im Projekt-Block fängt die Pin-Zeile jede Änderung der Stopp-Zeile). Die Ankerlisten stehen nur hier (der
+ * `KRITERIEN`-Scan nimmt diese Datei aus).
  */
-const FESTE_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen", "Forum-Antwort", "PixelLab-Key"];
+const KERN_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen"];
+const PROJEKT_STOPPS = ["Forum-Antwort posten", "PixelLab-Key"];
+const PROJEKT_STOPP_ZEILE = "- **Projekt-Stopps** (ergänzen die Kern-Liste, nie streichen): Forum-Antwort posten, PixelLab-Key; vorab klären.";
 
-/** Anker der festen Stopps, die im Block `stopps` zwischen den Besitz-Markern fehlen (ohne Marker: alle). */
+const KERN_RE = /<!-- factory-besitz:start kern -->([\s\S]*?)<!-- factory-besitz:ende kern -->/;
+const PROJEKT_RE = /<!-- factory-projekt:start -->([\s\S]*?)<!-- factory-projekt:ende -->/;
+
+/** Feste Stopps, die fehlen: Kern-Anker im Kern-Block, Projekt-Anker samt Pin-Zeile im Projekt-Block, Kern-Anker im Projekt-Block (ohne Marker: alle). */
 function festeStoppsFehlend(agentsText: string): string[] {
-  const m = /<!-- factory-besitz:start stopps -->([\s\S]*?)<!-- factory-besitz:ende stopps -->/.exec(agentsText);
-  const block = m ? m[1] : "";
-  return FESTE_STOPPS.filter((anker) => !block.includes(anker));
+  const kern = KERN_RE.exec(agentsText)?.[1] ?? "";
+  const projekt = PROJEKT_RE.exec(agentsText)?.[1] ?? "";
+  return [
+    ...KERN_STOPPS.filter((anker) => !kern.includes(anker)),
+    ...PROJEKT_STOPPS.filter((anker) => !projekt.includes(anker)),
+    ...(projekt.split("\n").includes(PROJEKT_STOPP_ZEILE) ? [] : [PROJEKT_STOPP_ZEILE]),
+    ...KERN_STOPPS.filter((anker) => projekt.includes(anker)).map((anker) => `Kern-Stopp im Projekt-Block: ${anker}`),
+  ];
 }
 
 type Permissions = { permissions: { ask: string[]; deny: string[] } };
@@ -543,25 +556,36 @@ describe("Feste Stopps bleiben (#1363)", () => {
   const agents = read("AGENTS.md");
 
   test("die Soll-Listen sind festgenagelt (ein geleerter Wächter wäre sonst vakuös)", () => {
-    assert.equal(FESTE_STOPPS.length, 5);
+    assert.equal(KERN_STOPPS.length, 3);
+    assert.equal(PROJEKT_STOPPS.length, 2);
     assert.equal(fehlendeRiegel({ permissions: { ask: [], deny: [] } }).length, 6);
   });
 
-  test("der Block `stopps` der AGENTS.md trägt jeden festen Stopp", () => {
+  test("Kern-Block und Projekt-Block der AGENTS.md tragen zusammen jeden festen Stopp", () => {
     assert.deepEqual(festeStoppsFehlend(agents), []);
   });
 
-  test("Red-Green: ein gestrichener Anker im Block wird genau benannt", () => {
-    for (const anker of FESTE_STOPPS) {
-      const ohne = agents.split(anker).join("X");
-      assert.deepEqual(festeStoppsFehlend(ohne), [anker], anker);
+  test("Red-Green: ein gestrichener Kern-Anker wird genau benannt", () => {
+    for (const anker of KERN_STOPPS) {
+      const kern = KERN_RE.exec(agents)?.[0] ?? "";
+      assert.ok(kern.split(anker).length === 2, `Anker ${anker} steht genau einmal im Kern`);
+      assert.deepEqual(festeStoppsFehlend(agents.replace(kern, kern.split(anker).join("X"))), [anker], anker);
     }
   });
 
-  test("Red-Green: ein Anker nur außerhalb des Blocks zählt nicht, fehlende Marker melden alle", () => {
-    const aussen = agents.replace(/<!-- factory-besitz:start stopps -->[\s\S]*?<!-- factory-besitz:ende stopps -->/, "<!-- factory-besitz:start stopps -->\n<!-- factory-besitz:ende stopps -->\n" + FESTE_STOPPS.join(" "));
-    assert.deepEqual(festeStoppsFehlend(aussen), FESTE_STOPPS);
-    assert.deepEqual(festeStoppsFehlend(agents.replace(/factory-besitz:start stopps/, "x")), FESTE_STOPPS);
+  test("Red-Green: ein gestrichener oder abgeschwächter Projekt-Stopp im Projekt-Block wird gemeldet", () => {
+    assert.ok(agents.split(PROJEKT_STOPP_ZEILE).length === 2, "die Pin-Zeile steht genau einmal");
+    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, PROJEKT_STOPP_ZEILE.replace(", PixelLab-Key", ""))), ["PixelLab-Key", PROJEKT_STOPP_ZEILE]);
+    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, PROJEKT_STOPP_ZEILE.replace("vorab klären.", "vorab klären, nur bei neuem Key."))), [PROJEKT_STOPP_ZEILE]);
+    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, "")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
+  });
+
+  test("Red-Green: ein Projekt-Stopp nur im Kern, ein Kern-Anker im Projekt-Block und fehlende Marker werden gemeldet", () => {
+    const nurKern = agents.replace(PROJEKT_STOPP_ZEILE, "").replace("dazu die Projekt-Stopps im Projekt-Block", "dazu Forum-Antwort posten, PixelLab-Key");
+    assert.deepEqual(festeStoppsFehlend(nurKern), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
+    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, `${PROJEKT_STOPP_ZEILE} Veröffentlichen`)), [PROJEKT_STOPP_ZEILE, "Kern-Stopp im Projekt-Block: Veröffentlichen"]);
+    assert.deepEqual(festeStoppsFehlend(agents.replace("factory-besitz:start kern", "x")), KERN_STOPPS);
+    assert.deepEqual(festeStoppsFehlend(agents.replace("factory-projekt:start", "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
   });
 
   test("der Forum-Skill hält den Freigabe-Stopp", () => {
