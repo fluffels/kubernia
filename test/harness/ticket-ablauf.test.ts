@@ -8,8 +8,8 @@
  *   3. Kein Ablauf-Werkzeug (Agent-Spawn, Skripte des Ablaufs) steht in einer Ticket-Skill-Datei.
  *   4. Kein Satz von 60 oder mehr Zeichen aus dem Ablauf steht wortgleich in einer anderen Skill-Datei.
  *   5. Die Auslöser der beiden `description:` überschneiden sich nicht.
- *   6. Ein Ticket-Skill bleibt Einstieg: keine Unterüberschrift, nur die fetten Absätze „Bereich“ und „Lies … ablauf.md“, Rumpf höchstens 900 Zeichen.
- * Bekannte Grenze: eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich.
+ *   6. Ein Ticket-Skill bleibt Einstieg: keine Unterüberschrift, nur die fetten Absätze „Bereich“ und „Lies … ablauf.md“, Rumpf höchstens 700 Zeichen.
+ * Bekannte Grenzen: eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich; ein kurzer Absatz ohne Fett und Überschrift (auch Listenpunkt, zweite H1) innerhalb des Rumpfbudgets bleibt unbemerkt, das Budget begrenzt ihn nur.
  */
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -43,8 +43,8 @@ export function doppelterAblauf(ablauf: string, dateien: Record<string, string>)
   return out;
 }
 
-const MAX_RUMPF = 900;
-const ERLAUBTE_FETTE_ABSAETZE = ["**Bereich:", "**Lies `.claude/skills/factory/ablauf.md`"];
+const MAX_RUMPF = 700;
+const ERLAUBTE_FETTE_ABSAETZE = ["**Bereich:", "**Lies `" + TICKET_ABLAUF + "`"];
 
 /** Abweichungen eines Ticket-Skills von der Einstiegsform (Rumpf nach dem Frontmatter). */
 export function einstiegAbweichungen(skillText: string): string[] {
