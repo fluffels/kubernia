@@ -236,7 +236,7 @@ function zaehleOffeneMitFix({ gh, label, von, bis, tickets, ohne, zeilen, owner 
     }
   };
   const liste = json(["pr", "list", "--state", "open", "--base", "main", "--label", label, "--limit", String(PR_LIMIT), "--json", "number,title,createdAt,closingIssuesReferences"]);
-  if (!Array.isArray(liste)) throw new DatenFehler("gh pr list (offen): Antwort ist keine Liste.");
+  if (!Array.isArray(liste)) throw new DatenFehler("Liste offener PRs: Antwort ist keine Liste.");
   if (liste.length >= PR_LIMIT) throw new DatenFehler(`Liste offener PRs bei ${PR_LIMIT} abgeschnitten.`);
   const t0 = new Date(von).getTime();
   const t1 = new Date(bis).getTime();
