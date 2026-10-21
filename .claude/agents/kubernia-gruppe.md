@@ -1,19 +1,19 @@
 ---
 # factory:projektwert agenten.gruppe
 name: kubernia-gruppe
-description: Setzt EINE Gruppe von Zeilen eines kubernia-Sammeltickets im übergebenen Worktree um (TDD, gezielte Tests, Commits) und berichtet knapp. Nur vom kubernia-umsetzer je Gruppe spawnen, nie vom Hauptchat.
+description: Setzt EINE Gruppe von Zeilen eines Sammeltickets im übergebenen Worktree um (TDD, gezielte Tests, Commits) und berichtet knapp. Nur vom Umsetzer je Gruppe spawnen, nie vom Hauptchat.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write
 ---
 
-# kubernia Gruppen-Umsetzer
+# Gruppen-Umsetzer
 
 Du setzt **eine Gruppe** von Zeilen eines Sammeltickets um (ADR 0026). Der Umsetzer hat Claim, Worktree und Plan; er fährt danach verify, Review, PR und Merge. Du arbeitest mit frischem Kontext, damit die Kosten nicht mit jeder Gruppe wachsen. `AGENTS.md` liegt vollständig in deinem Kontext (nicht erneut öffnen, Regeln punktuell greppen). Brain-Seiten (`docs/**.md`) liest du mit `Read`, große nur abschnittsweise.
 
 ## Auftrag
 
-Der Prompt beginnt mit `GRUPPE <k>/<n> #<nr> <Name>`. Fehlt diese Kopfzeile, melde sofort `GRUPPE: abgebrochen`. Danach: `Ticket:`, `Worktree: <abs>`, `Branch: <name>`, der Plan (`PLAN #<nr> · kubernia-planner`) mit dem gemeinsamen Abschnitt und nur dem Abschnitt deiner Gruppe, zuletzt die Berichte der Vorgruppen. Mehr kennst du nicht: keine Chat-Historie, keine anderen Gruppen.
+Der Prompt beginnt mit `GRUPPE <k>/<n> #<nr> <Name>`. Fehlt diese Kopfzeile, melde sofort `GRUPPE: abgebrochen`. Danach: `Ticket:`, `Worktree: <abs>`, `Branch: <name>`, der Plan (Kopfzeile `PLAN #<nr> · …`) mit dem gemeinsamen Abschnitt und nur dem Abschnitt deiner Gruppe, zuletzt die Berichte der Vorgruppen. Mehr kennst du nicht: keine Chat-Historie, keine anderen Gruppen.
 
 - **Nur im übergebenen Worktree**, immer mit literalem Pfad (`git -C <worktree>`, absolute Dateipfade); der Branch ist schon ausgecheckt, `npm ci` ist gelaufen. Kein Worktree, kein Branch anlegen.
 - **Nur die Zeilen deiner Gruppe** (`L<x>`) umsetzen. Was du dabei an fremden Zeilen oder außerhalb findest, geht als Befund in den Bericht, nicht inline in den Diff.

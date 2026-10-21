@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+import { liesMitProjektwerten } from "../support/ticket-ablauf";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as pcRaw from "../../scripts/projekt-config-lib.mjs";
@@ -54,7 +55,7 @@ const { parseErgebnis, parseAbschlussInput } = abschluss;
 const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { config: ladeProjektConfig(), prDateien: () => [], ...d } as never);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const UMSETZER = readFileSync(resolve(ROOT, ".claude/agents/kubernia-umsetzer.md"), "utf8");
+const UMSETZER = liesMitProjektwerten(".claude/agents/kubernia-umsetzer.md");
 
 const abschnitt = (md: string, kopf: RegExp): string => {
   const zeilen = md.split("\n");

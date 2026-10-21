@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
-import { liesTicketAblauf } from "../support/ticket-ablauf";
+import { liesMitProjektwerten, liesTicketAblauf } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 
@@ -65,13 +65,13 @@ const ABNAHME_TOOLS = [
 ];
 
 const SKILL = liesTicketAblauf();
-const LENSES = lies(".claude/skills/review-lenses/SKILL.md");
-const UMSETZER = lies(".claude/agents/kubernia-umsetzer.md");
+const LENSES = liesMitProjektwerten(".claude/skills/review-lenses/SKILL.md");
+const UMSETZER = liesMitProjektwerten(".claude/agents/kubernia-umsetzer.md");
 const GANZE_DATEIEN: [string, string][] = [
-  [".claude/agents/kubernia-planner.md", lies(".claude/agents/kubernia-planner.md")],
+  [".claude/agents/kubernia-planner.md", liesMitProjektwerten(".claude/agents/kubernia-planner.md")],
   [".claude/agents/kubernia-umsetzer.md", UMSETZER],
   [".claude/agents/kubernia-gruppe.md", lies(".claude/agents/kubernia-gruppe.md")],
-  [".claude/agents/kubernia-lens.md", lies(".claude/agents/kubernia-lens.md")],
+  [".claude/agents/kubernia-lens.md", liesMitProjektwerten(".claude/agents/kubernia-lens.md")],
   [".claude/skills/review-lenses/SKILL.md", LENSES],
 ];
 

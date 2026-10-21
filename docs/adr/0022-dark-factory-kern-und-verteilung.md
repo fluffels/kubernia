@@ -432,3 +432,15 @@ Was eine Datei nicht zur Laufzeit aus der Config lesen kann (Frontmatter, Prompt
 ## Fortschreibung #1814 (2026-10-21): Factory-Seiten bleiben unter docs/
 
 Die Factory-Seiten bleiben unter `docs/` (kein Verschieben nach `docs/factory/`, kein Ring `kern`). Gründe: Verweise in ADRs werden nie umgeschrieben, die Seiten mischen Projektwerte mit Kernwissen, und die Regelzeilen kommen laut F4 als Markdown-Blöcke in den Kern, ganze Brain-Seiten sind dafür nicht vorgesehen.
+
+## Fortschreibung #1747 (2026-10-21): Agenten- und Skill-Texte ohne Projektliterale (F3, Teil 7)
+
+Die Agenten-Definitionen (Planer, Umsetzer, Lens, Gruppen-Umsetzer, Explore), der Skill `review-lenses` und der Ticket-Ablauf nennen in der Prosa Rollen („der Umsetzer“). Wo ein echter Wert gebraucht wird (Spawn-Typ, Kopfzeile `PLAN`, Nachweis-Zeilen, Worktree- und Patch-Namen, Label), steht ein Platzhalter `<gruppe.schlüssel>` in Schlüssel-Form (Gruppen `agenten`, `labels`, `praefixe`).
+
+- **Block nur bei Platzhaltern:** fünf Dateien tragen einen Projektwert-Block (Planer, Umsetzer, Lens, `review-lenses`, `ablauf.md`), der Gruppen-Umsetzer und Explore nennen keinen Wert und brauchen keinen. Der Block steht direkt nach Überschrift und Einleitung, mit einem Satz davor: Werte wörtlich einsetzen, nie den Platzhalter.
+- **Der Ticket-Ablauf trägt den Block selbst:** der Hauptchat liest `.factory/projekt.json` dafür nicht mehr je Skill-Aufruf (Befund aus #1746); die Kurzformen `<Branch-Präfix>` und `<Commit-Präfix>` sind `<praefixe.branch>` und `<praefixe.commitZeile>`. Die Auslöser im `description:` des Ticket-Skills bleiben (Wortlaut der Maintainerin, Projektbesitz, nicht gezählt).
+- **Fitness-Regel „Platzhalter braucht Block, Schlüssel löst auf“** in `test/harness/platzhalter-regel.test.ts` (Wächter), nicht im Drift-Gate: sie prüft nur die Prüf-Fläche von `projektwertDateien` und nur die Schlüssel-Form; `<agenten.…>` mit Auslassungszeichen beschreibt nur und zählt nicht.
+- **K2 (Negativfall):** derselbe Test fährt das Drift-Gate auf den echten Texten und auf einer Kopie mit verfälschtem Block bzw. abweichender Config; beide sind rot.
+- **Tests lesen mit eingesetzten Werten** (`liesMitProjektwerten` in `test/support/ticket-ablauf.ts`), statt Wortlaute mit Projektnamen zu prüfen.
+- **Offen, bleibt für andere Schritte:** `Stardew` für F5, die Dateinamen `kubernia-*.md` für F3h (#1748). Die Baseline sinkt für die sechs Einheiten auf `Stardew` (Planer 2, Umsetzer 1, `review-lenses` 1).
+- **Grenzen:** das Modell muss den Platzhalter beim Spawn und in Nachweis-Zeilen selbst auflösen; setzt es ihn wörtlich ein, scheitert der Spawn („Agent type not found“) oder der Nachweis-Check ist rot (fail-closed). Beim Lens-Spawn kaschiert der Fallback auf `general-purpose` ein wörtlich gesetztes `<agenten.lens>` zunächst. Die Platzhalter-Regel liegt als Wächter im Projekt-Test, nicht in der Kern-Lib: bei der Kern-Verteilung (F10) gehört sie neben `projektwertAbweichungen`, sonst bekommt ein Ziel die Platzhalter ohne die Prüfung. Der Probe-Lauf dieses PRs belegt den Spawn für Planer und Umsetzer.

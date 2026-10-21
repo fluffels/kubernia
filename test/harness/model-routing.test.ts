@@ -81,7 +81,7 @@ const pflegeMarker = (brainMetrics as { pflegeMarker: (ev: { tool: string; input
 import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
-import { liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
+import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
 // Begründete Ausnahme, identisch zu test/harness/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed". Eng begrenzter
@@ -235,7 +235,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
   });
 
   test(`${REVIEW_SKILL} spawnt die Lenses über den Agenten kubernia-lens (opus/high), ohne model-Override`, () => {
-    const md = read(REVIEW_SKILL);
+    const md = liesMitProjektwerten(REVIEW_SKILL);
     // Bewusst an den `Agent({…})`-Spawn-Block gebunden, nicht datei-weit: sonst hält ein
     // beliebiger Prosa-Satz („historisch stand hier model: opus") den Test grün, während
     // die Lenses längst wieder inline oder auf general-purpose laufen.
@@ -460,7 +460,7 @@ describe("Sammelticket-Gruppen (#1647, ADR 0026): ein Vertrag in Planer, Umsetze
   });
   test("der Planer nennt das Block-Format, der Umsetzer spawnt kubernia-gruppe ohne isolation", () => {
     assert.ok(read(dateien[0]).includes("GRUPPE <k>/<n> <Name>: L<x>, L<y> | Dateien: … | nach: <k|->"));
-    const umsetzer = read(dateien[1]);
+    const umsetzer = liesMitProjektwerten(dateien[1]);
     assert.match(umsetzer, /subagent_type: "kubernia-gruppe"/);
     assert.match(umsetzer, /ohne `isolation`/);
   });
@@ -748,7 +748,7 @@ describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
   });
 
   test("Abgrenzung zu BEFUNDE steht in der Rolle, und der Subagent legt nichts selbst ab", () => {
-    assert.match(rolle, /BEFUNDE[^\n]*nur kubernia-Spezifisches/);
+    assert.match(rolle, /BEFUNDE[^\n]*nur Projektspezifisches/);
     assert.match(rolle, /legst (es|sie|nichts) [^\n]*selbst[^\n]*ab|legst du nichts selbst ab/);
   });
 

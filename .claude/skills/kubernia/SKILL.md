@@ -6,9 +6,9 @@ model: sonnet
 effort: medium
 ---
 
-# Kubernia-Ticket abarbeiten
+# Spiel-Ticket abarbeiten
 
-**Bereich: `spiel`.** Die Auswahl läuft mit `--bereich spiel` und sieht nur das Produkt-Board; die Notfälle (CI rot auf `main`, Security) gelten auf beiden Boards. Es wird nie ein `area:harness`-Ticket gezogen, keine Rückfrage, keine Spielquote.
+**Bereich: `spiel`.** Die Auswahl läuft mit `--bereich spiel` und sieht nur das Produkt-Board; die Notfälle (CI rot auf `main`, Security) gelten auf beiden Boards. Es wird nie ein Harness-Ticket gezogen, keine Rückfrage, keine Spielquote.
 
 **Lies `.claude/skills/factory/ablauf.md` und folge ihm mit diesem Bereich.** Dort steht der ganze Ablauf (Claim, Planer, Umsetzer, Übergabe, Abnahme, Abschluss); diese Datei legt nur Bereich und Auslöser fest. Die Fortsetzung „mach mit #<nr> weiter“ gehört diesem Skill; eine Ticketnummer braucht keinen Bereich.
 

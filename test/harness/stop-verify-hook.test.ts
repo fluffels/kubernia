@@ -17,6 +17,7 @@ import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { lies, repoDateien } from "./repo-texte";
+import { liesMitProjektwerten } from "../support/ticket-ablauf";
 
 // Zähler der PowerShell-Starts (#1526): bei einem gesperrten Waisen-Ordner fragt `checkAndFixOrphanWorktrees` unter Windows
 // die Prozessliste per `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests
@@ -447,9 +448,8 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
     assert.ok(s.hooks.Stop?.some((e) => e.hooks.some((h) => h.args.some((a) => a.endsWith("scripts/stop-verify-hook.mjs")))), "der Stop-Hook des Hauptchats bleibt");
   });
 
-  test("Umsetzer und Skill sagen, was bei einer Blockade zu tun ist", async () => {
-    const { readFileSync } = await import("node:fs");
-    const lies = (p: string) => readFileSync(fileURLToPath(new URL(`../../${p}`, import.meta.url)), "utf8");
+  test("Umsetzer und Skill sagen, was bei einer Blockade zu tun ist", () => {
+    const lies = (p: string) => liesMitProjektwerten(p);
     assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /SubagentStop-Hook/);
     assert.match(lies(".claude/skills/factory/ablauf.md"), /cleanup-worktrees\.mjs --fix/);
     assert.match(lies(".claude/skills/factory/ablauf.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills/);
