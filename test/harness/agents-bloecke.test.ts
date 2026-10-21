@@ -6,7 +6,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel (kein eigenes check-Skript), darum im geschützten test/harness/ (#1165).
  *
  * Grenze (geschlossener Scan-Umfang): geprüft werden nur `AGENTS.md`, `.factory/besitz.json` und `.factory/projekt.json`; die Bedeutung
- * der Regeltexte prüft kein Wächter, ein Synonym für einen gestrichenen Stopp fängt nur die Pin-Zeile in `harness-approval.test.ts`. */
+ * der Regeltexte prüft kein Wächter, Stopp-Aussagen im Projekt-Block fangen nur die Pin-Zeile und die Stopp-Wort-Prüfung in `harness-approval.test.ts`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
