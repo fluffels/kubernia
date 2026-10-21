@@ -506,6 +506,29 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.throws(lauf({ liste: [], offen: [offenPr()], fehler: "/comments" }), mod.DatenFehler);
       assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: (a) => (a.includes("open") ? "kein json" : gh({ liste: [] })(a)), owner: "fluffels" }), mod.DatenFehler);
     });
+    test("Guards der Zählung: Nicht-Liste, abgeschnittene Liste und beide Fenstergrenzen", () => {
+      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: "fluffels" });
+      assert.throws(lauf({ liste: [], offen: {} as unknown as unknown[] }), /keine Liste/);
+      const voll = Array.from({ length: 1000 }, (_, i) => offenPr({ number: 1000 + i }));
+      assert.throws(lauf({ liste: [], offen: voll }), /abgeschnitten/);
+      const k = { 70: [kommentar(marker(2))] };
+      const zaehle = (createdAt: string) => offen({ liste: [], offen: [offenPr({ createdAt })], kommentare: k }, { owner: "fluffels" }).offenMitFix;
+      assert.equal(zaehle(von), 1, "untere Grenze gehört zum Fenster");
+      assert.equal(zaehle(bis), 1, "obere Grenze gehört zum Fenster");
+      assert.equal(zaehle("2026-10-02T00:00:01Z"), 0, "nach dem Fenster zählt nicht");
+      assert.equal(zaehle("2026-09-30T23:59:59Z"), 0, "vor dem Fenster zählt nicht");
+    });
+    test("Besitzer kommt aus repo der Config; fehlt er bei einem Treffer im Fenster, ist das ein Datenfehler (fail-closed)", () => {
+      const o: Opt = { liste: [], offen: [offenPr()], kommentare: { 70: [kommentar(marker(2))] } };
+      const conf = (repo?: unknown) => () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL }, ...(repo === undefined ? {} : { repo }) });
+      const lauf = (c: () => unknown) => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ladeConfig: c });
+      assert.equal((lauf(conf("fluffels/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1);
+      assert.equal((lauf(conf("anderer/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 0, "Autor fluffels ist dann nicht vertraut");
+      assert.throws(() => lauf(conf()), /Besitzer/);
+      assert.throws(() => lauf(conf(42)), /Besitzer/);
+      const leer = { liste: [], offen: [] };
+      assert.doesNotThrow(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(leer), jetzt: SPAETER, ladeConfig: conf() }));
+    });
   });
   test.each([3, 50, 51, 60])("gh-Aufrufe wachsen nicht je PR: bei %i PRs höchstens 2 + 1 + ⌈N/50⌉", (n) => {
     const prs = Array.from({ length: n }, (_, i) => pr({ number: 100 + i, mergeCommit: { oid: `${(i + 1).toString(16).padStart(40, "0")}` }, headRefName: `feature/kq-${i}` }));
