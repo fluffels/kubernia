@@ -60,7 +60,7 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string },
     d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null },
   ) => Promise<{ exitCode: number; text: string }>;
-  parseArgs: (a: string[]) => { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[] };
+  parseArgs: (a: string[]) => { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string };
 };
 const BASE = rawBase as unknown as Record<string, unknown>;
 const PREISE = rawPreise as unknown as Record<string, unknown>;
@@ -813,7 +813,7 @@ describe("pruefen (Ablauf)", () => {
 
 describe("strikte Argumente (#1790)", () => {
   test("parseArgs: unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
-    const fehler = (argv: string[]) => (A.parseArgs(argv) as { fehler?: string }).fehler ?? "";
+    const fehler = (argv: string[]) => A.parseArgs(argv).fehler ?? "";
     expect(fehler(["--pruefen", "--bogus"])).toMatch(/Unbekanntes Argument: --bogus/);
     expect(fehler(["--seit"])).toMatch(/--seit braucht einen Wert/);
     expect(fehler(["--session", "a", "--session", "b"])).toMatch(/--session ist doppelt/);
@@ -824,7 +824,7 @@ describe("strikte Argumente (#1790)", () => {
     const wirft = () => {
       throw new Error("kein I/O erlaubt");
     };
-    const r = await A.pruefen({ pruefen: true, json: false, seit: null, session: null, ist: [], fehler: "X" } as Parameters<typeof A.pruefen>[0], { env: {}, projectsRoot: "X:/gibt-es-nicht", repoRoot: "X:/repo", fetchImpl: wirft, leseDatei: wirft });
+    const r = await A.pruefen({ pruefen: true, json: false, seit: null, session: null, ist: [], fehler: "X" }, { env: {}, projectsRoot: "X:/gibt-es-nicht", repoRoot: "X:/repo", fetchImpl: wirft, leseDatei: wirft });
     expect(r).toEqual({ exitCode: 2, text: `X\n${A.AUFRUFHILFE}` });
   });
 });
