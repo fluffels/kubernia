@@ -668,9 +668,10 @@ describe("pruefen (Ablauf)", () => {
     // Anzahl und Liste zählen nur Sessions mit Zähl-Dubletten; die ID wird auf 8 Zeichen gekürzt.
     const z = (session: string, dubletten: number) => ({ ...b, schluessel: "zählung", session, dubletten });
     const zwei = A.renderMarkdown([z("abcdefgh-ijkl", 2), z("s2", 0), { ...z("s3", 1), schluessel: "fingerprint" }], sum);
-    expect(zwei).toContain("1 Session(s) mit Dubletten auf der Zählebene (abcdefgh)");
-    expect(zwei).not.toContain("s2");
-    expect(zwei).not.toContain("s3");
+    const hinweis = zwei.split("\n").find((l) => l.includes("auf der Zählebene")) ?? "";
+    expect(hinweis).toContain("1 Session(s) mit Dubletten auf der Zählebene (abcdefgh):");
+    expect(hinweis).not.toContain("s2");
+    expect(hinweis).not.toContain("s3");
   });
 
   test("Ohne Zugang nennt der Hinweis den Zähl-Filter gegen leere Hook-GENERATIONs (providedModelName none of claude)", () => {
