@@ -1095,6 +1095,21 @@ describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
     expect(r.protokoll.fehler.length).toBeGreaterThan(0);
     for (const f of r.protokoll.fehler) expect(f.meldung).toContain("fetch failed (ECONNRESET)");
   });
+  test.each([
+    ["OTLP-Send", "/otel/v1/traces", "fetch failed (ECONNRESET)"],
+    ["Score-Send", "/api/public/scores", "Score: fetch failed (ECONNRESET)"],
+  ])("Fehlerzeile bei scheiterndem %s trägt die Ursache (nur diese Anfrage wirft)", async (_n, pfad, erwartet) => {
+    const a = aufbau([msg("a", 1)]);
+    const m = mock({ ist: 0 });
+    const fetchImpl: Fetch = (url, init) =>
+      url.includes(pfad) ? Promise.reject(new TypeError("fetch failed", { cause: Object.assign(new Error("x"), { code: "ECONNRESET" }) })) : m.fetchImpl(url, init);
+    const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
+    expect(r.protokoll.fehler.map((f: { meldung: string }) => f.meldung)).toEqual([erwartet]);
+  });
+  test("fehlerText: cause null oder Nicht-Error mit cause werfen nicht und bleiben bei der Meldung", () => {
+    expect(N.fehlerText(new Error("x", { cause: null }))).toBe("x");
+    expect(N.fehlerText({ cause: { code: "X" } })).toBe("[object Object]");
+  });
   test("Standardfrist: 30 s", () => {
     expect(API2.ANFRAGE_FRIST_MS).toBe(30_000);
   });
