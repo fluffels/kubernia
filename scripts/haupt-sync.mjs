@@ -82,11 +82,11 @@ export const KERN_SKILL_VERZEICHNIS = `.claude/skills/${KERN_TICKET_SKILL}/`;
  * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien und
  * modul-lokale AGENTS.md; `lockGeaendert`: package-lock.json. Pur, wirft nie.
  */
-export function ordneHarnessAenderungen(dateien, skillVerzeichnis = TICKET_SKILL_VERZEICHNIS) {
+export function ordneHarnessAenderungen(dateien) {
   const ordnung = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
   for (const d of Array.isArray(dateien) ? dateien : []) {
     if (d === "package-lock.json") ordnung.lockGeaendert = true;
-    else if (d === "AGENTS.md" || d.startsWith(KERN_SKILL_VERZEICHNIS) || (skillVerzeichnis !== null && d.startsWith(skillVerzeichnis))) ordnung.skill.push(d);
+    else if (d === "AGENTS.md" || d.startsWith(KERN_SKILL_VERZEICHNIS) || d.startsWith(TICKET_SKILL_VERZEICHNIS))ordnung.skill.push(d);
     else if (d.startsWith(".claude/agents/")) ordnung.agenten.push(d);
     else if (d.startsWith(".claude/") || /(^|\/)AGENTS\.md$/.test(d)) ordnung.sonstige.push(d);
   }
