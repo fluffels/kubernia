@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, pfadSicher, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
@@ -62,14 +63,13 @@ export function pruefeDrift(lies) {
 
 /** Kommandozeile; Rückgabe = Exit-Code. */
 export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)), ".."), out = (s) => console.log(s), err = (s) => console.error(s) } = {}) {
-  let w = wurzel;
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--wurzel" && argv[i + 1] !== undefined) w = argv[++i];
-    else {
-      err("Aufruf: node scripts/check-factory-drift.mjs [--wurzel <pfad>]");
-      return 2;
-    }
+  const gelesen = flagsLesen(argv, { wurzel: { type: "string" } });
+  if (gelesen.fehler) {
+    err(`check-factory-drift: ${gelesen.fehler.text}`);
+    err("Aufruf: node scripts/check-factory-drift.mjs [--wurzel <pfad>]");
+    return AUFRUF_EXIT;
   }
+  const w = gelesen.werte.wurzel ?? wurzel;
   const lies = (pfad) => {
     const voll = join(w, ...pfad.split("/"));
     return existsSync(voll) ? readFileSync(voll, "utf8") : null;

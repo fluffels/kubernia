@@ -38,6 +38,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
 import { ticketNamen, ladeTicketNamen } from "./ticket-namen.mjs";
@@ -94,13 +95,6 @@ export function gehoertZu(lock, nonce) {
 export const NICHT_VON_HAND = "Nicht von Hand lösen: kein mv/rm der Lock-Datei, kein freigeben mit fremder Nonce; einen verwaisten Lock (älter als 2 h) übernimmt claim selbst.";
 
 const NUMMER = /^\d+$/;
-
-/** Wert hinter `--nonce` (oder `--nonce=<x>`) aus argv; `null`, wenn nicht angegeben; `""`, wenn der Wert fehlt. Pur. */
-export function nonceAus(argv) {
-  const i = argv.findIndex((a) => a === "--nonce" || a.startsWith("--nonce="));
-  if (i < 0) return null;
-  return argv[i].includes("=") ? argv[i].slice("--nonce=".length) : (argv[i + 1] ?? "");
-}
 
 const lockPfad = (deps, nr) => join(deps.lockDir, `${nr}.json`);
 
@@ -303,38 +297,51 @@ function freigeben(deps, nr, nonce) {
   return ergebnis(0, "freigegeben");
 }
 
-/** Wert hinter `--schritt` (oder `--schritt=<x>`); `null`, wenn nicht angegeben. Pur. */
-export function schrittAus(argv) {
-  const i = argv.findIndex((a) => a === "--schritt" || a.startsWith("--schritt="));
-  if (i < 0) return null;
-  return argv[i].includes("=") ? argv[i].slice("--schritt=".length) : (argv[i + 1] ?? "");
+const BEFEHLE = ["claim", "pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"];
+
+/** Flag-Menge je Befehl (Format von `flagsLesen`) und die Pflicht-Flags. */
+const FLAG_MENGEN = {
+  claim: { optionen: { wiederaufnahme: { type: "boolean" } }, pflicht: [] },
+  pruefe: { optionen: { nonce: { type: "string" } }, pflicht: [] },
+  freigeben: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
+  uebergeben: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
+  gestoppt: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
+  uebernehmen: { optionen: { nonce: { type: "string" }, nachfolger: { type: "boolean" } }, pflicht: ["nonce"] },
+  lebenszeichen: { optionen: { nonce: { type: "string" }, schritt: { type: "string" } }, pflicht: ["nonce"] },
+};
+
+const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit";
+
+/**
+ * Liest den Aufruf vor jedem I/O: `{ commit: true }` für `lebenszeichen --commit` (genau diese zwei Argumente, post-commit-Hook), sonst
+ * `{ befehl, nr, nonce, wiederaufnahme, schritt }` (`nonce` und `schritt` null ohne Flag) oder `{ fehler }`. Befehl und Nummer stehen fest an Position 1 und 2,
+ * die Flags danach lesen `flagsLesen` je Befehl. Eine leere Nonce ist ein Fehler. Pur.
+ */
+export function aufrufLesen(argv) {
+  if (argv.length === 2 && argv[0] === "lebenszeichen" && argv[1] === "--commit") return { commit: true };
+  const [befehl, nrText, ...rest] = argv;
+  if (!BEFEHLE.includes(befehl ?? "")) return { fehler: befehl === undefined ? "kein Befehl angegeben" : `unbekannter Befehl ${befehl}` };
+  if (!NUMMER.test(nrText ?? "")) return { fehler: nrText === undefined ? "Ticketnummer fehlt" : `ungültige Ticketnummer ${nrText}` };
+  const { optionen, pflicht } = FLAG_MENGEN[befehl];
+  const r = flagsLesen(rest, optionen, { pflicht });
+  if (r.fehler) return { fehler: r.fehler.text };
+  if (r.werte.nonce === "") return { fehler: "--nonce braucht einen Wert" };
+  if (befehl === "uebernehmen" && r.werte.nachfolger !== true) return { fehler: "uebernehmen ruft nur der Nachfolger (--nachfolger); der Hauptchat prüft mit pruefe <nr> --nonce <x>" };
+  return { befehl, nr: Number(nrText), nonce: r.werte.nonce ?? null, wiederaufnahme: r.werte.wiederaufnahme === true, schritt: r.werte.schritt ?? null };
 }
 
-/** `uebernehmen` verlangt `--nonce <x>` (oder `--nonce=<x>`) und `--nachfolger`, sonst nichts. Pur. */
-export function uebernehmenArgsOk(rest) {
-  const uebrig = [];
-  for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === "--nonce") i++;
-    else if (!rest[i].startsWith("--nonce=")) uebrig.push(rest[i]);
-  }
-  return uebrig.length === 1 && uebrig[0] === "--nachfolger";
-}
+/** Der Aufruf-Fehler als Ergebnis: Rahmen, Grund, Aufrufzeile. */
+const aufrufFehler = (grund) => ergebnis(AUFRUF_EXIT, "", `✖ ticket-lock: ${grund}\n${USAGE}`);
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, sandbox, lockDir, liesDatei, schreibeNeu, ersetze, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
 export function fuehreAus(argv, deps) {
-  const [befehl, nrText, ...rest] = argv;
-  const nonce = nonceAus(argv);
-  const nr = NUMMER.test(nrText ?? "") ? Number(nrText) : null;
-  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit");
-  if (befehl === "lebenszeichen" && argv.length === 2 && argv[1] === "--commit") return lebenszeichenCommit(deps);
-  if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"].includes(befehl)) return usage;
-  if (["freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"].includes(befehl) && !nonce) return usage;
-  if (befehl === "uebernehmen" && !uebernehmenArgsOk(rest)) return ergebnis(2, "", "✖ ticket-lock: uebernehmen ruft nur der Nachfolger (--nachfolger); der Hauptchat prüft mit pruefe <nr> --nonce <x>");
-  const wiederaufnahme = befehl === "claim" && rest.length === 1 && rest[0] === "--wiederaufnahme";
-  if (nonce === "" || (befehl === "claim" && rest.length > 0 && !wiederaufnahme)) return usage;
+  const aufruf = aufrufLesen(argv);
+  if (aufruf.fehler) return aufrufFehler(aufruf.fehler);
+  if (aufruf.commit) return lebenszeichenCommit(deps);
+  const { befehl, nr, nonce, wiederaufnahme, schritt } = aufruf;
   try {
     if (befehl === "claim") return claim(deps, nr, wiederaufnahme);
-    if (befehl === "lebenszeichen") return lebenszeichen(deps, nr, nonce, schrittAus(argv));
+    if (befehl === "lebenszeichen") return lebenszeichen(deps, nr, nonce, schritt);
     if (befehl === "pruefe") return pruefe(deps, nr, nonce);
     if (befehl === "uebernehmen") return pruefe(deps, nr, nonce, true);
     if (befehl === "uebergeben") return uebergeben(deps, nr, nonce);
@@ -398,7 +405,10 @@ export function echteDeps({ config } = {}) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let r;
   try {
-    r = fuehreAus(process.argv.slice(2), echteDeps());
+    // Aufruf zuerst: `echteDeps()` ruft git, ein falscher Aufruf braucht kein I/O (#1817).
+    const argv = process.argv.slice(2);
+    const vorab = aufrufLesen(argv);
+    r = vorab.fehler ? aufrufFehler(vorab.fehler) : fuehreAus(argv, echteDeps());
   } catch (e) {
     r = ergebnis(2, "", `✖ ticket-lock: ${e instanceof Error ? e.message : String(e)}`);
   }

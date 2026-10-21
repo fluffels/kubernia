@@ -14,6 +14,7 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "n
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
@@ -231,29 +232,23 @@ function lies(basis, wurzel, server, seit) {
 
 const USAGE = "Aufruf: node scripts/mcp-ausfall.mjs [--sessionstart] [--json] [--seit <ISO|Nh>]";
 
-/** Argumente prüfen: erlaubt `--sessionstart`, `--json`, `--seit <wert>`; sonst die Fehlerzeile, sonst `null`. Pur. */
-export function argumentFehler(argv) {
-  for (let k = 0; k < argv.length; k++) {
-    if (argv[k] === "--sessionstart" || argv[k] === "--json") continue;
-    if (argv[k] === "--seit" && argv[k + 1] !== undefined && !argv[k + 1].startsWith("--")) {
-      k++;
-      continue;
-    }
-    return argv[k] === "--seit" ? `--seit braucht einen Wert. ${USAGE}` : `Unbekanntes Argument: ${argv[k]}. ${USAGE}`;
-  }
-  return null;
+/** Liest den Aufruf (`--sessionstart`, `--json`, `--seit <wert>`): `{ werte: { sessionstart, json, seit } }` oder `{ fehler }` (Text samt Aufrufzeile). Pur. */
+export function aufrufLesen(argv) {
+  const r = flagsLesen(argv, { sessionstart: { type: "boolean" }, json: { type: "boolean" }, seit: { type: "string" } });
+  if (r.fehler) return { fehler: `${r.fehler.text}. ${USAGE}` };
+  return { werte: { sessionstart: r.werte.sessionstart === true, json: r.werte.json === true, seit: r.werte.seit } };
 }
 
 export function main(argv = process.argv.slice(2), env = process.env, out = console.log, { plattform = process.platform, home = homedir(), jetzt = Date.now(), err = console.error, config } = {}) {
-  const fehler = argumentFehler(argv);
-  if (fehler) {
-    err(fehler);
-    return 2;
+  const aufruf = aufrufLesen(argv);
+  if (aufruf.fehler) {
+    err(aufruf.fehler);
+    return AUFRUF_EXIT;
   }
+  const { sessionstart, json, seit: seitArg } = aufruf.werte;
   try {
     const wurzel = env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL("..", import.meta.url));
     const server = serverAusConfig(readFileSync(join(wurzel, ".mcp.json"), "utf8"));
-    const sessionstart = argv.includes("--sessionstart");
     // Ohne nutzbare Config: eine Zeile mit Grund (statt stiller Auslassung), die Auswertung läuft ohne Stand-Datei weiter (nichts lesen, nichts schreiben; die `&& stand`-Guards machen das sichtbar, das äußere catch würde es auch abfangen).
     let stand = null;
     try {
@@ -269,8 +264,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
         // kein Stand: Standardfenster
       }
     }
-    const i = argv.indexOf("--seit");
-    const seit = sessionstart ? parseSeit(standSeit, jetzt) : parseSeit(i >= 0 ? argv[i + 1] : undefined, jetzt);
+    const seit = sessionstart ? parseSeit(standSeit, jetzt) : parseSeit(seitArg, jetzt);
     const basis = logBasis({ plattform, env, home });
     const befunde = lies(basis, wurzel, server, seit);
     const variablen = server.filter((s) => s.type === "http").map((s) => [s, fehlendeVariablen(s, env)]).filter(([, f]) => f.length)
@@ -278,7 +272,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
     const unbekannt = server.filter((s) => !BEKANNTE_ARTEN.includes(s.type)).map((s) => `${s.name}: Server-Art "${s.type}" kennt mcp-ausfall nicht (ungeprüft)`);
     if (befunde === null) {
       out(`MCP-Logs nicht gefunden: ${basis} (Pfad oder Format von Claude Code geändert? Ohne Logs keine Ausfall-Auswertung).`);
-    } else if (!sessionstart && argv.includes("--json")) {
+    } else if (!sessionstart && json) {
       for (const b of befunde) out(JSON.stringify(b));
     } else {
       const text = meldung(buendeln(befunde), [...variablen, ...unbekannt], seit);

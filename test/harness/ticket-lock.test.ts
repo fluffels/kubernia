@@ -27,7 +27,7 @@ const M = raw as unknown as {
   entscheideClaim: (o: { erstellt: number; jetzt: number }) => string;
   entscheidePruefung: (o: { lock: { nonce: string } | null; nonce: string | null; vorhanden: boolean; aktivitaet: number | null; jetzt: number }) => string;
   letzteAktivitaet: (o: { commitMs?: number[]; reflogMs?: number[]; dateiMs?: number[]; nodeModulesMs?: number | null }) => number | null;
-  nonceAus: (argv: string[]) => string | null;
+  aufrufLesen: (argv: string[]) => { commit?: boolean; befehl?: string; nr?: number; nonce?: string | null; wiederaufnahme?: boolean; schritt?: string | null; fehler?: string };
   fuehreAus: (argv: string[], deps: Deps) => Erg;
   echteDeps: () => Deps;
   ALTLAST_MS: number;
@@ -321,11 +321,36 @@ describe("Aufruf und reine Funktionen", () => {
     assert.equal(M.letzteAktivitaet({}), null);
   });
 
-  test("nonceAus liest `--nonce x` und `--nonce=x`", () => {
-    assert.equal(M.nonceAus(["pruefe", "5"]), null);
-    assert.equal(M.nonceAus(["pruefe", "5", "--nonce", "abc"]), "abc");
-    assert.equal(M.nonceAus(["pruefe", "5", "--nonce=abc"]), "abc");
-    assert.equal(M.nonceAus(["pruefe", "5", "--nonce"]), "");
+  test("aufrufLesen: Befehl, Nummer, Nonce in beiden Schreibweisen, Flags je Befehl", () => {
+    assert.deepEqual(M.aufrufLesen(["pruefe", "5"]), { befehl: "pruefe", nr: 5, nonce: null, wiederaufnahme: false, schritt: null });
+    assert.equal(M.aufrufLesen(["pruefe", "5", "--nonce", "abc"]).nonce, "abc");
+    assert.equal(M.aufrufLesen(["pruefe", "5", "--nonce=abc"]).nonce, "abc");
+    assert.equal(M.aufrufLesen(["claim", "5", "--wiederaufnahme"]).wiederaufnahme, true);
+    assert.equal(M.aufrufLesen(["lebenszeichen", "5", "--nonce", "x", "--schritt", "2/9"]).schritt, "2/9");
+    assert.deepEqual(M.aufrufLesen(["lebenszeichen", "--commit"]), { commit: true });
+  });
+
+  test("aufrufLesen: jeder falsche Aufruf nennt seinen Grund", () => {
+    const grund = (argv: string[]): string | undefined => M.aufrufLesen(argv).fehler;
+    assert.equal(grund([]), "kein Befehl angegeben");
+    assert.equal(grund(["foo", "5"]), "unbekannter Befehl foo");
+    assert.equal(grund(["claim"]), "Ticketnummer fehlt");
+    assert.equal(grund(["claim", "abc"]), "ungültige Ticketnummer abc");
+    assert.equal(grund(["claim", "5", "--bogus"]), "Unbekanntes Argument: --bogus");
+    assert.equal(grund(["claim", "5", "extra"]), "Unbekanntes Argument: extra");
+    assert.equal(grund(["claim", "5", "--nonce", "x"]), "Unbekanntes Argument: --nonce");
+    assert.equal(grund(["pruefe", "5", "--nonce"]), "--nonce braucht einen Wert");
+    assert.equal(grund(["pruefe", "5", "--nonce", ""]), "--nonce braucht einen Wert");
+    assert.equal(grund(["pruefe", "5", "--nonce", "a", "--nonce", "b"]), "--nonce ist doppelt angegeben");
+    assert.equal(grund(["freigeben", "5"]), "--nonce fehlt");
+    assert.equal(grund(["lebenszeichen", "5", "--commit"]), "Unbekanntes Argument: --commit");
+    for (const befehl of ["pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"]) {
+      assert.equal(grund([befehl, "5", "--nonce", "x", "--wiederaufnahme"]), "Unbekanntes Argument: --wiederaufnahme", befehl);
+    }
+    for (const befehl of ["pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen"]) {
+      assert.equal(grund([befehl, "5", "--nonce", "x", "--schritt", "k"]), "Unbekanntes Argument: --schritt", befehl);
+    }
+    assert.equal(grund(["lebenszeichen", "--commit", "5"]), "ungültige Ticketnummer --commit");
   });
 
   test("die echte Lock-Datei liegt im gemeinsamen git-Verzeichnis, nicht unter .claude/worktrees", () => {

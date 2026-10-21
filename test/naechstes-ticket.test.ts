@@ -23,10 +23,9 @@ const N = raw as unknown as {
   formatiere: (e: Ergebnis) => string;
   fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string };
   waehleUeberBoards: (e: unknown) => Ergebnis & { hinweise?: string[] };
-  ticketAusArgv: (argv: string[]) => { ticket: number | null } | { fehler: string };
+  aufrufLesen: (argv: string[]) => { bereich?: string | null; ticket?: number | null; json?: boolean; fehler?: string };
   itemAusIssue: (i: unknown) => { number: number; title: string; state: string; labels: string[]; body: string; blockedBy: number; autor: { login: string } | null };
   pruefeTicket: (e: Omit<Eingabe, "items"> & { item: unknown }) => Ergebnis;
-  bereichAusArgv: (argv: string[]) => { bereich: string | null } | { fehler: string };
   messfensterZeilen: (b: string) => (Fenster | { fehler: string })[];
   ticketsImFenster: (l: { start: number; ticket: number | null }[], o: { closedAt: string; ohneTicket: number }) => number;
   messfensterGrund: (f: Fenster, s: Stand) => string;
@@ -172,16 +171,26 @@ describe("Bereich (#1552)", () => {
     },
   });
 
-  test("bereichAusArgv: ohne Schalter null, beide Schreibweisen, neben --json", () => {
-    expect(N.bereichAusArgv([])).toEqual({ bereich: null });
-    expect(N.bereichAusArgv(["--bereich", "agentic"])).toEqual({ bereich: "agentic" });
-    expect(N.bereichAusArgv(["--bereich=spiel"])).toEqual({ bereich: "spiel" });
-    expect(N.bereichAusArgv(["--json", "--bereich", "spiel"])).toEqual({ bereich: "spiel" });
+  test("aufrufLesen: --bereich in beiden Schreibweisen, neben --json", () => {
+    expect(N.aufrufLesen(["--bereich", "agentic"])).toEqual({ bereich: "agentic", ticket: null, json: false });
+    expect(N.aufrufLesen(["--bereich=spiel"])).toEqual({ bereich: "spiel", ticket: null, json: false });
+    expect(N.aufrufLesen(["--json", "--bereich", "spiel"])).toEqual({ bereich: "spiel", ticket: null, json: true });
   });
-  test("bereichAusArgv: fehlender oder unbekannter Wert ist ein Fehler", () => {
-    for (const argv of [["--bereich"], ["--bereich", "--json"], ["--bereich", "harness"], ["--bereich", "Agentic"], ["--bereich="], ["--bereich", "constructor"]]) {
-      expect(N.bereichAusArgv(argv), argv.join(" ")).toHaveProperty("fehler");
+  test("aufrufLesen: fehlender oder unbekannter --bereich-Wert ist ein Fehler mit dem alten Text", () => {
+    for (const argv of [["--bereich"], ["--bereich", "--json"], ["--bereich="]]) {
+      expect(N.aufrufLesen(argv).fehler, argv.join(" ")).toBe("--bereich erwartet agentic oder spiel (bekommen: nichts)");
     }
+    for (const argv of [["--bereich", "harness"], ["--bereich", "Agentic"], ["--bereich", "constructor"], ["--bereich", ""]]) {
+      expect(N.aufrufLesen(argv).fehler, argv.join(" ")).toMatch(/^--bereich erwartet agentic oder spiel \(bekommen: „.*“\)$/);
+    }
+  });
+  test("aufrufLesen: unbekanntes Flag, Positionsargument, doppeltes Flag, beide Schalter und keine Auswahl sind Fehler", () => {
+    expect(N.aufrufLesen(["--bogus"]).fehler).toBe("Unbekanntes Argument: --bogus");
+    expect(N.aufrufLesen(["--bereich", "spiel", "x"]).fehler).toBe("Unbekanntes Argument: x");
+    expect(N.aufrufLesen(["--bereich", "spiel", "--bereich", "agentic"]).fehler).toBe("--bereich ist doppelt angegeben");
+    expect(N.aufrufLesen(["--ticket", "1", "--bereich", "spiel"]).fehler).toBe("--ticket und --bereich schließen sich aus");
+    expect(N.aufrufLesen([]).fehler).toMatch(/^Aufruf ohne Auswahl: /);
+    expect(N.aufrufLesen(["--json"]).fehler).toMatch(/^Aufruf ohne Auswahl: /);
   });
   test("agentic: Spiel-Tickets werden weder gewählt noch als übersprungen gemeldet", () => {
     const r = frei([item(1), item(2, harness)], { bereich: "agentic" });
@@ -448,12 +457,13 @@ describe("Einzelprüfung --ticket (#1621)", () => {
   const grund = (r: Ergebnis) => r.uebersprungen[0]?.grund;
   const zeile = "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590";
 
-  test("ticketAusArgv: ohne Schalter null, drei Schreibweisen, Fehler bei fehlendem oder ungültigem Wert", () => {
-    expect(N.ticketAusArgv([])).toEqual({ ticket: null });
-    expect(N.ticketAusArgv(["--ticket", "12"])).toEqual({ ticket: 12 });
-    expect(N.ticketAusArgv(["--ticket=12"])).toEqual({ ticket: 12 });
-    expect(N.ticketAusArgv(["--ticket", "#12"])).toEqual({ ticket: 12 });
-    for (const bad of [[], ["abc"], ["0"], ["-3"], ["12x"]]) expect(N.ticketAusArgv(["--ticket", ...bad])).toHaveProperty("fehler");
+  test("aufrufLesen: --ticket in drei Schreibweisen, Fehler bei fehlendem oder ungültigem Wert", () => {
+    expect(N.aufrufLesen(["--ticket", "12"])).toEqual({ bereich: null, ticket: 12, json: false });
+    expect(N.aufrufLesen(["--ticket=12"]).ticket).toBe(12);
+    expect(N.aufrufLesen(["--ticket", "#12", "--json"])).toEqual({ bereich: null, ticket: 12, json: true });
+    expect(N.aufrufLesen(["--ticket"]).fehler).toBe("--ticket erwartet eine Ticketnummer (bekommen: nichts)");
+    expect(N.aufrufLesen(["--ticket="]).fehler).toBe("--ticket erwartet eine Ticketnummer (bekommen: nichts)");
+    for (const bad of ["abc", "0", "-3", "12x"]) expect(N.aufrufLesen(["--ticket", bad]).fehler, bad).toBe(`--ticket erwartet eine Ticketnummer (bekommen: „${bad}“)`);
   });
   test("itemAusIssue: REST-Issue wird normalisiert; PR und kaputte Form werfen", () => {
     const i = N.itemAusIssue(issue(7, { body: "b", labels: [{ name: "x" }], issue_dependencies_summary: { blocked_by: 2 } }));
