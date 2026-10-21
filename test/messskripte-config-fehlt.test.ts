@@ -24,7 +24,7 @@ afterAll(() => {
 
 function starte(skript: string, argv: string[]): { status: number | null; text: string } {
   const env: NodeJS.ProcessEnv = {};
-  for (const [k, v] of Object.entries(process.env)) if (k.toUpperCase() !== "PATH" && k !== "GITHUB_REPOSITORY" && k !== "KQ_GH_KOSTEN_LOG") env[k] = v;
+  for (const [k, v] of Object.entries(process.env)) if (k.toUpperCase() !== "PATH" && k !== "GITHUB_REPOSITORY" && k !== "FACTORY_GH_KOSTEN_LOG") env[k] = v;
   env.PATH = dirname(process.execPath);
   const r = spawnSync(process.execPath, [join(kopie, "scripts", `${skript}.mjs`), ...argv], { encoding: "utf8", env, timeout: 60_000, cwd: kopie });
   return { status: r.status, text: `${r.stdout}\n${r.stderr}` };
