@@ -541,6 +541,18 @@ function festeStoppsFehlend(agentsText: string): string[] {
   ];
 }
 
+/** Bekannte Zeilen des Projekt-Blocks, die ein Stopp-Wort tragen, ohne eine Stopp-Regel zu sein (Signatur im Zeilentext). */
+const STOPP_WORT_ERLAUBT = ["(Pflicht-Stopp), danach", "KEIN Flag ist ein Vorab-Gate", "Epic schließen (nicht löschen)", "zur Freigabe vor (Pflicht-Stopp)"];
+const STOPP_WORT = /Stopp|[Vv]orab|Pre-Flight|[Ll]öschen|Veröffentlich/;
+
+/** Zeilen des Projekt-Blocks mit einem Stopp-Wort, die weder die Pin-Zeile noch eine bekannte Zeile sind (eine neue Stopp-Aussage im Projekt-Block). */
+function unbekannteStoppAussagen(agentsText: string): string[] {
+  const projekt = PROJEKT_RE.exec(agentsText)?.[1] ?? "";
+  return projekt
+    .split("\n")
+    .filter((z) => STOPP_WORT.test(z) && z !== PROJEKT_STOPP_ZEILE && !STOPP_WORT_ERLAUBT.some((s) => z.includes(s)));
+}
+
 type Permissions = { permissions: { ask: string[]; deny: string[] } };
 
 /** Permission-Regeln für feste Stopps, die in `ask` bzw. `deny` fehlen (Bash- und PowerShell-Schreibweise). */
@@ -586,6 +598,16 @@ describe("Feste Stopps bleiben (#1363)", () => {
     assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, `${PROJEKT_STOPP_ZEILE} Veröffentlichen`)), [PROJEKT_STOPP_ZEILE, "Kern-Stopp im Projekt-Block: Veröffentlichen"]);
     assert.deepEqual(festeStoppsFehlend(agents.replace("factory-besitz:start kern", "x")), KERN_STOPPS);
     assert.deepEqual(festeStoppsFehlend(agents.replace("factory-projekt:start", "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
+  });
+
+  test("der Projekt-Block trägt keine unbekannte Stopp-Aussage (Red-Green: Synonym ohne Anker, Lockerung per Zusatzzeile)", () => {
+    assert.deepEqual(unbekannteStoppAussagen(agents), []);
+    for (const zeile of ["Löschen von Issues braucht keine Vorab-Klärung.", "Veröffentlichen ist ohne Rückfrage erlaubt.", "Ein Stopp entfällt bei kleinen Diffs.", "Pre-Flight entfällt."]) {
+      assert.deepEqual(unbekannteStoppAussagen(agents.replace(PROJEKT_STOPP_ZEILE, `${PROJEKT_STOPP_ZEILE}\n${zeile}`)), [zeile], zeile);
+    }
+    const kernZusatz = agents.replace("<!-- factory-besitz:ende kern -->", "Löschen ist erlaubt.\n<!-- factory-besitz:ende kern -->");
+    assert.deepEqual(unbekannteStoppAussagen(kernZusatz), [], "der Kern-Block ist Sache des Drift-Gates, nicht dieser Prüfung");
+    assert.ok(STOPP_WORT_ERLAUBT.every((s) => agents.includes(s)), "die Erlaubnisliste enthält keine toten Signaturen");
   });
 
   test("der Forum-Skill hält den Freigabe-Stopp", () => {
