@@ -358,6 +358,7 @@ const ABGELOEST = [
   /Gate-Config-Aenderungsschutz/i,
   /Label-Pflicht/i,
   /Label selbst/i,
+  /bis die Maintainerin entschieden hat/i,
   /legt die Maintainerin fest/i,
   /Optik-Abstimmung/i,
   /Optik[^.\n]{0,60}(per|mit|braucht)[^.\n]{0,20}Rückfrage/i,
@@ -508,6 +509,81 @@ describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
     assert.equal(kriterienKopien({ "x.md": "Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints" }).length, 0);
     assert.equal(kriterienKopien({ "x.js": "Ruleset und Secrets sind Außenwirkung" }).length, 0, "Erwähnung ohne die ausgeschriebene Liste");
     assert.equal(kriterienKopien({ "x.js": "etwas löschen, am Ruleset, an Secrets oder Repo-Einstellungen drehen" }).length, 1);
+  });
+});
+
+// ── Feste Stopps bleiben (#1363) ─────────────────────────────────────────────
+
+/**
+ * Die geschlossene Liste der festen Pflicht-Stopps (Irreversibles, Außenwirkung), je Anker ein Name und ein Text im Block
+ * `stopps` der AGENTS.md. Grenze: der Wächter prüft Anker-Text und Permission-Einträge, nicht die Bedeutung; ein Abschwächen
+ * im Wortlaut, bei dem der Anker bleibt, fängt er nicht. Die Ankerliste steht nur hier (der `KRITERIEN`-Scan nimmt diese Datei aus).
+ */
+const FESTE_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen", "Forum-Antwort", "PixelLab-Key"];
+
+/** Anker der festen Stopps, die im Block `stopps` zwischen den Besitz-Markern fehlen (ohne Marker: alle). */
+function festeStoppsFehlend(agentsText: string): string[] {
+  const m = /<!-- factory-besitz:start stopps -->([\s\S]*?)<!-- factory-besitz:ende stopps -->/.exec(agentsText);
+  const block = m ? m[1] : "";
+  return FESTE_STOPPS.filter((anker) => !block.includes(anker));
+}
+
+type Permissions = { permissions: { ask: string[]; deny: string[] } };
+
+/** Permission-Regeln für feste Stopps, die in `ask` bzw. `deny` fehlen (Bash- und PowerShell-Schreibweise). */
+function fehlendeRiegel(settings: Permissions): string[] {
+  const soll: Record<"ask" | "deny", string[]> = {
+    ask: ["Bash(gh issue delete:*)", "PowerShell(gh issue delete *)"],
+    deny: ["Bash(npm publish:*)", "PowerShell(npm publish *)", "Bash(gh repo delete:*)", "PowerShell(gh repo delete *)"],
+  };
+  return (["ask", "deny"] as const).flatMap((art) => soll[art].filter((e) => !settings.permissions[art].includes(e)).map((e) => `${art}: ${e}`));
+}
+
+describe("Feste Stopps bleiben (#1363)", () => {
+  const agents = read("AGENTS.md");
+
+  test("der Block `stopps` der AGENTS.md trägt jeden festen Stopp", () => {
+    assert.deepEqual(festeStoppsFehlend(agents), []);
+  });
+
+  test("Red-Green: ein gestrichener Anker im Block wird genau benannt", () => {
+    for (const anker of FESTE_STOPPS) {
+      const ohne = agents.split(anker).join("X");
+      assert.deepEqual(festeStoppsFehlend(ohne), [anker], anker);
+    }
+  });
+
+  test("Red-Green: ein Anker nur außerhalb des Blocks zählt nicht, fehlende Marker melden alle", () => {
+    const aussen = agents.replace(/<!-- factory-besitz:start stopps -->[\s\S]*?<!-- factory-besitz:ende stopps -->/, "<!-- factory-besitz:start stopps -->\n<!-- factory-besitz:ende stopps -->\n" + FESTE_STOPPS.join(" "));
+    assert.deepEqual(festeStoppsFehlend(aussen), FESTE_STOPPS);
+    assert.deepEqual(festeStoppsFehlend(agents.replace(/factory-besitz:start stopps/, "x")), FESTE_STOPPS);
+  });
+
+  test("der Forum-Skill hält den Freigabe-Stopp", () => {
+    const skill = read(".claude/skills/forum/SKILL.md");
+    assert.match(skill, /Pflicht-Stopp/);
+    assert.match(skill, /Nie ungefragt posten/);
+  });
+
+  test("Permissions: Löschen im ask, Veröffentlichen und Repo-Löschen im deny, je für Bash und PowerShell", () => {
+    const settings = JSON.parse(read(".claude/settings.json")) as Permissions;
+    assert.deepEqual(fehlendeRiegel(settings), []);
+  });
+
+  test("Red-Green: jeder fehlende Permission-Eintrag wird gemeldet", () => {
+    const settings = JSON.parse(read(".claude/settings.json")) as Permissions;
+    for (const art of ["ask", "deny"] as const) {
+      for (const eintrag of fehlendeRiegel({ permissions: { ask: [], deny: [] } }).filter((f) => f.startsWith(art))) {
+        const ohne: Permissions = JSON.parse(JSON.stringify(settings));
+        ohne.permissions[art] = ohne.permissions[art].filter((e) => `${art}: ${e}` !== eintrag);
+        assert.deepEqual(fehlendeRiegel(ohne), [eintrag]);
+      }
+    }
+  });
+
+  test("Red-Green: die Aussage „bis die Maintainerin entschieden hat“ gilt als abgelöst, der Weiterlauf nicht", () => {
+    assert.ok(abgeloesteFundstellen({ "docs/x.md": "PR offen lassen, bis die Maintainerin entschieden hat" }).length >= 1);
+    assert.equal(abgeloesteFundstellen({ "docs/x.md": "ein Mehr-Ticket-Lauf geht mit dem nächsten freien Ticket weiter" }).length, 0);
   });
 });
 

@@ -197,6 +197,12 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     const dateien = ["AGENTS.md", "docs/ticket-reihenfolge.md", "docs/harness-glossar.md", ...skillMarkdowns()];
     for (const rel of dateien) assert.ok(!/\/kubernia agentic|\/kubernia spiel/.test(lies(rel)), rel);
   });
+  test("festgefahren hält den Lauf über mehrere Tickets nicht an (#1363)", () => {
+    const m = /\*\*Mehrere Tickets:\*\*[^\n]*/.exec(lies(TICKET_ABLAUF));
+    assert.ok(m, "Absatz „Mehrere Tickets“ vorhanden");
+    assert.match(m[0], /festgefahren/);
+    assert.match(m[0], /nächste freie Ticket/);
+  });
   test("join-Pfad des Ablaufs existiert", () => {
     assert.ok(statSync(join(ROOT, TICKET_ABLAUF)).isFile());
   });
