@@ -62,6 +62,8 @@ const SZENARIO_TOOLS = ["Read", "Grep", "Glob"];
 const ABNAHME_TOOLS = [
   "Read", "Grep", "Glob", "Bash", "PowerShell", "Write",
   ...["navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "type", "wait_for", "console_messages", "resize", "tabs", "close", "handle_dialog"].map((t) => `mcp__playwright__browser_${t}`),
+  // nur lesend: belegt das Kriterium „von Langfuse erfasst“
+  ...["listObservations", "getObservation", "queryMetrics", "getMetricsSchema"].map((t) => `mcp__langfuse__${t}`),
 ];
 
 const SKILL = liesTicketAblauf();
@@ -192,6 +194,8 @@ describe("Tool-Mengen der Holdout-Agenten (#1754 K2)", () => {
     assert.deepEqual(toolAbweichungen(agentTools(szenario.replace("tools: Read, Grep, Glob", "tools: Read, Grep")), SZENARIO_TOOLS), ["fehlendes Tool Glob"]);
     assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("PowerShell, Write,", "PowerShell, Write, Edit,")), ABNAHME_TOOLS), ["zusätzliches Tool Edit"]);
     assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("Write, mcp__playwright__browser_navigate,", "mcp__playwright__browser_navigate,")), ABNAHME_TOOLS), ["fehlendes Tool Write"]);
+    assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace(", mcp__langfuse__queryMetrics", "")), ABNAHME_TOOLS), ["fehlendes Tool mcp__langfuse__queryMetrics"]);
+    assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("mcp__langfuse__getMetricsSchema", "mcp__langfuse__getMetricsSchema, mcp__langfuse__createScore")), ABNAHME_TOOLS), ["zusätzliches Tool mcp__langfuse__createScore"]);
   });
 
   test("Modell und Effort stehen im Frontmatter beider Agenten (opus, medium)", () => {
