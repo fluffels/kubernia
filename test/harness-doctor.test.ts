@@ -40,7 +40,7 @@ const GESUND: Record<string, unknown> = {
   "api orgs/acme/projectsV2/8": { node_id: "p_zwei", number: 8 },
   "api orgs/acme/projectsV2/7/fields/5": feld,
   "api orgs/acme/projectsV2/8/fields/5": feld,
-  "api repos/acme/demo/rules/branches/main": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }],
+  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }],
 };
 const SPIEGEL = { name: "main-schutz", requiredChecks: ["CI", "Audit"], bypassActors: [] };
 
@@ -50,11 +50,13 @@ afterEach(() => {
 });
 
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string; spiegel?: unknown; langfuse?: number; argv?: string[] } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[] } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
   ordner.push(root);
-  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
-  writeFileSync(join(root, ".github", "workflows", "a.yml"), opt.workflow ?? WORKFLOW);
+  if (opt.workflow !== null) {
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(root, ".github", "workflows", "a.yml"), opt.workflow ?? WORKFLOW);
+  }
   writeFileSync(join(root, "ruleset.json"), JSON.stringify(opt.spiegel ?? SPIEGEL));
   writeFileSync(join(root, "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
   const welt = { ...GESUND, ...over };
@@ -97,10 +99,15 @@ describe("harness-doctor --pruefen", () => {
     ["Board number", { "api orgs/acme/projectsV2/8": { node_id: "p_zwei", number: 9 } }, /Board factory: nummer.*Fix:/],
     ["Feld node_id", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, node_id: "anders" } }, /statusFeldNodeId.*Fix:/],
     ["Option Todo fehlt", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, options: [{ id: "abc", name: { raw: "Done" } }] } }, /todoOptionId.*Fix:/],
+    ["Status-Feld falscher Name", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, name: "Priorität" } }, /statusFeldId zeigt auf das Feld "Priorität".*Fix:/],
+    ["Repo nicht lesbar", { "api repos/acme/demo": new Error("HTTP 404") }, /Admin-Recht: Repo acme\/demo nicht lesbar.*Fix:/],
+    ["Actions nicht lesbar", { "api repos/acme/demo/actions/permissions": new Error("HTTP 403") }, /Actions: .*nicht lesbar.*Fix:/],
+    ["Secrets nicht lesbar", { "api --paginate --slurp repos/acme/demo/actions/secrets": new Error("HTTP 403") }, /Secret: secrets nicht lesbar.*Fix:/],
+    ["Labels nicht lesbar", { "api --paginate --slurp repos/acme/demo/labels?per_page=100": new Error("HTTP 403") }, /Labels: Labels nicht lesbar.*Fix:/],
     ["Board wirft", { "api orgs/acme/projectsV2/7": new Error("HTTP 404") }, /Board produkt: Board nicht lesbar.*Fix: boards\[0\]/],
-    ["keine Regel", { "api repos/acme/demo/rules/branches/main": [] }, /Ruleset: kein Required status check.*Fix:/],
-    ["Ruleset 403", { "api repos/acme/demo/rules/branches/main": new Error("HTTP 403") }, /Ruleset: Regeln.*nicht lesbar.*Fix:/],
-    ["privat ohne Ruleset", { "api repos/acme/demo": { private: true, default_branch: "main", permissions: { admin: true } }, "api repos/acme/demo/rules/branches/main": [] }, /ADR 0022.*Fix: Repo öffentlich/],
+    ["keine Regel", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [] }, /Ruleset: kein Required status check.*Fix:/],
+    ["Ruleset 403", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": new Error("HTTP 403") }, /Ruleset: Regeln.*nicht lesbar.*Fix:/],
+    ["privat ohne Ruleset", { "api repos/acme/demo": { private: true, default_branch: "main", permissions: { admin: true } }, "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [] }, /ADR 0022.*Fix: Repo öffentlich/],
   ];
   for (const [name, over, muster] of faelle) {
     test(`Lücke: ${name}`, () => {
@@ -119,17 +126,37 @@ describe("harness-doctor --pruefen", () => {
   });
 
   test("K4: fehlender Required-Check ergibt Exit 1 mit Fix-Zeile; zwei fehlende ergeben zwei Zeilen", () => {
-    const eins = lauf({ "api repos/acme/demo/rules/branches/main": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }] });
+    const eins = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }] });
     assert.equal(eins.code, 1);
     assert.equal(luecken(eins).length, 1);
     assert.match(luecken(eins)[0], /Required-Check "Audit" fehlt.*Fix: "Audit" in Ruleset "main-schutz"/);
-    const zwei = lauf({ "api repos/acme/demo/rules/branches/main": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }] });
+    const zwei = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }] });
     assert.equal(luecken(zwei).length, 2);
   });
 
-  test("Spiegel mit dem Check im Ruleset einer anderen Regel zählt nicht", () => {
-    const r = lauf({ "api repos/acme/demo/rules/branches/main": [{ type: "pull_request" }, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
+  test("Required-Check einer anderen Regelart zählt nicht", () => {
+    const r = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "pull_request", parameters: { required_status_checks: [{ context: "Audit" }] } }, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }] });
+    assert.equal(r.code, 1);
+    assert.match(luecken(r)[0], /Required-Check "Audit" fehlt/);
+  });
+
+  test("Standardzweig mit anderem Namen: Regeln kommen von diesem Zweig", () => {
+    const repo = { private: false, default_branch: "trunk", permissions: { admin: true } };
+    assert.equal(lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": GESUND["api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100"] }).code, 0);
+    const r = lauf({ "api repos/acme/demo": repo });
+    assert.equal(r.code, 1);
+    assert.match(luecken(r)[0], /Ruleset:.*trunk/);
+  });
+
+  test("Option mit Text-Namen statt { raw } gilt auch", () => {
+    assert.equal(lauf({ "api orgs/acme/projectsV2/7/fields/5": { ...feld, options: [{ id: "abc", name: "Todo" }] } }).code, 0);
+    assert.equal(lauf({ "api orgs/acme/projectsV2/7/fields/5": { name: "Status", node_id: "x_status" } }).code, 1);
+  });
+
+  test("ohne Ordner .github/workflows wird trotzdem geprüft (Einrichtungsfall)", () => {
+    const r = lauf({}, { workflow: null });
     assert.equal(r.code, 0);
+    assert.equal(r.aufrufe.filter((a) => a.includes("secrets")).length, 0);
   });
 
   test("Org-Secret deckt den Bedarf; ohne secrets.* kein Secrets-Aufruf", () => {
@@ -152,10 +179,11 @@ describe("harness-doctor --pruefen", () => {
     assert.ok(r.out.some((z) => z.startsWith("HINWEIS Token-Scope")));
   });
 
-  test("gh nicht angemeldet: genau eine GitHub-Lücke, danach kein weiterer gh-Aufruf", () => {
-    const r = lauf({ "api -i user": new Error("gh auth login") });
+  test("gh nicht angemeldet: genau eine GitHub-Lücke, danach kein weiterer gh-Aufruf, Langfuse läuft weiter", () => {
+    const r = lauf({ "api -i user": new Error("gh auth login") }, { langfuse: 1 });
     assert.equal(r.code, 1);
-    assert.equal(luecken(r).length, 1);
+    assert.equal(luecken(r).length, 2);
+    assert.match(luecken(r)[1], /Langfuse:/);
     assert.match(luecken(r)[0], /Token:.*Fix: gh auth login --scopes project/);
     assert.deepEqual(r.aufrufe, ["api -i user"]);
   });
@@ -170,7 +198,7 @@ describe("harness-doctor --pruefen", () => {
     const { rulesetSpiegel: _weg, ...ohne } = CONFIG;
     void _weg;
     assert.equal(lauf({}, { config: ohne }).code, 0);
-    assert.equal(lauf({ "api repos/acme/demo/rules/branches/main": [] }, { config: ohne }).code, 1);
+    assert.equal(lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [] }, { config: ohne }).code, 1);
   });
 
   test("Aufruf- und Config-Fehler: Exit 2 ohne einen gh-Aufruf", () => {
@@ -184,6 +212,10 @@ describe("harness-doctor --pruefen", () => {
     const keinSpiegel = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" } });
     assert.equal(keinSpiegel.code, 2);
     assert.equal(keinSpiegel.aufrufe.length, 0);
+    assert.match(keinSpiegel.err.join("\n"), /Fix: Ruleset-Spiegel/);
+    const leer = lauf({}, { spiegel: { name: "x", requiredChecks: [], bypassActors: [] } });
+    assert.equal(leer.code, 2);
+    assert.equal(leer.aufrufe.length, 0);
     for (const argv of [[], ["--config", "x"], ["--pruefen", "--unbekannt"], ["--pruefen", "--config"]]) {
       const r = lauf({}, { argv });
       assert.equal(r.code, 2, argv.join(" "));
@@ -212,7 +244,7 @@ describe("voraussetzungenAus", () => {
   });
 
   test("Label-Literale: Flag mit und ohne Anführungszeichen, Env-Schlüssel; Variablen und Ausdrücke nicht; Dedup ohne Groß-/Kleinschreibung", () => {
-    const v = ab('run: gh x --label forum --add-label "Area:Werk" --label "$VAR" --label \'a:b,c:d\'\nenv:\n  ALARM_LABEL: area:neu\n  INBOX_LABEL: ${{ x.y }}\n  OTHER: nein\n');
-    assert.deepEqual([...v.labels].sort(), ["area:werk", "a:b", "area:neu", "c:d", "forum"].sort());
+    const v = ab('run: gh x --label forum --add-label "Area:Werk" --label "$VAR" --label \'a:b,c:d,\' --label=eq:wert\nenv:\n  ALARM_LABEL: "area:neu"\n  INBOX_LABEL: ${{ x.y }}\n  OTHER: nein\n');
+    assert.deepEqual([...v.labels].sort(), ["area:werk", "a:b", "area:neu", "c:d", "eq:wert", "forum"].sort());
   });
 });

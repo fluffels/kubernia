@@ -10,7 +10,7 @@
  *
  * Bekannte Grenzen: private Repos auf GitHub Free kennen keine Rulesets (ADR 0022), dort ist das fehlende Ruleset eine Lücke mit dieser
  * Erklärung; `allowed_actions: selected` gilt als erlaubt (welche Actions, prüft der Doctor nicht); geprüft werden nur Repo- und Org-Secrets
- * bzw. -Variablen der Actions (keine Environment-Secrets); ein fein granulares Token hat keinen Scope-Header, dann nur ein HINWEIS.
+ * bzw. -Variablen der Actions (keine Environment-Secrets); Required Checks zählen nur aus Rulesets (klassischer Branch-Schutz wird nicht gelesen); ein fein granulares Token hat keinen Scope-Header, dann nur ein HINWEIS.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -167,7 +167,7 @@ function pruefeRuleset(gh, repo, repoInfo, spiegel) {
   const fixAnlegen = privat ? "Repo öffentlich machen oder einen Plan mit Rulesets wählen, dann das Ruleset anlegen" : `Ruleset auf ${branch} mit Required status checks anlegen`;
   let regeln;
   try {
-    regeln = json(gh, ["api", `repos/${repo}/rules/branches/${branch}`]);
+    regeln = seiten(gh, `repos/${repo}/rules/branches/${branch}?per_page=100`);
   } catch (e) {
     return [luecke("Ruleset", `Regeln auf ${branch} nicht lesbar (${erste(e)})${grenze}`, fixAnlegen)];
   }
