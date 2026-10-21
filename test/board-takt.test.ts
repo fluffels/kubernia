@@ -395,6 +395,7 @@ describe("spielquote-lib (#1729)", () => {
     });
     test("Aus: Nummern ohne PRs über alle Seiten; falsche Form wirft", () => {
       expect(L.harnessIssuesAus([[{ number: 1 }, { number: 2, pull_request: {} }], [{ number: 3 }]])).toEqual(new Set([1, 3]));
+      expect(L.harnessIssuesAus([[null, { number: 4 }]])).toEqual(new Set([4]));
       expect(() => L.harnessIssuesAus({})).toThrow(/Antwortform/);
       expect(() => L.harnessIssuesAus(null)).toThrow(/Antwortform/);
     });

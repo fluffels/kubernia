@@ -120,5 +120,5 @@ export function harnessIssuesAnfrage({ repo, label, seit }) {
 /** Nummern (ohne Pull Requests) aus der Antwort von `harnessIssuesAnfrage`; wirft bei falscher Form (keine Liste von Seiten). Pur. */
 export function harnessIssuesAus(seiten) {
   if (!Array.isArray(seiten)) throw new Error("Unerwartete Antwortform der geschlossenen Harness-Issues (keine Liste von Seiten).");
-  return new Set(seiten.flat().filter((i) => !i?.pull_request).map((i) => i.number));
+  return new Set(seiten.flat().filter((i) => i && !i.pull_request).map((i) => i.number));
 }

@@ -147,6 +147,20 @@ describe("deckendesIssue", () => {
   test("kein Issue: null", () => {
     expect(C.deckendesIssue(A, [])).toBeNull();
   });
+  test("beide Grenzen der Regel-ID und des Verzeichnisses (links wie rechts)", () => {
+    const D = "src/content/drills/";
+    expect(C.deckendesIssue(A, [iss(`xjs/incomplete-sanitization in ${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`foo/js/incomplete-sanitization in ${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss("js/incomplete-sanitization in src/content/drills-alt/b.ts")])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in x${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in ${D}`)])).toEqual({ number: 1703, grund: "regel+verzeichnis" });
+  });
+  test("leere Regel deckt über das Verzeichnis allein nie ab", () => {
+    expect(C.deckendesIssue({ ...A, regel: "" }, [iss("src/content/drills/ überall")])).toBeNull();
+  });
+  test("Ersatzwert unbekannt (unlesbare Regel-ID) deckt nie über das bloße Wort ab", () => {
+    expect(C.deckendesIssue({ ...A, regel: "unbekannt" }, [iss("Ursache unbekannt, betrifft src/content/drills/x.ts")])).toBeNull();
+  });
 });
 
 describe("bekannteAlerts offene Issues", () => {
@@ -163,6 +177,9 @@ describe("bekannteAlerts offene Issues", () => {
   });
   test("Sammeltickets zählen nicht", () => {
     expect(mit([offen({ title: "Harness-Härtung (gesammelt)" }), offen({ title: "Langfuse-Befunde (gesammelt)" })])).toEqual([]);
+  });
+  test("ein null-Element in offeneIssues wird übersprungen", () => {
+    expect(mit([null, offen()])).toEqual([1703]);
   });
   test("ohne offeneIssues: leere Liste", () => {
     expect(C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [] }).issues).toEqual([]);
@@ -181,6 +198,11 @@ describe("plane mit deckenden Issues", () => {
     const z = (n: number) => alert({ nummer: n, tool: "Scorecard", regel: "X" });
     const p = C.plane({ alerts: [z(5), z(6)], bekannt, offenesIssue: null });
     expect(p.zeilen.flatMap((g) => g.nummern)).toEqual([6]);
+  });
+  test("abgedecktDurch ist ohne Doppel und aufsteigend (mehrere Alerts, mehrere Issues, beide Gründe)", () => {
+    const D = { nummern: new Set<number>(), regeln: new Set<string>(), issues: [{ number: 1704, titel: "A", body: "Alerts 5, 6" }, { number: 1703, titel: "B", body: "js/path-injection in src/game/" }] };
+    const p = C.plane({ alerts: [alert({ nummer: 5 }), alert({ nummer: 6 }), alert({ nummer: 7, pfad: "src/game/x.ts" })], bekannt: D, offenesIssue: { number: 9, body: "x" } }) as unknown as { issue: Record<string, unknown> };
+    expect(p.issue).toEqual({ art: "schliessen", nummer: 9, abgedecktDurch: [1703, 1704] });
   });
   test("ohne Abdeckung: kein abgedecktDurch", () => {
     const p = C.plane({ alerts: [], bekannt: keine, offenesIssue: { number: 9, body: "x" } });
@@ -502,6 +524,30 @@ describe("lauf", () => {
     expect(logs).toContain("Code-Scanning-Inbox: Alerts 5 abgedeckt durch #1703 (nummer)");
     expect(kommentare[0]).toContain("#1703");
     expect(kommentare[0]).not.toContain("Keine offenen");
+  });
+  test("Log gruppiert je deckendem Issue, Nummern aufsteigend, Gründe ohne Doppel", () => {
+    const logs: string[] = [];
+    const i = {
+      ladeAlerts: () => [roh({ number: 6 }), roh({ number: 5 }), roh({ number: 7, most_recent_instance: { location: { path: "src/game/x.ts" } } })],
+      ladeKontext: () => ({ ...kontext, offenesIssue: { number: 9, body: "x" }, offeneIssues: [{ number: 1704, title: "A", body: "Alerts 5, 6", user: { login: OWNER, type: "User" } }, { number: 1703, title: "B", body: "js/path-injection in src/game/", user: { login: OWNER, type: "User" } }] }),
+      schliesse: () => undefined,
+      log: (m: string) => logs.push(m),
+      projectToken: "t",
+    };
+    expect(C.lauf({ io: i, trocken: false })).toBe(0);
+    expect(logs).toEqual(["Code-Scanning-Inbox: Alerts 7 abgedeckt durch #1703 (regel+verzeichnis)", "Code-Scanning-Inbox: Alerts 5, 6 abgedeckt durch #1704 (nummer)", "Ticket #9 geschlossen."]);
+  });
+  test("nur abgedeckte Zeilen-Alerts, kein offenes Ticket: Abdeckung im Log, aber nicht nichts Neues", () => {
+    const logs: string[] = [];
+    const i = {
+      ladeAlerts: () => [roh({ number: 5, tool: { name: "Scorecard" }, rule: { id: "X", severity: "warning" } })],
+      ladeKontext: () => ({ ...kontext, offeneIssues: [{ number: 1703, title: "S", body: "Alert 5", user: { login: OWNER, type: "User" } }] }),
+      log: (m: string) => logs.push(m),
+      projectToken: "t",
+    };
+    expect(C.lauf({ io: i, trocken: false })).toBe(0);
+    expect(logs).toContain("Code-Scanning-Inbox: Alerts 5 abgedeckt durch #1703 (nummer)");
+    expect(logs.join("|")).not.toContain("nichts Neues");
   });
   test("lesbare Alerts ohne Funde und offenes Issue: schliesst", () => {
     const calls: string[] = [];

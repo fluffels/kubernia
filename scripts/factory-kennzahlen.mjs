@@ -236,7 +236,7 @@ function auditQuote(commits, luecke, harnessIssues, harnessLuecke) {
   const ticket = commits.filter((c) => zaehleTicketMerges([c]) === 1);
   const harness = ticket.filter((c) => istHarnessCommit(c, harnessIssues)).length;
   const spiel = ticket.length - harness;
-  const messung = `${harness} Factory- auf ${spiel} Produkt-Merges seit dem letzten Sammelticket-Abschluss (Zuordnung nach Label der referenzierten Issues)`;
+  const messung = `${harness} Factory- auf ${spiel} Produkt-Merges seit dem letzten Sammelticket-Abschluss (${harnessIssues ? "Zuordnung nach Label der referenzierten Issues" : "Rückfall: Zuordnung nach Commit-Scope"})`;
   if (ticket.length < QUOTE_MIN_MERGES) return { mechanismus: "Spielquote", messung: `${messung}, nur ${ticket.length} Merges: keine Aussage`, soll, status: "Lücke" };
   return { mechanismus: "Spielquote", messung, soll, status: harness * SPIEL_QUOTE <= spiel ? "ok" : "ABWEICHUNG" };
 }

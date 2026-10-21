@@ -586,8 +586,17 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(r.messung).toContain("1 Factory- auf 3 Produkt-Merges");
     expect(r.messung).toContain("Zuordnung nach Label der referenzierten Issues");
     expect(r.status).toBe("ok");
-    // ohne Label-Menge Rückfall auf den Scope: dann zählt das feat(harness) als Factory
-    expect(von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)] }, "Spielquote").messung).toContain("1 Factory- auf 3 Produkt-Merges");
+    // ohne Label-Menge Rückfall auf den Scope: dann zählt das feat(harness) als Factory, und der Messtext sagt es
+    const rueckfall = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)] }, "Spielquote").messung;
+    expect(rueckfall).toContain("1 Factory- auf 3 Produkt-Merges");
+    expect(rueckfall).toContain("Rückfall: Zuordnung nach Commit-Scope");
+  });
+
+  test("Spielquote: Label und Scope laufen auseinander, das Label entscheidet (#1798)", () => {
+    // zwei feat(harness) auf Spiel-Issues (#901, #902), ein docs auf ein Harness-Issue (#900): nach Label 1 Factory, nach Scope 2
+    const cs = [commit("feat(harness): a (#901)"), commit("feat(harness): b (#902)"), commit("docs(adr): c (#900)"), spiel(1), spiel(2)];
+    expect(von({ commits: cs, harnessIssues: new Set([900]) }, "Spielquote").messung).toContain("1 Factory- auf 4 Produkt-Merges");
+    expect(von({ commits: cs }, "Spielquote").messung).toContain("2 Factory- auf 3 Produkt-Merges");
   });
 
   test("Spielquote: Lücke mit Grund bei harnessLuecke, der Takt bleibt gemessen (#1798)", () => {

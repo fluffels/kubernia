@@ -119,7 +119,8 @@ export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel 
 export function deckendesIssue(alert, issues) {
   const dir = String(alert.pfad ?? "").replace(/\\/g, "/").split("/").slice(0, -1).join("/");
   const regel = String(alert.regel ?? "");
-  const regelRe = regel ? new RegExp(String.raw`(?<![\w/.-])${escapeRegex(regel)}(?![\w/-])`) : null;
+  // "unbekannt" ist der Ersatzwert für eine unlesbare Regel-ID und darf nie über das bloße Wort im Body abdecken.
+  const regelRe = regel && regel !== "unbekannt" ? new RegExp(String.raw`(?<![\w/.-])${escapeRegex(regel)}(?![\w/-])`) : null;
   const dirRe = dir ? new RegExp(String.raw`(?<![\w.-])${escapeRegex(dir)}/`) : null;
   for (const i of issues ?? []) {
     if (nummernIn(i.body).includes(alert.nummer)) return { number: i.number, grund: "nummer" };
