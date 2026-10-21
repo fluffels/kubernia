@@ -53,12 +53,12 @@ export function parseAgentInput(text) {
 }
 
 /** Wird dieser Spawn als Lens-Spawn behandelt? Typ `lens` (Agentenname aus der Config), oder der Fallback (`general-purpose`/ohne Typ),
- *  dessen Prompt die Lens-Definition nennt: der feste Kern-Dateiname (`ROLLEN_PFADE.lens`) oder `<lens>.md` (Übergang, fail-closed). */
+ *  dessen Prompt die Lens-Definition nennt: der feste Kern-Dateiname (`ROLLEN_PFADE.lens`). */
 function istLensSpawn(subagentType, prompt, lens) {
   if (subagentType === lens) return true;
   const fallback = subagentType === undefined || subagentType === "general-purpose";
   const text = String(prompt ?? "");
-  return fallback && (text.includes(basename(ROLLEN_PFADE.lens)) || text.includes(`${lens}.md`));
+  return fallback && text.includes(basename(ROLLEN_PFADE.lens));
 }
 
 const HINWEIS =
