@@ -1,4 +1,4 @@
-/* Aufruf-Fehler der über `flagsLesen` migrierten Skripte (#1789): jedes Skript wird als Prozess gestartet, mit
+/* Aufruf-Fehler der über `flagsLesen` migrierten Skripte (#1789, #1790, #1791): jedes Skript wird als Prozess gestartet, mit
  * unbekanntem Flag, mit einem Flag ohne Wert und mit einem doppelten Einzel-Flag. Geprüft werden Exit-Code und der
  * stderr-Rahmen (Präfix, Meldung, Aufrufzeile). PATH enthält nur den Ordner von node: ohne gh, git und Netz. */
 import { describe, expect, test } from "vitest";
@@ -114,6 +114,54 @@ const ZEILEN: Zeile[] = [
     faelle: { unbekannt: ["--bogus"], ohneWert: ["--aus"], doppelt: ["--aus", "a", "--aus", "b"] },
     meldungen: { unbekannt: SBOM_USAGE, ohneWert: SBOM_USAGE, doppelt: SBOM_USAGE },
   },
+  {
+    skript: "hauptchat-zerlegung",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: /^Aufruf: node scripts\/hauptchat-zerlegung\.mjs --von <ISO> --bis <ISO>/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--von"], doppelt: ["--json", "--json"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--von braucht einen Wert", doppelt: "--json ist doppelt angegeben" },
+  },
+  {
+    skript: "kontext-treiber",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: /^Aufruf: node scripts\/kontext-treiber\.mjs --von <ISO>/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--agent"], doppelt: ["--agent", "a", "--agent", "b"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--agent braucht einen Wert", doppelt: "--agent ist doppelt angegeben" },
+  },
+  {
+    skript: "langfuse-abgleich",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: /^Aufruf: node scripts\/langfuse-abgleich\.mjs --pruefen/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--seit"], doppelt: ["--session", "a", "--session", "b"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--seit braucht einen Wert", doppelt: "--session ist doppelt angegeben" },
+  },
+  {
+    skript: "lauf-ergebnis",
+    exit: 1,
+    erste: (m) => m,
+    aufruf: /^Aufruf: node scripts\/lauf-ergebnis\.mjs --von <ISO> --bis <ISO>/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--von"], doppelt: ["--json", "--json"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--von braucht einen Wert", doppelt: "--json ist doppelt angegeben" },
+  },
+  {
+    skript: "subagent-laufzeit",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: /^Aufruf: node scripts\/subagent-laufzeit\.mjs --von <ISO>/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--schnitt"], doppelt: ["--agent", "a", "--agent", "b"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--schnitt braucht einen Wert", doppelt: "--agent ist doppelt angegeben" },
+  },
+  {
+    skript: "pr-warten",
+    exit: 3,
+    erste: (m) => m,
+    aufruf: /^Aufruf: node scripts\/pr-warten\.mjs <pr>/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--intervall"], doppelt: ["--intervall", "5", "--intervall", "6"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--intervall braucht einen Wert", doppelt: "--intervall ist doppelt angegeben" },
+  },
 ];
 
 /** Prozessumgebung ohne gh und git: PATH (jede Schreibweise) nur mit dem Ordner von node. */
@@ -150,11 +198,37 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["board-place", ["--top", "5", "--notfall", "rot-main"], 2, BOARD_USAGE], // --notfall nur unmittelbar vor --top
     ["abnahme", ["kriterien", "7", "8"], 2, "✖ abnahme: Unbekanntes Argument: 8"],
     ["spezifikation", ["gibtsnicht", "--bogus"], 2, "✖ spezifikation: unbekannter Befehl „gibtsnicht“"],
+    ["hauptchat-zerlegung", ["x"], 2, "Unbekanntes Argument: x"],
+    ["kontext-treiber", ["x"], 2, "Unbekanntes Argument: x"],
+    ["langfuse-abgleich", ["x"], 2, "Unbekanntes Argument: x"],
+    ["lauf-ergebnis", ["x"], 1, "Unbekanntes Argument: x"],
+    ["subagent-laufzeit", ["x"], 2, "Unbekanntes Argument: x"],
+    ["subagent-laufzeit", ["--ohne"], 2, "--ohne erwartet eine Ticketnummer, nicht nichts"],
+    ["pr-warten", ["abc"], 3, "PR-Nummer erwartet, nicht abc"],
+    ["pr-warten", ["12", "13"], 3, "Unbekanntes Argument: 13"],
+    ["lauf-ergebnis", ["--start-agent"], 1, "--start-agent erwartet einen Agent-Typ"],
+    ["kontext-treiber", ["--ticket"], 2, "--ticket erwartet eine Ticketnummer, nicht nichts"],
+    ["kontext-treiber", ["--delta", "vielleicht"], 2, "--delta erwartet ja|nein, nicht vielleicht"],
   ];
   test.concurrent.each(ZUSATZ)("%s %j: weitere Aufruf-Fehler (Pflicht-Flag, Positionsargument, Reihenfolge, Datumsprüfung)", { timeout: 60_000 }, (skript, argv, exit, erste) => {
     const r = starte(skript, argv);
     expect(r.status).toBe(exit);
     expect(r.stderr.split("\n")[0]).toBe(erste);
+  });
+
+  const WIEDERHOLBAR: [string, string[], number, RegExp][] = [
+    ["kontext-treiber", ["--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4"], 2, /^Aufruf: node scripts\/kontext-treiber\.mjs/],
+    ["subagent-laufzeit", ["--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4"], 2, /^Aufruf: node scripts\/subagent-laufzeit\.mjs/],
+    ["lauf-ergebnis", ["--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4"], 1, /^Aufruf: node scripts\/lauf-ergebnis\.mjs/],
+    ["hauptchat-zerlegung", ["--brain", "a", "--brain", "b"], 2, /^Aufruf: node scripts\/hauptchat-zerlegung\.mjs/],
+    ["langfuse-abgleich", ["--ist", "a", "--ist", "b"], 2, /^Aufruf: node scripts\/langfuse-abgleich\.mjs/],
+  ];
+  test.concurrent.each(WIEDERHOLBAR)("%s %j: wiederholbare Flags sind kein Aufruf-Fehler", { timeout: 60_000 }, (skript, argv, exit, aufruf) => {
+    const r = starte(skript, argv);
+    expect(r.status).toBe(exit);
+    expect(r.stderr).toMatch(aufruf);
+    expect(r.stderr).not.toContain("doppelt");
+    expect(r.stderr).not.toContain("Unbekanntes");
   });
 
   test.concurrent("fremdtext: beide Flags und --issue= ergeben die Aufrufzeile (fail-closed)", { timeout: 60_000 }, () => {

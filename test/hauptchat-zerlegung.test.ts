@@ -656,3 +656,18 @@ describe("zerlegeHauptchat: Modellanteil und TTL im Ergebnis (#1557)", () => {
     assert.match(text, /^TTL Ticket-Orchestrierung: keine Calls/m);
   });
 });
+
+describe("parseArgs (#1790: strikt über flagsLesen)", () => {
+  const pa = (hcModule as unknown as { parseArgs: (a: string[]) => { brain: string[]; json: boolean; von?: string; bis?: string; projekt?: string; fehler?: string } }).parseArgs;
+  test("--brain ist wiederholbar, im Erfolgsfall gibt es kein fehler-Feld", () => {
+    const a = pa(["--von", "v", "--bis", "b", "--brain", "a", "--brain", "c", "--projekt", "p", "--json"]);
+    assert.deepEqual(a, { brain: ["a", "c"], json: true, von: "v", bis: "b", projekt: "p" });
+    assert.deepEqual(pa([]), { brain: [], json: false });
+  });
+  test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
+    assert.match(pa(["--bogus"]).fehler ?? "", /Unbekanntes Argument: --bogus/);
+    assert.match(pa(["--von"]).fehler ?? "", /--von braucht einen Wert/);
+    assert.match(pa(["--von", "a", "--von", "b"]).fehler ?? "", /--von ist doppelt/);
+    assert.match(pa(["--json", "--json"]).fehler ?? "", /--json ist doppelt/);
+  });
+});
