@@ -15,7 +15,7 @@
  */
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { inboxStart, ladeBoardLibs } from "./inbox-start-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
@@ -107,27 +107,12 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst nach dem Vorab-Laden der Config importieren, sonst bräche eine
-// kaputte Config als Stacktrace statt als `::error::` mit Exit 2.
-const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
-
 /** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`. */
 export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error } = {}) {
-  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
-  if (fehler) {
-    err(`${fehler.text}
-Aufruf: node scripts/harness-doctor-melden.mjs [--dry-run]`);
-    return AUFRUF_EXIT;
-  }
-  let libs;
-  try {
-    ladeConfig();
-    libs = await ladeLibs();
-  } catch (e) {
-    log(`::error::${KENNUNG}: Projekt-Config nicht lesbar: ${einzeilig(fehlerText(e))}`);
-    return AUFRUF_EXIT;
-  }
-  const { REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
+  const start = await inboxStart(argv, { skript: "harness-doctor-melden", praefix: `${KENNUNG}: Projekt-Config nicht lesbar: `, ladeConfig, ladeLibs, log, err });
+  if (start.code !== undefined) return start.code;
+  const { trocken, libs } = start;
+  const { OWNER, REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
   const projektToken = process.env.PROJECT_TOKEN;
   const io = {
     ermittle: () =>
@@ -138,13 +123,13 @@ Aufruf: node scripts/harness-doctor-melden.mjs [--dry-run]`);
       }),
     kontext: () => {
       const { offene, kommentare } = ladeSammelKontext();
-      return { kommentare, owner: REPO.split("/")[0], ziel: waehleSammelticket(offene)?.number ?? null };
+      return { kommentare, owner: OWNER, ziel: waehleSammelticket(offene)?.number ?? null };
     },
     postZeilen,
     heute: new Date().toISOString().slice(0, 10),
     log,
   };
-  return lauf({ io, trocken: werte["dry-run"] === true });
+  return lauf({ io, trocken });
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = await main();

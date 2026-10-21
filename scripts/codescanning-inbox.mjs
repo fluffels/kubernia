@@ -20,12 +20,12 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { ladeBoardLibs, inboxStart } from "./inbox-start-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus } from "./projekt-config-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
 const SPITZEN_TOOLS = ["CodeQL"];
@@ -306,45 +306,27 @@ export function kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wieder
 
 const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad])).flat();
 
-// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst in `main`, nach dem Aufruf-Check, importieren, sonst bräche eine
-// kaputte Config als Stacktrace statt als `::error::` mit Fix-Zeile.
-const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
-
-const AUFRUF = "Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]";
-
 /** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `log`, `err`. Rückgabe: Exit-Code. */
 export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, log = console.log, err = console.error } = {}) {
-  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
-  if (fehler) {
-    err(`${fehler.text}\n${AUFRUF}`);
-    return AUFRUF_EXIT;
-  }
-  const trocken = werte["dry-run"] === true;
-  let libs;
-  let harnessLabel;
-  try {
-    harnessLabel = labelAus(ladeProjektConfig(), "harness");
-    libs = await ladeLibs();
-  } catch (e) {
-    log(fehlerMeldung(e, { praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: " }));
-    return AUFRUF_EXIT;
-  }
-  const { REPO, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
+  const start = await inboxStart(argv, { skript: "codescanning-inbox", praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
+  if (start.code !== undefined) return start.code;
+  const { trocken, config, libs } = start;
+  const harnessLabel = labelAus(config, "harness");
+  const { OWNER, REPO, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
   let offene = [];
   const io = {
     repo: REPO,
     ladeAlerts: () => seiten(`repos/${REPO}/code-scanning/alerts?state=open&per_page=100`),
     ladeKontext: () => {
-      const owner = REPO.split("/")[0];
       const kontext = ladeSammelKontext();
       const { rohe, kommentare } = kontext;
       offene = kontext.offene;
-      const vertraut = new Set(vertrauteIssues(rohe, owner).map((i) => i.number));
+      const vertraut = new Set(vertrauteIssues(rohe, OWNER).map((i) => i.number));
       // Das Spitzen-Ticket legt github-actions[bot] an (GH_TOKEN = github.token); ein gleichnamiges Ticket eines Fremden zählt nicht.
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
       const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${REPO}/issues/${ziele[0].number}`]).body ?? "") } : null;
-      return kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) });
+      return kontextAus({ libs, rohe, kommentare, owner: OWNER, offenesIssue, wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) });
     },
     projectToken: process.env.PROJECT_TOKEN,
     log,

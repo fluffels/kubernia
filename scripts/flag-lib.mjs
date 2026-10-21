@@ -95,6 +95,8 @@ export function befehlLesen(argv, befehle, { meldung } = {}) {
  * einem Aufruf-Fehler); bei Fehler nur `fehlerErgebnis(argv, vorab)`, weder `vorbereiten` noch `io` laufen (kein I/O vor dem Fehler).
  * Sonst `vorbereiten?.()`, dann `fuehreAus(argv, io())` (`io` als Funktion, erst hier aufgerufen, oder als Objekt). `ausgabe` (Standard:
  * Prozess-Streams, `process.exitCode`) bekommt `out`, `err` und `code`; Rückgabe ist das Ergebnis.
+ * Bekannte Grenze: `io` hat keinen Fehlerweg; `naechstes-ticket` (`{ configFehler }`) und `fremdtext` (`undefined`) überbrücken das selbst;
+ * braucht ein drittes Skript ihn, bekommt `direktaufruf` einen Parameter `ioFehler`.
  */
 export function direktaufruf(argv, { pruefe, fehlerErgebnis, vorbereiten, io, fuehreAus, ausgabe = {} }) {
   const senke = {

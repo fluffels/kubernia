@@ -171,7 +171,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     });
     assert.equal(code, 2);
     assert.equal(importiert, false);
-    assert.match(log.join("\n"), /^::error::Harness-Doctor \(Wochenlauf\): Projekt-Config nicht lesbar: Projekt-Config fehlt: x Fix: anlegen$/);
+    assert.match(log.join("\n"), /^::error::Harness-Doctor \(Wochenlauf\): Projekt-Config nicht lesbar: Projekt-Config fehlt: x\nFix: anlegen$/);
   });
   test("ein Import-Fehler der Libs (z. B. Config beim Import) → ebenfalls ::error:: Exit 2", async () => {
     const log: string[] = [];
@@ -187,6 +187,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
       const log: string[] = [];
       const libs = {
         REPO: "acme/proj",
+        OWNER: "acme",
         ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [] }),
         waehleSammelticket: (offene: { number: number }[]) => offene[0],
         postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
