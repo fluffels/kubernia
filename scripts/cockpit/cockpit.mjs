@@ -3,14 +3,14 @@
  *
  *   npm run cockpit [-- --projekt <pfad>] [--port <n>]    Standard: cwd und Port 4180; --port 0 wählt einen freien
  *
- * Exit 2 bei Aufruf-Fehler, 1 bei belegtem Port. Quellen: registry.mjs; Vertrag: quelle.mjs; Ablauf: docs/agent-harness.md › Cockpit. */
+ * `main` liefert eine Exit-Zahl (2 Aufruf-Fehler, 1 Startfehler, z.B. belegter Port) oder im Erfolg `schliessen` (der laufende Server). Quellen: registry.mjs; Vertrag: quelle.mjs; Ablauf: docs/agent-harness.md › Cockpit. */
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "../flag-lib.mjs";
 import { istDirektaufruf } from "../hook-io.mjs";
 import { laufe } from "./lauf.mjs";
 import { QUELLEN } from "./registry.mjs";
-import { starteServer } from "./server.mjs";
+import { starteServer as starteServerStandard } from "./server.mjs";
 
 export const STANDARD_PORT = 4180;
 
@@ -33,17 +33,17 @@ export function leseArgs(argv, cwd) {
   return { projekt, port: Number(roh) };
 }
 
-export async function main(argv = process.argv.slice(2), cwd = process.cwd()) {
+export async function main(argv = process.argv.slice(2), cwd = process.cwd(), { starteServer = starteServerStandard } = {}) {
   const a = leseArgs(argv, cwd);
   if (a.fehler) {
     console.error(`${a.fehler}\nAufruf: npm run cockpit [-- --projekt <pfad>] [--port <n>]`);
     return AUFRUF_EXIT;
   }
-  const ctxFuer = (signal) => ({ lauf: (id) => laufe(id, { cwd: a.projekt, signal }) });
+  const ctxFuer = (signal) => ({ projekt: a.projekt, lauf: (id) => laufe(id, { cwd: a.projekt, signal }) });
   try {
     const s = await starteServer({ port: a.port, quellen: QUELLEN, projekt: a.projekt, ctxFuer });
     console.log(`Cockpit: http://127.0.0.1:${s.port}/ (Projekt ${a.projekt})`);
-    return null;
+    return s.schliessen;
   } catch (e) {
     console.error(`Cockpit startet nicht: ${e?.code === "EADDRINUSE" ? `Port ${a.port} ist belegt` : e?.message}`);
     return 1;
@@ -51,6 +51,6 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()) {
 }
 
 if (istDirektaufruf(import.meta.url)) {
-  const code = await main();
-  if (code !== null) process.exitCode = code;
+  const ergebnis = await main();
+  if (typeof ergebnis === "number") process.exitCode = ergebnis;
 }
