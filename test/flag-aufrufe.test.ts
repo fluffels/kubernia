@@ -36,6 +36,18 @@ const ABNAHME_AUFRUF = [
   "  node scripts/abnahme.mjs kriterien <nr>",
   "  node scripts/abnahme.mjs auswerten <nr> --pr <pr> --bericht <datei> --worktree <pfad> --head <sha>",
 ].join("\n");
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../scripts/ticket-namen.mjs";
+const maskiere = escapeRegex as (s: string) => string;
+/** Skripte mit nur booleschen Flags: der Fall „fehlender Wert“ ist ein Wert an einem Schalter (`--x=wert`), ein unbekanntes Argument. */
+const nurSchalter = (skript: string, flag: string, aufrufZeile: string, rahmen: Zeile["erste"] = (m) => m): Zeile => ({
+  skript,
+  exit: 2,
+  erste: rahmen,
+  aufruf: new RegExp(`^${maskiere(aufrufZeile)}`, "m"),
+  faelle: { unbekannt: ["--bogus"], ohneWert: [`${flag}=x`], doppelt: [flag, flag] },
+  meldungen: { unbekannt: STD.unbekannt, ohneWert: `Unbekanntes Argument: ${flag}=x`, doppelt: `${flag} ist doppelt angegeben` },
+});
 const SBOM_USAGE = "Aufruf: node scripts/sbom.mjs [--aus <pfad>]";
 
 const ZEILEN: Zeile[] = [
@@ -207,6 +219,55 @@ const ZEILEN: Zeile[] = [
     faelle: { unbekannt: ["claim", "999999", "--bogus"], ohneWert: ["pruefe", "999999", "--nonce"], doppelt: ["pruefe", "999999", "--nonce", "a", "--nonce", "b"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--nonce braucht einen Wert", doppelt: "--nonce ist doppelt angegeben" },
   },
+  nurSchalter("audit-einordnung", "--dry-run", "Aufruf: node scripts/audit-einordnung.mjs [--dry-run]"),
+  nurSchalter("codescanning-inbox", "--dry-run", "Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]"),
+  nurSchalter("wiedervorlage", "--dry-run", "Aufruf: node scripts/wiedervorlage.mjs [--dry-run]"),
+  nurSchalter("budget-pacing", "--json", "Aufruf: node scripts/budget-pacing.mjs [--json] [--ohne-probe]"),
+  nurSchalter("check-any-suppressions", "--write", "Aufruf: node scripts/check-any-suppressions.mjs [--write]"),
+  nurSchalter("cleanup-worktrees", "--fix", "Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]"),
+  nurSchalter("forum-sanitize", "--body", "Aufruf: node scripts/forum-sanitize.mjs [--body]"),
+  nurSchalter("gh-kontingent", "--bericht", "Aufruf: node scripts/gh-kontingent.mjs [--bericht]"),
+  nurSchalter("verify-lauf", "--changed", "Aufruf: node scripts/verify-lauf.mjs [--changed]"),
+  {
+    skript: "langfuse-vorbedingung",
+    exit: 2,
+    erste: (m) => `${m}. Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]`,
+    aufruf: new RegExp(maskiere(". Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]")),
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--sessionstart=x"], doppelt: ["--sessionstart", "--sessionstart"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "Unbekanntes Argument: --sessionstart=x", doppelt: "--sessionstart ist doppelt angegeben" },
+  },
+  {
+    skript: "check-internalrefs",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: new RegExp(`^${maskiere("Aufruf: node scripts/check-internalrefs.mjs [--add <begriff> | --add-name <begriff> | --text]")}$`, "m"),
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--add"], doppelt: ["--add", "x", "--add", "y"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--add braucht einen Wert", doppelt: "--add ist doppelt angegeben" },
+  },
+  {
+    skript: "docs-gen",
+    exit: 2,
+    erste: (m) => `✖ ${m}`,
+    aufruf: new RegExp(`^${maskiere("Fix: Aufruf: node scripts/docs-gen.mjs [--write] [--config <pfad>]")}$`, "m"),
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--config"], doppelt: ["--write", "--write"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--config braucht einen Wert", doppelt: "--write ist doppelt angegeben" },
+  },
+  {
+    skript: "mermaid-vorschau",
+    exit: 2,
+    erste: (m) => m,
+    aufruf: new RegExp(`^${maskiere("Aufruf: node scripts/mermaid-vorschau.mjs <datei.md> --mermaid <ordner-mit-node_modules/mermaid> [--port 4173]")}$`, "m"),
+    faelle: { unbekannt: ["x.md", "--bogus"], ohneWert: ["x.md", "--mermaid"], doppelt: ["x.md", "--mermaid", "a", "--mermaid", "b"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--mermaid braucht einen Wert", doppelt: "--mermaid ist doppelt angegeben" },
+  },
+  {
+    skript: "projekt-config",
+    exit: 2,
+    erste: (m) => `✖ ${m}`,
+    aufruf: new RegExp(`^${maskiere("Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>")}$`, "m"),
+    faelle: { unbekannt: ["--bogus", "repo"], ohneWert: ["--config"], doppelt: ["--config", "a", "--config", "b", "repo"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--config braucht einen Wert", doppelt: "--config ist doppelt angegeben" },
+  },
   {
     skript: "haupt-sync",
     exit: 2,
@@ -271,7 +332,14 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["ticket-lock", ["freigeben", "999999"], 2, "✖ ticket-lock: --nonce fehlt"],
     ["ticket-lock", ["pruefe", "999999", "--nonce", ""], 2, "✖ ticket-lock: --nonce braucht einen Wert"],
     ["ticket-lock", ["lebenszeichen", "999999", "--commit"], 2, "✖ ticket-lock: Unbekanntes Argument: --commit"],
+    ["ticket-lock", ["toString", "1"], 2, "✖ ticket-lock: unbekannter Befehl toString"], // Prototyp-Namen sind keine Befehle (Object.hasOwn)
+    ["ticket-lock", ["__proto__", "1"], 2, "✖ ticket-lock: unbekannter Befehl __proto__"],
+    ["ticket-lock", ["constructor", "1"], 2, "✖ ticket-lock: unbekannter Befehl constructor"],
     ["haupt-sync", ["x"], 2, "haupt-sync: Unbekanntes Argument: x"],
+    ["mermaid-vorschau", ["a.md", "b.md", "--mermaid", "x"], 2, "genau eine Markdown-Datei erwartet"],
+    ["mermaid-vorschau", ["a.md", "--mermaid", "x", "--port", "abc"], 2, "--port erwartet eine Portnummer, nicht abc"],
+    ["projekt-config", ["repo", "zwei"], 2, "✖ Unbekanntes Argument: zwei"],
+    ["projekt-config", [], 2, "✖ Schlüssel fehlt"],
     ["board-takt", ["--bogus"], 2, "board-takt: Unbekanntes Argument: --bogus"],
     ["board-takt", ["--dry-run", "--dry-run"], 2, "board-takt: --dry-run ist doppelt angegeben"],
   ];

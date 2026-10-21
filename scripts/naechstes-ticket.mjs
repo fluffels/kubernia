@@ -28,7 +28,7 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
-import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -339,21 +339,17 @@ export function echteIo({ config } = {}) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
-  const vorab = aufrufLesen(process.argv.slice(2));
-  if (vorab.fehler) {
-    process.stderr.write(`✖ naechstes-ticket: ${vorab.fehler}\n`);
-    process.exit(AUFRUF_EXIT);
-  }
-  mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
-  let io;
-  try {
-    io = echteIo();
-  } catch (e) {
-    process.stderr.write(`✖ naechstes-ticket: ${e instanceof Error ? e.message : String(e)}\n`);
-    process.exit(2);
-  }
-  const { code, out, err } = fuehreAus(process.argv.slice(2), io);
-  process.stdout.write(out);
-  process.stderr.write(err);
-  process.exitCode = code;
+  direktaufruf(process.argv.slice(2), {
+    pruefe: aufrufLesen,
+    fehlerErgebnis: (_argv, vorab) => fehlerErgebnis(vorab.fehler),
+    vorbereiten: () => mitKontingent("naechstes-ticket", { arten: ["core"] }), // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
+    io: () => {
+      try {
+        return echteIo();
+      } catch (e) {
+        return { configFehler: e instanceof Error ? e.message : String(e) }; // `fuehreAus` unten meldet die Config-Ursache (Exit 2)
+      }
+    },
+    fuehreAus: (argv, io) => (io.configFehler === undefined ? fuehreAus(argv, io) : fehlerErgebnis(io.configFehler)),
+  });
 }

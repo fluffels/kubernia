@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/codescanning-inbox.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { NOTFAELLE } from "../scripts/board-lib.mjs";
+import { NOTFAELLE, SAMMELTICKET_TITEL_LISTE } from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sammelRaw from "../scripts/sammelticket-anlegen.mjs";
 
@@ -28,11 +28,12 @@ const C = raw as unknown as {
     owner: string;
     wiedervorlagen: { id: string; alerts?: number[] }[];
     offeneTitel?: string[];
+    sammelTitel?: string[];
     offeneIssues?: { number: number; title: string; body: string; user: unknown }[];
   }) => Required<Bekannt> & { issues: { number: number; titel: string; body: string }[] };
   deckendesIssue: (a: Partial<Alert>, issues: { number: number; titel: string; body: string }[]) => { number: number; grund: string } | null;
   zeilenText: (g: Gruppe) => string;
-  issueBody: (g: Gruppe[]) => string;
+  issueBody: (g: Gruppe[], repo?: string) => string;
   plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null }) => Plan;
   fuehreAus: (a: Record<string, unknown>) => number;
   lauf: (a: Record<string, unknown>) => number;
@@ -189,7 +190,7 @@ describe("deckendesIssue", () => {
 
 describe("bekannteAlerts offene Issues", () => {
   const offen = (o: Record<string, unknown> = {}) => ({ number: 1703, title: "Sanitization", body: "Code-Scanning-Alert 74", user: { login: OWNER, type: "User" }, ...o });
-  const mit = (i: unknown[]) => C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], offeneIssues: i as never }).issues.map((x) => x.number);
+  const mit = (i: unknown[]) => C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], sammelTitel: SAMMELTICKET_TITEL_LISTE as string[], offeneIssues: i as never }).issues.map((x) => x.number);
   test("offene Issues vertrauter Autoren werden übernommen", () => {
     expect(mit([offen()])).toEqual([1703]);
   });
@@ -398,6 +399,11 @@ describe("Texte", () => {
   test("kein #<zahl> in Zeile und Body (GitHub verlinkt es als Issue)", () => {
     expect(C.zeilenText(g)).not.toMatch(/#\d/);
     expect(C.issueBody([g])).not.toMatch(/#\d/);
+  });
+  test("der Body nennt das übergebene Repo in beiden gh-Befehlen", () => {
+    const body = C.issueBody([g], "eigner/projekt");
+    expect(body).toContain("gh api repos/eigner/projekt/code-scanning/alerts/<nummer>");
+    expect(body).toContain("gh api -X PATCH repos/eigner/projekt/code-scanning/alerts/<nummer>");
   });
 });
 

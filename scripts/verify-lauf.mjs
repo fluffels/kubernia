@@ -16,6 +16,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -194,11 +195,17 @@ export const statusVon = (r) => r.status ?? 1;
 
 /**
  * Der Lauf als Funktion (#1428 Z9): liefert den Exit-Code statt `process.exitCode` zu setzen, die Zugriffe sind injizierbar
- * (`deps.pkg`, `deps.ladeEngung`, `deps.run`, `deps.log`). Der Direktaufruf unten setzt `process.exitCode`.
+ * (`deps.pkg`, `deps.ladeEngung`, `deps.run`, `deps.log`, `deps.err`). Der Direktaufruf unten setzt `process.exitCode`.
  */
 export function main(argv = process.argv.slice(2), deps = {}) {
+  const { werte, fehler } = flagsLesen(argv, { changed: { type: "boolean" } });
+  if (fehler) {
+    (deps.err ?? console.error)(`${fehler.text}
+Aufruf: node scripts/verify-lauf.mjs [--changed]`);
+    return AUFRUF_EXIT;
+  }
   const { pkg = JSON.parse(readFileSync(join(WURZEL, "package.json"), "utf8")), ladeEngung: lade = ladeEngung, run = echterLauf, log = console.log } = deps;
-  const changed = argv.includes("--changed");
+  const changed = werte.changed === true;
   const schritte = ketteAusPackage(pkg);
   const engung = changed ? lade() : null;
   const hinweis = engung?.voll ? `Lint und Test voll (${engung.grund})` : "";

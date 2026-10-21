@@ -42,6 +42,7 @@ import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ghJson } from "./gh-cli.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ticketNamen } from "./ticket-namen.mjs";
 import {
@@ -100,8 +101,14 @@ export function branchenModus(root, loeschen, {
   return r.ok ? 0 : 1;
 }
 
-function main() {
-  const FIX = process.argv.includes("--fix");
+function main(argv = process.argv.slice(2)) {
+  const { werte, fehler } = flagsLesen(argv, { fix: { type: "boolean" }, branches: { type: "boolean" } });
+  if (fehler) {
+    console.error(`${fehler.text}
+Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
+    process.exit(AUFRUF_EXIT);
+  }
+  const FIX = werte.fix === true;
   const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
   let namen;
   try {
@@ -110,7 +117,7 @@ function main() {
     console.error(`Worktree-Aufräumen abgebrochen: ${e instanceof Error ? e.message : e}`);
     process.exit(1);
   }
-  if (process.argv.includes("--branches")) {
+  if (werte.branches) {
     process.exitCode = branchenModus(ROOT, FIX, { namen });
     return;
   }

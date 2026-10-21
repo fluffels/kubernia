@@ -5,13 +5,14 @@
  * es gibt bewusst keinen stillen Standardwert. Dieses Modul trägt selbst kein Projektliteral.
  *
  * Kommandozeile (über den Einstieg projekt-config.mjs): `node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>` gibt einen Skalarwert aus
- * (Exit 0), 1 bei fehlender/ungültiger Config oder fehlendem Schlüssel, 2 ohne Schlüssel.
+ * (Exit 0), 1 bei fehlender/ungültiger Config oder unbekanntem Schlüssel, 2 bei einem Aufruf-Fehler (ohne Schlüssel, unbekanntes Flag, fehlender Wert).
  *
- * Nur Node-Builtins (läuft auch in Workflows ohne `npm ci`).
+ * Nur Node-Builtins und `flag-lib.mjs` (läuft auch in Workflows ohne `npm ci`).
  */
 import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -193,31 +194,36 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG, pruef
   return wert;
 }
 
-/** Trennt `--config <pfad>` aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)
- *  oder `{ fehler }`, wenn der Pfad fehlt. */
+/** Trennt `--config <pfad>` (auch `--config=<pfad>`) aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)
+ *  oder `{ fehler }`, wenn der Pfad fehlt. Andere Argumente bleiben unberührt in `args`; das erste `--config` zählt. */
 export function trenneConfigArg(argv) {
-  const args = [...argv];
-  const ci = args.indexOf("--config");
-  if (ci < 0) return { args, pfad: undefined };
-  const pfad = args[ci + 1];
-  if (!pfad) return { fehler: "✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen" };
-  args.splice(ci, 2);
-  return { args, pfad };
+  const { tokens } = flagsLesen(argv, { config: { type: "string" } }, { positionale: true });
+  const t = tokens.find((x) => x.kind === "option" && x.name === "config");
+  if (!t) return { args: [...argv], pfad: undefined };
+  if (!t.value) return { fehler: "✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen" };
+  const belegt = new Set([t.index, ...(t.inlineValue ? [] : [t.index + 1])]);
+  return { args: argv.filter((_, k) => !belegt.has(k)), pfad: t.value };
 }
+
+const CLI_AUFRUF = "Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>";
 
 /** Kommandozeile; gibt den Exit-Code zurück. */
 export function cli(argv, { rootDir = ROOT, out = console.log, err = console.error } = {}) {
-  const getrennt = trenneConfigArg(argv);
-  if (getrennt.fehler) {
-    err(getrennt.fehler);
-    return 1;
+  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" } }, { positionale: true });
+  if (fehler) {
+    err(`✖ ${fehler.text}\n\n${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
   }
-  const { args, pfad } = getrennt;
-  const schluessel = args[0];
+  const [schluessel, ueberzaehlig] = positionale;
   if (!schluessel) {
-    err("✖ Schlüssel fehlt\n\nFix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>");
-    return 2;
+    err(`✖ Schlüssel fehlt\n\n${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
   }
+  if (ueberzaehlig !== undefined) {
+    err(`✖ Unbekanntes Argument: ${ueberzaehlig}\n\n${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  const pfad = werte.config;
   let cfg;
   try {
     cfg = ladeProjektConfig({ rootDir, pfad });

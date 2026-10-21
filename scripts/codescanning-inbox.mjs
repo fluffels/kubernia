@@ -20,13 +20,12 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { LANGFUSE_SAMMELTICKET_TITEL, REPO, SAMMELTICKET_TITEL } from "./board-lib.mjs";
+import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { offeneTitel as vertrauteTitel, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } from "./inbox-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
 const SPITZEN_TOOLS = ["CodeQL"];
@@ -94,9 +93,10 @@ export function codeScanningNummernIn(text) {
 
 /**
  * Bekannte Alerts: Nummern aus offenen Zeilen `- [ ] Code-Scanning:` in Kommentaren VERTRAUTER Autoren (`istVertraut`), Regeln (als Slug) aus
- * Wiedervorlagen-IDs `codescanning-<slug>`. Pur.
+ * Wiedervorlagen-IDs `codescanning-<slug>`. `sammelTitel`: Titel der Sammeltickets (deckt kein Alert ab; der Aufrufer liefert sie aus
+ * `board-lib`, das beim Import die Config liest). Pur.
  */
-export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [], offeneIssues = [] }) {
+export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [], offeneIssues = [], sammelTitel = [] }) {
   const nummern = new Set();
   const regeln = new Set();
   const alerts = new Set();
@@ -112,7 +112,7 @@ export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel 
     if (Array.isArray(e.alerts)) e.alerts.filter(Number.isInteger).forEach((n) => alerts.add(n));
   }
   const ghsa = bekannteGhsa({ kommentare: vertrauteBodies(kommentare, owner), wiedervorlagen, offeneTitel });
-  const ausgenommen = new Set([ZIEL_TITEL, SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL]);
+  const ausgenommen = new Set([ZIEL_TITEL, ...sammelTitel]);
   const issues = offeneIssues
     .filter((i) => i && !ausgenommen.has(i.title) && istVertraut(i.user ?? null, owner))
     .map((i) => ({ number: i.number, titel: String(i.title ?? ""), body: String(i.body ?? "") }));
@@ -147,15 +147,15 @@ const alertListe = (g) => `Alerts ${g.nummern.join(", ")}`;
 export const zeilenText = (g) =>
   `- [ ] Code-Scanning: ${g.tool} ${g.regel} (${g.stufe ?? g.schwere}), ${alertListe(g)}. Vorschlag: beheben, sonst mit Grund dismissen oder Wiedervorlage ${WV_PRAEFIX}${slug(g.regel)}`;
 
-/** Body des Spitzen-Tickets: je Regel eine Zeile, Prüfauftrag, keine Pfade und keine Meldungstexte aus dem Alert. Pur. */
-export function issueBody(gruppen) {
+/** Body des Spitzen-Tickets: je Regel eine Zeile, Prüfauftrag, keine Pfade und keine Meldungstexte aus dem Alert. `repo` = `owner/name`. Pur. */
+export function issueBody(gruppen, repo = "<owner>/<repo>") {
   const zeilen = gruppen.map((g) => `- ${g.tool} ${g.regel} (${g.stufe ?? g.schwere}): ${alertListe(g)}`);
   return [
     "Offene CodeQL-Alerts mit security-severity high/critical:",
     "",
     ...zeilen,
     "",
-    `Prüfauftrag: je Regel beheben, mit Grund dismissen oder per Wiedervorlage \`codescanning-<slug>\` zurückstellen. Details: \`gh api repos/${REPO}/code-scanning/alerts/<nummer>\`. Dismiss: \`gh api -X PATCH repos/${REPO}/code-scanning/alerts/<nummer> -f state=dismissed -f dismissed_reason="won't fix" -f dismissed_comment="<Grund, Ticket>"\` (Gründe: \`won't fix\`, \`false positive\`, \`used in tests\`). Die Liste wird wöchentlich aktualisiert; bei null Funden schließt der Lauf dieses Ticket selbst. Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.`,
+    `Prüfauftrag: je Regel beheben, mit Grund dismissen oder per Wiedervorlage \`codescanning-<slug>\` zurückstellen. Details: \`gh api repos/${repo}/code-scanning/alerts/<nummer>\`. Dismiss: \`gh api -X PATCH repos/${repo}/code-scanning/alerts/<nummer> -f state=dismissed -f dismissed_reason="won't fix" -f dismissed_comment="<Grund, Ticket>"\` (Gründe: \`won't fix\`, \`false positive\`, \`used in tests\`). Die Liste wird wöchentlich aktualisiert; bei null Funden schließt der Lauf dieses Ticket selbst. Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.`,
   ].join("\n");
 }
 
@@ -177,7 +177,7 @@ function gruppiere(alerts) {
  * sonst anlegen bzw. mit geändertem Body aktualisieren (`neue` = Nummern, die der alte Body noch nicht nannte). Zeilen = `zeile`-Alerts ohne
  * bekannte Nummer, ohne bekannte Regel und ohne vollständig bekannte GHSA-IDs, je (Tool, Regel) eine. Pur, deterministisch.
  */
-export function plane({ alerts, bekannt, offenesIssue }) {
+export function plane({ alerts, bekannt, offenesIssue, repo }) {
   const abgedeckt = [];
   const deckt = (a) => {
     const d = deckendesIssue(a, bekannt.issues);
@@ -193,7 +193,7 @@ export function plane({ alerts, bekannt, offenesIssue }) {
     const schliessen = { art: "schliessen", nummer: offenesIssue?.number, ...(durch.length > 0 ? { abgedecktDurch: durch } : {}) };
     return { issue: offenesIssue ? schliessen : { art: "nichts" }, zeilen, abgedeckt };
   }
-  const body = issueBody(spitze);
+  const body = issueBody(spitze, repo);
   if (!offenesIssue) return { issue: { art: "anlegen", body }, zeilen, abgedeckt };
   if (body === String(offenesIssue.body ?? "").replace(/\r\n/g, "\n")) return { issue: { art: "nichts" }, zeilen, abgedeckt };
   const alt = new Set(nummernIn(offenesIssue.body));
@@ -274,7 +274,7 @@ export function lauf({ io, trocken = false }) {
   try {
     const alerts = alertsAus(io.ladeAlerts());
     const k = io.ladeKontext();
-    plan = plane({ alerts, bekannt: bekannteAlerts(k), offenesIssue: k.offenesIssue });
+    plan = plane({ alerts, bekannt: bekannteAlerts(k), offenesIssue: k.offenesIssue, repo: io.repo });
     for (const [issue, liste] of abgedecktJeIssue(plan.abgedeckt)) log(`Code-Scanning-Inbox: Alerts ${liste.nummern.join(", ")} abgedeckt durch #${issue} (${liste.gruende.join(", ")})`);
   } catch (err) {
     log(`::error::Code-Scanning-Alerts nicht lesbar: ${fehlerText(err)}`);
@@ -289,11 +289,33 @@ export function lauf({ io, trocken = false }) {
 
 const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad])).flat();
 
-function main() {
-  const trocken = process.argv.includes("--dry-run");
+// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst in `main`, nach dem Aufruf-Check, importieren, sonst bräche eine
+// kaputte Config als Stacktrace statt als `::error::` mit Fix-Zeile.
+const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
+
+const AUFRUF = "Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]";
+
+/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, log = console.log, err = console.error } = {}) {
+  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
+  if (fehler) {
+    err(`${fehler.text}\n${AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  const trocken = werte["dry-run"] === true;
+  let libs;
+  let harnessLabel;
+  try {
+    harnessLabel = labelAus(ladeProjektConfig(), "harness");
+    libs = await ladeLibs();
+  } catch (e) {
+    log(fehlerMeldung(e, { praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: " }));
+    return AUFRUF_EXIT;
+  }
+  const { REPO, SAMMELTICKET_TITEL_LISTE, offeneTitel: vertrauteTitel, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
   let offene = [];
-  const harnessLabel = labelAus(ladeProjektConfig(), "harness");
   const io = {
+    repo: REPO,
     ladeAlerts: () => seiten(`repos/${REPO}/code-scanning/alerts?state=open&per_page=100`),
     ladeKontext: () => {
       const owner = REPO.split("/")[0];
@@ -303,12 +325,12 @@ function main() {
       const vertraut = new Set(vertrauteIssues(rohe, owner).map((i) => i.number));
       // Das Spitzen-Ticket legt github-actions[bot] an (GH_TOKEN = github.token); ein gleichnamiges Ticket eines Fremden zählt nicht.
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
-      if (ziele.length > 1) console.log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
+      if (ziele.length > 1) log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
       const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${REPO}/issues/${ziele[0].number}`]).body ?? "") } : null;
-      return { offenesIssue, kommentare, owner, offeneIssues: vertrauteIssues(rohe, owner), offeneTitel: vertrauteTitel(rohe, owner), wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) };
+      return { offenesIssue, kommentare, owner, sammelTitel: SAMMELTICKET_TITEL_LISTE, offeneIssues: vertrauteIssues(rohe, owner), offeneTitel: vertrauteTitel(rohe, owner), wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) };
     },
     projectToken: process.env.PROJECT_TOKEN,
-    log: console.log,
+    log,
     legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", REPO, "--title", titel, "--label", harnessLabel, "--body", body]).trim().split("/").pop(),
     sortiereEin: (nr) => {
       try {
@@ -324,7 +346,7 @@ function main() {
     zielSammelticket: () => waehleSammelticket(offene)?.number ?? null,
     postZeilen,
   };
-  process.exit(lauf({ io, trocken }));
+  return lauf({ io, trocken });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main();

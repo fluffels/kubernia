@@ -8,6 +8,7 @@
  * Bekannte Grenze: prüft nur /api/public/health, nicht die MCP-Verbindung der Session; die verbindet beim Session-Start vor Schritt 0 (Ausfall: mcp-ausfall.mjs).
  * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
 import { basisUrlAus, langfuseBasisUrl } from "./langfuse-zugang.mjs";
 
@@ -44,12 +45,12 @@ export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRI
 const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart]";
 
 export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies } = {}) {
-  const unbekannt = argv.find((a) => a !== "--sessionstart");
-  if (unbekannt) {
-    err(`Unbekanntes Argument: ${unbekannt}. ${USAGE}`);
-    return 2;
+  const { werte, fehler } = flagsLesen(argv, { sessionstart: { type: "boolean" } });
+  if (fehler) {
+    err(`${fehler.text}. ${USAGE}`);
+    return AUFRUF_EXIT;
   }
-  const sessionstart = argv.includes("--sessionstart");
+  const sessionstart = werte.sessionstart === true;
   const urteil = await pruefeLangfuse({ baseUrl: basisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) }), fetchImpl, fristMs });
   if (urteil.ok) return 0;
   const text = `${urteil.grund}. ${HINWEIS}`;

@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { REPO } from "./board-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { platziereOben } from "./inbox-lib.mjs";
@@ -175,13 +176,19 @@ export function ioAus(config, { legen = legeAn } = {}) {
   return { anlegen: (e) => legen(e, labelFuer(e, standard)), sortiereEin };
 }
 
-function main() {
+function main(argv = process.argv.slice(2)) {
+  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
+  if (fehler) {
+    console.error(`${fehler.text}
+Aufruf: node scripts/wiedervorlage.mjs [--dry-run]`);
+    process.exit(AUFRUF_EXIT);
+  }
   const eintraege = ladeEintraege();
   const code = lauf({
     eintraege,
     heute: new Date().toISOString().slice(0, 10),
     tickets: ladeTickets(),
-    trocken: process.argv.includes("--dry-run"),
+    trocken: werte["dry-run"] === true,
     ...ioAus(ladeProjektConfig()),
   });
   process.exit(code);

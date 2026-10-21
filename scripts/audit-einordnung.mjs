@@ -14,9 +14,8 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fehlerText, ghText } from "./gh-cli.mjs";
-import { REPO } from "./board-lib.mjs";
-import { ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
+import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
 export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
@@ -138,17 +137,38 @@ function npmAudit(extra = []) {
   return JSON.parse(text);
 }
 
-function ladeAlerts() {
+function ladeAlerts(repo) {
   try {
-    return JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/dependabot/alerts?state=open&per_page=100`])).flat();
+    return JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${repo}/dependabot/alerts?state=open&per_page=100`])).flat();
   } catch (err) {
     console.log(`::warning::Dependabot-Alerts nicht lesbar (${fehlerText(err, 200)}); weiter mit npm audit allein.`);
     return [];
   }
 }
 
-function main() {
-  const trocken = process.argv.includes("--dry-run");
+// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst in `main`, nach dem Aufruf-Check, importieren, sonst bräche eine
+// kaputte Config als Stacktrace statt als `::error::` mit Fix-Zeile.
+const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
+
+const AUFRUF = "Aufruf: node scripts/audit-einordnung.mjs [--dry-run]";
+
+/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, log = console.log, err = console.error } = {}) {
+  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
+  if (fehler) {
+    err(`${fehler.text}
+${AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  const trocken = werte["dry-run"] === true;
+  let libs;
+  try {
+    libs = await ladeLibs();
+  } catch (e) {
+    log(fehlerMeldung(e, { praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: " }));
+    return AUFRUF_EXIT;
+  }
+  const { REPO, ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } = libs;
   const { rohe, offene, kommentare } = ladeSammelKontext();
   const owner = REPO.split("/")[0];
   const bekannt = bekannteGhsa({
@@ -158,38 +178,41 @@ function main() {
     offeneTitel: offeneTitel(rohe, owner),
   });
   const voll = markiereProd(befundeAusNpmAudit(npmAudit()), befundeAusNpmAudit(npmAudit(["--omit=dev"])));
-  const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(ladeAlerts())], bekannt });
-  if (aktionen.length === 0) return console.log("Audit-Einordnung: nichts Neues.");
+  const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(ladeAlerts(REPO))], bekannt });
+  if (aktionen.length === 0) {
+    log("Audit-Einordnung: nichts Neues.");
+    return 0;
+  }
 
   const zeilen = aktionen.filter((a) => a.art === "zeile");
   const alarme = aktionen.filter((a) => a.art === "alarm");
   if (trocken) {
-    for (const a of aktionen) console.log(a.art === "alarm" ? `[dry-run] Alarm: ${a.titel}` : `[dry-run] ${a.text}`);
-    return;
+    for (const a of aktionen) log(a.art === "alarm" ? `[dry-run] Alarm: ${a.titel}` : `[dry-run] ${a.text}`);
+    return 0;
   }
   let rot = false;
   for (const a of alarme) {
     try {
       const url = ghText(["issue", "create", "--repo", REPO, "--title", a.titel, "--body", a.body]).trim();
       const nr = url.split("/").pop();
-      console.log(`Alarm angelegt: #${nr} (${a.befund.ghsa})`);
+      log(`Alarm angelegt: #${nr} (${a.befund.ghsa})`);
       platziereOben(nr, "security");
-    } catch (err) {
-      console.log(`::error::Alarm für ${a.befund.ghsa} unvollständig: ${fehlerText(err)}`);
+    } catch (fehl) {
+      log(`::error::Alarm für ${a.befund.ghsa} unvollständig: ${fehlerText(fehl)}`);
       rot = true;
     }
   }
   if (zeilen.length > 0) {
     const ziel = waehleSammelticket(offene);
     if (!ziel) {
-      console.log("::error::Kein ungeclaimtes Harness-Sammelticket für die Audit-Zeilen.");
+      log("::error::Kein ungeclaimtes Harness-Sammelticket für die Audit-Zeilen.");
       rot = true;
     } else {
       postZeilen(ziel.number, zeilen.map((z) => z.text).join("\n"));
-      console.log(`${zeilen.length} Zeile(n) in #${ziel.number}.`);
+      log(`${zeilen.length} Zeile(n) in #${ziel.number}.`);
     }
   }
-  if (rot) process.exit(1);
+  return rot ? 1 : 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main();

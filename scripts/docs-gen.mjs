@@ -14,6 +14,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { collectMarkdown, leseConfigObjekt, mermaidBloecke, parseSections, pruefeMermaid } from "./docs-gen/markdown.mjs";
 import { GENERATORS } from "./docs-gen/registry.mjs";
 
@@ -133,19 +134,19 @@ export function loadConfig(rootDir = ROOT, pfad = DEFAULT_CONFIG) {
 }
 
 /**
- * Kommandozeile: `[--write] [--config <pfad>]`. Gibt den Exit-Code zurück (0 ok, 1 Fehler oder veraltet);
+ * Kommandozeile: `[--write] [--config <pfad>]`. Gibt den Exit-Code zurück (0 ok, 1 Fehler oder veraltet, `AUFRUF_EXIT` bei einem Aufruf-Fehler);
  * `out`/`err` nehmen die Ausgabezeilen entgegen. `config`/`generators` überschreiben Datei und Registry (Tests).
  */
 export function cli(argv, { rootDir = ROOT, config, generators = GENERATORS, out = console.log, err = console.error } = {}) {
-  const write = argv.includes("--write");
-  const ci = argv.indexOf("--config");
+  const { werte, fehler } = flagsLesen(argv, { write: { type: "boolean" }, config: { type: "string" } });
+  if (fehler) {
+    err(`✖ ${fehler.text}\n\nFix: Aufruf: node scripts/docs-gen.mjs [--write] [--config <pfad>]`);
+    return AUFRUF_EXIT;
+  }
+  const write = werte.write === true;
   let cfg = config;
   if (!cfg) {
-    const pfad = ci >= 0 ? argv[ci + 1] : undefined;
-    if (ci >= 0 && !pfad) {
-      err("✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen");
-      return 1;
-    }
+    const pfad = werte.config;
     try {
       cfg = loadConfig(rootDir, pfad);
     } catch (e) {

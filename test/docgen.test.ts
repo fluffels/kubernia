@@ -364,7 +364,7 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     assert.match(r.out, /geschrieben: a\.md/);
     assert.match(lauf(["--write"]).out, /nichts zu tun/);
   });
-  test("--config: eigene Datei wird gelesen; falscher Pfad oder fehlender Wert ergibt Exit 1", () => {
+  test("--config: eigene Datei wird gelesen; falscher Pfad ergibt Exit 1, fehlender Wert und unbekanntes Flag Exit 2", () => {
     const f = { ...files, "x/eigen.json": JSON.stringify({ markdown: ["a.md"] }) };
     const ok = api.cli(["--config", "x/eigen.json"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: () => undefined });
     assert.equal(ok, 0);
@@ -373,7 +373,11 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     assert.equal(falsch, 1);
     assert.match(ausgabe.join(""), /Config nicht lesbar/);
     const ohneWert = api.cli(["--config"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
-    assert.equal(ohneWert, 1);
+    assert.equal(ohneWert, 2);
+    assert.match(ausgabe.at(-1) ?? "", /--config braucht einen Wert/);
+    const bogus = api.cli(["--bogus"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
+    assert.equal(bogus, 2);
+    assert.match(ausgabe.at(-1) ?? "", /Unbekanntes Argument: --bogus/);
   });
   test("--config mit einer Datei, die kein JSON-Objekt ist (null, Liste, Zahl): Exit 1 mit Meldung statt TypeError (#1428 Z19)", () => {
     for (const roh of ["null", "[]", "7"]) {

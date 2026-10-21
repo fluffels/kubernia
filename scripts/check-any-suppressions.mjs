@@ -36,6 +36,7 @@
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BASELINE_FILE = join(ROOT, "any-suppressions.json");
@@ -122,7 +123,13 @@ export function serializeBaseline(map) {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-function main() {
+function main(argv = process.argv.slice(2)) {
+  const { werte, fehler } = flagsLesen(argv, { write: { type: "boolean" } });
+  if (fehler) {
+    console.error(`${fehler.text}
+Aufruf: node scripts/check-any-suppressions.mjs [--write]`);
+    process.exit(AUFRUF_EXIT);
+  }
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const red = (s) => paint("31", s);
@@ -132,7 +139,7 @@ function main() {
   const current = collectSuppressions();
   const total = Object.values(current).reduce((a, b) => a + b, 0);
 
-  if (process.argv.includes("--write")) {
+  if (werte.write) {
     writeFileSync(BASELINE_FILE, serializeBaseline(current));
     console.log(green(`✔ Baseline geschrieben: ${total} \`any\`-Suppression(en) in ${Object.keys(current).length} Datei(en).`));
     return;

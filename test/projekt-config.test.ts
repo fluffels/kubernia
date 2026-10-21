@@ -240,6 +240,9 @@ describe("trenneConfigArg", () => {
     assert.deepEqual(pc.trenneConfigArg(["a", "--config", "p.json", "b"]), { args: ["a", "b"], pfad: "p.json" });
     assert.deepEqual(pc.trenneConfigArg(["a"]), { args: ["a"], pfad: undefined });
     assert.match(pc.trenneConfigArg(["--config"]).fehler ?? "", /Pfad[\s\S]*Fix:/);
+    assert.deepEqual(pc.trenneConfigArg(["--config=p.json", "b"]), { args: ["b"], pfad: "p.json" });
+    assert.deepEqual(pc.trenneConfigArg(["--pr", "5", "--config", "p.json"]), { args: ["--pr", "5"], pfad: "p.json" });
+    assert.match(pc.trenneConfigArg(["--config="]).fehler ?? "", /Pfad/);
   });
 });
 
@@ -269,7 +272,7 @@ describe("cli", () => {
       assert.equal(lauf(["--config", p, k]).code, 1, k);
     }
   });
-  test("fehlender Schlüssel, Objekt statt Skalar, fehlende Config, fehlender Pfad: Exit 1; ohne Schlüssel Exit 2", () => {
+  test("fehlender Schlüssel, Objekt statt Skalar, fehlende Config, Exit 1; Aufruf-Fehler (ohne Schlüssel, fehlender --config-Wert, unbekanntes oder doppeltes Argument) Exit 2", () => {
     const p = mitConfig();
     assert.equal(lauf(["--config", p, "boards.0.gibtsnicht"]).code, 1);
     assert.equal(lauf(["--config", p, "boards"]).code, 1);
@@ -278,8 +281,15 @@ describe("cli", () => {
     const fehlt = lauf(["--config", join(tmp(), "nein.json"), "repo"]);
     assert.equal(fehlt.code, 1);
     assert.match(fehlt.err.join(), /Fix:/);
-    assert.equal(lauf(["--config"]).code, 1);
+    assert.equal(lauf(["--config"]).code, 2);
     assert.equal(lauf([]).code, 2);
+    for (const argv of [["--bogus", "repo"], ["repo", "zwei"], ["--config", p, "--config", p, "repo"], ["--config=", "repo"]]) {
+      const r = lauf(argv);
+      assert.equal(r.code, 2, argv.join(" "));
+      assert.deepEqual(r.out, []);
+      assert.match(r.err.join(), /Fix: node scripts\/projekt-config\.mjs/);
+    }
+    assert.deepEqual(lauf([`--config=${p}`, "repo"]).out, ["acme/demo"]);
   });
 });
 
@@ -300,7 +310,7 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));
-    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
