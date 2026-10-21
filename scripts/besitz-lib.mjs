@@ -236,6 +236,10 @@ const PROJEKTWERT_KENNUNG = "factory:projektwert";
 const PROJEKTWERT_ZEILE = /^# factory:projektwert (\S+)$/;
 const PROJEKTWERT_FOLGE = /^(\s*)([A-Za-z_][\w-]*):/;
 export const PROJEKTWERT_GRUPPEN = ["praefixe", "agenten", "labels"];
+/** Muster für `<gruppe.schluessel>`-Platzhalter der Projektwert-Gruppen; frische Instanz (Flag `g`, eigener `lastIndex`) je Aufruf. */
+export function platzhalterMuster() {
+  return new RegExp(`<(${PROJEKTWERT_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
+}
 const YAML_BLANK = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
 const CONFIG_PFAD = ".factory/projekt.json";
 
