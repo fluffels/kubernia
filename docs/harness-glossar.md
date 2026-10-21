@@ -94,6 +94,7 @@
 
 | Begriff | Bedeutung | Mehr dazu |
 |---|---|---|
+| Entscheidungsprotokoll | Das Verfahren für Ermessens-Weichen und Hand-offs: Reversibilität klären, bei hoher Konfidenz handeln, bei Unsicherheit die billigste Methode (Messen, Recherche, A/B, gegenlesender Subagent) mit Token-Deckel, Ergebnis als „Entscheidung: X, weil Y“ im PR; Rückfrage nur bei Irreversiblem oder Außenwirkung. | [Entscheidungsprotokoll](factory/entscheidungsprotokoll.md) |
 | Langfuse-Vorbedingung | Kein Ticketlauf startet, solange Langfuse nicht erreichbar ist (`GET /api/public/health` muss 200 liefern), sonst bleibt der Lauf ungemessen. `scripts/langfuse-vorbedingung.mjs` prüft das mit 3 s Frist: Exit 1 stoppt den Ticket-Skill, als SessionStart-Hook (`--sessionstart`) warnt es nur. Nicht Teil des Takts. | [FAQ](agent-harness-faq.md#langfuse-lokal-aus) |
 | Langfuse | Die Messplattform für Agentenläufe: Tokens, Kosten und Läufe je Modell und Rolle. | [ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md), [Token- und Loop-Baseline](model-routing.md#5-token--und-loop-baseline-1068) |
 | Messfenster | Die Body-Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>` eines Nachmessungs-Tickets: frei erst, wenn #<nr> geschlossen ist und seit dessen `closedAt` mindestens k verschiedene Tickets (ohne das wartende) mit Läufen des Agent-Typs gestartet sind (Untergrenze, keine Messregel). | [Messfenster](ticket-reihenfolge.md#messfenster-1589) |

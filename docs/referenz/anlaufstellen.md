@@ -95,6 +95,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
+| [factory/entscheidungsprotokoll.md](../factory/entscheidungsprotokoll.md) | wenn du vor einer Ermessens-Weiche oder einem Hand-off (`festgefahren`, Zusatzpass, Override) stehst und entscheiden willst, ob und womit du sie selbst klärst |
 | [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
 | [lens-gegenprobe-2026-10-09.md](../lens-gegenprobe-2026-10-09.md) | Momentaufnahme: Rohwerte und Rezept der Lens-Gegenprobe (Opus gegen Sonnet gegen Haiku je Brille); die Entscheidung steht in model-routing.md |
 | [lens-gegenprobe-2026-10-15.md](../lens-gegenprobe-2026-10-15.md) | Momentaufnahme: Gegenprobe `omitClaudeMd: true` für die Lens (Kontextdateien mit und ohne), Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |
