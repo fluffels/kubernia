@@ -10,6 +10,7 @@
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istVertraut } from "./fremdtext-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie, bricht schon der Import ab (kein stiller Standardwert, #1611).
 const PROJEKT = ladeProjektConfig();
@@ -160,13 +161,15 @@ export function kandidatenSammelticket(offene, titel, { nach = null } = {}) {
 }
 
 /**
- * Das höchste Ticket der absteigend geprüften `kandidaten`, das der Direktabruf `einzeln(nr)` (REST-Form: `state`, `assignees`) als offen und
- * ungeclaimt bestätigt; sonst null. Die Listen-Abfrage hinkt nach, nur der Einzelabruf ist maßgeblich. Ein werfender Abruf wirft weiter. Pur bis auf `einzeln`.
+ * Das höchste Ticket der absteigend geprüften `kandidaten`, das der Direktabruf `einzeln(nr)` (REST-Form: `state`, `assignees`, `user`) als offen,
+ * ungeclaimt und von einem vertrauten Autor (`istVertraut`, `owner` Pflicht) bestätigt; sonst null. Die Listen-Abfrage hinkt nach, nur der
+ * Einzelabruf ist maßgeblich; ein Fremder mit dem exakten Titel wird nie gewählt. Ein werfender Abruf wirft weiter. Pur bis auf `einzeln`.
  */
-export function waehleBestaetigtes(kandidaten, einzeln) {
+export function waehleBestaetigtes(kandidaten, einzeln, owner) {
+  if (typeof owner !== "string" || owner === "") throw new Error("waehleBestaetigtes: owner fehlt (Pflicht für die Autorprüfung)");
   for (const k of [...kandidaten].sort((a, b) => b.number - a.number)) {
     const e = einzeln(k.number);
-    if (e && e.state === "open" && (e.assignees ?? []).length === 0) return k;
+    if (e && e.state === "open" && (e.assignees ?? []).length === 0 && istVertraut(e.user ?? null, owner)) return k;
   }
   return null;
 }

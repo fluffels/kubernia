@@ -256,44 +256,62 @@ describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
 });
 
 describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist idempotent gegen den Wettlauf)", () => {
-  type Roh = { state: string; assignees: unknown[] };
+  type Roh = { state: string; assignees: unknown[]; user?: { login: string; type: string } | null };
+  const ICH = { login: "fluffels", type: "User" };
   type Dub = { art: "keine" | "eigenes-schliessen" | "warnung"; aelter?: number };
   const Z = raw as unknown as {
-    waehleBestaetigtes: (kandidaten: Offen[], einzeln: (nr: number) => Roh) => Offen | null;
+    waehleBestaetigtes: (kandidaten: Offen[], einzeln: (nr: number) => Roh, owner?: string) => Offen | null;
     dublettenEntscheidung: (a: { eigenNr: number; titel: string; eigenKommentare: number; andere: Offen[] }) => Dub;
   };
   const T = "Harness-Härtung (gesammelt)";
   const o = (number: number, titel = T, assignees: string[] = []): Offen => ({ number, titel, assignees, createdAt: "2026-10-01T00:00:00Z" });
-  const offen = (): Roh => ({ state: "open", assignees: [] });
+  const offen = (): Roh => ({ state: "open", assignees: [], user: ICH });
 
   test("nimmt das höchste bestätigte Ticket; der Einzelabruf entscheidet, nicht die (nachhinkende) Liste", () => {
     const abgerufen: number[] = [];
     const r = Z.waehleBestaetigtes([o(5), o(9), o(7)], (nr) => {
       abgerufen.push(nr);
       return offen();
-    });
+    }, "fluffels");
     expect(r?.number).toBe(9);
     expect(abgerufen, "ein Treffer genügt, absteigend").toEqual([9]);
   });
 
   test("Liste sagt offen, Einzelabruf sagt geschlossen (das war der Wettlauf #1560/#1561) → das nächste", () => {
-    const r = Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "closed", assignees: [] } : offen()));
+    const r = Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "closed", assignees: [], user: ICH } : offen()), "fluffels");
     expect(r?.number).toBe(7);
   });
 
   test("geclaimt laut Einzelabruf → das nächste; alle ungültig oder leer → null", () => {
-    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "open", assignees: [{ login: "fluffels" }] } : offen()))?.number).toBe(7);
-    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "closed", assignees: [] }))).toBeNull();
-    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [{ login: "x" }] }))).toBeNull();
-    expect(Z.waehleBestaetigtes([], () => offen())).toBeNull();
+    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "open", assignees: [{ login: "fluffels" }], user: ICH } : offen()), "fluffels")?.number).toBe(7);
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "closed", assignees: [], user: ICH }), "fluffels")).toBeNull();
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [{ login: "x" }], user: ICH }), "fluffels")).toBeNull();
+    expect(Z.waehleBestaetigtes([], () => offen(), "fluffels")).toBeNull();
   });
 
   test("ein werfender Einzelabruf wirft weiter (kein stilles Weiterlaufen mit unbestätigtem Stand)", () => {
     expect(() =>
       Z.waehleBestaetigtes([o(9)], () => {
         throw new Error("gh kaputt");
-      }),
+      }, "fluffels"),
     ).toThrow(/gh kaputt/);
+  });
+
+  test("Autorprüfung (W14): ein Fremder mit exaktem Titel wird nicht gewählt, der Bot und der Owner schon", () => {
+    const fremd: Roh = { state: "open", assignees: [], user: { login: "fremd", type: "User" } };
+    const bot: Roh = { state: "open", assignees: [], user: { login: "github-actions[bot]", type: "Bot" } };
+    expect(Z.waehleBestaetigtes([o(9)], () => fremd, "fluffels")).toBeNull();
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [] }), "fluffels"), "ohne user fail-closed").toBeNull();
+    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? fremd : offen()), "fluffels")?.number).toBe(7);
+    expect(Z.waehleBestaetigtes([o(9)], () => bot, "fluffels")?.number).toBe(9);
+  });
+
+  test("ohne owner wirft es, bevor ein Abruf läuft (Pflicht-Parameter)", () => {
+    let abgerufen = 0;
+    const einzeln = (): Roh => (abgerufen++, offen());
+    expect(() => Z.waehleBestaetigtes([o(9)], einzeln)).toThrow(/owner/);
+    expect(() => Z.waehleBestaetigtes([o(9)], einzeln, "")).toThrow(/owner/);
+    expect(abgerufen).toBe(0);
   });
 
   test("Dublette: ein anderes offenes ungeclaimtes Ticket gleichen Titels mit kleinerer Nummer → eigenes-schliessen (nennt das ältere)", () => {
