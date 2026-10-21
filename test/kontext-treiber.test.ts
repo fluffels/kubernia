@@ -776,15 +776,15 @@ describe("parseArgs strikt (#1790)", () => {
 });
 
 describe("sessions je Zeile (#1814 L8)", () => {
-  const mitDatei = (l: Lauf, datei: string | undefined): Lauf => ({ ...l, datei } as Lauf);
+  const mitDatei = (l: Lauf, datei: string | undefined): Lauf => ({ ...l, datei: undefined, session: datei?.split("/")[0] } as Lauf);
   const cl = [{ min: 1 }, { min: 2 }];
   type Zeile = { ticket: number | null; sessions: string[] };
   const zeilen = (e: JeEingabe) => (je(e) as unknown as { laeufe: Zeile[] }).laeufe;
   const flach = (e: Omit<JeEingabe, "jeTicket">) => (K as unknown as { kontextTreiber: (e: JeEingabe) => { laeufe: Zeile[] } }).kontextTreiber({ ...e, jeTicket: false }).laeufe;
-  test("flacher Modus: erstes Segment von datei", () => {
+  test("flacher Modus: das Feld session des Laufs", () => {
     expect(flach({ laeufe: [mitDatei(lauf("#1 x", cl), "sess-a/subagents/agent-1.jsonl")] })[0].sessions).toEqual(["sess-a"]);
   });
-  test("ohne datei: leere Liste, kein Absturz", () => {
+  test("ohne session: leere Liste, kein Absturz", () => {
     expect(flach({ laeufe: [lauf("#1 x", cl)] })[0].sessions).toEqual([]);
   });
   test("je Ticket: sortiert und eindeutig über alle Läufe des Tickets", () => {

@@ -684,8 +684,9 @@ describe("laufErgebnis (git und gh injiziert)", () => {
           const t = new Date(Date.parse(von) - stunden * 3600_000);
           utimesSync(join(sub, `${name}.jsonl`), t, t);
         }
-        const geladen = mod.ladeStartLaeufe(dir, "x-agent", von) as { datei: string }[];
+        const geladen = mod.ladeStartLaeufe(dir, "x-agent", von) as { datei: string; session: string }[];
         assert.deepEqual(geladen.map((l) => l.datei), ["s1/subagents/a-neu.jsonl"]);
+        assert.deepEqual(geladen.map((l) => l.session), ["s1"]);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
