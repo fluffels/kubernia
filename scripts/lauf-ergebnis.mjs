@@ -23,7 +23,8 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
-import { parseNachweis } from "./nachweis-lib.mjs";
+import { parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { issueKommentare } from "./fremdtext-lib.mjs";
 import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
@@ -121,7 +122,7 @@ export function abnahmeVon(body, abnahme, zeilen) {
 }
 
 /** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt, `konfigZeilen` sind die Commit-Zeilen der Projekt-Config (`commitZeilen`). Pure. Liefert Zeilen und Kennzahlen. */
-export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen }) {
+export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen, offenMitFix = 0 }) {
   const eintraege = prs.map((pr) => {
     const mergeSha = pr.mergeCommit?.oid ?? "";
     const commit = commits.find((c) => c.sha === mergeSha);
@@ -180,10 +181,11 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
         ohne: eintraege.filter((z) => z.abnahme === null).length,
       },
       // Abnahme-Fix (#1808): PRs mit mehr als einem Abnahme-Durchgang (der Fix nach Urteil `fix`), davon mit Festgefahren-Label (Hand-off).
-      // Nur gemergte PRs: ein nie gemergter Hand-off-PR fehlt in dieser Zahl.
+      // `mitFix` zählt nur gemergte PRs; der offene Hand-off-PR steht getrennt in `offenMitFix` (nie in `mitFix` addiert).
       abnahmeFix: {
         mitFix: eintraege.filter((z) => z.abnahme?.durchgaenge >= 2).length,
         mitFixUndFestgefahren: eintraege.filter((z) => z.abnahme?.durchgaenge >= 2 && z.festgefahren > 0).length,
+        offenMitFix,
       },
     },
   };
@@ -204,20 +206,50 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   const a = k.abnahme;
   out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne gültige Abnahme-Zeile ${a.ohne}`);
-  out.push(`Abnahme-Fix: ${k.abnahmeFix.mitFix} PRs, davon mit Hand-off: ${prozent(k.abnahmeFix.mitFixUndFestgefahren, k.abnahmeFix.mitFix)}`);
+  out.push(`Abnahme-Fix: ${k.abnahmeFix.mitFix} PRs, davon mit Hand-off: ${prozent(k.abnahmeFix.mitFixUndFestgefahren, k.abnahmeFix.mitFix)}; offen (Hand-off, nicht gemergt): ${k.abnahmeFix.offenMitFix}`);
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
   return out.join("\n");
 }
 
-/** Commit-Zeilen und Festgefahren-Label aus der Projekt-Config (`ladeConfig`, Standard: die echte); wirft mit der Meldung des Laders. */
+/** Commit-Zeilen, Festgefahren-Label und Besitzer (`repo` = owner/name) aus der Projekt-Config (`ladeConfig`, Standard: die echte); wirft mit der Meldung des Laders. */
 function konfigurationAus(ladeConfig) {
   const config = ladeConfig();
-  return { zeilen: commitZeilenAus(config), label: labelAus(config, "festgefahren") };
+  const owner = typeof config?.repo === "string" ? config.repo.split("/")[0] : undefined;
+  return { zeilen: commitZeilenAus(config), label: labelAus(config, "festgefahren"), owner };
+}
+
+/** Höchster gültiger Abnahme-Durchgang aus den Kommentaren (nur vertraute Autoren, der Hand-off-Marker zählt nie); 0 ohne Marker. Pure. */
+export function hoechsterDurchgang(kommentare, owner, zeilen) {
+  return Math.max(0, ...vertrauteAbnahmeMarker(kommentare, owner, zeilen).map((m) => m.durchgang));
+}
+
+/**
+ * Offene PRs mit Festgefahren-Label (Hand-off), erstellt im Fenster, im Ticketfilter, mit höchstem gültigem Abnahme-Durchgang ≥ 2 (#1814):
+ * der Hand-off-PR, den `abnahmeFix.mitFix` als nie gemergter PR nicht sieht. Jeder gh-Fehler und jede unlesbare Antwort ist ein DatenFehler (keine stille 0).
+ */
+function zaehleOffeneMitFix({ gh, label, von, bis, tickets, ohne, zeilen, owner }) {
+  const json = (args) => {
+    try {
+      return JSON.parse(gh(args));
+    } catch (e) {
+      throw e instanceof DatenFehler ? e : new DatenFehler(`gh ${args.slice(0, 2).join(" ")}: Antwort ist kein JSON.`);
+    }
+  };
+  const liste = json(["pr", "list", "--state", "open", "--base", "main", "--label", label, "--limit", String(PR_LIMIT), "--json", "number,title,createdAt,closingIssuesReferences"]);
+  if (!Array.isArray(liste)) throw new DatenFehler("gh pr list (offen): Antwort ist keine Liste.");
+  if (liste.length >= PR_LIMIT) throw new DatenFehler(`Liste offener PRs bei ${PR_LIMIT} abgeschnitten.`);
+  const t0 = new Date(von).getTime();
+  const t1 = new Date(bis).getTime();
+  const imFenster = liste
+    .filter((p) => new Date(p.createdAt).getTime() >= t0 && new Date(p.createdAt).getTime() <= t1)
+    .filter((p) => passtTicketFilter(ticketVon(p), { tickets, ohne }));
+  if (imFenster.length > 0 && !owner) throw new DatenFehler("Besitzer des Repos unbekannt (repo der Projekt-Config): vertraute Abnahme-Marker nicht prüfbar.");
+  return imFenster.filter((p) => hoechsterDurchgang(issueKommentare(p.number, json), owner, zeilen) >= 2).length;
 }
 
 /** Holt die Daten über `runGit`/`runGh` (injizierbar) und bewertet. Wirft DatenFehler bei Lücken. */
-export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tickets = [], ohne = [], ladeConfig = ladeProjektConfig }) {
-  const { zeilen, label } = konfigurationAus(ladeConfig);
+export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tickets = [], ohne = [], ladeConfig = ladeProjektConfig, owner: ownerArg }) {
+  const { zeilen, label, owner: ownerConfig } = konfigurationAus(ladeConfig);
   const gh = (args) => {
     try {
       return runGh(args);
@@ -274,7 +306,8 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date(), tick
       festgefahren = { ...festgefahren, ...festgefahrenAusAntwort(json, nummern, label) };
     }
   }
-  return bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen: zeilen });
+  const offenMitFix = zaehleOffeneMitFix({ gh, label, von, bis, tickets, ohne, zeilen, owner: ownerArg ?? ownerConfig });
+  return bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen: zeilen, offenMitFix });
 }
 
 /**

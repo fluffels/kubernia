@@ -501,10 +501,10 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.match(zeile({ liste: [], offen: [] }), /offen \(Hand-off, nicht gemergt\): 0/);
     });
     test("gh-Fehler bei Liste oder Kommentaren ist ein Datenfehler, keine stille 0", () => {
-      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: "fluffels" } as never);
+      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: "fluffels" });
       assert.throws(lauf({ liste: [], fehler: "--state open" }), mod.DatenFehler);
       assert.throws(lauf({ liste: [], offen: [offenPr()], fehler: "/comments" }), mod.DatenFehler);
-      assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: (a) => (a.includes("open") ? "kein json" : gh({ liste: [] })(a)), owner: "fluffels" } as never), mod.DatenFehler);
+      assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: (a) => (a.includes("open") ? "kein json" : gh({ liste: [] })(a)), owner: "fluffels" }), mod.DatenFehler);
     });
   });
   test.each([3, 50, 51, 60])("gh-Aufrufe wachsen nicht je PR: bei %i PRs höchstens 2 + 1 + ⌈N/50⌉", (n) => {
@@ -558,7 +558,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.ok(query.includes("p51:") && !query.includes("p50:") && !query.includes("p52:"), query);
       const leer: string[][] = [];
       lauf({ tickets: [999] }, leer);
-      assert.equal(leer.length, 1);
+      assert.equal(leer.length, 2, "Liste gemergter plus Liste offener PRs, sonst nichts");
     });
     test("parseArgs: wiederholbare --ticket/--ohne, Nicht-Ganzzahl ist ein Aufruf-Fehler", () => {
       assert.deepEqual(mod.parseArgs(["--von", "a", "--bis", "b", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--json"]), { von: "a", bis: "b", tickets: [1, 2], ohne: [3], json: true, fehler: null });
