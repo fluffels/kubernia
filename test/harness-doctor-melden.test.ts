@@ -100,6 +100,9 @@ describe("harness-doctor-melden: lauf", () => {
       assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body }], OWNER), true, body);
     }
     assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body: z.replace("- [ ]", "[ ]") }], OWNER), false);
+    // linke Grenze: eine zitierte oder durch eine abgehakte Zeile erwähnte offene Zeile ist keine offene Zeile
+    assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body: `> ${z}` }], OWNER), false);
+    assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body: `- [x] ersetzt ${z}` }], OWNER), false);
   });
 
   test("ohne ungeclaimtes Sammelticket: alles schon gemeldet bleibt grün (nichts zu posten), eine neue Lücke ist ::error::", () => {

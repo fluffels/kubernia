@@ -80,7 +80,7 @@ function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0, sammelAu
   };
   const spawn = (args: string[]) => {
     r.sammel.push(args);
-    return { status: sammelStatus, stdout: sammelAusgabe ?? undefined, stderr: "" };
+    return { status: sammelStatus, stdout: sammelAusgabe ?? undefined, stderr: sammelAusgabe === null ? null : "" };
   };
   r.code = doctor.main(argv, { rootDir: root, gh, spawn, langfuse: () => assert.fail("Langfuse wird bei --einrichten nicht geprüft"), out: (s: string) => r.out.push(s), err: (s: string) => r.err.push(s) });
   return r;
@@ -225,7 +225,7 @@ describe("harness-doctor --einrichten", () => {
     assert.equal(r.code, 1);
     const z = r.out.find((x) => x.startsWith("FEHLER Sammelticket:")) ?? "";
     assert.match(z, /Exit \?/);
-    assert.equal(r.out.some((x) => x.includes("undefined")), false);
+    assert.equal(r.out.some((x) => x.includes("undefined") || x.includes("null")), false);
   });
 
   test("ein fehlschlagendes Sammelticket ist FEHLER mit Exit 1", () => {
