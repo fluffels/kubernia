@@ -162,7 +162,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
     const log: string[] = [];
     const deps = {
       ladeConfig: () => ({ labels: { harness: "area:harness" } }),
-      ladeLibs: async () => ({ REPO: "o/r", platziereOben: (nr: number) => sortiert.push(nr) }),
+      ladeLibs: () => Promise.resolve({ REPO: "o/r", platziereOben: (nr: number) => sortiert.push(nr) }),
       eintraegeLaden: () => [e("a", "2000-01-01")],
       ticketsLaden: () => [] as T[],
       legen: (eintrag: E, label: string, repo: string) => (angelegt.push([eintrag.id, label, repo]), 7),

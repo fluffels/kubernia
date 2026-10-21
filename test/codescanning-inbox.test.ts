@@ -634,7 +634,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
     const libs = {
       OWNER: OWNER,
       REPO: "o/r",
-      SAMMELTICKET_TITEL_LISTE,
+      SAMMELTICKET_TITEL_LISTE: SAMMELTICKET_TITEL_LISTE as string[],
       ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5, titel: "Sammel" }], kommentare: [] }),
       vertrauteIssues: () => [],
       offeneTitel: () => [],
@@ -644,7 +644,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
     };
     const deps = {
       ladeConfig: () => ({ labels: { harness: "area:harness" } }),
-      ladeLibs: async () => libs,
+      ladeLibs: () => Promise.resolve(libs),
       ladeSeiten: () => [roh({ tool: { name: "Semgrep" } })],
       log: (m: string) => log.push(m),
       err: () => undefined,

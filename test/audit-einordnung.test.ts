@@ -170,7 +170,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
       postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
       waehleSammelticket: (offene: { number: number }[]) => offene[0],
     };
-    const deps = { ladeLibs: async () => libs, npmAuditLaden: () => auditJson, alertsLaden: () => [], log: (m: string) => log.push(m), err: () => undefined };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => auditJson, alertsLaden: () => [], log: (m: string) => log.push(m), err: () => undefined };
     return { gepostet, log, deps };
   };
   test("mit Flag: [dry-run]-Zeile im Log, nichts gepostet", async () => {
