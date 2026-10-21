@@ -19,7 +19,7 @@ import { describe, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
 const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
-import { liesTicketAblauf, setzeAgentenWerte, TICKET_ABLAUF } from "../support/ticket-ablauf";
+import { liesTicketAblauf, setzeAgentenWerte, setzeProjektwerte, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const lies = (rel: string): string => readFileSync(ROOT + rel, "utf8");
@@ -150,6 +150,13 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
   test("Platzhalter: unbekannter Schlüssel wirft, bekannter wird ersetzt", () => {
     assert.throws(() => setzeAgentenWerte("<agenten.x>", { planer: "p" }), /Unbekannter Platzhalter/);
     assert.equal(setzeAgentenWerte("<agenten.planer>!", { planer: "p" }), "p!");
+  });
+  test("setzeProjektwerte: alle drei Gruppen werden ersetzt, eine fehlende Gruppe oder ein fehlender Schlüssel wirft", () => {
+    const cfg = { agenten: { planer: "p" }, labels: { festgefahren: "l:f" }, praefixe: { worktree: "w-" } };
+    assert.equal(setzeProjektwerte("<agenten.planer> <labels.festgefahren> <praefixe.worktree>1", cfg), "p l:f w-1");
+    assert.throws(() => setzeProjektwerte("<labels.x>", { ...cfg, labels: {} }), /Unbekannter Platzhalter <labels\.x>/);
+    assert.throws(() => setzeProjektwerte("<praefixe.worktree>", { agenten: {}, labels: {} }), /Unbekannter Platzhalter <praefixe\.worktree>/);
+    assert.equal(setzeProjektwerte("<gruppe.schluessel> <agenten.…>", cfg), "<gruppe.schluessel> <agenten.…>");
   });
 });
 
