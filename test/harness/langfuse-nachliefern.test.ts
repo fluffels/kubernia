@@ -45,6 +45,7 @@ const N = rawNach as unknown as {
   GESENDET_ABLAUF_MS: number;
   GESAMTFRIST_MS: number;
   parseArgs: (a: string[]) => Args;
+  fehlerText: (e: unknown) => string;
   nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
 };
 const O = rawOtlp as unknown as {
@@ -1079,6 +1080,21 @@ describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
     ["sendeScore", (z) => API2.sendeScore({}, z)],
   ];
 
+  test("fehlerText: Ursache (Code oder Meldung) in Klammern, ohne Ursache und bei Nicht-Error unverändert", () => {
+    expect(N.fehlerText(new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }) }))).toBe("fetch failed (ECONNREFUSED)");
+    expect(N.fehlerText(new TypeError("fetch failed", { cause: new Error("socket hang up") }))).toBe("fetch failed (socket hang up)");
+    expect(N.fehlerText(new TypeError("fetch failed"))).toBe("fetch failed");
+    expect(N.fehlerText(new Error("x", { cause: "kein Objekt" }))).toBe("x");
+    expect(N.fehlerText("roh geworfen")).toBe("roh geworfen");
+    expect(N.fehlerText(undefined)).toBe("undefined");
+  });
+  test("Fehlerzeile im Protokoll trägt die Ursache des Fetch-Fehlers", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const fetchImpl: Fetch = () => Promise.reject(new TypeError("fetch failed", { cause: Object.assign(new Error("x"), { code: "ECONNRESET" }) }));
+    const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
+    expect(r.protokoll.fehler.length).toBeGreaterThan(0);
+    for (const f of r.protokoll.fehler) expect(f.meldung).toContain("fetch failed (ECONNRESET)");
+  });
   test("Standardfrist: 30 s", () => {
     expect(API2.ANFRAGE_FRIST_MS).toBe(30_000);
   });
