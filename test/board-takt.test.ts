@@ -352,6 +352,54 @@ describe("spielquote-lib (#1729)", () => {
   test("entscheideSeite: ungültige Zähler werfen (negativ, Bruch, Text, null ohne Factory-Arbeit)", () => {
     for (const bad of [-1, 1.5, "3", null, undefined, Number.NaN]) expect(() => Q.entscheideSeite({ produktMerges: bad as number }), String(bad)).toThrow(/ganze Zahl/);
   });
+  describe("sammelStand (#1798)", () => {
+    type I = { number: number; title: string; state: string; closedAt?: string | null; assignees?: unknown[] };
+    const SS = (rawQuote as unknown as { sammelStand: (i: I[]) => { abschluss: { number: number; closedAt: string } | null; sammelIssues: Set<number>; inArbeit: number | null } }).sammelStand;
+    const H = "Harness-Härtung (gesammelt)";
+    test("leere Liste: kein Abschluss, keine Sammeltickets, nichts in Arbeit", () => {
+      expect(SS([])).toEqual({ abschluss: null, sammelIssues: new Set(), inArbeit: null });
+    });
+    test("das jüngste geschlossene Sammelticket gewinnt, ungültiges closedAt wird übersprungen, state ohne Groß/Klein", () => {
+      const s = SS([
+        { number: 1, title: H, state: "CLOSED", closedAt: "2026-10-01T00:00:00Z" },
+        { number: 2, title: H, state: "closed", closedAt: "2026-10-05T00:00:00Z" },
+        { number: 3, title: H, state: "CLOSED", closedAt: "kein-datum" },
+        { number: 4, title: H, state: "OPEN", closedAt: "2026-10-09T00:00:00Z" },
+      ]);
+      expect(s.abschluss).toEqual({ number: 2, closedAt: "2026-10-05T00:00:00Z" });
+      expect([...s.sammelIssues].sort()).toEqual([1, 2, 3, 4]);
+    });
+    test("Langfuse-Sammelticket zählt zu sammelIssues, nie als Abschluss und nie als in Arbeit", () => {
+      const s = SS([
+        { number: 5, title: "Langfuse-Befunde (gesammelt)", state: "CLOSED", closedAt: "2026-10-09T00:00:00Z" },
+        { number: 6, title: "Langfuse-Befunde (gesammelt)", state: "OPEN", assignees: [{ login: "x" }] },
+        { number: 7, title: "Etwas anderes (gesammelt)", state: "OPEN", assignees: [{ login: "x" }] },
+      ]);
+      expect(s).toEqual({ abschluss: null, sammelIssues: new Set([5, 6]), inArbeit: null });
+    });
+    test("offen mit Assignee ist in Arbeit, ohne Assignee oder ohne assignees-Feld nicht", () => {
+      expect(SS([{ number: 8, title: H, state: "OPEN", assignees: [{ login: "x" }] }]).inArbeit).toBe(8);
+      expect(SS([{ number: 8, title: H, state: "OPEN", assignees: [] }]).inArbeit).toBeNull();
+      expect(SS([{ number: 8, title: H, state: "OPEN" }]).inArbeit).toBeNull();
+    });
+    test("keine Liste: wirft", () => {
+      expect(() => SS(null as unknown as I[])).toThrow(/Liste/);
+    });
+  });
+  describe("harnessIssuesAnfrage und harnessIssuesAus (#1798)", () => {
+    const L = rawQuote as unknown as { harnessIssuesAnfrage: (a: { repo: string; label: string; seit: string }) => string[]; harnessIssuesAus: (s: unknown) => Set<number> };
+    test("Anfrage: paginiert, Label kodiert, seit durchgereicht", () => {
+      expect(L.harnessIssuesAnfrage({ repo: "o/r", label: "area:harness x", seit: "2026-10-01T00:00:00.000Z" })).toEqual([
+        "api", "--paginate", "--slurp", "repos/o/r/issues?state=closed&labels=area%3Aharness%20x&since=2026-10-01T00:00:00.000Z&per_page=100",
+      ]);
+    });
+    test("Aus: Nummern ohne PRs über alle Seiten; falsche Form wirft", () => {
+      expect(L.harnessIssuesAus([[{ number: 1 }, { number: 2, pull_request: {} }], [{ number: 3 }]])).toEqual(new Set([1, 3]));
+      expect(L.harnessIssuesAus([[null, { number: 4 }]])).toEqual(new Set([4]));
+      expect(() => L.harnessIssuesAus({})).toThrow(/Antwortform/);
+      expect(() => L.harnessIssuesAus(null)).toThrow(/Antwortform/);
+    });
+  });
 });
 
 describe("letzterTreffer (#1428 Z21)", () => {

@@ -33,7 +33,7 @@ import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 export const MAX_FAILED_PUSHES = 4;
 
 /** Das Label, das der Wächter bei Erreichen der Schwelle setzt (`labels.festgefahren`); wirft ohne den Schlüssel, kein stiller Standardwert. */
-export function stuckLabel(config = ladeProjektConfig()) {
+export function stuckLabel(config) {
   return labelAus(config, "festgefahren");
 }
 
@@ -87,7 +87,7 @@ export function main({ config } = {}) {
   // Config zuerst, vor jedem gh-Aufruf: fehlt `labels.festgefahren`, ist der Lauf rot (kein stiller Standardwert; Netzfehler bleiben graceful).
   let label;
   try {
-    label = stuckLabel(config);
+    label = stuckLabel(config ?? ladeProjektConfig());
   } catch (err) {
     console.error(`✖ ${err.message}`);
     return 1;

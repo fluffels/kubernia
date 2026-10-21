@@ -23,11 +23,8 @@ export function boardFuerRolle(rolle) {
   return Object.freeze({ ...b });
 }
 
-/** Label, das ein Issue dem Factory-Board zuordnet (Trennregel: Harness-Arbeit auf das Factory-Board, alles andere auf das Produkt-Board). */
-export const FACTORY_LABEL = labelAus(PROJEKT, "harness");
-
-/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste oder ohne Schlüssel wirft sie. */
-export function boardRolleFuer(labels, config = PROJEKT) {
+/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste, ohne `config` oder ohne Schlüssel wirft sie. */
+export function boardRolleFuer(labels, config) {
   if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
   const harness = labelAus(config, "harness");
   return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
@@ -51,7 +48,7 @@ export function ankerFehler({ anchor, rolle, produkt, factory }) {
  * behalten die Board-Reihenfolge; ein Item, das nur auf dem falschen Board steht (`falsch`, Nummern), zählt auf seiner Trennregel-Seite
  * und hängt hinten an; eine Nummer auf beiden Boards (`doppelt`, aufsteigend) zählt nur auf dem Board laut Trennregel. Eingaben bleiben unverändert.
  */
-export function seitenListen(produkt, factory) {
+export function seitenListen(produkt, factory, config) {
   const nr = (liste) => new Set(liste.map((i) => i.number));
   const aufFactory = nr(factory);
   const doppelt = [...nr(produkt)].filter((n) => aufFactory.has(n)).sort((a, b) => a - b);
@@ -61,7 +58,7 @@ export function seitenListen(produkt, factory) {
   const falsch = [];
   for (const [board, liste] of [["produkt", produkt], ["factory", factory]]) {
     for (const i of liste) {
-      const soll = boardRolleFuer(i.labels ?? []);
+      const soll = boardRolleFuer(i.labels ?? [], config);
       if (board === soll) richtig[soll].push(i);
       else if (!beide.has(i.number)) {
         verirrt[soll].push(i);
@@ -79,13 +76,13 @@ export function seitenListen(produkt, factory) {
  * (auch leer) oder ohne Issue-Node-ID wird gemeldet (`gemeldet`) und nicht angefasst. `ende`: ID des letzten Items je Board, das der Lauf nicht
  * selbst entfernt (null = leer), der Anker für das erste umgezogene Item. Geschlossene Items bleiben als Historie. Eingaben bleiben unverändert.
  */
-export function umzugsPlan(produkt, factory) {
+export function umzugsPlan(produkt, factory, config) {
   const stehtAuf = { produkt: new Set(produkt.map((i) => i.number)), factory: new Set(factory.map((i) => i.number)) };
   const schritte = [];
   const gemeldet = [];
   for (const [von, liste] of [["produkt", produkt], ["factory", factory]]) {
     for (const i of liste) {
-      const nach = boardRolleFuer(i.labels ?? []);
+      const nach = boardRolleFuer(i.labels ?? [], config);
       if (i.state !== "open" || nach === von) continue;
       const kopf = { number: i.number, title: i.title ?? "", von, nach, quelleId: i.id };
       if (stehtAuf[nach].has(i.number)) schritte.push({ aktion: "entfernen", ...kopf });
@@ -504,7 +501,7 @@ export function ankerNummerFuerPosition(items, n, ohneNr = null) {
  * null/fehlend, wenn nicht ladbar). Aufgenommen werden nur offene Issues (keine PRs) mit `node_id`; der `--after`-Anker (`ankerNr`) nie
  * automatisch. Liefert `{ aufnehmen: [{ number, nodeId, title, rolle }], abgelehnt: [{ number, grund }] }`. Pur.
  */
-export function aufnahmePlan(fehlend, issues, ankerNr = null) {
+export function aufnahmePlan(fehlend, issues, { config, ankerNr = null } = {}) {
   const aufnehmen = [];
   const abgelehnt = [];
   for (const nr of fehlend) {
@@ -514,7 +511,7 @@ export function aufnahmePlan(fehlend, issues, ankerNr = null) {
     else if (i.pull_request) abgelehnt.push({ number: nr, grund: "ist ein Pull Request" });
     else if (i.state !== "open") abgelehnt.push({ number: nr, grund: "Issue ist geschlossen" });
     else if (typeof i.node_id !== "string" || i.node_id === "") abgelehnt.push({ number: nr, grund: "Antwort ohne node_id" });
-    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? []) });
+    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? [], config) });
   }
   return { aufnehmen, abgelehnt };
 }

@@ -29,7 +29,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen, ungeclaimt } from "./board-lib.mjs";
-import { entscheideSeite, produktMergesSeitFactory } from "./spielquote-lib.mjs";
+import { entscheideSeite, harnessIssuesAnfrage, harnessIssuesAus, produktMergesSeitFactory } from "./spielquote-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -185,12 +185,12 @@ function waehleSeite(listen, ladeQuote) {
  * wie `waehleNaechstes`; `ladeQuote` nur bei Bedarf (wirft bei Fehlern, der Lauf endet mit Exit 2). Liefert
  * `{ ticket, uebersprungen, quote: { seite, produktMerges, grund, rueckfall }, hinweise? }`. Pur bis auf `ladeQuote`.
  */
-export function waehleUeberBoards({ produkt, factory, bereich = null, ladeQuote, ...belegung }) {
-  const listen = seitenListen(produkt, factory);
+export function waehleUeberBoards({ produkt, factory, bereich = null, ladeQuote, config, ...belegung }) {
+  const listen = seitenListen(produkt, factory, config);
   const hinweise = listenHinweise(listen);
   const uebersprungen = [];
   const lauf = (items, extra) => {
-    const r = waehleNaechstes({ ...belegung, items, ...extra });
+    const r = waehleNaechstes({ ...belegung, config, items, ...extra });
     uebersprungen.push(...r.uebersprungen);
     return r.ticket;
   };
@@ -352,9 +352,7 @@ export function ladeQuoteEcht(lade, config) {
   const aelteste = Math.min(...commits.map(datum));
   if (!Number.isFinite(aelteste)) throw new Error("Spielquote: Commits ohne gültiges Datum");
   const seit = new Date(aelteste - 24 * 60 * 60 * 1000).toISOString();
-  const seiten = lade(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=closed&labels=${encodeURIComponent(harness)}&since=${seit}&per_page=100`]);
-  if (!Array.isArray(seiten)) throw new Error("Spielquote: unerwartete Antwortform der geschlossenen Harness-Issues");
-  return { commits, harnessIssues: new Set(seiten.flat().filter((i) => !i.pull_request).map((i) => i.number)) };
+  return { commits, harnessIssues: harnessIssuesAus(lade(harnessIssuesAnfrage({ repo: REPO, label: harness, seit }))) };
 }
 
 /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */

@@ -5,8 +5,9 @@
  * Der SubagentStop-Hook (`stop-verify-hook.mjs`) fragt diese Prüfung bei jedem Ende des Umsetzers. Meldet er
  * `ERGEBNIS: gemergt` oder `abgebrochen`, obwohl sein PR noch offen ist und Auto-Merge hat (die CI läuft noch,
  * z.B. weil `gh pr checks --watch` am Tool-Timeout starb), blockiert der Hook mit einem klaren Grund. Bei
- * `festgefahren` und `entscheidung-noetig` ist ein offener PR gewollt. Jeder Fehler (kein gh, kein Netz, keine
- * Nachricht) gibt frei: ein kaputter Wächter darf den Umsetzer nie festhalten.
+ * `festgefahren` und `entscheidung-noetig` ist ein offener PR gewollt. Ein Config-Fehler (fehlende Namen oder `labels.festgefahren`)
+ * blockiert mit Fix-Zeile (fail-closed, #1742/#1743); ein zweiter Stop mit `stop_hook_active` gibt frei. Laufzeitfehler
+ * (kein gh, kein Netz, keine Nachricht) geben weiter frei: ein kaputter Wächter darf den Umsetzer nie festhalten.
  *
  * Grenze: die Wirkung von `deny` auf `SubagentHandback` ist live nicht belegt (eine `claude -p`-Probe hat das Tool nicht);
  * der Matcher ist wirkungslos, wenn er nie feuert, und R1 bis R3 gelten über `SubagentStop` ohnehin.
@@ -119,7 +120,13 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   const { namen, config, grund } = namenOderGrund("Umsetzer-Abschluss", deps);
   if (grund) return grund;
   if (agentType !== namen.agenten.umsetzer) return null;
-  const stuckLabel = labelAus(config, "festgefahren");
+  let stuckLabel;
+  try {
+    stuckLabel = labelAus(config, "festgefahren");
+  } catch (e) {
+    // Config-Fehler blockieren mit Fix-Zeile (fail-closed, wie namenOderGrund); ein Wurf ließe beide Hooks durch.
+    return `Umsetzer-Abschluss: Projekt-Config nicht nutzbar, darum blockiert (fail-closed). ${e instanceof Error ? e.message : String(e)}`;
+  }
   const { token, zusatz, pr, schnitt, uebergabe, festgefahren } = parseErgebnis(lastMessage);
   if (vorher) {
     const fehler = [];
