@@ -16,6 +16,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
 import { liesTicketAblauf, setzeAgentenWerte, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -86,7 +89,7 @@ function skillMarkdowns(dir = ".claude/skills"): string[] {
   return out;
 }
 
-const cfg = JSON.parse(lies(".factory/projekt.json")) as { agenten: Record<string, string> };
+const cfg = ladeProjektConfig() as { agenten: Record<string, string> };
 const PRODUKT = `.claude/skills/${cfg.agenten.ticketSkill}/SKILL.md`;
 const FACTORY = ".claude/skills/factory/SKILL.md";
 

@@ -4,7 +4,9 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 
-import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektRaw from "../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.

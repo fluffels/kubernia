@@ -2,6 +2,9 @@
  * die der Hauptchat aus `.factory/projekt.json` einsetzt. Tests, die den Ablauftext prüfen, lesen ihn hier mit eingesetzten Werten. */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -18,6 +21,6 @@ export function setzeAgentenWerte(text: string, agenten: Record<string, string>)
 
 /** Der Ablauftext mit den Agentennamen aus `.factory/projekt.json`. */
 export function liesTicketAblauf(): string {
-  const cfg = JSON.parse(readFileSync(ROOT + ".factory/projekt.json", "utf8")) as { agenten: Record<string, string> };
+  const cfg = ladeProjektConfig() as { agenten: Record<string, string> };
   return setzeAgentenWerte(readFileSync(ROOT + TICKET_ABLAUF, "utf8"), cfg.agenten);
 }
