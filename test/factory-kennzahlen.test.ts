@@ -554,17 +554,18 @@ describe("Einstiegsskript", () => {
 
 describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lücke statt 0", () => {
   type A = { mechanismus: string; messung: string; soll: string; status: "ok" | "ABWEICHUNG" | "Lücke" };
-  type Eingabe = { commits?: unknown[] | null; commitsLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null; zeilen?: Partial<Zeile>[] | null };
+  type Eingabe = { commits?: unknown[] | null; commitsLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; zeilen?: Partial<Zeile>[] | null };
   const S = raw as unknown as {
     selbstAudit: (e: Eingabe) => A[];
     auditAbschnitt: (a: A[]) => string[];
-    ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[]) => unknown; repo?: string }) => { commits: unknown[] | null; commitsLuecke?: string; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
+    ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[]) => unknown; repo?: string; config?: unknown }) => { commits: unknown[] | null; commitsLuecke?: string; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
     erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]>; auditLader?: (e: { bis: string }) => Eingabe }) => { bericht: { audit?: A[] }; exit: number };
     renderMarkdown: (b: unknown) => string;
   };
   const commit = (message: string, login = "fluffels") => ({ author: { login }, commit: { message, committer: { date: "2026-10-12T10:00:00Z" } } });
   const spiel = (n: number) => commit(`feat(sim): s${n} (#${100 + n}) (#${200 + n})`);
   const harness = (n: number) => commit(`feat(harness): h${n} (#${300 + n}) (#${400 + n})`);
+  const CFG = { labels: { harness: "area:harness" } };
   const von = (e: Eingabe, name: string) => S.selbstAudit({ commits: [], sammelAbschluss: "2026-10-01T00:00:00Z", zeilen: [], ...e }).find((a) => a.mechanismus === name)!;
 
   test("Spielquote: 1:3 ok, 2:2 ABWEICHUNG, unter 4 Merges Lücke (keine Aussage), Bots zählen nicht", () => {
@@ -575,6 +576,24 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(wenig.messung).toMatch(/keine Aussage/);
     // vier Commits, davon zwei von Bots: nur zwei zählen, also keine Aussage statt ok
     expect(von({ commits: [spiel(1), spiel(2), commit("feat(sim): x (#1)", "dependabot[bot]"), commit("feat(sim): y (#2)", "dependabot[bot]")] }, "Spielquote").status).toBe("Lücke");
+  });
+
+  test("Spielquote: Zuordnung nach Label der referenzierten Issues, nicht nach Commit-Scope (#1798)", () => {
+    const harnessIssues = new Set([900]);
+    const alsProdukt = commit("feat(harness): zu Spiel-Issue (#901)");
+    const alsFactory = commit("docs(adr): zu Harness-Issue (#900)");
+    const r = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)], harnessIssues }, "Spielquote");
+    expect(r.messung).toContain("1 Factory- auf 3 Produkt-Merges");
+    expect(r.messung).toContain("Zuordnung nach Label der referenzierten Issues");
+    expect(r.status).toBe("ok");
+    // ohne Label-Menge Rückfall auf den Scope: dann zählt das feat(harness) als Factory
+    expect(von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)] }, "Spielquote").messung).toContain("1 Factory- auf 3 Produkt-Merges");
+  });
+
+  test("Spielquote: Lücke mit Grund bei harnessLuecke, der Takt bleibt gemessen (#1798)", () => {
+    const e = { commits: [spiel(1)], harnessLuecke: "Harness-Issues nicht ladbar: x" };
+    expect(von(e, "Spielquote")).toMatchObject({ status: "Lücke", messung: "Harness-Issues nicht ladbar: x" });
+    expect(von(e, "Härtungs-Takt").status).toBe("ok");
   });
 
   test("Härtungs-Takt: 9 ok, 10 ABWEICHUNG; Sammelticket-Merges zählen nicht; Vorgänger in Arbeit pausiert; ohne Abschluss Lücke", () => {
@@ -630,7 +649,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(S.renderMarkdown(b({}))).not.toContain("Selbst-Audit");
   });
 
-  test("ladeAuditDaten: Sammeltickets und Commits über zwei gh-Aufrufe; jüngster Abschluss, geclaimter Vorgänger, Commits bis `bis`", () => {
+  test("ladeAuditDaten: Sammeltickets und Commits über drei gh-Aufrufe; jüngster Abschluss, geclaimter Vorgänger, Commits bis `bis`", () => {
     const aufrufe: string[][] = [];
     const gh = (a: string[]) => {
       aufrufe.push(a);
@@ -644,15 +663,36 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
           { number: 14, title: "Etwas anderes (gesammelt)", state: "OPEN", closedAt: null, assignees: [] },
         ];
       }
+      if (a[3]?.includes("/issues?")) return [[{ number: 500 }, { number: 501, pull_request: {} }]];
       return [[spiel(1), { ...spiel(2), commit: { message: "feat: spät (#9)", committer: { date: "2026-10-20T00:00:00Z" } } }]];
     };
-    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r" });
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
     expect([...d.sammelIssues!].sort()).toEqual([10, 11, 12, 13, 15]);
     expect(d.sammelInArbeit).toBe(13);
     expect(d.commits).toHaveLength(1);
     expect(aufrufe[0]).toContain("--limit");
+    expect(aufrufe[2].join(" ")).toContain("labels=area%3Aharness&since=2026-10-04T00:01:00.000Z");
+    expect([...d.harnessIssues!]).toEqual([500]);
     expect(aufrufe[1].join(" ")).toMatch(/--paginate --slurp repos\/o\/r\/commits\?sha=main&since=2026-10-05T00:01:00\.000Z/);
+  });
+
+  test("ladeAuditDaten: dritter Aufruf wirft oder labels.harness fehlt: nur die Quote ist Lücke, Commits und Takt-Daten bleiben (#1798)", () => {
+    const gh = (a: string[]) => {
+      if (a[0] === "issue") return [{ number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] }];
+      if (a[3]?.includes("/issues?")) throw new Error("issues weg");
+      return [[spiel(1)]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
+    expect(d.harnessIssues ?? null).toBeNull();
+    expect(d.harnessLuecke).toMatch(/Harness-Issues nicht ladbar: .*issues weg/);
+    expect(d.commits).toHaveLength(1);
+    expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
+    expect(von({ ...d, zeilen: [] }, "Spielquote").status).toBe("Lücke");
+    expect(von({ ...d, zeilen: [] }, "Härtungs-Takt").status).toBe("ok");
+    const ohneLabel = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: (a) => (a[0] === "issue" ? [] : [[spiel(1)]]), config: { labels: {} } });
+    expect(ohneLabel.harnessLuecke).toMatch(/labels.harness/);
+    expect(ohneLabel.commits).toHaveLength(1);
   });
 
   test("ladeAuditDaten: ohne abgeschlossenes Sammelticket ist das Fenster 28 Tage vor `bis`, nichts in Arbeit", () => {
@@ -662,10 +702,10 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
       if (a[0] === "issue") return [{ number: 20, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null, assignees: [] }];
       return [[spiel(1)]];
     };
-    const d = S.ladeAuditDaten({ bis: "2026-10-29T00:00:00Z" }, { gh, repo: "o/r" });
+    const d = S.ladeAuditDaten({ bis: "2026-10-29T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.sammelAbschluss).toBeNull();
     expect(d.sammelInArbeit).toBeNull();
-    expect(aufrufe).toHaveLength(2);
+    expect(aufrufe).toHaveLength(3);
     expect(aufrufe[1].join(" ")).toContain("since=2026-10-01T00:00:00.000Z");
     expect(d.commits).toHaveLength(1);
   });
@@ -681,7 +721,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
       }
       return [[{ author: { login: "fluffels" }, commit: { message: "feat(sim): ohne Datum (#1)" } }, spiel(1)]];
     };
-    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r" });
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
     expect(d.sammelInArbeit).toBeNull();
     expect(d.commits).toHaveLength(2);
