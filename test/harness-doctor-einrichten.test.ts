@@ -42,6 +42,7 @@ const GESUND: Record<string, unknown> = {
   "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }]],
 };
 
+const cfgPfad = (root: string): string => join(root, ".factory", "projekt.json"); // die Standard-Config (PROJEKT_CONFIG)
 const ordner: string[] = [];
 afterEach(() => {
   for (const o of ordner.splice(0)) rmSync(o, { recursive: true, force: true });
@@ -52,7 +53,8 @@ const neuerRoot = (workflow: string | null = WORKFLOW): string => {
   mkdirSync(join(root, ".github", "workflows"), { recursive: true });
   if (workflow !== null) writeFileSync(join(root, ".github", "workflows", "a.yml"), workflow);
   writeFileSync(join(root, "ruleset.json"), JSON.stringify({ name: "main-schutz", requiredChecks: ["CI"], bypassActors: [] }));
-  writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+  mkdirSync(join(root, ".factory"), { recursive: true });
+  writeFileSync(cfgPfad(root), JSON.stringify(CONFIG));
   return root;
 };
 
@@ -85,7 +87,7 @@ function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0, sammelAu
   r.code = doctor.main(argv, { rootDir: root, gh, spawn, langfuse: () => assert.fail("Langfuse wird bei --einrichten nicht geprüft"), out: (s: string) => r.out.push(s), err: (s: string) => r.err.push(s) });
   return r;
 }
-const EINR = (root: string, ...extra: string[]): string[] => ["--einrichten", "--config", join(root, "projekt.json"), ...extra];
+const EINR = (root: string, ...extra: string[]): string[] => ["--einrichten", "--config", cfgPfad(root), ...extra];
 const datei = (root: string): string => join(root, doctor.WOCHENLAUF_PFAD);
 
 describe("harness-doctor --einrichten", () => {
@@ -169,13 +171,40 @@ describe("harness-doctor --einrichten", () => {
   });
 
   test("das Sammelticket zählt: im Dry-Run „Würde … anlegen“ als geplant (Exit 1), im echten Lauf „Angelegt:“ als angelegt (Exit 0)", () => {
-    const geplant = fahre(neuerRoot(), welt(), EINR(neuerRoot(), "--dry-run"), 0, "Würde „Harness-Härtung (gesammelt)“ anlegen.\n");
+    const root0 = neuerRoot();
+    const geplant = fahre(root0, welt(), EINR(root0, "--dry-run"), 0, "Würde „Harness-Härtung (gesammelt)“ anlegen.\n");
     assert.match(geplant.out.at(-1) ?? "", /: 0 angelegt, 2 geplant, /); // Workflow-Datei und Sammelticket
     assert.ok(geplant.out.includes("Sammelticket: Würde „Harness-Härtung (gesammelt)“ anlegen."));
     const root = neuerRoot();
     const echt = fahre(root, welt(), EINR(root), 0, "Angelegt: #5\n");
     assert.equal(echt.code, 0);
     assert.match(echt.out.at(-1) ?? "", /: 2 angelegt, 0 geplant, /); // Workflow-Datei und Sammelticket
+  });
+
+  test("Dry-Run: ein vorhandenes, aber falsch positioniertes Sammelticket („Trockenlauf … würde es neu setzen“) zählt als geplant (Exit 1)", () => {
+    const root = neuerRoot();
+    writeFileSync(datei(root), doctor.WOCHENLAUF_WORKFLOW, { flag: "w" });
+    const ausgabe = SCHON + "Trockenlauf: #1 steht nicht auf Position 4, ein echter Lauf würde es neu setzen.\n";
+    const r = fahre(root, welt(), EINR(root, "--dry-run"), 0, ausgabe);
+    assert.match(r.out.at(-1) ?? "", /: 0 angelegt, 1 geplant, /);
+    assert.equal(r.code, 1);
+    const ruhig = fahre(root, welt(), EINR(root, "--dry-run"), 0, SCHON);
+    assert.match(ruhig.out.at(-1) ?? "", /: 0 angelegt, 0 geplant, /);
+  });
+
+  test("abweichendes --config: kein Sammelticket-Aufruf (das Skript liest die Standard-Config), stattdessen ANLEITUNG, Exit 1", () => {
+    const root = neuerRoot();
+    const andere = join(root, "andere.json");
+    writeFileSync(andere, JSON.stringify(CONFIG));
+    const r = fahre(root, welt(), ["--einrichten", "--config", andere]);
+    assert.deepEqual(r.sammel, []);
+    assert.ok(r.out.some((z) => z.startsWith("ANLEITUNG Sammelticket:") && /Standard-Config/.test(z)), r.out.join("\n"));
+    assert.equal(r.code, 1);
+    assert.match(r.out.at(-1) ?? "", /, 1 Anleitung\(en\), /);
+    const gleich = fahre(root, welt(), ["--einrichten", "--config", cfgPfad(root)]);
+    assert.equal(gleich.sammel.length, 1, "die Standard-Config ausdrücklich genannt ist nicht abweichend");
+    const ohne = fahre(root, welt(), ["--einrichten"]);
+    assert.equal(ohne.sammel.length, 1, "ohne --config ebenso");
   });
 
   test("eine Anleitung ohne Link bleibt ohne „Link:“ (Labels nicht lesbar)", () => {
@@ -242,12 +271,13 @@ describe("harness-doctor --einrichten", () => {
     assert.deepEqual(r.schreibend, []);
     assert.deepEqual(r.sammel, []);
     assert.ok(r.out.some((z) => z.startsWith("ANLEITUNG Token:") && z.includes("Link: https://")));
+    assert.ok(r.out.some((z) => z.startsWith("ANLEITUNG Sammelticket:") && z.includes("Token-Punkt")));
     assert.equal(r.code, 1);
   });
 
   test("Aufruf-Fehler: kein Modus, beide Modi, --dry-run ohne --einrichten, unbekanntes Flag: Exit 2 ohne gh-Aufruf", () => {
     const root = neuerRoot();
-    const cfg = ["--config", join(root, "projekt.json")];
+    const cfg = ["--config", cfgPfad(root)];
     for (const argv of [cfg, ["--pruefen", "--einrichten", ...cfg], ["--pruefen", "--dry-run", ...cfg], ["--einrichten", "--bunt"]]) {
       const r = fahre(root, welt(), argv);
       assert.equal(r.code, 2, argv.join(" "));
@@ -258,7 +288,7 @@ describe("harness-doctor --einrichten", () => {
 
   test("kaputte Config: Exit 2 mit Fix-Zeile, ohne gh- und Sammelticket-Aufruf", () => {
     const root = neuerRoot();
-    writeFileSync(join(root, "projekt.json"), "{kaputt");
+    writeFileSync(cfgPfad(root), "{kaputt");
     const r = fahre(root, welt(), EINR(root));
     assert.equal(r.code, 2);
     assert.match(r.err.join("\n"), /Fix:/);

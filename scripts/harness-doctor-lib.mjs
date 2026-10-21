@@ -18,7 +18,6 @@ const LINK = {
   actions: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository",
   token: "https://cli.github.com/manual/gh_auth_refresh",
   admin: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/repository-access-and-collaboration/inviting-collaborators-to-a-personal-repository",
-  langfuse: "https://langfuse.com/self-hosting",
 };
 
 /** Die Wochenlauf-Datei, die `--einrichten` installiert (Vorlage = Datei im Repo, ein Wächter hält beide gleich). */
@@ -126,7 +125,7 @@ function pruefeToken(gh) {
   try {
     kopf = gh(["api", "-i", "user"]);
   } catch (e) {
-    return { fatal: true, ergebnis: [luecke("Token", `gh nicht angemeldet oder ohne Zugriff (${erste(e)})`, "gh auth login --scopes project", LINK.token)] };
+    return { fatal: true, ergebnis: [{ ...luecke("Token", `gh nicht angemeldet oder ohne Zugriff (${erste(e)})`, "gh auth login --scopes project", LINK.token), fatal: true }] };
   }
   const scopes = /^x-oauth-scopes:\s*(.*)$/im.exec(kopf);
   if (!scopes) return { ergebnis: [{ ...gut("Token-Scope"), hinweis: "kein Scope-Header (fein granulares Token): Project-Zugriff nicht prüfbar" }] };
@@ -248,7 +247,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse }) {
   if (langfuse) {
     const lf = langfuse();
     const text = String(lf.stderr || lf.stdout || "").trim().split("\n")[0];
-    ergebnis.push(lf.status === 0 ? gut("Langfuse") : luecke("Langfuse", text || "Langfuse nicht erreichbar", "Langfuse starten (node scripts/langfuse-vorbedingung.mjs zeigt den Befund)", LINK.langfuse));
+    ergebnis.push(lf.status === 0 ? gut("Langfuse") : luecke("Langfuse", text || "Langfuse nicht erreichbar", "Langfuse starten (node scripts/langfuse-vorbedingung.mjs zeigt den Befund)"));
   }
   return ergebnis;
 }
