@@ -84,13 +84,13 @@ export function lauf({ io, trocken = false }) {
     log(`::error::${KENNUNG}: Sammelticket nicht lesbar: ${einzeilig(fehlerText(err))} Fix: gh-Zugriff und Token prüfen`);
     return 1;
   }
-  if (!ziel) {
-    log(`::error::${KENNUNG}: kein ungeclaimtes Harness-Sammelticket für ${luecken.length} Lücke(n) Fix: node scripts/sammelticket-anlegen.mjs harness`);
-    return 1;
-  }
   if (zeilen.length === 0) {
     log(`${KENNUNG}: nichts Neues (${luecken.length} Lücke(n) schon als offene Zeile gemeldet)`);
     return 0;
+  }
+  if (!ziel) {
+    log(`::error::${KENNUNG}: kein ungeclaimtes Harness-Sammelticket für ${zeilen.length} neue Zeile(n) Fix: node scripts/sammelticket-anlegen.mjs harness`);
+    return 1;
   }
   if (trocken) {
     for (const z of zeilen) log(`[dry-run] ${z}`);

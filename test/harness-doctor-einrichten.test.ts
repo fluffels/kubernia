@@ -60,7 +60,7 @@ interface Welt { labels: string[]; over: Record<string, unknown>; postFehler: Se
 interface Ergebnis { code: number; out: string[]; err: string[]; posts: string[]; schreibend: string[]; sammel: string[][]; ghAufrufe: number }
 const welt = (labels = ["area:werk", "status:steckt", "forum"], over: Record<string, unknown> = {}): Welt => ({ labels, over, postFehler: new Set() });
 const SCHON = "Ungeclaimtes „Harness-Härtung (gesammelt)“ gibt es schon: #1, nichts wird angelegt.\n";
-function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0, sammelAusgabe = SCHON): Ergebnis {
+function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0, sammelAusgabe: string | null = SCHON): Ergebnis {
   const r: Ergebnis = { code: -1, out: [], err: [], posts: [], schreibend: [], sammel: [], ghAufrufe: 0 };
   const gh = (args: string[]): string => {
     r.ghAufrufe++;
@@ -80,7 +80,7 @@ function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0, sammelAu
   };
   const spawn = (args: string[]) => {
     r.sammel.push(args);
-    return { status: sammelStatus, stdout: sammelAusgabe, stderr: "" };
+    return { status: sammelStatus, stdout: sammelAusgabe ?? undefined, stderr: "" };
   };
   r.code = doctor.main(argv, { rootDir: root, gh, spawn, langfuse: () => assert.fail("Langfuse wird bei --einrichten nicht geprüft"), out: (s: string) => r.out.push(s), err: (s: string) => r.err.push(s) });
   return r;
@@ -193,6 +193,39 @@ describe("harness-doctor --einrichten", () => {
     const r = fahre(root, welt(), EINR(root));
     assert.ok(r.out.includes(`OK Workflow ${doctor.WOCHENLAUF_PFAD}`));
     assert.equal(r.out.some((z) => z.startsWith("HINWEIS")), false);
+  });
+
+  test("ein frisches Projekt ohne .github/workflows: die Wochenlauf-Datei wird samt Ordner angelegt", () => {
+    const root = neuerRoot();
+    rmSync(join(root, ".github"), { recursive: true });
+    const r = fahre(root, welt(), EINR(root));
+    assert.equal(r.code, 0, r.out.join("\n"));
+    assert.equal(readFileSync(datei(root), "utf8"), doctor.WOCHENLAUF_WORKFLOW);
+  });
+
+  test("Dry-Run auf vollständig eingerichtetem Stand: nichts geplant, Exit 0, keine PLAN-Zeile", () => {
+    const root = neuerRoot();
+    const w = welt(["status:steckt"]);
+    fahre(root, w, EINR(root));
+    const r = fahre(root, w, EINR(root, "--dry-run"));
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.out.filter((z) => z.startsWith("PLAN")), []);
+    assert.match(r.out.at(-1) ?? "", /: 0 angelegt, 0 geplant, 0 Anleitung\(en\), 0 Fehler$/);
+  });
+
+  test("das Label wird per POST an repos/<repo>/labels angelegt", () => {
+    const root = neuerRoot();
+    const r = fahre(root, welt(["status:steckt", "forum"]), EINR(root));
+    assert.deepEqual(r.schreibend, ["api -X POST repos/acme/demo/labels -f name=area:werk"]);
+  });
+
+  test("ein Sammelticket-Aufruf ohne Status und Ausgabe (Timeout) ist FEHLER „Exit ?“, ohne „undefined“", () => {
+    const root = neuerRoot();
+    const r = fahre(root, welt(), EINR(root), null as unknown as number, null);
+    assert.equal(r.code, 1);
+    const z = r.out.find((x) => x.startsWith("FEHLER Sammelticket:")) ?? "";
+    assert.match(z, /Exit \?/);
+    assert.equal(r.out.some((x) => x.includes("undefined")), false);
   });
 
   test("ein fehlschlagendes Sammelticket ist FEHLER mit Exit 1", () => {

@@ -94,6 +94,21 @@ describe("harness-doctor-melden: lauf", () => {
     assert.equal(melden.istBekannt(L1.punkt, [{ user: { login: "github-actions[bot]", type: "Bot" }, body: zeile(L1) }], OWNER), true);
   });
 
+  test("offene Zeile mit *-Spiegelstrich, eingerückt oder mit Windows-Zeilenenden zählt als bekannt", () => {
+    const z = zeile(L1);
+    for (const body of [z.replace("- [ ]", "* [ ]"), `  ${z}`, `Notiz\r\n${z}\r\nEnde`]) {
+      assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body }], OWNER), true, body);
+    }
+    assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body: z.replace("- [ ]", "[ ]") }], OWNER), false);
+  });
+
+  test("ohne ungeclaimtes Sammelticket: alles schon gemeldet bleibt grün (nichts zu posten), eine neue Lücke ist ::error::", () => {
+    const still = fahre({ luecken: [L1], ziel: null, kommentare: [{ user: ICH, body: zeile(L1) }] });
+    assert.equal(still.code, 0);
+    assert.deepEqual(still.posts, []);
+    assert.equal(fahre({ luecken: [L1], ziel: null }).code, 1);
+  });
+
   test("zwei Lücken desselben Punkts: beide in Lauf 1, danach in Lauf 2 keine", () => {
     const a: Luecke = { punkt: "Board produkt", befund: "projectId falsch", fix: "prüfen" };
     const b: Luecke = { punkt: "Board produkt", befund: "nummer falsch", fix: "prüfen" };

@@ -5,8 +5,8 @@
  *   node scripts/harness-doctor.mjs --einrichten [--dry-run] [--config <pfad>]
  *
  * `--einrichten` (#1800) legt nur Umkehrbares an: fehlende Labels, die Wochenlauf-Datei (.github/workflows/harness-doctor.yml) und das Harness-Sammelticket
- * (über sammelticket-anlegen.mjs); Ruleset, Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token und Langfuse nie automatisch, nur als
- * `ANLEITUNG <Punkt>: <Befund> Fix: <Schritt> Link: <Seite>`. `--dry-run` gibt nur den Plan aus (`PLAN …`). Ein zweiter Lauf ändert nichts.
+ * (über sammelticket-anlegen.mjs); Ruleset, Secrets, Variablen, Project-Felder, Actions, Admin-Recht und Token nie automatisch, nur als
+ * `ANLEITUNG <Punkt>: <Befund> Fix: <Schritt> Link: <Seite>`. Langfuse prüft nur `--pruefen`; `--config` gilt nicht für das Sammelticket (sammelticket-anlegen.mjs liest die Standard-Config). `--dry-run` gibt nur den Plan aus (`PLAN …`). Ein zweiter Lauf ändert nichts.
  * Der Wochenlauf selbst (Lücke als Zeile ins Sammelticket) steht in harness-doctor-melden.mjs.
  *
  * Je Lücke eine Zeile `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>`; Exit 0 ohne Lücke, 1 mit mindestens einer, 2 bei Aufruf-Fehler oder
@@ -75,7 +75,7 @@ function sammelticket({ trocken, spawn, out }) {
 
 /**
  * `--einrichten [--dry-run]`: legt nur Umkehrbares an (fehlende Labels, die Wochenlauf-Datei, das Sammelticket); alles andere (Ruleset,
- * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token, Langfuse) nur als `ANLEITUNG` mit Link. Ein zweiter Lauf ändert nichts.
+ * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token) nur als `ANLEITUNG` mit Link. Ein zweiter Lauf ändert nichts.
  * Exit: 0 nichts offen; 1 Anleitung offen, Plan nicht leer (Dry-Run) oder Fehler; 2 Aufruf-Fehler oder Config.
  */
 function einrichten({ werte, rootDir, gh, spawn, out, err }) {
