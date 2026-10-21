@@ -54,7 +54,7 @@ const feldNamen = (text: string): string[] => [
 ];
 /** Ein Board-Skript liest Board-Items: es nennt `statusFeld` oder importiert `board-lib.mjs`. */
 const boardSkript = (text: string): boolean => text.includes("statusFeld") || /from\s+"\.\/board-lib\.mjs"/.test(text);
-const optionVergleiche =(text: string): string[] => [...text.matchAll(/\bstatus\s*[!=]==\s*"([^"]+)"/g)].map((m) => m[1]);
+const optionVergleiche = (text: string): string[] => [...text.matchAll(/\bstatus\s*[!=]==\s*"([^"]+)"/g)].map((m) => m[1]);
 
 const config = JSON.parse(lies(".factory/projekt.json")) as { labels: Record<string, string>; boards: Record<string, unknown>[] };
 const workflows = dateien(".github/workflows", /\.ya?ml$/);
@@ -80,6 +80,7 @@ describe("Scanner (Fixtures, nicht vakuös)", () => {
     assert.deepEqual(feldNamen('myfields.find((f) => f.name === "X"); subfield(name: "X")'), []);
     assert.deepEqual(boardSkript('import { a } from "./board-lib.mjs"; i.status === "Blocked"'), true);
     assert.deepEqual(boardSkript('x.status === "ok"'), false);
+    assert.deepEqual(boardSkript("const { statusFeld } = board; i.status === 'x'"), true);
     assert.deepEqual(optionVergleiche('i.status !== "Todo"'), ["Todo"]);
   });
   test("ein ungedecktes vars.FOO fällt auf (Negativfall)", () => {

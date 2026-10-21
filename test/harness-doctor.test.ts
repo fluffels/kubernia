@@ -166,6 +166,17 @@ describe("harness-doctor --pruefen", () => {
     assert.match(luecken(r)[0], /Ruleset: kein Required status check/);
   });
 
+  test("Antwort null für Board bzw. Status-Feld: Lücken statt Absturz", () => {
+    const board = lauf({ "api orgs/acme/projectsV2/7": null });
+    assert.equal(board.code, 1);
+    assert.equal(luecken(board).length, 2);
+    assert.match(luecken(board).join("\n"), /Board produkt: projectId p_eins passt nicht zum Board/);
+    const feldNull = lauf({ "api orgs/acme/projectsV2/7/fields/5": null });
+    assert.equal(feldNull.code, 1);
+    assert.equal(luecken(feldNull).length, 3);
+    assert.match(luecken(feldNull).join("\n"), /statusFeldId zeigt auf das Feld/);
+  });
+
   test("Option mit Text-Namen statt { raw } gilt auch", () => {
     assert.equal(lauf({ "api orgs/acme/projectsV2/7/fields/5": { ...feld, options: [{ id: "abc", name: "Todo" }] } }).code, 0);
     const r = lauf({ "api orgs/acme/projectsV2/7/fields/5": { name: "Status", node_id: "x_status" } });
