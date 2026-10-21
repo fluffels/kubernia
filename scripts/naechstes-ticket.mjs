@@ -34,7 +34,7 @@ import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
-import { ticketNamen } from "./ticket-namen.mjs";
+import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 
@@ -262,11 +262,12 @@ const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ign
  * aus den lokalen Transkripten (`dir`, Default der Projektordner wie `subagent-laufzeit.mjs`). Memo je `agent|nach`. Fail-closed:
  * `{ fehler }` ohne Transkript-Ordner, bei Abruf- oder Lesefehlern (Texte ohne lokalen Pfad).
  */
-export function messfensterLader({ dir, holeIssue = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]) } = {}) {
+export function messfensterLader({ dir, holeIssue = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]), namen } = {}) {
+  let ticketNamenCache = namen; // ohne Angabe beim ersten Bedarf aus der Projekt-Config (wirft mit Schlüssel und Fix-Zeile)
   const memo = new Map(); // je `agent|nach`: closedAt und geladene Läufe; nur die Zählung hängt am wartenden Ticket
   return (fenster, wartend) => {
     const schluessel = `${fenster.agent}|${fenster.nach}`;
-    if (!memo.has(schluessel)) memo.set(schluessel, messfensterLaeufe(fenster, dir ?? projektOrdner(), holeIssue));
+    if (!memo.has(schluessel)) memo.set(schluessel, messfensterLaeufe(fenster, dir ?? projektOrdner(), holeIssue, () => (ticketNamenCache ??= ladeTicketNamen())));
     const r = memo.get(schluessel);
     if ("fehler" in r) return r;
     if (r.closedAt === null) return { closedAt: null, n: 0 };
@@ -274,7 +275,7 @@ export function messfensterLader({ dir, holeIssue = (nr) => ghJson(["api", `repo
   };
 }
 
-function messfensterLaeufe(fenster, dir, holeIssue) {
+function messfensterLaeufe(fenster, dir, holeIssue, holeNamen) {
   let closedAt;
   try {
     const issue = holeIssue(fenster.nach);
@@ -284,8 +285,14 @@ function messfensterLaeufe(fenster, dir, holeIssue) {
   }
   if (closedAt === null) return { closedAt: null, laeufe: [] };
   if (!existsSync(dir)) return { fehler: "Messfenster nicht prüfbar (keine lokalen Transkripte)" };
+  let namen;
   try {
-    return { closedAt, laeufe: ladeLaeufe(dir, fenster.agent, closedAt).map(laufAus).filter(Boolean) };
+    namen = holeNamen();
+  } catch {
+    return { fehler: "Messfenster nicht prüfbar (Projekt-Config nicht nutzbar)" };
+  }
+  try {
+    return { closedAt, laeufe: ladeLaeufe(dir, fenster.agent, closedAt).map((l) => laufAus(l, namen)).filter(Boolean) };
   } catch {
     return { fehler: "Messfenster nicht prüfbar (Transkripte nicht lesbar)" };
   }

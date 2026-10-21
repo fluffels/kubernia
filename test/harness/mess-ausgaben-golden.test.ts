@@ -21,6 +21,12 @@ import * as otRaw from "../../scripts/langfuse-otlp.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as klRaw from "../../scripts/kontingent-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRaw from "../../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceRaw from "../../scripts/slice-override.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as faelleRaw from "../support/mess-golden-faelle.mjs";
 
 type Fn = (...a: unknown[]) => unknown;
@@ -34,20 +40,27 @@ const ot = otRaw as unknown as Modul;
 const kl = klRaw as unknown as Modul;
 const messGoldenFaelle = (faelleRaw as unknown as { messGoldenFaelle: (s: Record<string, Fn>) => Record<string, string> }).messGoldenFaelle;
 
+const projekt = projektRaw as unknown as Modul;
+const CONFIG = projekt.ladeProjektConfig() as unknown as { agenten: { umsetzer: string } };
+const NAMEN = (namenRaw as unknown as Modul).ticketNamen(CONFIG);
+const ZEILEN = (sliceRaw as unknown as Modul).commitZeilenAus(CONFIG) as unknown as { plan: string };
+const REPO = projekt.repoName(CONFIG) as unknown as string;
+const WORKTREE = (namenRaw as unknown as Modul).worktreePraefix(CONFIG) as unknown as string;
+
 const S: Record<string, Fn> = {
-  laufzeiten: (e) => lz.laufzeiten(e),
-  typenUebersicht: (e) => lz.typenUebersicht(e),
+  laufzeiten: (e) => lz.laufzeiten({ namen: NAMEN, ...(e as object) }),
+  typenUebersicht: (e) => lz.typenUebersicht({ namen: NAMEN, ...(e as object) }),
   laufzeitMarkdown: (r) => lz.renderMarkdown(r),
   laufzeitTypen: (r) => lz.renderTypen(r),
-  kontextTreiber: (e) => kt.kontextTreiber(e),
+  kontextTreiber: (e) => kt.kontextTreiber({ namen: NAMEN, ...(e as object) }),
   kontextMarkdown: (r) => kt.renderMarkdown(r),
-  phaseDerCalls: (z) => kt.phaseDerCalls(z),
+  phaseDerCalls: (z) => kt.phaseDerCalls(z, null, NAMEN),
   zerlegeHauptchat: (e) => hz.zerlegeHauptchat(e),
-  hauptchatMarkdown: (r) => hz.renderMarkdown(r),
-  summarize: (run, bounds) => tb.summarize(run, bounds),
-  baselineMarkdown: (s, loop) => tb.renderMarkdown(s, loop),
-  sollEintraege: (s, o) => ak.sollEintraege(s, o),
-  bauePayloads: (s, e, o) => ot.bauePayloads(s, e, o),
+  hauptchatMarkdown: (r) => hz.renderMarkdown(r, { repoName: REPO }),
+  summarize: (run, bounds) => tb.summarize(run, bounds, null, { umsetzer: CONFIG.agenten.umsetzer }),
+  baselineMarkdown: (s, loop) => tb.renderMarkdown(s, loop, { planZeile: ZEILEN.plan }),
+  sollEintraege: (s, o) => ak.sollEintraege(s, { ...(o as object), worktree: WORKTREE }),
+  bauePayloads: (s, e, o) => ot.bauePayloads(s, e, { ...(o as object), repoName: REPO }),
   logPfad: (env) => kl.logPfad(env),
 };
 

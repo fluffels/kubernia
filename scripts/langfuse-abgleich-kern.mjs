@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { istProjektOrdner } from "./transkript.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 
@@ -76,17 +77,20 @@ export const scoreId = (session, name) => sha("score:" + name + ":" + session).s
 
 // ── Soll (pur) ───────────────────────────────────────────────────────────────
 
-/** `kq-<nr>` aus dem Branch-Namen, sonst null. */
-export function ticketAusBranch(gitBranch) {
-  const m = /\bkq-(\d+)\b/.exec(String(gitBranch ?? ""));
-  return m ? `kq-${m[1]}` : null;
+/** `<Worktree-Präfix><nr>` aus dem Branch-Namen, sonst null. `worktree` ist `praefixe.worktree` der Projekt-Config (Pflicht, kein Standardwert). */
+export function ticketAusBranch(gitBranch, worktree) {
+  if (typeof worktree !== "string" || worktree === "") throw new Error("ticketAusBranch braucht das Worktree-Präfix (praefixe.worktree der Projekt-Config)");
+  const m = new RegExp(String.raw`(?<!\w)${escapeRegex(worktree)}(\d+)\b`).exec(String(gitBranch ?? ""));
+  return m ? `${worktree}${m[1]}` : null;
 }
 
 /**
  * Ergebnis von `ladeSessionDatei` → ein Eintrag je Message (`message.id`, Rückfall `uuid`) über Hauptdatei und Subagenten.
- * Eine Message in mehreren Dateien zählt einmal (Output = Maximum, der erste Fund bestimmt die Rolle).
+ * Eine Message in mehreren Dateien zählt einmal (Output = Maximum, der erste Fund bestimmt die Rolle). `worktree` (`praefixe.worktree` der Projekt-Config)
+ * ist Pflicht: aus dem Branch-Namen jedes Calls entsteht das Ticket.
  */
-export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
+export function sollEintraege(sitzung, { session = sitzung.id, worktree } = {}) {
+  if (typeof worktree !== "string" || worktree === "") throw new Error("sollEintraege braucht das Worktree-Präfix (praefixe.worktree der Projekt-Config)");
   const quellen = [
     { zeilen: sitzung.main, rolle: null },
     ...sitzung.subagents.map((s) => ({
@@ -112,7 +116,7 @@ export function sollEintraege(sitzung, { session = sitzung.id } = {}) {
       ts: c.ts,
       usage: { input: c.input, output: c.output, cacheRead: c.cacheRead, cacheWrite5m: c.cacheWrite - write1h, cacheWrite1h: write1h },
       rolle: c.subagent,
-      ticket: ticketAusBranch(c.gitBranch),
+      ticket: ticketAusBranch(c.gitBranch, worktree),
     };
   });
 }

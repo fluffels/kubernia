@@ -9,6 +9,7 @@ import { appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ghJson } from "./gh-cli.mjs";
+import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 
 /** Unterhalb dieses Anteils am Limit gilt das Kontingent als knapp. */
 export const MIN_ANTEIL = 0.1;
@@ -89,7 +90,19 @@ export function kontingentLesen({ token, exec, timeout = 15_000 } = {}) {
   return ghJson(["api", "rate_limit"], { token, exec, timeout });
 }
 
-export const logPfad = (env = process.env) => env.KQ_GH_KOSTEN_LOG || join(tmpdir(), "kubernia-gh-kosten.jsonl");
+/**
+ * Pfad der Kosten-Logdatei: die Umgebungsvariable `KQ_GH_KOSTEN_LOG` gewinnt, ohne die Config zu lesen; sonst `<tmp>/<Repo-Name>-gh-kosten.jsonl` mit dem Repo-Namen aus der
+ * Projekt-Config (`lade` ersetzt das Laden, Test; wirft wie `repoName`, wenn `repo` fehlt).
+ */
+export const logPfad = (env = process.env, { lade = () => ladeProjektConfig({ pruefen: false }) } = {}) => env.KQ_GH_KOSTEN_LOG || join(tmpdir(), `${repoName(lade())}-gh-kosten.jsonl`);
+
+function logPfadOderNull(env) {
+  try {
+    return logPfad(env);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Vorab-Prüfung am Anfang eines Skripts und Kostenmessung beim Beenden. Gibt `{ ok }` zurück.
@@ -98,6 +111,8 @@ export const logPfad = (env = process.env) => env.KQ_GH_KOSTEN_LOG || join(tmpdi
  * Alles injizierbar (`exec`, `schreibe`, `schreibeLog`, `registriere`, `beende`, `env`, `jetzt`) für Tests.
  */
 export function mitKontingent(name, opts = {}) {
+  // Der Log-Pfad entsteht einmal am Start (Env-Variable oder Repo-Name aus der Projekt-Config); ist er nicht bestimmbar, entfällt nur das Protokoll (die Messung ist Beiwerk).
+  const logDatei = opts.schreibeLog ? null : logPfadOderNull(opts.env ?? process.env);
   const {
     token,
     exec,
@@ -105,7 +120,7 @@ export function mitKontingent(name, opts = {}) {
     env = process.env,
     jetzt = Date.now,
     schreibe = (t) => process.stderr.write(t),
-    schreibeLog = (z) => appendFileSync(logPfad(env), `${z}\n`),
+    schreibeLog = (z) => (logDatei ? appendFileSync(logDatei, `${z}\n`) : undefined),
     registriere = (f) => process.on("exit", f),
     beende = (c) => process.exit(c),
   } = opts;

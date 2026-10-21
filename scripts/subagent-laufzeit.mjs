@@ -2,17 +2,19 @@
 /**
  * Laufzeit eines Subagent-Typs (#1382), z. B. der Planer-Laufzeit aus docs/model-routing.md § Planer-Laufzeit.
  *
- *   node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner | --typen] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]
+ *   node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent <name> | --typen] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]
+ *
+ * Ohne `--agent` gilt der Planer der Projekt-Config (`agenten.planer`); fehlt er oder die Config, endet das CLI mit Exit 1 und der Meldung samt `Fix:`-Zeile (kein Standardname, fail-closed).
  *
  * `--typen` (#1668) statt `--agent`: Rollen-Übersicht über alle Typen (`typenUebersicht`), je `agentType` (fehlend oder kein String: `unbekannt`) Läufe, offene, Requests, Σ Kosten (aufgezeichnet) und
  * Σ geschätzt getrennt (`-` ohne bepreisten Lauf), Läufe ohne Preis und Modelle; offene Läufe zählen mit. `--typen` mit `--agent` oder `--schnitt` ist ein Aufruf-Fehler.
  *
  * `--ticket`/`--ohne` (wiederholbar) lassen Läufe eines Tickets ein- bzw. ausschließen, bevor `parallel` und das Aggregat gerechnet werden (z. B. Gegenprobe-Läufe).
  * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` (mit `--typen` alle) und deren JSONL (nicht alle Haupttranskripte).
- * Je Lauf: Ticket (`kq-<nr>` im Patch-Pfad, sonst Worktree, sonst erstes `#<nr>` im Prompt; `ticketAusLauf`), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
+ * Je Lauf: Ticket (`<Worktree-Präfix><nr>` im Patch-Pfad, sonst Worktree, sonst erstes `#<nr>` im Prompt; `ticketAusLauf`), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
  * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
  * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request), Kosten in $ (`kosten`, Summe der Call-Preise aus PRICES, `null` bei einem Call ohne Preis; nur
- * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Für Lens-Läufe (#1582) zusätzlich: Beschreibung, `brille`, `runde`, `deltaArt` (`null` ohne Delta-Patch-Pfad im Prompt (gelabelt oder `kq-<nr>-r<n>-delta.patch`), `merge`, `fix`), `promptZeichen`, `ersterCall` und `patch` (Zugriffe auf den vollen und den Delta-Patch, siehe patch-zugriff.mjs). Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
+ * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Für Lens-Läufe (#1582) zusätzlich: Beschreibung, `brille`, `runde`, `deltaArt` (`null` ohne Delta-Patch-Pfad im Prompt (gelabelt oder `<Worktree-Präfix><nr>-r<n>-delta.patch`), `merge`, `fix`), `promptZeichen`, `ersterCall` und `patch` (Zugriffe auf den vollen und den Delta-Patch, siehe patch-zugriff.mjs). Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
  * Je Gruppe nennt die Spalte `Tickets` die verschiedenen Tickets; hat ein Ticket mehrere Läufe, steht unter der Tabelle eine Warnzeile (Mediane je Lauf, nicht je Ticket; #1646).
@@ -22,6 +24,7 @@
 import { pathToFileURL } from "node:url";
 import { median, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
+import { namenOderGrund } from "./ticket-namen.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeAlleLaeufe, ladeLaeufe, laufAus, ms } from "./subagent-laeufe.mjs";
 
@@ -59,13 +62,15 @@ const stat = (laeufe) => ({
 const imFenster = (l, { von, bis, tickets, ohne }) => passtTicketFilter(l.ticket, { tickets, ohne }) && (!von || l.start >= ms(von)) && (!bis || l.start <= ms(bis));
 
 /**
- * Kern: Läufe aus `{ meta, zeilen }` des gewünschten `agentType` im Fenster [von, bis] (Start) → Läufe plus Aggregat.
- * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], agent?: string, von?: string, bis?: string, schnitt?: string, tickets?: number[], ohne?: number[] }} e
+ * Kern: Läufe aus `{ meta, zeilen }` des gewünschten `agentType` im Fenster [von, bis] (Start) → Läufe plus Aggregat. `namen` = Ticket-Namen aus der Projekt-Config
+ * (`ticket-namen.mjs`), ohne `agent` gilt `namen.agenten.planer`; ohne beides wirft die Funktion.
+ * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], namen: object, agent?: string, von?: string, bis?: string, schnitt?: string, tickets?: number[], ohne?: number[] }} e
  */
-export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schnitt, tickets = [], ohne = [] }) {
+export function laufzeiten({ laeufe, namen, agent = namen?.agenten?.planer, von, bis, schnitt, tickets = [], ohne = [] }) {
+  if (typeof agent !== "string" || agent === "") throw new Error("laufzeiten braucht den Agenten-Typ: `agent` oder namen.agenten.planer");
   const alle = laeufe
     .filter((l) => l?.meta?.agentType === agent)
-    .map(laufAus)
+    .map((l) => laufAus(l, namen))
     .filter(Boolean)
     .filter((l) => imFenster(l, { von, bis, tickets, ohne }))
     .sort((a, b) => a.start - b.start);
@@ -112,20 +117,20 @@ const typZeile = (agentType, liste) => {
 
 /**
  * Rollen-Übersicht (#1668): alle Läufe im Fenster [von, bis] (Start) je `agentType`, offene Läufe zählen mit.
- * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], von?: string, bis?: string, tickets?: number[], ohne?: number[] }} e
+ * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], namen: object, von?: string, bis?: string, tickets?: number[], ohne?: number[] }} e
  */
-export function typenUebersicht({ laeufe, von, bis, tickets = [], ohne = [] }) {
+export function typenUebersicht({ laeufe, namen, von, bis, tickets = [], ohne = [] }) {
   const alle = laeufe
-    .map(laufAus)
+    .map((l) => laufAus(l, namen))
     .filter(Boolean)
     .filter((l) => imFenster(l, { von, bis, tickets, ohne }));
   const typ = (l) => (typeof l.agentType === "string" && l.agentType !== "" ? l.agentType : TYP_UNBEKANNT);
-  const namen = [...new Set(alle.map(typ))].sort((a, b) => (a === TYP_UNBEKANNT) - (b === TYP_UNBEKANNT) || (a < b ? -1 : a > b ? 1 : 0));
+  const typNamen = [...new Set(alle.map(typ))].sort((a, b) => (a === TYP_UNBEKANNT) - (b === TYP_UNBEKANNT) || (a < b ? -1 : a > b ? 1 : 0));
   return {
     modus: "typen",
     von: von ?? null,
     bis: bis ?? null,
-    typen: namen.map((n) => typZeile(n, alle.filter((l) => typ(l) === n))),
+    typen: typNamen.map((n) => typZeile(n, alle.filter((l) => typ(l) === n))),
     gesamt: typZeile("alle", alle),
   };
 }
@@ -169,12 +174,13 @@ export function renderTypen(r) {
 
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
-export function parseArgs(argv) {
+/** `namen` liefert den Standard-Agenten (`agenten.planer`), wenn `--agent` fehlt. */
+export function parseArgs(argv, namen) {
   const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string" }, typen: { type: "boolean" }, ...TICKET_OPTIONEN, schnitt: { type: "string" }, projekt: { type: "string" }, json: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { meldung: ticketMeldung });
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
   const { tickets, ohne, fehler: ticketFehler } = ticketFilterAus(werte);
-  const a = { agent: werte.agent ?? "kubernia-planner", json: werte.json === true, typen: werte.typen === true, agentGesetzt: werte.agent !== undefined, tickets, ohne };
+  const a = { agent: werte.agent ?? namen?.agenten?.planer, json: werte.json === true, typen: werte.typen === true, agentGesetzt: werte.agent !== undefined, tickets, ohne };
   for (const name of ["von", "bis", "schnitt", "projekt"]) if (werte[name] !== undefined) a[name] = werte[name];
   const gefunden = fehler?.text ?? ticketFehler;
   if (gefunden) a.fehler = gefunden;
@@ -184,21 +190,32 @@ export function parseArgs(argv) {
 }
 
 
-function main() {
-  const args = parseArgs(process.argv.slice(2));
+/**
+ * Das CLI als Funktion: gibt den Exit-Code zurück (0 ok, 1 Projekt-Config nicht nutzbar, 2 Aufruf-Fehler). Die Namen kommen aus der Projekt-Config
+ * (`config` ersetzt das Laden, Test) und werden vor allem anderen geprüft: ohne `agenten.planer` liest es kein Transkript.
+ */
+export function hauptlauf(argv, { config, ordner = projektOrdner, ladeTyp = ladeLaeufe, ladeAlle = ladeAlleLaeufe, out = console.log, err = console.error } = {}) {
+  const r = namenOderGrund("subagent-laufzeit", { config });
+  if (r.grund) {
+    err(r.grund);
+    return 1;
+  }
+  const namen = r.namen;
+  const args = parseArgs(argv, namen);
   if (args.fehler || !args.von) {
-    if (args.fehler) console.error(args.fehler);
-    console.error("Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-planner | --typen] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]");
-    process.exit(2);
+    if (args.fehler) err(args.fehler);
+    err(`Aufruf: node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent ${namen.agenten.planer} | --typen] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]`);
+    return 2;
   }
-  const dir = projektOrdner(args.projekt);
+  const dir = ordner(args.projekt);
   if (args.typen) {
-    const u = typenUebersicht({ laeufe: ladeAlleLaeufe(dir, args.von), von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne });
-    console.log(args.json ? JSON.stringify(u, null, 2) : renderTypen(u));
-    return;
+    const u = typenUebersicht({ laeufe: ladeAlle(dir, args.von), namen, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne });
+    out(args.json ? JSON.stringify(u, null, 2) : renderTypen(u));
+    return 0;
   }
-  const r = laufzeiten({ laeufe: ladeLaeufe(dir, args.agent, args.von), agent: args.agent, von: args.von, bis: args.bis, schnitt: args.schnitt, tickets: args.tickets, ohne: args.ohne });
-  console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
+  const lz = laufzeiten({ laeufe: ladeTyp(dir, args.agent, args.von), namen, agent: args.agent, von: args.von, bis: args.bis, schnitt: args.schnitt, tickets: args.tickets, ohne: args.ohne });
+  out(args.json ? JSON.stringify(lz, null, 2) : renderMarkdown(lz));
+  return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = hauptlauf(process.argv.slice(2));

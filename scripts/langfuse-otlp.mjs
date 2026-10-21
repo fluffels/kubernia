@@ -9,7 +9,8 @@
 import { priceParts, sumParts } from "./preise.mjs";
 import { subagentSpanId, traceIdVon } from "./langfuse-abgleich-kern.mjs";
 
-export const SCOPE_NAME = "kubernia-abgleich";
+/** Scope- und Service-Name der Abgleich-Spans: `<Repo-Name>-abgleich` (Repo-Name aus `repo` der Projekt-Config). */
+export const scopeName = (repoName) => `${repoName}-abgleich`;
 export const TRACE_NAME = "Abgleich";
 /** Spans je OTLP-Request (Chunking: ein Fehler verwirft nie mehr als einen Chunk). */
 export const MAX_SPANS_JE_REQUEST = 200;
@@ -118,11 +119,14 @@ function agentenVon(soll) {
 /**
  * Payloads für `eintraege` (die zu sendenden Generationen) einer Session. `soll` = das vollständige Soll (Agenten, Zeiten, Tags),
  * `ledgerSpans` = schon gesendete Subagent-Spans (werden nicht erneut gesendet). Benötigte Eltern-Spans kommen mit; Spans
- * stehen im ersten Chunk vor den Generationen. → `{ chunks: [{ payload, generationIds, spanIds }] }`.
+ * stehen im ersten Chunk vor den Generationen. `repoName` (Namensteil von `repo` der Projekt-Config) ist Pflicht: er benennt Scope und Service und ist das erste Tag.
+ * → `{ chunks: [{ payload, generationIds, spanIds }] }`.
  */
-export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans = [], env = {}, project, maxSpans = MAX_SPANS_JE_REQUEST }) {
+export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans = [], env = {}, project, repoName, maxSpans = MAX_SPANS_JE_REQUEST }) {
+  if (typeof repoName !== "string" || repoName === "") throw new Error("bauePayloads braucht repoName (Namensteil von repo der Projekt-Config)");
+  const scope = scopeName(repoName);
   const traceId = traceIdVon(session);
-  const tags = ["kubernia", "abgleich", ...[...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort()];
+  const tags = [repoName, "abgleich", ...[...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort()];
   const traceAttrs = traceAttribute({ session, tags, project, env });
   const agenten = agentenVon(soll);
   const spanIdVon = (agentId) => subagentSpanId(session, agentId);
@@ -168,7 +172,7 @@ export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans
     const teil = alle.slice(i, i + maxSpans);
     chunks.push({
       payload: {
-        resourceSpans: [{ resource: { attributes: [attr("service.name", SCOPE_NAME)] }, scopeSpans: [{ scope: { name: SCOPE_NAME }, spans: teil.map((t) => t.span) }] }],
+        resourceSpans: [{ resource: { attributes: [attr("service.name", scope)] }, scopeSpans: [{ scope: { name: scope }, spans: teil.map((t) => t.span) }] }],
       },
       generationIds: teil.filter((t) => t.gen).map((t) => t.id),
       spanIds: teil.filter((t) => !t.gen).map((t) => t.id),
