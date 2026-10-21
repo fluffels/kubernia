@@ -28,7 +28,9 @@ const C = raw as unknown as {
     owner: string;
     wiedervorlagen: { id: string; alerts?: number[] }[];
     offeneTitel?: string[];
-  }) => Required<Bekannt>;
+    offeneIssues?: { number: number; title: string; body: string; user: unknown }[];
+  }) => Required<Bekannt> & { issues: { number: number; titel: string; body: string }[] };
+  deckendesIssue: (a: Partial<Alert>, issues: { number: number; titel: string; body: string }[]) => { number: number; grund: string } | null;
   zeilenText: (g: Gruppe) => string;
   issueBody: (g: Gruppe[]) => string;
   plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null }) => Plan;
@@ -117,6 +119,75 @@ describe("nummernIn", () => {
   });
 });
 
+describe("deckendesIssue", () => {
+  const A = { nummer: 74, regel: "js/incomplete-sanitization", pfad: "src/content/drills/docker.ts" };
+  const iss = (body: string) => ({ number: 1703, titel: "Sanitization", body });
+  test("Alert-Nummer im Body deckt ab, auch in einer Liste", () => {
+    expect(C.deckendesIssue(A, [iss("Alert 74")])).toEqual({ number: 1703, grund: "nummer" });
+    expect(C.deckendesIssue(A, [iss("Alerts 70, 74, 75")])).toEqual({ number: 1703, grund: "nummer" });
+  });
+  test("nur #74 (Issue-Link) deckt nicht ab", () => {
+    expect(C.deckendesIssue(A, [iss("siehe #74")])).toBeNull();
+  });
+  test("Regel plus Verzeichnis deckt ab, auch für Geschwisterdateien und Backslash-Pfade", () => {
+    const body = "js/incomplete-sanitization in src/content/drills/{docker,git}.ts";
+    expect(C.deckendesIssue({ ...A, nummer: 99 }, [iss(body)])).toEqual({ number: 1703, grund: "regel+verzeichnis" });
+    expect(C.deckendesIssue({ ...A, nummer: 99, pfad: "src\\content\\drills\\k8s.ts" }, [iss(body)])).toEqual({ number: 1703, grund: "regel+verzeichnis" });
+  });
+  test("gleiche Regel, anderes Verzeichnis deckt nicht ab", () => {
+    expect(C.deckendesIssue({ ...A, pfad: "src/game/x.ts" }, [iss("js/incomplete-sanitization in src/content/drills/")])).toBeNull();
+  });
+  test("Regel-ID nur an Wortgrenze", () => {
+    expect(C.deckendesIssue(A, [iss("js/incomplete-sanitization-x in src/content/drills/")])).toBeNull();
+  });
+  test("bloße Regelnennung ohne Verzeichnis im Alert deckt nicht ab", () => {
+    expect(C.deckendesIssue({ ...A, pfad: "" }, [iss("js/incomplete-sanitization in src/content/drills/")])).toBeNull();
+    expect(C.deckendesIssue({ ...A, pfad: "datei.ts" }, [iss("js/incomplete-sanitization überall")])).toBeNull();
+  });
+  test("kein Issue: null", () => {
+    expect(C.deckendesIssue(A, [])).toBeNull();
+  });
+});
+
+describe("bekannteAlerts offene Issues", () => {
+  const offen = (o: Record<string, unknown> = {}) => ({ number: 1703, title: "Sanitization", body: "Alert 74", user: { login: OWNER, type: "User" }, ...o });
+  const mit = (i: unknown[]) => C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], offeneIssues: i as never }).issues.map((x) => x.number);
+  test("offene Issues vertrauter Autoren werden übernommen", () => {
+    expect(mit([offen()])).toEqual([1703]);
+  });
+  test("unvertrauter Autor zählt nicht", () => {
+    expect(mit([offen({ user: { login: "fremd", type: "User" } })])).toEqual([]);
+  });
+  test("das eigene Ticket ZIEL_TITEL deckt sich nie selbst ab", () => {
+    expect(mit([offen({ title: C.ZIEL_TITEL })])).toEqual([]);
+  });
+  test("Sammeltickets zählen nicht", () => {
+    expect(mit([offen({ title: "Harness-Härtung (gesammelt)" }), offen({ title: "Langfuse-Befunde (gesammelt)" })])).toEqual([]);
+  });
+  test("ohne offeneIssues: leere Liste", () => {
+    expect(C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [] }).issues).toEqual([]);
+  });
+});
+
+describe("plane mit deckenden Issues", () => {
+  const issues = [{ number: 1703, titel: "S", body: "Alerts 5" }];
+  const bekannt = { ...keine, issues };
+  test("abgedeckter Spitzen-Alert fällt aus Spitze, wird gemeldet; offenes Ticket wird geschlossen mit abgedecktDurch", () => {
+    const p = C.plane({ alerts: [alert({ nummer: 5 })], bekannt, offenesIssue: { number: 9, body: "x" } }) as unknown as { issue: Record<string, unknown>; abgedeckt: unknown[] };
+    expect(p.issue).toEqual({ art: "schliessen", nummer: 9, abgedecktDurch: [1703] });
+    expect(p.abgedeckt).toEqual([{ nummer: 5, issue: 1703, grund: "nummer" }]);
+  });
+  test("abgedeckter Zeilen-Alert erzeugt keine Zeile; nicht abgedeckter bleibt", () => {
+    const z = (n: number) => alert({ nummer: n, tool: "Scorecard", regel: "X" });
+    const p = C.plane({ alerts: [z(5), z(6)], bekannt, offenesIssue: null });
+    expect(p.zeilen.flatMap((g) => g.nummern)).toEqual([6]);
+  });
+  test("ohne Abdeckung: kein abgedecktDurch", () => {
+    const p = C.plane({ alerts: [], bekannt: keine, offenesIssue: { number: 9, body: "x" } });
+    expect(p.issue).toEqual({ art: "schliessen", nummer: 9 });
+  });
+});
+
 describe("bekannteAlerts", () => {
   const zeile = "- [ ] Code-Scanning: Scorecard Foo (high), Alerts 8, 9. Vorschlag: x";
   test("offene Zeile vertrauter Autoren liefert Nummern", () => {
@@ -178,7 +249,7 @@ describe("plane", () => {
   const rest = (n: number, o: Partial<Alert> = {}) => alert({ nummer: n, tool: "Scorecard", regel: "PinnedDependenciesID", stufe: "high", ...o });
 
   test("keine Funde ohne Issue: nichts", () => {
-    expect(C.plane({ alerts: [], bekannt: keine, offenesIssue: null })).toEqual({ issue: { art: "nichts" }, zeilen: [] });
+    expect(C.plane({ alerts: [], bekannt: keine, offenesIssue: null })).toEqual({ issue: { art: "nichts" }, zeilen: [], abgedeckt: [] });
   });
   test("keine Funde mit offenem Issue: schliessen", () => {
     expect(C.plane({ alerts: [], bekannt: keine, offenesIssue: { number: 9, body: "x" } }).issue.art).toBe("schliessen");
@@ -416,6 +487,21 @@ describe("lauf", () => {
     };
     expect(C.lauf({ io: i, trocken: false })).toBe(1);
     expect(calls).toEqual([]);
+  });
+  test("abgedeckter Alert: Log nennt Issue und Grund, Schließ-Kommentar nennt das deckende Issue", () => {
+    const logs: string[] = [];
+    const kommentare: string[] = [];
+    const i = {
+      ladeAlerts: () => [roh({ number: 5 })],
+      ladeKontext: () => ({ ...kontext, offenesIssue: { number: 9, body: "x" }, offeneIssues: [{ number: 1703, title: "S", body: "Alert 5", user: { login: OWNER, type: "User" } }] }),
+      schliesse: (_n: number, k: string) => kommentare.push(k),
+      log: (m: string) => logs.push(m),
+      projectToken: "t",
+    };
+    expect(C.lauf({ io: i, trocken: false })).toBe(0);
+    expect(logs).toContain("Code-Scanning-Inbox: Alerts 5 abgedeckt durch #1703 (nummer)");
+    expect(kommentare[0]).toContain("#1703");
+    expect(kommentare[0]).not.toContain("Keine offenen");
   });
   test("lesbare Alerts ohne Funde und offenes Issue: schliesst", () => {
     const calls: string[] = [];
