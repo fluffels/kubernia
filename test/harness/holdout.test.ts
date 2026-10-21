@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+import { liesTicketAblauf } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 
@@ -63,7 +64,7 @@ const ABNAHME_TOOLS = [
   ...["navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "type", "wait_for", "console_messages", "resize", "tabs", "close", "handle_dialog"].map((t) => `mcp__playwright__browser_${t}`),
 ];
 
-const SKILL = lies(".claude/skills/kubernia/SKILL.md");
+const SKILL = liesTicketAblauf();
 const LENSES = lies(".claude/skills/review-lenses/SKILL.md");
 const UMSETZER = lies(".claude/agents/kubernia-umsetzer.md");
 const GANZE_DATEIEN: [string, string][] = [

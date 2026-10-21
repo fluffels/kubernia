@@ -1,0 +1,193 @@
+/* Ticket-Ablauf-Wächter (#1806, ADR 0028 Fortschreibung) – der Ablauf der Ticket-Skills steht genau einmal.
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
+ * Regeln:
+ *   1. Beide Ticket-Skills (Produkt-Skill nach `agenten.ticketSkill` und `factory`) verweisen auf `.claude/skills/factory/ablauf.md`.
+ *   2. Der Produkt-Skill fährt den Bereich `spiel`, `factory` den Bereich `agentic`; nie umgekehrt.
+ *   3. Kein Ablauf-Werkzeug (Agent-Spawn, Skripte des Ablaufs) steht in einer Ticket-Skill-Datei.
+ *   4. Kein Satz von 60 oder mehr Zeichen aus dem Ablauf steht wortgleich in einer anderen Skill-Datei.
+ *   5. Die Auslöser der beiden `description:` überschneiden sich nicht.
+ *   6. Ein Ticket-Skill bleibt Einstieg: keine Unterüberschrift, nur die fetten Absätze „Bereich“ und „Lies … ablauf.md“, Rumpf höchstens 700 Zeichen.
+ * Bekannte Grenzen: eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich; ein kurzer Absatz ohne Fett und Überschrift (auch Listenpunkt, zweite H1) innerhalb des Rumpfbudgets bleibt unbemerkt, das Budget begrenzt ihn nur.
+ */
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, test } from "vitest";
+import { liesTicketAblauf, setzeAgentenWerte, TICKET_ABLAUF } from "../support/ticket-ablauf";
+
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const lies = (rel: string): string => readFileSync(ROOT + rel, "utf8");
+const MIN_SATZ = 60;
+
+const norm = (s: string): string => s.replace(/\s+/g, " ").trim();
+
+/** Sätze (Trenner `. ; : ! ?` oder Zeilenumbruch) mit mindestens `MIN_SATZ` Zeichen nach Whitespace-Normalisierung. */
+export function langeSaetze(text: string): string[] {
+  return text
+    .split(/[.;:!?\n]/)
+    .map(norm)
+    .filter((s) => s.length >= MIN_SATZ);
+}
+
+/** Sätze des Ablaufs, die in einer der anderen Dateien wortgleich (normalisiert) vorkommen: `datei: Satzanfang`. */
+export function doppelterAblauf(ablauf: string, dateien: Record<string, string>): string[] {
+  const saetze = langeSaetze(ablauf);
+  const out: string[] = [];
+  for (const [pfad, text] of Object.entries(dateien)) {
+    const n = norm(text);
+    for (const s of saetze) if (n.includes(s)) out.push(`${pfad}: ${s.slice(0, 60)}`);
+  }
+  return out;
+}
+
+const MAX_RUMPF = 700;
+const ERLAUBTE_FETTE_ABSAETZE = ["**Bereich:", "**Lies `" + TICKET_ABLAUF + "`"];
+
+/** Abweichungen eines Ticket-Skills von der Einstiegsform (Rumpf nach dem Frontmatter). */
+export function einstiegAbweichungen(skillText: string): string[] {
+  const rumpf = skillText.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  const out: string[] = [];
+  for (const zeile of rumpf.split(/\r?\n/)) {
+    if (/^#{2,}\s/.test(zeile)) out.push(`Unterüberschrift: ${zeile.slice(0, 40)}`);
+    if (zeile.startsWith("**") && !ERLAUBTE_FETTE_ABSAETZE.some((p) => zeile.startsWith(p))) out.push(`fetter Absatz: ${zeile.slice(0, 40)}`);
+  }
+  if (rumpf.length > MAX_RUMPF) out.push(`Rumpf ${rumpf.length} > ${MAX_RUMPF} Zeichen`);
+  return out;
+}
+
+const SIGNATUREN = ["Agent({", "subagent_type", "SendMessage", "naechstes-ticket.mjs", "ticket-lock.mjs", "haupt-sync.mjs", "abnahme.mjs", "fremdtext.mjs"];
+
+/** Ablauf-Werkzeuge, die nur der gemeinsame Ablauf nennen darf. */
+export function ablaufSignaturen(text: string): string[] {
+  return SIGNATUREN.filter((s) => text.includes(s));
+}
+
+/** Die zitierten Auslöser (in „…“) der `description:`-Zeile. */
+export function ausloeser(skillText: string): string[] {
+  const zeile = /^description:(.*)$/m.exec(skillText)?.[1] ?? "";
+  return [...zeile.matchAll(/[„"]([^“"]+)[“"]/g)].map((m) => m[1].toLowerCase());
+}
+
+/** Auslöser, die in beiden Listen vorkommen, oder sich als Teilstring enthalten. */
+export function gemeinsameAusloeser(a: string[], b: string[]): string[] {
+  return a.filter((x) => b.some((y) => x === y || x.includes(y) || y.includes(x)));
+}
+
+function skillMarkdowns(dir = ".claude/skills"): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(ROOT + dir)) {
+    const rel = `${dir}/${name}`;
+    if (statSync(ROOT + rel).isDirectory()) out.push(...skillMarkdowns(rel));
+    else if (name.endsWith(".md")) out.push(rel);
+  }
+  return out;
+}
+
+const cfg = JSON.parse(lies(".factory/projekt.json")) as { agenten: Record<string, string> };
+const PRODUKT = `.claude/skills/${cfg.agenten.ticketSkill}/SKILL.md`;
+const FACTORY = ".claude/skills/factory/SKILL.md";
+
+describe("Ticket-Ablauf: Hilfsfunktionen", () => {
+  const ablauf = "Der Hauptchat liest die Datei nach Schritt 0 einmal je Skill-Aufruf und setzt sie ein.";
+  test("kopierter Satz mit anderem Zeilenumbruch wird erkannt", () => {
+    const kopie = "Der Hauptchat liest die Datei\nnach Schritt 0 einmal je   Skill-Aufruf und setzt sie ein.";
+    assert.equal(doppelterAblauf(ablauf, { "a.md": kopie }).length, 1);
+  });
+  test("Satz unter 60 Zeichen wird nicht gemeldet", () => {
+    assert.deepEqual(doppelterAblauf("Kurzer Satz hier.", { "a.md": "Kurzer Satz hier." }), []);
+  });
+  test("Einstiegsform: Unterüberschrift, fremder fetter Absatz und zu langer Rumpf werden gemeldet", () => {
+    assert.equal(MAX_RUMPF, 700, "das Rumpfbudget wird nur gesenkt, nie angehoben");
+    const kopf = "---\nname: x\n---\n\n# Titel\n\n**Bereich: `spiel`.** Text.\n";
+    assert.deepEqual(einstiegAbweichungen(kopf), []);
+    assert.equal(einstiegAbweichungen(kopf + "\n## Umsetzer\n\nDer Umsetzer wird ohne Planer gestartet.\n").length, 1);
+    assert.equal(einstiegAbweichungen(kopf + "\n**Der Umsetzer wird ohne Planer gestartet.**\n").length, 1);
+    assert.equal(einstiegAbweichungen(kopf + "\n**Lies `.claude/skills/factory/ablauf.md` und folge ihm.**\n").length, 0);
+    assert.equal(einstiegAbweichungen(kopf + "\n**Lies `docs/x.md`.**\n**Bereichsleiter.**\n").length, 2);
+    assert.equal(einstiegAbweichungen(kopf + "x".repeat(MAX_RUMPF)).length, 1);
+    assert.equal(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF)).length, 0);
+    assert.equal(einstiegAbweichungen("---\r\nname: x\r\n---\r\n## A\r\n").length, 1);
+    assert.equal(einstiegAbweichungen("---\r\nname: x\r\n---\r\n" + "x".repeat(MAX_RUMPF)).length, 0);
+    assert.equal(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF + 1)).length, 1);
+    assert.match(einstiegAbweichungen(kopf + "\n### X\n")[0], /^Unterüberschrift/);
+    assert.match(einstiegAbweichungen(kopf + "\n**Fremd.**\n")[0], /^fetter Absatz/);
+    assert.match(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF + 1))[0], /^Rumpf/);
+    assert.equal(einstiegAbweichungen("---\nname: x\n---\n---\n" + "x".repeat(MAX_RUMPF)).length, 1);
+  });
+  test("Satzgrenze: genau 60 Zeichen werden gemeldet, 59 nicht", () => {
+    const s60 = "a".repeat(60);
+    const s59 = "a".repeat(59);
+    assert.equal(doppelterAblauf(s60, { "a.md": s60 }).length, 1);
+    assert.deepEqual(doppelterAblauf(s59, { "a.md": s59 }), []);
+  });
+  test("Auslöser: Teilstring in beiden Richtungen wird gemeldet", () => {
+    assert.deepEqual(gemeinsameAusloeser(["mehrere tickets"], ["mehrere tickets bitte"]), ["mehrere tickets"]);
+    assert.deepEqual(gemeinsameAusloeser(["mehrere tickets bitte"], ["mehrere tickets"]), ["mehrere tickets bitte"]);
+  });
+  test("Auslöser: ohne description-Zeile leer, gerade Anführungszeichen werden erkannt", () => {
+    assert.deepEqual(ausloeser("kein Frontmatter"), []);
+    assert.deepEqual(ausloeser('description: Text "Nächstes Ticket", "Weiter"'), ["nächstes ticket", "weiter"]);
+  });
+  test("ein anderer Text bleibt ohne Treffer", () => {
+    assert.deepEqual(doppelterAblauf(ablauf, { "a.md": "Ganz anderer Inhalt ohne Überschneidung, aber auch lang genug für den Mindestwert." }), []);
+  });
+  test("Signaturen: Agent-Spawn im dünnen Skill ist rot, ein Verweis nicht", () => {
+    assert.deepEqual(ablaufSignaturen('Agent({ subagent_type: "x" })'), ["Agent({", "subagent_type"]);
+    assert.deepEqual(ablaufSignaturen("Lies `.claude/skills/factory/ablauf.md` und folge ihm."), []);
+  });
+  test("Auslöser: gemeinsamer Auslöser wird gemeldet, getrennte nicht", () => {
+    const a = ausloeser('description: Text. Auslösen bei „nächstes Spiel-Ticket“, „mehrere Tickets“.');
+    const b = ausloeser('description: Text. Auslösen bei „nächstes Agentic-Ticket“, „mehrere Tickets“.');
+    assert.deepEqual(gemeinsameAusloeser(a, b), ["mehrere tickets"]);
+    assert.deepEqual(gemeinsameAusloeser(a, ausloeser("description: „nächstes Agentic-Ticket“")), []);
+  });
+  test("Platzhalter: unbekannter Schlüssel wirft, bekannter wird ersetzt", () => {
+    assert.throws(() => setzeAgentenWerte("<agenten.x>", { planer: "p" }), /Unbekannter Platzhalter/);
+    assert.equal(setzeAgentenWerte("<agenten.planer>!", { planer: "p" }), "p!");
+  });
+});
+
+describe("Ticket-Ablauf: das echte Repo", () => {
+  test("beide Ticket-Skills verweisen auf den gemeinsamen Ablauf", () => {
+    for (const skill of [PRODUKT, FACTORY]) assert.ok(lies(skill).includes(TICKET_ABLAUF), `${skill} ohne Verweis auf ${TICKET_ABLAUF}`);
+  });
+  test("der Ablauf trägt keinen unersetzten Platzhalter nach dem Einsetzen", () => {
+    assert.ok(!/<agenten\.\w+>/.test(liesTicketAblauf()));
+  });
+  test("der Bereich passt zum Skill und ist nie vertauscht", () => {
+    assert.ok(lies(PRODUKT).includes("--bereich spiel"));
+    assert.ok(!lies(PRODUKT).includes("--bereich agentic"));
+    assert.ok(lies(FACTORY).includes("--bereich agentic"));
+    assert.ok(!lies(FACTORY).includes("--bereich spiel"));
+  });
+  test("jeder Ticket-Skill bleibt in Einstiegsform", () => {
+    for (const skill of [PRODUKT, FACTORY]) assert.deepEqual(einstiegAbweichungen(lies(skill)), [], skill);
+  });
+  test("keine Ablauf-Werkzeuge in den Ticket-Skills", () => {
+    for (const skill of [PRODUKT, FACTORY]) assert.deepEqual(ablaufSignaturen(lies(skill)), [], skill);
+  });
+  test("kein Ablaufsatz steht in einer anderen Skill-Datei", () => {
+    const andere: Record<string, string> = {};
+    for (const rel of skillMarkdowns()) if (rel !== TICKET_ABLAUF) andere[rel] = lies(rel);
+    assert.ok(PRODUKT in andere && FACTORY in andere, "die Dateiliste trägt beide Ticket-Skills (Rekursion intakt)");
+    assert.deepEqual(doppelterAblauf(lies(TICKET_ABLAUF), andere), []);
+  });
+  test("die Auslöser der beiden Skills überschneiden sich nicht, nur factory nennt Agentic", () => {
+    const p = ausloeser(lies(PRODUKT));
+    const f = ausloeser(lies(FACTORY));
+    assert.ok(p.length > 0 && f.length > 0, "beide description: tragen zitierte Auslöser");
+    assert.deepEqual(gemeinsameAusloeser(p, f), []);
+    assert.ok(!p.some((x) => x.includes("agentic")));
+    assert.ok(f.some((x) => x.includes("agentic")));
+  });
+  test("keine Aussage mehr, `/kubernia` wähle den Bereich agentic", () => {
+    const dateien = ["AGENTS.md", "docs/ticket-reihenfolge.md", "docs/harness-glossar.md", ...skillMarkdowns()];
+    for (const rel of dateien) assert.ok(!/\/kubernia agentic|\/kubernia spiel/.test(lies(rel)), rel);
+  });
+  test("join-Pfad des Ablaufs existiert", () => {
+    assert.ok(statSync(join(ROOT, TICKET_ABLAUF)).isFile());
+  });
+});

@@ -389,7 +389,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
   });
 
   test("Bindung: jeder ERGEBNIS-Wert hat einen Bullet im kubernia-Skill (#1740 L1)", () => {
-    const skill = readFileSync(resolve(ROOT, ".claude/skills/kubernia/SKILL.md"), "utf8");
+    const skill = readFileSync(resolve(ROOT, ".claude/skills/factory/ablauf.md"), "utf8");
     for (const wert of abschluss.ERGEBNIS_WERTE) {
       assert.ok(skill.includes(`- **\`${wert}\`**`), `kubernia/SKILL.md ohne Bullet **\`${wert}\`**`);
     }

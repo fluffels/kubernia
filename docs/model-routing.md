@@ -62,7 +62,7 @@ Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) i
 
 ## 4. Konvention im Ticket-Workflow
 
-- Ticket claimen, dann **Planung** durch den `kubernia-planner` (`opus`, `xhigh`), aufgerufen vom `kubernia`-Skill. Er ist auch der Weg für Handplanung („plane das Ticket") und für die Aufteilung eines Epics (er schlägt die Kinder vor, der Aufrufer legt sie an). Es gibt keine zweite Planungs-Oberfläche.
+- Ticket claimen, dann **Planung** durch den `kubernia-planner` (`opus`, `xhigh`), aufgerufen vom Ticket-Ablauf (Skills `kubernia` und `factory`). Er ist auch der Weg für Handplanung („plane das Ticket") und für die Aufteilung eines Epics (er schlägt die Kinder vor, der Aufrufer legt sie an). Es gibt keine zweite Planungs-Oberfläche.
 - **Review** durch Lens-Subagenten `kubernia-lens` (Zahl nach der [Staffel](#review-staffel-1265)) (`opus`, `high` im Frontmatter), nie inline ([`review-lenses`](../.claude/skills/review-lenses/SKILL.md)).
 - **Umsetzung** auf `sonnet` über den Subagenten `kubernia-umsetzer`. Mehrere Tickets laufen nacheinander mit je einem frischen Umsetzer; einen eigenen Stapel-Skill gibt es nicht mehr.
 - **Explore** über den Projekt-Agenten `Explore` (`haiku`, `low`), den jede Explore-Delegation automatisch nutzt (§2).
@@ -773,7 +773,7 @@ Bewacht von [`test/harness/langfuse-erfassung.test.ts`](../test/harness/langfuse
 
 ## 6. Budget-Pacing (#1358)
 
-Das Abo-Limit gilt **kontoweit** und über sieben Tage. Ein Ticketlauf darf es nicht allein aufbrauchen: eine feste Reserve bleibt für die übrige Arbeit der Maintainerin. Darum fragt der Skill `kubernia` im Modus „Mehrere Tickets“ vor jedem Ticket `node scripts/budget-pacing.mjs` (Lib: `scripts/budget-lib.mjs`).
+Das Abo-Limit gilt **kontoweit** und über sieben Tage. Ein Ticketlauf darf es nicht allein aufbrauchen: eine feste Reserve bleibt für die übrige Arbeit der Maintainerin. Darum fragt der Ticket-Ablauf im Modus „Mehrere Tickets“ vor jedem Ticket `node scripts/budget-pacing.mjs` (Lib: `scripts/budget-lib.mjs`).
 
 **Datenquellen.** Primär der Snapshot der Statusline: die Projekt-`statusLine` in `.claude/settings.json` startet `scripts/statusline.mjs`; es legt `rate_limits` (`seven_day`, `five_hour`, je `used_percentage` und `resets_at`) in `<OS-Temp>/claude-rate-limits.json` ab (kontoweit, für alle Worktrees; Override `KQ_RATE_LIMITS_SNAPSHOT`) und reicht die persönliche Statusline aus `~/.claude/settings.json` unverändert durch (Timeout 5 s, Schleifenschutz `KQ_STATUSLINE_DURCHREICHEN`, endet immer mit Exit 0). Ohne `refreshInterval`: Die Statusline läuft nur bei Ereignissen der Session, ein Timer würde alte Werte mit frischem Zeitstempel schreiben. Fehlt der Snapshot oder ist er älter als 15 min, läuft eine **Headless-Probe** (`claude -p … --model haiku --output-format stream-json --verbose --max-turns 1`, cwd im OS-Temp, also ohne Projekt-Hooks und Tag `kubernia`; ein Haiku-Aufruf, 60 s Timeout) und liest das `rate_limit_event`; `--ohne-probe` verzichtet darauf. Eine `statusLine` in `.claude/settings.local.json` hätte Vorrang vor der Projekt-Einstellung, dann liefert nur die Probe.
 
