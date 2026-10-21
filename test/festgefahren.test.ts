@@ -22,6 +22,9 @@ import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as festgefahren from "../scripts/check-festgefahren.mjs";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+
 const isStuck: (n: number) => boolean = festgefahren.isStuck;
 const buildStuckComment: (count: number, url: string, label: string) => string = festgefahren.buildStuckComment;
 const MAX_FAILED_PUSHES: number = festgefahren.MAX_FAILED_PUSHES;
@@ -38,7 +41,7 @@ describe("Festgefahren-Wächter (#904)", () => {
   });
 
   test("stuckLabel() liefert labels.festgefahren der Projekt-Config", () => {
-    assert.strictEqual(stuckLabel(), STUCK_LABEL);
+    assert.strictEqual(stuckLabel(ladeProjektConfig()), STUCK_LABEL);
   });
 
   // ── isStuck: Schwellen-Check ─────────────────────────────────────────────

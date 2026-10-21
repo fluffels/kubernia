@@ -25,6 +25,8 @@ import * as rawLib from "../scripts/board-lib.mjs";
 import * as rawTakt from "../scripts/board-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLangfuse from "../scripts/langfuse-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
 
 type Board = { projectId: string; nummer: number; statusFeldId: number | string; statusFeldNodeId: string; todoOptionId: string };
 const L = rawLib as unknown as { boardFuerRolle: (r: string) => Board };
@@ -112,7 +114,7 @@ describe("Default-Wrapper der Takt-Skripte schreiben ins Factory-Board", () => {
   test("langfuse-takt fuehreStatusAus: Default `imBoardAnlegen` und `setze` treffen das Factory-Board", () => {
     const r = LF.fuehreStatusAus(
       { aktion: "nach-oben", nr: 9 },
-      { repo: "o/r", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "tok", items: [], io: { gh: () => ({ node_id: "I_n" }) } },
+      { repo: "o/r", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "tok", items: [], config: ladeProjektConfig(), io: { gh: () => ({ node_id: "I_n" }) } },
     );
     expect(r).toMatchObject({ ok: true, itemId: "PVTI_x" });
     nur(factory, produkt);
