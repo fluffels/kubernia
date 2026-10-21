@@ -184,7 +184,9 @@ export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false 
  */
 export async function setzeUndPruefe({ nr, position, dry = false, board }, io = {}) {
   if (!board) throw new Error("setzeUndPruefe: board fehlt");
-  const { loadItems: lade = loadItems, setPosition: setze = setPosition, sleep: warte = sleep } = io;
+  const lade = io.loadItems ?? (() => loadItems(board)); // Standard: immer das ausdrücklich übergebene Board
+  const setze = io.setPosition ?? ((_board, id, afterId) => setPosition(board, id, afterId));
+  const warte = io.sleep ?? sleep;
   let neuGesetzt = 0;
   for (let versuch = 1; versuch <= PRUEF_VERSUCHE; versuch++) {
     const schritt = pruefSchritt({ items: lade(board), nr, position, neuGesetzt, dry });
