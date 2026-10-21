@@ -104,7 +104,7 @@ export function erstesZeile(prompt) {
  * Kennzahlen eines Laufs, `null` ohne gültige Zeitstempel. `namen` (Ticket-Namen aus der Projekt-Config, `ticket-namen.mjs`) ist Pflicht: ein fehlendes
  * Objekt wirft, auch der Index aus `.map(laufAus)` (statt `.map((l) => laufAus(l, namen))`) zählt als fehlend.
  */
-export function laufAus({ meta, zeilen, datei }, namen) {
+export function laufAus({ meta, zeilen, datei, session }, namen) {
   if (!namen?.patchMuster) throw new Error("laufAus braucht die Ticket-Namen (ticketNamen(config)) als zweites Argument");
   const zeiten = zeilen.map((r) => r?.timestamp).filter(gueltig).map(ms);
   if (!zeiten.length) return null;
@@ -122,6 +122,7 @@ export function laufAus({ meta, zeilen, datei }, namen) {
     agentType: meta?.agentType ?? null,
     modelle: [...new Set(calls.map((c) => c.model).filter(istEchtesModell))].sort(),
     datei: datei ?? null,
+    ...(session ? { session } : {}), // nur mit Session im Ergebnis: die Golden-Ausgaben ohne Transkriptordner bleiben byte-gleich
     beschreibung: typeof meta?.description === "string" ? meta.description : null,
     brille: beschr.brille,
     runde: beschr.runde ?? (beschr.merge ? null : patch?.runde) ?? null,
@@ -189,7 +190,7 @@ function ladeLaeufeWo(dir, von, passt) {
         continue;
       }
       if (!passt(meta)) continue;
-      laeufe.push({ meta, zeilen: transkriptZeilen(readFileSync(jsonl, "utf8")), datei: `${id}/subagents/${basis}.jsonl` });
+      laeufe.push({ meta, zeilen: transkriptZeilen(readFileSync(jsonl, "utf8")), datei: `${id}/subagents/${basis}.jsonl`, session: id });
     }
   }
   return laeufe;

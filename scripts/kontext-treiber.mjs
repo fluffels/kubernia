@@ -213,7 +213,7 @@ export function analysiereLauf(lauf, { wurzel = null, namen } = {}) {
     ticket: kopf?.ticket ?? null,
     sammel: kopf?.sammel ?? false,
     offen: Boolean(kopf?.offen),
-    sessions: kopf?.datei ? [String(kopf.datei).split("/")[0]] : [],
+    sessions: kopf?.session ? [String(kopf.session)] : [],
     brille: kopf?.brille ?? null,
     schnitt: kopf?.schnitt ?? null,
     einstieg: kopf?.einstieg ?? null,

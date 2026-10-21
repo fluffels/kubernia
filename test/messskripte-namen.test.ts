@@ -128,6 +128,11 @@ describe("subagent-laeufe: Ticket aus dem Worktree-Präfix der Config", () => {
     expect(L.ticketAusLauf({ patch: null, prompt: "worktrees/ab-7" }, NAMEN)).toBe(7);
     expect(L.ticketAusLauf({ patch: null, prompt: "worktrees/kq-7" }, NAMEN)).toBeNull();
   });
+  test("laufAus reicht die Session durch und lässt das Feld ohne Session weg (#1821 L19)", () => {
+    const s = L.laufAus({ ...lauf("x", "a"), session: "s9" }, NAMEN) as unknown as Record<string, unknown>;
+    expect(s.session).toBe("s9");
+    expect(Object.keys(L.laufAus(lauf("x", "a"), NAMEN) as object)).not.toContain("session");
+  });
   test("Negativfall: ohne Namen wirft laufAus, auch der Index aus .map(laufAus)", () => {
     expect(() => L.laufAus(lauf("x", "a"))).toThrow(/Ticket-Namen/);
     expect(() => [lauf("x", "a")].map(L.laufAus as never)).toThrow(/Ticket-Namen/);
