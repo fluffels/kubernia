@@ -1,4 +1,5 @@
 ---
+# factory:projektwert agenten.umsetzer
 name: kubernia-umsetzer
 description: Setzt EIN geclaimtes, geplantes kubernia-Ticket bis zum Merge um (Worktree, TDD, verify, Review-Lenses, PR, CI-Fix, Merge, Cleanup) und meldet nötige Entscheidungen zurück. Nur vom Ticket-Skill nach Claim, Plan und Pre-Flight spawnen.
 model: sonnet

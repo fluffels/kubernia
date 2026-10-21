@@ -1,4 +1,5 @@
 ---
+# factory:projektwert agenten.lens
 name: kubernia-lens
 description: Review-Kritiker für genau eine Brille (Architektur, Requirement-Treue, Test-Adäquanz oder Doku) auf einem fertigen kubernia-Diff. Nur über den Skill review-lenses spawnen, nicht von sich aus delegieren.
 model: opus

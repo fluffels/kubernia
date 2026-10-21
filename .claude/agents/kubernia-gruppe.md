@@ -1,4 +1,5 @@
 ---
+# factory:projektwert agenten.gruppe
 name: kubernia-gruppe
 description: Setzt EINE Gruppe von Zeilen eines kubernia-Sammeltickets im übergebenen Worktree um (TDD, gezielte Tests, Commits) und berichtet knapp. Nur vom kubernia-umsetzer je Gruppe spawnen, nie vom Hauptchat.
 model: sonnet

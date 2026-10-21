@@ -464,6 +464,126 @@ describe("check-factory-drift", () => {
   });
 });
 
+// ── Projektwerte (#1746): Sync rendert aus der Config des Ziels, das Drift-Gate prüft sie immer ──────────
+
+const PW = { start: "<!-- factory:projektwerte:start -->", ende: "<!-- factory:projektwerte:end -->" };
+const PW_MANIFEST = {
+  version: 1,
+  eintraege: [
+    { pfad: ".claude/agents/w.md", ring: "kern", quelle: "t" },
+    { pfad: "docs/d.md", block: "pw", ring: "kern", quelle: "t" },
+  ],
+};
+const pwBlock = (inhalt: string): string => `${lib.markerStart("pw")}\n${PW.start}\n${inhalt}${PW.ende}\n${lib.markerEnde("pw")}`;
+const PW_AGENT = "---\n# factory:projektwert agenten.planer\nname: quelle-planer\nmodel: opus\n---\n# Agent\n";
+function pwConfig(planer: string): string {
+  const echt = JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { repo: string; agenten: Record<string, string> };
+  echt.repo = "acme/demo";
+  echt.agenten.planer = planer;
+  return JSON.stringify(echt, null, 2) + "\n";
+}
+function pwQuelle(): string {
+  const q = tmp();
+  schreibe(q, ".factory/besitz.json", JSON.stringify(PW_MANIFEST, null, 2) + "\n");
+  schreibe(q, ".claude/agents/w.md", PW_AGENT);
+  schreibe(q, "docs/d.md", `# D\n\n${pwBlock("Quellwert\n")}\n`);
+  return q;
+}
+function pwZiel(planer = "wk-planer"): string {
+  const z = tmp();
+  schreibe(z, ".factory/projekt.json", pwConfig(planer));
+  schreibe(z, "docs/d.md", `# Ziel\n\n${pwBlock("alt\n")}\n\nProjekttext\n`);
+  return z;
+}
+
+describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
+  test("K1: Ganze Datei und Block-Einheit bekommen die Werte aus der Config des Ziels, der zweite Lauf schreibt nichts", () => {
+    const q = pwQuelle();
+    const z = pwZiel();
+    const r = laufe(["--quelle", q, "--ziel", z]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(lies(z, ".claude/agents/w.md"), /\nname: wk-planer\n/);
+    assert.match(lies(z, "docs/d.md"), /\| `agenten\.planer` \| `wk-planer` \|/);
+    assert.ok(lies(z, "docs/d.md").endsWith("\n\nProjekttext\n"));
+    assert.match(lies(q, ".claude/agents/w.md"), /name: quelle-planer/, "die Quelle bleibt unverändert");
+    const vorher = [lies(z, ".claude/agents/w.md"), lies(z, "docs/d.md"), lies(z, ".factory/sync-stand.json")];
+    const zwei = laufe(["--quelle", q, "--ziel", z]);
+    assert.match(zwei.out, /0 geändert/);
+    assert.deepEqual([lies(z, ".claude/agents/w.md"), lies(z, "docs/d.md"), lies(z, ".factory/sync-stand.json")], vorher);
+  });
+
+  test("der Sync-Stand-Hash ist der Hash des Quelltextes mit geleerten Werten, zwei Ziele mit anderen Werten teilen ihn", () => {
+    const q = pwQuelle();
+    const a = pwZiel("eins-planer");
+    const b = pwZiel("zwei-planer");
+    assert.equal(laufe(["--quelle", q, "--ziel", a]).code, 0);
+    assert.equal(laufe(["--quelle", q, "--ziel", b]).code, 0);
+    const stand = (z: string): Record<string, string> => (JSON.parse(lies(z, ".factory/sync-stand.json")) as { einheiten: Record<string, string> }).einheiten;
+    assert.deepEqual(stand(a), stand(b));
+    assert.equal(stand(a)[".claude/agents/w.md"], lib.einheitHash({ pfad: ".claude/agents/w.md" }, PW_AGENT));
+    assert.equal(drift1(a).code, 0, drift1(a).err);
+    assert.equal(drift1(b).code, 0, drift1(b).err);
+  });
+
+  test("Ziel ohne Config, Marker ohne Ende und fehlender Schlüssel brechen ab, nichts wird geschrieben", () => {
+    const ohneConfig = pwZiel();
+    rmSync(join(ohneConfig, ".factory/projekt.json"));
+    const faelle: [string, string, RegExp][] = [
+      ["ohne Config", ohneConfig, /Projekt-Config fehlt/],
+      ["Marker ohne Ende", pwZiel(), /w\.md:2: .*kein Ende/],
+      ["fehlender Schlüssel", pwZiel(), /agenten\.fehlt.*Fix:/s],
+    ];
+    for (const [name, z, muster] of faelle) {
+      const q = pwQuelle();
+      if (name === "Marker ohne Ende") schreibe(q, ".claude/agents/w.md", PW_AGENT.replace("---\n# factory:projektwert agenten.planer\nname: quelle-planer\nmodel: opus\n---\n", `---\n${PW.start}\nname: x\n---\n`));
+      if (name === "fehlender Schlüssel") schreibe(q, ".claude/agents/w.md", PW_AGENT.replace("agenten.planer", "agenten.fehlt"));
+      const vorher = z === ohneConfig ? [] : [lies(z, "docs/d.md")];
+      const r = laufe(["--quelle", q, "--ziel", z]);
+      assert.equal(r.code, 1, name);
+      assert.match(r.err, muster, name);
+      assert.match(r.err, /nichts geschrieben/, name);
+      assert.ok(!existsSync(join(z, ".claude/agents/w.md")), `${name}: Datei geschrieben`);
+      if (vorher.length > 0) assert.equal(lies(z, "docs/d.md"), vorher[0], name);
+    }
+  });
+
+  test("Fixture-Repos ohne Projektwert-Stellen brauchen keine Config", () => {
+    const z = baueZiel();
+    assert.ok(!existsSync(join(z, ".factory/projekt.json")));
+    assert.equal(laufe(["--quelle", baueQuelle(), "--ziel", z]).code, 0);
+  });
+
+  test("K2: das Drift-Gate ist ohne Sync-Stand rot, wenn ein Wert von der Config abweicht, und nennt den Weg", () => {
+    const q = pwQuelle();
+    const z = pwZiel();
+    assert.equal(laufe(["--quelle", q, "--ziel", z]).code, 0);
+    rmSync(join(z, ".factory/sync-stand.json"));
+    const gruen = drift1(z);
+    assert.equal(gruen.code, 0, gruen.err);
+    assert.match(gruen.out, /Besitz-Prüfung entfällt/);
+    schreibe(z, ".claude/agents/w.md", lies(z, ".claude/agents/w.md").replace("name: wk-planer", "name: von-hand"));
+    const rot = drift1(z);
+    assert.equal(rot.code, 1);
+    assert.match(rot.err, /w\.md:3: Projektwert 'agenten\.planer'/);
+    assert.match(rot.err, /projektwerte\.mjs --write/);
+    assert.match(rot.err, /\.factory\/projekt\.json/);
+    schreibe(z, ".claude/agents/w.md", lies(z, ".claude/agents/w.md").replace("name: von-hand", "name: wk-planer"));
+    schreibe(z, "docs/d.md", lies(z, "docs/d.md").replace("`wk-planer` |", "`manipuliert` |"));
+    assert.match(drift1(z).err, /Projektwert-Block weicht/);
+  });
+
+  test("mit Sync-Stand: ein manipulierter Wert ist nur Projektwert-Drift, der Besitz-Hash bleibt grün; ein entfernter Marker ist Besitz-Drift", () => {
+    const z = pwZiel();
+    assert.equal(laufe(["--quelle", pwQuelle(), "--ziel", z]).code, 0);
+    schreibe(z, ".claude/agents/w.md", lies(z, ".claude/agents/w.md").replace("name: wk-planer", "name: von-hand"));
+    const r = drift1(z);
+    assert.equal(r.code, 1);
+    assert.doesNotMatch(r.err, /Besitz wurde im Projekt verändert/);
+    schreibe(z, ".claude/agents/w.md", lies(z, ".claude/agents/w.md").replace("# factory:projektwert agenten.planer\n", ""));
+    assert.match(drift1(z).err, /Besitz wurde im Projekt verändert/, "entfernter Marker ändert den normalisierten Text");
+  });
+});
+
 // ── Echter Besitz dieses Repos in ein Fremdrepo ───────────────────────────────
 
 // Prozess-Test (kopiert den Besitz, startet das Drift-Gate zweimal): unter Last braucht er mehr als die 5 s des Defaults.
@@ -472,8 +592,11 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     const z = tmp();
     schreibe(z, "AGENTS.md", `# Fremdes Projekt\n\n${blockText("alter Stopp")}\n`);
     schreibe(z, ".claude/settings.json", '{\n  "model": "x"\n}\n');
+    const config = pwConfig("wk-planer");
+    schreibe(z, ".factory/projekt.json", config);
     const r = laufe(["--quelle", WURZEL, "--ziel", z]);
     assert.equal(r.code, 0, r.err);
+    assert.match(lies(z, ".claude/agents/kubernia-planner.md"), /\nname: wk-planer\n/, "Projektwert aus der Config des Ziels");
     const gate = (): { status: number | null; stderr: string } => {
       const p = spawnSync(process.execPath, [join(z, "scripts", "check-factory-drift.mjs")], { cwd: z, encoding: "utf8" });
       return { status: p.status, stderr: p.stderr };
@@ -484,12 +607,21 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     assert.equal(rot.status, 1);
     assert.match(rot.stderr, /scripts\/hook-io\.mjs: Besitz wurde im Projekt verändert/);
     assert.match(rot.stderr, /upstream/);
-    assert.ok(existsSync(join(z, ".factory/besitz.json")) && !existsSync(join(z, ".factory/projekt.json")));
+    assert.ok(existsSync(join(z, ".factory/besitz.json")));
+    assert.equal(lies(z, ".factory/projekt.json"), config, "projekt.json bleibt, wie sie war");
+    schreibe(z, "scripts/hook-io.mjs", lies(z, "scripts/hook-io.mjs").replace("\n// Projektänderung\n", ""));
+    assert.equal(gate().status, 0, gate().stderr);
+    schreibe(z, ".claude/agents/kubernia-planner.md", lies(z, ".claude/agents/kubernia-planner.md").replace("name: wk-planer", "name: von-hand"));
+    const pw = gate();
+    assert.equal(pw.status, 1);
+    assert.match(pw.stderr, /kubernia-planner\.md:3: Projektwert 'agenten\.planer'/);
+    assert.match(pw.stderr, /projektwerte\.mjs --write/);
   });
 
   test.skipIf(process.platform === "win32")("das Ausführbit des Pre-Push-Hooks kommt mit", () => {
     const z = tmp();
     schreibe(z, "AGENTS.md", `${blockText("x")}\n`);
+    schreibe(z, ".factory/projekt.json", pwConfig("wk-planer"));
     assert.equal(laufe(["--quelle", WURZEL, "--ziel", z]).code, 0);
     assert.ok((statSync(join(z, ".githooks/pre-push")).mode & 0o111) !== 0);
   });
