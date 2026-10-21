@@ -470,3 +470,15 @@ Jede Umgebungsvariable, die ein Kern-Werkzeug liest, heißt `FACTORY_<NAME>`. De
 - **Inventar** (Name, Ring, wer setzt, wer liest): [befehle.md › Umgebungsvariablen](../referenz/befehle.md#umgebungsvariablen). Projektnamen (`KQ_UPDATE_QUIZ_GOLDEN`, `KQ_GIT_SAFECRLF`, `VITE_KQ_DEVPANEL_PW`) bleiben; sie liegen in Projekt-Einheiten.
 - **Wächter:** ein Eintrag in `test/harness/entfernte-pfade.test.ts` hält die 15 früheren Kern-Namen aus dem Repo (ADRs ausgenommen).
 - **Grenzen:** der Rückfall auf den Altnamen gilt nur für Werkzeuge, die `umgebungsWert` nutzen; ein Fremd-Projekt braucht ihn nicht (Präfix ohne Treffer, Warnung entfällt, wenn die Config nicht lädt). `--config <pfad>` gilt nicht für den Altpräfix: er kommt immer aus der Standard-Config neben dem Skript. Persönliche Settings der Maintainerin außerhalb des Repos können Altnamen tragen; sie wirken mit Warnung weiter.
+
+## Fortschreibung #1837 (2026-10-21): Präzisierungen zu #1748 und #1824
+
+Die Überschrift von #1824 zählt dort als „Teil 8“; gemeint ist F3 **Teil 9** (Teil 8 ist #1748). Die Anker bleiben, ein ADR wird nicht umgeschrieben.
+
+- **Standard-Config neben dem Skript:** gemeint ist `.factory/projekt.json` in der Wurzel des Repos, in dem das Skript liegt (`ROOT` in `scripts/projekt-config-lib.mjs`), nicht im Arbeitsverzeichnis. `--config <pfad>` ändert den Altpräfix der Umgebungsvariablen nicht.
+- **Ausnahmen des Wächters `entfernte-pfade.test.ts`, vollständig:** die Pfad-Präfixe `docs/adr/`, `test/harness/model-routing.test.ts`, `test/harness/entfernte-pfade.test.ts` und `docs/lens-gegenprobe-`; Schnappschuss-Blöcke zwischen `<!-- schnappschuss:start -->` und `<!-- schnappschuss:ende -->`; die Regel-Ausnahme für `docs/referenz/befehle.md` (nur die Regel der Kern-Umgebungsvariablen, wegen der Altnamen-Spalte im Inventar).
+- **Lens-Guard ohne Übergangs-Zweig:** ein Fallback-Spawn gilt nur noch als Lens, wenn der Prompt den Kern-Dateinamen `factory-lens.md` nennt; `<agenten.lens>.md` zählt nicht mehr (ersetzt den „Übergang, fail-closed“ aus #1748).
+- **`hauptchat-zerlegung`:** zählt den Verzeichnisnamen des festen Rollen-Pfads (`factory-ticket`) als Ticket-Skill, per Slash und per Skill-Tool (ersetzt die Grenze „zählt nicht“ aus #1748).
+- **`ordneHarnessAenderungen(dateien)`** hat keinen zweiten Parameter mehr: Skill ist `AGENTS.md`, `KERN_SKILL_VERZEICHNIS` oder `TICKET_SKILL_VERZEICHNIS`.
+- **Platzhalter-Muster:** `platzhalterMuster()` in `scripts/besitz-lib.mjs` liefert die Regex der `<gruppe.schluessel>`-Platzhalter (frische Instanz je Aufruf); Platzhalter-Regel und Test-Support nutzen sie.
+- **Inventar-Wächter:** `test/harness/umgebungsvariablen-inventar.test.ts` hält das Inventar der Umgebungsvariablen und den Quelltext in Einklang. Das Ende des Rückfalls auf den Altnamen steht in #1715 (F10).
