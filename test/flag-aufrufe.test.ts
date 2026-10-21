@@ -229,7 +229,7 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     expect(text.split("\n")[0]).toBe(z.erste(z.meldungen[fall]));
     expect(text).toMatch(z.aufruf);
     expect(z.kanal === "stdout" ? r.stderr : "").toBe(""); // stdout-Skripte schreiben nichts auf stderr
-    if (z.kanal !== "stdout") expect(r.stdout).toBe(""); // sonst lief schon Arbeit (z.B. der Sync von haupt-sync) vor dem Fehler
+    expect(z.kanal === "stdout" ? "" : r.stdout).toBe(""); // sonst lief schon Arbeit (z.B. der Sync von haupt-sync) vor dem Fehler
   });
 
   const ZUSATZ: [string, string[], number, string][] = [
