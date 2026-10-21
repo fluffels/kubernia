@@ -131,7 +131,8 @@ function pruefeGeheimnisse(gh, repo, art, namen) {
   } catch {
     /* Org-Abruf ist optional: ein Nutzer-Repo hat keine Org-Geheimnisse */
   }
-  return fehlen(namen, ist).map((n) => luecke(`${punkt} ${n}`, `${n} fehlt (ein Workflow liest es)`, `${setzen} ${n} --repo ${repo}`));
+  const l = fehlen(namen, ist).map((n) => luecke(`${punkt} ${n}`, `${n} fehlt (ein Workflow liest es)`, `${setzen} ${n} --repo ${repo}`));
+  return l.length ? l : [gut(`${punkt}s`)];
 }
 
 function pruefeLabels(gh, repo, soll) {
@@ -141,7 +142,8 @@ function pruefeLabels(gh, repo, soll) {
   } catch (e) {
     return [luecke("Labels", `Labels nicht lesbar (${erste(e)})`, "Token prüfen")];
   }
-  return fehlen(soll, ist, ohneCase).map((l) => luecke(`Label ${l}`, `Label "${l}" fehlt`, `gh label create "${l}" --repo ${repo}`));
+  const l = fehlen(soll, ist, ohneCase).map((n) => luecke(`Label ${n}`, `Label "${n}" fehlt`, `gh label create "${n}" --repo ${repo}`));
+  return l.length ? l : [gut("Labels")];
 }
 
 function pruefeBoard(gh, board, i) {
