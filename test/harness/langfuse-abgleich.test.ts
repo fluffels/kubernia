@@ -664,6 +664,10 @@ describe("pruefen (Ablauf)", () => {
     expect(A.renderMarkdown([b], sum)).not.toContain("leere Hook-GENERATIONs");
   });
 
+  test("Ohne Zugang nennt der Hinweis den Zähl-Filter gegen leere Hook-GENERATIONs (providedModelName none of claude)", () => {
+    expect(A.OHNE_ZUGANG).toContain('Filter providedModelName none of ["claude"]');
+  });
+
   test("Bericht: eine Lücke innerhalb der Nachlieferer-Frist bleibt Lücke und wird nie als „vollständig, Score ausstehend“ gezeigt", async () => {
     const root = mitSession([msg("a")]);
     const m = mock({ zaehlung: [], observations: [] });
