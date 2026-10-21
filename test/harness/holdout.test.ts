@@ -244,6 +244,8 @@ describe("Reihenfolge im Skill (#1754)", () => {
 });
 
 describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
+  const szenario = lies(".claude/agents/holdout-szenario.md");
+  const abnahme = lies(".claude/agents/holdout-abnahme.md");
   const PFLICHT = /Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach\./;
 
   test("der Pflichtsatz steht in Lens-Spawn-Vorlage, Abnahme- und Szenario-Agent", () => {
@@ -257,7 +259,7 @@ describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
   });
 
   test("Fehlerwege: fehlender Bericht einmal per SendMessage anfordern, fehlendes Werkzeug ohne Neuversuch", () => {
-    assert.match(SKILL, /fehlt ein Bericht[^\n]*einmal per `SendMessage`[^\n]*kein Neu-Spawn/);
+    assert.match(SKILL, /[Ff]ehlt ein Bericht[^\n]*einmal per `SendMessage`[^\n]*kein Neu-Spawn/);
     assert.match(SKILL, /fehlt dem Typ ein Werkzeug[^\n]*kein Neuversuch/);
   });
 

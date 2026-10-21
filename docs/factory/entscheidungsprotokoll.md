@@ -28,6 +28,10 @@ Der Hauptchat entscheidet Ermessensfragen **fundiert selbst** und schreibt im PR
 
 Hand-off-Entscheidungen im Rahmen dieses Protokolls (zum Beispiel ein Delta-Pass statt Override, Auslagern in ein Folgeticket) trifft der Hauptchat selbst und schreibt „Entscheidung: X, weil Y“ in den PR. Er fragt die Maintainerin nur bei Irreversiblem oder Außenwirkung.
 
+### Werkzeug-Abbruch der Abnahme
+
+Bricht die Abnahme wegen eines fehlenden oder ausgefallenen Werkzeugs ab (`FESTGEFAHREN: abnahme`), entscheidet der Hauptchat nach diesem Protokoll: das Kriterium per Hand belegen (zum Beispiel Langfuse-Abfrage über den MCP-Server) und im PR „Entscheidung: X, weil Y“ samt Beleg schreiben, dann `KQ-Abnahme-Override:` setzen; vorgelegt wird nur bei Irreversiblem oder Außenwirkung. Bei einem Spezifikationsmangel („nicht prüfbar“) präzisiert weiter die Maintainerin das Kriterium im Ticket-Body. Das ist keine Lockerung nach ADR 0027: die Abnahme bleibt Pflicht, der Override bleibt ein Druckventil mit Pflicht-Begründung, nur der Entscheider ist an AGENTS.md › Human-in-the-Loop-Checkpoints angeglichen.
+
 ## Grenzen
 
 - Kein Grün-durch-Aufweichen: das Protokoll ersetzt kein rotes Gate und keinen Review; es entscheidet nur, **wie** weitergemacht wird.
