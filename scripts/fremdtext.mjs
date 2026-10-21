@@ -74,9 +74,8 @@ const AUFRUF = "Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>";
 /** Genau eines von `--issue <nr>` / `--pr <nr>` mit positiver Ganzzahl, sonst Fehler (jede Auffälligkeit beim Lesen ist ein Aufruf-Fehler). */
 export function parseArgs(argv) {
   const { werte, tokens, fehler } = flagsLesen(argv, { issue: { type: "string" }, pr: { type: "string" } });
-  const gesetzt = ["issue", "pr"].filter((n) => werte[n] !== undefined);
-  if (fehler || tokens.length !== 1 || gesetzt.length !== 1) throw new Error(AUFRUF);
-  const [name] = gesetzt;
+  const [name] = ["issue", "pr"].filter((n) => werte[n] !== undefined);
+  if (fehler || tokens.length !== 1) throw new Error(AUFRUF);
   const wert = werte[name];
   if (!/^[1-9][0-9]*$/.test(wert)) throw new Error(`--${name} braucht eine positive Ganzzahl`);
   return { art: name, nr: Number(wert) };

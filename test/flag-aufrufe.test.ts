@@ -94,6 +94,19 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     expect(r.stderr).toMatch(z.aufruf);
   });
 
+  const ZUSATZ: [string, string[], number, string][] = [
+    ["token-baseline", ["--json"], 2, "Aufruf: node scripts/token-baseline.mjs --session <id>"],
+    ["factory-sync", ["--trocken"], 2, "factory-sync: --quelle <pfad> fehlt"],
+    ["factory-kennzahlen", ["--bis", "2026-01-01"], 1, "--von und --bis brauchen je ein gültiges ISO-Datum."],
+    ["claims-pruefen", ["x"], 2, "✖ claims-pruefen: unbekanntes Argument: x"],
+    ["langfuse-nachliefern", ["--bogus", "--ausloeser", "x"], 2, "Unbekanntes Argument: --bogus"],
+  ];
+  test.concurrent.each(ZUSATZ)("%s %j: fehlendes Pflicht-Flag, Positionsargument, erster Fehler gewinnt", { timeout: 60_000 }, (skript, argv, exit, erste) => {
+    const r = starte(skript, argv);
+    expect(r.status).toBe(exit);
+    expect(r.stderr.split("\n")[0]).toBe(erste);
+  });
+
   test.concurrent("fremdtext: beide Flags und --issue= ergeben die Aufrufzeile (fail-closed)", { timeout: 60_000 }, () => {
     for (const argv of [["--issue", "1", "--pr", "2"], ["--issue="], ["--issue=1", "--pr=2"]]) {
       const r = starte("fremdtext", argv);

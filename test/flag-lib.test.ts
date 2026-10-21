@@ -28,9 +28,11 @@ describe("flagsLesen", () => {
     const r = lies(["--a", "x", "--b=-5", "--json"]);
     expect(r.fehler).toBeNull();
     expect(r.werte).toEqual({ a: "x", b: "-5", json: true });
-    expect(lies(["--a", "-5"]).werte.a).toBe("-5");
-    expect(lies(["--a=--b"]).werte.a).toBe("--b");
-    expect(lies(["--a", ""]).werte.a).toBe("");
+    for (const [argv, wert] of [[["--a", "-5"], "-5"], [["--a=--b"], "--b"], [["--a", ""], ""]] as [string[], string][]) {
+      const l = lies(argv);
+      expect(l.fehler).toBeNull();
+      expect(l.werte.a).toBe(wert);
+    }
   });
 
   test("werte ist ein flaches Objekt, tokens und positionale werden durchgereicht", () => {

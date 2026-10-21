@@ -862,6 +862,10 @@ describe("parseArgs", () => {
     const a = N.parseArgs(["--ausloeser", w]);
     expect(a.fehler).toMatch(/sessionstart, sessionend/);
   });
+  test("ungültiger --ausloeser: ausloeser bleibt null; der erste Fehler gewinnt", () => {
+    expect(N.parseArgs(["--ausloeser", "x"])).toMatchObject({ ausloeser: null });
+    expect(N.parseArgs(["--foo", "--ausloeser", "x"]).fehler).toBe("Unbekanntes Argument: --foo");
+  });
   test.each([
     ["Wert fehlt", ["--session"]],
     ["der nächste Parameter ist ein Flag (sonst würde --session --trocken echt senden)", ["--session", "--trocken"]],

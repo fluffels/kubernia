@@ -7,7 +7,9 @@
  * migrierten Skripte stehen in AUSNAHMEN, je Eintrag mit Kind-Ticket; die Liste darf nur schrumpfen (ein neuer Eintrag
  * ist gegen die Diff-Basis rot), ein verwaister Eintrag ist rot.
  *
- * Bewusste Grenze: eine Schleife unter anderem Namen als `parseArgs` fängt der Wächter nicht.
+ * Bewusste Grenzen: eine Schleife unter anderem Namen als `parseArgs` fängt der Wächter nicht; `flagsLesen(` zählt als
+ * Textvorkommen (auch ein Kommentar neben einer weiter handgeschriebenen Schleife macht die Datei grün); der Scan sieht
+ * nur getrackte Dateien (in der CI sind neue Dateien committet).
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -132,7 +134,7 @@ describe("Flag-Parser-Wächter", () => {
   const basisText = ((): string | null => {
     if (basis === null) return null;
     try {
-      return git(["show", `${basis}:${SELBST}`]);
+      return execFileSync("git", ["show", `${basis}:${SELBST}`], { cwd: WURZEL, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
     } catch {
       return null;
     }
