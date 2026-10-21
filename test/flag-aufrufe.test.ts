@@ -213,7 +213,9 @@ function umgebung(): NodeJS.ProcessEnv {
 }
 
 function starte(skript: string, argv: string[]): { status: number | null; stderr: string; stdout: string } {
-  const r = spawnSync(process.execPath, [`scripts/${skript}.mjs`, ...argv], { encoding: "utf8", env: umgebung(), timeout: 60_000 });
+  const env = umgebung();
+  if (skript === "board-takt") env.PROJECT_TOKEN = "x"; // mit Token ruft `main` `mitKontingent` auf: ein vorgezogener Aufruf stünde dann vor dem Fehler
+  const r = spawnSync(process.execPath, [`scripts/${skript}.mjs`, ...argv], { encoding: "utf8", env, timeout: 60_000 });
   return { status: r.status, stderr: r.stderr, stdout: r.stdout };
 }
 
@@ -227,6 +229,7 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     expect(text.split("\n")[0]).toBe(z.erste(z.meldungen[fall]));
     expect(text).toMatch(z.aufruf);
     expect(z.kanal === "stdout" ? r.stderr : "").toBe(""); // stdout-Skripte schreiben nichts auf stderr
+    if (z.kanal !== "stdout") expect(r.stdout).toBe(""); // sonst lief schon Arbeit (z.B. der Sync von haupt-sync) vor dem Fehler
   });
 
   const ZUSATZ: [string, string[], number, string][] = [
@@ -263,6 +266,7 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     const r = starte(skript, argv);
     expect(r.status).toBe(exit);
     expect(r.stderr.split("\n")[0]).toBe(erste);
+    expect(r.stdout).toBe("");
   });
 
   const WIEDERHOLBAR: [string, string[], number, RegExp][] = [

@@ -344,6 +344,12 @@ describe("Aufruf und reine Funktionen", () => {
     assert.equal(grund(["pruefe", "5", "--nonce", "a", "--nonce", "b"]), "--nonce ist doppelt angegeben");
     assert.equal(grund(["freigeben", "5"]), "--nonce fehlt");
     assert.equal(grund(["lebenszeichen", "5", "--commit"]), "Unbekanntes Argument: --commit");
+    for (const befehl of ["pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"]) {
+      assert.equal(grund([befehl, "5", "--nonce", "x", "--wiederaufnahme"]), "Unbekanntes Argument: --wiederaufnahme", befehl);
+    }
+    for (const befehl of ["pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen"]) {
+      assert.equal(grund([befehl, "5", "--nonce", "x", "--schritt", "k"]), "Unbekanntes Argument: --schritt", befehl);
+    }
     assert.equal(grund(["lebenszeichen", "--commit", "5"]), "ungültige Ticketnummer --commit");
   });
 
