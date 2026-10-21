@@ -8,6 +8,8 @@ import * as raw from "../scripts/naechstes-ticket.mjs";
 import * as refs from "../scripts/ticket-refs.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as ladeCfg from "../scripts/projekt-config-lib.mjs";
 
 const ticketNamen = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 
@@ -859,5 +861,21 @@ describe("Aufruf ohne --bereich und ohne --ticket", () => {
     expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: null, offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
     // Negativfall: ein unbekannter, aber gesetzter Wert wird nicht still als Produkt-Seite gelesen.
     expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: "xyz", offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
+  });
+});
+
+describe("echteIo: Messfenster-Lader bekommt die Namen der Config (#1821 L10)", () => {
+  test("ladeNamen liefert die schon geladenen Namen, ohne die Config ein zweites Mal zu laden", () => {
+    const cfg = (ladeCfg as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
+    const optionen: { ladeNamen?: () => unknown }[] = [];
+    const io = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: (o: { ladeNamen?: () => unknown }) => unknown }) => { namen: unknown } }).echteIo({
+      config: cfg,
+      messfensterLader: (o) => {
+        optionen.push(o);
+        return () => ({ closedAt: null, n: 0 });
+      },
+    });
+    expect(optionen).toHaveLength(1);
+    expect(optionen[0].ladeNamen?.()).toBe(io.namen);
   });
 });
