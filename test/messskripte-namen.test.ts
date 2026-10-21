@@ -243,7 +243,7 @@ describe("kontext-treiber: Namen aus der Config", () => {
     const mitTool_ = [user(0, "Ticket #1: x"), call(1), ...mitTool(2, "Bash", { command: "ls" }), call(3)];
     expect(() => K.phaseDerCalls(mitTool_, null, undefined)).toThrow(/Ticket-Namen/);
     expect(() => K.phaseDerCalls(mitTool_, null, {})).toThrow(/Ticket-Namen/);
-    expect(K.phaseDerCalls(mitTool_, null, NAMEN)).toHaveLength(2);
+    expect(K.phaseDerCalls(mitTool_, null, NAMEN)).toHaveLength(3);
   });
   test("die Review-Phase beginnt beim Spawn des Lens-Agenten der Config, nicht beim alten Namen", () => {
     const mitLinse = [user(0, "Ticket #1: x"), call(1), ...spawn("acme-lens"), call(3)];

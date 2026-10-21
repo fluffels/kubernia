@@ -21,10 +21,13 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
-import { KERN_TICKET_SKILL, repoName } from "./projekt-config-lib.mjs";
+import { KERN_TICKET_SKILL, PROJEKT_CONFIG, repoName } from "./projekt-config-lib.mjs";
 import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
+
+/** Die festen Schlüssel des Ergebnisses von `zerlegeHauptchat`; daneben steht unter dem Repo-Namen die Zeile der eigenen Subagenten, der Name darf keinen davon tragen. */
+export const ERGEBNIS_SCHLUESSEL = Object.freeze(["rows", "fenster", "ohnePreis", "ohnePreisModelle", "ohneBrainWurzel", "modellanteil", "ttl"]);
 
 /**
  * Die Namen der Zerlegung aus der Projekt-Config: die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill` und der Kern-Skill, #1806; ihr Aufruf per Slash oder
@@ -36,8 +39,11 @@ export function hauptchatNamen(deps = {}) {
   if (!deps.config) throw new Error(failClosedGrund("hauptchat-zerlegung", new Error("keine Config übergeben (der Einstiegspunkt lädt sie)")));
   const r = namenOderGrund("hauptchat-zerlegung", deps);
   if (r.grund) throw new Error(r.grund);
+  const name = repoName(r.config);
+  if (ERGEBNIS_SCHLUESSEL.includes(name)) throw new Error(`Repo-Name "${name}" (repo der Projekt-Config) kollidiert mit dem Ergebnisschlüssel gleichen Namens der Zerlegung
+Fix: repo in ${PROJEKT_CONFIG} auf einen Namen außerhalb von ${ERGEBNIS_SCHLUESSEL.join(", ")} ändern`);
   const { planer, umsetzer, lens, gruppe, ticketSkill } = r.namen.agenten;
-  return { ticketSkills: [ticketSkill, KERN_TICKET_SKILL], ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: repoName(r.config), config: r.config };
+  return { ticketSkills: [ticketSkill, KERN_TICKET_SKILL], ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: name, config: r.config };
 }
 
 /** Die Ticket-Skills aus der Projekt-Config (siehe `hauptchatNamen`). */
