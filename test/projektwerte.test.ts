@@ -197,7 +197,7 @@ describe("projektwerte CLI", () => {
     assert.match(r.err, /nichts geschrieben/);
     assert.equal(lies(w, ".claude/agents/planer.md"), vorher);
   });
-  test("--check schlägt bei einem Marker ohne Ende keinen --write-Fix vor, bei Abweichung schon", () => {
+  test("--check schlägt bei einem Marker ohne Ende keinen --write-Fix vor", () => {
     const w = projekt();
     schreibe(w, ".claude/skills/s/SKILL.md", `${S}\nohne Ende\n`);
     const r = lauf(["--check"], w);
