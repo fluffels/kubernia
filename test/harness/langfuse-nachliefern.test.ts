@@ -9,6 +9,8 @@
  */
 import { describe, expect, test } from "vitest";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
@@ -1176,4 +1178,25 @@ describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
     expect(r.protokoll.sessions).toHaveLength(2);
     expect(r.protokoll.uebrig).toBe(0);
   });
+});
+
+describe("CLI-Einstieg: Zugang über kindEnv (#1821 L30)", () => {
+  const skript = fileURLToPath(new URL("../../scripts/langfuse-nachliefern.mjs", import.meta.url));
+  const FAKE_SECRET = "sk-lf-nur-fuer-den-test";
+  const cli = (dateien: Record<string, string>) => {
+    const home = fixture(dateien);
+    const env = { ...process.env, HOME: home, USERPROFILE: home, LANGFUSE_PUBLIC_KEY: "pk-lf-test", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "http://127.0.0.1:9" };
+    return spawnSync(process.execPath, [skript, "--trocken"], { encoding: "utf8", env, cwd: fileURLToPath(new URL("../..", import.meta.url)) });
+  };
+  test("Secret nur in ~/.langfuse-secret: der manuelle Lauf findet den Zugang", () => {
+    const r = cli({ ".langfuse-secret": `${FAKE_SECRET}\n` });
+    expect(r.stdout + r.stderr).not.toMatch(/Kein Langfuse-Zugang/);
+    expect(r.status).toBe(0);
+    expect(r.stdout + r.stderr).not.toContain(FAKE_SECRET);
+  }, 30000);
+  test("ohne Secret-Datei bleibt es bei Exit 2 und der Zugangsmeldung", () => {
+    const r = cli({});
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/Kein Langfuse-Zugang/);
+  }, 30000);
 });
