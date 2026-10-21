@@ -9,7 +9,7 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/sbom.mjs";
 
-type Io = { lauf: () => { status: number | null; stdout: string; stderr: string; error?: Error }; schreibe: (p: string, t: string) => void; entferne: (p: string) => void; log: (z: string) => void };
+type Io = { lauf: () => { status: number | null; stdout: string; stderr: string; error?: Error }; schreibe: (p: string, t: string) => void; entferne: (p: string) => void; log: (z: string) => void; fehler: (z: string) => void };
 const S = raw as unknown as {
   NPM_ARGS: string[];
   STANDARD_AUS: string;
@@ -64,6 +64,7 @@ describe("pruefeSbom", () => {
 function io(lauf: Io["lauf"]) {
   const aufrufe: string[] = [];
   const logs: string[] = [];
+  const fehlerLogs: string[] = [];
   const geschrieben: Array<[string, string]> = [];
   const impl: Io = {
     lauf: () => {
@@ -78,8 +79,9 @@ function io(lauf: Io["lauf"]) {
       aufrufe.push(`entferne:${p}`);
     },
     log: (z) => logs.push(z),
+    fehler: (z) => fehlerLogs.push(z),
   };
-  return { impl, aufrufe, logs, geschrieben };
+  return { impl, aufrufe, logs, fehlerLogs, geschrieben };
 }
 
 describe("fuehreAus", () => {
@@ -89,6 +91,7 @@ describe("fuehreAus", () => {
     expect(t.geschrieben).toEqual([[S.STANDARD_AUS, bom()]]);
     expect(t.logs.join("\n")).toMatch(/1 Komponenten/);
     expect(t.logs.join("\n")).toMatch(/npm 10\.9\.8/);
+    expect(t.fehlerLogs).toEqual([]);
   });
   test("--aus ändert den Zielpfad", () => {
     const t = io(() => ({ status: 0, stdout: bom(), stderr: "" }));
@@ -100,14 +103,15 @@ describe("fuehreAus", () => {
     const t = io(() => ({ status: 1, stdout: "", stderr: "npm error code ESBOMPROBLEMS\nnpm error missing" }));
     expect(S.fuehreAus([], t.impl)).toBe(1);
     expect(t.geschrieben).toEqual([]);
-    expect(t.logs.join("\n")).toMatch(/Exit 1/);
-    expect(t.logs.join("\n")).toMatch(/ESBOMPROBLEMS/);
+    expect(t.fehlerLogs.join("\n")).toMatch(/Exit 1/);
+    expect(t.fehlerLogs.join("\n")).toMatch(/ESBOMPROBLEMS/);
+    expect(t.logs).toEqual([]); // Fehler gehen auf stderr, nicht stdout
   });
   test("Startfehler (ENOENT): Exit 1, nichts geschrieben", () => {
     const t = io(() => ({ status: null, stdout: "", stderr: "", error: new Error("spawn npm ENOENT") }));
     expect(S.fuehreAus([], t.impl)).toBe(1);
     expect(t.geschrieben).toEqual([]);
-    expect(t.logs.join("\n")).toMatch(/ENOENT/);
+    expect(t.fehlerLogs.join("\n")).toMatch(/ENOENT/);
   });
   test.each([["leer", ""], ["ungültig", "{kaputt"]])("npm-Exit 0 mit %s stdout: Exit 1, nichts geschrieben", (_n, out) => {
     const t = io(() => ({ status: 0, stdout: out, stderr: "" }));
@@ -120,10 +124,12 @@ describe("fuehreAus", () => {
     expect(t.aufrufe[0]).toBe(`entferne:${S.STANDARD_AUS}`);
     expect(t.aufrufe[1]).toBe("lauf");
   });
-  test.each([[["--aus"]], [["--aus", ""]], [["--unbekannt"]], [["--aus", "a", "--aus", "b"]], [["x"]], [["--aus="]]])("ungültige Argumente %j: Exit 2, lauf nicht aufgerufen", (argv) => {
+  test.each([[["--aus"]], [["--aus", ""]], [["--unbekannt"]], [["--aus", "a", "--aus", "b"]], [["x"]], [["--aus="]], [["--"]], [["--aus", "a", "--"]]])("ungültige Argumente %j: Exit 2, Aufrufzeile auf stderr, lauf nicht aufgerufen", (argv) => {
     const t = io(() => ({ status: 0, stdout: bom(), stderr: "" }));
     expect(S.fuehreAus(argv, t.impl)).toBe(2);
     expect(t.aufrufe).not.toContain("lauf");
+    expect(t.fehlerLogs).toEqual(["Aufruf: node scripts/sbom.mjs [--aus <pfad>]"]);
+    expect(t.logs).toEqual([]);
   });
 });
 

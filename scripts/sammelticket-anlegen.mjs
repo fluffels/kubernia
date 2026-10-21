@@ -59,7 +59,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 export function parseArgs(argv) {
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, vorgaenger: { type: "string" }, top: { type: "boolean" } }, { positionale: true });
-  if (fehler || tokens.some((t) => t.kind === "option-terminator")) return null;
+  if (fehler) return null;
   const ohneDry = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
   if (ohneDry[0]?.kind !== "positional" || positionale.length !== 1) return null;
   const art = positionale[0] ?? "";
@@ -129,12 +129,13 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
+const BESITZER = REPO.split("/")[0];
 const einzelAbruf = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]);
 
 /** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
 function pruefeDublette(nr, titel, vorgaenger) {
   const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
-  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf);
+  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, BESITZER);
   return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
 }
 
@@ -221,7 +222,7 @@ async function main(argv = process.argv.slice(2)) {
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
   const offene = normalizeOffene(loadOpenIssuePages());
-  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbruf);
+  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbruf, BESITZER);
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;

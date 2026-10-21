@@ -1225,6 +1225,39 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       assert.ok(r.out.length > 0);
     });
 
+    test("vor jeder Auswertung läuft `git fetch --prune origin`; scheitert er, Exit 1 und nichts gelöscht (kein [gone] aus altem Stand)", () => {
+      const aufrufe: string[] = [];
+      const ghAufrufe = { n: 0 };
+      const ok = modus("/r", true, {
+        git: (a) => {
+          aufrufe.push(a.join(" "));
+          return a[0] === "for-each-ref" ? refsText : a[0] === "worktree" ? "worktree /r\nbranch refs/heads/main\n" : "";
+        },
+        gh: () => (ghAufrufe.n++, eins()),
+        out: () => undefined,
+        err: () => undefined,
+      });
+      assert.equal(ok, 0);
+      assert.equal(aufrufe[0], "fetch --prune origin", "der Fetch kommt vor allem anderen");
+      aufrufe.length = 0;
+      ghAufrufe.n = 0;
+      const err: string[] = [];
+      const code = modus("/r", true, {
+        git: (a) => {
+          aufrufe.push(a.join(" "));
+          if (a[0] === "fetch") throw new Error("kein Netz");
+          return a[0] === "for-each-ref" ? refsText : "";
+        },
+        gh: () => (ghAufrufe.n++, eins()),
+        out: () => undefined,
+        err: (s) => err.push(s),
+      });
+      assert.equal(code, 1);
+      assert.ok(err.join("\n").includes("nichts gelöscht") && err.join("\n").includes("kein Netz"));
+      assert.deepEqual(aufrufe, ["fetch --prune origin"], "danach kein weiterer git-Aufruf, insbesondere kein branch -d");
+      assert.equal(ghAufrufe.n, 0);
+    });
+
     test("mit loeschen steht der Kandidat als gelöscht da", () => {
       const r = lauf({ gh: eins, loeschen: true });
       assert.equal(r.code, 0);

@@ -534,10 +534,10 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
     assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" }, "pruefe ist lesend: auch das zweite Mal uebernehmbar");
     assert.equal(lockJson().uebergabe?.verbraucht, null, "pruefe verbraucht nichts");
-    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
+    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
     assert.equal(lockJson().uebergabe?.verbraucht, new Date(JETZT).toISOString());
     for (const befehl of ["uebernehmen", "pruefe"]) {
-      const zweites = lauf([befehl, "5", "--nonce", n], aktiv);
+      const zweites = lauf([befehl, "5", "--nonce", n, ...(befehl === "uebernehmen" ? ["--nachfolger"] : [])], aktiv);
       assert.equal(zweites.code, 4, `${befehl}: die Übergabe ist verbraucht: ${JSON.stringify(zweites)}`);
       assert.equal(zweites.out, "aktiv\n");
     }
@@ -546,13 +546,13 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
   test("uebernehmen: fremde Nonce Exit 4 ohne Verbrauch, ohne oder mit leerer Nonce Usage (Exit 2), ohne Worktree frei und ohne Verbrauch der Übergabe (#1593)", () => {
     const n = nonceVon(lauf(["claim", "5"]));
     lauf(["uebergeben", "5", "--nonce", n]);
-    const fremd = lauf(["uebernehmen", "5", "--nonce", "x-fremd"], aktiv);
+    const fremd = lauf(["uebernehmen", "5", "--nonce", "x-fremd", "--nachfolger"], aktiv);
     assert.equal(fremd.code, 4);
     assert.equal(fremd.out, "fremd\n");
     assert.equal(lockJson().uebergabe?.verbraucht, null, "fremde Nonce verbraucht nichts");
-    assert.equal(lauf(["uebernehmen", "5"]).code, 2);
-    assert.equal(lauf(["uebernehmen", "5", "--nonce", ""]).code, 2);
-    assert.equal(lauf(["uebernehmen", "5", "--nonce", n]).out, "frei\n");
+    assert.equal(lauf(["uebernehmen", "5", "--nachfolger"]).code, 2);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", "", "--nachfolger"]).code, 2);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"]).out, "frei\n");
     assert.equal(lockJson().uebergabe?.verbraucht, null, "ohne Worktree gibt es nichts zu übernehmen");
   });
 
@@ -566,6 +566,38 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.equal(fremd.out, "fremd\n");
     assert.equal(lockJson().uebergabe?.verbraucht, null, "fremde Nonce verbraucht nichts");
     assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "uebernehmbar\n");
+  });
+
+  test("uebernehmen ohne --nachfolger: Exit 2 mit Hinweis, Übergabe bleibt unverbraucht, pruefe bleibt wiederholbar uebernehmbar (#1814)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["uebergeben", "5", "--nonce", n], aktiv);
+    const ohne = lauf(["uebernehmen", "5", "--nonce", n], aktiv);
+    assert.equal(ohne.code, 2);
+    assert.equal(ohne.out, "");
+    assert.match(ohne.err, /uebernehmen ruft nur der Nachfolger \(--nachfolger\); der Hauptchat prüft mit pruefe <nr> --nonce <x>/);
+    assert.equal(lockJson().uebergabe?.verbraucht, null, "Exit 2 verbraucht nichts");
+    for (let i = 0; i < 2; i++) assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
+    assert.equal(lockJson().uebergabe?.verbraucht, null);
+  });
+
+  test("uebernehmen mit unbekanntem Zusatzargument: Exit 2, nichts verbraucht (#1814)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["uebergeben", "5", "--nonce", n], aktiv);
+    for (const extra of [["--nachfolger", "--quatsch"], ["--quatsch"], ["--nachfolger", "x"]]) {
+      assert.equal(lauf(["uebernehmen", "5", "--nonce", n, ...extra], aktiv).code, 2, extra.join(" "));
+    }
+    assert.equal(lockJson().uebergabe?.verbraucht, null);
+  });
+
+  test("zweites uebernehmen --nachfolger: aktiv (Exit 4) mit Verbrauchszeit und Ausweg gestoppt (#1814)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["uebergeben", "5", "--nonce", n], aktiv);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv).code, 0);
+    const zweites = lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv);
+    assert.equal(zweites.code, 4);
+    assert.equal(zweites.out, "aktiv\n");
+    assert.ok(zweites.err.includes(new Date(JETZT).toISOString()), "Verbrauchszeit steht im Text");
+    assert.ok(zweites.err.includes("gestoppt"), "Ausweg gestoppt steht im Text");
   });
 
   test("eine Übergabe je Lock: ein zweites uebergeben scheitert (offen wie verbraucht)", () => {
@@ -621,7 +653,7 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.equal(r.code, 2);
     assert.equal(lockJson().uebergabe, undefined);
     lauf(["uebergeben", "5", "--nonce", n]);
-    assert.equal(M.fuehreAus(["uebernehmen", "5", "--nonce", n], { ...deps(aktiv), ersetze: wirft }).code, 2);
+    assert.equal(M.fuehreAus(["uebernehmen", "5", "--nonce", n, "--nachfolger"], { ...deps(aktiv), ersetze: wirft }).code, 2);
     assert.equal(M.fuehreAus(["pruefe", "5", "--nonce", n], { ...deps(aktiv), ersetze: wirft }).code, 0, "pruefe schreibt nie");
   });
 
@@ -649,11 +681,30 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
     assert.deepEqual(lockJson().gestoppt, { gesetzt: new Date(JETZT).toISOString(), verbraucht: null });
     assert.deepEqual(lauf(["pruefe", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
     assert.equal(lockJson().gestoppt?.verbraucht, null, "pruefe verbraucht den Vermerk nicht");
-    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce", n], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
+    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
     assert.equal(lockJson().gestoppt?.verbraucht, new Date(JETZT).toISOString());
     const zweites = lauf(["pruefe", "5", "--nonce", n], aktiv);
     assert.equal(zweites.code, 4);
     assert.equal(zweites.out, "aktiv\n");
+  });
+
+  test("nach verbrauchtem Stopp-Vermerk: aktiv mit Verbrauchszeit und Ausweg im Text; ohne Verbrauch kein solcher Hinweis (#1814)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    const vorher = lauf(["pruefe", "5", "--nonce", n], aktiv);
+    assert.equal(vorher.code, 4);
+    assert.ok(!vorher.err.includes("verbraucht"), "ohne Verbrauch kein Hinweis: " + vorher.err);
+    lauf(["gestoppt", "5", "--nonce", n]);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv).code, 0);
+    const danach = lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv);
+    assert.equal(danach.code, 4);
+    assert.ok(danach.err.includes(new Date(JETZT).toISOString()), "Verbrauchszeit des Stopp-Vermerks steht im Text");
+    assert.ok(danach.err.includes("gestoppt"), "Ausweg steht im Text");
+  });
+
+  test("uebernehmen akzeptiert --nonce=<x> samt --nachfolger (#1814)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["gestoppt", "5", "--nonce", n]);
+    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce=" + n, "--nachfolger"], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
   });
 
   test("zählt nicht als Phasen-Schnitt: uebergeben bleibt danach möglich (eine Übergabe je Lock gilt weiter), gestoppt legt kein uebergabe-Feld an", () => {
@@ -691,7 +742,7 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
     lauf(["gestoppt", "5", "--nonce", n]);
     assert.equal(lauf(["pruefe", "5", "--nonce", n]).out, "frei\n");
     assert.equal(lockJson().gestoppt?.verbraucht, null);
-    assert.equal(lauf(["uebernehmen", "5", "--nonce", n]).out, "frei\n");
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"]).out, "frei\n");
     assert.notEqual(lockJson().gestoppt?.verbraucht, null);
     assert.equal(lauf(["pruefe", "5", "--nonce", n], aktiv).out, "aktiv\n");
   });

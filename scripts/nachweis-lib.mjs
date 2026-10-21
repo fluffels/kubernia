@@ -79,7 +79,7 @@ function blockerAus(reviewWert) {
     });
 }
 
-/** Optionales Feld `zusatzpass=<anzahl>:<grund>` (#1561, #1693): Pässe über das Cap hinaus (einer ohne Rückfrage, weitere nur mit Freigabe der Maintainerin).
+/** Optionales Feld `zusatzpass=<anzahl>:<grund>` (#1561, #1693): Pässe über das Cap hinaus (bis zu `MAX_ZUSATZPAESSE` ohne Rückfrage, mehr nur mit Freigabe der Maintainerin).
  *  `null`, wenn das Feld fehlt; `{ungueltig}`, wenn Anzahl (ganze Zahl ≥ 1) oder Grund fehlen; sonst `{anzahl, grund}`. */
 function zusatzpassAus(reviewWert) {
   const wert = feldWert(reviewWert, "zusatzpass");

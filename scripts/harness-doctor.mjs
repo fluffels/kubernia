@@ -20,11 +20,12 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
+import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
@@ -70,7 +71,7 @@ function sammelticket({ trocken, spawn, out }) {
     out(`FEHLER Sammelticket: sammelticket-anlegen.mjs endete mit Exit ${r.status ?? "?"} ${einzeilig(String(r.stderr ?? "").trim()).slice(0, 200)}`.trimEnd());
     return { geplant: 0, angelegt: 0, fehler: 1 };
   }
-  return { geplant: trocken && /^Würde /m.test(text) ? 1 : 0, angelegt: !trocken && /^Angelegt:/m.test(text) ? 1 : 0, fehler: 0 };
+  return { geplant: trocken && (/^Würde /m.test(text) || /^Trockenlauf: .*würde es neu setzen/m.test(text)) ? 1 : 0, angelegt: !trocken && /^Angelegt:/m.test(text) ? 1 : 0, fehler: 0 };
 }
 
 /**
@@ -88,7 +89,9 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
     return AUFRUF_EXIT;
   }
   const { config, ergebnis } = lauf;
-  const fatal = ergebnis.some((p) => !p.ok && p.punkt === "Token");
+  const fatal = ergebnis.some((p) => !p.ok && p.fatal === true);
+  // sammelticket-anlegen.mjs liest immer die Standard-Config: bei einer anderen --config würde es ein Ticket für ein anderes Repo anlegen.
+  const abweichend = werte.config !== undefined && resolve(rootDir, werte.config) !== resolve(rootDir, PROJEKT_CONFIG);
   let { geplant, angelegt, fehler, anleitungen } = { geplant: 0, angelegt: 0, fehler: 0, anleitungen: 0 };
   for (const p of ergebnis.filter((x) => !x.ok)) {
     if (p.aktion?.art === "label") {
@@ -114,7 +117,10 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   geplant += datei.geplant;
   angelegt += datei.angelegt;
   if (fatal) out("ANLEITUNG Sammelticket: ohne gültigen Token kein Zugriff auf GitHub Fix: erst den Token-Punkt beheben, dann --einrichten erneut fahren");
-  else {
+  else if (abweichend) {
+    out("ANLEITUNG Sammelticket: sammelticket-anlegen.mjs liest nur die Standard-Config (" + PROJEKT_CONFIG + "), nicht --config Fix: node scripts/sammelticket-anlegen.mjs harness mit der Standard-Config fahren");
+    anleitungen++;
+  } else {
     const s = sammelticket({ trocken, spawn, out });
     geplant += s.geplant;
     angelegt += s.angelegt;

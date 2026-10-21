@@ -21,12 +21,12 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { LANGFUSE_SAMMELTICKET_TITEL, REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
+import { LANGFUSE_SAMMELTICKET_TITEL, REPO, SAMMELTICKET_TITEL } from "./board-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { offeneTitel as vertrauteTitel, platziereOben, postZeilen, vertrauteIssues, waehleSammelticket } from "./inbox-lib.mjs";
+import { offeneTitel as vertrauteTitel, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } from "./inbox-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
 const SPITZEN_TOOLS = ["CodeQL"];
@@ -297,11 +297,10 @@ function main() {
     ladeAlerts: () => seiten(`repos/${REPO}/code-scanning/alerts?state=open&per_page=100`),
     ladeKontext: () => {
       const owner = REPO.split("/")[0];
-      const rohe = JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`]));
-      offene = normalizeOffene(rohe);
+      const kontext = ladeSammelKontext();
+      const { rohe, kommentare } = kontext;
+      offene = kontext.offene;
       const vertraut = new Set(vertrauteIssues(rohe, owner).map((i) => i.number));
-      const sammel = offene.filter((i) => i.titel === SAMMELTICKET_TITEL);
-      const kommentare = sammel.flatMap((i) => seiten(`repos/${REPO}/issues/${i.number}/comments?per_page=100`).map((k) => ({ user: k.user, body: k.body })));
       // Das Spitzen-Ticket legt github-actions[bot] an (GH_TOKEN = github.token); ein gleichnamiges Ticket eines Fremden zählt nicht.
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) console.log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);

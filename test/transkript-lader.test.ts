@@ -9,6 +9,8 @@ import * as rawTranskript from "../scripts/transkript.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawHc from "../scripts/hauptchat-zerlegung.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawProjekt from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../scripts/token-baseline.mjs";
 
 type Zeilen = Record<string, unknown>[];
@@ -16,10 +18,10 @@ type Sitzung = { id: string; main: Zeilen; subagents: { datei: string; meta: Rec
 const T = rawTranskript as unknown as { ladeSessionDatei: (pfad: string) => Sitzung; ladeSessions: (dir: string, von?: string) => Generator<Sitzung> };
 const HC = rawHc as unknown as {
   istTicketLauf: (meta: Record<string, unknown> | undefined, ticketAgenten: Set<string>) => boolean;
-  hauptchatNamen: () => { ticketAgenten: Set<string> };
-  zerlegeHauptchat: (e: { sessions: Iterable<Sitzung> }) => { rows: { kategorie: string; quelle: string; calls: number }[]; kubernia: { calls: number } };
+  hauptchatNamen: (deps: { config: unknown }) => { ticketAgenten: Set<string> };
+  zerlegeHauptchat: (e: { sessions: Iterable<Sitzung>; config: unknown }) => { rows: { kategorie: string; quelle: string; calls: number }[]; kubernia: { calls: number } };
 };
-const AGENTEN = HC.hauptchatNamen().ticketAgenten;
+const AGENTEN = HC.hauptchatNamen({ config: (rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig() }).ticketAgenten;
 const istTicketLauf = (meta: Record<string, unknown> | undefined) => HC.istTicketLauf(meta, AGENTEN);
 const BASE = rawBase as unknown as { readTranscriptSession: (id: string, root: string) => { calls: { subagent?: { agentType?: string } }[]; questions: number } };
 
@@ -132,8 +134,9 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
 
   test("ein einmal iterierbarer Generator liefert dasselbe Ergebnis wie ein Array", () => {
     const dir = join(root(), "d");
-    const ausGenerator = HC.zerlegeHauptchat({ sessions: T.ladeSessions(dir) });
-    const ausArray = HC.zerlegeHauptchat({ sessions: [...T.ladeSessions(dir)] });
+    const config = (rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
+    const ausGenerator = HC.zerlegeHauptchat({ sessions: T.ladeSessions(dir), config });
+    const ausArray = HC.zerlegeHauptchat({ sessions: [...T.ladeSessions(dir)], config });
     expect(ausGenerator).toEqual(ausArray);
     expect(ausGenerator.kubernia.calls).toBe(1);
     expect(ausGenerator.rows.reduce((s, r) => s + r.calls, 0)).toBe(2);

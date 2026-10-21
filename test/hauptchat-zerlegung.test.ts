@@ -3,6 +3,10 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../scripts/projekt-config-lib.mjs";
@@ -29,11 +33,14 @@ type Eingabe = {
   closedAtOf?: (nr: number) => string | null;
   config?: Record<string, unknown>;
 };
-const hc = hcModule as {
+const hcTyp = hcModule as {
   zerlegeHauptchat: (e: Eingabe) => Ergebnis;
   ticketSkillsAusConfig: (deps?: { config?: Record<string, unknown> }) => string[];
   renderMarkdown: (r: Ergebnis) => string;
 };
+/** Der Kern lädt die Config nie selbst (der Einstiegspunkt reicht sie durch); die Tests reichen die echte durch. */
+const ECHTE_CONFIG = ladeProjektConfig() as Record<string, unknown>;
+const hc = { ...hcTyp, zerlegeHauptchat: (e: Eingabe) => hcTyp.zerlegeHauptchat({ config: ECHTE_CONFIG, ...e }) };
 
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";
@@ -212,6 +219,10 @@ describe("Ticket-Skills aus der Projekt-Config", () => {
   test("unbrauchbare Config ist ein Datenfehler mit Grund, keine stille Zählung", () => {
     assert.throws(() => hc.ticketSkillsAusConfig({ config: { agenten: {} } }), /Projekt-Config nicht nutzbar/);
     assert.throws(() => hc.zerlegeHauptchat({ sessions: [], config: {} }), /hauptchat-zerlegung/);
+  });
+  test("der Kern lädt die Config nie selbst: ohne übergebene Config ein Datenfehler, auch mit vorhandener Projekt-Config", () => {
+    assert.throws(() => hcTyp.ticketSkillsAusConfig(), /hauptchat-zerlegung.*Config/);
+    assert.throws(() => hcTyp.zerlegeHauptchat({ sessions: [] }), /hauptchat-zerlegung.*Config/);
   });
 });
 
@@ -697,4 +708,22 @@ describe("parseArgs (#1790: strikt über flagsLesen)", () => {
     assert.match(pa(["--von", "a", "--von", "b"]).fehler ?? "", /--von ist doppelt/);
     assert.match(pa(["--json", "--json"]).fehler ?? "", /--json ist doppelt/);
   });
+});
+
+describe("Einstiegspunkt übergibt die Projekt-Config an den Kern (#1814)", () => {
+  test("Prozesslauf mit leerem Projektordner endet mit Exit 0 und gültigem JSON, nicht mit der Config-Abbruchmeldung", () => {
+    const home = mkdtempSync(join(tmpdir(), "kq-1814-home-"));
+    try {
+      mkdirSync(join(home, ".claude", "projects", "leer"), { recursive: true });
+      const skript = join(process.cwd(), "scripts", "hauptchat-zerlegung.mjs");
+      const r = spawnSync(process.execPath, [skript, "--von", "2026-01-01T00:00:00Z", "--bis", "2026-01-02T00:00:00Z", "--projekt", "leer", "--json"], {
+        encoding: "utf8",
+        env: { ...process.env, USERPROFILE: home, HOME: home },
+      });
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(Array.isArray((JSON.parse(r.stdout) as { rows: unknown[] }).rows));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

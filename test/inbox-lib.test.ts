@@ -6,6 +6,8 @@ const L = raw as unknown as {
   vertrauteIssues: (s: unknown, owner: string) => { title: string }[];
   offeneTitel: (s: unknown, owner: string) => string[];
   platziereOben: (nr: number, art: string, token?: string) => void;
+  sammelticketNummern: (offene: { number: number; titel: string }[]) => number[];
+  ladeSammelKontext: (io: { ladeOffene: () => unknown; ladeKommentare: (nr: number) => { user: unknown; body: string; extra?: string }[] }) => { rohe: unknown; offene: { number: number }[]; kommentare: { user: unknown; body: string }[] };
 };
 
 const OWNER = "fluffels";
@@ -34,5 +36,34 @@ describe("offeneTitel", () => {
 describe("platziereOben", () => {
   test("ohne Token wirft es, bevor etwas startet", () => {
     expect(() => L.platziereOben(1, "security", "")).toThrow(/PROJECT_TOKEN/);
+  });
+});
+
+describe("sammelticketNummern und ladeSammelKontext (Z3)", () => {
+  const T = "Harness-Härtung (gesammelt)";
+  test("nur der exakte Titel zählt, auch geclaimte; andere Titel und leere Liste → leer", () => {
+    expect(L.sammelticketNummern([{ number: 3, titel: T }, { number: 4, titel: "Langfuse-Befunde (gesammelt)" }, { number: 5, titel: T + " x" }, { number: 9, titel: T }])).toEqual([3, 9]);
+    expect(L.sammelticketNummern([])).toEqual([]);
+  });
+  test("lädt Kommentare nur der Sammeltickets, ungefiltert (user, body), und liefert rohe und normalisierte Seiten", () => {
+    const rohe = [[
+      { number: 3, title: T, user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" },
+      { number: 4, title: "anderes", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" },
+    ]];
+    const abgefragt: number[] = [];
+    const k = L.ladeSammelKontext({
+      ladeOffene: () => rohe,
+      ladeKommentare: (nr) => {
+        abgefragt.push(nr);
+        return [{ user: { login: "fremd", type: "User" }, body: "- [ ] x", extra: "fällt weg" }];
+      },
+    });
+    expect(abgefragt).toEqual([3]);
+    expect(k.rohe).toBe(rohe);
+    expect(k.offene.map((i) => i.number)).toEqual([3, 4]);
+    expect(k.kommentare).toEqual([{ user: { login: "fremd", type: "User" }, body: "- [ ] x" }]);
+  });
+  test("ein werfender Abruf wirft weiter (kein stilles Leer)", () => {
+    expect(() => L.ladeSammelKontext({ ladeOffene: () => { throw new Error("gh kaputt"); }, ladeKommentare: () => [] })).toThrow(/gh kaputt/);
   });
 });

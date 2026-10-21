@@ -774,3 +774,23 @@ describe("parseArgs strikt (#1790)", () => {
     expect(PS(["--delta"]).fehler).toMatch(/--delta braucht einen Wert/);
   });
 });
+
+describe("sessions je Zeile (#1814 L8)", () => {
+  const mitDatei = (l: Lauf, datei: string | undefined): Lauf => ({ ...l, datei } as Lauf);
+  const cl = [{ min: 1 }, { min: 2 }];
+  type Zeile = { ticket: number | null; sessions: string[] };
+  const zeilen = (e: JeEingabe) => (je(e) as unknown as { laeufe: Zeile[] }).laeufe;
+  const flach = (e: Omit<JeEingabe, "jeTicket">) => (K as unknown as { kontextTreiber: (e: JeEingabe) => { laeufe: Zeile[] } }).kontextTreiber({ ...e, jeTicket: false }).laeufe;
+  test("flacher Modus: erstes Segment von datei", () => {
+    expect(flach({ laeufe: [mitDatei(lauf("#1 x", cl), "sess-a/subagents/agent-1.jsonl")] })[0].sessions).toEqual(["sess-a"]);
+  });
+  test("ohne datei: leere Liste, kein Absturz", () => {
+    expect(flach({ laeufe: [lauf("#1 x", cl)] })[0].sessions).toEqual([]);
+  });
+  test("je Ticket: sortiert und eindeutig über alle Läufe des Tickets", () => {
+    const a = mitDatei(vorgaenger(5, "verify", 0, cl), "sess-b/subagents/a.jsonl");
+    const b = mitDatei(nachfolger(5, "pr", 30, cl), "sess-a/subagents/b.jsonl");
+    const c = mitDatei(nachfolger(5, "pr", 60, cl), "sess-b/subagents/c.jsonl");
+    expect(zeilen({ laeufe: [a, b, c], jeTicket: true })[0].sessions).toEqual(["sess-a", "sess-b"]);
+  });
+});

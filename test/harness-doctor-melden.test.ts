@@ -18,6 +18,7 @@ interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
   istBekannt(punkt: string, kommentare: Kommentar[], owner: string): boolean;
+  main(argv: string[], deps: { ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
 
@@ -155,5 +156,31 @@ describe("harness-doctor-melden: ermittleLuecken", () => {
     for (const env of umgebungen) {
       assert.deepEqual(melden.ermittleLuecken({ env, repo: "acme/demo", pruefe: () => ergebnis }).map((l) => l.punkt), ["Ruleset"]);
     }
+  });
+});
+
+describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Import)", () => {
+  test("kaputte Config → ::error:: mit Exit 2, die Board-Libs werden nie importiert", async () => {
+    const log: string[] = [];
+    let importiert = false;
+    const code = await melden.main([], {
+      ladeConfig: () => { throw new Error("Projekt-Config fehlt: x\nFix: anlegen"); },
+      ladeLibs: () => { importiert = true; return Promise.resolve({}); },
+      log: (s) => log.push(s),
+      err: () => undefined,
+    });
+    assert.equal(code, 2);
+    assert.equal(importiert, false);
+    assert.match(log.join("\n"), /^::error::Harness-Doctor \(Wochenlauf\): Projekt-Config nicht lesbar: Projekt-Config fehlt: x Fix: anlegen$/);
+  });
+  test("ein Import-Fehler der Libs (z. B. Config beim Import) → ebenfalls ::error:: Exit 2", async () => {
+    const log: string[] = [];
+    const code = await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.reject(new Error("Import kaputt")), log: (s) => log.push(s), err: () => undefined });
+    assert.equal(code, 2);
+    assert.match(log[0], /^::error::.*Import kaputt/);
+  });
+  test("unbekanntes Flag → Exit 2 vor jeder Config", async () => {
+    const code = await melden.main(["--quatsch"], { ladeConfig: () => assert.fail("keine Config"), ladeLibs: () => assert.fail("kein Import"), log: () => undefined, err: () => undefined });
+    assert.equal(code, 2);
   });
 });
