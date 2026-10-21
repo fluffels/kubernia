@@ -33,6 +33,12 @@ export const RESTE: { name: string; muster: RegExp }[] = [
   { name: "Konstante FACTORY_LABEL", muster: /\bFACTORY_LABEL\b/ },
   { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/ },
   { name: "Docs-Gen-Schlüssel diagramme.ruleset", muster: /diagramme\.ruleset/ },
+  // Kern-Umgebungsvariablen heißen FACTORY_<NAME> (#1824). Geschlossene Liste der 15 früheren Namen: Projektnamen (Quiz-Golden,
+  // Git-Guard, Dev-Panel) und die entfallenen Override-Namen fallen nicht darunter.
+  {
+    name: "Kern-Umgebungsvariable mit Projektpräfix",
+    muster: /\bKQ_(?:DIFF_BASE|DIFFSIZE_MAX_FILES|DIFFSIZE_MAX_LINES|PR_NUMBER|PR_DRAFT|PR_BODY|GH_KOSTEN_LOG|MCP_LOG_DIR|MCP_AUSFALL_STAND|PACING_ZIELQUOTE|PACING_PROBE_SKRIPT|RATE_LIMITS_SNAPSHOT|STATUSLINE_DURCHREICHEN|USER_SETTINGS|TEST_FEHLT)\b/,
+  },
 ];
 
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
@@ -42,13 +48,23 @@ export const AUSNAHMEN: { praefix: string; grund: string }[] = [
   { praefix: "test/harness/entfernte-pfade.test.ts", grund: "dieser Wächter trägt die Muster selbst" },
 ];
 
+/** Ausnahmen für genau eine Regel in genau einer Datei (exakter Pfad); alle anderen Regeln prüfen die Datei weiter. */
+export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] = [
+  {
+    pfad: "docs/referenz/befehle.md",
+    regel: "Kern-Umgebungsvariable mit Projektpräfix",
+    grund: "das Inventar der Umgebungsvariablen nennt die Altnamen bewusst in einer eigenen Spalte (#1824)",
+  },
+];
+
 /** Findet Reste in den übergebenen Dateien; leer = sauber. */
 export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[] {
   const treffer: string[] = [];
   for (const d of dateien) {
     if (AUSNAHMEN.some((a) => d.pfad.startsWith(a.praefix))) continue;
+    const regeln = RESTE.filter((r) => !REGEL_AUSNAHMEN.some((a) => a.pfad === d.pfad && a.regel === r.name));
     d.inhalt.split("\n").forEach((zeile, i) => {
-      for (const r of RESTE) if (r.muster.test(zeile)) treffer.push(`${d.pfad}:${i + 1}: ${r.name}`);
+      for (const r of regeln) if (r.muster.test(zeile)) treffer.push(`${d.pfad}:${i + 1}: ${r.name}`);
     });
   }
   return treffer;
@@ -91,6 +107,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Konstante FACTORY_LABEL": "import { FACTORY_LABEL } from board-lib",
       "Ausnahmeliste des Flag-Parser-Wächters": "die noch nicht migrierten Skripte stehen dort als Liste",
       "Docs-Gen-Schlüssel diagramme.ruleset": "config.diagramme.ruleset fehlt",
+      "Kern-Umgebungsvariable mit Projektpräfix": "echo KQ_DIFF_BASE=$base >> $GITHUB_ENV",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
@@ -103,6 +120,11 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
   });
 
+  test("Negativfall: Projektnamen, entfallene Override-Namen und die neuen Namen lösen die Umgebungsvariablen-Regel nicht aus", () => {
+    const sauber = "KQ_UPDATE_QUIZ_GOLDEN KQ_GIT_SAFECRLF VITE_KQ_DEVPANEL_PW KQ_DIFFSIZE_OVERRIDE KQ_DIFF_BASE_X VITE_KQ_DIFF_BASE __KQ_DIFF_BASE__ FACTORY_DIFF_BASE";
+    assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
+  });
+
   test("Ausnahmen: ADRs und der Absenz-Test dürfen die Namen tragen, andere Pfade nicht", () => {
     const text = "kubernia-ticket.js und kubernia-workflow";
     assert.deepEqual(findeReste([{ pfad: "docs/adr/0028-ein-ticket-ablauf.md", inhalt: text }]), []);
@@ -110,7 +132,16 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.ok(findeReste([{ pfad: "docs/modul.md", inhalt: text }]).length > 0);
   });
 
+  test("Regel-Ausnahme: das Inventar darf Altnamen tragen, jeder andere Rest dort und jede andere Datei bleibt rot", () => {
+    const inv = "docs/referenz/befehle.md";
+    assert.deepEqual(findeReste([{ pfad: inv, inhalt: "KQ_DIFF_BASE" }]), []);
+    assert.equal(findeReste([{ pfad: inv, inhalt: "der Skill kubernia-workflow" }]).length, 1);
+    assert.ok(findeReste([{ pfad: inv + ".bak", inhalt: "KQ_DIFF_BASE" }]).length > 0);
+    assert.ok(findeReste([{ pfad: "docs/x.md", inhalt: "KQ_DIFF_BASE" }]).length > 0);
+  });
+
   test("jede Ausnahme nennt einen Grund", () => {
+    for (const a of REGEL_AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.pfad} ohne Grund`);
     for (const a of AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.praefix} ohne Grund`);
   });
 });

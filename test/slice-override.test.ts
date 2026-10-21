@@ -7,6 +7,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { altName, ohneKernEnv } from "./support/env-alt";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -159,8 +160,16 @@ describe("parseNachweis lebt im neutralen Modul nachweis-lib (#1311)", () => {
 describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 30_000 }, () => {
   const SKRIPT = join(__dirname, "..", "scripts", "check-diffcoverage.mjs");
 
+  /** Umgebung mit der Diff-Basis unter dem gegebenen Namen; die Umgebung der CI und der Maintainerin liefert keine zweite Basis. */
+  function umgebung(basisName: string, basis: string): Record<string, string | undefined> {
+    const env: Record<string, string | undefined> = { ...process.env };
+    ohneKernEnv(env, "FACTORY_DIFF_BASE");
+    env[basisName] = basis;
+    return env;
+  }
+
   /** Temp-Repo: Basis-Commit, dann ein Doku-Commit mit der gegebenen Nachricht; liefert Ergebnis des CLI-Laufs. */
-  function lauf(nachricht: string) {
+  function lauf(nachricht: string, basisName = "FACTORY_DIFF_BASE") {
     const dir = mkdtempSync(join(tmpdir(), "kq-dcov-"));
     try {
       const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: dir, encoding: "utf8" }).trim();
@@ -172,7 +181,7 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
       writeFileSync(join(dir, "a.md"), "zwei\n");
       git("add", "-A");
       git("commit", "-q", "-m", "doku", "-m", nachricht);
-      const r = spawnSync(process.execPath, [SKRIPT], { cwd: dir, encoding: "utf8", env: { ...process.env, KQ_DIFF_BASE: basis } });
+      const r = spawnSync(process.execPath, [SKRIPT], { cwd: dir, encoding: "utf8", env: umgebung(basisName, basis) });
       return { code: r.status, out: `${r.stdout}${r.stderr}` };
     } finally {
       rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -196,6 +205,15 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
     const r = lauf("ganz normal");
     expect(r.code).toBe(0);
     expect(r.out).not.toContain("ungültige Override-Zeile");
+    expect(r.out).not.toContain("veraltet");
+  });
+
+  it("Altname der Diff-Basis (#1824): die Basis greift und die Warnung nennt den neuen Namen", () => {
+    const r = lauf("ganz normal", altName("FACTORY_DIFF_BASE"));
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("keinen gemessenen Spielcode");
+    expect(r.out).toContain("veraltet");
+    expect(r.out).toContain("FACTORY_DIFF_BASE");
   });
 });
 

@@ -256,7 +256,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen 
 
   let diff;
   try {
-    // Drei-Punkt, NICHT `base HEAD`: KQ_DIFF_BASE ist in der PR-CI der Kopf von main (erster
+    // Drei-Punkt, NICHT `base HEAD`: FACTORY_DIFF_BASE ist in der PR-CI der Kopf von main (erster
     // Elternteil des Merge-Checkouts, ci.yml „Diff-Basis bestimmen“) statt des Branchpunkts.
     // Zwei-Punkt wiese jede Änderung, die main NACH dem Abzweigen bekam, spiegelverkehrt als
     // Addition dieses Slices aus — fremde Zeilen im Nenner, potenziell falsches Rot. `A...B`

@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { altName, ohneKernEnv } from "./support/env-alt";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as vlModule from "../scripts/verify-lauf.mjs";
 
@@ -208,8 +209,9 @@ describe("main und IO-Verdrahtung (#1428 Z9)", () => {
 
   test("--changed ohne Vergleichs-Basis: voll; mit Basis eingeengt", () => {
     const ohne: Zugriffe = { git: () => { throw new Error("kein git"); }, existiert: () => true, sammleTests: () => [] };
-    const saved = process.env.KQ_DIFF_BASE;
-    delete process.env.KQ_DIFF_BASE;
+    const saved = process.env.FACTORY_DIFF_BASE;
+    const savedAlt = process.env[altName("FACTORY_DIFF_BASE")];
+    ohneKernEnv(process.env, "FACTORY_DIFF_BASE");
     try {
       expect(io.ladeEngung(ohne)).toEqual({ voll: true, grund: "keine Vergleichs-Basis" });
       const mit: Zugriffe = {
@@ -219,7 +221,8 @@ describe("main und IO-Verdrahtung (#1428 Z9)", () => {
       };
       expect(io.ladeEngung(mit)).toMatchObject({ voll: false, lint: ["src/a.ts"], perName: ["test/a.test.ts"] });
     } finally {
-      if (saved !== undefined) process.env.KQ_DIFF_BASE = saved;
+      if (saved !== undefined) process.env.FACTORY_DIFF_BASE = saved;
+      if (savedAlt !== undefined) process.env[altName("FACTORY_DIFF_BASE")] = savedAlt;
     }
   });
 });

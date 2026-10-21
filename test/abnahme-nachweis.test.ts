@@ -192,7 +192,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       if (o.ghFehler === "issue") throw new Error("gh kaputt");
       return o.issue ?? { body: AK };
     };
-    const env = { KQ_DIFF_BASE: "1".repeat(40), KQ_PR_BODY: BODY(), KQ_PR_NUMBER: "42", ...o.env };
+    const env = { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42", ...o.env };
     return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => CONFIG }), ghAufrufe };
   }
 
@@ -206,20 +206,20 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     const messages = `${Z.abnahme}: entfaellt — kein Kriterium`;
     rot(lauf({ messages }).r.fehler, /entfaellt ist bei Ticket #9/);
     expect(lauf({ messages, issue: { body: "ohne" } }).r.ok).toBe(true);
-    expect(lauf({ messages, env: { KQ_PR_BODY: "kein Ticket" } }).r.ok).toBe(true);
+    expect(lauf({ messages, env: { FACTORY_PR_BODY: "kein Ticket" } }).r.ok).toBe(true);
   });
   test("entfaellt braucht weder PR-Nummer noch Kommentar-Abruf", () => {
-    const { r, ghAufrufe } = lauf({ messages: `${Z.abnahme}: entfaellt — kein Kriterium`, issue: { body: "ohne" }, env: { KQ_PR_NUMBER: "" } });
+    const { r, ghAufrufe } = lauf({ messages: `${Z.abnahme}: entfaellt — kein Kriterium`, issue: { body: "ohne" }, env: { FACTORY_PR_NUMBER: "" } });
     expect(r.ok).toBe(true);
     expect(ghAufrufe.some((a) => a.join(" ").includes("/comments"))).toBe(false);
   });
-  test("Urteil ohne verknüpftes Ticket ist rot", () => rot(lauf({ env: { KQ_PR_BODY: "" } }).r.fehler, /braucht ein verknüpftes Ticket/));
+  test("Urteil ohne verknüpftes Ticket ist rot", () => rot(lauf({ env: { FACTORY_PR_BODY: "" } }).r.fehler, /braucht ein verknüpftes Ticket/));
   test("mehrere Tickets und ein PR statt Ticket sind rot", () => {
-    rot(lauf({ env: { KQ_PR_BODY: "Closes #1 Fixes #2" } }).r.fehler, /Mehr als ein verknüpftes Ticket/);
+    rot(lauf({ env: { FACTORY_PR_BODY: "Closes #1 Fixes #2" } }).r.fehler, /Mehr als ein verknüpftes Ticket/);
     rot(lauf({ issue: { body: AK, pull_request: {} } }).r.fehler, /ist ein PR, kein Ticket/);
   });
   test("fehlende PR-Nummer, fremder Kommentar und abweichendes Urteil sind rot", () => {
-    rot(lauf({ env: { KQ_PR_NUMBER: "" } }).r.fehler, /PR-Nummer fehlt/);
+    rot(lauf({ env: { FACTORY_PR_NUMBER: "" } }).r.fehler, /PR-Nummer fehlt/);
     rot(lauf({ kommentare: [{ ...kommentar, user: { login: "fremd", type: "User" } }] }).r.fehler, /Spur fehlt/);
     rot(lauf({ kommentare: [{ ...kommentar, body: kommentar.body.replace("K2:erfuellt", "K2:nicht-erfuellt") }] }).r.fehler, /Urteil im Marker weicht/);
   });
@@ -228,14 +228,14 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     rot(lauf({ ghFehler: "kommentare" }).r.fehler, /gh kaputt/);
     rot(lauf({ gitFehler: true }).r.fehler, /git kaputt/);
   });
-  test("GITHUB_REPOSITORY bestimmt Repo und vertrauten Owner; ohne Fehler ist es kein Entwurf; KQ_PR_DRAFT=false ist rot", () => {
+  test("GITHUB_REPOSITORY bestimmt Repo und vertrauten Owner; ohne Fehler ist es kein Entwurf; FACTORY_PR_DRAFT=false ist rot", () => {
     const { r, ghAufrufe } = lauf({ env: { GITHUB_REPOSITORY: "x/y" } });
     expect(ghAufrufe[0][1]).toBe("repos/x/y/issues/9");
     rot(r.fehler, /Spur fehlt/); // Kommentar von „owner“, vertraut wäre nur „x“
-    const gruen = lauf({ env: { KQ_PR_DRAFT: "true" } }).r;
+    const gruen = lauf({ env: { FACTORY_PR_DRAFT: "true" } }).r;
     expect(gruen.entwurf).toBe(false);
-    rot(lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "false" } }).r.fehler, /Zeile fehlt/);
-    expect(lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "false" } }).r.ok).toBe(false);
+    rot(lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "false" } }).r.fehler, /Zeile fehlt/);
+    expect(lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "false" } }).r.ok).toBe(false);
   });
   test("Nach-Merge-Kriterium Ende-zu-Ende: nach-merge am markierten Kriterium grün, an einem normalen rot", () => {
     const NM = "## Akzeptanzkriterien\n1. eins\n2. Nach dem Merge: zwei\n";
@@ -256,15 +256,15 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       if (a[0] === "log") return `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
       return "";
     };
-    const r = m.checkAbnahmeNachweis({ runGit: git, gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: AK }), env: { KQ_DIFF_BASE: "1".repeat(40), KQ_PR_BODY: BODY(), KQ_PR_NUMBER: "42" }, ladeConfig: () => CONFIG });
+    const r = m.checkAbnahmeNachweis({ runGit: git, gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: AK }), env: { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42" }, ladeConfig: () => CONFIG });
     rot(r.fehler, /kein bekannter Commit/);
   });
   test("Entwurf: nur Bericht, ok mit Fehlern; auch bei gh-Fehler", () => {
-    const { r } = lauf({ messages: "nur Code", env: { KQ_PR_DRAFT: "true" } });
+    const { r } = lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "true" } });
     expect(r.ok).toBe(true);
     expect(r.entwurf).toBe(true);
     expect(r.fehler.length).toBeGreaterThan(0);
-    expect(lauf({ ghFehler: "issue", env: { KQ_PR_DRAFT: "true" } }).r.entwurf).toBe(true);
+    expect(lauf({ ghFehler: "issue", env: { FACTORY_PR_DRAFT: "true" } }).r.entwurf).toBe(true);
   });
   test("Override: grün ohne gh-Aufruf; Widerruf gilt nicht mehr", () => {
     const ov = `${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug gestartet`;
@@ -276,7 +276,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   });
   test("Basis == HEAD: nichts zu prüfen, kein gh", () => {
     const spy = vi.fn();
-    const r = m.checkAbnahmeNachweis({ runGit: () => "a".repeat(40), gh: spy, env: { KQ_DIFF_BASE: "a".repeat(40) }, ladeConfig: () => CONFIG });
+    const r = m.checkAbnahmeNachweis({ runGit: () => "a".repeat(40), gh: spy, env: { FACTORY_DIFF_BASE: "a".repeat(40) }, ladeConfig: () => CONFIG });
     expect(r.skipped).toBe(true);
     expect(spy).not.toHaveBeenCalled();
   });
@@ -321,7 +321,7 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
     return m.checkAbnahmeNachweis({
       runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }),
       gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: "## Akzeptanzkriterien\n1. eins\n" }),
-      env: { KQ_DIFF_BASE: r.basis, KQ_PR_BODY: "Closes #9", KQ_PR_NUMBER: "42" },
+      env: { FACTORY_DIFF_BASE: r.basis, FACTORY_PR_BODY: "Closes #9", FACTORY_PR_NUMBER: "42" },
       ladeConfig: () => CONFIG,
     });
   };
@@ -399,7 +399,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     return { dir, basis, pfad };
   }
   const cli = (r: { dir: string; basis: string; pfad: string }, env: Record<string, string> = {}, args: string[] = ["--config", r.pfad]) =>
-    spawnSync(process.execPath, [SKRIPT, ...args], { cwd: r.dir, encoding: "utf8", env: { ...process.env, KQ_DIFF_BASE: r.basis, GH_TOKEN: "", KQ_PR_BODY: "", KQ_PR_NUMBER: "", KQ_PR_DRAFT: "", ...env } });
+    spawnSync(process.execPath, [SKRIPT, ...args], { cwd: r.dir, encoding: "utf8", env: { ...process.env, FACTORY_DIFF_BASE: r.basis, GH_TOKEN: "", FACTORY_PR_BODY: "", FACTORY_PR_NUMBER: "", FACTORY_PR_DRAFT: "", ...env } });
 
   test("rot: Exit 1, stderr nennt Fehler und Override-Hinweis", () => {
     const r = cli(cliRepo("nur Code"));
@@ -413,7 +413,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.stdout).toMatch(/Abnahme-Nachweis ok/);
   });
   test("Entwurf: nur Bericht, Exit 0", () => {
-    const r = cli(cliRepo("nur Code"), { KQ_PR_DRAFT: "true" });
+    const r = cli(cliRepo("nur Code"), { FACTORY_PR_DRAFT: "true" });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Entwurf, nur Bericht/);
     expect(r.stdout).toMatch(/Zeile fehlt/);

@@ -13,8 +13,8 @@
  *  - die Spur: der jüngste vertraute Kommentar mit Abnahme-Marker auf dem PR trägt gleichen head, Durchgang == `durchgaenge`, gleiches Urteil;
  *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist.
  *
- * Das Ticket ist die einzige Schließ-Referenz im PR-Body (Umgebungsvariable `KQ_PR_BODY`, alle GitHub-Schlüsselwörter zählen); mehrere sind rot.
- * Ein Entwurfs-PR (`KQ_PR_DRAFT=true`) wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Jeder git- oder gh-Fehler ist rot
+ * Das Ticket ist die einzige Schließ-Referenz im PR-Body (Umgebungsvariable `FACTORY_PR_BODY`, alle GitHub-Schlüsselwörter zählen); mehrere sind rot.
+ * Ein Entwurfs-PR (`FACTORY_PR_DRAFT=true`) wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Jeder git- oder gh-Fehler ist rot
  * (fail-closed). Druckventil: die Override-Zeile (Schlüssel `abnahmeOverride`, `#<nr> <warum>`), ausgewertet vor jedem gh-Aufruf.
  * Bewusst kein npm-`check:*`-Skript und nicht in `verify` (der Nachweis entsteht erst nach dem Review). Lokal:
  *   node scripts/check-abnahme-nachweis.mjs
@@ -27,7 +27,7 @@ import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
-import { ladeProjektConfig, trenneConfigArg } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien, NACH_MERGE_PRAEFIX } from "./spezifikation-lib.mjs";
 
@@ -150,7 +150,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
   } catch (e) {
     fehler = [`Fehler beim Prüfen des Abnahme-Nachweises (git/gh): ${fehlerText(e)}`];
   }
-  const entwurf = env.KQ_PR_DRAFT === "true";
+  const entwurf = umgebungsWert(env, "FACTORY_PR_DRAFT") === "true";
   return { ok: fehler.length === 0 || entwurf, entwurf: entwurf && fehler.length > 0, fehler, invalid: [] };
 }
 
@@ -159,7 +159,7 @@ function pruefe({ git, gh, env, config, zeilen, base }) {
   const repo = env.GITHUB_REPOSITORY || config.repo;
   const owner = String(repo).split("/")[0];
   const nachweis = parseNachweis(git(["log", "--reverse", "--format=%B", `${base}..HEAD`]), zeilen);
-  const nummern = verknuepfteTickets(env.KQ_PR_BODY);
+  const nummern = verknuepfteTickets(umgebungsWert(env, "FACTORY_PR_BODY"));
   if (nummern.length > 1) return [`Mehr als ein verknüpftes Ticket im PR-Body (${nummern.map((n) => `#${n}`).join(", ")}): ein PR gehört zu einem Ticket.`];
   let ticket = null;
   if (nummern.length === 1) {
@@ -169,8 +169,8 @@ function pruefe({ git, gh, env, config, zeilen, base }) {
   }
   let marker = null;
   if (nachweis.abnahme?.art === "urteil") {
-    if (!/^\d+$/.test(env.KQ_PR_NUMBER ?? "")) return ["PR-Nummer fehlt (KQ_PR_NUMBER): die Spur ist nicht prüfbar."];
-    marker = vertrauterMarker(issueKommentare(env.KQ_PR_NUMBER, gh, repo), owner, zeilen);
+    if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return ["PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
+    marker = vertrauterMarker(issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo), owner, zeilen);
   }
   const abnahmeHead = nachweis.abnahme?.art === "urteil" ? leseAbnahmeHead(git, base, nachweis.abnahme.head, nachweis.review?.head) : null;
   return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen });

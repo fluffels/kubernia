@@ -138,7 +138,7 @@ function langfuseFaelle(S) {
     "langfuse-ohne-ticket-json": JSON.stringify(ohneTicket.map((e) => e.ticket)),
     "langfuse-payload-json": JSON.stringify(payloads, null, 2),
     "kontingent-logdatei": basename(S.logPfad({})),
-    "kontingent-logdatei-env": S.logPfad({ KQ_GH_KOSTEN_LOG: "X:/eigen.jsonl" }),
+    "kontingent-logdatei-env": S.logPfad({ FACTORY_GH_KOSTEN_LOG: "X:/eigen.jsonl" }),
   };
 }
 
