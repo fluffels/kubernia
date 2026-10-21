@@ -12,7 +12,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,6 +56,7 @@ type InternalRefsApi = {
   ) => { files: string[]; violations: Violation[] };
   checkedLabel: (kind: "repo" | "text") => string;
   addTerm: (term: string, selfPath: string, listName?: string) => { ok: boolean; reason?: string; encoded?: string; count?: number };
+  main: (argv: string[], deps?: { self?: string; out?: (m: string) => void; err?: (m: string) => void }) => number;
 };
 
 const {
@@ -67,6 +70,7 @@ const {
   runCheck,
   checkedLabel,
   addTerm,
+  main,
 } = rawModule as unknown as InternalRefsApi;
 // isCheckable steht in der Gate-Lib scripts/check-basis.mjs (#1579).
 const isCheckable = (rawBasis as unknown as { isCheckable: (file: string) => boolean }).isCheckable;
@@ -265,5 +269,69 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
     assert.equal(isCheckable("docs/architektur/x.d2"), true);
     const hits = findViolations(["docs/architektur/spiel.c4"], [DUMMY], () => `x = modul '${DUMMY}'`);
     assert.equal(hits.length, 1, "Ein Begriff in .c4-Text wird gefunden.");
+  });
+});
+
+describe("CLI-Flags (#1837)", () => {
+  const SKRIPT = fileURLToPath(new URL("../scripts/check-internalrefs.mjs", import.meta.url));
+  const hash = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
+  const kopie = () => {
+    const f = join(mkdtempSync(join(tmpdir(), "kq-ir-")), "kopie.mjs");
+    copyFileSync(SKRIPT, f);
+    return f;
+  };
+  const lauf = (argv: string[]) => {
+    const out: string[] = [];
+    const err: string[] = [];
+    return { out, err, run: (self: string) => main(argv, { self, out: (m) => out.push(m), err: (m) => err.push(m) }) };
+  };
+  const zahl = (f: string, liste: string) => {
+    const m = new RegExp(String.raw`export const ${liste} = \[([^\]]*)\]`).exec(readFileSync(f, "utf8"));
+    return m ? [...m[1].matchAll(/"[^"]+"/g)].length : -1;
+  };
+
+  test("--add wächst nur ENCODED_TERMS der Kopie, das echte Skript bleibt unverändert", () => {
+    const vorher = hash(SKRIPT);
+    const f = kopie();
+    const t = lauf(["--add", DUMMY]);
+    assert.equal(t.run(f), 0);
+    assert.equal(zahl(f, "ENCODED_TERMS"), ENCODED_TERMS.length + 1);
+    assert.equal(zahl(f, "ENCODED_NAME_TERMS"), ENCODED_NAME_TERMS.length);
+    assert.match(t.out.join("\n"), /aufgenommen/);
+    assert.equal(hash(SKRIPT), vorher);
+  });
+
+  test("--add-name wächst nur ENCODED_NAME_TERMS der Kopie", () => {
+    const f = kopie();
+    assert.equal(lauf(["--add-name", DUMMY]).run(f), 0);
+    assert.equal(zahl(f, "ENCODED_NAME_TERMS"), ENCODED_NAME_TERMS.length + 1);
+    assert.equal(zahl(f, "ENCODED_TERMS"), ENCODED_TERMS.length);
+  });
+
+  test("ohne Flag bleibt die Kopie unberührt; --add mit leerem oder doppeltem Begriff ist Exit 1", () => {
+    const f = kopie();
+    const vorher = hash(f);
+    assert.equal(lauf(["--add", "  "]).run(f), 1);
+    assert.equal(lauf(["--add", DUMMY]).run(f), 0);
+    const doppelt = lauf(["--add", DUMMY]);
+    assert.equal(doppelt.run(f), 1);
+    assert.match(doppelt.err.join("\n"), /schon in der Liste/);
+    assert.notEqual(hash(f), vorher);
+  });
+
+  test("unbekanntes Flag: Aufruf-Fehler mit Exit 2", () => {
+    const t = lauf(["--gibtsnicht"]);
+    assert.equal(t.run(SKRIPT), 2);
+    assert.match(t.err.join("\n"), /Aufruf: node scripts\/check-internalrefs\.mjs/);
+  });
+
+  const text = (stdin: string) => spawnSync(process.execPath, [SKRIPT, "--text"], { input: stdin, encoding: "utf8" });
+  test("--text: harmloser stdin ist Exit 0, ein echter Begriff Exit 1 ohne ihn auszugeben", () => {
+    const sauber = text("Ein ganz harmloser Satz.");
+    assert.equal(sauber.status, 0);
+    const begriff = decodeTerms()[0];
+    const treffer = text(`vor ${begriff} nach`);
+    assert.equal(treffer.status, 1);
+    assert.ok(!(treffer.stdout + treffer.stderr).includes(begriff), "der Begriff darf nicht ausgegeben werden");
   });
 });
