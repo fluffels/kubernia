@@ -44,6 +44,7 @@
   "spezifikation": {
     "hartAb": 1
   },
+  "rulesetSpiegel": ".github/ruleset-main-schutz.json",
   "projektliterale": {
     "Stardew": "stardew"
   }

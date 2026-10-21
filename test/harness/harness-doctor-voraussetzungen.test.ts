@@ -1,0 +1,117 @@
+/* Wächter des Harness-Doctors (#1799, ADR 0022): jede Voraussetzung, die ein Workflow oder ein Skript liest, hat einen Prüfpunkt in
+ * `scripts/harness-doctor.mjs`. Drei Scanner, unabhängig von der Ableitung des Doctors (eigene, breitere Muster, fail-closed):
+ *   1. `secrets.X` und `vars.X` in den Workflows (inkl. Kommentare) stehen in `secrets`/`variablen` der Ableitung;
+ *   2. Label-Literale (Workflows: `--label`/`--add-label`/Env `*LABEL*:`, Skripte: `"--label", "<v>"`) stehen in `labels`; jeder gelesene
+ *      Config-Schlüssel `labels.<k>` bzw. `labelAus(…, "<k>")` existiert in der Config;
+ *   3. Project-Felder: jeder Board-Schlüssel der Config, den ein Skript liest (außer `rolle`), ist ein Prüfpunkt; die Vergleichsliterale
+ *      für Status-Feld und Todo-Option in den Board-Skripten stimmen mit den Namen des Doctors überein.
+ * Bekannte Grenzen: nur Literale und die drei genannten Schreibweisen; ein Label aus einer Berechnung oder `secrets[...]` sieht kein Scanner.
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ */
+import { describe, test } from "vitest";
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawDoctor from "../../scripts/harness-doctor.mjs";
+
+interface Vor { secrets: string[]; variablen: string[]; labels: string[] }
+interface Doctor {
+  voraussetzungenAus(a: { config: unknown; workflows: { pfad: string; text: string }[] }): Vor;
+  BOARD_PRUEFPUNKTE: string[];
+  STATUS_FELD_NAME: string;
+  TODO_OPTION_NAME: string;
+}
+const doctor = rawDoctor as unknown as Doctor;
+const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
+const lies = (rel: string): string => readFileSync(WURZEL + rel, "utf8");
+const dateien = (ordner: string, ende: RegExp): { pfad: string; text: string }[] =>
+  readdirSync(WURZEL + ordner).filter((f) => ende.test(f)).map((f) => ({ pfad: `${ordner}/${f}`, text: lies(`${ordner}/${f}`) }));
+
+/** Pure Scanner (mit Fixtures getestet, damit sie nicht vakuös sind). */
+const secretsUndVars = (text: string): { art: string; name: string }[] =>
+  [...text.matchAll(/\b(secrets|vars)\.([A-Za-z_]\w*)/g)].map((m) => ({ art: m[1], name: m[2] })).filter((x) => x.name !== "GITHUB_TOKEN");
+const labelLiterale = (text: string): string[] => {
+  const aus: string[] = [];
+  for (const m of text.matchAll(/--(?:add-)?label[ =]+["']?([^\s"'$\\]+)["']?/g)) aus.push(...m[1].split(","));
+  for (const m of text.matchAll(/^\s*\w*LABEL\w*:\s*["']?([^\s"'$]+)["']?\s*$/gm)) if (!m[1].includes("{{")) aus.push(m[1]);
+  return aus;
+};
+const skriptLabels = (text: string): string[] => [...text.matchAll(/"--(?:add-)?label",\s*"([^"$]+)"/g)].map((m) => m[1]);
+const gelesenerSchluessel = (text: string): string[] => [
+  ...[...text.matchAll(/labelAus\(\s*[^,()]+,\s*"(\w+)"\s*\)/g)].map((m) => m[1]),
+  ...[...text.matchAll(/\b(?:config|PROJEKT|cfg)\??\.labels\??\.(\w+)/g)].map((m) => m[1]),
+];
+const boardSchluesselGelesen = (text: string, schluessel: string[]): string[] => schluessel.filter((k) => new RegExp(`\\.${k}\\b`).test(text));
+const vergleiche = (text: string): { feld: string[]; option: string[] } => ({
+  feld: [...text.matchAll(/\bf\??\.name\s*===\s*"([^"]+)"/g)].map((m) => m[1]),
+  option: [...text.matchAll(/\bstatus\s*[!=]==\s*"([^"]+)"/g)].map((m) => m[1]),
+});
+
+const config = JSON.parse(lies(".factory/projekt.json")) as { labels: Record<string, string>; boards: Record<string, unknown>[] };
+const workflows = dateien(".github/workflows", /\.ya?ml$/);
+const skripte = dateien("scripts", /\.mjs$/).filter((s) => s.pfad !== "scripts/harness-doctor.mjs");
+const vor = doctor.voraussetzungenAus({ config, workflows });
+const ohneCase = (liste: string[]): Set<string> => new Set(liste.map((l) => l.toLowerCase()));
+
+describe("Scanner (Fixtures, nicht vakuös)", () => {
+  test("secrets und vars, auch im Kommentar; GITHUB_TOKEN ausgenommen", () => {
+    assert.deepEqual(secretsUndVars("# ${{ vars.FOO }} ${{ secrets.BAR }} ${{ secrets.GITHUB_TOKEN }}"), [{ art: "vars", name: "FOO" }, { art: "secrets", name: "BAR" }]);
+  });
+  test("Label-Literale und gelesene Schlüssel", () => {
+    assert.deepEqual(labelLiterale('gh x --label forum --label "$V" --add-label a:b,c:d\n  ALARM_LABEL: area:x\n  L: ${{ y }}'), ["forum", "a:b", "c:d"].concat(["area:x"]));
+    assert.deepEqual(skriptLabels('["--label", "area:harness", "--label", label]'), ["area:harness"]);
+    assert.deepEqual(gelesenerSchluessel('labelAus(config, "harness") config.labels.forum labels.some(x)'), ["harness", "forum"]);
+  });
+  test("Board-Schlüssel und Vergleichsliterale", () => {
+    assert.deepEqual(boardSchluesselGelesen("b.projectId + x.rolle", ["projectId", "neu", "rolle"]), ["projectId", "rolle"]);
+    assert.deepEqual(vergleiche('f?.name === "Status" && i.status !== "Todo"'), { feld: ["Status"], option: ["Todo"] });
+  });
+  test("ein ungedecktes vars.FOO fällt auf (Negativfall)", () => {
+    const v = doctor.voraussetzungenAus({ config, workflows: [{ pfad: "x.yml", text: "a: ${{ vars.FOO }}" }] });
+    assert.ok(v.variablen.includes("FOO"));
+    assert.ok(!doctor.voraussetzungenAus({ config, workflows: [] }).variablen.includes("FOO"));
+  });
+});
+
+describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () => {
+  test("jedes secrets.X und vars.X der Workflows steht in der Ableitung", () => {
+    const funde = workflows.flatMap((w) => secretsUndVars(w.text));
+    assert.ok(funde.length > 0, "Scanner fand kein einziges Secret: vakuös");
+    for (const { art, name } of funde) {
+      const liste = art === "secrets" ? vor.secrets : vor.variablen;
+      assert.ok(liste.includes(name), `${art}.${name} wird in den Workflows gelesen, hat aber keinen Prüfpunkt im Harness-Doctor`);
+    }
+  });
+
+  test("jedes Label-Literal der Workflows und Skripte steht in der Ableitung", () => {
+    const soll = ohneCase(vor.labels);
+    const funde = [...workflows.flatMap((w) => labelLiterale(w.text)), ...skripte.flatMap((s) => skriptLabels(s.text))];
+    assert.ok(funde.length > 0, "Scanner fand kein Label: vakuös");
+    for (const l of funde) assert.ok(soll.has(l.toLowerCase()), `Label "${l}" wird gelesen, hat aber keinen Prüfpunkt im Harness-Doctor (Config-Label oder Workflow-Literal)`);
+  });
+
+  test("jeder gelesene Label-Schlüssel existiert in der Config", () => {
+    const gelesen = skripte.flatMap((s) => gelesenerSchluessel(s.text));
+    assert.ok(gelesen.length > 0, "Scanner fand keinen Schlüssel: vakuös");
+    for (const k of gelesen) assert.ok(Object.hasOwn(config.labels, k), `labels.${k} wird gelesen, fehlt aber in .factory/projekt.json`);
+  });
+
+  test("jedes Project-Feld der Config, das ein Skript liest, ist ein Prüfpunkt (rolle: intern, keine GitHub-Voraussetzung)", () => {
+    const schluessel = Object.keys(config.boards[0]).filter((k) => k !== "rolle");
+    const gelesen = new Set(skripte.flatMap((s) => boardSchluesselGelesen(s.text, schluessel)));
+    assert.ok(gelesen.has("statusFeldNodeId"), "Scanner fand kein Board-Feld: vakuös");
+    for (const k of gelesen) assert.ok(doctor.BOARD_PRUEFPUNKTE.includes(k), `Board-Schlüssel ${k} wird gelesen, hat aber keinen Prüfpunkt im Harness-Doctor`);
+  });
+
+  test("Status-Feld und Todo-Option: die Vergleichsliterale der Board-Skripte sind die des Doctors", () => {
+    const boardSkripte = skripte.filter((s) => s.text.includes("statusFeld"));
+    const v = boardSkripte.map((s) => vergleiche(s.text));
+    assert.ok(v.some((x) => x.feld.length > 0) && v.some((x) => x.option.length > 0), "Scanner fand keinen Vergleich: vakuös");
+    for (const x of v) {
+      for (const f of x.feld) assert.equal(f, doctor.STATUS_FELD_NAME);
+      for (const o of x.option) assert.equal(o, doctor.TODO_OPTION_NAME);
+    }
+  });
+});

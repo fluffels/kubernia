@@ -88,6 +88,9 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (b1(c).todoOptionId = 3)), /boards\.1\.todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+    assert.match(mit((c) => (c.rulesetSpiegel = "")), /rulesetSpiegel/);
+    assert.match(mit((c) => (c.rulesetSpiegel = 5)), /rulesetSpiegel/);
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), rulesetSpiegel: ".github/r.json" }), []);
   });
 
   test("praefixe, labels, agenten (#1741): je Pflichtschlüssel ein Negativfall (fest verdrahtete Liste, kein Export)", () => {
