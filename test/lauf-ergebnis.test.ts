@@ -466,6 +466,23 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
     assert.throws(() => mod.laufErgebnisStartAgent({ laeufe: [], von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
   });
+  test("Negativfall: laufErgebnisStartAgent ohne vollständige Ticket-Namen bricht ab, ohne git oder gh zu fragen (#1821 L12)", () => {
+    const nie = () => {
+      throw new Error("darf nicht aufgerufen werden");
+    };
+    const ohneWorktree = () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+    assert.throws(() => mod.laufErgebnisStartAgent({ laeufe: [], von, bis, runGit: nie, runGh: nie, ladeConfig: ohneWorktree }), /praefixe\.worktree/);
+  });
+  test("Besitzer aus repo der Config (#1821 L20): ohne repo undefined (Abnahme-Marker nicht prüfbar), kaputtes repo wirft mit Fix-Zeile", () => {
+    const nie = () => {
+      throw new Error("darf nicht aufgerufen werden");
+    };
+    const mitRepo = (repo: unknown) => () => ({ repo, praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+    for (const kaputt of ["x", "a/b/c", "", "/b"]) {
+      assert.throws(() => mod.laufErgebnis({ von, bis, runGit: nie, runGh: nie, ladeConfig: mitRepo(kaputt) }), /owner\/name[\s\S]*Fix:/, kaputt);
+    }
+    assert.doesNotThrow(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh({ liste: [] }), ladeConfig: mitRepo("o/n") }));
+  });
   test("ohne PRs keine weiteren gh-Aufrufe (nur die Liste)", () => {
     const aufrufe: string[][] = [];
     const e = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh({ liste: [], aufrufe }), jetzt: SPAETER });
@@ -511,6 +528,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.throws(lauf({ liste: [], offen: {} as unknown as unknown[] }), /keine Liste/);
       const voll = Array.from({ length: 1000 }, (_, i) => offenPr({ number: 1000 + i }));
       assert.throws(lauf({ liste: [], offen: voll }), /abgeschnitten/);
+      assert.doesNotThrow(lauf({ liste: [], offen: voll.slice(1) }), "999 Einträge liegen unter dem Limit (#1821 L23a)");
       const k = { 70: [kommentar(marker(2))] };
       const zaehle = (createdAt: string) => offen({ liste: [], offen: [offenPr({ createdAt })], kommentare: k }, { owner: "fluffels" }).offenMitFix;
       assert.equal(zaehle(von), 1, "untere Grenze gehört zum Fenster");
@@ -524,8 +542,10 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       const lauf = (c: () => unknown) => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ladeConfig: c });
       assert.equal((lauf(conf("fluffels/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1);
       assert.equal((lauf(conf("anderer/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 0, "Autor fluffels ist dann nicht vertraut");
+      const mitArg = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ladeConfig: conf("anderer/x"), owner: "fluffels" });
+      assert.equal((mitArg.kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1, "das owner-Argument hat Vorrang vor der Config (#1821 L23a)");
       assert.throws(() => lauf(conf()), /Besitzer/);
-      assert.throws(() => lauf(conf(42)), /Besitzer/);
+      assert.throws(() => lauf(conf(42)), /owner\/name/); // kaputtes repo: wirft schon beim Zerlegen
       const leer = { liste: [], offen: [] };
       assert.doesNotThrow(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(leer), jetzt: SPAETER, ladeConfig: conf() }));
     });
@@ -667,8 +687,9 @@ describe("laufErgebnis (git und gh injiziert)", () => {
           const t = new Date(Date.parse(von) - stunden * 3600_000);
           utimesSync(join(sub, `${name}.jsonl`), t, t);
         }
-        const geladen = mod.ladeStartLaeufe(dir, "x-agent", von) as { datei: string }[];
+        const geladen = mod.ladeStartLaeufe(dir, "x-agent", von) as { datei: string; session: string }[];
         assert.deepEqual(geladen.map((l) => l.datei), ["s1/subagents/a-neu.jsonl"]);
+        assert.deepEqual(geladen.map((l) => l.session), ["s1"]);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

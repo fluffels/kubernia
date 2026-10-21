@@ -7,7 +7,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync,
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import {
   einheitHash,
   einheitId,
@@ -26,7 +26,7 @@ import {
 
 export const MANIFEST_PFAD = ".factory/besitz.json";
 export const STAND_PFAD = ".factory/sync-stand.json";
-export const PROJEKT_PFAD = ".factory/projekt.json";
+export const PROJEKT_PFAD = PROJEKT_CONFIG;
 
 const gleichJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -123,7 +123,7 @@ export function planeSync({
       if (!ganz) res.fehler.push(...pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis));
       ziele.set(pfad, { ergebnis, zielRoh, zielLf, srcText });
     } catch (err) {
-      res.fehler.push(`${pfad}: ${err.message}`);
+      res.fehler.push(err.message.startsWith(`${pfad}:`) ? err.message : `${pfad}: ${err.message}`);
     }
   }
   if (res.fehler.length > 0) return res;

@@ -13,10 +13,9 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { REPO } from "./board-lib.mjs";
+import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { platziereOben } from "./inbox-lib.mjs";
 
 /** Titel-Präfix der Wiedervorlage-Tickets; derselbe Marker steht als Notfall-Art `wiedervorlage` in `NOTFAELLE` (board-lib.mjs). */
 export const TITEL_PRAEFIX = "⏰ Wiedervorlage:";
@@ -117,15 +116,15 @@ function ladeEintraege() {
 
 /** Alle Issues (offen und geschlossen) aus der konsistenten Listenabfrage, nicht aus dem verzögerten Such-Index. */
 // Grenze: die jüngsten 1000 Issues (alle Zustände). Ein Wiedervorlage-Ticket wird zeitnah abgearbeitet und der Eintrag im selben PR gelöscht; ein Ticket, das hinter die 1000 fällt, stünde nur bei vergessenem Löschen noch an (dann Dublette statt Warnung).
-const ladeTickets = () => ghJson(["issue", "list", "--repo", REPO, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt"]);
+const ladeTickets = (repo) => ghJson(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt"]);
 
-function legeAn(e, label) {
+function legeAn(e, label, repo) {
   const { titel, body } = ticketText(e);
-  const url = ghText(["issue", "create", "--repo", REPO, "--title", titel, "--label", label, "--body", body]).trim();
+  const url = ghText(["issue", "create", "--repo", repo, "--title", titel, "--label", label, "--body", body]).trim();
   return Number(url.split("/").pop());
 }
 
-function sortiereEin(nr) {
+function sortiereEin(nr, platziereOben) {
   const token = process.env.PROJECT_TOKEN;
   if (!token) {
     console.log(`::warning::PROJECT_TOKEN fehlt: #${nr} steht nicht oben im Board.`);
@@ -170,21 +169,41 @@ export function lauf({ eintraege, heute, tickets, trocken = false, anlegen, sort
 }
 
 /** Die Verdrahtung von `lauf` mit dem Standard-Label aus der Config (`labels.harness`, wirft ohne); Eintrags-Label geht vor. */
-export function ioAus(config, { legen = legeAn } = {}) {
+export function ioAus(config, { legen = legeAn, repo, platziereOben } = {}) {
   const standard = labelAus(config, "harness");
-  return { anlegen: (e) => legen(e, labelFuer(e, standard)), sortiereEin };
+  return { anlegen: (e) => legen(e, labelFuer(e, standard), repo), sortiereEin: (nr) => sortiereEin(nr, platziereOben) };
 }
 
-function main() {
+// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst in `main`, nach dem Aufruf-Check, importieren, sonst bräche eine
+// kaputte Config als Stacktrace statt als `::error::` mit Fix-Zeile.
+const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
+
+async function main(argv = process.argv.slice(2)) {
+  const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
+  if (fehler) {
+    console.error(`${fehler.text}
+Aufruf: node scripts/wiedervorlage.mjs [--dry-run]`);
+    process.exit(AUFRUF_EXIT);
+  }
+  let libs;
+  let config;
+  try {
+    config = ladeProjektConfig();
+    libs = await ladeBoardLibs();
+  } catch (e) {
+    console.log(fehlerMeldung(e, { praefix: "Wiedervorlage: Projekt-Config nicht lesbar: " }));
+    process.exit(AUFRUF_EXIT);
+  }
+  const { REPO, platziereOben } = libs;
   const eintraege = ladeEintraege();
   const code = lauf({
     eintraege,
     heute: new Date().toISOString().slice(0, 10),
-    tickets: ladeTickets(),
-    trocken: process.argv.includes("--dry-run"),
-    ...ioAus(ladeProjektConfig()),
+    tickets: ladeTickets(REPO),
+    trocken: werte["dry-run"] === true,
+    ...ioAus(config, { repo: REPO, platziereOben }),
   });
   process.exit(code);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

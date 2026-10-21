@@ -8,9 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
-const PROJEKT_PFAD = ".factory/projekt.json";
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
 const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad>`), oder den Projektwert in `.factory/projekt.json` auslagern";
@@ -88,7 +87,7 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   if (pw.fehler.length > 0) {
     err(`check-factory-drift: ${pw.fehler.length} Projektwert-Befund(e)`);
     for (const f of pw.fehler) err(`  ${f}`);
-    if (pw.fehler.some((f) => f.includes("weicht von"))) err(`  Fix: \`node scripts/projektwerte.mjs --write\` (Werte kommen aus ${PROJEKT_PFAD})`);
+    if (pw.abweichungen.length > 0) err(`  Fix: \`node scripts/projektwerte.mjs --write\` (Werte kommen aus ${PROJEKT_CONFIG})`);
   }
   if (r.fehler.length > 0 || pw.fehler.length > 0) return 1;
   if (!r.entfaellt) out(`check-factory-drift: ${r.einheiten} Einheiten ohne Drift`);

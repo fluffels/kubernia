@@ -64,6 +64,7 @@ function labelVon(tool, wurzel, namen) {
 
 /** Calls des Laufs mit ihren Tool-Aufrufen und der Phase je Call. */
 function phasenUndTools(zeilen, einstieg, namen) {
+  if (!namen?.agenten?.lens) throw new Error("Phasen-Erkennung braucht die Ticket-Namen (ticketNamen(config)) als drittes Argument");
   const { calls } = callsFromTranscript(zeilen);
   const events = toolEventsFromTranscript(zeilen);
   const jeCall = new Map();
@@ -212,7 +213,7 @@ export function analysiereLauf(lauf, { wurzel = null, namen } = {}) {
     ticket: kopf?.ticket ?? null,
     sammel: kopf?.sammel ?? false,
     offen: Boolean(kopf?.offen),
-    sessions: kopf?.datei ? [String(kopf.datei).split("/")[0]] : [],
+    sessions: kopf?.session ? [String(kopf.session)] : [],
     brille: kopf?.brille ?? null,
     schnitt: kopf?.schnitt ?? null,
     einstieg: kopf?.einstieg ?? null,

@@ -1,6 +1,6 @@
 /* Harness-Doctor, Wochenlauf (#1800): jede Lücke wird eine Zeile im Harness-Sammelticket, bekannte Punkte nicht noch einmal.
  * Alle IO-Teile sind Fakes (kein Netz); `lauf` ist die öffentliche Einstiegsfunktion, `ermittleLuecken` die Token-Weiche in Actions. */
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMelden from "../scripts/harness-doctor-melden.mjs";
@@ -178,6 +178,30 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     const code = await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.reject(new Error("Import kaputt")), log: (s) => log.push(s), err: () => undefined });
     assert.equal(code, 2);
     assert.match(log[0], /^::error::.*Import kaputt/);
+  });
+  test("Gutfall (#1821 L23d): Config lesbar, injizierte Libs, Lücke aus dem leeren Token → Zeile geht an das Sammelticket", async () => {
+    vi.stubEnv("GITHUB_ACTIONS", "true");
+    vi.stubEnv("PROJECT_TOKEN", "");
+    try {
+      const gepostet: [number, string][] = [];
+      const log: string[] = [];
+      const libs = {
+        REPO: "acme/proj",
+        ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [] }),
+        waehleSammelticket: (offene: { number: number }[]) => offene[0],
+        postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
+      };
+      const deps = { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s: string) => log.push(s), err: () => undefined };
+      assert.equal(await melden.main(["--dry-run"], deps), 0);
+      assert.deepEqual(gepostet, [], "Trockenlauf schreibt nichts");
+      assert.match(log.join("\n"), /\[dry-run\] - \[ \] .*LÜCKE Secret PROJECT_TOKEN/);
+      assert.equal(await melden.main([], deps), 0);
+      assert.equal(gepostet.length, 1);
+      assert.equal(gepostet[0][0], 55);
+      assert.match(gepostet[0][1], /LÜCKE Secret PROJECT_TOKEN.*gh secret set PROJECT_TOKEN --repo acme\/proj/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
   test("unbekanntes Flag → Exit 2 vor jeder Config", async () => {
     const code = await melden.main(["--quatsch"], { ladeConfig: () => assert.fail("keine Config"), ladeLibs: () => assert.fail("kein Import"), log: () => undefined, err: () => undefined });

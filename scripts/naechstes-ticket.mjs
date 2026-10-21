@@ -28,10 +28,10 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
-import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -306,8 +306,8 @@ function messfensterLaeufe(fenster, dir, holeIssue, holeNamen) {
   }
 }
 
-/** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs, Messfenster-Lader. */
-function ladeBelegung() {
+/** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
+function ladeBelegung(messfenster) {
   const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
   try {
     git(["fetch", "--prune", "origin"]); // fail-open: ohne Netz zählen die lokalen Remote-Refs
@@ -317,43 +317,39 @@ function ladeBelegung() {
   const refs = git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
   const worktrees = parseWorktreeBloecke(git(["worktree", "list", "--porcelain"])).flatMap((b) => [b.pfad, b.branch].filter(Boolean));
   const prHeads = prHeadsAus(ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/pulls?state=open&per_page=100`]));
-  return { offene, refs, worktrees, prHeads, messfenster: messfensterLader() };
+  return { offene, refs, worktrees, prHeads, messfenster };
 }
 
-const ladeEcht = () => ({
-  produkt: normalizeItems(loadItemPages(boardFuerRolle("produkt"))),
-  factory: normalizeItems(loadItemPages(boardFuerRolle("factory"))),
-  ...ladeBelegung(),
-});
-
-/** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
-const ladeEinzelnEcht = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung() });
-
-/** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). */
-export function echteIo({ config } = {}) {
+/** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). Der Messfenster-Lader (`messfensterLader`, Test-Naht) bekommt die schon geladenen Namen. */
+export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLader } = {}) {
   const cfg = config ?? ladeProjektConfig();
   labelAus(cfg, "harness");
   labelAus(cfg, "forum"); // fail-fast: das Fremdeingang-Label gehört zur Eingabe der Auswahl
-  return { lade: ladeEcht, ladeEinzeln: ladeEinzelnEcht, owner: REPO.split("/")[0], hartAb: cfg.spezifikation?.hartAb, namen: ticketNamen(cfg), config: cfg };
+  const namen = ticketNamen(cfg);
+  const messfenster = erzeugeLader({ ladeNamen: () => namen });
+  const lade = () => ({
+    produkt: normalizeItems(loadItemPages(boardFuerRolle("produkt"))),
+    factory: normalizeItems(loadItemPages(boardFuerRolle("factory"))),
+    ...ladeBelegung(messfenster),
+  });
+  /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
+  const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster) });
+  return { lade, ladeEinzeln, owner: zerlegeRepo(REPO).owner, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
-  const vorab = aufrufLesen(process.argv.slice(2));
-  if (vorab.fehler) {
-    process.stderr.write(`✖ naechstes-ticket: ${vorab.fehler}\n`);
-    process.exit(AUFRUF_EXIT);
-  }
-  mitKontingent("naechstes-ticket", { arten: ["core"] }); // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
-  let io;
-  try {
-    io = echteIo();
-  } catch (e) {
-    process.stderr.write(`✖ naechstes-ticket: ${e instanceof Error ? e.message : String(e)}\n`);
-    process.exit(2);
-  }
-  const { code, out, err } = fuehreAus(process.argv.slice(2), io);
-  process.stdout.write(out);
-  process.stderr.write(err);
-  process.exitCode = code;
+  direktaufruf(process.argv.slice(2), {
+    pruefe: aufrufLesen,
+    fehlerErgebnis: (_argv, vorab) => fehlerErgebnis(vorab.fehler),
+    vorbereiten: () => mitKontingent("naechstes-ticket", { arten: ["core"] }), // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
+    io: () => {
+      try {
+        return echteIo();
+      } catch (e) {
+        return { configFehler: e instanceof Error ? e.message : String(e) }; // `fuehreAus` unten meldet die Config-Ursache (Exit 2)
+      }
+    },
+    fuehreAus: (argv, io) => (io.configFehler === undefined ? fuehreAus(argv, io) : fehlerErgebnis(io.configFehler)),
+  });
 }

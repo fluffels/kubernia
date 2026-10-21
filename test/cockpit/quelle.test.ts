@@ -104,6 +104,7 @@ describe("Abruf", () => {
     ["null", null],
     ["unbekannter status", { status: "vielleicht", stand: 1, daten: null, grund: "x" }],
     ["ok ohne stand", { status: "ok", daten: {}, grund: null }],
+    ["ok mit leerem daten-Objekt", { status: "ok", stand: 1, daten: {}, grund: null }],
     ["ok mit daten null", { status: "ok", stand: 1, daten: null, grund: null }],
     ["ausfall mit daten", { status: "ausfall", stand: 1, daten: {}, grund: "x" }],
     ["ausfall ohne grund", { status: "ausfall", stand: 1, daten: null, grund: null }],
@@ -116,6 +117,11 @@ describe("Abruf", () => {
     expect(p.ergebnis.status).toBe("ausfall");
     expect(p.ergebnis.daten).toBeNull();
     expect(p.ergebnis.grund).toMatch(/^Ungültiges Ergebnis: /);
+  });
+
+  test("ok mit leerem daten-Objekt nennt den Grund „ok ohne Werte“", () => {
+    expect(pruefeErgebnis({ status: "ok", stand: 1, daten: {}, grund: null })).toBe("ok ohne Werte");
+    expect(pruefeErgebnis({ status: "ok", stand: 1, daten: { a: 0 }, grund: null })).toBeNull();
   });
 
   test("gültige Formen bleiben gültig", () => {
@@ -144,6 +150,18 @@ describe("Ausfall-Anzeige ohne alte Werte", () => {
     const panels = await erzeugeAbruf({ quellen: [quelle(() => { throw new Error("weg"); })] })();
     expect(renderSeite({ panels, jetzt: 1, projekt: "p" })).toContain("Ausfall: Fehler: weg, zuletzt ok nie");
   });
+});
+
+describe("Ausfall-Grund mit Schlusspunkt", () => {
+  test.each([["Grund endet mit Punkt.", "Ausfall: Grund endet mit Punkt, zuletzt ok nie"], ["Mehrere Punkte...  ", "Ausfall: Mehrere Punkte, zuletzt ok nie"], ["Ohne Punkt", "Ausfall: Ohne Punkt, zuletzt ok nie"]])(
+    "%j wird ohne Schlusspunkt angezeigt, nie als „. ,“",
+    async (grund, erwartet) => {
+      const panels = await erzeugeAbruf({ quellen: [quelle((c) => ausfall(grund, c))] })();
+      const html = renderSeite({ panels, jetzt: 1, projekt: "p" });
+      expect(html).toContain(erwartet);
+      expect(html).not.toContain(". ,");
+    },
+  );
 });
 
 describe("pruefeQuellen", () => {

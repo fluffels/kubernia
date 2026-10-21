@@ -21,7 +21,7 @@ function renderPanel({ titel, ergebnis, zuletztOk }) {
   const kopf = `<h2>${escapeHtml(titel)}</h2>\n<p class="stand">Stand ${escapeHtml(formatZeit(ergebnis.stand))}</p>`;
   if (ergebnis.status !== "ok") {
     const zuletzt = zuletztOk === null ? "nie" : formatZeit(zuletztOk);
-    return `<section class="panel ${KLASSE.ausfall}">\n${kopf}\n<p class="meldung">${escapeHtml(`Ausfall: ${ergebnis.grund}, zuletzt ok ${zuletzt}`)}</p>\n</section>`;
+    return `<section class="panel ${KLASSE.ausfall}">\n${kopf}\n<p class="meldung">${escapeHtml(`Ausfall: ${String(ergebnis.grund).replace(/[.\s]+$/u, "")}, zuletzt ok ${zuletzt}`)}</p>\n</section>`;
   }
   const zeilen = Object.entries(ergebnis.daten)
     .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(wertText(v))}</dd>`)

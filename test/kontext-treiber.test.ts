@@ -388,6 +388,11 @@ describe("Wartepausen über 240 s (#1588)", () => {
     expect(() => K.analysiereLauf(l)).not.toThrow();
     expect(K.analysiereLauf(l)?.pausen).toEqual([]);
   });
+  test("Phasen-Erkennung ohne Ticket-Namen bricht mit lesbarer Meldung ab", () => {
+    const { zeilen } = lauf("#1 x", [{ min: 1 }]);
+    expect(() => kontextModul.phaseDerCalls(zeilen, null, {})).toThrow(/Phasen-Erkennung braucht die Ticket-Namen/);
+    expect(() => kontextModul.phaseDerCalls(zeilen, null, undefined)).toThrow(/Phasen-Erkennung braucht die Ticket-Namen/);
+  });
   test("Aggregat trennt die Ursachen in eigene Buckets, leere Gruppe hat pausen {}", () => {
     const calls: CallSpec[] = [{ min: 1, tools: [linse] }, { min: 11, tools: [bash("node scripts/pr-warten.mjs 5")] }, { min: 16 }];
     const r = K.kontextTreiber({ laeufe: [lauf("#1 x", calls)] });
@@ -776,15 +781,15 @@ describe("parseArgs strikt (#1790)", () => {
 });
 
 describe("sessions je Zeile (#1814 L8)", () => {
-  const mitDatei = (l: Lauf, datei: string | undefined): Lauf => ({ ...l, datei } as Lauf);
+  const mitDatei = (l: Lauf, datei: string | undefined): Lauf => ({ ...l, datei: undefined, session: datei?.split("/")[0] } as Lauf);
   const cl = [{ min: 1 }, { min: 2 }];
   type Zeile = { ticket: number | null; sessions: string[] };
   const zeilen = (e: JeEingabe) => (je(e) as unknown as { laeufe: Zeile[] }).laeufe;
   const flach = (e: Omit<JeEingabe, "jeTicket">) => (K as unknown as { kontextTreiber: (e: JeEingabe) => { laeufe: Zeile[] } }).kontextTreiber({ ...e, jeTicket: false }).laeufe;
-  test("flacher Modus: erstes Segment von datei", () => {
+  test("flacher Modus: das Feld session des Laufs", () => {
     expect(flach({ laeufe: [mitDatei(lauf("#1 x", cl), "sess-a/subagents/agent-1.jsonl")] })[0].sessions).toEqual(["sess-a"]);
   });
-  test("ohne datei: leere Liste, kein Absturz", () => {
+  test("ohne session: leere Liste, kein Absturz", () => {
     expect(flach({ laeufe: [lauf("#1 x", cl)] })[0].sessions).toEqual([]);
   });
   test("je Ticket: sortiert und eindeutig über alle Läufe des Tickets", () => {

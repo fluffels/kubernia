@@ -5,9 +5,11 @@
  * Jede getrackte Datei unter `scripts/`, die `function parseArgs` oder `parseArgs =` deklariert, muss `flagsLesen(`
  * aus `scripts/flag-lib.mjs` aufrufen, ohne Ausnahme. Der Import `parseArgs` aus `node:util` ist keine Deklaration.
  *
- * Zweite Regel (#1817): `argv[++i]`, `argv[i + 1]` (auch `args`, Index genau `i`) ist als Flag-Leser verboten, ausgenommen die
- * Shell-Parser `worktree-guard-*` und `stdin-skript-guard`. Grenzen: andere Bezeichner oder Indexnamen, `indexOf` und
- * Kommentare mit dem Muster werden nicht unterschieden (Kommentar zählt als Treffer), nur getrackte Dateien.
+ * Zweite Regel (#1817, #1821): Handleser sind als Flag-Leser verboten, ausgenommen die Shell-Parser `worktree-guard-*` und
+ * `stdin-skript-guard`: (a) Index `argv[++x]`/`argv[x + 1]` mit beliebigem Bezeichner (auch `args`), (b)
+ * `argv.includes("--…")`/`argv.indexOf("--…")` (auch `process.argv`, auch mit `'`). Grenzen: andere Array-Namen (`rest`,
+ * `process.argv.slice(2)`), `.find`/`.some`, Destrukturierung, Template-Literale als Argument und Kommentare mit dem Muster
+ * (ein Kommentar zählt als Treffer) werden nicht unterschieden; nur getrackte Dateien.
  *
  * Bewusste Grenzen: eine Schleife unter anderem Namen als `parseArgs` fängt der Wächter nicht; `flagsLesen(` zählt als
  * Textvorkommen (auch ein Kommentar neben einer weiter handgeschriebenen Schleife macht die Datei grün); der Scan sieht
@@ -28,17 +30,23 @@ const DEKLARATION = /\bfunction\s+parseArgs\b|\bparseArgs\s*=(?!=)/;
 const AUFRUF = /\bflagsLesen\(/;
 const FIX_LIB = "Fix: Flags über `flagsLesen` aus `scripts/flag-lib.mjs` lesen (Skript-Konvention, docs/agent-harness.md), keine eigene Schleife.";
 
-const FLAG_INDEX = /\b(?:argv|args)\s*\[\s*(?:\+\+\s*i|i\s*\+\s*1)\s*\]/;
+/** Geschlossene Musterliste der Handleser; jede Art mit eigener Meldung. */
+const HANDLESER: { muster: RegExp; art: string }[] = [
+  { muster: /\b(?:argv|args)\s*\[\s*(?:\+\+\s*[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*\s*\+\s*1)\s*\]/, art: "liest einen Flag-Wert per Index" },
+  { muster: /\b(?:argv|args)\s*\.\s*(?:includes|indexOf)\s*\(\s*["']--/, art: "liest ein Flag per includes/indexOf" },
+];
 /** Shell-Parser (Hook-Eingabe), kein Flag-Leser der Kommandozeile: Ausnahme nach Basisname. */
 const INDEX_AUSNAHME = /(?:^|\/)(?:worktree-guard-[^/]*|stdin-skript-guard)\.(?:mjs|cjs|js)$/;
 
-/** Probleme: Flag-Wert per Index (`argv[++i]`, `argv[i + 1]`, auch `args`), zeilenweise, ohne die Ausnahmen. Pur. */
-export function flagIndexProbleme(dateien: Datei[]): string[] {
+/** Probleme: Flag-Handleser (Index `argv[++x]`/`argv[x + 1]`, `argv.includes("--…")`/`indexOf`, auch `args`), zeilenweise, ohne die Ausnahmen. Pur. */
+export function flagHandleserProbleme(dateien: Datei[]): string[] {
   const probleme: string[] = [];
   for (const d of dateien) {
     if (INDEX_AUSNAHME.test(d.pfad)) continue;
     d.text.split("\n").forEach((zeile, i) => {
-      if (FLAG_INDEX.test(zeile)) probleme.push(`${d.pfad}:${i + 1}: liest einen Flag-Wert per Index. ${FIX_LIB}`);
+      for (const { muster, art } of HANDLESER) {
+        if (muster.test(zeile)) probleme.push(`${d.pfad}:${i + 1}: ${art}. ${FIX_LIB}`);
+      }
     });
   }
   return probleme;
@@ -70,25 +78,34 @@ describe("Flag-Parser-Wächter", () => {
     assert.match(flagParserProbleme(f("function parseArgs() {}"))[0] ?? "", /Fix: Flags über `flagsLesen`/);
   });
 
-  test("Fixtures Index-Regel: argv[++i] und argv[i + 1] sind rot, andere Zugriffe und die Shell-Parser grün", () => {
+  test("Fixtures Handleser-Regel: Index (beliebiger Bezeichner) und includes/indexOf sind rot, andere Zugriffe und die Shell-Parser grün", () => {
     const f = (text: string, pfad = "scripts/x.mjs"): Datei[] => [{ pfad, text }];
-    for (const rot of ["argv[++i]", "argv[i + 1]", "argv[i+1]", "process.argv[i + 1]", "args[ ++i ]"]) {
-      const p = flagIndexProbleme(f(`a\nconst v = ${rot};`));
+    const rote = [
+      "argv[++i]", "argv[i + 1]", "argv[i+1]", "process.argv[i + 1]", "args[ ++i ]",
+      "argv[addIndex + 1]", "args[ci + 1]", "argv[++idx]", "argv.includes(\"--dry-run\")", "process.argv.includes('--fix')",
+      "args.indexOf(\"--config\")", "process.argv.indexOf( \"--port\" )",
+    ];
+    for (const rot of rote) {
+      const p = flagHandleserProbleme(f(`a\nconst v = ${rot};`));
       assert.equal(p.length, 1, rot);
       assert.match(p[0] ?? "", /^scripts\/x\.mjs:2: /);
       assert.match(p[0] ?? "", /Fix: Flags über `flagsLesen`/);
     }
-    for (const gruen of ["argv[i]", "process.argv[1]", "argv[i - 1]", "argv[i + 10]", "xargv[i + 1]"]) {
-      assert.deepEqual(flagIndexProbleme(f(`const v = ${gruen};`)), [], gruen);
+    for (const gruen of [
+      "argv[i]", "process.argv[1]", "argv[i - 1]", "argv[i + 10]", "xargv[i + 1]", "argv[0 + 1]",
+      "argv.includes(name)", "argv.includes(\"x\")", "xargv.includes(\"--a\")", "argv.indexOf(\"-v\")", "liste.includes(\"--a\")",
+    ]) {
+      assert.deepEqual(flagHandleserProbleme(f(`const v = ${gruen};`)), [], gruen);
     }
     for (const ausgenommen of ["scripts/worktree-guard-eval.mjs", "scripts/worktree-guard-neu.mjs", "scripts/stdin-skript-guard.mjs"]) {
-      assert.deepEqual(flagIndexProbleme(f("argv[++i]", ausgenommen)), [], ausgenommen);
+      assert.deepEqual(flagHandleserProbleme(f("argv[++i]", ausgenommen)), [], ausgenommen);
+      assert.deepEqual(flagHandleserProbleme(f("argv.includes(\"--x\")", ausgenommen)), [], ausgenommen);
     }
-    assert.equal(flagIndexProbleme(f("argv[++i]", "scripts/x-worktree-guard-y.mjs")).length, 1);
+    assert.equal(flagHandleserProbleme(f("argv[++i]", "scripts/x-worktree-guard-y.mjs")).length, 1);
   });
 
-  test("echter Scan: kein Skript liest einen Flag-Wert per Index", () => {
-    assert.deepEqual(flagIndexProbleme(alleSkripte()), []);
+  test("echter Scan: kein Skript liest ein Flag per Handleser", () => {
+    assert.deepEqual(flagHandleserProbleme(alleSkripte()), []);
   });
 
   test("echter Scan: jedes Skript mit parseArgs ruft flagsLesen( auf, ohne Ausnahme", () => {

@@ -21,9 +21,9 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, repoOwner } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
-import { parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { hoechsterAbnahmeDurchgang, parseNachweis } from "./nachweis-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
@@ -215,13 +215,8 @@ export function formatiere({ zeilen, kennzahlen: k }) {
 /** Commit-Zeilen, Festgefahren-Label und Besitzer (`repo` = owner/name) aus der Projekt-Config (`ladeConfig`, Standard: die echte); wirft mit der Meldung des Laders. */
 function konfigurationAus(ladeConfig) {
   const config = ladeConfig();
-  const owner = typeof config?.repo === "string" ? config.repo.split("/")[0] : undefined;
+  const owner = config?.repo === undefined ? undefined : repoOwner(config);
   return { zeilen: commitZeilenAus(config), label: labelAus(config, "festgefahren"), owner, config };
-}
-
-/** Höchster gültiger Abnahme-Durchgang aus den Kommentaren (nur vertraute Autoren, der Hand-off-Marker zählt nie); 0 ohne Marker. Pure. */
-export function hoechsterDurchgang(kommentare, owner, zeilen) {
-  return Math.max(0, ...vertrauteAbnahmeMarker(kommentare, owner, zeilen).map((m) => m.durchgang));
 }
 
 /**
@@ -245,7 +240,7 @@ function zaehleOffeneMitFix({ gh, label, von, bis, tickets, ohne, zeilen, owner 
     .filter((p) => new Date(p.createdAt).getTime() >= t0 && new Date(p.createdAt).getTime() <= t1)
     .filter((p) => passtTicketFilter(ticketVon(p), { tickets, ohne }));
   if (imFenster.length > 0 && !owner) throw new DatenFehler("Besitzer des Repos unbekannt (repo der Projekt-Config): vertraute Abnahme-Marker nicht prüfbar.");
-  return imFenster.filter((p) => hoechsterDurchgang(issueKommentare(p.number, json), owner, zeilen) >= 2).length;
+  return imFenster.filter((p) => hoechsterAbnahmeDurchgang(issueKommentare(p.number, json), owner, zeilen) >= 2).length;
 }
 
 /** Holt die Daten über `runGit`/`runGh` (injizierbar) und bewertet. Wirft DatenFehler bei Lücken. */

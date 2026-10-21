@@ -29,7 +29,7 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   if (r.fehler.length > 0) {
     err(`projektwerte: ${r.fehler.length} Befund(e)${write ? ", nichts geschrieben" : ""}`);
     for (const f of r.fehler) err(`  ${f}`);
-    if (!write && r.fehler.some((f) => f.includes("weicht von"))) err(`projektwerte: ${FIX}`);
+    if (!write && r.abweichungen.length > 0) err(`projektwerte: ${FIX}`);
     return 1;
   }
   for (const p of r.geaendert) out(`geändert: ${p}`);

@@ -21,6 +21,7 @@ interface Lib {
   projektwertWert(c: Cfg, k: string): string;
   projektwertAbweichungen(pfad: string, t: string, c: Cfg): string[];
   projektwertDateien(manifest: string[], liste: string[]): string[];
+  projektwertLauf(w: string, c: () => Cfg, o?: { schreiben?: boolean }): { dateien: number; fehler: string[]; geaendert: string[]; abweichungen: string[] };
   einheitHash(e: { pfad: string; schluessel?: string }, t: string): string | null;
   normalisierterEinheitText(e: { pfad: string; schluessel?: string }, t: string): string | null;
 }
@@ -205,6 +206,23 @@ describe("projektwerte CLI", () => {
     assert.equal(r.code, 1);
     assert.match(r.err, /kein Ende/);
     assert.doesNotMatch(r.err, /--write/);
+  });
+  test("der Hinweis hängt am Feld abweichungen, nicht am Text: ein Pfad mit 'weicht von' löst ihn nicht aus (#1821)", () => {
+    const w = projekt();
+    assert.equal(lauf(["--write"], w).code, 0);
+    schreibe(w, ".claude/agents/weicht von.md", `${S}\nohne Ende\n`);
+    const r = lauf(["--check"], w);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /kein Ende/);
+    assert.doesNotMatch(r.err, /projektwerte\.mjs --write/);
+    assert.deepEqual(lib.projektwertLauf(w, () => JSON.parse(lies(w, ".factory/projekt.json")) as Cfg).abweichungen, []);
+  });
+  test("projektwertLauf führt Abweichungen im Feld abweichungen, Marker-Fehler nicht", () => {
+    const w = projekt();
+    const cfg = (): Cfg => JSON.parse(lies(w, ".factory/projekt.json")) as Cfg;
+    const roh = lib.projektwertLauf(w, cfg);
+    assert.ok(roh.abweichungen.length > 0);
+    assert.ok(roh.abweichungen.every((a) => roh.fehler.includes(a)));
   });
   test("fehlender Schlüssel in der Config bricht ab (ohne Config-Datei ebenso)", () => {
     const w = projekt();

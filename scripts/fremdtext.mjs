@@ -16,7 +16,7 @@ import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { flach, issueKommentare, istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
-import { flagsLesen } from "./flag-lib.mjs";
+import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
 const platzhalter = (art, user, url) => `[Fremdtext ausgeblendet: ${art} von @${loginVon(user)}, ${url}]`;
@@ -122,17 +122,30 @@ export function pruefe(argv, gh, config) {
   }
 }
 
-function main(argv) {
-  let config;
+/** Vorab-Prüfung des Aufrufs für `direktaufruf`: `{ fehler }` mit der Meldung von `parseArgs`, sonst `{}`. Pur. */
+const aufrufPruefen = (argv) => {
   try {
-    config = ladeProjektConfig({ pruefen: false });
-  } catch {
-    config = undefined; // fail-closed: `pruefe` wirft ohne Config mit „labels.forum“ (Exit 2)
+    parseArgs(argv);
+    return {};
+  } catch (e) {
+    return { fehler: e instanceof Error ? e.message : String(e) };
   }
-  const { code, out, err } = pruefe(argv, (args) => ghText(args), config);
-  process.stdout.write(out);
-  process.stderr.write(err);
-  process.exitCode = code;
-}
+};
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));
+/** Die Projekt-Config ohne Schema-Prüfung; fail-closed: ohne Config `undefined`, `pruefe` wirft dann mit „labels.forum“ (Exit 2). */
+const ladeConfigOderNichts = () => {
+  try {
+    return ladeProjektConfig({ pruefen: false });
+  } catch {
+    return undefined;
+  }
+};
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  direktaufruf(process.argv.slice(2), {
+    pruefe: aufrufPruefen,
+    fehlerErgebnis: (_argv, vorab) => ({ code: 2, out: "", err: `✖ fremdtext: ${vorab.fehler}\n` }),
+    io: ladeConfigOderNichts,
+    fuehreAus: (argv, config) => pruefe(argv, (args) => ghText(args), config),
+  });
+}

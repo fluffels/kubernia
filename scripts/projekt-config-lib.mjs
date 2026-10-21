@@ -5,13 +5,14 @@
  * es gibt bewusst keinen stillen Standardwert. Dieses Modul trägt selbst kein Projektliteral.
  *
  * Kommandozeile (über den Einstieg projekt-config.mjs): `node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>` gibt einen Skalarwert aus
- * (Exit 0), 1 bei fehlender/ungültiger Config oder fehlendem Schlüssel, 2 ohne Schlüssel.
+ * (Exit 0), 1 bei fehlender/ungültiger Config oder unbekanntem Schlüssel, 2 bei einem Aufruf-Fehler (ohne Schlüssel, unbekanntes Flag, fehlender Wert).
  *
- * Nur Node-Builtins (läuft auch in Workflows ohne `npm ci`).
+ * Nur Node-Builtins und `flag-lib.mjs` (läuft auch in Workflows ohne `npm ci`).
  */
 import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -120,13 +121,20 @@ export function labelAus(config, schluessel) {
   return wert;
 }
 
-/** Pur: der Namensteil von `repo` (`owner/name` → `name`); wirft mit Fix-Zeile, wenn `repo` nicht diese Form hat (kein stiller Standardwert, #1745). */
-export function repoName(config) {
-  const repo = config?.repo;
-  const m = typeof repo === "string" ? /^[^/\s]+\/([^/\s]+)$/.exec(repo) : null;
+const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
+
+/** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
+export function zerlegeRepo(repo) {
+  const m = typeof repo === "string" ? REPO_FORM.exec(repo) : null;
   if (!m) throw new Error(`repo fehlt oder hat nicht die Form owner/name in ${PROJEKT_CONFIG}\nFix: den Schlüssel repo in ${PROJEKT_CONFIG} als owner/name eintragen`);
-  return m[1];
+  return { owner: m[1], name: m[2] };
 }
+
+/** Pur: der Namensteil von `repo` der Config (`owner/name` → `name`); wirft wie `zerlegeRepo`. */
+export const repoName = (config) => zerlegeRepo(config?.repo).name;
+
+/** Pur: der Besitzerteil von `repo` der Config (`owner/name` → `owner`); wirft wie `zerlegeRepo`. */
+export const repoOwner = (config) => zerlegeRepo(config?.repo).owner;
 
 /** Pur: prüft `labels`: die Pflichtschlüssel und alle weiteren Werte sind nicht-leere Strings. */
 function pruefeLabels(l) {
@@ -156,7 +164,7 @@ export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
   const fehler = [];
   if (wert.version !== 2) fehler.push("version muss 2 sein (Schema mit boards-Liste)");
-  if (!istText(wert.repo) || !/^[^/\s]+\/[^/\s]+$/.test(wert.repo)) fehler.push("repo muss die Form owner/name haben");
+  if (!istText(wert.repo) || !REPO_FORM.test(wert.repo)) fehler.push("repo muss die Form owner/name haben");
   fehler.push(...pruefeBoards(wert.boards));
   fehler.push(...pruefePraefixe(wert.praefixe), ...pruefeLabels(wert.labels), ...pruefeAgenten(wert.agenten));
   if (wert.projektliterale !== undefined) {
@@ -256,31 +264,36 @@ export function umgebungsWert(env, name, { altPraefix, warn = standardWarnung } 
   return altWert;
 }
 
-/** Trennt `--config <pfad>` aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)
- *  oder `{ fehler }`, wenn der Pfad fehlt. */
+/** Trennt `--config <pfad>` (auch `--config=<pfad>`) aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)
+ *  oder `{ fehler }`, wenn der Pfad fehlt. Andere Argumente bleiben unberührt in `args`; das erste `--config` zählt. */
 export function trenneConfigArg(argv) {
-  const args = [...argv];
-  const ci = args.indexOf("--config");
-  if (ci < 0) return { args, pfad: undefined };
-  const pfad = args[ci + 1];
-  if (!pfad) return { fehler: "✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen" };
-  args.splice(ci, 2);
-  return { args, pfad };
+  const { tokens } = flagsLesen(argv, { config: { type: "string" } }, { positionale: true });
+  const t = tokens.find((x) => x.kind === "option" && x.name === "config");
+  if (!t) return { args: [...argv], pfad: undefined };
+  if (!t.value) return { fehler: "✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen" };
+  const belegt = new Set([t.index, ...(t.inlineValue ? [] : [t.index + 1])]);
+  return { args: argv.filter((_, k) => !belegt.has(k)), pfad: t.value };
 }
+
+const CLI_AUFRUF = "Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>";
 
 /** Kommandozeile; gibt den Exit-Code zurück. */
 export function cli(argv, { rootDir = ROOT, out = console.log, err = console.error } = {}) {
-  const getrennt = trenneConfigArg(argv);
-  if (getrennt.fehler) {
-    err(getrennt.fehler);
-    return 1;
+  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" } }, { positionale: true });
+  if (fehler) {
+    err(`✖ ${fehler.text}\n\n${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
   }
-  const { args, pfad } = getrennt;
-  const schluessel = args[0];
+  const [schluessel, ueberzaehlig] = positionale;
   if (!schluessel) {
-    err("✖ Schlüssel fehlt\n\nFix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>");
-    return 2;
+    err(`✖ Schlüssel fehlt\n\n${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
   }
+  if (ueberzaehlig !== undefined) {
+    err(`✖ Unbekanntes Argument: ${ueberzaehlig}\n\n${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  const pfad = werte.config;
   let cfg;
   try {
     cfg = ladeProjektConfig({ rootDir, pfad });

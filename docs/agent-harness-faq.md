@@ -100,13 +100,13 @@ Jede Eingabe im Terminal lässt den Sim-Takt weiterlaufen: `src/sim.ts` zählt `
 
 ## Warum meldet der Perf-Smoke 60 FPS und die CI später 16?
 
-Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `FrameSampler` zeigt dort immer rund 60, egal wie schnell der Rechner ist. Der scheinbare Abfall nach ca. 3,5 s in der CI-Reihe (60, 35, 21, 16, 16) ist das Ende dieses Anlaufs, kein Einbruch im Spiel: der Runner rendert per Software und liegt eingeschwungen bei 16 bis 31 FPS (lokal deutlich höher; mit gedrosselter CPU und Software-Rendering reproduzierbar, ein eigener rAF-Zähler zeigt dort von Anfang an den niedrigen Wert). Darum prüft `e2e/perf-smoke.spec.ts` den frühen Wert nur als Lebenszeichen und den eingeschwungenen (nach ≥ 200 Frames, Median aus fünf Werten) gegen einen am Runner kalibrierten Boden.
+Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `FrameSampler` zeigt dort immer rund 60, egal wie schnell der Rechner ist. Der scheinbare Abfall nach ca. 3,5 s in der CI-Reihe (60, 35, 21, 16, 16) ist das Ende dieses Anlaufs, kein Einbruch im Spiel: der Runner rendert per Software und liegt eingeschwungen bei 16 bis 31 FPS (lokal deutlich höher; mit gedrosselter CPU und Software-Rendering reproduzierbar, ein eigener rAF-Zähler zeigt dort von Anfang an den niedrigen Wert). Darum prüft `e2e/perf-smoke.spec.ts` den frühen Wert nur als Lebenszeichen (Median aus drei Proben, nur solange höchstens 120 Frames gezählt sind; liegt schon die erste dahinter, entfällt dieser Boden) und den eingeschwungenen (nach ≥ 200 Frames, Median aus fünf Werten) gegen einen am Runner kalibrierten Boden.
 
 ## Wie hänge ich ein Bild an einen PR, und wie prüfe ich ein Mermaid-Diagramm?
 
 **Bild an den PR (Optik-Tickets verlangen Screenshots).** `gh` kann keine Anhänge an einen PR hängen; der Weg über das Repo selbst:
 
-1. Das Bild (aus `.playwright-mcp/`) als **Zwischen-Commit** auf den PR-Branch legen und pushen, z.B. `docs/pr-bilder/<name>.png`.
+1. Das Bild (aus `.playwright-mcp/`) als **Zwischen-Commit** auf den PR-Branch legen und pushen, z.B. `docs/pr-bilder/<name>.png`. Das gilt auch für einen PR ohne Code-Änderung: das Bild liegt trotzdem als Zwischen-Commit auf dem PR-Branch. Kein eigener Hilfsbranch nur für Bilder: kein `refs/pull/<nr>/head` hält dessen Commit, nach dem Löschen des Branches laden die Bilder nicht mehr.
 2. Die URL `https://github.com/<owner>/<repo>/raw/<sha>/<pfad>` (`<sha>` = der Commit mit dem Bild) als Markdown-Bild `![Beschreibung](url)` in einen **PR-Kommentar** setzen.
 3. Im **nächsten Commit die Datei löschen**: der Squash-Merge enthält sie nie, und `refs/pull/<nr>/head` hält den Commit mit dem Bild, die URL bleibt also gültig. Belegt (2026-10-07): die Datei am Head-Commit eines gemergten PRs mit gelöschtem Branch liefert `curl -sIL "https://github.com/fluffels/kubernia/raw/<sha>/README.md"` mit `HTTP/1.1 200 OK`.
 

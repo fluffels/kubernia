@@ -364,6 +364,11 @@ describe("Durchgang aus früheren Marker-Kommentaren", () => {
     expect(A.zaehleDurchgang([{ user: { login: "github-actions[bot]", type: "Bot" }, body: marker(1) }], "fluffels", Z)).toBe(2);
     expect(A.zaehleDurchgang([], "fluffels", Z)).toBe(1);
   });
+  test("Lücke und Duplikat: höchster Durchgang plus 1, nicht die Anzahl (#1821 L18)", () => {
+    const m = (n: number) => ({ user: VERTRAUT, body: marker(n) });
+    expect(A.zaehleDurchgang([m(1), m(3)], "fluffels", Z)).toBe(4);
+    expect(A.zaehleDurchgang([m(2), m(2)], "fluffels", Z)).toBe(3);
+  });
 });
 
 describe("Aufruf-, gh- und Vertrauensfehler", () => {

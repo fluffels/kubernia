@@ -12,7 +12,7 @@
  * `--ticket`/`--ohne` (wiederholbar) lassen Läufe eines Tickets ein- bzw. ausschließen, bevor `parallel` und das Aggregat gerechnet werden (z. B. Gegenprobe-Läufe).
  * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` (mit `--typen` alle) und deren JSONL (nicht alle Haupttranskripte).
  * Je Lauf: Ticket (`<praefixe.worktree><nr>` im Patch-Pfad, sonst Worktree, sonst erstes `#<nr>` im Prompt; `ticketAusLauf`), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
- * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
+ * die verschiedenen `model` der Calls (`modelle`, sortiert), die Transkriptdatei relativ zum Projektordner (`datei`, `null` ohne; mit Transkriptordner zusätzlich `session`, die Session-ID), Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
  * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request), Kosten in $ (`kosten`, Summe der Call-Preise aus PRICES, `null` bei einem Call ohne Preis; nur
  * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Für Lens-Läufe (#1582) zusätzlich: Beschreibung, `brille`, `runde`, `deltaArt` (`null` ohne Delta-Patch-Pfad im Prompt (gelabelt oder `<praefixe.worktree><nr>-r<n>-delta.patch`), `merge`, `fix`), `promptZeichen`, `ersterCall` und `patch` (Zugriffe auf den vollen und den Delta-Patch, siehe patch-zugriff.mjs). Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
@@ -64,7 +64,7 @@ const imFenster = (l, { von, bis, tickets, ohne }) => passtTicketFilter(l.ticket
 /**
  * Kern: Läufe aus `{ meta, zeilen }` des gewünschten `agentType` im Fenster [von, bis] (Start) → Läufe plus Aggregat. `namen` = Ticket-Namen aus der Projekt-Config
  * (`ticket-namen.mjs`), ohne `agent` gilt `namen.agenten.planer`; ohne beides wirft die Funktion.
- * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string }[], namen: object, agent?: string, von?: string, bis?: string, schnitt?: string, tickets?: number[], ohne?: number[] }} e
+ * @param {{ laeufe: { meta: object, zeilen: object[], datei?: string, session?: string }[], namen: object, agent?: string, von?: string, bis?: string, schnitt?: string, tickets?: number[], ohne?: number[] }} e
  */
 export function laufzeiten({ laeufe, namen, agent = namen?.agenten?.planer, von, bis, schnitt, tickets = [], ohne = [] }) {
   if (typeof agent !== "string" || agent === "") throw new Error("laufzeiten braucht den Agenten-Typ: `agent` oder namen.agenten.planer");
