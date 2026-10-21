@@ -59,7 +59,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 export function parseArgs(argv) {
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, vorgaenger: { type: "string" }, top: { type: "boolean" } }, { positionale: true });
-  if (fehler || tokens.some((t) => t.kind === "option-terminator")) return null;
+  if (fehler) return null;
   const ohneDry = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
   if (ohneDry[0]?.kind !== "positional" || positionale.length !== 1) return null;
   const art = positionale[0] ?? "";
