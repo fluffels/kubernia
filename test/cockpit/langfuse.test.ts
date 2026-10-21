@@ -1,5 +1,5 @@
 /* Langfuse-Quelle, Unterprozess-Allowlist und Kommandozeile des Cockpits (#1764). */
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { createServer } from "node:net";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -66,6 +66,47 @@ describe("Langfuse-Quelle", () => {
 describe("Allowlist", () => {
   test("unbekannte id wirft", () => {
     expect(() => laufe("unbekannt")).toThrow("Befehl nicht in der Allowlist: unbekannt");
+  });
+});
+
+describe("laufe", () => {
+  test("ein bereits abgebrochenes Signal ergibt code null und einen Fehlertext", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const l = await (rawLauf as unknown as { laufe: (id: string, o: { signal: AbortSignal }) => Promise<Lauf> }).laufe("langfuse-vorbedingung", { signal: ac.signal });
+    expect(l.code).toBeNull();
+    expect(l.fehler).toEqual(expect.stringMatching(/\S/));
+  });
+});
+
+describe("main", () => {
+  const { main } = rawCockpit as unknown as { main: (argv: string[], cwd: string) => Promise<number | null> };
+  const stumm = () => [vi.spyOn(console, "error").mockImplementation(() => undefined), vi.spyOn(console, "log").mockImplementation(() => undefined)] as const;
+  afterEach(() => vi.restoreAllMocks());
+
+  test("Aufruf-Fehler: Exit 2 und Aufruf-Hinweis", async () => {
+    const [err] = stumm();
+    expect(await main(["--port", "abc"], process.cwd())).toBe(2);
+    expect(String(err.mock.calls[0][0])).toContain("Aufruf: npm run cockpit");
+  });
+
+  test("Erfolg: null und Startmeldung mit der Adresse", async () => {
+    const [, log] = stumm();
+    expect(await main(["--port", "0"], process.cwd())).toBeNull();
+    expect(String(log.mock.calls[0][0])).toMatch(/^Cockpit: http:\/\/127\.0\.0\.1:\d+\//);
+  });
+
+  test("belegter Port: Exit 1 und Meldung", async () => {
+    const [err] = stumm();
+    const besetzt = createServer();
+    await new Promise<void>((r) => besetzt.listen(0, "127.0.0.1", () => r()));
+    try {
+      const port = (besetzt.address() as { port: number }).port;
+      expect(await main(["--port", String(port)], process.cwd())).toBe(1);
+      expect(String(err.mock.calls[0][0])).toContain(`Port ${port} ist belegt`);
+    } finally {
+      await new Promise((r) => besetzt.close(r));
+    }
   });
 });
 

@@ -100,6 +100,25 @@ describe("Server", () => {
     expect((await frage(s.port, "GET", "/x", `127.0.0.1:${s.port}`)).status).toBe(404);
   });
 
+  test("Query-String ändert den Pfad nicht", async () => {
+    const r = await frage(s.port, "GET", "/?x=1", `127.0.0.1:${s.port}`);
+    expect(r.status).toBe(200);
+    expect(r.body).toContain("Harness-Cockpit");
+  });
+
+  test("Fehler beim Abruf ergibt 500 ohne Seiteninhalt", async () => {
+    const start = starteServer as unknown as (o: { port: number; quellen: Quelle[]; projekt: string; ctxFuer: () => never }) => Promise<Laufend>;
+    const kaputt = await start({ port: 0, quellen, projekt: "/p", ctxFuer: () => { throw new Error("kaputt"); } });
+    try {
+      const r = await frage(kaputt.port, "GET", "/", `127.0.0.1:${kaputt.port}`);
+      expect(r.status).toBe(500);
+      expect(r.body).toBe("Fehler beim Rendern\n");
+      expect(r.body).not.toContain("<script");
+    } finally {
+      await kaputt.schliessen();
+    }
+  });
+
   test("Titel, Grund, Schlüssel und Werte erscheinen escaped", async () => {
     const r = await frage(s.port, "GET", "/", `127.0.0.1:${s.port}`);
     expect(r.body).not.toContain("<script>");

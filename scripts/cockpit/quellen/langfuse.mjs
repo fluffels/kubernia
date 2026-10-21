@@ -8,4 +8,4 @@ async function sammeln(ctx) {
   return ausfall(`Langfuse-Prüfung fehlgeschlagen (Exit ${r.code ?? r.fehler ?? "fehler"})`, ctx);
 }
 
-export default { id: "langfuse", titel: "Langfuse-Erfassung", ttlMs: 30000, sammeln };
+export default { id: "langfuse", titel: "Langfuse-Erreichbarkeit", ttlMs: 30000, sammeln };

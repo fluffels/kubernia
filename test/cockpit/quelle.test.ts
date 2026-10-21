@@ -84,6 +84,14 @@ describe("Abruf", () => {
     expect(p.ergebnis).toMatchObject({ status: "ausfall", daten: null, grund: "Fehler: boom" });
   });
 
+  test.each([
+    ["String", "boom", "Fehler: boom"],
+    ["null", null, "Fehler: null"],
+  ])("Wurf eines Nicht-Error-Werts (%s) wird zum Ausfall statt zum Abbruch des Abrufs", async (_n, wert, grund) => {
+    const [p] = await erzeugeAbruf({ quellen: [quelle(() => Promise.reject(wert))] })();
+    expect(p.ergebnis).toMatchObject({ status: "ausfall", daten: null, grund });
+  });
+
   test("Timeout wird zum Ausfall und bricht per Signal ab", async () => {
     let signal: AbortSignal | undefined;
     const [p] = await erzeugeAbruf({ quellen: [quelle((c) => { signal = c.signal; return new Promise(() => undefined); })], timeoutMs: 20 })();
@@ -98,6 +106,9 @@ describe("Abruf", () => {
     ["ok mit daten null", { status: "ok", stand: 1, daten: null, grund: null }],
     ["ausfall mit daten", { status: "ausfall", stand: 1, daten: {}, grund: "x" }],
     ["ausfall ohne grund", { status: "ausfall", stand: 1, daten: null, grund: null }],
+    ["ok mit grund", { status: "ok", stand: 1, daten: {}, grund: "x" }],
+    ["ok mit daten als String", { status: "ok", stand: 1, daten: "x", grund: null }],
+    ["ausfall mit leerem grund", { status: "ausfall", stand: 1, daten: null, grund: "" }],
   ])("ungültige Form (%s) ist ein Ausfall", async (_n, form) => {
     expect(pruefeErgebnis(form)).not.toBeNull();
     const [p] = await erzeugeAbruf({ quellen: [quelle(() => form)] })();

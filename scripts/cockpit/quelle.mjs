@@ -3,7 +3,7 @@
  * `sammeln` liefert `ok(daten, ctx)` oder `ausfall(grund, ctx)` mit der Form `{ status: ok|ausfall, stand, daten|null, grund|null }`.
  * Der Abruf läuft parallel mit Frist je Quelle, hält Ergebnisse nur im Speicher (TTL) und merkt von einem früheren Erfolg
  * allein die Zeit (`zuletztOk`), nie Werte. Wirft eine Quelle, läuft in die Frist oder liefert eine ungültige Form, ist das ein Ausfall.
- * Neue Quelle = eine Datei unter quellen/ plus eine Zeile in registry.mjs; dieses Modul kennt keine Quelle beim Namen. */
+ * Neue Quelle = eine Datei unter quellen/ plus eine Zeile in registry.mjs plus ein Eintrag in .factory/besitz.json (Ring oberflaeche); dieses Modul kennt keine Quelle beim Namen. */
 
 export const STATUS = ["ok", "ausfall"];
 

@@ -590,7 +590,7 @@ Aktuelle Durchsatz-Zahlen (gemergte PRs, offen vs. geschlossen) stehen bewusst *
 Lokale, nur lesende Sicht auf die Harness-Quellen (Ring `oberflaeche`, nie in ein Projekt verteilt; Ort `scripts/cockpit/`). Start: `npm run cockpit [-- --projekt <pfad>] [--port <n>]` (Projektwurzel Standard cwd, Port Standard 4180); der Server bindet nur 127.0.0.1 und nimmt nur GET und HEAD an. Die Seite rendert serverseitig ein Panel je Quelle mit Stand-Zeit und lädt per `meta refresh` neu, ohne Client-Skript, alle Werte escaped.
 
 - **Quellen-Vertrag** (`quelle.mjs`): `{ id, titel, ttlMs, sammeln(ctx) }` mit Ergebnis `{ status: ok|ausfall, stand, daten|null, grund|null }`. Der Abruf läuft parallel mit Timeout je Quelle (5 s) und In-Memory-TTL, ohne eigene Persistenz.
-- **Neue Quelle:** eine Datei unter `scripts/cockpit/quellen/` plus eine Zeile in `registry.mjs`, kein zentrales `switch`; braucht sie einen neuen Unterprozess, zusätzlich eine Zeile in der Allowlist von `lauf.mjs` (die eine Prüfstelle für „nur lesend“).
+- **Neue Quelle:** eine Datei unter `scripts/cockpit/quellen/` plus eine Zeile in `registry.mjs` plus ein Eintrag in `.factory/besitz.json` (Ring `oberflaeche`, sonst wird die Kern-Abdeckung rot), kein zentrales `switch`; braucht sie einen neuen Unterprozess, zusätzlich eine Zeile in der Allowlist von `lauf.mjs` (die eine Prüfstelle für „nur lesend“).
 - **Ausfall-Anzeige:** wirft eine Quelle, läuft sie ins Timeout oder liefert eine ungültige Form, zeigt das Panel „Ausfall: <Grund>, zuletzt ok <Zeit>“ ohne Werte, nie alte Werte als aktuell. Erste Quelle: Langfuse-Erreichbarkeit über `langfuse-vorbedingung.mjs`.
 - Sicherheit (Host-Prüfung, CSP, Grenzen): [Sicherheit der Agenten](sicherheit-agenten.md).
 
