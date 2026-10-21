@@ -97,4 +97,4 @@ Fehlerwege: Exit 1 „Bericht ungültig“ oder Kopf `ABNAHME-ABGEBROCHEN`: gena
 - **Rückfragen bleiben möglich.** Subagenten können nicht fragen (`AskUserQuestion` ist dort entfernt); die seltene Pflicht-Rückfrage (Irreversibles, Außenwirkung) liegt vor dem Coden im Hauptchat, und spätere Fragen laufen über `entscheidung-noetig` und `SendMessage`.
 - **Kein Self-Grading (#1012).** Der Review läuft im Umsetzer über eigene Lens-Subagenten, nie inline. Regel-Heimat: AGENTS.md › Mehr-Perspektiven-Review.
 
-**Inhaltliche Änderungen am Ablauf immer in der Repo-`AGENTS.md` machen, nicht in den Skill-Dateien**.
+**Änderungen am Ablauf nur in dieser Datei machen; die harten Regeln bleiben in der Repo-`AGENTS.md`.**

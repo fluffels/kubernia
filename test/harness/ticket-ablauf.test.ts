@@ -83,6 +83,20 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
   test("Satz unter 60 Zeichen wird nicht gemeldet", () => {
     assert.deepEqual(doppelterAblauf("Kurzer Satz hier.", { "a.md": "Kurzer Satz hier." }), []);
   });
+  test("Satzgrenze: genau 60 Zeichen werden gemeldet, 59 nicht", () => {
+    const s60 = "a".repeat(60);
+    const s59 = "a".repeat(59);
+    assert.equal(doppelterAblauf(s60, { "a.md": s60 }).length, 1);
+    assert.deepEqual(doppelterAblauf(s59, { "a.md": s59 }), []);
+  });
+  test("Auslöser: Teilstring in beiden Richtungen wird gemeldet", () => {
+    assert.deepEqual(gemeinsameAusloeser(["mehrere tickets"], ["mehrere tickets bitte"]), ["mehrere tickets"]);
+    assert.deepEqual(gemeinsameAusloeser(["mehrere tickets bitte"], ["mehrere tickets"]), ["mehrere tickets bitte"]);
+  });
+  test("Auslöser: ohne description-Zeile leer, gerade Anführungszeichen werden erkannt", () => {
+    assert.deepEqual(ausloeser("kein Frontmatter"), []);
+    assert.deepEqual(ausloeser('description: Text "Nächstes Ticket", "Weiter"'), ["nächstes ticket", "weiter"]);
+  });
   test("ein anderer Text bleibt ohne Treffer", () => {
     assert.deepEqual(doppelterAblauf(ablauf, { "a.md": "Ganz anderer Inhalt ohne Überschneidung, aber auch lang genug für den Mindestwert." }), []);
   });
@@ -121,6 +135,7 @@ describe("Ticket-Ablauf: das echte Repo", () => {
   test("kein Ablaufsatz steht in einer anderen Skill-Datei", () => {
     const andere: Record<string, string> = {};
     for (const rel of skillMarkdowns()) if (rel !== TICKET_ABLAUF) andere[rel] = lies(rel);
+    assert.ok(PRODUKT in andere && FACTORY in andere, "die Dateiliste trägt beide Ticket-Skills (Rekursion intakt)");
     assert.deepEqual(doppelterAblauf(lies(TICKET_ABLAUF), andere), []);
   });
   test("die Auslöser der beiden Skills überschneiden sich nicht, nur factory nennt Agentic", () => {
