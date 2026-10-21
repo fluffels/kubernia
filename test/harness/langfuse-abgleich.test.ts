@@ -665,6 +665,12 @@ describe("pruefen (Ablauf)", () => {
     const sum = A.summenzeile([b]);
     expect(A.renderMarkdown([{ ...b, schluessel: "zählung" }], sum)).toContain("leere Hook-GENERATIONs");
     expect(A.renderMarkdown([b], sum)).not.toContain("leere Hook-GENERATIONs");
+    // Anzahl und Liste zählen nur Sessions mit Zähl-Dubletten; die ID wird auf 8 Zeichen gekürzt.
+    const z = (session: string, dubletten: number) => ({ ...b, schluessel: "zählung", session, dubletten });
+    const zwei = A.renderMarkdown([z("abcdefgh-ijkl", 2), z("s2", 0), { ...z("s3", 1), schluessel: "fingerprint" }], sum);
+    expect(zwei).toContain("1 Session(s) mit Dubletten auf der Zählebene (abcdefgh)");
+    expect(zwei).not.toContain("s2");
+    expect(zwei).not.toContain("s3");
   });
 
   test("Ohne Zugang nennt der Hinweis den Zähl-Filter gegen leere Hook-GENERATIONs (providedModelName none of claude)", () => {
