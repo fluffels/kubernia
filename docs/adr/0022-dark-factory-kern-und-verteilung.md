@@ -329,6 +329,7 @@ Umsetzungsentscheidungen in #1754 (präzisiert: das Marker-Format aus #1753 lieg
 - **Agentennamen bleiben eine Konstante** (`ABNAHME_AGENT`), nicht in `agenten` der Projekt-Config: jeder `agenten`-Wert zählt in der Kern-Reinheit als Projektliteral, und kein Hook braucht den Typnamen.
 - **Hand-off ohne Deduplizierung:** er beendet den Lauf; ein zweiter Kommentar entsteht nur in einem neuen Lauf nach geänderter Spezifikation.
 - **Fix-Runde:** eine Abnahme-Fix-Runde nutzt denselben Zähler, dasselbe Cap und denselben Zusatzpass wie der Review; „Cap erschöpft“ heißt nach dem Zusatzpass, dann `festgefahren` mit `FESTGEFAHREN: review`.
+  - Präzisiert durch #1808: die Abnahme-Fix-Runde hat ein eigenes Budget von einer Delta-Runde (Review-Feld `abnahmefix=1`), nicht mehr denselben Zähler und dasselbe Cap (Ledger in ADR 0027).
 - **Wiederholung:** genau ein Neuversuch je Durchgang bei Abbruch (Werkzeug) oder ungültigem Bericht, danach `FESTGEFAHREN: abnahme` plus Harness-Zeile; fällt der Szenario-Agent aus, läuft die Abnahme nach einem Neuversuch allein gegen die Kriterien.
 - **Wächter R8:** `FESTGEFAHREN: abnahme` verlangt einen Entwurf ohne Auto-Merge (statt des Labels); gh-Fehler geben frei. Der Umsetzer setzt das Label trotzdem am PR, weil `claims-pruefen` ein bewusst angehaltenes Ticket nur daran erkennt und es sonst nach der Schwelle als verwaist wieder aufnähme.
 - **Übergang:** #1754 selbst läuft ohne Abnahme, weil die neuen Agenten in der laufenden Session nicht geladen sind; die CI erzwingt die Zeile erst mit #1755.

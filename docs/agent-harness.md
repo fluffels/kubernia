@@ -363,7 +363,7 @@ flowchart TD
   lenses -- "Blocker, Runde unter 2" --> fix --> lenses
   lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
   lenses -- ja --> entwurf --> abnahme
-  abnahme -- "nicht erfüllt: Fix-Runde zählt gegen das Cap" --> fix
+  abnahme -- "nicht erfüllt: Abnahme-Fix mit eigenem Budget" --> fix
   abnahme -- "nicht prüfbar" --> handoff2
   abnahme -- ja --> pr
   pr --> ci

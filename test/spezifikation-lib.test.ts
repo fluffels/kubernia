@@ -227,6 +227,10 @@ describe("Allquantor-Kriterien auf Heuristik-Wächter (#1808)", () => {
   test("Begrenzung „bekannte Muster:“ im Kriterium: kein Mangel", () => {
     expect(S.spezifikationsMaengel(mit("Er findet jede Voraussetzung, die ein Skript liest (bekannte Muster: A, B; Grenze im Kopfkommentar)."))).toEqual([]);
   });
+  test("ohne Relativsatz und ohne echten Allquantor (Wortgrenze): kein Mangel", () => {
+    expect(S.spezifikationsMaengel(mit("Jede Datei wird vom Skript gelesen."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Allerdings meldet der Wächter die Datei, die er liest."))).toEqual([]);
+  });
   test("Kriterium ohne Allquantor: kein Mangel", () => {
     expect(S.spezifikationsMaengel(mit("Der Wächter findet die Voraussetzung, die das Skript liest."))).toEqual([]);
   });

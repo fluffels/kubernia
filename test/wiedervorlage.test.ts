@@ -118,6 +118,10 @@ describe("planeAktionen: Dedupe über den Marker, alle Zustände", () => {
 });
 
 describe("Wächter", () => {
+  test("die Listenabfrage holt closedAt (sonst bliebe die Regel „verschoben, also anlegen“ tot)", () => {
+    const src = readFileSync(new URL("../scripts/wiedervorlage.mjs", import.meta.url), "utf8");
+    expect(src).toMatch(/const ladeTickets = .*--json", "number,state,body,closedAt"/);
+  });
   test("die echte Datei .github/wiedervorlagen.json ist gültig", () => {
     const liste: unknown = JSON.parse(readFileSync(new URL("../.github/wiedervorlagen.json", import.meta.url), "utf8"));
     expect(W.pruefeEintraege(liste)).toEqual([]);

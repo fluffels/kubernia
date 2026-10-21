@@ -710,7 +710,10 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
       aufrufe.push(a[3] ?? a[0] ?? "");
       return a[0] === "issue" ? [] : [[spiel(1)]];
     };
-    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: null, configFehler: "agenten.planer fehlt" } as never);
+    const geladen = S.configOderFehler(() => { throw new Error("agenten.planer fehlt"); });
+    expect(geladen).toEqual({ config: null, configFehler: "agenten.planer fehlt" });
+    expect(S.configOderFehler(() => ({ x: 1 }))).toEqual({ config: { x: 1 } });
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", ...geladen } as never);
     expect(d.harnessIssues ?? null).toBeNull();
     expect(d.harnessLuecke).toBe("Projekt-Config nicht ladbar: agenten.planer fehlt");
     expect(d.commits).toHaveLength(1);

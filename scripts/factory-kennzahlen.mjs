@@ -394,9 +394,9 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
 }
 
 /** `{ config }` oder `{ config: null, configFehler }`: ein Ladefehler macht nur die Quote zur Lücke (mit dem echten Fehlertext), nie den ganzen Bericht kaputt. */
-function configOderFehler() {
+export function configOderFehler(lade = ladeProjektConfig) {
   try {
-    return { config: ladeProjektConfig() };
+    return { config: lade() };
   } catch (err) {
     return { config: null, configFehler: fehlerText(err, 200) };
   }

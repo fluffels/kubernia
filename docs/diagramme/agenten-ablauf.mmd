@@ -38,7 +38,7 @@ flowchart TD
   lenses -- "Blocker, Runde unter ${konstante:lensCap}" --> fix --> lenses
   lenses -- "Cap von ${konstante:lensCap} Fix-Runden erreicht" --> handoff
   lenses -- ja --> entwurf --> abnahme
-  abnahme -- "nicht erfüllt: Fix-Runde zählt gegen das Cap" --> fix
+  abnahme -- "nicht erfüllt: Abnahme-Fix mit eigenem Budget" --> fix
   abnahme -- "nicht prüfbar" --> handoff2
   abnahme -- ja --> pr
   pr --> ci

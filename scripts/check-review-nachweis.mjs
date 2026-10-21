@@ -13,7 +13,7 @@
  *   <Präfix>Plan: <Planer>               |  <Präfix>Plan: ohne — <Begründung>
  *   <Präfix>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
- *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): ein Pass über das Cap hinaus ohne Rückfrage (Ursache im PR); weitere gibt nur die Maintainerin frei; erhöht die Obergrenze.
+ *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR); mehr gibt nur die Maintainerin frei; erhöht die Obergrenze.
  *   Optional `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, eigenes Budget neben dem Cap (Obergrenze + 1, nur bei überschrittenem Review-Cap).
  *
  * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
@@ -95,8 +95,8 @@ function bewerteBlocker(review, zeilen) {
   return fehler;
 }
 
-/** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): einen Pass über das Cap
- *  fährt der Umsetzer ohne Rückfrage, weitere gibt nur die Maintainerin frei; der Nachweis bleibt Selbstauskunft.
+/** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap
+ *  fährt der Umsetzer ohne Rückfrage, mehr gibt nur die Maintainerin frei; der Nachweis bleibt Selbstauskunft.
  *  Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
 function bewerteRunden(review, zeilen) {
   const R = zeilen.review;

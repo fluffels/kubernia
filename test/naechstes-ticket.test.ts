@@ -825,5 +825,7 @@ describe("Aufruf ohne --bereich und ohne --ticket", () => {
   test("waehleUeberBoards ohne Bereich wirft, statt eine Seite zu raten", () => {
     expect(() => N.waehleUeberBoards({ produkt: norm([item(1)]), factory: [], offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
     expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: null, offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
+    // Negativfall: ein unbekannter, aber gesetzter Wert wird nicht still als Produkt-Seite gelesen.
+    expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: "xyz", offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
   });
 });

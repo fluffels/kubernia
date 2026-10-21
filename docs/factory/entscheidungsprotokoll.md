@@ -1,6 +1,6 @@
 # Entscheidungsprotokoll für Hand-offs und Weichen
 
-> Wissensart: Verfahren (Evergreen). Gilt für jede Entscheidung, bei der ein Agent sonst eine Optionsfrage an die Maintainerin stellen würde: Hand-off nach `festgefahren`, Zusatzpass, Override, Auslagern, Plan-Weichen. Repo, Labels, Board und Namen kommen aus der Projekt-Config (`.factory/projekt.json`), diese Seite nennt keine. Der Name der Factory ist ein Config-Wert; solange keiner feststeht, heißt sie „Factory“.
+> Wissensart: Verfahren (Evergreen). Gilt für jede Entscheidung, bei der ein Agent sonst eine Optionsfrage an die Maintainerin stellen würde: Hand-off nach `festgefahren`, Zusatzpass, Override, Auslagern, Plan-Weichen. Repo, Labels, Board und Namen kommen aus der Projekt-Config (`.factory/projekt.json`), diese Seite nennt keine. Der Name der Factory wird ein Config-Wert, sobald er feststeht; bis dahin heißt sie „Factory“.
 
 ## Grundsatz
 
@@ -12,7 +12,7 @@ Der Hauptchat entscheidet Ermessensfragen **fundiert selbst** und schreibt im PR
 2. **Hohe Konfidenz: handeln.** Ist die Antwort aus Regeln, ADRs und Evidenz klar, wird sie umgesetzt und begründet, ohne weitere Methode.
 3. **Echte Unsicherheit: die billigste passende Methode wählen**, in dieser Reihenfolge der Kosten:
    - **Messen oder Probelauf vor Meinung.** Ein Befehl, ein Lauf, ein Lese-Zugriff auf Langfuse oder `lauf-ergebnis` schlägt jede Vermutung.
-   - **Recherche:** wie löst ein Spiel dieser Größe das Problem (oberste Regel in AGENTS.md).
+   - **Recherche:** wie löst ein Projekt dieser Größe das Problem (Leitfrage des Projekts in der Root-Kontextdatei).
    - **A/B**, nur wenn beide Zweige billig und reversibel sind.
    - **Kritischer Gegen-Review durch einen frischen Agenten** bei teuren oder riskanten Weichen.
 4. **Token-Deckel: eine Runde je Methode.** Kein Nachschleifen. Danach wird entschieden und, was offen blieb, als „Bekannte Grenze“ im PR dokumentiert.
@@ -26,7 +26,7 @@ Der Hauptchat entscheidet Ermessensfragen **fundiert selbst** und schreibt im PR
 
 ## Hand-offs
 
-Hand-off-Entscheidungen im Rahmen dieses Protokolls (zum Beispiel ein Zusatzpass über die Regelzahl hinaus, ein Delta-Pass statt Override, Auslagern in ein Folgeticket) trifft der Hauptchat selbst und schreibt „Entscheidung: X, weil Y“ in den PR. Er fragt die Maintainerin nur bei Irreversiblem oder Außenwirkung.
+Hand-off-Entscheidungen im Rahmen dieses Protokolls (zum Beispiel ein Delta-Pass statt Override, Auslagern in ein Folgeticket) trifft der Hauptchat selbst und schreibt „Entscheidung: X, weil Y“ in den PR. Er fragt die Maintainerin nur bei Irreversiblem oder Außenwirkung.
 
 ## Grenzen
 
