@@ -108,6 +108,12 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
     assert.equal(einstiegAbweichungen(kopf + "x".repeat(MAX_RUMPF)).length, 1);
     assert.equal(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF)).length, 0);
     assert.equal(einstiegAbweichungen("---\r\nname: x\r\n---\r\n## A\r\n").length, 1);
+    assert.equal(einstiegAbweichungen("---\r\nname: x\r\n---\r\n" + "x".repeat(MAX_RUMPF)).length, 0);
+    assert.equal(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF + 1)).length, 1);
+    assert.match(einstiegAbweichungen(kopf + "\n### X\n")[0], /^Unterüberschrift/);
+    assert.match(einstiegAbweichungen(kopf + "\n**Fremd.**\n")[0], /^fetter Absatz/);
+    assert.match(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF + 1))[0], /^Rumpf/);
+    assert.equal(einstiegAbweichungen("---\nname: x\n---\n---\n" + "x".repeat(MAX_RUMPF)).length, 1);
   });
   test("Satzgrenze: genau 60 Zeichen werden gemeldet, 59 nicht", () => {
     const s60 = "a".repeat(60);
