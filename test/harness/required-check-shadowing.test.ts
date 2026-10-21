@@ -37,14 +37,18 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rulesetSpiegel from "../../scripts/docs-gen/ruleset-spiegel.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektConfig from "../../scripts/projekt-config-lib.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const WORKFLOW_DIR = join(ROOT, ".github", "workflows");
 
-/** Die Required-Check-Kontexte **genau so, wie das Ruleset `main-schutz` sie führt**, gelesen aus dem geschützten Spiegel
- *  `.github/ruleset-main-schutz.json` (Z1): dieselbe Quelle speist das Leitplanken-Diagramm (docs/diagramme). Die Wahrheit ist das
+/** Die Required-Check-Kontexte **genau so, wie das Ruleset `main-schutz` sie führt**, gelesen aus dem geschützten Spiegel,
+ *  dessen Pfad der Schlüssel `rulesetSpiegel` der Projekt-Config nennt (Z1): dieselbe Quelle speist das Leitplanken-Diagramm (docs/diagramme). Die Wahrheit ist das
  *  out-of-repo-Ruleset (`gh api repos/{owner}/{repo}/rulesets/20151454`); ändert sich dort ein Kontext, zieht der PR den Spiegel nach. */
-const RULESET_SPIEGEL = join(ROOT, ".github", "ruleset-main-schutz.json");
+const spiegelPfad = (projektConfig as unknown as { ladeProjektConfig: () => { rulesetSpiegel?: string } }).ladeProjektConfig().rulesetSpiegel;
+if (!spiegelPfad) throw new Error("rulesetSpiegel fehlt in der Projekt-Config (.factory/projekt.json)");
+const RULESET_SPIEGEL = join(ROOT, spiegelPfad);
 // Dieselbe Eingangsprüfung wie der Generator `leitplanken-schichten` (#1411): ein Modul statt zweier Kopien.
 const pruefeRulesetSpiegel = (rulesetSpiegel as unknown as { pruefeRulesetSpiegel: (roh: unknown, pfad: string) => { requiredChecks: string[] } }).pruefeRulesetSpiegel;
 function leseKontexte(json: string): string[] {

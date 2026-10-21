@@ -25,11 +25,14 @@ type Eingabe = {
   closedAtOf?: (nr: number) => string | null;
   config?: Record<string, unknown>;
 };
-const hc = hcModule as {
+const hcRoh = hcModule as {
   zerlegeHauptchat: (e: Eingabe) => Ergebnis;
   ticketSkillsAusConfig: (deps?: { config?: Record<string, unknown> }) => string[];
   renderMarkdown: (r: Ergebnis) => string;
 };
+/** Der Kern lädt die Config nie selbst (der Einstiegspunkt reicht sie durch); die Tests reichen die echte durch. */
+const ECHTE_CONFIG = ladeProjektConfig() as Record<string, unknown>;
+const hc = { ...hcRoh, zerlegeHauptchat: (e: Eingabe) => hcRoh.zerlegeHauptchat({ config: ECHTE_CONFIG, ...e }) };
 
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";
@@ -208,6 +211,10 @@ describe("Ticket-Skills aus der Projekt-Config", () => {
   test("unbrauchbare Config ist ein Datenfehler mit Grund, keine stille Zählung", () => {
     assert.throws(() => hc.ticketSkillsAusConfig({ config: { agenten: {} } }), /Projekt-Config nicht nutzbar/);
     assert.throws(() => hc.zerlegeHauptchat({ sessions: [], config: {} }), /hauptchat-zerlegung/);
+  });
+  test("der Kern lädt die Config nie selbst: ohne übergebene Config ein Datenfehler, auch mit vorhandener Projekt-Config", () => {
+    assert.throws(() => hcRoh.ticketSkillsAusConfig(), /hauptchat-zerlegung.*Config/);
+    assert.throws(() => hcRoh.zerlegeHauptchat({ sessions: [] }), /hauptchat-zerlegung.*Config/);
   });
 });
 

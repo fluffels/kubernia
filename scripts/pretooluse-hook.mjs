@@ -23,6 +23,7 @@ import { buildDenyOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput,
 import { holdoutAuftragBlockade, parseHoldoutInput } from "./holdout-auftrag-guard.mjs";
 import { lensAuftragBlockade, parseAgentInput } from "./lens-auftrag-guard.mjs";
 import { bewerteStdinSkript } from "./stdin-skript-guard.mjs";
+import { namenOderGrund } from "./ticket-namen.mjs";
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 import { decide, repoRootFromScriptUrl } from "./worktree-guard-hook.mjs";
 import { bewertePowerShell } from "./worktree-guard-powershell.mjs";
@@ -40,7 +41,11 @@ export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, b
   const { tool, cwd, command } = parseHookInput(text);
   if (tool === "SubagentHandback") {
     // Abschluss-Wächter des Umsetzers (#1342): vor der Zustellung des Berichts; fremde Agenten und jeder Fehler lassen durch.
-    const grund = sicher(() => abschlussBlockade(parseAbschlussInput(text), abschlussDeps));
+    // Die Config lädt dieser Einstiegspunkt (ohne nutzbare Config blockiert er fail-closed); der Kern bekommt sie als Parameter.
+    const grund = sicher(() => {
+      const geladen = namenOderGrund("Umsetzer-Abschluss", abschlussDeps);
+      return geladen.grund ?? abschlussBlockade(parseAbschlussInput(text), { ...abschlussDeps, config: geladen.config });
+    });
     return grund ? buildDenyOutput(grund) : null;
   }
   if (tool === "Agent") {

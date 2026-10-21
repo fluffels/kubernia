@@ -22,15 +22,17 @@ import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.m
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { KERN_TICKET_SKILL } from "./projekt-config-lib.mjs";
-import { namenOderGrund } from "./ticket-namen.mjs";
+import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
 /**
  * Die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill` der Projekt-Config und der Kern-Skill, #1806): ihr Aufruf (Slash oder Skill-Tool) ist ein Ticketlauf.
- * Wirft mit Grund, wenn die Config nicht nutzbar ist (Datenfehler statt falscher Zählung). `deps.config` ersetzt das Laden (Test).
+ * Wirft mit Grund, wenn die Config fehlt oder nicht nutzbar ist (Datenfehler statt falscher Zählung). Die Config lädt der Einstiegspunkt und
+ * reicht sie als `deps.config` durch; dieser Kern lädt nie selbst.
  */
 export function ticketSkillsAusConfig(deps = {}) {
+  if (!deps.config) throw new Error(failClosedGrund("hauptchat-zerlegung", new Error("keine Config übergeben (der Einstiegspunkt lädt sie)")));
   const r = namenOderGrund("hauptchat-zerlegung", deps);
   if (r.grund) throw new Error(r.grund);
   return [r.namen.agenten.ticketSkill, KERN_TICKET_SKILL];
@@ -366,7 +368,12 @@ function main() {
   const dir = projektOrdner(args.projekt);
   const cache = new Map();
   const closedAtOf = (nr) => (cache.has(nr) ? cache.get(nr) : cache.set(nr, closedAtViaGh(nr)).get(nr));
-  const r = zerlegeHauptchat({ sessions: ladeSessions(dir, args.von), von: args.von, bis: args.bis, brainRoots: args.brain, closedAtOf });
+  const geladen = namenOderGrund("hauptchat-zerlegung");
+  if (geladen.grund) {
+    console.error(geladen.grund);
+    process.exit(2);
+  }
+  const r = zerlegeHauptchat({ sessions: ladeSessions(dir, args.von), von: args.von, bis: args.bis, brainRoots: args.brain, closedAtOf, config: geladen.config });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r));
 }
 
