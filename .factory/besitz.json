@@ -141,7 +141,7 @@
     {"pfad":".claude/settings.json","schluessel":"permissions","ring":"kern-nach-entkopplung","quelle":"Inventar, Settings (Folgeschritt F4/F9)"},
     {"pfad":".claude/settings.json","schluessel":"sandbox","ring":"kern-nach-entkopplung","quelle":"Inventar, Settings (Folgeschritt F4/F9)"},
     {"pfad":".claude/settings.json","schluessel":"hooks","ring":"kern-nach-entkopplung","quelle":"Inventar, Settings (Folgeschritt F4/F9)"},
-    {"pfad":"AGENTS.md","block":"stopps","ring":"kern-nach-entkopplung","quelle":"ADR 0022 §1 Stopps (Zuschnitt in F4)"},
+    {"pfad":"AGENTS.md","block":"kern","ring":"kern-nach-entkopplung","quelle":"ADR 0022 §4 (Zuschnitt #1363), Kern-Block F4 (#1708)"},
     {"pfad":"scripts/cockpit/cockpit.mjs","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"},
     {"pfad":"scripts/cockpit/cockpit.css","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"},
     {"pfad":"scripts/cockpit/lauf.mjs","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"},

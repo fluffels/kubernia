@@ -121,6 +121,7 @@ describe("einheitHash", () => {
 
 // ── Fremdrepo-Fixture ─────────────────────────────────────────────────────────
 
+const kernText = (inhalt: string): string => `${lib.markerStart("kern")}\n${inhalt}\n${lib.markerEnde("kern")}`;
 const blockText = (inhalt: string): string => `${lib.markerStart("stopps")}\n${inhalt}\n${lib.markerEnde("stopps")}`;
 const MANIFEST = {
   version: 1,
@@ -386,11 +387,13 @@ describe("check-factory-drift", () => {
     const z = gesyncterZiel();
     schreibe(z, "scripts/a.mjs", "export const a = 99;\n");
     rot(z, /scripts\/a\.mjs: Besitz wurde im Projekt verändert/);
+    assert.doesNotMatch(drift1(z).err, /außerhalb der Besitz-Marker/, "der Block-Hinweis gehört nur zu Block-Einheiten");
   });
   test("rot bei geändertem Block-Inhalt", () => {
     const z = gesyncterZiel();
     schreibe(z, "AGENTS.md", lies(z, "AGENTS.md").replace("neuer Stopp", "eigener Stopp"));
     rot(z, /AGENTS\.md#stopps: Besitz wurde/);
+    assert.match(drift1(z).err, /Projektergänzungen gehören außerhalb der Besitz-Marker/);
   });
   test("rot bei geänderten permissions (JSON-Schlüssel-Besitz), grün bei Projektschlüssel", () => {
     const z = gesyncterZiel();
@@ -399,6 +402,7 @@ describe("check-factory-drift", () => {
     assert.equal(drift1(z).code, 0, "Projektschlüssel darf sich ändern");
     schreibe(z, ".claude/settings.json", orig.replace("Bash(ls)", "Bash(rm -rf /)"));
     rot(z, /settings\.json#\/permissions: Besitz wurde/);
+    assert.doesNotMatch(drift1(z).err, /außerhalb der Besitz-Marker/, "kein Marker-Hinweis bei JSON-Schlüsseln");
   });
   test("rot bei gelöschter Besitz-Datei, entferntem Marker und gelöschtem Schlüssel", () => {
     const z = gesyncterZiel();
@@ -628,7 +632,7 @@ describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
 describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, () => {
   test("Sync, Drift-Gate aus der Zielkopie grün (Import-Hülle trägt), Besitz-Änderung macht es rot", () => {
     const z = tmp();
-    schreibe(z, "AGENTS.md", `# Fremdes Projekt\n\n${blockText("alter Stopp")}\n`);
+    schreibe(z, "AGENTS.md", `# Fremdes Projekt\n\n${kernText("alter Stopp")}\n`);
     schreibe(z, ".claude/settings.json", '{\n  "model": "x"\n}\n');
     const config = pwConfig("wk-planer");
     schreibe(z, ".factory/projekt.json", config);
@@ -658,7 +662,7 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
 
   test.skipIf(process.platform === "win32")("das Ausführbit des Pre-Push-Hooks kommt mit", () => {
     const z = tmp();
-    schreibe(z, "AGENTS.md", `${blockText("x")}\n`);
+    schreibe(z, "AGENTS.md", `${kernText("x")}\n`);
     schreibe(z, ".factory/projekt.json", pwConfig("wk-planer"));
     assert.equal(laufe(["--quelle", WURZEL, "--ziel", z]).code, 0);
     assert.ok((statSync(join(z, ".githooks/pre-push")).mode & 0o111) !== 0);
