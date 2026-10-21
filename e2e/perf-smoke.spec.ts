@@ -58,7 +58,10 @@ test("Frame-Budget: das Spiel läuft mit gesunder FPS (Perf-HUD-Messwert)", asyn
   // Lebenszeichen: der Sampler läuft und das Spiel rendert. Der Wert liegt noch in Phasers Anlauf (siehe oben), ist also
   // kein Maß für die Geschwindigkeit des Rechners, fängt aber ein Spiel, das gar nicht richtig rendert.
   const fps = await page.evaluate(() => Number(document.body.dataset.kqFps));
-  expect(fps).toBeGreaterThanOrEqual(FPS_FLOOR);
+  // Diagnose bei Rot (#1814): die Frames bis zur Messung stehen in Meldung und Log; die Schwelle bleibt.
+  const frames = await page.evaluate(() => (window as unknown as { __kqFrames: number }).__kqFrames);
+  console.log(`Frames bis zur Messung: ${frames}`);
+  expect(fps, `FPS ${fps} im Anlauf nach ${frames} Frames`).toBeGreaterThanOrEqual(FPS_FLOOR);
 
   // Eingeschwungener Wert (#1411): erst nach dem Anlauf messen, Median aus fünf Werten im Abstand von 500 ms (Messfenster).
   await page.waitForFunction((n) => (window as unknown as { __kqFrames: number }).__kqFrames >= n, FRAMES_NACH_ANLAUF, { timeout: 60_000 });
