@@ -43,7 +43,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 
 ### Git-Identität (Anonymität, #418)
 
-Commits in diesem Repo laufen unter der anonymen Identität `fluffels`, nie unter einem Klarnamen oder einer dienstlichen Mail (siehe [AGENTS.md › Anonymität wahren](AGENTS.md#das-wichtigste-zuerst-harte-regeln)). Bei einem **frischen Klon** einmalig **lokal** setzen (nicht global, sonst betrifft es auch andere Repos):
+Commits in diesem Repo laufen unter der anonymen Identität `fluffels`, nie unter einem Klarnamen oder einer dienstlichen Mail (siehe [AGENTS.md › Anonymität wahren](AGENTS.md#kern-regeln-factory-besitz)). Bei einem **frischen Klon** einmalig **lokal** setzen (nicht global, sonst betrifft es auch andere Repos):
 
 ```bash
 git config --local user.name fluffels
