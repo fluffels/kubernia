@@ -605,7 +605,7 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     schreibe(z, ".factory/projekt.json", config);
     const r = laufe(["--quelle", WURZEL, "--ziel", z]);
     assert.equal(r.code, 0, r.err);
-    assert.match(lies(z, ".claude/agents/kubernia-planner.md"), /\nname: wk-planer\n/, "Projektwert aus der Config des Ziels");
+    assert.match(lies(z, ".claude/agents/factory-planer.md"), /\nname: wk-planer\n/, "Projektwert aus der Config des Ziels");
     const gate = (): { status: number | null; stderr: string } => {
       const p = spawnSync(process.execPath, [join(z, "scripts", "check-factory-drift.mjs")], { cwd: z, encoding: "utf8" });
       return { status: p.status, stderr: p.stderr };
@@ -620,10 +620,10 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     assert.equal(lies(z, ".factory/projekt.json"), config, "projekt.json bleibt, wie sie war");
     schreibe(z, "scripts/hook-io.mjs", lies(z, "scripts/hook-io.mjs").replace("\n// Projektänderung\n", ""));
     assert.equal(gate().status, 0, gate().stderr);
-    schreibe(z, ".claude/agents/kubernia-planner.md", lies(z, ".claude/agents/kubernia-planner.md").replace("name: wk-planer", "name: von-hand"));
+    schreibe(z, ".claude/agents/factory-planer.md", lies(z, ".claude/agents/factory-planer.md").replace("name: wk-planer", "name: von-hand"));
     const pw = gate();
     assert.equal(pw.status, 1);
-    assert.match(pw.stderr, /kubernia-planner\.md:3: Projektwert 'agenten\.planer'/);
+    assert.match(pw.stderr, /factory-planer.md:3: Projektwert 'agenten\.planer'/);
     assert.match(pw.stderr, /projektwerte\.mjs --write/);
   });
 

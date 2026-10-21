@@ -58,8 +58,8 @@ describe("entscheideSync: jede Verzweigung", () => {
 
 describe("Hilfsfunktionen", () => {
   test("ordneHarnessAenderungen: kubernia-Skill und Wurzel-AGENTS.md, Agent-Definitionen und Sonstiges getrennt (#1572)", () => {
-    expect(S.ordneHarnessAenderungen([".claude/skills/kubernia/SKILL.md", "AGENTS.md"])).toMatchObject({ skill: [".claude/skills/kubernia/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [] });
-    expect(S.ordneHarnessAenderungen([".claude/agents/kubernia-planner.md"])).toMatchObject({ skill: [], agenten: [".claude/agents/kubernia-planner.md"] });
+    expect(S.ordneHarnessAenderungen([".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"])).toMatchObject({ skill: [".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [] });
+    expect(S.ordneHarnessAenderungen([".claude/agents/factory-planer.md"])).toMatchObject({ skill: [], agenten: [".claude/agents/factory-planer.md"] });
     expect(S.ordneHarnessAenderungen([".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"])).toMatchObject({ skill: [], agenten: [], sonstige: [".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"] });
     expect(S.ordneHarnessAenderungen(["docs/x.md", "src/a.ts"])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
     expect(S.ordneHarnessAenderungen([])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
@@ -193,17 +193,17 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
     }
   });
 
-  test("Pull ohne nutzbare Config (agenten.ticketSkill fehlt): Fast-Forward bleibt, der Grund steht in notiz und macht --streng rot, nur AGENTS.md gilt als Skill (#1743)", () => {
+  test("Pull ohne nutzbare Config (agenten.ticketSkill fehlt): Fast-Forward bleibt, der Grund steht in notiz und macht --streng rot, der Kern-Skill-Pfad gilt trotzdem als Skill (#1748)", () => {
     const t = aufbau();
     try {
-      t.schiebe(".claude/skills/kubernia/SKILL.md", "neu\n");
+      t.schiebe(".claude/skills/factory-ticket/SKILL.md", "neu\n");
       const e = S.fuehreSyncAus(t.haupt, { config: { praefixe: { branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } } });
       expect(e.gepullt).toBe(true);
       expect(e.notiz).toContain("agenten.ticketSkill");
       expect(e.notiz).toContain("Fix:");
       expect(S.exitCodeFuer(e)).toBe(1);
-      expect(e.harness?.skill).toEqual([]);
-      expect(e.harness?.sonstige).toEqual([".claude/skills/kubernia/SKILL.md"]);
+      expect(e.harness?.skill).toEqual([".claude/skills/factory-ticket/SKILL.md"]);
+      expect(e.harness?.sonstige).toEqual([]);
     } finally {
       t.aufraeumen();
     }
@@ -370,10 +370,10 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("--text: nur der kubernia-Skill oder die Wurzel-AGENTS.md löst „Skill neu lesen“ aus; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
-    const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", harness: { skill: [".claude/skills/kubernia/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } };
+    const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", harness: { skill: [".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } };
     const text = S.ausgabe(e, true);
     expect(text).toContain("Skill neu lesen");
-    expect(text).toContain("Geändert (Harness): .claude/skills/kubernia/SKILL.md, AGENTS.md");
+    expect(text).toContain("Geändert (Harness): .claude/skills/factory-ticket/SKILL.md, AGENTS.md");
     expect(text).toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
     expect(text).not.toContain("Sitzungsbasis");
     const hook = (JSON.parse(S.ausgabe(e, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
@@ -382,7 +382,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("--text: ohne AGENTS.md im Diff kein AGENTS.md-Hinweis; nur Agent-Definition: Pfad und Neustart-Hinweis, kein „Skill neu lesen“", () => {
-    const nurSkill = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/kubernia/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
+    const nurSkill = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/factory-ticket/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
     expect(nurSkill).toContain("Skill neu lesen");
     expect(nurSkill).not.toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
     const agent = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [], lockGeaendert: false } } as never, true);
@@ -403,7 +403,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   test("--text: der Hinweis auf übrige .claude-Dateien kommt auch im Mischfall, fehlt aber ohne solche Dateien", () => {
     const misch = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [".claude/settings.json"], lockGeaendert: false } } as never, true);
     expect(misch).toContain("Übrige .claude-Dateien");
-    const ohne = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/kubernia/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
+    const ohne = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/factory-ticket/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
     expect(ohne).not.toContain("Übrige .claude-Dateien");
   });
 
@@ -471,7 +471,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   test("CLI: main hinter origin und sauber → Fast-Forward, Exit 0; geänderter Skill-Pfad meldet „Skill neu lesen“", () => {
     const t = aufbau();
     try {
-      t.schiebe(".claude/skills/kubernia/SKILL.md", "neu\n");
+      t.schiebe(".claude/skills/factory-ticket/SKILL.md", "neu\n");
       const r = cli(t.haupt, "--text", "--streng");
       expect(r.code).toBe(0);
       expect(r.out).toContain("Skill neu lesen");

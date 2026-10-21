@@ -13,7 +13,7 @@ const lies = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.u
 
 describe("Glossar-Abgleich (#1561 Z5)", () => {
   test("der Planer führt den Glossar-Abgleich als Pflichtpunkt des Plans und je Epic-Kind", () => {
-    const planer = lies(".claude/agents/kubernia-planner.md");
+    const planer = lies(".claude/agents/factory-planer.md");
     assert.match(planer, /\*\*Glossar-Abgleich \(Pflicht\):\*\*[^\n]*docs\/glossar\.md[^\n]*keine neuen Begriffe/);
     assert.match(planer, /\*\*Glossar-Abgleich \(Pflicht\):\*\*[^\n]*docs\/harness-glossar\.md[^\n]*keine neuen Begriffe/);
     assert.match(planer, /je Kind der Glossar-Abgleich/);

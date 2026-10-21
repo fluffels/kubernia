@@ -147,6 +147,6 @@ describe("Regel 4: Doku-Pin", () => {
     expect(skill).toContain("nur aus Szenarien und Kriterien");
   });
   test("der Umsetzer kennt den Nach-Merge-Beleg", () => {
-    expect(lies(".claude/agents/kubernia-umsetzer.md")).toContain("Nach-Merge-Beleg #<nr> K<i>");
+    expect(lies(".claude/agents/factory-umsetzer.md")).toContain("Nach-Merge-Beleg #<nr> K<i>");
   });
 });

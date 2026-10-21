@@ -412,8 +412,8 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     }
   });
 
-  test("Fallback-Spawn (general-purpose oder ohne Typ) wird geprüft, sobald der Prompt `kubernia-lens.md` nennt", () => {
-    const kaputt = "Lies zuerst `.claude/agents/kubernia-lens.md`. Patch: <TMP>/x.patch · erwarteter HEAD: abc1234";
+  test("Fallback-Spawn (general-purpose oder ohne Typ) wird geprüft, sobald der Prompt `factory-lens.md` nennt", () => {
+    const kaputt = "Lies zuerst `.claude/agents/factory-lens.md`. Patch: <TMP>/x.patch · erwarteter HEAD: abc1234";
     assert.equal(deny(agent(kaputt, "general-purpose"))?.hookSpecificOutput.permissionDecision, "deny");
     assert.equal(deny(agent(kaputt, null))?.hookSpecificOutput.permissionDecision, "deny");
   });

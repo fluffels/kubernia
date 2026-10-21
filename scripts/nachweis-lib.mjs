@@ -185,8 +185,8 @@ function abnahmeAus(wert) {
   return { art: "urteil", head, durchgaenge: Number(durch), urteil: u.urteil };
 }
 
-/** Die einzige Quelle der Abnahme-Zeile (ohne Schlüssel-Präfix der Message): `<Präfix>Abnahme: head=… durchgaenge=… urteil=…` bzw.
- *  `<Präfix>Abnahme: entfaellt — <Grund>`. Wirft bei ungültiger Eingabe (head, durchgaenge ≥ 1, Urteilswerte, Grund einzeilig und nicht leer). Pur. */
+/** Die einzige Quelle der Abnahme-Zeile (ohne Schlüssel-Präfix der Message): `<praefixe.commitZeile>Abnahme: head=… durchgaenge=… urteil=…` bzw.
+ *  `<praefixe.commitZeile>Abnahme: entfaellt — <Grund>`. Wirft bei ungültiger Eingabe (head, durchgaenge ≥ 1, Urteilswerte, Grund einzeilig und nicht leer). Pur. */
 export function formatAbnahme(zeilen, abnahme) {
   const key = `${zeilen.abnahme}:`;
   if (abnahme?.art === "entfaellt") {

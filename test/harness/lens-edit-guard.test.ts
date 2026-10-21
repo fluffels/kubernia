@@ -30,6 +30,9 @@ describe("bewerteLensEdit", () => {
       const e = G.bewerteLensEdit(p);
       expect(e.block, p).toBe(true);
       expect(e.reason).toMatch(/Lens-Worktree/);
+      // #1748: der Verweis nennt den festen Rollen-Pfad, nicht eine aus dem Agentennamen abgeleitete Datei
+      expect(e.reason).toContain(".claude/agents/factory-lens.md");
+      expect(e.reason).not.toContain(["kubernia", "lens.md"].join("-")); // alter Dateiname, zusammengesetzt (Rückfall-Wächter)
     }
   });
 
@@ -93,7 +96,7 @@ describe("entscheideHook", () => {
 
 describe("Verdrahtung", () => {
   test("die Lens-Definition startet den Guard als PreToolUse-Hook mit Matcher Edit (und nur dafür)", () => {
-    const md = readFileSync(new URL("../../.claude/agents/kubernia-lens.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const md = readFileSync(new URL("../../.claude/agents/factory-lens.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const kopf = /^---\n([\s\S]*?)\n---/.exec(md)?.[1] ?? "";
     expect(kopf).toMatch(/hooks:\s*\n\s+PreToolUse:\s*\n\s+- matcher: "Edit"/);
     expect(kopf).toContain("/scripts/lens-edit-guard.mjs");

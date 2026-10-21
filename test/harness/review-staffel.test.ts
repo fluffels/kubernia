@@ -45,9 +45,9 @@ describe("Der Skill regelt die Staffel (#1265)", () => {
 
   test("Patch einmal lesen: im Skill und im Lens-Agenten", () => {
     assert.ok(liestPatchEinmal(lies(SKILL)), "review-lenses/SKILL.md");
-    assert.ok(liestPatchEinmal(lies(".claude/agents/kubernia-lens.md")), "kubernia-lens.md");
+    assert.ok(liestPatchEinmal(lies(".claude/agents/factory-lens.md")), "factory-lens.md");
     assert.ok(nenntAbschnittsHelfer(lies(SKILL)), "review-lenses/SKILL.md nennt patch-abschnitte.mjs nicht");
-    assert.ok(nenntAbschnittsHelfer(lies(".claude/agents/kubernia-lens.md")), "kubernia-lens.md nennt patch-abschnitte.mjs nicht");
+    assert.ok(nenntAbschnittsHelfer(lies(".claude/agents/factory-lens.md")), "factory-lens.md nennt patch-abschnitte.mjs nicht");
   });
   test("Prädikate greifen (Red-Green)", () => {
     assert.ok(nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; Test-Adäquanz immer mit; fail-closed"));

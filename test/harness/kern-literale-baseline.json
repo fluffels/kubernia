@@ -1,6 +1,6 @@
 {
-  ".claude/agents/kubernia-planner.md": {"Stardew":2},
-  ".claude/agents/kubernia-umsetzer.md": {"Stardew":1},
+  ".claude/agents/factory-planer.md": {"Stardew":2},
+  ".claude/agents/factory-umsetzer.md": {"Stardew":1},
   ".claude/skills/review-lenses/SKILL.md": {"Stardew":1},
   "scripts/check-context-size.mjs": {"Stardew":1},
   "scripts/check-docmap.mjs": {"Stardew":2},

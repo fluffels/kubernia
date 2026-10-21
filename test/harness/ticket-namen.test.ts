@@ -188,7 +188,14 @@ describe("lens-auftrag-guard mit Config", () => {
   });
   test("Fallback general-purpose mit der Lens-Definition der Config im Prompt", () => {
     expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies ab-lens.md\n${kopf}` }, { config: AB })).toMatch(/Arbeitsverzeichnis/);
-    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies kubernia-lens.md\n${kopf}` }, { config: AB })).toBeNull();
+    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies fremd-lens.md\n${kopf}` }, { config: AB })).toBeNull();
+    // Kern-Dateiname (#1748): gilt unabhängig vom Agentennamen der Config
+    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "general-purpose", prompt: `Lies .claude/agents/factory-lens.md\n${kopf}` }, { config: AB })).toMatch(/Arbeitsverzeichnis/);
+  });
+  test("ein Spawn eines anderen Agenten, der den Kern-Dateinamen nennt, ist kein Lens-Spawn (#1748)", () => {
+    for (const subagentType of ["Explore", "ab-umsetzer"]) {
+      expect(lensAuftrag.lensAuftragBlockade({ subagentType, prompt: `Lies .claude/agents/factory-lens.md\n${kopf}` }, { config: AB })).toBeNull();
+    }
   });
   test("ohne Schlüssel: deny mit Fix-Zeile", () => {
     expect(lensAuftrag.lensAuftragBlockade({ subagentType: "ab-lens", prompt: "ok" }, { config: OHNE_UMSETZER })).toMatch(/Fix:/);

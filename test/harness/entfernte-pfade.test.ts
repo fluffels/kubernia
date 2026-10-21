@@ -12,6 +12,9 @@
  * Bewusste Grenze: freie Umschreibungen ohne einen der Namen („orchestrierter Workflow, der dieselben Phasen fährt“)
  * fängt der Scan nicht; das Wort „Workflow“ allein wäre zu breit (GitHub-Actions-Workflows, generische Mechanik).
  *
+ * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
+ * Namen mit Projektwort und ein Platzhalter als Dateiname (`<agenten.…>.md`) sind Rückfälle.
+ *
  * Ein neues Workflow-Skript unter `.claude/workflows/` heißt anders und löst diesen Wächter nicht aus; trägt ein Satz
  * künftig wieder den Namen `kubernia-ticket`, ist das ein Rückfall und rot.
  */
@@ -33,6 +36,9 @@ export const RESTE: { name: string; muster: RegExp }[] = [
   { name: "Konstante FACTORY_LABEL", muster: /\bFACTORY_LABEL\b/ },
   { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/ },
   { name: "Docs-Gen-Schlüssel diagramme.ruleset", muster: /diagramme\.ruleset/ },
+  { name: "alte Agenten-Dateinamen", muster: /kubernia-(planner|umsetzer|lens|gruppe)\.md/ },
+  { name: "altes Ticket-Skill-Verzeichnis", muster: /skills\/kubernia\// },
+  { name: "Platzhalter als Dateiname, die Datei heißt nach der Rolle", muster: /<agenten\.[A-Za-z]+>\.md|skills\/<agenten\.ticketSkill>\// },
   // Kern-Umgebungsvariablen heißen FACTORY_<NAME> (#1824). Geschlossene Liste der 15 früheren Namen: Projektnamen (Quiz-Golden,
   // Git-Guard, Dev-Panel) und die entfallenen Override-Namen fallen nicht darunter.
   {
@@ -46,6 +52,7 @@ export const AUSNAHMEN: { praefix: string; grund: string }[] = [
   { praefix: "docs/adr/", grund: "ADRs sind historisch und werden nie umgeschrieben (AGENTS.md § Projekt-Brain pflegen)" },
   { praefix: "test/harness/model-routing.test.ts", grund: "Absenz-Test: prüft, dass die entfernten Dateien nicht mehr existieren (ADR 0028)" },
   { praefix: "test/harness/entfernte-pfade.test.ts", grund: "dieser Wächter trägt die Muster selbst" },
+  { praefix: "docs/lens-gegenprobe-", grund: "datierte Schnappschüsse nennen die damaligen Dateinamen (Schnappschuss, nicht aktualisiert)" },
 ];
 
 /** Ausnahmen für genau eine Regel in genau einer Datei (exakter Pfad); alle anderen Regeln prüfen die Datei weiter. */
@@ -107,12 +114,25 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Konstante FACTORY_LABEL": "import { FACTORY_LABEL } from board-lib",
       "Ausnahmeliste des Flag-Parser-Wächters": "die noch nicht migrierten Skripte stehen dort als Liste",
       "Docs-Gen-Schlüssel diagramme.ruleset": "config.diagramme.ruleset fehlt",
+      "alte Agenten-Dateinamen": "Definition in .claude/agents/kubernia-lens.md",
+      "altes Ticket-Skill-Verzeichnis": "Datei .claude/skills/kubernia/SKILL.md",
+      "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
       "Kern-Umgebungsvariable mit Projektpräfix": "echo KQ_DIFF_BASE=$base >> $GITHUB_ENV",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
     const treffer = findeReste([{ pfad: "docs/beispiel.md", inhalt: `vorher\n${text}\nnachher` }]);
     assert.deepEqual(treffer, [`docs/beispiel.md:2: ${r.name}`]);
+  });
+
+  // Je Alternative der Muster mit „|“ ein eigenes Beispiel (#1748): sonst bliebe eine gestrichene Alternative unbemerkt
+  test.each([
+    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-planner.md"],
+    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-umsetzer.md"],
+    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-gruppe.md"],
+    ["Platzhalter als Dateiname, die Datei heißt nach der Rolle", ".claude/skills/<agenten.ticketSkill>/SKILL.md"],
+  ])("Negativfall: jede Alternative wird gefunden (%s: %s)", (name, text) => {
+    assert.deepEqual(findeReste([{ pfad: "docs/b.md", inhalt: text }]), [`docs/b.md:1: ${name}`]);
   });
 
   test("Negativfall: harmlose Nachbarn lösen nicht aus (kubernia-Ticket groß, Workflows der CI)", () => {

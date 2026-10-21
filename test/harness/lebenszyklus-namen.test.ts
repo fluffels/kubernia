@@ -72,7 +72,7 @@ const M = ausfallRaw as unknown as {
 };
 const H = syncRaw as unknown as {
   ordneHarnessAenderungen: (d: string[], verz?: string | null) => { skill: string[]; sonstige: string[] };
-  ticketSkillVerzeichnis: (d?: { config?: Cfg }) => string | null;
+  TICKET_SKILL_VERZEICHNIS: string;
   configGrund: (d?: { config?: Cfg }) => string | null;
   baueText: (e: Record<string, unknown>, o?: { sitzungsbasis?: boolean }) => string;
 };
@@ -411,12 +411,12 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
   });
 });
 
-describe("haupt-sync: Skill-Verzeichnis aus agenten.ticketSkill", () => {
+describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
   test("ordneHarnessAenderungen: nur das übergebene Verzeichnis zählt als Skill; null: nur AGENTS.md", () => {
-    const dateien = [".claude/skills/demo/SKILL.md", ".claude/skills/kubernia/SKILL.md", "AGENTS.md"];
+    const dateien = [".claude/skills/demo/SKILL.md", ".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"];
     const r = H.ordneHarnessAenderungen(dateien, ".claude/skills/demo/");
     expect(r.skill).toEqual([".claude/skills/demo/SKILL.md", "AGENTS.md"]);
-    expect(r.sonstige).toEqual([".claude/skills/kubernia/SKILL.md"]);
+    expect(r.sonstige).toEqual([".claude/skills/factory-ticket/SKILL.md"]);
     const ohne = H.ordneHarnessAenderungen(dateien, null);
     expect(ohne.skill).toEqual(["AGENTS.md"]);
     expect(ohne.sonstige).toHaveLength(2);
@@ -428,15 +428,13 @@ describe("haupt-sync: Skill-Verzeichnis aus agenten.ticketSkill", () => {
     expect(nurAgents).toContain("Den Ticket-Skill jetzt neu lesen");
     expect(nurAgents).not.toContain("SKILL.md");
   });
-  test("ticketSkillVerzeichnis: aus der Config; ohne den Schlüssel null und ein Grund mit Fix-Zeile", () => {
-    expect(H.ticketSkillVerzeichnis({ config: AB })).toBe(".claude/skills/ab/");
-    expect(H.ticketSkillVerzeichnis({ config: OHNE_SKILL })).toBeNull();
+  test("Kern-Pfad: das Verzeichnis gilt als Skill, auch ohne agenten.ticketSkill; die Config meldet den Grund weiter", () => {
+    expect(H.TICKET_SKILL_VERZEICHNIS).toBe(".claude/skills/factory-ticket/");
+    expect(H.ordneHarnessAenderungen([".claude/skills/factory-ticket/SKILL.md", ".claude/skills/ab/SKILL.md"]).skill).toEqual([".claude/skills/factory-ticket/SKILL.md"]);
     expect(H.configGrund({ config: OHNE_SKILL })).toMatch(/agenten\.ticketSkill[\s\S]*Fix:/);
     expect(H.configGrund({ config: AB })).toBeNull();
   });
   test("Fitness: das Verzeichnis der echten Config existiert (rot, sobald eine Umbenennung es verschiebt)", () => {
-    const verz = H.ticketSkillVerzeichnis();
-    expect(verz).not.toBeNull();
-    expect(lies(`${verz}SKILL.md`).length).toBeGreaterThan(0);
+    expect(lies(`${H.TICKET_SKILL_VERZEICHNIS}SKILL.md`).length).toBeGreaterThan(0);
   });
 });

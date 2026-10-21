@@ -95,11 +95,11 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 /** Der Einstiegs-Skill im Hauptchat; sein Frontmatter gilt nur bei /kubernia (#1035, #1280). */
-const UMSETZUNGS_SKILL = ".claude/skills/kubernia/SKILL.md";
+const UMSETZUNGS_SKILL = ".claude/skills/factory-ticket/SKILL.md";
 /** Der zweite Ticket-Skill (Bereich agentic); der Ablauf selbst steht in `.claude/skills/factory/ablauf.md` (#1806). */
 const FACTORY_SKILL = ".claude/skills/factory/SKILL.md";
 /** Der Subagent, der auf dem Skill-Pfad tatsächlich umsetzt (#1280). */
-const UMSETZER = ".claude/agents/kubernia-umsetzer.md";
+const UMSETZER = ".claude/agents/factory-umsetzer.md";
 /** Der Skill, dessen Lenses trotz Coding-Tier-Umsetzung auf dem starken Tier bleiben müssen. */
 const REVIEW_SKILL = ".claude/skills/review-lenses/SKILL.md";
 /** Die SSOT-/Checklisten-Datei für Modell-Pins. */
@@ -252,7 +252,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
       /\bmodel\s*:/,
       "Ein `model:` am Spawn überstimmt das Frontmatter von kubernia-lens – das Modell steht nur dort (#1209).",
     );
-    const lens = frontmatter(read(".claude/agents/kubernia-lens.md"));
+    const lens = frontmatter(read(".claude/agents/factory-lens.md"));
     assert.equal(lens.name, "kubernia-lens");
     assert.equal(lens.model, "opus", "Lenses laufen auf dem starken Tier");
     assert.equal(lens.effort, "high", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
@@ -306,7 +306,7 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
   });
 
   test("Planer opus/xhigh", () => {
-    const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
+    const planer = frontmatter(read(".claude/agents/factory-planer.md"));
     assert.equal(planer.model, "opus");
     assert.equal(planer.effort, "xhigh");
   });
@@ -349,10 +349,10 @@ const spawnFuer = (md: string, typ: string): string =>
 
 /** Ziele der Matrix-Zeilen (§1 der Routing-Doku): Frontmatter-Datei und ob `model` mitgeprüft wird (Subagenten ja, Hauptagent nein). */
 const MATRIX_ZIELE: Record<string, { datei: string; mitModel: boolean }> = {
-  planner: { datei: ".claude/agents/kubernia-planner.md", mitModel: true },
-  lens: { datei: ".claude/agents/kubernia-lens.md", mitModel: true },
-  umsetzer: { datei: ".claude/agents/kubernia-umsetzer.md", mitModel: true },
-  gruppe: { datei: ".claude/agents/kubernia-gruppe.md", mitModel: true },
+  planner: { datei: ".claude/agents/factory-planer.md", mitModel: true },
+  lens: { datei: ".claude/agents/factory-lens.md", mitModel: true },
+  umsetzer: { datei: ".claude/agents/factory-umsetzer.md", mitModel: true },
+  gruppe: { datei: ".claude/agents/factory-gruppe.md", mitModel: true },
   explore: { datei: ".claude/agents/explore.md", mitModel: true },
   forumLeser: { datei: ".claude/agents/forum-leser.md", mitModel: true },
   holdoutSzenario: { datei: ".claude/agents/holdout-szenario.md", mitModel: true },
@@ -454,7 +454,7 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
 });
 
 describe("Sammelticket-Gruppen (#1647, ADR 0026): ein Vertrag in Planer, Umsetzer und Gruppe", () => {
-  const dateien = [".claude/agents/kubernia-planner.md", ".claude/agents/kubernia-umsetzer.md", ".claude/agents/kubernia-gruppe.md"];
+  const dateien = [".claude/agents/factory-planer.md", ".claude/agents/factory-umsetzer.md", ".claude/agents/factory-gruppe.md"];
   test("die Kopfzeile `GRUPPE <k>/<n>` steht wortgleich in allen drei Definitionen", () => {
     for (const d of dateien) assert.ok(read(d).includes("GRUPPE <k>/<n>"), `${d} nennt \`GRUPPE <k>/<n>\``);
   });
@@ -647,7 +647,7 @@ describe("Keine festen Modell-IDs, genau eine Planungs-Oberfläche (#1065)", () 
         const fm = frontmatter(read(f));
         return /plan/i.test(fm.name ?? "") || /plane das ticket|mach mir einen plan/i.test(fm.description ?? "");
       });
-    assert.deepEqual(planend, [".claude/agents/kubernia-planner.md"], "Es darf nur EINEN Agent/Skill mit Planungsrolle geben.");
+    assert.deepEqual(planend, [".claude/agents/factory-planer.md"], "Es darf nur EINEN Agent/Skill mit Planungsrolle geben.");
   });
 });
 
@@ -714,14 +714,14 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
 
 describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
   test("Prosa-Bindung (#1309): Planer-Rolle und Skill nennen die Pflichtzeile „Weiche Epic“", () => {
-    assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: nein/);
-    assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: ja/);
-    assert.match(read(".claude/agents/kubernia-planner.md"), /verbindliches Format: eine eigene Zeile, nicht zitiert mit `>`/, "Format der Pflichtzeile ist verbindlich vorgeschrieben (#1311)");
+    assert.match(read(".claude/agents/factory-planer.md"), /Weiche Epic: nein/);
+    assert.match(read(".claude/agents/factory-planer.md"), /Weiche Epic: ja/);
+    assert.match(read(".claude/agents/factory-planer.md"), /verbindliches Format: eine eigene Zeile, nicht zitiert mit `>`/, "Format der Pflichtzeile ist verbindlich vorgeschrieben (#1311)");
     assert.match(liesTicketAblauf(), /Weiche Epic: ja/);
   });
 
   test("Planer-Rolle: der vom Skill (Hinweis „Epic: liefere die Aufteilung“) referenzierte Abschnitt „Bei einem Epic“ existiert und verbietet das Anlegen", () => {
-    const rolle = read(".claude/agents/kubernia-planner.md");
+    const rolle = read(".claude/agents/factory-planer.md");
     assert.match(rolle, /^## Bei einem Epic/m);
     assert.match(rolle, /Lege keine Issues selbst an/);
     assert.match(liesTicketAblauf(), /Epic: liefere die Aufteilung/, "der Skill gibt dem Planer den Epic-Hinweis");
@@ -781,7 +781,7 @@ const umsetzerRegelOk = (md: string): boolean =>
 describe("Weichen-Regel im Skill-Pfad (#1311)", () => {
   test("Skill, Planer und Umsetzer tragen die Regel", () => {
     assert.ok(skillRegelOk(liesTicketAblauf()), `${UMSETZUNGS_SKILL} Schritt 3`);
-    assert.ok(planerRegelOk(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md Abschnitt 7");
+    assert.ok(planerRegelOk(read(".claude/agents/factory-planer.md")), "factory-planer.md Abschnitt 7");
     assert.ok(umsetzerRegelOk(read(UMSETZER)), `${UMSETZER}`);
   });
 
@@ -789,7 +789,7 @@ describe("Weichen-Regel im Skill-Pfad (#1311)", () => {
     const skill = liesTicketAblauf();
     assert.ok(!skillRegelOk(skill.replace("`AskUserQuestion` nur, wenn", "`AskUserQuestion` immer, wenn")), "Skill: Rückfrage nicht mehr eingeschränkt");
     assert.ok(!skillRegelOk(skill.replace("als verbindlich", "als Vorschlag")), "Skill: Entscheidungen nicht mehr verbindlich");
-    const planer = read(".claude/agents/kubernia-planner.md");
+    const planer = read(".claude/agents/factory-planer.md");
     assert.ok(!planerRegelOk(planer.replace("steht nur bei Irreversiblem oder Außenwirkung", "steht bei jeder Optik-Weiche")), "Planer");
     assert.ok(!planerRegelOk(planer.replace("**entscheiden**", "vorschlagen")), "Planer: nicht mehr entscheiden");
     const umsetzer = read(UMSETZER);
@@ -828,14 +828,14 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   test("Die Brain-Lese-Konvention steht wortgleich in Umsetzer und Lens (#1331)", () => {
     const satz = konvention();
     assert.match(satz, /Read-Tool.*nie per cat\/sed\/head\/Get-Content/);
-    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"])
+    for (const datei of [UMSETZER, ".claude/agents/factory-lens.md"])
       assert.ok(ohneBackticks(read(datei)).includes(satz), `${datei} trägt den Satz aus anlaufstellen.md nicht wortgleich`);
   });
 
   test("Red-Green: eine um ein Wort abweichende Kopie fällt auf", () => {
     const satz = konvention();
     const gleich = (text: string) => text.includes(satz);
-    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"]) {
+    for (const datei of [UMSETZER, ".claude/agents/factory-lens.md"]) {
       const text = ohneBackticks(read(datei));
       assert.ok(gleich(text), datei);
       assert.ok(!gleich(text.replace(satz, satz.replace("nie per", "nicht per"))), datei);
@@ -853,14 +853,14 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   });
 
   test("Planer prüft den Stand des Checkouts gegen origin/main (#1331)", () => {
-    const t = read(".claude/agents/kubernia-planner.md");
+    const t = read(".claude/agents/factory-planer.md");
     assert.match(t, /git diff --name-only HEAD origin\/main/);
     assert.match(t, /MSYS_NO_PATHCONV=1 git show origin\/main:<pfad>/);
     assert.match(liesTicketAblauf(), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
   });
 
   test("Brain-Lese-Konvention steht in Umsetzer und Lens", () => {
-    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"]) {
+    for (const datei of [UMSETZER, ".claude/agents/factory-lens.md"]) {
       const t = read(datei);
       assert.match(t, /anlaufstellen\.md/, datei);
       assert.match(t, /`Read`/, datei);
