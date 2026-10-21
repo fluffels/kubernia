@@ -221,8 +221,8 @@ describe("Ticket-Skills aus der Projekt-Config", () => {
     assert.throws(() => hc.zerlegeHauptchat({ sessions: [], config: {} }), /hauptchat-zerlegung/);
   });
   test("der Kern lädt die Config nie selbst: ohne übergebene Config ein Datenfehler, auch mit vorhandener Projekt-Config", () => {
-    assert.throws(() => hcRoh.ticketSkillsAusConfig(), /hauptchat-zerlegung.*Config/);
-    assert.throws(() => hcRoh.zerlegeHauptchat({ sessions: [] }), /hauptchat-zerlegung.*Config/);
+    assert.throws(() => hcTyp.ticketSkillsAusConfig(), /hauptchat-zerlegung.*Config/);
+    assert.throws(() => hcTyp.zerlegeHauptchat({ sessions: [] }), /hauptchat-zerlegung.*Config/);
   });
 });
 
