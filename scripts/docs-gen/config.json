@@ -15,7 +15,7 @@
       "check:docgen": "generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
       "check:c4": "LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein, die hexagonale Sicht in arc42 (Ports und Adapter) mit Pfaden, Schichten und Modell, die Harness-Arten (Agenten, Skills, Workflows, Hooks, Git-Hooks, Gates, CI-Workflows, MCP-Server) mit `.claude/`, `package.json`, `.githooks/`, `.github/workflows/` und `.mcp.json`, die Pflicht-Views",
       "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
-      "check:factorydrift": "Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still; entfällt ohne Sync-Stand",
+      "check:factorydrift": "Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config)",
       "check:steuerbytes": "keine Steuerbytes (NUL) in Textdateien",
       "check:lockfile": "Lockfile passt zur `package.json`",
       "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",

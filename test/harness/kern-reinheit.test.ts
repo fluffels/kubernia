@@ -31,13 +31,14 @@ interface BesitzLib {
   markerEnde: (id: string) => string;
   einheitId: (e: Eintrag) => string;
   einheitText: (e: Eintrag, text: string) => string | null;
+  normalisierterEinheitText: (e: Eintrag, text: string) => string | null;
   pruefeManifest: (m: Manifest, lies: (pfad: string) => string | null) => string[];
   RINGE: string[];
   RING_IMPORTE: Record<string, string[]>;
   NUR_FACTORY: string[];
   wirdVerteilt: (e: Eintrag) => boolean;
 }
-const { markerStart, markerEnde, einheitId, einheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
+const { markerStart, markerEnde, einheitId, einheitText, normalisierterEinheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const MANIFEST = ".factory/besitz.json";
@@ -346,7 +347,7 @@ export function pruefeHuelle(verstoesse: string[], ausnahmen: Record<string, str
 export function istZaehlung(eintraege: Eintrag[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): Baseline {
   const ist: Baseline = {};
   for (const e of eintraege) {
-    const t = einheitText(e, lies(e.pfad) ?? "");
+    const t = normalisierterEinheitText(e, lies(e.pfad) ?? "");
     const z = zaehle(t ?? "", begriffe);
     if (Object.keys(z).length > 0) ist[einheitId(e)] = z;
   }
@@ -840,6 +841,15 @@ describe("Ring-Tabelle (ADR 0029)", () => {
     const ist = istZaehlung(E, (p) => (p === "scripts/cockpit/o.mjs" ? "// Fremdwort" : "sauber"), begriffe);
     assert.deepEqual(Object.keys(ist), ["scripts/cockpit/o.mjs"]);
     assert.notDeepEqual(vergleiche(ist, {}), []);
+  });
+  test("istZaehlung zählt auf dem normalisierten Text: Projektwert-Zeile und -Block zählen nicht, der Rumpf schon (#1746)", () => {
+    const begriffe = { fremd: /Fremdwort/g };
+    const kopf = "---\n# factory:projektwert agenten.planer\nname: Fremdwort-planer\n---\n";
+    const block = "<!-- factory:projektwerte:start -->\n| `agenten.planer` | `Fremdwort` |\n<!-- factory:projektwerte:end -->\n";
+    const ist = (text: string): Baseline => istZaehlung([ein("a.md")], () => text, begriffe);
+    assert.deepEqual(ist(`${kopf}${block}Text\n`), {});
+    assert.deepEqual(Object.values(ist(`${kopf}${block}Fremdwort im Rumpf\n`)), [{ fremd: 1 }]);
+    assert.deepEqual(ist(`${kopf}<!-- factory:projektwerte:start -->\nFremdwort\n`), {}); // kaputter Marker: Einheit nicht auflösbar, zählt nichts
   });
   test("istZaehlung: fehlende Datei und Block ohne Marker zählen nichts (null-Guards)", () => {
     const begriffe = { fremd: /Fremdwort/g };

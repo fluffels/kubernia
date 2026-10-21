@@ -7,6 +7,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync,
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import {
   einheitHash,
   einheitId,
@@ -14,7 +15,9 @@ import {
   eolVon,
   jsonSchluesselSpanne,
   normalisiereEol,
+  normalisierterEinheitText,
   pruefeManifest,
+  rendereProjektwerte,
   setzeBlock,
   setzeJsonSchluessel,
   textHash,
@@ -28,12 +31,12 @@ export const PROJEKT_PFAD = ".factory/projekt.json";
 const gleichJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Wendet alle Teil-Einheiten einer Datei nacheinander auf den Zieltext an (LF-normalisiert). Wirft bei Marker- oder JSON-Fehlern. */
-function wendeTeileAn(eintraege, srcText, zielLf) {
+function wendeTeileAn(eintraege, srcText, zielLf, zielConfig) {
   let arbeit = zielLf;
   for (const e of eintraege) {
     if (e.block !== undefined) {
       if (arbeit === null) throw new Error(`${einheitId(e)}: Datei fehlt im Ziel, die Marker fehlen`);
-      arbeit = setzeBlock(arbeit, e.block, einheitText(e, srcText));
+      arbeit = setzeBlock(arbeit, e.block, rendereProjektwerte(einheitText(e, srcText), zielConfig, einheitId(e)));
     } else {
       if (arbeit === null) arbeit = "{\n}\n";
       const span = jsonSchluesselSpanne(srcText, e.schluessel);
@@ -56,7 +59,7 @@ export function pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis) {
     for (const k of Object.keys(neu)) if (!besitz.has(k) && !(k in vorher)) fehler.push(`${pfad}: Schlüssel '${k}' ist neu und kein Besitz`);
   }
   for (const e of eintraege) {
-    if (e.block !== undefined && einheitText(e, ergebnis) !== einheitText(e, srcText)) fehler.push(`${einheitId(e)}: Block weicht nach dem Sync von der Quelle ab`);
+    if (e.block !== undefined && normalisierterEinheitText(e, ergebnis) !== normalisierterEinheitText(e, srcText)) fehler.push(`${einheitId(e)}: Block weicht nach dem Sync von der Quelle ab`);
   }
   return fehler;
 }
@@ -74,9 +77,17 @@ function leseAltStand(zielLies) {
 /**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
  * Ergebnis: `fehler` (nicht leer: nichts schreiben), `meldungen`, `dateien` (Pfad → { text, neu, ausfuehrbar }, nur Geändertes),
- * `unveraendert` (Zahl) und der `stand`.
+ * `unveraendert` (Zahl) und der `stand`. `zielConfig` liefert die Projekt-Config des Ziels, nur gerufen, wenn eine Datei Projektwert-Stellen hat.
  */
-export function planeSync({ quelleLies, zielLies, quelleAusfuehrbar = () => false, quelleStand = { commit: "unbekannt", sauber: false } }) {
+export function planeSync({
+  quelleLies,
+  zielLies,
+  quelleAusfuehrbar = () => false,
+  quelleStand = { commit: "unbekannt", sauber: false },
+  zielConfig = () => {
+    throw new Error("keine Projekt-Config des Ziels übergeben");
+  },
+}) {
   const res = { fehler: [], meldungen: [], dateien: new Map(), unveraendert: 0, stand: null };
   const manifestText = quelleLies(MANIFEST_PFAD);
   if (manifestText === null) {
@@ -108,7 +119,7 @@ export function planeSync({ quelleLies, zielLies, quelleAusfuehrbar = () => fals
     const zielLf = zielRoh === null ? null : normalisiereEol(zielRoh);
     try {
       const ganz = eintraege.some((e) => e.block === undefined && e.schluessel === undefined);
-      const ergebnis = ganz ? srcText : wendeTeileAn(eintraege, srcText, zielLf);
+      const ergebnis = ganz ? rendereProjektwerte(srcText, zielConfig, pfad) : wendeTeileAn(eintraege, srcText, zielLf, zielConfig);
       if (!ganz) res.fehler.push(...pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis));
       ziele.set(pfad, { ergebnis, zielRoh, zielLf, srcText });
     } catch (err) {
@@ -193,6 +204,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     zielLies: liesDatei(ziel),
     quelleAusfuehrbar: (pfad) => (statSync(join(quelle, ...pfad.split("/"))).mode & 0o111) !== 0,
     quelleStand: quelleGit(quelle),
+    zielConfig: () => ladeProjektConfig({ rootDir: ziel }),
   });
   if (plan.fehler.length > 0) {
     for (const f of plan.fehler) err(`factory-sync: ${f}`);

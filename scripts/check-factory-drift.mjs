@@ -1,13 +1,16 @@
 // Drift-Gate (ADR 0022 F9): ein Projekt ändert den Factory-Besitz nicht still.
 // `node scripts/check-factory-drift.mjs [--wurzel <pfad>]`; Exit 0 grün oder entfällt, 1 Drift, 2 Aufruf.
 // Referenz ist `.factory/sync-stand.json` (vom Sync geschrieben): Hash des Manifests und je Einheit. Ohne Sync-Stand ist das Projekt
-// selbst Quelle des Besitzes, die Prüfung entfällt mit einer Zeile.
+// selbst Quelle des Besitzes, die Besitz-Prüfung entfällt mit einer Zeile. Die Projektwert-Stellen (aus der Config erzeugte Blöcke und
+// Frontmatter-Zeilen, `scripts/projektwerte.mjs`) werden immer gegen die Config geprüft, auch ohne Sync-Stand.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { einheitHash, einheitId, pfadSicher, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitHash, einheitId, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
+const PROJEKT_PFAD = ".factory/projekt.json";
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
 const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad>`), oder den Projektwert in `.factory/projekt.json` auslagern";
@@ -49,7 +52,7 @@ export function pruefeDrift(lies) {
     }
     const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
     const hash = text === null ? null : einheitHash(e, text);
-    if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt)`);
+    if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`);
     else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert`);
   }
   const nichtVerteilt = new Map((manifest.eintraege ?? []).filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
@@ -75,16 +78,21 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
     return existsSync(voll) ? readFileSync(voll, "utf8") : null;
   };
   const r = pruefeDrift(lies);
-  if (r.entfaellt) {
-    out(`check-factory-drift: kein ${STAND_PFAD}, dieses Projekt ist Quelle des Besitzes, Prüfung entfällt`);
-    return 0;
-  }
+  // Projektwert-Stellen sind aus der Config erzeugt und werden immer geprüft, auch ohne Sync-Stand.
+  const pw = projektwertLauf(w, () => ladeProjektConfig({ rootDir: w }));
+  if (r.entfaellt) out(`check-factory-drift: kein ${STAND_PFAD}, dieses Projekt ist Quelle des Besitzes, Besitz-Prüfung entfällt`);
   if (r.fehler.length > 0) {
     err(`check-factory-drift: ${r.fehler.length} Drift-Befund(e)`);
     for (const f of r.fehler) err(`  ${f}`);
-    return 1;
   }
-  out(`check-factory-drift: ${r.einheiten} Einheiten ohne Drift`);
+  if (pw.fehler.length > 0) {
+    err(`check-factory-drift: ${pw.fehler.length} Projektwert-Befund(e)`);
+    for (const f of pw.fehler) err(`  ${f}`);
+    if (pw.fehler.some((f) => f.includes("weicht von"))) err(`  Fix: \`node scripts/projektwerte.mjs --write\` (Werte kommen aus ${PROJEKT_PFAD})`);
+  }
+  if (r.fehler.length > 0 || pw.fehler.length > 0) return 1;
+  if (!r.entfaellt) out(`check-factory-drift: ${r.einheiten} Einheiten ohne Drift`);
+  out(`check-factory-drift: ${pw.dateien} Dateien mit Projektwert-Stellen ohne Abweichung`);
   return 0;
 }
 
