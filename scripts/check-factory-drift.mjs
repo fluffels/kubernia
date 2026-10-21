@@ -88,7 +88,7 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   if (pw.fehler.length > 0) {
     err(`check-factory-drift: ${pw.fehler.length} Projektwert-Befund(e)`);
     for (const f of pw.fehler) err(`  ${f}`);
-    err(`  Fix: \`node scripts/projektwerte.mjs --write\` (Werte kommen aus ${PROJEKT_PFAD})`);
+    if (pw.fehler.some((f) => f.includes("weicht von"))) err(`  Fix: \`node scripts/projektwerte.mjs --write\` (Werte kommen aus ${PROJEKT_PFAD})`);
   }
   if (r.fehler.length > 0 || pw.fehler.length > 0) return 1;
   if (!r.entfaellt) out(`check-factory-drift: ${r.einheiten} Einheiten ohne Drift`);

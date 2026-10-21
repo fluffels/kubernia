@@ -197,6 +197,14 @@ describe("projektwerte CLI", () => {
     assert.match(r.err, /nichts geschrieben/);
     assert.equal(lies(w, ".claude/agents/planer.md"), vorher);
   });
+  test("--check schlägt bei einem Marker ohne Ende keinen --write-Fix vor, bei Abweichung schon", () => {
+    const w = projekt();
+    schreibe(w, ".claude/skills/s/SKILL.md", `${S}\nohne Ende\n`);
+    const r = lauf(["--check"], w);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /kein Ende/);
+    assert.doesNotMatch(r.err, /--write/);
+  });
   test("fehlender Schlüssel in der Config bricht ab (ohne Config-Datei ebenso)", () => {
     const w = projekt();
     schreibe(w, ".claude/agents/planer.md", FM.replace("agenten.planer", "agenten.fehlt"));

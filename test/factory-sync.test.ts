@@ -570,6 +570,11 @@ describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
     schreibe(z, ".claude/agents/w.md", lies(z, ".claude/agents/w.md").replace("name: von-hand", "name: wk-planer"));
     schreibe(z, "docs/d.md", lies(z, "docs/d.md").replace("`wk-planer` |", "`manipuliert` |"));
     assert.match(drift1(z).err, /Projektwert-Block weicht/);
+    schreibe(z, "docs/d.md", `${lies(z, "docs/d.md")}\n<!-- factory:projektwerte:start -->\nohne Ende\n`);
+    const kaputt = drift1(z);
+    assert.equal(kaputt.code, 1);
+    assert.match(kaputt.err, /kein Ende/);
+    assert.doesNotMatch(kaputt.err, /projektwerte\.mjs --write/);
   });
 
   test("mit Sync-Stand: ein manipulierter Wert ist nur Projektwert-Drift, der Besitz-Hash bleibt grün; ein entfernter Marker ist Besitz-Drift", () => {

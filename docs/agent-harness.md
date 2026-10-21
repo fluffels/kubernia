@@ -117,7 +117,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
 | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein, die hexagonale Sicht in arc42 (Ports und Adapter) mit Pfaden, Schichten und Modell, die Harness-Arten (Agenten, Skills, Workflows, Hooks, Git-Hooks, Gates, CI-Workflows, MCP-Server) mit `.claude/`, `package.json`, `.githooks/`, `.github/workflows/` und `.mcp.json`, die Pflicht-Views |
 | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
-| `npm run check:factorydrift` | `verify` | Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still; entfällt ohne Sync-Stand |
+| `npm run check:factorydrift` | `verify` | Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config) |
 | `npm run check:steuerbytes` | `verify` | keine Steuerbytes (NUL) in Textdateien |
 | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
 | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
