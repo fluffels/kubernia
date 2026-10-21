@@ -1,11 +1,21 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts
-import { AUFRUF_EXIT, flagsLesen } from "../scripts/flag-lib.mjs";
+import * as flagLib from "../scripts/flag-lib.mjs";
+
+interface Ergebnis {
+  werte: Record<string, unknown>;
+  positionale: string[];
+  tokens: unknown[];
+  fehler: { art: string; flag: string; text: string } | null;
+}
+const { AUFRUF_EXIT, flagsLesen } = flagLib as unknown as {
+  AUFRUF_EXIT: number;
+  flagsLesen: (argv: string[], optionen: Record<string, unknown>, opt?: Record<string, unknown>) => Ergebnis;
+};
 
 type Opt = Record<string, { type: "string" | "boolean"; multiple?: boolean }>;
 const OPT: Opt = { a: { type: "string" }, b: { type: "string" }, json: { type: "boolean" }, s: { type: "string", multiple: true } };
-const lies = (argv: string[], extra: Record<string, unknown> = {}) =>
-  flagsLesen(argv, OPT, extra) as { werte: Record<string, unknown>; positionale: string[]; tokens: unknown[]; fehler: { art: string; flag: string; text: string } | null };
+const lies = (argv: string[], extra: Record<string, unknown> = {}): Ergebnis => flagsLesen(argv, OPT, extra);
 const art = (argv: string[], extra: Record<string, unknown> = {}) => {
   const f = lies(argv, extra).fehler;
   return f === null ? null : `${f.art}|${f.flag}`;

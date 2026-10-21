@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 
 export interface Datei {
