@@ -61,7 +61,7 @@ const optionVergleiche = (text: string): string[] => [...text.matchAll(/\bstatus
 
 const config = JSON.parse(lies(".factory/projekt.json")) as { labels: Record<string, string>; boards: Record<string, unknown>[] };
 const workflows = dateien(".github/workflows", /\.ya?ml$/);
-const skripte = dateien("scripts", /\.mjs$/).filter((s) => s.pfad !== "scripts/harness-doctor.mjs");
+const skripte = dateien("scripts", /\.mjs$/).filter((s) => !["scripts/harness-doctor.mjs", "scripts/harness-doctor-lib.mjs"].includes(s.pfad));
 const vor = doctor.voraussetzungenAus({ config, workflows });
 const ohneCase = (liste: string[]): Set<string> => new Set(liste.map((l) => l.toLowerCase()));
 

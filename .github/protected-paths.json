@@ -33,6 +33,7 @@
     "/scripts/besitz-lib.mjs",
     "/scripts/factory-sync.mjs",
     "/scripts/harness-doctor.mjs",
+    "/scripts/harness-doctor-lib.mjs",
     "/scripts/harness-doctor-melden.mjs",
     "/scripts/sandbox-doctor.mjs",
     "/scripts/gh-guard-hook.mjs",

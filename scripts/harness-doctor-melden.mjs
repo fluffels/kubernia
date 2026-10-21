@@ -21,7 +21,7 @@ import { istDirektaufruf } from "./hook-io.mjs";
 import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
-import { pruefLauf } from "./harness-doctor.mjs";
+import { pruefLauf } from "./harness-doctor-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const KENNUNG = "Harness-Doctor (Wochenlauf)";

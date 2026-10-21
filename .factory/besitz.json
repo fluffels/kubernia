@@ -130,6 +130,7 @@
     {"pfad":"scripts/besitz-lib.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
     {"pfad":"scripts/factory-sync.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
     {"pfad":"scripts/harness-doctor.mjs","ring":"kern","quelle":"Plan #1799 (Regel ADR 0022 §1)"},
+    {"pfad":"scripts/harness-doctor-lib.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-melden.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":".github/workflows/harness-doctor.yml","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/check-factory-drift.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},

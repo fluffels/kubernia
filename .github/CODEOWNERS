@@ -65,6 +65,7 @@ AGENTS.md                  @fluffels
 /scripts/besitz-lib.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
 /scripts/harness-doctor.mjs @fluffels
+/scripts/harness-doctor-lib.mjs @fluffels
 /scripts/harness-doctor-melden.mjs @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
