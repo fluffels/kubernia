@@ -18,9 +18,8 @@ import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
-import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
-import { postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { pruefLauf } from "./harness-doctor-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -108,14 +107,27 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad])).flat();
+// board-lib und inbox-lib lesen die Projekt-Config beim Import (REPO): erst nach dem Vorab-Laden der Config importieren, sonst bräche eine
+// kaputte Config als Stacktrace statt als `::error::` mit Exit 2.
+const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
 
-function main(argv = process.argv.slice(2)) {
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`. */
+export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error } = {}) {
   const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" } });
   if (fehler) {
-    console.error(`${fehler.text}\nAufruf: node scripts/harness-doctor-melden.mjs [--dry-run]`);
+    err(`${fehler.text}
+Aufruf: node scripts/harness-doctor-melden.mjs [--dry-run]`);
     return AUFRUF_EXIT;
   }
+  let libs;
+  try {
+    ladeConfig();
+    libs = await ladeLibs();
+  } catch (e) {
+    log(`::error::${KENNUNG}: Projekt-Config nicht lesbar: ${einzeilig(fehlerText(e))}`);
+    return AUFRUF_EXIT;
+  }
+  const { REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
   const projektToken = process.env.PROJECT_TOKEN;
   const io = {
     ermittle: () =>
@@ -125,17 +137,14 @@ function main(argv = process.argv.slice(2)) {
         pruefe: () => pruefLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null }).ergebnis,
       }),
     kontext: () => {
-      const offene = normalizeOffene(JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`])));
-      const kommentare = offene
-        .filter((i) => i.titel === SAMMELTICKET_TITEL)
-        .flatMap((i) => seiten(`repos/${REPO}/issues/${i.number}/comments?per_page=100`).map((k) => ({ user: k.user, body: k.body })));
+      const { offene, kommentare } = ladeSammelKontext();
       return { kommentare, owner: REPO.split("/")[0], ziel: waehleSammelticket(offene)?.number ?? null };
     },
     postZeilen,
     heute: new Date().toISOString().slice(0, 10),
-    log: console.log,
+    log,
   };
   return lauf({ io, trocken: werte["dry-run"] === true });
 }
 
-if (istDirektaufruf(import.meta.url)) process.exitCode = main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = await main();
