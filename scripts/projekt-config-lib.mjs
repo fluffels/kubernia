@@ -84,6 +84,18 @@ export const KERN_TICKET_SKILL = "factory";
 
 export const PFLICHT_AGENTEN = ["planer", "umsetzer", "lens", "gruppe", "ticketSkill"];
 
+/**
+ * Feste Kern-Pfade der Rollen (#1748, F3h): ohne Projektwert im Pfad, die Identität setzt `name:` aus `agenten.<rolle>` (Platzhalterzeile vor `name:`).
+ * Einzige Quelle der Pfade; Schlüssel wie `PFLICHT_AGENTEN`.
+ */
+export const ROLLEN_PFADE = Object.freeze({
+  planer: ".claude/agents/factory-planer.md",
+  umsetzer: ".claude/agents/factory-umsetzer.md",
+  lens: ".claude/agents/factory-lens.md",
+  gruppe: ".claude/agents/factory-gruppe.md",
+  ticketSkill: ".claude/skills/factory-ticket/SKILL.md",
+});
+
 /** Pur: prüft `praefixe` (commitZeile, branch, worktree). */
 function pruefePraefixe(p) {
   if (!istObjekt(p)) return ["praefixe muss ein Objekt mit commitZeile, branch und worktree sein"];

@@ -77,7 +77,7 @@ export const scoreId = (session, name) => sha("score:" + name + ":" + session).s
 
 // ── Soll (pur) ───────────────────────────────────────────────────────────────
 
-/** `<Worktree-Präfix><nr>` aus dem Branch-Namen, sonst null. `worktree` ist `praefixe.worktree` der Projekt-Config (Pflicht, kein Standardwert). */
+/** `<praefixe.worktree><nr>` aus dem Branch-Namen, sonst null. `worktree` ist `praefixe.worktree` der Projekt-Config (Pflicht, kein Standardwert). */
 export function ticketAusBranch(gitBranch, worktree) {
   if (typeof worktree !== "string" || worktree === "") throw new Error("ticketAusBranch braucht das Worktree-Präfix (praefixe.worktree der Projekt-Config)");
   const m = new RegExp(String.raw`(?<!\w)${escapeRegex(worktree)}(\d+)\b`).exec(String(gitBranch ?? ""));

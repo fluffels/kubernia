@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Zwei Regeln hängen an Prosa in .claude/agents/kubernia-umsetzer.md:
+ * Zwei Regeln hängen an Prosa in .claude/agents/factory-umsetzer.md:
  *   1. Vor dem Bericht (`ERGEBNIS:`) stoppt der Umsetzer alle eigenen Hintergrund-Tasks per `TaskStop`
  *      und wartet auf die CI blockierend im Vordergrund (ein Monitor hält den Lauf nicht offen, #1342), auf
  *      Lenses per Turn-Ende; sonst kam derselbe Bericht mehrfach an oder der Lauf endete mitten im Review (#1139).
@@ -55,7 +55,7 @@ const { parseErgebnis, parseAbschlussInput } = abschluss;
 const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { config: ladeProjektConfig(), prDateien: () => [], ...d } as never);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const UMSETZER = liesMitProjektwerten(".claude/agents/kubernia-umsetzer.md");
+const UMSETZER = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
 
 const abschnitt = (md: string, kopf: RegExp): string => {
   const zeilen = md.split("\n");
@@ -626,7 +626,7 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
 
 describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
   // Diese Regeln stehen in der Agenten-Definition; die Gruppen-Rolle trägt die Red-Green-Regel mit.
-  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/kubernia-gruppe.md"), "utf8");
+  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/factory-gruppe.md"), "utf8");
   const KERNPHRASEN = [
     "nie über stdin", // Skripte nie über stdin starten
     "eigenen Negativtest, der genau diese Regel verfälscht", // je neue Guard-/Gate-Regel ein Negativtest
@@ -635,8 +635,8 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
   ];
 
   test("jede Kernphrase steht in der Agenten-Definition, die Red-Green-Regel auch in der Gruppen-Rolle", () => {
-    for (const phrase of KERNPHRASEN) assert.ok(UMSETZER.includes(phrase), `kubernia-umsetzer.md ohne „${phrase}“`);
-    assert.ok(GRUPPE.includes("git checkout <datei>"), "kubernia-gruppe.md ohne die Red-Green-Rücknahme-Regel");
+    for (const phrase of KERNPHRASEN) assert.ok(UMSETZER.includes(phrase), `factory-umsetzer.md ohne „${phrase}“`);
+    assert.ok(GRUPPE.includes("git checkout <datei>"), "factory-gruppe.md ohne die Red-Green-Rücknahme-Regel");
     assert.ok(!UMSETZER.replace("nie über stdin", "").includes("nie über stdin"), "Negativfall: die Prüfung erkennt eine fehlende Phrase");
   });
 
@@ -658,15 +658,15 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
 });
 
 describe("Selbstcheck vor jedem Commit (#1625)", () => {
-  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/kubernia-gruppe.md"), "utf8");
-  const LENS = readFileSync(resolve(ROOT, ".claude/agents/kubernia-lens.md"), "utf8");
+  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/factory-gruppe.md"), "utf8");
+  const LENS = readFileSync(resolve(ROOT, ".claude/agents/factory-lens.md"), "utf8");
   const SKILL = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
   /** Verlangt der Text den sichtbaren Block `Selbstcheck:` mit den Urteilen ok/gefixt/n.a. und der Lens-3-Quelle? */
   const verlangtSelbstcheck = (s: string) => /Block `Selbstcheck:`/.test(s) && /`ok`, `gefixt` oder `n.a.`/.test(s) && /Lens 3/.test(s);
 
   test("Umsetzer und Gruppen-Rolle verlangen den Block, der Umsetzer übernimmt ihn in den PR-Text", () => {
-    assert.ok(verlangtSelbstcheck(UMSETZER), "kubernia-umsetzer.md");
-    assert.ok(/Selbstcheck/.test(GRUPPE), "kubernia-gruppe.md");
+    assert.ok(verlangtSelbstcheck(UMSETZER), "factory-umsetzer.md");
+    assert.ok(/Selbstcheck/.test(GRUPPE), "factory-gruppe.md");
     assert.match(UMSETZER, /derselbe Block steht im PR-Text, kein neues Gate/);
   });
 

@@ -67,14 +67,14 @@ export function localWorktreeFiles(worktreesDir, deps = {}) {
     .map((e) => e.name);
 }
 
-/** Dateiname `<Worktree-Präfix><nr>` gefolgt von `-`, `.` oder Ende: Gruppe 1 ist der Eltern-Worktree (`<Präfix>13610-x` gehört zu `<Präfix>13610`, nicht `<Präfix>1361`). */
+/** Dateiname `<praefixe.worktree><nr>` gefolgt von `-`, `.` oder Ende: Gruppe 1 ist der Eltern-Worktree (`<praefixe.worktree>13610-x` gehört zu `<praefixe.worktree>13610`, nicht `<praefixe.worktree>1361`). */
 function dateiMuster(namen) {
   return namen.dateiMuster;
 }
 
 /**
- * Teilt lose Dateien (#1476): `verwaist` (`<Worktree-Präfix><nr>` nicht registriert, älter als 5 Minuten, löschbar), `jung` (verwaist,
- * aber jünger, nur melden) und `fremd` (Name nicht `<Worktree-Präfix><nr>…`, nur melden). Dateien eines registrierten Worktrees fehlen.
+ * Teilt lose Dateien (#1476): `verwaist` (`<praefixe.worktree><nr>` nicht registriert, älter als 5 Minuten, löschbar), `jung` (verwaist,
+ * aber jünger, nur melden) und `fremd` (Name nicht `<praefixe.worktree><nr>…`, nur melden). Dateien eines registrierten Worktrees fehlen.
  */
 export function sortiereDateien(worktreesDir, dateien, registered, deps = {}) {
   const kandidaten = [];
@@ -259,7 +259,7 @@ export function diagnoseOrphans(cwd, deps = {}) {
 }
 
 /**
- * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `<Worktree-Präfix><nr>` NICHT mehr registriert ist (#1425).
+ * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `<praefixe.worktree><nr>` NICHT mehr registriert ist (#1425).
  * `registeredPaths` sind die absoluten Pfade aus `git worktree list`. Pure; liefert Ordnernamen (nicht Pfade).
  */
 export function verwaisteLensWorktrees(registeredPaths, worktreesDir, namen = ladeTicketNamen()) {
@@ -488,7 +488,7 @@ export function worktreeBranchen(porcelain) {
 }
 
 /**
- * Welche lokalen Branches sind nach einem Squash-Merge sicher löschbar? Alle Bedingungen zugleich: Name `<Branch-Präfix><nr>…` (nur darunter wird je etwas gelöscht),
+ * Welche lokalen Branches sind nach einem Squash-Merge sicher löschbar? Alle Bedingungen zugleich: Name `<praefixe.branch><nr>…` (nur darunter wird je etwas gelöscht),
  * `[gone]` (Remote nach dem Merge gelöscht), in keinem Worktree ausgecheckt, und die Spitze gleicht dem Kopf-Commit eines gemergten
  * PR desselben Branch-Namens (`gemergteHeads`: `[{ headRefName, headRefOid }]`): lokale Nach-Commits bleiben also stehen.
  * Fehlt `gemergteHeads` (gh scheiterte), wird nichts gelöscht (fail-closed). `git branch --merged` erkennt Squash-Merges nicht.

@@ -66,12 +66,12 @@ const ABNAHME_TOOLS = [
 
 const SKILL = liesTicketAblauf();
 const LENSES = liesMitProjektwerten(".claude/skills/review-lenses/SKILL.md");
-const UMSETZER = liesMitProjektwerten(".claude/agents/kubernia-umsetzer.md");
+const UMSETZER = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
 const GANZE_DATEIEN: [string, string][] = [
-  [".claude/agents/kubernia-planner.md", liesMitProjektwerten(".claude/agents/kubernia-planner.md")],
-  [".claude/agents/kubernia-umsetzer.md", UMSETZER],
-  [".claude/agents/kubernia-gruppe.md", lies(".claude/agents/kubernia-gruppe.md")],
-  [".claude/agents/kubernia-lens.md", liesMitProjektwerten(".claude/agents/kubernia-lens.md")],
+  [".claude/agents/factory-planer.md", liesMitProjektwerten(".claude/agents/factory-planer.md")],
+  [".claude/agents/factory-umsetzer.md", UMSETZER],
+  [".claude/agents/factory-gruppe.md", lies(".claude/agents/factory-gruppe.md")],
+  [".claude/agents/factory-lens.md", liesMitProjektwerten(".claude/agents/factory-lens.md")],
   [".claude/skills/review-lenses/SKILL.md", LENSES],
 ];
 

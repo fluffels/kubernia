@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
 const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as besitzRaw from "../../scripts/besitz-lib.mjs";
+const PROJEKTWERT_GRUPPEN = (besitzRaw as unknown as { PROJEKTWERT_GRUPPEN: string[] }).PROJEKTWERT_GRUPPEN;
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -15,7 +18,7 @@ type Gruppen = Record<string, Record<string, string>>;
 
 /** Ersetzt `<gruppe.schluessel>` (Gruppen `agenten`, `labels`, `praefixe`) durch den Wert aus der Projekt-Config; ein unbekannter Schlüssel ist ein Fehler. */
 export function setzeProjektwerte(text: string, cfg: Gruppen): string {
-  return text.replace(/<(agenten|labels|praefixe)\.(\w+)>/g, (_m, gruppe: string, key: string) => {
+  return text.replace(new RegExp(`<(${PROJEKTWERT_GRUPPEN.join("|")})\\.(\\w+)>`, "g"), (_m, gruppe: string, key: string) => {
     const wert = cfg[gruppe]?.[key];
     if (wert === undefined) throw new Error(`Unbekannter Platzhalter <${gruppe}.${key}>`);
     return wert;

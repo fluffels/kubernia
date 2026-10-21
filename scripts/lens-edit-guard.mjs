@@ -17,6 +17,7 @@
  * Nur Node-Builtins.
  */
 import { emit, istDirektaufruf, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
+import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 // Pfadform: Groß-/Kleinschreibung egal (Windows-Pfade), der Ordnername selbst für das Aufräumen exakt (kein Flag oben).
@@ -38,7 +39,7 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
     block: true,
     reason:
       `${namen.agenten.lens} ändert nichts im Feature-Worktree: Edit ist nur im eigenen Lens-Worktree erlaubt ` +
-      `(.claude/worktrees/${namen.worktreeName("<nr>")}-lens-r<runde> bzw. ${namen.worktreeName("<nr>")}-lens-m<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${namen.agenten.lens}.md). ` +
+      `(.claude/worktrees/${namen.worktreeName("<nr>")}-lens-r<runde> bzw. ${namen.worktreeName("<nr>")}-lens-m<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
       "Ist der Lens-Worktree nicht anlegbar: Befund „Sabotage nicht möglich“ melden, kein Ersatz.",
   };
 }

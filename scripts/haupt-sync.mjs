@@ -30,10 +30,10 @@
  */
 import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
-import { KERN_TICKET_SKILL } from "./projekt-config-lib.mjs";
+import { KERN_TICKET_SKILL, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 /**
@@ -66,14 +66,8 @@ export function exitCodeFuer(ergebnis) {
   return 0;
 }
 
-/**
- * Verzeichnis des Ticket-Skills (`.claude/skills/<agenten.ticketSkill>/`) aus der Projekt-Config; `null`, wenn die Config nicht nutzbar ist
- * (kein Wurf: der Hook ist fail-open, den Grund liefert `configGrund`). `deps.config` ersetzt das Laden (Test).
- */
-export function ticketSkillVerzeichnis(deps = {}) {
-  const r = namenOderGrund("haupt-sync", deps);
-  return r.grund ? null : `.claude/skills/${r.namen.agenten.ticketSkill}/`;
-}
+/** Verzeichnis des Ticket-Skills als fester Kern-Pfad (#1748, `ROLLEN_PFADE.ticketSkill`): ohne Config, ohne IO (der Hook ist fail-open). */
+export const TICKET_SKILL_VERZEICHNIS = `${posix.dirname(ROLLEN_PFADE.ticketSkill)}/`;
 
 /** Grund, warum die Projekt-Config nicht nutzbar ist (mit Fix-Zeile), sonst `null`. Wirft nie. */
 export function configGrund(deps = {}) {
@@ -84,11 +78,11 @@ export function configGrund(deps = {}) {
 export const KERN_SKILL_VERZEICHNIS = `.claude/skills/${KERN_TICKET_SKILL}/`;
 
 /**
- * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: die Ticket-Skills (Verzeichnis aus `agenten.ticketSkill` der Projekt-Config und der Kern-Skill `factory` samt Ablauf) und die Wurzel-AGENTS.md (der Hauptchat
+ * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: die Ticket-Skills (der feste Kern-Pfad `factory-ticket/` und der Kern-Skill `factory` samt Ablauf) und die Wurzel-AGENTS.md (der Hauptchat
  * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien und
  * modul-lokale AGENTS.md; `lockGeaendert`: package-lock.json. Pur, wirft nie.
  */
-export function ordneHarnessAenderungen(dateien, skillVerzeichnis = ticketSkillVerzeichnis()) {
+export function ordneHarnessAenderungen(dateien, skillVerzeichnis = TICKET_SKILL_VERZEICHNIS) {
   const ordnung = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
   for (const d of Array.isArray(dateien) ? dateien : []) {
     if (d === "package-lock.json") ordnung.lockGeaendert = true;
@@ -241,10 +235,9 @@ export function fuehreSyncAus(dir, deps = {}) {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
       // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
-      const { namen, grund } = namenOderGrund("haupt-sync", deps);
+      const { grund } = namenOderGrund("haupt-sync", deps);
       if (grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${grund}`;
-      const skillVerzeichnis = grund ? null : `.claude/skills/${namen.agenten.ticketSkill}/`;
-      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean), skillVerzeichnis);
+      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean));
     }
   } catch (e) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;

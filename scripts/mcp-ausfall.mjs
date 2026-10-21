@@ -67,7 +67,7 @@ export function logBasis({ plattform, env, home }) {
 export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").replace(/[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/, "");
 
 /**
- * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<Worktree-Präfix>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
+ * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<praefixe.worktree>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
  * `FACTORY_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es nur den lazy gelesenen Altpräfix, keine Worktree-Angabe). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
  */
 export const standPfad = (wurzel, env, tmp, config) => umgebungsWert(env, "FACTORY_MCP_AUSFALL_STAND") || join(tmp, `${worktreePraefix(config ?? ladeProjektConfig())}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);

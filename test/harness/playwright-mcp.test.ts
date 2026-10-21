@@ -296,7 +296,7 @@ describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", 
   test("der Server nennt die Tools der FAQ und jedes mcp__playwright__-Tool der Umsetzer-Whitelist", async () => {
     const namen = new Set(await toolNamenEinmal());
     const faq = ["browser_evaluate", "browser_take_screenshot", "browser_press_key", "browser_start_video"];
-    const umsetzer = readFileSync(join(root, ".claude/agents/kubernia-umsetzer.md"), "utf8");
+    const umsetzer = readFileSync(join(root, ".claude/agents/factory-umsetzer.md"), "utf8");
     const tools = /^tools:\s*(.+)$/m.exec(umsetzer)?.[1] ?? "";
     const whitelist = tools.split(",").map((t) => t.trim()).filter((t) => t.startsWith("mcp__playwright__")).map((t) => t.slice("mcp__playwright__".length));
     assert.ok(whitelist.length >= 10, "Whitelist des Umsetzers enthält keine Playwright-Tools mehr?");

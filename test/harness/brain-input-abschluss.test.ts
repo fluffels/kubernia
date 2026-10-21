@@ -48,7 +48,7 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "brain-input im Abschluss", muster: /Skill\(\{ skill: "brain-input" \}\)/ },
     { name: "Verweis auf die Regel", muster: /AGENTS\.md § Abschluss ohne offene Befunde/ },
   ],
-  ".claude/agents/kubernia-umsetzer.md": [
+  ".claude/agents/factory-umsetzer.md": [
     { name: "Formatzeile mit Ziel-Ticket oder keine", muster: /^BEFUNDE: .*→ #<nr>.*keine/m },
     { name: "Eintragspflicht vor dem Bericht", muster: /Vor dem Bericht trägst du jeden Befund selbst ein/ },
     { name: "liegen gelassene Lens-Hinweise", muster: /liegen gelassene, zutreffende Lens-Hinweise/ },
@@ -85,7 +85,7 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
   });
 
   test("Gegenbeispiel: Umsetzer ohne Lens-Hinweis-Satz oder ohne Bekannte-Grenze-Ausnahme wird rot", () => {
-    const umsetzer = ".claude/agents/kubernia-umsetzer.md";
+    const umsetzer = ".claude/agents/factory-umsetzer.md";
     expect(abschlussLuecken(umsetzer, rohLesen(umsetzer).replace("liegen gelassene, zutreffende Lens-Hinweise", "alle Lens-Hinweise")).length).toBeGreaterThan(0);
     expect(abschlussLuecken(umsetzer, rohLesen(umsetzer).replace("„Bekannte Grenze“ (Kopfkommentar des Guards, PR-Text) sind kein Befund", "„Bekannte Grenze“ (Kopfkommentar des Guards, PR-Text) sind ein Hinweis")).length).toBeGreaterThan(0);
   });

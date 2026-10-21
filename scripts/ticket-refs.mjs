@@ -3,7 +3,7 @@
 // ohne übergebene `namen` wird die Config je Aufruf geladen, ein fehlender Schlüssel wirft (kein Standardwert).
 import { ladeTicketNamen } from "./ticket-namen.mjs";
 
-/** Ticketnummer aus einem Branch-, Worktree- oder Ref-Namen `<Branch-Präfix><nr>-…` bzw. `…worktrees/<Worktree-Präfix><nr>`; sonst null. Pur, wenn `namen` übergeben wird. */
+/** Ticketnummer aus einem Branch-, Worktree- oder Ref-Namen `<praefixe.branch><nr>-…` bzw. `…worktrees/<praefixe.worktree><nr>`; sonst null. Pur, wenn `namen` übergeben wird. */
 export function ticketAusRef(text, namen = ladeTicketNamen()) {
   return namen.ticketAus(text);
 }
@@ -14,8 +14,8 @@ export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }, name
 }
 
 /**
- * Muster eines Lens-Worktree-Namens: `<Worktree-Präfix><nr>-lens-r<runde>` (Lens-Runde) oder `<Worktree-Präfix><nr>-lens-m<n>` (Merge-Delta-Lens nach einem
- * Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `<Worktree-Präfix><nr>`.
+ * Muster eines Lens-Worktree-Namens: `<praefixe.worktree><nr>-lens-r<runde>` (Lens-Runde) oder `<praefixe.worktree><nr>-lens-m<n>` (Merge-Delta-Lens nach einem
+ * Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `<praefixe.worktree><nr>`.
  */
 export function lensWorktreeName(namen = ladeTicketNamen()) {
   return namen.lensWorktreeMuster;
