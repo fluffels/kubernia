@@ -11,7 +11,7 @@
  * des Langfuse-MCP (mehrfach nutzbar: Zählung und Tokens dürfen zwei Exporte sein).
  *
  * Das Präfix trifft nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
- * mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`, `langfuse-abgleich-kern`), damit es
+ * mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`, `langfuse-abgleich-kern`, `flag-lib`), damit es
  * später als Hook laufen kann, ohne die gh-/git-Kette von `token-baseline.mjs` mitzuziehen. Aufruf und Einordnung:
  * docs/model-routing.md › Checkliste Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
  */
@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import {
   ROW_LIMIT,
   LEDGER_NAME,
@@ -141,15 +142,10 @@ export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-abgleich.mjs --pruefen
 export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe haben den Secret-Key nicht: queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe docs/model-routing.md › Checkliste Punkt 1.";
 
 export function parseArgs(argv) {
-  const a = { pruefen: false, json: false, seit: null, session: null, ist: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (k === "--pruefen") a.pruefen = true;
-    else if (k === "--json") a.json = true;
-    else if (k === "--seit") a.seit = argv[++i];
-    else if (k === "--session") a.session = argv[++i];
-    else if (k === "--ist") a.ist.push(argv[++i]);
-  }
+  const optionen = { pruefen: { type: "boolean" }, json: { type: "boolean" }, seit: { type: "string" }, session: { type: "string" }, ist: { type: "string", multiple: true } };
+  const { werte, fehler } = flagsLesen(argv, optionen);
+  const a = { pruefen: werte.pruefen === true, json: werte.json === true, seit: werte.seit ?? null, session: werte.session ?? null, ist: werte.ist ?? [] };
+  if (fehler) a.fehler = fehler.text;
   return a;
 }
 
@@ -180,6 +176,7 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
 
 /** `--pruefen` ausführen: `{ exitCode, text }`. 0 = Bericht (auch mit Lücken: Messwerkzeug, kein Gate), 1 = Fehler beim Lesen/Abfragen, 2 = Aufruf oder Zugang fehlt. */
 export async function pruefen(args, { env = process.env, now = Date.now(), projectsRoot, repoRoot, fetchImpl = fetch, leseDatei = readFileSync, stateDir = null } = {}) {
+  if (args.fehler) return { exitCode: 2, text: `${args.fehler}\n${AUFRUFHILFE}` };
   if (!args.pruefen) return { exitCode: 2, text: AUFRUFHILFE };
   const seitMs = args.seit ? Date.parse(args.seit) : now - 7 * 86_400_000;
   if (!Number.isFinite(seitMs)) return { exitCode: 2, text: `--seit ist keine ISO-Zeit: ${args.seit}\n${AUFRUFHILFE}` };

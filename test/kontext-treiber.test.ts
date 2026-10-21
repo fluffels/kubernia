@@ -745,3 +745,19 @@ describe("Ticketliste je Gruppe: Summe über Nachfolger und Markdown-Zeilen (#15
     expect(KR.renderMarkdown(voll({ laeufe: [ohnePreis], jeTicket: true }))).toMatch(/\| #6 \| nein \| geschlossen \| ohne \| - \| 0 \| 0 \|/);
   });
 });
+
+describe("parseArgs strikt (#1790)", () => {
+  type PArgs = { agent: string; tickets: number[]; ohne: number[]; json: boolean; von?: string; bis?: string; projekt?: string; brille?: string; delta?: boolean; jeTicket?: boolean; fehler?: string };
+  const PS = (K as unknown as { parseArgs: (a: string[]) => PArgs }).parseArgs;
+  test("alle Flags gesetzt: Form ohne fehler-Feld, --ticket/--ohne wiederholbar", () => {
+    expect(PS(["--von", "v", "--bis", "b", "--agent", "x", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4", "--projekt", "p", "--brille", "Doku", "--delta", "nein", "--je-ticket", "--json"])).toEqual({ agent: "x", tickets: [1, 2], ohne: [3, 4], json: true, von: "v", bis: "b", projekt: "p", brille: "Doku", delta: false, jeTicket: true });
+    expect(PS([])).toEqual({ agent: "kubernia-umsetzer", tickets: [], ohne: [], json: false });
+  });
+  test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
+    expect(PS(["--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);
+    expect(PS(["--agent"]).fehler).toMatch(/--agent braucht einen Wert/);
+    expect(PS(["--agent", "a", "--agent", "b"]).fehler).toMatch(/--agent ist doppelt/);
+    expect(PS(["--je-ticket", "--je-ticket"]).fehler).toMatch(/--je-ticket ist doppelt/);
+    expect(PS(["--delta"]).fehler).toMatch(/--delta braucht einen Wert/);
+  });
+});

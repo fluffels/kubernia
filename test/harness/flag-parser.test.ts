@@ -30,12 +30,6 @@ export interface Ausnahme {
 
 /** Die noch nicht migrierten Skripte mit ihrem Kind-Ticket (Epic #1782). */
 export const AUSNAHMEN: Ausnahme[] = [
-  { pfad: "scripts/hauptchat-zerlegung.mjs", ticket: "#1790" },
-  { pfad: "scripts/kontext-treiber.mjs", ticket: "#1790" },
-  { pfad: "scripts/langfuse-abgleich.mjs", ticket: "#1790" },
-  { pfad: "scripts/lauf-ergebnis.mjs", ticket: "#1790" },
-  { pfad: "scripts/pr-warten.mjs", ticket: "#1790" },
-  { pfad: "scripts/subagent-laufzeit.mjs", ticket: "#1790" },
   { pfad: "scripts/abnahme.mjs", ticket: "#1791" },
   { pfad: "scripts/board-place.mjs", ticket: "#1791" },
   { pfad: "scripts/sammelticket-anlegen.mjs", ticket: "#1791" },

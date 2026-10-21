@@ -687,3 +687,20 @@ describe("Lader: nur Dateien jünger als von (#1693)", () => {
     expect(L4.ladeLaeufe(dir, "kubernia-lens")).toHaveLength(2);
   });
 });
+
+describe("parseArgs strikt (#1790)", () => {
+  const PA = S.parseArgs as unknown as (a: string[]) => { agent: string; agentGesetzt: boolean; typen: boolean; json: boolean; von?: string; bis?: string; schnitt?: string; projekt?: string; tickets: number[]; ohne: number[]; fehler?: string };
+  test("alle Flags gesetzt: Form ohne fehler-Feld", () => {
+    expect(PA(["--von", "v", "--bis", "b", "--agent", "x", "--schnitt", "s", "--projekt", "p", "--ticket", "1", "--ohne", "2", "--json"])).toEqual({ agent: "x", agentGesetzt: true, typen: false, json: true, von: "v", bis: "b", schnitt: "s", projekt: "p", tickets: [1], ohne: [2] });
+    expect(PA([])).toEqual({ agent: "kubernia-planner", agentGesetzt: false, typen: false, json: false, tickets: [], ohne: [] });
+  });
+  test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
+    expect(PA(["--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);
+    expect(PA(["--schnitt"]).fehler).toMatch(/--schnitt braucht einen Wert/);
+    expect(PA(["--ohne"]).fehler).toBe("--ohne erwartet eine Ticketnummer, nicht nichts");
+    expect(PA(["--ticket", "abc", "--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);
+    expect(PA(["--agent", "a", "--agent", "b"]).fehler).toMatch(/--agent ist doppelt/);
+    expect(PA(["--typen", "--typen"]).fehler).toMatch(/--typen ist doppelt/);
+    expect(PA(["--typen", "--agent", "a"]).fehler).toMatch(/--typen gilt für alle Typen/);
+  });
+});
