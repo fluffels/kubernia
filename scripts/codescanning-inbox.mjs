@@ -9,7 +9,10 @@
  * Bekannt (also still) ist ein Alert, wenn seine Nummer in einer offenen Zeile eines Harness-Sammeltickets (nur vertraute Autoren) steht
  * oder seine Regel als `codescanning-<slug>` in `.github/wiedervorlagen.json` steht (nur für Zeilen-Alerts; ein Spitzen-Alert bleibt nur still, wenn
  * seine Nummer im Feld `alerts` des Eintrags steht). Ein Alert mit GHSA-IDs im Meldungstext (VulnerabilitiesID) ist bekannt, wenn jede ID schon als
- * Audit-Zeile, `audit-ghsa-<id>` oder Security-Ticket eingeordnet ist.
+ * Audit-Zeile, `audit-ghsa-<id>` oder Security-Ticket eingeordnet ist. Außerdem deckt ein OFFENES Issue eines vertrauten Autors einen Alert ab
+ * (nicht Spitzen-Ticket, nicht Sammeltickets), wenn sein Body `Alert N` nennt oder die Regel-ID (Wortgrenze) samt Verzeichnis des Alert-Pfads;
+ * der Lauf loggt die Abdeckung, nach dem Schließen taucht der Alert wieder auf.
+ * Bekannte Grenze: Regel+Verzeichnis hält auch einen NEUEN Alert derselben Regel im selben Verzeichnis still, solange das deckende Issue offen ist.
  *
  * Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]   (Workflow: .github/workflows/codescanning-inbox.yml)
  * Die Funktionen oben sind pur und getestet (test/codescanning-inbox.test.ts); die Aufrufe von gh unten nicht.
@@ -17,9 +20,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
+import { LANGFUSE_SAMMELTICKET_TITEL, REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { offeneTitel as vertrauteTitel, platziereOben, postZeilen, vertrauteIssues, waehleSammelticket } from "./inbox-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
@@ -83,7 +88,7 @@ export function nummernIn(text) {
  * Bekannte Alerts: Nummern aus offenen Zeilen `- [ ] Code-Scanning:` in Kommentaren VERTRAUTER Autoren (`istVertraut`), Regeln (als Slug) aus
  * Wiedervorlagen-IDs `codescanning-<slug>`. Pur.
  */
-export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [] }) {
+export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [], offeneIssues = [] }) {
   const nummern = new Set();
   const regeln = new Set();
   const alerts = new Set();
@@ -99,8 +104,34 @@ export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel 
     if (Array.isArray(e.alerts)) e.alerts.filter(Number.isInteger).forEach((n) => alerts.add(n));
   }
   const ghsa = bekannteGhsa({ kommentare: vertrauteBodies(kommentare, owner), wiedervorlagen, offeneTitel });
-  return { nummern, regeln, alerts, ghsa };
+  const ausgenommen = new Set([ZIEL_TITEL, SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL]);
+  const issues = offeneIssues
+    .filter((i) => i && !ausgenommen.has(i.title) && istVertraut(i.user ?? null, owner))
+    .map((i) => ({ number: i.number, titel: String(i.title ?? ""), body: String(i.body ?? "") }));
+  return { nummern, regeln, alerts, ghsa, issues };
 }
+
+
+/**
+ * Das erste offene Issue (`issues` aus `bekannteAlerts`), das den Alert abdeckt: `{ number, grund }` oder null. Grund `nummer`: der Body nennt
+ * `Alert N`; `regel+verzeichnis`: der Body nennt die Regel-ID (Wortgrenze) und `dirname(pfad)/` (ohne Verzeichnis im Pfad keine Abdeckung). Pur.
+ */
+export function deckendesIssue(alert, issues) {
+  const dir = String(alert.pfad ?? "").replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+  const regel = String(alert.regel ?? "");
+  // "unbekannt" ist der Ersatzwert für eine unlesbare Regel-ID und darf nie über das bloße Wort im Body abdecken.
+  const regelRe = regel && regel !== "unbekannt" ? new RegExp(String.raw`(?<![\w/.-])${escapeRegex(regel)}(?![\w/-])`) : null;
+  const dirRe = dir ? new RegExp(String.raw`(?<![\w.-])${escapeRegex(dir)}/`) : null;
+  for (const i of issues ?? []) {
+    if (nummernIn(i.body).includes(alert.nummer)) return { number: i.number, grund: "nummer" };
+    if (regelRe && dirRe && regelRe.test(i.body) && dirRe.test(i.body)) return { number: i.number, grund: "regel+verzeichnis" };
+  }
+  return null;
+}
+
+const KOMMENTAR_LEER = "Keine offenen Code-Scanning-Befunde high/critical mehr, automatisch geschlossen.";
+const KOMMENTAR_ABGEDECKT = (nummern) =>
+  `Die offenen Code-Scanning-Befunde high/critical sind durch ${nummern.map((n) => `#${n}`).join(", ")} abgedeckt, automatisch geschlossen. Sie tauchen wieder auf, sobald das deckende Issue geschlossen ist und der Alert offen bleibt.`;
 
 const alertListe = (g) => `Alerts ${g.nummern.join(", ")}`;
 
@@ -139,17 +170,27 @@ function gruppiere(alerts) {
  * bekannte Nummer, ohne bekannte Regel und ohne vollständig bekannte GHSA-IDs, je (Tool, Regel) eine. Pur, deterministisch.
  */
 export function plane({ alerts, bekannt, offenesIssue }) {
+  const abgedeckt = [];
+  const deckt = (a) => {
+    const d = deckendesIssue(a, bekannt.issues);
+    if (d) abgedeckt.push({ nummer: a.nummer, issue: d.number, grund: d.grund });
+    return d !== null;
+  };
   const ghsaBekannt = (a) => a.ghsa?.length > 0 && a.ghsa.every((g) => bekannt.ghsa?.has(g));
   const stumm = (a) => bekannt.nummern.has(a.nummer) || bekannt.regeln.has(slug(a.regel)) || ghsaBekannt(a);
-  const spitze = gruppiere(alerts.filter((a) => klasse(a) === "spitze" && !bekannt.alerts?.has(a.nummer)));
-  const zeilen = gruppiere(alerts.filter((a) => klasse(a) === "zeile" && !stumm(a) && !bekannt.alerts?.has(a.nummer)));
-  if (spitze.length === 0) return { issue: offenesIssue ? { art: "schliessen", nummer: offenesIssue.number } : { art: "nichts" }, zeilen };
+  const spitze = gruppiere(alerts.filter((a) => klasse(a) === "spitze" && !bekannt.alerts?.has(a.nummer) && !deckt(a)));
+  const zeilen = gruppiere(alerts.filter((a) => klasse(a) === "zeile" && !stumm(a) && !bekannt.alerts?.has(a.nummer) && !deckt(a)));
+  if (spitze.length === 0) {
+    const durch = [...new Set(abgedeckt.map((x) => x.issue))].sort((x, y) => x - y);
+    const schliessen = { art: "schliessen", nummer: offenesIssue?.number, ...(durch.length > 0 ? { abgedecktDurch: durch } : {}) };
+    return { issue: offenesIssue ? schliessen : { art: "nichts" }, zeilen, abgedeckt };
+  }
   const body = issueBody(spitze);
-  if (!offenesIssue) return { issue: { art: "anlegen", body }, zeilen };
-  if (body === String(offenesIssue.body ?? "").replace(/\r\n/g, "\n")) return { issue: { art: "nichts" }, zeilen };
+  if (!offenesIssue) return { issue: { art: "anlegen", body }, zeilen, abgedeckt };
+  if (body === String(offenesIssue.body ?? "").replace(/\r\n/g, "\n")) return { issue: { art: "nichts" }, zeilen, abgedeckt };
   const alt = new Set(nummernIn(offenesIssue.body));
   const neue = spitze.flatMap((g) => g.nummern).filter((n) => !alt.has(n)).sort((a, b) => a - b);
-  return { issue: { art: "aktualisieren", nummer: offenesIssue.number, body, neue }, zeilen };
+  return { issue: { art: "aktualisieren", nummer: offenesIssue.number, body, neue }, zeilen, abgedeckt };
 }
 
 /**
@@ -181,7 +222,7 @@ export function fuehreAus({ plan, io, trocken = false }) {
       if (issue.neue.length > 0) io.kommentiere(issue.nummer, `Neu seit dem letzten Lauf: Alerts ${issue.neue.join(", ")}`);
       log(`Ticket #${issue.nummer} aktualisiert.`);
     } else if (issue.art === "schliessen") {
-      io.schliesse(issue.nummer);
+      io.schliesse(issue.nummer, issue.abgedecktDurch ? KOMMENTAR_ABGEDECKT(issue.abgedecktDurch) : KOMMENTAR_LEER);
       log(`Ticket #${issue.nummer} geschlossen.`);
     }
   } catch (err) {
@@ -206,6 +247,18 @@ export function fuehreAus({ plan, io, trocken = false }) {
   return rot ? 1 : 0;
 }
 
+/** Gruppiert `abgedeckt` nach deckendem Issue: Map Issue → { nummern, gruende }. Pur. */
+function abgedecktJeIssue(abgedeckt) {
+  const karte = new Map();
+  for (const a of [...abgedeckt].sort((x, y) => x.issue - y.issue || x.nummer - y.nummer)) {
+    const e = karte.get(a.issue) ?? { nummern: [], gruende: [] };
+    e.nummern.push(a.nummer);
+    if (!e.gruende.includes(a.grund)) e.gruende.push(a.grund);
+    karte.set(a.issue, e);
+  }
+  return karte;
+}
+
 /** Ein Lauf: lädt über `io.ladeAlerts()`/`io.ladeKontext()`, plant, führt aus. Nicht lesbare Alerts sind rot und schließen nie ein Ticket (fail-closed). */
 export function lauf({ io, trocken = false }) {
   const log = io.log ?? console.log;
@@ -214,12 +267,13 @@ export function lauf({ io, trocken = false }) {
     const alerts = alertsAus(io.ladeAlerts());
     const k = io.ladeKontext();
     plan = plane({ alerts, bekannt: bekannteAlerts(k), offenesIssue: k.offenesIssue });
+    for (const [issue, liste] of abgedecktJeIssue(plan.abgedeckt)) log(`Code-Scanning-Inbox: Alerts ${liste.nummern.join(", ")} abgedeckt durch #${issue} (${liste.gruende.join(", ")})`);
   } catch (err) {
     log(`::error::Code-Scanning-Alerts nicht lesbar: ${fehlerText(err)}`);
     return 1;
   }
   const code = fuehreAus({ plan, io, trocken });
-  if (plan.issue.art === "nichts" && plan.zeilen.length === 0) log("Code-Scanning-Inbox: nichts Neues.");
+  if (plan.issue.art === "nichts" && plan.zeilen.length === 0 && plan.abgedeckt.length === 0) log("Code-Scanning-Inbox: nichts Neues.");
   return code;
 }
 
@@ -230,6 +284,7 @@ const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad
 function main() {
   const trocken = process.argv.includes("--dry-run");
   let offene = [];
+  const harnessLabel = labelAus(ladeProjektConfig(), "harness");
   const io = {
     ladeAlerts: () => seiten(`repos/${REPO}/code-scanning/alerts?state=open&per_page=100`),
     ladeKontext: () => {
@@ -243,11 +298,11 @@ function main() {
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) console.log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
       const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${REPO}/issues/${ziele[0].number}`]).body ?? "") } : null;
-      return { offenesIssue, kommentare, owner, offeneTitel: vertrauteTitel(rohe, owner), wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) };
+      return { offenesIssue, kommentare, owner, offeneIssues: vertrauteIssues(rohe, owner), offeneTitel: vertrauteTitel(rohe, owner), wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) };
     },
     projectToken: process.env.PROJECT_TOKEN,
     log: console.log,
-    legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", REPO, "--title", titel, "--label", "area:harness", "--body", body]).trim().split("/").pop(),
+    legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", REPO, "--title", titel, "--label", harnessLabel, "--body", body]).trim().split("/").pop(),
     sortiereEin: (nr) => {
       try {
         platziereOben(nr, "security", process.env.PROJECT_TOKEN);
@@ -258,8 +313,7 @@ function main() {
     },
     aktualisiere: (nr, body) => ghText(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
     kommentiere: postZeilen,
-    schliesse: (nr) =>
-      ghText(["issue", "close", String(nr), "--repo", REPO, "--reason", "completed", "--comment", "Keine offenen Code-Scanning-Befunde high/critical mehr, automatisch geschlossen."]),
+    schliesse: (nr, kommentar = KOMMENTAR_LEER) => ghText(["issue", "close", String(nr), "--repo", REPO, "--reason", "completed", "--comment", kommentar]),
     zielSammelticket: () => waehleSammelticket(offene)?.number ?? null,
     postZeilen,
   };

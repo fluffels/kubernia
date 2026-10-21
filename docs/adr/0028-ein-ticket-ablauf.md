@@ -55,3 +55,16 @@ Die generische Mechanik bleibt: Deckel-Logik in `check:size`, der AGENTS.md-Satz
 ## Re-Evaluierung
 
 Wenn eine zweite Ablauf-Variante nachweislich gebraucht wird (ein Anwendungsfall, den der Skill-Pfad nicht abdeckt, belegt an Läufen oder einem Ticket), wird ein neuer ADR geschrieben, der den Mehrwert gegen die Doppelpflege dieses ADR abwägt.
+
+## Fortschreibung #1806 (2026-10-21): Zwei Ticket-Skills, ein Ablauf
+
+Anlass: `/kubernia` zog je nach Spielquote ein Spiel- oder ein Agentic-Ticket, und der Bereich kam aus einem Auslöser-Wort oder aus der Quote. Spiel und Agentic haben getrennte Boards, Quoten und Reviews, und der Harness wird als eigenes Repo herausgelöst ([ADR 0022](0022-dark-factory-kern-und-verteilung.md)); ein Ticket-Skill gehört dann zum Kern.
+
+Entscheidung:
+
+- Es gibt zwei Einstiege, die nur Bereich und Auslöser festlegen: der Produkt-Skill `kubernia` (`--bereich spiel`, nur Produkt-Board) und `factory` (`--bereich agentic`, nur Factory-Board). Die Notfälle 🚨 und 🔒 gelten auf beiden Boards. Die Einstiege setzen den Bereich, darum sind sie keine Zeiger-Skills im Sinn der Optionstabelle oben.
+- Der Ablauf steht einmal in `.claude/skills/factory/ablauf.md` (Ring `kern`, ohne Frontmatter, ohne Projektliterale: Agentennamen als Platzhalter `<agenten.…>`, die der Hauptchat aus `.factory/projekt.json` einsetzt). Der Wächter `test/harness/ticket-ablauf.test.ts` meldet Ablauf-Werkzeuge und wortgleiche Ablaufsätze in den Einstiegen und hält die Einstiege in Einstiegsform (keine Unterüberschrift, nur die fetten Absätze Bereich und Verweis, Rumpf höchstens 700 Zeichen). Bekannte Grenze: ein kurzer Absatz ohne Fett und Überschrift innerhalb des Rumpfbudgets bleibt unbemerkt; das Budget begrenzt ihn nur.
+- Der Produkt-Skill gehört dem Projekt (Name und Auslöser sind Projektwerte) und steht nicht im Besitz-Manifest; `factory` und der Ablauf sind Kern.
+- Name `factory`: Kurzform des Repo-Namens des Harness, im Repo schon etabliert (`.factory/`, Factory-Board), klar von `/kubernia` zu unterscheiden, kein Projektliteral.
+
+Konsequenzen: Factory-Arbeit entsteht nur noch über `/factory`; die Spielquote ist Soll und Kennzahl (Selbst-Audit), siehe [ADR 0016](0016-langfuse-takt-woechentlich.md). Laufende Sessions sehen `/factory` womöglich erst nach einem Neustart.

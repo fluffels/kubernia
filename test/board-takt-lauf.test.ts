@@ -344,7 +344,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
         addToBoardTodo: (_r: string, id: string) => `PVTI_${id}`,
         log: () => undefined,
       };
-      const r = W.nimmFehlendeAuf({ offene: [{ number: 20 }, { number: 21 }], listen: { produkt: [], factory: [] }, token: "t" }, io);
+      const r = W.nimmFehlendeAuf({ offene: [{ number: 20 }, { number: 21 }], listen: { produkt: [], factory: [] }, token: "t", config: CFG }, io);
       expect(r.listen.factory.map((i) => i.number)).toEqual([20]);
       expect(r.listen.produkt.map((i) => i.number)).toEqual([21]);
     });

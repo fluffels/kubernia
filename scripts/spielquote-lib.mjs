@@ -4,7 +4,7 @@
  * damit der Takt (Sammelticket nach vorn) und die Auswahl (welche Seite ist dran) dieselbe Zählung benutzen.
  * Ein Factory-Merge ist ein Commit auf main, dessen Titel ein Issue mit dem Harness-Label der Config referenziert (`istHarnessCommit`); Bots zählen nicht.
  */
-import { alsDatum } from "./board-lib.mjs";
+import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
 
 /** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
 export const SPIEL_QUOTE = 3;
@@ -88,4 +88,37 @@ export function entscheideSeite({ produktMerges, factoryInArbeit = null }) {
   if (!Number.isInteger(produktMerges) || produktMerges < 0) throw new Error(`produktMerges muss eine ganze Zahl ≥ 0 sein, war ${String(produktMerges)}`);
   const seite = produktMerges >= SPIEL_QUOTE ? "factory" : "produkt";
   return { seite, grund: `${produktMerges} Produkt-Merges seit dem letzten Factory-Merge (Spielquote 1:${SPIEL_QUOTE})` };
+}
+
+/**
+ * Der Sammelticket-Stand aus einer Issue-Liste `[{ number, title, state, closedAt, assignees }]` (state ohne Groß/Klein, assignees eine Liste
+ * oder fehlend): `abschluss` = jüngstes geschlossenes Harness-Sammelticket mit gültigem `closedAt` (`{ number, closedAt }` oder null),
+ * `sammelIssues` = Nummern aller Sammeltickets beider Titel (offen wie geschlossen), `inArbeit` = Nummer eines offenen Harness-Sammeltickets
+ * mit Assignee oder null. Das Langfuse-Sammelticket zählt nur zu `sammelIssues`. Wirft, wenn `issues` keine Liste ist. Pur.
+ */
+export function sammelStand(issues) {
+  if (!Array.isArray(issues)) throw new Error("issues muss eine Liste sein.");
+  const sammel = issues.filter((i) => SAMMELTICKET_TITEL_LISTE.includes(i?.title));
+  const harness = sammel.filter((i) => i.title === SAMMELTICKET_TITEL);
+  const status = (i) => String(i.state ?? "").toLowerCase();
+  const abschluss = harness
+    .filter((i) => status(i) === "closed" && Number.isFinite(Date.parse(i.closedAt)))
+    .sort((a, b) => Date.parse(b.closedAt) - Date.parse(a.closedAt))[0];
+  const inArbeit = harness.find((i) => status(i) === "open" && (i.assignees ?? []).length > 0);
+  return {
+    abschluss: abschluss ? { number: abschluss.number, closedAt: abschluss.closedAt } : null,
+    sammelIssues: new Set(sammel.map((i) => i.number)),
+    inArbeit: inArbeit?.number ?? null,
+  };
+}
+
+/** gh-Argumente für die geschlossenen Issues mit dem Harness-Label ab `seit` (ISO), paginiert und gesammelt. Pur. */
+export function harnessIssuesAnfrage({ repo, label, seit }) {
+  return ["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=${encodeURIComponent(label)}&since=${seit}&per_page=100`];
+}
+
+/** Nummern (ohne Pull Requests) aus der Antwort von `harnessIssuesAnfrage`; wirft bei falscher Form (keine Liste von Seiten). Pur. */
+export function harnessIssuesAus(seiten) {
+  if (!Array.isArray(seiten)) throw new Error("Unerwartete Antwortform der geschlossenen Harness-Issues (keine Liste von Seiten).");
+  return new Set(seiten.flat().filter((i) => i && !i.pull_request).map((i) => i.number));
 }

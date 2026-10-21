@@ -7,6 +7,9 @@ import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/langfuse-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ladeProjektConfig as ladeConfigRoh } from "../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (): Record<string, unknown> => (ladeConfigRoh as () => Record<string, unknown>)();
 
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Entscheidung = { aktion: "anlegen" | "nach-oben" | "nichts"; nr?: number; grund: string; warnungen: string[] };
@@ -289,6 +292,7 @@ describe("fuehreStatusAus: Fehlertext beim Setzen der Board-Position (#1609)", (
           repo: "o/r",
           token: "t",
           items: [],
+          config: ladeProjektConfig(),
           io: {
             gh: () => ({ node_id: "N" }),
             imBoardAnlegen: () => "I",
@@ -307,5 +311,33 @@ describe("fuehreStatusAus: Fehlertext beim Setzen der Board-Position (#1609)", (
     expect(text).toContain("zweite Zeile");
     expect(text).toContain("gh: HTTP 502");
     expect(text).toMatch(/\nDie Wiederholung ist idempotent und legt kein zweites Ticket an\.$/);
+  });
+});
+
+describe("fuehreStatusAus: Label und Board aus der übergebenen Config (#1798)", () => {
+  const F = (raw as unknown as { fuehreStatusAus: (e: unknown, c: unknown) => { ok: boolean } }).fuehreStatusAus;
+  const lauf = (config: unknown) => {
+    const api: string[][] = [];
+    const orig = console.log;
+    console.log = () => {};
+    try {
+      F(
+        { aktion: "anlegen" },
+        {
+          repo: "o/r", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "t", items: [], config,
+          io: { gh: (a: string[]) => (api.push(a), { number: 5, node_id: "N" }), imBoardAnlegen: () => "I", setze: () => {} },
+        },
+      );
+    } finally {
+      console.log = orig;
+    }
+    return api.flat();
+  };
+  test("das Label der Config (nicht das echte Literal) wird beim Anlegen gesendet", () => {
+    expect(lauf({ labels: { harness: "bereich:fabrik" } })).toContain("labels[]=bereich:fabrik");
+  });
+  test("ohne Config oder ohne labels.harness wirft die Funktion", () => {
+    expect(() => lauf(undefined)).toThrow(/labels\.harness[\s\S]*Fix:/);
+    expect(() => lauf({ labels: {} })).toThrow(/labels\.harness[\s\S]*Fix:/);
   });
 });

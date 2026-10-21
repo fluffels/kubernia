@@ -76,8 +76,11 @@ export function configGrund(deps = {}) {
   return namenOderGrund("haupt-sync", deps).grund ?? null;
 }
 
+/** Verzeichnis des Kern-Ticket-Skills samt gemeinsamem Ablauf (#1806): zählt immer als Skill, unabhängig von der Projekt-Config. */
+export const KERN_SKILL_VERZEICHNIS = ".claude/skills/factory/";
+
 /**
- * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: der Ticket-Skill (Verzeichnis aus `agenten.ticketSkill` der Projekt-Config) und die Wurzel-AGENTS.md (der Hauptchat
+ * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: die Ticket-Skills (Verzeichnis aus `agenten.ticketSkill` der Projekt-Config und der Kern-Skill `factory` samt Ablauf) und die Wurzel-AGENTS.md (der Hauptchat
  * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien und
  * modul-lokale AGENTS.md; `lockGeaendert`: package-lock.json. Pur, wirft nie.
  */
@@ -85,7 +88,7 @@ export function ordneHarnessAenderungen(dateien, skillVerzeichnis = ticketSkillV
   const ordnung = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
   for (const d of Array.isArray(dateien) ? dateien : []) {
     if (d === "package-lock.json") ordnung.lockGeaendert = true;
-    else if (d === "AGENTS.md" || (skillVerzeichnis !== null && d.startsWith(skillVerzeichnis))) ordnung.skill.push(d);
+    else if (d === "AGENTS.md" || d.startsWith(KERN_SKILL_VERZEICHNIS) || (skillVerzeichnis !== null && d.startsWith(skillVerzeichnis))) ordnung.skill.push(d);
     else if (d.startsWith(".claude/agents/")) ordnung.agenten.push(d);
     else if (d.startsWith(".claude/") || /(^|\/)AGENTS\.md$/.test(d)) ordnung.sonstige.push(d);
   }

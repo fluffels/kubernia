@@ -195,6 +195,12 @@ describe("zerlegeHauptchat: Start-Art", () => {
     assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("kubernia")), call(2, OPUS, claim(1))]), "Skill-Tool");
     assert.equal(art([user(0, "mach #1"), call(1, OPUS, claim(1))]), "frei");
   });
+  test("der Kern-Ticket-Skill factory zählt wie kubernia, ein anderer Skill bleibt frei (#1806)", () => {
+    assert.equal(art([slash(0, "factory"), call(1, SONNET, claim(1))]), "Slash");
+    assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("factory")), call(2, OPUS, claim(1))]), "Skill-Tool");
+    assert.equal(art([slash(0, "forum"), call(1, SONNET, claim(1))]), "frei");
+    assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("forum")), call(2, OPUS, claim(1))]), "frei");
+  });
 });
 
 describe("zerlegeHauptchat: Subagenten", () => {

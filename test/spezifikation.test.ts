@@ -295,11 +295,12 @@ describe("fuehreAus", () => {
 });
 
 describe("ankerPruefung: erst nur das Ziel-Board, das andere nur bei Bedarf (#1762 L20c)", () => {
-  const P = (raw as unknown as { ankerPruefung: (a: { nach: number; labels: string[] }, lade: (rolle: string) => { number: number }[]) => string | null }).ankerPruefung;
+  const CFG = { labels: { harness: "area:harness" } };
+  const P = (raw as unknown as { ankerPruefung: (a: { nach: number; labels: string[] }, lade: (rolle: string) => { number: number }[], config?: unknown) => string | null }).ankerPruefung;
   const boards: Record<string, { number: number }[]> = { produkt: [{ number: 1 }], factory: [{ number: 2 }] };
   const zaehle = (nach: number, labels: string[]) => {
     const geladen: string[] = [];
-    const r = P({ nach, labels }, (rolle) => (geladen.push(rolle), boards[rolle]));
+    const r = P({ nach, labels }, (rolle) => (geladen.push(rolle), boards[rolle]), CFG);
     return { r, geladen };
   };
 

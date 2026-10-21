@@ -17,10 +17,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
-import { REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE } from "./board-lib.mjs";
+import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { claimNummer, median } from "./mess-lib.mjs";
-import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, istHarnessCommit, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
 /** Nacharbeitsfenster von `lauf-ergebnis.mjs` (NACHARBEIT_TAGE dort; ein Einstiegsskript importiert das andere nicht, Test `vertrag` hält beide gleich). */
@@ -224,13 +225,14 @@ export const QUOTE_MIN_MERGES = 4;
 
 const nrListe = (zs) => zs.map((z) => `#${z.pr}`).join(", ");
 
-function auditQuote(commits, luecke) {
+function auditQuote(commits, luecke, harnessIssues, harnessLuecke) {
   const soll = `höchstens 1 Factory- auf ${SPIEL_QUOTE} Produkt-Merges`;
-  if (luecke) return { mechanismus: "Spielquote", messung: luecke, soll, status: "Lücke" };
+  const grund = luecke ?? harnessLuecke;
+  if (grund) return { mechanismus: "Spielquote", messung: grund, soll, status: "Lücke" };
   const ticket = commits.filter((c) => zaehleTicketMerges([c]) === 1);
-  const harness = ticket.filter((c) => istHarnessCommit(c, null)).length;
+  const harness = ticket.filter((c) => istHarnessCommit(c, harnessIssues)).length;
   const spiel = ticket.length - harness;
-  const messung = `${harness} Factory- auf ${spiel} Produkt-Merges seit dem letzten Sammelticket-Abschluss (Zuordnung nach Commit-Scope)`;
+  const messung = `${harness} Factory- auf ${spiel} Produkt-Merges seit dem letzten Sammelticket-Abschluss (${harnessIssues ? "Zuordnung nach Label der referenzierten Issues" : "Rückfall: Zuordnung nach Commit-Scope"})`;
   if (ticket.length < QUOTE_MIN_MERGES) return { mechanismus: "Spielquote", messung: `${messung}, nur ${ticket.length} Merges: keine Aussage`, soll, status: "Lücke" };
   return { mechanismus: "Spielquote", messung, soll, status: harness * SPIEL_QUOTE <= spiel ? "ok" : "ABWEICHUNG" };
 }
@@ -270,13 +272,13 @@ function auditLens(zeilen) {
  * Selbst-Audit: je Mechanismus (Spielquote, Härtungs-Takt, Festgefahren-Protokoll, Lens-Zahl) eine Messung gegen das Ziel, als
  * `{ mechanismus, messung, soll, status: "ok" | "ABWEICHUNG" | "Lücke" }`. `commits` = Commits von main seit dem Abschluss des letzten Sammeltickets
  * (`null` plus `commitsLuecke` = Grund, wenn nicht ladbar), `sammelAbschluss` = dessen Abschlusszeit, `sammelIssues` = Nummern
- * aller Sammeltickets, `sammelInArbeit` = Nummer eines geclaimten offenen Sammeltickets oder null, `zeilen` = Zeilen von `lauf-ergebnis --json`
+ * aller Sammeltickets, `sammelInArbeit` = Nummer eines geclaimten offenen Sammeltickets oder null, `harnessIssues` = Nummern geschlossener Harness-Issues (Quote-Zuordnung, null: Rückfall auf den Scope), `harnessLuecke` = Grund, wenn nicht ladbar (nur die Quote wird Lücke), `zeilen` = Zeilen von `lauf-ergebnis --json`
  * (`null` ohne). Fehlende Daten sind immer eine Lücke mit Grund, nie 0. Pur.
  */
-export function selbstAudit({ commits = null, commitsLuecke = null, sammelAbschluss = null, sammelIssues = new Set(), sammelInArbeit = null, zeilen = null }) {
+export function selbstAudit({ commits = null, commitsLuecke = null, sammelAbschluss = null, sammelIssues = new Set(), sammelInArbeit = null, harnessIssues = null, harnessLuecke = null, zeilen = null }) {
   const luecke = Array.isArray(commits) ? null : (commitsLuecke ?? "Commits von main nicht geladen");
   return [
-    auditQuote(commits, luecke),
+    auditQuote(commits, luecke, harnessIssues, harnessLuecke),
     auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }),
     auditFestgefahren(zeilen),
     auditLens(zeilen),
@@ -288,30 +290,35 @@ export function auditAbschnitt(audit) {
   return audit.map((a) => `- ${a.mechanismus}: ${a.messung} · Soll: ${a.soll} · ${a.status}`);
 }
 
+/** Die Nummern geschlossener Harness-Issues für die Quote-Zuordnung; ein Fehler (auch fehlendes `labels.harness`) wird zur `harnessLuecke`. */
+function ladeHarnessIssues({ gh, repo, config, seit }) {
+  try {
+    return { harnessIssues: harnessIssuesAus(gh(harnessIssuesAnfrage({ repo, label: labelAus(config, "harness"), seit }))) };
+  } catch (err) {
+    return { harnessIssues: null, harnessLuecke: `Harness-Issues nicht ladbar: ${fehlerText(err, 200)}` };
+  }
+}
+
 /**
- * Lädt die Rohdaten des Selbst-Audits mit zwei gh-Aufrufen (Sammeltickets mit `--limit`, Commits von main seit deren letztem Abschluss paginiert;
- * keine Modell-Tokens). `gh` ist injizierbar. Ein Ladefehler wird zur Lücke mit Grund (`commitsLuecke`), nie zu leeren Daten.
+ * Lädt die Rohdaten des Selbst-Audits mit drei gh-Aufrufen (Sammeltickets mit `--limit`, Commits von main seit deren letztem Abschluss und geschlossene Harness-Issues ab dann minus 1 Tag, paginiert;
+ * keine Modell-Tokens). `gh` ist injizierbar. Ein Ladefehler wird zur Lücke mit Grund (`commitsLuecke`, bei den Harness-Issues `harnessLuecke`), nie zu leeren Daten.
  */
-export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO } = {}) {
+export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = null } = {}) {
   let issues;
   try {
     issues = gh(["issue", "list", "--repo", repo, "--state", "all", "--search", "in:title \"gesammelt\"", "--json", "number,title,state,closedAt,assignees", "--limit", "200"]);
   } catch (err) {
     return { commits: null, commitsLuecke: `Sammeltickets nicht ladbar: ${fehlerText(err, 200)}` };
   }
-  const sammel = issues.filter((i) => SAMMELTICKET_TITEL_LISTE.includes(i.title));
-  const sammelIssues = new Set(sammel.map((i) => i.number));
-  const geschlossen = sammel
-    .filter((i) => i.title === SAMMELTICKET_TITEL && i.state === "CLOSED" && gueltig(i.closedAt))
-    .sort((a, b) => Date.parse(b.closedAt) - Date.parse(a.closedAt));
-  const sammelAbschluss = geschlossen[0]?.closedAt ?? null;
-  const inArbeit = sammel.find((i) => i.title === SAMMELTICKET_TITEL && i.state === "OPEN" && (i.assignees ?? []).length > 0);
-  const rest = { sammelAbschluss, sammelIssues, sammelInArbeit: inArbeit?.number ?? null };
+  const stand = sammelStand(issues);
+  const sammelAbschluss = stand.abschluss?.closedAt ?? null;
   const since = sammelAbschluss ? new Date(Date.parse(sammelAbschluss) + 60_000).toISOString() : new Date(Date.parse(bis) - 28 * TAG_MS).toISOString();
+  const rest = { sammelAbschluss, sammelIssues: stand.sammelIssues, sammelInArbeit: stand.inArbeit };
+  const harnessSeit = new Date(Date.parse(since) - TAG_MS).toISOString();
   try {
     const seiten = gh(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${since}&per_page=100`]);
     const commits = seiten.flat().filter((c) => !gueltig(c?.commit?.committer?.date) || Date.parse(c.commit.committer.date) <= Date.parse(bis));
-    return { commits, ...rest };
+    return { commits, ...rest, ...ladeHarnessIssues({ gh, repo, config, seit: harnessSeit }) };
   } catch (err) {
     return { commits: null, commitsLuecke: `Commits von main nicht ladbar: ${fehlerText(err, 200)}`, ...rest };
   }
@@ -384,6 +391,15 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
   return { bericht: b, exit: lauf.luecke || nacharbeit.luecke ? 2 : 0 };
 }
 
+/** Die Projekt-Config oder null: ein Ladefehler macht nur die Quote zur Lücke (`labelAus` nennt den Fix), nie den ganzen Bericht kaputt. */
+function configOderNull() {
+  try {
+    return ladeProjektConfig();
+  } catch {
+    return null;
+  }
+}
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.fehler) {
@@ -392,7 +408,7 @@ function main(argv) {
   }
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
-  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: ladeAuditDaten });
+  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, { config: configOderNull() }) });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);
 }
