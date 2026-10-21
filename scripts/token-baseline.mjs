@@ -19,6 +19,8 @@
  *
  * Projekt-Brain-Kennzahlen (#1205): Tool-Events beider Quellen → `brain` (scripts/brain-metrics.mjs).
  *
+ * Exit: 0 ok, 2 Aufruf-Fehler (`AUFRUF_EXIT`), 1 Laufzeitfehler.
+ *
  * Bewusst NICHT in `npm run verify` (liest lokale Transkripte bzw. braucht Netz
  * und gh-Auth). Die Auswertung ist pure/exportiert und ohne IO getestet; die
  * dünnen IO-Helfer (Dateisuche, gh) sind bewusst ungetestet.
@@ -27,6 +29,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeCommitZeilen } from "./slice-override.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
@@ -550,18 +553,15 @@ export function langfuseZugang(env) {
   );
 }
 
+const AUFRUF = "Aufruf: node scripts/token-baseline.mjs --session <id> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json]";
+
+/** Argumente; ein Aufruf-Fehler wirft (`main` meldet ihn mit Aufrufzeile und Exit `AUFRUF_EXIT`). */
 export function parseArgs(argv) {
-  const a = { sessions: [], json: false, langfuse: false };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (k === "--session") a.sessions.push(argv[++i]);
-    else if (k === "--issue") a.issue = argv[++i];
-    else if (k === "--pr") a.pr = argv[++i];
-    else if (k === "--json") a.json = true;
-    else if (k === "--langfuse") a.langfuse = true;
-    else if (k === "--from") a.from = argv[++i];
-    else throw new Error(`Unbekanntes Argument: ${k}`);
-  }
+  const optionen = { session: { type: "string", multiple: true }, issue: { type: "string" }, pr: { type: "string" }, from: { type: "string" }, json: { type: "boolean" }, langfuse: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen);
+  if (fehler) throw new Error(fehler.text);
+  const a = { sessions: werte.session ?? [], json: werte.json === true, langfuse: werte.langfuse === true };
+  for (const k of ["issue", "pr", "from"]) if (werte[k] !== undefined) a[k] = werte[k];
   return a;
 }
 
@@ -606,12 +606,17 @@ export async function ladeLangfuseSession(sessionId, opts) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  let args;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error(`${err.message}
+${AUFRUF}`);
+    process.exit(AUFRUF_EXIT);
+  }
   if (args.sessions.length === 0) {
-    console.error(
-      "Aufruf: node scripts/token-baseline.mjs --session <id> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json]",
-    );
-    process.exit(2);
+    console.error(AUFRUF);
+    process.exit(AUFRUF_EXIT);
   }
   const run = await loadRun(args);
   const loop = args.pr ? prInfo(args.pr) : {};
