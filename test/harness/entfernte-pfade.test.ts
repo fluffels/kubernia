@@ -44,6 +44,7 @@ export const RESTE: { name: string; muster: RegExp }[] = [
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
 export const AUSNAHMEN: { praefix: string; grund: string }[] = [
   { praefix: "docs/adr/", grund: "ADRs sind historisch und werden nie umgeschrieben (AGENTS.md § Projekt-Brain pflegen)" },
+  { praefix: "docs/referenz/befehle.md", grund: "das Inventar der Umgebungsvariablen nennt die Altnamen bewusst in einer eigenen Spalte (#1824)" },
   { praefix: "test/harness/model-routing.test.ts", grund: "Absenz-Test: prüft, dass die entfernten Dateien nicht mehr existieren (ADR 0028)" },
   { praefix: "test/harness/entfernte-pfade.test.ts", grund: "dieser Wächter trägt die Muster selbst" },
 ];
