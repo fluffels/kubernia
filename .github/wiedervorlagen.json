@@ -46,5 +46,11 @@
     "faellig": "2026-10-28",
     "titel": "Planer-Kosten nach #1801 nachmessen",
     "text": "`node scripts/subagent-laufzeit.mjs --agent kubernia-planner --von 2026-10-19T16:07:21Z --json` auswerten (Ø Kosten je Lauf, n). Stand 2026-10-21: n=4, Ø 1,07 $. n ≥ 10 und Ø ≤ 0,82 $ (Basis 0,80 $): Eintrag löschen. Ø > 0,82 $: eigenes Ticket mit Ursachenzerlegung (Requests, max. Kontext, Kosten je Request, Ticket-Mix; Vorbild: Absatz „Nachmessung #1775“ in docs/model-routing.md). n < 10 (egal bei welchem Ø): einmalig den Eintrag löschen und einen neuen mit neuer id (`planer-kosten-nach-1801-2`) und +7 Tagen anlegen (dieselbe id fände das geschlossene Ticket und legte kein neues an); ist n dann weiter < 10, mit dem Stand im Ergebnis-Kommentar des Tickets entscheiden: Ø > 0,82 $ eigenes Ticket, sonst Eintrag löschen."
+  },
+  {
+    "id": "review-verfahren-anpassen",
+    "faellig": "2027-01-21",
+    "titel": "Review-Verfahren an aktuelle Modelle und Standards anpassen",
+    "text": "Das Prüfverfahren (Brillen, Cap, Zusatzpässe ohne Rückfrage, Abnahme) an aktuelle Modelle und Standards anpassen: `node scripts/lauf-ergebnis.mjs --von <letzter Prüftermin> --bis <heute>` auswerten (Lens-Trefferquote: Blocker je Brille, Anteil `runden>3`, Folge-#-Commits nach Zusatzpässen), neue Modelle und Review-Verfahren recherchieren, Änderungen nach ADR 0027 (Evidenz, Ledger-Zeile). Danach `faellig` um 3 Monate verschieben, die id bleibt."
   }
 ]
