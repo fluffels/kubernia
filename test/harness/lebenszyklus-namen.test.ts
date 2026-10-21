@@ -134,7 +134,7 @@ describe("worktree-aufraeumen: Präfixe aus der Config", () => {
     const gemergt = refs.map((r) => ({ headRefName: r.name, headRefOid: sha }));
     expect(A.aufraeumbareBranches({ refs, worktreeBranches: [], gemergteHeads: gemergt, namen: NAMEN })).toEqual(["feature/ab-1-a"]);
   });
-  test("branchesAufraeumen fragt git nach refs/heads/<Branch-Präfix>*", () => {
+  test("branchesAufraeumen fragt git nach refs/heads/<praefixe.branch>*", () => {
     const befehle: string[][] = [];
     const git = (a: string[]) => {
       befehle.push(a);
@@ -376,7 +376,7 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
     expect(M.standPfad("/dev/proj", {}, "/tmp", nurWt)).toContain(join("/tmp", "ab-mcp-ausfall-"));
     expect(() => M.standPfad("/dev/proj", {}, "/tmp", { praefixe: { branch: "feature/ab-" }, agenten: AB.agenten })).toThrow(/praefixe\.worktree/);
   });
-  test("standPfad: <Präfix>mcp-ausfall-…; ohne Schlüssel Abbruch; die Umgebungsvariable gewinnt", () => {
+  test("standPfad: <praefixe.worktree>mcp-ausfall-…; ohne Schlüssel Abbruch; die Umgebungsvariable gewinnt", () => {
     expect(M.standPfad("/dev/proj", {}, "/tmp", AB)).toContain(join("/tmp", "ab-mcp-ausfall-"));
     expect(() => M.standPfad("/dev/proj", {}, "/tmp", OHNE_WT)).toThrow(/praefixe\.worktree/);
     expect(M.standPfad("/dev/proj", { FACTORY_MCP_AUSFALL_STAND: "/y/s.json" }, "/tmp", OHNE_WT)).toBe("/y/s.json");

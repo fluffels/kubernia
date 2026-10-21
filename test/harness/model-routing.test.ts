@@ -760,7 +760,7 @@ describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
 /**
  * Prosa-Wächter für die Weichen-Regel auf dem Skill-Pfad (#1311): „Weichen selbst entscheiden, Rückfrage nur
  * bei Irreversiblem oder Außenwirkung“. Der Skill-Pfad hat nur
- * Text (kubernia/SKILL.md Schritt 3, Planer Abschnitt 7, Umsetzer „entscheidung-noetig“). Ein Prädikat je Stelle,
+ * Text (`.claude/skills/factory/ablauf.md` Schritt 3, Planer Abschnitt 7, Umsetzer „entscheidung-noetig“). Ein Prädikat je Stelle,
  * jeweils mit rotem Gegenbeispiel.
  */
 const skillSchritt3 = (md: string): string => /^3\. \*\*Pre-Flight\*\*[^\n]*/m.exec(md)?.[0] ?? "";

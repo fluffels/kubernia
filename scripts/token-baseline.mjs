@@ -553,7 +553,7 @@ function ohnePreisZeile(summary) {
 export function langfuseZugang(env) {
   return zugangAus(
     env,
-    "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe haben den Secret-Key nicht: dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe docs/model-routing.md › Checkliste Punkt 1.",
+    "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe docs/model-routing.md › Checkliste Punkt 1.",
   );
 }
 

@@ -99,7 +99,7 @@ describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", 
     assert.equal(L.lockVerzeichnis({ gemeinsam: "/g", praefixWorktree: "zd-" }).replace(/\\/g, "/"), "/g/zd-locks");
   });
 
-  test("lockDir der echten Deps liegt im gemeinsamen git-Verzeichnis unter <Präfix>locks", () => {
+  test("lockDir der echten Deps liegt im gemeinsamen git-Verzeichnis unter <praefixe.worktree>locks", () => {
     echt ??= M.echteDeps();
     assert.match(String(echt.lockDir).replace(/\\/g, "/"), /\/\.git\/kq-locks$|\/kq-locks$/);
   });

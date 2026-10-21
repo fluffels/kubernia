@@ -141,7 +141,7 @@ export function renderMarkdown(bewertungen, sum) {
 }
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]";
-export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe haben den Secret-Key nicht: queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe docs/model-routing.md › Checkliste Punkt 1.";
+export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe docs/model-routing.md › Checkliste Punkt 1.";
 
 export function parseArgs(argv) {
   const optionen = { pruefen: { type: "boolean" }, json: { type: "boolean" }, seit: { type: "string" }, session: { type: "string" }, ist: { type: "string", multiple: true } };
