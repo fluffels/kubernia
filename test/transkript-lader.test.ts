@@ -123,7 +123,7 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
 
   test("ein einmal iterierbarer Generator liefert dasselbe Ergebnis wie ein Array", () => {
     const dir = join(root(), "d");
-    const config = rawProjekt.ladeProjektConfig();
+    const config = (rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
     const ausGenerator = HC.zerlegeHauptchat({ sessions: T.ladeSessions(dir), config });
     const ausArray = HC.zerlegeHauptchat({ sessions: [...T.ladeSessions(dir)], config });
     expect(ausGenerator).toEqual(ausArray);

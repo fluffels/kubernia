@@ -17,7 +17,7 @@ import * as rawGuard from "../../scripts/forum-leser-guard.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawQ from "../../scripts/forum-quarantaene.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../../scripts/projekt-config-lib.mjs";
+import * as rawConfig from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 
@@ -34,7 +34,7 @@ const Q = rawQ as unknown as {
   quarantaeneText: (d: Disc, s: (t: string, body: boolean) => string, nonce: string) => string;
 };
 /** Der Kern lädt die Config nie selbst; der Einstiegspunkt reicht sie durch, die Tests die echte. */
-const ECHT = ladeProjektConfig() as unknown;
+const ECHT = (rawConfig as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 const fm = parseFrontmatter as (md: string) => Record<string, string>;
 

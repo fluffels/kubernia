@@ -348,17 +348,17 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
   });
 
   test("Negativfall: ohne übergebene Config lädt der Kern keine selbst und blockiert fail-closed (auch für fremde Agenten, wie bei unbrauchbarer Config)", () => {
-    const g = abschluss.abschlussBlockade({ hookEvent: "SubagentStop", agentType: "Explore", lastMessage: "x" }, {} as never);
+    const g = abschluss.abschlussBlockade({ hookEvent: "SubagentStop", agentType: "Explore", lastMessage: "x" }, {});
     assert.match(g ?? "", /fail-closed/);
     assert.match(g ?? "", /keine Config übergeben/);
     // andere Ereignisse und Tools bleiben frei, sie brauchen keine Config
-    assert.equal(abschluss.abschlussBlockade({ hookEvent: "Stop", agentType: "Explore", lastMessage: "x" }, {} as never), null);
+    assert.equal(abschluss.abschlussBlockade({ hookEvent: "Stop", agentType: "Explore", lastMessage: "x" }, {}), null);
   });
   test("Negativfall: der Einstiegspunkt pretooluse-hook lädt die Config und blockiert bei unbrauchbarem Pfad fail-closed", () => {
     const payload = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: "x", tool_input: { message: "ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine" } });
     const deny = preHookRaw.dispatch(payload, "/x", undefined, undefined, { pfad: "/gibt/es/nicht.json" });
     assert.equal(deny?.hookSpecificOutput.permissionDecision, "deny");
-    assert.match(deny?.hookSpecificOutput.permissionDecisionReason ?? "", /fail-closed/);
+    assert.match((deny as unknown as { hookSpecificOutput: { permissionDecisionReason: string } }).hookSpecificOutput.permissionDecisionReason, /fail-closed/);
   });
   test("Negativfall: eine Config ohne labels.festgefahren blockiert fail-closed mit Fix-Zeile, ohne zu werfen, in Wächter und beiden Hooks (kein stiller Standardwert)", () => {
     const echt = ladeProjektConfig() as unknown as { labels: Record<string, string>; agenten: { umsetzer: string } };
