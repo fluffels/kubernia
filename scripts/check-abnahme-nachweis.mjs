@@ -167,12 +167,13 @@ function pruefe({ git, gh, env, config, zeilen, base }) {
     if (issue?.pull_request) return [`#${nummern[0]} im PR-Body ist ein PR, kein Ticket.`];
     ticket = { nr: nummern[0], kriterien: kriterien(issue?.body ?? "") };
   }
+  const abnahmeHead = nachweis.abnahme?.art === "urteil" ? leseAbnahmeHead(git, base, nachweis.abnahme.head, nachweis.review?.head) : null;
   let marker = null;
   if (nachweis.abnahme?.art === "urteil") {
-    if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return ["PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
+    // Ohne PR-Nummer bleibt es rot (fail-closed), zeigt aber vorher die Head-Fehler (Konflikt-Merge hinter der Abnahme), damit der lokale Lauf sie sieht.
+    if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return [...bewerteHead(nachweis.abnahme, nachweis.review, abnahmeHead), "PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
     marker = vertrauterMarker(issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo), owner, zeilen);
   }
-  const abnahmeHead = nachweis.abnahme?.art === "urteil" ? leseAbnahmeHead(git, base, nachweis.abnahme.head, nachweis.review?.head) : null;
   return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen });
 }
 

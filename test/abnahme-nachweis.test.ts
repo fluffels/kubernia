@@ -315,13 +315,13 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
     const neueBasis = nachher(dir);
     return { dir, basis: neueBasis || basis, abn: abnahmeSha };
   }
-  const pruefe = (r: { dir: string; basis: string; abn: string }) => {
+  const pruefe = (r: { dir: string; basis: string; abn: string }, env: Record<string, string> = {}) => {
     const abn = r.abn;
     const kommentar = { user: { login: "owner", type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${abn} urteil=K1:erfuellt -->` };
     return m.checkAbnahmeNachweis({
       runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }),
       gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: "## Akzeptanzkriterien\n1. eins\n" }),
-      env: { FACTORY_DIFF_BASE: r.basis, FACTORY_PR_BODY: "Closes #9", FACTORY_PR_NUMBER: "42" },
+      env: { FACTORY_DIFF_BASE: r.basis, FACTORY_PR_BODY: "Closes #9", FACTORY_PR_NUMBER: "42", ...env },
       ladeConfig: () => CONFIG,
     });
   };
@@ -364,6 +364,14 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
   });
   test("Konflikt-Merge nach dem Abnahme-head ist rot", () => {
     rot(pruefe(repo(mergeVonMain("a.txt", "SEITE\n", "aufgeloest\n"))).fehler, /Konflikt-Merge [0-9a-f]{40} nach dem Abnahme-head/);
+  });
+  test("ohne PR-Nummer (lokal): der Konflikt-Merge wird trotzdem gemeldet, dazu die fehlende PR-Nummer (rot, fail-closed)", () => {
+    const fehler = pruefe(repo(mergeVonMain("a.txt", "SEITE\n", "aufgeloest\n")), { FACTORY_PR_NUMBER: "" }).fehler;
+    rot(fehler, /Konflikt-Merge [0-9a-f]{40} nach dem Abnahme-head/);
+    rot(fehler, /PR-Nummer fehlt/);
+  });
+  test("ohne PR-Nummer und ohne Konflikt: nur die fehlende PR-Nummer, kein Head-Fehler", () => {
+    expect(pruefe(repo(() => undefined), { FACTORY_PR_NUMBER: "" }).fehler).toEqual([expect.stringMatching(/PR-Nummer fehlt/)]);
   });
   test("Abnahme-head außerhalb von base..HEAD ist rot (nicht im Slice)", () => {
     rot(pruefe(repo(() => undefined, false, ({ basis }) => basis)).fehler, /liegt nicht im Slice/);
