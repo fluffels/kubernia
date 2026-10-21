@@ -120,7 +120,7 @@ describe("fuehreAus", () => {
     expect(t.aufrufe[0]).toBe(`entferne:${S.STANDARD_AUS}`);
     expect(t.aufrufe[1]).toBe("lauf");
   });
-  test.each([[["--aus"]], [["--aus", ""]], [["--unbekannt"]]])("ungültige Argumente %j: Exit 2, lauf nicht aufgerufen", (argv) => {
+  test.each([[["--aus"]], [["--aus", ""]], [["--unbekannt"]], [["--aus", "a", "--aus", "b"]], [["x"]], [["--aus="]]])("ungültige Argumente %j: Exit 2, lauf nicht aufgerufen", (argv) => {
     const t = io(() => ({ status: 0, stdout: bom(), stderr: "" }));
     expect(S.fuehreAus(argv, t.impl)).toBe(2);
     expect(t.aufrufe).not.toContain("lauf");

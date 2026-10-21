@@ -39,7 +39,6 @@ export const AUSNAHMEN: Ausnahme[] = [
   { pfad: "scripts/abnahme.mjs", ticket: "#1791" },
   { pfad: "scripts/board-place.mjs", ticket: "#1791" },
   { pfad: "scripts/sammelticket-anlegen.mjs", ticket: "#1791" },
-  { pfad: "scripts/sbom.mjs", ticket: "#1791" },
   { pfad: "scripts/spezifikation.mjs", ticket: "#1791" },
 ];
 
