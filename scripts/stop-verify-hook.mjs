@@ -25,7 +25,7 @@
  * NICHT die `rm -rf`-Deny aufweichen — der Workaround über `fs.rmSync` (kein
  * Shell-`rm`) bleibt sauber innerhalb der Least-Privilege-Policy (#901).
  *
- * Lens-Worktrees (#1425): ein registrierter `<worktree-präfix><nr>-lens-r<runde>` bzw. `-lens-m<n>` ohne `<worktree-präfix><nr>` (der Umsetzer hat den Worktree
+ * Lens-Worktrees (#1425): ein registrierter `<worktree-präfix><nr>-lens-r<runde>` bzw. `-lens-m<n>`/`-lens-a<n>` ohne `<worktree-präfix><nr>` (der Umsetzer hat den Worktree
  * entfernt, die Sabotage-Probe der Test-Lens aber nicht) wird entfernt, wenn er älter als 5 Minuten ist.
  *
  * Lose Dateien (#1476): eine reguläre Datei `<worktree-präfix><nr>…` direkt unter `.claude/worktrees/`, deren `<worktree-präfix><nr>` nicht mehr

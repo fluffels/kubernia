@@ -21,7 +21,7 @@
  * Skript räumt stattdessen über `fs.rmSync` auf (kein Shell-`rm`, `Bash(node:*)`
  * bleibt erlaubt).
  *
- * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<praefixe.worktree><nr>-lens-r<runde>` bzw. `<praefixe.worktree><nr>-lens-m<n>` (Merge-Delta-Lens, Skill `review-lenses`). Bleibt so ein
+ * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<praefixe.worktree><nr>-lens-r<runde>` bzw. `-lens-m<n>` (Merge-Delta-Lens) bzw. `-lens-a<n>` (Abnahme-Fix-Delta-Lens, Skill `review-lenses`). Bleibt so ein
  * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `<praefixe.worktree><nr>` weg ist, fehlt er in der Waisen-Sicht oben
  * (die kennt nur unregistrierte Ordner). `verwaisteLensWorktrees` findet sie, `entferneLensWorktrees` räumt sie per
  * `git worktree remove --force` und prüft das Ergebnis.

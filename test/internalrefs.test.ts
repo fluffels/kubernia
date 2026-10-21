@@ -308,10 +308,13 @@ describe("CLI-Flags (#1837)", () => {
     assert.equal(zahl(f, "ENCODED_TERMS"), ENCODED_TERMS.length);
   });
 
-  test("ohne Flag bleibt die Kopie unberührt; --add mit leerem oder doppeltem Begriff ist Exit 1", () => {
+  test("ohne Flag und mit leerem Begriff bleibt die Kopie unberührt; --add mit doppeltem Begriff ist Exit 1", () => {
     const f = kopie();
     const vorher = hash(f);
+    lauf([]).run(f);
+    assert.equal(hash(f), vorher, "ohne Flag schreibt main nie in die Kopie");
     assert.equal(lauf(["--add", "  "]).run(f), 1);
+    assert.equal(hash(f), vorher, "ein leerer Begriff schreibt nichts");
     assert.equal(lauf(["--add", DUMMY]).run(f), 0);
     const doppelt = lauf(["--add", DUMMY]);
     assert.equal(doppelt.run(f), 1);

@@ -99,7 +99,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 
 ## Umgebungsvariablen
 
-Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1824-2026-10-21-umgebungsvariablen-ohne-projektpräfix-f3-teil-8)). Eine Variable, die ein Kern-Werkzeug liest, heißt `FACTORY_<NAME>` und wird über `umgebungsWert` aus `scripts/projekt-config-lib.mjs` gelesen. **Altname:** derselbe Name mit dem Commit-Zeilen-Präfix ohne Bindestrich statt `FACTORY_` (hier `KQ_`). Er gilt vorerst weiter und gibt eine Warnung mit dem neuen Namen aus; sind beide gesetzt, gewinnt der neue Name. Die Kern-Reinheit zählt den Altnamen als Begriff `Env`, in Kern-Einheiten steht er nicht mehr.
+Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1824-2026-10-21-umgebungsvariablen-ohne-projektpräfix-f3-teil-8)). Eine Variable, die ein Kern-Werkzeug liest, heißt `FACTORY_<NAME>` und wird über `umgebungsWert` aus `scripts/projekt-config-lib.mjs` gelesen. **Altname:** derselbe Name mit dem Commit-Zeilen-Präfix ohne Bindestrich statt `FACTORY_` (hier `KQ_`). Er gilt vorerst weiter und gibt eine Warnung mit dem neuen Namen aus; sind beide gesetzt, gewinnt der neue Name. Die Kern-Reinheit zählt den Altnamen als Begriff `Env`, in Kern-Einheiten steht er nicht mehr. Bewacht wird das Inventar von `test/harness/umgebungsvariablen-inventar.test.ts` (Ring `Kern`, beide Richtungen gegen die `umgebungsWert`-Literale in `scripts/`).
 
 | Name (neu) | Altname | Ring | Wer setzt ihn | Wer liest ihn |
 | --- | --- | --- | --- | --- |

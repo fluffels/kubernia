@@ -306,9 +306,9 @@ export function kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wieder
 
 const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad])).flat();
 
-/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `ladeSeiten(pfad)`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeSeiten = seiten, log = console.log, err = console.error } = {}) {
-  const start = await inboxStart(argv, { skript: "codescanning-inbox", praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `ladeSeiten(pfad)`, `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig, ladeSeiten = seiten, log = console.log, err = console.error } = {}) {
+  const start = await inboxStart(argv, { skript: "codescanning-inbox", praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: ", ladeLibs, ladeConfig, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config, libs } = start;
   const harnessLabel = labelAus(config, "harness");

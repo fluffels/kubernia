@@ -223,7 +223,7 @@ export function altEnvPraefix(config) {
 }
 
 function altNameZuPraefix(name, alt) {
-  if (alt === null || alt === undefined || typeof name !== "string") return null;
+  if (alt === null || typeof name !== "string") return null;
   if (!name.startsWith(KERN_ENV_PRAEFIX) || name.length === KERN_ENV_PRAEFIX.length) return null;
   return alt + name.slice(KERN_ENV_PRAEFIX.length);
 }

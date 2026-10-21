@@ -77,7 +77,7 @@ describe("Cockpit bleibt nur lesend (ADR 0029 (d))", () => {
 
   test("keine Datei startet Unterprozesse (außer lauf.mjs) oder schreibt ins Dateisystem", () => {
     const alle = cockpitDateien().flatMap((p) => {
-      return verstoesse(p.slice("scripts/cockpit/".length),readFileSync(resolve(ROOT, p), "utf8")).map((f) => `${p}: ${f}`);
+      return verstoesse(p.slice("scripts/cockpit/".length), readFileSync(resolve(ROOT, p), "utf8")).map((f) => `${p}: ${f}`);
     });
     assert.deepEqual(alle, []);
   });
