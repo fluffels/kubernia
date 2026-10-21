@@ -101,7 +101,11 @@ export function branchenModus(root, loeschen, {
   return r.ok ? 0 : 1;
 }
 
-function main(argv = process.argv.slice(2)) {
+/**
+ * Einstieg. `--branches` liefert den Exit-Code von `modus(root, loeschen, { namen })` zurück (`loeschen` nur mit `--fix`); die übrigen Pfade
+ * beenden den Prozess selbst. `deps` (Tests): `modus`, `root`.
+ */
+export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))) } = {}) {
   const { werte, fehler } = flagsLesen(argv, { fix: { type: "boolean" }, branches: { type: "boolean" } });
   if (fehler) {
     console.error(`${fehler.text}
@@ -109,7 +113,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     process.exit(AUFRUF_EXIT);
   }
   const FIX = werte.fix === true;
-  const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+  const ROOT = root;
   let namen;
   try {
     namen = ticketNamen(ladeProjektConfig());
@@ -118,8 +122,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     process.exit(1);
   }
   if (werte.branches) {
-    process.exitCode = branchenModus(ROOT, FIX, { namen });
-    return;
+    return modus(ROOT, FIX, { namen });
   }
 
   console.log("=== Worktree-Diagnose ===\n");
@@ -246,4 +249,4 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   if (suspicious.length > 0) process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();
