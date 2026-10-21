@@ -152,17 +152,18 @@ function pruefeBoard(gh, board, i) {
   const hilfe = `boards[${i}] in .factory/projekt.json prüfen (gh api ${pfad}/fields listet die Felder)`;
   let b;
   try {
-    b = json(gh, ["api", pfad]);
+    b = json(gh, ["api", pfad]) ?? {};
   } catch (e) {
     return [luecke(name, `Board nicht lesbar (${erste(e)})`, hilfe)];
   }
+  let f;
   try {
-    const f = json(gh, ["api", `${pfad}/fields/${board.statusFeldId}`]);
-    const probleme = Object.values(BOARD_PRUEFUNG).map((p) => p(board, b, f)).filter(Boolean);
-    return probleme.length ? probleme.map((p) => luecke(name, p, hilfe)) : [gut(name)];
+    f = json(gh, ["api", `${pfad}/fields/${board.statusFeldId}`]) ?? {};
   } catch (e) {
     return [luecke(name, `Status-Feld ${board.statusFeldId} ("${STATUS_FELD_NAME}") nicht lesbar (${erste(e)})`, hilfe)];
   }
+  const probleme = Object.values(BOARD_PRUEFUNG).map((p) => p(board, b, f)).filter(Boolean);
+  return probleme.length ? probleme.map((p) => luecke(name, p, hilfe)) : [gut(name)];
 }
 
 function pruefeRuleset(gh, repo, repoInfo, spiegel) {

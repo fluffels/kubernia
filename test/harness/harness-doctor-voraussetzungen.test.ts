@@ -3,9 +3,12 @@
  *   1. `secrets.X` und `vars.X` in den Workflows (inkl. Kommentare) stehen in `secrets`/`variablen` der Ableitung;
  *   2. Label-Literale (Workflows: `--label`/`--add-label`/Env `*LABEL*:`, Skripte: `"--label", "<v>"`) stehen in `labels`; jeder gelesene
  *      Config-Schlüssel `labels.<k>` bzw. `labelAus(…, "<k>")` existiert in der Config;
- *   3. Project-Felder: jeder Board-Schlüssel der Config, den ein Skript liest (außer `rolle`), ist ein Prüfpunkt; die Vergleichsliterale
- *      für Status-Feld und Todo-Option in den Board-Skripten stimmen mit den Namen des Doctors überein.
- * Bekannte Grenzen: nur Literale und die drei genannten Schreibweisen; ein Label aus einer Berechnung oder `secrets[...]` sieht kein Scanner.
+ *   3. Project-Felder: jeder Board-Schlüssel der Config, den ein Skript liest (außer `rolle`), ist ein Prüfpunkt; jedes Feld, das ein Skript
+ *      per Name liest (REST `fields.find((f) => f.name === "X")`, GraphQL `field(name: "X")`), heißt wie das Status-Feld des Doctors; die
+ *      Statusvergleiche der Board-Skripte (nennen `statusFeld` oder importieren `board-lib.mjs`) sind die Todo-Option des Doctors.
+ * Bekannte Grenzen: nur Literale und die genannten Schreibweisen; ein Label aus einer Berechnung oder `secrets[...]` sieht kein Scanner.
+ * Gescannt wird `scripts/*.mjs` auf oberster Ebene (nicht rekursiv, keine `.cjs`). Feldzugriffe mit einfachen Anführungszeichen,
+ * umgedrehtem Vergleich, Destructuring, `.filter`/`.some` oder einer Variablen als Feldname erkennt der Feld-Scanner nicht.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  */
@@ -49,7 +52,9 @@ const feldNamen = (text: string): string[] => [
   ...[...text.matchAll(/\bfields\??\.find\(\s*\(?\s*(\w+)\s*\)?\s*=>\s*\1\??\.name\s*===\s*"([^"]+)"/g)].map((m) => m[2]),
   ...[...text.matchAll(/\bfield(?:ValueByName)?\(\s*name:\s*\\?"([^"\\]+)\\?"/g)].map((m) => m[1]),
 ];
-const optionVergleiche = (text: string): string[] => [...text.matchAll(/\bstatus\s*[!=]==\s*"([^"]+)"/g)].map((m) => m[1]);
+/** Ein Board-Skript liest Board-Items: es nennt `statusFeld` oder importiert `board-lib.mjs`. */
+const boardSkript = (text: string): boolean => text.includes("statusFeld") || /from\s+"\.\/board-lib\.mjs"/.test(text);
+const optionVergleiche =(text: string): string[] => [...text.matchAll(/\bstatus\s*[!=]==\s*"([^"]+)"/g)].map((m) => m[1]);
 
 const config = JSON.parse(lies(".factory/projekt.json")) as { labels: Record<string, string>; boards: Record<string, unknown>[] };
 const workflows = dateien(".github/workflows", /\.ya?ml$/);
@@ -71,6 +76,10 @@ describe("Scanner (Fixtures, nicht vakuös)", () => {
     assert.deepEqual(feldNamen('i.fields?.find((f) => f?.name === "Status")?.value; fields.find(f => f.name === "Aufwand")'), ["Status", "Aufwand"]);
     assert.deepEqual(feldNamen('gql(`{ field(name: "Aufwand") { id } fieldValueByName(name: \\"Prio\\") }`)'), ["Aufwand", "Prio"]);
     assert.deepEqual(feldNamen('x.find((c) => c.name === "npm")'), []);
+    assert.deepEqual(feldNamen('fields.find((f) => g.name === "X")'), []);
+    assert.deepEqual(feldNamen('myfields.find((f) => f.name === "X"); subfield(name: "X")'), []);
+    assert.deepEqual(boardSkript('import { a } from "./board-lib.mjs"; i.status === "Blocked"'), true);
+    assert.deepEqual(boardSkript('x.status === "ok"'), false);
     assert.deepEqual(optionVergleiche('i.status !== "Todo"'), ["Todo"]);
   });
   test("ein ungedecktes vars.FOO fällt auf (Negativfall)", () => {
@@ -117,7 +126,7 @@ describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () =>
   });
 
   test("Todo-Option: die Statusvergleiche der Board-Skripte sind die des Doctors", () => {
-    const funde = skripte.filter((s) => s.text.includes("statusFeld")).flatMap((s) => optionVergleiche(s.text));
+    const funde = skripte.filter((s) => boardSkript(s.text)).flatMap((s) => optionVergleiche(s.text));
     assert.ok(funde.length > 0, "Scanner fand keinen Vergleich: vakuös");
     for (const o of funde) assert.equal(o, doctor.TODO_OPTION_NAME);
   });
