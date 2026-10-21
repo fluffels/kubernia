@@ -52,7 +52,7 @@ export function ablaufSignaturen(text: string): string[] {
 /** Die zitierten Auslöser (in „…“) der `description:`-Zeile. */
 export function ausloeser(skillText: string): string[] {
   const zeile = /^description:(.*)$/m.exec(skillText)?.[1] ?? "";
-  return [...zeile.matchAll(/[„"]([^“"]+)[“"]/g)].map((m) => m[1]!.toLowerCase());
+  return [...zeile.matchAll(/[„"]([^“"]+)[“"]/g)].map((m) => m[1].toLowerCase());
 }
 
 /** Auslöser, die in beiden Listen vorkommen, oder sich als Teilstring enthalten. */
