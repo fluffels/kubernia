@@ -268,6 +268,7 @@ describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
     assert.doesNotMatch(SKILL, /bei einem Werkzeug-Abbruch repariert sie das Werkzeug/);
     assert.doesNotMatch(umsetzer, /Maintainerin repariert das Werkzeug/);
     assert.match(umsetzer, /Werkzeug-Abbruch[^\n]*?entscheidet der Hauptchat nach `docs\/factory\/entscheidungsprotokoll\.md`/);
+    assert.match(SKILL, /Werkzeug-Abbruch der Abnahme entscheidet der Hauptchat nach dem \[Entscheidungsprotokoll\]\([^)]*#werkzeug-abbruch-der-abnahme\)/);
     assert.match(lies("docs/factory/entscheidungsprotokoll.md"), /Werkzeug-Abbruch der Abnahme/);
   });
 });
