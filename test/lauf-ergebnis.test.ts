@@ -41,9 +41,9 @@ const roh = raw as {
   formatiere: (e: Ergebnis) => string;
   labelAbfrage: (n: number[]) => string;
   festgefahrenAusAntwort: (a: unknown, n: number[], label?: string) => Record<number, number>;
-  laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; tickets?: number[]; ohne?: number[]; ladeConfig?: () => unknown }) => Ergebnis;
+  laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; tickets?: number[]; ohne?: number[]; ladeConfig?: () => unknown; owner?: string }) => Ergebnis;
   parseArgs: (a: string[]) => { von?: string; bis?: string; tickets: number[]; ohne: number[]; json: boolean; fehler: string | null; startAgent?: string };
-  laufErgebnisStartAgent: (e: { laeufe: unknown[]; von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; ohne?: number[]; ladeConfig?: () => unknown }) => Ergebnis;
+  laufErgebnisStartAgent: (e: { laeufe: unknown[]; von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date; ohne?: number[]; ladeConfig?: () => unknown; owner?: string }) => Ergebnis;
   ladeStartLaeufe: (dir: string, agent: string, von: string) => unknown[];
 };
 const mod = {
@@ -319,12 +319,12 @@ describe("Abnahme je PR (#1756)", () => {
     const commits = bodies.map((b, i) => commit(b, MERGED, String(i + 1).repeat(40)));
     const e = roh.bewertePrs({ prs, commits, ci: {}, festgefahren: { 50: 1, 51: 1, 53: 0 }, jetzt: SPAETER, konfigZeilen: Z });
     // PR 50: kein Fix (festgefahren zählt nicht); 51: Fix + festgefahren; 52: Fix ohne Eintrag; 53: Fix, 0 festgefahren; 54: entfällt
-    assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 3, mitFixUndFestgefahren: 1 });
+    assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 3, mitFixUndFestgefahren: 1, offenMitFix: 0 });
     assert.match(mod.formatiere(e), /Abnahme-Fix: 3 PRs, davon mit Hand-off: 33 % \(1\/3\)/);
   });
   test("Abnahme-Fix leer: 0 PRs, Darstellung ohne Prozent", () => {
     const e = bewerte([]);
-    assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 0, mitFixUndFestgefahren: 0 });
+    assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 0, mitFixUndFestgefahren: 0, offenMitFix: 0 });
     assert.match(mod.formatiere(e), /Abnahme-Fix: 0 PRs, davon mit Hand-off: –/);
   });
   test("leer: alle Werte 0, Darstellung ohne Prozent", () => {
@@ -340,7 +340,7 @@ describe("Abnahme je PR (#1756)", () => {
     const body = nachricht(urteil(1));
     const log = `${SHA}\x1f${MERGED}\x1f${body}\x1e`;
     const gh = (a: string[]): string => {
-      if (a[0] === "pr") return JSON.stringify([pr()]);
+      if (a[0] === "pr") return a.includes("open") ? "[]" : JSON.stringify([pr()]);
       if (a.join(" ").includes("actions/workflows")) return "";
       const nummern = [...(a.find((x) => x.startsWith("query=")) ?? "").matchAll(/p(\d+): pullRequest/g)].map((m) => Number(m[1]));
       const repository = Object.fromEntries(nummern.map((n) => [`p${n}`, { timelineItems: { pageInfo: { hasNextPage: false }, nodes: [] } }]));
@@ -384,11 +384,16 @@ describe("Label-Events per GraphQL (Z3c)", () => {
 describe("laufErgebnis (git und gh injiziert)", () => {
   const liste = [pr({ headRefName: "feature/kq-40-a&b#c+d" })];
   const log = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
-  type Opt = { seit?: string; liste?: unknown[]; fehler?: string; laeufe?: string; label?: (nummern: number[]) => unknown; aufrufe?: string[][] };
+  type Opt = { seit?: string; liste?: unknown[]; fehler?: string; laeufe?: string; label?: (nummern: number[]) => unknown; aufrufe?: string[][]; offen?: unknown[]; kommentare?: Record<number, unknown[]> };
   /** gh-Stub: `pr list`, die EINE paginierte Läufe-Abfrage und GraphQL-Label-Events (Standard: ein festgefahren-Label je PR). */
   const gh = (o: Opt = {}) => (a: string[]): string => {
     o.aufrufe?.push(a);
     if (o.fehler && a.join(" ").includes(o.fehler)) throw new Error("gh kaputt");
+    if (a[0] === "pr" && a.includes("open")) return JSON.stringify(o.offen ?? []);
+    if (a.includes("--slurp")) {
+      const nr = Number(/issues\/(\d+)\/comments/.exec(a.join(" "))?.[1]);
+      return JSON.stringify([o.kommentare?.[nr] ?? []]);
+    }
     if (a[0] === "pr") {
       assert.ok(a.includes("--base") && a.includes("main"), "nur PRs nach main");
       return JSON.stringify(o.liste ?? liste);
@@ -465,15 +470,73 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     const aufrufe: string[][] = [];
     const e = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh({ liste: [], aufrufe }), jetzt: SPAETER });
     assert.equal(e.zeilen.length, 0);
-    assert.equal(aufrufe.length, 1);
+    assert.equal(aufrufe.length, 2, "die Liste gemergter PRs und die der offenen Hand-off-PRs");
   });
-  test.each([3, 50, 51, 60])("gh-Aufrufe wachsen nicht je PR: bei %i PRs höchstens 1 + 1 + ⌈N/50⌉", (n) => {
+  describe("offene Hand-off-PRs (#1814 L9)", () => {
+    const H = "a".repeat(40);
+    const marker = (d: number) => `<!-- kq-abnahme durchgang=${d} head=${H} urteil=K1:erfuellt -->`;
+    const offenPr = (o: Record<string, unknown> = {}) => ({ number: 70, title: "feat(x): y (#41)", createdAt: "2026-10-01T10:00:00Z", closingIssuesReferences: [{ number: 41 }], ...o });
+    const vertraut = { login: "fluffels", type: "User" };
+    const kommentar = (body: string, user: unknown = vertraut) => ({ body, user });
+    const offen = (o: Opt, extra: Record<string, unknown> = {}) =>
+      mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ...extra }).kennzahlen.abnahmeFix as { mitFix: number; offenMitFix: number };
+    const zeile = (o: Opt, extra: Record<string, unknown> = {}) => mod.formatiere(mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ...extra }));
+    test("offener Festgefahren-PR mit Durchgang 2 zählt in offenMitFix, nicht in mitFix; die Abfrage filtert nach dem Label der Config", () => {
+      const aufrufe: string[][] = [];
+      const a = offen({ liste: [], aufrufe, offen: [offenPr()], kommentare: { 70: [kommentar(marker(1)), kommentar(marker(2))] } }, { owner: "fluffels" });
+      assert.deepEqual(a, { mitFix: 0, mitFixUndFestgefahren: 0, offenMitFix: 1 });
+      const liste = aufrufe.find((x) => x[0] === "pr" && x.includes("open")) ?? [];
+      assert.equal(liste[liste.indexOf("--label") + 1], LABEL);
+      assert.match(zeile({ liste: [], offen: [offenPr()], kommentare: { 70: [kommentar(marker(2))] } }, { owner: "fluffels" }), /offen \(Hand-off, nicht gemergt\): 1/);
+    });
+    test("Negativfälle: nur Durchgang 1, Hand-off-Marker, fremder Autor, außerhalb des Fensters, Ticketfilter und kein Treffer zählen 0", () => {
+      const k = (...c: unknown[]) => ({ 70: c });
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(1))) }, { owner: "fluffels" }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar("<!-- kq-abnahme-handoff -->"), kommentar(marker(1))) }, { owner: "fluffels" }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2), { login: "fremd", type: "User" })) }, { owner: "fluffels" }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr({ createdAt: "2026-09-01T00:00:00Z" })], kommentare: k(kommentar(marker(2))) }, { owner: "fluffels" }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2))) }, { owner: "fluffels", ohne: [41] }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2))) }, { owner: "fluffels", tickets: [99] }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [] }, { owner: "fluffels" }).offenMitFix, 0);
+      assert.match(zeile({ liste: [], offen: [] }), /offen \(Hand-off, nicht gemergt\): 0/);
+    });
+    test("gh-Fehler bei Liste oder Kommentaren ist ein Datenfehler, keine stille 0", () => {
+      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: "fluffels" });
+      assert.throws(lauf({ liste: [], fehler: "--state open" }), mod.DatenFehler);
+      assert.throws(lauf({ liste: [], offen: [offenPr()], fehler: "/comments" }), mod.DatenFehler);
+      assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: (a) => (a.includes("open") ? "kein json" : gh({ liste: [] })(a)), owner: "fluffels" }), mod.DatenFehler);
+    });
+    test("Guards der Zählung: Nicht-Liste, abgeschnittene Liste und beide Fenstergrenzen", () => {
+      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: "fluffels" });
+      assert.throws(lauf({ liste: [], offen: {} as unknown as unknown[] }), /keine Liste/);
+      const voll = Array.from({ length: 1000 }, (_, i) => offenPr({ number: 1000 + i }));
+      assert.throws(lauf({ liste: [], offen: voll }), /abgeschnitten/);
+      const k = { 70: [kommentar(marker(2))] };
+      const zaehle = (createdAt: string) => offen({ liste: [], offen: [offenPr({ createdAt })], kommentare: k }, { owner: "fluffels" }).offenMitFix;
+      assert.equal(zaehle(von), 1, "untere Grenze gehört zum Fenster");
+      assert.equal(zaehle(bis), 1, "obere Grenze gehört zum Fenster");
+      assert.equal(zaehle("2026-10-02T00:00:01Z"), 0, "nach dem Fenster zählt nicht");
+      assert.equal(zaehle("2026-09-30T23:59:59Z"), 0, "vor dem Fenster zählt nicht");
+    });
+    test("Besitzer kommt aus repo der Config; fehlt er bei einem Treffer im Fenster, ist das ein Datenfehler (fail-closed)", () => {
+      const o: Opt = { liste: [], offen: [offenPr()], kommentare: { 70: [kommentar(marker(2))] } };
+      const conf = (repo?: unknown) => () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL }, ...(repo === undefined ? {} : { repo }) });
+      const lauf = (c: () => unknown) => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ladeConfig: c });
+      assert.equal((lauf(conf("fluffels/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1);
+      assert.equal((lauf(conf("anderer/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 0, "Autor fluffels ist dann nicht vertraut");
+      assert.throws(() => lauf(conf()), /Besitzer/);
+      assert.throws(() => lauf(conf(42)), /Besitzer/);
+      const leer = { liste: [], offen: [] };
+      assert.doesNotThrow(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(leer), jetzt: SPAETER, ladeConfig: conf() }));
+    });
+  });
+  test.each([3, 50, 51, 60])("gh-Aufrufe wachsen nicht je PR: bei %i PRs höchstens 2 + 1 + ⌈N/50⌉", (n) => {
     const prs = Array.from({ length: n }, (_, i) => pr({ number: 100 + i, mergeCommit: { oid: `${(i + 1).toString(16).padStart(40, "0")}` }, headRefName: `feature/kq-${i}` }));
     const viele = prs.map((p) => `${p.mergeCommit.oid}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`).join("");
     const aufrufe: string[][] = [];
     const e = mod.laufErgebnis({ von, bis, runGit: git(viele), runGh: gh({ liste: prs, aufrufe }), jetzt: SPAETER });
     assert.equal(e.zeilen.length, n);
-    assert.ok(aufrufe.length <= 2 + Math.ceil(n / 50), `${aufrufe.length} Aufrufe bei ${n} PRs`);
+    assert.ok(aufrufe.length <= 3 + Math.ceil(n / 50), `${aufrufe.length} Aufrufe bei ${n} PRs`);
     assert.ok(e.zeilen.every((z) => z.festgefahren === 1), "jeder PR bekommt sein eigenes Label-Ergebnis");
   });
   test("rote Läufe zweier PRs werden dem richtigen Branch zugeordnet", () => {
@@ -518,7 +581,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.ok(query.includes("p51:") && !query.includes("p50:") && !query.includes("p52:"), query);
       const leer: string[][] = [];
       lauf({ tickets: [999] }, leer);
-      assert.equal(leer.length, 1);
+      assert.equal(leer.length, 2, "Liste gemergter plus Liste offener PRs, sonst nichts");
     });
     test("parseArgs: wiederholbare --ticket/--ohne, Nicht-Ganzzahl ist ein Aufruf-Fehler", () => {
       assert.deepEqual(mod.parseArgs(["--von", "a", "--bis", "b", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--json"]), { von: "a", bis: "b", tickets: [1, 2], ohne: [3], json: true, fehler: null });

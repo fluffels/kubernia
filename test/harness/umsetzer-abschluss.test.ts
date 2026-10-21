@@ -50,8 +50,8 @@ const abschluss = abschlussRaw as unknown as {
   letzteNachrichtAusTranskript: (p: string) => string | null;
 };
 const { parseErgebnis, parseAbschlussInput } = abschluss;
-// hermetisch: ohne eigene Injektion ruft der Leitplanken-Audit (#1067) nie das echte gh auf
-const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { prDateien: () => [], ...d } as never);
+// hermetisch: ohne eigene Injektion ruft der Leitplanken-Audit (#1067) nie das echte gh auf; die Config lädt der Einstiegspunkt, der Kern bekommt sie
+const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { config: ladeProjektConfig(), prDateien: () => [], ...d } as never);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const UMSETZER = readFileSync(resolve(ROOT, ".claude/agents/kubernia-umsetzer.md"), "utf8");
@@ -347,6 +347,19 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     });
   });
 
+  test("Negativfall: ohne übergebene Config lädt der Kern keine selbst und blockiert fail-closed (auch für fremde Agenten, wie bei unbrauchbarer Config)", () => {
+    const g = abschluss.abschlussBlockade({ hookEvent: "SubagentStop", agentType: "Explore", lastMessage: "x" }, {});
+    assert.match(g ?? "", /fail-closed/);
+    assert.match(g ?? "", /keine Config übergeben/);
+    // andere Ereignisse und Tools bleiben frei, sie brauchen keine Config
+    assert.equal(abschluss.abschlussBlockade({ hookEvent: "Stop", agentType: "Explore", lastMessage: "x" }, {}), null);
+  });
+  test("Negativfall: der Einstiegspunkt pretooluse-hook lädt die Config und blockiert bei unbrauchbarem Pfad fail-closed", () => {
+    const payload = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: "x", tool_input: { message: "ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine" } });
+    const deny = preHookRaw.dispatch(payload, "/x", undefined, undefined, { pfad: "/gibt/es/nicht.json" });
+    assert.equal(deny?.hookSpecificOutput.permissionDecision, "deny");
+    assert.match((deny as unknown as { hookSpecificOutput: { permissionDecisionReason: string } }).hookSpecificOutput.permissionDecisionReason, /fail-closed/);
+  });
   test("Negativfall: eine Config ohne labels.festgefahren blockiert fail-closed mit Fix-Zeile, ohne zu werfen, in Wächter und beiden Hooks (kein stiller Standardwert)", () => {
     const echt = ladeProjektConfig() as unknown as { labels: Record<string, string>; agenten: { umsetzer: string } };
     const { festgefahren: _weg, ...rest } = echt.labels;
@@ -723,7 +736,7 @@ describe("Leitplanken-Audit (#1067)", () => {
       };
       const r = abschluss.abschlussBlockade(
         { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
-        { prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: never) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
+        { config: ladeProjektConfig(), prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: never) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
       );
       assert.equal(diffAufrufe, 0, "der Status trägt die Dateien, der Diff-Rückfall bleibt ungenutzt");
       return { r, aufrufe };

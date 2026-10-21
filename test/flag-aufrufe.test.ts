@@ -3,7 +3,12 @@
  * stderr-Rahmen (Präfix, Meldung, Aufrufzeile). PATH enthält nur den Ordner von node: ohne gh, git und Netz. */
 import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 interface Zeile {
   skript: string;
@@ -14,14 +19,23 @@ interface Zeile {
   aufruf: RegExp;
   faelle: { unbekannt: string[]; ohneWert: string[]; doppelt: string[] };
   meldungen: { unbekannt: string; ohneWert: string; doppelt: string };
-  /** Kanal des Aufruf-Fehlers; Standard stderr (sbom meldet über stdout, #1791). */
-  kanal?: "stdout";
 }
 
 const BEIDE = ["--von", "2026-01-01", "--bis", "2026-02-01"];
 const STD = { unbekannt: "Unbekanntes Argument: --bogus" };
 const BOARD_USAGE = "Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)";
 const SAMMEL_USAGE = "Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run]";
+const SPEZ_AUFRUF = [
+  "Aufruf:",
+  "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)',
+  "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
+].join("\n");
+const ABNAHME_AUFRUF = [
+  "Aufruf:",
+  "  node scripts/abnahme.mjs kriterien <nr>",
+  "  node scripts/abnahme.mjs auswerten <nr> --pr <pr> --bericht <datei> --worktree <pfad> --head <sha>",
+].join("\n");
 const SBOM_USAGE = "Aufruf: node scripts/sbom.mjs [--aus <pfad>]";
 
 const ZEILEN: Zeile[] = [
@@ -107,7 +121,6 @@ const ZEILEN: Zeile[] = [
   },
   {
     skript: "sbom",
-    kanal: "stdout",
     exit: 2,
     erste: (m) => m,
     aufruf: /^Aufruf: node scripts\/sbom\.mjs \[--aus <pfad>\]$/m,
@@ -212,10 +225,11 @@ function umgebung(): NodeJS.ProcessEnv {
   return env;
 }
 
-function starte(skript: string, argv: string[]): { status: number | null; stderr: string; stdout: string } {
+/** Startet `scripts/<skript>.mjs` mit absolutem Pfad; `cwd` ist standardmäßig die Repo-Wurzel, der Test hängt nicht vom Aufrufer-cwd ab. */
+function starte(skript: string, argv: string[], cwd: string = ROOT): { status: number | null; stderr: string; stdout: string } {
   const env = umgebung();
   if (skript === "board-takt") env.PROJECT_TOKEN = "x"; // mit Token ruft `main` `mitKontingent` auf: ein vorgezogener Aufruf stünde dann vor dem Fehler
-  const r = spawnSync(process.execPath, [`scripts/${skript}.mjs`, ...argv], { encoding: "utf8", env, timeout: 60_000 });
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts", `${skript}.mjs`), ...argv], { encoding: "utf8", env, timeout: 60_000, cwd });
   return { status: r.status, stderr: r.stderr, stdout: r.stdout };
 }
 
@@ -225,11 +239,10 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
   test.concurrent.each(FAELLE)("%s: %s", { timeout: 60_000 }, (_skript, fall, z) => {
     const r = starte(z.skript, z.faelle[fall]);
     expect(r.status).toBe(z.exit);
-    const text = z.kanal === "stdout" ? r.stdout : r.stderr;
+    const text = r.stderr;
     expect(text.split("\n")[0]).toBe(z.erste(z.meldungen[fall]));
     expect(text).toMatch(z.aufruf);
-    expect(z.kanal === "stdout" ? r.stderr : "").toBe(""); // stdout-Skripte schreiben nichts auf stderr
-    expect(z.kanal === "stdout" ? "" : r.stdout).toBe(""); // sonst lief schon Arbeit (z.B. der Sync von haupt-sync) vor dem Fehler
+    expect(r.stdout).toBe(""); // Aufruf-Fehler schreiben nichts auf stdout (sonst lief schon Arbeit vor dem Fehler)
   });
 
   const ZUSATZ: [string, string[], number, string][] = [
@@ -289,6 +302,48 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
       const r = starte("fremdtext", argv);
       expect(r.status).toBe(2);
       expect(r.stderr).toBe("✖ fremdtext: Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>\n");
+    }
+  });
+
+  test.concurrent("Aufruf-Fehler hängen nicht vom Arbeitsverzeichnis ab (cwd = Temp-Ordner)", { timeout: 60_000 }, () => {
+    const r = starte("spezifikation", ["gibtsnicht"], tmpdir());
+    expect(r.status).toBe(2);
+    expect(r.stderr.split("\n")[0]).toBe("✖ spezifikation: unbekannter Befehl „gibtsnicht“");
+  });
+
+  test.concurrent("Options-Terminator `--` ist überall ein Aufruf-Fehler (zentral in flagsLesen)", { timeout: 60_000 }, () => {
+    const faelle: [string, string[], number, string][] = [
+      ["spezifikation", ["pruefen", "--"], 2, "✖ spezifikation: Unbekanntes Argument: --"],
+      ["abnahme", ["kriterien", "--", "7"], 2, "✖ abnahme: Unbekanntes Argument: --"],
+      ["sammelticket-anlegen", ["harness", "--"], 2, SAMMEL_USAGE],
+      ["sbom", ["--"], 2, SBOM_USAGE],
+      ["claims-pruefen", ["--"], 2, "✖ claims-pruefen: Unbekanntes Argument: --"],
+    ];
+    for (const [skript, argv, exit, erste] of faelle) {
+      const r = starte(skript, argv);
+      expect([skript, r.status]).toEqual([skript, exit]);
+      expect([skript, r.stderr.split("\n")[0]]).toEqual([skript, erste]);
+    }
+  });
+
+  test.concurrent("Direktaufruf: Aufruf-Fehler schreibt genau Meldung und Aufrufzeilen auf stderr, nichts auf stdout (kein I/O davor)", { timeout: 60_000 }, () => {
+    for (const [skript, argv, erste, aufruf] of [
+      ["spezifikation", ["gibtsnicht"], "✖ spezifikation: unbekannter Befehl „gibtsnicht“", SPEZ_AUFRUF],
+      ["abnahme", [], "✖ abnahme: unbekannter Befehl (keiner)", ABNAHME_AUFRUF],
+    ] as const) {
+      const r = starte(skript, [...argv]);
+      expect(r.status).toBe(2);
+      expect(r.stdout).toBe("");
+      expect(r.stderr).toBe(`${erste}\n${aufruf}\n`);
+    }
+  });
+
+  test("Quellscan: echteIo wird nie als Fabrik `echteIo()` aufgerufen, nur als Referenz an direktaufruf", () => {
+    for (const skript of ["abnahme", "spezifikation"]) {
+      const quelle = readFileSync(join(ROOT, "scripts", `${skript}.mjs`), "utf8");
+      expect(quelle).not.toMatch(/echteIo\(\)/);
+      expect(quelle).toMatch(/io: echteIo,/);
+      expect(quelle).not.toMatch(/process\.std(out|err)\.write/); // Ausgabe nur über direktaufruf
     }
   });
 });

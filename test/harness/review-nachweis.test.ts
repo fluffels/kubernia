@@ -31,7 +31,13 @@ type Mod = {
 import * as raw from "../../scripts/check-review-nachweis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../../scripts/slice-override.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as nachweisLib from "../../scripts/nachweis-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as kennzahlen from "../../scripts/factory-kennzahlen.mjs";
 const { MAX_FIX_RUNDEN, pflichtLenses } = raw as Mod;
+const { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } = nachweisLib as unknown as { MAX_REVIEW_PAESSE: number; MAX_ZUSATZPAESSE: number };
+const { MAX_RUNDEN } = kennzahlen as unknown as { MAX_RUNDEN: number };
 /** Zeilen der echten Config (KQ-, kubernia-planner); die Wrapper reichen sie durch. */
 const Z = (sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => unknown }).commitZeilen("KQ-", "kubernia-planner");
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
@@ -282,7 +288,7 @@ describe("(f) BEKANNTE_LENSES == die Brillen-Keys der Format-SSOT (#1349)", () =
   });
 });
 
-describe("Zusatzpass: ein Pass über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => {
+describe("Zusatzpässe über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => {
   const bewerteZ = (review: string, dateien = ["src/a.ts"]) =>
     bewerteNachweis({
       nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`),
@@ -304,6 +310,10 @@ describe("Zusatzpass: ein Pass über das Cap, ohne Rückfrage (#1561 Z2, #1693)"
   test("runden=5 mit zusatzpass=1 ist rot, mit zusatzpass=2 ok", () => {
     assert.match(bewerteZ(`runden=5 zusatzpass=1:x ${LENSES} verdikt=ok`).join(" "), /überschreitet/);
     assert.deepEqual(bewerteZ(`runden=5 zusatzpass=2:x ${LENSES} verdikt=ok`), []);
+  });
+  test("die Gate-Meldung nennt die Zahl der Zusatzpässe aus MAX_ZUSATZPAESSE", () => {
+    const m = bewerteZ(`runden=4 ${LENSES} verdikt=ok`).join(" ");
+    assert.ok(m.includes(`Bis zu ${MAX_ZUSATZPAESSE} Zusatzpässe`), m);
   });
   test("rot: Anzahl 0, leerer Grund, keine Zahl", () => {
     for (const w of ["0:x", "1:", "1:   ", "abc", "x:y", ""]) {
@@ -431,5 +441,26 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   // Ein einziger echter Prozess-Smoke (Kaltstart von git und node unter Last braucht Luft).
   test("CLI-Smoke: der Prozess gibt die Zusatzpass-Zeile aus", { timeout: 30_000 }, () => {
     assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass: Maintainerin gab Pass frei/);
+  });
+});
+
+describe("Drift: die Zahlen im Satz der Lens-Zahl in docs/model-routing.md == die Konstanten (#1814)", () => {
+  const SATZ = /mehr als (\d+) Review-Runden \((\d+) Pässe, höchstens (\d+) Zusatzpässe, 1 Abnahme-Fix-Pass; `MAX_RUNDEN`\)/;
+  /** Liefert die Konstanten, deren Zahl im Satz abweicht; bei fehlendem Satz eine eigene Meldung. Pur. */
+  const abweichungen = (text: string): string[] => {
+    const m = SATZ.exec(text);
+    if (!m) return ["Satz zur Lens-Zahl fehlt"];
+    const soll = [MAX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE];
+    return ["MAX_RUNDEN", "MAX_REVIEW_PAESSE", "MAX_ZUSATZPAESSE"].filter((_, i) => Number(m[i + 1]) !== soll[i]);
+  };
+  const satz = (a: number, b: number, c: number) => `mehr als ${a} Review-Runden (${b} Pässe, höchstens ${c} Zusatzpässe, 1 Abnahme-Fix-Pass; \`MAX_RUNDEN\`)`;
+  test("der echte Satz stimmt mit den Konstanten überein", () => {
+    assert.deepEqual(abweichungen(read("docs/model-routing.md")), []);
+  });
+  test("fehlender Satz und abweichende Zahlen sind rot", () => {
+    assert.deepEqual(abweichungen("kein Satz"), ["Satz zur Lens-Zahl fehlt"]);
+    assert.deepEqual(abweichungen(satz(MAX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE)), []);
+    assert.deepEqual(abweichungen(satz(MAX_RUNDEN + 1, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE)), ["MAX_RUNDEN"]);
+    assert.deepEqual(abweichungen(satz(MAX_RUNDEN, MAX_REVIEW_PAESSE + 1, MAX_ZUSATZPAESSE + 1)), ["MAX_REVIEW_PAESSE", "MAX_ZUSATZPAESSE"]);
   });
 });

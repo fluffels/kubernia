@@ -22,16 +22,18 @@ import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.m
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { KERN_TICKET_SKILL, repoName } from "./projekt-config-lib.mjs";
-import { namenOderGrund } from "./ticket-namen.mjs";
+import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
 
 /**
  * Die Namen der Zerlegung aus der Projekt-Config: die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill` und der Kern-Skill, #1806; ihr Aufruf per Slash oder
  * Skill-Tool ist ein Ticketlauf), die Menge der Ticketlauf-Agenten (`agenten.planer|umsetzer|lens|gruppe`) und der Repo-Name (Schlüssel und Label der eigenen Subagenten).
- * Wirft mit Grund, wenn die Config nicht nutzbar ist (Datenfehler statt falscher Zählung). `deps.config` ersetzt das Laden (Test).
+ * Wirft mit Grund, wenn die Config fehlt oder nicht nutzbar ist (Datenfehler statt falscher Zählung). Die Config lädt der Einstiegspunkt und reicht sie
+ * als `deps.config` durch; dieser Kern lädt nie selbst.
  */
 export function hauptchatNamen(deps = {}) {
+  if (!deps.config) throw new Error(failClosedGrund("hauptchat-zerlegung", new Error("keine Config übergeben (der Einstiegspunkt lädt sie)")));
   const r = namenOderGrund("hauptchat-zerlegung", deps);
   if (r.grund) throw new Error(r.grund);
   const { planer, umsetzer, lens, gruppe, ticketSkill } = r.namen.agenten;
@@ -371,7 +373,9 @@ function main() {
   }
   let namen;
   try {
-    namen = hauptchatNamen();
+    const geladen = namenOderGrund("hauptchat-zerlegung");
+    if (geladen.grund) throw new Error(geladen.grund);
+    namen = hauptchatNamen({ config: geladen.config });
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
     process.exit(1);

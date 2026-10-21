@@ -6,8 +6,8 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ghJson, ghText } from "./gh-cli.mjs";
-import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, waehleBestaetigtes } from "./board-lib.mjs";
-import { istVertraut } from "./fremdtext-lib.mjs";
+import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
+import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 
 const BOARD_PLACE = fileURLToPath(new URL("./board-place.mjs", import.meta.url));
 
@@ -33,7 +33,24 @@ export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN) {
 
 /** Das jüngste offene, ungeclaimte Harness-Sammelticket (per Einzelabruf bestätigt) oder null. `offene` aus `normalizeOffene`. */
 export const waehleSammelticket = (offene) =>
-  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]));
+  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]), REPO.split("/")[0]);
 
 /** Postet `text` als Kommentar unter Issue `nr`. */
 export const postZeilen = (nr, text) => ghText(["api", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]);
+
+/** Nummern der offenen Harness-Sammeltickets (exakter Titel, auch geclaimte) aus `normalizeOffene`. Pur. */
+export const sammelticketNummern = (offene) => offene.filter((i) => i.titel === SAMMELTICKET_TITEL).map((i) => i.number);
+
+/**
+ * Der gemeinsame Abruf der Inbox-Skripte: `{ rohe, offene, kommentare }` = offene Issues (REST-Seiten, `loadOpenIssuePages`), deren Normalform und die
+ * Kommentare (`[{ user, body }]`, ungefiltert) aller offenen Harness-Sammeltickets. Das Vertrauensfilter wendet der Aufrufer an (`vertrauteBodies`,
+ * `istBekannt`). `io` ist für Tests austauschbar (Default: echtes `gh`).
+ */
+export function ladeSammelKontext(io = {}) {
+  const ladeOffene = io.ladeOffene ?? (() => loadOpenIssuePages());
+  const ladeKommentare = io.ladeKommentare ?? ((nr) => issueKommentare(nr, (args) => JSON.parse(ghText(args)), REPO));
+  const rohe = ladeOffene();
+  const offene = normalizeOffene(rohe);
+  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr).map((k) => ({ user: k.user, body: k.body })));
+  return { rohe, offene, kommentare };
+}

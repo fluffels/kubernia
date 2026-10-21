@@ -17,6 +17,8 @@ import * as rawGuard from "../../scripts/forum-leser-guard.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawQ from "../../scripts/forum-quarantaene.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawConfig from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 
 const G = rawGuard as unknown as {
@@ -31,6 +33,8 @@ const Q = rawQ as unknown as {
   main: (argv: string[], deps?: Record<string, unknown>) => void;
   quarantaeneText: (d: Disc, s: (t: string, body: boolean) => string, nonce: string) => string;
 };
+/** Der Kern lädt die Config nie selbst; der Einstiegspunkt reicht sie durch, die Tests die echte. */
+const ECHT = (rawConfig as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 const fm = parseFrontmatter as (md: string) => Record<string, string>;
 
@@ -146,7 +150,7 @@ describe("kuerzungsHinweis (#1663 L25)", () => {
       return d;
     };
     try {
-      Q.main(["--inbox", "7"], { gh, sanitize: (t: string) => t, wurzel, nonce: () => "n", log: (z: string) => ausgabe.push(z) });
+      Q.main(["--inbox", "7"], { config: ECHT, gh, sanitize: (t: string) => t, wurzel, nonce: () => "n", log: (z: string) => ausgabe.push(z) });
     } finally {
       rmSync(wurzel, { recursive: true, force: true });
     }
@@ -222,6 +226,14 @@ describe("quarantaeneText", () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/Aufruf/);
     expect(r.stdout).toBe("");
+  }, 30000);
+
+  test("Einstiegspunkt übergibt die Projekt-Config an den Kern: --inbox scheitert an gh, nicht an fehlender Config (#1814)", () => {
+    const skript = fileURLToPath(new URL("../../scripts/forum-quarantaene.mjs", import.meta.url));
+    const r = spawnSync(process.execPath, [skript, "--inbox", "999999999"], { encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/^forum-quarantaene: /);
+    expect(r.stderr).not.toMatch(/keine Projekt-Config übergeben/);
   }, 30000);
 
   describe("Antworten auf Kommentare (#1693 L56)", () => {
@@ -394,7 +406,7 @@ describe("main (CLI-Kern, gh und Entschärfer injiziert): fail-closed, keine Tei
     const ausgabe: string[] = [];
     let fehler = "";
     try {
-      Q.main(argv, { gh, sanitize, wurzel, nonce: () => "n0nce", log: (z: string) => ausgabe.push(z), ...(config ? { config } : {}) });
+      Q.main(argv, { gh, sanitize, wurzel, nonce: () => "n0nce", log: (z: string) => ausgabe.push(z), config: config ?? ECHT });
     } catch (e) {
       fehler = (e as Error).message;
     }
@@ -410,6 +422,16 @@ describe("main (CLI-Kern, gh und Entschärfer injiziert): fail-closed, keine Tei
   const disc = JSON.stringify({ title: "GEHEIMTITEL", bodyText: "GEHEIMBODY", author: { login: "a" }, comments: { nodes: [] } });
   const gh = (titel: string, labels: string[], d: string = disc) => (args: string[]) => (args[0] === "issue" ? issue(titel, labels) : d);
 
+  test("Negativfall: ohne übergebene Config lädt der Kern keine selbst, sondern bricht ab (keine Teildatei)", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-1814-"));
+    try {
+      const aufruf = () => Q.main(["--inbox", "7"], { gh: gh("Forum #12: x", ["forum"]), sanitize: sicher, wurzel, nonce: () => "n", log: () => undefined });
+      expect(aufruf).toThrow(/keine Projekt-Config übergeben/);
+      expect(existsSync(join(wurzel, ".claude", "forum-quarantaene"))).toBe(false);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
   test("Happy Path: Datei forum-7.txt mit Nonce, stdout nur Metadaten", () => {
     const r = lauf(gh("Forum #12: x", ["forum"]));
     expect(r.fehler).toBe("");
@@ -457,7 +479,7 @@ describe("main (CLI-Kern, gh und Entschärfer injiziert): fail-closed, keine Tei
     const wurzel = mkdtempSync(join(tmpdir(), "kq-1435-"));
     try {
       const gh = (a: string[]) => (a[0] === "issue" ? issue("Forum #1: x", ["forum"]) : disc);
-      for (const nr of ["7", "8"]) Q.main(["--inbox", nr], { gh, sanitize: sicher, wurzel, nonce: () => "n", log: () => undefined });
+      for (const nr of ["7", "8"]) Q.main(["--inbox", nr], { config: ECHT, gh, sanitize: sicher, wurzel, nonce: () => "n", log: () => undefined });
       Q.main(["--entfernen", "7"], { wurzel });
       expect(readdirSync(join(wurzel, ".claude", "forum-quarantaene"))).toEqual(["forum-8.txt"]);
       Q.main(["--entfernen", "7"], { wurzel });

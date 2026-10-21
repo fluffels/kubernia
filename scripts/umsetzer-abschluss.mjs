@@ -117,6 +117,8 @@ const WARTEN = (nr) =>
 export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage }, deps = {}) {
   const vorher = hookEvent === "PreToolUse";
   if (vorher ? toolName !== "SubagentHandback" : hookEvent !== "SubagentStop") return null;
+  // Die Config lädt der Einstiegspunkt (Hook) und reicht sie als `deps.config` durch; dieser Kern lädt nie selbst (fail-closed ohne).
+  if (!deps.config) return failClosedGrund("Umsetzer-Abschluss", new Error("keine Config übergeben (der Einstiegspunkt lädt sie)"));
   const { namen, config, grund } = namenOderGrund("Umsetzer-Abschluss", deps);
   if (grund) return grund;
   if (agentType !== namen.agenten.umsetzer) return null;

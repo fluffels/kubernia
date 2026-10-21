@@ -12,6 +12,7 @@ import * as rawDoctor from "../scripts/harness-doctor.mjs";
 
 interface Doctor {
   main(argv: string[], opt: Record<string, unknown>): number;
+  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown[]>; spiegel: undefined; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
   voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[] }): { secrets: string[]; variablen: string[]; labels: string[] };
 }
 const doctor = rawDoctor as unknown as Doctor;
@@ -217,6 +218,14 @@ describe("harness-doctor --pruefen", () => {
     assert.match(luecken(r)[1], /Langfuse:/);
     assert.match(luecken(r)[0], /Token:.*Fix: gh auth login --scopes project/);
     assert.deepEqual(r.aufrufe, ["api -i user"]);
+  });
+
+  test("das nicht angemeldete Token trägt das Feld fatal (einrichten prüft es statt des Punktnamens), ein fehlender Scope nicht", () => {
+    const leer = { secrets: [], variablen: [], labels: [], boards: [] };
+    const nichtAngemeldet = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh: () => { throw new Error("gh auth login"); }, langfuse: null });
+    assert.deepEqual(nichtAngemeldet.map((p) => [p.punkt, p.fatal]), [["Token", true]]);
+    const ohneScope = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh: (a) => (a.join(" ") === "api -i user" ? "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo\n\n{}" : (() => { throw new Error("404"); })()), langfuse: null });
+    assert.equal(ohneScope.find((p) => p.punkt === "Token-Scope")?.fatal, undefined);
   });
 
   test("Langfuse nicht erreichbar: Lücke mit Befund aus stderr und Fix", () => {

@@ -15,9 +15,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { issueKommentare } from "./fremdtext-lib.mjs";
-import { REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
-import { offeneTitel, platziereOben, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
+import { REPO } from "./board-lib.mjs";
+import { ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
 export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
@@ -148,16 +147,12 @@ function ladeAlerts() {
   }
 }
 
-const kommentareVon = (nr) => issueKommentare(nr, (args) => JSON.parse(ghText(args)), REPO).map((k) => ({ body: k.body, user: k.user }));
-
 function main() {
   const trocken = process.argv.includes("--dry-run");
-  const rohe = JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/issues?state=open&per_page=100`]));
-  const offene = normalizeOffene(rohe);
-  const sammel = offene.filter((i) => i.titel === SAMMELTICKET_TITEL);
+  const { rohe, offene, kommentare } = ladeSammelKontext();
   const owner = REPO.split("/")[0];
   const bekannt = bekannteGhsa({
-    kommentare: vertrauteBodies(sammel.flatMap((i) => kommentareVon(i.number)), owner),
+    kommentare: vertrauteBodies(kommentare, owner),
     wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")),
     // Nur Titel vertrauter Autoren: ein Fremder darf mit einem „🔒 Security: GHSA-…“-Titel keinen Alarm unterdrücken.
     offeneTitel: offeneTitel(rohe, owner),

@@ -49,23 +49,23 @@ function parseArgs(argv) {
   return istText(werte.aus) ? werte.aus : null;
 }
 
-/** `io = { lauf, schreibe, entferne, log }` ist injizierbar (Tests rufen kein echtes npm). */
+/** `io = { lauf, schreibe, entferne, log, fehler }` (`fehler` schreibt auf stderr) ist injizierbar (Tests rufen kein echtes npm). */
 export function fuehreAus(argv, io) {
   const aus = parseArgs(argv);
   if (aus === null) {
-    io.log("Aufruf: node scripts/sbom.mjs [--aus <pfad>]");
+    io.fehler("Aufruf: node scripts/sbom.mjs [--aus <pfad>]");
     return 2;
   }
   io.entferne(aus);
   const r = io.lauf();
   if (r.error || r.status !== 0) {
     const stderr = String(r.stderr ?? "").split(/\r?\n/).filter(Boolean).slice(0, 5).join("\n");
-    io.log(`SBOM-Erzeugung fehlgeschlagen (npm ${NPM_ARGS.join(" ")}, Exit ${r.status}${r.error ? `, ${r.error.message}` : ""})${stderr ? `\n${stderr}` : ""}`);
+    io.fehler(`SBOM-Erzeugung fehlgeschlagen (npm ${NPM_ARGS.join(" ")}, Exit ${r.status}${r.error ? `, ${r.error.message}` : ""})${stderr ? `\n${stderr}` : ""}`);
     return 1;
   }
   const fehler = pruefeSbom(r.stdout);
   if (fehler.length > 0) {
-    io.log(`SBOM ungültig:\n- ${fehler.join("\n- ")}`);
+    io.fehler(`SBOM ungültig:\n- ${fehler.join("\n- ")}`);
     return 1;
   }
   io.schreibe(aus, r.stdout);
@@ -84,6 +84,7 @@ const echteIo = {
   },
   entferne: (pfad) => rmSync(pfad, { force: true }),
   log: (z) => console.log(z),
+  fehler: (z) => console.error(z),
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = fuehreAus(process.argv.slice(2), echteIo);

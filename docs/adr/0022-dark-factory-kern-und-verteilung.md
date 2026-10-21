@@ -428,3 +428,7 @@ Was eine Datei nicht zur Laufzeit aus der Config lesen kann (Frontmatter, Prompt
 - **Kein Block im echten Repo in diesem Schritt:** der erste Nutzer des Markdown-Blocks ist #1747; die Mechanik ist getestet.
 - **Rückfall Frontmatter:** trüge Claude Code ein Frontmatter mit Kommentarzeile nicht, wäre der Marker ein HTML-Kommentar hinter dem schließenden `---`; der Probe-Lauf (PR #1746) belegt, dass die Agenten mit der Kommentarzeile geladen und von Langfuse erfasst werden.
 - **Grenzen:** eine Änderung von `agenten.planer` macht das Drift-Gate rot, bis `projektwerte --write` lief; nicht-Markdown-Dateien (etwa YAML-Workflows) sind keine Prüf-Fläche.
+
+## Fortschreibung #1814 (2026-10-21): Factory-Seiten bleiben unter docs/
+
+Die Factory-Seiten bleiben unter `docs/` (kein Verschieben nach `docs/factory/`, kein Ring `kern`). Gründe: Verweise in ADRs werden nie umgeschrieben, die Seiten mischen Projektwerte mit Kernwissen, und die Regelzeilen kommen laut F4 als Markdown-Blöcke in den Kern, ganze Brain-Seiten sind dafür nicht vorgesehen.

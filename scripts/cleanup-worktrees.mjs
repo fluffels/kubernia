@@ -80,6 +80,12 @@ export function branchenModus(root, loeschen, {
     err(`Branch-Aufräumen abgebrochen, nichts gelöscht: ${e instanceof Error ? e.message : e}`);
     return 1;
   }
+  try {
+    git(["fetch", "--prune", "origin"]); // frische Remote-Refs: `[gone]` stammt sonst aus altem Stand
+  } catch (e) {
+    err(`Branch-Aufräumen abgebrochen, nichts gelöscht: git fetch --prune origin: ${e instanceof Error ? e.message : e}`);
+    return 1;
+  }
   const gh = ghIn ?? (() => ghJsonFn(["pr", "list", "--state", "merged", "--search", `head:${namen.praefixe.branch}`, "--json", "headRefName,headRefOid", "--limit", String(PR_LIMIT)]));
   const r = branchesAufraeumen({ git, gh, loeschen, namen });
   if (r.grund) {

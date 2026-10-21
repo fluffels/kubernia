@@ -121,8 +121,9 @@ const QUERY = `query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:
 const STANDARD = { gh, sanitize: sanitizeSpawn, wurzel: WURZEL, nonce: () => randomBytes(8).toString("hex"), log: console.log };
 
 function inbox(nr, d) {
+  if (!d.config) throw new Error("keine Projekt-Config übergeben (der Einstiegspunkt lädt sie)");
   const issue = JSON.parse(d.gh(["issue", "view", String(nr), "--json", "title,labels"]));
-  const forumLabel = labelAus(d.config ?? ladeProjektConfig(), "forum");
+  const forumLabel = labelAus(d.config, "forum");
   if (!issue.labels?.some((l) => l.name === forumLabel)) throw new Error(`#${nr} trägt kein Label ${forumLabel}`);
   const n = discussionNummer(issue.title);
   if (n === null) throw new Error(`#${nr}: Titel nicht im Format „Forum #N: …“`);
@@ -150,7 +151,9 @@ export function main(argv, deps = {}) {
 
 if (istDirektaufruf(import.meta.url)) {
   try {
-    main(process.argv.slice(2));
+    // Die Config lädt nur der Einstiegspunkt (und nur für --inbox); der Kern bekommt sie als Parameter.
+    const argv = process.argv.slice(2);
+    main(argv, argv[0] === "--inbox" ? { config: ladeProjektConfig() } : {});
   } catch (e) {
     console.error(`forum-quarantaene: ${e.message}`);
     process.exitCode = 2;

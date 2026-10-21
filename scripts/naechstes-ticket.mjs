@@ -231,9 +231,9 @@ export const reparierenVon = (uebersprungen) => uebersprungen.filter((u) => u.fe
 const reparierenZeilen = (uebersprungen) => reparierenVon(uebersprungen).map((r) => `reparieren #${r.nr}: ${r.fehlt.join("; ")}`);
 
 /** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach Hinweise, `reparieren`-Zeilen und je übersprungenem Kandidaten eine Zeile. Pur. */
-export function formatiere({ ticket, uebersprungen, bereich = null, einzel = null, hinweise = [] }) {
+export function formatiere({ ticket, uebersprungen, bereich, einzel = null, hinweise = [] }) {
   if (einzel !== null && !ticket) return [`#${einzel} nicht frei: ${uebersprungen[0]?.grund ?? "unbekannt"}`, ...reparierenZeilen(uebersprungen)].join("\n") + "\n";
-  const keins = bereich ? `kein freies Ticket im Bereich ${BEREICHE[bereich]}` : "kein freies Ticket";
+  const keins = `kein freies Ticket im Bereich ${BEREICHE[bereich]}`; // ohne Einzelprüfung ist `bereich` immer gesetzt (`fuehreAus` verlangt eines von beiden)
   const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : keins;
   const hinweis = ticket?.spezifikation ? [`hinweis #${ticket.nr}: Spezifikation unvollständig (Bestand, nur berichtet): ${ticket.spezifikation.fehlt.join("; ")}`] : [];
   return [kopf, ...hinweise.map((h) => `hinweis ${h}`), ...hinweis, ...reparierenZeilen(uebersprungen), ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
