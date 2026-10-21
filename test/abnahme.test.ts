@@ -381,6 +381,19 @@ describe("Aufruf-, gh- und Vertrauensfehler", () => {
     expect(r.code).toBe(2);
     expect(r.posts).toEqual([]);
   });
+  test.each([
+    ["unbekanntes Flag", [...AUSWERTEN, "--bogus", "x"], "Unbekanntes Argument: --bogus"],
+    ["doppeltes Flag", [...AUSWERTEN, "--pr", "71"], "--pr ist doppelt angegeben"],
+    ["Flag von auswerten bei kriterien", ["kriterien", "7", "--pr", "1"], "Unbekanntes Argument: --pr"],
+    ["zweite Nummer bei kriterien", ["kriterien", "7", "8"], "Unbekanntes Argument: 8"],
+    ["zweite Nummer bei auswerten", [...AUSWERTEN, "8"], "Unbekanntes Argument: 8"],
+    ["Flag ohne Wert", ["auswerten", "7", "--pr"], "--pr braucht einen Wert"],
+  ])("Aufruf-Fehler %s: Exit 2 mit Text und Aufruf, nichts gepostet", (_n, argv, text) => {
+    const r = lauf(ALLE_OK, {}, [], argv);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain(`✖ abnahme: ${text}\nAufruf:`);
+    expect(r.posts).toEqual([]);
+  });
   test("Issue ist ein PR: Exit 2", () => {
     expect(lauf(ALLE_OK, { ladeIssue: () => ({ body: BODY, user: VERTRAUT, pull_request: {} }) }).code).toBe(2);
     expect(lauf("", { ladeIssue: () => ({ body: BODY, user: VERTRAUT, pull_request: {} }) }, [], ["kriterien", "7"]).code).toBe(2);

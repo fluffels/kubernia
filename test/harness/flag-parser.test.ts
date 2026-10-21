@@ -36,7 +36,6 @@ export const AUSNAHMEN: Ausnahme[] = [
   { pfad: "scripts/lauf-ergebnis.mjs", ticket: "#1790" },
   { pfad: "scripts/pr-warten.mjs", ticket: "#1790" },
   { pfad: "scripts/subagent-laufzeit.mjs", ticket: "#1790" },
-  { pfad: "scripts/abnahme.mjs", ticket: "#1791" },
 ];
 
 const DEKLARATION = /\bfunction\s+parseArgs\b|\bparseArgs\s*=(?!=)/;

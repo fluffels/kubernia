@@ -27,6 +27,7 @@ import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { ladeCommitZeilen } from "./slice-override.mjs";
@@ -158,19 +159,22 @@ export function handoffKommentar({ zeilen, nr, urteile, kriterienListe, max = KO
   ], max);
 }
 
-/** Flags `--name wert`; alles andere ist positional. Pur. */
-function parseArgs(argv) {
-  const werte = {};
-  const positional = [];
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith("--")) {
-      const v = argv[i + 1];
-      if (v === undefined || v.startsWith("--")) return { fehler: `${argv[i]} braucht einen Wert` };
-      werte[argv[i].slice(2)] = v;
-      i++;
-    } else positional.push(argv[i]);
-  }
-  return { werte, positional };
+const FLAG_MENGEN = {
+  kriterien: {},
+  auswerten: { pr: { type: "string" }, bericht: { type: "string" }, worktree: { type: "string" }, head: { type: "string" } },
+};
+
+/**
+ * Prüft den Aufruf vor jedem I/O: Unterbefehl zuerst, dann die Flag-Menge dieses Unterbefehls (`flagsLesen`) und genau ein Positionsargument
+ * (die Ticketnummer; `kriterien` kennt keine Flags). Liefert `{ befehl, werte, positional }` oder `{ fehler }`. Pur.
+ */
+export function aufrufPruefen(argv) {
+  const [befehl, ...rest] = argv;
+  if (!Object.hasOwn(FLAG_MENGEN, befehl ?? "")) return { fehler: `unbekannter Befehl ${befehl === undefined ? "(keiner)" : `„${befehl}“`}` };
+  const r = flagsLesen(rest, FLAG_MENGEN[befehl], { positionale: true });
+  if (r.fehler) return { fehler: r.fehler.text };
+  if (r.positionale.length > 1) return { fehler: `Unbekanntes Argument: ${r.positionale[1]}` };
+  return { befehl, werte: r.werte, positional: r.positionale };
 }
 
 /** Lädt das Issue und prüft die Vorbedingungen (kein PR, vertraut); `{issue}` oder `{ergebnis}`. */
@@ -272,15 +276,11 @@ function auswerten(werte, nrText, io) {
 
 /** Ausführung mit injizierbarer I/O (`owner`, `zeilen`, `leseDatei`, `ladeIssue`, `ladeKommentare`, `poste`, `git`): `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
-  const [befehl, ...rest] = argv;
-  const p = parseArgs(rest);
+  const p = aufrufPruefen(argv);
   if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
-  if (befehl === "kriterien") {
-    const nr = positiveZahl(p.positional[0]);
-    return nr === null ? aufrufFehler(`kriterien braucht eine Ticketnummer\n${AUFRUF}`) : zeigeKriterien(nr, io);
-  }
-  if (befehl === "auswerten") return auswerten(p.werte, p.positional[0], io);
-  return aufrufFehler(`unbekannter Befehl ${befehl === undefined ? "(keiner)" : `„${befehl}“`}\n${AUFRUF}`);
+  if (p.befehl === "auswerten") return auswerten(p.werte, p.positional[0], io);
+  const nr = positiveZahl(p.positional[0]);
+  return nr === null ? aufrufFehler(`kriterien braucht eine Ticketnummer\n${AUFRUF}`) : zeigeKriterien(nr, io);
 }
 
 const echteIo = () => ({
@@ -295,8 +295,11 @@ const echteIo = () => ({
 });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  mitKontingent("abnahme", { arten: ["core"] });
-  const { code, out, err } = fuehreAus(process.argv.slice(2), echteIo());
+  const argv = process.argv.slice(2);
+  // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1791).
+  const vorab = aufrufPruefen(argv);
+  if (!vorab.fehler) mitKontingent("abnahme", { arten: ["core"] });
+  const { code, out, err } = fuehreAus(argv, vorab.fehler ? null : echteIo());
   process.stdout.write(out);
   process.stderr.write(err);
   process.exitCode = code;
