@@ -24,7 +24,7 @@ export function boardFuerRolle(rolle) {
 }
 
 /** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste, ohne `config` oder ohne Schlüssel wirft sie. */
-export function boardRolleFuer(labels, config) {
+export function boardRolleFuer(labels, config = PROJEKT) {
   if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
   const harness = labelAus(config, "harness");
   return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
