@@ -663,6 +663,25 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
     assert.equal(zweites.out, "aktiv\n");
   });
 
+  test("nach verbrauchtem Stopp-Vermerk: aktiv mit Verbrauchszeit und Ausweg im Text; ohne Verbrauch kein solcher Hinweis (#1814)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    const vorher = lauf(["pruefe", "5", "--nonce", n], aktiv);
+    assert.equal(vorher.code, 4);
+    assert.ok(!vorher.err.includes("verbraucht"), "ohne Verbrauch kein Hinweis: " + vorher.err);
+    lauf(["gestoppt", "5", "--nonce", n]);
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv).code, 0);
+    const danach = lauf(["uebernehmen", "5", "--nonce", n, "--nachfolger"], aktiv);
+    assert.equal(danach.code, 4);
+    assert.ok(danach.err.includes(new Date(JETZT).toISOString()), "Verbrauchszeit des Stopp-Vermerks steht im Text");
+    assert.ok(danach.err.includes("gestoppt"), "Ausweg steht im Text");
+  });
+
+  test("uebernehmen akzeptiert --nonce=<x> samt --nachfolger (#1814)", () => {
+    const n = nonceVon(lauf(["claim", "5"]));
+    lauf(["gestoppt", "5", "--nonce", n]);
+    assert.deepEqual(lauf(["uebernehmen", "5", "--nonce=" + n, "--nachfolger"], aktiv), { code: 0, out: "uebernehmbar\n", err: "" });
+  });
+
   test("zählt nicht als Phasen-Schnitt: uebergeben bleibt danach möglich (eine Übergabe je Lock gilt weiter), gestoppt legt kein uebergabe-Feld an", () => {
     const n = nonceVon(lauf(["claim", "5"]));
     lauf(["gestoppt", "5", "--nonce", n]);
