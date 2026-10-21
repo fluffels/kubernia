@@ -102,15 +102,15 @@ describe("Diff-Größenbudget (#533)", () => {
 
   test("readThresholds: Defaults, Env-Override, ungültige Werte fallen auf Default zurück", () => {
     assert.deepEqual(readThresholds({}), { maxFiles: MAX_FILES, maxLines: MAX_LINES });
-    assert.deepEqual(readThresholds({ KQ_DIFFSIZE_MAX_FILES: "5", KQ_DIFFSIZE_MAX_LINES: "50" }), {
+    assert.deepEqual(readThresholds({ FACTORY_DIFFSIZE_MAX_FILES: "5", FACTORY_DIFFSIZE_MAX_LINES: "50" }), {
       maxFiles: 5,
       maxLines: 50,
     });
-    assert.deepEqual(readThresholds({ KQ_DIFFSIZE_MAX_FILES: "0", KQ_DIFFSIZE_MAX_LINES: "-3" }), {
+    assert.deepEqual(readThresholds({ FACTORY_DIFFSIZE_MAX_FILES: "0", FACTORY_DIFFSIZE_MAX_LINES: "-3" }), {
       maxFiles: MAX_FILES,
       maxLines: MAX_LINES,
     });
-    assert.deepEqual(readThresholds({ KQ_DIFFSIZE_MAX_FILES: "abc" }), { maxFiles: MAX_FILES, maxLines: MAX_LINES });
+    assert.deepEqual(readThresholds({ FACTORY_DIFFSIZE_MAX_FILES: "abc" }), { maxFiles: MAX_FILES, maxLines: MAX_LINES });
   });
 
   // ── Override als Commit-Trailer (#1269): wirkt lokal, im PR und auf main gleich ──
@@ -163,7 +163,7 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(parseOverrideTrailers("KQ-Diffcov-Override: #5 warum", "KQ-Diffcov-Override").valid.length, 1);
   });
 
-  test("resolveBase: KQ_DIFF_BASE zuerst, sonst origin/main vor main, sonst null", () => {
+  test("resolveBase: FACTORY_DIFF_BASE zuerst, sonst origin/main vor main, sonst null", () => {
     // origin/main-Zweig gewinnt vor main.
     const git1: RunGit = (a) => {
       if (a[0] === "merge-base" && a[2] === "origin/main") return "base-origin\n";
@@ -180,12 +180,12 @@ describe("Diff-Größenbudget (#533)", () => {
     };
     assert.equal(resolveBase(git2, {}), "base-main");
 
-    // explizites KQ_DIFF_BASE gewinnt über alles.
+    // explizites FACTORY_DIFF_BASE gewinnt über alles.
     const git3: RunGit = (a) => {
       if (a[0] === "rev-parse") return "explicit-sha\n";
       throw new Error("merge-base darf nicht gefragt werden");
     };
-    assert.equal(resolveBase(git3, { KQ_DIFF_BASE: "v1.2.3" }), "explicit-sha");
+    assert.equal(resolveBase(git3, { FACTORY_DIFF_BASE: "v1.2.3" }), "explicit-sha");
 
     // alles wirft → keine Basis.
     const git4: RunGit = () => {
@@ -196,7 +196,7 @@ describe("Diff-Größenbudget (#533)", () => {
 
   // ── checkDiffSize: die vier Zustände (ok / über / geduldet / stale) + No-op ──
   const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n"); // 3 Dateien, 6 Zeilen
-  const tightEnv = { KQ_DIFFSIZE_MAX_FILES: "2", KQ_DIFFSIZE_MAX_LINES: "2" };
+  const tightEnv = { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" };
   const gitWith =
     (base: string | null, numstat: string, log = ""): RunGit =>
     (a) => {
@@ -552,7 +552,7 @@ describe("check:diffsize ohne GEN:-Abschnitte (#1411)", () => {
   test("checkDiffSize: ein Slice, der nur wegen GEN-Zeilen über Budget läge, ist im Budget (Red-Green gegen die Wurzel-Liste)", () => {
     const viele = "4\t4\tdocs/y.md\n";
     const patch = kopf("docs/y.md") + "@@ -3,4 +3,4 @@\n" + ["-a", "-b", "-c", "-d", "+a", "+b", "+c", "+d"].join("\n") + "\n";
-    const env = { KQ_DIFFSIZE_MAX_LINES: "4" };
+    const env = { FACTORY_DIFFSIZE_MAX_LINES: "4" };
     const mit = (wurzeln: string[]) => {
       const g = gitMitGen(viele, patch, wurzeln);
       return checkMitWurzeln({ runGit: g.runGit, env, docgenWurzeln: g.wurzeln });

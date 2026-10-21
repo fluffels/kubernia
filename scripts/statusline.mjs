@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ausStatusline, liesSnapshot, schreibeSnapshot } from "./budget-lib.mjs";
+import { umgebungsWert } from "./projekt-config-lib.mjs";
 
 /** Shell wie Claude Code: unter Windows Git Bash, sonst die Standard-Shell. */
 function shellArgs(kommando) {
@@ -33,9 +34,9 @@ try {
   } catch {
     /* kein JSON oder nicht schreibbar: nur durchreichen */
   }
-  if (process.env.KQ_STATUSLINE_DURCHREICHEN !== "1") {
+  if (umgebungsWert(process.env, "FACTORY_STATUSLINE_DURCHREICHEN") !== "1") {
     try {
-      const settings = process.env.KQ_USER_SETTINGS || join(homedir(), ".claude", "settings.json");
+      const settings = umgebungsWert(process.env, "FACTORY_USER_SETTINGS") || join(homedir(), ".claude", "settings.json");
       const kommando = JSON.parse(readFileSync(settings, "utf8"))?.statusLine?.command;
       if (typeof kommando === "string" && kommando.trim()) {
         const { datei, args, shell } = shellArgs(kommando);
@@ -43,7 +44,7 @@ try {
           input: roh,
           timeout: 5000,
           shell,
-          env: { ...process.env, KQ_STATUSLINE_DURCHREICHEN: "1" },
+          env: { ...process.env, FACTORY_STATUSLINE_DURCHREICHEN: "1" },
         });
         if (r.stdout?.length) process.stdout.write(r.stdout);
       }

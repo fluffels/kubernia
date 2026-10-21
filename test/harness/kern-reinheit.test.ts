@@ -98,6 +98,9 @@ export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
     Branch: new RegExp(escapeRe(config.praefixe.branch), "g"),
     Worktree: new RegExp(escapeRe(config.praefixe.worktree), "g"),
   };
+  // Env (#1824): der Commit-Zeilen-Präfix mit Unterstrich als Umgebungsvariablen-Präfix; die Wortgrenze davor schließt `VITE_<PRAEFIX>_…` und `__<PRAEFIX>_…__` aus.
+  const envPraefix = (rawPc as unknown as { altEnvPraefix(c: ProjektConfig): string | null }).altEnvPraefix(config);
+  if (envPraefix !== null) out.Env = new RegExp("\\b" + escapeRe(envPraefix) + "(?=[A-Z0-9])", "g");
   const labels = Object.values(config.labels).filter((l) => l.includes(":"));
   if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
@@ -127,6 +130,9 @@ export function zaehle(text: string, begriffe: Record<string, RegExp>): Zaehlung
   return out;
 }
 
+/** Weg zur Behebung je Begriff (nur wo er vom Standardsatz abweicht). */
+const hinweis = (begriff: string): string => (begriff === "Env" ? " (Kern-Umgebungsvariablen heißen FACTORY_<NAME> und werden über umgebungsWert gelesen)" : "");
+
 /** Meldungen (leer = grün): Ist gegen Baseline, nur sinkend. */
 export function vergleiche(ist: Baseline, baseline: Baseline): string[] {
   const out: string[] = [];
@@ -134,8 +140,8 @@ export function vergleiche(ist: Baseline, baseline: Baseline): string[] {
     const b = baseline[einheit] ?? {};
     for (const [begriff, n] of Object.entries(z)) {
       const bn = b[begriff];
-      if (bn === undefined) out.push(`${einheit}: neues Projektliteral '${begriff}' (${n}x), Kern-Einheiten bleiben literalfrei`);
-      else if (n > bn) out.push(`${einheit}: '${begriff}' ${n}x über Baseline ${bn} (neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben (Baseline sinkt nur))`);
+      if (bn === undefined) out.push(`${einheit}: neues Projektliteral '${begriff}' (${n}x), Kern-Einheiten bleiben literalfrei${hinweis(begriff)}`);
+      else if (n > bn) out.push(`${einheit}: '${begriff}' ${n}x über Baseline ${bn} (neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben (Baseline sinkt nur))${hinweis(begriff)}`);
       else if (n < bn) out.push(`${einheit}: '${begriff}' nur noch ${n}x, Baseline auf ${n} senken (steht ${bn})`);
     }
     for (const begriff of Object.keys(b)) {
@@ -414,8 +420,16 @@ describe("begriffeAus", () => {
   test("ohne projektliterale entfällt der Zusatzbegriff", () => {
     assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU })), {});
   });
-  test("Praefix zählt groß/klein-genau (ZD- ja, zd- und ZD_ nein)", () => {
-    assert.deepEqual(zaehle("ZD-Plan zd-Plan ZD_X", B), { Praefix: 1, Worktree: 1 });
+  test("Praefix zählt groß/klein-genau (ZD- ja, zd- und ZD_ nur als Env)", () => {
+    assert.deepEqual(zaehle("ZD-Plan zd-Plan ZD_X", B), { Praefix: 1, Worktree: 1, Env: 1 });
+  });
+  test("Env: Umgebungsvariablen mit Projektpräfix zählen (auch hinter $ und env.), VITE_- und __-Namen sowie ein nacktes Präfix nicht", () => {
+    assert.deepEqual(zaehle("ZD_DIFF_BASE $ZD_X env.ZD_PR_BODY", B), { Env: 3 });
+    assert.deepEqual(zaehle("VITE_ZD_PW __ZD_X__ zd_x ZD_ ZD_a", B), {});
+  });
+  test("Env entfällt ohne gültiges Commit-Zeilen-Präfix", () => {
+    const ohne = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, praefixe: { commitZeile: "", branch: "feature/zd-", worktree: "zd-" } });
+    assert.equal("Env" in ohne, false);
   });
   test("Branch und Worktree zählen wörtlich; der Branch enthält das Worktree-Präfix, beides zählt (gewollte Doppelzählung)", () => {
     assert.deepEqual(zaehle("feature/zd-12", B), { Branch: 1, Worktree: 1 });
@@ -504,6 +518,11 @@ describe("vergleiche", () => {
   });
   test("über Baseline nennt den Weg: Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben", () => {
     assert.match(vergleiche({ a: { Repo: 3 } }, { a: { Repo: 2 } }).join(), /neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben \(Baseline sinkt nur\)/);
+  });
+  test("Env nennt den Weg FACTORY_<NAME> über umgebungsWert, andere Begriffe nicht", () => {
+    assert.match(vergleiche({ "x.mjs": { Env: 1 } }, {}).join(), /FACTORY_<NAME>.*umgebungsWert/);
+    assert.match(vergleiche({ "x.mjs": { Env: 2 } }, { "x.mjs": { Env: 1 } }).join(), /FACTORY_<NAME>.*umgebungsWert/);
+    assert.doesNotMatch(vergleiche({ "x.mjs": { Owner: 1 } }, {}).join(), /FACTORY_/);
   });
   test("über Baseline, unter Baseline, verwaister Eintrag", () => {
     assert.match(vergleiche({ a: { Repo: 3 } }, { a: { Repo: 2 } }).join(), /'Repo' 3x über Baseline 2/);
@@ -819,7 +838,7 @@ describe("Kern-Reinheit (#1610)", () => {
 
   // In der CI (fail-closed) muss die Basis auflösbar sein; lokal ohne Basis entfällt die Prüfung.
   test.skipIf(diffBasisModus(basis, process.env) === "entfaellt")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
-    assert.ok(basis, "keine Diff-Basis auflösbar (KQ_DIFF_BASE/origin/main fehlt)");
+    assert.ok(basis, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
     const aend = parseNameStatus(git(["diff", "-M", "--name-status", basis]));
     const basisText = (alt: string): string | null => {
       try {

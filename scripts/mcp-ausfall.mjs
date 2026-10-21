@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, umgebungsWert } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 
 /** Server-Arten aus `.mcp.json`, die das Skript kennt (ein Wächter-Test hält `.mcp.json` dagegen). */
@@ -54,9 +54,10 @@ export function fehlendeVariablen(server, env) {
 /** Ordnername, wie Claude Code ihn aus einem Pfad bildet. Pur. */
 export const slug = (pfad) => String(pfad).replace(/[^a-zA-Z0-9]/g, "-");
 
-/** Basisordner der Claude-Code-Logs je Plattform; `KQ_MCP_LOG_DIR` hat Vorrang. Pur. */
+/** Basisordner der Claude-Code-Logs je Plattform; `FACTORY_MCP_LOG_DIR` hat Vorrang. Liest den Altpräfix lazy aus der Config (Fehler egal). */
 export function logBasis({ plattform, env, home }) {
-  if (env.KQ_MCP_LOG_DIR) return env.KQ_MCP_LOG_DIR;
+  const dir = umgebungsWert(env, "FACTORY_MCP_LOG_DIR");
+  if (dir) return dir;
   if (plattform === "win32") return join(env.LOCALAPPDATA || join(home, "AppData", "Local"), "claude-cli-nodejs", "Cache");
   if (plattform === "darwin") return join(home, "Library", "Caches", "claude-cli-nodejs");
   return join(env.XDG_CACHE_HOME || join(home, ".cache"), "claude-cli-nodejs");
@@ -67,9 +68,9 @@ export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").rep
 
 /**
  * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<praefixe.worktree>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
- * `KQ_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es keine Config). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
+ * `FACTORY_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es nur den lazy gelesenen Altpräfix, keine Worktree-Angabe). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
  */
-export const standPfad = (wurzel, env, tmp, config) => env.KQ_MCP_AUSFALL_STAND || join(tmp, `${worktreePraefix(config ?? ladeProjektConfig())}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
+export const standPfad = (wurzel, env, tmp, config) => umgebungsWert(env, "FACTORY_MCP_AUSFALL_STAND") || join(tmp, `${worktreePraefix(config ?? ladeProjektConfig())}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
 
 /** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. Pur. */
 export function projektOrdner(namen, wurzel) {

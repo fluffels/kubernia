@@ -369,7 +369,7 @@ describe("worktreePraefix und zentrale Muster in ticketNamen", () => {
 describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
   test("snapshotPfad: kontoweit und projektneutral (kein Präfix, keine Config nötig); die Umgebungsvariable gewinnt", () => {
     expect(B.snapshotPfad({})).toBe(join(tmpdir(), "claude-rate-limits.json"));
-    expect(B.snapshotPfad({ KQ_RATE_LIMITS_SNAPSHOT: "/x/s.json" })).toBe("/x/s.json");
+    expect(B.snapshotPfad({ FACTORY_RATE_LIMITS_SNAPSHOT: "/x/s.json" })).toBe("/x/s.json");
   });
   test("standPfad braucht nur praefixe.worktree: ohne Agenten-, Branch- und Label-Schlüssel entsteht der Pfad, ohne Worktree-Präfix nicht", () => {
     const nurWt: Cfg = { praefixe: { worktree: "ab-" } };
@@ -379,7 +379,7 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
   test("standPfad: <Präfix>mcp-ausfall-…; ohne Schlüssel Abbruch; die Umgebungsvariable gewinnt", () => {
     expect(M.standPfad("/dev/proj", {}, "/tmp", AB)).toContain(join("/tmp", "ab-mcp-ausfall-"));
     expect(() => M.standPfad("/dev/proj", {}, "/tmp", OHNE_WT)).toThrow(/praefixe\.worktree/);
-    expect(M.standPfad("/dev/proj", { KQ_MCP_AUSFALL_STAND: "/y/s.json" }, "/tmp", OHNE_WT)).toBe("/y/s.json");
+    expect(M.standPfad("/dev/proj", { FACTORY_MCP_AUSFALL_STAND: "/y/s.json" }, "/tmp", OHNE_WT)).toBe("/y/s.json");
   });
   describe("mcp-ausfall main", () => {
     let wurzel = "";
@@ -388,7 +388,7 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
       wurzel = mkdtempSync(join(tmpdir(), "lz-ausfall-"));
       writeFileSync(join(wurzel, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
       const aus: string[] = [];
-      const env = { CLAUDE_PROJECT_DIR: wurzel, KQ_MCP_LOG_DIR: join(wurzel, "logs") };
+      const env = { CLAUDE_PROJECT_DIR: wurzel, FACTORY_MCP_LOG_DIR: join(wurzel, "logs") };
       const code = M.main(["--sessionstart"], env, (t) => aus.push(t), { config });
       return { code, aus: aus.join("\n"), stand: M.standPfad(wurzel, env, tmpdir(), AB) };
     };

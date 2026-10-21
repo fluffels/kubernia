@@ -54,7 +54,7 @@ jobs:
       # zuerst, die volle Test-Suite zuletzt), nicht hier kopiert. Builds + Boot-Smoke bleiben eigene Steps,
       # weil sie Artefakte hochladen (= CI-Sache); zusammen = `npm run verify:full`.
       # Hinweis: check:diffsize (#533) misst den Slice gegen die Basis. Auf einem PR
-      # (fetch-depth:0 oben) ist die Basis die PR-Basis — via KQ_DIFF_BASE gesetzt —,
+      # (fetch-depth:0 oben) ist die Basis die PR-Basis — via FACTORY_DIFF_BASE gesetzt —,
       # der Wächter greift hier also WIRKLICH als Required Check (#592). Auf dem
       # push-auf-main-Event (nach dem Merge) ist die Basis der Vorgänger-Commit
       # (github.event.before) → der Wächter misst den gerade gemergten Slice AUCH
@@ -78,7 +78,7 @@ jobs:
           else
             base="$BEFORE_SHA"
           fi
-          echo "KQ_DIFF_BASE=$base" >> "$GITHUB_ENV"
+          echo "FACTORY_DIFF_BASE=$base" >> "$GITHUB_ENV"
 
       - name: Verify – alle Gates in einer SSOT-Kette (#527)
         run: npm run verify
@@ -97,7 +97,7 @@ jobs:
       # dreht den Nenner um und misst NUR die im Slice geänderten Zeilen (coverage/
       # lcov.info aus dem Lauf davor, geschnitten mit dem Diff). Muss darum NACH
       # test:coverage stehen — ohne Report wird er bewusst rot, nicht still grün.
-      # KQ_DIFF_BASE kommt aus dem Schritt „Diff-Basis bestimmen“ oben (wie bei check:diffsize).
+      # FACTORY_DIFF_BASE kommt aus dem Schritt „Diff-Basis bestimmen“ oben (wie bei check:diffsize).
       - name: Diff-Coverage-Gate – geänderte Zeilen (#1021)
         run: npm run check:diffcoverage
 
@@ -163,7 +163,7 @@ jobs:
       # Review, und der Schritt darf die Ausführung der Gates davor nicht beeinflussen. Er läuft auch
       # nach einem roten Schritt davor (`!cancelled()`), damit ein fehlender Nachweis neben einem
       # anderen Rot sichtbar bleibt. Nur auf PRs; Dependabot-PRs haben weder Plan noch Review.
-      # KQ_DIFF_BASE kommt aus „Diff-Basis bestimmen“ oben.
+      # FACTORY_DIFF_BASE kommt aus „Diff-Basis bestimmen“ oben.
       - name: Review- und Plan-Nachweis prüfen (#1270)
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         run: node scripts/check-review-nachweis.mjs
@@ -176,9 +176,9 @@ jobs:
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          KQ_PR_NUMBER: ${{ github.event.pull_request.number }}
-          KQ_PR_DRAFT: ${{ github.event.pull_request.draft }}
-          KQ_PR_BODY: ${{ github.event.pull_request.body }}
+          FACTORY_PR_NUMBER: ${{ github.event.pull_request.number }}
+          FACTORY_PR_DRAFT: ${{ github.event.pull_request.draft }}
+          FACTORY_PR_BODY: ${{ github.event.pull_request.body }}
         run: node scripts/check-abnahme-nachweis.mjs
 
   # Security-Audit (#396): npm audit als CI-Gate. Bewusst ZWEISTUFIG, um die

@@ -17,14 +17,14 @@
  * wenn er ein Budget an geänderten Dateien ODER Zeilen überschreitet.
  *
  * WO er beißt (seit #592 primär server-seitig, PR-gegated):
- *  - Auf einem PR (CI-Checkout mit fetch-depth:0 + KQ_DIFF_BASE=PR-Basis, siehe
+ *  - Auf einem PR (CI-Checkout mit fetch-depth:0 + FACTORY_DIFF_BASE=PR-Basis, siehe
  *    ci.yml) ist die Vergleichs-Basis auflösbar → der Slice wird als **Required
  *    Check** gemessen und ein zu breiter PR am Merge gehindert. Das ist der
  *    eigentliche Durchsetzungspunkt.
  *  - Auf einem Feature-Branch (lokales `npm run verify`) greift er ebenso
  *    (volle Historie da) — als schnelle Vorab-Rückmeldung vor dem PR.
  *  - Auf dem push-auf-main-Event (nach dem Merge) setzt ci.yml die Basis auf den
- *    Vorgänger-Commit (KQ_DIFF_BASE=github.event.before) → der Check misst den
+ *    Vorgänger-Commit (FACTORY_DIFF_BASE=github.event.before) → der Check misst den
  *    gerade gemergten Slice AUCH auf main nach (#605, zweite Grenze hinter dem
  *    PR-Gate #592; ein roter main-Lauf blockiert nichts, löst aber den Alarm-Job aus).
  *  - Nur wo keine sinnvolle Basis auflösbar ist (flacher Checkout, workflow_dispatch,
@@ -58,6 +58,7 @@
 
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
+import { umgebungsWert } from "./projekt-config-lib.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -69,7 +70,7 @@ import { leseJson, parseSections } from "./docs-gen/markdown.mjs";
  *  Override-Inflation → der Wächter wird ignoriert, siehe #395-Antipattern), aber
  *  ein Epic-als-Riesen-Commit auffällt. 800 Zeilen spiegeln das LOC_BUDGET aus
  *  check-size.mjs: ein Slice soll nicht mehr Zeilen ändern, als eine ganze Datei
- *  groß sein darf. Über Env überschreibbar (KQ_DIFFSIZE_MAX_FILES/-MAX_LINES). */
+ *  groß sein darf. Über Env überschreibbar (FACTORY_DIFFSIZE_MAX_FILES/-MAX_LINES). */
 export const MAX_FILES = 20;
 export const MAX_LINES = 800;
 
@@ -104,8 +105,8 @@ export function readThresholds(env = process.env) {
     return Number.isFinite(n) && n > 0 ? n : def;
   };
   return {
-    maxFiles: num(env.KQ_DIFFSIZE_MAX_FILES, MAX_FILES),
-    maxLines: num(env.KQ_DIFFSIZE_MAX_LINES, MAX_LINES),
+    maxFiles: num(umgebungsWert(env, "FACTORY_DIFFSIZE_MAX_FILES"), MAX_FILES),
+    maxLines: num(umgebungsWert(env, "FACTORY_DIFFSIZE_MAX_LINES"), MAX_LINES),
   };
 }
 
@@ -283,7 +284,7 @@ export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen
   let numstat;
   try {
     // Drei-Punkt wie check:diffcoverage: misst gegen die Merge-Base, nie gegen eine Basis, die
-    // main inzwischen überholt hat. Die PR-CI setzt KQ_DIFF_BASE auf den ersten Elternteil des
+    // main inzwischen überholt hat. Die PR-CI setzt FACTORY_DIFF_BASE auf den ersten Elternteil des
     // Merge-Checkouts (ci.yml „Diff-Basis bestimmen“), nicht auf die veraltete `base.sha` (#1240).
     numstat = git(["diff", "--numstat", `${base}...HEAD`]);
   } catch {

@@ -178,7 +178,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
 /* #605: das CI-Post-hoc-Netz auf `main` — die zweite Grenze hinter dem PR-Gate #592.
  * Struktureller Wächter (wie oben): stellt sicher, dass die zwei Bausteine des Netzes
  * in ci.yml erhalten bleiben und nicht still zurückdriften:
- *  1. check:diffsize misst auf push:main gegen den Vorgänger-Commit (KQ_DIFF_BASE
+ *  1. check:diffsize misst auf push:main gegen den Vorgänger-Commit (FACTORY_DIFF_BASE
  *     = github.event.before) — statt dort wie früher zu Grün zu degradieren.
  *  2. ein Alarm-Job öffnet bei rotem main ein Alarm-Issue, NUR auf push (nicht
  *     bei PRs) und ohne den Workflow zu blockieren.
@@ -198,7 +198,7 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     const schritt = ci.slice(ci.indexOf("- name: Diff-Basis bestimmen"), ci.indexOf("- name: Verify"));
     expect(schritt, "Schritt „Diff-Basis bestimmen“ muss vor Verify stehen").not.toBe("");
     expect(schritt).toMatch(/BEFORE_SHA:\s*\$\{\{\s*github\.event\.before\s*\}\}/);
-    expect(schritt).toContain('KQ_DIFF_BASE=$base" >> "$GITHUB_ENV"');
+    expect(schritt).toContain('FACTORY_DIFF_BASE=$base" >> "$GITHUB_ENV"');
     expect(schritt, "die Basis darf nirgends aus pull_request.base.sha kommen").not.toContain("pull_request.base.sha");
   });
 
@@ -206,10 +206,10 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     // #1240: base.sha liegt hinter main, wenn main nach dem Öffnen weiterging; der Diff zählte
     // dann fremde, inzwischen gemergte Änderungen mit (832 statt 758 Zeilen, rot).
     expect(ci).toContain("base=$(git rev-parse HEAD^1)");
-    expect(ci, "KQ_DIFF_BASE darf nicht aus pull_request.base.sha gesetzt werden").not.toMatch(
-      /KQ_DIFF_BASE:\s*\$\{\{[^}]*pull_request\.base\.sha/,
+    expect(ci, "FACTORY_DIFF_BASE darf nicht aus pull_request.base.sha gesetzt werden").not.toMatch(
+      /FACTORY_DIFF_BASE:\s*\$\{\{[^}]*pull_request\.base\.sha/,
     );
-    expect(ci, "die Gates erben KQ_DIFF_BASE aus GITHUB_ENV, kein eigenes env überschreibt es").not.toMatch(/^\s+KQ_DIFF_BASE:/m);
+    expect(ci, "die Gates erben FACTORY_DIFF_BASE aus GITHUB_ENV, kein eigenes env überschreibt es").not.toMatch(/^\s+FACTORY_DIFF_BASE:/m);
   });
 
   it("ein Alarm-Job schlägt bei rotem main an — nur auf push, nicht blockierend", () => {

@@ -381,9 +381,9 @@ describe("kontingent-lib: Log-Pfad aus dem Repo-Namen", () => {
     const p = KL.logPfad({}, { lade: () => CFG });
     expect(p).toBe(join(tmpdir(), "acme-gh-kosten.jsonl"));
   });
-  test("KQ_GH_KOSTEN_LOG gewinnt, ohne dass die Config geladen wird", () => {
+  test("FACTORY_GH_KOSTEN_LOG gewinnt, ohne dass die Config geladen wird", () => {
     let geladen = 0;
-    expect(KL.logPfad({ KQ_GH_KOSTEN_LOG: "X:/eigen.jsonl" }, { lade: () => (geladen += 1, CFG) })).toBe("X:/eigen.jsonl");
+    expect(KL.logPfad({ FACTORY_GH_KOSTEN_LOG: "X:/eigen.jsonl" }, { lade: () => (geladen += 1, CFG) })).toBe("X:/eigen.jsonl");
     expect(geladen).toBe(0);
   });
   test("Negativfall: ohne repo in der Config wirft logPfad", () => {
@@ -399,7 +399,7 @@ describe("kontingent-lib: Log-Pfad aus dem Repo-Namen", () => {
     const dir = mkdtempSync(join(tmpdir(), "kq-1745-"));
     ordner.push(dir);
     const datei = join(dir, "kosten.jsonl");
-    messe({ env: { KQ_GH_KOSTEN_LOG: datei } });
+    messe({ env: { FACTORY_GH_KOSTEN_LOG: datei } });
     expect((JSON.parse(readFileSync(datei, "utf8").trim()) as { skript: string }).skript).toBe("probe");
   });
   test("Negativfall: ist der Pfad nicht bestimmbar (Config unlesbar), läuft mitKontingent weiter und schreibt nichts", () => {

@@ -9,7 +9,7 @@ import { appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ghJson } from "./gh-cli.mjs";
-import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, repoName, umgebungsWert } from "./projekt-config-lib.mjs";
 
 /** Unterhalb dieses Anteils am Limit gilt das Kontingent als knapp. */
 export const MIN_ANTEIL = 0.1;
@@ -91,10 +91,10 @@ export function kontingentLesen({ token, exec, timeout = 15_000 } = {}) {
 }
 
 /**
- * Pfad der Kosten-Logdatei: die Umgebungsvariable `KQ_GH_KOSTEN_LOG` gewinnt, ohne die Config zu lesen; sonst `<tmp>/<Repo-Name>-gh-kosten.jsonl` mit dem Repo-Namen aus der
+ * Pfad der Kosten-Logdatei: die Umgebungsvariable `FACTORY_GH_KOSTEN_LOG` gewinnt (der Altpräfix wird lazy aus der Config gelesen, Fehler egal); sonst `<tmp>/<Repo-Name>-gh-kosten.jsonl` mit dem Repo-Namen aus der
  * Projekt-Config (`lade` ersetzt das Laden, Test; wirft wie `repoName`, wenn `repo` fehlt).
  */
-export const logPfad = (env = process.env, { lade = () => ladeProjektConfig({ pruefen: false }) } = {}) => env.KQ_GH_KOSTEN_LOG || join(tmpdir(), `${repoName(lade())}-gh-kosten.jsonl`);
+export const logPfad = (env = process.env, { lade = () => ladeProjektConfig({ pruefen: false }) } = {}) => umgebungsWert(env, "FACTORY_GH_KOSTEN_LOG") || join(tmpdir(), `${repoName(lade())}-gh-kosten.jsonl`);
 
 function logPfadOderNull(env, lade) {
   try {

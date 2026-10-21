@@ -186,7 +186,7 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
   });
   test("checkReviewNachweis meldet blockerFehlt für alte Zeilen, nicht für neue", () => {
     const lauf = (felder: string) =>
-      checkReviewNachweis({ runGit: fakeGit({ messages: review(felder) }), env: { KQ_DIFF_BASE: "base" } }) as { ok: boolean; blockerFehlt?: boolean };
+      checkReviewNachweis({ runGit: fakeGit({ messages: review(felder) }), env: { FACTORY_DIFF_BASE: "base" } }) as { ok: boolean; blockerFehlt?: boolean };
     assert.equal(lauf(`head=${SHA} runden=2 lenses=${DREI} verdikt=ok`).blockerFehlt, true);
     const neu = lauf(`head=${SHA} runden=2 lenses=${DREI} blocker=architektur:1,requirement-treue:0,test-adaequanz:0 verdikt=ok`);
     assert.equal(neu.ok, true);
@@ -270,7 +270,7 @@ function fakeGit(o: {
     throw new Error(`unerwartet: ${cmd}`);
   };
 }
-const env = { KQ_DIFF_BASE: "base" };
+const env = { FACTORY_DIFF_BASE: "base" };
 
 describe("checkReviewNachweis (git injiziert)", () => {
   test("zwei Nachweis-Commits: der jüngste gilt, ein alter mit unbekanntem head stört nicht (Z8a)", () => {
@@ -430,7 +430,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
     return { dir, basis: git(dir, "rev-parse", "main").trim() };
   }
   const pruefe = (r: { dir: string; basis: string }) =>
-    checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }), env: { KQ_DIFF_BASE: r.basis } });
+    checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }), env: { FACTORY_DIFF_BASE: r.basis } });
 
   test("Merge von main mit echtem Konflikt nach dem Review ist rot", () => {
     const r = pruefe(repoMitMerge(true));
@@ -521,7 +521,7 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
       git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis${extra}\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${head} runden=1 lenses=${DREI} verdikt=ok`);
     const sha = (dir: string) => git(dir, "rev-parse", "HEAD").trim();
     const pruefe = (dir: string, basis: string) =>
-      checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }), env: { KQ_DIFF_BASE: basis } });
+      checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }), env: { FACTORY_DIFF_BASE: basis } });
 
     /** Basis auf main, ein Feature-Commit (reviewt) darauf. */
     function repo() {
@@ -772,11 +772,11 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     writeFileSync(pfad, JSON.stringify(echteConfig()));
     const nachweis = (p: string) => `${p}Plan: demo-planer\n${p}Review: head=${reviewt} runden=1 lenses=doku blocker=doku:0 verdikt=ok`;
     git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", nachweis("KQ-"));
-    const rot = lauf(d, ["--config", pfad], { KQ_DIFF_BASE: basis });
+    const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(rot.status, 1, rot.stdout + rot.stderr);
     assert.match(rot.stderr, /ZD-Plan-Zeile fehlt/);
     git("commit", "-q", "--allow-empty", "-m", "Nachweis ZD", "-m", nachweis("ZD-"));
-    const gruen = lauf(d, ["--config", pfad], { KQ_DIFF_BASE: basis });
+    const gruen = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
     assert.match(gruen.stdout, /Nachweis ok/);
   });
