@@ -40,9 +40,9 @@ export function worktreePraefix(config) {
 /** Alle Worktree-Muster aus dem rohen Präfix (einzige Stelle, die es maskiert und baut). Pur. */
 function worktreeTeil(worktree) {
   const w = escapeRegex(worktree);
-  const lensNameKern = String.raw`(${w}\d+)-lens-[rm]\d+`;
+  const lensNameKern = String.raw`(${w}\d+)-lens-[rma]\d+`;
   return {
-    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>` oder `-lens-m<n>`); Gruppe 1 ist `<wt><nr>`. */
+    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>`, `-lens-m<n>` oder `-lens-a<n>`); Gruppe 1 ist `<wt><nr>`. */
     lensNameKern,
     /** Ganzer Lens-Worktree-Name (`^…$`). */
     lensWorktreeMuster: new RegExp(`^${lensNameKern}$`),

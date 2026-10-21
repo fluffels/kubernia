@@ -65,6 +65,18 @@ describe("bewerteLensEdit", () => {
     }
   });
 
+  test("Abnahme-Fix-Delta-Lens `kq-<nr>-lens-a<n>` ist ein Lens-Worktree, ähnliche Namen nicht", () => {
+    expect(G.bewerteLensEdit("C:/dev/kubernia/.claude/worktrees/kq-1708-lens-a1/a.ts").block).toBe(false);
+    expect(G.bewerteLensEdit("C:/dev/kubernia/.claude/worktrees/kq-1708-lens-a12/a.ts").block).toBe(false);
+    for (const p of [
+      "C:/dev/kubernia/.claude/worktrees/kq-1708-lens-a/a.ts",
+      "C:/dev/kubernia/.claude/worktrees/kq-lens-a1/a.ts",
+      "C:/dev/kubernia/.claude/worktrees/kq-1708-lens-b1/a.ts",
+    ]) {
+      expect(G.bewerteLensEdit(p).block, p).toBe(true);
+    }
+  });
+
   test("Pfadform ignoriert Groß-/Kleinschreibung (Windows), der Ordnername selbst nicht (Aufräumen)", () => {
     expect(G.bewerteLensEdit("C:/Dev/X/.Claude/Worktrees/KQ-1-Lens-R1/a.ts").block).toBe(false);
     expect(G.bewerteLensEdit("C:/Dev/X/.Claude/Worktrees/KQ-1-Lens-M2/a.ts").block).toBe(false);
