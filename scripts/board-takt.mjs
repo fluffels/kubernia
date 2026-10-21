@@ -13,9 +13,10 @@
  * zwei Tickets an und lassen die Position nicht springen. Die Board-Liste wird je Lauf EINMAL geladen und nach der Status-Aktion im
  * Speicher nachgezogen.
  *
- * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts.
+ * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts. Exit 0 grün, 1 Fehler, 2 Aufruf-Fehler (vor jedem I/O).
  */
 import { pathToFileURL } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -324,10 +325,17 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
 }
 
 function main() {
+  // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
+  const aufruf = flagsLesen(process.argv.slice(2), { "dry-run": { type: "boolean" } });
+  if (aufruf.fehler) {
+    console.error(`board-takt: ${aufruf.fehler.text}\nAufruf: node scripts/board-takt.mjs [--dry-run]`);
+    process.exitCode = AUFRUF_EXIT;
+    return;
+  }
   if (process.env.PROJECT_TOKEN) mitKontingent("board-takt", { token: process.env.PROJECT_TOKEN });
   const { fehler } = fuehreTaktAus({
     jetzt: new Date(),
-    dry: process.argv.includes("--dry-run"),
+    dry: aufruf.werte["dry-run"] === true,
     repo: REPO,
     ausloeser: process.env.GITHUB_EVENT_NAME || "schedule",
     token: process.env.PROJECT_TOKEN,

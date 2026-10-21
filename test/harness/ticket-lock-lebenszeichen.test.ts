@@ -24,7 +24,6 @@ const M = rawLock as unknown as {
   echteDeps: () => Record<string, unknown>;
   letzteAktivitaet: (o: { commitMs?: number[]; lockMs?: number | null }) => number | null;
   bereinigeSchritt: (t: unknown) => string | null;
-  schrittAus: (argv: string[]) => string | null;
   VERWAIST_MS: number;
   INAKTIV_MS: number;
   ALTLAST_MS: number;
@@ -231,8 +230,6 @@ describe("lebenszeichen <nr> --nonce", () => {
     assert.equal(M.bereinigeSchritt("x".repeat(200))?.length, 80);
     assert.equal(M.bereinigeSchritt("   "), null);
     assert.equal(M.bereinigeSchritt(undefined), null);
-    assert.equal(M.schrittAus(["lebenszeichen", "5", "--schritt", "k"]), "k");
-    assert.equal(M.schrittAus(["lebenszeichen", "5"]), null);
   });
 });
 

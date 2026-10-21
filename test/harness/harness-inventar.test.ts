@@ -11,7 +11,7 @@
  * die Abschnitte B und C (Skripte, Regeln) sind Handlisten ohne Generator-Abgleich.
  * Einordnung (#1693): jede Datei unter scripts/ aus Besitz-Manifest und Kern-Abdeckung (Art `modul`) steht in einer Zeile, jeder
  * genannte Name ist auflösbar und eingeordnet, die Spalte „Modul“ stimmt mit der Art überein. Ring und ja/teilweise/nein werden
- * bewusst nicht abgeglichen (ADR 0022 §1 Ausnahmen); das Manifest bleibt die Besitz-SSOT. */
+ * bewusst nicht abgeglichen (ADR 0022 §1 Ausnahmen), außer `oberflaeche`: eine Zeile „Oberfläche“ nennt nur Besitz mit Ring `oberflaeche` und umgekehrt (ADR 0029); das Manifest bleibt die Besitz-SSOT. */
 import { describe, expect, test } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -28,7 +28,7 @@ const WERKZEUGE = ["Claude Code", "Langfuse", "PixelLab", "Playwright", "GitHub"
 const MARKER = /^- Geprüft bis (Claude Code|Langfuse|PixelLab|Playwright|GitHub) (v?\d+\.\d+\.\d+|\d{4}-\d{2}-\d{2})$/gm;
 const KOPF = "| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |";
 const URTEIL = /^(behalten|ersetzen|beobachten)(:|$)/;
-const UNABHAENGIG = /^(ja|nein|teilweise|Modul)(:|$)/;
+const UNABHAENGIG = /^(ja|nein|teilweise|Modul|Oberfläche)(:|$)/;
 
 const inventarApi = inventar as unknown as { harnessInventarGenerator: (ctx: { rootDir: string; config: Record<string, unknown> }) => string };
 const docsGenApi = docsGen as unknown as { loadConfig: (rootDir?: string) => Record<string, unknown> };
@@ -183,7 +183,7 @@ describe("harness-inventar.md: festes Vokabular (#1361)", () => {
 });
 
 type Abdeckung = Record<string, { art: string }>;
-type Einordnung = { zeilen: Zeile[]; besitz: { pfad: string }[]; abdeckung: Abdeckung; dateien: string[] };
+type Einordnung = { zeilen: Zeile[]; besitz: { pfad: string; ring?: string }[]; abdeckung: Abdeckung; dateien: string[] };
 
 /** Repo-Pfad eines Backtick-Tokens der ersten Zelle, oder null (Agent, Hook-Ereignis, Flag, Platzhalter). Pur. */
 function tokenPfad(token: string): string | null {
@@ -201,10 +201,11 @@ function treffer(pfad: string, dateien: string[]): string[] {
   return dateien.filter((d) => re.test(d));
 }
 
-/** Meldungen zur Einordnung der Skripte: Vollständigkeit (R1), Auflösbarkeit (R2), Spalte „Modul“ (R3). Pur. */
+/** Meldungen zur Einordnung der Skripte: Vollständigkeit (R1), Auflösbarkeit (R2), Spalte „Modul“ (R3), Spalte „Oberfläche“ (R4). Pur. */
 function einordnungsProbleme({ zeilen, besitz, abdeckung, dateien }: Einordnung): string[] {
   const probleme: string[] = [];
   const modul = new Set(Object.entries(abdeckung).filter(([, v]) => v.art === "modul").map(([k]) => k));
+  const oberflaeche = new Set(besitz.filter((b) => b.ring === "oberflaeche").map((b) => b.pfad));
   const eingeordnet = new Set([...besitz.map((b) => b.pfad), ...Object.keys(abdeckung)]);
   const genannt = new Set<string>();
   for (const z of zeilen) {
@@ -222,6 +223,10 @@ function einordnungsProbleme({ zeilen, besitz, abdeckung, dateien }: Einordnung)
       }
     }
     const nichtModul = [...dieZeile].filter((d) => !modul.has(d));
+    const nichtOberflaeche = [...dieZeile].filter((d) => !oberflaeche.has(d));
+    const spalteOberflaeche = z.zellen[4]?.startsWith("Oberfläche") ?? false;
+    if (spalteOberflaeche && nichtOberflaeche.length > 0) probleme.push(`${name}: Oberfläche-Zeile nennt ${nichtOberflaeche.join(", ")}`);
+    if (!spalteOberflaeche && dieZeile.size > 0 && nichtOberflaeche.length === 0) probleme.push(`${name}: nennt nur Oberfläche-Dateien, Spalte „${z.zellen[4]}“`);
     const spalteModul = z.zellen[4]?.startsWith("Modul") ?? false;
     if (spalteModul && nichtModul.length > 0) probleme.push(`${name}: Modul-Zeile nennt ${nichtModul.join(", ")}`);
     if (!spalteModul && dieZeile.size > 0 && nichtModul.length === 0) probleme.push(`${name}: nennt nur Modul-Dateien, Spalte „${z.zellen[4]}“`);
@@ -280,6 +285,22 @@ describe("harness-inventar.md: Einordnung der Skripte (#1693)", () => {
     expect(lauf([rolle("`a.mjs`", "Modul"), rolle("`b.mjs`", "Modul")]).join()).toContain("Modul-Zeile nennt scripts/a.mjs");
     expect(lauf([sicher, rolle("`b.mjs`", "Modul"), rolle("`Agent`", "Modul"), rolle("`Hook`", "ja")])).toEqual([]);
     expect(lauf([sicher, rolle("`b.mjs`", "Modul"), { zellen: ["`Agent`"] }])).toEqual([]);
+  });
+
+  test("R4 positiv: eine Oberfläche-Zeile mit Oberflächen-Besitz bleibt frei", () => {
+    const besitz = [{ pfad: "scripts/a.mjs" }, { pfad: "scripts/lib/c.mjs", ring: "oberflaeche" }];
+    const o = { besitz, abdeckung: { "scripts/b.mjs": { art: "modul" } }, dateien: ["scripts/a.mjs", "scripts/b.mjs", "scripts/lib/c.mjs"] };
+    expect(lauf([rolle("`a.mjs`"), rolle("`b.mjs`", "Modul"), rolle("`scripts/lib/`", "Oberfläche")], o)).toEqual([]);
+  });
+
+  test("Negativ R4: Oberfläche-Zeile mit Kern-Besitz, reine Oberflächen-Zeile mit ja, Schreibweise ohne Umlaut", () => {
+    const besitz = [{ pfad: "scripts/a.mjs" }, { pfad: "scripts/lib/c.mjs", ring: "oberflaeche" }];
+    const o = { besitz, abdeckung: { "scripts/b.mjs": { art: "modul" } }, dateien: ["scripts/a.mjs", "scripts/b.mjs", "scripts/lib/c.mjs"] };
+    const grund = [rolle("`a.mjs`"), rolle("`b.mjs`", "Modul")];
+    expect(lauf([...grund, rolle("`scripts/lib/`", "Oberfläche"), rolle("`a.mjs`", "Oberfläche")], o).join()).toContain("Oberfläche-Zeile nennt scripts/a.mjs");
+    expect(lauf([...grund, rolle("`scripts/lib/`", "ja")], o).join()).toContain("nennt nur Oberfläche-Dateien, Spalte „ja“");
+    expect(UNABHAENGIG.test("Oberflaeche")).toBe(false);
+    expect(UNABHAENGIG.test("Oberfläche")).toBe(true);
   });
 
   test("CRLF-Seiten ergeben dieselben Zeilen und Funde wie LF", () => {
