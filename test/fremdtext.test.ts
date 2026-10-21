@@ -227,6 +227,19 @@ describe("parseArgs", () => {
     ];
     for (const a of faelle) assert.throws(() => parseArgs(a), /./, JSON.stringify(a));
   });
+  test("jede Auffälligkeit beim Lesen ergibt genau die Aufrufzeile (fail-closed)", () => {
+    const aufruf = "Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>";
+    for (const a of [["--issue="], ["--issue", "1", "--"], ["--issue", "1", "x"], ["--issue", "--pr"], ["--issue", "1", "--issue", "2"]]) {
+      assert.throws(() => parseArgs(a), (e: Error) => e.message === aufruf, JSON.stringify(a));
+    }
+    assert.throws(() => parseArgs(["--issue", "x"]), /--issue braucht eine positive Ganzzahl/);
+    assert.deepEqual(parseArgs(["--issue=12"]), { art: "issue", nr: 12 });
+  });
+  test("pruefe: --issue= endet mit Exit 2 und der Aufrufzeile", () => {
+    const r = pruefe(["--issue="], () => "");
+    assert.equal(r.code, 2);
+    assert.ok(r.err.includes("Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>"));
+  });
 });
 
 describe("flach", () => {
