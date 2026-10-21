@@ -7,6 +7,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
+import { umgebungsWert } from "./projekt-config-lib.mjs";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
 
@@ -15,7 +16,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // ── Vergleichs-Basis ───────────────────────────────────────────────────────────
 
 /** Löst die Vergleichs-Basis auf (Commit, gegen den der Diff gemessen wird).
- *  Reihenfolge: explizites KQ_DIFF_BASE → Merge-Base gegen origin/main → gegen
+ *  Reihenfolge: explizites FACTORY_DIFF_BASE → Merge-Base gegen origin/main → gegen
  *  main. origin/main ZUERST, weil im pre-push-Hook HEAD == main ist und nur
  *  origin/main (der alte Stand) den zu pushenden Slice sichtbar macht. `runGit`
  *  ist injizierbar (Test); es wirft bei Fehler, wir fangen und gehen weiter.
@@ -29,7 +30,7 @@ export function resolveBase(runGit, env = process.env) {
       return null;
     }
   };
-  const explicit = (env.KQ_DIFF_BASE ?? "").trim();
+  const explicit = (umgebungsWert(env, "FACTORY_DIFF_BASE") ?? "").trim();
   if (explicit !== "") {
     const sha = tryGit(["rev-parse", "--verify", "--quiet", `${explicit}^{commit}`]);
     if (sha) return sha;

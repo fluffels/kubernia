@@ -260,7 +260,7 @@ describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
     const r = checkDiffCoverage({
       runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
       readFile: () => text,
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, false);
     assert.deepEqual(r.partial, [{ path: "src/sim/pods.ts", line: 1, taken: 1, total: 2 }]);
@@ -363,7 +363,7 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
       (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
       "KQ-Diffsize-Override: #1021 falsches Gate",
     );
-    const r = checkDiffCoverage({ runGit, readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }), env: { KQ_DIFF_BASE: "basesha" } });
+    const r = checkDiffCoverage({ runGit, readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }), env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(r.allowed, false);
     assert.equal(r.failed, true);
   });
@@ -371,7 +371,7 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
   test("versetzte Override-Zeilen (#1390 Z7): mit Strich oder eingerückt zählen nicht, werden aber gemeldet; eine gültige daneben wirkt", () => {
     const basis: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
     const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
-    const env = { KQ_DIFF_BASE: "basesha" };
+    const env = { FACTORY_DIFF_BASE: "basesha" };
     const versetzt = ["- KQ-Diffcov-Override: #1390 mit Strich", "  KQ-Diffcov-Override: #1390 eingerückt"];
     const r = checkDiffCoverage({ runGit: mitTrailer(basis, versetzt.join("\n")), readFile, env });
     assert.equal(r.allowed, false, "die versetzten Zeilen zählen nicht als Override");
@@ -405,7 +405,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
       readFile: () => {
         throw new Error("ENOENT");
       },
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.skipped, false);
     assert.equal(r.noReport, true);
@@ -415,7 +415,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
   test("Präfix aus der Config (#1741): mit AB- zählt die KQ-Override-Zeile nicht, die AB-Zeile schon", () => {
     const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
     const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
-    const env = { KQ_DIFF_BASE: "basesha" };
+    const env = { FACTORY_DIFF_BASE: "basesha" };
     const kq = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 bewusst"), readFile, env, zeilen: ZEILEN_AB });
     assert.equal(kq.failed, true, "die KQ-Zeile zählt bei AB- nicht");
     const ab = checkDiffCoverage({ runGit: mitTrailer(runGit, "AB-Diffcov-Override: #1021 bewusst"), readFile, env, zeilen: ZEILEN_AB });
@@ -426,12 +426,12 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const runGit: RunGit = (args) =>
       args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha";
     const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
-    const rot = checkDiffCoverage({ runGit, readFile, env: { KQ_DIFF_BASE: "basesha" } });
+    const rot = checkDiffCoverage({ runGit, readFile, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(rot.failed, true);
     const geduldet = checkDiffCoverage({
       runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 bewusst"),
       readFile,
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(geduldet.failed, false);
     assert.equal(geduldet.allowed, true);
@@ -445,7 +445,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
         "KQ-Diffcov-Override: einfach so",
       ),
       readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.allowed, false);
     assert.deepEqual(r.invalidOverrides, ["KQ-Diffcov-Override: einfach so"]);
@@ -458,7 +458,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
         "KQ-Diffcov-Override: #1021 unnötig",
       ),
       readFile: () => lcovOk,
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.stale, true);
     assert.equal(r.failed, true);
@@ -468,7 +468,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const r = checkDiffCoverage({
       runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
       readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, true);
     assert.deepEqual(r.missing, ["src/sim/versteckt.ts"]);
@@ -481,7 +481,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
         "KQ-Diffcov-Override: #1021 durchwinken",
       ),
       readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, true);
     assert.equal(r.allowed, false);
@@ -500,7 +500,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const r = checkDiffCoverage({
       runGit,
       readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, true);
     assert.deepEqual(r.below, ["domaene"]);
@@ -513,7 +513,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
       readFile: () => {
         throw new Error("ENOENT — es gab nichts zu messen");
       },
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, false);
     assert.equal(r.nothingToMeasure, true);
@@ -524,13 +524,13 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const lesen = () => {
       throw new Error("ENOENT");
     };
-    const r = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 unnötig"), readFile: lesen, env: { KQ_DIFF_BASE: "basesha" } });
+    const r = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 unnötig"), readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(r.nothingToMeasure, true);
     assert.equal(r.stale, true);
     assert.equal(r.failed, true, "nichts zu messen heißt nichts durchzulassen: der Trailer ist überflüssig");
-    const ohne = checkDiffCoverage({ runGit, readFile: lesen, env: { KQ_DIFF_BASE: "basesha" } });
+    const ohne = checkDiffCoverage({ runGit, readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(ohne.failed, false);
-    const fremd = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffsize-Override: #1021 anderes Gate"), readFile: lesen, env: { KQ_DIFF_BASE: "basesha" } });
+    const fremd = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffsize-Override: #1021 anderes Gate"), readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(fremd.failed, false, "ein fremder Schlüssel macht diesen Slice nicht stale");
   });
 
@@ -541,7 +541,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
         return "basesha";
       },
       readFile: () => lcovOk,
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.skipped, true);
     assert.equal(r.failed, false);
@@ -557,7 +557,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
         return args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha";
       },
       readFile: () => lcovOk,
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     // Pinnt zugleich `-U0` (Kontextzeilen zählten sonst als geändert mit) und den Scope.
     assert.deepEqual(gesehen.find((a) => a[0] === "diff"), ["diff", "-U0", "basesha...HEAD", "--", "src"]);
@@ -567,7 +567,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const r = checkDiffCoverage({
       runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
       readFile: () => lcovOk,
-      env: { KQ_DIFF_BASE: "basesha" },
+      env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, false);
     assert.equal(r.skipped, false);

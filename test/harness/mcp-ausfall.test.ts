@@ -131,7 +131,7 @@ describe("Pfad-Helfer", () => {
     expect(a.logBasis({ plattform: "darwin", env: {}, home: "H" })).toBe(join("H", "Library", "Caches", "claude-cli-nodejs"));
     expect(a.logBasis({ plattform: "linux", env: { XDG_CACHE_HOME: "X" }, home: "H" })).toBe(join("X", "claude-cli-nodejs"));
     expect(a.logBasis({ plattform: "linux", env: {}, home: "H" })).toBe(join("H", ".cache", "claude-cli-nodejs"));
-    expect(a.logBasis({ plattform: "win32", env: { KQ_MCP_LOG_DIR: "O", LOCALAPPDATA: "L" }, home: "H" })).toBe("O");
+    expect(a.logBasis({ plattform: "win32", env: { FACTORY_MCP_LOG_DIR: "O", LOCALAPPDATA: "L" }, home: "H" })).toBe("O");
   });
   test("logBasis unter Windows ohne LOCALAPPDATA fällt auf das Home zurück", () => {
     expect(a.logBasis({ plattform: "win32", env: {}, home: "H" })).toBe(join("H", "AppData", "Local", "claude-cli-nodejs", "Cache"));
@@ -149,7 +149,7 @@ describe("Pfad-Helfer", () => {
     const haupt = a.standPfad("/dev/proj", {}, "/tmp");
     expect(a.standPfad("/dev/proj/.claude/worktrees/kq-1", {}, "/tmp")).toBe(haupt);
     expect(haupt).toBe(join("/tmp", "kq-mcp-ausfall--dev-proj.json"));
-    expect(a.standPfad("/dev/proj", { KQ_MCP_AUSFALL_STAND: "/x/s.json" }, "/tmp")).toBe("/x/s.json");
+    expect(a.standPfad("/dev/proj", { FACTORY_MCP_AUSFALL_STAND: "/x/s.json" }, "/tmp")).toBe("/x/s.json");
   });
   test("projektOrdner: Hauptcheckout und Worktrees, nie Namensvettern", () => {
     const namen = ["C--dev-proj", "C--dev-proj--claude-worktrees-kq-1", "C--dev-proj2", "C--dev-other"];
@@ -240,7 +240,7 @@ describe("main mit Temp-Logs", () => {
     const logdir = join(d, "logs", a.slug(wurzel), "mcp-logs-pw");
     mkdirSync(logdir, { recursive: true });
     writeFileSync(join(logdir, "2026-10-15T09-00-00Z.jsonl"), `${dbg("Starting connection x", "2026-10-15T09:00:00.000Z")}\n${dbg("Starting connection x", "2026-10-15T09:30:00.000Z")}\n`);
-    const env = { CLAUDE_PROJECT_DIR: wurzel, KQ_MCP_LOG_DIR: join(d, "logs"), KQ_MCP_AUSFALL_STAND: join(d, "stand", "stand.json") };
+    const env = { CLAUDE_PROJECT_DIR: wurzel, FACTORY_MCP_LOG_DIR: join(d, "logs"), FACTORY_MCP_AUSFALL_STAND: join(d, "stand", "stand.json") };
     return { env, d };
   }
   const jetzt = Date.now();
@@ -289,7 +289,7 @@ describe("main mit Temp-Logs", () => {
   });
   test("fehlender Log-Basisordner ergibt eine Zeile mit dem Pfad", () => {
     const { env, d } = aufbau();
-    const r = lauf([], { ...env, KQ_MCP_LOG_DIR: join(d, "gibtsnicht") });
+    const r = lauf([], { ...env, FACTORY_MCP_LOG_DIR: join(d, "gibtsnicht") });
     expect(r.aus).toHaveLength(1);
     expect(r.aus[0]).toContain("gibtsnicht");
   });
@@ -333,17 +333,17 @@ describe("main mit Temp-Logs", () => {
     const { env, d } = aufbau();
     const datei = join(d, "blockiert");
     writeFileSync(datei, "x");
-    const r = lauf(["--sessionstart"], { ...env, KQ_MCP_AUSFALL_STAND: join(datei, "unter", "stand.json") }, { jetzt: Date.parse("2026-10-15T10:00:00Z") });
+    const r = lauf(["--sessionstart"], { ...env, FACTORY_MCP_AUSFALL_STAND: join(datei, "unter", "stand.json") }, { jetzt: Date.parse("2026-10-15T10:00:00Z") });
     expect(r.code).toBe(0);
     expect(r.aus.join("\n")).toContain("reconnect ×1");
   });
   test("kaputtes .mcp.json wirft nicht, Exit 0; unbekannte Art und fehlende Variable werden genannt", () => {
     const { env } = aufbau("{kaputt");
     expect(lauf(["--sessionstart"], env)).toEqual({ code: 0, aus: [] });
-    const { env: env2 } = aufbau('{"mcpServers":{"w":{"type":"ws"},"h":{"type":"http","url":"u","headers":{"A":"${KQ_TEST_FEHLT}"}}}}');
+    const { env: env2 } = aufbau('{"mcpServers":{"w":{"type":"ws"},"h":{"type":"http","url":"u","headers":{"A":"${FACTORY_TEST_FEHLT}"}}}}');
     const t = lauf(["--seit", "2026-10-15T00:00:00Z"], env2).aus.join("\n");
     expect(t).toContain('w: Server-Art "ws"');
-    expect(t).toContain("KQ_TEST_FEHLT");
+    expect(t).toContain("FACTORY_TEST_FEHLT");
   });
 });
 

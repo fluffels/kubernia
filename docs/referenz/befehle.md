@@ -84,7 +84,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Langfuse-Abgleich je Call, nur lesend: welche Calls des Transkripts fehlen in Langfuse oder stehen doppelt (#1562; Doku: model-routing › Checkliste Punkt 1) | `node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]` (ohne Secret-Key `--ist` mit einem `queryMetrics`-Export) |
 | Fehlende Calls per OTLP nachliefern, idempotent, Dubletten nur gemeldet (#1577; Doku: model-routing › Checkliste Punkt 1) | `node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart\|sessionend] [--trocken] [--json]` (braucht `LANGFUSE_SECRET_KEY`; `--trocken` sendet nichts, ohne `--trocken` nimmt der Lauf den Lock; automatisch an SessionStart/SessionEnd über `scripts/langfuse-abgleich-hook.mjs`, #1578: [Hook-Patch › Abgleich als Garantie](../langfuse-hook-patch.md#abgleich-als-garantie-1578)) |
 | Review-/Plan-Nachweis prüfen (Commit-Zeilen `KQ-Plan:`/`KQ-Review:`, #1270; Präfix und Planer aus der Projekt-Config; kein `npm run`, nicht in `verify`) | `node scripts/check-review-nachweis.mjs [--config <pfad>]` |
-| Abnahme-Nachweis prüfen (Commit-Zeile `KQ-Abnahme:` plus vertrauter PR-Kommentar mit Marker, ADR 0022 F13, #1755; liest `KQ_PR_BODY`, `KQ_PR_NUMBER`, `KQ_PR_DRAFT` und `GH_TOKEN` aus der Umgebung; kein `npm run`, nicht in `verify`) | `node scripts/check-abnahme-nachweis.mjs [--config <pfad>]` |
+| Abnahme-Nachweis prüfen (Commit-Zeile `KQ-Abnahme:` plus vertrauter PR-Kommentar mit Marker, ADR 0022 F13, #1755; liest `FACTORY_PR_BODY`, `FACTORY_PR_NUMBER`, `FACTORY_PR_DRAFT` und `GH_TOKEN` aus der Umgebung; kein `npm run`, nicht in `verify`) | `node scripts/check-abnahme-nachweis.mjs [--config <pfad>]` |
 | Verwaiste Worktree-Ordner finden und mit `--fix` entfernen (#908); mit `--branches` lokale `feature/kq-*`-Branches nach dem Squash-Merge aufräumen, auch fremde (verlustfrei: Muster `feature/kq-*`, nur `[gone]`, nicht ausgecheckt, Spitze = gemergter PR-Kopf), ohne `--fix` nur die Liste; vorher holt es selbst `git fetch --prune origin` (scheitert der Fetch oder `gh`, wird nichts gelöscht) (#1579) | `node scripts/cleanup-worktrees.mjs [--fix]` / `--branches [--fix]` |
 | Merge von `origin/main` auf verlorene Tests prüfen: Testtitel gegen beide Eltern, bei Konflikt vor dem Merge-Commit, sonst danach; Exit 1 = ein Test fehlt im Ergebnis, Exit 2 = kein Merge, nichts zu prüfen (#1579) | `node scripts/merge-testabgleich.mjs` |
 | Diff-Coverage-Wächter (geänderte Zeilen pro Slice getestet; **hart** für Domäne/Anwendung, Präsentation/Einstieg nur berichtend; läuft **NACH `test:coverage`**, #1021) | `npm run check:diffcoverage` |
@@ -96,3 +96,26 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
 
 > Aus IntelliJ/WebStorm gibt es dieselben Befehle als Ein-Klick-Run-Configs: [CONTRIBUTING.md › Aus IntelliJ starten](../../CONTRIBUTING.md#aus-intellij-starten-ein-klick).
+
+## Umgebungsvariablen
+
+Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1824-2026-10-21-umgebungsvariablen-ohne-projektpräfix-f3-teil-8)). Eine Variable, die ein Kern-Werkzeug liest, heißt `FACTORY_<NAME>` und wird über `umgebungsWert` aus `scripts/projekt-config-lib.mjs` gelesen. **Altname:** derselbe Name mit dem Commit-Zeilen-Präfix ohne Bindestrich statt `FACTORY_` (hier `KQ_`). Er gilt vorerst weiter und gibt eine Warnung mit dem neuen Namen aus; sind beide gesetzt, gewinnt der neue Name. Die Kern-Reinheit zählt den Altnamen als Begriff `Env`, in Kern-Einheiten steht er nicht mehr.
+
+| Name | Ring | Wer setzt ihn | Wer liest ihn |
+| --- | --- | --- | --- |
+| `FACTORY_DIFF_BASE` | Kern | Workflow `ci.yml` (Schritt „Diff-Basis bestimmen“), Tests, lokal optional die Maintainerin | `resolveBase` (`scripts/check-basis.mjs`): `check-diffsize`, `check-diffcoverage`, `check-lockfile`, `check-review-nachweis`, `check-abnahme-nachweis`, `verify-lauf` |
+| `FACTORY_DIFFSIZE_MAX_FILES`, `FACTORY_DIFFSIZE_MAX_LINES` | Kern | Tests | `check-diffsize` |
+| `FACTORY_PR_NUMBER`, `FACTORY_PR_DRAFT`, `FACTORY_PR_BODY` | Kern | Workflow `ci.yml` | `check-abnahme-nachweis` |
+| `FACTORY_GH_KOSTEN_LOG` | Kern | Tests, optional die Maintainerin | `kontingent-lib` |
+| `FACTORY_MCP_LOG_DIR`, `FACTORY_MCP_AUSFALL_STAND` | Kern | Tests | `mcp-ausfall` |
+| `FACTORY_PACING_ZIELQUOTE` | Kern | die Maintainerin (Shell oder `env` in `.claude/settings.local.json`) | `budget-lib` |
+| `FACTORY_PACING_PROBE_SKRIPT` | Kern | Tests | `budget-pacing` |
+| `FACTORY_RATE_LIMITS_SNAPSHOT` | Kern | Tests | `budget-lib` |
+| `FACTORY_STATUSLINE_DURCHREICHEN` | Kern | Skript `statusline` (Schleifenschutz für die durchgereichte Statusline) | `statusline` |
+| `FACTORY_USER_SETTINGS` | Kern | Tests | `statusline` |
+| `FACTORY_TEST_FEHLT` | Test | nie gesetzt (Fixture in `test/harness/mcp-ausfall.test.ts`) | – |
+| `KQ_UPDATE_QUIZ_GOLDEN` | Projekt | Skript `quiz-golden` | Test `quizcheck` |
+| `KQ_GIT_SAFECRLF` | Projekt | `test/support/git-umgebung.ts` (Guard) | – |
+| `VITE_KQ_DEVPANEL_PW` | Projekt | die Maintainerin (Repo-Variable, `docker run -e`) | Vite-Build |
+
+`__KQ_DEVPANEL__` und `__KQ_CONFIG__` sind Vite-Konstanten, keine Umgebungsvariablen. Die Override-Variablen der Slice-Gates sind entfallen: dafür gibt es Commit-Zeilen (siehe [agent-harness](../agent-harness.md)).

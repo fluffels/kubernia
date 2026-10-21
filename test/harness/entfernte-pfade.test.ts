@@ -33,6 +33,12 @@ export const RESTE: { name: string; muster: RegExp }[] = [
   { name: "Konstante FACTORY_LABEL", muster: /\bFACTORY_LABEL\b/ },
   { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/ },
   { name: "Docs-Gen-Schlüssel diagramme.ruleset", muster: /diagramme\.ruleset/ },
+  // Kern-Umgebungsvariablen heißen FACTORY_<NAME> (#1824). Geschlossene Liste der 15 früheren Namen: Projektnamen (Quiz-Golden,
+  // Git-Guard, Dev-Panel) und die entfallenen Override-Namen fallen nicht darunter.
+  {
+    name: "Kern-Umgebungsvariable mit Projektpräfix",
+    muster: /\bKQ_(?:DIFF_BASE|DIFFSIZE_MAX_FILES|DIFFSIZE_MAX_LINES|PR_NUMBER|PR_DRAFT|PR_BODY|GH_KOSTEN_LOG|MCP_LOG_DIR|MCP_AUSFALL_STAND|PACING_ZIELQUOTE|PACING_PROBE_SKRIPT|RATE_LIMITS_SNAPSHOT|STATUSLINE_DURCHREICHEN|USER_SETTINGS|TEST_FEHLT)\b/,
+  },
 ];
 
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
@@ -91,6 +97,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Konstante FACTORY_LABEL": "import { FACTORY_LABEL } from board-lib",
       "Ausnahmeliste des Flag-Parser-Wächters": "die noch nicht migrierten Skripte stehen dort als Liste",
       "Docs-Gen-Schlüssel diagramme.ruleset": "config.diagramme.ruleset fehlt",
+      "Kern-Umgebungsvariable mit Projektpräfix": "echo KQ_DIFF_BASE=$base >> $GITHUB_ENV",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
@@ -100,6 +107,11 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
 
   test("Negativfall: harmlose Nachbarn lösen nicht aus (kubernia-Ticket groß, Workflows der CI)", () => {
     const sauber = "Der kubernia-Ticket-Ablauf ist der Skill kubernia; die CI läuft in .github/workflows/ci.yml.";
+    assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
+  });
+
+  test("Negativfall: Projektnamen, entfallene Override-Namen und die neuen Namen lösen die Umgebungsvariablen-Regel nicht aus", () => {
+    const sauber = "KQ_UPDATE_QUIZ_GOLDEN KQ_GIT_SAFECRLF VITE_KQ_DEVPANEL_PW KQ_DIFFSIZE_OVERRIDE KQ_DIFF_BASE_X FACTORY_DIFF_BASE";
     assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
   });
 

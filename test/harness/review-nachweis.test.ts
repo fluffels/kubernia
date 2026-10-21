@@ -27,6 +27,7 @@ type Mod = {
   pflichtLenses: (d: unknown) => string[];
   bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown }) => string[];
 };
+import { ohneKernEnv } from "../support/env-alt";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/check-review-nachweis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -139,7 +140,7 @@ describe("(d) CI-Schritt im Required-Job", () => {
       assert.match(text, /dependabot\[bot\]/);
     });
     test("env: liefert Token, PR-Nummer, Entwurfs-Status und Body; im run: kein Ausdruck", () => {
-      for (const k of ["GH_TOKEN", "KQ_PR_NUMBER", "KQ_PR_DRAFT", "KQ_PR_BODY"]) assert.match(text, new RegExp(`\n {10}${k}: \\$\\{\\{ `));
+      for (const k of ["GH_TOKEN", "FACTORY_PR_NUMBER", "FACTORY_PR_DRAFT", "FACTORY_PR_BODY"]) assert.match(text, new RegExp(`\n {10}${k}: \\$\\{\\{ `));
       const run = /\n\s+run: ([^\n]*)/.exec(text)?.[1] ?? "";
       assert.ok(run.includes("check-abnahme-nachweis.mjs") && !run.includes("${{"), "run: ohne Ausdruck");
     });
@@ -425,7 +426,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
       const head = git("rev-parse", "HEAD").trim();
       git("commit", "-q", "--allow-empty", "-m", `nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${head} ${review}`);
       const env = { ...process.env };
-      delete env.KQ_DIFF_BASE;
+      ohneKernEnv(env, "FACTORY_DIFF_BASE");
       return execFileSync("node", [fileURLToPath(new URL("../../scripts/check-review-nachweis.mjs", import.meta.url))], { cwd: dir, env, encoding: "utf8" });
     } finally {
       rmSync(dir, { recursive: true, force: true });

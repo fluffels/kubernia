@@ -10,6 +10,7 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { umgebungsWert } from "./projekt-config-lib.mjs";
 
 export const ZIELQUOTE_DEFAULT = 65;
 export const TOLERANZ_PP = 5;
@@ -58,13 +59,13 @@ export function ausProbe(zeilen, jetzt = Date.now()) {
   return sevenDay || fiveHour ? { stand: jetzt, quelle: "probe", ...(sevenDay && { sevenDay }), ...(fiveHour && { fiveHour }) } : null;
 }
 
-/** Zielquote aus `KQ_PACING_ZIELQUOTE` (1-100); ungültig ergibt den Default samt Warnung. Pur. */
+/** Zielquote aus `FACTORY_PACING_ZIELQUOTE` (1-100); ungültig ergibt den Default samt Warnung. Pur. */
 export function zielquoteAusEnv(env) {
-  const roh = env?.KQ_PACING_ZIELQUOTE;
+  const roh = umgebungsWert(env ?? {}, "FACTORY_PACING_ZIELQUOTE");
   if (roh === undefined) return { zielquote: ZIELQUOTE_DEFAULT };
   const n = Number(roh);
   if (String(roh).trim() !== "" && Number.isFinite(n) && n >= 1 && n <= 100) return { zielquote: n };
-  return { zielquote: ZIELQUOTE_DEFAULT, warnung: `KQ_PACING_ZIELQUOTE="${roh}" ungültig (erlaubt 1-100), Default ${ZIELQUOTE_DEFAULT} gilt.` };
+  return { zielquote: ZIELQUOTE_DEFAULT, warnung: `FACTORY_PACING_ZIELQUOTE="${roh}" ungültig (erlaubt 1-100), Default ${ZIELQUOTE_DEFAULT} gilt.` };
 }
 
 /** Braucht die CLI eine Probe? Ja, wenn der Snapshot fehlt, veraltet ist oder kein 7-Tage-Fenster trägt. Pur. */
@@ -119,10 +120,10 @@ export function pacing(snapshot, { jetzt = Date.now(), zielquote = ZIELQUOTE_DEF
 
 /**
  * Pfad des kontoweiten Snapshots (OS-Temp, für alle Worktrees gleich, projektneutraler Name `claude-rate-limits.json`, keine Config nötig);
- * `KQ_RATE_LIMITS_SNAPSHOT` überschreibt ihn.
+ * `FACTORY_RATE_LIMITS_SNAPSHOT` überschreibt ihn.
  */
 export function snapshotPfad(env = process.env) {
-  return env.KQ_RATE_LIMITS_SNAPSHOT || join(tmpdir(), "claude-rate-limits.json");
+  return umgebungsWert(env, "FACTORY_RATE_LIMITS_SNAPSHOT") || join(tmpdir(), "claude-rate-limits.json");
 }
 
 /** Liest den Snapshot; fehlende oder kaputte Datei ergibt `{ snapshot: null, warnung }`. */
