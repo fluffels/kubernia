@@ -21,6 +21,7 @@
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
 import { pathToFileURL } from "node:url";
+import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
@@ -53,18 +54,22 @@ const DUBLETTEN_PAUSE_MS = 3000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Argumente → `{ art, vorgaenger, top, dry }` oder null bei falscher Benutzung. `--vorgaenger` gilt nur für `harness`, `--top` nur für
- * `langfuse`. Pur.
+ * Argumente → `{ art, vorgaenger, top, dry }` oder null bei falscher Benutzung (unbekanntes, fehlendes, doppeltes Flag, Art nicht als
+ * erstes Positionsargument). `--vorgaenger` gilt nur für `harness`, `--top` nur für `langfuse`. Pur.
  */
 export function parseArgs(argv) {
-  const dry = argv.includes("--dry-run");
-  const [art, ...rest] = argv.filter((a) => a !== "--dry-run");
-  if (!Object.hasOwn(TITEL, art ?? "")) return null;
-  const basis = { art, vorgaenger: null, top: false, dry };
-  if (art === "langfuse") return rest.length === 0 ? basis : rest.length === 1 && rest[0] === "--top" ? { ...basis, top: true } : null;
-  if (rest.length === 0) return basis;
-  const nr = Number((rest[1] ?? "").replace(/^#/, ""));
-  return rest.length === 2 && rest[0] === "--vorgaenger" && Number.isInteger(nr) && nr > 0 ? { ...basis, vorgaenger: nr } : null;
+  const { werte, positionale, tokens, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, vorgaenger: { type: "string" }, top: { type: "boolean" } }, { positionale: true });
+  if (fehler || tokens.some((t) => t.kind === "option-terminator")) return null;
+  const ohneDry = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
+  if (ohneDry[0]?.kind !== "positional" || positionale.length !== 1) return null;
+  const art = positionale[0] ?? "";
+  if (!Object.hasOwn(TITEL, art)) return null;
+  const basis = { art, vorgaenger: null, top: false, dry: werte["dry-run"] === true };
+  if (art === "langfuse") return werte.vorgaenger === undefined ? { ...basis, top: werte.top === true } : null;
+  if (werte.top !== undefined) return null;
+  if (werte.vorgaenger === undefined) return basis;
+  const nr = Number(werte.vorgaenger.replace(/^#/, ""));
+  return Number.isInteger(nr) && nr > 0 ? { ...basis, vorgaenger: nr } : null;
 }
 
 /**

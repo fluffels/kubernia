@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, REPO } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -38,24 +39,27 @@ const ergebnis = (code, out = "", err = "") => ({ code, out, err });
 const aufrufFehler = (text) => ergebnis(2, "", `✖ spezifikation: ${text}\n`);
 const liste = (zeilen) => zeilen.map((z) => `  - ${z}`).join("\n");
 
-/** Flags aus argv: `--name wert`, `--label` mehrfach; alles andere ist positional. Pur. */
-export function parseArgs(argv) {
-  const werte = { label: [] };
-  const positional = [];
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith("--")) {
-      positional.push(a);
-      continue;
-    }
-    const name = a.slice(2);
-    const wert = argv[i + 1];
-    if (wert === undefined || wert.startsWith("--")) return { fehler: `${a} braucht einen Wert` };
-    i++;
-    if (name === "label") werte.label.push(wert);
-    else werte[name] = wert;
-  }
-  return { werte, positional };
+const FLAG_MENGEN = {
+  pruefen: { optionen: { "body-datei": { type: "string" } }, positionale: false },
+  anlegen: {
+    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, notfall: { type: "string" } },
+    positionale: false,
+  },
+  reparieren: { optionen: { "body-datei": { type: "string" } }, positionale: true },
+};
+
+/**
+ * Prüft den Aufruf vor jedem I/O: Unterbefehl zuerst, dann die Flag-Menge dieses Unterbefehls (`flagsLesen`; `reparieren` nimmt genau ein
+ * Positionsargument, die anderen keins). Liefert `{ befehl, werte, positional }` (`werte.label` immer eine Liste) oder `{ fehler }`. Pur.
+ */
+export function aufrufPruefen(argv) {
+  const [befehl, ...rest] = argv;
+  if (!Object.hasOwn(FLAG_MENGEN, befehl ?? "")) return { fehler: `unbekannter Befehl ${befehl === undefined ? "(keiner)" : `„${befehl}“`}` };
+  const { optionen, positionale } = FLAG_MENGEN[befehl];
+  const r = flagsLesen(rest, optionen, { positionale });
+  if (r.fehler) return { fehler: r.fehler.text };
+  if (r.positionale.length > 1) return { fehler: `Unbekanntes Argument: ${r.positionale[1]}` };
+  return { befehl, werte: { ...r.werte, label: r.werte.label ?? [] }, positional: r.positionale };
 }
 
 const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
@@ -151,13 +155,11 @@ function reparieren(werte, nrText, io) {
 
 /** Ausführung mit injizierbarer I/O (`leseDatei`, `erzeuge`, `pruefeAnker` (Fehlertext oder `null`), `einsortiere`, `ladeIssue`, `bearbeite`, `owner`): `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
-  const [befehl, ...rest] = argv;
-  const p = parseArgs(rest);
+  const p = aufrufPruefen(argv);
   if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
-  if (befehl === "pruefen") return pruefen(p.werte, io);
-  if (befehl === "anlegen") return anlegen(p.werte, io);
-  if (befehl === "reparieren") return reparieren(p.werte, p.positional[0], io);
-  return aufrufFehler(`unbekannter Befehl ${befehl === undefined ? "(keiner)" : `„${befehl}“`}\n${AUFRUF}`);
+  if (p.befehl === "pruefen") return pruefen(p.werte, io);
+  if (p.befehl === "anlegen") return anlegen(p.werte, io);
+  return reparieren(p.werte, p.positional[0], io);
 }
 
 /**
@@ -193,8 +195,11 @@ const echteIo = () => {
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  mitKontingent("spezifikation", { arten: ["core"] });
-  const { code, out, err } = fuehreAus(process.argv.slice(2), echteIo());
+  const argv = process.argv.slice(2);
+  // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1791).
+  const vorab = aufrufPruefen(argv);
+  if (!vorab.fehler) mitKontingent("spezifikation", { arten: ["core"] });
+  const { code, out, err } = fuehreAus(argv, vorab.fehler ? null : echteIo());
   process.stdout.write(out);
   process.stderr.write(err);
   process.exitCode = code;

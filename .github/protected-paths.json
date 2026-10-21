@@ -32,6 +32,7 @@
     "/scripts/langfuse-vorbedingung.mjs",
     "/scripts/besitz-lib.mjs",
     "/scripts/factory-sync.mjs",
+    "/scripts/harness-doctor.mjs",
     "/scripts/sandbox-doctor.mjs",
     "/scripts/gh-guard-hook.mjs",
     "/scripts/hook-io.mjs",

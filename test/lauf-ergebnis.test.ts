@@ -686,3 +686,17 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: kaputtGit, runGh: gh() }), mod.DatenFehler);
   });
 });
+
+describe("parseArgs strikt (#1790)", () => {
+  test("unbekanntes Flag und doppeltes Einzel-Flag setzen fehler; Rückgabeform bleibt exakt", () => {
+    assert.match(mod.parseArgs(["--von", "a", "--bis", "b", "--bogus"]).fehler ?? "", /Unbekanntes Argument: --bogus/);
+    assert.match(mod.parseArgs(["--von", "a", "--von", "b"]).fehler ?? "", /--von ist doppelt/);
+    assert.match(mod.parseArgs(["--json", "--json"]).fehler ?? "", /--json ist doppelt/);
+    assert.match(mod.parseArgs(["--von"]).fehler ?? "", /--von braucht einen Wert/);
+    assert.deepEqual(mod.parseArgs([]), { von: undefined, bis: undefined, tickets: [], ohne: [], json: false, fehler: null });
+  });
+  test("--start-agent mit Wert, doppelt oder mit Inline-Wert", () => {
+    assert.match(mod.parseArgs(["--start-agent", "a", "--start-agent", "b"]).fehler ?? "", /--start-agent ist doppelt/);
+    assert.equal(mod.parseArgs(["--start-agent=x-agent"]).startAgent, "x-agent");
+  });
+});

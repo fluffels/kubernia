@@ -203,3 +203,30 @@ describe("claimNummer (#1616)", () => {
     expect(C.claimNummer(undefined as unknown as string)).toBeNull();
   });
 });
+
+describe("Ticketfilter aus flagsLesen-Werten (#1790)", () => {
+  const T = raw as unknown as {
+    TICKET_OPTIONEN: Record<string, { type: string; multiple: boolean }>;
+    ticketMeldung: (art: string, flag: string) => string | undefined;
+    ticketFilterAus: (werte: { ticket?: string[]; ohne?: string[] }) => { tickets: number[]; ohne: number[]; fehler: string | null };
+  };
+  test("TICKET_OPTIONEN: --ticket und --ohne sind wiederholbare Wert-Flags", () => {
+    expect(T.TICKET_OPTIONEN).toEqual({ ticket: { type: "string", multiple: true }, ohne: { type: "string", multiple: true } });
+  });
+  test("ticketFilterAus: gültige Listen, leer oder fehlend ergibt []", () => {
+    expect(T.ticketFilterAus({ ticket: ["1", "2"], ohne: ["3"] })).toEqual({ tickets: [1, 2], ohne: [3], fehler: null });
+    expect(T.ticketFilterAus({})).toEqual({ tickets: [], ohne: [], fehler: null });
+  });
+  test("ticketFilterAus: Nicht-Ganzzahl und leerer Wert setzen fehler, bei --ohne wie bei --ticket", () => {
+    expect(T.ticketFilterAus({ ticket: ["abc"] }).fehler).toBe("--ticket erwartet eine Ticketnummer, nicht abc");
+    expect(T.ticketFilterAus({ ohne: [""] }).fehler).toBe("--ohne erwartet eine Ticketnummer, nicht ");
+    expect(T.ticketFilterAus({ ticket: ["1.5"] }).fehler).not.toBeNull();
+    expect(T.ticketFilterAus({ ticket: ["1", "x"], ohne: ["y"] }).fehler).toBe("--ticket erwartet eine Ticketnummer, nicht x");
+  });
+  test("ticketMeldung: nur ohne-wert bei --ticket/--ohne, sonst Standardtext (undefined)", () => {
+    expect(T.ticketMeldung("ohne-wert", "--ticket")).toBe("--ticket erwartet eine Ticketnummer, nicht nichts");
+    expect(T.ticketMeldung("ohne-wert", "--ohne")).toBe("--ohne erwartet eine Ticketnummer, nicht nichts");
+    expect(T.ticketMeldung("ohne-wert", "--von")).toBeUndefined();
+    expect(T.ticketMeldung("unbekannt", "--ticket")).toBeUndefined();
+  });
+});

@@ -24,7 +24,8 @@ import { pathToFileURL } from "node:url";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
-import { passtTicketFilter, ticketNummer } from "./mess-lib.mjs";
+import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf, ticketsMitStartImFenster } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -303,24 +304,13 @@ export const AUFRUFHILFE = "Aufruf: node scripts/lauf-ergebnis.mjs --von <ISO> -
 
 /** Argumente: `--von`, `--bis`, wiederholbar `--ticket <nr>` (nur diese) und `--ohne <nr>` (alle außer diesen), `--json`. `--start-agent <typ>` (kein Default, nicht mit `--ticket`). Eine Nicht-Ganzzahl oder ein fehlender Wert setzt `fehler`. */
 export function parseArgs(argv) {
-  const a = { von: undefined, bis: undefined, tickets: [], ohne: [], json: false, fehler: null };
-  const nummer = (name, wert) => {
-    const { nr, fehler } = ticketNummer(name, wert);
-    if (fehler) a.fehler ??= fehler;
-    return nr;
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const x = argv[i];
-    if (x === "--von") a.von = argv[++i];
-    else if (x === "--bis") a.bis = argv[++i];
-    else if (x === "--ticket") a.tickets.push(nummer(x, argv[++i]));
-    else if (x === "--ohne") a.ohne.push(nummer(x, argv[++i]));
-    else if (x === "--start-agent") {
-      const wert = argv[i + 1];
-      if (!wert || wert.startsWith("--")) a.fehler ??= "--start-agent erwartet einen Agent-Typ";
-      else a.startAgent = argv[++i];
-    } else if (x === "--json") a.json = true;
-  }
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, ...TICKET_OPTIONEN, "start-agent": { type: "string" }, json: { type: "boolean" } };
+  const meldung = (art, flag) => (art === "ohne-wert" && flag === "--start-agent" ? "--start-agent erwartet einen Agent-Typ" : ticketMeldung(art, flag));
+  const { werte, fehler } = flagsLesen(argv, optionen, { meldung });
+  const { tickets, ohne, fehler: ticketFehler } = ticketFilterAus(werte);
+  const a = { von: werte.von, bis: werte.bis, tickets, ohne, json: werte.json === true, fehler: fehler?.text ?? ticketFehler };
+  if (werte["start-agent"] !== undefined) a.startAgent = werte["start-agent"];
+  if (a.startAgent === "") a.fehler ??= "--start-agent erwartet einen Agent-Typ";
   if (a.startAgent !== undefined && a.tickets.length > 0) a.fehler ??= "--start-agent und --ticket schließen sich aus";
   return a;
 }

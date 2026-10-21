@@ -32,7 +32,8 @@ import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
-import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, ticketNummer, ticketZaehlung } from "./mess-lib.mjs";
+import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf } from "./subagent-laeufe.mjs";
 
@@ -498,41 +499,26 @@ export function renderMarkdown(r) {
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
 export function parseArgs(argv) {
-  const a = { agent: "kubernia-umsetzer", tickets: [], ohne: [], json: false };
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string" }, ...TICKET_OPTIONEN, projekt: { type: "string" }, brille: { type: "string" }, delta: { type: "string" }, "je-ticket": { type: "boolean" }, json: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen, { meldung: ticketMeldung });
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
-  const nummer = (name, wert) => {
-    const { nr, fehler } = ticketNummer(name, wert);
-    if (fehler) a.fehler ??= fehler;
-    return nr;
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const x = argv[i];
-    if (x === "--von") a.von = argv[++i];
-    else if (x === "--bis") a.bis = argv[++i];
-    else if (x === "--agent") a.agent = argv[++i];
-    else if (x === "--ticket") a.tickets.push(nummer(x, argv[++i]));
-    else if (x === "--ohne") a.ohne.push(nummer(x, argv[++i]));
-    else if (x === "--projekt") a.projekt = argv[++i];
-    else if (x === "--brille") a.brille = argv[++i];
-    else if (x === "--delta") {
-      const v = argv[++i];
-      if (v !== "ja" && v !== "nein") a.fehler = `--delta erwartet ja|nein, nicht ${v}`;
-      else a.delta = v === "ja";
-    }
-    else if (x === "--je-ticket") a.jeTicket = true;
-    else if (x === "--json") a.json = true;
-  }
+  const { tickets, ohne, fehler: ticketFehler } = ticketFilterAus(werte);
+  const a = { agent: werte.agent ?? "kubernia-umsetzer", tickets, ohne, json: werte.json === true };
+  for (const name of ["von", "bis", "projekt", "brille"]) if (werte[name] !== undefined) a[name] = werte[name];
+  if (werte["je-ticket"] === true) a.jeTicket = true;
+  const gefunden = fehler?.text ?? ticketFehler;
+  if (gefunden) a.fehler = gefunden;
+  const delta = werte.delta;
+  if (delta !== undefined && delta !== "ja" && delta !== "nein") a.fehler ??= `--delta erwartet ja|nein, nicht ${delta}`;
+  else if (delta !== undefined) a.delta = delta === "ja";
   return a;
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.von) {
+  if (args.fehler || !args.von) {
+    if (args.fehler) console.error(args.fehler);
     console.error("Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent kubernia-umsetzer] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket] [--json]");
-    process.exit(2);
-  }
-  if (args.fehler) {
-    console.error(args.fehler);
     process.exit(2);
   }
   const dir = projektOrdner(args.projekt);

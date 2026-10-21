@@ -15,7 +15,7 @@ type Io = {
   ladeIssue: (nr: number) => Issue;
   bearbeite: (nr: number, body: string) => void;
 };
-const S = raw as unknown as { fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string }; parseArgs: (argv: string[]) => { fehler?: string; werte?: Record<string, unknown>; positional?: string[] } };
+const S = raw as unknown as { fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string }; aufrufPruefen: (argv: string[]) => { fehler?: string; befehl?: string; werte?: Record<string, unknown>; positional?: string[] } };
 
 const GUT = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Es geht.\n- Negativfall: ohne Spezifikation wird nichts angelegt.\n";
 const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Es geht.\n";
@@ -45,15 +45,53 @@ function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
 
 const ANLEGEN = ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "12"];
 
-describe("parseArgs", () => {
-  test("Flags, mehrfaches --label und positionale Nummer", () => {
-    const p = S.parseArgs(["reparieren", "5", "--label", "a", "--label", "b"].slice(1));
-    expect(p.werte).toMatchObject({ label: ["a", "b"] });
-    expect(p.positional).toEqual(["5"]);
+describe("aufrufPruefen", () => {
+  test("Flags, mehrfaches --label und positionale Nummer je Unterbefehl", () => {
+    const a = S.aufrufPruefen(["anlegen", "--titel", "T", "--label", "a", "--label", "b"]);
+    expect(a).toMatchObject({ befehl: "anlegen", werte: { titel: "T", label: ["a", "b"] }, positional: [] });
+    expect(S.aufrufPruefen(["reparieren", "5", "--body-datei", "b.md"])).toMatchObject({ befehl: "reparieren", positional: ["5"], werte: { label: [] } });
+    expect(S.aufrufPruefen(["pruefen", "--body-datei=b.md"]).werte).toMatchObject({ "body-datei": "b.md" });
   });
   test("Flag ohne Wert ist ein Fehler", () => {
-    expect(S.parseArgs(["--titel"]).fehler).toContain("--titel");
-    expect(S.parseArgs(["--titel", "--label", "x"]).fehler).toContain("--titel");
+    expect(S.aufrufPruefen(["anlegen", "--titel"]).fehler).toBe("--titel braucht einen Wert");
+    expect(S.aufrufPruefen(["anlegen", "--titel", "--label", "x"]).fehler).toBe("--titel braucht einen Wert");
+  });
+  test.each([
+    [["pruefen", "--body-datei", "b.md", "--bogus", "x"], "Unbekanntes Argument: --bogus"],
+    [["pruefen", "--titel", "T", "--body-datei", "b.md"], "Unbekanntes Argument: --titel"], // Flag eines anderen Unterbefehls
+    [[...ANLEGEN, "--titel", "U"], "--titel ist doppelt angegeben"],
+    [["pruefen", "x", "--body-datei", "b.md"], "Unbekanntes Argument: x"],
+    [["anlegen", "x"], "Unbekanntes Argument: x"],
+    [["reparieren", "5", "6", "--body-datei", "b.md"], "Unbekanntes Argument: 6"],
+    [["reparieren", "5", "--label", "a"], "Unbekanntes Argument: --label"],
+    [["gibtsnicht", "--bogus"], "unbekannter Befehl „gibtsnicht“"],
+    [[], "unbekannter Befehl (keiner)"],
+    [["toString"], "unbekannter Befehl „toString“"], // Prototyp-Schlüssel ist kein Befehl
+    [["constructor", "7"], "unbekannter Befehl „constructor“"],
+  ])("ungültiger Aufruf %j: Fehler %s", (argv, text) => {
+    expect(S.aufrufPruefen(argv).fehler).toBe(text);
+  });
+});
+
+describe("Aufruf-Fehler vor jedem I/O", () => {
+  test.each([
+    ["pruefen", "--body-datei", "b.md", "--bogus", "x"],
+    ["pruefen", "--titel", "T", "--body-datei", "b.md"],
+    [...ANLEGEN, "--titel", "U"],
+    ["pruefen", "x", "--body-datei", "b.md"],
+    ["reparieren", "5", "6", "--body-datei", "b.md"],
+  ])("%j: Exit 2, Aufruf, nichts gelesen, angelegt oder geschrieben", (...argv) => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT });
+    let gelesen = 0;
+    io.leseDatei = () => {
+      gelesen++;
+      return GUT;
+    };
+    const r = S.fuehreAus(argv, io);
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/^✖ spezifikation: .+\nAufruf:/);
+    expect(gelesen).toBe(0);
+    expect(aufrufe).toEqual({ erzeuge: [], einsortiere: [], bearbeite: [] });
   });
 });
 

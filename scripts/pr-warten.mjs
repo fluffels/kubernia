@@ -9,7 +9,7 @@
  *   Exit 0  `MERGED <sha>`
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
- *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln)
+ *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln), auch ein Aufruf-Fehler (unbekanntes Flag, Flag ohne Wert, doppeltes Flag, keine oder falsche PR-Nummer: Meldung und Aufrufzeile auf stderr)
  *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (kein Pflicht-Check, kein Merge-Gate)` je rotem Check außerhalb der Pflicht-Checks (kein ROT, zählt nicht mit).
  * Pflicht-Checks: `gh pr checks <pr> --required --json name`; nur sie gaten. Schlägt das Holen fehl oder ist die Liste leer, gatet jeder Check (fail-closed).
  * `KONFLIKT` meldet erst eine zweite Abfrage im Abstand von mindestens 15 s (`mergeable` flackert, auch UNKNOWN).
@@ -18,6 +18,7 @@
  * Der Kern `bewerte` ist pur, `holePflicht` nimmt den `gh`-Aufruf als Parameter (getestet); nur CLI und Schlaf sind dünne, ungetestete IO.
  */
 import { pathToFileURL } from "node:url";
+import { flagsLesen } from "./flag-lib.mjs";
 import { ghJson, ghText } from "./gh-cli.mjs";
 
 const ROT = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"]);
@@ -136,12 +137,14 @@ export function warten({ hole, pflicht = () => [], schlafe, jetzt, maxMs, interv
 // ── CLI (dünn, ungetestet: gh und Schlaf) ────────────────────────────────────
 
 export function parseArgs(argv) {
+  const { werte, positionale, fehler } = flagsLesen(argv, { "max-sekunden": { type: "string" }, intervall: { type: "string" } }, { positionale: true });
   const a = { pr: null, maxSekunden: 240, intervall: 30 };
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--max-sekunden") a.maxSekunden = Number(argv[++i]);
-    else if (argv[i] === "--intervall") a.intervall = Number(argv[++i]);
-    else if (/^\d+$/.test(argv[i])) a.pr = argv[i];
-  }
+  if (fehler) a.fehler = fehler.text;
+  else if (positionale.length > 1) a.fehler = `Unbekanntes Argument: ${positionale[1]}`;
+  else if (positionale.length === 1 && !/^\d+$/.test(positionale[0])) a.fehler = `PR-Nummer erwartet, nicht ${positionale[0]}`;
+  else if (positionale.length === 1) a.pr = positionale[0];
+  if (werte["max-sekunden"] !== undefined) a.maxSekunden = Number(werte["max-sekunden"]);
+  if (werte.intervall !== undefined) a.intervall = Number(werte.intervall);
   return a;
 }
 
@@ -159,8 +162,8 @@ export function holePflicht(pr, gh = ghText) {
 
 function main() {
   const a = parseArgs(process.argv.slice(2));
-  if (!a.pr || !(a.maxSekunden > 0) || !(a.intervall > 0)) {
-    console.error("Aufruf: node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]");
+  if (a.fehler || !a.pr || !(a.maxSekunden > 0) || !(a.intervall > 0)) {
+    console.error(`${a.fehler ? `${a.fehler}\n` : ""}Aufruf: node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]`);
     process.exit(3);
   }
   const r = warten({
