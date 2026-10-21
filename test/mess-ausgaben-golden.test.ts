@@ -1,6 +1,6 @@
 /* Golden der Messskripte (#1745, ADR 0022 F3): Agentennamen, Worktree-Präfix, Commit-Zeile und Repo-Name kommen aus der Projekt-Config;
  * für dieses Projekt bleiben die Ausgaben (Text und JSON) byte-gleich, damit Langfuse und Messreihen kontinuierlich bleiben.
- * Die erwarteten Werte stehen in test/fixtures/mess-golden.json und wurden am Stand vor der Umstellung erzeugt. Die Fälle: test/support/mess-golden-faelle.mjs.
+ * Die erwarteten Werte stehen in test/fixtures/mess-golden.json und wurden am Stand vor der Umstellung erzeugt (einzige Ergänzung seither: das additive Feld `sessions` je Lauf im Kontext-JSON, #1814). Die Fälle: test/support/mess-golden-faelle.mjs.
  * Der Shim `S` ist die einzige Stelle, die die Aufrufform der Skripte kennt.
  */
 import { readFileSync } from "node:fs";

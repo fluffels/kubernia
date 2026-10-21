@@ -26,20 +26,34 @@ const { renderSeite } = rawSeite as unknown as { renderSeite: (o: { panels: Pane
 const { leseArgs } = rawCockpit as unknown as { leseArgs: (a: string[], cwd: string) => { projekt?: string; port?: number; fehler?: string } };
 
 const ctxMit = (l: Lauf): Ctx => ({ jetzt: () => 7, signal: new AbortController().signal, lauf: () => Promise.resolve(l) });
-const lauf = (code: number | null, stderr = "", fehler: string | null = null): Lauf => ({ code, stdout: "", stderr, fehler });
+const lauf = (code: number | null, stdout = "", fehler: string | null = null): Lauf => ({ code, stdout, stderr: "", fehler });
+const json = (erreichbar: boolean, grund: string | null): string => JSON.stringify({ erreichbar, grund });
 
 describe("Langfuse-Quelle", () => {
   test("Exit 0 ist ok", async () => {
-    expect(await langfuse.sammeln(ctxMit(lauf(0)))).toMatchObject({ status: "ok", daten: { Health: "erreichbar" }, grund: null });
+    expect(await langfuse.sammeln(ctxMit(lauf(0, json(true, null))))).toMatchObject({ status: "ok", daten: { Health: "erreichbar" }, grund: null });
   });
 
-  test("Exit 1 ist Ausfall mit der ersten stderr-Zeile", async () => {
-    const e = await langfuse.sammeln(ctxMit(lauf(1, "\nLangfuse nicht erreichbar: ECONNREFUSED. Hinweis\nzweite Zeile\n")));
-    expect(e).toMatchObject({ status: "ausfall", daten: null, grund: "Langfuse nicht erreichbar: ECONNREFUSED. Hinweis" });
+  test("Exit 1 ist Ausfall mit dem Grund aus dem JSON", async () => {
+    const e = await langfuse.sammeln(ctxMit(lauf(1, json(false, "Langfuse nicht erreichbar: ECONNREFUSED"))));
+    expect(e).toMatchObject({ status: "ausfall", daten: null, grund: "Langfuse nicht erreichbar: ECONNREFUSED" });
   });
 
-  test("Exit 1 ohne stderr hat trotzdem einen Grund", async () => {
-    expect((await langfuse.sammeln(ctxMit(lauf(1)))).grund).toBe("Langfuse aus");
+  test("Exit 1 mit leerem oder fehlendem Grund hat trotzdem einen Grund", async () => {
+    expect((await langfuse.sammeln(ctxMit(lauf(1, json(false, null))))).grund).toBe("Langfuse aus");
+    expect((await langfuse.sammeln(ctxMit(lauf(1, json(false, "  "))))).grund).toBe("Langfuse aus");
+  });
+
+  test.each([[""], ["kein json"], ["{}"], [JSON.stringify({ erreichbar: "ja" })], ["null"], [json(false, "x")]])(
+    "unlesbare oder widersprüchliche Ausgabe bei Exit 0 ist Ausfall (%s)",
+    async (stdout) => {
+      const e = await langfuse.sammeln(ctxMit(lauf(0, stdout)));
+      expect(e).toMatchObject({ status: "ausfall", daten: null, grund: "Langfuse-Prüfung fehlgeschlagen (unlesbare Ausgabe)" });
+    },
+  );
+
+  test("Exit 1 mit widersprüchlichem JSON (erreichbar true) ist Ausfall", async () => {
+    expect((await langfuse.sammeln(ctxMit(lauf(1, json(true, null))))).grund).toBe("Langfuse-Prüfung fehlgeschlagen (unlesbare Ausgabe)");
   });
 
   test.each([[2, null, "Exit 2"], [null, "ENOENT", "Exit ENOENT"]])("Exit %s / Fehler %s ist Ausfall", async (code, fehler, text) => {
@@ -75,12 +89,18 @@ describe("laufe", () => {
     ac.abort();
     const l = await (rawLauf as unknown as { laufe: (id: string, o: { signal: AbortSignal }) => Promise<Lauf> }).laufe("langfuse-vorbedingung", { signal: ac.signal });
     expect(l.code).toBeNull();
-    expect(l.fehler).toEqual(expect.stringMatching(/\S/));
+    expect(l.fehler).toBe("ABORT_ERR");
+  });
+
+  test("ein nicht existierendes Arbeitsverzeichnis ist ein Spawn-Fehler: code null, fehler ENOENT", async () => {
+    const l = await (rawLauf as unknown as { laufe: (id: string, o: { cwd: string }) => Promise<Lauf> }).laufe("langfuse-vorbedingung", { cwd: join(tmpdir(), "kq-gibt-es-nicht-1821") });
+    expect(l.code).toBeNull();
+    expect(l.fehler).toBe("ENOENT");
   });
 });
 
 describe("main", () => {
-  const { main } = rawCockpit as unknown as { main: (argv: string[], cwd: string) => Promise<number | null> };
+  const { main } = rawCockpit as unknown as { main: (argv: string[], cwd: string, deps?: { starteServer: unknown }) => Promise<number | (() => Promise<void>)> };
   const stumm = () => [vi.spyOn(console, "error").mockImplementation(() => undefined), vi.spyOn(console, "log").mockImplementation(() => undefined)] as const;
   afterEach(() => vi.restoreAllMocks());
 
@@ -90,10 +110,39 @@ describe("main", () => {
     expect(String(err.mock.calls[0][0])).toContain("Aufruf: npm run cockpit");
   });
 
-  test("Erfolg: null und Startmeldung mit der Adresse", async () => {
+  test("Erfolg: liefert schliessen und die Startmeldung mit der Adresse", async () => {
     const [, log] = stumm();
-    expect(await main(["--port", "0"], process.cwd())).toBeNull();
-    expect(String(log.mock.calls[0][0])).toMatch(/^Cockpit: http:\/\/127\.0\.0\.1:\d+\//);
+    const schliessen = await main(["--port", "0"], process.cwd());
+    try {
+      expect(schliessen).toEqual(expect.any(Function));
+      expect(String(log.mock.calls[0][0])).toMatch(/^Cockpit: http:\/\/127\.0\.0\.1:\d+\//);
+    } finally {
+      if (typeof schliessen === "function") await schliessen();
+    }
+  });
+
+  test("anderer Startfehler als belegter Port: Exit 1 mit der Fehlermeldung", async () => {
+    const [err] = stumm();
+    const starteServer = () => Promise.reject(new Error("kaputt"));
+    expect(await main(["--port", "0"], process.cwd(), { starteServer })).toBe(1);
+    expect(String(err.mock.calls[0][0])).toBe("Cockpit startet nicht: kaputt");
+  });
+
+  test("der Kontext der Quellen trägt das Projekt (ctx.projekt) und den Allowlist-Lauf", async () => {
+    stumm();
+    let ctx: { projekt: string; lauf: unknown } | undefined;
+    const starteServer = (o: { ctxFuer: (s: AbortSignal) => { projekt: string; lauf: unknown } }) => {
+      ctx = o.ctxFuer(new AbortController().signal);
+      return Promise.resolve({ port: 1, schliessen: () => Promise.resolve() });
+    };
+    const projekt = mkdtempSync(join(tmpdir(), "kq-cockpit-"));
+    try {
+      await main(["--projekt", projekt], process.cwd(), { starteServer });
+      expect(ctx?.projekt).toBe(projekt);
+      expect(ctx?.lauf).toEqual(expect.any(Function));
+    } finally {
+      rmSync(projekt, { recursive: true, force: true });
+    }
   });
 
   test("belegter Port: Exit 1 und Meldung", async () => {

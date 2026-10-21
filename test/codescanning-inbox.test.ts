@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/codescanning-inbox.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { NOTFAELLE } from "../scripts/board-lib.mjs";
+import { NOTFAELLE, SAMMELTICKET_TITEL_LISTE } from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sammelRaw from "../scripts/sammelticket-anlegen.mjs";
 
@@ -28,12 +28,14 @@ const C = raw as unknown as {
     owner: string;
     wiedervorlagen: { id: string; alerts?: number[] }[];
     offeneTitel?: string[];
+    sammelTitel: string[];
     offeneIssues?: { number: number; title: string; body: string; user: unknown }[];
   }) => Required<Bekannt> & { issues: { number: number; titel: string; body: string }[] };
+  kontextAus: (a: Record<string, unknown>) => { sammelTitel: string[]; offeneIssues: unknown; offeneTitel: unknown; owner: string };
   deckendesIssue: (a: Partial<Alert>, issues: { number: number; titel: string; body: string }[]) => { number: number; grund: string } | null;
   zeilenText: (g: Gruppe) => string;
-  issueBody: (g: Gruppe[]) => string;
-  plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null }) => Plan;
+  issueBody: (g: Gruppe[], repo?: string) => string;
+  plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null; repo?: string }) => Plan;
   fuehreAus: (a: Record<string, unknown>) => number;
   lauf: (a: Record<string, unknown>) => number;
 };
@@ -189,7 +191,7 @@ describe("deckendesIssue", () => {
 
 describe("bekannteAlerts offene Issues", () => {
   const offen = (o: Record<string, unknown> = {}) => ({ number: 1703, title: "Sanitization", body: "Code-Scanning-Alert 74", user: { login: OWNER, type: "User" }, ...o });
-  const mit = (i: unknown[]) => C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], offeneIssues: i as never }).issues.map((x) => x.number);
+  const mit = (i: unknown[]) => C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], sammelTitel: SAMMELTICKET_TITEL_LISTE as string[], offeneIssues: i as never }).issues.map((x) => x.number);
   test("offene Issues vertrauter Autoren werden übernommen", () => {
     expect(mit([offen()])).toEqual([1703]);
   });
@@ -206,7 +208,31 @@ describe("bekannteAlerts offene Issues", () => {
     expect(mit([null, offen()])).toEqual([1703]);
   });
   test("ohne offeneIssues: leere Liste", () => {
-    expect(C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [] }).issues).toEqual([]);
+    expect(C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], sammelTitel: [] }).issues).toEqual([]);
+  });
+});
+
+describe("sammelTitel ist Pflicht", () => {
+  const ohne = (v: unknown) => () => C.bekannteAlerts({ kommentare: [], owner: OWNER, wiedervorlagen: [], sammelTitel: v as never });
+  test("fehlende oder keine Liste wirft statt still [] anzunehmen", () => {
+    expect(ohne(undefined)).toThrow(/sammelTitel/);
+    expect(ohne("Harness-Härtung (gesammelt)")).toThrow(/sammelTitel/);
+    expect(ohne(null)).toThrow(/sammelTitel/);
+  });
+  test("eine leere Liste ist erlaubt (kein Sammelticket ausgenommen)", () => {
+    expect(ohne([])()).toBeDefined();
+  });
+  test("kontextAus (Verdrahtung in main) reicht die Sammeltitel der Libs durch", () => {
+    const libs = { SAMMELTICKET_TITEL_LISTE: ["Sammel A"], vertrauteIssues: () => [{ number: 1 }], offeneTitel: () => ["t"] };
+    const k = C.kontextAus({ libs, rohe: [], kommentare: [], owner: OWNER, offenesIssue: null, wiedervorlagen: [] });
+    expect(k.sammelTitel).toEqual(["Sammel A"]);
+    expect(k.offeneIssues).toEqual([{ number: 1 }]);
+    expect(k.offeneTitel).toEqual(["t"]);
+  });
+  test("kontextAus ohne Sammeltitel-Liste der Libs gibt einen Kontext, den bekannteAlerts ablehnt", () => {
+    const libs = { vertrauteIssues: () => [], offeneTitel: () => [] };
+    const k = C.kontextAus({ libs, rohe: [], kommentare: [], owner: OWNER, offenesIssue: null, wiedervorlagen: [] });
+    expect(() => C.bekannteAlerts(k as never)).toThrow(/sammelTitel/);
   });
 });
 
@@ -237,21 +263,22 @@ describe("plane mit deckenden Issues", () => {
 describe("bekannteAlerts", () => {
   const zeile = "- [ ] Code-Scanning: Scorecard Foo (high), Alerts 8, 9. Vorschlag: x";
   test("offene Zeile vertrauter Autoren liefert Nummern", () => {
-    const b = C.bekannteAlerts({ kommentare: [{ user: bot, body: zeile }], owner: OWNER, wiedervorlagen: [] });
+    const b = C.bekannteAlerts({ kommentare: [{ user: bot, body: zeile }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] });
     expect([...b.nummern].sort()).toEqual([8, 9]);
   });
   test("erledigte Zeile [x] zählt nicht", () => {
-    const b = C.bekannteAlerts({ kommentare: [{ user: bot, body: zeile.replace("[ ]", "[x]") }], owner: OWNER, wiedervorlagen: [] });
+    const b = C.bekannteAlerts({ kommentare: [{ user: bot, body: zeile.replace("[ ]", "[x]") }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] });
     expect(b.nummern.size).toBe(0);
   });
   test("Zeile eines fremden Autors zählt nicht", () => {
-    const b = C.bekannteAlerts({ kommentare: [{ user: { login: "fremd", type: "User" }, body: zeile }], owner: OWNER, wiedervorlagen: [] });
+    const b = C.bekannteAlerts({ kommentare: [{ user: { login: "fremd", type: "User" }, body: zeile }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] });
     expect(b.nummern.size).toBe(0);
   });
   test("Wiedervorlage codescanning-<slug> liefert die Regel, audit- nichts", () => {
     const b = C.bekannteAlerts({
       kommentare: [],
       owner: OWNER,
+      sammelTitel: [],
       wiedervorlagen: [{ id: "codescanning-js-path-injection" }, { id: "audit-ghsa-aaaa-bbbb-cccc" }],
     });
     expect([...b.regeln]).toEqual(["js-path-injection"]);
@@ -260,6 +287,7 @@ describe("bekannteAlerts", () => {
     const b = C.bekannteAlerts({
       kommentare: [],
       owner: OWNER,
+      sammelTitel: [],
       wiedervorlagen: [{ id: "codescanning-x", alerts: [7, 8] }, { id: "audit-ghsa-aaaa-bbbb-cccc", alerts: [9] }, { id: "codescanning-y" }],
     });
     expect([...b.alerts].sort()).toEqual([7, 8]);
@@ -268,21 +296,23 @@ describe("bekannteAlerts", () => {
     const b = C.bekannteAlerts({
       kommentare: [],
       owner: OWNER,
+      sammelTitel: [],
       wiedervorlagen: [{ id: "codescanning-x", alerts: [7, "8", 1.5, null, NaN] as unknown as number[] }],
     });
     expect([...b.alerts]).toEqual([7]);
   });
   test("Audit-Zeile eines vertrauten Kommentars macht die GHSA bekannt, die eines Fremden nicht (#1433)", () => {
     const audit = "- [ ] Audit: GHSA-aaaa-bbbb-cccc in x";
-    const vertraut = C.bekannteAlerts({ kommentare: [{ user: bot, body: audit }], owner: OWNER, wiedervorlagen: [] });
+    const vertraut = C.bekannteAlerts({ kommentare: [{ user: bot, body: audit }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] });
     expect([...vertraut.ghsa]).toEqual(["ghsa-aaaa-bbbb-cccc"]);
-    const fremd = C.bekannteAlerts({ kommentare: [{ user: { login: "fremd", type: "User" }, body: audit }], owner: OWNER, wiedervorlagen: [] });
+    const fremd = C.bekannteAlerts({ kommentare: [{ user: { login: "fremd", type: "User" }, body: audit }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] });
     expect(fremd.ghsa.size).toBe(0);
   });
   test("GHSA aus audit-Wiedervorlage und aus Titel ist bekannt", () => {
     const b = C.bekannteAlerts({
       kommentare: [],
       owner: OWNER,
+      sammelTitel: [],
       wiedervorlagen: [{ id: "audit-ghsa-vfj7-8cjw-p6xm" }],
       offeneTitel: ["🔒 Security: GHSA-aaaa-bbbb-cccc in x"],
     });
@@ -305,6 +335,10 @@ describe("plane", () => {
     expect(p.issue.art).toBe("nichts");
     expect(p.zeilen).toHaveLength(1);
     expect(p.zeilen[0].nummern).toEqual([1, 2]);
+  });
+  test("das Repo des Plans landet im Body des neuen Spitzen-Tickets", () => {
+    const p = C.plane({ alerts: [spitze(1)], bekannt: keine, offenesIssue: null, repo: "eigner/projekt" });
+    expect(p.issue.body).toContain("repos/eigner/projekt/code-scanning/alerts/");
   });
   test("Spitze ohne Issue: anlegen mit allen Nummern im Body", () => {
     const p = C.plane({ alerts: [spitze(1), spitze(2)], bekannt: keine, offenesIssue: null });
@@ -399,6 +433,11 @@ describe("Texte", () => {
     expect(C.zeilenText(g)).not.toMatch(/#\d/);
     expect(C.issueBody([g])).not.toMatch(/#\d/);
   });
+  test("der Body nennt das übergebene Repo in beiden gh-Befehlen", () => {
+    const body = C.issueBody([g], "eigner/projekt");
+    expect(body).toContain("gh api repos/eigner/projekt/code-scanning/alerts/<nummer>");
+    expect(body).toContain("gh api -X PATCH repos/eigner/projekt/code-scanning/alerts/<nummer>");
+  });
 });
 
 describe("fuehreAus", () => {
@@ -492,7 +531,7 @@ describe("fuehreAus", () => {
 });
 
 describe("lauf", () => {
-  const kontext = { offenesIssue: null, kommentare: [], owner: OWNER, wiedervorlagen: [] };
+  const kontext = { offenesIssue: null, kommentare: [], owner: OWNER, wiedervorlagen: [], sammelTitel: [] };
   test("Alerts nicht lesbar: Exit 1 und kein Schreib-Aufruf (fail-closed, nie schliessen)", () => {
     const calls: string[] = [];
     const logs: string[] = [];

@@ -1,6 +1,7 @@
 // Kein Shebang: Lib, wird vom Server importiert und von test/cockpit/ geprüft.
 /* Quellen-Vertrag des Harness-Cockpits (ADR 0029): eine Quelle ist `{ id, titel, ttlMs, sammeln(ctx) }`.
- * `sammeln` liefert `ok(daten, ctx)` oder `ausfall(grund, ctx)` mit der Form `{ status: ok|ausfall, stand, daten|null, grund|null }`.
+ * Der Kontext `ctx` trägt `jetzt()`, `signal`, `projekt` (absoluter Projektpfad) und `lauf(id)` (Allowlist-Unterprozess); weitere Felder liefert `ctxFuer`.
+ * `sammeln` liefert `ok(daten, ctx)` (daten mit mindestens einem Wert) oder `ausfall(grund, ctx)` mit der Form `{ status: ok|ausfall, stand, daten|null, grund|null }`.
  * Der Abruf läuft parallel mit Frist je Quelle, hält Ergebnisse nur im Speicher (TTL) und merkt von einem früheren Erfolg
  * allein die Zeit (`zuletztOk`), nie Werte. Wirft eine Quelle, läuft in die Frist oder liefert eine ungültige Form, ist das ein Ausfall.
  * Neue Quelle = eine Datei unter quellen/ plus eine Zeile in registry.mjs plus ein Eintrag in .factory/besitz.json (Ring oberflaeche); dieses Modul kennt keine Quelle beim Namen. */
@@ -28,6 +29,7 @@ export function pruefeErgebnis(e) {
   if (!Number.isFinite(e.stand)) return "stand keine Zahl";
   if (e.status === "ok") {
     if (!e.daten || typeof e.daten !== "object") return "ok ohne daten";
+    if (Object.keys(e.daten).length === 0) return "ok ohne Werte";
     if (e.grund !== null) return "ok mit grund";
     return null;
   }

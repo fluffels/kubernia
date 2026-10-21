@@ -13,6 +13,8 @@ import * as rawLib from "../scripts/besitz-lib.mjs";
 import * as rawSync from "../scripts/factory-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDrift from "../scripts/check-factory-drift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
 interface Span {
   start: number;
@@ -33,6 +35,7 @@ interface Opt {
   err?: (s: string) => void;
 }
 interface Sync {
+  PROJEKT_PFAD: string;
   cli(argv: string[], opt?: Opt): number;
 }
 interface Drift {
@@ -42,6 +45,7 @@ interface Drift {
 const lib = rawLib as unknown as Lib;
 const sync = rawSync as unknown as Sync;
 const drift = rawDrift as unknown as Drift;
+const pc = rawPc as unknown as { PROJEKT_CONFIG: string };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 const temps: string[] = [];
@@ -501,6 +505,10 @@ function pwZiel(planer = "wk-planer"): string {
 }
 
 describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
+  test("der Config-Pfad hat eine Quelle: sync-Alias und projekt-config-lib sind gleich (#1821)", () => {
+    assert.equal(sync.PROJEKT_PFAD, pc.PROJEKT_CONFIG);
+  });
+
   test("K1: Ganze Datei und Block-Einheit bekommen die Werte aus der Config des Ziels, der zweite Lauf schreibt nichts", () => {
     const q = pwQuelle();
     const z = pwZiel();
@@ -551,6 +559,29 @@ describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
     }
   });
 
+  test("eine Fehlermeldung, die schon mit dem Pfad beginnt, bekommt ihn nicht doppelt vorangestellt (#1821)", () => {
+    const q = pwQuelle();
+    schreibe(q, ".claude/agents/w.md", PW_AGENT.replace("agenten.planer", "agenten.fehlt"));
+    const r = laufe(["--quelle", q, "--ziel", pwZiel()]);
+    assert.equal(r.code, 1);
+    const zeile = r.err.split("\n").find((z) => z.includes("agenten.fehlt")) ?? "";
+    assert.equal(zeile.split(".claude/agents/w.md").length - 1, 1, zeile);
+    const z = pwZiel();
+    rmSync(join(z, ".factory/projekt.json"));
+    assert.match(laufe(["--quelle", pwQuelle(), "--ziel", z]).err, /\.claude\/agents\/w\.md: Projekt-Config fehlt/);
+  });
+
+  test("ein Pfad mit 'weicht von' löst keinen --write-Hinweis im Drift-Gate aus (#1821)", () => {
+    const z = pwZiel();
+    assert.equal(laufe(["--quelle", pwQuelle(), "--ziel", z]).code, 0);
+    rmSync(join(z, ".factory/sync-stand.json"));
+    schreibe(z, ".claude/agents/weicht von.md", `${PW.start}\nohne Ende\n`);
+    const r = drift1(z);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /kein Ende/);
+    assert.doesNotMatch(r.err, /projektwerte\.mjs --write/);
+  });
+
   test("Fixture-Repos ohne Projektwert-Stellen brauchen keine Config", () => {
     const z = baueZiel();
     assert.ok(!existsSync(join(z, ".factory/projekt.json")));
@@ -573,7 +604,9 @@ describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
     assert.match(rot.err, /\.factory\/projekt\.json/);
     schreibe(z, ".claude/agents/w.md", lies(z, ".claude/agents/w.md").replace("name: von-hand", "name: wk-planer"));
     schreibe(z, "docs/d.md", lies(z, "docs/d.md").replace("`wk-planer` |", "`manipuliert` |"));
-    assert.match(drift1(z).err, /Projektwert-Block weicht/);
+    const block = drift1(z);
+    assert.match(block.err, /Projektwert-Block weicht/);
+    assert.match(block.err, /projektwerte\.mjs --write/);
     schreibe(z, "docs/d.md", `${lies(z, "docs/d.md")}\n<!-- factory:projektwerte:start -->\nohne Ende\n`);
     const kaputt = drift1(z);
     assert.equal(kaputt.code, 1);

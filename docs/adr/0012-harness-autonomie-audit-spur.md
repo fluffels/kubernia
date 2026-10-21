@@ -128,6 +128,8 @@ Bewusst **keine** harte Token-Schwelle als Bedingung: eine nie erreichte Schwell
 | 22 | Skill `kubernia-workflow`, Workflow-Ausgänge `wartet-auf-klaerung`/`festgefahren` | entfallen | Ablauf | entfallen mit #1067; Nachfolger sind Zeile 6 und 10 (`ERGEBNIS`-Token `festgefahren`/`entscheidung-noetig`) |
 | 23 | Skill `kubernia` | keiner | kein Wartepunkt | delegiert an `ablauf.md` |
 
+Zeile 8, Abnahme-Abbruch: präzisiert durch #1821, siehe [Werkzeug-Abbruch der Abnahme](../factory/entscheidungsprotokoll.md#werkzeug-abbruch-der-abnahme): fehlt der Abnahme ein Werkzeug, entscheidet der Hauptchat nach dem Entscheidungsprotokoll; ein Abbruch, der die ganze Session betrifft, beendet den Lauf weiter.
+
 **Wächter.** `test/harness/harness-approval.test.ts` (Abschnitt „Feste Stopps bleiben“) prüft die fünf Anker im Block `stopps`, den Freigabe-Stopp im Skill `forum` und die Permission-Regeln (`ask` für `gh issue delete`, `deny` für `npm publish` und `gh repo delete`, je Bash und PowerShell). Ein gestrichener fester Stopp wird damit rot. Grenze: der Wächter prüft Anker und Einträge, nicht die Bedeutung; ein Abschwächen im Wortlaut bei erhaltenem Anker fängt er nicht.
 
 **Auto-Modus bei `.claude/`-Änderungen (Recherche 2026-10-21).** Keine Regel im Repo vermeidet die Sperre; sie bleibt eine externe Restgrenze.

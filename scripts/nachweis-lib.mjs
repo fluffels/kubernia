@@ -228,3 +228,9 @@ export function vertrauteAbnahmeMarker(kommentare, owner, zeilen) {
     .map((c) => parseAbnahmeMarker(zeilen, c?.body))
     .filter((m) => m !== null);
 }
+
+/** Höchster gültiger Abnahme-Durchgang der vertrauten Marker (das Maximum des Felds, nicht die Anzahl); 0 ohne Marker. Die eine Definition
+ *  für „nächster Durchgang“ (abnahme.mjs, höchster + 1) und die Abnahme-Kennzahl (lauf-ergebnis.mjs). Pur. */
+export function hoechsterAbnahmeDurchgang(kommentare, owner, zeilen) {
+  return Math.max(0, ...vertrauteAbnahmeMarker(kommentare, owner, zeilen).map((m) => m.durchgang));
+}

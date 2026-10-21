@@ -10,16 +10,15 @@
  */
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ausProbe, brauchtProbe, liesSnapshot, pacing, schreibeSnapshot, snapshotPfad, zielquoteAusEnv } from "./budget-lib.mjs";
 import { umgebungsWert } from "./projekt-config-lib.mjs";
 
 const EXIT = { ok: 0, knapp: 3, stopp: 4 };
-const argv = process.argv.slice(2);
-const bekannt = new Set(["--json", "--ohne-probe"]);
-const unbekannt = argv.filter((a) => !bekannt.has(a));
-if (unbekannt.length) {
-  console.error(`Unbekannte Argumente: ${unbekannt.join(" ")}\nAufruf: node scripts/budget-pacing.mjs [--json] [--ohne-probe]`);
-  process.exit(2);
+const { werte, fehler } = flagsLesen(process.argv.slice(2), { json: { type: "boolean" }, "ohne-probe": { type: "boolean" } });
+if (fehler) {
+  console.error(`${fehler.text}\nAufruf: node scripts/budget-pacing.mjs [--json] [--ohne-probe]`);
+  process.exit(AUFRUF_EXIT);
 }
 
 /** Headless-Probe: cwd im OS-Temp, damit weder Projekt-Hooks noch das Langfuse-Tag des Projekts greifen. `null` bei jedem Fehler. */
@@ -51,7 +50,7 @@ const gelesen = liesSnapshot(pfad);
 let snapshot = gelesen.snapshot;
 const vorab = [];
 if (zielWarnung) vorab.push(zielWarnung);
-if (brauchtProbe(snapshot, jetzt) && !argv.includes("--ohne-probe")) {
+if (brauchtProbe(snapshot, jetzt) && !werte["ohne-probe"]) {
   const gemessen = probe();
   if (gemessen) {
     snapshot = gemessen;
@@ -72,7 +71,7 @@ const zeit = (ms) => {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())} (${zone})`;
 };
 
-if (argv.includes("--json")) {
+if (werte.json) {
   console.log(JSON.stringify({ ...u, pauseBisText: u.pauseBis ? zeit(u.pauseBis) : null, stand: snapshot?.stand ?? null }));
 } else {
   const pct = (x) => (x === null ? "?" : `${Math.round(x * 10) / 10} %`);

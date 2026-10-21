@@ -33,6 +33,7 @@
  */
 
 import { pathToFileURL } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 /** Standard-Längenlimit für einen Forum-Titel im Issue (GitHub-Issue-Titel
  *  dürfen 256 Zeichen; das „Forum #N: "-Präfix + Reserve bleibt darunter). */
@@ -151,8 +152,16 @@ export function quoteBodyAsData(safeBody) {
 // ── CLI ────────────────────────────────────────────────────────────────────────
 // --body   → mehrzeiligen Body entschärfen (sanitizeForumBody)
 // (default) → einzeiligen Titel entschärfen (sanitizeForumText)
-function main() {
-  const bodyMode = process.argv.includes("--body");
+function main(argv = process.argv.slice(2)) {
+  const { werte, fehler } = flagsLesen(argv, { body: { type: "boolean" } });
+  if (fehler) {
+    process.stderr.write(`${fehler.text}
+Aufruf: node scripts/forum-sanitize.mjs [--body]   (Text von stdin)
+`);
+    process.exitCode = AUFRUF_EXIT;
+    return;
+  }
+  const bodyMode = werte.body === true;
   let input = "";
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (chunk) => {

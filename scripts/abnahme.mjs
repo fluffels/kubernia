@@ -29,7 +29,7 @@ import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, hoechsterAbnahmeDurchgang } from "./nachweis-lib.mjs";
 import { ladeCommitZeilen } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
@@ -95,9 +95,9 @@ export function entscheide(urteile) {
   return "bestanden";
 }
 
-/** Durchgang dieses Laufs: gültige Marker vertrauter Autoren auf dem PR plus 1; Marker Fremder und der Hand-off-Marker zählen nicht. Pur. */
+/** Durchgang dieses Laufs: höchster gültiger Durchgang vertrauter Marker auf dem PR plus 1 (ein Neuversuch nach gepostetem Marker zählt weiter); Marker Fremder und der Hand-off-Marker zählen nicht. Pur. */
 export function zaehleDurchgang(kommentare, owner, zeilen) {
-  return vertrauteAbnahmeMarker(kommentare, owner, zeilen).length + 1;
+  return hoechsterAbnahmeDurchgang(kommentare, owner, zeilen) + 1;
 }
 
 /** Text in Listenpunkten: spitze Klammern maskiert (der Marker bleibt nicht fälschbar), Zeilenumbruch zu Leerzeichen; Pipe und Backslash bleiben, in Listen gibt es nichts zu maskieren. */

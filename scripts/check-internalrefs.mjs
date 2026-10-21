@@ -46,6 +46,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { escapeRegex } from "./ticket-namen.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -176,18 +177,23 @@ export function addTerm(term, selfPath = SELF, listName = "ENCODED_TERMS") {
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main(argv = process.argv.slice(2)) {
+  const { werte, fehler } = flagsLesen(argv, { add: { type: "string" }, "add-name": { type: "string" }, text: { type: "boolean" } });
+  if (fehler) {
+    console.error(`${fehler.text}
+Aufruf: node scripts/check-internalrefs.mjs [--add <begriff> | --add-name <begriff> | --text]`);
+    process.exit(AUFRUF_EXIT);
+  }
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
 
-  for (const [flag, listName] of [["--add", "ENCODED_TERMS"], ["--add-name", "ENCODED_NAME_TERMS"]]) {
-    const addIndex = argv.indexOf(flag);
-    if (addIndex === -1) continue;
-    const result = addTerm(argv[addIndex + 1] ?? "", SELF, listName);
+  for (const [flag, listName] of [["add", "ENCODED_TERMS"], ["add-name", "ENCODED_NAME_TERMS"]]) {
+    if (werte[flag] === undefined) continue;
+    const result = addTerm(werte[flag], SELF, listName);
     if (!result.ok) {
-      console.error(red(`✖ ${flag} fehlgeschlagen: ${result.reason}`));
+      console.error(red(`✖ --${flag} fehlgeschlagen: ${result.reason}`));
       process.exit(1);
     }
     console.log(green(`✔ Begriff kodiert aufgenommen (${result.count} in der Liste).`));
@@ -197,7 +203,7 @@ function main(argv = process.argv.slice(2)) {
 
   // `--text`: Text von stdin prüfen (PR-Titel/-Body vor dem `gh pr create`/`gh pr edit`), z.B.
   //   gh pr view <nr> --json title,body --jq '.title, .body' | node scripts/check-internalrefs.mjs --text
-  if (argv.includes("--text")) {
+  if (werte.text) {
     const text = readFileSync(0, "utf8");
     reportAndExit(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, red, green, checkedLabel("text"));
     return;

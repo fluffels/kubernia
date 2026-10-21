@@ -16,6 +16,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { mermaidBloecke } from "./docs-gen/markdown.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 export { mermaidBloecke };
 
@@ -67,17 +68,21 @@ export function mermaidDatei(distDir, urlPfad) {
   return existsSync(ziel) && statSync(ziel).isFile() ? ziel : null;
 }
 
+const AUFRUF = "Aufruf: node scripts/mermaid-vorschau.mjs <datei.md> --mermaid <ordner-mit-node_modules/mermaid> [--port 4173]";
+
 function main(argv) {
-  const md = argv[0];
-  const mi = argv.indexOf("--mermaid");
-  const pi = argv.indexOf("--port");
-  if (!md || mi < 0 || !argv[mi + 1]) {
-    console.error("Aufruf: node scripts/mermaid-vorschau.mjs <datei.md> --mermaid <ordner-mit-node_modules/mermaid> [--port 4173]");
-    process.exit(2);
+  const { werte, positionale, fehler } = flagsLesen(argv, { mermaid: { type: "string" }, port: { type: "string" } }, { positionale: true, pflicht: ["mermaid"] });
+  const port = werte.port === undefined ? 4173 : Number(werte.port);
+  const problem = fehler?.text ?? (positionale.length !== 1 ? "genau eine Markdown-Datei erwartet" : !Number.isInteger(port) || port < 0 || port > 65535 ? `--port erwartet eine Portnummer, nicht ${werte.port}` : null);
+  if (problem) {
+    console.error(`${problem}
+${AUFRUF}`);
+    process.exit(AUFRUF_EXIT);
   }
-  const dist = join(argv[mi + 1], "node_modules", "mermaid", "dist");
+  const md = positionale[0];
+  const dist = join(werte.mermaid, "node_modules", "mermaid", "dist");
   if (!existsSync(join(dist, "mermaid.esm.min.mjs"))) {
-    console.error(`mermaid fehlt unter ${dist}. Einmal: npm install --prefix ${argv[mi + 1]} mermaid@11`);
+    console.error(`mermaid fehlt unter ${dist}. Einmal: npm install --prefix ${werte.mermaid} mermaid@11`);
     process.exit(2);
   }
   const mdPfad = unterhalb(REPO, md);
@@ -86,7 +91,6 @@ function main(argv) {
     process.exit(2);
   }
   const html = vorschauHtml(mermaidBloecke(readFileSync(mdPfad, "utf8")));
-  const port = pi >= 0 ? Number(argv[pi + 1]) : 4173;
   createServer((req, res) => {
     const url = req.url ?? "/";
     if (url.startsWith("/mermaid/")) {

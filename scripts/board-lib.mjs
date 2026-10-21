@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie, bricht schon der Import ab (kein stiller Standardwert, #1611).
@@ -609,7 +609,7 @@ export function aliasAbfrage(nummern, repo = REPO) {
   if (!Array.isArray(nummern) || nummern.some((n) => !Number.isInteger(n) || n <= 0)) {
     throw new Error(`Nummern müssen positive Ganzzahlen sein: ${JSON.stringify(nummern)}`);
   }
-  const [owner, name] = repo.split("/");
+  const { owner, name } = zerlegeRepo(repo);
   const felder = "number title state assignees(first:5){ nodes{ login } } projectItems(first:20){ nodes{ id project{ id } } }";
   const bloecke = [];
   for (let von = 0; von < nummern.length; von += ALIAS_MAX) {

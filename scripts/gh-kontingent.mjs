@@ -12,6 +12,7 @@
  * Es liest nur über `gh-cli.mjs` (der Wächter `test/harness/gh-cli.test.ts` verbietet einen direkten `gh`-Aufruf).
  */
 import { existsSync, readFileSync } from "node:fs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
 import { ARTEN, EXIT_KNAPP, berichtAus, kontingentLesen, kontingentPruefen, logPfad, ressource } from "./kontingent-lib.mjs";
 
@@ -22,8 +23,15 @@ function ausgabeBericht(b) {
   return [...(zeilen.length ? zeilen : ["Kein Log vorhanden."]), ...(b.uebersprungen ? [`${b.uebersprungen} unlesbare Zeile(n) übersprungen.`] : []), "Hinweis: Deltas enthalten den Verbrauch paralleler Agenten desselben Tokens."].join("\n");
 }
 
-function main() {
-  if (process.argv.includes("--bericht")) {
+function main(argv = process.argv.slice(2)) {
+  const { werte, fehler } = flagsLesen(argv, { bericht: { type: "boolean" } });
+  if (fehler) {
+    console.error(`${fehler.text}
+Aufruf: node scripts/gh-kontingent.mjs [--bericht]`);
+    process.exitCode = AUFRUF_EXIT;
+    return;
+  }
+  if (werte.bericht) {
     let pfad;
     try {
       pfad = logPfad();

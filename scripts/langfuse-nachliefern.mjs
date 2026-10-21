@@ -37,6 +37,7 @@ import {
   vorStichtag,
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
+import { kindEnv } from "./langfuse-zugang.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
 import { gesperrterLauf, kurzerStand, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
 
@@ -57,7 +58,7 @@ export function giltBestaetigt(eintrag) {
 }
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]";
-export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, im Hook zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe haben den Secret-Key nicht). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (docs/model-routing.md › Langfuse-Erfassung belegen).";
+export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe haben den Secret-Key nicht). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (docs/model-routing.md › Langfuse-Erfassung belegen).";
 const AUSLOESER = ["sessionstart", "sessionend"];
 
 /** Fehlertext fürs Protokoll: Node meldet bei Netzfehlern nur „fetch failed“, die Ursache steckt in `cause` (Code oder Meldung). */
@@ -312,7 +313,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = hauptrepoPfad(fileURLToPath(new URL("..", import.meta.url)));
   const stateDir = join(homedir(), ".claude", "state");
-  const lauf = (a, o) => nachliefern(a, { projectsRoot: projekteWurzel(), stateDir, repoRoot, ...o });
+  const lauf = (a, o) => nachliefern(a, { projectsRoot: projekteWurzel(), stateDir, repoRoot, env: kindEnv(process.env, homedir()), ...o }); // Zugang auch aus ~/.langfuse-secret und den Plugin-Optionen, wie im Hook (#1821 L30)
   if (args.ausloeser && !args.fehler) {
     await hookLauf(args, { stateDir, lauf, stand: kurzerStand(fileURLToPath(new URL("..", import.meta.url))) });
     return;

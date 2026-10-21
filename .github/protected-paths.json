@@ -30,6 +30,7 @@
     "/scripts/mcp-launch.mjs",
     "/scripts/mcp-ausfall.mjs",
     "/scripts/langfuse-vorbedingung.mjs",
+    "/scripts/cockpit/lauf.mjs",
     "/scripts/besitz-lib.mjs",
     "/scripts/factory-sync.mjs",
     "/scripts/harness-doctor.mjs",

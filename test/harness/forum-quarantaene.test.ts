@@ -232,7 +232,7 @@ describe("quarantaeneText", () => {
     const skript = fileURLToPath(new URL("../../scripts/forum-quarantaene.mjs", import.meta.url));
     const r = spawnSync(process.execPath, [skript, "--inbox", "999999999"], { encoding: "utf8" });
     expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/^forum-quarantaene: /);
+    expect(r.stderr).toMatch(/^forum-quarantaene: gh issue fehlgeschlagen/);
     expect(r.stderr).not.toMatch(/keine Projekt-Config übergeben/);
   }, 30000);
 

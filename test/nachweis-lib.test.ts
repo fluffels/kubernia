@@ -207,6 +207,15 @@ describe("vertrauteAbnahmeMarker (#1781 L5b): das Prädikat „vertraut + gülti
     expect(A.vertrauteAbnahmeMarker(undefined, "owner", Z)).toEqual([]);
     expect(A.vertrauteAbnahmeMarker([null, {}, { user: null, body: marker(1) }], "owner", Z)).toEqual([]);
   });
+  describe("hoechsterAbnahmeDurchgang (#1821 L18): das Maximum des Felds, nicht die Anzahl", () => {
+    const H = (raw as unknown as { hoechsterAbnahmeDurchgang: (k: unknown, owner: string, z: Zeilen) => number }).hoechsterAbnahmeDurchgang;
+    it("Lücke (1,3) liefert 3, Duplikat (2,2) liefert 2, ohne Marker 0", () => {
+      expect(H([von("owner", marker(1)), von("owner", marker(3))], "owner", Z)).toBe(3);
+      expect(H([von("owner", marker(2)), von("owner", marker(2))], "owner", Z)).toBe(2);
+      expect(H([von("owner", "Text"), von("fremd", marker(5))], "owner", Z)).toBe(0);
+      expect(H(undefined, "owner", Z)).toBe(0);
+    });
+  });
   function abnahmeMarkerName() {
     return (raw as unknown as { abnahmeMarker: (z: Zeilen) => string }).abnahmeMarker(Z);
   }

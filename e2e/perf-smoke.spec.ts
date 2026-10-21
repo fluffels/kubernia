@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { requireOfflineBuild, bootGame, dismissIntro } from "./support";
+import { anlaufMedian, medianAus, type FpsProbe } from "./perf-median";
 
 // FPS-/Frame-Budget-Smoke (#524) – über den Boot- (#391) und Interaktions-Smoke
 // (#480) hinaus. Die FPS werden längst gemessen (FrameSampler in src/hud/cull.ts,
@@ -28,6 +29,9 @@ const FPS_FLOOR = 40;
  *  auf dem Runner dauerhaft rot, ohne dass im Spiel etwas kaputt ist. */
 const STEADY_FLOOR = 10;
 
+/** Frames, bis zu denen Phasers Zeitgeber klemmt (`panicMax`); der Sampler zeigt dort immer ~60. */
+const PANIC_MAX = 120;
+
 /** Frames seit dem Laden, ab denen Phasers Anlauf (`panicMax`, 120 Frames) sicher vorbei ist (plus Puffer für Boot/Intro). */
 const FRAMES_NACH_ANLAUF = 200;
 
@@ -51,17 +55,27 @@ test("Frame-Budget: das Spiel läuft mit gesunder FPS (Perf-HUD-Messwert)", asyn
   // Timeout, damit langsame CI-Runner das Fenster sicher füllen können.
   await page.waitForFunction(() => Number(document.body.dataset.kqFps) > 0, null, { timeout: 10_000 });
 
-  // Messfenster, keine Warteschleife auf einen Zustand: der rollende Mittelwert des Samplers schwingt sich über 30 Frames ein
-  // (nicht am allerersten, oft langen Boot-Frame hängenbleiben). Es gibt dafür kein DOM-Signal, darum bleibt es zeitbasiert.
-  await page.waitForTimeout(1_500);
-
+  // Messfenster (#1821): erst nach 30 Frames, wenn der rollende Mittelwert des Samplers sein Fenster gefüllt hat (nicht am
+  // allerersten, oft langen Boot-Frame hängenbleiben). Dann drei Proben im Abstand von 300 ms, Frameanzahl und FPS in einem
+  // Aufruf gelesen; nur Proben innerhalb von Phasers Anlauf (höchstens 120 Frames) zählen für den Anlauf-Boden, ihr Median
+  // schluckt einen einzelnen Ausreißer des geteilten Runners. Liegt schon die erste Probe hinter dem Anlauf, misst der Sampler
+  // den echten Wert des Runners und der eingeschwungene Boden unten gilt (kein Senken einer Schwelle).
+  await page.waitForFunction((n) => (window as unknown as { __kqFrames: number }).__kqFrames >= n, 30, { timeout: 30_000 });
+  const proben: FpsProbe[] = [];
+  for (let i = 0; i < 3; i++) {
+    const probe = await page.evaluate(() => ({
+      fps: Number(document.body.dataset.kqFps),
+      frames: (window as unknown as { __kqFrames: number }).__kqFrames,
+    }));
+    proben.push(probe);
+    if (probe.frames > PANIC_MAX) break;
+    await page.waitForTimeout(300);
+  }
   // Lebenszeichen: der Sampler läuft und das Spiel rendert. Der Wert liegt noch in Phasers Anlauf (siehe oben), ist also
   // kein Maß für die Geschwindigkeit des Rechners, fängt aber ein Spiel, das gar nicht richtig rendert.
-  const fps = await page.evaluate(() => Number(document.body.dataset.kqFps));
-  // Diagnose bei Rot (#1814): die Frames bis zur Messung stehen in Meldung und Log; die Schwelle bleibt.
-  const frames = await page.evaluate(() => (window as unknown as { __kqFrames: number }).__kqFrames);
-  console.log(`Frames bis zur Messung: ${frames}`);
-  expect(fps, `FPS ${fps} im Anlauf nach ${frames} Frames`).toBeGreaterThanOrEqual(FPS_FLOOR);
+  const fps = anlaufMedian(proben, PANIC_MAX);
+  console.log(`Anlauf-Proben (fps@frames): ${proben.map((p) => `${p.fps}@${p.frames}`).join(", ")} → Median ${fps ?? "keine im Anlauf"}`);
+  if (fps !== null) expect(fps, `FPS ${fps} im Anlauf, Proben ${JSON.stringify(proben)}`).toBeGreaterThanOrEqual(FPS_FLOOR);
 
   // Eingeschwungener Wert (#1411): erst nach dem Anlauf messen, Median aus fünf Werten im Abstand von 500 ms (Messfenster).
   await page.waitForFunction((n) => (window as unknown as { __kqFrames: number }).__kqFrames >= n, FRAMES_NACH_ANLAUF, { timeout: 60_000 });
@@ -70,7 +84,7 @@ test("Frame-Budget: das Spiel läuft mit gesunder FPS (Perf-HUD-Messwert)", asyn
     await page.waitForTimeout(500);
     danach.push(await page.evaluate(() => Number(document.body.dataset.kqFps)));
   }
-  const steady = [...danach].sort((a, b) => a - b)[2];
-  console.log(`FPS-Messwert ${fps} (Anlauf), eingeschwungen ${danach.join(", ")} → Median ${steady} (Boden ${FPS_FLOOR} im Anlauf, ${STEADY_FLOOR} eingeschwungen)`);
+  const steady = medianAus(danach);
+  console.log(`FPS-Messwert ${fps ?? "-"} (Anlauf), eingeschwungen ${danach.join(", ")} → Median ${steady} (Boden ${FPS_FLOOR} im Anlauf, ${STEADY_FLOOR} eingeschwungen)`);
   expect(steady).toBeGreaterThanOrEqual(STEADY_FLOOR);
 });

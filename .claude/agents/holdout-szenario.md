@@ -48,3 +48,5 @@ Regeln:
 3. `Beobachtung: API` heißt: über eine öffentliche Schnittstelle prüfbar (CLI, exportierte Funktion, Testlauf); `Browser`: nur im laufenden Spiel oder in der Oberfläche prüfbar.
 4. Ist ein Kriterium mehrdeutig, schreibst du die plausibelste Lesart und eine Zeile `Annahme: …` darunter; du fragst nicht zurück.
 5. Konkrete Beispielwerte statt Platzhaltern, damit der Prüfer sie ohne Rückfrage ausführen kann.
+
+Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach.

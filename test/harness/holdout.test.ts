@@ -51,7 +51,7 @@ export function toolAbweichungen(ist: string[], erwartet: string[]): string[] {
 /** Getrackte Dateien mit einem echten Kopf `SZENARIEN #<ziffern>` (`git grep`; Exit 1 = keine Treffer). */
 export function szenarienKoepfe(cwd: string): string[] {
   try {
-    return execFileSync("git", ["grep", "-n", "-E", "SZENARIEN #" + "[0-9]+"], { cwd, encoding: "utf8" }).split(NL).filter(Boolean);
+    return execFileSync("git", ["grep", "-n", "-E", "SZENARIEN #" + "[0-9]+"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).split(NL).filter(Boolean);
   } catch (e) {
     if ((e as { status?: number }).status === 1) return [];
     throw e;
@@ -62,6 +62,8 @@ const SZENARIO_TOOLS = ["Read", "Grep", "Glob"];
 const ABNAHME_TOOLS = [
   "Read", "Grep", "Glob", "Bash", "PowerShell", "Write",
   ...["navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "type", "wait_for", "console_messages", "resize", "tabs", "close", "handle_dialog"].map((t) => `mcp__playwright__browser_${t}`),
+  // nur lesend: belegt das Kriterium „von Langfuse erfasst“
+  ...["listObservations", "getObservation", "queryMetrics", "getMetricsSchema"].map((t) => `mcp__langfuse__${t}`),
 ];
 
 const SKILL = liesTicketAblauf();
@@ -192,6 +194,8 @@ describe("Tool-Mengen der Holdout-Agenten (#1754 K2)", () => {
     assert.deepEqual(toolAbweichungen(agentTools(szenario.replace("tools: Read, Grep, Glob", "tools: Read, Grep")), SZENARIO_TOOLS), ["fehlendes Tool Glob"]);
     assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("PowerShell, Write,", "PowerShell, Write, Edit,")), ABNAHME_TOOLS), ["zusätzliches Tool Edit"]);
     assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("Write, mcp__playwright__browser_navigate,", "mcp__playwright__browser_navigate,")), ABNAHME_TOOLS), ["fehlendes Tool Write"]);
+    assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace(", mcp__langfuse__queryMetrics", "")), ABNAHME_TOOLS), ["fehlendes Tool mcp__langfuse__queryMetrics"]);
+    assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("mcp__langfuse__getMetricsSchema", "mcp__langfuse__getMetricsSchema, mcp__langfuse__createScore")), ABNAHME_TOOLS), ["zusätzliches Tool mcp__langfuse__createScore"]);
   });
 
   test("Modell und Effort stehen im Frontmatter beider Agenten (opus, medium)", () => {
@@ -236,5 +240,35 @@ describe("Reihenfolge im Skill (#1754)", () => {
 
   test("Ticket ohne Kriterien: der Skill verweist auf die entfaellt-Zeile statt auf einen Szenario-Agenten", () => {
     assert.match(SKILL, /Keine Akzeptanzkriterien[^\n]*entfaellt/);
+  });
+});
+
+describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
+  const szenario = lies(".claude/agents/holdout-szenario.md");
+  const abnahme = lies(".claude/agents/holdout-abnahme.md");
+  const PFLICHT = /Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach\./;
+
+  test("der Pflichtsatz steht in Lens-Spawn-Vorlage, Abnahme- und Szenario-Agent", () => {
+    assert.match(LENSES, PFLICHT);
+    assert.match(abnahme, PFLICHT);
+    assert.match(szenario, PFLICHT);
+  });
+
+  test("Negativ: ohne den Satz ist der Wächter rot", () => {
+    assert.doesNotMatch(abnahme.replace("nicht wiederholen", "wiederholen"), PFLICHT);
+  });
+
+  test("Fehlerwege: fehlender Bericht einmal per SendMessage anfordern, fehlendes Werkzeug ohne Neuversuch", () => {
+    assert.match(SKILL, /[Ff]ehlt ein Bericht[^\n]*einmal per `SendMessage`[^\n]*kein Neu-Spawn/);
+    assert.match(SKILL, /fehlt dem Typ ein Werkzeug[^\n]*?keinen Neuversuch, direkt der Hand-off/);
+  });
+
+  test("Werkzeug-Abbruch entscheidet der Hauptchat nach Entscheidungsprotokoll, nicht die Maintainerin (Skill und Umsetzer)", () => {
+    const umsetzer = lies(".claude/agents/factory-umsetzer.md");
+    assert.doesNotMatch(SKILL, /bei einem Werkzeug-Abbruch repariert sie das Werkzeug/);
+    assert.doesNotMatch(umsetzer, /Maintainerin repariert das Werkzeug/);
+    assert.match(umsetzer, /Werkzeug-Abbruch[^\n]*?entscheidet der Hauptchat nach `docs\/factory\/entscheidungsprotokoll\.md`/);
+    assert.match(SKILL, /Werkzeug-Abbruch der Abnahme entscheidet der Hauptchat nach dem \[Entscheidungsprotokoll\]\([^)]*#werkzeug-abbruch-der-abnahme\)/);
+    assert.match(lies("docs/factory/entscheidungsprotokoll.md"), /Werkzeug-Abbruch der Abnahme/);
   });
 });
