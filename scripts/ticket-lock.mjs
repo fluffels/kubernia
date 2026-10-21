@@ -6,7 +6,7 @@
  *
  *   node scripts/ticket-lock.mjs claim <nr> [--wiederaufnahme]    # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
  *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # rein lesend: vor Spawn und vor Übernahme eines Worktrees
- *   node scripts/ticket-lock.mjs uebernehmen <nr> --nonce <x>    # Nachfolger/Fortsetzung (#1593): wie `pruefe`, verbraucht zusätzlich Übergabe bzw. Stopp-Vermerk
+ *   node scripts/ticket-lock.mjs uebernehmen <nr> --nonce <x> --nachfolger   # nur Nachfolger/Fortsetzung (#1593): wie `pruefe`, verbraucht zusätzlich Übergabe bzw. Stopp-Vermerk; ohne `--nachfolger` Exit 2 (der Hauptchat prüft nur mit `pruefe`)
  *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup
  *   node scripts/ticket-lock.mjs uebergeben <nr> --nonce <x>     # Phasen-Schnitt (#1592): letzte Aktion des Vorgängers vor `ERGEBNIS: uebergabe`
  *   node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>       # nach `TaskStop` des eigenen Umsetzers (#1693): das nächste `pruefe --nonce` meldet `uebernehmbar`
@@ -27,7 +27,7 @@
  *
  * Bewusste Grenzen: `claim --wiederaufnahme` prüft kein Festgefahren-Label (das tut `claims-pruefen.mjs`; ein ausdrückliches „mach weiter“ der Maintainerin ist eine menschliche Entscheidung); nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre);
- * ein Lock eines gemergten, geschlossenen Tickets sperrt nichts (die Auswahl nimmt nur offene Todo-Items) und verfällt per `VERWAIST_MS`/`ALTLAST_MS`;
+ * ein Lock eines gemergten, geschlossenen Tickets sperrt nichts (die Auswahl nimmt nur offene Todo-Items), wird aber nur durch das Aufräumen (`freigeben` mit der Nonce) oder den Verfall per `VERWAIST_MS`/`ALTLAST_MS` frei; `pruefe` kann nach dem Merge bis dahin `aktiv` melden, solange Worktree oder Branch noch existieren (erst `cleanup-worktrees.mjs --branches --fix` nach `git fetch --prune`);
  * kein Freigabeweg ohne Nonce (Absicht);
  * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer; aus der Lock-Datei ist sie nicht lesbar). Jede Exit-4-Ausgabe nennt: den Lock nie von Hand lösen.
  *
@@ -216,6 +216,12 @@ function claim(deps, nr, wiederaufnahme = false) {
   return ergebnis(4, "", `✖ ticket-lock: #${nr} wurde beim Übernehmen des verwaisten Locks von einer anderen Session belegt. ${NICHT_VON_HAND}`);
 }
 
+/** Hinweis für `aktiv` nach einer schon verbrauchten Übergabe bzw. einem verbrauchten Stopp-Vermerk: Verbrauchszeit und Ausweg `gestoppt` (nach `TaskStop` des laufenden Umsetzers). Pur. */
+export function verbrauchtHinweis(lock) {
+  const zeit = lock?.uebergabe?.verbraucht ?? lock?.gestoppt?.verbraucht ?? null;
+  return zeit ? ` Die Übergabe bzw. der Stopp-Vermerk wurde schon ${zeit} verbraucht; ein weiterer Nachfolger braucht zuerst "gestoppt <nr> --nonce <x>" (nach TaskStop des laufenden Umsetzers).` : "";
+}
+
 /** `verbrauche` (nur `uebernehmen`, #1593): verbraucht eine offene Übergabe bzw. einen Stopp-Vermerk; `pruefe` ist rein lesend. */
 function pruefe(deps, nr, nonce, verbrauche = false) {
   const lock = liesLock(deps, nr);
@@ -225,7 +231,7 @@ function pruefe(deps, nr, nonce, verbrauche = false) {
   const gestopptOffen = Boolean(lock?.gestoppt && !lock.gestoppt.verbraucht);
   const urteil = entscheidePruefung({ lock, nonce, vorhanden: b.belegt, aktivitaet, jetzt: deps.jetzt(), uebergabeOffen, gestopptOffen });
   if (urteil === "fremd") return ergebnis(4, urteil, `✖ ticket-lock: der Lock zu #${nr} gehört nicht zu dieser Nonce (fremd, fehlt oder ohne Nonce noch keine 2 h alt): nicht anfassen, Befund melden. ${NICHT_VON_HAND}`);
-  if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen. ${NICHT_VON_HAND}`);
+  if (urteil === "aktiv") return ergebnis(4, urteil, `✖ ticket-lock: zu #${nr} gibt es Worktree/Branch mit Aktivität in den letzten 30 min (oder ohne feststellbare Aktivität): nicht übernehmen.${verbrauchtHinweis(lock)} ${NICHT_VON_HAND}`);
   const verbraucht = new Date(deps.jetzt()).toISOString();
   const frischeUebergabe = verbrauche && urteil === "uebernehmbar" && uebergabeOffen && nonce;
   const frischeStopp = verbrauche && (urteil === "uebernehmbar" || urteil === "frei") && gestopptOffen && nonce;
@@ -304,15 +310,26 @@ export function schrittAus(argv) {
   return argv[i].includes("=") ? argv[i].slice("--schritt=".length) : (argv[i + 1] ?? "");
 }
 
+/** `uebernehmen` verlangt `--nonce <x>` (oder `--nonce=<x>`) und `--nachfolger`, sonst nichts. Pur. */
+export function uebernehmenArgsOk(rest) {
+  const uebrig = [];
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === "--nonce") i++;
+    else if (!rest[i].startsWith("--nonce=")) uebrig.push(rest[i]);
+  }
+  return uebrig.length === 1 && uebrig[0] === "--nachfolger";
+}
+
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, sandbox, lockDir, liesDatei, schreibeNeu, ersetze, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
 export function fuehreAus(argv, deps) {
   const [befehl, nrText, ...rest] = argv;
   const nonce = nonceAus(argv);
   const nr = NUMMER.test(nrText ?? "") ? Number(nrText) : null;
-  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit");
+  const usage = ergebnis(2, "", "✖ ticket-lock: Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit");
   if (befehl === "lebenszeichen" && argv.length === 2 && argv[1] === "--commit") return lebenszeichenCommit(deps);
   if (nr === null || !["claim", "pruefe", "freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"].includes(befehl)) return usage;
   if (["freigeben", "uebergeben", "gestoppt", "uebernehmen", "lebenszeichen"].includes(befehl) && !nonce) return usage;
+  if (befehl === "uebernehmen" && !uebernehmenArgsOk(rest)) return ergebnis(2, "", "✖ ticket-lock: uebernehmen ruft nur der Nachfolger (--nachfolger); der Hauptchat prüft mit pruefe <nr> --nonce <x>");
   const wiederaufnahme = befehl === "claim" && rest.length === 1 && rest[0] === "--wiederaufnahme";
   if (nonce === "" || (befehl === "claim" && rest.length > 0 && !wiederaufnahme)) return usage;
   try {
