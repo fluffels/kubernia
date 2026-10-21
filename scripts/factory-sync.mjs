@@ -161,7 +161,8 @@ const liesDatei = (wurzel) => (pfad) => {
 };
 
 function parseArgs(argv) {
-  const meldung = (art, flag) => (art === "unbekannt" || art === "positional" ? `unbekannte Option '${flag}'` : art === "ohne-wert" ? `${flag} braucht einen Pfad` : art === "fehlt" ? "--quelle <pfad> fehlt" : undefined);
+  const unbekannt = (flag) => `unbekannte Option '${flag}'`;
+  const meldung = { unbekannt, positional: unbekannt, "ohne-wert": (flag) => `${flag} braucht einen Pfad`, fehlt: "--quelle <pfad> fehlt" };
   const optionen = { quelle: { type: "string" }, ziel: { type: "string" }, trocken: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["quelle"], meldung });
   return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, trocken: werte.trocken === true, fehler: fehler?.text ?? null };

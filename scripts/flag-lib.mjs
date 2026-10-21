@@ -19,18 +19,27 @@ const STANDARD = {
   fehlt: (flag) => `${flag} fehlt`,
 };
 
+/** Text einer Überschreibung: Funktion `(art, flag) => text`, oder Objekt `{ art: text | (flag) => text }`; `undefined` = Standard. */
+function meldungText(meldung, art, flag) {
+  if (typeof meldung === "function") return meldung(art, flag);
+  if (!meldung || !Object.hasOwn(meldung, art)) return undefined;
+  const eintrag = meldung[art];
+  return typeof eintrag === "function" ? eintrag(flag) : eintrag;
+}
+
 /**
  * Liest `argv` nach `optionen` (Format von `node:util`: `{ name: { type: "string"|"boolean", multiple? } }`).
  * Rückgabe `{ werte, positionale, tokens, fehler }`; `fehler` ist `null` oder `{ art, flag, text }` mit `art` aus
  * `unbekannt | ohne-wert | doppelt | positional | fehlt`. Ein Wert fehlt, wenn er am Ende fehlt, der nächste Token mit
  * `--` beginnt oder ein Inline-Wert (`--x=`) leer ist; negative Zahlen (`-5`) kommen als Wert durch.
- * `meldung(art, flag)` überschreibt den Standardtext (`undefined` = Standard).
+ * `meldung` überschreibt den Standardtext: als Objekt `{ art: text | (flag) => text }` (fehlende Art = Standard) oder als
+ * Funktion `(art, flag) => text` (`undefined` = Standard).
  */
 export function flagsLesen(argv, optionen, { positionale = false, pflicht = [], meldung } = {}) {
   for (const name of pflicht) if (!Object.hasOwn(optionen, name)) throw new Error(`flagsLesen: pflicht-Name ohne Option: ${name}`);
   const { values, positionals, tokens } = parseArgs({ args: argv, options: optionen, strict: false, allowPositionals: true, tokens: true });
   const werte = { ...values };
-  const fehler = (art, flag) => ({ art, flag, text: meldung?.(art, flag) ?? STANDARD[art](flag) });
+  const fehler = (art, flag) => ({ art, flag, text: meldungText(meldung, art, flag) ?? STANDARD[art](flag) });
   const gesehen = new Set();
   for (const t of tokens) {
     if (t.kind === "positional") {

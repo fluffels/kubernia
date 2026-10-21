@@ -33,7 +33,8 @@ const gueltig = (iso) => Number.isFinite(Date.parse(String(iso ?? "")));
 
 /** Argumente; ein fehlendes oder ungültiges `--von`/`--bis` setzt `fehler`. Pure. */
 export function parseArgs(argv) {
-  const meldung = (art) => (art === "ohne-wert" || art === "fehlt" ? "--von und --bis brauchen je ein gültiges ISO-Datum." : undefined);
+  const iso = "--von und --bis brauchen je ein gültiges ISO-Datum.";
+  const meldung = { "ohne-wert": iso, fehlt: iso };
   const optionen = { von: { type: "string" }, bis: { type: "string" }, langfuse: { type: "boolean" }, json: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["von", "bis"], meldung });
   const a = { von: werte.von, bis: werte.bis, langfuse: werte.langfuse === true, json: werte.json === true, fehler: fehler?.text ?? null };
@@ -291,7 +292,8 @@ export function auditAbschnitt(audit) {
 }
 
 /** Die Nummern geschlossener Harness-Issues für die Quote-Zuordnung; ein Fehler (auch fehlendes `labels.harness`) wird zur `harnessLuecke`. */
-function ladeHarnessIssues({ gh, repo, config, seit }) {
+function ladeHarnessIssues({ gh, repo, config, configFehler, seit }) {
+  if (!config && configFehler) return { harnessIssues: null, harnessLuecke: `Projekt-Config nicht ladbar: ${configFehler}` };
   try {
     return { harnessIssues: harnessIssuesAus(gh(harnessIssuesAnfrage({ repo, label: labelAus(config, "harness"), seit }))) };
   } catch (err) {
@@ -303,7 +305,7 @@ function ladeHarnessIssues({ gh, repo, config, seit }) {
  * Lädt die Rohdaten des Selbst-Audits mit drei gh-Aufrufen (Sammeltickets mit `--limit`, Commits von main seit deren letztem Abschluss und geschlossene Harness-Issues ab dann minus 1 Tag, paginiert;
  * keine Modell-Tokens). `gh` ist injizierbar. Ein Ladefehler wird zur Lücke mit Grund (`commitsLuecke`, bei den Harness-Issues `harnessLuecke`), nie zu leeren Daten.
  */
-export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = null } = {}) {
+export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = null, configFehler = null } = {}) {
   let issues;
   try {
     issues = gh(["issue", "list", "--repo", repo, "--state", "all", "--search", "in:title \"gesammelt\"", "--json", "number,title,state,closedAt,assignees", "--limit", "200"]);
@@ -318,7 +320,7 @@ export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = nul
   try {
     const seiten = gh(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${since}&per_page=100`]);
     const commits = seiten.flat().filter((c) => !gueltig(c?.commit?.committer?.date) || Date.parse(c.commit.committer.date) <= Date.parse(bis));
-    return { commits, ...rest, ...ladeHarnessIssues({ gh, repo, config, seit: harnessSeit }) };
+    return { commits, ...rest, ...ladeHarnessIssues({ gh, repo, config, configFehler, seit: harnessSeit }) };
   } catch (err) {
     return { commits: null, commitsLuecke: `Commits von main nicht ladbar: ${fehlerText(err, 200)}`, ...rest };
   }
@@ -391,12 +393,12 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
   return { bericht: b, exit: lauf.luecke || nacharbeit.luecke ? 2 : 0 };
 }
 
-/** Die Projekt-Config oder null: ein Ladefehler macht nur die Quote zur Lücke (`labelAus` nennt den Fix), nie den ganzen Bericht kaputt. */
-function configOderNull() {
+/** `{ config }` oder `{ config: null, configFehler }`: ein Ladefehler macht nur die Quote zur Lücke (mit dem echten Fehlertext), nie den ganzen Bericht kaputt. */
+function configOderFehler() {
   try {
-    return ladeProjektConfig();
-  } catch {
-    return null;
+    return { config: ladeProjektConfig() };
+  } catch (err) {
+    return { config: null, configFehler: fehlerText(err, 200) };
   }
 }
 
@@ -408,7 +410,7 @@ function main(argv) {
   }
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
-  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, { config: configOderNull() }) });
+  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()) });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);
 }

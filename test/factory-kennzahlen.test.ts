@@ -704,6 +704,22 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(ohneLabel.commits).toHaveLength(1);
   });
 
+  test("ladeAuditDaten: scheiterte das Laden der Config, nennt die Lücke deren Fehlertext statt labels.harness; Commits bleiben, keine Issue-Abfrage (L17)", () => {
+    const aufrufe: string[] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a[3] ?? a[0] ?? "");
+      return a[0] === "issue" ? [] : [[spiel(1)]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: null, configFehler: "agenten.planer fehlt" } as never);
+    expect(d.harnessIssues ?? null).toBeNull();
+    expect(d.harnessLuecke).toBe("Projekt-Config nicht ladbar: agenten.planer fehlt");
+    expect(d.commits).toHaveLength(1);
+    expect(aufrufe.some((a) => a.includes("/issues?"))).toBe(false);
+    // Negativfall: ohne Fehlertext und ohne Config bleibt es beim bisherigen Hinweis auf das Label.
+    const ohne = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: null });
+    expect(ohne.harnessLuecke).toMatch(/labels\.harness/);
+  });
+
   test("ladeAuditDaten: ohne abgeschlossenes Sammelticket ist das Fenster 28 Tage vor `bis`, nichts in Arbeit", () => {
     const aufrufe: string[][] = [];
     const gh = (a: string[]) => {

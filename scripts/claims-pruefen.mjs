@@ -52,8 +52,8 @@ const ALIAS_MAX = 40;
 
 /** Argumente: `{ json, stunden }` oder `{ fehler }`. Pur. */
 export function parseArgs(argv) {
-  const meldung = (art, flag) =>
-    art === "ohne-wert" ? "--stunden braucht eine positive Zahl (bekam: nichts)" : art === "unbekannt" || art === "positional" ? `unbekanntes Argument: ${flag}` : undefined;
+  const unbekannt = (flag) => `unbekanntes Argument: ${flag}`;
+  const meldung = { "ohne-wert": "--stunden braucht eine positive Zahl (bekam: nichts)", unbekannt, positional: unbekannt };
   const { werte, fehler } = flagsLesen(argv, { json: { type: "boolean" }, stunden: { type: "string" } }, { meldung });
   if (fehler) return { fehler: fehler.text };
   let stunden = STANDARD_STUNDEN;
@@ -268,10 +268,21 @@ const aufrufFehler = (fehler) => `✖ claims-pruefen: ${fehler}
 Aufruf: claims-pruefen [--json] [--stunden <n>]`;
 const ergebnisAus = (code, out = "", err = "") => ({ code, out: out ? `${out}\n` : "", err: err ? `${err}\n` : "" });
 
-/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
-export function fuehreAus(argv, deps) {
+/**
+ * Ausführung mit injizierbarer I/O: `{ code, out, err }`. `depsOderFabrik` ist das Deps-Objekt oder eine Fabrik dafür;
+ * die Fabrik läuft erst nach dem Parsen, ein Aufruf-Fehler kommt also vor jedem I/O (Kontingent, gh, git, Config).
+ */
+export function fuehreAus(argv, depsOderFabrik) {
   const args = parseArgs(argv);
-  if (args.fehler) return ergebnisAus(2, "", `✖ claims-pruefen: ${args.fehler}\nAufruf: claims-pruefen [--json] [--stunden <n>]`);
+  if (args.fehler) return ergebnisAus(AUFRUF_EXIT, "", aufrufFehler(args.fehler));
+  let deps = depsOderFabrik;
+  if (typeof depsOderFabrik === "function") {
+    try {
+      deps = depsOderFabrik();
+    } catch (e) {
+      return ergebnisAus(AUFRUF_EXIT, "", fehlerMeldung(e, { praefix: "claims-pruefen: " }));
+    }
+  }
   let stand;
   try {
     stand = sammle(deps);
@@ -323,17 +334,12 @@ export function echteDeps({ config: vorgabe } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // Ein Aufruf-Fehler kommt vor Kontingent-Messung und Deps (gh, git, Config) zurück.
-  const vorab = parseArgs(process.argv.slice(2));
-  if (vorab.fehler) {
-    process.stderr.write(`${aufrufFehler(vorab.fehler)}
-`);
-    process.exit(AUFRUF_EXIT);
-  }
-  mitKontingent("claims-pruefen");
   let r;
   try {
-    r = fuehreAus(process.argv.slice(2), echteDeps());
+    r = fuehreAus(process.argv.slice(2), () => {
+      mitKontingent("claims-pruefen");
+      return echteDeps();
+    });
   } catch (e) {
     r = ergebnisAus(2, "", fehlerMeldung(e, { praefix: "claims-pruefen: " }));
   }
