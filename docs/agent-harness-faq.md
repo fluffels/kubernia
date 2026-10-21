@@ -100,7 +100,7 @@ Jede Eingabe im Terminal lässt den Sim-Takt weiterlaufen: `src/sim.ts` zählt `
 
 ## Warum meldet der Perf-Smoke 60 FPS und die CI später 16?
 
-Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `FrameSampler` zeigt dort immer rund 60, egal wie schnell der Rechner ist. Der scheinbare Abfall nach ca. 3,5 s in der CI-Reihe (60, 35, 21, 16, 16) ist das Ende dieses Anlaufs, kein Einbruch im Spiel: der Runner rendert per Software und liegt eingeschwungen bei 16 bis 31 FPS (lokal deutlich höher; mit gedrosselter CPU und Software-Rendering reproduzierbar, ein eigener rAF-Zähler zeigt dort von Anfang an den niedrigen Wert). Darum prüft `e2e/perf-smoke.spec.ts` den frühen Wert nur als Lebenszeichen und den eingeschwungenen (nach ≥ 200 Frames, Median aus fünf Werten) gegen einen am Runner kalibrierten Boden.
+Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `FrameSampler` zeigt dort immer rund 60, egal wie schnell der Rechner ist. Der scheinbare Abfall nach ca. 3,5 s in der CI-Reihe (60, 35, 21, 16, 16) ist das Ende dieses Anlaufs, kein Einbruch im Spiel: der Runner rendert per Software und liegt eingeschwungen bei 16 bis 31 FPS (lokal deutlich höher; mit gedrosselter CPU und Software-Rendering reproduzierbar, ein eigener rAF-Zähler zeigt dort von Anfang an den niedrigen Wert). Darum prüft `e2e/perf-smoke.spec.ts` den frühen Wert nur als Lebenszeichen (Median aus drei Proben, nur solange höchstens 120 Frames gezählt sind; liegt schon die erste dahinter, entfällt dieser Boden) und den eingeschwungenen (nach ≥ 200 Frames, Median aus fünf Werten) gegen einen am Runner kalibrierten Boden.
 
 ## Wie hänge ich ein Bild an einen PR, und wie prüfe ich ein Mermaid-Diagramm?
 
