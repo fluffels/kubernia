@@ -106,7 +106,7 @@ Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `Fr
 
 **Bild an den PR (Optik-Tickets verlangen Screenshots).** `gh` kann keine Anhänge an einen PR hängen; der Weg über das Repo selbst:
 
-1. Das Bild (aus `.playwright-mcp/`) als **Zwischen-Commit** auf den PR-Branch legen und pushen, z.B. `docs/pr-bilder/<name>.png`.
+1. Das Bild (aus `.playwright-mcp/`) als **Zwischen-Commit** auf den PR-Branch legen und pushen, z.B. `docs/pr-bilder/<name>.png`. Das gilt auch für einen PR ohne Code-Änderung: das Bild liegt trotzdem als Zwischen-Commit auf dem PR-Branch. Kein eigener Hilfsbranch nur für Bilder: kein `refs/pull/<nr>/head` hält dessen Commit, nach dem Löschen des Branches laden die Bilder nicht mehr.
 2. Die URL `https://github.com/<owner>/<repo>/raw/<sha>/<pfad>` (`<sha>` = der Commit mit dem Bild) als Markdown-Bild `![Beschreibung](url)` in einen **PR-Kommentar** setzen.
 3. Im **nächsten Commit die Datei löschen**: der Squash-Merge enthält sie nie, und `refs/pull/<nr>/head` hält den Commit mit dem Bild, die URL bleibt also gültig. Belegt (2026-10-07): die Datei am Head-Commit eines gemergten PRs mit gelöschtem Branch liefert `curl -sIL "https://github.com/fluffels/kubernia/raw/<sha>/README.md"` mit `HTTP/1.1 200 OK`.
 

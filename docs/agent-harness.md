@@ -410,7 +410,7 @@ Gelb hinterlegt sind die drei Rückkopplungsschleifen (verify, Lenses, CI), rot 
 
 Shell-Befehle des Agenten (Bash, PowerShell, Monitor) laufen unter **WSL2 in bubblewrap** mit Domain-Allowlist; auf nativem Windows gibt es keine Sandbox, der strikte Projekt-Block sperrt dort Shell-Befehle ([Natives Windows](#natives-windows); Entscheidung, Probe und Alternativen: [ADR 0021](adr/0021-agenten-sandbox-wsl2.md)); die Anleitungen im Repo nennen beide Shell-Wege. Der `sandbox`-Block in [`.claude/settings.json`](../.claude/settings.json) wirkt darum nur dort, wo die Sandbox verfügbar ist; ein Wächter ([`test/harness/sandbox-settings.test.ts`](../test/harness/sandbox-settings.test.ts)) hält ihn fest, [`scripts/sandbox-doctor.mjs`](../scripts/sandbox-doctor.mjs) prüft die Maschine (`--check`) und druckt die User-Vorlage (`--vorlage`).
 
-Der Harness setzt nur den Sandbox-Vertrag voraus ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md)); WSL2 ist Kubernias Variante, andere Varianten (Docker Sandboxes, eigene Container-Sandbox) beschreibt [Sandbox anbinden](sandbox-anbinden.md).
+Der Harness setzt nur den Sandbox-Vertrag voraus ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md)); WSL2 ist Kubernias Variante, andere Varianten (Docker Sandboxes, eigene Container-Sandbox, [Cloud-Sitzung](sandbox-anbinden.md#cloud-sitzung-claude-code-im-web)) beschreibt [Sandbox anbinden](sandbox-anbinden.md).
 
 **Netz-Allowlist** (`sandbox.network.allowedDomains`; die Tabelle ist die Doku-Seite des Wächters, Zeilen mit Quelle „Projekt“ müssen der Liste in `.claude/settings.json` entsprechen). Anthropic-Hosts stehen bewusst nicht drin: kein Shell-Befehl braucht sie, die Session selbst läuft außerhalb der Sandbox.
 
