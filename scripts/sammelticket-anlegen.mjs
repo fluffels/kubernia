@@ -25,6 +25,7 @@ import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
+  OWNER,
   REPO,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
@@ -129,13 +130,12 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const BESITZER = REPO.split("/")[0];
 const einzelAbruf = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]);
 
 /** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
 function pruefeDublette(nr, titel, vorgaenger) {
   const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
-  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, BESITZER);
+  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, OWNER);
   return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
 }
 
@@ -222,7 +222,7 @@ async function main(argv = process.argv.slice(2)) {
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
   const offene = normalizeOffene(loadOpenIssuePages());
-  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbruf, BESITZER);
+  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbruf, OWNER);
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;

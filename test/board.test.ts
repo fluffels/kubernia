@@ -17,6 +17,8 @@ type Lib = {
     after?: number | null,
   ) => { steps: { item: Item; afterId: string | null }[]; missing: number[]; anchorMissing: boolean };
   isRateLimit: (m: string) => boolean;
+  REPO: string;
+  OWNER: string;
 };
 type Place = { parseArgs: (argv: string[]) => { anchor?: number | null; position?: number; numbers?: number[]; missing?: boolean; dry: boolean } | null };
 const L = rawLib as unknown as Lib;
@@ -54,6 +56,13 @@ describe("Einsortieren mehrerer Tickets (#1217)", () => {
     expect(P.parseArgs(["--top", "abc"])).toBeNull();
     expect(P.parseArgs(["--top", "0"])).toBeNull();
     expect(P.parseArgs(["5", "6"])).toBeNull();
+  });
+
+  test("OWNER ist der Besitzerteil von REPO (#1837 L17)", () => {
+    expect(L.REPO).toMatch(/^[^/]+\/[^/]+$/);
+    expect(L.OWNER).not.toBe("");
+    expect(`${L.OWNER}/`).toBe(L.REPO.slice(0, L.OWNER.length + 1));
+    expect(L.OWNER).not.toContain("/");
   });
 
   test("isRateLimit erkennt die GitHub-Meldung", () => {

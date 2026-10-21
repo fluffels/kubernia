@@ -27,7 +27,7 @@ import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
-import { ladeProjektConfig, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, trenneConfigArg, umgebungsWert, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien, NACH_MERGE_PRAEFIX } from "./spezifikation-lib.mjs";
 
@@ -157,7 +157,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
 function pruefe({ git, gh, env, config, zeilen, base }) {
   const repo = env.GITHUB_REPOSITORY || config.repo;
-  const owner = String(repo).split("/")[0];
+  const { owner } = zerlegeRepo(repo);
   const nachweis = parseNachweis(git(["log", "--reverse", "--format=%B", `${base}..HEAD`]), zeilen);
   const nummern = verknuepfteTickets(umgebungsWert(env, "FACTORY_PR_BODY"));
   if (nummern.length > 1) return [`Mehr als ein verknüpftes Ticket im PR-Body (${nummern.map((n) => `#${n}`).join(", ")}): ein PR gehört zu einem Ticket.`];
