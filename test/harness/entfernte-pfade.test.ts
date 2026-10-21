@@ -31,6 +31,7 @@ export const RESTE: { name: string; muster: RegExp }[] = [
   { name: "beruehrtHarness", muster: /beruehrtHarness/ },
   { name: "urteilFehler (entfernter Export von nachweis-lib)", muster: /urteilFehler/ },
   { name: "Konstante FACTORY_LABEL", muster: /\bFACTORY_LABEL\b/ },
+  { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/ },
 ];
 
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
