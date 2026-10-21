@@ -13,7 +13,11 @@
  * Reines Node-Skript (nur Builtins), pure Funktionen, keine I/O beim Import.
  */
 
-/** Name des Abnahme-Agenten (eine Quelle: `abnahme.mjs` exportiert ihn als `ABNAHME_AGENT`; Dateiname `.claude/agents/<name>.md`, der Test prüft ihn). */
+/**
+ * Name des Abnahme-Agenten (eine Quelle: `abnahme.mjs` exportiert ihn als `ABNAHME_AGENT`; Dateiname `.claude/agents/<name>.md`, der Test prüft ihn).
+ * Bewusst kein Schlüssel unter `agenten.*` der Projekt-Config: der Agent steht im Ring `kern` (`.factory/besitz.json`), sein Name gehört zum Kern
+ * und ist in jedem Projekt gleich; `agenten.*` enthält nur Projekt-Agenten (ADR 0022, Fortschreibung #1798).
+ */
 export const ABNAHME_EMPFAENGER = "holdout-abnahme";
 
 const SZENARIO_KOPF = /SZENARIEN #\d+/;

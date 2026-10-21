@@ -366,7 +366,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     // stop-verify-hook: Exit 2 mit decision block statt Wurf
     const stop = stopHookRaw.runHook(JSON.stringify({ hook_event_name: "SubagentStop", agent_type: echt.agenten.umsetzer, last_assistant_message: "ERGEBNIS: abgebrochen\nPR: -" }), "/x", () => ({ blocked: false }), { config: ohneLabel });
     assert.equal(stop.exit, 2);
-    assert.equal(JSON.parse(stop.stdout).decision, "block");
+    assert.equal((JSON.parse(stop.stdout) as { decision: string }).decision, "block");
     assert.match(stop.stderr, /labels\.festgefahren/);
     // pretooluse-hook: deny statt stillem Durchlass
     const payload = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: echt.agenten.umsetzer, tool_input: { message: "ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine" } });
