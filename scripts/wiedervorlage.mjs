@@ -69,11 +69,18 @@ export function faellige({ eintraege, heute }) {
   return eintraege.filter((e) => e.faellig <= heute);
 }
 
+/** Der Schließtag `YYYY-MM-DD` aus `closedAt` (ISO-Zeitstempel) oder null, wenn er fehlt oder kein Datum ist. Pur. */
+const schlussTag = (t) => {
+  const tag = typeof t?.closedAt === "string" ? t.closedAt.slice(0, 10) : "";
+  return istDatum(tag) ? tag : null;
+};
+
 /**
- * Aktionen je fälligem Eintrag. `tickets` = [{ number, state (open|closed), body }] (alle Zustände).
+ * Aktionen je fälligem Eintrag. `tickets` = [{ number, state (open|closed), body, closedAt? }] (alle Zustände).
  * - kein Ticket mit Marker: `anlegen`
  * - offenes Ticket: nichts
- * - nur geschlossenes Ticket (Eintrag steht noch): `warnen` ("Eintrag löschen"), kein neues Ticket.
+ * - nur geschlossene Tickets, alle mit Schließtag vor `faellig` (Eintrag verschoben): `anlegen`
+ * - sonst nur geschlossene (Eintrag steht noch, auch ohne lesbares `closedAt`): `warnen` ("Eintrag löschen"), kein neues Ticket.
  * Pur.
  */
 export function planeAktionen({ faellige: liste, tickets }) {
@@ -83,7 +90,9 @@ export function planeAktionen({ faellige: liste, tickets }) {
     const treffer = tickets.filter((t) => String(t.body ?? "").includes(marker));
     if (treffer.length === 0) aktionen.push({ art: "anlegen", eintrag: e });
     else if (!treffer.some((t) => String(t.state).toLowerCase() === "open")) {
-      aktionen.push({ art: "warnen", eintrag: e, nummer: treffer[0].number });
+      // Verschoben: alle Tickets wurden vor dem (neuen) Fälligkeitstag geschlossen, also gehören sie zum früheren Termin.
+      if (treffer.every((t) => schlussTag(t) !== null && schlussTag(t) < e.faellig)) aktionen.push({ art: "anlegen", eintrag: e });
+      else aktionen.push({ art: "warnen", eintrag: e, nummer: treffer[0].number });
     }
   }
   return aktionen;
@@ -93,7 +102,7 @@ export function planeAktionen({ faellige: liste, tickets }) {
 export function ticketText(e) {
   return {
     titel: `${TITEL_PRAEFIX} ${e.titel}`,
-    body: `${markerFuer(e.id)}\n\n${e.text}\n\nFällig seit ${e.faellig}. Abarbeiten: prüfen, dann in **einem** PR den Eintrag \`${e.id}\` aus \`.github/wiedervorlagen.json\` löschen und dieses Ticket schließen (Mechanik: docs/ticket-reihenfolge.md › Wiedervorlage).`,
+    body: `${markerFuer(e.id)}\n\n${e.text}\n\nFällig seit ${e.faellig}. Abarbeiten: prüfen, dann in **einem** PR den Eintrag \`${e.id}\` aus \`.github/wiedervorlagen.json\` löschen und dieses Ticket schließen; soll der Termin nur wandern, stattdessen \`faellig\` neu setzen (die id bleibt, der Lauf legt dann zum neuen Datum ein neues Ticket an) und dieses Ticket schließen (Mechanik: docs/ticket-reihenfolge.md › Wiedervorlage).`,
   };
 }
 
@@ -108,7 +117,7 @@ function ladeEintraege() {
 
 /** Alle Issues (offen und geschlossen) aus der konsistenten Listenabfrage, nicht aus dem verzögerten Such-Index. */
 // Grenze: die jüngsten 1000 Issues (alle Zustände). Ein Wiedervorlage-Ticket wird zeitnah abgearbeitet und der Eintrag im selben PR gelöscht; ein Ticket, das hinter die 1000 fällt, stünde nur bei vergessenem Löschen noch an (dann Dublette statt Warnung).
-const ladeTickets = () => ghJson(["issue", "list", "--repo", REPO, "--state", "all", "--limit", "1000", "--json", "number,state,body"]);
+const ladeTickets = () => ghJson(["issue", "list", "--repo", REPO, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt"]);
 
 function legeAn(e, label) {
   const { titel, body } = ticketText(e);

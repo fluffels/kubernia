@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import * as raw from "../scripts/wiedervorlage.mjs";
 
 type E = { id: string; faellig: string; titel: string; text: string; label?: string; alerts?: unknown };
-type T = { number: number; state: string; body: string };
+type T = { number: number; state: string; body: string; closedAt?: string };
 type Aktion = { art: string; eintrag: E; nummer?: number };
 const W = raw as unknown as {
   pruefeEintraege: (l: unknown) => string[];
@@ -86,6 +86,29 @@ describe("planeAktionen: Dedupe über den Marker, alle Zustände", () => {
   test("der Marker einer anderen id (Präfix) zählt nicht", () => {
     const tickets = [{ number: 5, state: "open", body: W.markerFuer("a-lang") }];
     expect(W.planeAktionen({ faellige: [a], tickets })).toEqual([{ art: "anlegen", eintrag: a }]);
+  });
+  describe("verschobene Wiedervorlage: geschlossen vor dem neuen Fälligkeitstag", () => {
+    const zu = (closedAt: string | undefined) => [{ number: 5, state: "closed", body: W.markerFuer("a"), ...(closedAt === undefined ? {} : { closedAt }) }];
+    test("Schließdatum vor faellig: neues Ticket anlegen", () => {
+      expect(W.planeAktionen({ faellige: [a], tickets: zu("2026-11-12T23:59:00Z") })).toEqual([{ art: "anlegen", eintrag: a }]);
+    });
+    test("Schließdatum am Fälligkeitstag oder danach: warnen", () => {
+      expect(W.planeAktionen({ faellige: [a], tickets: zu("2026-11-13T00:00:00Z") })[0]?.art).toBe("warnen");
+      expect(W.planeAktionen({ faellige: [a], tickets: zu("2026-12-01T10:00:00Z") })[0]?.art).toBe("warnen");
+    });
+    test("Schließdatum fehlt oder ist unlesbar: warnen", () => {
+      expect(W.planeAktionen({ faellige: [a], tickets: zu(undefined) })[0]?.art).toBe("warnen");
+      expect(W.planeAktionen({ faellige: [a], tickets: zu("") })[0]?.art).toBe("warnen");
+      expect(W.planeAktionen({ faellige: [a], tickets: zu("gestern") })[0]?.art).toBe("warnen");
+    });
+    test("offenes Ticket mit altem closedAt-Feld: keine Aktion", () => {
+      const tickets = [{ number: 5, state: "open", body: W.markerFuer("a"), closedAt: "2026-01-01T00:00:00Z" }];
+      expect(W.planeAktionen({ faellige: [a], tickets })).toEqual([]);
+    });
+    test("ein Ticket vor und eines nach faellig geschlossen: warnen (das jüngere zählt)", () => {
+      const tickets = [...zu("2026-11-01T00:00:00Z"), { number: 6, state: "closed", body: W.markerFuer("a"), closedAt: "2026-11-20T00:00:00Z" }];
+      expect(W.planeAktionen({ faellige: [a], tickets })[0]?.art).toBe("warnen");
+    });
   });
   test("ticketText trägt Marker im Body und Präfix im Titel", () => {
     const t = W.ticketText(a);
