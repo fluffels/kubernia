@@ -589,6 +589,15 @@ describe("pruefen (Ablauf)", () => {
     expect(m.aufrufe.some((a) => a.url.includes("/v2/observations"))).toBe(false);
   });
 
+  test("Negativfall (#1745): eine Config ohne Worktree-Präfix bricht mit Exit 1 und Fix-Zeile ab, ohne ein Transkript oder Langfuse zu fragen", async () => {
+    const root = mitSession([msg("a")]);
+    const m = mock({ zaehlung: [] });
+    const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl, config: { repo: "o/acme", praefixe: {} } });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/praefixe\.worktree[\s\S]*Fix:/);
+    expect(m.aufrufe).toHaveLength(0);
+  });
+
   test("HTTP 500 ergibt Exit 1", async () => {
     const root = mitSession([msg("a")]);
     const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: mock({ status: 500 }).fetchImpl });

@@ -48,7 +48,7 @@ const N = rawNach as unknown as {
   GESAMTFRIST_MS: number;
   parseArgs: (a: string[]) => Args;
   fehlerText: (e: unknown) => string;
-  nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
+  nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string; config?: unknown }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
 };
 // Der Repo-Name (Scope, Service und erstes Tag) kommt aus der Projekt-Config; der Wrapper reicht ihn durch, damit die Tests ihre Eingaben wie bisher schreiben.
 const REPO_NAME = (rawProjekt as unknown as { repoName: (c: unknown) => string; ladeProjektConfig: () => unknown }).repoName((rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig());
@@ -460,6 +460,26 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 2, dubletten: 1 });
   });
 
+  test("Fremd-Config (#1745): Worktree-Präfix und Repo-Name der Config bestimmen Ticket, Scope und erstes Tag der gesendeten Spans", async () => {
+    const cfg = { repo: "o/acme", praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" } };
+    const a = aufbau([msg("a", 1, { gitBranch: "feature/ab-9-x" })]);
+    const m = mock({ ist: 0, obs: [] });
+    await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state, config: cfg });
+    expect(m.otlp).toHaveLength(1);
+    expect(attrs(spansVon(m.otlp[0])[0])["langfuse.trace.tags"]).toEqual(["acme", "abgleich", "ab-9"]);
+    expect(m.otlp[0].resourceSpans[0].scopeSpans[0].scope.name).toBe("acme-abgleich");
+  });
+  test("Negativfall: eine Config ohne Worktree-Präfix oder ohne repo bricht ab, bevor ein Request oder eine Ledger-Datei entsteht", async () => {
+    for (const cfg of [{ repo: "o/acme", praefixe: {} }, { praefixe: { worktree: "ab-" } }]) {
+      const a = aufbau([msg("a", 1)]);
+      const m = mock({ ist: 0, obs: [] });
+      const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state, config: cfg });
+      expect(r.exitCode).toBe(1);
+      expect(r.text).toMatch(/Fix:/);
+      expect(m.aufrufe).toHaveLength(0);
+      expect(existsSync(a.ledger)).toBe(false);
+    }
+  });
   test("Subagent-Span je Session nur einmal; Kind-Call hängt am Span des Subagenten", async () => {
     const meta = JSON.stringify({ agentType: "kubernia-lens", description: "Lens R1" });
     const sub = (ids: string[]) => ids.map((i, n) => msg(i, 20 + n)).join("\n");

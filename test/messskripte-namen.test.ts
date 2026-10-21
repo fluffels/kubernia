@@ -107,7 +107,7 @@ describe("repoName (Namensteil von repo)", () => {
   test("owner/name ergibt den Namen", () => {
     expect(P.repoName(CFG)).toBe("acme");
   });
-  test.each([[undefined], [{}], [{ repo: "acme" }], [{ repo: "a/b/c" }], [{ repo: "" }], [{ repo: 5 }], [{ repo: "o/" }]])("kaputtes repo %j wirft mit Fix-Zeile", (c) => {
+  test.each([[undefined], [{}], [{ repo: "acme" }], [{ repo: "a/b/c" }], [{ repo: "" }], [{ repo: 5 }], [{ repo: "o/" }], [{ repo: ["o/acme"] }]])("kaputtes repo %j wirft mit Fix-Zeile", (c) => {
     expect(() => P.repoName(c)).toThrow(/repo[\s\S]*Fix:/);
   });
 });
@@ -218,6 +218,9 @@ describe("mess-lib: Worktree-Präfix als Option", () => {
   test("bereinige ohne worktree lässt jeden Worktree-Pfad stehen (nur diese Ersetzung entfällt, der Benutzerordner nicht)", () => {
     expect(M.bereinige("cd C:/r/.claude/worktrees/ab-5 && ls")).toBe("cd C:/r/.claude/worktrees/ab-5 && ls");
     expect(M.bereinige("C:/Users/Max/x")).toBe("~/x");
+    // Ein fehlender Wert darf nie als Text „undefined“ ins Muster rutschen.
+    expect(M.bereinige("C:/r/.claude/worktrees/undefined5/x")).toBe("C:/r/.claude/worktrees/undefined5/x");
+    expect(M.bereinige("C:/r/.claude/worktrees/null5/x")).toBe("C:/r/.claude/worktrees/null5/x");
   });
   test("bereinige maskiert Regex-Zeichen im Präfix (ein Punkt trifft nur den Punkt)", () => {
     expect(M.bereinige("C:/r/.claude/worktrees/a.-5/x", { worktree: "a.-" })).toBe("<wt>/x");
@@ -227,6 +230,8 @@ describe("mess-lib: Worktree-Präfix als Option", () => {
     expect(M.normPfad("C:\\R\\.claude\\worktrees\\ab-5\\Src\\A.ts", { worktree: "ab-" })).toBe("src/a.ts");
     expect(M.normPfad("C:/r/.claude/worktrees/kq-5/src/a.ts", { worktree: "ab-" })).toBe("c:/r/.claude/worktrees/kq-5/src/a.ts");
     expect(M.normPfad("C:/r/.claude/worktrees/ab-5/src/a.ts")).toBe("c:/r/.claude/worktrees/ab-5/src/a.ts");
+    expect(M.normPfad("C:/r/.claude/worktrees/undefined5/src/a.ts")).toBe("c:/r/.claude/worktrees/undefined5/src/a.ts");
+    expect(M.normPfad("C:/r/.claude/worktrees/null5/src/a.ts")).toBe("c:/r/.claude/worktrees/null5/src/a.ts");
   });
 });
 
