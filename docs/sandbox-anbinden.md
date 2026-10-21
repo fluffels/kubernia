@@ -1,10 +1,10 @@
 # Sandbox anbinden
 
-> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Den WSL2-Weg von Kubernia beschreibt [agent-harness.md](agent-harness.md#agenten-sandbox-wsl2).
+> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung #1827. Den WSL2-Weg von Kubernia beschreibt [agent-harness.md](agent-harness.md#agenten-sandbox-wsl2).
 
 ## Docker Sandboxes (`sbx`)
 
-Die offiziell dokumentierte Variante. Fakten und Quellen („gelesen 2026-10-16“): [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md#docker-sandboxes-fakten-mit-quelle-gelesen-2026-10-16). Schritte, die nicht per Probe belegt sind, sind markiert.
+Die offiziell dokumentierte Variante und der vorläufige Rückfallweg, nicht empfohlen bis Probe [#1657](https://github.com/fluffels/kubernia/issues/1657). Fakten und Quellen („gelesen 2026-10-16“): [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md#docker-sandboxes-fakten-mit-quelle-gelesen-2026-10-16). Schritte, die nicht per Probe belegt sind, sind markiert.
 
 1. **Installieren:** Windows 11 x64: Windows Hypervisor Platform aktivieren (erhöhte PowerShell, `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All`), dann `winget install -h Docker.sbx`. macOS: Sonoma 14+ auf Apple Silicon. Linux: Ubuntu 24.04+ mit KVM.
 2. **Netz (V2):** Preset „Locked Down“ wählen, dann nur die nötigen Ziele freigeben (`sbx policy allow network <host>`: GitHub, npm-Registry, Langfuse-Host, Anthropic). Nie Preset „Open“. Danach `sbx policy ls` prüfen: Standard-Domains können breite Wildcards enthalten, die zur Allowlist gehören.
@@ -16,9 +16,15 @@ Die offiziell dokumentierte Variante. Fakten und Quellen („gelesen 2026-10-16�
 
 Eine Kubernia-Session in `sbx` ist nicht per Probe belegt (Liste „Unbelegt“ im ADR).
 
+## Cloud-Sitzung (Claude Code im Web)
+
+Nicht empfohlen bis Probe [#1831](https://github.com/fluffels/kubernia/issues/1831). Der Vertrag verlangt dort: Netzstufe „Custom“ ohne Voll-Wildcard (V2), kein Token in den Umgebungsvariablen (V3), GitHub über den Proxy, weitere Schlüssel als Network Secrets.
+Hürden: `gh pr` und `gh issue` scheitern (GraphQL), Ersatz ist `gh api` per REST; User-Plugins fehlen; ein Remote außerhalb GitHub geht nur ohne Push zurück.
+Die Fakten mit Quelle stehen nur im ADR, Abschnitt Fortschreibung #1827.
+
 ## Eigene Container-Sandbox anbinden
 
-Gliederung des Leitfadens. Gemeint ist jede Container-Umgebung, die der Betreiber selbst baut. Am Ende muss sie den Vertrag erfüllen, sonst ist sie **nicht gesandboxt**.
+Probe: [#1832](https://github.com/fluffels/kubernia/issues/1832). Gliederung des Leitfadens. Gemeint ist jede Container-Umgebung, die der Betreiber selbst baut. Am Ende muss sie den Vertrag erfüllen, sonst ist sie **nicht gesandboxt**.
 
 1. **Mounts.** Workspace lesend und schreibend (V1). Kontextdateien (`AGENTS.md`), Hooks, User-Settings, Skills und Plugins müssen in den Container: entweder read-only mounten oder ins Image backen. Nichts davon beschreibbar mounten (V7).
 2. **Settings greifen oft nur beim ersten Start.** Der Init-Schritt vieler Images kopiert die Einstellungen in ein Volume und liest sie danach nicht mehr vom Mount. Abhilfe: Einstellungsdatei als read-only Bind-Mount oder das Volume neu anlegen.
