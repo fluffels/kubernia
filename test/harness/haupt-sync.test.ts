@@ -588,18 +588,27 @@ const X0 = raw as unknown as { exitCodeFuer: (e: Record<string, unknown>) => num
 // #1568 Z8: der Abgleich-Hook lief parallel zum Sync und lud den alten Code des Hauptcheckouts; `--danach` startet ihn erst nach dem Fast-Forward.
 describe("--danach: ein Folge-Hook läuft erst nach dem Sync (#1568)", { timeout: 30_000 }, () => {
   const D = raw as unknown as {
-    danachSkript: (argv: string[]) => string | null;
+    aufrufLesen: (argv: string[]) => { text?: boolean; streng?: boolean; danach?: string | null; fehler?: string };
     starteDanach: (skript: string, text: string, o?: { spawnSync?: (...a: unknown[]) => unknown; execPath?: string }) => boolean;
   };
   const skriptPfad = fileURLToPath(new URL("../../scripts/haupt-sync.mjs", import.meta.url));
 
-  test("danachSkript: Wert hinter --danach; ohne Flag, ohne Wert oder im Modus --text null", () => {
-    expect(D.danachSkript(["--danach", "/x/a.mjs"])).toBe("/x/a.mjs");
-    expect(D.danachSkript(["--streng", "--danach", "/x/a.mjs"])).toBe("/x/a.mjs");
-    expect(D.danachSkript([])).toBeNull();
-    expect(D.danachSkript(["--danach"])).toBeNull();
-    expect(D.danachSkript(["--danach", ""])).toBeNull();
-    expect(D.danachSkript(["--text", "--danach", "/x/a.mjs"])).toBeNull();
+  test("aufrufLesen: danach ist der Wert hinter --danach; ohne Flag, leer oder im Modus --text null", () => {
+    expect(D.aufrufLesen(["--danach", "/x/a.mjs"]).danach).toBe("/x/a.mjs");
+    expect(D.aufrufLesen(["--streng", "--danach", "/x/a.mjs"])).toEqual({ text: false, streng: true, danach: "/x/a.mjs" });
+    expect(D.aufrufLesen([])).toEqual({ text: false, streng: false, danach: null });
+    expect(D.aufrufLesen(["--danach", ""]).danach).toBeNull();
+    expect(D.aufrufLesen(["--text", "--danach", "/x/a.mjs"])).toEqual({ text: true, streng: false, danach: null });
+    expect(D.aufrufLesen(["--text", "--streng"])).toEqual({ text: true, streng: true, danach: null });
+  });
+
+  test("aufrufLesen: unbekanntes Flag, Positionsargument, fehlender Wert, doppeltes Flag und Inline-Wert bei einem Schalter sind Fehler", () => {
+    expect(D.aufrufLesen(["--bogus"]).fehler).toBe("Unbekanntes Argument: --bogus");
+    expect(D.aufrufLesen(["x"]).fehler).toBe("Unbekanntes Argument: x");
+    expect(D.aufrufLesen(["--danach"]).fehler).toBe("--danach braucht einen Wert");
+    expect(D.aufrufLesen(["--danach", "--text"]).fehler).toBe("--danach braucht einen Wert");
+    expect(D.aufrufLesen(["--text", "--text"]).fehler).toBe("--text ist doppelt angegeben");
+    expect(D.aufrufLesen(["--streng=1"]).fehler).toBe("Unbekanntes Argument: --streng=1");
   });
 
   test("starteDanach: node <skript> mit stdin-Text und Zeitgrenze; Fehler und Wurf geben false statt zu werfen", () => {
