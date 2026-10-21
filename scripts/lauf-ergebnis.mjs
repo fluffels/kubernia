@@ -23,7 +23,7 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { labelAus, ladeProjektConfig, repoOwner } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
-import { parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { hoechsterAbnahmeDurchgang, parseNachweis } from "./nachweis-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
@@ -219,11 +219,6 @@ function konfigurationAus(ladeConfig) {
   return { zeilen: commitZeilenAus(config), label: labelAus(config, "festgefahren"), owner, config };
 }
 
-/** Höchster gültiger Abnahme-Durchgang aus den Kommentaren (nur vertraute Autoren, der Hand-off-Marker zählt nie); 0 ohne Marker. Pure. */
-export function hoechsterDurchgang(kommentare, owner, zeilen) {
-  return Math.max(0, ...vertrauteAbnahmeMarker(kommentare, owner, zeilen).map((m) => m.durchgang));
-}
-
 /**
  * Offene PRs mit Festgefahren-Label (Hand-off), erstellt im Fenster, im Ticketfilter, mit höchstem gültigem Abnahme-Durchgang ≥ 2 (#1814):
  * der Hand-off-PR, den `abnahmeFix.mitFix` als nie gemergter PR nicht sieht. Jeder gh-Fehler und jede unlesbare Antwort ist ein DatenFehler (keine stille 0).
@@ -245,7 +240,7 @@ function zaehleOffeneMitFix({ gh, label, von, bis, tickets, ohne, zeilen, owner 
     .filter((p) => new Date(p.createdAt).getTime() >= t0 && new Date(p.createdAt).getTime() <= t1)
     .filter((p) => passtTicketFilter(ticketVon(p), { tickets, ohne }));
   if (imFenster.length > 0 && !owner) throw new DatenFehler("Besitzer des Repos unbekannt (repo der Projekt-Config): vertraute Abnahme-Marker nicht prüfbar.");
-  return imFenster.filter((p) => hoechsterDurchgang(issueKommentare(p.number, json), owner, zeilen) >= 2).length;
+  return imFenster.filter((p) => hoechsterAbnahmeDurchgang(issueKommentare(p.number, json), owner, zeilen) >= 2).length;
 }
 
 /** Holt die Daten über `runGit`/`runGh` (injizierbar) und bewertet. Wirft DatenFehler bei Lücken. */
