@@ -124,6 +124,7 @@ AGENTS.md                  @fluffels
 /scripts/langfuse-lock.mjs @fluffels
 /scripts/worktree-aufraeumen.mjs @fluffels
 /scripts/fremdtext-lib.mjs @fluffels
+/scripts/flag-lib.mjs @fluffels
 /.agents/                  @fluffels
 /.githooks/                @fluffels
 /docs/agent-harness*       @fluffels

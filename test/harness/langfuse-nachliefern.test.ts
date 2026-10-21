@@ -186,10 +186,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib"]));
   });
 });
 
@@ -862,6 +862,10 @@ describe("parseArgs", () => {
   test.each([["manuell"], ["Stop"], [""]])("--ausloeser %j ist ungültig (Fehler, Hilfe nennt die erlaubten Werte)", (w) => {
     const a = N.parseArgs(["--ausloeser", w]);
     expect(a.fehler).toMatch(/sessionstart, sessionend/);
+  });
+  test("ungültiger --ausloeser: ausloeser bleibt null; der erste Fehler gewinnt", () => {
+    expect(N.parseArgs(["--ausloeser", "x"])).toMatchObject({ ausloeser: null });
+    expect(N.parseArgs(["--foo", "--ausloeser", "x"]).fehler).toBe("Unbekanntes Argument: --foo");
   });
   test.each([
     ["Wert fehlt", ["--session"]],

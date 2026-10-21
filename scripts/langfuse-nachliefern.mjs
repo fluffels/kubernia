@@ -14,6 +14,7 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { flagsLesen } from "./flag-lib.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { hauptrepoPfad, ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import {
@@ -66,18 +67,12 @@ export function fehlerText(e) {
 
 /** Unbekanntes Flag oder fehlender Wert: `fehler` gesetzt (der Aufrufer meldet Exit 2). */
 export function parseArgs(argv) {
-  const a = { session: null, seit: null, aktuell: null, beendet: null, ausloeser: null, trocken: false, json: false, fehler: null };
-  const mitWert = { "--session": "session", "--seit": "seit", "--aktuell": "aktuell", "--beendet": "beendet", "--ausloeser": "ausloeser" };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (k === "--trocken") a.trocken = true;
-    else if (k === "--json") a.json = true;
-    else if (k in mitWert) {
-      const wert = argv[++i];
-      if (wert === undefined || wert.startsWith("--")) a.fehler = `${k} braucht einen Wert`;
-      else if (k === "--ausloeser" && !AUSLOESER.includes(wert)) a.fehler = `--ausloeser: erlaubt sind ${AUSLOESER.join(", ")}`;
-      else a[mitWert[k]] = wert;
-    } else a.fehler = `Unbekanntes Argument: ${k}`;
+  const optionen = { session: { type: "string" }, seit: { type: "string" }, aktuell: { type: "string" }, beendet: { type: "string" }, ausloeser: { type: "string" }, trocken: { type: "boolean" }, json: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen);
+  const a = { session: werte.session ?? null, seit: werte.seit ?? null, aktuell: werte.aktuell ?? null, beendet: werte.beendet ?? null, ausloeser: werte.ausloeser ?? null, trocken: werte.trocken === true, json: werte.json === true, fehler: fehler?.text ?? null };
+  if (a.fehler === null && a.ausloeser !== null && !AUSLOESER.includes(a.ausloeser)) {
+    a.fehler = `--ausloeser: erlaubt sind ${AUSLOESER.join(", ")}`;
+    a.ausloeser = null;
   }
   return a;
 }
