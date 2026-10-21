@@ -1,0 +1,12 @@
+body { font-family: system-ui, sans-serif; margin: 1.5rem auto; max-width: 48rem; padding: 0 1rem; color: #222; background: #f6f5f2; }
+h1 { font-size: 1.4rem; margin-bottom: 0.2rem; }
+.projekt { color: #666; margin-top: 0; font-size: 0.85rem; }
+.panel { background: #fff; border: 1px solid #ddd; border-left-width: 6px; border-radius: 4px; padding: 0.6rem 1rem; margin: 1rem 0; }
+.panel.ok { border-left-color: #3a8a4f; }
+.panel.ausfall { border-left-color: #b3372c; }
+.panel h2 { font-size: 1.05rem; margin: 0 0 0.2rem; }
+.stand { color: #777; font-size: 0.8rem; margin: 0 0 0.5rem; }
+.meldung { color: #b3372c; font-weight: 600; margin: 0; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+dt { color: #555; }
+dd { margin: 0; }

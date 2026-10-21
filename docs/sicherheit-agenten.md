@@ -25,6 +25,7 @@ Das Repo ist öffentlich: jeder darf Issues eröffnen und kommentieren, es gibt 
 | Forum (GitHub Discussions) | Label `forum` gilt als Fremdeingang; die Action legt das Inbox-Issue ohne Fremdtext an, `scripts/forum-sanitize.mjs` entschärft und rahmt den Text in der Quarantäne; Rule-of-Two-Audit im [Forum-Skill](../.claude/skills/forum/SKILL.md); Quarantäne: den Thread liest nur der Subagent [`forum-leser`](../.claude/agents/forum-leser.md) (nur `Read` auf die Quarantäne-Datei, `scripts/forum-quarantaene.mjs`, `scripts/forum-leser-guard.mjs`), der privilegierte Lauf sieht nur das feste Ergebnisformat; Antwort nur nach Freigabe der Maintainerin |
 | Issues und Kommentare Dritter | `scripts/fremdtext.mjs` (Autor-Prüfung), Skill-Schritt 1, Planer, Umsetzer, Lens |
 | PR-Kommentare und Reviews Dritter (inkl. Review-Kommentare) | `scripts/fremdtext.mjs --pr`; Fork-PRs Dritter: kein `pull_request_target` in `.github/workflows`, Required-Checks gaten den Merge |
+| Cockpit (lokaler Server, `npm run cockpit`) | nur lesend, bindet 127.0.0.1, nur GET und HEAD, Host-Prüfung gegen DNS-Rebinding, keine CORS-Header, CSP `default-src 'none'; style-src 'self'`, kein Client-Skript; jeder Wert wird escaped, auch Fremdtext späterer Quellen; Unterprozesse nur aus der Allowlist in `scripts/cockpit/lauf.mjs`, ohne Shell |
 | WebFetch/WebSearch | kein deterministisches Gate; Rahmung und Exfiltration per URL offen (#1447 a) |
 | npm-Pakete inkl. Lifecycle-Skripte | Dependabot-Policy, `npm audit` (täglich eingeordnet, [Audit-Einordnung](ticket-reihenfolge.md#audit-einordnung-1628)), `check:lockfile`; keine `.npmrc`, Lifecycle-Skripte laufen bei `npm ci` (#1447 b) |
 | Dependabot-PR-Texte | der Autor ist vertraut, die Release-Notes darin sind Text Dritter; der Ablauf liest nur Checks, erzwungen ist das nicht (#1447 c) |
@@ -51,6 +52,7 @@ ASI-Namen der Spalte nach der Sekundärquelle (siehe Quellen). Die Gate-Angaben 
 
 ## Grenzen (ehrlich)
 
+- Der Cockpit-Server ist lokal ohne Anmeldung: ein lokaler Prozess derselben Nutzerin erreicht ihn ([ADR 0029](adr/0029-harness-cockpit.md) (e)). Escapen ist keine Inhaltsprüfung, Fremdtext bleibt lesbarer Text.
 - Das Gate prüft den **Autor**, nicht den Inhalt. Eine vertraute Instanz, die Fremdtext zitiert (Zitat-Laundering), umgeht es; dagegen hilft nur Disziplin und das Review, bis #1447 d es löst.
 - Ein Skript kann eine Agenten-Anweisung nicht erzwingen: ein Agent, der Kommentare doch roh liest, wird nur vom Wächter-Test (Anweisungstext) und vom Review erwischt, nicht zur Laufzeit.
 - Rule-of-Two (kein Teilsystem verarbeitet zugleich unvertrauten Input, hält Secrets und ändert Zustand oder kommuniziert nach außen) ist im [Forum-Skill](../.claude/skills/forum/SKILL.md) beschrieben und wird hier nicht wiederholt.
