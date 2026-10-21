@@ -52,6 +52,7 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; leer: Obs[]; art: string };
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
   renderMarkdown: (b: Record<string, unknown>[], sum: unknown) => string;
+  OHNE_ZUGANG: string;
   bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null }) => Bewertung;
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
