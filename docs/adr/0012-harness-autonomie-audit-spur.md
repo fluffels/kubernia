@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Der Label-/Guard-Teil (Entscheidung 1 „Label selbst setzen“, 2 und 5) ist abgelöst durch [ADR 0014](0014-leitplanken-ohne-label-riegel.md) (#1303). Präzisiert [ADR 0008](0008-ki-agenten-harness.md) (Entwicklungsmodell) und [ADR 0009](0009-pr-gating-required-checks.md) (Integrationsweg) an einer Stelle: wer einen PR merged, der die **Leitplanken selbst** ändert. Nimmt den Merge-Checkpoint aus #1012 zurück. Umgesetzt mit #1069 (PR #1071); die operative Regel steht in [AGENTS.md › Human-in-the-Loop-Checkpoints](../../AGENTS.md), die Erklärung in [docs/agent-harness.md](../agent-harness.md).
+**Akzeptiert.** Der Label-/Guard-Teil (Entscheidung 1 „Label selbst setzen“, 2 und 5) ist abgelöst durch [ADR 0014](0014-leitplanken-ohne-label-riegel.md) (#1303). Präzisiert [ADR 0008](0008-ki-agenten-harness.md) (Entwicklungsmodell) und [ADR 0009](0009-pr-gating-required-checks.md) (Integrationsweg) an einer Stelle: wer einen PR merged, der die **Leitplanken selbst** ändert. Nimmt den Merge-Checkpoint aus #1012 zurück. Die Pflicht-Stopps sind inventarisiert und zugeschnitten durch die Fortschreibung #1363 unten. Umgesetzt mit #1069 (PR #1071); die operative Regel steht in [AGENTS.md › Human-in-the-Loop-Checkpoints](../../AGENTS.md), die Erklärung in [docs/agent-harness.md](../agent-harness.md).
 
 ## Kontext
 
@@ -93,6 +93,49 @@ Bewusst **keine** harte Token-Schwelle als Bedingung: eine nie erreichte Schwell
 **Entscheidung (Vorgabe der Maintainerin, löst die Halbierung aus #1309 ab).** Ein Sammelticket wird, wenn es drankommt, immer komplett umgesetzt: kein Teil, kein Rest-Übertrag ins nächste Sammelticket, weil sich sonst zu viel anstaut. Was beim Arbeiten dazukommt oder auffällt (neue Zeilen-Kommentare, eigene Befunde, Lens-`ausserhalbScope`), kommt in denselben PR. Ist er dafür zu groß, deckt die begründete Commit-Zeile `KQ-Diffsize-Override:` das ab. Nur was wirklich nicht machbar ist, geht als Entscheidung an die Maintainerin, nichts wird still ausgelagert. Jede Zeile bekommt ein Ergebnis (umgesetzt, geprüft und dokumentiert, oder begründet „bewusst nicht“ bei optionalen Teilen).
 
 **Trade-off.** Der PR wird breit und schwerer zu reviewen (mehr Lens-Runden, größerer Revert); dafür bleibt kein Rest, und die Zeilenzahl je Generation sinkt auf null, statt umgeschichtet zu werden.
+
+## Fortschreibung #1363 (2026-10-21): Human-in-the-Loop-Inventar
+
+**Anlass.** Die Konsequenz „Der Auto-Modus kann trotzdem bremsen“ und mehrere Skill-Texte ließen offen, an welchen Stellen ein Lauf wirklich auf die Maintainerin wartet. Besonders `festgefahren` hielt auch einen Lauf über mehrere Tickets an, obwohl das Protokoll (assigned bleiben, Label, PR-Kommentar) die Entscheidung ohnehin asynchron macht.
+
+**Entscheidung.** Pflicht-Stopps bleiben nur bei Irreversiblem und Außenwirkung, als geschlossene Liste im Block `stopps` der AGENTS.md (§ Human-in-the-Loop-Checkpoints): Löschen (auch `gh issue delete`), Ruleset/Secrets/Repo-Einstellungen samt Project-Ansichten und -Feldern, Veröffentlichen, Forum-Antwort posten, PixelLab-Key. `festgefahren` hält den Mehr-Ticket-Lauf nicht mehr an: das Protokoll bleibt unverändert, der Lauf nimmt das nächste freie Ticket, das festgefahrene zählt zu N, und die Schlussübersicht nennt es mit PR und `FESTGEFAHREN:`-Art. Ein Werkzeug- oder Session-Defekt beendet den Lauf weiter, weil er beim nächsten Ticket dieselben Tokens verbrennen würde.
+
+**Inventar** (Stand 2026-10-21; „bleibt“ = fester Stopp oder externe Grenze, „asynchron“ = der Lauf geht weiter, die Maintainerin entscheidet später, „entfällt“ = kein Warten mehr):
+
+| # | Fundstelle | Wartepunkt | Kategorie | Entscheidung |
+|---|---|---|---|---|
+| 1 | AGENTS.md § Human-in-the-Loop-Checkpoints (Block `stopps`), `ablauf.md` Schritt 3 | Pre-Flight-Klärung | Irreversibel/Außenwirkung | bleibt, geschlossene Liste |
+| 2 | AGENTS.md § Forum-Eingang, Skill `forum` Schritt 4 | Antwort-Freigabe vor dem Posten | Außenwirkung | bleibt |
+| 3 | AGENTS.md § Kein Parken, `docs/ticket-reihenfolge.md`, `permissions.ask` | `gh issue delete` | irreversibel | bleibt (ask-Regel für Bash und PowerShell) |
+| 4 | AGENTS.md § Konventionen (PixelLab) | Key trägt die Maintainerin ein | Secret | bleibt |
+| 5 | Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen (`deny` für `npm publish`, `gh repo delete`) | Pre-Flight | Außenwirkung/irreversibel | bleibt |
+| 6 | AGENTS.md § Festgefahren-Protokoll, `festgefahren.yml` samt `check-festgefahren.mjs` (Kommentar), `ablauf.md` Punkt `festgefahren` | der Lauf hielt an | Kostendeckel/Qualität | asynchron |
+| 7 | `ablauf.md` `FESTGEFAHREN: abnahme` „nicht prüfbar“ | Kriterium präzisieren | Spezifikation | asynchron |
+| 8 | `ablauf.md` Abnahme-Abbruch/unbekannter Agenten-Typ, `kubernia-umsetzer.md` Punkt `handoff` | Werkzeug reparieren, Session neu starten | externe Restgrenze | bleibt, der Lauf endet |
+| 9 | Skill `review-lenses` › Cap (mehr als 3 Zusatzpässe) | Freigabe | Kostendeckel | asynchron, über Zeile 6 |
+| 10 | `ablauf.md` `entscheidung-noetig` | `FRAGEN` per `AskUserQuestion` | nur Irreversibles/Außenwirkung | bleibt; ein PixelLab-Asset erzeugt der Hauptchat selbst |
+| 11 | `kubernia-umsetzer.md` (Klassifikator „Create Unsafe Agents“) | `entscheidung-noetig` | externe Restgrenze | bleibt |
+| 12 | Auto-Modus-Klassifikator bei `.claude/`-Änderungen (Konsequenzen oben, FAQ) | Wechsel in den normalen Modus | externe Restgrenze | bleibt, siehe unten |
+| 13 | `ablauf.md` Schritt 0 `haupt-sync --streng` Exit 1 | stoppen, melden | Schutz fremder Arbeit im geteilten Checkout | bleibt |
+| 14 | AGENTS.md § Langfuse-Erfassung, `ablauf.md` Schritt 0 | stoppen, melden | Vorbedingung, die der Agent nicht herstellen kann | bleibt |
+| 15 | `ablauf.md` Schritt 1 Exit 2/Exit 5 | stoppen | technischer Abbruch/API-Kontingent | bleibt, kein Entscheidungs-Stopp |
+| 16 | `ablauf.md` Reparaturweg („der Maintainerin melden und weitermachen“) | keiner | kein Wartepunkt | schon asynchron |
+| 17 | `ablauf.md` Schritt 2 Blocker („stoppen, kein Griff zum nächsten Ticket“) | der Lauf endet | Board-Hoheit, ausdrücklicher Wunsch der Maintainerin | bleibt, neu bewerten mit #1365 |
+| 18 | `ablauf.md` „Mehrere Tickets“ (Anzahl N) | Rückfrage ohne Zahl | Pacing | bleibt bis #1365 |
+| 19 | `ablauf.md` Budget-Pacing Exit 3/4 | Pause bis Reset | Kostendeckel | bleibt, wartet auf keine Entscheidung |
+| 20 | AGENTS.md § Kollisionsschutz (Worktree entfernen: „sonst stoppen und melden“) | stoppen | Datenverlust-Schutz | bleibt |
+| 21 | AGENTS.md § Mehr-Perspektiven-Review (strittige Blocker) | Hand-off | Entscheidung | entfällt: der Hauptchat entscheidet nach dem Entscheidungsprotokoll |
+| 22 | Skill `kubernia-workflow`, Workflow-Ausgänge `wartet-auf-klaerung`/`festgefahren` | entfallen | Ablauf | entfallen mit #1067; Nachfolger sind Zeile 6 und 10 (`ERGEBNIS`-Token `festgefahren`/`entscheidung-noetig`) |
+| 23 | Skill `kubernia` | keiner | kein Wartepunkt | delegiert an `ablauf.md` |
+
+**Wächter.** `test/harness/harness-approval.test.ts` (Abschnitt „Feste Stopps bleiben“) prüft die fünf Anker im Block `stopps`, den Freigabe-Stopp im Skill `forum` und die Permission-Regeln (`ask` für `gh issue delete`, `deny` für `npm publish` und `gh repo delete`, je Bash und PowerShell). Ein gestrichener fester Stopp wird damit rot. Grenze: der Wächter prüft Anker und Einträge, nicht die Bedeutung; ein Abschwächen im Wortlaut bei erhaltenem Anker fängt er nicht.
+
+**Auto-Modus bei `.claude/`-Änderungen (Recherche 2026-10-21).** Keine Regel im Repo vermeidet die Sperre; sie bleibt eine externe Restgrenze.
+- [Permission-Modi › Protected paths](https://code.claude.com/docs/en/permission-modes): `.claude` ist ein geschützter Pfad, `permissions.allow` gibt Schreibzugriffe dort nicht vorab frei; im Auto-Modus entscheidet der Klassifikator. Die Worktrees unter `.claude/worktrees/` sind ausgenommen, der Klassifikator blockt dort laut [FAQ](../agent-harness-faq.md) trotzdem (Self-Modification).
+- [Auto-Modus-Konfiguration](https://code.claude.com/docs/en/auto-mode-config): `autoMode` liest der Klassifikator nicht aus `.claude/settings.json` oder `.claude/settings.local.json`, nur aus den Nutzer-Settings, Managed Settings und `--settings`. Explizite `ask`-/`deny`-Regeln gelten vor dem Klassifikator.
+- Der einzige Hebel ist ein persönlicher `autoMode.allow`-Eintrag in `~/.claude/settings.json`: außerhalb des Repos, er lockert eine Sicherheitsprüfung und lässt sich nicht verteilen. Das entscheidet allein die Maintainerin; Agenten setzen ihn nicht. Bis dahin gilt der Rückfall: nicht umformulieren, `entscheidung-noetig` melden.
+
+**Trade-off.** Weiterlaufen nach `festgefahren` kostet Tokens für das nächste Ticket; gedeckelt durch N und das Budget-Pacing vor jedem Ticket. Ein festgefahrenes Ticket zählt zu N, weil N der Kosten- und Zeitdeckel ist, keine Erfolgsquote.
 
 ## Re-Evaluierungs-Trigger
 
