@@ -229,7 +229,7 @@ describe("parseArgs", () => {
   });
   test("jede Auffälligkeit beim Lesen ergibt genau die Aufrufzeile (fail-closed)", () => {
     const aufruf = "Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>";
-    for (const a of [["--issue="], ["--issue", "1", "--"], ["--issue", "1", "x"], ["--issue", "--pr"], ["--issue", "1", "--issue", "2"]]) {
+    for (const a of [[], ["--issue="], ["--issue", "1", "--"], ["--issue", "1", "x"], ["--issue", "--pr"], ["--issue", "1", "--issue", "2"]]) {
       assert.throws(() => parseArgs(a), (e: Error) => e.message === aufruf, JSON.stringify(a));
     }
     assert.throws(() => parseArgs(["--issue", "x"]), /--issue braucht eine positive Ganzzahl/);

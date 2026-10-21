@@ -101,7 +101,7 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["claims-pruefen", ["x"], 2, "✖ claims-pruefen: unbekanntes Argument: x"],
     ["langfuse-nachliefern", ["--bogus", "--ausloeser", "x"], 2, "Unbekanntes Argument: --bogus"],
   ];
-  test.concurrent.each(ZUSATZ)("%s %j: fehlendes Pflicht-Flag, Positionsargument, erster Fehler gewinnt", { timeout: 60_000 }, (skript, argv, exit, erste) => {
+  test.concurrent.each(ZUSATZ)("%s %j: weitere Aufruf-Fehler (Pflicht-Flag, Positionsargument, Reihenfolge, Datumsprüfung)", { timeout: 60_000 }, (skript, argv, exit, erste) => {
     const r = starte(skript, argv);
     expect(r.status).toBe(exit);
     expect(r.stderr.split("\n")[0]).toBe(erste);
