@@ -21,6 +21,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, SAMMELTICKET_TITEL, normalizeOffene } from "./board-lib.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -110,7 +111,6 @@ export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel 
   return { nummern, regeln, alerts, ghsa, issues };
 }
 
-const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * Das erste offene Issue (`issues` aus `bekannteAlerts`), das den Alert abdeckt: `{ number, grund }` oder null. Grund `nummer`: der Body nennt
@@ -119,8 +119,8 @@ const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 export function deckendesIssue(alert, issues) {
   const dir = String(alert.pfad ?? "").replace(/\\/g, "/").split("/").slice(0, -1).join("/");
   const regel = String(alert.regel ?? "");
-  const regelRe = regel ? new RegExp(String.raw`(?<![\w/.-])${escRe(regel)}(?![\w/-])`) : null;
-  const dirRe = dir ? new RegExp(String.raw`(?<![\w.-])${escRe(dir)}/`) : null;
+  const regelRe = regel ? new RegExp(String.raw`(?<![\w/.-])${escapeRegex(regel)}(?![\w/-])`) : null;
+  const dirRe = dir ? new RegExp(String.raw`(?<![\w.-])${escapeRegex(dir)}/`) : null;
   for (const i of issues ?? []) {
     if (nummernIn(i.body).includes(alert.nummer)) return { number: i.number, grund: "nummer" };
     if (regelRe && dirRe && regelRe.test(i.body) && dirRe.test(i.body)) return { number: i.number, grund: "regel+verzeichnis" };

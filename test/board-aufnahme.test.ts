@@ -2,7 +2,8 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+import { ladeProjektConfig as ladeConfigRoh } from "../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (): Record<string, unknown> => (ladeConfigRoh as () => Record<string, unknown>)();
 
 const config: unknown = ladeProjektConfig();
 

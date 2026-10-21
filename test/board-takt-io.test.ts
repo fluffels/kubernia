@@ -26,7 +26,8 @@ import * as rawTakt from "../scripts/board-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLangfuse from "../scripts/langfuse-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+import { ladeProjektConfig as ladeConfigRoh } from "../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (): Record<string, unknown> => (ladeConfigRoh as () => Record<string, unknown>)();
 
 type Board = { projectId: string; nummer: number; statusFeldId: number | string; statusFeldNodeId: string; todoOptionId: string };
 const L = rawLib as unknown as { boardFuerRolle: (r: string) => Board };

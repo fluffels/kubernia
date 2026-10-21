@@ -23,7 +23,8 @@ import { dirname, join } from "node:path";
 import * as festgefahren from "../scripts/check-festgefahren.mjs";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+import { ladeProjektConfig as ladeConfigRoh } from "../scripts/projekt-config-lib.mjs";
+const ladeProjektConfig = (): Record<string, unknown> => (ladeConfigRoh as () => Record<string, unknown>)();
 
 const isStuck: (n: number) => boolean = festgefahren.isStuck;
 const buildStuckComment: (count: number, url: string, label: string) => string = festgefahren.buildStuckComment;
