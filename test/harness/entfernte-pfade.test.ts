@@ -88,6 +88,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       beruehrtHarness: "Auftrag beruehrtHarness",
       "urteilFehler (entfernter Export von nachweis-lib)": "import { urteilFehler } from nachweis-lib",
       "Konstante FACTORY_LABEL": "import { FACTORY_LABEL } from board-lib",
+      "Ausnahmeliste des Flag-Parser-Wächters": "die noch nicht migrierten Skripte stehen dort als Liste",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
