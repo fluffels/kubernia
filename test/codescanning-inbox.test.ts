@@ -153,6 +153,12 @@ describe("deckendesIssue", () => {
     expect(C.deckendesIssue(A, [iss(`foo/js/incomplete-sanitization in ${D}`)])).toBeNull();
     expect(C.deckendesIssue(A, [iss("js/incomplete-sanitization in src/content/drills-alt/b.ts")])).toBeNull();
     expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in x${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitizationx in ${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization/sub in ${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`.js/incomplete-sanitization in ${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`-js/incomplete-sanitization in ${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in .${D}`)])).toBeNull();
+    expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in -${D}`)])).toBeNull();
     expect(C.deckendesIssue(A, [iss(`js/incomplete-sanitization in ${D}`)])).toEqual({ number: 1703, grund: "regel+verzeichnis" });
   });
   test("leere Regel deckt über das Verzeichnis allein nie ab", () => {
