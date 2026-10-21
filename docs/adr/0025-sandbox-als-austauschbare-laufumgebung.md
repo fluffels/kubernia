@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Präzisiert [ADR 0021](0021-agenten-sandbox-wsl2.md) (dessen Entscheidung bleibt) und gehört zum Kern-Schnitt aus [ADR 0022](0022-dark-factory-kern-und-verteilung.md) (Inventarzeile „Permissions und Sandbox“, Schritt F9). Freigabe der Maintainerin: 2026-10-15.
+**Akzeptiert.** Präzisiert [ADR 0021](0021-agenten-sandbox-wsl2.md) (dessen Entscheidung bleibt) und gehört zum Kern-Schnitt aus [ADR 0022](0022-dark-factory-kern-und-verteilung.md) (Inventarzeile „Permissions und Sandbox“, Schritt F9). Freigabe der Maintainerin: 2026-10-15. Fortgeschrieben durch #1827 (2026-10-21): Spalte Cloud-Sitzung, Grenzen je Variante, vorläufiger Standard- und Rückfallweg, siehe Abschnitt „Fortschreibung #1827“ unten.
 
 ## Kontext
 
@@ -56,6 +56,8 @@ Der Status ist binär. **Verletzt eine Laufumgebung auch nur eine Vertragszeile,
 
 ### Varianten
 
+Präzisiert durch die Fortschreibung #1827 (2026-10-21) unten: Tabelle mit Cloud-Spalte und Quellen.
+
 „belegt“ heißt: Quelle oder Probe liegt vor. „unbelegt“: nur Behauptung oder ungeprüft.
 
 | Zeile | WSL2 + Claude-Code-Sandbox | Docker Sandboxes (`sbx`) | Eigene Container-Sandbox |
@@ -100,3 +102,72 @@ Die folgenden Aussagen sind ungeprüft, bis die Maintainerin einen Probe-Lauf ge
 ## Re-Evaluierung
 
 Neu bewerten, wenn: ein Probe-Lauf in `sbx` vorliegt; `sbx` Credential-Modell oder Plattformen ändert; Claude Code eine Sandbox für natives Windows freigibt; #1434 grundsätzlich scheitert.
+
+## Fortschreibung #1827 (2026-10-21): Cloud-Sitzung, Grenzen je Variante, vorläufiger Standard- und Rückfallweg
+
+Diese Wahl ist **vorläufig**: sie legt fest, worauf die Proben zielen, und wird nach ihnen als weitere Fortschreibung endgültig. Kubernia bleibt bis dahin bei WSL2 (ADR 0021).
+
+### Beleg-Klassen und Quellen
+
+Klassen: `ja (Probe)`, `ja (Doku/Konfiguration)`, `nein` (laut Quelle nicht machbar, ohne den Ticket-Ablauf umzubauen), `unbelegt`.
+
+- [S] <https://code.claude.com/docs/en/sandboxing>, [C1] <https://code.claude.com/docs/en/claude-code-on-the-web>, [C2] <https://code.claude.com/docs/en/cloud-environments>: alle gelesen 2026-10-21.
+- [D] Docker-Quellen dieses ADR (gelesen 2026-10-16).
+- [R] Repo: ADR 0021, [agent-harness.md](../agent-harness.md#agenten-sandbox-wsl2) (Abschnitte Agenten-Sandbox und Natives Windows, Probe 2026-10-08), [Sandbox anbinden](../sandbox-anbinden.md), Stand 2026-10-21.
+- [E] Erfahrungswerte aus einer eigenen Container-Sandbox mit Egress-Proxy, Stand 2026-10-05, nicht an Kubernia geprobt (#1832).
+
+### Vertragszeilen je Variante
+
+| Zeile | WSL2 + Claude-Code-Sandbox | Docker Sandboxes (`sbx`) | Eigene Container-Sandbox | Cloud-Sitzung |
+|---|---|---|---|---|
+| V0 | belegt [S]: nur Shell-Befehle und Kindprozesse; Read/Edit/WebFetch, Hooks und lokale MCP-Server laufen außerhalb | belegt [D] | unbelegt, Sache des Projekts (#1832) | belegt [C1]: isolierte, von Anthropic verwaltete VM je Sitzung um die ganze Session |
+| V1 | Konfiguration belegt [R] (`denyRead /mnt`, `wsl.conf`); Schreibrecht im Arbeitsverzeichnis, `config`/`hooks` in `.git` geschützt [S]; Probe #1434 | belegt [D] | unbelegt (#1832) | belegt [C1, C2]: frischer Klon in der VM, kein Zugriff auf den eigenen Rechner, ungetrackte Dateien kommen nicht mit |
+| V2 | Konfiguration belegt [R]; der Proxy lehnt Namen ab, die nur auf lokale Adressen auflösen, `localhost` ist erlaubt [S]; Probe #1434 | belegt [D] | unbelegt, Domain-Proxy nötig (#1832) | Konfiguration belegt [C2]; Probe #1831. „Custom“ ist eine eigene Domain-Liste, `*.` passt auf Subdomains; „Full“ verletzt V2; die Standardliste von „Trusted“ enthält breite Wildcards. Unabhängig von der Stufe erreichbar: GitHub über den eigenen Proxy, MCP-Connectoren (laufen über Anthropic), Hosts der Network Secrets, die Anthropic-API |
+| V3 | Maskierung über die Vorlage [R]; braucht das experimentelle `network.tlsTerminate`, ohne es scheitert die Maskierung ohne Preisgabe [S]; Probe #1434 | wie in der Tabelle „Varianten“ oben | unbelegt, Sache des Projekts (#1832) | belegt erfüllbar [C1, C2]: GitHub-Zugangsdaten bleiben außerhalb der VM, `GH_TOKEN` liest als Platzhalter `proxy-injected`; weitere Schlüssel als Network Secrets über den Proxy; ein selbst gesetzter Token in den Umgebungsvariablen verletzt V3, weil jeder Nutzer der Umgebung ihn lesen kann. Ob ein Network Secret den Langfuse-Schlüssel setzen kann: unbelegt |
+| V4 | belegt [R] | unbelegt [D] | Sache des Images; `gh` fehlte im Basis-Image [E] | belegt [C2]: git, gh, Node 22 mit npm vorinstalliert |
+| V5 | ja (Doku/Konfiguration) [S, R]: Langfuse-Host in der Vorlage, `localhost` erlaubt, `networkingMode=mirrored`; Probe #1434 | unbelegt (#1657) | Host-`localhost` nicht erreichbar, Weg: Dienst im internen Netz [E, R] | nein für eine Instanz auf dem eigenen Rechner [C1]; ein öffentlich erreichbarer Host über die Custom-Liste unbelegt; Export über `OTEL_*`-Variablen als Mechanismus belegt [C2]; Probe #1831 |
+| V6 | wie in der Tabelle „Varianten“ oben | wie oben | wie oben | unbelegt, kein Wert vergeben; setzbar über eine Umgebungsvariable der Umgebung [C2]; Wert und Erkennung kommen mit #1831 und #1437 |
+| V7 | wie in der Tabelle „Varianten“ oben | wie oben | wie oben | spätere Sitzungen starten von einem Dateisystem-Schnappschuss nach dem Setup-Skript [C2]; ob eine Sitzung den Schnappschuss ändern kann: unbelegt |
+
+### Grenzen und Ticket-Ablauf je Variante
+
+| Zeile | WSL2 + Claude-Code-Sandbox | Docker Sandboxes (`sbx`) | Eigene Container-Sandbox | Cloud-Sitzung |
+|---|---|---|---|---|
+| Aufwand | mittel, Setup-Checkliste mit 10 Schritten [R] | gering laut Doku [D] | hoch [E] | gering [C1, C2]: GitHub-App bzw. `/web-setup`, Umgebung |
+| Natives Windows | nein [S, R]; die Sandbox läuft auf macOS, Linux, WSL2 [S] | ja [D] | ja über eine Container-Laufzeit; Dateizugriff auf Windows-Laufwerke sehr langsam [E] | ja als Client (Browser, Desktop, Mobil, `claude --cloud`); Sitzung in Ubuntu 24.04 x86_64; Pläne Pro/Max/Team/Enterprise [C1, C2] |
+| Kosten und Limits | keine Zusatzkosten; Tokens unbelegt (#1833) | Tokens unbelegt (#1833) | eigene Wartung; Tokens unbelegt (#1833) | keine VM-Gebühr, zählt zum Nutzungslimit, parallele Sitzungen proportional [C1]; ca. 4 vCPU/16 GB/30 GB; Befehle 2 min Standard, bis 10 min, dann Hintergrund; Setup-Cache nur bei weniger als ca. 5 min, ca. 7 Tage [C2]; frühere Kompaktierung [C1]; Tokens unbelegt (#1833) |
+| Außerhalb der Grenze | Read/Edit/WebFetch, Hooks, lokale MCP-Server (auch Playwright-MCP), Plugin-Monitore [S] | Hooks, MCP, Playwright, Langfuse: unbelegt (#1657) | Hooks: unbelegt, Sache des Projekts (#1832); MCP: innerhalb (im Container registrieren), Sidecar braucht `NO_PROXY` [E]; Langfuse: unbelegt, Sache des Projekts (#1832); Einstellungen greifen nur beim ersten Start [E] | lokal nichts; GitHub über Proxy, Connectoren über Anthropic; Repo-Hooks und `.mcp.json` nur bei genau einem Repo je Sitzung; `~/.claude`, User-Plugins und Repo-`enabledPlugins` werden nicht geladen [C2] |
+| Playwright | ja (Doku/Konfiguration) [S, R]: MCP außerhalb, Browser außerhalb installiert | unbelegt | innerhalb oder außerhalb der Grenze: unbelegt, Sache des Projekts (#1832); das Image hatte nur Systembibliotheken, keine Browser [E] | nur `chromedriver` [C2]; Browser und MCP unbelegt |
+| Langfuse-Erfassung | ja (Doku) [S]: Hooks laufen außerhalb | unbelegt | nein im erfahrenen Fall [E] | nein über das Plugin [C2]; OTel unbelegt |
+| Worktree, `npm ci`, `verify` | ja (Doku/Konfiguration), Ergänzung unten | unbelegt | unbelegt; Worktrees nur auf einer Seite anlegen [R] | ja (Doku) [C2]: Werkzeuge vorinstalliert; `verify` über 2 min läuft im Hintergrund |
+| `gh issue`, `gh pr` | ja (Konfiguration) [R]: `github.com`, `api.github.com` freigegeben | unbelegt | nein im erfahrenen Fall [E] | nein [C2]: der GitHub-Proxy weist GraphQL mit 403 ab, `gh api` per REST geht |
+| Auto-Merge | ja (Konfiguration): derselbe `gh`-Weg; Probe #1434 | unbelegt | unbelegt | nein [C1, C2], Ergänzung unten |
+
+Ergänzungen:
+
+- **WSL2, Worktree:** benannte Lücke: `config`/`hooks` in `.git` bleiben schreibgeschützt [S]; das betrifft den Upstream bei `git worktree add -b … origin/main` und `push -u`. Abhilfe: ein eng gefasstes `excludedCommands` [S], entschieden in #1434 (AK4). `npm ci` nur im Worktree [R]; wohin der npm-Cache gehört, ist unbelegt (klärt #1434).
+- **WSL2, `gh` und Auto-Merge:** Probe #1434 (AK3).
+- **Cloud, Auto-Merge:** nein über `gh pr merge --auto` (GraphQL); Branch-Löschungen weist der Proxy ab [C2]. Auto-fix für PRs gibt es, braucht die Claude-GitHub-App [C1].
+
+### Entscheidung (vorläufig)
+
+Eine Variante, in der mindestens eine Ticket-Ablauf-Zeile (Worktree/`npm ci`/`verify`, `gh`, Auto-Merge, Playwright-MCP, Langfuse-Erfassung) „unbelegt“ oder „nein“ ist, ist **nicht empfohlen bis Probe**. „ja (Doku/Konfiguration)“ trägt nur die vorläufige Wahl, endgültig wird sie mit „ja (Probe)“. „Offiziell dokumentiert“ für `sbx` (Abschnitt Entscheidung oben) bleibt bestehen und heißt nicht „empfohlen“.
+
+- **Standardweg: WSL2 mit der Claude-Code-Sandbox.** Entscheidung: WSL2, weil sie als einzige Variante keine Ticket-Ablauf-Zeile „unbelegt“ oder „nein“ hat (Agent, Hooks, MCP, Playwright-MCP und Langfuse-Plugin laufen laut [S] wie heute außerhalb, nur Shell-Befehle laufen innen gegen eine belegte Allowlist) und Kubernia sie schon trägt (ADR 0021). Bestätigung durch #1434.
+- **Rückfallweg: `sbx`, nicht empfohlen bis Probe #1657.** Sie umschließt die ganze Session (V0) und deckt natives Windows 11, macOS auf Apple Silicon und Ubuntu 24.04+ ab; ein Wechsel geschieht per neuem ADR, das ADR 0021 ablöst.
+- **Eigene Container-Sandbox und Cloud-Sitzung: nicht empfohlen bis Probe** (#1832, #1831). Bei der Cloud-Sitzung sind `gh pr`, `gh issue` und Auto-Merge als „nein“ belegt (GraphQL 403), User-Plugins fehlen, Playwright ist unbelegt.
+
+### Offene Fragen
+
+- Remotes außerhalb GitHub: Klonen und PR brauchen GitHub (für Team und Enterprise auch GitHub Enterprise Server); ein anderes Remote geht nur als Bundle-Upload (`CCR_FORCE_BUNDLE=1`), die Sitzung kann dann nicht zurück pushen [C1]. Ob der Ticket-Ablauf damit trägt, klärt #1831.
+- Ob Projektcode in einer Anbieter-VM liegen darf, entscheidet das Projekt (Kubernia ist öffentlich).
+- Die Claude-Code-Sandbox läuft laut [S] auch auf macOS und Linux; V6 kennt dafür keinen Wert (#1437).
+- Tokenkosten sind für alle Varianten unbelegt (#1833).
+
+### Proben und Messung
+
+#1434 bestätigt den Standardweg, #1657 den Rückfallweg, #1831 die Cloud-Sitzung, #1832 die eigene Container-Sandbox; #1833 misst über alle Varianten plus einen Lauf unter nativem Windows.
+
+### Neu entscheiden, wenn
+
+#1434 und #1657 vorliegen (dann die endgültige Wahl als weitere Fortschreibung); #1831, #1832 oder #1833 ein Ergebnis bringen; der Cloud-GitHub-Proxy GraphQL zulässt; Claude Code natives Windows sandboxt; `sbx` sein Credential-Modell ändert.
