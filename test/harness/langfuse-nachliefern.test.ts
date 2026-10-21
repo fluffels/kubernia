@@ -45,6 +45,7 @@ const N = rawNach as unknown as {
   GESENDET_ABLAUF_MS: number;
   GESAMTFRIST_MS: number;
   parseArgs: (a: string[]) => Args;
+  fehlerText: (e: unknown) => string;
   nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
 };
 const O = rawOtlp as unknown as {
@@ -1079,6 +1080,36 @@ describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
     ["sendeScore", (z) => API2.sendeScore({}, z)],
   ];
 
+  test("fehlerText: Ursache (Code oder Meldung) in Klammern, ohne Ursache und bei Nicht-Error unverändert", () => {
+    expect(N.fehlerText(new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }) }))).toBe("fetch failed (ECONNREFUSED)");
+    expect(N.fehlerText(new TypeError("fetch failed", { cause: new Error("socket hang up") }))).toBe("fetch failed (socket hang up)");
+    expect(N.fehlerText(new TypeError("fetch failed"))).toBe("fetch failed");
+    expect(N.fehlerText(new Error("x", { cause: "kein Objekt" }))).toBe("x");
+    expect(N.fehlerText("roh geworfen")).toBe("roh geworfen");
+    expect(N.fehlerText(undefined)).toBe("undefined");
+  });
+  test("Fehlerzeile im Protokoll trägt die Ursache des Fetch-Fehlers", async () => {
+    const a = aufbau([msg("a", 1)]);
+    const fetchImpl: Fetch = () => Promise.reject(new TypeError("fetch failed", { cause: Object.assign(new Error("x"), { code: "ECONNRESET" }) }));
+    const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
+    expect(r.protokoll.fehler.length).toBeGreaterThan(0);
+    for (const f of r.protokoll.fehler) expect(f.meldung).toContain("fetch failed (ECONNRESET)");
+  });
+  test.each([
+    ["OTLP-Send", "/otel/v1/traces", "fetch failed (ECONNRESET)"],
+    ["Score-Send", "/api/public/scores", "Score: fetch failed (ECONNRESET)"],
+  ])("Fehlerzeile bei scheiterndem %s trägt die Ursache (nur diese Anfrage wirft)", async (_n, pfad, erwartet) => {
+    const a = aufbau([msg("a", 1)]);
+    const m = mock({ ist: 0 });
+    const fetchImpl: Fetch = (url, init) =>
+      url.includes(pfad) ? Promise.reject(new TypeError("fetch failed", { cause: Object.assign(new Error("x"), { code: "ECONNRESET" }) })) : m.fetchImpl(url, init);
+    const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
+    expect(r.protokoll.fehler.map((f: { meldung: string }) => f.meldung)).toEqual([erwartet]);
+  });
+  test("fehlerText: cause null oder Nicht-Error mit cause werfen nicht und bleiben bei der Meldung", () => {
+    expect(N.fehlerText(new Error("x", { cause: null }))).toBe("x");
+    expect(N.fehlerText({ cause: { code: "X" } })).toBe("[object Object]");
+  });
   test("Standardfrist: 30 s", () => {
     expect(API2.ANFRAGE_FRIST_MS).toBe(30_000);
   });

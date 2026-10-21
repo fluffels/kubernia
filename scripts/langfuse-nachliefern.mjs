@@ -57,6 +57,13 @@ export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--ses
 export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, im Hook zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe haben den Secret-Key nicht). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (docs/model-routing.md › Langfuse-Erfassung belegen).";
 const AUSLOESER = ["sessionstart", "sessionend"];
 
+/** Fehlertext fürs Protokoll: Node meldet bei Netzfehlern nur „fetch failed“, die Ursache steckt in `cause` (Code oder Meldung). */
+export function fehlerText(e) {
+  const meldung = e instanceof Error ? e.message : String(e);
+  const ursache = e instanceof Error && e.cause ? (e.cause.code ?? e.cause.message) : null;
+  return ursache ? `${meldung} (${ursache})` : meldung;
+}
+
 /** Unbekanntes Flag oder fehlender Wert: `fehler` gesetzt (der Aufrufer meldet Exit 2). */
 export function parseArgs(argv) {
   const a = { session: null, seit: null, aktuell: null, beendet: null, ausloeser: null, trocken: false, json: false, fehler: null };
@@ -122,7 +129,7 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
     try {
       await sendeOtlp(chunk.payload, { ...zugang, fetchImpl });
     } catch (e) {
-      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: e.message });
+      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
       return false;
     }
     eintrag.gesendet.push(...chunk.generationIds);
@@ -216,7 +223,7 @@ async function verarbeite(s, c) {
   try {
     for (const score of scoresFuer({ s, soll, observations, rest, ledgerGesendet: alt?.gesendet ?? [], env })) await sendeScore(score, { ...zugang, fetchImpl });
   } catch (e) {
-    protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: `Score: ${e.message}` });
+    protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: `Score: ${fehlerText(e)}` });
   }
   return rec;
 }
@@ -270,7 +277,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
     try {
       await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll });
     } catch (e) {
-      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: e.message });
+      protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
     }
   }
   protokoll.dubletten = protokoll.sessions.reduce((n, r) => n + r.dubletten, 0);

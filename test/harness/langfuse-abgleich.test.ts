@@ -51,6 +51,8 @@ const A = { ...rawAbgleichEinstieg, ...rawKern } as unknown as {
   schluesselArt: (o: Obs[]) => string;
   diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; leer: Obs[]; art: string };
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
+  renderMarkdown: (b: Record<string, unknown>[], sum: unknown) => string;
+  OHNE_ZUGANG: string;
   bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null }) => Bewertung;
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
@@ -646,6 +648,34 @@ describe("pruefen (Ablauf)", () => {
     const neu = mitSession([msg("a")]);
     const r2 = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: neu, repoRoot: REPO, fetchImpl: m().fetchImpl });
     expect(r2.text).not.toContain("vor dem Stichtag (nie gesendet");
+  });
+
+  test("Bericht: Dubletten der Zählebene tragen den Hinweis auf leere Hook-GENERATIONs, ohne Dubletten oder im Fingerabdruck-Modus fehlt er", async () => {
+    const root = mitSession([msg("a")]);
+    const tokens = tokenZeilen("s1", { input: 10, output: 5, cacheRead: 100, w5: 10, w1: 30 });
+    const lauf = (count: number) => {
+      const dateien: Record<string, string> = { "z.json": JSON.stringify({ data: [{ sessionId: "s1", count_count: count }] }), "t.json": JSON.stringify(tokens) };
+      return A.pruefen(args({ ist: ["z.json", "t.json"] }), { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: (p: string) => dateien[p] });
+    };
+    expect((await lauf(2)).text).toContain("leere Hook-GENERATIONs");
+    expect((await lauf(2)).text).toContain("1 Session(s) mit Dubletten auf der Zählebene (s1)");
+    expect((await lauf(2)).text).toContain("providedModelName none of");
+    expect((await lauf(1)).text).not.toContain("leere Hook-GENERATIONs");
+    const b = { session: "s1", status: "Dublette", score: null, tickets: [], callsTranskript: 1, callsLangfuse: 2, tokensTranskript: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, tokensLangfuse: null, fehlend: 0, dubletten: 1, leer: 0, quote: 1, fehlendeCalls: null, schluessel: "fingerprint" };
+    const sum = A.summenzeile([b]);
+    expect(A.renderMarkdown([{ ...b, schluessel: "zählung" }], sum)).toContain("leere Hook-GENERATIONs");
+    expect(A.renderMarkdown([b], sum)).not.toContain("leere Hook-GENERATIONs");
+    // Anzahl und Liste zählen nur Sessions mit Zähl-Dubletten; die ID wird auf 8 Zeichen gekürzt.
+    const z = (session: string, dubletten: number) => ({ ...b, schluessel: "zählung", session, dubletten });
+    const zwei = A.renderMarkdown([z("abcdefgh-ijkl", 2), z("s2", 0), { ...z("s3", 1), schluessel: "fingerprint" }], sum);
+    const hinweis = zwei.split("\n").find((l) => l.includes("auf der Zählebene")) ?? "";
+    expect(hinweis).toContain("1 Session(s) mit Dubletten auf der Zählebene (abcdefgh):");
+    expect(hinweis).not.toContain("s2");
+    expect(hinweis).not.toContain("s3");
+  });
+
+  test("Ohne Zugang nennt der Hinweis den Zähl-Filter gegen leere Hook-GENERATIONs (providedModelName none of claude)", () => {
+    expect(A.OHNE_ZUGANG).toContain('Filter providedModelName none of ["claude"]');
   });
 
   test("Bericht: eine Lücke innerhalb der Nachlieferer-Frist bleibt Lücke und wird nie als „vollständig, Score ausstehend“ gezeigt", async () => {
