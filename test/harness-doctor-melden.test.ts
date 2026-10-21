@@ -133,7 +133,8 @@ describe("harness-doctor-melden: ermittleLuecken", () => {
     assert.deepEqual(l, [{ punkt: "Secret PROJECT_TOKEN", befund: "im Wochenlauf leer, der Doctor kann nicht prüfen", fix: "gh secret set PROJECT_TOKEN --repo acme/demo" }]);
   });
   test("mit Token oder außerhalb von Actions: nur die Lücken des Doctors", () => {
-    for (const env of [{ GITHUB_ACTIONS: "true", PROJECT_TOKEN: "x" }, {}]) {
+    const umgebungen: Record<string, string>[] = [{ GITHUB_ACTIONS: "true", PROJECT_TOKEN: "x" }, {}];
+    for (const env of umgebungen) {
       assert.deepEqual(melden.ermittleLuecken({ env, repo: "acme/demo", pruefe: () => ergebnis }).map((l) => l.punkt), ["Ruleset"]);
     }
   });
