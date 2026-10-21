@@ -2,7 +2,7 @@
  * Agenten acme-*) zeigt, dass kein Name mehr im Skript steht; die Negativfälle zeigen, dass ein fehlender Name laut abbricht statt still zu zählen.
  * Das Verhalten für dieses Projekt belegt das Golden (test/mess-ausgaben-golden.test.ts). Synthetische Zeilen, kein IO außer dem Temp-Ordner.
  */
-import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -107,7 +107,7 @@ describe("repoName (Namensteil von repo)", () => {
   test("owner/name ergibt den Namen", () => {
     expect(P.repoName(CFG)).toBe("acme");
   });
-  test.each([[undefined], [{}], [{ repo: "acme" }], [{ repo: "a/b/c" }], [{ repo: "" }], [{ repo: 5 }], [{ repo: "o/" }], [{ repo: ["o/acme"] }]])("kaputtes repo %j wirft mit Fix-Zeile", (c) => {
+  test.each([[undefined], [{}], [{ repo: "acme" }], [{ repo: "a/b/c" }], [{ repo: "" }], [{ repo: 5 }], [{ repo: "o/" }], [{ repo: "/acme" }], [{ repo: "o/ac me" }], [{ repo: ["o/acme"] }]])("kaputtes repo %j wirft mit Fix-Zeile", (c) => {
     expect(() => P.repoName(c)).toThrow(/repo[\s\S]*Fix:/);
   });
 });
@@ -147,6 +147,7 @@ describe("subagent-laufzeit: Agent aus der Config", () => {
   test("Negativfall: weder agent noch namen.agenten.planer wirft", () => {
     expect(() => Z.laufzeiten({ laeufe, namen: { agenten: {} } })).toThrow(/Agenten-Typ/);
     expect(() => Z.laufzeiten({ laeufe, namen: NAMEN, agent: "" })).toThrow(/Agenten-Typ/);
+    expect(() => Z.laufzeiten({ laeufe })).toThrow(/Agenten-Typ/);
   });
   test("typenUebersicht nimmt die Namen für die Ticket-Zuordnung (ohne sie wirft laufAus)", () => {
     expect(Z.typenUebersicht({ laeufe, namen: NAMEN }).gesamt.n).toBe(3);
@@ -187,7 +188,7 @@ describe("subagent-laufzeit: hauptlauf (K3: ohne agenten.planer bricht es mit Me
     expect(log.geladen).toEqual([]);
     expect(log.out).toEqual([]);
   });
-  test("ohne Config-Datei (Ladefehler) ebenso Exit 1 ohne Transkript", () => {
+  test("eine leere Config ebenso Exit 1 ohne Transkript", () => {
     const { log, d } = spiel();
     expect(Z.hauptlauf(["--von", t(0)], { ...d, config: {} })).toBe(1);
     expect(log.err.join("\n")).toMatch(/Fix:/);
@@ -252,6 +253,8 @@ describe("kontext-treiber: Namen aus der Config", () => {
   test("kontextTreiber: ohne agent gilt agenten.umsetzer; ohne beides wirft er; ohne namen wirft analysiereLauf", () => {
     expect(K.kontextTreiber({ laeufe: [], namen: NAMEN }).agent).toBe("acme-umsetzer");
     expect(() => K.kontextTreiber({ laeufe: [], namen: { agenten: {}, praefixe: {} } })).toThrow(/Agenten-Typ/);
+    expect(() => K.kontextTreiber({ laeufe: [], namen: NAMEN, agent: "" })).toThrow(/Agenten-Typ/);
+    expect(() => K.kontextTreiber({ laeufe: [] })).toThrow(/Agenten-Typ/);
     expect(() => K.analysiereLauf(lauf("acme-umsetzer", "Ticket #1: x"))).toThrow(/Ticket-Namen/);
   });
   test("Negativfall: hauptlauf ohne agenten.umsetzer endet mit Exit 1 und Meldung samt Fix, ohne Transkript", () => {
@@ -338,6 +341,9 @@ describe("Langfuse-Abgleich: Worktree-Präfix und Repo-Name aus der Config", () 
     expect(G.ticketAusBranch("ab-7", "ab-")).toBe("ab-7");
     expect(G.ticketAusBranch("feature/ab-7x", "ab-")).toBeNull();
     expect(G.ticketAusBranch(undefined, "ab-")).toBeNull();
+    // Regex-Zeichen im Präfix sind wörtlich: der Punkt trifft nur den Punkt.
+    expect(G.ticketAusBranch("feature/ab-7", "a.-")).toBeNull();
+    expect(G.ticketAusBranch("feature/a.-7", "a.-")).toBe("a.-7");
   });
   test("Negativfall: ohne Präfix wirft ticketAusBranch und sollEintraege", () => {
     expect(() => G.ticketAusBranch("feature/ab-7")).toThrow(/Worktree-Präfix/);
@@ -399,7 +405,17 @@ describe("kontingent-lib: Log-Pfad aus dem Repo-Namen", () => {
   test("Negativfall: ist der Pfad nicht bestimmbar (Config unlesbar), läuft mitKontingent weiter und schreibt nichts", () => {
     const dir = mkdtempSync(join(tmpdir(), "kq-1745-"));
     ordner.push(dir);
-    expect(() => messe({ env: {}, lade: () => { throw new Error("Config kaputt"); } })).not.toThrow();
-    expect(existsSync(join(tmpdir(), "acme-gh-kosten.jsonl"))).toBe(false);
+    // tmpdir() liest TEMP/TMP/TMPDIR zur Laufzeit: jede Ersatzdatei im Temp-Ordner würde hier sichtbar.
+    const alt = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
+    Object.assign(process.env, { TEMP: dir, TMP: dir, TMPDIR: dir });
+    try {
+      expect(() => messe({ env: {}, lade: () => { throw new Error("Config kaputt"); } })).not.toThrow();
+    } finally {
+      for (const [k, v] of Object.entries(alt)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    expect(readdirSync(dir)).toEqual([]);
   });
 });
