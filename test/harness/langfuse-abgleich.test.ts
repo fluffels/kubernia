@@ -68,7 +68,7 @@ const A = {
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string },
-    d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null },
+    d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null; config?: unknown },
   ) => Promise<{ exitCode: number; text: string }>;
   parseArgs: (a: string[]) => { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string };
 };
