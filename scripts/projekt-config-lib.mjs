@@ -98,6 +98,12 @@ export const ROLLEN_PFADE = Object.freeze({
   ticketSkill: ".agents/skills/factory-ticket/SKILL.md",
 });
 
+/**
+ * Rollen, deren Datei dem Projekt gehört (ADR 0022, Fortschreibung #1850): nie im Manifest, das Ziel legt sie unter dem Rollen-Pfad selbst an.
+ * Alle anderen Rollen aus `ROLLEN_PFADE` müssen im Quell-Manifest eine ganze, verteilte Einheit sein (Prüfung im Sync, #1871).
+ */
+export const PROJEKT_ROLLEN = Object.freeze(["ticketSkill"]);
+
 /** Verzeichnis des Ticket-Skills (`ROLLEN_PFADE.ticketSkill` ohne Dateiname), die einzige Ableitung für alle Nutzer. */
 export const TICKET_SKILL_ORDNER = posix.dirname(ROLLEN_PFADE.ticketSkill);
 
