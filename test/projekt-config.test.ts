@@ -3,7 +3,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,6 +20,7 @@ interface Pc {
   altEnvName(name: string, config: unknown): string | null;
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
   umschriftAus(config: unknown): string[];
+  strukturAus(config: unknown): { quelle: string; moduldoku: string };
   umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
 }
 const pc = rawPc as unknown as Pc;
@@ -412,7 +413,7 @@ describe("umgebungsWert: Standardwerte (eigener Prozess)", { timeout: 30_000 }, 
   test("Config nicht ladbar: kein Wurf, keine Alt-Prüfung", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));
-    for (const f of ["projekt-config-lib.mjs", "flag-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["projekt-config-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const code = `import(LIB).then(m => console.log(String(m.umgebungsWert({ ZD_Z_Y: "a" }, "FACTORY_Z_Y"))))`;
     const r = lauf(join(d, "scripts/projekt-config-lib.mjs"), code, {});
     assert.equal(r.status, 0, r.stderr);
@@ -425,7 +426,7 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));
-    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
@@ -516,5 +517,111 @@ describe("Sprache als Projektwert (#1711)", () => {
     const s = sprache();
     delete s.spezifikation;
     assert.match(mit(s).join("|"), /sprache\.spezifikation muss ein Objekt/);
+  });
+});
+
+describe("ungültige sprache: jeder Einstieg endet mit ✖-Zeile und Fix, ohne Stacktrace (#1843)", { timeout: 60_000 }, () => {
+  const EINSTIEGE: string[][] = [
+    ["projekt-config.mjs", "repo"],
+    ["check-abnahme-nachweis.mjs"],
+    ["naechstes-ticket.mjs"],
+    ["spezifikation.mjs", "pruefen"],
+    ["abnahme.mjs"],
+  ];
+  const mitSprache = (sprache: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...pc.ladeProjektConfig(), sprache }));
+    return d;
+  };
+  for (const [name, sprache] of [["leer", {}], ["ohne Wörter", { spezifikation: {} }]] as const) {
+    test(`sprache ${name}: ✖, Fix-Zeile, kein Stacktrace, Exit ungleich 0`, () => {
+      const d = mitSprache(sprache);
+      for (const args of EINSTIEGE) {
+        const r = spawnSync(process.execPath, [join(d, "scripts", args[0] ?? ""), ...args.slice(1)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+        const text = `${r.stderr}${r.stdout}`;
+        const wer = `${args.join(" ")}: ${text.slice(0, 300)}`;
+        assert.notEqual(r.status, 0, wer);
+        assert.match(text, /✖/, wer);
+        assert.match(text, /Fix:/, wer);
+        assert.match(text, /sprache/, wer);
+        assert.doesNotMatch(text, /^\s+at /m, wer);
+      }
+    });
+  }
+});
+
+describe("check:size und check:docmap lesen die Struktur aus der Config, ohne sie endet es mit ✖ statt Stacktrace (#1843)", { timeout: 60_000 }, () => {
+  const fremdrepo = (struktur: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    const rest = { ...(pc.ladeProjektConfig() as Record<string, unknown>) };
+    delete rest.struktur;
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify(struktur === undefined ? rest : { ...rest, struktur }));
+    mkdirSync(join(d, "lib"));
+    mkdirSync(join(d, "docs", "module"), { recursive: true });
+    writeFileSync(join(d, "lib", "gross.ts"), "x\n".repeat(801));
+    return d;
+  };
+  const lauf = (d: string, skript: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", skript)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  test("mit struktur.quelle=lib messen beide lib, nicht src", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
+    const groesse = lauf(d, "check-size.mjs");
+    assert.equal(groesse.status, 1, groesse.text);
+    assert.match(groesse.text, /✖ lib\/gross\.ts: 801 Zeilen/);
+    const karte = lauf(d, "check-docmap.mjs");
+    assert.equal(karte.status, 1, karte.text);
+    assert.match(karte.text, /Verwaistes Modul: „lib\/gross\.ts" ist in keinem docs\/module\/\*\.md/);
+  });
+  test("die Funktionen ohne Pfadangabe lesen struktur aus der Config (Default-Parameter)", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
+    writeFileSync(join(d, "docs", "module", "m.md"), "`lib/gross.ts` ist beschrieben.\n");
+    writeFileSync(
+      join(d, "lauf.mjs"),
+      [
+        'import { collectSizes } from "./scripts/check-size.mjs";',
+        'import { auditDocMap, collectSrcModules, parseDeepDocMaps } from "./scripts/check-docmap.mjs";',
+        "console.log(JSON.stringify({ groesse: collectSizes().map((s) => s.file), module: collectSrcModules(), audit: auditDocMap().modules, doku: [...parseDeepDocMaps()] }));",
+      ].join("\n"),
+    );
+    const r = spawnSync(process.execPath, [join(d, "lauf.mjs")], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), { groesse: ["lib/gross.ts"], module: ["lib/gross.ts"], audit: ["lib/gross.ts"], doku: ["lib/gross.ts"] });
+  });
+  test("ohne struktur: ✖, Schlüssel, Fix-Zeile, kein Stacktrace, Exit 1 (kein stiller Standardwert)", () => {
+    const d = fremdrepo(undefined);
+    for (const skript of ["check-size.mjs", "check-docmap.mjs"]) {
+      const r = lauf(d, skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*struktur/, skript);
+      assert.match(r.text, /Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
+  });
+});
+
+describe("Struktur-Pfade als Projektwert (#1843)", () => {
+  const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), struktur: s });
+
+  test("strukturAus: liefert quelle und moduldoku der echten Config", () => {
+    assert.deepEqual(pc.strukturAus(pc.ladeProjektConfig()), { quelle: "src", moduldoku: "docs/module" });
+    assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: "docs/mod" } }), { quelle: "lib", moduldoku: "docs/mod" });
+  });
+  test("strukturAus: ohne Block, Nicht-Objekt oder leeren Pfad wirft mit Schlüssel und Fix-Zeile (kein stiller Standardwert)", () => {
+    const falsch = [{}, null, undefined, { struktur: null }, { struktur: "src" }, { struktur: [] }, { struktur: {} },
+      { struktur: { quelle: "", moduldoku: "d" } }, { struktur: { quelle: "s", moduldoku: " " } }, { struktur: { quelle: "s" } }, { struktur: { moduldoku: "d" } }];
+    for (const f of falsch) assert.throws(() => pc.strukturAus(f), /struktur[\s\S]*Fix:/, JSON.stringify(f));
+  });
+  test("struktur ist beim Laden optional, ein kaputter Block wird gemeldet", () => {
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({ quelle: "lib", moduldoku: "docs/mod" }), []);
+    assert.match(mit("src").join("|"), /struktur muss ein Objekt/);
+    assert.match(mit({ quelle: "", moduldoku: "d" }).join("|"), /struktur\.quelle muss ein nicht-leerer String/);
+    assert.match(mit({ quelle: "s", moduldoku: 3 }).join("|"), /struktur\.moduldoku muss ein nicht-leerer String/);
   });
 });

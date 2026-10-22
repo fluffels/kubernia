@@ -30,10 +30,10 @@
  */
 import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
-import { join, posix, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
-import { KERN_TICKET_SKILL, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { KERN_TICKET_SKILL, TICKET_SKILL_ORDNER } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 /**
@@ -67,7 +67,7 @@ export function exitCodeFuer(ergebnis) {
 }
 
 /** Verzeichnis des Ticket-Skills als fester Kern-Pfad (#1748, `ROLLEN_PFADE.ticketSkill`): ohne Config, ohne IO (der Hook ist fail-open). */
-export const TICKET_SKILL_VERZEICHNIS = `${posix.dirname(ROLLEN_PFADE.ticketSkill)}/`;
+export const TICKET_SKILL_VERZEICHNIS = `${TICKET_SKILL_ORDNER}/`;
 
 /** Grund, warum die Projekt-Config nicht nutzbar ist (mit Fix-Zeile), sonst `null`. Wirft nie. */
 export function configGrund(deps = {}) {

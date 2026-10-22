@@ -12,8 +12,16 @@ import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 
-// Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie, bricht schon der Import ab (kein stiller Standardwert, #1611).
-const PROJEKT = ladeProjektConfig();
+// Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie oder ist sie ungültig, bricht schon der Import ab (kein stiller
+// Standardwert, #1611): mit einer ✖-Zeile samt Fix und Exit 1 statt einem Stacktrace (ein statischer Import schlägt vor jedem Einstieg zu).
+const PROJEKT = (() => {
+  try {
+    return ladeProjektConfig();
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+})();
 
 const gh = ghText;
 

@@ -25,7 +25,7 @@ type Allow = { file: string; reason: string };
 
 const LOC_BUDGET: number = checkSize.LOC_BUDGET;
 const ALLOWLIST: Allow[] = allowlists.SIZE_ALLOWLIST;
-const collectSizes: (rootDir?: string) => Sized[] = checkSize.collectSizes;
+const collectSizes: (rootDir?: string, quelle?: string) => Sized[] = checkSize.collectSizes;
 const findOversized: (sizes: Sized[], budget?: number) => Sized[] = checkSize.findOversized;
 const countLines: (text: string) => number = checkSize.countLines;
 type Deckel = { file: string; max: number; maxZeichen?: number; reason: string };
@@ -171,5 +171,32 @@ describe("collectWorkflowSizes: Randfälle (#1349)", () => {
     } finally {
       rmSync(wurzel, { recursive: true, force: true });
     }
+  });
+});
+
+describe("Quellwurzel aus der Config (#1843)", () => {
+  test("collectSizes zählt die übergebene Quellwurzel (lib), nicht src", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-size-"));
+    try {
+      mkdirSync(join(wurzel, "lib", "sub"), { recursive: true });
+      mkdirSync(join(wurzel, "src"), { recursive: true });
+      writeFileSync(join(wurzel, "lib", "a.ts"), "x\ny\nz\n");
+      writeFileSync(join(wurzel, "lib", "sub", "b.ts"), "x\n");
+      writeFileSync(join(wurzel, "src", "c.ts"), "x\n".repeat(9));
+      assert.deepEqual(collectSizes(wurzel, "lib"), [
+        { file: "lib/a.ts", loc: 3 },
+        { file: "lib/sub/b.ts", loc: 1 },
+      ]);
+      assert.deepEqual(collectSizes(wurzel, "src"), [{ file: "src/c.ts", loc: 9 }]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+
+  test("ohne Quellwurzel gilt die der Projekt-Config (struktur.quelle), nicht ein fester Name", () => {
+    assert.deepEqual(collectSizes(), collectSizes(undefined, "src"));
   });
 });

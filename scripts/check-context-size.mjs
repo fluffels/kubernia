@@ -19,8 +19,7 @@
  * Jede neue Regel bekommt Begründung + Präzedenzfall-Verweis in AGENTS.md – einzeln
  * sinnvoll, akkumuliert aber unbegrenzt in einer Datei, die pro Session mitläuft (reiner
  * Token-Kostentreiber ohne Bremse). Der Auslagerungsmechanismus existiert schon
- * (modul-lokale AGENTS.md, Vorbild src/content/AGENTS.md, #483; on-demand-Tiefendocs
- * docs/module/*.md, #394) – nur erzwang bisher nichts, ihn auch zu benutzen, BEVOR die
+ * (modul-lokale AGENTS.md; on-demand-Tiefendocs unter struktur.moduldoku der Projekt-Config) – nur erzwang bisher nichts, ihn auch zu benutzen, BEVOR die
  * Wurzel wächst.
  *
  * Gemessen werden ZEICHEN, nicht Zeilen (#1064, vorher #977/#1061): in Markdown-Fließtext
@@ -64,7 +63,7 @@ export const CONTEXT_BUDGETS = [
 ];
 
 /** Default-Zeichen-Budget je modul-lokaler AGENTS.md ohne eigenen Eintrag in
- *  CONTEXT_BUDGETS (#1088). Kalibriert wie die Wurzel: Ist von src/content/AGENTS.md
+ *  CONTEXT_BUDGETS (#1088). Kalibriert wie die Wurzel: größte modul-lokale AGENTS.md
  *  (~10.300 Zeichen) + ~15 % Kopffreiheit. Ratchet nur nach unten. */
 export const MODULE_AGENTS_BUDGET = 12_000;
 
@@ -154,8 +153,8 @@ function main() {
   if (violations.length)
     console.error(
       `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
-        `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md (Vorbild src/content/AGENTS.md, #483) ` +
-        `bzw. ein docs/module/*.md-Tiefendoc (#394) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
+        `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md ` +
+        `bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
         `CONTEXT_ALLOWLIST in scripts/check-allowlists.mjs aufnehmen.`,
     );
   process.exit(1);
