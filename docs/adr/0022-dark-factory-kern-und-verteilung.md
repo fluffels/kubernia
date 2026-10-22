@@ -505,6 +505,15 @@ Die Überschrift von #1824 zählt dort als „Teil 8“; gemeint ist F3 **Teil 9
 - **Präzisiert:** der Zuschnitt der Regeln ohne Inventar-Zeile („ihr Zuschnitt folgt mit F5“) folgt im Sammelticket #1843.
 - **Grenzen:** der Wächter zählt nur das Wort; Spielbezüge wie NPCs oder Phaser zählt er nicht, ein Projektwert-Block wird vor dem Zählen entfernt. Der Ring `kern` belegt „literal- und importfrei“, nicht „strukturfrei“.
 
+## Fortschreibung #1848 (2026-10-22): Skill-Quelle und Skill-Zeiger
+
+- **Entscheidung:** Abläufe liegen tool-neutral als Skill-Quelle unter `.agents/skills/<name>/SKILL.md`. `.claude/skills/<name>/SKILL.md` ist ein generierter Skill-Zeiger: das Frontmatter der Quelle wörtlich (auch `model`, `effort` und Projektwert-Zeilen), darunter Marke und Verweis „Lies die Quelle und folge ihr“. Vorgeführt am Skill `forum`; `review-lenses` folgt in #1849, der Ticket-Ablauf in #1850.
+- **Generator statt Symlink:** `npm run skills:sync` (`scripts/skills-sync.mjs`, Ring `kern`, läuft in `setup`) erzeugt die Zeiger. Claude Code hat keinen konfigurierbaren Skill-Pfad (anthropics/claude-code#33957, #22902, #25367), und Windows-Clones ohne `core.symlinks` machten aus einem Symlink eine Textdatei.
+- **Wächter als Test:** `test/harness/skills-sync.test.ts` prüft über die pure Funktion `pruefeSkills` den echten Stand (Zeiger gleich Quelle, Quelle ohne Zeiger, Zeiger ohne Quelle, nicht gelisteter Volltext-Skill, Quelle ohne `name` oder `description`). Es gibt kein neues Glied in `verify`. Der Umlaut-Wächter (`umlaut-regel.test.ts`) und die anderen Wächter, die Skill-Texte scannen, nehmen die Quelle unter `.agents/skills/` mit.
+- **Übergangsliste:** `UEBERGANG` in `scripts/skills-sync.mjs` nennt die noch nicht umgezogenen Volltext-Skills samt Ticket des Umzugs; sie schrumpft nur und ist rot, wenn ein Eintrag schon eine Quelle hat oder kein Ticket nennt.
+- **Besitz:** `scripts/skills-sync.mjs` ist Kern. Die Quelle von `forum` ist Projektbesitz; die Besitz-Pfade der Kern-Skills ziehen mit #1849 und #1850 um.
+- **Grenzen:** geprüft wird die Gleichheit von Zeiger und Quelle, nicht dass ein Werkzeug dem Zeiger tatsächlich folgt (das belegt ein Probe-Lauf). Der Sync überschreibt nie einen Ordner ohne Marke, er meldet ihn nur.
+
 ## Fortschreibung #1829 (2026-10-22): Betrieb ohne Harness im Projekt-Repo (Arbeitsplatz)
 
 Kurzfassung: Für Projekte, in deren Repo vom Harness nichts liegen darf, läuft die Factory in einem **Arbeitsplatz**: ein Ordner über dem Projekt-Klon, der `AGENTS.md`, `.claude/`, `scripts/` und `.factory/` trägt. Claude Code startet dort, der Klon liegt als Unterordner darin. Claude Code lädt diese Dateien von selbst, im Repo des Projekts ändert sich nichts (Probe unten). Die Git-Hooks sollen über die globale Git-Config zu den Repos kommen, nicht über Dateien im Repo; die Config-Doku deckt das, ein praktischer Lauf folgt in #1853. kubernia bleibt **eingebettet**, wie in ADR 0022 beschlossen. Nachteil: die Durchsetzung ist nur lokal, es gibt keinen Server-Check im Projekt.

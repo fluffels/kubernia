@@ -84,6 +84,7 @@
     {"pfad":"scripts/check-festgefahren.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1744)"},
     {"pfad":"scripts/check-basis.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/check-size.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610); Ring kern ab #1709"},
+    {"pfad":"scripts/skills-sync.mjs","ring":"kern","quelle":"ADR 0022 Fortschreibung #1848"},
     {"pfad":"scripts/check-diffsize.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/check-diffcoverage.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/check-context-size.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610); Ring kern ab #1709"},

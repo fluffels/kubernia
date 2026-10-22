@@ -47,7 +47,7 @@ export function istSelbstbeschreibung(pfad: string): boolean {
     /^package\.json$/,
     /^docs\/(agent-harness|harness-)[^/]*\.md$/,
     /^\.claude\/agents\/[^/]+\.md$/,
-    /^\.claude\/skills\/[^/]+\/SKILL\.md$/,
+    /^\.(claude|agents)\/skills\/[^/]+\/SKILL\.md$/,
     /(^|\/)\.claude-plugin\/[^/]+\.json$/,
   ].some((re) => re.test(pfad));
 }
@@ -108,6 +108,7 @@ describe("istSelbstbeschreibung", () => {
     "docs/harness-glossar.md",
     ".claude/agents/x.md",
     ".claude/skills/y/SKILL.md",
+    ".agents/skills/y/SKILL.md",
     ".claude-plugin/plugin.json",
   ])("im Scope: %s", (pfad) => {
     assert.equal(istSelbstbeschreibung(pfad), true);
@@ -127,6 +128,7 @@ describe("istSelbstbeschreibung", () => {
     "README.md.orig",
     ".claude/agents/sub/x.md",
     ".claude/skills/y/z/SKILL.md",
+    ".agents/skills/y/z/SKILL.md",
     ".claude/skills/y/other.md",
     "package.json.bak",
     ".factory/produkt",
@@ -141,6 +143,10 @@ describe("Selbstbeschreibung des Harness", () => {
   test("der Scope enthält die Entwürfe unter .factory/produkt/", () => {
     assert.ok(scope.includes(".factory/produkt/README.md"), "README-Entwurf fehlt im Scope (nicht versioniert?)");
     assert.ok(scope.includes(".factory/produkt/LICENSE"), "LICENSE-Entwurf fehlt im Scope (nicht versioniert?)");
+  });
+
+  test("der Scope enthält die Skill-Quelle forum unter .agents/skills/ (#1848)", () => {
+    assert.ok(scope.includes(".agents/skills/forum/SKILL.md"), "Skill-Quelle fehlt im Scope (nicht versioniert?)");
   });
 
   test("keine Fläche nennt den Harness Open Source", () => {

@@ -1,5 +1,5 @@
 /* Verweis-Wächter (#1079) – Freitext-Verweise „AGENTS.md § …" in den versionierten
- * `.claude/`-Dateien müssen in AGENTS.md wirklich existieren (CLAUDE.md ist seit #1087 gelöscht).
+ * `.claude/`- und `.agents/`-Dateien (Skill-Quellen, #1848) müssen in AGENTS.md wirklich existieren (CLAUDE.md ist seit #1087 gelöscht).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
@@ -127,7 +127,7 @@ const DOCS: Record<Ziel, string> = {
   "CLAUDE.md": existsSync(ROOT + "CLAUDE.md") ? read("CLAUDE.md") : "",
 };
 const CLAUDE_DATEIEN = listTrackedFiles(ROOT).filter(
-  (f) => f.startsWith(".claude/") && /\.(md|js|mjs|cjs|ts)$/.test(f),
+  (f) => (f.startsWith(".claude/") || f.startsWith(".agents/")) && /\.(md|js|mjs|cjs|ts)$/.test(f),
 );
 const ECHTE_VERWEISE = CLAUDE_DATEIEN.flatMap((datei) =>
   extrahiereVerweise(read(datei)).map((v) => ({ ...v, datei })),
@@ -156,6 +156,8 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     }
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/agents/")));
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/skills/")));
+    // Die Skill-Quellen unter .agents/skills/ (#1848) liegen im Scan: forum steht dort als Datei, auch ohne Verweis.
+    assert.ok(CLAUDE_DATEIEN.includes(".agents/skills/forum/SKILL.md"), "Quelle forum fehlt im Scan");
     // Bewusst KEINE Pflicht auf ein CLAUDE.md-Ziel: diese Verweise sollen mit #1086/#1087 aussterben.
   });
 

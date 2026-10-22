@@ -372,7 +372,7 @@ const skillVerstoesse = (md: string): string[] => {
 };
 
 describe("Skill forum orchestriert die Quarantäne", () => {
-  const echt = read(".claude/skills/forum/SKILL.md");
+  const echt = read(".agents/skills/forum/SKILL.md");
   test("der echte Skill erfüllt die Quarantäne", () => {
     expect(skillVerstoesse(echt)).toEqual([]);
   });

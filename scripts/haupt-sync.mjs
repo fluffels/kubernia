@@ -79,7 +79,7 @@ export const KERN_SKILL_VERZEICHNIS = `.claude/skills/${KERN_TICKET_SKILL}/`;
 
 /**
  * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: die Ticket-Skills (der feste Kern-Pfad `factory-ticket/` und der Kern-Skill `factory` samt Ablauf) und die Wurzel-AGENTS.md (der Hauptchat
- * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien und
+ * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien, Skill-Quellen unter `.agents/` (#1848) und
  * modul-lokale AGENTS.md; `lockGeaendert`: package-lock.json. Pur, wirft nie.
  */
 export function ordneHarnessAenderungen(dateien) {
@@ -88,7 +88,7 @@ export function ordneHarnessAenderungen(dateien) {
     if (d === "package-lock.json") ordnung.lockGeaendert = true;
     else if (d === "AGENTS.md" || d.startsWith(KERN_SKILL_VERZEICHNIS) || d.startsWith(TICKET_SKILL_VERZEICHNIS)) ordnung.skill.push(d);
     else if (d.startsWith(".claude/agents/")) ordnung.agenten.push(d);
-    else if (d.startsWith(".claude/") || /(^|\/)AGENTS\.md$/.test(d)) ordnung.sonstige.push(d);
+    else if (d.startsWith(".claude/") || d.startsWith(".agents/") || /(^|\/)AGENTS\.md$/.test(d)) ordnung.sonstige.push(d);
   }
   return ordnung;
 }
@@ -200,7 +200,7 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
         zeilen.push(`Skill neu lesen: ${h.skill.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. ${skillDatei ? `\`${skillDatei}\`` : "Den Ticket-Skill"} jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
       }
       if (h.agenten.length) zeilen.push("Agent-Definitionen geändert: gelten erst nach Session-Neustart; beim Umsetzer-Spawn den Umsetzer-Zusatz setzen (Skill § Vor dem Spawn).");
-      if (h.sonstige.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) gelten erst nach einem Session-Neustart.");
+      if (h.sonstige.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) und .agents-Dateien (Skill-Quellen) gelten erst nach einem Session-Neustart.");
     }
   }
   // Im Klartext-Modus (--text, Skill-Schritt 0) steht die Node-Version schon im SessionStart-Kontext, node_modules nur nach einer Lock-Änderung dieses Syncs.

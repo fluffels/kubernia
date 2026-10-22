@@ -3,7 +3,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Scan-Umfang (geschlossene Liste): getrackte `docs/**\/*.md` ohne `docs/adr/`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `src/**\/AGENTS.md`,
- * `.claude/agents/*.md`, `.claude/skills/*\/*.md`.
+ * `.claude/agents/*.md`, `.claude/skills/*\/*.md`, `.agents/skills/*\/*.md` (Skill-Quellen, #1848).
  * Bekannte Muster: genau die Wörter der Liste `sprache.umschrift` (ASCII-Umschrift eines Umlauts, etwa „fuer“ für „für“), ohne Beachtung der Schreibweise,
  * als ganzes Wort. Ausgeblendet: Code-Fences, Inline-Code, Link-Ziele, HTML-Tags und jedes Wort, das direkt an `-`, `/` oder `_` hängt oder vor einem
  * Punkt mit Buchstabe/Ziffer steht (`fuer.md`) bzw. hinter einem Punkt (`a.fuer`): Dateinamen, Bezeichner, Pfade bleiben ASCII. Ein Punkt am Satzende
@@ -28,7 +28,8 @@ const IM_SCOPE = (f: string): boolean =>
   /^(?:AGENTS|README|CONTRIBUTING)\.md$/.test(f) ||
   /^src\/(?:.+\/)?AGENTS\.md$/.test(f) ||
   /^\.claude\/agents\/[^/]+\.md$/.test(f) ||
-  /^\.claude\/skills\/[^/]+\/[^/]+\.md$/.test(f);
+  /^\.claude\/skills\/[^/]+\/[^/]+\.md$/.test(f) ||
+  /^\.agents\/skills\/[^/]+\/[^/]+\.md$/.test(f);
 
 interface Fund {
   zeile: number;
@@ -92,10 +93,10 @@ describe("findeUmschrift: Muster und Negativfälle", () => {
 
 describe("Scan-Umfang", () => {
   test("geschlossene Liste: Docs ohne ADRs, Wurzeldateien, Modul-AGENTS, Agenten und Skills", () => {
-    for (const f of ["docs/referenz/befehle.md", "docs/agent-harness.md", "AGENTS.md", "README.md", "CONTRIBUTING.md", "src/AGENTS.md", "src/content/AGENTS.md", ".claude/agents/factory-lens.md", ".claude/skills/review-lenses/SKILL.md"]) {
+    for (const f of ["docs/referenz/befehle.md", "docs/agent-harness.md", "AGENTS.md", "README.md", "CONTRIBUTING.md", "src/AGENTS.md", "src/content/AGENTS.md", ".claude/agents/factory-lens.md", ".claude/skills/review-lenses/SKILL.md", ".agents/skills/forum/SKILL.md"]) {
       assert.equal(IM_SCOPE(f), true, f);
     }
-    for (const f of ["docs/adr/0022-x.md", "docs/x.json", "src/ui/x.ts", "src/content/data/quests/knut.json", "CHANGELOG.md", ".claude/worktrees/kq-1/AGENTS.md", ".claude/agents/x/y.md", ".claude/skills/x/y/z.md"]) {
+    for (const f of ["docs/adr/0022-x.md", "docs/x.json", "src/ui/x.ts", "src/content/data/quests/knut.json", "CHANGELOG.md", ".claude/worktrees/kq-1/AGENTS.md", ".claude/agents/x/y.md", ".claude/skills/x/y/z.md", ".agents/skills/x/y/z.md", ".agents/skills/x.md", ".claude/skills/x.md", ".claude/worktrees/kq-1/.agents/skills/a/b.md"]) {
       assert.equal(IM_SCOPE(f), false, f);
     }
   });
@@ -106,6 +107,7 @@ describe("Umlaut-Wächter über die echte Fläche", () => {
     const woerter = umschriftAus(echteConfig());
     const dateien = listTrackedFiles(WURZEL).filter(IM_SCOPE);
     assert.ok(dateien.length > 50, "Dateiliste unerwartet klein: git ls-files fehlgeschlagen?");
+    assert.ok(dateien.includes(".agents/skills/forum/SKILL.md"), "Leerlauf-Schutz: die Skill-Quelle von forum liegt im Scan");
     const meldungen = dateien.flatMap((f) => findeUmschrift(readFileSync(WURZEL + f, "utf8"), woerter).map((x) => `${f}:${x.zeile}: ${x.wort}`));
     assert.deepEqual(meldungen, [], `ASCII-Umschrift statt Umlaut (Regel: Deutsch mit echten Umlauten):\n${meldungen.join("\n")}\nFix: den Umlaut setzen; ein Bezeichner oder Pfad gehört in Backticks.`);
   });
