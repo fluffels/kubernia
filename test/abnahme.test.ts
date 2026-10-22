@@ -7,6 +7,8 @@ import * as raw from "../scripts/abnahme.mjs";
 import * as so from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNl from "../scripts/nachweis-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
 
 type User = { login: string; type?: string } | null;
 type Issue = { state?: string; body?: string | null; user?: User; labels?: ({ name: string } | string)[]; pull_request?: object };
@@ -54,7 +56,7 @@ function umgebung(bericht: string, extra: Partial<Io> = {}, kommentare: Kommenta
   const aufrufe: string[] = [];
   const io: Io = {
     owner: "fluffels",
-    config: { labels: { forum: "forum" } },
+    config: { labels: { forum: "forum" }, sprache: ladeProjektConfig().sprache },
     zeilen: Z,
     leseDatei: (p) => {
       if (p !== "b.md") throw new Error("ENOENT");

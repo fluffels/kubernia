@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
@@ -72,10 +72,10 @@ function leseBody(werte, io) {
   return { body: String(body) };
 }
 
-function pruefen(werte, io) {
+function pruefen(werte, io, sprache) {
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
-  const maengel = spezifikationsMaengel(b.body);
+  const maengel = spezifikationsMaengel(b.body, sprache);
   return maengel.length === 0 ? ergebnis(0, "Spezifikation vollständig\n") : ergebnis(1, "", `✖ Spezifikation unvollständig:\n${liste(maengel)}\n`);
 }
 
@@ -83,7 +83,7 @@ function nachholBefehl(werte, nach, nr) {
   return nach ? `node scripts/board-place.mjs --after ${nach} ${nr}` : `node scripts/board-place.mjs --notfall ${werte.notfall} --top ${nr}`;
 }
 
-function anlegen(werte, io) {
+function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   if (!werte.label.some((l) => /^area:\S+/.test(l))) return aufrufFehler("ein Label `area:<x>` ist Pflicht (--label area:<x>)");
   if (Boolean(werte.nach) === Boolean(werte.notfall)) return aufrufFehler("genau eines von --nach <nr> und --notfall <art> ist Pflicht");
@@ -92,7 +92,7 @@ function anlegen(werte, io) {
   if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return aufrufFehler(`--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})`);
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
-  const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body: b.body }); // neu angelegt: nie Bestand, nie ausgenommen
+  const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body: b.body }, { sprache }); // neu angelegt: nie Bestand, nie ausgenommen
   if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
   if (nach !== null) {
     // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
@@ -118,7 +118,7 @@ function anlegen(werte, io) {
   return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`);
 }
 
-function reparieren(werte, nrText, io) {
+function reparieren(werte, nrText, io, sprache) {
   const nr = positiveZahl(nrText);
   if (nr === null) return aufrufFehler("reparieren braucht eine Ticketnummer");
   const b = leseBody(werte, io);
@@ -133,8 +133,8 @@ function reparieren(werte, nrText, io) {
   if (issue.state !== "open") return aufrufFehler(`#${nr} ist nicht offen`);
   if (istFremdeingang(issue, io.owner, { config: io.config }).fremdeingang) return ergebnis(3, "", `✖ #${nr} ist ein Fremdeingang (Autor nicht vertraut oder Label ${labelAus(io.config, "forum")}): wird nie umgeschrieben, als Befund melden\n`);
   if ((issue.assignees ?? []).length > 0) return aufrufFehler(`#${nr} hat einen Assignee (wird schon bearbeitet), nicht umschreiben`);
-  if (spezifikationsMaengel(issue.body).length === 0) return ergebnis(0, `#${nr}: Spezifikation schon vollständig, nichts zu tun\n`);
-  const maengel = spezifikationsMaengel(b.body);
+  if (spezifikationsMaengel(issue.body, sprache).length === 0) return ergebnis(0, `#${nr}: Spezifikation schon vollständig, nichts zu tun\n`);
+  const maengel = spezifikationsMaengel(b.body, sprache);
   if (maengel.length > 0) return ergebnis(1, "", `✖ neuer Body unvollständig, nichts geschrieben:\n${liste(maengel)}\n`);
   const verloren = verloreneZeilen(issue.body, b.body);
   if (verloren.length > 0) {
@@ -153,9 +153,15 @@ function reparieren(werte, nrText, io) {
 export function fuehreAus(argv, io) {
   const p = aufrufPruefen(argv);
   if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
-  if (p.befehl === "pruefen") return pruefen(p.werte, io);
-  if (p.befehl === "anlegen") return anlegen(p.werte, io);
-  return reparieren(p.werte, p.positional[0], io);
+  let sprache;
+  try {
+    sprache = spracheAus(io.config).spezifikation; // fehlt sie, bricht das Werkzeug ab: kein stiller Deutsch-Standardwert
+  } catch (e) {
+    return ergebnis(1, "", `✖ spezifikation: ${e instanceof Error ? e.message : String(e)}\n`);
+  }
+  if (p.befehl === "pruefen") return pruefen(p.werte, io, sprache);
+  if (p.befehl === "anlegen") return anlegen(p.werte, io, sprache);
+  return reparieren(p.werte, p.positional[0], io, sprache);
 }
 
 /**

@@ -24,7 +24,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
@@ -190,10 +190,10 @@ function ladeTicket(nr, io) {
 
 const einrueckung = (text) => text.split("\n").map((z, i) => (i === 0 ? z : `    ${z}`)).join("\n");
 
-function zeigeKriterien(nr, io) {
+function zeigeKriterien(nr, io, sprache) {
   const t = ladeTicket(nr, io);
   if (t.ergebnis) return t.ergebnis;
-  const liste = kriterien(t.issue.body);
+  const liste = kriterien(t.issue.body, sprache);
   if (liste.length === 0) {
     const zeile = formatAbnahme(io.zeilen, { art: "entfaellt", grund: "Ticket ohne Akzeptanzkriterien" });
     return ergebnis(0, `Keine Akzeptanzkriterien im Ticket; die Abnahme entfällt. Zeile für den Nachweis-Commit:\n${zeile}\n`);
@@ -227,7 +227,7 @@ function ausgabe(entscheidung, urteile, io, head, durchgang) {
   return `ENTSCHEIDUNG: handoff\n${zeilen.join("\n")}\n`;
 }
 
-function auswerten(werte, nrText, io) {
+function auswerten(werte, nrText, io, sprache) {
   const nr = positiveZahl(nrText);
   const pr = positiveZahl(werte.pr);
   if (nr === null || pr === null || !werte.bericht || !werte.worktree || !HEX_HEAD.test((werte.head ?? "").toLowerCase())) {
@@ -235,7 +235,7 @@ function auswerten(werte, nrText, io) {
   }
   const t = ladeTicket(nr, io);
   if (t.ergebnis) return t.ergebnis;
-  const liste = kriterien(t.issue.body);
+  const liste = kriterien(t.issue.body, sprache);
   if (liste.length === 0) return aufrufFehler(`#${nr} hat keine Akzeptanzkriterien: die Abnahme entfällt (Zeile: node scripts/abnahme.mjs kriterien ${nr})`);
   let text;
   try {
@@ -275,9 +275,15 @@ function auswerten(werte, nrText, io) {
 export function fuehreAus(argv, io) {
   const p = aufrufPruefen(argv);
   if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
-  if (p.befehl === "auswerten") return auswerten(p.werte, p.positional[0], io);
+  let sprache;
+  try {
+    sprache = spracheAus(io.config).spezifikation; // fehlt sie, bricht das Werkzeug ab: kein stiller Deutsch-Standardwert
+  } catch (e) {
+    return ergebnis(1, "", `✖ abnahme: ${e instanceof Error ? e.message : String(e)}\n`);
+  }
+  if (p.befehl === "auswerten") return auswerten(p.werte, p.positional[0], io, sprache);
   const nr = positiveZahl(p.positional[0]);
-  return nr === null ? aufrufFehler(`kriterien braucht eine Ticketnummer\n${AUFRUF}`) : zeigeKriterien(nr, io);
+  return nr === null ? aufrufFehler(`kriterien braucht eine Ticketnummer\n${AUFRUF}`) : zeigeKriterien(nr, io, sprache);
 }
 
 const echteIo = () => ({ // Fabrik: erst nach bestandener Aufruf-Prüfung aufgerufen (`direktaufruf`)
