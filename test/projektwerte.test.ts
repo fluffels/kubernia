@@ -129,7 +129,7 @@ describe("projektwertDateien", () => {
   test("geschlossene Liste: Manifest-Markdown plus Agenten und Skills, sortiert, ohne Doppelte und Unsicheres", () => {
     const r = lib.projektwertDateien(
       ["docs/x.md", "scripts/a.mjs", "../out.md", ".claude/agents/a.md"],
-      [".claude/agents/a.md", ".claude/agents/b.md", ".claude/agents/c.txt", ".claude/skills/s/SKILL.md", ".claude/skills/s/t/u.md", ".agents/skills/s/SKILL.md", ".agents/skills/s/t/u.md", ".agents/skills/s/run.mjs", "x/.agents/skills/s/SKILL.md", ".agents/x.md", "README.md"],
+      [".claude/agents/a.md", ".claude/agents/b.md", ".claude/agents/c.txt", ".claude/skills/s/SKILL.md", ".claude/skills/s/t/u.md", ".agents/skills/s/SKILL.md", ".agents/skills/s/t/u.md", ".agents/skills/s/notes.mdx", "x/.agents/skills/s/SKILL.md", ".agents/x.md", "README.md"],
     );
     assert.deepEqual(r, [".agents/skills/s/SKILL.md", ".claude/agents/a.md", ".claude/agents/b.md", ".claude/skills/s/SKILL.md", "docs/x.md"]);
   });
