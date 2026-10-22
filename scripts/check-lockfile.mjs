@@ -6,7 +6,7 @@
  * Lockfile-Integritäts-Wächter (#593, Governance) — fängt Lockfile-Drift lokal,
  * bevor er gepusht wird.
  *
- * Hintergrund (iSAQB 2026-07-02): `package.json` nutzt durchgehend `^`-Ranges; die
+ * Hintergrund: `package.json` nutzt durchgehend `^`-Ranges; die
  * CI ist über `npm ci` + `.nvmrc` reproduzierbar (ci.yml), aber KEIN Gate prüft
  * außerhalb der CI, ob `package-lock.json` noch zu `package.json` passt. Wer eine
  * Abhängigkeit von Hand in `package.json` ändert (Version bumpen, hinzufügen,

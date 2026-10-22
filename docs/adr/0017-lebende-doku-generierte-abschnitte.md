@@ -5,6 +5,8 @@
 
 > ⚠️ **Präzisiert durch [ADR 0020](0020-architekturmodell-likec4.md) (2026-10-08, #1420):** das LikeC4-Architekturmodell ist eine zweite Ableitung derselben SSOTs und wird von `check:c4` abgeglichen, nicht aus Mermaid-Export generiert.
 
+> ⚠️ **Präzisiert durch [ADR 0022, Fortschreibung #1710](0022-dark-factory-kern-und-verteilung.md#fortschreibung-1710-2026-10-22-kern-registry-ohne-spiel-generator-f6) (2026-10-22):** Die Registry enthält keinen Spiel-Generator, Projekt-Generatoren kommen über `generatoren` der Config; Registry-Tausch (Entscheidung, Z.53) und Gruppierung Kern/Harness-Stack/Spiel (Z.69) gelten so nicht mehr.
+
 ## Status
 
 **Akzeptiert.** Die Mechanik steht in [`scripts/docs-gen.mjs`](../../scripts/docs-gen.mjs), die Pfade und Beschreibungen in [`scripts/docs-gen/config.json`](../../scripts/docs-gen/config.json), der Wächter in [docs/agent-harness.md](../agent-harness.md#lebende-doku-wächter-npm-run-checkdocgen-1355).

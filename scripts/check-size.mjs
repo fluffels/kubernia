@@ -8,8 +8,8 @@
  *
  * Hintergrund: große Module sind bei wachsendem Umfang teuer – Agenten lesen pro
  * Änderung viel mehr Kontext (Tokens), und je größer eine Datei, desto leichter
- * schleichen sich Regressionen ein. Dieser Wächter meldet jedes `src`-Modul über
- * einem Zeilen-Budget, BEVOR es zum nächsten WorldScene.ts (1344) wächst.
+ * schleichen sich Regressionen ein. Dieser Wächter meldet jedes Quellmodul (Wurzel `struktur.quelle`
+ * der Projekt-Config) über einem Zeilen-Budget, BEVOR es zum nächsten God-File wächst.
  *
  * Bewusst ein reines Node-Skript (nur Builtins), analog zu setup.mjs: läuft
  * plattformübergreifend über `npm run check:size` und im CI. Die Mess- und
@@ -21,12 +21,12 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
 import { SIZE_ALLOWLIST as ALLOWLIST } from './check-allowlists.mjs'
+import { ladeProjektConfig, strukturAus } from './projekt-config-lib.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Zeilen-Budget pro Modul. Über diesem Wert gilt eine Datei als God-File-Verdacht.
- *  800 gewählt, weil game.ts (793) heute knapp darunter liegt und ohnehin (#392)
- *  aufgeteilt wird – die Schwelle fängt also echte Ausreißer, nicht den Normalfall. */
+ *  Die Schwelle fängt echte Ausreißer, nicht den Normalfall. */
 export const LOC_BUDGET = 800
 
 /**
@@ -49,10 +49,11 @@ export function countLines(text) {
   return lines.length
 }
 
-/** Sammelt alle `src/**\/*.ts` (repo-relativer POSIX-Pfad) mit ihrer Zeilenzahl,
+/** Sammelt alle `<quelle>/**\/*.ts` (repo-relativer POSIX-Pfad) mit ihrer Zeilenzahl,
  *  größte zuerst. `rootDir` ist überschreibbar, damit der Test deterministisch
- *  dasselbe Repo misst – unabhängig vom aktuellen Arbeitsverzeichnis. */
-export function collectSizes(rootDir = ROOT) {
+ *  dasselbe Repo misst – unabhängig vom aktuellen Arbeitsverzeichnis. `quelle` ist die Quellwurzel;
+ *  ohne Angabe gilt `struktur.quelle` der Projekt-Config (wirft ohne diesen Schlüssel, kein stiller Standardwert). */
+export function collectSizes(rootDir = ROOT, quelle = strukturAus(ladeProjektConfig()).quelle) {
   const out = []
   const walk = (dir) => {
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
@@ -62,7 +63,7 @@ export function collectSizes(rootDir = ROOT) {
         out.push({ file: relative(rootDir, abs).split(sep).join('/'), loc: countLines(readFileSync(abs, 'utf8')) })
     }
   }
-  walk(join(rootDir, 'src'))
+  walk(join(rootDir, quelle))
   return out.sort((a, b) => b.loc - a.loc)
 }
 
@@ -132,7 +133,14 @@ function main() {
   const green = (s) => paint('32', s)
   const dim = (s) => paint('2', s)
 
-  const sizes = collectSizes()
+  let quelle
+  try {
+    quelle = strukturAus(ladeProjektConfig()).quelle
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`)
+    process.exit(1)
+  }
+  const sizes = collectSizes(ROOT, quelle)
   const allow = new Map(ALLOWLIST.map((a) => [a.file, a.reason]))
   const oversized = findOversized(sizes, LOC_BUDGET)
   const oversizedFiles = new Set(oversized.map((s) => s.file))

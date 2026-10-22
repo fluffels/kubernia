@@ -75,6 +75,7 @@ export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] =
 /** Marker eines Schnappschuss-Blocks: datierter Text, der die damaligen Namen bewusst trägt (Glossar „Schnappschuss-Block“). */
 export const SCHNAPPSCHUSS_START = "<!-- schnappschuss:start -->";
 export const SCHNAPPSCHUSS_ENDE = "<!-- schnappschuss:ende -->";
+const ISO_DATUM = /\d{4}-\d{2}-\d{2}/;
 
 /** Findet Reste in den übergebenen Dateien; leer = sauber. */
 export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[] {
@@ -83,18 +84,26 @@ export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[
     if (AUSNAHMEN.some((a) => d.pfad.startsWith(a.praefix))) continue;
     const regeln = RESTE.filter((r) => !REGEL_AUSNAHMEN.some((a) => a.pfad === d.pfad && a.regel === r.name));
     let blockStart = 0; // Zeilennummer des offenen Schnappschuss-Blocks, 0 = außerhalb
+    let blockDatiert = false; // trägt der offene Block zwischen Start und Ende ein ISO-Datum
     d.inhalt.split("\n").forEach((zeile, i) => {
       const marker = zeile.trim();
       if (marker === SCHNAPPSCHUSS_START) {
         if (blockStart) treffer.push(`${d.pfad}:${i + 1}: Schnappschuss-Block verschachtelt`);
-        else blockStart = i + 1;
+        else {
+          blockStart = i + 1;
+          blockDatiert = false;
+        }
         return;
       }
       if (marker === SCHNAPPSCHUSS_ENDE) {
+        if (blockStart && !blockDatiert) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Datum`);
         blockStart = 0;
         return;
       }
-      if (blockStart) return;
+      if (blockStart) {
+        if (ISO_DATUM.test(zeile)) blockDatiert = true;
+        return;
+      }
       for (const r of regeln) if (r.muster.test(zeile)) treffer.push(`${d.pfad}:${i + 1}: ${r.name}`);
     });
     if (blockStart) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Ende`);
@@ -106,7 +115,7 @@ export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[
 export function meldungMitFix(treffer: string[]): string {
   const hinweise = RESTE.filter((r) => treffer.some((t) => t.endsWith(`: ${r.name}`))).map((r) => `- ${r.name}: ${r.fix}`);
   const bloecke = treffer.some((t) => t.includes("Schnappschuss-Block"))
-    ? ["- Schnappschuss-Block: Marker nur allein auf der Zeile, jeder Start braucht genau ein Ende"]
+    ? ["- Schnappschuss-Block: Marker nur allein auf der Zeile, jeder Start braucht genau ein Ende und zwischen beiden ein ISO-Datum (JJJJ-MM-TT)"]
     : [];
   return `Rest des entfernten Pfads gefunden:\n${[...hinweise, ...bloecke].join("\n")}`;
 }
@@ -159,31 +168,49 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
 
   describe("Schnappschuss-Block", () => {
     const rest = "der Skill kubernia-workflow";
+    const datum = "Stand 2026-10-01";
     const start = SCHNAPPSCHUSS_START;
     const ende = SCHNAPPSCHUSS_ENDE;
     const pruefe = (inhalt: string) => findeReste([{ pfad: "docs/s.md", inhalt }]);
 
-    test("ein Rest im Block ist kein Fund", () => {
-      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}`), []);
+    test("ein Rest im datierten Block ist kein Fund", () => {
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}\n${ende}`), []);
     });
     test("ein Rest nach dem Block ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}\n${rest}`), ["docs/s.md:4: Skill kubernia-workflow"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}\n${ende}\n${rest}`), ["docs/s.md:5: Skill kubernia-workflow"]);
     });
     test("ein Rest vor dem Block ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${rest}\n${start}\n${ende}`), ["docs/s.md:1: Skill kubernia-workflow"]);
+      assert.deepEqual(pruefe(`${rest}\n${start}\n${datum}\n${ende}`), ["docs/s.md:1: Skill kubernia-workflow"]);
     });
     test("ein Start ohne Ende ist ein Fund (fail-closed)", () => {
-      assert.deepEqual(pruefe(`${start}\n${rest}`), ["docs/s.md:1: Schnappschuss-Block ohne Ende"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}`), ["docs/s.md:1: Schnappschuss-Block ohne Ende"]);
     });
     test("ein verschachtelter Start ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${start}\n${start}\n${ende}`), ["docs/s.md:2: Schnappschuss-Block verschachtelt"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${start}\n${ende}`), ["docs/s.md:3: Schnappschuss-Block verschachtelt"]);
     });
     test("Marker nur allein auf der Zeile (getrimmt) zählen", () => {
-      assert.deepEqual(pruefe(`  ${start}  \n${rest}\n${ende}`), []);
+      assert.deepEqual(pruefe(`  ${start}  \n${datum}\n${rest}\n${ende}`), []);
       assert.equal(pruefe(`Text ${start}\n${rest}`).length, 1);
+    });
+    test("ein Block ohne ISO-Datum ist ein Fund (Schnappschuss ist datiert)", () => {
+      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
+    });
+    test("ein Ende-Marker ohne Start ist kein Datum-Fund (nur ein offener Block braucht ein Datum)", () => {
+      assert.deepEqual(pruefe(`${ende}\n${datum}`), []);
+    });
+    test("ein leerer Block ist ein Fund, ein Datum außerhalb des Blocks zählt nicht", () => {
+      assert.deepEqual(pruefe(`${start}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
+      assert.deepEqual(pruefe(`2026-10-01\n${start}\n${rest}\n${ende}\n2026-10-02`), ["docs/s.md:2: Schnappschuss-Block ohne Datum"]);
+    });
+    test("ein unvollständiges Datum zählt nicht", () => {
+      assert.deepEqual(pruefe(`${start}\n2026-10\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
+    });
+    test("mehrere Blöcke werden einzeln geprüft", () => {
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${ende}\n${start}\n${rest}\n${ende}`), ["docs/s.md:4: Schnappschuss-Block ohne Datum"]);
     });
     test("die Meldung erklärt Marker-Fehler", () => {
       assert.ok(meldungMitFix(pruefe(`${start}\n${rest}`)).includes("Schnappschuss-Block"));
+      assert.ok(meldungMitFix(pruefe(`${start}\n${rest}\n${ende}`)).includes("Datum"));
     });
   });
 

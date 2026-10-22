@@ -30,6 +30,10 @@ vi.mock("node:child_process", async (importOriginal) => {
 import * as cleanupModule from "../../scripts/worktree-aufraeumen.mjs";
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as cliModule from "../../scripts/cleanup-worktrees.mjs";
+// @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
+import * as flagLib from "../../scripts/flag-lib.mjs";
+
+const { AUFRUF_EXIT } = flagLib as unknown as { AUFRUF_EXIT: number };
 
 /**
  * Die Modul-Form EINMAL deklarieren und den Import genau hier casten. Vorher hing
@@ -1298,6 +1302,43 @@ describe("CLI main: --branches und --fix (#1837)", () => {
   test("--branches allein listet nur (loeschen=false), --branches --fix löscht (loeschen=true); der Exit-Code kommt von modus", () => {
     assert.deepEqual(aufruf(["--branches"]), { calls: [["/wurzel", false]], code: 7 });
     assert.deepEqual(aufruf(["--branches", "--fix"]), { calls: [["/wurzel", true]], code: 7 });
+  });
+  test("ein unbekanntes Flag liefert AUFRUF_EXIT als Rückgabe, ohne den Prozess zu beenden und ohne modus", () => {
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("process.exit darf main nicht beenden");
+    });
+    const fehler = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { calls, code } = aufruf(["--gibtsnicht"]);
+      assert.equal(code, AUFRUF_EXIT);
+      assert.deepEqual(calls, []);
+      assert.equal(exit.mock.calls.length, 0);
+    } finally {
+      exit.mockRestore();
+      fehler.mockRestore();
+    }
+  });
+
+  test("git worktree list scheitert (Wurzel ohne Repo): Rückgabe 1 statt process.exit", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = mkdtempSync(join(tmpdir(), "kq-keingit-"));
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("process.exit darf main nicht beenden");
+    });
+    const fehler = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      assert.equal(main([], { modus: () => 7, root }), 1);
+      assert.equal(exit.mock.calls.length, 0);
+      assert.match(fehler.mock.calls.map((c) => String(c[0])).join("|"), /git worktree list fehlgeschlagen/);
+    } finally {
+      exit.mockRestore();
+      fehler.mockRestore();
+      log.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

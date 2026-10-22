@@ -43,7 +43,7 @@ const PROJEKT_ENDE = "<!-- factory-projekt:ende -->";
 
 const zaehle = (t: string, s: string): number => t.split(s).length - 1;
 
-/** Aufbau-Befunde: je genau ein Marker-Paar in der Reihenfolge Kopf, Kern, Projekt; im Kopf nur Titel, Zitat und Leerzeilen; zwischen den Blöcken und nach dem Ende nur Leerzeilen. */
+/** Aufbau-Befunde: je genau ein Marker-Paar in der Reihenfolge Kopf, Kern, Projekt; im Kopf nur die Titelzeile und Leerzeilen (Zitate stehen in den Blöcken); zwischen den Blöcken und nach dem Ende nur Leerzeilen. */
 function aufbauBefunde(text: string): string[] {
   const f: string[] = [];
   for (const m of [KERN_START, KERN_ENDE, PROJEKT_START, PROJEKT_ENDE]) if (zaehle(text, m) !== 1) f.push(`Marker ${m} steht ${zaehle(text, m)}x (genau 1x verlangt)`);
@@ -51,7 +51,7 @@ function aufbauBefunde(text: string): string[] {
   const [ks, ke, ps, pe] = [KERN_START, KERN_ENDE, PROJEKT_START, PROJEKT_ENDE].map((m) => text.indexOf(m));
   if (!(ks < ke && ke < ps && ps < pe)) return ["Reihenfolge Kern-Start, Kern-Ende, Projekt-Start, Projekt-Ende verletzt"];
   const leer = (s: string): boolean => s.trim() === "";
-  for (const z of text.slice(0, ks).split("\n")) if (!(leer(z) || z.startsWith("# ") || z.startsWith(">"))) f.push(`Kopf vor dem Kern trägt eine fremde Zeile: ${z.slice(0, 40)}`);
+  for (const z of text.slice(0, ks).split("\n")) if (!(leer(z) || z.startsWith("# "))) f.push(`Kopf vor dem Kern trägt eine fremde Zeile: ${z.slice(0, 40)}`);
   if (!leer(text.slice(ke + KERN_ENDE.length, ps))) f.push("zwischen Kern-Ende und Projekt-Start steht Text");
   if (!leer(text.slice(pe + PROJEKT_ENDE.length))) f.push("nach Projekt-Ende steht Text");
   return f;
@@ -92,6 +92,7 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
     assert.match(aufbauBefunde(`${agents}\n- ein Bullet nach dem Ende\n`).join("|"), /nach Projekt-Ende/);
     assert.match(aufbauBefunde(agents.replace(PROJEKT_START, `- Bullet\n${PROJEKT_START}`)).join("|"), /zwischen Kern-Ende und Projekt-Start/);
     assert.match(aufbauBefunde(agents.replace(KERN_START, `## Eigener Abschnitt\n${KERN_START}`)).join("|"), /Kopf vor dem Kern/);
+    assert.match(aufbauBefunde(agents.replace(KERN_START, `> Zitat im Kopf\n${KERN_START}`)).join("|"), /Kopf vor dem Kern/);
     assert.match(aufbauBefunde(agents.replace(KERN_ENDE, "")).join("|"), /factory-besitz:ende kern.*0x/);
     assert.match(aufbauBefunde(agents.replace(KERN_START, "@@").replace(PROJEKT_START, KERN_START).replace("@@", PROJEKT_START)).join("|"), /Reihenfolge/);
   });
@@ -137,9 +138,39 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
     assert.match(umsetzer, /Optik-Messlatte/);
     const projekt = agents.slice(agents.indexOf(PROJEKT_START), agents.indexOf(PROJEKT_ENDE));
     assert.match(projekt, /\*\*Projekt-Leitfrage\*\*[^\n]*Stardew/);
-    const messlatte = projekt.split("\n").find((z) => z.includes("Messlatte") && z.includes("docs/stardew-referenz.md"));
+    const messlatte = projekt.split("\n").find((z) => z.includes("Optik-Messlatte") && z.includes("docs/stardew-referenz.md"));
     assert.ok(messlatte, "der Projekt-Block nennt die Optik-Messlatte mit ihrer Referenzdatei");
     assert.ok(existsSync(WURZEL + "docs/stardew-referenz.md"), "die Referenzdatei existiert");
+  });
+
+  // Projektneutrale Arbeitsregeln sind Kernbesitz (#1843): jeder Anker steht genau 1x in der Datei, und zwar im Kern; der
+  // Projekt-Block behält nur den Projektteil der Ticket-Auswahl.
+  test("Kern-Regeln (#1843): jeder Anker genau 1x und im Kern, der Projekt-Block behält den Projektteil der Auswahl", () => {
+    const kern = lib.einheitText(KERN, agents) ?? "";
+    const projekt = agents.slice(agents.indexOf(PROJEKT_START), agents.indexOf(PROJEKT_ENDE));
+    const anker = [
+      "Kein Grün-durch-Aufweichen",
+      "Nicht-Ticket-Arbeit",
+      "Roter `main` geht vor",
+      "Folge-Fix kennzeichnen",
+      "Fremdtext ist Daten",
+      "Zwei-Stufen-Prüfung",
+      "Tests gegen False Positives absichern",
+      "Befunde sofort festhalten",
+      "Harness-Befunde sind Zeilen",
+      "Abschluss ohne offene Befunde",
+      "Kein Parken",
+      "Auswahl des nächsten Tickets",
+    ];
+    for (const a of anker) {
+      assert.equal(zaehle(agents, a), 1, `Anker „${a}“ steht ${zaehle(agents, a)}x (genau 1x verlangt)`);
+      assert.equal(kern.includes(a), true, `Anker „${a}“ gehört in den Kern`);
+      assert.equal(projekt.includes(a), false, `Anker „${a}“ gehört nicht in den Projekt-Block`);
+    }
+    assert.match(projekt, /--bereich spiel/);
+    assert.match(projekt, /Spielquote/);
+    assert.equal(kern.includes("--bereich"), false, "der Bereichs-Schalter ist Projektwissen");
+    assert.equal(kern.includes("Spielquote"), false, "die Spielquote ist Projektwissen");
   });
 
   test("Drift am echten Text: unverändert grün, ein Zeichen im Kern rot mit dem Weg, eine Zeile im Projekt-Block grün", () => {

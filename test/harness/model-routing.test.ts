@@ -847,7 +847,7 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.match(t, /gebündelt/);
     // keine Kopie der Kriterien (#1349 Z8): die Rolle verweist auf die Heimat in AGENTS.md
     assert.match(t, /AGENTS\.md § „Harness-Befunde sind Zeilen/);
-    assert.match(t, /§ Oberste Regel/);
+    assert.match(t, /§ Befunde sofort festhalten/);
     assert.doesNotMatch(t, /Teil-Akzeptanzkriterien|Kleinkram eine Zeile|gleiches\s+Subsystem/);
     assert.doesNotMatch(t, /roter main|Datenverlust|allein nicht in eine Session/);
   });
