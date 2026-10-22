@@ -2,7 +2,7 @@
  * Gemeinsamer Start der Inbox-Skripte (`audit-einordnung`, `codescanning-inbox`, `wiedervorlage`, `harness-doctor-melden`): erst der
  * Aufruf-Check (`--dry-run`), dann die Projekt-Config, dann der Import der Board-Libs. Die Libs lesen die Config beim Import (`REPO`),
  * deshalb kommen sie erst nach dem Check und der Config: eine kaputte Config meldet sich als `::error::` mit Fix-Zeile und Exit 2 statt als
- * Stacktrace. Kein Guard, kein Import von `board-lib`/`inbox-lib` beim Laden dieser Datei.
+ * Stacktrace (das direkte Laden von `board-lib` endet bei einer kaputten Config ebenso mit Exit 2, `ladeProjektOderAbbruch`). Kein Guard, kein Import von `board-lib`/`inbox-lib` beim Laden dieser Datei.
  */
 import { fehlerMeldung } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
