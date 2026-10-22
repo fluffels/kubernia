@@ -6,8 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fehlerText } from "./gh-cli.mjs";
-import { fileURLToPath } from "node:url";
-import { altEnvName, boardPfad, kernEnvNamen, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { altEnvName, boardPfad, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
@@ -243,8 +242,6 @@ export function pruefeAltnamen({ env, config, namen }) {
   return luecken.length ? luecken : [gut("Umgebungsvariablen")];
 }
 
-const SKRIPT_ORDNER = fileURLToPath(new URL(".", import.meta.url));
-
 /** Führt alle Prüfpunkte aus: `[{ punkt, ok, befund?, fix?, hinweis? }]`. Wirft nie. */
 export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebung = null }) {
   const repo = config.repo;
@@ -265,7 +262,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     const text = String(lf.stderr || lf.stdout || "").trim().split("\n")[0];
     ergebnis.push(lf.status === 0 ? gut("Langfuse") : luecke("Langfuse", text || "Langfuse nicht erreichbar", "Langfuse starten (node scripts/langfuse-vorbedingung.mjs zeigt den Befund)"));
   }
-  if (umgebung) ergebnis.push(...pruefeAltnamen({ env: umgebung.env, config, namen: kernEnvNamen(SKRIPT_ORDNER) }));
+  if (umgebung) ergebnis.push(...pruefeAltnamen({ env: umgebung.env, config, namen: umgebung.namen }));
   return ergebnis;
 }
 
@@ -287,10 +284,11 @@ export function konfigFehlerText(e) {
 
 /**
  * Lädt Config und Ruleset-Spiegel und führt alle Prüfpunkte aus: `{ config, ergebnis }`. Wirft bei unlesbarer Config oder unlesbarem Spiegel,
- * bevor ein einziger `gh`-Aufruf läuft. `langfuse: null` lässt den Langfuse-Punkt aus, `umgebung: null` den Altnamen-Punkt (`{ env }` prüft ihn); `mitWochenlauf` rechnet die Vorlage des Wochenlaufs
+ * bevor ein einziger `gh`-Aufruf läuft. `langfuse: null` lässt den Langfuse-Punkt aus, `umgebung: null` den Altnamen-Punkt (`{ env, namen }` prüft ihn: `namen` sind die `FACTORY_…`-Namen aus `kernEnvNamen`, die der Aufrufer am Rand bestimmt; die Lib liest dafür keine Dateien); `mitWochenlauf` rechnet die Vorlage des Wochenlaufs
  * als Workflow mit, falls die Datei fehlt (dann erscheinen ihre Secrets schon im Plan von `--einrichten`).
  */
 export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenlauf = false, umgebung = null }) {
+  if (umgebung && !Array.isArray(umgebung.namen)) throw new Error("umgebung braucht { env, namen }: die Kern-Namen bestimmt der Aufrufer am Rand (kernEnvNamen)");
   const config = ladeProjektConfig({ rootDir, pfad: configPfad });
   const spiegel = config.rulesetSpiegel ? ladeRulesetSpiegel(rootDir, config.rulesetSpiegel) : undefined;
   const workflows = workflowsLesen(rootDir);

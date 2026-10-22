@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
-import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
@@ -133,9 +133,17 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
 }
 
 function pruefen({ werte, rootDir, gh, langfuse, env, out, err }) {
+  let namen;
+  try {
+    namen = kernEnvNamen(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
+  } catch (e) {
+    err(`Kern-Umgebungsvariablen nicht lesbar: ${e instanceof Error ? e.message : String(e)}
+Fix: scripts/ im Checkout wiederherstellen (git status), dann erneut prüfen`);
+    return AUFRUF_EXIT;
+  }
   let ergebnis;
   try {
-    ({ ergebnis } = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse, umgebung: { env } }));
+    ({ ergebnis } = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse, umgebung: { env, namen } }));
   } catch (e) {
     err(konfigFehlerText(e));
     return AUFRUF_EXIT;

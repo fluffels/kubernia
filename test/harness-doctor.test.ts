@@ -155,6 +155,31 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
   });
 });
 
+describe("pruefLauf mit umgebung: die Namen kommen vom Aufrufer, die Lib liest keine Dateien", () => {
+  const fixture = (): string => {
+    const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
+    ordner.push(root);
+    writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+    writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
+    return root;
+  };
+  const lauf2 = (root: string, umgebung: unknown) =>
+    (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string; ok: boolean }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null, umgebung });
+
+  test("ein übergebener Name, den kein Skript liest, wird gegen den Altnamen geprüft", () => {
+    const root = fixture();
+    const e = lauf2(root, { env: { [altEnvName("FACTORY_NUR_IM_TEST", CONFIG) as string]: "x" }, namen: ["FACTORY_NUR_IM_TEST"] }).ergebnis;
+    assert.equal(e.filter((x) => x.punkt.startsWith("Umgebungsvariable ") && !x.ok).length, 1);
+  });
+  test("leere Namensliste: der Punkt ist gut, nichts wird nachgelesen", () => {
+    const e = lauf2(fixture(), { env: { [altEnvName("FACTORY_NUR_IM_TEST", CONFIG) as string]: "x" }, namen: [] }).ergebnis;
+    assert.deepEqual(e.filter((x) => x.punkt.startsWith("Umgebungsvariable")), [{ punkt: "Umgebungsvariablen", ok: true }]);
+  });
+  test("umgebung ohne namen: wirft mit Hinweis, bevor ein gh-Aufruf läuft", () => {
+    assert.throws(() => lauf2(fixture(), { env: {} }), /braucht { env, namen }/);
+  });
+});
+
 describe("harness-doctor --pruefen", () => {
   test("gesunde Welt: Exit 0, keine Lücke, eine Schlusszeile", () => {
     const r = lauf();
