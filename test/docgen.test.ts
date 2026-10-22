@@ -460,8 +460,17 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     assert.deepEqual(Object.keys(geladen).sort(), Object.keys(registryApi.GENERATORS).sort());
   });
   test("ladeGeneratoren: ein Ladefehler der Datei nennt Marker und Pfad", async () => {
-    const rootDir = fixture({ "k.mjs": "export const g = => ;" });
-    await assert.rejects(registryApi.ladeGeneratoren({ rootDir, config: { generatoren: { mein: { datei: "k.mjs", name: "g" } } } }), /config\.generatoren\.mein: k\.mjs lässt sich nicht laden/);
+    const rootDir = fixture({ "k.mjs": "export const g = => ;", "b.mjs": "throw 'boom';" });
+    const config = (datei: string) => ({ generatoren: { mein: { datei, name: "g" } } });
+    // Fehler-Objekt: Ursachentext in der Meldung, Originalfehler als cause
+    const err = await registryApi.ladeGeneratoren({ rootDir, config: config("k.mjs") }).then(
+      () => assert.fail("kein Fehler"),
+      (e: unknown) => e as Error,
+    );
+    assert.match(err.message, /config\.generatoren\.mein: k\.mjs lässt sich nicht laden: .*\S/);
+    assert.ok(err.cause instanceof SyntaxError);
+    // geworfener Nicht-Error-Wert: String(e)
+    await assert.rejects(registryApi.ladeGeneratoren({ rootDir, config: config("b.mjs") }), /config\.generatoren\.mein: b\.mjs lässt sich nicht laden: boom$/);
   });
   test("ladeGeneratoren: fehlende Datei nennt Marker und Pfad", async () => {
     await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({}), config: { generatoren: { mein: { datei: "x/fehlt.mjs", name: "g" } } } }), /config\.generatoren\.mein: Datei fehlt: x\/fehlt\.mjs/);
