@@ -358,7 +358,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
-  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O; übersteuert Sprache, Labels, Namen und hartAb, Repo und Board-IDs kommen aus der Repo-Config (board-lib/inbox-lib)
   direktaufruf(args, {
     pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufLesen(argv)),
     fehlerErgebnis: (_argv, vorab) => fehlerErgebnis(vorab.fehler),
