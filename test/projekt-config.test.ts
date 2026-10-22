@@ -15,6 +15,7 @@ interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
   ladeProjektConfig(opt?: { rootDir?: string; pfad?: string }): { repo: string };
   trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
+  configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
@@ -243,6 +244,21 @@ describe("ladeProjektConfig", () => {
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /boards\.0\.projectId[\s\S]*Fix:/);
     writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), version: 1, board: gueltig().boards?.[0], boards: undefined }));
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /projekt\.json[\s\S]*version muss 2[\s\S]*boards[\s\S]*Fix:/);
+  });
+});
+
+describe("configAusAufruf", () => {
+  test("--config ohne Wert: fehler ohne ✖-Präfix (das setzt der Aufrufer), mit Fix, ohne die Config zu laden (#1866 L25c)", () => {
+    const r = pc.configAusAufruf(["a", "--config"], { lade: () => assert.fail("keine Config laden") });
+    assert.ok(r.fehler);
+    assert.doesNotMatch(r.fehler, /^✖/);
+    assert.match(r.fehler, /^--config braucht einen Pfad[\s\S]*Fix:/);
+    assert.deepEqual(r.args, ["a", "--config"]);
+  });
+  test("Ladefehler wird als fehler durchgereicht, Gutfall liefert config und die restlichen Argumente", () => {
+    assert.equal(pc.configAusAufruf(["--config", "x.json"], { lade: () => { throw new Error("kaputt"); } }).fehler, "kaputt");
+    const ok = pc.configAusAufruf(["a", "--config", "x.json"], { lade: (a) => ({ pfad: a.pfad }) });
+    assert.deepEqual(ok, { args: ["a"], config: { pfad: "x.json" } });
   });
 });
 

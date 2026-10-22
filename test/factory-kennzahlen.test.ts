@@ -818,6 +818,8 @@ describe("Spezifikations-Mängel im Wochenbericht (#1860)", () => {
   });
   test("Negativfall: Exit ≠ 0, kein JSON oder Vertragsbruch ergeben eine Lücke mit Grund, nie 0", () => {
     expect(M.holeMaengel(() => ({ status: 2, stdout: "", stderr: "\n✖ naechstes-ticket: gh weg\nmehr" })).luecke).toBe("naechstes-ticket Exit 2: ✖ naechstes-ticket: gh weg");
+    expect(M.holeMaengel(() => ({ status: 1, stdout: "", stderr: "" })).luecke).toBe("naechstes-ticket Exit 1: ohne Meldung");
+    expect(M.holeMaengel(() => ({ status: 1, stdout: "", stderr: " \n  \n" })).luecke).toBe("naechstes-ticket Exit 1: ohne Meldung");
     expect(M.holeMaengel(ok("kein json")).luecke).toMatch(/kein JSON/);
     for (const bad of ["{}", JSON.stringify({ anzahl: "2", maengel: [] }), JSON.stringify({ anzahl: 1, maengel: "x" }), "null", JSON.stringify({ anzahl: 2, maengel: [] })]) {
       const r = M.holeMaengel(ok(bad));
