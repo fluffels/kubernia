@@ -466,7 +466,7 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
 
   test("Lens und Review-Skill: Messbehauptungen nur gegen Rohwerte", () => {
     assert.ok(messbehauptungsRegel(read(".claude/agents/factory-lens.md")), "factory-lens.md");
-    assert.ok(messbehauptungsRegel(read(".claude/skills/review-lenses/SKILL.md")), "review-lenses/SKILL.md");
+    assert.ok(messbehauptungsRegel(read(".agents/skills/review-lenses/SKILL.md")), "review-lenses/SKILL.md");
     assert.ok(!messbehauptungsRegel("Prüfe alles."));
     assert.ok(!messbehauptungsRegel("Messbehauptungen prüfst du gegen Rohwerte."), "ohne den Befund „nicht belegt“ unvollständig");
   });

@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 // Der Skill hat keinen Code, nur die Regel. Fällt sie dort weg, spawnt er wieder immer drei Lenses.
 
 const lies = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
-const SKILL = ".claude/skills/review-lenses/SKILL.md";
+const SKILL = ".agents/skills/review-lenses/SKILL.md";
 
 /** Nennt ein Regeltext die Staffel vollständig? EIN Prädikat für Artefakt und Gegenbeispiel. */
 const nenntStaffel = (s: string) =>
@@ -63,7 +63,7 @@ describe("Der Skill regelt die Staffel (#1265)", () => {
 // ── Merge von main in den Branch (#1311) ───────────────────────────────────────
 
 describe("Merge von main ist kein Fix-Pass (#1311)", () => {
-  const SKILL_MD = lies(".claude/skills/review-lenses/SKILL.md");
+  const SKILL_MD = lies(".agents/skills/review-lenses/SKILL.md");
   const HARNESS_MD = lies("docs/agent-harness.md");
   const nenntMergeRegel = (s: string) => /Merge von `main`[^\n]*kein Fix-Pass/.test(s) && /git show --remerge-diff/.test(s);
 
@@ -81,7 +81,7 @@ describe("Merge von main ist kein Fix-Pass (#1311)", () => {
 });
 
 describe("Rotes verify vor dem ersten Lens-Pass zählt nicht als Fix-Runde (#1322 Z7)", () => {
-  const SKILL_MD = lies(".claude/skills/review-lenses/SKILL.md");
+  const SKILL_MD = lies(".agents/skills/review-lenses/SKILL.md");
   const HARNESS_MD = lies("docs/agent-harness.md");
   const nenntRundeEins = (s: string) =>
     /Runde 1 ist der erste Lens-Pass/.test(s) && /einmal auf demselben Stand nachgeholt/.test(s) && /Rote `verify`-Fixe davor zählen nicht als Fix-Runde/.test(s);

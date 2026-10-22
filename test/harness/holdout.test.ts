@@ -67,14 +67,14 @@ const ABNAHME_TOOLS = [
 ];
 
 const SKILL = liesTicketAblauf();
-const LENSES = liesMitProjektwerten(".claude/skills/review-lenses/SKILL.md");
+const LENSES = liesMitProjektwerten(".agents/skills/review-lenses/SKILL.md");
 const UMSETZER = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
 const GANZE_DATEIEN: [string, string][] = [
   [".claude/agents/factory-planer.md", liesMitProjektwerten(".claude/agents/factory-planer.md")],
   [".claude/agents/factory-umsetzer.md", UMSETZER],
   [".claude/agents/factory-gruppe.md", lies(".claude/agents/factory-gruppe.md")],
   [".claude/agents/factory-lens.md", liesMitProjektwerten(".claude/agents/factory-lens.md")],
-  [".claude/skills/review-lenses/SKILL.md", LENSES],
+  [".agents/skills/review-lenses/SKILL.md", LENSES],
 ];
 
 /** Befunde zu Regel 1 für Skill, Lenses-Skill und Umsetzer-Definition; leer = in Ordnung. */

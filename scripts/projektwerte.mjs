@@ -1,7 +1,7 @@
 // Projektwerte (ADR 0022 F3f): Stellen, die eine Datei nicht zur Laufzeit aus der Config lesen kann (Markdown-Block zwischen
 // Projektwert-Markern, YAML-Zeile direkt nach einem Zeilen-Marker im Frontmatter), werden aus `.factory/projekt.json` erzeugt.
 // `node scripts/projektwerte.mjs --check | --write [--wurzel <pfad>]`; Exit 0 ok, 1 Abweichung oder Fehler, 2 Aufruf.
-// Prüf-Fläche (geschlossene Liste): `.md`-Pfade des Besitz-Manifests, `.claude/agents/*.md`, `.claude/skills/*/*.md`; andere Dateitypen und
+// Prüf-Fläche (geschlossene Liste): `.md`-Pfade des Besitz-Manifests, `.claude/agents/*.md`, `.claude/skills/*/*.md`, `.agents/skills/*/*.md`; andere Dateitypen und
 // JSON-Schlüssel-Einheiten werden nicht gerendert. `--write` prüft erst alles und schreibt dann nur Geändertes, im Zeilenende-Stil der Datei.
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";

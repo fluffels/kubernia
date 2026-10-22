@@ -7,7 +7,7 @@
  * die gar nicht zum Slice gehören, und Entscheidungen der Leitplanken-Erkennung kippen. Beide Stellen
  * wurden von Hand gefunden – dieser Wächter macht das maschinell. Kanonisch ist die Form, die auch
  * `check:diffsize`/`check:diffcoverage` messen: `git diff origin/main...HEAD` (Begründung:
- * docs/agent-harness.md § 2.5 und `.claude/skills/review-lenses/SKILL.md`).
+ * docs/agent-harness.md § 2.5 und `.agents/skills/review-lenses/SKILL.md`).
  *
  * Regel: jeder `git diff`-Aufruf, der ein bares `main` als Revision nennt und NICHT `origin/main...`
  * enthält, ist rot. Bewusste Auslegungen:
@@ -94,7 +94,7 @@ function findeZweiPunktTreffer(text: string): Treffer[] {
 /** Erlaubte historische Gegenbeispiele: Datei → exakte Trefferzahl + Begründung. */
 const ERLAUBTE_GEGENBEISPIELE: { datei: string; anzahl: number; grund: string }[] = [
   {
-    datei: ".claude/skills/review-lenses/SKILL.md",
+    datei: ".agents/skills/review-lenses/SKILL.md",
     anzahl: 2,
     grund:
       "Historische Gegenbeispiele: die Absätze „Warum Drei-Punkt“ und „Erst committen“ erklären, " +
@@ -115,6 +115,7 @@ function dateienUnter(rel: string): string[] {
 
 const SCAN = [
   ...[...VERSIONED_CLAUDE_DIRS].flatMap((dir) => dateienUnter(`.claude/${dir}`)),
+  ...dateienUnter(".agents/skills"),
   ".claude/settings.json",
   ...readdirSync(ROOT + "docs")
     .filter((n) => n.startsWith("agent-harness") && n.endsWith(".md"))
@@ -208,7 +209,7 @@ describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
 describe("Harness-Texte diffen nur gegen origin/main... (#1108)", () => {
   test("Scan-Umfang ist nicht leer und enthält die bekannten Artefakte", () => {
     for (const pflicht of [
-      ".claude/skills/review-lenses/SKILL.md",
+      ".agents/skills/review-lenses/SKILL.md",
       ".claude/agents/factory-planer.md",
       ".claude/settings.json",
       "docs/agent-harness.md",

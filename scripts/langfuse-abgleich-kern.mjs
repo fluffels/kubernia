@@ -126,12 +126,15 @@ const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => 
 /**
  * Sessions des Projekts: `[{ id, pfad, mtime, groesse }]` (mtime = jüngste Datei der Session, groesse = Bytes von Haupt- und Subagent-Dateien).
  * Nur der Ordner `<präfix>` selbst und `<präfix>--claude-worktrees-…` zählen (kein Geschwister-Repo wie `<präfix>-tools`).
- * `seitMs` filtert nach mtime, `sessionId` gilt unabhängig davon.
+ * `seitMs` filtert nach mtime, `sessionId` gilt unabhängig davon. `alleOrdner` wirkt NUR zusammen mit `sessionId` (#1862): dann
+ * werden alle Ordner unter `projectsRoot` durchsucht, ein Treffer außerhalb des Projekts trägt `ausserhalb: true`. Ohne `sessionId`
+ * bleibt es beim Projekt (der Nachlieferer ruft ohne die Option auf und sendet nie für fremde Ordner).
  */
-export function findeSessions({ projectsRoot, praefix, seitMs = 0, sessionId = null }) {
+export function findeSessions({ projectsRoot, praefix, seitMs = 0, sessionId = null, alleOrdner = false }) {
   if (!existsSync(projectsRoot)) return [];
   const out = new Map();
-  for (const d of readdirSync(projectsRoot).filter((n) => istProjektOrdner(n, praefix))) {
+  const ordner = readdirSync(projectsRoot).filter((n) => (alleOrdner && sessionId) || istProjektOrdner(n, praefix));
+  for (const d of ordner) {
     for (const datei of jsonlDateien(join(projectsRoot, d))) {
       const id = datei.replace(/\.jsonl$/, "");
       if (sessionId && id !== sessionId) continue;
@@ -141,7 +144,8 @@ export function findeSessions({ projectsRoot, praefix, seitMs = 0, sessionId = n
       const mtime = Math.max(...stats.map((s) => s.mtimeMs));
       if (!sessionId && mtime < seitMs) continue;
       const prev = out.get(id);
-      if (!prev || prev.mtime < mtime) out.set(id, { id, pfad, mtime, groesse: stats.reduce((s, x) => s + x.size, 0) });
+      const ausserhalb = !istProjektOrdner(d, praefix);
+      if (!prev || prev.mtime < mtime) out.set(id, { id, pfad, mtime, groesse: stats.reduce((s, x) => s + x.size, 0), ...(ausserhalb ? { ausserhalb } : {}) });
     }
   }
   return [...out.values()].sort((a, b) => a.mtime - b.mtime);

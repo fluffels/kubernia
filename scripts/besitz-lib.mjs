@@ -364,7 +364,7 @@ export function projektwertAbweichungen(pfad, text, config) {
   return out;
 }
 
-const PROJEKTWERT_FLAECHEN = [/^\.claude\/agents\/[^/]+\.md$/, /^\.claude\/skills\/[^/]+\/[^/]+\.md$/];
+const PROJEKTWERT_FLAECHEN = [/^\.claude\/agents\/[^/]+\.md$/, /^\.claude\/skills\/[^/]+\/[^/]+\.md$/, /^\.agents\/skills\/[^/]+\/[^/]+\.md$/];
 
 /** Geschlossene Prüf-Fläche: `.md`-Pfade des Manifests plus Agenten- und Skill-Markdown aus `liste` (alle Projektpfade, Schrägstrich-Form). Sortiert, ohne Doppelte. */
 export function projektwertDateien(manifestPfade, liste) {
@@ -372,7 +372,7 @@ export function projektwertDateien(manifestPfade, liste) {
   return [...new Set([...manifestPfade.filter((p) => pfadSicher(p) && p.endsWith(".md")), ...aus])].sort();
 }
 
-/** Alle Agenten- und Skill-Dateien unter `wurzel` (Schrägstrich-Form, unsortiert). */
+/** Alle Agenten-, Skill-Zeiger- und Skill-Quell-Dateien (`.claude/agents`, `.claude/skills`, `.agents/skills`) unter `wurzel` (Schrägstrich-Form, unsortiert). */
 export function projektDateien(wurzel) {
   const out = [];
   const unter = (rel) => {
@@ -380,8 +380,10 @@ export function projektDateien(wurzel) {
     return existsSync(voll) ? readdirSync(voll, { withFileTypes: true }) : [];
   };
   for (const d of unter(".claude/agents")) if (d.isFile()) out.push(`.claude/agents/${d.name}`);
-  for (const s of unter(".claude/skills")) {
-    if (s.isDirectory()) for (const d of unter(`.claude/skills/${s.name}`)) if (d.isFile()) out.push(`.claude/skills/${s.name}/${d.name}`);
+  for (const wurzelOrdner of [".claude/skills", ".agents/skills"]) {
+    for (const s of unter(wurzelOrdner)) {
+      if (s.isDirectory()) for (const d of unter(`${wurzelOrdner}/${s.name}`)) if (d.isFile()) out.push(`${wurzelOrdner}/${s.name}/${d.name}`);
+    }
   }
   return out;
 }

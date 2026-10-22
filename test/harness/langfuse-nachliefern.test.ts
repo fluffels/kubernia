@@ -631,6 +631,16 @@ describe("Auswahl", () => {
     expect(ids).not.toContain("fremd");
   });
 
+  test("Außerhalb (#1862): explizites --session auf eine Session außerhalb der Projektordner sendet nichts und legt keinen Ledger-Eintrag an", async () => {
+    const a = aufbau([msg("a", 1)], { "Y--anders/s9.jsonl": msg("fremd", 7) });
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "s9" });
+    expect(r.protokoll.sessions).toEqual([]);
+    expect(m.posts()).toHaveLength(0);
+    expect(m.otlp).toHaveLength(0);
+    expect(existsSync(a.ledger) ? Object.keys(ledgerVon(a.ledger)) : []).not.toContain("s9");
+  });
+
   test("--trocken: null POSTs, kein Ledger, kaputtes Ledger bleibt liegen, Bericht zählt „würde senden“", async () => {
     const a = aufbau([msg("a", 1), msg("b", 2)]);
     mkdirLedger(a.state);

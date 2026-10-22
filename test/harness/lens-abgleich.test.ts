@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Die Prüfpunkte jeder Review-Brille stehen als Aufzählung im Skill `.claude/skills/review-lenses/SKILL.md`
+ * Die Prüfpunkte jeder Review-Brille stehen als Aufzählung im Skill `.agents/skills/review-lenses/SKILL.md`
  * (tool-neutral). Dieser Wächter verlangt vier Brillen in fester Reihenfolge, je mit Überschrift, Folgeabschnitt und
  * mindestens einem Prüfpunkt, damit eine umbenannte Überschrift oder ein leerer Abschnitt nicht still eine Brille
  * entfernt (die Orchestrierung und der Nachweis-Wächter hängen an diesen vier Brillen).
@@ -11,7 +11,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const SKILL = readFileSync(new URL("../../.claude/skills/review-lenses/SKILL.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const SKILL = readFileSync(new URL("../../.agents/skills/review-lenses/SKILL.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 /** Je Brille: Skill-Überschrift, Folgeabschnitt und Zeilenform der Prüfpunkte. */
 const BRILLEN: { key: string; kopf: string; ende: string; punkt: RegExp }[] = [

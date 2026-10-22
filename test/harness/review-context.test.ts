@@ -51,7 +51,7 @@ import { fileURLToPath } from "node:url";
 import { liesMitProjektwerten } from "../support/ticket-ablauf";
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-const lensSkill = liesMitProjektwerten(".claude/skills/review-lenses/SKILL.md");
+const lensSkill = liesMitProjektwerten(".agents/skills/review-lenses/SKILL.md");
 const planner = liesMitProjektwerten(".claude/agents/factory-planer.md");
 const lensAgent = liesMitProjektwerten(".claude/agents/factory-lens.md");
 

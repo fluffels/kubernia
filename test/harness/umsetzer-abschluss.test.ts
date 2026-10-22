@@ -641,7 +641,7 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
   });
 
   test("Verschobener-Code-Prüfung: der Skill trägt die Befehle für Diff der alten Datei und Merge-Basis (#1501, #1508)", () => {
-    const skill = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
+    const skill = readFileSync(resolve(ROOT, ".agents/skills/review-lenses/SKILL.md"), "utf8");
     assert.ok(skill.includes("git diff <basis> <M>^2 -- <alte datei>"), "review-lenses ohne Diff der alten Datei gegen die Merge-Basis");
     assert.ok(skill.includes("git merge-base <M>^1 <M>^2"), "review-lenses ohne Merge-Basis-Befehl");
   });
@@ -660,7 +660,7 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
 describe("Selbstcheck vor jedem Commit (#1625)", () => {
   const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/factory-gruppe.md"), "utf8");
   const LENS = readFileSync(resolve(ROOT, ".claude/agents/factory-lens.md"), "utf8");
-  const SKILL = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
+  const SKILL = readFileSync(resolve(ROOT, ".agents/skills/review-lenses/SKILL.md"), "utf8");
   /** Verlangt der Text den sichtbaren Block `Selbstcheck:` mit den Urteilen ok/gefixt/n.a. und der Lens-3-Quelle? */
   const verlangtSelbstcheck = (s: string) => /Block `Selbstcheck:`/.test(s) && /`ok`, `gefixt` oder `n.a.`/.test(s) && /Lens 3/.test(s);
 

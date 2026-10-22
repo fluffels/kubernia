@@ -655,3 +655,10 @@ F6 ist umgesetzt. Entscheidungen:
 - **Pfadform:** `struktur.quelle` und `struktur.moduldoku` müssen repo-relative POSIX-Pfade sein (kein führendes `/` oder Laufwerk, kein `.`/`..`, kein Backslash, kein End- oder Doppel-Slash); `pruefeProjektConfig` meldet Verstöße, `strukturAus` wirft mit `Fix:`-Zeile.
 - **Weitere Verbraucher:** `check:diffcoverage` (`isMeasured`, Diff-Pfadangabe), `check:anysuppress` (`collectSuppressions`) und `check:c4` (Meldungen, Hexagon-Pfade) nehmen die Quellwurzel als Parameter, ohne Angabe gilt `struktur.quelle`.
 - **Ausnahmelisten in der Config:** `ausnahmen.groesse` und `ausnahmen.kontext` (je `{ datei, grund }`, der Grund nennt `#<nr>`) ersetzen die Konstanten in `scripts/check-allowlists.mjs` (entfallen); `ausnahmenAus(config)` in `scripts/projekt-config-lib.mjs` liefert sie, `check:size`, `check:contextsize` und `check:doctickets` lesen sie dort. Ein kaputter Block endet mit `✖`, `Fix:` und Exit 1.
+
+## Fortschreibung #1849 (2026-10-22): review-lenses als Skill-Quelle
+
+- **Umzug:** Die Quelle von `review-lenses` liegt unter `.agents/skills/review-lenses/SKILL.md`, `.claude/skills/review-lenses/SKILL.md` ist der generierte Zeiger; der Eintrag verlässt `UEBERGANG`. Besitz: beide Pfade als Einheiten im Ring `kern-nach-entkopplung`.
+- **Prüffläche der Projektwerte:** `projektwertDateien` (`scripts/besitz-lib.mjs`) umfasst zusätzlich `.agents/skills/*/*.md`; die Prüffläche aus der Zeile zur Platzhalter-Regel gilt damit für die Quellen, der Diff-Basis-Wächter scannt sie ebenfalls. Ein verfälschter Projektwert-Block in einer Quelle ist rot.
+- **Verweise:** Verweise mit Anker zeigen auf die Quelle (der Zeiger trägt keine Überschriften). Ein Scan-Wächter in `test/harness/skills-sync.test.ts` meldet jeden Verweis auf `.claude/skills/<name>/SKILL.md` einer Quelle (Ausnahmen: ADRs, README.md (ganze Datei, wegen der generierten Tabelle), Besitz-Manifest, Fixtures); `check:docdrift` meldet Anker auf den Zeiger.
+- **Übergang:** Die Quelle verlinkt den Ticket-Ablauf noch über `.claude/skills/factory/ablauf.md`, bis `factory` mit #1850 umzieht.
