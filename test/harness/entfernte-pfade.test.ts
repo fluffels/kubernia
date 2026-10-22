@@ -9,7 +9,7 @@
  * entfernten Pfads. Ausnahmen sind begründet (AUSNAHMEN): ADRs sind historisch und werden nie umgeschrieben, der
  * Absenz-Test nennt die Namen absichtlich, dieser Wächter trägt die Muster selbst. Datierte Messungen und Entscheidungen
  * in lebenden Seiten stehen zwischen den Markern `<!-- schnappschuss:start -->` und `<!-- schnappschuss:ende -->` (je allein
- * auf der Zeile); der Scan überspringt den Block, ein Start ohne Ende oder ein verschachtelter Start ist ein Fund.
+ * auf der Zeile); der Scan überspringt den Block, ein Start ohne Ende, ein Ende ohne Start oder ein verschachtelter Start ist ein Fund.
  *
  * Bewusste Grenze: freie Umschreibungen ohne einen der Namen („orchestrierter Workflow, der dieselben Phasen fährt“)
  * fängt der Scan nicht; das Wort „Workflow“ allein wäre zu breit (GitHub-Actions-Workflows, generische Mechanik).
@@ -96,7 +96,8 @@ export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[
         return;
       }
       if (marker === SCHNAPPSCHUSS_ENDE) {
-        if (blockStart && !blockDatiert) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Datum`);
+        if (!blockStart) treffer.push(`${d.pfad}:${i + 1}: Schnappschuss-Ende ohne Start`);
+        else if (!blockDatiert) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Datum`);
         blockStart = 0;
         return;
       }
@@ -114,8 +115,8 @@ export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[
 /** Meldung mit dem Fix-Hinweis je getroffener Regel (ein Hinweis pro Regel, auch bei mehreren Treffern). */
 export function meldungMitFix(treffer: string[]): string {
   const hinweise = RESTE.filter((r) => treffer.some((t) => t.endsWith(`: ${r.name}`))).map((r) => `- ${r.name}: ${r.fix}`);
-  const bloecke = treffer.some((t) => t.includes("Schnappschuss-Block"))
-    ? ["- Schnappschuss-Block: Marker nur allein auf der Zeile, jeder Start braucht genau ein Ende und zwischen beiden ein ISO-Datum (JJJJ-MM-TT)"]
+  const bloecke = treffer.some((t) => t.includes("Schnappschuss-Block") || t.includes("Schnappschuss-Ende"))
+    ? ["- Schnappschuss-Block: Marker nur allein auf der Zeile, jeder Start braucht genau ein Ende (und jedes Ende einen Start) und zwischen beiden ein ISO-Datum (JJJJ-MM-TT)"]
     : [];
   return `Rest des entfernten Pfads gefunden:\n${[...hinweise, ...bloecke].join("\n")}`;
 }
@@ -195,8 +196,9 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     test("ein Block ohne ISO-Datum ist ein Fund (Schnappschuss ist datiert)", () => {
       assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
     });
-    test("ein Ende-Marker ohne Start ist kein Datum-Fund (nur ein offener Block braucht ein Datum)", () => {
-      assert.deepEqual(pruefe(`${ende}\n${datum}`), []);
+    test("ein Ende-Marker ohne Start ist ein eigener Fund, kein Datum-Fund (nur ein offener Block braucht ein Datum)", () => {
+      assert.deepEqual(pruefe(`${ende}\n${datum}`), ["docs/s.md:1: Schnappschuss-Ende ohne Start"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${ende}\n${ende}`), ["docs/s.md:4: Schnappschuss-Ende ohne Start"]);
     });
     test("ein leerer Block ist ein Fund, ein Datum außerhalb des Blocks zählt nicht", () => {
       assert.deepEqual(pruefe(`${start}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
