@@ -1,6 +1,7 @@
 /* docs-gen ist projektneutral (#1373): ein Mini-Repo, das nicht Kubernia ist (Python „wetterdienst“, kein
  * package.json, kein src/), läuft durch denselben Kern (Engine, ADR-Liste, Zeitleiste, Schichten Soll/Ist)
- * mit eigener Config, eigener Schicht-Definition, eigenem Import-Adapter und eigener Registry. Dazu ein
+ * mit eigener Config, eigener Schicht-Definition, eigenem Import-Adapter und eigener Registry (Kern-Registry plus
+ * optional `generatoren` aus der Config, ADR 0022 F6). Dazu ein
  * Import-Wächter: der übertragbare Kern importiert nichts aus dem Kubernia- oder Harness-Stack.
  * Das Fixture entsteht im Temp-Ordner (test/support/tmp-fixture.ts), nichts davon liegt im Repo.
  */
@@ -21,7 +22,7 @@ import * as zeit from "../scripts/docs-gen/zeitleiste.mjs";
 import * as schichten from "../scripts/docs-gen/schichten.mjs";
 
 type Gen = Record<string, (ctx: { rootDir: string; config: Record<string, unknown> }) => string>;
-const cli = (docsGen as unknown as { cli: (argv: string[], o: { rootDir: string; generators: Gen; out: (s: string) => void; err: (s: string) => void }) => number }).cli;
+const cli = (docsGen as unknown as { cli: (argv: string[], o: { rootDir: string; generators?: Gen; out: (s: string) => void; err: (s: string) => void }) => Promise<number> }).cli;
 
 /** Eigene Registry des Fremd-Repos: nur Kern-Generatoren, kein Harness-Stack, kein Spiel. */
 const generators: Gen = {
@@ -91,6 +92,15 @@ const README = `# Wetterdienst
 `;
 const adrDatei = (nr: string, titel: string, datum: string) => `# ADR ${nr}: ${titel}\n\n> Status: **akzeptiert** · Datum: ${datum}\n\n## Kontext\n\nText.\n`;
 
+const CONFIG: Record<string, unknown> = {
+  markdown: ["README.md"],
+  befehl: "make docs",
+  adr: { ordner: "docs/adr" },
+  zeitleiste: { meilensteine: "docs/meilensteine.json" },
+  schichten: { layers: "werkzeug/schichten.cjs", cruise: ["werkzeug/importgraph.mjs"] },
+};
+const mitConfig = (extra: Record<string, unknown>) => ({ "werkzeug/docs-gen.json": JSON.stringify({ ...CONFIG, ...extra }) });
+
 const mini = (extra: Record<string, string> = {}): Record<string, string> => ({
   "wetter/api/routen.py": "from wetter.dienste import vorhersage\nfrom wetter.modell import Ort\n",
   "wetter/dienste/vorhersage.py": "import httpx\nfrom wetter.modell import Ort\n",
@@ -100,39 +110,40 @@ const mini = (extra: Record<string, string> = {}): Record<string, string> => ({
   "docs/meilensteine.json": JSON.stringify({ meilensteine: [{ datum: "2026-03-10", text: "Erste Vorhersage live" }] }),
   "werkzeug/schichten.cjs": layersDatei(MODELL),
   "werkzeug/importgraph.mjs": IMPORTGRAPH,
-  "werkzeug/docs-gen.json": JSON.stringify({
-    markdown: ["README.md"],
-    befehl: "make docs",
-    adr: { ordner: "docs/adr" },
-    zeitleiste: { meilensteine: "docs/meilensteine.json" },
-    schichten: { layers: "werkzeug/schichten.cjs", cruise: ["werkzeug/importgraph.mjs"] },
-  }),
+  "werkzeug/docs-gen.json": JSON.stringify(CONFIG),
   "README.md": README,
   ...extra,
 });
 
-const lauf = (root: string, ...argv: string[]) => {
+const lauf = async (root: string, ...argv: string[]) => {
   const out: string[] = [];
   const err: string[] = [];
-  const code = cli(["--config", "werkzeug/docs-gen.json", ...argv], { rootDir: root, generators, out: (s) => out.push(s), err: (s) => err.push(s) });
+  const code = await cli(["--config", "werkzeug/docs-gen.json", ...argv], { rootDir: root, generators, out: (s) => out.push(s), err: (s) => err.push(s) });
+  return { code, out: out.join("\n"), err: err.join("\n") };
+};
+/** Wie `lauf`, aber ohne eigene Registry: die Engine lädt Kern-Registry plus `config.generatoren` selbst (AK3 von #1710). */
+const laufKern = async (root: string, ...argv: string[]) => {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = await cli(["--config", "werkzeug/docs-gen.json", ...argv], { rootDir: root, out: (s) => out.push(s), err: (s) => err.push(s) });
   return { code, out: out.join("\n"), err: err.join("\n") };
 };
 const readme = (root: string) => readFileSync(join(root, "README.md"), "utf8");
 
 describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
-  test("schreiben, danach ist der Prüflauf grün", () => {
+  test("schreiben, danach ist der Prüflauf grün", async () => {
     const root = fixture(mini());
-    const w = lauf(root, "--write");
+    const w = await lauf(root, "--write");
     assert.equal(w.code, 0, w.err);
     assert.match(w.out, /geschrieben: README\.md/);
-    const c = lauf(root);
+    const c = await lauf(root);
     assert.equal(c.code, 0, c.err);
     assert.match(c.out, /aktuell/);
   });
 
-  test("die Ausgabe trägt das Fremd-Repo, nichts von Kubernia", () => {
+  test("die Ausgabe trägt das Fremd-Repo, nichts von Kubernia", async () => {
     const root = fixture(mini());
-    lauf(root, "--write");
+    await lauf(root, "--write");
     const t = readme(root);
     assert.match(t, /alles übrige unter wetter\//);
     assert.match(t, /Zeitzonen immer in UTC/);
@@ -146,12 +157,12 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
     for (const fremd of ["src/", "Phaser", "Kubernia", "npm run"]) assert.ok(!t.includes(fremd), `"${fremd}" darf im Fremd-Repo nicht auftauchen`);
   });
 
-  test("ein neues ADR macht den Prüflauf rot, mit dem Befehl aus der Config; die Datei bleibt unverändert", () => {
+  test("ein neues ADR macht den Prüflauf rot, mit dem Befehl aus der Config; die Datei bleibt unverändert", async () => {
     const root = fixture(mini());
-    lauf(root, "--write");
+    await lauf(root, "--write");
     const vorher = readme(root);
     const stale = fixture({ ...mini({ "README.md": vorher }), "docs/adr/0003-neu.md": adrDatei("0003", "Neues ADR", "2026-04-01") });
-    const c = lauf(stale);
+    const c = await lauf(stale);
     assert.equal(c.code, 1);
     assert.match(c.err, /veraltet/);
     assert.match(c.err, /Fix: make docs/);
@@ -159,9 +170,9 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
     assert.equal(readme(stale), vorher);
   });
 
-  test("ein verbotener Import (Modell → Schnittstelle) in einer .py-Datei macht den Lauf rot", () => {
+  test("ein verbotener Import (Modell → Schnittstelle) in einer .py-Datei macht den Lauf rot", async () => {
     const root = fixture(mini({ "wetter/modell.py": "from wetter.api import routen\nclass Ort:\n    pass\n" }));
-    const c = lauf(root, "--write");
+    const c = await lauf(root, "--write");
     assert.equal(c.code, 1);
     assert.match(c.err, /außerhalb des Solls/);
     assert.match(c.err, /modell → api/);
@@ -169,14 +180,69 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
     assert.equal(readme(root), README, "fail-closed: nichts geschrieben");
   });
 
-  test("eine Schicht-Definition ohne Quellwurzel macht den Lauf rot, auch mit einem Prüfer, der nichts prüft", () => {
+  test("eine Schicht-Definition ohne Quellwurzel macht den Lauf rot, auch mit einem Prüfer, der nichts prüft", async () => {
     const ohne: Record<string, unknown> = { ...MODELL };
     delete ohne.quellwurzel;
     const root = fixture(mini({ "werkzeug/schichten.cjs": layersDatei(ohne, "function () {}") }));
-    const c = lauf(root, "--write");
+    const c = await lauf(root, "--write");
     assert.equal(c.code, 1);
     assert.match(c.err, /quellwurzel/);
     assert.equal(readme(root), README);
+  });
+});
+
+describe("docs-gen ohne eigene Registry: Kern plus config.generatoren (ADR 0022 F6, #1710)", () => {
+  const SPIEL_MARKER = (name: string) => `\n<!-- GEN:${name} START -->\n<!-- GEN:${name} END -->\n`;
+  const WETTER_GEN = 'export const wetterKarte = ({ rootDir, config }) => `Karte aus ${config.wetter.ort} (${rootDir.length > 0 ? "root" : ""})`;\n';
+
+  test("ohne Spiel-Generatoren und ohne `generatoren` läuft docs-gen fehlerfrei (Schreiben, danach Prüflauf grün)", async () => {
+    const root = fixture(mini());
+    const w = await laufKern(root, "--write");
+    assert.equal(w.code, 0, w.err);
+    assert.match(w.out, /geschrieben: README\.md/);
+    const c = await laufKern(root);
+    assert.equal(c.code, 0, c.err);
+    assert.match(c.out, /aktuell/);
+  });
+
+  test("ein Marker eines Spiel-Generators ohne Config-Eintrag ist ein Fehler (Exit 1, nichts geschrieben)", async () => {
+    const root = fixture(mini({ "README.md": README + SPIEL_MARKER("quest-graph") }));
+    const c = await laufKern(root, "--write");
+    assert.equal(c.code, 1);
+    assert.match(c.err, /unbekannter Generator "quest-graph"/);
+    assert.equal(readme(root), README + SPIEL_MARKER("quest-graph"));
+  });
+
+  test("ein in der Config genannter, aber fehlender Generator bricht mit klarer Meldung ab (Marker, Pfad, `fehlt`)", async () => {
+    const root = fixture(mini(mitConfig({ generatoren: { "wetter-karte": { datei: "werkzeug/fehlt.mjs", name: "wetterKarte" } } })));
+    const c = await laufKern(root, "--write");
+    assert.equal(c.code, 1);
+    assert.match(c.err, /config\.generatoren\.wetter-karte/);
+    assert.match(c.err, /werkzeug\/fehlt\.mjs/);
+    assert.match(c.err, /fehlt/);
+    assert.match(c.err, /Fix: config\.generatoren/);
+    assert.equal(readme(root), README, "fail-closed: nichts geschrieben");
+  });
+
+  test("eine Datei ohne den genannten Export bricht mit klarer Meldung ab", async () => {
+    const root = fixture(mini({ ...mitConfig({ generatoren: { "wetter-karte": { datei: "werkzeug/wetter-gen.mjs", name: "gibtsNicht" } } }), "werkzeug/wetter-gen.mjs": WETTER_GEN }));
+    const c = await laufKern(root, "--write");
+    assert.equal(c.code, 1);
+    assert.match(c.err, /config\.generatoren\.wetter-karte: werkzeug\/wetter-gen\.mjs exportiert keine Funktion "gibtsNicht"/);
+  });
+
+  test("ein eigener Projekt-Generator wird aus der Config geladen und gerendert", async () => {
+    const root = fixture(
+      mini({
+        ...mitConfig({ generatoren: { "wetter-karte": { datei: "werkzeug/wetter-gen.mjs", name: "wetterKarte" } }, wetter: { ort: "Hamburg" } }),
+        "werkzeug/wetter-gen.mjs": WETTER_GEN,
+        "README.md": README + SPIEL_MARKER("wetter-karte"),
+      }),
+    );
+    const w = await laufKern(root, "--write");
+    assert.equal(w.code, 0, w.err);
+    assert.match(readme(root), /Karte aus Hamburg/);
+    assert.equal((await laufKern(root)).code, 0);
   });
 });
 
