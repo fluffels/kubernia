@@ -434,7 +434,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("Hinweissätze zu sonstigen Dateien (#1850): .claude nur Neustart, Skill-Quelle nur Aufruf, beides beide, .agents außerhalb von skills Neustart", () => {
-    const text = (sonstige: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [], sonstige, lockGeaendert: false } }, { sitzungsbasis: false });
+    const text = (sonstige: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [], sonstige } }, { sitzungsbasis: false });
     const NEUSTART = "gelten erst nach einem Session-Neustart";
     const AUFRUF = "ab dem nächsten Skill-Aufruf";
     const nurClaude = text([".claude/settings.json"]);
