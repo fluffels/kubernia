@@ -2,10 +2,10 @@
 // `node scripts/check-docmap.mjs` (npm run check:docmap) gestartet UND von
 // test/docmap.test.ts importiert. Ein `#!` bricht genau diesen Vitest/esbuild-Import.
 /**
- * Doku↔Code-Drift-Wächter (#482, Stardew-Skalierung #907) — hält die Tiefendoc-Abdeckung ehrlich.
+ * Doku↔Code-Drift-Wächter (#482, Skalierung #907) — hält die Tiefendoc-Abdeckung ehrlich.
  *
  * Hintergrund: Eine per-Datei-Zeile in der Repo-Landkarte wächst linear mit den Modulen (~163→490 bei
- * Stardew-Scope). #907 ersetzt den per-File-Check der Landkarte durch einen Tiefendoc-Abdeckungs-Check:
+ * großem Umfang). #907 ersetzt den per-File-Check der Landkarte durch einen Tiefendoc-Abdeckungs-Check:
  * jedes `src/*.ts` muss als Backtick-Pfad in `docs/module/*.md` vorkommen.
  *
  *   1. Keine Geister-Einträge: jeder in den Tiefendocs genannte `src/…ts`-Pfad existiert.

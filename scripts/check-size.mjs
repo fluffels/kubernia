@@ -6,7 +6,7 @@
 /**
  * Dateigröße-Wächter (#390) – Frühwarnung gegen neue God-Files.
  *
- * Hintergrund: große Module sind bei Stardew-Scope teuer – Agenten lesen pro
+ * Hintergrund: große Module sind bei wachsendem Umfang teuer – Agenten lesen pro
  * Änderung viel mehr Kontext (Tokens), und je größer eine Datei, desto leichter
  * schleichen sich Regressionen ein. Dieser Wächter meldet jedes `src`-Modul über
  * einem Zeilen-Budget, BEVOR es zum nächsten WorldScene.ts (1344) wächst.

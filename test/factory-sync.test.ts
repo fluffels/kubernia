@@ -43,6 +43,7 @@ interface Drift {
   cli(argv: string[], opt?: Opt): number;
 }
 const lib = rawLib as unknown as Lib;
+const { wirdVerteilt } = rawLib as unknown as { wirdVerteilt: (e: { ring: string }) => boolean };
 const sync = rawSync as unknown as Sync;
 const drift = rawDrift as unknown as Drift;
 const pc = rawPc as unknown as { PROJEKT_CONFIG: string };
@@ -658,6 +659,25 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     assert.equal(pw.status, 1);
     assert.match(pw.stderr, /factory-planer.md:3: Projektwert 'agenten\.planer'/);
     assert.match(pw.stderr, /projektwerte\.mjs --write/);
+  });
+
+  test("ohne Projekt-Leitfrage und Optik-Messlatte (#1709): Sync und Drift-Gate ohne Meldung dazu, kein verteilter Besitz trägt den Spielbezug", () => {
+    const z = tmp();
+    const projekt = "<!-- factory-projekt:start -->\nEigene Regel des Fremdprojekts.\n<!-- factory-projekt:ende -->";
+    schreibe(z, "AGENTS.md", `# Fremdes Projekt\n\n${kernText("alter Kern")}\n\n${projekt}\n`);
+    schreibe(z, ".claude/settings.json", '{\n  "model": "x"\n}\n');
+    const echt = JSON.parse(pwConfig("wk-planer")) as Record<string, unknown>;
+    delete echt.projektliterale;
+    schreibe(z, ".factory/projekt.json", JSON.stringify(echt, null, 2) + "\n");
+    const r = laufe(["--quelle", WURZEL, "--ziel", z]);
+    assert.equal(r.code, 0, r.err);
+    const p = spawnSync(process.execPath, [join(z, "scripts", "check-factory-drift.mjs")], { cwd: z, encoding: "utf8" });
+    assert.equal(p.status, 0, p.stderr);
+    for (const text of [r.out, r.err, p.stdout, p.stderr]) assert.doesNotMatch(text, /Leitfrage|Messlatte|Optik|stardew/i);
+    const manifest = JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string; ring: string }[] };
+    const verteilt = [...new Set(manifest.eintraege.filter((e) => wirdVerteilt(e)).map((e) => e.pfad))];
+    assert.ok(verteilt.includes(".claude/agents/factory-planer.md"), "der Planer wird verteilt (sonst wäre der Test vakuös)");
+    for (const pfad of verteilt) assert.doesNotMatch(lies(z, pfad), /stardew/i, `${pfad} im Ziel trägt den Spielbezug`);
   });
 
   test.skipIf(process.platform === "win32")("das Ausführbit des Pre-Push-Hooks kommt mit", () => {

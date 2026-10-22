@@ -5,11 +5,11 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel (kein eigenes check-Skript), darum im geschützten test/harness/ (#1165).
  *
- * Grenze (geschlossener Scan-Umfang): geprüft werden nur `AGENTS.md`, `.factory/besitz.json` und `.factory/projekt.json`; die Bedeutung
+ * Grenze (geschlossener Scan-Umfang): geprüft werden nur `AGENTS.md`, `.factory/besitz.json`, `.factory/projekt.json`, die drei Prompt-Einheiten (Planer, Umsetzer, `review-lenses`) und `docs/stardew-referenz.md` (Existenz); die Bedeutung
  * der Regeltexte prüft kein Wächter, Stopp-Aussagen im Projekt-Block fangen nur die Pin-Zeile und die Stopp-Wort-Prüfung in `harness-approval.test.ts`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../../scripts/besitz-lib.mjs";
@@ -122,6 +122,24 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
     assert.match(projekt, /\*\*Projekt-Leitfrage\*\*/);
     assert.equal(kern.includes("Oberste Regel"), true, "die Einleitung nennt den Namen der Stelle");
     assert.equal(kern.includes("Stardew"), false, "der Kern nennt keine Projekt-Leitfrage-Inhalte");
+  });
+
+  // Der Prompt eines Subagenten ist seine Datei plus die nativ geladene AGENTS.md (#1087): die Kern-Prompts verweisen auf den
+  // Projekt-Block, dort stehen Leitfrage und Optik-Messlatte (#1709).
+  test("Projektregeln im Prompt (#1709): Kern-Prompts verweisen, der Projekt-Block trägt Leitfrage und Optik-Messlatte samt Referenzdatei", () => {
+    const planer = lese(".claude/agents/factory-planer.md");
+    const umsetzer = lese(".claude/agents/factory-umsetzer.md");
+    const lenses = lese(".claude/skills/review-lenses/SKILL.md");
+    for (const t of [planer, umsetzer, lenses]) assert.doesNotMatch(t, /stardew/i);
+    assert.match(planer, /Projekt-Leitfrage/);
+    assert.match(lenses, /Projekt-Leitfrage/);
+    assert.match(planer, /Optik-Messlatte/);
+    assert.match(umsetzer, /Optik-Messlatte/);
+    const projekt = agents.slice(agents.indexOf(PROJEKT_START), agents.indexOf(PROJEKT_ENDE));
+    assert.match(projekt, /\*\*Projekt-Leitfrage\*\*[^\n]*Stardew/);
+    const messlatte = projekt.split("\n").find((z) => z.includes("Messlatte") && z.includes("docs/stardew-referenz.md"));
+    assert.ok(messlatte, "der Projekt-Block nennt die Optik-Messlatte mit ihrer Referenzdatei");
+    assert.ok(existsSync(WURZEL + "docs/stardew-referenz.md"), "die Referenzdatei existiert");
   });
 
   test("Drift am echten Text: unverändert grün, ein Zeichen im Kern rot mit dem Weg, eine Zeile im Projekt-Block grün", () => {
