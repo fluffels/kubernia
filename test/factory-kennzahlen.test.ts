@@ -797,3 +797,65 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(ohne.bericht.audit!.filter((a) => a.status === "Lücke").map((a) => a.mechanismus)).toEqual(expect.arrayContaining(["Festgefahren-Protokoll", "Lens-Zahl"]));
   });
 });
+
+describe("Spezifikations-Mängel im Wochenbericht (#1860)", () => {
+  const von = "2026-10-12T00:00:00Z";
+  const bis = "2026-10-16T00:00:00Z";
+  type Maengel = { anzahl?: number; maengel?: { nr: number; titel: string; fehlt: string[] }[]; luecke?: string };
+  const M = raw as unknown as { holeMaengel: (run: Run) => Maengel };
+  const GUT = JSON.stringify({ anzahl: 2, maengel: [{ nr: 7, titel: "Sieben", fehlt: ["kein Negativfall"] }, { nr: 9, titel: "Neun", fehlt: ["`## Ziel` fehlt"] }] });
+  const ok = (stdout: string): Run => () => ({ status: 0, stdout, stderr: "" });
+
+  test("holeMaengel ruft naechstes-ticket.mjs --maengel --json auf und liefert anzahl und Liste", () => {
+    let gesehen: [string, string[]] | null = null;
+    const r = M.holeMaengel((name, args) => {
+      gesehen = [name, args];
+      return { status: 0, stdout: GUT, stderr: "" };
+    });
+    expect(gesehen).toEqual(["naechstes-ticket.mjs", ["--maengel", "--json"]]);
+    expect(r.anzahl).toBe(2);
+    expect(r.maengel?.map((m) => m.nr)).toEqual([7, 9]);
+  });
+  test("Negativfall: Exit ≠ 0, kein JSON oder Vertragsbruch ergeben eine Lücke mit Grund, nie 0", () => {
+    expect(M.holeMaengel(() => ({ status: 2, stdout: "", stderr: "\n✖ naechstes-ticket: gh weg\nmehr" })).luecke).toBe("naechstes-ticket Exit 2: ✖ naechstes-ticket: gh weg");
+    expect(M.holeMaengel(ok("kein json")).luecke).toMatch(/kein JSON/);
+    for (const bad of ["{}", JSON.stringify({ anzahl: "2", maengel: [] }), JSON.stringify({ anzahl: 1, maengel: "x" }), "null", JSON.stringify({ anzahl: 2, maengel: [] })]) {
+      const r = M.holeMaengel(ok(bad));
+      expect(r.luecke, bad).toMatch(/Vertrag verletzt/);
+      expect(r.anzahl, bad).toBeUndefined();
+    }
+  });
+  const md = (spezifikation?: Maengel) => F.renderMarkdown(F.bericht({ von, bis, quelle: "Transkript", lauf: daten([ZEILE()]), nacharbeit: daten([]), tickets: [], ...(spezifikation ? { spezifikation } : {}) } as never));
+  test("Abschnitt „Spezifikation“ nennt die Zahl und je Ticket Nummer, Titel und Mängel", () => {
+    const text = md(JSON.parse(GUT) as Maengel);
+    expect(text).toContain("**Spezifikation**\n- 2 Tickets mit Mangel");
+    expect(text).toContain("- #7 Sieben: kein Negativfall");
+    expect(text).toContain("- #9 Neun: `## Ziel` fehlt");
+  });
+  test("null Tickets mit Mangel ist eine echte Null; eine Lücke zeigt den Grund und nie `0 Tickets`", () => {
+    expect(md({ anzahl: 0, maengel: [] })).toContain("- 0 Tickets mit Mangel");
+    const luecke = md({ luecke: "naechstes-ticket Exit 2: gh weg" });
+    expect(luecke).toContain("**Spezifikation**\n- Lücke: naechstes-ticket Exit 2: gh weg");
+    expect(luecke).not.toContain("0 Tickets");
+  });
+  test("ein einzelnes Ticket steht im Singular; lange Listen werden bei 10 gekürzt", () => {
+    expect(md({ anzahl: 1, maengel: [{ nr: 3, titel: "Drei", fehlt: ["x"] }] })).toContain("- 1 Ticket mit Mangel");
+    const viele = Array.from({ length: 12 }, (_, i) => ({ nr: i + 1, titel: `T${i + 1}`, fehlt: ["x"] }));
+    const text = md({ anzahl: 12, maengel: viele });
+    expect(text).toContain("- #10 T10: x");
+    expect(text).not.toContain("- #11 T11: x");
+    expect(text).toContain("… und 2 weitere");
+  });
+  test("ohne Abschnitt im Bericht (kein Lader) bleibt der Block wie bisher", () => {
+    expect(md()).not.toContain("**Spezifikation**");
+  });
+  test("erstelle ruft den Mängel-Lader, Lücke dort ändert den Exit-Code nicht", () => {
+    type Fn = (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, never[]>; maengelLader?: () => Maengel }) => { bericht: { spezifikation?: Maengel }; exit: number };
+    const erstelle = (raw as unknown as { erstelle: Fn }).erstelle;
+    const run: Run = () => ({ status: 0, stdout: JSON.stringify({ zeilen: [], kennzahlen: { ...KENN, prs: 0 } }), stderr: "" });
+    const mit = erstelle({ von, bis }, { run, claimKarte: () => new Map(), maengelLader: () => ({ luecke: "weg" }) });
+    expect(mit.bericht.spezifikation).toEqual({ luecke: "weg" });
+    expect(mit.exit).toBe(0);
+    expect(erstelle({ von, bis }, { run, claimKarte: () => new Map() }).bericht.spezifikation).toBeUndefined();
+  });
+});

@@ -230,7 +230,7 @@ export function listeMaengel({ produkt, factory, bereich = null, config, offene,
     if (item.status !== "Todo" || item.state !== "open") continue;
     const r = ueberspringGrund(item, { offene, belegt, owner, messfenster: null, hartAb, config });
     const fehlt = r.fehlt ?? r.bestandFehlt;
-    if (fehlt && (r.grund === "" || r.fehlt)) maengel.push({ nr: item.number, titel: item.title, fehlt });
+    if (fehlt) maengel.push({ nr: item.number, titel: item.title, fehlt });
   }
   return { anzahl: maengel.length, maengel };
 }
