@@ -199,7 +199,7 @@ export function quelleVomTag(quelle, tag) {
   const modi = new Map();
   for (const zeile of baum.out.toString("utf8").split("\0")) {
     const m = /^(\d+) blob [0-9a-f]+\t(.*)$/s.exec(zeile);
-    if (m) modi.set(m[2], m[1]);
+    if (m && m[1] !== "120000") modi.set(m[2], m[1]); // Symlinks sind nicht verteilbar: der Link-Text wäre kein Dateiinhalt
   }
   const cache = new Map();
   const vorladen = (pfade) => {
@@ -240,7 +240,8 @@ function quelleGit(quelle) {
 
 const liesDatei = (wurzel) => (pfad) => {
   const voll = join(wurzel, ...pfad.split("/"));
-  return existsSync(voll) ? readFileSync(voll, "utf8") : null;
+  if (!existsSync(voll) || lstatSync(voll).isSymbolicLink()) return null; // Symlinks sind nicht verteilbar, wie im Tag-Leser
+  return readFileSync(voll, "utf8");
 };
 
 function parseArgs(argv) {
