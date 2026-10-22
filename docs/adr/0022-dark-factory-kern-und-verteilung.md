@@ -495,3 +495,12 @@ Die Überschrift von #1824 zählt dort als „Teil 8“; gemeint ist F3 **Teil 9
 - **`ordneHarnessAenderungen(dateien)`** hat keinen zweiten Parameter mehr: Skill ist `AGENTS.md`, `KERN_SKILL_VERZEICHNIS` oder `TICKET_SKILL_VERZEICHNIS`.
 - **Platzhalter-Muster:** `platzhalterMuster()` in `scripts/besitz-lib.mjs` liefert die Regex der `<gruppe.schluessel>`-Platzhalter (frische Instanz je Aufruf); Platzhalter-Regel und Test-Support nutzen sie.
 - **Inventar-Wächter:** `test/harness/umgebungsvariablen-inventar.test.ts` hält das Inventar der Umgebungsvariablen und den Quelltext in Einklang. Das Ende des Rückfalls auf den Altnamen steht in #1715 (F10).
+
+## Fortschreibung #1709 (2026-10-22): Stardew-Regeln aus dem Kern (F5)
+
+- **Ort der Regeln:** Leitfrage und Optik-Messlatte stehen im Projekt-Block der `AGENTS.md` (Claude Code lädt sie nativ, ein neuer Pflicht-Schlüssel in der Projekt-Config entfällt). Planer, Umsetzer und `review-lenses` verweisen darauf („Projekt-Leitfrage“, „Optik-Messlatte“); fehlt die Regel im Projekt, entfällt die Prüfung bzw. begründet der Agent die Optik-Weiche ohne.
+- **Wächter:** `kern-reinheit.test.ts` zählt `Stardew` (Config-Schlüssel `projektliterale`, groß/klein egal) je Kern-Einheit; die Baseline ist leer, ein eingeschleuster Treffer ist rot. `agents-bloecke.test.ts` weist die Projektregel im Prompt nach, `factory-sync.test.ts` ein Fremdrepo ohne Leitfrage und Optik-Regel.
+- **Ringe:** `check-size`, `check-context-size`, `check-docmap` und `check-lockfile` wechseln auf Ring `kern` (kein Baseline-Eintrag mehr, nur Kern-Importe). Planer, Umsetzer und `review-lenses` bleiben `kern-nach-entkopplung` (weitere Projektbezüge, F6).
+- **Schon frei:** der Ticket-Workflow (`.claude/skills/factory/*`), `scripts/schichten-kern.cjs` und `scripts/layers.cjs` (Projektbesitz).
+- **Präzisiert:** der Zuschnitt der Regeln ohne Inventar-Zeile („ihr Zuschnitt folgt mit F5“) folgt im Sammelticket #1843.
+- **Grenzen:** der Wächter zählt nur das Wort; Spielbezüge wie NPCs oder Phaser zählt er nicht, ein Projektwert-Block wird vor dem Zählen entfernt. Der Ring `kern` belegt „literal- und importfrei“, nicht „strukturfrei“.
