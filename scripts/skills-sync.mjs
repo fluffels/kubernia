@@ -136,20 +136,23 @@ export function lauf({ wurzel, tool = "claude", check = false, prune = false, ue
     const loeschbar = z.text !== null && traegtMarke(z.text) && z.dateien.every((d) => d === "SKILL.md");
     if (prune && loeschbar) { rmSync(join(wurzel, pfad), { recursive: true }); ergebnis.geloescht.push(pfad); }
     else if (z.text !== null && traegtMarke(z.text)) ergebnis.gemeldet.push(pfad);
-    else if (prune && !(z.ordner in uebergang)) ergebnis.gemeldet.push(pfad);
+    else if (prune) ergebnis.gemeldet.push(pfad);
   }
   return ergebnis;
 }
 
 function leseArgumente(argv) {
   const { werte, fehler } = flagsLesen(argv, { tool: { type: "string" }, check: { type: "boolean" }, prune: { type: "boolean" } });
-  return fehler ? null : { tool: werte.tool ?? "claude", check: werte.check === true, prune: werte.prune === true };
+  if (fehler) return { fehler: fehler.text };
+  const tool = werte.tool ?? "claude";
+  if (!Object.hasOwn(WERKZEUGE, tool)) return { fehler: `Unbekanntes Tool: ${tool}` };
+  return { tool, check: werte.check === true, prune: werte.prune === true };
 }
 
 function main() {
   const opt = leseArgumente(process.argv.slice(2));
-  if (!opt || !(opt.tool in WERKZEUGE)) {
-    console.error(`Aufruf: node scripts/skills-sync.mjs [--tool ${Object.keys(WERKZEUGE).join("|")}] [--check] [--prune]`);
+  if (opt.fehler) {
+    console.error(`${opt.fehler}\nAufruf: node scripts/skills-sync.mjs [--tool ${Object.keys(WERKZEUGE).join("|")}] [--check] [--prune]`);
     process.exit(AUFRUF_EXIT);
   }
   const wurzel = join(dirname(fileURLToPath(import.meta.url)), "..");

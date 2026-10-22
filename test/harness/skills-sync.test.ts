@@ -314,11 +314,15 @@ describe("lauf auf einem Temp-Verzeichnis", () => {
     expect(readdirSync(join(w, ".claude/skills")).sort()).toEqual(["fremd", "voll"]);
   });
 
-  test("Volltext aus der Übergangsliste wird auch mit --prune nicht gemeldet", () => {
+  test("--prune meldet auch einen Volltext aus der Übergangsliste, ohne ihn anzufassen; ohne --prune bleibt er still", () => {
     const w = neu();
-    schreibe(w, ".claude/skills/voll/SKILL.md", "---\nname: voll\n---\nText\n");
+    const text = "---\nname: voll\n---\nText\n";
+    schreibe(w, ".claude/skills/voll/SKILL.md", text);
     const e = sync.lauf({ wurzel: w, prune: true, uebergang: { voll: "#1" } });
-    expect(e.gemeldet).toEqual([]);
+    expect(e.gemeldet).toEqual([".claude/skills/voll"]);
+    expect(e.geloescht).toEqual([]);
+    expect(readFileSync(zeigerPfad(w, "voll"), "utf8")).toBe(text);
+    expect(sync.lauf({ wurzel: w, uebergang: { voll: "#1" } }).gemeldet).toEqual([]);
   });
 
   test("unbrauchbare Quelle wird gemeldet und kein Zeiger geschrieben", () => {
@@ -379,6 +383,15 @@ describe("Kommandozeile", () => {
     expect(cli("--tool", "cursor").status).toBe(2);
     expect(cli("--unbekannt").status).toBe(2);
     expect(cli("--tool").status).toBe(2);
+  });
+
+  test("die Fehlermeldung nennt das Tool bzw. das Flag, dazu die Aufruf-Zeile", () => {
+    for (const [args, wort] of [[["--tool", "cursor"], "cursor"], [["--tool=cursor"], "cursor"], [["--bogus"], "--bogus"], [["--tool"], "--tool"]] as const) {
+      const r = cli(...args);
+      expect(r.stderr, args.join(" ")).toContain(wort);
+      expect(r.stderr).toContain("Aufruf: node scripts/skills-sync.mjs");
+    }
+    expect(cli("--tool", "cursor").stderr).toContain("Unbekanntes Tool: cursor");
   });
 
   describe("Exit 1 in einem kopierten Skript-Baum (die Wurzel ergibt sich aus dem Skriptpfad)", () => {
