@@ -69,7 +69,7 @@ Für Projekte, in deren Repo vom Harness nichts liegen darf, gilt die Betriebsar
 
 Der Produktname ist „Self-Improving Agent Harness and Factory“. Er gilt als source-available: der Quelltext ist einsehbar, die Nutzung bleibt vorbehalten, er ist nicht als Open Source lizenziert.
 
-Das Sync-Werkzeug (`npm run factory:sync`, ADR 0022 F9) überträgt den Besitz aus einem Tag der Quelle (`--tag <name>`), nie aus dem Arbeitsbaum, das Drift-Gate (`npm run check:factorydrift`) hält ihn im Projekt unverändert und ist ohne Tag oder bei einem unsauberen Quellstand rot (#1871); nur `--entwurf` liest den Arbeitsbaum, zur Probe. Der Ist-Zustand bleibt eine Kopie, bis F10 die Quelle als eigenes Repo einführt.
+Das Sync-Werkzeug (`npm run factory:sync`, ADR 0022 F9) überträgt den Besitz aus einem Tag der Quelle (`--tag <name>`), für den Stand eines Projekts nie aus dem Arbeitsbaum, das Drift-Gate (`npm run check:factorydrift`) hält ihn im Projekt unverändert und ist ohne Tag oder bei einem unsauberen Quellstand rot (#1871); nur `--entwurf` liest den Arbeitsbaum, zur Probe. Der Ist-Zustand bleibt eine Kopie, bis F10 die Quelle als eigenes Repo einführt.
 
 Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md), [Sandbox anbinden](sandbox-anbinden.md)).
 

@@ -51,7 +51,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Kontextdatei-Wächter (Zeichen-Budget für jede AGENTS.md, Wurzel + modul-lokal, #719/#1064/#1088) | `npm run check:contextsize` |
 | Tiefendoc-Abdeckungs-Wächter (jede `src/`-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
 | Factory-Besitz in ein Projekt übertragen (nur Besitz laut `.factory/besitz.json`, kein Merge, idempotent; Trockenlauf mit `--trocken`, #1613; liest aus einem Tag der Quelle, ohne `--tag` bricht der Sync ab, nur `--entwurf` liest den Arbeitsbaum, #1871) | `npm run factory:sync -- --quelle <pfad> (--tag <name> \| --entwurf) [--ziel <pfad>] [--trocken]` |
-| Drift-Wächter (Besitz laut Sync-Stand unverändert, entfällt ohne `.factory/sync-stand.json`, #1613) | `npm run check:factorydrift` |
+| Drift-Wächter (Besitz laut Sync-Stand unverändert, entfällt ohne `.factory/sync-stand.json`, #1613; rot auch ohne `tag` oder bei `sauber: false` im Stand, #1871) | `npm run check:factorydrift` |
 | Projektwert-Stellen aus der Config prüfen oder erzeugen (Markdown-Block und Frontmatter-Zeile, #1746; `check:factorydrift` prüft sie immer gegen `.factory/projekt.json`, auch ohne Sync-Stand) | `node scripts/projektwerte.mjs --check` bzw. `--write` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Lebende-Doku-Wächter (generierte Abschnitte `<!-- GEN:<name> START/END -->` in README/docs gegen das Repo, #1355, [ADR 0017](../adr/0017-lebende-doku-generierte-abschnitte.md)) | `npm run check:docgen` |

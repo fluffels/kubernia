@@ -830,7 +830,8 @@ describe("Ring oberflaeche (ADR 0029)", () => {
     const faelle: string[][] = [["--tag", "v1"], ["--entwurf"], ["--tag", "v9"], []];
     for (const extra of faelle) {
       const z = baueZiel();
-      laufe(["--quelle", q, "--ziel", z, ...extra]);
+      const r = laufe(["--quelle", q, "--ziel", z, ...extra]);
+      assert.equal(r.code, extra.includes("--tag") && !extra.includes("v9") || extra.includes("--entwurf") ? 0 : 1, `${extra.join(" ")}: ${r.err}`);
       assert.ok(!cockpit(z), `${extra.join(" ") || "ohne Flag"}: oberflaeche-Datei im Ziel`);
     }
   });
@@ -873,8 +874,11 @@ describe("Sync vom Tag (#1871)", () => {
     assert.equal(v.lies("scripts/neu.mjs"), null);
     assert.equal(v.lies("gibt/es/nicht.txt"), null);
     assert.equal(v.lies("scripts/a.mjs"), "export const a = 1;\n");
-    v.vorladen(["scripts/a.mjs", "gibt/es/nicht.txt", "scripts/neu.mjs"]);
-    assert.equal(v.lies("scripts/a.mjs"), "export const a = 1;\n");
+    const w = sync.quelleVomTag(q, "v1");
+    w.vorladen(["scripts/a.mjs", "AGENTS.md", "gibt/es/nicht.txt", "scripts/neu.mjs"]);
+    assert.equal(w.lies("scripts/a.mjs"), "export const a = 1;\n");
+    assert.match(w.lies("AGENTS.md") ?? "", /^# Quelle\n/);
+    assert.equal(w.lies("scripts/neu.mjs"), null);
   });
 
   test("AK2: Sync-Stand Version 2 mit quelle { commit, tag, sauber: true } in dieser Reihenfolge", () => {
@@ -996,6 +1000,7 @@ describe("Sync vom Tag (#1871)", () => {
       const pfad = pc.ROLLEN_PFADE.lens;
       bricht(ohneRolle("lens", { pfad, ring: "oberflaeche", quelle: "t" }), /\(lens\) ist keine verteilte Einheit/);
       bricht(ohneRolle("lens", { pfad, block: "x", ring: "kern", quelle: "t" }), /\(lens\) ist keine verteilte Einheit/);
+      bricht(ohneRolle("lens", { pfad, schluessel: "x", ring: "kern", quelle: "t" }), /\(lens\) ist keine verteilte Einheit/);
     });
     test("der Ticket-Skill ist Projektdatei: fehlt er im Ziel, nur ein Hinweis; liegt er dort, keiner", () => {
       const pfad = pc.ROLLEN_PFADE.ticketSkill;
@@ -1047,6 +1052,11 @@ describe("Sync vom Tag (#1871)", () => {
       assert.match(f[0], /sauber: false/);
       assert.match(f[0], /von einem Tag neu syncen/);
     });
+    test("kaputte Herkunftswerte sind rot: Tag kein String, sauber fehlt oder ist kein Boolean", () => {
+      for (const tag of [null, 1, true]) assert.match(fehlerMit({ version: 2, quelle: { commit: "abc", tag, sauber: true } }).join(), /nicht von einem Tag/, `tag=${String(tag)}`);
+      assert.match(fehlerMit({ version: 2, quelle: { commit: "abc", tag: "v1" } }).join(), /sauber: false/, "sauber fehlt");
+      assert.match(fehlerMit({ version: 2, quelle: { commit: "abc", tag: "v1", sauber: "true" } }).join(), /sauber: false/, "sauber als String");
+    });
     test("Version 2 mit Tag und sauber: true ist grün, jede andere Version ist kaputt", () => {
       assert.deepEqual(fehlerMit({ version: 2, quelle: { commit: "abc", tag: "v1", sauber: true } }), []);
       assert.match(fehlerMit({ version: 3, quelle: { commit: "abc", tag: "v1", sauber: true } }).join(), /kaputt/);
@@ -1060,6 +1070,10 @@ describe("Sync vom Tag (#1871)", () => {
       const f = drift.pruefeDrift(lesen).fehler.join("|");
       assert.match(f, /nicht von einem Tag/);
       assert.match(f, /x\.txt: Besitz wurde im Projekt verändert/);
+      const zeilen = drift.pruefeDrift(lesen).fehler;
+      assert.match(zeilen.find((z) => z.includes("nicht von einem Tag")) ?? "", /Weg: von einem Tag neu syncen/);
+      assert.match(zeilen.find((z) => z.includes("x.txt: Besitz")) ?? "", /Weg: Änderung upstream/);
+      assert.doesNotMatch(zeilen.find((z) => z.includes("x.txt: Besitz")) ?? "", /von einem Tag neu syncen/);
     });
   });
 });
