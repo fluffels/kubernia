@@ -5,7 +5,7 @@
 // Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich. Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
@@ -15,6 +15,7 @@ import {
   einheitId,
   einheitText,
   eolVon,
+  istGanzeDatei,
   jsonSchluesselSpanne,
   normalisiereEol,
   normalisierterEinheitText,
@@ -112,7 +113,7 @@ export function planeSync({
   // Rollen-Pfade (#1871): jede Besitz-Rolle muss eine ganze, verteilte Einheit sein; die Rollen des Projekts stehen nicht im Manifest.
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
     if (PROJEKT_ROLLEN.includes(rolle)) continue;
-    const ganz = manifest.eintraege.some((e) => e.pfad === pfad && e.block === undefined && e.schluessel === undefined && wirdVerteilt(e));
+    const ganz = manifest.eintraege.some((e) => e.pfad === pfad && istGanzeDatei(e) && wirdVerteilt(e));
     if (!ganz) res.fehler.push(`Quell-Manifest: Rollen-Pfad '${pfad}' (${rolle}) ist keine verteilte Einheit (ganze Datei)`);
   }
   if (res.fehler.length > 0) return res;
@@ -129,7 +130,7 @@ export function planeSync({
     const zielRoh = zielLies(pfad);
     const zielLf = zielRoh === null ? null : normalisiereEol(zielRoh);
     try {
-      const ganz = eintraege.some((e) => e.block === undefined && e.schluessel === undefined);
+      const ganz = eintraege.some(istGanzeDatei);
       const ergebnis = ganz ? rendereProjektwerte(srcText, zielConfig, pfad) : wendeTeileAn(eintraege, srcText, zielLf, zielConfig);
       if (!ganz) res.fehler.push(...pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis));
       ziele.set(pfad, { ergebnis, zielRoh, zielLf, srcText });
@@ -231,12 +232,10 @@ export function quelleVomTag(quelle, tag) {
 }
 
 function quelleGit(quelle) {
-  try {
-    const git = (args) => execFileSync("git", ["-C", quelle, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    return { commit: git(["rev-parse", "HEAD"]).trim(), sauber: git(["status", "--porcelain"]).trim() === "" };
-  } catch {
-    return { commit: "unbekannt", sauber: false };
-  }
+  const kopf = gitIn(quelle, ["rev-parse", "HEAD"]);
+  const status = gitIn(quelle, ["status", "--porcelain"]);
+  if (!kopf.ok || !status.ok) return { commit: "unbekannt", sauber: false };
+  return { commit: kopf.out.toString("utf8").trim(), sauber: status.out.toString("utf8").trim() === "" };
 }
 
 const liesDatei = (wurzel) => (pfad) => {

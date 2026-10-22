@@ -23,6 +23,9 @@ export const NUR_FACTORY = ["oberflaeche"];
 /** Wird die Einheit in Projekte verteilt (Sync) und dort auf Drift geprüft? */
 export const wirdVerteilt = (e) => !NUR_FACTORY.includes(e.ring);
 
+/** Ist die Einheit eine ganze Datei (kein Block, kein JSON-Schlüssel)? */
+export const istGanzeDatei = (e) => e.block === undefined && e.schluessel === undefined;
+
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
 
@@ -88,7 +91,7 @@ export function pruefeManifest(m, lies) {
     if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
     if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
     if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
-    if (e.block === undefined && e.schluessel === undefined) ganze.add(e.pfad);
+    if (istGanzeDatei(e)) ganze.add(e.pfad);
     else teile.add(e.pfad);
     const text = lies(e.pfad);
     if (text === null) {

@@ -39,8 +39,9 @@ interface BesitzLib {
   RING_IMPORTE: Record<string, string[]>;
   NUR_FACTORY: string[];
   wirdVerteilt: (e: Eintrag) => boolean;
+  istGanzeDatei: (e: Eintrag) => boolean;
 }
-const { markerStart, markerEnde, einheitId, einheitText, normalisierterEinheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
+const { markerStart, markerEnde, einheitId, einheitText, normalisierterEinheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt, istGanzeDatei } = rawBesitz as unknown as BesitzLib;
 
 interface PcLib {
   ROLLEN_PFADE: Record<string, string>;
@@ -260,7 +261,7 @@ const musterRe = (muster: string): RegExp => new RegExp(`^${muster.split("*").ma
 /** Kern-Verzeichnisse: die Ordner der Ganz-Datei-Einheiten, nicht rekursiv. */
 export function kernVerzeichnisse(eintraege: Eintrag[]): Set<string> {
   const out = new Set<string>();
-  for (const e of eintraege) if (e.block === undefined && e.schluessel === undefined) out.add(posix.dirname(e.pfad));
+  for (const e of eintraege) if (istGanzeDatei(e)) out.add(posix.dirname(e.pfad));
   return out;
 }
 
@@ -294,7 +295,7 @@ export const KERN_HUELLE_AUSNAHMEN: Record<string, string> = {};
 
 /** Lokale Importe (`relativeImporte` aus hook-importe, auch JSON) jeder Ganz-Datei-Code-Einheit, die weder auf eine Ganz-Datei-Einheit noch auf die Projekt-Config zeigen: "<von> -> <nach>". */
 export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
-  const ganze = new Set(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => e.pfad));
+  const ganze = new Set(eintraege.filter((e) => istGanzeDatei(e)).map((e) => e.pfad));
   const out: string[] = [];
   for (const von of ganze) {
     if (!CODE_ENDUNG.test(von)) continue;
@@ -316,7 +317,7 @@ export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => 
  *  keinen Besitz importieren (fail-closed). Ziele ohne Besitz (Nicht-Besitz, Projekt-Config) sind Sache von `huellenVerstoesse`.
  *  Abhilfe: Ziel in einen erlaubten Ring ziehen (literalfrei) oder den Importeur in einen Ring mit mehr Rechten. */
 export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
-  const ring = new Map(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => [e.pfad, e.ring]));
+  const ring = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e.ring]));
   const out: string[] = [];
   for (const [von, ringVon] of ring) {
     if (!CODE_ENDUNG.test(von)) continue;
@@ -336,7 +337,7 @@ export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => str
  *  und alle lokalen Importe zeigen auf Besitz im Ring kern oder auf die Projekt-Config (Importe ohne Besitz-Ziel zählen als Grund zu bleiben).
  *  Abhilfe: Ring auf `kern` setzen. Grenze: nur statische lokale Importe (`relativeImporte`) werden gesehen. */
 export function ueberfluessigeEntkopplung(eintraege: Eintrag[], baseline: Baseline, lies: (pfad: string) => string | null): string[] {
-  const ring = new Map(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => [e.pfad, e.ring]));
+  const ring = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e.ring]));
   const out: string[] = [];
   for (const [pfad, r] of ring) {
     if (r !== "kern-nach-entkopplung" || !CODE_ENDUNG.test(pfad) || Object.keys(baseline[pfad] ?? {}).length > 0) continue;
@@ -853,7 +854,7 @@ describe("Kern-Reinheit (#1610)", () => {
     assert.ok(manifest.eintraege.length > 50, "Startbestand zu klein");
     assert.ok(manifest.eintraege.some((e) => e.block !== undefined), "kein Block-Eintrag");
     assert.ok(manifest.eintraege.some((e) => e.schluessel !== undefined), "kein Schlüssel-Eintrag");
-    assert.ok(manifest.eintraege.some((e) => e.block === undefined && e.schluessel === undefined), "kein Datei-Eintrag");
+    assert.ok(manifest.eintraege.some((e) => istGanzeDatei(e)), "kein Datei-Eintrag");
   });
 
   test("jede Einheit hält ihre Baseline an Projektliteralen, nur sinkend", () => {
@@ -874,7 +875,7 @@ describe("Kern-Reinheit (#1610)", () => {
   test("Kern-Registry enthält keinen Spiel-Generator (ADR 0022 F6)", () => {
     const registryPfad = "scripts/docs-gen/registry.mjs";
     assert.deepEqual(KERN_HUELLE_AUSNAHMEN, {}, "keine Ausnahmen der Import-Hülle mehr");
-    assert.equal(manifest.eintraege.find((e) => e.pfad === registryPfad && e.block === undefined && e.schluessel === undefined)?.ring, "kern");
+    assert.equal(manifest.eintraege.find((e) => e.pfad === registryPfad && istGanzeDatei(e))?.ring, "kern");
     const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
     assert.ok(cfg.generatoren && Object.keys(cfg.generatoren).length > 0, "scripts/docs-gen/config.json: generatoren fehlt");
     const ziele = relativeImporte(lesenWurzel(registryPfad) ?? "").flatMap((spec) => kandidatenPfade(posix.normalize(posix.join(posix.dirname(registryPfad), spec))));
