@@ -45,7 +45,7 @@ import {
   setPosition,
   todoItem,
 } from "./board-lib.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
 const PRUEF_VERSUCHE = 5;
@@ -100,17 +100,20 @@ export function zustandVonIssue(issue) {
 const ZUSATZ = { "in-arbeit": " (dort in Arbeit)" };
 
 /**
- * Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). `blockiert durch #N` bei jedem offenen (auch unlesbaren) Vorgänger, mit dem Zusatz,
+ * Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). Blocker-Zeile `<blocker> #N` (Wort aus `sprache.spezifikation.blocker`, Pflicht dann) bei jedem offenen (auch unlesbaren) Vorgänger, mit dem Zusatz,
  * dass die Sperre nur gilt, solange er offen ist (die Zeile bleibt nach dessen Merge stehen); „(dort in Arbeit)“ nur bei `in-arbeit`. Pur.
  */
-export function sammelticketBody({ art, vorgaenger = null, vorgaengerZustand = "zu" }) {
+export function sammelticketBody({ art, vorgaenger = null, vorgaengerZustand = "zu", blocker }) {
   if (!Object.hasOwn(TITEL, art)) throw new Error(`Unbekannte Art: ${String(art)}`);
   const zeilen =
     art === "harness"
       ? ["Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). Befunde als Kommentar `- [ ] …` anhängen."]
       : ["Sammelticket für Befunde aus Langfuse-Daten (docs/ticket-reihenfolge.md › Langfuse-Befunde (gesammelt)). Befunde als Kommentar `- [ ] …` anhängen."];
   if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${ZUSATZ[vorgaengerZustand] ?? ""}.`;
-  if (vorgaenger !== null && vorgaengerZustand !== "zu") zeilen.push("", `blockiert durch #${vorgaenger} (nur solange #${vorgaenger} offen ist)`);
+  if (vorgaenger !== null && vorgaengerZustand !== "zu") {
+    if (typeof blocker !== "string" || blocker.trim() === "") throw new Error("blocker (sprache.spezifikation.blocker) fehlt: die Blocker-Zeile braucht das Wort der Projekt-Config");
+    zeilen.push("", `${blocker} #${vorgaenger} (nur solange #${vorgaenger} offen ist)`);
+  }
   return zeilen.join("\n");
 }
 
@@ -231,7 +234,7 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger) });
+    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger), blocker: spracheAus(config).spezifikation.blocker });
     const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`]);
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);

@@ -102,6 +102,16 @@
         "Teil-Akzeptanzkriterien"
       ],
       "nachMerge": "Nach dem Merge:",
+      "blocker": "blockiert durch",
+      "abhaengigkeit": [
+        "folgt nach #",
+        "folgt auf #",
+        "erst nach #",
+        "setzt # voraus",
+        "baut auf # auf",
+        "wartet auf #",
+        "nach dem Merge von #"
+      ],
       "negativfall": {
         "wort": "Negativfall",
         "muster": "negativ-?f(?:a|ä)ll"

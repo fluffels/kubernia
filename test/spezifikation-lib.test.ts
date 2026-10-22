@@ -285,6 +285,8 @@ describe("Sprache als Projektwert (#1711)", () => {
     negativfall: { wort: "Negative case", muster: "negative case" },
     begrenzung: { wort: "known patterns:", muster: "known patterns:" },
     allquantor: { wort: "every/all … that … reads", muster: "(?:every|all) [^.!?]*that [^.!?]*(?:reads|read)" },
+    blocker: "blocked by",
+    abhaengigkeit: ["follows #"],
   };
   const BODY_EN = "## Goal\nThe gate checks.\n\n## Acceptance criteria\n1. It checks.\n2. Negative case: without format it is skipped.\n";
 
@@ -437,6 +439,13 @@ describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
     expect(P.blockerNummern(null, SPRACHE)).toEqual([]);
     expect(P.blockerNummern("blocked by #4", { ...SPRACHE, blocker: "blocked by" })).toEqual([4]);
     expect(P.blockerNummern("blockiert durch #4", { ...SPRACHE, blocker: "blocked by" })).toEqual([]);
+  });
+  test("Sonderzeichen im Blocker-Wort und in den Sätzen sind Text, keine Regex", () => {
+    const sp = { ...SPRACHE, blocker: "a.b+(c)", abhaengigkeit: ["x.y # [z]"] };
+    expect(P.blockerNummern("a.b+(c) #3", sp)).toEqual([3]);
+    expect(P.blockerNummern("aXb+(c) #3", sp)).toEqual([]);
+    expect(R.spezifikationsMaengel(GUT + "x.y #4 [z]", sp)).toEqual(["Abhängigkeitssatz „x.y #4 [z]“ ohne Zeile „a.b+(c) #4“"]);
+    expect(R.spezifikationsMaengel(GUT + "xXy #4 [z]", sp)).toEqual([]);
   });
   test("blockerNummern ohne Sprache wirft, kein stiller Standardwert", () => {
     expect(() => P.blockerNummern("blockiert durch #4", undefined)).toThrow(/sprache[\s\S]*Fix:/);

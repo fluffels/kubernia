@@ -376,7 +376,7 @@ describe("Sprache als Projektwert (#1711)", () => {
     expect(S.fuehreAus(["pruefen", "--bogus", "x"], io).code).toBe(2);
   });
   test("englische Sprache aus der Config: der englische Body ist vollständig, der deutsche nicht", () => {
-    const en = { ziel: "Goal", akzeptanzkriterien: ["Acceptance criteria"], nachMerge: "After merge:", negativfall: { wort: "Negative case", muster: "negative case" }, begrenzung: { wort: "known patterns:", muster: "known patterns:" }, allquantor: { wort: "all … that … read", muster: "all [^.!?]*that [^.!?]*read" } };
+    const en = { ziel: "Goal", akzeptanzkriterien: ["Acceptance criteria"], nachMerge: "After merge:", negativfall: { wort: "Negative case", muster: "negative case" }, begrenzung: { wort: "known patterns:", muster: "known patterns:" }, allquantor: { wort: "all … that … read", muster: "all [^.!?]*that [^.!?]*read" }, blocker: "blocked by", abhaengigkeit: ["follows #"] };
     const { io } = umgebung({ "en.md": "## Goal\nG\n\n## Acceptance criteria\n- Negative case: x\n", "de.md": GUT }, { config: { labels: { forum: "forum" }, sprache: { spezifikation: en } } });
     expect(S.fuehreAus(["pruefen", "--body-datei", "en.md"], io).code).toBe(0);
     const de = S.fuehreAus(["pruefen", "--body-datei", "de.md"], io);

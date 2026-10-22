@@ -32,23 +32,12 @@ import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
-import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
+import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
-
-/** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
-export function blockerNummern(body) {
-  const nummern = new Set();
-  for (const zeile of String(body ?? "").split(/\r?\n/)) {
-    for (const m of zeile.matchAll(/blockiert\s+durch\b([^(\n]*)/gi)) {
-      for (const n of m[1].matchAll(/#(\d+)/g)) nummern.add(Number(n[1]));
-    }
-  }
-  return [...nummern];
-}
 
 /**
  * Zeilen `Messfenster: n ≥ <k> <agent> nach #<nr>` (#1589; am Zeilenanfang, Listenpunkt erlaubt, `≥` oder `>=`, k ≥ 1; eine bloße Erwähnung im
@@ -207,7 +196,7 @@ const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kei
 function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, config }) {
   if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
   if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
-  const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
+  const offeneBlocker = blockerNummern(c.body, spracheAus(config).spezifikation).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
   const fenster = messfensterZeilen(c.body);
   const unlesbar = fenster.find((f) => "fehler" in f);

@@ -4,7 +4,7 @@
  * Spezifikation wird nachgezogen. Die Auswahl (`naechstes-ticket.mjs`) meldet nur (`reparieren #<nr>`), dieses Skript schreibt.
  *
  *   node scripts/spezifikation.mjs pruefen --body-datei <pfad>
- *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)
+ *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]
  *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
  *
  * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
@@ -26,12 +26,12 @@ import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
+import { blockerNummern, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
 const AUFRUF = [
   "Aufruf:",
   "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
-  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)',
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]',
   "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
 ].join("\n");
 
@@ -42,23 +42,25 @@ const liste = (zeilen) => zeilen.map((z) => `  - ${z}`).join("\n");
 const BEFEHLE = {
   pruefen: { optionen: { "body-datei": { type: "string" } }, positionale: 0 },
   anlegen: {
-    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, notfall: { type: "string" } },
+    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, notfall: { type: "string" }, blocker: { type: "string", multiple: true } },
     positionale: 0,
   },
   reparieren: { optionen: { "body-datei": { type: "string" } }, positionale: 1 },
 };
 
+const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
+
 /**
- * Prüft den Aufruf vor jedem I/O (`befehlLesen`): Unterbefehl, dann die Flag-Menge dieses Unterbefehls; `reparieren` nimmt genau ein
+ * Prüft den Aufruf vor jedem I/O (`befehlLesen`): Unterbefehl, dann die Flag-Menge dieses Unterbefehls (`--blocker` nur mit Ticketnummern, Liste in `werte.blocker`); `reparieren` nimmt genau ein
  * Positionsargument, die anderen keins. Liefert `{ befehl, werte, positional }` (`werte.label` immer eine Liste) oder `{ fehler }`. Pur.
  */
 export function aufrufPruefen(argv) {
   const r = befehlLesen(argv, BEFEHLE);
   if (r.fehler) return { fehler: r.fehler.text };
-  return { befehl: r.befehl, werte: { ...r.werte, label: r.werte.label ?? [] }, positional: r.positionale };
+  const blocker = (r.werte.blocker ?? []).map(positiveZahl);
+  if (blocker.includes(null)) return { fehler: "--blocker braucht eine Ticketnummer (--blocker <nr>, mehrfach möglich)" };
+  return { befehl: r.befehl, werte: { ...r.werte, label: r.werte.label ?? [], ...(r.befehl === "anlegen" ? { blocker } : {}) }, positional: r.positionale };
 }
-
-const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
 
 function leseBody(werte, io) {
   if (!werte["body-datei"]) return { fehler: "--body-datei fehlt" };
@@ -83,6 +85,13 @@ function nachholBefehl(werte, nach, nr) {
   return nach ? `node scripts/board-place.mjs --after ${nach} ${nr}` : `node scripts/board-place.mjs --notfall ${werte.notfall} --top ${nr}`;
 }
 
+/** Hängt die Blocker-Zeile (`<blocker> #a, #b`) mit den Nummern an, die der Body noch nicht als Blocker nennt; nichts Fehlendes: der Body bleibt unverändert. Pur. */
+export function mitBlockerZeile(body, nummern, sprache) {
+  const da = new Set(blockerNummern(body, sprache));
+  const fehlt = nummern.filter((n) => !da.has(n));
+  return fehlt.length === 0 ? body : `${body.replace(/\s+$/, "")}\n\n${sprache.blocker} ${fehlt.map((n) => `#${n}`).join(", ")}\n`;
+}
+
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   if (!werte.label.some((l) => /^area:\S+/.test(l))) return aufrufFehler("ein Label `area:<x>` ist Pflicht (--label area:<x>)");
@@ -92,7 +101,8 @@ function anlegen(werte, io, sprache) {
   if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return aufrufFehler(`--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})`);
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
-  const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body: b.body }, { sprache }); // neu angelegt: nie Bestand, nie ausgenommen
+  const body = mitBlockerZeile(b.body, werte.blocker, sprache);
+  const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body }, { sprache }); // neu angelegt: nie Bestand, nie ausgenommen
   if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
   if (nach !== null) {
     // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
@@ -106,7 +116,7 @@ function anlegen(werte, io, sprache) {
   }
   let neu;
   try {
-    neu = io.erzeuge({ titel: werte.titel, body: b.body, labels: werte.label });
+    neu = io.erzeuge({ titel: werte.titel, body, labels: werte.label });
   } catch (e) {
     return aufrufFehler(`Anlegen fehlgeschlagen: ${fehlerText(e)}`);
   }
