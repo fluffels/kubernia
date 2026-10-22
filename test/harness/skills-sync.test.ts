@@ -373,7 +373,7 @@ describe("lauf auf einem Temp-Verzeichnis", () => {
 
   test("unbekanntes Tool wirft", () => {
     expect(() => sync.lauf({ wurzel: neu(), tool: "cursor" })).toThrow(/cursor/);
-    expect(() => sync.lauf({ wurzel: neu(), tool: "toString" })).toThrow(/toString/);
+    expect(() => sync.lauf({ wurzel: neu(), tool: "toString" })).toThrow("unbekanntes Tool: toString");
   });
 });
 
