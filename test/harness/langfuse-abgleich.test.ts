@@ -55,7 +55,7 @@ const A = {
   traceIdVon: (s: string) => string;
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
-  findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null }) => { id: string; pfad: string; mtime: number; groesse: number }[];
+  findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null; alleOrdner?: boolean }) => { id: string; pfad: string; mtime: number; groesse: number; ausserhalb?: boolean }[];
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
   schluesselArt: (o: Obs[]) => string;
@@ -64,7 +64,7 @@ const A = {
   renderMarkdown: (b: Record<string, unknown>[], sum: unknown) => string;
   OHNE_ZUGANG: string;
   AUFRUFHILFE: string;
-  bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null }) => Bewertung;
+  bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null; ausserhalb?: boolean }) => Bewertung;
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
   pruefen: (
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string },
@@ -252,6 +252,21 @@ describe("Session-Auswahl", () => {
     expect(sessions.find((s) => s.id === "a")?.groesse).toBe(8);
   });
 
+  test("alleOrdner (#1862) wirkt nur mit sessionId: findet die Session außerhalb samt Markierung, ohne sessionId bleibt es beim Projekt", () => {
+    const root = fixture({
+      [`${PRAEFIX}/a.jsonl`]: msg("m"),
+      "Y--anders/c.jsonl": msg("m"),
+      [`${PRAEFIX}-alt/d.jsonl`]: msg("m"),
+    });
+    const f = (o: Partial<Parameters<typeof A.findeSessions>[0]>) => A.findeSessions({ projectsRoot: root, praefix: PRAEFIX, ...o });
+    expect(f({ alleOrdner: true }).map((s) => s.id).sort()).toEqual(["a"]);
+    expect(f({ sessionId: "c" })).toEqual([]);
+    expect(f({ sessionId: "c", alleOrdner: true })).toMatchObject([{ id: "c", ausserhalb: true }]);
+    expect(f({ sessionId: "d", alleOrdner: true })).toMatchObject([{ id: "d", ausserhalb: true }]);
+    expect(f({ sessionId: "a", alleOrdner: true })[0].ausserhalb).toBeFalsy();
+    expect(f({ sessionId: "gibt-es-nicht", alleOrdner: true })).toEqual([]);
+  });
+
   test("fehlender Projektordner ergibt keine Sessions", () => {
     expect(A.findeSessions({ projectsRoot: join(fixture({}), "gibt-es-nicht"), praefix: PRAEFIX })).toEqual([]);
   });
@@ -437,6 +452,27 @@ describe("Diff (pur)", () => {
   });
 });
 
+const NL = String.fromCharCode(10);
+describe("Score außerhalb (#1862)", () => {
+  const now = 1_000_000_000_000;
+  const bew = (o: Record<string, unknown> = {}) => A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null }, mtime: now - 60 * 60_000, now, ...o });
+
+  test("außerhalb hat Vorrang vor ausstehend und vor Stichtag, bei läuft bleibt der Score null, ohne Flag ändert sich nichts", () => {
+    expect(bew()).toMatchObject({ score: "ausstehend", ausserhalb: false });
+    expect(bew({ ausserhalb: true })).toMatchObject({ score: "außerhalb", ausserhalb: true });
+    expect(bew({ ausserhalb: true, soll: [{ ...eintrag(1), ts: "2020-01-01T00:00:00.000Z" }] }).score).toBe("außerhalb");
+    expect(bew({ ausserhalb: true, mtime: now - 60_000 })).toMatchObject({ status: "läuft", score: null });
+  });
+
+  test("Bericht: Hinweiszeile nur bei Sessions außerhalb", () => {
+    const aus = bew({ ausserhalb: true });
+    const drin = bew();
+    const md = (b: Record<string, unknown>[]) => A.renderMarkdown(b, A.summenzeile(b as unknown as Bewertung[]));
+    expect(md([aus])).toMatch(/Hinweis .*außerhalb des Projekts/);
+    expect(md([drin])).not.toMatch(/außerhalb des Projekts/);
+  });
+});
+
 describe("Score ausstehend und vor Stichtag (getrennt vom Status)", () => {
   const now = 1_000_000_000_000;
   const bew = (o: Record<string, unknown> = {}) => A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null }, mtime: now - 60 * 60_000, now, ...o });
@@ -577,6 +613,35 @@ describe("pruefen (Ablauf)", () => {
     expect(j.sessions[0].fehlendeCalls?.map((c) => c.messageId)).toEqual(["b"]);
     expect(j.summe).toMatchObject({ fehlend: 1 });
     expect(j.summe.quote).toBeCloseTo(2 / 3, 5);
+  });
+
+  test("Negativfall (#1862): eine Session des Projekts ohne jede Langfuse-Zeile wird als Lücke mit allen Calls gemeldet, nicht verschwiegen", async () => {
+    const root = fixture({ [`${PRAEFIX}/s1.jsonl`]: msg("a") + NL + msg("b"), [`${PRAEFIX}/s2.jsonl`]: msg("c") + NL + msg("d") });
+    const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 2 }], observations: [] });
+    const r = await A.pruefen(args({ json: true }), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
+    expect(r.exitCode).toBe(0);
+    const j = JSON.parse(r.text) as { sessions: (Bewertung & { session: string })[]; summe: { fehlend: number } };
+    const s2 = j.sessions.find((x) => x.session === "s2");
+    expect(s2).toMatchObject({ status: "Lücke", fehlend: 2, quote: 0, callsLangfuse: 0 });
+    expect(s2?.fehlendeCalls?.map((c) => c.messageId)).toEqual(["c", "d"]);
+    expect(j.summe.fehlend).toBe(2);
+  });
+
+  test("Außerhalb (#1862): --session findet eine Session außerhalb der Projektordner, meldet sie als Lücke mit Score außerhalb; ohne --session erscheint sie nicht; --ist ohne Zugang genügt", async () => {
+    const root = fixture({ [`${PRAEFIX}/s1.jsonl`]: msg("a"), "Y--anders/fremd.jsonl": msg("x") + NL + msg("y") });
+    const d = { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO };
+    const leer = fixture({ "ist.json": JSON.stringify({ data: [] }) });
+    const mitIst = (o: Partial<ReturnType<typeof A.parseArgs>>) => args({ json: true, ist: [join(leer, "ist.json")], ...o });
+    const leseDatei = (p: string) => readFileSync(p, "utf8");
+    const r = await A.pruefen(mitIst({ session: "fremd" }), { ...d, leseDatei });
+    expect(r.exitCode).toBe(0);
+    const j = JSON.parse(r.text) as { sessions: (Bewertung & { session: string; ausserhalb: boolean })[] };
+    expect(j.sessions).toHaveLength(1);
+    expect(j.sessions[0]).toMatchObject({ session: "fremd", status: "Lücke", fehlend: 2, callsLangfuse: 0, quote: 0, score: "außerhalb", ausserhalb: true });
+    const md = await A.pruefen(args({ session: "fremd", ist: [join(leer, "ist.json")] }), { ...d, leseDatei });
+    expect(md.text).toMatch(/Hinweis fremd.*außerhalb des Projekts/);
+    const ohne = await A.pruefen(mitIst({}), { ...d, leseDatei });
+    expect((JSON.parse(ohne.text) as { sessions: { session: string }[] }).sessions.map((x) => x.session)).toEqual(["s1"]);
   });
 
   test("Session in der Ruhefrist erscheint als läuft, nicht als Lücke, ohne Observations-Request", async () => {
