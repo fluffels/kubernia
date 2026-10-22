@@ -45,8 +45,9 @@ const { markerStart, markerEnde, einheitId, einheitText, normalisierterEinheitTe
 interface PcLib {
   ROLLEN_PFADE: Record<string, string>;
   PFLICHT_AGENTEN: string[];
+  TICKET_SKILL_ORDNER: string;
 }
-const { ROLLEN_PFADE, PFLICHT_AGENTEN } = rawPc as unknown as PcLib;
+const { ROLLEN_PFADE, PFLICHT_AGENTEN, TICKET_SKILL_ORDNER } = rawPc as unknown as PcLib;
 const { projektwertStellen } = rawBesitz as unknown as { projektwertStellen: (text: string, pfad?: string) => { zeilen: { schluessel: string; name: string }[] } };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -999,6 +1000,10 @@ describe("Kern-Pfade ohne Projektliteral (#1748)", () => {
   });
   test("echt: kein Manifest- und kein Rollen-Pfad trägt ein Projektliteral", () => {
     assert.deepEqual(pfadLiterale([...manifest.eintraege.map((e) => e.pfad), ...Object.values(ROLLEN_PFADE)], echteBegriffe), []);
+  });
+  test("TICKET_SKILL_ORDNER ist der Ordner des Ticket-Skill-Pfads (ohne Dateiname, ohne Schrägstrich am Ende)", () => {
+    assert.equal(TICKET_SKILL_ORDNER, ".claude/skills/factory-ticket");
+    assert.equal(`${TICKET_SKILL_ORDNER}/SKILL.md`, ROLLEN_PFADE.ticketSkill);
   });
   test("Fitness: die Rollen-Pfade decken genau die Pflicht-Agenten ab, jede Datei existiert und setzt den Namen aus agenten.<rolle>", () => {
     assert.deepEqual(Object.keys(ROLLEN_PFADE), PFLICHT_AGENTEN);

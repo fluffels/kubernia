@@ -10,7 +10,7 @@
  * Nur Node-Builtins, `flag-lib.mjs` und `spezifikation-lib.mjs` (importfrei; läuft auch in Workflows ohne `npm ci`).
  */
 import { readFileSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
@@ -97,6 +97,9 @@ export const ROLLEN_PFADE = Object.freeze({
   gruppe: ".claude/agents/factory-gruppe.md",
   ticketSkill: ".claude/skills/factory-ticket/SKILL.md",
 });
+
+/** Verzeichnis des Ticket-Skills (`ROLLEN_PFADE.ticketSkill` ohne Dateiname), die einzige Ableitung für alle Nutzer. */
+export const TICKET_SKILL_ORDNER = posix.dirname(ROLLEN_PFADE.ticketSkill);
 
 /** Pur: prüft `praefixe` (commitZeile, branch, worktree). */
 function pruefePraefixe(p) {
