@@ -29,7 +29,7 @@ const lauf = (args: string[], { cwd = WURZEL, env = {} }: { cwd?: string; env?: 
     encoding: "utf8",
     cwd,
     timeout: 30_000,
-    env: { ...process.env, NODE_OPTIONS: `--import ${STUB}`, STUB_LEER: "1", FACTORY_GH_KOSTEN_LOG: log, ...env },
+    env: { ...process.env, NODE_OPTIONS: `--import ${STUB}`, STUB_LEER: "1", FACTORY_GH_KOSTEN_LOG: log, GITHUB_ACTIONS: "", ...env }, // GITHUB_ACTIONS leer: unter Actions schreibt die Kostenmessung kein Log
   });
   return { status: r.status, text: `${r.stderr}${r.stdout}`, log };
 };
