@@ -23,6 +23,8 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 import * as rawNamen from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawRegistry from "../../scripts/docs-gen/registry.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "../../scripts/skill-pfade.mjs";
 
 // Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -683,6 +685,13 @@ describe("kernVerzeichnisse / pruefeAbdeckung (#1613)", () => {
     assert.match(m, /scripts\/neu\.mjs: liegt in einem Kern-Verzeichnis.*kern-abdeckung\.json/);
     assert.match(m, /\.claude\/agents\/neu\.md/);
   });
+  test("Skill-Quellen, Zeiger und Agenten sind eine feste Fläche, auch wenn das Manifest dort nichts besitzt", () => {
+    const skill = [`${QUELL_VERZEICHNIS as string}/s/SKILL.md`, `${ZEIGER_WURZEL as string}/s/SKILL.md`];
+    const m = pruefeAbdeckung([ein("scripts/a.mjs")], ["scripts/a.mjs", ...skill, ".claude/agents/neu.md", `${QUELL_VERZEICHNIS as string}/s/tief/x.md`], {}).join("|");
+    for (const p of [...skill, ".claude/agents/neu.md"]) assert.ok(m.includes(`${p}: liegt in einem Kern-Verzeichnis`), p);
+    assert.ok(!m.includes("tief/x.md"), "tiefer als <skill>/<datei> zählt nicht");
+    assert.deepEqual(pruefeAbdeckung([ein("scripts/a.mjs")], ["scripts/a.mjs", ...skill], { [skill[0]]: { art: "projekt", grund: "g" }, [skill[1]]: { art: "projekt", grund: "g" } }), []);
+  });
   test("Muster mit * deckt eine Dateigruppe, aber nicht über Ordnergrenzen", () => {
     const abd = klar({ "scripts/neu-*.mjs": { art: "modul", grund: "Modul" } });
     assert.deepEqual(pruefeAbdeckung(E, [...dateien, "scripts/neu-eins.mjs"], abd), []);
@@ -865,6 +874,16 @@ describe("Kern-Reinheit (#1610)", () => {
     const abdeckung = JSON.parse(readFileSync(WURZEL + ABDECKUNG, "utf8")) as Record<string, AbdeckEintrag>;
     const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
     assert.deepEqual(pruefeAbdeckung(manifest.eintraege, getrackt, abdeckung), []);
+  });
+
+  test("fehlt der Manifest-Eintrag der Skill-Quelle oder ihres Zeigers, meldet die Abdeckung die Datei (#1866)", () => {
+    const abdeckung = JSON.parse(readFileSync(WURZEL + ABDECKUNG, "utf8")) as Record<string, AbdeckEintrag>;
+    const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
+    for (const pfad of [`${QUELL_VERZEICHNIS as string}/review-lenses/SKILL.md`, `${ZEIGER_WURZEL as string}/review-lenses/SKILL.md`]) {
+      assert.ok(getrackt.includes(pfad), pfad);
+      const ohne = manifest.eintraege.filter((e) => e.pfad !== pfad);
+      assert.match(pruefeAbdeckung(ohne, getrackt, abdeckung).join("|"), new RegExp(`${escapeRe(pfad)}: liegt in einem Kern-Verzeichnis`));
+    }
   });
 
   test("jeder lokale Import einer Besitz-Datei ist selbst Besitz oder Projekt-Config (Import-Hülle, #1613)", () => {
