@@ -13,6 +13,7 @@ type Io = {
   fuehreStatusAus: (e: { aktion: string; nr?: number }, ctx: unknown) => { ok: boolean; nr?: number; itemId?: string };
   fuehreHarnessAus: (h: { aktion: string; nr?: number }, items: Item[], token: string) => boolean;
   itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string }) => ({ number: number } | null)[];
+  frischeOffeneIssues?: (a: { repo: string; label: string; anzahl: number }) => { number: number; titel: string }[];
   addToBoardTodo?: (rolle: string, nodeId: string, o: { token?: string }) => string;
   log: (z: string) => void;
 };
@@ -137,6 +138,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         loadItems: nurFactory([]),
         loadOpenIssuePages: () => [offenCreatedAt ? [{ number: 70, title: STATUS, created_at: offenCreatedAt, assignees: [] }] : []],
         positionLautAgentsMd: () => 4,
+        frischeOffeneIssues: () => [],
         fuehreStatusAus: () => ({ ok: true }),
         fuehreHarnessAus: () => true,
         log: (z) => log.push(z),
@@ -392,5 +394,68 @@ describe("fuehreHarnessAus: Fehlertext und Rückgabe (#1609)", () => {
     expect(F({ nr: 99, afterId: null }, items, "t", { setze: () => { gerufen = true; }, log: (z) => log.push(z) })).toBe(false);
     expect(gerufen).toBe(false);
     expect(log.join("\n")).toContain("::error::");
+  });
+});
+
+describe("Gegenprobe vor dem Anlegen des Status-Tickets (#1866)", () => {
+  const STATUS = "Langfuse-Status überprüfen";
+  // Fünf Commits seit dem Vorgänger: der Cron entscheidet „anlegen“ (kein offenes Status-Ticket in der REST-Liste).
+  const lauf = (frisch: Io["frischeOffeneIssues"], dry = false) => {
+    const log: string[] = [];
+    const angelegt: string[] = [];
+    const aufrufe: { repo: string; label: string; anzahl: number }[] = [];
+    const commits = Array.from({ length: 5 }, (_, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: "2026-10-07T12:00:00Z" } }, author: { login: "fluffels", type: "User" } }));
+    const io: Io = {
+      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[{ number: 60, title: STATUS, created_at: "2026-10-01T08:00:00Z", closed_at: "2026-10-02T08:00:00Z" }]] : [commits]),
+      loadItems: () => [],
+      loadOpenIssuePages: () => [[]],
+      frischeOffeneIssues: (a) => {
+        aufrufe.push(a);
+        return frisch ? frisch(a) : [];
+      },
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: (e) => (angelegt.push(e.aktion), { ok: true }),
+      fuehreHarnessAus: () => true,
+      log: (z) => log.push(z),
+    };
+    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-12T12:00:00Z"), dry, io });
+    return { log: log.join("\n"), angelegt, aufrufe, fehler: r.fehler };
+  };
+
+  test("GraphQL kennt noch kein Status-Ticket: es wird angelegt, die Abfrage trägt Repo, Harness-Label und 50", () => {
+    const r = lauf(() => []);
+    expect(r.angelegt).toEqual(["anlegen"]);
+    expect(r.aufrufe).toHaveLength(1);
+    expect(r.aufrufe[0]).toMatchObject({ label: "area:harness", anzahl: 50 });
+  });
+  test("GraphQL kennt ein offenes Status-Ticket, das die REST-Liste noch nicht hat: nichts angelegt, Warnung mit Nummer", () => {
+    const r = lauf(() => [{ number: 1865, titel: STATUS }]);
+    expect(r.angelegt).toEqual([]);
+    expect(r.log).toContain("#1865");
+    expect(r.log).toContain("): nichts");
+  });
+  test("GraphQL wirft: fail-closed, nichts angelegt, der Lauf bleibt grün", () => {
+    const r = lauf(() => {
+      throw new Error("Rate-Limit");
+    });
+    expect(r.angelegt).toEqual([]);
+    expect(r.log).toContain("Rate-Limit");
+    expect(r.fehler).toBe(false);
+  });
+  test("ohne Anlegen (hier: Montags-Cron mit offenem Status-Ticket, nach-oben) entfällt die Abfrage", () => {
+    const log: string[] = [];
+    const aufrufe: unknown[] = [];
+    const io: Io = {
+      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[]]),
+      loadItems: () => [],
+      loadOpenIssuePages: () => [[{ number: 70, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
+      frischeOffeneIssues: (a) => (aufrufe.push(a), []),
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: () => ({ ok: true }),
+      fuehreHarnessAus: () => true,
+      log: (z) => log.push(z),
+    };
+    T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-12T12:00:00Z"), dry: true, io });
+    expect(aufrufe).toHaveLength(0);
   });
 });

@@ -30,6 +30,7 @@ import {
   boardRolleFuer,
   alsDatum,
   aufnahmePlan,
+  frischeOffeneIssues,
   ghJson,
   itemsUeberIssues,
   kopfEnde,
@@ -48,7 +49,7 @@ import {
   wirklichFehlend,
 } from "./board-lib.mjs";
 
-import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
+import { bestaetigeAnlegen, entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
 
 // Die Quote liegt in spielquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
@@ -234,6 +235,7 @@ export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REP
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
 export const ECHTE_IO = {
   ghJson,
+  frischeOffeneIssues: (a) => frischeOffeneIssues(a),
   itemsUeberIssues: (rolle, nummern, opts) => itemsUeberIssues(boardFuerRolle(rolle), nummern, opts),
   addToBoardTodo: (rolle, nodeId, opts) => addToBoardTodo(boardFuerRolle(rolle), nodeId, opts),
   loadItems: (rolle, opts) => loadItems(boardFuerRolle(rolle), opts),
@@ -293,7 +295,9 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   let items = roh ? factoryListe(roh.factory, doppelt, config) : null;
 
   const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
-  const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
+  const vorEntscheidung = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
+  // Gegenprobe nur vor dem Anlegen: die REST-Liste hinkt bei frischen Tickets nach (fail-closed, #1866).
+  const e = bestaetigeAnlegen(vorEntscheidung, { zweit: () => io.frischeOffeneIssues({ repo, label: harnessLabel, anzahl: 50 }) });
   for (const w of e.warnungen) io.log(`::warning::${w}`);
   io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
   let fehler = false;
