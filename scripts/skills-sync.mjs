@@ -15,10 +15,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { parseFrontmatter } from "./docs-gen/markdown.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
-export const QUELL_VERZEICHNIS = ".agents/skills";
-export const WERKZEUGE = { claude: ".claude/skills" };
-export const ZEIGER_MARKE = "<!-- skills-sync: generierter Skill-Zeiger, nicht von Hand ändern (npm run skills:sync) -->";
+export const WERKZEUGE = { claude: ZEIGER_WURZEL };
 const FIX = "npm run skills:sync";
 const FIX_PRUNE = "npm run skills:sync -- --prune";
 
@@ -75,10 +74,10 @@ export function pruefeSkills({ quellen, zeiger, lose = [], ziel = WERKZEUGE.clau
     if (quellOrdner.has(z.ordner)) continue;
     const datei = `${ziel}/${z.ordner}/SKILL.md`;
     if (z.text !== null && traegtMarke(z.text)) melde(datei, "Zeiger ohne Quelle", FIX_PRUNE);
-    else melde(datei, "Volltext-Skill unter dem Werkzeug-Verzeichnis (Quelle nach .agents/skills/ verlegen, hier nur ein Zeiger)");
+    else melde(datei, `Volltext-Skill unter dem Werkzeug-Verzeichnis (Quelle nach ${QUELL_VERZEICHNIS}/ verlegen, hier nur ein Zeiger)`);
   }
 
-  for (const datei of lose) melde(`${ziel}/${datei}`, "lose Datei unter dem Werkzeug-Verzeichnis (nur Zeiger-Ordner erlaubt)", "Datei entfernen oder als Skill-Quelle unter .agents/skills/ ablegen");
+  for (const datei of lose) melde(`${ziel}/${datei}`, "lose Datei unter dem Werkzeug-Verzeichnis (nur Zeiger-Ordner erlaubt)", `Datei entfernen oder als Skill-Quelle unter ${QUELL_VERZEICHNIS}/ ablegen`);
 
   return befunde;
 }

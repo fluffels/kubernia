@@ -9,7 +9,7 @@
  * `ANLEITUNG <Punkt>: <Befund> Fix: <Schritt> Link: <Seite>`. Langfuse prüft nur `--pruefen`; `--config` gilt nicht für das Sammelticket (sammelticket-anlegen.mjs liest die Standard-Config). `--dry-run` gibt nur den Plan aus (`PLAN …`). Ein zweiter Lauf ändert nichts.
  * Der Wochenlauf selbst (Lücke als Zeile ins Sammelticket) steht in harness-doctor-melden.mjs.
  *
- * `--pruefen` meldet zusätzlich jede Kern-Umgebungsvariable, die in der Umgebung dieses Prozesses noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist: der Altname wird nicht mehr gelesen (Wert nie ausgegeben; Namen aus den `umgebungsWert`-Literalen in scripts/). Grenze: nur die Umgebung des Doctor-Prozesses, nicht die anderer Shells oder Settings-Dateien.
+ * `--pruefen` meldet den Block `sprache.spezifikation` der Config als Lücke `Sprache`, wenn er fehlt oder unvollständig ist (das Spezifikations-Gate hat keinen Standardwert). Es meldet zusätzlich jede Kern-Umgebungsvariable, die in der Umgebung dieses Prozesses noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist: der Altname wird nicht mehr gelesen (Wert nie ausgegeben; Namen aus den `umgebungsWert`-Literalen in scripts/). Grenze: nur die Umgebung des Doctor-Prozesses, nicht die anderer Shells oder Settings-Dateien.
  *
  * Je Lücke eine Zeile `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>`; Exit 0 ohne Lücke, 1 mit mindestens einer, 2 bei Aufruf-Fehler oder
  * unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf). Reines Node-Skript ohne Modell-Tokens; `gh` und
@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./hook-io.mjs";
-import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
@@ -132,10 +132,17 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   return anleitungen + (fatal ? 1 : 0) + fehler + geplant > 0 ? 1 : 0;
 }
 
-function pruefen({ werte, rootDir, gh, langfuse, env, out, err }) {
+function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv }) {
+  let namen;
+  try {
+    namen = kernEnv(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
+  } catch (e) {
+    err(`Kern-Umgebungsvariablen nicht lesbar: ${e instanceof Error ? e.message : String(e)}\nFix: scripts/ im Checkout wiederherstellen (git status), dann erneut prüfen`);
+    return AUFRUF_EXIT;
+  }
   let ergebnis;
   try {
-    ({ ergebnis } = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse, umgebung: { env } }));
+    ({ ergebnis } = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse, umgebung: { env, namen } }));
   } catch (e) {
     err(konfigFehlerText(e));
     return AUFRUF_EXIT;
@@ -156,7 +163,7 @@ function pruefen({ werte, rootDir, gh, langfuse, env, out, err }) {
 
 export function main(
   argv = process.argv.slice(2),
-  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error } = {},
+  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen } = {},
 ) {
   const { werte, fehler } = flagsLesen(argv, { pruefen: { type: "boolean" }, einrichten: { type: "boolean" }, "dry-run": { type: "boolean" }, config: { type: "string" } });
   const aufrufFehler = fehler?.text ?? (Number(werte.pruefen === true) + Number(werte.einrichten === true) !== 1 ? "Genau einen Modus angeben: --pruefen oder --einrichten" : null)
@@ -165,7 +172,7 @@ export function main(
     err(`${aufrufFehler}\n${USAGE}`);
     return AUFRUF_EXIT;
   }
-  return werte.einrichten ? einrichten({ werte, rootDir, gh, spawn, out, err }) : pruefen({ werte, rootDir, gh, langfuse, env, out, err });
+  return werte.einrichten ? einrichten({ werte, rootDir, gh, spawn, out, err }) : pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv });
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = main();

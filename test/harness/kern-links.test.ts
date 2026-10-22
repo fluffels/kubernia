@@ -18,6 +18,9 @@ import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 
 interface Eintrag {
   pfad: string;
@@ -40,16 +43,12 @@ const lesen = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? read
 
 /** Text ohne Code-Fences (``` und ~~~) und ohne Inline-Code; Zeilenanzahl bleibt irrelevant. */
 export function ohneCode(text: string): string {
-  const zeilen: string[] = [];
-  let zaun: string | null = null;
-  for (const zeile of text.replace(/\r\n/g, "\n").split("\n")) {
-    const m = /^\s*(`{3,}|~{3,})/.exec(zeile);
-    if (zaun === null) {
-      if (m?.[1] !== undefined) zaun = m[1][0] ?? null;
-      else zeilen.push(zeile.replace(/`[^`\n]*`/g, ""));
-    } else if (m?.[1] !== undefined && m[1][0] === zaun) zaun = null;
-  }
-  return zeilen.join("\n");
+  const zeilen = text.replace(/\r\n/g, "\n").split("\n");
+  const maske = fenceMaske(zeilen);
+  return zeilen
+    .filter((_, i) => !maske[i])
+    .map((zeile) => zeile.replace(/`[^`\n]*`/g, ""))
+    .join("\n");
 }
 
 /** Repo-relative Markdown-Ziele der Links in `text` einer Datei `quelle` (normalisiert, ohne Anker, dedupliziert). Schema-Links und reine Anker bleiben außen vor. */
@@ -119,6 +118,10 @@ describe("Kern-Links (#1860)", () => {
     test("ein längerer Zaun wird nur von gleichem Zeichen beendet; ein ~~~ in einem ```-Zaun schließt nicht", () => {
       const t = "```\n~~~\n[a](a.md)\n```\n[b](b.md)";
       assert.deepEqual(markdownZiele("q.md", t), ["b.md"]);
+    });
+    test("ein 4er-Zaun wird von einem inneren ``` oder ```x nicht geschlossen (CommonMark über fenceMaske)", () => {
+      assert.deepEqual(markdownZiele("q.md", "````\n```\n[a](a.md)\n```\n[c](c.md)\n````\n[b](b.md)"), ["b.md"]);
+      assert.deepEqual(markdownZiele("q.md", "```\n```js\n[a](a.md)\n```\n[b](b.md)"), ["b.md"]);
     });
     test("doppelte Ziele erscheinen einmal; Backtick-Pfade und Fließtext sind keine Links (bewusste Grenze)", () => {
       assert.deepEqual(markdownZiele("q.md", "[a](a.md) [b](a.md#z) `docs/x.md` siehe docs/y.md"), ["a.md"]);

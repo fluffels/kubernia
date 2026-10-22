@@ -24,6 +24,19 @@ const CONFIG = {
   labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
   agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
   rulesetSpiegel: "ruleset.json",
+  sprache: {
+    umschrift: ["ae"],
+    spezifikation: {
+      ziel: "Ziel",
+      nachMerge: "Danach:",
+      akzeptanzkriterien: ["Kriterien"],
+      blocker: "blockiert durch",
+      abhaengigkeit: ["folgt nach #"],
+      negativfall: { wort: "Negativfall", muster: "negativ" },
+      begrenzung: { wort: "Grenze", muster: "grenze" },
+      allquantor: { wort: "alle", muster: "alle" },
+    },
+  },
 };
 const WORKFLOW = "env:\n  T: ${{ secrets.PROJECT_TOKEN }}\nrun: gh issue list --label forum\n";
 const feld = { name: "Status", node_id: "x_status", options: [{ id: "abc", name: { raw: "Todo" } }] };

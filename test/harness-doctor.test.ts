@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeAltnamen as rawAlt, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
+import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
@@ -34,6 +34,19 @@ const CONFIG = {
   labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
   agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
   rulesetSpiegel: "ruleset.json",
+  sprache: {
+    umschrift: ["ae"],
+    spezifikation: {
+      ziel: "Ziel",
+      nachMerge: "Danach:",
+      akzeptanzkriterien: ["Kriterien"],
+      blocker: "blockiert durch",
+      abhaengigkeit: ["folgt nach #"],
+      negativfall: { wort: "Negativfall", muster: "negativ" },
+      begrenzung: { wort: "Grenze", muster: "grenze" },
+      allquantor: { wort: "alle", muster: "alle" },
+    },
+  },
 };
 const WORKFLOW = "env:\n  T: ${{ secrets.PROJECT_TOKEN }}\n  G: ${{ secrets.GITHUB_TOKEN }}\nrun: gh issue list --label forum\n";
 const feld = { name: "Status", node_id: "x_status", options: [{ id: "abc", name: { raw: "Todo" } }] };
@@ -58,7 +71,7 @@ afterEach(() => {
 });
 
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string> } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[] } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
   ordner.push(root);
   if (opt.workflow !== null) {
@@ -84,6 +97,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     rootDir: root,
     gh,
     env: opt.env ?? {},
+    ...(opt.kernEnv ? { kernEnv: opt.kernEnv } : {}),
     langfuse: () => ({ status: opt.langfuse ?? 0, stderr: opt.langfuse ? "Langfuse aus." : "" }),
     out: (s: string) => r.out.push(s),
     err: (s: string) => r.err.push(s),
@@ -152,6 +166,68 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
       if (vorher === undefined) delete process.env[ALT];
       else process.env[ALT] = vorher;
     }
+  });
+});
+
+describe("Sprache des Spezifikations-Gates (--pruefen, #1866 L22)", () => {
+  const pruefeSprache = rawSprache as (config: unknown) => { punkt: string; ok: boolean; befund?: string; fix?: string }[];
+  const ohne = (...schluessel: string[]) => {
+    const spez = { ...CONFIG.sprache.spezifikation } as Record<string, unknown>;
+    for (const k of schluessel) delete spez[k];
+    return { ...CONFIG, sprache: { ...CONFIG.sprache, spezifikation: spez } };
+  };
+
+  test("pur: vollständiger Block ist gut", () => {
+    assert.deepEqual(pruefeSprache(CONFIG), [{ punkt: "Sprache", ok: true }]);
+  });
+  test("pur: ohne blocker und abhaengigkeit eine Lücke, die beide Schlüssel und die Fix-Zeile nennt", () => {
+    const e = pruefeSprache(ohne("blocker", "abhaengigkeit"));
+    assert.equal(e.length, 1);
+    assert.equal(e[0].ok, false);
+    assert.match(e[0].befund ?? "", /sprache\.spezifikation\.blocker[\s\S]*sprache\.spezifikation\.abhaengigkeit/);
+    assert.match(e[0].fix ?? "", /sprache\.spezifikation/);
+  });
+  test("pur: Config ohne sprache, ohne spezifikation oder null ist eine Lücke, kein Wurf", () => {
+    for (const config of [{}, { sprache: {} }, { sprache: { spezifikation: null } }, null, undefined]) {
+      assert.equal(pruefeSprache(config)[0].ok, false, JSON.stringify(config));
+    }
+  });
+  test("CLI: Config ganz ohne sprache ergibt Exit 1 und eine LÜCKE-Zeile mit Fix", () => {
+    const { sprache: _weg, ...ohneSprache } = CONFIG;
+    const r = lauf({}, { config: ohneSprache });
+    assert.equal(r.code, 1);
+    assert.equal(luecken(r).length, 1, r.out.join("\n"));
+    assert.match(luecken(r)[0], /Sprache: .*Fix: .*sprache\.spezifikation/);
+  });
+  test("CLI: unvollständiger Block (blocker fehlt) wird schon beim Laden gemeldet: Exit 2 mit Schlüssel und Fix", () => {
+    const r = lauf({}, { config: ohne("blocker") });
+    assert.equal(r.code, 2);
+    assert.match(r.err.join("\n"), /sprache\.spezifikation\.blocker[\s\S]*Fix:/);
+  });
+});
+
+describe("pruefLauf mit umgebung: die Namen kommen vom Aufrufer, die Lib liest keine Dateien", () => {
+  const fixture = (): string => {
+    const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
+    ordner.push(root);
+    writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+    writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
+    return root;
+  };
+  const lauf2 = (root: string, umgebung: unknown) =>
+    (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string; ok: boolean }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null, umgebung });
+
+  test("ein übergebener Name, den kein Skript liest, wird gegen den Altnamen geprüft", () => {
+    const root = fixture();
+    const e = lauf2(root, { env: { [altEnvName("FACTORY_NUR_IM_TEST", CONFIG) as string]: "x" }, namen: ["FACTORY_NUR_IM_TEST"] }).ergebnis;
+    assert.equal(e.filter((x) => x.punkt.startsWith("Umgebungsvariable ") && !x.ok).length, 1);
+  });
+  test("leere Namensliste: der Punkt ist gut, nichts wird nachgelesen", () => {
+    const e = lauf2(fixture(), { env: { [altEnvName("FACTORY_NUR_IM_TEST", CONFIG) as string]: "x" }, namen: [] }).ergebnis;
+    assert.deepEqual(e.filter((x) => x.punkt.startsWith("Umgebungsvariable")), [{ punkt: "Umgebungsvariablen", ok: true }]);
+  });
+  test("umgebung ohne namen: wirft mit Hinweis, bevor ein gh-Aufruf läuft", () => {
+    assert.throws(() => lauf2(fixture(), { env: {} }), /braucht { env, namen }/);
   });
 });
 
@@ -312,6 +388,12 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [] }, { config: ohne }).code, 1);
   });
 
+  test("unlesbares scripts/ (kernEnvNamen wirft): Exit 2 mit Meldung und Fix, ohne gh-Aufruf", () => {
+    const r = lauf({}, { kernEnv: () => { throw new Error("EACCES scripts"); } });
+    assert.equal(r.code, 2);
+    assert.match(r.err.join("\n"), /Kern-Umgebungsvariablen nicht lesbar: EACCES scripts[\s\S]*Fix:/);
+    assert.equal(r.aufrufe.length, 0);
+  });
   test("Aufruf- und Config-Fehler: Exit 2 ohne einen gh-Aufruf", () => {
     const kaputt = lauf({}, { argv: ["--pruefen", "--config", "/gibt/es/nicht.json"] });
     assert.equal(kaputt.code, 2);

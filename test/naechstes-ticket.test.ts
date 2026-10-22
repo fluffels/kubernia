@@ -755,9 +755,10 @@ describe("Zwei Boards (#1729)", () => {
     expect(lauf([], [item(10, H)]).code).toBe(1);
     expect(lauf([item(1)], [], { argv: ["--bereich", "agentic"] }).code).toBe(1);
   });
-  test("JSON nennt Bereich, Ticket, übersprungen; ein Schlüssel quote gibt es nicht", () => {
+  test("JSON nennt Bereich, Ticket, übersprungen, verzug; ein Schlüssel quote gibt es nicht", () => {
     const j = json(lauf([item(1)], []));
-    expect(Object.keys(j).sort()).toEqual(["bereich", "ticket", "uebersprungen"]);
+    expect(Object.keys(j).sort()).toEqual(["bereich", "ticket", "uebersprungen", "verzug"]);
+    expect((j as { verzug?: number[] }).verzug).toEqual([]);
   });
   test("Kopf vor eigener Seite: ein 🚨 auf dem Factory-Board schlägt ein freies Produkt-Item in beiden Bereichen", () => {
     expect(json(lauf([item(1)], [item(10, { ...rot, ...H })])).ticket?.nr).toBe(10);
@@ -969,5 +970,53 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     const r = M.fuehreAus(["--maengel"], { owner: "fluffels", config: CFG, lade: () => { throw new Error("gh kaputt"); } });
     expect(r.code).toBe(2);
     expect(r.err).toContain("gh kaputt");
+  });
+});
+
+describe("Board-Verzug (#1866)", () => {
+  const PROD = "PVT_produkt";
+  const FACT = "PVT_factory";
+  type Frisch = { issues: { number: number; titel: string; projektIds: string[] }[]; projektIds: string[] } | { fehler: string };
+  const V = raw as unknown as {
+    verzugNummern: (a: { frisch: { number: number; titel: string; projektIds: string[] }[]; produkt: { number: number }[]; factory: { number: number }[]; projektIds: string[] }) => number[];
+    ladeFrisch: (lade: (a: { anzahl: number }) => unknown) => Frisch;
+  };
+  const frischer = (number: number, projektIds: string[] = []) => ({ number, titel: `T${number}`, projektIds });
+  const lauf = (frisch: Frisch | undefined, argv = ["--json", "--bereich", "spiel"]) =>
+    N.fuehreAus(argv, {
+      owner: "fluffels",
+      config: CFG,
+      lade: () => ({ produkt: norm([item(1)]), factory: norm([item(10, { labels: [{ name: "area:harness" }] })]), offene: new Set<number>(), ...(frisch ? { frisch } : {}) }),
+    });
+  const alle = { projektIds: [PROD, FACT] };
+
+  test("Nummern mit Item auf einem der Boards, in keiner REST-Liste: Verzug, sortiert; Textzeile direkt unter dem Ticket, JSON-Feld, Exit unverändert", () => {
+    const frisch: Frisch = { issues: [frischer(1885, [FACT]), frischer(1871, [PROD]), frischer(1), frischer(10, [FACT])], ...alle };
+    const t = lauf(frisch, ["--bereich", "spiel"]);
+    expect(t.code).toBe(0);
+    expect(t.out.split("\n")[0]).toBe("#1\tT1");
+    expect(t.out.split("\n")[1]).toBe("VERZUG #1871, #1885: Board-REST-Liste hinkt, die Auswahl sieht sie nicht");
+    expect((JSON.parse(lauf(frisch).out) as { verzug: number[] }).verzug).toEqual([1871, 1885]);
+  });
+  test("ein Issue ohne Board-Item oder mit fremdem Projekt ist kein Verzug", () => {
+    expect(V.verzugNummern({ frisch: [frischer(5, []), frischer(6, ["PVT_fremd"])], produkt: [], factory: [], ...alle })).toEqual([]);
+    const t = lauf({ issues: [frischer(5, [])], ...alle }, ["--bereich", "spiel"]);
+    expect(t.out).not.toContain("VERZUG");
+    expect(JSON.parse(lauf({ issues: [frischer(5, [])], ...alle }).out)).toMatchObject({ verzug: [] });
+  });
+  test("GraphQL-Fehler: fail-open, gleiche Auswahl, Hinweis statt VERZUG", () => {
+    const mit = lauf({ fehler: "Rate-Limit" }, ["--bereich", "spiel"]);
+    const ohne = lauf(undefined, ["--bereich", "spiel"]);
+    expect(mit.code).toBe(ohne.code);
+    expect(mit.out.split("\n")[0]).toBe(ohne.out.split("\n")[0]);
+    expect(mit.out).toContain("hinweis Board-Verzug nicht prüfbar (GraphQL): Rate-Limit");
+    expect(mit.out).not.toContain("VERZUG #");
+  });
+  test("ladeFrisch fängt einen werfenden Lader zu { fehler } ab und fragt 50 Issues", () => {
+    expect(V.ladeFrisch(() => { throw new Error("kaputt"); })).toEqual({ fehler: "kaputt" });
+    const gesehen: unknown[] = [];
+    const r = V.ladeFrisch((a) => (gesehen.push(a), []));
+    expect(gesehen).toEqual([{ anzahl: 50 }]);
+    expect("issues" in r && r.projektIds).toHaveLength(2);
   });
 });

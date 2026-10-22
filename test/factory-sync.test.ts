@@ -3,7 +3,7 @@
 import { afterAll, afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,7 @@ interface Lib {
   markerStart(id: string): string;
   markerEnde(id: string): string;
   wirdVerteilt: (e: { ring: string }) => boolean;
+  istGanzeDatei: (e: { block?: string; schluessel?: string }) => boolean;
 }
 interface Opt {
   cwd?: string;
@@ -52,7 +53,7 @@ interface Drift {
   cli(argv: string[], opt?: Opt): number;
 }
 const lib = rawLib as unknown as Lib;
-const { wirdVerteilt } = lib;
+const { wirdVerteilt, istGanzeDatei } = lib;
 const sync = rawSync as unknown as Sync;
 const drift = rawDrift as unknown as Drift;
 const pc = rawPc as unknown as { PROJEKT_CONFIG: string; ROLLEN_PFADE: Record<string, string>; PROJEKT_ROLLEN: string[] };
@@ -75,6 +76,16 @@ const schreibe = (wurzel: string, rel: string, text: string): void => {
 const lies = (wurzel: string, rel: string): string => readFileSync(join(wurzel, ...rel.split("/")), "utf8");
 
 // ── Besitz-Lib: Primitive ─────────────────────────────────────────────────────
+
+describe("istGanzeDatei", () => {
+  test("ganze Datei: weder Block noch Schlüssel", () => {
+    assert.equal(istGanzeDatei({}), true);
+  });
+  test("Block oder Schlüssel: keine ganze Datei", () => {
+    assert.equal(istGanzeDatei({ block: "b" }), false);
+    assert.equal(istGanzeDatei({ schluessel: "k" }), false);
+  });
+});
 
 describe("setzeBlock", () => {
   const S = lib.markerStart("b");
@@ -881,6 +892,49 @@ describe("Sync vom Tag (#1871)", () => {
     assert.equal(w.lies("scripts/neu.mjs"), null);
   });
 
+  test("vorladen füllt den Cache: lies liefert danach auch bei unbrauchbarer Quelle, ohne vorladen nicht", () => {
+    const q = baueQuelle();
+    taggen(q, "v1");
+    const mitVorladen = sync.quelleVomTag(q, "v1");
+    const ohneVorladen = sync.quelleVomTag(q, "v1");
+    mitVorladen.vorladen(["scripts/a.mjs"]);
+    const weg = `${q}-weg`;
+    renameSync(q, weg);
+    try {
+      assert.equal(mitVorladen.lies("scripts/a.mjs"), "export const a = 1;\n");
+      assert.equal(ohneVorladen.lies("scripts/a.mjs"), null);
+    } finally {
+      renameSync(weg, q);
+    }
+  });
+
+  test("Symlinks im Tag sind nicht verteilbar: lies und vorladen liefern keinen Link-Text", () => {
+    const q = baueQuelle();
+    schreibe(q, "scripts/real.mjs", "export const r = 1;\n");
+    taggen(q, "v1");
+    const blob = execFileSync("git", ["-C", q, "hash-object", "-w", "--stdin"], { input: "real.mjs", encoding: "utf8" }).trim();
+    git(q, ["update-index", "--add", "--cacheinfo", `120000,${blob},scripts/link.mjs`]);
+    git(q, ["commit", "-q", "-m", "link"]);
+    git(q, ["tag", "-f", "v1"]);
+    assert.match(git(q, ["ls-tree", "HEAD", "scripts/link.mjs"]), /^120000 blob /);
+    const v = sync.quelleVomTag(q, "v1");
+    assert.equal(v.lies("scripts/link.mjs"), null);
+    v.vorladen(["scripts/link.mjs", "scripts/real.mjs"]);
+    assert.equal(v.lies("scripts/link.mjs"), null);
+    assert.equal(v.lies("scripts/real.mjs"), "export const r = 1;\n");
+  });
+
+  test.skipIf(process.platform === "win32")("--entwurf: ein Symlink im Arbeitsbaum zählt als fehlend, nie als Link-Ziel", () => {
+    const q = baueQuelle();
+    mitManifest(q, [...MANIFEST.eintraege, { pfad: "scripts/link.mjs", ring: "kern", quelle: "t" }]);
+    symlinkSync("a.mjs", join(q, "scripts", "link.mjs"));
+    const z = baueZiel();
+    const r = laufe(["--quelle", q, "--ziel", z, "--entwurf"]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.err, /scripts\/link\.mjs/);
+    assert.equal(existsSync(join(z, "scripts", "link.mjs")), false);
+  });
+
   test("AK2: Sync-Stand Version 2 mit quelle { commit, tag, sauber: true } in dieser Reihenfolge", () => {
     const q = baueQuelle();
     const z = baueZiel();
@@ -1021,7 +1075,7 @@ describe("Sync vom Tag (#1871)", () => {
       for (const [rolle, pfad] of Object.entries(pc.ROLLEN_PFADE)) {
         const eintraege = m.eintraege.filter((e) => e.pfad === pfad);
         if (pc.PROJEKT_ROLLEN.includes(rolle)) assert.equal(eintraege.length, 0, `${rolle} gehört dem Projekt`);
-        else assert.ok(eintraege.some((e) => e.block === undefined && e.schluessel === undefined && wirdVerteilt(e)), `${rolle}: ${pfad} ist keine ganze verteilte Einheit`);
+        else assert.ok(eintraege.some((e) => istGanzeDatei(e) && wirdVerteilt(e)), `${rolle}: ${pfad} ist keine ganze verteilte Einheit`);
       }
     });
   });

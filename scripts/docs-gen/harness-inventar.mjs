@@ -3,6 +3,7 @@
 // Nie ausgegeben: Header, Tokens, Beschreibungstexte. Nie gelesen: settings.local.json.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { QUELL_VERZEICHNIS, ZEIGER_MARKE } from "../skill-pfade.mjs";
 import { brauche, byCodeUnit, leseJson, parseFrontmatter, renderTable } from "./markdown.mjs";
 
 const NONE = "—";
@@ -100,7 +101,9 @@ function skillKatalog(rootDir, dir) {
     if (!e.isDirectory() || !existsSync(join(rootDir, rel))) continue;
     const text = readFileSync(join(rootDir, rel), "utf8");
     const fm = parseFrontmatter(text);
-    items.push({ name: fm.name ?? e.name, model: fm.model, effort: fm.effort, datei: rel, hooks: frontmatterHooks(text, rel) });
+    // Ein generierter Zeiger (Marke) nennt die Quelle, nicht sich selbst (#1866); ein Volltext-Skill behält seinen Pfad.
+    const datei = text.split(/\r?\n/).includes(ZEIGER_MARKE) ? `${QUELL_VERZEICHNIS}/${e.name}/SKILL.md` : rel;
+    items.push({ name: fm.name ?? e.name, model: fm.model, effort: fm.effort, datei, hooks: frontmatterHooks(text, datei) });
   }
   return items;
 }

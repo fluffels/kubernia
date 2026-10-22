@@ -13,6 +13,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
@@ -95,7 +96,7 @@ export const ROLLEN_PFADE = Object.freeze({
   umsetzer: ".claude/agents/factory-umsetzer.md",
   lens: ".claude/agents/factory-lens.md",
   gruppe: ".claude/agents/factory-gruppe.md",
-  ticketSkill: ".agents/skills/factory-ticket/SKILL.md",
+  ticketSkill: `${QUELL_VERZEICHNIS}/factory-ticket/SKILL.md`,
 });
 
 /**
@@ -376,18 +377,33 @@ export function sammleKernEnv(datei, text) {
   return { literale, ohneLiteral };
 }
 
-/** Die sortierten `FACTORY_…`-Namen, die die `*.mjs` unter `ordner` (rekursiv) über `umgebungsWert` lesen. */
-export function kernEnvNamen(ordner) {
-  const namen = new Set();
+/**
+ * Sammelt über alle `*.mjs` unter `ordner` (rekursiv) die `FACTORY_…`-Literale der `umgebungsWert`-Aufrufe und die Aufrufe ohne Literal: `{ literale, ohneLiteral }` wie `sammleKernEnv`.
+ * `bezug` bestimmt die Dateinamen in `ohneLiteral` (`datei:zeile`, relativ zu `bezug`, Schrägstrich); ohne `bezug` steht der Pfad, wie er unter `ordner` gebildet wurde.
+ */
+export function sammleKernEnvIn(ordner, bezug = null) {
+  const literale = new Set();
+  const ohneLiteral = [];
   const gehe = (dir) => {
     for (const e of readdirSync(dir)) {
       const p = join(dir, e);
       if (statSync(p).isDirectory()) gehe(p);
-      else if (e.endsWith(".mjs")) for (const n of sammleKernEnv(p.split("\\").join("/"), readFileSync(p, "utf8")).literale) namen.add(n);
+      else if (e.endsWith(".mjs")) {
+        const fest = p.split("\\").join("/");
+        const name = bezug === null ? fest : fest.slice(bezug.split("\\").join("/").replace(/\/$/, "").length + 1);
+        const f = sammleKernEnv(name, readFileSync(p, "utf8"));
+        f.literale.forEach((n) => literale.add(n));
+        ohneLiteral.push(...f.ohneLiteral);
+      }
     }
   };
   gehe(ordner);
-  return [...namen].sort();
+  return { literale, ohneLiteral };
+}
+
+/** Die sortierten `FACTORY_…`-Namen, die die `*.mjs` unter `ordner` (rekursiv) über `umgebungsWert` lesen. */
+export function kernEnvNamen(ordner) {
+  return [...sammleKernEnvIn(ordner).literale].sort();
 }
 
 /** Trennt `--config <pfad>` (auch `--config=<pfad>`) aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)
@@ -404,7 +420,7 @@ export function trenneConfigArg(argv) {
 /**
  * Rahmen für `--config <pfad>` im Direktaufruf eines Werkzeugs: trennt das Flag ab, lädt die Config und liefert `{ args, config }` oder
  * `{ args, fehler }` (Text ohne `✖`-Präfix: fehlender Pfad bzw. Ladefehler mit Pfad, Schlüssel und `Fix:`-Zeile). Der Aufrufer meldet den Fehler
- * mit Exit 2, bevor er etwas liest oder schreibt. Ohne `--config` gilt die Config des Repos. `lade` ist die Test-Naht.
+ * mit Exit 2, bevor er etwas liest oder schreibt. Ohne `--config` gilt die Config des Repos. `--config` übersteuert Sprache, Labels, Namen und `hartAb`; Repo und Board-IDs kommen aus der Repo-Config (`board-lib`/`inbox-lib`). `lade` ist die Test-Naht.
  */
 export function configAusAufruf(argv, { lade = ladeProjektConfig } = {}) {
   const getrennt = trenneConfigArg(argv);

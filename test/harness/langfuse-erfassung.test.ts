@@ -433,6 +433,12 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.doesNotMatch(hp, sessionId);
     assert.doesNotMatch(hp, /\bSession `[0-9a-f]{8}`/);
     assert.ok(sessionId.test("Session 14dfbfb5-1f2f-439a-8f23-f2135cfa563a"));
+    // gekürzte ID: 8 Hex-Zeichen mit mindestens einer Ziffer und einem Buchstaben a-f.
+    // Grenze: Zählwerte und Prosa ohne dieses Muster bleiben unerkannt, die Prüfung ist ein Netz, kein Beweis.
+    const kurzId = /\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{8}\b/;
+    assert.doesNotMatch(hp, kurzId);
+    assert.ok(kurzId.test("Probelauf (Session 42b834f1)"));
+    assert.ok(!kurzId.test("Zählung 12345678 und Wort abcdefab"));
   });
 
   test("Prüfregel steht auf 26 und fortgesetzte Subagenten sind keine offene Lücke mehr", () => {

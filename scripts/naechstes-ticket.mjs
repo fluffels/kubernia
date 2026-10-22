@@ -21,12 +21,12 @@
  * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: Ziel- und
  * Kriterien-Abschnitt mit Negativfall, Namen aus `sprache.spezifikation` der Config; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
- * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); kein GraphQL. `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
+ * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); dazu EINE GraphQL-Abfrage der 50 jüngsten offenen Issues für den Board-Verzug (#1866: Items auf einem Board, die die REST-Listen noch nicht führen, stehen als Zeile `VERZUG #a, #b: …` und als `verzug` im JSON; fail-open, ein Fehler wird zum Hinweis). `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
+import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
@@ -186,6 +186,32 @@ export function waehleUeberBoards({ produkt, factory, bereich, config, ...belegu
   return { ticket, uebersprungen, ...(hinweise.length > 0 ? { hinweise } : {}) };
 }
 
+/**
+ * Board-Verzug (#1866): offene Issues, die laut GraphQL (`frisch` = `frischeOffeneIssues`, frisch ohne Verzögerung) ein Item auf dem Produkt- oder
+ * Factory-Board haben (`projektIds` = deren Projekt-IDs), aber in keiner der REST-Board-Listen stehen: die Auswahl sieht sie nicht. Sortierte
+ * Nummern; ein Issue ohne Board-Item ist kein Verzug (das ist Sache des Board-Wächters). Pur.
+ */
+export function verzugNummern({ frisch, produkt, factory, projektIds }) {
+  const gelistet = new Set([...produkt, ...factory].map((i) => i.number));
+  return frisch
+    .filter((i) => !gelistet.has(i.number) && i.projektIds.some((id) => projektIds.includes(id)))
+    .map((i) => i.number)
+    .sort((a, b) => a - b);
+}
+
+const verzugZeile = (verzug) => `VERZUG ${verzug.map((n) => `#${n}`).join(", ")}: Board-REST-Liste hinkt, die Auswahl sieht sie nicht`;
+
+/**
+ * `daten` = Ergebnis von `io.lade()`; `frisch` (optional) ist dort `{ issues, projektIds }` oder `{ fehler }`. Liefert `{ verzug, hinweis? }`:
+ * fail-open, ein GraphQL-Fehler wird zum Hinweis, die Auswahl läuft unverändert. Pur.
+ */
+export function verzugAus(daten) {
+  const f = daten.frisch;
+  if (!f) return { verzug: [] };
+  if (f.fehler) return { verzug: [], hinweis: `Board-Verzug nicht prüfbar (GraphQL): ${f.fehler}` };
+  return { verzug: verzugNummern({ frisch: f.issues, produkt: daten.produkt, factory: daten.factory, projektIds: f.projektIds }) };
+}
+
 const uebersprungenEintrag = (nr, r) => ({ nr, grund: r.grund, ...(r.fehlt ? { fehlt: r.fehlt } : {}) });
 const ticketVon = (item, r) => ({ nr: item.number, titel: item.title, ...(r.bestandFehlt ? { spezifikation: { bestand: true, fehlt: r.bestandFehlt } } : {}) });
 
@@ -245,12 +271,12 @@ export const reparierenVon = (uebersprungen) => uebersprungen.filter((u) => u.fe
 const reparierenZeilen = (uebersprungen) => reparierenVon(uebersprungen).map((r) => `reparieren #${r.nr}: ${r.fehlt.join("; ")}`);
 
 /** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach Hinweise, `reparieren`-Zeilen und je übersprungenem Kandidaten eine Zeile. Pur. */
-export function formatiere({ ticket, uebersprungen, bereich, einzel = null, hinweise = [] }) {
+export function formatiere({ ticket, uebersprungen, bereich, einzel = null, hinweise = [], verzug = [] }) {
   if (einzel !== null && !ticket) return [`#${einzel} nicht frei: ${uebersprungen[0]?.grund ?? "unbekannt"}`, ...reparierenZeilen(uebersprungen)].join("\n") + "\n";
   const keins = `kein freies Ticket im Bereich ${BEREICHE[bereich]}`; // ohne Einzelprüfung ist `bereich` immer gesetzt (`fuehreAus` verlangt eines von beiden)
   const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : keins;
   const hinweis = ticket?.spezifikation ? [`hinweis #${ticket.nr}: Spezifikation unvollständig (Bestand, nur berichtet): ${ticket.spezifikation.fehlt.join("; ")}`] : [];
-  return [kopf, ...hinweise.map((h) => `hinweis ${h}`), ...hinweis, ...reparierenZeilen(uebersprungen), ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
+  return [kopf, ...(verzug.length > 0 ? [verzugZeile(verzug)] : []), ...hinweise.map((h) => `hinweis ${h}`), ...hinweis, ...reparierenZeilen(uebersprungen), ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
 }
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
@@ -263,12 +289,16 @@ export function fuehreAus(argv, io) {
       return { code: 0, out: aufruf.json ? `${JSON.stringify(liste, null, 2)}\n` : formatiereMaengel(liste), err: "" };
     }
     const einzel = aufruf.ticket;
+    const daten = einzel === null ? io.lade() : null;
+    const { verzug, hinweis: verzugHinweis } = daten ? verzugAus(daten) : { verzug: [] };
     const roh =
-      einzel === null
-        ? { ...waehleUeberBoards({ ...io.lade(), owner: io.owner, bereich: aufruf.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config }), bereich: aufruf.bereich }
+      daten
+        ? { ...waehleUeberBoards({ ...daten, owner: io.owner, bereich: aufruf.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config }), bereich: aufruf.bereich }
         : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config });
+    const hinweise = [...(roh.hinweise ?? []), ...(verzugHinweis ? [verzugHinweis] : [])];
     const reparieren = reparierenVon(roh.uebersprungen);
-    const ergebnis = reparieren.length > 0 ? { ...roh, reparieren } : roh;
+    const mitVerzug = daten ? { ...roh, ...(hinweise.length > 0 ? { hinweise } : {}), verzug } : roh;
+    const ergebnis = reparieren.length > 0 ? { ...mitVerzug, reparieren } : mitVerzug;
     const out = aufruf.json ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere({ ...ergebnis, einzel });
     return { code: ergebnis.ticket ? 0 : 1, out, err: "" };
   } catch (e) {
@@ -338,6 +368,15 @@ function ladeBelegung(messfenster) {
   return { offene, refs, worktrees, prHeads, messfenster };
 }
 
+/** Die frischen offenen Issues per GraphQL für den Verzugs-Vergleich; fail-open: ein Fehler kommt als `{ fehler }` zurück, die Auswahl läuft weiter. */
+export function ladeFrisch(lade = frischeOffeneIssues) {
+  try {
+    return { issues: lade({ anzahl: 50 }), projektIds: ["produkt", "factory"].map((r) => boardFuerRolle(r).projectId) };
+  } catch (e) {
+    return { fehler: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). Der Messfenster-Lader (`messfensterLader`, Test-Naht) bekommt die schon geladenen Namen. */
 export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLader } = {}) {
   const cfg = config ?? ladeProjektConfig();
@@ -350,6 +389,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
     produkt: normalizeItems(loadItemPages(boardFuerRolle("produkt"))),
     factory: normalizeItems(loadItemPages(boardFuerRolle("factory"))),
     ...ladeBelegung(messfenster),
+    frisch: ladeFrisch(),
   });
   /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
   const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster) });
@@ -358,11 +398,11 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
-  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O; übersteuert Sprache, Labels, Namen und hartAb, Repo und Board-IDs kommen aus der Repo-Config (board-lib/inbox-lib)
   direktaufruf(args, {
     pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufLesen(argv)),
     fehlerErgebnis: (_argv, vorab) => fehlerErgebnis(vorab.fehler),
-    vorbereiten: () => mitKontingent("naechstes-ticket", { arten: ["core"] }), // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
+    vorbereiten: () => mitKontingent("naechstes-ticket", { arten: ["core"] }), // nur REST zählt: das eine GraphQL (Verzug) ist fail-open, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
     io: () => {
       try {
         return echteIo({ config });

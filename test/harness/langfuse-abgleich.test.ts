@@ -471,6 +471,12 @@ describe("Score außerhalb (#1862)", () => {
     expect(md([aus])).toMatch(/Hinweis .*außerhalb des Projekts/);
     expect(md([drin])).not.toMatch(/außerhalb des Projekts/);
   });
+
+  test("Bericht: der Kostenbefehl in der Hinweiszeile trägt die volle Session-ID", () => {
+    const id = "abcdef12-3456-7890-abcd-ef1234567890";
+    const md = A.renderMarkdown([{ ...bew({ ausserhalb: true }), session: id }], A.summenzeile([bew({ ausserhalb: true })]));
+    expect(md).toContain(`token-baseline.mjs --session ${id}`);
+  });
 });
 
 describe("Score ausstehend und vor Stichtag (getrennt vom Status)", () => {

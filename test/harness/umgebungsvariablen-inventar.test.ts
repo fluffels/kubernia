@@ -5,11 +5,11 @@
  * Grenze: direkte `process.env.FACTORY_…`-Zugriffe und Workflows liegen außerhalb des Scans.
  */
 import { describe, expect, test } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { sammleKernEnv as rawSammle } from "../../scripts/projekt-config-lib.mjs";
+import { sammleKernEnv as rawSammle, sammleKernEnvIn as rawSammleIn } from "../../scripts/projekt-config-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BEFEHLE = "docs/referenz/befehle.md";
@@ -27,6 +27,8 @@ export interface CodeFunde {
 
 /** Der Sammler liegt in der Kern-Lib (`sammleKernEnv`), damit der Doctor dieselben Namen kennt. */
 export const sammleCode = rawSammle as (datei: string, text: string) => CodeFunde;
+/** Dieselbe Lib sammelt über einen Ordner, damit Wächter und Doctor nicht zwei Läufe über die Dateien pflegen. */
+const sammleOrdner = rawSammleIn as (ordner: string, bezug: string) => CodeFunde;
 
 /** Pur: Namen der Kern-Zeilen unter `## Umgebungsvariablen` (Ring in Spalte 2, Name in Spalte 1). */
 export function sammleInventar(md: string): Set<string> {
@@ -64,24 +66,9 @@ export function vergleiche(code: CodeFunde, inventar: Set<string>, ausnahmen: Re
   return fehler;
 }
 
-function mjsDateien(dir: string): string[] {
-  const aus: string[] = [];
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e);
-    if (statSync(p).isDirectory()) aus.push(...mjsDateien(p));
-    else if (e.endsWith(".mjs")) aus.push(p);
-  }
-  return aus;
-}
-
 describe("Umgebungsvariablen-Inventar gegen den Code", () => {
   test("Kern-Inventar und gelesene FACTORY_-Variablen sind mengengleich", () => {
-    const code: CodeFunde = { literale: new Set(), ohneLiteral: [] };
-    for (const datei of mjsDateien(join(WURZEL, "scripts"))) {
-      const f = sammleCode(datei.slice(WURZEL.length).replace(/\\/g, "/"), readFileSync(datei, "utf8"));
-      f.literale.forEach((n) => code.literale.add(n));
-      code.ohneLiteral.push(...f.ohneLiteral);
-    }
+    const code = sammleOrdner(join(WURZEL, "scripts"), WURZEL);
     const inventar = sammleInventar(readFileSync(join(WURZEL, BEFEHLE), "utf8"));
     expect(vergleiche(code, inventar, AUSNAHMEN)).toEqual([]);
   });

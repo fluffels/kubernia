@@ -341,3 +341,35 @@ describe("fuehreStatusAus: Label und Board aus der übergebenen Config (#1798)",
     expect(() => lauf({ labels: {} })).toThrow(/labels\.harness[\s\S]*Fix:/);
   });
 });
+
+describe("bestaetigeAnlegen (#1866, fail-closed)", () => {
+  type E = { aktion: string; nr?: number; grund: string; warnungen: string[] };
+  const B = raw as unknown as { bestaetigeAnlegen: (e: E, a: { zweit: () => { number: number; titel: string }[] }) => E };
+  const anlegen: E = { aktion: "anlegen", grund: "g", warnungen: ["alt"] };
+  test("GraphQL kennt ein offenes Status-Ticket (die REST-Liste noch nicht): nichts, Nummer in Grund und Warnung, alte Warnungen bleiben", () => {
+    const r = B.bestaetigeAnlegen(anlegen, { zweit: () => [{ number: 1865, titel: T.STATUS_TITEL }] });
+    expect(r.aktion).toBe("nichts");
+    expect(r.grund).toContain("#1865");
+    expect(r.warnungen).toHaveLength(2);
+    expect(r.warnungen[0]).toBe("alt");
+    expect(r.warnungen[1]).toContain("#1865");
+  });
+  test("GraphQL wirft: fail-closed, nichts mit Warnung samt Fehlertext", () => {
+    const r = B.bestaetigeAnlegen(anlegen, { zweit: () => { throw new Error("Rate-Limit"); } });
+    expect(r.aktion).toBe("nichts");
+    expect(r.warnungen.join("\n")).toContain("Rate-Limit");
+  });
+  test("GraphQL liefert keine Liste: wie ein Fehler, nichts", () => {
+    expect(B.bestaetigeAnlegen(anlegen, { zweit: () => undefined as never }).aktion).toBe("nichts");
+  });
+  test("GraphQL kennt nur andere Titel oder nichts: anlegen bleibt, Entscheidung unverändert", () => {
+    expect(B.bestaetigeAnlegen(anlegen, { zweit: () => [] })).toBe(anlegen);
+    expect(B.bestaetigeAnlegen(anlegen, { zweit: () => [{ number: 5, titel: "Anderes" }] })).toBe(anlegen);
+  });
+  test("andere Aktionen bleiben unberührt und fragen GraphQL nicht", () => {
+    for (const aktion of ["nichts", "nach-oben"]) {
+      const e: E = { aktion, nr: 3, grund: "g", warnungen: [] };
+      expect(B.bestaetigeAnlegen(e, { zweit: () => { throw new Error("nicht fragen"); } })).toBe(e);
+    }
+  });
+});

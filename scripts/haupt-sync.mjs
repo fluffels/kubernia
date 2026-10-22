@@ -34,6 +34,7 @@ import { join, posix, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
 import { KERN_TICKET_SKILL, TICKET_SKILL_ORDNER } from "./projekt-config-lib.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 /**
@@ -65,10 +66,6 @@ export function exitCodeFuer(ergebnis) {
   if (typeof ergebnis.branch === "string" && ergebnis.branch !== "" && ergebnis.branch !== "main") return 1;
   return 0;
 }
-
-/** Skill-Quellen und Zeiger-Verzeichnis wie in `scripts/skills-sync.mjs` (kein Import: ein Einstiegsskript importiert kein anderes; ein Test hält beide gleich). */
-export const QUELL_VERZEICHNIS = ".agents/skills";
-export const ZEIGER_WURZEL = ".claude/skills";
 
 /** Verzeichnis der Ticket-Skill-Quelle als fester Kern-Pfad (#1748, `ROLLEN_PFADE.ticketSkill`, seit #1850 unter `.agents/skills/`): ohne Config, ohne IO (der Hook ist fail-open). */
 export const TICKET_SKILL_VERZEICHNIS = `${TICKET_SKILL_ORDNER}/`;
@@ -210,13 +207,14 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
       if (h.skill.length) {
         const agentsMd = h.skill.includes("AGENTS.md") ? " Die Wurzel-AGENTS.md hat sich geändert: zusätzlich `git diff <Stand vor diesem Sync> HEAD -- AGENTS.md` lesen." : "";
         const quellen = [...new Set(h.skill.map(quellePfad))];
-        const skillDatei = quellen.find((d) => d.endsWith("/SKILL.md")) ?? quellen.find((d) => d.endsWith("/ablauf.md"));
-        zeilen.push(`Skill neu lesen: ${quellen.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. ${skillDatei ? `\`${skillDatei}\`` : "Den Ticket-Skill"} jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
+        const skillMd = quellen.filter((d) => d.endsWith("/SKILL.md"));
+        const skillDateien = skillMd.length ? skillMd : quellen.filter((d) => d.endsWith("/ablauf.md")).slice(0, 1);
+        zeilen.push(`Skill neu lesen: ${quellen.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. ${skillDateien.length ? skillDateien.map((d) => `\`${d}\``).join(", ") : "Den Ticket-Skill"} jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
       }
       if (h.agenten.length) zeilen.push("Agent-Definitionen geändert: gelten erst nach Session-Neustart; beim Umsetzer-Spawn den Umsetzer-Zusatz setzen (Skill § Vor dem Spawn).");
       const quelle = h.sonstige.filter((d) => d.startsWith(`${QUELL_VERZEICHNIS}/`));
       if (h.sonstige.length > quelle.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) gelten erst nach einem Session-Neustart.");
-      if (quelle.length) zeilen.push("Geänderte Skill-Quellen unter .agents/skills/ gelten ab dem nächsten Skill-Aufruf (der Zeiger verweist auf die Quelle).");
+      if (quelle.length) zeilen.push(`Geänderte Skill-Quellen unter ${QUELL_VERZEICHNIS}/ gelten ab dem nächsten Skill-Aufruf (der Zeiger verweist auf die Quelle).`);
     }
   }
   // Im Klartext-Modus (--text, Skill-Schritt 0) steht die Node-Version schon im SessionStart-Kontext, node_modules nur nach einer Lock-Änderung dieses Syncs.

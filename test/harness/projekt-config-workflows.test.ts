@@ -127,8 +127,8 @@ describe("Sparse-Checkout der Workflows", () => {
   test("die Hülle des Einstiegs enthält die Lib und nur Dateien des Kerns", () => {
     const huelle = importHuelle(EINSTIEG, lies);
     assert.ok(huelle.includes(LIB));
-    // Genau diese vier: die Lib zieht die importfreie Spezifikations-Lib (`spracheMaengel`) nach; jede weitere Datei ist ein bewusster Commit.
-    assert.deepEqual(huelle, ["scripts/flag-lib.mjs", LIB, EINSTIEG, "scripts/spezifikation-lib.mjs"], `Hülle wächst: ${huelle.join(", ")}`);
+    // Genau diese sechs: die Lib zieht die Spezifikations-Lib (`spracheMaengel`), die nur die Builtin-Fence-Helfer `markdown.mjs` (SSOT der Code-Fences) importiert, und die importfreien Skill-Pfade nach; jede weitere Datei ist ein bewusster Commit.
+    assert.deepEqual(huelle, ["scripts/docs-gen/markdown.mjs", "scripts/flag-lib.mjs", LIB, EINSTIEG, "scripts/skill-pfade.mjs", "scripts/spezifikation-lib.mjs"],`Hülle wächst: ${huelle.join(", ")}`);
   });
   test("Workflows mit board-place.mjs checken das volle Repo aus und richten Node ein (#1628)", () => {
     const nutzer = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml") && lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));

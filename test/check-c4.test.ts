@@ -63,7 +63,10 @@ afterEach(() => {
 });
 
 const layersFile = (m: unknown) => `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)} };\n`;
+/** Projekt-Config mit dem Block `struktur`: `struktur.quelle` muss zu `architektur.quelle` passen. */
+const projektConfig = (quelle = "src"): string => JSON.stringify({ struktur: { quelle, moduldoku: "docs/module" } });
 const srcFiles = (extra: Record<string, string> = {}) => ({
+  ".factory/projekt.json": projektConfig(),
   "scripts/layers.cjs": layersFile(basis()),
   "src/ui/a.ts": "",
   "src/ui.ts": "",
@@ -455,6 +458,14 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
     assert.deepEqual(hex.adapter.map((a) => a.ort), [[]]);
     assert.deepEqual(hex.pfade.map((p) => p.pfad), ["lib/game/a.ts", "lib/content/a.ts"]);
     assert.deepEqual(api.leseHexagon(text, "Hexagonale Sicht", "li")?.pfade, []);
+  });
+
+  test("leseHexagon: Sonderzeichen der Quellwurzel sind wörtlich, `s.c` trifft `sxc/` nicht (#1866 L25a)", () => {
+    const text = hexText("| Content-Quelle | getrieben | `s.c/content/a.ts` | pure Domäne |", "| Tastatur | Content-Quelle | `sxc/ui/a.ts` | Präsentation |");
+    const hex = api.leseHexagon(text, "Hexagonale Sicht", "s.c");
+    assert.ok(hex);
+    assert.deepEqual(hex.pfade.map((p) => p.pfad), ["s.c/content/a.ts"]);
+    assert.deepEqual(hex.adapter.map((a) => a.ort), [[]]);
   });
 
   test("leseHexagon: Tabellen, Pfade bis zur nächsten Überschrift, Code-Fences ausgeblendet", () => {
@@ -921,10 +932,28 @@ describe("cli", () => {
 
   test("architektur.quelle weicht von der Quellwurzel des Schicht-Modells ab: Exit 1 mit abgleich-Meldung (#1428 Z13)", async () => {
     const cfg = JSON.stringify({ schichten: { layers: "scripts/layers.cjs" }, architektur: { ...CFG, quelle: "lib" } });
-    const r = await cliLauf(cliFixture({ "scripts/docs-gen/config.json": cfg }), () => 0);
+    const r = await cliLauf(cliFixture({ "scripts/docs-gen/config.json": cfg, ".factory/projekt.json": projektConfig("lib") }), () => 0);
     assert.equal(r.code, 1);
     assert.match(r.err, /architektur\.quelle „lib“ passt nicht zur Quellwurzel „src\/“/);
   }, 30000);
+
+  test("struktur.quelle weicht von architektur.quelle ab: Exit 1, beide Dateien genannt, kein likec4-Aufruf (#1866 L17)", async () => {
+    const calls: string[][] = [];
+    const r = await cliLauf(cliFixture({ ".factory/projekt.json": projektConfig("lib") }), (a) => (calls.push(a), 0));
+    assert.equal(r.code, 1);
+    assert.match(r.err, /scripts\/docs-gen\/config\.json:1 architektur\.quelle „src“ weicht von struktur\.quelle „lib“ in \.factory\/projekt\.json ab.*Fix: /);
+    assert.equal(calls.length, 0);
+  });
+
+  test("Projekt-Config ohne struktur oder nicht lesbar: Exit 1 mit Fix, kein likec4-Aufruf (#1866 L17)", async () => {
+    for (const extra of [{ ".factory/projekt.json": "{}" }, { ".factory/projekt.json": "{ kaputt" }]) {
+      const calls: string[][] = [];
+      const r = await cliLauf(cliFixture(extra), (a) => (calls.push(a), 0));
+      assert.equal(r.code, 1, JSON.stringify(extra));
+      assert.match(r.err, /\.factory\/projekt\.json:1 struktur .*Fix: /);
+      assert.equal(calls.length, 0);
+    }
+  });
 
   test("Block architektur fehlt: Exit 1 mit gezieltem Fix, kein likec4-Aufruf", async () => {
     const calls: string[][] = [];

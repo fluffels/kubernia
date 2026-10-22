@@ -9,7 +9,7 @@
  * Nur Node-Builtins, board-lib.mjs und gh-cli.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
-import { fehlerMeldung } from "./gh-cli.mjs";
+import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 
 export { STATUS_TITEL };
@@ -65,6 +65,26 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
     return { aktion: "nichts", grund: `erst ${stundenSeitAbschluss.toFixed(1)} h seit dem Abschluss des Vorgängers (Mindestabstand ${MIN_ABSTAND_STUNDEN} h)`, warnungen };
   }
   return { aktion: "anlegen", grund: `${mergesSeit} Merges seit dem Anlegen des jüngsten Status-Tickets, kein offenes Status-Ticket`, warnungen };
+}
+
+/**
+ * Gegenprobe vor dem Anlegen (fail-closed): die REST-Liste der offenen Issues hinkt bei frischen Tickets nach, ein zweites Status-Ticket
+ * entstand so schon. Nur bei `aktion: "anlegen"` fragt `zweit()` (liefert `[{ number, titel }]`, z.B. `frischeOffeneIssues`) einen zweiten
+ * Weg: kennt er ein offenes `STATUS_TITEL` oder wirft er, wird daraus `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur
+ * (`zweit` ist injiziert); liefert eine neue Entscheidung.
+ */
+export function bestaetigeAnlegen(e, { zweit }) {
+  if (e.aktion !== "anlegen") return e;
+  let frisch;
+  try {
+    frisch = zweit();
+    if (!Array.isArray(frisch)) throw new Error("Antwort ist keine Liste.");
+  } catch (err) {
+    return { aktion: "nichts", grund: "Anlegen abgebrochen: die Gegenprobe über GraphQL ist fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Gegenprobe vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
+  }
+  const da = frisch.filter((i) => i.titel === STATUS_TITEL).map((i) => `#${i.number}`);
+  if (da.length === 0) return e;
+  return { aktion: "nichts", grund: `Anlegen abgebrochen: die REST-Liste kannte ${da.join(", ")} noch nicht, GraphQL schon (frisch angelegt)`, warnungen: [...e.warnungen, `REST-Liste hinkt: offenes „${STATUS_TITEL}“ ${da.join(", ")} nur per GraphQL gefunden.`] };
 }
 
 /** Soll das Status-Ticket bewegt werden? `nach-oben` nur, wenn es nicht schon im Kopf von `items` steht; anlegen bewegt immer. Pur. */

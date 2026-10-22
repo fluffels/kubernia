@@ -46,7 +46,9 @@ import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
+import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex as escapeRe } from "../../scripts/ticket-namen.mjs";
 
 const { trifftLeitplanke, leitplankenMuster } = abschlussRaw as unknown as {
   trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
@@ -528,7 +530,8 @@ const KERN_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "V
 const PROJEKT_STOPPS = ["Forum-Antwort posten", "PixelLab-Key"];
 const PROJEKT_STOPP_ZEILE = "- **Projekt-Stopps** (ergänzen die Kern-Liste, nie streichen): Forum-Antwort posten, PixelLab-Key; vorab klären.";
 
-const KERN_RE = /<!-- factory-besitz:start kern -->([\s\S]*?)<!-- factory-besitz:ende kern -->/;
+const kernMarker = (f: (id: string) => string): string => (escapeRe as (t: string) => string)(f("kern"));
+const KERN_RE = new RegExp(`${kernMarker(markerStart as (id: string) => string)}([\\s\\S]*?)${kernMarker(markerEnde as (id: string) => string)}`);
 /** Inhalt des Projekt-Blocks (zwischen den Markern), `null` ohne vollständiges Paar. */
 const projektBlock = (text: string): string | null => {
   const von = text.indexOf(PROJEKT_BLOCK_START as string);

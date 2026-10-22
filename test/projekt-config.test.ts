@@ -15,6 +15,7 @@ interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
   ladeProjektConfig(opt?: { rootDir?: string; pfad?: string }): { repo: string };
   trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
+  configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
@@ -26,6 +27,7 @@ interface Pc {
   umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
   kernEnvNamen(ordner: string): string[];
   sammleKernEnv(datei: string, text: string): { literale: Set<string>; ohneLiteral: string[] };
+  sammleKernEnvIn(ordner: string, bezug?: string | null): { literale: Set<string>; ohneLiteral: string[] };
 }
 const pc = rawPc as unknown as Pc;
 
@@ -245,6 +247,21 @@ describe("ladeProjektConfig", () => {
   });
 });
 
+describe("configAusAufruf", () => {
+  test("--config ohne Wert: fehler ohne ✖-Präfix (das setzt der Aufrufer), mit Fix, ohne die Config zu laden (#1866 L25c)", () => {
+    const r = pc.configAusAufruf(["a", "--config"], { lade: () => assert.fail("keine Config laden") });
+    assert.ok(r.fehler);
+    assert.doesNotMatch(r.fehler, /^✖/);
+    assert.match(r.fehler, /^--config braucht einen Pfad[\s\S]*Fix:/);
+    assert.deepEqual(r.args, ["a", "--config"]);
+  });
+  test("Ladefehler wird als fehler durchgereicht, Gutfall liefert config und die restlichen Argumente", () => {
+    assert.equal(pc.configAusAufruf(["--config", "x.json"], { lade: () => { throw new Error("kaputt"); } }).fehler, "kaputt");
+    const ok = pc.configAusAufruf(["a", "--config", "x.json"], { lade: (a) => ({ pfad: a.pfad }) });
+    assert.deepEqual(ok, { args: ["a"], config: { pfad: "x.json" } });
+  });
+});
+
 describe("trenneConfigArg", () => {
   test("trennt --config samt Pfad ab, meldet fehlenden Pfad", () => {
     assert.deepEqual(pc.trenneConfigArg(["a", "--config", "p.json", "b"]), { args: ["a", "b"], pfad: "p.json" });
@@ -388,6 +405,17 @@ describe("kernEnvNamen und sammleKernEnv", () => {
     writeFileSync(join(d, "c.ts"), 'umgebungsWert(e, "FACTORY_TS")\n');
     assert.deepEqual(pc.kernEnvNamen(d), ["FACTORY_A", "FACTORY_B", "FACTORY_TIEF"]);
   });
+  test("sammleKernEnvIn: Literale und Aufrufe ohne Literal aus allen Dateien, Namen relativ zum Bezug", () => {
+    const d = tmp();
+    mkdirSync(join(d, "unter"));
+    writeFileSync(join(d, "a.mjs"), 'umgebungsWert(e, "FACTORY_A")\n');
+    writeFileSync(join(d, "unter", "b.mjs"), "const x = umgebungsWert(env, name);\n");
+    writeFileSync(join(d, "c.ts"), "umgebungsWert(e, name)\n");
+    const f = pc.sammleKernEnvIn(d, d);
+    assert.deepEqual([...f.literale], ["FACTORY_A"]);
+    assert.deepEqual(f.ohneLiteral, ["unter/b.mjs:1"]);
+    assert.deepEqual(pc.sammleKernEnvIn(d).ohneLiteral.map((x) => x.endsWith("/unter/b.mjs:1")), [true]);
+  });
   test("das echte scripts/ enthält die Diff-Basis", () => {
     assert.ok(pc.kernEnvNamen(join(WURZEL, "scripts")).includes("FACTORY_DIFF_BASE"));
   });
@@ -400,8 +428,8 @@ describe("kernEnvNamen und sammleKernEnv", () => {
 describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
-    mkdirSync(join(d, "scripts"));
-    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    mkdirSync(join(d, "scripts", "docs-gen"), { recursive: true });
+    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);

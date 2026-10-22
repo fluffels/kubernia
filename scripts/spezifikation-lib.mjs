@@ -1,7 +1,7 @@
 // Lib ohne Direktaufruf-Guard; Aufrufer: die Ticket-Auswahl (naechstes-ticket.mjs), der Anlege-/Reparaturweg (spezifikation.mjs), die Abnahme (abnahme.mjs, check-abnahme-nachweis.mjs).
 /**
  * Spezifikations-Gate (ADR 0022 F12): Der Eingang ist eine Spezifikation. Ein Ticket braucht den Ziel-Abschnitt und den Kriterien-Abschnitt (Liste)
- * mit mindestens einem Negativfall-Kriterium. Alles pur, ohne Importe und ohne Projektliterale.
+ * mit mindestens einem Negativfall-Kriterium. Alles pur, einziger Import ist `fenceMaske` (Code-Fences nach CommonMark), ohne Projektliterale.
  * Sprache (#1711): Abschnittsnamen, Schlüsselwörter und deren Muster kommen als `sprache` (= `sprache.spezifikation` der Projekt-Config, `spracheAus`)
  * in jeden Einstieg; die Rahmentexte der Meldungen bleiben deutsch (Kern-Texte, ADR 0022 §8), die Wörter werden eingesetzt. Fehlt `sprache` oder ein
  * Schlüssel, wirft der Einstieg (kein stiller Deutsch-Standardwert).
@@ -14,6 +14,8 @@
  * ist unbegrenzt und mit Mustern nie vollständig; es braucht die Begrenzung (`begrenzung`). Grenze: nur dieses kleine Satzmuster
  * (Allquantor, Relativsatz, Lesewort ohne Satzende dazwischen); andere Formulierungen desselben Anspruchs erkennt das Gate nicht.
  */
+
+import { fenceMaske } from "./docs-gen/markdown.mjs";
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 
@@ -100,19 +102,20 @@ function wortschatz(sprache) {
   };
 }
 
+/** Zeilen des Bodys ohne Code-Fences (CommonMark über `fenceMaske`, die Fence-Zeilen eingeschlossen). */
+function ohneFences(body) {
+  const lines = String(body ?? "").split(/\r?\n/);
+  const maske = fenceMaske(lines);
+  return lines.filter((_, i) => !maske[i]);
+}
+
 /** Zeilen je Abschnitt (Überschrift Ebene 2 mit einem der Namen aus `namen`, als Text verglichen, Groß-/Kleinschreibung egal); Code-Fences zählen nicht, `###` gehört zum Abschnitt. `null` = Abschnitt fehlt. */
 function abschnitt(body, namen) {
   const klein = namen.map((n) => n.toLowerCase());
   let drin = false;
   let gefunden = false;
-  let fence = false;
   const zeilen = [];
-  for (const zeile of String(body ?? "").split(/\r?\n/)) {
-    if (/^\s*(?:```|~~~)/.test(zeile)) {
-      fence = !fence;
-      continue;
-    }
-    if (fence) continue;
+  for (const zeile of ohneFences(body)) {
     if (/^#{1,2}\s/.test(zeile)) {
       const titel = /^##\s+(.*?)\s*$/.exec(zeile);
       drin = titel !== null && klein.includes(titel[1].toLowerCase());
@@ -131,7 +134,7 @@ function abschnitt(body, namen) {
 export function blockerNummern(body, sprache) {
   const w = wortschatz(sprache);
   const nummern = new Set();
-  for (const zeile of String(body ?? "").split(/\r?\n/)) {
+  for (const zeile of ohneFences(body)) {
     for (const m of zeile.matchAll(w.blockerRe())) {
       for (const n of m[1].matchAll(/#(\d+)/g)) nummern.add(Number(n[1]));
     }
@@ -139,18 +142,22 @@ export function blockerNummern(body, sprache) {
   return [...nummern];
 }
 
+/**
+ * Die Blocker-Zeile als Text: `<blocker> #a, #b`, mit `zusatz` hinter einem Leerzeichen (z.B. „(nur solange #a offen ist)“). Gegenstück zu `blockerNummern`
+ * (SSOT für das Schreiben); wirft bei leerer Nummernliste und bei leerem Wort `sprache.blocker`. Pur.
+ */
+export function blockerZeile(nummern, sprache, zusatz = "") {
+  if (!Array.isArray(nummern) || nummern.length === 0) throw new Error("blockerZeile braucht mindestens eine Ticketnummer");
+  const wort = sprache?.blocker;
+  if (typeof wort !== "string" || wort.trim() === "") throw new Error("sprache.blocker fehlt oder ist leer: die Blocker-Zeile braucht das Wort der Projekt-Config");
+  return `${wort} ${nummern.map((n) => `#${n}`).join(", ")}${zusatz === "" ? "" : ` ${zusatz}`}`;
+}
+
 /** Text ohne Code-Fences und ohne Inline-Code (dort steht Beispieltext, keine Abhängigkeit). */
 function ohneCode(body) {
-  let fence = false;
-  const zeilen = [];
-  for (const zeile of String(body ?? "").split(/\r?\n/)) {
-    if (/^\s*(?:```|~~~)/.test(zeile)) {
-      fence = !fence;
-      continue;
-    }
-    if (!fence) zeilen.push(zeile.replace(/`[^`\n]*`/g, ""));
-  }
-  return zeilen.join("\n");
+  return ohneFences(body)
+    .map((zeile) => zeile.replace(/`[^`\n]*`/g, ""))
+    .join("\n");
 }
 
 /** Mängel „Abhängigkeitssatz ohne passende Blocker-Zeile“, je Nummer einer. Pur. */

@@ -14,13 +14,17 @@
  * bewusst nicht abgeglichen (ADR 0022 §1 Ausnahmen), außer `oberflaeche`: eine Zeile „Oberfläche“ nennt nur Besitz mit Ring `oberflaeche` und umgekehrt (ADR 0029); das Manifest bleibt die Besitz-SSOT. */
 import { describe, expect, test } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as inventar from "../../scripts/docs-gen/harness-inventar.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as docsGen from "../../scripts/docs-gen.mjs";
+
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { QUELL_VERZEICHNIS, ZEIGER_MARKE } from "../../scripts/skill-pfade.mjs";
 
 const WURZEL = process.cwd();
 const SEITE = "docs/harness-inventar.md";
@@ -309,5 +313,29 @@ describe("harness-inventar.md: Einordnung der Skripte (#1693)", () => {
     expect(inventarZeilen(text.replace(/\n/g, "\r\n"))).toEqual(inventarZeilen(text));
     expect(lauf(inventarZeilen(text.replace(/\n/g, "\r\n")), o)).toEqual([]);
     expect(lauf([], o).join()).toContain("scripts/a.mjs steht in keiner");
+  });
+});
+
+describe("Skill-Katalog nennt die Quelle hinter einem Zeiger (#1866)", () => {
+  const skill = (name: string, rumpf: string) => `---\nname: ${name}\nmodel: sonnet\n---\n\n${rumpf}\n`;
+  const katalog = () => {
+    const w = mkdtempSync(join(tmpdir(), "inventar-skill-"));
+    try {
+      mkdirSync(join(w, ".claude/skills/zeig"), { recursive: true });
+      mkdirSync(join(w, ".claude/skills/voll"), { recursive: true });
+      writeFileSync(join(w, ".claude/skills/zeig/SKILL.md"), skill("zeig", `${ZEIGER_MARKE}\nLies die Quelle.`));
+      writeFileSync(join(w, ".claude/skills/voll/SKILL.md"), skill("voll", "Echter Volltext."));
+      return (inventar as unknown as { harnessKatalog: (w: string, c: { skills: string }) => { skills: { name: string; datei: string }[] } }).harnessKatalog(w, { skills: ".claude/skills" }).skills;
+    } finally {
+      rmSync(w, { recursive: true, force: true });
+    }
+  };
+
+  test("ein Zeiger mit Marke nennt die Quelle unter .agents/skills", () => {
+    expect(katalog().find((s) => s.name === "zeig")?.datei).toBe(`${QUELL_VERZEICHNIS}/zeig/SKILL.md`);
+  });
+
+  test("Negativ: ein Volltext-Skill ohne Marke behält seinen Pfad", () => {
+    expect(katalog().find((s) => s.name === "voll")?.datei).toBe(".claude/skills/voll/SKILL.md");
   });
 });

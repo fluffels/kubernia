@@ -30,6 +30,8 @@ interface Lib {
   markerEnde(id: string): string;
   PROJEKT_BLOCK_START: string;
   PROJEKT_BLOCK_ENDE: string;
+  platzhalterMuster(): RegExp;
+  projektwertWert(config: unknown, schluessel: string): string;
 }
 interface Drift {
   pruefeDrift(lies: (p: string) => string | null): { entfaellt: boolean; fehler: string[] };
@@ -62,14 +64,19 @@ function aufbauBefunde(text: string): string[] {
 }
 
 const KERN: Eintrag = { pfad: "AGENTS.md", block: "kern", ring: "kern-nach-entkopplung" };
-const PLATZHALTER = /<(?:praefixe|agenten|labels)\.[A-Za-z]+>/g;
 
 /** Platzhalter eines Textes, deren Schlüssel in der Config nicht auflösen. */
 function unaufloesbar(text: string, config: Record<string, Record<string, string>>): string[] {
-  return [...text.matchAll(PLATZHALTER)].map((m) => m[0]).filter((p) => {
-    const [g, k] = p.slice(1, -1).split(".");
-    return typeof config[g]?.[k] !== "string";
-  });
+  return [...text.matchAll(lib.platzhalterMuster())]
+    .filter((m) => {
+      try {
+        lib.projektwertWert(config, `${m[1]}.${m[2]}`);
+        return false;
+      } catch {
+        return true;
+      }
+    })
+    .map((m) => m[0]);
 }
 
 const stand = (agents: string, manifestText: string): string =>

@@ -17,6 +17,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 import { echteConfig, umschriftAus } from "../support/echte-sprache";
 
 const listTrackedFiles = (checkBasis as unknown as { listTrackedFiles: (rootDir?: string) => string[] }).listTrackedFiles;
@@ -41,13 +44,10 @@ function findeUmschrift(text: string, woerter: string[]): Fund[] {
   if (woerter.length === 0) return [];
   const treffer = new RegExp(`(?<![\\p{L}\\p{N}_./\\-])(${woerter.join("|")})(?![\\p{L}\\p{N}_/\\-]|\\.[\\p{L}\\p{N}])`, "giu");
   const funde: Fund[] = [];
-  let fence = false;
-  text.split(/\r?\n/).forEach((zeile, i) => {
-    if (/^\s*(?:```|~~~)/.test(zeile)) {
-      fence = !fence;
-      return;
-    }
-    if (fence) return;
+  const zeilen = text.split(/\r?\n/);
+  const maske = fenceMaske(zeilen);
+  zeilen.forEach((zeile, i) => {
+    if (maske[i]) return;
     const sichtbar = zeile.replace(/`[^`]*`/g, " ").replace(/\]\([^)]*\)/g, "]").replace(/<[^>]+>/g, " ");
     for (const m of sichtbar.matchAll(treffer)) funde.push({ zeile: i + 1, wort: m[1].toLowerCase() });
   });

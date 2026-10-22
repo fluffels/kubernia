@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
 /** Ring-Importregel (ADR 0029): Ring des Importeurs -> Ringe, deren Besitz er lokal importieren darf. Ein weiterer Ring ist eine Zeile. */
 export const RING_IMPORTE = {
@@ -21,6 +22,9 @@ export const NUR_FACTORY = ["oberflaeche"];
 
 /** Wird die Einheit in Projekte verteilt (Sync) und dort auf Drift geprüft? */
 export const wirdVerteilt = (e) => !NUR_FACTORY.includes(e.ring);
+
+/** Ist die Einheit eine ganze Datei (kein Block, kein JSON-Schlüssel)? */
+export const istGanzeDatei = (e) => e.block === undefined && e.schluessel === undefined;
 
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
@@ -87,7 +91,7 @@ export function pruefeManifest(m, lies) {
     if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
     if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
     if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
-    if (e.block === undefined && e.schluessel === undefined) ganze.add(e.pfad);
+    if (istGanzeDatei(e)) ganze.add(e.pfad);
     else teile.add(e.pfad);
     const text = lies(e.pfad);
     if (text === null) {
@@ -405,7 +409,7 @@ export function projektDateien(wurzel) {
     return existsSync(voll) ? readdirSync(voll, { withFileTypes: true }) : [];
   };
   for (const d of unter(".claude/agents")) if (d.isFile()) out.push(`.claude/agents/${d.name}`);
-  for (const wurzelOrdner of [".claude/skills", ".agents/skills"]) {
+  for (const wurzelOrdner of [ZEIGER_WURZEL, QUELL_VERZEICHNIS]) {
     for (const s of unter(wurzelOrdner)) {
       if (s.isDirectory()) for (const d of unter(`${wurzelOrdner}/${s.name}`)) if (d.isFile()) out.push(`${wurzelOrdner}/${s.name}/${d.name}`);
     }

@@ -9,6 +9,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 
 const FORM = /^## Fortschreibung #\d+(\/#\d+)* \(\d{4}-\d{2}-\d{2}\): \S/;
 const BEGINNT = /^#{1,6}\s+Fortschreibung/;
@@ -16,10 +19,10 @@ const BEGINNT = /^#{1,6}\s+Fortschreibung/;
 /** Überschriften (mit Zeilennummer) mit dem Anfang „Fortschreibung“, die nicht der Form entsprechen. Pur. */
 function abweichende(text: string): string[] {
   const aus: string[] = [];
-  let fence = false;
-  text.split(/\r?\n/).forEach((zeile, i) => {
-    if (/^\s*(```|~~~)/.test(zeile)) fence = !fence;
-    else if (!fence && BEGINNT.test(zeile) && !FORM.test(zeile)) aus.push(`${i + 1}: ${zeile}`);
+  const zeilen = text.split(/\r?\n/);
+  const maske = fenceMaske(zeilen);
+  zeilen.forEach((zeile, i) => {
+    if (!maske[i] && BEGINNT.test(zeile) && !FORM.test(zeile)) aus.push(`${i + 1}: ${zeile}`);
   });
   return aus;
 }
@@ -79,13 +82,9 @@ const BESTAND: Record<string, number> = {
 
 /** Zählt `## Fortschreibung`-Überschriften außerhalb von Code-Fences. Pur. */
 function zaehleAngehaengte(text: string): number {
-  let fence = false;
-  let n = 0;
-  for (const zeile of text.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(zeile)) fence = !fence;
-    else if (!fence && ANGEHAENGT.test(zeile)) n++;
-  }
-  return n;
+  const zeilen = text.split(/\r?\n/);
+  const maske = fenceMaske(zeilen);
+  return zeilen.filter((zeile, i) => !maske[i] && ANGEHAENGT.test(zeile)).length;
 }
 
 /** Ratchet: Meldungen, wenn der Bestand angehängter Abschnitte je ADR vom eingefrorenen Bestand abweicht (Plus und Minus). Pur. */
@@ -112,7 +111,7 @@ function dateiFehler(name: string, text: string, adrs: Record<string, string>): 
   const kopf = DATEI_KOPF.exec(text.split(/\r?\n/).find((l) => l.startsWith("# ")) ?? "");
   if (!kopf) fehler.push(`${name}: erste Überschrift muss "# Fortschreibung #<nr> (JJJJ-MM-TT): <Titel>" lauten`);
   else if (kopf[1].split("/#")[0] !== ticket) fehler.push(`${name}: Ticket der Kopfzeile (#${kopf[1].split("/#")[0]}) passt nicht zum Dateinamen (#${ticket})`);
-  if (!adrs[adrName].includes(`fortschreibungen/${adrNr}-`)) fehler.push(`${name}: ${adrName} enthält keinen Zeiger "fortschreibungen/${adrNr}-"`);
+  if (!adrs[adrName].includes(`fortschreibungen/${name}`)) fehler.push(`${name}: ${adrName} enthält keinen Zeiger "fortschreibungen/${name}"`);
   return fehler;
 }
 
@@ -172,5 +171,22 @@ describe("ADR-Fortschreibungen als Dateien und Ratchet (#1860)", () => {
     expect(zaehleAngehaengte("## Fortschreibung #1 (2026-10-22): T\n## Fortschreibung kaputt\n")).toBe(2);
     expect(zaehleAngehaengte("```\n## Fortschreibung #1 (2026-10-22): T\n```\n")).toBe(0);
     expect(zaehleAngehaengte("### Fortschreibung #1 (2026-10-22): T\n")).toBe(0);
+  });
+
+  test("Fences nach CommonMark: ein 4er-Zaun und ein ~~~ im ```-Zaun schließen nicht vorzeitig (beide Zählstellen)", () => {
+    const vier = "````\n```\n## Fortschreibung kaputt\n```\n````\n## Fortschreibung #1 (2026-10-22): T\n";
+    expect(zaehleAngehaengte(vier)).toBe(1);
+    expect(abweichende(vier)).toEqual([]);
+    const tilde = "```\n~~~\n## Fortschreibung kaputt\n```\n";
+    expect(zaehleAngehaengte(tilde)).toBe(0);
+    expect(abweichende(tilde)).toEqual([]);
+  });
+
+  test("Zeiger je Datei: eine zweite Datei desselben ADR ohne eigenen Zeiger wird gemeldet (L29)", () => {
+    const adrs = { "0013-x.md": "Text\nSiehe fortschreibungen/0013-1-a.md\n" };
+    const kopf = (n: number) => `# Fortschreibung #${n} (2026-10-22): T\n`;
+    expect(dateiFehler("0013-1-a.md", kopf(1), adrs)).toEqual([]);
+    expect(dateiFehler("0013-2-b.md", kopf(2), adrs).join("\n")).toContain("0013-2-b.md");
+    expect(dateiFehler("0013-2-b.md", kopf(2), adrs)).toHaveLength(1);
   });
 });

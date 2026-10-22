@@ -158,10 +158,10 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Subagent | `forum-leser` | model: sonnet, effort: medium | `.claude/agents/forum-leser.md` |
 | Subagent | `holdout-abnahme` | model: opus, effort: medium | `.claude/agents/holdout-abnahme.md` |
 | Subagent | `holdout-szenario` | model: opus, effort: medium | `.claude/agents/holdout-szenario.md` |
-| Skill | `factory` | model: sonnet | `.claude/skills/factory/SKILL.md` |
-| Skill | `kubernia` | model: sonnet | `.claude/skills/factory-ticket/SKILL.md` |
-| Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
-| Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
+| Skill | `factory` | model: sonnet | `.agents/skills/factory/SKILL.md` |
+| Skill | `kubernia` | model: sonnet | `.agents/skills/factory-ticket/SKILL.md` |
+| Skill | `forum` | model: Session-Modell | `.agents/skills/forum/SKILL.md` |
+| Skill | `review-lenses` | model: Session-Modell | `.agents/skills/review-lenses/SKILL.md` |
 | Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent\|SendMessage`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionEnd` | `node scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs --danach scripts/langfuse-abgleich-hook.mjs` | `.claude/settings.json` |

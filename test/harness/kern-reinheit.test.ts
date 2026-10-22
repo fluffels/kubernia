@@ -23,6 +23,8 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 import * as rawNamen from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawRegistry from "../../scripts/docs-gen/registry.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "../../scripts/skill-pfade.mjs";
 
 // Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -39,8 +41,9 @@ interface BesitzLib {
   RING_IMPORTE: Record<string, string[]>;
   NUR_FACTORY: string[];
   wirdVerteilt: (e: Eintrag) => boolean;
+  istGanzeDatei: (e: Eintrag) => boolean;
 }
-const { markerStart, markerEnde, einheitId, einheitText, normalisierterEinheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
+const { markerStart, markerEnde, einheitId, einheitText, normalisierterEinheitText, pruefeManifest, RINGE, RING_IMPORTE, NUR_FACTORY, wirdVerteilt, istGanzeDatei } = rawBesitz as unknown as BesitzLib;
 
 interface PcLib {
   ROLLEN_PFADE: Record<string, string>;
@@ -260,16 +263,23 @@ const musterRe = (muster: string): RegExp => new RegExp(`^${muster.split("*").ma
 /** Kern-Verzeichnisse: die Ordner der Ganz-Datei-Einheiten, nicht rekursiv. */
 export function kernVerzeichnisse(eintraege: Eintrag[]): Set<string> {
   const out = new Set<string>();
-  for (const e of eintraege) if (e.block === undefined && e.schluessel === undefined) out.add(posix.dirname(e.pfad));
+  for (const e of eintraege) if (istGanzeDatei(e)) out.add(posix.dirname(e.pfad));
   return out;
 }
 
-/** Meldungen (leer = grün): jede getrackte Datei direkt in einem Kern-Verzeichnis ist Besitz oder steht in der Abdeckungsliste. */
+/** Feste Wurzeln, unabhängig vom Manifest (wie `projektDateien`): Agenten direkt, Skill-Quellen und Zeiger eine Ebene tiefer. */
+const FESTE_FLAECHEN = [
+  /^\.claude\/agents\/[^/]+$/,
+  new RegExp(`^${escapeRe(ZEIGER_WURZEL as string)}/[^/]+/[^/]+$`),
+  new RegExp(`^${escapeRe(QUELL_VERZEICHNIS as string)}/[^/]+/[^/]+$`),
+];
+
+/** Meldungen (leer = grün): jede getrackte Datei direkt in einem Kern-Verzeichnis oder in einer festen Wurzel ist Besitz oder steht in der Abdeckungsliste. */
 export function pruefeAbdeckung(eintraege: Eintrag[], getrackt: string[], abdeckung: Record<string, AbdeckEintrag>): string[] {
   const out: string[] = [];
   const verz = kernVerzeichnisse(eintraege);
   const besitz = new Set(eintraege.map((e) => e.pfad));
-  const imKern = getrackt.filter((p) => verz.has(posix.dirname(p)));
+  const imKern = getrackt.filter((p) => verz.has(posix.dirname(p)) || FESTE_FLAECHEN.some((r) => r.test(p)));
   for (const p of imKern) {
     if (besitz.has(p)) continue;
     if (!Object.keys(abdeckung).some((m) => musterRe(m).test(p))) {
@@ -294,7 +304,7 @@ export const KERN_HUELLE_AUSNAHMEN: Record<string, string> = {};
 
 /** Lokale Importe (`relativeImporte` aus hook-importe, auch JSON) jeder Ganz-Datei-Code-Einheit, die weder auf eine Ganz-Datei-Einheit noch auf die Projekt-Config zeigen: "<von> -> <nach>". */
 export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
-  const ganze = new Set(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => e.pfad));
+  const ganze = new Set(eintraege.filter((e) => istGanzeDatei(e)).map((e) => e.pfad));
   const out: string[] = [];
   for (const von of ganze) {
     if (!CODE_ENDUNG.test(von)) continue;
@@ -316,7 +326,7 @@ export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => 
  *  keinen Besitz importieren (fail-closed). Ziele ohne Besitz (Nicht-Besitz, Projekt-Config) sind Sache von `huellenVerstoesse`.
  *  Abhilfe: Ziel in einen erlaubten Ring ziehen (literalfrei) oder den Importeur in einen Ring mit mehr Rechten. */
 export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
-  const ring = new Map(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => [e.pfad, e.ring]));
+  const ring = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e.ring]));
   const out: string[] = [];
   for (const [von, ringVon] of ring) {
     if (!CODE_ENDUNG.test(von)) continue;
@@ -336,7 +346,7 @@ export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => str
  *  und alle lokalen Importe zeigen auf Besitz im Ring kern oder auf die Projekt-Config (Importe ohne Besitz-Ziel zählen als Grund zu bleiben).
  *  Abhilfe: Ring auf `kern` setzen. Grenze: nur statische lokale Importe (`relativeImporte`) werden gesehen. */
 export function ueberfluessigeEntkopplung(eintraege: Eintrag[], baseline: Baseline, lies: (pfad: string) => string | null): string[] {
-  const ring = new Map(eintraege.filter((e) => e.block === undefined && e.schluessel === undefined).map((e) => [e.pfad, e.ring]));
+  const ring = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e.ring]));
   const out: string[] = [];
   for (const [pfad, r] of ring) {
     if (r !== "kern-nach-entkopplung" || !CODE_ENDUNG.test(pfad) || Object.keys(baseline[pfad] ?? {}).length > 0) continue;
@@ -682,6 +692,13 @@ describe("kernVerzeichnisse / pruefeAbdeckung (#1613)", () => {
     assert.match(m, /scripts\/neu\.mjs: liegt in einem Kern-Verzeichnis.*kern-abdeckung\.json/);
     assert.match(m, /\.claude\/agents\/neu\.md/);
   });
+  test("Skill-Quellen, Zeiger und Agenten sind eine feste Fläche, auch wenn das Manifest dort nichts besitzt", () => {
+    const skill = [`${QUELL_VERZEICHNIS as string}/s/SKILL.md`, `${ZEIGER_WURZEL as string}/s/SKILL.md`];
+    const m = pruefeAbdeckung([ein("scripts/a.mjs")], ["scripts/a.mjs", ...skill, ".claude/agents/neu.md", `${QUELL_VERZEICHNIS as string}/s/tief/x.md`], {}).join("|");
+    for (const p of [...skill, ".claude/agents/neu.md"]) assert.ok(m.includes(`${p}: liegt in einem Kern-Verzeichnis`), p);
+    assert.ok(!m.includes("tief/x.md"), "tiefer als <skill>/<datei> zählt nicht");
+    assert.deepEqual(pruefeAbdeckung([ein("scripts/a.mjs")], ["scripts/a.mjs", ...skill], { [skill[0]]: { art: "projekt", grund: "g" }, [skill[1]]: { art: "projekt", grund: "g" } }), []);
+  });
   test("Muster mit * deckt eine Dateigruppe, aber nicht über Ordnergrenzen", () => {
     const abd = klar({ "scripts/neu-*.mjs": { art: "modul", grund: "Modul" } });
     assert.deepEqual(pruefeAbdeckung(E, [...dateien, "scripts/neu-eins.mjs"], abd), []);
@@ -853,7 +870,7 @@ describe("Kern-Reinheit (#1610)", () => {
     assert.ok(manifest.eintraege.length > 50, "Startbestand zu klein");
     assert.ok(manifest.eintraege.some((e) => e.block !== undefined), "kein Block-Eintrag");
     assert.ok(manifest.eintraege.some((e) => e.schluessel !== undefined), "kein Schlüssel-Eintrag");
-    assert.ok(manifest.eintraege.some((e) => e.block === undefined && e.schluessel === undefined), "kein Datei-Eintrag");
+    assert.ok(manifest.eintraege.some((e) => istGanzeDatei(e)), "kein Datei-Eintrag");
   });
 
   test("jede Einheit hält ihre Baseline an Projektliteralen, nur sinkend", () => {
@@ -866,6 +883,16 @@ describe("Kern-Reinheit (#1610)", () => {
     assert.deepEqual(pruefeAbdeckung(manifest.eintraege, getrackt, abdeckung), []);
   });
 
+  test("fehlt der Manifest-Eintrag der Skill-Quelle oder ihres Zeigers, meldet die Abdeckung die Datei (#1866)", () => {
+    const abdeckung = JSON.parse(readFileSync(WURZEL + ABDECKUNG, "utf8")) as Record<string, AbdeckEintrag>;
+    const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
+    for (const pfad of [`${QUELL_VERZEICHNIS as string}/review-lenses/SKILL.md`, `${ZEIGER_WURZEL as string}/review-lenses/SKILL.md`]) {
+      assert.ok(getrackt.includes(pfad), pfad);
+      const ohne = manifest.eintraege.filter((e) => e.pfad !== pfad);
+      assert.match(pruefeAbdeckung(ohne, getrackt, abdeckung).join("|"), new RegExp(`${escapeRe(pfad)}: liegt in einem Kern-Verzeichnis`));
+    }
+  });
+
   test("jeder lokale Import einer Besitz-Datei ist selbst Besitz oder Projekt-Config (Import-Hülle, #1613)", () => {
     const ringVon = (pfad: string): string | undefined => manifest.eintraege.find((e) => e.pfad === pfad)?.ring;
     assert.deepEqual(pruefeHuelle(huellenVerstoesse(manifest.eintraege, lesenWurzel), KERN_HUELLE_AUSNAHMEN, ringVon), []);
@@ -874,7 +901,7 @@ describe("Kern-Reinheit (#1610)", () => {
   test("Kern-Registry enthält keinen Spiel-Generator (ADR 0022 F6)", () => {
     const registryPfad = "scripts/docs-gen/registry.mjs";
     assert.deepEqual(KERN_HUELLE_AUSNAHMEN, {}, "keine Ausnahmen der Import-Hülle mehr");
-    assert.equal(manifest.eintraege.find((e) => e.pfad === registryPfad && e.block === undefined && e.schluessel === undefined)?.ring, "kern");
+    assert.equal(manifest.eintraege.find((e) => e.pfad === registryPfad && istGanzeDatei(e))?.ring, "kern");
     const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
     assert.ok(cfg.generatoren && Object.keys(cfg.generatoren).length > 0, "scripts/docs-gen/config.json: generatoren fehlt");
     const ziele = relativeImporte(lesenWurzel(registryPfad) ?? "").flatMap((spec) => kandidatenPfade(posix.normalize(posix.join(posix.dirname(registryPfad), spec))));

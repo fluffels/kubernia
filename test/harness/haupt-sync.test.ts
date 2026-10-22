@@ -17,6 +17,9 @@ import { fileURLToPath } from "node:url";
 import * as raw from "../../scripts/haupt-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as syncRaw from "../../scripts/skills-sync.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as pfadeRaw from "../../scripts/skill-pfade.mjs";
+const pfade = pfadeRaw as unknown as { ZEIGER_WURZEL: string };
 
 type Eingabe = { istLinkedWorktree: boolean; branch: string; sauber: boolean; hinter: number; vor: number };
 type Ergebnis = { aktion: string; grund: string; hinter: number; basis: string; gepullt: boolean; harness?: { skill: string[]; agenten: string[]; sonstige: string[] }; notiz: string };
@@ -414,11 +417,15 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(text).not.toContain("Übrige .claude-Dateien");
   });
 
-  test("Ticket-Skills (#1850): die Verzeichnis-Konstanten gleichen denen von skills-sync (kein Import zwischen Einstiegsskripten)", () => {
-    const sync = syncRaw as unknown as { QUELL_VERZEICHNIS: string; WERKZEUGE: { claude: string } };
-    const h = raw as unknown as { QUELL_VERZEICHNIS: string; ZEIGER_WURZEL: string };
-    expect(h.QUELL_VERZEICHNIS).toBe(sync.QUELL_VERZEICHNIS);
-    expect(h.ZEIGER_WURZEL).toBe(sync.WERKZEUGE.claude);
+  test("Ticket-Skills (#1866): die Verzeichnis-Konstanten stehen nur in skill-pfade.mjs, haupt-sync und skills-sync führen keine eigene", () => {
+    const sync = syncRaw as unknown as { QUELL_VERZEICHNIS?: string; ZEIGER_MARKE?: string; WERKZEUGE: { claude: string } };
+    const h = raw as unknown as { QUELL_VERZEICHNIS?: string; ZEIGER_WURZEL?: string };
+    expect(sync.WERKZEUGE.claude).toBe(pfade.ZEIGER_WURZEL);
+    expect(sync.QUELL_VERZEICHNIS).toBeUndefined();
+    expect(sync.ZEIGER_MARKE).toBeUndefined();
+    expect(h.QUELL_VERZEICHNIS).toBeUndefined();
+    expect(h.ZEIGER_WURZEL).toBeUndefined();
+    expect(S.ZEIGER_VERZEICHNISSE[0]).toBe(`${pfade.ZEIGER_WURZEL}/factory/`);
   });
 
   test("Ticket-Skills (#1850): Quelle und Zeiger beider Skills sind Skill-Änderungen, eine fremde Quelle und ein Nachbarname nicht", () => {
@@ -466,6 +473,17 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(S.quellePfad(".claude/skills/factory/SKILL.md")).toBe(".agents/skills/factory/SKILL.md");
     expect(S.quellePfad("AGENTS.md")).toBe("AGENTS.md");
     expect(S.quellePfad(".claude/skills/forum/SKILL.md")).toBe(".claude/skills/forum/SKILL.md");
+  });
+
+  test("Ticket-Skills (#1866): ändern sich beide Ticket-Skills, nennt „Skill neu lesen“ beide SKILL.md; ablauf.md nur ohne SKILL.md", () => {
+    const text = (skill: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill, agenten: [], sonstige: [] } }, { sitzungsbasis: false });
+    const beide = text([".claude/skills/factory/SKILL.md", ".claude/skills/factory-ticket/SKILL.md", ".agents/skills/factory/ablauf.md"]);
+    expect(beide).toContain("`.agents/skills/factory/SKILL.md`, `.agents/skills/factory-ticket/SKILL.md` jetzt neu lesen");
+    expect(beide).not.toContain("`.agents/skills/factory/ablauf.md` jetzt");
+    const ohneSkillMd = text([".agents/skills/factory/ablauf.md", ".agents/skills/factory/weiteres.md"]);
+    expect(ohneSkillMd).toContain("`.agents/skills/factory/ablauf.md` jetzt neu lesen");
+    expect(ohneSkillMd).not.toContain("weiteres.md` jetzt");
+    expect(text(["AGENTS.md"])).toContain("Den Ticket-Skill jetzt neu lesen");
   });
 
   test("--text: der Hinweis auf übrige .claude-Dateien kommt auch im Mischfall, fehlt aber ohne solche Dateien", () => {

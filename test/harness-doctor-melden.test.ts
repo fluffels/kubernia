@@ -18,7 +18,7 @@ interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
   istBekannt(punkt: string, kommentare: Kommentar[], owner: string): boolean;
-  main(argv: string[], deps: { ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void }): Promise<number>;
+  main(argv: string[], deps: { ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
 
@@ -200,6 +200,31 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
       assert.equal(gepostet.length, 1);
       assert.equal(gepostet[0][0], 55);
       assert.match(gepostet[0][1], /LÜCKE Secret PROJECT_TOKEN.*gh secret set PROJECT_TOKEN --repo acme\/proj/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  test("Wochenlauf ruft den Doctor-Lauf mit rootDir und gh, langfuse null und ohne umgebung", async () => {
+    vi.stubEnv("GITHUB_ACTIONS", "");
+    try {
+      const aufrufe: Record<string, unknown>[] = [];
+      const libs = { REPO: "acme/proj", OWNER: "acme", ladeSammelKontext: () => ({ offene: [], kommentare: [] }), waehleSammelticket: () => undefined, postZeilen: () => assert.fail("keine Lücke, nichts zu posten") };
+      const code = await melden.main(["--dry-run"], {
+        ladeConfig: () => ({}),
+        ladeLibs: () => Promise.resolve(libs),
+        log: () => undefined,
+        err: () => undefined,
+        pruefLauf: (a) => {
+          aufrufe.push(a);
+          return { ergebnis: [] };
+        },
+      });
+      assert.equal(code, 0);
+      assert.equal(aufrufe.length, 1);
+      assert.equal(typeof aufrufe[0].rootDir, "string");
+      assert.equal(typeof aufrufe[0].gh, "function");
+      assert.equal(aufrufe[0].langfuse, null);
+      assert.equal("umgebung" in aufrufe[0], false, "der Wochenlauf prüft keine Altnamen der Runner-Umgebung");
     } finally {
       vi.unstubAllEnvs();
     }
