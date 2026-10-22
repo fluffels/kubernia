@@ -146,13 +146,24 @@ export function strukturAus(config) {
   if (!istObjekt(wert) || !istText(wert.quelle) || !istText(wert.moduldoku)) {
     throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
   }
+  const form = pruefeStruktur(wert);
+  if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
   return { quelle: wert.quelle, moduldoku: wert.moduldoku };
 }
 
 /** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
 function pruefeStruktur(s) {
   if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
-  return ["quelle", "moduldoku"].filter((k) => !istText(s[k])).map((k) => `struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`);
+  return ["quelle", "moduldoku"].flatMap((k) => {
+    if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
+    return istRepoRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
+  });
+}
+
+/** Pur: ein repo-relativer POSIX-Pfad (`src`, `docs/module`): kein absoluter Pfad, kein Laufwerk, keine `.`/`..`-Segmente, kein Backslash, kein End- oder Doppel-Slash. */
+function istRepoRelativPosix(pfad) {
+  if (pfad.includes("\\") || pfad.includes(":")) return false;
+  return pfad.split("/").every((teil) => teil !== "" && teil !== "." && teil !== "..");
 }
 
 /** Pur: die Umschrift-Wortliste (`sprache.umschrift`) für den Umlaut-Wächter; wirft ohne nicht-leere Liste (kein stiller Deutsch-Standardwert, #1711). */

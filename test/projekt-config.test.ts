@@ -560,7 +560,7 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
     delete rest.struktur;
     writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify(struktur === undefined ? rest : { ...rest, struktur }));
     mkdirSync(join(d, "lib"));
-    mkdirSync(join(d, "docs", "module"), { recursive: true });
+    mkdirSync(join(d, "handbuch", "module"), { recursive: true });
     writeFileSync(join(d, "lib", "gross.ts"), "x\n".repeat(801));
     return d;
   };
@@ -569,17 +569,17 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
     return { status: r.status, text: `${r.stderr}${r.stdout}` };
   };
   test("mit struktur.quelle=lib messen beide lib, nicht src", () => {
-    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
     const groesse = lauf(d, "check-size.mjs");
     assert.equal(groesse.status, 1, groesse.text);
     assert.match(groesse.text, /✖ lib\/gross\.ts: 801 Zeilen/);
     const karte = lauf(d, "check-docmap.mjs");
     assert.equal(karte.status, 1, karte.text);
-    assert.match(karte.text, /Verwaistes Modul: „lib\/gross\.ts" ist in keinem docs\/module\/\*\.md/);
+    assert.match(karte.text, /Verwaistes Modul: „lib\/gross\.ts" ist in keinem handbuch\/module\/\*\.md/);
   });
   test("die Funktionen ohne Pfadangabe lesen struktur aus der Config (Default-Parameter)", () => {
-    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
-    writeFileSync(join(d, "docs", "module", "m.md"), "`lib/gross.ts` ist beschrieben.\n");
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
+    writeFileSync(join(d, "handbuch", "module", "m.md"), "`lib/gross.ts` ist beschrieben.\n");
     writeFileSync(
       join(d, "lauf.mjs"),
       [
@@ -622,5 +622,14 @@ describe("Struktur-Pfade als Projektwert (#1843)", () => {
     assert.match(mit("src").join("|"), /struktur muss ein Objekt/);
     assert.match(mit({ quelle: "", moduldoku: "d" }).join("|"), /struktur\.quelle muss ein nicht-leerer String/);
     assert.match(mit({ quelle: "s", moduldoku: 3 }).join("|"), /struktur\.moduldoku muss ein nicht-leerer String/);
+  });
+  test("struktur-Pfade müssen repo-relativ und POSIX sein (kein absoluter Pfad, kein .., kein Backslash, kein End-Slash)", () => {
+    const schlecht = ["/src", "C:/src", "a/../b", "..", "src\\x", "src/", "./src", "a//b"];
+    for (const p of schlecht) {
+      assert.match(mit({ quelle: p, moduldoku: "docs/module" }).join("|"), /struktur\.quelle muss ein repo-relativer POSIX-Pfad/, p);
+      assert.match(mit({ quelle: "src", moduldoku: p }).join("|"), /struktur\.moduldoku muss ein repo-relativer POSIX-Pfad/, p);
+      assert.throws(() => pc.strukturAus({ struktur: { quelle: p, moduldoku: "d" } }), /repo-relativer POSIX-Pfad[\s\S]*Fix:/, p);
+    }
+    for (const p of ["src", "docs/module", "a/b.c/d"]) assert.deepEqual(mit({ quelle: p, moduldoku: p }), [], p);
   });
 });
