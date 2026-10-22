@@ -94,3 +94,7 @@ Session-große Slices, angelegt nach diesem ADR (Nummern im Übersichts-Kommenta
 - **`docs/` wird unübersichtlich** (Größenordnung 60+ Seiten ohne klare Gruppen): Unterordner nach Wissensart einziehen.
 - **Messbar schlechtere Agenten-Ergebnisse** durch Wiki-Inhalte (z.B. über die Token-/Loop-Baseline aus #1068): Pflege-Schritt schärfen oder zurücknehmen.
 - **Path-scoped Rules erweisen sich als zuverlässig und tool-übergreifend** — dann Option C als additive Ladehilfe neu bewerten.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0013-1860-fortschreibungen-als-dateien.md) (Konvention: [README](README.md#format)); dort die erste, die das begründet.

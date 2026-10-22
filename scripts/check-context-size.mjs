@@ -33,7 +33,7 @@
  * Bewusst ein reines Node-Skript (nur Builtins + der Walk aus check-basis.mjs), analog zu
  * check-size.mjs.
  * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts importiert –
- * EINE Quelle der Wahrheit für Budget (hier) und Ausnahmen (scripts/check-allowlists.mjs).
+ * EINE Quelle der Wahrheit für Budget (hier) und Ausnahmen (`ausnahmen.kontext` der Projekt-Config).
  *
  * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
  */
@@ -44,7 +44,7 @@ import { dirname, join } from "node:path";
 // Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
-import { CONTEXT_ALLOWLIST as ALLOWLIST } from "./check-allowlists.mjs";
+import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -101,9 +101,9 @@ export function findOversized(sizes) {
 
 /** Allowlist-Einträge, deren Datei nicht (mehr) über Budget liegt oder gar nicht gemessen
  *  wird – EINE Implementierung für CLI und Test. */
-export function findStale(sizes, allowlist = ALLOWLIST) {
+export function findStale(sizes, allowlist = ausnahmenAus(ladeProjektConfig()).kontext) {
   const oversized = new Set(findOversized(sizes).map((s) => s.file));
-  return allowlist.filter((a) => !oversized.has(a.file));
+  return allowlist.filter((a) => !oversized.has(a.datei));
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -116,8 +116,15 @@ function main() {
   const fmt = (n) => n.toLocaleString("de-DE");
   const tokens = (n) => `≈ ${fmt(Math.round(n / CHARS_PER_TOKEN))} Tokens`;
 
+  let ALLOWLIST;
+  try {
+    ALLOWLIST = ausnahmenAus(ladeProjektConfig()).kontext;
+  } catch (e) {
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
+    process.exit(1);
+  }
   const sizes = collectContextSizes();
-  const allow = new Map(ALLOWLIST.map((a) => [a.file, a.reason]));
+  const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]));
   const oversized = findOversized(sizes);
   const oversizedFiles = new Set(oversized.map((s) => s.file));
 
@@ -136,7 +143,7 @@ function main() {
   for (const s of stale)
     console.error(
       red(
-        `✖ Allowlist-Eintrag stale: ${s.file} liegt nicht mehr über Budget – Eintrag in scripts/check-context-size.mjs entfernen.`,
+        `✖ Ausnahme stale: ${s.datei} liegt nicht mehr über Budget – Eintrag unter ausnahmen.kontext in .factory/projekt.json entfernen.`,
       ),
     );
 
@@ -155,7 +162,7 @@ function main() {
       `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
         `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md ` +
         `bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
-        `CONTEXT_ALLOWLIST in scripts/check-allowlists.mjs aufnehmen.`,
+        `ausnahmen.kontext in .factory/projekt.json aufnehmen (datei, grund mit #<nr>).`,
     );
   process.exit(1);
 }

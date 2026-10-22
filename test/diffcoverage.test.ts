@@ -32,7 +32,7 @@ type CheckDiffCoverageModule = {
   LAYER_DIFF_FLOORS: Record<string, number | null>;
   LCOV_PATH: string;
   normalizePath: (p: string) => string;
-  isMeasured: (path: string) => boolean;
+  isMeasured: (path: string, quelle?: string) => boolean;
   parseDiffLines: (text: string) => Changed;
   parseLcov: (text: string) => Lcov;
   parseLcovBranches: (text: string) => Map<string, Map<number, { total: number; taken: number }>>;
@@ -42,7 +42,7 @@ type CheckDiffCoverageModule = {
     branches: Map<string, Map<number, { total: number; taken: number }>>,
   ) => { path: string; line: number; taken: number; total: number }[];
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
-  checkDiffCoverage: (opts: { runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
+  checkDiffCoverage: (opts: { quelle?: string; runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
 };
 
 // Tooling-Skript ohne Declaration-File (scripts/ ist nicht im tsconfig-include). Der
@@ -571,5 +571,63 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     });
     assert.equal(r.failed, false);
     assert.equal(r.skipped, false);
+  });
+});
+
+describe("Diff-Coverage: Quellwurzel aus der Struktur-Config (#1860)", () => {
+  test("isMeasured misst nur unter der übergebenen Quellwurzel, mit Segmentgrenze", () => {
+    assert.equal(isMeasured("lib/a.ts", "lib"), true);
+    assert.equal(isMeasured("lib/sub/a.ts", "lib"), true);
+    assert.equal(isMeasured("src/a.ts", "lib"), false);
+    assert.equal(isMeasured("library/a.ts", "lib"), false);
+    assert.equal(isMeasured("lib/a.d.ts", "lib"), false);
+    assert.equal(isMeasured("lib/a.mjs", "lib"), false);
+  });
+  test("ohne Angabe gilt struktur.quelle der Projekt-Config", () => {
+    assert.equal(isMeasured("src/sim/pods.ts"), true);
+    assert.equal(isMeasured("lib/a.ts"), false);
+  });
+  test("checkDiffCoverage fragt den Diff mit der übergebenen Quellwurzel ab und misst dort", () => {
+    const calls: string[][] = [];
+    const r = checkDiffCoverage({
+      quelle: "lib",
+      runGit: (args) => {
+        calls.push(args);
+        return args[0] === "diff" ? diffFor("lib/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha";
+      },
+      readFile: () => "TN:\nSF:lib/a.ts\nDA:1,0\nend_of_record\n",
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    assert.equal(calls.find((a) => a[0] === "diff")?.at(-1), "lib");
+    assert.equal(r.nothingToMeasure, undefined);
+    assert.equal(r.missing && (r.missing as string[]).length, 0);
+  });
+  test("checkDiffCoverage gibt die Quellwurzel an die Bewertung weiter: die Zeile unter lib zählt, nicht grün ohne Messung", () => {
+    const r = checkDiffCoverage({
+      quelle: "lib",
+      runGit: (args) => (args[0] === "diff" ? diffFor("lib/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      readFile: () => "TN:\nSF:lib/a.ts\nDA:1,0\nend_of_record\n",
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    const buckets = Object.values(r.buckets as Record<string, { total: number; covered: number }>);
+    assert.equal(buckets.reduce((s, b) => s + b.total, 0), 1);
+    assert.equal(buckets.reduce((s, b) => s + b.covered, 0), 0);
+  });
+  test("checkDiffCoverage meldet einen ungenommenen Zweig unter der übergebenen Quellwurzel", () => {
+    const r = checkDiffCoverage({
+      quelle: "lib",
+      runGit: (args) => (args[0] === "diff" ? diffFor("lib/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      readFile: () => "TN:\nSF:lib/a.ts\nDA:1,1\nBRDA:1,0,0,1\nBRDA:1,0,1,0\nend_of_record\n",
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    assert.deepEqual(r.partial, [{ path: "lib/a.ts", line: 1, taken: 1, total: 2 }]);
+  });
+  test("Änderung nur unter src ist bei quelle=lib nichts zu messen", () => {
+    const r = checkDiffCoverage({
+      quelle: "lib",
+      runGit: (args) => (args[0] === "diff" ? diffFor("src/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.nothingToMeasure, true);
   });
 });

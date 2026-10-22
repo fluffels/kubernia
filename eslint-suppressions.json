@@ -400,10 +400,10 @@
   },
   "test/context-size.test.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
+      "count": 3
     }
   },
   "test/contexts-quiz.test.ts": {
@@ -461,10 +461,10 @@
   },
   "test/filesize.test.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
+      "count": 4
     }
   },
   "test/forum-sanitize.test.ts": {

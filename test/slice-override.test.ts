@@ -192,7 +192,7 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
     const r = lauf("KQ-Diffcov-Override: ohne Nummer");
     expect(r.code).toBe(0);
     expect(r.out).toContain("ungültige Override-Zeile ignoriert");
-    expect(r.out).toContain("keinen gemessenen Spielcode");
+    expect(r.out).toContain("keinen gemessenen Quellcode (src/**/*.ts)");
   });
 
   it("gültige Override-Zeile ohne messbaren Code ist stale und rot", () => {
@@ -211,7 +211,7 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
   it("Altname der Diff-Basis (#1824): die Basis greift und die Warnung nennt den neuen Namen", () => {
     const r = lauf("ganz normal", altName("FACTORY_DIFF_BASE"));
     expect(r.code).toBe(0);
-    expect(r.out).toContain("keinen gemessenen Spielcode");
+    expect(r.out).toContain("keinen gemessenen Quellcode (src/**/*.ts)");
     expect(r.out).toContain("veraltet");
     expect(r.out).toContain("FACTORY_DIFF_BASE");
   });

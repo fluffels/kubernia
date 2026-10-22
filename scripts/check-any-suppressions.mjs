@@ -10,8 +10,7 @@
  * aber pro Zeile per `// eslint-disable-next-line @typescript-eslint/no-explicit-any`
  * trivial aushebelbar. Anders als die Komplexitäts-Gates (#502, eslint-suppressions.json)
  * ZÄHLT oder DECKELT bislang nichts die Zahl dieser Disables — ein autonomer Agent
- * kann so unbemerkt `any` einschleusen, genau der Vektor, den die iSAQB-Analysen bei
- * den `[key:string]:any`-Seams beklagten.
+ * kann so unbemerkt `any` einschleusen, genau der Vektor der `[key:string]:any`-Seams.
  *
  * Dieser Wächter hält eine per-Datei-Baseline (`any-suppressions.json`, Muster wie
  * eslint-suppressions.json). „Kein Grün-durch-Aufweichen" — dieselbe Ratchet-Philosophie
@@ -23,7 +22,7 @@
  *     wurde aufgelöst → Baseline über `--write` nachziehen, damit der Ratchet klemmt).
  *   • Deckungsgleich → grün.
  *
- * Bewusst NUR `src/**` (Produktionscode) — Tests/Tooling dürfen `any` frei nutzen.
+ * Bewusst NUR die Quellwurzel `struktur.quelle` der Projekt-Config (Produktionscode) — Tests/Tooling dürfen `any` frei nutzen.
  * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-size.mjs: läuft
  * plattformübergreifend über `npm run check:anysuppress` und im CI (via `npm run verify`).
  * Die Mess-/Vergleichslogik wird zusätzlich von test/any-suppressions.test.ts importiert
@@ -33,10 +32,11 @@
  *   node scripts/check-any-suppressions.mjs --write
  */
 
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BASELINE_FILE = join(ROOT, "any-suppressions.json");
@@ -67,10 +67,10 @@ export function countAnySuppressions(text) {
   return count;
 }
 
-/** Sammelt alle `src/**\/*.ts` (repo-relativer POSIX-Pfad) mit >0 `any`-Suppressions,
+/** Sammelt alle `<quelle>/**\/*.ts` (repo-relativer POSIX-Pfad) mit >0 `any`-Suppressions,
  *  als `{ file: count }`. `rootDir` überschreibbar, damit der Test deterministisch
  *  dasselbe Repo misst — unabhängig vom Arbeitsverzeichnis. */
-export function collectSuppressions(rootDir = ROOT) {
+export function collectSuppressions(rootDir = ROOT, quelle = strukturAus(ladeProjektConfig()).quelle) {
   const out = {};
   const walk = (dir) => {
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
@@ -82,7 +82,8 @@ export function collectSuppressions(rootDir = ROOT) {
       }
     }
   };
-  walk(join(rootDir, "src"));
+  const wurzel = join(rootDir, ...quelle.split("/"));
+  if (existsSync(wurzel)) walk(wurzel);
   return out;
 }
 
@@ -136,7 +137,14 @@ Aufruf: node scripts/check-any-suppressions.mjs [--write]`);
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
 
-  const current = collectSuppressions();
+  let quelle;
+  try {
+    quelle = strukturAus(ladeProjektConfig()).quelle;
+  } catch (e) {
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
+    process.exit(1);
+  }
+  const current = collectSuppressions(ROOT, quelle);
   const total = Object.values(current).reduce((a, b) => a + b, 0);
 
   if (werte.write) {

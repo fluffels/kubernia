@@ -41,7 +41,7 @@
 
 ## Format
 
-- **Historisch:** ein ADR wird nie umgeschrieben, sondern verknüpft; die Regel steht in AGENTS.md › Projekt-Brain pflegen. Ein Nachtrag zu einer laufenden Entscheidung hat die Form `## Fortschreibung #<Ticket> (JJJJ-MM-TT): <Thema>` am Ende desselben ADR.
+- **Historisch:** ein ADR wird nie umgeschrieben, sondern verknüpft; die Regel steht in AGENTS.md › Projekt-Brain pflegen. Ein Nachtrag zu einer laufenden Entscheidung ist eine eigene Datei `fortschreibungen/<NNNN>-<ticket>-<slug>.md` mit erster Zeile `# Fortschreibung #<Ticket> (JJJJ-MM-TT): <Thema>`; das ADR trägt am Ende einen Zeiger `fortschreibungen/<NNNN>-…` (Abschnitt „Weitere Fortschreibungen (als Dateien)“). Die älteren angehängten `## Fortschreibung`-Abschnitte bleiben stehen, ihre Zahl je ADR ist eingefroren (`test/harness/adr-fortschreibung.test.ts`).
 - **Dateiname** `NNNN-kurzer-slug.md` (ASCII, vierstellig fortlaufend), **erste Zeile** `# ADR NNNN: Titel` (die Nummer muss zum Dateinamen passen).
 - **Kopf-Format** (vom Generator erzwungen, sonst ist `check:docgen` rot): vor der ersten `##`-Überschrift die Zeile `> Status: **<Status>** · Datum: JJJJ-MM-TT · Ticket: #<nr>`. Das Datum ist ein gültiges Kalenderdatum und hat nichts dahinter hängen. Das ältere Listenformat `- **Status:** <Status> (JJJJ-MM-TT)` wird weiter gelesen, für neue ADRs gilt das Blockquote-Format.
 - **Abschnittsfolge:** Status, Kontext, Optionen (mit Bewertung), Entscheidung („Entscheidung: X, weil Y“), Konsequenzen, Re-Evaluierung (nachprüfbarer Auslöser statt „für immer“).

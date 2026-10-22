@@ -88,7 +88,7 @@ const alternative = (werte: string[]): string =>
 
 /** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611, #1741): Owner (Repo-Owner und Board-Besitzer),
  * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
- * wie `forum` zählt nie), Agentennamen und die `projektliterale` der Config. Präfix, Branch, Worktree, Label und Agent zählen
+ * wie `forum` zählt nie), Agentennamen und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
  * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix). */
 export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
   const [owner = "", name = ""] = config.repo.split("/");
@@ -107,7 +107,7 @@ export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
   const labels = Object.values(config.labels).filter((l) => l.includes(":"));
   if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
-  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(escapeRe(literal), "gi");
+  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRe(literal)}(?![\\p{L}\\p{N}_])`, "giu");
   return out;
 }
 
@@ -436,6 +436,17 @@ describe("begriffeAus", () => {
     const drei = begriffeAus({ repo: "alice/demo", boards: [{ besitzer: "bob" }, { besitzer: "carol" }, { besitzer: "bob" }], ...NEU });
     assert.deepEqual(zaehle("alice bob carol", drei), { Owner: 3 });
     assert.deepEqual(zaehle("acme", B), { Owner: 1 });
+  });
+  test("projektliterale zählen als ganzes Wort (Unicode-Wortgrenzen): Phaser ja, phaseRows und Phaserx nein", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Phaser: "phaser" } });
+    assert.deepEqual(zaehle("phaseRows", b2), {});
+    assert.deepEqual(zaehle("Phaserx xphaser phaser_x 1phaser", b2), {});
+    assert.deepEqual(zaehle("Phaser phaser-frei Phaser.Scene (Phaser) PHASER", b2), { Phaser: 5 });
+  });
+  test("projektliterale: ein Umlaut grenzt als Buchstabe, Nicht-Buchstaben davor und dahinter nicht", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Hof: "hof" } });
+    assert.deepEqual(zaehle("Schöhof hofä", b2), {});
+    assert.deepEqual(zaehle("Hof, hof/x „Hof“", b2), { Hof: 3 });
   });
   test("ohne projektliterale entfällt der Zusatzbegriff", () => {
     assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU })), {});
@@ -912,6 +923,7 @@ describe("Projektbezüge nicht in den Prompts (#1843)", () => {
   test("Dev-Helfer und Anti-Corruption-Begriff stehen in der Projekt-Config, sonst wäre der Wächter still aus", () => {
     assert.ok(echteBegriffe.kqDev?.test("kqDev"), "projektliterale.kqDev fehlt");
     assert.ok(echteBegriffe.Hafen?.test("Hafen"), "projektliterale.Hafen fehlt");
+    assert.ok(echteBegriffe.Phaser?.test("Phaser.Scene"), "projektliterale.Phaser fehlt (Engine-Name nicht im Kern)");
   });
 });
 

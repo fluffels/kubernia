@@ -656,3 +656,7 @@ F6 ist umgesetzt. Entscheidungen:
 - **Prüffläche der Projektwerte:** `projektwertDateien` (`scripts/besitz-lib.mjs`) umfasst zusätzlich `.agents/skills/*/*.md`; die Prüffläche aus der Zeile zur Platzhalter-Regel gilt damit für die Quellen, der Diff-Basis-Wächter scannt sie ebenfalls. Ein verfälschter Projektwert-Block in einer Quelle ist rot.
 - **Verweise:** Verweise mit Anker zeigen auf die Quelle (der Zeiger trägt keine Überschriften). Ein Scan-Wächter in `test/harness/skills-sync.test.ts` meldet jeden Verweis auf `.claude/skills/<name>/SKILL.md` einer Quelle (Ausnahmen: ADRs, README.md (ganze Datei, wegen der generierten Tabelle), Besitz-Manifest, Fixtures); `check:docdrift` meldet Anker auf den Zeiger.
 - **Übergang:** Die Quelle verlinkt den Ticket-Ablauf noch über `.claude/skills/factory/ablauf.md`, bis `factory` mit #1850 umzieht.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0022-1860-ausnahmelisten-und-quellwurzel.md) (Konvention: [README](README.md#format)); dort die erste.

@@ -5,7 +5,7 @@
 /**
  * Bundle-Größenbudget-Wächter (#503) — Byte-Budget für die AUSGELIEFERTEN Artefakte.
  *
- * Hintergrund (Architektur-Analyse 2026-07, iSAQB): es gibt zwar ein Zeilen-Budget
+ * Hintergrund: es gibt zwar ein Zeilen-Budget
  * je Quell-Modul (check-size.mjs, 800 LOC) und ein Diff-Budget je Slice
  * (check-diffsize.mjs), aber KEIN Byte-Budget für das, was der Nutzer wirklich lädt.
  * vite.config.ts setzt nur `chunkSizeWarningLimit` — das ist eine Log-WARNUNG, kein

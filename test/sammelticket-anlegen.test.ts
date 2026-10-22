@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
+import { echteSpezifikation } from "./support/echte-sprache";
 
 type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean };
 type User = { login: string; type?: string } | null;
@@ -15,7 +16,7 @@ type Komm = { user: User; body: string };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Anlegen = {
   parseArgs: (argv: string[]) => Args | null;
-  sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerZustand?: string }) => string;
+  sammelticketBody: (a: { art: string; vorgaenger?: number | null; vorgaengerZustand?: string; blocker?: string }) => string;
   zustandVonIssue: (issue: { state?: string; assignees?: unknown[] } | null) => string;
   korrekturFuer: (a: { items: unknown[]; nr: number; position: number }) => { nr: number; id: string; afterId: string | null } | null;
   kandidatenSammelticket: (offene: Offen[], titel: string, o?: { nach?: number | null }) => Offen[];
@@ -23,6 +24,7 @@ type Anlegen = {
   dublettenEntscheidung: (a: { eigenNr: number; titel: string; eigenKommentare: number; andere: Offen[]; vorgaenger?: number | null }) => { art: string; aelter?: number };
 };
 const A = raw as unknown as Anlegen;
+const BL = echteSpezifikation().blocker as string;
 const ergaenzeFehlende = (rawLib as unknown as { ergaenzeFehlende: (items: unknown[], neu: unknown[]) => unknown[] }).ergaenzeFehlende;
 
 describe("parseArgs", () => {
@@ -54,13 +56,13 @@ describe("sammelticketBody", () => {
   });
 
   test("Vorgänger in Arbeit: Nachfolger-Zeile mit „dort in Arbeit“ UND „blockiert durch #N“", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "in-arbeit" });
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "in-arbeit", blocker: BL });
     expect(b).toContain("Nachfolger von #1390 (dort in Arbeit).");
     expect(b).toMatch(/^blockiert durch #1390 \(nur solange #1390 offen ist\)$/m);
   });
 
   test("Vorgänger offen (ungeclaimt): Nachfolger-Zeile ohne Zusatz, Sperrzeile bleibt", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "offen" });
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "offen", blocker: BL });
     expect(b).toContain("Nachfolger von #1390.");
     expect(b).not.toContain("dort in Arbeit");
     expect(b).not.toContain("voll");
@@ -68,17 +70,23 @@ describe("sammelticketBody", () => {
   });
 
   test("Vorgänger unlesbar: gilt als offen ohne Zusatz, Sperrzeile bleibt", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "unbekannt" });
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "unbekannt", blocker: BL });
     expect(b).toContain("Nachfolger von #1390.");
     expect(b).not.toMatch(/dort in Arbeit|voll/);
     expect(b).toMatch(/^blockiert durch #1390 /m);
   });
 
   test("geschlossener Vorgänger: genannt, aber ohne Blocker (kein stale „blockiert durch“)", () => {
-    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "zu" });
+    const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerZustand: "zu", blocker: BL });
     expect(b).toContain("Nachfolger von #1390.");
     expect(b).not.toContain("blockiert durch");
     expect(b).not.toContain("dort in Arbeit");
+  });
+
+  test("das Blocker-Wort kommt aus dem Parameter, nicht aus einer Konstante; ohne Wort bei offenem Vorgänger wirft er (#1860)", () => {
+    expect(A.sammelticketBody({ art: "harness", vorgaenger: 7, vorgaengerZustand: "offen", blocker: "blocked by" })).toMatch(/^blocked by #7 /m);
+    expect(() => A.sammelticketBody({ art: "harness", vorgaenger: 7, vorgaengerZustand: "offen" })).toThrow(/blocker/);
+    expect(A.sammelticketBody({ art: "harness", vorgaenger: 7, vorgaengerZustand: "zu" })).not.toMatch(/#7 \(nur/);
   });
 
   test("zustandVonIssue: offen+Assignee in-arbeit, offen ohne Assignee offen, geschlossen zu, unlesbar unbekannt", () => {

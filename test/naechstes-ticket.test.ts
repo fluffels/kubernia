@@ -25,7 +25,6 @@ type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknow
 type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; config?: unknown; hartAb?: number };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
-  blockerNummern: (b: string) => number[];
   formatiere: (e: Ergebnis) => string;
   fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string };
   waehleUeberBoards: (e: unknown) => Ergebnis & { hinweise?: string[] };
@@ -57,13 +56,13 @@ const zweiBoards = (e: Eingabe): ZweiBoards => ({ ...e, produkt: e.items, factor
 const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
   (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
 
-describe("blockerNummern", () => {
-  test("mehrfach, case-insensitiv, mehrere Nummern je Zeile; Klammertext zählt nicht", () => {
-    expect(N.blockerNummern("x\nBlockiert durch #12, #13 (nur solange #99 offen ist)\nblockiert durch #14")).toEqual([12, 13, 14]);
-  });
-  test("ohne Zeile: leer; eine bloße Erwähnung blockiert nicht", () => {
-    expect(N.blockerNummern("siehe #5, Nachfolger von #7")).toEqual([]);
-    expect(N.blockerNummern(null as unknown as string)).toEqual([]);
+describe("Blocker-Zeile aus der Sprache (#1860)", () => {
+  const sprache = (CFG.sprache as { spezifikation: Record<string, unknown> }).spezifikation;
+  const cfgMit = (blocker: string) => ({ ...CFG, sprache: { ...(CFG.sprache as object), spezifikation: { ...sprache, blocker } } });
+  test("das Blocker-Wort der Config sperrt; ein anderes Wort sperrt nicht", () => {
+    const offene = new Set([1, 50]);
+    expect(frei([item(1, { body: "blocked by #50" })], { offene, config: cfgMit("blocked by") }).ticket).toBeNull();
+    expect(frei([item(1, { body: "blockiert durch #50" })], { offene, config: cfgMit("blocked by") }).ticket?.nr).toBe(1);
   });
 });
 
@@ -888,5 +887,87 @@ describe("Sprache als Projektwert (#1711)", () => {
   });
   test("die Auswahl wirft ohne sprache, sobald ein freier Kandidat das Spezifikations-Gate braucht", () => {
     expect(() => (N.waehleNaechstes as (e: unknown) => unknown)({ items: norm([item(1)]), offene: new Set(), owner: "fluffels", config: ohne })).toThrow(/sprache/);
+  });
+});
+
+describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-Reihenfolge (#1860)", () => {
+  type MIo = { owner: string; config: unknown; hartAb?: number; lade: () => ZweiBoards & { refs?: string[] } };
+  type MErgebnis = { anzahl: number; maengel: { nr: number; titel: string; fehlt: string[] }[] };
+  const M = N as unknown as {
+    aufrufLesen: (argv: string[]) => { maengel?: boolean; bereich?: string | null; ticket?: number | null; json?: boolean; fehler?: string };
+    fuehreAus: (argv: string[], io: MIo) => { code: number; out: string; err: string };
+  };
+  const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- nur Happy Path\n";
+  const H = { labels: [{ name: "area:harness" }] };
+  const lauf = (produkt: unknown[], factory: unknown[] = [], argv: string[] = ["--maengel"], extra: Partial<MIo> = {}, offene = new Set<number>()) =>
+    M.fuehreAus(argv, { owner: "fluffels", config: CFG, hartAb: 1, lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene }), ...extra });
+
+  test("aufrufLesen: --maengel braucht weder --bereich noch --ticket, schließt --ticket aus", () => {
+    expect(M.aufrufLesen(["--maengel"])).toMatchObject({ maengel: true, bereich: null, ticket: null, json: false });
+    expect(M.aufrufLesen(["--maengel", "--bereich", "agentic", "--json"])).toMatchObject({ maengel: true, bereich: "agentic", json: true });
+    expect(M.aufrufLesen(["--maengel", "--ticket", "5"]).fehler).toMatch(/schließen sich aus/);
+    expect(M.aufrufLesen(["--bereich", "spiel"]).maengel).toBeUndefined();
+  });
+  test("listet Tickets mit Mangel in Board-Reihenfolge, Exit 0, Body nie ausgegeben", () => {
+    const r = lauf([roh(3, { body: `${OHNE_NEGATIV}GEHEIM` }), item(4), roh(2, { body: "" })]);
+    expect(r.code).toBe(0);
+    const zeilen = r.out.trim().split("\n");
+    expect(zeilen[0]).toBe("2 Tickets mit Mangel");
+    expect(zeilen[1]).toMatch(/^#3\tT3: .*kein Negativfall/);
+    expect(zeilen[2]).toMatch(/^#2\tT2: /);
+    expect(r.out).not.toContain("GEHEIM");
+    expect(r.out).not.toContain("#4");
+  });
+  test("ohne Mangel: Exit 0 und `0 Tickets mit Mangel`", () => {
+    const r = lauf([item(1)]);
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toBe("0 Tickets mit Mangel");
+  });
+  test("Negativfall: Assignee, Fremdeingang, offener Blocker, Belegung, Kopf-, Sammel- und Nicht-Todo-Items fehlen", () => {
+    const produkt = [
+      roh(1, { body: OHNE_NEGATIV, assignees: [{ login: "fluffels" }] }),
+      roh(2, { body: OHNE_NEGATIV, user: { login: "fremder", type: "User" } }),
+      roh(3, { body: `${OHNE_NEGATIV}blockiert durch #50` }),
+      roh(4, { body: OHNE_NEGATIV }),
+      roh(5, { body: "", title: "Harness-Härtung (gesammelt)" }),
+      roh(6, { body: "", title: "🚨 CI rot auf main" }),
+      roh(7, { body: OHNE_NEGATIV }, "In Progress"),
+      roh(8, { body: OHNE_NEGATIV }),
+      roh(9, { body: OHNE_NEGATIV, state: "closed" }),
+    ];
+    const r = lauf(produkt, [], ["--maengel", "--json"], { lade: () => ({ produkt: norm(produkt), factory: [], offene: new Set([50]), refs: ["origin/feature/kq-8-x"] }) });
+    expect((JSON.parse(r.out) as MErgebnis).maengel.map((m) => m.nr)).toEqual([4]);
+  });
+  test("Bestand unter hartAb zählt mit (freies Ticket mit Mangel)", () => {
+    const j = JSON.parse(lauf([roh(5, { body: "" })], [], ["--maengel", "--json"], { hartAb: 100 }).out) as MErgebnis;
+    expect(j.maengel.map((m) => m.nr)).toEqual([5]);
+  });
+  test("--bereich trennt die Boards, ohne Bereich zählen beide (Produkt vor Factory), JSON mit anzahl und fehlt", () => {
+    const spiel = roh(1, { body: OHNE_NEGATIV });
+    const harness = roh(2, { body: OHNE_NEGATIV, ...H });
+    const nur = (bereich: string) => (JSON.parse(lauf([spiel], [harness], ["--maengel", "--bereich", bereich, "--json"]).out) as MErgebnis).maengel.map((m) => m.nr);
+    expect(nur("spiel")).toEqual([1]);
+    expect(nur("agentic")).toEqual([2]);
+    const beide = JSON.parse(lauf([spiel], [harness], ["--maengel", "--json"]).out) as MErgebnis;
+    expect(beide.anzahl).toBe(2);
+    expect(beide.maengel.map((m) => m.nr)).toEqual([1, 2]);
+    expect(beide.maengel[0].fehlt.join(" ")).toContain("kein Negativfall");
+  });
+  test("Messfenster wird nicht geladen: ein Ticket mit Messfenster-Zeile zählt nach seinem Mangel", () => {
+    const j = JSON.parse(lauf([roh(1, { body: `${OHNE_NEGATIV}Messfenster: 3 ≥ kubernia-umsetzer nach #9` })], [], ["--maengel", "--json"], { hartAb: 100 }).out) as MErgebnis;
+    expect(j.anzahl).toBe(1);
+  });
+  test("ein einzelnes Ticket mit Mangel steht im Singular, mehrere im Plural", () => {
+    expect(lauf([roh(1, { body: OHNE_NEGATIV })]).out.split("\n")[0]).toBe("1 Ticket mit Mangel");
+    expect(lauf([roh(1, { body: OHNE_NEGATIV }), roh(2, { body: OHNE_NEGATIV })]).out.split("\n")[0]).toBe("2 Tickets mit Mangel");
+  });
+  test("listeMaengel wirft bei einem unbekannten Bereich", () => {
+    const liste = (N as unknown as { listeMaengel: (a: unknown) => unknown }).listeMaengel;
+    expect(() => liste({ produkt: [], factory: [], bereich: "unfug", config: CFG, offene: new Set(), namen: {} })).toThrow(/bereich erwartet agentic oder spiel/);
+  });
+  test("Ladefehler: Exit 2 mit Ursache, kein Stacktrace", () => {
+    const r = M.fuehreAus(["--maengel"], { owner: "fluffels", config: CFG, lade: () => { throw new Error("gh kaputt"); } });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("gh kaputt");
   });
 });

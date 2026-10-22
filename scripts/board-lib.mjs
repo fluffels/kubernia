@@ -11,17 +11,22 @@ import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { AUFRUF_EXIT } from "./flag-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie oder ist sie ungültig, bricht schon der Import ab (kein stiller
-// Standardwert, #1611): mit einer ✖-Zeile samt Fix und Exit 1 statt einem Stacktrace (ein statischer Import schlägt vor jedem Einstieg zu).
-const PROJEKT = (() => {
+// Standardwert, #1611): mit einer ✖-Zeile samt Fix und Exit 2 (Config-Fehler wie ein Aufruf-Fehler, AUFRUF_EXIT) statt einem Stacktrace
+// (ein statischer Import schlägt vor jedem Einstieg zu).
+
+/** Lädt die Projekt-Config oder bricht ab: `err` bekommt `✖ <Meldung samt Fix>`, `exit` `AUFRUF_EXIT` (2). `lade`, `exit`, `err` sind Test-Nähte. */
+export function ladeProjektOderAbbruch(lade = ladeProjektConfig, { exit = (code) => process.exit(code), err = (s) => console.error(s) } = {}) {
   try {
-    return ladeProjektConfig();
+    return lade();
   } catch (e) {
-    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
-    process.exit(1);
+    err(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    return exit(AUFRUF_EXIT);
   }
-})();
+}
+const PROJEKT = ladeProjektOderAbbruch();
 
 const gh = ghText;
 

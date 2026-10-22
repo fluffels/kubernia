@@ -31,24 +31,13 @@ import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
-import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
+import { configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
-
-/** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
-export function blockerNummern(body) {
-  const nummern = new Set();
-  for (const zeile of String(body ?? "").split(/\r?\n/)) {
-    for (const m of zeile.matchAll(/blockiert\s+durch\b([^(\n]*)/gi)) {
-      for (const n of m[1].matchAll(/#(\d+)/g)) nummern.add(Number(n[1]));
-    }
-  }
-  return [...nummern];
-}
 
 /**
  * Zeilen `Messfenster: n ≥ <k> <agent> nach #<nr>` (#1589; am Zeilenanfang, Listenpunkt erlaubt, `≥` oder `>=`, k ≥ 1; eine bloße Erwähnung im
@@ -96,11 +85,11 @@ const OHNE_WERT = {
  * Schließt `--ticket` und `--bereich` gegenseitig aus und verlangt genau eines davon.
  */
 export function aufrufLesen(argv) {
-  const r = flagsLesen(argv, { bereich: { type: "string" }, ticket: { type: "string" }, json: { type: "boolean" } }, {
+  const r = flagsLesen(argv, { bereich: { type: "string" }, ticket: { type: "string" }, json: { type: "boolean" }, maengel: { type: "boolean" } }, {
     meldung: (art, flag) => (art === "ohne-wert" ? OHNE_WERT[flag] : undefined),
   });
   if (r.fehler) return { fehler: r.fehler.text };
-  const { bereich: roh, ticket: nr, json } = r.werte;
+  const { bereich: roh, ticket: nr, json, maengel } = r.werte;
   if (roh !== undefined && !Object.hasOwn(BEREICHE, roh)) return { fehler: `--bereich erwartet agentic oder spiel (bekommen: „${roh}“)` };
   let ticket = null;
   if (nr !== undefined) {
@@ -109,6 +98,8 @@ export function aufrufLesen(argv) {
     ticket = Number(m[1]);
   }
   const bereich = roh ?? null;
+  if (maengel === true && ticket !== null) return { fehler: "--maengel und --ticket schließen sich aus" };
+  if (maengel === true) return { bereich, ticket: null, json: json === true, maengel: true };
   if (ticket !== null && bereich) return { fehler: "--ticket und --bereich schließen sich aus" };
   if (ticket === null && !bereich) return { fehler: "Aufruf ohne Auswahl: --bereich agentic|spiel (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)" };
   return { bereich, ticket, json: json === true };
@@ -207,9 +198,9 @@ const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kei
 function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, config }) {
   if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
   if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
-  const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
+  const offeneBlocker = blockerNummern(c.body, spracheAus(config).spezifikation).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
-  const fenster = messfensterZeilen(c.body);
+  const fenster = messfenster === null ? [] : messfensterZeilen(c.body); // `null`: Mängelliste, das teure Messfenster zählt dort nicht
   const unlesbar = fenster.find((f) => "fehler" in f);
   if (unlesbar) return { grund: unlesbar.fehler };
   const offenesFenster = fenster.find((f) => offene.has(f.nach));
@@ -224,6 +215,29 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, confi
   }
   return spez.art === "bestand" ? { grund: "", bestandFehlt: spez.fehlt } : { grund: "" };
 }
+
+/**
+ * Die Mängelliste (`--maengel`): freie, vertraute, unblockierte Todo-Items mit Spezifikations-Mangel (hart oder Bestand) in Board-Reihenfolge (Produkt vor Factory,
+ * mit `bereich` nur dessen Board); Kopf-, Sammel- und Epic-Tickets sind vom Gate ausgenommen. Das Messfenster zählt hier nicht. Liefert `{ anzahl, maengel: [{ nr, titel, fehlt }] }`. Pur.
+ */
+export function listeMaengel({ produkt, factory, bereich = null, config, offene, refs = [], worktrees = [], prHeads = [], owner = "", hartAb = 0, namen }) {
+  if (bereich !== null && !Object.hasOwn(BEREICHE, bereich)) throw new Error("listeMaengel: bereich erwartet agentic oder spiel");
+  const listen = seitenListen(produkt, factory, config);
+  const items = bereich === null ? [...listen.produkt, ...listen.factory] : listen[bereich === "agentic" ? "factory" : "produkt"];
+  const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
+  const maengel = [];
+  for (const item of items) {
+    if (item.status !== "Todo" || item.state !== "open") continue;
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster: null, hartAb, config });
+    const fehlt = r.fehlt ?? r.bestandFehlt;
+    if (fehlt) maengel.push({ nr: item.number, titel: item.title, fehlt });
+  }
+  return { anzahl: maengel.length, maengel };
+}
+
+/** Textausgabe der Mängelliste: erste Zeile die Zahl, dann je Ticket `#<nr>TAB<Titel>: <Mängel>` (nie der Body). Pur. */
+export const formatiereMaengel = ({ anzahl, maengel }) =>
+  [`${anzahl} ${anzahl === 1 ? "Ticket" : "Tickets"} mit Mangel`, ...maengel.map((m) => `#${m.nr}\t${m.titel}: ${m.fehlt.join("; ")}`)].join("\n") + "\n";
 
 /** Reparaturaufträge (#1698): hart übersprungene Tickets mit Spezifikations-Mangel (`fehlt`), nur vertraute und freie (`ueberspringGrund` setzt `fehlt` erst nach Assignee-, Fremdeingangs-, Blocker- und Belegungsprüfung). Pur. */
 export const reparierenVon = (uebersprungen) => uebersprungen.filter((u) => u.fehlt).map((u) => ({ nr: u.nr, fehlt: u.fehlt }));
@@ -244,6 +258,10 @@ export function fuehreAus(argv, io) {
   const aufruf = aufrufLesen(argv);
   if (aufruf.fehler) return fehlerErgebnis(aufruf.fehler);
   try {
+    if (aufruf.maengel) {
+      const liste = listeMaengel({ ...io.lade(), owner: io.owner, bereich: aufruf.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config });
+      return { code: 0, out: aufruf.json ? `${JSON.stringify(liste, null, 2)}\n` : formatiereMaengel(liste), err: "" };
+    }
     const einzel = aufruf.ticket;
     const roh =
       einzel === null
@@ -340,13 +358,14 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
-  direktaufruf(process.argv.slice(2), {
-    pruefe: aufrufLesen,
+  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  direktaufruf(args, {
+    pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufLesen(argv)),
     fehlerErgebnis: (_argv, vorab) => fehlerErgebnis(vorab.fehler),
     vorbereiten: () => mitKontingent("naechstes-ticket", { arten: ["core"] }), // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
     io: () => {
       try {
-        return echteIo();
+        return echteIo({ config });
       } catch (e) {
         return { configFehler: e instanceof Error ? e.message : String(e) }; // `fuehreAus` unten meldet die Config-Ursache (Exit 2)
       }

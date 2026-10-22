@@ -2,6 +2,8 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/inbox-start-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawBoard from "../scripts/board-lib.mjs";
 
 interface Start { trocken?: boolean; config?: unknown; libs?: unknown; code?: number }
 type Deps = { skript: string; praefix: string; ladeConfig?: () => unknown; ladeLibs?: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void };
@@ -50,5 +52,30 @@ describe("inboxStart", () => {
     const { d, log } = deps({ ladeLibs: () => Promise.reject(new Error("Import kaputt")) });
     expect(await L.inboxStart([], d)).toEqual({ code: 2 });
     expect(log).toEqual(["::error::Demo: Projekt-Config nicht lesbar: Import kaputt"]);
+  });
+});
+
+describe("ladeProjektOderAbbruch (board-lib, Config-Fehler beim Import)", () => {
+  const B = rawBoard as unknown as { ladeProjektOderAbbruch: (lade: () => unknown, naehte: { exit: (c: number) => never; err: (s: string) => void }) => unknown };
+  const stopp = (c: number): never => { throw new Error(`exit ${c}`); };
+
+  test("Gutfall: liefert die Config, ruft weder exit noch err", () => {
+    const err: string[] = [];
+    expect(B.ladeProjektOderAbbruch(() => ({ repo: "a/b" }), { exit: stopp, err: (s) => err.push(s) })).toEqual({ repo: "a/b" });
+    expect(err).toEqual([]);
+  });
+
+  test("Config-Fehler: ✖-Zeile mit Meldung samt Fix auf err und Exit 2 (Aufruf-/Config-Fehler, nicht 1)", () => {
+    const err: string[] = [];
+    expect(() => B.ladeProjektOderAbbruch(() => { throw new Error("Projekt-Config fehlt: x\nFix: anlegen"); }, { exit: stopp, err: (s) => err.push(s) })).toThrow("exit 2");
+    expect(err).toEqual(["✖ Projekt-Config fehlt: x\nFix: anlegen"]);
+  });
+
+  test("ein Nicht-Error als Wurf wird als Text gemeldet", () => {
+    const err: string[] = [];
+    // Absicht: genau der Nicht-Error-Wurf ist der Zweig unter Test.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    expect(() => B.ladeProjektOderAbbruch(() => { throw "kaputt"; }, { exit: stopp, err: (s) => err.push(s) })).toThrow("exit 2");
+    expect(err).toEqual(["✖ kaputt"]);
   });
 });

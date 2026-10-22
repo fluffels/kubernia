@@ -24,13 +24,13 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
-import { ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { configAusAufruf, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, hoechsterAbnahmeDurchgang } from "./nachweis-lib.mjs";
-import { ladeCommitZeilen } from "./slice-override.mjs";
+import { commitZeilenAus } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
 /** Name des Abnahme-Agenten im Berichtskopf (eine Quelle: `ABNAHME_EMPFAENGER` des Auftrags-Guards). */
@@ -286,10 +286,10 @@ export function fuehreAus(argv, io) {
   return nr === null ? aufrufFehler(`kriterien braucht eine Ticketnummer\n${AUFRUF}`) : zeigeKriterien(nr, io, sprache);
 }
 
-const echteIo = () => ({ // Fabrik: erst nach bestandener Aufruf-Prüfung aufgerufen (`direktaufruf`)
+const echteIo = (config) => ({ // Fabrik: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`)
   owner: OWNER,
-  config: ladeProjektConfig(),
-  zeilen: ladeCommitZeilen(),
+  config,
+  zeilen: commitZeilenAus(config),
   leseDatei: (pfad) => readFileSync(pfad, "utf8"),
   ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
   ladeKommentare: (pr) => issueKommentare(pr, (a) => ghJson(a), REPO),
@@ -299,11 +299,12 @@ const echteIo = () => ({ // Fabrik: erst nach bestandener Aufruf-Prüfung aufger
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1791).
-  direktaufruf(process.argv.slice(2), {
-    pruefe: aufrufPruefen,
-    fehlerErgebnis: (argv) => fuehreAus(argv, null),
+  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  direktaufruf(args, {
+    pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufPruefen(argv)),
+    fehlerErgebnis: (argv) => (configFehler ? aufrufFehler(configFehler) : fuehreAus(argv, null)),
     vorbereiten: () => mitKontingent("abnahme", { arten: ["core"] }),
-    io: echteIo,
+    io: () => echteIo(config),
     fuehreAus,
   });
 }
