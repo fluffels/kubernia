@@ -13,6 +13,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs ist aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -95,5 +98,26 @@ describe("no-explicit-any-Suppression-Ratchet (#604)", () => {
 
     const same = diffAgainstBaseline({ "src/foo.ts": 1 }, { "src/foo.ts": 1 });
     assert.deepEqual(same, { increases: [], stale: [] }, "deckungsgleich = grün");
+  });
+});
+
+describe("Quellwurzel als Parameter (#1860)", () => {
+  const collect = checkAny.collectSuppressions as (rootDir: string, quelle: string) => CountMap;
+  const disable = "// eslint-disable-next-line @typescript-eslint/no-explicit-any\nconst a: any = 1;\n";
+  const baum = (): string => {
+    const d = mkdtempSync(join(tmpdir(), "anysup-"));
+    for (const p of ["lib/a.ts", "lib/sub/b.ts", "src/c.ts", "library/d.ts"]) {
+      mkdirSync(join(d, dirname(p)), { recursive: true });
+      writeFileSync(join(d, p), disable);
+    }
+    return d;
+  };
+  test("zählt nur unter der übergebenen Quellwurzel, nicht unter src", () => {
+    const d = baum();
+    assert.deepEqual(collect(d, "lib"), { "lib/a.ts": 1, "lib/sub/b.ts": 1 });
+    assert.deepEqual(collect(d, "src"), { "src/c.ts": 1 });
+  });
+  test("eine Quellwurzel ohne Ordner wirft nicht, sondern zählt 0", () => {
+    assert.deepEqual(collect(baum(), "gibtsnicht"), {});
   });
 });

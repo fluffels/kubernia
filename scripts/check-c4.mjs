@@ -5,9 +5,9 @@
  * Ableitung derselben SSOTs wie die generierten Schichtdiagramme. `check:c4` prüft in dieser Reihenfolge
  *   1. `likec4 validate` (Syntax, Referenzen),
  *   2. `likec4 format --check` (Layout-Drift; Fix: `npm run c4:format`),
- *   3. den Abgleich des Modells gegen scripts/layers.cjs und src/:
+ *   3. den Abgleich des Modells gegen scripts/layers.cjs und der Quellwurzel (`architektur.quelle`):
  *      Art `schicht`/`bibliothek` ↔ Labels von SCHICHT_MODELL, Beziehungen zwischen ihnen ↔ sollKanten (beide Richtungen),
- *      Art `modul` ↔ Top-Level von src/ unter der Schicht, die schichtVon liefert, View-Deckel,
+ *      Art `modul` ↔ Top-Level der Quellwurzel unter der Schicht, die schichtVon liefert, View-Deckel,
  *      die Harness-Arten (agent, skill, workflow, hook, githook, gate, ciworkflow, mcp) ↔ ihre Quellen (scripts/check-c4-harness.mjs),
  *      die Pflicht-Views (architektur.pflichtViews) und keine freistehende Zahl in Labels (SSOT-Konstanten gehören den generierten Diagrammen).
  * Gebunden wird über Art + Titel. Eine Art, die weder gebunden ist noch in `erzaehlung` steht, ist rot (fail-closed).
@@ -20,6 +20,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fenceMaske, leseConfigObjekt } from "./docs-gen/markdown.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { ladeModell, schichtVon, sollKanten } from "./docs-gen/schichten.mjs";
 import { HARNESS_BINDER, harnessQuellen, ortFuer, pruefeHarness } from "./check-c4-harness.mjs";
 
@@ -167,7 +168,7 @@ function pruefeModule(c4, modell, module, byId, binderVon, o) {
     const vorhanden = els.filter((e) => e.title === m.name);
     if (vorhanden.length === 0) {
       const s = schichtEl(soll);
-      ms.push(meld(s?.datei ?? o.ordner, s?.zeile ?? 1, "modul", m.name, `fehlt im Modell, steht aber als ${m.pfade.join(", ")} in src/`, `Element modul '${m.name}' unter der Schicht '${soll}' in ${s?.datei ?? o.ordner} anlegen`));
+      ms.push(meld(s?.datei ?? o.ordner, s?.zeile ?? 1, "modul", m.name, `fehlt im Modell, steht aber als ${m.pfade.join(", ")} in ${o.quelle}/`, `Element modul '${m.name}' unter der Schicht '${soll}' in ${s?.datei ?? o.ordner} anlegen`));
       continue;
     }
     for (const e of vorhanden) {
@@ -179,22 +180,23 @@ function pruefeModule(c4, modell, module, byId, binderVon, o) {
   }
   const namen = new Set(module.map((m) => m.name));
   for (const e of els) {
-    if (!namen.has(e.title)) ms.push(meld(e.datei, e.zeile, "modul", e.title, `kein Eintrag in src/ (Top-Level: ${[...namen].join(", ")})`, `Element entfernen oder den Titel auf einen Top-Level-Eintrag von src/ ändern`));
+    if (!namen.has(e.title)) ms.push(meld(e.datei, e.zeile, "modul", e.title, `kein Eintrag in ${o.quelle}/ (Top-Level: ${[...namen].join(", ")})`, `Element entfernen oder den Titel auf einen Top-Level-Eintrag von ${o.quelle}/ ändern`));
   }
   return ms;
 }
 
-const HEX_PFAD = /`((?:src|test|scripts|docs)\/[^`\s]*)`/g;
+/** Backtick-Pfade der Hexagon-Sicht: unter der Quellwurzel oder unter test/, scripts/, docs/. */
+const hexPfad = (quelle) => new RegExp("`((?:" + escapeRegex(quelle) + "|test|scripts|docs)/[^`\\s]*)`", "g");
 const HEX_KOPF = { port: ["Port", "Seite", "Ort", "Schicht"], adapter: ["Adapter", "Port", "Ort", "Schicht"] };
 const zellen = (zeile) => zeile.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
-const pfadeIn = (text) => [...text.matchAll(HEX_PFAD)].map((m) => m[1]);
+const pfadeIn = (text, quelle) => [...text.matchAll(hexPfad(quelle))].map((m) => m[1]);
 
 /**
  * Liest den Abschnitt `### <abschnitt>` der Hexagon-Sicht (bis zur nächsten Überschrift der Ebene 1 bis 3, Code-Fences
  * ausgeblendet): die Tabellen `| Port | Seite | Ort | Schicht |` und `| Adapter | Port | Ort | Schicht |` sowie alle Backtick-Pfade
- * `src/…`/`test/…`. Liefert `null`, wenn der Abschnitt fehlt. Reine Funktion.
+ * `<quelle>/…`/`test/…`. Liefert `null`, wenn der Abschnitt fehlt. Reine Funktion.
  */
-export function leseHexagon(text, abschnitt) {
+export function leseHexagon(text, abschnitt, quelle) {
   const lines = text.split(/\r?\n/);
   const fence = fenceMaske(lines);
   const start = lines.findIndex((l, i) => !fence[i] && l.trim() === `### ${abschnitt}`);
@@ -211,7 +213,7 @@ export function leseHexagon(text, abschnitt) {
   for (let i = start + 1; i < ende; i++) {
     if (fence[i]) continue;
     const line = lines[i];
-    for (const pfad of pfadeIn(line)) hex.pfade.push({ pfad, zeile: i + 1 });
+    for (const pfad of pfadeIn(line, quelle)) hex.pfade.push({ pfad, zeile: i + 1 });
     if (!line.trim().startsWith("|")) {
       modus = null;
       continue;
@@ -227,13 +229,13 @@ export function leseHexagon(text, abschnitt) {
       hex.schief.push({ zeile: i + 1, text: line.trim() });
       continue;
     }
-    const zeile = { name: z[0], zwei: z[1], ort: pfadeIn(z[2]), schicht: z[3], zeile: i + 1 };
+    const zeile = { name: z[0], zwei: z[1], ort: pfadeIn(z[2], quelle), schicht: z[3], zeile: i + 1 };
     (modus === "port" ? hex.ports : hex.adapter).push(zeile);
   }
   return hex;
 }
 
-/** Top-Level-Modul eines `src/`-Pfads (`src/ui/a.ts` → `ui`, `src/sim.ts` → `sim`), sonst `null`. */
+/** Top-Level-Modul eines Pfads unter der Quellwurzel (`<quelle>/ui/a.ts` → `ui`, `<quelle>/sim.ts` → `sim`), sonst `null`. */
 const modulVon = (pfad, quelle) => {
   if (!pfad.startsWith(`${quelle}/`)) return null;
   const erster = pfad.slice(quelle.length + 1).split("/")[0];
@@ -243,7 +245,7 @@ const modulVon = (pfad, quelle) => {
 /** Eine Tabellenzeile gegen Schicht-Modell: Schicht-Spalte ↔ schichtVon, genau ein Top-Level-Modul. Liefert { modul, schichtId } oder null (Meldungen in `ms`). */
 function pruefeHexZeile(z, art, { modell, quelle, datei, ms, sq }) {
   const m = (text, fix) => ms.push(meld(datei, z.zeile, art, z.name, text, fix));
-  if (z.ort.length === 0) return m(`Spalte Ort nennt keinen Backtick-Pfad`, `den Ort als \`src/…\` eintragen`), null;
+  if (z.ort.length === 0) return m(`Spalte Ort nennt keinen Backtick-Pfad`, `den Ort als \`${quelle}/…\` eintragen`), null;
   const module = new Set(z.ort.map((p) => modulVon(p, quelle)));
   if (module.has(null)) return m(`Ort liegt nicht unter ${quelle}/`, `Pfade unter ${quelle}/ angeben`), null;
   if (module.size > 1) return m(`Ort liegt in mehreren Top-Level-Modulen (${[...module].join(", ")})`, `Zeile je Modul aufteilen`), null;
@@ -356,7 +358,7 @@ function pruefeHexKanten(hex, c4, info, ctx) {
 export function pruefeHexagon({ hexagon, c4, modell, cfg, byId, binderVon, o }) {
   const datei = cfg.hexagon.datei;
   const ms = [];
-  const hex = hexagon.text == null ? null : leseHexagon(hexagon.text, cfg.hexagon.abschnitt);
+  const hex = hexagon.text == null ? null : leseHexagon(hexagon.text, cfg.hexagon.abschnitt, cfg.quelle);
   if (!hex) {
     return [meld(datei, 1, "hexagon", cfg.hexagon.abschnitt, `Abschnitt „### ${cfg.hexagon.abschnitt}“ fehlt`, `Abschnitt mit Ports- und Adapter-Tabelle in ${datei} anlegen`)];
   }
@@ -408,7 +410,7 @@ export function pruefeArchitektur({ modell, module, c4, cfg, hexagon, harness = 
   const probleme = pruefeConfig(cfg);
   if (probleme.length) return sortiere(probleme);
   const binderVon = (kind) => cfg.bindungen[kind] ?? null;
-  const o = { ordner: ortFuer(c4, binderVon, SPIEL_BINDER, cfg.workspace), sq: schichtQuelle };
+  const o = { ordner: ortFuer(c4, binderVon, SPIEL_BINDER, cfg.workspace), sq: schichtQuelle, quelle: cfg.quelle };
   const q = quellen(modell);
   const byId = new Map(c4.elemente.map((e) => [e.id, e]));
   const labelId = (binder, titel) => q[binder]?.get(titel) ?? null;
@@ -519,7 +521,7 @@ export async function cli(argv, { rootDir = ROOT, out = console.log, err = conso
     err(`✖ ${ws}:1 abgleich „check:c4“: ${e instanceof Error ? e.message : e}. Fix: Ursache beheben`);
     rot = true;
   }
-  if (!rot) out(`check:c4: Architekturmodell stimmt mit ${config.schichten.layers}, src/ und den Harness-Quellen überein.`);
+  if (!rot) out(`check:c4: Architekturmodell stimmt mit ${config.schichten.layers}, ${cfg.quelle}/ und den Harness-Quellen überein.`);
   return rot ? 1 : 0;
 }
 

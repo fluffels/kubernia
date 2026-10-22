@@ -26,7 +26,7 @@ type Hexagon = { text: string | null; existiert: (p: string) => boolean };
 const api = raw as unknown as {
   srcModule: (rootDir: string, quelle: string) => { name: string; pfade: string[] }[];
   pruefeArchitektur: (a: { modell: Modell; module: { name: string; pfade: string[] }[]; c4: C4; cfg: Cfg; hexagon: Hexagon; schichtQuelle?: string }) => Meldung[];
-  leseHexagon: (text: string, abschnitt: string) => { ports: { name: string; zwei: string; ort: string[]; schicht: string }[]; adapter: { name: string; zwei: string; ort: string[]; schicht: string }[]; pfade: { pfad: string; zeile: number }[] } | null;
+  leseHexagon: (text: string, abschnitt: string, quelle: string) => { ports: { name: string; zwei: string; ort: string[]; schicht: string }[]; adapter: { name: string; zwei: string; ort: string[]; schicht: string }[]; pfade: { pfad: string; zeile: number }[] } | null;
   formatiere: (m: Meldung) => string;
   ladeC4Modell: (rootDir: string, workspace: string) => Promise<C4>;
   cli: (argv: string[], io: { rootDir: string; out: (s: string) => void; err: (s: string) => void; spawn?: (args: string[]) => number }) => Promise<number>;
@@ -293,6 +293,19 @@ describe("pruefeArchitektur", () => {
     assert.match(t[0], /docs\/architektur\/spiel\.c4:1 /);
   });
 
+  test("Modul ohne Eintrag in der Quellwurzel: die Meldung nennt cfg.quelle statt eines festen src (#1860)", () => {
+    const c4 = gueltig();
+    c4.elemente.push(el("k.app.do.geist", "modul", "geist", "k.app.do", 12));
+    const root = fixture(srcFiles());
+    const modell = ladeModell(root, "scripts/layers.cjs");
+    const ms = api.pruefeArchitektur({ modell, module: [{ name: "game", pfade: ["lib/game/"] }], c4, cfg: { ...CFG, quelle: "lib" }, hexagon: { text: hexText(), existiert: hexVorhanden }, schichtQuelle: "scripts/layers.cjs" });
+    const t = treffer(ms, /modul „geist“/);
+    assert.equal(t.length, 1);
+    assert.match(t[0], /kein Eintrag in lib\/ \(Top-Level: game\)/);
+    assert.match(t[0], /Top-Level-Eintrag von lib\//);
+    assert.doesNotMatch(t[0], /src\//);
+  });
+
   test("Modul ohne src/-Eintrag: rot", () => {
     const c4 = gueltig();
     c4.elemente.push(el("k.app.do.geist", "modul", "geist", "k.app.do", 12));
@@ -434,15 +447,25 @@ describe("Hexagon-Sicht (#1567, ADR 0024)", () => {
   const PORT = "| Content-Quelle | getrieben | `src/content/a.ts` | pure Domäne |";
   const ADAPTER = "| Tastatur | Content-Quelle | `src/ui/a.ts` | Präsentation |";
 
+  test("leseHexagon erkennt nur Pfade unter der übergebenen Quellwurzel (#1860)", () => {
+    const text = hexText("| Content-Quelle | getrieben | `lib/content/a.ts` | pure Domäne |", "| Tastatur | Content-Quelle | `src/ui/a.ts` | Präsentation |", "Prosa `lib/game/a.ts`.");
+    const hex = api.leseHexagon(text, "Hexagonale Sicht", "lib");
+    assert.ok(hex);
+    assert.deepEqual(hex.ports.map((p) => p.ort), [["lib/content/a.ts"]]);
+    assert.deepEqual(hex.adapter.map((a) => a.ort), [[]]);
+    assert.deepEqual(hex.pfade.map((p) => p.pfad), ["lib/game/a.ts", "lib/content/a.ts"]);
+    assert.deepEqual(api.leseHexagon(text, "Hexagonale Sicht", "li")?.pfade, []);
+  });
+
   test("leseHexagon: Tabellen, Pfade bis zur nächsten Überschrift, Code-Fences ausgeblendet", () => {
     const text = hexText(PORT, ADAPTER, "Prosa `src/game/a.ts`.\n\n```\n### Hexagonale Sicht\n`src/im-fence.ts`\n```");
-    const hex = api.leseHexagon(text, "Hexagonale Sicht");
+    const hex = api.leseHexagon(text, "Hexagonale Sicht", "src");
     assert.ok(hex);
     assert.deepEqual(hex.ports.map((p) => [p.name, p.zwei, p.ort, p.schicht]), [["Content-Quelle", "getrieben", ["src/content/a.ts"], "pure Domäne"]]);
     assert.deepEqual(hex.adapter.map((a) => [a.name, a.zwei]), [["Tastatur", "Content-Quelle"]]);
     assert.deepEqual(hex.pfade.map((p) => p.pfad), ["src/game/a.ts", "src/content/a.ts", "src/ui/a.ts"]);
-    assert.equal(api.leseHexagon("# nur Titel\n", "Hexagonale Sicht"), null);
-    assert.equal(api.leseHexagon("```\n### Hexagonale Sicht\n```\n", "Hexagonale Sicht"), null, "Überschrift im Fence zählt nicht");
+    assert.equal(api.leseHexagon("# nur Titel\n", "Hexagonale Sicht", "src"), null);
+    assert.equal(api.leseHexagon("```\n### Hexagonale Sicht\n```\n", "Hexagonale Sicht", "src"), null, "Überschrift im Fence zählt nicht");
   });
 
   test("Happy Path: keine Meldung", () => {
