@@ -3,7 +3,7 @@
  * Exit 2 (✖, Schlüssel/Pfad, Fix-Zeile, kein Stacktrace) vor jedem I/O; eine gültige Config wird wirklich gelesen.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,9 +20,18 @@ afterAll(() => {
   for (const d of ordner) rmSync(d, { recursive: true, force: true });
 });
 
-const lauf = (args: string[]) => {
-  const r = spawnSync(process.execPath, args, { encoding: "utf8", cwd: WURZEL, timeout: 30_000 });
-  return { status: r.status, text: `${r.stderr}${r.stdout}` };
+const STUB = pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href;
+
+/** Läuft offline: `gh` ist gestubbt (`rate_limit` voll, sonst `[]`), das Kosten-Log liegt im Temp-Ordner, nicht im Repo; `cwd` bestimmt, woran `git` arbeitet. */
+const lauf = (args: string[], { cwd = WURZEL, env = {} }: { cwd?: string; env?: Record<string, string> } = {}) => {
+  const log = join(tmp(), "kosten.jsonl");
+  const r = spawnSync(process.execPath, args, {
+    encoding: "utf8",
+    cwd,
+    timeout: 30_000,
+    env: { ...process.env, NODE_OPTIONS: `--import ${STUB}`, STUB_LEER: "1", FACTORY_GH_KOSTEN_LOG: log, ...env },
+  });
+  return { status: r.status, text: `${r.stderr}${r.stdout}`, log };
 };
 
 const SKRIPTE: [string, string[]][] = [
@@ -103,15 +112,7 @@ describe("gültige --config wird gelesen", { timeout: 60_000 }, () => {
     const pfad = join(d, "anders.json");
     writeFileSync(pfad, JSON.stringify(config));
     const issue = JSON.stringify({ number: 1, title: "T", state: "open", user: { login: config.repo.split("/")[0], type: "User" }, labels: [], body: "## Abnahmepunkte\n- [ ] erstes\n- [ ] Negativfall: zweites\n" });
-    const mitStub = (...extra: string[]) => {
-      const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "abnahme.mjs"), "kriterien", "1", ...extra], {
-        encoding: "utf8",
-        cwd: WURZEL,
-        timeout: 30_000,
-        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1", FACTORY_GH_KOSTEN_LOG: join(d, "kosten.jsonl") },
-      });
-      return `${r.stderr}${r.stdout}`;
-    };
+    const mitStub = (...extra: string[]) => lauf([join(WURZEL, "scripts", "abnahme.mjs"), "kriterien", "1", ...extra], { env: { STUB_ISSUE: issue } }).text;
     expect(mitStub("--config", pfad)).toMatch(/^K1: erstes$/m);
     expect(mitStub()).toContain("Keine Akzeptanzkriterien");
   });
@@ -131,20 +132,27 @@ describe("gültige --config wird gelesen", { timeout: 60_000 }, () => {
       assignees: [],
       body: "## Ziel\nx\n## Akzeptanzkriterien\n- [ ] a\n- [ ] Negativfall: b\n",
     });
-    const mitStub = (...extra: string[]) => {
-      const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "naechstes-ticket.mjs"), "--ticket", "1", ...extra], {
-        encoding: "utf8",
-        cwd: WURZEL,
-        timeout: 30_000,
-        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1", FACTORY_GH_KOSTEN_LOG: join(d, "kosten.jsonl") },
-      });
-      return { status: r.status, text: `${r.stderr}${r.stdout}` };
-    };
+    // `git` arbeitet in einem leeren Temp-Repo: kein `fetch` gegen das echte `origin`, keine echten Refs und Worktrees.
+    const git = tmp();
+    expect(spawnSync("git", ["init", "-q"], { cwd: git }).status).toBe(0);
+    const mitStub = (...extra: string[]) => lauf([join(WURZEL, "scripts", "naechstes-ticket.mjs"), "--ticket", "1", ...extra], { cwd: git, env: { STUB_ISSUE: issue } });
     const mit = mitStub("--config", pfad);
     expect(mit.status, mit.text).toBe(1);
     expect(mit.text).toContain("`## Zweckbestimmung` fehlt");
     const ohne = mitStub();
     expect(ohne.status, ohne.text).toBe(0);
     expect(ohne.text).not.toContain("Zweckbestimmung");
+  });
+});
+
+describe("Läufe sind offline und fassen das echte Kosten-Log nicht an", { timeout: 60_000 }, () => {
+  test("ein gültiger Lauf schreibt nur in das Temp-Log; das Standard-Log bleibt unverändert", () => {
+    const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as { repo: string };
+    const standard = join(tmpdir(), `${config.repo.split("/")[1]}-gh-kosten.jsonl`);
+    const vorher = existsSync(standard) ? statSync(standard).size : -1;
+    const r = lauf([join(WURZEL, "scripts", "naechstes-ticket.mjs"), "--ticket", "1"], { cwd: tmp(), env: { STUB_ISSUE: JSON.stringify({ number: 1, title: "T", state: "closed", user: { login: "x", type: "User" }, labels: [], assignees: [], body: "" }) } });
+    expect(r.text).not.toMatch(/gh gestubbt, kein Netz/);
+    expect(existsSync(r.log), "Kostenmessung schreibt in das Temp-Log").toBe(true);
+    expect(existsSync(standard) ? statSync(standard).size : -1).toBe(vorher);
   });
 });
