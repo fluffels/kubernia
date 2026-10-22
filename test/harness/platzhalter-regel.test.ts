@@ -88,7 +88,7 @@ const BLOCK_DATEIEN = [
   rolle.planer,
   rolle.umsetzer,
   rolle.lens,
-  ".claude/skills/review-lenses/SKILL.md",
+  ".agents/skills/review-lenses/SKILL.md",
   ".claude/skills/factory/ablauf.md",
 ];
 
@@ -171,6 +171,7 @@ describe("Projektwert-Block der Kern-Texte (#1747)", () => {
       )
       .filter((p) => existsSync(join(WURZEL, ...p.split("/"))));
     assert.ok(dateien.length > 5, "Prüf-Fläche darf nicht leer sein");
+    assert.ok(dateien.includes(".agents/skills/review-lenses/SKILL.md"), "die Skill-Quelle liegt in der Prüf-Fläche (#1849)");
     assert.deepEqual(
       dateien.flatMap((p) => platzhalterBefunde(p, echt(p), echteConfig)),
       [],

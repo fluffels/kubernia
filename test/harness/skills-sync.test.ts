@@ -13,9 +13,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WURZEL, lies } from "./repo-texte";
+import { WURZEL, lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../../scripts/ticket-namen.mjs";
+const maskiere = escapeRegex as (s: string) => string;
 
 interface Befund { datei: string; meldung: string; fix: string }
 interface Quelle { ordner: string; text: string | null }
@@ -444,5 +447,45 @@ describe("Kommandozeile", () => {
   test("--check auf dem echten Repo endet mit Exit 0 und `--tool claude` ist erlaubt", () => {
     expect(cli("--check").status).toBe(0);
     expect(cli("--tool", "claude", "--check").status).toBe(0);
+  });
+});
+
+// Scan-Wächter (#1849): Verweise auf die Zeiger-Datei einer Skill-Quelle (Verweis mit Anker landet im Zeiger, der keine
+// Überschriften trägt; ein Test, der den Zeiger liest, prüft nichts) sind rot. Gilt für jede Quelle unter `.agents/skills/`.
+// Grenzen: geprüft werden die Pfadformen `.claude/skills/<name>/SKILL.md` und `](../<name>/SKILL.md` (nur in Dateien unter
+// `.claude/skills/` und `.agents/skills/`) in versionierten Textdateien; Ordnerform ohne SKILL.md, der Skill-Name ohne Pfad und
+// Skills ohne Quelle (Volltext in der Übergangsliste) zählen nicht.
+describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", () => {
+  /** Geschlossene Ausnahmen (Pfadpräfix → Grund). */
+  const AUSNAHMEN: Record<string, string> = {
+    "docs/adr/": "ADRs sind historisch, nie umgeschrieben",
+    "README.md": "vom docs-gen erzeugte Generatorstelle",
+    ".factory/besitz.json": "führt den Zeiger als eigene Einheit",
+    "test/harness/skills-sync.test.ts": "Fixtures dieses Wächters",
+    "test/harness/haupt-sync.test.ts": "Fixture eines Pfades in der Änderungsliste",
+  };
+  const namen = sync.liesStand(WURZEL).quellen.map((q) => q.ordner);
+  const dateien = repoDateien().filter((f) => /\.(md|ts|mjs|js|json|yml)$/.test(f) && !Object.keys(AUSNAHMEN).some((p) => f.startsWith(p)));
+  const funde = (): string[] => {
+    const out: string[] = [];
+    for (const name of namen) {
+      const voll = new RegExp(String.raw`\.claude/skills/${maskiere(name)}/SKILL\.md`);
+      const relativ = new RegExp(String.raw`\]\(\.\./${maskiere(name)}/SKILL\.md`);
+      for (const f of dateien) {
+        const text = lies(f);
+        const imSkillOrdner = f.startsWith(".claude/skills/") || f.startsWith(".agents/skills/");
+        if (voll.test(text) || (imSkillOrdner && relativ.test(text))) out.push(`${f} -> ${name}`);
+      }
+    }
+    return out;
+  };
+
+  test("der Scan ist nicht leer und kennt forum und review-lenses als Quellen", () => {
+    expect(namen).toEqual(expect.arrayContaining(["forum", "review-lenses"]));
+    expect(dateien.length).toBeGreaterThan(100);
+  });
+
+  test("keine versionierte Datei verweist auf den Zeiger einer Quelle", () => {
+    expect(funde()).toEqual([]);
   });
 });

@@ -101,7 +101,7 @@ const FACTORY_SKILL = ".claude/skills/factory/SKILL.md";
 /** Der Subagent, der auf dem Skill-Pfad tatsächlich umsetzt (#1280). */
 const UMSETZER = ".claude/agents/factory-umsetzer.md";
 /** Der Skill, dessen Lenses trotz Coding-Tier-Umsetzung auf dem starken Tier bleiben müssen. */
-const REVIEW_SKILL = ".claude/skills/review-lenses/SKILL.md";
+const REVIEW_SKILL = ".agents/skills/review-lenses/SKILL.md";
 /** Die SSOT-/Checklisten-Datei für Modell-Pins. */
 const ROUTING_SSOT = "docs/model-routing.md";
 

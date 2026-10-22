@@ -27,6 +27,8 @@ import { fileURLToPath } from "node:url";
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { zeigerText } from "../scripts/skills-sync.mjs";
 
 const parseNpmRunMentions: (md: string) => Set<string> = checkDocDrift.parseNpmRunMentions;
 const extractLinks: (md: string) => { target: string; path: string; anchor: string }[] =
@@ -314,6 +316,33 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
 
   test("im echten Repo liegt die Quelle forum im Scan", () => {
     assert.ok(collectMarkdown().includes(".agents/skills/forum/SKILL.md"));
+  });
+
+  test("im echten Repo liegt die Quelle review-lenses im Scan (#1849)", () => {
+    assert.ok(collectMarkdown().includes(".agents/skills/review-lenses/SKILL.md"));
+  });
+
+  test("ein Verweis mit Anker auf den Zeiger ist rot, derselbe Anker auf die Quelle grün (#1849)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-zeiger-"));
+    try {
+      const quelle = "# Skill\n\n## Nach jedem Merge von main\n\nText\n";
+      const dateien: Record<string, string> = {
+        "package.json": JSON.stringify({ scripts: {} }),
+        "AGENTS.md": "# Titel\n",
+        ".agents/skills/a/SKILL.md": quelle,
+        ".claude/skills/a/SKILL.md": zeigerText("a", `---\nname: a\n---\n${quelle}`),
+        "docs/x.md": "# X\n[zeiger](../.claude/skills/a/SKILL.md#nach-jedem-merge-von-main)\n[quelle](../.agents/skills/a/SKILL.md#nach-jedem-merge-von-main)\n",
+      };
+      for (const [f, text] of Object.entries(dateien)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      const audit = auditIn(dir);
+      assert.deepEqual(audit.deadLinks, []);
+      assert.deepEqual(audit.deadAnchors.map((a) => `${a.file}: ${a.target}`), ["docs/x.md: ../.claude/skills/a/SKILL.md#nach-jedem-merge-von-main"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

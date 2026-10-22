@@ -130,7 +130,7 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
   test("Projektregeln im Prompt (#1709): Kern-Prompts verweisen, der Projekt-Block trägt Leitfrage und Optik-Messlatte samt Referenzdatei", () => {
     const planer = lese(".claude/agents/factory-planer.md");
     const umsetzer = lese(".claude/agents/factory-umsetzer.md");
-    const lenses = lese(".claude/skills/review-lenses/SKILL.md");
+    const lenses = lese(".agents/skills/review-lenses/SKILL.md");
     for (const t of [planer, umsetzer, lenses]) assert.doesNotMatch(t, /stardew/i);
     assert.match(planer, /Projekt-Leitfrage/);
     assert.match(lenses, /Projekt-Leitfrage/);

@@ -359,7 +359,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   const grund = (text: string) => deny(text)?.hookSpecificOutput.permissionDecisionReason ?? "";
 
   // Die ECHTEN Blöcke aus dem Skill, wie der Orchestrator sie wörtlich in den Prompt kopiert (Fehlalarm-Schutz: sie tragen absichtlich `<…>`).
-  const skill = lies(".claude/skills/review-lenses/SKILL.md");
+  const skill = lies(".agents/skills/review-lenses/SKILL.md");
   const diaet = skill.slice(skill.indexOf("### Kontext-Diät je Lens"), skill.indexOf("> **Was die Diät ausdrücklich NICHT trifft:**"));
   const format = /## Findings-Format[\s\S]*?```\n([\s\S]*?)```/.exec(skill)?.[1] ?? "";
   const KOPF = "Brille: Architektur (Schichtregeln)";
