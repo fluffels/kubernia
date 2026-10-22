@@ -21,7 +21,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + Skill-Zeiger + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
-| Skill-Zeiger unter `.claude/skills/` aus den Skill-Quellen `.agents/skills/` erzeugen oder prüfen (#1848): `--check` schreibt nie, `--prune` entfernt den Zeiger-Ordner eines gelöschten Quell-Skills (nie Volltext oder fremde Dateien), `--tool claude` ist Default | `npm run skills:sync` |
+| Skill-Zeiger unter `.claude/skills/` aus den Skill-Quellen `.agents/skills/` erzeugen oder prüfen (#1848): `--check` schreibt nie, `--prune` entfernt den Zeiger-Ordner eines gelöschten Quell-Skills (nie Volltext oder fremde Dateien, es meldet sie nur), `--tool claude` ist Default | `npm run skills:sync` |
 | **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (die Kette steht in `package.json` › `scripts.verify`, nicht hier kopiert; ohne `check:bundle`, das braucht die Builds) |
 | Bundle-Budget vorab prüfen (#1331): nötig, wenn der Diff ausgelieferten Code, Assets oder Dependencies hinzufügt (`src/**` ohne reine Tests, auch Content-JSON unter `src/content/data/`, `assets/**`, `package.json`); `verify` deckt es nicht ab, erst `verify:full`/CI | `npm run verify:bundle` (= `build` + `build:offline` + `check:bundle`) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + `check:diffcoverage` + Builds + `check:bundle` + `test:smoke`) |

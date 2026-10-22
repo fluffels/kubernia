@@ -111,7 +111,7 @@ export function liesStand(wurzel, ziel = WERKZEUGE.claude) {
 
 /** Der Lauf: `{ befunde, unbrauchbar, geschrieben, geloescht, gemeldet }`. `check` schreibt und löscht nie. */
 export function lauf({ wurzel, tool = "claude", check = false, prune = false, uebergang = UEBERGANG }) {
-  if (!(tool in WERKZEUGE)) throw new Error(`unbekanntes Tool: ${tool}`);
+  if (!Object.hasOwn(WERKZEUGE, tool)) throw new Error(`unbekanntes Tool: ${tool}`);
   const ziel = WERKZEUGE[tool];
   const stand = liesStand(wurzel, ziel);
   const befunde = pruefeSkills({ ...stand, uebergang, ziel });

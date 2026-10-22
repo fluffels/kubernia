@@ -373,6 +373,7 @@ describe("lauf auf einem Temp-Verzeichnis", () => {
 
   test("unbekanntes Tool wirft", () => {
     expect(() => sync.lauf({ wurzel: neu(), tool: "cursor" })).toThrow(/cursor/);
+    expect(() => sync.lauf({ wurzel: neu(), tool: "toString" })).toThrow(/toString/);
   });
 });
 
@@ -386,12 +387,19 @@ describe("Kommandozeile", () => {
   });
 
   test("die Fehlermeldung nennt das Tool bzw. das Flag, dazu die Aufruf-Zeile", () => {
-    for (const [args, wort] of [[["--tool", "cursor"], "cursor"], [["--tool=cursor"], "cursor"], [["--bogus"], "--bogus"], [["--tool"], "--tool"]] as const) {
+    // Die erste Zeile ist der Fehlertext (die Aufruf-Zeile nennt `--tool` selbst und beweist darum nichts).
+    for (const [args, text] of [
+      [["--tool", "cursor"], "Unbekanntes Tool: cursor"],
+      [["--tool=cursor"], "Unbekanntes Tool: cursor"],
+      [["--tool", "toString"], "Unbekanntes Tool: toString"],
+      [["--bogus"], "Unbekanntes Argument: --bogus"],
+      [["--tool"], "--tool braucht einen Wert"],
+    ] as const) {
       const r = cli(...args);
-      expect(r.stderr, args.join(" ")).toContain(wort);
+      expect(r.status, args.join(" ")).toBe(2);
+      expect(r.stderr.split("\n")[0], args.join(" ")).toBe(text);
       expect(r.stderr).toContain("Aufruf: node scripts/skills-sync.mjs");
     }
-    expect(cli("--tool", "cursor").stderr).toContain("Unbekanntes Tool: cursor");
   });
 
   describe("Exit 1 in einem kopierten Skript-Baum (die Wurzel ergibt sich aus dem Skriptpfad)", () => {
