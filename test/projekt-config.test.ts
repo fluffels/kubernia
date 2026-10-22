@@ -710,3 +710,41 @@ describe("check:size und check:contextsize lesen die Ausnahmen aus der Config (#
     }
   });
 });
+
+describe("check:contextsize, check:anysuppress und check:diffcoverage: Ausnahmen- und Struktur-Block aus der Config (#1860)", { timeout: 60_000 }, () => {
+  const repo = (zusatz: Record<string, unknown>, agentsZeichen = 0): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), ...zusatz }));
+    if (agentsZeichen > 0) writeFileSync(join(d, "AGENTS.md"), "x".repeat(agentsZeichen));
+    return d;
+  };
+  const lauf = (d: string, skript: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", skript)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  const struktur = { quelle: "lib", moduldoku: "docs/module" };
+
+  test("check:contextsize: eine zu große Datei in ausnahmen.kontext ist geduldet, ohne Eintrag rot", () => {
+    const ohne = lauf(repo({ struktur, ausnahmen: { kontext: [] } }, 40_000), "check-context-size.mjs");
+    assert.equal(ohne.status, 1, ohne.text);
+    assert.match(ohne.text, /✖ AGENTS\.md: 40\.000 Zeichen > Budget/);
+    const mit = lauf(repo({ struktur, ausnahmen: { kontext: [{ datei: "AGENTS.md", grund: "#5 Auslagerung offen" }] } }, 40_000), "check-context-size.mjs");
+    assert.equal(mit.status, 0, mit.text);
+    assert.match(mit.text, /geduldet: AGENTS\.md[\s\S]*#5 Auslagerung offen/);
+  });
+  test("check:contextsize: ein Eintrag für eine Datei im Budget ist stale", () => {
+    const r = lauf(repo({ struktur, ausnahmen: { kontext: [{ datei: "AGENTS.md", grund: "#5 x" }] } }, 100), "check-context-size.mjs");
+    assert.equal(r.status, 1, r.text);
+    assert.match(r.text, /✖ Ausnahme stale: AGENTS\.md[\s\S]*ausnahmen\.kontext/);
+  });
+  test("check:anysuppress und check:diffcoverage: ein kaputtes struktur.quelle endet mit ✖, Fix-Zeile und Exit 1 (kein Stacktrace)", () => {
+    for (const skript of ["check-any-suppressions.mjs", "check-diffcoverage.mjs"]) {
+      const r = lauf(repo({ struktur: { quelle: "../x", moduldoku: "docs/module" } }), skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*struktur\.quelle[\s\S]*Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
+  });
+});

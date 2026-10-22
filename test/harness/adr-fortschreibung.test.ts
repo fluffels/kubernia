@@ -70,7 +70,7 @@ const BESTAND: Record<string, number> = {
   "0012": 5,
   "0016": 12,
   "0017": 3,
-  "0022": 37,
+  "0022": 36,
   "0025": 1,
   "0026": 2,
   "0027": 1,
@@ -86,6 +86,19 @@ function zaehleAngehaengte(text: string): number {
     else if (!fence && ANGEHAENGT.test(zeile)) n++;
   }
   return n;
+}
+
+/** Ratchet: Meldungen, wenn der Bestand angehängter Abschnitte je ADR vom eingefrorenen Bestand abweicht (Plus und Minus). Pur. */
+function ratchetFehler(adrs: Record<string, string>, bestand: Record<string, number>): string[] {
+  const ueber: string[] = [];
+  const stale: string[] = [];
+  for (const [n, text] of Object.entries(adrs)) {
+    const ist = zaehleAngehaengte(text);
+    const soll = bestand[n.slice(0, 4)] ?? 0;
+    if (ist > soll) ueber.push(`${n}: ${ist} > ${soll} – neue Fortschreibung als Datei unter docs/adr/fortschreibungen/ ablegen`);
+    if (ist < soll) stale.push(`${n}: ${ist} < ${soll} – BESTAND in diesem Test senken`);
+  }
+  return [...ueber, ...stale];
 }
 
 /** Meldungen zu einer Fortschreibungs-Datei (Name, Kopfzeile, Zeiger im ADR). Pur, `adrs` = Dateinamen und Texte der ADRs. */
@@ -120,16 +133,21 @@ describe("ADR-Fortschreibungen als Dateien und Ratchet (#1860)", () => {
   });
 
   test("Ratchet: je ADR nicht mehr angehängte Fortschreibungen als der eingefrorene Bestand", () => {
-    const ueber: string[] = [];
-    const stale: string[] = [];
-    for (const [n, text] of Object.entries(adrs)) {
-      const nr = n.slice(0, 4);
-      const ist = zaehleAngehaengte(text);
-      const soll = BESTAND[nr] ?? 0;
-      if (ist > soll) ueber.push(`${n}: ${ist} > ${soll} – neue Fortschreibung als Datei unter docs/adr/fortschreibungen/ ablegen`);
-      if (ist < soll) stale.push(`${n}: ${ist} < ${soll} – BESTAND in diesem Test senken`);
-    }
-    expect([...ueber, ...stale]).toEqual([]);
+    expect(ratchetFehler(adrs, BESTAND)).toEqual([]);
+  });
+
+  test.each([
+    ["Plus gegenüber dem Bestand ist rot", { "0013-x.md": "## Fortschreibung a\n## Fortschreibung b\n" }, { "0013": 1 }, "2 > 1"],
+    ["Minus verlangt das Senken des Bestands", { "0013-x.md": "## Fortschreibung a\n" }, { "0013": 2 }, "1 < 2"],
+    ["neues ADR mit angehängter Fortschreibung ist rot", { "0099-x.md": "## Fortschreibung a\n" }, {}, "1 > 0"],
+  ])("Ratchet-Fixture: %s", (_n, adrsFix, bestand, teil) => {
+    const f = ratchetFehler(adrsFix, bestand);
+    expect(f).toHaveLength(1);
+    expect(f[0]).toContain(teil);
+  });
+
+  test("Ratchet-Fixture: Bestand gleich ist grün, Fortschreibung im Code-Fence zählt nicht", () => {
+    expect(ratchetFehler({ "0013-x.md": "## Fortschreibung a\n```\n## Fortschreibung b\n```\n" }, { "0013": 1 })).toEqual([]);
   });
 
   const adrMock = { "0013-x.md": "Text\nSiehe fortschreibungen/0013-1-a.md\n" };

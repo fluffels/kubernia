@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
 
 const WURZEL = join(__dirname, "..");
@@ -93,5 +94,57 @@ describe("gültige --config wird gelesen", { timeout: 60_000 }, () => {
     expect(r.text).toContain("Zweckbestimmung");
     const mitRepoConfig = lauf([join(WURZEL, "scripts", "spezifikation.mjs"), "pruefen", "--body-datei", body]);
     expect(mitRepoConfig.text).not.toContain("Zweckbestimmung");
+  });
+
+  test("abnahme kriterien nimmt den Abschnittsnamen der Kriterien aus der übergebenen Config", () => {
+    const d = tmp();
+    const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as { repo: string; sprache: Record<string, Record<string, unknown>> };
+    config.sprache.spezifikation.akzeptanzkriterien = ["Abnahmepunkte"];
+    const pfad = join(d, "anders.json");
+    writeFileSync(pfad, JSON.stringify(config));
+    const issue = JSON.stringify({ number: 1, title: "T", state: "open", user: { login: config.repo.split("/")[0], type: "User" }, labels: [], body: "## Abnahmepunkte\n- [ ] erstes\n- [ ] Negativfall: zweites\n" });
+    const mitStub = (...extra: string[]) => {
+      const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "abnahme.mjs"), "kriterien", "1", ...extra], {
+        encoding: "utf8",
+        cwd: WURZEL,
+        timeout: 30_000,
+        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1" },
+      });
+      return `${r.stderr}${r.stdout}`;
+    };
+    expect(mitStub("--config", pfad)).toMatch(/^K1: erstes$/m);
+    expect(mitStub()).toContain("Keine Akzeptanzkriterien");
+  });
+
+  test("naechstes-ticket --ticket nimmt den Zielabschnitt aus der übergebenen Config", () => {
+    const d = tmp();
+    const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as { repo: string; sprache: Record<string, Record<string, unknown>> };
+    config.sprache.spezifikation.ziel = "Zweckbestimmung";
+    const pfad = join(d, "anders.json");
+    writeFileSync(pfad, JSON.stringify(config));
+    const issue = JSON.stringify({
+      number: 1,
+      title: "T",
+      state: "open",
+      user: { login: config.repo.split("/")[0], type: "User" },
+      labels: [],
+      assignees: [],
+      body: "## Ziel\nx\n## Akzeptanzkriterien\n- [ ] a\n- [ ] Negativfall: b\n",
+    });
+    const mitStub = (...extra: string[]) => {
+      const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "naechstes-ticket.mjs"), "--ticket", "1", ...extra], {
+        encoding: "utf8",
+        cwd: WURZEL,
+        timeout: 30_000,
+        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1" },
+      });
+      return { status: r.status, text: `${r.stderr}${r.stdout}` };
+    };
+    const mit = mitStub("--config", pfad);
+    expect(mit.status, mit.text).toBe(1);
+    expect(mit.text).toContain("`## Zweckbestimmung` fehlt");
+    const ohne = mitStub();
+    expect(ohne.status, ohne.text).toBe(0);
+    expect(ohne.text).not.toContain("Zweckbestimmung");
   });
 });

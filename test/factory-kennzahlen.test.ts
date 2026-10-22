@@ -846,6 +846,15 @@ describe("Spezifikations-Mängel im Wochenbericht (#1860)", () => {
     expect(text).not.toContain("- #11 T11: x");
     expect(text).toContain("… und 2 weitere");
   });
+  test("genau 10 Einträge stehen vollständig ohne „weitere“-Zeile, bei 11 fehlt der elfte", () => {
+    const liste = (n: number) => Array.from({ length: n }, (_, i) => ({ nr: i + 1, titel: `T${i + 1}`, fehlt: ["x"] }));
+    const zehn = md({ anzahl: 10, maengel: liste(10) });
+    expect(zehn).toContain("- #10 T10: x");
+    expect(zehn).not.toContain("weitere");
+    const elf = md({ anzahl: 11, maengel: liste(11) });
+    expect(elf).not.toContain("- #11 T11: x");
+    expect(elf).toContain("… und 1 weitere");
+  });
   test("ohne Abschnitt im Bericht (kein Lader) bleibt der Block wie bisher", () => {
     expect(md()).not.toContain("**Spezifikation**");
   });

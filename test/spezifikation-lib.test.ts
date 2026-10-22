@@ -451,6 +451,12 @@ describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
     expect(() => P.blockerNummern("blockiert durch #4", undefined)).toThrow(/sprache[\s\S]*Fix:/);
     expect(() => P.blockerNummern("blockiert durch #4", { ...SPRACHE, blocker: undefined })).toThrow(/blocker/);
   });
+  test("Wortgrenzen: ein Satz oder Blocker-Wort mitten in einem längeren Wort greift nicht", () => {
+    expect(S.spezifikationsMaengel(mit("Das Ticket erwartet auf #7 nichts."))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Das Ticket setzt #7 vorausgesetzt."))).toEqual([]);
+    expect(P.blockerNummern("Unblockiert durch #4", SPRACHE)).toEqual([]);
+    expect(P.blockerNummern("blockiert durchs #4", SPRACHE)).toEqual([]);
+  });
   test("spracheMaengel meldet fehlende oder kaputte Schlüssel blocker und abhaengigkeit", () => {
     expect(P.spracheMaengel({ ...SPRACHE, blocker: " " })).toEqual(["sprache.spezifikation.blocker muss ein nicht-leerer String sein"]);
     expect(P.spracheMaengel({ ...SPRACHE, blocker: undefined })).toEqual(["sprache.spezifikation.blocker muss ein nicht-leerer String sein"]);

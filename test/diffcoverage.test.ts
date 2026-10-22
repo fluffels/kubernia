@@ -602,6 +602,26 @@ describe("Diff-Coverage: Quellwurzel aus der Struktur-Config (#1860)", () => {
     assert.equal(r.nothingToMeasure, undefined);
     assert.equal(r.missing && (r.missing as string[]).length, 0);
   });
+  test("checkDiffCoverage gibt die Quellwurzel an die Bewertung weiter: die Zeile unter lib zählt, nicht grün ohne Messung", () => {
+    const r = checkDiffCoverage({
+      quelle: "lib",
+      runGit: (args) => (args[0] === "diff" ? diffFor("lib/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      readFile: () => "TN:\nSF:lib/a.ts\nDA:1,0\nend_of_record\n",
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    const buckets = Object.values(r.buckets as Record<string, { total: number; covered: number }>);
+    assert.equal(buckets.reduce((s, b) => s + b.total, 0), 1);
+    assert.equal(buckets.reduce((s, b) => s + b.covered, 0), 0);
+  });
+  test("checkDiffCoverage meldet einen ungenommenen Zweig unter der übergebenen Quellwurzel", () => {
+    const r = checkDiffCoverage({
+      quelle: "lib",
+      runGit: (args) => (args[0] === "diff" ? diffFor("lib/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      readFile: () => "TN:\nSF:lib/a.ts\nDA:1,1\nBRDA:1,0,0,1\nBRDA:1,0,1,0\nend_of_record\n",
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    assert.deepEqual(r.partial, [{ path: "lib/a.ts", line: 1, taken: 1, total: 2 }]);
+  });
   test("Änderung nur unter src ist bei quelle=lib nichts zu messen", () => {
     const r = checkDiffCoverage({
       quelle: "lib",

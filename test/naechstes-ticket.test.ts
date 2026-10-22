@@ -933,6 +933,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
       roh(6, { body: "", title: "🚨 CI rot auf main" }),
       roh(7, { body: OHNE_NEGATIV }, "In Progress"),
       roh(8, { body: OHNE_NEGATIV }),
+      roh(9, { body: OHNE_NEGATIV, state: "closed" }),
     ];
     const r = lauf(produkt, [], ["--maengel", "--json"], { lade: () => ({ produkt: norm(produkt), factory: [], offene: new Set([50]), refs: ["origin/feature/kq-8-x"] }) });
     expect((JSON.parse(r.out) as MErgebnis).maengel.map((m) => m.nr)).toEqual([4]);
@@ -955,6 +956,14 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
   test("Messfenster wird nicht geladen: ein Ticket mit Messfenster-Zeile zählt nach seinem Mangel", () => {
     const j = JSON.parse(lauf([roh(1, { body: `${OHNE_NEGATIV}Messfenster: 3 ≥ kubernia-umsetzer nach #9` })], [], ["--maengel", "--json"], { hartAb: 100 }).out) as MErgebnis;
     expect(j.anzahl).toBe(1);
+  });
+  test("ein einzelnes Ticket mit Mangel steht im Singular, mehrere im Plural", () => {
+    expect(lauf([roh(1, { body: OHNE_NEGATIV })]).out.split("\n")[0]).toBe("1 Ticket mit Mangel");
+    expect(lauf([roh(1, { body: OHNE_NEGATIV }), roh(2, { body: OHNE_NEGATIV })]).out.split("\n")[0]).toBe("2 Tickets mit Mangel");
+  });
+  test("listeMaengel wirft bei einem unbekannten Bereich", () => {
+    const liste = (N as unknown as { listeMaengel: (a: unknown) => unknown }).listeMaengel;
+    expect(() => liste({ produkt: [], factory: [], bereich: "unfug", config: CFG, offene: new Set(), namen: {} })).toThrow(/bereich erwartet agentic oder spiel/);
   });
   test("Ladefehler: Exit 2 mit Ursache, kein Stacktrace", () => {
     const r = M.fuehreAus(["--maengel"], { owner: "fluffels", config: CFG, lade: () => { throw new Error("gh kaputt"); } });

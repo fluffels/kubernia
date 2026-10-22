@@ -11,9 +11,9 @@
  *
  * Ausführen mit:  npm test   (oder gezielt: npm run check:anysuppress)
  */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -104,8 +104,13 @@ describe("no-explicit-any-Suppression-Ratchet (#604)", () => {
 describe("Quellwurzel als Parameter (#1860)", () => {
   const { collectSuppressions: collect } = checkAny as unknown as { collectSuppressions: (rootDir: string, quelle: string) => CountMap };
   const disable = "// eslint-disable-next-line @typescript-eslint/no-explicit-any\nconst a: any = 1;\n";
+  const temps: string[] = [];
+  afterEach(() => {
+    for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
   const baum = (): string => {
     const d = mkdtempSync(join(tmpdir(), "anysup-"));
+    temps.push(d);
     for (const p of ["lib/a.ts", "lib/sub/b.ts", "src/c.ts", "library/d.ts"]) {
       mkdirSync(join(d, dirname(p)), { recursive: true });
       writeFileSync(join(d, p), disable);
