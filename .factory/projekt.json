@@ -44,6 +44,74 @@
   "spezifikation": {
     "hartAb": 1
   },
+  "sprache": {
+    "umschrift": [
+      "fuer",
+      "ueber",
+      "koennen",
+      "koennte",
+      "muessen",
+      "muesste",
+      "wuerde",
+      "waere",
+      "waehrend",
+      "naechste",
+      "naechsten",
+      "naechstes",
+      "aenderung",
+      "aenderungen",
+      "groesse",
+      "schluessel",
+      "pruefung",
+      "pruefen",
+      "prueft",
+      "loesung",
+      "zurueck",
+      "spaeter",
+      "frueher",
+      "haeufig",
+      "moeglich",
+      "gemaess",
+      "fuehrt",
+      "ausfuehren",
+      "oeffnen",
+      "zusaetzlich",
+      "taeglich",
+      "ploetzlich",
+      "schoen",
+      "muede",
+      "hoeren",
+      "gruen",
+      "tuer",
+      "koenig",
+      "maedchen",
+      "faellt",
+      "laeuft",
+      "waehlen",
+      "erklaeren",
+      "ueberall"
+    ],
+    "spezifikation": {
+      "ziel": "Ziel",
+      "akzeptanzkriterien": [
+        "Akzeptanzkriterien",
+        "Teil-Akzeptanzkriterien"
+      ],
+      "nachMerge": "Nach dem Merge:",
+      "negativfall": {
+        "wort": "Negativfall",
+        "muster": "negativ-?f(?:a|ä)ll"
+      },
+      "begrenzung": {
+        "wort": "bekannte Muster:",
+        "muster": "bekannte\\s+Muster\\s*:"
+      },
+      "allquantor": {
+        "wort": "jede/alle … die … liest",
+        "muster": "\\b(?:jede[rsnm]?|alle[nrsm]?)\\b[^.!?]*\\b(?:die|der|das|den)\\b[^.!?]*\\b(?:liest|lesen|gelesen|verwendet|verwenden)\\b"
+      }
+    }
+  },
   "rulesetSpiegel": ".github/ruleset-main-schutz.json",
   "projektliterale": {
     "Stardew": "stardew",

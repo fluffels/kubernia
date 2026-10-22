@@ -24,17 +24,20 @@ import * as checkRaw from "../../scripts/check-abnahme-nachweis.mjs";
 import * as sliceRaw from "../../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as specRaw from "../../scripts/spezifikation-lib.mjs";
+import { echteSprache, echteSpezifikation } from "../support/echte-sprache";
 
 type Krit = { k: string; text: string; nachMerge?: boolean };
 type Urteil = { k: string; wert: string }[];
-const S = specRaw as unknown as { kriterien: (b: string) => Krit[]; spezifikationsMaengel: (b: string) => string[] };
+const SPRACHE = echteSpezifikation();
+const SR = specRaw as unknown as { kriterien: (b: string, s: unknown) => Krit[]; spezifikationsMaengel: (b: string, s: unknown) => string[] };
+const S = { kriterien: (b: string) => SR.kriterien(b, SPRACHE), spezifikationsMaengel: (b: string) => SR.spezifikationsMaengel(b, SPRACHE) };
 const A = abnahmeRaw as unknown as {
   parseBericht: (t: string, nr: number, k: Krit[]) => { urteile?: { k: string; wert: string; beleg: string }[]; fehler?: string[] };
   entscheide: (u: { wert: string }[]) => string;
   fuehreAus: (argv: string[], io: unknown) => { code: number; out: string; err: string };
 };
 const C = checkRaw as unknown as {
-  bewerteAbnahme: (o: { nachweis: unknown; ticket: { nr: number; kriterien: Krit[] } | null; marker: unknown; abnahmeHead: unknown; zeilen: unknown }) => string[];
+  bewerteAbnahme: (o: { nachweis: unknown; ticket: { nr: number; kriterien: Krit[]; nachMerge: string } | null; marker: unknown; abnahmeHead: unknown; zeilen: unknown }) => string[];
 };
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Record<string, string> };
 const Z = commitZeilen("KQ-", "kubernia-planner");
@@ -89,7 +92,7 @@ describe("Regel 2: Abnahme-Auswertung", () => {
     const posts: { nr: number; body: string }[] = [];
     const io = {
       owner: "fluffels",
-      config: { labels: { forum: "forum" } },
+      config: { labels: { forum: "forum" }, sprache: echteSprache() },
       zeilen: Z,
       leseDatei: () => bericht(["K1: erfuellt — a", "K3: erfuellt — c"]),
       ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }),
@@ -104,7 +107,7 @@ describe("Regel 2: Abnahme-Auswertung", () => {
     expect(posts[0].body).toContain(`<!-- kq-abnahme durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt -->`);
   });
   test("`kriterien <nr>` kennzeichnet das Kriterium für den Abnahme-Agenten", () => {
-    const io = { owner: "fluffels", config: { labels: { forum: "forum" } }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
+    const io = { owner: "fluffels", config: { labels: { forum: "forum" }, sprache: echteSprache() }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
     const out = A.fuehreAus(["kriterien", "7"], io).out;
     expect(out).toContain("K2 (nach dem Merge, nicht prüfen): Nach dem Merge: ein workflow_dispatch-Lauf");
     expect(out).toMatch(/^K1: Erstes\./m);
@@ -118,7 +121,7 @@ describe("Regel 3: CI-Nachweis", () => {
   const bewerte = (urteil: Urteil) =>
     C.bewerteAbnahme({
       nachweis: { review: { head: "a".repeat(40), runden: 2 }, abnahme: { art: "urteil", head: H, durchgaenge: 1, urteil } },
-      ticket: { nr: 9, kriterien: KRIT },
+      ticket: { nr: 9, kriterien: KRIT, nachMerge: SPRACHE.nachMerge as string },
       marker: { durchgang: 1, head: H, urteil },
       abnahmeHead: GUT,
       zeilen: Z,
@@ -148,5 +151,29 @@ describe("Regel 4: Doku-Pin", () => {
   });
   test("der Umsetzer kennt den Nach-Merge-Beleg", () => {
     expect(lies(".claude/agents/factory-umsetzer.md")).toContain("Nach-Merge-Beleg #<nr> K<i>");
+  });
+});
+
+describe("Sprache als Projektwert (#1711)", () => {
+  const H = "b".repeat(40);
+  const urteil: Urteil = [{ k: "K1", wert: "nach-merge" }];
+  test("die Meldung nennt das Präfix der Sprache, nicht ein festes", () => {
+    const fehler = C.bewerteAbnahme({
+      nachweis: { review: { head: "a".repeat(40), runden: 2 }, abnahme: { art: "urteil", head: H, durchgaenge: 1, urteil } },
+      ticket: { nr: 9, kriterien: [{ k: "K1", text: "x", nachMerge: false }], nachMerge: "After merge:" },
+      marker: { durchgang: 1, head: H, urteil },
+      abnahmeHead: { bekannt: true, imSlice: true, nachReviewHead: true, konfliktMerges: [], aenderungsCommits: [] },
+      zeilen: Z,
+    });
+    expect(fehler.join("\n")).toContain("Präfix `After merge:` erlaubt");
+  });
+  test("Negativfall: ohne sprache bricht `abnahme.mjs` mit klarer Meldung ab (Exit 1, kein Deutsch-Standardwert)", () => {
+    for (const befehl of [["kriterien", "7"], ["auswerten", "7", "--pr", "70", "--bericht", "b.md", "--worktree", "/wt", "--head", "abcdef1"]]) {
+      const io = { owner: "fluffels", config: { labels: { forum: "forum" } }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
+      const r = A.fuehreAus(befehl, io);
+      expect(r.code).toBe(1);
+      expect(r.err).toMatch(/sprache[\s\S]*Fix:/);
+      expect(r.err).not.toContain("Error:");
+    }
   });
 });

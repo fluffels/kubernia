@@ -18,6 +18,8 @@ interface Pc {
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
+  spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
+  umschriftAus(config: unknown): string[];
   umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
 }
 const pc = rawPc as unknown as Pc;
@@ -428,5 +430,91 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
     assert.doesNotMatch((r.stdout + r.stderr).split(d).join(""), /PVT_|fluffels|kubernia/); // ohne den Temp-Pfad, der selbst so heißen könnte
+  });
+});
+
+describe("Sprache als Projektwert (#1711)", () => {
+  const sprache = (): Record<string, unknown> => structuredClone(pc.spracheAus(pc.ladeProjektConfig()));
+  const spez = (s: Record<string, unknown>): Record<string, unknown> => s.spezifikation as Record<string, unknown>;
+  const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), sprache: s });
+
+  test("spracheAus: ohne sprache wirft mit Schlüssel und Fix-Zeile (kein stiller Deutsch-Standardwert)", () => {
+    for (const leer of [{}, { sprache: null }, { sprache: {} }, { sprache: { umschrift: [] } }, null, undefined]) {
+      assert.throws(() => pc.spracheAus(leer), /sprache[\s\S]*Fix:/);
+    }
+  });
+  test("echte Config: sprache vorhanden und gültig", () => {
+    const config = pc.ladeProjektConfig() as unknown as Record<string, unknown>;
+    assert.equal(typeof pc.spracheAus(config).spezifikation.ziel, "string");
+    assert.deepEqual(pc.pruefeProjektConfig(config), []);
+    assert.deepEqual(mit(sprache()), []);
+  });
+  test("sprache ist beim Laden optional (die Test-Config hat keine), aber ein kaputter Block wird gemeldet", () => {
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.match(mit("deutsch").join("|"), /sprache muss ein Objekt/);
+  });
+  test("Muster, die nicht als Regex kompilieren, werden gemeldet", () => {
+    const s = sprache();
+    (spez(s).negativfall as Record<string, unknown>).muster = "(";
+    assert.match(mit(s).join("|"), /sprache\.spezifikation\.negativfall\.muster ist keine gültige Regex/);
+  });
+  test("jedes der drei Muster wird einzeln geprüft: ohne muster, ohne Wort, kein Objekt, kaputte Regex", () => {
+    for (const k of ["negativfall", "begrenzung", "allquantor"]) {
+      const ohneMuster = sprache();
+      delete (spez(ohneMuster)[k] as Record<string, unknown>).muster;
+      assert.match(mit(ohneMuster).join("|"), new RegExp(`sprache\\.spezifikation\\.${k} muss ein Objekt mit nicht-leerem wort und muster`), `${k} ohne muster`);
+      const ohneWort = sprache();
+      (spez(ohneWort)[k] as Record<string, unknown>).wort = "";
+      assert.match(mit(ohneWort).join("|"), new RegExp(`sprache\\.spezifikation\\.${k} muss ein Objekt`), `${k} ohne wort`);
+      const keinObjekt = sprache();
+      delete spez(keinObjekt)[k];
+      assert.match(mit(keinObjekt).join("|"), new RegExp(`sprache\\.spezifikation\\.${k} muss ein Objekt`), `${k} fehlt`);
+      const kaputt = sprache();
+      (spez(kaputt)[k] as Record<string, unknown>).muster = "(";
+      assert.match(mit(kaputt).join("|"), new RegExp(`sprache\\.spezifikation\\.${k}\\.muster ist keine gültige Regex`), `${k} kaputt`);
+    }
+  });
+  test("akzeptanzkriterien: Liste mit leerem Text und Nicht-Liste werden gemeldet", () => {
+    for (const schlecht of [["Akzeptanzkriterien", " "], "Akzeptanzkriterien", undefined]) {
+      const s = sprache();
+      spez(s).akzeptanzkriterien = schlecht;
+      assert.match(mit(s).join("|"), /sprache\.spezifikation\.akzeptanzkriterien muss eine nicht-leere Liste/, JSON.stringify(schlecht));
+    }
+  });
+  test("Muster ohne Wort, leere Kriterienliste und leere Texte werden gemeldet", () => {
+    const a = sprache();
+    delete (spez(a).begrenzung as Record<string, unknown>).wort;
+    assert.match(mit(a).join("|"), /sprache\.spezifikation\.begrenzung muss ein Objekt mit nicht-leerem wort und muster/);
+    const b = sprache();
+    spez(b).akzeptanzkriterien = [];
+    assert.match(mit(b).join("|"), /sprache\.spezifikation\.akzeptanzkriterien muss eine nicht-leere Liste/);
+    const c = sprache();
+    spez(c).ziel = " ";
+    spez(c).nachMerge = 3;
+    const m = mit(c).join("|");
+    assert.match(m, /sprache\.spezifikation\.ziel muss ein nicht-leerer String/);
+    assert.match(m, /sprache\.spezifikation\.nachMerge muss ein nicht-leerer String/);
+  });
+  test("umschrift: nur kleingeschriebene ASCII-Wörter (Für, Großbuchstaben, Leerzeichen, Nicht-Liste werden gemeldet)", () => {
+    for (const schlecht of [["Für"], ["Fuer"], ["zwei wörter"], ["a-b"], "fuer", [3], []]) {
+      const s = sprache();
+      s.umschrift = schlecht;
+      assert.match(mit(s).join("|"), /sprache\.umschrift muss eine nicht-leere Liste/, JSON.stringify(schlecht));
+    }
+    const s = sprache();
+    delete s.umschrift;
+    assert.match(mit(s).join("|"), /sprache\.umschrift/);
+  });
+  test("umschriftAus: liefert die Liste der echten Config, wirft ohne nicht-leere Liste", () => {
+    const liste = pc.umschriftAus(pc.ladeProjektConfig());
+    assert.ok(liste.includes("fuer"));
+    for (const leer of [{}, { sprache: {} }, { sprache: { umschrift: [] } }, { sprache: { umschrift: "fuer" } }, null]) {
+      assert.throws(() => pc.umschriftAus(leer), /sprache\.umschrift[\s\S]*Fix:/);
+    }
+  });
+  test("sprache.spezifikation fehlt oder ist kein Objekt: gemeldet", () => {
+    const s = sprache();
+    delete s.spezifikation;
+    assert.match(mit(s).join("|"), /sprache\.spezifikation muss ein Objekt/);
   });
 });
