@@ -421,3 +421,90 @@ describe("anlegen --blocker (#1860)", () => {
     expect((aufrufe.erzeuge[1] as { body: string }).body).toMatch(/^blockiert durch #14$/m);
   });
 });
+
+describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1860)", () => {
+  type Sammel = { ziel: number | null; kommentare: { user: { login: string; type?: string } | null; body: string }[] };
+  type GIo = Io & { sammelKontext: () => Sammel; postZeilen: (nr: number, text: string) => void; heute: () => string };
+  const ARGS = ["gescheitert", "7", "--mangel", "Negativfall fehlt"];
+  const ZEILE = "- [ ] 2026-10-22 Reparatur gescheitert: #7 (Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
+  function gumgebung(sammel: Partial<Sammel> = {}, extra: Partial<GIo> = {}) {
+    const posts: { nr: number; text: string }[] = [];
+    const { io } = umgebung({});
+    const gio: GIo = {
+      ...io,
+      sammelKontext: () => ({ ziel: 1860, kommentare: [], ...sammel }),
+      postZeilen: (nr, text) => void posts.push({ nr, text }),
+      heute: () => "2026-10-22",
+      ...extra,
+    };
+    return { io: gio as unknown as Io, posts };
+  }
+  const fn = raw as unknown as { gescheitertZeile: (a: { nr: number; mangel: string; heute: string }) => string; gescheitertBekannt: (nr: number, kommentare: Sammel["kommentare"], owner: string) => boolean };
+
+  test("aufrufPruefen: Nummer und --mangel sind Pflicht", () => {
+    expect(S.aufrufPruefen(ARGS)).toMatchObject({ befehl: "gescheitert", positional: ["7"], werte: { mangel: "Negativfall fehlt" } });
+    for (const bad of [["gescheitert", "--mangel", "x"], ["gescheitert", "0", "--mangel", "x"], ["gescheitert", "7"], ["gescheitert", "7", "--mangel", "  "], ["gescheitert", "7", "8", "--mangel", "x"]]) {
+      expect(S.aufrufPruefen(bad).fehler, bad.join(" ")).toBeTruthy();
+    }
+  });
+  test("postet die Zeile mit Datum, Nummer und Mangel ins Sammelticket, Exit 0", () => {
+    const { io, posts } = gumgebung();
+    const r = S.fuehreAus(ARGS, io);
+    expect(r.code, r.err).toBe(0);
+    expect(posts).toEqual([{ nr: 1860, text: ZEILE }]);
+    expect(r.out).toContain("#1860");
+  });
+  test("Mangel über mehrere Zeilen wird einzeilig", () => {
+    const { io, posts } = gumgebung();
+    S.fuehreAus(["gescheitert", "7", "--mangel", "a\n  b"], io);
+    expect(posts[0]?.text).toContain("(a b)");
+    expect(posts[0]?.text.split("\n")).toHaveLength(1);
+  });
+  test("schon offene Zeile eines vertrauten Autors: Exit 0, nichts gepostet", () => {
+    const { io, posts } = gumgebung({ kommentare: [{ user: { login: "fluffels", type: "User" }, body: `x\n${ZEILE}\n` }] });
+    const r = S.fuehreAus(ARGS, io);
+    expect(r.code).toBe(0);
+    expect(posts).toEqual([]);
+    expect(r.out).toMatch(/schon/);
+  });
+  test("Negativfall: Zeile eines Fremden, erledigte Zeile oder andere Nummer verhindern den Post nicht", () => {
+    const fremd = { user: { login: "fremder", type: "User" }, body: ZEILE };
+    const erledigt = { user: { login: "fluffels", type: "User" }, body: ZEILE.replace("[ ]", "[x]") };
+    const anderes = { user: { login: "fluffels", type: "User" }, body: ZEILE.replace("#7 (", "#77 (") };
+    for (const k of [fremd, erledigt, anderes]) {
+      const { io, posts } = gumgebung({ kommentare: [k] });
+      expect(S.fuehreAus(ARGS, io).code).toBe(0);
+      expect(posts).toHaveLength(1);
+    }
+  });
+  test("kein ungeclaimtes Sammelticket: Exit 1 mit Fix, nichts gepostet", () => {
+    const { io, posts } = gumgebung({ ziel: null });
+    const r = S.fuehreAus(ARGS, io);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Fix: node scripts/sammelticket-anlegen.mjs harness");
+    expect(posts).toEqual([]);
+  });
+  test("Negativfall: Aufruf-Fehler enden mit Exit 2 vor jedem I/O", () => {
+    let io0 = 0;
+    const zaehle = () => { io0++; throw new Error("kein I/O erlaubt"); };
+    const { io } = gumgebung({}, { sammelKontext: zaehle, postZeilen: zaehle });
+    for (const bad of [["gescheitert", "x", "--mangel", "m"], ["gescheitert", "7"], ["gescheitert", "7", "--mangel", ""]]) {
+      expect(S.fuehreAus(bad, io).code, bad.join(" ")).toBe(2);
+    }
+    expect(io0).toBe(0);
+  });
+  test("Ladefehler und Postfehler: Exit 2 mit Ursache", () => {
+    const wirf = (m: string) => () => { throw new Error(m); };
+    const a = S.fuehreAus(ARGS, gumgebung({}, { sammelKontext: wirf("kaputt-laden") }).io);
+    expect(a.code).toBe(2);
+    expect(a.err).toContain("kaputt-laden");
+    const b = S.fuehreAus(ARGS, gumgebung({}, { postZeilen: wirf("kaputt-post") }).io);
+    expect(b.code).toBe(2);
+    expect(b.err).toContain("kaputt-post");
+  });
+  test("pure Bausteine", () => {
+    expect(fn.gescheitertZeile({ nr: 7, mangel: "Negativfall fehlt", heute: "2026-10-22" })).toBe(ZEILE);
+    expect(fn.gescheitertBekannt(7, [{ user: { login: "fluffels", type: "User" }, body: ZEILE }], "fluffels")).toBe(true);
+    expect(fn.gescheitertBekannt(7, [], "fluffels")).toBe(false);
+  });
+});
