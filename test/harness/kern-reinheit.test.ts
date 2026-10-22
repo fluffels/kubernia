@@ -907,6 +907,13 @@ describe("Kern-Reinheit (#1610)", () => {
   });
 });
 
+describe("Projektbezüge nicht in den Prompts (#1843)", () => {
+  test("Dev-Helfer und Anti-Corruption-Begriff stehen in der Projekt-Config, sonst wäre der Wächter still aus", () => {
+    assert.ok(echteBegriffe.kqDev?.test("kqDev"), "projektliterale.kqDev fehlt");
+    assert.ok(echteBegriffe.Hafen?.test("Hafen"), "projektliterale.Hafen fehlt");
+  });
+});
+
 describe("Stardew-Regeln nicht im Kern (#1709, ADR 0022 F5)", () => {
   const stardew = echteBegriffe.Stardew;
   const IST = (lies: (p: string) => string | null): Baseline => istZaehlung(manifest.eintraege, lies, echteBegriffe);

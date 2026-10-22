@@ -115,6 +115,8 @@
   "rulesetSpiegel": ".github/ruleset-main-schutz.json",
   "projektliterale": {
     "Stardew": "stardew",
-    "Save-Version": "CURRENT_SAVE_VERSION"
+    "Save-Version": "CURRENT_SAVE_VERSION",
+    "kqDev": "kqdev",
+    "Hafen": "hafen"
   }
 }
