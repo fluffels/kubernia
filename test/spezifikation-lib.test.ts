@@ -391,3 +391,69 @@ describe("spracheMaengel: eine Prüfung für Gate und Projekt-Config (#1843)", (
     }
   });
 });
+
+describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
+  const P = raw as unknown as { blockerNummern: (body: unknown, sprache: unknown) => number[]; spracheMaengel: (sp: unknown) => string[] };
+  const mit = (zusatz: string) => `${GUT}\n${zusatz}\n`;
+  const SATZ = (nr: number) => `Dieses Ticket folgt nach #${nr}.`;
+
+  test("Abhängigkeitssatz ohne Blocker-Zeile ist ein Mangel mit Satz und gewünschter Zeile", () => {
+    expect(S.spezifikationsMaengel(mit(SATZ(12)))).toEqual(["Abhängigkeitssatz „folgt nach #12“ ohne Zeile „blockiert durch #12“"]);
+  });
+  test("mit passender Zeile ist der Body vollständig", () => {
+    expect(S.spezifikationsMaengel(mit(`${SATZ(12)}\nblockiert durch #12`))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit(`${SATZ(12)}\nBlockiert durch #3, #12 (nur solange offen)`))).toEqual([]);
+  });
+  test("Negativfall: Zeile mit anderer Nummer deckt den Satz nicht", () => {
+    expect(S.spezifikationsMaengel(mit(`${SATZ(12)}\nblockiert durch #13`))).toHaveLength(1);
+  });
+  test("Negativfall: eine Nummer im Klammertext der Blocker-Zeile ist kein Blocker", () => {
+    expect(S.spezifikationsMaengel(mit(`${SATZ(12)}\nblockiert durch #13 (nur solange #12 offen ist)`))).toHaveLength(1);
+  });
+  test("jede Formulierung der geschlossenen Liste greift, auch groß geschrieben und mit Zeilenumbruch im Satz", () => {
+    for (const satz of ["folgt nach #7", "Folgt auf #7", "erst nach #7", "setzt #7 voraus", "baut auf #7 auf", "wartet auf #7", "nach dem Merge von #7", "folgt\nnach #7"]) {
+      expect(S.spezifikationsMaengel(mit(satz)), satz).toEqual([`Abhängigkeitssatz „${satz.replace(/\n/g, " ")}“ ohne Zeile „blockiert durch #7“`]);
+    }
+  });
+  test("zwei Sätze zur selben Nummer: ein Mangel; zwei Nummern: zwei Mängel", () => {
+    expect(S.spezifikationsMaengel(mit("folgt nach #7\nsetzt #7 voraus"))).toHaveLength(1);
+    expect(S.spezifikationsMaengel(mit("folgt nach #7\nsetzt #8 voraus"))).toHaveLength(2);
+  });
+  test("Grenzfälle ohne Mangel: Code-Fence, Inline-Code, bloßes „siehe #12“, Wort ohne Nummer", () => {
+    expect(S.spezifikationsMaengel(mit("```\nfolgt nach #12\n```"))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Beispiel: `folgt nach #12`"))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("siehe #12, Nachfolger von #7"))).toEqual([]);
+    expect(S.spezifikationsMaengel(mit("Das Ticket folgt nach dem Merge der Doku."))).toEqual([]);
+  });
+  test("Sammel- und Epic-Titel sind über das Prädikat ausgenommen, ein normaler Titel nicht", () => {
+    const i = { nummer: 5, titel: "Harness-Härtung (gesammelt)", body: mit(SATZ(12)) };
+    expect(S.pruefeEingang(i, { ausgenommen: () => true }).art).toBe("ausgenommen");
+    expect(S.pruefeEingang(i, { hartAb: 1 }).art).toBe("hart");
+    expect(S.pruefeEingang({ ...i, nummer: 0 }, { hartAb: 1 }).art).toBe("bestand");
+  });
+  test("blockerNummern: Wort aus der Sprache, mehrere Nummern, Klammertext zählt nicht, kein Body leer", () => {
+    expect(P.blockerNummern("x\nBlockiert durch #12, #13 (nur solange #99 offen ist)\nblockiert durch #14", SPRACHE)).toEqual([12, 13, 14]);
+    expect(P.blockerNummern("siehe #5, Nachfolger von #7", SPRACHE)).toEqual([]);
+    expect(P.blockerNummern(null, SPRACHE)).toEqual([]);
+    expect(P.blockerNummern("blocked by #4", { ...SPRACHE, blocker: "blocked by" })).toEqual([4]);
+    expect(P.blockerNummern("blockiert durch #4", { ...SPRACHE, blocker: "blocked by" })).toEqual([]);
+  });
+  test("blockerNummern ohne Sprache wirft, kein stiller Standardwert", () => {
+    expect(() => P.blockerNummern("blockiert durch #4", undefined)).toThrow(/sprache[\s\S]*Fix:/);
+    expect(() => P.blockerNummern("blockiert durch #4", { ...SPRACHE, blocker: undefined })).toThrow(/blocker/);
+  });
+  test("spracheMaengel meldet fehlende oder kaputte Schlüssel blocker und abhaengigkeit", () => {
+    expect(P.spracheMaengel({ ...SPRACHE, blocker: " " })).toEqual(["sprache.spezifikation.blocker muss ein nicht-leerer String sein"]);
+    expect(P.spracheMaengel({ ...SPRACHE, blocker: undefined })).toEqual(["sprache.spezifikation.blocker muss ein nicht-leerer String sein"]);
+    const liste = "sprache.spezifikation.abhaengigkeit muss eine nicht-leere Liste von Sätzen mit genau einem „#“ als Platz der Ticketnummer sein";
+    for (const kaputt of [undefined, [], "folgt nach #", ["folgt nach"], ["folgt # nach #"], ["ok #", " "]]) {
+      expect(P.spracheMaengel({ ...SPRACHE, abhaengigkeit: kaputt })).toEqual([liste]);
+    }
+  });
+  test("Englisch aus der Sprache: Satz und Zeile kommen aus der Config", () => {
+    const en = { ...SPRACHE, ziel: "Goal", akzeptanzkriterien: ["Acceptance criteria"], negativfall: { wort: "Negative case", muster: "negative case" }, blocker: "blocked by", abhaengigkeit: ["follows #"] };
+    const body = "## Goal\nG\n## Acceptance criteria\n- Negative case\n\nThis follows #5\n";
+    expect(R.spezifikationsMaengel(body, en)).toEqual(["Abhängigkeitssatz „follows #5“ ohne Zeile „blocked by #5“"]);
+    expect(R.spezifikationsMaengel(`${body}blocked by #5\n`, en)).toEqual([]);
+  });
+});

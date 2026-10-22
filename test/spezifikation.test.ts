@@ -384,3 +384,40 @@ describe("Sprache als Projektwert (#1711)", () => {
     expect(de.err).toContain("`## Goal` fehlt");
   });
 });
+
+describe("anlegen --blocker (#1860)", () => {
+  const MIT = (...bl: string[]) => [...ANLEGEN, ...bl.flatMap((b) => ["--blocker", b])];
+  test("aufrufPruefen: --blocker mehrfach, als Zahlen; ohne Flag eine leere Liste", () => {
+    expect(S.aufrufPruefen(MIT("12", "#13")).werte).toMatchObject({ blocker: [12, 13] });
+    expect(S.aufrufPruefen(ANLEGEN).werte).toMatchObject({ blocker: [] });
+  });
+  test("Negativfall: keine Zahl, Null oder Dezimalzahl: Exit 2 vor jedem I/O, nichts gelesen", () => {
+    for (const bad of ["abc", "0", "1.5", "-3", ""]) {
+      let gelesen = 0;
+      const { io, aufrufe } = umgebung({ "b.md": GUT }, { leseDatei: () => { gelesen++; return GUT; } });
+      const r = S.fuehreAus(MIT(bad), io);
+      expect(r.code, bad).toBe(2);
+      expect(r.err).toContain("--blocker");
+      expect(gelesen).toBe(0);
+      expect(aufrufe.erzeuge).toEqual([]);
+    }
+  });
+  test("--blocker hängt die Zeile an den Body und deckt damit den Abhängigkeitssatz", () => {
+    const body = `${GUT}\nDas Ticket folgt nach #12.\n`;
+    const { io, aufrufe } = umgebung({ "b.md": body });
+    expect(S.fuehreAus(ANLEGEN, io).code).toBe(1);
+    expect(aufrufe.erzeuge).toEqual([]);
+    const r = S.fuehreAus(MIT("12", "13"), io);
+    expect(r.code).toBe(0);
+    const neu = (aufrufe.erzeuge[0] as { body: string }).body;
+    expect(neu).toMatch(/^blockiert durch #12, #13$/m);
+    expect(neu.startsWith(body)).toBe(true);
+  });
+  test("eine schon vorhandene Zeile wird nicht doppelt angehängt, eine fehlende Nummer ergänzt", () => {
+    const { io, aufrufe } = umgebung({ "b.md": `${GUT}\nblockiert durch #12\n` });
+    S.fuehreAus(MIT("12"), io);
+    expect((aufrufe.erzeuge[0] as { body: string }).body.match(/blockiert durch/g)).toHaveLength(1);
+    S.fuehreAus(MIT("12", "14"), io);
+    expect((aufrufe.erzeuge[1] as { body: string }).body).toMatch(/^blockiert durch #14$/m);
+  });
+});

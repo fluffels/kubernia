@@ -25,7 +25,6 @@ type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknow
 type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; config?: unknown; hartAb?: number };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
-  blockerNummern: (b: string) => number[];
   formatiere: (e: Ergebnis) => string;
   fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string };
   waehleUeberBoards: (e: unknown) => Ergebnis & { hinweise?: string[] };
@@ -57,13 +56,13 @@ const zweiBoards = (e: Eingabe): ZweiBoards => ({ ...e, produkt: e.items, factor
 const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
   (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
 
-describe("blockerNummern", () => {
-  test("mehrfach, case-insensitiv, mehrere Nummern je Zeile; Klammertext zählt nicht", () => {
-    expect(N.blockerNummern("x\nBlockiert durch #12, #13 (nur solange #99 offen ist)\nblockiert durch #14")).toEqual([12, 13, 14]);
-  });
-  test("ohne Zeile: leer; eine bloße Erwähnung blockiert nicht", () => {
-    expect(N.blockerNummern("siehe #5, Nachfolger von #7")).toEqual([]);
-    expect(N.blockerNummern(null as unknown as string)).toEqual([]);
+describe("Blocker-Zeile aus der Sprache (#1860)", () => {
+  const sprache = (CFG.sprache as { spezifikation: Record<string, unknown> }).spezifikation;
+  const cfgMit = (blocker: string) => ({ ...CFG, sprache: { ...(CFG.sprache as object), spezifikation: { ...sprache, blocker } } });
+  test("das Blocker-Wort der Config sperrt; ein anderes Wort sperrt nicht", () => {
+    const offene = new Set([1, 50]);
+    expect(frei([item(1, { body: "blocked by #50" })], { offene, config: cfgMit("blocked by") }).ticket).toBeNull();
+    expect(frei([item(1, { body: "blockiert durch #50" })], { offene, config: cfgMit("blocked by") }).ticket?.nr).toBe(1);
   });
 });
 
