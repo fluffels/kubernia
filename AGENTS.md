@@ -144,4 +144,5 @@ Der Backlog sind **GitHub Issues** auf zwei **Project-Boards** (Trennregel: `are
 
 ## Forum-Eingang (Discussions) bearbeiten
 
-Das Forum sind die **GitHub Discussions**; `forum-inbox.yml` legt je Thread ein `forum`-Issue an, antwortet nicht. Lesen nur `forum-leser`. Im [`forum`-Skill](.agents/skills/forum/SKILL.md) legt der Agent **jede Antwort der Maintainerin zur Freigabe vor (Pflicht-Stopp)**, postet erst nach OK als `fluffels`; keine Em-Dashes als Satzverbinder.<!-- factory-projekt:ende -->
+Das Forum sind die **GitHub Discussions**; `forum-inbox.yml` legt je Thread ein `forum`-Issue an, antwortet nicht. Lesen nur `forum-leser`. Im [`forum`-Skill](.agents/skills/forum/SKILL.md) legt der Agent **jede Antwort der Maintainerin zur Freigabe vor (Pflicht-Stopp)**, postet erst nach OK als `fluffels`; keine Em-Dashes als Satzverbinder.
+<!-- factory-projekt:ende -->

@@ -155,6 +155,12 @@ describe("pruefeSkills: Übergangsliste", () => {
     expect(b[0].meldung).toContain("veraltet");
   });
 
+  test("Eintrag, dessen Skill Quelle und Volltext zugleich hat, wird ebenfalls als veraltet gemeldet", () => {
+    const q: Quelle = { ordner: "demo", text: QUELLE };
+    const b = stand([q], [{ ordner: "demo", text: QUELLE, dateien: ["SKILL.md"] }], { demo: "#5" });
+    expect(b.map((x) => x.datei)).toContain("Übergangsliste in scripts/skills-sync.mjs: demo");
+  });
+
   test("Eintrag ohne Ticketnummer ist rot", () => {
     expect(stand([], [voll], { voll: "" }).map((b) => b.meldung)).toEqual(["Eintrag ohne Ticket (#<nr>)"]);
     expect(stand([], [voll], { voll: "später" })).toHaveLength(1);

@@ -65,6 +65,7 @@ describe("Skill-Pfade (#1211)", { timeout: 30_000 }, () => {
   });
 
   it("die Skill-Quelle forum liegt im Scan", () => {
+    expect(SCAN).toContain(".agents/skills");
     const liste = dateien(join(ROOT, ".agents/skills")).map((f) => relative(ROOT, f).replace(/\\/g, "/"));
     expect(liste).toContain(".agents/skills/forum/SKILL.md");
   });

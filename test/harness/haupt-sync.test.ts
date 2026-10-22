@@ -403,7 +403,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     const o = S.ordneHarnessAenderungen([".agents/skills/forum/SKILL.md", "docs/.agents/x.md", ".agentsx/y", "agents/z.md"]);
     expect(o.sonstige).toEqual([".agents/skills/forum/SKILL.md"]);
     expect(o.skill).toEqual([]);
-    const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: o } as never, true);
+    const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: o }, true);
     expect(text).toContain("Geändert (Harness): .agents/skills/forum/SKILL.md");
     expect(text).toContain("Session-Neustart");
   });

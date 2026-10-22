@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 export const QUELL_VERZEICHNIS = ".agents/skills";
 export const WERKZEUGE = { claude: ".claude/skills" };
@@ -140,22 +141,16 @@ export function lauf({ wurzel, tool = "claude", check = false, prune = false, ue
   return ergebnis;
 }
 
-function parseArgs(argv) {
-  const opt = { tool: "claude", check: false, prune: false };
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--check") opt.check = true;
-    else if (argv[i] === "--prune") opt.prune = true;
-    else if (argv[i] === "--tool" && i + 1 < argv.length && !argv[i + 1].startsWith("--")) opt.tool = argv[++i];
-    else return null;
-  }
-  return opt;
+function leseArgumente(argv) {
+  const { werte, fehler } = flagsLesen(argv, { tool: { type: "string" }, check: { type: "boolean" }, prune: { type: "boolean" } });
+  return fehler ? null : { tool: werte.tool ?? "claude", check: werte.check === true, prune: werte.prune === true };
 }
 
 function main() {
-  const opt = parseArgs(process.argv.slice(2));
+  const opt = leseArgumente(process.argv.slice(2));
   if (!opt || !(opt.tool in WERKZEUGE)) {
     console.error(`Aufruf: node scripts/skills-sync.mjs [--tool ${Object.keys(WERKZEUGE).join("|")}] [--check] [--prune]`);
-    process.exit(2);
+    process.exit(AUFRUF_EXIT);
   }
   const wurzel = join(dirname(fileURLToPath(import.meta.url)), "..");
   const e = lauf({ wurzel, ...opt });
