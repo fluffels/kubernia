@@ -14,19 +14,45 @@
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 
-/** Prüft den Wörterbuch-Block und baut daraus Regexe und Meldungen; wirft ohne (vollständigen) Block. Pur. */
+const istText = (v) => typeof v === "string" && v.trim() !== "";
+const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Pur: Mängel eines Muster-Eintrags `{ wort, muster }` (das Muster muss als Regex mit Flag i kompilieren). */
+function musterMaengel(w, k) {
+  if (!istObjekt(w) || !istText(w.wort) || !istText(w.muster)) return [`sprache.spezifikation.${k} muss ein Objekt mit nicht-leerem wort und muster sein`];
+  try {
+    new RegExp(w.muster, "i");
+  } catch {
+    return [`sprache.spezifikation.${k}.muster ist keine gültige Regex`];
+  }
+  return [];
+}
+
+/**
+ * Pur: die Mängel von `sprache.spezifikation` (Meldungen auf den Schlüsselpfaden `sprache.spezifikation.<k>`; leer = gültig). SSOT der Pflichtschlüssel:
+ * `wortschatz` wirft bei jedem Mangel, die Projekt-Config-Prüfung (`pruefeSprache`) meldet dieselben Texte.
+ */
+export function spracheMaengel(sp) {
+  if (!istObjekt(sp)) return ["sprache.spezifikation muss ein Objekt sein"];
+  const maengel = [];
+  for (const k of ["ziel", "nachMerge"]) {
+    if (!istText(sp[k])) maengel.push(`sprache.spezifikation.${k} muss ein nicht-leerer String sein`);
+  }
+  if (!Array.isArray(sp.akzeptanzkriterien) || sp.akzeptanzkriterien.length === 0 || !sp.akzeptanzkriterien.every(istText)) {
+    maengel.push("sprache.spezifikation.akzeptanzkriterien muss eine nicht-leere Liste nicht-leerer Strings sein");
+  }
+  for (const k of ["negativfall", "begrenzung", "allquantor"]) maengel.push(...musterMaengel(sp[k], k));
+  return maengel;
+}
+
+/** Prüft den Wörterbuch-Block (`spracheMaengel`) und baut daraus Regexe und Meldungen; wirft ohne (vollständigen) Block. Pur. */
 function wortschatz(sprache) {
-  const fehlt = (was) => new Error(`sprache fehlt oder ist unvollständig (${was}); das Spezifikations-Gate hat keinen stillen Deutsch-Standardwert\nFix: den Schlüssel sprache.spezifikation in .factory/projekt.json eintragen`);
+  const maengel = spracheMaengel(sprache);
+  if (maengel.length > 0) {
+    throw new Error(`sprache fehlt oder ist unvollständig (${maengel.join("; ")}); das Spezifikations-Gate hat keinen stillen Deutsch-Standardwert\nFix: den Schlüssel sprache.spezifikation in .factory/projekt.json eintragen`);
+  }
   const s = sprache;
-  if (typeof s !== "object" || s === null) throw fehlt("kein Objekt");
-  const text = (v) => typeof v === "string" && v.trim() !== "";
-  if (!text(s.ziel) || !text(s.nachMerge)) throw fehlt("ziel, nachMerge");
-  if (!Array.isArray(s.akzeptanzkriterien) || s.akzeptanzkriterien.length === 0 || !s.akzeptanzkriterien.every(text)) throw fehlt("akzeptanzkriterien");
-  const muster = (k) => {
-    const w = s[k];
-    if (!text(w?.wort) || !text(w?.muster)) throw fehlt(k);
-    return { wort: w.wort, re: new RegExp(w.muster, "i") };
-  };
+  const muster = (k) => ({ wort: s[k].wort, re: new RegExp(s[k].muster, "i") });
   const negativ = muster("negativfall");
   const begrenzung = muster("begrenzung");
   const allquantor = muster("allquantor");

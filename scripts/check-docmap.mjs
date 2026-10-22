@@ -20,6 +20,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -31,16 +32,13 @@ export const ORPHAN_ALLOWLIST = [];
 /** Die Struktur-Pfade `{ quelle, moduldoku }` aus der Projekt-Config; wirft ohne `struktur` (kein stiller Standardwert). */
 const configStruktur = () => strukturAus(ladeProjektConfig());
 
-/** Maskiert Regex-Sonderzeichen eines Pfads für das Backtick-Muster. */
-const regexText = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 /** Scannt alle `<moduldoku>/*.md` nach Backtick-Pfaden der Form `<quelle>/…ts`.
  *  Gibt ein Set der gefundenen Pfade zurück (repo-relativ, POSIX).
  *  `rootDir` überschreibbar, damit der Test deterministisch dasselbe Repo misst;
  *  `struktur` ohne Angabe aus der Projekt-Config. */
 export function parseDeepDocMaps(rootDir = ROOT, struktur = configStruktur()) {
   const docsDir = join(rootDir, ...struktur.moduldoku.split("/"));
-  const muster = new RegExp("`(" + regexText(struktur.quelle) + "/[^`]+\\.ts)`", "g");
+  const muster = new RegExp("`(" + escapeRegex(struktur.quelle) + "/[^`]+\\.ts)`", "g");
   const covered = new Set();
   for (const filename of readdirSync(docsDir)) {
     if (!filename.endsWith(".md")) continue;

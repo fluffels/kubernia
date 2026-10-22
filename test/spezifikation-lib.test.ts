@@ -2,6 +2,8 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as raw2 from "../scripts/projekt-config-lib.mjs";
 import { echteSpezifikation } from "./support/echte-sprache";
 
 type Art = { art: "ausgenommen" | "ok" | "bestand" | "hart"; fehlt?: string[] };
@@ -21,6 +23,19 @@ const S = {
   spezifikationsMaengel: (body: unknown) => R.spezifikationsMaengel(body, SPRACHE),
   pruefeEingang: (i: { nummer: number; titel: string; body: unknown }, o: { ausgenommen?: (i: unknown) => boolean; hartAb?: number } = {}) => R.pruefeEingang(i, { ...o, sprache: SPRACHE }),
   kriterien: (body: unknown) => R.kriterien(body, SPRACHE),
+};
+
+/** Eine gültige Projekt-Config ohne sprache (nur die Form zählt). */
+const gueltigeConfig = (): Record<string, unknown> => {
+  const b = (rolle: string, n: number) => ({ rolle, besitzer: "acme", besitzerTyp: "org", nummer: n, projectId: `p${n}`, statusFeldId: 5, statusFeldNodeId: "x", todoOptionId: "a" });
+  return {
+    version: 2,
+    repo: "acme/demo",
+    boards: [b("produkt", 7), b("factory", 8)],
+    praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
+    labels: { harness: "a", festgefahren: "b", forum: "c", dependabotInbox: "a" },
+    agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
+  };
 };
 
 const GUT = "## Ziel\nDas Gate prüft.\n\n## Akzeptanzkriterien\n1. Es prüft.\n2. Negativfall: ohne Format wird übersprungen.\n";
@@ -337,5 +352,42 @@ describe("Sprache als Projektwert (#1711)", () => {
       expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, [k]: undefined }), k).toThrow(new RegExp(k));
     }
     expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, ziel: undefined })).toThrow(/ziel/);
+  });
+});
+
+describe("spracheMaengel: eine Prüfung für Gate und Projekt-Config (#1843)", () => {
+  const P = raw as unknown as { spracheMaengel: (sp: unknown) => string[] };
+  const cfg = raw2 as unknown as { pruefeProjektConfig: (w: unknown) => string[] };
+  const mitSprache = (sp: unknown): string[] => cfg.pruefeProjektConfig({ ...gueltigeConfig(), sprache: { umschrift: ["fuer"], spezifikation: sp } });
+
+  test("die echte Sprach-Config hat keine Mängel", () => {
+    expect(P.spracheMaengel(SPRACHE)).toEqual([]);
+  });
+  test("Meldungen stehen auf den Schlüsselpfaden sprache.spezifikation.<k>", () => {
+    expect(P.spracheMaengel({ ...SPRACHE, ziel: " ", nachMerge: 3 })).toEqual([
+      "sprache.spezifikation.ziel muss ein nicht-leerer String sein",
+      "sprache.spezifikation.nachMerge muss ein nicht-leerer String sein",
+    ]);
+    expect(P.spracheMaengel({ ...SPRACHE, akzeptanzkriterien: [] })).toEqual(["sprache.spezifikation.akzeptanzkriterien muss eine nicht-leere Liste nicht-leerer Strings sein"]);
+    expect(P.spracheMaengel({ ...SPRACHE, begrenzung: { wort: "x", muster: "(" } })).toEqual(["sprache.spezifikation.begrenzung.muster ist keine gültige Regex"]);
+    expect(P.spracheMaengel({ ...SPRACHE, allquantor: undefined })).toEqual(["sprache.spezifikation.allquantor muss ein Objekt mit nicht-leerem wort und muster sein"]);
+  });
+  test("kein Objekt (null, Liste, Text): ein Mangel", () => {
+    for (const falsch of [undefined, null, [], "x", 3]) expect(P.spracheMaengel(falsch)).toEqual(["sprache.spezifikation muss ein Objekt sein"]);
+  });
+  test("dieselbe ungültige Eingabe ergibt über Gate und Projekt-Config dieselben Meldungen", () => {
+    const eingaben: unknown[] = [
+      { ...SPRACHE, ziel: "" },
+      { ...SPRACHE, nachMerge: undefined, akzeptanzkriterien: [" "] },
+      { ...SPRACHE, negativfall: { wort: "x" }, allquantor: { wort: "y", muster: "(" } },
+      {},
+      null,
+    ];
+    for (const e of eingaben) {
+      const maengel = P.spracheMaengel(e);
+      expect(maengel.length, JSON.stringify(e)).toBeGreaterThan(0);
+      expect(mitSprache(e).filter((m) => m.startsWith("sprache.spezifikation")), JSON.stringify(e)).toEqual(maengel);
+      expect(() => R.spezifikationsMaengel(GUT, e), JSON.stringify(e)).toThrow(maengel.join("; "));
+    }
   });
 });

@@ -7,12 +7,13 @@
  * Kommandozeile (über den Einstieg projekt-config.mjs): `node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>` gibt einen Skalarwert aus
  * (Exit 0), 1 bei fehlender/ungültiger Config oder unbekanntem Schlüssel, 2 bei einem Aufruf-Fehler (ohne Schlüssel, unbekanntes Flag, fehlender Wert).
  *
- * Nur Node-Builtins und `flag-lib.mjs` (läuft auch in Workflows ohne `npm ci`).
+ * Nur Node-Builtins, `flag-lib.mjs` und `spezifikation-lib.mjs` (importfrei; läuft auch in Workflows ohne `npm ci`).
  */
 import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { spracheMaengel } from "./spezifikation-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -160,21 +161,9 @@ export function umschriftAus(config) {
   return liste;
 }
 
-/** Pur: ein Muster-Eintrag `{ wort, muster }`; das Muster muss als Regex (Flag i) kompilieren. */
-function pruefeMuster(w, schluessel) {
-  if (!istObjekt(w) || !istText(w.wort) || !istText(w.muster)) return [`sprache.spezifikation.${schluessel} muss ein Objekt mit nicht-leerem wort und muster sein`];
-  try {
-    new RegExp(w.muster, "i");
-  } catch {
-    return [`sprache.spezifikation.${schluessel}.muster ist keine gültige Regex`];
-  }
-  return [];
-}
-
 /**
  * Pur: prüft `sprache` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `spracheAus` verlangt ihn beim Gebrauch).
- * Die importfreie Spezifikations-Lib prüft dieselben Schlüssel von `sprache.spezifikation` noch einmal (`wortschatz`, sie bekommt auch injizierte Werte):
- * ein neuer Schlüssel gehört an beide Stellen.
+ * Die Schlüssel von `sprache.spezifikation` prüft die Spezifikations-Lib (`spracheMaengel`, SSOT; ihr `wortschatz` wirft bei denselben Mängeln).
  */
 function pruefeSprache(s) {
   if (!istObjekt(s)) return ["sprache muss ein Objekt mit umschrift und spezifikation sein"];
@@ -182,16 +171,7 @@ function pruefeSprache(s) {
   if (!Array.isArray(s.umschrift) || s.umschrift.length === 0 || !s.umschrift.every((w) => typeof w === "string" && /^[a-z]+$/.test(w))) {
     fehler.push("sprache.umschrift muss eine nicht-leere Liste kleingeschriebener ASCII-Wörter (Muster ^[a-z]+$) sein");
   }
-  const sp = s.spezifikation;
-  if (!istObjekt(sp)) return [...fehler, "sprache.spezifikation muss ein Objekt sein"];
-  for (const k of ["ziel", "nachMerge"]) {
-    if (!istText(sp[k])) fehler.push(`sprache.spezifikation.${k} muss ein nicht-leerer String sein`);
-  }
-  if (!Array.isArray(sp.akzeptanzkriterien) || sp.akzeptanzkriterien.length === 0 || !sp.akzeptanzkriterien.every(istText)) {
-    fehler.push("sprache.spezifikation.akzeptanzkriterien muss eine nicht-leere Liste nicht-leerer Strings sein");
-  }
-  for (const k of ["negativfall", "begrenzung", "allquantor"]) fehler.push(...pruefeMuster(sp[k], k));
-  return fehler;
+  return [...fehler, ...spracheMaengel(s.spezifikation)];
 }
 
 const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;

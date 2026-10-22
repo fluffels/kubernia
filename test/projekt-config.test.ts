@@ -413,7 +413,7 @@ describe("umgebungsWert: Standardwerte (eigener Prozess)", { timeout: 30_000 }, 
   test("Config nicht ladbar: kein Wurf, keine Alt-Prüfung", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));
-    for (const f of ["projekt-config-lib.mjs", "flag-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["projekt-config-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const code = `import(LIB).then(m => console.log(String(m.umgebungsWert({ ZD_Z_Y: "a" }, "FACTORY_Z_Y"))))`;
     const r = lauf(join(d, "scripts/projekt-config-lib.mjs"), code, {});
     assert.equal(r.status, 0, r.stderr);
@@ -426,7 +426,7 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts"));
-    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
