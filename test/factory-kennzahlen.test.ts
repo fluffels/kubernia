@@ -825,7 +825,7 @@ describe("Spezifikations-Mängel im Wochenbericht (#1860)", () => {
       expect(r.anzahl, bad).toBeUndefined();
     }
   });
-  const md = (spezifikation?: Maengel) => F.renderMarkdown(F.bericht({ von, bis, quelle: "Transkript", lauf: daten([ZEILE()]), nacharbeit: daten([]), tickets: [], ...(spezifikation ? { spezifikation } : {}) } as never));
+  const md = (spezifikation?: Maengel) => F.renderMarkdown(F.bericht({ von, bis, quelle: "Transkript", lauf: daten([ZEILE()]), nacharbeit: daten([]), tickets: [], ...(spezifikation ? { spezifikation } : {}) }));
   test("Abschnitt „Spezifikation“ nennt die Zahl und je Ticket Nummer, Titel und Mängel", () => {
     const text = md(JSON.parse(GUT) as Maengel);
     expect(text).toContain("**Spezifikation**\n- 2 Tickets mit Mangel");

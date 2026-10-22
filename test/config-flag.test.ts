@@ -53,7 +53,7 @@ describe.each(SKRIPTE)("%s --config", { timeout: 60_000 }, (skript, rest) => {
   });
 
   test("ungültige sprache in der übergebenen Config: Exit 2, ✖, sprache, Fix, kein Stacktrace", () => {
-    const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8"));
+    const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as { sprache: Record<string, Record<string, unknown>> };
     config.sprache = {};
     const pfad = join(tmp(), "sprache.json");
     writeFileSync(pfad, JSON.stringify(config));
@@ -82,7 +82,7 @@ describe.each(SKRIPTE)("%s --config", { timeout: 60_000 }, (skript, rest) => {
 describe("gültige --config wird gelesen", { timeout: 60_000 }, () => {
   test("spezifikation pruefen nimmt den Zielabschnitt aus der übergebenen Config", () => {
     const d = tmp();
-    const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8"));
+    const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as { sprache: Record<string, Record<string, unknown>> };
     config.sprache.spezifikation.ziel = "Zweckbestimmung";
     const pfad = join(d, "anders.json");
     writeFileSync(pfad, JSON.stringify(config));

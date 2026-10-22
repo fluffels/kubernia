@@ -7,7 +7,7 @@
  *
  * Verkettung über Unterprozesse mit `--json` (Einstiegsskripte importieren einander nicht): `lauf-ergebnis.mjs` für
  * Lauf-Ergebnis und Nacharbeit, `token-baseline.mjs` je Ticket für die Kosten (Standard: Transkript, `--langfuse`
- * ausdrücklich). Ticket → Session über die Claim-Zeile im lokalen Transkript. Definitionen und Grenzen:
+ * ausdrücklich), `naechstes-ticket.mjs --maengel` für den Abschnitt „Spezifikation“. Ticket → Session über die Claim-Zeile im lokalen Transkript. Definitionen und Grenzen:
  * docs/model-routing.md › Factory-Kennzahlen.
  *
  * Exit 0 ok (auch mit Kosten-Lücken), 1 Aufruffehler, 2 Lauf-Ergebnis fehlt oder verletzt den Vertrag (Block erscheint trotzdem).
