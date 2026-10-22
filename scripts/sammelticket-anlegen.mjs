@@ -46,6 +46,7 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { blockerZeile } from "./spezifikation-lib.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
 const PRUEF_VERSUCHE = 5;
@@ -111,8 +112,7 @@ export function sammelticketBody({ art, vorgaenger = null, vorgaengerZustand = "
       : ["Sammelticket für Befunde aus Langfuse-Daten (docs/ticket-reihenfolge.md › Langfuse-Befunde (gesammelt)). Befunde als Kommentar `- [ ] …` anhängen."];
   if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${ZUSATZ[vorgaengerZustand] ?? ""}.`;
   if (vorgaenger !== null && vorgaengerZustand !== "zu") {
-    if (typeof blocker !== "string" || blocker.trim() === "") throw new Error("blocker (sprache.spezifikation.blocker) fehlt: die Blocker-Zeile braucht das Wort der Projekt-Config");
-    zeilen.push("", `${blocker} #${vorgaenger} (nur solange #${vorgaenger} offen ist)`);
+    zeilen.push("", blockerZeile([vorgaenger], { blocker }, `(nur solange #${vorgaenger} offen ist)`));
   }
   return zeilen.join("\n");
 }

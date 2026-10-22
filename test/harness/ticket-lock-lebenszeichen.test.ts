@@ -390,7 +390,10 @@ function tempRepo(einstiege: string[]): string {
   mkdirSync(join(repo, ".factory"), { recursive: true });
   mkdirSync(join(repo, ".githooks"), { recursive: true });
   const dateien = new Set(einstiege.flatMap((e) => skriptHuelle(e)));
-  for (const f of dateien) copyFileSync(join(WURZEL, "scripts", f), join(repo, "scripts", f));
+  for (const f of dateien) {
+    mkdirSync(dirname(join(repo, "scripts", f)), { recursive: true });
+    copyFileSync(join(WURZEL, "scripts", f), join(repo, "scripts", f));
+  }
   copyFileSync(join(WURZEL, ".factory/projekt.json"), join(repo, ".factory/projekt.json"));
   copyFileSync(join(WURZEL, ".githooks/post-commit"), join(repo, ".githooks/post-commit"));
   return repo;

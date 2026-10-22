@@ -32,7 +32,7 @@ import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { configAusAufruf, labelAus, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { blockerNummern, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
+import { blockerNummern, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
 const AUFRUF = [
   "Aufruf:",
@@ -134,7 +134,7 @@ function nachholBefehl(werte, nach, nr) {
 export function mitBlockerZeile(body, nummern, sprache) {
   const da = new Set(blockerNummern(body, sprache));
   const fehlt = nummern.filter((n) => !da.has(n));
-  return fehlt.length === 0 ? body : `${body.replace(/\s+$/, "")}\n\n${sprache.blocker} ${fehlt.map((n) => `#${n}`).join(", ")}\n`;
+  return fehlt.length === 0 ? body : `${body.replace(/\s+$/, "")}\n\n${blockerZeile(fehlt, sprache)}\n`;
 }
 
 function anlegen(werte, io, sprache) {

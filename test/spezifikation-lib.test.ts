@@ -499,7 +499,7 @@ describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
       expect(P.blockerNummern(BZ.blockerZeile([4, 9], SPRACHE, "(x #99)"), SPRACHE)).toEqual([4, 9]);
     });
     test("Negativfall: leere Liste und leeres Wort werfen", () => {
-      expect(() => BZ.blockerZeile([], SPRACHE)).toThrow(/Nummer/);
+      expect(() => BZ.blockerZeile([], SPRACHE)).toThrow(/Ticketnummer/);
       expect(() => BZ.blockerZeile([1], { ...SPRACHE, blocker: "  " })).toThrow(/blocker/);
       expect(() => BZ.blockerZeile([1], { ...SPRACHE, blocker: undefined })).toThrow(/blocker/);
       expect(() => BZ.blockerZeile([1], undefined)).toThrow();

@@ -109,6 +109,7 @@ AGENTS.md                  @fluffels
 /scripts/gh-cli.mjs @fluffels
 /scripts/naechstes-ticket.mjs @fluffels
 /scripts/spezifikation-lib.mjs @fluffels
+/scripts/docs-gen/markdown.mjs @fluffels
 /scripts/skill-pfade.mjs @fluffels
 /scripts/subagent-laeufe.mjs @fluffels
 /scripts/mess-lib.mjs @fluffels
