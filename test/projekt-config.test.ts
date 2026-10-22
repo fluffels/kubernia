@@ -434,7 +434,7 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
 });
 
 describe("Sprache als Projektwert (#1711)", () => {
-  const sprache = (): Record<string, unknown> => structuredClone(pc.spracheAus(pc.ladeProjektConfig() as unknown as Record<string, unknown>)) as Record<string, unknown>;
+  const sprache = (): Record<string, unknown> => structuredClone(pc.spracheAus(pc.ladeProjektConfig()));
   const spez = (s: Record<string, unknown>): Record<string, unknown> => s.spezifikation as Record<string, unknown>;
   const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), sprache: s });
 
@@ -483,7 +483,7 @@ describe("Sprache als Projektwert (#1711)", () => {
     assert.match(mit(s).join("|"), /sprache\.umschrift/);
   });
   test("umschriftAus: liefert die Liste der echten Config, wirft ohne nicht-leere Liste", () => {
-    const liste = pc.umschriftAus(pc.ladeProjektConfig() as unknown as Record<string, unknown>);
+    const liste = pc.umschriftAus(pc.ladeProjektConfig());
     assert.ok(liste.includes("fuer"));
     for (const leer of [{}, { sprache: {} }, { sprache: { umschrift: [] } }, { sprache: { umschrift: "fuer" } }, null]) {
       assert.throws(() => pc.umschriftAus(leer), /sprache\.umschrift[\s\S]*Fix:/);

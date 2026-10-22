@@ -325,8 +325,8 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   const cfg = config ?? ladeProjektConfig();
   labelAus(cfg, "harness");
   labelAus(cfg, "forum"); // fail-fast: das Fremdeingang-Label gehört zur Eingabe der Auswahl
-  spracheAus(cfg); // fail-fast: das Spezifikations-Gate liest Abschnittsnamen und Schlüsselwörter aus der Config
   const namen = ticketNamen(cfg);
+  spracheAus(cfg); // fail-fast: das Spezifikations-Gate liest Abschnittsnamen und Schlüsselwörter aus der Config
   const messfenster = erzeugeLader({ ladeNamen: () => namen });
   const lade = () => ({
     produkt: normalizeItems(loadItemPages(boardFuerRolle("produkt"))),

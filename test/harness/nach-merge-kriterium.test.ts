@@ -24,12 +24,11 @@ import * as checkRaw from "../../scripts/check-abnahme-nachweis.mjs";
 import * as sliceRaw from "../../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as specRaw from "../../scripts/spezifikation-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig, spracheAus } from "../../scripts/projekt-config-lib.mjs";
+import { echteSprache, echteSpezifikation } from "../support/echte-sprache";
 
 type Krit = { k: string; text: string; nachMerge?: boolean };
 type Urteil = { k: string; wert: string }[];
-const SPRACHE = spracheAus(ladeProjektConfig()).spezifikation as Record<string, unknown>;
+const SPRACHE = echteSpezifikation();
 const SR = specRaw as unknown as { kriterien: (b: string, s: unknown) => Krit[]; spezifikationsMaengel: (b: string, s: unknown) => string[] };
 const S = { kriterien: (b: string) => SR.kriterien(b, SPRACHE), spezifikationsMaengel: (b: string) => SR.spezifikationsMaengel(b, SPRACHE) };
 const A = abnahmeRaw as unknown as {
@@ -93,7 +92,7 @@ describe("Regel 2: Abnahme-Auswertung", () => {
     const posts: { nr: number; body: string }[] = [];
     const io = {
       owner: "fluffels",
-      config: { labels: { forum: "forum" }, sprache: ladeProjektConfig().sprache },
+      config: { labels: { forum: "forum" }, sprache: echteSprache() },
       zeilen: Z,
       leseDatei: () => bericht(["K1: erfuellt — a", "K3: erfuellt — c"]),
       ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }),
@@ -108,7 +107,7 @@ describe("Regel 2: Abnahme-Auswertung", () => {
     expect(posts[0].body).toContain(`<!-- kq-abnahme durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt -->`);
   });
   test("`kriterien <nr>` kennzeichnet das Kriterium für den Abnahme-Agenten", () => {
-    const io = { owner: "fluffels", config: { labels: { forum: "forum" }, sprache: ladeProjektConfig().sprache }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
+    const io = { owner: "fluffels", config: { labels: { forum: "forum" }, sprache: echteSprache() }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
     const out = A.fuehreAus(["kriterien", "7"], io).out;
     expect(out).toContain("K2 (nach dem Merge, nicht prüfen): Nach dem Merge: ein workflow_dispatch-Lauf");
     expect(out).toMatch(/^K1: Erstes\./m);

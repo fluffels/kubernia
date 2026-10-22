@@ -2,8 +2,7 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig, spracheAus } from "../scripts/projekt-config-lib.mjs";
+import { echteSpezifikation } from "./support/echte-sprache";
 
 type Art = { art: "ausgenommen" | "ok" | "bestand" | "hart"; fehlt?: string[] };
 type Sprache = Record<string, unknown>;
@@ -16,7 +15,7 @@ const R = raw as unknown as {
 };
 
 /** Die echte Sprach-Config des Projekts (deutsch): die Tests unten laufen gegen sie, die Englisch-Tests gegen `EN`. */
-const SPRACHE = spracheAus(ladeProjektConfig()).spezifikation as Sprache;
+const SPRACHE = echteSpezifikation();
 const S = {
   ...R,
   spezifikationsMaengel: (body: unknown) => R.spezifikationsMaengel(body, SPRACHE),

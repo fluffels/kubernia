@@ -16,12 +16,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as configLib from "../../scripts/projekt-config-lib.mjs";
+import { echteConfig, umschriftAus } from "../support/echte-sprache";
 
-const listTrackedFiles = checkBasis.listTrackedFiles as (rootDir?: string) => string[];
-const ladeProjektConfig = configLib.ladeProjektConfig as () => unknown;
-const umschriftAus = configLib.umschriftAus as (config: unknown) => string[];
+const listTrackedFiles = (checkBasis as unknown as { listTrackedFiles: (rootDir?: string) => string[] }).listTrackedFiles;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -98,7 +95,7 @@ describe("Scan-Umfang", () => {
 
 describe("Umlaut-Wächter über die echte Fläche", () => {
   test("keine ASCII-Umschrift aus sprache.umschrift in Docs, Agenten und Skills", () => {
-    const woerter = umschriftAus(ladeProjektConfig());
+    const woerter = umschriftAus(echteConfig());
     const dateien = listTrackedFiles(WURZEL).filter(IM_SCOPE);
     assert.ok(dateien.length > 50, "Dateiliste unerwartet klein: git ls-files fehlgeschlagen?");
     const meldungen = dateien.flatMap((f) => findeUmschrift(readFileSync(WURZEL + f, "utf8"), woerter).map((x) => `${f}:${x.zeile}: ${x.wort}`));

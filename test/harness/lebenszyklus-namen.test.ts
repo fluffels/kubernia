@@ -82,6 +82,7 @@ const AB: Cfg = {
   praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" },
   agenten: { planer: "ab-planer", umsetzer: "ab-umsetzer", lens: "ab-lens", gruppe: "ab-gruppe", ticketSkill: "ab" },
   labels: { harness: "h", festgefahren: "zustand:fest", forum: "f", dependabotInbox: "h" },
+  sprache: ladeProjektConfig().sprache, // das Spezifikations-Gate der Auswahl liest die Sprache aus der Config (#1711)
 };
 const OHNE_WT: Cfg = { ...AB, praefixe: { commitZeile: "AB-", branch: "feature/ab-" } };
 const OHNE_SKILL: Cfg = { ...AB, agenten: { ...(AB.agenten as object), ticketSkill: undefined } };
@@ -306,7 +307,7 @@ describe("naechstes-ticket: Namen aus der Config", () => {
     fields: [{ name: "Status", value: { name: { raw: "Todo" } } }],
     content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n", issue_dependencies_summary: { blocked_by: 0 } },
   });
-  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: "fluffels", refs, namen: NAMEN, config: { labels: { harness: "area:harness", forum: "forum" } } });
+  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: "fluffels", refs, namen: NAMEN, config: { labels: { harness: "area:harness", forum: "forum" }, sprache: AB.sprache } });
   test("ein Branch mit dem Präfix der Config überspringt das Ticket, der des echten Projekts nicht", () => {
     expect(waehle(["feature/ab-5-x"]).ticket).toBeNull();
     expect(waehle(["feature/kq-5-x"]).ticket?.nr).toBe(5);

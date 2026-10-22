@@ -881,7 +881,7 @@ describe("echteIo: Messfenster-Lader bekommt die Namen der Config (#1821 L10)", 
 });
 
 describe("Sprache als Projektwert (#1711)", () => {
-  const ohne = { labels: { harness: "area:harness", forum: "forum" } };
+  const ohne = { ...(ladeCfg as unknown as { ladeProjektConfig: () => Record<string, unknown> }).ladeProjektConfig(), sprache: undefined };
   test("echteIo: ohne sprache in der Config bricht der Start vorab mit Fix-Zeile ab", () => {
     const echte = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => unknown }).echteIo;
     expect(() => echte({ config: ohne, messfensterLader: () => () => ({ closedAt: null, n: 0 }) })).toThrow(/sprache[\s\S]*Fix:/);

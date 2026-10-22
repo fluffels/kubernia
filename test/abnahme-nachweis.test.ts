@@ -12,8 +12,7 @@ import * as raw from "../scripts/check-abnahme-nachweis.mjs";
 import * as sliceRaw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as nlRaw from "../scripts/nachweis-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+import { echteSprache } from "./support/echte-sprache";
 
 interface Zeilen {
   abnahme: string;
@@ -38,7 +37,7 @@ const m = raw as unknown as Mod;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen & Record<string, string> };
 const { parseNachweis, abnahmeMarker, MAX_REVIEW_PAESSE } = nlRaw as unknown as { parseNachweis: (t: string, z: unknown) => Nachweis; abnahmeMarker: (z: unknown) => string; MAX_REVIEW_PAESSE: number };
 const Z = commitZeilen("KQ-", "kubernia-planner");
-const CONFIG = { repo: "owner/repo", praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, sprache: ladeProjektConfig().sprache };
+const CONFIG = { repo: "owner/repo", praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, sprache: echteSprache() };
 
 const H = "b".repeat(40);
 const R = "a".repeat(40);
@@ -240,7 +239,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "false" } }).r.ok).toBe(false);
   });
   test("Negativfall (#1711): ohne sprache in der Config ist der Nachweis rot (fail-closed), mit ihr bleibt er grün", () => {
-    const { sprache: _weg, ...ohne } = CONFIG;
+    const ohne = { ...CONFIG, sprache: undefined };
     const r = lauf({ config: ohne }).r;
     expect(r.ok).toBe(false);
     expect(r.fehler.join("|")).toMatch(/sprache/);

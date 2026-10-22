@@ -3,8 +3,7 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig } from "../scripts/projekt-config-lib.mjs";
+import { echteSprache } from "./support/echte-sprache";
 
 type Issue = { state?: string; body?: string | null; user?: { login: string; type?: string } | null; labels?: ({ name: string } | string)[]; pull_request?: object };
 type Io = {
@@ -26,7 +25,7 @@ const ALT = "Das ist der alte Text.\nZweite Zeile des alten Texts.";
 function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
   const aufrufe = { erzeuge: [] as unknown[], einsortiere: [] as unknown[], bearbeite: [] as unknown[] };
   const io: Io = {
-    config: { labels: { forum: "forum" }, sprache: ladeProjektConfig().sprache },
+    config: { labels: { forum: "forum" }, sprache: echteSprache() },
     owner: "fluffels",
     leseDatei: (p) => {
       if (!(p in dateien)) throw new Error("ENOENT");

@@ -11,6 +11,7 @@ import { describe, expect, test } from "vitest";
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { lies } from "./repo-texte";
+import { echteSprache } from "../support/echte-sprache";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -56,6 +57,7 @@ const esc = (namenRaw as unknown as { escapeRegex: (t: string) => string }).esca
 const T = taktRaw as unknown as { fuehreTaktAus: (a: Record<string, unknown>) => { fehler: boolean } };
 
 const BASIS = {
+  sprache: echteSprache(),
   praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" },
   agenten: { planer: "ab-planer", umsetzer: "ab-umsetzer", lens: "ab-lens", gruppe: "ab-gruppe", ticketSkill: "ab" },
 };

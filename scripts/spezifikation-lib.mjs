@@ -13,7 +13,6 @@
  */
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
-const maskiere = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Prüft den Wörterbuch-Block und baut daraus Regexe und Meldungen; wirft ohne (vollständigen) Block. Pur. */
 function wortschatz(sprache) {
@@ -34,7 +33,7 @@ function wortschatz(sprache) {
   const ak = s.akzeptanzkriterien[0];
   return {
     ziel: s.ziel,
-    akName: s.akzeptanzkriterien.map(maskiere).join("|"),
+    akNamen: s.akzeptanzkriterien,
     nachMerge: s.nachMerge,
     negativ: negativ.re,
     begrenzung: begrenzung.re,
@@ -51,8 +50,9 @@ function wortschatz(sprache) {
   };
 }
 
-/** Zeilen je Abschnitt (Überschrift Ebene 2 mit einem der Namen aus `name`, einer Regex-Alternation); Code-Fences zählen nicht, `###` gehört zum Abschnitt. `null` = Abschnitt fehlt. */
-function abschnitt(body, name) {
+/** Zeilen je Abschnitt (Überschrift Ebene 2 mit einem der Namen aus `namen`, als Text verglichen, Groß-/Kleinschreibung egal); Code-Fences zählen nicht, `###` gehört zum Abschnitt. `null` = Abschnitt fehlt. */
+function abschnitt(body, namen) {
+  const klein = namen.map((n) => n.toLowerCase());
   let drin = false;
   let gefunden = false;
   let fence = false;
@@ -64,7 +64,8 @@ function abschnitt(body, name) {
     }
     if (fence) continue;
     if (/^#{1,2}\s/.test(zeile)) {
-      drin = new RegExp(`^##\\s+(?:${name})\\s*$`, "i").test(zeile);
+      const titel = /^##\s+(.*?)\s*$/.exec(zeile);
+      drin = titel !== null && klein.includes(titel[1].toLowerCase());
       gefunden = gefunden || drin;
       continue;
     }
@@ -77,10 +78,10 @@ function abschnitt(body, name) {
 export function spezifikationsMaengel(body, sprache) {
   const w = wortschatz(sprache);
   const maengel = [];
-  const ziel = abschnitt(body, maskiere(w.ziel));
+  const ziel = abschnitt(body, [w.ziel]);
   if (ziel === null) maengel.push(w.meldung.zielFehlt);
   else if (ziel.every((z) => z.trim() === "")) maengel.push(w.meldung.zielLeer);
-  const ak = abschnitt(body, w.akName);
+  const ak = abschnitt(body, w.akNamen);
   if (ak === null) {
     maengel.push(w.meldung.akFehlt);
   } else {
@@ -104,7 +105,7 @@ const ohneMarker = (z) => z.trim().replace(/^(?:[-*+]|\d+[.)])\s+/, "").replace(
  */
 export function kriterien(body, sprache) {
   const w = wortschatz(sprache);
-  const zeilen = abschnitt(body, w.akName);
+  const zeilen = abschnitt(body, w.akNamen);
   const punkte = (zeilen ?? []).filter((z) => LISTENPUNKT.test(z));
   if (punkte.length === 0) return [];
   const oben = Math.min(...punkte.map(einzug));
