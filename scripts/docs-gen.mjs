@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { collectMarkdown, leseConfigObjekt, mermaidBloecke, parseSections, pruefeMermaid } from "./docs-gen/markdown.mjs";
-import { GENERATORS } from "./docs-gen/registry.mjs";
+import { GENERATORS, ladeGeneratoren } from "./docs-gen/registry.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Standard-Config; per `--config <pfad>` überschreibbar (Pfad relativ zum Repo-Root oder absolut). */
@@ -75,6 +75,7 @@ function runGenerator(cache, generators, name, ctx) {
 /**
  * Prüft (write=false) bzw. schreibt (write=true) alle Abschnitte.
  * Fail-closed: bei irgendeinem Fehler wird nichts geschrieben.
+ * `generators` ist standardmäßig nur die Kern-Registry; Projekt-Generatoren aus `config.generatoren` lädt `cli` (über `ladeGeneratoren`).
  */
 export function runDocsGen({ rootDir = ROOT, config, generators = GENERATORS, write = false }) {
   const stale = [];
@@ -135,9 +136,10 @@ export function loadConfig(rootDir = ROOT, pfad = DEFAULT_CONFIG) {
 
 /**
  * Kommandozeile: `[--write] [--config <pfad>]`. Gibt den Exit-Code zurück (0 ok, 1 Fehler oder veraltet, `AUFRUF_EXIT` bei einem Aufruf-Fehler);
- * `out`/`err` nehmen die Ausgabezeilen entgegen. `config`/`generators` überschreiben Datei und Registry (Tests).
+ * `out`/`err` nehmen die Ausgabezeilen entgegen. `config`/`generators` überschreiben Datei und Registry (Tests); ohne `generators`
+ * lädt `ladeGeneratoren` die Kern-Registry plus `config.generatoren` (ADR 0022 F6).
  */
-export function cli(argv, { rootDir = ROOT, config, generators = GENERATORS, out = console.log, err = console.error } = {}) {
+export async function cli(argv, { rootDir = ROOT, config, generators, out = console.log, err = console.error } = {}) {
   const { werte, fehler } = flagsLesen(argv, { write: { type: "boolean" }, config: { type: "string" } });
   if (fehler) {
     err(`✖ ${fehler.text}\n\nFix: Aufruf: node scripts/docs-gen.mjs [--write] [--config <pfad>]`);
@@ -154,7 +156,16 @@ export function cli(argv, { rootDir = ROOT, config, generators = GENERATORS, out
       return 1;
     }
   }
-  const res = runDocsGen({ rootDir, config: cfg, generators, write });
+  let gens = generators;
+  if (!gens) {
+    try {
+      gens = await ladeGeneratoren({ rootDir, config: cfg });
+    } catch (e) {
+      err(`✖ ${e instanceof Error ? e.message : e}\n\nFix: config.generatoren in der Config prüfen (Standard ${DEFAULT_CONFIG})`);
+      return 1;
+    }
+  }
+  const res = runDocsGen({ rootDir, config: cfg, generators: gens, write });
   let befehl = STANDARD_BEFEHL;
   try {
     befehl = befehlAus(cfg);
@@ -179,4 +190,4 @@ export function cli(argv, { rootDir = ROOT, config, generators = GENERATORS, out
   return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exitCode = cli(process.argv.slice(2));
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exitCode = await cli(process.argv.slice(2));
