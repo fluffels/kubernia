@@ -76,6 +76,7 @@ describe("findeUmschrift: Muster und Negativfälle", () => {
   test("Randfälle: Satzende, Ziffern, Pfad-Schrägstrich, CRLF, eingerückter Fence", () => {
     assert.deepEqual(findeUmschrift("Das ist fuer.\nEs geht ueber, pruefen.", WOERTER).map((f) => f.wort), ["fuer", "ueber", "pruefen"], "ein Punkt am Satzende ist kein Dateiname");
     assert.deepEqual(findeUmschrift("fuer2 und 2fuer und fuer/x und a/fuer", WOERTER), [], "Ziffern und Schrägstrich hängen am Bezeichner");
+    assert.deepEqual(findeUmschrift("fuer.2 und v1.fuer", WOERTER), [], "Punkt vor einer Ziffer gehört zum Bezeichner");
     assert.deepEqual(findeUmschrift("ok\r\nDas ist fuer dich\r\n", WOERTER), [{ zeile: 2, wort: "fuer" }]);
     assert.deepEqual(findeUmschrift("  ```yaml\n  fuer\n  ```\nfuer", WOERTER), [{ zeile: 4, wort: "fuer" }], "eingerückter Fence blendet aus");
   });
