@@ -267,12 +267,19 @@ export function kernVerzeichnisse(eintraege: Eintrag[]): Set<string> {
   return out;
 }
 
-/** Meldungen (leer = grün): jede getrackte Datei direkt in einem Kern-Verzeichnis ist Besitz oder steht in der Abdeckungsliste. */
+/** Feste Wurzeln, unabhängig vom Manifest (wie `projektDateien`): Agenten direkt, Skill-Quellen und Zeiger eine Ebene tiefer. */
+const FESTE_FLAECHEN = [
+  /^\.claude\/agents\/[^/]+$/,
+  new RegExp(`^${escapeRe(ZEIGER_WURZEL as string)}/[^/]+/[^/]+$`),
+  new RegExp(`^${escapeRe(QUELL_VERZEICHNIS as string)}/[^/]+/[^/]+$`),
+];
+
+/** Meldungen (leer = grün): jede getrackte Datei direkt in einem Kern-Verzeichnis oder in einer festen Wurzel ist Besitz oder steht in der Abdeckungsliste. */
 export function pruefeAbdeckung(eintraege: Eintrag[], getrackt: string[], abdeckung: Record<string, AbdeckEintrag>): string[] {
   const out: string[] = [];
   const verz = kernVerzeichnisse(eintraege);
   const besitz = new Set(eintraege.map((e) => e.pfad));
-  const imKern = getrackt.filter((p) => verz.has(posix.dirname(p)));
+  const imKern = getrackt.filter((p) => verz.has(posix.dirname(p)) || FESTE_FLAECHEN.some((r) => r.test(p)));
   for (const p of imKern) {
     if (besitz.has(p)) continue;
     if (!Object.keys(abdeckung).some((m) => musterRe(m).test(p))) {

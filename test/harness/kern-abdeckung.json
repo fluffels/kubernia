@@ -30,5 +30,9 @@
   "scripts/sbom.mjs": {"art":"modul","grund":"Sicherheits-Modul (SBOM), kein Factory-Kern"},
   ".github/workflows/ci.yml": {"art":"projekt","grund":"CI-Pipeline dieses Projekts (Gates, Builds, Smokes)"},
   ".github/workflows/codeql.yml": {"art":"modul","grund":"Sicherheits-Modul (Code-Scanning), kein Factory-Kern"},
-  ".github/workflows/scorecard.yml": {"art":"modul","grund":"Sicherheits-Modul (Scorecard), kein Factory-Kern"}
+  ".github/workflows/scorecard.yml": {"art":"modul","grund":"Sicherheits-Modul (Scorecard), kein Factory-Kern"},
+  ".agents/skills/factory-ticket/SKILL.md": {"art":"projekt","grund":"Ticket-Skill des Projekts (Ticket-Ablauf dieses Repos)"},
+  ".claude/skills/factory-ticket/SKILL.md": {"art":"projekt","grund":"Zeiger auf den Ticket-Skill des Projekts"},
+  ".agents/skills/forum/SKILL.md": {"art":"modul","grund":"Forum-Modul, kein Factory-Kern"},
+  ".claude/skills/forum/SKILL.md": {"art":"modul","grund":"Zeiger auf den Forum-Skill, Forum-Modul, kein Factory-Kern"}
 }
