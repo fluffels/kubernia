@@ -18,7 +18,8 @@ import * as raw from "../../scripts/haupt-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as syncRaw from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as pfade from "../../scripts/skill-pfade.mjs";
+import * as pfadeRaw from "../../scripts/skill-pfade.mjs";
+const pfade = pfadeRaw as unknown as { ZEIGER_WURZEL: string };
 
 type Eingabe = { istLinkedWorktree: boolean; branch: string; sauber: boolean; hinter: number; vor: number };
 type Ergebnis = { aktion: string; grund: string; hinter: number; basis: string; gepullt: boolean; harness?: { skill: string[]; agenten: string[]; sonstige: string[] }; notiz: string };
@@ -475,7 +476,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("Ticket-Skills (#1866): ändern sich beide Ticket-Skills, nennt „Skill neu lesen“ beide SKILL.md; ablauf.md nur ohne SKILL.md", () => {
-    const text = (skill: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill, agenten: [], sonstige: [], lockGeaendert: false } }, { sitzungsbasis: false });
+    const text = (skill: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill, agenten: [], sonstige: [] } }, { sitzungsbasis: false });
     const beide = text([".claude/skills/factory/SKILL.md", ".claude/skills/factory-ticket/SKILL.md", ".agents/skills/factory/ablauf.md"]);
     expect(beide).toContain("`.agents/skills/factory/SKILL.md`, `.agents/skills/factory-ticket/SKILL.md` jetzt neu lesen");
     expect(beide).not.toContain("`.agents/skills/factory/ablauf.md` jetzt");
