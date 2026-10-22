@@ -8,6 +8,8 @@ import { describe, expect, test } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { sammleKernEnv as rawSammle } from "../../scripts/projekt-config-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BEFEHLE = "docs/referenz/befehle.md";
@@ -17,30 +19,16 @@ const AUSNAHMEN: Record<string, string> = {
   FACTORY_TEST_FEHLT: "Absenz-Fixture im Test des Fehlerpfads, wird nie gelesen",
 };
 
-const LITERAL = /umgebungsWert\([^,()]*,\s*"(FACTORY_[A-Z0-9_]+)"/g;
-const KOMMENTARZEILE = /^\s*(\*|\/\/)/;
-
 export interface CodeFunde {
   literale: Set<string>;
   /** Aufrufe ohne Literal als Namen (Variablenname), als `datei:zeile`. */
   ohneLiteral: string[];
 }
 
-/** Pur: sammelt die Literale und die Aufrufe ohne Literal aus einem Quelltext. */
-export function sammleCode(datei: string, text: string): CodeFunde {
-  const literale = new Set<string>();
-  const ohneLiteral: string[] = [];
-  text.split("\n").forEach((zeile, i) => {
-    if (KOMMENTARZEILE.test(zeile) || !zeile.includes("umgebungsWert(")) return;
-    if (datei.endsWith("projekt-config-lib.mjs") && /function umgebungsWert\(/.test(zeile)) return;
-    const treffer = [...zeile.matchAll(LITERAL)];
-    for (const t of treffer) literale.add(t[1]);
-    if (treffer.length === 0) ohneLiteral.push(`${datei}:${i + 1}`);
-  });
-  return { literale, ohneLiteral };
-}
+/** Der Sammler liegt in der Kern-Lib (`sammleKernEnv`), damit der Doctor dieselben Namen kennt. */
+export const sammleCode = rawSammle as (datei: string, text: string) => CodeFunde;
 
-/** Pur: Namen der Kern-Zeilen unter `## Umgebungsvariablen` (Ring in Spalte 3, Name in Spalte 1). */
+/** Pur: Namen der Kern-Zeilen unter `## Umgebungsvariablen` (Ring in Spalte 2, Name in Spalte 1). */
 export function sammleInventar(md: string): Set<string> {
   const namen = new Set<string>();
   let drin = false;
@@ -48,7 +36,7 @@ export function sammleInventar(md: string): Set<string> {
     if (/^## /.test(zeile)) drin = zeile.trim() === "## Umgebungsvariablen";
     if (!drin || !zeile.startsWith("|")) continue;
     const spalten = zeile.split("|").slice(1, -1).map((s) => s.trim());
-    if (spalten[2] !== "Kern") continue;
+    if (spalten[1] !== "Kern") continue;
     const m = /^`([^`]+)`$/.exec(spalten[0]);
     if (m) namen.add(m[1]);
   }
@@ -101,8 +89,8 @@ describe("Umgebungsvariablen-Inventar gegen den Code", () => {
 
 describe("Wächter-Hilfsfunktionen (Negativfälle)", () => {
   const code = (literale: string[], ohneLiteral: string[] = []): CodeFunde => ({ literale: new Set(literale), ohneLiteral });
-  const tabelle = (zeilen: string[]) => `## Umgebungsvariablen\n\n| Name | Alt | Ring | a | b |\n| --- | --- | --- | --- | --- |\n${zeilen.join("\n")}\n\n## Anderes\n| \`FACTORY_X\` | – | Kern | a | b |\n`;
-  const zeile = (n: string, ring = "Kern") => `| \`${n}\` | – | ${ring} | a | b |`;
+  const tabelle = (zeilen: string[]) => `## Umgebungsvariablen\n\n| Name | Ring | a | b |\n| --- | --- | --- | --- |\n${zeilen.join("\n")}\n\n## Anderes\n| \`FACTORY_X\` | Kern | a | b |\n`;
+  const zeile = (n: string, ring = "Kern") => `| \`${n}\` | ${ring} | a | b |`;
 
   test("Gleichheit: keine Abweichung", () => {
     expect(vergleiche(code(["FACTORY_A"]), sammleInventar(tabelle([zeile("FACTORY_A")])), {})).toEqual([]);

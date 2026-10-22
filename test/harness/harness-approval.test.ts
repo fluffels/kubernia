@@ -45,6 +45,8 @@ import { fileURLToPath } from "node:url";
 import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
 
 const { trifftLeitplanke, leitplankenMuster } = abschlussRaw as unknown as {
   trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
@@ -527,12 +529,17 @@ const PROJEKT_STOPPS = ["Forum-Antwort posten", "PixelLab-Key"];
 const PROJEKT_STOPP_ZEILE = "- **Projekt-Stopps** (ergänzen die Kern-Liste, nie streichen): Forum-Antwort posten, PixelLab-Key; vorab klären.";
 
 const KERN_RE = /<!-- factory-besitz:start kern -->([\s\S]*?)<!-- factory-besitz:ende kern -->/;
-const PROJEKT_RE = /<!-- factory-projekt:start -->([\s\S]*?)<!-- factory-projekt:ende -->/;
+/** Inhalt des Projekt-Blocks (zwischen den Markern), `null` ohne vollständiges Paar. */
+const projektBlock = (text: string): string | null => {
+  const von = text.indexOf(PROJEKT_BLOCK_START as string);
+  const bis = text.indexOf(PROJEKT_BLOCK_ENDE as string, von + 1);
+  return von < 0 || bis < 0 ? null : text.slice(von + (PROJEKT_BLOCK_START as string).length, bis);
+};
 
 /** Feste Stopps, die fehlen: Kern-Anker im Kern-Block, Projekt-Anker samt Pin-Zeile im Projekt-Block, Kern-Anker im Projekt-Block (ohne Marker: alle). */
 function festeStoppsFehlend(agentsText: string): string[] {
   const kern = KERN_RE.exec(agentsText)?.[1] ?? "";
-  const projekt = PROJEKT_RE.exec(agentsText)?.[1] ?? "";
+  const projekt = projektBlock(agentsText) ?? "";
   return [
     ...KERN_STOPPS.filter((anker) => !kern.includes(anker)),
     ...PROJEKT_STOPPS.filter((anker) => !projekt.includes(anker)),
@@ -547,7 +554,7 @@ const STOPP_WORT = /Stopp|vorab|Pre-Flight|löschen|Veröffentlich/i;
 
 /** Zeilen des Projekt-Blocks mit einem Stopp-Wort, die weder die Pin-Zeile noch eine bekannte Zeile sind (eine neue Stopp-Aussage im Projekt-Block). */
 function unbekannteStoppAussagen(agentsText: string): string[] {
-  const projekt = PROJEKT_RE.exec(agentsText)?.[1] ?? "";
+  const projekt = projektBlock(agentsText) ?? "";
   return projekt
     .split("\n")
     .filter((z) => z !== PROJEKT_STOPP_ZEILE && STOPP_WORT.test(STOPP_WORT_ERLAUBT.reduce((rest, s) => rest.split(s).join(" "), z)));
@@ -597,7 +604,7 @@ describe("Feste Stopps bleiben (#1363)", () => {
     assert.deepEqual(festeStoppsFehlend(nurKern), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
     assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, `${PROJEKT_STOPP_ZEILE} Veröffentlichen`)), [PROJEKT_STOPP_ZEILE, "Kern-Stopp im Projekt-Block: Veröffentlichen"]);
     assert.deepEqual(festeStoppsFehlend(agents.replace("factory-besitz:start kern", "x")), KERN_STOPPS);
-    assert.deepEqual(festeStoppsFehlend(agents.replace("factory-projekt:start", "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
+    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_BLOCK_START as string, "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
   });
 
   test("der Projekt-Block trägt keine unbekannte Stopp-Aussage (Red-Green: Synonym ohne Anker, Lockerung per Zusatzzeile)", () => {
@@ -610,7 +617,7 @@ describe("Feste Stopps bleiben (#1363)", () => {
       assert.notEqual(zeile, "", signatur);
       assert.deepEqual(unbekannteStoppAussagen(agents.replace(zeile, `${zeile} Ein Stopp entfällt dort.`)), [`${zeile} Ein Stopp entfällt dort.`], `Lockerung an die Zeile mit ${signatur}`);
     }
-    assert.deepEqual(unbekannteStoppAussagen(agents.replace("factory-projekt:start", "x")), [], "ohne Projekt-Marker nichts zu prüfen (festeStoppsFehlend meldet den fehlenden Block)");
+    assert.deepEqual(unbekannteStoppAussagen(agents.replace(PROJEKT_BLOCK_START as string, "x")), [], "ohne Projekt-Marker nichts zu prüfen (festeStoppsFehlend meldet den fehlenden Block)");
     const kernZusatz = agents.replace("<!-- factory-besitz:ende kern -->", "Löschen ist erlaubt.\n<!-- factory-besitz:ende kern -->");
     assert.deepEqual(unbekannteStoppAussagen(kernZusatz), [], "der Kern-Block ist Sache des Drift-Gates, nicht dieser Prüfung");
     assert.ok(STOPP_WORT_ERLAUBT.every((s) => agents.includes(s)), "die Erlaubnisliste enthält keine toten Signaturen");

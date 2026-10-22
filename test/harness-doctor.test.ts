@@ -9,6 +9,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pruefeAltnamen as rawAlt } from "../scripts/harness-doctor-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
 interface Doctor {
   main(argv: string[], opt: Record<string, unknown>): number;
@@ -16,6 +20,9 @@ interface Doctor {
   voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[] }): { secrets: string[]; variablen: string[]; labels: string[] };
 }
 const doctor = rawDoctor as unknown as Doctor;
+type Befund = { punkt: string; ok: boolean; befund?: string; fix?: string };
+const pruefeAltnamen = rawAlt as (a: { env: Record<string, string | undefined>; config: unknown; namen: string[] }) => Befund[];
+const altEnvName = rawAltName as (name: string, config: unknown) => string | null;
 const SKRIPT = fileURLToPath(new URL("../scripts/harness-doctor.mjs", import.meta.url));
 
 const board = (rolle: string, nummer: number, id: string) => ({ rolle, besitzer: "acme", besitzerTyp: "org", nummer, projectId: id, statusFeldId: 5, statusFeldNodeId: "x_status", todoOptionId: "abc" });
@@ -51,7 +58,7 @@ afterEach(() => {
 });
 
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[] } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string> } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
   ordner.push(root);
   if (opt.workflow !== null) {
@@ -73,9 +80,10 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     return typeof w === "string" ? w : JSON.stringify(w);
   };
   const r: Lauf = { code: -1, out: [], err: [], aufrufe };
-  r.code = doctor.main(opt.argv ?? ["--pruefen", "--config", join(root, "projekt.json")], {
+  r.code = doctor.main((opt.argv ?? ["--pruefen", "--config", "<config>"]).map((a) => (a === "<config>" ? join(root, "projekt.json") : a)), {
     rootDir: root,
     gh,
+    env: opt.env ?? {},
     langfuse: () => ({ status: opt.langfuse ?? 0, stderr: opt.langfuse ? "Langfuse aus." : "" }),
     out: (s: string) => r.out.push(s),
     err: (s: string) => r.err.push(s),
@@ -83,6 +91,46 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
   return r;
 }
 const luecken = (r: Lauf): string[] => r.out.filter((z) => z.startsWith("LÜCKE"));
+
+describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
+  const NEU = "FACTORY_DIFF_BASE";
+  const ALT = altEnvName(NEU, CONFIG) as string;
+  const NEU2 = "FACTORY_PR_NUMBER";
+  const ALT2 = altEnvName(NEU2, CONFIG) as string;
+
+  test("pur: keiner gesetzt ergibt einen guten Punkt", () => {
+    assert.deepEqual(pruefeAltnamen({ env: {}, config: CONFIG, namen: [NEU, NEU2] }), [{ punkt: "Umgebungsvariablen", ok: true }]);
+  });
+  test("pur: ein gesetzter Altname ergibt eine Lücke mit Fix, der Wert fehlt", () => {
+    const e = pruefeAltnamen({ env: { [ALT]: "geheimwert" }, config: CONFIG, namen: [NEU, NEU2] });
+    assert.equal(e.length, 1);
+    assert.equal(e[0].ok, false);
+    assert.equal(e[0].punkt, `Umgebungsvariable ${ALT}`);
+    assert.match(e[0].fix ?? "", new RegExp(`${NEU}`));
+    assert.doesNotMatch(JSON.stringify(e), /geheimwert/);
+  });
+  test("pur: ein leerer Altwert zählt als gesetzt, zwei Altnamen geben zwei Lücken, der neue Name allein keine", () => {
+    assert.equal(pruefeAltnamen({ env: { [ALT]: "" }, config: CONFIG, namen: [NEU] })[0].ok, false);
+    assert.equal(pruefeAltnamen({ env: { [ALT]: "a", [ALT2]: "b" }, config: CONFIG, namen: [NEU, NEU2] }).length, 2);
+    assert.equal(pruefeAltnamen({ env: { [NEU]: "x" }, config: CONFIG, namen: [NEU] })[0].ok, true);
+  });
+  test("pur: Config ohne gültiges Commit-Präfix und leere Namensliste: kein Befund", () => {
+    assert.equal(pruefeAltnamen({ env: { [ALT]: "a" }, config: { praefixe: { commitZeile: "x" } }, namen: [NEU] })[0].ok, true);
+    assert.equal(pruefeAltnamen({ env: { [ALT]: "a" }, config: CONFIG, namen: [] })[0].ok, true);
+  });
+  test("CLI: ein gesetzter Altname ergibt Exit 1 und eine LÜCKE-Zeile mit Fix, der Wert steht nie in der Ausgabe", () => {
+    const r = lauf({}, { env: { [ALT]: "geheimwert" } });
+    assert.equal(r.code, 1);
+    assert.equal(luecken(r).length, 1, r.out.join("\n"));
+    assert.match(luecken(r)[0], new RegExp(`Umgebungsvariable ${ALT}: .*Fix: .*${NEU}`));
+    assert.doesNotMatch(r.out.concat(r.err).join("\n"), /geheimwert/);
+  });
+  test("CLI: --einrichten prüft den Punkt nicht", () => {
+    const r = lauf({}, { argv: ["--einrichten", "--dry-run", "--config", "<config>"], env: { [ALT]: "a" } });
+    assert.match(r.out.join("\n"), /Harness-Doctor --einrichten/);
+    assert.doesNotMatch(r.out.join("\n"), new RegExp(ALT));
+  });
+});
 
 describe("harness-doctor --pruefen", () => {
   test("gesunde Welt: Exit 0, keine Lücke, eine Schlusszeile", () => {

@@ -255,7 +255,7 @@ describe("liesSnapshot und CLI", () => {
     const pfad = join(d, "s.json");
     if (snapshot !== null) writeFileSync(pfad, typeof snapshot === "string" ? snapshot : JSON.stringify(snapshot));
     const basis: Record<string, string | undefined> = { ...process.env };
-    // Eine Zielquote aus der Umgebung der Maintainerin (neuer oder alter Name) darf die Tests nicht verschieben.
+    // Eine Zielquote aus der Umgebung der Maintainerin (nur der neue Name wirkt) darf die Tests nicht verschieben.
     ohneKernEnv(basis, "FACTORY_PACING_ZIELQUOTE");
     Object.assign(basis, { FACTORY_RATE_LIMITS_SNAPSHOT: pfad, ...env });
     const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", ...args], { encoding: "utf8", env: basis });
@@ -289,13 +289,14 @@ describe("liesSnapshot und CLI", () => {
     expect(streng.code).toBe(4);
   });
 
-  test("CLI: Altname der Zielquote (#1824) gilt weiter, die Warnung nennt den neuen Namen", () => {
+  test("CLI: der Altname der Zielquote wirkt nicht mehr und warnt nicht", () => {
     const snap = { stand: Date.now(), quelle: "statusline", sevenDay: { pct: 20, resetsAt: jetztS() + 3.5 * 86400 } };
-    const streng = cli(snap, { [altName("FACTORY_PACING_ZIELQUOTE")]: "20" });
-    expect(streng.code).toBe(4);
-    expect(streng.err).toContain("FACTORY_PACING_ZIELQUOTE");
-    expect(streng.err).toContain("veraltet");
-    expect(cli(snap, { FACTORY_PACING_ZIELQUOTE: "20" }).err).toBe("");
+    const ohneVariable = cli(snap);
+    const mitAltname = cli(snap, { [altName("FACTORY_PACING_ZIELQUOTE")]: "20" });
+    expect(mitAltname.code).toBe(ohneVariable.code);
+    expect((JSON.parse(mitAltname.out) as { zielquote: number }).zielquote).toBe((JSON.parse(ohneVariable.out) as { zielquote: number }).zielquote);
+    expect(mitAltname.err).toBe("");
+    expect(cli(snap, { FACTORY_PACING_ZIELQUOTE: "20" }).code).toBe(4);
   });
 
   test("CLI: Textausgabe nennt Status, Pause, Werte und Warnungen", () => {

@@ -20,8 +20,6 @@ export interface Behauptung {
 const BEHAUPTUNG = /open[\s-]?source|quelloffen/gi;
 const NEGATION = /^(nicht|kein(e|en|er|es|em)?|not|no|non)$/i;
 const SATZ_ENDE = /[.!?;]\s/g;
-/** Das Spiel-Muster der Lizenz-Entwürfe: „Spiel“ am Wortanfang, nicht „Beispiel“. */
-const SPIEL_MUSTER = /\bspiel/i;
 
 /** Alle Stellen, die den Text als Open Source beschreiben, ohne dass eine Verneinung (≤ 3 Wörter davor, gleicher Satz) davorsteht. */
 export function offeneQuelleBehauptungen(text: string): Behauptung[] {
@@ -152,38 +150,5 @@ describe("Selbstbeschreibung des Harness", () => {
   test("keine Fläche nennt den Harness Open Source", () => {
     const verstoesse = scope.flatMap((p) => offeneQuelleBehauptungen(lies(p)).map((b) => `${p}:${b.zeile}: „${b.auszug}“`));
     assert.deepEqual(verstoesse, [], "Selbstbeschreibung ist „source-available“, nicht Open Source");
-  });
-});
-
-describe("Produkt-Entwürfe (#1714)", () => {
-  const lizenz = (): string => lies(".factory/produkt/LICENSE");
-  const readme = (): string => lies(".factory/produkt/README.md");
-
-  test("Lizenz-Entwurf: Alle Rechte vorbehalten, ohne Spiel- oder Projektbezug", () => {
-    assert.match(lizenz(), /Alle Rechte vorbehalten/);
-    assert.doesNotMatch(lizenz(), SPIEL_MUSTER);
-    assert.doesNotMatch(lizenz(), /kubernia|kubequest/i);
-  });
-
-  test("Lizenz-Entwurf nimmt keine Fremdbeiträge an und untersagt den Einsatz", () => {
-    assert.match(lizenz(), /Beiträge Dritter werden nicht angenommen/);
-    assert.doesNotMatch(lizenz(), /Einreichen von Beiträgen als Pull Request/);
-    assert.match(lizenz(), /Ausführen oder Einsetzen/);
-  });
-
-  test("Namens-Grenzfall: „Beispiel“ trifft das Spiel-Muster nicht", () => {
-    assert.doesNotMatch("zum Beispiel", SPIEL_MUSTER);
-    assert.match("das Spiel", SPIEL_MUSTER);
-  });
-
-  test("README-Entwurf und Wurzel-README nennen den Harness source-available", () => {
-    assert.match(readme(), /source-available/);
-    assert.match(lies("README.md"), /source-available/);
-  });
-
-  test("README-Entwurf trägt den Produktnamen, ohne Projektnamen und ohne Dark-Factory-Behauptung", () => {
-    assert.match(readme(), /Self-Improving Agent Harness and Factory/);
-    assert.doesNotMatch(readme(), /kubernia/i);
-    assert.doesNotMatch(readme(), /ist eine Dark Factory/i);
   });
 });

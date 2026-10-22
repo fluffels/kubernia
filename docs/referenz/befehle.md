@@ -63,7 +63,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Ticket-Lock gegen doppelte Sessions am selben Ticket (#1561) | `node scripts/ticket-lock.mjs claim <nr> [--wiederaufnahme]` / `lebenszeichen <nr> --nonce <x> [--schritt <text>]` und `lebenszeichen --commit` / `pruefe <nr> [--nonce <x>]` / `uebernehmen <nr> --nonce <x> --nachfolger` / `uebergeben <nr> --nonce <x>` / `gestoppt <nr> --nonce <x>` / `freigeben <nr> --nonce <x>` (Exit 0 ok, 4 belegt/fremd/aktiv/schon übergeben, 2 Aufruffehler; Semantik: [agent-harness §2.3](../agent-harness.md#23-kollisionsschutz-für-parallele-agenten)) |
 | Verwaiste Claims melden und Erledigtes aufräumen (#1699): Locks und saubere Worktrees geschlossener Issues mit gemergtem PR, Zeilen `WIEDERAUFNAHME #<nr>`; `--json` liest nur (Exit 0 ok, 1 Aufräumschritt gescheitert, 2 Aufruf-/git-/gh-Fehler, 5 Kontingent knapp) | `node scripts/claims-pruefen.mjs [--json] [--stunden <n>]` |
 | Projektwert aus der Projekt-Config lesen (#1611): Repo, Board-Besitzer, Board-IDs, `praefixe.*`, `labels.*`, `agenten.*` aus `.factory/projekt.json`; Exit 1 bei fehlender oder unlesbarer Config oder bei einem Schlüssel, der fehlt oder kein Skalar ist, 2 bei Aufruf-Fehler (ohne Schlüssel, mit zweitem Positionsargument, unbekanntem Flag oder `--config` ohne Wert) | `node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>` (z.B. `boards.0.projectId`; Listenindex als Ziffer, 0 = Rolle `produkt`, 1 = Rolle `factory`) |
-| Voraussetzungen der Factory im Projekt prüfen (#1799, ADR 0022): Actions, Admin-Recht, Project-Scope, Secrets, Boards und Felder, Labels, Ruleset samt Required Checks, Langfuse; je Lücke eine Zeile mit `Fix:`, Exit 0 ohne Lücke, 1 mit, 2 bei Aufruf-Fehler, unlesbarer Config oder unlesbarem Ruleset-Spiegel | `node scripts/harness-doctor.mjs --pruefen [--config <pfad>]` |
+| Voraussetzungen der Factory im Projekt prüfen (#1799, ADR 0022): Actions, Admin-Recht, Project-Scope, Secrets, Boards und Felder, Labels, Ruleset samt Required Checks, Langfuse und gesetzte Altnamen der Kern-Umgebungsvariablen (nur `--pruefen`); je Lücke eine Zeile mit `Fix:`, Exit 0 ohne Lücke, 1 mit, 2 bei Aufruf-Fehler, unlesbarer Config oder unlesbarem Ruleset-Spiegel | `node scripts/harness-doctor.mjs --pruefen [--config <pfad>]` |
 | Voraussetzungen der Factory einrichten (#1800): legt nur Umkehrbares an (fehlende Labels, `.github/workflows/harness-doctor.yml`, Harness-Sammelticket über `sammelticket-anlegen.mjs`); Ruleset, Secrets, Variablen, Project-Felder, Actions, Admin-Recht und Token nur als `ANLEITUNG … Link: …` (Langfuse prüft nur `--pruefen`); bei einer anderen `--config` als `.factory/projekt.json` legt es kein Sammelticket an (`ANLEITUNG Sammelticket`); `--dry-run` gibt nur den Plan aus (`PLAN …`); idempotent, Exit 0 nichts offen, 1 Anleitung/Plan/Fehler, 2 Aufruf-Fehler oder Config | `node scripts/harness-doctor.mjs --einrichten [--dry-run] [--config <pfad>]` |
 | Wochenlauf des Doctors von Hand ansehen (#1800): schreibt jede noch nicht gemeldete Lücke als Zeile ins Harness-Sammelticket (`--dry-run`: nur anzeigen); in CI läuft er montags als `harness-doctor.yml`; Exit 0 nichts Neues oder gemeldet, 1 Doctor nicht lauffähig, kein ungeclaimtes Sammelticket oder Post-Fehler, 2 Aufruf-Fehler | `node scripts/harness-doctor-melden.mjs [--dry-run]` |
 | Harness-Cockpit starten (#1764, ADR 0029): lokale, nur lesende Seite auf 127.0.0.1 mit einem Panel je Quelle (zuerst Langfuse-Erreichbarkeit); `--projekt` setzt die Projektwurzel (Standard cwd), `--port` den Port (Standard 4180, 0 = frei); Exit 2 Aufruf-Fehler, 1 Startfehler (z.B. Port belegt) | `npm run cockpit [-- --projekt <pfad>] [--port <n>]` |
@@ -100,29 +100,29 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 
 ## Umgebungsvariablen
 
-Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1824-2026-10-21-umgebungsvariablen-ohne-projektpräfix-f3-teil-8)). Eine Variable, die ein Kern-Werkzeug liest, heißt `FACTORY_<NAME>` und wird über `umgebungsWert` aus `scripts/projekt-config-lib.mjs` gelesen. **Altname:** derselbe Name mit dem Commit-Zeilen-Präfix ohne Bindestrich statt `FACTORY_` (hier `KQ_`). Er gilt vorerst weiter und gibt eine Warnung mit dem neuen Namen aus; sind beide gesetzt, gewinnt der neue Name. Die Kern-Reinheit zählt den Altnamen als Begriff `Env`, in Kern-Einheiten steht er nicht mehr. Bewacht wird das Inventar von `test/harness/umgebungsvariablen-inventar.test.ts` (Ring `Kern`, beide Richtungen gegen die `umgebungsWert`-Literale in `scripts/`).
+Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1824-2026-10-21-umgebungsvariablen-ohne-projektpräfix-f3-teil-8)). Eine Variable, die ein Kern-Werkzeug liest, heißt `FACTORY_<NAME>` und wird über `umgebungsWert` aus `scripts/projekt-config-lib.mjs` gelesen. **Altname:** derselbe Name mit dem Commit-Zeilen-Präfix ohne Bindestrich statt `FACTORY_`. Er wird nicht mehr gelesen; `harness-doctor --pruefen` meldet einen noch gesetzten Altnamen mit einer `Fix:`-Zeile. Die Kern-Reinheit zählt den Altnamen als Begriff `Env`, in Kern-Einheiten steht er nicht. Bewacht wird das Inventar von `test/harness/umgebungsvariablen-inventar.test.ts` (Ring `Kern`, beide Richtungen gegen die `umgebungsWert`-Literale in `scripts/`).
 
-| Name (neu) | Altname | Ring | Wer setzt ihn | Wer liest ihn |
-| --- | --- | --- | --- | --- |
-| `FACTORY_DIFF_BASE` | `KQ_DIFF_BASE` | Kern | Workflow `ci.yml` (Schritt „Diff-Basis bestimmen“); lokal optional die Maintainerin; in Tests `test/diffsize.test.ts`, `test/diffcoverage.test.ts`, `test/review-nachweis.test.ts`, `test/abnahme-nachweis.test.ts`, `test/slice-override.test.ts` | `resolveBase` (`scripts/check-basis.mjs`): `check-diffsize`, `check-diffcoverage`, `check-lockfile`, `check-review-nachweis`, `check-abnahme-nachweis`, `verify-lauf` |
-| `FACTORY_DIFFSIZE_MAX_FILES` | `KQ_DIFFSIZE_MAX_FILES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
-| `FACTORY_DIFFSIZE_MAX_LINES` | `KQ_DIFFSIZE_MAX_LINES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
-| `FACTORY_PR_NUMBER` | `KQ_PR_NUMBER` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
-| `FACTORY_PR_DRAFT` | `KQ_PR_DRAFT` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
-| `FACTORY_PR_BODY` | `KQ_PR_BODY` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
-| `FACTORY_GH_KOSTEN_LOG` | `KQ_GH_KOSTEN_LOG` | Kern | die Maintainerin (optional); Testskripte `test/messskripte-namen.test.ts`, `test/support/mess-golden-faelle.mjs` | `kontingent-lib`, `gh-kontingent` |
-| `FACTORY_MCP_LOG_DIR` | `KQ_MCP_LOG_DIR` | Kern | Testskripte `test/harness/mcp-ausfall.test.ts`, `test/harness/lebenszyklus-namen.test.ts` | `mcp-ausfall` |
-| `FACTORY_MCP_AUSFALL_STAND` | `KQ_MCP_AUSFALL_STAND` | Kern | Testskript `test/harness/mcp-ausfall.test.ts` | `mcp-ausfall` |
-| `FACTORY_PACING_ZIELQUOTE` | `KQ_PACING_ZIELQUOTE` | Kern | die Maintainerin (Shell oder `env` in `.claude/settings.local.json`); Testskript `test/budget-pacing.test.ts` | `budget-lib` |
-| `FACTORY_PACING_PROBE_SKRIPT` | `KQ_PACING_PROBE_SKRIPT` | Kern | Testskript `test/budget-pacing.test.ts` | `budget-pacing` |
-| `FACTORY_RATE_LIMITS_SNAPSHOT` | `KQ_RATE_LIMITS_SNAPSHOT` | Kern | Testskripte `test/budget-pacing.test.ts`, `test/statusline.test.ts` | `budget-lib` |
-| `FACTORY_STATUSLINE_DURCHREICHEN` | `KQ_STATUSLINE_DURCHREICHEN` | Kern | Skript `statusline` (Schleifenschutz für die durchgereichte Statusline) | `statusline` |
-| `FACTORY_USER_SETTINGS` | `KQ_USER_SETTINGS` | Kern | Testskript `test/statusline.test.ts` | `statusline` |
-| `FACTORY_TEST_FEHLT` | – (nur Platzhalter-Name, ohne Altnamen-Weiterleitung) | Kern | nie gesetzt (Absenz-Fixture im Testskript `test/harness/mcp-ausfall.test.ts`) | `mcp-ausfall` (Test des Fehlerpfads) |
-| `KQ_UPDATE_QUIZ_GOLDEN` | – | Projekt | Skript `quiz-golden` | Test `quizcheck` |
-| `KQ_GIT_SAFECRLF` | – | Projekt | Testskript `test/support/git-umgebung.ts` (Guard) | `test/support/git-umgebung.ts` (liest und setzt) |
-| `VITE_KQ_DEVPANEL_PW` | – | Projekt | die Maintainerin (Repo-Variable, `docker run -e`) | Vite-Build |
+| Name | Ring | Wer setzt ihn | Wer liest ihn |
+| --- | --- | --- | --- |
+| `FACTORY_DIFF_BASE` | Kern | Workflow `ci.yml` (Schritt „Diff-Basis bestimmen“); lokal optional die Maintainerin; in Tests `test/diffsize.test.ts`, `test/diffcoverage.test.ts`, `test/review-nachweis.test.ts`, `test/abnahme-nachweis.test.ts`, `test/slice-override.test.ts` | `resolveBase` (`scripts/check-basis.mjs`): `check-diffsize`, `check-diffcoverage`, `check-lockfile`, `check-review-nachweis`, `check-abnahme-nachweis`, `verify-lauf` |
+| `FACTORY_DIFFSIZE_MAX_FILES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
+| `FACTORY_DIFFSIZE_MAX_LINES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
+| `FACTORY_PR_NUMBER` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
+| `FACTORY_PR_DRAFT` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
+| `FACTORY_PR_BODY` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
+| `FACTORY_GH_KOSTEN_LOG` | Kern | die Maintainerin (optional); Testskripte `test/messskripte-namen.test.ts`, `test/support/mess-golden-faelle.mjs` | `kontingent-lib`, `gh-kontingent` |
+| `FACTORY_MCP_LOG_DIR` | Kern | Testskripte `test/harness/mcp-ausfall.test.ts`, `test/harness/lebenszyklus-namen.test.ts` | `mcp-ausfall` |
+| `FACTORY_MCP_AUSFALL_STAND` | Kern | Testskript `test/harness/mcp-ausfall.test.ts` | `mcp-ausfall` |
+| `FACTORY_PACING_ZIELQUOTE` | Kern | die Maintainerin (Shell oder `env` in `.claude/settings.local.json`); Testskript `test/budget-pacing.test.ts` | `budget-lib` |
+| `FACTORY_PACING_PROBE_SKRIPT` | Kern | Testskript `test/budget-pacing.test.ts` | `budget-pacing` |
+| `FACTORY_RATE_LIMITS_SNAPSHOT` | Kern | Testskripte `test/budget-pacing.test.ts`, `test/statusline.test.ts` | `budget-lib` |
+| `FACTORY_STATUSLINE_DURCHREICHEN` | Kern | Skript `statusline` (Schleifenschutz für die durchgereichte Statusline) | `statusline` |
+| `FACTORY_USER_SETTINGS` | Kern | Testskript `test/statusline.test.ts` | `statusline` |
+| `FACTORY_TEST_FEHLT` | Kern | nie gesetzt (Absenz-Fixture im Testskript `test/harness/mcp-ausfall.test.ts`) | `mcp-ausfall` (Test des Fehlerpfads) |
+| `KQ_UPDATE_QUIZ_GOLDEN` | Projekt | Skript `quiz-golden` | Test `quizcheck` |
+| `KQ_GIT_SAFECRLF` | Projekt | Testskript `test/support/git-umgebung.ts` (Guard) | `test/support/git-umgebung.ts` (liest und setzt) |
+| `VITE_KQ_DEVPANEL_PW` | Projekt | die Maintainerin (Repo-Variable, `docker run -e`) | Vite-Build |
 
-**Zählung:** 18 Variablen (15 Kern, 3 Projekt), eine Zeile je Variable; 14 der 15 Kern-Variablen haben einen Altnamen (`FACTORY_TEST_FEHLT` ist nur ein Platzhalter-Name), zusammen 32 Namen. Das Ticket nannte 21; nachzählbar sind 19 verschiedene `KQ_`-Zeichenketten auf `origin/main` außerhalb von ADRs und Analysen (`git grep -hoE '\b[A-Z_]*KQ_[A-Z0-9_]*[A-Z0-9]\b' origin/main -- . ':!docs/adr' ':!docs/architektur-analyse*'`): die 15 Kern-Namen, die 3 Projekt-Namen und der entfallene `KQ_DIFFSIZE_OVERRIDE`. Die Abweichung zu 21 ist nicht reproduzierbar (weitere Treffer stehen nur in ADRs).
+**Zählung:** 18 Variablen (15 Kern, 3 Projekt), eine Zeile je Variable.
 
 `__KQ_DEVPANEL__` und `__KQ_CONFIG__` sind Vite-Konstanten, keine Umgebungsvariablen. Die Override-Variablen der Slice-Gates sind entfallen: dafür gibt es Commit-Zeilen (siehe [agent-harness](../agent-harness.md)).

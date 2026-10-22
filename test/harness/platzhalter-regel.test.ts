@@ -3,6 +3,7 @@
  * Drift-Gate gegen die Config (K2 fährt es auf den echten Texten und auf verfälschten Kopien).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel (kein eigenes check-Skript), darum im geschützten test/harness/ (#1165).
+ * Die Regel selbst ist `platzhalterBefunde` in scripts/besitz-lib.mjs; dieser Test ruft sie auf den echten Texten und auf Fixtures auf.
  *
  * Grenze: die Regel prüft nur die Prüf-Fläche von `projektwertDateien` (Manifest-Markdown, Agenten- und Skill-Markdown) und nur die
  * Schlüssel-Form mit den Gruppen `agenten`, `labels`, `praefixe`; `<agenten.…>` mit Auslassungszeichen beschreibt nur und zählt nicht. */
@@ -29,6 +30,7 @@ interface Lib {
   projektDateien(wurzel: string): string[];
   PROJEKTWERT_GRUPPEN: string[];
   platzhalterMuster(): RegExp;
+  platzhalterBefunde(pfad: string, text: string, config: Cfg): string[];
 }
 interface DriftCli {
   cli(argv: string[], opt?: { wurzel?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
@@ -67,22 +69,7 @@ const driftLauf = (w: string): { code: number; err: string } => {
   return { code, err: err.join("\n") };
 };
 
-/** Befunde zur Regel (leer = in Ordnung): Platzhalter ohne genau einen Block, Schlüssel ohne Wert in der Config. */
-function platzhalterBefunde(pfad: string, text: string, config: Cfg): string[] {
-  const treffer = [...text.matchAll(lib.platzhalterMuster())];
-  if (treffer.length === 0) return [];
-  const out: string[] = [];
-  const bloecke = lib.projektwertStellen(text, pfad).bloecke.length;
-  if (bloecke !== 1) out.push(`${pfad}: ${treffer.length} Platzhalter, aber ${bloecke} Projektwert-Blöcke (genau einer verlangt)`);
-  for (const schluessel of new Set(treffer.map((m) => `${m[1]}.${m[2]}`))) {
-    try {
-      lib.projektwertWert(config, schluessel);
-    } catch {
-      out.push(`${pfad}: Platzhalter <${schluessel}> löst in der Config nicht auf`);
-    }
-  }
-  return out;
-}
+const platzhalterBefunde = (pfad: string, text: string, config: Cfg): string[] => lib.platzhalterBefunde(pfad, text, config);
 
 const BLOCK_DATEIEN = [
   rolle.planer,

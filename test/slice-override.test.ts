@@ -208,12 +208,10 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
     expect(r.out).not.toContain("veraltet");
   });
 
-  it("Altname der Diff-Basis (#1824): die Basis greift und die Warnung nennt den neuen Namen", () => {
+  it("Altname der Diff-Basis: wirkt nicht mehr, keine Warnung", () => {
     const r = lauf("ganz normal", altName("FACTORY_DIFF_BASE"));
-    expect(r.code).toBe(0);
-    expect(r.out).toContain("keinen gemessenen Quellcode (src/**/*.ts)");
-    expect(r.out).toContain("veraltet");
-    expect(r.out).toContain("FACTORY_DIFF_BASE");
+    expect(r.out).not.toContain("veraltet");
+    expect(r.out).not.toContain("keinen gemessenen Quellcode (src/**/*.ts)");
   });
 });
 
