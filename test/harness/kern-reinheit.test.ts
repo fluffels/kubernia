@@ -859,7 +859,7 @@ describe("Stardew-Regeln nicht im Kern (#1709, ADR 0022 F5)", () => {
 
   test("der Begriff steht in der Projekt-Config und zählt ohne Beachtung der Groß-/Kleinschreibung", () => {
     assert.ok(stardew, "projektliterale.Stardew fehlt in .factory/projekt.json, der Wächter wäre still aus");
-    assert.deepEqual(zaehle("STARDEW stardew Stardew", { Stardew: stardew as RegExp }), { Stardew: 3 });
+    assert.deepEqual(zaehle("STARDEW stardew Stardew", { Stardew: stardew }), { Stardew: 3 });
   });
 
   test("keine Kern-Einheit trägt den Begriff, die Baseline kennt ihn nicht mehr", () => {
