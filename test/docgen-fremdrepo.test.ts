@@ -256,6 +256,8 @@ describe("Kern-Schnitt: Module der Ring-kern-Ableitung importieren nichts außer
   const KERN = kernPfade.flatMap((p) => /^scripts\/docs-gen\/([\w-]+)\.mjs$/.exec(p)?.[1] ?? []);
   // Die CommonJS-Kern-Module (Schicht-Kern, #1612) darf schichten.mjs laden (relativer Spezifizierer aus scripts/docs-gen/).
   const KERN_CJS = kernPfade.flatMap((p) => (/^scripts\/[\w-]+\.cjs$/.test(p) ? `../${p.slice("scripts/".length)}` : []));
+  // Die importfreie Kern-Konstanten-Lib neben docs-gen/ (skill-pfade.mjs) darf geladen werden.
+  const KERN_SKRIPTE = kernPfade.includes("scripts/skill-pfade.mjs") ? ["../skill-pfade.mjs"] : [];
   test("die Ableitung aus dem Besitz-Manifest ist nicht leer und enthält den Schicht-Kern", () => {
     assert.ok(KERN.includes("schichten"), KERN.join());
     assert.ok(KERN_CJS.includes("../schichten-kern.cjs"), KERN_CJS.join());
@@ -263,7 +265,7 @@ describe("Kern-Schnitt: Module der Ring-kern-Ableitung importieren nichts außer
   const importe = (rel: string): string[] => importeAus(readFileSync(join(__dirname, "..", rel), "utf8"));
   test.each(KERN)("scripts/docs-gen/%s.mjs: nur node:* und Kern-Module", (name) => {
     for (const spec of importe(`scripts/docs-gen/${name}.mjs`)) {
-      const ok = spec.startsWith("node:") || KERN.some((k) => spec === `./${k}.mjs`) || KERN_CJS.includes(spec);
+      const ok = spec.startsWith("node:") || KERN.some((k) => spec === `./${k}.mjs`) || KERN_CJS.includes(spec) || KERN_SKRIPTE.includes(spec);
       assert.ok(ok, `${name}.mjs importiert ${spec} (kein Kern-Modul)`);
     }
   });
