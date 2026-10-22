@@ -26,6 +26,10 @@ interface Lib {
   einheitHash(e: Eintrag, t: string): string | null;
   einheitId(e: Eintrag): string;
   textHash(t: string): string;
+  markerStart(id: string): string;
+  markerEnde(id: string): string;
+  PROJEKT_BLOCK_START: string;
+  PROJEKT_BLOCK_ENDE: string;
 }
 interface Drift {
   pruefeDrift(lies: (p: string) => string | null): { entfaellt: boolean; fehler: string[] };
@@ -36,10 +40,10 @@ const drift = rawDrift as unknown as Drift;
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const lese = (p: string): string => readFileSync(WURZEL + p, "utf8").replace(/\r\n/g, "\n");
 
-const KERN_START = "<!-- factory-besitz:start kern -->";
-const KERN_ENDE = "<!-- factory-besitz:ende kern -->";
-const PROJEKT_START = "<!-- factory-projekt:start -->";
-const PROJEKT_ENDE = "<!-- factory-projekt:ende -->";
+const KERN_START = lib.markerStart("kern");
+const KERN_ENDE = lib.markerEnde("kern");
+const PROJEKT_START = lib.PROJEKT_BLOCK_START;
+const PROJEKT_ENDE = lib.PROJEKT_BLOCK_ENDE;
 
 const zaehle = (t: string, s: string): number => t.split(s).length - 1;
 

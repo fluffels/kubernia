@@ -6,7 +6,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fehlerText } from "./gh-cli.mjs";
-import { boardPfad, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { fileURLToPath } from "node:url";
+import { altEnvName, boardPfad, kernEnvNamen, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
@@ -229,8 +230,23 @@ function pruefeRuleset(gh, repo, repoInfo, spiegel) {
   return fehlend.length ? fehlend : [gut("Ruleset")];
 }
 
+/**
+ * Pur: meldet jede Kern-Umgebungsvariable, die noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist; der Altname wird nicht mehr gelesen.
+ * `namen` sind die `FACTORY_…`-Namen (`kernEnvNamen`), `env` die Umgebung des Doctor-Prozesses. „Gesetzt“ heißt `!== undefined`, auch ein leerer Wert. Der Wert erscheint nie in der Meldung.
+ */
+export function pruefeAltnamen({ env, config, namen }) {
+  const luecken = [];
+  for (const neu of namen) {
+    const alt = altEnvName(neu, config);
+    if (alt !== null && env[alt] !== undefined) luecken.push(luecke(`Umgebungsvariable ${alt}`, `${alt} ist gesetzt, wird aber nicht mehr gelesen`, `${alt} entfernen und den Wert als ${neu} setzen`));
+  }
+  return luecken.length ? luecken : [gut("Umgebungsvariablen")];
+}
+
+const SKRIPT_ORDNER = fileURLToPath(new URL(".", import.meta.url));
+
 /** Führt alle Prüfpunkte aus: `[{ punkt, ok, befund?, fix?, hinweis? }]`. Wirft nie. */
-export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse }) {
+export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebung = null }) {
   const repo = config.repo;
   const ergebnis = [];
   const token = pruefeToken(gh);
@@ -249,6 +265,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse }) {
     const text = String(lf.stderr || lf.stdout || "").trim().split("\n")[0];
     ergebnis.push(lf.status === 0 ? gut("Langfuse") : luecke("Langfuse", text || "Langfuse nicht erreichbar", "Langfuse starten (node scripts/langfuse-vorbedingung.mjs zeigt den Befund)"));
   }
+  if (umgebung) ergebnis.push(...pruefeAltnamen({ env: umgebung.env, config, namen: kernEnvNamen(SKRIPT_ORDNER) }));
   return ergebnis;
 }
 
@@ -270,15 +287,15 @@ export function konfigFehlerText(e) {
 
 /**
  * Lädt Config und Ruleset-Spiegel und führt alle Prüfpunkte aus: `{ config, ergebnis }`. Wirft bei unlesbarer Config oder unlesbarem Spiegel,
- * bevor ein einziger `gh`-Aufruf läuft. `langfuse: null` lässt den Langfuse-Punkt aus; `mitWochenlauf` rechnet die Vorlage des Wochenlaufs
+ * bevor ein einziger `gh`-Aufruf läuft. `langfuse: null` lässt den Langfuse-Punkt aus, `umgebung: null` den Altnamen-Punkt (`{ env }` prüft ihn); `mitWochenlauf` rechnet die Vorlage des Wochenlaufs
  * als Workflow mit, falls die Datei fehlt (dann erscheinen ihre Secrets schon im Plan von `--einrichten`).
  */
-export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenlauf = false }) {
+export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenlauf = false, umgebung = null }) {
   const config = ladeProjektConfig({ rootDir, pfad: configPfad });
   const spiegel = config.rulesetSpiegel ? ladeRulesetSpiegel(rootDir, config.rulesetSpiegel) : undefined;
   const workflows = workflowsLesen(rootDir);
   if (mitWochenlauf && !workflows.some((w) => w.pfad === basename(WOCHENLAUF_PFAD))) workflows.push({ pfad: basename(WOCHENLAUF_PFAD), text: WOCHENLAUF_WORKFLOW });
-  const ergebnis = pruefe({ config, voraussetzungen: voraussetzungenAus({ config, workflows }), spiegel, gh, langfuse });
+  const ergebnis = pruefe({ config, voraussetzungen: voraussetzungenAus({ config, workflows }), spiegel, gh, langfuse, umgebung });
   return { config, ergebnis };
 }
 

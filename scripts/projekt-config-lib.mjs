@@ -9,8 +9,8 @@
  *
  * Nur Node-Builtins, `flag-lib.mjs` und `spezifikation-lib.mjs` (importfrei; läuft auch in Workflows ohne `npm ci`).
  */
-import { readFileSync } from "node:fs";
-import { isAbsolute, posix, resolve } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
@@ -338,57 +338,56 @@ export function altEnvPraefix(config) {
   return typeof p === "string" && COMMIT_PRAEFIX_MUSTER.test(p) ? `${p.slice(0, -1)}_` : null;
 }
 
-function altNameZuPraefix(name, alt) {
+/** Pur: der Altname zu einem neuen Namen (`FACTORY_<NAME>` → `<Altpräfix><NAME>`); `null`, wenn der Altpräfix fehlt oder `name` nicht mit `FACTORY_` plus Rest beginnt. */
+export function altEnvName(name, config) {
+  const alt = altEnvPraefix(config);
   if (alt === null || typeof name !== "string") return null;
   if (!name.startsWith(KERN_ENV_PRAEFIX) || name.length === KERN_ENV_PRAEFIX.length) return null;
   return alt + name.slice(KERN_ENV_PRAEFIX.length);
 }
 
-/** Pur: der Altname zu einem neuen Namen (`FACTORY_<NAME>` → `<Altpräfix><NAME>`); `null`, wenn der Altpräfix fehlt oder `name` nicht mit `FACTORY_` plus Rest beginnt. */
-export function altEnvName(name, config) {
-  return altNameZuPraefix(name, altEnvPraefix(config));
-}
-
-let standardAltPraefix;
-function ladeAltPraefix() {
-  if (standardAltPraefix === undefined) {
-    try {
-      standardAltPraefix = altEnvPraefix(ladeProjektConfig({ pruefen: false }));
-    } catch {
-      standardAltPraefix = null;
-    }
-  }
-  return standardAltPraefix;
-}
-
-const gewarnt = new Set();
-function standardWarnung(text) {
-  if (gewarnt.has(text)) return;
-  gewarnt.add(text);
-  process.stderr.write(`${text}\n`);
-}
-
 /**
- * Liest eine Kern-Umgebungsvariable (#1824). `name` ist der volle neue Name (`FACTORY_<NAME>`). Ein noch gesetzter Altname
- * (Projektpräfix statt `FACTORY_`) gilt übergangsweise weiter und warnt mit dem neuen Namen; sind beide gesetzt, gewinnt der neue Name.
- * „Gesetzt“ heißt `!== undefined`. Wirft nie, außer bei einem Namen ohne `FACTORY_`-Präfix.
+ * Liest eine Kern-Umgebungsvariable. `name` ist der volle Name (`FACTORY_<NAME>`); gelesen wird nur dieser Name, ein Altname
+ * (Projektpräfix) wirkt nicht mehr (`harness-doctor --pruefen` meldet ihn). „Gesetzt“ heißt `!== undefined`.
+ * Wirft nur bei einem Namen ohne `FACTORY_`-Präfix.
  */
-export function umgebungsWert(env, name, { altPraefix, warn = standardWarnung } = {}) {
+export function umgebungsWert(env, name) {
   if (typeof name !== "string" || !name.startsWith(KERN_ENV_PRAEFIX) || name.length === KERN_ENV_PRAEFIX.length) {
     throw new Error(`Umgebungsvariable ${String(name)} muss mit ${KERN_ENV_PRAEFIX} beginnen`);
   }
-  const alt = altPraefix === undefined ? ladeAltPraefix() : altPraefix;
-  const neu = env[name];
-  if (alt === null) return neu;
-  const altName = altNameZuPraefix(name, alt);
-  const altWert = env[altName];
-  if (altWert === undefined) return neu;
-  if (neu !== undefined) {
-    warn(`⚠ ${altName} wird ignoriert, ${name} ist gesetzt (der Altname ist veraltet: ${name} verwenden)`);
-    return neu;
-  }
-  warn(`⚠ ${altName} ist veraltet: bitte ${name} verwenden (der Altwert gilt vorerst weiter)`);
-  return altWert;
+  return env[name];
+}
+
+const ENV_LITERAL = /umgebungsWert\([^,()]*,\s*"(FACTORY_[A-Z0-9_]+)"/g;
+const KOMMENTARZEILE = /^\s*(\*|\/\/)/;
+const AUFRUF = /umgebungsWert\(/;
+
+/** Pur: sammelt die `FACTORY_…`-Literale der `umgebungsWert`-Aufrufe eines Quelltexts und die Aufrufe ohne Literal (`datei:zeile`). Kommentarzeilen und die Definition zählen nicht. */
+export function sammleKernEnv(datei, text) {
+  const literale = new Set();
+  const ohneLiteral = [];
+  text.split("\n").forEach((zeile, i) => {
+    if (KOMMENTARZEILE.test(zeile) || !AUFRUF.test(zeile)) return;
+    if (datei.endsWith("projekt-config-lib.mjs") && /function umgebungsWert\(/.test(zeile)) return;
+    const treffer = [...zeile.matchAll(ENV_LITERAL)];
+    for (const x of treffer) literale.add(x[1]);
+    if (treffer.length === 0) ohneLiteral.push(`${datei}:${i + 1}`);
+  });
+  return { literale, ohneLiteral };
+}
+
+/** Die sortierten `FACTORY_…`-Namen, die die `*.mjs` unter `ordner` (rekursiv) über `umgebungsWert` lesen. */
+export function kernEnvNamen(ordner) {
+  const namen = new Set();
+  const gehe = (dir) => {
+    for (const e of readdirSync(dir)) {
+      const p = join(dir, e);
+      if (statSync(p).isDirectory()) gehe(p);
+      else if (e.endsWith(".mjs")) for (const n of sammleKernEnv(p.split("\\").join("/"), readFileSync(p, "utf8")).literale) namen.add(n);
+    }
+  };
+  gehe(ordner);
+  return [...namen].sort();
 }
 
 /** Trennt `--config <pfad>` (auch `--config=<pfad>`) aus der Argumentliste. Pur. Liefert `{ args, pfad }` (`pfad` undefined ohne Option)

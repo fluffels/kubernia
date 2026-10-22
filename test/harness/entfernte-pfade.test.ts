@@ -47,12 +47,11 @@ export const RESTE: { name: string; muster: RegExp; fix: string }[] = [
     muster: /<agenten\.[A-Za-z]+>\.md|skills\/<agenten\.ticketSkill>\//,
     fix: "den Rollen-Pfad .claude/agents/factory-<rolle>.md ausschreiben statt eines Platzhalters",
   },
-  // Kern-Umgebungsvariablen heißen FACTORY_<NAME> (#1824). Geschlossene Liste der 15 früheren Namen: Projektnamen (Quiz-Golden,
-  // Git-Guard, Dev-Panel) und die entfallenen Override-Namen fallen nicht darunter.
+  // Der Altnamen-Rückfall der Kern-Umgebungsvariablen ist entfernt (#1872): gelesen wird nur FACTORY_<NAME>.
   {
-    name: "Kern-Umgebungsvariable mit Projektpräfix",
-    muster: /\bKQ_(?:DIFF_BASE|DIFFSIZE_MAX_FILES|DIFFSIZE_MAX_LINES|PR_NUMBER|PR_DRAFT|PR_BODY|GH_KOSTEN_LOG|MCP_LOG_DIR|MCP_AUSFALL_STAND|PACING_ZIELQUOTE|PACING_PROBE_SKRIPT|RATE_LIMITS_SNAPSHOT|STATUSLINE_DURCHREICHEN|USER_SETTINGS|TEST_FEHLT)\b/,
-    fix: "den neuen Namen FACTORY_<NAME> nutzen (Inventar in docs/referenz/befehle.md)",
+    name: "Altnamen-Rückfall",
+    muster: /\b(?:altNameZuPraefix|ladeAltPraefix|standardAltPraefix)\b/,
+    fix: "Kern-Variablen nur als FACTORY_<NAME> lesen; gesetzte Altnamen meldet harness-doctor --pruefen",
   },
 ];
 
@@ -65,13 +64,7 @@ export const AUSNAHMEN: { praefix: string; grund: string }[] = [
 ];
 
 /** Ausnahmen für genau eine Regel in genau einer Datei (exakter Pfad); alle anderen Regeln prüfen die Datei weiter. */
-export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] = [
-  {
-    pfad: "docs/referenz/befehle.md",
-    regel: "Kern-Umgebungsvariable mit Projektpräfix",
-    grund: "das Inventar der Umgebungsvariablen nennt die Altnamen bewusst in einer eigenen Spalte (#1824)",
-  },
-];
+export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] = [];
 
 /** Marker eines Schnappschuss-Blocks: datierter Text, der die damaligen Namen bewusst trägt (Glossar „Schnappschuss-Block“). */
 export const SCHNAPPSCHUSS_START = "<!-- schnappschuss:start -->";
@@ -153,10 +146,10 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
   });
 
   test("die Meldung nennt den Fix der getroffenen Regel und nur den", () => {
-    const treffer = findeReste([{ pfad: "docs/x.md", inhalt: "KQ_DIFF_BASE" }]);
+    const treffer = findeReste([{ pfad: "docs/x.md", inhalt: "import { altNameZuPraefix } from lib" }]);
     const meldung = meldungMitFix(treffer);
-    const env = RESTE.find((r) => r.name === "Kern-Umgebungsvariable mit Projektpräfix");
-    assert.ok(env && meldung.includes(env.fix));
+    const regel = RESTE.find((r) => r.name === "Altnamen-Rückfall");
+    assert.ok(regel && meldung.includes(regel.fix));
     assert.ok(!meldung.includes(RESTE[0].fix));
   });
 
@@ -167,12 +160,9 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(findeReste([{ pfad: "docs/adr/0022-x.md", inhalt: alt }]), []);
   });
 
-  // Je Altname ein Literal: sonst bliebe ein aus dem Muster gestrichener Name unbemerkt (#1824)
-  test.each([
-    "KQ_DIFF_BASE", "KQ_DIFFSIZE_MAX_FILES", "KQ_DIFFSIZE_MAX_LINES", "KQ_PR_NUMBER", "KQ_PR_DRAFT", "KQ_PR_BODY", "KQ_GH_KOSTEN_LOG", "KQ_MCP_LOG_DIR",
-    "KQ_MCP_AUSFALL_STAND", "KQ_PACING_ZIELQUOTE", "KQ_PACING_PROBE_SKRIPT", "KQ_RATE_LIMITS_SNAPSHOT", "KQ_STATUSLINE_DURCHREICHEN", "KQ_USER_SETTINGS", "KQ_TEST_FEHLT",
-  ])("Negativfall: der Altname %s wird gefunden", (altname) => {
-    assert.deepEqual(findeReste([{ pfad: "docs/b.md", inhalt: `export ${altname}=1` }]), ["docs/b.md:1: Kern-Umgebungsvariable mit Projektpräfix"]);
+  // Je Alternative der Muster ein Literal: sonst bliebe ein gestrichener Name unbemerkt
+  test.each(["altNameZuPraefix", "ladeAltPraefix", "standardAltPraefix"])("Negativfall: der Name %s wird gefunden", (name) => {
+    assert.deepEqual(findeReste([{ pfad: "docs/b.md", inhalt: `export ${name}()` }]), ["docs/b.md:1: Altnamen-Rückfall"]);
   });
 
   describe("Schnappschuss-Block", () => {
@@ -241,7 +231,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "altes Ticket-Skill-Verzeichnis": "Datei .claude/skills/kubernia/SKILL.md",
       "Ticket-Ablauf am alten Ort": "Lies .claude/skills/factory/ablauf.md",
       "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
-      "Kern-Umgebungsvariable mit Projektpräfix": "echo KQ_DIFF_BASE=$base >> $GITHUB_ENV",
+      "Altnamen-Rückfall": "const alt = altNameZuPraefix(name, praefix);",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
@@ -264,9 +254,8 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
   });
 
-  test("Negativfall: Projektnamen, entfallene Override-Namen und die neuen Namen lösen die Umgebungsvariablen-Regel nicht aus", () => {
-    const sauber = "KQ_UPDATE_QUIZ_GOLDEN KQ_GIT_SAFECRLF VITE_KQ_DEVPANEL_PW KQ_DIFFSIZE_OVERRIDE KQ_DIFF_BASE_X VITE_KQ_DIFF_BASE __KQ_DIFF_BASE__ FACTORY_DIFF_BASE";
-    assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
+  test("Negativfall: harmlose Nachbarn des Altnamen-Musters lösen nicht aus (altEnvName, Wortgrenze)", () => {
+    assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: "altEnvName und altEnvPraefix, xaltNameZuPraefixy" }]), []);
   });
 
   test("Ausnahmen: ADRs und der Absenz-Test dürfen die Namen tragen, andere Pfade nicht", () => {
@@ -274,14 +263,6 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(findeReste([{ pfad: "docs/adr/0028-ein-ticket-ablauf.md", inhalt: text }]), []);
     assert.deepEqual(findeReste([{ pfad: "test/harness/model-routing.test.ts", inhalt: text }]), []);
     assert.ok(findeReste([{ pfad: "docs/modul.md", inhalt: text }]).length > 0);
-  });
-
-  test("Regel-Ausnahme: das Inventar darf Altnamen tragen, jeder andere Rest dort und jede andere Datei bleibt rot", () => {
-    const inv = "docs/referenz/befehle.md";
-    assert.deepEqual(findeReste([{ pfad: inv, inhalt: "KQ_DIFF_BASE" }]), []);
-    assert.equal(findeReste([{ pfad: inv, inhalt: "der Skill kubernia-workflow" }]).length, 1);
-    assert.ok(findeReste([{ pfad: inv + ".bak", inhalt: "KQ_DIFF_BASE" }]).length > 0);
-    assert.ok(findeReste([{ pfad: "docs/x.md", inhalt: "KQ_DIFF_BASE" }]).length > 0);
   });
 
   test("jede Ausnahme nennt einen Grund", () => {

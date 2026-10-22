@@ -25,6 +25,11 @@ export const wirdVerteilt = (e) => !NUR_FACTORY.includes(e.ring);
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
 
+/** Der Projekt-Block in AGENTS.md: ab dieser Marker-Zeile steht Projektinhalt, den die Verteilung nie anfasst. */
+export const PROJEKT_BLOCK_START = "<!-- factory-projekt:start -->";
+/** Ende des Projekt-Blocks (Gegenstück zu `PROJEKT_BLOCK_START`). */
+export const PROJEKT_BLOCK_ENDE = "<!-- factory-projekt:ende -->";
+
 /** Zeilenenden auf LF (Hash und Vergleich sind CRLF-neutral). */
 export const normalisiereEol = (text) => text.replace(/\r\n/g, "\n");
 
@@ -360,6 +365,26 @@ export function projektwertAbweichungen(pfad, text, config) {
     const soll = mitOrt(pfad, b.start, () => blockZeilen(cfg));
     const ist = zeilen.slice(b.start, b.ende + 1).map((l) => l.trimEnd());
     if (ist.join("\n") !== soll.join("\n")) out.push(`${pfad}:${b.start + 1}: Projektwert-Block weicht von ${CONFIG_PFAD} ab`);
+  }
+  return out;
+}
+
+/**
+ * Befunde der Platzhalter-Regel (leer = in Ordnung): ein Platzhalter `<gruppe.schlüssel>` in `text` braucht genau einen Projektwert-Block
+ * in derselben Datei, und sein Schlüssel löst in `config` auf. Pur; die Muster steuert `platzhalterMuster`.
+ */
+export function platzhalterBefunde(pfad, text, config) {
+  const treffer = [...text.matchAll(platzhalterMuster())];
+  if (treffer.length === 0) return [];
+  const out = [];
+  const bloecke = projektwertStellen(text, pfad).bloecke.length;
+  if (bloecke !== 1) out.push(`${pfad}: ${treffer.length} Platzhalter, aber ${bloecke} Projektwert-Blöcke (genau einer verlangt)`);
+  for (const schluessel of new Set(treffer.map((m) => `${m[1]}.${m[2]}`))) {
+    try {
+      projektwertWert(config, schluessel);
+    } catch {
+      out.push(`${pfad}: Platzhalter <${schluessel}> löst in der Config nicht auf`);
+    }
   }
   return out;
 }

@@ -1,12 +1,13 @@
 /* Projekt-Config (#1611, ADR 0022 F2): Validierung, Lader, Kommandozeile und der AK3-Negativfall
  * (fehlende Config bricht das Werkzeug ab, kein stiller Standardwert). */
-import { afterEach, describe, test } from "vitest";
+import { afterEach, describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { altName } from "./support/env-alt";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
@@ -22,7 +23,9 @@ interface Pc {
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
-  umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
+  umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
+  kernEnvNamen(ordner: string): string[];
+  sammleKernEnv(datei: string, text: string): { literale: Set<string>; ohneLiteral: string[] };
 }
 const pc = rawPc as unknown as Pc;
 
@@ -347,79 +350,50 @@ describe("altEnvName", () => {
 });
 
 describe("umgebungsWert", () => {
-  const sammle = () => {
-    const w: string[] = [];
-    return { w, warn: (t: string) => w.push(t) };
-  };
-  test("nur der neue Name: Wert, keine Warnung", () => {
-    const { w, warn } = sammle();
-    assert.equal(pc.umgebungsWert({ FACTORY_X_Y: "neu" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "neu");
-    assert.deepEqual(w, []);
+  test("der neue Name liefert den Wert", () => {
+    assert.equal(pc.umgebungsWert({ FACTORY_X_Y: "neu" }, "FACTORY_X_Y"), "neu");
   });
-  test("nur der Altname: Altwert und genau eine Warnung mit dem neuen Namen", () => {
-    const { w, warn } = sammle();
-    assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "alt");
-    assert.equal(w.length, 1);
-    assert.match(w[0], /FACTORY_X_Y/);
-    assert.match(w[0], /ZD_X_Y/);
+  test("ein gesetzter Altname wird ignoriert, nichts geht nach stderr", () => {
+    const geschrieben: unknown[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((s: unknown) => (geschrieben.push(s), true));
+    try {
+      const alt = altName("FACTORY_X_Y");
+      assert.equal(pc.umgebungsWert({ [alt]: "alt" }, "FACTORY_X_Y"), undefined);
+      assert.equal(pc.umgebungsWert({ [alt]: "alt", FACTORY_X_Y: "neu" }, "FACTORY_X_Y"), "neu");
+    } finally {
+      spy.mockRestore();
+    }
+    assert.deepEqual(geschrieben, []);
   });
-  test("beide gesetzt: der neue Wert gilt, die Warnung nennt beide und „ignoriert“", () => {
-    const { w, warn } = sammle();
-    assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt", FACTORY_X_Y: "neu" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "neu");
-    assert.equal(w.length, 1);
-    assert.match(w[0], /ignoriert/);
-    assert.match(w[0], /ZD_X_Y/);
-    assert.match(w[0], /FACTORY_X_Y/);
+  test("keiner gesetzt: undefined", () => {
+    assert.equal(pc.umgebungsWert({}, "FACTORY_X_Y"), undefined);
   });
-  test("keiner gesetzt: undefined, keine Warnung", () => {
-    const { w, warn } = sammle();
-    assert.equal(pc.umgebungsWert({}, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), undefined);
-    assert.deepEqual(w, []);
-  });
-  test("leerer neuer Name zählt als gesetzt und schlägt den Altwert", () => {
-    const { w, warn } = sammle();
-    assert.equal(pc.umgebungsWert({ FACTORY_X_Y: "", ZD_X_Y: "alt" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "");
-    assert.equal(w.length, 1);
-  });
-  test("leerer Altname zählt als gesetzt", () => {
-    const { w, warn } = sammle();
-    assert.equal(pc.umgebungsWert({ ZD_X_Y: "" }, "FACTORY_X_Y", { altPraefix: "ZD_", warn }), "");
-    assert.equal(w.length, 1);
-  });
-  test("altPraefix null: keine Alt-Prüfung", () => {
-    const { w, warn } = sammle();
-    assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt" }, "FACTORY_X_Y", { altPraefix: null, warn }), undefined);
-    assert.deepEqual(w, []);
+  test("leerer neuer Name zählt als gesetzt", () => {
+    assert.equal(pc.umgebungsWert({ FACTORY_X_Y: "" }, "FACTORY_X_Y"), "");
   });
   test("Name ohne FACTORY_-Präfix oder nur das Präfix: Wurf", () => {
-    assert.throws(() => pc.umgebungsWert({}, "ZD_X_Y", { altPraefix: "ZD_" }), /FACTORY_/);
-    assert.throws(() => pc.umgebungsWert({}, "FACTORY_", { altPraefix: "ZD_" }), /FACTORY_/);
-    assert.throws(() => pc.umgebungsWert({}, undefined as unknown as string, { altPraefix: "ZD_" }), /FACTORY_/);
-    assert.throws(() => pc.umgebungsWert({}, 5 as unknown as string, { altPraefix: "ZD_" }), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, "ZD_X_Y"), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, "FACTORY_"), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, undefined as unknown as string), /FACTORY_/);
+    assert.throws(() => pc.umgebungsWert({}, 5 as unknown as string), /FACTORY_/);
   });
 });
 
-describe("umgebungsWert: Standardwerte (eigener Prozess)", { timeout: 30_000 }, () => {
-  const lauf = (cwdLib: string, code: string, env: Record<string, string>) =>
-    spawnSync(process.execPath, ["-e", code.replace("LIB", JSON.stringify(pathToFileURL(cwdLib).href))], { encoding: "utf8", env: { PATH: process.env.PATH ?? "", ...env } });
-  test("Standard-Warnung geht nach stderr, einmal je Name und Prozess, Altpräfix aus der echten Config", () => {
-    const alt = pc.altEnvPraefix(pc.ladeProjektConfig()) ?? "";
-    const code = `import(LIB).then(m => { const e = { ["${alt}Z_Y"]: "a" }; console.log(m.umgebungsWert(e, "FACTORY_Z_Y")); console.log(m.umgebungsWert(e, "FACTORY_Z_Y")); })`;
-    const r = lauf(join(WURZEL, "scripts/projekt-config-lib.mjs"), code, {});
-    assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout.trim(), "a\na");
-    assert.equal(r.stderr.trim().split("\n").length, 1);
-    assert.match(r.stderr, /FACTORY_Z_Y/);
-  });
-  test("Config nicht ladbar: kein Wurf, keine Alt-Prüfung", () => {
+describe("kernEnvNamen und sammleKernEnv", () => {
+  test("sammelt rekursiv aus *.mjs, sortiert, ohne Kommentarzeilen und Nicht-mjs, zwei Literale je Zeile zählen", () => {
     const d = tmp();
-    mkdirSync(join(d, "scripts"));
-    for (const f of ["projekt-config-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
-    const code = `import(LIB).then(m => console.log(String(m.umgebungsWert({ ZD_Z_Y: "a" }, "FACTORY_Z_Y"))))`;
-    const r = lauf(join(d, "scripts/projekt-config-lib.mjs"), code, {});
-    assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout.trim(), "undefined");
-    assert.equal(r.stderr, "");
+    mkdirSync(join(d, "unter"));
+    writeFileSync(join(d, "a.mjs"), 'a(umgebungsWert(e, "FACTORY_B"), umgebungsWert(e, "FACTORY_A"))\n// umgebungsWert(e, "FACTORY_KOMM")\n * umgebungsWert(e, "FACTORY_STERN")\n');
+    writeFileSync(join(d, "unter", "b.mjs"), 'const x = umgebungsWert(env, "FACTORY_TIEF");\n');
+    writeFileSync(join(d, "c.ts"), 'umgebungsWert(e, "FACTORY_TS")\n');
+    assert.deepEqual(pc.kernEnvNamen(d), ["FACTORY_A", "FACTORY_B", "FACTORY_TIEF"]);
+  });
+  test("das echte scripts/ enthält die Diff-Basis", () => {
+    assert.ok(pc.kernEnvNamen(join(WURZEL, "scripts")).includes("FACTORY_DIFF_BASE"));
+  });
+  test("Aufruf ohne Literal wird gemeldet, die Definition nicht", () => {
+    assert.deepEqual(pc.sammleKernEnv("scripts/x.mjs", "const v = umgebungsWert(env, name);\n").ohneLiteral, ["scripts/x.mjs:1"]);
+    assert.deepEqual(pc.sammleKernEnv("scripts/projekt-config-lib.mjs", "export function umgebungsWert(env, name) {\n").ohneLiteral, []);
   });
 });
 
