@@ -44,12 +44,12 @@ Hinweise zur Wahl: Für **JS/TS** und **Python** liefert das Werkzeug den Graphe
 
 ## docs-gen in ein anderes Repo übernehmen (Stufe 2 und 3)
 
-Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigener Registry durch den Kern fährt ([`test/docgen-fremdrepo.test.ts`](../test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
+Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigenem Generator (über `generatoren`) durch den Kern fährt ([`test/docgen-fremdrepo.test.ts`](../test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
 
 **Ist-Zustand ist Übernahme per Kopie, kein Paket.** Zum Kopieren:
 
-- Kern: `scripts/docs-gen.mjs` (Engine), `scripts/docs-gen/markdown.mjs`, `adr.mjs`, `zeitleiste.mjs`, `schichten.mjs`, dazu eine **eigene** `registry.mjs`, die nur wählt, was das Projekt braucht.
-- Nicht Kern: `harness-inventar`, `harness-kennzahlen`, `diagramme` und `ruleset-spiegel` setzen Claude Code und GitHub voraus (`harness-kennzahlen` zählt zudem npm-Ketten und GitHub-Workflows); `gates` setzt npm-Skripte voraus (für einen anderen Task-Runner, etwa Make, ist ein eigener Generator nötig); `save-versionen` und die Quest-Generatoren sind Kubernia-spezifisch. Welche es sonst noch gibt, zeigt die gruppierte [Registry](../scripts/docs-gen/registry.mjs).
+- Kern: `scripts/docs-gen.mjs` (Engine), `scripts/docs-gen/markdown.mjs`, `adr.mjs`, `zeitleiste.mjs`, `schichten.mjs`, dazu `registry.mjs`: sie führt nur Kern- und Harness-Generatoren, eigene Generatoren des Projekts nennt die Config im Schlüssel `generatoren` (`{ <marker>: { datei, name } }`), eine eigene Registry ist nicht nötig, wenn die Harness-Generatoren, die `registry.mjs` statisch importiert (`gates`, `diagramme`, `harness-inventar`, `harness-kennzahlen` samt deren Importen), mitkopiert werden; sonst übergibt das Projekt eigene `generators`.
+- Nicht Kern: `harness-inventar`, `harness-kennzahlen`, `diagramme` und `ruleset-spiegel` setzen Claude Code und GitHub voraus (`harness-kennzahlen` zählt zudem npm-Ketten und GitHub-Workflows); `gates` setzt npm-Skripte voraus (für einen anderen Task-Runner, etwa Make, ist ein eigener Generator nötig); `save-versionen` und die Quest-Generatoren sind Kubernia-spezifisch und stehen nicht in der Registry, sondern in der Config von Kubernia (`generatoren`). Welche Kern- und Harness-Generatoren es gibt, zeigt die gruppierte [Registry](../scripts/docs-gen/registry.mjs).
 
 **Was das Projekt festlegt (alles in einer Config-Datei, `--config <pfad>`):**
 
