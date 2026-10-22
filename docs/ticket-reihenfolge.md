@@ -126,7 +126,7 @@ Das Skript ist **idempotent**: gibt es schon ein ungeclaimtes Sammelticket diese
 Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** ungeclaimtes Sammelticket (`area:harness`); ein geclaimtes (Assignee) läuft daneben weiter.
 
 - **Evidenz und Quote (#1425):** die Regel „nur aus Evidenz“ steht in [AGENTS.md › Abschluss ohne offene Befunde](../AGENTS.md#wo-die-todos-leben). Die Quote Harness zu Spiel (höchstens 1 zu 3) misst der Board-Takt je Lauf (`Spielquote:` im Protokoll).
-- **Ansichten im Project (#1730):** beide Boards tragen nur „View 1“ (Auswahl, REST-Liste). Die frühere Teilung per Ansicht („Spiel“, „Agentic Engineering“, Filter auf `label:area:harness`, #1425) ist per `deleteProjectV2View` entfernt; die Trennung leisten die zwei Boards (Produkt-Board „Kubernia Backlog“, Factory-Board „Factory Backlog“). Eine Ansicht nach Bedarf legt man per `createProjectV2View` neu an.
+- **Ansichten im Project (#1730):** beide Boards tragen nur „View 1“ (Auswahl, REST-Liste; Filter-Empfehlung `-status:Done`, wirkt nur auf die Anzeige: [Board-Workflows](#board-workflows-1860)). Die frühere Teilung per Ansicht („Spiel“, „Agentic Engineering“, Filter auf `label:area:harness`, #1425) ist per `deleteProjectV2View` entfernt; die Trennung leisten die zwei Boards (Produkt-Board „Kubernia Backlog“, Factory-Board „Factory Backlog“). Eine Ansicht nach Bedarf legt man per `createProjectV2View` neu an.
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash
   gh issue list --state open --limit 1000 --json number,title,assignees --jq '[.[] | select(.title=="Harness-Härtung (gesammelt)" and (.assignees|length)==0) | .number] | max // empty'
@@ -222,9 +222,25 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt k
 - **Rot bei gescheiterter Position (#1628):** die drei Inbox-Workflows (Forum, Dependabot, 🚨 rot-main) rufen `board-place.mjs` mit Wiederholung bei Wettlauf (frisches Issue ohne GraphQL-Node: 4 Versuche, Pausen 5/10/20 s); scheitert es endgültig, wird der Lauf rot (`::error::`), nur ohne `PROJECT_TOKEN` bleibt es bei einer Warnung.
 - **Board-Wächter (#1628):** der Board-Takt nimmt jedes offene Issue ohne Board-Item als Todo am Board-Ende auf (`::warning::` mit Nummer im Log; REST-Treffer werden per GraphQL gegengeprüft, `board-place.mjs --missing` ebenso); scheitert eine Aufnahme, wird der Lauf rot.
 - **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es nicht.
-- **Neues Issue:** kommt **nicht** von selbst aufs Board (das Projekt hat nur „Auto-add sub-issues"). Issues legt `node scripts/spezifikation.mjs anlegen` an und sortiert sie ein ([Reparaturweg](#reparaturweg-1698)); Sammeltickets legt `sammelticket-anlegen.mjs` komplett an.
+- **Neues Issue:** kommt **nicht** von selbst aufs Board (der Workflow „Auto-add sub-issues to project“ nimmt nur Sub-Issues eines Board-Items auf, [Board-Workflows](#board-workflows-1860)). Issues legt `node scripts/spezifikation.mjs anlegen` an und sortiert sie ein ([Reparaturweg](#reparaturweg-1698)); Sammeltickets legt `sammelticket-anlegen.mjs` komplett an.
 - **Forum-Issues schieben sich selbst nach oben:** die Action [`.github/workflows/forum-inbox.yml`](../.github/workflows/forum-inbox.yml) schiebt ein frisch geflaggtes Forum-Ticket beim Anlegen per `board-place.mjs --notfall forum --top <nr>` an die **oberste** Board-Position (#747). ⚠️ Das braucht ein Repo-Secret **`PROJECT_TOKEN`** (PAT mit `project`-Scope) — das Standard-`GITHUB_TOKEN` kann kein User-Project V2 beschreiben; fehlt es, warnt die Action nur (Issue steht dann irgendwo im Board). Board-Node-ID: `PVT_kwHOD8746c4Barq_`.
 - **Offene Dependabot-PRs sammeln sich selbst ein** (#712): die Action [`.github/workflows/dependabot-inbox.yml`](../.github/workflows/dependabot-inbox.yml) prüft täglich (+ `workflow_dispatch`), ob Dependabot-PRs offen sind, und legt bei Bedarf **ein** Sammel-Issue „🤖 Dependabot-PRs auflösen" an — direkt an die **oberste** Board-Position geschoben (dasselbe `board-place.mjs`-Verfahren und `PROJECT_TOKEN` wie bei den Forum-Issues; das Label ist `area:harness`), damit es beim nächsten „nächstes Ticket"-Griff sofort oben steht. Bleibt es offen, hängt jeder weitere Lauf nur den aktuellen PR-Stand als Kommentar an (kein Issue-Spam); sind keine Dependabot-PRs mehr offen, schließt die Action das Sammel-Issue automatisch. **Abarbeiten ohne Worktree/Code:** die gelisteten PRs einzeln gegen grüne CI prüfen (`gh pr checks <nr>`) und mergen (`gh pr merge <nr> --squash --delete-branch`), danach das Issue schließen.
+
+### Board-Workflows (#1860)
+
+Beide Boards tragen dieselben sieben Workflows, alle eingeschaltet (gelesen 2026-10-22 per GraphQL `projectV2.workflows { name number enabled }`; Zwecke nach der GitHub-Doku „Using the built-in automations“, gelesen 2026-10-22). Die Einstellungen im Detail (Filter, Zielstatus) liefert die API nicht, sie stehen nur in der Oberfläche (Project › Workflows).
+
+| Workflow | Zweck | Einstellung | Bewertung |
+|---|---|---|---|
+| Item added to project | setzt den Status eines neu hinzugefügten Items (hier Todo, mit Verzögerung, s. „Status setzen“) | von der Maintainerin zu ergänzen (Oberfläche) | nötig, wir setzen den Status zusätzlich selbst |
+| Item closed | setzt den Status eines geschlossenen Issues bzw. PR auf Done | von der Maintainerin zu ergänzen (Oberfläche) | nötig, Grundlage des Aufräumens |
+| Pull request merged | setzt den Status eines gemergten PR auf Done | von der Maintainerin zu ergänzen (Oberfläche) | harmlos, PRs stehen nicht im Board |
+| Pull request linked to issue | setzt den Status des Issues, sobald ein PR darauf verweist | von der Maintainerin zu ergänzen (Oberfläche) | zu prüfen: Zielstatus darf kein „In Progress“ sein (der Assignee ist der Marker, die Auswahl liest nur Todo) |
+| Auto-close issue | schließt ein Issue, wenn sein Status auf Done wechselt | von der Maintainerin zu ergänzen (Oberfläche) | harmlos |
+| Auto-add sub-issues to project | nimmt Sub-Issues eines Board-Items ins Board auf | von der Maintainerin zu ergänzen (Oberfläche) | harmlos, nimmt keine gewöhnlichen Issues auf |
+| Auto-archive items | archiviert Items, die dem Filter genügen (z.B. `is:closed`, ältere Zeit) | von der Maintainerin zu ergänzen (Oberfläche) | nötig, hält das Board klein |
+
+**Aufräumen:** ein geschlossenes Issue wird per „Item closed“ auf Done gesetzt und von „Auto-archive items“ archiviert (beobachtet an #1711: 14:24Z geschlossen, 14:32Z archiviert). Archivierte Items fehlen in der REST-Liste und damit in der Auswahl; es ist keine Aufräum-Arbeit der Agenten. Die Ansicht „View 1“ blendet Erledigtes mit dem Filter `-status:Done` aus (Empfehlung; die Einstellung nimmt die Maintainerin in der Oberfläche vor, kein Agent ändert sie). Der Filter wirkt nur auf die Anzeige: die Auswahl liest die Items per REST unabhängig von Ansicht und Filter.
 
 ## Am Ticket-Ende
 
