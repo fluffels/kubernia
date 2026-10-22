@@ -28,7 +28,7 @@ interface Lib {
   setzeBlock(t: string, block: string, blockText: string): string;
   markerStart(id: string): string;
   markerEnde(id: string): string;
-  wirdVerteilt(e: { ring: string }): boolean;
+  wirdVerteilt: (e: { ring: string }) => boolean;
 }
 interface Opt {
   cwd?: string;
