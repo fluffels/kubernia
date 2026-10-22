@@ -295,6 +295,11 @@ describe("Sprache als Projektwert (#1711)", () => {
     const k = R.kriterien("## Goal\nG\n## Acceptance criteria\n- After merge: a\n- Nach dem Merge: b\n", EN);
     expect(k.map((c) => c.nachMerge)).toEqual([true, false]);
   });
+  test("Regex-Sonderzeichen in den Abschnittsnamen sind Text, keine Regex", () => {
+    const sonder = { ...EN, ziel: "Goal (v2)+", akzeptanzkriterien: ["AC.*"] };
+    expect(R.spezifikationsMaengel("## Goal (v2)+\nG\n## AC.*\n- Negative case\n", sonder)).toEqual([]);
+    expect(R.spezifikationsMaengel("## Goal (v2)\nG\n## ACDC\n- Negative case\n", sonder)).toEqual(["`## Goal (v2)+` fehlt", "`## AC.*` fehlt"]);
+  });
   test("Golden: mit der echten Config sind alle Mängeltexte wortgleich zu den früheren Konstanten", () => {
     expect(S.spezifikationsMaengel("")).toEqual(["`## Ziel` fehlt", "`## Akzeptanzkriterien` fehlt"]);
     expect(S.spezifikationsMaengel("## Ziel\n\n## Akzeptanzkriterien\nProsa\n")).toEqual(["`## Ziel` ist leer", "`## Akzeptanzkriterien` ohne Listenpunkt", "kein Negativfall in den Akzeptanzkriterien (ein Kriterium mit dem Wort „Negativfall“)"]);
@@ -316,5 +321,8 @@ describe("Sprache als Projektwert (#1711)", () => {
   test("ein Muster ohne Wort oder eine leere Kriterienliste ist unvollständig", () => {
     expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, negativfall: { muster: "x" } })).toThrow(/negativfall/);
     expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: [] })).toThrow(/akzeptanzkriterien/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: ["Akzeptanzkriterien", " "] })).toThrow(/akzeptanzkriterien/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, nachMerge: "" })).toThrow(/nachMerge/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, ziel: undefined })).toThrow(/ziel/);
   });
 });

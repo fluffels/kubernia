@@ -65,7 +65,7 @@ describe("findeUmschrift: Muster und Negativfälle", () => {
   });
   test("echte Umlaute und Wörter außerhalb der Liste sind kein Fund", () => {
     assert.deepEqual(findeUmschrift("Für dich, über alles, nächstes Ticket, prüfen", WOERTER), []);
-    assert.deepEqual(findeUmschrift("fuerst und Zufuer", WOERTER), [], "nur ganze Wörter");
+    assert.deepEqual(findeUmschrift("fuerst und Zufuer und a.fuer", WOERTER), [], "nur ganze Wörter, auch hinter einem Punkt");
   });
   test("Code, Link-Ziele, HTML und Bezeichner werden ausgeblendet", () => {
     assert.deepEqual(findeUmschrift("`fuer` und `a fuer b`", WOERTER), []);
