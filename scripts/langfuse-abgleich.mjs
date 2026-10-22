@@ -10,7 +10,8 @@
  * nur für Sessions mit Differenz. Ohne Secret-Key (Agentenläufe) ersatzweise `--ist <datei>` mit einem `queryMetrics`-Export
  * des Langfuse-MCP (mehrfach nutzbar: Zählung und Tokens dürfen zwei Exporte sein).
  *
- * Das Präfix trifft nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
+ * Mit `--session <id>` werden alle Ordner durchsucht (#1862); ein Treffer außerhalb des Projekts bekommt den Score „außerhalb“ und eine Hinweiszeile.
+ * Das Präfix trifft sonst nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
  * mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`, `langfuse-abgleich-kern`, `flag-lib`), damit es
  * später als Hook laufen kann, ohne die gh-/git-Kette von `token-baseline.mjs` mitzuziehen. Aufruf und Einordnung:
  * docs/model-routing.md › Checkliste Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
@@ -53,9 +54,9 @@ const FEHLEND_ANZEIGE = 20;
  * (sonst Zählebene: fehlend = max(0, Soll − Ist), Dubletten = max(0, Ist − Soll)). Status: `läuft` (Ruhefrist),
  * `Lücke`, `Dublette`, `Abweichung` (gleiche Zahl, andere Tokens), `vollständig`. Dazu `score` (getrennt vom Status): `vor Stichtag`
  * (der Nachlieferer sendet dort nie), `ausstehend` (der Nachlieferer wartet noch: 150 s bei bekanntem Ende laut Ledger `ledgerEintrag`,
- * sonst 24 h) oder `null`.
+ * sonst 24 h), `außerhalb` (#1862: Session liegt außerhalb der Projektordner, weder Projekt-Hook noch Nachlieferer erfassen sie, der Score kommt nie) oder `null`.
  */
-export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = null, ledgerEintrag = null }) {
+export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = null, ledgerEintrag = null, ausserhalb = false }) {
   const calls = ist.calls ?? 0;
   const fehlend = diff ? diff.fehlend.length : Math.max(0, soll.length - calls);
   const dubletten = diff ? diff.dubletten.length : Math.max(0, calls - soll.length);
@@ -69,11 +70,12 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
   else if (tokenAbweichung) status = "Abweichung";
   const beendet = endeGiltFuer(ledgerEintrag, { mtime, groesse });
   let score = null;
-  if (!laeuft) score = vorStichtag(soll) ? "vor Stichtag" : nachliefererWartet({ mtime, now, beendet }) ? "ausstehend" : null;
+  if (!laeuft) score = ausserhalb ? "außerhalb" : vorStichtag(soll) ? "vor Stichtag" : nachliefererWartet({ mtime, now, beendet }) ? "ausstehend" : null;
   return {
     session: soll[0]?.session ?? null,
     status,
     score,
+    ausserhalb,
     tickets: [...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort(),
     callsTranskript: soll.length,
     callsLangfuse: calls,
@@ -131,6 +133,9 @@ export function renderMarkdown(bewertungen, sum) {
     out.push("", `Fehlende Calls ${String(b.session).slice(0, 8)} (Schlüssel: ${b.schluessel}):`);
     for (const c of b.fehlendeCalls.slice(0, FEHLEND_ANZEIGE)) out.push(`- ${c.messageId} · ${c.ts} · ${c.model}`);
     if (b.fehlendeCalls.length > FEHLEND_ANZEIGE) out.push(`- … und ${b.fehlendeCalls.length - FEHLEND_ANZEIGE} weitere`);
+  }
+  for (const b of bewertungen.filter((x) => x.ausserhalb)) {
+    out.push("", `Hinweis ${String(b.session).slice(0, 8)}: Session außerhalb des Projekts (Projektordner passt nicht). Weder Projekt-Hook noch Nachlieferer erfassen sie, der Score erfassung kommt nie. Kosten: node scripts/token-baseline.mjs --session <id>; Einordnung: docs/langfuse-hook-patch.md › Läufe außerhalb des Repos.`);
   }
   const zaehlDubletten = bewertungen.filter((x) => x.schluessel === "zählung" && x.dubletten > 0);
   if (zaehlDubletten.length) {
@@ -195,13 +200,13 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     return { exitCode: 1, text: `Fehler: ${e.message}` };
   }
   try {
-    const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
+    const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session, alleOrdner: Boolean(args.session) });
     const soll = new Map();
     const staende = new Map();
     for (const s of sessions) {
       const eintraege = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
       if (eintraege.length) soll.set(s.id, eintraege);
-      staende.set(s.id, { mtime: s.mtime, groesse: s.groesse });
+      staende.set(s.id, { mtime: s.mtime, groesse: s.groesse, ausserhalb: Boolean(s.ausserhalb) });
     }
     if (!soll.size) return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: [], summe: summenzeile([]) }) : "Keine Sessions mit Calls im Fenster." };
     // Ledger nur lesen (bekanntes Ende für die Score-Spalte); kaputt oder fehlend heißt: kein bekanntes Ende, nie schreiben oder sichern.
@@ -210,14 +215,14 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     const bewertungen = [];
     for (const [id, eintraege] of soll) {
       const istSession = ist.get(id) ?? { calls: 0, tokens: leereSumme() };
-      const { mtime, groesse } = staende.get(id);
+      const { mtime, groesse, ausserhalb } = staende.get(id);
       const laeuft = now - mtime < RUHEFRIST_MIN * 60_000;
       let diff = null;
       if (zugang && !laeuft && hatDifferenz(eintraege, { calls: istSession.calls ?? 0, tokens: istSession.tokens })) {
         const obs = await fetchSessionObservations(id, { ...zugang, fetchImpl, type: "GENERATION", fields: "core,basic,model,usage,metadata" });
         diff = diffMultimenge(eintraege, obs);
       }
-      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens }, mtime, groesse, now, diff, ledgerEintrag: ledger.sessions[id] ?? null }));
+      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens }, mtime, groesse, now, diff, ledgerEintrag: ledger.sessions[id] ?? null, ausserhalb }));
     }
     const sum = summenzeile(bewertungen);
     return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: bewertungen, summe: sum }, null, 2) : renderMarkdown(bewertungen, sum) };
