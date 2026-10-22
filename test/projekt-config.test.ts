@@ -7,6 +7,7 @@ import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wri
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { altName } from "./support/env-alt";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
@@ -356,8 +357,9 @@ describe("umgebungsWert", () => {
     const geschrieben: unknown[] = [];
     const spy = vi.spyOn(process.stderr, "write").mockImplementation((s: unknown) => (geschrieben.push(s), true));
     try {
-      assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt" }, "FACTORY_X_Y"), undefined);
-      assert.equal(pc.umgebungsWert({ ZD_X_Y: "alt", FACTORY_X_Y: "neu" }, "FACTORY_X_Y"), "neu");
+      const alt = altName("FACTORY_X_Y");
+      assert.equal(pc.umgebungsWert({ [alt]: "alt" }, "FACTORY_X_Y"), undefined);
+      assert.equal(pc.umgebungsWert({ [alt]: "alt", FACTORY_X_Y: "neu" }, "FACTORY_X_Y"), "neu");
     } finally {
       spy.mockRestore();
     }

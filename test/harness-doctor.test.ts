@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeAltnamen as rawAlt } from "../scripts/harness-doctor-lib.mjs";
+import { pruefeAltnamen as rawAlt, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
@@ -125,10 +125,33 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
     assert.match(luecken(r)[0], new RegExp(`Umgebungsvariable ${ALT}: .*Fix: .*${NEU}`));
     assert.doesNotMatch(r.out.concat(r.err).join("\n"), /geheimwert/);
   });
-  test("CLI: --einrichten prüft den Punkt nicht", () => {
-    const r = lauf({}, { argv: ["--einrichten", "--dry-run", "--config", "<config>"], env: { [ALT]: "a" } });
-    assert.match(r.out.join("\n"), /Harness-Doctor --einrichten/);
-    assert.doesNotMatch(r.out.join("\n"), new RegExp(ALT));
+  test("CLI: --einrichten prüft den Punkt nicht, auch nicht über die Prozess-Umgebung", () => {
+    const vorher = process.env[ALT];
+    process.env[ALT] = "a";
+    try {
+      const r = lauf({}, { argv: ["--einrichten", "--dry-run", "--config", "<config>"], env: { [ALT]: "a" } });
+      assert.match(r.out.join("\n"), /Harness-Doctor --einrichten/);
+      assert.doesNotMatch(r.out.join("\n"), new RegExp(ALT));
+    } finally {
+      if (vorher === undefined) delete process.env[ALT];
+      else process.env[ALT] = vorher;
+    }
+  });
+  test("pruefLauf ohne umgebung (Wochenlauf) prüft den Altnamen nicht, auch bei gesetzter Prozess-Umgebung", () => {
+    const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
+    ordner.push(root);
+    writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+    writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
+    const vorher = process.env[ALT];
+    process.env[ALT] = "a";
+    try {
+      const { ergebnis } = (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null });
+      assert.ok(ergebnis.length > 0);
+      assert.equal(ergebnis.filter((e) => e.punkt.startsWith("Umgebungsvariable")).length, 0);
+    } finally {
+      if (vorher === undefined) delete process.env[ALT];
+      else process.env[ALT] = vorher;
+    }
   });
 });
 

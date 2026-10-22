@@ -605,6 +605,7 @@ describe("Feste Stopps bleiben (#1363)", () => {
     assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, `${PROJEKT_STOPP_ZEILE} Veröffentlichen`)), [PROJEKT_STOPP_ZEILE, "Kern-Stopp im Projekt-Block: Veröffentlichen"]);
     assert.deepEqual(festeStoppsFehlend(agents.replace("factory-besitz:start kern", "x")), KERN_STOPPS);
     assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_BLOCK_START as string, "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
+    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_BLOCK_ENDE as string, "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
   });
 
   test("der Projekt-Block trägt keine unbekannte Stopp-Aussage (Red-Green: Synonym ohne Anker, Lockerung per Zusatzzeile)", () => {
