@@ -578,6 +578,21 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
     assert.equal(karte.status, 1, karte.text);
     assert.match(karte.text, /Verwaistes Modul: „lib\/gross\.ts" ist in keinem docs\/module\/\*\.md/);
   });
+  test("die Funktionen ohne Pfadangabe lesen struktur aus der Config (Default-Parameter)", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
+    writeFileSync(join(d, "docs", "module", "m.md"), "`lib/gross.ts` ist beschrieben.\n");
+    writeFileSync(
+      join(d, "lauf.mjs"),
+      [
+        'import { collectSizes } from "./scripts/check-size.mjs";',
+        'import { auditDocMap, collectSrcModules, parseDeepDocMaps } from "./scripts/check-docmap.mjs";',
+        "console.log(JSON.stringify({ groesse: collectSizes().map((s) => s.file), module: collectSrcModules(), audit: auditDocMap().modules, doku: [...parseDeepDocMaps()] }));",
+      ].join("\n"),
+    );
+    const r = spawnSync(process.execPath, [join(d, "lauf.mjs")], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), { groesse: ["lib/gross.ts"], module: ["lib/gross.ts"], audit: ["lib/gross.ts"], doku: ["lib/gross.ts"] });
+  });
   test("ohne struktur: ✖, Schlüssel, Fix-Zeile, kein Stacktrace, Exit 1 (kein stiller Standardwert)", () => {
     const d = fremdrepo(undefined);
     for (const skript of ["check-size.mjs", "check-docmap.mjs"]) {
