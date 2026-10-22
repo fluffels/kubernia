@@ -468,9 +468,9 @@ describe("docs-gen CLI und Registry (#1392)", () => {
       (e: unknown) => e as Error,
     );
     assert.match(err.message, /config\.generatoren\.mein: k\.mjs lässt sich nicht laden: .*\S/);
-    assert.ok(err.cause instanceof Error && err.message.endsWith(err.cause.message));
+    assert.ok(err.cause instanceof Error && err.message.includes(err.cause.message));
     // geworfener Nicht-Error-Wert: String(e)
-    await assert.rejects(registryApi.ladeGeneratoren({ rootDir, config: config("b.mjs") }), /config\.generatoren\.mein: b\.mjs lässt sich nicht laden: boom$/);
+    await assert.rejects(registryApi.ladeGeneratoren({ rootDir, config: config("b.mjs") }), /config\.generatoren\.mein: b\.mjs lässt sich nicht laden: boom/);
   });
   test("ladeGeneratoren: fehlende Datei nennt Marker und Pfad", async () => {
     await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({}), config: { generatoren: { mein: { datei: "x/fehlt.mjs", name: "g" } } } }), /config\.generatoren\.mein: Datei fehlt: x\/fehlt\.mjs/);

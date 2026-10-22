@@ -10,14 +10,25 @@
  *
  * Ausführen mit:  npm test   (oder gezielt: npm run check:internalrefs)
  */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// Temp-Ordner dieser Datei: jeder Test legt über `tempOrdner()` an, `afterEach` räumt auf (kein Rest im Temp-Verzeichnis).
+const angelegt: string[] = [];
+const tempOrdner = (praefix: string) => {
+  const dir = mkdtempSync(join(tmpdir(), praefix));
+  angelegt.push(dir);
+  return dir;
+};
+afterEach(() => {
+  for (const dir of angelegt.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs ist aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -247,7 +258,7 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
   });
 
   test("addTerm trägt in die gewählte Liste ein und lässt die andere unberührt (#1217)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-internalrefs-"));
+    const dir = tempOrdner("kq-internalrefs-");
     const file = join(dir, "liste.mjs");
     const source = 'export const ENCODED_TERMS = ["YQ=="];' + String.fromCharCode(10) + 'export const ENCODED_NAME_TERMS = ["Yg=="];' + String.fromCharCode(10);
     writeFileSync(file, source);
@@ -276,7 +287,7 @@ describe("CLI-Flags (#1837)", () => {
   const SKRIPT = fileURLToPath(new URL("../scripts/check-internalrefs.mjs", import.meta.url));
   const hash = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
   const kopie = () => {
-    const f = join(mkdtempSync(join(tmpdir(), "kq-ir-")), "kopie.mjs");
+    const f = join(tempOrdner("kq-ir-"), "kopie.mjs");
     copyFileSync(SKRIPT, f);
     return f;
   };

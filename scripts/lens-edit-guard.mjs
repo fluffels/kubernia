@@ -11,7 +11,7 @@
  * Bewusste Grenzen:
  *   - Bash/PowerShell (`sed -i`, `Set-Content`) fängt er nicht ab; die Lens-Definition verbietet es per Text, der
  *     Frische-Guard der Folge-Runde und `git status --porcelain` im Feature-Worktree machen eine Änderung sichtbar.
- *   - Ein Pfad per Symlink/Junction in einen Lens-Worktree wird nicht aufgelöst (lexikalische Prüfung); jeder Pfad mit einem Segment `.claude/worktrees/<worktree-präfix><nr>-lens-r<n>/` gilt als Lens-Worktree, auch ein verschachtelter.
+ *   - Ein Pfad per Symlink/Junction in einen Lens-Worktree wird nicht aufgelöst (lexikalische Prüfung); jeder Pfad mit einem Segment `.claude/worktrees/<worktree-präfix><nr>-lens-r<n>/`, `-lens-m<n>/` oder `-lens-a<n>/` gilt als Lens-Worktree, auch ein verschachtelter.
  *
  * Präfixe und Agentenname kommen je Aufruf aus der Projekt-Config (`ticket-namen.mjs`); ist sie nicht nutzbar, lehnt der Guard ab (fail-closed).
  * Nur Node-Builtins.

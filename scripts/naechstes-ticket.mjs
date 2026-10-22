@@ -26,12 +26,12 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { NOTFAELLE, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
+import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { labelAus, ladeProjektConfig, spracheAus, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -335,7 +335,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   });
   /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
   const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster) });
-  return { lade, ladeEinzeln, owner: zerlegeRepo(REPO).owner, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
+  return { lade, ladeEinzeln, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

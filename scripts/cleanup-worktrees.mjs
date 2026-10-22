@@ -102,15 +102,15 @@ export function branchenModus(root, loeschen, {
 }
 
 /**
- * Einstieg. `--branches` liefert den Exit-Code von `modus(root, loeschen, { namen })` zurück (`loeschen` nur mit `--fix`); die übrigen Pfade
- * beenden den Prozess selbst. `deps` (Tests): `modus`, `root`.
+ * Einstieg, liefert in jedem Pfad den Exit-Code zurück (nie `process.exit`; der Aufrufer setzt `process.exitCode`). `--branches` gibt den Code von
+ * `modus(root, loeschen, { namen })` weiter (`loeschen` nur mit `--fix`). `deps` (Tests): `modus`, `root`.
  */
 export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))) } = {}) {
   const { werte, fehler } = flagsLesen(argv, { fix: { type: "boolean" }, branches: { type: "boolean" } });
   if (fehler) {
     console.error(`${fehler.text}
 Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
-    process.exit(AUFRUF_EXIT);
+    return AUFRUF_EXIT;
   }
   const FIX = werte.fix === true;
   const ROOT = root;
@@ -119,7 +119,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     namen = ticketNamen(ladeProjektConfig());
   } catch (e) {
     console.error(`Worktree-Aufräumen abgebrochen: ${e instanceof Error ? e.message : e}`);
-    process.exit(1);
+    return 1;
   }
   if (werte.branches) {
     return modus(ROOT, FIX, { namen });
@@ -131,7 +131,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   const { ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = diagnoseOrphans(ROOT, { namen });
   if (!ok) {
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
-    process.exit(1);
+    return 1;
   }
 
   const dirs = localWorktreeDirs(worktreesDir);
@@ -151,7 +151,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
 
   if (dirs.length === 0 && suspicious.length === 0 && orphanFiles.length + youngFiles.length + foreignFiles.length === 0) {
     console.log(".claude/worktrees/ ist leer — alles sauber.");
-    process.exit(0);
+    return 0;
   }
 
   if (young.length > 0) {
@@ -190,7 +190,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     console.log("Keine verwaisten Ordner — alles sauber.");
     // Ein gemeldeter Reparse-Point ist NICHT "sauber": exit 1, damit die
     // Warnung nicht in einem grünen Lauf untergeht (#1051).
-    process.exit(suspicious.length > 0 ? 1 : 0);
+    return suspicious.length > 0 ? 1 : 0;
   }
 
   if (orphans.length > 0) {
@@ -203,7 +203,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     console.log(
       "Dry-Run — keine Änderungen. Zum Bereinigen: node scripts/cleanup-worktrees.mjs --fix"
     );
-    process.exit(1);
+    return 1;
   }
 
   console.log("Pruning veralteter git-Einträge + Löschen...");
@@ -228,14 +228,14 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     console.error(
       `\n${refused.length} Ziel(e) vom Schutzgurt abgelehnt — bewusst NICHT gelöscht. Bitte von Hand prüfen (#1051).`
     );
-    process.exit(1);
+    return 1;
   }
 
   if (errors.length > 0) {
     console.error(
       `\n${errors.length} Fehler beim Löschen. Den Halter gezielt per PID beenden (taskkill /PID <pid> /T /F bzw. in Git-Bash taskkill //PID <pid> //T //F, nie per Name), dann erneut versuchen.`
     );
-    process.exit(1);
+    return 1;
   }
 
   console.log("\nFertig. Verify-Befehle:");
@@ -246,7 +246,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
 
   // Ein gemeldeter Reparse-Point bleibt offen (wird nie automatisch gelöscht,
   // #1051) — der Lauf darf deshalb nicht grün enden.
-  if (suspicious.length > 0) process.exit(1);
+  return suspicious.length > 0 ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();
