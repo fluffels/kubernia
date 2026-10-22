@@ -75,6 +75,7 @@ export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] =
 /** Marker eines Schnappschuss-Blocks: datierter Text, der die damaligen Namen bewusst trägt (Glossar „Schnappschuss-Block“). */
 export const SCHNAPPSCHUSS_START = "<!-- schnappschuss:start -->";
 export const SCHNAPPSCHUSS_ENDE = "<!-- schnappschuss:ende -->";
+const ISO_DATUM = /\d{4}-\d{2}-\d{2}/;
 
 /** Findet Reste in den übergebenen Dateien; leer = sauber. */
 export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[] {
@@ -83,18 +84,26 @@ export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[
     if (AUSNAHMEN.some((a) => d.pfad.startsWith(a.praefix))) continue;
     const regeln = RESTE.filter((r) => !REGEL_AUSNAHMEN.some((a) => a.pfad === d.pfad && a.regel === r.name));
     let blockStart = 0; // Zeilennummer des offenen Schnappschuss-Blocks, 0 = außerhalb
+    let blockDatiert = false; // trägt der offene Block zwischen Start und Ende ein ISO-Datum
     d.inhalt.split("\n").forEach((zeile, i) => {
       const marker = zeile.trim();
       if (marker === SCHNAPPSCHUSS_START) {
         if (blockStart) treffer.push(`${d.pfad}:${i + 1}: Schnappschuss-Block verschachtelt`);
-        else blockStart = i + 1;
+        else {
+          blockStart = i + 1;
+          blockDatiert = false;
+        }
         return;
       }
       if (marker === SCHNAPPSCHUSS_ENDE) {
+        if (blockStart && !blockDatiert) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Datum`);
         blockStart = 0;
         return;
       }
-      if (blockStart) return;
+      if (blockStart) {
+        if (ISO_DATUM.test(zeile)) blockDatiert = true;
+        return;
+      }
       for (const r of regeln) if (r.muster.test(zeile)) treffer.push(`${d.pfad}:${i + 1}: ${r.name}`);
     });
     if (blockStart) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Ende`);
@@ -106,7 +115,7 @@ export function findeReste(dateien: { pfad: string; inhalt: string }[]): string[
 export function meldungMitFix(treffer: string[]): string {
   const hinweise = RESTE.filter((r) => treffer.some((t) => t.endsWith(`: ${r.name}`))).map((r) => `- ${r.name}: ${r.fix}`);
   const bloecke = treffer.some((t) => t.includes("Schnappschuss-Block"))
-    ? ["- Schnappschuss-Block: Marker nur allein auf der Zeile, jeder Start braucht genau ein Ende"]
+    ? ["- Schnappschuss-Block: Marker nur allein auf der Zeile, jeder Start braucht genau ein Ende und zwischen beiden ein ISO-Datum (JJJJ-MM-TT)"]
     : [];
   return `Rest des entfernten Pfads gefunden:\n${[...hinweise, ...bloecke].join("\n")}`;
 }
@@ -189,9 +198,6 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     test("ein leerer Block ist ein Fund, ein Datum außerhalb des Blocks zählt nicht", () => {
       assert.deepEqual(pruefe(`${start}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
       assert.deepEqual(pruefe(`2026-10-01\n${start}\n${rest}\n${ende}\n2026-10-02`), ["docs/s.md:2: Schnappschuss-Block ohne Datum"]);
-    });
-    test("ein Datum in der Start- oder Endzeile zählt nicht, nur eines im Inneren", () => {
-      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende} 2026-10-01`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
     });
     test("ein unvollständiges Datum zählt nicht", () => {
       assert.deepEqual(pruefe(`${start}\n2026-10\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);

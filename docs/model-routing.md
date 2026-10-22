@@ -548,6 +548,8 @@ Mit `node scripts/subagent-laufzeit.mjs --von 2026-10-07T00:00:00Z --schnitt 202
 - Überschneidung: der Umsetzer liest 78 % (vor) bzw. 83 % (nach) seiner Lese-Tokens auf Dateien, die der Plan nennt (alle ohne Sammeltickets: 78 % bei n = 72, 86 % bei n = 8), weit über der Schwelle von 20 %.
 
 <!-- schnappschuss:start -->
+*Stand 2026-10-09 (Planer-Kosten, #1558).*
+
 
 **Hebel umgesetzt (mit Zahl):** der Planer nennt je Datei die Fundstelle (`pfad:zeile`, Funktion oder Überschrift), der Umsetzer liest gezielt (`Read` mit `offset`/`limit`) statt neu zu suchen (`.claude/agents/kubernia-planner.md` Punkt 2, `.claude/agents/kubernia-umsetzer.md`). Grund: 78 bis 86 % der Lese-Tokens des Umsetzers liegen auf Dateien, die der Plan schon nennt. Die Ersparnis ist gemessen (Absatz „Umsetzer-Lese-Tokens nach dem Hebel“ unten, Ø 9,3k bei n = 7). Vergleichswert vor dem Hebel: Ø Umsetzer-Lese-Tokens je Lauf 14k (n = 5 nach dem Schnitt, also nach dem Request-Budget; vor dem Schnitt 24k bei n = 5; Ergebnis-Tokens aus `Read` und Pfaden in Shell-Kommandos, Zeichen/4); Die Zeile `Lesen:` des Skripts erfasst nur `Read`, keine Pfade in Shell-Kommandos; die Nachmessung zählt darum mit dem Scratch-Skript.
 
@@ -669,6 +671,8 @@ Qualität (`lauf-ergebnis`), feste **Basismenge** (festgelegt 2026-10-15 vor jed
 Kontrollmessung zum Startzeitpunkt (alle 14 Läufe inkl. laufender): Ø Kontext 119k, Median Kosten 1,14 $; die Zahlen aus der Vorab-Messung des Planers (Stand 21:39Z, 12 Läufe) bleiben gültig, `lauf-ergebnis` lieferte roh 13 PRs und Σ CI-Fix 8; nach Abzug der drei Dependabot-PRs bleiben dieselben 10 PRs und dieselbe Σ CI-Fix (3). Die Tabellenwerte zu Kosten und Kontext stammen vom Stand 21:39Z (12 Läufe, #1634 noch offen); mit dem Fenster bis 21:46:15Z (14 Läufe inkl. laufender) liegt der Ø Kontext bei 119k, das Kontextziel liegt also im Rauschen um 120k.
 
 <!-- schnappschuss:start -->
+*Stand 2026-10-16 (Messung der Umsetzer-Effort-Probe, #1591).*
+
 
 **Entscheidung: Abbruch, `effort: medium` zurück, weil Regel (3) wörtlich greift (Σ CI-Fix 3 = Basis 1 + 2, „mindestens eins“ genügt).** Die Drift-Runde in #1633 (`check:docgen` durch parallele Merges) bleibt in der Zählung, weil die Regel vorab keine Ursachenklassen nannte; sie auszunehmen wäre Grün-durch-Aufweichen. Störgrößen im Fenster: `kubernia-umsetzer.md` (#1619, #1624), `kubernia/SKILL.md` (#1626, #1631, #1633), `review-lenses/SKILL.md` und `kubernia-planner.md` (#1637), `settings.json` (#1624, #1631) änderten sich parallel; Kosten und Kontext sind darum nicht allein `low` zuzuschreiben. **Grenzen:** n = 10 mit Deckeneffekt bei Runde 1; die Kostenwirkung ist unterschätzt (Output unterzählt); ob `low` im Lauf wirklich griff, zeigt das Transkript nicht direkt; Regel (4) ist vorläufig. **AK 3 (Zwischenstand gegen Ziel):** Median Kosten −55 % gegen die Basis, aber das Ziel (≤ 0,74 $) ist verfehlt, der Ø Kontext knapp verfehlt; die Zielmessung (inkl. Beitrag von #1590/#1591) liegt bei #1593. Revert-Pfad ausgeführt: Frontmatter, Test, Matrix und „Warum so“ stehen wieder auf `medium`.
 
