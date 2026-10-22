@@ -28,8 +28,9 @@ const SAMMEL_USAGE = "Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr
 const SPEZ_AUFRUF = [
   "Aufruf:",
   "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
-  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)',
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]',
   "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
+  '  node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"',
 ].join("\n");
 const ABNAHME_AUFRUF = [
   "Aufruf:",
@@ -420,7 +421,7 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     for (const skript of ["abnahme", "spezifikation"]) {
       const quelle = readFileSync(join(ROOT, "scripts", `${skript}.mjs`), "utf8");
       expect(quelle).not.toMatch(/echteIo\(\)/);
-      expect(quelle).toMatch(/io: echteIo,/);
+      expect(quelle).toMatch(/io: \(\) => echteIo\(config\),/); // die Fabrik läuft erst im Rückruf, nach Aufruf- und Config-Prüfung
       expect(quelle).not.toMatch(/process\.std(out|err)\.write/); // Ausgabe nur über direktaufruf
     }
   });

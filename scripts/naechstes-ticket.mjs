@@ -85,11 +85,11 @@ const OHNE_WERT = {
  * Schließt `--ticket` und `--bereich` gegenseitig aus und verlangt genau eines davon.
  */
 export function aufrufLesen(argv) {
-  const r = flagsLesen(argv, { bereich: { type: "string" }, ticket: { type: "string" }, json: { type: "boolean" } }, {
+  const r = flagsLesen(argv, { bereich: { type: "string" }, ticket: { type: "string" }, json: { type: "boolean" }, maengel: { type: "boolean" } }, {
     meldung: (art, flag) => (art === "ohne-wert" ? OHNE_WERT[flag] : undefined),
   });
   if (r.fehler) return { fehler: r.fehler.text };
-  const { bereich: roh, ticket: nr, json } = r.werte;
+  const { bereich: roh, ticket: nr, json, maengel } = r.werte;
   if (roh !== undefined && !Object.hasOwn(BEREICHE, roh)) return { fehler: `--bereich erwartet agentic oder spiel (bekommen: „${roh}“)` };
   let ticket = null;
   if (nr !== undefined) {
@@ -98,6 +98,8 @@ export function aufrufLesen(argv) {
     ticket = Number(m[1]);
   }
   const bereich = roh ?? null;
+  if (maengel === true && ticket !== null) return { fehler: "--maengel und --ticket schließen sich aus" };
+  if (maengel === true) return { bereich, ticket: null, json: json === true, maengel: true };
   if (ticket !== null && bereich) return { fehler: "--ticket und --bereich schließen sich aus" };
   if (ticket === null && !bereich) return { fehler: "Aufruf ohne Auswahl: --bereich agentic|spiel (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)" };
   return { bereich, ticket, json: json === true };
@@ -198,7 +200,7 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, confi
   if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
   const offeneBlocker = blockerNummern(c.body, spracheAus(config).spezifikation).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
-  const fenster = messfensterZeilen(c.body);
+  const fenster = messfenster === null ? [] : messfensterZeilen(c.body); // `null`: Mängelliste, das teure Messfenster zählt dort nicht
   const unlesbar = fenster.find((f) => "fehler" in f);
   if (unlesbar) return { grund: unlesbar.fehler };
   const offenesFenster = fenster.find((f) => offene.has(f.nach));
@@ -213,6 +215,29 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, confi
   }
   return spez.art === "bestand" ? { grund: "", bestandFehlt: spez.fehlt } : { grund: "" };
 }
+
+/**
+ * Die Mängelliste (`--maengel`): freie, vertraute, unblockierte Todo-Items mit Spezifikations-Mangel (hart oder Bestand) in Board-Reihenfolge (Produkt vor Factory,
+ * mit `bereich` nur dessen Board); Kopf-, Sammel- und Epic-Tickets sind vom Gate ausgenommen. Das Messfenster zählt hier nicht. Liefert `{ anzahl, maengel: [{ nr, titel, fehlt }] }`. Pur.
+ */
+export function listeMaengel({ produkt, factory, bereich = null, config, offene, refs = [], worktrees = [], prHeads = [], owner = "", hartAb = 0, namen }) {
+  if (bereich !== null && !Object.hasOwn(BEREICHE, bereich)) throw new Error("listeMaengel: bereich erwartet agentic oder spiel");
+  const listen = seitenListen(produkt, factory, config);
+  const items = bereich === null ? [...listen.produkt, ...listen.factory] : listen[bereich === "agentic" ? "factory" : "produkt"];
+  const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
+  const maengel = [];
+  for (const item of items) {
+    if (item.status !== "Todo" || item.state !== "open") continue;
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster: null, hartAb, config });
+    const fehlt = r.fehlt ?? r.bestandFehlt;
+    if (fehlt && (r.grund === "" || r.fehlt)) maengel.push({ nr: item.number, titel: item.title, fehlt });
+  }
+  return { anzahl: maengel.length, maengel };
+}
+
+/** Textausgabe der Mängelliste: erste Zeile die Zahl, dann je Ticket `#<nr>TAB<Titel>: <Mängel>` (nie der Body). Pur. */
+export const formatiereMaengel = ({ anzahl, maengel }) =>
+  [`${anzahl} ${anzahl === 1 ? "Ticket" : "Tickets"} mit Mangel`, ...maengel.map((m) => `#${m.nr}\t${m.titel}: ${m.fehlt.join("; ")}`)].join("\n") + "\n";
 
 /** Reparaturaufträge (#1698): hart übersprungene Tickets mit Spezifikations-Mangel (`fehlt`), nur vertraute und freie (`ueberspringGrund` setzt `fehlt` erst nach Assignee-, Fremdeingangs-, Blocker- und Belegungsprüfung). Pur. */
 export const reparierenVon = (uebersprungen) => uebersprungen.filter((u) => u.fehlt).map((u) => ({ nr: u.nr, fehlt: u.fehlt }));
@@ -233,6 +258,10 @@ export function fuehreAus(argv, io) {
   const aufruf = aufrufLesen(argv);
   if (aufruf.fehler) return fehlerErgebnis(aufruf.fehler);
   try {
+    if (aufruf.maengel) {
+      const liste = listeMaengel({ ...io.lade(), owner: io.owner, bereich: aufruf.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config });
+      return { code: 0, out: aufruf.json ? `${JSON.stringify(liste, null, 2)}\n` : formatiereMaengel(liste), err: "" };
+    }
     const einzel = aufruf.ticket;
     const roh =
       einzel === null

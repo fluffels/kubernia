@@ -39,6 +39,7 @@ const AUFRUF = [
   "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
   '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]',
   "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
+  '  node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"',
 ].join("\n");
 
 const ergebnis = (code, out = "", err = "") => ({ code, out, err });

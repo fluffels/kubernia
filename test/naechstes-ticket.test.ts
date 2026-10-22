@@ -906,7 +906,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     expect(M.aufrufLesen(["--maengel"])).toMatchObject({ maengel: true, bereich: null, ticket: null, json: false });
     expect(M.aufrufLesen(["--maengel", "--bereich", "agentic", "--json"])).toMatchObject({ maengel: true, bereich: "agentic", json: true });
     expect(M.aufrufLesen(["--maengel", "--ticket", "5"]).fehler).toMatch(/schließen sich aus/);
-    expect(M.aufrufLesen(["--bereich", "spiel"]).maengel).toBe(false);
+    expect(M.aufrufLesen(["--bereich", "spiel"]).maengel).toBeUndefined();
   });
   test("listet Tickets mit Mangel in Board-Reihenfolge, Exit 0, Body nie ausgegeben", () => {
     const r = lauf([roh(3, { body: `${OHNE_NEGATIV}GEHEIM` }), item(4), roh(2, { body: "" })]);
