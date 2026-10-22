@@ -17,7 +17,7 @@ type Cfg = Record<string, unknown>;
 type Ctx = { rootDir: string; config: Cfg };
 const generator = (sv as unknown as { saveVersionenGenerator: (c: Ctx) => string }).saveVersionenGenerator;
 const loadConfig = (gen as unknown as { loadConfig: (root: string) => Cfg }).loadConfig;
-const GENERATORS = (reg as unknown as { GENERATORS: Record<string, unknown> }).GENERATORS;
+const ladeGeneratoren = (reg as unknown as { ladeGeneratoren: (a: { rootDir: string; config: Cfg }) => Promise<Record<string, unknown>> }).ladeGeneratoren;
 
 const config: Cfg = {
   saveVersionen: { beschreibungen: "s/save-versionen.json", version: { datei: "s/versioning.ts", name: "CURRENT_SAVE_VERSION" } },
@@ -124,9 +124,9 @@ describe("save-versionen: Bindung an die echte Migrations-Registry", () => {
       m,
     );
   });
-  test("der echte Generator läuft auf dem Repo und nennt die aktuelle Version", () => {
+  test("der echte Generator läuft auf dem Repo und nennt die aktuelle Version", async () => {
     const config = loadConfig(process.cwd());
-    const out = (GENERATORS["save-versionen"] as (c: Ctx) => string)({ rootDir: process.cwd(), config });
+    const out = ((await ladeGeneratoren({ rootDir: process.cwd(), config }))["save-versionen"] as (c: Ctx) => string)({ rootDir: process.cwd(), config });
     assert.match(out, new RegExp(`v${current}\\[\\["v${current} · aktuell"\\]\\]`));
   });
 });

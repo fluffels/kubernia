@@ -21,6 +21,8 @@ import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNamen from "../../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawRegistry from "../../scripts/docs-gen/registry.mjs";
 
 // Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -287,10 +289,7 @@ export function pruefeAbdeckung(eintraege: Eintrag[], getrackt: string[], abdeck
 
 const PROJEKT_CONFIG_PFAD = ".factory/projekt.json";
 /** Offene Ausnahmen der Import-Hülle: "<von> -> <nach>" → Grund mit Ticket oder ADR-Schritt. Darf nur schrumpfen; nur für Importeure im Ring kern-nach-entkopplung. */
-export const KERN_HUELLE_AUSNAHMEN: Record<string, string> = {
-  "scripts/docs-gen/registry.mjs -> scripts/docs-gen/quests.mjs": "ADR 0022 F6: Kern-Registry ohne Spiel-Generator",
-  "scripts/docs-gen/registry.mjs -> scripts/docs-gen/save-versionen.mjs": "ADR 0022 F6: Kern-Registry ohne Spiel-Generator",
-};
+export const KERN_HUELLE_AUSNAHMEN: Record<string, string> = {};
 
 /** Lokale Importe (`relativeImporte` aus hook-importe, auch JSON) jeder Ganz-Datei-Code-Einheit, die weder auf eine Ganz-Datei-Einheit noch auf die Projekt-Config zeigen: "<von> -> <nach>". */
 export function huellenVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
@@ -363,6 +362,26 @@ export function pruefeHuelle(verstoesse: string[], ausnahmen: Record<string, str
     if (!/#\d+|ADR 0022 F\d+/.test(grund)) out.push(`${id}: Ausnahme ohne Ticket (#<nr>) oder ADR-Schritt (ADR 0022 F<n>) im Grund`);
     if (ringVon(von) !== "kern-nach-entkopplung") out.push(`${id}: Ausnahmen gelten nur für Importeure im Ring kern-nach-entkopplung`);
     if (!verstoesse.includes(id)) out.push(`${id}: Ausnahme veraltet (Import entfällt oder Ziel ist Besitz), Eintrag entfernen`);
+  }
+  return out;
+}
+
+/** Kern-Registry ohne Spiel-Generator (ADR 0022 F6, #1710). Meldungen (leer = grün) für `config.generatoren`:
+ *  (1) die Registry importiert die Datei eines Projekt-Generators statisch, (2) der Marker ist zugleich ein Kern-Name,
+ *  (3) die Datei eines Projekt-Generators ist Besitz. `registryZiele` sind die aufgelösten Pfade der lokalen Importe der Registry.
+ *  Grenze: nur statische lokale Importe (`relativeImporte`) werden gesehen. */
+export function spielGeneratorVerstoesse(
+  registryZiele: string[],
+  kernNamen: string[],
+  projektGeneratoren: Record<string, { datei: string }>,
+  istBesitz: (pfad: string) => boolean,
+): string[] {
+  const out: string[] = [];
+  for (const [marker, { datei }] of Object.entries(projektGeneratoren)) {
+    const pfad = posix.normalize(datei);
+    if (registryZiele.includes(pfad)) out.push(`${marker}: die Kern-Registry importiert den Projekt-Generator ${pfad} (laden über config.generatoren)`);
+    if (kernNamen.includes(marker)) out.push(`${marker}: Marker ist zugleich ein Kern-Generator`);
+    if (istBesitz(pfad)) out.push(`${marker}: ${pfad} ist Factory-Besitz, ein Projekt-Generator gehört dem Projekt`);
   }
   return out;
 }
@@ -782,6 +801,30 @@ describe("ueberfluessigeEntkopplung (Ring ohne Grund, #1740)", () => {
   });
 });
 
+describe("spielGeneratorVerstoesse (Kern-Registry ohne Spiel-Generator, ADR 0022 F6)", () => {
+  const PG = { "wetter-karte": { datei: "scripts/docs-gen/wetter.mjs" } };
+  const kein = () => false;
+  test("sauber: kein Import, kein Kern-Name, kein Besitz", () => {
+    assert.deepEqual(spielGeneratorVerstoesse(["scripts/docs-gen/adr.mjs"], ["adr-liste"], PG, kein), []);
+    assert.deepEqual(spielGeneratorVerstoesse([], [], {}, kein), []);
+  });
+  test("Regel 1: die Registry importiert die Datei eines Projekt-Generators (auch nicht normalisiert in der Config)", () => {
+    assert.equal(spielGeneratorVerstoesse(["scripts/docs-gen/wetter.mjs"], [], PG, kein).length, 1);
+    assert.equal(spielGeneratorVerstoesse(["scripts/docs-gen/wetter.mjs"], [], { "wetter-karte": { datei: "scripts/docs-gen/../docs-gen/wetter.mjs" } }, kein).length, 1);
+    assert.match(spielGeneratorVerstoesse(["scripts/docs-gen/wetter.mjs"], [], PG, kein)[0] ?? "", /importiert den Projekt-Generator/);
+  });
+  test("Regel 2: der Marker ist zugleich ein Kern-Name", () => {
+    assert.match(spielGeneratorVerstoesse([], ["wetter-karte"], PG, kein)[0] ?? "", /zugleich ein Kern-Generator/);
+  });
+  test("Regel 3: die Datei eines Projekt-Generators ist Besitz", () => {
+    assert.match(spielGeneratorVerstoesse([], [], PG, (p) => p === "scripts/docs-gen/wetter.mjs")[0] ?? "", /Factory-Besitz/);
+    assert.deepEqual(spielGeneratorVerstoesse([], [], PG, (p) => p === "anderes.mjs"), []);
+  });
+  test("die Hülle meldet einen Import der Registry auf eine Nicht-Besitz-Datei ebenfalls (Zusammenspiel)", () => {
+    assert.notDeepEqual(pruefeHuelle(["scripts/docs-gen/registry.mjs -> scripts/docs-gen/quests.mjs"], {}, () => "kern"), []);
+  });
+});
+
 // ── Reale Prüfungen ───────────────────────────────────────────────────────────
 
 const lesenWurzel = (pfad: string): string | null => {
@@ -814,6 +857,18 @@ describe("Kern-Reinheit (#1610)", () => {
   test("jeder lokale Import einer Besitz-Datei ist selbst Besitz oder Projekt-Config (Import-Hülle, #1613)", () => {
     const ringVon = (pfad: string): string | undefined => manifest.eintraege.find((e) => e.pfad === pfad)?.ring;
     assert.deepEqual(pruefeHuelle(huellenVerstoesse(manifest.eintraege, lesenWurzel), KERN_HUELLE_AUSNAHMEN, ringVon), []);
+  });
+
+  test("Kern-Registry enthält keinen Spiel-Generator (ADR 0022 F6)", () => {
+    const registryPfad = "scripts/docs-gen/registry.mjs";
+    assert.deepEqual(KERN_HUELLE_AUSNAHMEN, {}, "keine Ausnahmen der Import-Hülle mehr");
+    assert.equal(manifest.eintraege.find((e) => e.pfad === registryPfad && e.block === undefined && e.schluessel === undefined)?.ring, "kern");
+    const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
+    assert.ok(cfg.generatoren && Object.keys(cfg.generatoren).length > 0, "scripts/docs-gen/config.json: generatoren fehlt");
+    const ziele = relativeImporte(lesenWurzel(registryPfad) ?? "").flatMap((spec) => kandidatenPfade(posix.normalize(posix.join(posix.dirname(registryPfad), spec))));
+    const kernNamen = Object.keys((rawRegistry as unknown as { GENERATORS: Record<string, unknown> }).GENERATORS);
+    const besitz = new Set(manifest.eintraege.map((e) => e.pfad));
+    assert.deepEqual(spielGeneratorVerstoesse(ziele, kernNamen, cfg.generatoren, (p) => besitz.has(p)), []);
   });
 
   test("kein Importeur verletzt die Ring-Importregel (RING_IMPORTE, #1663, ADR 0029)", () => {

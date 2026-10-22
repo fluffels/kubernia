@@ -31,7 +31,7 @@ const api = docsGen as unknown as {
   renderSections: (t: string, o: Record<string, string>, hinweis?: string) => string;
   runDocsGen: (a: { rootDir: string; config: Cfg; generators?: Gen; write?: boolean }) => Run;
   loadConfig: (rootDir?: string, pfad?: string) => Cfg;
-  cli: (argv: string[], o: { rootDir: string; config?: Cfg; generators?: Gen; out: (s: string) => void; err: (s: string) => void }) => number;
+  cli: (argv: string[], o: { rootDir: string; config?: Cfg; generators?: Gen; out: (s: string) => void; err: (s: string) => void }) => Promise<number>;
 };
 const kettenApi = npmKetten as unknown as { parseChain: (s: string) => string[] };
 const mdApi = markdown as unknown as {
@@ -41,7 +41,10 @@ const mdApi = markdown as unknown as {
   parseFrontmatter: (t: string) => Record<string, string>;
   brauche: (rootDir: string, rel: string, was: string, errors: string[]) => boolean;
 };
-const registryApi = registry as unknown as { GENERATORS: Record<string, unknown> };
+const registryApi = registry as unknown as {
+  GENERATORS: Record<string, unknown>;
+  ladeGeneratoren: (a: { rootDir: string; config?: Cfg }) => Promise<Record<string, unknown>>;
+};
 const gatesApi = gates as unknown as {
   gatesGenerator: (ctx: { rootDir: string; config: Cfg }) => string;
 };
@@ -335,54 +338,54 @@ describe("Generator gates: verschachtelte Ketten (#1392)", () => {
 
 describe("docs-gen CLI und Registry (#1392)", () => {
   const files = { "a.md": `${S}\n${HINT}\n\n| a |\n|---|\n| 1 |\n\n${E}\n` };
-  const lauf = (argv: string[], f: Record<string, string> = files, o: { config?: Cfg; generators?: Gen } = {}) => {
+  const lauf = async (argv: string[], f: Record<string, string> = files, o: { config?: Cfg; generators?: Gen } = {}) => {
     const out: string[] = [];
     const err: string[] = [];
-    const code = api.cli(argv, { rootDir: fixture(f), config: cfg, generators: gen, out: (x) => out.push(x), err: (x) => err.push(x), ...o });
+    const code = await api.cli(argv, { rootDir: fixture(f), config: cfg, generators: gen, out: (x) => out.push(x), err: (x) => err.push(x), ...o });
     return { code, out: out.join("\n"), err: err.join("\n") };
   };
 
-  test("aktuell: Exit 0", () => {
-    const r = lauf([]);
+  test("aktuell: Exit 0", async () => {
+    const r = await lauf([]);
     assert.equal(r.code, 0);
     assert.match(r.out, /aktuell/);
   });
-  test("veraltet: Exit 1 mit Fix-Text, ohne zu schreiben", () => {
-    const r = lauf([], { "a.md": `${S}\n${E}\n` });
+  test("veraltet: Exit 1 mit Fix-Text, ohne zu schreiben", async () => {
+    const r = await lauf([], { "a.md": `${S}\n${E}\n` });
     assert.equal(r.code, 1);
     assert.match(r.err, /veraltet/);
     assert.match(r.err, /Fix: npm run docs:gen/);
   });
-  test("Fehler: Exit 1 mit Fix-Text für Marker", () => {
-    const r = lauf([], { "a.md": `${S}\n` });
+  test("Fehler: Exit 1 mit Fix-Text für Marker", async () => {
+    const r = await lauf([], { "a.md": `${S}\n` });
     assert.equal(r.code, 1);
     assert.match(r.err, /Fix: Marker bzw\. Generator-Daten/);
   });
-  test("--write: Exit 0 und \"geschrieben\"", () => {
-    const r = lauf(["--write"], { "a.md": `${S}\n${E}\n` });
+  test("--write: Exit 0 und \"geschrieben\"", async () => {
+    const r = await lauf(["--write"], { "a.md": `${S}\n${E}\n` });
     assert.equal(r.code, 0);
     assert.match(r.out, /geschrieben: a\.md/);
-    assert.match(lauf(["--write"]).out, /nichts zu tun/);
+    assert.match((await lauf(["--write"])).out, /nichts zu tun/);
   });
-  test("--config: eigene Datei wird gelesen; falscher Pfad ergibt Exit 1, fehlender Wert und unbekanntes Flag Exit 2", () => {
+  test("--config: eigene Datei wird gelesen; falscher Pfad ergibt Exit 1, fehlender Wert und unbekanntes Flag Exit 2", async () => {
     const f = { ...files, "x/eigen.json": JSON.stringify({ markdown: ["a.md"] }) };
-    const ok = api.cli(["--config", "x/eigen.json"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: () => undefined });
+    const ok = await api.cli(["--config", "x/eigen.json"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: () => undefined });
     assert.equal(ok, 0);
     const ausgabe: string[] = [];
-    const falsch = api.cli(["--config", "gibtsnicht.json"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
+    const falsch = await api.cli(["--config", "gibtsnicht.json"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
     assert.equal(falsch, 1);
     assert.match(ausgabe.join(""), /Config nicht lesbar/);
-    const ohneWert = api.cli(["--config"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
+    const ohneWert = await api.cli(["--config"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
     assert.equal(ohneWert, 2);
     assert.match(ausgabe.at(-1) ?? "", /--config braucht einen Wert/);
-    const bogus = api.cli(["--bogus"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
+    const bogus = await api.cli(["--bogus"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
     assert.equal(bogus, 2);
     assert.match(ausgabe.at(-1) ?? "", /Unbekanntes Argument: --bogus/);
   });
-  test("--config mit einer Datei, die kein JSON-Objekt ist (null, Liste, Zahl): Exit 1 mit Meldung statt TypeError (#1428 Z19)", () => {
+  test("--config mit einer Datei, die kein JSON-Objekt ist (null, Liste, Zahl): Exit 1 mit Meldung statt TypeError (#1428 Z19)", async () => {
     for (const roh of ["null", "[]", "7"]) {
       const ausgabe: string[] = [];
-      const code = api.cli(["--config", "x/leer.json"], { rootDir: fixture({ ...files, "x/leer.json": roh }), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
+      const code = await api.cli(["--config", "x/leer.json"], { rootDir: fixture({ ...files, "x/leer.json": roh }), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
       assert.equal(code, 1, roh);
       assert.match(ausgabe.join(""), /Config nicht lesbar.*kein JSON-Objekt/, roh);
     }
@@ -392,38 +395,38 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     assert.deepEqual(api.loadConfig(root), { markdown: ["x"] });
     assert.deepEqual(api.loadConfig(root, "andere.json"), { markdown: ["y"] });
   });
-  test("befehl: Standard bleibt npm run docs:gen, eigener Befehl steht in Hinweiszeile und Fix-Text (#1373)", () => {
+  test("befehl: Standard bleibt npm run docs:gen, eigener Befehl steht in Hinweiszeile und Fix-Text (#1373)", async () => {
     const eigen = { "a.md": `${S}\n<!-- Generiert von make docs – nicht von Hand ändern. -->\n\n| a |\n|---|\n| 1 |\n\n${E}\n` };
-    const ok = lauf([], eigen, { config: { ...cfg, befehl: "make docs" } });
+    const ok = await lauf([], eigen, { config: { ...cfg, befehl: "make docs" } });
     assert.equal(ok.code, 0, ok.err);
-    const alt = lauf([], eigen, { config: { ...cfg, befehl: "make docs" } });
+    const alt = await lauf([], eigen, { config: { ...cfg, befehl: "make docs" } });
     assert.equal(alt.code, 0);
     // dieselbe Datei mit Standard-Befehl: veraltet, Fix nennt npm run docs:gen
-    const std = lauf([], eigen);
+    const std = await lauf([], eigen);
     assert.equal(std.code, 1);
     assert.match(std.err, /Fix: npm run docs:gen/);
     // veraltet mit eigenem Befehl: Fix nennt ihn, nicht npm
-    const stale = lauf([], { "a.md": `${S}\n${E}\n` }, { config: { ...cfg, befehl: "make docs" } });
+    const stale = await lauf([], { "a.md": `${S}\n${E}\n` }, { config: { ...cfg, befehl: "make docs" } });
     assert.equal(stale.code, 1);
     assert.match(stale.err, /Fix: make docs/);
     assert.doesNotMatch(stale.err, /npm run/);
     // Fehlerfall (Marker): Fix-Text nennt ebenfalls den eigenen Befehl
-    const kaputt = lauf([], { "a.md": `${S}\n` }, { config: { ...cfg, befehl: "make docs" } });
+    const kaputt = await lauf([], { "a.md": `${S}\n` }, { config: { ...cfg, befehl: "make docs" } });
     assert.match(kaputt.err, /dann make docs/);
     assert.doesNotMatch(kaputt.err, /npm run/);
   });
-  test("befehl: --write schreibt die Hinweiszeile mit dem eigenen Befehl", () => {
+  test("befehl: --write schreibt die Hinweiszeile mit dem eigenen Befehl", async () => {
     const root = fixture({ "a.md": `${S}\n${E}\n` });
-    const code = api.cli(["--write"], { rootDir: root, config: { ...cfg, befehl: "make docs" }, generators: gen, out: () => undefined, err: () => undefined });
+    const code = await api.cli(["--write"], { rootDir: root, config: { ...cfg, befehl: "make docs" }, generators: gen, out: () => undefined, err: () => undefined });
     assert.equal(code, 0);
     assert.match(readFileSync(join(root, "a.md"), "utf8"), /<!-- Generiert von make docs – nicht von Hand ändern\. -->/);
   });
   test.each([["leer", ""], ["nur Leerzeichen", "  "], ["führendes Leerzeichen", " make docs"], ["folgendes Leerzeichen", "make docs "], ["Zahl", 5], ["Zeilenumbruch", "make\ndocs"], ["Bindestriche --", "make -- docs"], ["Kommentar-Ende", "a --> b"]])(
     "befehl ungültig (%s): Exit 1, nichts geschrieben",
-    (_n, wert) => {
+    async (_n, wert) => {
       const root = fixture({ "a.md": `${S}\n${E}\n` });
       const fehler: string[] = [];
-      const code = api.cli(["--write"], { rootDir: root, config: { ...cfg, befehl: wert }, generators: gen, out: () => undefined, err: (x) => fehler.push(x) });
+      const code = await api.cli(["--write"], { rootDir: root, config: { ...cfg, befehl: wert }, generators: gen, out: () => undefined, err: (x) => fehler.push(x) });
       assert.equal(code, 1);
       assert.match(fehler.join(""), /befehl/);
       assert.equal(readFileSync(join(root, "a.md"), "utf8"), `${S}\n${E}\n`);
@@ -434,6 +437,54 @@ describe("docs-gen CLI und Registry (#1392)", () => {
   });
   test("Registry: jeder Eintrag ist eine Funktion", () => {
     for (const [name, g] of Object.entries(registryApi.GENERATORS)) assert.equal(typeof g, "function", name);
+  });
+  test("ladeGeneratoren ohne generatoren liefert genau die Kern-Registry", async () => {
+    const geladen = await registryApi.ladeGeneratoren({ rootDir: fixture({}), config: {} });
+    assert.deepEqual(Object.keys(geladen).sort(), Object.keys(registryApi.GENERATORS).sort());
+  });
+  test.each([["Liste", []], ["Zeichenkette", "x"], ["null", null]])("ladeGeneratoren: generatoren als %s ist ein Formfehler", async (_n, wert) => {
+    await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({}), config: { generatoren: wert } }), /config\.generatoren muss ein Objekt/);
+  });
+  test("ladeGeneratoren: ein Kern-Name als Marker ist ein Fehler (fail-closed)", async () => {
+    const config = { generatoren: { "adr-liste": { datei: "g.mjs", name: "g" } } };
+    await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({ "g.mjs": "export const g = () => 'x';" }), config }), /config\.generatoren\.adr-liste: "adr-liste" ist ein Kern-Generator/);
+  });
+  test.each([["ohne name", { datei: "g.mjs" }], ["Zahl als datei", { datei: 5, name: "g" }], ["leerer name", { datei: "g.mjs", name: "" }], ["kein Objekt", "g.mjs"], ["null", null], ["leere datei", { datei: "", name: "g" }]])(
+    "ladeGeneratoren: Eintrag %s ist ein Formfehler",
+    async (_n, eintrag) => {
+      await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({ "g.mjs": "export const g = () => 'x';" }), config: { generatoren: { mein: eintrag } } }), /config\.generatoren\.mein muss \{ datei, name \}/);
+    },
+  );
+  test("ladeGeneratoren ohne config liefert die Kern-Registry", async () => {
+    const geladen = await registryApi.ladeGeneratoren({ rootDir: fixture({}) });
+    assert.deepEqual(Object.keys(geladen).sort(), Object.keys(registryApi.GENERATORS).sort());
+  });
+  test("ladeGeneratoren: ein Ladefehler der Datei nennt Marker und Pfad", async () => {
+    const rootDir = fixture({ "k.mjs": "export const g = => ;", "b.mjs": "throw 'boom';" });
+    const config = (datei: string) => ({ generatoren: { mein: { datei, name: "g" } } });
+    // Fehler-Objekt: Ursachentext in der Meldung, Originalfehler als cause
+    const err = await registryApi.ladeGeneratoren({ rootDir, config: config("k.mjs") }).then(
+      () => assert.fail("kein Fehler"),
+      (e: unknown) => e as Error,
+    );
+    assert.match(err.message, /config\.generatoren\.mein: k\.mjs lässt sich nicht laden: .*\S/);
+    assert.ok(err.cause instanceof Error && err.message.endsWith(err.cause.message));
+    // geworfener Nicht-Error-Wert: String(e)
+    await assert.rejects(registryApi.ladeGeneratoren({ rootDir, config: config("b.mjs") }), /config\.generatoren\.mein: b\.mjs lässt sich nicht laden: boom$/);
+  });
+  test("ladeGeneratoren: fehlende Datei nennt Marker und Pfad", async () => {
+    await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({}), config: { generatoren: { mein: { datei: "x/fehlt.mjs", name: "g" } } } }), /config\.generatoren\.mein: Datei fehlt: x\/fehlt\.mjs/);
+  });
+  test("ladeGeneratoren: fehlender oder nicht aufrufbarer Export ist ein Fehler", async () => {
+    const rootDir = fixture({ "g.mjs": "export const g = () => 'x';\nexport const kein = 5;" });
+    for (const name of ["fehlt", "kein"])
+      await assert.rejects(registryApi.ladeGeneratoren({ rootDir, config: { generatoren: { mein: { datei: "g.mjs", name } } } }), /config\.generatoren\.mein: g\.mjs exportiert keine Funktion/, name);
+  });
+  test("ladeGeneratoren: ein Projekt-Generator wird geladen und ergänzt die Kern-Registry", async () => {
+    const rootDir = fixture({ "g.mjs": "export const g = () => 'x';" });
+    const geladen = await registryApi.ladeGeneratoren({ rootDir, config: { generatoren: { mein: { datei: "g.mjs", name: "g" } } } });
+    assert.equal(typeof geladen.mein, "function");
+    assert.ok(Object.hasOwn(geladen, "adr-liste"));
   });
 });
 
@@ -644,7 +695,7 @@ describe("Generator harness-inventar", () => {
 
 describe("Echt-Repo", () => {
   // Den vollen Vergleich (inkl. dependency-cruiser) macht `check:docgen` in `verify`; hier nur die Marker (#1392).
-  test("alle GEN-Marker der Repo-Doku sind wohlgeformt und haben einen registrierten Generator", () => {
+  test("alle GEN-Marker der Repo-Doku sind wohlgeformt und haben einen registrierten Generator", async () => {
     const config = api.loadConfig(process.cwd()) as { markdown: string[] };
     const dateien = mdApi.collectMarkdown(process.cwd(), config.markdown);
     assert.ok(dateien.length > 0);
@@ -655,7 +706,8 @@ describe("Echt-Repo", () => {
       for (const sec of r.sections) namen.add(sec.name);
     }
     assert.ok(namen.size > 0);
-    for (const n of namen) assert.ok(Object.hasOwn(registryApi.GENERATORS, n), `unbekannter Generator ${n}`);
+    const geladen = await registryApi.ladeGeneratoren({ rootDir: process.cwd(), config: api.loadConfig(process.cwd()) });
+    for (const n of namen) assert.ok(Object.hasOwn(geladen, n), `unbekannter Generator ${n}`);
   });
 });
 
