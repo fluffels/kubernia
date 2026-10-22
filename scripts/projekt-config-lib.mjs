@@ -153,12 +153,16 @@ function pruefeMuster(w, schluessel) {
   return [];
 }
 
-/** Pur: prüft `sprache` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `spracheAus` verlangt ihn beim Gebrauch). */
+/**
+ * Pur: prüft `sprache` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `spracheAus` verlangt ihn beim Gebrauch).
+ * Die importfreie Spezifikations-Lib prüft dieselben Schlüssel von `sprache.spezifikation` noch einmal (`wortschatz`, sie bekommt auch injizierte Werte):
+ * ein neuer Schlüssel gehört an beide Stellen.
+ */
 function pruefeSprache(s) {
   if (!istObjekt(s)) return ["sprache muss ein Objekt mit umschrift und spezifikation sein"];
   const fehler = [];
-  if (!Array.isArray(s.umschrift) || !s.umschrift.every((w) => typeof w === "string" && /^[a-z]+$/.test(w))) {
-    fehler.push("sprache.umschrift muss eine Liste kleingeschriebener ASCII-Wörter (Muster ^[a-z]+$) sein");
+  if (!Array.isArray(s.umschrift) || s.umschrift.length === 0 || !s.umschrift.every((w) => typeof w === "string" && /^[a-z]+$/.test(w))) {
+    fehler.push("sprache.umschrift muss eine nicht-leere Liste kleingeschriebener ASCII-Wörter (Muster ^[a-z]+$) sein");
   }
   const sp = s.spezifikation;
   if (!istObjekt(sp)) return [...fehler, "sprache.spezifikation muss ein Objekt sein"];

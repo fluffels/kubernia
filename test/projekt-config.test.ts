@@ -458,6 +458,29 @@ describe("Sprache als Projektwert (#1711)", () => {
     (spez(s).negativfall as Record<string, unknown>).muster = "(";
     assert.match(mit(s).join("|"), /sprache\.spezifikation\.negativfall\.muster ist keine gültige Regex/);
   });
+  test("jedes der drei Muster wird einzeln geprüft: ohne muster, ohne Wort, kein Objekt, kaputte Regex", () => {
+    for (const k of ["negativfall", "begrenzung", "allquantor"]) {
+      const ohneMuster = sprache();
+      delete (spez(ohneMuster)[k] as Record<string, unknown>).muster;
+      assert.match(mit(ohneMuster).join("|"), new RegExp(`sprache\\.spezifikation\\.${k} muss ein Objekt mit nicht-leerem wort und muster`), `${k} ohne muster`);
+      const ohneWort = sprache();
+      (spez(ohneWort)[k] as Record<string, unknown>).wort = "";
+      assert.match(mit(ohneWort).join("|"), new RegExp(`sprache\\.spezifikation\\.${k} muss ein Objekt`), `${k} ohne wort`);
+      const keinObjekt = sprache();
+      delete spez(keinObjekt)[k];
+      assert.match(mit(keinObjekt).join("|"), new RegExp(`sprache\\.spezifikation\\.${k} muss ein Objekt`), `${k} fehlt`);
+      const kaputt = sprache();
+      (spez(kaputt)[k] as Record<string, unknown>).muster = "(";
+      assert.match(mit(kaputt).join("|"), new RegExp(`sprache\\.spezifikation\\.${k}\\.muster ist keine gültige Regex`), `${k} kaputt`);
+    }
+  });
+  test("akzeptanzkriterien: Liste mit leerem Text und Nicht-Liste werden gemeldet", () => {
+    for (const schlecht of [["Akzeptanzkriterien", " "], "Akzeptanzkriterien", undefined]) {
+      const s = sprache();
+      spez(s).akzeptanzkriterien = schlecht;
+      assert.match(mit(s).join("|"), /sprache\.spezifikation\.akzeptanzkriterien muss eine nicht-leere Liste/, JSON.stringify(schlecht));
+    }
+  });
   test("Muster ohne Wort, leere Kriterienliste und leere Texte werden gemeldet", () => {
     const a = sprache();
     delete (spez(a).begrenzung as Record<string, unknown>).wort;
@@ -473,10 +496,10 @@ describe("Sprache als Projektwert (#1711)", () => {
     assert.match(m, /sprache\.spezifikation\.nachMerge muss ein nicht-leerer String/);
   });
   test("umschrift: nur kleingeschriebene ASCII-Wörter (Für, Großbuchstaben, Leerzeichen, Nicht-Liste werden gemeldet)", () => {
-    for (const schlecht of [["Für"], ["Fuer"], ["zwei wörter"], ["a-b"], "fuer", [3]]) {
+    for (const schlecht of [["Für"], ["Fuer"], ["zwei wörter"], ["a-b"], "fuer", [3], []]) {
       const s = sprache();
       s.umschrift = schlecht;
-      assert.match(mit(s).join("|"), /sprache\.umschrift muss eine Liste/, JSON.stringify(schlecht));
+      assert.match(mit(s).join("|"), /sprache\.umschrift muss eine nicht-leere Liste/, JSON.stringify(schlecht));
     }
     const s = sprache();
     delete s.umschrift;

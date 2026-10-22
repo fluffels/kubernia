@@ -5,8 +5,9 @@
  * Scan-Umfang (geschlossene Liste): getrackte `docs/**\/*.md` ohne `docs/adr/`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `src/**\/AGENTS.md`,
  * `.claude/agents/*.md`, `.claude/skills/*\/*.md`.
  * Bekannte Muster: genau die Wörter der Liste `sprache.umschrift` (ASCII-Umschrift eines Umlauts, etwa „fuer“ für „für“), ohne Beachtung der Schreibweise,
- * als ganzes Wort. Ausgeblendet: Code-Fences, Inline-Code, Link-Ziele, HTML-Tags und jedes Wort, das direkt an `-`, `.`, `/` oder `_` hängt
- * (Dateinamen, Bezeichner, Pfade bleiben ASCII).
+ * als ganzes Wort. Ausgeblendet: Code-Fences, Inline-Code, Link-Ziele, HTML-Tags und jedes Wort, das direkt an `-`, `/` oder `_` hängt oder vor einem
+ * Punkt mit Buchstabe/Ziffer steht (`fuer.md`) bzw. hinter einem Punkt (`a.fuer`): Dateinamen, Bezeichner, Pfade bleiben ASCII. Ein Punkt am Satzende
+ * blendet nichts aus. Ein Teil eines Bindestrich-Worts („Asset-Aenderung“) zählt als Bezeichner und wird nicht gemeldet.
  * Bekannte Grenze: Code-Kommentare, Spieltexte (`src/content/data/`), Commit-Texte, ADRs (historisch) und alle Wörter außerhalb der Liste prüft er nicht;
  * ein neues Umschrift-Wort kommt in die Liste der Config, nicht in diesen Test.
  * Fehlt `sprache.umschrift`, bricht er ab (`umschriftAus`), es gibt keinen stillen Deutsch-Standardwert. */
@@ -37,7 +38,7 @@ interface Fund {
 /** Fundstellen der Umschrift-Wörter in einem Markdown-Text (siehe Kopfkommentar für das Ausgeblendete). */
 function findeUmschrift(text: string, woerter: string[]): Fund[] {
   if (woerter.length === 0) return [];
-  const treffer = new RegExp(`(?<![\\p{L}\\p{N}_./\\-])(${woerter.join("|")})(?![\\p{L}\\p{N}_./\\-])`, "giu");
+  const treffer = new RegExp(`(?<![\\p{L}\\p{N}_./\\-])(${woerter.join("|")})(?![\\p{L}\\p{N}_/\\-]|\\.[\\p{L}\\p{N}])`, "giu");
   const funde: Fund[] = [];
   let fence = false;
   text.split(/\r?\n/).forEach((zeile, i) => {
@@ -72,6 +73,12 @@ describe("findeUmschrift: Muster und Negativfälle", () => {
     assert.deepEqual(findeUmschrift("```\nfuer\n```\nund fuer", WOERTER), [{ zeile: 4, wort: "fuer" }], "Fence-Inhalt zählt nicht, Text danach schon");
     assert.deepEqual(findeUmschrift("~~~\nfuer\n~~~", WOERTER), []);
   });
+  test("Randfälle: Satzende, Ziffern, Pfad-Schrägstrich, CRLF, eingerückter Fence", () => {
+    assert.deepEqual(findeUmschrift("Das ist fuer.\nEs geht ueber, pruefen.", WOERTER).map((f) => f.wort), ["fuer", "ueber", "pruefen"], "ein Punkt am Satzende ist kein Dateiname");
+    assert.deepEqual(findeUmschrift("fuer2 und 2fuer und fuer/x und a/fuer", WOERTER), [], "Ziffern und Schrägstrich hängen am Bezeichner");
+    assert.deepEqual(findeUmschrift("ok\r\nDas ist fuer dich\r\n", WOERTER), [{ zeile: 2, wort: "fuer" }]);
+    assert.deepEqual(findeUmschrift("  ```yaml\n  fuer\n  ```\nfuer", WOERTER), [{ zeile: 4, wort: "fuer" }], "eingerückter Fence blendet aus");
+  });
   test("die Wortliste kommt von außen: ohne das Wort kein Fund, mit leerer Liste nie", () => {
     assert.deepEqual(findeUmschrift("fuer dich", ["ueber"]), []);
     assert.deepEqual(findeUmschrift("fuer dich", []), []);
@@ -87,7 +94,7 @@ describe("Scan-Umfang", () => {
     for (const f of ["docs/referenz/befehle.md", "docs/agent-harness.md", "AGENTS.md", "README.md", "CONTRIBUTING.md", "src/AGENTS.md", "src/content/AGENTS.md", ".claude/agents/factory-lens.md", ".claude/skills/review-lenses/SKILL.md"]) {
       assert.equal(IM_SCOPE(f), true, f);
     }
-    for (const f of ["docs/adr/0022-x.md", "docs/x.json", "src/ui/x.ts", "src/content/data/quests/knut.json", "CHANGELOG.md", ".claude/worktrees/kq-1/AGENTS.md", ".claude/agents/x/y.md"]) {
+    for (const f of ["docs/adr/0022-x.md", "docs/x.json", "src/ui/x.ts", "src/content/data/quests/knut.json", "CHANGELOG.md", ".claude/worktrees/kq-1/AGENTS.md", ".claude/agents/x/y.md", ".claude/skills/x/y/z.md"]) {
       assert.equal(IM_SCOPE(f), false, f);
     }
   });

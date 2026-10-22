@@ -245,6 +245,20 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(r.fehler.join("|")).toMatch(/sprache/);
     expect(lauf().r.fehler).toEqual([]);
   });
+  test("Nach-Merge-Präfix kommt aus der Config (Ende-zu-Ende): „Danach:“ zählt, „Nach dem Merge:“ nicht mehr", () => {
+    const sprache = echteSprache();
+    const config = { ...CONFIG, sprache: { ...sprache, spezifikation: { ...(sprache.spezifikation as object), nachMerge: "Danach:" } } };
+    const NM = "## Akzeptanzkriterien\n1. eins\n2. Danach: zwei\n3. Nach dem Merge: drei\n";
+    const mit = (urteil: string) => ({
+      messages: `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`,
+      kommentare: [{ ...kommentar, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=${urteil} -->` }],
+      issue: { body: NM },
+      config,
+    });
+    expect(lauf(mit("K1:erfuellt,K2:nach-merge,K3:erfuellt")).r.fehler).toEqual([]);
+    rot(lauf(mit("K1:erfuellt,K2:erfuellt,K3:nach-merge")).r.fehler, /K3: nach-merge ist nur bei einem Kriterium mit dem Präfix `Danach:` erlaubt/);
+    rot(lauf(mit("K1:nach-merge,K2:erfuellt,K3:erfuellt")).r.fehler, /K1: nach-merge ist nur bei einem Kriterium mit dem Präfix `Danach:` erlaubt/);
+  });
   test("Nach-Merge-Kriterium Ende-zu-Ende: nach-merge am markierten Kriterium grün, an einem normalen rot", () => {
     const NM = "## Akzeptanzkriterien\n1. eins\n2. Nach dem Merge: zwei\n";
     const mit = (urteil: string) => ({

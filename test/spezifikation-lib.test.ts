@@ -294,6 +294,13 @@ describe("Sprache als Projektwert (#1711)", () => {
     const k = R.kriterien("## Goal\nG\n## Acceptance criteria\n- After merge: a\n- Nach dem Merge: b\n", EN);
     expect(k.map((c) => c.nachMerge)).toEqual([true, false]);
   });
+  test("Überschrift Ebene 1 im Body ist kein Fehler und beendet den Abschnitt; Groß-/Kleinschreibung und Leerraum am Ende sind egal", () => {
+    expect(S.spezifikationsMaengel("# Titel\n## Ziel\nZ\n## Akzeptanzkriterien\n- Negativfall\n")).toEqual([]);
+    expect(S.spezifikationsMaengel("## Ziel\nZ\n# Anhang\n## Akzeptanzkriterien\n- Negativfall\n# Anhang\n- Happy\n")).toEqual([]);
+    expect(S.spezifikationsMaengel("## ziel\nZ\n## AKZEPTANZKRITERIEN\n- Negativfall\n")).toEqual([]);
+    expect(S.spezifikationsMaengel("## Ziel   \nZ\n## Akzeptanzkriterien \t\n- Negativfall\n")).toEqual([]);
+    expect(S.kriterien("## Akzeptanzkriterien\n- a\n# Anhang\n- b\n").map((c) => c.text)).toEqual(["a"]);
+  });
   test("Regex-Sonderzeichen in den Abschnittsnamen sind Text, keine Regex", () => {
     const sonder = { ...EN, ziel: "Goal (v2)+", akzeptanzkriterien: ["AC.*"] };
     expect(R.spezifikationsMaengel("## Goal (v2)+\nG\n## AC.*\n- Negative case\n", sonder)).toEqual([]);
@@ -322,6 +329,13 @@ describe("Sprache als Projektwert (#1711)", () => {
     expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: [] })).toThrow(/akzeptanzkriterien/);
     expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: ["Akzeptanzkriterien", " "] })).toThrow(/akzeptanzkriterien/);
     expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, nachMerge: "" })).toThrow(/nachMerge/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: "Akzeptanzkriterien" })).toThrow(/akzeptanzkriterien/);
+    // ein fehlendes Muster darf nicht zu einer Regex werden, die alles trifft (stiller Standardwert)
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, negativfall: { wort: "x" } })).toThrow(/negativfall/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, begrenzung: { wort: "x", muster: " " } })).toThrow(/begrenzung/);
+    for (const k of ["negativfall", "begrenzung", "allquantor"]) {
+      expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, [k]: undefined }), k).toThrow(new RegExp(k));
+    }
     expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, ziel: undefined })).toThrow(/ziel/);
   });
 });
