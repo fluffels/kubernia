@@ -13,7 +13,7 @@ type Io = {
   fuehreStatusAus: (e: { aktion: string; nr?: number }, ctx: unknown) => { ok: boolean; nr?: number; itemId?: string };
   fuehreHarnessAus: (h: { aktion: string; nr?: number }, items: Item[], token: string) => boolean;
   itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string }) => ({ number: number } | null)[];
-  frischeOffeneIssues?: (a: { repo: string; label: string; anzahl: number }) => { number: number; titel: string }[];
+  frischeOffeneIssues?: (a: { repo: string; label: string; anzahl: number; mitBoard?: boolean }) => { number: number; titel: string }[];
   addToBoardTodo?: (rolle: string, nodeId: string, o: { token?: string }) => string;
   log: (z: string) => void;
 };
@@ -403,7 +403,7 @@ describe("Gegenprobe vor dem Anlegen des Status-Tickets (#1866)", () => {
   const lauf = (frisch: Io["frischeOffeneIssues"], dry = false) => {
     const log: string[] = [];
     const angelegt: string[] = [];
-    const aufrufe: { repo: string; label: string; anzahl: number }[] = [];
+    const aufrufe: { repo: string; label: string; anzahl: number; mitBoard?: boolean }[] = [];
     const commits = Array.from({ length: 5 }, (_, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: "2026-10-07T12:00:00Z" } }, author: { login: "fluffels", type: "User" } }));
     const io: Io = {
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[{ number: 60, title: STATUS, created_at: "2026-10-01T08:00:00Z", closed_at: "2026-10-02T08:00:00Z" }]] : [commits]),
@@ -426,7 +426,8 @@ describe("Gegenprobe vor dem Anlegen des Status-Tickets (#1866)", () => {
     const r = lauf(() => []);
     expect(r.angelegt).toEqual(["anlegen"]);
     expect(r.aufrufe).toHaveLength(1);
-    expect(r.aufrufe[0]).toMatchObject({ label: "area:harness", anzahl: 50 });
+    expect(r.aufrufe[0]).toMatchObject({ label: "area:harness", anzahl: 50, mitBoard: false });
+    expect(r.aufrufe[0]?.repo).toMatch(/^[^/]+\/[^/]+$/);
   });
   test("GraphQL kennt ein offenes Status-Ticket, das die REST-Liste noch nicht hat: nichts angelegt, Warnung mit Nummer", () => {
     const r = lauf(() => [{ number: 1865, titel: STATUS }]);

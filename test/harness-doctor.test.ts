@@ -71,7 +71,7 @@ afterEach(() => {
 });
 
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string> } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[] } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
   ordner.push(root);
   if (opt.workflow !== null) {
@@ -97,6 +97,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     rootDir: root,
     gh,
     env: opt.env ?? {},
+    ...(opt.kernEnv ? { kernEnv: opt.kernEnv } : {}),
     langfuse: () => ({ status: opt.langfuse ?? 0, stderr: opt.langfuse ? "Langfuse aus." : "" }),
     out: (s: string) => r.out.push(s),
     err: (s: string) => r.err.push(s),
@@ -387,6 +388,12 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [] }, { config: ohne }).code, 1);
   });
 
+  test("unlesbares scripts/ (kernEnvNamen wirft): Exit 2 mit Meldung und Fix, ohne gh-Aufruf", () => {
+    const r = lauf({}, { kernEnv: () => { throw new Error("EACCES scripts"); } });
+    assert.equal(r.code, 2);
+    assert.match(r.err.join("\n"), /Kern-Umgebungsvariablen nicht lesbar: EACCES scripts[\s\S]*Fix:/);
+    assert.equal(r.aufrufe.length, 0);
+  });
   test("Aufruf- und Config-Fehler: Exit 2 ohne einen gh-Aufruf", () => {
     const kaputt = lauf({}, { argv: ["--pruefen", "--config", "/gibt/es/nicht.json"] });
     assert.equal(kaputt.code, 2);

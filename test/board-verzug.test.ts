@@ -7,7 +7,7 @@ import * as raw from "../scripts/board-lib.mjs";
 type Frisch = { number: number; titel: string; projektIds: string[] };
 const B = raw as unknown as {
   normalisiereFrischeIssues: (a: unknown) => Frisch[];
-  frischeOffeneIssues: (a?: { repo?: string; label?: string | null; anzahl?: number }, opts?: unknown, run?: (args: string[], opts: unknown) => string) => Frisch[];
+  frischeOffeneIssues: (a?: { repo?: string; label?: string | null; anzahl?: number; mitBoard?: boolean }, opts?: unknown, run?: (args: string[], opts: unknown) => string) => Frisch[];
 };
 const antwort = (nodes: unknown) => ({ data: { repository: { issues: { nodes } } } });
 
@@ -54,6 +54,19 @@ describe("frischeOffeneIssues", () => {
     expect(q).toContain("projectItems");
     expect(args).toEqual(expect.arrayContaining(["o=o", "n=n", "l[]=area:harness"]));
   });
+  test("Fenstergrenzen: anzahl 1 und 100 sind gültig", () => {
+    for (const anzahl of [1, 100]) {
+      let q = "";
+      B.frischeOffeneIssues({ repo: "o/n", anzahl }, {}, (a) => ((q = a.find((x) => x.startsWith("query=")) ?? ""), JSON.stringify(antwort([]))));
+      expect(q).toContain(`first:${anzahl},`);
+    }
+  });
+  test("mitBoard: false lässt projectItems weg (Token ohne Projekt-Scope) und liefert leere projektIds", () => {
+    let q = "";
+    const r = B.frischeOffeneIssues({ repo: "o/n", mitBoard: false }, {}, (a) => ((q = a.find((x) => x.startsWith("query=")) ?? ""), JSON.stringify({ data: { repository: { issues: { nodes: [{ number: 7, title: "t" }] } } } })));
+    expect(q).not.toContain("projectItems");
+    expect(r).toEqual([{ number: 7, titel: "t", projektIds: [] }]);
+  });
   test("ohne Label keine Label-Variable", () => {
     let args: string[] = [];
     B.frischeOffeneIssues({ repo: "o/n", anzahl: 5 }, {}, (a) => ((args = a), JSON.stringify(antwort([]))));
@@ -67,7 +80,7 @@ describe("frischeOffeneIssues", () => {
   });
   test("ungültige Anzahl, Label oder Repo werfen vor dem Aufruf", () => {
     const nie = () => { throw new Error("darf nicht laufen"); };
-    for (const anzahl of [0, 101, 1.5]) expect(() => B.frischeOffeneIssues({ repo: "o/n", anzahl }, {}, nie)).toThrow(/anzahl/);
+    for (const anzahl of [0, 101, 1.5, -1]) expect(() => B.frischeOffeneIssues({ repo: "o/n", anzahl }, {}, nie)).toThrow(/anzahl/);
     expect(() => B.frischeOffeneIssues({ repo: "o/n", label: 5 as unknown as string }, {}, nie)).toThrow(/label/);
     expect(() => B.frischeOffeneIssues({ repo: "kaputt" }, {}, nie)).toThrow(/owner\/name/);
   });

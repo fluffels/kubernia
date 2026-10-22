@@ -692,11 +692,11 @@ export function itemsUeberIssues(board, nummern, opts = {}, repo = REPO) {
  * Antwort von `frischeOffeneIssues` (GraphQL `repository.issues`) → `[{ number, titel, projektIds }]`; `projektIds` = Projekt-IDs der
  * Board-Items des Issues. Wirft bei unerwarteter Form, statt Issues still zu übersehen. Pur.
  */
-export function normalisiereFrischeIssues(antwort) {
+export function normalisiereFrischeIssues(antwort, mitBoard = true) {
   const nodes = antwort?.data?.repository?.issues?.nodes;
   if (!Array.isArray(nodes)) throw new Error("Unerwartete Antwortform der frischen Issues (kein repository.issues.nodes).");
   return nodes.map((n) => {
-    const items = n?.projectItems?.nodes;
+    const items = mitBoard ? n?.projectItems?.nodes : [];
     if (!Number.isInteger(n?.number) || typeof n.title !== "string" || !Array.isArray(items)) {
       throw new Error(`Unerwartete Form eines frischen Issues: ${JSON.stringify(n)?.slice(0, 120)}`);
     }
@@ -706,18 +706,18 @@ export function normalisiereFrischeIssues(antwort) {
 
 /**
  * Die `anzahl` jüngsten offenen Issues per GraphQL (ohne die Verzögerung der REST-Listen; `label` optional: nur dieses Label). Liefert
- * `normalisiereFrischeIssues`. `run` ersetzt `gh` im Test. Fehler (Netz, Rate-Limit, Form) werfen, der Aufrufer entscheidet fail-open oder fail-closed.
+ * `normalisiereFrischeIssues`. `mitBoard: false` lässt `projectItems` weg (nur Nummer und Titel; ohne Projekt-Scope des Tokens, z.B. `github.token` im Takt, `projektIds` leer). `run` ersetzt `gh` im Test. Fehler (Netz, Rate-Limit, Form) werfen, der Aufrufer entscheidet fail-open oder fail-closed.
  */
-export function frischeOffeneIssues({ repo = REPO, label = null, anzahl = 50 } = {}, opts = {}, run = gh) {
+export function frischeOffeneIssues({ repo = REPO, label = null, anzahl = 50, mitBoard = true } = {}, opts = {}, run = gh) {
   if (!Number.isInteger(anzahl) || anzahl < 1 || anzahl > 100) throw new Error(`anzahl muss 1 bis 100 sein, war ${String(anzahl)}`);
   if (label !== null && typeof label !== "string") throw new Error("label muss ein String oder null sein.");
   const { owner, name } = zerlegeRepo(repo);
   const query =
     `query($o:String!,$n:String!,$l:[String!]){ repository(owner:$o,name:$n){ issues(states:OPEN,first:${anzahl},labels:$l,` +
-    "orderBy:{field:CREATED_AT,direction:DESC}){ nodes{ number title projectItems(first:5){ nodes{ project{ id } } } } } } }";
+    `orderBy:{field:CREATED_AT,direction:DESC}){ nodes{ number title${mitBoard ? " projectItems(first:5){ nodes{ project{ id } } }" : ""} } } } }`;
   const args = ["api", "graphql", "-f", `query=${query}`, "-f", `o=${owner}`, "-f", `n=${name}`];
   if (label !== null) args.push("-f", `l[]=${label}`);
-  return normalisiereFrischeIssues(JSON.parse(run(args, opts)));
+  return normalisiereFrischeIssues(JSON.parse(run(args, opts)), mitBoard);
 }
 
 /** Position setzen: hinter `afterId`, null = an die Spitze. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */

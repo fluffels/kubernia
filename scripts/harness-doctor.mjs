@@ -132,10 +132,10 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   return anleitungen + (fatal ? 1 : 0) + fehler + geplant > 0 ? 1 : 0;
 }
 
-function pruefen({ werte, rootDir, gh, langfuse, env, out, err }) {
+function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv }) {
   let namen;
   try {
-    namen = kernEnvNamen(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
+    namen = kernEnv(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
   } catch (e) {
     err(`Kern-Umgebungsvariablen nicht lesbar: ${e instanceof Error ? e.message : String(e)}\nFix: scripts/ im Checkout wiederherstellen (git status), dann erneut prüfen`);
     return AUFRUF_EXIT;
@@ -163,7 +163,7 @@ function pruefen({ werte, rootDir, gh, langfuse, env, out, err }) {
 
 export function main(
   argv = process.argv.slice(2),
-  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error } = {},
+  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen } = {},
 ) {
   const { werte, fehler } = flagsLesen(argv, { pruefen: { type: "boolean" }, einrichten: { type: "boolean" }, "dry-run": { type: "boolean" }, config: { type: "string" } });
   const aufrufFehler = fehler?.text ?? (Number(werte.pruefen === true) + Number(werte.einrichten === true) !== 1 ? "Genau einen Modus angeben: --pruefen oder --einrichten" : null)
@@ -172,7 +172,7 @@ export function main(
     err(`${aufrufFehler}\n${USAGE}`);
     return AUFRUF_EXIT;
   }
-  return werte.einrichten ? einrichten({ werte, rootDir, gh, spawn, out, err }) : pruefen({ werte, rootDir, gh, langfuse, env, out, err });
+  return werte.einrichten ? einrichten({ werte, rootDir, gh, spawn, out, err }) : pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv });
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = main();
