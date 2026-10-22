@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const skill = readFileSync(fileURLToPath(new URL("../../.claude/skills/forum/SKILL.md", import.meta.url)), "utf8");
+const skill = readFileSync(fileURLToPath(new URL("../../.agents/skills/forum/SKILL.md", import.meta.url)), "utf8");
 const schritt6 = skill.slice(skill.indexOf("**6. "), skill.indexOf("**7. "));
 
 describe("Forum-Skill Schritt 6: Ticket-Format (#1663 L4)", () => {

@@ -399,6 +399,15 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(text).toContain("Session-Neustart");
   });
 
+  test("ordneHarnessAenderungen: Dateien unter .agents/ sind eine Harness-Änderung, ähnliche Pfade nicht (#1848)", () => {
+    const o = S.ordneHarnessAenderungen([".agents/skills/forum/SKILL.md", "docs/.agents/x.md", ".agentsx/y", "agents/z.md"]);
+    expect(o.sonstige).toEqual([".agents/skills/forum/SKILL.md"]);
+    expect(o.skill).toEqual([]);
+    const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: o } as never, true);
+    expect(text).toContain("Geändert (Harness): .agents/skills/forum/SKILL.md");
+    expect(text).toContain("Session-Neustart");
+  });
+
   test("--text: der Hinweis auf übrige .claude-Dateien kommt auch im Mischfall, fehlt aber ohne solche Dateien", () => {
     const misch = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [".claude/settings.json"], lockGeaendert: false } } as never, true);
     expect(misch).toContain("Übrige .claude-Dateien");

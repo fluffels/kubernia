@@ -77,6 +77,7 @@ try {
 
 // 2)–5) Die Schritte der Reihe nach – bei Fehler sofort abbrechen.
 const steps = [
+  ['Skill-Zeiger', 'npm run skills:sync -- --prune'],
   ['Abhängigkeiten installieren', 'npm install'],
   ['Tests', 'npm test'],
   ['Typecheck (strict)', 'npm run typecheck'],

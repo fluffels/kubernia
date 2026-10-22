@@ -13,7 +13,7 @@
  * rotes Gegenbeispiel (Vorbild langfuse-erfassung.test.ts).
  */
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { workflowDateien } from "./repo-texte";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,8 +87,11 @@ const agentDateien = (): string[] => {
     .filter((f) => f.endsWith(".md"))
     .map((f) => `.claude/agents/${f}`);
 };
+// Zeiger unter .claude/skills/ und Quellen unter .agents/skills/ (#1848): der Ablauf steht in der Quelle.
 const skillDateien = (): string[] =>
-  readdirSync(resolve(ROOT, ".claude/skills")).map((d) => `.claude/skills/${d}/SKILL.md`).filter((p) => {
+  [".claude/skills", ".agents/skills"].flatMap((wurzel) =>
+    (existsSync(resolve(ROOT, wurzel)) ? readdirSync(resolve(ROOT, wurzel)) : []).map((d) => `${wurzel}/${d}/SKILL.md`),
+  ).filter((p) => {
     try {
       read(p);
       return true;
@@ -117,6 +120,7 @@ describe("Fremdtext-Gate (#1433)", () => {
   test("c) kein rohes Kommentar-Lesen in Agenten, Skills, AGENTS.md, ticket-reihenfolge", () => {
     const dateien = [...agentDateien(), ...skillDateien(), ...workflowDateien(), "AGENTS.md", "docs/ticket-reihenfolge.md"];
     assert.ok(dateien.length > 8);
+    assert.ok(dateien.includes(".agents/skills/forum/SKILL.md"), "die Skill-Quelle forum liegt im Scan");
     for (const d of dateien) assert.ok(!liestKommentareRoh(read(d)), `${d} liest Kommentare roh`);
     // Gegenbeispiele: die verbotenen Formen werden erkannt
     assert.ok(liestKommentareRoh("gh pr view 1 --json commits,comments"));

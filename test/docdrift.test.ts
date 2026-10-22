@@ -281,6 +281,42 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
   });
 });
 
+// Skill-Quellen (#1848): `.agents/skills/` trägt die Abläufe, ein toter Link oder Anker dort muss rot sein.
+describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
+  const auditIn = (checkDocDrift as unknown as {
+    auditDocDrift: (root: string) => {
+      deadLinks: { file: string; target: string }[];
+      deadAnchors: { file: string; target: string; anchor: string }[];
+    };
+  }).auditDocDrift;
+
+  test("ein toter Link und ein toter Anker in einer Skill-Quelle werden gemeldet, ein guter Link nicht", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-agents-"));
+    try {
+      const quelle = ".agents/skills/a/SKILL.md";
+      const dateien: Record<string, string> = {
+        "package.json": JSON.stringify({ scripts: {} }),
+        "AGENTS.md": "# Titel\n",
+        [quelle]: "# Skill\n[tot](../../../fehlt.md)\n[anker](../../../AGENTS.md#gibt-es-nicht)\n[gut](../../../AGENTS.md#titel)\n",
+      };
+      for (const [f, text] of Object.entries(dateien)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      assert.ok(collectMarkdown(dir).includes(quelle));
+      const audit = auditIn(dir);
+      assert.deepEqual(audit.deadLinks.map((l) => `${l.file}: ${l.target}`), [`${quelle}: ../../../fehlt.md`]);
+      assert.deepEqual(audit.deadAnchors.map((a) => `${a.file}: ${a.anchor}`), [`${quelle}: gibt-es-nicht`]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("im echten Repo liegt die Quelle forum im Scan", () => {
+    assert.ok(collectMarkdown().includes(".agents/skills/forum/SKILL.md"));
+  });
+});
+
 describe("keine Handkopie der verify-Kette in Kommentaren (#1392)", () => {
   // Die Dokumentations-Prüfung (findDocumentedVerifyChains) sieht nur Markdown; Kommentare in CI und Hook
   // veralten sonst still (die Kette dort stand schon einmal mit 8 statt der echten Gates).

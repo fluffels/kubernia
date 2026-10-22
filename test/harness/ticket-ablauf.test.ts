@@ -12,7 +12,7 @@
  * Bekannte Grenzen: eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich; ein kurzer Absatz ohne Fett und Überschrift (auch Listenpunkt, zweite H1) innerhalb des Rumpfbudgets bleibt unbemerkt, das Budget begrenzt ihn nur.
  */
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
@@ -79,12 +79,15 @@ export function gemeinsameAusloeser(a: string[], b: string[]): string[] {
   return a.filter((x) => b.some((y) => x === y || x.includes(y) || y.includes(x)));
 }
 
-function skillMarkdowns(dir = ".claude/skills"): string[] {
+/** Alle Markdown-Dateien unter den Skill-Wurzeln: Zeiger (`.claude/skills`) und Quellen (`.agents/skills`, #1848). */
+function skillMarkdowns(dirs: string[] = [".claude/skills", ".agents/skills"]): string[] {
   const out: string[] = [];
-  for (const name of readdirSync(ROOT + dir)) {
-    const rel = `${dir}/${name}`;
-    if (statSync(ROOT + rel).isDirectory()) out.push(...skillMarkdowns(rel));
-    else if (name.endsWith(".md")) out.push(rel);
+  for (const dir of dirs.filter((d) => existsSync(ROOT + d))) {
+    for (const name of readdirSync(ROOT + dir)) {
+      const rel = `${dir}/${name}`;
+      if (statSync(ROOT + rel).isDirectory()) out.push(...skillMarkdowns([rel]));
+      else if (name.endsWith(".md")) out.push(rel);
+    }
   }
   return out;
 }
@@ -182,6 +185,7 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     const andere: Record<string, string> = {};
     for (const rel of skillMarkdowns()) if (rel !== TICKET_ABLAUF) andere[rel] = lies(rel);
     assert.ok(PRODUKT in andere && FACTORY in andere, "die Dateiliste trägt beide Ticket-Skills (Rekursion intakt)");
+    assert.ok(".agents/skills/forum/SKILL.md" in andere, "die Skill-Quelle forum liegt im Scan");
     assert.deepEqual(doppelterAblauf(lies(TICKET_ABLAUF), andere), []);
   });
   test("die Auslöser der beiden Skills überschneiden sich nicht, nur factory nennt Agentic", () => {

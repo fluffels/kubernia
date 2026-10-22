@@ -9,6 +9,7 @@
   },
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "skills:sync": "node scripts/skills-sync.mjs",
     "dev": "vite",
     "build": "vite build",
     "build:offline": "vite build --mode offline",

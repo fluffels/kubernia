@@ -23,3 +23,10 @@
 .claude/**/*.jpg binary
 .claude/**/*.gif binary
 .claude/**/*.webp binary
+
+# Skill-Quellen (#1848): wie .claude/ (Steuerzeichen im Permission-Dialog); die Zeiger unter .claude/skills/ werden daraus generiert.
+.agents/** text eol=lf
+.agents/**/*.png binary
+.agents/**/*.jpg binary
+.agents/**/*.gif binary
+.agents/**/*.webp binary

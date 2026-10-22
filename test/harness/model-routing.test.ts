@@ -151,6 +151,8 @@ function routingFiles(): string[] {
   const out = [".claude/settings.json"];
   for (const d of readdirSync(`${REPO_ROOT}.claude/agents`)) out.push(`.claude/agents/${d}`);
   for (const d of readdirSync(`${REPO_ROOT}.claude/skills`)) out.push(`.claude/skills/${d}/SKILL.md`);
+  // Skill-Quellen (#1848): Modell und Aufwand eines Skills stehen in der Quelle und im Zeiger.
+  if (existsSync(`${REPO_ROOT}.agents/skills`)) for (const d of readdirSync(`${REPO_ROOT}.agents/skills`)) out.push(`.agents/skills/${d}/SKILL.md`);
   out.push(...workflowDateien());
   return out.filter((f) => existsSync(`${REPO_ROOT}${f}`));
 }
@@ -629,6 +631,7 @@ describe("Keine festen Modell-IDs, genau eine Planungs-Oberfläche (#1065)", () 
     const treffer = routingFiles().filter((f) => hatHartenPin(read(f)));
     assert.deepEqual(treffer, [], `Feste Modell-IDs statt Alias (opus/sonnet/haiku) in:\n${treffer.join("\n")}`);
     assert.ok(routingFiles().length >= 7, "Der Datei-Walk darf nicht leer laufen");
+    assert.ok(routingFiles().includes(".agents/skills/forum/SKILL.md"), "die Skill-Quelle forum liegt im Scan");
   });
 
   test("Erkennung greift wirklich (Red-Green): ID ja, Alias nein", () => {

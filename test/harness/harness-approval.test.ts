@@ -617,7 +617,7 @@ describe("Feste Stopps bleiben (#1363)", () => {
   });
 
   test("der Forum-Skill hält den Freigabe-Stopp", () => {
-    const skill = read(".claude/skills/forum/SKILL.md");
+    const skill = read(".agents/skills/forum/SKILL.md");
     assert.match(skill, /Pflicht-Stopp/);
     assert.match(skill, /Nie ungefragt posten/);
   });
