@@ -1,5 +1,8 @@
 {
   "paare": [
+    ".agents/skills/factory/ablauf.md -> docs/harness-glossar.md",
+    ".agents/skills/factory/ablauf.md -> docs/model-routing.md",
+    ".agents/skills/factory/ablauf.md -> docs/ticket-reihenfolge.md",
     ".agents/skills/review-lenses/SKILL.md -> docs/agent-harness.md",
     ".agents/skills/review-lenses/SKILL.md -> docs/model-routing.md",
     ".agents/skills/review-lenses/SKILL.md -> docs/referenz/repo-landkarte.md",
@@ -11,9 +14,6 @@
     ".claude/agents/factory-planer.md -> docs/referenz/anlaufstellen.md",
     ".claude/agents/factory-umsetzer.md -> docs/agent-harness-faq.md",
     ".claude/agents/factory-umsetzer.md -> docs/model-routing.md",
-    ".claude/skills/factory/ablauf.md -> docs/harness-glossar.md",
-    ".claude/skills/factory/ablauf.md -> docs/model-routing.md",
-    ".claude/skills/factory/ablauf.md -> docs/ticket-reihenfolge.md",
     "AGENTS.md -> docs/adr/0014-leitplanken-ohne-label-riegel.md",
     "AGENTS.md -> docs/adr/0027-regeln-lockern.md",
     "AGENTS.md -> docs/agent-harness-faq.md",

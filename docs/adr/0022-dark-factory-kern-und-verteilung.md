@@ -659,4 +659,4 @@ F6 ist umgesetzt. Entscheidungen:
 
 ## Weitere Fortschreibungen (als Dateien)
 
-Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0022-1860-ausnahmelisten-und-quellwurzel.md) (Konvention: [README](README.md#format)); dort die erste.
+Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0022-1860-ausnahmelisten-und-quellwurzel.md) (Konvention: [README](README.md#format)); dort die erste. Weitere: [#1850](fortschreibungen/0022-1850-ticket-skills-als-quellen.md).

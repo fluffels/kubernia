@@ -7,7 +7,7 @@ description: Gestaffelter Mehr-Perspektiven-Review des Ticket-Diffs: erst `npm r
 
 Ein **gestaffelter** Review des aktuellen Ticket-Diffs — Vorbild sind produktiv eingesetzte KI-Entwicklungspipelines (#532). Die Idee: **erst die billigen, verlässlichen deterministischen Gates, dann die teuren LLM-Lenses — und die Lenses nur, wenn die Gates grün sind.** Das gibt zuerst das sicherste Feedback und verbrennt keine Tokens auf einem Diff, der schon an einem Gate scheitert.
 
-> Kein Ersatz für die CI-Gates, sondern eine Schicht **davor/darüber** (Feinschliff vor `main`). **Kein Auto-Merge** — der Review liefert Findings, das Mergen bleibt der normale [Ticket-Ablauf](../../../.claude/skills/factory/ablauf.md). Regeln/Begründungen: **[AGENTS.md](../../../AGENTS.md)**; die Harness-Gesamtsicht: [docs/agent-harness.md](../../../docs/agent-harness.md).
+> Kein Ersatz für die CI-Gates, sondern eine Schicht **davor/darüber** (Feinschliff vor `main`). **Kein Auto-Merge** — der Review liefert Findings, das Mergen bleibt der normale [Ticket-Ablauf](../factory/ablauf.md). Regeln/Begründungen: **[AGENTS.md](../../../AGENTS.md)**; die Harness-Gesamtsicht: [docs/agent-harness.md](../../../docs/agent-harness.md).
 
 Werte für die Platzhalter `<gruppe.schlüssel>` dieser Datei (Lens-Name, Präfixe) stehen im Block darunter und werden wörtlich eingesetzt.
 

@@ -3,7 +3,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Regeln:
- *   1. Beide Ticket-Skills (Produkt-Skill nach `agenten.ticketSkill` und `factory`) verweisen auf `.claude/skills/factory/ablauf.md`.
+ *   1. Beide Ticket-Skills (Produkt-Skill nach `agenten.ticketSkill` und `factory`) verweisen auf `.agents/skills/factory/ablauf.md`.
  *   2. Der Produkt-Skill fährt den Bereich `spiel`, `factory` den Bereich `agentic`; nie umgekehrt.
  *   3. Kein Ablauf-Werkzeug (Agent-Spawn, Skripte des Ablaufs) steht in einer Ticket-Skill-Datei.
  *   4. Kein Satz von 60 oder mehr Zeichen aus dem Ablauf steht wortgleich in einer anderen Skill-Datei.
@@ -93,7 +93,7 @@ function skillMarkdowns(dirs: string[] = [".claude/skills", ".agents/skills"]): 
 }
 
 const PRODUKT = ROLLEN_PFADE.ticketSkill;
-const FACTORY = ".claude/skills/factory/SKILL.md";
+const FACTORY = ".agents/skills/factory/SKILL.md";
 
 describe("Ticket-Ablauf: Hilfsfunktionen", () => {
   const ablauf = "Der Hauptchat liest die Datei nach Schritt 0 einmal je Skill-Aufruf und setzt sie ein.";
@@ -110,7 +110,7 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
     assert.deepEqual(einstiegAbweichungen(kopf), []);
     assert.equal(einstiegAbweichungen(kopf + "\n## Umsetzer\n\nDer Umsetzer wird ohne Planer gestartet.\n").length, 1);
     assert.equal(einstiegAbweichungen(kopf + "\n**Der Umsetzer wird ohne Planer gestartet.**\n").length, 1);
-    assert.equal(einstiegAbweichungen(kopf + "\n**Lies `.claude/skills/factory/ablauf.md` und folge ihm.**\n").length, 0);
+    assert.equal(einstiegAbweichungen(kopf + "\n**Lies `.agents/skills/factory/ablauf.md` und folge ihm.**\n").length, 0);
     assert.equal(einstiegAbweichungen(kopf + "\n**Lies `docs/x.md`.**\n**Bereichsleiter.**\n").length, 2);
     assert.equal(einstiegAbweichungen(kopf + "x".repeat(MAX_RUMPF)).length, 1);
     assert.equal(einstiegAbweichungen("---\nname: x\n---\n" + "x".repeat(MAX_RUMPF)).length, 0);
@@ -141,7 +141,7 @@ describe("Ticket-Ablauf: Hilfsfunktionen", () => {
   });
   test("Signaturen: Agent-Spawn im dünnen Skill ist rot, ein Verweis nicht", () => {
     assert.deepEqual(ablaufSignaturen('Agent({ subagent_type: "x" })'), ["Agent({", "subagent_type"]);
-    assert.deepEqual(ablaufSignaturen("Lies `.claude/skills/factory/ablauf.md` und folge ihm."), []);
+    assert.deepEqual(ablaufSignaturen("Lies `.agents/skills/factory/ablauf.md` und folge ihm."), []);
   });
   test("Auslöser: gemeinsamer Auslöser wird gemeldet, getrennte nicht", () => {
     const a = ausloeser('description: Text. Auslösen bei „nächstes Spiel-Ticket“, „mehrere Tickets“.');

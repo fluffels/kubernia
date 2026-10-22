@@ -95,9 +95,9 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 /** Der Einstiegs-Skill im Hauptchat; sein Frontmatter gilt nur bei /kubernia (#1035, #1280). */
-const UMSETZUNGS_SKILL = ".claude/skills/factory-ticket/SKILL.md";
-/** Der zweite Ticket-Skill (Bereich agentic); der Ablauf selbst steht in `.claude/skills/factory/ablauf.md` (#1806). */
-const FACTORY_SKILL = ".claude/skills/factory/SKILL.md";
+const UMSETZUNGS_SKILL = ".agents/skills/factory-ticket/SKILL.md";
+/** Der zweite Ticket-Skill (Bereich agentic); der Ablauf selbst steht in `.agents/skills/factory/ablauf.md` (#1806). */
+const FACTORY_SKILL = ".agents/skills/factory/SKILL.md";
 /** Der Subagent, der auf dem Skill-Pfad tatsächlich umsetzt (#1280). */
 const UMSETZER = ".claude/agents/factory-umsetzer.md";
 /** Der Skill, dessen Lenses trotz Coding-Tier-Umsetzung auf dem starken Tier bleiben müssen. */
@@ -763,7 +763,7 @@ describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
 /**
  * Prosa-Wächter für die Weichen-Regel auf dem Skill-Pfad (#1311): „Weichen selbst entscheiden, Rückfrage nur
  * bei Irreversiblem oder Außenwirkung“. Der Skill-Pfad hat nur
- * Text (`.claude/skills/factory/ablauf.md` Schritt 3, Planer Abschnitt 7, Umsetzer „entscheidung-noetig“). Ein Prädikat je Stelle,
+ * Text (`.agents/skills/factory/ablauf.md` Schritt 3, Planer Abschnitt 7, Umsetzer „entscheidung-noetig“). Ein Prädikat je Stelle,
  * jeweils mit rotem Gegenbeispiel.
  */
 const skillSchritt3 = (md: string): string => /^3\. \*\*Pre-Flight\*\*[^\n]*/m.exec(md)?.[0] ?? "";
@@ -859,7 +859,7 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     const t = read(".claude/agents/factory-planer.md");
     assert.match(t, /git diff --name-only HEAD origin\/main/);
     assert.match(t, /MSYS_NO_PATHCONV=1 git show origin\/main:<pfad>/);
-    assert.match(liesTicketAblauf(), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
+    assert.match(liesTicketAblauf(), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills \.agents\/skills AGENTS\.md/);
   });
 
   test("Brain-Lese-Konvention steht in Umsetzer und Lens", () => {

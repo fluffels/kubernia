@@ -166,7 +166,7 @@ const CONFIG = {
 const FILES = (extra: Record<string, string | null> = {}): Record<string, string> => {
   const alle: Record<string, string | null> = {
     ".claude/agents/umsetzer.md": "---\nname: kubernia-umsetzer\nmodel: sonnet\n---\nText\n",
-    ".claude/skills/factory-ticket/SKILL.md": "---\nname: kubernia\n---\nText\n",
+    ".claude/skills/demo/SKILL.md": "---\nname: kubernia\n---\nText\n",
     ".claude/workflows/ticket.js": "export const meta = { name: 'wf-beispiel' };\n",
     ".claude/settings.json": JSON.stringify({ hooks: { Stop: [{ hooks: [] }], PreToolUse: [] } }),
     ".githooks/pre-push": "#!/bin/sh\n",

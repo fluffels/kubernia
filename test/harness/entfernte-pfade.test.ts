@@ -40,7 +40,8 @@ export const RESTE: { name: string; muster: RegExp; fix: string }[] = [
   { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/, fix: "die Ausnahmeliste gibt es nicht mehr, den Ist-Zustand des Wächters beschreiben" },
   { name: "Docs-Gen-Schlüssel diagramme.ruleset", muster: /diagramme\.ruleset/, fix: "den Schlüssel aus der Docs-Gen-Konfiguration nicht mehr nennen, er ist entfernt" },
   { name: "alte Agenten-Dateinamen", muster: /kubernia-(planner|umsetzer|lens|gruppe)\.md/, fix: "den Rollen-Pfad .claude/agents/factory-<rolle>.md nennen" },
-  { name: "altes Ticket-Skill-Verzeichnis", muster: /skills\/kubernia\//, fix: "das Verzeichnis .claude/skills/factory-ticket/ nennen" },
+  { name: "altes Ticket-Skill-Verzeichnis", muster: /skills\/kubernia\//, fix: "das Verzeichnis .agents/skills/factory-ticket/ nennen" },
+  { name: "Ticket-Ablauf am alten Ort", muster: /\.claude\/skills\/factory\/ablauf\.md/, fix: "den Ticket-Ablauf unter .agents/skills/factory/ablauf.md nennen (Skill-Quelle, #1850)" },
   {
     name: "Platzhalter als Dateiname, die Datei heißt nach der Rolle",
     muster: /<agenten\.[A-Za-z]+>\.md|skills\/<agenten\.ticketSkill>\//,
@@ -159,6 +160,13 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.ok(!meldung.includes(RESTE[0].fix));
   });
 
+  test("Ticket-Ablauf am alten Ort: der alte Pfad ist ein Fund, der neue Pfad und eine ADR nicht", () => {
+    const alt = ".claude/skills/factory/ablauf.md";
+    assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: `Lies ${alt}` }]), ["docs/x.md:1: Ticket-Ablauf am alten Ort"]);
+    assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: "Lies .agents/skills/factory/ablauf.md und ../.agents/skills/factory/ablauf.md" }]), []);
+    assert.deepEqual(findeReste([{ pfad: "docs/adr/0022-x.md", inhalt: alt }]), []);
+  });
+
   // Je Altname ein Literal: sonst bliebe ein aus dem Muster gestrichener Name unbemerkt (#1824)
   test.each([
     "KQ_DIFF_BASE", "KQ_DIFFSIZE_MAX_FILES", "KQ_DIFFSIZE_MAX_LINES", "KQ_PR_NUMBER", "KQ_PR_DRAFT", "KQ_PR_BODY", "KQ_GH_KOSTEN_LOG", "KQ_MCP_LOG_DIR",
@@ -231,6 +239,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Docs-Gen-Schlüssel diagramme.ruleset": "config.diagramme.ruleset fehlt",
       "alte Agenten-Dateinamen": "Definition in .claude/agents/kubernia-lens.md",
       "altes Ticket-Skill-Verzeichnis": "Datei .claude/skills/kubernia/SKILL.md",
+      "Ticket-Ablauf am alten Ort": "Lies .claude/skills/factory/ablauf.md",
       "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
       "Kern-Umgebungsvariable mit Projektpräfix": "echo KQ_DIFF_BASE=$base >> $GITHUB_ENV",
     };

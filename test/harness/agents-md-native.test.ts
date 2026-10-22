@@ -258,8 +258,8 @@ describe("Kein Markdown beschreibt CLAUDE.md noch in einer abgelegten Rolle (#99
   });
 
   test("versionierte .claude/-Konfiguration wird mitgeprüft, Parallel-Worktrees nicht (#1002)", () => {
-    assert.ok(isVersionedAgentConfig(".claude/skills/factory-ticket/SKILL.md"));
-    assert.ok(isVersionedAgentConfig(".claude/skills/factory-ticket/hilfe.js"), "Prompt-Freitext kann in .js stehen");
+    assert.ok(isVersionedAgentConfig(".claude/skills/demo/SKILL.md"));
+    assert.ok(isVersionedAgentConfig(".claude/skills/demo/hilfe.js"), "Prompt-Freitext kann in .js stehen");
     assert.ok(!isVersionedAgentConfig(".claude/worktrees/kq-1/AGENTS.md"), "Worktrees paralleler Agenten nicht");
     assert.ok(!isVersionedAgentConfig(".claude/settings.json"));
     assert.ok(collectAgentConfig().includes(".claude/agents/factory-planer.md"), "Inventar ist nicht leer");

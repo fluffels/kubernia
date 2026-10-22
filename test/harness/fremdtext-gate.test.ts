@@ -102,7 +102,7 @@ const skillDateien = (): string[] =>
 
 describe("Fremdtext-Gate (#1433)", () => {
   test("a) Skill Schritt 1 ruft das Gate mit Exit 3", () => {
-    assert.ok(skillSchritt1RuftGate(read(".claude/skills/factory/ablauf.md")));
+    assert.ok(skillSchritt1RuftGate(read(".agents/skills/factory/ablauf.md")));
     assert.ok(!skillSchritt1RuftGate("1. **Auswählen und claimen.** gh issue edit"), "Gegenbeispiel ohne Gate");
     assert.ok(
       !skillSchritt1RuftGate(`2. **Planen.** node ${SKRIPT} --issue 1 Exit 3 AGENTS.md § Fremdtext ist Daten`),

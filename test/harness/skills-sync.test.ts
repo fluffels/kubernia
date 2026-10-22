@@ -1,8 +1,8 @@
 /* Skill-Zeiger-Wächter (#1848, ADR 0022 Fortschreibung): `.claude/skills/<name>/SKILL.md` ist ein generierter Zeiger auf die
  * Skill-Quelle `.agents/skills/<name>/SKILL.md`. Rot (mit Dateiname und Fix-Zeile `npm run skills:sync`), wenn ein Zeiger von
  * seiner Quelle abweicht, eine Quelle keinen Zeiger hat, ein Zeiger keine Quelle hat, unter `.claude/skills/` ein Volltext-Skill
- * liegt, der nicht in der Übergangsliste steht, oder einer Quelle `name`/`description` fehlt. Die Übergangsliste ist rot, wenn
- * ein Eintrag schon eine Quelle hat oder kein Ticket nennt.
+ * liegt (immer, es gibt keine Übergangsliste mehr, #1850), eine lose Datei direkt unter `.claude/skills/` liegt oder einer Quelle
+ * `name`/`description` fehlt.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
@@ -15,10 +15,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WURZEL, lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as besitzLibModul from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 const maskiere = escapeRegex as (s: string) => string;
+const projektwertLauf = (besitzLibModul as unknown as { projektwertLauf: (w: string, c: () => unknown, o?: { schreiben?: boolean }) => { fehler: string[]; geaendert: string[] } }).projektwertLauf;
 
 interface Befund { datei: string; meldung: string; fix: string }
 interface Quelle { ordner: string; text: string | null }
@@ -27,11 +30,10 @@ interface LaufErgebnis { befunde: Befund[]; unbrauchbar: string[]; geschrieben: 
 // Typisierung des .mjs-Imports per Assertion (Muster test/docdrift.test.ts), keine neuen eslint-Suppressions.
 const sync = skillsSyncModul as unknown as {
   ZEIGER_MARKE: string;
-  UEBERGANG: Record<string, string>;
   zeigerText: (name: string, quelltext: string) => string;
-  pruefeSkills: (a: { quellen: Quelle[]; zeiger: Zeiger[]; uebergang?: Record<string, string> }) => Befund[];
-  liesStand: (wurzel: string) => { quellen: Quelle[]; zeiger: Zeiger[] };
-  lauf: (a: { wurzel: string; tool?: string; check?: boolean; prune?: boolean; uebergang?: Record<string, string> }) => LaufErgebnis;
+  pruefeSkills: (a: { quellen: Quelle[]; zeiger: Zeiger[]; lose?: string[] }) => Befund[];
+  liesStand: (wurzel: string) => { quellen: Quelle[]; zeiger: Zeiger[]; lose: string[] };
+  lauf: (a: { wurzel: string; tool?: string; check?: boolean; prune?: boolean }) => LaufErgebnis;
 };
 
 const QUELLE = [
@@ -49,7 +51,7 @@ const QUELLE = [
 ].join("\n");
 
 const zeigerVon = (name: string, text: string): Zeiger => ({ ordner: name, text: sync.zeigerText(name, text), dateien: ["SKILL.md"] });
-const stand = (quellen: Quelle[], zeiger: Zeiger[], uebergang: Record<string, string> = {}) => sync.pruefeSkills({ quellen, zeiger, uebergang });
+const stand = (quellen: Quelle[], zeiger: Zeiger[], lose: string[] = []) => sync.pruefeSkills({ quellen, zeiger, lose });
 
 describe("Zeiger-Text", () => {
   const zeiger = sync.zeigerText("demo", QUELLE);
@@ -102,16 +104,23 @@ describe("pruefeSkills: Negativfälle mit Dateiname und Fix-Zeile", () => {
     expect(b[0].fix).toBe("npm run skills:sync -- --prune");
   });
 
-  test("Volltext-Skill unter .claude/skills/ ohne Eintrag in der Übergangsliste", () => {
-    const b = stand([], [{ ordner: "voll", text: "---\nname: voll\ndescription: x\n---\nText\n", dateien: ["SKILL.md", "ablauf.md"] }]);
+  test("Volltext-Skill unter .claude/skills/ ist immer rot, es gibt keine Ausnahmeliste", () => {
+    const voll: Zeiger = { ordner: "voll", text: "---\nname: voll\ndescription: x\n---\nText\n", dateien: ["SKILL.md", "ablauf.md"] };
+    const b = stand([], [voll]);
     expect(b).toHaveLength(1);
     expect(b[0].datei).toBe(".claude/skills/voll/SKILL.md");
+    expect(b[0].meldung).toContain("Volltext-Skill");
     expect(b[0].fix).toContain("npm run skills:sync");
+    // ein Skill mit dem Namen eines früheren Übergangs-Eintrags ist nicht besser gestellt
+    for (const name of ["factory", "factory-ticket"]) expect(stand([], [{ ...voll, ordner: name }]), name).toHaveLength(1);
   });
 
-  test("Volltext-Skill in der Übergangsliste ist erlaubt", () => {
-    const voll: Zeiger = { ordner: "voll", text: "---\nname: voll\n---\nText\n", dateien: ["SKILL.md"] };
-    expect(stand([], [voll], { voll: "#1" })).toEqual([]);
+  test("lose Datei direkt unter .claude/skills/ ist rot, mit Dateiname", () => {
+    const b = stand([q], [z], ["notizen.md"]);
+    expect(b).toHaveLength(1);
+    expect(b[0].datei).toBe(".claude/skills/notizen.md");
+    expect(b[0].meldung).toContain("lose Datei");
+    expect(stand([q], [z], [])).toEqual([]);
   });
 
   test("Volltext und Quelle gleichzeitig", () => {
@@ -147,41 +156,7 @@ describe("pruefeSkills: Negativfälle mit Dateiname und Fix-Zeile", () => {
   });
 });
 
-describe("pruefeSkills: Übergangsliste", () => {
-  const voll: Zeiger = { ordner: "voll", text: "---\nname: voll\n---\nText\n", dateien: ["SKILL.md"] };
-
-  test("Eintrag, dessen Skill schon eine Quelle hat, ist rot", () => {
-    const q: Quelle = { ordner: "demo", text: QUELLE };
-    const b = stand([q], [zeigerVon("demo", QUELLE)], { demo: "#5" });
-    expect(b).toHaveLength(1);
-    expect(b[0].datei).toContain("demo");
-    expect(b[0].meldung).toContain("veraltet");
-  });
-
-  test("Eintrag, dessen Skill Quelle und Volltext zugleich hat, wird ebenfalls als veraltet gemeldet", () => {
-    const q: Quelle = { ordner: "demo", text: QUELLE };
-    const b = stand([q], [{ ordner: "demo", text: QUELLE, dateien: ["SKILL.md"] }], { demo: "#5" });
-    expect(b.map((x) => x.datei)).toContain("Übergangsliste in scripts/skills-sync.mjs: demo");
-  });
-
-  test("Eintrag ohne Ticketnummer ist rot", () => {
-    expect(stand([], [voll], { voll: "" }).map((b) => b.meldung)).toEqual(["Eintrag ohne Ticket (#<nr>)"]);
-    expect(stand([], [voll], { voll: "später" })).toHaveLength(1);
-  });
-
-  test("Eintrag ohne Volltext-Skill dahinter ist rot", () => {
-    expect(stand([], [], { weg: "#7" }).map((b) => b.meldung)).toEqual([expect.stringContaining("veraltet")]);
-    const zeiger = zeigerVon("demo", QUELLE);
-    expect(stand([], [zeiger], { demo: "#7" }).some((b) => b.meldung.includes("veraltet"))).toBe(true);
-  });
-
-  test("das Ticket muss genau `#<nr>` heißen: Text davor oder dahinter ist rot", () => {
-    for (const ticket of ["siehe #1849", "#1849 später", "1849", "#"]) {
-      expect(stand([], [voll], { voll: ticket }).map((b) => b.meldung), ticket).toEqual(["Eintrag ohne Ticket (#<nr>)"]);
-    }
-    expect(stand([], [voll], { voll: "#1849" })).toEqual([]);
-  });
-
+describe("pruefeSkills: leere und kaputte Ordner", () => {
   test("Zeiger-Ordner ohne SKILL.md: bei vorhandener Quelle fehlt der Zeiger", () => {
     const q: Quelle = { ordner: "demo", text: QUELLE };
     const b = stand([q], [{ ordner: "demo", text: null, dateien: [] }]);
@@ -189,11 +164,21 @@ describe("pruefeSkills: Übergangsliste", () => {
     expect(b[0].meldung).toContain("Zeiger fehlt");
   });
 
-  test("Zeiger-Ordner ohne SKILL.md und ohne Quelle ist rot, außer er steht in der Übergangsliste", () => {
+  test("Zeiger-Ordner ohne SKILL.md und ohne Quelle ist rot", () => {
     const leer: Zeiger = { ordner: "leer", text: null, dateien: [] };
     expect(stand([], [leer]).map((x) => x.datei)).toEqual([".claude/skills/leer/SKILL.md"]);
-    // Der Eintrag dahinter hat keinen Volltext-Skill: veraltet (ein Ordner ohne SKILL.md ist keiner).
-    expect(stand([], [leer], { leer: "#3" }).map((x) => x.meldung)).toEqual([expect.stringContaining("veraltet")]);
+  });
+
+  test("leeres Frontmatter vor einem zweiten Block liefert keine Felder, ein leerer Anführungsstrich-Wert zählt als fehlend", () => {
+    const b = stand([{ ordner: "doppelt", text: "---\n---\nname: x\ndescription: d\n---\nRumpf\n" }], []);
+    expect(b.map((x) => x.meldung)).toEqual(["Quelle ohne name und description im Frontmatter"]);
+    const leer = stand([{ ordner: "leer", text: '---\nname: ""\ndescription: d\n---\n' }], []);
+    expect(leer.map((x) => x.meldung)).toEqual(["Quelle ohne name im Frontmatter"]);
+  });
+
+  test("pruefeSkills ohne lose-Angabe wirft nicht und meldet keine lose Datei", () => {
+    const q: Quelle = { ordner: "demo", text: QUELLE };
+    expect(sync.pruefeSkills({ quellen: [q], zeiger: [zeigerVon("demo", QUELLE)] })).toEqual([]);
   });
 
   test("Frontmatter ohne schließendes `---` zählt als fehlend", () => {
@@ -201,21 +186,33 @@ describe("pruefeSkills: Übergangsliste", () => {
     expect(b.map((x) => x.meldung)).toEqual(["Quelle ohne Frontmatter"]);
   });
 
-  test("die echte Liste nennt je Eintrag ein Ticket", () => {
-    for (const ticket of Object.values(sync.UEBERGANG)) expect(ticket).toMatch(/^#\d+$/);
+  test("das Modul kennt keine Übergangsliste mehr", () => {
+    expect(Object.keys(sync)).not.toContain("UEBERGANG");
   });
 });
 
 describe("echter Stand des Repos", () => {
   const echt = sync.liesStand(WURZEL);
 
-  test("Zeiger und Quellen stimmen überein, die Übergangsliste ist gültig", () => {
+  test("Zeiger und Quellen stimmen überein, unter .claude/skills/ liegt nur noch Zeiger", () => {
     expect(sync.pruefeSkills(echt)).toEqual([]);
+    expect(echt.lose).toEqual([]);
   });
 
-  test("Leerlauf-Schutz: die Quelle von forum liegt im Scan", () => {
-    expect(echt.quellen.map((q) => q.ordner)).toContain("forum");
-    expect(echt.zeiger.map((z) => z.ordner)).toContain("forum");
+  test("Leerlauf-Schutz: die Quellen von forum, factory und factory-ticket liegen im Scan, der Ablauf liegt in der Quelle (#1850)", () => {
+    for (const name of ["forum", "factory", "factory-ticket"]) {
+      expect(echt.quellen.map((q) => q.ordner), name).toContain(name);
+      expect(echt.zeiger.map((z) => z.ordner), name).toContain(name);
+    }
+    expect(echt.zeiger.find((z) => z.ordner === "factory")?.dateien).toEqual(["SKILL.md"]);
+    expect(lies(".agents/skills/factory/ablauf.md").length).toBeGreaterThan(1000);
+  });
+
+  test("die Zeiger der Ticket-Skills tragen model, effort und die Projektwert-Zeile samt name (#1850)", () => {
+    const zeiger = echt.zeiger.find((z) => z.ordner === "factory-ticket")?.text ?? "";
+    for (const zeile of ["# factory:projektwert agenten.ticketSkill", "model: sonnet", "effort: medium"]) expect(zeiger.split("\n"), zeile).toContain(zeile);
+    expect(zeiger).toMatch(/^name: \S+$/m);
+    expect(zeiger.split("\n")).toContain("Lies `.agents/skills/factory-ticket/SKILL.md` und folge ihm.");
   });
 
   test("setup ruft den Sync mit --prune auf, package.json kennt skills:sync", () => {
@@ -261,7 +258,7 @@ describe("lauf auf einem Temp-Verzeichnis", () => {
     expect(zweiter.geschrieben).toEqual([]);
     expect(readFileSync(zeigerPfad(w)).equals(bytes)).toBe(true);
     expect(bytes.toString()).toBe(sync.zeigerText("demo", QUELLE));
-    expect(sync.lauf({ wurzel: w, check: true, uebergang: {} }).befunde).toEqual([]);
+    expect(sync.lauf({ wurzel: w, check: true }).befunde).toEqual([]);
   });
 
   test("aktualisiert einen Zeiger mit Marke, der abweicht", () => {
@@ -317,15 +314,41 @@ describe("lauf auf einem Temp-Verzeichnis", () => {
     expect(readdirSync(join(w, ".claude/skills")).sort()).toEqual(["fremd", "voll"]);
   });
 
-  test("--prune meldet auch einen Volltext aus der Übergangsliste, ohne ihn anzufassen; ohne --prune bleibt er still", () => {
+  test("--prune meldet einen Volltext ohne Quelle, ohne ihn anzufassen; ohne --prune ist der Lauf still, --check meldet ihn", () => {
     const w = neu();
-    const text = "---\nname: voll\n---\nText\n";
+    const text = "---\nname: voll\ndescription: d\n---\nText\n";
     schreibe(w, ".claude/skills/voll/SKILL.md", text);
-    const e = sync.lauf({ wurzel: w, prune: true, uebergang: { voll: "#1" } });
+    const e = sync.lauf({ wurzel: w, prune: true });
     expect(e.gemeldet).toEqual([".claude/skills/voll"]);
     expect(e.geloescht).toEqual([]);
     expect(readFileSync(zeigerPfad(w, "voll"), "utf8")).toBe(text);
-    expect(sync.lauf({ wurzel: w, uebergang: { voll: "#1" } }).gemeldet).toEqual([]);
+    expect(sync.lauf({ wurzel: w }).gemeldet).toEqual([]);
+    expect(sync.lauf({ wurzel: w, check: true }).befunde.map((b) => b.datei)).toEqual([".claude/skills/voll/SKILL.md"]);
+  });
+
+  test("eine lose Datei unter .claude/skills/ macht --check rot und wird nie angefasst", () => {
+    const w = neu();
+    schreibe(w, ".agents/skills/demo/SKILL.md", QUELLE);
+    sync.lauf({ wurzel: w });
+    schreibe(w, ".claude/skills/notizen.md", "lose");
+    expect(sync.lauf({ wurzel: w, check: true }).befunde.map((b) => b.datei)).toEqual([".claude/skills/notizen.md"]);
+    const e = sync.lauf({ wurzel: w, prune: true });
+    expect(e.geloescht).toEqual([]);
+    expect(readFileSync(join(w, ".claude/skills/notizen.md"), "utf8")).toBe("lose");
+  });
+
+  test("projektwerte --write bei geändertem agenten.ticketSkill ändert Quelle und Zeiger, danach ist der Stand grün (#1850)", () => {
+    const w = neu();
+    schreibe(w, ".agents/skills/factory-ticket/SKILL.md", ["---", "# factory:projektwert agenten.ticketSkill", "name: alt", "description: d", "model: sonnet", "---", "", "Rumpf", ""].join("\n"));
+    sync.lauf({ wurzel: w });
+    expect(sync.pruefeSkills(sync.liesStand(w))).toEqual([]);
+    const config = { agenten: { ticketSkill: "neuername" } };
+    const r = projektwertLauf(w, () => config, { schreiben: true });
+    expect(r.fehler).toEqual([]);
+    expect([...r.geaendert].sort()).toEqual([".agents/skills/factory-ticket/SKILL.md", ".claude/skills/factory-ticket/SKILL.md"]);
+    expect(readFileSync(join(w, ".agents/skills/factory-ticket/SKILL.md"), "utf8")).toContain("name: neuername");
+    expect(readFileSync(zeigerPfad(w, "factory-ticket"), "utf8")).toContain("name: neuername");
+    expect(sync.pruefeSkills(sync.liesStand(w))).toEqual([]);
   });
 
   test("unbrauchbare Quelle wird gemeldet und kein Zeiger geschrieben", () => {
@@ -414,7 +437,8 @@ describe("Kommandozeile", () => {
       const w = mkdtempSync(join(tmpdir(), "skills-sync-cli-"));
       temp.push(w);
       mkdirSync(join(w, "scripts"), { recursive: true });
-      for (const f of ["skills-sync.mjs", "flag-lib.mjs"]) writeFileSync(join(w, "scripts", f), readFileSync(join(WURZEL, "scripts", f)));
+      mkdirSync(join(w, "scripts/docs-gen"), { recursive: true });
+      for (const f of ["skills-sync.mjs", "flag-lib.mjs", "docs-gen/markdown.mjs"]) writeFileSync(join(w, "scripts", f), readFileSync(join(WURZEL, "scripts", f)));
       mkdirSync(join(w, ".agents/skills/demo"), { recursive: true });
       writeFileSync(join(w, ".agents/skills/demo/SKILL.md"), quelle);
       return w;
@@ -436,6 +460,16 @@ describe("Kommandozeile", () => {
       expect(existsSync(join(w, ".claude/skills/demo/SKILL.md"))).toBe(true);
     });
 
+    test("nach dem Lauf ohne Flag endet --check mit Exit 0; eine lose Datei macht es wieder rot", () => {
+      const w = baum(QUELLE);
+      expect(lauf(w).status).toBe(0);
+      expect(lauf(w, "--check").status).toBe(0);
+      writeFileSync(join(w, ".claude/skills/notizen.md"), "lose");
+      const r = lauf(w, "--check");
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(".claude/skills/notizen.md");
+    });
+
     test("unbrauchbare Quelle: Exit 1 auch ohne Flag", () => {
       const w = baum("---\nname: demo\n---\n");
       const r = lauf(w);
@@ -454,7 +488,7 @@ describe("Kommandozeile", () => {
 // Überschriften trägt; ein Test, der den Zeiger liest, prüft nichts) sind rot. Gilt für jede Quelle unter `.agents/skills/`.
 // Grenzen: geprüft werden die Pfadformen `.claude/skills/<name>/SKILL.md` und `](../<name>/SKILL.md` (nur in Dateien unter
 // `.claude/skills/`; unter `.agents/skills/` führt `../<name>/` zur Quelle) in versionierten Textdateien; Ordnerform ohne SKILL.md, der Skill-Name ohne Pfad und
-// Skills ohne Quelle (Volltext in der Übergangsliste) zählen nicht.
+// Skills ohne Quelle (ein Volltext ist ohnehin rot) zählen nicht.
 describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", () => {
   /** Geschlossene Ausnahmen (Pfadpräfix → Grund). */
   const AUSNAHMEN: Record<string, string> = {
@@ -493,7 +527,7 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
     expect(gescannt("docs/adr/0022-x.md")).toBe(false);
     expect(gescannt("docs/x.md")).toBe(true);
     expect(gescannt("docs/bild.png")).toBe(false);
-    for (const name of Object.keys(sync.UEBERGANG)) expect(namen, name).not.toContain(name);
+    expect(namen).toEqual(expect.arrayContaining(["factory", "factory-ticket"]));
   });
 
   test("der Scan ist nicht leer und kennt forum und review-lenses als Quellen", () => {

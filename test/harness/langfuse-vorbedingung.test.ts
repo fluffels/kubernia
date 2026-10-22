@@ -179,7 +179,7 @@ describe("Kopplung", () => {
     const zeile = lies("AGENTS.md").split("\n").find((z) => z.includes("Langfuse-Erfassung erhalten"));
     expect(zeile).toContain("scripts/langfuse-vorbedingung.mjs");
   });
-  test.each([".claude/skills/factory/ablauf.md"])("%s ruft die Vorbedingung vor dem Start", (datei) => {
+  test.each([".agents/skills/factory/ablauf.md"])("%s ruft die Vorbedingung vor dem Start", (datei) => {
     // Der Aufruf gehört in Schritt 0 (Liste im Abschnitt „Im Hauptchat“), nicht irgendwohin in die Datei.
     const zeilen = lies(datei).split("\n");
     const start = zeilen.findIndex((z) => z.startsWith("0. "));

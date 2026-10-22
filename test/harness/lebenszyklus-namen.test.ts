@@ -414,9 +414,9 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
 
 describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
   test("ordneHarnessAenderungen: der feste Rollen-Pfad factory-ticket/ zählt als Skill, ein anderes Skill-Verzeichnis (demo/) als sonstige", () => {
-    const dateien = [".claude/skills/demo/SKILL.md", ".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"];
+    const dateien = [".claude/skills/demo/SKILL.md", ".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"];
     const r = H.ordneHarnessAenderungen(dateien);
-    expect(r.skill).toEqual([".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"]);
+    expect(r.skill).toEqual([".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"]);
     expect(r.sonstige).toEqual([".claude/skills/demo/SKILL.md"]);
     const mitZweitem = H.ordneHarnessAenderungen as (d: string[], verz: string) => { skill: string[]; sonstige: string[] };
     expect(mitZweitem(dateien, ".claude/skills/demo/")).toEqual(r);
@@ -429,8 +429,8 @@ describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
     expect(nurAgents).not.toContain("SKILL.md");
   });
   test("Kern-Pfad: das Verzeichnis gilt als Skill, auch ohne agenten.ticketSkill; die Config meldet den Grund weiter", () => {
-    expect(H.TICKET_SKILL_VERZEICHNIS).toBe(".claude/skills/factory-ticket/");
-    expect(H.ordneHarnessAenderungen([".claude/skills/factory-ticket/SKILL.md", ".claude/skills/ab/SKILL.md"]).skill).toEqual([".claude/skills/factory-ticket/SKILL.md"]);
+    expect(H.TICKET_SKILL_VERZEICHNIS).toBe(".agents/skills/factory-ticket/");
+    expect(H.ordneHarnessAenderungen([".agents/skills/factory-ticket/SKILL.md", ".claude/skills/ab/SKILL.md"]).skill).toEqual([".agents/skills/factory-ticket/SKILL.md"]);
     expect(H.configGrund({ config: OHNE_SKILL })).toMatch(/agenten\.ticketSkill[\s\S]*Fix:/);
     expect(H.configGrund({ config: AB })).toBeNull();
   });

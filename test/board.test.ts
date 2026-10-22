@@ -286,7 +286,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   });
 
   test("der Titel, an dem die Klemmung das Sammelticket erkennt, steht wörtlich in AGENTS.md, Skill und ticket-reihenfolge.md (keine stille Drift)", () => {
-    for (const datei of ["AGENTS.md", ".claude/skills/factory/ablauf.md", "docs/ticket-reihenfolge.md"]) {
+    for (const datei of ["AGENTS.md", ".agents/skills/factory/ablauf.md", "docs/ticket-reihenfolge.md"]) {
       expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.SAMMELTICKET_TITEL);
     }
     for (const datei of ["AGENTS.md", "docs/ticket-reihenfolge.md"]) {

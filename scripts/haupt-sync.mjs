@@ -20,7 +20,7 @@
  *
  * `--text --streng` ist der erste Schritt des Ticket-Skills (#1392): derselbe Sync (entspricht `git pull --ff-only`, aber mit Stopp
  * bei getrackten Resten), nur dass jede Abweichung vom sauberen `main` Exit 1 ergibt (`exitCodeFuer`): der Hauptchat startet dann kein
- * Ticket. Hat der Sync `.claude/skills`, `.claude/agents` oder `AGENTS.md` geändert, sagt der Text „Skill neu lesen“: der Skill-Text
+ * Ticket. Hat der Sync eine Ticket-Skill-Quelle (`.agents/skills/`), deren Zeiger (`.claude/skills`) oder `AGENTS.md` geändert, sagt der Text „Skill neu lesen“: der Skill-Text
  * der laufenden Session stammt noch vom alten Stand.
  *
  * Aufruf-Fehler (unbekanntes Flag, fehlender Wert, doppeltes Flag, Positionsargument): Exit 2 vor Sync und Folge-Skript.
@@ -30,7 +30,7 @@
  */
 import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
 import { KERN_TICKET_SKILL, TICKET_SKILL_ORDNER } from "./projekt-config-lib.mjs";
@@ -66,7 +66,11 @@ export function exitCodeFuer(ergebnis) {
   return 0;
 }
 
-/** Verzeichnis des Ticket-Skills als fester Kern-Pfad (#1748, `ROLLEN_PFADE.ticketSkill`): ohne Config, ohne IO (der Hook ist fail-open). */
+/** Skill-Quellen und Zeiger-Verzeichnis wie in `scripts/skills-sync.mjs` (kein Import: ein Einstiegsskript importiert kein anderes; ein Test hält beide gleich). */
+export const QUELL_VERZEICHNIS = ".agents/skills";
+export const ZEIGER_WURZEL = ".claude/skills";
+
+/** Verzeichnis der Ticket-Skill-Quelle als fester Kern-Pfad (#1748, `ROLLEN_PFADE.ticketSkill`, seit #1850 unter `.agents/skills/`): ohne Config, ohne IO (der Hook ist fail-open). */
 export const TICKET_SKILL_VERZEICHNIS = `${TICKET_SKILL_ORDNER}/`;
 
 /** Grund, warum die Projekt-Config nicht nutzbar ist (mit Fix-Zeile), sonst `null`. Wirft nie. */
@@ -74,11 +78,20 @@ export function configGrund(deps = {}) {
   return namenOderGrund("haupt-sync", deps).grund ?? null;
 }
 
-/** Verzeichnis des Kern-Ticket-Skills samt gemeinsamem Ablauf (#1806): zählt immer als Skill, unabhängig von der Projekt-Config. */
-export const KERN_SKILL_VERZEICHNIS = `.claude/skills/${KERN_TICKET_SKILL}/`;
+/** Quell-Verzeichnis des Kern-Ticket-Skills samt gemeinsamem Ablauf (#1806): zählt immer als Skill, unabhängig von der Projekt-Config. */
+export const KERN_SKILL_VERZEICHNIS = `${QUELL_VERZEICHNIS}/${KERN_TICKET_SKILL}/`;
+
+/** Die generierten Zeiger beider Ticket-Skills unter dem Werkzeug-Verzeichnis (#1850): eine Änderung dort meint immer die Quelle. */
+export const ZEIGER_VERZEICHNISSE = [`${ZEIGER_WURZEL}/${KERN_TICKET_SKILL}/`, `${ZEIGER_WURZEL}/${posix.basename(TICKET_SKILL_ORDNER)}/`];
+
+/** Pfad eines Zeigers → Pfad seiner Quelle (Zeiger und Quelle heißen gleich); alles andere unverändert. */
+export function quellePfad(d) {
+  const zeiger = ZEIGER_VERZEICHNISSE.find((v) => d.startsWith(v));
+  return zeiger ? `${QUELL_VERZEICHNIS}/${d.slice(ZEIGER_WURZEL.length + 1)}` : d;
+}
 
 /**
- * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: die Ticket-Skills (der feste Kern-Pfad `factory-ticket/` und der Kern-Skill `factory` samt Ablauf) und die Wurzel-AGENTS.md (der Hauptchat
+ * Geänderte Dateien eines Syncs nach Wirkung ordnen (#1572). `skill`: die Ticket-Skills (Quelle und Zeiger des festen Kern-Pfads `factory-ticket/` und des Kern-Skills `factory` samt Ablauf) und die Wurzel-AGENTS.md (der Hauptchat
  * liest sie neu); `agenten`: Agent-Definitionen (gelten erst nach Session-Neustart); `sonstige`: übrige `.claude/`-Dateien, Skill-Quellen unter `.agents/` (#1848) und
  * modul-lokale AGENTS.md; `lockGeaendert`: package-lock.json. Pur, wirft nie.
  */
@@ -86,7 +99,7 @@ export function ordneHarnessAenderungen(dateien) {
   const ordnung = { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
   for (const d of Array.isArray(dateien) ? dateien : []) {
     if (d === "package-lock.json") ordnung.lockGeaendert = true;
-    else if (d === "AGENTS.md" || d.startsWith(KERN_SKILL_VERZEICHNIS) || d.startsWith(TICKET_SKILL_VERZEICHNIS)) ordnung.skill.push(d);
+    else if (d === "AGENTS.md" || d.startsWith(KERN_SKILL_VERZEICHNIS) || d.startsWith(TICKET_SKILL_VERZEICHNIS) || ZEIGER_VERZEICHNISSE.some((v) => d.startsWith(v))) ordnung.skill.push(d);
     else if (d.startsWith(".claude/agents/")) ordnung.agenten.push(d);
     else if (d.startsWith(".claude/") || d.startsWith(".agents/") || /(^|\/)AGENTS\.md$/.test(d)) ordnung.sonstige.push(d);
   }
@@ -196,11 +209,14 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
       zeilen.push(`Geändert (Harness): ${pfadListe(alle)}`);
       if (h.skill.length) {
         const agentsMd = h.skill.includes("AGENTS.md") ? " Die Wurzel-AGENTS.md hat sich geändert: zusätzlich `git diff <Stand vor diesem Sync> HEAD -- AGENTS.md` lesen." : "";
-        const skillDatei = h.skill.find((d) => d.endsWith("/SKILL.md"));
-        zeilen.push(`Skill neu lesen: ${h.skill.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. ${skillDatei ? `\`${skillDatei}\`` : "Den Ticket-Skill"} jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
+        const quellen = [...new Set(h.skill.map(quellePfad))];
+        const skillDatei = quellen.find((d) => d.endsWith("/SKILL.md")) ?? quellen.find((d) => d.endsWith("/ablauf.md"));
+        zeilen.push(`Skill neu lesen: ${quellen.join(", ")} haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. ${skillDatei ? `\`${skillDatei}\`` : "Den Ticket-Skill"} jetzt neu lesen und der neuen Fassung folgen.${agentsMd}`);
       }
       if (h.agenten.length) zeilen.push("Agent-Definitionen geändert: gelten erst nach Session-Neustart; beim Umsetzer-Spawn den Umsetzer-Zusatz setzen (Skill § Vor dem Spawn).");
-      if (h.sonstige.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) und .agents-Dateien (Skill-Quellen) gelten erst nach einem Session-Neustart.");
+      const quelle = h.sonstige.filter((d) => d.startsWith(`${QUELL_VERZEICHNIS}/`));
+      if (h.sonstige.length > quelle.length) zeilen.push("Übrige .claude-Dateien (Hooks, Einstellungen, andere Skills) gelten erst nach einem Session-Neustart.");
+      if (quelle.length) zeilen.push("Geänderte Skill-Quellen unter .agents/skills/ gelten ab dem nächsten Skill-Aufruf (der Zeiger verweist auf die Quelle).");
     }
   }
   // Im Klartext-Modus (--text, Skill-Schritt 0) steht die Node-Version schon im SessionStart-Kontext, node_modules nur nach einer Lock-Änderung dieses Syncs.

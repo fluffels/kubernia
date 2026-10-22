@@ -155,7 +155,7 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
       );
     }
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/agents/")));
-    assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/skills/")));
+    assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".agents/skills/")));
     // Die Skill-Quellen unter .agents/skills/ (#1848) liegen im Scan: forum steht dort als Datei, auch ohne Verweis.
     assert.ok(CLAUDE_DATEIEN.includes(".agents/skills/forum/SKILL.md"), "Quelle forum fehlt im Scan");
     // Bewusst KEINE Pflicht auf ein CLAUDE.md-Ziel: diese Verweise sollen mit #1086/#1087 aussterben.

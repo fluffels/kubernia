@@ -14,12 +14,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { parseFrontmatter } from "./docs-gen/markdown.mjs";
 
 export const QUELL_VERZEICHNIS = ".agents/skills";
 export const WERKZEUGE = { claude: ".claude/skills" };
 export const ZEIGER_MARKE = "<!-- skills-sync: generierter Skill-Zeiger, nicht von Hand ändern (npm run skills:sync) -->";
-/** Volltext-Skills, die noch nicht umgezogen sind: Ordnername → Ticket des Umzugs. Nur Schrumpfen. */
-export const UEBERGANG = { factory: "#1850", "factory-ticket": "#1850" };
 const FIX = "npm run skills:sync";
 const FIX_PRUNE = "npm run skills:sync -- --prune";
 
@@ -34,16 +33,13 @@ export function frontmatterBlock(text) {
   return ende < 0 ? null : zeilen.slice(0, ende + 1).join("\n");
 }
 
-/** Felder des Frontmatters aus `key: value`-Zeilen; Kommentarzeilen (`#`) zählen nicht. */
-export function frontmatterFelder(text) {
-  const block = frontmatterBlock(text);
-  const felder = {};
-  if (!block) return felder;
-  for (const zeile of block.split("\n").slice(1, -1)) {
-    const m = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(zeile);
-    if (m) felder[m[1]] = m[2].trim();
-  }
-  return felder;
+/** Quelle brauchbar? `null` oder die Meldung, warum nicht (Frontmatter-Felder über `parseFrontmatter` der Doku-Generatoren). */
+export function quellProblem(q) {
+  if (q.text === null) return "Ordner ohne SKILL.md";
+  if (!frontmatterBlock(q.text)) return "Quelle ohne Frontmatter";
+  const felder = parseFrontmatter(frontmatterBlock(q.text));
+  const fehlt = ["name", "description"].filter((k) => !felder[k]);
+  return fehlt.length ? `Quelle ohne ${fehlt.join(" und ")} im Frontmatter` : null;
 }
 
 /** Gewünschter Zeiger-Text zu einer Quelle (immer LF). */
@@ -52,8 +48,11 @@ export function zeigerText(name, quelltext) {
   return `${block}\n\n${ZEIGER_MARKE}\nLies \`${QUELL_VERZEICHNIS}/${name}/SKILL.md\` und folge ihm.\n`;
 }
 
-/** Prüft den Stand: quellen `{ordner, text|null}`, zeiger `{ordner, text|null, dateien}`; Befunde `{datei, meldung, fix}`. */
-export function pruefeSkills({ quellen, zeiger, uebergang = UEBERGANG, ziel = WERKZEUGE.claude }) {
+/**
+ * Prüft den Stand: quellen `{ordner, text|null}`, zeiger `{ordner, text|null, dateien}`, lose = Dateien direkt unter dem
+ * Werkzeug-Verzeichnis; Befunde `{datei, meldung, fix}`. Unter dem Werkzeug-Verzeichnis liegt nur ein Zeiger (kein Volltext, keine lose Datei).
+ */
+export function pruefeSkills({ quellen, zeiger, lose = [], ziel = WERKZEUGE.claude }) {
   const befunde = [];
   const quellOrdner = new Set(quellen.map((q) => q.ordner));
   const zeigerNach = new Map(zeiger.map((z) => [z.ordner, z]));
@@ -61,11 +60,8 @@ export function pruefeSkills({ quellen, zeiger, uebergang = UEBERGANG, ziel = WE
 
   for (const q of quellen) {
     const quelle = `${QUELL_VERZEICHNIS}/${q.ordner}/SKILL.md`;
-    if (q.text === null) { melde(quelle, "Ordner ohne SKILL.md"); continue; }
-    const felder = frontmatterFelder(q.text);
-    if (!frontmatterBlock(q.text)) { melde(quelle, "Quelle ohne Frontmatter"); continue; }
-    const fehlt = ["name", "description"].filter((k) => !felder[k]);
-    if (fehlt.length) { melde(quelle, `Quelle ohne ${fehlt.join(" und ")} im Frontmatter`); continue; }
+    const problem = quellProblem(q);
+    if (problem) { melde(quelle, problem); continue; }
     const z = zeigerNach.get(q.ordner);
     const datei = `${ziel}/${q.ordner}/SKILL.md`;
     if (!z || z.text === null) melde(datei, `Zeiger fehlt für die Quelle ${quelle}`);
@@ -79,18 +75,11 @@ export function pruefeSkills({ quellen, zeiger, uebergang = UEBERGANG, ziel = WE
     if (quellOrdner.has(z.ordner)) continue;
     const datei = `${ziel}/${z.ordner}/SKILL.md`;
     if (z.text !== null && traegtMarke(z.text)) melde(datei, "Zeiger ohne Quelle", FIX_PRUNE);
-    else if (!(z.ordner in uebergang)) melde(datei, "Volltext-Skill unter dem Werkzeug-Verzeichnis, nicht in der Übergangsliste (Quelle nach .agents/skills/ verlegen)");
+    else melde(datei, "Volltext-Skill unter dem Werkzeug-Verzeichnis (Quelle nach .agents/skills/ verlegen, hier nur ein Zeiger)");
   }
 
-  for (const [name, ticket] of Object.entries(uebergang)) {
-    const eintrag = `Übergangsliste in scripts/skills-sync.mjs: ${name}`;
-    if (!/^#\d+$/.test(ticket)) melde(eintrag, "Eintrag ohne Ticket (#<nr>)");
-    if (quellOrdner.has(name)) melde(eintrag, "Eintrag veraltet: der Skill hat schon eine Quelle (Eintrag streichen)");
-    else {
-      const z = zeigerNach.get(name);
-      if (!z || z.text === null || traegtMarke(z.text)) melde(eintrag, "Eintrag veraltet: kein Volltext-Skill dieses Namens (Eintrag streichen)");
-    }
-  }
+  for (const datei of lose) melde(`${ziel}/${datei}`, "lose Datei unter dem Werkzeug-Verzeichnis (nur Zeiger-Ordner erlaubt)", "Datei entfernen oder als Skill-Quelle unter .agents/skills/ ablegen");
+
   return befunde;
 }
 
@@ -99,7 +88,9 @@ const liesOderNull = (pfad) => (existsSync(pfad) ? readFileSync(pfad, "utf8") : 
 
 /** Liest den Stand per Dateisystem (nur die Ordner direkt unter den beiden Wurzeln). */
 export function liesStand(wurzel, ziel = WERKZEUGE.claude) {
+  const lose = existsSync(join(wurzel, ziel)) ? readdirSync(join(wurzel, ziel), { withFileTypes: true }).filter((e) => !e.isDirectory()).map((e) => e.name) : [];
   return {
+    lose,
     quellen: unterordner(join(wurzel, QUELL_VERZEICHNIS)).map((ordner) => ({ ordner, text: liesOderNull(join(wurzel, QUELL_VERZEICHNIS, ordner, "SKILL.md")) })),
     zeiger: unterordner(join(wurzel, ziel)).map((ordner) => ({
       ordner,
@@ -110,17 +101,16 @@ export function liesStand(wurzel, ziel = WERKZEUGE.claude) {
 }
 
 /** Der Lauf: `{ befunde, unbrauchbar, geschrieben, geloescht, gemeldet }`. `check` schreibt und löscht nie. */
-export function lauf({ wurzel, tool = "claude", check = false, prune = false, uebergang = UEBERGANG }) {
+export function lauf({ wurzel, tool = "claude", check = false, prune = false }) {
   if (!Object.hasOwn(WERKZEUGE, tool)) throw new Error(`unbekanntes Tool: ${tool}`);
   const ziel = WERKZEUGE[tool];
   const stand = liesStand(wurzel, ziel);
-  const befunde = pruefeSkills({ ...stand, uebergang, ziel });
+  const befunde = pruefeSkills({ ...stand, ziel });
   const ergebnis = { befunde, unbrauchbar: [], geschrieben: [], geloescht: [], gemeldet: [] };
   if (check) return ergebnis;
   const zeigerNach = new Map(stand.zeiger.map((z) => [z.ordner, z]));
   for (const q of stand.quellen) {
-    const felder = q.text === null ? {} : frontmatterFelder(q.text);
-    if (q.text === null || !frontmatterBlock(q.text) || !felder.name || !felder.description) { ergebnis.unbrauchbar.push(q.ordner); continue; }
+    if (quellProblem(q)) { ergebnis.unbrauchbar.push(q.ordner); continue; }
     const z = zeigerNach.get(q.ordner);
     if (z && z.text !== null && !traegtMarke(z.text)) { ergebnis.gemeldet.push(`${ziel}/${q.ordner}`); continue; }
     const soll = zeigerText(q.ordner, q.text);
