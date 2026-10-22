@@ -453,7 +453,7 @@ describe("Kommandozeile", () => {
 // Scan-Wächter (#1849): Verweise auf die Zeiger-Datei einer Skill-Quelle (Verweis mit Anker landet im Zeiger, der keine
 // Überschriften trägt; ein Test, der den Zeiger liest, prüft nichts) sind rot. Gilt für jede Quelle unter `.agents/skills/`.
 // Grenzen: geprüft werden die Pfadformen `.claude/skills/<name>/SKILL.md` und `](../<name>/SKILL.md` (nur in Dateien unter
-// `.claude/skills/` und `.agents/skills/`) in versionierten Textdateien; Ordnerform ohne SKILL.md, der Skill-Name ohne Pfad und
+// `.claude/skills/`; unter `.agents/skills/` führt `../<name>/` zur Quelle) in versionierten Textdateien; Ordnerform ohne SKILL.md, der Skill-Name ohne Pfad und
 // Skills ohne Quelle (Volltext in der Übergangsliste) zählen nicht.
 describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", () => {
   /** Geschlossene Ausnahmen (Pfadpräfix → Grund). */
@@ -465,20 +465,36 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
     "test/harness/haupt-sync.test.ts": "Fixture eines Pfades in der Änderungsliste",
   };
   const namen = sync.liesStand(WURZEL).quellen.map((q) => q.ordner);
-  const dateien = repoDateien().filter((f) => /\.(md|ts|mjs|js|json|yml)$/.test(f) && !Object.keys(AUSNAHMEN).some((p) => f.startsWith(p)));
-  const funde = (): string[] => {
-    const out: string[] = [];
-    for (const name of namen) {
-      const voll = new RegExp(String.raw`\.claude/skills/${maskiere(name)}/SKILL\.md`);
-      const relativ = new RegExp(String.raw`\]\(\.\./${maskiere(name)}/SKILL\.md`);
-      for (const f of dateien) {
-        const text = lies(f);
-        const imSkillOrdner = f.startsWith(".claude/skills/") || f.startsWith(".agents/skills/");
-        if (voll.test(text) || (imSkillOrdner && relativ.test(text))) out.push(`${f} -> ${name}`);
-      }
-    }
-    return out;
+  const gescannt = (f: string): boolean => /\.(md|ts|mjs|js|json|yml)$/.test(f) && !Object.keys(AUSNAHMEN).some((p) => f.startsWith(p));
+  const dateien = repoDateien().filter(gescannt);
+  /** Verweist `text` der Datei `pfad` auf den Zeiger von `name`? Die relative Form führt nur unter `.claude/skills/` zum Zeiger (unter `.agents/skills/` auf die Quelle). */
+  const verweistAufZeiger = (name: string, pfad: string, text: string): boolean => {
+    const voll = new RegExp(String.raw`\.claude/skills/${maskiere(name)}/SKILL\.md`);
+    const relativ = new RegExp(String.raw`\]\(\.\./${maskiere(name)}/SKILL\.md`);
+    return voll.test(text) || (pfad.startsWith(".claude/skills/") && relativ.test(text));
   };
+  const funde = (): string[] =>
+    namen.flatMap((name) => dateien.filter((f) => verweistAufZeiger(name, f, lies(f))).map((f) => `${f} -> ${name}`));
+
+  test("Prädikat: volle Form überall ein Fund, relative Form nur unter .claude/skills", () => {
+    expect(verweistAufZeiger("forum", "docs/x.md", "siehe .claude/skills/forum/SKILL.md#a")).toBe(true);
+    expect(verweistAufZeiger("forum", ".claude/skills/x/ablauf.md", "[f](../forum/SKILL.md#a)")).toBe(true);
+    expect(verweistAufZeiger("forum", "docs/x.md", "[f](../forum/SKILL.md#a)")).toBe(false);
+    expect(verweistAufZeiger("forum", ".agents/skills/x/SKILL.md", "[f](../forum/SKILL.md#a)")).toBe(false);
+  });
+
+  test("Prädikat: Ordnerform, anderer Skill und Quellpfad sind kein Fund", () => {
+    expect(verweistAufZeiger("forum", "docs/x.md", "`.claude/skills/forum/` ist der Zeiger")).toBe(false);
+    expect(verweistAufZeiger("forum", "docs/x.md", ".claude/skills/forum-leser/SKILL.md")).toBe(false);
+    expect(verweistAufZeiger("forum", "docs/x.md", ".agents/skills/forum/SKILL.md")).toBe(false);
+  });
+
+  test("Ausnahmen: ADR bleibt ungescannt, ein Nachbar ohne Ausnahme und ein Skill ohne Quelle nicht", () => {
+    expect(gescannt("docs/adr/0022-x.md")).toBe(false);
+    expect(gescannt("docs/x.md")).toBe(true);
+    expect(gescannt("docs/bild.png")).toBe(false);
+    for (const name of Object.keys(sync.UEBERGANG)) expect(namen, name).not.toContain(name);
+  });
 
   test("der Scan ist nicht leer und kennt forum und review-lenses als Quellen", () => {
     expect(namen).toEqual(expect.arrayContaining(["forum", "review-lenses"]));
