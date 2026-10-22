@@ -530,16 +530,15 @@ describe("ungültige sprache: jeder Einstieg endet mit ✖-Zeile und Fix, ohne S
   ];
   const mitSprache = (sprache: unknown): string => {
     const d = tmp();
-    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
-    mkdirSync(join(d, ".factory"));
-    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...pc.ladeProjektConfig(), sprache }));
-    return d;
+    const pfad = join(d, "projekt.json");
+    writeFileSync(pfad, JSON.stringify({ ...pc.ladeProjektConfig(), sprache }));
+    return pfad;
   };
   for (const [name, sprache] of [["leer", {}], ["ohne Wörter", { spezifikation: {} }]] as const) {
     test(`sprache ${name}: ✖, Fix-Zeile, kein Stacktrace, Exit ungleich 0`, () => {
-      const d = mitSprache(sprache);
+      const pfad = mitSprache(sprache);
       for (const args of EINSTIEGE) {
-        const r = spawnSync(process.execPath, [join(d, "scripts", args[0] ?? ""), ...args.slice(1)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+        const r = spawnSync(process.execPath, [join(WURZEL, "scripts", args[0] ?? ""), ...args.slice(1), "--config", pfad], { encoding: "utf8", cwd: WURZEL, timeout: 20_000 });
         const text = `${r.stderr}${r.stdout}`;
         const wer = `${args.join(" ")}: ${text.slice(0, 300)}`;
         assert.notEqual(r.status, 0, wer);
