@@ -6,6 +6,11 @@
  *   node scripts/spezifikation.mjs pruefen --body-datei <pfad>
  *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]
  *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
+ *   node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"
+ *
+ * `gescheitert` meldet eine Reparatur, die nicht gelang (Exit 1 oder 3, Body nicht nachziehbar): eine Zeile `- [ ] <Datum> Reparatur gescheitert: #<nr> (<Mängel>). Fix: …`
+ * als Kommentar ins jüngste ungeclaimte Harness-Sammelticket (Exit 1: keins da, Fix: `sammelticket-anlegen.mjs harness`). Steht die Zeile zu dieser Nummer schon
+ * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post. Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
  *
  * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
  * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
@@ -20,8 +25,9 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
-import { istFremdeingang } from "./fremdtext-lib.mjs";
+import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { configAusAufruf, labelAus, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
@@ -46,6 +52,7 @@ const BEFEHLE = {
     positionale: 0,
   },
   reparieren: { optionen: { "body-datei": { type: "string" } }, positionale: 1 },
+  gescheitert: { optionen: { mangel: { type: "string" } }, positionale: 1 },
 };
 
 const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
@@ -57,6 +64,10 @@ const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(
 export function aufrufPruefen(argv) {
   const r = befehlLesen(argv, BEFEHLE);
   if (r.fehler) return { fehler: r.fehler.text };
+  if (r.befehl === "gescheitert") {
+    if (positiveZahl(r.positionale[0]) === null) return { fehler: "gescheitert braucht eine Ticketnummer" };
+    if (String(r.werte.mangel ?? "").trim() === "") return { fehler: "gescheitert braucht --mangel \"<text>\"" };
+  }
   const blocker = (r.werte.blocker ?? []).map(positiveZahl);
   if (blocker.includes(null)) return { fehler: "--blocker braucht eine Ticketnummer (--blocker <nr>, mehrfach möglich)" };
   return { befehl: r.befehl, werte: { ...r.werte, label: r.werte.label ?? [], ...(r.befehl === "anlegen" ? { blocker } : {}) }, positional: r.positionale };
@@ -79,6 +90,39 @@ function pruefen(werte, io, sprache) {
   if (b.fehler) return aufrufFehler(b.fehler);
   const maengel = spezifikationsMaengel(b.body, sprache);
   return maengel.length === 0 ? ergebnis(0, "Spezifikation vollständig\n") : ergebnis(1, "", `✖ Spezifikation unvollständig:\n${liste(maengel)}\n`);
+}
+
+const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ").trim();
+const gescheitertSchluessel = (nr) => `Reparatur gescheitert: #${nr} (`;
+
+/** Die Sammelticket-Zeile zu einer gescheiterten Reparatur von #`nr` (`mangel` einzeilig). Pur. */
+export const gescheitertZeile = ({ nr, mangel, heute }) =>
+  `- [ ] ${heute} ${gescheitertSchluessel(nr)}${einzeilig(mangel)}). Fix: Body über den Reparaturweg nachziehen`;
+
+/** Steht zu #`nr` schon eine offene Zeile (`- [ ]`) eines vertrauten Autors in `kommentare` (`[{ user, body }]`)? Pur. */
+export function gescheitertBekannt(nr, kommentare, owner) {
+  const schluessel = gescheitertSchluessel(nr);
+  return kommentare.some(
+    (k) => istVertraut(k?.user ?? null, owner) && String(k?.body ?? "").split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)),
+  );
+}
+
+function gescheitert(werte, nrText, io) {
+  const nr = positiveZahl(nrText);
+  let kontext;
+  try {
+    kontext = io.sammelKontext();
+  } catch (e) {
+    return aufrufFehler(`Sammelticket nicht lesbar: ${fehlerText(e)}`);
+  }
+  if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness\n");
+  if (gescheitertBekannt(nr, kontext.kommentare, io.owner)) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
+  try {
+    io.postZeilen(kontext.ziel, gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute() }));
+  } catch (e) {
+    return aufrufFehler(`Zeile nicht gepostet: ${fehlerText(e)}`);
+  }
+  return ergebnis(0, `Zeile für #${nr} in #${kontext.ziel} gepostet\n`);
 }
 
 function nachholBefehl(werte, nach, nr) {
@@ -163,6 +207,7 @@ function reparieren(werte, nrText, io, sprache) {
 export function fuehreAus(argv, io) {
   const p = aufrufPruefen(argv);
   if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
+  if (p.befehl === "gescheitert") return gescheitert(p.werte, p.positional[0], io);
   let sprache;
   try {
     sprache = spracheAus(io.config).spezifikation; // fehlt sie, bricht das Werkzeug ab: kein stiller Deutsch-Standardwert
@@ -200,6 +245,12 @@ const echteIo = (config) => { // Fabrik: erst nach bestandener Aufruf- und Confi
       const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
       execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
     },
+    sammelKontext: () => {
+      const k = ladeSammelKontext();
+      return { ziel: waehleSammelticket(k.offene)?.number ?? null, kommentare: k.kommentare };
+    },
+    postZeilen,
+    heute: () => new Date().toISOString().slice(0, 10),
     ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
     bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
   };
