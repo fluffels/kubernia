@@ -74,10 +74,10 @@ export function pruefeSkills({ quellen, zeiger, lose = [], ziel = WERKZEUGE.clau
     if (quellOrdner.has(z.ordner)) continue;
     const datei = `${ziel}/${z.ordner}/SKILL.md`;
     if (z.text !== null && traegtMarke(z.text)) melde(datei, "Zeiger ohne Quelle", FIX_PRUNE);
-    else melde(datei, "Volltext-Skill unter dem Werkzeug-Verzeichnis (Quelle nach .agents/skills/ verlegen, hier nur ein Zeiger)");
+    else melde(datei, `Volltext-Skill unter dem Werkzeug-Verzeichnis (Quelle nach ${QUELL_VERZEICHNIS}/ verlegen, hier nur ein Zeiger)`);
   }
 
-  for (const datei of lose) melde(`${ziel}/${datei}`, "lose Datei unter dem Werkzeug-Verzeichnis (nur Zeiger-Ordner erlaubt)", "Datei entfernen oder als Skill-Quelle unter .agents/skills/ ablegen");
+  for (const datei of lose) melde(`${ziel}/${datei}`, "lose Datei unter dem Werkzeug-Verzeichnis (nur Zeiger-Ordner erlaubt)", `Datei entfernen oder als Skill-Quelle unter ${QUELL_VERZEICHNIS}/ ablegen`);
 
   return befunde;
 }

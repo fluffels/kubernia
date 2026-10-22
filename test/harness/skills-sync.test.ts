@@ -494,7 +494,6 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
   /** Geschlossene Ausnahmen (Pfadpräfix → Grund). */
   const AUSNAHMEN: Record<string, string> = {
     "docs/adr/": "ADRs sind historisch, nie umgeschrieben",
-    "README.md": "vom docs-gen erzeugte Generatorstelle",
     ".factory/besitz.json": "führt den Zeiger als eigene Einheit",
     "test/harness/skills-sync.test.ts": "Fixtures dieses Wächters",
     "test/harness/haupt-sync.test.ts": "Fixture eines Pfades in der Änderungsliste",
@@ -524,9 +523,10 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
     expect(verweistAufZeiger("forum", "docs/x.md", ".agents/skills/forum/SKILL.md")).toBe(false);
   });
 
-  test("Ausnahmen: ADR bleibt ungescannt, ein Nachbar ohne Ausnahme und ein Skill ohne Quelle nicht", () => {
+  test("Ausnahmen: ADR bleibt ungescannt, README und ein Nachbar ohne Ausnahme werden gescannt, factory und factory-ticket sind Quellen", () => {
     expect(gescannt("docs/adr/0022-x.md")).toBe(false);
     expect(gescannt("docs/x.md")).toBe(true);
+    expect(gescannt("README.md")).toBe(true);
     expect(gescannt("docs/bild.png")).toBe(false);
     expect(namen).toEqual(expect.arrayContaining(["factory", "factory-ticket"]));
   });
@@ -538,5 +538,43 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
 
   test("keine versionierte Datei verweist auf den Zeiger einer Quelle", () => {
     expect(funde()).toEqual([]);
+  });
+});
+
+// Scan-Wächter (#1866): die Skill-Pfade stehen als Code-Literal nur in `scripts/skill-pfade.mjs`; alle anderen Skripte importieren
+// sie von dort (eine zweite Schreibweise driftet still). Grenzen: geprüft werden versionierte `.mjs`/`.cjs`/`.js`/`.ts`-Dateien
+// außerhalb von `test/` (Testfixtures nennen Pfade bewusst wörtlich); Kommentarzeilen (`//`, `/*`, ` *`) und Zeilenenden-
+// Kommentare zählen nicht, ein in Anführungszeichen zusammengesetzter Pfad (`".agents/" + "skills"`) bleibt unerkannt.
+describe("Skill-Pfade stehen als Code-Literal nur in skill-pfade.mjs (#1866)", () => {
+  const PFAD = /\.agents\/skills|\.claude\/skills/;
+  const LIB = "scripts/skill-pfade.mjs";
+  /** Zeilen mit dem Pfad außerhalb von Kommentaren. Pur. */
+  const codeTreffer = (text: string): string[] =>
+    text
+      .split(/\r?\n/)
+      .filter((z) => !/^\s*(\/\/|\/\*|\*)/.test(z))
+      .map((z) => z.replace(/\s\/\/ .*$/, ""))
+      .filter((z) => PFAD.test(z));
+  const kandidaten = (): string[] => repoDateien().filter((f) => /\.(mjs|cjs|js|ts)$/.test(f) && !f.startsWith("test/"));
+
+  test("Prädikat: Literal im Code ist ein Treffer, Kommentar und Konstantennutzung nicht", () => {
+    expect(codeTreffer('const a = ".agents/skills";')).toHaveLength(1);
+    expect(codeTreffer("const m = `${x}/.claude/skills/y`;")).toHaveLength(1);
+    expect(codeTreffer("// siehe .agents/skills/x")).toEqual([]);
+    expect(codeTreffer(" * Quelle `.claude/skills`")).toEqual([]);
+    expect(codeTreffer("const b = 1; // .agents/skills")).toEqual([]);
+    expect(codeTreffer("const c = `${QUELL_VERZEICHNIS}/x`;")).toEqual([]);
+  });
+
+  test("die Lib führt beide Literale, der Scan ist nicht leer", () => {
+    expect(QUELL_VERZEICHNIS).toBe(".agents/skills");
+    expect(ZEIGER_WURZEL).toBe(".claude/skills");
+    expect(codeTreffer(lies(LIB))).toHaveLength(2);
+    expect(kandidaten().length).toBeGreaterThan(50);
+  });
+
+  test("kein anderer Code nennt die Pfade als Literal", () => {
+    const funde = kandidaten().filter((f) => f !== LIB && codeTreffer(lies(f)).length > 0);
+    expect(funde).toEqual([]);
   });
 });
