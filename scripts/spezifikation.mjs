@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
-import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { configAusAufruf, labelAus, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { blockerNummern, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
@@ -188,8 +188,7 @@ export function ankerPruefung({ nach, labels }, lade, config) {
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
-const echteIo = () => { // Fabrik: erst nach bestandener Aufruf-Prüfung aufgerufen (`direktaufruf`)
-  const config = ladeProjektConfig();
+const echteIo = (config) => { // Fabrik: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`)
   return {
     owner: OWNER,
     config,
@@ -208,11 +207,12 @@ const echteIo = () => { // Fabrik: erst nach bestandener Aufruf-Prüfung aufgeru
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1791).
-  direktaufruf(process.argv.slice(2), {
-    pruefe: aufrufPruefen,
-    fehlerErgebnis: (argv) => fuehreAus(argv, null),
+  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  direktaufruf(args, {
+    pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufPruefen(argv)),
+    fehlerErgebnis: (argv) => (configFehler ? aufrufFehler(configFehler) : fuehreAus(argv, null)),
     vorbereiten: () => mitKontingent("spezifikation", { arten: ["core"] }),
-    io: echteIo,
+    io: () => echteIo(config),
     fuehreAus,
   });
 }

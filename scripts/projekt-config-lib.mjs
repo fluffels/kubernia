@@ -344,6 +344,21 @@ export function trenneConfigArg(argv) {
   return { args: argv.filter((_, k) => !belegt.has(k)), pfad: t.value };
 }
 
+/**
+ * Rahmen für `--config <pfad>` im Direktaufruf eines Werkzeugs: trennt das Flag ab, lädt die Config und liefert `{ args, config }` oder
+ * `{ args, fehler }` (Text ohne `✖`-Präfix: fehlender Pfad bzw. Ladefehler mit Pfad, Schlüssel und `Fix:`-Zeile). Der Aufrufer meldet den Fehler
+ * mit Exit 2, bevor er etwas liest oder schreibt. Ohne `--config` gilt die Config des Repos. `lade` ist die Test-Naht.
+ */
+export function configAusAufruf(argv, { lade = ladeProjektConfig } = {}) {
+  const getrennt = trenneConfigArg(argv);
+  if (getrennt.fehler) return { args: [...argv], fehler: getrennt.fehler.replace(/^✖ /, "") };
+  try {
+    return { args: getrennt.args, config: lade({ pfad: getrennt.pfad }) };
+  } catch (e) {
+    return { args: getrennt.args, fehler: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 const CLI_AUFRUF = "Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>";
 
 /** Kommandozeile; gibt den Exit-Code zurück. */

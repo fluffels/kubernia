@@ -31,7 +31,7 @@ import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -329,13 +329,14 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
-  direktaufruf(process.argv.slice(2), {
-    pruefe: aufrufLesen,
+  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  direktaufruf(args, {
+    pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufLesen(argv)),
     fehlerErgebnis: (_argv, vorab) => fehlerErgebnis(vorab.fehler),
     vorbereiten: () => mitKontingent("naechstes-ticket", { arten: ["core"] }), // nur REST, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
     io: () => {
       try {
-        return echteIo();
+        return echteIo({ config });
       } catch (e) {
         return { configFehler: e instanceof Error ? e.message : String(e) }; // `fuehreAus` unten meldet die Config-Ursache (Exit 2)
       }
