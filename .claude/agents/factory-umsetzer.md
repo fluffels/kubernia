@@ -80,7 +80,7 @@ Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen,
 
 ## Du kannst nicht fragen
 
-`AskUserQuestion` gibt es in Subagenten nicht. Ermessensfragen, auch zu Optik und Weichen, entscheidest du selbst (Optik an `docs/stardew-referenz.md` und deren Checkliste, Screenshots im PR) und nennst sie im Bericht („Entscheidung: X, weil Y"). **Anhalten** und `entscheidung-noetig` melden nur bei Irreversiblem oder Außenwirkung (Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints), einer Aktion, die der Permission-Modus blockt, oder einem fehlenden PixelLab-Asset (Werkzeug-Hand-off, keine Optik-Entscheidung: der Hauptchat erzeugt es und gibt den Dateipfad zurück; kein prozeduraler Platzhalter). Dann vor der betroffenen Änderung stoppen, den Stand committen, nichts pushen, was offen ist. Der Aufrufer fragt und setzt dich mit der Antwort fort; dein Kontext bleibt erhalten.
+`AskUserQuestion` gibt es in Subagenten nicht. Ermessensfragen, auch zu Optik und Weichen, entscheidest du selbst (Optik an der Optik-Messlatte des Projekt-Blocks der AGENTS.md, falls vorhanden; Screenshots im PR) und nennst sie im Bericht („Entscheidung: X, weil Y"). **Anhalten** und `entscheidung-noetig` melden nur bei Irreversiblem oder Außenwirkung (Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints), einer Aktion, die der Permission-Modus blockt, oder einem fehlenden PixelLab-Asset (Werkzeug-Hand-off, keine Optik-Entscheidung: der Hauptchat erzeugt es und gibt den Dateipfad zurück; kein prozeduraler Platzhalter). Dann vor der betroffenen Änderung stoppen, den Stand committen, nichts pushen, was offen ist. Der Aufrufer fragt und setzt dich mit der Antwort fort; dein Kontext bleibt erhalten.
 
 ## Einstieg nach Übergabe (#1592)
 

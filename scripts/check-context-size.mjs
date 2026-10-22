@@ -6,7 +6,7 @@
  *
  * Seit #1088 zählt JEDE AGENTS.md im Repo, nicht nur die Wurzel: Claude Code (und andere
  * Tools) laden eine modul-lokale AGENTS.md automatisch, sobald dort eine Datei gelesen
- * wird. Ohne Messung wären sie eine neue, ungebremste On-Demand-Quelle – bei Stardew-Scope
+ * wird. Ohne Messung wären sie eine neue, ungebremste On-Demand-Quelle – bei wachsendem Umfang
  * mit vielen Bereichen genau die Stelle, an die das Wurzel-Gate den Inhalt hindrängt.
  * Modul-lokale Dateien bekommen ohne eigenen Eintrag MODULE_AGENTS_BUDGET (Default statt
  * Pflicht-Registrierung: der Walk misst jede neue Datei ohnehin sofort, eine Registrierung

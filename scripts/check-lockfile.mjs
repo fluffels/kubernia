@@ -45,7 +45,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Die dependency-Blöcke, die `packages[""]` des Lockfiles 1:1 aus `package.json`
  *  spiegeln muss. Alle vier abgedeckt (nicht nur die heute genutzten
  *  dependencies/devDependencies), damit ein künftig ergänzter Block — z.B.
- *  optionalDependencies bei Stardew-Scope — automatisch mitbewacht wird. */
+ *  optionalDependencies bei wachsendem Umfang — automatisch mitbewacht wird. */
 export const DEP_BUCKETS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
 
 /** Vergleicht `package.json` gegen die Wurzel `packages[""]` des Lockfiles. Pure —
