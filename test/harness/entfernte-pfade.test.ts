@@ -159,31 +159,49 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
 
   describe("Schnappschuss-Block", () => {
     const rest = "der Skill kubernia-workflow";
+    const datum = "Stand 2026-10-01";
     const start = SCHNAPPSCHUSS_START;
     const ende = SCHNAPPSCHUSS_ENDE;
     const pruefe = (inhalt: string) => findeReste([{ pfad: "docs/s.md", inhalt }]);
 
-    test("ein Rest im Block ist kein Fund", () => {
-      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}`), []);
+    test("ein Rest im datierten Block ist kein Fund", () => {
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}\n${ende}`), []);
     });
     test("ein Rest nach dem Block ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}\n${rest}`), ["docs/s.md:4: Skill kubernia-workflow"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}\n${ende}\n${rest}`), ["docs/s.md:5: Skill kubernia-workflow"]);
     });
     test("ein Rest vor dem Block ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${rest}\n${start}\n${ende}`), ["docs/s.md:1: Skill kubernia-workflow"]);
+      assert.deepEqual(pruefe(`${rest}\n${start}\n${datum}\n${ende}`), ["docs/s.md:1: Skill kubernia-workflow"]);
     });
     test("ein Start ohne Ende ist ein Fund (fail-closed)", () => {
-      assert.deepEqual(pruefe(`${start}\n${rest}`), ["docs/s.md:1: Schnappschuss-Block ohne Ende"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}`), ["docs/s.md:1: Schnappschuss-Block ohne Ende"]);
     });
     test("ein verschachtelter Start ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${start}\n${start}\n${ende}`), ["docs/s.md:2: Schnappschuss-Block verschachtelt"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${start}\n${ende}`), ["docs/s.md:3: Schnappschuss-Block verschachtelt"]);
     });
     test("Marker nur allein auf der Zeile (getrimmt) zählen", () => {
-      assert.deepEqual(pruefe(`  ${start}  \n${rest}\n${ende}`), []);
+      assert.deepEqual(pruefe(`  ${start}  \n${datum}\n${rest}\n${ende}`), []);
       assert.equal(pruefe(`Text ${start}\n${rest}`).length, 1);
+    });
+    test("ein Block ohne ISO-Datum ist ein Fund (Schnappschuss ist datiert)", () => {
+      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
+    });
+    test("ein leerer Block ist ein Fund, ein Datum außerhalb des Blocks zählt nicht", () => {
+      assert.deepEqual(pruefe(`${start}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
+      assert.deepEqual(pruefe(`2026-10-01\n${start}\n${rest}\n${ende}\n2026-10-02`), ["docs/s.md:2: Schnappschuss-Block ohne Datum"]);
+    });
+    test("ein Datum in der Start- oder Endzeile zählt nicht, nur eines im Inneren", () => {
+      assert.deepEqual(pruefe(`${start}\n${rest}\n${ende} 2026-10-01`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
+    });
+    test("ein unvollständiges Datum zählt nicht", () => {
+      assert.deepEqual(pruefe(`${start}\n2026-10\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
+    });
+    test("mehrere Blöcke werden einzeln geprüft", () => {
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${ende}\n${start}\n${rest}\n${ende}`), ["docs/s.md:4: Schnappschuss-Block ohne Datum"]);
     });
     test("die Meldung erklärt Marker-Fehler", () => {
       assert.ok(meldungMitFix(pruefe(`${start}\n${rest}`)).includes("Schnappschuss-Block"));
+      assert.ok(meldungMitFix(pruefe(`${start}\n${rest}\n${ende}`)).includes("Datum"));
     });
   });
 
