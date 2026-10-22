@@ -3,7 +3,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -518,6 +518,37 @@ describe("Sprache als Projektwert (#1711)", () => {
     delete s.spezifikation;
     assert.match(mit(s).join("|"), /sprache\.spezifikation muss ein Objekt/);
   });
+});
+
+describe("ungültige sprache: jeder Einstieg endet mit ✖-Zeile und Fix, ohne Stacktrace (#1843)", { timeout: 60_000 }, () => {
+  const EINSTIEGE: string[][] = [
+    ["projekt-config.mjs", "repo"],
+    ["check-abnahme-nachweis.mjs"],
+    ["naechstes-ticket.mjs"],
+    ["spezifikation.mjs", "pruefen"],
+    ["abnahme.mjs"],
+  ];
+  const mitSprache = (sprache: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...pc.ladeProjektConfig(), sprache }));
+    return d;
+  };
+  for (const [name, sprache] of [["leer", {}], ["ohne Wörter", { spezifikation: {} }]] as const) {
+    test(`sprache ${name}: ✖, Fix-Zeile, kein Stacktrace, Exit ungleich 0`, () => {
+      const d = mitSprache(sprache);
+      for (const args of EINSTIEGE) {
+        const r = spawnSync(process.execPath, [join(d, "scripts", args[0] ?? ""), ...args.slice(1)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+        const text = `${r.stderr}${r.stdout}`;
+        const wer = `${args.join(" ")}: ${text.slice(0, 300)}`;
+        assert.notEqual(r.status, 0, wer);
+        assert.match(text, /✖/, wer);
+        assert.match(text, /Fix:/, wer);
+        assert.doesNotMatch(text, /^\s+at /m, wer);
+      }
+    });
+  }
 });
 
 describe("Struktur-Pfade als Projektwert (#1843)", () => {
