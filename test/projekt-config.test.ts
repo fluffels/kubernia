@@ -20,6 +20,7 @@ interface Pc {
   altEnvName(name: string, config: unknown): string | null;
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
   umschriftAus(config: unknown): string[];
+  strukturAus(config: unknown): { quelle: string; moduldoku: string };
   umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
 }
 const pc = rawPc as unknown as Pc;
@@ -516,5 +517,26 @@ describe("Sprache als Projektwert (#1711)", () => {
     const s = sprache();
     delete s.spezifikation;
     assert.match(mit(s).join("|"), /sprache\.spezifikation muss ein Objekt/);
+  });
+});
+
+describe("Struktur-Pfade als Projektwert (#1843)", () => {
+  const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), struktur: s });
+
+  test("strukturAus: liefert quelle und moduldoku der echten Config", () => {
+    assert.deepEqual(pc.strukturAus(pc.ladeProjektConfig()), { quelle: "src", moduldoku: "docs/module" });
+    assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: "docs/mod" } }), { quelle: "lib", moduldoku: "docs/mod" });
+  });
+  test("strukturAus: ohne Block, Nicht-Objekt oder leeren Pfad wirft mit Schlüssel und Fix-Zeile (kein stiller Standardwert)", () => {
+    const falsch = [{}, null, undefined, { struktur: null }, { struktur: "src" }, { struktur: [] }, { struktur: {} },
+      { struktur: { quelle: "", moduldoku: "d" } }, { struktur: { quelle: "s", moduldoku: " " } }, { struktur: { quelle: "s" } }, { struktur: { moduldoku: "d" } }];
+    for (const f of falsch) assert.throws(() => pc.strukturAus(f), /struktur[\s\S]*Fix:/, JSON.stringify(f));
+  });
+  test("struktur ist beim Laden optional, ein kaputter Block wird gemeldet", () => {
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({ quelle: "lib", moduldoku: "docs/mod" }), []);
+    assert.match(mit("src").join("|"), /struktur muss ein Objekt/);
+    assert.match(mit({ quelle: "", moduldoku: "d" }).join("|"), /struktur\.quelle muss ein nicht-leerer String/);
+    assert.match(mit({ quelle: "s", moduldoku: 3 }).join("|"), /struktur\.moduldoku muss ein nicht-leerer String/);
   });
 });

@@ -31,7 +31,7 @@ type Audit = {
 };
 
 const parseDeepDocMaps: (rootDir?: string) => Set<string> = checkDocMap.parseDeepDocMaps;
-const auditDocMap: () => Audit = checkDocMap.auditDocMap;
+const auditDocMap: (rootDir?: string, struktur?: { quelle: string; moduldoku: string }) => Audit = checkDocMap.auditDocMap;
 
 const audit = auditDocMap();
 
@@ -124,5 +124,44 @@ describe("Doku↔Code-Drift (#482/#907)", () => {
     // Vergleich (LABEL_TO_LAYER[label] vs. layerOf(file)) ungleich sein – sonst misst er nichts.
     assert.notEqual(LABEL_TO_LAYER["Präsentation"], layerOf("src/sim/state.ts"));
     assert.equal(LABEL_TO_LAYER["pure Domäne"], layerOf("src/sim/state.ts"));
+  });
+});
+
+describe("Struktur-Pfade aus der Config (#1843)", () => {
+  type Struktur = { quelle: string; moduldoku: string };
+  const api = checkDocMap as unknown as {
+    parseDeepDocMaps: (rootDir?: string, struktur?: Struktur) => Set<string>;
+    auditDocMap: (rootDir?: string, struktur?: Struktur) => Audit;
+  };
+
+  test("Fixture mit lib/ und eigener Moduldoku: gezählt und abgedeckt wird lib, nicht src", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-docmap-"));
+    try {
+      mkdirSync(join(wurzel, "lib", "sub"), { recursive: true });
+      mkdirSync(join(wurzel, "src"), { recursive: true });
+      mkdirSync(join(wurzel, "docs", "mod"), { recursive: true });
+      mkdirSync(join(wurzel, "docs", "module"), { recursive: true });
+      writeFileSync(join(wurzel, "lib", "a.ts"), "x\n");
+      writeFileSync(join(wurzel, "lib", "sub", "b.ts"), "x\n");
+      writeFileSync(join(wurzel, "lib", "t.d.ts"), "x\n");
+      writeFileSync(join(wurzel, "src", "c.ts"), "x\n");
+      writeFileSync(join(wurzel, "docs", "mod", "m.md"), "`lib/a.ts` ist da, `lib/weg.ts` nicht, `src/c.ts` gehört nicht zu lib.\n");
+      writeFileSync(join(wurzel, "docs", "module", "falsch.md"), "`lib/sub/b.ts` steht im falschen Ordner.\n");
+      const struktur = { quelle: "lib", moduldoku: "docs/mod" };
+      const a = api.auditDocMap(wurzel, struktur);
+      assert.deepEqual(a.modules, ["lib/a.ts", "lib/sub/b.ts"]);
+      assert.deepEqual(a.orphans, ["lib/sub/b.ts"]);
+      assert.deepEqual(a.ghosts, ["lib/weg.ts"]);
+      assert.deepEqual([...api.parseDeepDocMaps(wurzel, struktur)].sort(), ["lib/a.ts", "lib/weg.ts"]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+
+  test("ohne Struktur gilt die der Projekt-Config", () => {
+    assert.deepEqual(api.auditDocMap().modules, api.auditDocMap(undefined, { quelle: "src", moduldoku: "docs/module" }).modules);
   });
 });
