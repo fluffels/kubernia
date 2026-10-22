@@ -73,6 +73,8 @@ describe("ladeProjektOderAbbruch (board-lib, Config-Fehler beim Import)", () => 
 
   test("ein Nicht-Error als Wurf wird als Text gemeldet", () => {
     const err: string[] = [];
+    // Absicht: genau der Nicht-Error-Wurf ist der Zweig unter Test.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
     expect(() => B.ladeProjektOderAbbruch(() => { throw "kaputt"; }, { exit: stopp, err: (s) => err.push(s) })).toThrow("exit 2");
     expect(err).toEqual(["✖ kaputt"]);
   });

@@ -103,9 +103,9 @@ export function branchenModus(root, loeschen, {
 
 /**
  * Einstieg, liefert in jedem Pfad den Exit-Code zurück (nie `process.exit`; der Aufrufer setzt `process.exitCode`). `--branches` gibt den Code von
- * `modus(root, loeschen, { namen })` weiter (`loeschen` nur mit `--fix`). `deps` (Tests): `modus`, `root`.
+ * `modus(root, loeschen, { namen })` weiter (`loeschen` nur mit `--fix`). `deps` (Tests): `modus`, `root`, `diagnoseDeps` (Nähte von `diagnoseOrphans`, z. B. `execSync`).
  */
-export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))) } = {}) {
+export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))), diagnoseDeps = {} } = {}) {
   const { werte, fehler } = flagsLesen(argv, { fix: { type: "boolean" }, branches: { type: "boolean" } });
   if (fehler) {
     console.error(`${fehler.text}
@@ -128,7 +128,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);
 
-  const { ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = diagnoseOrphans(ROOT, { namen });
+  const { ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = diagnoseOrphans(ROOT, { ...diagnoseDeps, namen });
   if (!ok) {
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
     return 1;
