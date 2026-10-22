@@ -246,7 +246,7 @@ describe("docs-gen ohne eigene Registry: Kern plus config.generatoren (ADR 0022 
   });
 });
 
-describe("Kern-Schnitt:übertragbare Module importieren keinen Harness-Stack", () => {
+describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", () => {
   // Bekannte Grenze: erkannt werden statische `import`/`export … from`, `import("…")`, `require("…")` und `createRequire(…)("…")` mit
   // einfachen oder doppelten Anführungszeichen (#1428 Z12). Nicht erkannt: ein dynamischer Pfad (z.B. die Layers-Datei, die schichten.mjs
   // aus der Config lädt, bleibt erlaubt) und ein `createRequire`-Ergebnis, das erst in einer Variablen steht.

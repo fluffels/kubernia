@@ -84,7 +84,7 @@ npm run verify:kompakt   # Kette aus package.json › scripts.verify, alle Gates
 
 **Welche Lenses laufen — die Review-Staffel (#1265).** Der Sockel je Lens ist fix, gespart wird an der **Zahl** der Lenses. Die Regel:
 
-- **Runde 1:** Listet `git diff --name-only origin/main...HEAD` **nur `*.md`-Dateien** (auch Harness-Markdown), läuft **eine Lens 4 — Doku**. Sonst laufen **Lens 1–3**, ohne Größenschwelle: auch ein kleiner `src`-Diff kann das Save-Format brechen.
+- **Runde 1:** Listet `git diff --name-only origin/main...HEAD` **nur `*.md`-Dateien** (auch Harness-Markdown), läuft **eine Lens 4 — Doku**. Sonst laufen **Lens 1–3**, ohne Größenschwelle: auch ein kleiner `src`-Diff kann das persistierte Format brechen.
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/<praefixe.worktree><nr>-r<runde>-delta.patch"`), mit ihren Vorrunden-Blockern als Prüfliste; der volle Patch bleibt Referenz für gezielte Zugriffe. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit**.
 - **Runde 1 ist der erste Lens-Pass** und hat immer den vollen Satz der Diff-Art (Code: alle drei Brillen). Liefert eine Brille keinen Bericht, wird sie einmal auf demselben Stand nachgeholt, bevor gefixt wird; das ist kein eigener Pass. Rote `verify`-Fixe davor zählen nicht als Fix-Runde (eigene Grenze: drei Fix-Versuche, dann Hand-off).
 - **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` war rot), fiel eine Lens aus, hat die Diff-Art gewechselt oder wurde rebased: der volle Satz auf dem vollen Patch.

@@ -50,7 +50,12 @@ export async function ladeGeneratoren({ rootDir, config }) {
       throw new Error(`${wo} muss { datei, name } mit nicht leeren Zeichenketten sein`);
     const abs = isAbsolute(eintrag.datei) ? eintrag.datei : resolve(rootDir, eintrag.datei);
     if (!existsSync(abs)) throw new Error(`${wo}: Datei fehlt: ${eintrag.datei}`);
-    const modul = await import(pathToFileURL(abs).href);
+    let modul;
+    try {
+      modul = await import(pathToFileURL(abs).href);
+    } catch (e) {
+      throw new Error(`${wo}: ${eintrag.datei} lässt sich nicht laden: ${e instanceof Error ? e.message : String(e)}`);
+    }
     if (typeof modul[eintrag.name] !== "function") throw new Error(`${wo}: ${eintrag.datei} exportiert keine Funktion "${eintrag.name}"`);
     geladen[marker] = modul[eintrag.name];
   }

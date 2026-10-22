@@ -75,6 +75,7 @@ function runGenerator(cache, generators, name, ctx) {
 /**
  * Prüft (write=false) bzw. schreibt (write=true) alle Abschnitte.
  * Fail-closed: bei irgendeinem Fehler wird nichts geschrieben.
+ * `generators` ist standardmäßig nur die Kern-Registry; Projekt-Generatoren aus `config.generatoren` lädt `cli` (über `ladeGeneratoren`).
  */
 export function runDocsGen({ rootDir = ROOT, config, generators = GENERATORS, write = false }) {
   const stale = [];

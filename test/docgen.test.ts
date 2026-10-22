@@ -449,12 +449,20 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     const config = { generatoren: { "adr-liste": { datei: "g.mjs", name: "g" } } };
     await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({ "g.mjs": "export const g = () => 'x';" }), config }), /config\.generatoren\.adr-liste: "adr-liste" ist ein Kern-Generator/);
   });
-  test.each([["ohne name", { datei: "g.mjs" }], ["Zahl als datei", { datei: 5, name: "g" }], ["leerer name", { datei: "g.mjs", name: "" }], ["kein Objekt", "g.mjs"]])(
+  test.each([["ohne name", { datei: "g.mjs" }], ["Zahl als datei", { datei: 5, name: "g" }], ["leerer name", { datei: "g.mjs", name: "" }], ["kein Objekt", "g.mjs"], ["null", null], ["leere datei", { datei: "", name: "g" }]])(
     "ladeGeneratoren: Eintrag %s ist ein Formfehler",
     async (_n, eintrag) => {
       await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({ "g.mjs": "export const g = () => 'x';" }), config: { generatoren: { mein: eintrag } } }), /config\.generatoren\.mein muss \{ datei, name \}/);
     },
   );
+  test("ladeGeneratoren ohne config liefert die Kern-Registry", async () => {
+    const geladen = await registryApi.ladeGeneratoren({ rootDir: fixture({}) });
+    assert.deepEqual(Object.keys(geladen).sort(), Object.keys(registryApi.GENERATORS).sort());
+  });
+  test("ladeGeneratoren: ein Ladefehler der Datei nennt Marker und Pfad", async () => {
+    const rootDir = fixture({ "k.mjs": "export const g = => ;" });
+    await assert.rejects(registryApi.ladeGeneratoren({ rootDir, config: { generatoren: { mein: { datei: "k.mjs", name: "g" } } } }), /config\.generatoren\.mein: k\.mjs lässt sich nicht laden/);
+  });
   test("ladeGeneratoren: fehlende Datei nennt Marker und Pfad", async () => {
     await assert.rejects(registryApi.ladeGeneratoren({ rootDir: fixture({}), config: { generatoren: { mein: { datei: "x/fehlt.mjs", name: "g" } } } }), /config\.generatoren\.mein: Datei fehlt: x\/fehlt\.mjs/);
   });

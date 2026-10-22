@@ -48,7 +48,7 @@ Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, de
 
 **Ist-Zustand ist Übernahme per Kopie, kein Paket.** Zum Kopieren:
 
-- Kern: `scripts/docs-gen.mjs` (Engine), `scripts/docs-gen/markdown.mjs`, `adr.mjs`, `zeitleiste.mjs`, `schichten.mjs`, dazu `registry.mjs`: sie führt nur Kern- und Harness-Generatoren, eigene Generatoren des Projekts nennt die Config im Schlüssel `generatoren` (`{ <marker>: { datei, name } }`), eine eigene Registry ist nicht nötig.
+- Kern: `scripts/docs-gen.mjs` (Engine), `scripts/docs-gen/markdown.mjs`, `adr.mjs`, `zeitleiste.mjs`, `schichten.mjs`, dazu `registry.mjs`: sie führt nur Kern- und Harness-Generatoren, eigene Generatoren des Projekts nennt die Config im Schlüssel `generatoren` (`{ <marker>: { datei, name } }`), eine eigene Registry ist nicht nötig, wenn die Harness-Generatoren, die `registry.mjs` statisch importiert (`gates`, `diagramme`, `harness-inventar`, `harness-kennzahlen` samt deren Importen), mitkopiert werden; sonst übergibt das Projekt eigene `generators`.
 - Nicht Kern: `harness-inventar`, `harness-kennzahlen`, `diagramme` und `ruleset-spiegel` setzen Claude Code und GitHub voraus (`harness-kennzahlen` zählt zudem npm-Ketten und GitHub-Workflows); `gates` setzt npm-Skripte voraus (für einen anderen Task-Runner, etwa Make, ist ein eigener Generator nötig); `save-versionen` und die Quest-Generatoren sind Kubernia-spezifisch und stehen nicht in der Registry, sondern in der Config von Kubernia (`generatoren`). Welche Kern- und Harness-Generatoren es gibt, zeigt die gruppierte [Registry](../scripts/docs-gen/registry.mjs).
 
 **Was das Projekt festlegt (alles in einer Config-Datei, `--config <pfad>`):**
