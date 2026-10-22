@@ -1,6 +1,7 @@
 // Drift-Gate (ADR 0022 F9): ein Projekt ändert den Factory-Besitz nicht still.
 // `node scripts/check-factory-drift.mjs [--wurzel <pfad>]`; Exit 0 grün oder entfällt, 1 Drift, 2 Aufruf.
-// Referenz ist `.factory/sync-stand.json` (vom Sync geschrieben): Hash des Manifests und je Einheit. Ohne Sync-Stand ist das Projekt
+// Referenz ist `.factory/sync-stand.json` (vom Sync geschrieben): Hash des Manifests und je Einheit, dazu die Herkunft (`quelle.tag`,
+// `quelle.sauber`): ein Stand ohne Tag oder mit `sauber: false` (Entwurfs-Sync, Version 1) ist rot, der Weg ist ein Sync von einem Tag. Ohne Sync-Stand ist das Projekt
 // selbst Quelle des Besitzes, die Besitz-Prüfung entfällt mit einer Zeile. Die Projektwert-Stellen (aus der Config erzeugte Blöcke und
 // Frontmatter-Zeilen, `scripts/projektwerte.mjs`) werden immer gegen die Config geprüft, auch ohne Sync-Stand.
 import { existsSync, readFileSync } from "node:fs";
@@ -12,7 +13,9 @@ import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
-const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad>`), oder den Projektwert in `.factory/projekt.json` auslagern";
+const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
+
+const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`)";
 
 const BLOCK_HINWEIS = " (Projektergänzungen gehören außerhalb der Besitz-Marker)";
 
@@ -30,7 +33,7 @@ export function pruefeDrift(lies) {
   } catch {
     return rot(`${STAND_PFAD} ist kein gültiges JSON`);
   }
-  if (stand?.version !== 1 || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object") {
+  if ((stand?.version !== 1 && stand?.version !== 2) || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object") {
     return rot(`${STAND_PFAD} ist kaputt (Version, Manifest-Hash oder Einheiten fehlen)`);
   }
   const manifestText = lies(MANIFEST_PFAD);
@@ -43,6 +46,11 @@ export function pruefeDrift(lies) {
     return rot(`${MANIFEST_PFAD} ist kein gültiges JSON`);
   }
   const fehler = [];
+  // Herkunft (#1871): nur ein Sync von einem sauberen Tag gilt, auch ein Stand der Version 1 ist rot.
+  const tag = stand.quelle?.tag;
+  if (typeof tag !== "string" || tag === "") fehler.push(`Sync-Stand stammt nicht von einem Tag (tag fehlt, Version ${stand.version})`);
+  else if (stand.quelle.sauber !== true) fehler.push("Sync-Stand stammt von einem unsauberen Quellstand (sauber: false)");
+  const herkunftFehler = fehler.length;
   const ids = new Set();
   for (const e of (manifest.eintraege ?? []).filter(wirdVerteilt)) {
     const id = einheitId(e);
@@ -62,7 +70,7 @@ export function pruefeDrift(lies) {
     if (nichtVerteilt.has(id)) fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
     else fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
   }
-  return { entfaellt: false, fehler: fehler.map((f) => `${f}. ${WEG}`), einheiten: ids.size };
+  return { entfaellt: false, fehler: fehler.map((f, i) => `${f}. ${i < herkunftFehler ? TAG_WEG : WEG}`), einheiten: ids.size };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */

@@ -69,7 +69,7 @@ function unaufloesbar(text: string, config: Record<string, Record<string, string
 }
 
 const stand = (agents: string, manifestText: string): string =>
-  JSON.stringify({ version: 1, manifest: lib.textHash(manifestText), einheiten: { [lib.einheitId(KERN)]: lib.einheitHash(KERN, agents) } });
+  JSON.stringify({ version: 2, quelle: { commit: "0".repeat(40), tag: "v1", sauber: true }, manifest: lib.textHash(manifestText), einheiten: { [lib.einheitId(KERN)]: lib.einheitHash(KERN, agents) } });
 
 const nurKernManifest = JSON.stringify({ eintraege: [KERN] });
 
