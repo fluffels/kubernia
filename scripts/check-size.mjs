@@ -133,7 +133,14 @@ function main() {
   const green = (s) => paint('32', s)
   const dim = (s) => paint('2', s)
 
-  const sizes = collectSizes()
+  let quelle
+  try {
+    quelle = strukturAus(ladeProjektConfig()).quelle
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`)
+    process.exit(1)
+  }
+  const sizes = collectSizes(ROOT, quelle)
   const allow = new Map(ALLOWLIST.map((a) => [a.file, a.reason]))
   const oversized = findOversized(sizes, LOC_BUDGET)
   const oversizedFiles = new Set(oversized.map((s) => s.file))

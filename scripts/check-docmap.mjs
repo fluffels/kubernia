@@ -92,7 +92,13 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
 
-  const struktur = configStruktur();
+  let struktur;
+  try {
+    struktur = configStruktur();
+  } catch (e) {
+    console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
   const { modules, ghosts, orphans, staleAllowlist } = auditDocMap(ROOT, struktur);
 
   let bad = false;

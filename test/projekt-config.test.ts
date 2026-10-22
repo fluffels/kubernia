@@ -545,10 +545,49 @@ describe("ungültige sprache: jeder Einstieg endet mit ✖-Zeile und Fix, ohne S
         assert.notEqual(r.status, 0, wer);
         assert.match(text, /✖/, wer);
         assert.match(text, /Fix:/, wer);
+        assert.match(text, /sprache/, wer);
         assert.doesNotMatch(text, /^\s+at /m, wer);
       }
     });
   }
+});
+
+describe("check:size und check:docmap lesen die Struktur aus der Config, ohne sie endet es mit ✖ statt Stacktrace (#1843)", { timeout: 60_000 }, () => {
+  const fremdrepo = (struktur: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    const rest = { ...(pc.ladeProjektConfig() as Record<string, unknown>) };
+    delete rest.struktur;
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify(struktur === undefined ? rest : { ...rest, struktur }));
+    mkdirSync(join(d, "lib"));
+    mkdirSync(join(d, "docs", "module"), { recursive: true });
+    writeFileSync(join(d, "lib", "gross.ts"), "x\n".repeat(801));
+    return d;
+  };
+  const lauf = (d: string, skript: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", skript)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  test("mit struktur.quelle=lib messen beide lib, nicht src", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
+    const groesse = lauf(d, "check-size.mjs");
+    assert.equal(groesse.status, 1, groesse.text);
+    assert.match(groesse.text, /✖ lib\/gross\.ts: 801 Zeilen/);
+    const karte = lauf(d, "check-docmap.mjs");
+    assert.equal(karte.status, 1, karte.text);
+    assert.match(karte.text, /Verwaistes Modul: „lib\/gross\.ts" ist in keinem docs\/module\/\*\.md/);
+  });
+  test("ohne struktur: ✖, Schlüssel, Fix-Zeile, kein Stacktrace, Exit 1 (kein stiller Standardwert)", () => {
+    const d = fremdrepo(undefined);
+    for (const skript of ["check-size.mjs", "check-docmap.mjs"]) {
+      const r = lauf(d, skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*struktur/, skript);
+      assert.match(r.text, /Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
+  });
 });
 
 describe("Struktur-Pfade als Projektwert (#1843)", () => {

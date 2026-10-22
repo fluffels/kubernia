@@ -195,6 +195,9 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     test("ein Block ohne ISO-Datum ist ein Fund (Schnappschuss ist datiert)", () => {
       assert.deepEqual(pruefe(`${start}\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
     });
+    test("ein Ende-Marker ohne Start ist kein Datum-Fund (nur ein offener Block braucht ein Datum)", () => {
+      assert.deepEqual(pruefe(`${ende}\n${datum}`), []);
+    });
     test("ein leerer Block ist ein Fund, ein Datum außerhalb des Blocks zählt nicht", () => {
       assert.deepEqual(pruefe(`${start}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
       assert.deepEqual(pruefe(`2026-10-01\n${start}\n${rest}\n${ende}\n2026-10-02`), ["docs/s.md:2: Schnappschuss-Block ohne Datum"]);

@@ -161,6 +161,22 @@ describe("Struktur-Pfade aus der Config (#1843)", () => {
     }
   });
 
+  test("eine Quellwurzel mit Regex-Sonderzeichen gilt wörtlich (a.b trifft nicht axb)", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-docmap-"));
+    try {
+      mkdirSync(join(wurzel, "a.b"), { recursive: true });
+      mkdirSync(join(wurzel, "docs", "mod"), { recursive: true });
+      writeFileSync(join(wurzel, "a.b", "m.ts"), "x\n");
+      writeFileSync(join(wurzel, "docs", "mod", "m.md"), "`axb/m.ts` ist ein anderer Pfad, `a.b/m.ts` der richtige.\n");
+      assert.deepEqual([...api.parseDeepDocMaps(wurzel, { quelle: "a.b", moduldoku: "docs/mod" })], ["a.b/m.ts"]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+
   test("ohne Struktur gilt die der Projekt-Config", () => {
     assert.deepEqual(api.auditDocMap().modules, api.auditDocMap(undefined, { quelle: "src", moduldoku: "docs/module" }).modules);
   });
