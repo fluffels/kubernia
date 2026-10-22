@@ -495,6 +495,7 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
   const AUSNAHMEN: Record<string, string> = {
     "docs/adr/": "ADRs sind historisch, nie umgeschrieben",
     ".factory/besitz.json": "führt den Zeiger als eigene Einheit",
+    "test/harness/kern-abdeckung.json": "ordnet den Zeiger als eigene Datei ein (Abdeckung der festen Skill-Fläche)",
     "test/harness/skills-sync.test.ts": "Fixtures dieses Wächters",
     "test/harness/haupt-sync.test.ts": "Fixture eines Pfades in der Änderungsliste",
   };
