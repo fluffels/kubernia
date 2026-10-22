@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
 /** Ring-Importregel (ADR 0029): Ring des Importeurs -> Ringe, deren Besitz er lokal importieren darf. Ein weiterer Ring ist eine Zeile. */
 export const RING_IMPORTE = {
@@ -405,7 +406,7 @@ export function projektDateien(wurzel) {
     return existsSync(voll) ? readdirSync(voll, { withFileTypes: true }) : [];
   };
   for (const d of unter(".claude/agents")) if (d.isFile()) out.push(`.claude/agents/${d.name}`);
-  for (const wurzelOrdner of [".claude/skills", ".agents/skills"]) {
+  for (const wurzelOrdner of [ZEIGER_WURZEL, QUELL_VERZEICHNIS]) {
     for (const s of unter(wurzelOrdner)) {
       if (s.isDirectory()) for (const d of unter(`${wurzelOrdner}/${s.name}`)) if (d.isFile()) out.push(`${wurzelOrdner}/${s.name}/${d.name}`);
     }

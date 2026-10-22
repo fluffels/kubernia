@@ -34,6 +34,7 @@ import { join, posix, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs";
 import { KERN_TICKET_SKILL, TICKET_SKILL_ORDNER } from "./projekt-config-lib.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
 /**
@@ -65,10 +66,6 @@ export function exitCodeFuer(ergebnis) {
   if (typeof ergebnis.branch === "string" && ergebnis.branch !== "" && ergebnis.branch !== "main") return 1;
   return 0;
 }
-
-/** Skill-Quellen und Zeiger-Verzeichnis wie in `scripts/skills-sync.mjs` (kein Import: ein Einstiegsskript importiert kein anderes; ein Test hält beide gleich). */
-export const QUELL_VERZEICHNIS = ".agents/skills";
-export const ZEIGER_WURZEL = ".claude/skills";
 
 /** Verzeichnis der Ticket-Skill-Quelle als fester Kern-Pfad (#1748, `ROLLEN_PFADE.ticketSkill`, seit #1850 unter `.agents/skills/`): ohne Config, ohne IO (der Hook ist fail-open). */
 export const TICKET_SKILL_VERZEICHNIS = `${TICKET_SKILL_ORDNER}/`;

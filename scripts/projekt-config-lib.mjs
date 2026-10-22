@@ -13,6 +13,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
@@ -95,7 +96,7 @@ export const ROLLEN_PFADE = Object.freeze({
   umsetzer: ".claude/agents/factory-umsetzer.md",
   lens: ".claude/agents/factory-lens.md",
   gruppe: ".claude/agents/factory-gruppe.md",
-  ticketSkill: ".agents/skills/factory-ticket/SKILL.md",
+  ticketSkill: `${QUELL_VERZEICHNIS}/factory-ticket/SKILL.md`,
 });
 
 /**

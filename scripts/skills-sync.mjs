@@ -15,10 +15,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { parseFrontmatter } from "./docs-gen/markdown.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
-export const QUELL_VERZEICHNIS = ".agents/skills";
-export const WERKZEUGE = { claude: ".claude/skills" };
-export const ZEIGER_MARKE = "<!-- skills-sync: generierter Skill-Zeiger, nicht von Hand ändern (npm run skills:sync) -->";
+export const WERKZEUGE = { claude: ZEIGER_WURZEL };
 const FIX = "npm run skills:sync";
 const FIX_PRUNE = "npm run skills:sync -- --prune";
 

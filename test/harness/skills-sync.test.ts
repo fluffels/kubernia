@@ -19,6 +19,8 @@ import * as besitzLibModul from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL } from "../../scripts/skill-pfade.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 const maskiere = escapeRegex as (s: string) => string;
 const projektwertLauf = (besitzLibModul as unknown as { projektwertLauf: (w: string, c: () => unknown, o?: { schreiben?: boolean }) => { fehler: string[]; geaendert: string[] } }).projektwertLauf;
@@ -29,7 +31,6 @@ interface Zeiger { ordner: string; text: string | null; dateien: string[] }
 interface LaufErgebnis { befunde: Befund[]; unbrauchbar: string[]; geschrieben: string[]; geloescht: string[]; gemeldet: string[] }
 // Typisierung des .mjs-Imports per Assertion (Muster test/docdrift.test.ts), keine neuen eslint-Suppressions.
 const sync = skillsSyncModul as unknown as {
-  ZEIGER_MARKE: string;
   zeigerText: (name: string, quelltext: string) => string;
   pruefeSkills: (a: { quellen: Quelle[]; zeiger: Zeiger[]; lose?: string[] }) => Befund[];
   liesStand: (wurzel: string) => { quellen: Quelle[]; zeiger: Zeiger[]; lose: string[] };
@@ -66,7 +67,7 @@ describe("Zeiger-Text", () => {
 
   test("Rumpf höchstens drei Zeilen: Leerzeile, Marke, Verweis auf die Quelle", () => {
     const rumpf = zeiger.trimEnd().split("\n").slice(7);
-    expect(rumpf).toEqual(["", sync.ZEIGER_MARKE, "Lies `.agents/skills/demo/SKILL.md` und folge ihm."]);
+    expect(rumpf).toEqual(["", ZEIGER_MARKE,"Lies `.agents/skills/demo/SKILL.md` und folge ihm."]);
     expect(zeiger.endsWith("\n")).toBe(true);
   });
 
@@ -438,7 +439,7 @@ describe("Kommandozeile", () => {
       temp.push(w);
       mkdirSync(join(w, "scripts"), { recursive: true });
       mkdirSync(join(w, "scripts/docs-gen"), { recursive: true });
-      for (const f of ["skills-sync.mjs", "flag-lib.mjs", "docs-gen/markdown.mjs"]) writeFileSync(join(w, "scripts", f), readFileSync(join(WURZEL, "scripts", f)));
+      for (const f of ["skills-sync.mjs", "skill-pfade.mjs", "flag-lib.mjs", "docs-gen/markdown.mjs"]) writeFileSync(join(w, "scripts", f), readFileSync(join(WURZEL, "scripts", f)));
       mkdirSync(join(w, ".agents/skills/demo"), { recursive: true });
       writeFileSync(join(w, ".agents/skills/demo/SKILL.md"), quelle);
       return w;
