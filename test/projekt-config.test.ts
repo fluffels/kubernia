@@ -21,6 +21,7 @@ interface Pc {
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
+  ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
   umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
 }
 const pc = rawPc as unknown as Pc;
@@ -530,16 +531,15 @@ describe("ungültige sprache: jeder Einstieg endet mit ✖-Zeile und Fix, ohne S
   ];
   const mitSprache = (sprache: unknown): string => {
     const d = tmp();
-    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
-    mkdirSync(join(d, ".factory"));
-    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...pc.ladeProjektConfig(), sprache }));
-    return d;
+    const pfad = join(d, "projekt.json");
+    writeFileSync(pfad, JSON.stringify({ ...pc.ladeProjektConfig(), sprache }));
+    return pfad;
   };
   for (const [name, sprache] of [["leer", {}], ["ohne Wörter", { spezifikation: {} }]] as const) {
     test(`sprache ${name}: ✖, Fix-Zeile, kein Stacktrace, Exit ungleich 0`, () => {
-      const d = mitSprache(sprache);
+      const pfad = mitSprache(sprache);
       for (const args of EINSTIEGE) {
-        const r = spawnSync(process.execPath, [join(d, "scripts", args[0] ?? ""), ...args.slice(1)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+        const r = spawnSync(process.execPath, [join(WURZEL, "scripts", args[0] ?? ""), ...args.slice(1), "--config", pfad], { encoding: "utf8", cwd: WURZEL, timeout: 20_000 });
         const text = `${r.stderr}${r.stdout}`;
         const wer = `${args.join(" ")}: ${text.slice(0, 300)}`;
         assert.notEqual(r.status, 0, wer);
@@ -561,7 +561,7 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
     delete rest.struktur;
     writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify(struktur === undefined ? rest : { ...rest, struktur }));
     mkdirSync(join(d, "lib"));
-    mkdirSync(join(d, "docs", "module"), { recursive: true });
+    mkdirSync(join(d, "handbuch", "module"), { recursive: true });
     writeFileSync(join(d, "lib", "gross.ts"), "x\n".repeat(801));
     return d;
   };
@@ -570,17 +570,17 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
     return { status: r.status, text: `${r.stderr}${r.stdout}` };
   };
   test("mit struktur.quelle=lib messen beide lib, nicht src", () => {
-    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
     const groesse = lauf(d, "check-size.mjs");
     assert.equal(groesse.status, 1, groesse.text);
     assert.match(groesse.text, /✖ lib\/gross\.ts: 801 Zeilen/);
     const karte = lauf(d, "check-docmap.mjs");
     assert.equal(karte.status, 1, karte.text);
-    assert.match(karte.text, /Verwaistes Modul: „lib\/gross\.ts" ist in keinem docs\/module\/\*\.md/);
+    assert.match(karte.text, /Verwaistes Modul: „lib\/gross\.ts" ist in keinem handbuch\/module\/\*\.md/);
   });
   test("die Funktionen ohne Pfadangabe lesen struktur aus der Config (Default-Parameter)", () => {
-    const d = fremdrepo({ quelle: "lib", moduldoku: "docs/module" });
-    writeFileSync(join(d, "docs", "module", "m.md"), "`lib/gross.ts` ist beschrieben.\n");
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
+    writeFileSync(join(d, "handbuch", "module", "m.md"), "`lib/gross.ts` ist beschrieben.\n");
     writeFileSync(
       join(d, "lauf.mjs"),
       [
@@ -623,5 +623,136 @@ describe("Struktur-Pfade als Projektwert (#1843)", () => {
     assert.match(mit("src").join("|"), /struktur muss ein Objekt/);
     assert.match(mit({ quelle: "", moduldoku: "d" }).join("|"), /struktur\.quelle muss ein nicht-leerer String/);
     assert.match(mit({ quelle: "s", moduldoku: 3 }).join("|"), /struktur\.moduldoku muss ein nicht-leerer String/);
+  });
+  test("struktur-Pfade müssen repo-relativ und POSIX sein (kein absoluter Pfad, kein .., kein Backslash, kein End-Slash)", () => {
+    const schlecht = ["/src", "C:/src", "a/../b", "..", "src\\x", "src/", "./src", "a//b"];
+    for (const p of schlecht) {
+      assert.match(mit({ quelle: p, moduldoku: "docs/module" }).join("|"), /struktur\.quelle muss ein repo-relativer POSIX-Pfad/, p);
+      assert.match(mit({ quelle: "src", moduldoku: p }).join("|"), /struktur\.moduldoku muss ein repo-relativer POSIX-Pfad/, p);
+      assert.throws(() => pc.strukturAus({ struktur: { quelle: p, moduldoku: "d" } }), /repo-relativer POSIX-Pfad[\s\S]*Fix:/, p);
+    }
+    for (const p of ["src", "docs/module", "a/b.c/d"]) assert.deepEqual(mit({ quelle: p, moduldoku: p }), [], p);
+  });
+});
+
+describe("Ausnahmelisten als Projektwert (#1860)", () => {
+  const mit = (a: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), ausnahmen: a });
+  const ok = { datei: "src/gross.ts", grund: "#893 Split offen" };
+
+  test("ausnahmenAus: ohne Block leer, sonst die Einträge; die echte Config nennt für die Größe #893", () => {
+    assert.deepEqual(pc.ausnahmenAus({}), { groesse: [], kontext: [] });
+    assert.deepEqual(pc.ausnahmenAus({ ausnahmen: { groesse: [ok] } }), { groesse: [ok], kontext: [] });
+    assert.deepEqual(pc.ausnahmenAus({ ausnahmen: { kontext: [ok] } }), { groesse: [], kontext: [ok] });
+    const echt = pc.ausnahmenAus(pc.ladeProjektConfig());
+    assert.deepEqual(echt.groesse.map((a) => a.datei), ["src/sim.ts"]);
+    assert.match(echt.groesse[0]?.grund ?? "", /#893/);
+  });
+  test("ausnahmenAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
+    for (const falsch of ["x", [], { groesse: {} }, { groesse: [{ datei: "a.ts" }] }]) {
+      assert.throws(() => pc.ausnahmenAus({ ausnahmen: falsch }), /ausnahmen[\s\S]*Fix:/, JSON.stringify(falsch));
+    }
+  });
+  test("Form: ausnahmen ist optional, gültige Einträge sind ok", () => {
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({ groesse: [ok], kontext: [] }), []);
+    assert.deepEqual(mit({}), []);
+  });
+  test("Form: Nicht-Objekt, Nicht-Liste, unbekannter Schlüssel, fehlende Felder werden gemeldet", () => {
+    assert.match(mit("x").join("|"), /ausnahmen muss ein Objekt/);
+    assert.match(mit({ groesse: {} }).join("|"), /ausnahmen\.groesse muss eine Liste/);
+    assert.match(mit({ kontext: "x" }).join("|"), /ausnahmen\.kontext muss eine Liste/);
+    assert.match(mit({ andere: [] }).join("|"), /ausnahmen\.andere ist kein bekannter Schlüssel/);
+    assert.match(mit({ groesse: [null] }).join("|"), /ausnahmen\.groesse\[0\] muss ein Objekt/);
+    assert.match(mit({ groesse: [{ grund: "#1 x" }] }).join("|"), /ausnahmen\.groesse\[0\]\.datei muss ein nicht-leerer String/);
+    assert.match(mit({ groesse: [{ datei: "a.ts" }] }).join("|"), /ausnahmen\.groesse\[0\]\.grund muss ein nicht-leerer String/);
+  });
+  test("Form: der Grund nennt ein Ticket #<nr>, die Datei ist repo-relativ POSIX, eine Datei steht nur einmal", () => {
+    assert.match(mit({ groesse: [{ datei: "a.ts", grund: "ohne Ticket" }] }).join("|"), /ausnahmen\.groesse\[0\]\.grund muss ein Ticket #<nr> nennen/);
+    assert.match(mit({ groesse: [{ datei: "a.ts", grund: "Split bis 2027" }] }).join("|"), /muss ein Ticket #<nr> nennen/);
+    for (const p of ["/a.ts", "C:/a.ts", "a/../b.ts", "a\\b.ts", "a/"]) {
+      assert.match(mit({ kontext: [{ datei: p, grund: "#1 x" }] }).join("|"), /ausnahmen\.kontext\[0\]\.datei muss ein repo-relativer POSIX-Pfad/, p);
+    }
+    assert.match(mit({ groesse: [ok, ok] }).join("|"), /ausnahmen\.groesse\[1\]\.datei „src\/gross\.ts“ steht doppelt/);
+  });
+});
+
+describe("check:size und check:contextsize lesen die Ausnahmen aus der Config (#1860)", { timeout: 60_000 }, () => {
+  const repo = (ausnahmen: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), struktur: { quelle: "lib", moduldoku: "docs/module" }, ausnahmen }));
+    mkdirSync(join(d, "lib"));
+    writeFileSync(join(d, "lib", "gross.ts"), "x\n".repeat(801));
+    writeFileSync(join(d, "lib", "klein.ts"), "x\n");
+    return d;
+  };
+  const lauf = (d: string, skript: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", skript)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  test("check:size: eine Datei der Liste ist geduldet, ohne Eintrag rot, ein nicht mehr zu großer Eintrag stale", () => {
+    const ohne = lauf(repo({ groesse: [] }), "check-size.mjs");
+    assert.match(ohne.text, /✖ lib\/gross\.ts: 801 Zeilen/);
+    const mit = lauf(repo({ groesse: [{ datei: "lib/gross.ts", grund: "#5 Split offen" }] }), "check-size.mjs");
+    assert.doesNotMatch(mit.text, /✖ lib\/gross\.ts/);
+    assert.match(mit.text, /geduldet: lib\/gross\.ts[\s\S]*#5 Split offen/);
+    const stale = lauf(repo({ groesse: [{ datei: "lib/gross.ts", grund: "#5 x" }, { datei: "lib/klein.ts", grund: "#6 x" }] }), "check-size.mjs");
+    assert.match(stale.text, /✖ Ausnahme stale: lib\/klein\.ts[\s\S]*ausnahmen\.groesse/);
+    assert.equal(stale.status, 1, stale.text);
+  });
+  test("check:size und check:contextsize: eine kaputte Liste endet mit ✖, Fix-Zeile und Exit 1 (kein Stacktrace)", () => {
+    for (const skript of ["check-size.mjs", "check-context-size.mjs"]) {
+      const r = lauf(repo({ groesse: [{ datei: "lib/gross.ts", grund: "ohne Ticket" }] }), skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*ausnahmen\.groesse\[0\]\.grund[\s\S]*Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
+  });
+});
+
+describe("check:contextsize, check:anysuppress und check:diffcoverage: Ausnahmen- und Struktur-Block aus der Config (#1860)", { timeout: 60_000 }, () => {
+  const repo = (zusatz: Record<string, unknown>, agentsZeichen = 0): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), ...zusatz }));
+    if (agentsZeichen > 0) writeFileSync(join(d, "AGENTS.md"), "x".repeat(agentsZeichen));
+    return d;
+  };
+  const lauf = (d: string, skript: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", skript)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  const struktur = { quelle: "lib", moduldoku: "docs/module" };
+
+  test("check:contextsize: eine zu große Datei in ausnahmen.kontext ist geduldet, ohne Eintrag rot", () => {
+    const ohne = lauf(repo({ struktur, ausnahmen: { kontext: [] } }, 40_000), "check-context-size.mjs");
+    assert.equal(ohne.status, 1, ohne.text);
+    assert.match(ohne.text, /✖ AGENTS\.md: 40\.000 Zeichen > Budget/);
+    const mit = lauf(repo({ struktur, ausnahmen: { kontext: [{ datei: "AGENTS.md", grund: "#5 Auslagerung offen" }] } }, 40_000), "check-context-size.mjs");
+    assert.equal(mit.status, 0, mit.text);
+    assert.match(mit.text, /geduldet: AGENTS\.md[\s\S]*#5 Auslagerung offen/);
+  });
+  test("check:contextsize: ein Eintrag für eine Datei im Budget ist stale", () => {
+    const r = lauf(repo({ struktur, ausnahmen: { kontext: [{ datei: "AGENTS.md", grund: "#5 x" }] } }, 100), "check-context-size.mjs");
+    assert.equal(r.status, 1, r.text);
+    assert.match(r.text, /✖ Ausnahme stale: AGENTS\.md[\s\S]*ausnahmen\.kontext/);
+  });
+  test("check:anysuppress und check:diffcoverage: ein kaputtes struktur.quelle endet mit ✖, Fix-Zeile und Exit 1 (kein Stacktrace)", () => {
+    for (const skript of ["check-any-suppressions.mjs", "check-diffcoverage.mjs"]) {
+      const r = lauf(repo({ struktur: { quelle: "../x", moduldoku: "docs/module" } }), skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*struktur\.quelle[\s\S]*Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
+  });
+  test("check:anysuppress und check:diffcoverage: ohne struktur-Block (beim Laden optional) endet es mit ✖, Fix-Zeile und Exit 1", () => {
+    for (const skript of ["check-any-suppressions.mjs", "check-diffcoverage.mjs"]) {
+      const r = lauf(repo({ struktur: undefined }), skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*struktur[\s\S]*Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
   });
 });

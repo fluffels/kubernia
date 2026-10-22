@@ -146,13 +146,24 @@ export function strukturAus(config) {
   if (!istObjekt(wert) || !istText(wert.quelle) || !istText(wert.moduldoku)) {
     throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
   }
+  const form = pruefeStruktur(wert);
+  if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
   return { quelle: wert.quelle, moduldoku: wert.moduldoku };
 }
 
 /** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
 function pruefeStruktur(s) {
   if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
-  return ["quelle", "moduldoku"].filter((k) => !istText(s[k])).map((k) => `struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`);
+  return ["quelle", "moduldoku"].flatMap((k) => {
+    if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
+    return istRepoRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
+  });
+}
+
+/** Pur: ein repo-relativer POSIX-Pfad (`src`, `docs/module`): kein absoluter Pfad, kein Laufwerk, keine `.`/`..`-Segmente, kein Backslash, kein End- oder Doppel-Slash. */
+function istRepoRelativPosix(pfad) {
+  if (pfad.includes("\\") || pfad.includes(":")) return false;
+  return pfad.split("/").every((teil) => teil !== "" && teil !== "." && teil !== "..");
 }
 
 /** Pur: die Umschrift-Wortliste (`sprache.umschrift`) für den Umlaut-Wächter; wirft ohne nicht-leere Liste (kein stiller Deutsch-Standardwert, #1711). */
@@ -175,6 +186,46 @@ function pruefeSprache(s) {
     fehler.push("sprache.umschrift muss eine nicht-leere Liste kleingeschriebener ASCII-Wörter (Muster ^[a-z]+$) sein");
   }
   return [...fehler, ...spracheMaengel(s.spezifikation)];
+}
+
+const AUSNAHME_LISTEN_NAMEN = ["groesse", "kontext"];
+
+/** Pur: prüft den Block `ausnahmen` (Form): je Liste `{ datei, grund }`, die Datei repo-relativ POSIX und je Liste nur einmal, der Grund nennt ein Ticket `#<nr>`. */
+function pruefeAusnahmen(a) {
+  if (!istObjekt(a)) return ["ausnahmen muss ein Objekt mit den Listen groesse und kontext sein"];
+  const fehler = Object.keys(a).filter((k) => !AUSNAHME_LISTEN_NAMEN.includes(k)).map((k) => `ausnahmen.${k} ist kein bekannter Schlüssel (erlaubt: ${AUSNAHME_LISTEN_NAMEN.join(", ")})`);
+  for (const name of AUSNAHME_LISTEN_NAMEN) {
+    const liste = a[name];
+    if (liste === undefined) continue;
+    if (!Array.isArray(liste)) {
+      fehler.push(`ausnahmen.${name} muss eine Liste von { datei, grund } sein`);
+      continue;
+    }
+    const gesehen = new Set();
+    liste.forEach((e, i) => {
+      const wo = `ausnahmen.${name}[${i}]`;
+      if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { datei, grund } sein`);
+      if (!istText(e.datei)) fehler.push(`${wo}.datei muss ein nicht-leerer String (repo-relativer Pfad) sein`);
+      else if (!istRepoRelativPosix(e.datei)) fehler.push(`${wo}.datei muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(e.datei)}`);
+      else if (gesehen.has(e.datei)) fehler.push(`${wo}.datei „${e.datei}“ steht doppelt`);
+      else gesehen.add(e.datei);
+      if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
+      else if (!/#\d+/.test(e.grund)) fehler.push(`${wo}.grund muss ein Ticket #<nr> nennen (eine Ausnahme ohne offenes Ticket gibt es nicht)`);
+    });
+  }
+  return fehler;
+}
+
+/**
+ * Pur: die Ausnahmelisten der Größen-Gates (`ausnahmen.groesse` für check:size, `ausnahmen.kontext` für check:contextsize), je Eintrag `{ datei, grund }`;
+ * ohne Block beide leer. Wirft mit Fix-Zeile bei kaputter Form (die Gates dürfen keine Ausnahme still verlieren).
+ */
+export function ausnahmenAus(config) {
+  const wert = config?.ausnahmen;
+  if (wert === undefined) return { groesse: [], kontext: [] };
+  const fehler = pruefeAusnahmen(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block ausnahmen (groesse, kontext: Liste von { datei, grund mit #<nr> }) in ${PROJEKT_CONFIG} korrigieren`);
+  return { groesse: wert.groesse ?? [], kontext: wert.kontext ?? [] };
 }
 
 const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
@@ -238,6 +289,7 @@ export function pruefeProjektConfig(wert) {
   }
   if (wert.sprache !== undefined) fehler.push(...pruefeSprache(wert.sprache));
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
+  if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
   return fehler;
 }
 
@@ -342,6 +394,21 @@ export function trenneConfigArg(argv) {
   if (!t.value) return { fehler: "✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen" };
   const belegt = new Set([t.index, ...(t.inlineValue ? [] : [t.index + 1])]);
   return { args: argv.filter((_, k) => !belegt.has(k)), pfad: t.value };
+}
+
+/**
+ * Rahmen für `--config <pfad>` im Direktaufruf eines Werkzeugs: trennt das Flag ab, lädt die Config und liefert `{ args, config }` oder
+ * `{ args, fehler }` (Text ohne `✖`-Präfix: fehlender Pfad bzw. Ladefehler mit Pfad, Schlüssel und `Fix:`-Zeile). Der Aufrufer meldet den Fehler
+ * mit Exit 2, bevor er etwas liest oder schreibt. Ohne `--config` gilt die Config des Repos. `lade` ist die Test-Naht.
+ */
+export function configAusAufruf(argv, { lade = ladeProjektConfig } = {}) {
+  const getrennt = trenneConfigArg(argv);
+  if (getrennt.fehler) return { args: [...argv], fehler: getrennt.fehler.replace(/^✖ /, "") };
+  try {
+    return { args: getrennt.args, config: lade({ pfad: getrennt.pfad }) };
+  } catch (e) {
+    return { args: getrennt.args, fehler: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 const CLI_AUFRUF = "Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>";

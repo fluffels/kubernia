@@ -18,13 +18,13 @@ import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkSize from "../scripts/check-size.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as allowlists from "../scripts/check-allowlists.mjs";
+import * as pcl from "../scripts/projekt-config-lib.mjs";
 
 type Sized = { file: string; loc: number; chars?: number };
-type Allow = { file: string; reason: string };
+type Allow = { datei: string; grund: string };
 
 const LOC_BUDGET: number = checkSize.LOC_BUDGET;
-const ALLOWLIST: Allow[] = allowlists.SIZE_ALLOWLIST;
+const ALLOWLIST: Allow[] = (pcl as unknown as { ausnahmenAus(c: unknown): { groesse: Allow[] }; ladeProjektConfig(): unknown }).ausnahmenAus((pcl as unknown as { ladeProjektConfig(): unknown }).ladeProjektConfig()).groesse;
 const collectSizes: (rootDir?: string, quelle?: string) => Sized[] = checkSize.collectSizes;
 const findOversized: (sizes: Sized[], budget?: number) => Sized[] = checkSize.findOversized;
 const countLines: (text: string) => number = checkSize.countLines;
@@ -37,7 +37,7 @@ const deckelApi = checkSize as unknown as {
 const { DECKEL, collectWorkflowSizes, pruefeDeckel } = deckelApi;
 
 const sizes = collectSizes();
-const allowedFiles = new Set(ALLOWLIST.map((a) => a.file));
+const allowedFiles = new Set(ALLOWLIST.map((a) => a.datei));
 
 describe("Dateigröße-Budget (#390)", () => {
   test(`kein src-Modul über ${LOC_BUDGET} LOC (außer dokumentierten Ausnahmen)`, () => {
@@ -47,7 +47,7 @@ describe("Dateigröße-Budget (#390)", () => {
       [],
       `Module über dem ${LOC_BUDGET}-LOC-Budget ohne Allowlist-Eintrag:\n` +
         violations.map((v) => `  ${v.file}: ${v.loc}`).join("\n") +
-        `\nAufteilen (siehe #392/#393) oder – mit offenem Split-Ticket – in SIZE_ALLOWLIST (scripts/check-allowlists.mjs) allowlisten.`,
+        `\nAufteilen (siehe #392/#393) oder – mit offenem Split-Ticket – unter ausnahmen.groesse in .factory/projekt.json aufnehmen.`,
     );
   });
 
@@ -56,15 +56,15 @@ describe("Dateigröße-Budget (#390)", () => {
     // und dieser Test bricht – das erinnert daran, die Ausnahme wieder zu entfernen.
     const bySize = new Map(sizes.map((s) => [s.file, s.loc]));
     const stale = ALLOWLIST.filter((a) => {
-      const loc = bySize.get(a.file);
+      const loc = bySize.get(a.datei);
       return loc === undefined || loc <= LOC_BUDGET;
     });
     assert.deepEqual(
       stale,
       [],
       `Stale Allowlist-Einträge (Datei nicht mehr über Budget oder nicht mehr vorhanden) – ` +
-        `aus SIZE_ALLOWLIST (scripts/check-allowlists.mjs) entfernen:\n` +
-        stale.map((a) => `  ${a.file}`).join("\n"),
+        `aus ausnahmen.groesse (.factory/projekt.json) entfernen:\n` +
+        stale.map((a) => `  ${a.datei}`).join("\n"),
     );
   });
 

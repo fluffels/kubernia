@@ -18,14 +18,14 @@ import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkContextSize from "../scripts/check-context-size.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as allowlists from "../scripts/check-allowlists.mjs";
+import * as pcl from "../scripts/projekt-config-lib.mjs";
 
 type Budget = { file: string; budget: number };
 type Sized = { file: string; chars: number; budget: number };
-type Allow = { file: string; reason: string };
+type Allow = { datei: string; grund: string };
 
 const CONTEXT_BUDGETS: Budget[] = checkContextSize.CONTEXT_BUDGETS;
-const ALLOWLIST: Allow[] = allowlists.CONTEXT_ALLOWLIST;
+const ALLOWLIST: Allow[] = (pcl as unknown as { ausnahmenAus(c: unknown): { kontext: Allow[] }; ladeProjektConfig(): unknown }).ausnahmenAus((pcl as unknown as { ladeProjektConfig(): unknown }).ladeProjektConfig()).kontext;
 const collectContextSizes: (rootDir?: string, budgets?: Budget[], moduleBudget?: number) => Sized[] = checkContextSize.collectContextSizes;
 const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversized;
 // Neu mit #1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,
@@ -55,7 +55,7 @@ function withTempRepo(files: Record<string, string>, fn: (dir: string) => void):
 }
 
 const sizes = collectContextSizes();
-const allowedFiles = new Set(ALLOWLIST.map((a) => a.file));
+const allowedFiles = new Set(ALLOWLIST.map((a) => a.datei));
 
 describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
   test("kein Root-Kontextfile über seinem Zeichen-Budget (außer dokumentierten Ausnahmen)", () => {
@@ -66,7 +66,7 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
       `Root-Kontextdateien über Budget ohne Allowlist-Eintrag:\n` +
         violations.map((v) => `  ${v.file}: ${v.chars}/${v.budget}`).join("\n") +
         `\nInhalt auslagern (modul-lokale AGENTS.md / docs/module/*.md) oder – mit offenem Ticket – ` +
-        `in scripts/check-context-size.mjs allowlisten.`,
+        `unter ausnahmen.kontext in .factory/projekt.json aufnehmen.`,
     );
   });
 
@@ -79,7 +79,7 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
       [],
       `Stale Allowlist-Einträge (Datei nicht mehr über Budget oder unbekannt) – aus ` +
         `scripts/check-context-size.mjs entfernen:\n` +
-        stale.map((a) => `  ${a.file}`).join("\n"),
+        stale.map((a) => `  ${a.datei}`).join("\n"),
     );
   });
 
@@ -133,12 +133,12 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
       { file: "CLAUDE.md", chars: 50, budget: 100 },
     ];
     const allow: Allow[] = [
-      { file: "AGENTS.md", reason: "#1 Auslagerung offen" },
-      { file: "CLAUDE.md", reason: "#2 längst erledigt" },
-      { file: "GIBTS-NICHT.md", reason: "#3 Tippfehler" },
+      { datei: "AGENTS.md", grund: "#1 Auslagerung offen" },
+      { datei: "CLAUDE.md", grund: "#2 längst erledigt" },
+      { datei: "GIBTS-NICHT.md", grund: "#3 Tippfehler" },
     ];
     assert.deepEqual(
-      findStale(sized, allow).map((a) => a.file),
+      findStale(sized, allow).map((a) => a.datei),
       ["CLAUDE.md", "GIBTS-NICHT.md"],
     );
   });
@@ -224,9 +224,9 @@ describe("Modul-lokale AGENTS.md im Budget (#1088)", () => {
       { file: "src/b/AGENTS.md", chars: 500, budget: 100 },
     ];
     const allow: Allow[] = [
-      { file: "src/a/AGENTS.md", reason: "#1 erledigt" },
-      { file: "src/b/AGENTS.md", reason: "#2 Auslagerung offen" },
+      { datei: "src/a/AGENTS.md", grund: "#1 erledigt" },
+      { datei: "src/b/AGENTS.md", grund: "#2 Auslagerung offen" },
     ];
-    assert.deepEqual(findStale(sized, allow).map((a) => a.file), ["src/a/AGENTS.md"]);
+    assert.deepEqual(findStale(sized, allow).map((a) => a.datei), ["src/a/AGENTS.md"]);
   });
 });

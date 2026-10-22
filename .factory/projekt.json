@@ -45,6 +45,12 @@
     "quelle": "src",
     "moduldoku": "docs/module"
   },
+  "ausnahmen": {
+    "groesse": [
+      { "datei": "src/sim.ts", "grund": "#893 (Split offen): sim.ts entflechten, God-File von der Ausnahmeliste." }
+    ],
+    "kontext": []
+  },
   "spezifikation": {
     "hartAb": 1
   },
@@ -102,6 +108,16 @@
         "Teil-Akzeptanzkriterien"
       ],
       "nachMerge": "Nach dem Merge:",
+      "blocker": "blockiert durch",
+      "abhaengigkeit": [
+        "folgt nach #",
+        "folgt auf #",
+        "erst nach #",
+        "setzt # voraus",
+        "baut auf # auf",
+        "wartet auf #",
+        "nach dem Merge von #"
+      ],
       "negativfall": {
         "wort": "Negativfall",
         "muster": "negativ-?f(?:a|ä)ll"
@@ -121,6 +137,7 @@
     "Stardew": "stardew",
     "Save-Version": "CURRENT_SAVE_VERSION",
     "kqDev": "kqdev",
-    "Hafen": "hafen"
+    "Hafen": "hafen",
+    "Phaser": "phaser"
   }
 }

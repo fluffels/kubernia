@@ -10,7 +10,7 @@
  * Floor (bei ~4000 Domänen-Zeilen fallen 40 neue unter die Rundungsschwelle). Dieser
  * Wächter dreht den Nenner um: gemessen wird nur, was der aktuelle Slice ANFASST.
  *
- * Mechanik: die Hunk-Header aus `git diff -U0 <basis>...HEAD -- src` liefern die
+ * Mechanik: die Hunk-Header aus `git diff -U0 <basis>...HEAD -- <quelle>` liefern die
  * geänderten Zeilen der NEUEN Seite; geschnitten mit den `DA:`-Records aus
  * `coverage/lcov.info` (v8) ergibt das je Zeile „getestet / nicht getestet". Bewertet
  * wird PRO SCHICHT über `layerOf()` aus der Schicht-SSOT scripts/layers.cjs — dieselben
@@ -30,6 +30,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
+import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 // Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
@@ -44,7 +45,7 @@ const { LAYERS, layerOf } = createRequire(import.meta.url)(`${WURZEL}${schichten
 export const LCOV_PATH = fileURLToPath(new URL("../coverage/lcov.info", import.meta.url));
 
 /** Mindest-Abdeckung der GEÄNDERTEN Zeilen je Schicht in Prozent; `null` = messen und
- *  berichten, aber nicht gaten (Präsentation/Einstieg sind Phaser/DOM, per Architektur
+ *  berichten, aber nicht gaten (Präsentation/Einstieg hängen an Framework und Oberfläche, per Architektur
  *  unit-untestbar). Kalibriert an den letzten zehn `src`-Commits: Domäne/Anwendung lagen
  *  bei 100 %, Präsentation/Einstieg bei 0-47 %. Die 90/80 liegen bewusst unter dem Ist —
  *  Luft für defensive Guard-Zweige, sonst erzwingt jede Kleinigkeit ein Override (#395).
@@ -167,10 +168,10 @@ export function parseLcovBranches(text) {
  *  (z. B. ein `catch` mit Weiterwurf auf derselben Zeile): die Zeilen-Coverage zählt sie als getestet,
  *  der Zweig bleibt unsichtbar. Nur berichtend, kein Gate (v8 meldet implizite Zweige, keine Kalibrierung).
  *  Gemessen werden nur Dateien, für die `isMeasured` gilt. Pure. */
-export function teilweiseGetestet(changed, lcov, branches) {
+export function teilweiseGetestet(changed, lcov, branches, quelle = strukturAus(ladeProjektConfig()).quelle) {
   const partial = [];
   for (const [path, lines] of changed) {
-    if (!isMeasured(path)) continue;
+    if (!isMeasured(path, quelle)) continue;
     const da = lcov.get(path);
     const br = branches.get(path);
     if (da === undefined || br === undefined) continue;
@@ -185,13 +186,13 @@ export function teilweiseGetestet(changed, lcov, branches) {
 }
 
 /** Ist die Datei überhaupt Gegenstand der Coverage-Messung? Deckungsgleich mit dem
- *  `include: ["src/**\/*.ts"]` in vite.config.ts — Content-JSON, Assets und Skripte
- *  außerhalb von `src` sind kein ausführbarer Spielcode und fallen raus.
+ *  `include` der Coverage-Config für die Quellwurzel (`struktur.quelle` der Projekt-Config) — Content-JSON, Assets und Skripte
+ *  außerhalb der Quellwurzel sind kein ausführbarer Quellcode und fallen raus.
  *
  *  `.d.ts` ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile, und ein
  *  Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
-export function isMeasured(path) {
-  return path.startsWith("src/") && path.endsWith(".ts") && !path.endsWith(".d.ts");
+export function isMeasured(path, quelle = strukturAus(ladeProjektConfig()).quelle) {
+  return path.startsWith(`${quelle}/`) && path.endsWith(".ts") && !path.endsWith(".d.ts");
 }
 
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
@@ -199,7 +200,7 @@ export function isMeasured(path) {
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
  *  einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`, ein Float-Vergleich
  *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Pure. */
-export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
+export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quelle = strukturAus(ladeProjektConfig()).quelle) {
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
     buckets[layer] = { covered: 0, total: 0, pct: 100, floor: floors[layer] ?? null, below: false, files: [] };
@@ -207,7 +208,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
   const missing = [];
 
   for (const [path, lines] of changed) {
-    if (!isMeasured(path)) continue;
+    if (!isMeasured(path, quelle)) continue;
     const record = lcov.get(path);
     if (record === undefined) {
       missing.push(path);
@@ -246,7 +247,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
 /** Führt die komplette Prüfung aus (Basis → Diff → lcov → Bewertung → Override).
  *  `runGit`/`readFile`/`env` sind injizierbar, damit der Test ohne git, ohne
  *  Coverage-Lauf und ohne Repo-Zustand deterministisch läuft. */
-export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen = ladeCommitZeilen() } = {}) {
+export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen = ladeCommitZeilen(), quelle = strukturAus(ladeProjektConfig()).quelle } = {}) {
   const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
   const read = readFile ?? ((p) => readFileSync(p, "utf8"));
   const base = resolveBase(git, env);
@@ -261,14 +262,14 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen 
     // Zwei-Punkt wiese jede Änderung, die main NACH dem Abzweigen bekam, spiegelverkehrt als
     // Addition dieses Slices aus — fremde Zeilen im Nenner, potenziell falsches Rot. `A...B`
     // misst gegen die Merge-Base.
-    diff = git(["diff", "-U0", `${base}...HEAD`, "--", "src"]);
+    diff = git(["diff", "-U0", `${base}...HEAD`, "--", quelle]);
   } catch {
     return { skipped: true, failed: false, base };
   }
 
   const changed = parseDiffLines(diff);
-  const measuredFiles = [...changed.keys()].filter(isMeasured);
-  // Kein Spielcode angefasst (reiner Doku-/Tooling-Slice) → nichts zu messen, grün.
+  const measuredFiles = [...changed.keys()].filter((p) => isMeasured(p, quelle));
+  // Kein Quellcode angefasst (reiner Doku-/Tooling-Slice) → nichts zu messen, grün.
   // Ein Override-Trailer ist dann überflüssig (stale, #1309): es gibt nichts durchzulassen.
   if (measuredFiles.length === 0) {
     const { reason, invalid } = sliceOverride(git, base, zeilen.diffcovOverride);
@@ -279,13 +280,13 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen 
   try {
     lcovText = read(LCOV_PATH);
   } catch {
-    // src geändert, aber kein Messergebnis da → NICHT still grün melden.
+    // Quellcode geändert, aber kein Messergebnis da → NICHT still grün melden.
     return { skipped: false, failed: true, base, noReport: true };
   }
 
   const lcov = parseLcov(lcovText);
-  const verdict = evaluateByLayer(changed, lcov);
-  const partial = teilweiseGetestet(changed, lcov, parseLcovBranches(lcovText));
+  const verdict = evaluateByLayer(changed, lcov, LAYER_DIFF_FLOORS, quelle);
+  const partial = teilweiseGetestet(changed, lcov, parseLcovBranches(lcovText), quelle);
   // `below` ist eine COVERAGE-Lücke (bewertbar, darum override-bar), `missing` ein
   // MESSfehler — für diese Datei wurde gar nichts gemessen. Ihn durchzuwinken wäre
   // dasselbe „grün ohne Messung", das der noReport-Zweig verbietet: nicht override-bar.
@@ -315,7 +316,7 @@ function renderBuckets(r, { dim, red, green }) {
     if (b.total === 0) continue;
     const zahl = `${b.covered}/${b.total} geänderte Zeilen getestet (${b.pct.toFixed(1)} %)`;
     if (b.floor === null) {
-      console.log(dim(`• ${layer}: ${zahl} — nur berichtend (Phaser/DOM, siehe Skript-Kopf)`));
+      console.log(dim(`• ${layer}: ${zahl} — nur berichtend (Schicht ohne Floor, siehe Skript-Kopf)`));
       continue;
     }
     const paint = b.below ? red : green;
@@ -335,7 +336,14 @@ function main() {
   const colors = { red: (s) => paint("31", s), green: (s) => paint("32", s), dim: (s) => paint("2", s) };
   const { red, green, dim } = colors;
 
-  const r = checkDiffCoverage({ zeilen });
+  let quelle;
+  try {
+    quelle = strukturAus(ladeProjektConfig()).quelle;
+  } catch (e) {
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
+    process.exit(1);
+  }
+  const r = checkDiffCoverage({ zeilen, quelle });
 
   if (r.skipped) {
     console.log(dim("• check:diffcoverage übersprungen — keine Vergleichs-Basis (flacher Checkout / nichts gegenüber main)."));
@@ -343,12 +351,12 @@ function main() {
   }
   if (r.nothingToMeasure && r.stale) {
     meldeUngueltigeOverrides(r.invalidOverrides, { dim });
-    console.error(red(staleOverrideHinweis(zeilen.diffcovOverride, "dieser Slice ändert keinen gemessenen Spielcode (src/**/*.ts)")));
+    console.error(red(staleOverrideHinweis(zeilen.diffcovOverride, `dieser Slice ändert keinen gemessenen Quellcode (${quelle}/**/*.ts)`)));
     process.exit(1);
   }
   if (r.nothingToMeasure) {
     meldeUngueltigeOverrides(r.invalidOverrides, { dim });
-    console.log(green("✔ check:diffcoverage ok — dieser Slice ändert keinen gemessenen Spielcode (src/**/*.ts)."));
+    console.log(green(`✔ check:diffcoverage ok — dieser Slice ändert keinen gemessenen Quellcode (${quelle}/**/*.ts).`));
     return;
   }
   if (r.noReport) {
@@ -365,7 +373,7 @@ function main() {
 
   // Messfehler, nicht Coverage-Lücke — bewusst NICHT über das Override abkürzbar.
   if (r.missing.length > 0) {
-    console.error(red(`✖ ${r.missing.length} geänderte src-Datei(en) fehlen im Coverage-Report:`));
+    console.error(red(`✖ ${r.missing.length} geänderte Quelldatei(en) fehlen im Coverage-Report:`));
     for (const p of r.missing) console.error(`    ${p}`);
     console.error(`\nFür sie wurde NICHTS gemessen — Report veraltet. Neu messen:  npm run test:coverage`);
     process.exit(1);

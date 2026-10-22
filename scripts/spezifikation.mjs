@@ -4,8 +4,13 @@
  * Spezifikation wird nachgezogen. Die Auswahl (`naechstes-ticket.mjs`) meldet nur (`reparieren #<nr>`), dieses Skript schreibt.
  *
  *   node scripts/spezifikation.mjs pruefen --body-datei <pfad>
- *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)
+ *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]
  *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
+ *   node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"
+ *
+ * `gescheitert` meldet eine Reparatur, die nicht gelang (Exit 1 oder 3, Body nicht nachziehbar): eine Zeile `- [ ] <Datum> Reparatur gescheitert: #<nr> (<Mängel>). Fix: …`
+ * als Kommentar ins jüngste ungeclaimte Harness-Sammelticket (Exit 1: keins da, Fix: `sammelticket-anlegen.mjs harness`). Steht die Zeile zu dieser Nummer schon
+ * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post. Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
  *
  * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
  * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
@@ -20,19 +25,21 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
-import { istFremdeingang } from "./fremdtext-lib.mjs";
+import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
-import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { configAusAufruf, labelAus, spracheAus } from "./projekt-config-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
+import { blockerNummern, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
 const AUFRUF = [
   "Aufruf:",
   "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
-  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>)',
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]',
   "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
+  '  node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"',
 ].join("\n");
 
 const ergebnis = (code, out = "", err = "") => ({ code, out, err });
@@ -42,23 +49,30 @@ const liste = (zeilen) => zeilen.map((z) => `  - ${z}`).join("\n");
 const BEFEHLE = {
   pruefen: { optionen: { "body-datei": { type: "string" } }, positionale: 0 },
   anlegen: {
-    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, notfall: { type: "string" } },
+    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, notfall: { type: "string" }, blocker: { type: "string", multiple: true } },
     positionale: 0,
   },
   reparieren: { optionen: { "body-datei": { type: "string" } }, positionale: 1 },
+  gescheitert: { optionen: { mangel: { type: "string" } }, positionale: 1 },
 };
 
+const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
+
 /**
- * Prüft den Aufruf vor jedem I/O (`befehlLesen`): Unterbefehl, dann die Flag-Menge dieses Unterbefehls; `reparieren` nimmt genau ein
+ * Prüft den Aufruf vor jedem I/O (`befehlLesen`): Unterbefehl, dann die Flag-Menge dieses Unterbefehls (`--blocker` nur mit Ticketnummern, Liste in `werte.blocker`); `reparieren` nimmt genau ein
  * Positionsargument, die anderen keins. Liefert `{ befehl, werte, positional }` (`werte.label` immer eine Liste) oder `{ fehler }`. Pur.
  */
 export function aufrufPruefen(argv) {
   const r = befehlLesen(argv, BEFEHLE);
   if (r.fehler) return { fehler: r.fehler.text };
-  return { befehl: r.befehl, werte: { ...r.werte, label: r.werte.label ?? [] }, positional: r.positionale };
+  if (r.befehl === "gescheitert") {
+    if (positiveZahl(r.positionale[0]) === null) return { fehler: "gescheitert braucht eine Ticketnummer" };
+    if (String(r.werte.mangel ?? "").trim() === "") return { fehler: "gescheitert braucht --mangel \"<text>\"" };
+  }
+  const blocker = (r.werte.blocker ?? []).map(positiveZahl);
+  if (blocker.includes(null)) return { fehler: "--blocker braucht eine Ticketnummer (--blocker <nr>, mehrfach möglich)" };
+  return { befehl: r.befehl, werte: { ...r.werte, label: r.werte.label ?? [], ...(r.befehl === "anlegen" ? { blocker } : {}) }, positional: r.positionale };
 }
-
-const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
 
 function leseBody(werte, io) {
   if (!werte["body-datei"]) return { fehler: "--body-datei fehlt" };
@@ -79,8 +93,48 @@ function pruefen(werte, io, sprache) {
   return maengel.length === 0 ? ergebnis(0, "Spezifikation vollständig\n") : ergebnis(1, "", `✖ Spezifikation unvollständig:\n${liste(maengel)}\n`);
 }
 
+const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ").trim();
+const gescheitertSchluessel = (nr) => `Reparatur gescheitert: #${nr} (`;
+
+/** Die Sammelticket-Zeile zu einer gescheiterten Reparatur von #`nr` (`mangel` einzeilig). Pur. */
+export const gescheitertZeile = ({ nr, mangel, heute }) =>
+  `- [ ] ${heute} ${gescheitertSchluessel(nr)}${einzeilig(mangel)}). Fix: Body über den Reparaturweg nachziehen`;
+
+/** Steht zu #`nr` schon eine offene Zeile (`- [ ]`) eines vertrauten Autors in `kommentare` (`[{ user, body }]`)? Pur. */
+export function gescheitertBekannt(nr, kommentare, owner) {
+  const schluessel = gescheitertSchluessel(nr);
+  return kommentare.some(
+    (k) => istVertraut(k?.user ?? null, owner) && String(k?.body ?? "").split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)),
+  );
+}
+
+function gescheitert(werte, nrText, io) {
+  const nr = positiveZahl(nrText);
+  let kontext;
+  try {
+    kontext = io.sammelKontext();
+  } catch (e) {
+    return aufrufFehler(`Sammelticket nicht lesbar: ${fehlerText(e)}`);
+  }
+  if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness\n");
+  if (gescheitertBekannt(nr, kontext.kommentare, io.owner)) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
+  try {
+    io.postZeilen(kontext.ziel, gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute() }));
+  } catch (e) {
+    return aufrufFehler(`Zeile nicht gepostet: ${fehlerText(e)}`);
+  }
+  return ergebnis(0, `Zeile für #${nr} in #${kontext.ziel} gepostet\n`);
+}
+
 function nachholBefehl(werte, nach, nr) {
   return nach ? `node scripts/board-place.mjs --after ${nach} ${nr}` : `node scripts/board-place.mjs --notfall ${werte.notfall} --top ${nr}`;
+}
+
+/** Hängt die Blocker-Zeile (`<blocker> #a, #b`) mit den Nummern an, die der Body noch nicht als Blocker nennt; nichts Fehlendes: der Body bleibt unverändert. Pur. */
+export function mitBlockerZeile(body, nummern, sprache) {
+  const da = new Set(blockerNummern(body, sprache));
+  const fehlt = nummern.filter((n) => !da.has(n));
+  return fehlt.length === 0 ? body : `${body.replace(/\s+$/, "")}\n\n${sprache.blocker} ${fehlt.map((n) => `#${n}`).join(", ")}\n`;
 }
 
 function anlegen(werte, io, sprache) {
@@ -92,7 +146,8 @@ function anlegen(werte, io, sprache) {
   if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return aufrufFehler(`--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})`);
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
-  const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body: b.body }, { sprache }); // neu angelegt: nie Bestand, nie ausgenommen
+  const body = mitBlockerZeile(b.body, werte.blocker, sprache);
+  const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body }, { sprache }); // neu angelegt: nie Bestand, nie ausgenommen
   if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
   if (nach !== null) {
     // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
@@ -106,7 +161,7 @@ function anlegen(werte, io, sprache) {
   }
   let neu;
   try {
-    neu = io.erzeuge({ titel: werte.titel, body: b.body, labels: werte.label });
+    neu = io.erzeuge({ titel: werte.titel, body, labels: werte.label });
   } catch (e) {
     return aufrufFehler(`Anlegen fehlgeschlagen: ${fehlerText(e)}`);
   }
@@ -153,6 +208,7 @@ function reparieren(werte, nrText, io, sprache) {
 export function fuehreAus(argv, io) {
   const p = aufrufPruefen(argv);
   if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
+  if (p.befehl === "gescheitert") return gescheitert(p.werte, p.positional[0], io);
   let sprache;
   try {
     sprache = spracheAus(io.config).spezifikation; // fehlt sie, bricht das Werkzeug ab: kein stiller Deutsch-Standardwert
@@ -178,8 +234,7 @@ export function ankerPruefung({ nach, labels }, lade, config) {
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
-const echteIo = () => { // Fabrik: erst nach bestandener Aufruf-Prüfung aufgerufen (`direktaufruf`)
-  const config = ladeProjektConfig();
+const echteIo = (config) => { // Fabrik: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`)
   return {
     owner: OWNER,
     config,
@@ -191,6 +246,12 @@ const echteIo = () => { // Fabrik: erst nach bestandener Aufruf-Prüfung aufgeru
       const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
       execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
     },
+    sammelKontext: () => {
+      const k = ladeSammelKontext();
+      return { ziel: waehleSammelticket(k.offene)?.number ?? null, kommentare: k.kommentare };
+    },
+    postZeilen,
+    heute: () => new Date().toISOString().slice(0, 10),
     ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
     bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
   };
@@ -198,11 +259,12 @@ const echteIo = () => { // Fabrik: erst nach bestandener Aufruf-Prüfung aufgeru
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1791).
-  direktaufruf(process.argv.slice(2), {
-    pruefe: aufrufPruefen,
-    fehlerErgebnis: (argv) => fuehreAus(argv, null),
+  const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  direktaufruf(args, {
+    pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufPruefen(argv)),
+    fehlerErgebnis: (argv) => (configFehler ? aufrufFehler(configFehler) : fuehreAus(argv, null)),
     vorbereiten: () => mitKontingent("spezifikation", { arten: ["core"] }),
-    io: echteIo,
+    io: () => echteIo(config),
     fuehreAus,
   });
 }

@@ -1,0 +1,29 @@
+{
+  "paare": [
+    ".agents/skills/factory/ablauf.md -> docs/harness-glossar.md",
+    ".agents/skills/factory/ablauf.md -> docs/model-routing.md",
+    ".agents/skills/factory/ablauf.md -> docs/ticket-reihenfolge.md",
+    ".agents/skills/review-lenses/SKILL.md -> docs/agent-harness.md",
+    ".agents/skills/review-lenses/SKILL.md -> docs/model-routing.md",
+    ".agents/skills/review-lenses/SKILL.md -> docs/referenz/repo-landkarte.md",
+    ".claude/agents/explore.md -> docs/model-routing.md",
+    ".claude/agents/factory-lens.md -> docs/agent-harness-faq.md",
+    ".claude/agents/factory-lens.md -> docs/agent-harness.md",
+    ".claude/agents/factory-lens.md -> docs/model-routing.md",
+    ".claude/agents/factory-planer.md -> docs/model-routing.md",
+    ".claude/agents/factory-planer.md -> docs/referenz/anlaufstellen.md",
+    ".claude/agents/factory-umsetzer.md -> docs/agent-harness-faq.md",
+    ".claude/agents/factory-umsetzer.md -> docs/model-routing.md",
+    "AGENTS.md -> docs/adr/0014-leitplanken-ohne-label-riegel.md",
+    "AGENTS.md -> docs/adr/0027-regeln-lockern.md",
+    "AGENTS.md -> docs/agent-harness-faq.md",
+    "AGENTS.md -> docs/agent-harness.md",
+    "AGENTS.md -> docs/model-routing.md",
+    "AGENTS.md -> docs/referenz/anlaufstellen.md",
+    "AGENTS.md -> docs/referenz/befehle.md",
+    "AGENTS.md -> docs/sicherheit-agenten.md",
+    "AGENTS.md -> docs/ticket-reihenfolge.md",
+    "docs/factory/entscheidungsprotokoll.md -> docs/adr/0027-regeln-lockern.md",
+    "docs/factory/entscheidungsprotokoll.md -> docs/model-routing.md"
+  ]
+}

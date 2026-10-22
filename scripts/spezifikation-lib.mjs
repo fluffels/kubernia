@@ -7,6 +7,9 @@
  * Schlüssel, wirft der Einstieg (kein stiller Deutsch-Standardwert).
  * Ausnahmen (Sammel-, Status-, Epic-Tickets) entscheidet der Aufrufer über das Prädikat `ausgenommen`; Bestand (Nummer unter `hartAb`)
  * wird nur berichtet, Neues ist hart.
+ * Blocker-Zeile (#1860): ein Abhängigkeitssatz (geschlossene Liste `abhaengigkeit`, `#` steht für die Ticketnummer, z.B. „folgt nach #“) nennt eine Nummer,
+ * die auch als Zeile `<blocker> #<nr>` im Body stehen muss, sonst lässt die Auswahl das Ticket frei (`blockerNummern`, SSOT für Lesen und Schreiben).
+ * Grenze: nur diese Sätze; jede andere Formulierung einer Abhängigkeit erkennt das Gate nicht. Code-Fences und Inline-Code zählen nicht.
  * Ticketzuschnitt (#1808): ein Allquantor-Kriterium auf einen Heuristik-Wächter (`allquantor`: Allquantor, Relativsatz, Lesewort im selben Satz)
  * ist unbegrenzt und mit Mustern nie vollständig; es braucht die Begrenzung (`begrenzung`). Grenze: nur dieses kleine Satzmuster
  * (Allquantor, Relativsatz, Lesewort ohne Satzende dazwischen); andere Formulierungen desselben Anspruchs erkennt das Gate nicht.
@@ -41,9 +44,21 @@ export function spracheMaengel(sp) {
   if (!Array.isArray(sp.akzeptanzkriterien) || sp.akzeptanzkriterien.length === 0 || !sp.akzeptanzkriterien.every(istText)) {
     maengel.push("sprache.spezifikation.akzeptanzkriterien muss eine nicht-leere Liste nicht-leerer Strings sein");
   }
+  if (!istText(sp.blocker)) maengel.push("sprache.spezifikation.blocker muss ein nicht-leerer String sein");
+  if (!Array.isArray(sp.abhaengigkeit) || sp.abhaengigkeit.length === 0 || !sp.abhaengigkeit.every((s) => istText(s) && s.split("#").length === 2)) {
+    maengel.push("sprache.spezifikation.abhaengigkeit muss eine nicht-leere Liste von Sätzen mit genau einem „#“ als Platz der Ticketnummer sein");
+  }
   for (const k of ["negativfall", "begrenzung", "allquantor"]) maengel.push(...musterMaengel(sp[k], k));
   return maengel;
 }
+
+/** Maskiert jedes Zeichen außer Buchstaben und Ziffern als `\u{…}` (gültig im Unicode-Modus; die Lib bleibt importfrei). */
+const maskiere = (s) => s.replace(/[^\p{L}\p{N}]/gu, (c) => `\\u{${c.codePointAt(0).toString(16)}}`);
+/** Text als Regex-Quelle: Zeichen maskiert, Leerraum beliebig lang (auch Zeilenumbruch). */
+const textMuster = (s) => s.trim().split(/\s+/).map(maskiere).join("\\s+");
+/** Wortgrenze für Unicode-Text (`\b` kennt kein ä): davor/danach kein Buchstabe oder keine Ziffer. */
+const VOR = "(?<![\\p{L}\\p{N}])";
+const NACH = "(?![\\p{L}\\p{N}])";
 
 /** Prüft den Wörterbuch-Block (`spracheMaengel`) und baut daraus Regexe und Meldungen; wirft ohne (vollständigen) Block. Pur. */
 function wortschatz(sprache) {
@@ -57,7 +72,15 @@ function wortschatz(sprache) {
   const begrenzung = muster("begrenzung");
   const allquantor = muster("allquantor");
   const ak = s.akzeptanzkriterien[0];
+  const abhaengigkeit = s.abhaengigkeit.map((satz) => {
+    const [vor, nach] = satz.split("#");
+    const ende = nach.trim() === "" ? "" : `\\s*${textMuster(nach)}${NACH}`;
+    return new RegExp(`${VOR}${textMuster(vor)}\\s*#(\\d+)${ende}`, "giu");
+  });
   return {
+    blocker: s.blocker,
+    blockerRe: () => new RegExp(`${VOR}${textMuster(s.blocker)}${NACH}([^(\\n]*)`, "giu"),
+    abhaengigkeit,
     ziel: s.ziel,
     akNamen: s.akzeptanzkriterien,
     nachMerge: s.nachMerge,
@@ -71,6 +94,7 @@ function wortschatz(sprache) {
       akOhneListe: `\`## ${ak}\` ohne Listenpunkt`,
       keinNegativ: `kein ${negativ.wort} in den ${ak} (ein Kriterium mit dem Wort „${negativ.wort}“)`,
       alleNachMerge: `alle ${ak} beginnen mit „${s.nachMerge}“: die Abnahme hätte nichts zu prüfen (mindestens ein Kriterium muss vor dem Merge prüfbar sein)`,
+      abhaengigkeit: (satz, nr) => `Abhängigkeitssatz „${satz}“ ohne Zeile „${s.blocker} #${nr}“`,
       allquantor: (k) => `${k}: Allquantor („${allquantor.wort}“) auf einen Heuristik-Wächter ist unbegrenzt: die Begrenzung als geschlossene Liste nennen („${begrenzung.wort} …“)`,
     },
   };
@@ -100,6 +124,52 @@ function abschnitt(body, namen) {
   return gefunden ? zeilen : null;
 }
 
+/**
+ * Die Nummern hinter der Blocker-Zeile (`sprache.blocker`, z.B. „blockiert durch #12, #13 (nur solange …)“): zeilenweise, bis zu einer öffnenden Klammer
+ * oder dem Zeilenende, Groß-/Kleinschreibung egal. SSOT für Lesen (Auswahl) und Schreiben (anlegen, Sammelticket) der Zeile; wirft ohne Sprache. Pur.
+ */
+export function blockerNummern(body, sprache) {
+  const w = wortschatz(sprache);
+  const nummern = new Set();
+  for (const zeile of String(body ?? "").split(/\r?\n/)) {
+    for (const m of zeile.matchAll(w.blockerRe())) {
+      for (const n of m[1].matchAll(/#(\d+)/g)) nummern.add(Number(n[1]));
+    }
+  }
+  return [...nummern];
+}
+
+/** Text ohne Code-Fences und ohne Inline-Code (dort steht Beispieltext, keine Abhängigkeit). */
+function ohneCode(body) {
+  let fence = false;
+  const zeilen = [];
+  for (const zeile of String(body ?? "").split(/\r?\n/)) {
+    if (/^\s*(?:```|~~~)/.test(zeile)) {
+      fence = !fence;
+      continue;
+    }
+    if (!fence) zeilen.push(zeile.replace(/`[^`\n]*`/g, ""));
+  }
+  return zeilen.join("\n");
+}
+
+/** Mängel „Abhängigkeitssatz ohne passende Blocker-Zeile“, je Nummer einer. Pur. */
+function abhaengigkeitsMaengel(body, w, sprache) {
+  const text = ohneCode(body);
+  const gedeckt = new Set(blockerNummern(body, sprache));
+  const gemeldet = new Set();
+  const maengel = [];
+  for (const re of w.abhaengigkeit) {
+    for (const m of text.matchAll(re)) {
+      const nr = Number(m[1]);
+      if (gedeckt.has(nr) || gemeldet.has(nr)) continue;
+      gemeldet.add(nr);
+      maengel.push(w.meldung.abhaengigkeit(m[0].replace(/\s+/g, " "), nr));
+    }
+  }
+  return maengel;
+}
+
 /** Mängel einer Spezifikation als Textliste (leer = vollständig). Pur. */
 export function spezifikationsMaengel(body, sprache) {
   const w = wortschatz(sprache);
@@ -117,6 +187,7 @@ export function spezifikationsMaengel(body, sprache) {
     if (liste.length > 0 && liste.every((c) => c.nachMerge)) maengel.push(w.meldung.alleNachMerge);
     for (const c of liste) if (w.allquantor.test(c.text.replace(/\s+/g, " ")) && !w.begrenzung.test(c.text)) maengel.push(w.meldung.allquantor(c.k));
   }
+  maengel.push(...abhaengigkeitsMaengel(body, w, sprache));
   return maengel;
 }
 
