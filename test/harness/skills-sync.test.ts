@@ -172,6 +172,32 @@ describe("pruefeSkills: Übergangsliste", () => {
     expect(stand([], [zeiger], { demo: "#7" }).some((b) => b.meldung.includes("veraltet"))).toBe(true);
   });
 
+  test("das Ticket muss genau `#<nr>` heißen: Text davor oder dahinter ist rot", () => {
+    for (const ticket of ["siehe #1849", "#1849 später", "1849", "#"]) {
+      expect(stand([], [voll], { voll: ticket }).map((b) => b.meldung), ticket).toEqual(["Eintrag ohne Ticket (#<nr>)"]);
+    }
+    expect(stand([], [voll], { voll: "#1849" })).toEqual([]);
+  });
+
+  test("Zeiger-Ordner ohne SKILL.md: bei vorhandener Quelle fehlt der Zeiger", () => {
+    const q: Quelle = { ordner: "demo", text: QUELLE };
+    const b = stand([q], [{ ordner: "demo", text: null, dateien: [] }]);
+    expect(b.map((x) => x.datei)).toEqual([".claude/skills/demo/SKILL.md"]);
+    expect(b[0].meldung).toContain("Zeiger fehlt");
+  });
+
+  test("Zeiger-Ordner ohne SKILL.md und ohne Quelle ist rot, außer er steht in der Übergangsliste", () => {
+    const leer: Zeiger = { ordner: "leer", text: null, dateien: [] };
+    expect(stand([], [leer]).map((x) => x.datei)).toEqual([".claude/skills/leer/SKILL.md"]);
+    // Der Eintrag dahinter hat keinen Volltext-Skill: veraltet (ein Ordner ohne SKILL.md ist keiner).
+    expect(stand([], [leer], { leer: "#3" }).map((x) => x.meldung)).toEqual([expect.stringContaining("veraltet")]);
+  });
+
+  test("Frontmatter ohne schließendes `---` zählt als fehlend", () => {
+    const b = stand([{ ordner: "offen", text: "---\nname: x\ndescription: y\n" }], []);
+    expect(b.map((x) => x.meldung)).toEqual(["Quelle ohne Frontmatter"]);
+  });
+
   test("die echte Liste nennt je Eintrag ein Ticket", () => {
     for (const ticket of Object.values(sync.UEBERGANG)) expect(ticket).toMatch(/^#\d+$/);
   });
@@ -303,6 +329,44 @@ describe("lauf auf einem Temp-Verzeichnis", () => {
     expect(existsSync(zeigerPfad(w, "kaputt"))).toBe(false);
   });
 
+  test("Quelle ohne name, Quellordner ohne SKILL.md: unbrauchbar, kein Zeiger", () => {
+    const w = neu();
+    schreibe(w, ".agents/skills/ohnename/SKILL.md", "---\ndescription: d\n---\n");
+    mkdirSync(join(w, ".agents/skills/leer"), { recursive: true });
+    schreibe(w, ".agents/skills/offen/SKILL.md", "---\nname: offen\ndescription: d\n");
+    const e = sync.lauf({ wurzel: w });
+    expect([...e.unbrauchbar].sort()).toEqual(["leer", "offen", "ohnename"]);
+    expect(e.geschrieben).toEqual([]);
+    expect(existsSync(join(w, ".claude/skills"))).toBe(false);
+  });
+
+  test("leerer Zeiger-Ordner wird gefüllt", () => {
+    const w = neu();
+    schreibe(w, ".agents/skills/demo/SKILL.md", QUELLE);
+    mkdirSync(join(w, ".claude/skills/demo"), { recursive: true });
+    expect(sync.lauf({ wurzel: w }).geschrieben).toEqual([".claude/skills/demo/SKILL.md"]);
+    expect(readFileSync(zeigerPfad(w), "utf8")).toBe(sync.zeigerText("demo", QUELLE));
+  });
+
+  test("leerer Zeiger-Ordner ohne Quelle wird mit --prune nie gelöscht, nur gemeldet", () => {
+    const w = neu();
+    mkdirSync(join(w, ".claude/skills/leer"), { recursive: true });
+    const e = sync.lauf({ wurzel: w, prune: true });
+    expect(e.geloescht).toEqual([]);
+    expect(e.gemeldet).toEqual([".claude/skills/leer"]);
+    expect(existsSync(join(w, ".claude/skills/leer"))).toBe(true);
+  });
+
+  test("ein Zeiger mit CRLF und Marke gilt als Zeiger und wird auf LF umgeschrieben", () => {
+    const w = neu();
+    schreibe(w, ".agents/skills/demo/SKILL.md", QUELLE);
+    schreibe(w, ".claude/skills/demo/SKILL.md", sync.zeigerText("demo", QUELLE).replace(/\n/g, "\r\n"));
+    const e = sync.lauf({ wurzel: w });
+    expect(e.gemeldet).toEqual([]);
+    expect(e.geschrieben).toEqual([".claude/skills/demo/SKILL.md"]);
+    expect(readFileSync(zeigerPfad(w), "utf8")).toBe(sync.zeigerText("demo", QUELLE));
+  });
+
   test("unbekanntes Tool wirft", () => {
     expect(() => sync.lauf({ wurzel: neu(), tool: "cursor" })).toThrow(/cursor/);
   });
@@ -315,6 +379,45 @@ describe("Kommandozeile", () => {
     expect(cli("--tool", "cursor").status).toBe(2);
     expect(cli("--unbekannt").status).toBe(2);
     expect(cli("--tool").status).toBe(2);
+  });
+
+  describe("Exit 1 in einem kopierten Skript-Baum (die Wurzel ergibt sich aus dem Skriptpfad)", () => {
+    const temp: string[] = [];
+    afterEach(() => {
+      for (const o of temp.splice(0)) rmSync(o, { recursive: true, force: true });
+    });
+    const baum = (quelle: string): string => {
+      const w = mkdtempSync(join(tmpdir(), "skills-sync-cli-"));
+      temp.push(w);
+      mkdirSync(join(w, "scripts"), { recursive: true });
+      for (const f of ["skills-sync.mjs", "flag-lib.mjs"]) writeFileSync(join(w, "scripts", f), readFileSync(join(WURZEL, "scripts", f)));
+      mkdirSync(join(w, ".agents/skills/demo"), { recursive: true });
+      writeFileSync(join(w, ".agents/skills/demo/SKILL.md"), quelle);
+      return w;
+    };
+    const lauf = (w: string, ...args: string[]) => spawnSync(process.execPath, [join(w, "scripts/skills-sync.mjs"), ...args], { cwd: w, encoding: "utf8" });
+
+    test("--check bei Drift: Exit 1, nennt die Datei und die Fix-Zeile, schreibt nichts", () => {
+      const w = baum(QUELLE);
+      const r = lauf(w, "--check");
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(".claude/skills/demo/SKILL.md");
+      expect(r.stderr).toContain("npm run skills:sync");
+      expect(existsSync(join(w, ".claude"))).toBe(false);
+    });
+
+    test("ohne Flag: Exit 0 und schreibt den Zeiger", () => {
+      const w = baum(QUELLE);
+      expect(lauf(w).status).toBe(0);
+      expect(existsSync(join(w, ".claude/skills/demo/SKILL.md"))).toBe(true);
+    });
+
+    test("unbrauchbare Quelle: Exit 1 auch ohne Flag", () => {
+      const w = baum("---\nname: demo\n---\n");
+      const r = lauf(w);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(".agents/skills/demo/SKILL.md");
+    });
   });
 
   test("--check auf dem echten Repo endet mit Exit 0 und `--tool claude` ist erlaubt", () => {
