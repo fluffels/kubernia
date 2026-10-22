@@ -121,7 +121,7 @@ Warum überhaupt Subagenten:
 - Schleicht sich **Präsentation in die Domäne** (oder umgekehrt) inhaltlich ein, ohne einen Import zu verletzen?
 - **God-Function / zu viel in einer Einheit** (der LOC-Deckel `check:size` sieht nur Dateien, nicht Funktionen)?
 - **Duplizierung** einer schon existierenden Fabrik/Abstraktion statt Wiederverwendung?
-- **Projekt-Leitfrage (oberste Regel, Projekt-Block der AGENTS.md):** trägt der Ansatz noch bei 10× Umfang, oder reproduziert er dasselbe Problem größer? Granularität und die Struktur-Regeln des Projekt-Blocks (etwa Inhalt als Daten) mitgedacht?
+- **Projekt-Leitfrage (oberste Regel, Projekt-Block der AGENTS.md; fehlt sie, entfällt der Punkt):** trägt der Ansatz noch bei 10× Umfang, oder reproduziert er dasselbe Problem größer? Granularität und die Struktur-Regeln des Projekt-Blocks (etwa Inhalt als Daten) mitgedacht?
 - **Abfragen und Zählungen:** neue Abfragen oder Zählungen (auch im Delta eines Fixes) auf Standardgrenzen prüfen: `gh issue list` ohne `--limit` liefert nur 30 Treffer, `gh api` ohne `--paginate` nur eine Seite.
 
 **Lens 2 — Requirement-Treue.** Tut der Diff **wirklich, was das Ticket verlangt**?

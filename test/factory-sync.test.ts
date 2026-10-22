@@ -28,6 +28,7 @@ interface Lib {
   setzeBlock(t: string, block: string, blockText: string): string;
   markerStart(id: string): string;
   markerEnde(id: string): string;
+  wirdVerteilt(e: { ring: string }): boolean;
 }
 interface Opt {
   cwd?: string;
@@ -43,7 +44,7 @@ interface Drift {
   cli(argv: string[], opt?: Opt): number;
 }
 const lib = rawLib as unknown as Lib;
-const { wirdVerteilt } = rawLib as unknown as { wirdVerteilt: (e: { ring: string }) => boolean };
+const { wirdVerteilt } = lib;
 const sync = rawSync as unknown as Sync;
 const drift = rawDrift as unknown as Drift;
 const pc = rawPc as unknown as { PROJEKT_CONFIG: string };

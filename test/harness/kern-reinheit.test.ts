@@ -878,7 +878,9 @@ describe("Stardew-Regeln nicht im Kern (#1709, ADR 0022 F5)", () => {
   test("im Projekt-Block der AGENTS.md ist der Begriff erlaubt (nur der Kern-Block zählt)", () => {
     const agents = lesenWurzel("AGENTS.md") ?? "";
     assert.match(agents.slice(agents.indexOf("<!-- factory-projekt:start -->")), /Stardew/);
-    assert.deepEqual(vergleiche(IST(mitAnhang("AGENTS.md", "Stardew im Projekt-Block-Ende")), baseline), []);
+    const imBlock = (p: string): string | null => (p === "AGENTS.md" ? agents.replace("<!-- factory-projekt:ende -->", "Stardew zusätzlich im Projekt-Block\n<!-- factory-projekt:ende -->") : lesenWurzel(p));
+    assert.ok(imBlock("AGENTS.md")?.includes("Stardew zusätzlich"), "der Anhang landet im Projekt-Block");
+    assert.deepEqual(vergleiche(IST(imBlock), baseline), []);
   });
 });
 

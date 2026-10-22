@@ -59,7 +59,7 @@ Was du wirklich beschaffst:
 
 ## Projekt-Leitfrage (steht über allem)
 
-⭐ Die **Projekt-Leitfrage** aus dem Projekt-Block der AGENTS.md steht über allem: nur planen, was auch bei vielfachem Umfang trägt, Granularität und Struktur mitdenken; hat das Projekt keine, entfällt die Prüfung. Ist das Ticket ein Epic/eine Phase, ist der „Plan" die **Aufteilung** in session-große Kinder (keine Umsetzung). Details: [AGENTS.md § Oberste Regel](../../AGENTS.md#-oberste-regel--über-allem-auch-über-den-adrs).
+⭐ Die **Projekt-Leitfrage** aus dem Projekt-Block der AGENTS.md steht über allem: nur planen, was auch bei vielfachem Umfang trägt, Granularität und Struktur mitdenken; hat das Projekt keine Leitfrage, entfällt diese Prüfung ganz. Ist das Ticket ein Epic/eine Phase, ist der „Plan" die **Aufteilung** in session-große Kinder (keine Umsetzung). Details: [AGENTS.md § Oberste Regel](../../AGENTS.md#-oberste-regel--über-allem-auch-über-den-adrs).
 
 ## Was der Plan enthält
 
