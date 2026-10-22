@@ -507,7 +507,7 @@ Die Überschrift von #1824 zählt dort als „Teil 8“; gemeint ist F3 **Teil 9
 
 ## Fortschreibung #1829 (2026-10-22): Betrieb ohne Harness im Projekt-Repo (Arbeitsplatz)
 
-Kurzfassung: Für Projekte, in deren Repo vom Harness nichts liegen darf, läuft die Factory in einem **Arbeitsplatz**: ein Ordner über dem Projekt-Klon, der `AGENTS.md`, `.claude/`, `scripts/` und `.factory/` trägt. Claude Code startet dort, der Klon liegt als Unterordner darin. Claude Code lädt diese Dateien von selbst, im Repo des Projekts ändert sich nichts (Probe unten). Die Git-Hooks kommen über die globale Git-Config zu den Repos, nicht über Dateien im Repo. kubernia bleibt **eingebettet**, wie in ADR 0022 beschlossen. Nachteil: die Durchsetzung ist nur lokal, es gibt keinen Server-Check im Projekt.
+Kurzfassung: Für Projekte, in deren Repo vom Harness nichts liegen darf, läuft die Factory in einem **Arbeitsplatz**: ein Ordner über dem Projekt-Klon, der `AGENTS.md`, `.claude/`, `scripts/` und `.factory/` trägt. Claude Code startet dort, der Klon liegt als Unterordner darin. Claude Code lädt diese Dateien von selbst, im Repo des Projekts ändert sich nichts (Probe unten). Die Git-Hooks sollen über die globale Git-Config zu den Repos kommen, nicht über Dateien im Repo; die Config-Doku deckt das, ein praktischer Lauf folgt in #1853. kubernia bleibt **eingebettet**, wie in ADR 0022 beschlossen. Nachteil: die Durchsetzung ist nur lokal, es gibt keinen Server-Check im Projekt.
 
 ### Anforderungen (Pre-Flight-Antworten der Maintainerin vom 2026-10-22)
 
@@ -532,7 +532,7 @@ Quelle: [Kommentar im Ticket #1829](https://github.com/fluffels/kubernia/issues/
 - **Agent SDK** ([Übersicht](https://code.claude.com/docs/en/agent-sdk/overview)): „Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login“, es gilt der API-Key; das SDK ist eine Bibliothek ohne Terminal-Oberfläche.
 - **Managed Settings** ([Doku](https://code.claude.com/docs/en/managed-settings)): `managed-settings.json` und `managed-settings.d/` liegen unter Windows in `C:\Program Files\ClaudeCode\`; wer Administrator ist, kann sie ändern; sie gelten für alle Projekte der Maschine.
 - **Cloud-Sitzungen** ([Doku](https://code.claude.com/docs/en/claude-code-on-the-web), [Settings in cloud sessions](https://code.claude.com/docs/en/settings#settings-in-cloud-sessions)): laufen auf einem frischen Klon des Repos; `~/.claude/settings.json` und `.claude/settings.local.json` werden nicht gelesen; Plugins aus Marketplaces laden nicht.
-- **Git** ([git-config](https://git-scm.com/docs/git-config), [githooks](https://git-scm.com/docs/githooks)): `includeIf "gitdir:<muster>"` bindet eine Config-Datei, wenn der Pfad des `.git`-Ordners zum Muster passt; `core.hooksPath` ersetzt `$GIT_DIR/hooks`; `GIT_CONFIG_COUNT` und `GIT_CONFIG_KEY_<n>` setzen Config-Werte für den Prozess. Dass ein `includeIf`-Block `core.hooksPath` setzen darf, steht dort nicht ausdrücklich; Git liest den Block wie jede Config-Datei, die Probe dazu fehlt: **unbelegt** (Folgeticket #1853 belegt es).
+- **Git** ([git-config](https://git-scm.com/docs/git-config), [githooks](https://git-scm.com/docs/githooks)): `includeIf "gitdir:<muster>"` bindet eine Config-Datei, wenn der Pfad des `.git`-Ordners zum Muster passt; `core.hooksPath` ersetzt `$GIT_DIR/hooks`; `GIT_CONFIG_COUNT` und `GIT_CONFIG_KEY_<n>` setzen Config-Werte für den Prozess. Eingebundene Dateien gelten nach git-config so, „as if they had been found at the location of the include directive“; ein `core.hooksPath` in einer per `includeIf` eingebundenen Datei wirkt also wie in der Hauptdatei. Ein praktischer Lauf fehlt noch (Folgeticket #1853).
 
 ### Probe A (2026-10-22, lokal, `claude -p`, Modell haiku, zwei Läufe)
 
@@ -553,20 +553,20 @@ Aufbau: ein Ordner mit `AGENTS.md` (Markersatz), `.claude/settings.json` (PreToo
 |---|---|---|---|---|---|---|---|---|
 | O1 eingebettet per Sync (heute) | `AGENTS.md`, `.claude/`, `scripts/`, Workflows, `.factory/` | nichts nötig | lokal und Server (Required Checks, wo das Projekt sie erlaubt) | Sync-PR je Projekt | gering, läuft | Harness gehört dem Repo-Eigner | ADR 0022 | **scheidet aus** nach Frage 2; bleibt Betriebsart für eigene Repos |
 | O2 `.git/info/exclude` | dieselben Dateien, nur ungetrackt | nichts | lokal | Sync wie O1 | gering | Dateien liegen weiter im Arbeitsbaum des Repos | Fakten Git (Dateien bleiben im Repo-Ordner) | **scheidet aus** nach Frage 2 |
-| O3 User-Scope `~/.claude/*` | keine | Agenten, Skills, Regeln, Settings in `~/.claude` | lokal; gilt in jedem Projekt der Maschine | Dateien kopieren; eine Version je Rechner | mittel | widerspricht Frage 6 (Version je Projekt), Hooks mit Projektbezug nicht trennbar | Memory, Settings (gelesen 2026-10-22) | nur Baustein, kein Träger |
+| O3 User-Scope `~/.claude/*` | keine | Agenten, Skills, Regeln, Settings in `~/.claude` | lokal; gilt in jedem Projekt der Maschine | Dateien kopieren; eine Version je Rechner | mittel | eine Version für alle Projekte der Maschine, Hooks mit Projektbezug nicht trennbar | Memory, Settings (gelesen 2026-10-22) | nur Baustein, kein Träger |
 | O3b `CLAUDE_CONFIG_DIR` je Projekt | keine | eigener Config-Ordner je Projekt | lokal | wie O3, je Ordner | mittel | getrennter Login und Langfuse-Zustand: **unbelegt** | Settings (nur Existenz der Variable) | Variante von O3, nicht empfohlen ohne Beleg |
 | O4 Managed Settings, verwaltete `CLAUDE.md` | keine | `C:\Program Files\ClaudeCode\` | lokal, stärkste Stufe; Administrator nötig | Datei ersetzen | gering | wirkt global, ändert sich nur mit Adminrechten | Managed Settings, Memory | Zusatz für projektneutrale Denies |
 | O5 Plugin im User-Scope oder `--plugin-dir` | keine | Plugin-Ordner | lokal | Marketplace oder Ordner | mittel | trägt keine `CLAUDE.md`, keine `permissions`; Namensraum ändert Agentennamen (Guards, Langfuse-Reihen) | Plugins-Referenz | kein Träger |
-| O6 Launcher: Arbeitsverzeichnis = Repo, mit `--add-dir`, `--settings`, `--append-system-prompt-file` | `settings.local.json` und `.claude/worktrees/` landen im Repo | Harness-Ordner außerhalb | lokal | Ordner aktualisieren | mittel | `--add-dir` lädt die meiste `.claude/`-Konfiguration nicht und gibt Schreibzugriff auf den Harness | CLI, Permissions, Settings | Rückfall, falls O7 scheitert |
+| O6 Launcher: Arbeitsverzeichnis = Repo, mit `--add-dir`, `--settings`, `--append-system-prompt-file` | `settings.local.json` und `.claude/worktrees/` landen im Repo | Harness-Ordner außerhalb | lokal | Ordner aktualisieren | mittel | `--add-dir` lädt die meiste `.claude/`-Konfiguration nicht und gibt Schreibzugriff auf den Harness | CLI, Permissions, Settings | **scheidet aus** nach Frage 2 (legt Dateien im Repo ab) |
 | **O7 Arbeitsplatz** (Arbeitsverzeichnis = Arbeitsplatz, Klon als Unterordner) | keine (Probe) | Arbeitsplatz-Ordner mit allen Harness-Dateien | lokal; Hooks per O9 | `factory-sync --ziel <arbeitsplatz>` von einem Tag, ohne PR | mittel (Folgetickets) | Fremdrepo-`.claude/` wirkt nicht (gewollt); nur lokale Durchsetzung | Memory, Permissions, Probe A | **empfohlen** |
 | O8 Wrapper-Repo mit Submodul | keine | Wrapper-Repo | lokal | Submodul-Zeiger | mittel | Submodul pinnt SHAs, Pflege je Projekt | Fakten Git (nicht geprüft): **unbelegt** | verworfen, Variante von O7 |
-| O9 `core.hooksPath` über `includeIf` | keine | globale Git-Config plus Hooks-Ordner im Arbeitsplatz | lokal (umgehbar mit `--no-verify`) | Hooks-Ordner im Sync | gering | `includeIf` setzt `hooksPath`: **unbelegt** (Probe in #1853) | git-config, githooks | Baustein für O7 |
+| O9 `core.hooksPath` über `includeIf` | keine | globale Git-Config plus Hooks-Ordner im Arbeitsplatz | lokal (umgehbar mit `--no-verify`) | Hooks-Ordner im Sync | gering | `includeIf` setzt `hooksPath` laut git-config wie eine Hauptdatei; praktischer Lauf in #1853 | git-config, githooks | Baustein für O7 |
 | O10 Agent SDK | keine | eigenes Programm | lokal oder Server | Paketversion | hoch | keine Terminal-Oberfläche, API-Key statt Login (widerspricht Frage 3) | Agent SDK | beobachten |
 | O11 Cloud-Sitzung, Managed Agents | liest `.claude/` aus dem Klon | nicht gelesen (User-Scope) | Anthropic-Umgebung | je Sitzung | mittel | nicht lokal; Code und Repo laufen beim Anbieter | Cloud-Doku, Settings in cloud sessions | **scheidet aus** (Frage 3) |
 | O12 Devcontainer, Docker Sandboxes | je Konfiguration | Container-Konfiguration außerhalb des Repos möglich: **unbelegt** | lokal | Image | hoch | siehe ADR 0025 | ADR 0025 | orthogonal, passt zu O7 |
 | O13 eigener CI-Spiegel | keine | Spiegel-Repo mit CI | Server auf dem Spiegel | Push in den Spiegel | hoch | Commit-Status im Fremdrepo wäre Außenwirkung | unbelegt | optionaler Zusatz, nicht Teil der Entscheidung |
 
-Ticketsystem im Projekt nötig: bei O1 bis O13 nein, das Ticketsystem bleibt wie heute (kubernia: GitHub); die Anbindung anderer Systeme ist #1851. Telemetrie: Langfuse läuft über Hooks und Plugins des Arbeitsplatzes, nicht über das Repo; je Arbeitsplatz abschaltbar zu machen ist Teil von #1853. Für Kundenrepos gilt es strenger: Quelltext verlässt die Maschine ohnehin zum Cloud-Modell (Frage 7).
+Ticketsystem im Projekt nötig: bei O1 bis O13 nein, das Ticketsystem bleibt wie heute (kubernia: GitHub); die Anbindung anderer Systeme ist #1851. Telemetrie: Langfuse läuft über Hooks und das Plugin, nicht über das Repo; nach [ADR 0019](0019-langfuse-plugin-im-user-scope.md) ist das Plugin im User-Scope aktiv und erfasst damit auch Sitzungen im Arbeitsplatz, solange es dort nicht abgeschaltet ist; das Abschalten je Arbeitsplatz ist Teil von #1853. Für Kundenrepos gilt es strenger: Quelltext verlässt die Maschine ohnehin zum Cloud-Modell (Frage 7).
 
 ### Ähnliche Ansätze anderer Werkzeuge (gelesen 2026-10-22)
 
@@ -575,13 +575,13 @@ Ticketsystem im Projekt nötig: bei O1 bis O13 nein, das Ticketsystem bleibt wie
 - **Aider** ([Konventionen](https://aider.chat/docs/usage/conventions.html)): `--read` oder `read:` in `.aider.conf.yml`; ein Ort in der Home-Config steht dort nicht: unbelegt.
 - Persönliche Anweisungen bei Copilot: nicht gelesen, **unbelegt**.
 
-Alle drei bestätigen das Muster „globale Datei plus Ordner über dem Repo“; keines beweist, dass ein Ordner über dem Repo Hooks und Berechtigungen trägt. Das belegt nur die Probe.
+Nur Gemini liest erwiesenermaßen auch Ordner über dem Repo; Codex liest eine globale Datei und Projektdateien, Aider ist unbelegt. Keines der Werkzeuge belegt, dass ein Ordner über dem Repo Hooks und Berechtigungen trägt. Das belegt nur die Probe.
 
 ### Entscheidung
 
 **Entscheidung: Betriebsart Arbeitsplatz (O7) für Projekte ohne Harness im Repo, Git-Hooks über `includeIf` in der globalen Git-Config (O9), kubernia bleibt eingebettet, weil nur O7 zugleich vier Dinge erfüllt: nichts im Projekt-Repo, native Ladeorte ohne Namensraum, mehrere Repos je Projekt und den unveränderten Sync.**
 
-Eine Option, die Dateien im Repo braucht (O1, O2), scheidet nach Frage 2 aus, ebenso O11 (nicht lokal). Eigenschaften ohne Quelle (O3b, O8, O9-Teil, O12, O13) tragen keine Empfehlung. Kippkriterium: findet sich eine unvermeidbare Datei im Repo, gilt der Rückfall O6; scheitert auch er, bleibt der Harness im Projekt-Repo, und das steht dann hier.
+Eine Option, die Dateien im Repo braucht (O1, O2, O6), scheidet nach Frage 2 aus, ebenso O11 (nicht lokal). Eigenschaften ohne Quelle (O3b, O8, O12, O13) tragen keine Empfehlung. Kippkriterium: findet sich bei O7 eine unvermeidbare Datei im Repo, bleibt der Harness im Projekt-Repo, und das steht dann hier; einen Rückfall über O6 gibt es nicht, weil er ebenfalls Dateien im Repo ablegt.
 
 ### Wirkung
 
