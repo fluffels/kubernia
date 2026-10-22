@@ -145,8 +145,9 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
 
   test("ausnahmeListen liest beide Listen aus der übergebenen Config, ohne Block sind beide leer", () => {
     const eintrag = { datei: "x.ts", grund: "#7 offen" };
-    const l = ausnahmeListen({ ausnahmen: { groesse: [eintrag], kontext: [] } });
-    assert.deepEqual(l.map((x) => x.eintraege), [[eintrag], []]);
+    const andere = { datei: "y.md", grund: "#8 offen" };
+    const l = ausnahmeListen({ ausnahmen: { groesse: [eintrag], kontext: [andere] } });
+    assert.deepEqual(l.map((x) => x.eintraege), [[eintrag], [andere]]);
     assert.deepEqual(ausnahmeListen({}).map((x) => x.eintraege), [[], []]);
     assert.throws(() => ausnahmeListen({ ausnahmen: "kaputt" }), /ausnahmen[\s\S]*Fix:/);
   });
