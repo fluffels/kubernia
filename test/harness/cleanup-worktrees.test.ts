@@ -31,9 +31,9 @@ import * as cleanupModule from "../../scripts/worktree-aufraeumen.mjs";
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as cliModule from "../../scripts/cleanup-worktrees.mjs";
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
-import { AUFRUF_EXIT as aufrufExitRoh } from "../../scripts/flag-lib.mjs";
+import * as flagLib from "../../scripts/flag-lib.mjs";
 
-const AUFRUF_EXIT = aufrufExitRoh as number;
+const { AUFRUF_EXIT } = flagLib as unknown as { AUFRUF_EXIT: number };
 
 /**
  * Die Modul-Form EINMAL deklarieren und den Import genau hier casten. Vorher hing
@@ -1304,9 +1304,9 @@ describe("CLI main: --branches und --fix (#1837)", () => {
     assert.deepEqual(aufruf(["--branches", "--fix"]), { calls: [["/wurzel", true]], code: 7 });
   });
   test("ein unbekanntes Flag liefert AUFRUF_EXIT als Rückgabe, ohne den Prozess zu beenden und ohne modus", () => {
-    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => {
       throw new Error("process.exit darf main nicht beenden");
-    }) as never);
+    });
     const fehler = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const { calls, code } = aufruf(["--gibtsnicht"]);

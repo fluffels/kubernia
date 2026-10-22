@@ -2,7 +2,7 @@
  * package.json, kein src/), läuft durch denselben Kern (Engine, ADR-Liste, Zeitleiste, Schichten Soll/Ist)
  * mit eigener Config, eigener Schicht-Definition, eigenem Import-Adapter und eigener Registry (Kern-Registry plus
  * optional `generatoren` aus der Config, ADR 0022 F6). Dazu ein
- * Import-Wächter: der übertragbare Kern importiert nichts aus dem Kubernia- oder Harness-Stack.
+ * Import-Wächter: die Module der Ring-`kern`-Ableitung importieren nichts außerhalb ihrer Import-Hülle (`node:*` und andere Kern-Module).
  * Das Fixture entsteht im Temp-Ordner (test/support/tmp-fixture.ts), nichts davon liegt im Repo.
  */
 import { describe, test } from "vitest";
@@ -246,7 +246,7 @@ describe("docs-gen ohne eigene Registry: Kern plus config.generatoren (ADR 0022 
   });
 });
 
-describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", () => {
+describe("Kern-Schnitt: Module der Ring-kern-Ableitung importieren nichts außerhalb ihrer Import-Hülle", () => {
   // Bekannte Grenze: erkannt werden statische `import`/`export … from`, `import("…")`, `require("…")` und `createRequire(…)("…")` mit
   // einfachen oder doppelten Anführungszeichen (#1428 Z12). Nicht erkannt: ein dynamischer Pfad (z.B. die Layers-Datei, die schichten.mjs
   // aus der Config lädt, bleibt erlaubt) und ein `createRequire`-Ergebnis, das erst in einer Variablen steht.
