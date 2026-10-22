@@ -433,6 +433,24 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     });
   });
 
+  test("Hinweissätze zu sonstigen Dateien (#1850): .claude nur Neustart, Skill-Quelle nur Aufruf, beides beide, .agents außerhalb von skills Neustart", () => {
+    const text = (sonstige: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [], sonstige, lockGeaendert: false } }, { sitzungsbasis: false });
+    const NEUSTART = "gelten erst nach einem Session-Neustart";
+    const AUFRUF = "ab dem nächsten Skill-Aufruf";
+    const nurClaude = text([".claude/settings.json"]);
+    expect(nurClaude).toContain(NEUSTART);
+    expect(nurClaude).not.toContain(AUFRUF);
+    const nurQuelle = text([".agents/skills/forum/SKILL.md"]);
+    expect(nurQuelle).toContain(AUFRUF);
+    expect(nurQuelle).not.toContain(NEUSTART);
+    const beides = text([".claude/settings.json", ".agents/skills/forum/SKILL.md"]);
+    expect(beides).toContain(NEUSTART);
+    expect(beides).toContain(AUFRUF);
+    const fremd = text([".agents/README.md"]);
+    expect(fremd).toContain(NEUSTART);
+    expect(fremd).not.toContain(AUFRUF);
+  });
+
   test("Ticket-Skills (#1850): „Skill neu lesen“ nennt immer die Quelle, nie den Zeiger, und doppelt nichts", () => {
     const harness = (skill: string[]) => ({ skill, agenten: [], sonstige: [], lockGeaendert: false });
     const text = (skill: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: harness(skill) }, { sitzungsbasis: false });

@@ -37,7 +37,7 @@ export function frontmatterBlock(text) {
 export function quellProblem(q) {
   if (q.text === null) return "Ordner ohne SKILL.md";
   if (!frontmatterBlock(q.text)) return "Quelle ohne Frontmatter";
-  const felder = parseFrontmatter(q.text);
+  const felder = parseFrontmatter(frontmatterBlock(q.text));
   const fehlt = ["name", "description"].filter((k) => !felder[k]);
   return fehlt.length ? `Quelle ohne ${fehlt.join(" und ")} im Frontmatter` : null;
 }

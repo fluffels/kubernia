@@ -169,6 +169,18 @@ describe("pruefeSkills: leere und kaputte Ordner", () => {
     expect(stand([], [leer]).map((x) => x.datei)).toEqual([".claude/skills/leer/SKILL.md"]);
   });
 
+  test("leeres Frontmatter vor einem zweiten Block liefert keine Felder, ein leerer Anführungsstrich-Wert zählt als fehlend", () => {
+    const b = stand([{ ordner: "doppelt", text: "---\n---\nname: x\ndescription: d\n---\nRumpf\n" }], []);
+    expect(b.map((x) => x.meldung)).toEqual(["Quelle ohne name und description im Frontmatter"]);
+    const leer = stand([{ ordner: "leer", text: '---\nname: ""\ndescription: d\n---\n' }], []);
+    expect(leer.map((x) => x.meldung)).toEqual(["Quelle ohne name im Frontmatter"]);
+  });
+
+  test("pruefeSkills ohne lose-Angabe wirft nicht und meldet keine lose Datei", () => {
+    const q: Quelle = { ordner: "demo", text: QUELLE };
+    expect(sync.pruefeSkills({ quellen: [q], zeiger: [zeigerVon("demo", QUELLE)] })).toEqual([]);
+  });
+
   test("Frontmatter ohne schließendes `---` zählt als fehlend", () => {
     const b = stand([{ ordner: "offen", text: "---\nname: x\ndescription: y\n" }], []);
     expect(b.map((x) => x.meldung)).toEqual(["Quelle ohne Frontmatter"]);
@@ -515,7 +527,7 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
     expect(gescannt("docs/adr/0022-x.md")).toBe(false);
     expect(gescannt("docs/x.md")).toBe(true);
     expect(gescannt("docs/bild.png")).toBe(false);
-    expect(namen).not.toContain("kein-skill");
+    expect(namen).toEqual(expect.arrayContaining(["factory", "factory-ticket"]));
   });
 
   test("der Scan ist nicht leer und kennt forum und review-lenses als Quellen", () => {
