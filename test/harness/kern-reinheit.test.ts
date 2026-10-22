@@ -852,6 +852,38 @@ describe("Kern-Reinheit (#1610)", () => {
   });
 });
 
+describe("Stardew-Regeln nicht im Kern (#1709, ADR 0022 F5)", () => {
+  const stardew = echteBegriffe.Stardew;
+  const IST = (lies: (p: string) => string | null): Baseline => istZaehlung(manifest.eintraege, lies, echteBegriffe);
+  const mitAnhang = (pfad: string, anhang: string) => (p: string): string | null => (p === pfad ? (lesenWurzel(p) ?? "") + "\n" + anhang + "\n" : lesenWurzel(p));
+
+  test("der Begriff steht in der Projekt-Config und zählt ohne Beachtung der Groß-/Kleinschreibung", () => {
+    assert.ok(stardew, "projektliterale.Stardew fehlt in .factory/projekt.json, der Wächter wäre still aus");
+    assert.deepEqual(zaehle("STARDEW stardew Stardew", { Stardew: stardew }), { Stardew: 3 });
+  });
+
+  test("keine Kern-Einheit trägt den Begriff, die Baseline kennt ihn nicht mehr", () => {
+    const treffer = Object.entries(IST(lesenWurzel)).filter(([, z]) => "Stardew" in z).map(([einheit]) => einheit);
+    assert.deepEqual(treffer, []);
+    assert.deepEqual(Object.values(baseline).filter((z) => "Stardew" in z), []);
+  });
+
+  test("ein eingeschleuster Treffer ist rot, in einer Markdown- und in einer Skript-Einheit", () => {
+    const md = ".claude/agents/factory-planer.md";
+    const skript = "scripts/check-size.mjs";
+    assert.deepEqual(vergleiche(IST(mitAnhang(md, "stardew")), baseline), [`${md}: neues Projektliteral 'Stardew' (1x), Kern-Einheiten bleiben literalfrei`]);
+    assert.deepEqual(vergleiche(IST(mitAnhang(skript, "// STARDEW")), baseline), [`${skript}: neues Projektliteral 'Stardew' (1x), Kern-Einheiten bleiben literalfrei`]);
+  });
+
+  test("im Projekt-Block der AGENTS.md ist der Begriff erlaubt (nur der Kern-Block zählt)", () => {
+    const agents = lesenWurzel("AGENTS.md") ?? "";
+    assert.match(agents.slice(agents.indexOf("<!-- factory-projekt:start -->")), /Stardew/);
+    const imBlock = (p: string): string | null => (p === "AGENTS.md" ? agents.replace("<!-- factory-projekt:ende -->", "Stardew zusätzlich im Projekt-Block\n<!-- factory-projekt:ende -->") : lesenWurzel(p));
+    assert.ok(imBlock("AGENTS.md")?.includes("Stardew zusätzlich"), "der Anhang landet im Projekt-Block");
+    assert.deepEqual(vergleiche(IST(imBlock), baseline), []);
+  });
+});
+
 describe("Ring-Tabelle (ADR 0029)", () => {
   test("RING_IMPORTE deckt genau die Ringe ab, jede Regel und NUR_FACTORY nennen nur bekannte Ringe", () => {
     assert.deepEqual([...RINGE].sort(), ["kern", "kern-nach-entkopplung", "oberflaeche"]);
