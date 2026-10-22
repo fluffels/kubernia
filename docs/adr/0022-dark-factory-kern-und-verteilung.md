@@ -1,7 +1,7 @@
 # ADR 0022: Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Folgeticket-Entwürfe → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert, Workflow-Pfad entfernt: präzisiert durch ADR 0028, Ring Oberfläche: präzisiert durch ADR 0029, Ticket-Ablauf im Ring kern und Produkt-Skill im Projekt: präzisiert durch ADR 0028, Fortschreibung #1806** · Datum: 2026-10-08 · Ticket: #1366
+> Status: **akzeptiert, Workflow-Pfad entfernt: präzisiert durch ADR 0028, Ring Oberfläche: präzisiert durch ADR 0029, Ticket-Ablauf im Ring kern und Produkt-Skill im Projekt: präzisiert durch ADR 0028, Fortschreibung #1806, Betrieb ohne Harness im Projekt-Repo: Fortschreibung #1829** · Datum: 2026-10-08 · Ticket: #1366
 
 ## Status
 
@@ -513,6 +513,114 @@ Die Überschrift von #1824 zählt dort als „Teil 8“; gemeint ist F3 **Teil 9
 - **Übergangsliste:** `UEBERGANG` in `scripts/skills-sync.mjs` nennt die noch nicht umgezogenen Volltext-Skills samt Ticket des Umzugs; sie schrumpft nur und ist rot, wenn ein Eintrag schon eine Quelle hat oder kein Ticket nennt.
 - **Besitz:** `scripts/skills-sync.mjs` ist Kern. Die Quelle von `forum` ist Projektbesitz; die Besitz-Pfade der Kern-Skills ziehen mit #1849 und #1850 um.
 - **Grenzen:** geprüft wird die Gleichheit von Zeiger und Quelle, nicht dass ein Werkzeug dem Zeiger tatsächlich folgt (das belegt ein Probe-Lauf). Der Sync überschreibt nie einen Ordner ohne Marke, er meldet ihn nur.
+
+## Fortschreibung #1829 (2026-10-22): Betrieb ohne Harness im Projekt-Repo (Arbeitsplatz)
+
+Kurzfassung: Für Projekte, in deren Repo vom Harness nichts liegen darf, läuft die Factory in einem **Arbeitsplatz**: ein Ordner über dem Projekt-Klon, der `AGENTS.md`, `.claude/`, `scripts/` und `.factory/` trägt. Claude Code startet dort, der Klon liegt als Unterordner darin. Claude Code lädt diese Dateien von selbst, im Repo des Projekts ändert sich nichts (Probe unten). Die Git-Hooks sollen über die globale Git-Config zu den Repos kommen, nicht über Dateien im Repo; die Config-Doku deckt das, ein praktischer Lauf folgt in #1853. kubernia bleibt **eingebettet**, wie in ADR 0022 beschlossen. Nachteil: die Durchsetzung ist nur lokal, es gibt keinen Server-Check im Projekt.
+
+### Anforderungen (Pre-Flight-Antworten der Maintainerin vom 2026-10-22)
+
+Quelle: [Kommentar im Ticket #1829](https://github.com/fluffels/kubernia/issues/1829#issuecomment-6341813365).
+
+1. Tragender Grund: Eigentum und Vertraulichkeit; Projektspezifisches gehört nicht in die Factory.
+2. Vom Harness liegt nichts im Projekt-Repo, auch nichts Git-ignoriertes, wenn vermeidbar. Spricht alles dagegen, steht das hier ehrlich.
+3. Läuft lokal, nur mit Claude Code; Sandbox ist entkoppelt ([ADR 0025](0025-sandbox-als-austauschbare-laufumgebung.md)).
+4. Das Ticketsystem bleibt vorerst wie heute; die Anbindung anderer Systeme ist ein Folgeticket (#1851).
+5. Lokale Durchsetzung ist Pflicht (Hooks, `verify`); Server-Checks sind nur ein Zusatz.
+6. Mehrere Projekte und mehrere Repos je Projekt, neben eigenen Projekten.
+7. Claude als Cloud-Modell ist erlaubt; Langfuse und Telemetrie gelten je Option und sind bei Kundenrepos strenger zu bewerten.
+8. Neue Kern-Versionen kommen als Release mit Tag.
+
+### Belegte Fakten (gelesen 2026-10-22, Claude Code 2.1.308, Git 2.53.0.windows.1)
+
+- **Kontextdateien** ([Memory](https://code.claude.com/docs/en/memory)): `CLAUDE.md`-Dateien oberhalb des Arbeitsverzeichnisses laden beim Start, Dateien in Unterordnern bei Bedarf. `AGENTS.md` lädt aus dem Arbeitsverzeichnis und den Ordnern darüber, wenn dort keine `CLAUDE.md` liegt (ab v2.1.277). Aus `--add-dir` lädt `CLAUDE.md` nur mit `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`. Eine verwaltete `CLAUDE.md` liegt unter `C:\Program Files\ClaudeCode\CLAUDE.md`, `~/.claude/rules/` gilt global.
+- **Hooks und Settings** ([Permissions](https://code.claude.com/docs/en/permissions)): „Hooks and other `.claude/settings.json` keys load from the current working directory's `.claude/` folder with no parent-directory fallback“. Darum muss das Arbeitsverzeichnis der Arbeitsplatz sein. `--add-dir` lädt Skills, Commands und Subagenten, aus den Settings nur `enabledPlugins` und `extraKnownMarketplaces`; `permissions.additionalDirectories` gibt nur Dateizugriff.
+- **Settings-Dateien** ([Settings](https://code.claude.com/docs/en/settings)): `.claude/settings.local.json` entsteht bei „Yes, and don't ask again“ im Projekt (unter Windows neben `.claude/settings.json` im Startordner) und trägt sich in die globalen Git-Excludes ein. `--settings` steht über user/project/local und unter managed. `CLAUDE_CONFIG_DIR` verlegt `~/.claude` samt Einstellungen, Verlauf und Plugins. Telemetrie-Variablen aus Projekt-Settings wirken nur als Aus-Wert.
+- **CLI** ([Referenz](https://code.claude.com/docs/en/cli-reference)): `--add-dir` entdeckt die meiste `.claude/`-Konfiguration nicht; `--plugin-dir` gilt nur für die Sitzung; `--worktree` legt `<repo>/.claude/worktrees/<name>` an.
+- **Plugins** ([Referenz](https://code.claude.com/docs/en/plugins-reference)): tragen Skills, Agenten, Hooks, MCP, LSP, Workflows, Monitore und `bin/`; `settings` wirkt nur für `agent` und `subagentStatusLine`; „A `CLAUDE.md` at the plugin root isn't loaded as context“; Namensraum `<plugin>:<name>`.
+- **Agent SDK** ([Übersicht](https://code.claude.com/docs/en/agent-sdk/overview)): „Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login“, es gilt der API-Key; das SDK ist eine Bibliothek ohne Terminal-Oberfläche.
+- **Managed Settings** ([Doku](https://code.claude.com/docs/en/managed-settings)): `managed-settings.json` und `managed-settings.d/` liegen unter Windows in `C:\Program Files\ClaudeCode\`; wer Administrator ist, kann sie ändern; sie gelten für alle Projekte der Maschine.
+- **Cloud-Sitzungen** ([Doku](https://code.claude.com/docs/en/claude-code-on-the-web), [Settings in cloud sessions](https://code.claude.com/docs/en/settings#settings-in-cloud-sessions)): laufen auf einem frischen Klon des Repos; `~/.claude/settings.json` und `.claude/settings.local.json` werden nicht gelesen; Plugins aus Marketplaces laden nicht.
+- **Git** ([git-config](https://git-scm.com/docs/git-config), [githooks](https://git-scm.com/docs/githooks)): `includeIf "gitdir:<muster>"` bindet eine Config-Datei, wenn der Pfad des `.git`-Ordners zum Muster passt; `core.hooksPath` ersetzt `$GIT_DIR/hooks`; `GIT_CONFIG_COUNT` und `GIT_CONFIG_KEY_<n>` setzen Config-Werte für den Prozess. Eingebundene Dateien gelten nach git-config so, „as if they had been found at the location of the include directive“; ein `core.hooksPath` in einer per `includeIf` eingebundenen Datei wirkt also wie in der Hauptdatei. Ein praktischer Lauf fehlt noch (Folgeticket #1853).
+
+### Probe A und A2 (2026-10-22, lokal, `claude -p`, Modell haiku, drei Läufe)
+
+Aufbau: ein Ordner mit `AGENTS.md` (Markersatz), `.claude/settings.json` (PreToolUse-Hook, der ein Log im Ordner schreibt, und `deny: Edit(./AGENTS.md)`), einem Agenten und einem Skill `probe`, dazu ein Unterordner mit einem frischen Git-Repo, einer committeten Datei und einer eigenen `CLAUDE.md`. Claude Code startete im Oberordner. Sitzungen `41c95138-b72c-4e75-a795-0b1388b77264` (Lauf 1) und `b137f8c6-5ff6-44d7-b888-cc8196e4e45e` (Lauf 2); zwei Repos siehe A2 unten.
+
+- Das init-Ereignis listet `probe` als Agent und als Skill, ohne Namensraum.
+- Der Marker der `AGENTS.md` des Oberordners war ohne Tool-Aufruf bekannt (Lauf 2).
+- Der Hook lief (Log mit 5 Zeilen in Lauf 1); ein Edit auf `AGENTS.md` wurde abgelehnt („File is in a directory that is denied by your permission settings“), der Edit auf eine Datei im Repo ging durch.
+- `git status --porcelain --ignored` im Repo zeigte danach nur ` M README.md`: nichts vom Harness.
+- Die `CLAUDE.md` im Repo lud nach, als eine Datei dort gelesen wurde (Marker in Lauf 2 genannt).
+- **Probe A2 (zwei Repos):** zweites Repo `repo2` mit eigener `CLAUDE.md` neben dem ersten, Sitzung `900fd730-09a7-4482-9e56-b634bbce9885`: die Marker beider Repo-`CLAUDE.md` und der `AGENTS.md` wurden geladen, ein Edit in `repo2` ging durch, `git status --porcelain --ignored` zeigte in beiden Repos nur ` M README.md` (`repo` stammt aus Lauf 1, dessen Edit dort noch im Arbeitsbaum lag; die Marker beider Repo-`CLAUDE.md` wurden durch Lesen je einer Datei in beiden Repos geladen). Damit ist „mehrere Repos je Projekt“ für zwei Repos belegt, mehr wurden nicht geprüft.
+- Eine Vertrauens-Warnung („workspace not trusted“) erschien bei `-p` nicht. Grenze: interaktive Läufe wurden nicht geprüft.
+
+### Optionen
+
+„Dateien im Repo“ sind Dateien des Harness; `.git/`-Interna (`.git/worktrees`) zählen nicht. Zellen ohne Quelle sind „unbelegt“. Ticketsystem und Telemetrie stehen unter der Tabelle.
+
+| Option | Dateien im Projekt-Repo | User-Scope bzw. außerhalb | Durchsetzung | Update-Weg | Aufwand | Risiken | Beleg | Urteil |
+|---|---|---|---|---|---|---|---|---|
+| O1 eingebettet per Sync (heute) | `AGENTS.md`, `.claude/`, `scripts/`, Workflows, `.factory/` | nichts nötig | lokal und Server (Required Checks, wo das Projekt sie erlaubt) | Sync-PR je Projekt | gering, läuft | Harness gehört dem Repo-Eigner | ADR 0022 (dieses Dokument, Stand gelesen 2026-10-22) | **scheidet aus** nach Frage 2; bleibt Betriebsart für eigene Repos |
+| O2 `.git/info/exclude` | dieselben Dateien, nur ungetrackt | nichts | lokal | Sync wie O1 | gering | Dateien liegen weiter im Arbeitsbaum des Repos | Dateien liegen im Repo-Ordner (Folge der Definition); Wirkung von `.git/info/exclude`: **unbelegt**, nicht gelesen | **scheidet aus** nach Frage 2 |
+| O3 User-Scope `~/.claude/*` | keine | Agenten, Skills, Regeln, Settings in `~/.claude` | lokal; gilt in jedem Projekt der Maschine | Dateien kopieren; eine Version je Rechner | mittel | eine Version für alle Projekte der Maschine, Hooks mit Projektbezug nicht trennbar | Memory, Settings (gelesen 2026-10-22) | nur Baustein, kein Träger |
+| O3b `CLAUDE_CONFIG_DIR` je Projekt | keine | eigener Config-Ordner je Projekt | lokal | wie O3, je Ordner | mittel | getrennter Login und Langfuse-Zustand: **unbelegt** | Settings (gelesen 2026-10-22, nur Existenz der Variable) | Variante von O3, nicht empfohlen ohne Beleg |
+| O4 Managed Settings, verwaltete `CLAUDE.md` | keine | `C:\Program Files\ClaudeCode\` | lokal, stärkste Stufe; Administrator nötig | Datei ersetzen | gering | wirkt global, ändert sich nur mit Adminrechten | Managed Settings, Memory (gelesen 2026-10-22) | Zusatz für projektneutrale Denies |
+| O5 Plugin im User-Scope oder `--plugin-dir` | keine | Plugin-Ordner | lokal | Marketplace oder Ordner | mittel | trägt keine `CLAUDE.md`, keine `permissions`; Namensraum ändert Agentennamen (Guards, Langfuse-Reihen) | Plugins-Referenz (gelesen 2026-10-22) | kein Träger |
+| O6 Launcher: Arbeitsverzeichnis = Repo, mit `--add-dir`, `--settings`, `--append-system-prompt-file` | `settings.local.json` und `.claude/worktrees/` landen im Repo | Harness-Ordner außerhalb | lokal | Ordner aktualisieren | mittel | `--add-dir` lädt die meiste `.claude/`-Konfiguration nicht und gibt Schreibzugriff auf den Harness | CLI, Permissions, Settings (gelesen 2026-10-22) | **scheidet aus** nach Frage 2 (legt Dateien im Repo ab) |
+| **O7 Arbeitsplatz** (Arbeitsverzeichnis = Arbeitsplatz, Klon als Unterordner) | keine (Probe) | Arbeitsplatz-Ordner mit allen Harness-Dateien | lokal; Hooks per O9 | `factory-sync --ziel <arbeitsplatz>` von einem Tag, ohne PR | mittel (Folgetickets) | Fremdrepo-`.claude/` wirkt nicht (gewollt); nur lokale Durchsetzung; mehrere Repos als Unterordner: Probe A2 | Memory, Permissions (gelesen 2026-10-22); Probe A und A2 (2026-10-22) | **empfohlen** |
+| O8 Wrapper-Repo mit Submodul | keine | Wrapper-Repo | lokal | Submodul-Zeiger | mittel | Submodul pinnt SHAs, Pflege je Projekt | Fakten Git (nicht geprüft): **unbelegt** | verworfen, Variante von O7 |
+| O9 `core.hooksPath` über `includeIf` | keine | globale Git-Config plus Hooks-Ordner im Arbeitsplatz | lokal (umgehbar mit `--no-verify`) | Hooks-Ordner im Sync | gering | `includeIf` setzt `hooksPath` laut git-config wie eine Hauptdatei; praktischer Lauf in #1853 | git-config, githooks (gelesen 2026-10-22) | Baustein für O7 |
+| O10 Agent SDK | keine | eigenes Programm | lokal oder Server | Paketversion | hoch | keine Terminal-Oberfläche, API-Key statt Login (widerspricht Frage 3) | Agent SDK (gelesen 2026-10-22) | beobachten |
+| O11 Cloud-Sitzung, Managed Agents | liest `.claude/` aus dem Klon | nicht gelesen (User-Scope) | Server (Anthropic-Umgebung), nicht lokal; selbst gehostete Umgebung: **unbelegt** | je Sitzung | mittel | nicht lokal; Code und Repo laufen beim Anbieter | Cloud-Doku, Settings in cloud sessions (gelesen 2026-10-22) | **scheidet aus** (Frage 3) |
+| O12 Devcontainer, Docker Sandboxes | **unbelegt** (Quelle nicht gelesen; üblich ist ein Konfigurationsordner im Repo, eine Ablage außerhalb ist ungeprüft) | **unbelegt** | lokal | Image | hoch | siehe ADR 0025 | ADR 0025 (Stand gelesen 2026-10-22); Container-Konfiguration: **unbelegt** | orthogonal, passt zu O7 |
+| O13 eigener CI-Spiegel | keine | Spiegel-Repo mit CI | Server auf dem Spiegel | Push in den Spiegel | hoch | Commit-Status im Fremdrepo wäre Außenwirkung | unbelegt | optionaler Zusatz, nicht Teil der Entscheidung |
+
+Ticketsystem im Projekt nötig: bei O1 bis O13 nein, das Ticketsystem bleibt wie heute (kubernia: GitHub); die Anbindung anderer Systeme ist #1851. Telemetrie: Langfuse läuft über Hooks und das Plugin, nicht über das Repo; nach [ADR 0019](0019-langfuse-plugin-im-user-scope.md) ist das Plugin im User-Scope aktiv und erfasst damit auch Sitzungen im Arbeitsplatz, solange es dort nicht abgeschaltet ist; das Abschalten je Arbeitsplatz ist Teil von #1853. Für Kundenrepos gilt es strenger: Quelltext verlässt die Maschine ohnehin zum Cloud-Modell (Frage 7).
+
+### Ähnliche Ansätze anderer Werkzeuge (gelesen 2026-10-22)
+
+- **Codex** ([AGENTS.md-Anleitung](https://learn.chatgpt.com/docs/agent-configuration/agents-md)): globale Datei im Codex-Home (`~/.codex`, verlegbar mit `CODEX_HOME`), dazu Projektdateien von der Repo-Wurzel abwärts. Ein globaler Ort, kein Ordner über dem Repo.
+- **Gemini CLI** ([GEMINI.md](https://geminicli.com/docs/cli/gemini-md/)): `~/.gemini/GEMINI.md`, dazu Dateien in Arbeitsbereichen und deren Elternordnern. Ein Ordner über dem Repo wird gelesen, wie bei Claude Code.
+- **Aider** ([Konventionen](https://aider.chat/docs/usage/conventions.html)): `--read` oder `read:` in `.aider.conf.yml`; ein Ort in der Home-Config steht dort nicht: unbelegt.
+- Persönliche Anweisungen bei Copilot: nicht gelesen, **unbelegt**.
+
+Nur Gemini liest erwiesenermaßen auch Ordner über dem Repo; Codex liest eine globale Datei und Projektdateien, Aider ist unbelegt. Keines der Werkzeuge belegt, dass ein Ordner über dem Repo Hooks und Berechtigungen trägt. Das belegt nur die Probe.
+
+### Entscheidung
+
+**Entscheidung: Betriebsart Arbeitsplatz (O7) für Projekte ohne Harness im Repo, Git-Hooks über `includeIf` in der globalen Git-Config (O9), kubernia bleibt eingebettet, weil nur O7 zugleich vier Dinge erfüllt: nichts im Projekt-Repo, native Ladeorte ohne Namensraum, mehrere Repos je Projekt und den unveränderten Sync.**
+
+Eine Option, die Dateien im Repo braucht (O1, O2, O6), scheidet nach Frage 2 aus, ebenso O11 (nicht lokal). Eigenschaften ohne Quelle (O3b, O8, O12, O13) tragen keine Empfehlung. Kippkriterium: findet sich bei O7 eine unvermeidbare Datei im Repo, bleibt der Harness im Projekt-Repo, und das steht dann hier; einen Rückfall über O6 gibt es nicht, weil er ebenfalls Dateien im Repo ablegt.
+
+### Wirkung
+
+- **Besitz-Manifest:** der Inhalt bleibt; neu ist eine Betriebsart je Einheit (`eingebettet` oder `Arbeitsplatz`). Workflows und `.githooks` gelten nur eingebettet (#1854).
+- **Sync:** `factory-sync --ziel <arbeitsplatz>` von einem Tag; `sync-stand` und das Drift-Gate laufen lokal im Arbeitsplatz, es gibt keinen PR im Projekt (#1854). Eigene Repos bleiben beim bisherigen Sync.
+- **AGENTS.md-Aufteilung (F4):** Kern- und Projekt-Block stehen in der `AGENTS.md` des Arbeitsplatzes; die Regel zur einen Root-Kontextdatei gilt dort. Die `CLAUDE.md` eines Fremdrepos bleibt dessen Besitz und lädt bei Bedarf nach.
+- **Projekt-Config:** neuer Schlüssel für die Repo-Pfade (#1855).
+
+### Was dagegen spricht
+
+- Die Durchsetzung ist nur lokal: ohne Sandbox stoppt ein Edit-Deny keine Schreibzugriffe über Bash ([ADR 0025](0025-sandbox-als-austauschbare-laufumgebung.md)), Git-Hooks sind mit `--no-verify` umgehbar.
+- Die `.claude/`-Konfiguration eines Fremdrepos wirkt nicht automatisch; das ist gewollt, ein Hook oder MCP-Server aus einem Klon läuft nicht.
+- Git-abhängige Funktionen beziehen sich auf das Arbeitsverzeichnis, nicht auf das Repo; Pfade müssen aus der Projekt-Config kommen (#1855).
+- Commit-Zeilen mit Harness-Präfix würden in der Historie des Fremdrepos landen (#1852).
+- Ein Arbeitsplatz ist ein zusätzlicher Ordner je Projekt; ohne Sync-Werkzeug (#1854) wäre er Handarbeit.
+
+### Folgeticket-Entwürfe
+
+| Nr. | Inhalt |
+|---|---|
+| #1855 | Projekt-Config mit Repo-Pfaden, getrennte Wurzel für Arbeitsplatz und Repo, Worktrees außerhalb des Repos |
+| #1854 | Betriebsart im Manifest, Sync und Drift-Gate im Arbeitsplatz |
+| #1853 | `includeIf`-Hooks, Doctor gibt nur eine `Fix:`-Zeile aus, Schutz der Harness-Pfade, Langfuse je Arbeitsplatz abschaltbar |
+| #1852 | Nachweise ohne Commit-Zeilen im Fremdrepo |
+| #1851 | Ticketsystem als Port (GitHub, Trello, Jira per MCP) |
+
+### Re-Evaluierung
+
+Neu bewerten, wenn Claude Code die Ladeorte ändert (Release-Watch #1362) oder Plugins `permissions` oder Kontext tragen.
 
 ## Fortschreibung #1711 (2026-10-22): Sprache als Projektwert (F8)
 
