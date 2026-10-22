@@ -137,8 +137,7 @@ function pruefen({ werte, rootDir, gh, langfuse, env, out, err }) {
   try {
     namen = kernEnvNamen(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
   } catch (e) {
-    err(`Kern-Umgebungsvariablen nicht lesbar: ${e instanceof Error ? e.message : String(e)}
-Fix: scripts/ im Checkout wiederherstellen (git status), dann erneut prüfen`);
+    err(`Kern-Umgebungsvariablen nicht lesbar: ${e instanceof Error ? e.message : String(e)}\nFix: scripts/ im Checkout wiederherstellen (git status), dann erneut prüfen`);
     return AUFRUF_EXIT;
   }
   let ergebnis;

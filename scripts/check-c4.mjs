@@ -20,6 +20,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fenceMaske, leseConfigObjekt } from "./docs-gen/markdown.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from "./projekt-config-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { ladeModell, schichtVon, sollKanten } from "./docs-gen/schichten.mjs";
 import { HARNESS_BINDER, harnessQuellen, ortFuer, pruefeHarness } from "./check-c4-harness.mjs";
@@ -493,6 +494,18 @@ export async function cli(argv, { rootDir = ROOT, out = console.log, err = conso
   const configProbleme = pruefeConfig(cfg);
   if (configProbleme.length) {
     for (const m of configProbleme) err(formatiere(m));
+    return 1;
+  }
+  // Die Quellwurzel steht zweimal (Projekt-Config `struktur.quelle` für die Kern-Checks, `architektur.quelle` hier): beide müssen dasselbe Verzeichnis nennen.
+  let struktur;
+  try {
+    struktur = strukturAus(ladeProjektConfig({ rootDir, pruefen: false }));
+  } catch (e) {
+    err(`✖ ${PROJEKT_CONFIG}:1 struktur „check:c4“: ${e instanceof Error ? e.message.split("\n").join(" ") : e}`);
+    return 1;
+  }
+  if (struktur.quelle !== cfg.quelle) {
+    err(`✖ ${CONFIG}:1 architektur.quelle „${cfg.quelle}“ weicht von struktur.quelle „${struktur.quelle}“ in ${PROJEKT_CONFIG} ab. Fix: beide Dateien auf dieselbe Quellwurzel setzen`);
     return 1;
   }
   const ws = cfg.workspace;
