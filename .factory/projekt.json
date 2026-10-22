@@ -41,6 +41,10 @@
     "gruppe": "kubernia-gruppe",
     "ticketSkill": "kubernia"
   },
+  "struktur": {
+    "quelle": "src",
+    "moduldoku": "docs/module"
+  },
   "spezifikation": {
     "hartAb": 1
   },

@@ -133,6 +133,24 @@ export function spracheAus(config) {
   return wert;
 }
 
+/**
+ * Pur: der Block `struktur` der Config (`quelle`: Wurzel des Quellcodes, `moduldoku`: Ordner der Modul-Tiefendocs; beide repo-relativ, POSIX) für die Kern-Checks
+ * `check:size` und `check:docmap`; wirft ohne beide nicht-leeren Strings (kein stiller Standardwert, #1843). Nicht zu verwechseln mit der Quellwurzel der Schichtdaten.
+ */
+export function strukturAus(config) {
+  const wert = config?.struktur;
+  if (!istObjekt(wert) || !istText(wert.quelle) || !istText(wert.moduldoku)) {
+    throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
+  }
+  return { quelle: wert.quelle, moduldoku: wert.moduldoku };
+}
+
+/** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
+function pruefeStruktur(s) {
+  if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
+  return ["quelle", "moduldoku"].filter((k) => !istText(s[k])).map((k) => `struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`);
+}
+
 /** Pur: die Umschrift-Wortliste (`sprache.umschrift`) für den Umlaut-Wächter; wirft ohne nicht-leere Liste (kein stiller Deutsch-Standardwert, #1711). */
 export function umschriftAus(config) {
   const liste = config?.sprache?.umschrift;
@@ -236,6 +254,7 @@ export function pruefeProjektConfig(wert) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
   }
   if (wert.sprache !== undefined) fehler.push(...pruefeSprache(wert.sprache));
+  if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
   return fehler;
 }
 

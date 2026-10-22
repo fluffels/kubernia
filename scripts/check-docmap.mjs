@@ -6,10 +6,10 @@
  *
  * Hintergrund: Eine per-Datei-Zeile in der Repo-Landkarte wächst linear mit den Modulen (~163→490 bei
  * großem Umfang). #907 ersetzt den per-File-Check der Landkarte durch einen Tiefendoc-Abdeckungs-Check:
- * jedes `src/*.ts` muss als Backtick-Pfad in `docs/module/*.md` vorkommen.
+ * jedes `<quelle>/*.ts` muss als Backtick-Pfad in `<moduldoku>/*.md` vorkommen (beide Pfade aus `struktur` der Projekt-Config).
  *
- *   1. Keine Geister-Einträge: jeder in den Tiefendocs genannte `src/…ts`-Pfad existiert.
- *   2. Keine verwaisten Module: jede src/-*.ts ist in min. einem Tiefendoc erwähnt.
+ *   1. Keine Geister-Einträge: jeder in den Tiefendocs genannte `<quelle>/…ts`-Pfad existiert.
+ *   2. Keine verwaisten Module: jede Quell-*.ts ist in min. einem Tiefendoc erwähnt.
  *   3. Schicht-Konsistenz: weggefallen (#907) — `check:arch` (dependency-cruiser) erzwingt
  *      die eigentlichen Schichtgrenzen als CI-Gate; Doku-Schicht-Angaben sind nur noch Prosa.
  *
@@ -19,33 +19,42 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
+import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Module, die bewusst KEINE Tiefendoc-Zeile brauchen (repo-relativ, POSIX).
- *  Leer gehalten: die Konvention verlangt für JEDES src-Modul eine Tiefendoc-Erwähnung.
+ *  Leer gehalten: die Konvention verlangt für JEDES Quellmodul eine Tiefendoc-Erwähnung.
  *  Reine Typdeklarationen (.d.ts) werden separat gefiltert (kein Laufzeit-Modul). */
 export const ORPHAN_ALLOWLIST = [];
 
-/** Scannt alle `docs/module/*.md` nach Backtick-Pfaden der Form `src/…ts`.
+/** Die Struktur-Pfade `{ quelle, moduldoku }` aus der Projekt-Config; wirft ohne `struktur` (kein stiller Standardwert). */
+const configStruktur = () => strukturAus(ladeProjektConfig());
+
+/** Maskiert Regex-Sonderzeichen eines Pfads für das Backtick-Muster. */
+const regexText = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Scannt alle `<moduldoku>/*.md` nach Backtick-Pfaden der Form `<quelle>/…ts`.
  *  Gibt ein Set der gefundenen Pfade zurück (repo-relativ, POSIX).
- *  `rootDir` überschreibbar, damit der Test deterministisch dasselbe Repo misst. */
-export function parseDeepDocMaps(rootDir = ROOT) {
-  const docsDir = join(rootDir, "docs", "module");
+ *  `rootDir` überschreibbar, damit der Test deterministisch dasselbe Repo misst;
+ *  `struktur` ohne Angabe aus der Projekt-Config. */
+export function parseDeepDocMaps(rootDir = ROOT, struktur = configStruktur()) {
+  const docsDir = join(rootDir, ...struktur.moduldoku.split("/"));
+  const muster = new RegExp("`(" + regexText(struktur.quelle) + "/[^`]+\\.ts)`", "g");
   const covered = new Set();
   for (const filename of readdirSync(docsDir)) {
     if (!filename.endsWith(".md")) continue;
     const text = readFileSync(join(docsDir, filename), "utf8");
-    for (const m of text.matchAll(/`(src\/[^`]+\.ts)`/g)) {
+    for (const m of text.matchAll(muster)) {
       covered.add(m[1]);
     }
   }
   return covered;
 }
 
-/** Sammelt alle src/**\/*.ts (repo-relativer POSIX-Pfad), OHNE reine Typdeklarationen
+/** Sammelt alle `<quelle>/**\/*.ts` (repo-relativer POSIX-Pfad), OHNE reine Typdeklarationen
  *  (.d.ts sind kein Laufzeit-Modul und stehen nicht in den Tiefendocs). */
-export function collectSrcModules(rootDir = ROOT) {
+export function collectSrcModules(rootDir = ROOT, quelle = configStruktur().quelle) {
   const out = [];
   const walk = (dir) => {
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
@@ -55,21 +64,21 @@ export function collectSrcModules(rootDir = ROOT) {
         out.push(relative(rootDir, abs).split(sep).join("/"));
     }
   };
-  walk(join(rootDir, "src"));
+  walk(join(rootDir, ...quelle.split("/")));
   return out.sort();
 }
 
 /** Vergleicht Tiefendocs gegen Code. Gibt strukturierte Befunde zurück (leere Arrays = ok). */
-export function auditDocMap(rootDir = ROOT) {
-  const modules = collectSrcModules(rootDir);
+export function auditDocMap(rootDir = ROOT, struktur = configStruktur()) {
+  const modules = collectSrcModules(rootDir, struktur.quelle);
   const moduleSet = new Set(modules);
   const allowed = new Set(ORPHAN_ALLOWLIST);
-  const covered = parseDeepDocMaps(rootDir);
+  const covered = parseDeepDocMaps(rootDir, struktur);
 
-  // 1. Geister-Einträge: Tiefendoc nennt einen Pfad, der nicht in src/ existiert.
+  // 1. Geister-Einträge: Tiefendoc nennt einen Pfad, der nicht in der Quellwurzel existiert.
   const ghosts = [...covered].filter((f) => !moduleSet.has(f));
 
-  // 2. Verwaiste Module: src-*.ts ohne Tiefendoc-Erwähnung (außer Allowlist).
+  // 2. Verwaiste Module: Quell-*.ts ohne Tiefendoc-Erwähnung (außer Allowlist).
   const orphans = modules.filter((f) => !covered.has(f) && !allowed.has(f));
 
   // 3. Stale Allowlist-Einträge (Datei weg oder inzwischen doch in einem Tiefendoc).
@@ -85,17 +94,18 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
 
-  const { modules, ghosts, orphans, staleAllowlist } = auditDocMap();
+  const struktur = configStruktur();
+  const { modules, ghosts, orphans, staleAllowlist } = auditDocMap(ROOT, struktur);
 
   let bad = false;
   for (const f of ghosts) {
     bad = true;
-    console.error(red(`✖ Geister-Eintrag: „${f}" steht in einem Tiefendoc, existiert aber nicht in src/.`));
+    console.error(red(`✖ Geister-Eintrag: „${f}" steht in einem Tiefendoc, existiert aber nicht in ${struktur.quelle}/.`));
   }
   for (const o of orphans) {
     bad = true;
     console.error(
-      red(`✖ Verwaistes Modul: „${o}" ist in keinem docs/module/*.md als Backtick-Pfad erwähnt (Zeile ergänzen).`),
+      red(`✖ Verwaistes Modul: „${o}" ist in keinem ${struktur.moduldoku}/*.md als Backtick-Pfad erwähnt (Zeile ergänzen).`),
     );
   }
   for (const f of staleAllowlist) {
@@ -104,11 +114,11 @@ function main() {
   }
 
   if (bad) {
-    console.error(`\nDoku↔Code-Drift. Tiefendoc-Abdeckung in docs/module/*.md ergänzen.`);
+    console.error(`\nDoku↔Code-Drift. Tiefendoc-Abdeckung in ${struktur.moduldoku}/*.md ergänzen.`);
     process.exit(1);
   }
   console.log(
-    green(`✔ Tiefendoc-Abdeckung vollständig (${modules.length} src-Module alle in docs/module/*.md erwähnt).`),
+    green(`✔ Tiefendoc-Abdeckung vollständig (${modules.length} Quell-Module (${struktur.quelle}) alle in ${struktur.moduldoku}/*.md erwähnt).`),
   );
 }
 
