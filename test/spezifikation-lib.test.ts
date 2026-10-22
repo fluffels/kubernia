@@ -2,13 +2,25 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation-lib.mjs";
+import { echteSpezifikation } from "./support/echte-sprache";
 
 type Art = { art: "ausgenommen" | "ok" | "bestand" | "hart"; fehlt?: string[] };
-const S = raw as unknown as {
-  spezifikationsMaengel: (body: unknown) => string[];
+type Sprache = Record<string, unknown>;
+const R = raw as unknown as {
+  spezifikationsMaengel: (body: unknown, sprache?: unknown) => string[];
   istEpicTitel: (titel: unknown) => boolean;
-  pruefeEingang: (i: { nummer: number; titel: string; body: unknown }, o?: { ausgenommen?: (i: unknown) => boolean; hartAb?: number }) => Art;
+  pruefeEingang: (i: { nummer: number; titel: string; body: unknown }, o?: { ausgenommen?: (i: unknown) => boolean; hartAb?: number; sprache?: unknown }) => Art;
   verloreneZeilen: (alt: unknown, neu: unknown) => string[];
+  kriterien: (body: unknown, sprache?: unknown) => { k: string; text: string; nachMerge: boolean }[];
+};
+
+/** Die echte Sprach-Config des Projekts (deutsch): die Tests unten laufen gegen sie, die Englisch-Tests gegen `EN`. */
+const SPRACHE = echteSpezifikation();
+const S = {
+  ...R,
+  spezifikationsMaengel: (body: unknown) => R.spezifikationsMaengel(body, SPRACHE),
+  pruefeEingang: (i: { nummer: number; titel: string; body: unknown }, o: { ausgenommen?: (i: unknown) => boolean; hartAb?: number } = {}) => R.pruefeEingang(i, { ...o, sprache: SPRACHE }),
+  kriterien: (body: unknown) => R.kriterien(body, SPRACHE),
 };
 
 const GUT = "## Ziel\nDas Gate prüft.\n\n## Akzeptanzkriterien\n1. Es prüft.\n2. Negativfall: ohne Format wird übersprungen.\n";
@@ -158,7 +170,7 @@ describe("verloreneZeilen (Inhaltsverlust beim Reparieren)", () => {
 });
 
 describe("kriterien (#1753): K1…KN aus den Akzeptanzkriterien", () => {
-  const K = (S as unknown as { kriterien: (b: unknown) => { k: string; text: string; nachMerge: boolean }[] }).kriterien;
+  const K = S.kriterien;
   const ak = (liste: string) => `## Ziel\nZ\n\n## Akzeptanzkriterien\n${liste}`;
   test("nummerierte und Strich-Listen, Position statt Autorenziffer", () => {
     expect(K(ak("1. a\n3. b\n3. c\n"))).toEqual([
@@ -247,5 +259,83 @@ describe("Allquantor-Kriterien auf Heuristik-Wächter (#1808)", () => {
   });
   test("Allquantor und Lesewort in getrennten Sätzen: kein Mangel", () => {
     expect(S.spezifikationsMaengel(mit("Jede Datei, die geprüft wird. Das Skript liest sie."))).toEqual([]);
+  });
+});
+
+describe("Sprache als Projektwert (#1711)", () => {
+  const EN: Sprache = {
+    ziel: "Goal",
+    akzeptanzkriterien: ["Acceptance criteria", "Partial acceptance criteria"],
+    nachMerge: "After merge:",
+    negativfall: { wort: "Negative case", muster: "negative case" },
+    begrenzung: { wort: "known patterns:", muster: "known patterns:" },
+    allquantor: { wort: "every/all … that … reads", muster: "(?:every|all) [^.!?]*that [^.!?]*(?:reads|read)" },
+  };
+  const BODY_EN = "## Goal\nThe gate checks.\n\n## Acceptance criteria\n1. It checks.\n2. Negative case: without format it is skipped.\n";
+
+  test("englischer Body ist mit englischem Vokabular vollständig, der deutsche meldet den englischen Abschnitt als fehlend", () => {
+    expect(R.spezifikationsMaengel(BODY_EN, EN)).toEqual([]);
+    expect(R.spezifikationsMaengel(GUT, EN)).toEqual(["`## Goal` fehlt", "`## Acceptance criteria` fehlt"]);
+    expect(R.spezifikationsMaengel(BODY_EN, SPRACHE)).toEqual(["`## Ziel` fehlt", "`## Akzeptanzkriterien` fehlt"]);
+  });
+  test("Meldungen setzen die Wörter der Sprache ein, der Rahmentext bleibt deutsch", () => {
+    expect(R.spezifikationsMaengel("## Goal\nG\n## Acceptance criteria\n- happy only\n", EN)).toEqual([
+      "kein Negative case in den Acceptance criteria (ein Kriterium mit dem Wort „Negative case“)",
+    ]);
+    expect(R.spezifikationsMaengel("## Goal\nG\n## Acceptance criteria\n- After merge: a\n- After merge: Negative case b\n", EN)).toEqual([
+      "alle Acceptance criteria beginnen mit „After merge:“: die Abnahme hätte nichts zu prüfen (mindestens ein Kriterium muss vor dem Merge prüfbar sein)",
+    ]);
+    const m = R.spezifikationsMaengel("## Goal\nG\n## Acceptance criteria\n- Negative case: all files that the script reads\n", EN);
+    expect(m).toEqual(["K1: Allquantor („every/all … that … reads“) auf einen Heuristik-Wächter ist unbegrenzt: die Begrenzung als geschlossene Liste nennen („known patterns: …“)"]);
+    expect(R.spezifikationsMaengel("## Goal\nG\n## Acceptance criteria\n- Negative case: all files that the script reads (known patterns: a)\n", EN)).toEqual([]);
+  });
+  test("Alternativ-Überschrift und Nach-Merge-Präfix kommen aus der Sprache", () => {
+    expect(R.spezifikationsMaengel("## Goal\nG\n## Partial acceptance criteria\n- Negative case\n", EN)).toEqual([]);
+    const k = R.kriterien("## Goal\nG\n## Acceptance criteria\n- After merge: a\n- Nach dem Merge: b\n", EN);
+    expect(k.map((c) => c.nachMerge)).toEqual([true, false]);
+  });
+  test("Überschrift Ebene 1 im Body ist kein Fehler und beendet den Abschnitt; Groß-/Kleinschreibung und Leerraum am Ende sind egal", () => {
+    expect(S.spezifikationsMaengel("# Titel\n## Ziel\nZ\n## Akzeptanzkriterien\n- Negativfall\n")).toEqual([]);
+    expect(S.spezifikationsMaengel("## Ziel\nZ\n# Anhang\n## Akzeptanzkriterien\n- Negativfall\n# Anhang\n- Happy\n")).toEqual([]);
+    expect(S.spezifikationsMaengel("## ziel\nZ\n## AKZEPTANZKRITERIEN\n- Negativfall\n")).toEqual([]);
+    expect(S.spezifikationsMaengel("## Ziel   \nZ\n## Akzeptanzkriterien \t\n- Negativfall\n")).toEqual([]);
+    expect(S.kriterien("## Akzeptanzkriterien\n- a\n# Anhang\n- b\n").map((c) => c.text)).toEqual(["a"]);
+  });
+  test("Regex-Sonderzeichen in den Abschnittsnamen sind Text, keine Regex", () => {
+    const sonder = { ...EN, ziel: "Goal (v2)+", akzeptanzkriterien: ["AC.*"] };
+    expect(R.spezifikationsMaengel("## Goal (v2)+\nG\n## AC.*\n- Negative case\n", sonder)).toEqual([]);
+    expect(R.spezifikationsMaengel("## Goal (v2)\nG\n## ACDC\n- Negative case\n", sonder)).toEqual(["`## Goal (v2)+` fehlt", "`## AC.*` fehlt"]);
+  });
+  test("Golden: mit der echten Config sind alle Mängeltexte wortgleich zu den früheren Konstanten", () => {
+    expect(S.spezifikationsMaengel("")).toEqual(["`## Ziel` fehlt", "`## Akzeptanzkriterien` fehlt"]);
+    expect(S.spezifikationsMaengel("## Ziel\n\n## Akzeptanzkriterien\nProsa\n")).toEqual(["`## Ziel` ist leer", "`## Akzeptanzkriterien` ohne Listenpunkt", "kein Negativfall in den Akzeptanzkriterien (ein Kriterium mit dem Wort „Negativfall“)"]);
+    expect(S.spezifikationsMaengel("## Ziel\nZ\n## Akzeptanzkriterien\n- Nach dem Merge: Negativfall\n")).toEqual([
+      "alle Akzeptanzkriterien beginnen mit „Nach dem Merge:“: die Abnahme hätte nichts zu prüfen (mindestens ein Kriterium muss vor dem Merge prüfbar sein)",
+    ]);
+    expect(S.spezifikationsMaengel("## Ziel\nZ\n## Akzeptanzkriterien\n- Negativfall: jede Datei, die das Skript liest\n")).toEqual([
+      "K1: Allquantor („jede/alle … die … liest“) auf einen Heuristik-Wächter ist unbegrenzt: die Begrenzung als geschlossene Liste nennen („bekannte Muster: …“)",
+    ]);
+  });
+  test("ohne sprache wirft jeder Einstieg mit Fix-Zeile, kein stiller Deutsch-Standardwert", () => {
+    for (const leer of [undefined, null, {}, { ziel: "Ziel" }]) {
+      expect(() => R.spezifikationsMaengel(GUT, leer)).toThrow(/sprache[\s\S]*Fix:/);
+      expect(() => R.kriterien(GUT, leer)).toThrow(/sprache[\s\S]*Fix:/);
+      expect(() => R.pruefeEingang({ nummer: 1, titel: "T", body: GUT }, { sprache: leer })).toThrow(/sprache[\s\S]*Fix:/);
+    }
+    expect(() => R.pruefeEingang({ nummer: 1, titel: "T", body: GUT }, { ausgenommen: () => true })).toThrow(/sprache/);
+  });
+  test("ein Muster ohne Wort oder eine leere Kriterienliste ist unvollständig", () => {
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, negativfall: { muster: "x" } })).toThrow(/negativfall/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: [] })).toThrow(/akzeptanzkriterien/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: ["Akzeptanzkriterien", " "] })).toThrow(/akzeptanzkriterien/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, nachMerge: "" })).toThrow(/nachMerge/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, akzeptanzkriterien: "Akzeptanzkriterien" })).toThrow(/akzeptanzkriterien/);
+    // ein fehlendes Muster darf nicht zu einer Regex werden, die alles trifft (stiller Standardwert)
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, negativfall: { wort: "x" } })).toThrow(/negativfall/);
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, begrenzung: { wort: "x", muster: " " } })).toThrow(/begrenzung/);
+    for (const k of ["negativfall", "begrenzung", "allquantor"]) {
+      expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, [k]: undefined }), k).toThrow(new RegExp(k));
+    }
+    expect(() => R.spezifikationsMaengel(GUT, { ...SPRACHE, ziel: undefined })).toThrow(/ziel/);
   });
 });

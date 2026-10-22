@@ -12,6 +12,7 @@ import * as raw from "../scripts/check-abnahme-nachweis.mjs";
 import * as sliceRaw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as nlRaw from "../scripts/nachweis-lib.mjs";
+import { echteSprache } from "./support/echte-sprache";
 
 interface Zeilen {
   abnahme: string;
@@ -36,7 +37,7 @@ const m = raw as unknown as Mod;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen & Record<string, string> };
 const { parseNachweis, abnahmeMarker, MAX_REVIEW_PAESSE } = nlRaw as unknown as { parseNachweis: (t: string, z: unknown) => Nachweis; abnahmeMarker: (z: unknown) => string; MAX_REVIEW_PAESSE: number };
 const Z = commitZeilen("KQ-", "kubernia-planner");
-const CONFIG = { repo: "owner/repo", praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" } };
+const CONFIG = { repo: "owner/repo", praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, sprache: echteSprache() };
 
 const H = "b".repeat(40);
 const R = "a".repeat(40);
@@ -170,7 +171,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   const ZEILE = `${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt`;
   const kommentar = { user: { login: "owner", type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
 
-  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare" } = {}) {
+  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; config?: unknown } = {}) {
     const ghAufrufe: string[][] = [];
     const runGit = (a: string[]): string => {
       if (o.gitFehler && a[0] === "merge-base") throw new Error("git kaputt");
@@ -193,7 +194,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       return o.issue ?? { body: AK };
     };
     const env = { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42", ...o.env };
-    return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => CONFIG }), ghAufrufe };
+    return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => o.config ?? CONFIG }), ghAufrufe };
   }
 
   test("grün: Urteil, Spur und head passen", () => {
@@ -236,6 +237,27 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(gruen.entwurf).toBe(false);
     rot(lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "false" } }).r.fehler, /Zeile fehlt/);
     expect(lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "false" } }).r.ok).toBe(false);
+  });
+  test("Negativfall (#1711): ohne sprache in der Config ist der Nachweis rot (fail-closed), mit ihr bleibt er grün", () => {
+    const ohne = { ...CONFIG, sprache: undefined };
+    const r = lauf({ config: ohne }).r;
+    expect(r.ok).toBe(false);
+    expect(r.fehler.join("|")).toMatch(/sprache/);
+    expect(lauf().r.fehler).toEqual([]);
+  });
+  test("Nach-Merge-Präfix kommt aus der Config (Ende-zu-Ende): „Danach:“ zählt, „Nach dem Merge:“ nicht mehr", () => {
+    const sprache = echteSprache();
+    const config = { ...CONFIG, sprache: { ...sprache, spezifikation: { ...(sprache.spezifikation as object), nachMerge: "Danach:" } } };
+    const NM = "## Akzeptanzkriterien\n1. eins\n2. Danach: zwei\n3. Nach dem Merge: drei\n";
+    const mit = (urteil: string) => ({
+      messages: `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`,
+      kommentare: [{ ...kommentar, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=${urteil} -->` }],
+      issue: { body: NM },
+      config,
+    });
+    expect(lauf(mit("K1:erfuellt,K2:nach-merge,K3:erfuellt")).r.fehler).toEqual([]);
+    rot(lauf(mit("K1:erfuellt,K2:erfuellt,K3:nach-merge")).r.fehler, /K3: nach-merge ist nur bei einem Kriterium mit dem Präfix `Danach:` erlaubt/);
+    rot(lauf(mit("K1:nach-merge,K2:erfuellt,K3:erfuellt")).r.fehler, /K1: nach-merge ist nur bei einem Kriterium mit dem Präfix `Danach:` erlaubt/);
   });
   test("Nach-Merge-Kriterium Ende-zu-Ende: nach-merge am markierten Kriterium grün, an einem normalen rot", () => {
     const NM = "## Akzeptanzkriterien\n1. eins\n2. Nach dem Merge: zwei\n";

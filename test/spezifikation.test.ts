@@ -3,6 +3,7 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
+import { echteSprache } from "./support/echte-sprache";
 
 type Issue = { state?: string; body?: string | null; user?: { login: string; type?: string } | null; labels?: ({ name: string } | string)[]; pull_request?: object };
 type Io = {
@@ -24,7 +25,7 @@ const ALT = "Das ist der alte Text.\nZweite Zeile des alten Texts.";
 function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
   const aufrufe = { erzeuge: [] as unknown[], einsortiere: [] as unknown[], bearbeite: [] as unknown[] };
   const io: Io = {
-    config: { labels: { forum: "forum" } },
+    config: { labels: { forum: "forum" }, sprache: echteSprache() },
     owner: "fluffels",
     leseDatei: (p) => {
       if (!(p in dateien)) throw new Error("ENOENT");
@@ -353,5 +354,33 @@ describe("ankerPruefung: erst nur das Ziel-Board, das andere nur bei Bedarf (#17
   });
   test("Anker auf keinem Board: null nach zwei Ladevorgängen", () => {
     expect(zaehle(99, ["area:harness"])).toEqual({ r: null, geladen: ["factory", "produkt"] });
+  });
+});
+
+describe("Sprache als Projektwert (#1711)", () => {
+  const ohneSprache = { config: { labels: { forum: "forum" } } };
+  test("Negativfall: ohne sprache bricht jeder Unterbefehl mit klarer Meldung ab (Exit 1, nichts angelegt oder geschrieben, kein Stacktrace)", () => {
+    const befehle = [["pruefen", "--body-datei", "b.md"], ANLEGEN, ["reparieren", "5", "--body-datei", "b.md"]];
+    for (const argv of befehle) {
+      const { io, aufrufe } = umgebung({ "b.md": GUT }, ohneSprache);
+      const r = S.fuehreAus(argv, io);
+      expect(r.code, argv[0]).toBe(1);
+      expect(r.err).toMatch(/^✖ spezifikation: sprache[\s\S]*Fix:/);
+      expect(r.err).not.toMatch(/\bat \S+ \(|Error:/);
+      expect(aufrufe.erzeuge).toEqual([]);
+      expect(aufrufe.bearbeite).toEqual([]);
+    }
+  });
+  test("ein Aufruf-Fehler (Exit 2) kommt vor der Sprachprüfung", () => {
+    const { io } = umgebung({}, ohneSprache);
+    expect(S.fuehreAus(["pruefen", "--bogus", "x"], io).code).toBe(2);
+  });
+  test("englische Sprache aus der Config: der englische Body ist vollständig, der deutsche nicht", () => {
+    const en = { ziel: "Goal", akzeptanzkriterien: ["Acceptance criteria"], nachMerge: "After merge:", negativfall: { wort: "Negative case", muster: "negative case" }, begrenzung: { wort: "known patterns:", muster: "known patterns:" }, allquantor: { wort: "all … that … read", muster: "all [^.!?]*that [^.!?]*read" } };
+    const { io } = umgebung({ "en.md": "## Goal\nG\n\n## Acceptance criteria\n- Negative case: x\n", "de.md": GUT }, { config: { labels: { forum: "forum" }, sprache: { spezifikation: en } } });
+    expect(S.fuehreAus(["pruefen", "--body-datei", "en.md"], io).code).toBe(0);
+    const de = S.fuehreAus(["pruefen", "--body-datei", "de.md"], io);
+    expect(de.code).toBe(1);
+    expect(de.err).toContain("`## Goal` fehlt");
   });
 });

@@ -18,8 +18,8 @@
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
  * `<praefixe.branch><nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
- * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: `## Ziel` und
- * `## Akzeptanzkriterien` mit Negativfall; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
+ * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: Ziel- und
+ * Kriterien-Abschnitt mit Negativfall, Namen aus `sprache.spezifikation` der Config; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
  * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); kein GraphQL. `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
  */
@@ -31,7 +31,7 @@ import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, spracheAus, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -216,7 +216,7 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, confi
   if (offenesFenster) return { grund: messfensterGrund(offenesFenster, { closedAt: null, n: 0 }) };
   if (c.blockedBy > 0) return { grund: "offener Blocker laut GitHub-Abhängigkeit" };
   if (belegt.has(c.number)) return { grund: "Branch, Worktree oder offener PR vorhanden" };
-  const spez = pruefeEingang({ nummer: c.number, titel: c.title, body: c.body }, { ausgenommen: spezAusgenommen, hartAb });
+  const spez = pruefeEingang({ nummer: c.number, titel: c.title, body: c.body }, { ausgenommen: spezAusgenommen, hartAb, sprache: spracheAus(config).spezifikation });
   if (spez.art === "hart") return { grund: `Spezifikation unvollständig: ${spez.fehlt.join("; ")}`, fehlt: spez.fehlt };
   for (const f of fenster) {
     const grund = messfensterGrund(f, messfenster(f, c.number)); // teuer (REST + Transkripte): erst für sonst freie Kandidaten
@@ -326,6 +326,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   labelAus(cfg, "harness");
   labelAus(cfg, "forum"); // fail-fast: das Fremdeingang-Label gehört zur Eingabe der Auswahl
   const namen = ticketNamen(cfg);
+  spracheAus(cfg); // fail-fast: das Spezifikations-Gate liest Abschnittsnamen und Schlüsselwörter aus der Config
   const messfenster = erzeugeLader({ ladeNamen: () => namen });
   const lade = () => ({
     produkt: normalizeItems(loadItemPages(boardFuerRolle("produkt"))),
