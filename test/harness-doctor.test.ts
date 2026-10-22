@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeAltnamen as rawAlt, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
+import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
@@ -34,6 +34,19 @@ const CONFIG = {
   labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
   agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
   rulesetSpiegel: "ruleset.json",
+  sprache: {
+    umschrift: ["ae"],
+    spezifikation: {
+      ziel: "Ziel",
+      nachMerge: "Danach:",
+      akzeptanzkriterien: ["Kriterien"],
+      blocker: "blockiert durch",
+      abhaengigkeit: ["folgt nach #"],
+      negativfall: { wort: "Negativfall", muster: "negativ" },
+      begrenzung: { wort: "Grenze", muster: "grenze" },
+      allquantor: { wort: "alle", muster: "alle" },
+    },
+  },
 };
 const WORKFLOW = "env:\n  T: ${{ secrets.PROJECT_TOKEN }}\n  G: ${{ secrets.GITHUB_TOKEN }}\nrun: gh issue list --label forum\n";
 const feld = { name: "Status", node_id: "x_status", options: [{ id: "abc", name: { raw: "Todo" } }] };
@@ -152,6 +165,43 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
       if (vorher === undefined) delete process.env[ALT];
       else process.env[ALT] = vorher;
     }
+  });
+});
+
+describe("Sprache des Spezifikations-Gates (--pruefen, #1866 L22)", () => {
+  const pruefeSprache = rawSprache as (config: unknown) => { punkt: string; ok: boolean; befund?: string; fix?: string }[];
+  const ohne = (...schluessel: string[]) => {
+    const spez = { ...CONFIG.sprache.spezifikation } as Record<string, unknown>;
+    for (const k of schluessel) delete spez[k];
+    return { ...CONFIG, sprache: { ...CONFIG.sprache, spezifikation: spez } };
+  };
+
+  test("pur: vollständiger Block ist gut", () => {
+    assert.deepEqual(pruefeSprache(CONFIG), [{ punkt: "Sprache", ok: true }]);
+  });
+  test("pur: ohne blocker und abhaengigkeit eine Lücke, die beide Schlüssel und die Fix-Zeile nennt", () => {
+    const e = pruefeSprache(ohne("blocker", "abhaengigkeit"));
+    assert.equal(e.length, 1);
+    assert.equal(e[0].ok, false);
+    assert.match(e[0].befund ?? "", /sprache\.spezifikation\.blocker[\s\S]*sprache\.spezifikation\.abhaengigkeit/);
+    assert.match(e[0].fix ?? "", /sprache\.spezifikation/);
+  });
+  test("pur: Config ohne sprache, ohne spezifikation oder null ist eine Lücke, kein Wurf", () => {
+    for (const config of [{}, { sprache: {} }, { sprache: { spezifikation: null } }, null, undefined]) {
+      assert.equal(pruefeSprache(config)[0].ok, false, JSON.stringify(config));
+    }
+  });
+  test("CLI: Config ganz ohne sprache ergibt Exit 1 und eine LÜCKE-Zeile mit Fix", () => {
+    const { sprache: _weg, ...ohneSprache } = CONFIG;
+    const r = lauf({}, { config: ohneSprache });
+    assert.equal(r.code, 1);
+    assert.equal(luecken(r).length, 1, r.out.join("\n"));
+    assert.match(luecken(r)[0], /Sprache: .*Fix: .*sprache\.spezifikation/);
+  });
+  test("CLI: unvollständiger Block (blocker fehlt) wird schon beim Laden gemeldet: Exit 2 mit Schlüssel und Fix", () => {
+    const r = lauf({}, { config: ohne("blocker") });
+    assert.equal(r.code, 2);
+    assert.match(r.err.join("\n"), /sprache\.spezifikation\.blocker[\s\S]*Fix:/);
   });
 });
 

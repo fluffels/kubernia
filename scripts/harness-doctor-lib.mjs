@@ -6,7 +6,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fehlerText } from "./gh-cli.mjs";
-import { altEnvName, boardPfad, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
@@ -230,6 +231,17 @@ function pruefeRuleset(gh, repo, repoInfo, spiegel) {
 }
 
 /**
+ * Pur: prüft das Wörterbuch des Spezifikations-Gates (`sprache.spezifikation`, Mängel aus `spracheMaengel`, auch `blocker` und `abhaengigkeit`). Das Laden der Config lässt einen fehlenden Block zu
+ * (additive Schlüssel brechen den Stand nicht), das Gate hat aber keinen Standardwert: der Doctor meldet die Lücke mit der Fix-Zeile, statt dass erst das Gate wirft.
+ */
+export function pruefeSprache(config) {
+  const sp = config?.sprache?.spezifikation;
+  const maengel = sp === undefined || sp === null ? ["sprache.spezifikation fehlt"] : spracheMaengel(sp);
+  if (maengel.length === 0) return [gut("Sprache")];
+  return [luecke("Sprache", `${maengel.join("; ")} in ${PROJEKT_CONFIG}`, `den Block sprache.spezifikation (ziel, nachMerge, akzeptanzkriterien, blocker, abhaengigkeit, negativfall, begrenzung, allquantor) in ${PROJEKT_CONFIG} vervollständigen`)];
+}
+
+/**
  * Pur: meldet jede Kern-Umgebungsvariable, die noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist; der Altname wird nicht mehr gelesen.
  * `namen` sind die `FACTORY_…`-Namen (`kernEnvNamen`), `env` die Umgebung des Doctor-Prozesses. „Gesetzt“ heißt `!== undefined`, auch ein leerer Wert. Der Wert erscheint nie in der Meldung.
  */
@@ -256,6 +268,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     ergebnis.push(...pruefeLabels(gh, repo, voraussetzungen.labels));
     voraussetzungen.boards.forEach((b, i) => ergebnis.push(...pruefeBoard(gh, b, i)));
     ergebnis.push(...pruefeRuleset(gh, repo, r.repo, spiegel));
+    ergebnis.push(...pruefeSprache(config));
   }
   if (langfuse) {
     const lf = langfuse();

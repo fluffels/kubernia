@@ -9,7 +9,7 @@
  * `ANLEITUNG <Punkt>: <Befund> Fix: <Schritt> Link: <Seite>`. Langfuse prüft nur `--pruefen`; `--config` gilt nicht für das Sammelticket (sammelticket-anlegen.mjs liest die Standard-Config). `--dry-run` gibt nur den Plan aus (`PLAN …`). Ein zweiter Lauf ändert nichts.
  * Der Wochenlauf selbst (Lücke als Zeile ins Sammelticket) steht in harness-doctor-melden.mjs.
  *
- * `--pruefen` meldet zusätzlich jede Kern-Umgebungsvariable, die in der Umgebung dieses Prozesses noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist: der Altname wird nicht mehr gelesen (Wert nie ausgegeben; Namen aus den `umgebungsWert`-Literalen in scripts/). Grenze: nur die Umgebung des Doctor-Prozesses, nicht die anderer Shells oder Settings-Dateien.
+ * `--pruefen` meldet den Block `sprache.spezifikation` der Config als Lücke `Sprache`, wenn er fehlt oder unvollständig ist (das Spezifikations-Gate hat keinen Standardwert). Es meldet zusätzlich jede Kern-Umgebungsvariable, die in der Umgebung dieses Prozesses noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist: der Altname wird nicht mehr gelesen (Wert nie ausgegeben; Namen aus den `umgebungsWert`-Literalen in scripts/). Grenze: nur die Umgebung des Doctor-Prozesses, nicht die anderer Shells oder Settings-Dateien.
  *
  * Je Lücke eine Zeile `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>`; Exit 0 ohne Lücke, 1 mit mindestens einer, 2 bei Aufruf-Fehler oder
  * unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf). Reines Node-Skript ohne Modell-Tokens; `gh` und

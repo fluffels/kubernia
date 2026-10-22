@@ -420,7 +420,7 @@ export function trenneConfigArg(argv) {
 /**
  * Rahmen für `--config <pfad>` im Direktaufruf eines Werkzeugs: trennt das Flag ab, lädt die Config und liefert `{ args, config }` oder
  * `{ args, fehler }` (Text ohne `✖`-Präfix: fehlender Pfad bzw. Ladefehler mit Pfad, Schlüssel und `Fix:`-Zeile). Der Aufrufer meldet den Fehler
- * mit Exit 2, bevor er etwas liest oder schreibt. Ohne `--config` gilt die Config des Repos. `lade` ist die Test-Naht.
+ * mit Exit 2, bevor er etwas liest oder schreibt. Ohne `--config` gilt die Config des Repos. `--config` übersteuert Sprache, Labels, Namen und `hartAb`; Repo und Board-IDs kommen aus der Repo-Config (`board-lib`/`inbox-lib`). `lade` ist die Test-Naht.
  */
 export function configAusAufruf(argv, { lade = ladeProjektConfig } = {}) {
   const getrennt = trenneConfigArg(argv);
