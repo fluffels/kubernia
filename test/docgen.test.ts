@@ -43,7 +43,7 @@ const mdApi = markdown as unknown as {
 };
 const registryApi = registry as unknown as {
   GENERATORS: Record<string, unknown>;
-  ladeGeneratoren: (a: { rootDir: string; config: Cfg }) => Promise<Record<string, unknown>>;
+  ladeGeneratoren: (a: { rootDir: string; config?: Cfg }) => Promise<Record<string, unknown>>;
 };
 const gatesApi = gates as unknown as {
   gatesGenerator: (ctx: { rootDir: string; config: Cfg }) => string;

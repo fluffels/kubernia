@@ -36,6 +36,7 @@ export const GENERATORS = {
  * (`{ "<marker>": { datei: "<pfad relativ zum rootDir>", name: "<Export>" } }`). Wirft mit einer Meldung, die immer
  * `config.generatoren.<marker>` und den Pfad nennt: Kern-Name als Marker (fail-closed), Datei fehlt, Export fehlt
  * oder ist keine Funktion. Ohne `generatoren` entspricht das Ergebnis `GENERATORS`.
+ * @param {{ rootDir: string, config?: { generatoren?: unknown } }} opts
  */
 export async function ladeGeneratoren({ rootDir, config }) {
   const spec = config?.generatoren;
@@ -54,7 +55,7 @@ export async function ladeGeneratoren({ rootDir, config }) {
     try {
       modul = await import(pathToFileURL(abs).href);
     } catch (e) {
-      throw new Error(`${wo}: ${eintrag.datei} lässt sich nicht laden: ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(`${wo}: ${eintrag.datei} lässt sich nicht laden: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
     }
     if (typeof modul[eintrag.name] !== "function") throw new Error(`${wo}: ${eintrag.datei} exportiert keine Funktion "${eintrag.name}"`);
     geladen[marker] = modul[eintrag.name];
