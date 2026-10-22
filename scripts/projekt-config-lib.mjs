@@ -188,6 +188,46 @@ function pruefeSprache(s) {
   return [...fehler, ...spracheMaengel(s.spezifikation)];
 }
 
+const AUSNAHME_LISTEN_NAMEN = ["groesse", "kontext"];
+
+/** Pur: prüft den Block `ausnahmen` (Form): je Liste `{ datei, grund }`, die Datei repo-relativ POSIX und je Liste nur einmal, der Grund nennt ein Ticket `#<nr>`. */
+function pruefeAusnahmen(a) {
+  if (!istObjekt(a)) return ["ausnahmen muss ein Objekt mit den Listen groesse und kontext sein"];
+  const fehler = Object.keys(a).filter((k) => !AUSNAHME_LISTEN_NAMEN.includes(k)).map((k) => `ausnahmen.${k} ist kein bekannter Schlüssel (erlaubt: ${AUSNAHME_LISTEN_NAMEN.join(", ")})`);
+  for (const name of AUSNAHME_LISTEN_NAMEN) {
+    const liste = a[name];
+    if (liste === undefined) continue;
+    if (!Array.isArray(liste)) {
+      fehler.push(`ausnahmen.${name} muss eine Liste von { datei, grund } sein`);
+      continue;
+    }
+    const gesehen = new Set();
+    liste.forEach((e, i) => {
+      const wo = `ausnahmen.${name}[${i}]`;
+      if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { datei, grund } sein`);
+      if (!istText(e.datei)) fehler.push(`${wo}.datei muss ein nicht-leerer String (repo-relativer Pfad) sein`);
+      else if (!istRepoRelativPosix(e.datei)) fehler.push(`${wo}.datei muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(e.datei)}`);
+      else if (gesehen.has(e.datei)) fehler.push(`${wo}.datei „${e.datei}“ steht doppelt`);
+      else gesehen.add(e.datei);
+      if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
+      else if (!/#\d+/.test(e.grund)) fehler.push(`${wo}.grund muss ein Ticket #<nr> nennen (eine Ausnahme ohne offenes Ticket gibt es nicht)`);
+    });
+  }
+  return fehler;
+}
+
+/**
+ * Pur: die Ausnahmelisten der Größen-Gates (`ausnahmen.groesse` für check:size, `ausnahmen.kontext` für check:contextsize), je Eintrag `{ datei, grund }`;
+ * ohne Block beide leer. Wirft mit Fix-Zeile bei kaputter Form (die Gates dürfen keine Ausnahme still verlieren).
+ */
+export function ausnahmenAus(config) {
+  const wert = config?.ausnahmen;
+  if (wert === undefined) return { groesse: [], kontext: [] };
+  const fehler = pruefeAusnahmen(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block ausnahmen (groesse, kontext: Liste von { datei, grund mit #<nr> }) in ${PROJEKT_CONFIG} korrigieren`);
+  return { groesse: wert.groesse ?? [], kontext: wert.kontext ?? [] };
+}
+
 const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
 
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
@@ -249,6 +289,7 @@ export function pruefeProjektConfig(wert) {
   }
   if (wert.sprache !== undefined) fehler.push(...pruefeSprache(wert.sprache));
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
+  if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
   return fehler;
 }
 

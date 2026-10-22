@@ -3,7 +3,7 @@
  * jscpd-Copy-Paste-Reports ehrlich. Struktureller Wächter (wie docdrift/bundle/
  * coverage-config), kein Verhaltens-Test.
  *
- * Hintergrund (iSAQB-Runde 3, docs/architektur-analyse-2026-07-03-iSAQB.md): die
+ * Hintergrund: die
  * SSOT-Umgehungen (#534/#577/#578, _resetNodes/#596) sind die einzige Regressionsklasse
  * ohne direkten Guard — nur der Invariant (wirft bei illegalem State) + Review fangen sie,
  * ein Copy-Paste-Detektor fehlte. jscpd macht Copy-Paste früh sichtbar, ist aber ABSICHTLICH

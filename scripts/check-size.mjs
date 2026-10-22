@@ -20,8 +20,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
-import { SIZE_ALLOWLIST as ALLOWLIST } from './check-allowlists.mjs'
-import { ladeProjektConfig, strukturAus } from './projekt-config-lib.mjs'
+import { ausnahmenAus, ladeProjektConfig, strukturAus } from './projekt-config-lib.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -134,20 +133,23 @@ function main() {
   const dim = (s) => paint('2', s)
 
   let quelle
+  let ALLOWLIST
   try {
-    quelle = strukturAus(ladeProjektConfig()).quelle
+    const config = ladeProjektConfig()
+    quelle = strukturAus(config).quelle
+    ALLOWLIST = ausnahmenAus(config).groesse
   } catch (e) {
     console.error(`✖ ${e instanceof Error ? e.message : String(e)}`)
     process.exit(1)
   }
   const sizes = collectSizes(ROOT, quelle)
-  const allow = new Map(ALLOWLIST.map((a) => [a.file, a.reason]))
+  const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]))
   const oversized = findOversized(sizes, LOC_BUDGET)
   const oversizedFiles = new Set(oversized.map((s) => s.file))
 
   const violations = oversized.filter((s) => !allow.has(s.file))
   const allowed = oversized.filter((s) => allow.has(s.file))
-  const stale = ALLOWLIST.filter((a) => !oversizedFiles.has(a.file))
+  const stale = ALLOWLIST.filter((a) => !oversizedFiles.has(a.datei))
 
   for (const a of allowed)
     console.log(dim(`• geduldet: ${a.file} (${a.loc} > ${LOC_BUDGET} LOC) – ${allow.get(a.file)}`))
@@ -157,7 +159,7 @@ function main() {
 
   for (const s of stale)
     console.error(
-      red(`✖ Allowlist-Eintrag stale: ${s.file} liegt nicht mehr über ${LOC_BUDGET} LOC – Eintrag in scripts/check-size.mjs entfernen.`),
+      red(`✖ Ausnahme stale: ${s.datei} liegt nicht mehr über ${LOC_BUDGET} LOC – Eintrag unter ausnahmen.groesse in .factory/projekt.json entfernen.`),
     )
 
   const deckelMeldungen = pruefeDeckel(collectWorkflowSizes())
@@ -171,7 +173,7 @@ function main() {
   if (violations.length)
     console.error(
       `\n${violations.length} Modul(e) über dem Budget. Aufteilen (siehe #392/#393 als Vorlage) ` +
-        `oder – mit offenem Split-Ticket – bewusst in SIZE_ALLOWLIST in scripts/check-allowlists.mjs aufnehmen.`,
+        `oder – mit offenem Split-Ticket – bewusst unter ausnahmen.groesse in .factory/projekt.json aufnehmen (datei, grund mit #<nr>).`,
     )
   process.exit(1)
 }

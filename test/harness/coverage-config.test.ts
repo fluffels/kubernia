@@ -3,7 +3,7 @@
  * Coverage-Config ehrlich (analog verify-script/docmap/docdrift: struktureller Wächter, kein
  * Verhaltens-Test).
  *
- * Motivation (Architektur-Analyse 2026-07, iSAQB): 94 Testdateien sagen NICHTS über die
+ * Motivation: 94 Testdateien sagen NICHTS über die
  * Abdeckung. Der Repo-Mittelwert (~62 %) versteckt, dass die Domäne exzellent (~92-96 %),
  * die Präsentation aber unit-untestbar (~5 %, nur e2e-Smoke) ist. Das Gate misst darum PRO
  * SCHICHT-Bucket — und genau diese Zuordnung darf nicht driften. Der Wächter sichert:

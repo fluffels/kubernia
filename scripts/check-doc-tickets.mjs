@@ -9,7 +9,7 @@
  * Hintergrund: docs/agent-harness.md § „Roadmap / bekannte Lücken" listet
  * Harness-Verbesserungen, die noch **offen** sind. Diese Liste veraltet leise —
  * genau so wie die alte „#492 (RNG-Determinismus) ist offen"-Zeile, die noch
- * dastand, obwohl das Gate längst existierte (Befund iSAQB-Runde 3). check:docdrift
+ * dastand, obwohl das Gate längst existierte (ein realer Fund dieser Klasse). check:docdrift
  * prüft nur Kommandos/Links/Anker, nicht ob eine als „offen" dokumentierte
  * Ticket-Nummer auf GitHub inzwischen geschlossen ist. Dieser Wächter schließt die
  * Lücke: er liest die zwischen zwei Markern gelistete „offen"-Tabelle und prüft jede
@@ -35,7 +35,7 @@ import { readFileSync } from "node:fs";
 import { ghText } from "./gh-cli.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-import { SIZE_ALLOWLIST, CONTEXT_ALLOWLIST } from "./check-allowlists.mjs";
+import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -69,21 +69,24 @@ export function parseOpenHarnessTickets(md) {
 
 /** Die Ausnahme-Listen, die ein offenes Ticket nennen müssen (#1460 Z1). DECKEL in check-size sind Ratchet-Historie,
  *  kein Ticket-Versprechen, und gehören bewusst nicht dazu. */
-export const AUSNAHME_LISTEN = [
-  { skript: "scripts/check-allowlists.mjs › SIZE_ALLOWLIST", eintraege: SIZE_ALLOWLIST },
-  { skript: "scripts/check-allowlists.mjs › CONTEXT_ALLOWLIST", eintraege: CONTEXT_ALLOWLIST },
-];
+export function ausnahmeListen(config = ladeProjektConfig()) {
+  const { groesse, kontext } = ausnahmenAus(config);
+  return [
+    { skript: ".factory/projekt.json › ausnahmen.groesse", eintraege: groesse },
+    { skript: ".factory/projekt.json › ausnahmen.kontext", eintraege: kontext },
+  ];
+}
 
-/** Je Ausnahme die Ticket-Nummer: das erste `#N` der Begründung, sonst null. Rein, offline. */
+/** Je Ausnahme (`{ datei, grund }`) die Ticket-Nummer: das erste `#N` des Grundes, sonst null. Rein, offline. */
 export function ausnahmeTickets(eintraege) {
   return eintraege.map((e) => {
-    const m = /#(\d+)/.exec(e.reason ?? "");
-    return { file: e.file, nr: m ? Number(m[1]) : null };
+    const m = /#(\d+)/.exec(e.grund ?? "");
+    return { datei: e.datei, nr: m ? Number(m[1]) : null };
   });
 }
 
 /**
- * Urteil über die Ausnahmen (`{ file, nr, skript }`): `stateOf(nr)` liefert "OPEN" | "CLOSED" | null (nicht ermittelbar). Rot ist eine
+ * Urteil über die Ausnahmen (`{ datei, nr, skript }`): `stateOf(nr)` liefert "OPEN" | "CLOSED" | null (nicht ermittelbar). Rot ist eine
  * Ausnahme ohne Nummer oder mit CLOSED-Ticket, unbekannt eine mit nicht ermittelbarem Status (kein Rot aus dem falschen Grund). Rein.
  */
 export function bewerteAusnahmen(ausnahmen, stateOf) {
@@ -133,7 +136,7 @@ function main() {
 
   const md = readFileSync(join(ROOT, HARNESS_DOC), "utf8");
   const open = parseOpenHarnessTickets(md);
-  const ausnahmen = AUSNAHME_LISTEN.flatMap((l) => ausnahmeTickets(l.eintraege).map((e) => ({ ...e, skript: l.skript })));
+  const ausnahmen = ausnahmeListen().flatMap((l) => ausnahmeTickets(l.eintraege).map((e) => ({ ...e, skript: l.skript })));
 
   if (open.length === 0 && ausnahmen.length === 0) {
     console.log(green(`✔ Keine offen-markierten Roadmap-Tickets in ${HARNESS_DOC} (nichts abzugleichen).`));
@@ -155,11 +158,11 @@ function main() {
   const unknown = [];
   const urteil = bewerteAusnahmen(ausnahmen, ghStateOf);
   for (const a of urteil.unbekannt) {
-    console.error(yellow(`… #${a.nr}: gh-Status der Ausnahme für ${a.file} nicht ermittelbar — übersprungen (transient/kein Zugriff).`));
+    console.error(yellow(`… #${a.nr}: gh-Status der Ausnahme für ${a.datei} nicht ermittelbar — übersprungen (transient/kein Zugriff).`));
   }
   for (const a of urteil.rot) {
     console.error(
-      red(`✖ ${a.skript}: die Ausnahme für ${a.file}: ${a.grund}; offenes Ticket eintragen oder die Ausnahme abbauen.`),
+      red(`✖ ${a.skript}: die Ausnahme für ${a.datei}: ${a.grund}; offenes Ticket eintragen oder die Ausnahme abbauen.`),
     );
   }
   for (const n of open) {

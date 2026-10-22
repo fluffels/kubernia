@@ -45,6 +45,12 @@
     "quelle": "src",
     "moduldoku": "docs/module"
   },
+  "ausnahmen": {
+    "groesse": [
+      { "datei": "src/sim.ts", "grund": "#893 (Split offen): sim.ts entflechten, God-File von der Ausnahmeliste." }
+    ],
+    "kontext": []
+  },
   "spezifikation": {
     "hartAb": 1
   },

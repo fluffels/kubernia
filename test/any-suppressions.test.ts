@@ -102,7 +102,7 @@ describe("no-explicit-any-Suppression-Ratchet (#604)", () => {
 });
 
 describe("Quellwurzel als Parameter (#1860)", () => {
-  const collect = checkAny.collectSuppressions as (rootDir: string, quelle: string) => CountMap;
+  const { collectSuppressions: collect } = checkAny as unknown as { collectSuppressions: (rootDir: string, quelle: string) => CountMap };
   const disable = "// eslint-disable-next-line @typescript-eslint/no-explicit-any\nconst a: any = 1;\n";
   const baum = (): string => {
     const d = mkdtempSync(join(tmpdir(), "anysup-"));

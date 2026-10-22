@@ -1,7 +1,7 @@
 /* Doku-Aktualitäts-Wächter (#610) — hält die Harness-Roadmap in
  * docs/agent-harness.md § „Roadmap / bekannte Lücken" ehrlich: eine als „offen"
  * dokumentierte Ticket-Nummer, die auf GitHub längst geschlossen ist (der reale
- * #492-Befund aus iSAQB-Runde 3), ist Drift. check:docdrift (#529) prüft nur
+ * #492-Fund dieser Klasse), ist Drift. check:docdrift (#529) prüft nur
  * Kommandos/Links/Anker, NICHT inhaltliche Aktualität.
  *
  * Der eigentliche gh-Abgleich braucht Netz + Auth und ist nicht deterministisch —
@@ -27,13 +27,13 @@ const parseOpenHarnessTickets: (md: string) => number[] = checkDocTickets.parseO
 const OPEN_TICKETS_START: string = checkDocTickets.OPEN_TICKETS_START;
 const OPEN_TICKETS_END: string = checkDocTickets.OPEN_TICKETS_END;
 const HARNESS_DOC: string = checkDocTickets.HARNESS_DOC;
-const { ausnahmeTickets, AUSNAHME_LISTEN, bewerteAusnahmen } = checkDocTickets as unknown as {
+const { ausnahmeTickets, ausnahmeListen, bewerteAusnahmen } = checkDocTickets as unknown as {
   bewerteAusnahmen: (
-    a: { file: string; nr: number | null; skript: string }[],
+    a: { datei: string; nr: number | null; skript: string }[],
     stateOf: (nr: number) => string | null,
-  ) => { rot: { file: string; grund: string }[]; unbekannt: { file: string; nr: number | null }[] };
-  ausnahmeTickets: (eintraege: { file: string; reason: string }[]) => { file: string; nr: number | null }[];
-  AUSNAHME_LISTEN: { skript: string; eintraege: { file: string; reason: string }[] }[];
+  ) => { rot: { datei: string; grund: string }[]; unbekannt: { datei: string; nr: number | null }[] };
+  ausnahmeTickets: (eintraege: { datei: string; grund: string }[]) => { datei: string; nr: number | null }[];
+  ausnahmeListen: (config?: unknown) => { skript: string; eintraege: { datei: string; grund: string }[] }[];
 };
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -109,35 +109,45 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
   test("ausnahmeTickets: erstes #N der Begründung, null ohne Nummer", () => {
     assert.deepEqual(
       ausnahmeTickets([
-        { file: "a.ts", reason: "#893 (Split offen), vorher #942." },
-        { file: "b.ts", reason: "ohne Ticket" },
+        { datei: "a.ts", grund: "#893 (Split offen), vorher #942." },
+        { datei: "b.ts", grund: "ohne Ticket" },
       ]),
       [
-        { file: "a.ts", nr: 893 },
-        { file: "b.ts", nr: null },
+        { datei: "a.ts", nr: 893 },
+        { datei: "b.ts", nr: null },
       ],
     );
   });
 
   test("ausnahmeTickets: nur `#N` zählt als Ticket, eine bloße Zahl nicht", () => {
-    assert.deepEqual(ausnahmeTickets([{ file: "a.ts", reason: "Split bis 2027" }]), [{ file: "a.ts", nr: null }]);
+    assert.deepEqual(ausnahmeTickets([{ datei: "a.ts", grund: "Split bis 2027" }]), [{ datei: "a.ts", nr: null }]);
   });
 
   test("bewerteAusnahmen: CLOSED und fehlende Nummer sind rot, OPEN grün, nicht ermittelbar unbekannt (nie rot)", () => {
-    const eintrag = (file: string, nr: number | null) => ({ file, nr, skript: "scripts/check-size.mjs" });
+    const eintrag = (datei: string, nr: number | null) => ({ datei, nr, skript: "scripts/check-size.mjs" });
     const stand: Record<number, string | null> = { 1: "OPEN", 2: "CLOSED", 3: null };
     const r = bewerteAusnahmen([eintrag("a", 1), eintrag("b", 2), eintrag("c", 3), eintrag("d", null)], (nr) => stand[nr]);
-    assert.deepEqual(r.rot.map((x) => `${x.file}:${x.grund}`), ["b:#2 ist CLOSED", "d:keine Ticket-Nummer"]);
-    assert.deepEqual(r.unbekannt.map((x) => x.file), ["c"]);
+    assert.deepEqual(r.rot.map((x) => `${x.datei}:${x.grund}`), ["b:#2 ist CLOSED", "d:keine Ticket-Nummer"]);
+    assert.deepEqual(r.unbekannt.map((x) => x.datei), ["c"]);
     assert.deepEqual(bewerteAusnahmen([], () => "OPEN"), { rot: [], unbekannt: [] });
   });
 
-  test("die echten ALLOWLISTs nennen je Eintrag eine Ticket-Nummer", () => {
-    assert.ok(AUSNAHME_LISTEN.length >= 2, "check-size und check-context-size müssen erfasst sein");
-    for (const liste of AUSNAHME_LISTEN) {
+  test("die echten Ausnahmelisten der Config nennen je Eintrag eine Ticket-Nummer", () => {
+    const listen = ausnahmeListen();
+    assert.deepEqual(listen.map((l) => l.skript), [".factory/projekt.json › ausnahmen.groesse", ".factory/projekt.json › ausnahmen.kontext"]);
+    assert.ok(listen.some((l) => l.eintraege.length > 0), "mindestens die Größen-Ausnahme muss erfasst sein");
+    for (const liste of listen) {
       for (const e of ausnahmeTickets(liste.eintraege)) {
-        assert.ok(e.nr !== null, `${liste.skript}: Ausnahme ${e.file} nennt kein #N`);
+        assert.ok(e.nr !== null, `${liste.skript}: Ausnahme ${e.datei} nennt kein #N`);
       }
     }
+  });
+
+  test("ausnahmeListen liest beide Listen aus der übergebenen Config, ohne Block sind beide leer", () => {
+    const eintrag = { datei: "x.ts", grund: "#7 offen" };
+    const l = ausnahmeListen({ ausnahmen: { groesse: [eintrag], kontext: [] } });
+    assert.deepEqual(l.map((x) => x.eintraege), [[eintrag], []]);
+    assert.deepEqual(ausnahmeListen({}).map((x) => x.eintraege), [[], []]);
+    assert.throws(() => ausnahmeListen({ ausnahmen: "kaputt" }), /ausnahmen[\s\S]*Fix:/);
   });
 });

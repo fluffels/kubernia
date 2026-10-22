@@ -21,6 +21,7 @@ interface Pc {
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
+  ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
   umgebungsWert(env: Record<string, string | undefined>, name: string, opt?: { altPraefix?: string | null; warn?: (t: string) => void }): string | undefined;
 }
 const pc = rawPc as unknown as Pc;
@@ -631,5 +632,81 @@ describe("Struktur-Pfade als Projektwert (#1843)", () => {
       assert.throws(() => pc.strukturAus({ struktur: { quelle: p, moduldoku: "d" } }), /repo-relativer POSIX-Pfad[\s\S]*Fix:/, p);
     }
     for (const p of ["src", "docs/module", "a/b.c/d"]) assert.deepEqual(mit({ quelle: p, moduldoku: p }), [], p);
+  });
+});
+
+describe("Ausnahmelisten als Projektwert (#1860)", () => {
+  const mit = (a: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), ausnahmen: a });
+  const ok = { datei: "src/gross.ts", grund: "#893 Split offen" };
+
+  test("ausnahmenAus: ohne Block leer, sonst die Einträge; die echte Config nennt für die Größe #893", () => {
+    assert.deepEqual(pc.ausnahmenAus({}), { groesse: [], kontext: [] });
+    assert.deepEqual(pc.ausnahmenAus({ ausnahmen: { groesse: [ok] } }), { groesse: [ok], kontext: [] });
+    assert.deepEqual(pc.ausnahmenAus({ ausnahmen: { kontext: [ok] } }), { groesse: [], kontext: [ok] });
+    const echt = pc.ausnahmenAus(pc.ladeProjektConfig());
+    assert.deepEqual(echt.groesse.map((a) => a.datei), ["src/sim.ts"]);
+    assert.match(echt.groesse[0]?.grund ?? "", /#893/);
+  });
+  test("ausnahmenAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
+    for (const falsch of ["x", [], { groesse: {} }, { groesse: [{ datei: "a.ts" }] }]) {
+      assert.throws(() => pc.ausnahmenAus({ ausnahmen: falsch }), /ausnahmen[\s\S]*Fix:/, JSON.stringify(falsch));
+    }
+  });
+  test("Form: ausnahmen ist optional, gültige Einträge sind ok", () => {
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({ groesse: [ok], kontext: [] }), []);
+    assert.deepEqual(mit({}), []);
+  });
+  test("Form: Nicht-Objekt, Nicht-Liste, unbekannter Schlüssel, fehlende Felder werden gemeldet", () => {
+    assert.match(mit("x").join("|"), /ausnahmen muss ein Objekt/);
+    assert.match(mit({ groesse: {} }).join("|"), /ausnahmen\.groesse muss eine Liste/);
+    assert.match(mit({ kontext: "x" }).join("|"), /ausnahmen\.kontext muss eine Liste/);
+    assert.match(mit({ andere: [] }).join("|"), /ausnahmen\.andere ist kein bekannter Schlüssel/);
+    assert.match(mit({ groesse: [null] }).join("|"), /ausnahmen\.groesse\[0\] muss ein Objekt/);
+    assert.match(mit({ groesse: [{ grund: "#1 x" }] }).join("|"), /ausnahmen\.groesse\[0\]\.datei muss ein nicht-leerer String/);
+    assert.match(mit({ groesse: [{ datei: "a.ts" }] }).join("|"), /ausnahmen\.groesse\[0\]\.grund muss ein nicht-leerer String/);
+  });
+  test("Form: der Grund nennt ein Ticket #<nr>, die Datei ist repo-relativ POSIX, eine Datei steht nur einmal", () => {
+    assert.match(mit({ groesse: [{ datei: "a.ts", grund: "ohne Ticket" }] }).join("|"), /ausnahmen\.groesse\[0\]\.grund muss ein Ticket #<nr> nennen/);
+    assert.match(mit({ groesse: [{ datei: "a.ts", grund: "Split bis 2027" }] }).join("|"), /muss ein Ticket #<nr> nennen/);
+    for (const p of ["/a.ts", "C:/a.ts", "a/../b.ts", "a\\b.ts", "a/"]) {
+      assert.match(mit({ kontext: [{ datei: p, grund: "#1 x" }] }).join("|"), /ausnahmen\.kontext\[0\]\.datei muss ein repo-relativer POSIX-Pfad/, p);
+    }
+    assert.match(mit({ groesse: [ok, ok] }).join("|"), /ausnahmen\.groesse\[1\]\.datei „src\/gross\.ts“ steht doppelt/);
+  });
+});
+
+describe("check:size und check:contextsize lesen die Ausnahmen aus der Config (#1860)", { timeout: 60_000 }, () => {
+  const repo = (ausnahmen: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), struktur: { quelle: "lib", moduldoku: "docs/module" }, ausnahmen }));
+    mkdirSync(join(d, "lib"));
+    writeFileSync(join(d, "lib", "gross.ts"), "x\n".repeat(801));
+    writeFileSync(join(d, "lib", "klein.ts"), "x\n");
+    return d;
+  };
+  const lauf = (d: string, skript: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", skript)], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  test("check:size: eine Datei der Liste ist geduldet, ohne Eintrag rot, ein nicht mehr zu großer Eintrag stale", () => {
+    const ohne = lauf(repo({ groesse: [] }), "check-size.mjs");
+    assert.match(ohne.text, /✖ lib\/gross\.ts: 801 Zeilen/);
+    const mit = lauf(repo({ groesse: [{ datei: "lib/gross.ts", grund: "#5 Split offen" }] }), "check-size.mjs");
+    assert.doesNotMatch(mit.text, /✖ lib\/gross\.ts/);
+    assert.match(mit.text, /geduldet: lib\/gross\.ts[\s\S]*#5 Split offen/);
+    const stale = lauf(repo({ groesse: [{ datei: "lib/gross.ts", grund: "#5 x" }, { datei: "lib/klein.ts", grund: "#6 x" }] }), "check-size.mjs");
+    assert.match(stale.text, /✖ Ausnahme stale: lib\/klein\.ts[\s\S]*ausnahmen\.groesse/);
+    assert.equal(stale.status, 1, stale.text);
+  });
+  test("check:size und check:contextsize: eine kaputte Liste endet mit ✖, Fix-Zeile und Exit 1 (kein Stacktrace)", () => {
+    for (const skript of ["check-size.mjs", "check-context-size.mjs"]) {
+      const r = lauf(repo({ groesse: [{ datei: "lib/gross.ts", grund: "ohne Ticket" }] }), skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*ausnahmen\.groesse\[0\]\.grund[\s\S]*Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
   });
 });
