@@ -28,7 +28,8 @@ import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { zeigerText } from "../scripts/skills-sync.mjs";
+import * as skillsSync from "../scripts/skills-sync.mjs";
+const zeigerText = (skillsSync as unknown as { zeigerText: (name: string, quelltext: string) => string }).zeigerText;
 
 const parseNpmRunMentions: (md: string) => Set<string> = checkDocDrift.parseNpmRunMentions;
 const extractLinks: (md: string) => { target: string; path: string; anchor: string }[] =
