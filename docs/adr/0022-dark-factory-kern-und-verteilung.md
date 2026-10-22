@@ -505,6 +505,15 @@ Die Überschrift von #1824 zählt dort als „Teil 8“; gemeint ist F3 **Teil 9
 - **Präzisiert:** der Zuschnitt der Regeln ohne Inventar-Zeile („ihr Zuschnitt folgt mit F5“) folgt im Sammelticket #1843.
 - **Grenzen:** der Wächter zählt nur das Wort; Spielbezüge wie NPCs oder Phaser zählt er nicht, ein Projektwert-Block wird vor dem Zählen entfernt. Der Ring `kern` belegt „literal- und importfrei“, nicht „strukturfrei“.
 
+## Fortschreibung #1711 (2026-10-22): Sprache als Projektwert (F8)
+
+- **Wo der Wert steht:** `sprache` in der Projekt-Config (`.factory/projekt.json`) trägt die Umschrift-Wortliste (`umschrift`) und das Vokabular des Spezifikations-Gates (`spezifikation`: Abschnittsnamen `ziel` und `akzeptanzkriterien`, das Präfix `nachMerge`, je `wort` und `muster` für Negativfall, Begrenzung und Allquantor). Die Form prüft `pruefeProjektConfig`; beim Laden ist der Block optional, beim Gebrauch Pflicht: `spracheAus` und `umschriftAus` brechen mit Fix-Zeile ab, es gibt keinen stillen Deutsch-Standardwert.
+- **Was im Kern deutsch bleibt:** die Rahmentexte der Meldungen (§8: Kern-Texte bleiben deutsch). Die Schlüsselwörter werden eingesetzt; mit der echten Config sind alle Meldungen wortgleich zu vorher (Golden-Test). Die Einstiege `spezifikationsMaengel`, `kriterien` und `pruefeEingang` der Lib verlangen `sprache`; `naechstes-ticket.mjs`, `spezifikation.mjs`, `abnahme.mjs` und `check-abnahme-nachweis.mjs` lesen sie aus der Config.
+- **Umlaut-Wächter:** `test/harness/umlaut-regel.test.ts` erzwingt die Sprachregel „Deutsch mit echten Umlauten“ für die lebende Doku, Agenten und Skills mit der Wortliste `sprache.umschrift`. Grenze: Code-Kommentare, Spieltexte, Commit-Texte, ADRs und Wörter außerhalb der Liste prüft er nicht; der Scan-Umfang steht im Kopfkommentar des Tests.
+- **Kern-Protokoll, nicht Sprache:** der Epic-Titel-Test (`istEpicTitel`), die Szenario-Wörter der Holdout-Abnahme (`holdout-auftrag-guard.mjs`), der Sammelticket-Titel mit „(gesammelt)“ und die Urteilswerte der Abnahme sind feste Protokollwörter und kein Projektwert.
+- **Präzisiert:** der Abschnitt zum Spezifikations-Gate (F12) nennt die Abschnittsnamen und Schlüsselwörter fest; sie stammen jetzt aus `sprache.spezifikation`.
+- **Re-Evaluierung:** der Trigger „erstes nicht deutschsprachiges Projekt“ bleibt unverändert; die Kern-Texte wären dann zu übersetzen.
+
 ## Fortschreibung #1710 (2026-10-22): Kern-Registry ohne Spiel-Generator (F6)
 
 F6 ist umgesetzt. Entscheidungen:

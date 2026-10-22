@@ -27,9 +27,9 @@ import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
-import { ladeProjektConfig, trenneConfigArg, umgebungsWert, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
-import { kriterien, NACH_MERGE_PRAEFIX } from "./spezifikation-lib.mjs";
+import { kriterien } from "./spezifikation-lib.mjs";
 
 /** Schließ-Referenzen eines PR-Bodys: verschiedene Ticketnummern zu close/fix/resolve (alle Beugungen, Groß-/Kleinschreibung egal, optional `:`). Pur. */
 export function verknuepfteTickets(body) {
@@ -49,14 +49,14 @@ const vorlage = (zeilen) =>
   `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>`;
 
 /** Urteil je Kriterium gegen die Kriterien des Tickets (`[{k, nachMerge}]`) und gegen `erfuellt`; `nach-merge` gilt nur an einem Nach-Merge-Kriterium. */
-function bewerteUrteil(urteil, liste) {
+function bewerteUrteil(urteil, liste, nachMerge) {
   const n = liste.length;
   const fehler = [];
   for (const u of urteil) {
     const nr = Number(u.k.slice(1));
     if (nr > n) fehler.push(`${u.k}: unbekannt, das Ticket hat nur ${n} Kriterium/Kriterien.`);
     else if (u.wert === "nach-merge") {
-      if (!liste[nr - 1].nachMerge) fehler.push(`${u.k}: nach-merge ist nur bei einem Kriterium mit dem Präfix \`${NACH_MERGE_PRAEFIX}\` erlaubt.`);
+      if (!liste[nr - 1].nachMerge) fehler.push(`${u.k}: nach-merge ist nur bei einem Kriterium mit dem Präfix \`${nachMerge}\` erlaubt.`);
     } else if (u.wert !== "erfuellt") fehler.push(`${u.k}: ${u.wert} (Merge gestoppt, Abnahme nicht bestanden).`);
   }
   for (let i = 1; i <= n; i++) if (!urteil.some((u) => u.k === `K${i}`)) fehler.push(`K${i}: Urteil fehlt.`);
@@ -95,7 +95,7 @@ function bewerteSpur(a, marker) {
 
 /**
  * Bewertet den Abnahme-Nachweis; liefert `fehler[]` (leer = grün). Pur.
- * `ticket` = `{nr, kriterien: <Liste aus kriterien()>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
+ * `ticket` = `{nr, kriterien: <Liste aus kriterien()>, nachMerge: <Präfix aus sprache.spezifikation>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
  */
 export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen }) {
   const a = nachweis.abnahme;
@@ -105,7 +105,7 @@ export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen }
     return ticket && ticket.kriterien.length > 0 ? [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt.`] : [];
   }
   if (!ticket) return [`${zeilen.abnahme}: ein Urteil braucht ein verknüpftes Ticket (Schließ-Referenz im PR-Body).`];
-  return [...bewerteUrteil(a.urteil, ticket.kriterien), ...bewerteHead(a, nachweis.review, abnahmeHead), ...bewerteSpur(a, marker)];
+  return [...bewerteUrteil(a.urteil, ticket.kriterien, ticket.nachMerge), ...bewerteHead(a, nachweis.review, abnahmeHead), ...bewerteSpur(a, marker)];
 }
 
 const gitDefault = (args) => execFileSync("git", args, { encoding: "utf8" });
@@ -165,7 +165,8 @@ function pruefe({ git, gh, env, config, zeilen, base }) {
   if (nummern.length === 1) {
     const issue = gh(["api", `repos/${repo}/issues/${nummern[0]}`]);
     if (issue?.pull_request) return [`#${nummern[0]} im PR-Body ist ein PR, kein Ticket.`];
-    ticket = { nr: nummern[0], kriterien: kriterien(issue?.body ?? "") };
+    const sprache = spracheAus(config).spezifikation;
+    ticket = { nr: nummern[0], kriterien: kriterien(issue?.body ?? "", sprache), nachMerge: sprache.nachMerge };
   }
   const abnahmeHead = nachweis.abnahme?.art === "urteil" ? leseAbnahmeHead(git, base, nachweis.abnahme.head, nachweis.review?.head) : null;
   let marker = null;

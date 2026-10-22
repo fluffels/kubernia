@@ -121,6 +121,61 @@ export function labelAus(config, schluessel) {
   return wert;
 }
 
+/**
+ * Pur: der Block `sprache` der Config (`umschrift` plus `spezifikation` mit den Abschnittsnamen und Schlüsselwörtern des Spezifikations-Gates);
+ * wirft ohne `sprache` (kein stiller Deutsch-Standardwert, #1711). Die Form prüft `pruefeProjektConfig`, das Gate wirft bei einem fehlenden Schlüssel selbst.
+ */
+export function spracheAus(config) {
+  const wert = config?.sprache;
+  if (!istObjekt(wert) || !istObjekt(wert.spezifikation)) {
+    throw new Error(`sprache fehlt oder hat keinen Block spezifikation in ${PROJEKT_CONFIG}\nFix: den Schlüssel sprache (umschrift, spezifikation) in ${PROJEKT_CONFIG} eintragen`);
+  }
+  return wert;
+}
+
+/** Pur: die Umschrift-Wortliste (`sprache.umschrift`) für den Umlaut-Wächter; wirft ohne nicht-leere Liste (kein stiller Deutsch-Standardwert, #1711). */
+export function umschriftAus(config) {
+  const liste = config?.sprache?.umschrift;
+  if (!Array.isArray(liste) || liste.length === 0) {
+    throw new Error(`sprache.umschrift fehlt oder ist keine nicht-leere Liste in ${PROJEKT_CONFIG}\nFix: den Schlüssel sprache.umschrift (Liste der ASCII-Umschriften) in ${PROJEKT_CONFIG} eintragen`);
+  }
+  return liste;
+}
+
+/** Pur: ein Muster-Eintrag `{ wort, muster }`; das Muster muss als Regex (Flag i) kompilieren. */
+function pruefeMuster(w, schluessel) {
+  if (!istObjekt(w) || !istText(w.wort) || !istText(w.muster)) return [`sprache.spezifikation.${schluessel} muss ein Objekt mit nicht-leerem wort und muster sein`];
+  try {
+    new RegExp(w.muster, "i");
+  } catch {
+    return [`sprache.spezifikation.${schluessel}.muster ist keine gültige Regex`];
+  }
+  return [];
+}
+
+/**
+ * Pur: prüft `sprache` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `spracheAus` verlangt ihn beim Gebrauch).
+ * Die importfreie Spezifikations-Lib prüft dieselben Schlüssel von `sprache.spezifikation` noch einmal (`wortschatz`, sie bekommt auch injizierte Werte):
+ * ein neuer Schlüssel gehört an beide Stellen.
+ */
+function pruefeSprache(s) {
+  if (!istObjekt(s)) return ["sprache muss ein Objekt mit umschrift und spezifikation sein"];
+  const fehler = [];
+  if (!Array.isArray(s.umschrift) || s.umschrift.length === 0 || !s.umschrift.every((w) => typeof w === "string" && /^[a-z]+$/.test(w))) {
+    fehler.push("sprache.umschrift muss eine nicht-leere Liste kleingeschriebener ASCII-Wörter (Muster ^[a-z]+$) sein");
+  }
+  const sp = s.spezifikation;
+  if (!istObjekt(sp)) return [...fehler, "sprache.spezifikation muss ein Objekt sein"];
+  for (const k of ["ziel", "nachMerge"]) {
+    if (!istText(sp[k])) fehler.push(`sprache.spezifikation.${k} muss ein nicht-leerer String sein`);
+  }
+  if (!Array.isArray(sp.akzeptanzkriterien) || sp.akzeptanzkriterien.length === 0 || !sp.akzeptanzkriterien.every(istText)) {
+    fehler.push("sprache.spezifikation.akzeptanzkriterien muss eine nicht-leere Liste nicht-leerer Strings sein");
+  }
+  for (const k of ["negativfall", "begrenzung", "allquantor"]) fehler.push(...pruefeMuster(sp[k], k));
+  return fehler;
+}
+
 const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
 
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
@@ -180,6 +235,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.spezifikation !== undefined) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
   }
+  if (wert.sprache !== undefined) fehler.push(...pruefeSprache(wert.sprache));
   return fehler;
 }
 

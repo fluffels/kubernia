@@ -52,7 +52,7 @@ const roh = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
   content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
 });
 // Zwei Boards (#1729): die Eingabe der alten Form (ein Board) steht auf dem Produkt-Board; Harness-Items rücken laut Trennregel auf die Factory-Seite.
-const CFG = { labels: { harness: "area:harness", forum: "forum" } };
+const CFG = { labels: { harness: "area:harness", forum: "forum" }, sprache: (ladeCfg as unknown as { ladeProjektConfig: () => { sprache: unknown } }).ladeProjektConfig().sprache };
 const zweiBoards = (e: Eingabe): ZweiBoards => ({ ...e, produkt: e.items, factory: [] });
 const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
   (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
@@ -877,5 +877,16 @@ describe("echteIo: Messfenster-Lader bekommt die Namen der Config (#1821 L10)", 
     });
     expect(optionen).toHaveLength(1);
     expect(optionen[0].ladeNamen?.()).toBe(io.namen);
+  });
+});
+
+describe("Sprache als Projektwert (#1711)", () => {
+  const ohne = { ...(ladeCfg as unknown as { ladeProjektConfig: () => Record<string, unknown> }).ladeProjektConfig(), sprache: undefined };
+  test("echteIo: ohne sprache in der Config bricht der Start vorab mit Fix-Zeile ab", () => {
+    const echte = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => unknown }).echteIo;
+    expect(() => echte({ config: ohne, messfensterLader: () => () => ({ closedAt: null, n: 0 }) })).toThrow(/sprache[\s\S]*Fix:/);
+  });
+  test("die Auswahl wirft ohne sprache, sobald ein freier Kandidat das Spezifikations-Gate braucht", () => {
+    expect(() => (N.waehleNaechstes as (e: unknown) => unknown)({ items: norm([item(1)]), offene: new Set(), owner: "fluffels", config: ohne })).toThrow(/sprache/);
   });
 });
