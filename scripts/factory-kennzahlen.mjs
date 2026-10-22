@@ -180,10 +180,24 @@ function abnahmeAbschnitt(lauf) {
   ];
 }
 
+/** Höchstens so viele Tickets mit Mangel zeigt der Abschnitt einzeln (der Rest als Zahl). */
+export const MAENGEL_ZEILEN_MAX = 10;
+
+/** Abschnitt „Spezifikation“: Zahl der freien, vertrauten, unblockierten Tickets mit Mangel (`holeMaengel`) samt Liste; eine Lücke zeigt den Grund, nie 0. Pure. */
+export function spezifikationAbschnitt(s) {
+  if (s.luecke) return [`- Lücke: ${s.luecke}`];
+  return [
+    `- ${s.anzahl} ${s.anzahl === 1 ? "Ticket" : "Tickets"} mit Mangel`,
+    ...s.maengel.slice(0, MAENGEL_ZEILEN_MAX).map((m) => `- #${m.nr} ${m.titel}: ${m.fehlt.join("; ")}`),
+    ...(s.maengel.length > MAENGEL_ZEILEN_MAX ? [`- … und ${s.maengel.length - MAENGEL_ZEILEN_MAX} weitere`] : []),
+  ];
+}
+
 /** Bericht als Daten: `lauf`/`nacharbeit` = `vertragPruefen`-Ergebnis, `tickets` = `[{ticket, pr, ergebnis}]`. Pure. */
-export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle, audit }) {
+export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle, audit, spezifikation }) {
   return {
     ...(audit ? { audit } : {}),
+    ...(spezifikation ? { spezifikation } : {}),
     zeitraum: { von, bis },
     nacharbeitFenster: nacharbeitFenster(von, bis),
     quelle,
@@ -210,6 +224,7 @@ export function renderMarkdown(b) {
     "",
     "**Abnahme-Quote**",
     ...abnahmeAbschnitt(b.lauf),
+    ...(b.spezifikation ? ["", "**Spezifikation**", ...spezifikationAbschnitt(b.spezifikation)] : []),
     ...(b.audit ? ["", "**Selbst-Audit**", ...auditAbschnitt(b.audit)] : []),
   ].join("\n");
 }
@@ -347,6 +362,20 @@ export function holeLauf(von, bis, run = runSkript) {
   }
 }
 
+/** `naechstes-ticket.mjs --maengel --json` → `{ anzahl, maengel }` oder `{ luecke }` (Exit ≠ 0, kein JSON, Vertragsbruch). Nie 0 für fehlende Daten. IO injizierbar. */
+export function holeMaengel(run = runSkript) {
+  const r = run("naechstes-ticket.mjs", ["--maengel", "--json"]);
+  if (r.status !== 0) return { luecke: `naechstes-ticket Exit ${r.status}: ${String(r.stderr).split(/\r?\n/).find((l) => l.trim()) ?? "ohne Meldung"}` };
+  let json;
+  try {
+    json = JSON.parse(r.stdout);
+  } catch {
+    return { luecke: "naechstes-ticket: Ausgabe ist kein JSON" };
+  }
+  if (!json || !Array.isArray(json.maengel) || json.anzahl !== json.maengel.length) return { luecke: "naechstes-ticket: Ausgabe ohne anzahl/maengel (Vertrag verletzt)" };
+  return { anzahl: json.anzahl, maengel: json.maengel };
+}
+
 function kostenLauf(sessions, { ticket, pr, von, langfuse }, run) {
   const args = [...sessions.flatMap((c) => ["--session", c.session]), "--issue", String(ticket), "--pr", String(pr), "--from", von, ...(langfuse ? ["--langfuse"] : []), "--json"];
   const r = run("token-baseline.mjs", args);
@@ -380,7 +409,7 @@ export function holeKosten({ ticket, pr, claims, langfuse }, run = runSkript) {
  * Setzt den Bericht zusammen; IO injiziert (`run` für die Unterprozesse, `claimKarte` liefert die Karte Ticket → Sessions).
  * Exit 2, wenn Lauf-Ergebnis oder Nacharbeit-Lauf fehlen (der Block erscheint trotzdem). Nur mit gültigem `von`/`bis` rufen.
  */
-export function erstelle({ von, bis, langfuse = false }, { run = runSkript, claimKarte, auditLader = null }) {
+export function erstelle({ von, bis, langfuse = false }, { run = runSkript, claimKarte, auditLader = null, maengelLader = null }) {
   const fenster = nacharbeitFenster(von, bis);
   const lauf = holeLauf(von, bis, run);
   const nacharbeit = holeLauf(fenster.von, fenster.bis, run);
@@ -390,7 +419,8 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
     tickets = ticketLaeufe(lauf.daten.zeilen).tickets.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
   }
   const audit = auditLader ? selbstAudit({ ...auditLader({ bis }), zeilen: lauf.daten?.zeilen ?? null }) : undefined;
-  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit });
+  const spezifikation = maengelLader ? maengelLader() : undefined; // eine Lücke dort ändert den Exit-Code nicht (wie bei den Kosten)
+  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit, spezifikation });
   return { bericht: b, exit: lauf.luecke || nacharbeit.luecke ? 2 : 0 };
 }
 
@@ -411,7 +441,7 @@ function main(argv) {
   }
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
-  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()) });
+  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()), maengelLader: () => holeMaengel() });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);
 }
