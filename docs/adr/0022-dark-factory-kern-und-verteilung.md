@@ -523,3 +523,11 @@ F6 ist umgesetzt. Entscheidungen:
 - **Ort und Ringe:** die Projekt-Generatoren (`save-versionen`, `quest-graph`, `quests-je-thema`) bleiben unter `scripts/docs-gen/` und stehen in `test/harness/kern-abdeckung.json` als `projekt`. `docs-gen.mjs` und `registry.mjs` wechseln von `kern-nach-entkopplung` auf Ring `kern`; `KERN_HUELLE_AUSNAHMEN` ist leer.
 - **Wächter:** „Kern-Registry enthält keinen Spiel-Generator (ADR 0022 F6)“ in `test/harness/kern-reinheit.test.ts` (läuft mit `npm test` in `verify`); Fremdrepo-Fälle (ohne `generatoren`, fehlender Generator) in `test/docgen-fremdrepo.test.ts`.
 - **Grenzen:** die Import-Hülle und der Wächter sehen nur statische Importe; der dynamische Import aus der Config bleibt für die Hülle unsichtbar, ihn sichert `ladeGeneratoren` zur Laufzeit. Ein absoluter oder mit Backslash geschriebener Pfad in `datei` wird vom Wächter nicht normalisiert. Die Projekt-Generatoren liegen im Kern-Ordner, ein eigener Projektordner folgt bei F10.
+
+## Fortschreibung #1843 (2026-10-22): Struktur-Pfade der Kern-Checks aus der Config (F5-Rest)
+
+- **Config-Schlüssel `struktur`:** `.factory/projekt.json` trägt `struktur.quelle` (Wurzel des Quellcodes) und `struktur.moduldoku` (Ordner der Modul-Tiefendocs), beide repo-relative POSIX-Pfade. `pruefeProjektConfig` meldet einen kaputten Block; beim Laden ist er optional.
+- **Gebrauchspflicht:** `strukturAus(config)` in `scripts/projekt-config-lib.mjs` wirft ohne beide nicht-leeren Strings mit Schlüssel und `Fix:`-Zeile, es gibt keinen stillen Standardwert (wie `spracheAus`).
+- **Betroffene Checks:** `check:size` (`collectSizes`) und `check:docmap` (`collectSrcModules`, `parseDeepDocMaps`, `auditDocMap`) nehmen die Pfade als Parameter und lesen ohne Angabe die Config; ihre Meldungen und Kommentare nennen keine Projektdateien mehr. Die `quellwurzel` des Schicht-Modells bleibt eine eigene Angabe der Schichtdaten.
+- **Eine Prüfung der Sprachwerte:** `spracheMaengel` in `scripts/spezifikation-lib.mjs` (importfrei) ist die einzige Prüfung von `sprache.spezifikation`; das Gate wirft bei ihren Mängeln, `pruefeProjektConfig` meldet dieselben Texte. Die Import-Hülle der Config-Lib wächst damit auf vier Dateien.
+- **Ungültige Config am Einstieg:** `board-lib.mjs` fängt den Ladefehler beim Import und endet mit `✖`-Zeile, `Fix:` und Exit 1 ohne Stacktrace.
