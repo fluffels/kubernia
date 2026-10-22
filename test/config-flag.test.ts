@@ -108,7 +108,7 @@ describe("gültige --config wird gelesen", { timeout: 60_000 }, () => {
         encoding: "utf8",
         cwd: WURZEL,
         timeout: 30_000,
-        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1" },
+        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1", FACTORY_GH_KOSTEN_LOG: join(d, "kosten.jsonl") },
       });
       return `${r.stderr}${r.stdout}`;
     };
@@ -136,7 +136,7 @@ describe("gültige --config wird gelesen", { timeout: 60_000 }, () => {
         encoding: "utf8",
         cwd: WURZEL,
         timeout: 30_000,
-        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1" },
+        env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href}`, STUB_ISSUE: issue, STUB_LEER: "1", FACTORY_GH_KOSTEN_LOG: join(d, "kosten.jsonl") },
       });
       return { status: r.status, text: `${r.stderr}${r.stdout}` };
     };

@@ -747,4 +747,12 @@ describe("check:contextsize, check:anysuppress und check:diffcoverage: Ausnahmen
       assert.doesNotMatch(r.text, /^\s+at /m, skript);
     }
   });
+  test("check:anysuppress und check:diffcoverage: ohne struktur-Block (beim Laden optional) endet es mit ✖, Fix-Zeile und Exit 1", () => {
+    for (const skript of ["check-any-suppressions.mjs", "check-diffcoverage.mjs"]) {
+      const r = lauf(repo({ struktur: undefined }), skript);
+      assert.equal(r.status, 1, `${skript}: ${r.text}`);
+      assert.match(r.text, /✖ [\s\S]*struktur[\s\S]*Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
+  });
 });
