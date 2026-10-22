@@ -47,7 +47,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 /** Die Texte, die heute die Worktree-Anlage beschreiben (Leerlauf-Schutz). */
 const PFLICHT_QUELLEN = [
   "AGENTS.md",
-  ".claude/skills/review-lenses/SKILL.md",
+  ".agents/skills/review-lenses/SKILL.md",
   "docs/agent-harness-faq.md",
 ];
 

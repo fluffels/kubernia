@@ -129,9 +129,9 @@ describe("projektwertDateien", () => {
   test("geschlossene Liste: Manifest-Markdown plus Agenten und Skills, sortiert, ohne Doppelte und Unsicheres", () => {
     const r = lib.projektwertDateien(
       ["docs/x.md", "scripts/a.mjs", "../out.md", ".claude/agents/a.md"],
-      [".claude/agents/a.md", ".claude/agents/b.md", ".claude/agents/c.txt", ".claude/skills/s/SKILL.md", ".claude/skills/s/t/u.md", "README.md"],
+      [".claude/agents/a.md", ".claude/agents/b.md", ".claude/agents/c.txt", ".claude/skills/s/SKILL.md", ".claude/skills/s/t/u.md", ".agents/skills/s/SKILL.md", ".agents/skills/s/t/u.md", ".agents/skills/s/notes.mdx", "x/.agents/skills/s/SKILL.md", ".agents/x.md", "README.md"],
     );
-    assert.deepEqual(r, [".claude/agents/a.md", ".claude/agents/b.md", ".claude/skills/s/SKILL.md", "docs/x.md"]);
+    assert.deepEqual(r, [".agents/skills/s/SKILL.md", ".claude/agents/a.md", ".claude/agents/b.md", ".claude/skills/s/SKILL.md", "docs/x.md"]);
   });
 });
 
@@ -197,6 +197,14 @@ describe("projektwerte CLI", () => {
     assert.match(r.err, /SKILL\.md:1: .*kein Ende/);
     assert.match(r.err, /nichts geschrieben/);
     assert.equal(lies(w, ".claude/agents/planer.md"), vorher);
+  });
+  test("ein verfälschter Projektwert-Block in einer Skill-Quelle unter .agents/skills ist rot (#1849)", () => {
+    const w = projekt();
+    assert.equal(lauf(["--write"], w).code, 0);
+    schreibe(w, ".agents/skills/a/SKILL.md", `---\nname: a\n---\n${S}\nverfälscht\n${E}\n`);
+    const r = lauf(["--check"], w);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /\.agents\/skills\/a\/SKILL\.md:\d+: Projektwert-Block weicht/);
   });
   test("--check schlägt bei einem Marker ohne Ende keinen --write-Fix vor", () => {
     const w = projekt();

@@ -78,7 +78,7 @@ describe("(a) Das Format der SSOT ist das, was das Skript liest", () => {
 describe("(b) Cap", () => {
   test("MAX_FIX_RUNDEN im Skript == 2 und der Skill nennt dasselbe Cap", () => {
     assert.equal(MAX_FIX_RUNDEN, 2);
-    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /\*\*Cap 2\*\* Fix-Runden, also höchstens 3 Pässe/);
+    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /\*\*Cap 2\*\* Fix-Runden, also höchstens 3 Pässe/);
   });
 });
 
@@ -97,7 +97,7 @@ describe("(c) Pflicht-Lenses je Diff-Art", () => {
     });
   }
   test("der Skill nennt dieselbe Staffel (reiner Markdown-Diff: eine Lens Doku, sonst drei)", () => {
-    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /nur `\*\.md`-Dateien\*\* [^\n]*Lens 4 — Doku\*\*\. Sonst laufen \*\*Lens 1–3\*\*/);
+    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /nur `\*\.md`-Dateien\*\* [^\n]*Lens 4 — Doku\*\*\. Sonst laufen \*\*Lens 1–3\*\*/);
   });
 });
 
@@ -154,7 +154,7 @@ describe("(d) CI-Schritt im Required-Job", () => {
 });
 
 describe("(e) Texte verweisen auf das Skript", () => {
-  for (const datei of [".claude/skills/review-lenses/SKILL.md", ".claude/agents/factory-umsetzer.md", "docs/agent-harness.md"]) {
+  for (const datei of [".agents/skills/review-lenses/SKILL.md", ".claude/agents/factory-umsetzer.md", "docs/agent-harness.md"]) {
     test(datei, () => assert.match(read(datei), /check-review-nachweis/));
   }
 });
@@ -162,7 +162,7 @@ describe("(e) Texte verweisen auf das Skript", () => {
 describe("(e2) Das Feld blocker= ist an allen Stellen benannt (#1123)", () => {
   test("Format-SSOT und Skill nennen das Feld, die Vorlage des Prüfskripts auch", () => {
     assert.match(read("docs/agent-harness.md"), /blocker=architektur:<n>/);
-    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /`blocker`/);
+    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /`blocker`/);
     assert.match(read("scripts/check-review-nachweis.mjs"), /blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n>/);
   });
 });
@@ -179,7 +179,7 @@ describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#
     assert.match(harness, /remerge-diff/);
     assert.match(harness, /wird der Check rot/);
     assert.match(harness, /Nach jedem Merge von `main`/, "§3a verweist auf die Schritte im Skill");
-    const skill = read(".claude/skills/review-lenses/SKILL.md");
+    const skill = read(".agents/skills/review-lenses/SKILL.md");
     assert.doesNotMatch(skill, /wird der Check rot/, "keine zweite Kopie der Erklärung im Skill");
     assert.doesNotMatch(skill, /git ≥ 2\.36/, "keine zweite Kopie der Erklärung im Skill");
     assert.match(skill, /git show --remerge-diff --format= <M>/, "der Skill trägt das Rezept");
@@ -371,7 +371,7 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
   });
   test("Skill, Format-SSOT und Umsetzer nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /abnahmefix=/);
-    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /abnahmefix=/);
+    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /abnahmefix=/);
     assert.match(read(".claude/agents/factory-umsetzer.md"), /abnahmefix=/);
   });
 });
@@ -379,7 +379,7 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
 describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
   test("Format-SSOT und Skill nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /zusatzpass=/);
-    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /zusatzpass=/);
+    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /zusatzpass=/);
   });
 });
 

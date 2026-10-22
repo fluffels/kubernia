@@ -39,7 +39,7 @@ const BLOECKE: string[] = [
   agentPfad("planer"),
   agentPfad("umsetzer"),
   agentPfad("lens"),
-  ".claude/skills/review-lenses/SKILL.md",
+  ".agents/skills/review-lenses/SKILL.md",
   ".claude/skills/factory/ablauf.md",
 ];
 

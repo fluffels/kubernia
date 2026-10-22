@@ -19,7 +19,7 @@ export const QUELL_VERZEICHNIS = ".agents/skills";
 export const WERKZEUGE = { claude: ".claude/skills" };
 export const ZEIGER_MARKE = "<!-- skills-sync: generierter Skill-Zeiger, nicht von Hand ändern (npm run skills:sync) -->";
 /** Volltext-Skills, die noch nicht umgezogen sind: Ordnername → Ticket des Umzugs. Nur Schrumpfen. */
-export const UEBERGANG = { "review-lenses": "#1849", factory: "#1850", "factory-ticket": "#1850" };
+export const UEBERGANG = { factory: "#1850", "factory-ticket": "#1850" };
 const FIX = "npm run skills:sync";
 const FIX_PRUNE = "npm run skills:sync -- --prune";
 

@@ -13,9 +13,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WURZEL, lies } from "./repo-texte";
+import { WURZEL, lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../../scripts/ticket-namen.mjs";
+const maskiere = escapeRegex as (s: string) => string;
 
 interface Befund { datei: string; meldung: string; fix: string }
 interface Quelle { ordner: string; text: string | null }
@@ -444,5 +447,61 @@ describe("Kommandozeile", () => {
   test("--check auf dem echten Repo endet mit Exit 0 und `--tool claude` ist erlaubt", () => {
     expect(cli("--check").status).toBe(0);
     expect(cli("--tool", "claude", "--check").status).toBe(0);
+  });
+});
+
+// Scan-Wächter (#1849): Verweise auf die Zeiger-Datei einer Skill-Quelle (Verweis mit Anker landet im Zeiger, der keine
+// Überschriften trägt; ein Test, der den Zeiger liest, prüft nichts) sind rot. Gilt für jede Quelle unter `.agents/skills/`.
+// Grenzen: geprüft werden die Pfadformen `.claude/skills/<name>/SKILL.md` und `](../<name>/SKILL.md` (nur in Dateien unter
+// `.claude/skills/`; unter `.agents/skills/` führt `../<name>/` zur Quelle) in versionierten Textdateien; Ordnerform ohne SKILL.md, der Skill-Name ohne Pfad und
+// Skills ohne Quelle (Volltext in der Übergangsliste) zählen nicht.
+describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", () => {
+  /** Geschlossene Ausnahmen (Pfadpräfix → Grund). */
+  const AUSNAHMEN: Record<string, string> = {
+    "docs/adr/": "ADRs sind historisch, nie umgeschrieben",
+    "README.md": "vom docs-gen erzeugte Generatorstelle",
+    ".factory/besitz.json": "führt den Zeiger als eigene Einheit",
+    "test/harness/skills-sync.test.ts": "Fixtures dieses Wächters",
+    "test/harness/haupt-sync.test.ts": "Fixture eines Pfades in der Änderungsliste",
+  };
+  const namen = sync.liesStand(WURZEL).quellen.map((q) => q.ordner);
+  const gescannt = (f: string): boolean => /\.(md|ts|mjs|js|json|yml)$/.test(f) && !Object.keys(AUSNAHMEN).some((p) => f.startsWith(p));
+  const dateien = repoDateien().filter(gescannt);
+  /** Verweist `text` der Datei `pfad` auf den Zeiger von `name`? Die relative Form führt nur unter `.claude/skills/` zum Zeiger (unter `.agents/skills/` auf die Quelle). */
+  const verweistAufZeiger = (name: string, pfad: string, text: string): boolean => {
+    const voll = new RegExp(String.raw`\.claude/skills/${maskiere(name)}/SKILL\.md`);
+    const relativ = new RegExp(String.raw`\]\(\.\./${maskiere(name)}/SKILL\.md`);
+    return voll.test(text) || (pfad.startsWith(".claude/skills/") && relativ.test(text));
+  };
+  const funde = (): string[] =>
+    namen.flatMap((name) => dateien.filter((f) => verweistAufZeiger(name, f, lies(f))).map((f) => `${f} -> ${name}`));
+
+  test("Prädikat: volle Form überall ein Fund, relative Form nur unter .claude/skills", () => {
+    expect(verweistAufZeiger("forum", "docs/x.md", "siehe .claude/skills/forum/SKILL.md#a")).toBe(true);
+    expect(verweistAufZeiger("forum", ".claude/skills/x/ablauf.md", "[f](../forum/SKILL.md#a)")).toBe(true);
+    expect(verweistAufZeiger("forum", "docs/x.md", "[f](../forum/SKILL.md#a)")).toBe(false);
+    expect(verweistAufZeiger("forum", ".agents/skills/x/SKILL.md", "[f](../forum/SKILL.md#a)")).toBe(false);
+  });
+
+  test("Prädikat: Ordnerform, anderer Skill und Quellpfad sind kein Fund", () => {
+    expect(verweistAufZeiger("forum", "docs/x.md", "`.claude/skills/forum/` ist der Zeiger")).toBe(false);
+    expect(verweistAufZeiger("forum", "docs/x.md", ".claude/skills/forum-leser/SKILL.md")).toBe(false);
+    expect(verweistAufZeiger("forum", "docs/x.md", ".agents/skills/forum/SKILL.md")).toBe(false);
+  });
+
+  test("Ausnahmen: ADR bleibt ungescannt, ein Nachbar ohne Ausnahme und ein Skill ohne Quelle nicht", () => {
+    expect(gescannt("docs/adr/0022-x.md")).toBe(false);
+    expect(gescannt("docs/x.md")).toBe(true);
+    expect(gescannt("docs/bild.png")).toBe(false);
+    for (const name of Object.keys(sync.UEBERGANG)) expect(namen, name).not.toContain(name);
+  });
+
+  test("der Scan ist nicht leer und kennt forum und review-lenses als Quellen", () => {
+    expect(namen).toEqual(expect.arrayContaining(["forum", "review-lenses"]));
+    expect(dateien.length).toBeGreaterThan(100);
+  });
+
+  test("keine versionierte Datei verweist auf den Zeiger einer Quelle", () => {
+    expect(funde()).toEqual([]);
   });
 });

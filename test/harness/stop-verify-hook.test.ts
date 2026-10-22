@@ -453,7 +453,7 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
     assert.match(lies(".claude/agents/factory-umsetzer.md"), /SubagentStop-Hook/);
     assert.match(lies(".claude/skills/factory/ablauf.md"), /cleanup-worktrees\.mjs --fix/);
     assert.match(lies(".claude/skills/factory/ablauf.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills/);
-    assert.match(lies(".claude/skills/review-lenses/SKILL.md"), /Agent type 'kubernia-lens' not found/);
+    assert.match(lies(".agents/skills/review-lenses/SKILL.md"), /Agent type 'kubernia-lens' not found/);
   });
 });
 
