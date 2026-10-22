@@ -12,7 +12,7 @@ import { describe, expect, test } from "vitest";
 
 const norm = (t: string) => t.replace(/\s+/g, " ");
 const lies = (pfad: string) => norm(readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8"));
-const SKILLS = [".claude/skills/factory/ablauf.md"];
+const SKILLS = [".agents/skills/factory/ablauf.md"];
 
 describe("Sitzungsabschluss ruft brain-input immer auf (#1572)", () => {
   test.each(SKILLS)("%s: Aufruf-Wortlaut und Satz zur Skill-Liste stehen da", (pfad) => {
@@ -42,7 +42,7 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "nur aus Evidenz", muster: /nur aus Evidenz/ },
     { name: "gemergter PR erledigt es nicht mehr", muster: /gemergter PR/ },
   ],
-  ".claude/skills/factory/ablauf.md": [
+  ".agents/skills/factory/ablauf.md": [
     { name: "BEFUNDE:-Feld im Sitzungsabschluss", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*BEFUNDE:/ },
     { name: "Fortsetzungs-Pfad im Schritt 5", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*mach mit <nr> weiter[^\n]*brain-input/ },
     { name: "brain-input im Abschluss", muster: /Skill\(\{ skill: "brain-input" \}\)/ },
@@ -76,7 +76,7 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
   });
 
   test("Gegenbeispiel: Schritt 5 ohne Fortsetzungs-Satz, AGENTS.md ohne brain-input und ohne Evidenz-Klausel werden rot", () => {
-    const skill = ".claude/skills/factory/ablauf.md";
+    const skill = ".agents/skills/factory/ablauf.md";
     expect(abschlussLuecken(skill, rohLesen(skill).replace(/mach mit <nr> weiter/g, "weiter")).length).toBeGreaterThan(0);
     expect(abschlussLuecken(skill, rohLesen(skill).replace("weiter“, „weiter“) oder Ad-hoc-Auftrag", "weiter“, „weiter“)\n\n- oder Ad-hoc-Auftrag")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/`brain-input`/g, "`x`")).length).toBeGreaterThan(0);
@@ -91,7 +91,7 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
   });
 
   test("Gegenbeispiel: BEFUNDE: nur im Zwischen-Hand-off, nicht im Sitzungsabschluss, wird rot", () => {
-    const skill = ".claude/skills/factory/ablauf.md";
+    const skill = ".agents/skills/factory/ablauf.md";
     expect(abschlussLuecken(skill, rohLesen(skill).replace("jede `BEFUNDE:`-Zeile des Umsetzers", "jede Befund-Zeile des Umsetzers")).length).toBeGreaterThan(0);
   });
 

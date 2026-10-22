@@ -105,7 +105,7 @@ describe(".claude/ wird mit LF ausgecheckt (#1026)", () => {
   const versioniert = git(["ls-files", "-z", "--", ".claude"]).split("\0").filter(Boolean);
 
   it("findet die versionierten .claude/-Dateien überhaupt (sonst prüft der Wächter nichts)", () => {
-    expect(versioniert).toContain(".claude/skills/factory-ticket/SKILL.md");
+    expect(versioniert).toContain(".claude/agents/factory-planer.md");
   });
 
   it("jede versionierte .claude/-Datei hat eol=lf", () => {

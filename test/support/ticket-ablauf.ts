@@ -12,7 +12,7 @@ const platzhalterMuster = (besitzRaw as unknown as { platzhalterMuster: () => Re
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
-export const TICKET_ABLAUF = ".claude/skills/factory/ablauf.md";
+export const TICKET_ABLAUF = ".agents/skills/factory/ablauf.md";
 
 type Gruppen = Record<string, Record<string, string>>;
 

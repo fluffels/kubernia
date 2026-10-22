@@ -323,6 +323,31 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
     assert.ok(collectMarkdown().includes(".agents/skills/review-lenses/SKILL.md"));
   });
 
+  test("im echten Repo liegen die Ticket-Skills und der Ablauf im Scan (#1850)", () => {
+    const md = collectMarkdown();
+    for (const f of [".agents/skills/factory/SKILL.md", ".agents/skills/factory-ticket/SKILL.md", ".agents/skills/factory/ablauf.md"]) assert.ok(md.includes(f), f);
+  });
+
+  test("ein Link auf den Ticket-Ablauf am alten Ort ist rot, am neuen Ort grün (#1850)", () => {
+    const alt = [".claude", "skills", "factory", "ablauf.md"].join("/"); // zusammengesetzt: der Wächter für entfernte Pfade scannt diese Datei
+    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-ablauf-"));
+    try {
+      const dateien: Record<string, string> = {
+        "package.json": JSON.stringify({ scripts: {} }),
+        "AGENTS.md": "# Titel\n",
+        ".agents/skills/factory/ablauf.md": "# Ablauf\n",
+        "docs/x.md": `# X\n[alt](../${alt})\n[neu](../.agents/skills/factory/ablauf.md)\n`,
+      };
+      for (const [f, text] of Object.entries(dateien)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      assert.deepEqual(auditIn(dir).deadLinks.map((l) => `${l.file}: ${l.target}`), [`docs/x.md: ../${alt}`]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("ein Verweis mit Anker auf den Zeiger ist rot, derselbe Anker auf die Quelle grün (#1849)", () => {
     const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-zeiger-"));
     try {

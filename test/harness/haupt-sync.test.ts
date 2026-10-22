@@ -15,16 +15,20 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/haupt-sync.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as syncRaw from "../../scripts/skills-sync.mjs";
 
 type Eingabe = { istLinkedWorktree: boolean; branch: string; sauber: boolean; hinter: number; vor: number };
 type Ergebnis = { aktion: string; grund: string; hinter: number; basis: string; gepullt: boolean; harness?: { skill: string[]; agenten: string[]; sonstige: string[] }; notiz: string };
 const S = raw as unknown as {
   entscheideSync: (e: Eingabe) => { aktion: "pull" | "melden" | "nichts"; grund: string };
   ordneHarnessAenderungen: (d: string[]) => { skill: string[]; agenten: string[]; sonstige: string[]; lockGeaendert: boolean };
-  baueText: (e: Partial<Ergebnis>) => string;
+  baueText: (e: Partial<Ergebnis>, o?: { sitzungsbasis?: boolean }) => string;
   fuehreSyncAus: (dir: string, deps?: { config?: Record<string, unknown> }) => Ergebnis;
   exitCodeFuer: (e: Partial<Ergebnis>) => number;
   ausgabe: (e: Partial<Ergebnis>, text: boolean) => string;
+  ZEIGER_VERZEICHNISSE: string[];
+  quellePfad: (d: string) => string;
 };
 
 const basis: Eingabe = { istLinkedWorktree: false, branch: "main", sauber: true, hinter: 3, vor: 0 };
@@ -58,7 +62,7 @@ describe("entscheideSync: jede Verzweigung", () => {
 
 describe("Hilfsfunktionen", () => {
   test("ordneHarnessAenderungen: kubernia-Skill und Wurzel-AGENTS.md, Agent-Definitionen und Sonstiges getrennt (#1572)", () => {
-    expect(S.ordneHarnessAenderungen([".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"])).toMatchObject({ skill: [".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [] });
+    expect(S.ordneHarnessAenderungen([".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"])).toMatchObject({ skill: [".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [] });
     expect(S.ordneHarnessAenderungen([".claude/agents/factory-planer.md"])).toMatchObject({ skill: [], agenten: [".claude/agents/factory-planer.md"] });
     expect(S.ordneHarnessAenderungen([".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"])).toMatchObject({ skill: [], agenten: [], sonstige: [".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"] });
     expect(S.ordneHarnessAenderungen(["docs/x.md", "src/a.ts"])).toEqual({ skill: [], agenten: [], sonstige: [], lockGeaendert: false });
@@ -66,7 +70,7 @@ describe("Hilfsfunktionen", () => {
     expect(S.ordneHarnessAenderungen(["package-lock.json"]).lockGeaendert).toBe(true);
   });
   test("ordneHarnessAenderungen: der Kern-Ticket-Skill factory samt Ablauf zählt immer als Skill, auch ohne nutzbare Config (#1806)", () => {
-    const f = [".claude/skills/factory/ablauf.md", ".claude/skills/factory/SKILL.md"];
+    const f = [".agents/skills/factory/ablauf.md", ".agents/skills/factory/SKILL.md"];
     expect(S.ordneHarnessAenderungen(f)).toMatchObject({ skill: f, sonstige: [] });
     expect(S.ordneHarnessAenderungen([".claude/skills/factoryx/SKILL.md"])).toMatchObject({ skill: [], sonstige: [".claude/skills/factoryx/SKILL.md"] });
   });
@@ -195,13 +199,13 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
   test("Pull ohne nutzbare Config (agenten.ticketSkill fehlt): Fast-Forward bleibt, der Grund steht in notiz und macht --streng rot, der Kern-Skill-Pfad gilt trotzdem als Skill (#1748)", () => {
     const t = aufbau();
     try {
-      t.schiebe(".claude/skills/factory-ticket/SKILL.md", "neu\n");
+      t.schiebe(".agents/skills/factory-ticket/SKILL.md", "neu\n");
       const e = S.fuehreSyncAus(t.haupt, { config: { praefixe: { branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } } });
       expect(e.gepullt).toBe(true);
       expect(e.notiz).toContain("agenten.ticketSkill");
       expect(e.notiz).toContain("Fix:");
       expect(S.exitCodeFuer(e)).toBe(1);
-      expect(e.harness?.skill).toEqual([".claude/skills/factory-ticket/SKILL.md"]);
+      expect(e.harness?.skill).toEqual([".agents/skills/factory-ticket/SKILL.md"]);
       expect(e.harness?.sonstige).toEqual([]);
     } finally {
       t.aufraeumen();
@@ -369,10 +373,10 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("--text: nur der kubernia-Skill oder die Wurzel-AGENTS.md löst „Skill neu lesen“ aus; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
-    const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", harness: { skill: [".claude/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } };
+    const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", harness: { skill: [".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } };
     const text = S.ausgabe(e, true);
     expect(text).toContain("Skill neu lesen");
-    expect(text).toContain("Geändert (Harness): .claude/skills/factory-ticket/SKILL.md, AGENTS.md");
+    expect(text).toContain("Geändert (Harness): .agents/skills/factory-ticket/SKILL.md, AGENTS.md");
     expect(text).toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
     expect(text).not.toContain("Sitzungsbasis");
     const hook = (JSON.parse(S.ausgabe(e, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
@@ -381,7 +385,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("--text: ohne AGENTS.md im Diff kein AGENTS.md-Hinweis; nur Agent-Definition: Pfad und Neustart-Hinweis, kein „Skill neu lesen“", () => {
-    const nurSkill = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/factory-ticket/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
+    const nurSkill = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".agents/skills/factory-ticket/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
     expect(nurSkill).toContain("Skill neu lesen");
     expect(nurSkill).not.toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
     const agent = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [], lockGeaendert: false } } as never, true);
@@ -405,13 +409,51 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(o.skill).toEqual([]);
     const text = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: o }, true);
     expect(text).toContain("Geändert (Harness): .agents/skills/forum/SKILL.md");
-    expect(text).toContain("Session-Neustart");
+    expect(text).toContain("ab dem nächsten Skill-Aufruf");
+    expect(text).not.toContain("Session-Neustart");
+    expect(text).not.toContain("Übrige .claude-Dateien");
+  });
+
+  test("Ticket-Skills (#1850): die Verzeichnis-Konstanten gleichen denen von skills-sync (kein Import zwischen Einstiegsskripten)", () => {
+    const sync = syncRaw as unknown as { QUELL_VERZEICHNIS: string; WERKZEUGE: { claude: string } };
+    const h = raw as unknown as { QUELL_VERZEICHNIS: string; ZEIGER_WURZEL: string };
+    expect(h.QUELL_VERZEICHNIS).toBe(sync.QUELL_VERZEICHNIS);
+    expect(h.ZEIGER_WURZEL).toBe(sync.WERKZEUGE.claude);
+  });
+
+  test("Ticket-Skills (#1850): Quelle und Zeiger beider Skills sind Skill-Änderungen, eine fremde Quelle und ein Nachbarname nicht", () => {
+    const z = [".claude/skills/factory/SKILL.md", ".claude/skills/factory-ticket/SKILL.md"];
+    expect(S.ZEIGER_VERZEICHNISSE).toEqual([".claude/skills/factory/", ".claude/skills/factory-ticket/"]);
+    expect(S.ordneHarnessAenderungen(z)).toMatchObject({ skill: z, sonstige: [] });
+    const q = [".agents/skills/factory/SKILL.md", ".agents/skills/factory-ticket/SKILL.md"];
+    expect(S.ordneHarnessAenderungen(q)).toMatchObject({ skill: q, sonstige: [] });
+    expect(S.ordneHarnessAenderungen([".agents/skills/review-lenses/SKILL.md", ".agents/skills/factory-ticketx/SKILL.md"])).toMatchObject({
+      skill: [],
+      sonstige: [".agents/skills/review-lenses/SKILL.md", ".agents/skills/factory-ticketx/SKILL.md"],
+    });
+  });
+
+  test("Ticket-Skills (#1850): „Skill neu lesen“ nennt immer die Quelle, nie den Zeiger, und doppelt nichts", () => {
+    const harness = (skill: string[]) => ({ skill, agenten: [], sonstige: [], lockGeaendert: false });
+    const text = (skill: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: harness(skill) }, { sitzungsbasis: false });
+    const nurZeiger = text([".claude/skills/factory-ticket/SKILL.md"]);
+    expect(nurZeiger).toContain("`.agents/skills/factory-ticket/SKILL.md` jetzt neu lesen");
+    expect(nurZeiger).not.toContain(".claude/skills/factory-ticket/SKILL.md` jetzt");
+    expect(nurZeiger).toContain("Skill neu lesen: .agents/skills/factory-ticket/SKILL.md haben");
+    const beide = text([".agents/skills/factory/SKILL.md", ".claude/skills/factory/SKILL.md"]);
+    expect(beide).toContain("Skill neu lesen: .agents/skills/factory/SKILL.md haben");
+    expect(beide.match(/\.agents\/skills\/factory\/SKILL\.md/g)).toHaveLength(3); // Geändert-Zeile (Quelle) + Liste + Lies-Satz
+    const nurAblauf = text([".agents/skills/factory/ablauf.md"]);
+    expect(nurAblauf).toContain("`.agents/skills/factory/ablauf.md` jetzt neu lesen");
+    expect(S.quellePfad(".claude/skills/factory/SKILL.md")).toBe(".agents/skills/factory/SKILL.md");
+    expect(S.quellePfad("AGENTS.md")).toBe("AGENTS.md");
+    expect(S.quellePfad(".claude/skills/forum/SKILL.md")).toBe(".claude/skills/forum/SKILL.md");
   });
 
   test("--text: der Hinweis auf übrige .claude-Dateien kommt auch im Mischfall, fehlt aber ohne solche Dateien", () => {
     const misch = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [".claude/settings.json"], lockGeaendert: false } } as never, true);
     expect(misch).toContain("Übrige .claude-Dateien");
-    const ohne = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".claude/skills/factory-ticket/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
+    const ohne = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [".agents/skills/factory-ticket/SKILL.md"], agenten: [], sonstige: [], lockGeaendert: false } } as never, true);
     expect(ohne).not.toContain("Übrige .claude-Dateien");
   });
 
@@ -479,7 +521,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   test("CLI: main hinter origin und sauber → Fast-Forward, Exit 0; geänderter Skill-Pfad meldet „Skill neu lesen“", () => {
     const t = aufbau();
     try {
-      t.schiebe(".claude/skills/factory-ticket/SKILL.md", "neu\n");
+      t.schiebe(".agents/skills/factory-ticket/SKILL.md", "neu\n");
       const r = cli(t.haupt, "--text", "--streng");
       expect(r.code).toBe(0);
       expect(r.out).toContain("Skill neu lesen");
@@ -490,7 +532,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
   });
 
   test("der Skill kubernia beginnt mit Schritt 0 (haupt-sync --streng), nennt Stopp bei Exit 1 und die Neu-Lesen-Regel; kein „nie ein eigenes git pull“ mehr", () => {
-    const skill = readFileSync(new URL("../../.claude/skills/factory/ablauf.md", import.meta.url), "utf8");
+    const skill = readFileSync(new URL("../../.agents/skills/factory/ablauf.md", import.meta.url), "utf8");
     const schritt0 = /^0\. \*\*Hauptcheckout heben[^\n]*\n/m.exec(skill)?.[0] ?? "";
     expect(schritt0).toContain("node scripts/haupt-sync.mjs --text --streng");
     expect(schritt0).toMatch(/Exit 1/);

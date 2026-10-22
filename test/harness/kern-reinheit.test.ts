@@ -995,14 +995,15 @@ describe("Kern-Pfade ohne Projektliteral (#1748)", () => {
   test("pfadLiterale: ein Einheitspfad mit Repo-Namen oder Agentennamen ist rot (Negativfall)", () => {
     assert.deepEqual(pfadLiterale([".claude/agents/demo-planer.md"], B), [".claude/agents/demo-planer.md: Projektliteral 'Repo' im Pfad"]);
     assert.deepEqual(pfadLiterale([".claude/agents/wk-planer.md"], B), [".claude/agents/wk-planer.md: Projektliteral 'Agent' im Pfad"]);
-    assert.deepEqual(pfadLiterale([".claude/agents/factory-planer.md", ".claude/skills/factory-ticket/SKILL.md"], B), []);
+    assert.deepEqual(pfadLiterale([".claude/agents/factory-planer.md", ".agents/skills/factory-ticket/SKILL.md"], B), []);
     assert.deepEqual(pfadLiterale([], B), []);
   });
   test("echt: kein Manifest- und kein Rollen-Pfad trägt ein Projektliteral", () => {
     assert.deepEqual(pfadLiterale([...manifest.eintraege.map((e) => e.pfad), ...Object.values(ROLLEN_PFADE)], echteBegriffe), []);
   });
   test("TICKET_SKILL_ORDNER ist der Ordner des Ticket-Skill-Pfads (ohne Dateiname, ohne Schrägstrich am Ende)", () => {
-    assert.equal(TICKET_SKILL_ORDNER, ".claude/skills/factory-ticket");
+    assert.equal(TICKET_SKILL_ORDNER, ".agents/skills/factory-ticket");
+    assert.ok(ROLLEN_PFADE.ticketSkill.startsWith(".agents/skills/"), "der Ticket-Skill-Pfad ist eine Skill-Quelle");
     assert.equal(`${TICKET_SKILL_ORDNER}/SKILL.md`, ROLLEN_PFADE.ticketSkill);
   });
   test("Fitness: die Rollen-Pfade decken genau die Pflicht-Agenten ab, jede Datei existiert und setzt den Namen aus agenten.<rolle>", () => {

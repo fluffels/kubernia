@@ -89,7 +89,7 @@ const BLOCK_DATEIEN = [
   rolle.umsetzer,
   rolle.lens,
   ".agents/skills/review-lenses/SKILL.md",
-  ".claude/skills/factory/ablauf.md",
+  ".agents/skills/factory/ablauf.md",
 ];
 
 describe("Projektwert-Block der Kern-Texte (#1747)", () => {

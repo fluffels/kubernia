@@ -259,7 +259,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
       "docs/model-routing.md",
       ".claude/agents/factory-planer.md",
       ".claude/agents/factory-umsetzer.md",
-      ".claude/skills/factory/ablauf.md",
+      ".agents/skills/factory/ablauf.md",
     ];
     assert.ok(keinePositionsRegel(dateien.map(read)));
     assert.ok(!keinePositionsRegel(["alles gut", "Nachfolger auf Position 20"]));

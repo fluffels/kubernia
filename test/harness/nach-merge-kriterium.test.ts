@@ -141,11 +141,11 @@ describe("Regel 3: CI-Nachweis", () => {
 });
 
 describe("Regel 4: Doku-Pin", () => {
-  test.each(["docs/ticket-reihenfolge.md", ".claude/skills/factory/ablauf.md", "docs/harness-glossar.md"])("%s nennt den Präfix `Nach dem Merge:`", (rel) => {
+  test.each(["docs/ticket-reihenfolge.md", ".agents/skills/factory/ablauf.md", "docs/harness-glossar.md"])("%s nennt den Präfix `Nach dem Merge:`", (rel) => {
     expect(lies(rel)).toContain("`Nach dem Merge:`");
   });
   test("der Skill verlangt den Nach-Merge-Beleg und bindet Szenario- und Abnahme-Prompts an Szenarien und Kriterien", () => {
-    const skill = lies(".claude/skills/factory/ablauf.md");
+    const skill = lies(".agents/skills/factory/ablauf.md");
     expect(skill).toContain("Nach-Merge-Beleg #<nr> K<i>");
     expect(skill).toContain("nur aus Szenarien und Kriterien");
   });

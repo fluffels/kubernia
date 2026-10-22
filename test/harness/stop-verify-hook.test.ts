@@ -194,7 +194,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
   const STATUS: Array<{ was: string; before: string[]; after: string[]; blockt: boolean }> = [
     { was: "unveraenderter Status", before: [" M src/game.ts"], after: [" M src/game.ts"], blockt: false },
     { was: "Loeschung war VORHER schon da (agenten-eigene, kein Fehlalarm)", before: [" D docs/alt.md"], after: [" D docs/alt.md"], blockt: false },
-    { was: "Loeschung erst NACHHER (der eigentliche Alarm)", before: [], after: [" D .claude/settings.json", " D .claude/skills/factory-ticket/SKILL.md"], blockt: true },
+    { was: "Loeschung erst NACHHER (der eigentliche Alarm)", before: [], after: [" D .claude/settings.json", " D .claude/skills/demo/SKILL.md"], blockt: true },
     { was: "gestagete Loeschung (D im ersten Spaltenzeichen)", before: [], after: ["D  .claude/settings.json"], blockt: true },
     { was: "untracked-Eintrag, dessen Pfad mit D beginnt: kein Fehlalarm", before: [], after: ["?? Dokumente/neu.md"], blockt: false },
     { was: "nur eine von zwei Loeschungen ist neu", before: [" D docs/alt.md"], after: [" D docs/alt.md", " D .claude/settings.json"], blockt: true },
@@ -451,8 +451,8 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
   test("Umsetzer und Skill sagen, was bei einer Blockade zu tun ist", () => {
     const lies = (p: string) => liesMitProjektwerten(p);
     assert.match(lies(".claude/agents/factory-umsetzer.md"), /SubagentStop-Hook/);
-    assert.match(lies(".claude/skills/factory/ablauf.md"), /cleanup-worktrees\.mjs --fix/);
-    assert.match(lies(".claude/skills/factory/ablauf.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills/);
+    assert.match(lies(".agents/skills/factory/ablauf.md"), /cleanup-worktrees\.mjs --fix/);
+    assert.match(lies(".agents/skills/factory/ablauf.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills/);
     assert.match(lies(".agents/skills/review-lenses/SKILL.md"), /Agent type 'kubernia-lens' not found/);
   });
 });

@@ -83,7 +83,7 @@ describe("Sammelticket-Position (#1276)", () => {
   });
 
   test("der Skill kubernia legt beim Claim eines Sammeltickets den Nachfolger über das Skript an", () => {
-    assert.match(lies(".claude/skills/factory/ablauf.md"), /node scripts\/sammelticket-anlegen\.mjs harness --vorgaenger/);
+    assert.match(lies(".agents/skills/factory/ablauf.md"), /node scripts\/sammelticket-anlegen\.mjs harness --vorgaenger/);
   });
 
   test("AGENTS.md verweist für das Anlegen auf das Skript", () => {
@@ -91,7 +91,7 @@ describe("Sammelticket-Position (#1276)", () => {
   });
 
   test("der Skill doppelt die Zahl nicht, sondern verweist für die Position auf AGENTS.md", () => {
-    const skill = lies(".claude/skills/factory/ablauf.md");
+    const skill = lies(".agents/skills/factory/ablauf.md");
     assert.doesNotMatch(skill, POSITION_EINZELN);
   });
 
@@ -118,7 +118,7 @@ describe("Sammelticket-Position (#1276)", () => {
   test("Komplett-Regel: Umsetzer, Planer und Skill nennen sie", () => {
     assert.match(lies(".claude/agents/factory-umsetzer.md"), /setze ALLE Zeilen um/);
     assert.match(lies(".claude/agents/factory-planer.md"), /plane ALLE Zeilen/);
-    assert.match(lies(".claude/skills/factory/ablauf.md"), /komplett umsetzen, kein Rest-Übertrag/);
+    assert.match(lies(".agents/skills/factory/ablauf.md"), /komplett umsetzen, kein Rest-Übertrag/);
   });
 
   test("Negativfall: der alte Teil-Abarbeiten-Wortlaut steht nirgends mehr im Abschnitt oder in AGENTS.md", () => {

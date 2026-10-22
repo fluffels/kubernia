@@ -31,7 +31,7 @@ const agentPfad = (k: string): string => `.claude/agents/factory-${k}.md`;
 /** Dateien mit Frontmatter-Zeilen-Marker: Pfad -> erwarteter Schlüssel. */
 const ZEILEN: [string, string][] = [
   ...["planer", "umsetzer", "lens", "gruppe"].map((k): [string, string] => [agentPfad(k), `agenten.${k}`]),
-  [".claude/skills/factory-ticket/SKILL.md", "agenten.ticketSkill"],
+  [".agents/skills/factory-ticket/SKILL.md", "agenten.ticketSkill"],
 ];
 
 /** Dateien mit Projektwert-Block (geschlossene Liste). */
@@ -40,7 +40,7 @@ const BLOECKE: string[] = [
   agentPfad("umsetzer"),
   agentPfad("lens"),
   ".agents/skills/review-lenses/SKILL.md",
-  ".claude/skills/factory/ablauf.md",
+  ".agents/skills/factory/ablauf.md",
 ];
 
 const lf = (pfad: string): string => lies(pfad).replace(/\r\n/g, "\n");

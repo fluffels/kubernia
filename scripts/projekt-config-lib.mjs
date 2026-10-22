@@ -81,7 +81,7 @@ export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
 
 /** Pflicht-Label-Schlüssel (weitere erlaubt, gleiche Prüfung) und Pflicht-Agenten. */
 export const PFLICHT_LABELS = ["harness", "festgefahren", "forum", "dependabotInbox"];
-/** Name des Kern-Ticket-Skills (`.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
+/** Name des Kern-Ticket-Skills (Quelle `.agents/skills/<name>/`, Zeiger `.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
 export const KERN_TICKET_SKILL = "factory";
 
 export const PFLICHT_AGENTEN = ["planer", "umsetzer", "lens", "gruppe", "ticketSkill"];
@@ -95,7 +95,7 @@ export const ROLLEN_PFADE = Object.freeze({
   umsetzer: ".claude/agents/factory-umsetzer.md",
   lens: ".claude/agents/factory-lens.md",
   gruppe: ".claude/agents/factory-gruppe.md",
-  ticketSkill: ".claude/skills/factory-ticket/SKILL.md",
+  ticketSkill: ".agents/skills/factory-ticket/SKILL.md",
 });
 
 /** Verzeichnis des Ticket-Skills (`ROLLEN_PFADE.ticketSkill` ohne Dateiname), die einzige Ableitung für alle Nutzer. */
