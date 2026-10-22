@@ -46,6 +46,7 @@
   },
   "rulesetSpiegel": ".github/ruleset-main-schutz.json",
   "projektliterale": {
-    "Stardew": "stardew"
+    "Stardew": "stardew",
+    "Save-Version": "CURRENT_SAVE_VERSION"
   }
 }

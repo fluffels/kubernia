@@ -101,6 +101,11 @@
     "gitHooks": ".githooks",
     "mcp": ".mcp.json"
   },
+  "generatoren": {
+    "save-versionen": { "datei": "scripts/docs-gen/save-versionen.mjs", "name": "saveVersionenGenerator" },
+    "quest-graph": { "datei": "scripts/docs-gen/quests.mjs", "name": "questGraphGenerator" },
+    "quests-je-thema": { "datei": "scripts/docs-gen/quests.mjs", "name": "questsJeThemaGenerator" }
+  },
   "saveVersionen": {
     "beschreibungen": "src/store/save-versionen.json",
     "version": { "datei": "src/store/versioning.ts", "name": "CURRENT_SAVE_VERSION" }
