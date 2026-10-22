@@ -471,4 +471,38 @@ describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
     expect(R.spezifikationsMaengel(body, en)).toEqual(["Abhängigkeitssatz „follows #5“ ohne Zeile „blocked by #5“"]);
     expect(R.spezifikationsMaengel(`${body}blocked by #5\n`, en)).toEqual([]);
   });
+
+  describe("Code-Fences nach CommonMark (#1866 L20/L21)", () => {
+    const Z = (body: unknown) => S.spezifikationsMaengel(body);
+    test("ein ~~~ in einem ```-Zaun schließt ihn nicht: die Abhängigkeit darin zählt nicht, der Text danach schon", () => {
+      expect(Z(mit("```\n~~~\nfolgt nach #12\n```"))).toEqual([]);
+      expect(Z(mit("```\n~~~\n```\nfolgt nach #12"))).toHaveLength(1);
+    });
+    test("ein 4er-Zaun wird von einem inneren ``` nicht geschlossen", () => {
+      expect(Z(mit("````\n```\nfolgt nach #12\n```\n````"))).toEqual([]);
+      expect(Z("## Ziel\nZ\n## Akzeptanzkriterien\n- Happy\n````\n```\n- Negativfall\n```\n````\n").some((x) => x.includes("kein Negativfall"))).toBe(true);
+      expect(Z("````\n```\n## Ziel\nZ\n```\n````\n")).toContain("`## Ziel` fehlt");
+    });
+    test("L21: eine Blocker-Zeile im Code-Fence deckt den Abhängigkeitssatz nicht und zählt für die Auswahl nicht", () => {
+      const b = mit(SATZ(12) + "\n```\nblockiert durch #12\n```");
+      expect(Z(b)).toHaveLength(1);
+      expect(P.blockerNummern(b, SPRACHE)).toEqual([]);
+      expect(P.blockerNummern("````\n```\nblockiert durch #12\n```\n````\nblockiert durch #3", SPRACHE)).toEqual([3]);
+    });
+  });
+
+  describe("blockerZeile: SSOT zum Schreiben (#1866 L19/L25d)", () => {
+    const BZ = raw as unknown as { blockerZeile: (nummern: number[], sprache: unknown, zusatz?: string) => string };
+    test("Format `<blocker> #a, #b`, mit Zusatz in Klammern, und blockerNummern liest es zurück", () => {
+      expect(BZ.blockerZeile([4, 9], SPRACHE)).toBe("blockiert durch #4, #9");
+      expect(BZ.blockerZeile([4], SPRACHE, "(nur solange #4 offen ist)")).toBe("blockiert durch #4 (nur solange #4 offen ist)");
+      expect(P.blockerNummern(BZ.blockerZeile([4, 9], SPRACHE, "(x #99)"), SPRACHE)).toEqual([4, 9]);
+    });
+    test("Negativfall: leere Liste und leeres Wort werfen", () => {
+      expect(() => BZ.blockerZeile([], SPRACHE)).toThrow(/Nummer/);
+      expect(() => BZ.blockerZeile([1], { ...SPRACHE, blocker: "  " })).toThrow(/blocker/);
+      expect(() => BZ.blockerZeile([1], { ...SPRACHE, blocker: undefined })).toThrow(/blocker/);
+      expect(() => BZ.blockerZeile([1], undefined)).toThrow();
+    });
+  });
 });
