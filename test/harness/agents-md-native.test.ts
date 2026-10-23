@@ -48,6 +48,7 @@ import { fileURLToPath } from "node:url";
 import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
+import { FREMD } from "../support/fremd-config";
 
 // Begründete Ausnahme: das .mjs hat kein Declaration-File, der Namespace ist für tsc
 // „error typed". Die Schwester-Tests (docdrift/docmap/context-size) haben dafür Einträge
@@ -167,7 +168,7 @@ describe("Keine CLAUDE.md verdrängt das native Laden von AGENTS.md (#1087)", ()
 
   test("Erkennung greift wirklich (Red-Green): jede Variante trifft, Unterordner nicht", () => {
     // No-op-Schutz: ein Wächter, der immer grün ist, wäre wertlos.
-    const dir = mkdtempSync(join(tmpdir(), "kq-agents-native-"));
+    const dir = mkdtempSync(join(tmpdir(), "agents-native-"));
     try {
       assert.deepEqual(blockingMemoryFiles(dir), [], "leerer Root ist sauber");
       mkdirSync(join(dir, "src"));
@@ -176,7 +177,7 @@ describe("Keine CLAUDE.md verdrängt das native Laden von AGENTS.md (#1087)", ()
       // Bewusst ein festes Literal statt BLOCKING_MEMORY_FILES: sonst fiele mit einem gestrichenen
       // Pfad auch sein Prüffall weg, und die Selbstprobe bliebe grün (Sabotage-Befund im Review).
       for (const rel of ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"]) {
-        const sub = mkdtempSync(join(tmpdir(), "kq-agents-native-"));
+        const sub = mkdtempSync(join(tmpdir(), "agents-native-"));
         try {
           mkdirSync(join(sub, ".claude"));
           writeFileSync(join(sub, rel), "x");
@@ -260,7 +261,7 @@ describe("Kein Markdown beschreibt CLAUDE.md noch in einer abgelegten Rolle (#99
   test("versionierte .claude/-Konfiguration wird mitgeprüft, Parallel-Worktrees nicht (#1002)", () => {
     assert.ok(isVersionedAgentConfig(".claude/skills/demo/SKILL.md"));
     assert.ok(isVersionedAgentConfig(".claude/skills/demo/hilfe.js"), "Prompt-Freitext kann in .js stehen");
-    assert.ok(!isVersionedAgentConfig(".claude/worktrees/kq-1/AGENTS.md"), "Worktrees paralleler Agenten nicht");
+    assert.ok(!isVersionedAgentConfig(`.claude/worktrees/${FREMD.praefixe.worktree}1/AGENTS.md`), "Worktrees paralleler Agenten nicht");
     assert.ok(!isVersionedAgentConfig(".claude/settings.json"));
     assert.ok(collectAgentConfig().includes(".claude/agents/factory-planer.md"), "Inventar ist nicht leer");
   });

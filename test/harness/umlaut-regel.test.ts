@@ -21,6 +21,9 @@ import * as checkBasis from "../../scripts/check-basis.mjs";
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 import { echteConfig, umschriftAus } from "../support/echte-sprache";
+import { FREMD } from "../support/fremd-config";
+
+const W = FREMD.praefixe.worktree;
 
 const listTrackedFiles = (checkBasis as unknown as { listTrackedFiles: (rootDir?: string) => string[] }).listTrackedFiles;
 
@@ -96,7 +99,7 @@ describe("Scan-Umfang", () => {
     for (const f of ["docs/referenz/befehle.md", "docs/agent-harness.md", "AGENTS.md", "README.md", "CONTRIBUTING.md", "src/AGENTS.md", "src/content/AGENTS.md", ".claude/agents/factory-lens.md", ".agents/skills/review-lenses/SKILL.md", ".agents/skills/forum/SKILL.md"]) {
       assert.equal(IM_SCOPE(f), true, f);
     }
-    for (const f of ["docs/adr/0022-x.md", "docs/x.json", "src/ui/x.ts", "src/content/data/quests/knut.json", "CHANGELOG.md", ".claude/worktrees/kq-1/AGENTS.md", ".claude/agents/x/y.md", ".claude/skills/x/y/z.md", ".agents/skills/x/y/z.md", ".agents/skills/x.md", ".claude/skills/x.md", ".claude/worktrees/kq-1/.agents/skills/a/b.md", ".claude/worktrees/kq-1/.claude/skills/a/b.md", ".claude/worktrees/kq-1/.claude/agents/a.md"]) {
+    for (const f of ["docs/adr/0022-x.md", "docs/x.json", "src/ui/x.ts", "src/content/data/quests/knut.json", "CHANGELOG.md", `.claude/worktrees/${W}1/AGENTS.md`, ".claude/agents/x/y.md", ".claude/skills/x/y/z.md", ".agents/skills/x/y/z.md", ".agents/skills/x.md", ".claude/skills/x.md", `.claude/worktrees/${W}1/.agents/skills/a/b.md`, `.claude/worktrees/${W}1/.claude/skills/a/b.md`, `.claude/worktrees/${W}1/.claude/agents/a.md`]) {
       assert.equal(IM_SCOPE(f), false, f);
     }
   });

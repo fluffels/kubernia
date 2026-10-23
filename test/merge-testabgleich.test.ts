@@ -89,7 +89,7 @@ describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
   const lies = (root: string) => (p: string) => (existsSync(join(root, p)) ? readFileSync(join(root, p), "utf8") : null);
   /** Basis mit test/x.test.ts (alt); main fügt "von main" hinzu, der Feature-Branch fügt "von uns" hinzu (Konflikt in derselben Zeile). */
   const aufbau = () => {
-    const root = mkdtempSync(join(tmpdir(), "kq-merge-"));
+    const root = mkdtempSync(join(tmpdir(), "merge-abgleich-"));
     ordner.push(root);
     const g = git(root);
     g(["init", "-q", "-b", "main"]);
@@ -223,7 +223,7 @@ describe("pruefeMerge nennt den Wächter-Lauf", () => {
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   /** Basis mit docs/a.md und docs/b.md; main ändert die Datei `mainDatei`, der Feature-Branch `featureDatei` (konfliktfrei, wenn verschieden). */
   const merge = (featureDatei: string, mainDatei: string) => {
-    const root = mkdtempSync(join(tmpdir(), "kq-merge-w-"));
+    const root = mkdtempSync(join(tmpdir(), "merge-abgleich-w-"));
     ordner.push(root);
     const g = gitIn(root);
     const schreibe = (p: string, t: string) => {
@@ -263,7 +263,7 @@ describe("pruefeMerge nennt den Wächter-Lauf", () => {
     assert.match(r.text, /docs\/a\.md, docs\/b\.md/);
   });
   test("beide Seiten berühren dieselbe Datei unter docs/ (ohne Test-Verlust): Hinweis bei Exit 0", () => {
-    const root = mkdtempSync(join(tmpdir(), "kq-merge-w2-"));
+    const root = mkdtempSync(join(tmpdir(), "merge-abgleich-w2-"));
     ordner.push(root);
     const g = gitIn(root);
     const schreibe = (p: string, t: string) => {
