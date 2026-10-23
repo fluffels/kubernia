@@ -1150,6 +1150,25 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
     assert.deepEqual(vergleiche({ ...kernTestIst(pfade, lesenWurzel, echteBegriffe), ...ist }, kernBaseline), ["test/neu.test.ts: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei"]);
     assert.deepEqual(kernTestIst(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), {}, "ohne Literal keine Zählung");
   });
+  // Geschlossene Liste der literalfrei umgebauten Kern-Tests (#1876 Teil 1, Hooks und Guards; die Folgeteile #1877-#1879 ergänzen sie).
+  const LITERALFREIE_KERN_TESTS = [
+    "test/harness/gh-guard.test.ts",
+    "test/harness/holdout-guard.test.ts",
+    "test/harness/lens-edit-guard.test.ts",
+    "test/harness/pretooluse-hook.test.ts",
+    "test/harness/worktree-guard-powershell.test.ts",
+    "test/harness/worktree-guard.test.ts",
+  ];
+  test("literalfreie Kern-Tests (#1876): kein Baseline-Eintrag, Ist-Zählung leer, ein zurückkehrendes Literal ist rot", () => {
+    const basis = kernTestIst(pfade, lesenWurzel, echteBegriffe);
+    for (const datei of LITERALFREIE_KERN_TESTS) {
+      assert.ok(pfade.includes(datei), `${datei} ist ein Kern-Test`);
+      assert.equal(datei in kernBaseline, false, `${datei}: kein Baseline-Eintrag, die Datei ist literalfrei`);
+      assert.equal(datei in basis, false, `${datei}: trägt ein Projektliteral`);
+      const rueckfall = { ...basis, ...kernTestIst([datei], () => `${lesenWurzel(datei) ?? ""}\nexpect(x).toBe("${config.praefixe.commitZeile}1");\n`, echteBegriffe) };
+      assert.deepEqual(vergleiche(rueckfall, kernBaseline), [`${datei}: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei`]);
+    }
+  });
   test("Anheben der Kern-Test-Baseline gegen die Diff-Basis: ein neuer Test mit Baseline-Eintrag ist rot (Status A), ein gleich bleibender grün", () => {
     const pseudo = (p: string): Eintrag => ({ pfad: p, ring: "kern", quelle: "extraktion" });
     const neu = new Map<string, string | null>([["test/neu.test.ts", null]]);

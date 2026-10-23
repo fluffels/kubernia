@@ -37,20 +37,20 @@ const sicher = (fn) => {
 };
 
 /** Entscheidet für ein Payload (Text) und gibt das Hook-Output-Objekt oder null (durchlassen) zurück. */
-export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }, shellVonTool = SHELL_VON_TOOL, abschlussDeps = {}) {
+export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }, shellVonTool = SHELL_VON_TOOL, deps = {}) {
   const { tool, cwd, command } = parseHookInput(text);
   if (tool === "SubagentHandback") {
     // Abschluss-Wächter des Umsetzers (#1342): vor der Zustellung des Berichts; fremde Agenten und jeder Fehler lassen durch.
     // Die Config lädt dieser Einstiegspunkt (ohne nutzbare Config blockiert er fail-closed); der Kern bekommt sie als Parameter.
     const grund = sicher(() => {
-      const geladen = namenOderGrund("Umsetzer-Abschluss", abschlussDeps);
-      return geladen.grund ?? abschlussBlockade(parseAbschlussInput(text), { ...abschlussDeps, config: geladen.config });
+      const geladen = namenOderGrund("Umsetzer-Abschluss", deps);
+      return geladen.grund ?? abschlussBlockade(parseAbschlussInput(text), { ...deps, config: geladen.config });
     });
     return grund ? buildDenyOutput(grund) : null;
   }
   if (tool === "Agent") {
     // Lens-Auftrag-Guard (#1425): ein Lens-Spawn mit übrig gebliebenen Platzhaltern wird verweigert; alles andere läuft durch.
-    const grund = sicher(() => lensAuftragBlockade(parseAgentInput(text))) ?? sicher(() => holdoutAuftragBlockade(parseHoldoutInput(text)));
+    const grund = sicher(() => lensAuftragBlockade(parseAgentInput(text), deps)) ?? sicher(() => holdoutAuftragBlockade(parseHoldoutInput(text)));
     return grund ? buildDenyOutput(grund) : null;
   }
   if (tool === "SendMessage") {

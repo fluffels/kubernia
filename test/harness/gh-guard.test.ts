@@ -13,6 +13,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as raw from "../../scripts/gh-guard-hook.mjs";
+import { FREMD } from "../support/fremd-config";
 
 type Bewertung = { ask: boolean; reason?: string };
 const hook = raw as unknown as {
@@ -48,8 +49,8 @@ describe("gh api mit Außenwirkung fragt nach (#1204)", () => {
     ["unlinkProjectV2FromTeam", graphql("unlinkProjectV2FromTeam")],
     ["markProjectV2AsTemplate", graphql("markProjectV2AsTemplate")],
     ["unmarkProjectV2AsTemplate", graphql("unmarkProjectV2AsTemplate")],
-    ["-X DELETE auf ein Label", "gh api -X DELETE repos/fluffels/kubernia/labels/x"],
-    ["--method=DELETE", "gh api --method=DELETE repos/fluffels/kubernia/issues/comments/1"],
+    ["-X DELETE auf ein Label", `gh api -X DELETE repos/${FREMD.repo}/labels/x`],
+    ["--method=DELETE", `gh api --method=DELETE repos/${FREMD.repo}/issues/comments/1`],
     ["--method DELETE (Kleinschreibung)", "gh api --method delete repos/o/r/git/refs/heads/x"],
     ["REST: Ruleset schreiben", "gh api -X PUT repos/o/r/rulesets/1 -f name=x"],
     ["REST: Secret setzen (implizit POST über -f)", "gh api repos/o/r/actions/secrets/X -f value=y"],
@@ -84,7 +85,7 @@ describe("Alltags-Aufrufe laufen durch (kein Dauer-Nachfragen)", () => {
     ["Item hinzufügen", graphql("addProjectV2ItemById")],
     ["Feldwert eines Items setzen (Status)", graphql("updateProjectV2ItemFieldValue")],
     ["Item archivieren", graphql("archiveProjectV2Item")],
-    ["Board-Items lesen (REST)", "gh api --paginate users/fluffels/projectsV2/1/items?per_page=100&fields=358708531 --jq '.[].id'"],
+    ["Board-Items lesen (REST)", `gh api --paginate users/${FREMD.boards[0].besitzer}/projectsV2/1/items?per_page=100&fields=${FREMD.boards[0].statusFeldId} --jq '.[].id'`],
     ["Ruleset nur lesen (GET)", "gh api repos/o/r/rulesets/1"],
     ["Ruleset lesen mit -X GET", "gh api -X GET repos/o/r/rulesets"],
     ["Webhooks nur lesen (GET)", "gh api repos/o/r/hooks"],
@@ -168,7 +169,7 @@ describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311
   });
 
   test("Alltags-Aufrufe bleiben ohne Rückfrage", () => {
-    laeuft("gh api graphql -f query='query($o:String!){ repository(owner:$o,name:\"x\"){ id } }' -f o=fluffels");
+    laeuft(`gh api graphql -f query='query($o:String!){ repository(owner:$o,name:"x"){ id } }' -f o=${FREMD.boards[0].besitzer}`);
     laeuft("gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item { id } } }' -f p=$P -f c=$C");
     laeuft("gh api repos/o/r/issues/$N/comments -f body=x");
     laeuft('eval "$(ssh-agent -s)"');
