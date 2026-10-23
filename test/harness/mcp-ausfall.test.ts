@@ -25,6 +25,7 @@ type Ausfall = {
   projektOrdner: (namen: string[], wurzel: string) => { ordner: string; suffix: string }[];
   serverOrdner: (n: string) => string;
   serverNameFuerOrdner: (ordner: string, server: Server[]) => string | null;
+  serverAnzeige: (ordner: string, server: Server[]) => string | null;
   istNpxFallback: (text: string) => boolean;
   klassifiziere: (zeilen: string[]) => Befund[];
   netzCode: (text: string) => string;
@@ -166,6 +167,12 @@ describe("Pfad-Helfer", () => {
     expect(a.serverNameFuerOrdner("mcp-logs-langfuse", cfg)).toBe("langfuse");
     expect(a.serverNameFuerOrdner("mcp-logs-", cfg)).toBeNull();
     expect(a.serverNameFuerOrdner("anderes", cfg)).toBeNull();
+  });
+  test("serverAnzeige: Repo-Server (likec4) schlicht, Server ohne .mcp.json-Eintrag (claude-artifacts) als extern gekennzeichnet", () => {
+    const cfg = [{ name: "likec4" }];
+    expect(a.serverAnzeige("mcp-logs-likec4", cfg)).toBe("likec4");
+    expect(a.serverAnzeige("mcp-logs-claude-artifacts", cfg)).toBe("claude-artifacts [extern (nicht im Repo konfiguriert)]");
+    expect(a.serverAnzeige("anderes", cfg)).toBeNull();
   });
   test("istNpxFallback erkennt den Launcher-Hinweis, nicht beliebige stderr-Zeilen", () => {
     expect(a.istNpxFallback("Server stderr: playwright-mcp: lokale Installation fehlt oder weicht ab → npx @playwright/mcp@1.2.3")).toBe(true);
@@ -314,8 +321,8 @@ describe("main mit Temp-Logs", () => {
       ].join("\n") + "\n",
     );
     const t = lauf(["--seit", "2026-10-15T00:00:00Z"], env).aus.join("\n");
-    expect(t).toContain("langfuse: fehler ×2");
-    expect(t).toContain("langfuse: abbruch (ECONNRESET) ×1");
+    expect(t).toContain("langfuse [extern (nicht im Repo konfiguriert)]: fehler ×2");
+    expect(t).toContain("langfuse [extern (nicht im Repo konfiguriert)]: abbruch (ECONNRESET) ×1");
     expect(t).not.toContain("Terminal connection");
     expect(t).not.toContain("Server-Art");
   });

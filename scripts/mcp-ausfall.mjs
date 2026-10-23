@@ -88,6 +88,13 @@ export function serverNameFuerOrdner(ordner, server) {
   return server.find((s) => serverOrdner(s.name) === ordner)?.name ?? ordner.slice("mcp-logs-".length);
 }
 
+/** Anzeigename im Befund: wie `serverNameFuerOrdner`, bei einem Server ohne Eintrag in `.mcp.json` (user-scope, Plugin, Connector) mit dem Zusatz „extern (nicht im Repo konfiguriert)“, damit er nicht als Repo-Defekt gelesen wird. Pur. */
+export function serverAnzeige(ordner, server) {
+  const name = serverNameFuerOrdner(ordner, server);
+  if (!name) return null;
+  return server.some((s) => serverOrdner(s.name) === ordner) ? name : `${name} [extern (nicht im Repo konfiguriert)]`;
+}
+
 /** Der npx-Hinweis des Launchers (`scripts/mcp-launch.mjs` › `npxHinweis`) als stderr-Zeile des Servers: Pfeil + `npx` oder `npx -y`. Pur. */
 export const istNpxFallback = (text) => /→\s*npx\b|\bnpx -y\b/.test(text);
 
@@ -208,7 +215,7 @@ function lies(basis, wurzel, server, seit) {
       continue;
     }
     for (const o of ordnerNamen) {
-      const name = serverNameFuerOrdner(o, server);
+      const name = serverAnzeige(o, server);
       if (!name) continue;
       const dir = join(basis, p.ordner, o);
       let dateien;
