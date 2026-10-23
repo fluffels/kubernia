@@ -384,7 +384,7 @@ export function kernAnteilSandbox(sb, erg) {
   const aus = { ...sb };
   for (const l of SANDBOX_NAMEN) {
     const [a, b] = SANDBOX_LISTEN[l].pfad;
-    if (!istObjekt(sb[a]) || !Array.isArray(sb[a][b])) continue;
+    if (!Array.isArray(sb[a]?.[b])) continue;
     const mit = new Set((erg?.[l] ?? []).map(SANDBOX_LISTEN[l].name));
     const rest = sb[a][b].filter((x) => !mit.has(SANDBOX_LISTEN[l].name(x)));
     const zweig = { ...aus[a] };

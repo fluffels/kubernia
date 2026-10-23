@@ -324,7 +324,7 @@ describe("Extraktionsliste: Quellwurzel als Parameter und Vorkompilierung (#1888
     assert.equal(artVon(l2, "test/b.test.ts"), null);
     l2.eintraege.push(eintrag("test/b.test.ts", "projekt-test"));
     assert.equal(artVon(l2, "test/b.test.ts"), "projekt-test", "angehängt");
-    l2.eintraege = [eintrag("test/b.test.ts", "kern-test")];
+    l2.eintraege = [eintrag("test/b.test.ts", "kern-test"), eintrag("test/c.test.ts", "kern-test")];
     assert.equal(artVon(l2, "test/b.test.ts"), "kern-test", "ausgetauscht (gleiche Länge)");
   });
 });

@@ -438,6 +438,12 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
     assert.equal(sb.kernAnteilVon(E, null, { sandbox: ERG }), null, "ein Nicht-Objekt bleibt unverändert");
     assert.deepEqual(sb.kernAnteilVon(E, KERN_SB, {}), KERN_SB, "ohne Ergänzung bleibt der Wert");
   });
+  test("kaputter Zustand: ein Zweig, der kein Objekt ist, eine Liste, die keine ist, und ein leerer envVars-Eintrag sind Befund oder bleiben unverändert, kein Absturz", () => {
+    const k1 = { network: "x", credentials: { envVars: "y" } };
+    assert.deepEqual(sb.kernAnteilVon(E, k1, { sandbox: ERG }), k1, "kein Objekt und keine Liste: unverändert");
+    assert.match(bef(k1, ERG), /fehlt/);
+    assert.match(bef(mitSb(KERN_SB, ERG), { envVars: [null as never] }), /muss mode deny haben/);
+  });
   test("der Vergleich der envVars läuft über den Namen, nicht über das ganze Objekt", () => {
     const m = mitSb(KERN_SB, { envVars: [{ name: "PIXELLAB_TOKEN", mode: "deny" }] });
     assert.deepEqual(sb.kernAnteilVon(E, m, { sandbox: { envVars: [{ name: "PIXELLAB_TOKEN", mode: "andere" }] } }), KERN_SB);
@@ -528,6 +534,16 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
     const g = gate(z);
     assert.equal(g.code, 0, g.err);
     assert.match(g.out, /2 Einträge der Berechtigungs-Ergänzung ohne Befund/);
+  });
+  test("Quelle und Ziel ohne Sandbox-Ergänzung: der Wert kommt wörtlich aus der Quelle (kompaktes Format bleibt)", () => {
+    const q = tmp();
+    schreibe(q, ".factory/besitz.json", json(SB_MANIFEST));
+    for (const e of ROLLEN) schreibe(q, e.pfad, "rolle\n");
+    const kompakt = '{"enabled": true, "network": {"allowedDomains": ["github.com"]}}';
+    schreibe(q, SETTINGS, `{\n    "sandbox": ${kompakt}\n}\n`);
+    const z = ziel();
+    assert.equal(vomTag(q, z).code, 0);
+    assert.ok(lies(z, SETTINGS).includes(`"sandbox": ${kompakt}`));
   });
   test("ohne Block im Ziel gibt es nur den Kern-Anteil, ohne Meldung des Gates", () => {
     const z = ziel();

@@ -551,9 +551,10 @@ const PW_MANIFEST = {
 const pwBlock = (inhalt: string): string => `${lib.markerStart("pw")}\n${PW.start}\n${inhalt}${PW.ende}\n${lib.markerEnde("pw")}`;
 const PW_AGENT = "---\n# factory:projektwert agenten.planer\nname: quelle-planer\nmodel: opus\n---\n# Agent\n";
 function pwConfig(planer: string): string {
-  const echt = JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { repo: string; agenten: Record<string, string>; berechtigungen?: unknown };
+  const echt = JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { repo: string; agenten: Record<string, string>; berechtigungen?: unknown; sandbox?: unknown };
   echt.repo = "acme/demo";
-  delete echt.berechtigungen; // das Ziel ergänzt nichts; die Ergänzung prüft test/factory-sync-berechtigungen.test.ts
+  delete echt.berechtigungen; // das Ziel ergänzt nichts; die Ergänzungen prüft test/factory-sync-berechtigungen.test.ts
+  delete echt.sandbox;
   echt.agenten.planer = planer;
   return JSON.stringify(echt, null, 2) + "\n";
 }
