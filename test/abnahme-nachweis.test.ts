@@ -13,6 +13,7 @@ import * as sliceRaw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as nlRaw from "../scripts/nachweis-lib.mjs";
 import { echteSprache } from "./support/echte-sprache";
+import { FREMD, FREMD_CONFIG_PFAD, FREMD_OWNER, projektConfig } from "./support/fremd-config";
 
 interface Zeilen {
   abnahme: string;
@@ -36,8 +37,9 @@ interface Mod {
 const m = raw as unknown as Mod;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen & Record<string, string> };
 const { parseNachweis, abnahmeMarker, MAX_REVIEW_PAESSE } = nlRaw as unknown as { parseNachweis: (t: string, z: unknown) => Nachweis; abnahmeMarker: (z: unknown) => string; MAX_REVIEW_PAESSE: number };
-const Z = commitZeilen("KQ-", "kubernia-planner");
-const CONFIG = { repo: "owner/repo", praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, sprache: echteSprache() };
+const PL = FREMD.agenten.planer;
+const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
+const CONFIG = { repo: FREMD.repo, praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PL }, sprache: echteSprache() };
 
 const H = "b".repeat(40);
 const R = "a".repeat(40);
@@ -131,23 +133,23 @@ describe("K5: Spur", () => {
 describe("vertrauterMarker", () => {
   const text = (o: { durchgang?: number; handoff?: boolean } = {}) =>
     `<!-- ${abnahmeMarker(Z)}${o.handoff ? "-handoff" : ""} durchgang=${o.durchgang ?? 1} head=${H} urteil=K1:erfuellt -->`;
-  const owner = { login: "owner", type: "User" };
+  const owner = { login: FREMD_OWNER, type: "User" };
   test("nur vertraute Autoren zählen; ein Bot mit falschem type nicht", () => {
-    expect(m.vertrauterMarker([{ user: { login: "fremd", type: "User" }, body: text() }], "owner", Z)).toBeNull();
-    expect(m.vertrauterMarker([{ user: { login: "github-actions[bot]", type: "User" }, body: text() }], "owner", Z)).toBeNull();
-    expect(m.vertrauterMarker([{ user: owner, body: text() }], "owner", Z)?.durchgang).toBe(1);
+    expect(m.vertrauterMarker([{ user: { login: "fremd", type: "User" }, body: text() }], FREMD_OWNER, Z)).toBeNull();
+    expect(m.vertrauterMarker([{ user: { login: "github-actions[bot]", type: "User" }, body: text() }], FREMD_OWNER, Z)).toBeNull();
+    expect(m.vertrauterMarker([{ user: owner, body: text() }], FREMD_OWNER, Z)?.durchgang).toBe(1);
   });
   test("ein späterer Kommentar ohne Marker verdrängt den Marker nicht", () => {
     const k = [{ user: owner, body: text({ durchgang: 1 }) }, { user: owner, body: "LGTM, kein Marker" }];
-    expect(m.vertrauterMarker(k, "owner", Z)?.durchgang).toBe(1);
+    expect(m.vertrauterMarker(k, FREMD_OWNER, Z)?.durchgang).toBe(1);
   });
   test("ohne Kommentarliste: kein Marker", () => {
-    expect(m.vertrauterMarker(undefined as unknown as unknown[], "owner", Z)).toBeNull();
+    expect(m.vertrauterMarker(undefined as unknown as unknown[], FREMD_OWNER, Z)).toBeNull();
   });
   test("Hand-off-Marker zählt nicht, der jüngste vertraute Marker gewinnt", () => {
-    expect(m.vertrauterMarker([{ user: owner, body: text({ handoff: true }) }], "owner", Z)).toBeNull();
+    expect(m.vertrauterMarker([{ user: owner, body: text({ handoff: true }) }], FREMD_OWNER, Z)).toBeNull();
     const k = [{ user: owner, body: text({ durchgang: 1 }) }, { user: owner, body: text({ durchgang: 2 }) }, { user: { login: "fremd", type: "User" }, body: text({ durchgang: 3 }) }];
-    expect(m.vertrauterMarker(k, "owner", Z)?.durchgang).toBe(2);
+    expect(m.vertrauterMarker(k, FREMD_OWNER, Z)?.durchgang).toBe(2);
   });
 });
 
@@ -169,7 +171,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   const BODY = (n = 9) => `Closes #${n}`;
   const AK = "## Akzeptanzkriterien\n1. eins\n2. zwei\n";
   const ZEILE = `${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt`;
-  const kommentar = { user: { login: "owner", type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
+  const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
 
   function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; config?: unknown } = {}) {
     const ghAufrufe: string[][] = [];
@@ -177,7 +179,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       if (o.gitFehler && a[0] === "merge-base") throw new Error("git kaputt");
       if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);
       if (a[0] === "rev-parse") return a[3].slice(0, 40);
-      if (a[0] === "log") return o.messages ?? `Nachweis\n\n${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
+      if (a[0] === "log") return o.messages ?? `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
       if (a[0] === "rev-list" && a[1] === "--merges") return "";
       if (a[0] === "rev-list" && a.includes("--no-merges")) return "";
       if (a[0] === "rev-list") return `${R}\n${H}\n`;
@@ -250,7 +252,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     const config = { ...CONFIG, sprache: { ...sprache, spezifikation: { ...(sprache.spezifikation as object), nachMerge: "Danach:" } } };
     const NM = "## Akzeptanzkriterien\n1. eins\n2. Danach: zwei\n3. Nach dem Merge: drei\n";
     const mit = (urteil: string) => ({
-      messages: `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`,
+      messages: `${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`,
       kommentare: [{ ...kommentar, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=${urteil} -->` }],
       issue: { body: NM },
       config,
@@ -262,7 +264,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   test("Nach-Merge-Kriterium Ende-zu-Ende: nach-merge am markierten Kriterium grün, an einem normalen rot", () => {
     const NM = "## Akzeptanzkriterien\n1. eins\n2. Nach dem Merge: zwei\n";
     const mit = (urteil: string) => ({
-      messages: `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`,
+      messages: `${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=1 urteil=${urteil}`,
       kommentare: [{ ...kommentar, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=${urteil} -->` }],
       issue: { body: NM },
     });
@@ -275,7 +277,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);
       if (a[0] === "rev-parse" && a[3].startsWith(H)) throw new Error("unknown revision");
       if (a[0] === "rev-parse") return a[3].slice(0, 40);
-      if (a[0] === "log") return `${Z.plan}: kubernia-planner\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
+      if (a[0] === "log") return `${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
       return "";
     };
     const r = m.checkAbnahmeNachweis({ runGit: git, gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: AK }), env: { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42" }, ladeConfig: () => CONFIG });
@@ -318,7 +320,7 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
 
   /** Basis, Feature-Commit (Review-head), Abnahme-Zeile als leerer Commit; `nachher` baut weitere Commits dahinter. */
   function repo(nachher: (dir: string) => string | void, abnahmeVorReview = false, abnahmeWahl?: (s: { basis: string; erster: string; review: string }) => string) {
-    const dir = mkdtempSync(join(tmpdir(), "kq-abnahme-"));
+    const dir = mkdtempSync(join(tmpdir(), "abnahme-"));
     dirs.push(dir);
     git(dir, "init", "-q", "-b", "main");
     writeFileSync(join(dir, "a.txt"), "x\n");
@@ -333,13 +335,13 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
     const review = git(dir, "rev-parse", "HEAD");
     git(dir, "commit", "-q", "--allow-empty", "-m", `Abnahme\n\n${Z.abnahme}: head=${review} durchgaenge=1 urteil=K1:erfuellt`);
     const abnahmeSha = abnahmeWahl ? abnahmeWahl({ basis, erster, review }) : abnahmeVorReview ? erster : review;
-    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: kubernia-planner\n${Z.review}: head=${abnahmeVorReview ? review : erster} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${abnahmeSha} durchgaenge=1 urteil=K1:erfuellt`);
+    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${abnahmeVorReview ? review : erster} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${abnahmeSha} durchgaenge=1 urteil=K1:erfuellt`);
     const neueBasis = nachher(dir);
     return { dir, basis: neueBasis || basis, abn: abnahmeSha };
   }
   const pruefe = (r: { dir: string; basis: string; abn: string }, env: Record<string, string> = {}) => {
     const abn = r.abn;
-    const kommentar = { user: { login: "owner", type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${abn} urteil=K1:erfuellt -->` };
+    const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${abn} urteil=K1:erfuellt -->` };
     return m.checkAbnahmeNachweis({
       runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }),
       gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: "## Akzeptanzkriterien\n1. eins\n" }),
@@ -416,7 +418,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   /** Temp-Repo mit Basis und einem Feature-Commit, dessen Message `nachricht` trägt; liefert Ordner, Basis und Config-Pfad. */
   function cliRepo(nachricht: string) {
-    const dir = mkdtempSync(join(tmpdir(), "kq-abnahme-cli-"));
+    const dir = mkdtempSync(join(tmpdir(), "abnahme-cli-"));
     dirs.push(dir);
     git(dir, "init", "-q", "-b", "main");
     writeFileSync(join(dir, "a.txt"), "x\n");
@@ -425,7 +427,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     const basis = git(dir, "rev-parse", "HEAD");
     git(dir, "commit", "-q", "--allow-empty", "-m", nachricht);
     const pfad = join(dir, "config.json");
-    writeFileSync(pfad, readFileSync(fileURLToPath(new URL("../.factory/projekt.json", import.meta.url)), "utf8")); // die echte, vollständige Config
+    writeFileSync(pfad, readFileSync(fileURLToPath(new URL(`../${FREMD_CONFIG_PFAD}`, import.meta.url)), "utf8")); // die Fremd-Config, vollständig
     return { dir, basis, pfad };
   }
   const cli = (r: { dir: string; basis: string; pfad: string }, env: Record<string, string> = {}, args: string[] = ["--config", r.pfad]) =>
@@ -435,12 +437,17 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     const r = cli(cliRepo("nur Code"));
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/Abnahme-Nachweis fehlt oder ist ungültig/);
-    expect(r.stderr).toMatch(/KQ-Abnahme: Zeile fehlt/);
+    expect(r.stderr).toMatch(new RegExp(`${Z.abnahme}: Zeile fehlt`));
   });
   test("grün: entfaellt ohne Ticket, Exit 0", () => {
-    const r = cli(cliRepo("x\n\nKQ-Abnahme: entfaellt — kein Ticket"));
+    const r = cli(cliRepo(`x\n\n${Z.abnahme}: entfaellt — kein Ticket`));
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Abnahme-Nachweis ok/);
+  });
+  test("Standardpfad ohne --config: der Prozess liest die echte Config und ihr Präfix zählt", () => {
+    const echt = commitZeilen(projektConfig().praefixe.commitZeile, projektConfig().agenten.planer);
+    expect(cli(cliRepo(`x\n\n${echt.abnahme}: entfaellt — kein Ticket`), {}, []).status).toBe(0);
+    expect(cli(cliRepo(`x\n\n${commitZeilen("XQ-", "x").abnahme}: entfaellt — kein Ticket`), {}, []).status).toBe(1);
   });
   test("Entwurf: nur Bericht, Exit 0", () => {
     const r = cli(cliRepo("nur Code"), { FACTORY_PR_DRAFT: "true" });
@@ -449,13 +456,13 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.stdout).toMatch(/Zeile fehlt/);
   });
   test("Override: Exit 0 und die Begründung steht in der Ausgabe", () => {
-    const r = cli(cliRepo("x\n\nKQ-Abnahme-Override: #9 Sitzung vor dem Werkzeug"));
+    const r = cli(cliRepo(`x\n\n${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug`));
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/KQ-Abnahme-Override — #9 Sitzung vor dem Werkzeug/);
+    expect(r.stdout).toMatch(new RegExp(`${Z.abnahmeOverride} — #9 Sitzung vor dem Werkzeug`));
   });
   test("kaputte Config und --config ohne Pfad: Exit 1", () => {
     // Mit der echten Config wäre diese Message grün (entfaellt ohne Ticket): Exit 1 kommt nur aus dem --config-Zweig.
-    const k = cliRepo("x\n\nKQ-Abnahme: entfaellt — kein Ticket");
+    const k = cliRepo(`x\n\n${Z.abnahme}: entfaellt — kein Ticket`);
     expect(cli(k).status).toBe(0);
     writeFileSync(k.pfad, "{}");
     const kaputt = cli(k);

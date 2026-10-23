@@ -2,15 +2,15 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Das Prüfskript `scripts/check-review-nachweis.mjs` verlangt im PR-Slice die Commit-Zeilen `KQ-Plan:` /
- * `KQ-Review:`. Alles, was das Skript an Wissen aus Skill und Format-SSOT dupliziert (Cap, Lens-Satz je
+ * Das Prüfskript `scripts/check-review-nachweis.mjs` verlangt im PR-Slice die Commit-Zeilen `<praefixe.commitZeile>Plan:` /
+ * `<praefixe.commitZeile>Review:`. Alles, was das Skript an Wissen aus Skill und Format-SSOT dupliziert (Cap, Lens-Satz je
  * Diff-Art, Brillen-Keys), darf nicht still auseinanderlaufen. Geprüft werden:
  *   (a) die Zeilen im Format der SSOT (`nachweisZeilen`) werden vom Parser angenommen (Roundtrip),
  *   (b) MAX_FIX_RUNDEN im Skript == das Cap im Skill,
  *   (c) `pflichtLenses` je Diff-Art == die Staffel im Skill,
  *   (d) der Required-Job build-test ruft das Skript als Schritt nach „Diff-Basis bestimmen“ auf, mit
  *       pull_request-Bedingung und Dependabot-Ausnahme,
- *   (e) review-lenses-Skill und kubernia-umsetzer verweisen auf das Skript.
+ *   (e) review-lenses-Skill und der Umsetzer-Agent verweisen auf das Skript.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -28,6 +28,7 @@ type Mod = {
   bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown }) => string[];
 };
 import { ohneKernEnv } from "../support/env-alt";
+import { FREMD, FREMD_CONFIG_PFAD, projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/check-review-nachweis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -39,8 +40,10 @@ import * as kennzahlen from "../../scripts/factory-kennzahlen.mjs";
 const { MAX_FIX_RUNDEN, pflichtLenses } = raw as Mod;
 const { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } = nachweisLib as unknown as { MAX_REVIEW_PAESSE: number; MAX_ZUSATZPAESSE: number };
 const { MAX_RUNDEN } = kennzahlen as unknown as { MAX_RUNDEN: number };
-/** Zeilen der echten Config (KQ-, kubernia-planner); die Wrapper reichen sie durch. */
-const Z = (sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => unknown }).commitZeilen("KQ-", "kubernia-planner");
+/** Zeilen der Fremd-Config; die Wrapper reichen sie durch. */
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string } };
+const PL = FREMD.agenten.planer;
+const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
 const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen">) => (raw as Mod).bewerteNachweis({ zeilen: Z, ...o });
 const zusatzpassZeile = (raw as unknown as { zusatzpassZeile: (r: { zusatzpass: { grund: string } | null }) => string | null }).zusatzpassZeile;
@@ -53,8 +56,8 @@ const SHA = "c".repeat(40);
 const CODE = ["architektur", "requirement-treue", "test-adaequanz"];
 /** Die zwei Commit-Zeilen im Format der SSOT (docs/agent-harness.md §3a), wie sie der Umsetzer nach der Konvergenz setzt. */
 function nachweisZeilen({ head, runden, lenses, plan }: { head: string; runden: number; lenses: string[]; plan: unknown }): string {
-  const planZeile = plan ? "KQ-Plan: kubernia-planner" : "KQ-Plan: ohne — Planer lieferte keinen Plan";
-  return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(",")} verdikt=ok`;
+  const planZeile = plan ? `${Z.plan}: ${PL}` : `${Z.plan}: ohne — Planer lieferte keinen Plan`;
+  return `${planZeile}\n${Z.review}: head=${head} runden=${runden} lenses=${lenses.join(",")} verdikt=ok`;
 }
 
 describe("(a) Das Format der SSOT ist das, was das Skript liest", () => {
@@ -213,10 +216,10 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
 describe("Das Feld blocker= im Nachweis (#1123)", () => {
   const DREI = "lenses=architektur,requirement-treue,test-adaequanz";
   const bewerteB = (review: string, dateien: string[]) =>
-    bewerteNachweis({ nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`), dateien, headBekannt: true, headImSlice: true });
+    bewerteNachweis({ nachweis: parseNachweis(`${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}`), dateien, headBekannt: true, headImSlice: true });
 
   test("blocker= je Brille wird angenommen, auch mit null, und stört die Brillen-Erkennung nicht", () => {
-    const text = `KQ-Review: head=${SHA} runden=2 ${DREI} blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    const text = `${Z.review}: head=${SHA} runden=2 ${DREI} blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
     assert.deepEqual(parseNachweis(text).review?.lenses, ["architektur", "requirement-treue", "test-adaequanz"]);
     assert.deepEqual(bewerteB(`runden=2 ${DREI} blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok`, ["src/x.ts"]), []);
     assert.deepEqual(bewerteB("runden=2 lenses=doku blocker=doku:1 verdikt=ok", ["docs/a.md"]), []);
@@ -232,10 +235,10 @@ describe("Das Feld blocker= im Nachweis (#1123)", () => {
 });
 
 describe("Tolerantes Lesen der Brillen (#1331)", () => {
-  const lenses = (wert: string) => parseNachweis(`KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`).review?.lenses;
+  const lenses = (wert: string) => parseNachweis(`${Z.review}: head=${SHA} runden=1 lenses=${wert} verdikt=ok`).review?.lenses;
   const bewerte = (wert: string, dateien = ["src/a.ts"]) =>
-    bewerteNachweis({ nachweis: parseNachweis(`KQ-Plan: kubernia-planner
-KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`), dateien, headBekannt: true, headImSlice: true });
+    bewerteNachweis({ nachweis: parseNachweis(`${Z.plan}: ${PL}
+${Z.review}: head=${SHA} runden=1 lenses=${wert} verdikt=ok`), dateien, headBekannt: true, headImSlice: true });
 
   test("Großschreibung, Leerzeichen nach Kommas und Umlaute werden normalisiert", () => {
     assert.deepEqual(lenses("Architektur, Requirement-Treue, Test-Adäquanz"), ["architektur", "requirement-treue", "test-adaequanz"]);
@@ -244,7 +247,7 @@ KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`), dateien, headBekann
   });
 
   test("die Felder dahinter werden nicht in die Brillen gezogen", () => {
-    const n = parseNachweis(`KQ-Review: lenses=architektur, doku verdikt=ok head=${SHA} runden=2`);
+    const n = parseNachweis(`${Z.review}: lenses=architektur, doku verdikt=ok head=${SHA} runden=2`);
     assert.deepEqual(n.review?.lenses, ["architektur", "doku"]);
     assert.equal(n.review?.verdikt, "ok");
     assert.equal(n.review?.runden, 2);
@@ -261,10 +264,10 @@ KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`), dateien, headBekann
     assert.match(bewerte("architektur,requirement-treue,test-adaequanz,foo").join(' '), /unbekannte Brille\(n\) foo/);
   });
 
-  test("die letzte KQ-Review-Zeile gewinnt (Korrektur per weiterem Nachweis-Commit)", () => {
-    const text = `KQ-Review: head=${SHA} runden=1 lenses=Falsch verdikt=ok
+  test("die letzte Review-Zeile gewinnt (Korrektur per weiterem Nachweis-Commit)", () => {
+    const text = `${Z.review}: head=${SHA} runden=1 lenses=Falsch verdikt=ok
 
-KQ-Review: head=${SHA} runden=1 lenses=doku verdikt=ok`;
+${Z.review}: head=${SHA} runden=1 lenses=doku verdikt=ok`;
     assert.deepEqual(parseNachweis(text).review?.lenses, ["doku"]);
   });
 });
@@ -292,7 +295,7 @@ describe("(f) BEKANNTE_LENSES == die Brillen-Keys der Format-SSOT (#1349)", () =
 describe("Zusatzpässe über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => {
   const bewerteZ = (review: string, dateien = ["src/a.ts"]) =>
     bewerteNachweis({
-      nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`),
+      nachweis: parseNachweis(`${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}`),
       dateien,
       headBekannt: true,
       headImSlice: true,
@@ -325,7 +328,7 @@ describe("Zusatzpässe über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => 
     assert.match(bewerteZ(`runden=3 zusatzpass=1:x ${LENSES} verdikt=ok`).join(" "), /zusatzpass ist nur/);
   });
   test("das Feld vor lenses= verschiebt die Brillen-Erkennung nicht", () => {
-    const n = parseNachweis(`KQ-Review: head=${SHA} runden=4 zusatzpass=1:Grund mit Wörtern ${LENSES} verdikt=ok`);
+    const n = parseNachweis(`${Z.review}: head=${SHA} runden=4 zusatzpass=1:Grund mit Wörtern ${LENSES} verdikt=ok`);
     assert.deepEqual(n.review?.lenses, ["architektur", "requirement-treue", "test-adaequanz"]);
   });
   test("die Vorlage des Skripts führt kein Feld zusatzpass (kein Standardweg)", () => {
@@ -336,7 +339,7 @@ describe("Zusatzpässe über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => 
 describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap (#1808)", () => {
   const bewerteA = (review: string) =>
     bewerteNachweis({
-      nachweis: parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}`),
+      nachweis: parseNachweis(`${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}`),
       dateien: ["src/a.ts"],
       headBekannt: true,
       headImSlice: true,
@@ -366,7 +369,7 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
     assert.match(bewerteA(`runden=4 ${LENSES} verdikt=ok`).join(" "), /überschreitet/);
   });
   test("der Parser liefert das Feld, die Vorlage führt es nicht", () => {
-    assert.equal((parseNachweis(`KQ-Review: head=${SHA} runden=4 abnahmefix=1 ${LENSES} verdikt=ok`).review as { abnahmefix?: unknown } | null)?.abnahmefix, 1);
+    assert.equal((parseNachweis(`${Z.review}: head=${SHA} runden=4 abnahmefix=1 ${LENSES} verdikt=ok`).review as { abnahmefix?: unknown } | null)?.abnahmefix, 1);
     assert.doesNotMatch(read("scripts/check-review-nachweis.mjs").split("export const vorlage")[1].split(";")[0], /abnahmefix/);
   });
   test("Skill, Format-SSOT und Umsetzer nennen das Feld", () => {
@@ -386,12 +389,12 @@ describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
 describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   const BASE = "b".repeat(40);
   const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
-  /** Gefälschtes git für `checkReviewNachweis`: ein Code-Slice (src/a.ts) und ein Nachweis-Commit mit der gegebenen KQ-Review-Zeile. */
+  /** Gefälschtes git für `checkReviewNachweis`: ein Code-Slice (src/a.ts) und ein Nachweis-Commit mit der gegebenen Review-Zeile. */
   const fakeGit = (review: string) => (a: string[]): string => {
     const j = a.join(" ");
     if (j.startsWith("merge-base")) return BASE;
     if (j === "rev-parse HEAD") return "d".repeat(40);
-    if (j.startsWith("log --reverse")) return `KQ-Plan: kubernia-planner\nKQ-Review: head=${SHA} ${review}\n`;
+    if (j.startsWith("log --reverse")) return `${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}\n`;
     if (j.startsWith("diff --name-only")) return "src/a.ts\n";
     if (j.startsWith("rev-parse --verify")) return SHA;
     if (j.startsWith("rev-list --count")) return "1";
@@ -414,8 +417,10 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   });
 
   /** Echtes Temp-Repo: main mit einem Commit, Feature-Branch mit Code-Commit und leerem Nachweis-Commit. */
-  function cliAusgabe(review: string): string {
-    const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+  function cliAusgabe(review: string, echt = false): string {
+    const e = echt ? projektConfig() : FREMD;
+    const zeilen = commitZeilen(e.praefixe.commitZeile, e.agenten.planer);
+    const dir = mkdtempSync(join(tmpdir(), "nachweis-"));
     try {
       const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", ...a], { cwd: dir, encoding: "utf8" });
       git("init", "-q", "-b", "main");
@@ -424,10 +429,10 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
       git("checkout", "-q", "-b", "feature/x");
       git("commit", "-q", "--allow-empty", "-m", "umsetzung");
       const head = git("rev-parse", "HEAD").trim();
-      git("commit", "-q", "--allow-empty", "-m", `nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${head} ${review}`);
+      git("commit", "-q", "--allow-empty", "-m", `nachweis\n\n${zeilen.plan}: ${e.agenten.planer}\n${zeilen.review}: head=${head} ${review}`);
       const env = { ...process.env };
       ohneKernEnv(env, "FACTORY_DIFF_BASE");
-      return execFileSync("node", [fileURLToPath(new URL("../../scripts/check-review-nachweis.mjs", import.meta.url))], { cwd: dir, env, encoding: "utf8" });
+      return execFileSync("node", [fileURLToPath(new URL("../../scripts/check-review-nachweis.mjs", import.meta.url)), ...(echt ? [] : ["--config", FREMD_CONFIG_PFAD])], { cwd: dir, env, encoding: "utf8" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -442,6 +447,9 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   // Ein einziger echter Prozess-Smoke (Kaltstart von git und node unter Last braucht Luft).
   test("CLI-Smoke: der Prozess gibt die Zusatzpass-Zeile aus", { timeout: 30_000 }, () => {
     assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass: Maintainerin gab Pass frei/);
+  });
+  test("CLI-Standardpfad ohne --config: der Prozess liest die echte Config", { timeout: 30_000 }, () => {
+    assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`, true), /• Zusatzpass: Maintainerin gab Pass frei/);
   });
 });
 

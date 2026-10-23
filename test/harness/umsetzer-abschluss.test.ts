@@ -1,4 +1,4 @@
-/* Umsetzer-Abschluss-Wächter (#1308) – der Abschluss des `kubernia-umsetzer` driftet nicht still.
+/* Umsetzer-Abschluss-Wächter (#1308) – der Abschluss des Umsetzer-Agenten driftet nicht still.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
@@ -6,7 +6,7 @@
  *   1. Vor dem Bericht (`ERGEBNIS:`) stoppt der Umsetzer alle eigenen Hintergrund-Tasks per `TaskStop`
  *      und wartet auf die CI blockierend im Vordergrund (ein Monitor hält den Lauf nicht offen, #1342), auf
  *      Lenses per Turn-Ende; sonst kam derselbe Bericht mehrfach an oder der Lauf endete mitten im Review (#1139).
- *   2. Der Nachweis-Commit (`KQ-Plan:`/`KQ-Review:`, lokal geprüft mit `check-review-nachweis`) steht im
+ *   2. Der Nachweis-Commit (`<praefixe.commitZeile>Plan:`/`<praefixe.commitZeile>Review:`, lokal geprüft mit `check-review-nachweis`) steht im
  *      Ablauf VOR dem PR-Schritt; ohne ihn wird die PR-CI rot (#1270).
  */
 import assert from "node:assert/strict";
@@ -15,10 +15,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+import { FREMD, FREMD_OWNER, projektConfig } from "../support/fremd-config";
 import { liesMitProjektwerten } from "../support/ticket-ablauf";
 
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as pcRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -32,7 +31,11 @@ import * as preRaw from "../../scripts/pretooluse-hook.mjs";
 const stopHookRaw = stopRaw as unknown as { runHook: (s: string, r: string, c: () => object, d: object) => { exit: number; stdout: string; stderr: string } };
 const preHookRaw = preRaw as unknown as { dispatch: (t: string, r: string, g?: unknown, s?: unknown, d?: object) => { hookSpecificOutput: { permissionDecision: string } } | null };
 const stuckLabel = (c: unknown) => (festRaw as unknown as { stuckLabel: (c: unknown) => string }).stuckLabel(c);
-const ladeProjektConfig = () => (pcRaw as unknown as { ladeProjektConfig: () => { labels: { festgefahren: string } } }).ladeProjektConfig();
+/** Echte Config: nur dort, wo Texte oder der Einstiegspunkt sie selbst lesen; alles andere bekommt `FREMD` injiziert. */
+const ECHT = projektConfig();
+const ladeProjektConfig = projektConfig;
+const { umsetzer: UMS, lens: LENS } = FREMD.agenten;
+const STUCK = FREMD.labels.festgefahren;
 
 type Status = { state: string; autoMergeRequest: object | null; labels?: { name: string }[]; isDraft?: boolean };
 type Eingabe = { hookEvent?: string; agentType?: string; toolName?: string; lastMessage?: string | null };
@@ -52,7 +55,7 @@ const abschluss = abschlussRaw as unknown as {
 };
 const { parseErgebnis, parseAbschlussInput } = abschluss;
 // hermetisch: ohne eigene Injektion ruft der Leitplanken-Audit (#1067) nie das echte gh auf; die Config lädt der Einstiegspunkt, der Kern bekommt sie
-const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { config: ladeProjektConfig(), prDateien: () => [], ...d } as never);
+const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.abschlussBlockade(i, { config: FREMD, prDateien: () => [], ...d } as never);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const UMSETZER = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
@@ -87,14 +90,14 @@ function abschlussProbleme(md: string): string[] {
   return probleme;
 }
 
-/** Probleme beim Nachweis: KQ-Plan/KQ-Review/check-review-nachweis stehen im Ablauf vor dem PR-Schritt. */
+/** Probleme beim Nachweis: die Plan- und Review-Zeile der Config und check-review-nachweis stehen im Ablauf vor dem PR-Schritt. */
 function nachweisProbleme(md: string): string[] {
   const a = abschnitt(md, /^## Ablauf/);
   if (!a) return ["Abschnitt „## Ablauf“ fehlt"];
   const prPos = a.indexOf("**PR bis zum Merge**");
   if (prPos < 0) return ["Schritt „PR bis zum Merge“ fehlt"];
   const davor = a.slice(0, prPos);
-  return ["KQ-Plan:", "KQ-Review:", "check-review-nachweis"].filter((s) => !davor.includes(s)).map((s) => `${s} steht nicht vor dem PR-Schritt`);
+  return [`${ECHT.praefixe.commitZeile}Plan:`, `${ECHT.praefixe.commitZeile}Review:`, "check-review-nachweis"].filter((s) => !davor.includes(s)).map((s) => `${s} steht nicht vor dem PR-Schritt`);
 }
 
 describe("Umsetzer-Abschluss (#1308)", () => {
@@ -126,7 +129,7 @@ describe("Umsetzer-Abschluss (#1308)", () => {
     assert.deepEqual(abschlussProbleme("# x\n"), ["Abschnitt „## Letzte Nachricht“ fehlt"]);
     assert.deepEqual(nachweisProbleme("# x\n"), ["Abschnitt „## Ablauf“ fehlt"]);
     assert.deepEqual(nachweisProbleme("## Ablauf\n\n1. nichts\n"), ["Schritt „PR bis zum Merge“ fehlt"]);
-    assert.equal(nachweisProbleme("## Ablauf\n\n4. **PR bis zum Merge** x\n3. KQ-Plan: KQ-Review: check-review-nachweis\n").length, 3);
+    assert.equal(nachweisProbleme(`## Ablauf\n\n4. **PR bis zum Merge** x\n3. ${ECHT.praefixe.commitZeile}Plan: ${ECHT.praefixe.commitZeile}Review: check-review-nachweis\n`).length, 3);
     assert.deepEqual(nachweisProbleme(UMSETZER.replace(/check-review-nachweis/g, "x")), ["check-review-nachweis steht nicht vor dem PR-Schritt"]);
   });
 });
@@ -137,8 +140,8 @@ PR: ${pr}
 BEFUNDE: keine
 `;
 const offenMitAuto = () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, labels: [] });
-const stuck = { name: "status:festgefahren" };
-const eingabe = (lastMessage: string | null, extra = {}) => ({ hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage, ...extra });
+const stuck = { name: STUCK };
+const eingabe = (lastMessage: string | null, extra = {}) => ({ hookEvent: "SubagentStop", agentType: UMS, lastMessage, ...extra });
 const vorher = (lastMessage: string | null, extra = {}) => eingabe(lastMessage, { hookEvent: "PreToolUse", toolName: "SubagentHandback", ...extra });
 
 describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
@@ -190,10 +193,10 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
   test("frei: anderes Ereignis, anderer oder fehlender Agent, fremdes Tool, kein PR, keine Nachricht, gh-Fehler", () => {
     const d = { prStatus: offenMitAuto };
     assert.equal(blockade(eingabe(bericht("gemergt"), { hookEvent: "Stop" }), d), null);
-    assert.equal(blockade(eingabe(bericht("gemergt"), { agentType: "kubernia-lens" }), d), null);
+    assert.equal(blockade(eingabe(bericht("gemergt"), { agentType: LENS }), d), null);
     assert.equal(blockade(eingabe(bericht("gemergt"), { agentType: undefined }), d), null);
     assert.equal(blockade(vorher("kaputt", { toolName: "Bash" }), d), null);
-    assert.equal(blockade(vorher("kaputt", { agentType: "kubernia-lens" }), d), null);
+    assert.equal(blockade(vorher("kaputt", { agentType: LENS }), d), null);
     assert.equal(blockade(eingabe(bericht("abgebrochen", "-")), d), null);
     assert.equal(blockade(eingabe(null), d), null);
     assert.equal(
@@ -305,7 +308,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
       assert.match(g ?? "", /node scripts\/pr-warten\.mjs 1330/);
     }
     const g = blockade(eingabe(bericht("festgefahren (NICHT gemergt, Lauf vom System beendet)")), { prStatus: offenMitAuto });
-    assert.match(g ?? "", /Label status:festgefahren fehlt/);
+    assert.match(g ?? "", new RegExp(`Label ${STUCK} fehlt`));
   });
 
   test("erlaubt mit Label, ohne PR, bei MERGED/CLOSED", () => {
@@ -322,14 +325,14 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
       assert.equal(parseErgebnis(bericht("festgefahren")).festgefahren, null);
     });
     test("review verlangt das Label am offenen PR wie ci, in beiden Ereignissen (L3d, umgedreht: früher ohne Label frei)", () => {
-      for (const e of [eingabe, vorher]) assert.match(blockade(e(mitArt("review")), { prStatus: offenMitAuto }) ?? "", /Label status:festgefahren fehlt/);
+      for (const e of [eingabe, vorher]) assert.match(blockade(e(mitArt("review")), { prStatus: offenMitAuto }) ?? "", new RegExp(`Label ${STUCK} fehlt`));
       assert.equal(blockade(eingabe(mitArt("review")), { prStatus: mitLabel }), null);
       assert.equal(blockade(vorher(mitArt("review")), { prStatus: mitLabel }), null);
       assert.equal(blockade(eingabe(bericht("festgefahren", "-") + "FESTGEFAHREN: review" + String.fromCharCode(10)), { prStatus: offenMitAuto }), null, "ohne PR kann der Hook nichts prüfen");
     });
     test("ci und die fehlende Zeile verlangen das Label weiter (Standard ci)", () => {
-      assert.match(blockade(eingabe(mitArt("ci")), { prStatus: offenMitAuto }) ?? "", /Label status:festgefahren fehlt/);
-      assert.match(blockade(eingabe(festgefahren), { prStatus: offenMitAuto }) ?? "", /Label status:festgefahren fehlt/);
+      assert.match(blockade(eingabe(mitArt("ci")), { prStatus: offenMitAuto }) ?? "", new RegExp(`Label ${STUCK} fehlt`));
+      assert.match(blockade(eingabe(festgefahren), { prStatus: offenMitAuto }) ?? "", new RegExp(`Label ${STUCK} fehlt`));
       assert.equal(blockade(eingabe(mitArt("ci")), { prStatus: mitLabel }), null);
     });
     test("Negativ: ein ungültiger Wert wird verweigert, auch ohne PR-Aufruf und bei fehlendem PR", () => {
@@ -487,7 +490,7 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
   const NL = String.fromCharCode(10);
   const PR = "https://github.com/x/y/pull/9";
   const SHA = "0123456789abcdef0123456789abcdef01234567";
-  const abnahme = (zeile: string | null = `ABNAHME: head=${SHA} worktree=/w/kq-1`, pr = PR) => [`ERGEBNIS: abnahme`, "TICKET: #1", `PR: ${pr}`, "BEFUNDE: keine", ...(zeile === null ? [] : [zeile])].join(NL);
+  const abnahme = (zeile: string | null = `ABNAHME: head=${SHA} worktree=/w/x-1`, pr = PR) => [`ERGEBNIS: abnahme`, "TICKET: #1", `PR: ${pr}`, "BEFUNDE: keine", ...(zeile === null ? [] : [zeile])].join(NL);
   const entwurf = () => ({ state: "OPEN", autoMergeRequest: null, isDraft: true });
   const keinGh = () => {
     throw new Error("kein gh");
@@ -495,7 +498,7 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
 
   test("parseErgebnis kennt das Token; parseAbnahme liest head und Worktree (Rest der Zeile, auch mit Leerzeichen)", () => {
     assert.equal(parseErgebnis(abnahme()).token, "abnahme");
-    assert.deepEqual(abschluss.parseAbnahme(abnahme()), { head: SHA, worktree: "/w/kq-1" });
+    assert.deepEqual(abschluss.parseAbnahme(abnahme()), { head: SHA, worktree: "/w/x-1" });
     assert.deepEqual(abschluss.parseAbnahme(abnahme(`ABNAHME: head=abc1234 worktree=C:/dev/mein ordner/w`)), { head: "abc1234", worktree: "C:/dev/mein ordner/w" });
   });
 
@@ -545,7 +548,7 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
   test("R8: festgefahren/abnahme braucht den Entwurf ohne Auto-Merge UND das Label, in beiden Ereignissen (L3g, umgedreht: früher ohne Label frei)", () => {
     assert.equal(blockade(eingabe(stuckAbnahme()), { prStatus: entwurfMitLabel }), null);
     assert.equal(blockade(vorher(stuckAbnahme()), { prStatus: entwurfMitLabel }), null);
-    for (const e of [eingabe, vorher]) assert.match(blockade(e(stuckAbnahme()), { prStatus: entwurf }) ?? "", /FESTGEFAHREN: abnahme.*Label status:festgefahren fehlt/);
+    for (const e of [eingabe, vorher]) assert.match(blockade(e(stuckAbnahme()), { prStatus: entwurf }) ?? "", new RegExp(`FESTGEFAHREN: abnahme.*Label ${STUCK} fehlt`));
     assert.equal(parseErgebnis(stuckAbnahme()).festgefahren, "abnahme");
   });
 
@@ -569,11 +572,11 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
 });
 
 describe("Nachrichtenquelle (#1342)", () => {
-  const p = (extra: object) => JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", ...extra });
+  const p = (extra: object) => JSON.stringify({ hook_event_name: "SubagentStop", agent_type: UMS, ...extra });
 
   test("parseAbschlussInput: PreToolUse liest tool_input.message, SubagentStop Transkript vor last_assistant_message, kaputtes JSON", () => {
-    const pre = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: "kubernia-umsetzer", tool_input: { message: "M" } });
-    assert.deepEqual(parseAbschlussInput(pre), { hookEvent: "PreToolUse", agentType: "kubernia-umsetzer", toolName: "SubagentHandback", lastMessage: "M" });
+    const pre = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: UMS, tool_input: { message: "M" } });
+    assert.deepEqual(parseAbschlussInput(pre), { hookEvent: "PreToolUse", agentType: UMS, toolName: "SubagentHandback", lastMessage: "M" });
     assert.equal(parseAbschlussInput(p({ last_assistant_message: "A" })).lastMessage, "A");
     assert.equal(parseAbschlussInput(p({ last_assistant_message: "A", agent_transcript_path: "/x" }), () => "B").lastMessage, "B");
     assert.equal(parseAbschlussInput(p({ last_assistant_message: "A", agent_transcript_path: "/x" }), () => null).lastMessage, "A", "ohne ERGEBNIS im Transkript gilt last_assistant_message");
@@ -585,7 +588,7 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
   const zeile = (role: string, content: unknown) => JSON.stringify({ type: role, message: { role, content } });
   const lies = abschluss.letzteNachrichtAusTranskript;
   const datei = (zeilen: string[]) => {
-    const p = join(mkdtempSync(join(tmpdir(), "kq-abschluss-")), "t.jsonl");
+    const p = join(mkdtempSync(join(tmpdir(), "abschluss-")), "t.jsonl");
     writeFileSync(p, zeilen.join(String.fromCharCode(10)) + String.fromCharCode(10));
     return p;
   };
@@ -691,12 +694,12 @@ describe("Leitplanken-Audit (#1067)", () => {
     AUDIT_KOPF: string;
   };
   const ruf = (text: string, d: AuditDeps) =>
-    (blockade as (i: Eingabe, d: AuditDeps) => string | null)({ hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: text }, {
+    (blockade as (i: Eingabe, d: AuditDeps) => string | null)({ hookEvent: "SubagentStop", agentType: UMS, lastMessage: text }, {
       prStatus: () => ({ state: "MERGED", autoMergeRequest: null }),
       ...d,
     });
   const gemergt = (d: AuditDeps) => ruf("ERGEBNIS: gemergt\nPR: #7", d);
-  const mit = (body: string, login = "fluffels"): Kommentare => ({ author: { login: "fluffels" }, comments: [{ author: { login }, body }] });
+  const mit = (body: string, login = FREMD_OWNER): Kommentare => ({ author: { login: FREMD_OWNER }, comments: [{ author: { login }, body }] });
   const treffer = (pfad: string, muster: string[]) => audit.trifftLeitplanke(pfad, muster);
 
   test("Matcher: verankert, Verzeichnis-Präfix, Stern, jede Ebene", () => {
@@ -726,8 +729,9 @@ describe("Leitplanken-Audit (#1067)", () => {
 
   describe("ein gh-Aufruf liefert Status, Dateien und Kommentare (#1740 L4)", () => {
     const merged = { state: "MERGED", autoMergeRequest: null, labels: [] };
-    const alles = (files: string[], comments: Kommentare["comments"]) => ({ ...merged, files: files.map((path) => ({ path })), author: { login: "fluffels" }, comments });
+    const alles = (files: string[], comments: Kommentare["comments"]) => ({ ...merged, files: files.map((path) => ({ path })), author: { login: ECHT_OWNER }, comments });
     // Der Diff-Rückfall (`gh pr diff`) ist injiziert und zählt: der echte Aufruf liefe gegen das Netz; ein Status mit `files` darf ihn nie auslösen.
+    const ECHT_OWNER = ECHT.repo.split("/")[0] ?? "";
     const abschlussOhneInjektion = (status: object) => {
       let aufrufe = 0;
       let diffAufrufe = 0;
@@ -736,21 +740,21 @@ describe("Leitplanken-Audit (#1067)", () => {
         throw new Error("kein gh pr diff erwartet");
       };
       const r = abschluss.abschlussBlockade(
-        { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
-        { config: ladeProjektConfig(), prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: never) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
+        { hookEvent: "SubagentStop", agentType: ECHT.agenten.umsetzer, lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
+        { config: ECHT, prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: never) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
       );
       assert.equal(diffAufrufe, 0, "der Status trägt die Dateien, der Diff-Rückfall bleibt ungenutzt");
       return { r, aufrufe };
     };
 
     test("Leitplanken-Datei ohne Audit-Kommentar im selben Status: blockiert, genau ein Status-Aufruf", () => {
-      const { r, aufrufe } = abschlussOhneInjektion(alles(["src/main.ts", "AGENTS.md"], [{ author: { login: "fluffels" }, body: "LGTM" }]));
+      const { r, aufrufe } = abschlussOhneInjektion(alles(["src/main.ts", "AGENTS.md"], [{ author: { login: ECHT_OWNER }, body: "LGTM" }]));
       assert.match(r ?? "", /AGENTS\.md/);
       assert.equal(aufrufe, 1);
     });
 
     test("Audit-Kommentar des Autors im selben Status: frei; PR ohne Leitplanken-Datei: frei", () => {
-      assert.equal(abschlussOhneInjektion(alles(["AGENTS.md"], [{ author: { login: "fluffels" }, body: audit.AUDIT_KOPF }])).r, null);
+      assert.equal(abschlussOhneInjektion(alles(["AGENTS.md"], [{ author: { login: ECHT_OWNER }, body: audit.AUDIT_KOPF }])).r, null);
       assert.equal(abschlussOhneInjektion(alles(["src/main.ts"], [])).r, null);
     });
 

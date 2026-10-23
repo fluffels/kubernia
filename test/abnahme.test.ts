@@ -8,6 +8,7 @@ import * as so from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNl from "../scripts/nachweis-lib.mjs";
 import { echteSprache } from "./support/echte-sprache";
+import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
 type User = { login: string; type?: string } | null;
 type Issue = { state?: string; body?: string | null; user?: User; labels?: ({ name: string } | string)[]; pull_request?: object };
@@ -41,11 +42,13 @@ const A = raw as unknown as {
 };
 const nl = rawNl as unknown as { parseAbnahmeMarker: (z: Zeilen, text: string) => { urteil: unknown[] } | null };
 const commitZeilen =(so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
-const Z = commitZeilen("KQ-", "kubernia-planner");
+const Z = commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer) as { praefix: string; abnahme: string };
+/** Marker-Kennung `<präfix-klein>abnahme` der Fremd-Config. */
+const MARKER = `${Z.praefix.toLowerCase()}abnahme`;
 
 const HEAD = "a".repeat(40);
 const BODY = "## Ziel\nZ\n\n## Akzeptanzkriterien\n1. Erstes Kriterium.\n   - mit Unterpunkt\n2. Zweites Kriterium.\n3. Negativfall: Drittes.\n";
-const VERTRAUT: User = { login: "fluffels", type: "User" };
+const VERTRAUT: User = { login: FREMD_OWNER, type: "User" };
 const BERICHT = (zeilen: string[], kopf = "ABNAHME #7 · holdout-abnahme") => [kopf, "", "Szenario: geheim", ...zeilen].join("\n");
 const ALLE_OK = BERICHT(["K1: erfuellt — Beleg eins", "K2: erfuellt — Beleg zwei", "K3: erfuellt — Beleg drei"]);
 
@@ -54,7 +57,7 @@ function umgebung(bericht: string, extra: Partial<Io> = {}, kommentare: Kommenta
   const posts: Aufruf[] = [];
   const aufrufe: string[] = [];
   const io: Io = {
-    owner: "fluffels",
+    owner: FREMD_OWNER,
     config: { labels: { forum: "forum" }, sprache: echteSprache() },
     zeilen: Z,
     leseDatei: (p) => {
@@ -87,9 +90,9 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(r.code).toBe(0);
     expect(r.posts).toHaveLength(1);
     expect(r.posts[0].nr).toBe(70);
-    expect(r.posts[0].body).toContain(`<!-- kq-abnahme durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt -->`);
+    expect(r.posts[0].body).toContain(`<!-- ${MARKER} durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt -->`);
     expect(r.posts[0].body).toContain("| K1: Erstes Kriterium. | erfuellt | Beleg eins |");
-    expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\nKQ-Abnahme: head=${HEAD} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt\n`);
+    expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\n${Z.abnahme}: head=${HEAD} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt\n`);
     const gelesen = (nl as unknown as { parseNachweis: (t: string, z: Zeilen) => { abnahme: { art: string } } }).parseNachweis(r.out, Z);
     expect(gelesen.abnahme.art).toBe("urteil");
   });
@@ -105,14 +108,14 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(r.out.split("\n")[0]).toBe("ENTSCHEIDUNG: handoff");
     expect(r.posts.map((p) => p.nr)).toEqual([70, 7]);
     const t = r.posts[1].body;
-    expect(t.startsWith("<!-- kq-abnahme-handoff -->")).toBe(true);
+    expect(t.startsWith(`<!-- ${MARKER}-handoff -->`)).toBe(true);
     expect(t).toContain("K2");
     expect(t).toContain("Grund: keine Messgröße");
     expect(t).toContain("K3");
     expect(t).toContain("Grund: nicht beobachtbar");
     expect(t).not.toContain("K1");
     expect(t).toContain("spezifikation.mjs reparieren");
-    expect(r.posts[0].body).not.toContain("kq-abnahme-handoff");
+    expect(r.posts[0].body).not.toContain(`${MARKER}-handoff`);
   });
   test("entscheide: Vorrang handoff > fix > bestanden", () => {
     expect(A.entscheide([{ wert: "erfuellt" }])).toBe("bestanden");
@@ -344,31 +347,31 @@ describe("auswerten: ungültiger Bericht oder Worktree, Exit 1, nichts gepostet"
 });
 
 describe("Durchgang aus früheren Marker-Kommentaren", () => {
-  const marker = (d: number, extra = "") => `<!-- kq-abnahme durchgang=${d} head=${HEAD} urteil=K1:erfuellt ${extra}-->`;
+  const marker = (d: number, extra = "") => `<!-- ${MARKER} durchgang=${d} head=${HEAD} urteil=K1:erfuellt ${extra}-->`;
   test("zählt nur vertraute Autoren mit gültigem Marker; Fremde, Bot-Spoof, Hand-off und Prosa zählen nicht", () => {
     const k: Kommentar[] = [
       { user: VERTRAUT, body: marker(1) },
       { user: VERTRAUT, body: `Text davor\n${marker(2)}` },
       { user: { login: "fremd", type: "User" }, body: marker(3) },
       { user: { login: "github-actions[bot]", type: "User" }, body: marker(4) },
-      { user: VERTRAUT, body: "<!-- kq-abnahme-handoff -->" },
+      { user: VERTRAUT, body: `<!-- ${MARKER}-handoff -->` },
       { user: VERTRAUT, body: "nur Text ohne Marker" },
-      { user: VERTRAUT, body: "<!-- kq-abnahme durchgang=x -->" },
+      { user: VERTRAUT, body: `<!-- ${MARKER} durchgang=x -->` },
       { user: null, body: marker(5) },
     ];
-    expect(A.zaehleDurchgang(k, "fluffels", Z)).toBe(3);
+    expect(A.zaehleDurchgang(k, FREMD_OWNER, Z)).toBe(3);
     const r = lauf(ALLE_OK, {}, k);
-    expect(r.posts[0].body).toContain(`<!-- kq-abnahme durchgang=3 head=${HEAD}`);
+    expect(r.posts[0].body).toContain(`<!-- ${MARKER} durchgang=3 head=${HEAD}`);
     expect(r.out).toContain("durchgaenge=3");
   });
   test("vertrauter Bot (type Bot) zählt, ohne Kommentare ist es Durchgang 1", () => {
-    expect(A.zaehleDurchgang([{ user: { login: "github-actions[bot]", type: "Bot" }, body: marker(1) }], "fluffels", Z)).toBe(2);
-    expect(A.zaehleDurchgang([], "fluffels", Z)).toBe(1);
+    expect(A.zaehleDurchgang([{ user: { login: "github-actions[bot]", type: "Bot" }, body: marker(1) }], FREMD_OWNER, Z)).toBe(2);
+    expect(A.zaehleDurchgang([], FREMD_OWNER, Z)).toBe(1);
   });
   test("Lücke und Duplikat: höchster Durchgang plus 1, nicht die Anzahl (#1821 L18)", () => {
     const m = (n: number) => ({ user: VERTRAUT, body: marker(n) });
-    expect(A.zaehleDurchgang([m(1), m(3)], "fluffels", Z)).toBe(4);
-    expect(A.zaehleDurchgang([m(2), m(2)], "fluffels", Z)).toBe(3);
+    expect(A.zaehleDurchgang([m(1), m(3)], FREMD_OWNER, Z)).toBe(4);
+    expect(A.zaehleDurchgang([m(2), m(2)], FREMD_OWNER, Z)).toBe(3);
   });
 });
 
@@ -463,7 +466,7 @@ describe("kriterien", () => {
   test("ohne Kriterien: Hinweis und fertige entfaellt-Zeile, Exit 0", () => {
     const r = lauf("", { ladeIssue: () => ({ body: "## Ziel\nZ\n", user: VERTRAUT }) }, [], ["kriterien", "7"]);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("KQ-Abnahme: entfaellt — Ticket ohne Akzeptanzkriterien");
+    expect(r.out).toContain(`${Z.abnahme}: entfaellt — Ticket ohne Akzeptanzkriterien`);
   });
   test("ABNAHME_AGENT ist holdout-abnahme", () => {
     expect(A.ABNAHME_AGENT).toBe("holdout-abnahme");

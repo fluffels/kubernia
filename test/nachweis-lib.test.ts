@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import * as raw from "../scripts/nachweis-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
+import { FREMD } from "./support/fremd-config";
 
 interface Zeilen {
   praefix: string;
@@ -17,10 +18,12 @@ const so = {
   ...(raw as unknown as { parseNachweis: (text: string, zeilen?: Zeilen) => { plan: unknown; abnahme: unknown } }),
   ...(sliceRaw as unknown as { commitZeilen: (praefix?: unknown, planer?: unknown) => Zeilen }),
 };
-const Z = so.commitZeilen("KQ-", "kubernia-planner");
+const Z = so.commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer);
 const HEX = "abc1234";
+/** Marker-Kennung `<präfix-klein>abnahme` der Fremd-Config. */
+const MARKER = `${Z.praefix.toLowerCase()}abnahme`;
 
-describe("KQ-Abnahme (#1753): lesen, formatieren, Marker", () => {
+describe("Abnahme-Zeile (#1753): lesen, formatieren, Marker", () => {
   const A = raw as unknown as {
     URTEILSWERTE: string[];
     formatAbnahme: (z: Zeilen, a: unknown) => string;
@@ -37,10 +40,10 @@ describe("KQ-Abnahme (#1753): lesen, formatieren, Marker", () => {
   const lies = (zeile: string) => so.parseNachweis(zeile, Z).abnahme;
   it("Roundtrip Urteil und entfaellt", () => {
     const z = A.formatAbnahme(Z, ok);
-    expect(z).toBe(`KQ-Abnahme: head=${HEX} durchgaenge=2 urteil=K1:erfuellt,K2:nicht-erfuellt,K3:nicht-pruefbar`);
+    expect(z).toBe(`${Z.abnahme}: head=${HEX} durchgaenge=2 urteil=K1:erfuellt,K2:nicht-erfuellt,K3:nicht-pruefbar`);
     expect(lies(z)).toEqual(ok);
     const e = A.formatAbnahme(Z, { art: "entfaellt", grund: "Ticket ohne Kriterien" });
-    expect(e).toBe("KQ-Abnahme: entfaellt — Ticket ohne Kriterien");
+    expect(e).toBe(`${Z.abnahme}: entfaellt — Ticket ohne Kriterien`);
     expect(lies(e)).toEqual({ art: "entfaellt", grund: "Ticket ohne Kriterien" });
   });
   it("`nach-merge` ist ein Zeilen- und Markerwert (ZEILENWERTE), aber kein Urteilswert des Agenten; Nachbarwerte bleiben ungültig", () => {
@@ -49,19 +52,19 @@ describe("KQ-Abnahme (#1753): lesen, formatieren, Marker", () => {
     expect(A.URTEILSWERTE).not.toContain("nach-merge");
     const nm = { art: "urteil", head: HEX, durchgaenge: 1, urteil: [{ k: "K1", wert: "erfuellt" }, { k: "K2", wert: "nach-merge" }] };
     const z = A.formatAbnahme(Z, nm);
-    expect(z).toBe(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:erfuellt,K2:nach-merge`);
+    expect(z).toBe(`${Z.abnahme}: head=${HEX} durchgaenge=1 urteil=K1:erfuellt,K2:nach-merge`);
     expect(lies(z)).toEqual(nm);
     const m = A.formatAbnahmeMarker(Z, { durchgang: 1, head: HEX, urteil: nm.urteil });
     expect(A.parseAbnahmeMarker(Z, m)).toEqual({ durchgang: 1, head: HEX, urteil: nm.urteil });
-    expect(lies(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:nach-merges`)).toMatchObject({ art: "ungueltig", grund: "unbekannter Wert „nach-merges“ bei K1" });
+    expect(lies(`${Z.abnahme}: head=${HEX} durchgaenge=1 urteil=K1:nach-merges`)).toMatchObject({ art: "ungueltig", grund: "unbekannter Wert „nach-merges“ bei K1" });
     expect(() => A.formatAbnahme(Z, { ...nm, urteil: [{ k: "K1", wert: "nach_merge" }] })).toThrow(/Abnahme/);
   });
   it("ohne Zeile null; die jüngste Zeile gilt, auch eine ungültige; Squash-Präfix; eingerückt zählt nicht", () => {
     const alt = A.formatAbnahme(Z, ok);
     expect(lies("feat: x")).toBeNull();
     expect(lies(`${alt}
-KQ-Abnahme: kaputt`)).toEqual({ art: "ungueltig", zeile: "kaputt", grund: "head fehlt oder ist kein Hex" });
-    expect(lies(`KQ-Abnahme: kaputt
+${Z.abnahme}: kaputt`)).toEqual({ art: "ungueltig", zeile: "kaputt", grund: "head fehlt oder ist kein Hex" });
+    expect(lies(`${Z.abnahme}: kaputt
 ${alt}`)).toEqual(ok);
     expect(lies(`* ${alt}`)).toEqual(ok);
     expect(lies(`  ${alt}`)).toBeNull();
@@ -98,10 +101,10 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
     ["Eintrag ohne Wert", `head=${HEX} durchgaenge=1 urteil=K1:`, /Eintrag „K1:“ ungültig/],
     ["Wert mit Leerzeichen", `head=${HEX} durchgaenge=1 urteil=K1:a b`, /Eintrag „K1:a b“ ungültig/],
   ])("ungueltig: %s (mit Grund)", (_n, wert, grund) => {
-    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert, grund: expect.stringMatching(grund) as string });
+    expect(lies(`${Z.abnahme}: ${wert}`)).toEqual({ art: "ungueltig", zeile: wert, grund: expect.stringMatching(grund) as string });
   });
   it("Urteil toleriert Leerzeichen nach Kommas und Groß-/Kleinschreibung", () => {
-    expect(lies(`KQ-Abnahme: head=${HEX} durchgaenge=1 urteil=K1:Erfuellt, K2:nicht-erfuellt`)).toEqual({
+    expect(lies(`${Z.abnahme}: head=${HEX} durchgaenge=1 urteil=K1:Erfuellt, K2:nicht-erfuellt`)).toEqual({
       art: "urteil",
       head: HEX,
       durchgaenge: 1,
@@ -131,7 +134,7 @@ Rest`)).toEqual({ durchgang: 3, head: HEX, urteil });
   });
 });
 
-describe("KQ-Abnahme: Toleranzen und Validierung (Lens-Runde 1)", () => {
+describe("Abnahme-Zeile: Toleranzen und Validierung (Lens-Runde 1)", () => {
   const A = raw as unknown as {
     formatAbnahme: (z: Zeilen, a: unknown) => string;
     formatAbnahmeMarker: (z: Zeilen, a: unknown) => string;
@@ -142,10 +145,10 @@ describe("KQ-Abnahme: Toleranzen und Validierung (Lens-Runde 1)", () => {
     ["entfaellt - Grund", "entfaellt - Grund"],
     ["entfaellt – Grund", "entfaellt – Grund"],
   ])("entfaellt toleriert Umlaut und Trenner: %s", (_n, wert) => {
-    expect(lies(`KQ-Abnahme: ${wert}`)).toEqual({ art: "entfaellt", grund: "Grund" });
+    expect(lies(`${Z.abnahme}: ${wert}`)).toEqual({ art: "entfaellt", grund: "Grund" });
   });
   it("head in Großbuchstaben wird kleingeschrieben gelesen", () => {
-    expect(lies("KQ-Abnahme: head=ABC1234 durchgaenge=1 urteil=K1:erfuellt")).toMatchObject({ art: "urteil", head: "abc1234" });
+    expect(lies(`${Z.abnahme}: head=ABC1234 durchgaenge=1 urteil=K1:erfuellt`)).toMatchObject({ art: "urteil", head: "abc1234" });
   });
   it("formatAbnahmeMarker validiert wie formatAbnahme; formatAbnahme ohne Urteil wirft die Abnahme-Meldung", () => {
     const urteil = [{ k: "K1", wert: "erfuellt" }];
@@ -167,7 +170,7 @@ describe("Hex-Muster und Wert-Normalisierung (#1762 L11)", () => {
   });
   it("HEX ist die Quelle des Marker-Musters: ein Marker mit Großbuchstaben oder 6 Zeichen zählt nicht", () => {
     const urteil = [{ k: "K1", wert: "erfuellt" }];
-    const m = (head: string) => `<!-- kq-abnahme durchgang=1 head=${head} urteil=K1:erfuellt -->`;
+    const m = (head: string) => `<!-- ${MARKER} durchgang=1 head=${head} urteil=K1:erfuellt -->`;
     const A = raw as unknown as { parseAbnahmeMarker: (z: Zeilen, t: string) => unknown };
     expect(A.parseAbnahmeMarker(Z, m("abc1234"))).toEqual({ durchgang: 1, head: "abc1234", urteil });
     expect(A.parseAbnahmeMarker(Z, m("abc123"))).toBeNull();
@@ -201,7 +204,7 @@ describe("vertrauteAbnahmeMarker (#1781 L5b): das Prädikat „vertraut + gülti
   });
   it("Hand-off-Marker und kaputte Marker zählen nicht", () => {
     const handoff = `<!-- ${abnahmeMarkerName()}-handoff -->`;
-    expect(A.vertrauteAbnahmeMarker([von("owner", handoff), von("owner", `<!-- kq-abnahme durchgang=0 head=${HEX} urteil=K1:erfuellt -->`)], "owner", Z)).toEqual([]);
+    expect(A.vertrauteAbnahmeMarker([von("owner", handoff), von("owner", `<!-- ${MARKER} durchgang=0 head=${HEX} urteil=K1:erfuellt -->`)], "owner", Z)).toEqual([]);
   });
   it("kein Array, null-Einträge und Einträge ohne user/body sind leer statt Fehler", () => {
     expect(A.vertrauteAbnahmeMarker(undefined, "owner", Z)).toEqual([]);

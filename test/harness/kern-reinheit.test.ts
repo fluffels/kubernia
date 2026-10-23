@@ -13,6 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
+import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -72,14 +73,12 @@ interface Manifest {
 type Zaehlung = Record<string, number>;
 type Baseline = Record<string, Zaehlung>;
 
-export interface ProjektConfig {
-  repo: string;
-  boards: { besitzer: string; statusFeldId?: number }[];
-  praefixe: { commitZeile: string; branch: string; worktree: string };
+/** Loser Eingabetyp von `begriffeAus`: aus dem gemeinsamen Config-Typ abgeleitet, Teil-Fixtures bleiben gültig. */
+export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektliterale"> & {
+  boards: (Pick<ProjektConfig["boards"][number], "besitzer"> & Partial<Pick<ProjektConfig["boards"][number], "statusFeldId">>)[];
   labels: Record<string, string>;
   agenten: Record<string, string>;
-  projektliterale?: Record<string, string>;
-}
+};
 
 
 /** Alternative aus wörtlichen Werten: einmalig, längster zuerst (sonst zählt ein Kurzname im Langnamen mit), regex-escaped. */
@@ -91,7 +90,7 @@ const alternative = (werte: string[]): string =>
 
 /** Board-ID (#1875): das generische Muster der Projekt-IDs, dazu die Status-Feld-ID jedes Boards der Config als ganze Zahl
  * (`todoOptionId` zählt nicht: der GitHub-Standardwert steht in jedem Projekt). */
-const boardIdRegex = (config: ProjektConfig): RegExp => {
+const boardIdRegex = (config: BegriffsConfig): RegExp => {
   const ids = config.boards.flatMap((b) => (b.statusFeldId === undefined ? [] : [String(b.statusFeldId)]));
   const muster = "\\bPVT[A-Z]*_[A-Za-z0-9_-]+";
   return new RegExp(ids.length === 0 ? muster : `${muster}|(?<!\\d)(?:${ids.map(escapeRe).join("|")})(?!\\d)`, "g");
@@ -101,7 +100,7 @@ const boardIdRegex = (config: ProjektConfig): RegExp => {
  * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
  * wie `forum` zählt nie), Agentennamen und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
  * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix). */
-export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
+export function begriffeAus(config: BegriffsConfig): Record<string, RegExp> {
   const [owner = "", name = ""] = config.repo.split("/");
   const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
   const out: Record<string, RegExp> = {
@@ -113,7 +112,7 @@ export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
     Worktree: new RegExp(escapeRe(config.praefixe.worktree), "g"),
   };
   // Env (#1824): der Commit-Zeilen-Präfix mit Unterstrich als Umgebungsvariablen-Präfix; die Wortgrenze davor schließt `VITE_<PRAEFIX>_…` und `__<PRAEFIX>_…__` aus.
-  const envPraefix = (rawPc as unknown as { altEnvPraefix(c: ProjektConfig): string | null }).altEnvPraefix(config);
+  const envPraefix = (rawPc as unknown as { altEnvPraefix(c: BegriffsConfig): string | null }).altEnvPraefix(config);
   if (envPraefix !== null) out.Env = new RegExp("\\b" + escapeRe(envPraefix) + "(?=[A-Z0-9])", "g");
   const labels = Object.values(config.labels).filter((l) => l.includes(":"));
   if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
@@ -434,7 +433,7 @@ const NEU = {
   labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
   agenten: { planer: "wk-planer", umsetzer: "wk-umsetzer", lens: "wk-lens", gruppe: "wk-gruppe", ticketSkill: "wk" },
 };
-const FIXTURE: ProjektConfig = { repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Zelda: "zelda" } };
+const FIXTURE: BegriffsConfig = { repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Zelda: "zelda" } };
 const B = begriffeAus(FIXTURE);
 
 describe("zaehle", () => {
@@ -900,7 +899,7 @@ const projektGeneratorPfade = (): string[] => {
 };
 const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
-const echteBegriffe = begriffeAus((rawPc as unknown as { ladeProjektConfig(): ProjektConfig }).ladeProjektConfig());
+const echteBegriffe = begriffeAus(projektConfig());
 
 describe("Kern-Reinheit (#1610)", () => {
   test("das Besitz-Manifest ist gültig und nicht trivial", () => {
@@ -1131,7 +1130,7 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
   const gitIn = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const getrackt = gitIn(["ls-files"]).split("\n").filter((p) => p !== "" && existsSync(WURZEL + p));
   const pfade = kernTestPfade(liste, getrackt);
-  const config = (rawPc as unknown as { ladeProjektConfig(): ProjektConfig }).ladeProjektConfig();
+  const config = projektConfig();
 
   test("kernTestPfade: Kern-Test, Test-Hilfe und Fixture zählen, projekt-test und nicht Eingeordnetes nicht", () => {
     const l: ExtraktionsListe = {
@@ -1150,7 +1149,7 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
     assert.deepEqual(vergleiche({ ...kernTestIst(pfade, lesenWurzel, echteBegriffe), ...ist }, kernBaseline), ["test/neu.test.ts: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei"]);
     assert.deepEqual(kernTestIst(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), {}, "ohne Literal keine Zählung");
   });
-  // Geschlossene Liste der literalfrei umgebauten Kern-Tests (#1876 Teil 1, Hooks und Guards; #1877 Teil 2, Board und Tickets; die Folgeteile #1878-#1879 ergänzen sie).
+  // Geschlossene Liste der literalfrei umgebauten Kern-Tests (#1876 Teil 1, Hooks und Guards; #1877 Teil 2, Board und Tickets; #1878 Teil 3, Nachweis und Review; der Folgeteil #1879 ergänzt sie).
   const LITERALFREIE_KERN_TESTS = [
     "test/harness/claims-pruefen.test.ts",
     "test/harness/lebenszyklus-namen.test.ts",
@@ -1176,8 +1175,19 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
     "test/harness/pretooluse-hook.test.ts",
     "test/harness/worktree-guard-powershell.test.ts",
     "test/harness/worktree-guard.test.ts",
+    "test/abnahme-nachweis.test.ts",
+    "test/abnahme.test.ts",
+    "test/harness/holdout.test.ts",
+    "test/harness/quote-folge.test.ts",
+    "test/harness/review-context.test.ts",
+    "test/harness/review-nachweis.test.ts",
+    "test/harness/review-staffel.test.ts",
+    "test/harness/ticket-ablauf.test.ts",
+    "test/harness/umsetzer-abschluss.test.ts",
+    "test/nachweis-lib.test.ts",
+    "test/review-nachweis.test.ts",
   ];
-  test("literalfreie Kern-Tests (#1876, #1877): kein Baseline-Eintrag, Ist-Zählung leer, ein zurückkehrendes Literal ist rot", () => {
+  test("literalfreie Kern-Tests (#1876, #1877, #1878): kein Baseline-Eintrag, Ist-Zählung leer, ein zurückkehrendes Literal ist rot", () => {
     const basis = kernTestIst(pfade, lesenWurzel, echteBegriffe);
     for (const datei of LITERALFREIE_KERN_TESTS) {
       assert.ok(pfade.includes(datei), `${datei} ist ein Kern-Test`);

@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+import { projektConfig } from "../support/fremd-config";
 import { liesMitProjektwerten, liesTicketAblauf } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
@@ -24,6 +25,9 @@ import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const lies = (rel: string): string => readFileSync(ROOT + rel, "utf8");
 const NL = String.fromCharCode(10);
+/** Echte Projektwerte: Skill und Agenten werden mit ihnen gelesen. */
+const ECHT = projektConfig();
+const { planer: PLANER, umsetzer: UMS, lens: LENS } = ECHT.agenten;
 
 /** Alle `Agent({ … })`-Aufrufe eines Textes (Codeblock oder Prosa): von `Agent({` bis zum ersten `})`. */
 export function agentBloecke(text: string): string[] {
@@ -104,14 +108,14 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
   });
 
   test("Negativ: ein Szenario-Platzhalter oder ein SZENARIEN-Kopf in der Planer-, Umsetzer- oder Lens-Vorlage ist rot", () => {
-    const planer = 'subagent_type: "kubernia-planner"';
+    const planer = `subagent_type: "${PLANER}"`;
     assert.ok(SKILL.includes(planer));
     const mitPlatzhalter = SKILL.replace(planer, planer + NL + '     prompt: "Body\\n<Szenarien>"');
-    assert.match(uebergabeProbleme(mitPlatzhalter, LENSES, UMSETZER).join(NL), /Vorlage kubernia-planner trägt Szenario-Bezug/);
-    const mitKopf = SKILL.replace('subagent_type: "kubernia-umsetzer"', 'subagent_type: "kubernia-umsetzer"' + NL + '  prompt: "SZENARIEN #" + "12"');
-    assert.match(uebergabeProbleme(mitKopf, LENSES, UMSETZER).join(NL), /Vorlage kubernia-umsetzer trägt Szenario-Bezug/);
-    const lens = LENSES.replace('subagent_type: "kubernia-lens"', 'subagent_type: "kubernia-lens"' + NL + "  prompt: \"<Szenario-Auszug>\"");
-    assert.match(uebergabeProbleme(SKILL, lens, UMSETZER).join(NL), /Vorlage kubernia-lens trägt Szenario-Bezug/);
+    assert.match(uebergabeProbleme(mitPlatzhalter, LENSES, UMSETZER).join(NL), new RegExp(`Vorlage ${PLANER} trägt Szenario-Bezug`));
+    const mitKopf = SKILL.replace(`subagent_type: "${UMS}"`, `subagent_type: "${UMS}"` + NL + '  prompt: "SZENARIEN #" + "12"');
+    assert.match(uebergabeProbleme(mitKopf, LENSES, UMSETZER).join(NL), new RegExp(`Vorlage ${UMS} trägt Szenario-Bezug`));
+    const lens = LENSES.replace(`subagent_type: "${LENS}"`, `subagent_type: "${LENS}"` + NL + "  prompt: \"<Szenario-Auszug>\"");
+    assert.match(uebergabeProbleme(SKILL, lens, UMSETZER).join(NL), new RegExp(`Vorlage ${LENS} trägt Szenario-Bezug`));
   });
 
   test("Negativ: Nachfolger-Bullet und Gruppen-Absatz mit Szenario-Bezug sind rot", () => {
@@ -148,7 +152,7 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
   });
 
   test("Negativ: szenarienKoepfe wirft bei einem git-Fehler (kein Repo) statt still grün zu sein", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-holdout-kein-repo-"));
+    const dir = mkdtempSync(join(tmpdir(), "holdout-kein-repo-"));
     try {
       assert.throws(() => szenarienKoepfe(dir));
     } finally {
@@ -157,7 +161,7 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
   });
 
   test("Negativ: szenarienKoepfe findet einen echten Kopf in einer getrackten Datei, einen Platzhalter nicht", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-holdout-"));
+    const dir = mkdtempSync(join(tmpdir(), "holdout-"));
     try {
       const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: dir, stdio: "ignore" });
       git("init", "-q");
@@ -233,7 +237,7 @@ describe("Reihenfolge im Skill (#1754)", () => {
   test("abnahme.mjs kriterien und der Szenario-Spawn stehen vor dem Planer-Spawn", () => {
     const kriterien = SKILL.indexOf("node scripts/abnahme.mjs kriterien");
     const szenario = SKILL.indexOf('subagent_type: "holdout-szenario"');
-    const planer = SKILL.indexOf('subagent_type: "kubernia-planner"');
+    const planer = SKILL.indexOf(`subagent_type: "${PLANER}"`);
     assert.ok(kriterien >= 0 && szenario >= 0 && planer >= 0);
     assert.ok(kriterien < szenario && szenario < planer);
   });
