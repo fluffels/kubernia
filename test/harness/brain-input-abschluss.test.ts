@@ -1,4 +1,4 @@
-/* Wächter für den Sitzungsabschluss (#1572 Z5, #1723): der kubernia-Skill (Schritt 5) ruft `brain-input`
+/* Wächter für den Sitzungsabschluss (#1572 Z5, #1723): der Ticket-Skill (Schritt 5) ruft `brain-input`
  * IMMER auf; der Schritt entfällt nur, wenn dieser Aufruf mit unbekanntem Skill scheitert. Seit #1723 nennen AGENTS.md, der Skill
  * und der Umsetzer auch das Feld `BEFUNDE:` und den Fortsetzungs-Pfad („mach mit <nr> weiter“).
  *
@@ -30,7 +30,7 @@ describe("Sitzungsabschluss ruft brain-input immer auf (#1572)", () => {
     expect(t).not.toMatch(/brain-input[^.]{0,40}falls verfügbar/);
   });
 
-  test("der kubernia-Skill lässt den Schritt nur bei unbekanntem Skill entfallen", () => {
+  test("der Ticket-Skill lässt den Schritt nur bei unbekanntem Skill entfallen", () => {
     expect(lies(SKILLS[0])).toMatch(/entfällt nur, wenn dieser Aufruf mit unbekanntem Skill scheitert/);
   });
 });

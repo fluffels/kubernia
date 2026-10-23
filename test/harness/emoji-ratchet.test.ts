@@ -79,12 +79,12 @@ describe("Emoji-Ratchet (#1311)", () => {
   });
 
   test("Zählung: Piktogramme ja, Umlaute und Ziffern nein; Scope-Ausnahmen", () => {
-    assert.equal(zaehle("⚓ Hafen 🚢 äöü 123"), 2);
+    assert.equal(zaehle("⚓ Anker 🚢 äöü 123"), 2);
     assert.equal(zaehle("kein Icon, nur Prosa äöüß 42"), 0);
     assert.equal(IM_SCOPE("src/content/data/quests/x.json"), false);
     assert.equal(IM_SCOPE("src/content/data/smalltalk.json"), false);
-    assert.equal(IM_SCOPE("src/content/data/smalltalk/hafen.json"), false, "pro Region aufgeteilte Dialoge bleiben draußen");
-    assert.equal(IM_SCOPE("src/content/data/smalltalk-hafen.json"), false);
+    assert.equal(IM_SCOPE("src/content/data/smalltalk/region-a.json"), false, "pro Region aufgeteilte Dialoge bleiben draußen");
+    assert.equal(IM_SCOPE("src/content/data/smalltalk-region-a.json"), false);
     assert.equal(IM_SCOPE("src/content/data/npcs/ole.json"), false);
     assert.equal(IM_SCOPE("src/content/data/crabquiz/kubernetes.json"), false, "Quiz-Prosa im Unterordner");
     assert.equal(IM_SCOPE("src/content/data/funk-explain/x.json"), false);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/inbox-lib.mjs";
+import { FREMD_OWNER } from "./support/fremd-config";
 
 const L = raw as unknown as {
   vertrauteIssues: (s: unknown, owner: string) => { title: string }[];
@@ -10,14 +11,14 @@ const L = raw as unknown as {
   ladeSammelKontext: (io: { ladeOffene: () => unknown; ladeKommentare: (nr: number) => { user: unknown; body: string; extra?: string }[] }) => { rohe: unknown; offene: { number: number }[]; kommentare: { user: unknown; body: string }[] };
 };
 
-const OWNER = "fluffels";
+const OWNER = FREMD_OWNER;
 const issue = (title: string, user: unknown, extra: Record<string, unknown> = {}) => ({ title, user, ...extra });
 const bot = { login: "github-actions[bot]", type: "Bot" };
 
 describe("offeneTitel", () => {
   test("Owner und github-actions[bot] zählen, ein Fremder mit gleichem Titel nicht", () => {
     const seiten = [
-      [issue("🔒 Security: A", bot), issue("🔒 Security: B", { login: "fluffels", type: "User" }), issue("🔒 Security: C", { login: "fremd", type: "User" })],
+      [issue("🔒 Security: A", bot), issue("🔒 Security: B", { login: FREMD_OWNER, type: "User" }), issue("🔒 Security: C", { login: "fremd", type: "User" })],
       [issue("🔒 Security: D", null), issue("🔒 Security: E", { login: "github-actions[bot]", type: "User" })],
     ];
     expect(L.offeneTitel(seiten, OWNER)).toEqual(["🔒 Security: A", "🔒 Security: B"]);

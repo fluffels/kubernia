@@ -23,8 +23,11 @@ import * as checkRaw from "../../scripts/check-abnahme-nachweis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as nlRaw from "../../scripts/nachweis-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as specRaw from "../../scripts/spezifikation-lib.mjs";
 import { echteSprache, echteSpezifikation } from "../support/echte-sprache";
+import { FREMD, FREMD_OWNER } from "../support/fremd-config";
 
 type Krit = { k: string; text: string; nachMerge?: boolean };
 type Urteil = { k: string; wert: string }[];
@@ -40,7 +43,8 @@ const C = checkRaw as unknown as {
   bewerteAbnahme: (o: { nachweis: unknown; ticket: { nr: number; kriterien: Krit[]; nachMerge: string } | null; marker: unknown; abnahmeHead: unknown; zeilen: unknown }) => string[];
 };
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Record<string, string> };
-const Z = commitZeilen("KQ-", "kubernia-planner");
+const { abnahmeMarker } = nlRaw as unknown as { abnahmeMarker: (z: unknown) => string };
+const Z = commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer);
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const lies = (rel: string): string => readFileSync(ROOT + rel, "utf8");
@@ -91,23 +95,23 @@ describe("Regel 2: Abnahme-Auswertung", () => {
     const HEAD = "a".repeat(40);
     const posts: { nr: number; body: string }[] = [];
     const io = {
-      owner: "fluffels",
+      owner: FREMD_OWNER,
       config: { labels: { forum: "forum" }, sprache: echteSprache() },
       zeilen: Z,
       leseDatei: () => bericht(["K1: erfuellt — a", "K3: erfuellt — c"]),
-      ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }),
+      ladeIssue: () => ({ state: "open", body: BODY, user: { login: FREMD_OWNER, type: "User" }, labels: [] }),
       ladeKommentare: () => [],
       poste: (nr: number, body: string) => void posts.push({ nr, body }),
       git: (_cwd: string, args: string[]) => (args[0] === "status" ? "" : `${HEAD}\n`),
     };
     const r = A.fuehreAus(["auswerten", "7", "--pr", "70", "--bericht", "b.md", "--worktree", "/wt", "--head", HEAD.slice(0, 7)], io);
     expect(r.code).toBe(0);
-    expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\nKQ-Abnahme: head=${HEAD} durchgaenge=1 urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt\n`);
+    expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\n${Z.abnahme}: head=${HEAD} durchgaenge=1 urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt\n`);
     expect(posts).toHaveLength(1);
-    expect(posts[0].body).toContain(`<!-- kq-abnahme durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt -->`);
+    expect(posts[0].body).toContain(`<!-- ${abnahmeMarker(Z)} durchgang=1 head=${HEAD} urteil=K1:erfuellt,K2:nach-merge,K3:erfuellt -->`);
   });
   test("`kriterien <nr>` kennzeichnet das Kriterium für den Abnahme-Agenten", () => {
-    const io = { owner: "fluffels", config: { labels: { forum: "forum" }, sprache: echteSprache() }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
+    const io = { owner: FREMD_OWNER, config: { labels: { forum: "forum" }, sprache: echteSprache() }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: FREMD_OWNER, type: "User" }, labels: [] }) };
     const out = A.fuehreAus(["kriterien", "7"], io).out;
     expect(out).toContain("K2 (nach dem Merge, nicht prüfen): Nach dem Merge: ein workflow_dispatch-Lauf");
     expect(out).toMatch(/^K1: Erstes\./m);
@@ -169,7 +173,7 @@ describe("Sprache als Projektwert (#1711)", () => {
   });
   test("Negativfall: ohne sprache bricht `abnahme.mjs` mit klarer Meldung ab (Exit 1, kein Deutsch-Standardwert)", () => {
     for (const befehl of [["kriterien", "7"], ["auswerten", "7", "--pr", "70", "--bericht", "b.md", "--worktree", "/wt", "--head", "abcdef1"]]) {
-      const io = { owner: "fluffels", config: { labels: { forum: "forum" } }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: "fluffels", type: "User" }, labels: [] }) };
+      const io = { owner: FREMD_OWNER, config: { labels: { forum: "forum" } }, zeilen: Z, ladeIssue: () => ({ state: "open", body: BODY, user: { login: FREMD_OWNER, type: "User" }, labels: [] }) };
       const r = A.fuehreAus(befehl, io);
       expect(r.code).toBe(1);
       expect(r.err).toMatch(/sprache[\s\S]*Fix:/);
