@@ -24,7 +24,6 @@ import * as baselineModule from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceModule from "../../scripts/slice-override.mjs";
 const { commitZeilen } = sliceModule as unknown as { commitZeilen: (praefix: string, planer: string) => { plan: string; review: string } };
-import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ticketNamen from "../../scripts/ticket-namen.mjs";
 const { escapeRegex } = ticketNamen as unknown as { escapeRegex: (t: string) => string };
