@@ -2,12 +2,10 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as kontextRoh from "../scripts/kontext-treiber.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRoh from "../scripts/ticket-namen.mjs";
-import { FREMD } from "./support/fremd-config";
+import { FREMD, FREMD_NAMEN } from "./support/fremd-config";
 
 // Die Namen kommen aus der Fremd-Config; die Wrapper reichen sie an die Kern-Funktionen durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const NAMEN = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen(FREMD);
+const NAMEN = FREMD_NAMEN;
 const WT = FREMD.praefixe.worktree;
 const { planer: PLANER, umsetzer: UMSETZER, lens: LENS } = FREMD.agenten;
 const kontextModul = kontextRoh as unknown as { kontextTreiber: (e: object) => unknown; analysiereLauf: (l: unknown, o?: object) => unknown; phaseDerCalls: (z: unknown, einstieg: unknown, namen: unknown) => unknown; parseArgs: (a: string[], namen: unknown) => unknown };

@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lies } from "./repo-texte";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, FREMD_OWNER } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -91,7 +91,7 @@ const NAMEN = ticketNamen(AB);
 // Das eigene Präfix des Projekts darf unter der Config `AB` nirgends durchschlagen: die Erwartung kommt aus der echten Config.
 const WTP = (ladeProjektConfig().praefixe as { worktree: string }).worktree;
 const BRP = (ladeProjektConfig().praefixe as { branch: string }).branch;
-const OWNER = FREMD.repo.split("/")[0] ?? "";
+const OWNER = FREMD_OWNER;
 /** Zeile mit new RegExp( und escapeRegex( auf praefixe: der Musterbau gehört zentral in ticket-namen.mjs. */
 const verstreuterMusterbau = (text: string) => text.split("\n").some((z) => z.includes("new RegExp(") && z.includes("escapeRegex(") && z.includes("praefixe"));
 const LIES_FEHLER = (text: string) => {

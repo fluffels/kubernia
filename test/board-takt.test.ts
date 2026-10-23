@@ -12,9 +12,9 @@ import * as rawStatus from "../scripts/langfuse-takt.mjs";
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawQuote from "../scripts/spielquote-lib.mjs";
-import { FREMD } from "./support/fremd-config";
+import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
-const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
+const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };

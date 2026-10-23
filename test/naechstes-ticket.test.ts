@@ -10,12 +10,12 @@ import * as refs from "../scripts/ticket-refs.mjs";
 import * as namenRoh from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ladeCfg from "../scripts/projekt-config-lib.mjs";
-import { FREMD, projektConfig } from "./support/fremd-config";
+import { FREMD, projektConfig, FREMD_OWNER, FREMD_NAMEN } from "./support/fremd-config";
 
 const ticketNamen = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 
-const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
-const NAMEN = ticketNamen(FREMD);
+const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
+const NAMEN = FREMD_NAMEN;
 const ECHT = projektConfig().praefixe; // Standardpfad ohne `namen`: die Config des Projekts wird je Aufruf geladen
 const WTP = FREMD.praefixe.worktree;
 const BRP = FREMD.praefixe.branch;

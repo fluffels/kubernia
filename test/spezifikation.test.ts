@@ -4,9 +4,9 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
 import { echteSprache } from "./support/echte-sprache";
-import { FREMD, projektConfig } from "./support/fremd-config";
+import { FREMD, projektConfig, FREMD_OWNER } from "./support/fremd-config";
 
-const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
+const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
 const HARNESS = FREMD.labels.harness;
 const AREA = `${FREMD.labels.harness.split(":")[0]}:demo`; // Bereichs-Label der Fremd-Config: Präfix von labels.harness, die Wahl des Bereichs ist Testdatum
 
