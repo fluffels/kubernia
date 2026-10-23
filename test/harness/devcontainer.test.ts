@@ -1,9 +1,9 @@
 /* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Konsistenz-Wächter für die containerisierte Dev-Umgebung (#388).
  *
- * Es gibt jetzt VIER Stellen, die dieselbe Node-Version und denselben Dev-Port
- * nennen: .nvmrc / package.json (engines), .devcontainer/devcontainer.json und
- * docker-compose.yml. Solche Duplikate driften leise auseinander — jemand hebt
+ * Mehrere Stellen nennen dieselbe Node-Version und denselben Dev-Port:
+ * .nvmrc / package.json (engines), .devcontainer/devcontainer.json,
+ * docker-compose.yml, Dockerfile und Dockerfile.devpanel. Solche Duplikate driften leise auseinander — jemand hebt
  * .nvmrc auf eine neue Node-Version, vergisst aber den Container, und Mitwirkende
  * bekommen eine andere Umgebung als die CI. Genau das ist der Stardew-Scope-Sinn
  * von #388 ("über Jahre und viele Mitwirkende konsistent"): Dieser Test bricht,
@@ -231,6 +231,8 @@ describe("engines.node der Wurzel deckt die Abhängigkeiten ab (#1428 Z18)", () 
 // .devcontainer/devcontainer.json (nur Major-Tag, vom Major-Kopplungstest oben geprüft).
 // Bei einem Node-Security-Release engines.node anheben: dieser Test nennt dann alle nachzuziehenden Pins.
 // Bekannte Grenze: geprüft wird nur die Untergrenze, kein Gleichheitstest (Dependabot darf Docker-Pins höher ziehen).
+// Bekannte Grenze: ein Digest-Pin (`node:22.23.4@sha256:…`) wird als „nicht patch-genau“ gemeldet (fail-closed Fehlalarm, heute ohne Vorkommen).
+// Bewusste Abwägung: .nvmrc ist patch-genau gepinnt (deterministische CI), Dependabot hebt es nicht; ein Security-Release hebt man von Hand.
 
 const PIN_FORM = /^v?(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?$/;
 
@@ -285,6 +287,9 @@ describe("Node-Pins erfüllen das Minimum engines.node (#1907)", () => {
     assert.match(v(["22"])[0], /nicht patch-genau/);
     assert.match(v(["22-bookworm-slim"])[0], /nicht patch-genau/);
     assert.match(v(["22.22.3-bookworm-slim"])[0], /liegt unter/);
+    assert.match(v(["22.23.3-bookworm-slim"])[0], /liegt unter/, "gleiche Minor, älterer Patch: der Security-Fall");
+    assert.match(v(["22.23-bookworm-slim"])[0], /nicht patch-genau/, "Minor-genauer Tag schwebt im Patch");
+    assert.match(v(["22.23.4x"])[0], /nicht patch-genau/, "End-Anker");
     assert.match(v([])[0], /kein Node-Pin/);
     for (const ok of ["22.23.4-bookworm-slim", "v22.23.4", "22.24.0", "24.1.0-slim"]) assert.deepEqual(v([ok]), [], ok);
     assert.equal(nodePinVerstoesse({ q: ["22.23.4"] }, "^22").length, 1);
@@ -294,5 +299,6 @@ describe("Node-Pins erfüllen das Minimum engines.node (#1907)", () => {
     assert.equal(letzteStageIstNginx("FROM node:22.23.4 AS build\nFROM nginx:1.31-alpine\n"), true);
     assert.equal(letzteStageIstNginx("FROM nginx:1.31-alpine\nFROM node:22.23.4 AS build\n"), false);
     assert.equal(letzteStageIstNginx("RUN x\n"), false);
+    assert.equal(letzteStageIstNginx("FROM nginx:1.31-alpine\n# Daten FROM build\n"), true, "FROM-Anker: Kommentar zählt nicht als Stage");
   });
 });

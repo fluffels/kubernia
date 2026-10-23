@@ -505,7 +505,7 @@ Wird **automatisch alle 5 Sekunden** im Browser gespeichert (IndexedDB). Im 📜
 
 ## Mitentwickeln (Entwickler:innen & KI-Agenten)
 
-Voraussetzung: **Node ≥ 22** (siehe [`.nvmrc`](.nvmrc)). In **einem** Befehl startklar:
+Voraussetzung: **Node 22, mindestens `engines.node`** (siehe [`package.json`](package.json) und [`.nvmrc`](.nvmrc)). In **einem** Befehl startklar:
 
 ```
 npm run setup   # prüft Node, installiert, lässt Tests + Typecheck + Architektur-Wächter einmal laufen
