@@ -563,7 +563,7 @@ describe("hookLauf", () => {
 
   test("kurzerStand: der kurze HEAD eines Git-Ordners, null ohne Repo (nie ein Wurf)", () => {
     expect(N.kurzerStand(join(__dirname, "../.."))).toMatch(/^[0-9a-f]{7,}$/);
-    const leer = mkdtempSync(join(tmpdir(), "kq-stand-"));
+    const leer = mkdtempSync(join(tmpdir(), "abgleich-hook-stand-"));
     try {
       expect(N.kurzerStand(leer)).toBeNull();
       expect(N.kurzerStand(join(leer, "gibt-es-nicht"))).toBeNull();

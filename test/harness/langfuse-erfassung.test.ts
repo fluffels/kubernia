@@ -19,9 +19,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 import { lokaleImporteTransitiv } from "./hook-importe";
+import { projektConfig, repoName } from "../support/fremd-config";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
+/** Der Trace-Tag der echten Projektdateien (Repo-Name der Config): diese Prüfungen lesen echte Projektdateien, keine Fremd-Config. */
+const TAG = repoName(projektConfig());
 
 const abschnitt = (md: string, kopf: RegExp): string => {
   const zeilen = md.split("\n");
@@ -76,7 +79,7 @@ const hatChecklisteVollstaendig = (modelRouting: string): boolean => {
 /** Der Beleg-Ablauf steht in model-routing.md. */
 const hatBelegAblauf = (modelRouting: string): boolean => {
   const a = abschnitt(modelRouting, /^### Langfuse-Erfassung belegen \(#1293\)/);
-  return a !== "" && /Probe-Lauf/.test(a) && /usageDetails/.test(a) && /kubernia/.test(a);
+  return a !== "" && /Probe-Lauf/.test(a) && /usageDetails/.test(a) && a.includes(TAG);
 };
 
 /** Keine Doppelung: kein alter „Langfuse-Blick"-Abschnitt, die Checklistenpunkte nur in model-routing.md. */
@@ -170,7 +173,7 @@ const erfassungKonfigIntakt = (settingsJson: string): boolean => {
   };
   return (
     s.enabledPlugins?.["langfuse-observability@langfuse-observability"] === true &&
-    (s.env?.CC_LANGFUSE_TRACE_TAGS ?? "").split(",").map((t) => t.trim()).includes("kubernia") &&
+    (s.env?.CC_LANGFUSE_TRACE_TAGS ?? "").split(",").map((t) => t.trim()).includes(TAG) &&
     s.disableAllHooks !== true
   );
 };
@@ -342,7 +345,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(erfassungKonfigIntakt(read(".claude/settings.json")));
     const ok = {
       enabledPlugins: { "langfuse-observability@langfuse-observability": true },
-      env: { CC_LANGFUSE_TRACE_TAGS: "kubernia" },
+      env: { CC_LANGFUSE_TRACE_TAGS: TAG },
     };
     assert.ok(erfassungKonfigIntakt(JSON.stringify(ok)));
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, enabledPlugins: {} })));
@@ -551,7 +554,7 @@ describe("Zuordnung in Langfuse (#1668)", () => {
     const zeile = (name: string): string => a.split("\n").find((z) => z.startsWith(`| ${name}`)) ?? "";
     const ticket = zeile("Ticket");
     const tag = mr.split("\n").find((z) => z.startsWith("- **Trace-Tag:**")) ?? "";
-    const glossarZeile = glossar.split("\n").find((z) => z.startsWith("| Trace-Tag `kubernia`")) ?? "";
+    const glossarZeile = glossar.split("\n").find((z) => z.startsWith("| Trace-Tag `" + TAG + "`")) ?? "";
     return (
       /nicht für Kosten je Ticket verwenden/.test(ticket) &&
       ["(a)", "(b)", "(c)", "(d)"].every((g) => ticket.includes(g)) &&
