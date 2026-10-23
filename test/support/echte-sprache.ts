@@ -4,19 +4,19 @@
  */
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/projekt-config-lib.mjs";
+import { projektConfig } from "./fremd-config";
 
 type Block = Record<string, unknown>;
 const lib = raw as unknown as {
-  ladeProjektConfig: () => Block;
   spracheAus: (config: unknown) => { umschrift: string[]; spezifikation: Block };
   umschriftAus: (config: unknown) => string[];
 };
 
 /** Die ganze Projekt-Config. */
-export const echteConfig = (): Block => lib.ladeProjektConfig();
+export const echteConfig = (): Block => projektConfig() as unknown as Block;
 /** Der Block `sprache` (umschrift und spezifikation). */
-export const echteSprache = (): Block => lib.spracheAus(lib.ladeProjektConfig());
+export const echteSprache = (): Block => lib.spracheAus(echteConfig());
 /** Der Block `sprache.spezifikation`, so wie ihn das Spezifikations-Gate bekommt. */
-export const echteSpezifikation = (): Block => lib.spracheAus(lib.ladeProjektConfig()).spezifikation;
+export const echteSpezifikation = (): Block => lib.spracheAus(echteConfig()).spezifikation;
 /** `umschriftAus` der Config-Lib (wirft ohne nicht-leere Liste). */
 export const umschriftAus = (config: unknown): string[] => lib.umschriftAus(config);

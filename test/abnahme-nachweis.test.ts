@@ -427,7 +427,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     const basis = git(dir, "rev-parse", "HEAD");
     git(dir, "commit", "-q", "--allow-empty", "-m", nachricht);
     const pfad = join(dir, "config.json");
-    writeFileSync(pfad, readFileSync(fileURLToPath(new URL(`../${FREMD_CONFIG_PFAD}`, import.meta.url)), "utf8")); // die Fremd-Config, vollständig
+    writeFileSync(pfad, readFileSync(fileURLToPath(new URL(`../${FREMD_CONFIG_PFAD}`, import.meta.url)), "utf8")); // Kopie der Fremd-Config als --config-Datei (das Skript liest und prüft sie selbst, vollständig)
     return { dir, basis, pfad };
   }
   const cli = (r: { dir: string; basis: string; pfad: string }, env: Record<string, string> = {}, args: string[] = ["--config", r.pfad]) =>
@@ -461,7 +461,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.stdout).toMatch(new RegExp(`${Z.abnahmeOverride} — #9 Sitzung vor dem Werkzeug`));
   });
   test("kaputte Config und --config ohne Pfad: Exit 1", () => {
-    // Mit der echten Config wäre diese Message grün (entfaellt ohne Ticket): Exit 1 kommt nur aus dem --config-Zweig.
+    // Die Message trägt das Fremd-Präfix: mit der gültigen Fremd-Config grün (Exit 0), mit der kaputten kommt Exit 1 aus dem --config-Zweig (nicht aus der Zeile).
     const k = cliRepo(`x\n\n${Z.abnahme}: entfaellt — kein Ticket`);
     expect(cli(k).status).toBe(0);
     writeFileSync(k.pfad, "{}");

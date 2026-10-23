@@ -1,6 +1,6 @@
 /* Review- und Plan-Nachweis-Wächter (#1270).
  *
- * Jeder Agenten-PR trägt per Commit-Zeilen `${Z.plan}:` / `${Z.review}:` einen prüfbaren Nachweis
+ * Jeder Agenten-PR trägt per Commit-Zeilen `<Plan-Zeile>:` / `<Review-Zeile>:` (Namen aus der Config, getestet mit der Fremd-Config) einen prüfbaren Nachweis
  * über Planungspass und konvergierten Lens-Review; die PR-CI erzwingt ihn pfadunabhängig.
  * Logik aus scripts/check-review-nachweis.mjs importiert (eine Quelle der Wahrheit), git
  * ist injiziert.
@@ -662,7 +662,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
     const f = bewerte(squash(Z, PL), ab).join("\n");
     assert.match(f, /AB-Plan-Zeile fehlt/);
     assert.match(f, /AB-Review-Zeile fehlt/);
-    assert.doesNotMatch(f, new RegExp(Z.praefix));
+    assert.ok(!f.includes(Z.praefix));
     assert.deepEqual(bewerte(squash(ab, PL), ab), []);
   });
 
@@ -710,7 +710,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
   test("die Vorlage trägt Präfix und Planer der Config", () => {
     const v = (raw as Mod).vorlage(commitZeilen("AB-", "x-planer"));
     assert.match(v, /^AB-Plan: x-planer\nAB-Review: head=/);
-    assert.doesNotMatch(v, new RegExp(Z.praefix));
+    assert.ok(!v.includes(Z.praefix));
   });
 });
 

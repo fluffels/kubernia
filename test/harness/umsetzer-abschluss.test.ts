@@ -33,7 +33,6 @@ const preHookRaw = preRaw as unknown as { dispatch: (t: string, r: string, g?: u
 const stuckLabel = (c: unknown) => (festRaw as unknown as { stuckLabel: (c: unknown) => string }).stuckLabel(c);
 /** Echte Config: nur dort, wo Texte oder der Einstiegspunkt sie selbst lesen; alles andere bekommt `FREMD` injiziert. */
 const ECHT = projektConfig();
-const ladeProjektConfig = projektConfig;
 const { umsetzer: UMS, lens: LENS } = FREMD.agenten;
 const STUCK = FREMD.labels.festgefahren;
 
@@ -365,7 +364,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     assert.match((deny as unknown as { hookSpecificOutput: { permissionDecisionReason: string } }).hookSpecificOutput.permissionDecisionReason, /fail-closed/);
   });
   test("Negativfall: eine Config ohne labels.festgefahren blockiert fail-closed mit Fix-Zeile, ohne zu werfen, in Wächter und beiden Hooks (kein stiller Standardwert)", () => {
-    const echt = ladeProjektConfig() as unknown as { labels: Record<string, string>; agenten: { umsetzer: string } };
+    const echt = FREMD;
     const { festgefahren: _weg, ...rest } = echt.labels;
     const ohneLabel = { ...echt, labels: rest };
     const eingaben = [
@@ -391,11 +390,22 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     assert.equal(deny?.hookSpecificOutput.permissionDecision, "deny");
     assert.equal(preHookRaw.dispatch(payload, "/x", undefined, undefined, { config: echt, prDateien: () => [] }), null);
   });
+  test("Standardpfad: der pretooluse-Hook lädt ohne injizierte Config die echte Projekt-Config und wendet den Wächter auf deren Umsetzer an", () => {
+    const echt = projektConfig();
+    const bericht = (agentType: string, message: string) => JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: agentType, tool_input: { message } });
+    const frei = preHookRaw.dispatch(bericht(echt.agenten.umsetzer, "ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine"), "/x", undefined, undefined, { prDateien: () => [] });
+    assert.equal(frei, null, "gültiger Abbruch-Bericht des echten Umsetzers geht durch");
+    // Negativ: derselbe Umsetzer mit unzulässigem Ergebnis-Wert wird blockiert (der Wächter greift also wirklich, nicht nur ein Durchlass)
+    const deny = preHookRaw.dispatch(bericht(echt.agenten.umsetzer, "ERGEBNIS: unsinn\nPR: -\nBEFUNDE: keine"), "/x", undefined, undefined, { prDateien: () => [] });
+    assert.equal(deny?.hookSpecificOutput.permissionDecision, "deny");
+    // Ein Agent, der in der echten Config nicht der Umsetzer ist (der Fremd-Umsetzer), ist nicht zuständig
+    assert.equal(preHookRaw.dispatch(bericht(FREMD.agenten.umsetzer, "ERGEBNIS: unsinn\nPR: -\nBEFUNDE: keine"), "/x", undefined, undefined, { prDateien: () => [] }), null);
+  });
   test("Bindungen: stuckLabel und ERGEBNIS_WERTE stimmen mit check-festgefahren und dem Formatblock überein", () => {
     // Beide Skripte lesen das Label aus der Projekt-Config (#1742, #1744): ein Fixture-Label muss bei check-festgefahren ankommen.
     const fixture = { labels: { festgefahren: "zustand:fest" } };
     assert.equal(stuckLabel(fixture), fixture.labels.festgefahren, "check-festgefahren liest labels.festgefahren");
-    assert.equal(stuckLabel(ladeProjektConfig()), ladeProjektConfig().labels.festgefahren);
+    assert.equal(stuckLabel(FREMD), FREMD.labels.festgefahren);
     assert.match(readFileSync(resolve(ROOT, "scripts/umsetzer-abschluss.mjs"), "utf8"), /labels\.festgefahren/);
     assert.match(readFileSync(resolve(ROOT, "scripts/check-festgefahren.mjs"), "utf8"), /labelAus\(config, "festgefahren"\)/);
     const format = /^ERGEBNIS: (.+)$/m.exec(abschnitt(UMSETZER, /^## Letzte Nachricht/).split("```")[1])?.[1].split(" | ");
@@ -736,9 +746,8 @@ describe("Leitplanken-Audit (#1067)", () => {
 
   describe("ein gh-Aufruf liefert Status, Dateien und Kommentare (#1740 L4)", () => {
     const merged = { state: "MERGED", autoMergeRequest: null, labels: [] };
-    const alles = (files: string[], comments: Kommentare["comments"]) => ({ ...merged, files: files.map((path) => ({ path })), author: { login: ECHT_OWNER }, comments });
+    const alles = (files: string[], comments: Kommentare["comments"]) => ({ ...merged, files: files.map((path) => ({ path })), author: { login: FREMD_OWNER }, comments });
     // Der Diff-Rückfall (`gh pr diff`) ist injiziert und zählt: der echte Aufruf liefe gegen das Netz; ein Status mit `files` darf ihn nie auslösen.
-    const ECHT_OWNER = ECHT.repo.split("/")[0] ?? "";
     const abschlussOhneInjektion = (status: object) => {
       let aufrufe = 0;
       let diffAufrufe = 0;
@@ -747,21 +756,21 @@ describe("Leitplanken-Audit (#1067)", () => {
         throw new Error("kein gh pr diff erwartet");
       };
       const r = abschluss.abschlussBlockade(
-        { hookEvent: "SubagentStop", agentType: ECHT.agenten.umsetzer, lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
-        { config: ECHT, prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: never) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
+        { hookEvent: "SubagentStop", agentType: UMS, lastMessage: "ERGEBNIS: gemergt\nPR: #7" },
+        { config: FREMD, prStatus: () => (aufrufe++, status), prDateien: (nr: string, st: never) => abschluss.ghPrDateien(nr, st, nichtAufrufen) } as never,
       );
       assert.equal(diffAufrufe, 0, "der Status trägt die Dateien, der Diff-Rückfall bleibt ungenutzt");
       return { r, aufrufe };
     };
 
     test("Leitplanken-Datei ohne Audit-Kommentar im selben Status: blockiert, genau ein Status-Aufruf", () => {
-      const { r, aufrufe } = abschlussOhneInjektion(alles(["src/main.ts", "AGENTS.md"], [{ author: { login: ECHT_OWNER }, body: "LGTM" }]));
+      const { r, aufrufe } = abschlussOhneInjektion(alles(["src/main.ts", "AGENTS.md"], [{ author: { login: FREMD_OWNER }, body: "LGTM" }]));
       assert.match(r ?? "", /AGENTS\.md/);
       assert.equal(aufrufe, 1);
     });
 
     test("Audit-Kommentar des Autors im selben Status: frei; PR ohne Leitplanken-Datei: frei", () => {
-      assert.equal(abschlussOhneInjektion(alles(["AGENTS.md"], [{ author: { login: ECHT_OWNER }, body: audit.AUDIT_KOPF }])).r, null);
+      assert.equal(abschlussOhneInjektion(alles(["AGENTS.md"], [{ author: { login: FREMD_OWNER }, body: audit.AUDIT_KOPF }])).r, null);
       assert.equal(abschlussOhneInjektion(alles(["src/main.ts"], [])).r, null);
     });
 

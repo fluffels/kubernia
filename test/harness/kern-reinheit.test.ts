@@ -1161,7 +1161,7 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
     assert.deepEqual(vergleiche({ ...kernTestIst(pfade, lesenWurzel, echteBegriffe), ...ist }, kernBaseline), ["test/neu.test.ts: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei"]);
     assert.deepEqual(kernTestIst(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), {}, "ohne Literal keine Zählung");
   });
-  // Geschlossene Liste der literalfrei umgebauten Kern-Tests (#1876 Teil 1, Hooks und Guards; #1877 Teil 2, Board und Tickets; #1878 Teil 3, Nachweis und Review; der Folgeteil #1879 ergänzt sie).
+  // Geschlossene Liste der literalfrei umgebauten Kern-Tests (Mindestbestand: Hooks und Guards, Board und Tickets, Nachweis und Review); sie wird nicht erweitert, die Rückfall-Prüfung unten leitet ihre Dateien aus der Baseline ab.
   const LITERALFREIE_KERN_TESTS = [
     "test/harness/claims-pruefen.test.ts",
     "test/harness/lebenszyklus-namen.test.ts",

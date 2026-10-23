@@ -9,6 +9,7 @@ import * as so from "../scripts/slice-override.mjs";
 import * as rawNl from "../scripts/nachweis-lib.mjs";
 import { echteSprache } from "./support/echte-sprache";
 import { FREMD, FREMD_OWNER } from "./support/fremd-config";
+import { FREMD_ABNAHME_MARKER } from "./support/ticket-ablauf";
 
 type User = { login: string; type?: string } | null;
 type Issue = { state?: string; body?: string | null; user?: User; labels?: ({ name: string } | string)[]; pull_request?: object };
@@ -43,8 +44,7 @@ const A = raw as unknown as {
 const nl = rawNl as unknown as { parseAbnahmeMarker: (z: Zeilen, text: string) => { urteil: unknown[] } | null };
 const commitZeilen =(so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer) as { praefix: string; abnahme: string };
-/** Marker-Kennung `<präfix-klein>abnahme` der Fremd-Config. */
-const MARKER = `${Z.praefix.toLowerCase()}abnahme`;
+const MARKER = FREMD_ABNAHME_MARKER;
 
 const HEAD = "a".repeat(40);
 const BODY = "## Ziel\nZ\n\n## Akzeptanzkriterien\n1. Erstes Kriterium.\n   - mit Unterpunkt\n2. Zweites Kriterium.\n3. Negativfall: Drittes.\n";
@@ -58,7 +58,7 @@ function umgebung(bericht: string, extra: Partial<Io> = {}, kommentare: Kommenta
   const aufrufe: string[] = [];
   const io: Io = {
     owner: FREMD_OWNER,
-    config: { labels: { forum: "forum" }, sprache: echteSprache() },
+    config: { labels: { forum: FREMD.labels.forum }, sprache: echteSprache() },
     zeilen: Z,
     leseDatei: (p) => {
       if (p !== "b.md") throw new Error("ENOENT");
@@ -443,7 +443,7 @@ describe("Aufruf-, gh- und Vertrauensfehler", () => {
   });
   test.each([
     ["fremder Autor", { user: { login: "fremd", type: "User" }, labels: [] }],
-    ["Label forum", { user: VERTRAUT, labels: [{ name: "forum" }] }],
+    ["Label forum", { user: VERTRAUT, labels: [{ name: FREMD.labels.forum }] }],
     ["Autor null", { user: null, labels: [] }],
   ])("Fremdeingang (%s): Exit 3 bei auswerten und kriterien, nichts gepostet, kein Body auf stderr", (_n, f) => {
     const io = { ladeIssue: () => ({ body: BODY, ...f }) };

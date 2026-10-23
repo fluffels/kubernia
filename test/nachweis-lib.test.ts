@@ -6,6 +6,7 @@ import * as raw from "../scripts/nachweis-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
 import { FREMD } from "./support/fremd-config";
+import { FREMD_ABNAHME_MARKER } from "./support/ticket-ablauf";
 
 interface Zeilen {
   praefix: string;
@@ -20,8 +21,7 @@ const so = {
 };
 const Z = so.commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer);
 const HEX = "abc1234";
-/** Marker-Kennung `<präfix-klein>abnahme` der Fremd-Config. */
-const MARKER = `${Z.praefix.toLowerCase()}abnahme`;
+const MARKER = FREMD_ABNAHME_MARKER;
 
 describe("Abnahme-Zeile (#1753): lesen, formatieren, Marker", () => {
   const A = raw as unknown as {
