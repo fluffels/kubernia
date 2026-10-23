@@ -315,6 +315,49 @@ export function berechtigungenAus(config) {
   return { allow: wert.allow ?? [], ask: wert.ask ?? [], deny: wert.deny ?? [] };
 }
 
+const SANDBOX_KEYS = ["allowedDomains", "envVars"];
+
+/**
+ * Pur: prüft den Block `sandbox` (Form, #1888): nur die Listen allowedDomains (Strings ohne Leerraum) und envVars (Objekte `{ name, mode }` mit `mode: "deny"`), je Liste ohne Duplikat (Name).
+ * Ob die Ergänzung zum Wert in `.claude/settings.json` passt und nichts öffnet, prüft die Besitz-Lib (`sandboxErgaenzungsBefunde`).
+ */
+function pruefeSandbox(b) {
+  if (!istObjekt(b)) return ["sandbox muss ein Objekt mit den Listen allowedDomains und envVars sein"];
+  const fehler = Object.keys(b).filter((k) => !SANDBOX_KEYS.includes(k)).map((k) => `sandbox.${k} ist kein bekannter Schlüssel (erlaubt: ${SANDBOX_KEYS.join(", ")})`);
+  for (const k of SANDBOX_KEYS) {
+    const liste = b[k];
+    if (liste === undefined) continue;
+    if (!Array.isArray(liste)) {
+      fehler.push(`sandbox.${k} muss eine Liste sein`);
+      continue;
+    }
+    const gesehen = new Set();
+    liste.forEach((e, i) => {
+      const wo = `sandbox.${k}[${i}]`;
+      const name = k === "envVars" ? e?.name : e;
+      if (!istText(name) || /\s/.test(name)) return fehler.push(`${wo} braucht einen nicht-leeren Namen ohne Leerraum`);
+      if (k === "envVars" && (!istObjekt(e) || e.mode !== "deny" || Object.keys(e).some((x) => x !== "name" && x !== "mode"))) fehler.push(`${wo} muss die Form { "name": …, "mode": "deny" } haben (eine Ergänzung sperrt nur)`);
+      if (gesehen.has(name)) fehler.push(`${wo} „${name}“ steht doppelt`);
+      gesehen.add(name);
+    });
+  }
+  return fehler;
+}
+
+/** Pur: die Sandbox-Ergänzung des Projekts (`sandbox`, #1888) als `{ allowedDomains, envVars }`; ohne Block beide leer. Wirft mit Fix-Zeile bei kaputter Form. */
+export function sandboxAus(config) {
+  const wert = config?.sandbox;
+  if (wert === undefined) return { allowedDomains: [], envVars: [] };
+  const fehler = pruefeSandbox(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block sandbox (allowedDomains: Strings, envVars: { name, mode: "deny" }) in ${PROJEKT_CONFIG} korrigieren`);
+  return { allowedDomains: wert.allowedDomains ?? [], envVars: wert.envVars ?? [] };
+}
+
+/** Pur: die gesamte Ergänzung des Projekts aus der geparsten Config: die Listen von `berechtigungen` plus der Zweig `sandbox`; wirft bei kaputter Form. */
+export function ergaenzungAus(config) {
+  return { ...berechtigungenAus(config), sandbox: sandboxAus(config) };
+}
+
 /** Pur: wie `berechtigungenAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
 export function berechtigungenAusText(text) {
   if (text === null) return berechtigungenAus({}); // keine Datei: leer (JSON.parse(null) ergäbe dasselbe)
@@ -325,6 +368,18 @@ export function berechtigungenAusText(text) {
     throw new Error(`${PROJEKT_CONFIG} ist kein gültiges JSON`);
   }
   return berechtigungenAus(config);
+}
+
+/** Pur: wie `ergaenzungAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
+export function ergaenzungAusText(text) {
+  if (text === null) return ergaenzungAus({});
+  let config;
+  try {
+    config = JSON.parse(text);
+  } catch {
+    throw new Error(`${PROJEKT_CONFIG} ist kein gültiges JSON`);
+  }
+  return ergaenzungAus(config);
 }
 
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
@@ -352,6 +407,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
+  if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
   return fehler;
 }
 

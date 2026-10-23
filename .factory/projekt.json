@@ -66,6 +66,10 @@
     "ask": ["mcp__playwright__browser_run_code_unsafe", "mcp__likec4__apply-semantic-layout"],
     "deny": ["mcp__pixellab__list_projects"]
   },
+  "sandbox": {
+    "allowedDomains": ["*.pixellab.ai"],
+    "envVars": [{ "name": "PIXELLAB_TOKEN", "mode": "deny" }]
+  },
   "spezifikation": {
     "hartAb": 1
   },

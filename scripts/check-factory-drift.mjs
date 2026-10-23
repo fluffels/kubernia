@@ -8,8 +8,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { einheitHash, einheitId, ERGAENZBARE_EINHEIT, ergaenzungsBefunde, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { berechtigungenAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { einheitHash, einheitId, ERGAENZBARE_EINHEITEN, ergaenzungsAnzahlVon, ergaenzungsBefundeVon, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
@@ -19,16 +19,16 @@ const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs -
 
 const BLOCK_HINWEIS = " (Projektergänzungen gehören außerhalb der Besitz-Marker)";
 
-const ERGAENZUNG_HINWEIS = ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFIG} › berechtigungen)`;
+const ergaenzungHinweis = (e) => ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFIG} › ${e.schluessel === "sandbox" ? "sandbox" : "berechtigungen"})`;
 
 /** Pur: die Ergänzung aus dem Text der Projekt-Config; ohne Datei oder Block leer, bei kaputter Datei oder Form wirft es (Fix-Zeile inklusive). */
 function ergaenzungAus(lies) {
-  return berechtigungenAusText(lies(PROJEKT_CONFIG));
+  return ergaenzungAusText(lies(PROJEKT_CONFIG));
 }
 
-/** Der Wert (parsed) der ergänzbaren Einheit aus dem Projekt oder `null` (Datei oder Schlüssel fehlt, kein JSON). */
-function ergaenzbarerWert(lies) {
-  const [pfad, schluessel] = ERGAENZBARE_EINHEIT.split("#/");
+/** Der Wert (parsed) der ergänzbaren Einheit `id` (`<pfad>#/<schluessel>`) aus dem Projekt oder `null` (Datei oder Schlüssel fehlt, kein JSON). */
+function ergaenzbarerWert(lies, id) {
+  const [pfad, schluessel] = id.split("#/");
   try {
     const j = JSON.parse(lies(pfad) ?? "");
     return j?.[schluessel] ?? null;
@@ -38,8 +38,8 @@ function ergaenzbarerWert(lies) {
 }
 
 /**
- * Prüft die Berechtigungs-Ergänzung des Projekts (`berechtigungen` in der Config) gegen die ergänzbare Einheit, getrennt vom Kern-Hash und immer,
- * auch ohne Sync-Stand (#1874): jeder Eintrag steht am Ende seiner Liste, nichts doppelt, kein allow hebt ein deny oder ask auf.
+ * Prüft die Ergänzungen des Projekts (`berechtigungen` und `sandbox` in der Config) gegen ihre ergänzbaren Einheiten, getrennt vom Kern-Hash und immer,
+ * auch ohne Sync-Stand (#1874, #1888): jeder Eintrag steht am Ende seiner Liste, nichts doppelt, kein allow hebt ein deny oder ask auf, die Sandbox-Ergänzung öffnet nichts Breites.
  * Rückgabe: `{ fehler, eintraege }`; jeder Fehler nennt den Weg.
  */
 export function pruefeErgaenzung(lies) {
@@ -47,14 +47,23 @@ export function pruefeErgaenzung(lies) {
   try {
     erg = ergaenzungAus(lies);
   } catch (e) {
-    return { fehler: [`${e.message}. Weg: ${PROJEKT_CONFIG} › berechtigungen korrigieren`], eintraege: 0 };
+    return { fehler: [`${e.message}. Weg: ${PROJEKT_CONFIG} › berechtigungen und sandbox korrigieren`], eintraege: 0 };
   }
-  const eintraege = erg.allow.length + erg.ask.length + erg.deny.length;
-  if (eintraege === 0) return { fehler: [], eintraege };
-  const perm = ergaenzbarerWert(lies);
-  const befunde = perm === null ? [`${ERGAENZBARE_EINHEIT}: Datei oder Schlüssel fehlt, die Ergänzung hat keinen Platz`] : ergaenzungsBefunde(perm, erg);
-  const weg = `Weg: die Einträge aus ${PROJEKT_CONFIG} › berechtigungen ans Ende der Liste in ${ERGAENZBARE_EINHEIT.split("#/")[0]} setzen und im Zielprojekt neu syncen`;
-  return { fehler: befunde.map((b) => `${b}. ${weg}`), eintraege };
+  const fehler = [];
+  let eintraege = 0;
+  for (const id of ERGAENZBARE_EINHEITEN) {
+    const [pfad, schluessel] = id.split("#/");
+    const einheit = { pfad, schluessel };
+    const anzahl = ergaenzungsAnzahlVon(einheit, erg);
+    eintraege += anzahl;
+    if (anzahl === 0) continue;
+    const wert = ergaenzbarerWert(lies, id);
+    const befunde = wert === null ? [`${id}: Datei oder Schlüssel fehlt, die Ergänzung hat keinen Platz`] : ergaenzungsBefundeVon(einheit, wert, erg);
+    const block = schluessel === "sandbox" ? "sandbox" : "berechtigungen";
+    const weg = `Weg: die Einträge aus ${PROJEKT_CONFIG} › ${block} ans Ende der Liste in ${pfad} setzen und im Zielprojekt neu syncen`;
+    fehler.push(...befunde.map((b) => `${b}. ${weg}`));
+  }
+  return { fehler, eintraege };
 }
 
 /**
@@ -107,7 +116,7 @@ export function pruefeDrift(lies) {
     if (configKaputt && istErgaenzbar(e)) continue;
     const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
     const hash = text === null ? null : einheitHash(e, text, ergaenzung);
-    const hinweis = e.block !== undefined ? BLOCK_HINWEIS : istErgaenzbar(e) ? ERGAENZUNG_HINWEIS : "";
+    const hinweis = e.block !== undefined ? BLOCK_HINWEIS : istErgaenzbar(e) ? ergaenzungHinweis(e) : "";
     if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`);
     else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert${hinweis}`);
   }

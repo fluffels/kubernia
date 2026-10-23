@@ -22,6 +22,8 @@ interface Pc {
   altEnvName(name: string, config: unknown): string | null;
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
   berechtigungenAus(config: unknown): { allow: string[]; ask: string[]; deny: string[] };
+  sandboxAus(config: unknown): { allowedDomains: string[]; envVars: { name: string; mode: string }[] };
+  ergaenzungAusText(text: string | null): { allow: string[]; sandbox: { allowedDomains: string[]; envVars: unknown[] } };
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
@@ -709,6 +711,44 @@ describe("Berechtigungs-Ergänzung als Projektwert (#1874)", () => {
     assert.match(mit({ allow: [1] }).join("|"), /berechtigungen\.allow\[0\] muss ein nicht-leerer String/);
     assert.match(mit({ deny: ["mcp__a b"] }).join("|"), /berechtigungen\.deny\[0\] muss ein nicht-leerer String ohne Leerraum/);
     assert.match(mit({ allow: ["mcp__a", "mcp__a"] }).join("|"), /berechtigungen\.allow\[1\] „mcp__a“ steht doppelt/);
+  });
+});
+
+describe("Config-Block sandbox (#1888)", () => {
+  const gueltig = (): Record<string, unknown> => pc.ladeProjektConfig() as Record<string, unknown>;
+  const mit = (b: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), sandbox: b });
+
+  test("sandboxAus: ohne Block leer, sonst die Listen; die echte Config trägt die Projektliterale", () => {
+    assert.deepEqual(pc.sandboxAus({}), { allowedDomains: [], envVars: [] });
+    assert.deepEqual(pc.sandboxAus({ sandbox: { allowedDomains: ["*.a.example"] } }), { allowedDomains: ["*.a.example"], envVars: [] });
+    const echt = pc.sandboxAus(pc.ladeProjektConfig());
+    assert.ok(echt.allowedDomains.includes("*.pixellab.ai"));
+    assert.deepEqual(echt.envVars, [{ name: "PIXELLAB_TOKEN", mode: "deny" }]);
+  });
+  test("ergaenzungAusText: beide Ergänzungen aus dem Dateitext, ohne Datei leer, kaputtes JSON wirft", () => {
+    const e = pc.ergaenzungAusText(JSON.stringify({ berechtigungen: { allow: ["mcp__a"] }, sandbox: { allowedDomains: ["x.example"] } }));
+    assert.deepEqual([e.allow, e.sandbox.allowedDomains], [["mcp__a"], ["x.example"]]);
+    assert.deepEqual(pc.ergaenzungAusText(null).sandbox, { allowedDomains: [], envVars: [] });
+    assert.throws(() => pc.ergaenzungAusText("{kaputt"), /kein gültiges JSON/);
+  });
+  test("sandboxAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
+    for (const falsch of ["x", [], { allowedDomains: {} }, { envVars: [{ name: "X", mode: "allow" }] }]) {
+      assert.throws(() => pc.sandboxAus({ sandbox: falsch }), /sandbox[\s\S]*Fix:/, JSON.stringify(falsch));
+    }
+  });
+  test("Form: gültiger Block und Fehlen sind ok", () => {
+    assert.deepEqual(mit({ allowedDomains: ["*.a.example"], envVars: [{ name: "A_TOKEN", mode: "deny" }] }), []);
+    assert.deepEqual(mit({}), []);
+  });
+  test("Form: fremde Schlüssel, Nicht-Listen, Leerraum, doppelte Namen und envVars ohne mode deny werden gemeldet", () => {
+    assert.match(mit("x").join("|"), /sandbox muss ein Objekt/);
+    assert.match(mit({ filesystem: {} }).join("|"), /sandbox\.filesystem ist kein bekannter Schlüssel \(erlaubt: allowedDomains, envVars\)/);
+    assert.match(mit({ allowedDomains: "a" }).join("|"), /sandbox\.allowedDomains muss eine Liste/);
+    assert.match(mit({ allowedDomains: ["a b"] }).join("|"), /sandbox\.allowedDomains\[0\] braucht einen nicht-leeren Namen ohne Leerraum/);
+    assert.match(mit({ allowedDomains: ["a.example", "a.example"] }).join("|"), /sandbox\.allowedDomains\[1\] „a\.example“ steht doppelt/);
+    assert.match(mit({ envVars: ["A"] }).join("|"), /sandbox\.envVars\[0\] braucht einen nicht-leeren Namen/);
+    assert.match(mit({ envVars: [{ name: "A", mode: "allow" }] }).join("|"), /sandbox\.envVars\[0\] muss die Form \{ "name": …, "mode": "deny" \} haben/);
+    assert.match(mit({ envVars: [{ name: "A", mode: "deny", extra: 1 }] }).join("|"), /muss die Form/);
   });
 });
 

@@ -195,24 +195,112 @@ export function pruefeManifest(m, lies) {
   return out;
 }
 
-// ── Berechtigungs-Ergänzung (#1874, ADR 0022 Fortschreibung 1874) ─────────────
-// Die einzige Einheit mit Projekt-Ergänzung: Hash und Sync rechnen auf dem Kern-Anteil (der Wert ohne die Einträge der Ergänzung),
-// die Ergänzung steht je Liste als Ende der Liste. Bekannte Muster der Aufhebe-Prüfung (`ergaenzungsBefunde`): ein allow-Eintrag A hebt eine
+// ── Berechtigungs- und Sandbox-Ergänzung (#1874, #1888, ADR 0022 Fortschreibungen 1874 und 1888) ─────────────
+// Die einzigen Einheiten mit Projekt-Ergänzung (`ERGAENZBARE_EINHEITEN`): Hash und Sync rechnen auf dem Kern-Anteil (der Wert ohne die Einträge der Ergänzung),
+// die Ergänzung steht je Liste als Ende der Liste. `permissions` hat die Listen allow, ask und deny (Einträge sind Strings), `sandbox` die Listen
+// `network.allowedDomains` (Strings) und `credentials.envVars` (Objekte, Vergleich über `name`); eine Ergänzung sperrt oder öffnet nur, was die Befunde zulassen. Bekannte Muster der Aufhebe-Prüfung (`ergaenzungsBefunde`): ein allow-Eintrag A hebt eine
 // Regel R aus deny oder ask auf, wenn A === R; wenn R eine Server-Regel `mcp__<server>` ohne Tool-Teil ist und A mit `R + "__"` beginnt;
 // wenn R auf `*` endet und A mit R ohne `*` beginnt; wenn A auf `*` endet und R mit A ohne `*` beginnt (allow `mcp__*` deckt jede Regel mit dem Präfix). Grenze: andere Platzhalterformen werden nicht erkannt. Legitim bleibt die Kombination
 // „allow Server-Regel, ask oder deny einzelnes Tool“.
 
-/** Die Einheit, die ein Projekt über `berechtigungen` ergänzen darf (geschlossene Liste mit einem Eintrag; `sandbox` wäre ein weiterer). */
-export const ERGAENZBARE_EINHEIT = ".claude/settings.json#/permissions";
+/** Die Einheiten, die ein Projekt über seine Config ergänzen darf (geschlossene Liste): `berechtigungen` ergänzt `permissions`, `sandbox` ergänzt `sandbox`. */
+export const ERGAENZBARE_EINHEITEN = [".claude/settings.json#/permissions", ".claude/settings.json#/sandbox"];
+
+const SANDBOX_EINHEIT = ERGAENZBARE_EINHEITEN[1];
+
+/** Die Listen der Sandbox-Ergänzung: Schlüssel in der Ergänzung, Pfad im Wert und der Name, über den Einträge verglichen werden. */
+export const SANDBOX_LISTEN = {
+  allowedDomains: { pfad: ["network", "allowedDomains"], name: (x) => x },
+  envVars: { pfad: ["credentials", "envVars"], name: (x) => x?.name },
+};
+const SANDBOX_NAMEN = Object.keys(SANDBOX_LISTEN);
 
 /** Die Regel-Listen der Ergänzung (die Namen von Claude Code). */
 export const ERGAENZUNG_LISTEN = ["allow", "ask", "deny"];
 
-/** Eine leere Ergänzung (frisch je Aufruf). */
-export const leereErgaenzung = () => ({ allow: [], ask: [], deny: [] });
+/** Eine leere Ergänzung (frisch je Aufruf): die Listen von `permissions` und der Zweig `sandbox`. */
+export const leereErgaenzung = () => ({ allow: [], ask: [], deny: [], sandbox: { allowedDomains: [], envVars: [] } });
 
-/** Ist die Einheit die ergänzbare? */
-export const istErgaenzbar = (e) => einheitId(e) === ERGAENZBARE_EINHEIT;
+/** Zahl der Einträge der Ergänzung für die Einheit `e` (alle ihre Listen). */
+export const ergaenzungsAnzahlVon = (e, erg) =>
+  istSandbox(e) ? SANDBOX_NAMEN.reduce((n, l) => n + (erg?.sandbox?.[l]?.length ?? 0), 0) : ERGAENZUNG_LISTEN.reduce((n, l) => n + (erg?.[l]?.length ?? 0), 0);
+
+/** Ist die Einheit eine ergänzbare? */
+export const istErgaenzbar = (e) => ERGAENZBARE_EINHEITEN.includes(einheitId(e));
+
+const istSandbox = (e) => einheitId(e) === SANDBOX_EINHEIT;
+const istObjekt = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+const sandboxListe = (sb, l) => {
+  const [a, b] = SANDBOX_LISTEN[l].pfad;
+  const v = sb?.[a]?.[b];
+  return Array.isArray(v) ? v : [];
+};
+
+/** Pur: der Kern-Anteil von `sandbox`: je Liste ohne die Einträge der Ergänzung (Vergleich über den Namen); eine leere Liste und ein dadurch leerer Zweig entfallen. Ein Nicht-Objekt bleibt unverändert. */
+export function kernAnteilSandbox(sb, erg) {
+  if (!istObjekt(sb)) return sb;
+  const aus = { ...sb };
+  for (const l of SANDBOX_NAMEN) {
+    const [a, b] = SANDBOX_LISTEN[l].pfad;
+    if (!istObjekt(sb[a]) || !Array.isArray(sb[a][b])) continue;
+    const mit = new Set((erg?.[l] ?? []).map(SANDBOX_LISTEN[l].name));
+    const rest = sb[a][b].filter((x) => !mit.has(SANDBOX_LISTEN[l].name(x)));
+    const zweig = { ...aus[a] };
+    if (rest.length === 0) delete zweig[b];
+    else zweig[b] = rest;
+    if (Object.keys(zweig).length === 0) delete aus[a];
+    else aus[a] = zweig;
+  }
+  return aus;
+}
+
+/** Pur: Kern-Anteil von `sandbox` plus Ergänzung, je Liste hinten angehängt; fehlende Zweige werden angelegt. */
+export function mitErgaenzungSandbox(kern, erg) {
+  const aus = { ...kern };
+  for (const l of SANDBOX_NAMEN) {
+    const neu = erg?.[l] ?? [];
+    if (neu.length === 0) continue;
+    const [a, b] = SANDBOX_LISTEN[l].pfad;
+    aus[a] = { ...aus[a], [b]: [...sandboxListe(kern, l), ...neu] };
+  }
+  return aus;
+}
+
+/** Pur: Befunde der Sandbox-Ergänzung gegen den zusammengesetzten Wert `sb` (leer = in Ordnung): Eintrag fehlt, steht nicht am Listenende oder doppelt (auch ein Kern-Eintrag gleichen Namens: eine Ergänzung darf ihn nicht überschreiben),
+ *  eine Domain besteht nur aus Platzhaltern (öffnet jede Domain), ein envVars-Eintrag der Ergänzung sperrt nicht (`mode` ist nicht `deny`). */
+export function sandboxErgaenzungsBefunde(sb, erg) {
+  const out = [];
+  for (const l of SANDBOX_NAMEN) {
+    const neu = erg?.[l] ?? [];
+    if (neu.length === 0) continue;
+    const { pfad, name } = SANDBOX_LISTEN[l];
+    const wo = `sandbox.${pfad.join(".")}`;
+    const ist = sandboxListe(sb, l).map(name);
+    const neuNamen = neu.map(name);
+    const fehlend = neuNamen.filter((n) => !ist.includes(n));
+    for (const n of fehlend) out.push(`${wo}: Ergänzung „${n}“ fehlt`);
+    for (const n of neuNamen) {
+      if (ist.filter((y) => y === n).length > 1) out.push(`${wo}: „${n}“ steht doppelt (Kern-Anteil und Ergänzung); eine Ergänzung darf einen Kern-Eintrag nicht überschreiben`);
+    }
+    if (fehlend.length === 0 && neuNamen.some((n, i) => ist[ist.length - neuNamen.length + i] !== n)) out.push(`${wo}: die Ergänzung muss als Ende der Liste stehen, in der Reihenfolge der Config`);
+  }
+  for (const d of erg?.allowedDomains ?? []) {
+    if (/^[*.]+$/.test(d)) out.push(`sandbox.network.allowedDomains: Ergänzung „${d}“ erlaubt jede Domain`);
+  }
+  for (const v of erg?.envVars ?? []) {
+    if (v?.mode !== "deny") out.push(`sandbox.credentials.envVars: Ergänzung „${v?.name}“ muss mode deny haben (eine Ergänzung sperrt nur)`);
+  }
+  return out;
+}
+
+/** Pur: Kern-Anteil der ergänzbaren Einheit `e` aus ihrem Wert (`erg` ist die Ergänzung des Projekts). */
+export const kernAnteilVon = (e, wert, erg) => (istSandbox(e) ? kernAnteilSandbox(wert, erg?.sandbox) : kernAnteil(wert, erg));
+
+/** Pur: Kern-Anteil der Einheit `e` plus Ergänzung. */
+export const mitErgaenzungVon = (e, kern, erg) => (istSandbox(e) ? mitErgaenzungSandbox(kern, erg?.sandbox) : mitErgaenzung(kern, erg));
+
+/** Pur: Befunde der Ergänzung der Einheit `e` gegen ihren zusammengesetzten Wert. */
+export const ergaenzungsBefundeVon = (e, wert, erg) => (istSandbox(e) ? sandboxErgaenzungsBefunde(wert, erg?.sandbox) : ergaenzungsBefunde(wert, erg));
 
 /** Pur: der Kern-Anteil von `permissions`: je Liste ohne die Einträge der Ergänzung (mengenbasiert); eine leere Liste entfällt immer
  *  (leer gilt wie fehlend, sonst unterschiede sich Quelle und Ziel nur durch `ask: []`). Ein Nicht-Objekt bleibt unverändert. */
@@ -276,7 +364,7 @@ export function ergaenzungsBefunde(perm, erg) {
 export function normalisierterEinheitText(e, text, erg = leereErgaenzung()) {
   const t = einheitText(e, text);
   if (t === null) return t;
-  if (istErgaenzbar(e)) return JSON.stringify(kernAnteil(JSON.parse(t), erg));
+  if (istErgaenzbar(e)) return JSON.stringify(kernAnteilVon(e, JSON.parse(t), erg));
   if (e.schluessel !== undefined) return t;
   try {
     return leereProjektwerte(normalisiereEol(t));

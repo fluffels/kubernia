@@ -9,14 +9,15 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
-import { berechtigungenAusText, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import {
   einheitHash,
-  ergaenzungsBefunde,
+  ergaenzungsAnzahlVon,
+  ergaenzungsBefundeVon,
   istErgaenzbar,
-  kernAnteil,
+  kernAnteilVon,
   leereErgaenzung,
-  mitErgaenzung,
+  mitErgaenzungVon,
   einheitId,
   einheitText,
   eolVon,
@@ -41,22 +42,22 @@ const gleichJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const LEER = () => ({ quelle: leereErgaenzung(), ziel: leereErgaenzung() });
 
 /**
- * Die Berechtigungs-Ergänzung aus der Projekt-Config (`lies` liefert den Dateitext oder `null`), tolerant: fehlende Datei oder fehlender Block
+ * Die Ergänzungen aus der Projekt-Config (`berechtigungen` und `sandbox`; `lies` liefert den Dateitext oder `null`), tolerant: fehlende Datei oder fehlender Block
  * heißt leer (weniger Rechte). Wirft bei kaputtem JSON oder falscher Form (dann wird nichts geschrieben).
  */
 export function liesErgaenzung(lies) {
-  return berechtigungenAusText(lies(PROJEKT_PFAD));
+  return ergaenzungAusText(lies(PROJEKT_PFAD));
 }
 
-const istLeer = (erg) => Object.values(erg).every((l) => l.length === 0);
+const istLeer = (e, erg) => ergaenzungsAnzahlVon(e, erg) === 0;
 
-/** Werttext der ergänzbaren Einheit im Ziel: ohne Ergänzung wörtlich aus der Quelle, sonst Kern-Anteil plus Ziel-Ergänzung (zwei Leerzeichen, Einrückung der Schlüsselzeile). */
-function ergaenzterWert(srcText, span, erg) {
+/** Werttext der ergänzbaren Einheit `e` im Ziel: ohne Ergänzung wörtlich aus der Quelle, sonst Kern-Anteil plus Ziel-Ergänzung (zwei Leerzeichen, Einrückung der Schlüsselzeile). */
+function ergaenzterWert(e, srcText, span, erg) {
   const roh = srcText.slice(span.start, span.ende);
-  if (istLeer(erg.quelle) && istLeer(erg.ziel)) return roh;
-  const quellBefund = ergaenzungsBefunde(JSON.parse(roh), erg.quelle);
-  const ziel = mitErgaenzung(kernAnteil(JSON.parse(roh), erg.quelle), erg.ziel);
-  const befund = [...quellBefund.map((b) => `Quelle: ${b}`), ...ergaenzungsBefunde(ziel, erg.ziel).map((b) => `Ziel: ${b}`)];
+  if (istLeer(e, erg.quelle) && istLeer(e, erg.ziel)) return roh;
+  const quellBefund = ergaenzungsBefundeVon(e, JSON.parse(roh), erg.quelle);
+  const ziel = mitErgaenzungVon(e, kernAnteilVon(e, JSON.parse(roh), erg.quelle), erg.ziel);
+  const befund = [...quellBefund.map((b) => `Quelle: ${b}`), ...ergaenzungsBefundeVon(e, ziel, erg.ziel).map((b) => `Ziel: ${b}`)];
   if (befund.length > 0) throw new Error(befund.join("; "));
   const zeilenStart = srcText.lastIndexOf("\n", span.start) + 1;
   const einrueckung = /^[ \t]*/.exec(srcText.slice(zeilenStart))[0];
@@ -73,7 +74,7 @@ function wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg) {
     } else {
       if (arbeit === null) arbeit = "{\n}\n";
       const span = jsonSchluesselSpanne(srcText, e.schluessel);
-      arbeit = setzeJsonSchluessel(arbeit, e.schluessel, istErgaenzbar(e) ? ergaenzterWert(srcText, span, erg) : srcText.slice(span.start, span.ende));
+      arbeit = setzeJsonSchluessel(arbeit, e.schluessel, istErgaenzbar(e) ? ergaenzterWert(e, srcText, span, erg) : srcText.slice(span.start, span.ende));
     }
   }
   return arbeit;
@@ -87,11 +88,12 @@ export function pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis, erg =
     const quelle = JSON.parse(srcText);
     const vorher = zielLf === null ? {} : JSON.parse(zielLf);
     const besitz = new Set(eintraege.filter((e) => e.schluessel !== undefined).map((e) => e.schluessel));
-    const ergKeys = new Set(eintraege.filter(istErgaenzbar).map((e) => e.schluessel));
+    const ergEinheiten = new Map(eintraege.filter(istErgaenzbar).map((e) => [e.schluessel, e]));
     for (const k of besitz) {
-      const gleich = ergKeys.has(k) ? gleichJson(kernAnteil(neu[k], erg.ziel), kernAnteil(quelle[k], erg.quelle)) : gleichJson(neu[k], quelle[k]);
+      const ergE = ergEinheiten.get(k);
+      const gleich = ergE ? gleichJson(kernAnteilVon(ergE, neu[k], erg.ziel), kernAnteilVon(ergE, quelle[k], erg.quelle)) : gleichJson(neu[k], quelle[k]);
       if (!gleich) fehler.push(`${pfad}: Schlüssel '${k}' weicht nach dem Sync von der Quelle ab`);
-      if (ergKeys.has(k)) fehler.push(...ergaenzungsBefunde(neu[k], erg.ziel).map((b) => `${pfad}: ${b}`));
+      if (ergE) fehler.push(...ergaenzungsBefundeVon(ergE, neu[k], erg.ziel).map((b) => `${pfad}: ${b}`));
     }
     for (const k of Object.keys(vorher)) if (!besitz.has(k) && !gleichJson(neu[k], vorher[k])) fehler.push(`${pfad}: Projektschlüssel '${k}' wurde verändert`);
     for (const k of Object.keys(neu)) if (!besitz.has(k) && !(k in vorher)) fehler.push(`${pfad}: Schlüssel '${k}' ist neu und kein Besitz`);

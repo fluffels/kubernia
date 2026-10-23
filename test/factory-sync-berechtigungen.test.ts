@@ -337,6 +337,10 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
     assert.match(r.err, /Ergänzung „mcp__\*“ hebt die Regel „mcp__claude-in-chrome“/);
     schreibe(z, SETTINGS, json({ permissions: mit(KERN, { allow: ["mcp__*"] }) }));
     assert.match(drift.pruefeErgaenzung(leser(z)).fehler.join("|"), /hebt die Regel „mcp__claude-in-chrome“/);
+    // Gate-Weg (check-factory-drift) unabhängig von der Sync-Assertion oben: ohne Sync-Stand, nur Config und settings.json.
+    const g = gate(z);
+    assert.equal(g.code, 1, g.out);
+    assert.match(g.err, /Berechtigungs-Ergänzung[\s\S]*hebt die Regel „mcp__claude-in-chrome“/);
   });
 
   test("eine fehlende Liste in permissions bei nicht-leerer Ergänzung ist ein Befund, kein Absturz", () => {
@@ -404,3 +408,190 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
   });
 });
 
+
+describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
+  type Sb = { enabled?: boolean; network?: { allowedDomains?: string[] }; credentials?: { envVars?: { name: string; mode: string }[] } };
+  type SbErg = { allowedDomains?: string[]; envVars?: { name: string; mode?: string }[] };
+  type Einheit = { pfad: string; schluessel: string };
+  const sb = lib as unknown as {
+    ERGAENZBARE_EINHEITEN: string[];
+    kernAnteilVon(e: Einheit, wert: unknown, erg: unknown): unknown;
+    mitErgaenzungVon(e: Einheit, kern: unknown, erg: unknown): unknown;
+    ergaenzungsBefundeVon(e: Einheit, wert: unknown, erg: unknown): string[];
+  };
+  const E: Einheit = { pfad: SETTINGS, schluessel: "sandbox" };
+  const KERN_SB: Sb = { enabled: true, network: { allowedDomains: ["github.com"] }, credentials: { envVars: [{ name: "GITHUB_TOKEN", mode: "deny" }] } };
+  const ERG: SbErg = { allowedDomains: ["*.pixellab.ai"], envVars: [{ name: "PIXELLAB_TOKEN", mode: "deny" }] };
+  const mitSb = (kern: Sb, erg: SbErg): Sb => sb.mitErgaenzungVon(E, kern, { sandbox: erg }) as Sb;
+  const bef = (wert: unknown, erg: SbErg): string => sb.ergaenzungsBefundeVon(E, wert, { sandbox: erg }).join("|");
+
+  test("die Liste der ergänzbaren Einheiten ist geschlossen: permissions und sandbox", () => {
+    assert.deepEqual(sb.ERGAENZBARE_EINHEITEN, [".claude/settings.json#/permissions", ".claude/settings.json#/sandbox"]);
+  });
+  test("mitErgaenzung hängt je Liste hinten an und legt fehlende Teile an; kernAnteil kehrt es um", () => {
+    const m = mitSb(KERN_SB, ERG);
+    assert.deepEqual(m.network?.allowedDomains, ["github.com", "*.pixellab.ai"]);
+    assert.deepEqual(m.credentials?.envVars?.map((v) => v.name), ["GITHUB_TOKEN", "PIXELLAB_TOKEN"]);
+    assert.deepEqual(sb.kernAnteilVon(E, m, { sandbox: ERG }), KERN_SB);
+    assert.deepEqual(mitSb({ enabled: true }, ERG).network, { allowedDomains: ["*.pixellab.ai"] }, "ein fehlender Zweig wird angelegt");
+    assert.deepEqual(sb.kernAnteilVon(E, { enabled: true, network: { allowedDomains: ["*.pixellab.ai"] } }, { sandbox: ERG }), { enabled: true }, "leere Liste und leerer Zweig entfallen");
+    assert.equal(sb.kernAnteilVon(E, null, { sandbox: ERG }), null, "ein Nicht-Objekt bleibt unverändert");
+    assert.deepEqual(sb.kernAnteilVon(E, KERN_SB, {}), KERN_SB, "ohne Ergänzung bleibt der Wert");
+  });
+  test("der Vergleich der envVars läuft über den Namen, nicht über das ganze Objekt", () => {
+    const m = mitSb(KERN_SB, { envVars: [{ name: "PIXELLAB_TOKEN", mode: "deny" }] });
+    assert.deepEqual(sb.kernAnteilVon(E, m, { sandbox: { envVars: [{ name: "PIXELLAB_TOKEN", mode: "andere" }] } }), KERN_SB);
+  });
+  test("Befunde: grün bei korrekter Ergänzung, ohne Ergänzung nichts", () => {
+    assert.equal(bef(mitSb(KERN_SB, ERG), ERG), "");
+    assert.equal(bef(KERN_SB, {}), "");
+  });
+  test("Befund: Eintrag fehlt", () => {
+    assert.match(bef(KERN_SB, ERG), /sandbox\.network\.allowedDomains: Ergänzung „\*\.pixellab\.ai“ fehlt/);
+    assert.match(bef(KERN_SB, ERG), /sandbox\.credentials\.envVars: Ergänzung „PIXELLAB_TOKEN“ fehlt/);
+    assert.match(bef(null, ERG), /fehlt/, "ein Nicht-Objekt ist ein Befund, kein Absturz");
+  });
+  test("Befund: Ergänzung nicht am Listenende", () => {
+    const m = mitSb(KERN_SB, ERG);
+    const falsch = { ...m, network: { allowedDomains: ["*.pixellab.ai", "github.com"] } };
+    assert.match(bef(falsch, ERG), /sandbox\.network\.allowedDomains: die Ergänzung muss als Ende der Liste stehen/);
+    const falsch2 = { ...m, credentials: { envVars: [...(m.credentials?.envVars ?? [])].reverse() } };
+    assert.match(bef(falsch2, ERG), /sandbox\.credentials\.envVars: die Ergänzung muss als Ende der Liste stehen/);
+  });
+  test("Befund: Duplikat (auch im Kern-Anteil); ein envVars-Name aus dem Kern ist eine Lockerung", () => {
+    const dup = { ...KERN_SB, network: { allowedDomains: ["github.com", "github.com"] } };
+    assert.match(bef(dup, { allowedDomains: ["github.com"] }), /„github\.com“ steht doppelt/);
+    const kernName: SbErg = { envVars: [{ name: "GITHUB_TOKEN", mode: "deny" }] };
+    assert.match(bef(mitSb(KERN_SB, kernName), kernName), /„GITHUB_TOKEN“ steht doppelt[\s\S]*Kern-Eintrag/);
+  });
+  test("Befund: eine Domain, die nur aus Platzhaltern besteht, ist rot; eine Subdomain-Maske bleibt erlaubt", () => {
+    for (const d of ["*", "*.*", "**"]) {
+      const erg: SbErg = { allowedDomains: [d] };
+      assert.match(bef(mitSb(KERN_SB, erg), erg), /erlaubt jede Domain/, d);
+    }
+    const ok: SbErg = { allowedDomains: ["*.pixellab.ai"] };
+    assert.equal(bef(mitSb(KERN_SB, ok), ok), "");
+  });
+  test("Befund: eine envVars-Ergänzung ohne mode deny (Lockerung) ist rot", () => {
+    for (const erg of [{ envVars: [{ name: "X", mode: "allow" }] }, { envVars: [{ name: "X" }] }] as SbErg[]) {
+      assert.match(bef(mitSb(KERN_SB, erg), erg), /„X“ muss mode deny haben/);
+    }
+  });
+  test("einheitHash: derselbe Kern mit verschiedener Ergänzung hat denselben Hash, eine Handänderung am Kern einen anderen", () => {
+    const text = (s: Sb): string => json({ sandbox: s });
+    const h = (s: Sb, erg: SbErg): string | null => lib.einheitHash(E, text(s), { sandbox: erg } as never);
+    const kern = h(KERN_SB, {});
+    assert.equal(h(mitSb(KERN_SB, ERG), ERG), kern);
+    assert.equal(h(mitSb(KERN_SB, { allowedDomains: ["x.example"] }), { allowedDomains: ["x.example"] }), kern);
+    assert.notEqual(h({ ...KERN_SB, network: { allowedDomains: ["github.com", "boese.example"] } }, {}), kern);
+  });
+});
+
+describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
+  const SB_MANIFEST = { version: 1, eintraege: [...ROLLEN, { pfad: SETTINGS, schluessel: "sandbox", ring: "kern", quelle: "t" }] };
+  const KERN_SB = { enabled: true, network: { allowedDomains: ["github.com"] }, credentials: { envVars: [{ name: "GITHUB_TOKEN", mode: "deny" }] } };
+  const QUELL_SB = { allowedDomains: ["*.quelle.example"], envVars: [{ name: "QUELL_TOKEN", mode: "deny" }] };
+  const ZIEL_SB = { allowedDomains: ["*.ziel.example"], envVars: [{ name: "ZIEL_TOKEN", mode: "deny" }] };
+  const sandboxMit = (kern: typeof KERN_SB, e: typeof ZIEL_SB): unknown => ({
+    ...kern,
+    network: { allowedDomains: [...kern.network.allowedDomains, ...e.allowedDomains] },
+    credentials: { envVars: [...kern.credentials.envVars, ...e.envVars] },
+  });
+  function quelle(opt: { settings?: unknown; erg?: unknown } = {}): string {
+    const q = tmp();
+    schreibe(q, ".factory/besitz.json", json(SB_MANIFEST));
+    for (const e of ROLLEN) schreibe(q, e.pfad, "rolle\n");
+    schreibe(q, SETTINGS, json({ model: "quelle", sandbox: opt.settings ?? sandboxMit(KERN_SB, QUELL_SB) }));
+    schreibe(q, CONFIG, json({ sandbox: opt.erg ?? QUELL_SB }));
+    return q;
+  }
+  function ziel(erg?: unknown): string {
+    const z = tmp();
+    schreibe(z, SETTINGS, '{\n  "model": "opus"\n}\n');
+    if (erg !== undefined) schreibe(z, CONFIG, json({ sandbox: erg }));
+    return z;
+  }
+  const sbox = (z: string): { enabled: boolean; network: { allowedDomains: string[] }; credentials: { envVars: { name: string }[] } } =>
+    (JSON.parse(lies(z, SETTINGS)) as { sandbox: never }).sandbox;
+
+  test("das Ziel bekommt den Kern-Anteil plus die eigene Ergänzung am Ende, die der Quelle verteilt sich nicht; der zweite Lauf schreibt nichts, das Gate ist grün", () => {
+    const q = quelle();
+    const z = ziel(ZIEL_SB);
+    const r = vomTag(q, z);
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(sbox(z).network.allowedDomains, ["github.com", "*.ziel.example"]);
+    assert.deepEqual(sbox(z).credentials.envVars.map((v) => v.name), ["GITHUB_TOKEN", "ZIEL_TOKEN"]);
+    assert.ok(!lies(z, SETTINGS).includes("quelle.example") && !lies(z, SETTINGS).includes("QUELL_TOKEN"));
+    const vorher = [lies(z, SETTINGS), lies(z, ".factory/sync-stand.json")];
+    assert.match(vomTag(q, z).out, /0 geändert/);
+    assert.deepEqual([lies(z, SETTINGS), lies(z, ".factory/sync-stand.json")], vorher);
+    const g = gate(z);
+    assert.equal(g.code, 0, g.err);
+    assert.match(g.out, /2 Einträge der Berechtigungs-Ergänzung ohne Befund/);
+  });
+  test("ohne Block im Ziel gibt es nur den Kern-Anteil, ohne Meldung des Gates", () => {
+    const z = ziel();
+    assert.equal(vomTag(quelle(), z).code, 0);
+    assert.deepEqual(sbox(z), KERN_SB);
+    const g = gate(z);
+    assert.equal(g.code, 0, g.err);
+    assert.match(g.out, /: 0 Einträge der Berechtigungs-Ergänzung ohne Befund/);
+  });
+  test("eine Handänderung am Kern-Anteil macht das Gate rot, mit Hinweis auf die Config", () => {
+    const z = ziel(ZIEL_SB);
+    assert.equal(vomTag(quelle(), z).code, 0);
+    const s = sbox(z);
+    schreibe(z, SETTINGS, json({ sandbox: { ...s, network: { allowedDomains: [...s.network.allowedDomains, "hand.example"] } } }));
+    assert.match(gate(z).err, /#\/sandbox: Besitz wurde im Projekt verändert \(Projekt-Ergänzungen gehören nach \.factory\/projekt\.json › sandbox\)/);
+  });
+  test("eine nur in der Config ergänzte Domain ohne neuen Sync lässt den Kern-Hash grün und die Ergänzungs-Prüfung rot", () => {
+    const z = ziel(ZIEL_SB);
+    assert.equal(vomTag(quelle(), z).code, 0);
+    schreibe(z, CONFIG, json({ sandbox: { ...ZIEL_SB, allowedDomains: [...ZIEL_SB.allowedDomains, "neu.example"] } }));
+    assert.deepEqual(drift.pruefeDrift(leser(z)).fehler, []);
+    assert.match(drift.pruefeErgaenzung(leser(z)).fehler.join("|"), /sandbox\.network\.allowedDomains: Ergänzung „neu\.example“ fehlt[\s\S]*Weg:/);
+    assert.equal(gate(z).code, 1);
+  });
+  test("ein Ziel mit Domain * ist rot, nichts wird geschrieben", () => {
+    const z = ziel({ allowedDomains: ["*"] });
+    const r = vomTag(quelle(), z);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.err, /Ziel: sandbox\.network\.allowedDomains: Ergänzung „\*“ erlaubt jede Domain/);
+    assert.match(r.err, /nichts geschrieben/);
+    assert.equal(lies(z, SETTINGS), '{\n  "model": "opus"\n}\n');
+  });
+  test("eine Ziel-Ergänzung mit einem Kern-Namen in envVars ist rot", () => {
+    const z = ziel({ envVars: [{ name: "GITHUB_TOKEN", mode: "deny" }] });
+    const r = vomTag(quelle(), z);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.err, /„GITHUB_TOKEN“ steht doppelt/);
+  });
+  test("eine Quelle, deren Ergänzung nicht am Listenende steht, blockiert den Sync mit „Quelle:“", () => {
+    const falsch = { ...(sandboxMit(KERN_SB, QUELL_SB) as object), network: { allowedDomains: ["*.quelle.example", "github.com"] } };
+    const r = vomTag(quelle({ settings: falsch }), ziel());
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.err, /Quelle: sandbox\.network\.allowedDomains: die Ergänzung muss als Ende der Liste stehen/);
+  });
+  test("ohne Sync-Stand prüft das Gate die Sandbox-Ergänzung (fehlt sie in settings.json, rot)", () => {
+    const z = tmp();
+    schreibe(z, CONFIG, json({ sandbox: ZIEL_SB }));
+    schreibe(z, SETTINGS, json({ sandbox: KERN_SB }));
+    const f = drift.pruefeErgaenzung(leser(z));
+    assert.equal(f.eintraege, 2);
+    assert.match(f.fehler.join("|"), /„\*\.ziel\.example“ fehlt/);
+    schreibe(z, SETTINGS, "{}\n");
+    assert.match(drift.pruefeErgaenzung(leser(z)).fehler.join("|"), /#\/sandbox: Datei oder Schlüssel fehlt/);
+  });
+});
+
+describe("Berechtigungs-Ergänzung: Server-Regel und Tool-Platzhalter (#1888)", () => {
+  const befunde = (perm: Perm, erg: Partial<Erg>): string => lib.ergaenzungsBefunde(perm, erg).join("|");
+  test("allow mcp__s__* neben ask oder deny eines einzelnen Tools desselben Servers ist rot", () => {
+    assert.match(befunde({ allow: ["mcp__s__*"], ask: ["mcp__s__tool"] }, { allow: ["mcp__s__*"] }), /hebt die Regel „mcp__s__tool“/);
+    assert.match(befunde({ allow: ["mcp__s__*"], deny: ["mcp__s__tool"] }, { allow: ["mcp__s__*"] }), /hebt die Regel „mcp__s__tool“/);
+  });
+  test("allow mcp__s ohne * neben ask oder deny eines einzelnen Tools bleibt legitim", () => {
+    assert.equal(befunde({ allow: ["mcp__s"], ask: ["mcp__s__tool"] }, { allow: ["mcp__s"] }), "");
+    assert.equal(befunde({ allow: ["mcp__s"], deny: ["mcp__s__tool"] }, { allow: ["mcp__s"] }), "");
+  });
+});
