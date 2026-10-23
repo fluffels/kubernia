@@ -44,6 +44,7 @@
   "skills": {
     "abschluss": "zz-abschluss"
   },
+  "rulesetSpiegel": ".github/ruleset-main-schutz.json",
   "sprache": {
     "umschrift": [
       "fuer",
