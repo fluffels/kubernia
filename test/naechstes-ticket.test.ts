@@ -1034,7 +1034,11 @@ describe("Board-Verzug (#1866)", () => {
     const gesehen: unknown[] = [];
     const r = V.ladeFrisch((a) => (gesehen.push(a), []));
     expect(gesehen).toEqual([{ anzahl: 50 }]);
-    expect("issues" in r && r.projektIds).toHaveLength(2);
+    const idVon = (rolle: string): string | undefined => projektConfig().boards.find((b) => b.rolle === rolle)?.projectId;
+    expect(idVon("produkt")).toBeTruthy();
+    expect(idVon("factory")).toBeTruthy();
+    expect(idVon("produkt")).not.toBe(idVon("factory"));
+    expect("issues" in r && r.projektIds).toEqual([idVon("produkt"), idVon("factory")]);
   });
 });
 

@@ -10,7 +10,7 @@
  * Nur Node-Builtins, `flag-lib.mjs` und `spezifikation-lib.mjs` (importfrei; läuft auch in Workflows ohne `npm ci`).
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, posix, resolve } from "node:path";
+import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
@@ -512,7 +512,8 @@ export function sammleKernEnvIn(ordner, bezug = null) {
       if (statSync(p).isDirectory()) gehe(p);
       else if (e.endsWith(".mjs")) {
         const fest = p.split("\\").join("/");
-        const name = bezug === null ? fest : fest.slice(bezug.split("\\").join("/").replace(/\/$/, "").length + 1);
+        const rel = bezug === null ? null : relative(bezug.split("\\").join("/").replace(/\/$/, ""), fest).split("\\").join("/");
+        const name = rel === null || rel.startsWith("../") || isAbsolute(rel) ? fest : rel; // liegt die Datei nicht unter dem Bezug, bleibt der volle Pfad
         const f = sammleKernEnv(name, readFileSync(p, "utf8"));
         f.literale.forEach((n) => literale.add(n));
         ohneLiteral.push(...f.ohneLiteral);

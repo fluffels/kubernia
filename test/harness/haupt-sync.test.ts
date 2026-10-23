@@ -486,6 +486,14 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(text(["AGENTS.md"])).toContain("Den Ticket-Skill jetzt neu lesen");
   });
 
+  test("Ticket-Skills: ohne SKILL.md nennt der Lies-Satz nur die erste ablauf.md, die Liste der Änderungen alle", () => {
+    const text = (skill: string[]) => S.baueText({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill, agenten: [], sonstige: [] } }, { sitzungsbasis: false });
+    const zwei = text([".agents/skills/factory/ablauf.md", ".agents/skills/factory-ticket/ablauf.md"]);
+    expect(zwei).toContain("Skill neu lesen: .agents/skills/factory/ablauf.md, .agents/skills/factory-ticket/ablauf.md haben");
+    expect(zwei).toContain("`.agents/skills/factory/ablauf.md` jetzt neu lesen");
+    expect(zwei).not.toContain("factory-ticket/ablauf.md` jetzt");
+  });
+
   test("--text: der Hinweis auf übrige .claude-Dateien kommt auch im Mischfall, fehlt aber ohne solche Dateien", () => {
     const misch = S.ausgabe({ aktion: "pull", gepullt: true, hinter: 1, basis: "abc", harness: { skill: [], agenten: [".claude/agents/x.md"], sonstige: [".claude/settings.json"], lockGeaendert: false } } as never, true);
     expect(misch).toContain("Übrige .claude-Dateien");

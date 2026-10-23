@@ -424,6 +424,16 @@ describe("kernEnvNamen und sammleKernEnv", () => {
     assert.deepEqual(f.ohneLiteral, ["unter/b.mjs:1"]);
     assert.deepEqual(pc.sammleKernEnvIn(d).ohneLiteral.map((x) => x.endsWith("/unter/b.mjs:1")), [true]);
   });
+  test("sammleKernEnvIn: ein Bezug, der kein Präfix des Ordners ist, schneidet nichts ab; Schrägstrich und Backslash am Bezugsende sind gleich", () => {
+    const d = tmp();
+    mkdirSync(join(d, "unter"));
+    mkdirSync(join(d, "anders"));
+    writeFileSync(join(d, "unter", "b.mjs"), "const x = umgebungsWert(env, name);\n");
+    const fest = (p: string): string => p.split("\\").join("/");
+    assert.deepEqual(pc.sammleKernEnvIn(join(d, "unter"), join(d, "anders")).ohneLiteral, [`${fest(join(d, "unter", "b.mjs"))}:1`]);
+    assert.deepEqual(pc.sammleKernEnvIn(join(d, "unter"), join(d, "anders-lang-genug-fuer-abschnitt")).ohneLiteral, [`${fest(join(d, "unter", "b.mjs"))}:1`]);
+    for (const bezug of [d, `${d}/`, `${d}\\`, fest(d)]) assert.deepEqual(pc.sammleKernEnvIn(join(d, "unter"), bezug).ohneLiteral, ["unter/b.mjs:1"], bezug);
+  });
   test("das echte scripts/ enthält die Diff-Basis", () => {
     assert.ok(pc.kernEnvNamen(join(WURZEL, "scripts")).includes("FACTORY_DIFF_BASE"));
   });

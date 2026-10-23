@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
+import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
@@ -200,10 +200,27 @@ describe("Sprache des Spezifikations-Gates (--pruefen, #1866 L22)", () => {
     assert.equal(luecken(r).length, 1, r.out.join("\n"));
     assert.match(luecken(r)[0], /Sprache: .*Fix: .*sprache\.spezifikation/);
   });
+  test("CLI: ohne angemeldetes Token wird die Sprache trotzdem geprüft (liest nur die Config)", () => {
+    const { sprache: _weg, ...ohneSprache } = CONFIG;
+    const r = lauf({ "api -i user": new Error("gh auth login") }, { config: ohneSprache });
+    assert.equal(r.code, 1);
+    assert.deepEqual(luecken(r).map((z) => z.split(":")[0]), ["LÜCKE Token", "LÜCKE Sprache"], r.out.join("\n"));
+    assert.deepEqual(r.aufrufe, ["api -i user"]);
+  });
   test("CLI: unvollständiger Block (blocker fehlt) wird schon beim Laden gemeldet: Exit 2 mit Schlüssel und Fix", () => {
     const r = lauf({}, { config: ohne("blocker") });
     assert.equal(r.code, 2);
     assert.match(r.err.join("\n"), /sprache\.spezifikation\.blocker[\s\S]*Fix:/);
+  });
+});
+
+describe("konfigFehlerText", () => {
+  const fehlerText = rawFehlerText as (e: unknown) => string;
+  test("Error: Meldung; Nicht-Error: String(e); ohne Fix-Zeile kommt die Spiegel-Fix-Zeile dazu, mit Fix-Zeile bleibt der Text", () => {
+    assert.match(fehlerText(new Error("kaputt")), /^kaputt\nFix: /);
+    assert.match(fehlerText("nur ein Text"), /^nur ein Text\nFix: /);
+    assert.match(fehlerText(42), /^42\nFix: /);
+    assert.equal(fehlerText(new Error("x\nFix: so")), "x\nFix: so");
   });
 });
 
@@ -371,7 +388,7 @@ describe("harness-doctor --pruefen", () => {
   test("das nicht angemeldete Token trägt das Feld fatal (einrichten prüft es statt des Punktnamens), ein fehlender Scope nicht", () => {
     const leer = { secrets: [], variablen: [], labels: [], boards: [] };
     const nichtAngemeldet = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh: () => { throw new Error("gh auth login"); }, langfuse: null });
-    assert.deepEqual(nichtAngemeldet.map((p) => [p.punkt, p.fatal]), [["Token", true]]);
+    assert.deepEqual(nichtAngemeldet.filter((p) => p.punkt !== "Sprache").map((p) => [p.punkt, p.fatal]), [["Token", true]]);
     const ohneScope = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh: (a) => (a.join(" ") === "api -i user" ? "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo\n\n{}" : (() => { throw new Error("404"); })()), langfuse: null });
     assert.equal(ohneScope.find((p) => p.punkt === "Token-Scope")?.fatal, undefined);
   });

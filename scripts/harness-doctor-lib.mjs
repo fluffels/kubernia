@@ -268,8 +268,8 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     ergebnis.push(...pruefeLabels(gh, repo, voraussetzungen.labels));
     voraussetzungen.boards.forEach((b, i) => ergebnis.push(...pruefeBoard(gh, b, i)));
     ergebnis.push(...pruefeRuleset(gh, repo, r.repo, spiegel));
-    ergebnis.push(...pruefeSprache(config));
   }
+  ergebnis.push(...pruefeSprache(config)); // liest nur die Config, braucht kein Token
   if (langfuse) {
     const lf = langfuse();
     const text = String(lf.stderr || lf.stdout || "").trim().split("\n")[0];
