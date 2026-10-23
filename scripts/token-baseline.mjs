@@ -618,8 +618,8 @@ export async function ladeLangfuseSession(sessionId, opts) {
 async function main() {
   const { args: rest, config, fehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
   if (fehler) {
-    console.error(`✖ ${fehler}`);
-    process.exit(AUFRUF_EXIT);
+    console.error(fehler);
+    process.exit(1); // wie eine fehlende Projekt-Config ohne --config: Laufzeitfehler
   }
   let args;
   try {

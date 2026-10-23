@@ -160,9 +160,9 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.equal(m.classifySubagent("fremder-agent", "irgendwas", a), null);
     assert.equal(m.classifySubagent("x-planner", "irgendwas", a), "Planung", "die Heuristik bleibt der Rückfall");
   });
-  test("CLI: eine unlesbare --config bricht vor jedem Lesen mit Exit 2 und Fix-Zeile ab", () => {
+  test("CLI: eine unlesbare --config bricht vor jedem Lesen mit Exit 1 und Fix-Zeile ab", () => {
     const r = spawnSync(process.execPath, ["scripts/token-baseline.mjs", "--config", "gibt-es-nicht.json", "--session", "x"], { encoding: "utf8" });
-    assert.equal(r.status, 2);
+    assert.equal(r.status, 1);
     assert.match(r.stderr, /Projekt-Config fehlt[\s\S]*Fix:/);
   });
   test("windowCalls und summarize reichen die Agentennamen an die Phasen-Zuordnung durch", () => {
