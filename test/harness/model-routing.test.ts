@@ -12,8 +12,8 @@
  * Der Wächter deckt die drei Fehlklassen ab, die das leise zurückbringen:
  *
  *   1. **Der Hebel verschwindet.** Seit #1280 ist der Hebel das Frontmatter des Subagenten
- *      `kubernia-umsetzer` (Skill-Frontmatter greift wegen anthropics/claude-code#98898 nur bei
- *      `/kubernia`, ein Projekt-Default ließ sich per `/model` überstimmen; seit #1557 gilt `sonnet` als Projekt-Default nur für den Hauptchat). Es ist je eine Zeile –
+ *      des Umsetzer-Agenten (Skill-Frontmatter greift wegen anthropics/claude-code#98898 nur beim
+ *      Aufruf als Slash-Command, ein Projekt-Default ließ sich per `/model` überstimmen; seit #1557 gilt `sonnet` als Projekt-Default nur für den Hauptchat). Es ist je eine Zeile –
  *      gelöscht/umformuliert fällt die Umsetzung wortlos aufs Session-Modell zurück.
  *   2. **Der Review wird still mitdemoviert.** Der Umsetzer läuft auf dem
  *      Coding-Tier. Liefen die Lens-Pässe INLINE in einem orchestrierenden Agenten (Umsetzer oder
@@ -25,9 +25,9 @@
  *      diese Klasse sieht `check:docdrift` (#529) nicht – es prüft Kommandos/Links.
  *
  * Seit #1280 schreibt auf dem Skill-Pfad nicht mehr der Hauptagent den Code, sondern der Subagent
- * `kubernia-umsetzer` mit `sonnet`/`medium` im eigenen Frontmatter: Projekt-Default und Skill-Frontmatter
+ * der Umsetzer-Agent mit `sonnet`/`medium` im eigenen Frontmatter: Projekt-Default und Skill-Frontmatter
  * ließen sich per `/model` bzw. durch den Turn-Scope still umgehen. Der Wächter prüft Agent, Spawn ohne
- * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review), dass kubernia-loop weg ist
+ * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review), dass der Loop-Skill des Ticket-Skills weg ist
  * und dass `.claude/settings.json` den Hauptchat auf `sonnet` setzt (#1557: Projekt-Default, Ad-hoc-Opus per `/model`).
  *
  * Seit #1065 gilt zusätzlich: `model` (oder `agentType`), es gibt keine festen Modell-IDs mehr und genau
@@ -47,7 +47,7 @@
  *     untrackte lokale Dateien in .claude/ werden mitgeprüft und können lokal rot machen, die CI nicht.
  *   - Die Epic-Aufteilung auf dem Skill-Pfad wird nur auf den Verweis im Text geprüft.
  *   - Das Agent-Tool kennt `effort`, die Konvention setzt ihn nicht am Spawn (docs/model-routing.md §2): der
- *     Effort von Repo-Agenten (kubernia-lens, Explore) kommt aus ihrem Frontmatter; am Spawn wird geprüft, dass
+ *     Effort von Repo-Agenten (Lens-Agent, Explore) kommt aus ihrem Frontmatter; am Spawn wird geprüft, dass
  *     KEIN `model:` das Frontmatter überstimmt. `effort: low` am Explore wirkt, solange `haiku`
  *     auf Haiku 5.5 auflöst (Anthropic-API, Effort unterstützt); auf Cloud-Providern mit Haiku 4.5 nicht.
  *
@@ -82,6 +82,11 @@ import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
+import { FREMD, projektConfig, repoName } from "../support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRoh from "../../scripts/ticket-namen.mjs";
+
+const escapeRegex = (namenRoh as unknown as { escapeRegex: (t: string) => string }).escapeRegex;
 
 // Begründete Ausnahme, identisch zu test/harness/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed". Eng begrenzter
@@ -92,9 +97,11 @@ const stripFencedCode: (md: string) => string = checkDocDrift.stripFencedCode;
 const collectMarkdown: (rootDir?: string) => string[] = checkBasis.collectMarkdown;
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+/** Rollennamen der echten Config: der Test liest echte Agenten- und Doku-Dateien, die sie tragen. */
+const AG = projektConfig().agenten;
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-/** Der Einstiegs-Skill im Hauptchat; sein Frontmatter gilt nur bei /kubernia (#1035, #1280). */
+/** Der Einstiegs-Skill im Hauptchat; sein Frontmatter gilt nur beim Aufruf als Slash-Command (#1035, #1280). */
 const UMSETZUNGS_SKILL = ".agents/skills/factory-ticket/SKILL.md";
 /** Der zweite Ticket-Skill (Bereich agentic); der Ablauf selbst steht in `.agents/skills/factory/ablauf.md` (#1806). */
 const FACTORY_SKILL = ".agents/skills/factory/SKILL.md";
@@ -183,7 +190,7 @@ function agentenNachName(): Record<string, Record<string, string>> {
 const RETIRED_ROUTING_CLAIMS: { term: string; home: string; nurWenn?: RegExp; ausser?: RegExp }[] = [
   {
     term: "Opus-Standard-Effort",
-    home: "die Lenses tragen `effort: high` im Frontmatter von kubernia-lens und laufen damit (#1209)",
+    home: "die Lenses tragen `effort: high` im Frontmatter des Lens-Agenten und laufen damit (#1209)",
   },
   {
     term: "Session-Default",
@@ -223,7 +230,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     assert.ok(
       fm.model && istCodingTier(fm.model),
       `Im Frontmatter von ${skillDatei} fehlt ein \`model:\` auf dem Coding-Tier (Alias \`sonnet\`). ` +
-        "Die Zeile wirkt nur bei Aufruf als `/kubernia` (anthropics/claude-code#98898); der eigentliche Hebel " +
+        "Die Zeile wirkt nur bei Aufruf als `/" + AG.ticketSkill + "` (anthropics/claude-code#98898); der eigentliche Hebel " +
         `ist der Subagent ${UMSETZER} (#1280). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
     );
     // Absichtlich nur Anwesenheit, nicht der Wert: die Regel ist „explizit statt erben".
@@ -236,7 +243,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     );
   });
 
-  test(`${REVIEW_SKILL} spawnt die Lenses über den Agenten kubernia-lens (opus/high), ohne model-Override`, () => {
+  test(`${REVIEW_SKILL} spawnt die Lenses über den Lens-Agenten (opus/high), ohne model-Override`, () => {
     const md = liesMitProjektwerten(REVIEW_SKILL);
     // Bewusst an den `Agent({…})`-Spawn-Block gebunden, nicht datei-weit: sonst hält ein
     // beliebiger Prosa-Satz („historisch stand hier model: opus") den Test grün, während
@@ -244,18 +251,18 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     const spawn = /Agent\(\{[^}]*\}\)/s.exec(md)?.[0] ?? "";
     assert.match(
       spawn,
-      /subagent_type:\s*"kubernia-lens"/,
-      `${REVIEW_SKILL} muss die Lens-Pässe in einem \`Agent({…})\`-Spawn über \`kubernia-lens\` starten: ` +
+      new RegExp(String.raw`subagent_type:\s*"${escapeRegex(AG.lens)}"`),
+      `${REVIEW_SKILL} muss die Lens-Pässe in einem \`Agent({…})\`-Spawn über \`${AG.lens}\` starten: ` +
         "nur dessen Frontmatter trägt `effort: high`, ein `effort:` am Spawn überstimmte es (#1209). " +
         "Laufen die Lenses inline im Hauptagenten, reviewt Sonnet, und der finale Blick wäre ein Self-Grading (#1012).",
     );
     assert.doesNotMatch(
       spawn,
       /\bmodel\s*:/,
-      "Ein `model:` am Spawn überstimmt das Frontmatter von kubernia-lens – das Modell steht nur dort (#1209).",
+      "Ein `model:` am Spawn überstimmt das Frontmatter von " + AG.lens + " – das Modell steht nur dort (#1209).",
     );
     const lens = frontmatter(read(".claude/agents/factory-lens.md"));
-    assert.equal(lens.name, "kubernia-lens");
+    assert.equal(lens.name, AG.lens);
     assert.equal(lens.model, "opus", "Lenses laufen auf dem starken Tier");
     assert.equal(lens.effort, "high", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
   });
@@ -289,7 +296,7 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
 
   test("Erkennung greift wirklich (Red-Green): nur der Alias sonnet ist grün, env-Modelle und TTL-Schlüssel sind Befunde", () => {
     assert.deepEqual(hauptchatModellBefunde({ model: "sonnet" }), []);
-    assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { CC_LANGFUSE_TRACE_TAGS: "kubernia" } }), []);
+    assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { CC_LANGFUSE_TRACE_TAGS: repoName(FREMD) } }), []);
     assert.deepEqual(hauptchatModellBefunde({}), ["model=null"], "fehlendes model");
     for (const m of ["opus", "opusplan", "best", "claude-sonnet-5-5", "Sonnet "]) {
       assert.equal(hauptchatModellBefunde({ model: m }).length, 1, m);
@@ -366,7 +373,7 @@ const zelleOhneCode = (z: string) => z.replace(/`/g, "").trim();
 
 /**
  * Prüft die Phasen-Matrix (§1) gegen die Frontmatter ihrer Ziele (#1609): je Zeile Ziel über die Skill-Pfad-Zelle bestimmen
- * (Reihenfolge `holdout-szenario`, `holdout-abnahme`, `forum-leser`, `kubernia-planner`, `kubernia-lens`, `kubernia-gruppe`, `kubernia-umsetzer`/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
+ * (Reihenfolge `holdout-szenario`, `holdout-abnahme`, `forum-leser`, Planer, Lens, Gruppe, Umsetzer/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
  * (Spalte „Effort Skill-Pfad“) und bei Subagenten `model` (Spalte „Alias“) gleich dem Frontmatter. Liefert die Verstöße;
  * eine fehlende Spalte, eine fehlende Tabelle oder eine nicht zuordenbare Zeile ist ein Verstoß.
  */
@@ -377,7 +384,7 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
   const zellen = (z: string) => z.split("|").slice(1, -1).map((c) => c.trim());
   const spalten = zellen(zeilen[kopf]);
   const idx = (name: string) => spalten.indexOf(name);
-  const [iAlias, iEffort, iSkill] = [idx("Alias"), idx("Effort Skill-Pfad"), idx("Skill-Pfad (`kubernia`)")];
+  const [iAlias, iEffort, iSkill] = [idx("Alias"), idx("Effort Skill-Pfad"), idx(`Skill-Pfad (\`${AG.ticketSkill}\`)`)];
   if (iAlias < 0 || iEffort < 0 || iSkill < 0) return [`Spalte fehlt (Alias ${iAlias}, Effort Skill-Pfad ${iEffort}, Skill-Pfad ${iSkill})`];
   const fehler: string[] = [];
   for (let i = kopf + 2; i < zeilen.length && zeilen[i].startsWith("|"); i++) {
@@ -390,13 +397,13 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
         ? "holdoutAbnahme"
         : /`forum-leser`/.test(skill)
       ? "forumLeser"
-      : /`kubernia-planner`/.test(skill)
+      : skill.includes("`" + AG.planer + "`")
         ? "planner"
-        : /`kubernia-lens`/.test(skill)
+        : skill.includes("`" + AG.lens + "`")
         ? "lens"
-        : /`kubernia-gruppe`/.test(skill)
+        : skill.includes("`" + AG.gruppe + "`")
           ? "gruppe"
-          : /kubernia-umsetzer|im Umsetzer/.test(skill)
+          : (skill.includes(AG.umsetzer) || skill.includes("im Umsetzer"))
             ? "umsetzer"
             : /`Explore`/.test(skill)
               ? "explore"
@@ -460,10 +467,10 @@ describe("Sammelticket-Gruppen (#1647, ADR 0026): ein Vertrag in Planer, Umsetze
   test("die Kopfzeile `GRUPPE <k>/<n>` steht wortgleich in allen drei Definitionen", () => {
     for (const d of dateien) assert.ok(read(d).includes("GRUPPE <k>/<n>"), `${d} nennt \`GRUPPE <k>/<n>\``);
   });
-  test("der Planer nennt das Block-Format, der Umsetzer spawnt kubernia-gruppe ohne isolation", () => {
+  test("der Planer nennt das Block-Format, der Umsetzer spawnt den Gruppen-Agenten ohne isolation", () => {
     assert.ok(read(dateien[0]).includes("GRUPPE <k>/<n> <Name>: L<x>, L<y> | Dateien: … | nach: <k|->"));
     const umsetzer = liesMitProjektwerten(dateien[1]);
-    assert.match(umsetzer, /subagent_type: "kubernia-gruppe"/);
+    assert.match(umsetzer, new RegExp(`subagent_type: "${escapeRegex(AG.gruppe)}"`));
     assert.match(umsetzer, /ohne `isolation`/);
   });
   test("die Gruppe pusht nicht, öffnet keinen PR und hat weder Agent noch Playwright noch Web", () => {
@@ -473,10 +480,10 @@ describe("Sammelticket-Gruppen (#1647, ADR 0026): ein Vertrag in Planer, Umsetze
   });
 });
 
-describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nicht im Hauptchat (#1280)", () => {
+describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Hauptchat (#1280)", () => {
   test("Umsetzer-Agent: Coding-Tier und Effort aus der Matrix im eigenen Frontmatter", () => {
     const fm = frontmatter(read(UMSETZER));
-    assert.equal(fm.name, "kubernia-umsetzer");
+    assert.equal(fm.name, AG.umsetzer);
     assert.ok(
       fm.model && istCodingTier(fm.model),
       "Der Umsetzer muss im Frontmatter auf dem Coding-Tier stehen – nur das Agent-Frontmatter wirkt unabhängig " +
@@ -490,7 +497,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     const fm = frontmatter(read(UMSETZER));
     const tools = (fm.tools ?? "").split(",").map((t) => t.trim());
     for (const tool of ["Agent", "Edit", "Write", "Bash"]) {
-      // exakt statt per Wortgrenze: `Agent(kubernia-planner)` schränkt die spawnbaren Typen ein und sperrte die Lenses
+      // exakt statt per Wortgrenze: ein auf Namen eingeschränktes `Agent(…)` schränkt die spawnbaren Typen ein und sperrte die Lenses
       assert.ok(tools.includes(tool), `tools: ohne uneingeschränktes ${tool}`);
     }
     assert.match(
@@ -575,9 +582,9 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     assert.deepEqual([...tools].sort(), [...erwartet].sort(), "tools: des Umsetzers weicht von der erwarteten Gesamtmenge ab: bewusst ändern = diese Liste mitpflegen");
   });
 
-  test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {
-    const spawn = spawnFuer(liesTicketAblauf(), "kubernia-umsetzer");
-    assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
+  test("der Ticket-Skill spawnt den Umsetzer ohne model-Override", () => {
+    const spawn = spawnFuer(liesTicketAblauf(), AG.umsetzer);
+    assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "${AG.umsetzer}", … })\`-Spawn`);
     assert.doesNotMatch(spawn, /\bmodel:/, "Ein `model:` am Spawn (auch ohne Anführungszeichen) überstimmt das Frontmatter des Umsetzers");
   });
 
@@ -593,17 +600,17 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
 
   test("Erkennung greift wirklich (Red-Green): spawnFuer trennt Blöcke und erkennt den Override", () => {
     const md =
-      'Agent({\n  subagent_type: "kubernia-planner",\n  prompt: "p"\n})\n\n' +
-      'Agent({\n  subagent_type: "kubernia-umsetzer",\n  model: "opus",\n  prompt: "u"\n})';
+      'Agent({\n  subagent_type: "' + FREMD.agenten.planer + '",\n  prompt: "p"\n})\n\n' +
+      'Agent({\n  subagent_type: "' + FREMD.agenten.umsetzer + '",\n  model: "opus",\n  prompt: "u"\n})';
     assert.equal(spawnBloecke(md).length, 2);
-    assert.match(spawnFuer(md, "kubernia-umsetzer"), /model:\s*"opus"/, "der Override fällt am richtigen Block auf");
-    assert.doesNotMatch(spawnFuer(md, "kubernia-planner"), /model:/, "der Nachbarblock bleibt unberührt");
+    assert.match(spawnFuer(md, FREMD.agenten.umsetzer), /model:\s*"opus"/, "der Override fällt am richtigen Block auf");
+    assert.doesNotMatch(spawnFuer(md, FREMD.agenten.planer), /model:/, "der Nachbarblock bleibt unberührt");
     assert.equal(spawnFuer(md, "gibt-es-nicht"), "");
   });
 
-  test("genau ein Ticket-Ablauf: kubernia-workflow-Skill und kubernia-ticket-Workflow existieren nicht (ADR 0028)", () => {
-    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-workflow`), "der Skill kubernia ist der einzige Ticket-Ablauf");
-    assert.ok(!existsSync(`${REPO_ROOT}.claude/workflows/kubernia-ticket.js`), "der Workflow ging im Skill kubernia auf");
+  test("genau ein Ticket-Ablauf: Workflow-Skill und Ticket-Workflow des Ticket-Skills existieren nicht (ADR 0028)", () => {
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/${AG.ticketSkill}-workflow`), "der Ticket-Skill ist der einzige Ticket-Ablauf");
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/workflows/${AG.ticketSkill}-ticket.js`), "der Workflow ging im Ticket-Skill auf");
   });
 
   test("jeder agent({…})-Aufruf in .claude/workflows trägt model:/agentType: und effort: (#1740)", () => {
@@ -621,8 +628,8 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     assert.equal(unvollstaendigeAufrufe("kein Aufruf").length, 0);
   });
 
-  test("der Skill kubernia-loop existiert nicht mehr (ein Umsetzer pro Ticket ersetzt ihn)", () => {
-    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-loop`), "kubernia-loop ging im Umsetzer-Subagenten auf (#1280)");
+  test("der Loop-Skill des Ticket-Skills existiert nicht mehr (ein Umsetzer pro Ticket ersetzt ihn)", () => {
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/${AG.ticketSkill}-loop`), `${AG.ticketSkill}-loop ging im Umsetzer-Subagenten auf (#1280)`);
   });
 });
 
@@ -643,7 +650,7 @@ describe("Keine festen Modell-IDs, genau eine Planungs-Oberfläche (#1065)", () 
   });
 
   test("der Skill plan-feature existiert nicht mehr, höchstens eine Planungsrolle", () => {
-    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/plan-feature`), "plan-feature ging in den kubernia-planner auf (#1065)");
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/plan-feature`), `plan-feature ging in den Planer ${AG.planer} auf (#1065)`);
     const planend = routingFiles()
       .filter((f) => f.endsWith(".md"))
       .filter((f) => {
@@ -730,8 +737,8 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.match(liesTicketAblauf(), /Epic: liefere die Aufteilung/, "der Skill gibt dem Planer den Epic-Hinweis");
   });
 
-  test("Skill-Pfad: der Epic-Absatz delegiert die Aufteilung an den kubernia-planner", () => {
-    assert.match(liesTicketAblauf(), /\*\*Sonderfall zu großes Epic[^\n]*kubernia-planner/);
+  test("Skill-Pfad: der Epic-Absatz delegiert die Aufteilung an den Planer", () => {
+    assert.match(liesTicketAblauf(), new RegExp(String.raw`\*\*Sonderfall zu großes Epic[^\n]*${escapeRegex(AG.planer)}`));
   });
 
   test("Doku: die Matrix-Zeile der Epic-Aufteilung trägt opus", () => {
@@ -755,7 +762,7 @@ describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
     assert.match(rolle, /legst (es|sie|nichts) [^\n]*selbst[^\n]*ab|legst du nichts selbst ab/);
   });
 
-  test("der kubernia-Skill reicht LERNKANDIDATEN im Abschlussbericht durch", () => {
+  test("der Ticket-Skill reicht LERNKANDIDATEN im Abschlussbericht durch", () => {
     assert.match(skill, /\*\*`gemergt`\*\*[^\n]*LERNKANDIDATEN/);
   });
 });
