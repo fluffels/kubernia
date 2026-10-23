@@ -6,8 +6,10 @@
  * Lens-Definition. Grenzen (Bash-Sabotage, Symlinks) stehen im Kopf des Skripts und sind hier bewusst nicht getestet.
  */
 import { describe, expect, test } from "vitest";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, projektConfig } from "../support/fremd-config";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/lens-edit-guard.mjs";
 
@@ -106,6 +108,19 @@ describe("entscheideHook", () => {
     expect(G.entscheideHook(payload(undefined), DEPS)?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(G.entscheideHook("{kaputt", DEPS)).toBeNull();
     expect(G.entscheideHook(payload(`${FEATURE}/x`, "Read"), DEPS)).toBeNull();
+  });
+});
+
+describe("Prozess-Start ohne deps (echter Hook-Pfad, liest die Projekt-Config selbst)", () => {
+  const echt = projektConfig().praefixe.worktree;
+  const start = (file_path: string): string =>
+    execFileSync("node", [fileURLToPath(new URL("../../scripts/lens-edit-guard.mjs", import.meta.url))], {
+      input: JSON.stringify({ tool_name: "Edit", cwd: `C:/dev/projekt/.claude/worktrees/${echt}1349`, tool_input: { file_path } }),
+      encoding: "utf8",
+    });
+  test("Lens-Worktree: durchgelassen (leere Ausgabe); Feature-Worktree: deny", () => {
+    expect(start(`C:/dev/projekt/.claude/worktrees/${echt}1349-lens-r1/src/a.ts`).trim()).toBe("");
+    expect(start(`C:/dev/projekt/.claude/worktrees/${echt}1349/src/a.ts`)).toContain('"deny"');
   });
 });
 
