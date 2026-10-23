@@ -33,6 +33,7 @@ import {
   frischeOffeneIssues,
   ghJson,
   itemsUeberIssues,
+  kandidatenSammelticket,
   kopfEnde,
   loadItems,
   loadOpenIssuePages,
@@ -184,7 +185,7 @@ export function harnessVoraussetzung({ items, position, positionFehler }) {
 export function entscheideMitFuellstand({ items, offene, position, repo, io }) {
   const kandidat = sammelticketItem(items);
   if (!kandidat) {
-    const offenes = offene.find((i) => i.titel === SAMMELTICKET_TITEL && (i.assignees ?? []).length === 0);
+    const [offenes] = kandidatenSammelticket(offene, SAMMELTICKET_TITEL);
     if (offenes) io.log(`::warning::Board-Verzug: #${offenes.number} fehlt in der Board-Liste (REST hinkt oder Item fehlt), der Härtungs-Takt sieht das Sammelticket nicht.`);
     return { ...entscheideHarnessTakt({ items, befundKommentare: 0, position }), fuellstand: null };
   }

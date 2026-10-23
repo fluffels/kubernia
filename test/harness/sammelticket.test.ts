@@ -162,7 +162,7 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
     assert.ok(!halbiert("kein Teil, kein Rest-Übertrag"));
     assert.ok(!nenntErgebnisPflicht(""));
     // Fremd-Präfix-Probe: der Literal-Wächter ist nicht an das Projektpräfix gebunden, der Platzhalter selbst ist kein Literal
-    for (const praefix of ["KQ-", "ZZ-", "AB12-".replace("12", "")]) assert.match(`${praefix}Diffsize-Override`, PROJEKT_LITERAL, praefix);
+    for (const praefix of ["ZZ-", "AB-", "XYZ-"]) assert.match(`${praefix}Diffsize-Override`, PROJEKT_LITERAL, praefix);
     assert.doesNotMatch(OVERRIDE, PROJEKT_LITERAL);
   });
 });
