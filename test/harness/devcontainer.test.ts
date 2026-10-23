@@ -312,6 +312,9 @@ describe("Node-Pins erfüllen das Minimum engines.node (#1907)", () => {
     const text = 'FROM node:22.23.4 AS a\nFROM node:22 AS b\n  image: "node:22.23.5-slim" # Kommentar\n';
     assert.deepEqual(dockerPins(text), ["22.23.4", "22", "22.23.5-slim"]);
     assert.equal(nodePinVerstoesse({ q: dockerPins(text) }, ">=22.23.4").length, 1, "nur die schwebende zweite Stage fällt auf");
+    assert.deepEqual(dockerPins("FROM mynode:22.23.4\n"), [], "Wortgrenze: fremdes Image ist kein Node-Pin");
+    assert.deepEqual(dockerPins("image: 'node:22.23.4'\n"), ["22.23.4"], "einfache Anführungszeichen");
+    assert.deepEqual(dockerPins("node:22.23.4#x"), ["22.23.4"], "Kommentarzeichen beendet den Pin");
   });
 
   test("Negativ: eine Node-Stage als letzte wird nicht als nginx-Laufzeit gewertet", () => {
