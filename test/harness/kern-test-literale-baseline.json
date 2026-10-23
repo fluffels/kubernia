@@ -22,6 +22,7 @@
   "test/docgen-fremdrepo.test.ts": {"Repo":4,"Phaser":1},
   "test/docgen-schichten.test.ts": {"Worktree":1,"Phaser":26},
   "test/factory-kennzahlen.test.ts": {"Owner":3,"Repo":1,"Praefix":5,"Label":1,"Agent":1},
+  "test/factory-sync-berechtigungen.test.ts": {"Repo":1,"Worktree":1,"Agent":1},
   "test/factory-sync.test.ts": {"Worktree":2,"Stardew":2},
   "test/festgefahren.test.ts": {"Owner":2,"Repo":2,"Label":1,"Agent":2},
   "test/filesize.test.ts": {"Worktree":3,"Stardew":1},
