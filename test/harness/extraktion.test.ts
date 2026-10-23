@@ -81,11 +81,47 @@ export function zuordnungsLuecken(liste: Liste, bezug: string[]): string[] {
     .map((p) => `${p}: in ${EXTRAKTION_PFAD} als kern-test (zieht ins Factory-Repo) oder projekt-test (bleibt) eintragen`);
 }
 
+const DATEN_DATEI = "Daten-Datei des Kern-Wächters (Baseline oder Abdeckung): ihre Werte sind Projektzustand, der Export entscheidet über Mitgabe oder Neuerzeugung (#1880)";
 /** Offene Ausnahmen der Test-Hülle: "<von> -> <nach>" → Grund mit Ticket (K6, #1876 bis #1879). Darf nur schrumpfen. */
-export const TEST_HUELLE_AUSNAHMEN: Record<string, string> = {};
+export const TEST_HUELLE_AUSNAHMEN: Record<string, string> = {
+  "test/harness/emoji-ratchet.test.ts -> test/harness/emoji-baseline.json": DATEN_DATEI,
+  "test/harness/harness-inventar.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
+  "test/harness/kern-links.test.ts -> test/harness/kern-links-baseline.json": DATEN_DATEI,
+  "test/harness/kern-reinheit.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
+  "test/harness/kern-reinheit.test.ts -> test/harness/kern-literale-baseline.json": DATEN_DATEI,
+  "test/harness/kern-reinheit.test.ts -> test/harness/kern-test-literale-baseline.json": DATEN_DATEI,
+  "test/harness/skills-sync.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
+};
 
-/** Lokale Importe aller mitziehenden Test-Dateien (Art `kern-test`, `test-hilfe`, `fixture` mit Code-Endung), die weder auf Besitz noch
- *  auf die Projekt-Config noch auf einen Eintrag mit mitziehender Art zeigen: "<von> -> <nach>". Dateien ohne Text werden übersprungen. */
+const LITERAL = /(?:"[^"\\\n]*"|'[^'\\\n]*'|`[^`$\\\n]*`)/;
+const LITERAL_FOLGE = new RegExp(`${LITERAL.source}(?:\\s*,\\s*${LITERAL.source})*`, "g");
+
+/** Lese-Bezüge (K2): getrackte Dateien unter `test/`, die ein String-Literal einer Test-Datei benennt, relativ zu ihrem Ordner oder zur
+ *  Wurzel: das Literal selbst (`join(__dirname, "./fixtures/x.json")`, `new URL("../fixtures/x.json", …)`) oder aufeinanderfolgende
+ *  Literale eines Aufrufs, mit `/` verbunden (`join(WURZEL, "test", "fixtures", "x.json")`). Grenze: ein Pfad aus Variablen oder ein
+ *  Literal außerhalb von `test/` bleibt unsichtbar (Projekt-Texte, K7). */
+export function lesebezuege(von: string, text: string, getrackt: Set<string>): string[] {
+  const kandidaten = new Set<string>();
+  const code = text.split("\n").filter((z) => !/^\s*(?:\/\/|\/\*|\*)/.test(z)).join("\n");
+  for (const folge of code.matchAll(LITERAL_FOLGE)) {
+    const teile = [...folge[0].matchAll(new RegExp(LITERAL.source, "g"))].map((m) => m[0].slice(1, -1)).filter((t) => t !== "");
+    for (let i = 0; i < teile.length; i++) {
+      for (let j = i; j < Math.min(teile.length, i + 6); j++) kandidaten.add(teile.slice(i, j + 1).join("/"));
+    }
+  }
+  const out = new Set<string>();
+  for (const c of kandidaten) {
+    for (const basis of [posix.dirname(von), ""]) {
+      const p = posix.normalize(posix.join(basis, c));
+      if (p.startsWith("test/") && p !== von && getrackt.has(p)) out.add(p);
+    }
+  }
+  return [...out];
+}
+
+/** Lokale Importe und Lese-Bezüge (`lesebezuege`) aller mitziehenden Test-Dateien (Art `kern-test`, `test-hilfe`, `fixture` mit
+ *  Code-Endung), die weder auf Besitz noch auf die Projekt-Config noch auf einen Eintrag mit mitziehender Art zeigen: "<von> -> <nach>".
+ *  Dateien ohne Text werden übersprungen. */
 export function huellenVerstoesse(liste: Liste, getrackt: string[], lies: (p: string) => string | null, ganzerBesitz: Set<string>): string[] {
   const menge = new Set(getrackt);
   const out: string[] = [];
@@ -94,8 +130,8 @@ export function huellenVerstoesse(liste: Liste, getrackt: string[], lies: (p: st
     if (!["kern-test", "test-hilfe", "fixture"].includes(art) || !CODE_ENDUNG.test(von)) continue;
     const text = lies(von);
     if (text === null) continue;
-    for (const spec of relativeImporte(text)) {
-      const nach = zielDatei(von, spec, menge);
+    const ziele = [...relativeImporte(text).map((spec) => zielDatei(von, spec, menge)), ...lesebezuege(von, text, menge)];
+    for (const nach of ziele) {
       if (nach === null) continue;
       const erlaubt = ganzerBesitz.has(nach) || nach === PROJEKT_CONFIG || MITZIEHEND.includes(artVon(liste, nach) ?? "");
       if (!erlaubt && !out.includes(`${von} -> ${nach}`)) out.push(`${von} -> ${nach}`);
@@ -299,6 +335,28 @@ describe("Extraktionsliste: Bezug, Zuordnung und Test-Hülle (#1875)", () => {
     const l = liste(eintrag("test/support/h.ts", "test-hilfe"), eintrag("test/support/f.json", "fixture"), eintrag("test/support/g.mjs", "fixture"));
     assert.deepEqual(huellenVerstoesse(l, g, (p) => text[p] ?? null, new Set()), ["test/support/h.ts -> src/p.ts", "test/support/g.mjs -> src/p.ts"], "Fixture mit Code-Endung zählt, ohne nicht, ein unauflösbarer Import nicht");
     assert.deepEqual(huellenVerstoesse(l, g, () => null, new Set()), [], "ohne Text nichts zu prüfen");
+  });
+  test("Lese-Bezüge: ein Pfad-Literal (auch aus mehreren Literalen eines Aufrufs) auf eine getrackte Datei unter test/ zählt, sonst nicht", () => {
+    const g = new Set(["test/a.test.ts", "test/fixtures/x.json", "docs/a.md"]);
+    const l = (text: string): string[] => lesebezuege("test/a.test.ts", text, g);
+    assert.deepEqual(l('readFileSync(join(__dirname, "./fixtures/x.json"))'), ["test/fixtures/x.json"]);
+    assert.deepEqual(l('new URL("../test/fixtures/x.json", import.meta.url)'), ["test/fixtures/x.json"]);
+    assert.deepEqual(l('join(WURZEL, "test", "fixtures", "x.json")'), ["test/fixtures/x.json"]);
+    assert.deepEqual(l("lies(`fixtures/x.json`)"), ["test/fixtures/x.json"]);
+    assert.deepEqual(l('lies("fixtures/y.json")'), [], "keine getrackte Datei");
+    assert.deepEqual(l('lies("docs/a.md")'), [], "außerhalb von test/ bleibt unsichtbar (Grenze)");
+    assert.deepEqual(l('lies("a.test.ts")'), [], "die Datei selbst zählt nicht");
+    assert.deepEqual(l('// lies("fixtures/x.json")\n * "fixtures/x.json"'), [], "Kommentare zählen nicht");
+  });
+  test("Test-Hülle: ein per readFileSync gelesenes Fixture muss in der Liste stehen, sonst rot mit Weg (K2)", () => {
+    const text: Record<string, string> = { "test/k.test.ts": 'const d = readFileSync(join(__dirname, "./fixtures/x.json"), "utf8");\n', "test/fixtures/x.json": "{}" };
+    const g = Object.keys(text);
+    const lesen = (p: string): string | null => text[p] ?? null;
+    const v = huellenVerstoesse(liste(eintrag("test/k.test.ts", "kern-test")), g, lesen, new Set());
+    assert.deepEqual(v, ["test/k.test.ts -> test/fixtures/x.json"]);
+    assert.match(testHuelle(v, {}, "src").join(), /Ziel als test-hilfe oder fixture eintragen/);
+    assert.deepEqual(huellenVerstoesse(liste(eintrag("test/k.test.ts", "kern-test"), eintrag("test/fixtures/x.json", "fixture")), g, lesen, new Set()), []);
+    assert.deepEqual(huellenVerstoesse(liste(eintrag("test/k.test.ts", "projekt-test")), g, lesen, new Set()), [], "ein projekt-test liest frei");
   });
   test("Test-Hülle: Ausnahmen mit Ticket grün, ohne Ticket rot, veraltet rot, auf src/ rot", () => {
     const v = ["test/k.test.ts -> test/support/h.ts"];
