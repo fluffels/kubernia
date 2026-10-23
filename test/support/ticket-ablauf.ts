@@ -1,5 +1,5 @@
 /* Der gemeinsame Ticket-Ablauf der Ticket-Skills (#1806): eine Datei im Kern mit Platzhaltern `<gruppe.schlüssel>`
- * (Gruppen `agenten`, `labels`, `praefixe`), deren Werte im Projektwert-Block derselben Datei stehen (#1747). Tests, die einen Kern-Text
+ * (Gruppen `agenten`, `labels`, `praefixe`, `skills`), deren Werte im Projektwert-Block derselben Datei stehen (#1747). Tests, die einen Kern-Text
  * (Ablauf, Agenten-Definition, Skill) prüfen, lesen ihn hier mit eingesetzten Werten aus `.factory/projekt.json`. */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,7 @@ export const TICKET_ABLAUF = ".agents/skills/factory/ablauf.md";
 
 type Gruppen = Record<string, Record<string, string>>;
 
-/** Ersetzt `<gruppe.schluessel>` (Gruppen `agenten`, `labels`, `praefixe`) durch den Wert aus der Projekt-Config; ein unbekannter Schlüssel ist ein Fehler. */
+/** Ersetzt `<gruppe.schluessel>` (Gruppen `agenten`, `labels`, `praefixe`, `skills`) durch den Wert aus der Projekt-Config; ein unbekannter Schlüssel ist ein Fehler. */
 export function setzeProjektwerte(text: string, cfg: Gruppen): string {
   return text.replace(platzhalterMuster(), (_m, gruppe: string, key: string) => {
     const wert = cfg[gruppe]?.[key];

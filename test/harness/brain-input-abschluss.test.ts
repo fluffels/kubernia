@@ -9,9 +9,12 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { liesMitProjektwerten, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
 const norm = (t: string) => t.replace(/\s+/g, " ");
-const lies = (pfad: string) => norm(readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8"));
+const lies = (pfad: string) => norm(rohLesen(pfad));
+/** Der Ablauf wird mit den Projektwerten gelesen (`<skills.abschluss>` ist dort der Wert aus der Config, ADR 0022 F10), alles andere roh. */
+const rohLesen = (pfad: string): string => (pfad === TICKET_ABLAUF ? liesMitProjektwerten(pfad) : readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8"));
 const SKILLS = [".agents/skills/factory/ablauf.md"];
 
 describe("Sitzungsabschluss ruft brain-input immer auf (#1572)", () => {
@@ -61,7 +64,6 @@ function abschlussLuecken(pfad: string, text: string): string[] {
   return (PFLICHT[pfad] ?? []).filter((p) => !p.muster.test(text)).map((p) => `${pfad}: ${p.name}`);
 }
 
-const rohLesen = (pfad: string) => readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8");
 
 describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () => {
   test.each(Object.keys(PFLICHT))("%s: alle Pflichtstellen stehen da", (pfad) => {
