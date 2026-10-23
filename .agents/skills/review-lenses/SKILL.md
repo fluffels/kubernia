@@ -28,6 +28,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.festgefahren` | `status:festgefahren` |
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
+| `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
 ## Was ist „der Diff"? — einmal materialisieren, nicht pro Lens erheben (#1034)

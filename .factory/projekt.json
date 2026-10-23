@@ -41,6 +41,9 @@
     "gruppe": "kubernia-gruppe",
     "ticketSkill": "kubernia"
   },
+  "skills": {
+    "abschluss": "brain-input"
+  },
   "struktur": {
     "quelle": "src",
     "moduldoku": "docs/module"

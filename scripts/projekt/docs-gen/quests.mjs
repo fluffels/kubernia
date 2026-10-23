@@ -5,7 +5,7 @@
 // (der Generator ist reines Node); ein Bindungstest hält die Reihenfolge gegen `KQContent.QUESTS`.
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER, byCodeUnit, leseJson, mermaidText, renderTable } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER, byCodeUnit, leseJson, mermaidText, renderTable } from "../../docs-gen/markdown.mjs";
 
 const brauche = (cfg, schluessel) => {
   const v = cfg?.[schluessel];

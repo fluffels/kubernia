@@ -8,7 +8,7 @@ import { fixture } from "./support/tmp-fixture";
 import { KQContent } from "../src/content";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as qm from "../scripts/docs-gen/quests.mjs";
+import * as qm from "../scripts/projekt/docs-gen/quests.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gen from "../scripts/docs-gen.mjs";
 

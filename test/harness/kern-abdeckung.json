@@ -5,8 +5,6 @@
   "scripts/quiz-golden.mjs": {"art":"projekt","grund":"Quiz-Golden-Werkzeug des Spiels"},
   "scripts/check-bundle.mjs": {"art":"projekt","grund":"Bundle-Budget des Spiels"},
   "scripts/docs-gen/config.json": {"art":"projekt","grund":"Projekt-Config des Doku-Generators"},
-  "scripts/docs-gen/quests.mjs": {"art":"projekt","grund":"Spiel-Generator der Doku"},
-  "scripts/docs-gen/save-versionen.mjs": {"art":"projekt","grund":"Spiel-Generator der Doku"},
   ".github/workflows/deploy-validate.yml": {"art":"projekt","grund":"Deploy-Prüfung des Projekts"},
   ".github/workflows/release.yml": {"art":"projekt","grund":"Release des Projekts"},
   "scripts/playwright-mcp.mjs": {"art":"modul","grund":"Browser-Modul, kein Factory-Kern"},

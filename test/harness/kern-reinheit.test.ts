@@ -275,9 +275,18 @@ const FESTE_FLAECHEN = [
 ];
 
 /** Meldungen (leer = grün): jede getrackte Datei direkt in einem Kern-Verzeichnis oder in einer festen Wurzel ist Besitz oder steht in der Abdeckungsliste. */
-export function pruefeAbdeckung(eintraege: Eintrag[], getrackt: string[], abdeckung: Record<string, AbdeckEintrag>): string[] {
+export function pruefeAbdeckung(
+  eintraege: Eintrag[],
+  getrackt: string[],
+  abdeckung: Record<string, AbdeckEintrag>,
+  projektGeneratoren: string[] = [],
+): string[] {
   const out: string[] = [];
   const verz = kernVerzeichnisse(eintraege);
+  for (const g of projektGeneratoren) {
+    const dir = posix.dirname(posix.normalize(g));
+    if (verz.has(dir)) out.push(`${g}: Projekt-Generator im Kern-Ordner ${dir}, gehört in einen Projektordner (config.generatoren)`);
+  }
   const besitz = new Set(eintraege.map((e) => e.pfad));
   const imKern = getrackt.filter((p) => verz.has(posix.dirname(p)) || FESTE_FLAECHEN.some((r) => r.test(p)));
   for (const p of imKern) {
@@ -712,6 +721,14 @@ describe("kernVerzeichnisse / pruefeAbdeckung (#1613)", () => {
     assert.match(pruefeAbdeckung(E, dateien, { "scripts/c.mjs": { art: "offen", grund: "später" } }).join(), /braucht ein Ticket/);
     assert.deepEqual(pruefeAbdeckung(E, dateien, { "scripts/c.mjs": { art: "offen", grund: "#12 klären" } }), []);
   });
+  test("ein Projekt-Generator im Kern-Ordner ist rot, auch mit Abdeckungs-Eintrag; in einem Projektordner grün", () => {
+    const abd = klar({ "scripts/docs-gen/x.mjs": { art: "projekt", grund: "g" } });
+    const mitX = [...dateien, "scripts/docs-gen/x.mjs"];
+    assert.match(pruefeAbdeckung([...E, ein("scripts/docs-gen/r.mjs")], mitX, abd, ["scripts/docs-gen/x.mjs"]).join(), /scripts\/docs-gen\/x\.mjs: Projekt-Generator im Kern-Ordner scripts\/docs-gen/);
+    assert.match(pruefeAbdeckung(E, dateien, klar(), ["scripts/x.mjs"]).join(), /scripts\/x\.mjs: Projekt-Generator im Kern-Ordner scripts,/);
+    assert.deepEqual(pruefeAbdeckung(E, dateien, klar(), ["scripts/projekt/docs-gen/x.mjs"]), []);
+    assert.match(pruefeAbdeckung(E, dateien, klar(), ["./scripts/x.mjs"]).join(), /Projekt-Generator im Kern-Ordner scripts,/);
+  });
 });
 
 describe("huellenVerstoesse / pruefeHuelle (#1613)", () => {
@@ -860,6 +877,13 @@ const lesenWurzel = (pfad: string): string | null => {
   const voll = WURZEL + pfad;
   return existsSync(voll) ? readFileSync(voll, "utf8") : null;
 };
+/** Dateien der Projekt-Generatoren aus `config.generatoren` (ADR 0022 F10). */
+const projektGeneratorPfade = (): string[] => {
+  const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
+  const pfade = [...new Set(Object.values(cfg.generatoren ?? {}).map((g) => g.datei))];
+  if (pfade.length === 0) throw new Error("scripts/docs-gen/config.json: generatoren fehlt oder ist leer");
+  return pfade;
+};
 const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
 const echteBegriffe = begriffeAus((rawPc as unknown as { ladeProjektConfig(): ProjektConfig }).ladeProjektConfig());
@@ -881,6 +905,13 @@ describe("Kern-Reinheit (#1610)", () => {
     const abdeckung = JSON.parse(readFileSync(WURZEL + ABDECKUNG, "utf8")) as Record<string, AbdeckEintrag>;
     const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
     assert.deepEqual(pruefeAbdeckung(manifest.eintraege, getrackt, abdeckung), []);
+  });
+
+  test("kein Projekt-Generator aus config.generatoren liegt in einem Kern-Verzeichnis (ADR 0022 F10)", () => {
+    const pfade = projektGeneratorPfade();
+    assert.ok(pfade.length >= 2, "die Dateien der Projekt-Generatoren stehen in der Config");
+    for (const p of pfade) assert.ok(existsSync(WURZEL + p), `${p}: Datei fehlt`);
+    assert.deepEqual(pruefeAbdeckung(manifest.eintraege, [], {}, pfade), []);
   });
 
   test("fehlt der Manifest-Eintrag der Skill-Quelle oder ihres Zeigers, meldet die Abdeckung die Datei (#1866)", () => {

@@ -3,7 +3,7 @@
 // (`CURRENT_SAVE_VERSION`), die Kurzbeschreibung je Schritt aus `src/store/save-versionen.json`.
 // Eine Migration ohne Beschreibung (oder eine Beschreibung ohne Migration) macht den Generator und damit
 // `check:docgen` rot; ob ein Schritt additiv oder strukturell ist, bindet ein Test an `migrationsSchritte()`.
-import { MERMAID_FRONTMATTER, byCodeUnit, ganzzahlKonstante, leseJson, mermaidText, renderTable } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER, byCodeUnit, ganzzahlKonstante, leseJson, mermaidText, renderTable } from "../../docs-gen/markdown.mjs";
 
 const ARTEN = ["additiv", "strukturell"];
 const MAX_BESCHREIBUNG = 100;
