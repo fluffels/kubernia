@@ -1,0 +1,37 @@
+name: Verify (macOS, manuell)
+
+# Fährt die Gate-Kette (`npm run verify`) einmal auf macOS, um plattformabhängige Pfad- und Shell-Annahmen der Harness-Skripte
+# zu finden, die Linux (CI) und Windows (lokal) nicht zeigen. Nur manuell gestartet, kein Required Check: ein roter Lauf ist ein
+# Befund (Zeile im Harness-Sammelticket), kein Merge-Blocker.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-macos
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: "verify auf macOS"
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Gate-Kette
+        run: npm run verify
