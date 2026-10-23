@@ -147,6 +147,8 @@ describe("anlegen", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
     expect(S.fuehreAus(["anlegen", "--titel", "   ", "--body-datei", "b.md", "--label", AREA, "--nach", "12"], io).code).toBe(2);
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:", "--nach", "12"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${FREMD.labels.harness.split(":")[0]}:`, "--nach", "12"], io).code).toBe(2); // leer, im Präfix der Config
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${FREMD.labels.harness.split(":")[0]}:a b`, "--nach", "12"], io).code).toBe(2); // Leerraum im Namen
     expect(aufrufe.erzeuge).toEqual([]);
   });
   test("Bereichs-Label: Präfix = labels.harness bis zum ersten Doppelpunkt (fremd `bereich:`, echt `area:`)", () => {

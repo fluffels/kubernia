@@ -1072,6 +1072,12 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
     (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, { ...SAMMEL, assignees: [{ login: OWNER }] }), item(2, { labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: spion });
     expect(gefragt).toEqual([]); // geclaimt: Assignee-Grund, kein Laden
   });
+  test("das Langfuse-Sammelticket hängt nicht am Füllstand: gewählt trotz Füllstand 0, der Lader wird für es nicht gefragt", () => {
+    const gefragt: number[] = [];
+    const r = (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, { title: "Langfuse-Befunde (gesammelt)", labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: (nr: number) => (gefragt.push(nr), 0) });
+    expect(r.ticket?.nr).toBe(1);
+    expect(gefragt).toEqual([]);
+  });
   test("--ticket umgeht die Schwelle: die Einzelprüfung nimmt das Sammelticket auch bei Füllstand 3", () => {
     const pruefe = N.pruefeTicket({ item: N.itemAusIssue(item(1, SAMMEL).content), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG } as never);
     expect(pruefe.ticket?.nr).toBe(1);
