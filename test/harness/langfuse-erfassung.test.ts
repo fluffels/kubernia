@@ -121,7 +121,7 @@ const hatLangfuseSammelticket = (ticketReihenfolge: string, agentsMd: string): b
     /komplett/.test(a) &&
     /--top/.test(a) &&
     /Langfuse-Befunde \(gesammelt\)/.test(ausnahme) &&
-    /#langfuse-befunde-gesammelt-1351/.test(ausnahme)
+    /#langfuse-befunde-gesammelt/.test(ausnahme)
   );
 };
 
@@ -273,7 +273,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatLangfuseSammelticket(tr.replace("**Höchstens ein**", "Mehrere"), agents));
     assert.ok(!hatLangfuseSammelticket(tr.replace(/komplett/g, "teilweise"), agents));
     assert.ok(!hatLangfuseSammelticket(tr.replace(/--top/g, "--x"), agents));
-    assert.ok(!hatLangfuseSammelticket(tr, agents.replace("#langfuse-befunde-gesammelt-1351", "#x")));
+    assert.ok(!hatLangfuseSammelticket(tr, agents.replace("#langfuse-befunde-gesammelt", "#x")));
     assert.ok(!hatLangfuseSammelticket("", ""));
     assert.ok(!hatLangfuseSammelticket(tr, agents.replace(/(Ausnahme:\*\*[^\n]*)Langfuse-Befunde \(gesammelt\)/, "$1Anderes")), "Titel fehlt im Ausnahme-Teil von AGENTS.md");
   });
