@@ -289,3 +289,102 @@ describe("Berechtigungs-Ergänzung: Negativfälle (nichts wird geschrieben, Exit
     assert.equal(gate(z).code, 0);
   });
 });
+
+describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () => {
+  const EINHEIT = { pfad: SETTINGS, schluessel: "permissions" };
+  const pe = (
+    rawSync as unknown as {
+      pruefeErgebnis(p: string, e: unknown[], src: string, ziel: string | null, ergebnis: string, erg: { quelle: Erg; ziel: Erg }): string[];
+    }
+  ).pruefeErgebnis;
+  const leer: Erg = { allow: [], ask: [], deny: [] };
+  const befunde = (perm: Perm, erg: Partial<Erg>): string => lib.ergaenzungsBefunde(perm, erg).join("|");
+
+  test("kernAnteil: eine leere Liste entfällt immer, eine fehlende bleibt fehlend, ein Nicht-Objekt bleibt unverändert", () => {
+    assert.deepEqual(lib.kernAnteil({ allow: [], deny: ["d"] }, {}), { deny: ["d"] });
+    assert.deepEqual(lib.kernAnteil({ allow: ["a"] }, { deny: ["mcp__x"] }), { allow: ["a"] });
+    assert.equal(lib.kernAnteil(null as unknown as Perm, { allow: ["mcp__x"] }), null);
+    assert.doesNotThrow(() => lib.einheitHash(EINHEIT, '{"permissions": null}', { allow: ["mcp__x"] }));
+  });
+
+  test("Quelle mit leerer Kern-Liste, Ziel ergänzt genau diese Liste: Sync und Gate grün, derselbe Hash", () => {
+    const q = baueQuelle({ settings: { allow: ["Bash(ls)"], ask: [], deny: ["Read(/.env)"] }, erg: null });
+    const z = baueZiel({ allow: [], ask: ["mcp__z__w"], deny: [] });
+    const r = vomTag(q, z);
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(perm(z), { allow: ["Bash(ls)"], ask: ["mcp__z__w"], deny: ["Read(/.env)"] });
+    const g = gate(z);
+    assert.equal(g.code, 0, g.err);
+  });
+
+  test("hebtAuf: die Wortgrenze der Server-Regel, der Tool-Teil und der Platzhalter sind genau begrenzt", () => {
+    assert.equal(befunde({ allow: ["mcp__xy"], deny: ["mcp__x"] }, { allow: ["mcp__xy"] }), "", "anderer Server mit gleichem Präfix");
+    assert.equal(befunde({ allow: ["mcp__x__t__u"], deny: ["mcp__x__t"] }, { allow: ["mcp__x__t__u"] }), "", "eine Tool-Regel ist kein Server-Muster");
+    assert.equal(befunde({ allow: ["mcp__y__t"], ask: ["mcp__x__*"] }, { allow: ["mcp__y__t"] }), "", "Platzhalter gilt nur für sein Präfix");
+    assert.match(befunde({ allow: ["mcp__x__t"], ask: ["mcp__x__*"] }, { allow: ["mcp__x__t"] }), /hebt die Regel/);
+  });
+
+  test("eine fehlende Liste in permissions bei nicht-leerer Ergänzung ist ein Befund, kein Absturz", () => {
+    assert.match(befunde({ allow: [] }, { deny: ["mcp__x"] }), /deny: Ergänzung „mcp__x“ fehlt/);
+    const z = tmp();
+    schreibe(z, SETTINGS, json({ permissions: { allow: [] } }));
+    schreibe(z, CONFIG, json({ berechtigungen: { deny: ["mcp__x"] } }));
+    assert.match(drift.pruefeErgaenzung(leser(z)).fehler.join("|"), /deny: Ergänzung „mcp__x“ fehlt/);
+  });
+
+  test("pruefeErgebnis der ergänzbaren Einheit: korrekt grün, abweichender Kern-Anteil rot, fehlende Ziel-Ergänzung rot", () => {
+    const src = json({ permissions: mit(KERN, QUELL_ERG) });
+    const zielErg: Erg = { allow: ["mcp__z"], ask: [], deny: [] };
+    const erg = { quelle: QUELL_ERG, ziel: zielErg };
+    const gut = json({ permissions: mit(KERN, zielErg) });
+    assert.deepEqual(pe(SETTINGS, [EINHEIT], src, null, gut, erg), []);
+    const ohneDeny = json({ permissions: mit({ ...KERN, deny: ["Read(/.env)"] }, zielErg) });
+    assert.match(pe(SETTINGS, [EINHEIT], src, null, ohneDeny, erg).join("|"), /Schlüssel 'permissions' weicht nach dem Sync von der Quelle ab/);
+    const ohneErg = json({ permissions: KERN });
+    assert.match(pe(SETTINGS, [EINHEIT], src, null, ohneErg, erg).join("|"), /Ergänzung „mcp__z“ fehlt/);
+  });
+
+  test("kaputte Quell-Config (Form und JSON) bricht den Sync mit „Quelle:“ ab, nichts wird geschrieben", () => {
+    for (const config of [json({ berechtigungen: { defaultMode: "x" } }), "{kaputt"]) {
+      const q = baueQuelle();
+      schreibe(q, CONFIG, config);
+      const z = baueZiel();
+      const vorher = lies(z, SETTINGS);
+      const r = vomTag(q, z);
+      assert.equal(r.code, 1, r.out);
+      assert.match(r.err, /Quelle: /);
+      assert.match(r.err, /nichts geschrieben/);
+      assert.equal(lies(z, SETTINGS), vorher);
+      assert.ok(!existsSync(join(z, ".factory/sync-stand.json")));
+    }
+  });
+
+  test("kaputtes JSON in der Ziel-Config bricht den Sync mit „Ziel:“ ab", () => {
+    const z = baueZiel();
+    schreibe(z, CONFIG, "{kaputt");
+    const r = vomTag(baueQuelle(), z);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.err, /Ziel: .*kein gültiges JSON/);
+  });
+
+  test("gesyncctes Ziel, danach kaputte Config: das Gate meldet genau die Config mit Weg, ohne Folgebefund am Kern", () => {
+    const z = baueZiel(ZIEL_ERG0);
+    assert.equal(vomTag(baueQuelle(), z).code, 0);
+    schreibe(z, CONFIG, "{kaputt");
+    const g = gate(z);
+    assert.equal(g.code, 1);
+    assert.match(g.err, /kein gültiges JSON/);
+    assert.doesNotMatch(g.err, /Besitz wurde im Projekt verändert/);
+    assert.deepEqual(drift.pruefeDrift(leser(z)).fehler, []);
+  });
+
+  test("leere Ergänzung: das Gate wirft nicht, wenn permissions in settings.json kein Objekt ist", () => {
+    const z = baueZiel(ZIEL_ERG0);
+    assert.equal(vomTag(baueQuelle(), z).code, 0);
+    schreibe(z, SETTINGS, json({ permissions: null }));
+    assert.doesNotThrow(() => gate(z));
+    assert.equal(gate(z).code, 1);
+  });
+});
+
+const ZIEL_ERG0: Erg = { allow: ["mcp__z"], ask: [], deny: [] };

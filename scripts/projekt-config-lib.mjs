@@ -315,6 +315,18 @@ export function berechtigungenAus(config) {
   return { allow: wert.allow ?? [], ask: wert.ask ?? [], deny: wert.deny ?? [] };
 }
 
+/** Pur: wie `berechtigungenAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
+export function berechtigungenAusText(text) {
+  if (text === null) return berechtigungenAus({});
+  let config;
+  try {
+    config = JSON.parse(text);
+  } catch {
+    throw new Error(`${PROJEKT_CONFIG} ist kein gültiges JSON`);
+  }
+  return berechtigungenAus(config);
+}
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];

@@ -130,12 +130,14 @@ export const leereErgaenzung = () => ({ allow: [], ask: [], deny: [] });
 /** Ist die Einheit die ergänzbare? */
 export const istErgaenzbar = (e) => einheitId(e) === ERGAENZBARE_EINHEIT;
 
-/** Pur: der Kern-Anteil von `permissions`: je Liste ohne die Einträge der Ergänzung (mengenbasiert); eine dadurch leer gewordene Liste entfällt. */
+/** Pur: der Kern-Anteil von `permissions`: je Liste ohne die Einträge der Ergänzung (mengenbasiert); eine leere Liste entfällt immer
+ *  (leer gilt wie fehlend, sonst unterschiede sich Quelle und Ziel nur durch `ask: []`). Ein Nicht-Objekt bleibt unverändert. */
 export function kernAnteil(perm, erg) {
+  if (perm === null || typeof perm !== "object" || Array.isArray(perm)) return perm;
   const aus = { ...perm };
   for (const l of ERGAENZUNG_LISTEN) {
+    if (!Array.isArray(perm[l])) continue;
     const mit = new Set(erg?.[l] ?? []);
-    if (mit.size === 0 || !Array.isArray(perm[l])) continue;
     const rest = perm[l].filter((x) => !mit.has(x));
     if (rest.length === 0) delete aus[l];
     else aus[l] = rest;

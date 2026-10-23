@@ -9,7 +9,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
-import { berechtigungenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { berechtigungenAusText, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import {
   einheitHash,
   ergaenzungsBefunde,
@@ -45,15 +45,7 @@ const LEER = () => ({ quelle: leereErgaenzung(), ziel: leereErgaenzung() });
  * heißt leer (weniger Rechte). Wirft bei kaputtem JSON oder falscher Form (dann wird nichts geschrieben).
  */
 export function liesErgaenzung(lies) {
-  const text = lies(PROJEKT_PFAD);
-  if (text === null) return leereErgaenzung();
-  let config;
-  try {
-    config = JSON.parse(text);
-  } catch {
-    throw new Error(`${PROJEKT_PFAD} ist kein gültiges JSON`);
-  }
-  return berechtigungenAus(config);
+  return berechtigungenAusText(lies(PROJEKT_PFAD));
 }
 
 const istLeer = (erg) => Object.values(erg).every((l) => l.length === 0);

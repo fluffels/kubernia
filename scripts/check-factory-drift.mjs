@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, ERGAENZBARE_EINHEIT, ergaenzungsBefunde, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { berechtigungenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { berechtigungenAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
@@ -23,15 +23,7 @@ const ERGAENZUNG_HINWEIS = ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFI
 
 /** Pur: die Ergänzung aus dem Text der Projekt-Config; ohne Datei oder Block leer, bei kaputter Datei oder Form wirft es (Fix-Zeile inklusive). */
 function ergaenzungAus(lies) {
-  const text = lies(PROJEKT_CONFIG);
-  if (text === null) return leereErgaenzung();
-  let config;
-  try {
-    config = JSON.parse(text);
-  } catch {
-    throw new Error(`${PROJEKT_CONFIG} ist kein gültiges JSON`);
-  }
-  return berechtigungenAus(config);
+  return berechtigungenAusText(lies(PROJEKT_CONFIG));
 }
 
 /** Der Wert (parsed) der ergänzbaren Einheit aus dem Projekt oder `null` (Datei oder Schlüssel fehlt, kein JSON). */
@@ -93,10 +85,11 @@ export function pruefeDrift(lies) {
   }
   const fehler = [];
   let ergaenzung = leereErgaenzung();
+  let configKaputt = false;
   try {
     ergaenzung = ergaenzungAus(lies);
   } catch {
-    // die Ergänzungs-Prüfung (pruefeErgaenzung) meldet die kaputte Config mit Weg; hier rechnet der Kern-Hash mit leerer Ergänzung.
+    configKaputt = true; // die Ergänzungs-Prüfung (pruefeErgaenzung) meldet die kaputte Config mit Weg; ihr Hash wäre hier nicht aussagekräftig.
   }
   // Herkunft (#1871): nur ein Sync von einem sauberen Tag gilt, auch ein Stand der Version 1 ist rot.
   const tag = stand.quelle?.tag;
@@ -111,6 +104,7 @@ export function pruefeDrift(lies) {
       fehler.push(`${id}: im Manifest, aber nicht im Sync-Stand`);
       continue;
     }
+    if (configKaputt && istErgaenzbar(e)) continue;
     const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
     const hash = text === null ? null : einheitHash(e, text, ergaenzung);
     const hinweis = e.block !== undefined ? BLOCK_HINWEIS : istErgaenzbar(e) ? ERGAENZUNG_HINWEIS : "";
