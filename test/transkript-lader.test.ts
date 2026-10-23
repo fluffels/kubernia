@@ -1,15 +1,14 @@
-/* Gemeinsamer Session-Lader (#1392 Z29), kubernia-Erkennung (Z30) und Generator-Lader (Z31) für die Transkript-Skripte.
+/* Gemeinsamer Session-Lader (#1392 Z29), Ticketlauf-Erkennung (Z30) und Generator-Lader (Z31) für die Transkript-Skripte.
  * Läuft gegen ein Fixture-Root (test/support/tmp-fixture); synthetische Zeilen, kein Zugriff auf ~/.claude. */
 import { describe, expect, test } from "vitest";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { fixture } from "./support/tmp-fixture";
+import { FREMD, repoName } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTranskript from "../scripts/transkript.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawHc from "../scripts/hauptchat-zerlegung.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawProjekt from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../scripts/token-baseline.mjs";
 
@@ -19,9 +18,10 @@ const T = rawTranskript as unknown as { ladeSessionDatei: (pfad: string) => Sitz
 const HC = rawHc as unknown as {
   istTicketLauf: (meta: Record<string, unknown> | undefined, ticketAgenten: Set<string>) => boolean;
   hauptchatNamen: (deps: { config: unknown }) => { ticketAgenten: Set<string> };
-  zerlegeHauptchat: (e: { sessions: Iterable<Sitzung>; config: unknown }) => { rows: { kategorie: string; quelle: string; calls: number }[]; kubernia: { calls: number } };
+  zerlegeHauptchat: (e: { sessions: Iterable<Sitzung>; config: unknown }) => { rows: { kategorie: string; quelle: string; calls: number }[] } & Record<string, { calls: number }>;
 };
-const AGENTEN = HC.hauptchatNamen({ config: (rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig() }).ticketAgenten;
+const { planer: PLANER, umsetzer: UMSETZER, lens: LENS, gruppe: GRUPPE } = FREMD.agenten;
+const AGENTEN = HC.hauptchatNamen({ config: FREMD }).ticketAgenten;
 const istTicketLauf = (meta: Record<string, unknown> | undefined) => HC.istTicketLauf(meta, AGENTEN);
 const BASE = rawBase as unknown as { readTranscriptSession: (id: string, root: string) => { calls: { subagent?: { agentType?: string } }[]; questions: number } };
 
@@ -39,13 +39,13 @@ describe("ladeSessionDatei (#1392 Z29)", () => {
     const root = fixture({
       "p/s1.jsonl": `${call(1, "a")}\n{"abgeschnitten`,
       "p/s1/subagents/agent-1.jsonl": `${call(2, "b")}\n`,
-      "p/s1/subagents/agent-1.meta.json": JSON.stringify({ agentType: "kubernia-planner", description: "Plan" }),
+      "p/s1/subagents/agent-1.meta.json": JSON.stringify({ agentType: PLANER, description: "Plan" }),
     });
     const s = T.ladeSessionDatei(join(root, "p/s1.jsonl"));
     expect(s.id).toBe("s1");
     expect(s.main).toHaveLength(1);
     expect(s.subagents).toHaveLength(1);
-    expect(s.subagents[0]).toMatchObject({ datei: "agent-1.jsonl", meta: { agentType: "kubernia-planner" } });
+    expect(s.subagents[0]).toMatchObject({ datei: "agent-1.jsonl", meta: { agentType: PLANER } });
     expect(s.subagents[0].zeilen).toHaveLength(1);
   });
 
@@ -74,38 +74,38 @@ describe("ladeSessionDatei (#1392 Z29)", () => {
     const root = fixture({
       "projekte/proj/s1.jsonl": `${call(1, "a")}\n`,
       "projekte/proj/s1/subagents/agent-1.jsonl": `${call(2, "b")}\n`,
-      "projekte/proj/s1/subagents/agent-1.meta.json": JSON.stringify({ agentType: "kubernia-lens" }),
+      "projekte/proj/s1/subagents/agent-1.meta.json": JSON.stringify({ agentType: LENS }),
     });
     const r = BASE.readTranscriptSession("s1", join(root, "projekte"));
     expect(r.calls).toHaveLength(2);
-    expect(r.calls.filter((c) => c.subagent?.agentType === "kubernia-lens")).toHaveLength(1);
+    expect(r.calls.filter((c) => c.subagent?.agentType === LENS)).toHaveLength(1);
     expect(() => BASE.readTranscriptSession("gibtsnicht", join(root, "projekte"))).toThrow(/Kein Transkript/);
   });
 });
 
 describe("istTicketLauf (#1392 Z30)", () => {
   test("nur agentType aus den Agenten der Projekt-Config (Planer, Umsetzer, Lens, Gruppe) oder ein verschachtelter Agent", () => {
-    expect(istTicketLauf({ agentType: "kubernia-planner" })).toBe(true);
-    expect(istTicketLauf({ agentType: "kubernia-umsetzer" })).toBe(true);
-    expect(istTicketLauf({ agentType: "kubernia-lens" })).toBe(true);
-    expect(istTicketLauf({ agentType: "kubernia-gruppe" })).toBe(true);
+    expect(istTicketLauf({ agentType: PLANER })).toBe(true);
+    expect(istTicketLauf({ agentType: UMSETZER })).toBe(true);
+    expect(istTicketLauf({ agentType: LENS })).toBe(true);
+    expect(istTicketLauf({ agentType: GRUPPE })).toBe(true);
     expect(istTicketLauf({ agentType: "general-purpose", parentAgentId: "x" })).toBe(true);
   });
 
   test("ein Name mit dem Präfix, aber ohne Eintrag in der Config, ist kein Ticketlauf (Menge statt Präfix)", () => {
-    expect(istTicketLauf({ agentType: "kubernia-unbekannt" })).toBe(false);
+    expect(istTicketLauf({ agentType: `${LENS}-unbekannt` })).toBe(false);
     expect(HC.istTicketLauf({ agentType: "acme-lens" }, new Set(["acme-lens"]))).toBe(true);
-    expect(HC.istTicketLauf({ agentType: "kubernia-lens" }, new Set(["acme-lens"]))).toBe(false);
+    expect(HC.istTicketLauf({ agentType: LENS }, new Set(["acme-lens"]))).toBe(false);
   });
 
-  test("general-purpose mit Beschreibung „Review des Plans“ ist ein Fork (die alte Beschreibungsheuristik zählte ihn als kubernia)", () => {
+  test("general-purpose mit Beschreibung „Review des Plans“ ist ein Fork (die alte Beschreibungsheuristik zählte ihn als Ticketlauf)", () => {
     expect(istTicketLauf({ agentType: "general-purpose", description: "Review des Plans" })).toBe(false);
     expect(istTicketLauf({ agentType: "general-purpose", description: "Lens R1" })).toBe(false);
   });
 
-  test("Explore aus dem Hauptchat, fehlendes Meta und ähnliche Typnamen sind keine kubernia-Subagenten", () => {
+  test("Explore aus dem Hauptchat, fehlendes Meta und ähnliche Typnamen sind keine Ticketlauf-Subagenten", () => {
     expect(istTicketLauf({ agentType: "Explore" })).toBe(false);
-    expect(istTicketLauf({ agentType: "my-kubernia-x" })).toBe(false);
+    expect(istTicketLauf({ agentType: `my-${LENS}` })).toBe(false);
     expect(istTicketLauf({})).toBe(false);
     expect(istTicketLauf(undefined)).toBe(false);
   });
@@ -117,7 +117,7 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
       "d/s1.jsonl": `${call(1, "a")}\n`,
       "d/s2.jsonl": `${call(2, "b")}\n`,
       "d/s2/subagents/x.jsonl": `${call(3, "c")}\n`,
-      "d/s2/subagents/x.meta.json": JSON.stringify({ agentType: "kubernia-lens" }),
+      "d/s2/subagents/x.meta.json": JSON.stringify({ agentType: LENS }),
       "d/readme.txt": "x",
     });
 
@@ -134,11 +134,11 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
 
   test("ein einmal iterierbarer Generator liefert dasselbe Ergebnis wie ein Array", () => {
     const dir = join(root(), "d");
-    const config = (rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
+    const config = FREMD;
     const ausGenerator = HC.zerlegeHauptchat({ sessions: T.ladeSessions(dir), config });
     const ausArray = HC.zerlegeHauptchat({ sessions: [...T.ladeSessions(dir)], config });
     expect(ausGenerator).toEqual(ausArray);
-    expect(ausGenerator.kubernia.calls).toBe(1);
+    expect(ausGenerator[repoName(FREMD)].calls).toBe(1);
     expect(ausGenerator.rows.reduce((s, r) => s + r.calls, 0)).toBe(2);
   });
 });
@@ -148,8 +148,8 @@ describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", (
   test("projektSlug: Windows und POSIX, Worktree-Pfad zählt als Hauptrepo, abschließender Schrägstrich entfällt", () => {
     expect(P.projektSlug("X:\\dev\\repo")).toBe("X--dev-repo");
     expect(P.projektSlug("/home/x/repo")).toBe("-home-x-repo");
-    expect(P.projektSlug("X:\\dev\\repo\\.claude\\worktrees\\kq-1")).toBe("X--dev-repo");
-    expect(P.projektSlug("/home/x/repo/.claude/worktrees/kq-1/scripts")).toBe("-home-x-repo");
+    expect(P.projektSlug("X:\\dev\\repo\\.claude\\worktrees\\wt-1")).toBe("X--dev-repo");
+    expect(P.projektSlug("/home/x/repo/.claude/worktrees/wt-1/scripts")).toBe("-home-x-repo");
     expect(P.projektSlug("X:/dev/repo/")).toBe("X--dev-repo");
   });
   const O = rawTranskript as unknown as { projekteWurzel: () => string; projektOrdner: (s?: string | null) => string; hauptrepoWurzel: () => string | null };
@@ -162,7 +162,7 @@ describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", (
   });
   test("istProjektOrdner: exakter Ordner und Worktree-Ordner ja, Geschwister-Repos mit gleichem Präfix nein", () => {
     expect(P.istProjektOrdner("X--dev-repo", "X--dev-repo")).toBe(true);
-    expect(P.istProjektOrdner("X--dev-repo--claude-worktrees-kq-1", "X--dev-repo")).toBe(true);
+    expect(P.istProjektOrdner("X--dev-repo--claude-worktrees-wt-1", "X--dev-repo")).toBe(true);
     expect(P.istProjektOrdner("X--dev-repo-alt", "X--dev-repo")).toBe(false);
     expect(P.istProjektOrdner("X--dev-repo2", "X--dev-repo")).toBe(false);
     expect(P.istProjektOrdner("X--dev", "X--dev-repo")).toBe(false);

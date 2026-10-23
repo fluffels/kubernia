@@ -4,9 +4,12 @@ import { describe, expect, test } from "vitest";
 import * as kontextRoh from "../scripts/kontext-treiber.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../scripts/ticket-namen.mjs";
+import { FREMD } from "./support/fremd-config";
 
-// Die Namen kommen aus der Projekt-Config; die Wrapper reichen sie an die Kern-Funktionen durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const NAMEN = (namenRoh as unknown as { ladeTicketNamen: () => unknown }).ladeTicketNamen();
+// Die Namen kommen aus der Fremd-Config; die Wrapper reichen sie an die Kern-Funktionen durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const NAMEN = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen(FREMD);
+const WT = FREMD.praefixe.worktree;
+const { planer: PLANER, umsetzer: UMSETZER, lens: LENS } = FREMD.agenten;
 const kontextModul = kontextRoh as unknown as { kontextTreiber: (e: object) => unknown; analysiereLauf: (l: unknown, o?: object) => unknown; phaseDerCalls: (z: unknown, einstieg: unknown, namen: unknown) => unknown; parseArgs: (a: string[], namen: unknown) => unknown };
 const raw = {
   ...(kontextRoh as object),
@@ -71,10 +74,10 @@ function schritt(c: CallSpec): Row[] {
   });
   return rows;
 }
-const lauf = (prompt: string, calls: CallSpec[], agentType = "kubernia-umsetzer"): Lauf => ({ meta: { agentType }, zeilen: [user(0, prompt), ...calls.flatMap(schritt)] });
+const lauf = (prompt: string, calls: CallSpec[], agentType = UMSETZER): Lauf => ({ meta: { agentType }, zeilen: [user(0, prompt), ...calls.flatMap(schritt)] });
 const bash = (command: string, result?: string | null): Tool => ({ name: "Bash", input: { command }, result });
 const edit = (file = "src/a.ts"): Tool => ({ name: "Edit", input: { file_path: file } });
-const linse: Tool = { name: "Agent", input: { subagent_type: "kubernia-lens", description: "Lens Architektur R1" } };
+const linse: Tool = { name: "Agent", input: { subagent_type: LENS, description: "Lens Architektur R1" } };
 
 describe("Phasen je Call", () => {
   const phasen = (calls: CallSpec[]) => K.phaseDerCalls(lauf("#1 x", calls).zeilen);
@@ -146,7 +149,7 @@ describe("analysiereLauf", () => {
     expect(K.analysiereLauf(l)!.requests).toBe(2);
   });
   test("leerer Lauf (keine Calls) → null, Call ohne Preis → Kosten null", () => {
-    expect(K.analysiereLauf({ meta: { agentType: "kubernia-umsetzer" }, zeilen: [user(0, "#1 x")] })).toBeNull();
+    expect(K.analysiereLauf({ meta: { agentType: UMSETZER }, zeilen: [user(0, "#1 x")] })).toBeNull();
     const l = lauf("#1 x", [{ min: 1 }]);
     (l.zeilen[1] as { message: { model: string } }).message.model = "unbekanntes-modell";
     expect(K.analysiereLauf(l)!.kosten).toBeNull();
@@ -193,7 +196,7 @@ describe("kontextTreiber (Aggregat)", () => {
   });
   test("Sammeltickets getrennt, fremder Agent und Ticket-Filter greifen, leere Gruppe → null", () => {
     const sammel = lauf("#9 Harness-Härtung (gesammelt)", [{ min: 1 }, { min: 2 }]);
-    const planer = lauf("#3 z", [{ min: 1 }], "kubernia-planner");
+    const planer = lauf("#3 z", [{ min: 1 }], PLANER);
     const r = K.kontextTreiber({ laeufe: [kurz, sammel, planer] });
     expect(r.ohneSammel.gesamt!.n).toBe(1);
     expect(r.sammel.gesamt!.n).toBe(1);
@@ -313,25 +316,25 @@ describe("Filter --delta und --brille (#1582)", () => {
   const kt = (e: Filter) => (K as unknown as { kontextTreiber: (e: Filter) => { gesamt: { gesamt: { n: number } | null } } }).kontextTreiber(e).gesamt.gesamt?.n ?? 0;
   const PA = (K as unknown as { parseArgs: (a: string[]) => { delta?: boolean; brille?: string; fehler?: string } }).parseArgs;
   const lens = (beschreibung: string, prompt: string): Lauf => {
-    const l = lauf(prompt, [{ min: 1 }, { min: 2 }], "kubernia-lens");
+    const l = lauf(prompt, [{ min: 1 }, { min: 2 }], LENS);
     (l.meta as Record<string, unknown>).description = beschreibung;
     return l;
   };
-  const r1 = lens("Lens Architektur R1", "Patch: /t/kq-1-r1.patch");
-  const r2 = lens("Lens Test-Adäquanz R2", "Patch: /t/kq-1-r1.patch Delta-Patch: /t/kq-1-r2-delta.patch");
+  const r1 = lens("Lens Architektur R1", `Patch: /t/${WT}1-r1.patch`);
+  const r2 = lens("Lens Test-Adäquanz R2", `Patch: /t/${WT}1-r1.patch Delta-Patch: /t/${WT}1-r2-delta.patch`);
   const alle = [r1, r2];
   test("ohne Filter zählen alle Läufe (Regression)", () => {
-    expect(kt({ laeufe: alle, agent: "kubernia-lens" })).toBe(2);
+    expect(kt({ laeufe: alle, agent: LENS })).toBe(2);
   });
   test("delta true nur mit Delta-Patch, delta false nur ohne", () => {
-    expect(kt({ laeufe: alle, agent: "kubernia-lens", delta: true })).toBe(1);
-    expect(kt({ laeufe: alle, agent: "kubernia-lens", delta: false })).toBe(1);
+    expect(kt({ laeufe: alle, agent: LENS, delta: true })).toBe(1);
+    expect(kt({ laeufe: alle, agent: LENS, delta: false })).toBe(1);
   });
   test("brille filtert auf den Namen, ein unbekannter Name liefert keine Läufe", () => {
-    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Architektur" })).toBe(1);
-    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Test-Adäquanz", delta: true })).toBe(1);
-    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Architektur", delta: true })).toBe(0);
-    expect(kt({ laeufe: alle, agent: "kubernia-lens", brille: "Gibtsnicht" })).toBe(0);
+    expect(kt({ laeufe: alle, agent: LENS, brille: "Architektur" })).toBe(1);
+    expect(kt({ laeufe: alle, agent: LENS, brille: "Test-Adäquanz", delta: true })).toBe(1);
+    expect(kt({ laeufe: alle, agent: LENS, brille: "Architektur", delta: true })).toBe(0);
+    expect(kt({ laeufe: alle, agent: LENS, brille: "Gibtsnicht" })).toBe(0);
   });
   test("parseArgs: --delta ja|nein und --brille; ein anderer Wert ist ein Fehler", () => {
     expect(PA(["--delta", "ja", "--brille", "Doku"])).toMatchObject({ delta: true, brille: "Doku" });
@@ -351,9 +354,9 @@ describe("Filter --delta und --brille (#1582)", () => {
 
 describe("--delta ja zählt Merge-Delta-Läufe (#1582)", () => {
   test("ein Lauf mit Delta-Patch-Pfad und Merge-Beschreibung bleibt bei delta true", () => {
-    const l = lauf("Patch: /t/kq-1-r1.patch Delta-Patch: /t/kq-1-r2-delta.patch Konflikt-Auflösung", [{ min: 1 }, { min: 2 }], "kubernia-lens");
+    const l = lauf(`Patch: /t/${WT}1-r1.patch Delta-Patch: /t/${WT}1-r2-delta.patch Konflikt-Auflösung`, [{ min: 1 }, { min: 2 }], LENS);
     (l.meta as Record<string, unknown>).description = "Lens Doku Merge-Auflösung";
-    const n = (delta: boolean) => (K as unknown as { kontextTreiber: (e: { laeufe: Lauf[]; agent: string; delta: boolean }) => { gesamt: { gesamt: { n: number } | null } } }).kontextTreiber({ laeufe: [l], agent: "kubernia-lens", delta }).gesamt.gesamt?.n ?? 0;
+    const n = (delta: boolean) => (K as unknown as { kontextTreiber: (e: { laeufe: Lauf[]; agent: string; delta: boolean }) => { gesamt: { gesamt: { n: number } | null } } }).kontextTreiber({ laeufe: [l], agent: LENS, delta }).gesamt.gesamt?.n ?? 0;
     expect(n(true)).toBe(1);
     expect(n(false)).toBe(0);
   });
@@ -426,7 +429,7 @@ const KI = K as unknown as {
 };
 /** Lauf, der `ab` Minuten später beginnt (der Prompt-Zeitstempel ist der Start des Laufs). */
 const laufAb = (ab: number, prompt: string, calls: CallSpec[]): Lauf => ({
-  meta: { agentType: "kubernia-umsetzer" },
+  meta: { agentType: UMSETZER },
   zeilen: [user(ab, prompt), ...calls.map((c) => ({ ...c, min: c.min + ab })).flatMap(schritt)],
 });
 const NL = String.fromCharCode(10);
@@ -526,13 +529,13 @@ describe("Nachlese-Calls und Kosten ab Phase (#1592)", () => {
   };
   const lies = (file: string): Tool => ({ name: "Read", input: { file_path: file } });
   test("Read mit absolutem Worktree-Pfad (Backslash) und Shell-Befehle cat/sed/head auf geänderte Pfade zählen", () => {
-    expect(nachlese([edit("scripts/a.mjs")], [lies("C:\\dev\\kubernia\\.claude\\worktrees\\kq-5-x\\scripts\\a.mjs")])).toBe(1);
+    expect(nachlese([edit("scripts/a.mjs")], [lies(`C:\\dev\\repo\\.claude\\worktrees\\${WT}5-x\\scripts\\a.mjs`)])).toBe(1);
     expect(nachlese([edit("scripts/a.mjs")], [bash("sed -n '1,9p' scripts/a.mjs")])).toBe(1);
     expect(nachlese([edit("scripts/a.mjs")], [bash("head -n 5 scripts/a.mjs")])).toBe(1);
-    expect(nachlese([edit("scripts/a.mjs")], [bash("cat C:/dev/kubernia/.claude/worktrees/kq-5-x/scripts/a.mjs")])).toBe(1);
+    expect(nachlese([edit("scripts/a.mjs")], [bash(`cat C:/dev/repo/.claude/worktrees/${WT}5-x/scripts/a.mjs`)])).toBe(1);
     expect(nachlese([edit("scripts/a.mjs")], [lies("scripts/a.mjs"), bash("cat scripts/a.mjs"), lies("src/b.ts")])).toBe(2);
     // geänderter Pfad absolut (Worktree, Backslash), gelesen relativ: der Worktree-Präfix fällt weg
-    expect(nachlese([edit("C:\\dev\\kubernia\\.claude\\worktrees\\kq-5-x\\scripts\\a.mjs")], [lies("scripts/a.mjs")])).toBe(1);
+    expect(nachlese([edit(`C:\\dev\\repo\\.claude\\worktrees\\${WT}5-x\\scripts\\a.mjs`)], [lies("scripts/a.mjs")])).toBe(1);
   });
   test("Negativ: ungeänderte Datei, grep, ähnlicher Name und Lesen durch den Vorgänger zählen nicht", () => {
     expect(nachlese([edit("scripts/a.mjs")], [bash("cat scripts/b.mjs")])).toBe(0);
@@ -769,7 +772,7 @@ describe("parseArgs strikt (#1790)", () => {
   const PS = (K as unknown as { parseArgs: (a: string[]) => PArgs }).parseArgs;
   test("alle Flags gesetzt: Form ohne fehler-Feld, --ticket/--ohne wiederholbar", () => {
     expect(PS(["--von", "v", "--bis", "b", "--agent", "x", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4", "--projekt", "p", "--brille", "Doku", "--delta", "nein", "--je-ticket", "--json"])).toEqual({ agent: "x", tickets: [1, 2], ohne: [3, 4], json: true, von: "v", bis: "b", projekt: "p", brille: "Doku", delta: false, jeTicket: true });
-    expect(PS([])).toEqual({ agent: "kubernia-umsetzer", tickets: [], ohne: [], json: false });
+    expect(PS([])).toEqual({ agent: UMSETZER, tickets: [], ohne: [], json: false });
   });
   test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
     expect(PS(["--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);

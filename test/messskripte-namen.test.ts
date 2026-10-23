@@ -1,11 +1,12 @@
 /* Messskripte: Namen aus der Projekt-Config (#1745, ADR 0022 F3). Eine Fremd-Config (Repo o/acme, Worktree-Präfix ab-, Commit-Zeile AB-,
  * Agenten acme-*) zeigt, dass kein Name mehr im Skript steht; die Negativfälle zeigen, dass ein fehlender Name laut abbricht statt still zu zählen.
- * Das Verhalten für dieses Projekt belegt das Golden (test/mess-ausgaben-golden.test.ts). Synthetische Zeilen, kein IO außer dem Temp-Ordner.
+ * Die Ausgabeform belegt das Golden (test/mess-ausgaben-golden.test.ts). Synthetische Zeilen, kein IO außer dem Temp-Ordner.
  */
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import { FREMD, repoName } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRoh from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -30,6 +31,9 @@ import * as otlpRoh from "../scripts/langfuse-otlp.mjs";
 import * as kontingentRoh from "../scripts/kontingent-lib.mjs";
 
 type Row = Record<string, unknown>;
+const WT = FREMD.praefixe.worktree;
+const BRANCH = FREMD.praefixe.branch;
+const { planer: PLANER, umsetzer: UMSETZER, lens: LENS } = FREMD.agenten;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[] };
 type Namen = { agenten: Record<string, string>; praefixe: { worktree: string } };
 
@@ -114,19 +118,19 @@ describe("repoName (Namensteil von repo)", () => {
 });
 
 describe("subagent-laeufe: Ticket aus dem Worktree-Präfix der Config", () => {
-  test("worktrees/ab-12 ordnet Ticket 12 zu, das alte Präfix kq- nicht", () => {
+  test("worktrees/ab-12 ordnet Ticket 12 zu, ein fremdes Präfix nicht", () => {
     expect(L.laufAus(lauf("x", "Arbeit in C:/r/.claude/worktrees/ab-12/src"), NAMEN)?.ticket).toBe(12);
-    expect(L.laufAus(lauf("x", "Arbeit in C:/r/.claude/worktrees/kq-12/src"), NAMEN)?.ticket).toBeNull();
+    expect(L.laufAus(lauf("x", `Arbeit in C:/r/.claude/worktrees/${WT}12/src`), NAMEN)?.ticket).toBeNull();
   });
-  test("Patch-Pfad ab-12-r1.patch ordnet Ticket 12 zu, kq-12-r1.patch nicht", () => {
+  test("Patch-Pfad ab-12-r1.patch ordnet Ticket 12 zu, ein fremdes Präfix nicht", () => {
     const mit = L.laufAus(lauf("x", "Patch: /t/ab-12-r1.patch"), NAMEN) as { patch: { ticket: number; runde: number } | null; ticket: number | null };
     expect(mit.patch).toMatchObject({ ticket: 12, runde: 1 });
     expect(mit.ticket).toBe(12);
-    expect((L.laufAus(lauf("x", "Patch: /t/kq-12-r1.patch"), NAMEN) as { ticket: number | null }).ticket).toBeNull();
+    expect((L.laufAus(lauf("x", `Patch: /t/${WT}12-r1.patch`), NAMEN) as { ticket: number | null }).ticket).toBeNull();
   });
   test("ticketAusLauf ruft ticketAusRef mit den übergebenen Namen auf (Kommentar #1743 K3)", () => {
     expect(L.ticketAusLauf({ patch: null, prompt: "worktrees/ab-7" }, NAMEN)).toBe(7);
-    expect(L.ticketAusLauf({ patch: null, prompt: "worktrees/kq-7" }, NAMEN)).toBeNull();
+    expect(L.ticketAusLauf({ patch: null, prompt: `worktrees/${WT}7` }, NAMEN)).toBeNull();
   });
   test("laufAus reicht die Session durch und lässt das Feld ohne Session weg (#1821 L19)", () => {
     const s = L.laufAus({ ...lauf("x", "a"), session: "s9" }, NAMEN) as unknown as Record<string, unknown>;
@@ -141,7 +145,7 @@ describe("subagent-laeufe: Ticket aus dem Worktree-Präfix der Config", () => {
 });
 
 describe("subagent-laufzeit: Agent aus der Config", () => {
-  const laeufe = [lauf("acme-planer", "Ticket #1: a"), lauf("kubernia-planner", "Ticket #2: b"), lauf("acme-lens", "Ticket #3: c")];
+  const laeufe = [lauf("acme-planer", "Ticket #1: a"), lauf(PLANER, "Ticket #2: b"), lauf("acme-lens", "Ticket #3: c")];
   test("ohne agent gilt agenten.planer, ein Lauf des alten Namens zählt nicht", () => {
     const r = Z.laufzeiten({ laeufe, namen: NAMEN });
     expect(r.agent).toBe("acme-planer");
@@ -220,7 +224,7 @@ describe("subagent-laufzeit: hauptlauf (K3: ohne agenten.planer bricht es mit Me
 describe("mess-lib: Worktree-Präfix als Option", () => {
   test("bereinige: der Worktree-Pfad mit dem Präfix der Config wird <wt>, ein anderes Präfix bleibt", () => {
     expect(M.bereinige("cd C:/r/.claude/worktrees/ab-5 && ls", { worktree: "ab-" })).toBe("cd <wt>/ && ls");
-    expect(M.bereinige("cd C:/r/.claude/worktrees/kq-5 && ls", { worktree: "ab-" })).toBe("cd C:/r/.claude/worktrees/kq-5 && ls");
+    expect(M.bereinige(`cd C:/r/.claude/worktrees/${WT}5 && ls`, { worktree: "ab-" })).toBe(`cd C:/r/.claude/worktrees/${WT}5 && ls`);
   });
   test("bereinige ohne worktree lässt jeden Worktree-Pfad stehen (nur diese Ersetzung entfällt, der Benutzerordner nicht)", () => {
     expect(M.bereinige("cd C:/r/.claude/worktrees/ab-5 && ls")).toBe("cd C:/r/.claude/worktrees/ab-5 && ls");
@@ -235,7 +239,7 @@ describe("mess-lib: Worktree-Präfix als Option", () => {
   });
   test("normPfad: Präfix der Config fällt weg, anderes bleibt, ohne worktree bleibt alles", () => {
     expect(M.normPfad("C:\\R\\.claude\\worktrees\\ab-5\\Src\\A.ts", { worktree: "ab-" })).toBe("src/a.ts");
-    expect(M.normPfad("C:/r/.claude/worktrees/kq-5/src/a.ts", { worktree: "ab-" })).toBe("c:/r/.claude/worktrees/kq-5/src/a.ts");
+    expect(M.normPfad(`C:/r/.claude/worktrees/${WT}5/src/a.ts`, { worktree: "ab-" })).toBe(`c:/r/.claude/worktrees/${WT}5/src/a.ts`);
     expect(M.normPfad("C:/r/.claude/worktrees/ab-5/src/a.ts")).toBe("c:/r/.claude/worktrees/ab-5/src/a.ts");
     expect(M.normPfad("C:/r/.claude/worktrees/undefined5/src/a.ts")).toBe("c:/r/.claude/worktrees/undefined5/src/a.ts");
     expect(M.normPfad("C:/r/.claude/worktrees/null5/src/a.ts")).toBe("c:/r/.claude/worktrees/null5/src/a.ts");
@@ -253,14 +257,14 @@ describe("kontext-treiber: Namen aus der Config", () => {
   test("die Review-Phase beginnt beim Spawn des Lens-Agenten der Config, nicht beim alten Namen", () => {
     const mitLinse = [user(0, "Ticket #1: x"), call(1), ...spawn("acme-lens"), call(3)];
     expect(K.phaseDerCalls(mitLinse, null, NAMEN)).toEqual(["Umsetzung", "Review", "Review"]);
-    const alt = [user(0, "Ticket #1: x"), call(1), ...spawn("kubernia-lens"), call(3)];
+    const alt = [user(0, "Ticket #1: x"), call(1), ...spawn(LENS), call(3)];
     expect(K.phaseDerCalls(alt, null, NAMEN)).toEqual(["Umsetzung", "Umsetzung", "Umsetzung"]);
   });
   test("Tool-Label und Pfade: der Worktree-Pfad der Config wird <wt>, der alte bleibt", () => {
-    const l = lauf("acme-umsetzer", "Ticket #1: x", [...mitTool(2, "Read", { file_path: "C:/r/.claude/worktrees/ab-5/src/a.ts" }), ...mitTool(3, "Read", { file_path: "C:/r/.claude/worktrees/kq-5/src/b.ts" })]);
+    const l = lauf("acme-umsetzer", "Ticket #1: x", [...mitTool(2, "Read", { file_path: "C:/r/.claude/worktrees/ab-5/src/a.ts" }), ...mitTool(3, "Read", { file_path: `C:/r/.claude/worktrees/${WT}5/src/b.ts` })]);
     const labels = K.analysiereLauf(l, { namen: NAMEN })!.ergebnisse.map((e) => e.label);
     expect(labels).toContain("Read <wt>/src/a.ts");
-    expect(labels).toContain("Read C:/r/.claude/worktrees/kq-5/src/b.ts");
+    expect(labels).toContain(`Read C:/r/.claude/worktrees/${WT}5/src/b.ts`);
   });
   test("kontextTreiber: ohne agent gilt agenten.umsetzer; ohne beides wirft er; ohne namen wirft analysiereLauf", () => {
     expect(K.kontextTreiber({ laeufe: [], namen: NAMEN }).agent).toBe("acme-umsetzer");
@@ -312,13 +316,13 @@ describe("hauptchat-zerlegung: Agenten und Repo-Name aus der Config", () => {
     main: [user(0, "frag"), call(1)],
     subagents: [
       { meta: { agentType: "acme-umsetzer" }, zeilen: [call(2), call(3)] },
-      { meta: { agentType: "kubernia-umsetzer" }, zeilen: [call(4)] },
+      { meta: { agentType: UMSETZER }, zeilen: [call(4)] },
     ],
   };
   test("ein Subagent mit Namen der Config zählt als eigener (Schlüssel = Repo-Name), der alte Name ist ein Fork", () => {
     const r = H.zerlegeHauptchat({ sessions: [sitzung], config: CFG });
     expect(r.acme.calls).toBe(2);
-    expect("kubernia" in r).toBe(false);
+    expect(repoName(FREMD) in r).toBe(false);
     expect(r.rows.filter((z) => z.quelle === "Fork").reduce((n, z) => n + z.calls, 0)).toBe(1);
   });
   test("renderMarkdown nennt `<Repo-Name>-Subagenten`; ohne passenden repoName wirft es", () => {
@@ -336,7 +340,7 @@ describe("token-baseline: Umsetzer und Plan-Zeile aus der Config", () => {
   });
   test("pflegeFehlt: der Umsetzer der Config löst die Warnung aus, der alte Name nicht", () => {
     expect(B.summarize(aufruf("acme-umsetzer"), {}, null, { umsetzer: "acme-umsetzer" }).pflegeFehlt).toBe(true);
-    expect(B.summarize(aufruf("kubernia-umsetzer"), {}, null, { umsetzer: "acme-umsetzer" }).pflegeFehlt).toBe(false);
+    expect(B.summarize(aufruf(UMSETZER), {}, null, { umsetzer: "acme-umsetzer" }).pflegeFehlt).toBe(false);
   });
   test("Negativfall: mit Tool-Events und ohne Umsetzer-Namen wirft summarize, ohne Events nicht", () => {
     expect(() => B.summarize(aufruf("acme-umsetzer"), {}, null, {})).toThrow(/Umsetzer/);
@@ -358,7 +362,7 @@ describe("token-baseline: Umsetzer und Plan-Zeile aus der Config", () => {
 describe("Langfuse-Abgleich: Worktree-Präfix und Repo-Name aus der Config", () => {
   test("ticketAusBranch: das Präfix der Config trifft, das alte nicht; Wortgrenze davor", () => {
     expect(G.ticketAusBranch("feature/ab-7-x", "ab-")).toBe("ab-7");
-    expect(G.ticketAusBranch("feature/kq-7", "ab-")).toBeNull();
+    expect(G.ticketAusBranch(`${BRANCH}7`, "ab-")).toBeNull();
     expect(G.ticketAusBranch("feature/xab-7", "ab-")).toBeNull();
     expect(G.ticketAusBranch("ab-7", "ab-")).toBe("ab-7");
     expect(G.ticketAusBranch("feature/ab-7x", "ab-")).toBeNull();
@@ -375,7 +379,7 @@ describe("Langfuse-Abgleich: Worktree-Präfix und Repo-Name aus der Config", () 
   const sitzung = { id: "s1", main: [call(0, { branch: "feature/ab-7-x" })], subagents: [] };
   test("sollEintraege setzt das Ticket aus dem Branch mit dem übergebenen Präfix", () => {
     expect(G.sollEintraege(sitzung, { worktree: "ab-" })[0].ticket).toBe("ab-7");
-    expect(G.sollEintraege(sitzung, { worktree: "kq-" })[0].ticket).toBeNull();
+    expect(G.sollEintraege(sitzung, { worktree: WT })[0].ticket).toBeNull();
   });
   test("scopeName und bauePayloads: Scope, Service und erstes Tag tragen den Repo-Namen", () => {
     expect(O.scopeName("acme")).toBe("acme-abgleich");
@@ -418,14 +422,14 @@ describe("kontingent-lib: Log-Pfad aus dem Repo-Namen", () => {
     for (const f of exits) f();
   };
   test("mitKontingent schreibt das Protokoll in die Datei aus dem Pfad vom Start (Umgebungsvariable)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-1745-"));
+    const dir = mkdtempSync(join(tmpdir(), "mess-1745-"));
     ordner.push(dir);
     const datei = join(dir, "kosten.jsonl");
     messe({ env: { FACTORY_GH_KOSTEN_LOG: datei } });
     expect((JSON.parse(readFileSync(datei, "utf8").trim()) as { skript: string }).skript).toBe("probe");
   });
   test("Negativfall: ist der Pfad nicht bestimmbar (Config unlesbar), läuft mitKontingent weiter und schreibt nichts", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-1745-"));
+    const dir = mkdtempSync(join(tmpdir(), "mess-1745-"));
     ordner.push(dir);
     // tmpdir() liest TEMP/TMP/TMPDIR zur Laufzeit: jede Ersatzdatei im Temp-Ordner würde hier sichtbar.
     const alt = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };

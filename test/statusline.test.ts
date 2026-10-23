@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 function lauf(stdin: string, kommando: string | null, env: Record<string, string> = {}) {
-  dir = mkdtempSync(join(tmpdir(), "kq-statusline-"));
+  dir = mkdtempSync(join(tmpdir(), "statusline-"));
   const settings = join(dir, "settings.json");
   writeFileSync(settings, JSON.stringify(kommando === null ? {} : { statusLine: { type: "command", command: kommando } }));
   const snapshot = join(dir, "snap.json");
@@ -39,7 +39,7 @@ describe("scripts/statusline.mjs", () => {
   });
 
   test("ohne rate_limits bleibt ein vorhandener Snapshot unberührt", () => {
-    dir = mkdtempSync(join(tmpdir(), "kq-statusline-"));
+    dir = mkdtempSync(join(tmpdir(), "statusline-"));
     const snapshot = join(dir, "snap.json");
     writeFileSync(snapshot, '{"alt":true}');
     const settings = join(dir, "s.json");
@@ -53,7 +53,7 @@ describe("scripts/statusline.mjs", () => {
   });
 
   test("Teil-Snapshot ohne 7-Tage-Fenster ersetzt keinen vorhandenen Wochenstand, mit Wochenstand schon", () => {
-    dir = mkdtempSync(join(tmpdir(), "kq-statusline-"));
+    dir = mkdtempSync(join(tmpdir(), "statusline-"));
     const snapshot = join(dir, "snap.json");
     const settings = join(dir, "s.json");
     writeFileSync(settings, "{}");

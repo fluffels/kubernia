@@ -25,9 +25,9 @@ describe("roteLaeufePfad", () => {
     assert.ok(!p.includes("branch=") && !p.includes("created="));
   });
   test("Branch wird URL-kodiert, Datum auf den Tag gekürzt und kodiert, Repo überschreibbar", () => {
-    const p = m.roteLaeufePfad({ branch: "feature/kq-40-a&b#c+d", seit: "2026-10-01T10:30:00Z", repo: "x/y" });
+    const p = m.roteLaeufePfad({ branch: "feature/x-40-a&b#c+d", seit: "2026-10-01T10:30:00Z", repo: "x/y" });
     assert.ok(p.startsWith("repos/x/y/actions/"));
-    assert.ok(p.includes(`branch=${encodeURIComponent("feature/kq-40-a&b#c+d")}`));
+    assert.ok(p.includes(`branch=${encodeURIComponent("feature/x-40-a&b#c+d")}`));
     assert.ok(p.includes("created=%3E%3D2026-10-01"));
     assert.ok(!p.includes("T10:30"));
   });

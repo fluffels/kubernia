@@ -10,21 +10,25 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as projektRaw from "../scripts/projekt-config-lib.mjs";
-const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
+import * as namenRoh from "../scripts/ticket-namen.mjs";
+import { FREMD, repoName } from "./support/fremd-config";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as hcRoh from "../scripts/hauptchat-zerlegung.mjs";
 
-// Der Repo-Name (Schlüssel der eigenen Subagenten im Ergebnis) kommt aus der Projekt-Config; der Wrapper reicht ihn an renderMarkdown durch.
-const REPO_NAME = (projektRaw as unknown as { repoName: (c: unknown) => string }).repoName(ladeProjektConfig());
+// Der Repo-Name (Schlüssel der eigenen Subagenten im Ergebnis) kommt aus der Fremd-Config; der Wrapper reicht ihn an renderMarkdown durch.
+const REPO_NAME = repoName(FREMD);
+const escapeRegex = (namenRoh as unknown as { escapeRegex: (s: string) => string }).escapeRegex;
 const hcModule = { ...(hcRoh as object), renderMarkdown: (r: unknown) => (hcRoh as unknown as { renderMarkdown: (r: unknown, o: object) => string }).renderMarkdown(r, { repoName: REPO_NAME }) };
 
 type Row = Record<string, unknown>;
 type Zeile = { kategorie: string; quelle: string; modell: string; calls: number; cost: number };
 type Fenster = { nr: number; art: string; startTs: string; closedAt: string | null; modelle: Record<string, number> };
-type Ergebnis = { rows: Zeile[]; fenster: Fenster[]; kubernia: { calls: number; cost: number; costGeschaetzt: number; output: number; outputGeschaetzt: number }; ohnePreis: number; ohnePreisModelle: Record<string, number> };
+type Ergebnis = { rows: Zeile[]; fenster: Fenster[]; ohnePreis: number; ohnePreisModelle: Record<string, number> };
+type Eigen = { calls: number; cost: number; costGeschaetzt: number; output: number; outputGeschaetzt: number };
+/** Die Zeile der eigenen Subagenten; ihr Schlüssel ist der Repo-Name der Config. */
+const eigen = (r: Ergebnis): Eigen => (r as unknown as Record<string, Eigen>)[REPO_NAME];
 type Sub = { meta: { agentType?: string; description?: string; parentAgentId?: string }; zeilen: Row[] };
 type Eingabe = {
   sessions: { id: string; main: Row[]; subagents?: Sub[] }[];
@@ -39,9 +43,9 @@ const hcTyp = hcModule as {
   ticketSkillsAusConfig: (deps?: { config?: Record<string, unknown> }) => string[];
   renderMarkdown: (r: Ergebnis) => string;
 };
-/** Der Kern lädt die Config nie selbst (der Einstiegspunkt reicht sie durch); die Tests reichen die echte durch. */
-const ECHTE_CONFIG = ladeProjektConfig() as Record<string, unknown>;
-const hc = { ...hcTyp, zerlegeHauptchat: (e: Eingabe) => hcTyp.zerlegeHauptchat({ config: ECHTE_CONFIG, ...e }) };
+/** Der Kern lädt die Config nie selbst (der Einstiegspunkt reicht sie durch); die Tests reichen die Fremd-Config durch. */
+const CONFIG = FREMD as unknown as Record<string, unknown>;
+const hc = { ...hcTyp, zerlegeHauptchat: (e: Eingabe) => hcTyp.zerlegeHauptchat({ config: CONFIG, ...e }) };
 
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";
@@ -75,6 +79,7 @@ const call = (min: number, model: string, tool?: { name: string; input: Record<s
 };
 const bash = (cmd: string) => ({ name: "Bash", input: { command: cmd } });
 const read = (path: string) => ({ name: "Read", input: { file_path: path } });
+const SKILL = FREMD.agenten.ticketSkill;
 const skill = (name: string) => ({ name: "Skill", input: { skill: name } });
 const claim = (nr: number) => bash(`gh issue edit ${nr} --add-assignee @me`);
 
@@ -87,7 +92,7 @@ describe("zerlegeHauptchat: Kategorien", () => {
     const main: Row[] = [
       user(0, "frag mal was"),
       call(1, OPUS),
-      slash(10, "kubernia"),
+      slash(10, SKILL),
       call(11, SONNET, claim(7)),
       toolResult(12),
       call(13, SONNET),
@@ -207,14 +212,14 @@ describe("zerlegeHauptchat: Brain-Erkennung", () => {
 });
 
 describe("Ticket-Skills aus der Projekt-Config", () => {
-  const cfg = ladeProjektConfig() as { agenten: Record<string, string> };
+  const cfg = FREMD;
   const mitSkill = (name: string) => ({ ...cfg, agenten: { ...cfg.agenten, ticketSkill: name } });
   const art = (main: Row[], config: Record<string, unknown>) => hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], config }).fenster[0].art;
   test("der konfigurierte Produkt-Skill zählt, der alte Name nicht, der Kern-Skill immer", () => {
     const c = mitSkill("ab");
     assert.equal(art([slash(0, "ab"), call(1, SONNET, claim(1))], c), "Slash");
     assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("ab")), call(2, OPUS, claim(1))], c), "Skill-Tool");
-    assert.equal(art([slash(0, "kubernia"), call(1, SONNET, claim(1))], c), "frei");
+    assert.equal(art([slash(0, SKILL), call(1, SONNET, claim(1))], c), "frei");
     assert.equal(art([slash(0, "factory"), call(1, SONNET, claim(1))], c), "Slash");
   });
   test("der Verzeichnisname des festen Rollen-Pfads (factory-ticket) zählt als Ticket-Skill, ein anderer Name nicht, ohne Doppelung", () => {
@@ -239,11 +244,11 @@ describe("Ticket-Skills aus der Projekt-Config", () => {
 describe("zerlegeHauptchat: Start-Art", () => {
   const art = (main: Row[]) => hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }).fenster[0].art;
   test("Slash, Skill-Tool und frei", () => {
-    assert.equal(art([slash(0, "kubernia"), call(1, SONNET, claim(1))]), "Slash");
-    assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("kubernia")), call(2, OPUS, claim(1))]), "Skill-Tool");
+    assert.equal(art([slash(0, SKILL), call(1, SONNET, claim(1))]), "Slash");
+    assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill(SKILL)), call(2, OPUS, claim(1))]), "Skill-Tool");
     assert.equal(art([user(0, "mach #1"), call(1, OPUS, claim(1))]), "frei");
   });
-  test("der Kern-Ticket-Skill factory zählt wie kubernia, ein anderer Skill bleibt frei (#1806)", () => {
+  test("der Kern-Ticket-Skill factory zählt wie der Produkt-Skill, ein anderer Skill bleibt frei (#1806)", () => {
     assert.equal(art([slash(0, "factory"), call(1, SONNET, claim(1))]), "Slash");
     assert.equal(art([user(0, "mach #1"), call(1, OPUS, skill("factory")), call(2, OPUS, claim(1))]), "Skill-Tool");
     assert.equal(art([slash(0, "forum"), call(1, SONNET, claim(1))]), "frei");
@@ -254,17 +259,17 @@ describe("zerlegeHauptchat: Start-Art", () => {
 describe("zerlegeHauptchat: Subagenten", () => {
   const sub = (meta: Sub["meta"], zeilen: Row[]): Sub => ({ meta, zeilen });
 
-  test("kubernia-Subagenten und verschachtelte zählen nicht zum Hauptchat, Forks folgen dem Turn", () => {
+  test("Ticketlauf-Subagenten und verschachtelte zählen nicht zum Hauptchat, Forks folgen dem Turn", () => {
     const main = [user(0, "a"), call(1, OPUS), user(10, "b"), call(11, OPUS, claim(1))];
     const subagents = [
-      sub({ agentType: "kubernia-planner", description: "Plan" }, [call(12, OPUS)]),
-      sub({ agentType: "kubernia-umsetzer", description: "Umsetzen" }, [call(13, SONNET)]),
-      sub({ agentType: "kubernia-lens", description: "Lens R1", parentAgentId: "x" }, [call(14, OPUS)]),
+      sub({ agentType: FREMD.agenten.planer, description: "Plan" }, [call(12, OPUS)]),
+      sub({ agentType: FREMD.agenten.umsetzer, description: "Umsetzen" }, [call(13, SONNET)]),
+      sub({ agentType: FREMD.agenten.lens, description: "Lens R1", parentAgentId: "x" }, [call(14, OPUS)]),
       sub({ agentType: "general-purpose", description: "Recherche außer der Reihe" }, [call(15, OPUS), call(16, OPUS)]),
       sub({ agentType: "general-purpose", description: "früher Fork" }, [call(2, OPUS)]),
     ];
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main, subagents }] });
-    assert.equal(r.kubernia.calls, 3);
+    assert.equal(eigen(r).calls, 3);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 1);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS, "Fork"), 2);
     assert.equal(calls(r, "Ad-hoc", OPUS, "Fork"), 1);
@@ -379,19 +384,19 @@ describe("zerlegeHauptchat: Grenzfälle aus dem Review (R1)", () => {
 
   test("ein Claim in einem verschachtelten Subagenten eröffnet kein Fenster", () => {
     const main = [user(0, "a"), call(1, OPUS)];
-    const subagents = [sub({ agentType: "kubernia-lens", description: "x", parentAgentId: "p" }, [call(2, SONNET, claim(9))])];
+    const subagents = [sub({ agentType: FREMD.agenten.lens, description: "x", parentAgentId: "p" }, [call(2, SONNET, claim(9))])];
     assert.equal(hc.zerlegeHauptchat({ sessions: [{ id: "s", main, subagents }] }).fenster.length, 0);
   });
 
-  test("ein verschachtelter Subagent zählt als kubernia, auch mit fremdem Typ und ohne ersichtliche Phase", () => {
+  test("ein verschachtelter Subagent zählt als eigener Subagent, auch mit fremdem Typ und ohne ersichtliche Phase", () => {
     const subagents = [sub({ agentType: "general-purpose", description: "Erkundung", parentAgentId: "p" }, [call(2, OPUS)])];
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a")], subagents }] });
-    assert.equal(r.kubernia.calls, 1);
+    assert.equal(eigen(r).calls, 1);
     assert.equal(r.rows.length, 0);
   });
 
-  test("Calls ohne Preis eines kubernia-Subagenten zählen in ohnePreis", () => {
-    const subagents = [sub({ agentType: "kubernia-planner" }, [call(2, "claude-unbekannt-9")])];
+  test("Calls ohne Preis eines Ticketlauf-Subagenten zählen in ohnePreis", () => {
+    const subagents = [sub({ agentType: FREMD.agenten.planer }, [call(2, "claude-unbekannt-9")])];
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a")], subagents }] });
     assert.equal(r.ohnePreis, 1);
     assert.deepEqual(r.ohnePreisModelle, { "claude-unbekannt-9": 1 });
@@ -413,28 +418,28 @@ describe("zerlegeHauptchat: geschätzte Kosten und Output (Z2)", () => {
   const sub = (meta: Sub["meta"], zeilen: Row[]): Sub => ({ meta, zeilen });
   const zerlege = (meta: Sub["meta"], zeilen: Row[]) => hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a"), call(1, OPUS)], subagents: [sub(meta, zeilen)] }] });
 
-  test("kubernia-Subagent: Output und Kosten geschätzt liegen über den aufgezeichneten Werten", () => {
-    const k = zerlege({ agentType: "kubernia-umsetzer" }, zuwachsZeilen(true)).kubernia;
+  test("Ticketlauf-Subagent: Output und Kosten geschätzt liegen über den aufgezeichneten Werten", () => {
+    const k = eigen(zerlege({ agentType: FREMD.agenten.umsetzer }, zuwachsZeilen(true)));
     assert.equal(k.output, 15);
     assert.ok(k.outputGeschaetzt > k.output, JSON.stringify(k));
     assert.ok(k.costGeschaetzt > k.cost, JSON.stringify(k));
   });
 
   test("ohne Kontext-Zuwachs ist geschätzt gleich aufgezeichnet; ein Call ohne Preis ergibt kein NaN", () => {
-    const k = zerlege({ agentType: "kubernia-umsetzer" }, zuwachsZeilen(false)).kubernia;
+    const k = eigen(zerlege({ agentType: FREMD.agenten.umsetzer }, zuwachsZeilen(false)));
     assert.equal(k.outputGeschaetzt, k.output);
     assert.equal(k.costGeschaetzt, k.cost);
-    const ohne = zerlege({ agentType: "kubernia-umsetzer" }, zuwachsZeilen(true, "claude-unbekannt-9")).kubernia;
+    const ohne = eigen(zerlege({ agentType: FREMD.agenten.umsetzer }, zuwachsZeilen(true, "claude-unbekannt-9")));
     assert.ok(Number.isFinite(ohne.costGeschaetzt) && Number.isFinite(ohne.outputGeschaetzt));
   });
 
-  test("Fork-Zeile trägt costGeschaetzt, die Summe und die kubernia-Zeile nennen es", () => {
+  test("Fork-Zeile trägt costGeschaetzt, die Summe und die Zeile der eigenen Subagenten nennen es", () => {
     const r = zerlege({ agentType: "general-purpose" }, zuwachsZeilen(true));
     const fork = r.rows.find((z) => z.quelle === "Fork") as unknown as { cost: number; costGeschaetzt: number };
     assert.ok(fork.costGeschaetzt > fork.cost);
-    const k = zerlege({ agentType: "kubernia-planner" }, zuwachsZeilen(true));
+    const k = zerlege({ agentType: FREMD.agenten.planer }, zuwachsZeilen(true));
     const text = hc.renderMarkdown(k);
-    assert.match(text, /kubernia-Subagenten \(nicht Hauptchat\): 3 Calls, [\d.]+ \$, geschätzt [\d.]+ \$ \(Output geschätzt \d+ statt 15 Tokens\)/);
+    assert.match(text, new RegExp(`${escapeRegex(REPO_NAME)}-Subagenten \\(nicht Hauptchat\\): 3 Calls, [\\d.]+ \\$, geschätzt [\\d.]+ \\$ \\(Output geschätzt \\d+ statt 15 Tokens\\)`));
     assert.match(text, /^\| Kategorie \| Quelle \| Modell \| Calls \| Kosten \| Kosten geschätzt \|$/m);
     assert.match(text, /^\| \*\*Summe\*\* \| \| \| \d+ \| [\d.]+ \$ \| [\d.]+ \$ \|$/m);
     const forkText = hc.renderMarkdown(r);
@@ -450,7 +455,7 @@ describe("renderMarkdown", () => {
   const render = (e: Eingabe) => (hcModule as { renderMarkdown: (r: Ergebnis) => string }).renderMarkdown(hc.zerlegeHauptchat(e));
 
   test("nennt Fenster, warnt bei fehlendem --brain und bei Calls ohne Preis", () => {
-    const text = render({ sessions: [{ id: "abcdef123456", main: [slash(0, "kubernia"), call(1, "claude-unbekannt-9", claim(4))] }] });
+    const text = render({ sessions: [{ id: "abcdef123456", main: [slash(0, SKILL), call(1, "claude-unbekannt-9", claim(4))] }] });
     assert.match(text, /ohne --brain gemessen/);
     assert.match(text, /1 Calls ohne Preis/);
     assert.match(text, /\| #4 \| abcdef12 \|/);
@@ -480,7 +485,7 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
     hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], brainRoots, closedAtOf: () => closed });
 
   test("Ticket-Turn mit späterem brain-input: Calls davor Ticket, ab dem Ereignis Brain", () => {
-    const r = lauf([slash(0, "kubernia"), call(1, OPUS, claim(9)), call(2, OPUS), call(3, OPUS, skill("brain-input")), call(4, OPUS), call(5, OPUS)]);
+    const r = lauf([slash(0, SKILL), call(1, OPUS, claim(9)), call(2, OPUS), call(3, OPUS, skill("brain-input")), call(4, OPUS), call(5, OPUS)]);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 2);
     assert.equal(calls(r, "Brain", OPUS), 3);
   });
@@ -491,7 +496,7 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
   });
 
   test("Brain-Ereignis nach closedAt: Calls zwischen Merge und Ereignis sind Nachlauf", () => {
-    const r = lauf([slash(0, "kubernia"), call(1, OPUS, claim(9)), call(5, OPUS), call(8, OPUS), call(9, OPUS, read("/x/notizen/a.md"))], iso(4));
+    const r = lauf([slash(0, SKILL), call(1, OPUS, claim(9)), call(5, OPUS), call(8, OPUS), call(9, OPUS, read("/x/notizen/a.md"))], iso(4));
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 1);
     assert.equal(calls(r, "Nachlauf", OPUS), 2);
     assert.equal(calls(r, "Brain", OPUS), 1);
@@ -503,7 +508,7 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
   });
 
   test("zwei Brain-Ereignisse im Turn: Brain beginnt beim ersten, auch die Calls dazwischen sind Brain", () => {
-    const r = lauf([slash(0, "kubernia"), call(1, OPUS, claim(9)), call(2, OPUS, read("/x/notizen/a.md")), call(3, OPUS), call(4, OPUS, read("/x/notizen/b.md")), call(5, OPUS)]);
+    const r = lauf([slash(0, SKILL), call(1, OPUS, claim(9)), call(2, OPUS, read("/x/notizen/a.md")), call(3, OPUS), call(4, OPUS, read("/x/notizen/b.md")), call(5, OPUS)]);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 1);
     assert.equal(calls(r, "Brain", OPUS), 4);
   });
@@ -518,13 +523,13 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
   });
 
   test("hauptchatCalls ist die Summe über alle Modelle und Calls des Fensters", () => {
-    const main = [slash(0, "kubernia"), call(1, SONNET, claim(5)), call(2, SONNET), call(3, SONNET), call(4, OPUS)];
+    const main = [slash(0, SKILL), call(1, SONNET, claim(5)), call(2, SONNET), call(3, SONNET), call(4, OPUS)];
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }) as Ergebnis & { fenster: { hauptchatCalls: number }[] };
     assert.equal(r.fenster[0].hauptchatCalls, 4);
   });
 
   test("Fenster ohne Hauptchat-Calls: hauptchatCalls 0 und Ausgabe „0 Calls“ statt „-“", () => {
-    const e = { sessions: [{ id: "s", main: [slash(0, "kubernia"), call(1, SONNET, claim(5))] }] };
+    const e = { sessions: [{ id: "s", main: [slash(0, SKILL), call(1, SONNET, claim(5))] }] };
     const r = hc.zerlegeHauptchat(e) as Ergebnis & { fenster: (Fenster & { hauptchatCalls: number })[] };
     assert.equal(r.fenster[0].hauptchatCalls, 1);
     // Claim-Call in einem Subagent-Claim: Fenster ohne eigene Calls
@@ -664,7 +669,7 @@ describe("ttlVergleich (#1557)", () => {
 
 describe("zerlegeHauptchat: Modellanteil und TTL im Ergebnis (#1557)", () => {
   test("Ergebnis trägt modellanteil und ttl, renderMarkdown zeigt beide Zeilen", () => {
-    const main = [slash(0, "kubernia"), call(1, SONNET, claim(5)), call(2, SONNET), call(3, OPUS)];
+    const main = [slash(0, SKILL), call(1, SONNET, claim(5)), call(2, SONNET), call(3, OPUS)];
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }) as Ergebnis & { modellanteil: Anteil; ttl: Ttl };
     assert.equal(r.modellanteil.gesamt, 3);
     assert.equal(r.modellanteil.sonnet, 2);
@@ -679,20 +684,20 @@ describe("zerlegeHauptchat: Modellanteil und TTL im Ergebnis (#1557)", () => {
       msg.usage = { ...msg.usage, cache_creation_input_tokens: 1_000_000, cache_creation: { ephemeral_1h_input_tokens: 1_000_000 }, cache_read_input_tokens: 1_000_000 };
       return row;
     };
-    const main = [user(0, "x"), call(1, SONNET), slash(2, "kubernia"), mitCache(call(4, SONNET, claim(5)))];
+    const main = [user(0, "x"), call(1, SONNET), slash(2, SKILL), mitCache(call(4, SONNET, claim(5)))];
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }) as Ergebnis & { ttl: Ttl };
     assert.equal(r.ttl.calls, 1, "nur der Ticket-Call zählt");
     assert.equal(r.ttl.pausenUeber5, 0);
     // warm (Vorgänger 3 min davor im Ad-hoc): 1M Write zu 2,5 + 1M Read zu 0,2; ohne Kette wäre er kalt (5 $)
     assert.ok(Math.abs(r.ttl.sim5mKosten - 2.7) < 1e-9);
     // eine Pause über 5 min bleibt eine Pause, auch wenn sie hinter einem Ad-hoc-Call liegt
-    const lang = [user(0, "x"), call(1, SONNET), slash(10, "kubernia"), mitCache(call(12, SONNET, claim(5)))];
+    const lang = [user(0, "x"), call(1, SONNET), slash(10, SKILL), mitCache(call(12, SONNET, claim(5)))];
     const l = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: lang }] }) as Ergebnis & { ttl: Ttl };
     assert.equal(l.ttl.pausenUeber5, 1);
     assert.ok(Math.abs(l.ttl.sim5mKosten - 5) < 1e-9);
   });
   test("Nachlauf-Calls (nach closedAt) bilden nur die Kette und zählen nicht", () => {
-    const main = [slash(0, "kubernia"), call(1, SONNET, claim(5)), call(2, SONNET), call(20, SONNET)];
+    const main = [slash(0, SKILL), call(1, SONNET, claim(5)), call(2, SONNET), call(20, SONNET)];
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], closedAtOf: () => iso(10) }) as Ergebnis & { ttl: Ttl };
     assert.equal(r.ttl.calls, 2, "nur die beiden Calls vor closedAt");
     assert.equal(r.ttl.pausenUeber5, 0, "die Pause bis zum Nachlauf-Call gehört nicht zu den gezählten");
@@ -722,7 +727,7 @@ describe("parseArgs (#1790: strikt über flagsLesen)", () => {
 
 describe("Einstiegspunkt übergibt die Projekt-Config an den Kern (#1814)", () => {
   test("Prozesslauf mit leerem Projektordner endet mit Exit 0 und gültigem JSON, nicht mit der Config-Abbruchmeldung", () => {
-    const home = mkdtempSync(join(tmpdir(), "kq-1814-home-"));
+    const home = mkdtempSync(join(tmpdir(), "hauptchat-1814-home-"));
     try {
       mkdirSync(join(home, ".claude", "projects", "leer"), { recursive: true });
       const skript = fileURLToPath(new URL("../scripts/hauptchat-zerlegung.mjs", import.meta.url));

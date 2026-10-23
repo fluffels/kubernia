@@ -132,7 +132,7 @@ describe("pruefLaeufe (#1120)", () => {
     assert.deepEqual(z(evs), { voll: 6, gezielt: 0 });
   });
   test("zählt npm mit Flag samt Wert vor run (--prefix, -C) und run-script", () => {
-    const evs = [sh("npm --prefix C:/x/kq-1 run verify:kompakt"), sh("npm -C C:/x run-script verify"), sh("npm --prefix C:/x run verify:changed"), sh("npm --prefix C:/x run lint")];
+    const evs = [sh("npm --prefix C:/x/wt-1 run verify:kompakt"), sh("npm -C C:/x run-script verify"), sh("npm --prefix C:/x run verify:changed"), sh("npm --prefix C:/x run lint")];
     assert.deepEqual(z(evs), { voll: 2, gezielt: 1 });
   });
   test("zählt gezielte Läufe getrennt", () => {
@@ -148,7 +148,7 @@ describe("pruefLaeufe (#1120)", () => {
       sh("npm run verify", "Bash", "Permission to use Bash has been denied"),
       sh("npm run lint"),
       sh("npm ci"),
-      sh("npm --prefix C:/x/kq-1 ci"),
+      sh("npm --prefix C:/x/wt-1 ci"),
       sh("npm test"),
       sh("npm install"),
       sh("npm verify"),

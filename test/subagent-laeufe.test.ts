@@ -4,10 +4,13 @@ import { describe, expect, test } from "vitest";
 import * as laeufeRoh from "../scripts/subagent-laeufe.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../scripts/ticket-namen.mjs";
+import { FREMD } from "./support/fremd-config";
 
 type Row = Record<string, unknown>;
-// Die Namen kommen aus der Projekt-Config; die Wrapper reichen sie durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const NAMEN = (namenRoh as unknown as { ladeTicketNamen: () => unknown }).ladeTicketNamen();
+// Die Namen kommen aus der Fremd-Config; die Wrapper reichen sie durch, damit die Tests ihre Eingaben wie bisher schreiben.
+const NAMEN = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen(FREMD);
+const WT = FREMD.praefixe.worktree;
+const LENS = FREMD.agenten.lens;
 const raw = laeufeRoh as object;
 const roh = laeufeRoh as unknown as { ticketAusLauf: (e: object, namen: unknown) => number | null; laufAus: (e: object, namen: unknown) => unknown };
 const A = {
@@ -22,29 +25,29 @@ const zeile = (min: number, model: string | undefined, text?: string): Row =>
 
 describe("ticketAusLauf", () => {
   test("Patch-Pfad vor einer fremden Nummer im Brillen-Text (Negativfall der Zeile)", () => {
-    const prompt = "Brille: schon erledigt durch #1349 … Patch: C:/tmp/kq-1580-r1.patch · erwarteter HEAD: abc";
+    const prompt = `Brille: schon erledigt durch #1349 … Patch: C:/tmp/${WT}1580-r1.patch · erwarteter HEAD: abc`;
     expect(A.ticketAusLauf({ patch: { ticket: 1580 }, prompt })).toBe(1580);
   });
   test("Reihenfolge: der Patch-Pfad schlägt einen Worktree-Pfad im Prompt", () => {
-    const prompt = "Arbeitsverzeichnis: C:/x/.claude/worktrees/kq-1111 · Patch: /tmp/kq-1580-r1.patch";
+    const prompt = `Arbeitsverzeichnis: C:/x/.claude/worktrees/${WT}1111 · Patch: /tmp/${WT}1580-r1.patch`;
     expect(A.ticketAusLauf({ patch: { ticket: 1580 }, prompt })).toBe(1580);
   });
   test("Diät-Überschrift (#1034) plus Lens-Worktree: der Worktree gibt das Ticket", () => {
-    const prompt = "Kontext-Diät (#1034) · Arbeitsverzeichnis: C:/x/.claude/worktrees/kq-1582-lens-r1 · Brille #907";
+    const prompt = `Kontext-Diät (#1034) · Arbeitsverzeichnis: C:/x/.claude/worktrees/${WT}1582-lens-r1 · Brille #907`;
     expect(A.ticketAusLauf({ patch: null, prompt })).toBe(1582);
   });
   test("Kopfzeile `Ticket #<nr>:` in Zeile 1 schlägt Worktree-Pfad und Patch (#1593)", () => {
-    const prompt = "Ticket #1729: Titel\nArbeitsverzeichnis: C:/x/.claude/worktrees/kq-1628 · Patch: /tmp/kq-1628-r1.patch";
+    const prompt = `Ticket #1729: Titel\nArbeitsverzeichnis: C:/x/.claude/worktrees/${WT}1628 · Patch: /tmp/${WT}1628-r1.patch`;
     expect(A.ticketAusLauf({ patch: { ticket: 1628 }, prompt })).toBe(1729);
     expect(A.ticketAusLauf({ patch: null, prompt })).toBe(1729);
   });
   test("Kopfzeile nur in Zeile 1 und nur vollständig: Zeile 2, Satzmitte und `#12a` zählen nicht (#1593)", () => {
-    const wt = "C:/x/.claude/worktrees/kq-1628";
+    const wt = `C:/x/.claude/worktrees/${WT}1628`;
     expect(A.ticketAusLauf({ patch: null, prompt: `Vorspann\nTicket #1729: T ${wt}` })).toBe(1628);
     expect(A.ticketAusLauf({ patch: null, prompt: `Siehe Ticket #1729: T ${wt}` })).toBe(1628);
     expect(A.ticketAusLauf({ patch: null, prompt: `Ticket #12a: T ${wt}` })).toBe(1628);
   });
-  test("ohne kq-Pfad der Rückfall auf das erste #<nr>, ohne alles null", () => {
+  test("ohne Worktree-Pfad der Rückfall auf das erste #<nr>, ohne alles null", () => {
     expect(A.ticketAusLauf({ patch: null, prompt: "Plane #1382 Langfuse-Befunde" })).toBe(1382);
     expect(A.ticketAusLauf({ patch: null, prompt: "kein Bezug" })).toBeNull();
   });
@@ -52,8 +55,8 @@ describe("ticketAusLauf", () => {
 
 describe("laufAus: Ticket und Modelle", () => {
   test("ein Lens-Prompt mit fremder Nummer vor dem Patch bleibt dem Patch-Ticket zugeordnet", () => {
-    const prompt = "Brille (#907) schon erledigt durch #1349\nPatch: /tmp/kq-1580-r2.patch";
-    const r = A.laufAus({ meta: { agentType: "kubernia-lens" }, zeilen: [zeile(0, undefined, prompt), zeile(1, "claude-opus-5-5")] });
+    const prompt = `Brille (#907) schon erledigt durch #1349\nPatch: /tmp/${WT}1580-r2.patch`;
+    const r = A.laufAus({ meta: { agentType: LENS }, zeilen: [zeile(0, undefined, prompt), zeile(1, "claude-opus-5-5")] });
     expect(r?.ticket).toBe(1580);
   });
   test("<synthetic> und leere Modelle fehlen in modelle, echte bleiben sortiert", () => {
