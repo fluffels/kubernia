@@ -69,6 +69,7 @@
     {"muster":"test/harness*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/adr-fortschreibung.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/agents*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
+    {"muster":"test/harness/berechtigungen-kern.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/bash-parser.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/brain-input-abschluss.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/claims-pruefen.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
