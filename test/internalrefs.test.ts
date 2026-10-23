@@ -372,6 +372,7 @@ describe("Pfadregel (#1888)", () => {
     assert.deepEqual(befund("docs/a.md", win("C:", "Users", "KEINPLATZHALTER", "x")), ["nutzer"]);
     assert.deepEqual(befund("docs/a.md", "siehe " + ["", "Users", "KEINPLATZHALTER", "x"].join("/")), ["nutzer"]);
     assert.deepEqual(befund("docs/a.md", ["", "home", "KEINPLATZHALTER"].join("/") + "."), ["nutzer"]);
+    assert.deepEqual(befund("docs/a.md", "(/home/x.)"), [], "Satzzeichen hinter dem Platzhalter");
     assert.deepEqual(befund("README.md", win("D:", "", "Users", "KEINPLATZHALTER")), ["nutzer"], "doppelter Trenner");
   });
 
@@ -389,6 +390,8 @@ describe("Pfadregel (#1888)", () => {
     assert.deepEqual(befund("test/a.test.ts", win("C:", "tmp", "x")), []);
     assert.deepEqual(befund("test/a.test.ts", win("C:", "Temp", "x")), [], "Groß-/Kleinschreibung egal");
     assert.deepEqual(befund("test/a.test.ts", "const t = 'a:\\n';"), [], "kleines Laufwerk ist ein JS-Escape");
+    assert.deepEqual(befund("test/a.test.ts", "const t = 'a:\\nfoo';"), [], "Großbuchstaben-Pflicht: kleines Laufwerk mit unbekannter Wurzel");
+    assert.deepEqual(befund("test/a.test.ts", "(C:/tmp.)"), [], "Satzzeichen hinter der Wurzel");
     assert.deepEqual(befund("test/a.test.ts", "`C:\\${name}\\x`"), [], "Template-Teil sieht die Regel nicht");
   });
 
