@@ -68,7 +68,7 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
 }
 
 /**
- * Gegenprobe vor dem Anlegen (fail-closed): die REST-Liste der offenen Issues hinkt bei frischen Tickets nach, ein zweites Status-Ticket
+ * Zweitabfrage vor dem Anlegen (fail-closed): die REST-Liste der offenen Issues hinkt bei frischen Tickets nach, ein zweites Status-Ticket
  * entstand so schon. Nur bei `aktion: "anlegen"` fragt `zweit()` (liefert `[{ number, titel }]`, z.B. `frischeOffeneIssues`) einen zweiten
  * Weg: kennt er ein offenes `STATUS_TITEL` oder wirft er, wird daraus `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur
  * (`zweit` ist injiziert); liefert eine neue Entscheidung.
@@ -80,7 +80,7 @@ export function bestaetigeAnlegen(e, { zweit }) {
     frisch = zweit();
     if (!Array.isArray(frisch)) throw new Error("Antwort ist keine Liste.");
   } catch (err) {
-    return { aktion: "nichts", grund: "Anlegen abgebrochen: die Gegenprobe über GraphQL ist fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Gegenprobe vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
+    return { aktion: "nichts", grund: "Anlegen abgebrochen: die Zweitabfrage über GraphQL ist fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
   }
   const da = frisch.filter((i) => i.titel === STATUS_TITEL).map((i) => `#${i.number}`);
   if (da.length === 0) return e;

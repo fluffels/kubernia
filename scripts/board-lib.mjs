@@ -690,7 +690,7 @@ export function itemsUeberIssues(board, nummern, opts = {}, repo = REPO) {
 
 /**
  * Antwort von `frischeOffeneIssues` (GraphQL `repository.issues`) → `[{ number, titel, projektIds }]`; `projektIds` = Projekt-IDs der
- * Board-Items des Issues. Wirft bei unerwarteter Form, statt Issues still zu übersehen. Pur.
+ * Board-Items des Issues (bis zu 20 Projekte je Issue, wie `aliasAbfrage`). `mitBoard` (Standard true): bei `false` fehlt `projectItems` in der Antwort und `projektIds` ist leer. Wirft bei unerwarteter Form, statt Issues still zu übersehen. Pur.
  */
 export function normalisiereFrischeIssues(antwort, mitBoard = true) {
   const nodes = antwort?.data?.repository?.issues?.nodes;
@@ -714,7 +714,7 @@ export function frischeOffeneIssues({ repo = REPO, label = null, anzahl = 50, mi
   const { owner, name } = zerlegeRepo(repo);
   const query =
     `query($o:String!,$n:String!,$l:[String!]){ repository(owner:$o,name:$n){ issues(states:OPEN,first:${anzahl},labels:$l,` +
-    `orderBy:{field:CREATED_AT,direction:DESC}){ nodes{ number title${mitBoard ? " projectItems(first:5){ nodes{ project{ id } } }" : ""} } } } }`;
+    `orderBy:{field:CREATED_AT,direction:DESC}){ nodes{ number title${mitBoard ? " projectItems(first:20){ nodes{ project{ id } } }" : ""} } } } }`;
   const args = ["api", "graphql", "-f", `query=${query}`, "-f", `o=${owner}`, "-f", `n=${name}`];
   if (label !== null) args.push("-f", `l[]=${label}`);
   return normalisiereFrischeIssues(JSON.parse(run(args, opts)), mitBoard);

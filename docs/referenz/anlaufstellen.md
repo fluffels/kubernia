@@ -34,7 +34,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0013 docs/ als Wiki](../adr/0013-docs-als-agentengepflegtes-wiki.md) | bevor du Doku anlegst oder umziehst — welche Wissensart wohin gehört |
 | [0014 Leitplanken ohne Label-Riegel](../adr/0014-leitplanken-ohne-label-riegel.md) | wenn es um Gate-/Harness-Änderungen, die Pfadquelle und den Audit-Kommentar geht |
 | [0015 Projekt-Brain](../adr/0015-projekt-brain.md) | wenn es um Prinzipien, Token-Ziel und Messung des Projekt-Brains geht |
-| [0016 Langfuse-Takt](../adr/0016-langfuse-takt-woechentlich.md) | wenn es um den wöchentlichen Takt des Status-Tickets, das Langfuse-Sammelticket oder den Board-Takt (Harness-Sammelticket nach 5 Ticket-Merges jeder Art, Spielquote, Positionskorrektur) geht |
+| [0016 Langfuse-Takt](../adr/0016-langfuse-takt-woechentlich.md) | wenn es um den wöchentlichen Takt des Status-Tickets, das Langfuse-Sammelticket oder den Board-Takt (Harness-Sammelticket ab 10 Befund-Kommentaren, Spielquote, Positionskorrektur) geht |
 | [0017 Lebende Doku](../adr/0017-lebende-doku-generierte-abschnitte.md) | wenn Doku generiert, ein Gate beschrieben oder ein Diagramm eingeführt wird |
 | [0018 Content-Chunks je Datei](../adr/0018-content-chunks-je-datei.md) | wenn der Spielcode-Chunk oder ein Bundle-Budget reißt, Content (Quests, Crabquiz, Karten) wächst oder Lazy-Load je Region zur Debatte steht |
 | [0019 Langfuse-Plugin im User-Scope](../adr/0019-langfuse-plugin-im-user-scope.md) | wenn die Langfuse-Erfassung (Plugin, Hooks, User- vs. Projekt-Scope) geändert oder verdächtigt wird, nichts zu erfassen |

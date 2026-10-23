@@ -47,6 +47,11 @@ export const RESTE: { name: string; muster: RegExp; fix: string }[] = [
     muster: /<agenten\.[A-Za-z]+>\.md|skills\/<agenten\.ticketSkill>\//,
     fix: "den Rollen-Pfad .claude/agents/factory-<rolle>.md ausschreiben statt eines Platzhalters",
   },
+  {
+    name: "Härtungs-Takt nach Merge-Zahl",
+    muster: /\bHARNESS_TAKT_MERGES\b|\bharnessTaktAusCommits\b|\bmergesSeitAbschluss\b|(?:nach 5|fünf) Ticket-Merges jeder Art|Ticket-Merges seit dem Abschluss des letzten Sammeltickets hinter den Kopf/,
+    fix: "den Härtungs-Takt nach Füllstand beschreiben: HARNESS_TAKT_KOMMENTARE Befund-Kommentare vertrauter Nicht-Bot-Autoren im Harness-Sammelticket (#1888)",
+  },
   // Der Altnamen-Rückfall der Kern-Umgebungsvariablen ist entfernt (#1872): gelesen wird nur FACTORY_<NAME>.
   {
     name: "Altnamen-Rückfall",
@@ -232,6 +237,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Ticket-Ablauf am alten Ort": "Lies .claude/skills/factory/ablauf.md",
       "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
       "Altnamen-Rückfall": "const alt = altNameZuPraefix(name, praefix);",
+      "Härtungs-Takt nach Merge-Zahl": "export const HARNESS_TAKT_MERGES = 5;",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
@@ -244,6 +250,11 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     ["alte Agenten-Dateinamen", ".claude/agents/kubernia-planner.md"],
     ["alte Agenten-Dateinamen", ".claude/agents/kubernia-umsetzer.md"],
     ["alte Agenten-Dateinamen", ".claude/agents/kubernia-gruppe.md"],
+    ["Härtungs-Takt nach Merge-Zahl", "harnessTaktAusCommits({ items })"],
+    ["Härtungs-Takt nach Merge-Zahl", "entscheideHarnessTakt({ mergesSeitAbschluss: 5 })"],
+    ["Härtungs-Takt nach Merge-Zahl", "holt es nach 5 Ticket-Merges jeder Art"],
+    ["Härtungs-Takt nach Merge-Zahl", "nach fünf Ticket-Merges jeder Art"],
+    ["Härtungs-Takt nach Merge-Zahl", "nach 10 Ticket-Merges seit dem Abschluss des letzten Sammeltickets hinter den Kopf"],
     ["Platzhalter als Dateiname, die Datei heißt nach der Rolle", ".claude/skills/<agenten.ticketSkill>/SKILL.md"],
   ])("Negativfall: jede Alternative wird gefunden (%s: %s)", (name, text) => {
     assert.deepEqual(findeReste([{ pfad: "docs/b.md", inhalt: text }]), [`docs/b.md:1: ${name}`]);

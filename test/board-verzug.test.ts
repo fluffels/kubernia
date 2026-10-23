@@ -62,6 +62,14 @@ describe("frischeOffeneIssues", () => {
       expect(q).toContain(`first:${anzahl},`);
     }
   });
+  test("projectItems liest bis zu 20 Projekte je Issue (ein Issue in vielen Projekten verlöre sonst sein Board-Item hinter dem fünften), die Board-ID bleibt erkennbar (#1888)", () => {
+    let q = "";
+    const projekte = Array.from({ length: 6 }, (_, i) => ({ project: { id: `P${i + 1}` } }));
+    const r = B.frischeOffeneIssues({ repo: "o/n" }, {}, (a) => ((q = a.find((x) => x.startsWith("query=")) ?? ""), JSON.stringify(antwort([{ number: 7, title: "t", projectItems: { nodes: projekte } }]))));
+    expect(q).toContain("projectItems(first:20)");
+    expect(q).not.toContain("projectItems(first:5)");
+    expect(r[0].projektIds).toEqual(["P1", "P2", "P3", "P4", "P5", "P6"]); // auch das sechste Projekt bleibt erhalten
+  });
   test("mitBoard: false lässt projectItems weg (Token ohne Projekt-Scope) und liefert leere projektIds", () => {
     let q = "";
     const r = B.frischeOffeneIssues({ repo: "o/n", mitBoard: false }, {}, (a) => ((q = a.find((x) => x.startsWith("query=")) ?? ""), JSON.stringify({ data: { repository: { issues: { nodes: [{ number: 7, title: "t" }] } } } })));

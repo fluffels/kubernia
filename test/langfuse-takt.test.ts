@@ -231,7 +231,7 @@ describe("Zuständigkeit (#1390): langfuse-takt.mjs ist die Status-Logik, der Ta
   test("langfuse-takt.mjs hat keinen eigenen Lauf mehr und keine Harness-Sammelticket-Logik", () => {
     const skript = readFileSync(new URL("../scripts/langfuse-takt.mjs", import.meta.url), "utf8");
     expect(skript).not.toMatch(/function main\b/);
-    expect(skript).not.toMatch(/entscheideHarnessTakt|HARNESS_TAKT_MERGES/);
+    expect(skript).not.toMatch(/entscheideHarnessTakt|HARNESS_TAKT_KOMMENTARE/);
     expect(Object.keys(raw as object)).not.toContain("entscheideHarnessTakt");
   });
 });
