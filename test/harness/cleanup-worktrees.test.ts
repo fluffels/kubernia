@@ -1107,15 +1107,18 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
   describe("Standardpfad ohne injizierte Namen oder Config (echte Projekt-Config)", () => {
     const p = projektConfig().praefixe;
     const wt = "/root/.claude/worktrees";
-    const refsText = `${p.branch}1-a\t[gone]\t${SHA_A}\n${BRP}2-b\t[gone]\t${SHA_A}`;
+    // Ein Präfix, das weder die echte Config noch die Fremd-Config nutzt: die Tests bleiben auch unter vertauschter Config gültig.
+    const ANDERES_BRANCH = "kein-ticket/";
+    const ANDERES_WT = "kein-ticket-";
+    const refsText = `${p.branch}1-a\t[gone]\t${SHA_A}\n${ANDERES_BRANCH}2-b\t[gone]\t${SHA_A}`;
     const git = (a: string[]): string => (a[0] === "for-each-ref" ? refsText : a[0] === "worktree" ? "worktree /r\nbranch refs/heads/main\n" : "");
-    const gh = (): Gemergt[] => [gemergt(`${p.branch}1-a`), gemergt(`${BRP}2-b`)];
+    const gh = (): Gemergt[] => [gemergt(`${p.branch}1-a`), gemergt(`${ANDERES_BRANCH}2-b`)];
 
     test("sortiereDateien: echtes Präfix verwaist, Fremd-Präfix fremd", () => {
       const sortiere = (cleanupModule as unknown as { sortiereDateien: (d: string, f: string[], r: Set<string>, o: object) => { verwaist: string[]; fremd: string[] } }).sortiereDateien;
-      const r = sortiere(wt, [`${p.worktree}7-x.bak`, `${WTP}7-y.bak`], new Set(), { now: 10_000_000, statSync: () => ({ mtimeMs: 0 }) });
+      const r = sortiere(wt, [`${p.worktree}7-x.bak`, `${ANDERES_WT}7-y.bak`], new Set(), { now: 10_000_000, statSync: () => ({ mtimeMs: 0 }) });
       assert.deepEqual(r.verwaist, [`${p.worktree}7-x.bak`]);
-      assert.deepEqual(r.fremd, [`${WTP}7-y.bak`]);
+      assert.deepEqual(r.fremd, [`${ANDERES_WT}7-y.bak`]);
     });
 
     test("branchesAufraeumen: echtes Präfix ist Kandidat, Fremd-Präfix nicht", () => {
@@ -1127,7 +1130,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       const out: string[] = [];
       assert.equal(modus("/r", false, { git, gh, out: (s) => out.push(s), err: () => undefined }), 0);
       assert.ok(out.some((z) => z.includes(`löschbar  ${p.branch}1-a`)));
-      assert.ok(!out.some((z) => z.includes(`${BRP}2-b`)));
+      assert.ok(!out.some((z) => z.includes(`${ANDERES_BRANCH}2-b`)));
     });
   });
 
