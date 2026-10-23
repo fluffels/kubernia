@@ -13,7 +13,7 @@ afterEach(() => {
 
 /** Erzeugt ein Root-Verzeichnis mit den angegebenen Dateien (Pfad relativ → Inhalt). */
 export function fixture(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), "kq-docgen-"));
+  const root = mkdtempSync(join(tmpdir(), "docgen-"));
   dirs.push(root);
   for (const [rel, content] of Object.entries(files)) {
     const abs = join(root, rel);

@@ -56,6 +56,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { FREMD } from "../support/fremd-config";
 
 // Reines Node-Tooling-Skript ohne Declaration-File – wie in claude-bridge.test.ts.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -147,7 +148,7 @@ describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
     "git diff main...HEAD",
     "Führe `git diff main` aus",
     "```bash\ngit diff --name-only main\n```",
-    "git -C .claude/worktrees/kq-1 diff main",
+    `git -C .claude/worktrees/${FREMD.praefixe.worktree}1 diff main`,
     "git --no-pager diff --stat main",
     // Ein kanonischer Aufruf davor darf den falschen hinter dem Shell-Trenner nicht maskieren.
     "git diff origin/main...HEAD --stat && git diff --name-only main",
@@ -175,7 +176,7 @@ describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
     "git diff origin/main..HEAD",
     "git diff origin/main HEAD",
     "git diff HEAD~1 -- src/main.ts main/x",
-    "git -C .claude/worktrees/kq-1 diff origin/main...HEAD",
+    `git -C .claude/worktrees/${FREMD.praefixe.worktree}1 diff origin/main...HEAD`,
     // Kanonischer Aufruf im Fence mit Shell-Kommentar, der „main" nennt – die KANONISCH-Ausnahme.
     "```bash\ngit diff origin/main...HEAD   # nicht gegen lokales main\n```",
     // Nachbau von review-lenses/SKILL.md: kanonischer Inline-Code, danach Prosa mit „main".

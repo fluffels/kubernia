@@ -17,6 +17,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../../scripts/harness-doctor.mjs";
 
@@ -71,7 +72,7 @@ describe("Scanner (Fixtures, nicht vakuös)", () => {
   });
   test("Label-Literale und gelesene Schlüssel", () => {
     assert.deepEqual(labelLiterale('gh x --label forum --label "$V" --add-label a:b,c:d\n  ALARM_LABEL: area:x\n  L: ${{ y }}'), ["forum", "a:b", "c:d"].concat(["area:x"]));
-    assert.deepEqual(skriptLabels('["--label", "area:harness", "--label", label]'), ["area:harness"]);
+    assert.deepEqual(skriptLabels(`["--label", "${FREMD.labels.harness}", "--label", label]`), [FREMD.labels.harness]);
     assert.deepEqual(gelesenerSchluessel('labelAus(config, "harness") config.labels.forum labels.some(x)'), ["harness", "forum"]);
   });
   test("Board-Schlüssel und Vergleichsliterale", () => {

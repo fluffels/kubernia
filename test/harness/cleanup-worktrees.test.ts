@@ -32,6 +32,15 @@ import * as cleanupModule from "../../scripts/worktree-aufraeumen.mjs";
 import * as cliModule from "../../scripts/cleanup-worktrees.mjs";
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as flagLib from "../../scripts/flag-lib.mjs";
+import { FREMD, projektConfig } from "../support/fremd-config";
+// @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
+import * as namenLib from "../../scripts/ticket-namen.mjs";
+
+const ticketNamen = (namenLib as unknown as { ticketNamen: (c: object) => object }).ticketNamen;
+/** Namen der Fremd-Config; jede Funktion mit Namensmuster bekommt sie injiziert (Standard: die echte Config). */
+const NAMEN = ticketNamen(FREMD);
+const WTP = FREMD.praefixe.worktree;
+const BRP = FREMD.praefixe.branch;
 
 const { AUFRUF_EXIT } = flagLib as unknown as { AUFRUF_EXIT: number };
 
@@ -91,43 +100,43 @@ const fixOrphans: CleanupModule["fixOrphans"] = (mainRoot, worktreesDir, orphans
 
 describe("parseWorktreeListPorcelain (#952)", () => {
   test("ein Eintrag (nur Haupt-Checkout)", () => {
-    const out = ["worktree /c/git/kubernia", "HEAD abc123", "branch refs/heads/main", ""].join("\n");
-    assert.deepEqual(parseWorktreeListPorcelain(out), ["/c/git/kubernia"]);
+    const out = ["worktree /c/git/projekt", "HEAD abc123", "branch refs/heads/main", ""].join("\n");
+    assert.deepEqual(parseWorktreeListPorcelain(out), ["/c/git/projekt"]);
   });
 
   test("Haupt-Checkout zuerst, dann Linked Worktrees in Reihenfolge", () => {
     const out = [
-      "worktree /c/git/kubernia",
+      "worktree /c/git/projekt",
       "HEAD abc123",
       "branch refs/heads/main",
       "",
-      "worktree /c/git/kubernia/.claude/worktrees/kq-1",
+      `worktree /c/git/projekt/.claude/worktrees/${WTP}1`,
       "HEAD def456",
-      "branch refs/heads/kq-1",
+      `branch refs/heads/${WTP}1`,
       "",
-      "worktree /c/git/kubernia/.claude/worktrees/kq-2",
+      `worktree /c/git/projekt/.claude/worktrees/${WTP}2`,
       "HEAD ghi789",
-      "branch refs/heads/kq-2",
+      `branch refs/heads/${WTP}2`,
       "",
     ].join("\n");
     assert.deepEqual(parseWorktreeListPorcelain(out), [
-      "/c/git/kubernia",
-      "/c/git/kubernia/.claude/worktrees/kq-1",
-      "/c/git/kubernia/.claude/worktrees/kq-2",
+      "/c/git/projekt",
+      `/c/git/projekt/.claude/worktrees/${WTP}1`,
+      `/c/git/projekt/.claude/worktrees/${WTP}2`,
     ]);
   });
 
   test("Windows-Pfade mit Backslashes werden auf Slashes normalisiert", () => {
         const bs = String.fromCharCode(92);
-        const winPath = "worktree C:" + bs + "git" + bs + "kubernia";
+        const winPath = "worktree C:" + bs + "git" + bs + "projekt";
         const out = [winPath, "HEAD abc123", "branch refs/heads/main", ""].join("\n");
-        assert.deepEqual(parseWorktreeListPorcelain(out), ["C:/git/kubernia"]);
+        assert.deepEqual(parseWorktreeListPorcelain(out), ["C:/git/projekt"]);
     });
 
 
   test("CRLF-Zeilenenden werden korrekt geparst", () => {
-    const out = ["worktree /c/git/kubernia", "HEAD abc123", "branch refs/heads/main", ""].join("\r\n");
-    assert.deepEqual(parseWorktreeListPorcelain(out), ["/c/git/kubernia"]);
+    const out = ["worktree /c/git/projekt", "HEAD abc123", "branch refs/heads/main", ""].join("\r\n");
+    assert.deepEqual(parseWorktreeListPorcelain(out), ["/c/git/projekt"]);
   });
 
   test("leerer Output ergibt leeres Array", () => {
@@ -141,10 +150,10 @@ describe("parseWorktreeBloecke (#1762)", () => {
   const kurz = (t: string) => bloecke(t).map((x) => [x.pfad, x.head, x.branch, x.locked]);
 
   test("liest Pfad, HEAD, Branch; Backslashes werden zu /", () => {
-    const text = "worktree C:\\h\nHEAD aaa\nbranch refs/heads/main\n\nworktree /h/w\nHEAD bbb\nbranch refs/heads/feature/kq-5-x\n";
+    const text = `worktree C:\\h\nHEAD aaa\nbranch refs/heads/main\n\nworktree /h/w\nHEAD bbb\nbranch refs/heads/${BRP}5-x\n`;
     assert.deepEqual(kurz(text), [
       ["C:/h", "aaa", "main", false],
-      ["/h/w", "bbb", "feature/kq-5-x", false],
+      ["/h/w", "bbb", `${BRP}5-x`, false],
     ]);
   });
 
@@ -178,9 +187,9 @@ describe("parseWorktreeBloecke (#1762)", () => {
 describe("registeredWorktreePaths (#952)", () => {
   test("gibt geparste Pfade zurueck", () => {
     const deps = {
-      execSync: () => "worktree /c/git/kubernia\nHEAD abc\nbranch refs/heads/main\n\n",
+      execSync: () => "worktree /c/git/projekt\nHEAD abc\nbranch refs/heads/main\n\n",
     };
-    assert.deepEqual(registeredWorktreePaths("/c/git/kubernia", deps), ["/c/git/kubernia"]);
+    assert.deepEqual(registeredWorktreePaths("/c/git/projekt", deps), ["/c/git/projekt"]);
   });
 
   test("execSync wirft, Fehler propagiert (Aufrufer entscheidet fail-safe)", () => {
@@ -189,7 +198,7 @@ describe("registeredWorktreePaths (#952)", () => {
         throw new Error("kein git");
       },
     };
-    assert.throws(() => registeredWorktreePaths("/c/git/kubernia", deps));
+    assert.throws(() => registeredWorktreePaths("/c/git/projekt", deps));
   });
 });
 
@@ -203,31 +212,31 @@ describe("localWorktreeDirs (#952)", () => {
     const deps = {
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-1", isDirectory: () => true },
+        { name: `${WTP}1`, isDirectory: () => true },
         { name: ".gitkeep", isDirectory: () => false },
-        { name: "kq-2", isDirectory: () => true },
+        { name: `${WTP}2`, isDirectory: () => true },
       ],
     };
-    assert.deepEqual(localWorktreeDirs("/x/.claude/worktrees", deps), ["kq-1", "kq-2"]);
+    assert.deepEqual(localWorktreeDirs("/x/.claude/worktrees", deps), [`${WTP}1`, `${WTP}2`]);
   });
 });
 
 describe("computeOrphans (#952)", () => {
   test("kein Ordner ist registriert, alle sind Waisen", () => {
-    const orphans = computeOrphans("/root/.claude/worktrees", ["kq-1", "kq-2"], new Set());
-    assert.deepEqual(orphans, ["kq-1", "kq-2"]);
+    const orphans = computeOrphans("/root/.claude/worktrees", [`${WTP}1`, `${WTP}2`], new Set());
+    assert.deepEqual(orphans, [`${WTP}1`, `${WTP}2`]);
   });
 
   test("alle Ordner registriert, keine Waisen", () => {
-    const registered = new Set(["/root/.claude/worktrees/kq-1", "/root/.claude/worktrees/kq-2"]);
-    assert.deepEqual(computeOrphans("/root/.claude/worktrees", ["kq-1", "kq-2"], registered), []);
+    const registered = new Set([`/root/.claude/worktrees/${WTP}1`, `/root/.claude/worktrees/${WTP}2`]);
+    assert.deepEqual(computeOrphans("/root/.claude/worktrees", [`${WTP}1`, `${WTP}2`], registered), []);
   });
 
   test("gemischt, nur die nicht-registrierten sind Waisen", () => {
-    const registered = new Set(["/root/.claude/worktrees/kq-1"]);
+    const registered = new Set([`/root/.claude/worktrees/${WTP}1`]);
     assert.deepEqual(
-      computeOrphans("/root/.claude/worktrees", ["kq-1", "kq-2", "kq-3"], registered),
-      ["kq-2", "kq-3"]
+      computeOrphans("/root/.claude/worktrees", [`${WTP}1`, `${WTP}2`, `${WTP}3`], registered),
+      [`${WTP}2`, `${WTP}3`]
     );
   });
 });
@@ -237,16 +246,16 @@ describe("diagnoseOrphans (#952)", () => {
     const deps = {
       execSync: () =>
         "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n" +
-        "worktree /root/.claude/worktrees/kq-1\nHEAD def\nbranch refs/heads/kq-1\n\n",
+        `worktree /root/.claude/worktrees/${WTP}1\nHEAD def\nbranch refs/heads/${WTP}1\n\n`,
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-1", isDirectory: () => true },
-        { name: "kq-2", isDirectory: () => true },
+        { name: `${WTP}1`, isDirectory: () => true },
+        { name: `${WTP}2`, isDirectory: () => true },
       ],
     };
-    const result = diagnoseOrphans("/root", deps);
+    const result = diagnoseOrphans("/root", { ...deps, namen: NAMEN });
     assert.equal(result.ok, true);
-    assert.deepEqual(result.orphans, ["kq-2"]);
+    assert.deepEqual(result.orphans, [`${WTP}2`]);
     assert.equal(result.mainRoot, "/root");
   });
 
@@ -255,7 +264,7 @@ describe("diagnoseOrphans (#952)", () => {
       execSync: () => "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n",
       existsSync: () => false,
     };
-    const result = diagnoseOrphans("/root", deps);
+    const result = diagnoseOrphans("/root", { ...deps, namen: NAMEN });
     assert.equal(result.ok, true);
     assert.deepEqual(result.orphans, []);
   });
@@ -266,14 +275,14 @@ describe("diagnoseOrphans (#952)", () => {
         throw new Error("kein git-Repo");
       },
     };
-    const result = diagnoseOrphans("/root", deps);
+    const result = diagnoseOrphans("/root", { ...deps, namen: NAMEN });
     assert.equal(result.ok, false);
     assert.deepEqual(result.orphans, []);
   });
 
   test("leerer git-Output, sollte nie vorkommen, ok false statt Absturz", () => {
     const deps = { execSync: () => "" };
-    const result = diagnoseOrphans("/root", deps);
+    const result = diagnoseOrphans("/root", { ...deps, namen: NAMEN });
     assert.equal(result.ok, false);
   });
 });
@@ -297,15 +306,15 @@ describe("assertSafeOrphanTarget (#1051)", () => {
   }
 
   test("legitimer Waisen-Ordner unterhalb .claude/worktrees, safe true", () => {
-    const r = safe("kq-1027");
+    const r = safe(`${WTP}1027`);
     assert.equal(r.safe, true, `sollte safe sein, reason: ${r.reason}`);
   });
 
   test("gemischte Separatoren im worktreesDir werden trotzdem als legitim erkannt", () => {
     // So entsteht der Pfad real: mainRoot ist slash-normalisiert (aus
     // parseWorktreeListPorcelain), join() haengt auf Windows Backslashes an.
-    const mixed = "C:/git/kubernia" + BS + ".claude" + BS + "worktrees";
-    const r = safe("kq-1027", dirLstat, "C:/git/kubernia", mixed);
+    const mixed = "C:/git/projekt" + BS + ".claude" + BS + "worktrees";
+    const r = safe(`${WTP}1027`, dirLstat, "C:/git/projekt", mixed);
     assert.equal(r.safe, true, `Guard darf sich nicht selbst blockieren, reason: ${r.reason}`);
   });
 
@@ -320,16 +329,16 @@ describe("assertSafeOrphanTarget (#1051)", () => {
     { was: "Name steigt zwei Ebenen auf (traefe sonst den Haupt-Checkout)", name: "../.." },
     { was: "Slash-Trenner im Namen (nur EIN Pfad-Segment erlaubt)", name: "a/b" },
     { was: "Backslash-Trenner im Namen (Windows-Variante)", name: "a" + BS + "b" },
-    { was: "worktreesDir ist mainRoot selbst (Hypothese 3 des Tickets)", name: "kq-1027", wt: MAIN },
+    { was: "worktreesDir ist mainRoot selbst (Hypothese 3 des Tickets)", name: `${WTP}1027`, wt: MAIN },
     { was: "worktreesDir ist .claude selbst (der real eingetretene Schaden)", name: "worktrees", wt: "/root/.claude" },
-    { was: "worktreesDir ausserhalb von mainRoot", name: "kq-1027", wt: "/anderswo/.claude/worktrees" },
+    { was: "worktreesDir ausserhalb von mainRoot", name: `${WTP}1027`, wt: "/anderswo/.claude/worktrees" },
     // Deckt die Gleichheits-Pruefung: das Ziel liegt UNTERHALB des erwarteten
     // Ordners, die Prefix-Pruefung allein liesse es durch (Red-Green-Probe #1051).
-    { was: "worktreesDir eine Ebene ZU TIEF aufgeloest", name: "kq-1027", wt: WT + "/sub" },
-    { was: "Ziel ist ein Symlink/Reparse-Point (Junction nie folgen)", name: "kq-1027", lstat: symlink },
-    { was: "Symlink, der sich als Verzeichnis ausgibt", name: "kq-1027", lstat: { lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => true }) } },
-    { was: "Ziel ist eine Datei", name: "kq-1027", lstat: { lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => false }) } },
-    { was: "lstat wirft ENOENT statt Absturz", name: "kq-1027", lstat: { lstatSync: () => { throw new Error("ENOENT"); } } },
+    { was: "worktreesDir eine Ebene ZU TIEF aufgeloest", name: `${WTP}1027`, wt: WT + "/sub" },
+    { was: "Ziel ist ein Symlink/Reparse-Point (Junction nie folgen)", name: `${WTP}1027`, lstat: symlink },
+    { was: "Symlink, der sich als Verzeichnis ausgibt", name: `${WTP}1027`, lstat: { lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => true }) } },
+    { was: "Ziel ist eine Datei", name: `${WTP}1027`, lstat: { lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => false }) } },
+    { was: "lstat wirft ENOENT statt Absturz", name: `${WTP}1027`, lstat: { lstatSync: () => { throw new Error("ENOENT"); } } },
   ];
 
   for (const { was, name, wt, lstat } of REFUSE) {
@@ -350,7 +359,7 @@ describe("assertSafeOrphanTarget (#1051)", () => {
   });
 
   test("die Symlink-Begruendung nennt den Reparse-Point beim Namen", () => {
-    const r = safe("kq-1027", symlink);
+    const r = safe(`${WTP}1027`, symlink);
     assert.ok(
       /symlink|junction|reparse/i.test(r.reason ?? ""),
       `reason sollte den Reparse-Point nennen: ${r.reason}`
@@ -373,8 +382,8 @@ describe("suspiciousWorktreeEntries (#1051)", () => {
     const deps = {
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-1", isDirectory: () => true, isSymbolicLink: () => false },
-        { name: "kq-2", isDirectory: () => true, isSymbolicLink: () => false },
+        { name: `${WTP}1`, isDirectory: () => true, isSymbolicLink: () => false },
+        { name: `${WTP}2`, isDirectory: () => true, isSymbolicLink: () => false },
       ],
     };
     assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), []);
@@ -384,11 +393,11 @@ describe("suspiciousWorktreeEntries (#1051)", () => {
     const deps = {
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-1", isDirectory: () => true, isSymbolicLink: () => false },
-        { name: "kq-junction", isDirectory: () => false, isSymbolicLink: () => true },
+        { name: `${WTP}1`, isDirectory: () => true, isSymbolicLink: () => false },
+        { name: `${WTP}junction`, isDirectory: () => false, isSymbolicLink: () => true },
       ],
     };
-    assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), ["kq-junction"]);
+    assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), [`${WTP}junction`]);
   });
 
   test("gewoehnliche Datei ist NICHT verdaechtig, kein Fehlalarm auf .gitkeep", () => {
@@ -404,7 +413,7 @@ describe("suspiciousWorktreeEntries (#1051)", () => {
   test("Dirent ohne isSymbolicLink-Methode, kein Absturz", () => {
     const deps = {
       existsSync: () => true,
-      readdirSync: () => [{ name: "kq-1", isDirectory: () => true }],
+      readdirSync: () => [{ name: `${WTP}1`, isDirectory: () => true }],
     };
     assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), []);
   });
@@ -420,17 +429,17 @@ describe("fixOrphans (#952)", () => {
 
   test("erfolgreiches Loeschen, removed enthaelt Namen, errors leer", () => {
     const deps = { ...okDeps, execSync: () => "", rmSync: () => {}, existsSync: () => false };
-    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-1"], deps);
-    assert.deepEqual(result.removed, ["kq-1"]);
+    const result = fixOrphans("/root", "/root/.claude/worktrees", [`${WTP}1`], deps);
+    assert.deepEqual(result.removed, [`${WTP}1`]);
     assert.deepEqual(result.errors, []);
     assert.deepEqual(result.refused, []);
   });
 
   test("Ordner besteht nach rmSync weiter, Datei-Lock, errors enthaelt Namen", () => {
     const deps = { ...okDeps, execSync: () => "", rmSync: () => {}, existsSync: () => true };
-    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-1"], deps);
+    const result = fixOrphans("/root", "/root/.claude/worktrees", [`${WTP}1`], deps);
     assert.deepEqual(result.removed, []);
-    assert.deepEqual(result.errors, ["kq-1"]);
+    assert.deepEqual(result.errors, [`${WTP}1`]);
   });
 
   test("rmSync wirft, als error gezaehlt, kein Absturz", () => {
@@ -442,8 +451,8 @@ describe("fixOrphans (#952)", () => {
       },
       existsSync: () => true,
     };
-    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-1"], deps);
-    assert.deepEqual(result.errors, ["kq-1"]);
+    const result = fixOrphans("/root", "/root/.claude/worktrees", [`${WTP}1`], deps);
+    assert.deepEqual(result.errors, [`${WTP}1`]);
   });
 
   test("git worktree prune schlaegt fehl, nicht fatal, Loeschung laeuft trotzdem", () => {
@@ -455,8 +464,8 @@ describe("fixOrphans (#952)", () => {
       rmSync: () => {},
       existsSync: () => false,
     };
-    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-1"], deps);
-    assert.deepEqual(result.removed, ["kq-1"]);
+    const result = fixOrphans("/root", "/root/.claude/worktrees", [`${WTP}1`], deps);
+    assert.deepEqual(result.removed, [`${WTP}1`]);
   });
 
   test("mehrere Waisen, gemischtes Ergebnis", () => {
@@ -464,18 +473,18 @@ describe("fixOrphans (#952)", () => {
       ...okDeps,
       execSync: () => "",
       rmSync: (path: string) => {
-        if (path.includes("kq-locked")) throw new Error("EBUSY");
+        if (path.includes(`${WTP}locked`)) throw new Error("EBUSY");
       },
       existsSync: () => false,
     };
     const result = fixOrphans(
       "/root",
       "/root/.claude/worktrees",
-      ["kq-1", "kq-locked", "kq-2"],
+      [`${WTP}1`, `${WTP}locked`, `${WTP}2`],
       deps
     );
-    assert.deepEqual(result.removed, ["kq-1", "kq-2"]);
-    assert.deepEqual(result.errors, ["kq-locked"]);
+    assert.deepEqual(result.removed, [`${WTP}1`, `${WTP}2`]);
+    assert.deepEqual(result.errors, [`${WTP}locked`]);
   });
 
   test("leere orphans-Liste, removed und errors beide leer", () => {
@@ -497,12 +506,12 @@ describe("fixOrphans (#952)", () => {
       existsSync: () => false,
       lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => true }),
     };
-    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-junction"], deps);
+    const result = fixOrphans("/root", "/root/.claude/worktrees", [`${WTP}junction`], deps);
     assert.equal(rmCalls, 0, "bei safe:false darf NICHT geloescht werden");
     assert.deepEqual(result.removed, []);
     assert.deepEqual(result.errors, []);
     assert.equal(result.refused.length, 1);
-    assert.equal(result.refused[0].name, "kq-junction");
+    assert.equal(result.refused[0].name, `${WTP}junction`);
     assert.ok((result.refused[0].reason ?? "").length > 0);
   });
 
@@ -515,11 +524,11 @@ describe("fixOrphans (#952)", () => {
         throw new Error("ENOENT");
       },
     };
-    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-weg"], deps);
+    const result = fixOrphans("/root", "/root/.claude/worktrees", [`${WTP}weg`], deps);
     assert.deepEqual(result.errors, [], "refused ist kein Loeschfehler");
     assert.deepEqual(
       result.refused.map((r) => r.name),
-      ["kq-weg"]
+      [`${WTP}weg`]
     );
   });
 
@@ -527,26 +536,26 @@ describe("fixOrphans (#952)", () => {
     const deps = {
       execSync: () => "",
       rmSync: (path: string) => {
-        if (path.includes("kq-locked")) throw new Error("EBUSY");
+        if (path.includes(`${WTP}locked`)) throw new Error("EBUSY");
       },
       existsSync: () => false,
       lstatSync: (path: string) =>
-        path.includes("kq-junction")
+        path.includes(`${WTP}junction`)
           ? { isDirectory: () => false, isSymbolicLink: () => true }
           : { isDirectory: () => true, isSymbolicLink: () => false },
     };
     const result = fixOrphans(
       "/root",
       "/root/.claude/worktrees",
-      ["kq-ok", "kq-junction", "kq-locked"],
+      [`${WTP}ok`, `${WTP}junction`, `${WTP}locked`],
       deps
     );
-    assert.deepEqual(result.removed, ["kq-ok"]);
+    assert.deepEqual(result.removed, [`${WTP}ok`]);
     assert.deepEqual(
       result.refused.map((r) => r.name),
-      ["kq-junction"]
+      [`${WTP}junction`]
     );
-    assert.deepEqual(result.errors, ["kq-locked"]);
+    assert.deepEqual(result.errors, [`${WTP}locked`]);
   });
 
   test("falsch aufgeloester worktreesDir, KEIN einziges rmSync, der Datenverlust-Fall", () => {
@@ -596,15 +605,15 @@ describe("Altersgrenze für Waisen (#1311)", () => {
       execSync: () => "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n",
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-neu", isDirectory: () => true },
-        { name: "kq-alt", isDirectory: () => true },
+        { name: `${WTP}neu`, isDirectory: () => true },
+        { name: `${WTP}alt`, isDirectory: () => true },
       ],
-      statSync: stat({ "kq-neu": 20_000, "kq-alt": 7_200_000 }),
+      statSync: stat({ [`${WTP}neu`]: 20_000, [`${WTP}alt`]: 7_200_000 }),
     };
-    const r = diagnoseOrphans("/root", deps);
+    const r = diagnoseOrphans("/root", { ...deps, namen: NAMEN });
     assert.equal(r.ok, true);
-    assert.deepEqual(r.orphans, ["kq-alt"]);
-    assert.deepEqual(r.young, ["kq-neu"]);
+    assert.deepEqual(r.orphans, [`${WTP}alt`]);
+    assert.deepEqual(r.young, [`${WTP}neu`]);
   });
 });
 
@@ -617,20 +626,20 @@ describe("fixOrphans: Wiederholung und leerer gesperrter Ordner (#1411)", () => 
 
   test("rmSync bekommt die Wiederholungs-Optionen (kurze Sperren lösen sich von selbst)", () => {
     const optionen: object[] = [];
-    fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: (_p: string, o: object) => optionen.push(o), existsSync: () => false });
+    fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...okDeps, rmSync: (_p: string, o: object) => optionen.push(o), existsSync: () => false });
     assert.deepEqual(optionen, [{ recursive: true, force: true, maxRetries: 3, retryDelay: 300 }]);
   });
 
   test("Ordner bleibt bestehen und ist LEER → pending (kein Fehler), nicht errors", () => {
-    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => [] });
-    assert.deepEqual(r.pending, ["kq-1"]);
+    const r = fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => [] });
+    assert.deepEqual(r.pending, [`${WTP}1`]);
     assert.deepEqual(r.errors, []);
     assert.deepEqual(r.removed, []);
   });
 
   test("Ordner bleibt bestehen und ist NICHT leer → errors, nicht pending (Red-Green gegen die Leer-Prüfung)", () => {
-    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => ["datei.txt"] });
-    assert.deepEqual(r.errors, ["kq-1"]);
+    const r = fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => ["datei.txt"] });
+    assert.deepEqual(r.errors, [`${WTP}1`]);
     assert.deepEqual(r.pending, []);
   });
 
@@ -638,8 +647,8 @@ describe("fixOrphans: Wiederholung und leerer gesperrter Ordner (#1411)", () => 
     const wirft = () => {
       throw new Error("EBUSY");
     };
-    assert.deepEqual(fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: wirft, existsSync: () => true, readdirSync: () => [] }).pending, ["kq-1"]);
-    const unlesbar = fix("/root", "/root/.claude/worktrees", ["kq-1"], {
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...okDeps, rmSync: wirft, existsSync: () => true, readdirSync: () => [] }).pending, [`${WTP}1`]);
+    const unlesbar = fix("/root", "/root/.claude/worktrees", [`${WTP}1`], {
       ...okDeps,
       rmSync: wirft,
       existsSync: () => true,
@@ -647,17 +656,17 @@ describe("fixOrphans: Wiederholung und leerer gesperrter Ordner (#1411)", () => 
         throw new Error("EPERM");
       },
     });
-    assert.deepEqual(unlesbar.errors, ["kq-1"]);
+    assert.deepEqual(unlesbar.errors, [`${WTP}1`]);
     assert.deepEqual(unlesbar.pending, []);
   });
 
   test("bei nicht leerem Ordner nennt `halter` die möglichen Halter mit PID (nur Windows)", () => {
     const prozesse = [{ pid: 4711, ppid: 1, name: "python3.exe", commandLine: "python3 -m http.server", startMs: 2000 }];
     const base = { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => ["x"], statSync: () => ({ birthtimeMs: 1000 }), listProcesses: () => prozesse };
-    assert.equal((fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, platform: "win32" }).halter["kq-1"] as { pid: number }[])[0].pid, 4711);
-    assert.deepEqual(fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, platform: "linux" }).halter["kq-1"], [], "nur Windows");
+    assert.equal((fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "win32" }).halter[`${WTP}1`] as { pid: number }[])[0].pid, 4711);
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "linux" }).halter[`${WTP}1`], [], "nur Windows");
     const kaputt = { ...base, platform: "win32", listProcesses: () => { throw new Error("powershell fehlt"); } };
-    assert.deepEqual(fix("/root", "/root/.claude/worktrees", ["kq-1"], kaputt).halter["kq-1"], [], "fail-open");
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], kaputt).halter[`${WTP}1`], [], "fail-open");
   });
 });
 
@@ -668,19 +677,19 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
     moeglicheHalter: (p: P[], pfad: string, geburt: number | null, eigenePid?: number) => H;
     formatHalter: (h: unknown[]) => string;
   };
-  const PFAD = "C:\\dev\\kubernia\\.claude\\worktrees\\kq-1404";
+  const PFAD = `C:\\dev\\projekt\\.claude\\worktrees\\${WTP}1404`;
   const proz = (o: Partial<P> & { pid: number }): P => ({ ppid: 1, name: "node.exe", commandLine: "", startMs: 5000, ...o });
   const eltern = proz({ pid: 1, ppid: 0, name: "explorer.exe" });
 
   test("Kommandozeile mit dem Worktree-Pfad: Backslash-, Schrägstrich- und MSYS-Form, ohne Groß-/Kleinschreibung", () => {
     const liste = [
       eltern,
-      proz({ pid: 10, commandLine: "node C:\\dev\\kubernia\\.claude\\worktrees\\kq-1404\\server.mjs" }),
-      proz({ pid: 11, commandLine: "node c:/dev/kubernia/.claude/worktrees/kq-1404/a.mjs" }),
-      proz({ pid: 12, name: "bash.exe", commandLine: "bash /c/dev/kubernia/.claude/worktrees/KQ-1404/run.sh" }),
-      proz({ pid: 13, commandLine: "node C:\\dev\\kubernia\\.claude\\worktrees\\kq-1405\\server.mjs" }),
+      proz({ pid: 10, commandLine: `node C:\\dev\\projekt\\.claude\\worktrees\\${WTP}1404\\server.mjs` }),
+      proz({ pid: 11, commandLine: `node c:/dev/projekt/.claude/worktrees/${WTP}1404/a.mjs` }),
+      proz({ pid: 12, name: "bash.exe", commandLine: `bash /c/dev/projekt/.claude/worktrees/${WTP.toUpperCase()}1404/run.sh` }),
+      proz({ pid: 13, commandLine: `node C:\\dev\\projekt\\.claude\\worktrees\\${WTP}1405\\server.mjs` }),
     ];
-    assert.deepEqual(m.moeglicheHalter(liste, PFAD, 0).map((h) => h.pid), [10, 11, 12], "kq-1405 ist ein anderer Worktree");
+    assert.deepEqual(m.moeglicheHalter(liste, PFAD, 0).map((h) => h.pid), [10, 11, 12], `${WTP}1405 ist ein anderer Worktree`);
   });
 
   test("verwaister Werkzeug-Prozess nach dem Anlegen des Ordners ist Kandidat; davor, mit Elternprozess oder fremder Name nicht", () => {
@@ -716,7 +725,7 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
   });
 
   test("der eigene Prozess ist nie Kandidat; ohne Prozesse oder Treffer bleibt die Liste leer", () => {
-    assert.deepEqual(m.moeglicheHalter([proz({ pid: 77, commandLine: "node c:/dev/kubernia/.claude/worktrees/kq-1404/x" })], PFAD, 0, 77), []);
+    assert.deepEqual(m.moeglicheHalter([proz({ pid: 77, commandLine: `node c:/dev/projekt/.claude/worktrees/${WTP}1404/x` })], PFAD, 0, 77), []);
     assert.deepEqual(m.moeglicheHalter([], PFAD, 0), []);
   });
 
@@ -745,21 +754,21 @@ describe("fixOrphans: Ordner-Geburt begrenzt die Halter-Kandidaten (#1411)", () 
     listProcesses: () => [proz(1, 500), proz(2, 5000)],
   };
   test("ein verwaister Prozess, der VOR dem Anlegen des Ordners startete, ist kein Halter", () => {
-    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, statSync: () => ({ birthtimeMs: 1000 }) });
-    assert.deepEqual(r.halter["kq-1"].map((h) => h.pid), [2]);
+    const r = fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, statSync: () => ({ birthtimeMs: 1000 }) });
+    assert.deepEqual(r.halter[`${WTP}1`].map((h) => h.pid), [2]);
   });
   test("ist die Geburt des Ordners unbekannt (statSync wirft), zählt jeder verwaiste Werkzeug-Prozess", () => {
     const wirft = () => {
       throw new Error("ENOENT");
     };
-    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, statSync: wirft });
-    assert.deepEqual(r.halter["kq-1"].map((h) => h.pid), [1, 2]);
+    const r = fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, statSync: wirft });
+    assert.deepEqual(r.halter[`${WTP}1`].map((h) => h.pid), [1, 2]);
   });
 });
 
 describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
   type LensModule = {
-    verwaisteLensWorktrees: (registered: string[], worktreesDir: string) => string[];
+    verwaisteLensWorktrees: (registered: string[], worktreesDir: string, namen?: object) => string[];
     entferneLensWorktrees: (
       mainRoot: string,
       worktreesDir: string,
@@ -772,46 +781,46 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
   const WT = "/root/.claude/worktrees";
   const porcelain = (pfade: string[]) => pfade.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n");
 
-  test("registrierter `kq-<nr>-lens-r<n>` ohne `kq-<nr>` ist verwaist; mit Feature-Worktree nicht", () => {
-    const reg = [MAIN, `${WT}/kq-12`, `${WT}/kq-12-lens-r1`, `${WT}/kq-13-lens-r2`, `${WT}/kq-14`];
-    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-r2"]);
+  test("registrierter Lens-Ordner `<präfix><nr>-lens-r<n>` ohne Feature-Ordner ist verwaist; mit Feature-Worktree nicht", () => {
+    const reg = [MAIN, `${WT}/${WTP}12`, `${WT}/${WTP}12-lens-r1`, `${WT}/${WTP}13-lens-r2`, `${WT}/${WTP}14`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT, NAMEN), [`${WTP}13-lens-r2`]);
   });
 
-  test("Merge-Delta-Lens `kq-<nr>-lens-m<n>` ohne `kq-<nr>` ist verwaist, mit Feature-Worktree nicht", () => {
-    const reg = [MAIN, `${WT}/kq-13-lens-m1`, `${WT}/kq-14`, `${WT}/kq-14-lens-m2`, `${WT}/kq-15-lens-m`];
-    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-m1"]);
+  test("Merge-Delta-Lens `<präfix><nr>-lens-m<n>` ohne Feature-Ordner ist verwaist, mit Feature-Worktree nicht", () => {
+    const reg = [MAIN, `${WT}/${WTP}13-lens-m1`, `${WT}/${WTP}14`, `${WT}/${WTP}14-lens-m2`, `${WT}/${WTP}15-lens-m`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT, NAMEN), [`${WTP}13-lens-m1`]);
   });
 
-  test("Großgeschriebener Ordnername `KQ-13-lens-r1` wird nicht mit `kq-13` verwechselt (kein Flag i, sonst fälschlich verwaist)", () => {
-    const reg = [MAIN, `${WT}/kq-13`, `${WT}/KQ-13-lens-r1`];
-    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);
+  test("Großgeschriebener Ordnername wird nicht mit dem kleingeschriebenen Feature-Ordner verwechselt (kein Flag i, sonst fälschlich verwaist)", () => {
+    const reg = [MAIN, `${WT}/${WTP}13`, `${WT}/${WTP.toUpperCase()}13-lens-r1`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT, NAMEN), []);
   });
 
-  test("nie angefasst: `kq-<nr>`, `kq-<nr>-lens-x`, `foo-lens-r1`, fremde Ordner, tiefer verschachtelte Pfade", () => {
-    const reg = [MAIN, `${WT}/kq-12`, `${WT}/kq-12-lens-x`, `${WT}/foo-lens-r1`, `/other/kq-9-lens-r1`, `${WT}/kq-9-lens-r1/sub`, `${WT}/kq-9-lens-r10x`];
-    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);
+  test("nie angefasst: Feature-Ordner, `-lens-x`, `foo-lens-r1`, fremde Ordner, tiefer verschachtelte Pfade", () => {
+    const reg = [MAIN, `${WT}/${WTP}12`, `${WT}/${WTP}12-lens-x`, `${WT}/foo-lens-r1`, `/other/${WTP}9-lens-r1`, `${WT}/${WTP}9-lens-r1/sub`, `${WT}/${WTP}9-lens-r10x`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT, NAMEN), []);
   });
 
   test("Windows-Pfade (Backslashes, gemischte Trenner) werden wie POSIX-Pfade behandelt", () => {
-    const reg = ["C:/root", "C:/root/.claude/worktrees/kq-5-lens-r1", "C:/root/.claude/worktrees/kq-6", "C:/root/.claude/worktrees/kq-6-lens-r1"];
-    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, "C:\\root\\.claude\\worktrees"), ["kq-5-lens-r1"]);
+    const reg = ["C:/root", `C:/root/.claude/worktrees/${WTP}5-lens-r1`, `C:/root/.claude/worktrees/${WTP}6`, `C:/root/.claude/worktrees/${WTP}6-lens-r1`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, "C:\\root\\.claude\\worktrees", NAMEN), [`${WTP}5-lens-r1`]);
   });
 
   test("diagnoseOrphans trennt alte (löschbar) von jungen (nur melden) Lens-Worktrees", () => {
     const jetzt = 10_000_000;
     const deps = {
       now: jetzt,
-      execSync: () => porcelain([MAIN, `${WT}/kq-1-lens-r1`, `${WT}/kq-2-lens-r1`]),
+      execSync: () => porcelain([MAIN, `${WT}/${WTP}1-lens-r1`, `${WT}/${WTP}2-lens-r1`]),
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-1-lens-r1", isDirectory: () => true },
-        { name: "kq-2-lens-r1", isDirectory: () => true },
+        { name: `${WTP}1-lens-r1`, isDirectory: () => true },
+        { name: `${WTP}2-lens-r1`, isDirectory: () => true },
       ],
-      statSync: (p: string) => ({ mtimeMs: p.includes("kq-1-") ? jetzt - MIN_ORPHAN_AGE_MS - 1 : jetzt - 1000 }),
+      statSync: (p: string) => ({ mtimeMs: p.includes(`${WTP}1-`) ? jetzt - MIN_ORPHAN_AGE_MS - 1 : jetzt - 1000 }),
     };
-    const r = diagnoseOrphans(MAIN, deps) as unknown as { lensOrphans: string[]; lensYoung: string[]; orphans: string[] };
-    assert.deepEqual(r.lensOrphans, ["kq-1-lens-r1"]);
-    assert.deepEqual(r.lensYoung, ["kq-2-lens-r1"]);
+    const r = diagnoseOrphans(MAIN, { ...deps, namen: NAMEN }) as unknown as { lensOrphans: string[]; lensYoung: string[]; orphans: string[] };
+    assert.deepEqual(r.lensOrphans, [`${WTP}1-lens-r1`]);
+    assert.deepEqual(r.lensYoung, [`${WTP}2-lens-r1`]);
     assert.deepEqual(r.orphans, [], "registrierte Ordner sind keine Geister-Ordner");
   });
 
@@ -840,32 +849,32 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
   }
 
   test("entfernt per `git worktree remove --force` und prüft: nicht mehr registriert, Ordner weg", () => {
-    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
-    const r = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], g.deps);
-    assert.deepEqual(r.removed, ["kq-3-lens-r1"]);
+    const g = fakeGit([MAIN, `${WT}/${WTP}3-lens-r1`]);
+    const r = lensM.entferneLensWorktrees(MAIN, WT, [`${WTP}3-lens-r1`], g.deps);
+    assert.deepEqual(r.removed, [`${WTP}3-lens-r1`]);
     assert.deepEqual(r.errors, []);
-    assert.ok(g.befehle.some((c) => /worktree remove --force ".*kq-3-lens-r1"/.test(c)));
+    assert.ok(g.befehle.some((c) => new RegExp(`worktree remove --force ".*${WTP}3-lens-r1"`).test(c)));
   });
 
   test("scheitert das Entfernen (Sperre), steht der Name in `errors`; ein werfender Exit-Code mit Erfolg zählt als entfernt", () => {
-    const klemmt = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], fakeGit([MAIN, `${WT}/kq-3-lens-r1`], { klemmt: true }).deps);
-    assert.deepEqual(klemmt.errors, ["kq-3-lens-r1"]);
+    const klemmt = lensM.entferneLensWorktrees(MAIN, WT, [`${WTP}3-lens-r1`], fakeGit([MAIN, `${WT}/${WTP}3-lens-r1`], { klemmt: true }).deps);
+    assert.deepEqual(klemmt.errors, [`${WTP}3-lens-r1`]);
     assert.deepEqual(klemmt.removed, []);
-    assert.ok("kq-3-lens-r1" in klemmt.halter);
-    const warnung = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], fakeGit([MAIN, `${WT}/kq-3-lens-r1`], { wirftTrotzdem: true }).deps);
-    assert.deepEqual(warnung.removed, ["kq-3-lens-r1"], "geprüft wird das Ergebnis, nicht der Exit-Code");
+    assert.ok(`${WTP}3-lens-r1` in klemmt.halter);
+    const warnung = lensM.entferneLensWorktrees(MAIN, WT, [`${WTP}3-lens-r1`], fakeGit([MAIN, `${WT}/${WTP}3-lens-r1`], { wirftTrotzdem: true }).deps);
+    assert.deepEqual(warnung.removed, [`${WTP}3-lens-r1`], "geprüft wird das Ergebnis, nicht der Exit-Code");
   });
 
   test("git meldet Erfolg, aber der Ordner steht noch (Windows-Sperre): Fehler, nicht entfernt", () => {
-    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const g = fakeGit([MAIN, `${WT}/${WTP}3-lens-r1`]);
     const deps = { ...g.deps, existsSync: () => true };
-    const r = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps);
-    assert.deepEqual(r.errors, ["kq-3-lens-r1"]);
+    const r = lensM.entferneLensWorktrees(MAIN, WT, [`${WTP}3-lens-r1`], deps);
+    assert.deepEqual(r.errors, [`${WTP}3-lens-r1`]);
     assert.deepEqual(r.removed, []);
   });
 
   test("lässt sich die Worktree-Liste nach dem Entfernen nicht lesen, zählt das fail-closed als nicht entfernt", () => {
-    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const g = fakeGit([MAIN, `${WT}/${WTP}3-lens-r1`]);
     const deps = {
       ...g.deps,
       execSync: (cmd: string) => {
@@ -873,13 +882,13 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
         return g.deps.execSync(cmd);
       },
     };
-    assert.deepEqual(lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps).errors, ["kq-3-lens-r1"]);
+    assert.deepEqual(lensM.entferneLensWorktrees(MAIN, WT, [`${WTP}3-lens-r1`], deps).errors, [`${WTP}3-lens-r1`]);
   });
 
   test("Schutzgurt: ein Symlink wird nicht angefasst (kein `git worktree remove`)", () => {
-    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const g = fakeGit([MAIN, `${WT}/${WTP}3-lens-r1`]);
     const deps = { ...g.deps, lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => true }) };
-    const r = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps);
+    const r = lensM.entferneLensWorktrees(MAIN, WT, [`${WTP}3-lens-r1`], deps);
     assert.equal(r.refused.length, 1);
     assert.deepEqual(r.removed, []);
     assert.ok(!g.befehle.some((c) => c.includes("worktree remove")));
@@ -924,19 +933,19 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
   });
 
   test("sortiereDateien: verwaist, jung, fremd; registrierter Worktree schützt seine Dateien", () => {
-    const registered = new Set([`${WT}/kq-5`]);
-    const r = m.sortiereDateien(WT, ["kq-1361-lens-r2-orig.bak", "kq-9-jung.bak", "kq-5-notiz.txt", "notizen.txt"], registered, { now: JETZT, statSync: alt });
-    assert.deepEqual(r.verwaist, ["kq-1361-lens-r2-orig.bak"]);
-    assert.deepEqual(r.jung, ["kq-9-jung.bak"]);
+    const registered = new Set([`${WT}/${WTP}5`]);
+    const r = m.sortiereDateien(WT, [`${WTP}1361-lens-r2-orig.bak`, `${WTP}9-jung.bak`, `${WTP}5-notiz.txt`, "notizen.txt"], registered, { now: JETZT, statSync: alt, namen: NAMEN });
+    assert.deepEqual(r.verwaist, [`${WTP}1361-lens-r2-orig.bak`]);
+    assert.deepEqual(r.jung, [`${WTP}9-jung.bak`]);
     assert.deepEqual(r.fremd, ["notizen.txt"]);
   });
 
-  test("sortiereDateien: kq-13610-x gehört zu kq-13610, nicht zu kq-1361", () => {
-    const r = m.sortiereDateien(WT, ["kq-13610-x.bak"], new Set([`${WT}/kq-1361`]), { now: JETZT, statSync: alt });
-    assert.deepEqual(r.verwaist, ["kq-13610-x.bak"]);
-    const r2 = m.sortiereDateien(WT, ["kq-13610-x.bak"], new Set([`${WT}/kq-13610`]), { now: JETZT, statSync: alt });
+  test("sortiereDateien: eine längere Ticketnummer gehört zu ihrem eigenen Ordner, nicht zu der kürzeren", () => {
+    const r = m.sortiereDateien(WT, [`${WTP}13610-x.bak`], new Set([`${WT}/${WTP}1361`]), { now: JETZT, statSync: alt, namen: NAMEN });
+    assert.deepEqual(r.verwaist, [`${WTP}13610-x.bak`]);
+    const r2 = m.sortiereDateien(WT, [`${WTP}13610-x.bak`], new Set([`${WT}/${WTP}13610`]), { now: JETZT, statSync: alt, namen: NAMEN });
     assert.deepEqual(r2.verwaist, []);
-    assert.deepEqual(m.sortiereDateien(WT, ["kq-1361x.bak"], new Set(), { now: JETZT, statSync: alt }).fremd, ["kq-1361x.bak"]);
+    assert.deepEqual(m.sortiereDateien(WT, [`${WTP}1361x.bak`], new Set(), { now: JETZT, statSync: alt, namen: NAMEN }).fremd, [`${WTP}1361x.bak`]);
   });
 
   test("diagnoseOrphans liefert die Dateilisten; Ordner bleiben getrennt", () => {
@@ -945,15 +954,15 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
       execSync: () => porcelain([MAIN]),
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-7-x.bak", isDirectory: () => false, isFile: () => true },
-        { name: "kq-8-jung.bak", isDirectory: () => false, isFile: () => true },
+        { name: `${WTP}7-x.bak`, isDirectory: () => false, isFile: () => true },
+        { name: `${WTP}8-jung.bak`, isDirectory: () => false, isFile: () => true },
         { name: "fremd.txt", isDirectory: () => false, isFile: () => true },
       ],
       statSync: alt,
     };
-    const r = diagnoseOrphans(MAIN, deps) as unknown as { orphanFiles: string[]; youngFiles: string[]; foreignFiles: string[]; orphans: string[] };
-    assert.deepEqual(r.orphanFiles, ["kq-7-x.bak"]);
-    assert.deepEqual(r.youngFiles, ["kq-8-jung.bak"]);
+    const r = diagnoseOrphans(MAIN, { ...deps, namen: NAMEN }) as unknown as { orphanFiles: string[]; youngFiles: string[]; foreignFiles: string[]; orphans: string[] };
+    assert.deepEqual(r.orphanFiles, [`${WTP}7-x.bak`]);
+    assert.deepEqual(r.youngFiles, [`${WTP}8-jung.bak`]);
     assert.deepEqual(r.foreignFiles, ["fremd.txt"]);
     assert.deepEqual(r.orphans, []);
   });
@@ -961,15 +970,15 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
   test("diagnoseOrphans: Dateien eines registrierten Worktrees sind weder verwaist noch fremd (Verdrahtung der Registrierung)", () => {
     const deps = {
       now: JETZT,
-      execSync: () => porcelain([MAIN, `${WT}/kq-5`]),
+      execSync: () => porcelain([MAIN, `${WT}/${WTP}5`]),
       existsSync: () => true,
       readdirSync: () => [
-        { name: "kq-5", isDirectory: () => true, isFile: () => false },
-        { name: "kq-5-notiz.bak", isDirectory: () => false, isFile: () => true },
+        { name: `${WTP}5`, isDirectory: () => true, isFile: () => false },
+        { name: `${WTP}5-notiz.bak`, isDirectory: () => false, isFile: () => true },
       ],
       statSync: alt,
     };
-    const r = diagnoseOrphans(MAIN, deps) as unknown as { orphanFiles: string[]; youngFiles: string[]; foreignFiles: string[] };
+    const r = diagnoseOrphans(MAIN, { ...deps, namen: NAMEN }) as unknown as { orphanFiles: string[]; youngFiles: string[]; foreignFiles: string[] };
     assert.deepEqual(r.orphanFiles, []);
     assert.deepEqual(r.youngFiles, []);
     assert.deepEqual(r.foreignFiles, []);
@@ -988,8 +997,8 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
       },
       existsSync: () => da,
     };
-    const r = m.entferneVerwaisteDateien(MAIN, WT, ["kq-7-x.bak"], deps);
-    assert.deepEqual(r.removed, ["kq-7-x.bak"]);
+    const r = m.entferneVerwaisteDateien(MAIN, WT, [`${WTP}7-x.bak`], deps);
+    assert.deepEqual(r.removed, [`${WTP}7-x.bak`]);
     assert.equal(gerufen.length, 1);
     assert.equal((gerufen[0][1] as { recursive?: boolean }).recursive, undefined);
   });
@@ -997,9 +1006,9 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
   test("Schutzgurt lehnt Link, Ordner, Fremdpfad und Trenner ab, ohne zu löschen", () => {
     let gerufen = 0;
     const basis = { rmSync: () => gerufen++, existsSync: () => true };
-    const link = m.entferneVerwaisteDateien(MAIN, WT, ["kq-1-a.bak"], { ...basis, lstatSync: () => ({ ...reguLaer, isSymbolicLink: () => true }) });
-    const ordner = m.entferneVerwaisteDateien(MAIN, WT, ["kq-1-b.bak"], { ...basis, lstatSync: () => ({ ...reguLaer, isFile: () => false, isDirectory: () => true }) });
-    const fremdPfad = m.entferneVerwaisteDateien(MAIN, "/anderswo/worktrees", ["kq-1-c.bak"], { ...basis, lstatSync: () => reguLaer });
+    const link = m.entferneVerwaisteDateien(MAIN, WT, [`${WTP}1-a.bak`], { ...basis, lstatSync: () => ({ ...reguLaer, isSymbolicLink: () => true }) });
+    const ordner = m.entferneVerwaisteDateien(MAIN, WT, [`${WTP}1-b.bak`], { ...basis, lstatSync: () => ({ ...reguLaer, isFile: () => false, isDirectory: () => true }) });
+    const fremdPfad = m.entferneVerwaisteDateien(MAIN, "/anderswo/worktrees", [`${WTP}1-c.bak`], { ...basis, lstatSync: () => reguLaer });
     const trenner = m.entferneVerwaisteDateien(MAIN, WT, ["../x.bak", "a/b.bak"], { ...basis, lstatSync: () => reguLaer });
     assert.equal(link.refused.length, 1);
     assert.equal(ordner.refused.length, 1);
@@ -1016,15 +1025,15 @@ describe("Lose Dateien unter .claude/worktrees (#1476)", () => {
       },
       existsSync: () => true,
     };
-    const r = m.entferneVerwaisteDateien(MAIN, WT, ["kq-7-x.bak"], deps);
-    assert.deepEqual(r.errors, ["kq-7-x.bak"]);
+    const r = m.entferneVerwaisteDateien(MAIN, WT, [`${WTP}7-x.bak`], deps);
+    assert.deepEqual(r.errors, [`${WTP}7-x.bak`]);
     assert.deepEqual(r.removed, []);
   });
 
   test("assertSafeOrphanTarget für Dateien verlangt eine reguläre Datei", () => {
     const f = assertSafeOrphanTarget as unknown as (a: string, b: string, c: string, d: object, e: string) => { safe: boolean };
-    assert.equal(f(MAIN, WT, "kq-1-a.bak", { lstatSync: () => reguLaer }, "file").safe, true);
-    assert.equal(f(MAIN, WT, "kq-1-a.bak", { lstatSync: () => ({ ...reguLaer, isFile: () => false }) }, "file").safe, false);
+    assert.equal(f(MAIN, WT, `${WTP}1-a.bak`, { lstatSync: () => reguLaer }, "file").safe, true);
+    assert.equal(f(MAIN, WT, `${WTP}1-a.bak`, { lstatSync: () => ({ ...reguLaer, isFile: () => false }) }, "file").safe, false);
   });
 });
 
@@ -1034,8 +1043,8 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
   const B = cleanupModule as unknown as {
     parseBranchRefs: (text: string) => Ref[];
     worktreeBranchen: (porcelain: string) => Set<string>;
-    aufraeumbareBranches: (o: { refs: Ref[]; worktreeBranches: Set<string> | string[]; gemergteHeads: Gemergt[] | null | undefined }) => string[];
-    branchesAufraeumen: (o: { git: (a: string[]) => string; gh: () => Gemergt[]; loeschen?: boolean }) => { ok: boolean; grund?: string; kandidaten: string[]; geloescht: string[]; behalten: number; fehler: string[]; warnung?: string | null };
+    aufraeumbareBranches: (o: { namen?: object; refs: Ref[]; worktreeBranches: Set<string> | string[]; gemergteHeads: Gemergt[] | null | undefined }) => string[];
+    branchesAufraeumen: (o: { namen?: object; git: (a: string[]) => string; gh: () => Gemergt[]; loeschen?: boolean }) => { ok: boolean; grund?: string; kandidaten: string[]; geloescht: string[]; behalten: number; fehler: string[]; warnung?: string | null };
   };
   const SHA_A = "a".repeat(40);
   const SHA_B = "b".repeat(40);
@@ -1044,53 +1053,60 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
   const frei = new Set<string>();
 
   test("Positivfall: genau der gemergte, [gone]-markierte, nicht ausgecheckte Branch mit gleicher Spitze", () => {
-    const r = B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-1-a")] });
-    assert.deepEqual(r, ["feature/kq-1-a"]);
+    const r = B.aufraeumbareBranches({ namen: NAMEN, refs: [ref(`${BRP}1-a`)], worktreeBranches: frei, gemergteHeads: [gemergt(`${BRP}1-a`)] });
+    assert.deepEqual(r, [`${BRP}1-a`]);
   });
 
   test("nicht [gone]: bleibt (Remote existiert noch, Arbeit läuft)", () => {
-    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a", { gone: false })], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-1-a")] }), []);
+    assert.deepEqual(B.aufraeumbareBranches({ namen: NAMEN, refs: [ref(`${BRP}1-a`, { gone: false })], worktreeBranches: frei, gemergteHeads: [gemergt(`${BRP}1-a`)] }), []);
   });
 
   test("gone, aber in einem Worktree ausgecheckt: bleibt", () => {
-    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: new Set(["feature/kq-1-a"]), gemergteHeads: [gemergt("feature/kq-1-a")] }), []);
+    assert.deepEqual(B.aufraeumbareBranches({ namen: NAMEN, refs: [ref(`${BRP}1-a`)], worktreeBranches: new Set([`${BRP}1-a`]), gemergteHeads: [gemergt(`${BRP}1-a`)] }), []);
   });
 
   test("gone, aber die Spitze weicht vom gemergten Kopf ab (lokale Nach-Commits): bleibt", () => {
-    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a", { sha: SHA_B })], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-1-a", SHA_A)] }), []);
+    assert.deepEqual(B.aufraeumbareBranches({ namen: NAMEN, refs: [ref(`${BRP}1-a`, { sha: SHA_B })], worktreeBranches: frei, gemergteHeads: [gemergt(`${BRP}1-a`, SHA_A)] }), []);
   });
 
   test("gone, aber kein gemergter PR zu diesem Namen (Remote ohne Merge gelöscht): bleibt", () => {
-    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: [gemergt("feature/kq-2-b")] }), []);
+    assert.deepEqual(B.aufraeumbareBranches({ namen: NAMEN, refs: [ref(`${BRP}1-a`)], worktreeBranches: frei, gemergteHeads: [gemergt(`${BRP}2-b`)] }), []);
   });
 
-  test("Name außerhalb von feature/kq-: bleibt, auch wenn alles andere passt", () => {
-    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("main"), ref("feature/andere"), ref("hotfix/kq-1")], worktreeBranches: frei, gemergteHeads: [gemergt("main"), gemergt("feature/andere"), gemergt("hotfix/kq-1")] }), []);
+  test("Name außerhalb des Ticket-Branch-Präfixes: bleibt, auch wenn alles andere passt", () => {
+    assert.deepEqual(B.aufraeumbareBranches({ namen: NAMEN, refs: [ref("main"), ref("feature/andere"), ref(`hotfix/${WTP}1`)], worktreeBranches: frei, gemergteHeads: [gemergt("main"), gemergt("feature/andere"), gemergt(`hotfix/${WTP}1`)] }), []);
   });
 
   test("gh liefert nichts (null/undefined): nichts löschen, fail-closed", () => {
-    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: null }), []);
-    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref("feature/kq-1-a")], worktreeBranches: frei, gemergteHeads: undefined }), []);
+    assert.deepEqual(B.aufraeumbareBranches({ namen: NAMEN, refs: [ref(`${BRP}1-a`)], worktreeBranches: frei, gemergteHeads: null }), []);
+    assert.deepEqual(B.aufraeumbareBranches({ namen: NAMEN, refs: [ref(`${BRP}1-a`)], worktreeBranches: frei, gemergteHeads: undefined }), []);
   });
 
   test("parseBranchRefs: Tab-getrennt, [gone] erkannt, andere Tracking-Texte und kaputte Zeilen nicht", () => {
-    const text = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-2-b\t\t" + SHA_B, "feature/kq-3-c\t[ahead 2]\t" + SHA_A, "feature/kq-6-f\tgone\t" + SHA_B, "kaputt", "\t[gone]\t" + SHA_A, "feature/kq-4-d\t[gone]\tkurz", ""].join("\n");
+    const text = [`${BRP}1-a\t[gone]\t` + SHA_A, `${BRP}2-b\t\t` + SHA_B, `${BRP}3-c\t[ahead 2]\t` + SHA_A, `${BRP}6-f\tgone\t` + SHA_B, "kaputt", "\t[gone]\t" + SHA_A, `${BRP}4-d\t[gone]\tkurz`, ""].join("\n");
     assert.deepEqual(B.parseBranchRefs(text), [
-      { name: "feature/kq-1-a", gone: true, sha: SHA_A },
-      { name: "feature/kq-2-b", gone: false, sha: SHA_B },
-      { name: "feature/kq-3-c", gone: false, sha: SHA_A },
-      { name: "feature/kq-6-f", gone: false, sha: SHA_B },
+      { name: `${BRP}1-a`, gone: true, sha: SHA_A },
+      { name: `${BRP}2-b`, gone: false, sha: SHA_B },
+      { name: `${BRP}3-c`, gone: false, sha: SHA_A },
+      { name: `${BRP}6-f`, gone: false, sha: SHA_B },
     ]);
   });
 
   test("worktreeBranchen: Branch-Zeilen aus der Porcelain-Ausgabe, detached und gesperrte Einträge ohne Branch", () => {
-    const out = ["worktree /r", "HEAD abc", "branch refs/heads/main", "", "worktree /r/.claude/worktrees/kq-1", "HEAD def", "branch refs/heads/feature/kq-1-a", "", "worktree /r/x", "HEAD 123", "detached", ""].join("\n");
-    assert.deepEqual([...B.worktreeBranchen(out)].sort(), ["feature/kq-1-a", "main"]);
+    const out = ["worktree /r", "HEAD abc", "branch refs/heads/main", "", `worktree /r/.claude/worktrees/${WTP}1`, "HEAD def", `branch refs/heads/${BRP}1-a`, "", "worktree /r/x", "HEAD 123", "detached", ""].join("\n");
+    assert.deepEqual([...B.worktreeBranchen(out)].sort(), [`${BRP}1-a`, "main"]);
+  });
+
+  test("Standardpfad ohne injizierte Namen: die Muster kommen aus der Projekt-Config", () => {
+    const p = projektConfig().praefixe;
+    assert.deepEqual(B.aufraeumbareBranches({ refs: [ref(`${p.branch}1-a`)], worktreeBranches: frei, gemergteHeads: [gemergt(`${p.branch}1-a`)] }), [`${p.branch}1-a`]);
+    const lens = (cleanupModule as unknown as { verwaisteLensWorktrees: (r: string[], w: string) => string[] }).verwaisteLensWorktrees;
+    assert.deepEqual(lens(["/root", `/root/.claude/worktrees/${p.worktree}13-lens-r1`], "/root/.claude/worktrees"), [`${p.worktree}13-lens-r1`]);
   });
 
   describe("branchesAufraeumen (git und gh injiziert)", () => {
-    const refsText = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-2-b\t[gone]\t" + SHA_A, "feature/kq-3-c\t\t" + SHA_A].join("\n");
-    const worktrees = "worktree /r\nbranch refs/heads/main\n\nworktree /r/w\nbranch refs/heads/feature/kq-2-b\n";
+    const refsText = [`${BRP}1-a\t[gone]\t` + SHA_A, `${BRP}2-b\t[gone]\t` + SHA_A, `${BRP}3-c\t\t` + SHA_A].join("\n");
+    const worktrees = `worktree /r\nbranch refs/heads/main\n\nworktree /r/w\nbranch refs/heads/${BRP}2-b\n`;
     const aufbau = (gh: () => Gemergt[], gitFehler: string | null = null) => {
       const befehle: string[][] = [];
       const git = (a: string[]): string => {
@@ -1102,12 +1118,12 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       };
       return { befehle, git, gh };
     };
-    const alleGemergt = () => [gemergt("feature/kq-1-a"), gemergt("feature/kq-2-b"), gemergt("feature/kq-3-c")];
+    const alleGemergt = () => [gemergt(`${BRP}1-a`), gemergt(`${BRP}2-b`), gemergt(`${BRP}3-c`)];
 
     test("Trockenlauf: nennt Kandidaten, löscht nichts (kein git branch)", () => {
       const a = aufbau(alleGemergt);
-      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh });
-      assert.deepEqual(r.kandidaten, ["feature/kq-1-a"]);
+      const r = B.branchesAufraeumen({ namen: NAMEN, git: a.git, gh: a.gh });
+      assert.deepEqual(r.kandidaten, [`${BRP}1-a`]);
       assert.deepEqual(r.geloescht, []);
       assert.equal(r.behalten, 2);
       assert.ok(!a.befehle.some((b) => b[0] === "branch"));
@@ -1115,24 +1131,24 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
 
     test("mit loeschen: git branch -D genau für die Kandidaten", () => {
       const a = aufbau(alleGemergt);
-      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
-      assert.deepEqual(r.geloescht, ["feature/kq-1-a"]);
-      assert.deepEqual(a.befehle.filter((b) => b[0] === "branch"), [["branch", "-D", "feature/kq-1-a"]]);
+      const r = B.branchesAufraeumen({ namen: NAMEN, git: a.git, gh: a.gh, loeschen: true });
+      assert.deepEqual(r.geloescht, [`${BRP}1-a`]);
+      assert.deepEqual(a.befehle.filter((b) => b[0] === "branch"), [["branch", "-D", `${BRP}1-a`]]);
       assert.equal(r.ok, true);
     });
 
     test("Suchgrenze: genau PR_LIMIT gemergte PRs ergeben eine Warnung, eine weniger nicht", () => {
       const PR_LIMIT = (cleanupModule as unknown as { PR_LIMIT: number }).PR_LIMIT;
-      const viele = (n: number) => () => Array.from({ length: n }, (_, i) => gemergt(`feature/kq-${100 + i}-x`));
+      const viele = (n: number) => () => Array.from({ length: n }, (_, i) => gemergt(`${BRP}${100 + i}-x`));
       const voll = aufbau(viele(PR_LIMIT));
-      assert.match(B.branchesAufraeumen({ git: voll.git, gh: voll.gh }).warnung ?? "", /Suchgrenze/);
+      assert.match(B.branchesAufraeumen({ namen: NAMEN, git: voll.git, gh: voll.gh }).warnung ?? "", /Suchgrenze/);
       const knapp = aufbau(viele(PR_LIMIT - 1));
-      assert.equal(B.branchesAufraeumen({ git: knapp.git, gh: knapp.gh }).warnung, null);
+      assert.equal(B.branchesAufraeumen({ namen: NAMEN, git: knapp.git, gh: knapp.gh }).warnung, null);
     });
 
     test("gh liefert null statt einer Liste: kein Absturz, nichts löschbar, keine Warnung", () => {
       const a = aufbau((() => null) as unknown as () => Gemergt[]);
-      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
+      const r = B.branchesAufraeumen({ namen: NAMEN, git: a.git, gh: a.gh, loeschen: true });
       assert.deepEqual(r.kandidaten, []);
       assert.equal(r.warnung, null);
       assert.ok(!a.befehle.some((b) => b[0] === "branch"));
@@ -1142,7 +1158,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       const a = aufbau(() => {
         throw new Error("HTTP 502");
       });
-      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
+      const r = B.branchesAufraeumen({ namen: NAMEN, git: a.git, gh: a.gh, loeschen: true });
       assert.equal(r.ok, false);
       assert.match(r.grund ?? "", /gh: HTTP 502/);
       assert.ok(!a.befehle.some((b) => b[0] === "branch"));
@@ -1150,7 +1166,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
 
     test("git for-each-ref scheitert: ok false, nichts gelöscht", () => {
       const a = aufbau(alleGemergt, "for-each-ref");
-      const r = B.branchesAufraeumen({ git: a.git, gh: a.gh, loeschen: true });
+      const r = B.branchesAufraeumen({ namen: NAMEN, git: a.git, gh: a.gh, loeschen: true });
       assert.equal(r.ok, false);
       assert.match(r.grund ?? "", /^git:/);
       assert.ok(!a.befehle.some((b) => b[0] === "branch"));
@@ -1158,25 +1174,25 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
 
     test("ein gescheitertes git branch -D landet in fehler, die übrigen laufen weiter", () => {
       const befehle: string[][] = [];
-      const refs = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-5-e\t[gone]\t" + SHA_A].join("\n");
+      const refs = [`${BRP}1-a\t[gone]\t` + SHA_A, `${BRP}5-e\t[gone]\t` + SHA_A].join("\n");
       const git = (a: string[]): string => {
         befehle.push(a);
         if (a[0] === "for-each-ref") return refs;
         if (a[0] === "worktree") return "";
-        if (a[2] === "feature/kq-1-a") throw new Error("gesperrt");
+        if (a[2] === `${BRP}1-a`) throw new Error("gesperrt");
         return "";
       };
-      const r = B.branchesAufraeumen({ git, gh: () => [gemergt("feature/kq-1-a"), gemergt("feature/kq-5-e")], loeschen: true });
-      assert.deepEqual(r.geloescht, ["feature/kq-5-e"]);
+      const r = B.branchesAufraeumen({ namen: NAMEN, git, gh: () => [gemergt(`${BRP}1-a`), gemergt(`${BRP}5-e`)], loeschen: true });
+      assert.deepEqual(r.geloescht, [`${BRP}5-e`]);
       assert.equal(r.fehler.length, 1);
       assert.equal(r.ok, false);
     });
   });
 
   describe("branchenModus (CLI-Durchreichung von branchesAufraeumen: Ausgabe und Exit-Code)", () => {
-    type Modus = (root: string, loeschen: boolean, o: { git: (a: string[]) => string; gh: () => Gemergt[]; out: (s: string) => void; err: (s: string) => void }) => number;
+    type Modus = (root: string, loeschen: boolean, o: { config?: object; git: (a: string[]) => string; gh: () => Gemergt[]; out: (s: string) => void; err: (s: string) => void }) => number;
     const modus = (cliModule as unknown as { branchenModus: Modus }).branchenModus;
-    const refsText = ["feature/kq-1-a\t[gone]\t" + SHA_A, "feature/kq-3-c\t\t" + SHA_A].join("\n");
+    const refsText = [`${BRP}1-a\t[gone]\t` + SHA_A, `${BRP}3-c\t\t` + SHA_A].join("\n");
     const lauf = (o: { gh: () => Gemergt[]; gitFehler?: boolean; loeschen?: boolean; branchFehler?: boolean }) => {
       const out: string[] = [];
       const err: string[] = [];
@@ -1185,23 +1201,23 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
         if (o.branchFehler && a[0] === "branch") throw new Error("nicht löschbar");
         return a[0] === "for-each-ref" ? refsText : a[0] === "worktree" ? "worktree /r\nbranch refs/heads/main\n" : "";
       };
-      const code = modus("/r", o.loeschen ?? false, { git, gh: o.gh, out: (s) => out.push(s), err: (s) => err.push(s) });
+      const code = modus("/r", o.loeschen ?? false, { config: FREMD, git, gh: o.gh, out: (s) => out.push(s), err: (s) => err.push(s) });
       return { code, out, err };
     };
-    const eins = () => [gemergt("feature/kq-1-a")];
+    const eins = () => [gemergt(`${BRP}1-a`)];
 
     test("Normalfall: Exit 0, Kandidat gelistet, Hinweis auf --fix, kein stderr", () => {
       const r = lauf({ gh: eins });
       assert.equal(r.code, 0);
       assert.ok(r.out[0].includes("1 gemergt und löschbar"));
-      assert.ok(r.out.some((z) => z.includes("löschbar  feature/kq-1-a")));
+      assert.ok(r.out.some((z) => z.includes(`löschbar  ${BRP}1-a`)));
       assert.ok(r.out.some((z) => z.includes("--branches --fix")));
       assert.deepEqual(r.err, []);
     });
 
     test("Warnung (Suchgrenze) geht auf stderr, der Lauf bleibt Exit 0", () => {
       const PR_LIMIT = (cleanupModule as unknown as { PR_LIMIT: number }).PR_LIMIT;
-      const r = lauf({ gh: () => Array.from({ length: PR_LIMIT }, (_, i) => gemergt(`feature/kq-${100 + i}-x`)) });
+      const r = lauf({ gh: () => Array.from({ length: PR_LIMIT }, (_, i) => gemergt(`${BRP}${100 + i}-x`)) });
       assert.equal(r.code, 0);
       assert.equal(r.err.length, 1);
       assert.ok(r.err[0].startsWith("Warnung: ") && r.err[0].includes("Suchgrenze"));
@@ -1225,7 +1241,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
     test("Fehler beim Löschen: Exit 1 und die Fehlerzeile auf stderr, die Liste bleibt auf stdout", () => {
       const r = lauf({ gh: eins, loeschen: true, branchFehler: true });
       assert.equal(r.code, 1);
-      assert.ok(r.err.some((z) => z.includes("✗ feature/kq-1-a: nicht löschbar")));
+      assert.ok(r.err.some((z) => z.includes(`✗ ${BRP}1-a: nicht löschbar`)));
       assert.ok(r.out.length > 0);
     });
 
@@ -1233,6 +1249,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       const aufrufe: string[] = [];
       const ghAufrufe = { n: 0 };
       const ok = modus("/r", true, {
+        config: FREMD,
         git: (a) => {
           aufrufe.push(a.join(" "));
           return a[0] === "for-each-ref" ? refsText : a[0] === "worktree" ? "worktree /r\nbranch refs/heads/main\n" : "";
@@ -1247,6 +1264,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
       ghAufrufe.n = 0;
       const err: string[] = [];
       const code = modus("/r", true, {
+        config: FREMD,
         git: (a) => {
           aufrufe.push(a.join(" "));
           if (a[0] === "fetch") throw new Error("kein Netz");
@@ -1265,7 +1283,7 @@ describe("lokale Branches nach dem Squash-Merge (#1579)", () => {
     test("mit loeschen steht der Kandidat als gelöscht da", () => {
       const r = lauf({ gh: eins, loeschen: true });
       assert.equal(r.code, 0);
-      assert.ok(r.out.some((z) => z.includes("gelöscht feature/kq-1-a")));
+      assert.ok(r.out.some((z) => z.includes(`gelöscht ${BRP}1-a`)));
     });
   });
 });
@@ -1276,16 +1294,16 @@ describe("fixOrphans entfernt einen leeren, nicht registrierten Ordner wirklich 
     const { mkdtempSync, mkdirSync, existsSync, rmSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const root = mkdtempSync(join(tmpdir(), "kq-leer-"));
+    const root = mkdtempSync(join(tmpdir(), `${WTP}leer-`));
     try {
       const wt = join(root, ".claude", "worktrees");
-      mkdirSync(join(wt, "kq-9"), { recursive: true });
-      mkdirSync(join(wt, "kq-8"), { recursive: true });
-      writeFileSync(join(wt, "kq-8", "datei.txt"), "x");
-      const r = (fixOrphans as unknown as Fix)(root, wt, ["kq-9"], { execSync: () => "" });
-      assert.deepEqual(r.removed, ["kq-9"]);
-      assert.equal(existsSync(join(wt, "kq-9")), false);
-      assert.equal(existsSync(join(wt, "kq-8", "datei.txt")), true, "nur der genannte Ordner wird angefasst");
+      mkdirSync(join(wt, `${WTP}9`), { recursive: true });
+      mkdirSync(join(wt, `${WTP}8`), { recursive: true });
+      writeFileSync(join(wt, `${WTP}8`, "datei.txt"), "x");
+      const r = (fixOrphans as unknown as Fix)(root, wt, [`${WTP}9`], { execSync: () => "" });
+      assert.deepEqual(r.removed, [`${WTP}9`]);
+      assert.equal(existsSync(join(wt, `${WTP}9`)), false);
+      assert.equal(existsSync(join(wt, `${WTP}8`, "datei.txt")), true, "nur der genannte Ordner wird angefasst");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
