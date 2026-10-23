@@ -38,7 +38,7 @@ const ECHT = (rawConfig as unknown as { ladeProjektConfig: () => unknown }).lade
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 const fm = parseFrontmatter as (md: string) => Record<string, string>;
 
-const WURZEL = "C:/dev/kubernia/.claude/worktrees/kq-1435";
+const WURZEL = "C:/dev/repo/.claude/worktrees/kq-1435";
 const DATEI = `${WURZEL}/.claude/forum-quarantaene/forum-1435.txt`;
 
 describe("bewerteForumLeserRead", () => {
@@ -72,7 +72,7 @@ describe("bewerteForumLeserRead", () => {
 
   test("Drift-Schutz: der Pfad, den forum-quarantaene.mjs schreibt, wird vom Guard akzeptiert", () => {
     for (const n of [1, 1435, 99999]) expect(G.bewerteForumLeserRead(Q.quarantaenePfad(WURZEL, n)).block).toBe(false);
-    expect(G.bewerteForumLeserRead(Q.quarantaenePfad("C:\\dev\\kubernia\\", 5)).block).toBe(false);
+    expect(G.bewerteForumLeserRead(Q.quarantaenePfad("C:\\dev\\repo\\", 5)).block).toBe(false);
   });
 });
 

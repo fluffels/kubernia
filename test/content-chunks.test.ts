@@ -18,7 +18,7 @@ const { contentChunkName, expectedContentChunks, contentChunkCollisions, CONTENT
 describe("contentChunkName (#1408)", () => {
   test("Unterverzeichnis-Datei → content-<dir>-<name> (Posix und Windows-ID)", () => {
     assert.equal(contentChunkName("/repo/src/content/data/quests/knut.json"), "content-quests-knut");
-    assert.equal(contentChunkName("C:\\dev\\kubernia\\src\\content\\data\\crabquiz\\storage.json"), "content-crabquiz-storage");
+    assert.equal(contentChunkName("C:\\dev\\repo\\src\\content\\data\\crabquiz\\storage.json"), "content-crabquiz-storage");
   });
   test("Datei direkt unter data/ → gemeinsamer content-core", () => {
     assert.equal(contentChunkName("/repo/src/content/data/smalltalk.json"), "content-core");
