@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/wiedervorlage.mjs";
+import { FREMD } from "./support/fremd-config";
 
 type E = { id: string; faellig: string; titel: string; text: string; label?: string; alerts?: unknown };
 type T = { number: number; state: string; body: string; closedAt?: string };
@@ -161,7 +162,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
     const angelegt: [string, string, string][] = [];
     const log: string[] = [];
     const deps = {
-      ladeConfig: () => ({ labels: { harness: "area:harness" } }),
+      ladeConfig: () => ({ labels: { harness: FREMD.labels.harness } }),
       ladeLibs: () => Promise.resolve({ REPO: "o/r", platziereOben: (nr: number) => sortiert.push(nr) }),
       eintraegeLaden: () => [e("a", "2000-01-01")],
       ticketsLaden: () => [] as T[],
@@ -182,7 +183,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
     vi.stubEnv("PROJECT_TOKEN", "t");
     const { sortiert, angelegt, log, deps } = aufbau();
     expect(await main([], deps)).toBe(0);
-    expect(angelegt).toEqual([["a", "area:harness", "o/r"]]);
+    expect(angelegt).toEqual([["a", FREMD.labels.harness, "o/r"]]);
     expect(sortiert).toEqual([7]);
     expect(log.join("\n")).toContain("Angelegt: #7");
     expect(log.join("\n")).not.toContain("[dry-run]");

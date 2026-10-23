@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { lies, repoDateien } from "./repo-texte";
 import { liesMitProjektwerten } from "../support/ticket-ablauf";
+import { FREMD, projektConfig } from "../support/fremd-config";
 
 // Zähler der PowerShell-Starts (#1526): bei einem gesperrten Waisen-Ordner fragt `checkAndFixOrphanWorktrees` unter Windows
 // die Prozessliste per `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests
@@ -36,11 +37,19 @@ vi.mock("node:child_process", async (importOriginal) => {
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as hook from "../../scripts/stop-verify-hook.mjs";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRoh from "../../scripts/ticket-namen.mjs";
+
+const { ticketNamen, escapeRegex } = namenRoh as unknown as { ticketNamen: (c: unknown) => unknown; escapeRegex: (t: string) => string };
+/** Worktree-Präfix der Fremd-Config: alle Ordner- und Dateinamen dieser Datei leiten sich daraus ab. */
+const W = FREMD.praefixe.worktree;
+const NAMEN = ticketNamen(FREMD);
+
 const checkRoh = (hook as unknown as { checkAndFixOrphanWorktrees: unknown }).checkAndFixOrphanWorktrees;
 
 /** Gibt `checkAndFixOrphanWorktrees` mit leerer Prozessliste als Vorgabe zurück; eigene `listProcesses`-Fakes der Tests gewinnen. */
 const ohnePowershell = <F>(f: unknown): F =>
-  ((root: string, deps?: object) => (f as (r: string, d: object) => unknown)(root, { listProcesses: () => [], ...deps })) as unknown as F;
+  ((root: string, deps?: object) => (f as (r: string, d: object) => unknown)(root, { listProcesses: () => [], namen: NAMEN, ...deps })) as unknown as F;
 
 const parseStopInput: (text: string) => { stopHookActive: boolean } = hook.parseStopInput;
 const repoRootFromScriptUrl: (url: string) => string = hook.repoRootFromScriptUrl;
@@ -81,7 +90,7 @@ describe("repoRootFromScriptUrl", () => {
     const scriptUrl = import.meta.url.replace(/\/test\/harness\/[^/]+$/, "/scripts/stop-verify-hook.mjs");
     const root = repoRootFromScriptUrl(scriptUrl);
     // Exakt der Repo-Root (zwei Ebenen über diesem Test). Der frühere Check „enthält
-    // kubernia, endet nicht auf /scripts" blieb grün, wenn die Regex oben nicht traf
+    // den Repo-Namen, endet nicht auf /scripts" blieb grün, wenn die Regex oben nicht traf
     // und der Root auf …/test fiel (Review #1177).
     const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/$/, "");
     assert.equal(norm(root), norm(fileURLToPath(new URL("../../", import.meta.url))));
@@ -163,19 +172,19 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
   test("Waisen-Ordner gefunden und erfolgreich geloescht, blocked false, still", () => {
     const result = checkAndFixOrphanWorktrees(
       MAIN,
-      makeDeps({ orphanName: "kq-862", existsAfterRm: false })
+      makeDeps({ orphanName: `${W}862`, existsAfterRm: false })
     );
     assert.equal(result.blocked, false);
-    assert.deepEqual(result.removed, ["kq-862"]);
+    assert.deepEqual(result.removed, [`${W}862`]);
   });
 
   test("Waisen-Ordner gefunden, Loeschen schlaegt fehl (Datei-Lock), blocked true mit Ordnername in reason", () => {
     const result = checkAndFixOrphanWorktrees(
       MAIN,
-      makeDeps({ orphanName: "kq-862", existsAfterRm: true })
+      makeDeps({ orphanName: `${W}862`, existsAfterRm: true })
     );
     assert.equal(result.blocked, true);
-    assert.ok(result.reason?.includes("kq-862"), `reason sollte kq-862 nennen: ${result.reason}`);
+    assert.ok(result.reason?.includes(`${W}862`), `reason sollte ${W}862 nennen: ${result.reason}`);
   });
 
   test("git worktree list schlaegt fehl, fail-open, blocked false", () => {
@@ -205,7 +214,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
       const result = checkAndFixOrphanWorktrees(
         MAIN,
         makeDeps({
-          orphanName: "kq-862",
+          orphanName: `${W}862`,
           existsAfterRm: false,
           statusBefore: before,
           statusAfter: after,
@@ -219,7 +228,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     const result = checkAndFixOrphanWorktrees(
       MAIN,
       makeDeps({
-        orphanName: "kq-862",
+        orphanName: `${W}862`,
         existsAfterRm: false,
         statusBefore: [],
         statusAfter: [" D .claude/mit leerzeichen.json"],
@@ -236,7 +245,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     const result = checkAndFixOrphanWorktrees(
       MAIN,
       makeDeps({
-        orphanName: "kq-862",
+        orphanName: `${W}862`,
         existsAfterRm: false,
         statusBefore: [],
         statusAfter: [" D .claude/a.json", " D .claude/b.json"],
@@ -251,7 +260,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
 
   test("git status wirft, fail-open, blocked false statt jeden Turn zu blockieren", () => {
     const deps: OrphanDeps = {
-      ...makeDeps({ orphanName: "kq-862", existsAfterRm: false }),
+      ...makeDeps({ orphanName: `${W}862`, existsAfterRm: false }),
       execSync: (cmd: string) => {
         if (cmd.includes("worktree list")) {
           return "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n";
@@ -281,7 +290,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
   test("Junction OHNE Waise blockt, ruft aber KEIN git status, deckt den Latenz-Wrapper", () => {
     // Ohne diesen Fall bliebe `if (orphans.length > 0)` ungetestet (#1051).
     let statusCalls = 0;
-    const base = makeDeps({ orphanName: "kq-junction", existsAfterRm: false, symlink: true });
+    const base = makeDeps({ orphanName: `${W}junction`, existsAfterRm: false, symlink: true });
     const deps: OrphanDeps = {
       ...base,
       execSync: (cmd: string) => {
@@ -297,16 +306,16 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
   test("Waise UND Junction zugleich, beide Gruende stehen in reason", () => {
     // Mischzustand: `problems.join` war ungetestet, problems[0] blieb gruen (#1051).
     const deps: OrphanDeps = {
-      ...makeDeps({ orphanName: "kq-locked", existsAfterRm: true }),
+      ...makeDeps({ orphanName: `${W}locked`, existsAfterRm: true }),
       readdirSync: () => [
-        { name: "kq-locked", isDirectory: () => true, isSymbolicLink: () => false },
-        { name: "kq-junction", isDirectory: () => false, isSymbolicLink: () => true },
+        { name: `${W}locked`, isDirectory: () => true, isSymbolicLink: () => false },
+        { name: `${W}junction`, isDirectory: () => false, isSymbolicLink: () => true },
       ],
     };
     const result = checkAndFixOrphanWorktrees(MAIN, deps);
     assert.equal(result.blocked, true);
-    assert.ok(result.reason?.includes("kq-locked"), `Datei-Lock fehlt: ${result.reason}`);
-    assert.ok(result.reason?.includes("kq-junction"), `Junction fehlt: ${result.reason}`);
+    assert.ok(result.reason?.includes(`${W}locked`), `Datei-Lock fehlt: ${result.reason}`);
+    assert.ok(result.reason?.includes(`${W}junction`), `Junction fehlt: ${result.reason}`);
   });
 
   // ── Junction an Worktree-Stelle (#1051) ───────────────────────────────────
@@ -314,7 +323,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
   test("Symlink an Worktree-Stelle, blocked true mit Aufloese-Befehl, nie geloescht", () => {
     let rmCalls = 0;
     const deps: OrphanDeps = {
-      ...makeDeps({ orphanName: "kq-junction", existsAfterRm: false, symlink: true }),
+      ...makeDeps({ orphanName: `${W}junction`, existsAfterRm: false, symlink: true }),
       rmSync: () => {
         rmCalls++;
       },
@@ -322,20 +331,20 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     const result = checkAndFixOrphanWorktrees(MAIN, deps);
     assert.equal(result.blocked, true);
     assert.equal(rmCalls, 0, "eine Junction wird NIE geloescht, nur gemeldet");
-    assert.ok(result.reason?.includes("kq-junction"), `Name fehlt: ${result.reason}`);
+    assert.ok(result.reason?.includes(`${W}junction`), `Name fehlt: ${result.reason}`);
     assert.ok(result.reason?.includes("rmdir"), `Aufloese-Befehl fehlt: ${result.reason}`);
   });
 
   test("Schutzgurt verweigert ein Ziel, blocked true, Begruendung in reason", () => {
     const deps: OrphanDeps = {
-      ...makeDeps({ orphanName: "kq-862", existsAfterRm: false }),
+      ...makeDeps({ orphanName: `${W}862`, existsAfterRm: false }),
       lstatSync: () => {
         throw new Error("ENOENT");
       },
     };
     const result = checkAndFixOrphanWorktrees(MAIN, deps);
     assert.equal(result.blocked, true);
-    assert.ok(result.reason?.includes("kq-862"), `Name fehlt: ${result.reason}`);
+    assert.ok(result.reason?.includes(`${W}862`), `Name fehlt: ${result.reason}`);
   });
 });
 
@@ -346,18 +355,20 @@ type RunHook = (
   stdin: string,
   root: string,
   check?: (r: string) => { blocked: boolean; reason?: string },
-  abschlussDeps?: { prStatus?: (nr: string) => { state: string; autoMergeRequest: object | null } },
+  abschlussDeps?: { prStatus?: (nr: string) => { state: string; autoMergeRequest: object | null; labels?: { name: string }[] }; config?: unknown },
 ) => HookErgebnis;
-const runHook = (hook as unknown as { runHook: RunHook }).runHook;
-const geblockt = () => ({ blocked: true, reason: "Waise kq-1" });
+const runHookRoh = (hook as unknown as { runHook: RunHook }).runHook;
+/** `runHook` mit der Fremd-Config als Vorgabe (`deps.config`); eigene Deps der Tests gewinnen. */
+const runHook: RunHook = (stdin, root, check, deps) => runHookRoh(stdin, root, check, { config: FREMD, ...deps });
+const geblockt = () => ({ blocked: true, reason: "Waise w-1" });
 const frei = () => ({ blocked: false });
 
 describe("runHook – Ausgabe bei Block und Freigabe (#1309)", () => {
   test("blockiert: decision+reason auf stdout, Grund auf stderr, Exit 2", () => {
     const r = runHook("{}", "/x", geblockt);
     assert.equal(r.exit, 2);
-    assert.deepEqual(JSON.parse(r.stdout), { decision: "block", reason: "Waise kq-1" });
-    assert.equal(r.stderr, "Waise kq-1");
+    assert.deepEqual(JSON.parse(r.stdout), { decision: "block", reason: "Waise w-1" });
+    assert.equal(r.stderr, "Waise w-1");
   });
 
   test("nicht blockiert: Exit 0 und keine Ausgabe", () => {
@@ -365,9 +376,9 @@ describe("runHook – Ausgabe bei Block und Freigabe (#1309)", () => {
   });
 
   test("SubagentStop-Payload mit stop_hook_active:true gibt frei, auch wenn geblockt würde (kein Endlos-Block)", () => {
-    const payload = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", stop_hook_active: true });
+    const payload = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: FREMD.agenten.umsetzer, stop_hook_active: true });
     assert.deepEqual(runHook(payload, "/x", geblockt), { exit: 0, stdout: "", stderr: "" });
-    const ohne = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", stop_hook_active: false });
+    const ohne = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: FREMD.agenten.umsetzer, stop_hook_active: false });
     assert.equal(runHook(ohne, "/x", geblockt).exit, 2, "ohne stop_hook_active blockt derselbe Hook");
   });
 
@@ -378,7 +389,7 @@ describe("runHook – Ausgabe bei Block und Freigabe (#1309)", () => {
 
 describe("runHook – Umsetzer-Abschluss (#1331)", () => {
   const payload = (ergebnis: string, extra = {}) =>
-    JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", last_assistant_message: `ERGEBNIS: ${ergebnis}
+    JSON.stringify({ hook_event_name: "SubagentStop", agent_type: FREMD.agenten.umsetzer, last_assistant_message: `ERGEBNIS: ${ergebnis}
 PR: https://github.com/x/y/pull/7`, ...extra });
   const offen = () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" } });
 
@@ -390,17 +401,17 @@ PR: https://github.com/x/y/pull/7`, ...extra });
 
   test("beide Gründe werden zusammengeführt", () => {
     const r = runHook(payload("gemergt"), "/x", geblockt, { prStatus: offen });
-    assert.match(r.stderr, /Waise kq-1 \| .*Auto-Merge/);
+    assert.match(r.stderr, /Waise w-1 \| .*Auto-Merge/);
   });
 
-  test("festgefahren bei offenem PR: nur mit Label status:festgefahren frei (#1342)", () => {
+  test("festgefahren bei offenem PR: nur mit dem Festgefahren-Label frei (#1342)", () => {
     assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: offen }).exit, 2);
-    assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: () => ({ state: "OPEN", autoMergeRequest: null, labels: [{ name: "status:festgefahren" }] }) }).exit, 0);
+    assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: () => ({ state: "OPEN", autoMergeRequest: null, labels: [{ name: FREMD.labels.festgefahren }] }) }).exit, 0);
   });
 
   test("uebergabe (#1592): ein aktiver, registrierter Worktree ist keine Waise, der Stop bleibt frei; ohne Auto-Merge blockt R5", () => {
     const WT = "/root/.claude/worktrees";
-    const registriert = ["/root", `${WT}/kq-1592`];
+    const registriert = ["/root", `${WT}/${W}1592`];
     const befehle: string[] = [];
     const echteWaisenPruefung = (root: string) =>
       (ohnePowershell<(r: string, d: object) => { blocked: boolean; reason?: string }>(checkRoh))(root, {
@@ -410,7 +421,7 @@ PR: https://github.com/x/y/pull/7`, ...extra });
           return cmd.includes("worktree list") ? registriert.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n") : "";
         },
         existsSync: (p: string) => p.replace(/\\/g, "/") === WT || registriert.includes(p.replace(/\\/g, "/")),
-        readdirSync: () => [{ name: "kq-1592", isDirectory: () => true, isSymbolicLink: () => false }],
+        readdirSync: () => [{ name: `${W}1592`, isDirectory: () => true, isSymbolicLink: () => false }],
         statSync: () => ({ mtimeMs: 50_000_000 - 600_000, birthtimeMs: 1 }),
         lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
         rmSync: () => {
@@ -420,8 +431,8 @@ PR: https://github.com/x/y/pull/7`, ...extra });
       });
     const uebergabe = JSON.stringify({
       hook_event_name: "SubagentStop",
-      agent_type: "kubernia-umsetzer",
-      last_assistant_message: "ERGEBNIS: uebergabe\nPR: https://github.com/x/y/pull/7\nSCHNITT: pr\nUEBERGABE:\n  Worktree: /root/.claude/worktrees/kq-1592",
+      agent_type: FREMD.agenten.umsetzer,
+      last_assistant_message: `ERGEBNIS: uebergabe\nPR: https://github.com/x/y/pull/7\nSCHNITT: pr\nUEBERGABE:\n  Worktree: /root/.claude/worktrees/${W}1592`,
     });
     assert.deepEqual(runHook(uebergabe, "/root", echteWaisenPruefung, { prStatus: offen }), { exit: 0, stdout: "", stderr: "" });
     assert.ok(befehle.some((c) => c.includes("worktree list")), "die Waisenprüfung lief wirklich");
@@ -453,7 +464,7 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
     assert.match(lies(".claude/agents/factory-umsetzer.md"), /SubagentStop-Hook/);
     assert.match(lies(".agents/skills/factory/ablauf.md"), /cleanup-worktrees\.mjs --fix/);
     assert.match(lies(".agents/skills/factory/ablauf.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills/);
-    assert.match(lies(".agents/skills/review-lenses/SKILL.md"), /Agent type 'kubernia-lens' not found/);
+    assert.match(lies(".agents/skills/review-lenses/SKILL.md"), new RegExp(`Agent type '${escapeRegex(projektConfig().agenten.lens)}' not found`));
   });
 });
 
@@ -469,7 +480,7 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
     existsSync: () => true, // der Ordner bleibt nach dem Löschversuch bestehen
     // Wurzel-Listing: ein Waisen-Ordner; Listing des Ordners selbst: `inhalt`
     readdirSync: (p: string) =>
-      String(p).replace(/\\/g, "/") === WT ? [{ name: "kq-1404", isDirectory: () => true, isSymbolicLink: () => false }] : inhalt,
+      String(p).replace(/\\/g, "/") === WT ? [{ name: `${W}1404`, isDirectory: () => true, isSymbolicLink: () => false }] : inhalt,
     rmSync: () => {},
     lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
     platform: "win32",
@@ -480,13 +491,13 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
   test("leerer, gesperrter Ordner: kein Block, nur eine Warnung (der nächste Stop versucht es erneut)", () => {
     const r = check("/root", basisDeps([]));
     assert.equal(r.blocked, false);
-    assert.match(r.warning ?? "", /kq-1404.*leer.*nächste Stop/);
+    assert.match(r.warning ?? "", new RegExp(`${escapeRegex(W)}1404.*leer.*nächste Stop`));
   });
 
   test("nicht leerer, gesperrter Ordner: Block, nennt den möglichen Halter mit PID und rät nie zum Kill per Name", () => {
     const r = check("/root", basisDeps(["datei.txt"]));
     assert.equal(r.blocked, true);
-    assert.match(r.reason ?? "", /kq-1404/);
+    assert.match(r.reason ?? "", new RegExp(`${escapeRegex(W)}1404`));
     assert.match(r.reason ?? "", /PID 4711 python3\.exe/);
     assert.match(r.reason ?? "", /taskkill \/PID <pid> \/T \/F/, "PowerShell-Weg samt Baum (#1501)");
     assert.match(r.reason ?? "", /taskkill \/\/PID <pid> \/\/T \/\/F/, "Git-Bash-Weg");
@@ -495,10 +506,10 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
   });
 
   test("runHook: Warnung gibt den Stop frei (exit 0) und geht als systemMessage raus, nicht als Block", () => {
-    const warn = () => ({ blocked: false, warning: "Worktree-Ordner kq-1 ist leer, aber gerade gesperrt." });
+    const warn = () => ({ blocked: false, warning: "Worktree-Ordner w-1 ist leer, aber gerade gesperrt." });
     const r = (hook as unknown as { runHook: (s: string, root: string, c: typeof warn) => { exit: number; stdout: string; stderr: string } }).runHook("{}", "/root", warn);
     assert.equal(r.exit, 0);
-    assert.deepEqual(JSON.parse(r.stdout), { systemMessage: "Worktree-Ordner kq-1 ist leer, aber gerade gesperrt." });
+    assert.deepEqual(JSON.parse(r.stdout), { systemMessage: "Worktree-Ordner w-1 ist leer, aber gerade gesperrt." });
     assert.equal(r.stderr, "");
     const still = (hook as unknown as { runHook: (s: string, root: string, c: () => object) => { exit: number; stdout: string } }).runHook("{}", "/root", () => ({ blocked: false }));
     assert.deepEqual([still.exit, still.stdout], [0, ""]);
@@ -677,43 +688,43 @@ describe("checkAndFixOrphanWorktrees: Lens-Worktrees ohne Feature-Worktree (#142
   }
 
   test("Schutzgurt: ein Lens-Worktree als Symlink blockiert den Stop mit Namen und Schutzgurt, `git worktree remove` läuft nicht", () => {
-    const g = deps([MAIN, `${WT}/kq-7-lens-r1`], { symlink: true });
+    const g = deps([MAIN, `${WT}/${W}7-lens-r1`], { symlink: true });
     const r = check(MAIN, g.deps);
     assert.equal(r.blocked, true);
     assert.match(r.reason ?? "", /Schutzgurt/);
-    assert.match(r.reason ?? "", /kq-7-lens-r1/);
+    assert.match(r.reason ?? "", new RegExp(`${escapeRegex(W)}7-lens-r1`));
     assert.ok(!g.befehle.some((c) => c.includes("worktree remove")));
   });
 
   test("Lens-Waise und Ordner-Waise im selben Lauf: beide stehen in `removed`", () => {
-    const g = deps([MAIN, `${WT}/kq-7-lens-r1`], { geisterOrdner: ["kq-99"] });
+    const g = deps([MAIN, `${WT}/${W}7-lens-r1`], { geisterOrdner: [`${W}99`] });
     const r = check(MAIN, g.deps);
     assert.equal(r.blocked, false);
-    assert.deepEqual([...(r.removed ?? [])].sort(), ["kq-7-lens-r1", "kq-99"]);
+    assert.deepEqual([...(r.removed ?? [])].sort(), [`${W}7-lens-r1`, `${W}99`]);
   });
 
   test("verwaister, alter Lens-Worktree wird entfernt, der Stop bleibt frei", () => {
-    const g = deps([MAIN, `${WT}/kq-7-lens-r1`]);
+    const g = deps([MAIN, `${WT}/${W}7-lens-r1`]);
     const r = check(MAIN, g.deps);
     assert.equal(r.blocked, false);
-    assert.deepEqual(r.removed, ["kq-7-lens-r1"]);
+    assert.deepEqual(r.removed, [`${W}7-lens-r1`]);
     assert.ok(g.befehle.some((c) => c.includes("worktree remove --force")));
   });
 
   test("bleibt unberührt: Lens-Worktree mit Feature-Worktree, junger Lens-Worktree", () => {
-    const mitEltern = deps([MAIN, `${WT}/kq-7`, `${WT}/kq-7-lens-r1`]);
+    const mitEltern = deps([MAIN, `${WT}/${W}7`, `${WT}/${W}7-lens-r1`]);
     assert.equal(check(MAIN, mitEltern.deps).blocked, false);
     assert.ok(!mitEltern.befehle.some((c) => c.includes("worktree remove")));
-    const jung = deps([MAIN, `${WT}/kq-8-lens-r1`], { alterMs: 60_000 });
+    const jung = deps([MAIN, `${WT}/${W}8-lens-r1`], { alterMs: 60_000 });
     assert.equal(check(MAIN, jung.deps).blocked, false);
     assert.ok(!jung.befehle.some((c) => c.includes("worktree remove")));
   });
 
   test("scheitert das Entfernen, blockiert der Stop mit Namen und Hinweis auf --fix", () => {
-    const g = deps([MAIN, `${WT}/kq-9-lens-r2`], { klemmt: true });
+    const g = deps([MAIN, `${WT}/${W}9-lens-r2`], { klemmt: true });
     const r = check(MAIN, g.deps);
     assert.equal(r.blocked, true);
-    assert.match(r.reason ?? "", /kq-9-lens-r2/);
+    assert.match(r.reason ?? "", new RegExp(`${escapeRegex(W)}9-lens-r2`));
     assert.match(r.reason ?? "", /cleanup-worktrees\.mjs --fix/);
   });
 
@@ -756,11 +767,11 @@ describe("checkAndFixOrphanWorktrees: lose Dateien unter .claude/worktrees (#147
   }
 
   test("Datei eines registrierten Worktrees bleibt unangetastet (nichts gelöscht, keine Meldung)", () => {
-    const g = deps(["kq-5-notiz.bak"]);
+    const g = deps([`${W}5-notiz.bak`]);
     const d = { ...g.deps, execSync: (cmd: string) => (cmd.includes("worktree list") ? `worktree ${MAIN}
 HEAD abc
 
-worktree ${WT}/kq-5
+worktree ${WT}/${W}5
 HEAD abc
 ` : "") };
     const r = check(MAIN, d);
@@ -769,7 +780,7 @@ HEAD abc
   });
 
   test("verwaiste Datei und verwaister Lens-Worktree im selben Lauf: beide in removed", () => {
-    const g = deps(["kq-1361-x.bak"]);
+    const g = deps([`${W}1361-x.bak`]);
     let lensDa = true;
     const d = {
       ...g.deps,
@@ -777,29 +788,29 @@ HEAD abc
         if (cmd.includes("worktree list")) return `worktree ${MAIN}
 HEAD abc
 ` + (lensDa ? `
-worktree ${WT}/kq-7-lens-r1
+worktree ${WT}/${W}7-lens-r1
 HEAD abc
 ` : "");
         if (cmd.includes("worktree remove")) lensDa = false;
         return "";
       },
-      existsSync: (p: string) => p.replace(/\\/g, "/") === WT || (p.replace(/\\/g, "/").endsWith("kq-1361-x.bak") && g.geloescht.length === 0),
+      existsSync: (p: string) => p.replace(/\\/g, "/") === WT || (p.replace(/\\/g, "/").endsWith(`${W}1361-x.bak`) && g.geloescht.length === 0),
       readdirSync: () => [
-        { name: "kq-1361-x.bak", isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
-        ...(lensDa ? [{ name: "kq-7-lens-r1", isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false }] : []),
+        { name: `${W}1361-x.bak`, isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+        ...(lensDa ? [{ name: `${W}7-lens-r1`, isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false }] : []),
       ],
       lstatSync: () => ({ isFile: () => true, isDirectory: () => true, isSymbolicLink: () => false }),
     };
     const r = check(MAIN, d);
     assert.equal(r.blocked, false);
-    assert.deepEqual([...(r.removed ?? [])].sort(), ["kq-1361-x.bak", "kq-7-lens-r1"]);
+    assert.deepEqual([...(r.removed ?? [])].sort(), [`${W}1361-x.bak`, `${W}7-lens-r1`]);
   });
 
   test("verwaiste, alte Datei wird still entfernt: kein Block, keine Warnung", () => {
-    const g = deps(["kq-1361-lens-r2-orig.bak"]);
+    const g = deps([`${W}1361-lens-r2-orig.bak`]);
     const r = check(MAIN, g.deps);
     assert.equal(r.blocked, false);
-    assert.deepEqual(r.removed, ["kq-1361-lens-r2-orig.bak"]);
+    assert.deepEqual(r.removed, [`${W}1361-lens-r2-orig.bak`]);
     assert.equal(r.warning, undefined);
     assert.equal(g.geloescht.length, 1);
   });
@@ -813,10 +824,10 @@ HEAD abc
   });
 
   test("gescheiterte Löschung und Schutzgurt-Ablehnung sind nur Warnungen, nie ein Block", () => {
-    const wirft = check(MAIN, deps(["kq-7-x.bak"], { rmWirft: true }).deps);
+    const wirft = check(MAIN, deps([`${W}7-x.bak`], { rmWirft: true }).deps);
     assert.equal(wirft.blocked, false);
-    assert.match(wirft.warning ?? "", /kq-7-x\.bak.*nicht gelöscht/);
-    const g = deps(["kq-7-x.bak"], { link: true });
+    assert.match(wirft.warning ?? "", new RegExp(`${escapeRegex(W)}7-x\\.bak.*nicht gelöscht`));
+    const g = deps([`${W}7-x.bak`], { link: true });
     const link = check(MAIN, g.deps);
     assert.equal(link.blocked, false);
     assert.match(link.warning ?? "", /Schutzgurt/);
@@ -824,7 +835,7 @@ HEAD abc
   });
 
   test("junge verwaiste Datei bleibt unberührt und ohne Meldung", () => {
-    const g = deps(["kq-8-x.bak"], { alterMs: 60_000 });
+    const g = deps([`${W}8-x.bak`], { alterMs: 60_000 });
     const r = check(MAIN, g.deps);
     assert.deepEqual(r, { blocked: false });
     assert.equal(g.geloescht.length, 0);
@@ -842,6 +853,46 @@ HEAD abc
     assert.equal(r.exit, 0);
     assert.match(r.stdout, /systemMessage/);
     assert.match(r.stdout, /notizen\.txt/);
+  });
+});
+
+// Die Gegenproben laufen bewusst nicht gegen FREMD: beim Tausch der Projekt-Config wären echte Config und FREMD gleich.
+describe("Rückfall auf die echte Config ohne injizierte Namen oder Config", () => {
+  const ECHT = projektConfig();
+  const MAIN = "/root";
+  const WT = "/root/.claude/worktrees";
+  const JETZT = 50_000_000;
+  type Ergebnis = { blocked: boolean; removed?: string[] };
+
+  const lauf = (datei: string) => {
+    const geloescht: string[] = [];
+    const r = (checkRoh as (root: string, d: object) => Ergebnis)(MAIN, {
+      listProcesses: () => [],
+      now: JETZT,
+      execSync: (cmd: string) => (cmd.includes("worktree list") ? `worktree ${MAIN}\nHEAD abc\n` : ""),
+      existsSync: (p: string) => p.replace(/\\/g, "/") === WT || (p.replace(/\\/g, "/").endsWith(`/${datei}`) && !geloescht.includes(p)),
+      readdirSync: () => [{ name: datei, isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false }],
+      statSync: () => ({ mtimeMs: JETZT - 10 * 60_000, birthtimeMs: 1 }),
+      lstatSync: () => ({ isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }),
+      rmSync: (p: string) => void geloescht.push(p),
+      platform: "linux",
+    });
+    return { r, geloescht };
+  };
+
+  test("ohne `namen` räumt die Waisen-Prüfung eine lose Datei mit dem Präfix der echten Config weg, ein abgewandeltes Präfix bleibt", () => {
+    const echt = lauf(`${ECHT.praefixe.worktree}1361-x.bak`);
+    assert.deepEqual(echt.r.removed, [`${ECHT.praefixe.worktree}1361-x.bak`]);
+    assert.equal(echt.geloescht.length, 1);
+    const anders = lauf(`x${ECHT.praefixe.worktree}1361-x.bak`);
+    assert.equal(anders.geloescht.length, 0);
+    assert.notDeepEqual(anders.r.removed, [`x${ECHT.praefixe.worktree}1361-x.bak`]);
+  });
+
+  test("ohne `config` gilt als Umsetzer der Agent der echten Config, ein abgewandelter Name steigt aus", () => {
+    const stop = (typ: string) => JSON.stringify({ hook_event_name: "SubagentStop", agent_type: typ });
+    assert.equal(runHookRoh(stop(ECHT.agenten.umsetzer), "/x", geblockt).exit, 2);
+    assert.equal(runHookRoh(stop(`${ECHT.agenten.umsetzer}-x`), "/x", geblockt).exit, 0);
   });
 });
 

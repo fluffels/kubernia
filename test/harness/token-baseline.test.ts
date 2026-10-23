@@ -23,7 +23,11 @@ import { join } from "node:path";
 import * as baselineModule from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceModule from "../../scripts/slice-override.mjs";
-const { commitZeilen } = sliceModule as unknown as { commitZeilen: (praefix: string, planer: string) => unknown };
+const { commitZeilen } = sliceModule as unknown as { commitZeilen: (praefix: string, planer: string) => { plan: string; review: string } };
+import { FREMD } from "../support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as ticketNamen from "../../scripts/ticket-namen.mjs";
+const { escapeRegex } = ticketNamen as unknown as { escapeRegex: (t: string) => string };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as brainModule from "../../scripts/brain-metrics.mjs";
 
@@ -108,8 +112,9 @@ const mRoh = baselineModule as {
 };
 
 // Umsetzer-Name und Plan-Zeile kommen aus der Projekt-Config; die Wrapper reichen sie durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const UMSETZER = "kubernia-umsetzer";
-const PLAN_ZEILE = (commitZeilen("KQ-", "kubernia-planner") as { plan: string }).plan;
+const { umsetzer: UMSETZER, lens: LENS, planer: PLANER } = FREMD.agenten;
+const Z = commitZeilen(FREMD.praefixe.commitZeile, PLANER);
+const PLAN_ZEILE = Z.plan;
 const m: typeof mRoh = {
   ...mRoh,
   summarize: (run, bounds) => mRoh.summarize(run, bounds, null, { umsetzer: UMSETZER }),
@@ -133,18 +138,18 @@ const call = (ts: string, output: number, extra: Partial<Call> = {}): Call => ({
 
 describe("token-baseline: Phasen-Zuordnung", () => {
   test("Subagent-Typen: Planer, Lens, Kritiker, Explore; Unklares → null (Zeitschnitt)", () => {
-    assert.equal(m.classifySubagent("kubernia-planner", "Planungspass für #1064"), "Planung");
+    assert.equal(m.classifySubagent("x-planner", "Planungspass für #1064"), "Planung");
     assert.equal(m.classifySubagent("general-purpose", "Lens 1: Architektur"), "Review");
     assert.equal(m.classifySubagent("general-purpose", "Frischer Kritiker Runde 2"), "Review");
     assert.equal(m.classifySubagent("Explore", "Review-Kontext sammeln"), "Recherche");
     assert.equal(m.classifySubagent("general-purpose", "Lens 2: Requirement-Treue gegen den Plan"), "Review");
-    // kubernia-lens mit einer Beschreibung ohne Review-Wort: der agentType allein ordnet zu.
-    assert.equal(m.classifySubagent("kubernia-lens", "Architektur-Blick auf #1264"), "Review");
+    // Ein Lens-Typ mit einer Beschreibung ohne Review-Wort: der agentType allein ordnet zu.
+    assert.equal(m.classifySubagent("x-lens", "Architektur-Blick auf #1264"), "Review");
     assert.equal(m.classifySubagent("claude-code-guide", "Liest Claude Code AGENTS.md?"), null);
     // Der Umsetzer (#1280) arbeitet über Umsetzung UND CI/Merge: bewusst keine feste Phase,
     // der Zeitschnitt an PR-/Merge-Zeitpunkt teilt seine Calls genauer auf (#1291).
-    assert.equal(m.classifySubagent("kubernia-umsetzer", "Umsetzung #1291"), null);
-    assert.equal(m.classifySubagent("kubernia-umsetzer", "Umsetzung #1291 nach Plan inkl. Review-Fix"), null, "der Typ zählt, nicht die Beschreibung");
+    assert.equal(m.classifySubagent("x-umsetzer", "Umsetzung #1291"), null);
+    assert.equal(m.classifySubagent("x-umsetzer", "Umsetzung #1291 nach Plan inkl. Review-Fix"), null, "der Typ zählt, nicht die Beschreibung");
     assert.equal(m.classifySubagent(undefined, undefined), null);
   });
 
@@ -225,7 +230,7 @@ describe("token-baseline: Phasen-Zuordnung", () => {
 });
 
 describe("token-baseline: summarize", () => {
-  const plan: Sub = { id: "p", agentType: "kubernia-planner", description: "Planungspass" };
+  const plan: Sub = { id: "p", agentType: PLANER, description: "Planungspass" };
   const lens: Sub = { id: "l1", agentType: "general-purpose", description: "Lens 1: Architektur" };
   const lens2: Sub = { id: "l2", agentType: "general-purpose", description: "Lens 2" };
   const lens3: Sub = { id: "l3", description: "Lens 3" };
@@ -340,7 +345,7 @@ describe("token-baseline: Quelle Transkript", () => {
   });
 
   test("zählt AskUserQuestion-Aufrufe als Rückfragen und hängt den Subagenten an", () => {
-    const sub = { agentType: "kubernia-planner", description: "Plan" };
+    const sub = { agentType: PLANER, description: "Plan" };
     const jsonl = [
       row("msg_1", "2026-09-29T10:00:00Z", 5, [{ type: "tool_use", name: "AskUserQuestion" }]),
       row("msg_2", "2026-09-29T10:00:00Z", 5, [{ type: "tool_use", name: "Agent" }]),
@@ -365,12 +370,12 @@ describe("token-baseline: Quelle Langfuse", () => {
 
   test("Generation erbt den Subagenten vom Span über mehrere Ebenen, Usage-Felder werden gemappt", () => {
     const r = m.callsFromLangfuse([
-      { id: "s", type: "SPAN", name: "Subagent: Planungspass", startTime: "x", metadata: { agent_type: "kubernia-planner" } },
+      { id: "s", type: "SPAN", name: "Subagent: Planungspass", startTime: "x", metadata: { agent_type: PLANER } },
       { id: "t", type: "TOOL", name: "Tool: Bash", startTime: "x", parentObservationId: "s" },
       gen("g", "t", { input: 3, output: 9, cache_read_input_tokens: 70, cache_creation_input_tokens: 8 }),
       { id: "q", type: "TOOL", name: "Tool: AskUserQuestion", startTime: "x" },
     ]);
-    assert.deepEqual(r.calls[0].subagent, { id: "s", agentType: "kubernia-planner", description: "Planungspass" });
+    assert.deepEqual(r.calls[0].subagent, { id: "s", agentType: PLANER, description: "Planungspass" });
     assert.equal(r.calls[0].cacheRead, 70);
     assert.equal(r.calls[0].cacheWrite, 8);
     assert.equal(r.questions, 1);
@@ -383,14 +388,14 @@ describe("token-baseline: Quelle Langfuse", () => {
 
   test("verschachtelt (#1291): Lens unter dem Umsetzer zählt als Review, der Umsetzer selbst per Zeitschnitt", () => {
     const r = m.callsFromLangfuse([
-      { id: "u", type: "SPAN", name: "Subagent: Umsetzung #1291", startTime: "x", metadata: { agent_type: "kubernia-umsetzer" } },
-      { id: "l", type: "SPAN", name: "Subagent: Lens Architektur R1", startTime: "x", parentObservationId: "u", metadata: { agent_type: "kubernia-lens" } },
+      { id: "u", type: "SPAN", name: "Subagent: Umsetzung #1291", startTime: "x", metadata: { agent_type: UMSETZER } },
+      { id: "l", type: "SPAN", name: "Subagent: Lens Architektur R1", startTime: "x", parentObservationId: "u", metadata: { agent_type: LENS } },
       gen("gl", "l", { input: 1 }),
       { ...gen("gu1", "u", { input: 1 }), startTime: "2026-09-29T11:00:00Z" },
       { ...gen("gu2", "u", { input: 1 }), startTime: "2026-09-29T12:30:00Z" },
     ]);
     const nachId = (id: string) => r.calls[["gl", "gu1", "gu2"].indexOf(id)];
-    assert.equal(nachId("gl").subagent?.agentType, "kubernia-lens", "nächster umschließender Subagent, nicht der äußerste");
+    assert.equal(nachId("gl").subagent?.agentType, LENS, "nächster umschließender Subagent, nicht der äußerste");
     const zeilen = m.summarize(r, BOUNDS).rows.map((row) => [row.phase, row.calls]).sort();
     assert.deepEqual(
       zeilen,
@@ -534,7 +539,7 @@ describe("token-baseline: Preise (#1206)", () => {
 });
 
 describe("token-baseline: Sockel, Median-Kontext, Kosten-Teile (#1206)", () => {
-  const plan: Sub = { id: "p", agentType: "kubernia-planner", description: "Planungspass" };
+  const plan: Sub = { id: "p", agentType: PLANER, description: "Planungspass" };
   const lensA: Sub = { id: "la", agentType: "general-purpose", description: "Lens 1" };
   const lensB: Sub = { id: "lb", agentType: "general-purpose", description: "Lens 2" };
   // Kontext je Call = input + cacheWrite + cacheRead
@@ -656,7 +661,7 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
     output: 0,
     ...extra,
   });
-  const plan: Sub = { id: "p", agentType: "kubernia-planner", description: "Planungspass" };
+  const plan: Sub = { id: "p", agentType: PLANER, description: "Planungspass" };
 
   test("Präfix-Falle: künftiges claude-opus-5-6 ist ohne Preis, nicht Opus 5; Datums-Suffix bleibt erlaubt", () => {
     const c = (model: string): Call => ({ ts: "2026-10-05T10:00:00Z", model, input: MIO });
@@ -699,7 +704,7 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
   });
 
   test("Sockel: Planer vor --from (anderes Ticket derselben Session) zählt nicht, der Haupt-Sockel bleibt sessionweit", () => {
-    const other: Sub = { id: "other", agentType: "kubernia-planner", description: "Planungspass für #1" };
+    const other: Sub = { id: "other", agentType: PLANER, description: "Planungspass für #1" };
     const s = m.summarize(
       {
         calls: [
@@ -760,7 +765,7 @@ describe("token-baseline: Kontext-Formel und Preistabelle (#1206)", () => {
       output: 7, // zählt nicht zum Kontext
       ...extra,
     });
-    const plan: Sub = { id: "p", agentType: "kubernia-planner", description: "Planungspass" };
+    const plan: Sub = { id: "p", agentType: PLANER, description: "Planungspass" };
     const s = m.summarize({ calls: [mixed("2026-10-05T10:00:00Z"), mixed("2026-10-05T10:01:00Z", { subagent: plan })] });
     assert.equal(s.sockel.main, 111);
     assert.equal(s.sockel.planung, 111);
@@ -949,7 +954,7 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
 
   /** Session-Ordner in der Form von ~/.claude/projects/<projekt>/<id>.jsonl (+ <id>/subagents/). */
   function mitSession(bauen: (dir: string, id: string) => void, body: (root: string) => void) {
-    const root = mkdtempSync(join(tmpdir(), "kq-tb-"));
+    const root = mkdtempSync(join(tmpdir(), "token-baseline-"));
     try {
       const proj = join(root, "proj");
       mkdirSync(proj);
@@ -969,18 +974,18 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
         writeFileSync(join(sub, "agent-u.jsonl"), zeile("u1", "2026-09-29T11:00:00Z") + "\n");
         writeFileSync(
           join(sub, "agent-u.meta.json"),
-          JSON.stringify({ agentType: "kubernia-umsetzer", description: "Umsetzung #1", spawnDepth: 1 }),
+          JSON.stringify({ agentType: UMSETZER, description: "Umsetzung #1", spawnDepth: 1 }),
         );
         writeFileSync(join(sub, "agent-l.jsonl"), zeile("l1", "2026-09-29T11:30:00Z") + "\n");
         writeFileSync(
           join(sub, "agent-l.meta.json"),
-          JSON.stringify({ agentType: "kubernia-lens", description: "Lens Architektur R1", parentAgentId: "u", spawnDepth: 2 }),
+          JSON.stringify({ agentType: LENS, description: "Lens Architektur R1", parentAgentId: "u", spawnDepth: 2 }),
         );
       },
       (root) => {
         const r = m.readTranscriptSession("sess-1", root);
         assert.equal(r.calls.length, 3);
-        const lens = r.calls.find((c) => c.subagent?.agentType === "kubernia-lens");
+        const lens = r.calls.find((c) => c.subagent?.agentType === LENS);
         assert.equal(lens?.subagent?.parentAgentId, "u");
         const phasen = Object.fromEntries(m.summarize(r, BOUNDS).rows.map((row) => [row.phase, row.calls]));
         assert.equal(phasen["Review"], 1, "die Lens zählt als Review, obwohl sie unter dem Umsetzer läuft");
@@ -998,7 +1003,7 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
         const sub = join(proj, id, "subagents");
         mkdirSync(sub, { recursive: true });
         writeFileSync(join(sub, "agent-x.jsonl"), mit("dup", "2026-09-29T09:00:00Z", 9) + "\n");
-        writeFileSync(join(sub, "agent-x.meta.json"), JSON.stringify({ agentType: "kubernia-lens" }));
+        writeFileSync(join(sub, "agent-x.meta.json"), JSON.stringify({ agentType: LENS }));
       },
       (root) => {
         const r = m.readTranscriptSession("sess-1", root);
@@ -1033,7 +1038,7 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
             zeile("u2", "2026-09-29T11:20:00Z"),
           ].join("\n") + "\n",
         );
-        writeFileSync(join(sub, "agent-u.meta.json"), JSON.stringify({ agentType: "kubernia-umsetzer", description: "Umsetzung #1" }));
+        writeFileSync(join(sub, "agent-u.meta.json"), JSON.stringify({ agentType: UMSETZER, description: "Umsetzung #1" }));
       },
       (root) => {
         const r = m.readTranscriptSession("sess-1", root) as Run & { events?: PEv[] };
@@ -1098,20 +1103,19 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
 
 describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
   const SHA = "a".repeat(40);
-  const Z = commitZeilen("KQ-", "kubernia-planner");
-  const nachweisCommit = (plan = "KQ-Plan: kubernia-planner", runden = 2) => ({
+  const nachweisCommit = (plan = `${Z.plan}: ${PLANER}`, runden = 2) => ({
     messageHeadline: "chore: Nachweis",
-    messageBody: `${plan}\nKQ-Review: head=${SHA} runden=${runden} lenses=architektur,requirement-treue,test-adaequanz verdikt=ok`,
+    messageBody: `${plan}\n${Z.review}: head=${SHA} runden=${runden} lenses=architektur,requirement-treue,test-adaequanz verdikt=ok`,
   });
 
-  test("nachweisAusCommits: Runden und Planer aus den Commit-Zeilen; ohne KQ-Review null", () => {
+  test("nachweisAusCommits: Runden und Planer aus den Commit-Zeilen; ohne Review-Zeile null", () => {
     assert.deepEqual(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "" }, nachweisCommit()], Z), { runden: 2, plan: true });
-    assert.deepEqual(m.nachweisAusCommits([nachweisCommit("KQ-Plan: ohne — Planer lieferte keinen Plan", 3)], Z), { runden: 3, plan: false });
+    assert.deepEqual(m.nachweisAusCommits([nachweisCommit(`${Z.plan}: ohne — Planer lieferte keinen Plan`, 3)], Z), { runden: 3, plan: false });
     assert.equal(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "kein Nachweis" }], Z), null);
     assert.equal(m.nachweisAusCommits(undefined, Z), null, "kaputte Eingabe wirft nicht");
-    assert.equal(m.nachweisAusCommits([{ messageHeadline: "x", messageBody: "KQ-Review: head=kaputt runden=viele" }], Z), null, "kaputte Rundenzahl ist kein Nachweis");
-    // Präfix aus der Config (#1741): mit AB- zählen die KQ-Zeilen nicht, ohne Zeilen wirft die Funktion
-    assert.equal(m.nachweisAusCommits([nachweisCommit()], commitZeilen("AB-", "kubernia-planner")), null);
+    assert.equal(m.nachweisAusCommits([{ messageHeadline: "x", messageBody: `${Z.review}: head=kaputt runden=viele` }], Z), null, "kaputte Rundenzahl ist kein Nachweis");
+    // Präfix aus der Config (#1741): mit AB- zählen die Zeilen des Config-Präfixes nicht, ohne Zeilen wirft die Funktion
+    assert.equal(m.nachweisAusCommits([nachweisCommit()], commitZeilen("AB-", PLANER)), null);
     assert.throws(() => m.nachweisAusCommits([nachweisCommit()], undefined), /Commit-Zeilen/);
   });
 
@@ -1152,8 +1156,8 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
     assert.match(m.renderMarkdown(s), /Review-Runden: 0 \(Heuristik\)/);
     const md = m.renderMarkdown(s, { failedPushes: 0, mergedAt: "x", nachweis: { runden: 2, plan: true } });
     assert.match(md, /Review-Runden: 2 \(Nachweis\)/);
-    assert.match(md, /Planer: ja \(KQ-Plan\)/);
-    assert.match(m.renderMarkdown(s, { nachweis: { runden: 1, plan: false } }), /Planer: nein \(KQ-Plan\)/);
+    assert.match(md, new RegExp(`Planer: ja \\(${escapeRegex(PLAN_ZEILE)}\\)`));
+    assert.match(m.renderMarkdown(s, { nachweis: { runden: 1, plan: false } }), new RegExp(`Planer: nein \\(${escapeRegex(PLAN_ZEILE)}\\)`));
     assert.doesNotMatch(m.renderMarkdown(s, { nachweis: { runden: 1, plan: null } }), /Planer:/);
   });
 
@@ -1180,7 +1184,7 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
   });
 
   const lauf = (ts: string, extra: Partial<Call> = {}): Call => ({ ts, model: "claude-sonnet-5-5", input: 10, cacheWrite: 0, cacheRead: 1000, output: 1, ...extra });
-  const umsetzer = { id: "u1", agentType: "kubernia-umsetzer" };
+  const umsetzer = { id: "u1", agentType: UMSETZER };
 
   test("countCacheRebuilds: ohne Pause kein Neuaufbau; Pause + Neuaufbau zählt; Pause + warmer Cache zählt nicht", () => {
     const ohnePause = [lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }), lauf("2026-10-05T10:02:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 })];
@@ -1202,7 +1206,7 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
     const gemischt = [
       lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 }),
       lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }),
-      lauf("2026-10-05T10:04:30Z", { subagent: { id: "u2", agentType: "kubernia-lens" } }),
+      lauf("2026-10-05T10:04:30Z", { subagent: { id: "u2", agentType: LENS } }),
     ];
     assert.equal(m.countCacheRebuilds(gemischt).count, 1, "ein anderer Subagent dazwischen verdeckt die Pause nicht (zusammengelegt wären beide Lücken unter 5 min)");
   });
@@ -1214,7 +1218,7 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
 });
 
 describe("token-baseline: Grenzwerte von countCacheRebuilds (#1311)", () => {
-  const umsetzer = { id: "u1", agentType: "kubernia-umsetzer" };
+  const umsetzer = { id: "u1", agentType: UMSETZER };
   const warm = (ts: string): Call => ({ ts, model: "claude-sonnet-5-5", input: 0, cacheWrite: 0, cacheRead: 1000, output: 1, subagent: umsetzer });
   const spaeter = (ts: string, cacheRead: number, cacheWrite: number): Call => ({ ts, model: "claude-sonnet-5-5", input: 0, cacheWrite, cacheRead, output: 1, subagent: umsetzer });
 
@@ -1245,7 +1249,7 @@ describe("token-baseline: Grenzwerte von countCacheRebuilds (#1311)", () => {
 });
 
 describe("token-baseline: Phase Pflege (#1099)", () => {
-  const umsetzer: Sub = { id: "u", agentType: "kubernia-umsetzer", description: "Umsetzung #12" };
+  const umsetzer: Sub = { id: "u", agentType: UMSETZER, description: "Umsetzung #12" };
   const wf: Sub = { id: "w", description: "umsetzen:#12" };
   const marker = (ts: string, art: "start" | "ende", agent: string | null = "u"): PEv => ({
     ts,
@@ -1269,7 +1273,7 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
   });
 
   test("Hauptagent im selben Zeitraum bleibt Umsetzung (Agenten-Grenze)", () => {
-    const w = m.windowCalls([call("2026-09-29T11:05:00Z", 1), call("2026-09-29T11:06:00Z", 1, { subagent: { id: "anderer", agentType: "kubernia-umsetzer" } })], BOUNDS, IV);
+    const w = m.windowCalls([call("2026-09-29T11:05:00Z", 1), call("2026-09-29T11:06:00Z", 1, { subagent: { id: "anderer", agentType: UMSETZER } })], BOUNDS, IV);
     assert.deepEqual(w.map((x) => x.phase), ["Umsetzung", "Umsetzung"]);
   });
 
@@ -1291,7 +1295,7 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
     const calls = [
       call("2026-09-29T10:30:00Z", 1, { subagent: umsetzer }),
       call("2026-09-29T11:05:00Z", 2, { subagent: umsetzer }),
-      call("2026-09-29T11:30:00Z", 3, { model: "claude-opus-5-5", subagent: { id: "l", agentType: "kubernia-lens", description: "Lens Architektur R1" } }),
+      call("2026-09-29T11:30:00Z", 3, { model: "claude-opus-5-5", subagent: { id: "l", agentType: LENS, description: "Lens Architektur R1" } }),
     ];
     const events = [marker("2026-09-29T11:00:00Z", "start"), marker("2026-09-29T11:10:00Z", "ende")];
     const s = m.summarize({ calls, events }, BOUNDS);
@@ -1362,7 +1366,7 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
 
   test("Langfuse-Parität: Marker-TOOL unter dem Subagent-Span ergibt dieselbe Zuordnung", () => {
     const obs: Obs[] = [
-      { id: "u", type: "SPAN", name: "Subagent: Umsetzung #12", startTime: "2026-09-29T10:00:00Z", metadata: { agent_type: "kubernia-umsetzer" } },
+      { id: "u", type: "SPAN", name: "Subagent: Umsetzung #12", startTime: "2026-09-29T10:00:00Z", metadata: { agent_type: UMSETZER } },
       { id: "t1", type: "TOOL", name: "Tool: Bash", startTime: "2026-09-29T11:00:00Z", parentObservationId: "u", input: { command: 'echo "pflege: start #12"' }, metadata: { tool_name: "Bash" } } as Obs,
       { id: "g", type: "GENERATION", name: "LLM Call", startTime: "2026-09-29T11:05:00Z", parentObservationId: "u", providedModelName: "claude-sonnet-5-5", usageDetails: { output: 4 } },
       { id: "t2", type: "TOOL", name: "Tool: Bash", startTime: "2026-09-29T11:10:00Z", parentObservationId: "u", input: { command: 'echo "pflege: ende #12"' }, metadata: { tool_name: "Bash" } } as Obs,
@@ -1379,7 +1383,7 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
 
 describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)", () => {
   type Sum = Summary & { nachlauf: { calls: number; cost: number }; fehler?: Record<string, number>; lesen?: { reads: number; voll: { n: number } }; pflegeFehlt?: boolean };
-  const umsetzer: Sub = { id: "u", agentType: "kubernia-umsetzer", description: "Umsetzung #12" };
+  const umsetzer: Sub = { id: "u", agentType: UMSETZER, description: "Umsetzung #12" };
   const sum = (c: Call[], events?: unknown[]) => m.summarize({ calls: c, events: events as PEv[] }, BOUNDS) as unknown as Sum;
   const calls = [
     call("2026-09-29T11:00:00Z", 50, { cost: 1.5 }),

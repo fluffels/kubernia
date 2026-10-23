@@ -104,7 +104,7 @@ updates:
     labels:
       - "dependencies"
 
-  # Docker-Basis-Images (Dockerfile, Dockerfile.devpanel): halten die Digest-Pins aktuell, sobald #983 die Images pinnt.
+  # Docker-Basis-Images (Dockerfile, Dockerfile.devpanel): hebt die patch-genauen Node-Tags (Minor/Patch), ab #983 auch die Digests.
   # Das devcontainer-Image (.devcontainer/devcontainer.json) kennt Dependabot hier nicht und bleibt außen vor;
   # es zieht beim Node-Major von Hand nach (Wächter test/harness/devcontainer.test.ts).
   - package-ecosystem: "docker"

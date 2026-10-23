@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import * as fremdtextRoh from "../scripts/fremdtext.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as fremdtextLib from "../scripts/fremdtext-lib.mjs";
+import { FREMD_OWNER } from "./support/fremd-config";
 
 interface User {
   login: string;
@@ -64,8 +65,8 @@ const CFG = { labels: { forum: "forum" } };
 const { VERTRAUTE_BOTS, fremdeingangLabels, istVertraut, istFremdeingang, trenneFremdtext, formatiere, parseArgs, flach, issueKommentare } = fremdtext;
 const pruefe = (argv: string[], gh: (args: string[]) => string, config: unknown = CFG) => fremdtext.pruefe(argv, gh, config);
 
-const OWNER = "fluffels";
-const eigen: User = { login: "fluffels", type: "User" };
+const OWNER = FREMD_OWNER;
+const eigen: User = { login: FREMD_OWNER, type: "User" };
 const fremd: User = { login: "angreifer", type: "User" };
 const eintrag = (u: User | null, body: string | null = "Text", labels: string[] = []): Eintrag => ({
   number: 7,
@@ -87,7 +88,7 @@ const trenne = (e: Eintrag, b: Beitrag[] = []): Ergebnis =>
 describe("istVertraut", () => {
   test("Owner ist vertraut, auch in anderer Schreibweise", () => {
     assert.equal(istVertraut(eigen, OWNER), true);
-    assert.equal(istVertraut({ login: "Fluffels", type: "User" }, OWNER), true);
+    assert.equal(istVertraut({ login: FREMD_OWNER.toUpperCase(), type: "User" }, OWNER), true);
   });
   test("fremder Autor ist fremd", () => {
     assert.equal(istVertraut(fremd, OWNER), false);
@@ -363,33 +364,33 @@ describe("pruefe (CLI-Ablauf mit Fake-gh)", () => {
     assert.equal(r.code, 0);
     assert.ok(r.out.includes("[Fremdtext ausgeblendet: Kommentar von @angreifer, uk]"));
     assert.ok(r.out.includes("[Fremdtext ausgeblendet: Review von @angreifer, ur]"));
-    assert.ok(r.out.includes("RK-sichtbar") && r.out.includes("Review-Kommentar von @fluffels"));
+    assert.ok(r.out.includes("RK-sichtbar") && r.out.includes(`Review-Kommentar von @${FREMD_OWNER}`));
   });
 });
 
 describe("istFremdeingang (eine Entscheidung für alle Skripte)", () => {
-  const eigen = { login: "fluffels", type: "User" };
+  const eigen = { login: FREMD_OWNER, type: "User" };
   test("vertrauter Autor ohne Label: kein Fremdeingang", () => {
-    assert.deepEqual(istFremdeingang({ user: eigen, labels: [] }, "fluffels", { config: CFG }), { fremdeingang: false, grund: "", label: undefined });
+    assert.deepEqual(istFremdeingang({ user: eigen, labels: [] }, FREMD_OWNER, { config: CFG }), { fremdeingang: false, grund: "", label: undefined });
   });
   test("fremder Autor: Fremdeingang mit Autor im Grund", () => {
-    const r = istFremdeingang({ user: { login: "fremd", type: "User" }, labels: [] }, "fluffels", { config: CFG });
+    const r = istFremdeingang({ user: { login: "fremd", type: "User" }, labels: [] }, FREMD_OWNER, { config: CFG });
     assert.equal(r.fremdeingang, true);
     assert.match(r.grund, /@fremd/);
   });
   test("fehlender Autor (null/ghost) ist fremd", () => {
-    assert.equal(istFremdeingang({ user: null, labels: [] }, "fluffels", { config: CFG }).fremdeingang, true);
-    assert.equal(istFremdeingang({ labels: [] }, "fluffels", { config: CFG }).fremdeingang, true);
+    assert.equal(istFremdeingang({ user: null, labels: [] }, FREMD_OWNER, { config: CFG }).fremdeingang, true);
+    assert.equal(istFremdeingang({ labels: [] }, FREMD_OWNER, { config: CFG }).fremdeingang, true);
   });
   test("Label forum (Objekt oder String) macht vertrauten Autor zum Fremdeingang", () => {
     for (const labels of [[{ name: "forum" }], ["forum"]]) {
-      const r = istFremdeingang({ user: eigen, labels }, "fluffels", { config: CFG });
+      const r = istFremdeingang({ user: eigen, labels }, FREMD_OWNER, { config: CFG });
       assert.equal(r.fremdeingang, true);
       assert.equal(r.label, "forum");
     }
   });
   test("fehlende labels und fremdes Label: kein Fremdeingang", () => {
-    assert.equal(istFremdeingang({ user: eigen }, "fluffels", { config: CFG }).fremdeingang, false);
-    assert.equal(istFremdeingang({ user: eigen, labels: ["bug", { name: "x" }, null] }, "fluffels", { config: CFG }).fremdeingang, false);
+    assert.equal(istFremdeingang({ user: eigen }, FREMD_OWNER, { config: CFG }).fremdeingang, false);
+    assert.equal(istFremdeingang({ user: eigen, labels: ["bug", { name: "x" }, null] }, FREMD_OWNER, { config: CFG }).fremdeingang, false);
   });
 });

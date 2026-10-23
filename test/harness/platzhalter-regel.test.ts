@@ -52,7 +52,7 @@ afterEach(() => {
   for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 const tempWurzel = (): string => {
-  const w = mkdtempSync(join(tmpdir(), "kq-pl-"));
+  const w = mkdtempSync(join(tmpdir(), "platzhalter-"));
   temps.push(w);
   return w;
 };

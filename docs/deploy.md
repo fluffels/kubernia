@@ -20,8 +20,8 @@ docker build -t kubernia .
 ```
 
 Der Multi-Stage-Build (Dockerfile im Repo-Root) tut:
-1. **Build-Stage** (`node:22-bookworm-slim`): `npm ci` + `npm run build` → `dist/`
-2. **Serve-Stage** (`nginx:1.27-alpine`): serviert `dist/` über Port 80 mit SPA-Fallback
+1. **Build-Stage** (Node-22-Image, Tag im Dockerfile): `npm ci` + `npm run build` → `dist/`
+2. **Serve-Stage** (nginx-alpine): serviert `dist/` über Port 80 mit SPA-Fallback
 
 Das fertige Image enthält keinen Node-Laufzeit-Layer, nur nginx + statische Assets.
 

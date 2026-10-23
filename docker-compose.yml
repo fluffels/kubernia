@@ -13,9 +13,9 @@
 
 services:
   dev:
-    # An .nvmrc gepinnt (Node 22). `slim` reicht: der Dev-Server braucht nur Node,
+    # Patch-genau gepinnt, mindestens engines.node (Wächter: test/harness/devcontainer.test.ts). `slim` reicht: der Dev-Server braucht nur Node,
     # nicht git/gh (die stecken im VS-Code-devcontainer, siehe .devcontainer/).
-    image: node:22-bookworm-slim
+    image: node:22.23.4-bookworm-slim
     working_dir: /app
     # Bei jedem Start idempotent installieren (füllt das node_modules-Volume beim
     # ersten Lauf) und dann den Dev-Server starten. `--host 0.0.0.0` ist nötig,

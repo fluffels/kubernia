@@ -11,6 +11,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lies, repoDateien } from "./repo-texte";
+import { FREMD, projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -69,6 +70,8 @@ const AB: Cfg = {
   agenten: { planer: "ab-planer", umsetzer: "ab-umsetzer", lens: "ab-lens", gruppe: "ab-gruppe", ticketSkill: "ab" },
   labels: { harness: "h", festgefahren: "zustand:fest", forum: "f", dependabotInbox: "h" },
 };
+// Negativfälle „der Wert des echten Projekts gilt nicht“ nehmen ihn aus der echten Config (mit FREMD wäre er leer, ein Rückfall bliebe grün).
+const ECHT = projektConfig();
 const ohneAgent = (rolle: string): Cfg => ({ ...AB, agenten: { ...(AB.agenten as object), [rolle]: undefined } });
 const OHNE_UMSETZER = ohneAgent("umsetzer");
 const OHNE_WORKTREE: Cfg = { ...AB, praefixe: { commitZeile: "AB-", branch: "feature/ab-" } };
@@ -78,9 +81,9 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
   const n = N.ticketNamen(AB);
   test("Worktree und Branch mit dem Präfix der Config gelten, die des echten Projekts nicht", () => {
     expect(n.ticketAus(".claude/worktrees/ab-12")).toBe(12);
-    expect(n.ticketAus(".claude/worktrees/kq-12")).toBeNull();
+    expect(n.ticketAus(`.claude/worktrees/${ECHT.praefixe.worktree}12`)).toBeNull();
     expect(n.ticketAus("feature/ab-12-slug")).toBe(12);
-    expect(n.ticketAus("feature/kq-12-slug")).toBeNull();
+    expect(n.ticketAus(`${ECHT.praefixe.branch}12-slug`)).toBeNull();
     expect(n.ticketAus("C:\\x\\.claude\\worktrees\\ab-7\\src")).toBe(7);
   });
   test("Ticketnummer endet an Trenner, nicht mitten in einer längeren Zahl", () => {
@@ -99,7 +102,7 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     const re = new RegExp(`^${n.lensNameKern}$`);
     expect(re.exec("ab-12-lens-r1")?.[1]).toBe("ab-12");
     expect(re.exec("ab-12-lens-m2")?.[1]).toBe("ab-12");
-    expect(re.test("kq-12-lens-r1")).toBe(false);
+    expect(re.test(`${ECHT.praefixe.worktree}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x1")).toBe(false);
   });
   test("dateiMuster und ticketBranchMuster sind am Namensanfang verankert: ein vorangestelltes Präfix passt nicht", () => {
@@ -138,7 +141,7 @@ describe("ticketNamen: fehlender Schlüssel (AK3)", () => {
     expect(() => N.ticketNamen(undefined as unknown as Cfg)).toThrow(/Fix:/);
   });
   test("ladeTicketNamen: Datei ohne Schlüssel wirft mit Fix", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-namen-"));
+    const dir = mkdtempSync(join(tmpdir(), "ticket-namen-"));
     try {
       const pfad = join(dir, "projekt.json");
       writeFileSync(pfad, JSON.stringify({ version: 2 }));
@@ -174,7 +177,7 @@ describe("lens-edit-guard mit Config", () => {
   test("Edit im Lens-Worktree mit dem Präfix der Config ist erlaubt, mit fremdem Präfix abgelehnt", () => {
     expect(lensEdit.bewerteLensEdit("/r/.claude/worktrees/ab-12-lens-r1/src/a.ts", "", { config: AB }).block).toBe(false);
     expect(lensEdit.bewerteLensEdit("/r/.claude/worktrees/ab-12-lens-m2/src/a.ts", "", { config: AB }).block).toBe(false);
-    const fremd = lensEdit.bewerteLensEdit("/r/.claude/worktrees/kq-12-lens-r1/src/a.ts", "", { config: AB });
+    const fremd = lensEdit.bewerteLensEdit(`/r/.claude/worktrees/${FREMD.praefixe.worktree}12-lens-r1/src/a.ts`, "", { config: AB });
     expect(fremd.block).toBe(true);
     expect(fremd.reason).toMatch(/ab-lens .*ab-<nr>-lens-r<runde>/);
   });
@@ -192,7 +195,7 @@ describe("lens-auftrag-guard mit Config", () => {
   const kopf = "Arbeitsverzeichnis: <worktree>\nPatch: /t/ab-1-r1.patch\nerwarteter HEAD: abcdef1";
   test("der Lens-Agent der Config wird geprüft, der echte Name nicht", () => {
     expect(lensAuftrag.lensAuftragBlockade({ subagentType: "ab-lens", prompt: kopf }, { config: AB })).toMatch(/Arbeitsverzeichnis/);
-    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "kubernia-lens", prompt: kopf }, { config: AB })).toBeNull();
+    expect(lensAuftrag.lensAuftragBlockade({ subagentType: ECHT.agenten.lens, prompt: kopf }, { config: AB })).toBeNull();
   });
   test("Fallback general-purpose mit der Lens-Definition der Config im Prompt", () => {
     // kein Übergangs-Zweig mehr: `<lens>.md` aus der Config macht den Fallback nicht zum Lens-Spawn
@@ -221,7 +224,7 @@ describe("umsetzer-abschluss mit Config", () => {
   test("nur der Umsetzer der Config wird geprüft; das Label kommt aus der Config", () => {
     const r = abschluss.abschlussBlockade(eingabe("ab-umsetzer"), { config: AB, prStatus: offen });
     expect(r).toMatch(/zustand:fest/);
-    expect(abschluss.abschlussBlockade(eingabe("kubernia-umsetzer"), { config: AB, prStatus: offen })).toBeNull();
+    expect(abschluss.abschlussBlockade(eingabe(ECHT.agenten.umsetzer), { config: AB, prStatus: offen })).toBeNull();
   });
   test("das Label der Config am PR genügt", () => {
     const mit = () => ({ state: "OPEN", autoMergeRequest: null, labels: [{ name: "zustand:fest" }] });
@@ -253,7 +256,7 @@ describe("stop-verify-hook ersetzt den Matcher durch den Vergleich mit agenten.u
     expect(lauf({ hook_event_name: "SubagentStop", agent_type: "ab-umsetzer" }, AB).geprueft).toBe(1);
   });
   test("SubagentStop eines anderen Agenten (auch des echten Umsetzer-Namens) steigt aus, ohne Prüfung", () => {
-    for (const typ of ["Explore", "kubernia-umsetzer", undefined]) {
+    for (const typ of ["Explore", ECHT.agenten.umsetzer, undefined]) {
       const { r, geprueft } = lauf({ hook_event_name: "SubagentStop", agent_type: typ }, AB);
       expect(r.exit).toBe(0);
       expect(geprueft).toBe(0);
@@ -290,7 +293,7 @@ describe("worktree-guard-hook: Beispiel aus der Config, Block bleibt", () => {
     const r = commit(AB);
     expect(r.block).toBe(true);
     expect(r.reason).toContain("git worktree add .claude/worktrees/ab-<nr> -b feature/ab-<nr>-<slug> origin/main");
-    expect(r.reason).not.toContain("kq-");
+    expect(r.reason).not.toContain(ECHT.praefixe.worktree);
   });
   test("ohne Schlüssel bleibt es ein Block, die Meldung trägt die Fix-Zeile", () => {
     for (const cfg of [OHNE_WORKTREE, OHNE_BRANCH]) {
@@ -305,13 +308,13 @@ describe("patch-zugriff mit Namen aus der Config", () => {
   const n = N.ticketNamen(AB);
   test("ohne Label gilt der Pfad mit dem Präfix der Config, der mit fremdem Präfix nicht", () => {
     expect(patch.patchPfade("Patch bereit:\n /t/ab-12-r3.patch", n).voll).toBe("ab-12-r3.patch");
-    expect(patch.patchPfade("Patch bereit:\n /t/kq-12-r3.patch", n).voll).toBeNull();
+    expect(patch.patchPfade(`Patch bereit:\n /t/${FREMD.praefixe.worktree}12-r3.patch`, n).voll).toBeNull();
     expect(patch.patchPfade("Patch bereit:\n /t/x/ab-12-r3-delta.patch", n).delta).toBe("ab-12-r3-delta.patch");
-    expect(patch.patchPfade("x /t/kq-12-r3-delta.patch", n).delta).toBeNull();
+    expect(patch.patchPfade(`x /t/${FREMD.praefixe.worktree}12-r3-delta.patch`, n).delta).toBeNull();
   });
   test("patchAus liest Ticket und Runde mit dem Präfix der Config", () => {
     expect(patch.patchAus("Patch: /t/ab-12-r3.patch", [], n)).toMatchObject({ ticket: 12, runde: 3 });
-    expect(patch.patchAus("Patch: /t/kq-12-r3.patch", [], n)).toMatchObject({ ticket: null, runde: null });
+    expect(patch.patchAus(`Patch: /t/${FREMD.praefixe.worktree}12-r3.patch`, [], n)).toMatchObject({ ticket: null, runde: null });
   });
   test("Groß-/Kleinschreibung zählt nicht (Flag i)", () => {
     expect(patch.patchPfade("Patch bereit:\n /t/AB-12-r3.patch", n).voll).toBe("ab-12-r3.patch");
@@ -321,7 +324,7 @@ describe("patch-zugriff mit Namen aus der Config", () => {
     expect(patch.patchAus("Patch: /t/AB-12-r3.patch", [], g)).toMatchObject({ ticket: 12, runde: 3 });
   });
   test("ohne übergebene Namen gilt die echte Config", () => {
-    expect(patch.patchAus("Patch: /t/kq-12-r3.patch", [])).toMatchObject({ ticket: 12, runde: 3 });
+    expect(patch.patchAus(`Patch: /t/${ECHT.praefixe.worktree}12-r3.patch`, [])).toMatchObject({ ticket: 12, runde: 3 });
   });
 });
 

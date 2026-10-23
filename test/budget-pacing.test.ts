@@ -209,7 +209,7 @@ describe("liesSnapshot und CLI", () => {
     dir = "";
   });
   const neu = () => {
-    dir = mkdtempSync(join(tmpdir(), "kq-budget-"));
+    dir = mkdtempSync(join(tmpdir(), "budget-pacing-"));
     alle.push(dir);
     return dir;
   };

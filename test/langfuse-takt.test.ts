@@ -5,6 +5,7 @@
  * (gleiche Technik wie test/board.test.ts). */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
+import { FREMD_OWNER } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/langfuse-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -52,7 +53,7 @@ describe("entscheideTakt", () => {
   });
 
   test("nichts: ein geclaimtes offenes Ticket läuft schon", () => {
-    expect(T.entscheideTakt({ offene: [offen(1304, { assignees: ["fluffels"] })], mergesSeit: 99 }).aktion).toBe("nichts");
+    expect(T.entscheideTakt({ offene: [offen(1304, { assignees: [FREMD_OWNER] })], mergesSeit: 99 }).aktion).toBe("nichts");
   });
 
   test("zwei offene, keins geclaimt: das älteste nach oben, Warnung 'Mehrere'", () => {
@@ -66,7 +67,7 @@ describe("entscheideTakt", () => {
 
   test("zwei offene, das jüngere geclaimt: nichts, Warnung", () => {
     const e = T.entscheideTakt({
-      offene: [offen(1304, { createdAt: "2026-10-01T05:00:00Z" }), offen(1400, { createdAt: "2026-10-05T05:00:00Z", assignees: ["fluffels"] })],
+      offene: [offen(1304, { createdAt: "2026-10-01T05:00:00Z" }), offen(1400, { createdAt: "2026-10-05T05:00:00Z", assignees: [FREMD_OWNER] })],
       mergesSeit: 0,
     });
     expect(e.aktion).toBe("nichts");
@@ -132,7 +133,7 @@ describe("statusBody", () => {
     const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y" });
     expect(x).toContain("https://github.com/x/y/blob/main/docs/model-routing.md#");
     expect(x).toContain("https://github.com/x/y/blob/main/docs/ticket-reihenfolge.md#");
-    expect(x).not.toContain("fluffels/kubernia");
+    expect(x).not.toContain(String(ladeProjektConfig().repo));
   });
   test("Factory-Kennzahlen-Aufruf mit dem Abschlusszeitpunkt des Vorgängers, sonst Platzhalter (#1616)", () => {
     expect(body).toContain("node scripts/factory-kennzahlen.mjs --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");
@@ -181,7 +182,7 @@ describe("Push-Auslöser nach Aktivität (#1349 Z14)", () => {
   });
 
   test("Push mit geclaimtem Status-Ticket: nichts", () => {
-    expect(push(60, [offen(1304, { assignees: ["fluffels"] })]).aktion).toBe("nichts");
+    expect(push(60, [offen(1304, { assignees: [FREMD_OWNER] })]).aktion).toBe("nichts");
   });
 
   test("Push ruht Fr, Sa, So (UTC): auch mit 60 Merges nichts, Grund nennt die Ruhe; Grenzfälle Fr 00:00 und So 23:59", () => {

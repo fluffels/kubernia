@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { FREMD } from "./support/fremd-config";
 
 // Reines Tooling-Skript ohne Declaration-File (scripts/ nicht im tsconfig).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -30,7 +31,7 @@ const isStuck: (n: number) => boolean = festgefahren.isStuck;
 const buildStuckComment: (count: number, url: string, label: string) => string = festgefahren.buildStuckComment;
 const MAX_FAILED_PUSHES: number = festgefahren.MAX_FAILED_PUSHES;
 const stuckLabel: (config?: unknown) => string = festgefahren.stuckLabel;
-const STUCK_LABEL = "status:festgefahren";
+const STUCK_LABEL = FREMD.labels.festgefahren;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -42,7 +43,8 @@ describe("Festgefahren-Wächter (#904)", () => {
   });
 
   test("stuckLabel() liefert labels.festgefahren der Projekt-Config", () => {
-    assert.strictEqual(stuckLabel(ladeProjektConfig()), STUCK_LABEL);
+    assert.strictEqual(stuckLabel(ladeProjektConfig()), (ladeProjektConfig() as { labels: { festgefahren: string } }).labels.festgefahren);
+    assert.strictEqual(stuckLabel(FREMD), FREMD.labels.festgefahren);
   });
 
   // ── isStuck: Schwellen-Check ─────────────────────────────────────────────
@@ -66,10 +68,10 @@ describe("Festgefahren-Wächter (#904)", () => {
   // ── buildStuckComment: Kommentartext-Wächter ─────────────────────────────
 
   test("buildStuckComment enthält den Auslöser-Link", () => {
-    const comment = buildStuckComment(4, "https://github.com/fluffels/kubernia/actions/runs/42", STUCK_LABEL);
+    const comment = buildStuckComment(4, `https://github.com/${FREMD.repo}/actions/runs/42`, STUCK_LABEL);
     const links = (comment.match(/https:\/\/[^\s)>"]+/g) ?? []).map((u) => new URL(u));
     assert.ok(
-      links.some((u) => u.host === "github.com" && u.pathname === "/fluffels/kubernia/actions/runs/42"),
+      links.some((u) => u.host === "github.com" && u.pathname === `/${FREMD.repo}/actions/runs/42`),
       "Kommentar muss den RUN_URL enthalten.",
     );
   });

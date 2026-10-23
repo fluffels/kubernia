@@ -56,7 +56,7 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
 
   test("deny sperrt PixelLab list_projects: der Server bewirbt darüber Git-Clone-URLs und einen Push-Weg (#1476)", () => {
     assert.ok(deny.includes("mcp__pixellab__list_projects"), "deny ohne mcp__pixellab__list_projects");
-    // Erzeugungs-Tools bleiben bewusst frei (kubernia braucht sie für Assets, #1476).
+    // Erzeugungs-Tools bleiben bewusst frei (das Projekt braucht sie für Assets, #1476).
     assert.deepEqual(deny.filter((d) => d.startsWith("mcp__pixellab")), ["mcp__pixellab__list_projects"], "nur list_projects ist gesperrt");
   });
 
