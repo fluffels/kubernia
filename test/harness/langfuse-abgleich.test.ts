@@ -717,7 +717,10 @@ describe("pruefen (Ablauf)", () => {
     const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }], observations: [] });
     const r = await einstiegRoh.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl }) as { text: string };
     expect(r.text).toContain(`${echt.praefixe.worktree}1562`);
-    expect(r.text).not.toContain(`${WORKTREE}1562`);
+    // Gegenprobe unabhängig davon, ob echte Config und FREMD gleich sind: ein anderes Worktree-Präfix erkennt den Branch nicht.
+    const anders = { ...FREMD, praefixe: { ...FREMD.praefixe, worktree: `${echt.praefixe.worktree}x-` } };
+    const r2 = await einstiegRoh.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl, config: anders }) as { text: string };
+    expect(r2.text).not.toContain(`${echt.praefixe.worktree}1562`);
   });
 
   test("Bericht: vollständig, Score ausstehend; Ledger (nur gelesen) mit Ende hebt es auf; kaputtes Ledger bleibt unberührt; Hinweis nennt den Stichtag aus dem Kern", async () => {

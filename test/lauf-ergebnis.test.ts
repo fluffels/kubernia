@@ -457,7 +457,8 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.equal(roh.laufErgebnis({ von, bis, runGit: git(echtLog), runGh: gh(), jetzt: SPAETER }).zeilen[0].runden, 1);
     const lauf40 = { meta: { agentType: "x-agent" }, zeilen: [{ type: "user", timestamp: "2026-10-01T00:00:01Z", message: { role: "user", content: "Ticket #40: x" } }] };
     assert.equal(roh.laufErgebnisStartAgent({ laeufe: [lauf40], von, bis, runGit: git(echtLog), runGh: gh(), jetzt: SPAETER }).zeilen[0].runden, 1);
-    assert.equal(roh.laufErgebnis({ von, bis, runGit: git(echtLog), runGh: gh(), jetzt: SPAETER, ladeConfig: () => FREMD }).zeilen[0].runden, null, "mit der Fremd-Config zählt die Zeile der echten nicht");
+    const anders = { ...echt, praefixe: { ...echt.praefixe, commitZeile: `X${echt.praefixe.commitZeile}` } };
+    assert.equal(roh.laufErgebnis({ von, bis, runGit: git(echtLog), runGh: gh(), jetzt: SPAETER, ladeConfig: () => anders }).zeilen[0].runden, null, "mit einem anderen Präfix zählt die Zeile der echten Config nicht");
   });
   test("ein Ladefehler der Config bricht ab, ohne git oder gh zu fragen", () => {
     const nie = () => {
