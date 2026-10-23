@@ -8,10 +8,11 @@ import assert from "node:assert/strict";
 import * as raw from "../../scripts/claims-pruefen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ticketNamen } from "../../scripts/ticket-namen.mjs";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, projektConfig } from "../support/fremd-config";
 
 const WTP = FREMD.praefixe.worktree;
 const BRP = FREMD.praefixe.branch;
+const ECHT = projektConfig().praefixe; // Standardpfad ohne `namen`: die Config des Projekts wird je Aufruf geladen
 const NAMEN: unknown = (ticketNamen as (c: unknown) => unknown)(FREMD);
 
 interface Claim {
@@ -213,6 +214,11 @@ describe("reine Hilfen", () => {
   test("aliasAbfragen: das Repo muss genau owner/name sein (Anker an beiden Enden, kein Zusatz in der Abfrage)", () => {
     for (const repo of ['o/r"x', "o/r/x", "x o/r", "o/r y", "/r", "o/"]) assert.throws(() => M.aliasAbfragen([1], repo), /Ungültiges Repo/, repo);
     assert.doesNotThrow(() => M.aliasAbfragen([1], "my-o.rg/re_po.x"));
+  });
+
+  test("pfadErlaubt ohne namen: gilt das Präfix der Projekt-Config, ein fremdes Präfix nicht", () => {
+    assert.equal(M.pfadErlaubt({ pfad: `/h/.claude/worktrees/${ECHT.worktree}1628`, hauptcheckout: "/h", nr: 1628 }), true);
+    assert.equal(M.pfadErlaubt({ pfad: `/h/.claude/worktrees/${WTP}1628`, hauptcheckout: "/h", nr: 1628 }), false);
   });
 
   test("pfadErlaubt: nur direkt unter <Hauptcheckout>/.claude/worktrees und mit passender Nummer; nie ein Lens-Worktree", () => {
@@ -562,6 +568,12 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     }
     const anderes = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN", labels: ["anderes"] } } }).deps);
     assert.match(anderes.out, /WIEDERAUFNAHME #20/);
+  });
+
+  test("fuehreAus ohne deps.namen: der Branch mit dem Präfix der Projekt-Config zählt als Ticket, der mit dem fremden nicht", () => {
+    const ohne = (branch: string) => ({ ...baue({ refs: [[branch, sek("2026-10-16T03:36:00Z")]], issues: { 21: { state: "OPEN" } } }).deps, namen: undefined });
+    assert.match(M.fuehreAus([], ohne(`${ECHT.branch}21-x`)).out, /#21/);
+    assert.doesNotMatch(M.fuehreAus([], ohne(`${BRP}21-x`)).out, /#21/);
   });
 
   test("ein reiner Remote-Branch ist keine lokale Spur: keine Wiederaufnahme", () => {

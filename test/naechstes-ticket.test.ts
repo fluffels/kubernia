@@ -10,12 +10,13 @@ import * as refs from "../scripts/ticket-refs.mjs";
 import * as namenRoh from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ladeCfg from "../scripts/projekt-config-lib.mjs";
-import { FREMD } from "./support/fremd-config";
+import { FREMD, projektConfig } from "./support/fremd-config";
 
 const ticketNamen = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 
 const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
 const NAMEN = ticketNamen(FREMD);
+const ECHT = projektConfig().praefixe; // Standardpfad ohne `namen`: die Config des Projekts wird je Aufruf geladen
 const WTP = FREMD.praefixe.worktree;
 const BRP = FREMD.praefixe.branch;
 const UMS = FREMD.agenten.umsetzer;
@@ -83,6 +84,11 @@ describe("ticketAusRef", () => {
     expect(R.ticketAusRef(`worktree C:/x/.claude/worktrees/${WTP}12`, NAMEN)).toBe(12);
     expect(R.ticketAusRef(`worktree C:\\x\\.claude\\worktrees\\${WTP}12`, NAMEN)).toBe(12);
     expect(R.ticketAusRef(`${BRP}123-foo`, NAMEN)).toBe(123);
+  });
+  test("ohne namen gilt das Präfix der Projekt-Config, ein fremdes nicht", () => {
+    expect(R.ticketAusRef(`${ECHT.branch}12-foo`)).toBe(12);
+    expect(R.ticketAusRef(`${BRP}12-foo`)).toBeNull();
+    expect([...R.belegteNummern({ refs: [`${ECHT.branch}1-a`, `${BRP}2-b`], worktrees: [`worktree C:/x/.claude/worktrees/${ECHT.worktree}3`] })].sort()).toEqual([1, 3]);
   });
   test(`fremde Namen: null (${WTP}12x, anderes Präfix)`, () => {
     expect(R.ticketAusRef("main", NAMEN)).toBeNull();
