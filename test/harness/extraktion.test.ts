@@ -152,6 +152,7 @@ describe("Extraktionsliste: Muster und Struktur (#1875)", () => {
     assert.ok(!musterRegex("test/a.test.ts").test("test/aXtest.ts"), "der Punkt ist wörtlich");
     assert.ok(!musterRegex("test/a").test("xtest/a"), "am Anfang verankert");
     assert.ok(!musterRegex("test/a").test("test/ab"), "am Ende verankert");
+    assert.ok(musterRegex("a+(b)*").test("a+(b)xyz") && !musterRegex("a+(b)*").test("aab"), "Regex-Zeichen sind wörtlich");
   });
   test("artVon: Art des treffenden Muster-Eintrags, sonst null; Ring-Einträge zählen nicht", () => {
     assert.equal(artVon(GUT, "test/a.test.ts"), "kern-test");

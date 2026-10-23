@@ -55,9 +55,9 @@ export const EXTRAKTION_ARTEN = {
 /** Arten, die ins Factory-Repo ziehen: alle außer `projekt-test` (bleibt im Projekt). */
 export const MITZIEHEND = Object.keys(EXTRAKTION_ARTEN).filter((a) => a !== "projekt-test");
 
-/** Regex eines Pfadmusters: `*` steht für beliebig viele Zeichen außer `/`, alles andere wörtlich. */
+/** Regex eines Pfadmusters: `*` steht für beliebig viele Zeichen außer `/`, alles andere wörtlich (jedes Zeichen außer Buchstaben, Ziffern und `_` wird maskiert). */
 export const musterRegex = (muster) =>
-  new RegExp(`^${muster.split("*").map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*")}$`);
+  new RegExp(`^${muster.split("*").map((t) => [...t].map((c) => (/\w/.test(c) ? c : `\\${c}`)).join("")).join("[^/]*")}$`);
 
 /** Art der Datei laut Muster-Einträgen der Liste (`null`: nicht eingeordnet). */
 export function artVon(liste, pfad) {
