@@ -904,17 +904,14 @@ describe("Kern-Reinheit (#1610)", () => {
   test("jede getrackte Datei in einem Kern-Verzeichnis ist Besitz oder ausdrücklich eingeordnet (kern-abdeckung.json, #1613)", () => {
     const abdeckung = JSON.parse(readFileSync(WURZEL + ABDECKUNG, "utf8")) as Record<string, AbdeckEintrag>;
     const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
-    assert.deepEqual(pruefeAbdeckung(manifest.eintraege, getrackt, abdeckung, projektGeneratorPfade()), []);
+    assert.deepEqual(pruefeAbdeckung(manifest.eintraege, getrackt, abdeckung), []);
   });
 
   test("kein Projekt-Generator aus config.generatoren liegt in einem Kern-Verzeichnis (ADR 0022 F10)", () => {
     const pfade = projektGeneratorPfade();
     assert.ok(pfade.length >= 2, "die Dateien der Projekt-Generatoren stehen in der Config");
-    const kern = kernVerzeichnisse(manifest.eintraege);
-    for (const p of pfade) {
-      assert.ok(existsSync(WURZEL + p), `${p}: Datei fehlt`);
-      assert.ok(!kern.has(posix.dirname(posix.normalize(p))), `${p}: liegt in einem Kern-Verzeichnis`);
-    }
+    for (const p of pfade) assert.ok(existsSync(WURZEL + p), `${p}: Datei fehlt`);
+    assert.deepEqual(pruefeAbdeckung(manifest.eintraege, [], {}, pfade), []);
   });
 
   test("fehlt der Manifest-Eintrag der Skill-Quelle oder ihres Zeigers, meldet die Abdeckung die Datei (#1866)", () => {
