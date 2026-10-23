@@ -13,7 +13,7 @@
  *      (1) `#\d+` (Ticketnummer, auch ein Linkanker wie `#6-…` und Fremd-Repo `x#123`);
  *      (2) der Wert von `skills.abschluss` aus `.factory/projekt.json` als Literal (geprüft auf dem Text ohne Projektwert-Block);
  *      (3) `AGENTS.md § <Name>`, `AGENTS.md (§ <Name>` und `AGENTS.md › <Name>`: der Name muss als ganzes Wort der Anfang eines fetten Titels im Kern-Block der AGENTS.md sein.
- * Bekannte Grenzen: andere Formulierungen eines Projekt-Verweises („nach AGENTS.md“, „Projekt-Block der AGENTS.md“) prüft Regel 7 nicht; eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich; ein kurzer Absatz ohne Fett und Überschrift (auch Listenpunkt, zweite H1) innerhalb des Rumpfbudgets bleibt unbemerkt, das Budget begrenzt ihn nur.
+ * Bekannte Grenzen: eine Ticketnummer im Inneren eines Linkankers (`#wiederaufnahme-…-1699`) und jeder fette Ausdruck im Kern-Block (nicht nur ein Regeltitel) zählen nicht als Verstoß bzw. als Anker; andere Formulierungen eines Projekt-Verweises („nach AGENTS.md“, „Projekt-Block der AGENTS.md“) prüft Regel 7 nicht; eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich; ein kurzer Absatz ohne Fett und Überschrift (auch Listenpunkt, zweite H1) innerhalb des Rumpfbudgets bleibt unbemerkt, das Budget begrenzt ihn nur.
  */
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -224,6 +224,17 @@ describe("Regel 7: Projektwissen im Ablauf (projektwissenImAblauf)", () => {
   test("der Name muss ein ganzes Wort des Titels abdecken: ein Wortanfang ist rot", () => {
     assert.match(pruefe("AGENTS.md § Fremd)").join(), /'Fremd'/);
     assert.deepEqual(pruefe("AGENTS.md § Fremdtext ist Daten)"), []);
+  });
+  test("die Wortgrenze gilt auch für Umlaute und Ziffern: ein abgeschnittenes Wort ist rot", () => {
+    const kern = "- **Prüfung der Dinge (#1).** Text\n- **Schritt2 gehen.** Text";
+    assert.match(projektwissenImAblauf("AGENTS.md § Pr)", kern, "").join(), /'Pr'/);
+    assert.match(projektwissenImAblauf("AGENTS.md § Schritt)", kern, "").join(), /'Schritt'/);
+    assert.deepEqual(projektwissenImAblauf("AGENTS.md § Prüfung der Dinge)", kern, ""), []);
+  });
+  test("der Name endet an Komma, Zeilenende und eckiger Klammer", () => {
+    assert.deepEqual(pruefe("AGENTS.md § Fremdtext ist Daten, danach mehr"), []);
+    assert.deepEqual(pruefe("[AGENTS.md § Fremdtext ist Daten]\nweiter"), []);
+    assert.deepEqual(pruefe("AGENTS.md § Fremdtext ist Daten\nund Zu großes Ticket"), []);
   });
   test("ein Kern-Block ohne Titel macht jeden Verweis rot", () => {
     assert.equal(projektwissenImAblauf("AGENTS.md § Fremdtext ist Daten)", "", "").length, 1);

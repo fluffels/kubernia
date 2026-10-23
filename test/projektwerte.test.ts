@@ -91,14 +91,11 @@ describe("leereProjektwerte / rendereProjektwerte", () => {
     assert.throws(() => lib.projektwertWert({ agenten: { planer: 5 } }, "agenten.planer"), /kein nichtleerer Text/);
   });
   test("die Gruppe skills wird aus der Config ersetzt und fehlt sie, bricht der Block mit Fix ab (#1873)", () => {
-    assert.match(lib.rendereProjektwerte(`${S}
-${E}
-`, CONFIG), /| `skills.abschluss` | `wk-abschluss` |/);
+    const gerendert = lib.rendereProjektwerte(`${S}\n${E}\n`, CONFIG);
+    assert.ok(gerendert.includes("| `skills.abschluss` | `wk-abschluss` |"), gerendert);
     assert.equal(lib.platzhalterMuster().exec("Skill <skills.abschluss> rufen")?.[0], "<skills.abschluss>");
     const ohne = { praefixe: CONFIG.praefixe, agenten: CONFIG.agenten, labels: CONFIG.labels };
-    assert.throws(() => lib.rendereProjektwerte(`${S}
-${E}
-`, ohne, "a.md"), /Gruppe 'skills'/);
+    assert.throws(() => lib.rendereProjektwerte(`${S}\n${E}\n`, ohne, "a.md"), /Gruppe 'skills'/);
   });
   test("die Config wird erst bei einer Stelle gerufen", () => {
     let n = 0;

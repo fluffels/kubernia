@@ -727,6 +727,7 @@ describe("kernVerzeichnisse / pruefeAbdeckung (#1613)", () => {
     assert.match(pruefeAbdeckung([...E, ein("scripts/docs-gen/r.mjs")], mitX, abd, ["scripts/docs-gen/x.mjs"]).join(), /scripts\/docs-gen\/x\.mjs: Projekt-Generator im Kern-Ordner scripts\/docs-gen/);
     assert.match(pruefeAbdeckung(E, dateien, klar(), ["scripts/x.mjs"]).join(), /scripts\/x\.mjs: Projekt-Generator im Kern-Ordner scripts,/);
     assert.deepEqual(pruefeAbdeckung(E, dateien, klar(), ["scripts/projekt/docs-gen/x.mjs"]), []);
+    assert.match(pruefeAbdeckung(E, dateien, klar(), ["./scripts/x.mjs"]).join(), /Projekt-Generator im Kern-Ordner scripts,/);
   });
 });
 
@@ -879,7 +880,9 @@ const lesenWurzel = (pfad: string): string | null => {
 /** Dateien der Projekt-Generatoren aus `config.generatoren` (ADR 0022 F10). */
 const projektGeneratorPfade = (): string[] => {
   const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
-  return [...new Set(Object.values(cfg.generatoren ?? {}).map((g) => g.datei))];
+  const pfade = [...new Set(Object.values(cfg.generatoren ?? {}).map((g) => g.datei))];
+  if (pfade.length === 0) throw new Error("scripts/docs-gen/config.json: generatoren fehlt oder ist leer");
+  return pfade;
 };
 const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
@@ -902,6 +905,16 @@ describe("Kern-Reinheit (#1610)", () => {
     const abdeckung = JSON.parse(readFileSync(WURZEL + ABDECKUNG, "utf8")) as Record<string, AbdeckEintrag>;
     const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
     assert.deepEqual(pruefeAbdeckung(manifest.eintraege, getrackt, abdeckung, projektGeneratorPfade()), []);
+  });
+
+  test("kein Projekt-Generator aus config.generatoren liegt in einem Kern-Verzeichnis (ADR 0022 F10)", () => {
+    const pfade = projektGeneratorPfade();
+    assert.ok(pfade.length >= 2, "die Dateien der Projekt-Generatoren stehen in der Config");
+    const kern = kernVerzeichnisse(manifest.eintraege);
+    for (const p of pfade) {
+      assert.ok(existsSync(WURZEL + p), `${p}: Datei fehlt`);
+      assert.ok(!kern.has(posix.dirname(posix.normalize(p))), `${p}: liegt in einem Kern-Verzeichnis`);
+    }
   });
 
   test("fehlt der Manifest-Eintrag der Skill-Quelle oder ihres Zeigers, meldet die Abdeckung die Datei (#1866)", () => {
