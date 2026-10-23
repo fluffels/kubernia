@@ -317,7 +317,7 @@ export function berechtigungenAus(config) {
 
 /** Pur: wie `berechtigungenAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
 export function berechtigungenAusText(text) {
-  if (text === null) return berechtigungenAus({});
+  if (text === null) return berechtigungenAus({}); // keine Datei: leer (JSON.parse(null) ergäbe dasselbe)
   let config;
   try {
     config = JSON.parse(text);

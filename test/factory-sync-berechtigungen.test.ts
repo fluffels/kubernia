@@ -302,6 +302,8 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
     assert.deepEqual(lib.kernAnteil({ allow: [], deny: ["d"] }, {}), { deny: ["d"] });
     assert.deepEqual(lib.kernAnteil({ allow: ["a"] }, { deny: ["mcp__x"] }), { allow: ["a"] });
     assert.equal(lib.kernAnteil(null as unknown as Perm, { allow: ["mcp__x"] }), null);
+    assert.deepEqual(lib.kernAnteil(["a"] as unknown as Perm, { allow: ["a"] }), ["a"]);
+    assert.equal(lib.kernAnteil("x" as unknown as Perm, { allow: ["x"] }), "x");
     assert.doesNotThrow(() => lib.einheitHash(EINHEIT, '{"permissions": null}', { allow: ["mcp__x"] }));
   });
 
@@ -365,7 +367,7 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
     assert.match(r.err, /Ziel: .*kein gültiges JSON/);
   });
 
-  test("gesyncctes Ziel, danach kaputte Config: das Gate meldet genau die Config mit Weg, ohne Folgebefund am Kern", () => {
+  test("gesynctes Ziel, danach kaputte Config: das Gate meldet genau die Config mit Weg, ohne Folgebefund am Kern", () => {
     const z = baueZiel({ allow: ["mcp__z"], ask: [], deny: [] });
     assert.equal(vomTag(baueQuelle(), z).code, 0);
     schreibe(z, CONFIG, "{kaputt");
@@ -374,9 +376,11 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
     assert.match(g.err, /kein gültiges JSON/);
     assert.doesNotMatch(g.err, /Besitz wurde im Projekt verändert/);
     assert.deepEqual(drift.pruefeDrift(leser(z)).fehler, []);
+    schreibe(z, ROLLEN[0].pfad, "von Hand geändert\n");
+    assert.match(drift.pruefeDrift(leser(z)).fehler.join("|"), new RegExp(ROLLEN[0].pfad.replaceAll(".", "[.]")), "eine andere Einheit bleibt trotz kaputter Config geprüft");
   });
 
-  test("leere Ergänzung: das Gate wirft nicht, wenn permissions in settings.json kein Objekt ist", () => {
+  test("das Gate wirft nicht, wenn permissions in settings.json kein Objekt ist", () => {
     const z = baueZiel({ allow: ["mcp__z"], ask: [], deny: [] });
     assert.equal(vomTag(baueQuelle(), z).code, 0);
     schreibe(z, SETTINGS, json({ permissions: null }));
