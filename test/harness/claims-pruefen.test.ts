@@ -366,6 +366,28 @@ const BELEG: Welt = {
 };
 
 describe("fuehreAus: Belegfall vom 2026-10-16", () => {
+  test("fuehreAus ohne deps.namen räumt einen Worktree mit dem Präfix der Projekt-Config auf, einen mit dem fremden nicht", () => {
+    const welt = (wt: string, branch: string): Welt => ({
+      ...BELEG,
+      worktrees: [{ pfad: `/h/.claude/worktrees/${wt}1628`, head: OID, branch: `${branch}1628-x` }],
+      refs: [[`${branch}1628-x`, sek("2026-10-16T00:21:00Z")]],
+      locks: { "1628.json": BELEG.locks?.["1628.json"] ?? "" },
+    });
+    const ohne = (w: Welt) => {
+      const b = baue(w);
+      return { ...b, deps: { ...b.deps, namen: undefined } };
+    };
+    const echt = ohne(welt(ECHT.worktree, ECHT.branch));
+    const r = M.fuehreAus([], echt.deps);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(r.out.startsWith(`AUFGERAEUMT #1628: Worktree /h/.claude/worktrees/${ECHT.worktree}1628, `));
+    assert.ok(echt.aufrufe.includes(`git worktree remove /h/.claude/worktrees/${ECHT.worktree}1628`));
+    const fremd = ohne(welt(WTP, BRP));
+    const rf = M.fuehreAus([], fremd.deps);
+    assert.doesNotMatch(rf.out, /AUFGERAEUMT #1628: Worktree/);
+    assert.equal(fremd.aufrufe.some((a) => a.includes("worktree remove")), false);
+  });
+
   test("Textmodus: räumt #1628 auf (Worktree dann Lock), meldet #1672 vor #1530 zur Wiederaufnahme", () => {
     const { deps, aufrufe, geloescht } = baue(BELEG);
     const r = M.fuehreAus([], deps);
@@ -572,8 +594,12 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
 
   test("fuehreAus ohne deps.namen: der Branch mit dem Präfix der Projekt-Config zählt als Ticket, der mit dem fremden nicht", () => {
     const ohne = (branch: string) => ({ ...baue({ refs: [[branch, sek("2026-10-16T03:36:00Z")]], issues: { 21: { state: "OPEN" } } }).deps, namen: undefined });
-    assert.match(M.fuehreAus([], ohne(`${ECHT.branch}21-x`)).out, /#21/);
-    assert.doesNotMatch(M.fuehreAus([], ohne(`${BRP}21-x`)).out, /#21/);
+    const echt = M.fuehreAus([], ohne(`${ECHT.branch}21-x`));
+    assert.equal(echt.code, 0, echt.err);
+    assert.match(echt.out, /#21/);
+    const fremd = M.fuehreAus([], ohne(`${BRP}21-x`));
+    assert.equal(fremd.code, 0, fremd.err);
+    assert.doesNotMatch(fremd.out, /#21/);
   });
 
   test("ein reiner Remote-Branch ist keine lokale Spur: keine Wiederaufnahme", () => {
