@@ -115,7 +115,7 @@ export function pruefeManifest(m, lies) {
 // Die einzige Einheit mit Projekt-Ergänzung: Hash und Sync rechnen auf dem Kern-Anteil (der Wert ohne die Einträge der Ergänzung),
 // die Ergänzung steht je Liste als Ende der Liste. Bekannte Muster der Aufhebe-Prüfung (`ergaenzungsBefunde`): ein allow-Eintrag A hebt eine
 // Regel R aus deny oder ask auf, wenn A === R; wenn R eine Server-Regel `mcp__<server>` ohne Tool-Teil ist und A mit `R + "__"` beginnt;
-// wenn R auf `*` endet und A mit R ohne `*` beginnt. Grenze: andere Platzhalterformen werden nicht erkannt. Legitim bleibt die Kombination
+// wenn R auf `*` endet und A mit R ohne `*` beginnt; wenn A auf `*` endet und R mit A ohne `*` beginnt (allow `mcp__*` deckt jede Regel mit dem Präfix). Grenze: andere Platzhalterformen werden nicht erkannt. Legitim bleibt die Kombination
 // „allow Server-Regel, ask oder deny einzelnes Tool“.
 
 /** Die Einheit, die ein Projekt über `berechtigungen` ergänzen darf (geschlossene Liste mit einem Eintrag; `sandbox` wäre ein weiterer). */
@@ -159,7 +159,8 @@ export function mitErgaenzung(kern, erg) {
 function hebtAuf(a, r) {
   if (a === r) return true;
   if (r.startsWith("mcp__") && !r.slice(5).includes("__") && a.startsWith(`${r}__`)) return true;
-  return r.endsWith("*") && a.startsWith(r.slice(0, -1));
+  if (r.endsWith("*") && a.startsWith(r.slice(0, -1))) return true;
+  return a.endsWith("*") && r.startsWith(a.slice(0, -1));
 }
 
 /**

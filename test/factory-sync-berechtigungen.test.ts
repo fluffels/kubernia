@@ -322,6 +322,21 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
     assert.equal(befunde({ allow: ["mcp__x__t__u"], deny: ["mcp__x__t"] }, { allow: ["mcp__x__t__u"] }), "", "eine Tool-Regel ist kein Server-Muster");
     assert.equal(befunde({ allow: ["mcp__y__t"], ask: ["mcp__x__*"] }, { allow: ["mcp__y__t"] }), "", "Platzhalter gilt nur für sein Präfix");
     assert.match(befunde({ allow: ["mcp__x__t"], ask: ["mcp__x__*"] }, { allow: ["mcp__x__t"] }), /hebt die Regel/);
+    for (const a of ["mcp__*", "mcp__claude*", "mcp__claude-in-chrome*"]) {
+      assert.match(befunde({ allow: [a], deny: ["mcp__claude-in-chrome"] }, { allow: [a] }), /hebt die Regel „mcp__claude-in-chrome“/, `allow-Platzhalter ${a} deckt das deny`);
+    }
+    assert.equal(befunde({ allow: ["mcp__y*"], deny: ["mcp__x"] }, { allow: ["mcp__y*"] }), "", "ein allow-Platzhalter anderen Präfixes hebt nichts auf");
+  });
+
+  test("Sync und Gate: ein allow-Platzhalter, der das Kern-deny abdeckt, ist rot (Exit 1)", () => {
+    const z = tmp();
+    schreibe(z, SETTINGS, '{\n  "model": "opus"\n}\n');
+    schreibe(z, CONFIG, json({ berechtigungen: { allow: ["mcp__*"] } }));
+    const r = vomTag(baueQuelle(), z);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.err, /Ergänzung „mcp__\*“ hebt die Regel „mcp__claude-in-chrome“/);
+    schreibe(z, SETTINGS, json({ permissions: mit(KERN, { allow: ["mcp__*"] }) }));
+    assert.match(drift.pruefeErgaenzung(leser(z)).fehler.join("|"), /hebt die Regel „mcp__claude-in-chrome“/);
   });
 
   test("eine fehlende Liste in permissions bei nicht-leerer Ergänzung ist ein Befund, kein Absturz", () => {
