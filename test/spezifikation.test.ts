@@ -4,6 +4,11 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
 import { echteSprache } from "./support/echte-sprache";
+import { FREMD } from "./support/fremd-config";
+
+const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
+const HARNESS = FREMD.labels.harness;
+const AREA = "area:demo"; // der Bereichs-Label-Aufbau `area:<x>` ist fest; die Wahl des Bereichs ist Testdatum
 
 type Issue = { state?: string; body?: string | null; user?: { login: string; type?: string } | null; labels?: ({ name: string } | string)[]; pull_request?: object };
 type Io = {
@@ -25,8 +30,8 @@ const ALT = "Das ist der alte Text.\nZweite Zeile des alten Texts.";
 function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
   const aufrufe = { erzeuge: [] as unknown[], einsortiere: [] as unknown[], bearbeite: [] as unknown[] };
   const io: Io = {
-    config: { labels: { forum: "forum" }, sprache: echteSprache() },
-    owner: "fluffels",
+    config: { labels: { forum: FREMD.labels.forum }, sprache: echteSprache() },
+    owner: OWNER,
     leseDatei: (p) => {
       if (!(p in dateien)) throw new Error("ENOENT");
       return dateien[p];
@@ -37,14 +42,14 @@ function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
     },
     pruefeAnker: () => null,
     einsortiere: (a) => void aufrufe.einsortiere.push(a),
-    ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, labels: [] }),
+    ladeIssue: () => ({ state: "open", body: ALT, user: { login: OWNER, type: "User" }, labels: [] }),
     bearbeite: (nr, body) => void aufrufe.bearbeite.push({ nr, body }),
     ...extra,
   };
   return { io, aufrufe };
 }
 
-const ANLEGEN = ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "12"];
+const ANLEGEN = ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "12"];
 
 describe("aufrufPruefen", () => {
   test("Flags, mehrfaches --label und positionale Nummer je Unterbefehl", () => {
@@ -131,29 +136,29 @@ describe("anlegen", () => {
   test("ohne area-Label, ohne Ziel der Einordnung oder mit beiden: Exit 2, nichts angelegt", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "bug", "--nach", "12"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA], io).code).toBe(2);
     expect(S.fuehreAus([...ANLEGEN, "--notfall", "rot-main"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--body-datei", "b.md", "--label", "area:harness", "--nach", "12"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--notfall", "unbekannt"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "abc"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--body-datei", "b.md", "--label", AREA, "--nach", "12"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--notfall", "unbekannt"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "abc"], io).code).toBe(2);
     expect(aufrufe.erzeuge).toEqual([]);
   });
   test("leerer Titel (nur Leerzeichen) und leeres Label `area:` sind Aufrufdefekte: Exit 2, nichts angelegt", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
-    expect(S.fuehreAus(["anlegen", "--titel", "   ", "--body-datei", "b.md", "--label", "area:harness", "--nach", "12"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "   ", "--body-datei", "b.md", "--label", AREA, "--nach", "12"], io).code).toBe(2);
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:", "--nach", "12"], io).code).toBe(2);
     expect(aufrufe.erzeuge).toEqual([]);
   });
   test("`--nach #12` und `--nach 12` sind dieselbe Nummer: einsortiert wird mit 12 (nie NaN), der Nachhol-Befehl nennt 12", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "#12"], io).code).toBe(0);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12"], io).code).toBe(0);
     expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null }]);
     const { io: kaputt } = umgebung({ "b.md": GUT }, {
       einsortiere: () => {
         throw new Error("x");
       },
     });
-    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--nach", "#12"], kaputt);
+    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12"], kaputt);
     expect(r.err).toContain("--after 12 900");
     expect(r.err).not.toContain("#12 900");
   });
@@ -165,13 +170,13 @@ describe("anlegen", () => {
     const r = S.fuehreAus([...ANLEGEN, "--label", "prio"], io);
     expect(r.code).toBe(0);
     expect(r.out).toContain("angelegt #900");
-    expect(aufrufe.erzeuge).toEqual([{ titel: "T", body: GUT, labels: ["area:harness", "prio"] }]);
+    expect(aufrufe.erzeuge).toEqual([{ titel: "T", body: GUT, labels: [AREA, "prio"] }]);
     expect(JSON.stringify(aufrufe.erzeuge)).not.toContain("assignee");
     expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null }]);
   });
   test("--notfall: einsortiert wird als Notfall", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
-    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--notfall", "rot-main"], io);
+    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--notfall", "rot-main"], io);
     expect(r.code).toBe(0);
     expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: null, notfall: "rot-main" }]);
   });
@@ -199,7 +204,7 @@ describe("anlegen", () => {
     expect(r.code).toBe(2);
     expect(r.err).toContain("nichts angelegt");
     expect(r.err).toContain("Anker #12 steht auf dem Produkt-Board; einen Anker vom Factory-Board wählen");
-    expect(geprueft).toEqual([{ nach: 12, labels: ["area:harness"] }]);
+    expect(geprueft).toEqual([{ nach: 12, labels: [AREA] }]);
     expect(aufrufe.erzeuge).toEqual([]);
     expect(aufrufe.einsortiere).toEqual([]);
   });
@@ -213,7 +218,7 @@ describe("anlegen", () => {
     expect(r.code).toBe(2);
     expect(r.err).toContain("503");
     expect(aufrufe.erzeuge).toEqual([]);
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:harness", "--notfall", "rot-main"], io).code).toBe(0);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--notfall", "rot-main"], io).code).toBe(0);
   });
   test("Anlegen scheitert: Exit 2, kein Einsortieren", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT }, {
@@ -242,30 +247,30 @@ describe("reparieren", () => {
     expect(aufrufe.bearbeite).toEqual([]);
   });
   test("Label forum (auch von vertrautem Autor): Exit 3, nie geschrieben", () => {
-    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, labels: [{ name: "forum" }] }) });
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: OWNER, type: "User" }, labels: [{ name: FREMD.labels.forum }] }) });
     expect(S.fuehreAus(REP, io).code).toBe(3);
     expect(aufrufe.bearbeite).toEqual([]);
   });
   test("Label forum als String (nicht als Objekt) ist ebenfalls Fremdeingang: Exit 3, nie geschrieben", () => {
-    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, labels: ["forum"] }) });
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: OWNER, type: "User" }, labels: [FREMD.labels.forum] }) });
     expect(S.fuehreAus(REP, io).code).toBe(3);
     expect(aufrufe.bearbeite).toEqual([]);
   });
   test("Fremdeingang vor Assignee: fremdes Ticket mit Assignee meldet Exit 3, nicht 2", () => {
-    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fremd", type: "User" }, assignees: [{ login: "fluffels" }] }) });
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fremd", type: "User" }, assignees: [{ login: OWNER }] }) });
     const r = S.fuehreAus(REP, io);
     expect(r.code).toBe(3);
     expect(r.err).toContain("Fremdeingang");
     expect(aufrufe.bearbeite).toEqual([]);
   });
   test("Ticket mit Assignee wird nicht umgeschrieben: Exit 2", () => {
-    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: "fluffels", type: "User" }, assignees: [{ login: "fluffels" }] }) });
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: ALT, user: { login: OWNER, type: "User" }, assignees: [{ login: OWNER }] }) });
     expect(S.fuehreAus(REP, io).code).toBe(2);
     expect(aufrufe.bearbeite).toEqual([]);
   });
   test("Inhaltsverlust-Ausgabe: höchstens 10 Zeilen, lange Zeilen gekürzt, die Zahl im Kopf bleibt die volle", () => {
     const alt = Array.from({ length: 12 }, (_, i) => `Zeile${i + 1}${i === 0 ? "x".repeat(200) : ""}`).join("\n");
-    const { io, aufrufe } = umgebung({ "b.md": GUT }, { ladeIssue: () => ({ state: "open", body: alt, user: { login: "fluffels", type: "User" } }) });
+    const { io, aufrufe } = umgebung({ "b.md": GUT }, { ladeIssue: () => ({ state: "open", body: alt, user: { login: OWNER, type: "User" } }) });
     const r = S.fuehreAus(REP, io);
     expect(r.code).toBe(1);
     expect(aufrufe.bearbeite).toEqual([]);
@@ -278,7 +283,7 @@ describe("reparieren", () => {
     expect(r.err).toContain("…");
   });
   test("Spezifikation schon vollständig: Exit 0 „nichts zu tun“, ohne Schreibaufruf", () => {
-    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: GUT, user: { login: "fluffels", type: "User" } }) });
+    const { io, aufrufe } = umgebung({ "b.md": NEU }, { ladeIssue: () => ({ state: "open", body: GUT, user: { login: OWNER, type: "User" } }) });
     const r = S.fuehreAus(REP, io);
     expect(r.code).toBe(0);
     expect(r.out).toContain("nichts zu tun");
@@ -300,7 +305,7 @@ describe("reparieren", () => {
     expect(aufrufe.bearbeite).toEqual([]);
   });
   test("geschlossen, PR oder nicht ladbar: Exit 2", () => {
-    const basis = { body: ALT, user: { login: "fluffels", type: "User" } };
+    const basis = { body: ALT, user: { login: OWNER, type: "User" } };
     for (const ladeIssue of [() => ({ ...basis, state: "closed" }), () => ({ ...basis, state: "open", pull_request: {} }), () => {
       throw new Error("404");
     }]) {
@@ -334,7 +339,7 @@ describe("fuehreAus", () => {
 });
 
 describe("ankerPruefung: erst nur das Ziel-Board, das andere nur bei Bedarf (#1762 L20c)", () => {
-  const CFG = { labels: { harness: "area:harness" } };
+  const CFG = { labels: { harness: HARNESS } };
   const P = (raw as unknown as { ankerPruefung: (a: { nach: number; labels: string[] }, lade: (rolle: string) => { number: number }[], config?: unknown) => string | null }).ankerPruefung;
   const boards: Record<string, { number: number }[]> = { produkt: [{ number: 1 }], factory: [{ number: 2 }] };
   const zaehle = (nach: number, labels: string[]) => {
@@ -344,21 +349,21 @@ describe("ankerPruefung: erst nur das Ziel-Board, das andere nur bei Bedarf (#17
   };
 
   test("Anker auf dem Ziel-Board: null, nur ein Laden", () => {
-    expect(zaehle(2, ["area:harness"])).toEqual({ r: null, geladen: ["factory"] });
+    expect(zaehle(2, [HARNESS])).toEqual({ r: null, geladen: ["factory"] });
     expect(zaehle(1, ["area:spiel"])).toEqual({ r: null, geladen: ["produkt"] });
   });
   test("Anker fehlt auf dem Ziel-Board: das andere wird nachgeladen, Meldung wie bisher", () => {
-    const { r, geladen } = zaehle(1, ["area:harness"]);
+    const { r, geladen } = zaehle(1, [HARNESS]);
     expect(geladen).toEqual(["factory", "produkt"]);
     expect(r).toMatch(/Anker #1 steht nur auf dem Produkt-Board.*Factory-Board.*einen Anker vom passenden Board wählen/);
   });
   test("Anker auf keinem Board: null nach zwei Ladevorgängen", () => {
-    expect(zaehle(99, ["area:harness"])).toEqual({ r: null, geladen: ["factory", "produkt"] });
+    expect(zaehle(99, [HARNESS])).toEqual({ r: null, geladen: ["factory", "produkt"] });
   });
 });
 
 describe("Sprache als Projektwert (#1711)", () => {
-  const ohneSprache = { config: { labels: { forum: "forum" } } };
+  const ohneSprache = { config: { labels: { forum: FREMD.labels.forum } } };
   test("Negativfall: ohne sprache bricht jeder Unterbefehl mit klarer Meldung ab (Exit 1, nichts angelegt oder geschrieben, kein Stacktrace)", () => {
     const befehle = [["pruefen", "--body-datei", "b.md"], ANLEGEN, ["reparieren", "5", "--body-datei", "b.md"]];
     for (const argv of befehle) {
@@ -377,7 +382,7 @@ describe("Sprache als Projektwert (#1711)", () => {
   });
   test("englische Sprache aus der Config: der englische Body ist vollständig, der deutsche nicht", () => {
     const en = { ziel: "Goal", akzeptanzkriterien: ["Acceptance criteria"], nachMerge: "After merge:", negativfall: { wort: "Negative case", muster: "negative case" }, begrenzung: { wort: "known patterns:", muster: "known patterns:" }, allquantor: { wort: "all … that … read", muster: "all [^.!?]*that [^.!?]*read" }, blocker: "blocked by", abhaengigkeit: ["follows #"] };
-    const { io } = umgebung({ "en.md": "## Goal\nG\n\n## Acceptance criteria\n- Negative case: x\n", "de.md": GUT }, { config: { labels: { forum: "forum" }, sprache: { spezifikation: en } } });
+    const { io } = umgebung({ "en.md": "## Goal\nG\n\n## Acceptance criteria\n- Negative case: x\n", "de.md": GUT }, { config: { labels: { forum: FREMD.labels.forum }, sprache: { spezifikation: en } } });
     expect(S.fuehreAus(["pruefen", "--body-datei", "en.md"], io).code).toBe(0);
     const de = S.fuehreAus(["pruefen", "--body-datei", "de.md"], io);
     expect(de.code).toBe(1);
@@ -461,7 +466,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     expect(posts[0]?.text.split("\n")).toHaveLength(1);
   });
   test("schon offene Zeile eines vertrauten Autors: Exit 0, nichts gepostet", () => {
-    const { io, posts } = gumgebung({ kommentare: [{ user: { login: "fluffels", type: "User" }, body: `x\n${ZEILE}\n` }] });
+    const { io, posts } = gumgebung({ kommentare: [{ user: { login: OWNER, type: "User" }, body: `x\n${ZEILE}\n` }] });
     const r = S.fuehreAus(ARGS, io);
     expect(r.code).toBe(0);
     expect(posts).toEqual([]);
@@ -469,8 +474,8 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
   });
   test("Negativfall: Zeile eines Fremden, erledigte Zeile oder andere Nummer verhindern den Post nicht", () => {
     const fremd = { user: { login: "fremder", type: "User" }, body: ZEILE };
-    const erledigt = { user: { login: "fluffels", type: "User" }, body: ZEILE.replace("[ ]", "[x]") };
-    const anderes = { user: { login: "fluffels", type: "User" }, body: ZEILE.replace("#7 (", "#77 (") };
+    const erledigt = { user: { login: OWNER, type: "User" }, body: ZEILE.replace("[ ]", "[x]") };
+    const anderes = { user: { login: OWNER, type: "User" }, body: ZEILE.replace("#7 (", "#77 (") };
     for (const k of [fremd, erledigt, anderes]) {
       const { io, posts } = gumgebung({ kommentare: [k] });
       expect(S.fuehreAus(ARGS, io).code).toBe(0);
@@ -504,7 +509,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
   });
   test("pure Bausteine", () => {
     expect(fn.gescheitertZeile({ nr: 7, mangel: "Negativfall fehlt", heute: "2026-10-22" })).toBe(ZEILE);
-    expect(fn.gescheitertBekannt(7, [{ user: { login: "fluffels", type: "User" }, body: ZEILE }], "fluffels")).toBe(true);
-    expect(fn.gescheitertBekannt(7, [], "fluffels")).toBe(false);
+    expect(fn.gescheitertBekannt(7, [{ user: { login: OWNER, type: "User" }, body: ZEILE }], OWNER)).toBe(true);
+    expect(fn.gescheitertBekannt(7, [], OWNER)).toBe(false);
   });
 });

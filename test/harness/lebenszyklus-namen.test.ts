@@ -10,6 +10,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lies } from "./repo-texte";
+import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -87,29 +88,33 @@ const AB: Cfg = {
 const OHNE_WT: Cfg = { ...AB, praefixe: { commitZeile: "AB-", branch: "feature/ab-" } };
 const OHNE_SKILL: Cfg = { ...AB, agenten: { ...(AB.agenten as object), ticketSkill: undefined } };
 const NAMEN = ticketNamen(AB);
+// Das eigene Präfix des Projekts darf unter der Config `AB` nirgends durchschlagen: die Erwartung kommt aus der echten Config.
+const WTP = (ladeProjektConfig().praefixe as { worktree: string }).worktree;
+const BRP = (ladeProjektConfig().praefixe as { branch: string }).branch;
+const OWNER = FREMD.repo.split("/")[0] ?? "";
 /** Zeile mit new RegExp( und escapeRegex( auf praefixe: der Musterbau gehört zentral in ticket-namen.mjs. */
 const verstreuterMusterbau = (text: string) => text.split("\n").some((z) => z.includes("new RegExp(") && z.includes("escapeRegex(") && z.includes("praefixe"));
 const LIES_FEHLER = (text: string) => {
   expect(text).toContain("praefixe.worktree");
   expect(text).toContain("Fix:");
-  expect(text).not.toContain("kq-");
+  expect(text).not.toContain(WTP);
 };
 
 describe("ticket-refs: Präfixe aus der Config", () => {
   test("Branch- und Worktree-Namen mit dem Präfix der Config zählen, die des echten Projekts nicht", () => {
-    const belegt = R.belegteNummern({ refs: ["feature/ab-12-x", "feature/kq-13-x", "origin/feature/ab-14-y"], worktrees: ["C:/r/.claude/worktrees/ab-15", "C:/r/.claude/worktrees/kq-16"] }, NAMEN);
+    const belegt = R.belegteNummern({ refs: ["feature/ab-12-x", `${BRP}13-x`, "origin/feature/ab-14-y"], worktrees: ["C:/r/.claude/worktrees/ab-15", `C:/r/.claude/worktrees/${WTP}16`] }, NAMEN);
     expect([...belegt].sort((a, b) => a - b)).toEqual([12, 14, 15]);
-    expect(R.belegteNummern({ prHeads: ["feature/ab-17-z", "feature/kq-18-z"] }, NAMEN)).toEqual(new Set([17]));
+    expect(R.belegteNummern({ prHeads: ["feature/ab-17-z", `${BRP}18-z`] }, NAMEN)).toEqual(new Set([17]));
   });
-  test("ticketAusRef: feature/ab-12-x gefunden, feature/kq-12-x ignoriert", () => {
+  test(`ticketAusRef: feature/ab-12-x gefunden, ${BRP}12-x ignoriert`, () => {
     expect(R.ticketAusRef("feature/ab-12-x", NAMEN)).toBe(12);
-    expect(R.ticketAusRef("feature/kq-12-x", NAMEN)).toBeNull();
+    expect(R.ticketAusRef(`${BRP}12-x`, NAMEN)).toBeNull();
   });
   test("lensWorktreeName erkennt ab-<nr>-lens-r<n> und -m<n>, nicht das fremde Präfix und nicht lens-x", () => {
     const re = R.lensWorktreeName(NAMEN);
     expect(re.exec("ab-12-lens-r1")?.[1]).toBe("ab-12");
     expect(re.test("ab-12-lens-m2")).toBe(true);
-    expect(re.test("kq-12-lens-r1")).toBe(false);
+    expect(re.test(`${WTP}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x")).toBe(false);
   });
 });
@@ -118,20 +123,20 @@ describe("worktree-aufraeumen: Präfixe aus der Config", () => {
   const WT = "/r/.claude/worktrees";
   const alt = () => ({ mtimeMs: 0 });
   const deps = { now: 10 * 60_000, statSync: alt, namen: NAMEN };
-  test("sortiereDateien: ab-7-x.bak ist Kandidat, kq-7-x.bak fremd, ab-70.bak gehört nicht zu ab-7", () => {
+  test(`sortiereDateien: ab-7-x.bak ist Kandidat, ${WTP}7-x.bak fremd, ab-70.bak gehört nicht zu ab-7`, () => {
     const registered = new Set([`${WT}/ab-7`]);
-    const r = A.sortiereDateien(WT, ["ab-7-x.bak", "kq-7-x.bak", "ab-70.bak"], registered, deps);
-    expect(r.fremd).toEqual(["kq-7-x.bak"]);
+    const r = A.sortiereDateien(WT, ["ab-7-x.bak", `${WTP}7-x.bak`, "ab-70.bak"], registered, deps);
+    expect(r.fremd).toEqual([`${WTP}7-x.bak`]);
     expect(r.verwaist).toEqual(["ab-70.bak"]);
     expect(A.sortiereDateien(WT, ["ab-7-x.bak"], new Set(), deps).verwaist).toEqual(["ab-7-x.bak"]);
   });
-  test("verwaisteLensWorktrees: ab-3-lens-r1 ohne ab-3 ist verwaist, kq-3-lens-r1 wird ignoriert", () => {
-    expect(A.verwaisteLensWorktrees([`${WT}/ab-3-lens-r1`, `${WT}/kq-3-lens-r1`], WT, NAMEN)).toEqual(["ab-3-lens-r1"]);
+  test(`verwaisteLensWorktrees: ab-3-lens-r1 ohne ab-3 ist verwaist, ${WTP}3-lens-r1 wird ignoriert`, () => {
+    expect(A.verwaisteLensWorktrees([`${WT}/ab-3-lens-r1`, `${WT}/${WTP}3-lens-r1`], WT, NAMEN)).toEqual(["ab-3-lens-r1"]);
     expect(A.verwaisteLensWorktrees([`${WT}/ab-3`, `${WT}/ab-3-lens-r1`], WT, NAMEN)).toEqual([]);
   });
   test("aufraeumbareBranches: nur der Namensraum der Config", () => {
     const sha = "a".repeat(40);
-    const refs = [{ name: "feature/ab-1-a", gone: true, sha }, { name: "feature/kq-2-b", gone: true, sha }];
+    const refs = [{ name: "feature/ab-1-a", gone: true, sha }, { name: `${BRP}2-b`, gone: true, sha }];
     const gemergt = refs.map((r) => ({ headRefName: r.name, headRefOid: sha }));
     expect(A.aufraeumbareBranches({ refs, worktreeBranches: [], gemergteHeads: gemergt, namen: NAMEN })).toEqual(["feature/ab-1-a"]);
   });
@@ -167,7 +172,7 @@ describe("cleanup-worktrees --branches", () => {
     const git = (a: string[]) => (a[0] === "for-each-ref" ? "" : "");
     expect(C.branchenModus("/r", false, { config: AB, git, gh: () => [], out: (t) => aus.push(t), err: () => undefined })).toBe(0);
     expect(aus.join("\n")).toContain("feature/ab-*");
-    expect(aus.join("\n")).not.toContain("kq-");
+    expect(aus.join("\n")).not.toContain(WTP);
   });
   test("die gh-Suche nach gemergten PRs trägt das Branch-Präfix der Config", () => {
     let argumente: string[] = [];
@@ -258,8 +263,8 @@ describe("stop-verify-hook: Namen aus der Config", () => {
   });
   test("Vertrag: das Teilobjekt reicht für die Lens-Waisen-Prüfung von worktree-aufraeumen", () => {
     const teil = worktreeNamenOderGrund("T", { config: AB }).namen;
-    expect(A.verwaisteLensWorktrees(["/r/.claude/worktrees/ab-3-lens-r1", "/r/.claude/worktrees/kq-3-lens-r1"], "/r/.claude/worktrees", teil)).toEqual(["ab-3-lens-r1"]);
-    expect(A.sortiereDateien("/r/.claude/worktrees", ["ab-7-x.bak", "kq-7-x.bak"], new Set(), { now: 10 * 60_000, statSync: () => ({ mtimeMs: 0 }), namen: teil }).fremd).toEqual(["kq-7-x.bak"]);
+    expect(A.verwaisteLensWorktrees(["/r/.claude/worktrees/ab-3-lens-r1", `/r/.claude/worktrees/${WTP}3-lens-r1`], "/r/.claude/worktrees", teil)).toEqual(["ab-3-lens-r1"]);
+    expect(A.sortiereDateien("/r/.claude/worktrees", ["ab-7-x.bak", `${WTP}7-x.bak`], new Set(), { now: 10 * 60_000, statSync: () => ({ mtimeMs: 0 }), namen: teil }).fremd).toEqual([`${WTP}7-x.bak`]);
   });
   test("stop_hook_active gibt auch bei kaputter Config frei (keine Schleife)", () => {
     expect(S.runHook('{"hook_event_name":"Stop","stop_hook_active":true}', "/x", () => ({ blocked: true, reason: "x" }), { config: OHNE_WT }).exit).toBe(0);
@@ -284,10 +289,10 @@ describe("ticket-lock: Namen aus der Config", () => {
     const r = claim(["feature/ab-12-x"]);
     expect(r.code).toBe(4);
     expect(r.err).toContain("feature/ab-12-*");
-    expect(r.err).not.toContain("kq-");
+    expect(r.err).not.toContain(WTP);
   });
   test("ein Ref mit dem Präfix des echten Projekts belegt nichts (Exit 0)", () => {
-    expect(claim(["feature/kq-12-x"]).code).toBe(0);
+    expect(claim([`${BRP}12-x`]).code).toBe(0);
   });
   test("echteDeps ohne praefixe.worktree wirft mit Schlüssel und Fix-Zeile", () => {
     let text = "";
@@ -302,15 +307,15 @@ describe("ticket-lock: Namen aus der Config", () => {
 
 describe("naechstes-ticket: Namen aus der Config", () => {
   const item = (nr: number) => ({
-    node_id: `PVTI_${nr}`,
+    node_id: `ITEM_${nr}`,
     content_type: "Issue",
     fields: [{ name: "Status", value: { name: { raw: "Todo" } } }],
-    content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n", issue_dependencies_summary: { blocked_by: 0 } },
+    content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: OWNER, type: "User" }, labels: [], body: "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n", issue_dependencies_summary: { blocked_by: 0 } },
   });
-  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: "fluffels", refs, namen: NAMEN, config: { labels: { harness: "area:harness", forum: "forum" }, sprache: AB.sprache } });
+  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: OWNER, refs, namen: NAMEN, config: { labels: { harness: FREMD.labels.harness, forum: "forum" }, sprache: AB.sprache } });
   test("ein Branch mit dem Präfix der Config überspringt das Ticket, der des echten Projekts nicht", () => {
     expect(waehle(["feature/ab-5-x"]).ticket).toBeNull();
-    expect(waehle(["feature/kq-5-x"]).ticket?.nr).toBe(5);
+    expect(waehle([`${BRP}5-x`]).ticket?.nr).toBe(5);
   });
   test("echteIo ohne praefixe.worktree wirft mit Schlüssel und Fix-Zeile", () => {
     expect(() => N.echteIo({ config: OHNE_WT })).toThrow(/praefixe\.worktree[\s\S]*Fix:/);
@@ -326,16 +331,16 @@ describe("worktreePraefix und zentrale Muster in ticketNamen", () => {
     expect(() => praefixVon({ praefixe: { branch: "feature/ab-" } })).toThrow(/praefixe\.worktree[\s\S]*Fix:/);
     expect(() => praefixVon({})).toThrow(/praefixe\.worktree/);
   });
-  test("ticketNamen trägt dateiMuster, lensWorktreeMuster, lensPfadMuster, ticketBranchMuster (Präfix ab-, kq- passt nicht)", () => {
+  test(`ticketNamen trägt dateiMuster, lensWorktreeMuster, lensPfadMuster, ticketBranchMuster (Präfix ab-, ${WTP} passt nicht)`, () => {
     const n = ticketNamen(AB) as unknown as Record<string, RegExp>;
     expect(n.dateiMuster.exec("ab-13610-x.bak")?.[1]).toBe("ab-13610");
-    expect(n.dateiMuster.test("kq-7.bak")).toBe(false);
+    expect(n.dateiMuster.test(`${WTP}7.bak`)).toBe(false);
     expect(n.lensWorktreeMuster.test("ab-3-lens-r2")).toBe(true);
     expect(n.lensWorktreeMuster.test("x-ab-3-lens-r2")).toBe(false);
     expect(n.lensPfadMuster.test("C:/R/.Claude/worktrees/ab-3-lens-m1/src/a.ts")).toBe(true);
-    expect(n.lensPfadMuster.test("/r/.claude/worktrees/kq-3-lens-r1/a.ts")).toBe(false);
+    expect(n.lensPfadMuster.test(`/r/.claude/worktrees/${WTP}3-lens-r1/a.ts`)).toBe(false);
     expect(n.ticketBranchMuster.test("feature/ab-12-x")).toBe(true);
-    expect(n.ticketBranchMuster.test("feature/kq-12-x")).toBe(false);
+    expect(n.ticketBranchMuster.test(`${BRP}12-x`)).toBe(false);
     expect(n.ticketBranchMuster.test("ab-12-x")).toBe(false);
   });
   test("namenOderGrund liest deps.pfad: vollständige Datei liefert Namen (Präfix zz-), unvollständige einen Grund", () => {

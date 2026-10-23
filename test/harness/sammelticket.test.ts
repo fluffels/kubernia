@@ -11,7 +11,7 @@
  *      `sammelticketPosition` aus AGENTS.md, setzt und prüft die Position; die Zählung (N-1. Todo-Item ohne
  *      das neue Item) liegt getestet in scripts/board-lib.mjs › afterIdForPosition und sammelticketKorrektur.
  *      Die Doku nennt das Skript und keine eigene Zahl.
- *   3. Skill `kubernia` und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
+ *   3. Der Ticket-Skill und der Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
  *   4. Das Sammelticket hat keine Zeilengrenze (#1687, ADR 0026): kein `--generation`, keine Grenzzahl, kein
@@ -25,6 +25,10 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { projektConfig } from "../support/fremd-config";
+
+// Dieser Wächter liest die echten Projekttexte (AGENTS.md, Skill, Doku): die Erwartung kommt aus der Projekt-Config.
+const CZP = projektConfig().praefixe.commitZeile;
 
 const lies = (rel: string): string => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
@@ -82,7 +86,7 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.doesNotMatch(lies("scripts/board-place.mjs"), POSITION_EINZELN);
   });
 
-  test("der Skill kubernia legt beim Claim eines Sammeltickets den Nachfolger über das Skript an", () => {
+  test("der Ticket-Skill legt beim Claim eines Sammeltickets den Nachfolger über das Skript an", () => {
     assert.match(lies(".agents/skills/factory/ablauf.md"), /node scripts\/sammelticket-anlegen\.mjs harness --vorgaenger/);
   });
 
@@ -112,7 +116,7 @@ describe("Sammelticket-Position (#1276)", () => {
   test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen das ganze Sammelticket, keinen Rest-Übertrag (#1311)", () => {
     assert.match(agents, /Kommt es dran: abarbeiten, und zwar \*\*komplett\*\*/);
     assert.match(abschnitt, /\*\*Abarbeiten:\*\* \*\*alle\*\* Zeilen umsetzen, kein Teil und kein Rest-Übertrag/);
-    assert.match(abschnitt, /KQ-Diffsize-Override/, "zu große PRs deckt der begründete Override");
+    assert.ok(abschnitt.includes(`${CZP}Diffsize-Override`), "zu große PRs deckt der begründete Override");
   });
 
   test("Komplett-Regel: Umsetzer, Planer und Skill nennen sie", () => {
@@ -134,7 +138,7 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
   const claimen = doc.split("\n").find((z) => z.startsWith("- **Beim Claimen des Sammeltickets**")) ?? "";
 
   /** Verlangt der Abarbeiten-Bullet ein Ergebnis je Zeile, alle Zeilen und den Override für zu große PRs? Ein Prädikat für Artefakt und Gegenbeispiel. */
-  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** Zeilen") && s.includes("**Ergebnis**") && s.includes("KQ-Diffsize-Override") && s.includes("nichts wird still ausgelagert");
+  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** Zeilen") && s.includes("**Ergebnis**") && s.includes(`${CZP}Diffsize-Override`) && s.includes("nichts wird still ausgelagert");
   /** Beschreibt ein Text noch die Halbierung (die Teilung der Zeilenliste, #1309)? */
   const halbiert = (s: string) => /zweite Hälfte/.test(s) || /erste Hälfte/.test(s);
 
@@ -151,7 +155,7 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
 
   test("Erkennung greift (Red-Green): der alte Wortlaut und die Halbierung fallen durch", () => {
     assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** so viele Zeilen umsetzen, wie " + "in **einen** PR " + "passen (`check:diffsize`)."));
-    assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** jede Zeile der ersten Hälfte bekommt ein **Ergebnis**; KQ-Diffsize-Override."));
+    assert.ok(!nenntErgebnisPflicht(`- **Abarbeiten:** jede Zeile der ersten Hälfte bekommt ein **Ergebnis**; ${CZP}Diffsize-Override.`));
     assert.ok(halbiert("die **zweite " + "Hälfte** ins nächste Sammelticket übertragen"));
     assert.ok(!halbiert("kein Teil, kein Rest-Übertrag"));
     assert.ok(!nenntErgebnisPflicht(""));

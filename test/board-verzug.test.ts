@@ -3,6 +3,7 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-lib.mjs";
+import { FREMD } from "./support/fremd-config";
 
 type Frisch = { number: number; titel: string; projektIds: string[] };
 const B = raw as unknown as {
@@ -45,14 +46,14 @@ describe("frischeOffeneIssues", () => {
   const ok = (a: unknown) => () => JSON.stringify(a);
   test("die Abfrage: offene Issues, neueste zuerst, Anzahl und Label gebunden, Owner und Name als Variablen", () => {
     let args: string[] = [];
-    const r = B.frischeOffeneIssues({ repo: "o/n", label: "area:harness", anzahl: 50 }, {}, (a) => ((args = a), JSON.stringify(antwort([]))));
+    const r = B.frischeOffeneIssues({ repo: "o/n", label: FREMD.labels.harness, anzahl: 50 }, {}, (a) => ((args = a), JSON.stringify(antwort([]))));
     expect(r).toEqual([]);
     const q = args.find((x) => x.startsWith("query=")) ?? "";
     expect(q).toContain("states:OPEN");
     expect(q).toContain("first:50");
     expect(q).toContain("direction:DESC");
     expect(q).toContain("projectItems");
-    expect(args).toEqual(expect.arrayContaining(["o=o", "n=n", "l[]=area:harness"]));
+    expect(args).toEqual(expect.arrayContaining(["o=o", "n=n", `l[]=${FREMD.labels.harness}`]));
   });
   test("Fenstergrenzen: anzahl 1 und 100 sind gültig", () => {
     for (const anzahl of [1, 100]) {

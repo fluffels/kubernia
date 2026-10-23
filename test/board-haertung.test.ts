@@ -8,8 +8,9 @@ import { readFileSync } from "node:fs";
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTakt from "../scripts/board-takt.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawPc from "../scripts/projekt-config-lib.mjs";
+import { FREMD, projektConfig } from "./support/fremd-config";
+
+const OWNER = FREMD.repo.split("/")[0] ?? "";
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Lib = {
@@ -85,7 +86,7 @@ describe("GraphQL-Syntax-Wächter (#1392 Z10)", () => {
 
 describe("freier Todo-Rang (#1392 Z11)", () => {
   const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
-  const geclaimt = (number: number) => it(number, { assignees: ["fluffels"] });
+  const geclaimt = (number: number) => it(number, { assignees: [OWNER] });
   const SAMMEL = "Harness-Härtung (gesammelt)";
 
   test("geclaimte Todo-Items zählen im Rang nicht mit", () => {
@@ -155,7 +156,7 @@ describe("graphqlTeilantwort: Verdrahtung des Teilantwort-Pfads (#1392 Z20)", ()
 
 describe("gemeinsame Helfer (#1392 Z22, Z23)", () => {
   test("todoItem: offenes, ungeclaimtes Todo-Item mit den übergebenen Feldern", () => {
-    expect(L.todoItem({ id: "PVTI_x", number: 7, title: "T" })).toEqual({ id: "PVTI_x", number: 7, status: "Todo", title: "T", assignees: [], state: "open" });
+    expect(L.todoItem({ id: "ITEM_x", number: 7, title: "T" })).toEqual({ id: "ITEM_x", number: 7, status: "Todo", title: "T", assignees: [], state: "open" });
   });
 
   test("positionLautAgentsMd liest die echte AGENTS.md und stimmt mit sammelticketPosition überein", () => {
@@ -170,17 +171,18 @@ describe("gemeinsame Helfer (#1392 Z22, Z23)", () => {
   });
 
   test("REPO: GITHUB_REPOSITORY oder das Repo der Projekt-Config, und die Alias-Abfrage nutzt es als Standard", () => {
-    expect(L.REPO).toBe(process.env.GITHUB_REPOSITORY || (rawPc as unknown as { ladeProjektConfig(): { repo: string } }).ladeProjektConfig().repo);
+    expect(L.REPO).toBe(process.env.GITHUB_REPOSITORY || projektConfig().repo);
     const [owner, name] = L.REPO.split("/");
     expect(L.aliasAbfrage([1])[0].query).toContain(`repository(owner:"${owner}",name:"${name}")`);
   });
 
   test("kein Board-Skript trägt das Repo fest verdrahtet (auch board-lib liest es aus der Projekt-Config)", () => {
+    const repo = projektConfig().repo;
     for (const f of ["board-lib", "board-place", "board-takt", "sammelticket-anlegen", "langfuse-takt"]) {
       const quelle = readFileSync(new URL(`../scripts/${f}.mjs`, import.meta.url), "utf8");
-      const ohneUrls = quelle.replace(/https:\/\/github\.com\/fluffels\/kubernia[^\s"`)]*/g, "");
-      expect(ohneUrls, f).not.toMatch(/repos\/fluffels\/kubernia/);
-      expect(ohneUrls, f).not.toMatch(/"fluffels\/kubernia"/);
+      const ohneUrls = quelle.replaceAll(`https://github.com/${repo}`, "");
+      expect(ohneUrls, f).not.toContain(`repos/${repo}`);
+      expect(ohneUrls, f).not.toContain(`"${repo}"`);
     }
   });
 });

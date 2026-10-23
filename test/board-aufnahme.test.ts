@@ -1,11 +1,9 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig as ladeConfigRoh } from "../scripts/projekt-config-lib.mjs";
-const ladeProjektConfig = (): Record<string, unknown> => (ladeConfigRoh as () => Record<string, unknown>)();
+import { FREMD } from "./support/fremd-config";
 
-const config: unknown = ladeProjektConfig();
+const config: unknown = FREMD;
 
 type Plan = { aufnehmen: { number: number; nodeId: string; title: string; rolle: string }[]; abgelehnt: { number: number; grund: string }[] };
 const aufnahmePlan = (raw as unknown as { aufnahmePlan: (f: number[], i: Record<number, unknown>, o?: { config?: unknown; ankerNr?: number | null }) => Plan }).aufnahmePlan;
@@ -52,7 +50,7 @@ type Io = { ghJson: (a: string[]) => unknown; addToBoardTodo: (nodeId: string) =
 const nimmFehlendeAuf = (placeRaw as unknown as { nimmFehlendeAuf: (items: Item[], args: { anchor: number | null; numbers: number[]; dry: boolean }, io: Io) => Item[] }).nimmFehlendeAuf;
 
 describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
-  const board: Item[] = [{ id: "PVTI_1", number: 1, title: "eins", status: "Todo" }];
+  const board: Item[] = [{ id: "ITEM_1", number: 1, title: "eins", status: "Todo" }];
   const fakes = (issues: Record<number, unknown>) => {
     const rufe = { api: [] as string[][], add: [] as string[], log: [] as string[], warn: [] as string[] };
     const io: Io = {
@@ -66,7 +64,7 @@ describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
       },
       addToBoardTodo: (nodeId) => {
         rufe.add.push(nodeId);
-        return `PVTI_neu_${nodeId}`;
+        return `ITEM_neu_${nodeId}`;
       },
       log: (m) => rufe.log.push(m),
       warn: (m) => rufe.warn.push(m),
@@ -87,7 +85,7 @@ describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
     const r = nimmFehlendeAuf(board, { anchor: null, numbers: [1, 5], dry: false }, io);
     expect(rufe.add).toEqual(["I_5"]);
     expect(r.map((i) => i.number)).toEqual([1, 5]);
-    expect(r[1]).toMatchObject({ id: "PVTI_neu_I_5", title: "T5" });
+    expect(r[1]).toMatchObject({ id: "ITEM_neu_I_5", title: "T5" });
     expect(rufe.log[0]).toMatch(/#5 fehlte im Board: aufgenommen/);
   });
 

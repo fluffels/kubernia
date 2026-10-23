@@ -6,8 +6,7 @@ import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawPc from "../scripts/projekt-config-lib.mjs";
+import { FREMD, projektConfig } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPlace from "../scripts/board-place.mjs";
 
@@ -28,15 +27,17 @@ type Lib = {
 };
 type Item = { number: number; title?: string; labels?: string[] };
 const L = rawLib as unknown as Lib;
-const echt = (rawPc as unknown as { ladeProjektConfig(): { boards: Board[] } }).ladeProjektConfig();
+const echt = FREMD; // injiziert: der getestete Code liest die Config nicht selbst
+const real = projektConfig(); // nur für `boardFuerRolle`, das die Projekt-Config des Repos liest
+const HARNESS = FREMD.labels.harness;
 
 describe("boardFuerRolle", () => {
   test("liefert das Board der Rolle aus der Config; Produkt und Factory sind verschiedene Boards", () => {
     const produkt = L.boardFuerRolle("produkt");
     const factory = L.boardFuerRolle("factory");
-    expect(produkt).toMatchObject(echt.boards.find((b) => b.rolle === "produkt") ?? {});
-    expect(factory).toMatchObject(echt.boards.find((b) => b.rolle === "factory") ?? {});
-    expect(produkt.nummer).toBe(1);
+    expect(produkt).toMatchObject(real.boards.find((b) => b.rolle === "produkt") ?? {});
+    expect(factory).toMatchObject(real.boards.find((b) => b.rolle === "factory") ?? {});
+    expect(produkt.nummer).toBe(real.boards.find((b) => b.rolle === "produkt")?.nummer);
     expect(factory.projectId).not.toBe(produkt.projectId);
     expect(factory.nummer).not.toBe(produkt.nummer);
   });
@@ -47,24 +48,24 @@ describe("boardFuerRolle", () => {
 });
 
 describe("boardRolleFuer", () => {
-  test("area:harness ergibt factory, alles andere produkt (Strings und Label-Objekte)", () => {
+  test("das Harness-Label ergibt factory, alles andere produkt (Strings und Label-Objekte)", () => {
     expect(L.boardRolleFuer([], echt)).toBe("produkt");
-    expect(L.boardRolleFuer(["bug", "area:harness"], echt)).toBe("factory");
-    expect(L.boardRolleFuer([{ name: "area:harness" }], echt)).toBe("factory");
+    expect(L.boardRolleFuer(["bug", HARNESS], echt)).toBe("factory");
+    expect(L.boardRolleFuer([{ name: HARNESS }], echt)).toBe("factory");
     expect(L.boardRolleFuer(["area:spiel", { name: "bug" }, null], echt)).toBe("produkt");
   });
-  test("nur exakte Gleichheit: area:harness-x und xarea:harness zählen nicht", () => {
-    expect(L.boardRolleFuer(["area:harness-x"], echt)).toBe("produkt");
-    expect(L.boardRolleFuer([{ name: "xarea:harness" }], echt)).toBe("produkt");
+  test("nur exakte Gleichheit: das Label mit Suffix oder Präfix zählt nicht", () => {
+    expect(L.boardRolleFuer([`${HARNESS}-x`], echt)).toBe("produkt");
+    expect(L.boardRolleFuer([{ name: `x${HARNESS}` }], echt)).toBe("produkt");
   });
   test("ohne Label-Liste wirft sie, statt still das Produkt-Board zu wählen", () => {
-    for (const bad of [null, undefined, "area:harness", {}]) expect(() => L.boardRolleFuer(bad, echt), JSON.stringify(bad) ?? "undefined").toThrow(/Label-Liste[\s\S]*Fix:/);
+    for (const bad of [null, undefined, HARNESS, {}]) expect(() => L.boardRolleFuer(bad, echt), JSON.stringify(bad) ?? "undefined").toThrow(/Label-Liste[\s\S]*Fix:/);
     // kein Zufallstreffer: eine echte Liste wirft nicht
     expect(() => L.boardRolleFuer([], echt)).not.toThrow();
   });
 });
 
-const H = ["area:harness"];
+const H = [HARNESS];
 const nrn = (l: Item[]) => l.map((i) => i.number);
 
 describe("seitenListen: zwei Boards als zwei Auswahllisten (#1729)", () => {
@@ -117,7 +118,7 @@ describe("kopfRang und aufnahmePlan.rolle (#1729)", () => {
   });
   test("jeder aufzunehmende Eintrag trägt die Rolle laut Trennregel", () => {
     const issue = (n: number, labels: unknown[]) => ({ number: n, state: "open", node_id: `N${n}`, title: "t", labels });
-    const r = L.aufnahmePlan([1, 2, 3], { 1: issue(1, [{ name: "area:harness" }]), 2: issue(2, []), 3: { ...issue(3, []), labels: undefined } }, { config: echt });
+    const r = L.aufnahmePlan([1, 2, 3], { 1: issue(1, [{ name: HARNESS }]), 2: issue(2, []), 3: { ...issue(3, []), labels: undefined } }, { config: echt });
     expect(r.aufnehmen.map((a) => [a.number, a.rolle])).toEqual([[1, "factory"], [2, "produkt"], [3, "produkt"]]);
   });
 });
@@ -159,7 +160,7 @@ describe("zielRolle: das Board für board-place (#1729)", () => {
     expect(r).toEqual({ rolle: "factory", doppelt: [5] });
   });
   test("ohne Item im Board kommen die Labels aus der Issue-REST; ohne beides ist die Rolle nicht bestimmbar", () => {
-    expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], labelsRest: { 7: ["area:harness"] }, config: echt })).toMatchObject({ rolle: "factory" });
+    expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], labelsRest: { 7: [HARNESS] }, config: echt })).toMatchObject({ rolle: "factory" });
     expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], config: echt }).fehler).toMatch(/#7: Board-Rolle nicht bestimmbar/);
     expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], labelsRest: { 7: null }, config: echt }).fehler).toMatch(/nicht bestimmbar/);
   });
@@ -241,28 +242,28 @@ describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
   type Schritt = { aktion: string; number: number; title: string; von: string; nach: string; quelleId: string; contentId?: string };
   type Plan = { schritte: Schritt[]; gemeldet: { number: number; grund: string }[]; ende: { produkt: string | null; factory: string | null } };
   const plan = (p: U[], f: U[]): Plan => (L as unknown as { umzugsPlan: (p: U[], f: U[], c: unknown) => Plan }).umzugsPlan(p, f, echt);
-  const it = (number: number, labels: string[] = [], extra: Partial<U> = {}): U => ({ id: `PVTI_${number}`, number, status: "Todo", state: "open", contentId: `I_${number}`, labels, ...extra });
-  const H = ["area:harness"];
+  const it = (number: number, labels: string[] = [], extra: Partial<U> = {}): U => ({ id: `ITEM_${number}`, number, status: "Todo", state: "open", contentId: `I_${number}`, labels, ...extra });
+  const H = [HARNESS];
 
   test("Harness-Items vom Produkt-Board ziehen in Quell-Reihenfolge nach Factory, Nicht-Harness dazwischen bleibt", () => {
     const p = plan([it(1, H), it(2), it(3, H), it(4)], [it(9, H)]);
     expect(p.schritte).toEqual([
-      { aktion: "umziehen", number: 1, title: "", von: "produkt", nach: "factory", quelleId: "PVTI_1", contentId: "I_1" },
-      { aktion: "umziehen", number: 3, title: "", von: "produkt", nach: "factory", quelleId: "PVTI_3", contentId: "I_3" },
+      { aktion: "umziehen", number: 1, title: "", von: "produkt", nach: "factory", quelleId: "ITEM_1", contentId: "I_1" },
+      { aktion: "umziehen", number: 3, title: "", von: "produkt", nach: "factory", quelleId: "ITEM_3", contentId: "I_3" },
     ]);
     expect(p.gemeldet).toEqual([]);
-    expect(p.ende).toEqual({ produkt: "PVTI_4", factory: "PVTI_9" });
+    expect(p.ende).toEqual({ produkt: "ITEM_4", factory: "ITEM_9" });
   });
 
   test("Gegenrichtung: Nicht-Harness auf dem Factory-Board zieht aufs Produkt-Board", () => {
     const p = plan([], [it(5), it(6, H)]);
     expect(p.schritte.map((s) => [s.number, s.von, s.nach])).toEqual([[5, "factory", "produkt"]]);
-    expect(p.ende).toEqual({ produkt: null, factory: "PVTI_6" });
+    expect(p.ende).toEqual({ produkt: null, factory: "ITEM_6" });
   });
 
   test("ein Item auf beiden Boards wird nur vom falschen entfernt, nicht doppelt angelegt", () => {
     const p = plan([it(1, H)], [it(1, H)]);
-    expect(p.schritte).toEqual([{ aktion: "entfernen", number: 1, title: "", von: "produkt", nach: "factory", quelleId: "PVTI_1" }]);
+    expect(p.schritte).toEqual([{ aktion: "entfernen", number: 1, title: "", von: "produkt", nach: "factory", quelleId: "ITEM_1" }]);
   });
 
   test("Status ungleich Todo (auch leer) und fehlende Issue-ID werden gemeldet und nicht umgezogen", () => {
@@ -283,7 +284,7 @@ describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
     const p = plan([it(1), it(2, H)], [it(9, H), it(5)]);
     expect(p.schritte.map((s) => [s.number, s.nach])).toEqual([[2, "factory"], [5, "produkt"]]);
     // das letzte Item beider Boards zieht selbst um: der Anker ist das davor
-    expect(p.ende).toEqual({ produkt: "PVTI_1", factory: "PVTI_9" });
+    expect(p.ende).toEqual({ produkt: "ITEM_1", factory: "ITEM_9" });
   });
 
   test("ein Board, dessen Items alle ausziehen, hat keinen Anker (Spitze)", () => {
@@ -301,7 +302,7 @@ describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
   test("auch ein nur zu entfernendes Item ist als Anker ausgeschlossen (steht auf beiden Boards, letzte Position)", () => {
     const p = plan([it(3), it(1, H)], [it(1, H), it(5)]);
     expect(p.schritte.map((s) => [s.aktion, s.number])).toEqual([["entfernen", 1], ["umziehen", 5]]);
-    expect(p.ende.produkt).toBe("PVTI_3");
+    expect(p.ende.produkt).toBe("ITEM_3");
   });
 
   test("geschlossene Items bleiben als Historie, richtig stehende Items bleiben, ein Plan nach dem Umzug ist leer (idempotent)", () => {
@@ -421,11 +422,11 @@ describe("parseArgs --umzug und entferneVomBoard (#1730)", () => {
   });
   test("normalizeItems trägt die Issue-Node-ID, fehlend ist sie leer", () => {
     const n = (L as unknown as { normalizeItems: (r: unknown) => { contentId: string }[] }).normalizeItems;
-    const roh = [[{ node_id: "PVTI_1", content_type: "Issue", content: { node_id: "I_1", number: 1 }, fields: [] }, { node_id: "PVTI_2", content_type: "Issue", content: { number: 2 }, fields: [] }]];
+    const roh = [[{ node_id: "ITEM_1", content_type: "Issue", content: { node_id: "I_1", number: 1 }, fields: [] }, { node_id: "ITEM_2", content_type: "Issue", content: { number: 2 }, fields: [] }]];
     expect(n(roh).map((i) => i.contentId)).toEqual(["I_1", ""]);
   });
   test("entferneVomBoard ohne Board wirft vor jedem gh-Aufruf", () => {
     const f = (L as unknown as { entferneVomBoard: (...a: unknown[]) => unknown }).entferneVomBoard;
-    for (const falsch of [undefined, null, "produkt", {}]) expect(() => f(falsch, "PVTI_1")).toThrow(/Board fehlt[\s\S]*Fix:/);
+    for (const falsch of [undefined, null, "produkt", {}]) expect(() => f(falsch, "ITEM_1")).toThrow(/Board fehlt[\s\S]*Fix:/);
   });
 });

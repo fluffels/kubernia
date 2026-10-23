@@ -16,12 +16,16 @@ import { fileURLToPath } from "node:url";
 import * as rawLock from "../../scripts/ticket-lock.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../../scripts/ticket-lock-lib.mjs";
+import { FREMD, FREMD_CONFIG_PFAD } from "../support/fremd-config";
+
+const WTP = FREMD.praefixe.worktree;
+const BRP = FREMD.praefixe.branch;
 
 type Erg = { code: number; out: string; err: string };
 type Lock = Record<string, unknown>;
 const M = rawLock as unknown as {
   fuehreAus: (argv: string[], deps: Record<string, unknown>) => Erg;
-  echteDeps: () => Record<string, unknown>;
+  echteDeps: (o?: { config?: unknown }) => Record<string, unknown>;
   letzteAktivitaet: (o: { commitMs?: number[]; lockMs?: number | null }) => number | null;
   bereinigeSchritt: (t: unknown) => string | null;
   VERWAIST_MS: number;
@@ -48,7 +52,7 @@ let echt: Record<string, unknown> | null = null;
 type Welt = { refs?: string[]; worktrees?: string[]; commitSek?: number; branch?: string; gitFehler?: boolean };
 
 function deps(welt: Welt = {}, jetzt = JETZT, sandbox?: string | null): Record<string, unknown> {
-  echt ??= M.echteDeps();
+  echt ??= M.echteDeps({ config: FREMD });
   return {
     ...echt,
     lockDir: join(dir, "locks"),
@@ -84,24 +88,24 @@ function eigenerLock(nr: number, extra: Lock = {}, jetzt = JETZT): string {
   schreibeLock(nr, { ...liesLock(nr), ...extra });
   return nonce;
 }
-const WT = "/repo/.claude/worktrees/kq-9";
+const WT = `/repo/.claude/worktrees/${WTP}9`;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "kq-lebenszeichen-"));
+  dir = mkdtempSync(join(tmpdir(), "lebenszeichen-"));
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
 describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", () => {
-  test("lockVerzeichnis hängt Präfix und `locks` an das gemeinsame git-Verzeichnis (historischer Ordner bei Präfix kq-)", () => {
-    assert.equal(L.lockVerzeichnis({ gemeinsam: "/g", praefixWorktree: "kq-" }).replace(/\\/g, "/"), "/g/kq-locks");
+  test("lockVerzeichnis hängt Präfix und `locks` an das gemeinsame git-Verzeichnis (ein fremdes Präfix ergibt einen anderen Ordner)", () => {
+    assert.equal(L.lockVerzeichnis({ gemeinsam: "/g", praefixWorktree: WTP }).replace(/\\/g, "/"), `/g/${WTP}locks`);
     assert.equal(L.lockVerzeichnis({ gemeinsam: "/g", praefixWorktree: "zd-" }).replace(/\\/g, "/"), "/g/zd-locks");
   });
 
   test("lockDir der echten Deps liegt im gemeinsamen git-Verzeichnis unter <praefixe.worktree>locks", () => {
-    echt ??= M.echteDeps();
-    assert.match(String(echt.lockDir).replace(/\\/g, "/"), /\/\.git\/kq-locks$|\/kq-locks$/);
+    echt ??= M.echteDeps({ config: FREMD });
+    assert.ok(String(echt.lockDir).replace(/\\/g, "/").endsWith(`/${WTP}locks`));
   });
 
   test.each([
@@ -237,7 +241,7 @@ describe("lebenszeichen --commit (post-commit-Hook)", () => {
   test("Ticket-Branch mit Lock: nur zuletzt (quelle commit) ändert sich", () => {
     eigenerLock(5, { schritt: "1/3", uebergabe: { gesetzt: "u", verbraucht: null } });
     const vorher = liesLock(5);
-    const r = lauf(["lebenszeichen", "--commit"], { branch: "feature/kq-5-irgendwas" }, JETZT + 5 * MIN);
+    const r = lauf(["lebenszeichen", "--commit"], { branch: `${BRP}5-irgendwas` }, JETZT + 5 * MIN);
     assert.deepEqual(r, { code: 0, out: "", err: "" });
     const nachher = liesLock(5);
     assert.deepEqual(nachher.zuletzt, { zeit: iso(JETZT + 5 * MIN), quelle: "commit" });
@@ -246,7 +250,7 @@ describe("lebenszeichen --commit (post-commit-Hook)", () => {
     assert.deepEqual(restNachher, restVorher);
   });
 
-  test.each([["main"], ["HEAD"], ["feature/ohne-ticket"], ["feature/kq-7-x"]])("Branch %s: stiller No-op (Exit 0), keine Datei", (branch) => {
+  test.each([["main"], ["HEAD"], ["feature/ohne-ticket"], [`${BRP}7-x`]])("Branch %s: stiller No-op (Exit 0), keine Datei", (branch) => {
     eigenerLock(5);
     const vorher = readFileSync(lockPfad(5), "utf8");
     assert.equal(lauf(["lebenszeichen", "--commit"], { branch }).code, 0);
@@ -257,7 +261,7 @@ describe("lebenszeichen --commit (post-commit-Hook)", () => {
   test("unlesbarer Lock bleibt unverändert, ein werfendes git ergibt trotzdem Exit 0", () => {
     mkdirSync(join(dir, "locks"), { recursive: true });
     writeFileSync(lockPfad(5), "{kaputt");
-    assert.equal(lauf(["lebenszeichen", "--commit"], { branch: "feature/kq-5-x" }).code, 0);
+    assert.equal(lauf(["lebenszeichen", "--commit"], { branch: `${BRP}5-x` }).code, 0);
     assert.equal(readFileSync(lockPfad(5), "utf8"), "{kaputt");
     assert.deepEqual(lauf(["lebenszeichen", "--commit"], { gitFehler: true }), { code: 0, out: "", err: "" });
   });
@@ -273,7 +277,7 @@ describe("Herzschlag als Aktivität in pruefe und claim", () => {
     const alt = (JETZT - 5 * 60 * MIN) / 1000;
     const nonce = eigenerLock(9, {}, JETZT - 4 * 60 * MIN);
     schreibeLock(9, { ...liesLock(9), zuletzt: { zeit: iso(JETZT - 10 * MIN), quelle: "commit" } });
-    const welt = { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt };
+    const welt = { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: alt };
     const aktiv = lauf(["pruefe", "9", "--nonce", nonce], welt);
     assert.equal(aktiv.code, 4);
     assert.equal(aktiv.out, "aktiv\n");
@@ -283,7 +287,7 @@ describe("Herzschlag als Aktivität in pruefe und claim", () => {
 
   test("erstellt zählt nicht als Herzschlag: ein junger Lock ohne zuletzt bei alter Aktivität ist übernehmbar", () => {
     const nonce = eigenerLock(9, {}, JETZT - 5 * MIN);
-    assert.equal(lauf(["pruefe", "9", "--nonce", nonce], { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: (JETZT - 5 * 60 * MIN) / 1000 }).out, "uebernehmbar\n");
+    assert.equal(lauf(["pruefe", "9", "--nonce", nonce], { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: (JETZT - 5 * 60 * MIN) / 1000 }).out, "uebernehmbar\n");
   });
 
   test("claim: Lock ohne Worktree mit erstellt vor 3 h, aber zuletzt vor 10 min gilt noch (Exit 4); zuletzt vor 2 h 1 min wird ersetzt", () => {
@@ -305,18 +309,18 @@ describe("claim --wiederaufnahme", () => {
   test("alter Lock und inaktiver Worktree: Exit 0 mit neuer Nonce, der alte Lock liegt als .verwaist-* daneben", () => {
     alterLock(9);
     const alteNonceHash = liesLock(9).nonceHash;
-    const r = lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt });
+    const r = lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: alt });
     assert.equal(r.code, 0);
     const nonce = /^nonce=(\S+)\n$/.exec(r.out)?.[1];
     assert.ok(nonce);
     assert.notEqual(liesLock(9).nonceHash, alteNonceHash);
-    assert.equal(lauf(["pruefe", "9", "--nonce", nonce ?? ""], { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt }).out, "uebernehmbar\n");
+    assert.equal(lauf(["pruefe", "9", "--nonce", nonce ?? ""], { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: alt }).out, "uebernehmbar\n");
     assert.equal(readdirSync(join(dir, "locks")).filter((f) => f.startsWith("9.json.verwaist-")).length, 1);
   });
 
   test("ohne Flag bleibt die Belegung Exit 4, mit unbekanntem Zusatz Usage (Exit 2)", () => {
     alterLock(9);
-    assert.equal(lauf(["claim", "9"], { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt }).code, 4);
+    assert.equal(lauf(["claim", "9"], { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: alt }).code, 4);
     assert.equal(lauf(["claim", "9", "--anderes"]).code, 2);
     assert.equal(lauf(["claim", "9", "--wiederaufnahme", "x"]).code, 2);
   });
@@ -324,7 +328,7 @@ describe("claim --wiederaufnahme", () => {
   test("Aktivität unter 30 min: Exit 4, der Lock bleibt", () => {
     alterLock(9);
     const vorher = readFileSync(lockPfad(9), "utf8");
-    const r = lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: (JETZT - 10 * MIN) / 1000 });
+    const r = lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: (JETZT - 10 * MIN) / 1000 });
     assert.equal(r.code, 4);
     assert.match(r.err, /Nicht von Hand/);
     assert.equal(readFileSync(lockPfad(9), "utf8"), vorher);
@@ -332,16 +336,16 @@ describe("claim --wiederaufnahme", () => {
 
   test("Herzschlag unter 30 min zählt als Aktivität: Exit 4", () => {
     alterLock(9, JETZT - 10 * MIN);
-    assert.equal(lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt }).code, 4);
+    assert.equal(lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: alt }).code, 4);
   });
 
   test("Lock jünger als 2 h: Exit 4 auch bei alter Aktivität", () => {
     eigenerLock(9, {}, JETZT - 60 * MIN);
-    assert.equal(lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt }).code, 4);
+    assert.equal(lauf(["claim", "9", "--wiederaufnahme"], { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: alt }).code, 4);
   });
 
   test("ohne Lock und mit inaktivem Branch: Exit 0 (neuer Lock)", () => {
-    const r = lauf(["claim", "9", "--wiederaufnahme"], { refs: ["feature/kq-9-x"], commitSek: alt });
+    const r = lauf(["claim", "9", "--wiederaufnahme"], { refs: [`${BRP}9-x`], commitSek: alt });
     assert.equal(r.code, 0);
     assert.equal(liesLock(9).nonceHash !== undefined, true);
   });
@@ -353,7 +357,7 @@ describe("claim --wiederaufnahme", () => {
 
   test("zwei Bewerber um eine belegte Nummer: der zweite sieht den frischen Lock des ersten (Exit 4)", () => {
     alterLock(9);
-    const welt = { worktrees: [WT], refs: ["feature/kq-9-x"], commitSek: alt };
+    const welt = { worktrees: [WT], refs: [`${BRP}9-x`], commitSek: alt };
     assert.equal(lauf(["claim", "9", "--wiederaufnahme"], welt).code, 0);
     assert.equal(lauf(["claim", "9", "--wiederaufnahme"], welt).code, 4);
   });
@@ -394,7 +398,7 @@ function tempRepo(einstiege: string[]): string {
     mkdirSync(dirname(join(repo, "scripts", f)), { recursive: true });
     copyFileSync(join(WURZEL, "scripts", f), join(repo, "scripts", f));
   }
-  copyFileSync(join(WURZEL, ".factory/projekt.json"), join(repo, ".factory/projekt.json"));
+  copyFileSync(join(WURZEL, FREMD_CONFIG_PFAD), join(repo, ".factory/projekt.json")); // die Fremd-Config: das Kind liest sie wie die Projekt-Config
   copyFileSync(join(WURZEL, ".githooks/post-commit"), join(repo, ".githooks/post-commit"));
   return repo;
 }
@@ -407,9 +411,9 @@ describe("post-commit-Hook Ende zu Ende (#1762)", () => {
     git(repo, "commit", "-q", "-m", "init");
     const claim = node(repo, ["scripts/ticket-lock.mjs", "claim", "5"]);
     assert.match(claim, /nonce=/);
-    git(repo, "worktree", "add", "-q", ".claude/worktrees/kq-5", "-b", "feature/kq-5-x");
-    const wt = join(repo, ".claude", "worktrees", "kq-5");
-    const lockDatei = join(repo, ".git", "kq-locks", "5.json");
+    git(repo, "worktree", "add", "-q", `.claude/worktrees/${WTP}5`, "-b", `${BRP}5-x`);
+    const wt = join(repo, ".claude", "worktrees", `${WTP}5`);
+    const lockDatei = join(repo, ".git", `${WTP}locks`, "5.json");
     assert.equal((JSON.parse(readFileSync(lockDatei, "utf8")) as Lock).zuletzt, undefined);
     git(wt, "commit", "-q", "--allow-empty", "-m", "arbeit");
     const lock = JSON.parse(readFileSync(lockDatei, "utf8")) as { zuletzt?: { quelle?: string; zeit?: string } };
@@ -422,10 +426,10 @@ describe("post-commit-Hook Ende zu Ende (#1762)", () => {
     git(repo, "add", "-A");
     git(repo, "commit", "-q", "-m", "init", "--no-verify");
     node(repo, ["scripts/ticket-lock.mjs", "claim", "5"]);
-    git(repo, "worktree", "add", "-q", ".claude/worktrees/kq-5", "-b", "feature/kq-5-x");
+    git(repo, "worktree", "add", "-q", `.claude/worktrees/${WTP}5`, "-b", `${BRP}5-x`);
     git(repo, "config", "core.hooksPath", "kein-ordner");
-    git(join(repo, ".claude", "worktrees", "kq-5"), "commit", "-q", "--allow-empty", "-m", "arbeit");
-    const lock = JSON.parse(readFileSync(join(repo, ".git", "kq-locks", "5.json"), "utf8")) as Lock;
+    git(join(repo, ".claude", "worktrees", `${WTP}5`), "commit", "-q", "--allow-empty", "-m", "arbeit");
+    const lock = JSON.parse(readFileSync(join(repo, ".git", `${WTP}locks`, "5.json"), "utf8")) as Lock;
     assert.equal(lock.zuletzt, undefined);
   });
 });
@@ -446,7 +450,7 @@ describe("echteDeps: Smoke im Temp-Repo (#1762)", () => {
     const r = lade(repo, "ticket-lock.mjs");
     for (const k of ["git", "jetzt", "nonce", "lockDir", "sandbox", "liesDatei", "schreibeNeu", "ersetze", "benenneUm", "loesche", "legeVerzeichnisAn", "liste", "mtime"]) assert.ok(r.keys.includes(k), k);
     assert.equal(klein(r.top), klein(repo));
-    assert.equal(klein(r.lockDir), `${klein(repo)}/.git/kq-locks`);
+    assert.equal(klein(r.lockDir), `${klein(repo)}/.git/${WTP}locks`);
   });
 
   test("ticket-lock: sandbox folgt der Umgebungsvariable AGENT_SANDBOX", () => {

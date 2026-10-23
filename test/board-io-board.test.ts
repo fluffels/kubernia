@@ -10,7 +10,7 @@ vi.mock("../scripts/gh-cli.mjs", async (orig) => {
     ghText: (args: string[]) => {
       aufrufe.push(args);
       const q = args.join(" ");
-      if (q.includes("addProjectV2ItemById")) return JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "PVTI_x" } } } });
+      if (q.includes("addProjectV2ItemById")) return JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "ITEM_x" } } } });
       return "[]";
     },
   };
@@ -44,13 +44,13 @@ describe("Board-I/O nutzt das übergebene Board", () => {
     expect(t).not.toContain(`fields=${produkt.statusFeldId}`);
   });
   test("setPosition: projectId des Factory-Boards", () => {
-    L.setPosition(factory, "PVTI_a", "PVTI_b");
+    L.setPosition(factory, "ITEM_a", "ITEM_b");
     const t = flach();
     expect(t).toContain(`p=${factory.projectId}`);
     expect(t).not.toContain(produkt.projectId);
   });
   test("addToBoardTodo: projectId, Status-Feld und Todo-Option vom Factory-Board, richtig zugeordnet", () => {
-    expect(L.addToBoardTodo(factory, "I_node")).toBe("PVTI_x");
+    expect(L.addToBoardTodo(factory, "I_node")).toBe("ITEM_x");
     const t = flach();
     expect(t).toContain(`p=${factory.projectId}`);
     expect(t).toContain(`f=${factory.statusFeldNodeId}`);
