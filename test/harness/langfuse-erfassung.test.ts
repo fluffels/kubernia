@@ -583,3 +583,34 @@ describe("Zuordnung in Langfuse (#1668)", () => {
     assert.equal(nutztRollenUebersicht(mr.replace("`name` `starts with` `Subagent LLM Call`, Familie `opus`", "`name` `starts with` `Call`, Familie `opus`")), false);
   });
 });
+
+/* Messwerte gehören in den Beleg-Kommentar, nicht in die Doku (L1 #1888): docs/langfuse-hook-patch.md
+ * trägt nur qualitative Aussagen mit Verweis. Geschlossene Musterliste (jede Erweiterung ist ein
+ * bewusster Commit):
+ *   `\d+ von \d+`                    Stichprobenanteil („10 von 11“)
+ *   `gemessen am \d{4}-\d{2}-\d{2}`  Messdatum
+ *   `an \d+ \S+-Läufen`              Lauf-Anzahl der Stichprobe
+ *   `(zwei|drei|vier)mal \d+`        Zahl-Wiederholungen
+ *   `[−+-]\d+ s`                     Messabweichung in Sekunden
+ */
+describe("langfuse-hook-patch.md ohne Messwerte (#1888)", () => {
+  const MESSWERT_MUSTER = [
+    /\d+ von \d+/,
+    /gemessen am \d{4}-\d{2}-\d{2}/,
+    /an \d+ \S+-Läufen/,
+    /(zwei|drei|vier)mal \d+/,
+    /[−+-]\d+ s/,
+  ];
+  const messwerte = (md: string): string[] => MESSWERT_MUSTER.filter((m) => m.test(md)).map(String);
+
+  test("die Doku trägt keinen Messwert", () => {
+    assert.deepEqual(messwerte(read("docs/langfuse-hook-patch.md")), []);
+  });
+
+  test("rote Gegenbeispiele: jedes Muster schlägt an", () => {
+    for (const s of ["10 von 11", "gemessen am 2026-10-10", "an 6 SessionEnd-Läufen", "dreimal 181", "lag +2 s", "lag −1 s"]) {
+      assert.equal(messwerte(`x ${s} y`).length > 0, true, s);
+    }
+    assert.deepEqual(messwerte("fast alle, wenige Sekunden, 5 s Toleranz"), []);
+  });
+});
