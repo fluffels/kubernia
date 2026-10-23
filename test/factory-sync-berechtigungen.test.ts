@@ -33,7 +33,10 @@ const lib = rawLib as unknown as {
   ergaenzungsBefunde(perm: Perm, erg: Partial<Erg>): string[];
   einheitHash(e: { pfad: string; schluessel?: string }, text: string, erg?: Partial<Erg>): string | null;
 };
-const sync = rawSync as unknown as { cli(argv: string[], opt?: Opt): number };
+const sync = rawSync as unknown as {
+  cli(argv: string[], opt?: Opt): number;
+  pruefeErgebnis(p: string, e: unknown[], src: string, ziel: string | null, ergebnis: string, erg: { quelle: Erg; ziel: Erg }): string[];
+};
 const drift = rawDrift as unknown as {
   cli(argv: string[], opt?: Opt): number;
   pruefeDrift(lies: (p: string) => string | null): { fehler: string[] };
@@ -292,12 +295,7 @@ describe("Berechtigungs-Ergänzung: Negativfälle (nichts wird geschrieben, Exit
 
 describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () => {
   const EINHEIT = { pfad: SETTINGS, schluessel: "permissions" };
-  const pe = (
-    rawSync as unknown as {
-      pruefeErgebnis(p: string, e: unknown[], src: string, ziel: string | null, ergebnis: string, erg: { quelle: Erg; ziel: Erg }): string[];
-    }
-  ).pruefeErgebnis;
-  const leer: Erg = { allow: [], ask: [], deny: [] };
+  const pe = (ergebnis: string, src: string, erg: { quelle: Erg; ziel: Erg }): string[] => sync.pruefeErgebnis(SETTINGS, [EINHEIT], src, null, ergebnis, erg);
   const befunde = (perm: Perm, erg: Partial<Erg>): string => lib.ergaenzungsBefunde(perm, erg).join("|");
 
   test("kernAnteil: eine leere Liste entfällt immer, eine fehlende bleibt fehlend, ein Nicht-Objekt bleibt unverändert", () => {
@@ -337,11 +335,11 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
     const zielErg: Erg = { allow: ["mcp__z"], ask: [], deny: [] };
     const erg = { quelle: QUELL_ERG, ziel: zielErg };
     const gut = json({ permissions: mit(KERN, zielErg) });
-    assert.deepEqual(pe(SETTINGS, [EINHEIT], src, null, gut, erg), []);
+    assert.deepEqual(pe(gut, src, erg), []);
     const ohneDeny = json({ permissions: mit({ ...KERN, deny: ["Read(/.env)"] }, zielErg) });
-    assert.match(pe(SETTINGS, [EINHEIT], src, null, ohneDeny, erg).join("|"), /Schlüssel 'permissions' weicht nach dem Sync von der Quelle ab/);
+    assert.match(pe(ohneDeny, src, erg).join("|"), /Schlüssel 'permissions' weicht nach dem Sync von der Quelle ab/);
     const ohneErg = json({ permissions: KERN });
-    assert.match(pe(SETTINGS, [EINHEIT], src, null, ohneErg, erg).join("|"), /Ergänzung „mcp__z“ fehlt/);
+    assert.match(pe(ohneErg, src, erg).join("|"), /Ergänzung „mcp__z“ fehlt/);
   });
 
   test("kaputte Quell-Config (Form und JSON) bricht den Sync mit „Quelle:“ ab, nichts wird geschrieben", () => {
@@ -368,7 +366,7 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
   });
 
   test("gesyncctes Ziel, danach kaputte Config: das Gate meldet genau die Config mit Weg, ohne Folgebefund am Kern", () => {
-    const z = baueZiel(ZIEL_ERG0);
+    const z = baueZiel({ allow: ["mcp__z"], ask: [], deny: [] });
     assert.equal(vomTag(baueQuelle(), z).code, 0);
     schreibe(z, CONFIG, "{kaputt");
     const g = gate(z);
@@ -379,7 +377,7 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
   });
 
   test("leere Ergänzung: das Gate wirft nicht, wenn permissions in settings.json kein Objekt ist", () => {
-    const z = baueZiel(ZIEL_ERG0);
+    const z = baueZiel({ allow: ["mcp__z"], ask: [], deny: [] });
     assert.equal(vomTag(baueQuelle(), z).code, 0);
     schreibe(z, SETTINGS, json({ permissions: null }));
     assert.doesNotThrow(() => gate(z));
@@ -387,4 +385,3 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
   });
 });
 
-const ZIEL_ERG0: Erg = { allow: ["mcp__z"], ask: [], deny: [] };
