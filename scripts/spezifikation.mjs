@@ -137,9 +137,19 @@ export function mitBlockerZeile(body, nummern, sprache) {
   return fehlt.length === 0 ? body : `${body.replace(/\s+$/, "")}\n\n${blockerZeile(fehlt, sprache)}\n`;
 }
 
+/** Präfix des Bereichs-Labels: `labels.harness` bis einschließlich dem ersten `:` (Beispiel `x:harness` → `x:`); ohne `:` gibt es kein Präfix (jedes Label zählt). */
+export function bereichsPraefix(config) {
+  const harness = labelAus(config, "harness");
+  const i = harness.indexOf(":");
+  return i < 0 ? "" : harness.slice(0, i + 1);
+}
+
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
-  if (!werte.label.some((l) => /^area:\S+/.test(l))) return aufrufFehler("ein Label `area:<x>` ist Pflicht (--label area:<x>)");
+  const praefix = bereichsPraefix(io.config);
+  if (!werte.label.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) {
+    return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
+  }
   if (Boolean(werte.nach) === Boolean(werte.notfall)) return aufrufFehler("genau eines von --nach <nr> und --notfall <art> ist Pflicht");
   const nach = werte.nach ? positiveZahl(werte.nach) : null; // einmal parsen: `#12` und `12` sind dieselbe Nummer
   if (werte.nach && nach === null) return aufrufFehler("--nach braucht eine Ticketnummer");

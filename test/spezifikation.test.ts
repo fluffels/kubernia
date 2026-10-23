@@ -4,11 +4,11 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
 import { echteSprache } from "./support/echte-sprache";
-import { FREMD } from "./support/fremd-config";
+import { FREMD, projektConfig } from "./support/fremd-config";
 
 const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
 const HARNESS = FREMD.labels.harness;
-const AREA = "area:demo"; // der Bereichs-Label-Aufbau `area:<x>` ist fest; die Wahl des Bereichs ist Testdatum
+const AREA = `${FREMD.labels.harness.split(":")[0]}:demo`; // Bereichs-Label der Fremd-Config: Präfix von labels.harness, die Wahl des Bereichs ist Testdatum
 
 type Issue = { state?: string; body?: string | null; user?: { login: string; type?: string } | null; labels?: ({ name: string } | string)[]; pull_request?: object };
 type Io = {
@@ -30,7 +30,7 @@ const ALT = "Das ist der alte Text.\nZweite Zeile des alten Texts.";
 function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
   const aufrufe = { erzeuge: [] as unknown[], einsortiere: [] as unknown[], bearbeite: [] as unknown[] };
   const io: Io = {
-    config: { labels: { forum: FREMD.labels.forum }, sprache: echteSprache() },
+    config: { labels: { forum: FREMD.labels.forum, harness: FREMD.labels.harness }, sprache: echteSprache() },
     owner: OWNER,
     leseDatei: (p) => {
       if (!(p in dateien)) throw new Error("ENOENT");
@@ -148,6 +148,27 @@ describe("anlegen", () => {
     expect(S.fuehreAus(["anlegen", "--titel", "   ", "--body-datei", "b.md", "--label", AREA, "--nach", "12"], io).code).toBe(2);
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:", "--nach", "12"], io).code).toBe(2);
     expect(aufrufe.erzeuge).toEqual([]);
+  });
+  test("Bereichs-Label: Präfix = labels.harness bis zum ersten Doppelpunkt (fremd `bereich:`, echt `area:`)", () => {
+    const fremd = FREMD.labels.harness.split(":")[0] + ":";
+    const echt = projektConfig().labels.harness.split(":")[0] + ":";
+    expect(fremd).not.toBe(echt);
+    const a = umgebung({ "b.md": GUT });
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${fremd}demo`, "--nach", "12"], a.io).code).toBe(0);
+    const b = umgebung({ "b.md": GUT });
+    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${echt}demo`, "--nach", "12"], b.io);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain(`${fremd}<x>`);
+    expect(b.aufrufe.erzeuge).toEqual([]);
+  });
+  test("Bereichs-Label der echten Config: `area:demo` ist gültig", () => {
+    const echt = projektConfig();
+    const { io } = umgebung({ "b.md": GUT }, { config: { labels: echt.labels, sprache: echteSprache() } });
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:demo", "--nach", "12"], io).code).toBe(0);
+  });
+  test("harness-Label ohne Doppelpunkt: jedes nicht leere Label genügt", () => {
+    const { io } = umgebung({ "b.md": GUT }, { config: { labels: { forum: "f", harness: "harness" }, sprache: echteSprache() } });
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "irgendwas", "--nach", "12"], io).code).toBe(0);
   });
   test("`--nach #12` und `--nach 12` sind dieselbe Nummer: einsortiert wird mit 12 (nie NaN), der Nachhol-Befehl nennt 12", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
@@ -363,7 +384,7 @@ describe("ankerPruefung: erst nur das Ziel-Board, das andere nur bei Bedarf (#17
 });
 
 describe("Sprache als Projektwert (#1711)", () => {
-  const ohneSprache = { config: { labels: { forum: FREMD.labels.forum } } };
+  const ohneSprache = { config: { labels: { forum: FREMD.labels.forum, harness: FREMD.labels.harness } } };
   test("Negativfall: ohne sprache bricht jeder Unterbefehl mit klarer Meldung ab (Exit 1, nichts angelegt oder geschrieben, kein Stacktrace)", () => {
     const befehle = [["pruefen", "--body-datei", "b.md"], ANLEGEN, ["reparieren", "5", "--body-datei", "b.md"]];
     for (const argv of befehle) {
@@ -382,7 +403,7 @@ describe("Sprache als Projektwert (#1711)", () => {
   });
   test("englische Sprache aus der Config: der englische Body ist vollständig, der deutsche nicht", () => {
     const en = { ziel: "Goal", akzeptanzkriterien: ["Acceptance criteria"], nachMerge: "After merge:", negativfall: { wort: "Negative case", muster: "negative case" }, begrenzung: { wort: "known patterns:", muster: "known patterns:" }, allquantor: { wort: "all … that … read", muster: "all [^.!?]*that [^.!?]*read" }, blocker: "blocked by", abhaengigkeit: ["follows #"] };
-    const { io } = umgebung({ "en.md": "## Goal\nG\n\n## Acceptance criteria\n- Negative case: x\n", "de.md": GUT }, { config: { labels: { forum: FREMD.labels.forum }, sprache: { spezifikation: en } } });
+    const { io } = umgebung({ "en.md": "## Goal\nG\n\n## Acceptance criteria\n- Negative case: x\n", "de.md": GUT }, { config: { labels: { forum: FREMD.labels.forum, harness: FREMD.labels.harness }, sprache: { spezifikation: en } } });
     expect(S.fuehreAus(["pruefen", "--body-datei", "en.md"], io).code).toBe(0);
     const de = S.fuehreAus(["pruefen", "--body-datei", "de.md"], io);
     expect(de.code).toBe(1);
