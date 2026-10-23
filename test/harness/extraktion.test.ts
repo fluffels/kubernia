@@ -82,7 +82,7 @@ export function zuordnungsLuecken(liste: Liste, bezug: string[]): string[] {
 }
 
 const DATEN_DATEI = "Daten-Datei des Kern-Wächters (Baseline oder Abdeckung): ihre Werte sind Projektzustand, der Export entscheidet über Mitgabe oder Neuerzeugung (#1880)";
-/** Offene Ausnahmen der Test-Hülle: "<von> -> <nach>" → Grund mit Ticket (K6, #1876 bis #1879). Darf nur schrumpfen. */
+/** Offene Ausnahmen der Test-Hülle: "<von> -> <nach>" → Grund mit Ticket (K6 #1876 bis #1879, K7 #1880). Darf nur schrumpfen. */
 export const TEST_HUELLE_AUSNAHMEN: Record<string, string> = {
   "test/harness/emoji-ratchet.test.ts -> test/harness/emoji-baseline.json": DATEN_DATEI,
   "test/harness/harness-inventar.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
@@ -343,6 +343,13 @@ describe("Extraktionsliste: Bezug, Zuordnung und Test-Hülle (#1875)", () => {
     assert.deepEqual(l('new URL("../test/fixtures/x.json", import.meta.url)'), ["test/fixtures/x.json"]);
     assert.deepEqual(l('join(WURZEL, "test", "fixtures", "x.json")'), ["test/fixtures/x.json"]);
     assert.deepEqual(l("lies(`fixtures/x.json`)"), ["test/fixtures/x.json"]);
+    assert.deepEqual(l("lies('fixtures/x.json')"), ["test/fixtures/x.json"], "einfache Anführungszeichen");
+    assert.deepEqual(l('/* lies("fixtures/x.json") */'), [], "Blockkommentar-Zeile");
+    const tief = new Set(["test/harness/a.test.ts", "test/a/b/c/d/x.json", "test/a/b/c/d/e/x.json"]);
+    const lt = (text: string): string[] => lesebezuege("test/harness/a.test.ts", text, tief);
+    assert.deepEqual(lt('join(R, "test", "fixtures", "x.json")'), [], "ab dem Ordner des Tests löst nichts auf");
+    assert.deepEqual(lt('join(R, "test", "a", "b", "c", "d", "x.json")'), ["test/a/b/c/d/x.json"], "sechs Literale ab der Wurzel");
+    assert.deepEqual(lt('join(R, "test", "a", "b", "c", "d", "e", "x.json")'), [], "sieben Literale liegen außerhalb des Fensters");
     assert.deepEqual(l('lies("fixtures/y.json")'), [], "keine getrackte Datei");
     assert.deepEqual(l('lies("docs/a.md")'), [], "außerhalb von test/ bleibt unsichtbar (Grenze)");
     assert.deepEqual(l('lies("a.test.ts")'), [], "die Datei selbst zählt nicht");
