@@ -321,6 +321,7 @@ describe("Extraktionsliste im echten Repo (#1875)", () => {
     assert.ok(listeEcht.eintraege.some((e) => e.ring === "oberflaeche" && e.art === "nur-factory"));
     assert.equal(artVon(listeEcht, ".factory/produkt/README.md"), "produkt-wurzel");
     assert.equal(artVon(listeEcht, ".factory/produkt/LICENSE"), "produkt-wurzel");
+    assert.equal(artVon(listeEcht, "test/harness/extraktion.test.ts"), "projekt-test", "dieser Wächter bleibt im Projekt und entfällt mit der Extraktion");
     for (const p of [".gitattributes", ".nvmrc"]) assert.equal(artVon(listeEcht, p), "infrastruktur", p);
     for (const p of ["package.json", "tsconfig.json", "eslint.config.js", "vite.config.ts", ".github/workflows/ci.yml"]) assert.equal(artVon(listeEcht, p), "infrastruktur-anteil", p);
   });
@@ -329,8 +330,5 @@ describe("Extraktionsliste im echten Repo (#1875)", () => {
     const ziele = [...new Set(paare.map((p) => p.split(" -> ")[1] ?? "").filter((z) => z.startsWith("docs/")))];
     assert.ok(ziele.length >= 11, "Link-Ziele gefunden");
     for (const z of ziele) assert.equal(artVon(listeEcht, z), "factory-seite", z);
-  });
-  test("die Liste enthält keine Datei dieses Wächters als kern-test (er entfällt mit der Extraktion)", () => {
-    assert.equal(artVon(listeEcht, "test/harness/extraktion.test.ts"), "projekt-test");
   });
 });

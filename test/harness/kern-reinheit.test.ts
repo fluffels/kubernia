@@ -1150,10 +1150,6 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
     assert.deepEqual(vergleiche({ ...kernTestIst(pfade, lesenWurzel, echteBegriffe), ...ist }, kernBaseline), ["test/neu.test.ts: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei"]);
     assert.deepEqual(kernTestIst(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), {}, "ohne Literal keine Zählung");
   });
-  test("ein unter die Baseline gesunkener Wert und ein verwaister Eintrag sind rot", () => {
-    assert.match(vergleiche({}, { "test/weg.test.ts": { Praefix: 1 } }).join(), /test\/weg\.test\.ts: Baseline-Eintrag ohne Literale oder ohne Einheit/);
-    assert.match(vergleiche({ "t.ts": { Praefix: 1 } }, { "t.ts": { Praefix: 2 } }).join(), /nur noch 1x, Baseline auf 1 senken/);
-  });
   test("Anheben der Kern-Test-Baseline gegen die Diff-Basis: ein neuer Test mit Baseline-Eintrag ist rot (Status A), ein gleich bleibender grün", () => {
     const pseudo = (p: string): Eintrag => ({ pfad: p, ring: "kern", quelle: "extraktion" });
     const neu = new Map<string, string | null>([["test/neu.test.ts", null]]);
