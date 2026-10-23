@@ -119,6 +119,7 @@ describe("Berechtigungs-Ergänzung: pure Primitive", () => {
   });
   test("ergaenzungsBefunde: fehlend, nicht am Ende, doppelt", () => {
     assert.match(lib.ergaenzungsBefunde({ allow: ["a"] }, { allow: ["mcp__x"] }).join("|"), /allow: Ergänzung „mcp__x“ fehlt/);
+    assert.doesNotMatch(lib.ergaenzungsBefunde({ allow: ["a"] }, { allow: ["mcp__x"] }).join("|"), /Ende der Liste/, "ein fehlender Eintrag ist kein Reihenfolge-Befund");
     assert.match(lib.ergaenzungsBefunde({ allow: ["mcp__x", "a"] }, { allow: ["mcp__x"] }).join("|"), /Ende der Liste/);
     assert.match(lib.ergaenzungsBefunde({ allow: ["mcp__x", "mcp__x"] }, { allow: ["mcp__x"] }).join("|"), /steht doppelt/);
     assert.deepEqual(lib.ergaenzungsBefunde({ allow: ["a", "mcp__x", "mcp__y"] }, { allow: ["mcp__x", "mcp__y"] }), []);
@@ -131,6 +132,7 @@ describe("Berechtigungs-Ergänzung: pure Primitive", () => {
     assert.match(heb("mcp__x", { ask: ["mcp__x"] }), /hebt die Regel/);
     assert.equal(heb("mcp__x", { ask: ["mcp__x__w"], deny: ["mcp__xy"] }), "", "allow Server-Regel, ask einzelnes Tool: legitim");
     assert.equal(heb("mcp__x__t", { deny: ["mcp__x__u"] }), "");
+    assert.equal(heb("mcp__x", { deny: ["mcp"] }), "", "eine Regel, die kein Server-Muster ist, wird nicht als Präfix gelesen");
   });
   test("einheitHash: dieselbe Quelle mit verschiedenen Ergänzungen hat denselben Kern-Hash, eine Handänderung am Kern einen anderen", () => {
     const e = { pfad: SETTINGS, schluessel: "permissions" };
