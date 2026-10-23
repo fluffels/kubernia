@@ -215,7 +215,7 @@ function echteQuelle(): string {
   const k = mkdtempSync(join(tmpdir(), "kq-fsync-echt-"));
   echteKopie = k;
   const manifestText = readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8");
-  const pfade = new Set([".factory/besitz.json", ...(JSON.parse(manifestText) as { eintraege: { pfad: string }[] }).eintraege.map((e) => e.pfad)]);
+  const pfade = new Set([".factory/besitz.json", ".factory/projekt.json", ...(JSON.parse(manifestText) as { eintraege: { pfad: string }[] }).eintraege.map((e) => e.pfad)]);
   for (const p of pfade) schreibe(k, p, readFileSync(join(WURZEL, ...p.split("/")), "utf8"));
   git(k, ["init", "-q"]);
   git(k, ["add", "-A"]);
@@ -551,8 +551,9 @@ const PW_MANIFEST = {
 const pwBlock = (inhalt: string): string => `${lib.markerStart("pw")}\n${PW.start}\n${inhalt}${PW.ende}\n${lib.markerEnde("pw")}`;
 const PW_AGENT = "---\n# factory:projektwert agenten.planer\nname: quelle-planer\nmodel: opus\n---\n# Agent\n";
 function pwConfig(planer: string): string {
-  const echt = JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { repo: string; agenten: Record<string, string> };
+  const echt = JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { repo: string; agenten: Record<string, string>; berechtigungen?: unknown };
   echt.repo = "acme/demo";
+  delete echt.berechtigungen; // das Ziel ergänzt nichts; die Ergänzung prüft test/factory-sync-berechtigungen.test.ts
   echt.agenten.planer = planer;
   return JSON.stringify(echt, null, 2) + "\n";
 }
@@ -706,6 +707,13 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     const r = vomTag(echteQuelle(), z);
     assert.equal(r.code, 0, r.err);
     assert.match(lies(z, ".claude/agents/factory-planer.md"), /\nname: wk-planer\n/, "Projektwert aus der Config des Ziels");
+    const perm = (JSON.parse(lies(z, ".claude/settings.json")) as { permissions: Record<string, string[]> }).permissions;
+    assert.ok((perm.deny ?? []).includes("mcp__claude-in-chrome"), "der Kern-Anteil kommt an (sonst wäre die Prüfung darunter vakuös)");
+    assert.deepEqual(
+      Object.values(perm).flat().filter((x) => /^mcp__(playwright|likec4|langfuse__|pixellab)/.test(x)),
+      [],
+      "die Modulregeln des Quell-Projekts gehören nicht zum Kern-Anteil, den das Ziel bekommt",
+    );
     const gate = (): { status: number | null; stderr: string } => {
       const p = spawnSync(process.execPath, [join(z, "scripts", "check-factory-drift.mjs")], { cwd: z, encoding: "utf8" });
       return { status: p.status, stderr: p.stderr };

@@ -89,7 +89,6 @@
       "PowerShell(npm publish *)",
       "PowerShell(gh repo delete *)",
       "mcp__claude-in-chrome",
-      "mcp__pixellab__list_projects",
       "Read(~/.ssh/**)",
       "Read(~/.config/gh/**)",
       "Read(~/.claude/.credentials.json)",
@@ -101,7 +100,8 @@
       "Read(/.env.development.local)",
       "Read(/.env.production.local)",
       "Read(/.env.test.local)",
-      "Read(/.env.*)"
+      "Read(/.env.*)",
+      "mcp__pixellab__list_projects"
     ]
   },
   "sandbox": {

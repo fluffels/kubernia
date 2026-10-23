@@ -273,6 +273,48 @@ function pruefeAgenten(a) {
   return fehler;
 }
 
+const BERECHTIGUNG_LISTEN = ["allow", "ask", "deny"];
+const BERECHTIGUNG_PRAEFIX = "mcp__";
+
+/**
+ * Pur: prüft den Block `berechtigungen` (Form, #1874): nur die Listen allow, ask und deny, je Eintrag ein nicht-leerer String ohne Leerraum
+ * mit dem Präfix `mcp__` (nur Modul- und Server-Regeln), je Liste ohne Duplikat. Ob ein allow ein deny oder ask aufhebt, prüft die Besitz-Lib
+ * (`ergaenzungsBefunde`), sie kennt den Kern-Anteil.
+ */
+function pruefeBerechtigungen(b) {
+  if (!istObjekt(b)) return ["berechtigungen muss ein Objekt mit den Listen allow, ask und deny sein"];
+  const fehler = Object.keys(b).filter((k) => !BERECHTIGUNG_LISTEN.includes(k)).map((k) => `berechtigungen.${k} ist kein bekannter Schlüssel (erlaubt: ${BERECHTIGUNG_LISTEN.join(", ")})`);
+  for (const name of BERECHTIGUNG_LISTEN) {
+    const liste = b[name];
+    if (liste === undefined) continue;
+    if (!Array.isArray(liste)) {
+      fehler.push(`berechtigungen.${name} muss eine Liste von Strings sein`);
+      continue;
+    }
+    const gesehen = new Set();
+    liste.forEach((e, i) => {
+      const wo = `berechtigungen.${name}[${i}]`;
+      if (!istText(e) || /\s/.test(e)) return fehler.push(`${wo} muss ein nicht-leerer String ohne Leerraum sein`);
+      if (!e.startsWith(BERECHTIGUNG_PRAEFIX)) fehler.push(`${wo} muss mit „${BERECHTIGUNG_PRAEFIX}“ beginnen (nur Modul- und Server-Regeln gehören in die Ergänzung): ${JSON.stringify(e)}`);
+      if (gesehen.has(e)) fehler.push(`${wo} „${e}“ steht doppelt`);
+      gesehen.add(e);
+    });
+  }
+  return fehler;
+}
+
+/**
+ * Pur: die Berechtigungs-Ergänzung des Projekts (`berechtigungen`, #1874) als `{ allow, ask, deny }`; ohne Block alle drei leer.
+ * Wirft mit Fix-Zeile bei kaputter Form (die Ergänzung darf nicht still verloren gehen).
+ */
+export function berechtigungenAus(config) {
+  const wert = config?.berechtigungen;
+  if (wert === undefined) return { allow: [], ask: [], deny: [] };
+  const fehler = pruefeBerechtigungen(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block berechtigungen (allow, ask, deny: Listen von mcp__-Einträgen) in ${PROJEKT_CONFIG} korrigieren`);
+  return { allow: wert.allow ?? [], ask: wert.ask ?? [], deny: wert.deny ?? [] };
+}
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
@@ -297,6 +339,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.sprache !== undefined) fehler.push(...pruefeSprache(wert.sprache));
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
+  if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   return fehler;
 }
 
