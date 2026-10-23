@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as bmModule from "../scripts/brain-metrics.mjs";
+import { FREMD } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../scripts/token-baseline.mjs";
 
@@ -56,7 +57,7 @@ describe("isBrainPage", () => {
     for (const p of [
       "docs/x.md",
       "C:\\r\\docs\\adr\\0013-a.md",
-      "/r/.claude/worktrees/kq-1/docs/module/sim.md",
+      "/r/.claude/worktrees/wt-1/docs/module/sim.md",
     ])
       assert.equal(isBrainPage(p), true, p);
   });
@@ -186,7 +187,7 @@ describe("toolEventsFromLangfuse", () => {
   test("Input als Objekt und JSON-String, orig_len als Ergebnisgröße, nur TOOL", () => {
     const e = toolEventsFromLangfuse([
       { type: "TOOL", startTime: "t1", input: "{\"file_path\": \"docs/a.md\"}", metadata: { tool_name: "Read", output_meta: { orig_len: 400 } } },
-      { type: "TOOL", startTime: "t2", name: "Tool: Grep [Kubernia-Code]", input: { pattern: "x" }, metadata: {} },
+      { type: "TOOL", startTime: "t2", name: "Tool: Grep [Projekt-Code]", input: { pattern: "x" }, metadata: {} },
       { type: "GENERATION", startTime: "t3", input: {} },
       { type: "SPAN", startTime: "t4", input: {} },
     ]);
@@ -312,13 +313,13 @@ describe("Härtung nach Review", () => {
       ev(T(0), "Read", { file_path: "C:\\r\\docs\\a.md" }),
       ev(T(1), "Bash", { command: "cat C:/r/docs/a.md" }),
       ev(T(2), "Read", { file_path: "C:\\dev\\x\\docs\\a.md" }),
-      ev(T(3), "Read", { file_path: "C:\\dev\\x\\.claude\\worktrees\\kq-1\\docs\\a.md" }),
+      ev(T(3), "Read", { file_path: "C:\\dev\\x\\.claude\\worktrees\\wt-1\\docs\\a.md" }),
     ]);
     assert.deepEqual([m.brainReads, m.brainPages], [4, 1]);
   });
   test("Seitenschlüssel: letztes docs/-Segment, auch bei Elternordner docs, und Groß-/Kleinschreibung (#1322 Z8/Z9)", () => {
     const eltern = brainMetrics([
-      ev(T(0), "Read", { file_path: "C:/docs/kubernia/docs/x.md" }),
+      ev(T(0), "Read", { file_path: "C:/docs/repo/docs/x.md" }),
       ev(T(1), "Read", { file_path: "docs/x.md" }),
     ]);
     assert.deepEqual([eltern.brainReads, eltern.brainPages], [2, 1], "Elternordner docs trennt nicht von der Seite");
@@ -333,7 +334,7 @@ describe("Härtung nach Review", () => {
   test("summarize rechnet die Recherche-Tokens aus den Phasenzeilen selbst", () => {
     const call = { ts: T(0), model: "m", input: 7, cacheWrite: 0, cacheRead: 0, output: 0, subagent: { id: "s", agentType: "Explore", description: "x" } };
     assert.equal(baseline.summarize({ calls: [call], events: [] }).brain?.rechercheTokens, 7);
-    const umsetzung = { ...call, input: 100, subagent: { id: "u", agentType: "kubernia-umsetzer", description: "u" } };
+    const umsetzung = { ...call, input: 100, subagent: { id: "u", agentType: FREMD.agenten.umsetzer, description: "u" } };
     assert.equal(baseline.summarize({ calls: [call, umsetzung], events: [] }).brain?.rechercheTokens, 7, "nur die Recherche-Phase");
     const spaet = { ...call, ts: T(5) };
     assert.equal(baseline.summarize({ calls: [spaet], events: [] }, { mergedAt: T(3) }).brain?.rechercheTokens, 0, "Nachlauf zählt nicht");
@@ -392,7 +393,7 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
   // Mock, der `type` und `name` EXAKT filtert wie die v2-API; Datei-Tools tragen den Bereichs-Qualifier des Hooks.
   const alle = [
     { id: "g1", type: "GENERATION", name: "Claude", startTime: T(0), usageDetails: { input: 1, output: 1 }, model: "m" },
-    { id: "r1", type: "TOOL", name: "Tool: Read [Kubernia-Doku]", startTime: T(1), metadata: { tool_name: "Read", output_meta: { orig_len: 400 } }, input: { file_path: "docs/a.md" } },
+    { id: "r1", type: "TOOL", name: "Tool: Read [Projekt-Doku]", startTime: T(1), metadata: { tool_name: "Read", output_meta: { orig_len: 400 } }, input: { file_path: "docs/a.md" } },
     { id: "b1", type: "TOOL", name: "Tool: Bash", startTime: T(2), metadata: { tool_name: "Bash", output_meta: { orig_len: 8 } }, input: { command: "cat docs/b.md" } },
     { id: "g2", type: "TOOL", name: "Tool: Grep", startTime: T(3), metadata: { tool_name: "Grep" }, input: { pattern: "x" } },
   ];
@@ -412,7 +413,7 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
     const m = brainMetrics(part.events);
     assert.deepEqual([m.brainReads, m.brainPages, m.brainReadTokens], [2, 2, 100 + 2], "Read (400 Zeichen) und cat (8 Zeichen)");
     const stufe2 = anfragen.filter((a) => a.name);
-    assert.deepEqual(stufe2.map((a) => a.name).sort(), ["Tool: Bash", "Tool: Read [Kubernia-Doku]"], "nur Tools aus EINGABE_TOOLS, mit dem echten Namen");
+    assert.deepEqual(stufe2.map((a) => a.name).sort(), ["Tool: Bash", "Tool: Read [Projekt-Doku]"], "nur Tools aus EINGABE_TOOLS, mit dem echten Namen");
     assert.ok(stufe2.every((a) => a.fields === "core,io" && a.type === "TOOL" && a.sessionId === "s1"));
     assert.ok(anfragen.filter((a) => !a.name && a.type === "TOOL").every((a) => a.fields === "core,basic,metadata"), "Stufe 1 holt kein io");
   });
@@ -431,7 +432,7 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
 
   test("Namens-Fallback: ein Span ohne metadata.tool_name wird über den Span-Namen als Eingabe-Tool erkannt (#1331)", async () => {
     const ohneMeta = [
-      { id: "r1", type: "TOOL", name: "Tool: Read [Kubernia-Doku]", startTime: T(1), metadata: { output_meta: { orig_len: 400 } }, input: { file_path: "docs/a.md" } },
+      { id: "r1", type: "TOOL", name: "Tool: Read [Projekt-Doku]", startTime: T(1), metadata: { output_meta: { orig_len: 400 } }, input: { file_path: "docs/a.md" } },
       { id: "x1", type: "TOOL", name: "Tool: Grep", startTime: T(2), metadata: {}, input: { pattern: "x" } },
     ];
     const namen: (string | null)[] = [];
@@ -442,7 +443,7 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: daten, meta: {} }) });
     };
     const part = await lade("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl });
-    assert.deepEqual(namen, ["Tool: Read [Kubernia-Doku]"], "Stufe 2 fragt nur das Eingabe-Tool, erkannt am Namen ohne Präfix und Qualifier");
+    assert.deepEqual(namen, ["Tool: Read [Projekt-Doku]"], "Stufe 2 fragt nur das Eingabe-Tool, erkannt am Namen ohne Präfix und Qualifier");
     const m = brainMetrics(part.events);
     assert.deepEqual([m.brainReads, m.searchCalls], [1, 1]);
   });

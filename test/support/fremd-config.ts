@@ -13,7 +13,7 @@ export interface ProjektConfig {
   projektliterale?: Record<string, string>;
 }
 
-const lib = raw as unknown as { ladeProjektConfig(opt?: { pfad?: string }): ProjektConfig };
+const lib = raw as unknown as { ladeProjektConfig(opt?: { pfad?: string }): ProjektConfig; repoName(config: { repo: string }): string };
 
 export const FREMD_CONFIG_PFAD = "test/fixtures/projekt-fremd.json";
 
@@ -22,6 +22,9 @@ export const FREMD: ProjektConfig = lib.ladeProjektConfig({ pfad: FREMD_CONFIG_P
 
 /** Die echte Projekt-Config, nur für Tests, die einen Kindprozess starten (der liest sie selbst). */
 export const projektConfig = (): ProjektConfig => lib.ladeProjektConfig();
+
+/** Der Repo-Name einer Config (der Teil hinter dem Owner), etwa als Ergebnisschlüssel. */
+export const repoName = (config: { repo: string }): string => lib.repoName(config);
 
 /** Der Owner der Fremd-Config (`zz-org`): Login und Besitzer in Tests mit injizierter Config. */
 export const FREMD_OWNER = FREMD.repo.split("/")[0] ?? "";
