@@ -157,6 +157,7 @@
     "Save-Version": "CURRENT_SAVE_VERSION",
     "kqDev": "kqdev",
     "Hafen": "hafen",
-    "Phaser": "phaser"
+    "Phaser": "phaser",
+    "KubeQuest": "kubequest"
   }
 }

@@ -8,6 +8,10 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { lies } from "./repo-texte";
+import { projektConfig, repoName } from "../support/fremd-config";
+
+/** Projektbezug der Entwürfe: Repo-Name und Projektliterale der Config (kein Literal im Test). */
+const PROJEKT_MUSTER = new RegExp([repoName(projektConfig()), ...Object.values(projektConfig().projektliterale ?? {})].join("|"), "i");
 
 /** Das Spiel-Muster der Lizenz-Entwürfe: „Spiel“ am Wortanfang, nicht „Beispiel“. */
 const SPIEL_MUSTER = /\bspiel/i;
@@ -19,7 +23,7 @@ describe("Produkt-Entwürfe (#1714)", () => {
   test("Lizenz-Entwurf: Alle Rechte vorbehalten, ohne Spiel- oder Projektbezug", () => {
     assert.match(lizenz(), /Alle Rechte vorbehalten/);
     assert.doesNotMatch(lizenz(), SPIEL_MUSTER);
-    assert.doesNotMatch(lizenz(), /kubernia|kubequest/i);
+    assert.doesNotMatch(lizenz(), PROJEKT_MUSTER);
   });
 
   test("Lizenz-Entwurf nimmt keine Fremdbeiträge an und untersagt den Einsatz", () => {
