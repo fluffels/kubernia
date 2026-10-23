@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/mcp-ausfall.mjs";
+import { FREMD } from "../support/fremd-config";
 
 type Server = { name: string; type?: string; url?: string; headers?: Record<string, string> };
 type Befund = { klasse: string; zeit: string; sessionId: string; text: string; code?: string; ursache?: string };
@@ -20,7 +21,7 @@ type Ausfall = {
   fehlendeVariablen: (s: Server, env: Record<string, string | undefined>) => string[];
   slug: (p: string) => string;
   hauptWurzel: (p: string) => string;
-  standPfad: (w: string, env: Record<string, string | undefined>, tmp: string) => string;
+  standPfad: (w: string, env: Record<string, string | undefined>, tmp: string, config?: unknown) => string;
   logBasis: (o: { plattform: string; env: Record<string, string | undefined>; home: string }) => string;
   projektOrdner: (namen: string[], wurzel: string) => { ordner: string; suffix: string }[];
   serverOrdner: (n: string) => string;
@@ -137,25 +138,25 @@ describe("Pfad-Helfer", () => {
     expect(a.logBasis({ plattform: "win32", env: {}, home: "H" })).toBe(join("H", "AppData", "Local", "claude-cli-nodejs", "Cache"));
   });
   test("hauptWurzel kürzt Worktree und Schrägstrich am Ende, sonst unverändert", () => {
-    expect(a.hauptWurzel("C:\\dev\\proj\\.claude\\worktrees\\kq-1\\")).toBe("C:\\dev\\proj");
-    expect(a.hauptWurzel("/dev/proj/.claude/worktrees/kq-1")).toBe("/dev/proj");
+    expect(a.hauptWurzel("C:\\dev\\proj\\.claude\\worktrees\\wt-1\\")).toBe("C:\\dev\\proj");
+    expect(a.hauptWurzel("/dev/proj/.claude/worktrees/wt-1")).toBe("/dev/proj");
     expect(a.hauptWurzel("C:\\dev\\proj")).toBe("C:\\dev\\proj");
   });
   test("hauptWurzel lässt tiefere Pfade und Namensvettern unverändert", () => {
-    expect(a.hauptWurzel("/dev/proj/.claude/worktrees/kq-1/sub")).toBe("/dev/proj/.claude/worktrees/kq-1/sub");
-    expect(a.hauptWurzel("/dev/proj/.claude/worktreesX/kq-1")).toBe("/dev/proj/.claude/worktreesX/kq-1");
+    expect(a.hauptWurzel("/dev/proj/.claude/worktrees/wt-1/sub")).toBe("/dev/proj/.claude/worktrees/wt-1/sub");
+    expect(a.hauptWurzel("/dev/proj/.claude/worktreesX/wt-1")).toBe("/dev/proj/.claude/worktreesX/wt-1");
   });
   test("standPfad: Worktree und Hauptcheckout teilen eine Datei, der Override hat Vorrang", () => {
-    const haupt = a.standPfad("/dev/proj", {}, "/tmp");
-    expect(a.standPfad("/dev/proj/.claude/worktrees/kq-1", {}, "/tmp")).toBe(haupt);
-    expect(haupt).toBe(join("/tmp", "kq-mcp-ausfall--dev-proj.json"));
+    const haupt = a.standPfad("/dev/proj", {}, "/tmp", FREMD);
+    expect(a.standPfad("/dev/proj/.claude/worktrees/wt-1", {}, "/tmp", FREMD)).toBe(haupt);
+    expect(haupt).toBe(join("/tmp", `${FREMD.praefixe.worktree}mcp-ausfall--dev-proj.json`));
     expect(a.standPfad("/dev/proj", { FACTORY_MCP_AUSFALL_STAND: "/x/s.json" }, "/tmp")).toBe("/x/s.json");
   });
   test("projektOrdner: Hauptcheckout und Worktrees, nie Namensvettern", () => {
-    const namen = ["C--dev-proj", "C--dev-proj--claude-worktrees-kq-1", "C--dev-proj2", "C--dev-other"];
-    const erwartet = [{ ordner: "C--dev-proj", suffix: "" }, { ordner: "C--dev-proj--claude-worktrees-kq-1", suffix: "--claude-worktrees-kq-1" }];
+    const namen = ["C--dev-proj", "C--dev-proj--claude-worktrees-wt-1", "C--dev-proj2", "C--dev-other"];
+    const erwartet = [{ ordner: "C--dev-proj", suffix: "" }, { ordner: "C--dev-proj--claude-worktrees-wt-1", suffix: "--claude-worktrees-wt-1" }];
     expect(a.projektOrdner(namen, "C:\\dev\\proj")).toEqual(erwartet);
-    expect(a.projektOrdner(namen, "C:\\dev\\proj\\.claude\\worktrees\\kq-1\\")).toEqual(erwartet);
+    expect(a.projektOrdner(namen, "C:\\dev\\proj\\.claude\\worktrees\\wt-1\\")).toEqual(erwartet);
   });
   test("serverOrdner schlägt den Namen wie Claude Code", () => {
     expect(a.serverOrdner("plugin:x y")).toBe("mcp-logs-plugin-x-y");
@@ -232,7 +233,7 @@ describe("main mit Temp-Logs", () => {
   });
   /** Projektwurzel mit `.mcp.json` und Log-Basis mit einem Reconnect-Log; Rückgabe: Umgebung. */
   function aufbau(mcp = '{"mcpServers":{"pw":{"type":"stdio","command":"node"}}}') {
-    const d = mkdtempSync(join(tmpdir(), "kq-mcp-ausfall-"));
+    const d = mkdtempSync(join(tmpdir(), "mcp-ausfall-"));
     dirs.push(d);
     const wurzel = join(d, "proj");
     mkdirSync(wurzel);

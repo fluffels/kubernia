@@ -12,13 +12,12 @@ import { readdirSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
+import { FREMD } from "../support/fremd-config";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawKern from "../../scripts/langfuse-abgleich-kern.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawNamen from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -37,11 +36,13 @@ type Bewertung = { status: string; score: string | null; fehlend: number; dublet
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>;
 // Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
 // Das Worktree-Präfix kommt aus der Projekt-Config; die Wrapper reichen es durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const WORKTREE = (rawNamen as unknown as { ladeTicketNamen: () => { praefixe: { worktree: string } } }).ladeTicketNamen().praefixe.worktree;
+const WORKTREE = FREMD.praefixe.worktree;
 const kernRoh = rawKern as unknown as { sollEintraege: (s: unknown, o: object) => unknown; ticketAusBranch: (b: unknown, w: string) => unknown };
+const einstiegRoh = rawAbgleichEinstieg as unknown as { pruefen: (a: unknown, d: object) => unknown };
 const A = {
   ...rawAbgleichEinstieg,
   ...rawKern,
+  pruefen: (a: unknown, d: object) => einstiegRoh.pruefen(a, { config: FREMD, ...d }),
   sollEintraege: (s: unknown, o?: object) => kernRoh.sollEintraege(s, { worktree: WORKTREE, ...o }),
   ticketAusBranch: (b: unknown) => kernRoh.ticketAusBranch(b, WORKTREE),
 } as unknown as {
@@ -89,7 +90,7 @@ const msg = (id: string, usage: Record<string, unknown> | null = {}, extra: Reco
   zeile({
     type: "assistant",
     sessionId: "s1",
-    gitBranch: "feature/kq-1562-x",
+    gitBranch: `${FREMD.praefixe.branch}1562-x`,
     timestamp: new Date(Date.UTC(2026, 9, 9, 10, 0, zaehler++)).toISOString(),
     uuid: `u-${id}-${zaehler}`,
     message: {
@@ -134,7 +135,7 @@ describe("callsFromTranscript liefert messageId, sessionId, gitBranch", () => {
   test("Felder aus der ersten Zeile; Rückfall uuid ohne message.id", () => {
     const text = [msg("m1"), zeile({ type: "assistant", uuid: "nur-uuid", timestamp: "2026-10-09T10:00:00Z", message: { model: "x", usage: { output_tokens: 1 }, content: [] } })].join("\n");
     const { calls } = CALLS.callsFromTranscript(text);
-    expect(calls[0]).toMatchObject({ messageId: "m1", sessionId: "s1", gitBranch: "feature/kq-1562-x" });
+    expect(calls[0]).toMatchObject({ messageId: "m1", sessionId: "s1", gitBranch: `${FREMD.praefixe.branch}1562-x` });
     expect(calls[1].messageId).toBe("nur-uuid");
     expect(calls[1].sessionId).toBeNull();
   });
@@ -181,7 +182,7 @@ describe("Soll (pur)", () => {
 
   test("Felder: IDs, Modell, Ticket, getrennter Cache-Write, Rolle des Hauptchats null", () => {
     const [e] = A.sollEintraege({ id: "s1", main: [row(msg("m"))], subagents: [] });
-    expect(e).toMatchObject({ id: A.beobachtungsId("s1", "m"), traceId: A.traceIdVon("s1"), session: "s1", messageId: "m", model: "claude-opus-5-5", ticket: "kq-1562", rolle: null });
+    expect(e).toMatchObject({ id: A.beobachtungsId("s1", "m"), traceId: A.traceIdVon("s1"), session: "s1", messageId: "m", model: "claude-opus-5-5", ticket: `${WORKTREE}1562`, rolle: null });
     expect(e.usage).toEqual({ input: 10, output: 5, cacheRead: 100, cacheWrite5m: 10, cacheWrite1h: 30 });
   });
 
@@ -191,10 +192,10 @@ describe("Soll (pur)", () => {
   });
 
   test("Ticket aus dem Branch; main und fehlender Branch ergeben null", () => {
-    expect(A.ticketAusBranch("feature/kq-1562-x")).toBe("kq-1562");
+    expect(A.ticketAusBranch(`${FREMD.praefixe.branch}1562-x`)).toBe(`${WORKTREE}1562`);
     expect(A.ticketAusBranch("main")).toBeNull();
     expect(A.ticketAusBranch(undefined)).toBeNull();
-    expect(A.ticketAusBranch("feature/kq-abc")).toBeNull();
+    expect(A.ticketAusBranch(`${FREMD.praefixe.branch}abc`)).toBeNull();
   });
 
   test("kaputtes meta.json ergibt Rolle ohne agentType, der Eintrag bleibt; kaputte und abgeschnittene Zeilen entfallen", () => {
@@ -214,13 +215,13 @@ describe("Soll (pur)", () => {
   });
 
   test("Rolle und Zusammenführung über Dateien: erster Fund bestimmt die Rolle, Output = Maximum", () => {
-    const { root } = sitzung(msg("dup", { output_tokens: 2 }), [{ meta: JSON.stringify({ agentType: "kubernia-lens", description: "L", parentAgentId: "p" }), text: msg("dup", { output_tokens: 8 }) + "\n" + msg("nur-sub") }]);
+    const { root } = sitzung(msg("dup", { output_tokens: 2 }), [{ meta: JSON.stringify({ agentType: FREMD.agenten.lens, description: "L", parentAgentId: "p" }), text: msg("dup", { output_tokens: 8 }) + "\n" + msg("nur-sub") }]);
     const e = A.sollEintraege(LADE(lade(root).pfad));
     expect(e).toHaveLength(2);
     const dup = e.find((x) => x.messageId === "dup");
     expect(dup?.usage.output).toBe(8);
     expect(dup?.rolle).toBeNull();
-    expect(e.find((x) => x.messageId === "nur-sub")?.rolle).toMatchObject({ agentType: "kubernia-lens", parentAgentId: "p" });
+    expect(e.find((x) => x.messageId === "nur-sub")?.rolle).toMatchObject({ agentType: FREMD.agenten.lens, parentAgentId: "p" });
   });
 });
 
@@ -228,7 +229,7 @@ describe("Session-Auswahl", () => {
   test("fremder Projektordner wird nicht gelesen; Worktree-Ordner des Projekts schon; --seit filtert nach mtime, --session nicht", () => {
     const root = fixture({
       [`${PRAEFIX}/a.jsonl`]: msg("m"),
-      [`${PRAEFIX}--claude-worktrees-kq-1/b.jsonl`]: msg("m"),
+      [`${PRAEFIX}--claude-worktrees-wt-1/b.jsonl`]: msg("m"),
       "Y--anders/c.jsonl": msg("m"),
       [`${PRAEFIX}-alt/d.jsonl`]: msg("m"), // Geschwister-Repo mit gleichem Präfix (#1572)
     });
@@ -245,7 +246,7 @@ describe("Session-Auswahl", () => {
       [`${PRAEFIX}/a.jsonl`]: "12345",
       [`${PRAEFIX}/a/subagents/agent-x.jsonl`]: "123",
       [`${PRAEFIX}-tools/fremd.jsonl`]: msg("m"),
-      [`${PRAEFIX}--claude-worktrees-kq-1/b.jsonl`]: msg("m"),
+      [`${PRAEFIX}--claude-worktrees-wt-1/b.jsonl`]: msg("m"),
     });
     const sessions = A.findeSessions({ projectsRoot: root, praefix: PRAEFIX });
     expect(sessions.map((s) => s.id).sort()).toEqual(["a", "b"]);
@@ -320,7 +321,7 @@ const eintrag = (n: number, over: Partial<Eintrag> = {}): Eintrag => ({
   ts: `2026-10-09T10:00:0${n}Z`,
   usage: { input: n, output: 5, cacheRead: 100, cacheWrite5m: 10, cacheWrite1h: 30 },
   rolle: null,
-  ticket: "kq-1562",
+  ticket: `${WORKTREE}1562`,
   ...over,
 });
 const obsZu = (e: Eintrag, extra: Obs = {}): Obs => ({
@@ -707,7 +708,7 @@ describe("pruefen (Ablauf)", () => {
     expect(r.text).toMatch(/\| Session \| Ticket \| Status \| Calls T\/L/);
     expect(r.text).toMatch(/\*\*Summe:\*\*/);
     expect(r.text).toMatch(/Fehlende Calls s1/);
-    expect(r.text).toMatch(/kq-1562/);
+    expect(r.text).toContain(`${WORKTREE}1562`);
   });
 
   test("Bericht: vollständig, Score ausstehend; Ledger (nur gelesen) mit Ende hebt es auf; kaputtes Ledger bleibt unberührt; Hinweis nennt den Stichtag aus dem Kern", async () => {

@@ -93,7 +93,7 @@ describe("laufe", () => {
   });
 
   test("ein nicht existierendes Arbeitsverzeichnis ist ein Spawn-Fehler: code null, fehler ENOENT", async () => {
-    const l = await (rawLauf as unknown as { laufe: (id: string, o: { cwd: string }) => Promise<Lauf> }).laufe("langfuse-vorbedingung", { cwd: join(tmpdir(), "kq-gibt-es-nicht-1821") });
+    const l = await (rawLauf as unknown as { laufe: (id: string, o: { cwd: string }) => Promise<Lauf> }).laufe("langfuse-vorbedingung", { cwd: join(tmpdir(), "gibt-es-nicht-1821") });
     expect(l.code).toBeNull();
     expect(l.fehler).toBe("ENOENT");
   });
@@ -135,7 +135,7 @@ describe("main", () => {
       ctx = o.ctxFuer(new AbortController().signal);
       return Promise.resolve({ port: 1, schliessen: () => Promise.resolve() });
     };
-    const projekt = mkdtempSync(join(tmpdir(), "kq-cockpit-"));
+    const projekt = mkdtempSync(join(tmpdir(), "cockpit-lf-"));
     try {
       await main(["--projekt", projekt], process.cwd(), { starteServer });
       expect(ctx?.projekt).toBe(projekt);
@@ -183,7 +183,7 @@ describe("leseArgs", () => {
   });
 
   test("--projekt auf eine Datei ist ein Fehler", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-cockpit-"));
+    const dir = mkdtempSync(join(tmpdir(), "cockpit-lf-"));
     try {
       writeFileSync(join(dir, "f.txt"), "x");
       expect(leseArgs(["--projekt", "f.txt"], dir).fehler).toContain("kein Verzeichnis");

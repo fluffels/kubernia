@@ -11,6 +11,10 @@ import { join } from "node:path";
 import * as raw from "../scripts/lauf-ergebnis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as nachweisLib from "../scripts/nachweis-lib.mjs";
+const { abnahmeMarker } = nachweisLib as unknown as { abnahmeMarker: (z: Zeilen) => string };
+import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
 type Commit = { sha: string; datum: string; body: string };
 type Pr = {
@@ -27,9 +31,11 @@ type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: numb
 type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }> } };
 type Zeilen = Record<string, string>;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
-/** Zeilen der echten Config (KQ-); die Wrapper in `mod` reichen sie durch. */
-const Z = commitZeilen("KQ-", "kubernia-planner");
-const LABEL = "status:festgefahren";
+/** Zeilen der Fremd-Config; die Wrapper in `mod` reichen sie durch. */
+const PLANER = FREMD.agenten.planer;
+const Z = commitZeilen(FREMD.praefixe.commitZeile, PLANER);
+const LABEL = FREMD.labels.festgefahren;
+const BRANCH = FREMD.praefixe.branch;
 const roh = raw as {
   NACHARBEIT_TAGE: number;
   DatenFehler: new (m: string) => Error;
@@ -48,6 +54,9 @@ const roh = raw as {
 };
 const mod = {
   ...roh,
+  // Die Fremd-Config ist der Standard (sonst läse der Aufruf die echte Config); ein eigenes `ladeConfig` gewinnt über den Spread.
+  laufErgebnis: (e: Parameters<typeof roh.laufErgebnis>[0]) => roh.laufErgebnis({ ladeConfig: () => FREMD, ...e }),
+  laufErgebnisStartAgent: (e: Parameters<typeof roh.laufErgebnisStartAgent>[0]) => roh.laufErgebnisStartAgent({ ladeConfig: () => FREMD, ...e }),
   bewertePrs: (e: Omit<Parameters<typeof roh.bewertePrs>[0], "konfigZeilen">) => roh.bewertePrs({ konfigZeilen: Z, ...e }),
   festgefahrenAusAntwort: (a: unknown, n: number[]) => roh.festgefahrenAusAntwort(a, n, LABEL),
 };
@@ -63,13 +72,13 @@ const pr = (o: Partial<Pr> = {}): Pr => ({
   createdAt: "2026-10-01T10:00:00Z",
   mergedAt: MERGED,
   mergeCommit: { oid: SHA },
-  headRefName: "feature/kq-40-x",
+  headRefName: `${BRANCH}40-x`,
   closingIssuesReferences: [{ number: 40 }],
   ...o,
 });
 const nach = (commits: Commit[], jetzt = SPAETER, p = 50, ticket: number | null = 40) =>
   mod.nacharbeitVon({ pr: p, ticket, mergeSha: SHA, mergedAt: MERGED, commits, jetzt });
-const review = (felder: string) => `feat: y (#40) (#50)\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${"a".repeat(40)} ${felder} verdikt=ok`;
+const review = (felder: string) => `feat: y (#40) (#50)\n\n${Z.plan}: ${PLANER}\n${Z.review}: head=${"a".repeat(40)} ${felder} verdikt=ok`;
 
 describe("Nacharbeit (14 Tage)", () => {
   test("Revert per SHA-Präfix (≥ 7 Zeichen) und per Betreff mit (#pr)", () => {
@@ -219,8 +228,8 @@ describe("bewertePrs und Aggregate", () => {
       "",
       "* chore(harness): Review-Nachweis (#1723)",
       "",
-      "KQ-Plan: kubernia-planner",
-      `KQ-Review: head=${"a".repeat(40)} runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok`,
+      `${Z.plan}: ${PLANER}`,
+      `${Z.review}: head=${"a".repeat(40)} runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok`,
       "",
       "---------",
     ].join("\n");
@@ -228,7 +237,7 @@ describe("bewertePrs und Aggregate", () => {
     const cs = [commit(squash, MERGED, "1".repeat(40))];
     const basis = { prs: eins, commits: cs, ci: {}, festgefahren: {}, jetzt: SPAETER };
     assert.equal(mod.bewertePrs(basis).zeilen[0].runden, 3);
-    const ab = roh.bewertePrs({ ...basis, konfigZeilen: commitZeilen("AB-", "kubernia-planner") });
+    const ab = roh.bewertePrs({ ...basis, konfigZeilen: commitZeilen("AB-", PLANER) });
     assert.equal(ab.zeilen[0].runden, null);
     assert.equal(ab.kennzahlen.ohneNachweis, 1);
   });
@@ -251,8 +260,8 @@ describe("bewertePrs und Aggregate", () => {
 describe("Abnahme je PR (#1756)", () => {
   const NL = String.fromCharCode(10);
   const H = "b".repeat(40);
-  const urteil = (d: number) => `KQ-Abnahme: head=${H} durchgaenge=${d} urteil=K1:erfuellt`;
-  const nachricht = (...zeilen: string[]) => ["feat: y (#40) (#50)", "", "KQ-Plan: kubernia-planner", ...zeilen].join(NL);
+  const urteil = (d: number) => `${Z.abnahme}: head=${H} durchgaenge=${d} urteil=K1:erfuellt`;
+  const nachricht = (...zeilen: string[]) => ["feat: y (#40) (#50)", "", `${Z.plan}: ${PLANER}`, ...zeilen].join(NL);
   const bewerte = (bodies: string[], konfig: Zeilen = Z) => {
     const prs = bodies.map((_, i) => pr({ number: 50 + i, mergeCommit: { oid: String(i + 1).repeat(40) } }));
     const commits = bodies.map((b, i) => commit(b, MERGED, String(i + 1).repeat(40)));
@@ -265,25 +274,25 @@ describe("Abnahme je PR (#1756)", () => {
     assert.deepEqual(ab(urteil(2)), { durchgaenge: 2 });
   });
   test("entfaellt und Override", () => {
-    assert.equal(ab("KQ-Abnahme: entfaellt — Hand-PR"), "entfaellt");
-    assert.equal(ab("KQ-Abnahme-Override: #1755 Sitzung vor den Agenten"), "override");
+    assert.equal(ab(`${Z.abnahme}: entfaellt — Hand-PR`), "entfaellt");
+    assert.equal(ab(`${Z.abnahmeOverride}: #1755 Sitzung vor den Agenten`), "override");
   });
   test("Vorrang: Override schlägt eine gültige Abnahme-Zeile", () => {
-    assert.equal(ab("KQ-Abnahme-Override: #1755 Sitzung vor den Agenten", urteil(1)), "override");
+    assert.equal(ab(`${Z.abnahmeOverride}: #1755 Sitzung vor den Agenten`, urteil(1)), "override");
   });
   test("Vorrang gilt auch gegenüber entfaellt", () => {
-    assert.equal(ab("KQ-Abnahme-Override: #1755 grund", "KQ-Abnahme: entfaellt — Hand-PR"), "override");
+    assert.equal(ab(`${Z.abnahmeOverride}: #1755 grund`, `${Z.abnahme}: entfaellt — Hand-PR`), "override");
   });
   test("Prozent wird gerundet: 2 von 3 sind 67 %", () => {
     const e = bewerte([nachricht(urteil(1)), nachricht(urteil(1)), nachricht(urteil(2))]);
     assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 67 %/);
   });
   test("Widerruf hebt den Override auf, die Abnahme-Zeile zählt wieder", () => {
-    assert.deepEqual(ab("KQ-Abnahme-Override: #1755 grund", "KQ-Abnahme-Override: #1755 entfällt", urteil(1)), { durchgaenge: 1 });
+    assert.deepEqual(ab(`${Z.abnahmeOverride}: #1755 grund`, `${Z.abnahmeOverride}: #1755 entfällt`, urteil(1)), { durchgaenge: 1 });
   });
   test("ungültig (durchgaenge=0, ohne head) und ohne Zeile: null", () => {
-    assert.equal(ab(`KQ-Abnahme: head=${H} durchgaenge=0 urteil=K1:erfuellt`), null);
-    assert.equal(ab("KQ-Abnahme: durchgaenge=1 urteil=K1:erfuellt"), null);
+    assert.equal(ab(`${Z.abnahme}: head=${H} durchgaenge=0 urteil=K1:erfuellt`), null);
+    assert.equal(ab(`${Z.abnahme}: durchgaenge=1 urteil=K1:erfuellt`), null);
     assert.equal(ab(), null);
   });
   test("Squash-Betreff mit Stern-Präfix wird erkannt", () => {
@@ -304,8 +313,8 @@ describe("Abnahme je PR (#1756)", () => {
     const e = bewerte([
       nachricht(urteil(1)),
       nachricht(urteil(2)),
-      nachricht("KQ-Abnahme: entfaellt — Hand-PR"),
-      nachricht("KQ-Abnahme-Override: #1755 grund"),
+      nachricht(`${Z.abnahme}: entfaellt — Hand-PR`),
+      nachricht(`${Z.abnahmeOverride}: #1755 grund`),
       nachricht(),
     ]);
     const a = e.kennzahlen.abnahme as Record<string, number>;
@@ -314,7 +323,7 @@ describe("Abnahme je PR (#1756)", () => {
     assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 50 % \(1\/2\); entfällt 1, Override 1, ohne gültige Abnahme-Zeile 1/);
   });
   test("Abnahme-Fix und Hand-off (#1808): PRs mit durchgaenge ≥ 2, davon mit festgefahren-Label; ohne Fix/override/entfällt zählen nicht", () => {
-    const bodies = [nachricht(urteil(1)), nachricht(urteil(2)), nachricht(urteil(2)), nachricht(urteil(3)), nachricht("KQ-Abnahme: entfaellt — Hand-PR")];
+    const bodies = [nachricht(urteil(1)), nachricht(urteil(2)), nachricht(urteil(2)), nachricht(urteil(3)), nachricht(`${Z.abnahme}: entfaellt — Hand-PR`)];
     const prs = bodies.map((_, i) => pr({ number: 50 + i, mergeCommit: { oid: String(i + 1).repeat(40) } }));
     const commits = bodies.map((b, i) => commit(b, MERGED, String(i + 1).repeat(40)));
     const e = roh.bewertePrs({ prs, commits, ci: {}, festgefahren: { 50: 1, 51: 1, 53: 0 }, jetzt: SPAETER, konfigZeilen: Z });
@@ -332,8 +341,8 @@ describe("Abnahme je PR (#1756)", () => {
     assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 0 });
     assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: –;/);
   });
-  test("Präfix aus der Config: bei AB- wird KQ-Abnahme nicht gelesen", () => {
-    const e = bewerte([nachricht(urteil(1), "KQ-Abnahme-Override: #1755 grund")], commitZeilen("AB-", "kubernia-planner"));
+  test("Präfix aus der Config: bei AB- wird die Abnahme-Zeile des Config-Präfixes nicht gelesen", () => {
+    const e = bewerte([nachricht(urteil(1), `${Z.abnahmeOverride}: #1755 grund`)], commitZeilen("AB-", PLANER));
     assert.equal(e.zeilen[0].abnahme, null);
   });
   test("laufErgebnis liefert das Feld je Zeile und das Aggregat", () => {
@@ -362,14 +371,14 @@ describe("Label-Events per GraphQL (Z3c)", () => {
     assert.ok(!q.includes("totalCount"), "totalCount zählt alle Timeline-Einträge, nicht nur Label-Events");
   });
   const knoten = (...namen: string[]) => ({ pageInfo: { hasNextPage: false }, nodes: namen.map((name) => ({ createdAt: "2026-10-01T10:45:00Z", label: { name } })) });
-  test("festgefahrenAusAntwort zählt nur status:festgefahren, auch mehrfach", () => {
-    const antwort = { data: { repository: { p1: { timelineItems: knoten("status:festgefahren", "x", "status:festgefahren") }, p2: { timelineItems: knoten("dependencies") } } } };
+  test("festgefahrenAusAntwort zählt nur das Festgefahren-Label, auch mehrfach", () => {
+    const antwort = { data: { repository: { p1: { timelineItems: knoten(LABEL, "x", LABEL) }, p2: { timelineItems: knoten("dependencies") } } } };
     assert.deepEqual(mod.festgefahrenAusAntwort(antwort, [1, 2]), { 1: 2, 2: 0 });
   });
   test("festgefahrenAusAntwort: das Label kommt als Parameter, ohne Label wirft die Funktion", () => {
-    const antwort = { data: { repository: { p1: { timelineItems: knoten("status:festgefahren", "anderes:label", "anderes:label") } } } };
+    const antwort = { data: { repository: { p1: { timelineItems: knoten(LABEL, "anderes:label", "anderes:label") } } } };
     assert.deepEqual(roh.festgefahrenAusAntwort(antwort, [1], "anderes:label"), { 1: 2 });
-    assert.deepEqual(roh.festgefahrenAusAntwort(antwort, [1], "status:festgefahren"), { 1: 1 });
+    assert.deepEqual(roh.festgefahrenAusAntwort(antwort, [1], LABEL), { 1: 1 });
     for (const schlecht of [undefined, ""]) assert.throws(() => roh.festgefahrenAusAntwort(antwort, [1], schlecht), /Label-Namen/);
   });
   test("abgeschnittene Seite, fehlender PR, fehlende pageInfo und fehlendes repository sind Datenfehler", () => {
@@ -382,7 +391,7 @@ describe("Label-Events per GraphQL (Z3c)", () => {
 });
 
 describe("laufErgebnis (git und gh injiziert)", () => {
-  const liste = [pr({ headRefName: "feature/kq-40-a&b#c+d" })];
+  const liste = [pr({ headRefName: `${BRANCH}40-a&b#c+d` })];
   const log = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
   type Opt = { seit?: string; liste?: unknown[]; fehler?: string; laeufe?: string; label?: (nummern: number[]) => unknown; aufrufe?: string[][]; offen?: unknown[]; kommentare?: Record<number, unknown[]> };
   /** gh-Stub: `pr list`, die EINE paginierte Läufe-Abfrage und GraphQL-Label-Events (Standard: ein festgefahren-Label je PR). */
@@ -403,7 +412,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.ok(a.includes("--paginate") && pfad.includes("status=failure") && pfad.includes("event=pull_request"), "nur rote PR-Läufe, paginiert");
       assert.ok(pfad.includes(`created=%3E%3D${o.seit ?? "2026-10-01"}`), "Zeitfilter ab dem frühesten PR");
       assert.ok(!pfad.includes("branch="), "keine Abfrage je Branch");
-      return o.laeufe ?? `feature/kq-40-a&b#c+d\tx\t2026-10-01T10:30:00Z\nfeature/kq-40-a&b#c+d\tx\t2026-10-01T10:31:00Z\nfremder/branch\ty\t2026-10-01T10:32:00Z\n`;
+      return o.laeufe ?? `${BRANCH}40-a&b#c+d\tx\t2026-10-01T10:30:00Z\n${BRANCH}40-a&b#c+d\tx\t2026-10-01T10:31:00Z\nfremder/branch\ty\t2026-10-01T10:32:00Z\n`;
     }
     assert.equal(a[1], "graphql");
     assert.ok(a.includes("owner={owner}") && a.includes("name={repo}"));
@@ -411,7 +420,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     const nummern = [...query.matchAll(/p(\d+): pullRequest/g)].map((m) => Number(m[1]));
     if (o.label) return JSON.stringify(o.label(nummern));
     const repository = Object.fromEntries(
-      nummern.map((n) => [`p${n}`, { timelineItems: { pageInfo: { hasNextPage: false }, nodes: [{ createdAt: "2026-10-01T10:45:00Z", label: { name: "status:festgefahren" } }] } }]),
+      nummern.map((n) => [`p${n}`, { timelineItems: { pageInfo: { hasNextPage: false }, nodes: [{ createdAt: "2026-10-01T10:45:00Z", label: { name: LABEL } }] } }]),
     );
     return JSON.stringify({ data: { repository } });
   };
@@ -430,13 +439,13 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.equal(e.zeilen[0].festgefahren, 1);
     assert.equal(e.zeilen[0].runden, 1);
   });
-  test("Config injiziert (#1741): ein anderes Präfix lässt die KQ-Zeile des Squash-Commits nicht zählen, das Label kommt aus der Config", () => {
-    const config = (praefix: string, label: string) => () => ({ praefixe: { commitZeile: praefix }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: label } });
-    const kq = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config("KQ-", LABEL) });
+  test("Config injiziert (#1741): ein anderes Präfix lässt die Zeile des Config-Präfixes im Squash-Commit nicht zählen, das Label kommt aus der Config", () => {
+    const config = (praefix: string, label: string) => () => ({ praefixe: { commitZeile: praefix }, agenten: { planer: PLANER }, labels: { festgefahren: label } });
+    const kq = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config(FREMD.praefixe.commitZeile, LABEL) });
     assert.equal(kq.zeilen[0].runden, 1);
     assert.equal(kq.zeilen[0].festgefahren, 1);
     const ab = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config("AB-", "anderes:label") });
-    assert.equal(ab.zeilen[0].runden, null, "KQ-Zeilen zählen bei AB- nicht");
+    assert.equal(ab.zeilen[0].runden, null, "Zeilen des Config-Präfixes zählen bei AB- nicht");
     assert.equal(ab.zeilen[0].festgefahren, 0, "ein anderes Label zählt das festgefahren-Label nicht");
     assert.equal(ab.kennzahlen.ohneNachweis, 1);
   });
@@ -462,7 +471,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     const nie = () => {
       throw new Error("darf nicht aufgerufen werden");
     };
-    const ohneLabel = () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: {} });
+    const ohneLabel = () => ({ praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PLANER }, labels: {} });
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
     assert.throws(() => mod.laufErgebnisStartAgent({ laeufe: [], von, bis, runGit: nie, runGh: nie, ladeConfig: ohneLabel }), /labels\.festgefahren/);
   });
@@ -470,14 +479,14 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     const nie = () => {
       throw new Error("darf nicht aufgerufen werden");
     };
-    const ohneWorktree = () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+    const ohneWorktree = () => ({ praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PLANER }, labels: { festgefahren: LABEL } });
     assert.throws(() => mod.laufErgebnisStartAgent({ laeufe: [], von, bis, runGit: nie, runGh: nie, ladeConfig: ohneWorktree }), /praefixe\.worktree/);
   });
   test("Besitzer aus repo der Config (#1821 L20): ohne repo undefined (Abnahme-Marker nicht prüfbar), kaputtes repo wirft mit Fix-Zeile", () => {
     const nie = () => {
       throw new Error("darf nicht aufgerufen werden");
     };
-    const mitRepo = (repo: unknown) => () => ({ repo, praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL } });
+    const mitRepo = (repo: unknown) => () => ({ repo, praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PLANER }, labels: { festgefahren: LABEL } });
     for (const kaputt of ["x", "a/b/c", "", "/b"]) {
       assert.throws(() => mod.laufErgebnis({ von, bis, runGit: nie, runGh: nie, ladeConfig: mitRepo(kaputt) }), /owner\/name[\s\S]*Fix:/, kaputt);
     }
@@ -491,46 +500,46 @@ describe("laufErgebnis (git und gh injiziert)", () => {
   });
   describe("offene Hand-off-PRs (#1814 L9)", () => {
     const H = "a".repeat(40);
-    const marker = (d: number) => `<!-- kq-abnahme durchgang=${d} head=${H} urteil=K1:erfuellt -->`;
+    const marker = (d: number) => `<!-- ${abnahmeMarker(Z)} durchgang=${d} head=${H} urteil=K1:erfuellt -->`;
     const offenPr = (o: Record<string, unknown> = {}) => ({ number: 70, title: "feat(x): y (#41)", createdAt: "2026-10-01T10:00:00Z", closingIssuesReferences: [{ number: 41 }], ...o });
-    const vertraut = { login: "fluffels", type: "User" };
+    const vertraut = { login: FREMD_OWNER, type: "User" };
     const kommentar = (body: string, user: unknown = vertraut) => ({ body, user });
     const offen = (o: Opt, extra: Record<string, unknown> = {}) =>
       mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ...extra }).kennzahlen.abnahmeFix as { mitFix: number; offenMitFix: number };
     const zeile = (o: Opt, extra: Record<string, unknown> = {}) => mod.formatiere(mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ...extra }));
     test("offener Festgefahren-PR mit Durchgang 2 zählt in offenMitFix, nicht in mitFix; die Abfrage filtert nach dem Label der Config", () => {
       const aufrufe: string[][] = [];
-      const a = offen({ liste: [], aufrufe, offen: [offenPr()], kommentare: { 70: [kommentar(marker(1)), kommentar(marker(2))] } }, { owner: "fluffels" });
+      const a = offen({ liste: [], aufrufe, offen: [offenPr()], kommentare: { 70: [kommentar(marker(1)), kommentar(marker(2))] } }, { owner: FREMD_OWNER });
       assert.deepEqual(a, { mitFix: 0, mitFixUndFestgefahren: 0, offenMitFix: 1 });
       const liste = aufrufe.find((x) => x[0] === "pr" && x.includes("open")) ?? [];
       assert.equal(liste[liste.indexOf("--label") + 1], LABEL);
-      assert.match(zeile({ liste: [], offen: [offenPr()], kommentare: { 70: [kommentar(marker(2))] } }, { owner: "fluffels" }), /offen \(Hand-off, nicht gemergt\): 1/);
+      assert.match(zeile({ liste: [], offen: [offenPr()], kommentare: { 70: [kommentar(marker(2))] } }, { owner: FREMD_OWNER }), /offen \(Hand-off, nicht gemergt\): 1/);
     });
     test("Negativfälle: nur Durchgang 1, Hand-off-Marker, fremder Autor, außerhalb des Fensters, Ticketfilter und kein Treffer zählen 0", () => {
       const k = (...c: unknown[]) => ({ 70: c });
-      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(1))) }, { owner: "fluffels" }).offenMitFix, 0);
-      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar("<!-- kq-abnahme-handoff -->"), kommentar(marker(1))) }, { owner: "fluffels" }).offenMitFix, 0);
-      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2), { login: "fremd", type: "User" })) }, { owner: "fluffels" }).offenMitFix, 0);
-      assert.equal(offen({ liste: [], offen: [offenPr({ createdAt: "2026-09-01T00:00:00Z" })], kommentare: k(kommentar(marker(2))) }, { owner: "fluffels" }).offenMitFix, 0);
-      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2))) }, { owner: "fluffels", ohne: [41] }).offenMitFix, 0);
-      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2))) }, { owner: "fluffels", tickets: [99] }).offenMitFix, 0);
-      assert.equal(offen({ liste: [], offen: [] }, { owner: "fluffels" }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(1))) }, { owner: FREMD_OWNER }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(`<!-- ${abnahmeMarker(Z)}-handoff -->`), kommentar(marker(1))) }, { owner: FREMD_OWNER }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2), { login: "fremd", type: "User" })) }, { owner: FREMD_OWNER }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr({ createdAt: "2026-09-01T00:00:00Z" })], kommentare: k(kommentar(marker(2))) }, { owner: FREMD_OWNER }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2))) }, { owner: FREMD_OWNER, ohne: [41] }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [offenPr()], kommentare: k(kommentar(marker(2))) }, { owner: FREMD_OWNER, tickets: [99] }).offenMitFix, 0);
+      assert.equal(offen({ liste: [], offen: [] }, { owner: FREMD_OWNER }).offenMitFix, 0);
       assert.match(zeile({ liste: [], offen: [] }), /offen \(Hand-off, nicht gemergt\): 0/);
     });
     test("gh-Fehler bei Liste oder Kommentaren ist ein Datenfehler, keine stille 0", () => {
-      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: "fluffels" });
+      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: FREMD_OWNER });
       assert.throws(lauf({ liste: [], fehler: "--state open" }), mod.DatenFehler);
       assert.throws(lauf({ liste: [], offen: [offenPr()], fehler: "/comments" }), mod.DatenFehler);
-      assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: (a) => (a.includes("open") ? "kein json" : gh({ liste: [] })(a)), owner: "fluffels" }), mod.DatenFehler);
+      assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: (a) => (a.includes("open") ? "kein json" : gh({ liste: [] })(a)), owner: FREMD_OWNER }), mod.DatenFehler);
     });
     test("Guards der Zählung: Nicht-Liste, abgeschnittene Liste und beide Fenstergrenzen", () => {
-      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: "fluffels" });
+      const lauf = (o: Opt) => () => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), owner: FREMD_OWNER });
       assert.throws(lauf({ liste: [], offen: {} as unknown as unknown[] }), /keine Liste/);
       const voll = Array.from({ length: 1000 }, (_, i) => offenPr({ number: 1000 + i }));
       assert.throws(lauf({ liste: [], offen: voll }), /abgeschnitten/);
       assert.doesNotThrow(lauf({ liste: [], offen: voll.slice(1) }), "999 Einträge liegen unter dem Limit (#1821 L23a)");
       const k = { 70: [kommentar(marker(2))] };
-      const zaehle = (createdAt: string) => offen({ liste: [], offen: [offenPr({ createdAt })], kommentare: k }, { owner: "fluffels" }).offenMitFix;
+      const zaehle = (createdAt: string) => offen({ liste: [], offen: [offenPr({ createdAt })], kommentare: k }, { owner: FREMD_OWNER }).offenMitFix;
       assert.equal(zaehle(von), 1, "untere Grenze gehört zum Fenster");
       assert.equal(zaehle(bis), 1, "obere Grenze gehört zum Fenster");
       assert.equal(zaehle("2026-10-02T00:00:01Z"), 0, "nach dem Fenster zählt nicht");
@@ -538,11 +547,11 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     });
     test("Besitzer kommt aus repo der Config; fehlt er bei einem Treffer im Fenster, ist das ein Datenfehler (fail-closed)", () => {
       const o: Opt = { liste: [], offen: [offenPr()], kommentare: { 70: [kommentar(marker(2))] } };
-      const conf = (repo?: unknown) => () => ({ praefixe: { commitZeile: "KQ-" }, agenten: { planer: "kubernia-planner" }, labels: { festgefahren: LABEL }, ...(repo === undefined ? {} : { repo }) });
+      const conf = (repo?: unknown) => () => ({ praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PLANER }, labels: { festgefahren: LABEL }, ...(repo === undefined ? {} : { repo }) });
       const lauf = (c: () => unknown) => mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ladeConfig: c });
-      assert.equal((lauf(conf("fluffels/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1);
-      assert.equal((lauf(conf("anderer/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 0, "Autor fluffels ist dann nicht vertraut");
-      const mitArg = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ladeConfig: conf("anderer/x"), owner: "fluffels" });
+      assert.equal((lauf(conf(`${FREMD_OWNER}/x`)).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1);
+      assert.equal((lauf(conf("anderer/x")).kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 0, `Autor ${FREMD_OWNER} ist dann nicht vertraut`);
+      const mitArg = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh(o), jetzt: SPAETER, ladeConfig: conf("anderer/x"), owner: FREMD_OWNER });
       assert.equal((mitArg.kennzahlen.abnahmeFix as { offenMitFix: number }).offenMitFix, 1, "das owner-Argument hat Vorrang vor der Config (#1821 L23a)");
       assert.throws(() => lauf(conf()), /Besitzer/);
       assert.throws(() => lauf(conf(42)), /owner\/name/); // kaputtes repo: wirft schon beim Zerlegen
@@ -551,7 +560,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     });
   });
   test.each([3, 50, 51, 60])("gh-Aufrufe wachsen nicht je PR: bei %i PRs höchstens 2 + 1 + ⌈N/50⌉", (n) => {
-    const prs = Array.from({ length: n }, (_, i) => pr({ number: 100 + i, mergeCommit: { oid: `${(i + 1).toString(16).padStart(40, "0")}` }, headRefName: `feature/kq-${i}` }));
+    const prs = Array.from({ length: n }, (_, i) => pr({ number: 100 + i, mergeCommit: { oid: `${(i + 1).toString(16).padStart(40, "0")}` }, headRefName: `${BRANCH}${i}` }));
     const viele = prs.map((p) => `${p.mergeCommit.oid}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`).join("");
     const aufrufe: string[][] = [];
     const e = mod.laufErgebnis({ von, bis, runGit: git(viele), runGh: gh({ liste: prs, aufrufe }), jetzt: SPAETER });
@@ -649,27 +658,23 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       assert.throws(() => start([lauf1(40, t0 - 10)], { ladeConfig: wirft }), /praefixe\.commitZeile/);
       assert.throws(() => start([lauf1(40, t0 + 1)], { ladeConfig: wirft }), /praefixe\.commitZeile/);
       // Die Läufe werden mit den Ticket-Namen der Config zugeordnet (ticketNamen): die Config ist vollständig, nur die Commit-Zeile weicht ab.
-      const ab = () => ({ praefixe: { commitZeile: "AB-", branch: "feature/kq-", worktree: "kq-" }, agenten: { planer: "kubernia-planner", umsetzer: "kubernia-umsetzer", lens: "kubernia-lens", gruppe: "kubernia-gruppe", ticketSkill: "kubernia" }, labels: { festgefahren: LABEL } });
+      const ab = () => ({ ...FREMD, praefixe: { ...FREMD.praefixe, commitZeile: "AB-" }, labels: { festgefahren: LABEL } });
       const e = start([lauf1(40, t0 + 1)], { ladeConfig: ab });
-      assert.equal(e.zeilen[0].runden, null, "KQ-Zeilen zählen bei AB- nicht");
+      assert.equal(e.zeilen[0].runden, null, "Zeilen des Config-Präfixes zählen bei AB- nicht");
       assert.equal(e.kennzahlen.ohneNachweis, 1);
     });
     test("Ticket-Namen aus der Config (#1745): der Worktree-Pfad mit dem Präfix der Config ordnet den Lauf zu, mit einer anderen Config nicht", () => {
       const imWorktree = { meta: { agentType: "x-agent" }, zeilen: [{ type: "user", timestamp: new Date(t0 + 1).toISOString(), message: { role: "user", content: "Arbeit in C:/r/.claude/worktrees/ab-40/src" } }] };
-      const namen = (worktree: string) => () => ({
-        praefixe: { commitZeile: "KQ-", branch: "feature/kq-", worktree },
-        agenten: { planer: "kubernia-planner", umsetzer: "kubernia-umsetzer", lens: "kubernia-lens", gruppe: "kubernia-gruppe", ticketSkill: "kubernia" },
-        labels: { festgefahren: LABEL },
-      });
+      const namen = (worktree: string) => () => ({ ...FREMD, praefixe: { ...FREMD.praefixe, worktree }, labels: { festgefahren: LABEL } });
       assert.deepEqual(start([imWorktree], { ladeConfig: namen("ab-") }).zeilen.map((z) => z.pr), [50]);
-      assert.deepEqual(start([imWorktree], { ladeConfig: namen("kq-") }).zeilen, []);
+      assert.deepEqual(start([imWorktree], { ladeConfig: namen(FREMD.praefixe.worktree) }).zeilen, []);
     });
     test("--ohne bleibt kombinierbar", () => {
       assert.deepEqual(start([lauf1(40, t0 + 1), lauf1(41, t0 + 2)], { ohne: [41] }).zeilen.map((z) => z.pr), [50]);
     });
     test("ladeStartLaeufe: fehlender Ordner und kein Lauf des Typs sind ein Datenfehler (fail-closed)", () => {
       assert.throws(() => mod.ladeStartLaeufe(join(tmpdir(), "gibt-es-nicht-1646"), "x-agent", von), (e: Error) => e instanceof mod.DatenFehler && /Transkript/.test(e.message));
-      const dir = mkdtempSync(join(tmpdir(), "kq-1646-"));
+      const dir = mkdtempSync(join(tmpdir(), "lauf-ergebnis-1646-"));
       try {
         assert.throws(() => mod.ladeStartLaeufe(dir, "x-agent", von), mod.DatenFehler);
       } finally {
@@ -677,7 +682,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       }
     });
     test("ladeStartLaeufe: lädt einen Vorgänger 30 h vor `von` (Vorlauf 48 h), nicht aber 60 h davor", () => {
-      const dir = mkdtempSync(join(tmpdir(), "kq-1646-vorlauf-"));
+      const dir = mkdtempSync(join(tmpdir(), "lauf-ergebnis-1646-vorlauf-"));
       try {
         const sub = join(dir, "s1", "subagents");
         mkdirSync(sub, { recursive: true });
@@ -695,7 +700,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       }
     });
     test("ladeStartLaeufe: Grenze des Vorlaufs: 47:59 h vor `von` wird geladen, 48:01 h nicht", () => {
-      const dir = mkdtempSync(join(tmpdir(), "kq-1663-grenze-"));
+      const dir = mkdtempSync(join(tmpdir(), "lauf-ergebnis-1663-grenze-"));
       try {
         const sub = join(dir, "s1", "subagents");
         mkdirSync(sub, { recursive: true });
@@ -712,7 +717,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
       }
     });
     test("ladeStartLaeufe: ein nicht lesbarer Projektordner (Datei statt Ordner) ist ein Datenfehler", () => {
-      const dir = mkdtempSync(join(tmpdir(), "kq-1646-datei-"));
+      const dir = mkdtempSync(join(tmpdir(), "lauf-ergebnis-1646-datei-"));
       try {
         const datei = join(dir, "keinordner");
         writeFileSync(datei, "x");
@@ -733,7 +738,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     });
   });
   test("API-Kappung bei 1000 roten Läufen ist ein Datenfehler", () => {
-    const laeufe = Array.from({ length: 1000 }, (_, i) => `feature/kq-40-a&b#c+d\tsha${i}\t2026-10-01T10:30:00Z`).join("\n");
+    const laeufe = Array.from({ length: 1000 }, (_, i) => `${BRANCH}40-a&b#c+d\tsha${i}\t2026-10-01T10:30:00Z`).join("\n");
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ laeufe }) }), (e: Error) => e instanceof mod.DatenFehler && /abgeschnitten/.test(e.message));
   });
   test("kaputte GraphQL-Antwort (kein JSON, abgeschnitten) ist ein Datenfehler", () => {

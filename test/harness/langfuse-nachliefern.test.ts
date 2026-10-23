@@ -14,13 +14,12 @@ import { fileURLToPath } from "node:url";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
+import { FREMD, FREMD_OWNER, repoName } from "../support/fremd-config";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawOtlp from "../../scripts/langfuse-otlp.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawProjekt from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleich from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -43,7 +42,9 @@ type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; s
 type Args = { ende?: number; ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { gesendetAm?: Record<string, number>; vermerk?: string; pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
 
-const N = rawNach as unknown as {
+const nachRoh = rawNach as unknown as { nachliefern: (a: unknown, d: object) => unknown };
+// Die Fremd-Config ist der Standard; ein Aufruf mit eigenem `config` gewinnt über den Spread.
+const N = { ...rawNach, nachliefern: (a: unknown, d: object) => nachRoh.nachliefern(a, { config: FREMD, ...d }) } as unknown as {
   STICHTAG: string;
   RUHEFRIST_OHNE_ENDE_H: number;
   GESENDET_ABLAUF_MS: number;
@@ -53,7 +54,9 @@ const N = rawNach as unknown as {
   nachliefern: (a: Args, d: { env?: Record<string, string>; now?: number; uhr?: () => number; fetchImpl?: Fetch; projectsRoot: string; repoRoot: string; stateDir: string; config?: unknown }) => Promise<{ exitCode: number; text: string; protokoll: Protokoll }>;
 };
 // Der Repo-Name (Scope, Service und erstes Tag) kommt aus der Projekt-Config; der Wrapper reicht ihn durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const REPO_NAME = (rawProjekt as unknown as { repoName: (c: unknown) => string; ladeProjektConfig: () => unknown }).repoName((rawProjekt as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig());
+const REPO_NAME = repoName(FREMD);
+const T1577 = `${FREMD.praefixe.worktree}1577`;
+const T9 = `${FREMD.praefixe.worktree}9`;
 const otlpRoh = rawOtlp as unknown as { bauePayloads: (s: string, e: unknown, o: object) => unknown };
 const O = { ...rawOtlp, bauePayloads: (s: string, e: unknown, o: object) => otlpRoh.bauePayloads(s, e, { repoName: REPO_NAME, ...o }) } as unknown as {
   MAX_SPANS_JE_REQUEST: number;
@@ -94,7 +97,7 @@ const eintrag = (n: number, over: Partial<Eintrag> = {}): Eintrag => ({
   ts: new Date(HEUTE + n * 1000).toISOString(),
   usage: usage({ input: n }),
   rolle: null,
-  ticket: "kq-1577",
+  ticket: T1577,
   ...over,
 });
 
@@ -104,7 +107,7 @@ const msg = (id: string, i = 10, extra: Record<string, unknown> = {}) =>
   JSON.stringify({
     type: "assistant",
     sessionId: "s1",
-    gitBranch: "feature/kq-1577-x",
+    gitBranch: `${FREMD.praefixe.branch}1577-x`,
     timestamp: new Date(HEUTE + zaehler++ * 1000).toISOString(),
     uuid: `u-${id}`,
     message: {
@@ -223,26 +226,26 @@ describe("Payload (Golden)", () => {
   });
 
   test("Trace-Attribute auf jedem Span: Session, Tags, Name, Projekt; Scope ohne langfuse-sdk-Präfix", () => {
-    const sub = { agentId: "x1", agentType: "kubernia-lens", description: "L" };
-    const { chunks } = baue([eintrag(1), eintrag(2, { rolle: sub }), eintrag(3, { ticket: "kq-9" })]);
+    const sub = { agentId: "x1", agentType: FREMD.agenten.lens, description: "L" };
+    const { chunks } = baue([eintrag(1), eintrag(2, { rolle: sub }), eintrag(3, { ticket: T9 })]);
     const p = chunks[0].payload;
     expect(spansVon(p)).toHaveLength(4); // 3 Generationen + 1 Subagent-Span
     for (const s of spansVon(p)) {
       const a = attrs(s);
       expect(a["langfuse.session.id"]).toBe("s1");
-      expect(a["langfuse.trace.tags"]).toEqual(["kubernia", "abgleich", "kq-1577", "kq-9"]);
+      expect(a["langfuse.trace.tags"]).toEqual([REPO_NAME, "abgleich", T1577, T9]);
       expect(a["langfuse.trace.name"]).toBe("Abgleich");
       expect(a["langfuse.trace.metadata.project"]).toBe("repo");
     }
-    expect(p.resourceSpans[0].scopeSpans[0].scope.name).toBe("kubernia-abgleich");
+    expect(p.resourceSpans[0].scopeSpans[0].scope.name).toBe(`${REPO_NAME}-abgleich`);
     expect(p.resourceSpans[0].scopeSpans[0].scope.name.startsWith("langfuse-sdk")).toBe(false);
-    expect(p.resourceSpans[0].resource.attributes).toEqual([O.attr("service.name", "kubernia-abgleich")]);
+    expect(p.resourceSpans[0].resource.attributes).toEqual([O.attr("service.name", `${REPO_NAME}-abgleich`)]);
   });
 
   test.each([
     ["ohne Umgebung", {}, undefined, undefined],
     ["Environment", { LANGFUSE_TRACING_ENVIRONMENT: "dev" }, "dev", undefined],
-    ["User", { LANGFUSE_USER_ID: "fluffels" }, undefined, "fluffels"],
+    ["User", { LANGFUSE_USER_ID: FREMD_OWNER }, undefined, FREMD_OWNER],
   ])("environment/user.id nur wenn gesetzt: %s", (_n, env, environment, user) => {
     const a = attrs(spansVon(baue([eintrag(1)], { env }).chunks[0].payload)[0]);
     expect(a["langfuse.environment"]).toBe(environment);
@@ -261,9 +264,9 @@ describe("Payload (Golden)", () => {
 
   test("Subagenten: Name, agent_type, Zeitspanne; Verschachtelung über parentAgentId (auch mit agent--Präfix); Generation hängt am Span ihres Agenten", () => {
     const e = [
-      eintrag(1, { rolle: { agentId: "a1", agentType: "kubernia-umsetzer", description: "Umsetzung" } }),
-      eintrag(5, { rolle: { agentId: "a1", agentType: "kubernia-umsetzer", description: "Umsetzung" } }),
-      eintrag(2, { rolle: { agentId: "a2", agentType: "kubernia-lens", description: "Lens R1", parentAgentId: "agent-a1" } }),
+      eintrag(1, { rolle: { agentId: "a1", agentType: FREMD.agenten.umsetzer, description: "Umsetzung" } }),
+      eintrag(5, { rolle: { agentId: "a1", agentType: FREMD.agenten.umsetzer, description: "Umsetzung" } }),
+      eintrag(2, { rolle: { agentId: "a2", agentType: FREMD.agenten.lens, description: "Lens R1", parentAgentId: "agent-a1" } }),
       eintrag(3, { rolle: { agentId: "a3", agentType: "x", parentAgentId: "fremd" } }),
       eintrag(4),
     ];
@@ -273,7 +276,7 @@ describe("Payload (Golden)", () => {
     const a2 = proId.get(A.subagentSpanId("s1", "a2"))!;
     const a3 = proId.get(A.subagentSpanId("s1", "a3"))!;
     expect(a1.name).toBe("Subagent: Umsetzung");
-    expect(attrs(a1)["langfuse.observation.metadata.agent_type"]).toBe("kubernia-umsetzer");
+    expect(attrs(a1)["langfuse.observation.metadata.agent_type"]).toBe(FREMD.agenten.umsetzer);
     expect(attrs(a1)["langfuse.observation.type"]).toBe("span");
     expect(a1.startTimeUnixNano).toBe(O.nanos(e[0].ts));
     expect(a1.endTimeUnixNano).toBe(O.nanos(e[1].ts));
@@ -483,7 +486,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     }
   });
   test("Subagent-Span je Session nur einmal; Kind-Call hängt am Span des Subagenten", async () => {
-    const meta = JSON.stringify({ agentType: "kubernia-lens", description: "Lens R1" });
+    const meta = JSON.stringify({ agentType: FREMD.agenten.lens, description: "Lens R1" });
     const sub = (ids: string[]) => ids.map((i, n) => msg(i, 20 + n)).join("\n");
     const a = aufbau([msg("a", 1)], { [`${PRAEFIX}/s1/subagents/agent-x1.jsonl`]: sub(["s1a"]), [`${PRAEFIX}/s1/subagents/agent-x1.meta.json`]: meta });
     const m = mock({ ist: 0, obs: [] });
@@ -622,7 +625,7 @@ describe("Auswahl", () => {
   test("Geschwister-Repo wird nicht gelesen, auch nicht Ende zu Ende; Worktree-Ordner des Projekts schon", async () => {
     const a = aufbau([msg("a", 1)], {
       [`${PRAEFIX}-tools/s9.jsonl`]: msg("fremd", 7),
-      [`${PRAEFIX}--claude-worktrees-kq-1/s8.jsonl`]: msg("wt", 8),
+      [`${PRAEFIX}--claude-worktrees-wt-1/s8.jsonl`]: msg("wt", 8),
     });
     const m = mock({ ist: 0 });
     const r = await lauf(a, m);

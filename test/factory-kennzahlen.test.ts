@@ -12,6 +12,7 @@ import * as rawLauf from "../scripts/lauf-ergebnis.mjs";
 import * as rawSlice from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../scripts/token-baseline.mjs";
+import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
 type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string; abnahme: Abnahme };
@@ -38,7 +39,7 @@ const LAUF = rawLauf as unknown as {
   NACHARBEIT_TAGE: number;
   bewertePrs: (e: unknown) => Daten;
 };
-const ZEILEN = (rawSlice as unknown as { commitZeilen: (praefix: string, planer: string) => unknown }).commitZeilen("KQ-", "kubernia-planner");
+const ZEILEN = (rawSlice as unknown as { commitZeilen: (praefix: string, planer: string) => { abnahme: string; abnahmeOverride: string } }).commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer);
 const BASE = rawBase as unknown as { summarize: (run: { calls: unknown[]; questions: number; events?: unknown[] }, bounds?: unknown) => unknown };
 
 const ZEILE = (o: Partial<Zeile> = {}): Zeile => ({ pr: 50, ticket: 40, gemergt: "2026-10-14T10:00:00Z", runden: 1, ciFix: 0, festgefahren: 0, nacharbeit: "nein", abnahme: null, ...o });
@@ -232,7 +233,7 @@ describe("Abnahme-Quote (#1756)", () => {
   const prNr = (n: number) => ({ number: n, title: "feat: x (#40)", createdAt: "2026-09-30T00:00:00Z", mergedAt: "2026-10-01T00:00:00Z", mergeCommit: { oid: String(n) + "abc1234" } });
   const body = (...zeilen: string[]) => ["feat: x (#40)", "", ...zeilen].join(String.fromCharCode(10));
   const h = "c".repeat(40);
-  const urteil = (d: number) => "KQ-Abnahme: head=" + h + " durchgaenge=" + d + " urteil=K1:erfuellt";
+  const urteil = (d: number) => ZEILEN.abnahme + ": head=" + h + " durchgaenge=" + d + " urteil=K1:erfuellt";
   const echt = (bodies: string[]) =>
     LAUF.bewertePrs({
       prs: bodies.map((_, i) => prNr(i + 1)),
@@ -248,8 +249,8 @@ describe("Abnahme-Quote (#1756)", () => {
     const e = echt([
       body(urteil(1)),
       body(urteil(2)),
-      body("KQ-Abnahme: entfaellt — Hand-PR"),
-      body("KQ-Abnahme-Override: #1755 grund"),
+      body(ZEILEN.abnahme + ": entfaellt — Hand-PR"),
+      body(ZEILEN.abnahmeOverride + ": #1755 grund"),
       body("nichts"),
     ]);
     const lage = F.vertragPruefen(e);
@@ -274,7 +275,7 @@ describe("Abnahme-Quote (#1756)", () => {
     expect(a).toContain("Vertrag verletzt");
   });
   test("Negativfall: ohne Abnahme-Urteil steht eine Lücke mit Grund, nie 0 %", () => {
-    const lage = F.vertragPruefen(echt([body("nichts"), body("KQ-Abnahme: entfaellt — Hand-PR")]));
+    const lage = F.vertragPruefen(echt([body("nichts"), body(ZEILEN.abnahme + ": entfaellt — Hand-PR")]));
     const a = md(lage);
     expect(a).toContain("- Lücke: keine PR mit Abnahme-Urteil im Zeitraum");
     expect(a).not.toMatch(/0 %/);
@@ -563,10 +564,10 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]>; auditLader?: (e: { bis: string }) => Eingabe }) => { bericht: { audit?: A[] }; exit: number };
     renderMarkdown: (b: unknown) => string;
   };
-  const commit = (message: string, login = "fluffels") => ({ author: { login }, commit: { message, committer: { date: "2026-10-12T10:00:00Z" } } });
+  const commit = (message: string, login = FREMD_OWNER) => ({ author: { login }, commit: { message, committer: { date: "2026-10-12T10:00:00Z" } } });
   const spiel = (n: number) => commit(`feat(sim): s${n} (#${100 + n}) (#${200 + n})`);
   const harness = (n: number) => commit(`feat(harness): h${n} (#${300 + n}) (#${400 + n})`);
-  const CFG = { labels: { harness: "area:harness" } };
+  const CFG = { labels: { harness: FREMD.labels.harness } };
   const von = (e: Eingabe, name: string) => S.selbstAudit({ commits: [], sammelAbschluss: "2026-10-01T00:00:00Z", zeilen: [], ...e }).find((a) => a.mechanismus === name)!;
 
   test("Spielquote: 1:3 ok, 2:2 ABWEICHUNG, unter 4 Merges Lücke (keine Aussage), Bots zählen nicht", () => {
@@ -668,7 +669,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
           { number: 10, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-01T00:00:00Z", assignees: [] },
           { number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] },
           { number: 12, title: "Langfuse-Befunde (gesammelt)", state: "CLOSED", closedAt: "2026-10-09T00:00:00Z", assignees: [] },
-          { number: 13, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null, assignees: [{ login: "fluffels" }] },
+          { number: 13, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null, assignees: [{ login: FREMD_OWNER }] },
           { number: 15, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: "2026-10-08T00:00:00Z", assignees: [] }, // wieder geöffnet: zählt nicht als Abschluss
           { number: 14, title: "Etwas anderes (gesammelt)", state: "OPEN", closedAt: null, assignees: [] },
         ];
@@ -682,7 +683,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(d.sammelInArbeit).toBe(13);
     expect(d.commits).toHaveLength(1);
     expect(aufrufe[0]).toContain("--limit");
-    expect(aufrufe[2].join(" ")).toContain("labels=area%3Aharness&since=2026-10-04T00:01:00.000Z");
+    expect(aufrufe[2].join(" ")).toContain(`labels=${encodeURIComponent(FREMD.labels.harness)}&since=2026-10-04T00:01:00.000Z`);
     expect([...d.harnessIssues!]).toEqual([500]);
     expect(aufrufe[1].join(" ")).toMatch(/--paginate --slurp repos\/o\/r\/commits\?sha=main&since=2026-10-05T00:01:00\.000Z/);
   });
@@ -748,7 +749,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
           { number: 32, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null },
         ];
       }
-      return [[{ author: { login: "fluffels" }, commit: { message: "feat(sim): ohne Datum (#1)" } }, spiel(1)]];
+      return [[{ author: { login: FREMD_OWNER }, commit: { message: "feat(sim): ohne Datum (#1)" } }, spiel(1)]];
     };
     const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
