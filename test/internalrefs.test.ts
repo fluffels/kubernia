@@ -376,6 +376,21 @@ describe("Pfadregel (#1888)", () => {
     assert.deepEqual(befund("README.md", win("D:", "", "Users", "KEINPLATZHALTER")), ["nutzer"], "doppelter Trenner");
   });
 
+  test("Leser: eine nicht lesbare Datei wird übersprungen, ein Text mit NUL-Byte ist Binärdaten", () => {
+    const wirft = (f: string): string => {
+      if (f === "docs/kaputt.md") throw new Error("EACCES");
+      return win("C:", "Users", "KEINPLATZHALTER", "x");
+    };
+    assert.deepEqual(pfadBefunde(["docs/kaputt.md"], wirft, { repo: fremderRepo }), []);
+    assert.equal(pfadBefunde(["docs/ok.md"], wirft, { repo: fremderRepo }).length, 1, "ohne Wurf trifft die Zeile");
+    assert.deepEqual(pfadBefunde(["docs/a.md"], () => `\0${win("C:", "Users", "KEINPLATZHALTER", "x")}`, { repo: fremderRepo }), []);
+  });
+
+  test("Repo-Segment mit Satzzeichen dahinter ist ein Treffer (Nachlauf wird abgestreift)", () => {
+    assert.deepEqual(befund("docs/a.md", `(C:/dev/${fremderRepo}.)`), ["repo"]);
+    assert.deepEqual(befund("docs/a.md", `(C:/dev/${fremderRepo}x.)`), [], "längerer Name ist kein Treffer");
+  });
+
   test("Benutzerordner-URLs und Teilwörter sind kein Pfad", () => {
     assert.deepEqual(befund("docs/a.md", "https://example.org/home/KEINPLATZHALTER/x"), []);
     assert.deepEqual(befund("docs/a.md", "src/home/KEINPLATZHALTER/x.ts"), []);

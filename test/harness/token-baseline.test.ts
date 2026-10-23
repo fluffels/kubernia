@@ -177,6 +177,21 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     const s = mRoh.summarize({ calls: [c] }, BOUNDS, null, { umsetzer: a.umsetzer, agenten: a });
     assert.ok(s.rows.some((r) => r.phase === "Planung"));
   });
+  test("summarize: Review-Runden und Sockel kennen den konfigurierten Lens- und Planer-Namen (auch ohne „lens“ im Namen)", () => {
+    const a = { ...FREMD.agenten, lens: "zz-kritik" };
+    const calls = [
+      call("2026-09-29T10:30:00Z", 1, { subagent: { id: "k", agentType: "zz-kritik", description: "Blick auf #1" } }),
+      call("2026-09-29T10:31:00Z", 1, { subagent: { id: "p", agentType: a.planer, description: "irgendwas" } }),
+    ];
+    const mit = mRoh.summarize({ calls }, BOUNDS, null, { umsetzer: a.umsetzer, agenten: a });
+    assert.ok(mit.reviewRounds >= 1);
+    assert.ok(mit.sockel.review !== null && mit.sockel.review > 0);
+    assert.ok(mit.sockel.planung !== null && mit.sockel.planung > 0);
+    const ohne = mRoh.summarize({ calls }, BOUNDS, null, { umsetzer: a.umsetzer });
+    assert.equal(ohne.reviewRounds, 0);
+    assert.ok(!ohne.sockel.review);
+    assert.ok(!ohne.sockel.planung);
+  });
 
   test("Workflow-Labels werden per Präfix ihrer Phase zugeordnet", () => {
     assert.equal(m.classifySubagent(undefined, "auswahl+claim"), "Auswahl");

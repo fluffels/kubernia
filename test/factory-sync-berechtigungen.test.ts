@@ -435,6 +435,11 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
     assert.deepEqual(sb.kernAnteilVon(E, m, { sandbox: ERG }), KERN_SB);
     assert.deepEqual(mitSb({ enabled: true }, ERG).network, { allowedDomains: ["*.pixellab.ai"] }, "ein fehlender Zweig wird angelegt");
     assert.deepEqual(sb.kernAnteilVon(E, { enabled: true, network: { allowedDomains: ["*.pixellab.ai"] } }, { sandbox: ERG }), { enabled: true }, "leere Liste und leerer Zweig entfallen");
+    assert.deepEqual(
+      sb.kernAnteilVon(E, { network: { allowedDomains: ["*.pixellab.ai"], allowLocalBinding: true } }, { sandbox: ERG }),
+      { network: { allowLocalBinding: true } },
+      "ein leer werdender Listenzweig lässt die weiteren Schlüssel des Zweigs stehen",
+    );
     assert.equal(sb.kernAnteilVon(E, null, { sandbox: ERG }), null, "ein Nicht-Objekt bleibt unverändert");
     assert.deepEqual(sb.kernAnteilVon(E, KERN_SB, {}), KERN_SB, "ohne Ergänzung bleibt der Wert");
   });
