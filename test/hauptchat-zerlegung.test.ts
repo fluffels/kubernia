@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRoh from "../scripts/ticket-namen.mjs";
 import { FREMD, repoName } from "./support/fremd-config";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
@@ -17,6 +19,7 @@ import * as hcRoh from "../scripts/hauptchat-zerlegung.mjs";
 
 // Der Repo-Name (Schlüssel der eigenen Subagenten im Ergebnis) kommt aus der Fremd-Config; der Wrapper reicht ihn an renderMarkdown durch.
 const REPO_NAME = repoName(FREMD);
+const escapeRegex = (namenRoh as unknown as { escapeRegex: (s: string) => string }).escapeRegex;
 const hcModule = { ...(hcRoh as object), renderMarkdown: (r: unknown) => (hcRoh as unknown as { renderMarkdown: (r: unknown, o: object) => string }).renderMarkdown(r, { repoName: REPO_NAME }) };
 
 type Row = Record<string, unknown>;
@@ -436,7 +439,7 @@ describe("zerlegeHauptchat: geschätzte Kosten und Output (Z2)", () => {
     assert.ok(fork.costGeschaetzt > fork.cost);
     const k = zerlege({ agentType: FREMD.agenten.planer }, zuwachsZeilen(true));
     const text = hc.renderMarkdown(k);
-    assert.match(text, new RegExp(`${REPO_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-Subagenten \\(nicht Hauptchat\\): 3 Calls, [\\d.]+ \\$, geschätzt [\\d.]+ \\$ \\(Output geschätzt \\d+ statt 15 Tokens\\)`));
+    assert.match(text, new RegExp(`${escapeRegex(REPO_NAME)}-Subagenten \\(nicht Hauptchat\\): 3 Calls, [\\d.]+ \\$, geschätzt [\\d.]+ \\$ \\(Output geschätzt \\d+ statt 15 Tokens\\)`));
     assert.match(text, /^\| Kategorie \| Quelle \| Modell \| Calls \| Kosten \| Kosten geschätzt \|$/m);
     assert.match(text, /^\| \*\*Summe\*\* \| \| \| \d+ \| [\d.]+ \$ \| [\d.]+ \$ \|$/m);
     const forkText = hc.renderMarkdown(r);
