@@ -10,19 +10,28 @@ import * as refs from "../scripts/ticket-refs.mjs";
 import * as namenRoh from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ladeCfg from "../scripts/projekt-config-lib.mjs";
+import { FREMD } from "./support/fremd-config";
 
 const ticketNamen = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 
-const R = refs as unknown as { ticketAusRef: (t: string) => number | null; belegteNummern: (e: { refs?: string[]; worktrees?: string[]; prHeads?: string[] }) => Set<number> };
+const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
+const NAMEN = ticketNamen(FREMD);
+const WTP = FREMD.praefixe.worktree;
+const BRP = FREMD.praefixe.branch;
+const UMS = FREMD.agenten.umsetzer;
+const LENS = FREMD.agenten.lens;
+const HARNESS = FREMD.labels.harness;
+
+const R = refs as unknown as { ticketAusRef: (t: string, n?: unknown) => number | null; belegteNummern: (e: { refs?: string[]; worktrees?: string[]; prHeads?: string[] }, n?: unknown) => Set<number> };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as boardLib from "../scripts/board-lib.mjs";
 
 type Fenster = { k: number; agent: string; nach: number };
 type Stand = { closedAt: string | null; n: number } | { fehler: string };
-type Eingabe = { items: unknown[]; offene: Set<number>; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; messfenster?: (f: Fenster, wartend: number) => Stand };
+type Eingabe = { items: unknown[]; offene: Set<number>; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
-type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; config?: unknown; hartAb?: number };
+type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
   formatiere: (e: Ergebnis) => string;
@@ -41,6 +50,7 @@ const N = raw as unknown as {
 const normalizeItems = (boardLib as unknown as { normalizeItems: (pages: unknown[][]) => unknown[] }).normalizeItems;
 const norm = (items: unknown[]) => normalizeItems([items]);
 
+const messfensterLader = (o: Parameters<typeof N.messfensterLader>[0] = {}) => N.messfensterLader({ ladeNamen: () => NAMEN, ...o });
 const SPEZ = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n\n";
 // Standard-Item trägt eine gültige Spezifikation (Spezifikations-Gate, #1615); `roh` ohne.
 const item = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => roh(nr, { ...c, body: SPEZ + (typeof c.body === "string" ? c.body : "") }, status);
@@ -48,13 +58,13 @@ const roh = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
   node_id: `ITEM_${nr}`,
   content_type: "Issue",
   fields: [{ name: "Status", value: { name: { raw: status } } }],
-  content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
+  content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: OWNER, type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
 });
 // Zwei Boards (#1729): die Eingabe der alten Form (ein Board) steht auf dem Produkt-Board; Harness-Items rücken laut Trennregel auf die Factory-Seite.
-const CFG = { labels: { harness: "area:harness", forum: "forum" }, sprache: (ladeCfg as unknown as { ladeProjektConfig: () => { sprache: unknown } }).ladeProjektConfig().sprache };
+const CFG = { labels: { harness: HARNESS, forum: FREMD.labels.forum }, sprache: (ladeCfg as unknown as { ladeProjektConfig: () => { sprache: unknown } }).ladeProjektConfig().sprache };
 const zweiBoards = (e: Eingabe): ZweiBoards => ({ ...e, produkt: e.items, factory: [] });
 const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
-  (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
+  (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG, ...extra });
 
 describe("Blocker-Zeile aus der Sprache (#1860)", () => {
   const sprache = (CFG.sprache as { spezifikation: Record<string, unknown> }).spezifikation;
@@ -68,24 +78,24 @@ describe("Blocker-Zeile aus der Sprache (#1860)", () => {
 
 describe("ticketAusRef", () => {
   test("Branch, Remote-Ref, Worktree-Zeile", () => {
-    expect(R.ticketAusRef("feature/kq-12-foo")).toBe(12);
-    expect(R.ticketAusRef("origin/feature/kq-12-foo")).toBe(12);
-    expect(R.ticketAusRef("worktree C:/x/.claude/worktrees/kq-12")).toBe(12);
-    expect(R.ticketAusRef("worktree C:\\x\\.claude\\worktrees\\kq-12")).toBe(12);
-    expect(R.ticketAusRef("feature/kq-123-foo")).toBe(123);
+    expect(R.ticketAusRef(`${BRP}12-foo`, NAMEN)).toBe(12);
+    expect(R.ticketAusRef(`origin/${BRP}12-foo`, NAMEN)).toBe(12);
+    expect(R.ticketAusRef(`worktree C:/x/.claude/worktrees/${WTP}12`, NAMEN)).toBe(12);
+    expect(R.ticketAusRef(`worktree C:\\x\\.claude\\worktrees\\${WTP}12`, NAMEN)).toBe(12);
+    expect(R.ticketAusRef(`${BRP}123-foo`, NAMEN)).toBe(123);
   });
-  test("fremde Namen: null (kq-12x, anderes Präfix)", () => {
-    expect(R.ticketAusRef("main")).toBeNull();
-    expect(R.ticketAusRef("feature/kq-12x")).toBeNull();
-    expect(R.ticketAusRef("hotfix/kq-12-a")).toBeNull();
+  test(`fremde Namen: null (${WTP}12x, anderes Präfix)`, () => {
+    expect(R.ticketAusRef("main", NAMEN)).toBeNull();
+    expect(R.ticketAusRef(`${BRP}12x`, NAMEN)).toBeNull();
+    expect(R.ticketAusRef(`hotfix/${WTP}12-a`, NAMEN)).toBeNull();
   });
 });
 
 describe("belegteNummern", () => {
   test("Branches, Worktrees und PR-Köpfe zählen, fremde Namen nicht", () => {
-    const belegt = R.belegteNummern({ refs: ["feature/kq-1-a", "main"], worktrees: ["worktree C:/x/.claude/worktrees/kq-2"], prHeads: ["feature/kq-3-b", "hotfix/kq-4-x"] });
+    const belegt = R.belegteNummern({ refs: [`${BRP}1-a`, "main"], worktrees: [`worktree C:/x/.claude/worktrees/${WTP}2`], prHeads: [`${BRP}3-b`, `hotfix/${WTP}4-x`] }, NAMEN);
     expect([...belegt].sort()).toEqual([1, 2, 3]);
-    expect(R.belegteNummern({}).size).toBe(0);
+    expect(R.belegteNummern({}, NAMEN).size).toBe(0);
   });
 });
 
@@ -94,9 +104,9 @@ describe("waehleNaechstes: jedes Kriterium mit Negativfall", () => {
     expect(frei([item(1), item(2)]).ticket).toEqual({ nr: 1, titel: "T1" });
   });
   test("Assignee: übersprungen, nächstes frei", () => {
-    const r = frei([item(1, { assignees: [{ login: "fluffels" }] }), item(2)]);
+    const r = frei([item(1, { assignees: [{ login: OWNER }] }), item(2)]);
     expect(r.ticket?.nr).toBe(2);
-    expect(r.uebersprungen).toEqual([{ nr: 1, grund: "Assignee @fluffels" }]);
+    expect(r.uebersprungen).toEqual([{ nr: 1, grund: `Assignee @${OWNER}` }]);
   });
   test("Status nicht Todo oder geschlossen: nicht einmal als übersprungen gelistet", () => {
     const r = frei([item(1, {}, "In Progress"), item(2, { state: "closed" }), item(3)]);
@@ -113,12 +123,12 @@ describe("waehleNaechstes: jedes Kriterium mit Negativfall", () => {
     expect(frei([item(1, { issue_dependencies_summary: { blocked_by: 1 } }), item(2)]).ticket?.nr).toBe(2);
   });
   test("Branch, Worktree oder offener PR: je einzeln übersprungen", () => {
-    expect(frei([item(1), item(2)], { refs: ["origin/feature/kq-1-x"] }).ticket?.nr).toBe(2);
-    expect(frei([item(1), item(2)], { worktrees: ["worktree C:/a/.claude/worktrees/kq-1"] }).ticket?.nr).toBe(2);
-    expect(frei([item(1), item(2)], { prHeads: ["feature/kq-1-y"] }).ticket?.nr).toBe(2);
+    expect(frei([item(1), item(2)], { refs: [`origin/${BRP}1-x`] }).ticket?.nr).toBe(2);
+    expect(frei([item(1), item(2)], { worktrees: [`worktree C:/a/.claude/worktrees/${WTP}1`] }).ticket?.nr).toBe(2);
+    expect(frei([item(1), item(2)], { prHeads: [`${BRP}1-y`] }).ticket?.nr).toBe(2);
   });
   test("Fremdeingang: fremder Autor oder Forum-Label wird übersprungen mit Hinweis „Befund melden“", () => {
-    const r = frei([item(1, { user: { login: "fremd", type: "User" } }), item(2, { labels: [{ name: "forum" }] }), item(3)]);
+    const r = frei([item(1, { user: { login: "fremd", type: "User" } }), item(2, { labels: [{ name: FREMD.labels.forum }] }), item(3)]);
     expect(r.ticket?.nr).toBe(3);
     expect(r.uebersprungen.map((u) => u.nr)).toEqual([1, 2]);
     expect(r.uebersprungen[0].grund).toContain("Befund melden");
@@ -138,7 +148,7 @@ describe("waehleNaechstes: jedes Kriterium mit Negativfall", () => {
 
 describe("fuehreAus", () => {
   const io = (eingabe: Eingabe | Error) => ({
-    owner: "fluffels",
+    owner: OWNER, namen: NAMEN,
     config: CFG,
     lade: () => {
       if (eingabe instanceof Error) throw eingabe;
@@ -166,9 +176,9 @@ describe("fuehreAus", () => {
 });
 
 describe("Bereich (#1552)", () => {
-  const harness = { labels: [{ name: "area:harness" }] };
+  const harness = { labels: [{ name: HARNESS }] };
   const io = (items: unknown[], spion?: { n: number }) => ({
-    owner: "fluffels",
+    owner: OWNER, namen: NAMEN,
     config: CFG,
     lade: () => {
       if (spion) spion.n++;
@@ -203,9 +213,9 @@ describe("Bereich (#1552)", () => {
     expect(r.uebersprungen).toEqual([]);
   });
   test("agentic: ein Assignee im Bereich bleibt übersprungen", () => {
-    const r = frei([item(1, { ...harness, assignees: [{ login: "fluffels" }] }), item(2, harness)], { bereich: "agentic" });
+    const r = frei([item(1, { ...harness, assignees: [{ login: OWNER }] }), item(2, harness)], { bereich: "agentic" });
     expect(r.ticket?.nr).toBe(2);
-    expect(r.uebersprungen).toEqual([{ nr: 1, grund: "Assignee @fluffels" }]);
+    expect(r.uebersprungen).toEqual([{ nr: 1, grund: `Assignee @${OWNER}` }]);
   });
   test("spiel: Harness-Tickets werden weder gewählt noch gemeldet", () => {
     const r = frei([item(1, harness), item(2)], { bereich: "spiel" });
@@ -237,7 +247,7 @@ describe("Bereich (#1552)", () => {
   });
   test("Notfälle (rot-main, security) gelten in beiden Bereichen", () => {
     const rot = item(1, { title: "🚨 CI rot auf main: x", labels: [{ name: "area:architektur" }] });
-    const sec = item(2, { title: "🔒 Security: y", labels: [{ name: "area:harness" }] });
+    const sec = item(2, { title: "🔒 Security: y", labels: [{ name: HARNESS }] });
     expect(frei([rot], { bereich: "agentic" }).ticket?.nr).toBe(1);
     expect(frei([sec], { bereich: "spiel" }).ticket?.nr).toBe(2);
   });
@@ -252,34 +262,34 @@ describe("Bereich (#1552)", () => {
 describe("prHeadsAus: REST-Form der offenen PRs (#1549 Z1)", () => {
   const P = raw as unknown as { prHeadsAus: (s: unknown[]) => string[] };
   test("flacht die Seiten ab und liest head.ref", () => {
-    const seiten = [[{ head: { ref: "feature/kq-1-a" } }, { head: { ref: "feature/kq-2-b" } }], [{ head: { ref: "feature/kq-3-c" } }]];
-    expect(P.prHeadsAus(seiten)).toEqual(["feature/kq-1-a", "feature/kq-2-b", "feature/kq-3-c"]);
+    const seiten = [[{ head: { ref: `${BRP}1-a` } }, { head: { ref: `${BRP}2-b` } }], [{ head: { ref: `${BRP}3-c` } }]];
+    expect(P.prHeadsAus(seiten)).toEqual([`${BRP}1-a`, `${BRP}2-b`, `${BRP}3-c`]);
     expect(P.prHeadsAus([])).toEqual([]);
     expect(P.prHeadsAus([[]])).toEqual([]);
   });
 });
 
 describe("messfensterZeilen (#1589)", () => {
-  const F = { k: 12, agent: "kubernia-umsetzer", nach: 1590 };
+  const F = { k: 12, agent: `${UMS}`, nach: 1590 };
   test("ohne Zeile: leer; eine Erwähnung im Fließtext ist keine Zeile", () => {
     expect(N.messfensterZeilen("nichts")).toEqual([]);
     expect(N.messfensterZeilen(null as unknown as string)).toEqual([]);
-    expect(N.messfensterZeilen("**Ziel:** Ein Issue mit der Body-Zeile `Messfenster: n ≥ 12 kubernia-umsetzer nach #1590` ist frei")).toEqual([]);
+    expect(N.messfensterZeilen(`**Ziel:** Ein Issue mit der Body-Zeile \`Messfenster: n ≥ 12 ${UMS} nach #1590\` ist frei`)).toEqual([]);
   });
   test("gültig: ≥ oder >=, Listenpunkt, CRLF, Groß-/Kleinschreibung", () => {
-    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590")).toEqual([F]);
-    expect(N.messfensterZeilen("Messfenster: n >= 12 kubernia-umsetzer nach #1590")).toEqual([F]);
-    expect(N.messfensterZeilen("- messfenster: n ≥ 12 kubernia-umsetzer nach #1590")).toEqual([F]);
-    expect(N.messfensterZeilen("x\r\nMessfenster: n ≥ 12 kubernia-umsetzer nach #1590\r\ny")).toEqual([F]);
+    expect(N.messfensterZeilen(`Messfenster: n ≥ 12 ${UMS} nach #1590`)).toEqual([F]);
+    expect(N.messfensterZeilen(`Messfenster: n >= 12 ${UMS} nach #1590`)).toEqual([F]);
+    expect(N.messfensterZeilen(`- messfenster: n ≥ 12 ${UMS} nach #1590`)).toEqual([F]);
+    expect(N.messfensterZeilen(`x\r\nMessfenster: n ≥ 12 ${UMS} nach #1590\r\ny`)).toEqual([F]);
   });
   test("Schlusspunkt erlaubt, Folgetext nach der Nummer ist unlesbar", () => {
-    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590.")).toEqual([F]);
-    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590 (Hinweis)")[0]).toHaveProperty("fehler");
+    expect(N.messfensterZeilen(`Messfenster: n ≥ 12 ${UMS} nach #1590.`)).toEqual([F]);
+    expect(N.messfensterZeilen(`Messfenster: n ≥ 12 ${UMS} nach #1590 (Hinweis)`)[0]).toHaveProperty("fehler");
   });
   test("mehrere Zeilen: mehrere Fenster", () => {
-    expect(N.messfensterZeilen("Messfenster: n ≥ 12 kubernia-umsetzer nach #1590\nMessfenster: n ≥ 3 kubernia-lens nach #7")).toEqual([F, { k: 3, agent: "kubernia-lens", nach: 7 }]);
+    expect(N.messfensterZeilen(`Messfenster: n ≥ 12 ${UMS} nach #1590\nMessfenster: n ≥ 3 ${LENS} nach #7`)).toEqual([F, { k: 3, agent: `${LENS}`, nach: 7 }]);
   });
-  test.each(["n ≥ zehn kubernia-umsetzer nach #1", "n ≥ 0 kubernia-umsetzer nach #1", "n ≥ <k> kubernia-umsetzer nach #<nr>", "n ≥ 5 kubernia-umsetzer nach 1590", "n ≥ 5 nach #1"])(
+  test.each([`n ≥ zehn ${UMS} nach #1`, `n ≥ 0 ${UMS} nach #1`, `n ≥ <k> ${UMS} nach #<nr>`, `n ≥ 5 ${UMS} nach 1590`, "n ≥ 5 nach #1"])(
     "kaputte Zeile „%s“: fehler",
     (rest) => {
       const r = N.messfensterZeilen(`Messfenster: ${rest}`);
@@ -305,20 +315,20 @@ describe("ticketsImFenster (#1589, je Ticket #1646)", () => {
 });
 
 describe("messfensterGrund (#1589)", () => {
-  const F = { k: 12, agent: "kubernia-umsetzer", nach: 1590 };
+  const F = { k: 12, agent: `${UMS}`, nach: 1590 };
   test("offen: wie ein Blocker; Fehler: nicht prüfbar", () => {
     expect(N.messfensterGrund(F, { closedAt: null, n: 0 })).toBe("offener Blocker #1590 (Messfenster)");
     expect(N.messfensterGrund(F, { fehler: "Messfenster nicht prüfbar (x)" })).toContain("nicht prüfbar");
   });
   test("n = k−1 gesperrt mit exaktem Grund, n = k und n > k frei", () => {
-    expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 11 })).toBe("Messfenster offen (11/12 Tickets mit kubernia-umsetzer nach #1590)");
+    expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 11 })).toBe(`Messfenster offen (11/12 Tickets mit ${UMS} nach #1590)`);
     expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 12 })).toBe("");
     expect(N.messfensterGrund(F, { closedAt: "2026-10-15T16:00:00Z", n: 13 })).toBe("");
   });
 });
 
 describe("waehleNaechstes mit Messfenster (#1589)", () => {
-  const zeile = "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590";
+  const zeile = `Messfenster: n ≥ 12 ${UMS} nach #1590`;
   const lader = (stand: Stand) => {
     const aufrufe: number[] = [];
     return { aufrufe, fn: (_f: Fenster, wartend: number) => (aufrufe.push(wartend), stand) };
@@ -335,21 +345,21 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
     const zu = lader({ closedAt: frist, n: 4 });
     const r = frei([item(1, { body: zeile }), item(2)], { messfenster: zu.fn });
     expect(r.ticket?.nr).toBe(2);
-    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (4/12 Tickets mit kubernia-umsetzer nach #1590)");
+    expect(r.uebersprungen[0].grund).toBe(`Messfenster offen (4/12 Tickets mit ${UMS} nach #1590)`);
     expect(zu.aufrufe).toEqual([1]);
     expect(frei([item(1, { body: zeile })], { messfenster: lader({ closedAt: frist, n: 12 }).fn }).ticket?.nr).toBe(1);
   });
   test("ohne Zeile, mit Assignee oder belegtem Branch: Lader nie aufgerufen", () => {
     const l = lader({ closedAt: frist, n: 0 });
-    frei([item(1), item(2, { body: zeile, assignees: [{ login: "x" }] }), item(3, { body: zeile })], { refs: ["feature/kq-3-a"], messfenster: l.fn });
+    frei([item(1), item(2, { body: zeile, assignees: [{ login: "x" }] }), item(3, { body: zeile })], { refs: [`${BRP}3-a`], messfenster: l.fn });
     expect(l.aufrufe).toEqual([]);
   });
   test("mehrere Zeilen: jede muss erfüllt sein (auch die zweite)", () => {
-    const body = `${zeile}\nMessfenster: n ≥ 3 kubernia-lens nach #1600`;
-    const nachAgent = (f: Fenster) => (f.agent === "kubernia-lens" ? { closedAt: frist, n: 2 } : { closedAt: frist, n: 50 });
+    const body = `${zeile}\nMessfenster: n ≥ 3 ${LENS} nach #1600`;
+    const nachAgent = (f: Fenster) => (f.agent === `${LENS}` ? { closedAt: frist, n: 2 } : { closedAt: frist, n: 50 });
     const r = frei([item(1, { body }), item(2)], { messfenster: nachAgent });
     expect(r.ticket?.nr).toBe(2);
-    expect(r.uebersprungen[0].grund).toBe("Messfenster offen (2/3 Tickets mit kubernia-lens nach #1600)");
+    expect(r.uebersprungen[0].grund).toBe(`Messfenster offen (2/3 Tickets mit ${LENS} nach #1600)`);
     expect(frei([item(1, { body })], { messfenster: () => ({ closedAt: frist, n: 50 }) }).ticket?.nr).toBe(1);
     const offen = frei([item(1, { body }), item(2)], { offene: new Set([1600]), messfenster: lader({ closedAt: frist, n: 50 }).fn });
     expect(offen.uebersprungen[0].grund).toBe("offener Blocker #1600 (Messfenster)");
@@ -363,17 +373,17 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
     expect(f.uebersprungen[0].grund).toBe("Messfenster nicht prüfbar (keine lokalen Transkripte)");
   });
   test("unlesbare Zeile: fail-closed, der Body-Text taucht nirgends auf", () => {
-    const eingabe = { items: norm([item(1, { body: "Messfenster: n ≥ GEHEIM kubernia-umsetzer nach #1" })]), offene: new Set<number>() };
-    const r = N.fuehreAus(["--json", "--bereich", "spiel"], { owner: "fluffels", lade: () => zweiBoards(eingabe), config: CFG });
+    const eingabe = { items: norm([item(1, { body: `Messfenster: n ≥ GEHEIM ${UMS} nach #1` })]), offene: new Set<number>() };
+    const r = N.fuehreAus(["--json", "--bereich", "spiel"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG });
     expect(r.code).toBe(1);
     expect(r.out).toContain("unlesbar");
     expect(r.out).not.toContain("GEHEIM");
-    expect(N.fuehreAus(["--bereich", "spiel"], { owner: "fluffels", lade: () => zweiBoards(eingabe), config: CFG }).out).not.toContain("GEHEIM");
+    expect(N.fuehreAus(["--bereich", "spiel"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG }).out).not.toContain("GEHEIM");
   });
 });
 
 describe("messfensterLader (#1589)", () => {
-  const F = { k: 2, agent: "kubernia-umsetzer", nach: 1590 };
+  const F = { k: 2, agent: `${UMS}`, nach: 1590 };
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -386,86 +396,86 @@ describe("messfensterLader (#1589)", () => {
     writeFileSync(join(sub, `${name}.jsonl`), `${JSON.stringify({ type: "user", timestamp: ts, message: { role: "user", content: `Ticket #${ticket}: los` } })}\n`);
   };
   const tmp = () => {
-    const d = mkdtempSync(join(tmpdir(), "kq-mf-"));
+    const d = mkdtempSync(join(tmpdir(), "mf-"));
     dirs.push(d);
     return d;
   };
   test("fehlender Ordner: fehler ohne Pfad im Text", () => {
-    const r = N.messfensterLader({ dir: join(tmpdir(), "kq-gibt-es-nicht-1589"), holeIssue: zu })(F, 1591);
+    const r = messfensterLader({ dir: join(tmpdir(), "gibt-es-nicht-1589"), holeIssue: zu })(F, 1591);
     expect(r).toEqual({ fehler: "Messfenster nicht prüfbar (keine lokalen Transkripte)" });
   });
   test("zählt Läufe des Typs ab closedAt, ohne die des wartenden Tickets", () => {
     const d = tmp();
-    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
-    lauf(d, "b", "kubernia-umsetzer", 1601, "2026-10-15T12:00:00Z");
-    lauf(d, "c", "kubernia-umsetzer", 1591, "2026-10-15T13:00:00Z");
-    lauf(d, "d", "kubernia-lens", 1602, "2026-10-15T13:00:00Z");
-    lauf(d, "e", "kubernia-umsetzer", 1603, "2026-10-15T09:00:00Z");
-    expect(N.messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
+    lauf(d, "a", `${UMS}`, 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "b", `${UMS}`, 1601, "2026-10-15T12:00:00Z");
+    lauf(d, "c", `${UMS}`, 1591, "2026-10-15T13:00:00Z");
+    lauf(d, "d", `${LENS}`, 1602, "2026-10-15T13:00:00Z");
+    lauf(d, "e", `${UMS}`, 1603, "2026-10-15T09:00:00Z");
+    expect(messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
   });
   test("Ticket-Namen aus der Config (#1745): der Worktree-Pfad mit dem Präfix der Config ordnet den Lauf zu", () => {
     const d = tmp();
     const sub = join(d, "sess", "subagents");
     mkdirSync(sub, { recursive: true });
-    writeFileSync(join(sub, "w.meta.json"), JSON.stringify({ agentType: "kubernia-umsetzer" }));
+    writeFileSync(join(sub, "w.meta.json"), JSON.stringify({ agentType: `${UMS}` }));
     writeFileSync(join(sub, "w.jsonl"), `${JSON.stringify({ type: "user", timestamp: "2026-10-15T11:00:00Z", message: { role: "user", content: "Arbeit in C:/r/.claude/worktrees/ab-1700/src" } })}\n`);
     const mit = (worktree: string) => () => ticketNamen({ praefixe: { branch: `feature/${worktree}`, worktree }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" } });
-    expect(N.messfensterLader({ dir: d, holeIssue: zu, ladeNamen: mit("ab-") })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
-    expect(N.messfensterLader({ dir: d, holeIssue: zu, ladeNamen: mit("kq-") })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 0 });
+    expect(messfensterLader({ dir: d, holeIssue: zu, ladeNamen: mit("ab-") })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+    expect(messfensterLader({ dir: d, holeIssue: zu, ladeNamen: mit(WTP) })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 0 });
   });
   test("Negativfall: sind die Ticket-Namen nicht ladbar, ist das Fenster unprüfbar (fail-closed, ohne Text der Config)", () => {
     const d = tmp();
-    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "a", `${UMS}`, 1600, "2026-10-15T11:00:00Z");
     const wirft = () => {
       throw new Error("Projekt-Config unvollständig: agenten.umsetzer fehlt");
     };
-    expect(N.messfensterLader({ dir: d, holeIssue: zu, ladeNamen: wirft })(F, 1591)).toEqual({ fehler: "Messfenster nicht prüfbar (Projekt-Config nicht nutzbar)" });
+    expect(messfensterLader({ dir: d, holeIssue: zu, ladeNamen: wirft })(F, 1591)).toEqual({ fehler: "Messfenster nicht prüfbar (Projekt-Config nicht nutzbar)" });
   });
   test("offenes Issue: closedAt null; Abruffehler: fehler", () => {
     const d = tmp();
-    expect(N.messfensterLader({ dir: d, holeIssue: () => ({ state: "open", closed_at: null }) })(F, 1591)).toEqual({ closedAt: null, n: 0 });
-    const r = N.messfensterLader({ dir: d, holeIssue: () => { throw new Error("boom"); } })(F, 1591);
+    expect(messfensterLader({ dir: d, holeIssue: () => ({ state: "open", closed_at: null }) })(F, 1591)).toEqual({ closedAt: null, n: 0 });
+    const r = messfensterLader({ dir: d, holeIssue: () => { throw new Error("boom"); } })(F, 1591);
     expect(r).toEqual({ fehler: "Messfenster nicht prüfbar (#1590 nicht abrufbar)" });
   });
   test("Transkript-Pfad ist eine Datei: fail-closed „nicht lesbar“", () => {
     const d = tmp();
     const datei = join(d, "keine-ordner");
     writeFileSync(datei, "x");
-    expect(N.messfensterLader({ dir: datei, holeIssue: zu })(F, 1591)).toEqual({ fehler: "Messfenster nicht prüfbar (Transkripte nicht lesbar)" });
+    expect(messfensterLader({ dir: datei, holeIssue: zu })(F, 1591)).toEqual({ fehler: "Messfenster nicht prüfbar (Transkripte nicht lesbar)" });
   });
   test("ein frisch gestarteter Lauf ohne Zeitstempel macht das Fenster nicht unprüfbar und zählt nicht", () => {
     const d = tmp();
-    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "a", `${UMS}`, 1600, "2026-10-15T11:00:00Z");
     const sub = join(d, "sess", "subagents");
-    writeFileSync(join(sub, "leer.meta.json"), JSON.stringify({ agentType: "kubernia-umsetzer" }));
+    writeFileSync(join(sub, "leer.meta.json"), JSON.stringify({ agentType: `${UMS}` }));
     writeFileSync(join(sub, "leer.jsonl"), "");
-    expect(N.messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+    expect(messfensterLader({ dir: d, holeIssue: zu })(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
   });
   test("Memo-Schlüssel ist agent und nach: anderer Agent-Typ oder andere Nummer bekommt eigene Läufe und eigenen Abruf", () => {
     const d = tmp();
-    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
-    lauf(d, "b", "kubernia-umsetzer", 1601, "2026-10-15T12:00:00Z");
-    lauf(d, "c", "kubernia-lens", 1602, "2026-10-15T13:00:00Z");
+    lauf(d, "a", `${UMS}`, 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "b", `${UMS}`, 1601, "2026-10-15T12:00:00Z");
+    lauf(d, "c", `${LENS}`, 1602, "2026-10-15T13:00:00Z");
     const abrufe: number[] = [];
     const holeIssue = (nr: number) => (abrufe.push(nr), nr === 1590 ? zu() : { state: "open", closed_at: null });
-    const lader = N.messfensterLader({ dir: d, holeIssue });
+    const lader = messfensterLader({ dir: d, holeIssue });
     expect(lader(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
-    expect(lader({ ...F, agent: "kubernia-lens" }, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
+    expect(lader({ ...F, agent: `${LENS}` }, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
     expect(lader({ ...F, nach: 1700 }, 1591)).toEqual({ closedAt: null, n: 0 });
     lader(F, 1592);
-    lader({ ...F, agent: "kubernia-lens" }, 1592);
+    lader({ ...F, agent: `${LENS}` }, 1592);
     expect(abrufe).toEqual([1590, 1590, 1700]);
   });
   test("offenes Issue ohne Transkript-Ordner: Grund bleibt „offen“, nicht „keine Transkripte“", () => {
-    const r = N.messfensterLader({ dir: join(tmpdir(), "kq-gibt-es-nicht-1589"), holeIssue: () => ({ state: "open", closed_at: null }) })(F, 1591);
+    const r = messfensterLader({ dir: join(tmpdir(), "gibt-es-nicht-1589"), holeIssue: () => ({ state: "open", closed_at: null }) })(F, 1591);
     expect(r).toEqual({ closedAt: null, n: 0 });
   });
   test("Memo je Fenster: ein REST-Aufruf, aber die Zählung gilt je wartendem Ticket", () => {
     const d = tmp();
-    lauf(d, "a", "kubernia-umsetzer", 1600, "2026-10-15T11:00:00Z");
-    lauf(d, "b", "kubernia-umsetzer", 1591, "2026-10-15T12:00:00Z");
+    lauf(d, "a", `${UMS}`, 1600, "2026-10-15T11:00:00Z");
+    lauf(d, "b", `${UMS}`, 1591, "2026-10-15T12:00:00Z");
     let aufrufe = 0;
-    const lader = N.messfensterLader({ dir: d, holeIssue: () => (aufrufe++, zu()) });
+    const lader = messfensterLader({ dir: d, holeIssue: () => (aufrufe++, zu()) });
     expect(lader(F, 1591)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
     expect(lader(F, 1600)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 1 });
     expect(lader(F, 1700)).toEqual({ closedAt: "2026-10-15T10:00:00Z", n: 2 });
@@ -476,9 +486,9 @@ describe("messfensterLader (#1589)", () => {
 describe("Einzelprüfung --ticket (#1621)", () => {
   const issue = (nr: number, c: Record<string, unknown> = {}) => item(nr, c).content;
   const pruefe = (nr: number, c: Record<string, unknown> = {}, extra: Partial<Eingabe> = {}) =>
-    N.pruefeTicket({ item: N.itemAusIssue(issue(nr, c)), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
+    N.pruefeTicket({ item: N.itemAusIssue(issue(nr, c)), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG, ...extra });
   const grund = (r: Ergebnis) => r.uebersprungen[0]?.grund;
-  const zeile = "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590";
+  const zeile = `Messfenster: n ≥ 12 ${UMS} nach #1590`;
 
   test("aufrufLesen: --ticket in drei Schreibweisen, Fehler bei fehlendem oder ungültigem Wert", () => {
     expect(N.aufrufLesen(["--ticket", "12"])).toEqual({ bereich: null, ticket: 12, json: false });
@@ -490,7 +500,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
   });
   test("itemAusIssue: REST-Issue wird normalisiert; PR und kaputte Form werfen", () => {
     const i = N.itemAusIssue(issue(7, { body: "b", labels: [{ name: "x" }], issue_dependencies_summary: { blocked_by: 2 } }));
-    expect(i).toMatchObject({ number: 7, title: "T7", state: "open", labels: ["x"], body: `${SPEZ}b`, blockedBy: 2, autor: { login: "fluffels" } });
+    expect(i).toMatchObject({ number: 7, title: "T7", state: "open", labels: ["x"], body: `${SPEZ}b`, blockedBy: 2, autor: { login: OWNER } });
     expect(() => N.itemAusIssue({ ...issue(7), pull_request: {} })).toThrow();
     expect(() => N.itemAusIssue({ title: "ohne Nummer" })).toThrow();
     expect(() => N.itemAusIssue(null)).toThrow();
@@ -500,18 +510,18 @@ describe("Einzelprüfung --ticket (#1621)", () => {
   });
   test("pruefeTicket: geschlossen, Assignee, Blocker, Fremdeingang, belegt", () => {
     expect(grund(pruefe(7, { state: "closed" }))).toBe("geschlossen");
-    expect(grund(pruefe(7, { assignees: [{ login: "fluffels" }] }))).toBe("Assignee @fluffels");
+    expect(grund(pruefe(7, { assignees: [{ login: OWNER }] }))).toBe(`Assignee @${OWNER}`);
     expect(grund(pruefe(7, { body: "blockiert durch #5" }, { offene: new Set([5]) }))).toBe("offener Blocker #5");
-    expect(grund(pruefe(7, { labels: [{ name: "forum" }] }))).toContain("Fremdeingang");
+    expect(grund(pruefe(7, { labels: [{ name: FREMD.labels.forum }] }))).toContain("Fremdeingang");
     expect(grund(pruefe(7, { user: { login: "fremd", type: "User" } }))).toContain("Fremdeingang");
     const belegt = "Branch, Worktree oder offener PR vorhanden";
-    expect(grund(pruefe(7, {}, { refs: ["feature/kq-7-x"] }))).toBe(belegt);
-    expect(grund(pruefe(7, {}, { prHeads: ["feature/kq-7-x"] }))).toBe(belegt);
-    expect(grund(pruefe(7, {}, { worktrees: ["branch refs/heads/feature/kq-7-x"] }))).toBe(belegt);
+    expect(grund(pruefe(7, {}, { refs: [`${BRP}7-x`] }))).toBe(belegt);
+    expect(grund(pruefe(7, {}, { prHeads: [`${BRP}7-x`] }))).toBe(belegt);
+    expect(grund(pruefe(7, {}, { worktrees: [`branch refs/heads/${BRP}7-x`] }))).toBe(belegt);
   });
   test("pruefeTicket: Messfenster zählt, auch fail-closed; ein anderer Status als Todo ist kein Grund", () => {
     const stand = (s: Stand) => () => s;
-    expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 4 }) }))).toBe("Messfenster offen (4/12 Tickets mit kubernia-umsetzer nach #1590)");
+    expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 4 }) }))).toBe(`Messfenster offen (4/12 Tickets mit ${UMS} nach #1590)`);
     expect(grund(pruefe(7, { body: zeile }, { messfenster: stand({ fehler: "Messfenster nicht prüfbar (x)" }) }))).toBe("Messfenster nicht prüfbar (x)");
     expect(pruefe(7, { body: zeile }, { messfenster: stand({ closedAt: "2026-10-15T10:00:00Z", n: 12 }) }).ticket?.nr).toBe(7);
   });
@@ -520,7 +530,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     const aufrufe = { lade: 0, einzeln: 0 };
     return {
       aufrufe,
-      owner: "fluffels",
+      owner: OWNER, namen: NAMEN,
       config: CFG,
       lade: () => {
         aufrufe.lade++;
@@ -561,6 +571,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
 describe("Spezifikations-Gate (#1615)", () => {
   type GateIo = {
     owner: string;
+    namen?: unknown;
     config?: unknown;
     hartAb?: number;
     lade: () => ZweiBoards;
@@ -574,7 +585,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     fuehreAus: (argv: string[], io: GateIo) => { code: number; out: string; err: string };
   };
   const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- nur Happy Path\n";
-  const waehle = (items: unknown[], extra: Record<string, unknown> = {}) => GateN.waehleNaechstes({ items: norm(items), offene: new Set(), owner: "fluffels", config: CFG, ...extra });
+  const waehle = (items: unknown[], extra: Record<string, unknown> = {}) => GateN.waehleNaechstes({ items: norm(items), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG, ...extra });
 
   test("AK3: neues Ticket ohne Negativfall wird übersprungen, das nächste gewählt", () => {
     const r = waehle([roh(1, { body: OHNE_NEGATIV }), item(2)]);
@@ -610,14 +621,14 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(r.uebersprungen[0].fehlt).toBeUndefined();
   });
   test("Belegung (Branch, Worktree, PR) schlägt die Spezifikation: Grund Belegung, kein fehlt", () => {
-    const r = waehle([roh(1, { body: OHNE_NEGATIV })], { refs: ["origin/feature/kq-1-x"] });
+    const r = waehle([roh(1, { body: OHNE_NEGATIV })], { refs: [`origin/${BRP}1-x`] });
     expect(r.uebersprungen[0].grund).toBe("Branch, Worktree oder offener PR vorhanden");
     expect(r.uebersprungen[0].fehlt).toBeUndefined();
   });
   test("Assignee und Fremdeingang schlagen die Spezifikation: kein `reparieren`, nie ein fremdes Ticket umschreiben", () => {
     const fremd = { body: OHNE_NEGATIV, user: { login: "fremd", type: "User" } };
-    const forum = { body: OHNE_NEGATIV, labels: [{ name: "forum" }] };
-    const vergeben = { body: OHNE_NEGATIV, assignees: [{ login: "fluffels" }] };
+    const forum = { body: OHNE_NEGATIV, labels: [{ name: FREMD.labels.forum }] };
+    const vergeben = { body: OHNE_NEGATIV, assignees: [{ login: OWNER }] };
     for (const c of [fremd, forum, vergeben]) {
       const { eingang } = io([roh(1, c), item(2)]);
       const r = GateN.fuehreAus(["--json", "--bereich", "spiel"], eingang);
@@ -630,7 +641,7 @@ describe("Spezifikations-Gate (#1615)", () => {
 
   test("der teure Messfenster-Lader läuft bei Spezifikations-Mangel nicht", () => {
     let n = 0;
-    const r = waehle([roh(1, { body: "Messfenster: n ≥ 12 kubernia-umsetzer nach #1590" })], {
+    const r = waehle([roh(1, { body: `Messfenster: n ≥ 12 ${UMS} nach #1590` })], {
       messfenster: () => {
         n++;
         return { closedAt: "2026-10-15T10:00:00Z", n: 99 };
@@ -640,14 +651,14 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(n).toBe(0);
   });
   test("--ticket: dieselbe Prüfung", () => {
-    const r = GateN.pruefeTicket({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set(), owner: "fluffels", config: CFG });
+    const r = GateN.pruefeTicket({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG });
     expect(r.ticket).toBeNull();
     expect(r.uebersprungen[0].grund).toContain("kein Negativfall");
   });
 
   const io = (items: unknown[], extra: Partial<GateIo> = {}) => {
     const eingang: GateIo = {
-      owner: "fluffels",
+      owner: OWNER, namen: NAMEN,
       config: CFG,
       lade: () => zweiBoards({ items: norm(items), offene: new Set<number>() }),
       ...extra,
@@ -713,7 +724,7 @@ describe("Spezifikations-Gate (#1615)", () => {
   });
   test("--ticket: nicht frei wegen Spezifikation zeigt `reparieren #nr` mit Exit 1", () => {
     const r = GateN.fuehreAus(["--ticket", "7"], {
-      owner: "fluffels",
+      owner: OWNER, namen: NAMEN,
       config: CFG,
       lade: () => ({ produkt: [], factory: [], offene: new Set<number>() }),
       ladeEinzeln: () => ({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set<number>() }) as never,
@@ -732,12 +743,12 @@ describe("Spezifikations-Gate (#1615)", () => {
 });
 
 describe("Zwei Boards (#1729)", () => {
-  const H = { labels: [{ name: "area:harness" }] };
-  const vergeben = { assignees: [{ login: "fluffels" }] };
+  const H = { labels: [{ name: HARNESS }] };
+  const vergeben = { assignees: [{ login: OWNER }] };
   type Opt = { argv?: string[]; spion?: { n: number } };
   const lauf = (produkt: unknown[], factory: unknown[], o: Opt = {}) =>
     N.fuehreAus(o.argv ?? ["--json", "--bereich", "spiel"], {
-      owner: "fluffels",
+      owner: OWNER, namen: NAMEN,
       config: CFG,
       lade: () => {
         if (o.spion) o.spion.n++;
@@ -831,7 +842,7 @@ describe("Zwei Boards (#1729)", () => {
     expect("hinweise" in json(lauf([item(1)], []))).toBe(false);
   });
   test("Lader-Fehler: Exit 2 mit Meldung", () => {
-    const r = N.fuehreAus(["--bereich", "spiel"], { owner: "fluffels", config: CFG, lade: () => { throw new Error("kein Netz"); } });
+    const r = N.fuehreAus(["--bereich", "spiel"], { owner: OWNER, namen: NAMEN, config: CFG, lade: () => { throw new Error("kein Netz"); } });
     expect(r.code).toBe(2);
     expect(r.err).toContain("kein Netz");
   });
@@ -839,7 +850,7 @@ describe("Zwei Boards (#1729)", () => {
 
 describe("Aufruf ohne --bereich und ohne --ticket", () => {
   const io = (spion: { n: number }) => ({
-    owner: "fluffels",
+    owner: OWNER, namen: NAMEN,
     config: CFG,
     lade: () => {
       spion.n++;
@@ -857,10 +868,10 @@ describe("Aufruf ohne --bereich und ohne --ticket", () => {
     }
   });
   test("waehleUeberBoards ohne Bereich wirft, statt eine Seite zu raten", () => {
-    expect(() => N.waehleUeberBoards({ produkt: norm([item(1)]), factory: [], offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
-    expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: null, offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
+    expect(() => N.waehleUeberBoards({ produkt: norm([item(1)]), factory: [], offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG })).toThrow(/bereich/);
+    expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: null, offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG })).toThrow(/bereich/);
     // Negativfall: ein unbekannter, aber gesetzter Wert wird nicht still als Produkt-Seite gelesen.
-    expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: "xyz", offene: new Set<number>(), owner: "fluffels", config: CFG })).toThrow(/bereich/);
+    expect(() => N.waehleUeberBoards({ produkt: [], factory: [], bereich: "xyz", offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG })).toThrow(/bereich/);
   });
 });
 
@@ -887,21 +898,21 @@ describe("Sprache als Projektwert (#1711)", () => {
     expect(() => echte({ config: ohne, messfensterLader: () => () => ({ closedAt: null, n: 0 }) })).toThrow(/sprache[\s\S]*Fix:/);
   });
   test("die Auswahl wirft ohne sprache, sobald ein freier Kandidat das Spezifikations-Gate braucht", () => {
-    expect(() => (N.waehleNaechstes as (e: unknown) => unknown)({ items: norm([item(1)]), offene: new Set(), owner: "fluffels", config: ohne })).toThrow(/sprache/);
+    expect(() => (N.waehleNaechstes as (e: unknown) => unknown)({ items: norm([item(1)]), offene: new Set(), owner: OWNER, namen: NAMEN, config: ohne })).toThrow(/sprache/);
   });
 });
 
 describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-Reihenfolge (#1860)", () => {
-  type MIo = { owner: string; config: unknown; hartAb?: number; lade: () => ZweiBoards & { refs?: string[] } };
+  type MIo = { owner: string; namen?: unknown; config: unknown; hartAb?: number; lade: () => ZweiBoards & { refs?: string[] } };
   type MErgebnis = { anzahl: number; maengel: { nr: number; titel: string; fehlt: string[] }[] };
   const M = N as unknown as {
     aufrufLesen: (argv: string[]) => { maengel?: boolean; bereich?: string | null; ticket?: number | null; json?: boolean; fehler?: string };
     fuehreAus: (argv: string[], io: MIo) => { code: number; out: string; err: string };
   };
   const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- nur Happy Path\n";
-  const H = { labels: [{ name: "area:harness" }] };
+  const H = { labels: [{ name: HARNESS }] };
   const lauf = (produkt: unknown[], factory: unknown[] = [], argv: string[] = ["--maengel"], extra: Partial<MIo> = {}, offene = new Set<number>()) =>
-    M.fuehreAus(argv, { owner: "fluffels", config: CFG, hartAb: 1, lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene }), ...extra });
+    M.fuehreAus(argv, { owner: OWNER, namen: NAMEN, config: CFG, hartAb: 1, lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene }), ...extra });
 
   test("aufrufLesen: --maengel braucht weder --bereich noch --ticket, schließt --ticket aus", () => {
     expect(M.aufrufLesen(["--maengel"])).toMatchObject({ maengel: true, bereich: null, ticket: null, json: false });
@@ -926,7 +937,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
   });
   test("Negativfall: Assignee, Fremdeingang, offener Blocker, Belegung, Kopf-, Sammel- und Nicht-Todo-Items fehlen", () => {
     const produkt = [
-      roh(1, { body: OHNE_NEGATIV, assignees: [{ login: "fluffels" }] }),
+      roh(1, { body: OHNE_NEGATIV, assignees: [{ login: OWNER }] }),
       roh(2, { body: OHNE_NEGATIV, user: { login: "fremder", type: "User" } }),
       roh(3, { body: `${OHNE_NEGATIV}blockiert durch #50` }),
       roh(4, { body: OHNE_NEGATIV }),
@@ -936,7 +947,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
       roh(8, { body: OHNE_NEGATIV }),
       roh(9, { body: OHNE_NEGATIV, state: "closed" }),
     ];
-    const r = lauf(produkt, [], ["--maengel", "--json"], { lade: () => ({ produkt: norm(produkt), factory: [], offene: new Set([50]), refs: ["origin/feature/kq-8-x"] }) });
+    const r = lauf(produkt, [], ["--maengel", "--json"], { lade: () => ({ produkt: norm(produkt), factory: [], offene: new Set([50]), refs: [`origin/${BRP}8-x`] }) });
     expect((JSON.parse(r.out) as MErgebnis).maengel.map((m) => m.nr)).toEqual([4]);
   });
   test("Bestand unter hartAb zählt mit (freies Ticket mit Mangel)", () => {
@@ -955,7 +966,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     expect(beide.maengel[0].fehlt.join(" ")).toContain("kein Negativfall");
   });
   test("Messfenster wird nicht geladen: ein Ticket mit Messfenster-Zeile zählt nach seinem Mangel", () => {
-    const j = JSON.parse(lauf([roh(1, { body: `${OHNE_NEGATIV}Messfenster: 3 ≥ kubernia-umsetzer nach #9` })], [], ["--maengel", "--json"], { hartAb: 100 }).out) as MErgebnis;
+    const j = JSON.parse(lauf([roh(1, { body: `${OHNE_NEGATIV}Messfenster: 3 ≥ ${UMS} nach #9` })], [], ["--maengel", "--json"], { hartAb: 100 }).out) as MErgebnis;
     expect(j.anzahl).toBe(1);
   });
   test("ein einzelnes Ticket mit Mangel steht im Singular, mehrere im Plural", () => {
@@ -967,7 +978,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     expect(() => liste({ produkt: [], factory: [], bereich: "unfug", config: CFG, offene: new Set(), namen: {} })).toThrow(/bereich erwartet agentic oder spiel/);
   });
   test("Ladefehler: Exit 2 mit Ursache, kein Stacktrace", () => {
-    const r = M.fuehreAus(["--maengel"], { owner: "fluffels", config: CFG, lade: () => { throw new Error("gh kaputt"); } });
+    const r = M.fuehreAus(["--maengel"], { owner: OWNER, namen: NAMEN, config: CFG, lade: () => { throw new Error("gh kaputt"); } });
     expect(r.code).toBe(2);
     expect(r.err).toContain("gh kaputt");
   });
@@ -984,9 +995,9 @@ describe("Board-Verzug (#1866)", () => {
   const frischer = (number: number, projektIds: string[] = []) => ({ number, titel: `T${number}`, projektIds });
   const lauf = (frisch: Frisch | undefined, argv = ["--json", "--bereich", "spiel"]) =>
     N.fuehreAus(argv, {
-      owner: "fluffels",
+      owner: OWNER, namen: NAMEN,
       config: CFG,
-      lade: () => ({ produkt: norm([item(1)]), factory: norm([item(10, { labels: [{ name: "area:harness" }] })]), offene: new Set<number>(), ...(frisch ? { frisch } : {}) }),
+      lade: () => ({ produkt: norm([item(1)]), factory: norm([item(10, { labels: [{ name: HARNESS }] })]), offene: new Set<number>(), ...(frisch ? { frisch } : {}) }),
     });
   const alle = { projektIds: [PROD, FACT] };
 

@@ -8,7 +8,6 @@ import { readFileSync } from "node:fs";
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTakt from "../scripts/board-takt.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { FREMD, projektConfig } from "./support/fremd-config";
 
 const OWNER = FREMD.repo.split("/")[0] ?? "";

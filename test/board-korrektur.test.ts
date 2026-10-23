@@ -15,6 +15,7 @@ type B = { id: string; number: number; status: string; title: string; assignees:
 type Korrektur = { nr: number; id: string; afterId: string | null; vonRang: number; nachRang: number };
 type Plan = { steps: { item: B; afterId: string | null }[]; klemmung: { geklemmt: boolean; sammelticket: number | null } };
 type Lib = {
+  REPO: string;
   notfallTitelFehler: (items: B[], numbers: number[], art: string) => string | null;
   aliasAbfrage: (nummern: number[], repo?: string) => { nummern: number[]; query: string }[];
   itemsAusAliasAntwort: (board: unknown, antwort: unknown, nummern: number[]) => (B | null)[];

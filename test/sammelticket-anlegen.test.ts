@@ -9,6 +9,9 @@ import * as raw from "../scripts/sammelticket-anlegen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 import { echteSpezifikation } from "./support/echte-sprache";
+import { FREMD } from "./support/fremd-config";
+
+const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
 
 type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean };
 type User = { login: string; type?: string } | null;
@@ -113,16 +116,16 @@ describe("kandidatenSammelticket", () => {
   });
 
   test("Negativfälle: geclaimt, anderer oder fast gleicher Titel, leer → leere Liste", () => {
-    expect(A.kandidatenSammelticket([o(5, T, ["fluffels"])], T)).toEqual([]);
+    expect(A.kandidatenSammelticket([o(5, T, [OWNER])], T)).toEqual([]);
     expect(A.kandidatenSammelticket([o(5, `${T} x`), o(6, T.toLowerCase()), o(7, "Langfuse-Befunde (gesammelt)")], T)).toEqual([]);
     expect(A.kandidatenSammelticket([], T)).toEqual([]);
-    expect(A.kandidatenSammelticket([o(5, T, ["fluffels"]), o(6, T)], T).map((i) => i.number)).toEqual([6]);
+    expect(A.kandidatenSammelticket([o(5, T, [OWNER]), o(6, T)], T).map((i) => i.number)).toEqual([6]);
   });
 });
 
-const fluffels = { login: "fluffels", type: "User" };
-const vertraut = (u: User) => u?.login === "fluffels";
-const k = (body: string, user: User = fluffels): Komm => ({ user, body });
+const ownerUser = { login: OWNER, type: "User" };
+const vertraut = (u: User) => u?.login === OWNER;
+const k = (body: string, user: User = ownerUser): Komm => ({ user, body });
 
 describe("zaehleBefundZeilen", () => {
   test("leer → 0; Kommentar ohne Checkbox → 0", () => {
@@ -219,11 +222,11 @@ describe("pruefSchritt: der Prüf- und Retry-Kern (#1390 Z10, Lens R1)", () => {
     const items = [b(1), sammel(5), ...fueller.slice(1), sammel(20)];
     expect(P({ items, nr: 20, position: 4 })).toMatchObject({ art: "setze", k: { nr: 20 } });
     // ein geclaimtes Sammelticket davor zählt ohnehin nicht, dann ist die Lage dieselbe
-    expect(P({ items: [b(1), sammel(5, { assignees: ["fluffels"] }), sammel(20)], nr: 20, position: 4 }).art).toBe("ok");
+    expect(P({ items: [b(1), sammel(5, { assignees: [OWNER] }), sammel(20)], nr: 20, position: 4 }).art).toBe("ok");
   });
 
   test("geclaimtes Ticket nr: nichts zu korrigieren", () => {
-    expect(P({ items: [...fueller, sammel(20, { assignees: ["fluffels"] })], nr: 20, position: 4 }).art).toBe("ok");
+    expect(P({ items: [...fueller, sammel(20, { assignees: [OWNER] })], nr: 20, position: 4 }).art).toBe("ok");
   });
 });
 
@@ -265,7 +268,7 @@ describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
 
 describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist idempotent gegen den Wettlauf)", () => {
   type Roh = { state: string; assignees: unknown[]; user?: { login: string; type: string } | null };
-  const ICH = { login: "fluffels", type: "User" };
+  const ICH = { login: OWNER, type: "User" };
   type Dub = { art: "keine" | "eigenes-schliessen" | "warnung"; aelter?: number };
   const Z = raw as unknown as {
     waehleBestaetigtes: (kandidaten: Offen[], einzeln: (nr: number) => Roh, owner?: string) => Offen | null;
@@ -280,38 +283,38 @@ describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist id
     const r = Z.waehleBestaetigtes([o(5), o(9), o(7)], (nr) => {
       abgerufen.push(nr);
       return offen();
-    }, "fluffels");
+    }, OWNER);
     expect(r?.number).toBe(9);
     expect(abgerufen, "ein Treffer genügt, absteigend").toEqual([9]);
   });
 
   test("Liste sagt offen, Einzelabruf sagt geschlossen (das war der Wettlauf #1560/#1561) → das nächste", () => {
-    const r = Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "closed", assignees: [], user: ICH } : offen()), "fluffels");
+    const r = Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "closed", assignees: [], user: ICH } : offen()), OWNER);
     expect(r?.number).toBe(7);
   });
 
   test("geclaimt laut Einzelabruf → das nächste; alle ungültig oder leer → null", () => {
-    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "open", assignees: [{ login: "fluffels" }], user: ICH } : offen()), "fluffels")?.number).toBe(7);
-    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "closed", assignees: [], user: ICH }), "fluffels")).toBeNull();
-    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [{ login: "x" }], user: ICH }), "fluffels")).toBeNull();
-    expect(Z.waehleBestaetigtes([], () => offen(), "fluffels")).toBeNull();
+    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? { state: "open", assignees: [{ login: OWNER }], user: ICH } : offen()), OWNER)?.number).toBe(7);
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "closed", assignees: [], user: ICH }), OWNER)).toBeNull();
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [{ login: "x" }], user: ICH }), OWNER)).toBeNull();
+    expect(Z.waehleBestaetigtes([], () => offen(), OWNER)).toBeNull();
   });
 
   test("ein werfender Einzelabruf wirft weiter (kein stilles Weiterlaufen mit unbestätigtem Stand)", () => {
     expect(() =>
       Z.waehleBestaetigtes([o(9)], () => {
         throw new Error("gh kaputt");
-      }, "fluffels"),
+      }, OWNER),
     ).toThrow(/gh kaputt/);
   });
 
   test("Autorprüfung (W14): ein Fremder mit exaktem Titel wird nicht gewählt, der Bot und der Owner schon", () => {
     const fremd: Roh = { state: "open", assignees: [], user: { login: "fremd", type: "User" } };
     const bot: Roh = { state: "open", assignees: [], user: { login: "github-actions[bot]", type: "Bot" } };
-    expect(Z.waehleBestaetigtes([o(9)], () => fremd, "fluffels")).toBeNull();
-    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [] }), "fluffels"), "ohne user fail-closed").toBeNull();
-    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? fremd : offen()), "fluffels")?.number).toBe(7);
-    expect(Z.waehleBestaetigtes([o(9)], () => bot, "fluffels")?.number).toBe(9);
+    expect(Z.waehleBestaetigtes([o(9)], () => fremd, OWNER)).toBeNull();
+    expect(Z.waehleBestaetigtes([o(9)], () => ({ state: "open", assignees: [] }), OWNER), "ohne user fail-closed").toBeNull();
+    expect(Z.waehleBestaetigtes([o(9), o(7)], (nr) => (nr === 9 ? fremd : offen()), OWNER)?.number).toBe(7);
+    expect(Z.waehleBestaetigtes([o(9)], () => bot, OWNER)?.number).toBe(9);
   });
 
   test("ohne owner wirft es, bevor ein Abruf läuft (Pflicht-Parameter)", () => {
@@ -332,7 +335,7 @@ describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist id
   });
 
   test("keine Dublette: nur größere Nummern, geclaimte, anderer Titel, nur das eigene, leer", () => {
-    for (const andere of [[o(21)], [o(18, T, ["fluffels"])], [o(18, "Langfuse-Befunde (gesammelt)")], [o(20)], []]) {
+    for (const andere of [[o(21)], [o(18, T, [OWNER])], [o(18, "Langfuse-Befunde (gesammelt)")], [o(20)], []]) {
       expect(Z.dublettenEntscheidung({ eigenNr: 20, titel: T, eigenKommentare: 0, andere }).art).toBe("keine");
     }
   });

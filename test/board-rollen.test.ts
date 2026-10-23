@@ -6,7 +6,6 @@ import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { FREMD, projektConfig } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPlace from "../scripts/board-place.mjs";

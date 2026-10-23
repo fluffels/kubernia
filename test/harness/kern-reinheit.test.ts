@@ -1152,6 +1152,14 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
   });
   // Geschlossene Liste der literalfrei umgebauten Kern-Tests (#1876 Teil 1, Hooks und Guards; #1877 Teil 2, Board und Tickets; die Folgeteile #1878-#1879 ergänzen sie).
   const LITERALFREIE_KERN_TESTS = [
+    "test/harness/claims-pruefen.test.ts",
+    "test/harness/lebenszyklus-namen.test.ts",
+    "test/harness/sammelticket.test.ts",
+    "test/harness/ticket-lock-lebenszeichen.test.ts",
+    "test/harness/ticket-lock.test.ts",
+    "test/naechstes-ticket.test.ts",
+    "test/sammelticket-anlegen.test.ts",
+    "test/spezifikation.test.ts",
     "test/board-aufnahme.test.ts",
     "test/board-haertung.test.ts",
     "test/board-io-board.test.ts",
