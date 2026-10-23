@@ -54,7 +54,7 @@ const K = kontextRoh as unknown as {
 };
 const M = messRoh as unknown as { bereinige: (t: string, o?: object) => string; normPfad: (p: string, o?: object) => string };
 const H = hauptchatRoh as unknown as {
-  hauptchatNamen: (d: { config: unknown }) => { ticketAgenten: Set<string>; repoName: string };
+  hauptchatNamen: (d: { config: unknown }) => { ticketAgenten: Set<string>; repoName: string; abschlussSkill: string };
   zerlegeHauptchat: (e: object) => Record<string, { calls: number }> & { rows: { quelle: string; calls: number }[] };
   renderMarkdown: (r: unknown, o?: object) => string;
   ERGEBNIS_SCHLUESSEL: readonly string[];
@@ -79,6 +79,7 @@ const CFG = {
   praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" },
   labels: { harness: "bereich:x", festgefahren: "zustand:fest", forum: "f", dependabotInbox: "bereich:x" },
   agenten: { planer: "acme-planer", umsetzer: "acme-umsetzer", lens: "acme-lens", gruppe: "acme-gruppe", ticketSkill: "acme" },
+  skills: { abschluss: "acme-abschluss" },
 };
 const ohneAgent = (rolle: string) => ({ ...CFG, agenten: { ...CFG.agenten, [rolle]: undefined } });
 const NAMEN = N.ticketNamen(CFG);
@@ -310,6 +311,8 @@ describe("hauptchat-zerlegung: Agenten und Repo-Name aus der Config", () => {
   test("Negativfall: ohne repo oder ohne Agentenname wirft hauptchatNamen mit Fix", () => {
     expect(() => H.hauptchatNamen({ config: { ...CFG, repo: undefined } })).toThrow(/repo[\s\S]*Fix:/);
     expect(() => H.hauptchatNamen({ config: ohneAgent("gruppe") })).toThrow(/agenten\.gruppe/);
+    expect(() => H.hauptchatNamen({ config: { ...CFG, skills: undefined } })).toThrow(/skills\.abschluss[\s\S]*Fix:/);
+    expect(H.hauptchatNamen({ config: CFG })).toMatchObject({ abschlussSkill: "acme-abschluss" });
   });
   const sitzung = {
     id: "s",

@@ -10,12 +10,12 @@ import * as refs from "../scripts/ticket-refs.mjs";
 import * as namenRoh from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ladeCfg from "../scripts/projekt-config-lib.mjs";
-import { FREMD, projektConfig } from "./support/fremd-config";
+import { FREMD, projektConfig, FREMD_OWNER, FREMD_NAMEN } from "./support/fremd-config";
 
 const ticketNamen = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 
-const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
-const NAMEN = ticketNamen(FREMD);
+const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
+const NAMEN = FREMD_NAMEN;
 const ECHT = projektConfig().praefixe; // Standardpfad ohne `namen`: die Config des Projekts wird je Aufruf geladen
 const WTP = FREMD.praefixe.worktree;
 const BRP = FREMD.praefixe.branch;
@@ -29,7 +29,7 @@ import * as boardLib from "../scripts/board-lib.mjs";
 
 type Fenster = { k: number; agent: string; nach: number };
 type Stand = { closedAt: string | null; n: number } | { fehler: string };
-type Eingabe = { items: unknown[]; offene: Set<number>; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
+type Eingabe = { items: unknown[]; offene: Set<number>; fuellstand?: (nr: number) => number | { fehler: string }; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
 type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number };
@@ -616,7 +616,7 @@ describe("Spezifikations-Gate (#1615)", () => {
   });
   test("ausgenommen: Sammel-, Status-, Notfall-, Forum-, Epic-Titel ohne Format bleiben frei", () => {
     for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "📦 Epic: Welt", "Phase 2: Bau", "Langfuse-Status überprüfen"]) {
-      const r = waehle([roh(1, { title: titel, body: "" })]);
+      const r = waehle([roh(1, { title: titel, body: "" })], { fuellstand: () => 10 }); // das Sammelticket ist voll: nur das Spezifikations-Gate steht zur Prüfung
       expect(r.ticket?.nr, titel).toBe(1);
       expect(r.ticket?.spezifikation, titel).toBeUndefined();
     }
@@ -1034,6 +1034,84 @@ describe("Board-Verzug (#1866)", () => {
     const gesehen: unknown[] = [];
     const r = V.ladeFrisch((a) => (gesehen.push(a), []));
     expect(gesehen).toEqual([{ anzahl: 50 }]);
-    expect("issues" in r && r.projektIds).toHaveLength(2);
+    const idVon = (rolle: string): string | undefined => projektConfig().boards.find((b) => b.rolle === rolle)?.projectId;
+    expect(idVon("produkt")).toBeTruthy();
+    expect(idVon("factory")).toBeTruthy();
+    expect(idVon("produkt")).not.toBe(idVon("factory"));
+    expect("issues" in r && r.projektIds).toEqual([idVon("produkt"), idVon("factory")]);
+  });
+});
+
+describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888)", () => {
+  type Fuell = (nr: number) => number | { fehler: string };
+  const SAMMEL = { title: "Harness-Härtung (gesammelt)", labels: [{ name: HARNESS }] };
+  const mit = (fuellstand: Fuell | undefined, extra: Record<string, unknown> = {}) =>
+    (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, SAMMEL), item(2, { labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand, ...extra });
+
+  test("Grenze 9/10/11: unter der Schwelle übersprungen mit Grund, ab 10 gewählt", () => {
+    const neun = mit(() => 9);
+    expect(neun.ticket?.nr).toBe(2);
+    expect(neun.uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 Befund-Kommentare)" }]);
+    expect(mit(() => 10).ticket?.nr).toBe(1);
+    expect(mit(() => 11).ticket?.nr).toBe(1);
+    expect(mit(() => 0).uebersprungen[0].grund).toBe("füllt sich (0/10 Befund-Kommentare)");
+  });
+  test("nicht ladbar oder ohne Lader: übersprungen (fail-closed), nie gewählt", () => {
+    expect(mit(() => ({ fehler: "HTTP 502" })).uebersprungen).toEqual([{ nr: 1, grund: "Füllstand nicht prüfbar (HTTP 502)" }]);
+    expect(mit(undefined).uebersprungen[0].grund).toMatch(/^Füllstand nicht prüfbar/);
+    expect(mit(undefined).ticket?.nr).toBe(2);
+  });
+  test("der Füllstand wird nur für das ungeclaimte Sammelticket als Kandidat geladen: nicht für andere Items, nicht für ein geclaimtes Sammelticket, nicht nach einem früheren Treffer", () => {
+    const gefragt: number[] = [];
+    const spion: Fuell = (nr) => (gefragt.push(nr), 10);
+    mit(spion);
+    expect(gefragt).toEqual([1]);
+    gefragt.length = 0;
+    (frei as (i: unknown[], e: unknown) => Ergebnis)([item(2, { labels: [{ name: HARNESS }] }), item(1, SAMMEL)], { bereich: "agentic", fuellstand: spion });
+    expect(gefragt).toEqual([]); // Item 2 ist frei und kommt zuerst
+    (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, { ...SAMMEL, assignees: [{ login: OWNER }] }), item(2, { labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: spion });
+    expect(gefragt).toEqual([]); // geclaimt: Assignee-Grund, kein Laden
+  });
+  test("das Langfuse-Sammelticket hängt nicht am Füllstand: gewählt trotz Füllstand 0, der Lader wird für es nicht gefragt", () => {
+    const gefragt: number[] = [];
+    const r = (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, { title: "Langfuse-Befunde (gesammelt)", labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: (nr: number) => (gefragt.push(nr), 0) });
+    expect(r.ticket?.nr).toBe(1);
+    expect(gefragt).toEqual([]);
+  });
+  test("--ticket umgeht die Schwelle: die Einzelprüfung nimmt das Sammelticket auch bei Füllstand 3", () => {
+    const pruefe = N.pruefeTicket({ item: N.itemAusIssue(item(1, SAMMEL).content), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG } as never);
+    expect(pruefe.ticket?.nr).toBe(1);
+  });
+  test("fuehreAus: der Lader aus der io entscheidet; ohne ihn bleibt das Sammelticket liegen", () => {
+    const eingabe = { items: norm([item(1, SAMMEL), item(2, { labels: [{ name: HARNESS }] })]), offene: new Set<number>() };
+    const lauf = (fuellstand?: Fuell) => N.fuehreAus(["--bereich", "agentic"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG, fuellstand } as never);
+    expect(lauf(() => 10).out.split("\n")[0]).toBe("#1\tT1".replace("T1", "Harness-Härtung (gesammelt)"));
+    const r = lauf(() => 4);
+    expect(r.out.split("\n")[0]).toBe("#2\tT2");
+    expect(r.out).toContain("übersprungen #1: füllt sich (4/10 Befund-Kommentare)");
+    expect(lauf().out).toContain("Füllstand nicht prüfbar");
+  });
+  test("Mängelliste und Einzelprüfung fragen den Füllstand nie", () => {
+    const eingabe = { items: norm([item(1, SAMMEL)]), offene: new Set<number>() };
+    const r = N.fuehreAus(["--maengel"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG, fuellstand: () => { throw new Error("darf nicht fragen"); } } as never);
+    expect(r).toMatchObject({ code: 0, err: "" }); // ein Wurf des Laders wäre hier Exit 2
+  });
+
+  describe("fuellstandLader: Kommentare vertrauter Nicht-Bot-Autoren, Memo, Ladefehler", () => {
+    const lader = (N as unknown as { fuellstandLader: (o: { holeKommentare: (nr: number) => unknown; owner: string }) => Fuell }).fuellstandLader;
+    const k = (login: string, type = "User") => ({ user: { login, type } });
+    test("zählt nur den Owner ohne Bots, lädt je Nummer einmal", () => {
+      let n = 0;
+      const f = lader({ holeKommentare: () => (n++, [k(OWNER), k(OWNER), k("fremd"), k("github-actions[bot]", "Bot")]), owner: OWNER });
+      expect(f(5)).toBe(2);
+      expect(f(5)).toBe(2);
+      expect(n).toBe(1);
+    });
+    test("ein Ladefehler oder eine falsche Form wird zu { fehler } (kein Wurf)", () => {
+      const f = lader({ holeKommentare: () => { throw new Error("HTTP 502\nzweite Zeile"); }, owner: OWNER });
+      expect(f(5)).toEqual({ fehler: "Kommentare von #5 nicht ladbar: HTTP 502" });
+      const r = lader({ holeKommentare: () => ({}), owner: OWNER })(5);
+      expect(typeof r === "object" ? r.fehler : "").toMatch(/nicht ladbar/);
+    });
   });
 });

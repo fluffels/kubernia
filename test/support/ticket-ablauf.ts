@@ -3,9 +3,7 @@
  * (Ablauf, Agenten-Definition, Skill) prüfen, lesen ihn hier mit eingesetzten Werten aus `.factory/projekt.json`. */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
-const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig;
+import { FREMD, projektConfig } from "./fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzRaw from "../../scripts/besitz-lib.mjs";
 const platzhalterMuster = (besitzRaw as unknown as { platzhalterMuster: () => RegExp }).platzhalterMuster;
@@ -32,8 +30,11 @@ export function setzeAgentenWerte(text: string, agenten: Record<string, string>)
 
 /** Eine Projektdatei (Pfad relativ zur Wurzel, Schrägstrich-Form) mit eingesetzten Projektwerten. */
 export function liesMitProjektwerten(rel: string): string {
-  return setzeProjektwerte(readFileSync(ROOT + rel, "utf8"), ladeProjektConfig() as Gruppen);
+  return setzeProjektwerte(readFileSync(ROOT + rel, "utf8"), projektConfig() as unknown as Gruppen);
 }
+
+/** Marker-Kennung `<präfix-klein>abnahme` der Fremd-Config (Erwartung der Abnahme-Tests, nicht aus der Produktions-API abgeleitet). */
+export const FREMD_ABNAHME_MARKER = `${FREMD.praefixe.commitZeile.toLowerCase()}abnahme`;
 
 /** Der Ablauftext mit den Werten aus `.factory/projekt.json`. */
 export function liesTicketAblauf(): string {

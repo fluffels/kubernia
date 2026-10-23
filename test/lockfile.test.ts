@@ -52,7 +52,7 @@ function lockMirroring(pkg: Pkg): Lock {
 }
 
 const BASE_PKG: Pkg = {
-  name: "kubequest",
+  name: "demo-paket",
   version: "3.0.0",
   dependencies: { phaser: "^3.87.0" },
   devDependencies: { vite: "^8.1.0", vitest: "^4.1.9" },

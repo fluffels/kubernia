@@ -156,3 +156,7 @@ Anlass: der Bereich der Auswahl ergibt sich jetzt aus dem Ticket-Skill ([ADR 002
 Entscheidung: die Spielquote bleibt Soll (ein Factory-Merge nach 3 Produkt-Merges seit dem letzten Factory-Merge, `SPIEL_QUOTE` in `scripts/spielquote-lib.mjs`) und Kennzahl im Selbst-Audit und im Takt-Protokoll; sie wählt nur noch beim Aufruf der Auswahl ohne `--bereich` (von Hand). Die Zahlen der früheren Fortschreibungen bleiben unverändert. Der Auswahlmodus ohne Bereich bleibt in diesem Ticket erhalten; sein Abbau ist eine Zeile im Harness-Sammelticket.
 
 Präzisiert durch #1808: der Auswahlmodus ohne `--bereich` ist abgebaut; ohne `--bereich` und ohne `--ticket` endet `naechstes-ticket` mit Exit 2, das JSON trägt kein `quote`-Feld mehr, die Spielquote bleibt Kennzahl.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md) (Konvention: [README](README.md#format)); dort die erste: [#1888](fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md) löst den Härtungs-Takt nach Merge-Zahl ab (Füllstand der Befund-Kommentare).

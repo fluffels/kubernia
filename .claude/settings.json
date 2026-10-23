@@ -115,9 +115,9 @@
         "codeload.github.com",
         "objects.githubusercontent.com",
         "raw.githubusercontent.com",
-        "*.pixellab.ai",
         "cdn.playwright.dev",
-        "playwright.download.prss.microsoft.com"
+        "playwright.download.prss.microsoft.com",
+        "*.pixellab.ai"
       ]
     },
     "filesystem": {
@@ -144,10 +144,10 @@
     },
     "credentials": {
       "envVars": [
-        { "name": "PIXELLAB_TOKEN", "mode": "deny" },
         { "name": "GITHUB_TOKEN", "mode": "deny" },
         { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
-        { "name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny" }
+        { "name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny" },
+        { "name": "PIXELLAB_TOKEN", "mode": "deny" }
       ]
     }
   },

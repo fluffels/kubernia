@@ -12,7 +12,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { FREMD } from "../support/fremd-config";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -22,7 +24,6 @@ import * as baselineModule from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceModule from "../../scripts/slice-override.mjs";
 const { commitZeilen } = sliceModule as unknown as { commitZeilen: (praefix: string, planer: string) => { plan: string; review: string } };
-import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ticketNamen from "../../scripts/ticket-namen.mjs";
 const { escapeRegex } = ticketNamen as unknown as { escapeRegex: (t: string) => string };
@@ -31,6 +32,7 @@ import * as brainModule from "../../scripts/brain-metrics.mjs";
 
 const toolEventsFromLangfuse = (brainModule as { toolEventsFromLangfuse: (obs: unknown[], agentOf?: (o: never) => string | null) => PEv[] }).toolEventsFromLangfuse;
 
+type Agenten = { planer: string; umsetzer: string; lens: string; gruppe: string };
 type Sub = { id?: string; agentType?: string; description?: string; parentAgentId?: string };
 type Call = {
   ts: string;
@@ -76,10 +78,10 @@ type Obs = {
 
 /** Modul-Form EINMAL deklarieren und genau hier casten (Muster wie cleanup-worktrees.test.ts). */
 const mRoh = baselineModule as {
-  classifySubagent: (agentType?: string, description?: string) => string | null;
+  classifySubagent: (agentType?: string, description?: string, agenten?: Agenten) => string | null;
   classifyMainByTime: (ts: string, bounds?: Bounds) => string;
   countReviewRounds: (descriptions: string[]) => number;
-  summarize: (run: Run & { events?: PEv[] }, bounds?: Bounds, prFiles?: unknown, namen?: { umsetzer: string }) => Summary & { pflegeUnpaired?: number };
+  summarize: (run: Run & { events?: PEv[] }, bounds?: Bounds, prFiles?: unknown, namen?: { umsetzer: string; agenten?: Agenten }) => Summary & { pflegeUnpaired?: number };
   toolAgentResolver: (obs: Obs[]) => (o: Obs) => string | null;
   callsFromTranscript: (jsonl: string, subagent?: Sub | null) => { calls: Call[]; questions: number };
   readTranscriptSession: (sessionId: string, projectsRoot: string) => { calls: Call[]; questions: number };
@@ -88,7 +90,7 @@ const mRoh = baselineModule as {
   renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null; nachweis?: { runden: number; plan: boolean | null } | null }, namen?: { planZeile?: string }) => string;
   priceCall: (c: Call, prices?: unknown) => number | null;
   priceParts: (c: Call, prices?: unknown) => Parts | null;
-  windowCalls: (calls: Call[], bounds?: Bounds, intervals?: { agent: string | null; from: string; to: string }[]) => { call: Call; phase: string }[];
+  windowCalls: (calls: Call[], bounds?: Bounds, intervals?: { agent: string | null; from: string; to: string }[], agenten?: Agenten) => { call: Call; phase: string }[];
   PRICES_STAND: string;
   langfuseZugang: (env: Record<string, string | undefined>) => { baseUrl: string; publicKey: string; secretKey: string };
   periodAt: (entry: unknown, ts?: string) => Record<string, unknown> | null;
@@ -148,6 +150,47 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.equal(m.classifySubagent("x-umsetzer", "Umsetzung #1291"), null);
     assert.equal(m.classifySubagent("x-umsetzer", "Umsetzung #1291 nach Plan inkl. Review-Fix"), null, "der Typ zählt, nicht die Beschreibung");
     assert.equal(m.classifySubagent(undefined, undefined), null);
+  });
+
+  test("Subagent-Typen aus den konfigurierten Agentennamen (Fremd-Config): exakter Treffer vor den Heuristiken, ohne Namen nur die Heuristik", () => {
+    const a = FREMD.agenten;
+    assert.equal(m.classifySubagent(a.planer, "irgendwas", a), "Planung");
+    assert.equal(m.classifySubagent(a.lens, "Blick auf #1", a), "Review");
+    assert.equal(m.classifySubagent("zz-kritik", "Blick auf #1", { ...a, lens: "zz-kritik" }), "Review", "ein Lens-Name ohne „lens“ zählt über die Config");
+    assert.equal(m.classifySubagent("zz-kritik", "Blick auf #1"), null);
+    assert.equal(m.classifySubagent(a.umsetzer, "Review und Plan", a), null, "Umsetzer: keine feste Phase");
+    assert.equal(m.classifySubagent(a.gruppe, "Lens und Plan", a), null, "Gruppen-Umsetzer: keine feste Phase");
+    assert.equal(m.classifySubagent(a.planer, "irgendwas"), null, "ohne Namen kennt nur die Heuristik den Planer nicht");
+    assert.equal(m.classifySubagent("fremder-agent", "irgendwas", a), null);
+    assert.equal(m.classifySubagent("x-planner", "irgendwas", a), "Planung", "die Heuristik bleibt der Rückfall");
+  });
+  test("CLI: eine unlesbare --config bricht vor jedem Lesen mit Exit 1 und Fix-Zeile ab", () => {
+    const r = spawnSync(process.execPath, ["scripts/token-baseline.mjs", "--config", "gibt-es-nicht.json", "--session", "x"], { encoding: "utf8" });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /Projekt-Config fehlt[\s\S]*Fix:/);
+  });
+  test("windowCalls und summarize reichen die Agentennamen an die Phasen-Zuordnung durch", () => {
+    const a = FREMD.agenten;
+    const c = call("2026-09-29T10:30:00Z", 1, { subagent: { id: "p", agentType: a.planer, description: "irgendwas" } });
+    assert.equal(m.windowCalls([c], BOUNDS, [], a)[0].phase, "Planung");
+    assert.notEqual(m.windowCalls([c], BOUNDS)[0].phase, "Planung");
+    const s = mRoh.summarize({ calls: [c] }, BOUNDS, null, { umsetzer: a.umsetzer, agenten: a });
+    assert.ok(s.rows.some((r) => r.phase === "Planung"));
+  });
+  test("summarize: Review-Runden und Sockel kennen den konfigurierten Lens- und Planer-Namen (auch ohne „lens“ im Namen)", () => {
+    const a = { ...FREMD.agenten, lens: "zz-kritik" };
+    const calls = [
+      call("2026-09-29T10:30:00Z", 1, { subagent: { id: "k", agentType: "zz-kritik", description: "Blick auf #1" } }),
+      call("2026-09-29T10:31:00Z", 1, { subagent: { id: "p", agentType: a.planer, description: "irgendwas" } }),
+    ];
+    const mit = mRoh.summarize({ calls }, BOUNDS, null, { umsetzer: a.umsetzer, agenten: a });
+    assert.ok(mit.reviewRounds >= 1);
+    assert.ok(mit.sockel.review !== null && mit.sockel.review > 0);
+    assert.ok(mit.sockel.planung !== null && mit.sockel.planung > 0);
+    const ohne = mRoh.summarize({ calls }, BOUNDS, null, { umsetzer: a.umsetzer });
+    assert.equal(ohne.reviewRounds, 0);
+    assert.ok(!ohne.sockel.review);
+    assert.ok(!ohne.sockel.planung);
   });
 
   test("Workflow-Labels werden per Präfix ihrer Phase zugeordnet", () => {

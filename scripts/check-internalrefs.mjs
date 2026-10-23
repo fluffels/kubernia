@@ -48,6 +48,7 @@ import { dirname, join } from "node:path";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
+import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
 const ROOT = join(dirname(SELF), "..");
@@ -134,6 +135,74 @@ export function listBranchCommitMessages(rootDir = ROOT, exec = execFileSync) {
   }
 }
 
+// ── Pfadregel (#1888): lokale Pfade verraten Benutzer- und Ordnernamen ──────────────────────────────
+// Drei Regeln auf den Zeilen getrackter Dateien (`pfadBefunde`), Treffer tragen `kind: "pfad"`:
+//  1. Benutzerordner (`X:\Users\<seg>`, `/Users/<seg>`, `/home/<seg>`, in allen Dateien): `<seg>` muss ein Platzhalter der
+//     geschlossenen Liste `PLATZHALTER_NUTZER` sein oder in Klammern/als Variable stehen (`<name>`, `$HOME`, `%USERNAME%`, `*`).
+//  2. Laufwerkspfade (`X:\<wurzel>\…`, nur in test/** und scripts/**): `<wurzel>` steht in `FIXTURE_WURZELN`, der einen Liste der
+//     erlaubten Fixture-Wurzeln (Verhalten von Pfad-Guards, Temp-Ordnern und Beispiel-Checkouts; keine echten Ordner).
+//  3. Repo-Name als Pfadsegment eines Laufwerkspfads (in jeder Datei) ist rot; der Name kommt aus der Projekt-Config
+//     (`repoName`), nie als Literal. `/…`-Pfade prüft die Regel nicht: URL-Pfade und der Vite-Basispfad tragen den Namen zu Recht.
+// Laufwerkspfade brauchen einen Großbuchstaben als Laufwerk (sonst träfe `a:\n` im JS-Text). Grenzen: Pfade aus Variablen oder Template-Teilen (`${…}`) sieht die Regel nicht (fail-open), UNC- und `file://`-Pfade ebenso.
+// Beispiele in Tests und Doku bauen den Pfad aus Teilen oder nutzen einen Platzhalter, sonst trifft die Regel das Beispiel.
+
+/** Erlaubte Platzhalter-Segmente hinter `Users/` und `home/` (Klartext, keine echten Namen). */
+export const PLATZHALTER_NUTZER = ["x", "y", "z", "u", "Max", "agent", "nutzer", "test", "…"];
+
+/** Erlaubte Fixture-Wurzeln: erstes Segment eines Laufwerkspfads in test/** und scripts/** (klein geschrieben verglichen). */
+export const FIXTURE_WURZELN = [
+  "a", "a.ts", "andere", "b.txt", "daten", "dev", "docs", "eigen.jsonl", "foo", "gibt-es-nicht", "git", "h", "ignoriert", "msys",
+  "n", "other", "pfad", "program", "projekt", "python", "r", "repo", "root", "src", "temp", "temp2", "tempo", "tmp", "tools", "users", "w", "windows", "work", "wt", "x", "…",
+];
+
+const NUTZER_MUSTER = /(?:(?<![\w])[A-Z]:[\\/]+Users|(?<![\w.:/\\])\/(?:Users|home))[\\/]+([^\\/\s"'`<>*|]+)/g;
+const LAUFWERK_MUSTER = /(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g;
+const LAUFWERK_KOPF = /^[A-Z]:[\\/]+/;
+const NACHLAUF = /[.,;:)\]}]+$/;
+const VARIABLE = /^[$%{~]/;
+const imScope = (file) => /^(test|scripts)\//.test(file);
+
+/** Findet Pfad-Verstöße (siehe Block oben). `repo`: Repo-Name aus der Projekt-Config oder `null` (Regel 3 entfällt). Pur. */
+export function pfadBefunde(files, readFile, { repo = null } = {}) {
+  const hits = [];
+  const repoKlein = repo ? repo.toLowerCase() : null;
+  for (const file of files) {
+    let content;
+    try {
+      content = readFile(file);
+    } catch {
+      continue;
+    }
+    if (content.includes("\0")) continue;
+    content.split(/\r?\n/).forEach((text, i) => {
+      const melde = (term) => hits.push({ file, line: i + 1, term, kind: "pfad", excerpt: text.trim().slice(0, 120) });
+      for (const m of text.matchAll(NUTZER_MUSTER)) {
+        const seg = m[1].replace(NACHLAUF, "");
+        if (seg && !VARIABLE.test(seg) && !PLATZHALTER_NUTZER.includes(seg)) melde("nutzer");
+      }
+      const laufwerke = [...text.matchAll(LAUFWERK_MUSTER)].map((m) => m[0]);
+      if (imScope(file)) {
+        for (const p of laufwerke) {
+          const wurzel = p.replace(LAUFWERK_KOPF, "").split(/[\\/]+/)[0].replace(NACHLAUF, "");
+          if (wurzel && !VARIABLE.test(wurzel) && !FIXTURE_WURZELN.includes(wurzel.toLowerCase())) melde("wurzel");
+        }
+      }
+      if (!repoKlein) return;
+      if (laufwerke.some((p) => p.split(/[\\/]+/).some((seg) => seg.replace(NACHLAUF, "").toLowerCase() === repoKlein))) melde("repo");
+    });
+  }
+  return hits;
+}
+
+/** Repo-Name aus der Projekt-Config des Repos, `null` ohne nutzbare Config (Regel 3 der Pfadregel entfällt dann). */
+function repoNameOderNull(rootDir) {
+  try {
+    return repoName(ladeProjektConfig({ rootDir }));
+  } catch {
+    return null;
+  }
+}
+
 /** Kompletter Lauf gegen das echte Repo: getrackte Dateien plus Commit-Messages des Branches. */
 export function runCheck(rootDir = ROOT, io = {}) {
   // Injizierbar, damit die Verdrahtung (beide Begriffslisten, Commit-Messages) testbar ist.
@@ -143,12 +212,13 @@ export function runCheck(rootDir = ROOT, io = {}) {
     readFile: readDisk = (rel) => readFileSync(join(rootDir, rel), "utf8"),
     terms = decodeTerms(),
     nameTerms = decodeTerms(ENCODED_NAME_TERMS),
+    repo = repoNameOderNull(rootDir),
   } = io;
   const files = listFiles(rootDir).filter((f) => isCheckable(f));
   const texts = new Map(listCommits(rootDir).map((c) => [c.name, c.text]));
   const readFile = (rel) => (texts.has(rel) ? texts.get(rel) : readDisk(rel));
   const all = [...files, ...texts.keys()];
-  return { files: all, violations: findViolations(all, terms, readFile, nameTerms) };
+  return { files: all, violations: [...findViolations(all, terms, readFile, nameTerms), ...pfadBefunde(files, readFile, { repo })] };
 }
 
 /** Was die Erfolgsmeldung als „geprüft" nennt: der Repo-Lauf Dateien und Commits, `--text` nur stdin. */
@@ -222,18 +292,25 @@ function bericht(violations, checked, { red, green, label, out, err }) {
   }
 
   for (const v of violations) {
-    const what = v.kind === "name" ? "Namensbezug im Text" : "interner Bezug im Text";
+    const what = v.kind === "name" ? "Namensbezug im Text" : v.kind === "pfad" ? `lokaler Pfad (${v.term})` : "interner Bezug im Text";
     err(red(`✖ ${v.file}:${v.line} — ${what}`));
   }
 
   const names = violations.filter((v) => v.kind === "name").length;
   const refs = violations.filter((v) => v.kind === "ref").length;
+  const pfade = violations.filter((v) => v.kind === "pfad").length;
   if (refs > 0) {
     err(
       `\n${refs} interne Referenz(en) gefunden. Bitte neutral umformulieren ` +
         `(die Sache benennen, nicht die Herkunft) — Begründung siehe Kopf von ` +
         `scripts/check-internalrefs.mjs und AGENTS.md › Konventionen. Einmal gemergt lässt sich das ` +
         `nicht mehr vollständig zurücknehmen (PR-Refs bleiben).`,
+    );
+  }
+  if (pfade > 0) {
+    err(
+      `\n${pfade} lokale(r) Pfad(e) gefunden. Platzhalter aus PLATZHALTER_NUTZER, Fixture-Wurzel aus FIXTURE_WURZELN ` +
+        `oder den Pfad aus Teilen bauen (Kopf von scripts/check-internalrefs.mjs, Pfadregel).`,
     );
   }
   if (names > 0) {

@@ -20,7 +20,7 @@ import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { claimNummer, median } from "./mess-lib.mjs";
-import { HARNESS_TAKT_MERGES, SPIEL_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { SPIEL_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
 import { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } from "./nachweis-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
@@ -231,8 +231,6 @@ export function renderMarkdown(b) {
 
 // ── Selbst-Audit (#1787): das Harness hinterfragt seine Mechanismen selbst ───────────────────────────────
 
-/** Abweichung des Härtungs-Takts ab dem Vielfachen der Takt-Schwelle (das Sammelticket hätte längst vorn stehen müssen). */
-export const TAKT_ABWEICHUNG_FAKTOR = 2;
 /** Lens-Zahl: Obergrenze der Review-Runden je PR: Cap-Pässe, höchstens `MAX_ZUSATZPAESSE` Zusatzpässe und die eine Delta-Runde nach einem Abnahme-Fix. */
 export const MAX_RUNDEN = MAX_REVIEW_PAESSE + MAX_ZUSATZPAESSE + 1;
 /** CI-Fix-Runden, ab denen das Festgefahren-Protokoll greifen muss (nach dem dritten Fix-Versuch). */
@@ -255,13 +253,13 @@ function auditQuote(commits, luecke, harnessIssues, harnessLuecke) {
 }
 
 function auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }) {
-  const soll = `Sammelticket nach ${HARNESS_TAKT_MERGES} Ticket-Merges vorn, Abweichung ab ${TAKT_ABWEICHUNG_FAKTOR * HARNESS_TAKT_MERGES}`;
+  const soll = "reine Messung, kein Soll: der Takt hängt am Füllstand der Befund-Kommentare, ein still liegendes Sammelticket ist gewollt";
   if (luecke) return { mechanismus: "Härtungs-Takt", messung: luecke, soll, status: "Lücke" };
   if (sammelInArbeit) return { mechanismus: "Härtungs-Takt", messung: `Vorgänger #${sammelInArbeit} in Arbeit, der Takt zählt erst ab dessen Abschluss`, soll, status: "ok" };
   if (!sammelAbschluss) return { mechanismus: "Härtungs-Takt", messung: "kein abgeschlossenes Sammelticket gefunden, kein Zählanfang", soll, status: "Lücke" };
   const n = zaehleTaktMerges(commits, null, sammelIssues);
   const messung = `${n} Ticket-Merges seit dem Abschluss des letzten Sammeltickets (${String(sammelAbschluss).slice(0, 10)})`;
-  return { mechanismus: "Härtungs-Takt", messung, soll, status: n >= TAKT_ABWEICHUNG_FAKTOR * HARNESS_TAKT_MERGES ? "ABWEICHUNG" : "ok" };
+  return { mechanismus: "Härtungs-Takt", messung, soll, status: "ok" };
 }
 
 function auditFestgefahren(zeilen) {

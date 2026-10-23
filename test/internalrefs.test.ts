@@ -18,6 +18,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FREMD } from "./support/fremd-config";
 
 // Temp-Ordner dieser Datei: jeder Test legt über `tempOrdner()` an, `afterEach` räumt auf (kein Rest im Temp-Verzeichnis).
 const angelegt: string[] = [];
@@ -40,9 +41,12 @@ import * as rawModule from "../scripts/check-internalrefs.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBasis from "../scripts/check-basis.mjs";
 
-type Violation = { file: string; line: number; term: string; kind: "ref" | "name"; excerpt: string };
+type Violation = { file: string; line: number; term: string; kind: "ref" | "name" | "pfad"; excerpt: string };
 
 type InternalRefsApi = {
+  PLATZHALTER_NUTZER: string[];
+  FIXTURE_WURZELN: string[];
+  pfadBefunde: (files: string[], readFile: (f: string) => string, opt?: { repo?: string | null }) => Violation[];
   ENCODED_TERMS: string[];
   ENCODED_NAME_TERMS: string[];
   decodeTerms: (encoded?: string[]) => string[];
@@ -71,6 +75,9 @@ type InternalRefsApi = {
 };
 
 const {
+  PLATZHALTER_NUTZER,
+  FIXTURE_WURZELN,
+  pfadBefunde,
   ENCODED_TERMS,
   ENCODED_NAME_TERMS,
   listBranchCommitMessages,
@@ -88,6 +95,7 @@ const isCheckable = (rawBasis as unknown as { isCheckable: (file: string) => boo
 
 const DUMMY = "zzzdummyfirma";
 const readRepo = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+const WURZEL_REPO = fileURLToPath(new URL("../", import.meta.url));
 
 describe("Interne-Referenzen-Wächter (#990)", () => {
   test("das Repo ist frei von den gelisteten Begriffen", () => {
@@ -347,5 +355,93 @@ describe("CLI-Flags (#1837)", () => {
     const treffer = text(`vor ${begriff} nach`);
     assert.equal(treffer.status, 1);
     assert.ok(!(treffer.stdout + treffer.stderr).includes(begriff), "der Begriff darf nicht ausgegeben werden");
+  });
+});
+
+// Die Beispielpfade werden aus Teilen gebaut: ein Literal träfe die Pfadregel in dieser Testdatei selbst.
+describe("Pfadregel (#1888)", () => {
+  const win = (...teile: string[]) => teile.join("\\");
+  const fremderRepo = FREMD.repo.split("/")[1] ?? "";
+  const befund = (datei: string, zeile: string, repo: string | null = fremderRepo) => pfadBefunde([datei], () => zeile, { repo }).map((b) => b.term);
+
+  test("Benutzerordner: Platzhalter grün, ein nicht gelisteter Name rot (Windows, macOS, Linux; auch mit Satzzeichen dahinter)", () => {
+    for (const seg of PLATZHALTER_NUTZER) {
+      assert.deepEqual(befund("docs/a.md", win("C:", "Users", seg, "x")), [], seg);
+      assert.deepEqual(befund("docs/a.md", `/home/${seg}/x`), [], seg);
+    }
+    for (const ok of ["/home/<name>/x", "/Users/$HOME/x", win("C:", "Users", "%USERNAME%", "x"), win("C:", "Users", "<name>")]) assert.deepEqual(befund("docs/a.md", ok), [], ok);
+    assert.deepEqual(befund("docs/a.md", win("C:", "Users", "KEINPLATZHALTER", "x")), ["nutzer"]);
+    assert.deepEqual(befund("docs/a.md", "siehe " + ["", "Users", "KEINPLATZHALTER", "x"].join("/")), ["nutzer"]);
+    assert.deepEqual(befund("docs/a.md", ["", "home", "KEINPLATZHALTER"].join("/") + "."), ["nutzer"]);
+    assert.deepEqual(befund("docs/a.md", "(/home/x.)"), [], "Satzzeichen hinter dem Platzhalter");
+    assert.deepEqual(befund("README.md", win("D:", "", "Users", "KEINPLATZHALTER")), ["nutzer"], "doppelter Trenner");
+  });
+
+  test("Leser: eine nicht lesbare Datei wird übersprungen, ein Text mit NUL-Byte ist Binärdaten", () => {
+    const wirft = (f: string): string => {
+      if (f === "docs/kaputt.md") throw new Error("EACCES");
+      return win("C:", "Users", "KEINPLATZHALTER", "x");
+    };
+    assert.deepEqual(pfadBefunde(["docs/kaputt.md"], wirft, { repo: fremderRepo }), []);
+    assert.equal(pfadBefunde(["docs/ok.md"], wirft, { repo: fremderRepo }).length, 1, "ohne Wurf trifft die Zeile");
+    assert.deepEqual(pfadBefunde(["docs/a.md"], () => `\0${win("C:", "Users", "KEINPLATZHALTER", "x")}`, { repo: fremderRepo }), []);
+  });
+
+  test("Repo-Segment mit Satzzeichen dahinter ist ein Treffer (Nachlauf wird abgestreift)", () => {
+    assert.deepEqual(befund("docs/a.md", `(C:/dev/${fremderRepo}.)`), ["repo"]);
+    assert.deepEqual(befund("docs/a.md", `(C:/dev/${fremderRepo}x.)`), [], "längerer Name ist kein Treffer");
+  });
+
+  test("FIXTURE_WURZELN schrumpft nur: kein Eintrag ohne Verwendung in test/ oder scripts/, keine Obergrenzen-Überschreitung", () => {
+    const dateien = spawnSync("git", ["ls-files", "test", "scripts"], { encoding: "utf8", cwd: WURZEL_REPO }).stdout.split("\n").filter(Boolean);
+    const benutzt = new Set<string>();
+    for (const d of dateien) {
+      let text: string;
+      try {
+        text = readFileSync(join(WURZEL_REPO, d), "utf8");
+      } catch {
+        continue;
+      }
+      for (const m of text.matchAll(/(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g)) {
+        benutzt.add(m[0].replace(/^[A-Z]:[\\/]+/, "").split(/[\\/]+/)[0].replace(/[.,;:)\]}]+$/, "").toLowerCase());
+      }
+    }
+    assert.deepEqual(FIXTURE_WURZELN.filter((w) => !benutzt.has(w)), [], "verwaiste Fixture-Wurzel: Eintrag streichen");
+    assert.ok(FIXTURE_WURZELN.length <= 36, "die Liste darf nur schrumpfen");
+  });
+
+  test("Benutzerordner-URLs und Teilwörter sind kein Pfad", () => {
+    assert.deepEqual(befund("docs/a.md", "https://example.org/home/KEINPLATZHALTER/x"), []);
+    assert.deepEqual(befund("docs/a.md", "src/home/KEINPLATZHALTER/x.ts"), []);
+  });
+
+  test("Laufwerkspfade in test/ und scripts/: nur Fixture-Wurzeln, in Docs frei", () => {
+    for (const w of FIXTURE_WURZELN) assert.equal(w, w.toLowerCase(), "Liste klein geschrieben, sonst trifft der Vergleich nie");
+    const fremd = win("D:", "KeineWurzel", "x");
+    assert.deepEqual(befund("test/a.test.ts", fremd), ["wurzel"]);
+    assert.deepEqual(befund("scripts/a.mjs", fremd), ["wurzel"]);
+    assert.deepEqual(befund("docs/a.md", fremd), []);
+    assert.deepEqual(befund("test/a.test.ts", win("C:", "tmp", "x")), []);
+    assert.deepEqual(befund("test/a.test.ts", win("C:", "Temp", "x")), [], "Groß-/Kleinschreibung egal");
+    assert.deepEqual(befund("test/a.test.ts", "const t = 'a:\\n';"), [], "kleines Laufwerk ist ein JS-Escape");
+    assert.deepEqual(befund("test/a.test.ts", "const t = 'a:\\nfoo';"), [], "Großbuchstaben-Pflicht: kleines Laufwerk mit unbekannter Wurzel");
+    assert.deepEqual(befund("test/a.test.ts", "(C:/tmp.)"), [], "Satzzeichen hinter der Wurzel");
+    assert.deepEqual(befund("test/a.test.ts", "`C:\\${name}\\x`"), [], "Template-Teil sieht die Regel nicht");
+  });
+
+  test("Repo-Name als Segment eines Laufwerkspfads ist rot (Name aus der Config), Fremdname und Fixture-Wurzel grün", () => {
+    assert.ok(fremderRepo.length > 0);
+    assert.deepEqual(befund("test/a.test.ts", `C:/dev/${fremderRepo}/x`), ["repo"]);
+    assert.deepEqual(befund("test/a.test.ts", win("C:", "dev", fremderRepo.toUpperCase(), "x")), ["repo"], "ohne Groß-/Kleinschreibung");
+    assert.deepEqual(befund("docs/a.md", `C:/dev/${fremderRepo}/x`), ["repo"], "auch in Docs");
+    assert.deepEqual(befund("test/a.test.ts", "C:/dev/repo/x"), []);
+    assert.deepEqual(befund("test/a.test.ts", `C:/dev/${fremderRepo}`, null), [], "ohne Repo-Name entfällt die Regel");
+    assert.deepEqual(befund("test/a.test.ts", `/${fremderRepo}/x`), [], "Unix-Pfade und URL-Pfade trägt den Namen zu Recht");
+  });
+
+  test("runCheck verdrahtet die Pfadregel (Treffer tragen kind pfad)", () => {
+    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => `C:/dev/${fremderRepo}/x`, terms: [], nameTerms: [], repo: fremderRepo } as Parameters<typeof runCheck>[1];
+    const r = runCheck("/x", io);
+    assert.deepEqual(r.violations.map((v) => `${v.file}:${v.kind}:${v.term}`), ["test/a.test.ts:pfad:repo"]);
   });
 });

@@ -32,13 +32,10 @@ import * as cleanupModule from "../../scripts/worktree-aufraeumen.mjs";
 import * as cliModule from "../../scripts/cleanup-worktrees.mjs";
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as flagLib from "../../scripts/flag-lib.mjs";
-import { FREMD, projektConfig } from "../support/fremd-config";
-// @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
-import * as namenLib from "../../scripts/ticket-namen.mjs";
+import { FREMD, projektConfig, FREMD_NAMEN } from "../support/fremd-config";
 
-const ticketNamen = (namenLib as unknown as { ticketNamen: (c: object) => object }).ticketNamen;
 /** Namen der Fremd-Config; jede Funktion mit Namensmuster bekommt sie injiziert (Standard: die echte Config). */
-const NAMEN = ticketNamen(FREMD);
+const NAMEN = FREMD_NAMEN;
 const WTP = FREMD.praefixe.worktree;
 const BRP = FREMD.praefixe.branch;
 

@@ -108,6 +108,7 @@ model {
       internalrefsPrText = ciworkflow 'internalrefs-pr-text.yml'
       release = ciworkflow 'release.yml'
       scorecard = ciworkflow 'scorecard.yml'
+      verifyMacos = ciworkflow 'verify-macos.yml'
       wiedervorlage = ciworkflow 'wiedervorlage.yml'
     }
   }

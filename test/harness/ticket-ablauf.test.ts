@@ -10,10 +10,10 @@
  *   5. Die Auslöser der beiden `description:` überschneiden sich nicht.
  *   6. Ein Ticket-Skill bleibt Einstieg: keine Unterüberschrift, nur die fetten Absätze „Bereich“ und „Lies … ablauf.md“, Rumpf höchstens 700 Zeichen.
  *   7. Der Ablauf trägt kein Projektwissen (ADR 0022 F10). Die Musterliste ist geschlossen, bekannte Muster:
- *      (1) `#\d+` (Ticketnummer, auch ein Linkanker wie `#6-…` und Fremd-Repo `x#123`);
+ *      (1) `#\d+` (Ticketnummer, auch ein Linkanker wie `#6-…` und Fremd-Repo `x#123`); (1b) ein Linkanker `](…#slug)`, dessen Slug nach einem Bindestrich eine Zahl mit mindestens 3 Ziffern trägt (`#…-1699`), ISO-Datumsfolgen (`2026-10-05`) ausgenommen;
  *      (2) der Wert von `skills.abschluss` aus `.factory/projekt.json` als Literal (geprüft auf dem Text ohne Projektwert-Block);
  *      (3) `AGENTS.md § <Name>`, `AGENTS.md (§ <Name>` und `AGENTS.md › <Name>`: der Name muss als ganzes Wort der Anfang eines fetten Titels im Kern-Block der AGENTS.md sein.
- * Bekannte Grenzen: eine Ticketnummer im Inneren eines Linkankers (`#wiederaufnahme-…-1699`) und jeder fette Ausdruck im Kern-Block (nicht nur ein Regeltitel) zählen nicht als Verstoß bzw. als Anker; andere Formulierungen eines Projekt-Verweises („nach AGENTS.md“, „Projekt-Block der AGENTS.md“) prüft Regel 7 nicht; eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich; ein kurzer Absatz ohne Fett und Überschrift (auch Listenpunkt, zweite H1) innerhalb des Rumpfbudgets bleibt unbemerkt, das Budget begrenzt ihn nur.
+ * Bekannte Grenzen: ein Linkanker mit Zahl unter 3 Ziffern oder ohne Bindestrich davor (`#v2`, `#abschnitt-12`), ein Anker außerhalb eines Markdown-Links `](…)` und jeder fette Ausdruck im Kern-Block (nicht nur ein Regeltitel) zählen nicht als Verstoß bzw. als Anker; andere Formulierungen eines Projekt-Verweises („nach AGENTS.md“, „Projekt-Block der AGENTS.md“) prüft Regel 7 nicht; eine umformulierte Kopie fängt nur die Signaturprüfung (Regel 3), kein unscharfer Abgleich; ein kurzer Absatz ohne Fett und Überschrift (auch Listenpunkt, zweite H1) innerhalb des Rumpfbudgets bleibt unbemerkt, das Budget begrenzt ihn nur.
  */
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -105,6 +105,8 @@ function skillMarkdowns(dirs: string[] = [".claude/skills", ".agents/skills"]): 
 }
 
 const VERWEIS_RE = /AGENTS\.md \(?[§›] ([^)\]:;,.\n]+)/g;
+const ANKER_RE = /\]\([^)\s]*?#([^)\s]+)\)/g;
+const ISO_DATUM = /\d{4}-\d{2}-\d{2}/g;
 const WORTZEICHEN = /[\p{L}\p{N}]/u;
 
 /** Fette Titel (`**…**`) eines Textes. */
@@ -116,6 +118,9 @@ function fetteTitel(text: string): string[] {
 export function projektwissenImAblauf(ablauf: string, kernBlock: string, abschlussSkill: string): string[] {
   const out: string[] = [];
   for (const m of ablauf.matchAll(/#\d+/g)) out.push(`Ticketnummer ${m[0]}`);
+  for (const m of ablauf.matchAll(ANKER_RE)) {
+    if (/-\d{3,}(?!\d)/.test(m[1].replace(ISO_DATUM, ""))) out.push(`Ticketnummer im Linkanker #${m[1]}`);
+  }
   if (abschlussSkill !== "" && ablauf.includes(abschlussSkill)) out.push(`Literal des Abschluss-Skills '${abschlussSkill}' (Platzhalter <skills.abschluss> nutzen)`);
   const titel = fetteTitel(kernBlock);
   for (const m of ablauf.matchAll(VERWEIS_RE)) {
@@ -212,6 +217,14 @@ describe("Regel 7: Projektwissen im Ablauf (projektwissenImAblauf)", () => {
     assert.match(pruefe("siehe #1234").join(), /Ticketnummer #1234/);
     assert.match(pruefe("[x](../a.md#6-budget)").join(), /Ticketnummer #6/);
     assert.match(pruefe("anthropics/claude-code#98898").join(), /#98898/);
+  });
+  test("ein Linkanker, dessen Slug nach Bindestrich eine Ticketnummer (ab 3 Ziffern) trägt, ist rot; Datum, kurze Zahl und Slug ohne Nummer nicht", () => {
+    assert.match(pruefe("[x](../a.md#foo-1699)").join(), /Ticketnummer im Linkanker #foo-1699/);
+    assert.match(pruefe("[x](../a.md#a-1592-b)").join(), /#a-1592-b/);
+    assert.deepEqual(pruefe("[x](../a.md#x-2026-10-05)"), []);
+    assert.deepEqual(pruefe("[x](../a.md#abschnitt-12)"), []);
+    assert.deepEqual(pruefe("[x](../a.md#wiederaufnahme-verwaister-claims)"), []);
+    assert.equal(pruefe("[x](#foo-1699)").length, 1);
   });
   test("das Literal des Abschluss-Skills ist rot, der Platzhalter nicht; ein leerer Wert prüft nichts", () => {
     assert.match(pruefe("Skill abschluss-x rufen").join(), /abschluss-x/);

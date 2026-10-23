@@ -1,6 +1,6 @@
 /* Review- und Plan-Nachweis-Wächter (#1270).
  *
- * Jeder Agenten-PR trägt per Commit-Zeilen `${Z.plan}:` / `${Z.review}:` einen prüfbaren Nachweis
+ * Jeder Agenten-PR trägt per Commit-Zeilen `<Plan-Zeile>:` / `<Review-Zeile>:` (Namen aus der Config, getestet mit der Fremd-Config) einen prüfbaren Nachweis
  * über Planungspass und konvergierten Lens-Review; die PR-CI erzwingt ihn pfadunabhängig.
  * Logik aus scripts/check-review-nachweis.mjs importiert (eine Quelle der Wahrheit), git
  * ist injiziert.
@@ -595,7 +595,7 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
 
 /** Wörtliche Commit-Message des gemergten Squash-Commits 1d193666 (Betreff als `* `-Zeilen, zwei Nachweise im Body). */
 const squash = (z: Zeilen, planer: string): string => [ // die Zeilen der Config stehen als Parameter, der übrige Text ist wörtlich
-  "feat(harness): Abschluss ohne offene Befunde, BEFUNDE-Zeile, brain-input im Fortsetzungs-Pfad (#1723) (#1733)",
+  "feat(harness): Abschluss ohne offene Befunde, BEFUNDE-Zeile, Abschluss-Skill im Fortsetzungs-Pfad (#1723) (#1733)",
   "",
   "* feat(harness): R0 verlangt BEFUNDE-Zeile im Umsetzer-Bericht (#1723)",
   "",
@@ -662,7 +662,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
     const f = bewerte(squash(Z, PL), ab).join("\n");
     assert.match(f, /AB-Plan-Zeile fehlt/);
     assert.match(f, /AB-Review-Zeile fehlt/);
-    assert.doesNotMatch(f, new RegExp(Z.praefix));
+    assert.ok(!f.includes(Z.praefix));
     assert.deepEqual(bewerte(squash(ab, PL), ab), []);
   });
 
@@ -710,7 +710,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
   test("die Vorlage trägt Präfix und Planer der Config", () => {
     const v = (raw as Mod).vorlage(commitZeilen("AB-", "x-planer"));
     assert.match(v, /^AB-Plan: x-planer\nAB-Review: head=/);
-    assert.doesNotMatch(v, new RegExp(Z.praefix));
+    assert.ok(!v.includes(Z.praefix));
   });
 });
 
@@ -723,6 +723,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
     labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
     agenten: { planer: "demo-planer", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
+    skills: { abschluss: "a" },
   });
   const lauf = (dir: string, args: string[], env: Record<string, string> = {}) =>
     spawnSync(process.execPath, [SKRIPT, ...args], { cwd: dir, encoding: "utf8", env: { ...process.env, ...env } });

@@ -22,6 +22,8 @@ interface Pc {
   altEnvName(name: string, config: unknown): string | null;
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
   berechtigungenAus(config: unknown): { allow: string[]; ask: string[]; deny: string[] };
+  sandboxAus(config: unknown): { allowedDomains: string[]; envVars: { name: string; mode: string }[] };
+  ergaenzungAusText(text: string | null): { allow: string[]; sandbox: { allowedDomains: string[]; envVars: unknown[] } };
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
@@ -52,6 +54,7 @@ const gueltig = (): Cfg => ({
   praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
   labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
   agenten: { planer: "demo-planer", umsetzer: "demo-umsetzer", lens: "demo-lens", gruppe: "demo-gruppe", ticketSkill: "demo" },
+  skills: { abschluss: "demo-abschluss" },
   projektliterale: { Zelda: "zelda" },
 });
 
@@ -101,6 +104,10 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (b1(c).todoOptionId = 3)), /boards\.1\.todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+    assert.match(mit((c) => delete c.skills), /skills/);
+    assert.match(mit((c) => (c.skills = {})), /skills\.abschluss fehlt/);
+    assert.match(mit((c) => (c.skills = { abschluss: "" })), /skills\.abschluss muss/);
+    assert.match(mit((c) => (c.skills = [])), /skills muss/);
     assert.match(mit((c) => (c.rulesetSpiegel = "")), /rulesetSpiegel/);
     assert.match(mit((c) => (c.rulesetSpiegel = 5)), /rulesetSpiegel/);
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), rulesetSpiegel: ".github/r.json" }), []);
@@ -417,6 +424,16 @@ describe("kernEnvNamen und sammleKernEnv", () => {
     assert.deepEqual(f.ohneLiteral, ["unter/b.mjs:1"]);
     assert.deepEqual(pc.sammleKernEnvIn(d).ohneLiteral.map((x) => x.endsWith("/unter/b.mjs:1")), [true]);
   });
+  test("sammleKernEnvIn: ein Bezug, der kein Präfix des Ordners ist, schneidet nichts ab; Schrägstrich und Backslash am Bezugsende sind gleich", () => {
+    const d = tmp();
+    mkdirSync(join(d, "unter"));
+    mkdirSync(join(d, "anders"));
+    writeFileSync(join(d, "unter", "b.mjs"), "const x = umgebungsWert(env, name);\n");
+    const fest = (p: string): string => p.split("\\").join("/");
+    assert.deepEqual(pc.sammleKernEnvIn(join(d, "unter"), join(d, "anders")).ohneLiteral, [`${fest(join(d, "unter", "b.mjs"))}:1`]);
+    assert.deepEqual(pc.sammleKernEnvIn(join(d, "unter"), join(d, "anders-lang-genug-fuer-abschnitt")).ohneLiteral, [`${fest(join(d, "unter", "b.mjs"))}:1`]);
+    for (const bezug of [d, `${d}/`, `${d}\\`, fest(d)]) assert.deepEqual(pc.sammleKernEnvIn(join(d, "unter"), bezug).ohneLiteral, ["unter/b.mjs:1"], bezug);
+  });
   test("das echte scripts/ enthält die Diff-Basis", () => {
     assert.ok(pc.kernEnvNamen(join(WURZEL, "scripts")).includes("FACTORY_DIFF_BASE"));
   });
@@ -709,6 +726,44 @@ describe("Berechtigungs-Ergänzung als Projektwert (#1874)", () => {
     assert.match(mit({ allow: [1] }).join("|"), /berechtigungen\.allow\[0\] muss ein nicht-leerer String/);
     assert.match(mit({ deny: ["mcp__a b"] }).join("|"), /berechtigungen\.deny\[0\] muss ein nicht-leerer String ohne Leerraum/);
     assert.match(mit({ allow: ["mcp__a", "mcp__a"] }).join("|"), /berechtigungen\.allow\[1\] „mcp__a“ steht doppelt/);
+  });
+});
+
+describe("Config-Block sandbox (#1888)", () => {
+  const gueltig = (): Record<string, unknown> => pc.ladeProjektConfig();
+  const mit = (b: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), sandbox: b });
+
+  test("sandboxAus: ohne Block leer, sonst die Listen; die echte Config trägt die Projektliterale", () => {
+    assert.deepEqual(pc.sandboxAus({}), { allowedDomains: [], envVars: [] });
+    assert.deepEqual(pc.sandboxAus({ sandbox: { allowedDomains: ["*.a.example"] } }), { allowedDomains: ["*.a.example"], envVars: [] });
+    const echt = pc.sandboxAus(pc.ladeProjektConfig());
+    assert.ok(echt.allowedDomains.includes("*.pixellab.ai"));
+    assert.deepEqual(echt.envVars, [{ name: "PIXELLAB_TOKEN", mode: "deny" }]);
+  });
+  test("ergaenzungAusText: beide Ergänzungen aus dem Dateitext, ohne Datei leer, kaputtes JSON wirft", () => {
+    const e = pc.ergaenzungAusText(JSON.stringify({ berechtigungen: { allow: ["mcp__a"] }, sandbox: { allowedDomains: ["x.example"] } }));
+    assert.deepEqual([e.allow, e.sandbox.allowedDomains], [["mcp__a"], ["x.example"]]);
+    assert.deepEqual(pc.ergaenzungAusText(null).sandbox, { allowedDomains: [], envVars: [] });
+    assert.throws(() => pc.ergaenzungAusText("{kaputt"), /kein gültiges JSON/);
+  });
+  test("sandboxAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
+    for (const falsch of ["x", [], { allowedDomains: {} }, { envVars: [{ name: "X", mode: "allow" }] }]) {
+      assert.throws(() => pc.sandboxAus({ sandbox: falsch }), /sandbox[\s\S]*Fix:/, JSON.stringify(falsch));
+    }
+  });
+  test("Form: gültiger Block und Fehlen sind ok", () => {
+    assert.deepEqual(mit({ allowedDomains: ["*.a.example"], envVars: [{ name: "A_TOKEN", mode: "deny" }] }), []);
+    assert.deepEqual(mit({}), []);
+  });
+  test("Form: fremde Schlüssel, Nicht-Listen, Leerraum, doppelte Namen und envVars ohne mode deny werden gemeldet", () => {
+    assert.match(mit("x").join("|"), /sandbox muss ein Objekt/);
+    assert.match(mit({ filesystem: {} }).join("|"), /sandbox\.filesystem ist kein bekannter Schlüssel \(erlaubt: allowedDomains, envVars\)/);
+    assert.match(mit({ allowedDomains: "a" }).join("|"), /sandbox\.allowedDomains muss eine Liste/);
+    assert.match(mit({ allowedDomains: ["a b"] }).join("|"), /sandbox\.allowedDomains\[0\] braucht einen nicht-leeren Namen ohne Leerraum/);
+    assert.match(mit({ allowedDomains: ["a.example", "a.example"] }).join("|"), /sandbox\.allowedDomains\[1\] „a\.example“ steht doppelt/);
+    assert.match(mit({ envVars: ["A"] }).join("|"), /sandbox\.envVars\[0\] braucht einen nicht-leeren Namen/);
+    assert.match(mit({ envVars: [{ name: "A", mode: "allow" }] }).join("|"), /sandbox\.envVars\[0\] muss die Form \{ "name": …, "mode": "deny" \} haben/);
+    assert.match(mit({ envVars: [{ name: "A", mode: "deny", extra: 1 }] }).join("|"), /muss die Form/);
   });
 });
 

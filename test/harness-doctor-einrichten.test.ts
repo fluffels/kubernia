@@ -23,6 +23,7 @@ const CONFIG = {
   praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
   labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
   agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
+  skills: { abschluss: "a" },
   rulesetSpiegel: "ruleset.json",
   sprache: {
     umschrift: ["ae"],

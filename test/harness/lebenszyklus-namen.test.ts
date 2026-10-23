@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lies } from "./repo-texte";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, FREMD_OWNER } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -91,7 +91,7 @@ const NAMEN = ticketNamen(AB);
 // Das eigene Präfix des Projekts darf unter der Config `AB` nirgends durchschlagen: die Erwartung kommt aus der echten Config.
 const WTP = (ladeProjektConfig().praefixe as { worktree: string }).worktree;
 const BRP = (ladeProjektConfig().praefixe as { branch: string }).branch;
-const OWNER = FREMD.repo.split("/")[0] ?? "";
+const OWNER = FREMD_OWNER;
 /** Zeile mit new RegExp( und escapeRegex( auf praefixe: der Musterbau gehört zentral in ticket-namen.mjs. */
 const verstreuterMusterbau = (text: string) => text.split("\n").some((z) => z.includes("new RegExp(") && z.includes("escapeRegex(") && z.includes("praefixe"));
 const LIES_FEHLER = (text: string) => {
@@ -116,6 +116,13 @@ describe("ticket-refs: Präfixe aus der Config", () => {
     expect(re.test("ab-12-lens-m2")).toBe(true);
     expect(re.test(`${WTP}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x")).toBe(false);
+  });
+  test("lensWorktreeName ohne Argument (Standardpfad): Muster der Projekt-Config, nicht das fremde Präfix", () => {
+    const wt = ticketNamen(ladeProjektConfig()).praefixe.worktree;
+    const re = R.lensWorktreeName();
+    expect(re.exec(`${wt}12-lens-r1`)?.[1]).toBe(`${wt}12`);
+    expect(re.test(`${wt}12-lens-x`)).toBe(false);
+    expect(re.test("ab-12-lens-r1")).toBe(false);
   });
 });
 
@@ -342,6 +349,8 @@ describe("worktreePraefix und zentrale Muster in ticketNamen", () => {
     expect(n.ticketBranchMuster.test("feature/ab-12-x")).toBe(true);
     expect(n.ticketBranchMuster.test(`${BRP}12-x`)).toBe(false);
     expect(n.ticketBranchMuster.test("ab-12-x")).toBe(false);
+    expect(n.ticketBranchMuster.test("x-feature/ab-12")).toBe(false); // nur am Namensanfang
+    expect(n.dateiMuster.test("x-ab-7.bak")).toBe(false);
   });
   test("namenOderGrund liest deps.pfad: vollständige Datei liefert Namen (Präfix zz-), unvollständige einen Grund", () => {
     const dir = mkdtempSync(join(tmpdir(), "lz-pfad-"));

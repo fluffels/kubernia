@@ -3,9 +3,9 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-takt.mjs";
-import { FREMD } from "./support/fremd-config";
+import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
-const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
+const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string; labels?: string[] };
 type Io = {
@@ -18,13 +18,13 @@ type Io = {
   itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string }) => ({ number: number } | null)[];
   frischeOffeneIssues?: (a: { repo: string; label: string; anzahl: number; mitBoard?: boolean }) => { number: number; titel: string }[];
   addToBoardTodo?: (rolle: string, nodeId: string, o: { token?: string }) => string;
+  ladeKommentare?: (nr: number, repo: string) => unknown[];
   log: (z: string) => void;
 };
 const T = raw as unknown as {
   istHarnessCommit: (c: unknown, h?: Set<number> | null) => boolean;
   zaehleSpielMerges: (c: unknown[], seit?: string | null, h?: Set<number> | null) => number;
   quotenBericht: (c: unknown[], seit?: string | null, h?: Set<number> | null) => { harness: number; spiel: number };
-  harnessTaktAusCommits: (a: { items: Item[]; commits: unknown[]; seit?: string | null; position: number; sammelIssues?: Set<number> }) => { aktion: string };
   fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io; config?: unknown }) => { fehler: boolean };
 };
 
@@ -66,8 +66,9 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
   const sammel = it(12, { title: "Harness-Härtung (gesammelt)" });
   const STATUS = "Langfuse-Status überprüfen";
 
-  function lauf(commits: unknown[], opts: { offeneStatus?: boolean; offeneSammel?: boolean } = {}) {
+  function lauf(commits: unknown[], opts: { offeneStatus?: boolean; offeneSammel?: boolean; kommentare?: unknown[] | Error } = {}) {
     const log: string[] = [];
+    const geladen: number[] = [];
     const aufrufe: { harness: { items: Item[] }[]; status: unknown[]; ghArgs: string[] } = { harness: [], status: [], ghArgs: [] };
     const io: Io = {
       ghJson: (args) => {
@@ -86,6 +87,11 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         ...(opts.offeneSammel ? [{ number: 160, title: "Langfuse-Befunde (gesammelt)", created_at: "2026-10-02T00:00:00Z", assignees: [OWNER] }] : []),
       ]],
       positionLautAgentsMd: () => 4,
+      ladeKommentare: (nr) => {
+        geladen.push(nr);
+        if (opts.kommentare instanceof Error) throw opts.kommentare;
+        return opts.kommentare ?? [];
+      },
       fuehreStatusAus: (e) => {
         aufrufe.status.push(e);
         return { ok: true, nr: 50, itemId: "I50" };
@@ -96,38 +102,83 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       },
       log: (z) => log.push(z),
     };
-    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), token: "t", io });
-    return { r, log, aufrufe };
+    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), repo: FREMD.repo, token: "t", io });
+    return { r, log, aufrufe, geladen };
   }
 
   const spiel = (n: number) => c(`feat(sim): s${n} (#${200 + n})`, "2026-10-06T10:00:00Z");
   const doku = c("docs(adr): Wächter (#102)", "2026-10-06T11:00:00Z");
+  const kommentar = (login: string, type = "User") => ({ user: { login, type } });
+  const befunde = (n: number) => Array.from({ length: n }, () => kommentar(OWNER));
 
-  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Spiel-Merges plus ein Harness-Doku-Commit (drei Ticket-Merges) holen nichts", () => {
+  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Spiel-Merges plus ein Harness-Doku-Commit (ohne Befund-Kommentare) holen nichts", () => {
     const { log, aufrufe } = lauf([spiel(1), spiel(2), doku]);
     expect(aufrufe.harness).toHaveLength(0);
     expect(log.join("\n")).toContain("Fenster ab 2026-10-01T00:01:00.000Z");
     expect(log.join("\n")).toMatch(/1 Harness- auf 2 Spiel-Merges/);
   });
 
-  test("fünf Ticket-Merges jeder Art (vier Spiel, ein Harness-Doku) holen das Sammelticket; die Liste ist nach der Status-Aktion nachgezogen (Status-Ticket vorn)", () => {
-    const { r, aufrufe } = lauf([spiel(1), spiel(2), spiel(3), spiel(4), doku], { offeneStatus: true });
+  test("zehn Befund-Kommentare (Füllstand 10/10) holen das Sammelticket; die Liste ist nach der Status-Aktion nachgezogen (Status-Ticket vorn); die Kommentare lädt der Takt nur für dieses Ticket", () => {
+    const { r, aufrufe, geladen, log } = lauf([spiel(1)], { offeneStatus: true, kommentare: befunde(10) });
     expect(aufrufe.status).toHaveLength(1);
     expect(aufrufe.harness).toHaveLength(1);
     expect(aufrufe.harness[0].items[0].number).toBe(50);
+    expect(geladen).toEqual([12]);
+    expect(log.join("\n")).toContain("Füllstand 10/10");
     expect(r.fehler).toBe(false);
   });
 
-  test("der Abschluss-Commit eines Sammeltickets (#100, geschlossen, Sammeltitel) zählt nicht: vier Spiel-Merges plus er holen nichts", () => {
-    const abschluss = c("feat(harness): Härtung komplett (#100) (#150)", "2026-10-06T12:00:00Z");
-    const { aufrufe } = lauf([spiel(1), spiel(2), spiel(3), spiel(4), abschluss]);
-    expect(aufrufe.harness).toHaveLength(0);
+  test("neun Befund-Kommentare holen nichts, auch bei vielen Merges (die Merge-Zahl zählt nicht mehr); Merges ohne Kommentare ebenso", () => {
+    const viele = [spiel(1), spiel(2), spiel(3), spiel(4), spiel(5), doku];
+    const neun = lauf(viele, { kommentare: befunde(9) });
+    expect(neun.aufrufe.harness).toHaveLength(0);
+    expect(neun.log.join("\n")).toContain("Füllstand 9/10");
+    expect(lauf(viele).aufrufe.harness).toHaveLength(0);
   });
 
-  test("auch der Commit eines noch offenen Sammeltickets (Langfuse-Titel, #160) zählt nicht", () => {
-    const offen = c("feat(harness): Langfuse-Zeilen (#160) (#161)", "2026-10-06T12:00:00Z");
-    expect(lauf([spiel(1), spiel(2), spiel(3), spiel(4), offen], { offeneSammel: true }).aufrufe.harness).toHaveLength(0);
-    expect(lauf([spiel(1), spiel(2), spiel(3), spiel(4), offen]).aufrufe.harness).toHaveLength(1); // ohne das offene Sammelticket zählt er mit
+  test("fremde, Bot- und anonyme Kommentare füllen nicht: 9 vom Owner plus 5 andere bleiben bei 9", () => {
+    const gemischt = [...befunde(9), kommentar("fremd"), kommentar("github-actions[bot]", "Bot"), kommentar("dependabot[bot]", "Bot"), { user: null }, {}];
+    const { aufrufe, log } = lauf([], { kommentare: gemischt });
+    expect(aufrufe.harness).toHaveLength(0);
+    expect(log.join("\n")).toContain("Füllstand 9/10");
+  });
+
+  test("Kommentare nicht ladbar: Warnung, keine Bewegung (fail-closed), der Lauf bleibt grün", () => {
+    const { r, aufrufe, log } = lauf([], { kommentare: new Error("HTTP 502") });
+    expect(aufrufe.harness).toHaveLength(0);
+    expect(r.fehler).toBe(false);
+    expect(log.join("\n")).toMatch(/::warning::Härtungs-Takt: Füllstand von #12 nicht ladbar.*HTTP 502/);
+    expect(log.join("\n")).toContain("Füllstand ?/10");
+  });
+
+  test("steht das offene, ungeclaimte Sammelticket in der REST-Liste, aber nicht im Board: Warnung Board-Verzug statt stillem Nichts, nichts wird geladen", () => {
+    const log: string[] = [];
+    let geladen = 0;
+    const offen = (assignees: unknown[]) => [[{ number: 77, title: "Harness-Härtung (gesammelt)", created_at: "2026-10-02T00:00:00Z", assignees }]];
+    const io: Io = {
+      ghJson: () => [[]],
+      loadItems: nurFactory([it(10), it(11)]),
+      loadOpenIssuePages: () => offen([]),
+      positionLautAgentsMd: () => 4,
+      itemsUeberIssues: () => [{ number: 77 }],
+      ladeKommentare: () => ((geladen += 1), []),
+      fuehreStatusAus: () => ({ ok: true }),
+      fuehreHarnessAus: () => true,
+      log: (z) => log.push(z),
+    };
+    const jetzt = new Date("2026-10-08T12:00:00Z");
+    const r = T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io });
+    expect(geladen).toBe(0);
+    expect(r.fehler).toBe(false);
+    expect(log.join("\n")).toMatch(/::warning::Board-Verzug: #77 fehlt in der Board-Liste/);
+    // ohne offenes Sammelticket keine Verzugs-Warnung
+    log.length = 0;
+    T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io: { ...io, loadOpenIssuePages: () => [[]] } });
+    expect(log.join("\n")).not.toContain("Board-Verzug");
+    // ein geclaimtes Sammelticket ist kein Verzug
+    log.length = 0;
+    T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io: { ...io, loadOpenIssuePages: () => offen([{ login: OWNER }]) } });
+    expect(log.join("\n")).not.toContain("Board-Verzug");
   });
 
   describe("Zählfenster beginnt mit dem Anlegen des jüngsten Status-Tickets (#1628)", () => {
@@ -176,14 +227,15 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       loadItems: nurFactory([it(10), it(11), sammel, it(50, { title: STATUS })]),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
       positionLautAgentsMd: () => 4,
+      ladeKommentare: () => befunde(10),
       fuehreStatusAus: () => ({ ok: statusOk }),
       fuehreHarnessAus: () => harnessOk,
       log: () => undefined,
     });
     const jetzt = new Date("2026-10-08T12:00:00Z");
-    expect(T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk(true, true) }).fehler).toBe(false);
-    expect(T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk(false, true) }).fehler).toBe(true);
-    expect(T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk(true, false) }).fehler).toBe(true);
+    expect(T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io: mk(true, true) }).fehler).toBe(false);
+    expect(T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io: mk(false, true) }).fehler).toBe(true);
+    expect(T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io: mk(true, false) }).fehler).toBe(true);
   });
 
   describe("Status- und Harness-Takt arbeiten auf der Factory-Liste (#1729)", () => {
@@ -192,6 +244,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       loadItems: (rolle) => (rolle === "factory" ? factory : produkt),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
       positionLautAgentsMd: () => 4,
+      ladeKommentare: () => befunde(10),
       fuehreStatusAus: (_e, ctx) => (gesehen.status.push((ctx as { items: Item[] }).items), { ok: true }),
       fuehreHarnessAus: () => ((gesehen.harness += 1), true),
       log: () => undefined,
@@ -202,7 +255,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([it(10), it(11), sammel], [it(1)], nur) });
       expect(nur.harness).toBe(0);
       const auf = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([], [it(10), it(11), sammel], auf) });
+      T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io: mk([], [it(10), it(11), sammel], auf) });
       expect(auf.harness).toBe(1);
     });
     test("das Status-Ticket bekommt die Factory-Liste, nie die Produkt-Liste", () => {
@@ -316,7 +369,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
     expect(r.fehler).toBe(true);
     expect(log.join("\n")).toMatch(/::error::Board-Wächter: #11 nicht aufgenommen: .*Could not resolve/);
   });
-  test("scheitert die GraphQL-Gegenprobe, ist der Lauf rot und nichts wird aufgenommen", () => {
+  test("scheitert die GraphQL-Zweitabfrage, ist der Lauf rot und nichts wird aufgenommen", () => {
     const { r, zaehler } = lauf({ offene: [11], imBoard: [], graphql: () => { throw new Error("rate limit"); } });
     expect(r.fehler).toBe(true);
     expect(zaehler.add).toEqual([]);
@@ -335,7 +388,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
       expect(zaehler.graphql).toBe(0);
       expect(r.fehler).toBe(false);
     });
-    test("die GraphQL-Gegenprobe fragt beide Boards; kennt nur das Produkt-Board das Item, wird nicht aufgenommen", () => {
+    test("die GraphQL-Zweitabfrage fragt beide Boards; kennt nur das Produkt-Board das Item, wird nicht aufgenommen", () => {
       const { zaehler } = lauf({ offene: [11], imBoard: [], graphql: () => [{ number: 11 }] });
       expect(zaehler.graphql).toBe(2);
       expect(zaehler.graphqlRollen).toEqual(["produkt", "factory"]);
@@ -400,7 +453,7 @@ describe("fuehreHarnessAus: Fehlertext und Rückgabe (#1609)", () => {
   });
 });
 
-describe("Gegenprobe vor dem Anlegen des Status-Tickets (#1866)", () => {
+describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
   const STATUS = "Langfuse-Status überprüfen";
   // Fünf Commits seit dem Vorgänger: der Cron entscheidet „anlegen“ (kein offenes Status-Ticket in der REST-Liste).
   const lauf = (frisch: Io["frischeOffeneIssues"], dry = false) => {

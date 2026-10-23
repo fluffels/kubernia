@@ -141,10 +141,17 @@ jobs:
       # Offline-Build headless in Chromium und prüfen, dass er ohne Konsolen-/
       # Laufzeit-Fehler hochfährt (dist-offline/index.html ist hier schon da).
       # Timeout (#1425): der Schritt hing einmal 37 Minuten ohne Fortschritt; Normalläufe dauerten
-      # 0:24-4:39 min (letzte 8 Läufe), Obergrenze = rund das Doppelte des Maximums.
+      # 0:24-4:39 min (letzte 8 Läufe, Maximum 4:39). Ein Hänger wird nach 6 min je Versuch
+      # abgebrochen und einmal wiederholt (2 Versuche, 10 s Pause); Obergrenze des Schritts 14 min.
       - name: Playwright-Browser installieren (Chromium)
-        timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 14
+        run: |
+          for versuch in 1 2; do
+            if timeout 360 npx playwright install --with-deps chromium; then exit 0; fi
+            echo "Versuch $versuch fehlgeschlagen oder hing"
+            sleep 10
+          done
+          exit 1
 
       - name: Boot-Smoke-Test (headless, #391)
         run: npm run test:smoke

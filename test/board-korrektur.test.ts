@@ -3,13 +3,13 @@
  * Reines Node-Tooling ohne Declaration-File: Namespaces einmal über `unknown` auf lokale Interfaces (Technik wie test/board.test.ts). */
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { FREMD } from "./support/fremd-config";
+import { FREMD_OWNER } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPlace from "../scripts/board-place.mjs";
 
-const OWNER = FREMD.repo.split("/")[0] ?? "";
+const OWNER = FREMD_OWNER;
 
 type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Korrektur = { nr: number; id: string; afterId: string | null; vonRang: number; nachRang: number };

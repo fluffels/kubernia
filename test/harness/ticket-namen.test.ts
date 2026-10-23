@@ -38,6 +38,8 @@ type Namen = {
   lensNameKern: string;
   ticketAus: (t: string) => number | null;
   patchMuster: { ticketRunde: RegExp; voll: RegExp; delta: RegExp };
+  dateiMuster: RegExp;
+  ticketBranchMuster: RegExp;
 };
 const docsGen = docsGenRaw as unknown as { escapeRegex: (t: string) => string };
 const N = namenRaw as unknown as {
@@ -102,6 +104,12 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(re.exec("ab-12-lens-m2")?.[1]).toBe("ab-12");
     expect(re.test(`${ECHT.praefixe.worktree}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x1")).toBe(false);
+  });
+  test("dateiMuster und ticketBranchMuster sind am Namensanfang verankert: ein vorangestelltes Präfix passt nicht", () => {
+    expect(n.dateiMuster.test("ab-7.bak")).toBe(true);
+    expect(n.dateiMuster.test("x-ab-7.bak")).toBe(false);
+    expect(n.ticketBranchMuster.test("feature/ab-12")).toBe(true);
+    expect(n.ticketBranchMuster.test("x-feature/ab-12")).toBe(false);
   });
   test("Regex-Metazeichen im Präfix werden maskiert", () => {
     const m = N.ticketNamen({ ...AB, praefixe: { branch: "feature/a.b-", worktree: "a.b-" } });

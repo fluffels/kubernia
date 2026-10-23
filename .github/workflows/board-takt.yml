@@ -7,8 +7,8 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 #    dasselbe, sobald seit dem Anlegen des jüngsten Status-Tickets mindestens 50 Ticket-Merges (ohne Bots) dazukamen (Fr–So ruht
 #    der Push-Auslöser, der Montag setzt zurück; #1628). Angelegt wird nur mit einem
 #    Mindestabstand von 24 Stunden zum Abschluss des Vorgängers (#1382).
-# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach 5 Ticket-Merges jeder Art (Spiel und Agentic, ohne Bots, ohne Sammelticket-Merges; Härtungs-Takt) seit dem Abschluss des letzten holt derselbe Lauf das
-#    ungeclaimte hinter den Kopf (#1349). Außerdem schiebt er es bei jedem Lauf auf die Position laut AGENTS.md zurück, wenn es
+# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab 10 Befund-Kommentaren (vertraute Nicht-Bot-Autoren; Härtungs-Takt, Füllstand) holt derselbe Lauf das
+#    ungeclaimte hinter den Kopf (#1349, #1888). Außerdem schiebt er es bei jedem Lauf auf die Position laut AGENTS.md zurück, wenn es
 #    dahinter steht (Selbstkorrektur, nur nach vorn, nie in den Kopf).
 # Die Entscheidungen stehen in scripts/board-takt.mjs und scripts/langfuse-takt.mjs (pur, getestet, idempotent: kein gespeicherter
 # Zähler, jedes Mal aus offenen Issues, Commit-Liste und Board-Liste abgeleitet).

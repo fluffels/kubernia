@@ -9,9 +9,9 @@ import * as raw from "../scripts/sammelticket-anlegen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 import { echteSpezifikation } from "./support/echte-sprache";
-import { FREMD } from "./support/fremd-config";
+import { FREMD_OWNER } from "./support/fremd-config";
 
-const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
+const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
 
 type Args = { art: string; vorgaenger: number | null; top: boolean; dry: boolean };
 type User = { login: string; type?: string } | null;

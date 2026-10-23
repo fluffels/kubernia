@@ -14,9 +14,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { relativeImporte } from "./hook-importe";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 
@@ -38,48 +36,27 @@ interface BesitzEintrag {
 }
 interface Lib {
   EXTRAKTION_PFAD: string;
-  EXTRAKTION_ARTEN: Record<string, ((p: string) => boolean) | null>;
+  extraktionsArten: (quelle: string) => Record<string, ((p: string) => boolean) | null>;
   MITZIEHEND: string[];
   RINGE: string[];
   NUR_FACTORY: string[];
   musterRegex: (muster: string) => RegExp;
   artVon: (liste: Liste, pfad: string) => string | null;
-  pruefeExtraktion: (liste: Liste, opt: { getrackt: string[]; besitz: BesitzEintrag[]; ringe?: string[]; nurFactory?: string[] }) => string[];
+  pruefeExtraktion: (liste: Liste, opt: { getrackt: string[]; besitz: BesitzEintrag[]; quelle?: string; ringe?: string[]; nurFactory?: string[] }) => string[];
   istGanzeDatei: (e: BesitzEintrag) => boolean;
+  zielDatei: (von: string, spec: string, getrackt: Set<string>) => string | null;
+  bezugsTests: (getrackt: string[], lies: (p: string) => string | null, ganzerBesitz: Set<string>) => string[];
+  zuordnungsLuecken: (liste: Liste, bezug: string[]) => string[];
+  lesebezuege: (von: string, text: string, getrackt: Set<string>) => string[];
+  huellenVerstoesse: (liste: Liste, getrackt: string[], lies: (p: string) => string | null, ganzerBesitz: Set<string>) => string[];
+  testHuelle: (verstoesse: string[], ausnahmen: Record<string, string>, quelle: string) => string[];
 }
 // Begründete Ausnahme wie in kern-reinheit.test.ts: das .mjs hat kein Declaration-File.
-const { EXTRAKTION_PFAD, EXTRAKTION_ARTEN, MITZIEHEND, RINGE, NUR_FACTORY, musterRegex, artVon, pruefeExtraktion, istGanzeDatei } = rawBesitz as unknown as Lib;
+const { EXTRAKTION_PFAD, extraktionsArten, MITZIEHEND, RINGE, NUR_FACTORY, musterRegex, artVon, pruefeExtraktion, istGanzeDatei, zielDatei, bezugsTests, zuordnungsLuecken, lesebezuege, huellenVerstoesse, testHuelle } =
+  rawBesitz as unknown as Lib;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const PROJEKT_CONFIG = ".factory/projekt.json";
-const TEST_DATEI = /^test\/.*\.test\.ts$/;
-const CODE_ENDUNG = /\.(?:mjs|cjs|js|ts)$/;
-const ENDUNGEN = ["", ".ts", ".mjs", ".cjs", ".js"];
-
-/** Auflösung eines relativen Spezifizierers auf eine getrackte Datei (roh, dann `.ts`, `.mjs`, `.cjs`, `.js`); keine Datei: `null`. */
-export function zielDatei(von: string, spec: string, getrackt: Set<string>): string | null {
-  const roh = posix.normalize(posix.join(posix.dirname(von), spec));
-  for (const e of ENDUNGEN) if (getrackt.has(roh + e)) return roh + e;
-  return null;
-}
-
-/** Testdateien mit Bezug zum Besitz: Import, der auf eine Ganz-Datei-Besitz-Einheit auflöst, oder deren Pfad wörtlich im Text. */
-export function bezugsTests(getrackt: string[], lies: (p: string) => string | null, ganzerBesitz: Set<string>): string[] {
-  const menge = new Set(getrackt);
-  return getrackt.filter((von) => {
-    if (!TEST_DATEI.test(von)) return false;
-    const text = lies(von) ?? "";
-    if (relativeImporte(text).some((spec) => ganzerBesitz.has(zielDatei(von, spec, menge) ?? ""))) return true;
-    return [...ganzerBesitz].some((p) => text.includes(p));
-  });
-}
-
-/** Meldungen (leer = grün): jede Testdatei mit Bezug ist als `kern-test` oder `projekt-test` eingeordnet. */
-export function zuordnungsLuecken(liste: Liste, bezug: string[]): string[] {
-  return bezug
-    .filter((p) => !["kern-test", "projekt-test"].includes(artVon(liste, p) ?? ""))
-    .map((p) => `${p}: in ${EXTRAKTION_PFAD} als kern-test (zieht ins Factory-Repo) oder projekt-test (bleibt) eintragen`);
-}
 
 const DATEN_DATEI = "Daten-Datei des Kern-Wächters (Baseline oder Abdeckung): ihre Werte sind Projektzustand, der Export entscheidet über Mitgabe oder Neuerzeugung (#1880)";
 /** Offene Ausnahmen der Test-Hülle: "<von> -> <nach>" → Grund mit Ticket (K6 #1876 bis #1879, K7 #1880). Darf nur schrumpfen. */
@@ -93,72 +70,6 @@ export const TEST_HUELLE_AUSNAHMEN: Record<string, string> = {
   "test/harness/skills-sync.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
 };
 
-const LITERAL = /(?:"[^"\\\n]*"|'[^'\\\n]*'|`[^`$\\\n]*`)/;
-const LITERAL_FOLGE = new RegExp(`${LITERAL.source}(?:\\s*,\\s*${LITERAL.source})*`, "g");
-
-/** Lese-Bezüge (K2): getrackte Dateien unter `test/`, die ein String-Literal einer Test-Datei benennt, relativ zu ihrem Ordner oder zur
- *  Wurzel: das Literal selbst (`join(__dirname, "./fixtures/x.json")`, `new URL("../fixtures/x.json", …)`) oder aufeinanderfolgende
- *  Literale eines Aufrufs, mit `/` verbunden (`join(WURZEL, "test", "fixtures", "x.json")`). Grenze: ein Pfad aus Variablen oder ein
- *  Literal außerhalb von `test/` bleibt unsichtbar (Projekt-Texte, K7). */
-export function lesebezuege(von: string, text: string, getrackt: Set<string>): string[] {
-  const kandidaten = new Set<string>();
-  const code = text.split("\n").filter((z) => !/^\s*(?:\/\/|\/\*|\*)/.test(z)).join("\n");
-  for (const folge of code.matchAll(LITERAL_FOLGE)) {
-    const teile = [...folge[0].matchAll(new RegExp(LITERAL.source, "g"))].map((m) => m[0].slice(1, -1)).filter((t) => t !== "");
-    for (let i = 0; i < teile.length; i++) {
-      for (let j = i; j < Math.min(teile.length, i + 6); j++) kandidaten.add(teile.slice(i, j + 1).join("/"));
-    }
-  }
-  const out = new Set<string>();
-  for (const c of kandidaten) {
-    for (const basis of [posix.dirname(von), ""]) {
-      const p = posix.normalize(posix.join(basis, c));
-      if (p.startsWith("test/") && p !== von && getrackt.has(p)) out.add(p);
-    }
-  }
-  return [...out];
-}
-
-/** Lokale Importe und Lese-Bezüge (`lesebezuege`) aller mitziehenden Test-Dateien (Art `kern-test`, `test-hilfe`, `fixture` mit
- *  Code-Endung), die weder auf Besitz noch auf die Projekt-Config noch auf einen Eintrag mit mitziehender Art zeigen: "<von> -> <nach>".
- *  Dateien ohne Text werden übersprungen. */
-export function huellenVerstoesse(liste: Liste, getrackt: string[], lies: (p: string) => string | null, ganzerBesitz: Set<string>): string[] {
-  const menge = new Set(getrackt);
-  const out: string[] = [];
-  for (const von of getrackt) {
-    const art = artVon(liste, von) ?? "";
-    if (!["kern-test", "test-hilfe", "fixture"].includes(art) || !CODE_ENDUNG.test(von)) continue;
-    const text = lies(von);
-    if (text === null) continue;
-    const ziele = [...relativeImporte(text).map((spec) => zielDatei(von, spec, menge)), ...lesebezuege(von, text, menge)];
-    for (const nach of ziele) {
-      if (nach === null) continue;
-      const erlaubt = ganzerBesitz.has(nach) || nach === PROJEKT_CONFIG || MITZIEHEND.includes(artVon(liste, nach) ?? "");
-      if (!erlaubt && !out.includes(`${von} -> ${nach}`)) out.push(`${von} -> ${nach}`);
-    }
-  }
-  return out;
-}
-
-/** Meldungen (leer = grün) der Test-Hülle: Verstoß ohne Ausnahme, Ausnahme ohne Ticket, Ausnahme auf die Projekt-Quelle, veraltete Ausnahme. */
-export function testHuelle(verstoesse: string[], ausnahmen: Record<string, string>, quelle: string): string[] {
-  const out: string[] = [];
-  for (const v of verstoesse) {
-    if (v in ausnahmen) continue;
-    const nach = v.split(" -> ")[1] ?? "";
-    out.push(
-      nach.startsWith(`${quelle}/`)
-        ? `${v}: ${quelle}/ ist Projektcode: den Test als projekt-test einordnen oder die Abhängigkeit durch ein Fixture ersetzen`
-        : `${v}: Ziel als test-hilfe oder fixture eintragen (wenn projektfrei), den Import entfernen oder den Test als projekt-test einordnen`,
-    );
-  }
-  for (const [id, grund] of Object.entries(ausnahmen)) {
-    if (!/#\d+/.test(grund)) out.push(`${id}: Ausnahme ohne Ticket (#<nr>) im Grund`);
-    if ((id.split(" -> ")[1] ?? "").startsWith(`${quelle}/`)) out.push(`${id}: eine Ausnahme auf ${quelle}/ ist nie erlaubt`);
-    if (!verstoesse.includes(id)) out.push(`${id}: Ausnahme veraltet (Import entfällt oder Ziel ist eingetragen), Eintrag entfernen`);
-  }
-  return out;
-}
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -167,7 +78,7 @@ const eintrag = (muster: string, art: string, grund = "Grund"): ExtraktionEintra
 const ringEintrag = (ring: string, art = "nur-factory"): ExtraktionEintrag => ({ ring, art, grund: "Grund" });
 const liste = (...eintraege: ExtraktionEintrag[]): Liste => ({ version: 1, eintraege });
 const GETRACKT = ["scripts/a.mjs", "test/a.test.ts", "test/b.test.ts", "test/support/h.ts", "test/support/f.json", "src/p.ts", "package.json", ".factory/produkt/README.md"];
-const OPT = { getrackt: GETRACKT, besitz: [ein("scripts/a.mjs")], ringe: ["kern", "oberflaeche"], nurFactory: ["oberflaeche"] };
+const OPT = { getrackt: GETRACKT, besitz: [ein("scripts/a.mjs")], quelle: "src", ringe: ["kern", "oberflaeche"], nurFactory: ["oberflaeche"] };
 const GUT = liste(
   eintrag("test/a.test.ts", "kern-test"),
   eintrag("test/b.test.ts", "projekt-test"),
@@ -197,7 +108,7 @@ describe("Extraktionsliste: Muster und Struktur (#1875)", () => {
     assert.equal(artVon(liste(ringEintrag("oberflaeche")), "oberflaeche"), null);
   });
   test("die geschlossene Art-Liste: nur projekt-test zieht nicht mit", () => {
-    assert.deepEqual(Object.keys(EXTRAKTION_ARTEN).sort(), ["factory-seite", "fixture", "infrastruktur", "infrastruktur-anteil", "kern-test", "nur-factory", "produkt-wurzel", "projekt-test", "test-hilfe"]);
+    assert.deepEqual(Object.keys(extraktionsArten("src")).sort(), ["factory-seite", "fixture", "infrastruktur", "infrastruktur-anteil", "kern-test", "nur-factory", "produkt-wurzel", "projekt-test", "test-hilfe"]);
     assert.ok(!MITZIEHEND.includes("projekt-test") && MITZIEHEND.includes("kern-test") && MITZIEHEND.includes("nur-factory"));
   });
   test("eine gültige Liste ist grün", () => {
@@ -256,9 +167,9 @@ describe("Extraktionsliste: Muster und Struktur (#1875)", () => {
   });
   test("Standardwerte: ohne ringe/nurFactory gilt die Ring-Tabelle der Lib", () => {
     assert.ok(NUR_FACTORY.every((r) => RINGE.includes(r)));
-    const liefert = pruefeExtraktion(ohne(GUT, (e) => e.ring !== undefined), { getrackt: GETRACKT, besitz: [] });
+    const liefert = pruefeExtraktion(ohne(GUT, (e) => e.ring !== undefined), { getrackt: GETRACKT, besitz: [], quelle: "src" });
     assert.match(liefert.join("\n"), new RegExp(`ring ${NUR_FACTORY[0] ?? "?"}: Ring ist nur Factory`));
-    assert.doesNotMatch(pruefeExtraktion(mit(GUT, ringEintrag("kern")), { getrackt: GETRACKT, besitz: [] }).join("\n"), /unbekannter Ring/, "kern ist ein Ring der Lib");
+    assert.doesNotMatch(pruefeExtraktion(mit(GUT, ringEintrag("kern")), { getrackt: GETRACKT, besitz: [], quelle: "src" }).join("\n"), /unbekannter Ring/, "kern ist ein Ring der Lib");
   });
 });
 
@@ -375,6 +286,80 @@ describe("Extraktionsliste: Bezug, Zuordnung und Test-Hülle (#1875)", () => {
   });
 });
 
+describe("Extraktionsliste: Quellwurzel als Parameter und Vorkompilierung (#1888)", () => {
+  const getrackt = ["scripts/a.mjs", "src/p.ts", "lib/p.ts", "test/a.test.ts"];
+  const opt = { getrackt, besitz: [ein("scripts/a.mjs")], ringe: ["kern"], nurFactory: [] as string[] };
+  const l = (muster: string): Liste => liste(eintrag(muster, "infrastruktur"));
+
+  test("Infrastruktur liegt weder in test/, docs/ noch in der Quellwurzel der Config: quelle lib macht lib/ zum Projektcode, src/ zur Infrastruktur", () => {
+    assert.match(pruefeExtraktion(l("lib/p.ts"), { ...opt, quelle: "lib" }).join("\n"), /lib\/p\.ts liegt nicht an einem Ort der art infrastruktur/);
+    assert.doesNotMatch(pruefeExtraktion(l("src/p.ts"), { ...opt, quelle: "lib" }).join("\n"), /liegt nicht an einem Ort/);
+    assert.match(pruefeExtraktion(l("src/p.ts"), { ...opt, quelle: "src" }).join("\n"), /src\/p\.ts liegt nicht an einem Ort der art infrastruktur/);
+    assert.doesNotMatch(pruefeExtraktion(l("lib/p.ts"), { ...opt, quelle: "src" }).join("\n"), /liegt nicht an einem Ort/);
+  });
+  test("extraktionsArten(quelle): dieselben Arten für jede Quellwurzel, nur der Ort der Infrastruktur folgt ihr", () => {
+    assert.deepEqual(Object.keys(extraktionsArten("lib")), Object.keys(extraktionsArten("src")));
+    assert.equal(extraktionsArten("lib").infrastruktur?.("src/x.ts"), true);
+    assert.equal(extraktionsArten("lib").infrastruktur?.("lib/x.ts"), false);
+    assert.equal(extraktionsArten("lib")["infrastruktur-anteil"]?.("docs/x.md"), false);
+  });
+  test("ohne Quellwurzel bricht die Prüfung ab (der Kern kennt keinen festen Namen)", () => {
+    assert.throws(() => pruefeExtraktion(l("src/p.ts"), opt), /quelle .* fehlt/);
+    assert.throws(() => pruefeExtraktion(l("src/p.ts"), { ...opt, quelle: "" }), /quelle .* fehlt/);
+  });
+  test("artVon: vorkompiliert, gleiches Ergebnis wie die Einzelprüfung; die Muster werden je Liste einmal gelesen", () => {
+    let zugriffe = 0;
+    const gezaehlt = (muster: string, art: string): ExtraktionEintrag => ({ get muster(): string { zugriffe++; return muster; }, art, grund: "g" });
+    const gross = liste(gezaehlt("test/*.test.ts", "kern-test"), gezaehlt("scripts/*.mjs", "infrastruktur"), gezaehlt("src/*", "infrastruktur"));
+    const ist = ["test/a.test.ts", "scripts/a.mjs", "src/p.ts", "nichts.txt"].map((p) => artVon(gross, p));
+    assert.deepEqual(ist, ["kern-test", "infrastruktur", "infrastruktur", null]);
+    const nachErstem = zugriffe;
+    for (let i = 0; i < 20; i++) artVon(gross, "test/a.test.ts");
+    assert.equal(zugriffe, nachErstem, "weitere Aufrufe lesen die Muster nicht erneut");
+    const naiv = (p: string): string | null => GUT.eintraege.find((e) => e.muster !== undefined && musterRegex(e.muster).test(p))?.art ?? null;
+    for (const p of [...GETRACKT, "nichts.txt", "test/x.test.ts"]) assert.equal(artVon(GUT, p), naiv(p), p);
+  });
+  test("artVon: ein neuer Eintrag oder eine ausgetauschte Eintragsliste ist beim nächsten Aufruf sichtbar", () => {
+    const l2: Liste = liste(eintrag("test/a.test.ts", "kern-test"));
+    assert.equal(artVon(l2, "test/b.test.ts"), null);
+    l2.eintraege.push(eintrag("test/b.test.ts", "projekt-test"));
+    assert.equal(artVon(l2, "test/b.test.ts"), "projekt-test", "angehängt");
+    l2.eintraege = [eintrag("test/b.test.ts", "kern-test"), eintrag("test/c.test.ts", "kern-test")];
+    assert.equal(artVon(l2, "test/b.test.ts"), "kern-test", "ausgetauscht (gleiche Länge)");
+  });
+});
+
+describe("Test-Hülle: erlaubte Ziel-Arten (#1888)", () => {
+  const text: Record<string, string> = {
+    "test/k.test.ts": 'import "../package.json"; import "../docs/s.md"; import "../scripts/i.mjs"; import "./b.test"; import "../src/p"; import "./loose";\n',
+    "package.json": "{}",
+    "docs/s.md": "",
+    "scripts/i.mjs": "",
+    "test/b.test.ts": "",
+    "test/loose.ts": "",
+    "src/p.ts": "",
+  };
+  const g = Object.keys(text);
+  const lesen = (p: string): string | null => text[p] ?? null;
+  const l = liste(
+    eintrag("test/k.test.ts", "kern-test"),
+    eintrag("package.json", "infrastruktur-anteil"),
+    eintrag("docs/s.md", "factory-seite"),
+    eintrag("scripts/i.mjs", "infrastruktur"),
+    eintrag("test/b.test.ts", "projekt-test"),
+  );
+
+  test("Entscheidung: infrastruktur-anteil (Vorlage), factory-seite (Kopie) und infrastruktur sind erlaubte Ziele eines Kern-Tests", () => {
+    assert.ok(["infrastruktur-anteil", "factory-seite", "infrastruktur"].every((a) => MITZIEHEND.includes(a)));
+    assert.ok(!huellenVerstoesse(l, g, lesen, new Set()).some((v) => /package\.json|docs\/s\.md|scripts\/i\.mjs/.test(v)));
+  });
+  test("verboten bleiben ein projekt-test und eine nicht eingeordnete Datei (src/ und test/loose.ts); nur-factory ist nie Muster-Ziel", () => {
+    assert.deepEqual(huellenVerstoesse(l, g, lesen, new Set()), ["test/k.test.ts -> test/b.test.ts", "test/k.test.ts -> src/p.ts", "test/k.test.ts -> test/loose.ts"]);
+    assert.ok(MITZIEHEND.includes("nur-factory") && !MITZIEHEND.includes("projekt-test"));
+    assert.equal(extraktionsArten("src")["nur-factory"], null, "nur-factory hat keinen Ort: er steht nur als Ring-Eintrag");
+  });
+});
+
 // ── Echtes Repo ───────────────────────────────────────────────────────────────
 
 const lesenWurzel = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? readFileSync(WURZEL + pfad, "utf8") : null);
@@ -388,7 +373,7 @@ const quelle = (JSON.parse(readFileSync(WURZEL + PROJEKT_CONFIG, "utf8")) as { s
 
 describe("Extraktionsliste im echten Repo (#1875)", () => {
   test("die Liste ist gültig: Struktur, Orte, kein Eintrag auf Besitz, Ring oberflaeche und Wurzel-Dateien", () => {
-    assert.deepEqual(pruefeExtraktion(listeEcht, { getrackt: getracktEcht, besitz: besitzEcht }), []);
+    assert.deepEqual(pruefeExtraktion(listeEcht, { getrackt: getracktEcht, besitz: besitzEcht, quelle }), []);
   });
   test("jede Testdatei mit Bezug zum Besitz ist als kern-test oder projekt-test eingeordnet", () => {
     const bezug = bezugsTests(getracktEcht, lesenWurzel, ganzerBesitz);

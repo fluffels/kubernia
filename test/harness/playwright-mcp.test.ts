@@ -83,9 +83,9 @@ describe("planLaunch – Startentscheidung des Launchers", () => {
     assert.deepEqual(plan, { mode: "npx", spec: `${launcher.PKG}@1.2.3` });
   });
 
-  test("veraltete lokale Installation (Haupt-Checkout hinter dem Lockfile) → NICHT lokal, sondern npx gepinnt", () => {
+  test("abweichende lokale Installation (Haupt-Checkout hinter dem Lockfile) → lokal mit Abweichungs-Vermerk, nicht npx", () => {
     const plan = launcher.planLaunch({ lockVersion: "1.2.4", installed: { version: "1.2.3", binPath: "/x/cli.js" } });
-    assert.deepEqual(plan, { mode: "npx", spec: `${launcher.PKG}@1.2.4` });
+    assert.deepEqual(plan, { mode: "local", binPath: "/x/cli.js", abweichung: { lokal: "1.2.3", lock: "1.2.4" } });
   });
 
   test("Lockfile ohne Eintrag → Fehler statt ungepinntem npx", () => {

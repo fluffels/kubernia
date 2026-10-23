@@ -2,13 +2,11 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as laeufeRoh from "../scripts/subagent-laeufe.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRoh from "../scripts/ticket-namen.mjs";
-import { FREMD } from "./support/fremd-config";
+import { FREMD, FREMD_NAMEN } from "./support/fremd-config";
 
 type Row = Record<string, unknown>;
 // Die Namen kommen aus der Fremd-Config; die Wrapper reichen sie durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const NAMEN = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen(FREMD);
+const NAMEN = FREMD_NAMEN;
 const WT = FREMD.praefixe.worktree;
 const LENS = FREMD.agenten.lens;
 const raw = laeufeRoh as object;

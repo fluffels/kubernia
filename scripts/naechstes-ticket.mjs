@@ -4,7 +4,7 @@
  * Blocker, Branch, Worktree und offenen PR einzeln prüfen“ (AGENTS.md § Auswahl des nächsten Tickets).
  *
  *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten; nur das Factory- bzw. nur das Produkt-Board (#1552, #1729); Notfälle 🚨/🔒 zählen in beiden
- *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel --json   # { bereich, ticket, uebersprungen, hinweise? }
+ *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel --json   # { bereich, ticket, uebersprungen, verzug, hinweise?, reparieren? } (`verzug`: Nummern des Board-Verzugs, leere Liste ohne Verzug)
  *   node scripts/naechstes-ticket.mjs --ticket <nr>   # Einzelprüfung einer vorgegebenen Nummer (#1621): alle Kriterien außer Status und Bereich; Exit 1 = nicht frei, Grund in der Ausgabe
  *
  * Ohne `--bereich` und ohne `--ticket` ist der Aufruf ein Fehler (Exit 2): es gibt keinen Auswahlmodus über beide Seiten. Zwei Boards (ADR 0022 F11, #1729):
@@ -17,7 +17,7 @@
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
- * `<praefixe.branch><nr>-*` · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
+ * `<praefixe.branch><nr>-*` · das ungeclaimte Harness-Sammelticket erst ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren (Härtungs-Takt, `fuellstand`; `--ticket` umgeht das) · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
  * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: Ziel- und
  * Kriterien-Abschnitt mit Negativfall, Namen aus `sprache.spezifikation` der Config; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
@@ -26,12 +26,13 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
-import { istFremdeingang } from "./fremdtext-lib.mjs";
+import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
+import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, befundKommentare } from "./spielquote-lib.mjs";
 import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -138,15 +139,17 @@ export function imBereich(item, bereich, config) {
 /**
  * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
+ * `fuellstand(nr)`: Füllstand des Harness-Sammeltickets (`befundKommentare`) oder `{ fehler }`; das ungeclaimte Harness-Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
+ * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, nur = () => true, namen, config }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, fuellstand = FUELLSTAND_OHNE_LADER, hartAb = 0, nur = () => true, namen, config }) {
   labelAus(config, "harness"); // fail-fast, auch ohne Bereich: ohne Config gibt es keine Auswahl
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const uebersprungen = [];
   for (const item of items) {
     if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich, config) || !nur(item)) continue;
-    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, hartAb, config });
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, fuellstand, hartAb, config });
     if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
     else return { ticket: ticketVon(item, r), uebersprungen };
   }
@@ -219,9 +222,18 @@ const ticketVon = (item, r) => ({ nr: item.number, titel: item.title, ...(r.best
 const spezAusgenommen = (t) => istKopfItem({ title: t.titel }) || SAMMELTICKET_TITEL_LISTE.includes(t.titel) || istEpicTitel(t.titel);
 
 const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kein Lader)" });
+const FUELLSTAND_OHNE_LADER = () => ({ fehler: "kein Lader" });
+
+/** Härtungs-Takt: Grund, das ungeclaimte Harness-Sammelticket noch nicht zu nehmen (`""` = nehmen). `fuellstand === null` schaltet die Prüfung ab (Einzelprüfung `--ticket`, Mängelliste). */
+function fuellstandGrund(c, fuellstand) {
+  if (fuellstand === null || c.title !== SAMMELTICKET_TITEL) return "";
+  const f = fuellstand(c.number);
+  if (typeof f !== "number") return `Füllstand nicht prüfbar (${f.fehler})`;
+  return f < HARNESS_TAKT_KOMMENTARE ? `füllt sich (${f}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare)` : "";
+}
 
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
-function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, config }) {
+function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config }) {
   if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
   if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
   const offeneBlocker = blockerNummern(c.body, spracheAus(config).spezifikation).filter((n) => offene.has(n) && n !== c.number);
@@ -233,6 +245,8 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, hartAb, confi
   if (offenesFenster) return { grund: messfensterGrund(offenesFenster, { closedAt: null, n: 0 }) };
   if (c.blockedBy > 0) return { grund: "offener Blocker laut GitHub-Abhängigkeit" };
   if (belegt.has(c.number)) return { grund: "Branch, Worktree oder offener PR vorhanden" };
+  const fuell = fuellstandGrund(c, fuellstand);
+  if (fuell) return { grund: fuell };
   const spez = pruefeEingang({ nummer: c.number, titel: c.title, body: c.body }, { ausgenommen: spezAusgenommen, hartAb, sprache: spracheAus(config).spezifikation });
   if (spez.art === "hart") return { grund: `Spezifikation unvollständig: ${spez.fehlt.join("; ")}`, fehlt: spez.fehlt };
   for (const f of fenster) {
@@ -293,7 +307,7 @@ export function fuehreAus(argv, io) {
     const { verzug, hinweis: verzugHinweis } = daten ? verzugAus(daten) : { verzug: [] };
     const roh =
       daten
-        ? { ...waehleUeberBoards({ ...daten, owner: io.owner, bereich: aufruf.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config }), bereich: aufruf.bereich }
+        ? { ...waehleUeberBoards({ ...daten, owner: io.owner, bereich: aufruf.bereich, fuellstand: io.fuellstand, hartAb: io.hartAb, namen: io.namen, config: io.config }), bereich: aufruf.bereich }
         : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config });
     const hinweise = [...(roh.hinweise ?? []), ...(verzugHinweis ? [verzugHinweis] : [])];
     const reparieren = reparierenVon(roh.uebersprungen);
@@ -354,6 +368,24 @@ function messfensterLaeufe(fenster, dir, holeIssue, holeNamen) {
   }
 }
 
+/**
+ * Lader für den Füllstand (Härtungs-Takt), I/O: die Kommentare des Sammeltickets per REST (`holeKommentare`), gezählt mit `befundKommentare`. Memo je Nummer;
+ * ein Ladefehler wird zu `{ fehler }` (fail-closed: das Sammelticket wird dann übersprungen, die Auswahl läuft weiter).
+ */
+export function fuellstandLader({ holeKommentare = (nr) => issueKommentare(nr, ghJson, REPO), owner = OWNER } = {}) {
+  const memo = new Map();
+  return (nr) => {
+    if (!memo.has(nr)) {
+      try {
+        memo.set(nr, befundKommentare(holeKommentare(nr), owner));
+      } catch (e) {
+        memo.set(nr, { fehler: `Kommentare von #${nr} nicht ladbar: ${e instanceof Error ? e.message.split(/\r?\n/)[0] : String(e)}` });
+      }
+    }
+    return memo.get(nr);
+  };
+}
+
 /** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
 function ladeBelegung(messfenster) {
   const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
@@ -393,7 +425,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   });
   /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
   const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster) });
-  return { lade, ladeEinzeln, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
+  return { lade, ladeEinzeln, fuellstand: fuellstandLader(), owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

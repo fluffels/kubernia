@@ -8,8 +8,9 @@
 // still aus: in der Session fehlen nur die mcp__<server>__*-Tools, kein Fehler.
 //
 // Darum: Version kommt aus dem Lockfile (die eine Quelle, Dependabot pflegt sie).
-// Passt die lokale Installation dazu → lokal starten (schnell, offline). Sonst
-// `npx -y <paket>@<exakte Version>` – nie ungepinnt, nie @latest.
+// Ist das Paket lokal installiert → lokal starten (schnell, offline); weicht die Version vom Lockfile ab,
+// steht eine Warnung auf stderr (#1888: der Start über npx kostete beim ersten Mal lange und fiel aus). Fehlt
+// die Installation, `npx -y <paket>@<exakte Version>` – nie ungepinnt, nie @latest.
 // Alle übrigen Argumente gehen unverändert an den Server.
 //
 // Bekannte Grenzen (#1309, gemessen unter Windows: nach Beenden des Launchers blieben weder im lokalen
@@ -48,12 +49,13 @@ export function readInstalled(root, pkg, bin) {
   }
 }
 
-/** Pure Startentscheidung: lokal nur bei exakt passender Version, sonst npx gepinnt. */
+/** Pure Startentscheidung: lokal, wenn installiert (bei abweichender Version mit `abweichung`), sonst npx gepinnt. */
 export function planLaunch({ pkg, lockVersion, installed }) {
   if (!lockVersion) {
     throw new Error(`${pkg} fehlt im Lockfile (package-lock.json) – ohne gepinnte Version kein Start.`);
   }
   if (installed && installed.version === lockVersion) return { mode: "local", binPath: installed.binPath };
+  if (installed) return { mode: "local", binPath: installed.binPath, abweichung: { lokal: installed.version, lock: lockVersion } };
   return { mode: "npx", spec: `${pkg}@${lockVersion}` };
 }
 
@@ -85,6 +87,11 @@ export function exitMeldung({ name, code, signal, vonAussen, laufzeitMs, modus, 
   return `${name}: Server beendet (${ende}, nach ${Math.round(laufzeitMs / 1000)} s, Modus ${modus}${zusatz})`;
 }
 
+/** Warnzeile für eine lokale Installation, deren Version vom Lockfile abweicht. Pur. */
+export function abweichungHinweis(name, { lokal, lock }) {
+  return `${name}: lokale Version ${lokal} weicht vom Lockfile ${lock} ab, starte lokal (npm ci gleicht an)`;
+}
+
 /** Hinweiszeile für den npx-Modus; das Format erkennt `scripts/mcp-ausfall.mjs` (Pfeil + `npx`). Pur. */
 export function npxHinweis(name, spec) {
   return `${name}: lokale Installation fehlt oder weicht ab → npx ${spec}`;
@@ -106,6 +113,7 @@ export function launcherFuer({ name, pkg, bin }) {
     installationErsetzt,
     exitMeldung: (o) => exitMeldung({ name, ...o }),
     npxHinweis: (spec) => npxHinweis(name, spec),
+    abweichungHinweis: (a) => abweichungHinweis(name, a),
     starte: ({ root, args, cwd }) => starte({ name, pkg, bin, root, args, cwd }),
   };
 }
@@ -118,6 +126,8 @@ export function starte({ name, pkg, bin, root, args, cwd }) {
   let vonAussen = false;
   const opt = { stdio: "inherit", ...(cwd ? { cwd } : {}) };
   // stdout gehört dem MCP-Protokoll – Hinweise nur auf stderr.
+  if (plan.abweichung) process.stderr.write(`${abweichungHinweis(name, plan.abweichung)}
+`);
   const child =
     plan.mode === "local"
       ? spawn(process.execPath, [plan.binPath, ...args], opt)

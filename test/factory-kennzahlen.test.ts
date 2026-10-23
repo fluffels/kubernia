@@ -607,15 +607,16 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(von(e, "Härtungs-Takt").status).toBe("ok");
   });
 
-  test("Härtungs-Takt: 9 ok, 10 ABWEICHUNG; Sammelticket-Merges zählen nicht; Vorgänger in Arbeit pausiert; ohne Abschluss Lücke", () => {
+  test("Härtungs-Takt: reine Messung, nie ABWEICHUNG (ein still liegendes Sammelticket ist gewollt); Sammelticket-Merges zählen nicht; Vorgänger in Arbeit pausiert; ohne Abschluss Lücke", () => {
     const n = (k: number) => Array.from({ length: k }, (_, i) => spiel(i));
     expect(von({ commits: n(9) }, "Härtungs-Takt").status).toBe("ok");
-    const zehn = von({ commits: n(10) }, "Härtungs-Takt");
-    expect(zehn.status).toBe("ABWEICHUNG");
-    expect(zehn.messung).toMatch(/10 Ticket-Merges/);
+    const viele = von({ commits: n(40) }, "Härtungs-Takt");
+    expect(viele.status).toBe("ok");
+    expect(viele.messung).toMatch(/40 Ticket-Merges/);
+    expect(viele.soll).toMatch(/kein Soll/);
     const sammel = commit("feat(harness): Härtung (#40) (#41)");
     expect(von({ commits: [...n(9), sammel], sammelIssues: new Set([40]) }, "Härtungs-Takt").status).toBe("ok");
-    expect(von({ commits: [...n(9), sammel] }, "Härtungs-Takt").status).toBe("ABWEICHUNG");
+    expect(von({ commits: [...n(9), sammel] }, "Härtungs-Takt").messung).toMatch(/^10 Ticket-Merges/);
     const pause = von({ commits: n(20), sammelInArbeit: 77 }, "Härtungs-Takt");
     expect(pause.status).toBe("ok");
     expect(pause.messung).toContain("#77 in Arbeit");
@@ -768,7 +769,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
   test("Härtungs-Takt: nur die Titelzeile entscheidet, ein Sammelticket im Body schließt einen Merge nicht aus", () => {
     const n = (k: number) => Array.from({ length: k }, (_, i) => spiel(i));
     const imBody = commit("feat(sim): normal (#50)\n\nFolge #40, siehe #40");
-    expect(von({ commits: [...n(9), imBody], sammelIssues: new Set([40]) }, "Härtungs-Takt").status).toBe("ABWEICHUNG");
+    expect(von({ commits: [...n(9), imBody], sammelIssues: new Set([40]) }, "Härtungs-Takt").messung).toMatch(/^10 Ticket-Merges/);
   });
 
   test("ladeAuditDaten: gh-Fehler wird zur Lücke mit Grund, nie zu leeren Commits", () => {

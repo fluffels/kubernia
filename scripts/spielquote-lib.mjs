@@ -5,13 +5,24 @@
  * Ein Factory-Merge ist ein Commit auf main, dessen Titel ein Issue mit dem Harness-Label der Config referenziert (`istHarnessCommit`); Bots zählen nicht.
  */
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
+import { istVertraut } from "./fremdtext-lib.mjs";
 
 /** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
 export const SPIEL_QUOTE = 3;
 
-/** Härtungs-Takt: so viele Ticket-Merges jeder Art (Spiel und Agentic, ohne Bots, ohne Sammelticket-Merges) seit dem Abschluss des letzten
- *  Sammeltickets holen das ungeclaimte Harness-Sammelticket hinter den Kopf. Eigene Zahl, nicht an die Seitenwahl (`SPIEL_QUOTE`) gekoppelt. */
-export const HARNESS_TAKT_MERGES = 5;
+/** Härtungs-Takt (Füllstand): so viele Befund-Kommentare vertrauter Nicht-Bot-Autoren muss das ungeclaimte Harness-Sammelticket tragen, bevor der Takt es
+ *  hinter den Kopf holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`SPIEL_QUOTE`) gekoppelt. */
+export const HARNESS_TAKT_KOMMENTARE = 10;
+
+/**
+ * Füllstand des Harness-Sammeltickets: Zahl der Kommentare (REST `repos/<repo>/issues/<nr>/comments`, flache Liste) von vertrauten Autoren
+ * (`istVertraut`: Repo-Owner oder vertrauter Bot) ohne `[bot]`-Login, also nur Menschen-Kommentare des Owners. Kommentare ohne `user.login`
+ * zählen nicht. Wirft, wenn `kommentare` keine Liste ist. Pur.
+ */
+export function befundKommentare(kommentare, owner) {
+  if (!Array.isArray(kommentare)) throw new Error("kommentare muss eine Liste sein.");
+  return kommentare.filter((k) => istVertraut(k?.user, owner) && !/\[bot\]$/i.test(String(k.user.login))).length;
+}
 
 /**
  * Zahl der Ticket-Merges in einer Commit-Liste von main (`repos/<repo>/commits`): Commits, deren Autor kein Bot ist

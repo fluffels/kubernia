@@ -11,6 +11,7 @@
     {"muster":"eslint.config.js","art":"infrastruktur-anteil","grund":"Kern-Regeln als Vorlage; Projekt-Regeln für src/ bleiben"},
     {"muster":"vite.config.ts","art":"infrastruktur-anteil","grund":"Vitest-Block als Vorlage; Build des Spiels bleibt"},
     {"muster":".github/workflows/ci.yml","art":"infrastruktur-anteil","grund":"Kern-Jobs als Vorlage (kern-abdeckung führt die Datei als projekt)"},
+    {"muster":".github/workflows/verify-macos.yml","art":"infrastruktur","grund":"projektneutraler manueller verify-Lauf auf macOS, unverändert ins Factory-Repo (kern-abdeckung führt die Datei als projekt)"},
     {"muster":"eslint-suppressions.json","art":"infrastruktur-anteil","grund":"Lint-Bestand: Kern-Anteil als Vorlage"},
     {"muster":"any-suppressions.json","art":"infrastruktur-anteil","grund":"any-Deckel: Kern-Anteil als Vorlage"},
     {"muster":".github/ruleset-main-schutz.json","art":"infrastruktur","grund":"Ruleset-Vorlage, unverändert ins Factory-Repo"},

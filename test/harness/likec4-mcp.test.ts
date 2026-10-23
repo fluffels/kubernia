@@ -53,7 +53,7 @@ const schreibToolsOhneAsk = (tools: McpTool[], ask: string[]): string[] => schre
 describe("Launcher-Bausteine (#1422)", () => {
   test("passende lokale Installation → lokal, sonst npx mit exakter Lockfile-Version", () => {
     assert.deepEqual(launcher.planLaunch({ lockVersion: "1.2.3", installed: { version: "1.2.3", binPath: "/x/likec4.mjs" } }), { mode: "local", binPath: "/x/likec4.mjs" });
-    assert.deepEqual(launcher.planLaunch({ lockVersion: "1.2.3", installed: { version: "1.2.2", binPath: "/x/likec4.mjs" } }), { mode: "npx", spec: "likec4@1.2.3" });
+    assert.deepEqual(launcher.planLaunch({ lockVersion: "1.2.3", installed: { version: "1.2.2", binPath: "/x/likec4.mjs" } }), { mode: "local", binPath: "/x/likec4.mjs", abweichung: { lokal: "1.2.2", lock: "1.2.3" } });
     assert.deepEqual(launcher.planLaunch({ lockVersion: "1.2.3", installed: null }), { mode: "npx", spec: "likec4@1.2.3" });
   });
 

@@ -6,7 +6,7 @@
  * Aufruf, Phasen-Regeln und Baseline: docs/model-routing.md §5.
  *
  *   node scripts/token-baseline.mjs --session <id> [--session <id>…] \
- *        [--issue <nr>] [--pr <nr>] [--from <ISO-Zeit>] [--langfuse] [--json]
+ *        [--issue <nr>] [--pr <nr>] [--from <ISO-Zeit>] [--langfuse] [--json] [--config <pfad>]
  *
  * ZWEI Quellen, EINE Auswertung (`summarize` kennt die Quelle nicht):
  *   1. Standard: das lokale Claude-Code-Transkript (vollständig, ohne Schlüssel).
@@ -31,7 +31,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { commitZeilenAus, ladeCommitZeilen } from "./slice-override.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { configAusAufruf } from "./projekt-config-lib.mjs";
 import { parseNachweis } from "./nachweis-lib.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
@@ -69,14 +69,20 @@ const WORKFLOW_LABELS = [
 ];
 
 /**
- * Phase eines Subagenten: erst der eindeutige `agentType`, dann Workflow-Label,
+ * Phase eines Subagenten: erst der exakte Agentenname aus `agenten` (`agenten.planer`/`lens`; `umsetzer` und `gruppe` haben keine feste Phase), dann der Typ per
+ * Namens-Heuristik (`agenten` fehlt oder passt nicht), dann Workflow-Label,
  * dann Skill-Beschreibung (Review vor Plan — „Lens 2 gegen den Plan" ist Review).
  * Unklar → null: der Call fällt auf den Zeitschnitt des Hauptagenten zurück,
  * statt in einem Sammeltopf zu verschwinden.
  */
-export function classifySubagent(agentType, description) {
+export function classifySubagent(agentType, description, agenten = {}) {
   const t = String(agentType ?? "");
   const d = String(description ?? "");
+  if (t !== "") {
+    if (t === agenten.planer) return "Planung";
+    if (t === agenten.lens) return "Review";
+    if (t === agenten.umsetzer || t === agenten.gruppe) return null; // keine feste Phase: der Zeitschnitt teilt sie (s. u.)
+  }
   if (/planner/i.test(t)) return "Planung";
   if (/explore/i.test(t)) return "Recherche";
   if (/lens/i.test(t)) return "Review";
@@ -133,7 +139,7 @@ const agentKey = (c) => (c.subagent ? subKey(c) : c.session ? `main:${c.session}
  * die Subagenten IM Ticket-Fenster (`windowCalls`: nach `--from`, ohne Nachlauf), damit der Planer
  * eines anderen Tickets derselben Session nicht mitzählt.
  */
-function sockelOf(allCalls, windowCalls) {
+function sockelOf(allCalls, windowCalls, agenten) {
   const first = (calls) => [...calls].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
   const main = first(allCalls).find((c) => !c.subagent);
   const firstBySub = new Map();
@@ -141,7 +147,7 @@ function sockelOf(allCalls, windowCalls) {
   const phaseSockel = (phase) =>
     median(
       [...firstBySub.values()]
-        .filter((c) => classifySubagent(c.subagent.agentType, c.subagent.description) === phase)
+        .filter((c) => classifySubagent(c.subagent.agentType, c.subagent.description, agenten) === phase)
         .map(kontextVon),
     );
   return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
@@ -169,12 +175,12 @@ function unpricedModels(calls) {
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
  * `umsetzer` (Agentenname des Umsetzers, `agenten.umsetzer` der Projekt-Config) ist mit Tool-Events Pflicht: er erkennt den Ticketlauf ohne Pflege-Marker.
  */
-export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null, { umsetzer } = {}) {
+export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null, { umsetzer, agenten } = {}) {
   if (events && (typeof umsetzer !== "string" || umsetzer === "")) throw new Error("summarize braucht mit Tool-Events den Umsetzer-Namen (agenten.umsetzer der Projekt-Config)");
   // Events vor `--from` (früheres Ticket derselben Session) und nach dem Merge zählen nicht (auch nicht die Pflege-Marker).
   const imFenster = (events ?? []).filter((e) => fensterLage(e.ts, bounds) === "ticket");
   const { intervals, unpaired } = events ? pflegeIntervals(imFenster) : { intervals: [], unpaired: 0 };
-  const window = windowCalls(calls, bounds, intervals);
+  const window = windowCalls(calls, bounds, intervals, agenten);
   const sorted = phaseRows(window);
   const ticket = window.filter((w) => w.phase !== "Nachlauf").map((w) => w.call);
   const out = {
@@ -184,7 +190,7 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     // Invariante: Σ rows = total + nachlauf (Kosten und Calls); der Nachlauf ist die einzige Differenz (#1379).
     nachlauf: totalOf(sorted.filter((r) => r.phase === "Nachlauf")),
     hasCost: window.some((w) => w.call.cost !== undefined && w.call.cost !== null),
-    reviewRounds: countReviewRounds(reviewDescriptions(ticket)),
+    reviewRounds: countReviewRounds(reviewDescriptions(ticket, agenten)),
     cacheRebuilds: countCacheRebuilds(ticket),
     questions,
     unpriced: ticket.filter(ohnePreis).length,
@@ -194,7 +200,7 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
       all: median(ticket.map(kontextVon)),
       main: median(ticket.filter((c) => !c.subagent).map(kontextVon)),
     },
-    sockel: sockelOf(calls, ticket),
+    sockel: sockelOf(calls, ticket, agenten),
   };
   if (events) {
     // Das Ticket-Fenster besitzt dieser Ort (`fensterLage`); Marker und Brain-Kennzahlen bekommen nur Events darin.
@@ -224,7 +230,7 @@ export function fensterLage(ts, bounds = {}) {
  * das Gespräch danach startet. Calls eines Agenten zwischen seinen Pflege-Markern (#1099, `intervals` aus
  * `pflegeIntervals`, Grenzen inklusive) sind Pflege; der Nachlauf schlägt sie, sie schlagen die übrigen Regeln.
  */
-export function windowCalls(calls, bounds = {}, intervals = []) {
+export function windowCalls(calls, bounds = {}, intervals = [], agenten = {}) {
   const out = [];
   for (const c of calls) {
     const lage = fensterLage(c.ts, bounds);
@@ -233,7 +239,7 @@ export function windowCalls(calls, bounds = {}, intervals = []) {
     const agent = agentKey(c);
     const t = Date.parse(c.ts);
     const inPflege = intervals.some((iv) => iv.agent === agent && t >= Date.parse(iv.from) && t <= Date.parse(iv.to));
-    const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description) : null;
+    const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description, agenten) : null;
     out.push({ call: c, phase: afterMerge ? "Nachlauf" : inPflege ? "Pflege" : (subPhase ?? classifyMainByTime(c.ts, bounds)) });
   }
   return out;
@@ -316,11 +322,11 @@ export function countCacheRebuilds(calls) {
 }
 
 /** Beschreibungen der Review-Subagenten, die im Ticket-Fenster Calls haben (je Subagent einmal). */
-function reviewDescriptions(ticketCalls) {
+function reviewDescriptions(ticketCalls, agenten) {
   const subs = new Map();
   for (const c of ticketCalls) if (c.subagent) subs.set(subKey(c), c.subagent);
   return [...subs.values()]
-    .filter((s) => classifySubagent(s.agentType, s.description) === "Review")
+    .filter((s) => classifySubagent(s.agentType, s.description, agenten) === "Review")
     .map((s) => String(s.description ?? ""));
 }
 
@@ -557,7 +563,7 @@ export function langfuseZugang(env) {
   );
 }
 
-const AUFRUF = "Aufruf: node scripts/token-baseline.mjs --session <id> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json]";
+const AUFRUF = "Aufruf: node scripts/token-baseline.mjs --session <id> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json] [--config <pfad>]";
 
 /** Argumente; ein Aufruf-Fehler wirft (`main` meldet ihn mit Aufrufzeile und Exit `AUFRUF_EXIT`). */
 export function parseArgs(argv) {
@@ -610,9 +616,14 @@ export async function ladeLangfuseSession(sessionId, opts) {
 }
 
 async function main() {
+  const { args: rest, config, fehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O
+  if (fehler) {
+    console.error(fehler);
+    process.exit(1); // wie eine fehlende Projekt-Config ohne --config: Laufzeitfehler
+  }
   let args;
   try {
-    args = parseArgs(process.argv.slice(2));
+    args = parseArgs(rest);
   } catch (err) {
     console.error(`${err.message}
 ${AUFRUF}`);
@@ -622,7 +633,6 @@ ${AUFRUF}`);
     console.error(AUFRUF);
     process.exit(AUFRUF_EXIT);
   }
-  const config = ladeProjektConfig();
   const zeilen = commitZeilenAus(config);
   const run = await loadRun(args);
   const loop = args.pr ? prInfo(args.pr, zeilen) : {};
@@ -632,7 +642,7 @@ ${AUFRUF}`);
     prCreatedAt: loop.prCreatedAt,
     mergedAt: loop.mergedAt,
   };
-  const summary = summarize(run, bounds, loop.files ?? null, { umsetzer: config.agenten.umsetzer });
+  const summary = summarize(run, bounds, loop.files ?? null, { umsetzer: config.agenten.umsetzer, agenten: config.agenten });
   if (args.json) console.log(JSON.stringify({ bounds, loop, ...summary }, null, 2));
   else console.log(renderMarkdown(summary, loop, { planZeile: zeilen.plan }));
 }

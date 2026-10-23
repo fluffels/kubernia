@@ -80,6 +80,8 @@ const call = (min: number, model: string, tool?: { name: string; input: Record<s
 const bash = (cmd: string) => ({ name: "Bash", input: { command: cmd } });
 const read = (path: string) => ({ name: "Read", input: { file_path: path } });
 const SKILL = FREMD.agenten.ticketSkill;
+/** Der Abschluss-Skill der Fremd-Config: zählt als Brain. */
+const ABSCHLUSS = FREMD.skills.abschluss;
 const skill = (name: string) => ({ name: "Skill", input: { skill: name } });
 const claim = (nr: number) => bash(`gh issue edit ${nr} --add-assignee @me`);
 
@@ -88,7 +90,7 @@ const zeile = (r: Ergebnis, kategorie: string, modell: string, quelle = "Hauptch
 const calls = (r: Ergebnis, kategorie: string, modell: string, quelle = "Hauptchat") => zeile(r, kategorie, modell, quelle)?.calls ?? 0;
 
 describe("zerlegeHauptchat: Kategorien", () => {
-  test("Happy Path: Ad-hoc, Ticket-Fenster, Benachrichtigung, Nachlauf, Brain, brain-input", () => {
+  test("Happy Path: Ad-hoc, Ticket-Fenster, Benachrichtigung, Nachlauf, Brain, Abschluss-Skill", () => {
     const main: Row[] = [
       user(0, "frag mal was"),
       call(1, OPUS),
@@ -103,8 +105,8 @@ describe("zerlegeHauptchat: Kategorien", () => {
       call(41, OPUS),
       user(50, "lies die Notiz"),
       call(51, OPUS, read("/x/notizen/a.md")),
-      user(60, "brain-input bitte"),
-      call(61, OPUS, skill("brain-input")),
+      user(60, `${ABSCHLUSS} bitte`),
+      call(61, OPUS, skill(ABSCHLUSS)),
       call(62, OPUS),
     ];
     const r = hc.zerlegeHauptchat({
@@ -116,7 +118,7 @@ describe("zerlegeHauptchat: Kategorien", () => {
     assert.equal(calls(r, "Ticket-Orchestrierung", SONNET), 2);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 1);
     assert.equal(calls(r, "Nachlauf", OPUS), 2); // Call 31 und der Folgeturn 41
-    assert.equal(calls(r, "Brain", OPUS), 3); // Read-Turn (1) + brain-input-Turn (2)
+    assert.equal(calls(r, "Brain", OPUS), 3); // Read-Turn (1) + Abschluss-Turn (2)
     const gesamt = r.rows.reduce((s, z) => s + z.calls, 0);
     assert.equal(gesamt, 9);
     assert.equal(r.fenster.length, 1);
@@ -197,9 +199,9 @@ describe("zerlegeHauptchat: Brain-Erkennung", () => {
     assert.equal(calls(r, "Brain", OPUS), 1);
   });
 
-  test("ohne --brain ist nur der Skill brain-input Brain", () => {
+  test("ohne --brain ist nur der Abschluss-Skill Brain", () => {
     assert.equal(calls(brainTurn("/x/notizen/a.md", undefined), "Brain", OPUS), 0);
-    const main = [user(0, "x"), call(1, OPUS, skill("brain-input"))];
+    const main = [user(0, "x"), call(1, OPUS, skill(ABSCHLUSS))];
     assert.equal(calls(hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }), "Brain", OPUS), 1);
   });
 
@@ -344,8 +346,8 @@ describe("zerlegeHauptchat: Grenzfälle aus dem Review (R1)", () => {
     assert.equal(calls(r, "Ad-hoc", OPUS), 1);
   });
 
-  test("Slash /brain-input ohne Skill-Tool zählt als Brain", () => {
-    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [slash(0, "brain-input"), call(1, OPUS)] }] });
+  test("Slash des Abschluss-Skills ohne Skill-Tool zählt als Brain", () => {
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [slash(0, ABSCHLUSS), call(1, OPUS)] }] });
     assert.equal(calls(r, "Brain", OPUS), 1);
   });
 
@@ -484,14 +486,14 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
   const lauf = (main: Row[], closed: string | null = null) =>
     hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], brainRoots, closedAtOf: () => closed });
 
-  test("Ticket-Turn mit späterem brain-input: Calls davor Ticket, ab dem Ereignis Brain", () => {
-    const r = lauf([slash(0, SKILL), call(1, OPUS, claim(9)), call(2, OPUS), call(3, OPUS, skill("brain-input")), call(4, OPUS), call(5, OPUS)]);
+  test("Ticket-Turn mit späterem Abschluss-Skill: Calls davor Ticket, ab dem Ereignis Brain", () => {
+    const r = lauf([slash(0, SKILL), call(1, OPUS, claim(9)), call(2, OPUS), call(3, OPUS, skill(ABSCHLUSS)), call(4, OPUS), call(5, OPUS)]);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 2);
     assert.equal(calls(r, "Brain", OPUS), 3);
   });
 
-  test("ein Turn, der mit /brain-input beginnt, bleibt ganz Brain", () => {
-    const r = lauf([slash(0, "brain-input"), call(1, OPUS), call(2, OPUS)]);
+  test("ein Turn, der mit dem Abschluss-Slash beginnt, bleibt ganz Brain", () => {
+    const r = lauf([slash(0, ABSCHLUSS), call(1, OPUS), call(2, OPUS)]);
     assert.equal(calls(r, "Brain", OPUS), 2);
   });
 

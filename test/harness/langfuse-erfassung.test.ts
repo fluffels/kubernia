@@ -124,7 +124,7 @@ const hatLangfuseSammelticket = (ticketReihenfolge: string, agentsMd: string): b
     /komplett/.test(a) &&
     /--top/.test(a) &&
     /Langfuse-Befunde \(gesammelt\)/.test(ausnahme) &&
-    /#langfuse-befunde-gesammelt-1351/.test(ausnahme)
+    /#langfuse-befunde-gesammelt/.test(ausnahme)
   );
 };
 
@@ -276,7 +276,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatLangfuseSammelticket(tr.replace("**Höchstens ein**", "Mehrere"), agents));
     assert.ok(!hatLangfuseSammelticket(tr.replace(/komplett/g, "teilweise"), agents));
     assert.ok(!hatLangfuseSammelticket(tr.replace(/--top/g, "--x"), agents));
-    assert.ok(!hatLangfuseSammelticket(tr, agents.replace("#langfuse-befunde-gesammelt-1351", "#x")));
+    assert.ok(!hatLangfuseSammelticket(tr, agents.replace("#langfuse-befunde-gesammelt", "#x")));
     assert.ok(!hatLangfuseSammelticket("", ""));
     assert.ok(!hatLangfuseSammelticket(tr, agents.replace(/(Ausnahme:\*\*[^\n]*)Langfuse-Befunde \(gesammelt\)/, "$1Anderes")), "Titel fehlt im Ausnahme-Teil von AGENTS.md");
   });
@@ -584,5 +584,36 @@ describe("Zuordnung in Langfuse (#1668)", () => {
     assert.equal(nutztRollenUebersicht(mr.replaceAll("subagent-laufzeit.mjs --typen", "subagent-laufzeit.mjs")), false);
     assert.equal(nutztRollenUebersicht(mr.replace("**Abgleich der Opus-Subagenten:**", "**Abgleich:**")), false);
     assert.equal(nutztRollenUebersicht(mr.replace("`name` `starts with` `Subagent LLM Call`, Familie `opus`", "`name` `starts with` `Call`, Familie `opus`")), false);
+  });
+});
+
+/* Messwerte gehören in den Beleg-Kommentar, nicht in die Doku (L1 #1888): docs/langfuse-hook-patch.md
+ * trägt nur qualitative Aussagen mit Verweis. Geschlossene Musterliste (jede Erweiterung ist ein
+ * bewusster Commit):
+ *   `\d+ von \d+`                    Stichprobenanteil („10 von 11“)
+ *   `gemessen am \d{4}-\d{2}-\d{2}`  Messdatum
+ *   `an \d+ \S+-Läufen`              Lauf-Anzahl der Stichprobe
+ *   `(zwei|drei|vier)mal \d+`        Zahl-Wiederholungen
+ *   `[−+-]\d+ s`                     Messabweichung in Sekunden
+ */
+describe("langfuse-hook-patch.md ohne Messwerte (#1888)", () => {
+  const MESSWERT_MUSTER = [
+    /\d+ von \d+/,
+    /gemessen am \d{4}-\d{2}-\d{2}/,
+    /an \d+ \S+-Läufen/,
+    /(zwei|drei|vier)mal \d+/,
+    /[−+-]\d+ s/,
+  ];
+  const messwerte = (md: string): string[] => MESSWERT_MUSTER.filter((m) => m.test(md)).map(String);
+
+  test("die Doku trägt keinen Messwert", () => {
+    assert.deepEqual(messwerte(read("docs/langfuse-hook-patch.md")), []);
+  });
+
+  test("rote Gegenbeispiele: jedes Muster schlägt an", () => {
+    for (const s of ["10 von 11", "gemessen am 2026-10-10", "an 6 SessionEnd-Läufen", "dreimal 181", "lag +2 s", "lag −1 s"]) {
+      assert.equal(messwerte(`x ${s} y`).length > 0, true, s);
+    }
+    assert.deepEqual(messwerte("fast alle, wenige Sekunden, 5 s Toleranz"), []);
   });
 });

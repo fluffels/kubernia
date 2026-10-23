@@ -25,10 +25,11 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { projektConfig } from "../support/fremd-config";
 
-// Dieser Wächter liest die echten Projekttexte (AGENTS.md, Skill, Doku): die Erwartung kommt aus der Projekt-Config.
-const CZP = projektConfig().praefixe.commitZeile;
+// Die Kern-Doku nennt die Override-Zeile mit dem Platzhalter, nie mit dem Projektpräfix (die Tabelle in AGENTS.md setzt ihn ein); der Wächter braucht keine Projekt-Config.
+const OVERRIDE = "<praefixe.commitZeile>Diffsize-Override";
+/** Ein konkretes Präfix (zwei oder mehr Großbuchstaben, Bindestrich) vor „Diffsize-Override“: das wäre ein Projektliteral in der Kern-Doku. */
+const PROJEKT_LITERAL = new RegExp("[A-Z]{2,}-" + "Diffsize-Override");
 
 const lies = (rel: string): string => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
@@ -116,7 +117,8 @@ describe("Sammelticket-Position (#1276)", () => {
   test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen das ganze Sammelticket, keinen Rest-Übertrag (#1311)", () => {
     assert.match(agents, /Kommt es dran: abarbeiten, und zwar \*\*komplett\*\*/);
     assert.match(abschnitt, /\*\*Abarbeiten:\*\* \*\*alle\*\* Zeilen umsetzen, kein Teil und kein Rest-Übertrag/);
-    assert.ok(abschnitt.includes(`${CZP}Diffsize-Override`), "zu große PRs deckt der begründete Override");
+    assert.ok(abschnitt.includes(OVERRIDE), "zu große PRs deckt der begründete Override (mit Platzhalter, nicht mit dem Projektpräfix)");
+    assert.doesNotMatch(abschnitt, PROJEKT_LITERAL, "kein Projektpräfix vor Diffsize-Override in der Kern-Doku");
   });
 
   test("Komplett-Regel: Umsetzer, Planer und Skill nennen sie", () => {
@@ -138,7 +140,7 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
   const claimen = doc.split("\n").find((z) => z.startsWith("- **Beim Claimen des Sammeltickets**")) ?? "";
 
   /** Verlangt der Abarbeiten-Bullet ein Ergebnis je Zeile, alle Zeilen und den Override für zu große PRs? Ein Prädikat für Artefakt und Gegenbeispiel. */
-  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** Zeilen") && s.includes("**Ergebnis**") && s.includes(`${CZP}Diffsize-Override`) && s.includes("nichts wird still ausgelagert");
+  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** Zeilen") && s.includes("**Ergebnis**") && s.includes(OVERRIDE) && s.includes("nichts wird still ausgelagert");
   /** Beschreibt ein Text noch die Halbierung (die Teilung der Zeilenliste, #1309)? */
   const halbiert = (s: string) => /zweite Hälfte/.test(s) || /erste Hälfte/.test(s);
 
@@ -155,10 +157,13 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
 
   test("Erkennung greift (Red-Green): der alte Wortlaut und die Halbierung fallen durch", () => {
     assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** so viele Zeilen umsetzen, wie " + "in **einen** PR " + "passen (`check:diffsize`)."));
-    assert.ok(!nenntErgebnisPflicht(`- **Abarbeiten:** jede Zeile der ersten Hälfte bekommt ein **Ergebnis**; ${CZP}Diffsize-Override.`));
+    assert.ok(!nenntErgebnisPflicht(`- **Abarbeiten:** jede Zeile der ersten Hälfte bekommt ein **Ergebnis**; ${OVERRIDE}.`));
     assert.ok(halbiert("die **zweite " + "Hälfte** ins nächste Sammelticket übertragen"));
     assert.ok(!halbiert("kein Teil, kein Rest-Übertrag"));
     assert.ok(!nenntErgebnisPflicht(""));
+    // Fremd-Präfix-Probe: der Literal-Wächter ist nicht an das Projektpräfix gebunden, der Platzhalter selbst ist kein Literal
+    for (const praefix of ["ZZ-", "AB-", "XYZ-"]) assert.match(`${praefix}Diffsize-Override`, PROJEKT_LITERAL, praefix);
+    assert.doesNotMatch(OVERRIDE, PROJEKT_LITERAL);
   });
 });
 

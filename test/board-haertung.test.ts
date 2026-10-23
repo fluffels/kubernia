@@ -8,9 +8,9 @@ import { readFileSync } from "node:fs";
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTakt from "../scripts/board-takt.mjs";
-import { FREMD, projektConfig } from "./support/fremd-config";
+import { projektConfig, FREMD_OWNER } from "./support/fremd-config";
 
-const OWNER = FREMD.repo.split("/")[0] ?? "";
+const OWNER = FREMD_OWNER;
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Lib = {

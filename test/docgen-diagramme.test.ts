@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixture } from "./support/tmp-fixture";
+import { FREMD_CONFIG_PFAD } from "./support/fremd-config";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as dia from "../scripts/docs-gen/diagramme.mjs";
@@ -297,7 +298,9 @@ describe("Factory", () => {
 
 describe("Echt-Repo", () => {
   const root = process.cwd();
-  const config = docgen.loadConfig();
+  // Die Projekt-Config, aus der die Vorlage den Ruleset-Spiegel liest, ist die Fremd-Config (der Spiegel selbst ist die echte Datei unter .github/): der Test hängt nicht an .factory/projekt.json.
+  const basisConfig = docgen.loadConfig() as { diagramme: Cfg };
+  const config: Cfg = { ...basisConfig, diagramme: { ...basisConfig.diagramme, projektConfig: join(root, FREMD_CONFIG_PFAD) } };
   test("die Registry kennt alle drei Diagramme, und alle erzeugen Mermaid ohne Platzhalter-Reste", () => {
     for (const name of ["agenten-ablauf", "agenten-sequenz", "leitplanken-schichten"]) {
       const out = docgen.GENERATORS[name]({ rootDir: root, config });

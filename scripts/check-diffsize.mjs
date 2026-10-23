@@ -8,7 +8,7 @@
  * Hintergrund (Vorbild: produktiv eingesetzte KI-Entwicklungspipelines): so eine
  * Pipeline plant Code in **Commit-Slices mit hartem Größenbudget** und prüft das
  * programmatisch,
- * LLM-frei. kubequest hat das Budget bisher nur auf DATEI-Ebene (check-size.mjs,
+ * LLM-frei. Dieses Projekt hat das Budget bisher nur auf DATEI-Ebene (check-size.mjs,
  * 800 LOC je Modul), aber KEIN Budget für die Größe EINER Änderung/eines Tickets.
  * Ein Epic, das eigentlich in session-große Kinder gehört (siehe AGENTS.md), kann
  * so als ein Riesen-Commit durchrutschen und wird unreviewbar.
@@ -64,7 +64,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { leseJson, parseSections } from "./docs-gen/markdown.mjs";
 
-/** Budget für EINE Änderung. Kalibriert an echten kubequest-Tickets: die letzten
+/** Budget für EINE Änderung. Kalibriert an echten Tickets dieses Projekts: die letzten
  *  liegen bei ~5–8 Dateien und bis ~450 geänderten Zeilen (#529: 8 Dateien / 453).
  *  Bewusst mit Kopffreiheit darüber, damit ein normales Ticket NICHT trippt (sonst
  *  Override-Inflation → der Wächter wird ignoriert, siehe #395-Antipattern), aber
