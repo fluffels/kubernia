@@ -14,7 +14,7 @@ import * as sliceRaw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as nachweisLib from "../scripts/nachweis-lib.mjs";
 const { abnahmeMarker } = nachweisLib as unknown as { abnahmeMarker: (z: Zeilen) => string };
-import { FREMD, FREMD_OWNER } from "./support/fremd-config";
+import { FREMD, FREMD_OWNER, projektConfig } from "./support/fremd-config";
 
 type Commit = { sha: string; datum: string; body: string };
 type Pr = {
@@ -448,6 +448,16 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.equal(ab.zeilen[0].runden, null, "Zeilen des Config-Präfixes zählen bei AB- nicht");
     assert.equal(ab.zeilen[0].festgefahren, 0, "ein anderes Label zählt das festgefahren-Label nicht");
     assert.equal(ab.kennzahlen.ohneNachweis, 1);
+  });
+  test("ohne injizierte Config gilt die echte Projekt-Config (Standard von ladeConfig), in beiden Einstiegen", () => {
+    const echt = projektConfig();
+    const ZE = commitZeilen(echt.praefixe.commitZeile, echt.agenten.planer);
+    const body = `feat: y (#40) (#50)\n\n${ZE.plan}: ${echt.agenten.planer}\n${ZE.review}: head=${"a".repeat(40)} runden=1 lenses=doku verdikt=ok`;
+    const echtLog = `${SHA}\x1f${MERGED}\x1f${body}\x1e`;
+    assert.equal(roh.laufErgebnis({ von, bis, runGit: git(echtLog), runGh: gh(), jetzt: SPAETER }).zeilen[0].runden, 1);
+    const lauf40 = { meta: { agentType: "x-agent" }, zeilen: [{ type: "user", timestamp: "2026-10-01T00:00:01Z", message: { role: "user", content: "Ticket #40: x" } }] };
+    assert.equal(roh.laufErgebnisStartAgent({ laeufe: [lauf40], von, bis, runGit: git(echtLog), runGh: gh(), jetzt: SPAETER }).zeilen[0].runden, 1);
+    assert.equal(roh.laufErgebnis({ von, bis, runGit: git(echtLog), runGh: gh(), jetzt: SPAETER, ladeConfig: () => FREMD }).zeilen[0].runden, null, "mit der Fremd-Config zählt die Zeile der echten nicht");
   });
   test("ein Ladefehler der Config bricht ab, ohne git oder gh zu fragen", () => {
     const nie = () => {

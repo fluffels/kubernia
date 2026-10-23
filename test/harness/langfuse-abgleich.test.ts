@@ -12,7 +12,7 @@ import { readdirSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, projektConfig } from "../support/fremd-config";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";
@@ -709,6 +709,15 @@ describe("pruefen (Ablauf)", () => {
     expect(r.text).toMatch(/\*\*Summe:\*\*/);
     expect(r.text).toMatch(/Fehlende Calls s1/);
     expect(r.text).toContain(`${WORKTREE}1562`);
+  });
+
+  test("ohne injizierte Config gilt die echte Projekt-Config (Standard von pruefen)", async () => {
+    const echt = projektConfig();
+    const root = mitSession([msg("a", {}, { gitBranch: `${echt.praefixe.branch}1562-x` })]);
+    const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }], observations: [] });
+    const r = await einstiegRoh.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl }) as { text: string };
+    expect(r.text).toContain(`${echt.praefixe.worktree}1562`);
+    expect(r.text).not.toContain(`${WORKTREE}1562`);
   });
 
   test("Bericht: vollständig, Score ausstehend; Ledger (nur gelesen) mit Ende hebt es auf; kaputtes Ledger bleibt unberührt; Hinweis nennt den Stichtag aus dem Kern", async () => {

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/mcp-ausfall.mjs";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, projektConfig } from "../support/fremd-config";
 
 type Server = { name: string; type?: string; url?: string; headers?: Record<string, string> };
 type Befund = { klasse: string; zeit: string; sessionId: string; text: string; code?: string; ursache?: string };
@@ -151,6 +151,9 @@ describe("Pfad-Helfer", () => {
     expect(a.standPfad("/dev/proj/.claude/worktrees/wt-1", {}, "/tmp", FREMD)).toBe(haupt);
     expect(haupt).toBe(join("/tmp", `${FREMD.praefixe.worktree}mcp-ausfall--dev-proj.json`));
     expect(a.standPfad("/dev/proj", { FACTORY_MCP_AUSFALL_STAND: "/x/s.json" }, "/tmp")).toBe("/x/s.json");
+  });
+  test("standPfad ohne injizierte Config nimmt das Präfix der echten Projekt-Config", () => {
+    expect(a.standPfad("/dev/proj", {}, "/tmp")).toBe(join("/tmp", `${projektConfig().praefixe.worktree}mcp-ausfall--dev-proj.json`));
   });
   test("projektOrdner: Hauptcheckout und Worktrees, nie Namensvettern", () => {
     const namen = ["C--dev-proj", "C--dev-proj--claude-worktrees-wt-1", "C--dev-proj2", "C--dev-other"];
