@@ -21,6 +21,7 @@ interface Pc {
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
+  berechtigungenAus(config: unknown): { allow: string[]; ask: string[]; deny: string[] };
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
@@ -675,6 +676,39 @@ describe("Ausnahmelisten als Projektwert (#1860)", () => {
       assert.match(mit({ kontext: [{ datei: p, grund: "#1 x" }] }).join("|"), /ausnahmen\.kontext\[0\]\.datei muss ein repo-relativer POSIX-Pfad/, p);
     }
     assert.match(mit({ groesse: [ok, ok] }).join("|"), /ausnahmen\.groesse\[1\]\.datei „src\/gross\.ts“ steht doppelt/);
+  });
+});
+
+describe("Berechtigungs-Ergänzung als Projektwert (#1874)", () => {
+  const mit = (b: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), berechtigungen: b });
+
+  test("berechtigungenAus: ohne Block leer, sonst die Listen; die echte Config trägt die Modulregeln", () => {
+    assert.deepEqual(pc.berechtigungenAus({}), { allow: [], ask: [], deny: [] });
+    assert.deepEqual(pc.berechtigungenAus({ berechtigungen: { allow: ["mcp__a"] } }), { allow: ["mcp__a"], ask: [], deny: [] });
+    const echt = pc.berechtigungenAus(pc.ladeProjektConfig());
+    assert.ok(echt.allow.includes("mcp__playwright"));
+    assert.deepEqual(echt.deny, ["mcp__pixellab__list_projects"]);
+  });
+  test("berechtigungenAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
+    for (const falsch of ["x", [], { allow: {} }, { allow: ["Bash(rm:*)"] }]) {
+      assert.throws(() => pc.berechtigungenAus({ berechtigungen: falsch }), /berechtigungen[\s\S]*Fix:/, JSON.stringify(falsch));
+    }
+  });
+  test("Form: gültiger Block und Fehlen sind ok", () => {
+    assert.deepEqual(mit({ allow: ["mcp__a"], ask: ["mcp__a__x"], deny: ["mcp__b"] }), []);
+    assert.deepEqual(mit({}), []);
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+  });
+  test("Form: fremde Unterschlüssel, Nicht-Listen, Einträge ohne mcp__, mit Leerraum oder doppelt werden gemeldet", () => {
+    assert.match(mit("x").join("|"), /berechtigungen muss ein Objekt/);
+    assert.match(mit({ defaultMode: "bypassPermissions" }).join("|"), /berechtigungen\.defaultMode ist kein bekannter Schlüssel \(erlaubt: allow, ask, deny\)/);
+    assert.match(mit({ additionalDirectories: ["/"] }).join("|"), /berechtigungen\.additionalDirectories ist kein bekannter Schlüssel/);
+    assert.match(mit({ allow: "mcp__a" }).join("|"), /berechtigungen\.allow muss eine Liste/);
+    assert.match(mit({ ask: ["Bash(rm:*)"] }).join("|"), /berechtigungen\.ask\[0\] muss mit „mcp__“ beginnen/);
+    assert.match(mit({ allow: [""] }).join("|"), /berechtigungen\.allow\[0\] muss ein nicht-leerer String ohne Leerraum/);
+    assert.match(mit({ allow: [1] }).join("|"), /berechtigungen\.allow\[0\] muss ein nicht-leerer String/);
+    assert.match(mit({ deny: ["mcp__a b"] }).join("|"), /berechtigungen\.deny\[0\] muss ein nicht-leerer String ohne Leerraum/);
+    assert.match(mit({ allow: ["mcp__a", "mcp__a"] }).join("|"), /berechtigungen\.allow\[1\] „mcp__a“ steht doppelt/);
   });
 });
 

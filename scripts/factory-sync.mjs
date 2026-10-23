@@ -9,9 +9,14 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { berechtigungenAusText, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import {
   einheitHash,
+  ergaenzungsBefunde,
+  istErgaenzbar,
+  kernAnteil,
+  leereErgaenzung,
+  mitErgaenzung,
   einheitId,
   einheitText,
   eolVon,
@@ -33,8 +38,33 @@ export const PROJEKT_PFAD = PROJEKT_CONFIG;
 
 const gleichJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+const LEER = () => ({ quelle: leereErgaenzung(), ziel: leereErgaenzung() });
+
+/**
+ * Die Berechtigungs-Ergänzung aus der Projekt-Config (`lies` liefert den Dateitext oder `null`), tolerant: fehlende Datei oder fehlender Block
+ * heißt leer (weniger Rechte). Wirft bei kaputtem JSON oder falscher Form (dann wird nichts geschrieben).
+ */
+export function liesErgaenzung(lies) {
+  return berechtigungenAusText(lies(PROJEKT_PFAD));
+}
+
+const istLeer = (erg) => Object.values(erg).every((l) => l.length === 0);
+
+/** Werttext der ergänzbaren Einheit im Ziel: ohne Ergänzung wörtlich aus der Quelle, sonst Kern-Anteil plus Ziel-Ergänzung (zwei Leerzeichen, Einrückung der Schlüsselzeile). */
+function ergaenzterWert(srcText, span, erg) {
+  const roh = srcText.slice(span.start, span.ende);
+  if (istLeer(erg.quelle) && istLeer(erg.ziel)) return roh;
+  const quellBefund = ergaenzungsBefunde(JSON.parse(roh), erg.quelle);
+  const ziel = mitErgaenzung(kernAnteil(JSON.parse(roh), erg.quelle), erg.ziel);
+  const befund = [...quellBefund.map((b) => `Quelle: ${b}`), ...ergaenzungsBefunde(ziel, erg.ziel).map((b) => `Ziel: ${b}`)];
+  if (befund.length > 0) throw new Error(befund.join("; "));
+  const zeilenStart = srcText.lastIndexOf("\n", span.start) + 1;
+  const einrueckung = /^[ \t]*/.exec(srcText.slice(zeilenStart))[0];
+  return JSON.stringify(ziel, null, 2).replace(/\n/g, `\n${einrueckung}`);
+}
+
 /** Wendet alle Teil-Einheiten einer Datei nacheinander auf den Zieltext an (LF-normalisiert). Wirft bei Marker- oder JSON-Fehlern. */
-function wendeTeileAn(eintraege, srcText, zielLf, zielConfig) {
+function wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg) {
   let arbeit = zielLf;
   for (const e of eintraege) {
     if (e.block !== undefined) {
@@ -43,21 +73,26 @@ function wendeTeileAn(eintraege, srcText, zielLf, zielConfig) {
     } else {
       if (arbeit === null) arbeit = "{\n}\n";
       const span = jsonSchluesselSpanne(srcText, e.schluessel);
-      arbeit = setzeJsonSchluessel(arbeit, e.schluessel, srcText.slice(span.start, span.ende));
+      arbeit = setzeJsonSchluessel(arbeit, e.schluessel, istErgaenzbar(e) ? ergaenzterWert(srcText, span, erg) : srcText.slice(span.start, span.ende));
     }
   }
   return arbeit;
 }
 
 /** Selbstprüfung einer Teil-Datei: JSON parst, Besitz-Schlüssel = Quelle, alle anderen = Vorher; Block-Einheit = Quelle. */
-export function pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis) {
+export function pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis, erg = LEER()) {
   const fehler = [];
   if (eintraege.some((e) => e.schluessel !== undefined)) {
     const neu = JSON.parse(ergebnis);
     const quelle = JSON.parse(srcText);
     const vorher = zielLf === null ? {} : JSON.parse(zielLf);
     const besitz = new Set(eintraege.filter((e) => e.schluessel !== undefined).map((e) => e.schluessel));
-    for (const k of besitz) if (!gleichJson(neu[k], quelle[k])) fehler.push(`${pfad}: Schlüssel '${k}' weicht nach dem Sync von der Quelle ab`);
+    const ergKeys = new Set(eintraege.filter(istErgaenzbar).map((e) => e.schluessel));
+    for (const k of besitz) {
+      const gleich = ergKeys.has(k) ? gleichJson(kernAnteil(neu[k], erg.ziel), kernAnteil(quelle[k], erg.quelle)) : gleichJson(neu[k], quelle[k]);
+      if (!gleich) fehler.push(`${pfad}: Schlüssel '${k}' weicht nach dem Sync von der Quelle ab`);
+      if (ergKeys.has(k)) fehler.push(...ergaenzungsBefunde(neu[k], erg.ziel).map((b) => `${pfad}: ${b}`));
+    }
     for (const k of Object.keys(vorher)) if (!besitz.has(k) && !gleichJson(neu[k], vorher[k])) fehler.push(`${pfad}: Projektschlüssel '${k}' wurde verändert`);
     for (const k of Object.keys(neu)) if (!besitz.has(k) && !(k in vorher)) fehler.push(`${pfad}: Schlüssel '${k}' ist neu und kein Besitz`);
   }
@@ -124,6 +159,17 @@ export function planeSync({
   const nachPfad = new Map();
   const verteilt = manifest.eintraege.filter(wirdVerteilt);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
+  const erg = LEER();
+  if (verteilt.some(istErgaenzbar)) {
+    for (const [seite, lies] of [["quelle", quelleLies], ["ziel", zielLies]]) {
+      try {
+        erg[seite] = liesErgaenzung(lies);
+      } catch (err) {
+        res.fehler.push(`${seite === "quelle" ? "Quelle" : "Ziel"}: ${err.message}`);
+      }
+    }
+    if (res.fehler.length > 0) return res;
+  }
   const ziele = new Map(); // Pfad -> { ergebnis (LF), quelleText }
   for (const [pfad, eintraege] of nachPfad) {
     const srcText = normalisiereEol(quelleLies(pfad));
@@ -131,8 +177,8 @@ export function planeSync({
     const zielLf = zielRoh === null ? null : normalisiereEol(zielRoh);
     try {
       const ganz = eintraege.some(istGanzeDatei);
-      const ergebnis = ganz ? rendereProjektwerte(srcText, zielConfig, pfad) : wendeTeileAn(eintraege, srcText, zielLf, zielConfig);
-      if (!ganz) res.fehler.push(...pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis));
+      const ergebnis = ganz ? rendereProjektwerte(srcText, zielConfig, pfad) : wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg);
+      if (!ganz) res.fehler.push(...pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis, erg));
       ziele.set(pfad, { ergebnis, zielRoh, zielLf, srcText });
     } catch (err) {
       res.fehler.push(err.message.startsWith(`${pfad}:`) ? err.message : `${pfad}: ${err.message}`);
@@ -151,7 +197,7 @@ export function planeSync({
   ziehe(MANIFEST_PFAD, normalisiereEol(manifestText), zielLies(MANIFEST_PFAD), false);
 
   const einheiten = {};
-  for (const e of verteilt) einheiten[einheitId(e)] = einheitHash(e, ziele.get(e.pfad).srcText);
+  for (const e of verteilt) einheiten[einheitId(e)] = einheitHash(e, ziele.get(e.pfad).srcText, erg.quelle);
   const sortiert = Object.fromEntries(Object.entries(einheiten).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   const herkunft = quelleStand.tag ? { commit: quelleStand.commit, tag: quelleStand.tag, sauber: quelleStand.sauber } : { commit: quelleStand.commit, sauber: quelleStand.sauber };
   res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert };
@@ -286,7 +332,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     }
     try {
       const m = JSON.parse(v.lies(MANIFEST_PFAD) ?? "");
-      if (Array.isArray(m.eintraege)) v.vorladen(m.eintraege.filter((e) => typeof e?.pfad === "string").map((e) => e.pfad));
+      if (Array.isArray(m.eintraege)) v.vorladen([PROJEKT_PFAD, ...m.eintraege.filter((e) => typeof e?.pfad === "string").map((e) => e.pfad)]);
     } catch {
       // kein lesbares Manifest: planeSync meldet es.
     }

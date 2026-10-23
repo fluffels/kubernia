@@ -8,8 +8,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { einheitHash, einheitId, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { einheitHash, einheitId, ERGAENZBARE_EINHEIT, ergaenzungsBefunde, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { berechtigungenAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
@@ -18,6 +18,44 @@ const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scrip
 const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`)";
 
 const BLOCK_HINWEIS = " (Projektergänzungen gehören außerhalb der Besitz-Marker)";
+
+const ERGAENZUNG_HINWEIS = ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFIG} › berechtigungen)`;
+
+/** Pur: die Ergänzung aus dem Text der Projekt-Config; ohne Datei oder Block leer, bei kaputter Datei oder Form wirft es (Fix-Zeile inklusive). */
+function ergaenzungAus(lies) {
+  return berechtigungenAusText(lies(PROJEKT_CONFIG));
+}
+
+/** Der Wert (parsed) der ergänzbaren Einheit aus dem Projekt oder `null` (Datei oder Schlüssel fehlt, kein JSON). */
+function ergaenzbarerWert(lies) {
+  const [pfad, schluessel] = ERGAENZBARE_EINHEIT.split("#/");
+  try {
+    const j = JSON.parse(lies(pfad) ?? "");
+    return j?.[schluessel] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prüft die Berechtigungs-Ergänzung des Projekts (`berechtigungen` in der Config) gegen die ergänzbare Einheit, getrennt vom Kern-Hash und immer,
+ * auch ohne Sync-Stand (#1874): jeder Eintrag steht am Ende seiner Liste, nichts doppelt, kein allow hebt ein deny oder ask auf.
+ * Rückgabe: `{ fehler, eintraege }`; jeder Fehler nennt den Weg.
+ */
+export function pruefeErgaenzung(lies) {
+  let erg;
+  try {
+    erg = ergaenzungAus(lies);
+  } catch (e) {
+    return { fehler: [`${e.message}. Weg: ${PROJEKT_CONFIG} › berechtigungen korrigieren`], eintraege: 0 };
+  }
+  const eintraege = erg.allow.length + erg.ask.length + erg.deny.length;
+  if (eintraege === 0) return { fehler: [], eintraege };
+  const perm = ergaenzbarerWert(lies);
+  const befunde = perm === null ? [`${ERGAENZBARE_EINHEIT}: Datei oder Schlüssel fehlt, die Ergänzung hat keinen Platz`] : ergaenzungsBefunde(perm, erg);
+  const weg = `Weg: die Einträge aus ${PROJEKT_CONFIG} › berechtigungen ans Ende der Liste in ${ERGAENZBARE_EINHEIT.split("#/")[0]} setzen und im Zielprojekt neu syncen`;
+  return { fehler: befunde.map((b) => `${b}. ${weg}`), eintraege };
+}
 
 /**
  * Prüft den Besitz gegen den Sync-Stand. `lies(pfad)` liefert den Dateitext (relativ zur Projektwurzel) oder `null`.
@@ -46,6 +84,13 @@ export function pruefeDrift(lies) {
     return rot(`${MANIFEST_PFAD} ist kein gültiges JSON`);
   }
   const fehler = [];
+  let ergaenzung = leereErgaenzung();
+  let configKaputt = false;
+  try {
+    ergaenzung = ergaenzungAus(lies);
+  } catch {
+    configKaputt = true; // die Ergänzungs-Prüfung (pruefeErgaenzung) meldet die kaputte Config mit Weg; ihr Hash wäre hier nicht aussagekräftig.
+  }
   // Herkunft (#1871): nur ein Sync von einem sauberen Tag gilt, auch ein Stand der Version 1 ist rot.
   const tag = stand.quelle?.tag;
   if (typeof tag !== "string" || tag === "") fehler.push(`Sync-Stand stammt nicht von einem Tag (tag fehlt, Version ${stand.version})`);
@@ -59,10 +104,12 @@ export function pruefeDrift(lies) {
       fehler.push(`${id}: im Manifest, aber nicht im Sync-Stand`);
       continue;
     }
+    if (configKaputt && istErgaenzbar(e)) continue;
     const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
-    const hash = text === null ? null : einheitHash(e, text);
+    const hash = text === null ? null : einheitHash(e, text, ergaenzung);
+    const hinweis = e.block !== undefined ? BLOCK_HINWEIS : istErgaenzbar(e) ? ERGAENZUNG_HINWEIS : "";
     if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`);
-    else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert${e.block !== undefined ? BLOCK_HINWEIS : ""}`);
+    else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert${hinweis}`);
   }
   const nichtVerteilt = new Map((manifest.eintraege ?? []).filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
   for (const id of Object.keys(stand.einheiten)) {
@@ -99,9 +146,15 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
     for (const f of pw.fehler) err(`  ${f}`);
     if (pw.abweichungen.length > 0) err(`  Fix: \`node scripts/projektwerte.mjs --write\` (Werte kommen aus ${PROJEKT_CONFIG})`);
   }
-  if (r.fehler.length > 0 || pw.fehler.length > 0) return 1;
+  const ergPruefung = pruefeErgaenzung(lies);
+  if (ergPruefung.fehler.length > 0) {
+    err(`check-factory-drift: ${ergPruefung.fehler.length} Befund(e) der Berechtigungs-Ergänzung`);
+    for (const f of ergPruefung.fehler) err(`  ${f}`);
+  }
+  if (r.fehler.length > 0 || pw.fehler.length > 0 || ergPruefung.fehler.length > 0) return 1;
   if (!r.entfaellt) out(`check-factory-drift: ${r.einheiten} Einheiten ohne Drift`);
   out(`check-factory-drift: ${pw.dateien} Dateien mit Projektwert-Stellen ohne Abweichung`);
+  out(`check-factory-drift: ${ergPruefung.eintraege} Einträge der Berechtigungs-Ergänzung ohne Befund`);
   return 0;
 }
 
