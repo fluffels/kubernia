@@ -231,10 +231,10 @@ describe("engines.node der Wurzel deckt die Abhängigkeiten ab (#1428 Z18)", () 
 // .devcontainer/devcontainer.json (nur Major-Tag, vom Major-Kopplungstest oben geprüft).
 // Bei einem Node-Security-Release engines.node anheben: dieser Test nennt dann alle nachzuziehenden Pins.
 // Bekannte Grenze: geprüft wird nur die Untergrenze, kein Gleichheitstest (Dependabot darf Docker-Pins höher ziehen).
-// Bekannte Grenze: ein Digest-Pin (`node:22.23.4@sha256:…`) wird als „nicht patch-genau“ gemeldet (fail-closed Fehlalarm, heute ohne Vorkommen).
+// Ein Digest-Suffix `@sha256:<64 hex>` ist erlaubt (#983 pinnt die Basis-Images per Digest); der Tag davor bleibt patch-genau.
 // Bewusste Abwägung: .nvmrc ist patch-genau gepinnt (deterministische CI), Dependabot hebt es nicht; ein Security-Release hebt man von Hand.
 
-const PIN_FORM = /^v?(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?$/;
+const PIN_FORM = /^v?(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?(?:@sha256:[0-9a-f]{64})?$/;
 
 /** Verstöße je Quelle: kein Pin, nicht patch-genau, unter dem engines-Minimum, engines nicht auswertbar. Pur. */
 function nodePinVerstoesse(pins: Record<string, string[]>, engines: string | undefined): string[] {
@@ -293,6 +293,15 @@ describe("Node-Pins erfüllen das Minimum engines.node (#1907)", () => {
     assert.match(v([])[0], /kein Node-Pin/);
     for (const ok of ["22.23.4-bookworm-slim", "v22.23.4", "22.24.0", "24.1.0-slim"]) assert.deepEqual(v([ok]), [], ok);
     assert.equal(nodePinVerstoesse({ q: ["22.23.4"] }, "^22").length, 1);
+  });
+
+  test("Digest-Suffix: erlaubt hinter einem patch-genauen Tag, der Tag davor wird weiter geprüft", () => {
+    const v = (pin: string) => nodePinVerstoesse({ q: [pin] }, ">=22.23.4");
+    const d = `@sha256:${"a".repeat(64)}`;
+    assert.deepEqual(v(`22.23.4-bookworm-slim${d}`), []);
+    assert.match(v(`22-bookworm-slim${d}`)[0], /nicht patch-genau/);
+    assert.match(v(`22.22.3-bookworm-slim${d}`)[0], /liegt unter/);
+    assert.match(v("22.23.4@sha256:abc")[0], /nicht patch-genau/, "kurzer Digest");
   });
 
   test("Negativ: eine Node-Stage als letzte wird nicht als nginx-Laufzeit gewertet", () => {
