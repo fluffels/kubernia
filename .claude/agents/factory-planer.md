@@ -30,6 +30,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.festgefahren` | `status:festgefahren` |
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
+| `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
 > Modell per Alias `opus` (immer das aktuelle Opus), keine feste ID. Phasen-Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.

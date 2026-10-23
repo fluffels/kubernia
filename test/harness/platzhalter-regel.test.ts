@@ -6,7 +6,7 @@
  * Die Regel selbst ist `platzhalterBefunde` in scripts/besitz-lib.mjs; dieser Test ruft sie auf den echten Texten und auf Fixtures auf.
  *
  * Grenze: die Regel prüft nur die Prüf-Fläche von `projektwertDateien` (Manifest-Markdown, Agenten- und Skill-Markdown) und nur die
- * Schlüssel-Form mit den Gruppen `agenten`, `labels`, `praefixe`; `<agenten.…>` mit Auslassungszeichen beschreibt nur und zählt nicht. */
+ * Schlüssel-Form mit den Gruppen `agenten`, `labels`, `praefixe`, `skills`; `<agenten.…>` mit Auslassungszeichen beschreibt nur und zählt nicht. */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

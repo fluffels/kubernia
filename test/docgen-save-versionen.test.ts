@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { fixture } from "./support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as sv from "../scripts/docs-gen/save-versionen.mjs";
+import * as sv from "../scripts/projekt/docs-gen/save-versionen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gen from "../scripts/docs-gen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
