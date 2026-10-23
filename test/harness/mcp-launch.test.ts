@@ -20,6 +20,7 @@ type Fabrik = {
   planLaunch: (o: { lockVersion: string | undefined; installed: { version: string; binPath: string } | null }) => unknown;
   exitMeldung: (o: { code: number | null; signal: string | null; vonAussen: boolean; laufzeitMs: number; modus: string; ersetzt: boolean }) => string | null;
   npxHinweis: (spec: string) => string;
+  abweichungHinweis: (a: { lokal: string; lock: string }) => string;
 };
 const launcherFuer = (launchRoh as unknown as { launcherFuer: (o: { name: string; pkg: string; bin: string }) => Fabrik }).launcherFuer;
 const istNpxFallback = (ausfallRoh as unknown as { istNpxFallback: (t: string) => boolean }).istNpxFallback;
@@ -46,6 +47,9 @@ describe("launcherFuer", () => {
     expect(l.readLockVersion(fixture({ "package-lock.json": JSON.stringify({ packages: { "node_modules/@scope/x": { version: "1.2.3" } } }) }))).toBe("1.2.3");
     expect(l.readLockVersion(fixture({ "package-lock.json": JSON.stringify({ packages: { "node_modules/anderes": { version: "9.9.9" } } }) }))).toBeUndefined();
     expect(l.planLaunch({ lockVersion: "1.2.3", installed: null })).toEqual({ mode: "npx", spec: "@scope/x@1.2.3" });
+    expect(l.planLaunch({ lockVersion: "1.2.3", installed: { version: "1.2.3", binPath: "/b" } })).toEqual({ mode: "local", binPath: "/b" });
+    expect(l.planLaunch({ lockVersion: "1.2.3", installed: { version: "1.0.0", binPath: "/b" } })).toEqual({ mode: "local", binPath: "/b", abweichung: { lokal: "1.0.0", lock: "1.2.3" } });
+    expect(l.abweichungHinweis({ lokal: "1.0.0", lock: "1.2.3" })).toBe("x-mcp: lokale Version 1.0.0 weicht vom Lockfile 1.2.3 ab, starte lokal (npm ci gleicht an)");
     expect(() => l.planLaunch({ lockVersion: undefined, installed: null })).toThrow(/@scope\/x.*Lockfile/);
     expect(l.exitMeldung({ code: 1, signal: null, vonAussen: false, laufzeitMs: 4600, modus: "npx", ersetzt: false })).toBe("x-mcp: Server beendet (Exit 1, nach 5 s, Modus npx)");
     expect(l.npxHinweis("@scope/x@1.2.3")).toBe("x-mcp: lokale Installation fehlt oder weicht ab → npx @scope/x@1.2.3");
