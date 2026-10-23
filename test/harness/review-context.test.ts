@@ -48,9 +48,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { projektConfig } from "../support/fremd-config";
 import { liesMitProjektwerten } from "../support/ticket-ablauf";
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
+/** Echte Projektwerte: die Texte werden mit ihnen gelesen (Präfix nur aus [A-Za-z0-9-], daher ohne Escaping in Regex). */
+const ECHT = projektConfig();
+const WT = ECHT.praefixe.worktree;
 const lensSkill = liesMitProjektwerten(".agents/skills/review-lenses/SKILL.md");
 const planner = liesMitProjektwerten(".claude/agents/factory-planer.md");
 const lensAgent = liesMitProjektwerten(".claude/agents/factory-lens.md");
@@ -144,7 +148,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
     // Redundanz-Muster und wird mit einbezogen.
     assert.ok(
       haeltKontextDiaet(planner),
-      "Der kubernia-planner fordert AGENTS.md weiter zum Lesen an, obwohl Claude " +
+      "Der Planungs-Agent fordert AGENTS.md weiter zum Lesen an, obwohl Claude " +
         "Code sie nativ und schon vollständig in seinen Kontext legt (#1034).",
     );
   });
@@ -152,7 +156,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
   test("auch der Lens-Agent liest die Kontextdateien nicht erneut (#1209)", () => {
     assert.ok(
       haeltKontextDiaet(lensAgent),
-      "kubernia-lens fordert AGENTS.md weiter zum Lesen an, obwohl Claude Code sie nativ und schon " +
+      "Der Lens-Agent fordert AGENTS.md weiter zum Lesen an, obwohl Claude Code sie nativ und schon " +
         "vollständig in seinen Kontext legt (#1034).",
     );
   });
@@ -214,9 +218,9 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
   // Prädikat aufgeweicht, fällt hier sein eigener Gegenbeweis.
 
   test("nenntPatchDatei verlangt Benennung UND Dateiendung", () => {
-    assert.ok(nenntPatchDatei("Die Patch-Datei liegt unter kq-1-r1.patch"));
+    assert.ok(nenntPatchDatei("Die Patch-Datei liegt unter x-1-r1.patch"));
     assert.ok(!nenntPatchDatei("Die Patch-Datei liegt irgendwo"), "ohne Dateiendung nicht grün");
-    assert.ok(!nenntPatchDatei("kq-1-r1.patch"), "ohne Benennung nicht grün");
+    assert.ok(!nenntPatchDatei("x-1-r1.patch"), "ohne Benennung nicht grün");
   });
 
   test("haeltKontextDiaet fällt bei ausgehöhltem Baustein", () => {
@@ -226,8 +230,8 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
   });
 
   test("hatRundenNummer und istDreiPunkt fallen bei Zwei-Punkt und fehlender Runde", () => {
-    assert.ok(hatRundenNummer('git diff origin/main...HEAD > "$TMP/kq-<nr>-r<runde>.patch"'));
-    assert.ok(!hatRundenNummer('git diff origin/main...HEAD > "$TMP/kq-<nr>.patch"'), "ohne Runde rot");
+    assert.ok(hatRundenNummer('git diff origin/main...HEAD > "$TMP/x-<nr>-r<runde>.patch"'));
+    assert.ok(!hatRundenNummer('git diff origin/main...HEAD > "$TMP/x-<nr>.patch"'), "ohne Runde rot");
     assert.ok(istDreiPunkt("git diff origin/main...HEAD > \"$TMP/x.patch\""));
     assert.ok(!istDreiPunkt("git diff main > \"$TMP/x.patch\""), "Zwei-Punkt gegen main rot");
   });
@@ -243,7 +247,7 @@ describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1
   const harness = read("docs/agent-harness.md");
   const umsetzer = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
   /** Der Lens-Worktree ist in Definition und Skill beschrieben (Pfadmuster, Detach, Entfernen). */
-  const beschreibtLensWorktree = (s: string) => /kq-<nr>-lens-r<runde>/.test(s) && /worktree add --detach/.test(s) && /worktree remove --force/.test(s);
+  const beschreibtLensWorktree = (s: string) => new RegExp(`${WT}<nr>-lens-r<runde>`).test(s) && /worktree add --detach/.test(s) && /worktree remove --force/.test(s);
 
   test("die Lens-Definition verlangt die Sabotage im Lens-Worktree, nie im Feature-Worktree", () => {
     assert.ok(beschreibtLensWorktree(lensAgent), "factory-lens.md beschreibt den Lens-Worktree nicht");
@@ -258,7 +262,7 @@ describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1
   });
 
   test("Umsetzer und Harness-Doku ziehen mit", () => {
-    assert.match(umsetzer, /kq-<nr>-lens-\*/);
+    assert.match(umsetzer, new RegExp(`${WT}<nr>-lens-\\*`));
     assert.ok(!/keine gemeinsame Datei/.test(harness), "agent-harness.md §2.5 behauptet weiter, die Lenses teilten nichts");
     assert.match(harness, /eigenen Lens-Worktree/);
   });

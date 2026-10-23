@@ -1,6 +1,6 @@
 /* Review- und Plan-Nachweis-Wächter (#1270).
  *
- * Jeder Agenten-PR trägt per Commit-Zeilen `KQ-Plan:` / `KQ-Review:` einen prüfbaren Nachweis
+ * Jeder Agenten-PR trägt per Commit-Zeilen `${Z.plan}:` / `${Z.review}:` einen prüfbaren Nachweis
  * über Planungspass und konvergierten Lens-Review; die PR-CI erzwingt ihn pfadunabhängig.
  * Logik aus scripts/check-review-nachweis.mjs importiert (eine Quelle der Wahrheit), git
  * ist injiziert.
@@ -22,7 +22,7 @@ type Nachweis = {
   plan: { art: string; grund?: string; zeile?: string } | null;
   review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; verdikt: string | null } | null;
 };
-type Zeilen = { praefix: string; planer: string; plan: string; review: string; reviewOverride: string };
+type Zeilen = { praefix: string; planer: string; plan: string; review: string; reviewOverride: string; diffsizeOverride: string };
 type Mod = {
   MAX_FIX_RUNDEN: number;
   MAX_REVIEW_PAESSE: number;
@@ -43,19 +43,22 @@ type Mod = {
 import * as raw from "../scripts/check-review-nachweis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
+import { FREMD, projektConfig } from "./support/fremd-config";
 const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, pflichtLenses } = raw as Mod;
 const { konfliktMergesNach } = sliceRaw as unknown as Pick<Mod, "konfliktMergesNach">;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
 
-/** Die Zeilen der echten Config (KQ-, kubernia-planner); die Wrapper reichen sie durch, damit die Bestandstests unverändert lesbar bleiben. */
-const Z = commitZeilen("KQ-", "kubernia-planner");
+/** Die Zeilen der Fremd-Config; die Wrapper reichen sie durch, damit die Bestandstests unverändert lesbar bleiben. */
+const PL = FREMD.agenten.planer;
+const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
+const ECHT = projektConfig();
 const parseNachweis = (text: string) => (raw as Mod).parseNachweis(text, Z);
 const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen"> & { zeilen?: Zeilen }) => (raw as Mod).bewerteNachweis({ zeilen: Z, ...o });
 const checkReviewNachweis = (o: Parameters<Mod["checkReviewNachweis"]>[0]) => (raw as Mod).checkReviewNachweis({ ladeZeilen: () => Z, ...o });
 
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
-const review = (felder = `head=${SHA} runden=2 lenses=${DREI} verdikt=ok`) => `KQ-Plan: kubernia-planner\nKQ-Review: ${felder}`;
+const review = (felder = `head=${SHA} runden=2 lenses=${DREI} verdikt=ok`) => `${Z.plan}: ${PL}\n${Z.review}: ${felder}`;
 
 describe("Cap-Semantik (W1)", () => {
   test("Cap 2 = höchstens 2 Fix-Runden = höchstens 3 Pässe", () => {
@@ -74,7 +77,7 @@ describe("parseNachweis", () => {
     assert.equal(n.review?.verdikt, "ok");
   });
   test("eingerückt oder mitten im Satz wird ignoriert", () => {
-    const n = parseNachweis(`  KQ-Review: head=${SHA} runden=1 lenses=doku verdikt=ok\nsiehe KQ-Plan: kubernia-planner`);
+    const n = parseNachweis(`  ${Z.review}: head=${SHA} runden=1 lenses=doku verdikt=ok\nsiehe ${Z.plan}: ${PL}`);
     assert.equal(n.review, null);
     assert.equal(n.plan, null);
   });
@@ -89,22 +92,22 @@ describe("parseNachweis", () => {
     assert.equal(n.review?.verdikt, "ok");
   });
   test("ein Head mit Großbuchstaben wird kleingeschrieben übernommen, ein zu kurzer bleibt leer", () => {
-    const n = parseNachweis(`KQ-Review: head=${"AB12CD3".repeat(5)}12345 runden=1 lenses=doku verdikt=ok`);
+    const n = parseNachweis(`${Z.review}: head=${"AB12CD3".repeat(5)}12345 runden=1 lenses=doku verdikt=ok`);
     assert.equal(n.review?.head, `${"ab12cd3".repeat(5)}12345`);
-    assert.equal(parseNachweis("KQ-Review: head=ABC123 runden=1 lenses=doku verdikt=ok").review?.head, null);
+    assert.equal(parseNachweis(`${Z.review}: head=ABC123 runden=1 lenses=doku verdikt=ok`).review?.head, null);
   });
   test("fehlende Felder bleiben leer, kaputte Zahl wird NaN", () => {
-    const n = parseNachweis("KQ-Review: runden=zwei");
+    const n = parseNachweis(`${Z.review}: runden=zwei`);
     assert.equal(n.review?.head, null);
     assert.ok(Number.isNaN(n.review?.runden));
     assert.deepEqual(n.review?.lenses, []);
     assert.equal(n.review?.verdikt, null);
   });
-  test("KQ-Plan ohne Planer braucht eine Begründung", () => {
-    assert.deepEqual(parseNachweis("KQ-Plan: ohne — Spawn scheiterte").plan, { art: "ohne", grund: "Spawn scheiterte" });
-    assert.equal(parseNachweis("KQ-Plan: ohne").plan?.art, "ungueltig");
-    assert.equal(parseNachweis("KQ-Plan: ohne —").plan?.art, "ungueltig");
-    assert.equal(parseNachweis("KQ-Plan: egal").plan?.art, "ungueltig");
+  test("Plan-Zeile ohne Planer braucht eine Begründung", () => {
+    assert.deepEqual(parseNachweis(`${Z.plan}: ohne — Spawn scheiterte`).plan, { art: "ohne", grund: "Spawn scheiterte" });
+    assert.equal(parseNachweis(`${Z.plan}: ohne`).plan?.art, "ungueltig");
+    assert.equal(parseNachweis(`${Z.plan}: ohne —`).plan?.art, "ungueltig");
+    assert.equal(parseNachweis(`${Z.plan}: egal`).plan?.art, "ungueltig");
   });
 });
 
@@ -132,7 +135,7 @@ describe("bewerteNachweis", () => {
   test("head unbekannt oder nicht im Slice (z.B. aus main) ist rot", () => {
     assert.match(ok(review(), { headBekannt: false }).join(), /kein bekannter Commit/);
     assert.match(ok(review(), { headImSlice: false }).join(), /nicht im Slice/);
-    assert.match(ok("KQ-Plan: kubernia-planner\nKQ-Review: runden=1 lenses=doku verdikt=ok").join(), /head fehlt/);
+    assert.match(ok(`${Z.plan}: ${PL}\n${Z.review}: runden=1 lenses=doku verdikt=ok`).join(), /head fehlt/);
   });
   test("Code-Diff nur mit doku ist rot, fehlende Code-Brille ist rot", () => {
     assert.match(ok(review(`head=${SHA} runden=1 lenses=doku verdikt=ok`)).join(), /lenses fehlt/);
@@ -148,14 +151,14 @@ describe("bewerteNachweis", () => {
     assert.match(ok(review(`head=${SHA} runden=1 lenses=${DREI} verdikt=blockiert`)).join(), /verdikt=blockiert/);
     assert.match(ok(review(`head=${SHA} runden=1 lenses=${DREI}`)).join(), /verdikt=\(fehlt\)/);
   });
-  test("KQ-Plan fehlt oder ist ungültig ist rot, mit Begründung ok", () => {
-    const rev = `KQ-Review: head=${SHA} runden=1 lenses=${DREI} verdikt=ok`;
-    assert.match(ok(rev).join(), /KQ-Plan-Zeile fehlt/);
-    assert.match(ok(`KQ-Plan: ohne\n${rev}`).join(), /KQ-Plan ungültig/);
-    assert.deepEqual(ok(`KQ-Plan: ohne — Spawn scheiterte\n${rev}`), []);
+  test("Plan-Zeile fehlt oder ist ungültig ist rot, mit Begründung ok", () => {
+    const rev = `${Z.review}: head=${SHA} runden=1 lenses=${DREI} verdikt=ok`;
+    assert.match(ok(rev).join(), new RegExp(`${Z.plan}-Zeile fehlt`));
+    assert.match(ok(`${Z.plan}: ohne\n${rev}`).join(), new RegExp(`${Z.plan} ungültig`));
+    assert.deepEqual(ok(`${Z.plan}: ohne — Spawn scheiterte\n${rev}`), []);
   });
-  test("KQ-Review-Zeile fehlt ist rot", () => {
-    assert.match(ok("KQ-Plan: kubernia-planner").join(), /KQ-Review-Zeile fehlt/);
+  test(`${Z.review}-Zeile fehlt ist rot`, () => {
+    assert.match(ok(`${Z.plan}: ${PL}`).join(), new RegExp(`${Z.review}-Zeile fehlt`));
   });
 });
 
@@ -177,9 +180,9 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
     assert.equal(n.review?.verdikt, "ok");
   });
   test("Parser: kaputte Zahl wird NaN, leerer Wert ergibt leere Liste", () => {
-    const n = parseNachweis("KQ-Review: blocker=architektur:x");
+    const n = parseNachweis(`${Z.review}: blocker=architektur:x`);
     assert.ok(Number.isNaN(n.review?.blocker?.[0].n));
-    assert.deepEqual(parseNachweis("KQ-Review: blocker= verdikt=ok").review?.blocker, []);
+    assert.deepEqual(parseNachweis(`${Z.review}: blocker= verdikt=ok`).review?.blocker, []);
   });
   test("alte Zeile ohne blocker bleibt gültig", () => {
     assert.deepEqual(bewerteNachweis({ nachweis: parseNachweis(review()), dateien: ["src/x.ts"], headBekannt: true, headImSlice: true }), []);
@@ -314,23 +317,23 @@ describe("checkReviewNachweis (git injiziert)", () => {
   });
   test("Override mit Begründung lässt durch, ohne Ticketnummer/Begründung nicht", () => {
     const g = (m: string) => checkReviewNachweis({ runGit: fakeGit({ messages: m }), env });
-    const ok = g("revert\n\nKQ-Review-Override: #1270 Revert-PR");
+    const ok = g(`revert\n\n${Z.reviewOverride}: #1270 Revert-PR`);
     assert.equal(ok.ok, true);
     assert.match(ok.override ?? "", /Revert-PR/);
-    assert.equal(g("KQ-Review-Override: Revert").ok, false);
-    assert.equal(g("KQ-Review-Override: #1270").ok, false);
+    assert.equal(g(`${Z.reviewOverride}: Revert`).ok, false);
+    assert.equal(g(`${Z.reviewOverride}: #1270`).ok, false);
   });
   test("Widerruf (#<nr> entfällt) hebt den Review-Override auf: der Nachweis wird geprüft (L7)", () => {
     const g = (m: string) => checkReviewNachweis({ runGit: fakeGit({ messages: m }), env });
-    const widerrufen = g("revert\n\nKQ-Review-Override: #1270 Revert-PR\n\nKQ-Review-Override: #1270 entfällt");
+    const widerrufen = g(`revert\n\n${Z.reviewOverride}: #1270 Revert-PR\n\n${Z.reviewOverride}: #1270 entfällt`);
     assert.equal(widerrufen.ok, false);
     assert.equal(widerrufen.override, undefined);
-    assert.match(widerrufen.fehler.join(), /KQ-Review-Zeile fehlt/);
-    const allein = g("KQ-Review-Override: #1270 entfällt");
+    assert.match(widerrufen.fehler.join(), new RegExp(`${Z.review}-Zeile fehlt`));
+    const allein = g(`${Z.reviewOverride}: #1270 entfällt`);
     assert.equal(allein.ok, false);
     assert.equal(allein.override, undefined);
     // Mit gültigem Nachweis bleibt ein widerrufener Override grün (der Nachweis trägt).
-    const mitNachweis = g(`${review()}\n\nKQ-Review-Override: #1270 Revert-PR\n\nKQ-Review-Override: #1270 entfällt`);
+    const mitNachweis = g(`${review()}\n\n${Z.reviewOverride}: #1270 Revert-PR\n\n${Z.reviewOverride}: #1270 entfällt`);
     assert.equal(mitNachweis.ok, true);
     assert.equal(mitNachweis.override, undefined);
   });
@@ -402,7 +405,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
 
   /** Repo mit Basis, Feature-Commit (der „reviewte“ Stand) und einem Merge von main; `konflikt` wählt, ob main dieselbe Zeile ändert. */
   function repoMitMerge(konflikt: boolean) {
-    const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+    const dir = mkdtempSync(join(tmpdir(), "nachweis-"));
     dirs.push(dir);
     git(dir, "init", "-q", "-b", "main");
     writeFileSync(join(dir, "a.txt"), "eins\nzwei\ndrei\n");
@@ -425,7 +428,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
       git(dir, "add", "a.txt");
       git(dir, "commit", "-q", "--no-edit");
     }
-    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
+    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
     // Wie im Betrieb: nach dem Einmergen ist die Basis (merge-base mit main) die Spitze von main; deren Commits zählen nicht zum Slice.
     return { dir, basis: git(dir, "rev-parse", "main").trim() };
   }
@@ -445,7 +448,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
   });
 
   test("ohne Merge nach dem Review: grün", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+    const dir = mkdtempSync(join(tmpdir(), "nachweis-"));
     dirs.push(dir);
     git(dir, "init", "-q", "-b", "main");
     writeFileSync(join(dir, "a.txt"), "x\n");
@@ -455,7 +458,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
     writeFileSync(join(dir, "a.txt"), "y\n");
     git(dir, "commit", "-q", "-am", "feature");
     const reviewt = git(dir, "rev-parse", "HEAD").trim();
-    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
+    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
     assert.equal(pruefe({ dir, basis }).ok, true);
   });
 });
@@ -518,14 +521,14 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
     const git = (cwd: string, ...args: string[]) =>
       execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     const nachweis = (dir: string, head: string, extra = "") =>
-      git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis${extra}\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${head} runden=1 lenses=${DREI} verdikt=ok`);
+      git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis${extra}\n\n${Z.plan}: ${PL}\n${Z.review}: head=${head} runden=1 lenses=${DREI} verdikt=ok`);
     const sha = (dir: string) => git(dir, "rev-parse", "HEAD").trim();
     const pruefe = (dir: string, basis: string) =>
       checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }), env: { FACTORY_DIFF_BASE: basis } });
 
     /** Basis auf main, ein Feature-Commit (reviewt) darauf. */
     function repo() {
-      const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+      const dir = mkdtempSync(join(tmpdir(), "nachweis-"));
       dirs.push(dir);
       git(dir, "init", "-q", "-b", "main");
       writeFileSync(join(dir, "a.txt"), "x\n");
@@ -552,7 +555,7 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
     test("leere Commits nach dem Nachweis (Override-Zeile) bleiben grün", () => {
       const { dir, basis, reviewt } = repo();
       nachweis(dir, reviewt);
-      git(dir, "commit", "-q", "--allow-empty", "-m", "KQ-Diffsize-Override: #1 entfällt");
+      git(dir, "commit", "-q", "--allow-empty", "-m", `${Z.diffsizeOverride}: #1 entfällt`);
       assert.deepEqual(pruefe(dir, basis).fehler, []);
     });
 
@@ -591,7 +594,7 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
 // ── Commit-Zeilen-Präfix aus der Projekt-Config (#1741, ADR 0022 F3) ─────────────────────────────
 
 /** Wörtliche Commit-Message des gemergten Squash-Commits 1d193666 (Betreff als `* `-Zeilen, zwei Nachweise im Body). */
-const SQUASH_1D193666 = [
+const squash = (z: Zeilen, planer: string): string => [ // die Zeilen der Config stehen als Parameter, der übrige Text ist wörtlich
   "feat(harness): Abschluss ohne offene Befunde, BEFUNDE-Zeile, brain-input im Fortsetzungs-Pfad (#1723) (#1733)",
   "",
   "* feat(harness): R0 verlangt BEFUNDE-Zeile im Umsetzer-Bericht (#1723)",
@@ -610,8 +613,8 @@ const SQUASH_1D193666 = [
   "",
   "* chore(harness): Review-Nachweis (#1723)",
   "",
-  "KQ-Plan: kubernia-planner",
-  "KQ-Review: head=7e145d331598bb4009a8a504b87a7347930416be runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok",
+  `${z.plan}: ${planer}`,
+  `${z.review}: head=7e145d331598bb4009a8a504b87a7347930416be runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok`,
   "",
   "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
   "Claude-Session: https://claude.ai/code/session_01LpXppXWFQtLt6rzgeapR9x",
@@ -620,8 +623,8 @@ const SQUASH_1D193666 = [
   "",
   "* chore(harness): Review-Nachweis nach Merge (#1723)",
   "",
-  "KQ-Plan: kubernia-planner",
-  "KQ-Review: head=47da050d18478970b277ae0d9218482fdd79fd11 runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok",
+  `${z.plan}: ${planer}`,
+  `${z.review}: head=47da050d18478970b277ae0d9218482fdd79fd11 runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok`,
   "",
   "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
   "Claude-Session: https://claude.ai/code/session_01LpXppXWFQtLt6rzgeapR9x",
@@ -641,27 +644,32 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
       zeilen,
     });
 
-  test("AK3: die wörtliche Squash-Message eines gemergten Commits ist mit der Config KQ- ein gültiger Nachweis", () => {
-    const n = parseNachweis(SQUASH_1D193666);
+  test("AK3: die wörtliche Squash-Message eines gemergten Commits ist mit der Config ein gültiger Nachweis", () => {
+    const n = parseNachweis(squash(Z, PL));
     assert.deepEqual(n.plan, { art: "planer" });
     assert.equal(n.review?.head, "47da050d18478970b277ae0d9218482fdd79fd11"); // der jüngste Nachweis gilt
     assert.equal(n.review?.runden, 3);
-    assert.deepEqual(bewerte(SQUASH_1D193666, Z), []);
+    assert.deepEqual(bewerte(squash(Z, PL), Z), []);
   });
 
-  test("Red-Green: mit der Config AB- zählen dieselben KQ-Zeilen nicht, die Meldungen nennen das Präfix der Config", () => {
-    const ab = commitZeilen("AB-", "kubernia-planner");
-    const f = bewerte(SQUASH_1D193666, ab).join("\n");
+  test("die Squash-Message mit den Zeilen der echten Config ist mit ihr ein gültiger Nachweis", () => {
+    const zeilen = commitZeilen(ECHT.praefixe.commitZeile, ECHT.agenten.planer);
+    assert.deepEqual(bewerte(squash(zeilen, ECHT.agenten.planer), zeilen), []);
+  });
+
+  test("Red-Green: mit der Config AB- zählen die Zeilen der anderen Config nicht, die Meldungen nennen das Präfix der Config", () => {
+    const ab = commitZeilen("AB-", PL);
+    const f = bewerte(squash(Z, PL), ab).join("\n");
     assert.match(f, /AB-Plan-Zeile fehlt/);
     assert.match(f, /AB-Review-Zeile fehlt/);
-    assert.doesNotMatch(f, /KQ-/);
-    assert.deepEqual(bewerte(SQUASH_1D193666.replaceAll("KQ-", "AB-"), ab), []);
+    assert.doesNotMatch(f, new RegExp(Z.praefix));
+    assert.deepEqual(bewerte(squash(ab, PL), ab), []);
   });
 
   test("ein ungültiger Plan nennt den Planer der Config, nicht einen festen Namen", () => {
-    const f = bewerte(`KQ-Plan: egal\nKQ-Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`, commitZeilen("KQ-", "mein-planer")).join("\n");
+    const f = bewerte(`${Z.plan}: egal\n${Z.review}: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`, commitZeilen(Z.praefix, "mein-planer")).join("\n");
     assert.match(f, /"mein-planer"/);
-    assert.doesNotMatch(f, /"kubernia-planner"/);
+    assert.doesNotMatch(f, new RegExp(`"${PL}"`));
   });
 
   test("bewerteNachweis ohne Zeilen wirft (kein Standardwert)", () => {
@@ -671,16 +679,16 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
     );
   });
 
-  test("AK4: XQ-Plan und XQ-Review zählen bei der Config KQ- nicht", () => {
-    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review().replaceAll("KQ-", "XQ-") }), env });
+  test("AK4: Plan- und Review-Zeilen mit fremdem Präfix zählen nicht", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review().replaceAll(Z.praefix, "XQ-") }), env });
     assert.equal(r.ok, false);
-    assert.match(r.fehler.join("\n"), /KQ-Plan-Zeile fehlt/);
+    assert.match(r.fehler.join("\n"), new RegExp(`${Z.plan}-Zeile fehlt`));
   });
 
-  test("ein Override trägt das Präfix der Config: KQ-Review-Override gilt bei KQ-, bei AB- nicht", () => {
-    const text = "KQ-Review-Override: #5 Revert-PR";
+  test(`ein Override trägt das Präfix der Config: ${Z.reviewOverride} gilt bei seinem Präfix, bei AB- nicht`, () => {
+    const text = `${Z.reviewOverride}: #5 Revert-PR`;
     assert.equal(checkReviewNachweis({ runGit: fakeGit({ messages: text }), env }).ok, true);
-    const ab = (raw as Mod).checkReviewNachweis({ ladeZeilen: () => commitZeilen("AB-", "kubernia-planner"), runGit: fakeGit({ messages: text }), env });
+    const ab = (raw as Mod).checkReviewNachweis({ ladeZeilen: () => commitZeilen("AB-", PL), runGit: fakeGit({ messages: text }), env });
     assert.equal(ab.ok, false);
   });
 
@@ -702,7 +710,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
   test("die Vorlage trägt Präfix und Planer der Config", () => {
     const v = (raw as Mod).vorlage(commitZeilen("AB-", "x-planer"));
     assert.match(v, /^AB-Plan: x-planer\nAB-Review: head=/);
-    assert.doesNotMatch(v, /KQ-/);
+    assert.doesNotMatch(v, new RegExp(Z.praefix));
   });
 });
 
@@ -719,7 +727,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
   const lauf = (dir: string, args: string[], env: Record<string, string> = {}) =>
     spawnSync(process.execPath, [SKRIPT, ...args], { cwd: dir, encoding: "utf8", env: { ...process.env, ...env } });
   const mkdir = () => {
-    const d = mkdtempSync(join(tmpdir(), "kq-nw-cli-"));
+    const d = mkdtempSync(join(tmpdir(), "nw-cli-"));
     dirs.push(d);
     return d;
   };
@@ -757,7 +765,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.match(r.stderr, /--config braucht einen Pfad/);
   });
 
-  test("mit der Config ZD- zählen ZD-Zeilen im Repo (Exit 0), KQ-Zeilen nicht (Exit 1)", () => {
+  test("mit der Config ZD- zählen ZD-Zeilen im Repo (Exit 0), die Zeilen einer anderen Config nicht (Exit 1)", () => {
     const d = mkdir();
     const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     git("init", "-q", "-b", "main");
@@ -771,7 +779,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const pfad = join(d, "c.json");
     writeFileSync(pfad, JSON.stringify(echteConfig()));
     const nachweis = (p: string) => `${p}Plan: demo-planer\n${p}Review: head=${reviewt} runden=1 lenses=doku blocker=doku:0 verdikt=ok`;
-    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", nachweis("KQ-"));
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", nachweis(Z.praefix));
     const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(rot.status, 1, rot.stdout + rot.stderr);
     assert.match(rot.stderr, /ZD-Plan-Zeile fehlt/);

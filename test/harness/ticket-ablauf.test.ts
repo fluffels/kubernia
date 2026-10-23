@@ -29,11 +29,13 @@ const { einheitText, leereProjektwerte } = besitzRaw as unknown as {
   einheitText: (e: { pfad: string; block: string }, text: string) => string | null;
   leereProjektwerte: (text: string) => string;
 };
+import { projektConfig } from "../support/fremd-config";
 import { liesTicketAblauf, setzeAgentenWerte, setzeProjektwerte, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const lies = (rel: string): string => readFileSync(ROOT + rel, "utf8");
 const MIN_SATZ = 60;
+const ECHT = projektConfig();
 
 const norm = (s: string): string => s.replace(/\s+/g, " ").trim();
 
@@ -287,9 +289,9 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     assert.ok(!p.some((x) => x.includes("agentic")));
     assert.ok(f.some((x) => x.includes("agentic")));
   });
-  test("keine Aussage mehr, `/kubernia` wähle den Bereich agentic", () => {
+  test("keine Aussage mehr, der Ticket-Skill wähle den Bereich agentic", () => {
     const dateien = ["AGENTS.md", "docs/ticket-reihenfolge.md", "docs/harness-glossar.md", ...skillMarkdowns()];
-    for (const rel of dateien) assert.ok(!/\/kubernia agentic|\/kubernia spiel/.test(lies(rel)), rel);
+    for (const rel of dateien) assert.ok(!new RegExp(`/${ECHT.agenten.ticketSkill} (agentic|spiel)`).test(lies(rel)), rel);
   });
   test("festgefahren hält den Lauf über mehrere Tickets nicht an (#1363)", () => {
     const m = /\*\*Mehrere Tickets:\*\*[^\n]*/.exec(lies(TICKET_ABLAUF));

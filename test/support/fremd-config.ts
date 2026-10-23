@@ -4,20 +4,24 @@
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/projekt-config-lib.mjs";
 
-export interface FremdConfig {
+export interface ProjektConfig {
   repo: string;
   boards: { rolle: string; besitzer: string; besitzerTyp: string; nummer: number; projectId: string; statusFeldId: number; statusFeldNodeId: string; todoOptionId: string }[];
   praefixe: { commitZeile: string; branch: string; worktree: string };
   labels: { harness: string; festgefahren: string; forum: string; dependabotInbox: string };
   agenten: { planer: string; umsetzer: string; lens: string; gruppe: string; ticketSkill: string };
+  projektliterale?: Record<string, string>;
 }
 
-const lib = raw as unknown as { ladeProjektConfig(opt?: { pfad?: string }): FremdConfig };
+const lib = raw as unknown as { ladeProjektConfig(opt?: { pfad?: string }): ProjektConfig };
 
 export const FREMD_CONFIG_PFAD = "test/fixtures/projekt-fremd.json";
 
 /** Die Fremd-Config (Schema wird beim Laden geprüft). */
-export const FREMD: FremdConfig = lib.ladeProjektConfig({ pfad: FREMD_CONFIG_PFAD });
+export const FREMD: ProjektConfig = lib.ladeProjektConfig({ pfad: FREMD_CONFIG_PFAD });
 
 /** Die echte Projekt-Config, nur für Tests, die einen Kindprozess starten (der liest sie selbst). */
-export const projektConfig = (): FremdConfig => lib.ladeProjektConfig();
+export const projektConfig = (): ProjektConfig => lib.ladeProjektConfig();
+
+/** Der Owner der Fremd-Config (`zz-org`): Login und Besitzer in Tests mit injizierter Config. */
+export const FREMD_OWNER = FREMD.repo.split("/")[0] ?? "";
