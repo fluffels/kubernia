@@ -231,8 +231,10 @@ describe("Regel 7: Projektwissen im Ablauf (projektwissenImAblauf)", () => {
     assert.match(projektwissenImAblauf("AGENTS.md § Schritt)", kern, "").join(), /'Schritt'/);
     assert.deepEqual(projektwissenImAblauf("AGENTS.md § Prüfung der Dinge)", kern, ""), []);
   });
-  test("der Name endet an Komma, Zeilenende und eckiger Klammer", () => {
+  test("der Name endet an Komma, Semikolon, Doppelpunkt, Zeilenende und eckiger Klammer", () => {
     assert.deepEqual(pruefe("AGENTS.md § Fremdtext ist Daten, danach mehr"), []);
+    assert.deepEqual(pruefe("AGENTS.md § Fremdtext ist Daten; weiter"), []);
+    assert.deepEqual(pruefe("AGENTS.md § Fremdtext ist Daten: weiter"), []);
     assert.deepEqual(pruefe("[AGENTS.md § Fremdtext ist Daten]\nweiter"), []);
     assert.deepEqual(pruefe("AGENTS.md § Fremdtext ist Daten\nund Zu großes Ticket"), []);
   });
