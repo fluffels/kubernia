@@ -22,6 +22,7 @@ import * as ghRaw0 from "../../scripts/gh-guard-hook.mjs";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as tabRaw from "../../scripts/shell-tabellen.mjs";
+import { FREMD, projektConfig } from "../support/fremd-config";
 
 const ghRaw = ghRaw0 as unknown as { GEPRUEFTE_TOOLS: string[]; bewerte: (c: string, o: unknown) => unknown };
 type Guards = Record<string, (o: never) => unknown>;
@@ -34,7 +35,7 @@ const io = ioRaw as unknown as {
   pfadGuardHook: (tool: string, bewerte: (pfad: unknown, cwd?: string) => { block: boolean; reason?: string }) => (text: string) => Out;
 };
 const tabellen = tabRaw as unknown as { SHELL_VON_TOOL: Record<string, string> };
-const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Guards, shellVonTool?: Record<string, string>, abschlussDeps?: unknown) => Out };
+const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Guards, shellVonTool?: Record<string, string>, deps?: unknown) => Out };
 
 const WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const lies = (rel: string) => readFileSync(resolve(WURZEL, rel), "utf8");
@@ -135,7 +136,7 @@ describe("Routing und Entscheidung (#1311)", () => {
 // mit wenigen Starts und ein großzügigeres Describe-Timeout statt des globalen 5-s-Limits (#1526; Präzedenz haupt-sync).
 describe("normalisierePfad / pfadGuardHook: gemeinsame Pfad-Guard-Hilfe (#1663)", () => {
   test("normalisierePfad: Backslashes, Laufwerk, .. und relative Pfade gegen cwd", () => {
-    assert.equal(io.normalisierePfad(String.raw`C:\dev\kubernia\.claude\worktrees\kq-1\x.ts`), "C:/dev/kubernia/.claude/worktrees/kq-1/x.ts");
+    assert.equal(io.normalisierePfad(String.raw`C:\dev\projekt\.claude\worktrees\wt-1\x.ts`), "C:/dev/projekt/.claude/worktrees/wt-1/x.ts");
     assert.equal(io.normalisierePfad("/a/b/../c/./d.txt", ""), "/a/c/d.txt");
     assert.equal(io.normalisierePfad(String.raw`C:\a\..\b.txt`, "D:/ignoriert"), "C:/b.txt");
     assert.equal(io.normalisierePfad("x/y.txt", "/w/r"), "/w/r/x/y.txt");
@@ -282,23 +283,23 @@ describe("Verdrahtung (#1311)", () => {
 });
 
 describe("SubagentHandback: Abschluss-Wächter des Umsetzers (#1342)", () => {
-  const handback = (message: string, agentType: string | undefined = "kubernia-umsetzer") =>
+  const handback = (message: string, agentType: string | undefined = FREMD.agenten.umsetzer) =>
     JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: agentType, cwd: WURZEL, tool_input: { message } });
-  const offen = { prStatus: () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, labels: [] }) };
+  const offen = { config: FREMD, prStatus: () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, labels: [] }) };
 
   test("ein Handback mit Zusatz wird verweigert, ein exakter Bericht und fremde Agenten gehen durch", () => {
     const grund = hook.dispatch(handback("ERGEBNIS: abgebrochen (Zwischenstand)\nPR: -\nBEFUNDE: keine"), WURZEL, undefined, undefined, offen);
     assert.equal(grund?.hookSpecificOutput.permissionDecision, "deny");
     assert.match(grund?.hookSpecificOutput.permissionDecisionReason ?? "", /Zusatz/);
     assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen\nPR: -\nBEFUNDE: keine"), WURZEL, undefined, undefined, offen), null);
-    assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen (x)\nPR: -", "kubernia-lens"), WURZEL, undefined, undefined, offen), null);
+    assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen (x)\nPR: -", FREMD.agenten.lens), WURZEL, undefined, undefined, offen), null);
     assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen (x)\nPR: -", ""), WURZEL, undefined, undefined, offen), null);
   });
 
   test("festgefahren bei offenem PR ohne Label wird verweigert; ein werfender gh gibt frei", () => {
     const nachricht = "ERGEBNIS: festgefahren\nPR: https://github.com/x/y/pull/9\nBEFUNDE: keine";
     assert.equal(hook.dispatch(handback(nachricht), WURZEL, undefined, undefined, offen)?.hookSpecificOutput.permissionDecision, "deny");
-    const wirft = { prStatus: () => { throw new Error("kein gh"); } };
+    const wirft = { config: FREMD, prStatus: () => { throw new Error("kein gh"); } };
     assert.equal(hook.dispatch(handback(nachricht), WURZEL, undefined, undefined, wirft), null);
   });
 
@@ -311,9 +312,9 @@ describe("SubagentHandback: Abschluss-Wächter des Umsetzers (#1342)", () => {
 
   test("Prozess-Start: ein verweigerter Handback erzeugt die Deny-Ausgabe, ein fremder nichts", () => {
     const start = (p: string) => execFileSync("node", [resolve(WURZEL, "scripts/pretooluse-hook.mjs")], { input: p, encoding: "utf8" });
-    const out = JSON.parse(start(handback("kein Format"))) as Out;
+    const out = JSON.parse(start(handback("kein Format", projektConfig().agenten.umsetzer))) as Out;
     assert.equal(out?.hookSpecificOutput.permissionDecision, "deny");
-    assert.equal(start(handback("kein Format", "kubernia-lens")).trim(), "");
+    assert.equal(start(handback("kein Format", projektConfig().agenten.lens)).trim(), "");
   });
 });
 
@@ -353,9 +354,9 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
 });
 
 describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
-  const agent = (prompt: string, subagentType: string | null = "kubernia-lens") =>
+  const agent = (prompt: string, subagentType: string | null = FREMD.agenten.lens) =>
     JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Agent", cwd: WURZEL, tool_input: { ...(subagentType === null ? {} : { subagent_type: subagentType }), description: "Lens X R1", prompt } });
-  const deny = (text: string) => hook.dispatch(text, WURZEL);
+  const deny = (text: string) => hook.dispatch(text, WURZEL, undefined, undefined, { config: FREMD });
   const grund = (text: string) => deny(text)?.hookSpecificOutput.permissionDecisionReason ?? "";
 
   // Die ECHTEN Blöcke aus dem Skill, wie der Orchestrator sie wörtlich in den Prompt kopiert (Fehlalarm-Schutz: sie tragen absichtlich `<…>`).
@@ -364,7 +365,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   const format = /## Findings-Format[\s\S]*?```\n([\s\S]*?)```/.exec(skill)?.[1] ?? "";
   const KOPF = "Brille: Architektur (Schichtregeln)";
   const gut = (extra = "") =>
-    `${KOPF} · Arbeitsverzeichnis: C:/dev/kubernia/.claude/worktrees/kq-1 · Patch: /tmp/x/kq-1-r1.patch · erwarteter HEAD: abc1234def${extra} · ${diaet} · ${format}`;
+    `${KOPF} · Arbeitsverzeichnis: C:/dev/projekt/.claude/worktrees/${FREMD.praefixe.worktree}1 · Patch: /tmp/x/${FREMD.praefixe.worktree}1-r1.patch · erwarteter HEAD: abc1234def${extra} · ${diaet} · ${format}`;
 
   test("die echten Skill-Blöcke tragen `<…>` und gehen trotzdem durch (kein generischer Platzhalter-Test)", () => {
     assert.match(diaet, /<Arbeitsverzeichnis>/);
@@ -384,7 +385,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   test("R2: Platzhalter in Arbeitsverzeichnis, Patch, Delta-Patch oder HEAD wird verweigert, mit Feldname im Grund", () => {
     const faelle: [string, RegExp][] = [
       [`${KOPF} · Arbeitsverzeichnis: <worktree> · Patch: /p.patch · erwarteter HEAD: abc1234`, /Arbeitsverzeichnis/],
-      [`${KOPF} · Arbeitsverzeichnis: /w · Patch: <TMP>/kq-1-r1.patch · erwarteter HEAD: abc1234`, /Patch/],
+      [`${KOPF} · Arbeitsverzeichnis: /w · Patch: <TMP>/${FREMD.praefixe.worktree}1-r1.patch · erwarteter HEAD: abc1234`, /Patch/],
       [`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · Delta-Patch: <TMP>/d.patch · erwarteter HEAD: abc1234`, /Delta-Patch/],
       [`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: <sha>`, /erwarteter HEAD/],
       [`${KOPF}\nArbeitsverzeichnis: /w\nPatch: <TMP>/x.patch\nerwarteter HEAD: abc1234`, /Patch/],
@@ -420,12 +421,12 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
 
   test("durchgelassen: Nicht-Lens-Agenten mit `<TMP>`, Workflow-Format ohne Kopf-Felder, kaputtes JSON, fehlendes Prompt-Feld", () => {
     const mitPlatzhalter = "Patch: <TMP>/x.patch · erwarteter HEAD: <sha> · <Brille WÖRTLICH>";
-    for (const typ of ["Explore", "kubernia-planner", "kubernia-umsetzer", "general-purpose", null]) {
+    for (const typ of ["Explore", FREMD.agenten.planer, FREMD.agenten.umsetzer, "general-purpose", null]) {
       assert.equal(deny(agent(mitPlatzhalter, typ)), null, String(typ));
     }
     assert.equal(deny(agent(`Prüfe den Patch ${"/p.patch"} mit der Brille Architektur; Findings als <Befund> auflisten.`)), null);
     assert.equal(deny("{kaputt"), null);
-    assert.equal(deny(JSON.stringify({ tool_name: "Agent", tool_input: { subagent_type: "kubernia-lens" } })), null);
+    assert.equal(deny(JSON.stringify({ tool_name: "Agent", tool_input: { subagent_type: FREMD.agenten.lens } })), null);
   });
 
   test("je Feld zählt der LETZTE Treffer: ein Beispiel in der Brille sperrt den echten Kopf nicht, ein Platzhalter im Kopf wird trotz früherem Treffer gefunden", () => {
@@ -461,8 +462,8 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
 
   test("Prozess-Start: ein kaputter Lens-Auftrag erzeugt die Deny-Ausgabe, ein sauberer nichts", () => {
     const start = (p: string) => execFileSync("node", [resolve(WURZEL, "scripts/pretooluse-hook.mjs")], { input: p, encoding: "utf8" });
-    const out = JSON.parse(start(agent("Patch: <TMP>/x.patch"))) as Out;
+    const out = JSON.parse(start(agent("Patch: <TMP>/x.patch", projektConfig().agenten.lens))) as Out;
     assert.equal(out?.hookSpecificOutput.permissionDecision, "deny");
-    assert.equal(start(agent(gut())).trim(), "");
+    assert.equal(start(agent(gut(), projektConfig().agenten.lens)).trim(), "");
   });
 });

@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "repo": "zz-org/zz-demo",
+  "boards": [
+    {
+      "rolle": "produkt",
+      "besitzer": "zz-org",
+      "besitzerTyp": "org",
+      "nummer": 7,
+      "projectId": "ZZ_board_produkt",
+      "statusFeldId": 901,
+      "statusFeldNodeId": "ZZ_feld_produkt",
+      "todoOptionId": "zz-todo"
+    },
+    {
+      "rolle": "factory",
+      "besitzer": "zz-org",
+      "besitzerTyp": "org",
+      "nummer": 8,
+      "projectId": "ZZ_board_factory",
+      "statusFeldId": 902,
+      "statusFeldNodeId": "ZZ_feld_factory",
+      "todoOptionId": "zz-todo"
+    }
+  ],
+  "praefixe": {
+    "commitZeile": "ZZ-",
+    "branch": "feature/zz-",
+    "worktree": "zz-"
+  },
+  "labels": {
+    "harness": "bereich:zz-harness",
+    "festgefahren": "status:zz-festgefahren",
+    "forum": "zz-forum",
+    "dependabotInbox": "bereich:zz-harness"
+  },
+  "agenten": {
+    "planer": "zz-planer",
+    "umsetzer": "zz-umsetzer",
+    "lens": "zz-lens",
+    "gruppe": "zz-gruppe",
+    "ticketSkill": "zz-ticket"
+  }
+}

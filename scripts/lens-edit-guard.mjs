@@ -44,7 +44,7 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
   };
 }
 
-/** Hook-stdin → Entscheidung. Kaputter Input: durchlassen (ein Hook darf nie selbst alles blockieren). */
-export const entscheideHook = pfadGuardHook("Edit", bewerteLensEdit);
+/** Hook-stdin → Entscheidung. Kaputter Input: durchlassen (ein Hook darf nie selbst alles blockieren). `deps` wie bei `bewerteLensEdit` (Test: injizierte Config). */
+export const entscheideHook = (text, deps = {}) => pfadGuardHook("Edit", (p, cwd) => bewerteLensEdit(p, cwd, deps))(text);
 
 if (istDirektaufruf(import.meta.url)) emit(entscheideHook(readStdin()));

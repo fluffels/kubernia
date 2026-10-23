@@ -5,7 +5,7 @@
  * Der Bash-Hook (`worktree-guard-hook.mjs`) hängt nur am Matcher `Bash`; über das PowerShell-Tool lief ein
  * Commit im geteilten Haupt-Checkout ungeprüft durch (`Set-Location <hauptcheckout>; git commit …`). Der
  * Hook `scripts/worktree-guard-powershell.mjs` bewertet den Befehl mit einem Tokenizer. Die Tests geben
- * Dateisystem und Git-Kontext per Injektion vor (Haupt-Checkout `/repo/main`, Worktree `/repo/wt/kq-1`),
+ * Dateisystem und Git-Kontext per Injektion vor (Haupt-Checkout `/repo/main`, Worktree `/repo/wt/<präfix>1`),
  * damit sie auf Windows und Linux gleich laufen (der Unterordner-Fall mit echtem git steht in worktree-guard.test.ts); die Payload-`cwd` folgt laut Probe dem persistenten
  * `Set-Location` früherer Aufrufe (siehe Hook-Kopf).
  *
@@ -17,6 +17,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as raw from "../../scripts/worktree-guard-powershell.mjs";
+import { FREMD } from "../support/fremd-config";
 
 type Token = { value: string; literal: boolean };
 type Stmt = { tokens: Token[]; raw: string; sep: string };
@@ -31,7 +32,7 @@ const g = raw as unknown as {
 const lies = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 const HAUPT = "/repo/main";
-const WT = "/repo/wt/kq-1";
+const WT = `/repo/wt/${FREMD.praefixe.worktree}1`;
 const ORDNER = new Set([HAUPT, WT, `${HAUPT}/src`, "/repo/wt"].map((p) => g.normPfad(p)));
 const deps: Deps = {
   istOrdner: (p) => ORDNER.has(g.normPfad(p)),
@@ -129,9 +130,9 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
 
   test("relatives und mehrfaches git -C wird gegen den aktuellen Ort aufgelöst", () => {
     blockt("git -C ../../main commit -m x", WT);
-    laeuft("git -C ../../wt/kq-1 commit -m x", WT);
+    laeuft(`git -C ../../wt/${FREMD.praefixe.worktree}1 commit -m x`, WT);
     blockt(`git -C /repo -C main commit -m x`, WT);
-    laeuft(`git -C /repo/wt -C kq-1 commit -m x`, HAUPT);
+    laeuft(`git -C /repo/wt -C ${FREMD.praefixe.worktree}1 commit -m x`, HAUPT);
   });
 
   test("nicht bestimmbares Ziel in einem bash -c-String fragt (ask), blockt nicht (Brücke übernimmt die Rückfragen des Bash-Auswerters)", () => {
@@ -224,7 +225,7 @@ describe("Worktree und harmlose Aufrufe laufen durch", () => {
   test("git -C <worktree> vom Haupt-Checkout aus, relativ und absolut", () => {
     laeuft(`git -C ${WT} commit -m x`);
     laeuft(`git -C ${WT} add -A; git -C ${WT} commit -m x`);
-    laeuft(`git -C ../wt/kq-1 commit -m x`, `${HAUPT}/src`.replace("/src", ""));
+    laeuft(`git -C ../wt/${FREMD.praefixe.worktree}1 commit -m x`, `${HAUPT}/src`.replace("/src", ""));
   });
 
   test("cd in den Worktree, dann commit/push", () => {

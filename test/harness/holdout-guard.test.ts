@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/holdout-guard.mjs";
+import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as auftrag from "../../scripts/holdout-auftrag-guard.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -34,7 +35,7 @@ const ZEILE = "Szenario 1.1: Gegeben ein Ticket · Wenn x · Dann y";
 
 describe("holdoutAuftragBlockade", () => {
   test("Szenario-Kopf oder -Zeile an Planer, Umsetzer, general-purpose oder ohne Typ: verweigert, mit Verweis auf die Holdout-Trennung", () => {
-    for (const subagentType of ["kubernia-planner", "kubernia-umsetzer", "kubernia-gruppe", "kubernia-lens", "general-purpose", undefined]) {
+    for (const subagentType of [FREMD.agenten.planer, FREMD.agenten.umsetzer, FREMD.agenten.gruppe, FREMD.agenten.lens, "general-purpose", undefined]) {
       for (const text of [`Body\n${KOPF} · x`, `Plan\n${ZEILE}`, "  Negativfall 2.3: Gegeben a"]) {
         expect(A.holdoutAuftragBlockade({ tool: "Agent", subagentType, text }), `${subagentType} ${text}`).toMatch(/Holdout-Trennung/);
       }
@@ -44,8 +45,8 @@ describe("holdoutAuftragBlockade", () => {
     expect(A.holdoutAuftragBlockade({ tool: "Agent", subagentType: "holdout-abnahme", text: `${KOPF}\n${ZEILE}` })).toBeNull();
   });
   test("Platzhalter ohne Ziffern und Fließtext über Szenarien: nicht verweigert", () => {
-    expect(A.holdoutAuftragBlockade({ tool: "Agent", subagentType: "kubernia-planner", text: "SZENARIEN #<nr> und Szenario 1.1 ohne Gegeben, Szenarien allgemein" })).toBeNull();
-    expect(A.holdoutAuftragBlockade({ tool: "Agent", subagentType: "kubernia-planner", text: "im Satz: Szenario 1.1: Gegeben" })).toBeNull();
+    expect(A.holdoutAuftragBlockade({ tool: "Agent", subagentType: FREMD.agenten.planer, text: "SZENARIEN #<nr> und Szenario 1.1 ohne Gegeben, Szenarien allgemein" })).toBeNull();
+    expect(A.holdoutAuftragBlockade({ tool: "Agent", subagentType: FREMD.agenten.planer, text: "im Satz: Szenario 1.1: Gegeben" })).toBeNull();
   });
   test("SendMessage wird immer geprüft, auch an den Abnahme-Agenten; alle String-Werte zählen", () => {
     expect(A.holdoutAuftragBlockade({ tool: "SendMessage", subagentType: "holdout-abnahme", text: KOPF })).toMatch(/Holdout-Trennung/);
@@ -195,7 +196,7 @@ describe("Verdrahtung", () => {
   });
   test("Dispatcher: Agent- und SendMessage-Zweig verweigern Szenarien, Spawn an die Abnahme läuft durch", () => {
     const d = (tool_name: string, tool_input: unknown) => dispatcher(JSON.stringify({ tool_name, tool_input }), "C:/x");
-    expect(d("Agent", { subagent_type: "kubernia-planner", prompt: KOPF })?.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(d("Agent", { subagent_type: FREMD.agenten.planer, prompt: KOPF })?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(d("SendMessage", { to: "a", message: ZEILE })?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(d("Agent", { subagent_type: "holdout-abnahme", prompt: KOPF })).toBeNull();
     expect(d("SendMessage", { to: "a", message: "weiter" })).toBeNull();

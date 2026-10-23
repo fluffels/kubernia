@@ -35,6 +35,7 @@ type GuardModule = {
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-review-nachweis.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/worktree-guard-hook.mjs";
+import { FREMD } from "../support/fremd-config";
 const guard = raw as GuardModule;
 
 const { isProtectedGitCommand, resolveGitContext, decide, parseHookInput, buildDenyOutput, protectedGitTargets, fromMsysPath } = guard;
@@ -60,7 +61,7 @@ describe("isProtectedGitCommand (#735)", () => {
   test("false NEGATIVES: unverwandte Kommandos triggern NICHT (Red-Green-Gegenprobe)", () => {
     assert.equal(isProtectedGitCommand("npm test"), false, "keine git-Erwähnung");
     assert.equal(isProtectedGitCommand("git status"), false, "lesender git-Befehl");
-    assert.equal(isProtectedGitCommand("git worktree remove .claude/worktrees/kq-1"), false, "kein commit/push");
+    assert.equal(isProtectedGitCommand(`git worktree remove .claude/worktrees/${FREMD.praefixe.worktree}1`), false, "kein commit/push");
     assert.equal(isProtectedGitCommand("git log --oneline"), false);
   });
 
@@ -70,7 +71,7 @@ describe("isProtectedGitCommand (#735)", () => {
 });
 
 describe("resolveGitContext (#735) — Haupt-Worktree vs. Linked-Worktree", () => {
-  const repoRoot = "/c/git/kubequest";
+  const repoRoot = "/c/git/projekt";
 
   type DirInfo = { toplevel: string; commonDir: string };
   /** Simuliert git für mehrere Verzeichnisse gleichzeitig (die Funktion ruft git
@@ -99,7 +100,7 @@ describe("resolveGitContext (#735) — Haupt-Worktree vs. Linked-Worktree", () =
   });
 
   test("Linked Worktree: .git ist eine Datei am Toplevel -> relevant, aber NICHT isMainWorktree", () => {
-    const wt = `${repoRoot}/.claude/worktrees/kq-42`;
+    const wt = `${repoRoot}/.claude/worktrees/${FREMD.praefixe.worktree}42`;
     const deps = fakeDeps(
       {
         [repoRoot]: { toplevel: repoRoot, commonDir: `${repoRoot}/.git` },
@@ -116,7 +117,7 @@ describe("resolveGitContext (#735) — Haupt-Worktree vs. Linked-Worktree", () =
     // Genau der Bug, den die Erstversion hatte: repoRoot kann ein Worktree sein
     // (das Skript läuft aus scripts/ innerhalb DIESES Checkouts) — die Referenz
     // muss über git-common-dir aufgelöst werden, nicht über `<repoRoot>/.git`.
-    const scriptWorktree = `${repoRoot}/.claude/worktrees/kq-735`;
+    const scriptWorktree = `${repoRoot}/.claude/worktrees/${FREMD.praefixe.worktree}735`;
     const deps = fakeDeps(
       {
         [scriptWorktree]: { toplevel: scriptWorktree, commonDir: `${repoRoot}/.git` },
@@ -147,7 +148,7 @@ describe("resolveGitContext (#735) — Haupt-Worktree vs. Linked-Worktree", () =
 });
 
 describe("decide (#735) — Gesamtentscheidung", () => {
-  const repoRoot = "/c/git/kubequest";
+  const repoRoot = "/c/git/projekt";
 
   function fakeDeps({ toplevel, gitFileAtToplevel }: { toplevel: string; gitFileAtToplevel: boolean }): ExecDeps {
     return {
@@ -174,7 +175,7 @@ describe("decide (#735) — Gesamtentscheidung", () => {
   });
 
   test("ERLAUBT: git commit in einem Linked Worktree", () => {
-    const wt = `${repoRoot}/.claude/worktrees/kq-735`;
+    const wt = `${repoRoot}/.claude/worktrees/${FREMD.praefixe.worktree}735`;
     const deps = fakeDeps({ toplevel: wt, gitFileAtToplevel: true });
     const r = decide({ cwd: wt, command: 'git commit -m "x"', repoRoot, deps });
     assert.equal(r.block, false);
@@ -271,8 +272,8 @@ describe("fromMsysPath (#1308)", () => {
 });
 
 describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
-  const repoRoot = resolve("/c/git/kubequest");
-  const wt = join(repoRoot, ".claude", "worktrees", "kq-42");
+  const repoRoot = resolve("/c/git/projekt");
+  const wt = join(repoRoot, ".claude", "worktrees", `${FREMD.praefixe.worktree}42`);
 
   /** git-Fake nach Verzeichnis: `worktrees` sind Linked Worktrees (`.git` ist eine
    *  Datei), alles unter `repoRoot` sonst der Haupt-Checkout, außerhalb: kein Repo.
@@ -305,7 +306,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
 
   test("ERLAUBT: cd in den Worktree, auch mit mehreren Schritten davor", () => {
     assert.equal(run(`cd '${wt}' && git add -A && git commit -m x`), false);
-    assert.equal(run(`cd ${join(".claude", "worktrees", "kq-42").replace(/\\/g, "/")} && git commit -m x`), false);
+    assert.equal(run(`cd ${join(".claude", "worktrees", `${FREMD.praefixe.worktree}42`).replace(/\\/g, "/")} && git commit -m x`), false);
     assert.equal(run(`cd "${wt}"\ngit push`), false);
   });
 
@@ -430,8 +431,8 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
   test("~ wird per os.homedir() aufgelöst (-C und cd), nicht als dynamisch geraten", () => {
     const home = resolve(repoRoot, "..");
     const deps = withHome(home);
-    assert.equal(run("git -C ~/kubequest push", wt, deps), true);
-    assert.equal(run("cd ~/kubequest && git push", wt, deps), true);
+    assert.equal(run("git -C ~/projekt push", wt, deps), true);
+    assert.equal(run("cd ~/projekt && git push", wt, deps), true);
     assert.equal(run("cd ~ && git push", wt, withHome(repoRoot)), true);
     assert.equal(run("git -C ~/anderswo push", wt, deps), false, "Home-Unterordner außerhalb des Repos");
     assert.equal(run("git -C ~root push", wt, deps), false, "~user ist nicht auflösbar, im Worktree aber kein Haupt-Checkout");
@@ -704,7 +705,7 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
   const gitEnvVorher = Object.entries(process.env).filter(([k]) => k.startsWith("GIT_"));
   beforeAll(() => {
     for (const [k] of gitEnvVorher) delete process.env[k];
-    base = realpathSync.native(mkdtempSync(join(tmpdir(), "kq-guard-")));
+    base = realpathSync.native(mkdtempSync(join(tmpdir(), "worktree-guard-")));
     main = join(base, "main");
     sub = join(main, "src");
     linked = join(base, "wt");
@@ -877,8 +878,8 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
 
 describe("parseHookInput / buildDenyOutput (#735) — CLI-Ein-/Ausgabe", () => {
   test("parst gültiges Hook-stdin-JSON (cwd + tool_input.command)", () => {
-    const input = JSON.stringify({ cwd: "/c/git/kubequest", tool_name: "Bash", tool_input: { command: "git push" } });
-    assert.deepEqual(parseHookInput(input), { tool: "Bash", cwd: "/c/git/kubequest", command: "git push" });
+    const input = JSON.stringify({ cwd: "/c/git/projekt", tool_name: "Bash", tool_input: { command: "git push" } });
+    assert.deepEqual(parseHookInput(input), { tool: "Bash", cwd: "/c/git/projekt", command: "git push" });
   });
 
   test("kaputtes/leeres JSON liefert leeres Objekt statt zu crashen", () => {
