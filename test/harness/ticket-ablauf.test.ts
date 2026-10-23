@@ -26,8 +26,8 @@ const { ROLLEN_PFADE } = projektRaw as unknown as { ROLLEN_PFADE: Record<string,
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzRaw from "../../scripts/besitz-lib.mjs";
 const { einheitText, leereProjektwerte } = besitzRaw as unknown as {
-  einheitText(e: { pfad: string; block: string }, text: string): string | null;
-  leereProjektwerte(text: string): string;
+  einheitText: (e: { pfad: string; block: string }, text: string) => string | null;
+  leereProjektwerte: (text: string) => string;
 };
 import { liesTicketAblauf, setzeAgentenWerte, setzeProjektwerte, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
