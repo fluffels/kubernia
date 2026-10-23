@@ -1,7 +1,7 @@
 // Besitz-Manifest-Leser und Bearbeitungs-Primitive (ADR 0022 F9): Einheiten des Besitz-Manifests `.factory/besitz.json`
 // (ganze Datei, Markdown-Block zwischen Markern, JSON-Schlüssel der obersten Ebene) lesen, prüfen, hashen und setzen.
 // Dazu die Projektwert-Stellen (ADR 0022 F3f): Block und Frontmatter-Zeile, die aus der Config gerendert werden; Hash und Wächter
-// rechnen auf dem Text mit geleerten Werten. Nur Node-Builtins; Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
+// rechnen auf dem Text mit geleerten Werten. Node-Builtins sowie projekt-config-lib und skill-pfade; Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";

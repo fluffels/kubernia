@@ -389,6 +389,12 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/ab (\d+) Befund-Kommentaren/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
     expect(Number(/Spielquote 1:(\d+)/.exec(doc)?.[1])).toBe(T.SPIEL_QUOTE);
+    // die Zahl steht auch in Glossar, Befehlsreferenz und Anlaufstellen
+    expect(Number(/ab der Schwelle (\d+) greift der Härtungs-Takt/.exec(lies("docs/harness-glossar.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
+    const befehle = lies("docs/referenz/befehle.md");
+    expect(Number(/erst ab (\d+) Befund-Kommentaren als frei/.exec(befehle)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
+    expect(Number(/k\/(\d+)/.exec(befehle)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
+    expect(Number(/Harness-Sammelticket ab (\d+) Befund-Kommentaren/.exec(lies("docs/referenz/anlaufstellen.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
     // #1663 T5: auch die Regel in AGENTS.md trägt beide Zahlen.
     expect(Number(/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/.exec(agents)?.[1])).toBe(Q.SPIEL_QUOTE);
     expect(Number(/Spielquote 1:(\d+)/.exec(agents)?.[1])).toBe(T.SPIEL_QUOTE);

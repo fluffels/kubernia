@@ -231,8 +231,6 @@ export function renderMarkdown(b) {
 
 // ── Selbst-Audit (#1787): das Harness hinterfragt seine Mechanismen selbst ───────────────────────────────
 
-/** Abweichung des Härtungs-Takts (Selbst-Audit): so viele Ticket-Merges seit dem Abschluss des letzten Sammeltickets, ohne dass ein neues geclaimt wurde (Schwelle des Takts ist der Füllstand, nicht die Merge-Zahl). */
-export const TAKT_AUDIT_MERGES = 10;
 /** Lens-Zahl: Obergrenze der Review-Runden je PR: Cap-Pässe, höchstens `MAX_ZUSATZPAESSE` Zusatzpässe und die eine Delta-Runde nach einem Abnahme-Fix. */
 export const MAX_RUNDEN = MAX_REVIEW_PAESSE + MAX_ZUSATZPAESSE + 1;
 /** CI-Fix-Runden, ab denen das Festgefahren-Protokoll greifen muss (nach dem dritten Fix-Versuch). */
@@ -255,13 +253,13 @@ function auditQuote(commits, luecke, harnessIssues, harnessLuecke) {
 }
 
 function auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }) {
-  const soll = `Sammelticket in Arbeit oder abgeschlossen, Abweichung ab ${TAKT_AUDIT_MERGES} Ticket-Merges ohne Sammelticket-Abschluss`;
+  const soll = "reine Messung, kein Soll: der Takt hängt am Füllstand der Befund-Kommentare, ein still liegendes Sammelticket ist gewollt";
   if (luecke) return { mechanismus: "Härtungs-Takt", messung: luecke, soll, status: "Lücke" };
   if (sammelInArbeit) return { mechanismus: "Härtungs-Takt", messung: `Vorgänger #${sammelInArbeit} in Arbeit, der Takt zählt erst ab dessen Abschluss`, soll, status: "ok" };
   if (!sammelAbschluss) return { mechanismus: "Härtungs-Takt", messung: "kein abgeschlossenes Sammelticket gefunden, kein Zählanfang", soll, status: "Lücke" };
   const n = zaehleTaktMerges(commits, null, sammelIssues);
   const messung = `${n} Ticket-Merges seit dem Abschluss des letzten Sammeltickets (${String(sammelAbschluss).slice(0, 10)})`;
-  return { mechanismus: "Härtungs-Takt", messung, soll, status: n >= TAKT_AUDIT_MERGES ? "ABWEICHUNG" : "ok" };
+  return { mechanismus: "Härtungs-Takt", messung, soll, status: "ok" };
 }
 
 function auditFestgefahren(zeilen) {

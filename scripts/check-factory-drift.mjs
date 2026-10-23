@@ -163,7 +163,7 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   if (r.fehler.length > 0 || pw.fehler.length > 0 || ergPruefung.fehler.length > 0) return 1;
   if (!r.entfaellt) out(`check-factory-drift: ${r.einheiten} Einheiten ohne Drift`);
   out(`check-factory-drift: ${pw.dateien} Dateien mit Projektwert-Stellen ohne Abweichung`);
-  out(`check-factory-drift: ${ergPruefung.eintraege} Einträge der Berechtigungs-Ergänzung ohne Befund`);
+  out(`check-factory-drift: ${ergPruefung.eintraege} Einträge der Projekt-Ergänzungen ohne Befund`);
   return 0;
 }
 

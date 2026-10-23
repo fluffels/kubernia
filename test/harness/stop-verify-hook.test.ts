@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { lies, repoDateien } from "./repo-texte";
 import { liesMitProjektwerten } from "../support/ticket-ablauf";
-import { FREMD, projektConfig } from "../support/fremd-config";
+import { FREMD, FREMD_NAMEN, projektConfig } from "../support/fremd-config";
 
 // Zähler der PowerShell-Starts (#1526): bei einem gesperrten Waisen-Ordner fragt `checkAndFixOrphanWorktrees` unter Windows
 // die Prozessliste per `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests
@@ -43,7 +43,7 @@ import * as namenRoh from "../../scripts/ticket-namen.mjs";
 const { ticketNamen, escapeRegex } = namenRoh as unknown as { ticketNamen: (c: unknown) => unknown; escapeRegex: (t: string) => string };
 /** Worktree-Präfix der Fremd-Config: alle Ordner- und Dateinamen dieser Datei leiten sich daraus ab. */
 const W = FREMD.praefixe.worktree;
-const NAMEN = ticketNamen(FREMD);
+const NAMEN = FREMD_NAMEN;
 
 const checkRoh = (hook as unknown as { checkAndFixOrphanWorktrees: unknown }).checkAndFixOrphanWorktrees;
 

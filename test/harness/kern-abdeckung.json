@@ -27,7 +27,7 @@
   "scripts/check-tseslint-ts7.mjs": {"art":"projekt","grund":"Prüfung der TypeScript-ESLint-Toolchain dieses Projekts"},
   "scripts/sbom.mjs": {"art":"modul","grund":"Sicherheits-Modul (SBOM), kein Factory-Kern"},
   ".github/workflows/ci.yml": {"art":"projekt","grund":"CI-Pipeline dieses Projekts (Gates, Builds, Smokes)"},
-  ".github/workflows/verify-macos.yml": {"art":"projekt","grund":"manueller verify-Lauf dieses Projekts auf macOS (Vorlage über die Extraktionsliste)"},
+  ".github/workflows/verify-macos.yml": {"art":"projekt","grund":"manueller verify-Lauf dieses Projekts auf macOS (ganze Datei über die Extraktionsliste)"},
   ".github/workflows/codeql.yml": {"art":"modul","grund":"Sicherheits-Modul (Code-Scanning), kein Factory-Kern"},
   ".github/workflows/scorecard.yml": {"art":"modul","grund":"Sicherheits-Modul (Scorecard), kein Factory-Kern"},
   ".agents/skills/factory-ticket/SKILL.md": {"art":"projekt","grund":"Ticket-Skill des Projekts (Ticket-Ablauf dieses Repos)"},

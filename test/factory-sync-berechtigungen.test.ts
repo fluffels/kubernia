@@ -165,7 +165,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
     assert.deepEqual([lies(z, SETTINGS), lies(z, ".factory/sync-stand.json")], vorher);
     const g = gate(z);
     assert.equal(g.code, 0, g.err);
-    assert.match(g.out, /2 Einträge der Berechtigungs-Ergänzung ohne Befund/);
+    assert.match(g.out, /2 Einträge der Projekt-Ergänzungen ohne Befund/);
   });
 
   test("ein Ziel ohne Config bekommt nur den Kern-Anteil", () => {
@@ -213,7 +213,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
     const ok = gate(q);
     assert.equal(ok.code, 0, ok.err);
     assert.match(ok.out, /dieses Projekt ist Quelle/);
-    assert.match(ok.out, /3 Einträge der Berechtigungs-Ergänzung/);
+    assert.match(ok.out, /3 Einträge der Projekt-Ergänzungen/);
     schreibe(q, SETTINGS, json({ permissions: { ...mit(KERN, QUELL_ERG), allow: ["mcp__a", "Bash(ls)"] } }));
     const rot = gate(q);
     assert.equal(rot.code, 1);
@@ -538,7 +538,7 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
     assert.deepEqual([lies(z, SETTINGS), lies(z, ".factory/sync-stand.json")], vorher);
     const g = gate(z);
     assert.equal(g.code, 0, g.err);
-    assert.match(g.out, /2 Einträge der Berechtigungs-Ergänzung ohne Befund/);
+    assert.match(g.out, /2 Einträge der Projekt-Ergänzungen ohne Befund/);
   });
   test("Quelle und Ziel ohne Sandbox-Ergänzung: der Wert kommt wörtlich aus der Quelle (kompaktes Format bleibt)", () => {
     const q = tmp();
@@ -556,7 +556,7 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
     assert.deepEqual(sbox(z), KERN_SB);
     const g = gate(z);
     assert.equal(g.code, 0, g.err);
-    assert.match(g.out, /: 0 Einträge der Berechtigungs-Ergänzung ohne Befund/);
+    assert.match(g.out, /: 0 Einträge der Projekt-Ergänzungen ohne Befund/);
   });
   test("eine Handänderung am Kern-Anteil macht das Gate rot, mit Hinweis auf die Config", () => {
     const z = ziel(ZIEL_SB);

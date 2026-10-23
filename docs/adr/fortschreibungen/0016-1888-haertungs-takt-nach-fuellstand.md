@@ -15,7 +15,7 @@ Entscheidung: das ungeclaimte Harness-Sammelticket kommt ab 10 Befund-Kommentare
 - **Spitze:** „vorn“ heißt direkt hinter dem zusammenhängenden Kopf (Status-, Notfall-, Dependabot-, Forum-Ticket); die Grundposition laut AGENTS.md bleibt, die Selbstkorrektur (nur nach vorn) ebenso. Ein geclaimtes Sammelticket fasst der Takt nicht an; solange ein Vorgänger in Arbeit ist, holt er das Folgeticket nicht.
 - **Still liegen unter der Schwelle** leistet die Auswahl, nicht der Takt: `naechstes-ticket` überspringt das ungeclaimte Harness-Sammelticket unter der Schwelle mit dem Grund `füllt sich (k/10 Befund-Kommentare)`; `--ticket <nr>` umgeht das. Die Kommentare lädt es nur, wenn dieses Ticket Kandidat ist.
 - **Fail-closed:** lassen sich die Kommentare nicht laden, bleibt der Takt bei `nichts` (Warnung im Log, Lauf grün) und die Auswahl überspringt das Sammelticket mit `Füllstand nicht prüfbar`; der nächste Lauf versucht es erneut.
-- **Unverändert:** die Spielquote 1:3 (Kennzahl, nicht Seitenwahl) und `--bereich spiel`. Das Selbst-Audit misst weiter die Merges seit dem letzten Sammelticket-Abschluss, mit eigener Schwelle (`TAKT_AUDIT_MERGES`), und meldet nur ein überfälliges Sammelticket.
+- **Unverändert:** die Spielquote 1:3 (Kennzahl, nicht Seitenwahl) und `--bereich spiel`. Das Selbst-Audit misst weiter die Merges seit dem letzten Sammelticket-Abschluss, aber nur als Messung ohne Soll: eine Abweichung ab einer Merge-Zahl widerspräche dem gewollten Stilliegen und füllte das Sammelticket über die Abweichungs-Zeile künstlich auf. `--bereich spiel` bleibt unverändert, weil die Spielquote Kennzahl und nicht Seitenwahl ist; das Sammelticket kommt nur dann an die Spitze, wenn der Lauf den Bereich `agentic` wählt (die Wahl des Bereichs steht beim Aufruf, [Spielquote](../../harness-glossar.md)).
 
 ## Verworfen
 
@@ -25,4 +25,4 @@ Entscheidung: das ungeclaimte Harness-Sammelticket kommt ab 10 Befund-Kommentare
 ## Folgen
 
 - Das Sammelticket kann länger als eine Woche liegen, wenn wenig auffällt; das ist gewollt. Ein Notfall-Befund geht als eigenes Issue.
-- Die Doku nennt die Schwelle an vier Stellen ([ticket-reihenfolge](../../ticket-reihenfolge.md#sammelticket-mechanik), Workflow-Kommentar, Glossar, AGENTS.md); ein Wächter in `test/board-takt.test.ts` bindet die Zahl an die Konstante.
+- Die Doku nennt die Schwelle an mehreren Stellen ([ticket-reihenfolge](../../ticket-reihenfolge.md#sammelticket-mechanik), Workflow-Kommentar, Glossar, Befehle, Anlaufstellen); ein Wächter in `test/board-takt.test.ts` bindet die Zahl an die Konstante.

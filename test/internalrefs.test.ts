@@ -95,6 +95,7 @@ const isCheckable = (rawBasis as unknown as { isCheckable: (file: string) => boo
 
 const DUMMY = "zzzdummyfirma";
 const readRepo = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+const WURZEL_REPO = fileURLToPath(new URL("../", import.meta.url));
 
 describe("Interne-Referenzen-Wächter (#990)", () => {
   test("das Repo ist frei von den gelisteten Begriffen", () => {
@@ -389,6 +390,24 @@ describe("Pfadregel (#1888)", () => {
   test("Repo-Segment mit Satzzeichen dahinter ist ein Treffer (Nachlauf wird abgestreift)", () => {
     assert.deepEqual(befund("docs/a.md", `(C:/dev/${fremderRepo}.)`), ["repo"]);
     assert.deepEqual(befund("docs/a.md", `(C:/dev/${fremderRepo}x.)`), [], "längerer Name ist kein Treffer");
+  });
+
+  test("FIXTURE_WURZELN schrumpft nur: kein Eintrag ohne Verwendung in test/ oder scripts/, keine Obergrenzen-Überschreitung", () => {
+    const dateien = spawnSync("git", ["ls-files", "test", "scripts"], { encoding: "utf8", cwd: WURZEL_REPO }).stdout.split("\n").filter(Boolean);
+    const benutzt = new Set<string>();
+    for (const d of dateien) {
+      let text: string;
+      try {
+        text = readFileSync(join(WURZEL_REPO, d), "utf8");
+      } catch {
+        continue;
+      }
+      for (const m of text.matchAll(/(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g)) {
+        benutzt.add(m[0].replace(/^[A-Z]:[\\/]+/, "").split(/[\\/]+/)[0].replace(/[.,;:)\]}]+$/, "").toLowerCase());
+      }
+    }
+    assert.deepEqual(FIXTURE_WURZELN.filter((w) => !benutzt.has(w)), [], "verwaiste Fixture-Wurzel: Eintrag streichen");
+    assert.ok(FIXTURE_WURZELN.length <= 36, "die Liste darf nur schrumpfen");
   });
 
   test("Benutzerordner-URLs und Teilwörter sind kein Pfad", () => {
