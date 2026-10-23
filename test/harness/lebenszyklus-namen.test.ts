@@ -117,6 +117,13 @@ describe("ticket-refs: Präfixe aus der Config", () => {
     expect(re.test(`${WTP}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x")).toBe(false);
   });
+  test("lensWorktreeName ohne Argument (Standardpfad): Muster der Projekt-Config, nicht das fremde Präfix", () => {
+    const wt = ticketNamen(ladeProjektConfig()).praefixe.worktree;
+    const re = R.lensWorktreeName();
+    expect(re.exec(`${wt}12-lens-r1`)?.[1]).toBe(`${wt}12`);
+    expect(re.test(`${wt}12-lens-x`)).toBe(false);
+    expect(re.test("ab-12-lens-r1")).toBe(false);
+  });
 });
 
 describe("worktree-aufraeumen: Präfixe aus der Config", () => {
@@ -342,6 +349,8 @@ describe("worktreePraefix und zentrale Muster in ticketNamen", () => {
     expect(n.ticketBranchMuster.test("feature/ab-12-x")).toBe(true);
     expect(n.ticketBranchMuster.test(`${BRP}12-x`)).toBe(false);
     expect(n.ticketBranchMuster.test("ab-12-x")).toBe(false);
+    expect(n.ticketBranchMuster.test("x-feature/ab-12")).toBe(false); // nur am Namensanfang
+    expect(n.dateiMuster.test("x-ab-7.bak")).toBe(false);
   });
   test("namenOderGrund liest deps.pfad: vollständige Datei liefert Namen (Präfix zz-), unvollständige einen Grund", () => {
     const dir = mkdtempSync(join(tmpdir(), "lz-pfad-"));
