@@ -6,6 +6,13 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/claims-pruefen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ticketNamen } from "../../scripts/ticket-namen.mjs";
+import { FREMD } from "../support/fremd-config";
+
+const WTP = FREMD.praefixe.worktree;
+const BRP = FREMD.praefixe.branch;
+const NAMEN: unknown = (ticketNamen as (c: unknown) => unknown)(FREMD);
 
 interface Claim {
   nr: number;
@@ -27,7 +34,7 @@ const M = raw as unknown as {
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
-  pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number }) => boolean;
+  pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number; namen?: unknown }) => boolean;
   fuehreAus: (argv: string[], deps: Record<string, unknown> | (() => Record<string, unknown>)) => Erg;
   echteDeps: (o?: { config?: unknown }) => { festgefahrenLabel: string; lockDir: string };
 };
@@ -36,7 +43,7 @@ const H = 60 * 60_000;
 const JETZT = Date.UTC(2026, 9, 16, 8, 36, 0);
 const SCHWELLE = 3 * H;
 const OID = "0bdcea16aaaa";
-const WTPFAD = "/h/.claude/worktrees/kq-1628";
+const WTPFAD = `/h/.claude/worktrees/${WTP}1628`;
 
 const claim = (o: Partial<Claim> = {}): Claim => ({
   nr: 1,
@@ -55,7 +62,7 @@ const geschlossen = (o: Partial<Claim> = {}): Claim =>
   claim({
     issue: { zustand: "CLOSED", assignees: ["ich"] },
     prs: [{ nummer: 9, zustand: "MERGED", headRefOid: OID }],
-    worktree: { pfad: WTPFAD, branch: "feature/kq-1-x", sauber: true, head: OID, locked: false },
+    worktree: { pfad: WTPFAD, branch: `${BRP}1-x`, sauber: true, head: OID, locked: false },
     branch: true,
     branchLokal: true,
     lebenszeichenMs: JETZT - 8 * H,
@@ -209,15 +216,15 @@ describe("reine Hilfen", () => {
   });
 
   test("pfadErlaubt: nur direkt unter <Hauptcheckout>/.claude/worktrees und mit passender Nummer; nie ein Lens-Worktree", () => {
-    const ok = (pfad: string, nr = 1628) => M.pfadErlaubt({ pfad, hauptcheckout: "/h", nr });
-    assert.equal(ok("/h/.claude/worktrees/kq-1628"), true);
-    assert.equal(ok("/h/.claude/worktrees/kq-1628", 1629), false);
+    const ok = (pfad: string, nr = 1628) => M.pfadErlaubt({ pfad, hauptcheckout: "/h", nr, namen: NAMEN });
+    assert.equal(ok(`/h/.claude/worktrees/${WTP}1628`), true);
+    assert.equal(ok(`/h/.claude/worktrees/${WTP}1628`, 1629), false);
     assert.equal(ok("/h"), false);
     assert.equal(ok("/h/.claude/worktrees"), false);
-    assert.equal(ok("/h/.claude/worktrees/kq-1628/tief"), false);
-    assert.equal(ok("/h/.claude/worktrees/../kq-1628"), false);
-    assert.equal(ok("/anders/.claude/worktrees/kq-1628"), false);
-    assert.equal(ok("/h/.claude/worktrees/kq-1628-lens-r1"), false);
+    assert.equal(ok(`/h/.claude/worktrees/${WTP}1628/tief`), false);
+    assert.equal(ok(`/h/.claude/worktrees/../${WTP}1628`), false);
+    assert.equal(ok(`/anders/.claude/worktrees/${WTP}1628`), false);
+    assert.equal(ok(`/h/.claude/worktrees/${WTP}1628-lens-r1`), false);
   });
 });
 
@@ -259,7 +266,8 @@ function baue(welt: Welt) {
   const deps = {
     jetzt: () => welt.jetzt ?? JETZT,
     lockDir: "/locks",
-    festgefahrenLabel: "status:festgefahren",
+    namen: NAMEN,
+    festgefahrenLabel: FREMD.labels.festgefahren,
     git: (args: string[]) => {
       const a = args.join(" ");
       aufrufe.push(`git ${a}`);
@@ -326,14 +334,14 @@ const sek = (iso: string) => Date.parse(iso) / 1000;
 /** Stand 2026-10-16 08:36 Z (die Belege des Tickets). */
 const BELEG: Welt = {
   worktrees: [
-    { pfad: WTPFAD, head: OID, branch: "feature/kq-1628-x" },
-    { pfad: "/h/.claude/worktrees/kq-1530", head: "e530", branch: "feature/kq-1530-x" },
-    { pfad: "/h/.claude/worktrees/kq-1628-lens-r1", head: OID },
+    { pfad: WTPFAD, head: OID, branch: `${BRP}1628-x` },
+    { pfad: `/h/.claude/worktrees/${WTP}1530`, head: "e530", branch: `${BRP}1530-x` },
+    { pfad: `/h/.claude/worktrees/${WTP}1628-lens-r1`, head: OID },
     { pfad: "/h/.claude/worktrees/scratch", head: "s0" },
   ],
   refs: [
-    ["feature/kq-1628-x", sek("2026-10-16T00:21:00Z")],
-    ["feature/kq-1530-x", sek("2026-10-16T02:30:00Z")],
+    [`${BRP}1628-x`, sek("2026-10-16T00:21:00Z")],
+    [`${BRP}1530-x`, sek("2026-10-16T02:30:00Z")],
     ["origin/HEAD", sek("2026-10-16T08:00:00Z")],
   ],
   locks: {
@@ -357,9 +365,9 @@ describe("fuehreAus: Belegfall vom 2026-10-16", () => {
     const r = M.fuehreAus([], deps);
     assert.equal(r.code, 0, r.err);
     assert.deepEqual(geloescht, ["/locks/1628.json"]);
-    assert.ok(aufrufe.includes("git worktree remove /h/.claude/worktrees/kq-1628"));
+    assert.ok(aufrufe.includes(`git worktree remove /h/.claude/worktrees/${WTP}1628`));
     const zeilen = r.out.trim().split("\n");
-    assert.match(zeilen[0], /^AUFGERAEUMT #1628: Worktree \/h\/\.claude\/worktrees\/kq-1628, Lock /);
+    assert.ok(zeilen[0].startsWith(`AUFGERAEUMT #1628: Worktree /h/.claude/worktrees/${WTP}1628, Lock `));
     const w = zeilen.filter((z) => z.startsWith("WIEDERAUFNAHME"));
     assert.equal(w.length, 2);
     assert.match(w[0], /^WIEDERAUFNAHME #1672: .*letztes Lebenszeichen 2026-10-16T03:11:00\.000Z \(vor 5 h\); Weg: node scripts\/ticket-lock\.mjs claim 1672 --wiederaufnahme, dann Fortsetzungsauftrag$/);
@@ -395,10 +403,10 @@ describe("fuehreAus: Belegfall vom 2026-10-16", () => {
   });
 
   test("ein Lens-Worktree ist nie der Ticket-Worktree: auch vor dem echten gelistet oder allein wird er nie entfernt", () => {
-    const lens = { pfad: "/h/.claude/worktrees/kq-1628-lens-r1", head: OID };
+    const lens = { pfad: `/h/.claude/worktrees/${WTP}1628-lens-r1`, head: OID };
     const vorn = baue({ ...BELEG, worktrees: [lens, ...(BELEG.worktrees ?? []).filter((w) => !w.pfad.includes("lens"))] });
     M.fuehreAus([], vorn.deps);
-    assert.deepEqual(vorn.aufrufe.filter((a) => a.includes("worktree remove")), ["git worktree remove /h/.claude/worktrees/kq-1628"]);
+    assert.deepEqual(vorn.aufrufe.filter((a) => a.includes("worktree remove")), [`git worktree remove /h/.claude/worktrees/${WTP}1628`]);
     const allein = baue({ ...BELEG, worktrees: [lens], refs: [] });
     const r = M.fuehreAus([], allein.deps);
     assert.equal(allein.aufrufe.some((a) => a.includes("worktree remove")), false);
@@ -445,7 +453,7 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   });
 
   test("ein Worktree außerhalb von <Hauptcheckout>/.claude/worktrees wird nicht entfernt (Pfad-Schutz)", () => {
-    const welt: Welt = { ...BELEG, worktrees: [{ pfad: "/anders/worktrees/kq-1628", head: OID }] };
+    const welt: Welt = { ...BELEG, worktrees: [{ pfad: `/anders/worktrees/${WTP}1628`, head: OID }] };
     const { deps, aufrufe, geloescht } = baue(welt);
     const r = M.fuehreAus([], deps);
     assert.equal(r.code, 1);
@@ -547,7 +555,7 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   test("festgefahren (Label am Issue oder am PR): keine Wiederaufnahme, behalten; ohne Label dieselbe Lage verwaist", () => {
     const ohne = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN" } } }).deps);
     assert.match(ohne.out, /WIEDERAUFNAHME #20/);
-    for (const issue of [{ state: "OPEN", labels: ["status:festgefahren"] }, { state: "OPEN", prs: [{ number: 5, state: "OPEN", headRefOid: "x", labels: ["status:festgefahren"] }] }]) {
+    for (const issue of [{ state: "OPEN", labels: [FREMD.labels.festgefahren] }, { state: "OPEN", prs: [{ number: 5, state: "OPEN", headRefOid: "x", labels: [FREMD.labels.festgefahren] }] }]) {
       const r = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: issue } }).deps);
       assert.match(r.out, /BEHALTEN #20: behalten, festgefahren/);
       assert.doesNotMatch(r.out, /WIEDERAUFNAHME/);
@@ -557,13 +565,13 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   });
 
   test("ein reiner Remote-Branch ist keine lokale Spur: keine Wiederaufnahme", () => {
-    const r = M.fuehreAus([], baue({ refs: [["origin/feature/kq-21-x", sek("2026-10-16T01:00:00Z")]], issues: { 21: { state: "OPEN" } } }).deps);
+    const r = M.fuehreAus([], baue({ refs: [[`origin/${BRP}21-x`, sek("2026-10-16T01:00:00Z")]], issues: { 21: { state: "OPEN" } } }).deps);
     assert.match(r.out, /BEHALTEN #21: ohne-lokale-spur, zugewiesen, aber ohne Lock, Worktree und lokalen Branch/);
     assert.doesNotMatch(r.out, /WIEDERAUFNAHME/);
   });
 
   test("ohne Lock entscheidet allein die Commit-Zeit des lokalen Branch-Kopfes: vor 1 h lebendig, vor 5 h verwaist", () => {
-    const welt = (iso: string): Welt => ({ refs: [["feature/kq-22-x", sek(iso)]], issues: { 22: { state: "OPEN" } } });
+    const welt = (iso: string): Welt => ({ refs: [[`${BRP}22-x`, sek(iso)]], issues: { 22: { state: "OPEN" } } });
     assert.match(M.fuehreAus([], baue(welt("2026-10-16T07:36:00Z")).deps).out, /BEHALTEN #22: lebendig/);
     assert.match(M.fuehreAus([], baue(welt("2026-10-16T03:36:00Z")).deps).out, /WIEDERAUFNAHME #22: .*letztes Lebenszeichen 2026-10-16T03:36:00\.000Z \(vor 5 h\)/);
   });
@@ -574,7 +582,7 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   });
 
   test("das Festgefahren-Label am Issue oder gemergten PR verhindert das Aufräumen eines geschlossenen Issues nicht", () => {
-    const welt: Welt = { ...BELEG, issues: { ...BELEG.issues, 1628: { state: "CLOSED", labels: ["status:festgefahren"], prs: [{ number: 1662, state: "MERGED", headRefOid: OID, labels: ["status:festgefahren"] }] } } };
+    const welt: Welt = { ...BELEG, issues: { ...BELEG.issues, 1628: { state: "CLOSED", labels: [FREMD.labels.festgefahren], prs: [{ number: 1662, state: "MERGED", headRefOid: OID, labels: [FREMD.labels.festgefahren] }] } } };
     const { deps, geloescht } = baue(welt);
     const r = M.fuehreAus([], deps);
     assert.match(r.out, /AUFGERAEUMT #1628: Worktree /);
@@ -582,13 +590,13 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   });
 
   test("--json: branchLokal ist true bei lokalem Branch und false bei reinem Remote-Branch", () => {
-    const welt: Welt = { refs: [["feature/kq-40-x", sek("2026-10-16T07:00:00Z")], ["origin/feature/kq-41-x", sek("2026-10-16T07:00:00Z")]], issues: { 40: { state: "OPEN" }, 41: { state: "OPEN" } } };
+    const welt: Welt = { refs: [[`${BRP}40-x`, sek("2026-10-16T07:00:00Z")], [`origin/${BRP}41-x`, sek("2026-10-16T07:00:00Z")]], issues: { 40: { state: "OPEN" }, 41: { state: "OPEN" } } };
     const d = JSON.parse(M.fuehreAus(["--json"], baue(welt).deps).out) as { claims: { nr: number; branch: boolean; branchLokal: boolean }[] };
     assert.deepEqual(d.claims.map((c) => [c.nr, c.branch, c.branchLokal]), [[40, true, true], [41, true, false]]);
   });
 
   test("--json: lock ist null ohne Lock und \"unlesbar\" bei kaputtem Lock, dazu branchLokal und festgefahren", () => {
-    const welt: Welt = { zugewiesen: [23], locks: { "24.json": "{kaputt" }, issues: { 23: { state: "OPEN" }, 24: { state: "OPEN", labels: ["status:festgefahren"] } } };
+    const welt: Welt = { zugewiesen: [23], locks: { "24.json": "{kaputt" }, issues: { 23: { state: "OPEN" }, 24: { state: "OPEN", labels: [FREMD.labels.festgefahren] } } };
     const d = JSON.parse(M.fuehreAus(["--json"], baue(welt).deps).out) as { claims: { nr: number; lock: unknown; branchLokal: boolean; festgefahren: boolean; urteil: string }[] };
     assert.deepEqual(d.claims.map((c) => [c.nr, c.lock, c.branchLokal, c.festgefahren, c.urteil]), [
       [23, null, false, false, "ohne-lokale-spur"],

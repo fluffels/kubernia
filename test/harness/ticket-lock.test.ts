@@ -1,4 +1,4 @@
-/* Ticket-Lock (#1561 Z4) – zwei Sessions als `fluffels` dürfen dasselbe Ticket nicht gleichzeitig bearbeiten.
+/* Ticket-Lock (#1561 Z4) – zwei Sessions unter demselben Account dürfen dasselbe Ticket nicht gleichzeitig bearbeiten.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
@@ -18,6 +18,7 @@ vi.mock("node:fs", async (original) => {
 import * as fsSpion from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/ticket-lock.mjs";
+import { FREMD } from "../support/fremd-config";
 
 type Erg = { code: number; out: string; err: string };
 type Deps = Record<string, unknown>;
@@ -29,12 +30,14 @@ const M = raw as unknown as {
   letzteAktivitaet: (o: { commitMs?: number[]; reflogMs?: number[]; dateiMs?: number[]; nodeModulesMs?: number | null }) => number | null;
   aufrufLesen: (argv: string[]) => { commit?: boolean; befehl?: string; nr?: number; nonce?: string | null; wiederaufnahme?: boolean; schritt?: string | null; fehler?: string };
   fuehreAus: (argv: string[], deps: Deps) => Erg;
-  echteDeps: () => Deps;
+  echteDeps: (o?: { config?: unknown }) => Deps;
   ALTLAST_MS: number;
   gehoertZu: (lock: Record<string, unknown> | null, nonce: string) => boolean;
   aufzuraeumen: (o: { eintraege: { name: string; mtime: number }[]; jetzt: number }) => string[];
 };
 
+const WTP = FREMD.praefixe.worktree;
+const BRP = FREMD.praefixe.branch;
 const MIN = 60_000;
 const JETZT = Date.UTC(2026, 9, 9, 12, 0, 0);
 let dir: string;
@@ -45,14 +48,14 @@ type Welt = { refs?: string[]; worktrees?: string[]; commitSek?: number; reflogS
 
 /** `echteDeps()` startet `git rev-parse`; einmal je Datei genügt (die Deps sind zustandslos). */
 let echteDepsCache: ReturnType<typeof M.echteDeps> | null = null;
-const echteDepsEinmal = (): ReturnType<typeof M.echteDeps> => (echteDepsCache ??= M.echteDeps());
+const echteDepsEinmal = (): ReturnType<typeof M.echteDeps> => (echteDepsCache ??= M.echteDeps({ config: FREMD }));
 
 /** Deps mit echtem Dateisystem im Temp-Ordner und einem gefälschten git. */
 function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}): Deps {
   const echt = echteDepsEinmal();
   return {
     ...echt,
-    lockDir: join(dir, "kq-locks"),
+    lockDir: join(dir, `${WTP}locks`),
     jetzt: () => jetzt,
     nonce: () => `nonce-${++zaehler}`,
     mtime: (p: string) => datei[p] ?? Number.NaN,
@@ -80,7 +83,7 @@ const nonceVon = (r: Erg) => /nonce=(\S+)/.exec(r.out)?.[1] ?? "";
 
 beforeEach(() => {
   fetchAufrufe = [];
-  dir = mkdtempSync(join(tmpdir(), "kq-lock-"));
+  dir = mkdtempSync(join(tmpdir(), "lock-"));
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -91,14 +94,14 @@ describe("claim", () => {
     const a = lauf(["claim", "1561"]);
     assert.equal(a.code, 0);
     assert.match(a.out, /^nonce=nonce-\d+\n$/);
-    const lockText = readFileSync(join(dir, "kq-locks", "1561.json"), "utf8");
+    const lockText = readFileSync(join(dir, `${WTP}locks`, "1561.json"), "utf8");
     assert.equal(lockInhalt(lockText).nonceHash, sha(nonceVon(a)));
     assert.doesNotMatch(lockText, new RegExp(nonceVon(a)), "die Nonce selbst steht nicht in der Datei");
     assert.equal(lockInhalt(lockText).nr, 1561);
     const b = lauf(["claim", "1561"]);
     assert.equal(b.code, 4);
     assert.match(b.err, /anderen Session/);
-    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "1561.json"), "utf8")).nonceHash, sha(nonceVon(a)), "der Lock des Gewinners bleibt");
+    assert.equal(lockInhalt(readFileSync(join(dir, `${WTP}locks`, "1561.json"), "utf8")).nonceHash, sha(nonceVon(a)), "der Lock des Gewinners bleibt");
   });
 
   test("claim holt mit --prune: ein gelöschter Remote-Branch darf das Ticket nicht sperren", () => {
@@ -117,9 +120,9 @@ describe("claim", () => {
     const b = lauf(["claim", "7"]);
     assert.equal(b.code, 0);
     assert.notEqual(nonceVon(b), nonceVon(a));
-    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonceHash, sha(nonceVon(b)));
-    assert.ok(readdirSync(join(dir, "kq-locks")).some((f) => f === `7.json.verwaist-${sha(nonceVon(b)).slice(0, 16)}`));
-    assert.ok(readdirSync(join(dir, "kq-locks")).every((f) => !f.includes(nonceVon(b))), "kein Dateiname verrät die Nonce");
+    assert.equal(lockInhalt(readFileSync(join(dir, `${WTP}locks`, "7.json"), "utf8")).nonceHash, sha(nonceVon(b)));
+    assert.ok(readdirSync(join(dir, `${WTP}locks`)).some((f) => f === `7.json.verwaist-${sha(nonceVon(b)).slice(0, 16)}`));
+    assert.ok(readdirSync(join(dir, `${WTP}locks`)).every((f) => !f.includes(nonceVon(b))), "kein Dateiname verrät die Nonce");
   });
 
   test("ein Lock knapp unter 2 h gilt noch", () => {
@@ -129,30 +132,30 @@ describe("claim", () => {
 
   test("ein kaputter Lock (kein JSON) zählt als verwaist", () => {
     lauf(["claim", "7"]);
-    writeFileSync(join(dir, "kq-locks", "7.json"), "{kaputt");
+    writeFileSync(join(dir, `${WTP}locks`, "7.json"), "{kaputt");
     assert.equal(lauf(["claim", "7"]).code, 0);
   });
 
-  test("belegt: Worktree kq-<nr> oder lokaler/remote Branch feature/kq-<nr>-* → Exit 4, kein Lock", () => {
+  test(`belegt: Worktree ${WTP}<nr> oder lokaler/remote Branch ${BRP}<nr>-* → Exit 4, kein Lock`, () => {
     for (const welt of [
-      { worktrees: ["/repo/.claude/worktrees/kq-9"] },
-      { refs: ["feature/kq-9-irgendwas"] },
-      { refs: ["origin/feature/kq-9-irgendwas"] },
+      { worktrees: [`/repo/.claude/worktrees/${WTP}9`] },
+      { refs: [`${BRP}9-irgendwas`] },
+      { refs: [`origin/${BRP}9-irgendwas`] },
     ]) {
       const r = lauf(["claim", "9"], welt);
       assert.equal(r.code, 4, JSON.stringify(welt));
       assert.match(r.err, /Worktree oder Branch/);
-      assert.equal(existsSync(join(dir, "kq-locks", "9.json")), false);
+      assert.equal(existsSync(join(dir, `${WTP}locks`, "9.json")), false);
     }
   });
 
-  test("ein Branch mit ähnlicher Nummer (kq-91, kq-19) belegt #9 nicht", () => {
-    assert.equal(lauf(["claim", "9"], { refs: ["feature/kq-91-x", "origin/feature/kq-19-y"], worktrees: ["C:/x/.claude/worktrees/kq-90"] }).code, 0);
+  test(`ein Branch mit ähnlicher Nummer (${WTP}91, ${WTP}19) belegt #9 nicht`, () => {
+    assert.equal(lauf(["claim", "9"], { refs: [`${BRP}91-x`, `origin/${BRP}19-y`], worktrees: [`C:/x/.claude/worktrees/${WTP}90`] }).code, 0);
   });
 
   test("ohne Netz (fetch scheitert) zählen die lokalen Refs: weiter fail-open", () => {
     assert.equal(lauf(["claim", "9"], { fetchFehler: true }).code, 0);
-    assert.equal(lauf(["claim", "10"], { fetchFehler: true, refs: ["feature/kq-10-x"] }).code, 4);
+    assert.equal(lauf(["claim", "10"], { fetchFehler: true, refs: [`${BRP}10-x`] }).code, 4);
   });
 });
 
@@ -173,8 +176,8 @@ describe("pruefe", () => {
   });
 
   test("Worktree mit Aktivität vor 29 min → aktiv (Exit 4), vor 31 min → uebernehmbar (Exit 0)", () => {
-    const wt = "/repo/.claude/worktrees/kq-5";
-    const welt = (minuten: number): Welt => ({ worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: (JETZT - minuten * MIN) / 1000, reflogSek: (JETZT - minuten * MIN) / 1000 });
+    const wt = `/repo/.claude/worktrees/${WTP}5`;
+    const welt = (minuten: number): Welt => ({ worktrees: [wt], refs: [`${BRP}5-x`], commitSek: (JETZT - minuten * MIN) / 1000, reflogSek: (JETZT - minuten * MIN) / 1000 });
     const aktiv = lauf(["pruefe", "5"], welt(29));
     assert.equal(aktiv.code, 4);
     assert.equal(aktiv.out, "aktiv\n");
@@ -183,9 +186,9 @@ describe("pruefe", () => {
   });
 
   test("jede Quelle zählt: Commit, Reflog, geänderte Datei, node_modules", () => {
-    const wt = "/repo/.claude/worktrees/kq-5";
+    const wt = `/repo/.claude/worktrees/${WTP}5`;
     const alt = (JETZT - 120 * MIN) / 1000;
-    const basis: Welt = { worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: alt, reflogSek: alt, status: [" M scripts/a.mjs", "?? neu.txt"] };
+    const basis: Welt = { worktrees: [wt], refs: [`${BRP}5-x`], commitSek: alt, reflogSek: alt, status: [" M scripts/a.mjs", "?? neu.txt"] };
     assert.equal(lauf(["pruefe", "5"], basis).out, "uebernehmbar\n", "Kontrolle: alles alt");
     assert.equal(lauf(["pruefe", "5"], { ...basis, commitSek: (JETZT - 5 * MIN) / 1000 }).out, "aktiv\n", "Commit");
     assert.equal(lauf(["pruefe", "5"], { ...basis, reflogSek: (JETZT - 5 * MIN) / 1000 }).out, "aktiv\n", "Reflog");
@@ -194,14 +197,14 @@ describe("pruefe", () => {
   });
 
   test("Remote-Branch ohne Worktree zählt als vorhanden; keine feststellbare Aktivität ist fail-closed aktiv", () => {
-    assert.equal(lauf(["pruefe", "5"], { refs: ["origin/feature/kq-5-x"], commitSek: (JETZT - 5 * MIN) / 1000 }).out, "aktiv\n");
-    assert.equal(lauf(["pruefe", "5"], { refs: ["origin/feature/kq-5-x"], commitSek: (JETZT - 300 * MIN) / 1000 }).out, "uebernehmbar\n");
+    assert.equal(lauf(["pruefe", "5"], { refs: [`origin/${BRP}5-x`], commitSek: (JETZT - 5 * MIN) / 1000 }).out, "aktiv\n");
+    assert.equal(lauf(["pruefe", "5"], { refs: [`origin/${BRP}5-x`], commitSek: (JETZT - 300 * MIN) / 1000 }).out, "uebernehmbar\n");
     assert.equal(M.entscheidePruefung({ lock: null, nonce: null, vorhanden: true, aktivitaet: null, jetzt: JETZT }), "aktiv");
   });
 
   test("mit eigener Nonce und einem Worktree mit frischer Aktivität bleibt es aktiv (Doppel-Spawn)", () => {
     const a = lauf(["claim", "5"]);
-    const welt: Welt = { worktrees: ["/repo/.claude/worktrees/kq-5"], reflogSek: (JETZT - 5 * MIN) / 1000 };
+    const welt: Welt = { worktrees: [`/repo/.claude/worktrees/${WTP}5`], reflogSek: (JETZT - 5 * MIN) / 1000 };
     assert.equal(lauf(["pruefe", "5", "--nonce", nonceVon(a)], welt).code, 4);
   });
 });
@@ -211,9 +214,9 @@ describe("freigeben", () => {
     const a = lauf(["claim", "5"]);
     const f = lauf(["freigeben", "5", "--nonce", "fremd"]);
     assert.equal(f.code, 4);
-    assert.ok(existsSync(join(dir, "kq-locks", "5.json")));
+    assert.ok(existsSync(join(dir, `${WTP}locks`, "5.json")));
     assert.equal(lauf(["freigeben", "5", "--nonce", nonceVon(a)]).code, 0);
-    assert.equal(existsSync(join(dir, "kq-locks", "5.json")), false);
+    assert.equal(existsSync(join(dir, `${WTP}locks`, "5.json")), false);
     assert.equal(lauf(["claim", "5"]).code, 0, "danach ist das Ticket wieder claimbar");
   });
 
@@ -247,19 +250,19 @@ describe("Z4/Z5: Lock nie von Hand, pruefe ohne Nonce", () => {
 
   test("die Hash-Datei lässt sich nicht mit dem Hash als Nonce freigeben oder prüfen", () => {
     lauf(["claim", "5"]);
-    const hash = lockInhalt(readFileSync(join(dir, "kq-locks", "5.json"), "utf8")).nonceHash;
+    const hash = lockInhalt(readFileSync(join(dir, `${WTP}locks`, "5.json"), "utf8")).nonceHash;
     const f = lauf(["freigeben", "5", "--nonce", hash]);
     assert.equal(f.code, 4);
-    assert.ok(existsSync(join(dir, "kq-locks", "5.json")), "Lock bleibt");
+    assert.ok(existsSync(join(dir, `${WTP}locks`, "5.json")), "Lock bleibt");
     assert.equal(lauf(["pruefe", "5", "--nonce", hash]).out, "fremd\n");
   });
 
   test("Altformat mit Klartext-Nonce bleibt gültig (freigeben, pruefe)", () => {
-    mkdirSync(join(dir, "kq-locks"), { recursive: true });
-    writeFileSync(join(dir, "kq-locks", "5.json"), JSON.stringify({ nr: 5, nonce: "alt", erstellt: new Date(JETZT).toISOString() }));
+    mkdirSync(join(dir, `${WTP}locks`), { recursive: true });
+    writeFileSync(join(dir, `${WTP}locks`, "5.json"), JSON.stringify({ nr: 5, nonce: "alt", erstellt: new Date(JETZT).toISOString() }));
     assert.equal(lauf(["pruefe", "5", "--nonce", "alt"]).out, "frei\n");
     assert.equal(lauf(["freigeben", "5", "--nonce", "alt"]).code, 0);
-    assert.equal(existsSync(join(dir, "kq-locks", "5.json")), false);
+    assert.equal(existsSync(join(dir, `${WTP}locks`, "5.json")), false);
   });
 
   test("jede Exit-4-Ausgabe nennt, dass man den Lock nie von Hand löst", () => {
@@ -267,10 +270,10 @@ describe("Z4/Z5: Lock nie von Hand, pruefe ohne Nonce", () => {
     const fehler = Object.assign(new Error("x"), { code: "ENOENT" });
     const meldungen = [
       lauf(["claim", "5"]).err,
-      lauf(["claim", "9"], { refs: ["feature/kq-9-x"] }).err,
+      lauf(["claim", "9"], { refs: [`${BRP}9-x`] }).err,
       lauf(["pruefe", "5", "--nonce", "falsch"]).err,
       lauf(["pruefe", "5"]).err,
-      lauf(["pruefe", "6"], { worktrees: ["/repo/.claude/worktrees/kq-6"], reflogSek: JETZT / 1000 }).err,
+      lauf(["pruefe", "6"], { worktrees: [`/repo/.claude/worktrees/${WTP}6`], reflogSek: JETZT / 1000 }).err,
       lauf(["freigeben", "5", "--nonce", "falsch"]).err,
       M.fuehreAus(["claim", "5"], { ...deps({}, JETZT + M.VERWAIST_MS + 1), benenneUm: () => { throw fehler; } }).err,
       M.fuehreAus(["claim", "5"], { ...deps({}, JETZT + M.VERWAIST_MS + 1), schreibeNeu: () => { throw Object.assign(new Error("x"), { code: "EEXIST" }); } }).err,
@@ -291,7 +294,7 @@ describe("Aufruf und reine Funktionen", () => {
     for (const argv of [[], ["claim"], ["claim", "abc"], ["claim", "-1"], ["claim", "1.5"], ["foo", "5"], ["pruefe", "5", "--nonce"], ["claim", "5", "extra"]]) {
       assert.equal(lauf(argv).code, 2, JSON.stringify(argv));
     }
-    assert.equal(existsSync(join(dir, "kq-locks")), false, "kein Lock bei falschem Aufruf");
+    assert.equal(existsSync(join(dir, `${WTP}locks`)), false, "kein Lock bei falschem Aufruf");
   });
 
   test("ein werfendes git ergibt Exit 2 statt eines Absturzes", () => {
@@ -355,7 +358,7 @@ describe("Aufruf und reine Funktionen", () => {
 
   test("die echte Lock-Datei liegt im gemeinsamen git-Verzeichnis, nicht unter .claude/worktrees", () => {
     const echt = echteDepsEinmal() as { lockDir: string };
-    assert.match(echt.lockDir.replace(/\\/g, "/"), /\.git\/kq-locks$/);
+    assert.ok(echt.lockDir.replace(/\\/g, "/").endsWith(`.git/${WTP}locks`));
     assert.doesNotMatch(echt.lockDir.replace(/\\/g, "/"), /\.claude\/worktrees/);
   });
 });
@@ -373,7 +376,7 @@ describe("verlorener Wettlauf und Randfälle in claim und pruefe", () => {
     });
     assert.equal(r.code, 4);
     assert.match(r.err, /übernommen/);
-    assert.equal(lockInhalt(readFileSync(join(dir, "kq-locks", "7.json"), "utf8")).nonceHash, sha(nonceVon(alt)));
+    assert.equal(lockInhalt(readFileSync(join(dir, `${WTP}locks`, "7.json"), "utf8")).nonceHash, sha(nonceVon(alt)));
   });
 
   test("nach dem Umbenennen gewinnt ein anderer das Neuanlegen → Exit 4, keine Nonce ausgegeben", () => {
@@ -401,7 +404,7 @@ describe("verlorener Wettlauf und Randfälle in claim und pruefe", () => {
   });
 
   test("git status: Umbenennung (`R  alt -> neu`) und zitierter Pfad mit Leerzeichen zählen als geänderte Datei", () => {
-    const wt = "/repo/.claude/worktrees/kq-5";
+    const wt = `/repo/.claude/worktrees/${WTP}5`;
     const alt = (JETZT - 120 * MIN) / 1000;
     const welt: Welt = { worktrees: [wt], reflogSek: alt, status: ["R  alt.txt -> neu.txt", '?? "mit leer.txt"'] };
     assert.equal(lauf(["pruefe", "5"], welt).out, "uebernehmbar\n", "Kontrolle: nichts frisch");
@@ -413,9 +416,9 @@ describe("verlorener Wettlauf und Randfälle in claim und pruefe", () => {
 describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
   const H = 60 * MIN;
   const lockDatei = (name: string, text = "{}") => {
-    mkdirSync(join(dir, "kq-locks"), { recursive: true });
-    writeFileSync(join(dir, "kq-locks", name), text);
-    return join(dir, "kq-locks", name);
+    mkdirSync(join(dir, `${WTP}locks`), { recursive: true });
+    writeFileSync(join(dir, `${WTP}locks`, name), text);
+    return join(dir, `${WTP}locks`, name);
   };
 
   test("aufzuraeumen: jede .verwaist-Datei und jede <nr>.json über ALTLAST_MS, sonst nichts", () => {
@@ -446,10 +449,10 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
     const ziel = lockDatei("4.json", "alt");
     echt.ersetze(ziel, `${"x".repeat(5000)}\n`);
     assert.equal(readFileSync(ziel, "utf8"), `${"x".repeat(5000)}\n`);
-    assert.deepEqual(readdirSync(join(dir, "kq-locks")).filter((n) => n.includes(".tmp-")), []);
-    mkdirSync(join(dir, "kq-locks", "3.json"));
-    assert.throws(() => echt.ersetze(join(dir, "kq-locks", "3.json"), "neu"));
-    assert.deepEqual(readdirSync(join(dir, "kq-locks")).filter((n) => n.includes(".tmp-")), [], "Rest nach Fehlschlag aufgeräumt");
+    assert.deepEqual(readdirSync(join(dir, `${WTP}locks`)).filter((n) => n.includes(".tmp-")), []);
+    mkdirSync(join(dir, `${WTP}locks`, "3.json"));
+    assert.throws(() => echt.ersetze(join(dir, `${WTP}locks`, "3.json"), "neu"));
+    assert.deepEqual(readdirSync(join(dir, `${WTP}locks`)).filter((n) => n.includes(".tmp-")), [], "Rest nach Fehlschlag aufgeräumt");
   });
 
   test("ersetze: erst Temp-Datei schreiben, dann auf das Ziel umbenennen, nie das Ziel direkt beschreiben (#1663 L44c)", () => {
@@ -477,7 +480,7 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
     });
     assert.throws(() => echt.ersetze(ziel, "neu"), /rename kaputt/);
     assert.equal(readFileSync(ziel, "utf8"), "alt", "ein halber Schreibvorgang erreicht nie das Ziel");
-    assert.deepEqual(readdirSync(join(dir, "kq-locks")).filter((n) => n.includes(".tmp-")), []);
+    assert.deepEqual(readdirSync(join(dir, `${WTP}locks`)).filter((n) => n.includes(".tmp-")), []);
   });
 
   test("eine .tmp-Datei zählt nicht als Lock: weder claim noch pruefe lesen sie", () => {
@@ -503,7 +506,7 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
     assert.equal(existsSync(alt), false, "25 h alt wird gelöscht");
     const b = lauf(["claim", "6"]);
     assert.equal(b.code, 0);
-    assert.equal(existsSync(join(dir, "kq-locks", "5.json")), true, "der eigene frische Lock bleibt");
+    assert.equal(existsSync(join(dir, `${WTP}locks`, "5.json")), true, "der eigene frische Lock bleibt");
     assert.equal(lauf(["pruefe", "5", "--nonce", nonceVon(a)]).out, "frei\n");
   });
 
@@ -518,9 +521,9 @@ describe("Aufräumen alter Lock-Dateien (#1572 Z9)", () => {
 });
 
 describe("uebergeben (#1592, Phasen-Schnitt)", () => {
-  const wt = "/repo/.claude/worktrees/kq-5";
-  const aktiv: Welt = { worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: (JETZT - 1 * MIN) / 1000, reflogSek: (JETZT - 1 * MIN) / 1000 };
-  const lockDatei5 = () => join(dir, "kq-locks", "5.json");
+  const wt = `/repo/.claude/worktrees/${WTP}5`;
+  const aktiv: Welt = { worktrees: [wt], refs: [`${BRP}5-x`], commitSek: (JETZT - 1 * MIN) / 1000, reflogSek: (JETZT - 1 * MIN) / 1000 };
+  const lockDatei5 = () => join(dir, `${WTP}locks`, "5.json");
   const lockJson = () => JSON.parse(readFileSync(lockDatei5(), "utf8")) as { nonceHash: string; uebergabe?: { gesetzt: string; verbraucht: string | null } };
 
   test("eigene Nonce: Exit 0, Feld in der Datei; pruefe meldet trotz Aktivität uebernehmbar und verbraucht nichts, uebernehmen verbraucht die Übergabe (#1593)", () => {
@@ -629,14 +632,14 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     lauf(["uebergeben", "5", "--nonce", n], {}, JETZT - 3 * 60 * MIN);
     const frisch = lauf(["pruefe", "5"], aktiv);
     assert.deepEqual({ code: frisch.code, out: frisch.out }, { code: 4, out: "aktiv\n" });
-    const alt: Welt = { worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: (JETZT - 120 * MIN) / 1000, reflogSek: (JETZT - 120 * MIN) / 1000 };
+    const alt: Welt = { worktrees: [wt], refs: [`${BRP}5-x`], commitSek: (JETZT - 120 * MIN) / 1000, reflogSek: (JETZT - 120 * MIN) / 1000 };
     assert.equal(lauf(["pruefe", "5"], alt).out, "uebernehmbar\n");
     assert.equal(lockJson().uebergabe?.verbraucht, null, "ohne Nonce kein Verbrauch");
     assert.equal(M.entscheidePruefung({ lock: { nonce: "a", erstellt: new Date(JETZT - 3 * 60 * MIN).toISOString() } as never, nonce: null, vorhanden: true, aktivitaet: JETZT - MIN, jetzt: JETZT, uebergabeOffen: true } as never), "aktiv");
   });
 
   test("ein Lock im Altformat (Klartext-nonce) ist übergebbar, freigeben geht danach", () => {
-    mkdirSync(join(dir, "kq-locks"), { recursive: true });
+    mkdirSync(join(dir, `${WTP}locks`), { recursive: true });
     writeFileSync(lockDatei5(), `${JSON.stringify({ nr: 5, nonce: "alt", erstellt: new Date(JETZT).toISOString() })}\n`);
     assert.equal(lauf(["uebergeben", "5", "--nonce", "alt"]).code, 0);
     assert.equal(lauf(["pruefe", "5", "--nonce", "alt"], aktiv).out, "uebernehmbar\n");
@@ -668,9 +671,9 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
 });
 
 describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
-  const wt = "/repo/.claude/worktrees/kq-5";
-  const aktiv: Welt = { worktrees: [wt], refs: ["feature/kq-5-x"], commitSek: (JETZT - 1 * MIN) / 1000, reflogSek: (JETZT - 1 * MIN) / 1000 };
-  const lockDatei5 = () => join(dir, "kq-locks", "5.json");
+  const wt = `/repo/.claude/worktrees/${WTP}5`;
+  const aktiv: Welt = { worktrees: [wt], refs: [`${BRP}5-x`], commitSek: (JETZT - 1 * MIN) / 1000, reflogSek: (JETZT - 1 * MIN) / 1000 };
+  const lockDatei5 = () => join(dir, `${WTP}locks`, "5.json");
   const lockJson = () =>
     JSON.parse(readFileSync(lockDatei5(), "utf8")) as { uebergabe?: unknown; gestoppt?: { gesetzt: string; verbraucht: string | null } };
 
