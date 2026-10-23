@@ -1,7 +1,7 @@
 /* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Konsistenz-Wächter für die containerisierte Dev-Umgebung (#388).
  *
- * Es gibt jetzt DREI Stellen, die dieselbe Node-Version und denselben Dev-Port
+ * Es gibt jetzt VIER Stellen, die dieselbe Node-Version und denselben Dev-Port
  * nennen: .nvmrc / package.json (engines), .devcontainer/devcontainer.json und
  * docker-compose.yml. Solche Duplikate driften leise auseinander — jemand hebt
  * .nvmrc auf eine neue Node-Version, vergisst aber den Container, und Mitwirkende
@@ -222,5 +222,77 @@ describe("engines.node der Wurzel deckt die Abhängigkeiten ab (#1428 Z18)", () 
     };
     assert.deepEqual(enginesVerstoesse(fixture, ">=22.22.3").map((v) => v.split(" ")[0]), ["node_modules/hoch", "node_modules/minor", "node_modules/major"]);
     assert.equal(enginesVerstoesse({ x: { engines: { node: ">=24" } } }, "^22").length, 1, "nicht auswertbare Wurzel-Angabe ist selbst ein Verstoß");
+  });
+});
+
+// ── Node-Pins erfüllen das Minimum engines.node (#1907) ──────────────────────────────────────
+// Anlass: ein Node-Security-Release hebt die Mindestversion; ein schwebender Tag (`22`) lässt alte Patch-Stände durch.
+// Scan-Umfang (geschlossene Liste): .nvmrc, Dockerfile, Dockerfile.devpanel, docker-compose.yml. Bewusst ausgenommen:
+// .devcontainer/devcontainer.json (nur Major-Tag, vom Major-Kopplungstest oben geprüft).
+// Bei einem Node-Security-Release engines.node anheben: dieser Test nennt dann alle nachzuziehenden Pins.
+// Bekannte Grenze: geprüft wird nur die Untergrenze, kein Gleichheitstest (Dependabot darf Docker-Pins höher ziehen).
+
+const PIN_FORM = /^v?(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?$/;
+
+/** Verstöße je Quelle: kein Pin, nicht patch-genau, unter dem engines-Minimum, engines nicht auswertbar. Pur. */
+function nodePinVerstoesse(pins: Record<string, string[]>, engines: string | undefined): string[] {
+  const min = mindest(engines);
+  if (!min) return [`engines.node „${String(engines)}“ hat nicht die Form >=X.Y.Z`];
+  return Object.entries(pins).flatMap(([quelle, liste]) => {
+    if (liste.length === 0) return [`${quelle}: kein Node-Pin gefunden`];
+    return liste.flatMap((pin) => {
+      const m = PIN_FORM.exec(pin);
+      if (!m) return [`${quelle}: Pin „${pin}“ ist nicht patch-genau`];
+      return kleiner([Number(m[1]), Number(m[2]), Number(m[3])], min) ? [`${quelle}: Pin „${pin}“ liegt unter ${String(engines)}`] : [];
+    });
+  });
+}
+
+const dockerPins = (text: string): string[] => [...text.matchAll(/\bnode:([^\s"'#]+)/g)].map((m) => m[1]);
+
+/** Beginnt die letzte FROM-Zeile (Laufzeit-Stage) mit `nginx:`? Pur. */
+const letzteStageIstNginx = (dockerfile: string): boolean => {
+  const froms = dockerfile.split(/\r?\n/).filter((z) => /^FROM\s/i.test(z));
+  return froms.length > 0 && /^FROM\s+nginx:/i.test(froms[froms.length - 1]);
+};
+
+describe("Node-Pins erfüllen das Minimum engines.node (#1907)", () => {
+  const dockerfile = read("Dockerfile");
+  const quellen: Record<string, string[]> = {
+    ".nvmrc": [nvmrc],
+    Dockerfile: dockerPins(dockerfile),
+    "Dockerfile.devpanel": dockerPins(devpanelDockerfile),
+    "docker-compose.yml": dockerPins(compose),
+  };
+
+  test("Ratchet: engines.node liegt mindestens auf dem Security-Release 22.23.4 (2026-10), künftig nur anheben", () => {
+    const m = mindest(pkg.engines?.node);
+    assert.ok(m, "engines.node nicht auswertbar");
+    assert.ok(!kleiner(m, [22, 23, 4]), `engines.node ${String(pkg.engines?.node)} liegt unter 22.23.4`);
+  });
+
+  test.each(Object.keys(quellen))("%s: Pin ist patch-genau und erfüllt engines.node", (quelle) => {
+    assert.deepEqual(nodePinVerstoesse({ [quelle]: quellen[quelle] }, pkg.engines?.node), []);
+  });
+
+  test.each(["Dockerfile", "Dockerfile.devpanel"])("%s: die Laufzeit-Stage bleibt nginx (kein Node zur Laufzeit)", (name) => {
+    assert.ok(letzteStageIstNginx(name === "Dockerfile" ? dockerfile : devpanelDockerfile));
+  });
+
+  test("Negativ: schwebende, zu alte, fehlende und unauswertbare Angaben werden gemeldet", () => {
+    const v = (pin: string[]) => nodePinVerstoesse({ q: pin }, ">=22.23.4");
+    assert.equal(v(["22"]).length, 1);
+    assert.match(v(["22"])[0], /nicht patch-genau/);
+    assert.match(v(["22-bookworm-slim"])[0], /nicht patch-genau/);
+    assert.match(v(["22.22.3-bookworm-slim"])[0], /liegt unter/);
+    assert.match(v([])[0], /kein Node-Pin/);
+    for (const ok of ["22.23.4-bookworm-slim", "v22.23.4", "22.24.0", "24.1.0-slim"]) assert.deepEqual(v([ok]), [], ok);
+    assert.equal(nodePinVerstoesse({ q: ["22.23.4"] }, "^22").length, 1);
+  });
+
+  test("Negativ: eine Node-Stage als letzte wird nicht als nginx-Laufzeit gewertet", () => {
+    assert.equal(letzteStageIstNginx("FROM node:22.23.4 AS build\nFROM nginx:1.31-alpine\n"), true);
+    assert.equal(letzteStageIstNginx("FROM nginx:1.31-alpine\nFROM node:22.23.4 AS build\n"), false);
+    assert.equal(letzteStageIstNginx("RUN x\n"), false);
   });
 });
