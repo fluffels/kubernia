@@ -5,7 +5,7 @@
  *
  *   node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]
  *
- * Kategorien (Vorrang von oben): Brain (ab dem ersten Call, dessen Tool eine `--brain`-Wurzel berührt oder der Skill `brain-input` ist, bis Turn-Ende; ein Turn mit `/brain-input` ganz),
+ * Kategorien (Vorrang von oben): Brain (ab dem ersten Call, dessen Tool eine `--brain`-Wurzel berührt oder der Abschluss-Skill (`skills.abschluss`) ist, bis Turn-Ende; ein Turn mit dessen Slash-Aufruf ganz),
  * Ticket-Orchestrierung (vom Claim-Turn bis `closedAt`), Nachlauf (nach dem Merge bis zum nächsten Claim),
  * Ad-hoc. Turn = Nutzerzeile (kein tool_result, keine Benachrichtigung); Benachrichtigungs-Turns bleiben im Turn davor.
  * Kennzahlen der Ticket-Orchestrierung (#1557): Zeile `Modellanteil` (Sonnet-Anteil, Median je Fenster) und Zeile `TTL` (1h-Ist gegen 5m-Simulation).
@@ -32,7 +32,7 @@ export const ERGEBNIS_SCHLUESSEL = Object.freeze(["rows", "fenster", "ohnePreis"
 
 /**
  * Die Namen der Zerlegung aus der Projekt-Config: die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill`, der Kern-Skill und der Verzeichnisname des festen Rollen-Pfads `ROLLEN_PFADE.ticketSkill`; ihr Aufruf per Slash oder
- * Skill-Tool ist ein Ticketlauf), die Menge der Ticketlauf-Agenten (`agenten.planer|umsetzer|lens|gruppe`) und der Repo-Name (Schlüssel und Label der eigenen Subagenten).
+ * Skill-Tool ist ein Ticketlauf), die Menge der Ticketlauf-Agenten (`agenten.planer|umsetzer|lens|gruppe`), der Abschluss-Skill (`skills.abschluss`, zählt als Brain) und der Repo-Name (Schlüssel und Label der eigenen Subagenten).
  * Wirft mit Grund, wenn die Config fehlt oder nicht nutzbar ist (Datenfehler statt falscher Zählung). Die Config lädt der Einstiegspunkt und reicht sie
  * als `deps.config` durch; dieser Kern lädt nie selbst.
  */
@@ -45,7 +45,10 @@ export function hauptchatNamen(deps = {}) {
 Fix: repo in ${PROJEKT_CONFIG} auf einen Namen außerhalb von ${ERGEBNIS_SCHLUESSEL.join(", ")} ändern`);
   const { planer, umsetzer, lens, gruppe, ticketSkill } = r.namen.agenten;
   const ticketSkills = [...new Set([ticketSkill, KERN_TICKET_SKILL, posix.basename(TICKET_SKILL_ORDNER)])];
-  return { ticketSkills, ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: name, config: r.config };
+  const abschlussSkill = r.config.skills?.abschluss;
+  if (typeof abschlussSkill !== "string" || !abschlussSkill) throw new Error(`skills.abschluss fehlt in der Projekt-Config
+Fix: skills.abschluss in ${PROJEKT_CONFIG} setzen (Name des Abschluss-Skills)`);
+  return { ticketSkills, abschlussSkill, ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: name, config: r.config };
 }
 
 /** Die Ticket-Skills aus der Projekt-Config (siehe `hauptchatNamen`). */
@@ -85,14 +88,14 @@ function beruehrtWurzel(text, wurzeln) {
   return false;
 }
 
-function eventBeruehrtBrain(ev, wurzeln) {
-  if (ev.tool === "Skill") return ev.input?.skill === "brain-input";
+function eventBeruehrtBrain(ev, wurzeln, abschlussSkill) {
+  if (ev.tool === "Skill") return ev.input?.skill === abschlussSkill;
   const felder = [ev.input?.file_path, ev.input?.path, ev.input?.notebook_path, ev.input?.command, ev.input?.pattern];
   return felder.some((f) => typeof f === "string" && beruehrtWurzel(f, wurzeln));
 }
 
 /** Eine Session in Turns zerlegen: jede Zeile gehört zum zuletzt begonnenen Turn. */
-function turnsAus(zeilen, wurzeln, ticketSkills) {
+function turnsAus(zeilen, wurzeln, ticketSkills, abschlussSkill) {
   const gruppen = [{ start: null, rows: [] }];
   for (const row of zeilen) {
     const s = turnStart(row);
@@ -105,9 +108,9 @@ function turnsAus(zeilen, wurzeln, ticketSkills) {
     const skillGeladen = events.some((e) => e.tool === "Skill" && ticketSkills.includes(e.input?.skill));
     const workflow = events.some((e) => /workflow/i.test(e.tool));
     const art = ticketSkills.includes(g.start?.slash) ? "Slash" : skillGeladen ? "Skill-Tool" : workflow ? "Workflow" : "frei";
-    // Brain gilt ab dem ersten Brain-Ereignis bis Turn-Ende (#1382); ein Turn mit /brain-input ist ganz Brain.
-    const brainTs = events.filter((e) => eventBeruehrtBrain(e, wurzeln)).map((e) => (gueltig(e.ts) ? Date.parse(e.ts) : -Infinity));
-    const brainAb = g.start?.slash === "brain-input" ? -Infinity : brainTs.length ? Math.min(...brainTs) : null;
+    // Brain gilt ab dem ersten Brain-Ereignis bis Turn-Ende (#1382); ein Turn mit dem Slash-Aufruf des Abschluss-Skills ist ganz Brain.
+    const brainTs = events.filter((e) => eventBeruehrtBrain(e, wurzeln, abschlussSkill)).map((e) => (gueltig(e.ts) ? Date.parse(e.ts) : -Infinity));
+    const brainAb = g.start?.slash === abschlussSkill ? -Infinity : brainTs.length ? Math.min(...brainTs) : null;
     return { idx, startTs: g.start?.ts ?? null, art, brainAb, calls, events };
   });
 }
@@ -209,7 +212,7 @@ export function ttlVergleich(calls) {
  *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config: object }} e Die Projekt-Config (`config`) ist Pflicht, ohne wirft `hauptchatNamen`.
  */
 export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, config }) {
-  const { ticketSkills, ticketAgenten, repoName: name } = hauptchatNamen({ config });
+  const { ticketSkills, ticketAgenten, abschlussSkill, repoName: name } = hauptchatNamen({ config });
   const wurzeln = brainRoots.map((r) => norm(r).replace(/\/+$/, "")).filter(Boolean);
   const summen = new Map();
   const fenster = [];
@@ -235,7 +238,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   };
 
   for (const s of sessions) {
-    const turns = turnsAus(s.main, wurzeln, ticketSkills);
+    const turns = turnsAus(s.main, wurzeln, ticketSkills, abschlussSkill);
     const subs = (s.subagents ?? []).map((sa) => ({
       meta: sa.meta ?? {},
       calls: callsFromTranscript(sa.zeilen).calls,
@@ -340,7 +343,7 @@ export function renderMarkdown(r, { repoName: name } = {}) {
   out.push(`| **Summe** | | | ${n} | ${$(total)} | ${$(totalGeschaetzt)} |`, "");
   const k = r[name];
   out.push(`${name}-Subagenten (nicht Hauptchat): ${k.calls} Calls, ${$(k.cost)}, geschätzt ${$(k.costGeschaetzt ?? k.cost)} (Output geschätzt ${k.outputGeschaetzt ?? k.output ?? 0} statt ${k.output ?? 0} Tokens)`);
-  if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
+  if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Abschluss-Skill der Projekt-Config zählt als Brain).");
   if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen oder Zeitpunkt fehlt), nicht als 0 $ zu lesen.`);
   out.push(...kennzahlZeilen(r));
   out.push("", "| Ticket | Session | Start | Start-Art | Hauptchat-Calls je Modell |", "|---|---|---|---|---|");

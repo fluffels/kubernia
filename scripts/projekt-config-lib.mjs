@@ -263,6 +263,17 @@ function pruefeLabels(l) {
   return fehler;
 }
 
+/** Pur: prüft `skills` (Name → nicht-leerer String); `abschluss` ist Pflicht (der Skill, den ein Ticketlauf am Ende fährt). */
+function pruefeSkills(s) {
+  if (!istObjekt(s)) return ["skills muss ein Objekt (Name → String) mit dem Pflichtschlüssel abschluss sein"];
+  const fehler = [];
+  if (!Object.hasOwn(s, "abschluss")) fehler.push("skills.abschluss fehlt (Pflichtschlüssel)");
+  for (const [k, v] of Object.entries(s)) {
+    if (!istText(v)) fehler.push(`skills.${k} muss ein nicht-leerer String sein`);
+  }
+  return fehler;
+}
+
 /** Pur: prüft `agenten`: je Pflichtschlüssel ein Name nach AGENT_MUSTER. */
 function pruefeAgenten(a) {
   if (!istObjekt(a)) return [`agenten muss ein Objekt mit ${PFLICHT_AGENTEN.join(", ")} sein`];
@@ -389,7 +400,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.version !== 2) fehler.push("version muss 2 sein (Schema mit boards-Liste)");
   if (!istText(wert.repo) || !REPO_FORM.test(wert.repo)) fehler.push("repo muss die Form owner/name haben");
   fehler.push(...pruefeBoards(wert.boards));
-  fehler.push(...pruefePraefixe(wert.praefixe), ...pruefeLabels(wert.labels), ...pruefeAgenten(wert.agenten));
+  fehler.push(...pruefePraefixe(wert.praefixe), ...pruefeLabels(wert.labels), ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
   if (wert.projektliterale !== undefined) {
     if (!istObjekt(wert.projektliterale)) {
       fehler.push("projektliterale muss ein Objekt (Name → String) sein");
@@ -426,7 +437,7 @@ export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG, pruef
   try {
     roh = readFileSync(abs, "utf8");
   } catch {
-    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, boards[], praefixe, labels, agenten)`);
+    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, boards[], praefixe, labels, agenten, skills.abschluss)`);
   }
   let wert;
   try {

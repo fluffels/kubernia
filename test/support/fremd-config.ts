@@ -10,6 +10,7 @@ export interface ProjektConfig {
   praefixe: { commitZeile: string; branch: string; worktree: string };
   labels: { harness: string; festgefahren: string; forum: string; dependabotInbox: string };
   agenten: { planer: string; umsetzer: string; lens: string; gruppe: string; ticketSkill: string };
+  skills: { abschluss: string };
   projektliterale?: Record<string, string>;
 }
 

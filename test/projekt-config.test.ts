@@ -54,6 +54,7 @@ const gueltig = (): Cfg => ({
   praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
   labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
   agenten: { planer: "demo-planer", umsetzer: "demo-umsetzer", lens: "demo-lens", gruppe: "demo-gruppe", ticketSkill: "demo" },
+  skills: { abschluss: "demo-abschluss" },
   projektliterale: { Zelda: "zelda" },
 });
 
@@ -103,6 +104,10 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (b1(c).todoOptionId = 3)), /boards\.1\.todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+    assert.match(mit((c) => delete c.skills), /skills/);
+    assert.match(mit((c) => (c.skills = {})), /skills\.abschluss fehlt/);
+    assert.match(mit((c) => (c.skills = { abschluss: "" })), /skills\.abschluss muss/);
+    assert.match(mit((c) => (c.skills = [])), /skills muss/);
     assert.match(mit((c) => (c.rulesetSpiegel = "")), /rulesetSpiegel/);
     assert.match(mit((c) => (c.rulesetSpiegel = 5)), /rulesetSpiegel/);
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), rulesetSpiegel: ".github/r.json" }), []);

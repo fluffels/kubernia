@@ -78,6 +78,7 @@ export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektl
   boards: (Pick<ProjektConfig["boards"][number], "besitzer"> & Partial<Pick<ProjektConfig["boards"][number], "statusFeldId">>)[];
   labels: Record<string, string>;
   agenten: Record<string, string>;
+  skills?: Record<string, string>;
 };
 
 
@@ -98,7 +99,7 @@ const boardIdRegex = (config: BegriffsConfig): RegExp => {
 
 /** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611, #1741): Owner (Repo-Owner und Board-Besitzer),
  * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
- * wie `forum` zählt nie), Agentennamen und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
+ * wie `forum` zählt nie), Agentennamen, Skill-Namen (`skills`, ganze Wörter ohne Bindestrich-Anschluss) und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
  * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix). */
 export function begriffeAus(config: BegriffsConfig): Record<string, RegExp> {
   const [owner = "", name = ""] = config.repo.split("/");
@@ -117,6 +118,8 @@ export function begriffeAus(config: BegriffsConfig): Record<string, RegExp> {
   const labels = Object.values(config.labels).filter((l) => l.includes(":"));
   if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
+  const skills = Object.values(config.skills ?? {});
+  if (skills.length > 0) out.Skill = new RegExp(`(?<![\\w-])(?:${alternative(skills)})(?![\\w-])`, "g");
   for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRe(literal)}(?![\\p{L}\\p{N}_])`, "giu");
   return out;
 }
@@ -512,6 +515,15 @@ describe("begriffeAus", () => {
     // Kurzname steht in der Config vor dem Langnamen, und der Rest des Langnamens ist selbst ein Name: ohne Längen-Sortierung zählte "wk-lens" doppelt.
     const kurzZuerst = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, agenten: { planer: "wk", umsetzer: "wk-lens", lens: "lens", gruppe: "g", ticketSkill: "t" } });
     assert.deepEqual(zaehle("wk-lens", kurzZuerst), { Agent: 1 });
+  });
+});
+
+describe("begriffeAus Skill", () => {
+  test("Skill-Namen aus config.skills zählen als ganze Wörter, groß/klein-genau; ohne skills keine Kategorie", () => {
+    const b = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, skills: { abschluss: "zz-abschluss", extra: "zz-extra" } });
+    assert.deepEqual(zaehle("zz-abschluss und zz-extra, `zz-abschluss`", b), { Skill: 3 });
+    assert.deepEqual(zaehle("zz-abschlussbericht zz-abschluss-bericht Zz-Abschluss mein-zz-abschluss", b), {});
+    assert.equal("Skill" in begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU }), false);
   });
 });
 

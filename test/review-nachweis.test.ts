@@ -595,7 +595,7 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
 
 /** Wörtliche Commit-Message des gemergten Squash-Commits 1d193666 (Betreff als `* `-Zeilen, zwei Nachweise im Body). */
 const squash = (z: Zeilen, planer: string): string => [ // die Zeilen der Config stehen als Parameter, der übrige Text ist wörtlich
-  "feat(harness): Abschluss ohne offene Befunde, BEFUNDE-Zeile, brain-input im Fortsetzungs-Pfad (#1723) (#1733)",
+  "feat(harness): Abschluss ohne offene Befunde, BEFUNDE-Zeile, Abschluss-Skill im Fortsetzungs-Pfad (#1723) (#1733)",
   "",
   "* feat(harness): R0 verlangt BEFUNDE-Zeile im Umsetzer-Bericht (#1723)",
   "",
@@ -723,6 +723,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     praefixe: { commitZeile: "ZD-", branch: "feature/zd-", worktree: "zd-" },
     labels: { harness: "area:werk", festgefahren: "status:steckt", forum: "forum", dependabotInbox: "area:werk" },
     agenten: { planer: "demo-planer", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "t" },
+    skills: { abschluss: "a" },
   });
   const lauf = (dir: string, args: string[], env: Record<string, string> = {}) =>
     spawnSync(process.execPath, [SKRIPT, ...args], { cwd: dir, encoding: "utf8", env: { ...process.env, ...env } });
