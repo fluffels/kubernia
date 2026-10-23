@@ -19,6 +19,7 @@ interface Lib {
   leereProjektwerte(t: string): string;
   rendereProjektwerte(t: string, c: Cfg | (() => Cfg), pfad?: string): string;
   projektwertWert(c: Cfg, k: string): string;
+  platzhalterMuster(): RegExp;
   projektwertAbweichungen(pfad: string, t: string, c: Cfg): string[];
   projektwertDateien(manifest: string[], liste: string[]): string[];
   projektwertLauf(w: string, c: () => Cfg, o?: { schreiben?: boolean }): { dateien: number; fehler: string[]; geaendert: string[]; abweichungen: string[] };
@@ -36,6 +37,7 @@ const CONFIG: Cfg = {
   praefixe: { commitZeile: "ZD-", branch: "feature/zd-" },
   agenten: { planer: "wk-planer", ticketSkill: "wk" },
   labels: { harness: "area:werk" },
+  skills: { abschluss: "wk-abschluss" },
 };
 const FM = "---\n# factory:projektwert agenten.planer\nname: kubernia-planer\nmodel: opus\n---\n# Text\n";
 
@@ -87,6 +89,16 @@ describe("leereProjektwerte / rendereProjektwerte", () => {
     assert.throws(() => lib.projektwertWert({ agenten: { planer: "a`b" } }, "agenten.planer"), /Backtick/);
     assert.throws(() => lib.projektwertWert({ agenten: { planer: "a|b" } }, "agenten.planer"), /'\|'/);
     assert.throws(() => lib.projektwertWert({ agenten: { planer: 5 } }, "agenten.planer"), /kein nichtleerer Text/);
+  });
+  test("die Gruppe skills wird aus der Config ersetzt und fehlt sie, bricht der Block mit Fix ab (#1873)", () => {
+    assert.match(lib.rendereProjektwerte(`${S}
+${E}
+`, CONFIG), /| `skills.abschluss` | `wk-abschluss` |/);
+    assert.equal(lib.platzhalterMuster().exec("Skill <skills.abschluss> rufen")?.[0], "<skills.abschluss>");
+    const ohne = { praefixe: CONFIG.praefixe, agenten: CONFIG.agenten, labels: CONFIG.labels };
+    assert.throws(() => lib.rendereProjektwerte(`${S}
+${E}
+`, ohne, "a.md"), /Gruppe 'skills'/);
   });
   test("die Config wird erst bei einer Stelle gerufen", () => {
     let n = 0;

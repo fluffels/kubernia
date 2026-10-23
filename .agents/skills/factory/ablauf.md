@@ -21,6 +21,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.festgefahren` | `status:festgefahren` |
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
+| `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
 **Bereich.** Der aufrufende Skill legt ihn fest; er geht als `--bereich <bereich>` an `naechstes-ticket.mjs`, ohne `AskUserQuestion` und ohne Spielquote; er gilt für alle Tickets dieses Aufrufs; eine Ticketnummer im Auslöser braucht keinen Bereich (`--ticket`).

@@ -25,6 +25,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.festgefahren` | `status:festgefahren` |
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
+| `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
 - **Eine Root-Kontextdatei (#992/#1087):** Claude Code lädt diese Datei nativ; eine `CLAUDE.md`, `.claude/CLAUDE.md` oder `CLAUDE.local.md` im Root (auch ungetrackt) würde das abschalten und ist verboten.
