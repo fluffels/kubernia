@@ -26,6 +26,90 @@ export const wirdVerteilt = (e) => !NUR_FACTORY.includes(e.ring);
 /** Ist die Einheit eine ganze Datei (kein Block, kein JSON-Schlüssel)? */
 export const istGanzeDatei = (e) => e.block === undefined && e.schluessel === undefined;
 
+// ── Extraktionsliste (ADR 0022 F10) ──────────────────────────────────────────
+// `.factory/extraktion.json` legt geschlossen fest, was außer dem Besitz ins Factory-Repo zieht (Kern-Tests, Test-Hilfen,
+// Fixtures, Infrastruktur, Factory-Seiten, Produkt-Wurzel) und was bleibt (`projekt-test`). Ein Eintrag hat genau eines von
+// `muster` (Pfadmuster, `*` = ein Pfadsegment-Teil, nie über `/`) oder `ring` (nur `nur-factory`), dazu `art` und `grund`.
+
+/** Pfad der Extraktionsliste. */
+export const EXTRAKTION_PFAD = ".factory/extraktion.json";
+
+const TEST_DATEI = /^test\/.*\.test\.ts$/;
+const IN_TEST = /^test\//;
+const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
+const AUSSER_TEST_DOCS_SRC = (p) => !/^(?:test|docs|src)\//.test(p);
+
+/** Arten der Liste und der Ort, an dem eine Datei dieser Art liegen darf (`null`: nur als Ring-Eintrag). Geschlossen. */
+export const EXTRAKTION_ARTEN = {
+  "kern-test": (p) => TEST_DATEI.test(p),
+  "projekt-test": (p) => TEST_DATEI.test(p),
+  "test-hilfe": (p) => IN_TEST.test(p) && !TEST_DATEI.test(p) && CODE_DATEI.test(p),
+  fixture: (p) => IN_TEST.test(p) && !TEST_DATEI.test(p),
+  infrastruktur: AUSSER_TEST_DOCS_SRC,
+  "infrastruktur-anteil": AUSSER_TEST_DOCS_SRC,
+  "factory-seite": (p) => /^docs\/.*\.md$/.test(p),
+  "produkt-wurzel": (p) => /^\.factory\/produkt\/[^/]+$/.test(p),
+  "nur-factory": null,
+};
+
+/** Arten, die ins Factory-Repo ziehen: alle außer `projekt-test` (bleibt im Projekt). */
+export const MITZIEHEND = Object.keys(EXTRAKTION_ARTEN).filter((a) => a !== "projekt-test");
+
+/** Regex eines Pfadmusters: `*` steht für beliebig viele Zeichen außer `/`, alles andere wörtlich (jedes Zeichen außer Buchstaben, Ziffern und `_` wird maskiert). */
+export const musterRegex = (muster) =>
+  new RegExp(`^${muster.split("*").map((t) => [...t].map((c) => (/\w/.test(c) ? c : `\\${c}`)).join("")).join("[^/]*")}$`);
+
+/** Art der Datei laut Muster-Einträgen der Liste (`null`: nicht eingeordnet). */
+export function artVon(liste, pfad) {
+  const e = (liste.eintraege ?? []).find((x) => typeof x.muster === "string" && musterRegex(x.muster).test(pfad));
+  return e?.art ?? null;
+}
+
+/** Meldungen (leer = grün): Struktur der Liste gegen die getrackten Dateien, den Besitz (Einträge des Manifests) und die Ring-Tabelle. */
+export function pruefeExtraktion(liste, { getrackt, besitz, ringe = RINGE, nurFactory = NUR_FACTORY }) {
+  const out = [];
+  if (liste.version !== 1) out.push(`${EXTRAKTION_PFAD}: version muss 1 sein`);
+  const eintraege = Array.isArray(liste.eintraege) ? liste.eintraege : [];
+  if (!Array.isArray(liste.eintraege)) out.push(`${EXTRAKTION_PFAD}: eintraege fehlt`);
+  const besitzPfade = new Set(besitz.map((e) => e.pfad));
+  const treffer = new Map();
+  const ringEintraege = [];
+  for (const e of eintraege) {
+    const id = e.muster ?? (e.ring === undefined ? "?" : `ring ${e.ring}`);
+    const hatMuster = typeof e.muster === "string";
+    const hatRing = typeof e.ring === "string";
+    if (hatMuster === hatRing) {
+      out.push(`${id}: genau eines von muster oder ring angeben`);
+      continue;
+    }
+    if (!Object.hasOwn(EXTRAKTION_ARTEN, e.art)) out.push(`${id}: unbekannte art '${e.art}' (erlaubt: ${Object.keys(EXTRAKTION_ARTEN).join(", ")})`);
+    if (typeof e.grund !== "string" || e.grund.trim() === "") out.push(`${id}: grund fehlt`);
+    if (hatRing) {
+      ringEintraege.push(e.ring);
+      if (e.art !== "nur-factory") out.push(`${id}: ein Ring-Eintrag hat die art nur-factory`);
+      if (!ringe.includes(e.ring)) out.push(`${id}: unbekannter Ring`);
+      else if (!nurFactory.includes(e.ring)) out.push(`${id}: der Ring ist nicht nur Factory, sein Besitz wird ohnehin verteilt, Eintrag entfernen`);
+      continue;
+    }
+    if (e.art === "nur-factory") out.push(`${id}: nur-factory gilt nur als Ring-Eintrag`);
+    const re = musterRegex(e.muster);
+    const trefferEintrag = getrackt.filter((p) => re.test(p));
+    if (trefferEintrag.length === 0) out.push(`${id}: Eintrag ohne Treffer (keine getrackte Datei), entfernen`);
+    const ort = EXTRAKTION_ARTEN[e.art];
+    for (const p of trefferEintrag) {
+      treffer.set(p, [...(treffer.get(p) ?? []), e.muster]);
+      if (besitzPfade.has(p)) out.push(`${id}: trifft die Besitz-Datei ${p}, Besitz zieht ohnehin um`);
+      if (typeof ort === "function" && !ort(p)) out.push(`${id}: ${p} liegt nicht an einem Ort der art ${e.art}`);
+    }
+  }
+  for (const [p, muster] of treffer) if (muster.length > 1) out.push(`${p}: von mehreren Einträgen getroffen (${muster.join(", ")})`);
+  for (const r of nurFactory) if (!ringEintraege.includes(r)) out.push(`ring ${r}: Ring ist nur Factory, braucht einen Ring-Eintrag mit art nur-factory`);
+  for (const p of getrackt) {
+    if (/^\.factory\/produkt\/[^/]+$/.test(p) && artVon(liste, p) !== "produkt-wurzel") out.push(`${p}: Wurzel-Datei des Factory-Repos, als produkt-wurzel eintragen`);
+  }
+  return out;
+}
+
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
 
