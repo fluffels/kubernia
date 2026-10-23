@@ -156,6 +156,9 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
     assert.deepEqual(perm(z), { allow: ["Bash(ls)", "mcp__z"], ask: ["Bash(curl:*)"], deny: ["Read(/.env)", "mcp__claude-in-chrome", "mcp__zz"] });
     assert.equal((JSON.parse(lies(z, SETTINGS)) as { model: string }).model, "opus");
     assert.ok(!JSON.stringify(perm(z)).includes("mcp__a"), "die Ergänzung der Quelle verteilt sich nicht");
+    assert.ok(lies(z, SETTINGS).includes('"permissions": {
+    "allow": [
+      "Bash(ls)"'), "neu serialisiert mit der Einrückung der Schlüsselzeile der Quelle (2 Leerzeichen) plus 2 je Ebene");
     const vorher = [lies(z, SETTINGS), lies(z, ".factory/sync-stand.json")];
     assert.match(vomTag(q, z).out, /0 geändert/);
     assert.deepEqual([lies(z, SETTINGS), lies(z, ".factory/sync-stand.json")], vorher);

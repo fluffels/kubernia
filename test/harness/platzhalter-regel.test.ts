@@ -92,6 +92,7 @@ describe("Projektwert-Block der Kern-Texte (#1747)", () => {
     const w = tempWurzel();
     const umsetzer = echt(".claude/agents/factory-umsetzer.md");
     schreibe(w, ".factory/projekt.json", echt(".factory/projekt.json"));
+    schreibe(w, ".claude/settings.json", echt(".claude/settings.json")); // die Berechtigungs-Ergänzung der Config braucht ihren Platz (#1874)
     schreibe(w, ".claude/agents/factory-umsetzer.md", umsetzer);
     assert.equal(driftLauf(w).code, 0);
     const verfaelscht = umsetzer.replace(/^(\| `agenten\.umsetzer` \| `)[^`]+(` \|)$/m, "$1fremd-umsetzer$2");
