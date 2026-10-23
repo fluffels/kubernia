@@ -15,6 +15,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import globals from "globals";
 import vitest from "@vitest/eslint-plugin";
+import regexp from "eslint-plugin-regexp";
 
 export default tseslint.config(
   // 1) Was der Linter NIE anfasst: Build-Artefakte. node_modules ignoriert ESLint 9
@@ -28,6 +29,15 @@ export default tseslint.config(
   //    `eslint`-Lauf (aus seiner Wurzel) geprüft.
   {
     ignores: ["dist/", "dist-offline/", "dist-devpanel/", ".claude/worktrees/"],
+  },
+
+  // 1b) Regex-Fallen (#1888): eine leere Alternative (`/a|/`, `(a|)`) matcht überall und ist
+  //    fast immer ein Tippfehler; gewollt optional schreibt man `(?:a)?`. Nur diese eine Regel des
+  //    Plugins, für alle gelinteten Dateien.
+  {
+    files: ["**/*.{js,mjs,cjs,ts}"],
+    plugins: { regexp },
+    rules: { "regexp/no-empty-alternative": "error" },
   },
 
   // 2) Reine JS-Dateien (diese Config, scripts/*.mjs): nur die JS-Basisregeln,
