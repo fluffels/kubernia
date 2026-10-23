@@ -232,6 +232,7 @@ describe("engines.node der Wurzel deckt die Abhängigkeiten ab (#1428 Z18)", () 
 // Bei einem Node-Security-Release engines.node anheben: dieser Test nennt dann alle nachzuziehenden Pins.
 // Bekannte Grenze: geprüft wird nur die Untergrenze, kein Gleichheitstest (Dependabot darf Docker-Pins höher ziehen).
 // Ein Digest-Suffix `@sha256:<64 hex>` ist erlaubt (#983 pinnt die Basis-Images per Digest); der Tag davor bleibt patch-genau.
+// Bekannte Grenze: `FROM node AS x` (ohne Tag), `FROM node@sha256:…` (nur Digest) und eingerückte FROM-Zeilen fallen aus dem Scan, solange ein anderer Node-Pin in der Datei steht.
 // Bewusste Abwägung: .nvmrc ist patch-genau gepinnt (deterministische CI), Dependabot hebt es nicht; ein Security-Release hebt man von Hand.
 
 const PIN_FORM = /^v?(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?(?:@sha256:[0-9a-f]{64})?$/;
@@ -302,11 +303,23 @@ describe("Node-Pins erfüllen das Minimum engines.node (#1907)", () => {
     assert.match(v(`22-bookworm-slim${d}`)[0], /nicht patch-genau/);
     assert.match(v(`22.22.3-bookworm-slim${d}`)[0], /liegt unter/);
     assert.match(v("22.23.4@sha256:abc")[0], /nicht patch-genau/, "kurzer Digest");
+    assert.match(v(`22.23.4${d}a`)[0], /nicht patch-genau/, "zu langer Digest (65 Zeichen)");
+    assert.match(v(`22.23.4@sha256:${"g".repeat(64)}`)[0], /nicht patch-genau/, "Digest ohne Hex-Zeichen");
+    assert.match(v("x22.23.4")[0], /nicht patch-genau/, "Start-Anker: kein Präfix");
+  });
+
+  test("dockerPins sammelt alle Node-Pins (mehrere Stages, gequotet, Kommentar) und jeder wird geprüft", () => {
+    const text = 'FROM node:22.23.4 AS a\nFROM node:22 AS b\n  image: "node:22.23.5-slim" # Kommentar\n';
+    assert.deepEqual(dockerPins(text), ["22.23.4", "22", "22.23.5-slim"]);
+    assert.equal(nodePinVerstoesse({ q: dockerPins(text) }, ">=22.23.4").length, 1, "nur die schwebende zweite Stage fällt auf");
   });
 
   test("Negativ: eine Node-Stage als letzte wird nicht als nginx-Laufzeit gewertet", () => {
     assert.equal(letzteStageIstNginx("FROM node:22.23.4 AS build\nFROM nginx:1.31-alpine\n"), true);
     assert.equal(letzteStageIstNginx("FROM nginx:1.31-alpine\nFROM node:22.23.4 AS build\n"), false);
+    assert.equal(letzteStageIstNginx("FROM nginx:1.31-alpine\nfrom node:22.23.4 AS dev\n"), false, "Instruktionen sind case-insensitiv");
+    assert.equal(letzteStageIstNginx("from nginx:1.31-alpine\n"), true, "kleingeschriebenes FROM nginx");
+    assert.equal(letzteStageIstNginx("FROM x/nginx:1\n"), false, "nginx-Anker am Image-Namen");
     assert.equal(letzteStageIstNginx("RUN x\n"), false);
     assert.equal(letzteStageIstNginx("FROM nginx:1.31-alpine\n# Daten FROM build\n"), true, "FROM-Anker: Kommentar zählt nicht als Stage");
   });
