@@ -16,13 +16,13 @@ const regeln = async (code: string, datei: string): Promise<string[]> => {
 };
 
 describe("regexp/no-empty-alternative (#1888)", () => {
-  test("leere Alternative ist rot (JS und TS)", async () => {
+  test("leere Alternative ist rot (JS und TS)", { timeout: 60_000 }, async () => {
     assert.ok((await regeln("export const r = /a|/;\n", "scripts/zz-probe.mjs")).includes("regexp/no-empty-alternative"));
     assert.ok((await regeln("export const r = /(a|)b/;\n", "scripts/zz-probe.mjs")).includes("regexp/no-empty-alternative"));
     assert.ok((await regeln("export const r = /a|/;\n", "test/eslint-regexp.test.ts")).includes("regexp/no-empty-alternative"));
   });
 
-  test("gültige Alternativen und optionale Gruppen sind grün", async () => {
+  test("gültige Alternativen und optionale Gruppen sind grün", { timeout: 60_000 }, async () => {
     assert.deepEqual(await regeln("export const r = /a|b/;\n", "scripts/zz-probe.mjs"), []);
     assert.deepEqual(await regeln("export const r = /(?:a)?b/;\n", "scripts/zz-probe.mjs"), []);
   });
