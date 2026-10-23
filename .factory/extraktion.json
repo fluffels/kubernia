@@ -35,6 +35,7 @@
     {"muster":"test/support/mess-golden-faelle.mjs","art":"test-hilfe","grund":"Golden-Fälle der Mess-Tests"},
     {"muster":"test/harness/hook-importe.ts","art":"test-hilfe","grund":"Import-Parser der Kern-Wächter"},
     {"muster":"test/harness/repo-texte.ts","art":"test-hilfe","grund":"Text-Leser der Kern-Wächter"},
+    {"muster":"test/fixtures/mess-golden.json","art":"fixture","grund":"Golden-Ausgaben des Kern-Tests mess-ausgaben-golden"},
     {"muster":"test/abnahme*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/any-suppressions.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/board*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},

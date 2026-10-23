@@ -176,6 +176,7 @@ describe("Extraktionsliste: Muster und Struktur (#1875)", () => {
   test("unbekannte Art und leerer Grund sind rot", () => {
     assert.match(meldungen(mit(GUT, eintrag("scripts/a.mjs", "magie"))), /unbekannte art 'magie'/);
     assert.match(meldungen(mit(GUT, eintrag("src/p.ts", "infrastruktur", " "))), /grund fehlt/);
+    assert.match(meldungen(mit(GUT, { muster: "src/p.ts", art: "infrastruktur" } as ExtraktionEintrag)), /grund fehlt/, "ein Eintrag ganz ohne grund");
     assert.match(meldungen(mit(GUT, { muster: "src/p.ts", art: "constructor", grund: "g" })), /unbekannte art 'constructor'/);
   });
   test("ein Muster ohne Treffer, auf Besitz oder mit Überlappung ist rot", () => {
@@ -193,6 +194,17 @@ describe("Extraktionsliste: Muster und Struktur (#1875)", () => {
     assert.match(rot("test/support/f.json", "infrastruktur-anteil"), /art infrastruktur-anteil/);
     assert.match(rot("package.json", "factory-seite"), /art factory-seite/);
     assert.match(rot("package.json", "produkt-wurzel"), /art produkt-wurzel/);
+  });
+  test("Orts-Grenzen je Art: Endung, .test.ts, .md und Verschachtelung zählen", () => {
+    const g = ["test/support/x.json", "test/support/y.test.ts", "docs/a.txt", ".factory/produkt/x/y", "test/support/ok.ts"];
+    const rot = (muster: string, art: string): string => meldungen(liste(eintrag(muster, art)), { getrackt: g, besitz: [], nurFactory: [] });
+    assert.match(rot("test/support/x.json", "test-hilfe"), /art test-hilfe/, "Test-Hilfe braucht eine Code-Endung");
+    assert.match(rot("test/support/y.test.ts", "test-hilfe"), /art test-hilfe/);
+    assert.match(rot("test/support/y.test.ts", "fixture"), /art fixture/);
+    assert.match(rot("docs/a.txt", "factory-seite"), /art factory-seite/);
+    assert.match(rot(".factory/produkt/x/y", "produkt-wurzel"), /art produkt-wurzel/);
+    assert.doesNotMatch(rot("test/support/ok.ts", "test-hilfe"), /liegt nicht an einem Ort/);
+    assert.doesNotMatch(rot("test/support/x.json", "fixture"), /liegt nicht an einem Ort/);
   });
   test("Ring-Einträge: andere Art, unbekannter Ring, Ring ohne Nur-Factory und nur-factory als Muster sind rot", () => {
     assert.match(meldungen(mit(GUT, ringEintrag("kern", "infrastruktur"))), /Ring-Eintrag hat die art nur-factory/);
@@ -277,10 +289,15 @@ describe("Extraktionsliste: Bezug, Zuordnung und Test-Hülle (#1875)", () => {
     assert.deepEqual(huellenVerstoesse(l2, g, lesen, BESITZ), ["test/k.test.ts -> test/b.test.ts"]);
   });
   test("Test-Hülle ist transitiv: eine Test-Hilfe mit Import aus src/ ist rot, ein Fixture ohne Code-Endung wird nicht gelesen", () => {
-    const text: Record<string, string> = { "test/support/h.ts": 'import "../../src/p";\n', "test/support/f.json": '"../../src/p"', "src/p.ts": "" };
+    const text: Record<string, string> = {
+      "test/support/h.ts": 'import "../../src/p"; import "./fehlt";\n',
+      "test/support/f.json": 'import "../../src/p";',
+      "test/support/g.mjs": 'import "../../src/p";\n',
+      "src/p.ts": "",
+    };
     const g = Object.keys(text);
-    const l = liste(eintrag("test/support/h.ts", "test-hilfe"), eintrag("test/support/f.json", "fixture"));
-    assert.deepEqual(huellenVerstoesse(l, g, (p) => text[p] ?? null, new Set()), ["test/support/h.ts -> src/p.ts"]);
+    const l = liste(eintrag("test/support/h.ts", "test-hilfe"), eintrag("test/support/f.json", "fixture"), eintrag("test/support/g.mjs", "fixture"));
+    assert.deepEqual(huellenVerstoesse(l, g, (p) => text[p] ?? null, new Set()), ["test/support/h.ts -> src/p.ts", "test/support/g.mjs -> src/p.ts"], "Fixture mit Code-Endung zählt, ohne nicht, ein unauflösbarer Import nicht");
     assert.deepEqual(huellenVerstoesse(l, g, () => null, new Set()), [], "ohne Text nichts zu prüfen");
   });
   test("Test-Hülle: Ausnahmen mit Ticket grün, ohne Ticket rot, veraltet rot, auf src/ rot", () => {

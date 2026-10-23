@@ -25,6 +25,7 @@
   "test/factory-sync.test.ts": {"Worktree":2,"Stardew":2},
   "test/festgefahren.test.ts": {"Owner":2,"Repo":2,"Label":1,"Agent":2},
   "test/filesize.test.ts": {"Worktree":3,"Stardew":1},
+  "test/fixtures/mess-golden.json": {"Repo":25,"Praefix":1,"Worktree":9,"Agent":25},
   "test/fremdtext.test.ts": {"Owner":12},
   "test/harness-doctor-einrichten.test.ts": {"Worktree":1},
   "test/harness-doctor.test.ts": {"Worktree":4},
