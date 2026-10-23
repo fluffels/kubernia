@@ -8,6 +8,9 @@ import { describe, expect, test } from "vitest";
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPlace from "../scripts/board-place.mjs";
+import { FREMD } from "./support/fremd-config";
+
+const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
 
 type Item = { id: string; number: number };
 type Lib = {
@@ -73,15 +76,15 @@ describe("Einsortieren mehrerer Tickets (#1217)", () => {
 
 describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
   // Form wie von `gh api --paginate --slurp users/<owner>/projectsV2/1/items?fields=<Status-ID>` geliefert (Auszug einer echten Antwort).
-  const status = (name: string) => [{ data_type: "single_select", id: 358708531, name: "Status", value: { id: "f75ad846", name: { raw: name, html: name } } }];
-  const issue = (node: string, number: number, st = "Todo") => ({ id: 1, node_id: node, content_type: "Issue", content: { node_id: node === "PVTI_a" ? "I_a" : undefined, number, title: "T", state: "open", assignees: [{ login: "fluffels" }] }, fields: status(st) });
+  const status = (name: string) => [{ data_type: "single_select", id: FREMD.boards[0]?.statusFeldId, name: "Status", value: { id: "f75ad846", name: { raw: name, html: name } } }];
+  const issue = (node: string, number: number, st = "Todo") => ({ id: 1, node_id: node, content_type: "Issue", content: { node_id: node === "ITEM_a" ? "I_a" : undefined, number, title: "T", state: "open", assignees: [{ login: OWNER }] }, fields: status(st) });
   const echt = [
     [
-      issue("PVTI_a", 12),
-      { id: 2, node_id: "PVTI_b", content_type: "DraftIssue", content: { title: "Entwurf" }, fields: [] },
-      { id: 3, node_id: "PVTI_c", content_type: "PullRequest", content: { number: 99 }, fields: status("Done") },
+      issue("ITEM_a", 12),
+      { id: 2, node_id: "ITEM_b", content_type: "DraftIssue", content: { title: "Entwurf" }, fields: [] },
+      { id: 3, node_id: "ITEM_c", content_type: "PullRequest", content: { number: 99 }, fields: status("Done") },
     ],
-    [{ id: 4, node_id: "PVTI_d", content_type: "Issue", content: { number: 5 }, fields: [] }, issue("PVTI_e", 7, "In Progress")],
+    [{ id: 4, node_id: "ITEM_d", content_type: "Issue", content: { number: 5 }, fields: [] }, issue("ITEM_e", 7, "In Progress")],
   ];
   const N = rawLib as unknown as {
     normalizeItems: (raw: unknown) => (Item & { status: string })[];
@@ -98,9 +101,9 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
 
   test("normalizeItems: nur Issues, über Seiten hinweg in Board-Reihenfolge, mit node_id, Nummer und Status", () => {
     expect(N.normalizeItems(echt)).toEqual([
-      { id: "PVTI_a", number: 12, status: "Todo", title: "T", assignees: ["fluffels"], state: "open", ...LEER, contentId: "I_a" },
-      { id: "PVTI_d", number: 5, status: "", title: "", assignees: [], state: "", ...LEER },
-      { id: "PVTI_e", number: 7, status: "In Progress", title: "T", assignees: ["fluffels"], state: "open", ...LEER },
+      { id: "ITEM_a", number: 12, status: "Todo", title: "T", assignees: [OWNER], state: "open", ...LEER, contentId: "I_a" },
+      { id: "ITEM_d", number: 5, status: "", title: "", assignees: [], state: "", ...LEER },
+      { id: "ITEM_e", number: 7, status: "In Progress", title: "T", assignees: [OWNER], state: "open", ...LEER },
     ]);
   });
 
@@ -196,7 +199,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   test("ungeclaimt ist exportiert und die EINE Prüfung: board-takt führt keine Kopie (#1663 L41)", () => {
     expect(K.ungeclaimt({ assignees: [] })).toBe(true);
     expect(K.ungeclaimt({})).toBe(true);
-    expect(K.ungeclaimt({ assignees: ["fluffels"] })).toBe(false);
+    expect(K.ungeclaimt({ assignees: [OWNER] })).toBe(false);
     const takt = readFileSync(new URL("../scripts/board-takt.mjs", import.meta.url), "utf8");
     expect(takt).toContain("ungeclaimt");
     expect(takt).not.toContain("assignees ?? []).length");
@@ -204,7 +207,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   test("sammelticketItem: offen, ohne Assignee, richtiger Titel; geclaimt, geschlossen oder gerade einsortiert zählt nicht", () => {
     expect(K.SAMMELTICKET_TITEL).toBe(TITEL);
     expect(K.sammelticketItem(board3)?.number).toBe(13);
-    expect(K.sammelticketItem([b(10), sammel(13, { assignees: ["fluffels"] })])).toBeNull();
+    expect(K.sammelticketItem([b(10), sammel(13, { assignees: [OWNER] })])).toBeNull();
     expect(K.sammelticketItem([b(10), sammel(13, { state: "closed" })])).toBeNull();
     expect(K.sammelticketItem(board3, [13])).toBeNull();
     expect(K.sammelticketItem([b(10, { title: "Harness-Härtung" })])).toBeNull();
@@ -236,7 +239,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   });
 
   test("ohne ungeclaimtes Sammelticket keine Klemmung (geclaimt, geschlossen, nicht vorhanden)", () => {
-    const geclaimt = [b(10), sammel(13, { assignees: ["fluffels"] }), b(14)];
+    const geclaimt = [b(10), sammel(13, { assignees: [OWNER] }), b(14)];
     expect(K.klemmeAnker(geclaimt, null)).toEqual({ anker: null, geklemmt: false, sammelticket: null });
     expect(K.klemmeAnker([b(10), sammel(13, { state: "closed" })], null).geklemmt).toBe(false);
     expect(K.klemmeAnker([b(10), b(11)], null).geklemmt).toBe(false);
@@ -256,7 +259,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     const nummern = (items: B[], ohne?: number[]) => K.sammelblock(items, ohne).map((i) => i.number);
     expect(nummern([sammel(1), langfuse(2), b(3), langfuse(4)])).toEqual([1, 2]);
     expect(nummern([b(3), sammel(1)]), "Block beginnt am Harness-Sammelticket, wo es steht").toEqual([1]);
-    expect(nummern([sammel(1), b(5, { assignees: ["fluffels"] }), langfuse(2), b(3)]), "geclaimte überspringt der Block").toEqual([1, 2]);
+    expect(nummern([sammel(1), b(5, { assignees: [OWNER] }), langfuse(2), b(3)]), "geclaimte überspringt der Block").toEqual([1, 2]);
     expect(nummern([sammel(1), b(5, { state: "closed" }), langfuse(2), b(3)]), "geschlossene überspringt der Block").toEqual([1, 2]);
     expect(nummern([sammel(1, { assignees: ["x"] }), langfuse(2)]), "geclaimtes Sammelticket zählt nicht").toEqual([2]);
     expect(nummern([sammel(1), b(20), langfuse(2)], [20]), "gerade einsortiertes Item beendet den Block nicht").toEqual([1, 2]);
@@ -271,7 +274,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(hinter([sammel(1), b(9)]), "[S_H, X]").toBe(1);
     expect(hinter([sammel(1), langfuse(2), b(9)]), "[S_H, S_L, X]").toBe(2);
     expect(hinter([sammel(1), b(9), b(10), langfuse(2)]), "S_L am Ende zählt nicht").toBe(1);
-    expect(hinter([sammel(1), b(5, { assignees: ["fluffels"] }), langfuse(2), b(9)]), "geclaimte dazwischen").toBe(2);
+    expect(hinter([sammel(1), b(5, { assignees: [OWNER] }), langfuse(2), b(9)]), "geclaimte dazwischen").toBe(2);
     expect(hinter([b(9), sammel(1)]), "[X, S_H]").toBe(1);
     expect(hinter([langfuse(2), b(9), sammel(1)]), "[S_L, X, S_H]").toBe(1);
     expect(hinter([sammel(1), langfuse(2), b(9)], 1), "Anker vor dem Ziel wird geklemmt").toBe(2);
@@ -326,15 +329,15 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   });
 
   test("normalizeItems liefert Titel, Assignee-Logins und Zustand (Form einer echten REST-Antwort)", () => {
-    const echt = [[{ node_id: "PVTI_x", content_type: "Issue", content: { number: 1331, title: TITEL, state: "open", assignees: [{ login: "fluffels", id: 1 }, null, { id: 2 }] }, fields: [] }]];
-    expect(K.normalizeItems(echt)).toEqual([{ id: "PVTI_x", number: 1331, status: "", title: TITEL, assignees: ["fluffels"], state: "open", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
-    const roh = [[{ node_id: "PVTI_y", content_type: "Issue", content: { number: 2, title: 5, assignees: "x" }, fields: [] }]];
-    expect(K.normalizeItems(roh)).toEqual([{ id: "PVTI_y", number: 2, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    const echt = [[{ node_id: "ITEM_x", content_type: "Issue", content: { number: 1331, title: TITEL, state: "open", assignees: [{ login: OWNER, id: 1 }, null, { id: 2 }] }, fields: [] }]];
+    expect(K.normalizeItems(echt)).toEqual([{ id: "ITEM_x", number: 1331, status: "", title: TITEL, assignees: [OWNER], state: "open", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    const roh = [[{ node_id: "ITEM_y", content_type: "Issue", content: { number: 2, title: 5, assignees: "x" }, fields: [] }]];
+    expect(K.normalizeItems(roh)).toEqual([{ id: "ITEM_y", number: 2, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
   });
 
   test("normalizeItems liest Body, Label-Namen, Autor und GitHubs Blocker-Zähler (REST-Form samt issue_dependencies_summary, #1460 Z8)", () => {
     const echt = [[{
-      node_id: "PVTI_z",
+      node_id: "ITEM_z",
       content_type: "Issue",
       content: {
         number: 7,
@@ -342,18 +345,18 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
         state: "open",
         body: "blockiert durch #3",
         assignees: [],
-        user: { login: "fluffels", type: "User", id: 1 },
-        labels: [{ name: "area:harness", id: 5 }, "forum", null, { id: 6 }],
+        user: { login: OWNER, type: "User", id: 1 },
+        labels: [{ name: FREMD.labels.harness, id: 5 }, "forum", null, { id: 6 }],
         issue_dependencies_summary: { blocked_by: 2, total_blocked_by: 3, blocking: 0, total_blocking: 0 },
       },
       fields: [],
     }]];
     expect(K.normalizeItems(echt)).toEqual([
-      { id: "PVTI_z", number: 7, status: "", title: "T", assignees: [], state: "open", contentId: "", body: "blockiert durch #3", labels: ["area:harness", "forum"], autor: { login: "fluffels", type: "User" }, blockedBy: 2 },
+      { id: "ITEM_z", number: 7, status: "", title: "T", assignees: [], state: "open", contentId: "", body: "blockiert durch #3", labels: [FREMD.labels.harness, "forum"], autor: { login: OWNER, type: "User" }, blockedBy: 2 },
     ]);
     // kaputte Felder werden abgehärtet statt zu werfen: Body kein Text, Autor ohne Login, Zähler keine Zahl
-    const roh = [[{ node_id: "PVTI_y", content_type: "Issue", content: { number: 8, body: 5, user: { type: "User" }, labels: "x", issue_dependencies_summary: { blocked_by: "viel" } }, fields: [] }]];
-    expect(K.normalizeItems(roh)).toEqual([{ id: "PVTI_y", number: 8, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    const roh = [[{ node_id: "ITEM_y", content_type: "Issue", content: { number: 8, body: 5, user: { type: "User" }, labels: "x", issue_dependencies_summary: { blocked_by: "viel" } }, fields: [] }]];
+    expect(K.normalizeItems(roh)).toEqual([{ id: "ITEM_y", number: 8, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
   });
 
   test("Argumente: --notfall nur mit --top und mit bekannter Art", () => {
@@ -434,7 +437,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
 
   test("geclaimtes Kopf-Item zählt zum Kopf (#1349)", () => {
     const M = rawLib as unknown as { kopfEnde: (items: B[]) => number };
-    expect(M.kopfEnde([b(1, { title: "Langfuse-Status überprüfen", assignees: ["fluffels"] }), b(2)])).toBe(1);
+    expect(M.kopfEnde([b(1, { title: "Langfuse-Status überprüfen", assignees: [OWNER] }), b(2)])).toBe(1);
   });
 
   test("GraphQL-Fallback (#1349 Z16): fehlende Items aus issue.projectItems, nur das eigene Board, fehlende bleiben fehlend", () => {
@@ -443,20 +446,20 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
       itemAusIssueAntwort: (board: unknown, a: unknown) => B | null;
       ergaenzeFehlende: (items: B[], gefunden: (B | null)[]) => B[];
     };
-    const antwort = (nodes: unknown[]) => ({ data: { repository: { issue: { number: 1360, title: "Kind", state: "OPEN", assignees: { nodes: [{ login: "fluffels" }] }, projectItems: { nodes } } } } });
+    const antwort = (nodes: unknown[]) => ({ data: { repository: { issue: { number: 1360, title: "Kind", state: "OPEN", assignees: { nodes: [{ login: OWNER }] }, projectItems: { nodes } } } } });
     const produkt = G.boardFuerRolle("produkt");
     const factory = G.boardFuerRolle("factory");
-    expect(G.itemAusIssueAntwort(produkt, antwort([{ id: "PVTI_a", project: { id: produkt.projectId } }]))).toEqual({ id: "PVTI_a", number: 1360, status: "", title: "Kind", assignees: ["fluffels"], state: "open" });
-    expect(G.itemAusIssueAntwort(produkt, antwort([{ id: "PVTI_x", project: { id: "PVT_fremd" } }])), "fremdes Projekt").toBeNull();
-    const beide = antwort([{ id: "PVTI_p", project: { id: produkt.projectId } }, { id: "PVTI_f", project: { id: factory.projectId } }]);
-    expect(G.itemAusIssueAntwort(produkt, beide)?.id, "Produkt-Board gewählt").toBe("PVTI_p");
-    expect(G.itemAusIssueAntwort(factory, beide)?.id, "Factory-Board gewählt").toBe("PVTI_f");
-    expect(G.itemAusIssueAntwort(factory, antwort([{ id: "PVTI_p", project: { id: produkt.projectId } }])), "nur im anderen Board").toBeNull();
+    expect(G.itemAusIssueAntwort(produkt, antwort([{ id: "ITEM_a", project: { id: produkt.projectId } }]))).toEqual({ id: "ITEM_a", number: 1360, status: "", title: "Kind", assignees: [OWNER], state: "open" });
+    expect(G.itemAusIssueAntwort(produkt, antwort([{ id: "ITEM_x", project: { id: "PRJ_fremd" } }])), "fremdes Projekt").toBeNull();
+    const beide = antwort([{ id: "ITEM_p", project: { id: produkt.projectId } }, { id: "ITEM_f", project: { id: factory.projectId } }]);
+    expect(G.itemAusIssueAntwort(produkt, beide)?.id, "Produkt-Board gewählt").toBe("ITEM_p");
+    expect(G.itemAusIssueAntwort(factory, beide)?.id, "Factory-Board gewählt").toBe("ITEM_f");
+    expect(G.itemAusIssueAntwort(factory, antwort([{ id: "ITEM_p", project: { id: produkt.projectId } }])), "nur im anderen Board").toBeNull();
     expect(G.itemAusIssueAntwort(produkt, antwort([])), "nicht im Board").toBeNull();
     expect(G.itemAusIssueAntwort(produkt, { data: { repository: { issue: null } } }), "Issue unbekannt").toBeNull();
     expect(G.itemAusIssueAntwort(produkt, null)).toBeNull();
-    const neu = G.ergaenzeFehlende([b(10)], [{ ...b(1360), id: "PVTI_a" }, null, b(10, { id: "doppelt" })]);
-    expect(neu.map((i) => i.id)).toEqual(["I10", "PVTI_a"]);
+    const neu = G.ergaenzeFehlende([b(10)], [{ ...b(1360), id: "ITEM_a" }, null, b(10, { id: "doppelt" })]);
+    expect(neu.map((i) => i.id)).toEqual(["I10", "ITEM_a"]);
     const plan = L.planPlacements(neu, [1360], 10);
     expect(plan.missing).toEqual([]);
     expect(plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[1360, "I10"]]);

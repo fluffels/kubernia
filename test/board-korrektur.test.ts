@@ -3,10 +3,13 @@
  * Reines Node-Tooling ohne Declaration-File: Namespaces einmal über `unknown` auf lokale Interfaces (Technik wie test/board.test.ts). */
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { FREMD } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPlace from "../scripts/board-place.mjs";
+
+const OWNER = FREMD.repo.split("/")[0] ?? "";
 
 type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Korrektur = { nr: number; id: string; afterId: string | null; vonRang: number; nachRang: number };
@@ -67,7 +70,8 @@ describe("Gebündelter GraphQL-Fallback (#1390 Z6d)", () => {
     expect(block.nummern).toEqual([5, 9]);
     expect(block.query).toContain("i0: issue(number: 5)");
     expect(block.query).toContain("i1: issue(number: 9)");
-    expect(block.query).toContain('owner:"fluffels",name:"kubernia"');
+    const [repoOwner, repoName] = L.REPO.split("/");
+    expect(block.query).toContain(`owner:"${repoOwner}",name:"${repoName}"`);
   });
 
   test("mehr als ALIAS_MAX Nummern → mehrere Blöcke, keine Nummer geht verloren", () => {
@@ -86,20 +90,20 @@ describe("Gebündelter GraphQL-Fallback (#1390 Z6d)", () => {
   });
 
   const PRODUKT = L.boardFuerRolle("produkt");
-  const issue = (number: number, nodes: unknown[]) => ({ number, title: `T${number}`, state: "OPEN", assignees: { nodes: [{ login: "fluffels" }] }, projectItems: { nodes } });
+  const issue = (number: number, nodes: unknown[]) => ({ number, title: `T${number}`, state: "OPEN", assignees: { nodes: [{ login: OWNER }] }, projectItems: { nodes } });
 
   test("itemsAusAliasAntwort: in Reihenfolge der Nummern; unbekanntes Issue, fremdes Projekt und leere Items → null", () => {
     const antwort = {
       data: {
         repository: {
-          i0: issue(5, [{ id: "PVTI_5", project: { id: PRODUKT.projectId } }]),
+          i0: issue(5, [{ id: "ITEM_5", project: { id: PRODUKT.projectId } }]),
           i1: null, // unbekanntes Issue (NOT_FOUND)
-          i2: issue(7, [{ id: "PVTI_x", project: { id: "PVT_fremd" } }]),
+          i2: issue(7, [{ id: "ITEM_x", project: { id: "PRJ_fremd" } }]),
           i3: issue(8, []),
         },
       },
     };
-    expect(L.itemsAusAliasAntwort(PRODUKT, antwort, [5, 6, 7, 8])).toEqual([{ id: "PVTI_5", number: 5, status: "", title: "T5", assignees: ["fluffels"], state: "open" }, null, null, null]);
+    expect(L.itemsAusAliasAntwort(PRODUKT, antwort, [5, 6, 7, 8])).toEqual([{ id: "ITEM_5", number: 5, status: "", title: "T5", assignees: [OWNER], state: "open" }, null, null, null]);
   });
 
   test("kaputte Antwortform wirft, statt Nummern still als fehlend zu melden", () => {
@@ -171,7 +175,7 @@ describe("sammelticketKorrektur (#1390 Z10)", () => {
   });
 
   test("geclaimt, geschlossen, fehlend: nichts; nur nach vorn, nie nach hinten", () => {
-    expect(k4([...fueller(1, 10), sammel(20, { assignees: ["fluffels"] })])).toBeNull();
+    expect(k4([...fueller(1, 10), sammel(20, { assignees: [OWNER] })])).toBeNull();
     expect(k4([...fueller(1, 10), sammel(20, { state: "closed" })])).toBeNull();
     expect(k4(fueller(1, 10))).toBeNull();
     expect(k4([])).toBeNull();
@@ -222,7 +226,7 @@ describe("planMitKorrektur: Komposition von board-place (#1390 Z10, Form des Vor
   });
 
   test("geclaimtes Sammelticket am Ende: keine Korrektur", () => {
-    const geclaimt = [...Array.from({ length: 10 }, (_, i) => b(i + 1)), sammel(1390, { assignees: ["fluffels"] })];
+    const geclaimt = [...Array.from({ length: 10 }, (_, i) => b(i + 1)), sammel(1390, { assignees: [OWNER] })];
     expect(plan(["--top", "1400"], [...geclaimt, b(1400)]).korrektur).toBeNull();
   });
 });

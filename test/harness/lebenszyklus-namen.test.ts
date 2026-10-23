@@ -302,7 +302,7 @@ describe("ticket-lock: Namen aus der Config", () => {
 
 describe("naechstes-ticket: Namen aus der Config", () => {
   const item = (nr: number) => ({
-    node_id: `PVTI_${nr}`,
+    node_id: `ITEM_${nr}`,
     content_type: "Issue",
     fields: [{ name: "Status", value: { name: { raw: "Todo" } } }],
     content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n", issue_dependencies_summary: { blocked_by: 0 } },

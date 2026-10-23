@@ -12,6 +12,9 @@ import * as rawStatus from "../scripts/langfuse-takt.mjs";
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawQuote from "../scripts/spielquote-lib.mjs";
+import { FREMD } from "./support/fremd-config";
+
+const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
@@ -58,13 +61,13 @@ describe("normalizeOffene", () => {
     number,
     title: "x",
     created_at: "2026-10-01T00:00:00Z",
-    assignees: [{ login: "fluffels" }],
+    assignees: [{ login: OWNER }],
     ...extra,
   });
   test("filtert Pull Requests und liest Assignees", () => {
     const r = normalizeOffene([[issue(1), issue(2, { pull_request: {} })], [issue(3, { assignees: [] })]]);
     expect(r.map((i) => i.number)).toEqual([1, 3]);
-    expect(r[0].assignees).toEqual(["fluffels"]);
+    expect(r[0].assignees).toEqual([OWNER]);
     expect(r[1].assignees).toEqual([]);
   });
   test("falsche Form wirft", () => {
@@ -83,7 +86,7 @@ describe("zaehleTicketMerges (#1349)", () => {
   const c = (login: string | null, date = "2026-10-07T10:00:00Z") => ({ author: login === null ? null : { login }, commit: { committer: { date } } });
 
   test("Bots zählen nicht (dependabot[bot], github-actions[bot]), Menschen und fehlender Autor schon", () => {
-    expect(T.zaehleTicketMerges([c("fluffels"), c("dependabot[bot]"), c("github-actions[bot]"), c(null)])).toBe(2);
+    expect(T.zaehleTicketMerges([c(OWNER), c("dependabot[bot]"), c("github-actions[bot]"), c(null)])).toBe(2);
     expect(T.zaehleTicketMerges([])).toBe(0);
   });
 
@@ -99,7 +102,7 @@ describe("zaehleTicketMerges (#1349)", () => {
 });
 
 describe("Spielquote im Takt (#1425)", () => {
-  const c = (message: string, login: string | null = "fluffels", date = "2026-10-07T10:00:00Z") => ({ author: login === null ? null : { login }, commit: { message, committer: { date } } });
+  const c = (message: string, login: string | null = OWNER, date = "2026-10-07T10:00:00Z") => ({ author: login === null ? null : { login }, commit: { message, committer: { date } } });
   const harness = c("feat(harness): Härtung (#1)\n\nKörper");
   const spiel = c("feat(sim): Pod (#2)");
 
@@ -121,14 +124,14 @@ describe("Spielquote im Takt (#1425)", () => {
   });
 
   test("zaehleSpielMerges: Harness-, Bot- und zu alte Commits zählen nicht", () => {
-    const l = [spiel, harness, c("feat(sim): y", "dependabot[bot]"), c("feat(sim): z", "fluffels", "2026-10-06T10:00:00Z"), c("feat(inhalt): q")];
+    const l = [spiel, harness, c("feat(sim): y", "dependabot[bot]"), c("feat(sim): z", OWNER, "2026-10-06T10:00:00Z"), c("feat(inhalt): q")];
     expect(T.zaehleSpielMerges(l)).toBe(3);
     expect(T.zaehleSpielMerges(l, "2026-10-07T00:00:00Z")).toBe(2);
     expect(() => T.zaehleSpielMerges({})).toThrow();
   });
 
   test("zaehleTaktMerges: Spiel und Agentic zählen, Bots, Sammelticket-Commits und zu alte nicht", () => {
-    const alt = c("feat(sim): alt (#9)", "fluffels", "2026-10-06T10:00:00Z");
+    const alt = c("feat(sim): alt (#9)", OWNER, "2026-10-06T10:00:00Z");
     const sammelCommit = c("feat(harness): Härtung (#40) (#41)");
     const l = [spiel, harness, sammelCommit, c("feat(sim): z", "dependabot[bot]"), alt];
     expect(T.zaehleTaktMerges(l, null, new Set([40]))).toBe(3);
@@ -148,8 +151,8 @@ describe("Spielquote im Takt (#1425)", () => {
   });
 
   test("quotenBericht: ein Harness-Merge VOR dem Fenster zählt nicht", () => {
-    const alt = c("feat(harness): alt", "fluffels", "2026-10-06T10:00:00Z");
-    const altSpiel = c("feat(sim): alt", "fluffels", "2026-10-06T10:00:00Z");
+    const alt = c("feat(harness): alt", OWNER, "2026-10-06T10:00:00Z");
+    const altSpiel = c("feat(sim): alt", OWNER, "2026-10-06T10:00:00Z");
     const q = T.quotenBericht([alt, alt, altSpiel, spiel], "2026-10-07T00:00:00Z");
     expect(q).toMatchObject({ harness: 0, spiel: 1 });
     expect(T.quotenBericht([alt, alt, altSpiel, spiel], null)).toMatchObject({ harness: 2, spiel: 2 });
@@ -206,24 +209,24 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
   });
 
   test("geclaimtes, geschlossenes oder fehlendes Sammelticket: nichts", () => {
-    expect(h([it(10), sammel(12, { assignees: ["fluffels"] })], 9).aktion).toBe("nichts");
+    expect(h([it(10), sammel(12, { assignees: [OWNER] })], 9).aktion).toBe("nichts");
     expect(h([it(10), sammel(12, { state: "closed" })], 9).aktion).toBe("nichts");
     expect(h([it(10)], 9).aktion).toBe("nichts");
   });
 
   test("Vorgänger in Arbeit (#1646): geclaimtes plus ungeclaimtes Sammelticket → Takt zählt erst ab dessen Abschluss, kein nach-oben", () => {
-    const board = [it(10), it(11), sammel(12, { assignees: ["fluffels"] }), sammel(13)];
+    const board = [it(10), it(11), sammel(12, { assignees: [OWNER] }), sammel(13)];
     const r = h(board, 5);
     expect(r.aktion).not.toBe("nach-oben");
     expect(r.grund).toMatch(/Vorgänger #12 in Arbeit/);
     // ohne geclaimten Vorgänger bleibt es nach-oben
     expect(h([it(10), it(11), sammel(13)], 5)).toMatchObject({ aktion: "nach-oben", nr: 13 });
     // geschlossener Vorgänger zählt nicht
-    expect(h([it(10), it(11), sammel(12, { assignees: ["fluffels"], state: "closed" }), sammel(13)], 5)).toMatchObject({ aktion: "nach-oben", nr: 13 });
+    expect(h([it(10), it(11), sammel(12, { assignees: [OWNER], state: "closed" }), sammel(13)], 5)).toMatchObject({ aktion: "nach-oben", nr: 13 });
   });
 
   test("Vorgänger in Arbeit: Regel 2 (auf-position) bleibt", () => {
-    const board = [...fueller(1, 8), sammel(12, { assignees: ["fluffels"] }), sammel(13)];
+    const board = [...fueller(1, 8), sammel(12, { assignees: [OWNER] }), sammel(13)];
     expect(h(board, 5)).toMatchObject({ aktion: "auf-position", nr: 13 });
   });
 
@@ -283,21 +286,21 @@ describe("ziehListeNach: die Board-Liste wird nach der Status-Aktion im Speicher
   test("ein schon gelistetes Status-Ticket wandert an die Spitze (auch bei bekannter Nummer mit anderer ID)", () => {
     const liste = [it(1), it(2), it(5, { title: STATUS_TITEL })];
     expect(T.ziehListeNach(liste, { nr: 5, itemId: "I5" }).map((i) => i.number)).toEqual([5, 1, 2]);
-    expect(T.ziehListeNach(liste, { nr: 5, itemId: "PVTI_neu" }).map((i) => i.number)).toEqual([5, 1, 2]);
+    expect(T.ziehListeNach(liste, { nr: 5, itemId: "ITEM_neu" }).map((i) => i.number)).toEqual([5, 1, 2]);
   });
 
   test("ein frisch angelegtes, noch nicht gelistetes Status-Ticket wird vorn ergänzt und zählt zum Kopf", () => {
-    const liste = T.ziehListeNach([it(1), it(2)], { nr: 9, itemId: "PVTI_9" });
+    const liste = T.ziehListeNach([it(1), it(2)], { nr: 9, itemId: "ITEM_9" });
     expect(liste.map((i) => i.number)).toEqual([9, 1, 2]);
-    expect(liste[0]).toMatchObject({ id: "PVTI_9", title: STATUS_TITEL, state: "open", assignees: [] });
+    expect(liste[0]).toMatchObject({ id: "ITEM_9", title: STATUS_TITEL, state: "open", assignees: [] });
     const kopfEnde = (rawLib as unknown as { kopfEnde: (i: Item[]) => number }).kopfEnde;
     expect(kopfEnde(liste)).toBe(1);
   });
 
   test("Komposition: nach dem Nachziehen entscheidet der Harness-Takt gegen die aktuelle Liste (Sammelticket hinter dem frischen Status-Ticket)", () => {
     const board = [it(1), it(2), it(12, { title: "Harness-Härtung (gesammelt)" })];
-    const nachgezogen = T.ziehListeNach(board, { nr: 9, itemId: "PVTI_9" });
-    expect(T.entscheideHarnessTakt({ items: nachgezogen, mergesSeitAbschluss: 5, position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "PVTI_9" });
+    const nachgezogen = T.ziehListeNach(board, { nr: 9, itemId: "ITEM_9" });
+    expect(T.entscheideHarnessTakt({ items: nachgezogen, mergesSeitAbschluss: 5, position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "ITEM_9" });
   });
 });
 
@@ -349,8 +352,8 @@ describe("spielquote-lib (#1729)", () => {
   describe("harnessIssuesAnfrage und harnessIssuesAus (#1798)", () => {
     const L = rawQuote as unknown as { harnessIssuesAnfrage: (a: { repo: string; label: string; seit: string }) => string[]; harnessIssuesAus: (s: unknown) => Set<number> };
     test("Anfrage: paginiert, Label kodiert, seit durchgereicht", () => {
-      expect(L.harnessIssuesAnfrage({ repo: "o/r", label: "area:harness x", seit: "2026-10-01T00:00:00.000Z" })).toEqual([
-        "api", "--paginate", "--slurp", "repos/o/r/issues?state=closed&labels=area%3Aharness%20x&since=2026-10-01T00:00:00.000Z&per_page=100",
+      expect(L.harnessIssuesAnfrage({ repo: "o/r", label: `${FREMD.labels.harness} x`, seit: "2026-10-01T00:00:00.000Z" })).toEqual([
+        "api", "--paginate", "--slurp", `repos/o/r/issues?state=closed&labels=${FREMD.labels.harness.replace(":", "%3A")}%20x&since=2026-10-01T00:00:00.000Z&per_page=100`,
       ]);
     });
     test("Aus: Nummern ohne PRs über alle Seiten; falsche Form wirft", () => {

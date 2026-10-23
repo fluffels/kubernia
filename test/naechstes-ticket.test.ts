@@ -45,7 +45,7 @@ const SPEZ = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n\n";
 // Standard-Item trägt eine gültige Spezifikation (Spezifikations-Gate, #1615); `roh` ohne.
 const item = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => roh(nr, { ...c, body: SPEZ + (typeof c.body === "string" ? c.body : "") }, status);
 const roh = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
-  node_id: `PVTI_${nr}`,
+  node_id: `ITEM_${nr}`,
   content_type: "Issue",
   fields: [{ name: "Status", value: { name: { raw: status } } }],
   content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: "fluffels", type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
@@ -974,8 +974,8 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
 });
 
 describe("Board-Verzug (#1866)", () => {
-  const PROD = "PVT_produkt";
-  const FACT = "PVT_factory";
+  const PROD = "PRJ_produkt";
+  const FACT = "PRJ_factory";
   type Frisch = { issues: { number: number; titel: string; projektIds: string[] }[]; projektIds: string[] } | { fehler: string };
   const V = raw as unknown as {
     verzugNummern: (a: { frisch: { number: number; titel: string; projektIds: string[] }[]; produkt: { number: number }[]; factory: { number: number }[]; projektIds: string[] }) => number[];
@@ -999,7 +999,7 @@ describe("Board-Verzug (#1866)", () => {
     expect((JSON.parse(lauf(frisch).out) as { verzug: number[] }).verzug).toEqual([1871, 1885]);
   });
   test("ein Issue ohne Board-Item oder mit fremdem Projekt ist kein Verzug", () => {
-    expect(V.verzugNummern({ frisch: [frischer(5, []), frischer(6, ["PVT_fremd"])], produkt: [], factory: [], ...alle })).toEqual([]);
+    expect(V.verzugNummern({ frisch: [frischer(5, []), frischer(6, ["PRJ_fremd"])], produkt: [], factory: [], ...alle })).toEqual([]);
     const t = lauf({ issues: [frischer(5, [])], ...alle }, ["--bereich", "spiel"]);
     expect(t.out).not.toContain("VERZUG");
     expect(JSON.parse(lauf({ issues: [frischer(5, [])], ...alle }).out)).toMatchObject({ verzug: [] });

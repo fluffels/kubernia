@@ -3,6 +3,9 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-takt.mjs";
+import { FREMD } from "./support/fremd-config";
+
+const OWNER = FREMD.repo.split("/")[0] ?? ""; // Login des Maintainer-Accounts, nur Testdaten
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string; labels?: string[] };
 type Io = {
@@ -25,11 +28,11 @@ const T = raw as unknown as {
   fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io; config?: unknown }) => { fehler: boolean };
 };
 
-const CFG = { labels: { harness: "area:harness", forum: "forum" } };
+const CFG = { labels: { harness: FREMD.labels.harness, forum: FREMD.labels.forum } };
 
 /** Fake für `io.loadItems`: die Items stehen auf dem Factory-Board (dort arbeiten Status- und Harness-Takt), das Produkt-Board ist leer. */
 const nurFactory = (items: Item[]) => (rolle: string) => (rolle === "factory" ? items : []);
-const c = (message: string, date = "2026-10-07T10:00:00Z") => ({ author: { login: "fluffels" }, commit: { message, committer: { date } } });
+const c = (message: string, date = "2026-10-07T10:00:00Z") => ({ author: { login: OWNER }, commit: { message, committer: { date } } });
 const H = new Set([102, 103]);
 
 describe("istHarnessCommit nach Label (#1428 Z22)", () => {
@@ -80,7 +83,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       loadItems: nurFactory([it(10), it(11), sammel, it(50, { title: STATUS })]),
       loadOpenIssuePages: () => [[
         ...(opts.offeneStatus ? [{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }] : []),
-        ...(opts.offeneSammel ? [{ number: 160, title: "Langfuse-Befunde (gesammelt)", created_at: "2026-10-02T00:00:00Z", assignees: ["fluffels"] }] : []),
+        ...(opts.offeneSammel ? [{ number: 160, title: "Langfuse-Befunde (gesammelt)", created_at: "2026-10-02T00:00:00Z", assignees: [OWNER] }] : []),
       ]],
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: (e) => {
@@ -134,7 +137,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         ghJson: (a) =>
           a.join(" ").includes("state=closed")
             ? [[{ number: 60, title: STATUS, created_at: vorgaengerCreated, closed_at: "2026-10-06T08:00:00Z" }]]
-            : [commitDaten.map((d, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: d } }, author: { login: "fluffels", type: "User" } }))],
+            : [commitDaten.map((d, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: d } }, author: { login: OWNER, type: "User" } }))],
         loadItems: nurFactory([]),
         loadOpenIssuePages: () => [offenCreatedAt ? [{ number: 70, title: STATUS, created_at: offenCreatedAt, assignees: [] }] : []],
         positionLautAgentsMd: () => 4,
@@ -275,7 +278,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: (_h, items) => (zaehler.harness.push(items), true),
       itemsUeberIssues: (rolle, n) => ((zaehler.graphql += 1), zaehler.graphqlRollen.push(rolle), (opts.graphql ?? (() => n.map(() => null)))(n)),
-      addToBoardTodo: (rolle, id) => (zaehler.add.push(id), zaehler.rollen.push(rolle), (opts.add ?? (() => `PVTI_${id}`))()),
+      addToBoardTodo: (rolle, id) => (zaehler.add.push(id), zaehler.rollen.push(rolle), (opts.add ?? (() => `ITEM_${id}`))()),
       log: (z) => log.push(z),
     };
     const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), dry: opts.dry, token: "token" in opts ? opts.token : "t", io });
@@ -319,7 +322,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
     expect(zaehler.add).toEqual([]);
   });
   describe("zwei Boards (#1729)", () => {
-    const harnessIssue = (n: number) => issue(n, { labels: [{ name: "area:harness" }] });
+    const harnessIssue = (n: number) => issue(n, { labels: [{ name: FREMD.labels.harness }] });
     test("ein fehlendes Harness-Issue kommt auf das Factory-Board, ein fehlendes Spiel-Issue auf das Produkt-Board", () => {
       const { zaehler, log } = lauf({ offene: [20, 21], imBoard: [], rest: (n) => (n === 20 ? harnessIssue(n) : issue(n)) });
       expect(zaehler.add).toEqual(["N20", "N21"]);
@@ -343,7 +346,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
       const io = {
         itemsUeberIssues: (_r: string, n: number[]) => n.map(() => null),
         ghJson: (a: string[]) => (a.join(" ").endsWith("/20") ? harnessIssue(20) : issue(21)),
-        addToBoardTodo: (_r: string, id: string) => `PVTI_${id}`,
+        addToBoardTodo: (_r: string, id: string) => `ITEM_${id}`,
         log: () => undefined,
       };
       const r = W.nimmFehlendeAuf({ offene: [{ number: 20 }, { number: 21 }], listen: { produkt: [], factory: [] }, token: "t", config: CFG }, io);
@@ -404,7 +407,7 @@ describe("Gegenprobe vor dem Anlegen des Status-Tickets (#1866)", () => {
     const log: string[] = [];
     const angelegt: string[] = [];
     const aufrufe: { repo: string; label: string; anzahl: number; mitBoard?: boolean }[] = [];
-    const commits = Array.from({ length: 5 }, (_, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: "2026-10-07T12:00:00Z" } }, author: { login: "fluffels", type: "User" } }));
+    const commits = Array.from({ length: 5 }, (_, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: "2026-10-07T12:00:00Z" } }, author: { login: OWNER, type: "User" } }));
     const io: Io = {
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[{ number: 60, title: STATUS, created_at: "2026-10-01T08:00:00Z", closed_at: "2026-10-02T08:00:00Z" }]] : [commits]),
       loadItems: () => [],
@@ -426,7 +429,7 @@ describe("Gegenprobe vor dem Anlegen des Status-Tickets (#1866)", () => {
     const r = lauf(() => []);
     expect(r.angelegt).toEqual(["anlegen"]);
     expect(r.aufrufe).toHaveLength(1);
-    expect(r.aufrufe[0]).toMatchObject({ label: "area:harness", anzahl: 50, mitBoard: false });
+    expect(r.aufrufe[0]).toMatchObject({ label: FREMD.labels.harness, anzahl: 50, mitBoard: false });
     expect(r.aufrufe[0]?.repo).toMatch(/^[^/]+\/[^/]+$/);
   });
   test("GraphQL kennt ein offenes Status-Ticket, das die REST-Liste noch nicht hat: nichts angelegt, Warnung mit Nummer", () => {
