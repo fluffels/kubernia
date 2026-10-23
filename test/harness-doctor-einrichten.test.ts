@@ -61,7 +61,7 @@ afterEach(() => {
   for (const o of ordner.splice(0)) rmSync(o, { recursive: true, force: true });
 });
 const neuerRoot = (workflow: string | null = WORKFLOW): string => {
-  const root = mkdtempSync(join(tmpdir(), "kq-einrichten-"));
+  const root = mkdtempSync(join(tmpdir(), "einrichten-"));
   ordner.push(root);
   mkdirSync(join(root, ".github", "workflows"), { recursive: true });
   if (workflow !== null) writeFileSync(join(root, ".github", "workflows", "a.yml"), workflow);

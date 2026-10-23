@@ -72,7 +72,7 @@ afterEach(() => {
 
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
 function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[] } = {}): Lauf {
-  const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
+  const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
   if (opt.workflow !== null) {
     mkdirSync(join(root, ".github", "workflows"), { recursive: true });
@@ -152,7 +152,7 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
     }
   });
   test("pruefLauf ohne umgebung (Wochenlauf) prüft den Altnamen nicht, auch bei gesetzter Prozess-Umgebung", () => {
-    const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
+    const root = mkdtempSync(join(tmpdir(), "doctor-"));
     ordner.push(root);
     writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
     writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
@@ -208,7 +208,7 @@ describe("Sprache des Spezifikations-Gates (--pruefen, #1866 L22)", () => {
 
 describe("pruefLauf mit umgebung: die Namen kommen vom Aufrufer, die Lib liest keine Dateien", () => {
   const fixture = (): string => {
-    const root = mkdtempSync(join(tmpdir(), "kq-doctor-"));
+    const root = mkdtempSync(join(tmpdir(), "doctor-"));
     ordner.push(root);
     writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
     writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
@@ -418,7 +418,7 @@ describe("harness-doctor --pruefen", () => {
   });
 
   test("CLI-Verdrahtung: unlesbare Config per Prozess ergibt Exit 2 und Fix auf stderr (ohne gh und Langfuse)", () => {
-    const root = mkdtempSync(join(tmpdir(), "kq-doctor-cli-"));
+    const root = mkdtempSync(join(tmpdir(), "doctor-cli-"));
     ordner.push(root);
     writeFileSync(join(root, "kaputt.json"), "{ nicht json");
     const r = spawnSync(process.execPath, [SKRIPT, "--pruefen", "--config", join(root, "kaputt.json")], { encoding: "utf8", windowsHide: true });

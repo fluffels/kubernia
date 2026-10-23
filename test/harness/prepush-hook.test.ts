@@ -109,7 +109,7 @@ describe.skipIf(!hatSh)("#1740 pre-push-Hook: Diffsize bei Pushes anderer Branch
   afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
   // Temp-Ordner mit Attrappe `scripts/check-diffsize.mjs`, die mit `exitCode` endet; der Hook läuft mit cwd dort.
   const lauf = (exitCode: number, ref: string, oid = OID) => {
-    const d = mkdtempSync(join(tmpdir(), "kq-prepush-"));
+    const d = mkdtempSync(join(tmpdir(), "prepush-"));
     dirs.push(d);
     mkdirSync(join(d, "scripts"));
     writeFileSync(join(d, "scripts", "check-diffsize.mjs"), `console.log("attrappe diffsize"); process.exit(${exitCode});`);
@@ -138,7 +138,7 @@ describe.skipIf(!hatSh)("#1762 L21c pre-push-Hook: welches Gate läuft bei welch
   afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
   // Temp-Ordner mit Attrappe `scripts/check-diffsize.mjs` und einem falschen `npm` vorn im PATH; beide protokollieren ihren Aufruf.
   const lauf = (refs: { ref: string; oid?: string }[], { verifyExit = 0, diffsizeExit = 0 } = {}) => {
-    const d = mkdtempSync(join(tmpdir(), "kq-prepush-"));
+    const d = mkdtempSync(join(tmpdir(), "prepush-"));
     dirs.push(d);
     const log = join(d, "aufrufe.log").replaceAll("\\", "/");
     mkdirSync(join(d, "scripts"));

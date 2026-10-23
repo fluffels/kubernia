@@ -64,7 +64,7 @@ describe("entscheideSync: jede Verzweigung", () => {
 });
 
 describe("Hilfsfunktionen", () => {
-  test("ordneHarnessAenderungen: kubernia-Skill und Wurzel-AGENTS.md, Agent-Definitionen und Sonstiges getrennt (#1572)", () => {
+  test("ordneHarnessAenderungen: Ticket-Skill und Wurzel-AGENTS.md, Agent-Definitionen und Sonstiges getrennt (#1572)", () => {
     expect(S.ordneHarnessAenderungen([".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"])).toMatchObject({ skill: [".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [] });
     expect(S.ordneHarnessAenderungen([".claude/agents/factory-planer.md"])).toMatchObject({ skill: [], agenten: [".claude/agents/factory-planer.md"] });
     expect(S.ordneHarnessAenderungen([".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"])).toMatchObject({ skill: [], agenten: [], sonstige: [".claude/skills/andere/SKILL.md", ".claude/settings.json", "src/content/AGENTS.md"] });
@@ -99,7 +99,7 @@ describe("Bilddateien im Hauptcheckout-Root (#1549 Z2)", () => {
     expect(B.bildReste([])).toEqual([]);
   });
   test("bildResteFuer: nur Dateien im Root, Unterordner (auch .playwright-mcp) und Ordner mit Bildnamen zählen nicht", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-bilder-"));
+    const dir = mkdtempSync(join(tmpdir(), "bilder-"));
     try {
       mkdirSync(join(dir, ".playwright-mcp"));
       writeFileSync(join(dir, ".playwright-mcp", "ok.png"), "x");
@@ -159,7 +159,7 @@ const git = (cwd: string, ...args: string[]) =>
 
 /** Bare-Remote + Haupt-Klon (main) + zweiter Klon, der Commits auf origin schiebt. */
 function aufbau() {
-  const wurzel = mkdtempSync(join(tmpdir(), "kq-haupt-sync-"));
+  const wurzel = mkdtempSync(join(tmpdir(), "haupt-sync-"));
   const remote = join(wurzel, "remote.git");
   mkdirSync(remote);
   git(remote, "init", "--bare", "--initial-branch=main");
@@ -320,7 +320,7 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
   });
 
   test("kein Git-Repo: kein Wurf, Notiz", () => {
-    const wurzel = mkdtempSync(join(tmpdir(), "kq-haupt-sync-leer-"));
+    const wurzel = mkdtempSync(join(tmpdir(), "haupt-sync-leer-"));
     try {
       const e = S.fuehreSyncAus(wurzel);
       expect(e.gepullt).toBe(false);
@@ -375,7 +375,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     expect(X.exitCodeFuer({ aktion: "nichts", grund: "Linked Worktree", branch: "", sauber: undefined })).toBe(0);
   });
 
-  test("--text: nur der kubernia-Skill oder die Wurzel-AGENTS.md löst „Skill neu lesen“ aus; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
+  test("--text: nur der Ticket-Skill oder die Wurzel-AGENTS.md löst „Skill neu lesen“ aus; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
     const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", harness: { skill: [".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"], agenten: [], sonstige: [], lockGeaendert: false } };
     const text = S.ausgabe(e, true);
     expect(text).toContain("Skill neu lesen");
@@ -567,7 +567,7 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
     }
   });
 
-  test("der Skill kubernia beginnt mit Schritt 0 (haupt-sync --streng), nennt Stopp bei Exit 1 und die Neu-Lesen-Regel; kein „nie ein eigenes git pull“ mehr", () => {
+  test("der Ticket-Skill beginnt mit Schritt 0 (haupt-sync --streng), nennt Stopp bei Exit 1 und die Neu-Lesen-Regel; kein „nie ein eigenes git pull“ mehr", () => {
     const skill = readFileSync(new URL("../../.agents/skills/factory/ablauf.md", import.meta.url), "utf8");
     const schritt0 = /^0\. \*\*Hauptcheckout heben[^\n]*\n/m.exec(skill)?.[0] ?? "";
     expect(schritt0).toContain("node scripts/haupt-sync.mjs --text --streng");
@@ -603,7 +603,7 @@ describe("Node-Versionsprüfung (#1411)", { timeout: 30_000 }, () => {
     expect(N.pruefeNodeVersion("kaputt", ">=22")).toBeNull();
   });
   test("nodeHinweisFuer liest engines.node aus der package.json und ist fail-open", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-node-"));
+    const dir = mkdtempSync(join(tmpdir(), "node-"));
     try {
       writeFileSync(join(dir, "package.json"), JSON.stringify({ engines: { node: ">=99" } }));
       expect(N.nodeHinweisFuer(dir, "22.17.0")).toMatch(/erfüllt engines\.node/);
@@ -652,7 +652,7 @@ describe("node_modules gegen package-lock.json (#1428 Z2)", { timeout: 30_000 },
     expect(N.pruefeNodeModules(JSON.stringify({}), hidden({}))).toBeNull();
   });
   test("nodeModulesHinweisFuer liest beide Dateien; ohne Lock fail-open", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-nm-"));
+    const dir = mkdtempSync(join(tmpdir(), "nm-"));
     try {
       expect(N.nodeModulesHinweisFuer(dir)).toBe("");
       writeFileSync(join(dir, "package-lock.json"), L);
