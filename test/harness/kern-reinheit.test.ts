@@ -74,7 +74,7 @@ type Baseline = Record<string, Zaehlung>;
 
 export interface ProjektConfig {
   repo: string;
-  boards: { besitzer: string }[];
+  boards: { besitzer: string; statusFeldId?: number }[];
   praefixe: { commitZeile: string; branch: string; worktree: string };
   labels: Record<string, string>;
   agenten: Record<string, string>;
@@ -89,6 +89,14 @@ const alternative = (werte: string[]): string =>
     .map(escapeRe)
     .join("|");
 
+/** Board-ID (#1875): das generische Muster der Projekt-IDs, dazu die Status-Feld-ID jedes Boards der Config als ganze Zahl
+ * (`todoOptionId` zählt nicht: der GitHub-Standardwert steht in jedem Projekt). */
+const boardIdRegex = (config: ProjektConfig): RegExp => {
+  const ids = config.boards.flatMap((b) => (b.statusFeldId === undefined ? [] : [String(b.statusFeldId)]));
+  const muster = "\\bPVT[A-Z]*_[A-Za-z0-9_-]+";
+  return new RegExp(ids.length === 0 ? muster : `${muster}|(?<!\\d)(?:${ids.map(escapeRe).join("|")})(?!\\d)`, "g");
+};
+
 /** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611, #1741): Owner (Repo-Owner und Board-Besitzer),
  * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
  * wie `forum` zählt nie), Agentennamen und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
@@ -99,7 +107,7 @@ export function begriffeAus(config: ProjektConfig): Record<string, RegExp> {
   const out: Record<string, RegExp> = {
     Owner: new RegExp(owners.map(escapeRe).join("|"), "gi"),
     Repo: new RegExp(escapeRe(name), "gi"),
-    "Board-ID": /\bPVT[A-Z]*_[A-Za-z0-9_-]+/g,
+    "Board-ID": boardIdRegex(config),
     Praefix: new RegExp(escapeRe(config.praefixe.commitZeile), "g"),
     Branch: new RegExp(escapeRe(config.praefixe.branch), "g"),
     Worktree: new RegExp(escapeRe(config.praefixe.worktree), "g"),
@@ -466,6 +474,12 @@ describe("begriffeAus", () => {
     const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Hof: "hof" } });
     assert.deepEqual(zaehle("Schöhof hofä", b2), {});
     assert.deepEqual(zaehle("Hof, hof/x „Hof“", b2), { Hof: 3 });
+  });
+  test("Board-ID (#1875): die Status-Feld-ID jedes Boards zählt als ganze Zahl; ohne statusFeldId kein Zusatz", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme", statusFeldId: 123 }, { besitzer: "acme", statusFeldId: 456 }], ...NEU });
+    assert.deepEqual(zaehle("id 123, 456; 1123 1234 4567 x7123", b2), { "Board-ID": 2 });
+    assert.deepEqual(zaehle(["PVT", "kwHOabc"].join("_") + " und 123", b2), { "Board-ID": 2 }, "das Projekt-ID-Muster gilt weiter");
+    assert.deepEqual(zaehle("id 123", B), {});
   });
   test("ohne projektliterale entfällt der Zusatzbegriff", () => {
     assert.deepEqual(zaehle("zelda", begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU })), {});
@@ -1084,5 +1098,86 @@ describe("Kern-Pfade ohne Projektliteral (#1748)", () => {
       const stellen = projektwertStellen((text ?? "").replace(/\r\n/g, "\n"), pfad).zeilen;
       assert.ok(stellen.some((s) => s.schluessel === `agenten.${rolle}` && s.name === "name"), `${pfad} setzt name: nicht aus agenten.${rolle}`);
     }
+  });
+});
+
+// ── Kern-Tests ohne Projektliterale (#1875, ADR 0022 F10) ─────────────────────
+
+const KERN_TEST_BASELINE = "test/harness/kern-test-literale-baseline.json";
+/** Arten, deren Dateien ins Factory-Repo ziehen und darum Projektliterale zählen: Kern-Tests, ihre Test-Hilfen und Fixtures. */
+const GEZAEHLTE_ARTEN = ["kern-test", "test-hilfe", "fixture"];
+
+interface ExtraktionsListe {
+  eintraege: { muster?: string; ring?: string; art: string }[];
+}
+const { artVon, EXTRAKTION_PFAD } = rawBesitz as unknown as { artVon: (liste: ExtraktionsListe, pfad: string) => string | null; EXTRAKTION_PFAD: string };
+
+/** Getrackte Dateien der Arten `kern-test`, `test-hilfe` und `fixture` laut Extraktionsliste. */
+export const kernTestPfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));
+
+/** Ist-Zählung je Datei auf dem rohen Text (wie `erlaubt`, damit die Diff-Basis dasselbe zählt); Dateien ohne Treffer fehlen. */
+export function kernTestIst(pfade: string[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): Baseline {
+  const ist: Baseline = {};
+  for (const p of pfade) {
+    const z = zaehle(lies(p) ?? "", begriffe);
+    if (Object.keys(z).length > 0) ist[p] = z;
+  }
+  return ist;
+}
+
+describe("Kern-Tests ohne Projektliterale (#1875)", () => {
+  const liste = JSON.parse(readFileSync(WURZEL + EXTRAKTION_PFAD, "utf8")) as ExtraktionsListe;
+  const kernBaseline = JSON.parse(readFileSync(WURZEL + KERN_TEST_BASELINE, "utf8")) as Baseline;
+  const gitIn = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const getrackt = gitIn(["ls-files"]).split("\n").filter((p) => p !== "" && existsSync(WURZEL + p));
+  const pfade = kernTestPfade(liste, getrackt);
+  const config = (rawPc as unknown as { ladeProjektConfig(): ProjektConfig }).ladeProjektConfig();
+
+  test("kernTestPfade: Kern-Test, Test-Hilfe und Fixture zählen, projekt-test und nicht Eingeordnetes nicht", () => {
+    const l: ExtraktionsListe = {
+      eintraege: ["kern-test", "projekt-test", "test-hilfe", "fixture", "infrastruktur"].map((art) => ({ muster: `t/${art}.ts`, art })),
+    };
+    assert.deepEqual(kernTestPfade(l, ["t/kern-test.ts", "t/projekt-test.ts", "t/test-hilfe.ts", "t/fixture.ts", "t/infrastruktur.ts", "t/frei.ts"]), ["t/kern-test.ts", "t/test-hilfe.ts", "t/fixture.ts"]);
+  });
+  test("im echten Repo hält jeder Kern-Test seine Baseline an Projektliteralen, nur sinkend", () => {
+    assert.ok(pfade.length > 100, "die Kern-Tests werden gefunden (sonst wäre der Wächter still aus)");
+    assert.deepEqual(vergleiche(kernTestIst(pfade, lesenWurzel, echteBegriffe), kernBaseline), []);
+  });
+  test("Negativfall: ein neuer Kern-Test mit einem Commit-Zeilen-Präfix ist rot, auch ohne dass das Literal im Quelltext steht", () => {
+    const text = `const zeile = "${config.praefixe.commitZeile}Review: head=abc";\n`;
+    const ist = kernTestIst(["test/neu.test.ts"], () => text, echteBegriffe);
+    assert.deepEqual(ist, { "test/neu.test.ts": { Praefix: 1 } });
+    assert.deepEqual(vergleiche({ ...kernTestIst(pfade, lesenWurzel, echteBegriffe), ...ist }, kernBaseline), ["test/neu.test.ts: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei"]);
+    assert.deepEqual(kernTestIst(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), {}, "ohne Literal keine Zählung");
+  });
+  test("ein unter die Baseline gesunkener Wert und ein verwaister Eintrag sind rot", () => {
+    assert.match(vergleiche({}, { "test/weg.test.ts": { Praefix: 1 } }).join(), /test\/weg\.test\.ts: Baseline-Eintrag ohne Literale oder ohne Einheit/);
+    assert.match(vergleiche({ "t.ts": { Praefix: 1 } }, { "t.ts": { Praefix: 2 } }).join(), /nur noch 1x, Baseline auf 1 senken/);
+  });
+  test("Anheben der Kern-Test-Baseline gegen die Diff-Basis: ein neuer Test mit Baseline-Eintrag ist rot (Status A), ein gleich bleibender grün", () => {
+    const pseudo = (p: string): Eintrag => ({ pfad: p, ring: "kern", quelle: "extraktion" });
+    const neu = new Map<string, string | null>([["test/neu.test.ts", null]]);
+    const erl = erlaubt([pseudo("test/neu.test.ts")], neu, () => null, echteBegriffe);
+    assert.deepEqual(anhebungen({ "test/neu.test.ts": { Praefix: 1 } }, erl), ["test/neu.test.ts: Baseline 'Praefix' 1 über dem Wert an der Diff-Basis (0), anheben ist verboten"]);
+    const alt = new Map<string, string | null>([["test/alt.test.ts", "test/alt.test.ts"]]);
+    const textAlt = `x ${config.praefixe.commitZeile}\n`;
+    assert.deepEqual(anhebungen({ "test/alt.test.ts": { Praefix: 1 } }, erlaubt([pseudo("test/alt.test.ts")], alt, () => textAlt, echteBegriffe)), []);
+    assert.notDeepEqual(anhebungen({ "test/alt.test.ts": { Praefix: 2 } }, erlaubt([pseudo("test/alt.test.ts")], alt, () => textAlt, echteBegriffe)), []);
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+  const basisKern: string | null = checkBasis.resolveBase(gitIn, process.env) ?? null;
+  test.skipIf(diffBasisModus(basisKern, process.env) === "entfaellt")("die Baseline der Kern-Tests wurde gegen die Diff-Basis nicht angehoben", () => {
+    assert.ok(basisKern, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
+    const aend = parseNameStatus(gitIn(["diff", "-M", "--name-status", basisKern]));
+    const basisText = (alt: string): string | null => {
+      try {
+        return gitIn(["show", `${basisKern}:${alt}`]);
+      } catch {
+        return null;
+      }
+    };
+    const pseudo = pfade.map((p): Eintrag => ({ pfad: p, ring: "kern", quelle: "extraktion" }));
+    assert.deepEqual(anhebungen(kernBaseline, erlaubt(pseudo, aend, basisText, echteBegriffe)), []);
   });
 });

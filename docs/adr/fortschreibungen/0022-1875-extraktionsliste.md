@@ -1,0 +1,10 @@
+# Fortschreibung #1875 (2026-10-23): Extraktionsliste und Kern-Tests (F10, Teil 5)
+
+Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Teil 5); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
+
+- **Extraktionsliste:** `.factory/extraktion.json` ordnet jede Testdatei mit Bezug zum Besitz als `kern-test` oder `projekt-test` ein und nennt alles, was sonst ins Factory-Repo zieht (Test-Hilfen, Fixtures, Infrastruktur, Factory-Seiten, Produkt-Wurzel, den Ring `oberflaeche` als „nur Factory“). Muster-Semantik und Strukturprüfung liegen in `scripts/besitz-lib.mjs`, damit der Export (K7) dieselbe Auslegung nutzt.
+- **Entscheidung (Bezug):** Import oder wörtliche Pfadnennung eines Ganz-Datei-Besitzes, weil sonst Tests fehlen, die per Kindprozess oder `pathToFileURL` laden.
+- **Entscheidung (Ring-Eintrag):** `oberflaeche` steht als Ring-Eintrag statt als Pfadmuster, weil neue Dateien des Rings sonst jedes Mal einen Eintrag bräuchten; ein Abgleich gegen `NUR_FACTORY` hält beides gleich.
+- **Entscheidung (Infrastruktur):** zwei Arten, `infrastruktur` (ganze Datei) und `infrastruktur-anteil` (nur der Kern-Anteil, K7 baut daraus die Vorlage), weil `package.json`, `tsconfig.json`, `eslint.config.js` und `vite.config.ts` Projektanteile tragen.
+- **Entscheidung (Zählung):** der Test-Literal-Wächter steht in `kern-reinheit.test.ts` (ein Import aus einer `*.test.ts` registriert deren Suiten doppelt), zählt auf dem Rohtext wie die Diff-Basis-Prüfung und nimmt zusätzlich die Status-Feld-ID der Boards als Board-ID; `todoOptionId` zählt nicht, weil GitHub den Standardwert in jedem Projekt vergibt.
+- **Grenzen:** zusammengesetzte Pfade und per `readFileSync` gelesene Projekt-Texte sehen Bezug und Hülle nicht; der Export (K7) fährt `verify:kompakt` im Ergebnis, um sie zu fangen. Die Test-Hülle-Ausnahmen (`TEST_HUELLE_AUSNAHMEN`) sind leer; die Aufräum-Tickets K6 (#1876 bis #1879) tragen dort bei Bedarf Einträge ein.
