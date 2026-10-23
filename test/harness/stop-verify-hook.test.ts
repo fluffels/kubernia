@@ -40,7 +40,7 @@ import * as hook from "../../scripts/stop-verify-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/ticket-namen.mjs";
 
-const { ticketNamen, escapeRegex } = namenRoh as unknown as { ticketNamen: (c: unknown) => unknown; escapeRegex: (t: string) => string };
+const { escapeRegex } = namenRoh as unknown as { escapeRegex: (t: string) => string };
 /** Worktree-Präfix der Fremd-Config: alle Ordner- und Dateinamen dieser Datei leiten sich daraus ab. */
 const W = FREMD.praefixe.worktree;
 const NAMEN = FREMD_NAMEN;
