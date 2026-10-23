@@ -1,0 +1,10 @@
+# Fortschreibung #1876 (2026-10-23): Fremd-Config der Kern-Tests (F10, Teil 6a)
+
+Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Teil 6a, Hooks und Guards); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
+
+- **Entscheidung (Quelle der Werte):** ein Kern-Test bekommt Projektwerte aus einer Config mit fremden Präfixen (`test/fixtures/projekt-fremd.json`, `ZZ-`), die ihm per `deps.config` injiziert wird, statt aus Literalen oder einem Tausch der Umgebung; nur ein echter Prozess-Start (Kindprozess liest die Projekt-Config selbst) nimmt `projektConfig()`. Grund: der Test hängt dann an keinem Projekt, und der Rückfall auf ein Literal macht ihn rot.
+- **Entscheidung (Form):** JSON-Datei plus TS-Helfer `test/support/fremd-config.ts`, weil `ladeProjektConfig` das Schema beim Laden prüft und die Folgeteile dieselbe Datei als `--config`-Pfad brauchen.
+- **Entscheidung (Durchreichen):** `entscheideHook` des Lens-Edit-Guards und `dispatch` des PreToolUse-Hooks reichen `deps` an ihre Config-Leser weiter (`abschlussDeps` heißt in `dispatch` jetzt `deps`); ohne `deps` verhalten sie sich wie bisher. Beide Pfade liegen in `.github/protected-paths.json`, die Änderung ist rückwärtskompatibel.
+- **Regel:** Code, der die Config liest, bekommt `FREMD` injiziert und die Erwartung kommt aus `FREMD`; Code, der keine liest (gh-Guard, Holdout-Auftrag, Worktree-Entscheidung), nimmt die Projektwerte der Erwartung trotzdem aus `FREMD`; Basisordner und Temp-Präfixe sind neutral (`C:/dev/projekt`).
+- **Entscheidung (Dauer-Wächter):** die literalfrei umgebauten Dateien stehen in einer geschlossenen Liste in `kern-reinheit.test.ts` (kein Baseline-Eintrag, Ist-Zählung leer, ein angehängtes Literal wird gemeldet); die Folgeteile ergänzen sie.
+- **Grenzen:** ein Tausch von `.factory/projekt.json` gegen die Fremd-Config (einmalige Probe, Ergebnis im PR) lässt alle 17 Hooks-und-Guards-Tests grün; er läuft nicht als Dauer-Test, weil er eine getrackte Datei überschreiben müsste.
