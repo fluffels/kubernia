@@ -195,11 +195,89 @@ export function pruefeManifest(m, lies) {
   return out;
 }
 
+// ── Berechtigungs-Ergänzung (#1874, ADR 0022 Fortschreibung 1874) ─────────────
+// Die einzige Einheit mit Projekt-Ergänzung: Hash und Sync rechnen auf dem Kern-Anteil (der Wert ohne die Einträge der Ergänzung),
+// die Ergänzung steht je Liste als Ende der Liste. Bekannte Muster der Aufhebe-Prüfung (`ergaenzungsBefunde`): ein allow-Eintrag A hebt eine
+// Regel R aus deny oder ask auf, wenn A === R; wenn R eine Server-Regel `mcp__<server>` ohne Tool-Teil ist und A mit `R + "__"` beginnt;
+// wenn R auf `*` endet und A mit R ohne `*` beginnt; wenn A auf `*` endet und R mit A ohne `*` beginnt (allow `mcp__*` deckt jede Regel mit dem Präfix). Grenze: andere Platzhalterformen werden nicht erkannt. Legitim bleibt die Kombination
+// „allow Server-Regel, ask oder deny einzelnes Tool“.
+
+/** Die Einheit, die ein Projekt über `berechtigungen` ergänzen darf (geschlossene Liste mit einem Eintrag; `sandbox` wäre ein weiterer). */
+export const ERGAENZBARE_EINHEIT = ".claude/settings.json#/permissions";
+
+/** Die Regel-Listen der Ergänzung (die Namen von Claude Code). */
+export const ERGAENZUNG_LISTEN = ["allow", "ask", "deny"];
+
+/** Eine leere Ergänzung (frisch je Aufruf). */
+export const leereErgaenzung = () => ({ allow: [], ask: [], deny: [] });
+
+/** Ist die Einheit die ergänzbare? */
+export const istErgaenzbar = (e) => einheitId(e) === ERGAENZBARE_EINHEIT;
+
+/** Pur: der Kern-Anteil von `permissions`: je Liste ohne die Einträge der Ergänzung (mengenbasiert); eine leere Liste entfällt immer
+ *  (leer gilt wie fehlend, sonst unterschiede sich Quelle und Ziel nur durch `ask: []`). Ein Nicht-Objekt bleibt unverändert. */
+export function kernAnteil(perm, erg) {
+  if (perm === null || typeof perm !== "object" || Array.isArray(perm)) return perm;
+  const aus = { ...perm };
+  for (const l of ERGAENZUNG_LISTEN) {
+    if (!Array.isArray(perm[l])) continue;
+    const mit = new Set(erg?.[l] ?? []);
+    const rest = perm[l].filter((x) => !mit.has(x));
+    if (rest.length === 0) delete aus[l];
+    else aus[l] = rest;
+  }
+  return aus;
+}
+
+/** Pur: Kern-Anteil plus Ergänzung, je Liste hinten angehängt; eine fehlende Liste wird angelegt. */
+export function mitErgaenzung(kern, erg) {
+  const aus = { ...kern };
+  for (const l of ERGAENZUNG_LISTEN) {
+    const neu = erg?.[l] ?? [];
+    if (neu.length > 0) aus[l] = [...(kern[l] ?? []), ...neu];
+  }
+  return aus;
+}
+
+/** Pur: hebt der allow-Eintrag `a` die deny- oder ask-Regel `r` auf (Muster im Kopfkommentar dieses Abschnitts)? */
+function hebtAuf(a, r) {
+  if (a === r) return true;
+  if (r.startsWith("mcp__") && !r.slice(5).includes("__") && a.startsWith(`${r}__`)) return true;
+  if (r.endsWith("*") && a.startsWith(r.slice(0, -1))) return true;
+  return a.endsWith("*") && r.startsWith(a.slice(0, -1));
+}
+
+/**
+ * Pur: Befunde der Ergänzung gegen den zusammengesetzten Wert `perm` (leer = in Ordnung): ein Eintrag fehlt in seiner Liste, die Ergänzung steht
+ * nicht als Ende der Liste, ein Eintrag steht doppelt (auch im Kern-Anteil), oder ein allow der Ergänzung hebt ein deny oder ask auf.
+ */
+export function ergaenzungsBefunde(perm, erg) {
+  const out = [];
+  for (const l of ERGAENZUNG_LISTEN) {
+    const neu = erg?.[l] ?? [];
+    if (neu.length === 0) continue;
+    const ist = Array.isArray(perm?.[l]) ? perm[l] : [];
+    const fehlend = neu.filter((x) => !ist.includes(x));
+    for (const x of fehlend) out.push(`permissions.${l}: Ergänzung „${x}“ fehlt`);
+    for (const x of neu) if (ist.filter((y) => y === x).length > 1) out.push(`permissions.${l}: „${x}“ steht doppelt (Kern-Anteil und Ergänzung)`);
+    if (fehlend.length === 0 && neu.some((x, i) => ist[ist.length - neu.length + i] !== x)) out.push(`permissions.${l}: die Ergänzung muss als Ende der Liste stehen, in der Reihenfolge der Config`);
+  }
+  const sperren = [...(perm?.deny ?? []), ...(perm?.ask ?? [])];
+  for (const a of erg?.allow ?? []) {
+    const r = sperren.find((s) => hebtAuf(a, s));
+    if (r !== undefined) out.push(`permissions.allow: Ergänzung „${a}“ hebt die Regel „${r}“ aus deny oder ask auf`);
+  }
+  return out;
+}
+
 /** Einheitentext, LF-normalisiert und (außer bei JSON-Schlüsseln) mit geleerten Projektwerten; `null`, wenn die Einheit nicht
- *  auflösbar ist oder ein Projektwert-Marker kaputt ist. Grundlage für Hash und Literal-Zählung. */
-export function normalisierterEinheitText(e, text) {
+ *  auflösbar ist oder ein Projektwert-Marker kaputt ist. Grundlage für Hash und Literal-Zählung. Die ergänzbare Einheit rechnet
+ *  auf dem Kern-Anteil gegen `erg` (die Ergänzung des Projekts, Standard leer). */
+export function normalisierterEinheitText(e, text, erg = leereErgaenzung()) {
   const t = einheitText(e, text);
-  if (t === null || e.schluessel !== undefined) return t;
+  if (t === null) return t;
+  if (istErgaenzbar(e)) return JSON.stringify(kernAnteil(JSON.parse(t), erg));
+  if (e.schluessel !== undefined) return t;
   try {
     return leereProjektwerte(normalisiereEol(t));
   } catch {
@@ -208,8 +286,8 @@ export function normalisierterEinheitText(e, text) {
 }
 
 /** `sha256:<hex>` über den normalisierten Einheitentext, `null` wenn die Einheit nicht auflösbar ist. */
-export function einheitHash(e, text) {
-  const t = normalisierterEinheitText(e, text);
+export function einheitHash(e, text, erg = leereErgaenzung()) {
+  const t = normalisierterEinheitText(e, text, erg);
   if (t === null) return null;
   return `sha256:${createHash("sha256").update(normalisiereEol(t)).digest("hex")}`;
 }

@@ -54,6 +54,18 @@
     ],
     "kontext": []
   },
+  "berechtigungen": {
+    "allow": [
+      "mcp__playwright",
+      "mcp__likec4",
+      "mcp__langfuse__queryMetrics",
+      "mcp__langfuse__getMetricsSchema",
+      "mcp__langfuse__listObservations",
+      "mcp__langfuse__getObservation"
+    ],
+    "ask": ["mcp__playwright__browser_run_code_unsafe", "mcp__likec4__apply-semantic-layout"],
+    "deny": ["mcp__pixellab__list_projects"]
+  },
   "spezifikation": {
     "hartAb": 1
   },
