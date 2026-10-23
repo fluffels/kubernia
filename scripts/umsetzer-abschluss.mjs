@@ -19,6 +19,7 @@
  */
 import { ghJson, ghText } from "./gh-cli.mjs";
 import { readFileSync } from "node:fs";
+import { musterRegex } from "./besitz-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
@@ -185,8 +186,6 @@ export function leitplankenMuster() {
   return Object.values(JSON.parse(readFileSync(quelle, "utf8"))).flatMap((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []));
 }
 
-const globSegment = (seg) => new RegExp("^" + seg.split("*").map((t) => t.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*") + "$");
-
 /**
  * Trifft `pfad` (Repo-relativ, `/`) eines der Muster? CODEOWNERS-Teilmenge: führendes `/` verankert an der Wurzel;
  * ohne `/` (außer am Ende) auf jeder Ebene; `/` am Ende = Verzeichnis-Präfix; `*` = beliebige Zeichen außer `/`;
@@ -197,7 +196,7 @@ export function trifftLeitplanke(pfad, muster) {
   return muster.some((roh) => {
     const verzeichnis = roh.endsWith("/");
     const kern = roh.replace(/^\//, "").replace(/\/$/, "");
-    const segmente = kern.split("/").map(globSegment);
+    const segmente = kern.split("/").map(musterRegex);
     const verankert = roh.startsWith("/") || kern.includes("/");
     const starts = verankert ? [0] : teile.map((_, i) => i);
     return starts.some((start) => {

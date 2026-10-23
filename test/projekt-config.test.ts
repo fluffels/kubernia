@@ -715,7 +715,7 @@ describe("Berechtigungs-Ergänzung als Projektwert (#1874)", () => {
 });
 
 describe("Config-Block sandbox (#1888)", () => {
-  const gueltig = (): Record<string, unknown> => pc.ladeProjektConfig() as Record<string, unknown>;
+  const gueltig = (): Record<string, unknown> => pc.ladeProjektConfig();
   const mit = (b: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), sandbox: b });
 
   test("sandboxAus: ohne Block leer, sonst die Listen; die echte Config trägt die Projektliterale", () => {

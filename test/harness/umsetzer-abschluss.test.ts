@@ -715,6 +715,13 @@ describe("Leitplanken-Audit (#1067)", () => {
     assert.ok(!treffer(".claude", ["/.claude/"]));
   });
 
+  test("Matcher teilt die Muster-Semantik mit der Extraktionsliste (musterRegex): Regex-Zeichen sind wörtlich, der Stern bleibt im Segment", () => {
+    assert.ok(treffer("scripts/a+b.mjs", ["/scripts/a+b.*"]));
+    assert.ok(!treffer("scripts/aab.mjs", ["/scripts/a+b.*"]), "das Plus ist wörtlich");
+    assert.ok(!treffer("scripts/aXmjs", ["/scripts/a.mjs"]), "der Punkt ist wörtlich");
+    assert.ok(treffer("scripts/(x).mjs", ["/scripts/(x).mjs"]), "Klammern sind wörtlich");
+  });
+
   test("echte Liste aus .github/protected-paths.json", () => {
     const liste = audit.leitplankenMuster();
     assert.ok(liste.includes("AGENTS.md") && liste.includes("/test/harness/"));

@@ -24,6 +24,8 @@ import * as inventar from "../../scripts/docs-gen/harness-inventar.mjs";
 import * as docsGen from "../../scripts/docs-gen.mjs";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { musterRegex } from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { QUELL_VERZEICHNIS, ZEIGER_MARKE } from "../../scripts/skill-pfade.mjs";
 
 const WURZEL = process.cwd();
@@ -201,7 +203,7 @@ function tokenPfad(token: string): string | null {
 /** Dateien, die ein Pfad, Glob (`*` = ein Segment) oder Verzeichnis (Endung `/`) trifft. Pur. */
 function treffer(pfad: string, dateien: string[]): string[] {
   if (pfad.endsWith("/")) return dateien.filter((d) => d.startsWith(pfad));
-  const re = new RegExp(`^${pfad.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*")}$`);
+  const re = (musterRegex as (muster: string) => RegExp)(pfad);
   return dateien.filter((d) => re.test(d));
 }
 

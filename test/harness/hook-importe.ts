@@ -5,6 +5,8 @@
  * Änderung an der Ketten-Logik eine Audit-Spur hinterlässt.
  */
 import { posix } from "node:path";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../../scripts/besitz-lib.mjs";
 
 /** Skripte, die `.claude/settings.json` als Hook startet (Argumente auf `scripts/*.mjs`). */
 export function hookSkripte(settingsText: string): string[] {
@@ -33,31 +35,10 @@ export function mcpSkripte(mcpJsonText: string): string[] {
   return [...skripte];
 }
 
-/**
- * Alle Importspezifizierer eines Quelltexts (ohne Auflösung, mit `node:*` und Paketnamen): statische
- * `import`/`export … from` (auch Side-Effect), `import("…")`, `require("…")`, `createRequire(…)("…")` und die
- * großzügige Aufruf-Form `)("…")` (fail-closed). Nicht erkannt: ein dynamischer Pfad (`require(pfad)`).
- */
-export function importeAus(text: string): string[] {
-  return [
-    ...new Set([
-      ...[...text.matchAll(/^\s*(?:import|export)\s+(?:[^;]*?\sfrom\s+)?["']([^"']+)["']/gm)].map((m) => m[1]),
-      ...[...text.matchAll(/\bfrom\s+["']([^"']+)["']/g)].map((m) => m[1]),
-      ...[...text.matchAll(/\bimport\s+["']([^"']+)["']/g)].map((m) => m[1]),
-      ...[...text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
-      ...[...text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
-      ...[...text.matchAll(/\bcreateRequire\([^)]*\)\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
-      ...[...text.matchAll(/\)\s*\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
-    ]),
-  ];
-}
-
-/**
- * Relative Spezifizierer (`./`, `../`) eines Quelltexts. Bekannte Grenze (fail-closed, keine Kommentar-Erkennung):
- * ein String-Literal `require("./x")` in einem Kommentar zählt wie ein echter Import. Abhilfe: den Kommentar
- * umformulieren (den Pfad ohne Klammer und Anführungszeichen nennen).
- */
-export const relativeImporte = (text: string): string[] => [...new Set(importeAus(text).filter((s) => /^\.{1,2}\//.test(s)))];
+/** Alle Importspezifizierer und die relativen darunter: die Auslegung steht einmal in `scripts/besitz-lib.mjs` (Bezug und Test-Hülle der Extraktion teilen sie). */
+const lib = rawLib as unknown as { importeAus(text: string): string[]; relativeImporte(text: string): string[] };
+export const importeAus = (text: string): string[] => lib.importeAus(text);
+export const relativeImporte = (text: string): string[] => lib.relativeImporte(text);
 
 const ENDUNGEN = [".mjs", ".cjs", ".js"];
 
