@@ -4,7 +4,7 @@ Willkommen! Diese Seite bringt dich – Mensch **oder** KI-Agent – in **einem 
 
 ## Voraussetzungen
 
-- **Node ≥ 22** – die erwartete Version steht in [`.nvmrc`](.nvmrc) (mit [`nvm`](https://github.com/nvm-sh/nvm): `nvm install && nvm use`).
+- **Node 22, mindestens die Version aus `engines.node`** in `package.json` (Security-Release); die CI-Version steht in [`.nvmrc`](.nvmrc) (mit [`nvm`](https://github.com/nvm-sh/nvm): `nvm install && nvm use`).
 - **git**; für den Ticket-Workflow zusätzlich die [GitHub-CLI](https://cli.github.com/) (`gh`).
 
 ## In einem Befehl startklar
@@ -64,7 +64,7 @@ Wer **kein Node lokal installieren** will (oder eine garantiert reproduzierbare 
 
 - **VS Code Dev Container:** Ordner öffnen → „Reopen in Container". VS Code baut die Umgebung aus [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json) (Node 22 + `gh`-CLI), installiert die Abhängigkeiten automatisch und leitet Port 5173 weiter; den Dev-Server dann wie gewohnt mit `npm run dev` starten.
 
-> Beides ist reine Entwicklungs-Tooling. Node-Version (Node 22, aus [`.nvmrc`](.nvmrc)) und Dev-Port bleiben über einen Test ([`test/harness/devcontainer.test.ts`](test/harness/devcontainer.test.ts)) mit Container-Konfig und CI konsistent.
+> Beides ist reine Entwicklungs-Tooling. Node-Version (Node 22, mindestens `engines.node`; bei einem Node-Security-Release `engines.node` anheben, der Test nennt alle nachzuziehenden Pins) und Dev-Port bleiben über einen Test ([`test/harness/devcontainer.test.ts`](test/harness/devcontainer.test.ts)) mit Container-Konfig und CI konsistent.
 
 ### Dev-Panel als Docker-Image (Passwort zur Laufzeit, #334)
 

@@ -20,7 +20,7 @@ Kubernia bringt DevOps-Grundlagen (Docker, Kubernetes, Helm, Terraform, Security
 
 | Kategorie | Randbedingung |
 |---|---|
-| Technisch | Reiner Client, keine Server-Laufzeit. Genau **eine** Laufzeit-Dep (Phaser 3.90). TypeScript durchgängig `strict`. Node ≥ 22. Browser **und** self-contained Doppelklick-HTML. |
+| Technisch | Reiner Client, keine Server-Laufzeit. Genau **eine** Laufzeit-Dep (Phaser 3.90). TypeScript durchgängig `strict`. Node 22 (mindestens `engines.node`). Browser **und** self-contained Doppelklick-HTML. |
 | Organisatorisch | Solo-Maintainerin, KI-Agenten-getriebener Weiterbau. Selbstdokumentierendes Repo (AGENTS.md als SSOT, Nachschlage-Referenzen on-demand unter `docs/referenz/`). Board-getriebener Ein-Ticket-Workflow mit Worktrees. |
 | Fachlich | Der simulierte Cluster muss sich plausibel wie echtes `kubectl`/`helm`/`docker` verhalten (Lerntransfer). Deutsch in Texten/Kommentaren. |
 | Rechtlich | Öffentliches, aber **proprietäres** Repo. Fremdbausteine sauber lizenziert (Phaser MIT, Kenney CC0). |
