@@ -1396,7 +1396,7 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
 });
 
 describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)", () => {
-  type Sum = Summary & { nachlauf: { calls: number; cost: number }; fehler?: Record<string, number>; lesen?: { reads: number; voll: { n: number } }; pflegeFehlt?: boolean };
+  type Sum = Summary & { nachlauf: { calls: number; cost: number }; fehler?: Record<string, number>; permissionGruende?: Record<string, number>; lesen?: { reads: number; voll: { n: number } }; pflegeFehlt?: boolean };
   const umsetzer: Sub = { id: "u", agentType: UMSETZER, description: "Umsetzung #12" };
   const sum = (c: Call[], events?: unknown[]) => m.summarize({ calls: c, events: events as PEv[] }, BOUNDS) as unknown as Sum;
   const calls = [
@@ -1443,6 +1443,20 @@ describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)
     assert.match(md, /Lesen: 2 Reads \(0 abschnittsweise\) · Wiederlesen voll 1 \(≈ 100 Tok\) · gezielt 0 \(≈ 0 Tok\) · Top a\.md 1×/);
     assert.match(md, /Prüfläufe: verify voll 1 · gezielt 0/);
     assert.doesNotMatch(m.renderMarkdown(sum(calls)), /Tool-Fehler:|Lesen:|Prüfläufe:/);
+  });
+
+  test("Permission-Gründe: Zeile nennt Regel und Klassifikator-Grund; ohne Permission keine Klammer", () => {
+    const perm = (ts: string, fehler: string): PEv => ({ ts, tool: "Bash", input: {}, resultChars: 0, agent: "u", fehler } as PEv);
+    const events: PEv[] = [
+      perm("2026-09-29T11:00:00Z", "Permission to use Bash with command rm -rf x has been denied."),
+      perm("2026-09-29T11:01:00Z", "Permission to use Bash with command rm -rf y has been denied."),
+      perm("2026-09-29T11:02:00Z", "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Security Weaken]. If you"),
+      perm("2026-09-29T14:00:00Z", "Permission to use Bash with command rm -rf z has been denied."), // Nachlauf
+    ];
+    const s = sum(calls, events);
+    assert.deepEqual(s.permissionGruende, { Regel: 2, "Security Weaken": 1 });
+    assert.match(m.renderMarkdown(s), /Tool-Fehler: Hook 0 · Guard 0 · Permission 3 \(Regel 2, Security Weaken 1\) · zu groß 0/);
+    assert.match(m.renderMarkdown(sum(calls, [perm("2026-09-29T11:00:00Z", "Blocked: x")])), /Permission 0 · zu groß/);
   });
 
   test("Warnzeile: Umsetzer ohne jeden Marker; nicht mit Markern, nicht ohne Umsetzer, nicht ohne Events", () => {

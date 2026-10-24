@@ -31,8 +31,8 @@ type Zeilen = Record<string, unknown>[];
 type Usage = { input: number; output: number; cacheRead: number; cacheWrite5m: number; cacheWrite1h: number };
 type Eintrag = { id: string; traceId: string; session: string; messageId: string; model: string | null; ts: string; usage: Usage; rolle: Record<string, unknown> | null; ticket: string | null };
 type Obs = Record<string, unknown>;
-type Ist = { calls: number | null; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } | null };
-type Bewertung = { status: string; score: string | null; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
+type Ist = { calls: number | null; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } | null; kosten?: number | null };
+type Bewertung = { kostenTranskript: number; kostenLangfuse: number | null; ohnePreis: number; ueberzaehlung: number | null; hinweisModellpreis: boolean; status: string; score: string | null; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>;
 // Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
 // Das Worktree-Präfix kommt aus der Projekt-Config; die Wrapper reichen es durch, damit die Tests ihre Eingaben wie bisher schreiben.
@@ -57,7 +57,8 @@ const A = {
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
   findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null; alleOrdner?: boolean }) => { id: string; pfad: string; mtime: number; groesse: number; ausserhalb?: boolean }[];
-  istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown> };
+  PREIS_TOLERANZ: number;
+  istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown>; kosten: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
   schluesselArt: (o: Obs[]) => string;
   diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; leer: Obs[]; art: string };
@@ -294,7 +295,7 @@ describe("Ist: Abfragen und Antwortformen", () => {
       { sessionId: "s1", usageType: "cache_creation_input_tokens", sum_usageByType: 999 },
       { sessionId: "s1", usageType: "total", sum_usageByType: 12345 },
     ];
-    const erwartet = { calls: 7, tokens: { input: 10, output: 5, cacheRead: 100, cacheWrite: 40 } };
+    const erwartet = { calls: 7, tokens: { input: 10, output: 5, cacheRead: 100, cacheWrite: 40 }, kosten: null };
     expect(A.istAusMetrics({ data: rows }).get("s1")).toEqual(erwartet);
     expect(A.istAusMetrics(rows).get("s1")).toEqual(erwartet);
   });
@@ -302,7 +303,27 @@ describe("Ist: Abfragen und Antwortformen", () => {
   test("nur Summe ohne Aufteilung zählt als Cache-Write; nur Zählung ergibt tokens null", () => {
     const m = A.istAusMetrics([{ sessionId: "a", usageType: "cache_creation_input_tokens", sum_usageByType: 8 }, { sessionId: "b", count_count: 2 }]);
     expect(m.get("a")?.tokens?.cacheWrite).toBe(8);
-    expect(m.get("b")).toEqual({ calls: 2, tokens: null });
+    expect(m.get("b")).toEqual({ calls: 2, tokens: null, kosten: null });
+  });
+
+  test("Kosten: sum_totalCost je Session, als String lesbar, mehrere Zeilen (Fensterhalbierung) addieren, ohne Zeile null (nie 0)", () => {
+    const m = A.istAusMetrics([
+      { sessionId: "a", sum_totalCost: "1.5" },
+      { sessionId: "a", sum_totalCost: 0.25 },
+      { sessionId: "b", count_count: 3 },
+      { sessionId: "c", sum_totalCost: 0 },
+      { sessionId: "d", sum_totalCost: "" },
+    ]);
+    expect(m.get("a")?.kosten).toBe(1.75);
+    expect(m.get("b")?.kosten).toBeNull();
+    expect(m.get("c")?.kosten).toBe(0);
+    expect(m.get("d")?.kosten).toBeNull();
+  });
+
+  test("Kosten-Abfrage: totalCost als Summe je sessionId, orderBy desc, gleiche Filter wie die anderen; --session filtert", () => {
+    const q = A.istAbfragen({ von: "a", bis: "b", session: "s9" });
+    expect(q.kosten).toMatchObject({ view: "observations", dimensions: [{ field: "sessionId" }], metrics: [{ measure: "totalCost", aggregation: "sum" }], orderBy: [{ field: "sum_totalCost", direction: "desc" }], config: { row_limit: A.ROW_LIMIT } });
+    expect(q.kosten.filters).toEqual(q.zaehlung.filters);
   });
 
   test("unbekannte Form wirft", () => {
@@ -453,6 +474,105 @@ describe("Diff (pur)", () => {
   });
 });
 
+describe("Kosten, Überzählung, Hinweis Modellpreis", () => {
+  const now = 1_000_000_000_000;
+  const PREIS = rawPreise as unknown as { priceCall: (c: Record<string, unknown>) => number | null };
+  /** Kosten eines Soll-Eintrags nach der Preistabelle (unabhängig von der Bewertung gerechnet). */
+  const kosten = (e: Eintrag) => PREIS.priceCall({ model: e.model, ts: e.ts, input: e.usage.input, output: e.usage.output, cacheRead: e.usage.cacheRead, cacheWrite: e.usage.cacheWrite5m + e.usage.cacheWrite1h, cacheWrite1h: e.usage.cacheWrite1h }) as number;
+  const T = kosten(eintrag(1));
+  const bew = (kost: number | null | undefined, o: Record<string, unknown> = {}) =>
+    A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null, ...(kost === undefined ? {} : { kosten: kost }) }, mtime: 0, now, ...o });
+
+  test("Transkript-Kosten aus der Preistabelle; Langfuse-Kosten aus dem Export, ohne Export null", () => {
+    expect(T).toBeGreaterThan(0);
+    expect(bew(1)).toMatchObject({ kostenTranskript: T, kostenLangfuse: 1, ohnePreis: 0 });
+    expect(bew(undefined).kostenLangfuse).toBeNull();
+    expect(bew(null).kostenLangfuse).toBeNull();
+  });
+
+  test("Calls ohne Preis zählen in ohnePreis und nie als 0 $ in der Summe", () => {
+    const b = A.bewerteSession({ soll: [eintrag(1), eintrag(2, { model: "unbekannt-modell" })], ist: { calls: 2, tokens: null, kosten: 1 }, mtime: 0, now });
+    expect(b.ohnePreis).toBe(1);
+    expect(b.kostenTranskript).toBe(T);
+  });
+
+  test("Überzählung: nur bei Dubletten und bekannten Kosten beider Seiten, max(0, L - T)", () => {
+    const dub = { soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T }, mtime: 0, now };
+    expect(A.bewerteSession(dub).ueberzaehlung).toBeCloseTo(T, 12);
+    // darf NICHT passieren: ohne Kosten-Export keine Überzählung, ohne Dublette keine
+    expect(A.bewerteSession({ ...dub, ist: { calls: 2, tokens: null } }).ueberzaehlung).toBeNull();
+    expect(A.bewerteSession({ ...dub, ist: { calls: 1, tokens: null, kosten: 2 * T } }).ueberzaehlung).toBeNull();
+    // Dublette, aber Langfuse unter dem Transkript (Unterpreis): nie negativ
+    expect(A.bewerteSession({ ...dub, ist: { calls: 2, tokens: null, kosten: T / 2 } }).ueberzaehlung).toBe(0);
+  });
+
+  test("Hinweis Modellpreis: gleiche Calls, Langfuse strikt unter 90 % des Transkripts", () => {
+    expect(A.PREIS_TOLERANZ).toBe(0.1);
+    const grenze = (1 - A.PREIS_TOLERANZ) * T;
+    expect(bew(0).hinweisModellpreis).toBe(true);
+    expect(bew(grenze - 1e-9).hinweisModellpreis).toBe(true);
+    expect(bew(grenze).hinweisModellpreis).toBe(false);
+    expect(bew(T).hinweisModellpreis).toBe(false);
+    // ohne Export kein Hinweis
+    expect(bew(undefined).hinweisModellpreis).toBe(false);
+  });
+
+  test("Hinweis Modellpreis: nie bei Lücke oder Dublette (dort erklärt die Zählung den Unterschied)", () => {
+    const soll = [eintrag(1), eintrag(2)];
+    const luecke = A.bewerteSession({ soll, ist: { calls: 1, tokens: null, kosten: 0 }, mtime: 0, now });
+    expect(luecke.fehlend).toBe(1);
+    expect(luecke.hinweisModellpreis).toBe(false);
+    const dub = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 0 }, mtime: 0, now });
+    expect(dub.dubletten).toBe(1);
+    expect(dub.hinweisModellpreis).toBe(false);
+  });
+
+  test("Summenzeile addiert Kosten T/L und Überzählung der festen Sessions (läuft zählt nicht)", () => {
+    const a = bew(2 * T, { soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T } });
+    const b = bew(T);
+    const laeuft = bew(T, { mtime: now - 60_000 });
+    const s = A.summenzeile([a, b, laeuft]) as unknown as Record<string, number>;
+    expect(s.kostenTranskript).toBeCloseTo(2 * T, 12);
+    expect(s.kostenLangfuse).toBeCloseTo(3 * T, 12);
+    expect(s.ueberzaehlung).toBeCloseTo(T, 12);
+    expect(A.summenzeile([bew(undefined)])).toMatchObject({ kostenLangfuse: null, ueberzaehlung: null });
+  });
+
+  test("Bericht: eine laufende Session (Ruhefrist) erzeugt keine Überzählungs- und keine Hinweiszeile; Überzählung 0 wird nicht gemeldet", () => {
+    const md = (b: Bewertung[]) => A.renderMarkdown(b, A.summenzeile(b));
+    const dubLaeuft = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T }, mtime: now - 60_000, now });
+    expect(dubLaeuft.status).toBe("läuft");
+    expect(dubLaeuft.ueberzaehlung).toBeGreaterThan(0);
+    expect(md([dubLaeuft])).not.toContain("Überzählung durch Dubletten");
+    const unterLaeuft = bew(0, { mtime: now - 60_000 });
+    expect(unterLaeuft.hinweisModellpreis).toBe(true);
+    expect(md([unterLaeuft])).not.toContain("Hinweis Modellpreis");
+    // Dublette, aber Langfuse unter dem Transkript: Überzählung ist 0 und bleibt ohne Zeile
+    const null0 = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 0.5 * T }, mtime: 0, now });
+    expect(null0.ueberzaehlung).toBe(0);
+    expect(md([null0])).not.toContain("Überzählung durch Dubletten");
+  });
+
+  test("Bericht: Kosten-Spalte immer, Überzählungs- und Hinweiszeile nur bei Treffern, getrennt und mit Session-Kürzel", () => {
+    const md = (b: Bewertung[]) => A.renderMarkdown(b, A.summenzeile(b));
+    const ok = md([bew(T)]);
+    expect(ok).toContain("Kosten T/L ($)");
+    expect(ok).not.toContain("Überzählung durch Dubletten");
+    expect(ok).not.toContain("Hinweis Modellpreis");
+    const dub = { ...A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T }, mtime: 0, now }), session: "abcdefgh-1" };
+    const mdDub = md([dub]);
+    expect(mdDub).toMatch(/Überzählung durch Dubletten: .* \$ in 1 Session\(s\) \(abcdefgh\): Langfuse-Wochensummen um diesen Betrag bereinigen \(Checkliste Punkt 7\)/);
+    expect(mdDub).not.toContain("Hinweis Modellpreis");
+    const unter = { ...bew(0), session: "zyxwvuts-1" };
+    const mdUnter = md([unter]);
+    expect(mdUnter).toMatch(/Hinweis Modellpreis: 1 Session\(s\) mit gleichen Calls, Langfuse-Kosten unter 90 % des Transkripts \(zyxwvuts\): Modelldefinition der Instanz prüfen/);
+    expect(mdUnter).not.toContain("Überzählung durch Dubletten");
+    // ohne Kosten-Export: Platzhalter statt 0
+    expect(md([bew(undefined)])).toMatch(/Kosten [\d,.]+ \/ –/);
+    expect(ok).toMatch(/Kosten [\d,.]+ \/ [\d,.]+/);
+  });
+});
+
 const NL = String.fromCharCode(10);
 describe("Score außerhalb (#1862)", () => {
   const now = 1_000_000_000_000;
@@ -547,16 +667,18 @@ describe("pruefen (Ablauf)", () => {
   const antwort = (body: unknown, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body), text: () => Promise.resolve(JSON.stringify(body)) });
 
   /** Ein Langfuse-Mock: zählt Aufrufe, antwortet je nach Pfad. */
-  const mock = (o: { zaehlung?: unknown[]; zaehlungFn?: (q: Record<string, unknown>) => unknown[]; tokensFn?: (q: Record<string, unknown>) => unknown[]; tokens?: unknown[]; observations?: Obs[]; status?: number }) => {
+  const mock = (o: { zaehlung?: unknown[]; zaehlungFn?: (q: Record<string, unknown>) => unknown[]; tokensFn?: (q: Record<string, unknown>) => unknown[]; tokens?: unknown[]; kosten?: unknown[]; observations?: Obs[]; status?: number }) => {
     const aufrufe: { url: string; method?: string; auth?: string }[] = [];
     const queries: Record<string, unknown>[] = [];
     const fetchImpl: Fetch = (url, init) => {
       aufrufe.push({ url, method: init?.method, auth: init?.headers?.Authorization });
       if (o.status) return antwort({ error: "kaputt" }, o.status);
       if (url.includes("/v2/observations")) return antwort({ data: o.observations ?? [], meta: {} });
-      const q = JSON.parse(new URL(url).searchParams.get("query") ?? "{}") as { dimensions: unknown[] };
+      const q = JSON.parse(new URL(url).searchParams.get("query") ?? "{}") as { metrics: { measure: string }[] };
       queries.push(q);
-      return antwort({ data: q.dimensions.length === 1 ? (o.zaehlungFn ? o.zaehlungFn(q) : (o.zaehlung ?? [])) : (o.tokensFn ? o.tokensFn(q) : (o.tokens ?? [])) });
+      const mass = q.metrics[0].measure;
+      if (mass === "totalCost") return antwort({ data: o.kosten ?? [] });
+      return antwort({ data: mass === "count" ? (o.zaehlungFn ? o.zaehlungFn(q) : (o.zaehlung ?? [])) : (o.tokensFn ? o.tokensFn(q) : (o.tokens ?? [])) });
     };
     return { aufrufe, queries, fetchImpl };
   };
@@ -586,12 +708,12 @@ describe("pruefen (Ablauf)", () => {
     expect(r.exitCode).toBe(2);
   });
 
-  test("vollständig erfasst: genau 2 Metrics-Requests, kein Observations-Request, nur GET, Basic-Auth, Exit 0", async () => {
+  test("vollständig erfasst: genau 3 Metrics-Requests (Zählung, Tokens, Kosten), kein Observations-Request, nur GET, Basic-Auth, Exit 0", async () => {
     const root = mitSession([msg("a"), msg("b")]);
     const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 2 }], tokens: tokenZeilen("s1", { input: 20, output: 10, cacheRead: 200, w5: 20, w1: 60 }) });
     const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
     expect(r.exitCode).toBe(0);
-    expect(m.aufrufe).toHaveLength(2);
+    expect(m.aufrufe).toHaveLength(3);
     expect(m.aufrufe.every((a) => a.url.startsWith("http://lf.test/api/public/v2/metrics?query="))).toBe(true);
     expect(m.aufrufe.every((a) => a.method === undefined || a.method === "GET")).toBe(true);
     expect(m.aufrufe[0].auth).toBe("Basic " + Buffer.from("pk:sk").toString("base64"));
@@ -599,11 +721,11 @@ describe("pruefen (Ablauf)", () => {
     expect(r.text).toMatch(/Erfassungsquote 100,0 %/);
   });
 
-  test("N Sessions: weiterhin nur 2 Metrics-Requests", async () => {
+  test("N Sessions: weiterhin nur 3 Metrics-Requests", async () => {
     const root = fixture({ [`${PRAEFIX}/s1.jsonl`]: msg("a"), [`${PRAEFIX}/s2.jsonl`]: msg("b"), [`${PRAEFIX}/s3.jsonl`]: msg("c") });
     const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }, { sessionId: "s2", count_count: 1 }, { sessionId: "s3", count_count: 1 }] });
     await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
-    expect(m.aufrufe.filter((a) => a.url.includes("/metrics"))).toHaveLength(2);
+    expect(m.aufrufe.filter((a) => a.url.includes("/metrics"))).toHaveLength(3);
   });
 
   test("Teil-Erfassung: Observations nur für diese Session, fehlender Call samt Zeit und Modell im Bericht, Exit 0", async () => {
@@ -765,7 +887,7 @@ describe("pruefen (Ablauf)", () => {
     expect((await lauf(2)).text).toContain("1 Session(s) mit Dubletten auf der Zählebene (s1)");
     expect((await lauf(2)).text).toContain("providedModelName none of");
     expect((await lauf(1)).text).not.toContain("leere Hook-GENERATIONs");
-    const b = { session: "s1", status: "Dublette", score: null, tickets: [], callsTranskript: 1, callsLangfuse: 2, tokensTranskript: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, tokensLangfuse: null, fehlend: 0, dubletten: 1, leer: 0, quote: 1, fehlendeCalls: null, schluessel: "fingerprint" };
+    const b = { session: "s1", status: "Dublette", score: null, tickets: [], callsTranskript: 1, callsLangfuse: 2, tokensTranskript: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, tokensLangfuse: null, kostenTranskript: 0, kostenLangfuse: null, ohnePreis: 0, ueberzaehlung: null, hinweisModellpreis: false, fehlend: 0, dubletten: 1, leer: 0, quote: 1, fehlendeCalls: null, schluessel: "fingerprint" };
     const sum = A.summenzeile([b]);
     expect(A.renderMarkdown([{ ...b, schluessel: "zählung" }], sum)).toContain("leere Hook-GENERATIONs");
     expect(A.renderMarkdown([b], sum)).not.toContain("leere Hook-GENERATIONs");
@@ -808,7 +930,26 @@ describe("pruefen (Ablauf)", () => {
       expect(Date.parse(q.toTimestamp as string)).toBeGreaterThan(jetzt);
       expect((q.filters as { column: string; value: string }[]).some((f) => f.column === "sessionId" && f.value === "s1")).toBe(true);
     }
-    expect(m.queries).toHaveLength(2);
+    expect(m.queries).toHaveLength(3);
+  });
+
+  test("Kosten im Ablauf: Export (--ist) mit totalCost-Zeile liefert Kosten T/L, Überzählung und Hinweis in Text und JSON; die Kosten-Abfrage läuft nur hier, nie im Nachlieferer", async () => {
+    const root = mitSession([msg("a")]);
+    const tokens = tokenZeilen("s1", { input: 10, output: 5, cacheRead: 100, w5: 10, w1: 30 });
+    const lauf = (zeilen: unknown[], json = false) => {
+      const dateien: Record<string, string> = { "z.json": JSON.stringify({ data: zeilen }), "t.json": JSON.stringify(tokens) };
+      return A.pruefen(args({ ist: ["z.json", "t.json"], json }), { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: (p: string) => dateien[p] });
+    };
+    const unter = JSON.parse((await lauf([{ sessionId: "s1", count_count: 1, sum_totalCost: 0 }], true)).text) as { sessions: Bewertung[]; summe: Record<string, unknown> };
+    expect(unter.sessions[0]).toMatchObject({ kostenLangfuse: 0, hinweisModellpreis: true, ueberzaehlung: null });
+    expect(unter.summe.kostenLangfuse).toBe(0);
+    expect((await lauf([{ sessionId: "s1", count_count: 1, sum_totalCost: 0 }])).text).toContain("Hinweis Modellpreis: 1 Session(s)");
+    const dub = (await lauf([{ sessionId: "s1", count_count: 2, sum_totalCost: 1 }])).text;
+    expect(dub).toContain("Überzählung durch Dubletten:");
+    expect((await lauf([{ sessionId: "s1", count_count: 2 }])).text).not.toContain("Überzählung durch Dubletten");
+    // der Nachlieferer fragt keine Kosten (kein dritter Request)
+    const nachliefern = readFileSync(join(__dirname, "../../scripts/langfuse-nachliefern.mjs"), "utf8");
+    expect(nachliefern).not.toMatch(/\.kosten\b|totalCost/);
   });
 
   test("row_limit erreicht: das Zeitfenster wird halbiert und die Teile werden zusammengeführt", async () => {

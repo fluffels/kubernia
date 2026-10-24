@@ -94,10 +94,10 @@ function textLength(content) {
   return content.reduce((n, p) => n + (p?.type === "text" && typeof p.text === "string" ? p.text.length : 0), 0);
 }
 
-/** Anfang des Ergebnistexts (Fehlerart steht im Präfix, #1379); 200 Zeichen genügen. */
+/** Anfang des Ergebnistexts (Fehlerart steht im Präfix); 200 Zeichen genügen, nur Permission-Meldungen behalten 500 (der Grund steht hinter dem Befehl oder im Klassifikator-Text). */
 function textStart(content) {
   const t = typeof content === "string" ? content : Array.isArray(content) ? content.map((p) => (p?.type === "text" ? p.text : "")).join("") : "";
-  return t.slice(0, 200);
+  return t.slice(0, t.startsWith("Permission") ? 500 : 200);
 }
 
 /** Transkript → Tool-Events; `tool_use` und `tool_result` werden über die ID verknüpft. Nimmt den JSONL-Text oder die Zeilen aus `transkriptZeilen`. */
@@ -232,11 +232,16 @@ export function brainMetrics(events = [], prFiles = null) {
   const acc = { reads: 0, readChars: 0, searches: 0, searchChars: 0, writes: 0 };
   let calls = 0;
   let callsBeforeFirstEdit = null;
+  const vorErstemEdit = {}; // Aufteilung von `callsBeforeFirstEdit` je Agent (Hauptagent: `haupt`)
   const sorted = [...events].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
   for (const ev of sorted) {
     if (callsBeforeFirstEdit === null) {
       if (EDIT_TOOLS.has(ev.tool) && !SCRATCH.test(filePath(ev))) callsBeforeFirstEdit = calls;
-      else calls += 1;
+      else {
+        calls += 1;
+        const agent = ev.agent ?? "haupt";
+        vorErstemEdit[agent] = (vorErstemEdit[agent] ?? 0) + 1;
+      }
     }
     countEvent(ev, pages, acc);
   }
@@ -248,6 +253,7 @@ export function brainMetrics(events = [], prFiles = null) {
     searchCalls: acc.searches,
     searchTokens: tokens(acc.searchChars),
     callsBeforeFirstEdit,
+    vorErstemEdit,
     brainWrites: acc.writes,
     prBrain: prFiles
       ? {

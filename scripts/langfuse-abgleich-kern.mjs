@@ -166,6 +166,8 @@ export function istAbfragen({ von, bis, session = null }) {
       metrics: [{ measure: "usageByType", aggregation: "sum" }],
       orderBy: [{ field: "sum_usageByType", direction: "desc" }],
     },
+    // Nur der Prüfbericht liest die Kosten; der Nachlieferer fragt `zaehlung` und `tokens`.
+    kosten: { ...basis, dimensions: [{ field: "sessionId" }], metrics: [{ measure: "totalCost", aggregation: "sum" }], orderBy: [{ field: "sum_totalCost", direction: "desc" }] },
   };
 }
 
@@ -173,8 +175,9 @@ const zahl = (v) => (v !== null && v !== "" && Number.isFinite(Number(v)) ? Numb
 export const leereSumme = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 
 /**
- * Metrics-Zeilen (`{data:[…]}` oder nacktes Array; Zahlen auch als String) → `Map<sessionId, { calls, tokens }>`.
- * `calls` ohne Zählzeile null, `tokens` ohne usageType-Zeilen null. Eine unbekannte Form wirft.
+ * Metrics-Zeilen (`{data:[…]}` oder nacktes Array; Zahlen auch als String) → `Map<sessionId, { calls, tokens, kosten }>`.
+ * `calls` ohne Zählzeile null, `tokens` ohne usageType-Zeilen null, `kosten` (Summe `totalCost` in $) ohne Kostenzeile null (nie 0).
+ * Eine unbekannte Form wirft.
  */
 export function istAusMetrics(zeilen) {
   const rows = Array.isArray(zeilen) ? zeilen : zeilen?.data;
@@ -183,10 +186,12 @@ export function istAusMetrics(zeilen) {
   const typen = new Map();
   for (const r of rows) {
     if (typeof r?.sessionId !== "string") throw new Error("Unbekannte Metrics-Zeile ohne sessionId (View observations, Dimension sessionId erwartet).");
-    const e = map.get(r.sessionId) ?? { calls: null, tokens: null };
+    const e = map.get(r.sessionId) ?? { calls: null, tokens: null, kosten: null };
     map.set(r.sessionId, e);
     const count = zahl(r.count_count);
     if (count !== null) e.calls = (e.calls ?? 0) + count;
+    const kosten = zahl(r.sum_totalCost);
+    if (kosten !== null) e.kosten = (e.kosten ?? 0) + kosten;
     const wert = zahl(r.sum_usageByType);
     if (typeof r.usageType === "string" && wert !== null) {
       const t = typen.get(r.sessionId) ?? {};

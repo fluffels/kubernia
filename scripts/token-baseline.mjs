@@ -41,7 +41,7 @@ import { CACHE_TTL_MS, istEchtesModell, istNeuaufbau, kontextVon, median } from 
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
-import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
+import { fehlerArten, permissionGruende, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 
 // Ausgelagert (#1562, hook-taugliche Module ohne gh-/git-Kette); hier re-exportiert, damit Verbraucher und Tests unverändert bleiben.
 export { PRICES, PRICES_STAND, periodAt, priceParts, priceCall, callsFromTranscript, fetchSessionObservations };
@@ -208,11 +208,26 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     out.pflegeUnpaired = unpaired;
     out.pflegeOhneDauer = intervals.filter((iv) => iv.from === iv.to).length; // Start und Ende im selben Befehl: gepaart, aber ohne Messwert (#1382)
     out.fehler = fehlerArten(imFenster);
+    out.permissionGruende = permissionGruende(imFenster);
     out.lesen = wiederlesen(imFenster);
     out.pruef = pruefLaeufe(imFenster);
     // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
     out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && ticket.some((c) => c.subagent?.agentType === umsetzer);
-    out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
+    const brain = brainMetrics(imFenster, prFiles);
+    out.brain = { ...brain, vorErstemEditJeTyp: jeAgentTyp(brain.vorErstemEdit, ticket), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
+  }
+  return out;
+}
+
+/** Calls vor dem ersten Edit je Agent (Schlüssel aus den Events) → je Agenttyp: Hauptagent „Hauptchat“, Subagent über seine ID aus den Calls, unbekannte ID „Subagent“; gleiche Typen werden summiert. */
+function jeAgentTyp(jeAgent, ticketCalls) {
+  const typen = new Map();
+  for (const c of ticketCalls) if (c.subagent) typen.set(subKey(c), c.subagent.agentType);
+  const out = {};
+  for (const [agent, n] of Object.entries(jeAgent)) {
+    const haupt = agent === "haupt" || agent.startsWith("main:");
+    const typ = haupt ? "Hauptchat" : (typen.get(agent) ?? "Subagent");
+    out[typ] = (out[typ] ?? 0) + n;
   }
   return out;
 }
@@ -471,7 +486,8 @@ function werkzeugZeilen(summary) {
   const out = [];
   if (summary.fehler) {
     const f = summary.fehler;
-    const teile = FEHLER_LABEL.map(([k, l]) => `${l} ${f[k] ?? 0}`);
+    const gruende = Object.entries(summary.permissionGruende ?? {}).map(([g, n]) => `${g} ${n}`);
+    const teile = FEHLER_LABEL.map(([k, l]) => `${l} ${f[k] ?? 0}${k === "permission" && gruende.length ? ` (${gruende.join(", ")})` : ""}`);
     out.push(`Tool-Fehler: ${teile.join(" · ")} · Exit≠0 ${f.exit ?? 0} (kein Fehlersignal)`);
   }
   const l = summary.lesen;
@@ -528,9 +544,11 @@ export function renderMarkdown(summary, loop = {}, { planZeile } = {}) {
     lines.push(`Cache-Neuaufbauten: ${cr.count} (≈ ${fmt(cr.cacheWriteTokens)} Tokens Cache-Write)`);
   }
   if (brain) {
+    const typen = Object.entries(brain.vorErstemEditJeTyp ?? {});
+    const jeTyp = typen.length ? ` (${typen.map(([t, n]) => `${t} ${n}`).join(" · ")})` : "";
     const pr = brain.prBrain ? `${brain.prBrain.pages} Seiten (+${brain.prBrain.additions}/−${brain.prBrain.deletions})` : "–";
     lines.push(
-      `Projekt-Brain: gelesen ${brain.brainReads}× (${brain.brainPages} Seiten, ≈ ${fmt(brain.brainReadTokens)} Tokens) · Suche ${brain.searchCalls} Calls (≈ ${fmt(brain.searchTokens)} Tokens) · Recherche-Subagenten ${fmt(brain.rechercheTokens)} Tokens · Calls bis erster Edit ${dash(brain.callsBeforeFirstEdit)} · Brain-Pflege ${brain.brainWrites} Schreibzugriffe, PR ${pr}`,
+      `Projekt-Brain: gelesen ${brain.brainReads}× (${brain.brainPages} Seiten, ≈ ${fmt(brain.brainReadTokens)} Tokens) · Suche ${brain.searchCalls} Calls (≈ ${fmt(brain.searchTokens)} Tokens) · Recherche-Subagenten ${fmt(brain.rechercheTokens)} Tokens · erster Edit nach ${dash(brain.callsBeforeFirstEdit)} Calls${jeTyp} · Brain-Pflege ${brain.brainWrites} Schreibzugriffe, PR ${pr}`,
     );
   }
   lines.push(...werkzeugZeilen(summary));

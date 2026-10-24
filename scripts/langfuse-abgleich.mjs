@@ -24,6 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
+import { priceCall } from "./preise.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 import {
@@ -48,9 +49,24 @@ import {
 } from "./langfuse-abgleich-kern.mjs";
 
 const FEHLEND_ANZEIGE = 20;
+/** Liegen die Langfuse-Kosten bei gleichen Calls strikt unter (1 − PREIS_TOLERANZ) · Transkript-Kosten, bepreist die Instanz das Modell nicht oder zu niedrig (Hinweis Modellpreis). */
+export const PREIS_TOLERANZ = 0.1;
+
+/** Transkript-Kosten eines Solls in $ (Preistabelle `preise.mjs`); Calls ohne Preis zählen in `ohnePreis`, nie als 0 $ in der Summe. */
+function kostenAusSoll(soll) {
+  let kosten = 0;
+  let ohnePreis = 0;
+  for (const e of soll) {
+    const u = e.usage;
+    const k = priceCall({ model: e.model, ts: e.ts, input: u.input, output: u.output, cacheRead: u.cacheRead, cacheWrite: u.cacheWrite5m + u.cacheWrite1h, cacheWrite1h: u.cacheWrite1h });
+    if (k === null) ohnePreis++;
+    else kosten += k;
+  }
+  return { kosten, ohnePreis };
+}
 
 /**
- * Eine Session bewerten. `ist` = `{ calls, tokens }` (calls null zählt als 0), `diff` optional aus `diffMultimenge`
+ * Eine Session bewerten. `ist` = `{ calls, tokens, kosten }` (calls null zählt als 0, kosten fehlend/null = unbekannt), `diff` optional aus `diffMultimenge`
  * (sonst Zählebene: fehlend = max(0, Soll − Ist), Dubletten = max(0, Ist − Soll)). Status: `läuft` (Ruhefrist),
  * `Lücke`, `Dublette`, `Abweichung` (gleiche Zahl, andere Tokens), `vollständig`. Dazu `score` (getrennt vom Status): `vor Stichtag`
  * (der Nachlieferer sendet dort nie), `ausstehend` (der Nachlieferer wartet noch: 150 s bei bekanntem Ende laut Ledger `ledgerEintrag`,
@@ -61,6 +77,12 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
   const fehlend = diff ? diff.fehlend.length : Math.max(0, soll.length - calls);
   const dubletten = diff ? diff.dubletten.length : Math.max(0, calls - soll.length);
   const tokensT = summe(soll);
+  const { kosten: kostenT, ohnePreis } = kostenAusSoll(soll);
+  const kostenL = ist.kosten ?? null;
+  // Überzählung (nur gemeldet, nie gelöscht): was Langfuse durch echte Dubletten mehr führt; ohne Kosten-Export unbekannt.
+  const ueberzaehlung = dubletten > 0 && kostenL !== null ? Math.max(0, kostenL - kostenT) : null;
+  // Gleiche Calls, aber Langfuse-Kosten klar unter dem Transkript: Modelldefinition der Instanz fehlt oder ist zu niedrig.
+  const hinweisModellpreis = fehlend === 0 && dubletten === 0 && kostenT > 0 && kostenL !== null && kostenL < (1 - PREIS_TOLERANZ) * kostenT;
   const tokenAbweichung = ist.tokens !== null && !gleich(tokensT, ist.tokens);
   const laeuft = now - mtime < RUHEFRIST_MIN * 60_000;
   let status = "vollständig";
@@ -81,6 +103,11 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
     callsLangfuse: calls,
     tokensTranskript: tokensT,
     tokensLangfuse: ist.tokens,
+    kostenTranskript: kostenT,
+    kostenLangfuse: kostenL,
+    ohnePreis,
+    ueberzaehlung,
+    hinweisModellpreis,
     fehlend,
     dubletten,
     leer: diff?.leer?.length ?? 0,
@@ -95,7 +122,15 @@ export function summenzeile(bewertungen) {
   const fest = bewertungen.filter((b) => b.status !== "läuft");
   const t = fest.reduce((s, b) => s + b.callsTranskript, 0);
   const fehlend = fest.reduce((s, b) => s + b.fehlend, 0);
+  // Langfuse-Kosten und Überzählung: Summe der bekannten Werte, ohne Kosten-Export null (nie 0).
+  const bekannt = (feld) => {
+    const werte = fest.map((b) => b[feld]).filter((v) => v !== null);
+    return werte.length ? werte.reduce((s, v) => s + v, 0) : null;
+  };
   return {
+    kostenTranskript: fest.reduce((s, b) => s + b.kostenTranskript, 0),
+    kostenLangfuse: bekannt("kostenLangfuse"),
+    ueberzaehlung: bekannt("ueberzaehlung"),
     sessions: fest.length,
     laeuft: bewertungen.length - fest.length,
     scoreAusstehend: fest.filter((b) => b.score === "ausstehend").length,
@@ -113,14 +148,17 @@ export function summenzeile(bewertungen) {
 const fmt = (n) => Math.round(n).toLocaleString("de-DE");
 const pct = (q) => `${(q * 100).toFixed(1).replace(".", ",")} %`;
 const paar = (a, b) => `${fmt(a)} / ${b === null ? "–" : fmt(b)}`;
+const usd = (n) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+const paarUsd = (a, b) => `${usd(a)} / ${b === null ? "–" : usd(b)}`;
+const kuerzel = (liste) => liste.map((x) => String(x.session).slice(0, 8)).join(", ");
 
 export function renderMarkdown(bewertungen, sum) {
-  const kopf = ["Session", "Ticket", "Status", "Calls T/L", "Input T/L", "Output T/L", "Cache-Read T/L", "Cache-Write T/L", "fehlend", "Dubletten", "Quote"];
+  const kopf = ["Session", "Ticket", "Status", "Calls T/L", "Input T/L", "Output T/L", "Cache-Read T/L", "Cache-Write T/L", "Kosten T/L ($)", "fehlend", "Dubletten", "Quote"];
   const zeilen = [`| ${kopf.join(" | ")} |`, `|${kopf.map(() => "---").join("|")}|`];
   for (const b of bewertungen) {
     const l = b.tokensLangfuse;
     zeilen.push(
-      `| ${String(b.session).slice(0, 8)} | ${b.tickets.join(", ") || "–"} | ${b.status === "vollständig" && b.score === "ausstehend" ? "vollständig, Score ausstehend" : b.status} | ${paar(b.callsTranskript, b.callsLangfuse)} | ${paar(b.tokensTranskript.input, l?.input ?? null)} | ${paar(b.tokensTranskript.output, l?.output ?? null)} | ${paar(b.tokensTranskript.cacheRead, l?.cacheRead ?? null)} | ${paar(b.tokensTranskript.cacheWrite, l?.cacheWrite ?? null)} | ${b.fehlend} | ${b.dubletten} | ${pct(b.quote)} |`,
+      `| ${String(b.session).slice(0, 8)} | ${b.tickets.join(", ") || "–"} | ${b.status === "vollständig" && b.score === "ausstehend" ? "vollständig, Score ausstehend" : b.status} | ${paar(b.callsTranskript, b.callsLangfuse)} | ${paar(b.tokensTranskript.input, l?.input ?? null)} | ${paar(b.tokensTranskript.output, l?.output ?? null)} | ${paar(b.tokensTranskript.cacheRead, l?.cacheRead ?? null)} | ${paar(b.tokensTranskript.cacheWrite, l?.cacheWrite ?? null)} | ${paarUsd(b.kostenTranskript, b.kostenLangfuse)} | ${b.fehlend} | ${b.dubletten} | ${pct(b.quote)} |`,
     );
   }
   const out = ["# Langfuse-Abgleich (T = Transkript, L = Langfuse)", "", ...zeilen, ""];
@@ -128,7 +166,7 @@ export function renderMarkdown(bewertungen, sum) {
   if (sum.scoreAusstehend) teile.push(`${sum.scoreAusstehend} davon Score ausstehend (Nachlieferer wartet noch)`);
   if (sum.vorStichtag) teile.push(`${sum.vorStichtag} vor dem Stichtag (nie gesendet, kein Score)`);
   const zusatz = teile.length ? `; ${teile.join(", ")}` : "";
-  out.push(`**Summe:** ${sum.sessions} Session(s), Calls ${fmt(sum.callsTranskript)} / ${fmt(sum.callsLangfuse)}, fehlend ${sum.fehlend}, Dubletten ${sum.dubletten}, Erfassungsquote ${pct(sum.quote)}${sum.laeuft ? `; ${sum.laeuft} Session(s) läuft noch (Ruhefrist ${RUHEFRIST_MIN} min, nicht in Σ)` : ""}${zusatz}.`);
+  out.push(`**Summe:** ${sum.sessions} Session(s), Calls ${fmt(sum.callsTranskript)} / ${fmt(sum.callsLangfuse)}, Kosten ${paarUsd(sum.kostenTranskript, sum.kostenLangfuse)} $, fehlend ${sum.fehlend}, Dubletten ${sum.dubletten}, Erfassungsquote ${pct(sum.quote)}${sum.laeuft ? `; ${sum.laeuft} Session(s) läuft noch (Ruhefrist ${RUHEFRIST_MIN} min, nicht in Σ)` : ""}${zusatz}.`);
   for (const b of bewertungen.filter((x) => x.fehlendeCalls?.length)) {
     out.push("", `Fehlende Calls ${String(b.session).slice(0, 8)} (Schlüssel: ${b.schluessel}):`);
     for (const c of b.fehlendeCalls.slice(0, FEHLEND_ANZEIGE)) out.push(`- ${c.messageId} · ${c.ts} · ${c.model}`);
@@ -141,12 +179,22 @@ export function renderMarkdown(bewertungen, sum) {
   if (zaehlDubletten.length) {
     out.push("", `Hinweis: ${zaehlDubletten.length} Session(s) mit Dubletten auf der Zählebene (${zaehlDubletten.map((x) => String(x.session).slice(0, 8)).join(", ")}): leere Hook-GENERATIONs (ohne Message-ID und Tokens) können dort mitzählen (ein Export mit dem Filter providedModelName none of ["claude"] schließt sie aus). Genau prüfen lässt sich das auch mit dem Secret-Key (Observations je Session), dort trennt der Abgleich sie als „leer“ ab.`);
   }
+  // Beide Werte stehen getrennt und werden nie verrechnet; Sessions in der Ruhefrist zählen nicht (wie in der Summe).
+  const festeSessions = bewertungen.filter((x) => x.status !== "läuft");
+  const ueber = festeSessions.filter((x) => x.ueberzaehlung > 0);
+  if (ueber.length) {
+    out.push("", `Überzählung durch Dubletten: ${usd(ueber.reduce((s, x) => s + x.ueberzaehlung, 0))} $ in ${ueber.length} Session(s) (${kuerzel(ueber)}): Langfuse-Wochensummen um diesen Betrag bereinigen (Checkliste Punkt 7).`);
+  }
+  const unterpreis = festeSessions.filter((x) => x.hinweisModellpreis);
+  if (unterpreis.length) {
+    out.push("", `Hinweis Modellpreis: ${unterpreis.length} Session(s) mit gleichen Calls, Langfuse-Kosten unter ${Math.round((1 - PREIS_TOLERANZ) * 100)} % des Transkripts (${kuerzel(unterpreis)}): Modelldefinition der Instanz prüfen (docs/langfuse-hook-patch.md › Modelldefinitionen der Instanz).`);
+  }
   out.push("", `Hinweis: Aufzeichnungen ohne TTL-Aufteilung der Cache-Writes (vor dem Hook-Patch, vor ${STICHTAG.slice(0, 10)}) passen nicht auf den Fingerabdruck und erscheinen als fehlend plus Dublette.`);
   return out.join("\n");
 }
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]";
-export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe docs/model-routing.md › Checkliste Punkt 1.";
+export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; Kosten: Dimension sessionId, Metrik totalCost (sum); jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe docs/model-routing.md › Checkliste Punkt 1.";
 
 export function parseArgs(argv) {
   const optionen = { pruefen: { type: "boolean" }, json: { type: "boolean" }, seit: { type: "string" }, session: { type: "string" }, ist: { type: "string", multiple: true } };
@@ -177,7 +225,7 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
   const fruehester = Math.min(...[...soll.values()].flat().map((e) => Date.parse(e.ts)).filter(Number.isFinite));
   const q = istAbfragen({ von: new Date(fruehester - 3_600_000).toISOString(), bis: new Date(now + 60_000).toISOString(), session: args.session });
   const rows = [];
-  for (const abfrage of [q.zaehlung, q.tokens]) rows.push(...(await holeMetrics(abfrage, zugang, fetchImpl)));
+  for (const abfrage of [q.zaehlung, q.tokens, q.kosten]) rows.push(...(await holeMetrics(abfrage, zugang, fetchImpl)));
   return istAusMetrics(rows);
 }
 
@@ -214,7 +262,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     const ist = await istHolen({ args, soll, zugang, now, fetchImpl, leseDatei });
     const bewertungen = [];
     for (const [id, eintraege] of soll) {
-      const istSession = ist.get(id) ?? { calls: 0, tokens: leereSumme() };
+      const istSession = ist.get(id) ?? { calls: 0, tokens: leereSumme(), kosten: null };
       const { mtime, groesse, ausserhalb } = staende.get(id);
       const laeuft = now - mtime < RUHEFRIST_MIN * 60_000;
       let diff = null;
@@ -222,7 +270,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
         const obs = await fetchSessionObservations(id, { ...zugang, fetchImpl, type: "GENERATION", fields: "core,basic,model,usage,metadata" });
         diff = diffMultimenge(eintraege, obs);
       }
-      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens }, mtime, groesse, now, diff, ledgerEintrag: ledger.sessions[id] ?? null, ausserhalb }));
+      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens, kosten: istSession.kosten }, mtime, groesse, now, diff, ledgerEintrag: ledger.sessions[id] ?? null, ausserhalb }));
     }
     const sum = summenzeile(bewertungen);
     return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: bewertungen, summe: sum }, null, 2) : renderMarkdown(bewertungen, sum) };

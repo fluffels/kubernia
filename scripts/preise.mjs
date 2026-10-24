@@ -3,6 +3,7 @@
  * Preistabelle und Kostenrechnung je Call (#1562, ausgelagert aus `token-baseline.mjs`). Reines Node-Modul
  * ohne Abhängigkeiten: der Langfuse-Abgleich läuft später als Hook, und Hook-Importe müssen geschützt und
  * klein sein; die gh-/git-Kette von `token-baseline.mjs` darf nicht mitkommen.
+ * Ein neues Modell hier braucht auch eine Modelldefinition in der Langfuse-Instanz: docs/langfuse-hook-patch.md › Modelldefinitionen der Instanz.
  */
 
 export function num(v) {

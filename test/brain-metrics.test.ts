@@ -8,7 +8,10 @@ import { readFileSync } from "node:fs";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as bmModule from "../scripts/brain-metrics.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as toolMetrikenRaw from "../scripts/tool-metriken.mjs";
 import { FREMD } from "./support/fremd-config";
+const toolMetriken = toolMetrikenRaw as unknown as { permissionGruende: (e: Ev[]) => Record<string, number> };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../scripts/token-baseline.mjs";
 
@@ -20,6 +23,8 @@ type Metrics = {
   searchCalls: number;
   searchTokens: number;
   callsBeforeFirstEdit: number | null;
+  vorErstemEdit: Record<string, number>;
+  vorErstemEditJeTyp?: Record<string, number>;
   brainWrites: number;
   prBrain: { pages: number; additions: number; deletions: number } | null;
 };
@@ -224,6 +229,25 @@ describe("brainMetrics", () => {
     assert.equal(brainMetrics([ev("2020-01-01T00:00:00Z", "Read", { file_path: "docs/a.md" })]).brainReads, 1, "kein Filter nach Zeit");
     assert.equal("rechercheTokens" in z, false, "Recherche-Tokens rechnet summarize");
   });
+  test("vorErstemEdit: Calls bis zum ersten Edit je Agent, Hauptagent (null) als „haupt“", () => {
+    const m = brainMetrics([
+      { ...ev(T(0), "Read", {}), agent: null },
+      { ...ev(T(1), "Read", {}), agent: "sub-a" },
+      { ...ev(T(2), "Read", {}), agent: "sub-a" },
+      { ...ev(T(3), "Edit", { file_path: "C:\\Users\\x\\AppData\\Local\\Temp\\s.txt" }), agent: "sub-a" },
+      { ...ev(T(4), "Read", {}), agent: null },
+      { ...ev(T(5), "Edit", { file_path: "src/a.ts" }), agent: "sub-b" },
+      { ...ev(T(6), "Read", {}), agent: "sub-b" },
+    ]);
+    assert.equal(m.callsBeforeFirstEdit, 5);
+    assert.deepEqual(m.vorErstemEdit, { haupt: 2, "sub-a": 3 }, "Scratch-Edit zählt als Call, der Edit selbst und alles danach nicht");
+  });
+  test("vorErstemEdit ohne Edit: alle Calls zählen, callsBeforeFirstEdit bleibt null; leerer Lauf ergibt {}", () => {
+    const m = brainMetrics([{ ...ev(T(0), "Read", {}), agent: "x" }, ev(T(1), "Grep", {})]);
+    assert.equal(m.callsBeforeFirstEdit, null);
+    assert.deepEqual(m.vorErstemEdit, { x: 1, haupt: 1 });
+    assert.deepEqual(brainMetrics().vorErstemEdit, {});
+  });
   test("PR-Seiten nur unter docs/", () => {
     const m = brainMetrics([], [{ path: "docs/a.md", additions: 5, deletions: 1 }, { path: "src/x.ts", additions: 9, deletions: 9 }]);
     assert.deepEqual(m.prBrain, { pages: 1, additions: 5, deletions: 1 });
@@ -240,8 +264,10 @@ describe("renderMarkdown mit Projekt-Brain", () => {
     const brain = { ...brainMetrics([ev("2026-10-01T10:00:00Z", "Read", { file_path: "docs/a.md" }, 400)], null), rechercheTokens: 0 };
     const out = baseline.renderMarkdown({ ...summary, brain }, {});
     assert.match(out, /Projekt-Brain: gelesen 1× \(1 Seiten, ≈ 100 Tokens\)/);
-    assert.match(out, /Calls bis erster Edit –/);
+    assert.match(out, /erster Edit nach – Calls · Brain-Pflege/);
     assert.match(out, /PR –/);
+    const mitTyp = baseline.renderMarkdown({ ...summary, brain: { ...brain, callsBeforeFirstEdit: 5, vorErstemEditJeTyp: { Hauptchat: 3, "typ-a": 2 } } }, {});
+    assert.match(mitTyp, /erster Edit nach 5 Calls \(Hauptchat 3 · typ-a 2\) · Brain-Pflege/);
     assert.doesNotMatch(baseline.renderMarkdown(summary, {}), /Projekt-Brain/);
   });
 });
@@ -256,6 +282,22 @@ describe("Härtung nach Review", () => {
     ].join("\n");
     const e = toolEventsFromTranscript(lines);
     assert.deepEqual(e.map((x) => [x.tool, x.resultChars]), [["Read", 1], ["Grep", 2]]);
+  });
+  test("Fehlertext: Permission-Meldungen behalten bis 500 Zeichen (Grund steht hinter langem Befehl), andere Fehler 200; Transkript und Langfuse", () => {
+    const lang = "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [" + "G".repeat(450) + "]. If you";
+    const regel = "Permission to use Bash with command " + "x".repeat(600) + " has been denied.";
+    const exit = "Exit code 1\n" + "y".repeat(600);
+    const rows = [
+      JSON.stringify({ type: "assistant", timestamp: "2026-10-01T10:00:00Z", message: { content: ["a", "b", "c"].map((id) => ({ type: "tool_use", id, name: "Bash", input: {} })) } }),
+      JSON.stringify({ type: "user", message: { content: [lang, regel, exit].map((content, i) => ({ type: "tool_result", tool_use_id: ["a", "b", "c"][i], is_error: true, content })) } }),
+    ].join("\n");
+    const e = toolEventsFromTranscript(rows);
+    assert.deepEqual(e.map((x) => x.fehler?.length), [500, 500, 200]);
+    assert.match(e[0].fehler ?? "", /Reason: \[G+/);
+    const l = toolEventsFromLangfuse([{ type: "TOOL", startTime: "2026-10-01T10:00:00Z", level: "ERROR", statusMessage: regel, metadata: { tool_name: "Bash" } }]);
+    assert.equal(l[0].fehler?.length, 500);
+    assert.deepEqual(toolMetriken.permissionGruende(e.filter((x) => x.fehler?.startsWith("Permission to use"))), { Regel: 1 }, "lange Regel-Ablehnung zählt als Regel, nicht als ohne Grund");
+    assert.equal(toolEventsFromTranscript(rows.replace('"is_error":true', '"is_error":false'))[0].fehler, null, "ohne is_error kein Fehlertext");
   });
   test("Transkript-Adapter mit geparsten Zeilen liefert dasselbe wie mit Text (Zeilen werden nur einmal geparst)", () => {
     const text = [
@@ -339,6 +381,16 @@ describe("Härtung nach Review", () => {
     const spaet = { ...call, ts: T(5) };
     assert.equal(baseline.summarize({ calls: [spaet], events: [] }, { mergedAt: T(3) }).brain?.rechercheTokens, 0, "Nachlauf zählt nicht");
   });
+  test("summarize ordnet die Calls vor dem ersten Edit dem Agenttyp zu (Hauptchat, Typ aus dem Subagent-Call, unbekannte ID als Subagent)", () => {
+    const sub = (id: string, agentType: string) => ({ ts: T(0), model: "m", input: 1, cacheWrite: 0, cacheRead: 0, output: 0, subagent: { id, agentType, description: "x" } });
+    const calls = [sub("u1", "typ-a"), sub("u2", "typ-a"), sub("u3", "typ-b")];
+    const at = (t: string, agent: string | null, tool = "Read", input: Record<string, unknown> = {}): Ev => ({ ...ev(t, tool, input), agent });
+    const events = [at(T(0), "main:s1"), at(T(1), null), at(T(2), "u1"), at(T(3), "u2"), at(T(4), "u3"), at(T(5), "zz"), at(T(6), "u3", "Edit", { file_path: "src/a.ts" }), at(T(7), "u1")];
+    const b = baseline.summarize({ calls, events }).brain;
+    assert.equal(b?.callsBeforeFirstEdit, 6);
+    assert.deepEqual(b?.vorErstemEditJeTyp, { Hauptchat: 2, "typ-a": 2, "typ-b": 1, Subagent: 1 });
+    assert.deepEqual(baseline.summarize({ calls, events: [] }).brain?.vorErstemEditJeTyp, {}, "ohne Events keine Zuordnung");
+  });
   test("kaputter Langfuse-Input wirft nicht", () => {
     const e = toolEventsFromLangfuse([{ type: "TOOL", startTime: T(0), input: "{kaputt", metadata: { tool_name: "Read" } }]);
     assert.deepEqual(e[0].input, {});
@@ -349,7 +401,7 @@ describe("Härtung nach Review", () => {
       rechercheTokens: 5,
     };
     const out = baseline.renderMarkdown({ rows: [], total: { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 }, hasCost: false, reviewRounds: 0, cacheRebuilds: null, questions: 0, unpriced: 0, costParts: null, medianContext: {}, sockel: {}, brain }, {});
-    assert.match(out, /Suche 1 Calls \(≈ 10 Tokens\) · Recherche-Subagenten 5 Tokens · Calls bis erster Edit 1 · Brain-Pflege 1 Schreibzugriffe, PR 1 Seiten \(\+3\/−2\)/);
+    assert.match(out, /Suche 1 Calls \(≈ 10 Tokens\) · Recherche-Subagenten 5 Tokens · erster Edit nach 1 Calls · Brain-Pflege 1 Schreibzugriffe, PR 1 Seiten \(\+3\/−2\)/);
   });
   test("fetchSessionObservations reicht type, name und fields durch", async () => {
     const urls: string[] = [];
