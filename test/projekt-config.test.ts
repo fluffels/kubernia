@@ -3,7 +3,7 @@
 import { afterEach, describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -677,8 +677,9 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
 describe("Struktur-Pfade als Projektwert (#1843)", () => {
   const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), struktur: s });
 
-  test("strukturAus: liefert quelle und moduldoku der echten Config", () => {
-    assert.deepEqual(pc.strukturAus(pc.ladeProjektConfig()), { quelle: "src", moduldoku: "docs/module" });
+  test("strukturAus: liefert quelle und moduldoku, die der echten Config zeigen auf vorhandene Ordner (die Werte prüft ein Projekt-Test)", () => {
+    const echt = pc.strukturAus(pc.ladeProjektConfig());
+    for (const p of [echt.quelle, echt.moduldoku]) assert.ok(existsSync(join(WURZEL, p)), `struktur-Pfad ${p} fehlt im Repo`);
     assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: "docs/mod" } }), { quelle: "lib", moduldoku: "docs/mod" });
   });
   test("strukturAus: ohne Block, Nicht-Objekt oder leeren Pfad wirft mit Schlüssel und Fix-Zeile (kein stiller Standardwert)", () => {
@@ -708,13 +709,12 @@ describe("Ausnahmelisten als Projektwert (#1860)", () => {
   const mit = (a: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), ausnahmen: a });
   const ok = { datei: "src/gross.ts", grund: "#893 Split offen" };
 
-  test("ausnahmenAus: ohne Block leer, sonst die Einträge; die echte Config nennt für die Größe #893", () => {
+  test("ausnahmenAus: ohne Block leer, sonst die Einträge; die Dateien der echten Config existieren (die Werte prüft ein Projekt-Test)", () => {
     assert.deepEqual(pc.ausnahmenAus({}), { groesse: [], kontext: [] });
     assert.deepEqual(pc.ausnahmenAus({ ausnahmen: { groesse: [ok] } }), { groesse: [ok], kontext: [] });
     assert.deepEqual(pc.ausnahmenAus({ ausnahmen: { kontext: [ok] } }), { groesse: [], kontext: [ok] });
     const echt = pc.ausnahmenAus(pc.ladeProjektConfig());
-    assert.deepEqual(echt.groesse.map((a) => a.datei), ["src/sim.ts"]);
-    assert.match(echt.groesse[0]?.grund ?? "", /#893/);
+    for (const a of [...echt.groesse, ...echt.kontext]) assert.ok(existsSync(join(WURZEL, a.datei)), `Ausnahme-Datei ${a.datei} fehlt im Repo`);
   });
   test("ausnahmenAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
     for (const falsch of ["x", [], { groesse: {} }, { groesse: [{ datei: "a.ts" }] }]) {
@@ -748,12 +748,10 @@ describe("Ausnahmelisten als Projektwert (#1860)", () => {
 describe("Berechtigungs-Ergänzung als Projektwert (#1874)", () => {
   const mit = (b: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), berechtigungen: b });
 
-  test("berechtigungenAus: ohne Block leer, sonst die Listen; die echte Config trägt die Modulregeln", () => {
+  test("berechtigungenAus: ohne Block leer, sonst die Listen; die echte Config ist lesbar (die Werte prüft ein Projekt-Test)", () => {
     assert.deepEqual(pc.berechtigungenAus({}), { allow: [], ask: [], deny: [] });
     assert.deepEqual(pc.berechtigungenAus({ berechtigungen: { allow: ["mcp__a"] } }), { allow: ["mcp__a"], ask: [], deny: [] });
-    const echt = pc.berechtigungenAus(pc.ladeProjektConfig());
-    assert.ok(echt.allow.includes("mcp__playwright"));
-    assert.deepEqual(echt.deny, ["mcp__pixellab__list_projects"]);
+    assert.doesNotThrow(() => pc.berechtigungenAus(pc.ladeProjektConfig()));
   });
   test("berechtigungenAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
     for (const falsch of ["x", [], { allow: {} }, { allow: ["Bash(rm:*)"] }]) {
@@ -782,12 +780,10 @@ describe("Config-Block sandbox (#1888)", () => {
   const gueltig = (): Record<string, unknown> => pc.ladeProjektConfig();
   const mit = (b: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), sandbox: b });
 
-  test("sandboxAus: ohne Block leer, sonst die Listen; die echte Config trägt die Projektliterale", () => {
+  test("sandboxAus: ohne Block leer, sonst die Listen; die echte Config ist lesbar (die Werte prüft ein Projekt-Test)", () => {
     assert.deepEqual(pc.sandboxAus({}), { allowedDomains: [], envVars: [] });
     assert.deepEqual(pc.sandboxAus({ sandbox: { allowedDomains: ["*.a.example"] } }), { allowedDomains: ["*.a.example"], envVars: [] });
-    const echt = pc.sandboxAus(pc.ladeProjektConfig());
-    assert.ok(echt.allowedDomains.includes("*.pixellab.ai"));
-    assert.deepEqual(echt.envVars, [{ name: "PIXELLAB_TOKEN", mode: "deny" }]);
+    assert.doesNotThrow(() => pc.sandboxAus(pc.ladeProjektConfig()));
   });
   test("ergaenzungAusText: beide Ergänzungen aus dem Dateitext, ohne Datei leer, kaputtes JSON wirft", () => {
     const e = pc.ergaenzungAusText(JSON.stringify({ berechtigungen: { allow: ["mcp__a"] }, sandbox: { allowedDomains: ["x.example"] } }));

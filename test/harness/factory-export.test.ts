@@ -496,7 +496,8 @@ describe("Export aus HEAD", () => {
     assert.match(agents, /<!-- factory-projekt:start -->[\s\S]*<!-- factory-projekt:ende -->/);
     const settings = JSON.parse(text(".claude/settings.json")) as { permissions: { allow: string[] }; hooks: unknown; model: string };
     assert.ok(settings.permissions.allow.includes("mcp__langfuse__queryMetrics"));
-    assert.ok(!settings.permissions.allow.includes("mcp__playwright"));
+    assert.ok(settings.permissions.allow.includes("mcp__playwright"), "der Browser-Server der Vorlage steht in der Ergänzung (#1931)");
+    assert.ok(!settings.permissions.allow.includes("mcp__likec4"));
     assert.ok(settings.hooks !== undefined);
     assert.equal(settings.model, "sonnet");
   });
@@ -604,6 +605,20 @@ describe("Export aus HEAD", () => {
     assert.deepEqual(stand.pruefeSkills(stand.liesStand(z)), []);
     assert.doesNotMatch(quelle + zeiger, /kubernia|KQ/i);
   }, 60_000);
+
+  test("#1931: die Settings-Vorlage trägt die Kontext-Schalter und gibt jeden Server der .mcp.json frei, die Ergänzung der Config erreicht permissions", () => {
+    const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
+    const settings = JSON.parse(text(".claude/settings.json")) as { enabledPlugins: Record<string, boolean>; enabledMcpjsonServers: string[]; permissions: { allow: string[]; ask: string[] } };
+    assert.equal(settings.enabledPlugins["data@synced"], false);
+    assert.equal(settings.enabledPlugins["cowork-plugin-management@synced"], false);
+    const server = Object.keys((JSON.parse(text(".mcp.json")) as { mcpServers: Record<string, unknown> }).mcpServers);
+    assert.ok(server.length > 0, ".mcp.json des Exports führt keinen Server");
+    for (const s of server) assert.ok(settings.enabledMcpjsonServers.includes(s), `Server ${s} der .mcp.json ist in enabledMcpjsonServers nicht freigegeben`);
+    const config = JSON.parse(text(".factory/projekt.json")) as { berechtigungen: { allow: string[]; ask: string[] } };
+    assert.ok(config.berechtigungen.allow.includes("mcp__playwright"));
+    assert.ok(settings.permissions.allow.includes("mcp__playwright"));
+    assert.ok(settings.permissions.ask.includes("mcp__playwright__browser_run_code_unsafe"));
+  });
 
   test("Lock: Wurzel entspricht der Vorlage, jede Wurzel-Abhängigkeit hat einen Eintrag, Einträge sind unverändert aus kubernia", () => {
     const lock = JSON.parse(echt.dateien.get("package-lock.json")?.text ?? "{}") as Lock;

@@ -861,12 +861,10 @@ const lesenWurzel = (pfad: string): string | null => {
   const voll = WURZEL + pfad;
   return existsSync(voll) ? readFileSync(voll, "utf8") : null;
 };
-/** Dateien der Projekt-Generatoren aus `config.generatoren` (ADR 0022 F10). */
+/** Dateien der Projekt-Generatoren aus `config.generatoren` (ADR 0022 F10); ohne den Block (ein Projekt ohne eigene Generatoren) leer. */
 const projektGeneratorPfade = (): string[] => {
   const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
-  const pfade = [...new Set(Object.values(cfg.generatoren ?? {}).map((g) => g.datei))];
-  if (pfade.length === 0) throw new Error("scripts/docs-gen/config.json: generatoren fehlt oder ist leer");
-  return pfade;
+  return [...new Set(Object.values(cfg.generatoren ?? {}).map((g) => g.datei))];
 };
 const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
@@ -893,7 +891,6 @@ describe("Kern-Reinheit (#1610)", () => {
 
   test("kein Projekt-Generator aus config.generatoren liegt in einem Kern-Verzeichnis (ADR 0022 F10)", () => {
     const pfade = projektGeneratorPfade();
-    assert.ok(pfade.length >= 2, "die Dateien der Projekt-Generatoren stehen in der Config");
     for (const p of pfade) assert.ok(existsSync(WURZEL + p), `${p}: Datei fehlt`);
     assert.deepEqual(pruefeAbdeckung(manifest.eintraege, [], {}, pfade), []);
   });
@@ -918,11 +915,10 @@ describe("Kern-Reinheit (#1610)", () => {
     assert.deepEqual(KERN_HUELLE_AUSNAHMEN, {}, "keine Ausnahmen der Import-Hülle mehr");
     assert.equal(manifest.eintraege.find((e) => e.pfad === registryPfad && istGanzeDatei(e))?.ring, "kern");
     const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
-    assert.ok(cfg.generatoren && Object.keys(cfg.generatoren).length > 0, "scripts/docs-gen/config.json: generatoren fehlt");
     const ziele = relativeImporte(lesenWurzel(registryPfad) ?? "").flatMap((spec) => kandidatenPfade(posix.normalize(posix.join(posix.dirname(registryPfad), spec))));
     const kernNamen = Object.keys((rawRegistry as unknown as { GENERATORS: Record<string, unknown> }).GENERATORS);
     const besitz = new Set(manifest.eintraege.map((e) => e.pfad));
-    assert.deepEqual(spielGeneratorVerstoesse(ziele, kernNamen, cfg.generatoren, (p) => besitz.has(p)), []);
+    assert.deepEqual(spielGeneratorVerstoesse(ziele, kernNamen, cfg.generatoren ?? {}, (p) => besitz.has(p)), []);
   });
 
   test("kein Importeur verletzt die Ring-Importregel (RING_IMPORTE, #1663, ADR 0029)", () => {
@@ -977,11 +973,9 @@ describe("Jedes Projektliteral der Config ist ein Begriff des Wächters (#1843)"
 
 describe("Projektliterale nicht im Kern (#1709, ADR 0022 F5)", () => {
   const agentsText = lesenWurzel("AGENTS.md") ?? "";
-  const projektBlock = agentsText.slice(agentsText.indexOf("<!-- factory-projekt:start -->"));
-  // das erste Projektliteral, das im Projekt-Block der Kontextdatei vorkommt (dort ist es erlaubt)
-  const gewaehlt = Object.entries(projektConfig().projektliterale ?? {}).find(([, wert]) => projektBlock.toLowerCase().includes(wert.toLowerCase()));
-  assert.ok(gewaehlt, "projektliterale leer oder nicht im Projekt-Block der Kontextdatei");
-  const [BEGRIFF, WORT] = gewaehlt;
+  // das erste Projektliteral der Config; die Mechanik-Tests hängen es selbst an Kern- und Projekt-Block an. Eine leere Liste meldet der Test
+  // „die Config trägt Projektliterale“ oben, hier nur ein Platzhalter, damit kein Sammelfehler beim Einsammeln entsteht.
+  const [BEGRIFF, WORT] = Object.entries(projektConfig().projektliterale ?? {})[0] ?? ["", ""];
   const begriff = echteBegriffe[BEGRIFF];
   const IST = (lies: (p: string) => string | null): Baseline => istZaehlung(manifest.eintraege, lies, echteBegriffe);
   const mitAnhang = (pfad: string, anhang: string) => (p: string): string | null => (p === pfad ? (lesenWurzel(p) ?? "") + "\n" + anhang + "\n" : lesenWurzel(p));
