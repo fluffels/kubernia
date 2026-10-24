@@ -401,7 +401,7 @@ function agentenKontextDateien(): Record<string, string> {
 function abgeloesteFundstellen(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
-    if (pfad.startsWith("docs/adr/") || ANKER_DATEIEN.includes(pfad)) continue;
+    if (pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
     if (ABGELOEST_VORFILTER && !ABGELOEST_VORFILTER.test(inhalt)) continue;
     for (const muster of ABGELOEST) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }

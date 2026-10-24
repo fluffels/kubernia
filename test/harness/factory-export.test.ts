@@ -557,6 +557,16 @@ describe("Export aus HEAD", () => {
     for (const o of ["agents", "skills", "workflows"]) assert.ok(ignore.includes(`!.claude/${o}/`), `.gitignore ohne !.claude/${o}/`);
   });
 
+  test("#1929: Daten für die elf Kern-Tests liegen im Export: Coverage-Reporter, Diagramm-Vorlagen mit den Namen des Factory-Repos, Langfuse-Seite und -Regel", () => {
+    const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
+    assert.match(text("vite.config.ts"), /reporter:\s*\[[^\]]*"lcovonly"/);
+    assert.match(text("vite.config.ts"), /reportsDirectory:\s*"coverage"/);
+    for (const p of ["docs/diagramme/agenten-ablauf.mmd", "docs/diagramme/agenten-sequenz.mmd", "docs/diagramme/leitplanken-schichten.mmd", "docs/langfuse-hook-patch.md"]) assert.ok(echt.dateien.has(p), `${p} fehlt im Export`);
+    assert.match(text("docs/diagramme/agenten-ablauf.mmd"), /\$\{agent:sih-planer\}/);
+    assert.doesNotMatch(text("docs/diagramme/agenten-sequenz.mmd"), /forum/i);
+    assert.match(text("AGENTS.md"), /Langfuse-Erfassung erhalten[^\n]*model-routing\.md#langfuse-erfassung-belegen-1293/);
+  });
+
   test("#1929: setup.mjs besteht node --check und nennt kein Projekt; layers.cjs lädt gegen den Schicht-Kern und liefert die vier Schicht-IDs", () => {
     const dir = leerOrdner();
     for (const p of ["scripts/setup.mjs", "scripts/layers.cjs", "scripts/schichten-kern.cjs"]) {
