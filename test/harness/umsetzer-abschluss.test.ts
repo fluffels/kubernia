@@ -705,8 +705,8 @@ describe("Selbstcheck vor jedem Commit (#1625)", () => {
   });
 
   test("Red-Green: ohne Befehl, Nachhol-Satz, Gruppen-Bezug oder Commit-Body greifen die Prädikate nicht", () => {
-    assert.ok(!uebernimmtBloecke(UMSETZER.replace("git log origin/main..HEAD --format=%B", "git log")));
-    assert.ok(!uebernimmtBloecke(UMSETZER.replace("vor `gh pr create` nachholen", "ignorieren")));
+    assert.ok(!uebernimmtBloecke(UMSETZER.replaceAll("git log origin/main..HEAD --format=%B", "git log")));
+    assert.ok(!uebernimmtBloecke(UMSETZER.replaceAll("vor `gh pr create` nachholen", "ignorieren")));
     assert.ok(!uebernimmtBloecke(UMSETZER.replaceAll("`SELBSTCHECK`", "x")));
     assert.ok(!gruppeTraegtBlock(GRUPPE.replace("im Commit-Body", "irgendwo")));
     assert.ok(!gruppeTraegtBlock(GRUPPE.replace("übernimmt ihn in den PR-Text", "liest ihn")));
