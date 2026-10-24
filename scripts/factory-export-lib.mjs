@@ -36,6 +36,20 @@ function aufloesen(packages, von, name) {
 }
 
 /**
+ * Schreibt den Commit-Zeilen-Präfix (`KQ-`) in `text` auf den der Factory-Config um, aber nur vor einem Großbuchstaben (`KQ-Review:`, `KQ-Diffsize-Override`).
+ * Teilwörter (`XKQ-A`), Zahlen (`KQ-123`), Kleinschreibung (Branch- und Worktree-Präfix) und der nackte Präfix bleiben stehen. Rückgabe `{ text, anzahl }`.
+ */
+export function schreibePraefixUm(text, von, nach) {
+  const re = new RegExp(`(?<![\\w-])${von.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\p{Lu})`, "gu");
+  let anzahl = 0;
+  const neu = text.replace(re, () => {
+    anzahl++;
+    return nach;
+  });
+  return { text: neu, anzahl };
+}
+
+/**
  * Lock-Auszug (Auftrag: `package-lock.json` des Factory-Repos als Auszug aus dem Lock von kubernia). Die Wurzel kommt aus `pkg` (der Vorlage),
  * die Hülle ist alles, was von den Wurzel-Abhängigkeiten über `dependencies`, `optionalDependencies` und `peerDependencies` erreichbar ist; die
  * Reihenfolge der Quelle und alle Flags bleiben. Rückgabe `{ lock, befunde }`: ein fehlendes Pflichtziel (Wurzel-Abhängigkeit oder `dependencies`

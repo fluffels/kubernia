@@ -39,7 +39,7 @@ interface Leser {
 interface Ergebnis {
   dateien: Map<string, { text: string; ausfuehrbar: boolean }>;
   befunde: string[];
-  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][] };
+  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][]; praefixUmgeschrieben: number };
 }
 interface Lock {
   name?: string;
@@ -61,6 +61,7 @@ const lib = rawLib as unknown as {
   pruefeSkriptBezuege(d: Map<string, string>): { befunde: string[] };
   pruefeLokalePfade(d: Map<string, string>, repos: string[]): { befunde: string[]; durchgelassen: number; jeMuster: number[] };
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
+  schreibePraefixUm(text: string, von: string, nach: string): { text: string; anzahl: number };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
   pruefeSchutzliste(e: { vorlage: string; codeowners: string; quelle: string; pfade: string[] }): string[];
@@ -183,6 +184,23 @@ describe("lockAuszug", () => {
     const kaputt = structuredClone(lock);
     kaputt.packages["node_modules/x"].dependencies = { b: "^1", zz: "^1" };
     assert.match(lib.lockAuszug(kaputt, pkg).befunde.join("|"), /'zz' \(node_modules\/x\)/);
+  });
+});
+
+describe("schreibePraefixUm (#1932)", () => {
+  test("schreibt den Commit-Zeilen-Präfix vor Großbuchstaben um und zählt die Treffer", () => {
+    const r = lib.schreibePraefixUm("`KQ-Review:` und KQ-Diffsize-Override: #<nr>", "KQ-", "SIH-");
+    assert.equal(r.text, "`SIH-Review:` und SIH-Diffsize-Override: #<nr>");
+    assert.equal(r.anzahl, 2);
+  });
+  test("lässt Teilwörter, Zahlen, Kleinschreibung und den nackten Präfix stehen", () => {
+    const text = "XKQ-A, KQ-123, kq-foo, `KQ-`, feature/kq-12, NKQ-Review";
+    const r = lib.schreibePraefixUm(text, "KQ-", "SIH-");
+    assert.equal(r.text, text);
+    assert.equal(r.anzahl, 0);
+  });
+  test("ein Präfix mit Regex-Zeichen wird wörtlich genommen", () => {
+    assert.equal(lib.schreibePraefixUm("A.-Review und AX-Review", "A.-", "B-").text, "B-Review und AX-Review");
   });
 });
 
@@ -444,6 +462,13 @@ describe("Export aus HEAD", () => {
     assert.ok(echt.dateien.size > 300);
     assert.equal(echt.bericht.anzahl, echt.dateien.size);
   }, 60_000);
+
+  test("#1932: Factory-Seiten tragen den Präfix der Factory-Config, keine KQ-Commit-Zeile mehr", () => {
+    const harness = echt.dateien.get("docs/agent-harness.md")?.text ?? "";
+    assert.match(harness, /SIH-Lockfile-Override/);
+    assert.doesNotMatch(harness, /(?<![\w-])KQ-\p{Lu}/u);
+    assert.ok(echt.bericht.praefixUmgeschrieben > 0);
+  });
 
   test("AK1: zwei Läufe in zwei leere Ordner sind byte-gleich (Dateiliste, Inhalt, Ausführbar-Bit)", () => {
     const [a, b] = [leerOrdner(), leerOrdner()];
