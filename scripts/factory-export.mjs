@@ -234,10 +234,10 @@ function berichtZeilen(b) {
   return [
     `Export-SHA ${b.sha}`,
     `Dateien: ${b.anzahl} (Besitz ${h.besitz}, Extraktionsliste ${h.extraktion}, Vorlagen ${h.vorlage}, berechnet ${h.berechnet})`,
-    `Lokale Pfade durchgelassen (Zeilen mit Platzhalter oder Fixture-Wurzel, ohne Befund): ${b.durchgelassen}; je Muster ${KANDIDATEN.map((re, k) => `${re.source} = ${b.durchgelassenJeMuster[k]}`).join("; ")}`,
+    `Lokale Pfade durchgelassen (Zeilen mit Platzhalter oder Fixture-Wurzel, ohne Befund; eine Zeile kann mehrere Muster treffen, darum ist die Summe je Muster größer): ${b.durchgelassen}; je Muster ${KANDIDATEN.map((re, k) => `${re.source} = ${b.durchgelassenJeMuster[k]}`).join("; ")}`,
     `Relative Importe, in der Quelle schon unauflösbar (Fixture-Text): ${b.relativUnaufloesbar}`,
     `Paket-Spezifizierer, die kubernia nicht kennt (Fixture-Text): ${b.paketUnbekannt.length} (Namen: ${b.paketUnbekannt.filter((n) => !n.startsWith("?")).join(", ")}; ${b.paketUnbekannt.filter((n) => n.startsWith("?")).length} Texte, die kein Paketname sind)`,
-    `kubernia-Rest (Factory-Seiten und .factory/projekt.json, ganze Wörter, je Fundstelle einmal): ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,
+    `kubernia-Rest (Factory-Seiten und .factory/projekt.json, ganze Wörter, überlappende Treffer zählen einmal): ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,
     ...b.literalRest.map(([p, n]) => `  ${p}: ${n}`),
   ];
 }

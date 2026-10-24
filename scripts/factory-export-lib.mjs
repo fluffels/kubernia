@@ -1,10 +1,12 @@
 // Prüfungen und Lock-Auszug des Export-Werkzeugs (ADR 0022 F10, Teil 7a, #1923). Einmalig: das Werkzeug samt dieser Bibliothek entfällt mit K9 (#1882).
 // Alles pur: Eingaben sind Maps `Pfad -> Text` und geparste Configs, Ausgaben Befund-Listen und Zählungen; geschrieben wird hier nichts.
 //
-// Bekannte Muster (Grenzen, fail-open): Importe erkennt `importeAus` (ein dynamischer Pfad bleibt unsichtbar); ein in der Quelle schon unauflösbarer
-// Importtext (Fixture-Text in Tests) und ein Paketname, den kubernia nicht kennt, gelten als Fixture-Rauschen und werden nur gezählt. Skriptbezüge
-// sind Treffer von `scripts/<name>.mjs|cjs|js` ohne Platzhalter; lokale Pfade die Treffer von `pfadBefunde`; kubernia-Literale die Begriffe der
-// Config (`begriffeAus`), die kein Projektliteral der Factory sind und deren Regex in beiden Configs verschieden ist.
+// Bekannte Muster (Grenzen, fail-open): Importe erkennt `importeAus` auf dem Text ohne Kommentare (ein dynamischer Pfad bleibt unsichtbar); ein in der Quelle schon
+// unauflösbarer Importtext und ein Paketname, den kubernia nicht kennt, sind nur in `*.test.ts` Fixture-Rauschen (gezählt), sonst ein Befund. Skriptbezüge sind Treffer
+// von `scripts/<name>.mjs|cjs|js` ohne Platzhalter; lokale Pfade die Treffer von `pfadBefunde`, durchgelassene Zeilen zählt der Bericht je Muster (eine Zeile kann
+// mehrere Muster treffen); kubernia-Literale die Begriffe der Config (`begriffeAus`), die kein Projektliteral der Factory sind und deren Regex in beiden Configs
+// verschieden ist, als ganze Wörter (Buchstaben und Ziffern grenzen ab, `_` nicht), je Fundstelle einmal, Projektliterale zuerst. Der Kern-Wächter zählt dieselben
+// Begriffe ohne diese Wortgrenze (ein Teilwort trifft dort); das Werkzeug ist enger, damit ein Teilwort wie `kuberniaartig` keinen Export verhindert.
 import { builtinModules } from "node:module";
 import { posix } from "node:path";
 import { begriffeAus } from "./besitz-lib.mjs";
@@ -84,8 +86,8 @@ export function paketName(spec) {
   return PAKET_NAME.test(name) ? name : `?${spec}`;
 }
 
-/** Text ohne Block- und Zeilenkommentare: ein Import, der nur als Beispiel in einem Kommentar steht, ist keiner (Grenze: `//` in einem String vor einem Import auf derselben Zeile). */
-const ohneKommentare = (text) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+/** Text ohne Block- und Zeilenkommentare (ein Durchlauf von links nach rechts, damit ein `/*` im Zeilenkommentar keinen Scheinblock öffnet): ein Import, der nur als Beispiel in einem Kommentar steht, ist keiner. Grenze: ein `//` direkt nach `:`, Anführungszeichen oder Backslash gilt nicht als Kommentar (URL im String). */
+const ohneKommentare = (text) => text.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`\\])\/\/.*$/gm, (treffer, davor) => (treffer.startsWith("/*") ? "" : davor));
 
 /** Testdateien: nur dort kann ein Importtext Fixture sein (ein Import in einem String oder Template); in jeder anderen Code-Datei ist ein nicht auflösbarer Import ein Befund. */
 export const FIXTURE_TOLERIERT = /\.test\.ts$/;
@@ -201,8 +203,8 @@ export function kuberniaBegriffe(kubConfig, factoryConfig) {
 }
 
 /**
- * kubernia-Literale als ganze Wörter (ein Teilwort wie `kuberniaartig` trifft nicht): Befund je Datei und Begriff (mit Anzahl). Eine Fundstelle zählt einmal und gehört dem
- * ersten Begriff, der sie trifft (die Reihenfolge der Begriffe ist die Rangfolge: `kuberniaBegriffe` nennt die Projektliterale zuerst). `ausgenommen(pfad)` liefert `null` (prüfen), `"zaehlen"` (Rest je Datei im Bericht)
+ * kubernia-Literale als ganze Wörter (ein Teilwort wie `kuberniaartig` trifft nicht): Befund je Datei und Begriff (mit Anzahl). Eine Fundstelle zählt einmal: ein Treffer, der einen
+ * schon belegten Bereich überlappt, entfällt; der erste Begriff gewinnt (die Reihenfolge der Begriffe ist die Rangfolge: `kuberniaBegriffe` nennt die Projektliterale zuerst). `ausgenommen(pfad)` liefert `null` (prüfen), `"zaehlen"` (Rest je Datei im Bericht)
  * oder `"frei"` (nicht geprüft).
  */
 export function pruefeLiterale(dateien, begriffe, ausgenommen) {
@@ -211,14 +213,14 @@ export function pruefeLiterale(dateien, begriffe, ausgenommen) {
   for (const [pfad, text] of dateien) {
     const modus = ausgenommen(pfad);
     if (modus === "frei") continue;
-    const belegt = new Set();
+    const belegt = [];
     const je = new Map();
     for (const [name, re] of Object.entries(begriffe)) {
       for (const m of text.matchAll(re)) {
         const von = m.index;
         const bis = von + m[0].length;
-        if (m[0] === "" || !ganzesWort(text, von, bis, m[0]) || belegt.has(von)) continue;
-        belegt.add(von);
+        if (m[0] === "" || !ganzesWort(text, von, bis, m[0]) || belegt.some(([a, b]) => von < b && a < bis)) continue;
+        belegt.push([von, bis]);
         je.set(name, (je.get(name) ?? 0) + 1);
       }
     }
@@ -230,8 +232,8 @@ export function pruefeLiterale(dateien, begriffe, ausgenommen) {
   return { befunde, rest };
 }
 
-const WORTZEICHEN = /[\p{L}\p{N}_]/u;
-/** Steht der Treffer `text[von, bis)` als ganzes Wort? Eine Seite prüft nur, wenn der Treffer dort mit einem Wortzeichen endet (ein Präfix wie `KQ-` grenzt rechts von selbst ab). */
+const WORTZEICHEN = /[\p{L}\p{N}]/u;
+/** Steht der Treffer `text[von, bis)` als ganzes Wort? Wortzeichen sind Buchstaben und Ziffern (ein `_` trennt: `KQ_NAME` bleibt ein Treffer des Env-Begriffs). Eine Seite prüft nur, wenn der Treffer dort mit einem Wortzeichen endet (ein Präfix wie `KQ-` grenzt rechts von selbst ab). */
 function ganzesWort(text, von, bis, treffer) {
   if (WORTZEICHEN.test(treffer[0]) && von > 0 && WORTZEICHEN.test(text[von - 1])) return false;
   return !(WORTZEICHEN.test(treffer.at(-1)) && bis < text.length && WORTZEICHEN.test(text[bis]));
