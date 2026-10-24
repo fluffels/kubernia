@@ -470,6 +470,18 @@ describe("Export aus HEAD", () => {
     assert.ok(echt.bericht.praefixUmgeschrieben > 0);
   });
 
+  test("#1932: ci.yml und AGENTS.md des Exports tragen Kern-Jobs und Kern-Regeln (Stolperdraht gegen verlorene Vorlagen-Anteile)", () => {
+    const ci = echt.dateien.get(".github/workflows/ci.yml")?.text ?? "";
+    assert.match(ci, /^ {2}alarm-red-main:/m);
+    assert.ok(ci.includes('marker="🚨 CI rot auf main'), "Alarm-Job mit Marker");
+    assert.ok(ci.indexOf("check-abnahme-nachweis.mjs") > ci.indexOf("check-review-nachweis.mjs"), "Abnahme-Schritt hinter dem Review-Schritt");
+    assert.ok(ci.includes("scripts.verify"), "Verweis auf scripts.verify");
+    const agents = echt.dateien.get("AGENTS.md")?.text ?? "";
+    assert.ok(agents.includes("SIH-Diffsize-Override: #<nr>"), "Diffsize-Override-Zeile");
+    assert.ok(agents.includes("SIH-Lockfile-Override"), "Lockfile-Override-Zeile");
+    assert.ok(agents.includes("Langfuse-Erfassung erhalten"), "Langfuse-Regel");
+  });
+
   test("AK1: zwei Läufe in zwei leere Ordner sind byte-gleich (Dateiliste, Inhalt, Ausführbar-Bit)", () => {
     const [a, b] = [leerOrdner(), leerOrdner()];
     const [la, lb] = [lauf(["--ziel", a], leser), lauf(["--ziel", b], leser)];
