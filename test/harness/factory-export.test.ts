@@ -593,7 +593,7 @@ describe("Export aus HEAD", () => {
     const quelle = text(quellPfad);
     assert.ok(quelle.length > 0, `${quellPfad} fehlt im Export`);
     const factory = JSON.parse(text(".factory/projekt.json")) as { agenten: { ticketSkill: string } };
-    assert.match(quelle, new RegExp(`# factory:projektwert agenten\.ticketSkill\nname: ${factory.agenten.ticketSkill}\n`));
+    assert.ok(quelle.split("\n").join("|").includes(`# factory:projektwert agenten.ticketSkill|name: ${factory.agenten.ticketSkill}|`), "Marker und Name der Config stehen untereinander");
     assert.ok(quelle.includes("--bereich spiel"));
     assert.ok(!quelle.includes("--bereich agentic"));
     const zeiger = text(`${String(ZEIGER_WURZEL)}/${ordner}/SKILL.md`);

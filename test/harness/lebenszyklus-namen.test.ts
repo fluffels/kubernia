@@ -445,7 +445,7 @@ describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
   });
   test("Kern-Pfad: das Verzeichnis gilt als Skill, auch ohne agenten.ticketSkill; die Config meldet den Grund weiter", () => {
     expect(H.TICKET_SKILL_VERZEICHNIS).toBe(".agents/skills/factory-ticket/");
-    expect(H.ordneHarnessAenderungen([".agents/skills/factory-ticket/SKILL.md", ".claude/skills/ab/SKILL.md"]).skill).toEqual([".agents/skills/factory-ticket/SKILL.md"]);
+    expect(H.ordneHarnessAenderungen([TICKET_QUELLE, ".claude/skills/ab/SKILL.md"]).skill).toEqual([TICKET_QUELLE]);
     expect(H.configGrund({ config: OHNE_SKILL })).toMatch(/agenten\.ticketSkill[\s\S]*Fix:/);
     expect(H.configGrund({ config: AB })).toBeNull();
   });

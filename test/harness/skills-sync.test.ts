@@ -36,7 +36,7 @@ interface Quelle { ordner: string; text: string | null }
 interface Zeiger { ordner: string; text: string | null; dateien: string[] }
 interface LaufErgebnis { befunde: Befund[]; unbrauchbar: string[]; geschrieben: string[]; geloescht: string[]; gemeldet: string[] }
 // Typisierung des .mjs-Imports per Assertion (Muster test/docdrift.test.ts), keine neuen eslint-Suppressions.
-const sync = { ...(skillsSyncModul as object), zeigerText } as unknown as {
+const sync = { ...(skillsSyncModul as object), zeigerText: zeigerText as (name: string, quelltext: string) => string } as unknown as {
   zeigerText: (name: string, quelltext: string) => string;
   pruefeSkills: (a: { quellen: Quelle[]; zeiger: Zeiger[]; lose?: string[] }) => Befund[];
   liesStand: (wurzel: string) => { quellen: Quelle[]; zeiger: Zeiger[]; lose: string[] };

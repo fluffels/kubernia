@@ -1,4 +1,4 @@
-/* Forum-Anteile der Kern-Wächter (#1930, ADR 0022 F10, Teil 7b-2): die Prüfungen, die im Kern keinen Forum-Skill voraussetzen dürfen,
+/* Forum-Anteile der Kern-Wächter (#1930, ADR 0022 F10, Teil 7b-2) – @harness-waechter, einziger Durchsetzer der Forum-Anteile im geschützten test/harness/ (#1165): die Prüfungen, die im Kern keinen Forum-Skill voraussetzen dürfen,
  * liegen hier als `projekt-test` (nur kubernia führt den Forum-Eingang): Matrix-Zeile, Skill-Quelle und Zeiger im Scan der Kern-Wächter,
  * kein `.gitignore`-Treffer. Der Kern-Anker für „Skill-Quelle ohne Besitz liegt im Scan“ ist die Quelle der Rolle ticketSkill. */
 import { describe, expect, test } from "vitest";

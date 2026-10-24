@@ -30,6 +30,7 @@ import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 import * as checkBasis from "../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ROLLEN_PFADE } from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { zeigerText as zeigerTextRoh } from "../scripts/skill-pfade.mjs";
 const zeigerText = zeigerTextRoh as (name: string, quelltext: string) => string;
 
