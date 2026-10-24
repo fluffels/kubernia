@@ -1,7 +1,7 @@
 sequenceDiagram
   autonumber
   actor M as Maintainerin
-  participant H as Hauptchat<br/>Skill ${skill:factory} · ${skill-modell:factory}
+  participant H as Hauptchat<br/>Skill ${skill:sih-ticket} oder ${skill:factory} · ${skill-modell:sih-ticket}
   participant S as ${agent:holdout-szenario}<br/>${agent-modell:holdout-szenario}
   participant A as ${agent:holdout-abnahme}<br/>${agent-modell:holdout-abnahme}
   participant P as ${agent:sih-planer}<br/>${agent-modell:sih-planer}

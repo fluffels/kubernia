@@ -19,7 +19,7 @@
     {"muster":".github/CODEOWNERS","art":"infrastruktur-anteil","grund":"Spiegel der Schutzliste, dieselben Muster wie die protected-paths-Vorlage"},
     {"muster":".github/wiedervorlagen.json","art":"infrastruktur-anteil","grund":"Wiedervorlagen des Projekts: im Factory-Repo eine leere Liste"},
     {"muster":"docs/diagramme/agenten-ablauf.mmd","art":"infrastruktur-anteil","grund":"Diagramm-Vorlage: Agentennamen und Forum-Eingang des Projekts entfallen"},
-    {"muster":"docs/diagramme/agenten-sequenz.mmd","art":"infrastruktur-anteil","grund":"Diagramm-Vorlage: Agentennamen, Ticket-Skill und Forum-Hinweis des Projekts entfallen"},
+    {"muster":"docs/diagramme/agenten-sequenz.mmd","art":"infrastruktur-anteil","grund":"Diagramm-Vorlage: Agentennamen und Ticket-Skill des Factory-Repos, Forum-Hinweis des Projekts entfällt"},
     {"muster":"docs/diagramme/leitplanken-schichten.mmd","art":"infrastruktur","grund":"projektneutral (Required Checks, Ruleset, Konstanten kommen aus Workflows und Config), unverändert ins Factory-Repo"},
     {"muster":"scripts/docs-gen/config.json","art":"infrastruktur-anteil","grund":"Docs-Gen-Config: nur die Blöcke, die Kern-Skripte und Kern-Tests im Export lesen"},
     {"muster":"scripts/layers.cjs","art":"infrastruktur-anteil","grund":"Schicht-Definition des Projekts: im Factory-Repo ein eigenes Modell mit denselben vier Schicht-IDs"},
