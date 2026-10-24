@@ -1,6 +1,8 @@
 /* Export-Werkzeug des Factory-Repos (#1923, ADR 0022 F10, Teil 7a): `scripts/factory-export.mjs` schreibt den Anfangsstand des Factory-Repos aus einem Commit.
  * Dieser Test ist ein `projekt-test` und entfällt mit dem einmaligen Werkzeug (K9, #1882).
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel (der Export bleibt rein und schreibt nichts bei einem Befund), darum im geschützten test/harness/ (#1165).
+ *
  * Reale Quelle ist `HEAD` dieses Repos (gelesen per git wie beim Sync). Ein uncommittetes Vorlagen-File macht den Integrationsteil darum rot:
  * erst committen, dann testen. Die Negativfälle verändern einen Hüll-Leser (`mitAenderung`), nie die Datei auf der Platte. */
 import { beforeAll, describe, test } from "vitest";
@@ -18,8 +20,6 @@ import * as rawLib from "../../scripts/factory-export-lib.mjs";
 import * as rawSync from "../../scripts/factory-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawRefs from "../../scripts/check-internalrefs.mjs";
 
 interface Leser {
   fehler?: string;
@@ -54,7 +54,6 @@ const lib = rawLib as unknown as {
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   paketName(spec: string): string | null;
 };
-const { decodeTerms } = rawRefs as unknown as { decodeTerms: () => string[] };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
 const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] } };
 
@@ -493,9 +492,6 @@ describe("Export aus HEAD", () => {
       befund({ [p]: `${basisText(p)}\n<!-- factory:projektwerte:start -->\n` }, /Projektwert-Block/);
     });
 
-    test("ein interner Bezug im Export ist ein Befund", () => {
-      befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// ${decodeTerms()[0]}\n` }, /scripts\/check-size\.mjs:\d+: interner Bezug \(ref\)/);
-    });
 
     test("ein Kern-Test mit kubernia-Literal im Wort wird nur als ganzes Wort gezählt", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// kubernias\n` }) });

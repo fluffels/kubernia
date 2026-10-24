@@ -896,14 +896,15 @@ const boardIdRegex = (config) => {
 export function begriffeAus(config) {
   const [owner = "", name = ""] = config.repo.split("/");
   const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
+  const { commitZeile, branch, worktree } = config.praefixe;
   /** @type {Record<string, RegExp>} */
   const out = {
     Owner: new RegExp(owners.map(escapeRegex).join("|"), "gi"),
     Repo: new RegExp(escapeRegex(name), "gi"),
     "Board-ID": boardIdRegex(config),
-    Praefix: new RegExp(escapeRegex(config.praefixe.commitZeile), "g"),
-    Branch: new RegExp(escapeRegex(config.praefixe.branch), "g"),
-    Worktree: new RegExp(escapeRegex(config.praefixe.worktree), "g"),
+    Praefix: new RegExp(escapeRegex(commitZeile), "g"),
+    Branch: new RegExp(escapeRegex(branch), "g"),
+    Worktree: new RegExp(escapeRegex(worktree), "g"),
   };
   // Env (#1824): der Commit-Zeilen-Präfix mit Unterstrich als Umgebungsvariablen-Präfix; die Wortgrenze davor schließt `VITE_<PRAEFIX>_…` und `__<PRAEFIX>_…__` aus.
   const envPraefix = altEnvPraefix(config);

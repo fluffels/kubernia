@@ -915,7 +915,7 @@ describe("Sync vom Tag (#1871)", () => {
     const q = baueQuelle();
     taggen(q, "v1", { exec: ["scripts/a.mjs"] });
     schreibe(q, "scripts/neu.mjs", "nur im Arbeitsbaum\n");
-    const lv = (rawSync as unknown as { leserVomCommit(q: string, rev: string): TagLeser & { commit: string; pfade: string[] } }).leserVomCommit;
+    const lv = (rawSync as unknown as { leserVomCommit: (q: string, rev: string) => TagLeser & { commit: string; pfade: string[] } }).leserVomCommit;
     const sha = commitVon(q);
     for (const rev of ["HEAD", sha]) {
       const l = lv(q, rev);

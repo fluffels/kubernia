@@ -9,7 +9,7 @@ import { builtinModules } from "node:module";
 import { posix } from "node:path";
 import { importeAus, begriffeAus, relativeImporte, zielDatei } from "./besitz-lib.mjs";
 import { isCheckable } from "./check-basis.mjs";
-import { pfadBefunde } from "./check-internalrefs.mjs";
+import { pfadBefunde } from "./internalrefs-lib.mjs";
 
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
 const BUILTINS = new Set(builtinModules);

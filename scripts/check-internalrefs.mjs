@@ -48,6 +48,7 @@ import { dirname, join } from "node:path";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
+import { FIXTURE_WURZELN, PLATZHALTER_NUTZER, pfadBefunde } from "./internalrefs-lib.mjs";
 import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -146,53 +147,9 @@ export function listBranchCommitMessages(rootDir = ROOT, exec = execFileSync) {
 // Laufwerkspfade brauchen einen Großbuchstaben als Laufwerk (sonst träfe `a:\n` im JS-Text). Grenzen: Pfade aus Variablen oder Template-Teilen (`${…}`) sieht die Regel nicht (fail-open), UNC- und `file://`-Pfade ebenso.
 // Beispiele in Tests und Doku bauen den Pfad aus Teilen oder nutzen einen Platzhalter, sonst trifft die Regel das Beispiel.
 
-/** Erlaubte Platzhalter-Segmente hinter `Users/` und `home/` (Klartext, keine echten Namen). */
-export const PLATZHALTER_NUTZER = ["x", "y", "z", "u", "Max", "agent", "nutzer", "test", "…"];
+// Daten und Prüffunktion der Pfadregel stehen in `internalrefs-lib.mjs` (hier wieder ausgeführt, damit Tests und Aufrufer sie über dieses Modul kennen).
+export { FIXTURE_WURZELN, PLATZHALTER_NUTZER, pfadBefunde };
 
-/** Erlaubte Fixture-Wurzeln: erstes Segment eines Laufwerkspfads in test/** und scripts/** (klein geschrieben verglichen). */
-export const FIXTURE_WURZELN = [
-  "a", "a.ts", "andere", "b.txt", "daten", "dev", "docs", "eigen.jsonl", "foo", "gibt-es-nicht", "git", "h", "ignoriert", "msys",
-  "n", "other", "pfad", "program", "projekt", "python", "r", "repo", "root", "src", "temp", "temp2", "tempo", "tmp", "tools", "users", "w", "windows", "work", "wt", "x", "…",
-];
-
-const NUTZER_MUSTER = /(?:(?<![\w])[A-Z]:[\\/]+Users|(?<![\w.:/\\])\/(?:Users|home))[\\/]+([^\\/\s"'`<>*|]+)/g;
-const LAUFWERK_MUSTER = /(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g;
-const LAUFWERK_KOPF = /^[A-Z]:[\\/]+/;
-const NACHLAUF = /[.,;:)\]}]+$/;
-const VARIABLE = /^[$%{~]/;
-const imScope = (file) => /^(test|scripts)\//.test(file);
-
-/** Findet Pfad-Verstöße (siehe Block oben). `repo`: Repo-Name aus der Projekt-Config oder `null` (Regel 3 entfällt). Pur. */
-export function pfadBefunde(files, readFile, { repo = null } = {}) {
-  const hits = [];
-  const repoKlein = repo ? repo.toLowerCase() : null;
-  for (const file of files) {
-    let content;
-    try {
-      content = readFile(file);
-    } catch {
-      continue;
-    }
-    if (content.includes("\0")) continue;
-    content.split(/\r?\n/).forEach((text, i) => {
-      const melde = (term) => hits.push({ file, line: i + 1, term, kind: "pfad", excerpt: text.trim().slice(0, 120) });
-      for (const m of text.matchAll(NUTZER_MUSTER)) {
-        const seg = m[1].replace(NACHLAUF, "");
-        if (seg && !VARIABLE.test(seg) && !PLATZHALTER_NUTZER.includes(seg)) melde("nutzer");
-      }
-      const laufwerke = [...text.matchAll(LAUFWERK_MUSTER)].map((m) => m[0]);
-      if (imScope(file)) {
-        for (const p of laufwerke) {
-          const wurzel = p.replace(LAUFWERK_KOPF, "").split(/[\\/]+/)[0].replace(NACHLAUF, "");
-          if (wurzel && !VARIABLE.test(wurzel) && !FIXTURE_WURZELN.includes(wurzel.toLowerCase())) melde("wurzel");
-        }
-      }
-      if (!repoKlein) return;
-      if (laufwerke.some((p) => p.split(/[\\/]+/).some((seg) => seg.replace(NACHLAUF, "").toLowerCase() === repoKlein))) melde("repo");
-    });
-  }
-  return hits;
-}
 
 /** Repo-Name aus der Projekt-Config des Repos, `null` ohne nutzbare Config (Regel 3 der Pfadregel entfällt dann). */
 function repoNameOderNull(rootDir) {

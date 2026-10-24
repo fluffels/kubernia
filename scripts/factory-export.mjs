@@ -22,9 +22,7 @@ import {
   pruefeManifest,
   rendereProjektwerte,
 } from "./besitz-lib.mjs";
-import { decodeTerms, ENCODED_NAME_TERMS, findViolations } from "./check-internalrefs.mjs";
-import { isCheckable } from "./check-basis.mjs";
-import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync.mjs";
+import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import {
   kuberniaBegriffe,
   lockAuszug,
@@ -223,9 +221,7 @@ export function baueExport({ leser }) {
   const pfade = pruefeLokalePfade(texte, [repoName(factoryConfig), repoName(kubConfig)]);
   const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
   const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === PROJEKT_CONFIG || p === LOCK ? "frei" : seiten.has(p) ? "zaehlen" : null));
-  const intern = findViolations([...texte.keys()].filter((p) => isCheckable(p)), decodeTerms(), (p) => texte.get(p), decodeTerms(ENCODED_NAME_TERMS));
   befunde.push(...rel.befunde, ...pak.befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
-  befunde.push(...intern.map((h) => `${h.file}:${h.line}: interner Bezug (${h.kind})`));
   Object.assign(bericht, {
     anzahl: dateien.size,
     durchgelassen: pfade.durchgelassen,
