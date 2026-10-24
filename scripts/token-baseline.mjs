@@ -212,7 +212,21 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     out.pruef = pruefLaeufe(imFenster);
     // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
     out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && ticket.some((c) => c.subagent?.agentType === umsetzer);
-    out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
+    const brain = brainMetrics(imFenster, prFiles);
+    out.brain = { ...brain, vorErstemEditJeTyp: jeAgentTyp(brain.vorErstemEdit, ticket), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
+  }
+  return out;
+}
+
+/** Calls vor dem ersten Edit je Agent (Schlüssel aus den Events) → je Agenttyp: Hauptagent „Hauptchat“, Subagent über seine ID aus den Calls, unbekannte ID „Subagent“; gleiche Typen werden summiert. */
+function jeAgentTyp(jeAgent, ticketCalls) {
+  const typen = new Map();
+  for (const c of ticketCalls) if (c.subagent) typen.set(subKey(c), c.subagent.agentType);
+  const out = {};
+  for (const [agent, n] of Object.entries(jeAgent)) {
+    const haupt = agent === "haupt" || agent.startsWith("main:");
+    const typ = haupt ? "Hauptchat" : (typen.get(agent) ?? "Subagent");
+    out[typ] = (out[typ] ?? 0) + n;
   }
   return out;
 }
@@ -528,9 +542,11 @@ export function renderMarkdown(summary, loop = {}, { planZeile } = {}) {
     lines.push(`Cache-Neuaufbauten: ${cr.count} (≈ ${fmt(cr.cacheWriteTokens)} Tokens Cache-Write)`);
   }
   if (brain) {
+    const typen = Object.entries(brain.vorErstemEditJeTyp ?? {});
+    const jeTyp = typen.length ? ` (${typen.map(([t, n]) => `${t} ${n}`).join(" · ")})` : "";
     const pr = brain.prBrain ? `${brain.prBrain.pages} Seiten (+${brain.prBrain.additions}/−${brain.prBrain.deletions})` : "–";
     lines.push(
-      `Projekt-Brain: gelesen ${brain.brainReads}× (${brain.brainPages} Seiten, ≈ ${fmt(brain.brainReadTokens)} Tokens) · Suche ${brain.searchCalls} Calls (≈ ${fmt(brain.searchTokens)} Tokens) · Recherche-Subagenten ${fmt(brain.rechercheTokens)} Tokens · Calls bis erster Edit ${dash(brain.callsBeforeFirstEdit)} · Brain-Pflege ${brain.brainWrites} Schreibzugriffe, PR ${pr}`,
+      `Projekt-Brain: gelesen ${brain.brainReads}× (${brain.brainPages} Seiten, ≈ ${fmt(brain.brainReadTokens)} Tokens) · Suche ${brain.searchCalls} Calls (≈ ${fmt(brain.searchTokens)} Tokens) · Recherche-Subagenten ${fmt(brain.rechercheTokens)} Tokens · erster Edit nach ${dash(brain.callsBeforeFirstEdit)} Calls${jeTyp} · Brain-Pflege ${brain.brainWrites} Schreibzugriffe, PR ${pr}`,
     );
   }
   lines.push(...werkzeugZeilen(summary));

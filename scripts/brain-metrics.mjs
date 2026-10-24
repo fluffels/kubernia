@@ -232,11 +232,16 @@ export function brainMetrics(events = [], prFiles = null) {
   const acc = { reads: 0, readChars: 0, searches: 0, searchChars: 0, writes: 0 };
   let calls = 0;
   let callsBeforeFirstEdit = null;
+  const vorErstemEdit = {}; // Aufteilung von `callsBeforeFirstEdit` je Agent (Hauptagent: `haupt`)
   const sorted = [...events].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
   for (const ev of sorted) {
     if (callsBeforeFirstEdit === null) {
       if (EDIT_TOOLS.has(ev.tool) && !SCRATCH.test(filePath(ev))) callsBeforeFirstEdit = calls;
-      else calls += 1;
+      else {
+        calls += 1;
+        const agent = ev.agent ?? "haupt";
+        vorErstemEdit[agent] = (vorErstemEdit[agent] ?? 0) + 1;
+      }
     }
     countEvent(ev, pages, acc);
   }
@@ -248,6 +253,7 @@ export function brainMetrics(events = [], prFiles = null) {
     searchCalls: acc.searches,
     searchTokens: tokens(acc.searchChars),
     callsBeforeFirstEdit,
+    vorErstemEdit,
     brainWrites: acc.writes,
     prBrain: prFiles
       ? {
