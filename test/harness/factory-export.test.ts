@@ -694,6 +694,19 @@ describe("Export aus HEAD", () => {
     });
 
 
+    test("#1930: fehlt die Vorlage des Ticket-Skills, bricht der Export ab", () => {
+      const vorlage = `.factory/produkt/vorlagen/${(ROLLEN_PFADE as Record<string, string>).ticketSkill}.vorlage`;
+      abbruch({ [vorlage]: null }, /SKILL\.md\.vorlage: Vorlage fehlt/);
+    });
+
+    test("#1930: ohne Eintrag der Quelle in der Extraktionsliste und ohne Vorlage meldet der Export den fehlenden Ticket-Skill statt abzustürzen", () => {
+      const quelle = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+      const alle = basisText(".factory/extraktion.json").split("\n");
+      const liste = alle.filter((z) => !z.includes(`"muster":"${quelle}"`));
+      assert.equal(liste.length, alle.length - 1, "genau ein Eintrag entfällt");
+      befund({ ".factory/extraktion.json": liste.join("\n"), [`.factory/produkt/vorlagen/${quelle}.vorlage`]: null }, /Vorlage der Rolle ticketSkill fehlt im Export/);
+    });
+
     test("#1929: fehlt die Vorlage einer der neuen Daten-Dateien, bricht der Export ab", () => {
       abbruch({ ".factory/produkt/vorlagen/.github/wiedervorlagen.json.vorlage": null }, /wiedervorlagen\.json\.vorlage: Vorlage fehlt/);
     });
