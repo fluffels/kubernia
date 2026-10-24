@@ -38,8 +38,7 @@
  *
  * Ausführen mit:  npm run check:tseslint-ts7
  */
-
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 
 /** Das Paket, dessen typescript-Peer der echte Engpass ist (der Parser, der mit
  *  TS 7 crasht) — nicht das Meta-Paket `typescript-eslint`. */
@@ -153,4 +152,4 @@ async function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

@@ -12,9 +12,10 @@
  *
  * Exit 0 ok (auch mit Kosten-Lücken), 1 Aufruffehler, 2 Lauf-Ergebnis fehlt oder verletzt den Vertrag (Block erscheint trotzdem).
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { REPO } from "./board-lib.mjs";
@@ -444,4 +445,4 @@ function main(argv) {
   if (r.exit !== 0) process.exit(r.exit);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));
+if (istDirektaufruf(import.meta.url)) main(process.argv.slice(2));

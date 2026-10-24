@@ -25,10 +25,11 @@
  * Ausführen mit:  npm run check:diffcoverage   (nach: npm run test:coverage)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
@@ -406,4 +407,4 @@ function main() {
   console.log(green("✔ check:diffcoverage ok — die geänderten Zeilen sind getestet."));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

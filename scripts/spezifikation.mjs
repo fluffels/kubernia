@@ -22,9 +22,10 @@
  * Grenze: Exit 3 heißt hier immer Fremdeingang; ein knappes API-Kontingent meldet `mitKontingent` mit Exit 5.
  * Grenze: zwei gleichzeitige Reparaturen desselben Tickets: der letzte Schreiber gewinnt.
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
@@ -267,7 +268,7 @@ const echteIo = (config) => { // Fabrik: erst nach bestandener Aufruf- und Confi
   };
 };
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1791).
   const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O; übersteuert Sprache, Labels, Namen und hartAb, Repo und Board-IDs kommen aus der Repo-Config (board-lib/inbox-lib)
   direktaufruf(args, {

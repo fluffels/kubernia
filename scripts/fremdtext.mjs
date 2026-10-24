@@ -12,8 +12,8 @@
  * Exit 0 = Eingang vertraut, 3 = Fremdeingang (nicht automatisch umsetzen), 2 = Aufruf- oder gh-Fehler
  * (fail-closed). Brain-Seite: docs/sicherheit-agenten.md. Der Kern ist pur, gh und die Projekt-Config (`labels.forum`, Pflicht) werden injiziert (Test).
  */
+import { istDirektaufruf } from "./hook-io.mjs";
 import { ghText } from "./gh-cli.mjs";
-import { pathToFileURL } from "node:url";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { flach, issueKommentare, istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
@@ -141,7 +141,7 @@ const ladeConfigOderNichts = () => {
   }
 };
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   direktaufruf(process.argv.slice(2), {
     pruefe: aufrufPruefen,
     fehlerErgebnis: (_argv, vorab) => ({ code: 2, out: "", err: `✖ fremdtext: ${vorab.fehler}\n` }),

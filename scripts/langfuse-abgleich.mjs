@@ -17,10 +17,11 @@
  * docs/model-routing.md › Checkliste Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
@@ -287,4 +288,4 @@ async function main() {
   process.exitCode = exitCode;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (istDirektaufruf(import.meta.url)) await main();

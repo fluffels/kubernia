@@ -36,7 +36,7 @@
  * Nummern und der `--after`-Anker werden nie aufgenommen: „fehlt im Board, nicht aufgenommen: <Grund>“, Exit 1.
  * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   ankerFehler,
@@ -317,4 +317,4 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (istDirektaufruf(import.meta.url)) await main();

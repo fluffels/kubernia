@@ -14,11 +14,12 @@
  * Pfade und Bindungen stehen im Block `architektur` von scripts/docs-gen/config.json (keine zweite Pfadliste); `architektur.quelle` muss `struktur.quelle` der Projekt-Config gleichen (sonst Exit 1 vor dem ersten likec4-Aufruf).
  * Die LikeC4-Model-API steckt in genau einem Adapter (`ladeC4Modell`).
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { fenceMaske, leseConfigObjekt } from "./docs-gen/markdown.mjs";
 import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from "./projekt-config-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
@@ -538,4 +539,4 @@ export async function cli(argv, { rootDir = ROOT, out = console.log, err = conso
   return rot ? 1 : 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exitCode = await cli(process.argv.slice(2));
+if (istDirektaufruf(import.meta.url)) process.exitCode = await cli(process.argv.slice(2));

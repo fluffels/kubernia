@@ -17,7 +17,7 @@
  * `statusCheckRollup` liefert `gh` mit der Standardgrenze (rund 100 Einträge); die CI hat deutlich weniger Checks.
  * Der Kern `bewerte` ist pur, `holePflicht` nimmt den `gh`-Aufruf als Parameter (getestet); nur CLI und Schlaf sind dünne, ungetestete IO.
  */
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ghJson, ghText } from "./gh-cli.mjs";
 
@@ -178,4 +178,4 @@ function main() {
   process.exit(r.exit);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

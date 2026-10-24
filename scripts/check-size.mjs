@@ -17,8 +17,9 @@
  * Quelle der Wahrheit für Budget + Ausnahmen, damit nichts auseinanderdriftet.
  */
 
+import { istDirektaufruf } from "./hook-io.mjs";
 import { readFileSync, readdirSync } from 'node:fs'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
 import { ausnahmenAus, ladeProjektConfig, strukturAus } from './projekt-config-lib.mjs'
 
@@ -178,4 +179,4 @@ function main() {
   process.exit(1)
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()
+if (istDirektaufruf(import.meta.url)) main()

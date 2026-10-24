@@ -19,9 +19,9 @@
  * Grenze: scheitert nach dem PR-Kommentar der Hand-off-Kommentar, ist der PR-Kommentar gepostet; ein Neuversuch zählt als weiterer Durchgang (fail-closed).
  * Grenze: der Bericht ist Selbstauskunft des Abnahme-Agenten; das Skript prüft Form, Vollständigkeit und Worktree, nicht die Wahrheit der Belege.
  */
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { configAusAufruf, spracheAus } from "./projekt-config-lib.mjs";
@@ -297,7 +297,7 @@ const echteIo = (config) => ({ // Fabrik: erst nach bestandener Aufruf- und Conf
   git: (cwd, args) => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }),
 });
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1791).
   const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O; übersteuert Sprache, Labels, Namen und hartAb, Repo und Board-IDs kommen aus der Repo-Config (board-lib/inbox-lib)
   direktaufruf(args, {

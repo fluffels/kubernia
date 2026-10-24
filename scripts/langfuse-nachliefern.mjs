@@ -11,13 +11,14 @@
  * (Hook-Verdrahtung: #1578, Einstieg scripts/langfuse-abgleich-hook.mjs; mit --ausloeser laufen Wartezeit, Lock und Log, ohne nur Lock und Log). Aufruf: docs/referenz/befehle.md, Einordnung: docs/model-routing.md › Checkliste Punkt 1.
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { hauptrepoPfad, ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import {
   diffMultimenge,
@@ -335,4 +336,4 @@ async function main() {
   process.exitCode = ergebnis.exitCode;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (istDirektaufruf(import.meta.url)) await main();

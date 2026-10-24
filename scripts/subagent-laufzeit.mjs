@@ -25,7 +25,7 @@
  *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
  */
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { median, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -251,4 +251,4 @@ export function hauptlauf(argv, { config, ordner = projektOrdner, ladeTyp = lade
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = hauptlauf(process.argv.slice(2));
+if (istDirektaufruf(import.meta.url)) process.exitCode = hauptlauf(process.argv.slice(2));

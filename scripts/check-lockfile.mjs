@@ -33,9 +33,10 @@
  * Ausführen mit:  npm run check:lockfile   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { resolveBase } from "./check-basis.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
@@ -244,4 +245,4 @@ function main() {
   console.log(green(`✔ check:lockfile ok — package-lock.json ist synchron zu package.json.`));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

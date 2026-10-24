@@ -16,8 +16,9 @@
  * Bewusst ein reines Node-Skript (nur Builtins). Ausführen mit: npm run check:docmap
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
@@ -126,4 +127,4 @@ function main() {
   );
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

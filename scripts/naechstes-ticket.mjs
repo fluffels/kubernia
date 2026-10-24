@@ -23,9 +23,9 @@
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
  * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); dazu EINE GraphQL-Abfrage der 50 jüngsten offenen Issues für den Board-Verzug (#1866: Items auf einem Board, die die REST-Listen noch nicht führen, stehen als Zeile `VERZUG #a, #b: …` und als `verzug` im JSON; fail-open, ein Fehler wird zum Hinweis). `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
  */
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
@@ -428,7 +428,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   return { lade, ladeEinzeln, fuellstand: fuellstandLader(), owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O; übersteuert Sprache, Labels, Namen und hartAb, Repo und Board-IDs kommen aus der Repo-Config (board-lib/inbox-lib)
   direktaufruf(args, {

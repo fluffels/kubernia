@@ -33,11 +33,11 @@
  *
  * Reines Node-Skript (nur Builtins + git). Die Entscheidungen sind pur exportiert, git und Dateisystem injizierbar.
  */
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
@@ -400,7 +400,7 @@ export function echteDeps({ config } = {}) {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   let r;
   try {
     // Aufruf zuerst: `echteDeps()` ruft git, ein falscher Aufruf braucht kein I/O (#1817).

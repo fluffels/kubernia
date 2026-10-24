@@ -32,8 +32,9 @@
  *   node scripts/check-any-suppressions.mjs --write
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
@@ -183,4 +184,4 @@ Aufruf: node scripts/check-any-suppressions.mjs [--write]`);
   process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

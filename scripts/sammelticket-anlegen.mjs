@@ -20,7 +20,7 @@
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
@@ -266,4 +266,4 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (istDirektaufruf(import.meta.url)) await main();

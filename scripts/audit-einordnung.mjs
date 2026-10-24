@@ -11,9 +11,10 @@
  * Aufruf: node scripts/audit-einordnung.mjs [--dry-run]   (Workflow: .github/workflows/audit-einordnung.yml)
  * Die Funktionen oben sind pur und getestet (test/audit-einordnung.test.ts); die Aufrufe von npm und gh unten nicht.
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { ladeBoardLibs, inboxStart } from "./inbox-start-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
@@ -197,4 +198,4 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   return rot ? 1 : 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = await main();

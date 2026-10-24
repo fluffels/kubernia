@@ -11,10 +11,11 @@
  * ein neues Gate läuft automatisch in beiden Modi mit. Die CI fährt weiter das rohe `npm run verify`.
  * Fail-closed: kann der Slice nicht sicher bestimmt werden, laufen Lint und Test voll.
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
@@ -214,4 +215,4 @@ Aufruf: node scripts/verify-lauf.mjs [--changed]`);
   return exitCode(ergebnisse);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = main();

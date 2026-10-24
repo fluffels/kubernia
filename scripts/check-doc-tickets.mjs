@@ -31,9 +31,10 @@
  * Ausführen mit:  npm run check:doctickets
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { readFileSync } from "node:fs";
 import { ghText } from "./gh-cli.mjs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
@@ -198,4 +199,4 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

@@ -38,9 +38,10 @@
  * scripts/stop-verify-hook.mjs (#952).
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { ghJson } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -249,4 +250,4 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   return suspicious.length > 0 ? 1 : 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = main();

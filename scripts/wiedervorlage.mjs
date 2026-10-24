@@ -11,8 +11,9 @@
  * Aufruf: node scripts/wiedervorlage.mjs [--dry-run]
  * Die Funktionen oben sind pur und getestet (test/wiedervorlage.test.ts); die gh-Aufrufe unten nicht.
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { inboxStart } from "./inbox-start-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
@@ -190,4 +191,4 @@ export async function main(argv = process.argv.slice(2), { ladeConfig, ladeLibs,
   });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = await main();

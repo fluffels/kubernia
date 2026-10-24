@@ -28,8 +28,8 @@
  * Im `--je-ticket`-Modus lädt das CLI 48 h vor `--von` (`mitVorlauf`), damit der Vorgänger eines Nachfolgers im Fenster dabei ist.
  * Pur und ohne IO bis auf das CLI. Importiert transkript-calls, preise, brain-metrics, subagent-laeufe; wird selbst nicht importiert.
  */
+import { istDirektaufruf } from "./hook-io.mjs";
 import { readdirSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
@@ -548,4 +548,4 @@ export function hauptlauf(argv, { config, ordner = projektOrdner, ladeTyp = lade
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = hauptlauf(process.argv.slice(2));
+if (istDirektaufruf(import.meta.url)) process.exitCode = hauptlauf(process.argv.slice(2));

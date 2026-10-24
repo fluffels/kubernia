@@ -41,9 +41,10 @@
  * Ausführen mit:  npm run check:internalrefs   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -322,4 +323,4 @@ function bericht(violations, checked, { red, green, label, out, err }) {
   return 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = main();

@@ -32,7 +32,7 @@
  * Ausführen (in der Action):  printf '%s' "$DISC_TITLE" | node scripts/forum-sanitize.mjs
  */
 
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 /** Standard-Längenlimit für einen Forum-Titel im Issue (GitHub-Issue-Titel
@@ -172,4 +172,4 @@ Aufruf: node scripts/forum-sanitize.mjs [--body]   (Text von stdin)
   });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

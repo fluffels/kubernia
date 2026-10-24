@@ -4,9 +4,10 @@
 // `quelle.sauber`): ein Stand ohne Tag oder mit `sauber: false` (Entwurfs-Sync, Version 1) ist rot, der Weg ist ein Sync von einem Tag. Ohne Sync-Stand ist das Projekt
 // selbst Quelle des Besitzes, die Besitz-Prüfung entfällt mit einer Zeile. Die Projektwert-Stellen (aus der Config erzeugte Blöcke und
 // Frontmatter-Zeilen, `scripts/projektwerte.mjs`) werden immer gegen die Config geprüft, auch ohne Sync-Stand.
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./hook-io.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, ERGAENZBARE_EINHEITEN, ergaenzungsAnzahlVon, ergaenzungsBefundeVon, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
@@ -167,6 +168,6 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   process.exitCode = cli(process.argv.slice(2));
 }

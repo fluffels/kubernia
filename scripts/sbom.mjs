@@ -8,10 +8,10 @@
  *
  * Aufruf: node scripts/sbom.mjs [--aus <pfad>]   (Standard: sbom/bom.cdx.json)
  * Exit: 0 ok, 1 Erzeugung oder Prüfung fehlgeschlagen, 2 falsche Argumente. */
+import { istDirektaufruf } from "./hook-io.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { pathToFileURL } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
 
 export const NPM_ARGS = ["sbom", "--sbom-format", "cyclonedx", "--sbom-type", "application", "--package-lock-only"];
@@ -87,4 +87,4 @@ const echteIo = {
   fehler: (z) => console.error(z),
 };
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = fuehreAus(process.argv.slice(2), echteIo);
+if (istDirektaufruf(import.meta.url)) process.exitCode = fuehreAus(process.argv.slice(2), echteIo);
