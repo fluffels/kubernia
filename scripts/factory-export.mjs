@@ -15,6 +15,7 @@ import { istGanzeDatei, normalisiereEol, projektwertDateien, pruefeManifest, ren
 import { artVon, EXTRAKTION_PFAD, MITZIEHEND, musterRegex, pruefeExtraktion } from "./besitz-extraktion.mjs";
 import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import {
+  KANDIDATEN,
   kuberniaBegriffe,
   lockAuszug,
   pruefeLiterale,
@@ -126,7 +127,7 @@ function vorpruefung(leser, befunde) {
  */
 export function baueExport({ leser }) {
   const befunde = [];
-  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [] };
+  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, durchgelassenJeMuster: [], relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [] };
   const aus = () => ({ dateien: new Map(), befunde, bericht });
   const eingabe = vorpruefung(leser, befunde);
   if (eingabe === null) return aus();
@@ -214,11 +215,12 @@ export function baueExport({ leser }) {
   const pak = pruefePaketImporte(texte, kubPkg, pkgVorlage);
   const pfade = pruefeLokalePfade(texte, [repoName(factoryConfig), repoName(kubConfig)]);
   const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
-  const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === PROJEKT_CONFIG || p === LOCK ? "frei" : seiten.has(p) ? "zaehlen" : null));
+  const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === LOCK ? "frei" : p === PROJEKT_CONFIG || seiten.has(p) ? "zaehlen" : null));
   befunde.push(...rel.befunde, ...pak.befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
   Object.assign(bericht, {
     anzahl: dateien.size,
     durchgelassen: pfade.durchgelassen,
+    durchgelassenJeMuster: pfade.jeMuster,
     relativUnaufloesbar: rel.unaufloesbar,
     paketUnbekannt: pak.unbekannt,
     literalRest: [...lit.rest].sort(([a], [b]) => (a < b ? -1 : 1)),
@@ -232,10 +234,10 @@ function berichtZeilen(b) {
   return [
     `Export-SHA ${b.sha}`,
     `Dateien: ${b.anzahl} (Besitz ${h.besitz}, Extraktionsliste ${h.extraktion}, Vorlagen ${h.vorlage}, berechnet ${h.berechnet})`,
-    `Lokale Pfade durchgelassen (Platzhalter, Fixture-Wurzeln): ${b.durchgelassen}`,
+    `Lokale Pfade durchgelassen (Zeilen mit Platzhalter oder Fixture-Wurzel, ohne Befund): ${b.durchgelassen}; je Muster ${KANDIDATEN.map((re, k) => `${re.source} = ${b.durchgelassenJeMuster[k]}`).join("; ")}`,
     `Relative Importe, in der Quelle schon unauflösbar (Fixture-Text): ${b.relativUnaufloesbar}`,
     `Paket-Spezifizierer, die kubernia nicht kennt (Fixture-Text): ${b.paketUnbekannt.length} (Namen: ${b.paketUnbekannt.filter((n) => !n.startsWith("?")).join(", ")}; ${b.paketUnbekannt.filter((n) => n.startsWith("?")).length} Texte, die kein Paketname sind)`,
-    `kubernia-Rest in Factory-Seiten: ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,
+    `kubernia-Rest (Factory-Seiten und .factory/projekt.json, ganze Wörter, je Fundstelle einmal): ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,
     ...b.literalRest.map(([p, n]) => `  ${p}: ${n}`),
   ];
 }

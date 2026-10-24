@@ -84,7 +84,13 @@ export function paketName(spec) {
   return PAKET_NAME.test(name) ? name : `?${spec}`;
 }
 
-/** Relative Importe aller Code-Dateien: Befund, wenn der Import in der Quelle auflöst und im Export nicht; in der Quelle schon unauflösbare werden gezählt. */
+/** Testdateien: nur dort kann ein Importtext Fixture sein (ein Import in einem String oder Template); in jeder anderen Code-Datei ist ein nicht auflösbarer Import ein Befund. */
+export const FIXTURE_TOLERIERT = /\.test\.ts$/;
+
+/**
+ * Relative Importe aller Code-Dateien: Befund, wenn der Import im Export nicht auflöst. Ist er auch in der Quelle nicht auflösbar, ist er in einer Testdatei
+ * Fixture-Text und wird gezählt, in jeder anderen Code-Datei (Skript, Lib, Konfiguration, Test-Hilfe) ein Befund.
+ */
 export function pruefeRelativeImporte(dateien, quellPfade) {
   const exportPfade = new Set(dateien.keys());
   const befunde = [];
@@ -94,7 +100,8 @@ export function pruefeRelativeImporte(dateien, quellPfade) {
     for (const spec of relativeImporte(text)) {
       if (zielDatei(pfad, spec, exportPfade) !== null) continue;
       const q = zielDatei(pfad, spec, quellPfade);
-      if (q === null) unaufloesbar++;
+      if (q === null && FIXTURE_TOLERIERT.test(pfad)) unaufloesbar++;
+      else if (q === null) befunde.push(`${pfad}: relativer Import '${spec}' löst weder im Export noch in der Quelle auf`);
       else befunde.push(`${pfad}: relativer Import '${spec}' löst im Export nicht auf (in der Quelle: ${q})`);
     }
   }
@@ -103,7 +110,7 @@ export function pruefeRelativeImporte(dateien, quellPfade) {
 
 /**
  * Paket-Importe: Befund, wenn ein Paket, das kubernia kennt, nicht in der Vorlage steht; Befund auch für eine Vorlagen-Abhängigkeit, die kubernia nicht
- * hat oder mit anderer Range führt. Unbekannte Namen (Fixture-Text) und Builtins zählen nicht; die unbekannten Namen kommen sortiert zurück.
+ * hat oder mit anderer Range führt. Unbekannte Namen sind in Testdateien Fixture-Text (gezählt), sonst ein Befund; Builtins zählen nicht; die unbekannten Namen kommen sortiert zurück.
  */
 export function pruefePaketImporte(dateien, kubPkg, vorlagePkg) {
   const kub = new Set(namen(kubPkg));
@@ -116,7 +123,8 @@ export function pruefePaketImporte(dateien, kubPkg, vorlagePkg) {
       const name = paketName(spec);
       if (name === null || vorlage.has(name)) continue;
       if (kub.has(name)) befunde.push(`${pfad}: Paket '${name}' steht nicht in der package.json-Vorlage`);
-      else unbekannt.add(name);
+      else if (FIXTURE_TOLERIERT.test(pfad)) unbekannt.add(name);
+      else befunde.push(`${pfad}: Paket '${name}' steht weder in der package.json-Vorlage noch in kubernia`);
     }
   }
   const range = (pkg, name) => ABHAENGIGKEITS_ARTEN.map((art) => pkg?.[art]?.[name]).find((r) => r !== undefined);
@@ -143,7 +151,7 @@ export function pruefeSkriptBezuege(dateien) {
 
 // Kandidaten der Pfadregel laut Auftrag; Laufwerks- und Ordnerteil getrennt gebaut, damit der Quelltext selbst keinen lokalen Pfad ergibt.
 const LAUFWERK = "[A-Za-z]:[\\\\/]+";
-const KANDIDATEN = [new RegExp(`${LAUFWERK}(?:dev|Users)(?![\\w])`), new RegExp("(?<![\\w.:/])/[a-z]/dev/"), new RegExp("(?<![\\w.:/\\\\])/Users/")];
+export const KANDIDATEN = [new RegExp(`${LAUFWERK}(?:dev|Users)(?![\\w])`), new RegExp("(?<![\\w.:/])/[a-z]/dev/"), new RegExp("(?<![\\w.:/\\\\])/Users/")];
 
 /** Lokale Pfade: Befund ist jeder Treffer von `pfadBefunde` (mit den Repo-Namen aus `repoNamen`); Kandidatenzeilen ohne Befund (Platzhalter, Fixture-Wurzeln) werden gezählt. */
 export function pruefeLokalePfade(dateien, repoNamen) {
@@ -156,12 +164,18 @@ export function pruefeLokalePfade(dateien, repoNamen) {
   const befunde = [...treffer.values()].map((h) => `${h.file}:${h.line}: lokaler Pfad (${h.term}): ${h.excerpt}`);
   const mitBefund = new Set([...treffer.values()].map((h) => `${h.file}:${h.line}`));
   let durchgelassen = 0;
+  const jeMuster = KANDIDATEN.map(() => 0);
   for (const pfad of dateiListe) {
     lies(pfad).split(/\r?\n/).forEach((zeile, i) => {
-      if (KANDIDATEN.some((re) => re.test(zeile)) && !mitBefund.has(`${pfad}:${i + 1}`)) durchgelassen++;
+      const trifft = KANDIDATEN.map((re) => re.test(zeile));
+      if (!trifft.includes(true) || mitBefund.has(`${pfad}:${i + 1}`)) return;
+      durchgelassen++;
+      trifft.forEach((t, k) => {
+        if (t) jeMuster[k]++;
+      });
     });
   }
-  return { befunde, durchgelassen };
+  return { befunde, durchgelassen, jeMuster };
 }
 
 /**
@@ -173,18 +187,19 @@ export function kuberniaBegriffe(kubConfig, factoryConfig) {
   const fac = begriffeAus(factoryConfig);
   const literale = Object.keys(factoryConfig.projektliterale ?? {});
   const out = {};
+  for (const name of literale) out[name] = fac[name];
   for (const [name, re] of Object.entries(kub)) {
     if (literale.includes(name)) continue;
     const f = fac[name];
     const geteilt = f !== undefined && f.source === re.source && f.flags === re.flags;
     if (!geteilt) out[name] = re;
   }
-  for (const name of literale) out[name] = fac[name];
   return out;
 }
 
 /**
- * kubernia-Literale: Befund je Datei und Begriff (mit Anzahl). `ausgenommen(pfad)` liefert `null` (prüfen), `"zaehlen"` (Rest je Datei im Bericht)
+ * kubernia-Literale als ganze Wörter (ein Teilwort wie `kuberniaartig` trifft nicht): Befund je Datei und Begriff (mit Anzahl). Eine Fundstelle zählt einmal und gehört dem
+ * ersten Begriff, der sie trifft (die Reihenfolge der Begriffe ist die Rangfolge: `kuberniaBegriffe` nennt die Projektliterale zuerst). `ausgenommen(pfad)` liefert `null` (prüfen), `"zaehlen"` (Rest je Datei im Bericht)
  * oder `"frei"` (nicht geprüft).
  */
 export function pruefeLiterale(dateien, begriffe, ausgenommen) {
@@ -193,14 +208,30 @@ export function pruefeLiterale(dateien, begriffe, ausgenommen) {
   for (const [pfad, text] of dateien) {
     const modus = ausgenommen(pfad);
     if (modus === "frei") continue;
+    const belegt = new Set();
+    const je = new Map();
     for (const [name, re] of Object.entries(begriffe)) {
-      const n = (text.match(re) ?? []).length;
-      if (n === 0) continue;
+      for (const m of text.matchAll(re)) {
+        const von = m.index;
+        const bis = von + m[0].length;
+        if (m[0] === "" || !ganzesWort(text, von, bis, m[0]) || belegt.has(von)) continue;
+        belegt.add(von);
+        je.set(name, (je.get(name) ?? 0) + 1);
+      }
+    }
+    for (const [name, n] of je) {
       if (modus === "zaehlen") rest.set(pfad, (rest.get(pfad) ?? 0) + n);
       else befunde.push(`${pfad}: kubernia-Literal '${name}' (${n}x)`);
     }
   }
   return { befunde, rest };
+}
+
+const WORTZEICHEN = /[\p{L}\p{N}_]/u;
+/** Steht der Treffer `text[von, bis)` als ganzes Wort? Eine Seite prüft nur, wenn der Treffer dort mit einem Wortzeichen endet (ein Präfix wie `KQ-` grenzt rechts von selbst ab). */
+function ganzesWort(text, von, bis, treffer) {
+  if (WORTZEICHEN.test(treffer[0]) && von > 0 && WORTZEICHEN.test(text[von - 1])) return false;
+  return !(WORTZEICHEN.test(treffer.at(-1)) && bis < text.length && WORTZEICHEN.test(text[bis]));
 }
 
 /** Ordner einer Vorlage im Quellbaum. */
