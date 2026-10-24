@@ -259,29 +259,30 @@ describe("ladeProjektConfig", () => {
       writeFileSync(p, JSON.stringify({ ...gueltig(), repo }));
       return p;
     };
-    test("ohne Pfad gilt der Pfad aus der Umgebung statt des Standardpfads", () => {
-      const d = tmp();
-      mkdirSync(join(d, ".factory"));
-      writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), repo: "acme/standard" }));
-      const fremd = schreibe(d, "fremd.json", "acme/fremd");
-      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: fremd } }).repo, "acme/fremd");
+    test("ohne Pfad und ohne rootDir gilt der Pfad aus der Umgebung statt des Standardpfads", () => {
+      const fremd = schreibe(tmp(), "fremd.json", "acme/fremd");
+      assert.equal(pc.ladeProjektConfig({ env: { FACTORY_PROJEKT_CONFIG: fremd } }).repo, "acme/fremd");
     });
     test("ein expliziter pfad geht vor der Umgebung", () => {
       const d = tmp();
       const a = schreibe(d, "a.json", "acme/a");
       const b = schreibe(d, "b.json", "acme/b");
-      assert.equal(pc.ladeProjektConfig({ rootDir: d, pfad: a, env: { FACTORY_PROJEKT_CONFIG: b } }).repo, "acme/a");
+      assert.equal(pc.ladeProjektConfig({ pfad: a, env: { FACTORY_PROJEKT_CONFIG: b } }).repo, "acme/a");
     });
-    test("ohne oder leere Variable gilt der Standardpfad", () => {
+    test("ein explizites rootDir (anderes Repo) ignoriert die Umgebung", () => {
       const d = tmp();
       mkdirSync(join(d, ".factory"));
       writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), repo: "acme/standard" }));
-      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: {} }).repo, "acme/standard");
-      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: "" } }).repo, "acme/standard");
+      const fremd = schreibe(d, "fremd.json", "acme/fremd");
+      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: fremd } }).repo, "acme/standard");
+    });
+    test("ohne oder leere Variable gilt der Standardpfad des Repos", () => {
+      const standard = pc.ladeProjektConfig({ pfad: ".factory/projekt.json" }).repo;
+      assert.equal(pc.ladeProjektConfig({ env: {} }).repo, standard);
+      assert.equal(pc.ladeProjektConfig({ env: { FACTORY_PROJEKT_CONFIG: "" } }).repo, standard);
     });
     test("eine fehlende Datei am Env-Pfad wirft mit Pfad und Fix-Zeile", () => {
-      const d = tmp();
-      assert.throws(() => pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: "gibt-es-nicht.json" } }), /gibt-es-nicht\.json[\s\S]*Fix:/);
+      assert.throws(() => pc.ladeProjektConfig({ env: { FACTORY_PROJEKT_CONFIG: "gibt-es-nicht.json" } }), /gibt-es-nicht\.json[\s\S]*Fix:/);
     });
   });
 });

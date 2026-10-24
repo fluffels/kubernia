@@ -430,10 +430,11 @@ export function boardPfad(board) {
 /**
  * Liest und prüft die Config; wirft mit Pfad, allen Fehlern und einer „Fix:“-Zeile. `pruefen: false` liest nur und parst (ohne Schema-Prüfung):
  * für Werkzeuge, die genau einen Schlüssel brauchen und ihn selbst prüfen (`worktreeNamenOderGrund`).
- * Pfad-Vorrang: explizites `pfad` (`--config`), dann `FACTORY_PROJEKT_CONFIG` (Fremd-Config-Probe, `scripts/fremd-config-probe.mjs`), sonst `PROJEKT_CONFIG`; leer zählt als nicht gesetzt.
+ * Pfad-Vorrang: explizites `pfad` (`--config`), dann `FACTORY_PROJEKT_CONFIG` (Fremd-Config-Probe, `scripts/fremd-config-probe.mjs`), sonst `PROJEKT_CONFIG`; leer zählt als nicht gesetzt. Ein explizites `rootDir` (anderes Repo, etwa `--wurzel`) ignoriert die Variable.
  */
-export function ladeProjektConfig({ rootDir = ROOT, pfad, pruefen = true, env = process.env } = {}) {
-  const gewaehlt = pfad || umgebungsWert(env, "FACTORY_PROJEKT_CONFIG") || PROJEKT_CONFIG;
+export function ladeProjektConfig({ rootDir, pfad, pruefen = true, env = process.env } = {}) {
+  const gewaehlt = pfad || (rootDir === undefined ? umgebungsWert(env, "FACTORY_PROJEKT_CONFIG") : undefined) || PROJEKT_CONFIG;
+  rootDir ??= ROOT;
   const abs = isAbsolute(gewaehlt) ? gewaehlt : resolve(rootDir, gewaehlt);
   let roh;
   try {
