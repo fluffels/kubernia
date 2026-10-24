@@ -259,10 +259,7 @@ describe("Diff-Größenbudget (#533)", () => {
   });
 
   test("Standardpfad: ohne injizierte `zeilen` liest der Wächter die Projekt-Config", () => {
-    const echterTrailer = `chore: bewusst breit
-
-${ECHT.diffsizeOverride}: #317 Epic-Split
-`;
+    const echterTrailer = `chore: bewusst breit\n\n${ECHT.diffsizeOverride}: #317 Epic-Split\n`;
     const r = checkDiffSizeRoh({ runGit: gitWith("BASE", OVER, echterTrailer), env: tightEnv });
     assert.equal(r.allowed, true);
     const fremd = checkDiffSizeRoh({ runGit: gitWith("BASE", OVER, echterTrailer), env: tightEnv, zeilen: ZEILEN_AB });

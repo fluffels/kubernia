@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { FREMD, projektConfig } from "./support/fremd-config";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, Typen lokal deklariert.
@@ -27,10 +28,15 @@ import { dirname, join } from "node:path";
 import * as checkLock from "../scripts/check-lockfile.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
-const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Record<string, string> };
-/** Zeilen der echten Config (KQ-); ein anderes Präfix darf die KQ-Zeile nicht zählen lassen. */
-const ZEILEN = commitZeilen("KQ-", "kubernia-planner");
-const ZEILEN_AB = commitZeilen("AB-", "kubernia-planner");
+const { commitZeilen, commitZeilenAus } = sliceRaw as unknown as {
+  commitZeilen: (praefix: string, planer: string) => Record<string, string>;
+  commitZeilenAus: (config: unknown) => Record<string, string>;
+};
+/** Zeilen der Fremd-Config; ein anderes Präfix (AB-) darf deren Zeile nicht zählen lassen. */
+const ZEILEN = commitZeilenAus(FREMD);
+const ZEILEN_AB = commitZeilen("AB-", FREMD.agenten.planer);
+/** Zeilen der echten Config: nur für die echte Doku und den Standardpfad ohne injizierte Zeilen. */
+const ECHT = commitZeilenAus(projektConfig());
 
 type Problem = { kind: string; [k: string]: unknown };
 type Audit = { ok: boolean; problems: Problem[] };
@@ -54,7 +60,7 @@ function lockMirroring(pkg: Pkg): Lock {
 const BASE_PKG: Pkg = {
   name: "demo-paket",
   version: "3.0.0",
-  dependencies: { phaser: "^3.87.0" },
+  dependencies: { "beispiel-lib": "^3.87.0" },
   devDependencies: { vite: "^8.1.0", vitest: "^4.1.9" },
 };
 
@@ -67,14 +73,14 @@ describe("Lockfile-Integrität (#593)", () => {
 
   test("Detektion greift wirklich (Red-Green): ein Bump ohne install wird rot", () => {
     // No-op-Schutz: ein Wächter, der immer grün ist, wäre wertlos. package.json
-    // bumpt phaser, der Lockfile bleibt auf der alten Range → MUSS treffen.
+    // bumpt beispiel-lib, der Lockfile bleibt auf der alten Range → MUSS treffen.
     const lock = lockMirroring(BASE_PKG);
-    const bumped: Pkg = { ...BASE_PKG, dependencies: { phaser: "^4.0.0" } };
+    const bumped: Pkg = { ...BASE_PKG, dependencies: { "beispiel-lib": "^4.0.0" } };
     const r = auditLockfile({ pkg: bumped, lock });
     assert.equal(r.ok, false);
     const p = r.problems.find((x) => x.kind === "spec-mismatch");
     assert.ok(p, "spec-mismatch muss gemeldet werden");
-    assert.equal(p!.name, "phaser");
+    assert.equal(p!.name, "beispiel-lib");
     assert.equal(p!.pkgSpec, "^4.0.0");
     assert.equal(p!.lockSpec, "^3.87.0");
   });
@@ -166,9 +172,10 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
     checkLockfileSlice: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; zeilen?: Record<string, string> }) => Slice;
   };
   const checkLockfileSlice = sliceModul.checkLockfileSlice;
+  const checkLockfileSliceRoh = sliceModul.checkLockfileSlice;
   const OVERRIDE = ZEILEN.lockfileOverride;
   const DEPENDABOT = "49699333+dependabot[bot]@users.noreply.github.com";
-  const MENSCH = "12345+fluffels@users.noreply.github.com";
+  const MENSCH = "12345+mensch@users.noreply.github.com";
 
   /** Fake-git: Basis BASE, geänderte Dateien, Autor-Mails der Slice-Commits, Commit-Messages. */
   const gitMit =
@@ -186,7 +193,7 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
       if (a[0] === "log") return opts.messages ?? "";
       throw new Error("unerwartet: " + a.join(" "));
     };
-  const messe = (o: Parameters<typeof gitMit>[0]) => checkLockfileSlice({ runGit: gitMit(o), env: {} });
+  const messe = (o: Parameters<typeof gitMit>[0]) => checkLockfileSlice({ runGit: gitMit(o), env: {}, zeilen: ZEILEN });
 
   test("nur package-lock.json geändert (Metadaten-Drift) → rot", () => {
     const r = messe({ geaendert: "package-lock.json\n" });
@@ -227,10 +234,16 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
     assert.deepEqual(ungueltig.invalidOverrides, [`${OVERRIDE}: ohne nummer`]);
   });
 
-  test("Präfix aus der Config (#1741): mit AB- zählt die KQ-Override-Zeile nicht, die AB-Zeile schon", () => {
+  test("Präfix aus der Config (#1741): mit AB- zählt die Override-Zeile der Fremd-Config nicht, die AB-Zeile schon", () => {
     const mitZeilen = (messages: string) => checkLockfileSlice({ runGit: gitMit({ geaendert: "package-lock.json\n", messages }), env: {}, zeilen: ZEILEN_AB });
     assert.equal(mitZeilen(`chore\n\n${OVERRIDE}: #99 npm-Update bewusst\n`).allowed, false);
     assert.equal(mitZeilen(`chore\n\nAB-Lockfile-Override: #99 npm-Update bewusst\n`).allowed, true);
+  });
+
+  test("Standardpfad: ohne injizierte Zeilen liest der Wächter die Projekt-Config", () => {
+    const git = gitMit({ geaendert: "package-lock.json\n", messages: `chore\n\n${ECHT.lockfileOverride}: #99 npm-Update bewusst\n` });
+    assert.equal(checkLockfileSliceRoh({ runGit: git, env: {} }).allowed, true);
+    assert.equal(checkLockfileSliceRoh({ runGit: git, env: {}, zeilen: ZEILEN_AB }).allowed, false);
   });
 
   test("Override ohne Drift (Lockfile mit package.json, Dependabot, kein Lockfile-Diff) ist stale", () => {
@@ -262,7 +275,7 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
   test("Doku nennt den Override so, wie das Skript ihn liest", () => {
     for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
       const text = readFileSync(join(REPO_ROOT, datei), "utf8");
-      assert.ok(text.includes(OVERRIDE), `${datei} beschreibt ${OVERRIDE}`);
+      assert.ok(text.includes(ECHT.lockfileOverride), `${datei} beschreibt ${ECHT.lockfileOverride}`);
     }
   });
 });
