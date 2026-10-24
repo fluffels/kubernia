@@ -526,7 +526,7 @@ Die Toolzeit liegt in allen Gruppen bei rund 1 min. Mittel je Lauf (Transkript-Z
 
 ### Planer-Kosten (#1558)
 
-**Aufzeichnungsbasis:** `subagent-laufzeit` nennt je Gruppe die Output-Quote (aufgezeichnet / geschätzt) und warnt mit „Hinweis Aufzeichnungsbasis“, wenn sie zwischen alt und neu oder zwischen Tagen um mehr als 0,2 abweicht (die Output-Aufzeichnung im Transkript hat dann gewechselt); über diese Gruppen sind aufgezeichnete Kosten nicht vergleichbar, nur geschätzte.
+**Aufzeichnungsbasis:** `subagent-laufzeit` nennt je Gruppe die Output-Quote (aufgezeichnet / geschätzt) und warnt mit „Hinweis Aufzeichnungsbasis“, wenn sie zwischen alt und neu oder zwischen Tagen um mehr als 0,2 abweicht (nur Tage und Schnitt-Seiten mit mindestens 5 Läufen zählen, `BASIS_MIN_N`; die Output-Aufzeichnung im Transkript hat dann gewechselt); über diese Gruppen sind aufgezeichnete Kosten nicht vergleichbar, nur geschätzte.
 
 **Befund des Tickets und warum er gemischt ist:** Das Ticket (167 $, 102 Läufe, Ø 39 Requests, 1,64 $ je Lauf) mittelt über 95 Läufe vor und nur 11 nach dem Request-Budget aus #1441 (Merge #1541, 2026-10-08T22:23:11Z); den Effekt sieht man dort nicht.
 

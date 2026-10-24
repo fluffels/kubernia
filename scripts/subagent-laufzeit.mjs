@@ -18,7 +18,7 @@
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
  * Aufzeichnungsbasis: Die Tabelle nennt je Gruppe `Kosten geschätzt ($, Median)` und die `Output-Quote` (aufgezeichneter / geschätzter Output, `outputQuote`, `null` ohne geschätzten Output). Weichen die Quoten
- * von alt und neu (mit `--schnitt`) oder die Spanne der Tagesquoten um mehr als `BASIS_SPRUNG` (0,2) ab, hat die Output-Aufzeichnung im Transkript gewechselt: `aggregat.basisWarnung` (auch in `--json`, sonst `null`)
+ * von alt und neu (mit `--schnitt`) oder die Spanne der Tagesquoten (nur Tage und Seiten mit mindestens `BASIS_MIN_N` = 5 Läufen) um mehr als `BASIS_SPRUNG` (0,2) ab, hat die Output-Aufzeichnung im Transkript gewechselt: `aggregat.basisWarnung` (auch in `--json`, sonst `null`)
  * und eine Zeile „Hinweis Aufzeichnungsbasis“ unter der Tabelle sagen, dass aufgezeichnete Kosten über diese Gruppen nicht vergleichbar sind; verglichen wird dann nur geschätzt.
  *
  * Je Gruppe nennt die Spalte `Tickets` die verschiedenen Tickets; hat ein Ticket mehrere Läufe, steht unter der Tabelle eine Warnzeile (Mediane je Lauf, nicht je Ticket; #1646).
