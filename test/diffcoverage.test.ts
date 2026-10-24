@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { FREMD, projektConfig } from "./support/fremd-config";
 
 // Schicht-SSOT (bewusst CommonJS, siehe scripts/layers.cjs) — damit der Floor-Test
 // unten an die ECHTEN Schicht-Buckets gebunden ist statt an vier abgeschriebene Namen.
@@ -61,14 +62,21 @@ const {
   parseLcovBranches,
   teilweiseGetestet,
   evaluateByLayer,
-  checkDiffCoverage,
+  checkDiffCoverage: checkDiffCoverageRoh,
 } = checkCovRaw as CheckDiffCoverageModule;
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
-const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Record<string, string> };
-/** Zeilen der echten Config (KQ-); ein anderes Präfix darf die KQ-Zeile nicht zählen lassen. */
-const ZEILEN = commitZeilen("KQ-", "kubernia-planner");
-const ZEILEN_AB = commitZeilen("AB-", "kubernia-planner");
+const { commitZeilen, commitZeilenAus } = sliceRaw as unknown as {
+  commitZeilen: (praefix: string, planer: string) => Record<string, string>;
+  commitZeilenAus: (config: unknown) => Record<string, string>;
+};
+/** Zeilen der Fremd-Config; ein anderes Präfix (AB-) darf deren Zeile nicht zählen lassen. */
+const ZEILEN = commitZeilenAus(FREMD);
+const ZEILEN_AB = commitZeilen("AB-", FREMD.agenten.planer);
+/** Zeilen der echten Config: nur für den Standardpfad ohne injizierte Zeilen. */
+const ECHT = commitZeilenAus(projektConfig());
+/** Der Wächter mit den Zeilen der Fremd-Config; ein Test ohne eigene `zeilen` liest damit nie die echte Projekt-Config. */
+const checkDiffCoverage = (o: Parameters<CheckDiffCoverageModule["checkDiffCoverage"]>[0]) => checkDiffCoverageRoh({ zeilen: ZEILEN, ...o });
 
 /** Hängt an einen Fake-git einen Slice-Commit mit `line` als Message (Override-Trailer, #1269). */
 function mitTrailer(runGit: RunGit, line: string): RunGit {
@@ -283,7 +291,7 @@ describe("Diff-Coverage: Bewertung pro Schicht", () => {
     assert.deepEqual(evaluateByLayer(changed, lcov).below, []);
   });
 
-  test("dieselbe ungetestete Zeile in der PRÄSENTATION ist NICHT rot (Phaser/DOM ist unit-untestbar)", () => {
+  test("dieselbe ungetestete Zeile in der PRÄSENTATION ist NICHT rot (Grafik/DOM ist unit-untestbar)", () => {
     const changed = new Map([["src/scenes/worldscene/clustersync.ts", new Set([1, 2, 3, 4, 5])]]);
     const lcov = new Map([["src/scenes/worldscene/clustersync.ts", new Map([[1, 0], [2, 0], [3, 0], [4, 0], [5, 0]])]]);
     const v = evaluateByLayer(changed, lcov);
@@ -358,10 +366,10 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
   });
 
   test("eigener Override-Schlüssel (#1269): ein Diffsize-Trailer gilt hier nicht", () => {
-    assert.equal(ZEILEN.diffcovOverride, "KQ-Diffcov-Override");
+    assert.equal(ZEILEN.diffcovOverride, `${FREMD.praefixe.commitZeile}Diffcov-Override`);
     const runGit = mitTrailer(
       (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
-      "KQ-Diffsize-Override: #1021 falsches Gate",
+      `${ZEILEN.diffsizeOverride}: #1021 falsches Gate`,
     );
     const r = checkDiffCoverage({ runGit, readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }), env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(r.allowed, false);
@@ -372,12 +380,12 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
     const basis: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
     const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
     const env = { FACTORY_DIFF_BASE: "basesha" };
-    const versetzt = ["- KQ-Diffcov-Override: #1390 mit Strich", "  KQ-Diffcov-Override: #1390 eingerückt"];
+    const versetzt = [`- ${ZEILEN.diffcovOverride}: #1390 mit Strich`, `  ${ZEILEN.diffcovOverride}: #1390 eingerückt`];
     const r = checkDiffCoverage({ runGit: mitTrailer(basis, versetzt.join("\n")), readFile, env });
     assert.equal(r.allowed, false, "die versetzten Zeilen zählen nicht als Override");
     assert.equal(r.failed, true);
-    assert.deepEqual(r.versetzteOverrides, ["- KQ-Diffcov-Override: #1390 mit Strich", "KQ-Diffcov-Override: #1390 eingerückt"]);
-    const gueltig = "KQ-Diffcov-Override: #1390 bewusst";
+    assert.deepEqual(r.versetzteOverrides, [`- ${ZEILEN.diffcovOverride}: #1390 mit Strich`, `${ZEILEN.diffcovOverride}: #1390 eingerückt`]);
+    const gueltig = `${ZEILEN.diffcovOverride}: #1390 bewusst`;
     const beides = checkDiffCoverage({ runGit: mitTrailer(basis, `${versetzt.join("\n")}\n${gueltig}`), readFile, env });
     assert.equal(beides.allowed, true);
     assert.equal(beides.failed, false);
@@ -412,14 +420,24 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     assert.equal(r.failed, true); // die Leitregel: nichts gemessen ⇒ niemals grün
   });
 
-  test("Präfix aus der Config (#1741): mit AB- zählt die KQ-Override-Zeile nicht, die AB-Zeile schon", () => {
+  test("Präfix aus der Config (#1741): mit AB- zählt die Override-Zeile der Fremd-Config nicht, die AB-Zeile schon", () => {
     const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
     const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
     const env = { FACTORY_DIFF_BASE: "basesha" };
-    const kq = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 bewusst"), readFile, env, zeilen: ZEILEN_AB });
-    assert.equal(kq.failed, true, "die KQ-Zeile zählt bei AB- nicht");
+    const kq = checkDiffCoverage({ runGit: mitTrailer(runGit, `${ZEILEN.diffcovOverride}: #1021 bewusst`), readFile, env, zeilen: ZEILEN_AB });
+    assert.equal(kq.failed, true, "die Zeile der Fremd-Config zählt bei AB- nicht");
     const ab = checkDiffCoverage({ runGit: mitTrailer(runGit, "AB-Diffcov-Override: #1021 bewusst"), readFile, env, zeilen: ZEILEN_AB });
     assert.equal(ab.failed, false);
+  });
+
+  test("Standardpfad: ohne injizierte `zeilen` liest der Wächter die Projekt-Config", () => {
+    const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
+    const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
+    const env = { FACTORY_DIFF_BASE: "basesha" };
+    const echt = checkDiffCoverageRoh({ runGit: mitTrailer(runGit, `${ECHT.diffcovOverride}: #1021 bewusst`), readFile, env });
+    assert.equal(echt.failed, false, "die Zeile des echten Präfixes lässt den Slice durch");
+    const ohne = checkDiffCoverageRoh({ runGit, readFile, env });
+    assert.equal(ohne.failed, true);
   });
 
   test("ungetesteter Domänen-Slice → rot; Override mit Begründung lässt ihn bewusst durch", () => {
@@ -429,7 +447,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const rot = checkDiffCoverage({ runGit, readFile, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(rot.failed, true);
     const geduldet = checkDiffCoverage({
-      runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 bewusst"),
+      runGit: mitTrailer(runGit, `${ZEILEN.diffcovOverride}: #1021 bewusst`),
       readFile,
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
@@ -442,20 +460,20 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const r = checkDiffCoverage({
       runGit: mitTrailer(
         (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
-        "KQ-Diffcov-Override: einfach so",
+        `${ZEILEN.diffcovOverride}: einfach so`,
       ),
       readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.allowed, false);
-    assert.deepEqual(r.invalidOverrides, ["KQ-Diffcov-Override: einfach so"]);
+    assert.deepEqual(r.invalidOverrides, [`${ZEILEN.diffcovOverride}: einfach so`]);
   });
 
   test("gesetztes Override bei grünem Slice wird als STALE gemeldet (rot)", () => {
     const r = checkDiffCoverage({
       runGit: mitTrailer(
         (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
-        "KQ-Diffcov-Override: #1021 unnötig",
+        `${ZEILEN.diffcovOverride}: #1021 unnötig`,
       ),
       readFile: () => lcovOk,
       env: { FACTORY_DIFF_BASE: "basesha" },
@@ -478,7 +496,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const r = checkDiffCoverage({
       runGit: mitTrailer(
         (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
-        "KQ-Diffcov-Override: #1021 durchwinken",
+        `${ZEILEN.diffcovOverride}: #1021 durchwinken`,
       ),
       readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
       env: { FACTORY_DIFF_BASE: "basesha" },
@@ -519,18 +537,18 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     assert.equal(r.nothingToMeasure, true);
   });
 
-  test("Doku-Slice mit KQ-Diffcov-Override ist stale → rot (#1309); ohne Trailer bleibt er grün", () => {
+  test("Doku-Slice mit dem Diffcov-Override ist stale → rot (#1309); ohne Trailer bleibt er grün", () => {
     const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("docs/agent-harness.md", ["@@ -0,0 +1 @@", "+text"]) : "basesha");
     const lesen = () => {
       throw new Error("ENOENT");
     };
-    const r = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 unnötig"), readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
+    const r = checkDiffCoverage({ runGit: mitTrailer(runGit, `${ZEILEN.diffcovOverride}: #1021 unnötig`), readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(r.nothingToMeasure, true);
     assert.equal(r.stale, true);
     assert.equal(r.failed, true, "nichts zu messen heißt nichts durchzulassen: der Trailer ist überflüssig");
     const ohne = checkDiffCoverage({ runGit, readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(ohne.failed, false);
-    const fremd = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffsize-Override: #1021 anderes Gate"), readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
+    const fremd = checkDiffCoverage({ runGit: mitTrailer(runGit, `${ZEILEN.diffsizeOverride}: #1021 anderes Gate`), readFile: lesen, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(fremd.failed, false, "ein fremder Schlüssel macht diesen Slice nicht stale");
   });
 
