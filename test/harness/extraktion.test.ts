@@ -315,6 +315,13 @@ describe("Extraktionsliste: Quellwurzel als Parameter und Vorkompilierung (#1888
       assert.equal(extraktionsArten("lib")[art]?.("test/docs/diagramme/x.mmd"), false, `${art}: der Pfad ist an der Wurzel verankert`);
       assert.equal(extraktionsArten("lib")[art]?.("lib/docs/diagramme/x.mmd"), false, `${art}: auch unter der Quellwurzel`);
       assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/.mmd"), false, `${art}: ein Dateiname braucht einen Stamm vor .mmd`);
+      // zweite Ausnahme: genau das Inventar der Eigenbauten
+      assert.equal(extraktionsArten("lib")[art]?.("docs/harness-inventar.md"), true, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/harness-inventar.mdx"), false, `${art}: die Endung ist verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/x/harness-inventar.md"), false, `${art}: nur direkt unter docs/`);
+      assert.equal(extraktionsArten("lib")[art]?.("test/docs/harness-inventar.md"), false, `${art}: an der Wurzel verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/xharness-inventar.md"), false, `${art}: der Name ist ganz`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/harness-inventarxmd"), false, `${art}: der Punkt ist maskiert`);
     }
   });
   test("ohne Quellwurzel bricht die Prüfung ab (der Kern kennt keinen festen Namen)", () => {

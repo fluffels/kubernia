@@ -31,7 +31,7 @@
     {"muster":"docs/agent-harness-faq.md","art":"factory-seite","grund":"Link-Ziel des Besitzes, die Factory führt eine Kopie"},
     {"muster":"docs/agent-harness.md","art":"factory-seite","grund":"Link-Ziel des Besitzes, die Factory führt eine Kopie"},
     {"muster":"docs/harness-glossar.md","art":"factory-seite","grund":"Link-Ziel des Besitzes, die Factory führt eine Kopie"},
-    {"muster":"docs/harness-inventar.md","art":"factory-seite","grund":"Link-Ziel des Besitzes (Test harness-inventar liest die Seite), die Factory führt eine Kopie"},
+    {"muster":"docs/harness-inventar.md","art":"infrastruktur-anteil","grund":"Inventar der Eigenbauten: Vorlage mit den Agentennamen des Factory-Repos, ohne Projekt-Einträge"},
     {"muster":"docs/langfuse-hook-patch.md","art":"factory-seite","grund":"Link-Ziel des Besitzes (Test langfuse-erfassung liest die Seite), die Factory führt eine Kopie"},
     {"muster":"docs/model-routing.md","art":"factory-seite","grund":"Link-Ziel des Besitzes, die Factory führt eine Kopie"},
     {"muster":"docs/referenz/anlaufstellen.md","art":"factory-seite","grund":"Link-Ziel des Besitzes, die Factory führt eine Kopie"},
