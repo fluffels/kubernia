@@ -430,9 +430,11 @@ export function boardPfad(board) {
 /**
  * Liest und prüft die Config; wirft mit Pfad, allen Fehlern und einer „Fix:“-Zeile. `pruefen: false` liest nur und parst (ohne Schema-Prüfung):
  * für Werkzeuge, die genau einen Schlüssel brauchen und ihn selbst prüfen (`worktreeNamenOderGrund`).
+ * Pfad-Vorrang: explizites `pfad` (`--config`), dann `FACTORY_PROJEKT_CONFIG` (Fremd-Config-Probe, `scripts/fremd-config-probe.mjs`), sonst `PROJEKT_CONFIG`; leer zählt als nicht gesetzt.
  */
-export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG, pruefen = true } = {}) {
-  const abs = isAbsolute(pfad) ? pfad : resolve(rootDir, pfad);
+export function ladeProjektConfig({ rootDir = ROOT, pfad, pruefen = true, env = process.env } = {}) {
+  const gewaehlt = pfad || umgebungsWert(env, "FACTORY_PROJEKT_CONFIG") || PROJEKT_CONFIG;
+  const abs = isAbsolute(gewaehlt) ? gewaehlt : resolve(rootDir, gewaehlt);
   let roh;
   try {
     roh = readFileSync(abs, "utf8");

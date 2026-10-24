@@ -112,6 +112,7 @@ Welche Umgebungsvariable ein Werkzeug liest (#1824, [ADR 0022](../adr/0022-dark-
 | `FACTORY_PR_BODY` | Kern | Workflow `ci.yml`; Testskript `test/abnahme-nachweis.test.ts` | `check-abnahme-nachweis` |
 | `FACTORY_GH_KOSTEN_LOG` | Kern | die Maintainerin (optional); Testskripte `test/messskripte-namen.test.ts`, `test/support/mess-golden-faelle.mjs` | `kontingent-lib`, `gh-kontingent` |
 | `FACTORY_MCP_LOG_DIR` | Kern | Testskripte `test/harness/mcp-ausfall.test.ts`, `test/harness/lebenszyklus-namen.test.ts` | `mcp-ausfall` |
+| `FACTORY_PROJEKT_CONFIG` | Kern | Skript `fremd-config-probe` (nur im Kindlauf), Testskript `test/projekt-config.test.ts` | `projekt-config-lib` (`ladeProjektConfig`, wenn kein `--config` gesetzt ist) |
 | `FACTORY_MCP_AUSFALL_STAND` | Kern | Testskript `test/harness/mcp-ausfall.test.ts` | `mcp-ausfall` |
 | `FACTORY_PACING_ZIELQUOTE` | Kern | die Maintainerin (Shell oder `env` in `.claude/settings.local.json`); Testskript `test/budget-pacing.test.ts` | `budget-lib` |
 | `FACTORY_PACING_PROBE_SKRIPT` | Kern | Testskript `test/budget-pacing.test.ts` | `budget-pacing` |

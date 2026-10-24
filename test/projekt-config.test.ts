@@ -13,7 +13,7 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
 interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
-  ladeProjektConfig(opt?: { rootDir?: string; pfad?: string }): { repo: string };
+  ladeProjektConfig(opt?: { rootDir?: string; pfad?: string; env?: Record<string, string | undefined> }): { repo: string };
   trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
@@ -252,6 +252,37 @@ describe("ladeProjektConfig", () => {
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /boards\.0\.projectId[\s\S]*Fix:/);
     writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), version: 1, board: gueltig().boards?.[0], boards: undefined }));
     assert.throws(() => pc.ladeProjektConfig({ rootDir: d }), /projekt\.json[\s\S]*version muss 2[\s\S]*boards[\s\S]*Fix:/);
+  });
+  describe("Env-Schalter FACTORY_PROJEKT_CONFIG", () => {
+    const schreibe = (d: string, name: string, repo: string): string => {
+      const p = join(d, name);
+      writeFileSync(p, JSON.stringify({ ...gueltig(), repo }));
+      return p;
+    };
+    test("ohne Pfad gilt der Pfad aus der Umgebung statt des Standardpfads", () => {
+      const d = tmp();
+      mkdirSync(join(d, ".factory"));
+      writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), repo: "acme/standard" }));
+      const fremd = schreibe(d, "fremd.json", "acme/fremd");
+      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: fremd } }).repo, "acme/fremd");
+    });
+    test("ein expliziter pfad geht vor der Umgebung", () => {
+      const d = tmp();
+      const a = schreibe(d, "a.json", "acme/a");
+      const b = schreibe(d, "b.json", "acme/b");
+      assert.equal(pc.ladeProjektConfig({ rootDir: d, pfad: a, env: { FACTORY_PROJEKT_CONFIG: b } }).repo, "acme/a");
+    });
+    test("ohne oder leere Variable gilt der Standardpfad", () => {
+      const d = tmp();
+      mkdirSync(join(d, ".factory"));
+      writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), repo: "acme/standard" }));
+      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: {} }).repo, "acme/standard");
+      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: "" } }).repo, "acme/standard");
+    });
+    test("eine fehlende Datei am Env-Pfad wirft mit Pfad und Fix-Zeile", () => {
+      const d = tmp();
+      assert.throws(() => pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: "gibt-es-nicht.json" } }), /gibt-es-nicht\.json[\s\S]*Fix:/);
+    });
   });
 });
 
