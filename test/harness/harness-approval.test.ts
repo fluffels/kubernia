@@ -380,6 +380,8 @@ const ABGELOEST = [
 const ABGELOEST_VORFILTER = baueVorfilter(ABGELOEST);
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
+/** Wächterdateien mit den Ankerlisten der festen Stopps (diese Datei und ihr Projekt-Teil): vom Kriterien-Scan ausgenommen. */
+const ANKER_DATEIEN = [EIGENE_DATEI, "test/harness/forum-stopps-projekt.test.ts"];
 
 /**
  * Alle versionierten Textdateien im Agenten-Kontext (Pfad → Inhalt), die die Text-Wächter unten durchsuchen: Doku, Prompts,
@@ -398,7 +400,7 @@ function agentenKontextDateien(): Record<string, string> {
 function abgeloesteFundstellen(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
-    if (pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
+    if (pfad.startsWith("docs/adr/") || ANKER_DATEIEN.includes(pfad)) continue;
     if (ABGELOEST_VORFILTER && !ABGELOEST_VORFILTER.test(inhalt)) continue;
     for (const muster of ABGELOEST) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }
@@ -456,7 +458,7 @@ const KRITERIEN_VORFILTER = baueVorfilter(KRITERIEN);
 function kriterienKopien(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
-    if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
+    if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || ANKER_DATEIEN.includes(pfad)) continue;
     if (KRITERIEN_VORFILTER && !KRITERIEN_VORFILTER.test(inhalt)) continue;
     for (const muster of KRITERIEN) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }
