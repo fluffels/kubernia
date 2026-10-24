@@ -291,7 +291,6 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     const andere: Record<string, string> = {};
     for (const rel of skillMarkdowns()) if (rel !== TICKET_ABLAUF) andere[rel] = lies(rel);
     assert.ok(PRODUKT in andere && FACTORY in andere, "die Dateiliste trägt beide Ticket-Skills (Rekursion intakt)");
-    assert.ok(".agents/skills/forum/SKILL.md" in andere, "die Skill-Quelle forum liegt im Scan");
     assert.deepEqual(doppelterAblauf(lies(TICKET_ABLAUF), andere), []);
   });
   test("die Auslöser der beiden Skills überschneiden sich nicht, nur factory nennt Agentic", () => {

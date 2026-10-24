@@ -47,6 +47,8 @@ import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 
 // Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -156,8 +158,8 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     }
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/agents/")));
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".agents/skills/")));
-    // Die Skill-Quellen unter .agents/skills/ (#1848) liegen im Scan: forum steht dort als Datei, auch ohne Verweis.
-    assert.ok(CLAUDE_DATEIEN.includes(".agents/skills/forum/SKILL.md"), "Quelle forum fehlt im Scan");
+    // Die Skill-Quellen unter .agents/skills/ (#1848) liegen im Scan: die Quelle der Rolle ticketSkill steht dort als Datei, auch ohne Verweis.
+    assert.ok(CLAUDE_DATEIEN.includes((ROLLEN_PFADE as Record<string, string>).ticketSkill), "Quelle der Rolle ticketSkill fehlt im Scan");
     // Bewusst KEINE Pflicht auf ein CLAUDE.md-Ziel: diese Verweise sollen mit #1086/#1087 aussterben.
   });
 

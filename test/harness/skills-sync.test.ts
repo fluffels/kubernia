@@ -12,7 +12,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { WURZEL, lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzLibModul from "../../scripts/besitz-lib.mjs";
@@ -21,9 +21,15 @@ import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 const maskiere = escapeRegex as (s: string) => string;
 const projektwertLauf = (besitzLibModul as unknown as { projektwertLauf: (w: string, c: () => unknown, o?: { schreiben?: boolean }) => { fehler: string[]; geaendert: string[] } }).projektwertLauf;
+
+/** Quelle und Verzeichnisname des Ticket-Skills der Rolle ticketSkill (fester Kern-Pfad, in jedem Projekt vorhanden). */
+const TICKET_QUELLE = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+const TICKET_ORDNER = posix.basename(posix.dirname(TICKET_QUELLE));
 
 interface Befund { datei: string; meldung: string; fix: string }
 interface Quelle { ordner: string; text: string | null }
@@ -113,7 +119,7 @@ describe("pruefeSkills: Negativfälle mit Dateiname und Fix-Zeile", () => {
     expect(b[0].meldung).toContain("Volltext-Skill");
     expect(b[0].fix).toContain("npm run skills:sync");
     // ein Skill mit dem Namen eines früheren Übergangs-Eintrags ist nicht besser gestellt
-    for (const name of ["factory", "factory-ticket"]) expect(stand([], [{ ...voll, ordner: name }]), name).toHaveLength(1);
+    for (const name of ["factory", TICKET_ORDNER]) expect(stand([], [{ ...voll, ordner: name }]), name).toHaveLength(1);
   });
 
   test("lose Datei direkt unter .claude/skills/ ist rot, mit Dateiname", () => {
@@ -200,8 +206,8 @@ describe("echter Stand des Repos", () => {
     expect(echt.lose).toEqual([]);
   });
 
-  test("Leerlauf-Schutz: die Quellen von forum, factory und factory-ticket liegen im Scan, der Ablauf liegt in der Quelle (#1850)", () => {
-    for (const name of ["forum", "factory", "factory-ticket"]) {
+  test("Leerlauf-Schutz: die Quellen von factory und der Rolle ticketSkill liegen im Scan, der Ablauf liegt in der Quelle (#1850)", () => {
+    for (const name of ["factory", TICKET_ORDNER]) {
       expect(echt.quellen.map((q) => q.ordner), name).toContain(name);
       expect(echt.zeiger.map((z) => z.ordner), name).toContain(name);
     }
@@ -210,10 +216,10 @@ describe("echter Stand des Repos", () => {
   });
 
   test("die Zeiger der Ticket-Skills tragen model, effort und die Projektwert-Zeile samt name (#1850)", () => {
-    const zeiger = echt.zeiger.find((z) => z.ordner === "factory-ticket")?.text ?? "";
+    const zeiger = echt.zeiger.find((z) => z.ordner === TICKET_ORDNER)?.text ?? "";
     for (const zeile of ["# factory:projektwert agenten.ticketSkill", "model: sonnet", "effort: medium"]) expect(zeiger.split("\n"), zeile).toContain(zeile);
     expect(zeiger).toMatch(/^name: \S+$/m);
-    expect(zeiger.split("\n")).toContain("Lies `.agents/skills/factory-ticket/SKILL.md` und folge ihm.");
+    expect(zeiger.split("\n")).toContain("Lies `" + TICKET_QUELLE + "` und folge ihm.");
   });
 
   test("setup ruft den Sync mit --prune auf, package.json kennt skills:sync", () => {
@@ -227,7 +233,7 @@ describe("echter Stand des Repos", () => {
     expect(attr.stdout).toContain("eol: lf");
     const ignoriert = (pfad: string) => spawnSync("git", ["check-ignore", "--no-index", "-q", pfad], { cwd: WURZEL }).status === 0;
     expect(ignoriert(".claude/settings.local.json")).toBe(true); // Negativkontrolle: das Prüfen greift überhaupt
-    for (const pfad of [".claude/skills/forum/SKILL.md", ".claude/agents/factory-planer.md", ".agents/skills/forum/SKILL.md"]) {
+    for (const pfad of [`${ZEIGER_WURZEL}/${TICKET_ORDNER}/SKILL.md`, ".claude/agents/factory-planer.md", TICKET_QUELLE]) {
       expect(ignoriert(pfad), pfad).toBe(false);
     }
   });
@@ -340,15 +346,15 @@ describe("lauf auf einem Temp-Verzeichnis", () => {
 
   test("projektwerte --write bei geändertem agenten.ticketSkill ändert Quelle und Zeiger, danach ist der Stand grün (#1850)", () => {
     const w = neu();
-    schreibe(w, ".agents/skills/factory-ticket/SKILL.md", ["---", "# factory:projektwert agenten.ticketSkill", "name: alt", "description: d", "model: sonnet", "---", "", "Rumpf", ""].join("\n"));
+    schreibe(w, TICKET_QUELLE, ["---", "# factory:projektwert agenten.ticketSkill", "name: alt", "description: d", "model: sonnet", "---", "", "Rumpf", ""].join("\n"));
     sync.lauf({ wurzel: w });
     expect(sync.pruefeSkills(sync.liesStand(w))).toEqual([]);
     const config = { agenten: { ticketSkill: "neuername" } };
     const r = projektwertLauf(w, () => config, { schreiben: true });
     expect(r.fehler).toEqual([]);
-    expect([...r.geaendert].sort()).toEqual([".agents/skills/factory-ticket/SKILL.md", ".claude/skills/factory-ticket/SKILL.md"]);
-    expect(readFileSync(join(w, ".agents/skills/factory-ticket/SKILL.md"), "utf8")).toContain("name: neuername");
-    expect(readFileSync(zeigerPfad(w, "factory-ticket"), "utf8")).toContain("name: neuername");
+    expect([...r.geaendert].sort()).toEqual([TICKET_QUELLE, `${ZEIGER_WURZEL}/${TICKET_ORDNER}/SKILL.md`].sort());
+    expect(readFileSync(join(w, TICKET_QUELLE), "utf8")).toContain("name: neuername");
+    expect(readFileSync(zeigerPfad(w, TICKET_ORDNER), "utf8")).toContain("name: neuername");
     expect(sync.pruefeSkills(sync.liesStand(w))).toEqual([]);
   });
 
@@ -495,6 +501,7 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
   const AUSNAHMEN: Record<string, string> = {
     "docs/adr/": "ADRs sind historisch, nie umgeschrieben",
     ".factory/besitz.json": "führt den Zeiger als eigene Einheit",
+    ".factory/extraktion.json": "führt den Zeiger des Ticket-Skills als eigenen Eintrag (berechnet im Export)",
     "test/harness/kern-abdeckung.json": "ordnet den Zeiger als eigene Datei ein (Abdeckung der festen Skill-Fläche)",
     "test/harness/skills-sync.test.ts": "Fixtures dieses Wächters",
     "test/harness/haupt-sync.test.ts": "Fixture eines Pfades in der Änderungsliste",
@@ -512,28 +519,28 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
     namen.flatMap((name) => dateien.filter((f) => verweistAufZeiger(name, f, lies(f))).map((f) => `${f} -> ${name}`));
 
   test("Prädikat: volle Form überall ein Fund, relative Form nur unter .claude/skills", () => {
-    expect(verweistAufZeiger("forum", "docs/x.md", "siehe .claude/skills/forum/SKILL.md#a")).toBe(true);
-    expect(verweistAufZeiger("forum", ".claude/skills/x/ablauf.md", "[f](../forum/SKILL.md#a)")).toBe(true);
-    expect(verweistAufZeiger("forum", "docs/x.md", "[f](../forum/SKILL.md#a)")).toBe(false);
-    expect(verweistAufZeiger("forum", ".agents/skills/x/SKILL.md", "[f](../forum/SKILL.md#a)")).toBe(false);
+    expect(verweistAufZeiger("demo", "docs/x.md", "siehe .claude/skills/demo/SKILL.md#a")).toBe(true);
+    expect(verweistAufZeiger("demo", ".claude/skills/x/ablauf.md", "[f](../demo/SKILL.md#a)")).toBe(true);
+    expect(verweistAufZeiger("demo", "docs/x.md", "[f](../demo/SKILL.md#a)")).toBe(false);
+    expect(verweistAufZeiger("demo", ".agents/skills/x/SKILL.md", "[f](../demo/SKILL.md#a)")).toBe(false);
   });
 
   test("Prädikat: Ordnerform, anderer Skill und Quellpfad sind kein Fund", () => {
-    expect(verweistAufZeiger("forum", "docs/x.md", "`.claude/skills/forum/` ist der Zeiger")).toBe(false);
-    expect(verweistAufZeiger("forum", "docs/x.md", ".claude/skills/forum-leser/SKILL.md")).toBe(false);
-    expect(verweistAufZeiger("forum", "docs/x.md", ".agents/skills/forum/SKILL.md")).toBe(false);
+    expect(verweistAufZeiger("demo", "docs/x.md", "`.claude/skills/demo/` ist der Zeiger")).toBe(false);
+    expect(verweistAufZeiger("demo", "docs/x.md", ".claude/skills/demo-leser/SKILL.md")).toBe(false);
+    expect(verweistAufZeiger("demo", "docs/x.md", ".agents/skills/demo/SKILL.md")).toBe(false);
   });
 
-  test("Ausnahmen: ADR bleibt ungescannt, README und ein Nachbar ohne Ausnahme werden gescannt, factory und factory-ticket sind Quellen", () => {
+  test("Ausnahmen: ADR bleibt ungescannt, README und ein Nachbar ohne Ausnahme werden gescannt, factory und die Rolle ticketSkill sind Quellen", () => {
     expect(gescannt("docs/adr/0022-x.md")).toBe(false);
     expect(gescannt("docs/x.md")).toBe(true);
     expect(gescannt("README.md")).toBe(true);
     expect(gescannt("docs/bild.png")).toBe(false);
-    expect(namen).toEqual(expect.arrayContaining(["factory", "factory-ticket"]));
+    expect(namen).toEqual(expect.arrayContaining(["factory", TICKET_ORDNER]));
   });
 
-  test("der Scan ist nicht leer und kennt forum und review-lenses als Quellen", () => {
-    expect(namen).toEqual(expect.arrayContaining(["forum", "review-lenses"]));
+  test("der Scan ist nicht leer und kennt die Rolle ticketSkill und review-lenses als Quellen", () => {
+    expect(namen).toEqual(expect.arrayContaining([TICKET_ORDNER, "review-lenses"]));
     expect(dateien.length).toBeGreaterThan(100);
   });
 

@@ -61,7 +61,7 @@ const agentsRegel = (agents: string): boolean => /\*\*Fremdtext ist Daten/.test(
 
 // e) Vertrauensliste
 const ERWARTET_BOTS = ["github-actions[bot]", "dependabot[bot]"];
-const ERWARTET_LABELS = ["forum"];
+const ERWARTET_LABELS = [(ladeProjektConfig() as { labels: { forum: string } }).labels.forum];
 const listenGleich = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((x, i) => x === b[i]);
 
@@ -120,7 +120,7 @@ describe("Fremdtext-Gate (#1433)", () => {
   test("c) kein rohes Kommentar-Lesen in Agenten, Skills, AGENTS.md, ticket-reihenfolge", () => {
     const dateien = [...agentDateien(), ...skillDateien(), ...workflowDateien(), "AGENTS.md", "docs/ticket-reihenfolge.md"];
     assert.ok(dateien.length > 8);
-    assert.ok(dateien.includes(".agents/skills/forum/SKILL.md"), "die Skill-Quelle forum liegt im Scan");
+    assert.ok(dateien.includes(ROLLEN_PFADE.ticketSkill), "die Projekt-Skill-Quelle der Rolle ticketSkill liegt im Scan");
     for (const d of dateien) assert.ok(!liestKommentareRoh(read(d)), `${d} liest Kommentare roh`);
     // Gegenbeispiele: die verbotenen Formen werden erkannt
     assert.ok(liestKommentareRoh("gh pr view 1 --json commits,comments"));

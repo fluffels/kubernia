@@ -24,6 +24,7 @@ const B = rawBesitz as unknown as {
 const P = rawPc as unknown as {
   ladeProjektConfig: () => { agenten: Record<string, string> };
   PROJEKT_CONFIG: string;
+  ROLLEN_PFADE: Record<string, string>;
 };
 
 const agentPfad = (k: string): string => `.claude/agents/factory-${k}.md`;
@@ -31,7 +32,7 @@ const agentPfad = (k: string): string => `.claude/agents/factory-${k}.md`;
 /** Dateien mit Frontmatter-Zeilen-Marker: Pfad -> erwarteter Schlüssel. */
 const ZEILEN: [string, string][] = [
   ...["planer", "umsetzer", "lens", "gruppe"].map((k): [string, string] => [agentPfad(k), `agenten.${k}`]),
-  [".agents/skills/factory-ticket/SKILL.md", "agenten.ticketSkill"],
+  [P.ROLLEN_PFADE.ticketSkill, "agenten.ticketSkill"],
 ];
 
 /** Dateien mit Projektwert-Block (geschlossene Liste). */
