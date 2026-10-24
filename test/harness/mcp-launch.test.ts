@@ -153,7 +153,7 @@ describe("starte (gestubbter Kindprozess)", () => {
     const r = lauf(installiert("1.2.3"));
     r.signale.SIGTERM();
     expect(r.kind.getoetet).toEqual(["SIGTERM"]);
-    r.kind.ereignisse.exit(null, "SIGTERM");
+    r.kind.ereignisse.exit(1, null); // Exit ≠ 0 nach Signal vom Host: kein Ausfall
     expect(r.stderr).toEqual([]);
     expect(r.exits).toEqual([1]);
   });
