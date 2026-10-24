@@ -223,7 +223,7 @@ const quoteLauf = (prompt: string, tag: number, z: number, min = 0, o = 300): La
 };
 const Z25 = 3000;
 const Z45 = 1400;
-const Z50 = 1000;
+const Z50 = 1200;
 
 describe("laufzeiten: Aufzeichnungsbasis des Outputs (#1909)", () => {
   const w = (r: Erg) => (r.aggregat as unknown as { basisWarnung: string | null }).basisWarnung;

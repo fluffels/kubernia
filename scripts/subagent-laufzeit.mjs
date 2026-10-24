@@ -17,6 +17,10 @@
  * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Für Lens-Läufe (#1582) zusätzlich: Beschreibung, `brille`, `runde`, `deltaArt` (`null` ohne Delta-Patch-Pfad im Prompt (gelabelt oder `<praefixe.worktree><nr>-r<n>-delta.patch`), `merge`, `fix`), `promptZeichen`, `ersterCall` und `patch` (Zugriffe auf den vollen und den Delta-Patch, siehe patch-zugriff.mjs). Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
+ * Aufzeichnungsbasis: Die Tabelle nennt je Gruppe `Kosten geschätzt ($, Median)` und die `Output-Quote` (aufgezeichneter / geschätzter Output, `outputQuote`, `null` ohne geschätzten Output). Weichen die Quoten
+ * von alt und neu (mit `--schnitt`) oder die Spanne der Tagesquoten um mehr als `BASIS_SPRUNG` (0,2) ab, hat die Output-Aufzeichnung im Transkript gewechselt: `aggregat.basisWarnung` (auch in `--json`, sonst `null`)
+ * und eine Zeile „Hinweis Aufzeichnungsbasis“ unter der Tabelle sagen, dass aufgezeichnete Kosten über diese Gruppen nicht vergleichbar sind; verglichen wird dann nur geschätzt.
+ *
  * Je Gruppe nennt die Spalte `Tickets` die verschiedenen Tickets; hat ein Ticket mehrere Läufe, steht unter der Tabelle eine Warnzeile (Mediane je Lauf, nicht je Ticket; #1646).
  *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
@@ -34,7 +38,12 @@ const summeOderNull = (werte) => {
   const da = werte.filter((x) => x !== null);
   return da.length ? da.reduce((s, x) => s + x, 0) : null;
 };
-const stat = (laeufe) => ({
+const stat = (laeufe) => {
+  const s = statRoh(laeufe);
+  // Anteil des aufgezeichneten am geschätzten Output (`null` ohne geschätzten Output).
+  return { ...s, outputQuote: s.outputGeschaetzt > 0 ? s.output / s.outputGeschaetzt : null };
+};
+const statRoh = (laeufe) => ({
   n: laeufe.length,
   // Verschiedene Tickets und die mit mehr als einem Lauf (#1646): die Mediane gelten je Lauf, nicht je Ticket.
   ...ticketZaehlung(laeufe),
@@ -57,6 +66,28 @@ const stat = (laeufe) => ({
   maxKontext: median(laeufe.map((l) => l.maxKontext)),
   maxDauerMin: laeufe.length ? Math.max(...laeufe.map((l) => l.dauerMin)) : null,
 });
+
+/** Quoten (aufgezeichneter / geschätzter Output) weiter als dies auseinander: die Aufzeichnungsbasis hat gewechselt, aufgezeichnete Kosten sind nicht vergleichbar. */
+const BASIS_SPRUNG = 0.2;
+const prozent = (q) => `${Math.round(q * 100)} %`;
+// Auf drei Stellen gerundet, damit genau 0,2 Abstand nicht an Gleitkomma-Rauschen warnt.
+const spruenge = (a, b) => Math.round(Math.abs(a - b) * 1000) / 1000 > BASIS_SPRUNG;
+const BASIS_HINWEIS = "aufgezeichnete Kosten über diese Gruppen nicht vergleichbar, nur „geschätzt“ vergleichen.";
+
+/** Warnzeile zur Aufzeichnungsbasis oder `null`: Schnitt-Vergleich (alt/neu) zuerst, sonst die Spanne der Tagesquoten. */
+function basisWarnung(aggregat) {
+  const { alt, neu } = aggregat;
+  if (alt && neu && alt.outputQuote !== null && neu.outputQuote !== null && spruenge(alt.outputQuote, neu.outputQuote)) {
+    return `Hinweis Aufzeichnungsbasis: Output-Aufzeichnung schwankt (alt ${prozent(alt.outputQuote)}, neu ${prozent(neu.outputQuote)}): ${BASIS_HINWEIS}`;
+  }
+  const tage = aggregat.jeTag.filter((t) => t.outputQuote !== null);
+  if (tage.length < 2) return null;
+  const sortiert = [...tage].sort((a, b) => a.outputQuote - b.outputQuote);
+  const klein = sortiert[0];
+  const gross = sortiert[sortiert.length - 1];
+  if (!spruenge(klein.outputQuote, gross.outputQuote)) return null;
+  return `Hinweis Aufzeichnungsbasis: Output-Aufzeichnung schwankt (Tage ${klein.tag} ${prozent(klein.outputQuote)} bis ${gross.tag} ${prozent(gross.outputQuote)}): ${BASIS_HINWEIS}`;
+}
 
 /** Ein Lauf liegt im Fenster [von, bis] (Start) und passt zum Ticket-Filter (#1693, gemeinsam für laufzeiten und typenUebersicht). */
 const imFenster = (l, { von, bis, tickets, ohne }) => passtTicketFilter(l.ticket, { tickets, ohne }) && (!von || l.start >= ms(von)) && (!bis || l.start <= ms(bis));
@@ -95,6 +126,7 @@ export function laufzeiten({ laeufe, namen, agent = namen?.agenten?.planer, von,
     aggregat.altOhneSammel = je(ohneSammel.filter((l) => l.start < s));
     aggregat.neuOhneSammel = je(ohneSammel.filter((l) => l.start >= s));
   }
+  aggregat.basisWarnung = basisWarnung(aggregat);
   return { agent, laeufe: alle.map((l) => ({ ...l, start: new Date(l.start).toISOString(), ende: new Date(l.ende).toISOString() })), aggregat };
 }
 
@@ -141,8 +173,8 @@ const f2 = (x) => (x === null ? "-" : x.toFixed(2));
 /** Markdown: Aggregat-Tabelle und Läufe. */
 export function renderMarkdown(r) {
   const out = [`Subagent-Typ \`${r.agent}\`: ${r.laeufe.length} Läufe (${r.aggregat.offen} offen, nicht in den Medianen)`, ""];
-  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | Σ Kosten geschätzt ($) | ohne Preis | s/Req (Modell) | parallel | max. Kontext | längster (min) | Tickets |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
-  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${f2(s.kostenGeschaetztSumme ?? null)} | ${s.ohnePreis} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} | ${s.tickets} |`);
+  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | Σ Kosten geschätzt ($) | ohne Preis | Kosten geschätzt ($, Median) | Output-Quote | s/Req (Modell) | parallel | max. Kontext | längster (min) | Tickets |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
+  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${f2(s.kostenGeschaetztSumme ?? null)} | ${s.ohnePreis} | ${f2(s.kostenGeschaetzt ?? null)} | ${s.outputQuote === null || s.outputQuote === undefined ? "-" : prozent(s.outputQuote)} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} | ${s.tickets} |`);
   z("alle gemessenen", r.aggregat.gesamt);
   z("ohne Sammeltickets", r.aggregat.ohneSammel);
   z("Sammeltickets", r.aggregat.sammel);
@@ -157,6 +189,7 @@ export function renderMarkdown(r) {
   }
   const hinweis = mehrlaufHinweis(r.aggregat.gesamt.mehrlauf);
   if (hinweis) out.push("", hinweis);
+  if (r.aggregat.basisWarnung) out.push("", r.aggregat.basisWarnung);
   out.push("", "| Start | Ticket | Sammel | Dauer | Modellzeit | Modell | Tool | Requests | Kosten ($) | s/Req | max. Kontext | parallel |", "|---|--:|---|--:|--:|---|--:|--:|--:|--:|--:|--:|");
   for (const l of r.laeufe) {
     out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${l.modelle.length ? l.modelle.join(", ") : "-"} | ${f1(l.toolMin)} | ${l.requests} | ${f2(l.kosten)} | ${f1(l.sProRequest ?? null)} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);
