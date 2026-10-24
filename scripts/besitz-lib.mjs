@@ -5,8 +5,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";
-import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { altEnvPraefix, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 
 /** Ring-Importregel (ADR 0029): Ring des Importeurs -> Ringe, deren Besitz er lokal importieren darf. Ein weiterer Ring ist eine Zeile. */
 export const RING_IMPORTE = {
@@ -864,3 +865,54 @@ export function projektwertLauf(wurzel, ladeConfig, { schreiben = false } = {}) 
   return res;
 }
 const KEINE_CONFIG = "Projekt-Config nicht lesbar";
+
+// ── Projektliterale aus der Config (ADR 0022 F1, F10) ───────────────────────
+// Eine Auslegung für den Kern-Wächter und das Export-Werkzeug: welche Begriffe ein Kern nicht tragen soll.
+
+/** Alternative aus wörtlichen Werten: einmalig, längster zuerst (sonst zählt ein Kurzname im Langnamen mit), regex-escaped.
+ * @param {string[]} werte */
+const alternative = (werte) =>
+  [...new Set(werte)]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegex)
+    .join("|");
+
+/** Board-ID (#1875): das generische Muster der Projekt-IDs, dazu die Status-Feld-ID jedes Boards der Config als ganze Zahl
+ * (`todoOptionId` zählt nicht: der GitHub-Standardwert steht in jedem Projekt).
+ * @param {{ boards: { statusFeldId?: string | number }[] }} config */
+const boardIdRegex = (config) => {
+  const ids = config.boards.flatMap((b) => (b.statusFeldId === undefined ? [] : [String(b.statusFeldId)]));
+  const muster = "\\bPVT[A-Z]*_[A-Za-z0-9_-]+";
+  return new RegExp(ids.length === 0 ? muster : `${muster}|(?<!\\d)(?:${ids.map(escapeRegex).join("|")})(?!\\d)`, "g");
+};
+
+/** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611, #1741): Owner (Repo-Owner und Board-Besitzer),
+ * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
+ * wie `forum` zählt nie), Agentennamen, Skill-Namen (`skills`, ganze Wörter ohne Bindestrich-Anschluss) und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
+ * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix).
+ * @param {{ repo: string, boards: { besitzer: string, statusFeldId?: string | number }[], praefixe: { commitZeile: string, branch: string, worktree: string },
+ *   labels: Record<string, string>, agenten: Record<string, string>, skills?: Record<string, string>, projektliterale?: Record<string, string> }} config
+ * @returns {Record<string, RegExp>} */
+export function begriffeAus(config) {
+  const [owner = "", name = ""] = config.repo.split("/");
+  const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
+  /** @type {Record<string, RegExp>} */
+  const out = {
+    Owner: new RegExp(owners.map(escapeRegex).join("|"), "gi"),
+    Repo: new RegExp(escapeRegex(name), "gi"),
+    "Board-ID": boardIdRegex(config),
+    Praefix: new RegExp(escapeRegex(config.praefixe.commitZeile), "g"),
+    Branch: new RegExp(escapeRegex(config.praefixe.branch), "g"),
+    Worktree: new RegExp(escapeRegex(config.praefixe.worktree), "g"),
+  };
+  // Env (#1824): der Commit-Zeilen-Präfix mit Unterstrich als Umgebungsvariablen-Präfix; die Wortgrenze davor schließt `VITE_<PRAEFIX>_…` und `__<PRAEFIX>_…__` aus.
+  const envPraefix = altEnvPraefix(config);
+  if (envPraefix !== null) out.Env = new RegExp("\\b" + escapeRegex(envPraefix) + "(?=[A-Z0-9])", "g");
+  const labels = Object.values(config.labels).filter((l) => l.includes(":"));
+  if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
+  out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
+  const skills = Object.values(config.skills ?? {});
+  if (skills.length > 0) out.Skill = new RegExp(`(?<![\\w-])(?:${alternative(skills)})(?![\\w-])`, "g");
+  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(literal)}(?![\\p{L}\\p{N}_])`, "giu");
+  return out;
+}

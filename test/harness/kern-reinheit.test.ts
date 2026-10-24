@@ -53,6 +53,8 @@ interface PcLib {
 }
 const { ROLLEN_PFADE, PFLICHT_AGENTEN, TICKET_SKILL_ORDNER } = rawPc as unknown as PcLib;
 const { projektwertStellen } = rawBesitz as unknown as { projektwertStellen: (text: string, pfad?: string) => { zeilen: { schluessel: string; name: string }[] } };
+/** Die Auslegung der Projektliterale lebt in der Bibliothek (eine Quelle für Wächter und Export-Werkzeug). */
+const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const MANIFEST = ".factory/besitz.json";
@@ -80,49 +82,6 @@ export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektl
   agenten: Record<string, string>;
   skills?: Record<string, string>;
 };
-
-
-/** Alternative aus wörtlichen Werten: einmalig, längster zuerst (sonst zählt ein Kurzname im Langnamen mit), regex-escaped. */
-const alternative = (werte: string[]): string =>
-  [...new Set(werte)]
-    .sort((a, b) => b.length - a.length)
-    .map(escapeRe)
-    .join("|");
-
-/** Board-ID (#1875): das generische Muster der Projekt-IDs, dazu die Status-Feld-ID jedes Boards der Config als ganze Zahl
- * (`todoOptionId` zählt nicht: der GitHub-Standardwert steht in jedem Projekt). */
-const boardIdRegex = (config: BegriffsConfig): RegExp => {
-  const ids = config.boards.flatMap((b) => (b.statusFeldId === undefined ? [] : [String(b.statusFeldId)]));
-  const muster = "\\bPVT[A-Z]*_[A-Za-z0-9_-]+";
-  return new RegExp(ids.length === 0 ? muster : `${muster}|(?<!\\d)(?:${ids.map(escapeRe).join("|")})(?!\\d)`, "g");
-};
-
-/** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611, #1741): Owner (Repo-Owner und Board-Besitzer),
- * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
- * wie `forum` zählt nie), Agentennamen, Skill-Namen (`skills`, ganze Wörter ohne Bindestrich-Anschluss) und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
- * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix). */
-export function begriffeAus(config: BegriffsConfig): Record<string, RegExp> {
-  const [owner = "", name = ""] = config.repo.split("/");
-  const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
-  const out: Record<string, RegExp> = {
-    Owner: new RegExp(owners.map(escapeRe).join("|"), "gi"),
-    Repo: new RegExp(escapeRe(name), "gi"),
-    "Board-ID": boardIdRegex(config),
-    Praefix: new RegExp(escapeRe(config.praefixe.commitZeile), "g"),
-    Branch: new RegExp(escapeRe(config.praefixe.branch), "g"),
-    Worktree: new RegExp(escapeRe(config.praefixe.worktree), "g"),
-  };
-  // Env (#1824): der Commit-Zeilen-Präfix mit Unterstrich als Umgebungsvariablen-Präfix; die Wortgrenze davor schließt `VITE_<PRAEFIX>_…` und `__<PRAEFIX>_…__` aus.
-  const envPraefix = (rawPc as unknown as { altEnvPraefix(c: BegriffsConfig): string | null }).altEnvPraefix(config);
-  if (envPraefix !== null) out.Env = new RegExp("\\b" + escapeRe(envPraefix) + "(?=[A-Z0-9])", "g");
-  const labels = Object.values(config.labels).filter((l) => l.includes(":"));
-  if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
-  out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
-  const skills = Object.values(config.skills ?? {});
-  if (skills.length > 0) out.Skill = new RegExp(`(?<![\\w-])(?:${alternative(skills)})(?![\\w-])`, "g");
-  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRe(literal)}(?![\\p{L}\\p{N}_])`, "giu");
-  return out;
-}
 
 /** Pfade (#1748): je Pfad und Begriff, der im Pfad vorkommt, eine Meldung. Pur; die Regex der Begriffe sind global, darum `match` statt `test`. */
 export function pfadLiterale(pfade: string[], begriffe: Record<string, RegExp>): string[] {
