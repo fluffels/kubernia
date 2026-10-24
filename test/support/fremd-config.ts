@@ -25,7 +25,7 @@ export const FREMD_CONFIG_PFAD = "test/fixtures/projekt-fremd.json";
 /** Die Fremd-Config (Schema wird beim Laden geprüft). */
 export const FREMD: ProjektConfig = lib.ladeProjektConfig({ pfad: FREMD_CONFIG_PFAD });
 
-/** Die echte Projekt-Config, nur für Tests, die einen Kindprozess starten (der liest sie selbst). */
+/** Die echte Projekt-Config: für Tests, die einen Kindprozess starten (der liest sie selbst), und für Standardpfad-Tests im selben Prozess (Rückfall ohne injizierte Config). */
 export const projektConfig = (): ProjektConfig => lib.ladeProjektConfig();
 
 /** Der Repo-Name einer Config (der Teil hinter dem Owner), etwa als Ergebnisschlüssel. */

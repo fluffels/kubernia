@@ -15,10 +15,7 @@ import * as rawSync from "../scripts/factory-sync.mjs";
 import * as rawDrift from "../scripts/check-factory-drift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../scripts/ticket-namen.mjs";
-
-const escRe = (s: string): string => (escapeRegex as (t: string) => string)(s);
+import { ganzesWortMuster } from "./support/regex";
 
 interface Span {
   start: number;
@@ -749,7 +746,7 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     // Spielbezug: alle projektliterale des echten Projekts (ganze Wörter, ohne Groß-/Kleinschreibung).
     const spielWoerter = Object.values((echt.projektliterale ?? {}) as Record<string, string>);
     assert.ok(spielWoerter.length > 0, "die echte Config nennt Spielbezüge (sonst wäre der Test vakuös)");
-    const spielWort = `(?<![\\p{L}\\p{N}_])(?:${spielWoerter.map(escRe).join("|")})(?![\\p{L}\\p{N}_])`;
+    const spielWort = ganzesWortMuster(spielWoerter);
     const spielRe = new RegExp(spielWort, "iu");
     const ausgabeRe = new RegExp(`Leitfrage|Messlatte|Optik|${spielWort}`, "iu");
     delete echt.projektliterale;

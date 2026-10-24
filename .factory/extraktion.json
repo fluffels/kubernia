@@ -34,6 +34,7 @@
     {"muster":"test/support/env-alt.ts","art":"test-hilfe","grund":"Umgebungs-Hilfe der Kern-Tests"},
     {"muster":"test/support/ticket-ablauf.ts","art":"test-hilfe","grund":"Ticket-Ablauf-Hilfe der Kern-Tests"},
     {"muster":"test/support/fremd-config.ts","art":"test-hilfe","grund":"Fremd-Config der Kern-Tests"},
+    {"muster":"test/support/regex.ts","art":"test-hilfe","grund":"Regex-Hilfe der Kern-Tests"},
     {"muster":"test/support/mess-golden-faelle.mjs","art":"test-hilfe","grund":"Golden-Fälle der Mess-Tests"},
     {"muster":"test/harness/hook-importe.ts","art":"test-hilfe","grund":"Import-Parser der Kern-Wächter"},
     {"muster":"test/harness/repo-texte.ts","art":"test-hilfe","grund":"Text-Leser der Kern-Wächter"},

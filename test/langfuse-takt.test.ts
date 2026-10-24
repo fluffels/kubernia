@@ -5,12 +5,9 @@
  * (gleiche Technik wie test/board.test.ts). */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { FREMD_OWNER } from "./support/fremd-config";
+import { FREMD_OWNER, projektConfig } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/langfuse-takt.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ladeProjektConfig as ladeConfigRoh } from "../scripts/projekt-config-lib.mjs";
-const ladeProjektConfig = (): Record<string, unknown> => (ladeConfigRoh as () => Record<string, unknown>)();
 
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Entscheidung = { aktion: "anlegen" | "nach-oben" | "nichts"; nr?: number; grund: string; warnungen: string[] };
@@ -133,7 +130,7 @@ describe("statusBody", () => {
     const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y" });
     expect(x).toContain("https://github.com/x/y/blob/main/docs/model-routing.md#");
     expect(x).toContain("https://github.com/x/y/blob/main/docs/ticket-reihenfolge.md#");
-    expect(x).not.toContain(String(ladeProjektConfig().repo));
+    expect(x).not.toContain(String(projektConfig().repo));
   });
   test("Factory-Kennzahlen-Aufruf mit dem Abschlusszeitpunkt des Vorgängers, sonst Platzhalter (#1616)", () => {
     expect(body).toContain("node scripts/factory-kennzahlen.mjs --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");
@@ -293,7 +290,7 @@ describe("fuehreStatusAus: Fehlertext beim Setzen der Board-Position (#1609)", (
           repo: "o/r",
           token: "t",
           items: [],
-          config: ladeProjektConfig(),
+          config: projektConfig(),
           io: {
             gh: () => ({ node_id: "N" }),
             imBoardAnlegen: () => "I",
