@@ -89,6 +89,10 @@ function vorpruefung(leser, befunde) {
     befunde.push("Manifest oder Extraktionsliste ohne Liste 'eintraege'");
     return null;
   }
+  if (typeof kubConfig.struktur?.quelle !== "string" || kubConfig.struktur.quelle === "") {
+    befunde.push(`${PROJEKT_CONFIG}: struktur.quelle fehlt`);
+    return null;
+  }
   const teile = teileJePfad(manifest.eintraege);
   const anteil = leser.pfade.filter((p) => artVon(liste, p) === "infrastruktur-anteil" && !BERECHNET.includes(p));
   const vorlagenZiele = [...new Set([...teile.keys(), PROJEKT_CONFIG, ...anteil])];
@@ -102,7 +106,7 @@ function vorpruefung(leser, befunde) {
   ]);
   leser.vorladen([...gebraucht]);
   befunde.push(...pruefeManifest(manifest, lies).map((m) => `Manifest: ${m}`));
-  befunde.push(...pruefeExtraktion(liste, { getrackt: leser.pfade, besitz: manifest.eintraege, quelle: kubConfig.struktur?.quelle ?? "src" }).map((m) => `Extraktionsliste: ${m}`));
+  befunde.push(...pruefeExtraktion(liste, { getrackt: leser.pfade, besitz: manifest.eintraege, quelle: kubConfig.struktur.quelle }).map((m) => `Extraktionsliste: ${m}`));
   const vorlagen = new Map();
   for (const ziel of vorlagenZiele) {
     const text = lies(vorlagenPfad(ziel));

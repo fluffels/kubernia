@@ -80,7 +80,7 @@ export function paketName(spec) {
   if (/^[./]/.test(spec) || spec.startsWith("node:")) return null;
   const teile = spec.split("/");
   const name = spec.startsWith("@") ? teile.slice(0, 2).join("/") : teile[0];
-  if (BUILTINS.has(name) || BUILTINS.has(spec)) return null;
+  if (BUILTINS.has(name)) return null;
   return PAKET_NAME.test(name) ? name : `?${spec}`;
 }
 
@@ -157,9 +157,7 @@ export function pruefeLokalePfade(dateien, repoNamen) {
   const mitBefund = new Set([...treffer.values()].map((h) => `${h.file}:${h.line}`));
   let durchgelassen = 0;
   for (const pfad of dateiListe) {
-    const text = lies(pfad);
-    if (text.includes("\0")) continue;
-    text.split(/\r?\n/).forEach((zeile, i) => {
+    lies(pfad).split(/\r?\n/).forEach((zeile, i) => {
       if (KANDIDATEN.some((re) => re.test(zeile)) && !mitBefund.has(`${pfad}:${i + 1}`)) durchgelassen++;
     });
   }

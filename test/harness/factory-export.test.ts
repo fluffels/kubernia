@@ -5,7 +5,7 @@
  *
  * Reale Quelle ist `HEAD` dieses Repos (gelesen per git wie beim Sync). Ein uncommittetes Vorlagen-File macht den Integrationsteil darum rot:
  * erst committen, dann testen. Die Negativfälle verändern einen Hüll-Leser (`mitAenderung`), nie die Datei auf der Platte. */
-import { beforeAll, describe, test } from "vitest";
+import { afterEach, beforeAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -64,10 +64,10 @@ const leerOrdner = (): string => {
   temp.push(d);
   return d;
 };
-// Aufräumen am Ende der Datei (kein afterAll-Import nötig: Temp-Ordner sind klein, der Lauf räumt sie weg).
 const aufraeumen = (): void => {
   for (const d of temp.splice(0)) rmSync(d, { recursive: true, force: true });
 };
+afterEach(aufraeumen);
 
 /** Leser mit Änderungen: `text` ersetzt oder ergänzt die Datei, `null` entfernt sie (aus `pfade` und `lies`). */
 function mitAenderung(basis: Leser, aend: Record<string, string | null>): Leser {
@@ -126,6 +126,8 @@ describe("lockAuszug", () => {
     const r = lib.lockAuszug({} as Lock, pkg);
     assert.equal(r.lock, null);
     assert.match(r.befunde.join("|"), /keine packages/);
+    const ohneWurzel = lib.lockAuszug({ packages: { "node_modules/x": { version: "1.0.0" } } }, { name: "neu", version: "0.1.0", devDependencies: { x: "^1" } });
+    assert.deepEqual(Object.keys(ohneWurzel.lock?.packages ?? {}).sort(), ["", "node_modules/x"]);
   });
 
   test("ein verschachtelter Eintrag verdeckt den gehobenen: nicht erreichbare Einträge entfallen", () => {
@@ -268,7 +270,6 @@ describe("Export aus HEAD", () => {
       assert.ok(readFileSync(join(a, p)).equals(readFileSync(join(b, p))), `${p} weicht ab`);
       if (process.platform !== "win32") assert.equal((statSync(join(a, p)).mode & 0o111) !== 0, echt.dateien.get(p)?.ausfuehrbar, `${p}: Ausführbar-Bit`);
     }
-    aufraeumen();
   }, 60_000);
 
   test("AK1: ein nicht leeres Ziel endet mit Exit 1, und nichts wird geschrieben; fehlendes --ziel ist Exit 2", () => {
@@ -281,14 +282,12 @@ describe("Export aus HEAD", () => {
     const datei = join(z, "vorhanden.txt");
     assert.equal(lauf(["--ziel", datei], leser).code, 1);
     assert.equal(lauf([], leser).code, 2);
-    aufraeumen();
   });
 
   test("AK1: ein Ziel, das noch nicht existiert, wird angelegt", () => {
     const z = join(leerOrdner(), "neu", "tief");
     assert.equal(lauf(["--ziel", z], leser).code, 0);
     assert.ok(existsSync(join(z, "AGENTS.md")));
-    aufraeumen();
   }, 60_000);
 
   test("Config, AGENTS.md und settings des Exports tragen die Factory-Werte, nichts von kubernia", () => {
@@ -321,7 +320,6 @@ describe("Export aus HEAD", () => {
     assert.deepEqual(r.fehler, []);
     assert.deepEqual(r.abweichungen, []);
     assert.ok(r.dateien > 0);
-    aufraeumen();
   }, 60_000);
 
   test("AK3: check-internalrefs ist im Export grün (nach git init und git add)", () => {
@@ -331,7 +329,6 @@ describe("Export aus HEAD", () => {
     execFileSync("git", ["add", "-A"], { cwd: z });
     const r = execFileSync("node", ["scripts/check-internalrefs.mjs"], { cwd: z, encoding: "utf8" });
     assert.match(r, /Keine internen Referenzen/);
-    aufraeumen();
   }, 60_000);
 
   test("AK4: Daten-Dateien der Kern-Wächter stehen nur mit ihrem Kern-Anteil im Export", () => {
@@ -378,6 +375,12 @@ describe("Export aus HEAD", () => {
     for (const p of ["AGENTS.md", "package.json", "scripts/check-docmap.mjs"]) assert.equal(r.dateien.get(p)?.ausfuehrbar, false, p);
     assert.ok(r.dateien.has("LICENSE"));
     assert.ok(!r.dateien.has(".factory/produkt/README.md"));
+    if (process.platform !== "win32") {
+      const z = leerOrdner();
+      assert.equal(lauf(["--ziel", z], { ...leser, ausfuehrbar: (p) => exec.has(p) }).code, 0);
+      assert.equal((statSync(join(z, "scripts/check-size.mjs")).mode & 0o111) !== 0, true);
+      assert.equal((statSync(join(z, "AGENTS.md")).mode & 0o111) !== 0, false);
+    }
   });
 
   test("ohne injizierten Leser liest die Kommandozeile den Commit per git (--commit, --quelle)", () => {
@@ -386,10 +389,12 @@ describe("Export aus HEAD", () => {
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, new RegExp(`Export-SHA ${echt.bericht.sha}`));
     assert.ok(existsSync(join(z, "package-lock.json")));
+    const standard = lauf(["--ziel", leerOrdner(), "--quelle", WURZEL]);
+    assert.equal(standard.code, 0, standard.err);
+    assert.match(standard.out, new RegExp(`Export-SHA ${echt.bericht.sha}`));
     const falsch = lauf(["--ziel", leerOrdner(), "--commit", "gibt-es-nicht", "--quelle", WURZEL]);
     assert.equal(falsch.code, 1);
     assert.match(falsch.err, /gibt es in der Quelle nicht/);
-    aufraeumen();
   }, 60_000);
 
   test("Bericht zählt durchgelassene Pfade, Fixture-Rauschen und den Rest der Factory-Seiten", () => {
@@ -408,7 +413,6 @@ describe("Export aus HEAD", () => {
       assert.match(r.err, muster);
       assert.match(r.err, /nichts geschrieben/);
       assert.deepEqual(readdirSync(z), []);
-      aufraeumen();
     };
     const befund = (aend: Record<string, string | null>, muster: RegExp): void => {
       assert.match(ex.baueExport({ leser: mitAenderung(leser, aend) }).befunde.join("\n"), muster);
@@ -457,6 +461,13 @@ describe("Export aus HEAD", () => {
     test("ein lokaler Pfad mit echtem Namen ist ein Befund", () => {
       const pfad = "C" + ":\\" + "Users\\Echt\\x";
       befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// ${pfad}\n` }, /scripts\/check-size\.mjs:\d+: lokaler Pfad \(nutzer\)/);
+    });
+
+    test("fehlt struktur.quelle in der Config oder packages im Lock, ist das ein Befund", () => {
+      const kub = JSON.parse(basisText(".factory/projekt.json")) as Record<string, unknown>;
+      delete kub.struktur;
+      befund({ ".factory/projekt.json": JSON.stringify(kub) }, /struktur.quelle fehlt/);
+      befund({ "package-lock.json": "{}" }, /Lock: keine packages/);
     });
 
     test("ein Lock-Eintrag, der in kubernia fehlt, ist ein Befund", () => {
