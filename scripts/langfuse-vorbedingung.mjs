@@ -10,7 +10,7 @@
  * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { basisUrlAus, langfuseBasisUrl } from "./langfuse-zugang.mjs";
 
 export const HEALTH_PFAD = "/api/public/health";

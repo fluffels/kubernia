@@ -16,14 +16,14 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, release as osRelease } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 
 const ok = (text) => ({ status: "OK", text });
 const fehlt = (text) => ({ status: "FEHLT", text });
 const hinweis = (text) => ({ status: "HINWEIS", text });
 
-/** Token-Variablen, die die Vorlage in jedem Projekt sperrt (die MCP-Header und Tokens laufen außerhalb der Sandbox). */
-const DENY_VARIABLEN = ["PIXELLAB_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"];
+/** Token-Variablen, die die Vorlage in jedem Projekt sperrt (die MCP-Header und Tokens laufen außerhalb der Sandbox); projektspezifische kommen aus `projektDenyVariablen`. */
+const DENY_VARIABLEN = ["GITHUB_TOKEN", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"];
 /** Namensmuster für Secrets im `env`-Block der User-Settings (die öffentliche Langfuse-Kennung LANGFUSE_PUBLIC_KEY trifft es nicht). */
 const SECRET_MUSTER = /TOKEN|SECRET|PASSWORD|_API_KEY/i;
 
@@ -141,6 +141,17 @@ export function projektDomains(settingsText) {
   }
 }
 
+/** Die Projekt-Deny-Variablen (Namen mit `mode: "deny"`) aus dem Text von `.claude/settings.json` (leer bei kaputtem JSON oder ohne Block). */
+export function projektDenyVariablen(settingsText) {
+  try {
+    const v = JSON.parse(settingsText)?.sandbox?.credentials?.envVars;
+    if (!Array.isArray(v)) return [];
+    return v.filter((e) => e?.mode === "deny" && typeof e.name === "string").map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
 /** Host einer Langfuse-URL, `undefined` bei leerer oder ungültiger Angabe. */
 function langfuseHost(url) {
   if (!url) return undefined;
@@ -152,13 +163,13 @@ function langfuseHost(url) {
 }
 
 /** Die User-Settings-Vorlage. Enthält Namen, Modi und Hosts, nie Werte. */
-export function erzeugeVorlage({ projektDomains: domains, langfuseBaseUrl }) {
+export function erzeugeVorlage({ projektDomains: domains, projektDenyVariablen: projektDeny = [], langfuseBaseUrl }) {
   const host = langfuseHost(langfuseBaseUrl);
   const allowedDomains = [...domains];
   if (host && !allowedDomains.includes(host)) allowedDomains.push(host);
   const envVars = [{ name: "GH_TOKEN", mode: "mask", injectHosts: ["api.github.com", "github.com"] }];
   if (host) envVars.push({ name: "LANGFUSE_SECRET_KEY", mode: "mask", injectHosts: [host] });
-  for (const name of DENY_VARIABLEN) envVars.push({ name, mode: "deny" });
+  for (const name of new Set([...DENY_VARIABLEN, ...projektDeny])) envVars.push({ name, mode: "deny" });
   const credentials = { envVars };
   if (host && langfuseBaseUrl.trim().toLowerCase().startsWith("http://")) credentials.allowPlaintextInject = true;
   return {
@@ -228,7 +239,8 @@ function projektSettingsText() {
 }
 
 function vorlageAusUmgebung(env) {
-  return erzeugeVorlage({ projektDomains: projektDomains(projektSettingsText()), langfuseBaseUrl: env.LANGFUSE_BASE_URL });
+  const settings = projektSettingsText();
+  return erzeugeVorlage({ projektDomains: projektDomains(settings), projektDenyVariablen: projektDenyVariablen(settings), langfuseBaseUrl: env.LANGFUSE_BASE_URL });
 }
 
 const vorhanden = (name) => {

@@ -18,14 +18,14 @@
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
  * Aufzeichnungsbasis: Die Tabelle nennt je Gruppe `Kosten geschätzt ($, Median)` und die `Output-Quote` (aufgezeichneter / geschätzter Output, `outputQuote`, `null` ohne geschätzten Output). Weichen die Quoten
- * von alt und neu (mit `--schnitt`) oder die Spanne der Tagesquoten um mehr als `BASIS_SPRUNG` (0,2) ab, hat die Output-Aufzeichnung im Transkript gewechselt: `aggregat.basisWarnung` (auch in `--json`, sonst `null`)
+ * von alt und neu (mit `--schnitt`) oder die Spanne der Tagesquoten (nur Tage und Seiten mit mindestens `BASIS_MIN_N` = 5 Läufen) um mehr als `BASIS_SPRUNG` (0,2) ab, hat die Output-Aufzeichnung im Transkript gewechselt: `aggregat.basisWarnung` (auch in `--json`, sonst `null`)
  * und eine Zeile „Hinweis Aufzeichnungsbasis“ unter der Tabelle sagen, dass aufgezeichnete Kosten über diese Gruppen nicht vergleichbar sind; verglichen wird dann nur geschätzt.
  *
  * Je Gruppe nennt die Spalte `Tickets` die verschiedenen Tickets; hat ein Ticket mehrere Läufe, steht unter der Tabelle eine Warnzeile (Mediane je Lauf, nicht je Ticket; #1646).
  *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Läufe aus den Transkripten stehen in subagent-laeufe.mjs.
  */
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { median, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -67,6 +67,8 @@ const statRoh = (laeufe) => ({
   maxDauerMin: laeufe.length ? Math.max(...laeufe.map((l) => l.dauerMin)) : null,
 });
 
+/** Mindestzahl Läufe je Tag (und je Schnitt-Seite), damit deren Output-Quote in den Vergleich der Basiswarnung eingeht: wenige Läufe schwanken von Natur aus. */
+export const BASIS_MIN_N = 5;
 /** Quoten (aufgezeichneter / geschätzter Output) weiter als dies auseinander: die Aufzeichnungsbasis hat gewechselt, aufgezeichnete Kosten sind nicht vergleichbar. */
 const BASIS_SPRUNG = 0.2;
 const prozent = (q) => `${Math.round(q * 100)} %`;
@@ -77,10 +79,11 @@ const BASIS_HINWEIS = "aufgezeichnete Kosten über diese Gruppen nicht vergleich
 /** Warnzeile zur Aufzeichnungsbasis oder `null`: Schnitt-Vergleich (alt/neu) zuerst, sonst die Spanne der Tagesquoten. */
 function basisWarnung(aggregat) {
   const { alt, neu } = aggregat;
-  if (alt && neu && alt.outputQuote !== null && neu.outputQuote !== null && spruenge(alt.outputQuote, neu.outputQuote)) {
+  const tragfaehig = (s) => s.n >= BASIS_MIN_N && s.outputQuote !== null;
+  if (alt && neu && tragfaehig(alt) && tragfaehig(neu) && spruenge(alt.outputQuote, neu.outputQuote)) {
     return `Hinweis Aufzeichnungsbasis: Output-Aufzeichnung schwankt (alt ${prozent(alt.outputQuote)}, neu ${prozent(neu.outputQuote)}): ${BASIS_HINWEIS}`;
   }
-  const tage = aggregat.jeTag.filter((t) => t.outputQuote !== null);
+  const tage = aggregat.jeTag.filter(tragfaehig);
   if (tage.length < 2) return null;
   const sortiert = [...tage].sort((a, b) => a.outputQuote - b.outputQuote);
   const klein = sortiert[0];
@@ -251,4 +254,4 @@ export function hauptlauf(argv, { config, ordner = projektOrdner, ladeTyp = lade
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = hauptlauf(process.argv.slice(2));
+if (istDirektaufruf(import.meta.url)) process.exitCode = hauptlauf(process.argv.slice(2));

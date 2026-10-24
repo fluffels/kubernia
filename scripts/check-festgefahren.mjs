@@ -24,7 +24,7 @@
  * steht in ci-laeufe.mjs, geteilt mit token-baseline.mjs und lauf-ergebnis.mjs.
  */
 
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -160,7 +160,7 @@ export function main({ config } = {}) {
   console.log(`Festgefahren-Wächter: PR #${prNumber} als '${label}' markiert.`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   const code = main();
   if (code) process.exit(code);
 }

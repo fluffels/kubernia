@@ -4,11 +4,12 @@
 // `quelle.sauber`): ein Stand ohne Tag oder mit `sauber: false` (Entwurfs-Sync, Version 1) ist rot, der Weg ist ein Sync von einem Tag. Ohne Sync-Stand ist das Projekt
 // selbst Quelle des Besitzes, die Besitz-Prüfung entfällt mit einer Zeile. Die Projektwert-Stellen (aus der Config erzeugte Blöcke und
 // Frontmatter-Zeilen, `scripts/projektwerte.mjs`) werden immer gegen die Config geprüft, auch ohne Sync-Stand.
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { einheitHash, einheitId, ERGAENZBARE_EINHEITEN, ergaenzungsAnzahlVon, ergaenzungsBefundeVon, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitHash, einheitId, ERGAENZBARE, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
@@ -19,7 +20,7 @@ const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs -
 
 const BLOCK_HINWEIS = " (Projektergänzungen gehören außerhalb der Besitz-Marker)";
 
-const ergaenzungHinweis = (e) => ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFIG} › ${e.schluessel === "sandbox" ? "sandbox" : "berechtigungen"})`;
+const ergaenzungHinweis = (e) => ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFIG} › ${ERGAENZBARE.find((x) => x.id === einheitId(e))?.block})`;
 
 /** Pur: die Ergänzung aus dem Text der Projekt-Config; ohne Datei oder Block leer, bei kaputter Datei oder Form wirft es (Fix-Zeile inklusive). */
 function ergaenzungAus(lies) {
@@ -51,15 +52,13 @@ export function pruefeErgaenzung(lies) {
   }
   const fehler = [];
   let eintraege = 0;
-  for (const id of ERGAENZBARE_EINHEITEN) {
-    const [pfad, schluessel] = id.split("#/");
-    const einheit = { pfad, schluessel };
-    const anzahl = ergaenzungsAnzahlVon(einheit, erg);
+  for (const { id, block, anzahl: zaehle, befunde: pruefe } of ERGAENZBARE) {
+    const pfad = id.split("#/")[0];
+    const anzahl = zaehle(erg);
     eintraege += anzahl;
     if (anzahl === 0) continue;
     const wert = ergaenzbarerWert(lies, id);
-    const befunde = wert === null ? [`${id}: Datei oder Schlüssel fehlt, die Ergänzung hat keinen Platz`] : ergaenzungsBefundeVon(einheit, wert, erg);
-    const block = schluessel === "sandbox" ? "sandbox" : "berechtigungen";
+    const befunde = wert === null ? [`${id}: Datei oder Schlüssel fehlt, die Ergänzung hat keinen Platz`] : pruefe(wert, erg);
     const weg = `Weg: die Einträge aus ${PROJEKT_CONFIG} › ${block} ans Ende der Liste in ${pfad} setzen und im Zielprojekt neu syncen`;
     fehler.push(...befunde.map((b) => `${b}. ${weg}`));
   }
@@ -157,7 +156,7 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   }
   const ergPruefung = pruefeErgaenzung(lies);
   if (ergPruefung.fehler.length > 0) {
-    err(`check-factory-drift: ${ergPruefung.fehler.length} Befund(e) der Berechtigungs-Ergänzung`);
+    err(`check-factory-drift: ${ergPruefung.fehler.length} Befund(e) der Projekt-Ergänzungen`);
     for (const f of ergPruefung.fehler) err(`  ${f}`);
   }
   if (r.fehler.length > 0 || pw.fehler.length > 0 || ergPruefung.fehler.length > 0) return 1;
@@ -167,6 +166,6 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   process.exitCode = cli(process.argv.slice(2));
 }

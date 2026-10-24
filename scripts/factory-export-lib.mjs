@@ -7,7 +7,8 @@
 // Config (`begriffeAus`), die kein Projektliteral der Factory sind und deren Regex in beiden Configs verschieden ist.
 import { builtinModules } from "node:module";
 import { posix } from "node:path";
-import { importeAus, begriffeAus, relativeImporte, zielDatei } from "./besitz-lib.mjs";
+import { begriffeAus } from "./besitz-lib.mjs";
+import { importeAus, relativeImporte, zielDatei } from "./besitz-extraktion.mjs";
 import { isCheckable } from "./check-basis.mjs";
 import { pfadBefunde } from "./internalrefs-lib.mjs";
 

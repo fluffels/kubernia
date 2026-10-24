@@ -3,8 +3,9 @@
 // `node scripts/projektwerte.mjs --check | --write [--wurzel <pfad>]`; Exit 0 ok, 1 Abweichung oder Fehler, 2 Aufruf.
 // Prüf-Fläche (geschlossene Liste): `.md`-Pfade des Besitz-Manifests, `.claude/agents/*.md`, `.claude/skills/*/*.md`, `.agents/skills/*/*.md`; andere Dateitypen und
 // JSON-Schlüssel-Einheiten werden nicht gerendert. `--write` prüft erst alles und schreibt dann nur Geändertes, im Zeilenende-Stil der Datei.
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { projektwertLauf } from "./besitz-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -37,6 +38,6 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   process.exitCode = cli(process.argv.slice(2));
 }

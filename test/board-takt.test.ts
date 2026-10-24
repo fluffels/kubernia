@@ -40,6 +40,7 @@ const Q = rawQuote as unknown as {
   zaehleTaktMerges: (commits: unknown, seit?: string | Date | null, sammelIssues?: Set<number>) => number;
   befundKommentare: Takt["befundKommentare"];
   HARNESS_TAKT_KOMMENTARE: number;
+  fuellstandVon: (a: { nr: number; repo: string; ladeKommentare: (nr: number, repo: string) => unknown }) => { wert: number } | { fehler: string };
 };
 const normalizeOffene = (rawLib as unknown as { normalizeOffene: (pages: unknown) => Offen[] }).normalizeOffene;
 const STATUS_TITEL = (rawStatus as unknown as { STATUS_TITEL: string }).STATUS_TITEL;
@@ -158,6 +159,30 @@ describe("Spielquote im Takt (#1425)", () => {
     const q = T.quotenBericht([alt, alt, altSpiel, spiel], "2026-10-07T00:00:00Z");
     expect(q).toMatchObject({ harness: 0, spiel: 1 });
     expect(T.quotenBericht([alt, alt, altSpiel, spiel], null)).toMatchObject({ harness: 2, spiel: 2 });
+  });
+
+  describe("fuellstandVon: Laden, Zählen und Fail-closed an einer Stelle", () => {
+    const k = (login: string) => ({ user: { login, type: "User" } });
+    const repo = `${OWNER}/projekt`;
+    test("zählt die Owner-Kommentare (Owner aus dem Repo) und reicht Nummer und Repo an den Lader", () => {
+      const gesehen: unknown[] = [];
+      const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: (nr, rp) => (gesehen.push([nr, rp]), [k(OWNER), k(OWNER), k("fremd")]) });
+      expect(r).toEqual({ wert: 2 });
+      expect(gesehen).toEqual([[7, repo]]);
+    });
+    test("ein Ladefehler wird zu { fehler } mit erster Zeile (kein Wurf)", () => {
+      const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => { throw new Error("HTTP 502\nzweite Zeile"); } });
+      expect(r).toEqual({ fehler: "Kommentare von #7 nicht ladbar: HTTP 502" });
+    });
+    test("ein geworfener Nicht-Error (String) wird zu { fehler }", () => {
+      const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => { throw "kaputt"; } }); // eslint-disable-line @typescript-eslint/only-throw-error
+      expect(r).toEqual({ fehler: "Kommentare von #7 nicht ladbar: kaputt" });
+    });
+    test("eine falsche Antwortform und ein kaputtes Repo sind fail-closed { fehler }", () => {
+      expect(Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => ({}) })).toHaveProperty("fehler", "Kommentare von #7 nicht ladbar: kommentare muss eine Liste sein.");
+      const kaputt = Q.fuellstandVon({ nr: 7, repo: "ohne-slash", ladeKommentare: () => [] });
+      expect("fehler" in kaputt ? kaputt.fehler : "").toMatch(/nicht ladbar.*owner\/name/);
+    });
   });
 
   test("befundKommentare (#1888): nur Kommentare des vertrauten Owners ohne [bot]; fremde, Bot-, anonyme und gelöschte Autoren zählen nicht", () => {
@@ -305,6 +330,13 @@ function letzterTreffer(re: RegExp, text: string): string | undefined {
   return [...text.matchAll(re)].at(-1)?.[1];
 }
 
+/** Bindet JEDE Stelle, die das globale Muster trägt, an die erwartete Zahl (nicht nur den ersten Treffer je Datei); mindestens `min` Stellen, sonst wäre die Bindung leer. */
+function bindeAlle(re: RegExp, text: string, erwartet: number, min = 1): void {
+  const zahlen = [...text.matchAll(re)].map((m) => Number(m[1]));
+  expect(zahlen.length, `Muster ${re} trifft zu selten`).toBeGreaterThanOrEqual(min);
+  expect(zahlen.every((z) => z === erwartet), `Muster ${re}: ${zahlen.join(", ")} statt ${erwartet}`).toBe(true);
+}
+
 describe("spielquote-lib (#1729)", () => {
   test("die Bestandsfunktionen sind aus board-takt erreichbar und identisch (Re-Export)", () => {
     expect(T.SPIEL_QUOTE).toBe(Q.SPIEL_QUOTE);
@@ -379,25 +411,30 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const agents = lies("AGENTS.md");
     const fortschreibung = lies("docs/adr/fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md");
     expect(Number(/mindestens (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
-    expect(Number(/ab (\d+) Befund-Kommentaren/.exec(yml)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/ab (\d+) Befund-Kommentaren/g, yml, T.HARNESS_TAKT_KOMMENTARE);
     // #1428 Z21: der ADR wächst durch Fortschreibungen nur am Ende; die Bindung gilt dem LETZTEN Treffer (dem jüngsten Stand).
     expect(Number(letzterTreffer(/(\d+) Ticket-Merges \(ohne Bots\)/g, adr))).toBe(status.MIN_TICKET_MERGES_PUSH);
-    expect(Number(/ab (\d+) Befund-Kommentaren/.exec(fortschreibung)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/ab (\d+) Befund-Kommentaren/g, fortschreibung, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, fortschreibung, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/Spielquote 1:(\d+)/g, fortschreibung, T.SPIEL_QUOTE);
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(doc)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(adr)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
-    expect(Number(/ab (\d+) Befund-Kommentaren/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
-    expect(Number(/Spielquote 1:(\d+)/.exec(doc)?.[1])).toBe(T.SPIEL_QUOTE);
+    // ticket-reihenfolge.md nennt Schwelle und Quote an mehreren Stellen (Takt-Absatz, Position, Kennzahl-Soll): jede muss stimmen.
+    bindeAlle(/ab (\d+) Befund-Kommentaren/g, doc, T.HARNESS_TAKT_KOMMENTARE, 2);
+    bindeAlle(/Schwelle (\d+) Befund-Kommentare/g, doc, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, doc, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/Spielquote 1:(\d+)/g, doc, T.SPIEL_QUOTE, 2);
     // die Zahl steht auch in Glossar, Befehlsreferenz und Anlaufstellen
     expect(Number(/ab der Schwelle (\d+) greift der Härtungs-Takt/.exec(lies("docs/harness-glossar.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
     const befehle = lies("docs/referenz/befehle.md");
-    expect(Number(/erst ab (\d+) Befund-Kommentaren als frei/.exec(befehle)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
-    expect(Number(/k\/(\d+)/.exec(befehle)?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/erst ab (\d+) Befund-Kommentaren als frei/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
     expect(Number(/Harness-Sammelticket ab (\d+) Befund-Kommentaren/.exec(lies("docs/referenz/anlaufstellen.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
     // #1663 T5: auch die Regel in AGENTS.md trägt beide Zahlen.
-    expect(Number(/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/.exec(agents)?.[1])).toBe(Q.SPIEL_QUOTE);
-    expect(Number(/Spielquote 1:(\d+)/.exec(agents)?.[1])).toBe(T.SPIEL_QUOTE);
+    bindeAlle(/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/g, agents, Q.SPIEL_QUOTE);
+    bindeAlle(/Spielquote 1:(\d+)/g, agents, T.SPIEL_QUOTE);
   });
   test("das Kennzahl-Soll (#1729) trägt dieselbe Zahl in ticket-reihenfolge.md und, als jüngster Stand, in ADR 0016", () => {
     const wendung = /nach (\d+) Produkt-Merges \(Spielquote 1:\d+\) seit dem letzten Factory-Merge/;
@@ -409,7 +446,7 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const wahl = lies("scripts/naechstes-ticket.mjs");
     expect(takt).toContain('from "./spielquote-lib.mjs"');
     expect(wahl).not.toMatch(/SPIEL_QUOTE|quotenBericht|zaehleSpielMerges/); // die Spielquote steuert die Auswahl nicht
-    expect(wahl).toMatch(/import \{ HARNESS_TAKT_KOMMENTARE, befundKommentare \} from "\.\/spielquote-lib\.mjs"/);
+    expect(wahl).toMatch(/import \{ HARNESS_TAKT_KOMMENTARE, fuellstandVon \} from "\.\/spielquote-lib\.mjs"/);
     expect(takt).not.toMatch(/from "\.\/naechstes-ticket\.mjs"/);
     expect(wahl).not.toMatch(/from "\.\/board-takt\.mjs"/);
   });

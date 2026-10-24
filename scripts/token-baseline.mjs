@@ -26,9 +26,9 @@
  * dünnen IO-Helfer (Dateisuche, gh) sind bewusst ungetestet.
  */
 
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { commitZeilenAus, ladeCommitZeilen } from "./slice-override.mjs";
 import { configAusAufruf } from "./projekt-config-lib.mjs";
@@ -665,7 +665,7 @@ ${AUFRUF}`);
   else console.log(renderMarkdown(summary, loop, { planZeile: zeilen.plan }));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   main().catch((err) => {
     console.error(err.message);
     process.exit(1);

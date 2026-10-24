@@ -23,16 +23,16 @@
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
  * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); dazu EINE GraphQL-Abfrage der 50 jüngsten offenen Issues für den Board-Verzug (#1866: Items auf einem Board, die die REST-Listen noch nicht führen, stehen als Zeile `VERZUG #a, #b: …` und als `verzug` im JSON; fail-open, ein Fehler wird zum Hinweis). `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
  */
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
-import { HARNESS_TAKT_KOMMENTARE, befundKommentare } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./spielquote-lib.mjs";
 import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -139,7 +139,7 @@ export function imBereich(item, bereich, config) {
 /**
  * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
- * `fuellstand(nr)`: Füllstand des Harness-Sammeltickets (`befundKommentare`) oder `{ fehler }`; das ungeclaimte Harness-Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
+ * `fuellstand(nr)`: Füllstand des Harness-Sammeltickets (`fuellstandVon`) oder `{ fehler }`; das ungeclaimte Harness-Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
  * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
@@ -369,18 +369,15 @@ function messfensterLaeufe(fenster, dir, holeIssue, holeNamen) {
 }
 
 /**
- * Lader für den Füllstand (Härtungs-Takt), I/O: die Kommentare des Sammeltickets per REST (`holeKommentare`), gezählt mit `befundKommentare`. Memo je Nummer;
+ * Lader für den Füllstand (Härtungs-Takt), I/O: die Kommentare des Sammeltickets per REST (`holeKommentare`), gezählt mit `fuellstandVon`. Memo je Nummer;
  * ein Ladefehler wird zu `{ fehler }` (fail-closed: das Sammelticket wird dann übersprungen, die Auswahl läuft weiter).
  */
-export function fuellstandLader({ holeKommentare = (nr) => issueKommentare(nr, ghJson, REPO), owner = OWNER } = {}) {
+export function fuellstandLader({ holeKommentare = (nr, repo) => issueKommentare(nr, ghJson, repo), repo = REPO } = {}) {
   const memo = new Map();
   return (nr) => {
     if (!memo.has(nr)) {
-      try {
-        memo.set(nr, befundKommentare(holeKommentare(nr), owner));
-      } catch (e) {
-        memo.set(nr, { fehler: `Kommentare von #${nr} nicht ladbar: ${e instanceof Error ? e.message.split(/\r?\n/)[0] : String(e)}` });
-      }
+      const r = fuellstandVon({ nr, repo, ladeKommentare: holeKommentare });
+      memo.set(nr, r.fehler === undefined ? r.wert : { fehler: r.fehler });
     }
     return memo.get(nr);
   };
@@ -428,7 +425,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   return { lade, ladeEinzeln, fuellstand: fuellstandLader(), owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O; übersteuert Sprache, Labels, Namen und hartAb, Repo und Board-IDs kommen aus der Repo-Config (board-lib/inbox-lib)
   direktaufruf(args, {

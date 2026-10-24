@@ -41,14 +41,15 @@
  * Ausführen mit:  npm run check:internalrefs   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
-import { FIXTURE_WURZELN, PLATZHALTER_NUTZER, pfadBefunde } from "./internalrefs-lib.mjs";
+import { FIXTURE_WURZELN, LAUFWERK_KOPF, LAUFWERK_MUSTER, NACHLAUF, PLATZHALTER_NUTZER, pfadBefunde } from "./internalrefs-lib.mjs";
 import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -148,7 +149,7 @@ export function listBranchCommitMessages(rootDir = ROOT, exec = execFileSync) {
 // Beispiele in Tests und Doku bauen den Pfad aus Teilen oder nutzen einen Platzhalter, sonst trifft die Regel das Beispiel.
 
 // Daten und Prüffunktion der Pfadregel stehen in `internalrefs-lib.mjs` (hier wieder ausgeführt, damit Tests und Aufrufer sie über dieses Modul kennen).
-export { FIXTURE_WURZELN, PLATZHALTER_NUTZER, pfadBefunde };
+export { FIXTURE_WURZELN, LAUFWERK_KOPF, LAUFWERK_MUSTER, NACHLAUF, PLATZHALTER_NUTZER, pfadBefunde };
 
 
 /** Repo-Name aus der Projekt-Config des Repos, `null` ohne nutzbare Config (Regel 3 der Pfadregel entfällt dann). */
@@ -203,8 +204,8 @@ export function addTerm(term, selfPath = SELF, listName = "ENCODED_TERMS") {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-/** Einstieg. `deps` (Tests): `self` (die Datei, in die `--add`/`--add-name` schreiben), `out`, `err`. Rückgabe: Exit-Code. */
-export function main(argv = process.argv.slice(2), { self = SELF, out = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `self` (die Datei, in die `--add`/`--add-name` schreiben), `out`, `err`, `pruefe` (statt `runCheck` gegen das echte Repo). Rückgabe: Exit-Code. */
+export function main(argv = process.argv.slice(2), { self = SELF, out = console.log, err = console.error, pruefe = runCheck } = {}) {
   const { werte, fehler } = flagsLesen(argv, { add: { type: "string" }, "add-name": { type: "string" }, text: { type: "boolean" } });
   if (fehler) {
     err(`${fehler.text}
@@ -236,7 +237,7 @@ Aufruf: node scripts/check-internalrefs.mjs [--add <begriff> | --add-name <begri
     return bericht(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, { red, green, label: checkedLabel("text"), out, err });
   }
 
-  const { files, violations } = runCheck();
+  const { files, violations } = pruefe();
   return bericht(violations, files.length, { red, green, label: checkedLabel("repo"), out, err });
 }
 
@@ -279,4 +280,4 @@ function bericht(violations, checked, { red, green, label, out, err }) {
   return 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = main();

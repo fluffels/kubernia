@@ -13,8 +13,8 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { FREMD } from "../support/fremd-config";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { FREMD, FREMD_CONFIG_PFAD } from "../support/fremd-config";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -169,6 +169,32 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.equal(r.status, 1);
     assert.match(r.stderr, /Projekt-Config fehlt[\s\S]*Fix:/);
   });
+  test("CLI: eine gültige Fremd-Config per --config bestimmt die Phasen-Zuordnung (Planer-Name aus der Config, nicht aus der Projekt-Config)", () => {
+    const home = mkdtempSync(join(tmpdir(), "tb-home-"));
+    try {
+      const projekt = join(home, ".claude", "projects", "p1");
+      const sitzung = "sess1";
+      const zeile = (id: string) =>
+        JSON.stringify({ type: "assistant", timestamp: "2026-09-29T10:30:00Z", uuid: id, message: { id, model: "claude-sonnet-5-5", usage: { input_tokens: 1, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 10 }, content: [{ type: "text", text: "x" }] } });
+      mkdirSync(join(projekt, sitzung, "subagents"), { recursive: true });
+      writeFileSync(join(projekt, `${sitzung}.jsonl`), `${zeile("m1")}\n`);
+      writeFileSync(join(projekt, sitzung, "subagents", "a1.jsonl"), `${zeile("s1")}\n`);
+      writeFileSync(join(projekt, sitzung, "subagents", "a1.meta.json"), JSON.stringify({ agentType: FREMD.agenten.planer, description: "irgendwas" }));
+      const andere = join(home, "andere.json");
+      const fremdeConfig = JSON.parse(readFileSync(FREMD_CONFIG_PFAD, "utf8")) as { agenten: { planer: string } };
+      writeFileSync(andere, JSON.stringify({ ...fremdeConfig, agenten: { ...fremdeConfig.agenten, planer: "anderer-planer" } }));
+      const env = { ...process.env, HOME: home, USERPROFILE: home };
+      const phasen = (config: string) => {
+        const r = spawnSync(process.execPath, ["scripts/token-baseline.mjs", "--config", config, "--session", sitzung, "--json"], { encoding: "utf8", env, timeout: 30_000 });
+        assert.equal(r.status, 0, r.stderr);
+        return (JSON.parse(r.stdout) as { rows: { phase: string }[] }).rows.map((x) => x.phase);
+      };
+      assert.ok(phasen(FREMD_CONFIG_PFAD).includes("Planung"), "Planer-Name der Fremd-Config trifft");
+      assert.ok(!phasen(andere).includes("Planung"), "mit umbenanntem Planer in der Config trifft derselbe Name nicht mehr");
+    } finally {
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  }, 60_000);
   test("windowCalls und summarize reichen die Agentennamen an die Phasen-Zuordnung durch", () => {
     const a = FREMD.agenten;
     const c = call("2026-09-29T10:30:00Z", 1, { subagent: { id: "p", agentType: a.planer, description: "irgendwas" } });

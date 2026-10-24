@@ -56,12 +56,13 @@
  * Ausführen mit:  npm run check:diffsize   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { umgebungsWert } from "./projekt-config-lib.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { leseJson, parseSections } from "./docs-gen/markdown.mjs";
 
 /** Budget für EINE Änderung. Kalibriert an echten Tickets dieses Projekts: die letzten
@@ -391,4 +392,4 @@ function main() {
   console.log(green(`✔ check:diffsize ok — ${measured} ≤ ${budget}.`));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

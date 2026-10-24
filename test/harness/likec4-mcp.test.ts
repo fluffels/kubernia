@@ -68,7 +68,7 @@ describe("Launcher-Bausteine (#1422)", () => {
 
   test("npx-Hinweis hat das Format, das scripts/mcp-ausfall.mjs als npx-Fallback erkennt", () => {
     assert.ok(istNpxFallback(`Server stderr: ${launcher.npxHinweis("likec4@1.2.3")}`));
-    assert.equal(launcher.npxHinweis("likec4@1.2.3"), "likec4-mcp: lokale Installation fehlt oder weicht ab → npx likec4@1.2.3");
+    assert.equal(launcher.npxHinweis("likec4@1.2.3"), "likec4-mcp: lokale Installation fehlt → npx likec4@1.2.3");
   });
 
   test("Server-Argumente: stdio auf docs/architektur, Zusatzargumente hinten, Modellordner hat .c4-Dateien", () => {

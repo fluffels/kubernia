@@ -17,14 +17,15 @@
  * docs/model-routing.md › Checkliste Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
 import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
-import { priceCall } from "./preise.mjs";
+import { costDetails } from "./langfuse-otlp.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 import {
@@ -52,15 +53,14 @@ const FEHLEND_ANZEIGE = 20;
 /** Liegen die Langfuse-Kosten bei gleichen Calls strikt unter (1 − PREIS_TOLERANZ) · Transkript-Kosten, bepreist die Instanz das Modell nicht oder zu niedrig (Hinweis Modellpreis). */
 export const PREIS_TOLERANZ = 0.1;
 
-/** Transkript-Kosten eines Solls in $ (Preistabelle `preise.mjs`); Calls ohne Preis zählen in `ohnePreis`, nie als 0 $ in der Summe. */
+/** Transkript-Kosten eines Solls in $; die Preisabbildung ist `costDetails` (`langfuse-otlp.mjs`), dieselbe, die der Nachlieferer an Langfuse sendet. Calls ohne Preis zählen in `ohnePreis`, nie als 0 $ in der Summe. */
 function kostenAusSoll(soll) {
   let kosten = 0;
   let ohnePreis = 0;
   for (const e of soll) {
-    const u = e.usage;
-    const k = priceCall({ model: e.model, ts: e.ts, input: u.input, output: u.output, cacheRead: u.cacheRead, cacheWrite: u.cacheWrite5m + u.cacheWrite1h, cacheWrite1h: u.cacheWrite1h });
+    const k = costDetails(e);
     if (k === null) ohnePreis++;
-    else kosten += k;
+    else kosten += k.total;
   }
   return { kosten, ohnePreis };
 }
@@ -127,9 +127,12 @@ export function summenzeile(bewertungen) {
     const werte = fest.map((b) => b[feld]).filter((v) => v !== null);
     return werte.length ? werte.reduce((s, v) => s + v, 0) : null;
   };
+  // T und L über dieselbe Menge: nur Sessions mit Kosten-Export; ohne jeden Export gibt es keine L-Seite, dann zählen alle festen Sessions.
+  const mitExport = fest.filter((b) => b.kostenLangfuse !== null);
   return {
-    kostenTranskript: fest.reduce((s, b) => s + b.kostenTranskript, 0),
+    kostenTranskript: (mitExport.length ? mitExport : fest).reduce((s, b) => s + b.kostenTranskript, 0),
     kostenLangfuse: bekannt("kostenLangfuse"),
+    ohneKostenExport: fest.length - mitExport.length,
     ueberzaehlung: bekannt("ueberzaehlung"),
     sessions: fest.length,
     laeuft: bewertungen.length - fest.length,
@@ -164,6 +167,7 @@ export function renderMarkdown(bewertungen, sum) {
   const out = ["# Langfuse-Abgleich (T = Transkript, L = Langfuse)", "", ...zeilen, ""];
   const teile = [];
   if (sum.scoreAusstehend) teile.push(`${sum.scoreAusstehend} davon Score ausstehend (Nachlieferer wartet noch)`);
+  if (sum.ohneKostenExport) teile.push(`ohne Kosten-Export: ${sum.ohneKostenExport}`);
   if (sum.vorStichtag) teile.push(`${sum.vorStichtag} vor dem Stichtag (nie gesendet, kein Score)`);
   const zusatz = teile.length ? `; ${teile.join(", ")}` : "";
   out.push(`**Summe:** ${sum.sessions} Session(s), Calls ${fmt(sum.callsTranskript)} / ${fmt(sum.callsLangfuse)}, Kosten ${paarUsd(sum.kostenTranskript, sum.kostenLangfuse)} $, fehlend ${sum.fehlend}, Dubletten ${sum.dubletten}, Erfassungsquote ${pct(sum.quote)}${sum.laeuft ? `; ${sum.laeuft} Session(s) läuft noch (Ruhefrist ${RUHEFRIST_MIN} min, nicht in Σ)` : ""}${zusatz}.`);
@@ -287,4 +291,4 @@ async function main() {
   process.exitCode = exitCode;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (istDirektaufruf(import.meta.url)) await main();

@@ -13,7 +13,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ARTEN, EXIT_KNAPP, berichtAus, kontingentLesen, kontingentPruefen, logPfad, ressource } from "./kontingent-lib.mjs";
 
 function ausgabeBericht(b) {

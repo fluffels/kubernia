@@ -27,10 +27,11 @@ type Doktor = {
   pruefePlattform: (a: { platform: string; release: string; env?: Record<string, string | undefined> }) => Ergebnis[];
   pruefeWerkzeuge: (which: (name: string) => boolean) => Ergebnis[];
   pruefeWslConf: (text: string | null) => Ergebnis[];
-  erzeugeVorlage: (a: { projektDomains: string[]; langfuseBaseUrl?: string }) => Settings;
+  erzeugeVorlage: (a: { projektDomains: string[]; projektDenyVariablen?: string[]; langfuseBaseUrl?: string }) => Settings;
   pruefeUserSettings: (user: Settings | null, vorlage: Settings) => Ergebnis[];
   verhaltensprobe: (io: { home: string; schreibe: (p: string) => void; loesche: (p: string) => void }) => Ergebnis[];
   projektDomains: (settingsText: string) => string[];
+  projektDenyVariablen: (settingsText: string) => string[];
   pruefeWindowsSperre: (a: { platform: string; projektText: string | null; lokalText: string | null }) => boolean;
   sessionStartAusgabe: (a: { platform: string; projektText: string | null; lokalText: string | null }) => string;
   main: (argv: string[], env?: Record<string, string | undefined>, out?: (t: string) => void, err?: (t: string) => void, io?: { platform?: string; projektText?: string | null; lokalText?: string | null }) => number;
@@ -207,7 +208,7 @@ describe("pruefeWslConf", () => {
 
 describe("erzeugeVorlage", () => {
   const domains = ["github.com", "api.github.com"];
-  test("Grundform: Flags, strenge Allowlist, GH_TOKEN maskiert, vier Deny-Einträge", () => {
+  test("Grundform: Flags, strenge Allowlist, GH_TOKEN maskiert, drei Kern-Deny-Einträge ohne Projektvariable", () => {
     const v = D.erzeugeVorlage({ projektDomains: domains });
     expect(v.sandbox?.enabled).toBe(true);
     expect(v.sandbox?.failIfUnavailable).toBe(true);
@@ -217,7 +218,12 @@ describe("erzeugeVorlage", () => {
     expect(v.sandbox?.network?.allowedDomains).toEqual(domains);
     const envs = v.sandbox?.credentials?.envVars ?? [];
     expect(envs.find((e) => e.name === "GH_TOKEN")).toEqual({ name: "GH_TOKEN", mode: "mask", injectHosts: ["api.github.com", "github.com"] });
-    expect(envs.filter((e) => e.mode === "deny").map((e) => e.name).sort()).toEqual(["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "GITHUB_TOKEN", "PIXELLAB_TOKEN"]);
+    expect(envs.filter((e) => e.mode === "deny").map((e) => e.name).sort()).toEqual(["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "GITHUB_TOKEN"]);
+  });
+  test("Projekt-Deny-Variablen kommen zusätzlich dazu, doppelte Namen nur einmal", () => {
+    const v = D.erzeugeVorlage({ projektDomains: domains, projektDenyVariablen: ["BEISPIEL_PROJEKT_TOKEN", "GITHUB_TOKEN"] });
+    const deny = (v.sandbox?.credentials?.envVars ?? []).filter((e) => e.mode === "deny").map((e) => e.name).sort();
+    expect(deny).toEqual(["ANTHROPIC_API_KEY", "BEISPIEL_PROJEKT_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "GITHUB_TOKEN"]);
   });
   test("ohne Langfuse kein Langfuse-Eintrag", () => {
     const v = D.erzeugeVorlage({ projektDomains: domains });
@@ -327,8 +333,8 @@ describe("pruefeUserSettings", () => {
   });
   test("Credential-Eintrag fehlt ganz: rot", () => {
     const u = kopie();
-    u.sandbox!.credentials!.envVars = u.sandbox!.credentials!.envVars!.filter((e) => e.name !== "PIXELLAB_TOKEN");
-    expect(rot(D.pruefeUserSettings(u, vorlage))[0].text).toContain("PIXELLAB_TOKEN");
+    u.sandbox!.credentials!.envVars = u.sandbox!.credentials!.envVars!.filter((e) => e.name !== "ANTHROPIC_API_KEY");
+    expect(rot(D.pruefeUserSettings(u, vorlage))[0].text).toContain("ANTHROPIC_API_KEY");
   });
   test("Secret im env-Block: rot, nur der Name steht in der Meldung, nie der Wert", () => {
     const u = kopie();
@@ -397,6 +403,21 @@ describe("Integration mit dem echten Projekt", () => {
     const v = D.erzeugeVorlage({ projektDomains: domains, langfuseBaseUrl: "https://lf.example" });
     for (const d of domains) expect(v.sandbox?.network?.allowedDomains).toContain(d);
   });
+  test("projektDenyVariablen liest die Deny-Namen aus der echten .claude/settings.json und ist in der Vorlage", () => {
+    const text = readFileSync(fileURLToPath(new URL("../.claude/settings.json", import.meta.url)), "utf8");
+    const deny = D.projektDenyVariablen(text);
+    expect(deny.length).toBeGreaterThan(0);
+    const v = D.erzeugeVorlage({ projektDomains: [], projektDenyVariablen: deny });
+    const namen = (v.sandbox?.credentials?.envVars ?? []).filter((e) => e.mode === "deny").map((e) => e.name);
+    for (const n of deny) expect(namen).toContain(n);
+  });
+  test("projektDenyVariablen: nur Einträge mit mode deny und String-Namen; kaputtes JSON oder fehlender Block liefert eine leere Liste", () => {
+    const text = JSON.stringify({ sandbox: { credentials: { envVars: [{ name: "BEISPIEL_A", mode: "deny" }, { name: "BEISPIEL_B", mode: "mask" }, { name: 5, mode: "deny" }, "x", null] } } });
+    expect(D.projektDenyVariablen(text)).toEqual(["BEISPIEL_A"]);
+    expect(D.projektDenyVariablen("{")).toEqual([]);
+    expect(D.projektDenyVariablen("{}")).toEqual([]);
+    expect(D.projektDenyVariablen(JSON.stringify({ sandbox: { credentials: { envVars: "nein" } } }))).toEqual([]);
+  });
   test("projektDomains: kaputtes JSON oder fehlender Block liefert eine leere Liste", () => {
     expect(D.projektDomains("{")).toEqual([]);
     expect(D.projektDomains("{}")).toEqual([]);
@@ -436,6 +457,13 @@ describe("CLI", () => {
     const json = JSON.parse(r.stdout) as Settings;
     expect(json.sandbox?.network?.allowedDomains).toContain("registry.npmjs.org");
     expect(json.sandbox?.network?.allowedDomains).toContain("lf.example");
+  });
+  test("--vorlage führt die Projekt-Deny-Variablen aus der settings.json mit", () => {
+    const r = lauf(["--vorlage"]);
+    const json = JSON.parse(r.stdout) as Settings;
+    const soll = D.projektDenyVariablen(readFileSync(fileURLToPath(new URL("../.claude/settings.json", import.meta.url)), "utf8"));
+    const deny = (json.sandbox?.credentials?.envVars ?? []).filter((e) => e.mode === "deny").map((e) => e.name);
+    for (const n of soll) expect(deny).toContain(n);
   });
   test("unbekanntes oder fehlendes Argument: Usage und Exit 2", () => {
     expect(lauf(["--quatsch"]).status).toBe(2);

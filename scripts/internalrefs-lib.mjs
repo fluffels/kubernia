@@ -12,9 +12,9 @@ export const FIXTURE_WURZELN = [
 ];
 
 const NUTZER_MUSTER = /(?:(?<![\w])[A-Z]:[\\/]+Users|(?<![\w.:/\\])\/(?:Users|home))[\\/]+([^\\/\s"'`<>*|]+)/g;
-const LAUFWERK_MUSTER = /(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g;
-const LAUFWERK_KOPF = /^[A-Z]:[\\/]+/;
-const NACHLAUF = /[.,;:)\]}]+$/;
+export const LAUFWERK_MUSTER = /(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g;
+export const LAUFWERK_KOPF = /^[A-Z]:[\\/]+/;
+export const NACHLAUF = /[.,;:)\]}]+$/;
 const VARIABLE = /^[$%{~]/;
 const imScope = (file) => /^(test|scripts)\//.test(file);
 

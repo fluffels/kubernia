@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { posix } from "node:path";
-import { pathToFileURL } from "node:url";
+export { istDirektaufruf } from "./direktaufruf.mjs";
 
 /** Liest stdin komplett; bei Fehler (kein stdin) leerer Text. */
 export function readStdin() {
@@ -47,9 +47,6 @@ export function mergeDecisions(decisions) {
   const ask = decisions.find((d) => d?.ask);
   return ask ? buildAskOutput(ask.reason) : null;
 }
-
-/** True, wenn `meta.url` das gestartete Skript ist (statt von einem Test importiert zu werden). */
-export const istDirektaufruf = (metaUrl) => Boolean(process.argv[1]) && metaUrl === pathToFileURL(process.argv[1]).href;
 
 /** Gibt die Entscheidung als eine JSON-Zeile aus. Bewusst KEIN process.exit(): auf Windows kann ein Pipe-stdout
  *  asynchron sein, ein sofortiges exit() nach console.log() schnitte die Ausgabe ab. */

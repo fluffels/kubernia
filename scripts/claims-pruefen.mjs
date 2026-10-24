@@ -30,10 +30,10 @@
  * Exit 0 = ok, 1 = ein Aufräumschritt ist gescheitert (der Rest wird gemeldet), 2 = Aufruf-, git- oder gh-Fehler (nichts aufgeräumt),
  * 5 = GitHub-API-Kontingent knapp.
  */
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -333,7 +333,7 @@ export function echteDeps({ config: vorgabe } = {}) {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   let r;
   try {
     r = fuehreAus(process.argv.slice(2), () => {

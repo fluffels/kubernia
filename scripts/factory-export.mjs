@@ -9,19 +9,10 @@
 // Bekannte Muster der Prüfungen (Grenzen): siehe Kopf von `factory-export-lib.mjs`.
 import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import {
-  artVon,
-  EXTRAKTION_PFAD,
-  istGanzeDatei,
-  MITZIEHEND,
-  musterRegex,
-  normalisiereEol,
-  projektwertDateien,
-  pruefeExtraktion,
-  pruefeManifest,
-  rendereProjektwerte,
-} from "./besitz-lib.mjs";
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { istGanzeDatei, normalisiereEol, projektwertDateien, pruefeManifest, rendereProjektwerte } from "./besitz-lib.mjs";
+import { artVon, EXTRAKTION_PFAD, MITZIEHEND, musterRegex, pruefeExtraktion } from "./besitz-extraktion.mjs";
 import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import {
   kuberniaBegriffe,
@@ -281,6 +272,6 @@ export function cli(argv, { leser, quelle = ROOT, out = (s) => console.log(s), e
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   process.exitCode = cli(process.argv.slice(2));
 }

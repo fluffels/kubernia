@@ -94,7 +94,7 @@ export function abweichungHinweis(name, { lokal, lock }) {
 
 /** Hinweiszeile für den npx-Modus; das Format erkennt `scripts/mcp-ausfall.mjs` (Pfeil + `npx`). Pur. */
 export function npxHinweis(name, spec) {
-  return `${name}: lokale Installation fehlt oder weicht ab → npx ${spec}`;
+  return `${name}: lokale Installation fehlt → npx ${spec}`;
 }
 
 /**
@@ -118,33 +118,40 @@ export function launcherFuer({ name, pkg, bin }) {
   };
 }
 
-/** Startet den Server (lokal oder per npx) und reicht Exit-Code und Signale durch. `cwd` optional (sonst das der Session). */
-export function starte({ name, pkg, bin, root, args, cwd }) {
+/**
+ * Startet den Server (lokal oder per npx) und reicht Exit-Code und Signale durch. `cwd` optional (sonst das der Session).
+ * `abhaengigkeiten` ersetzt in Tests Kindprozess, stderr, Prozessende und Signal-Anmeldung (`spawn`, `stderr`, `exit`, `onSignal`); Standard sind die echten.
+ */
+export function starte({ name, pkg, bin, root, args, cwd }, abhaengigkeiten = {}) {
+  const { spawn: starten = spawn, stderr = process.stderr, exit = (c) => process.exit(c), onSignal = (sig, fn) => process.on(sig, fn) } = abhaengigkeiten;
   const plan = planLaunch({ pkg, lockVersion: readLockVersion(root, pkg), installed: readInstalled(root, pkg, bin) });
   const start = Date.now();
   const vorher = plan.mode === "local" ? statInstallation(plan.binPath) : null;
   let vonAussen = false;
   const opt = { stdio: "inherit", ...(cwd ? { cwd } : {}) };
   // stdout gehört dem MCP-Protokoll – Hinweise nur auf stderr.
-  if (plan.abweichung) process.stderr.write(`${abweichungHinweis(name, plan.abweichung)}
+  if (plan.abweichung) stderr.write(`${abweichungHinweis(name, plan.abweichung)}
 `);
   const child =
     plan.mode === "local"
-      ? spawn(process.execPath, [plan.binPath, ...args], opt)
-      : (process.stderr.write(`${npxHinweis(name, plan.spec)}\n`),
-        spawn("npx", ["-y", plan.spec, ...args], { ...opt, shell: process.platform === "win32" }));
+      ? starten(process.execPath, [plan.binPath, ...args], opt)
+      : (stderr.write(`${npxHinweis(name, plan.spec)}
+`),
+        starten("npx", ["-y", plan.spec, ...args], { ...opt, shell: process.platform === "win32" }));
   child.on("error", (e) => {
-    process.stderr.write(`${name}: Start fehlgeschlagen (${e.code ?? e.message})\n`);
-    process.exit(1);
+    stderr.write(`${name}: Start fehlgeschlagen (${e.code ?? e.message})
+`);
+    exit(1);
   });
   child.on("exit", (code, signal) => {
     const ersetzt = plan.mode === "local" && installationErsetzt(vorher, statInstallation(plan.binPath));
     const zeile = exitMeldung({ name, code, signal, vonAussen, laufzeitMs: Date.now() - start, modus: plan.mode === "local" ? "local" : "npx", ersetzt });
-    if (zeile) process.stderr.write(`${zeile}\n`);
-    process.exit(code ?? (signal ? 1 : 0));
+    if (zeile) stderr.write(`${zeile}
+`);
+    exit(code ?? (signal ? 1 : 0));
   });
   for (const sig of ["SIGINT", "SIGTERM"]) {
-    process.on(sig, () => {
+    onSignal(sig, () => {
       vonAussen = true;
       child.kill(sig);
     });

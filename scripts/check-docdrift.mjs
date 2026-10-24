@@ -30,9 +30,10 @@
  * Ausführen mit:  npm run check:docdrift   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { dirname, join, relative, resolve, sep, posix } from "node:path";
+import { dirname, join, relative, sep, posix, resolve } from "node:path";
 import { fenceMaske } from "./docs-gen/markdown.mjs";
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
@@ -310,4 +311,4 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();
