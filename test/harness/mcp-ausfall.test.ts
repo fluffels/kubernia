@@ -179,6 +179,7 @@ describe("Pfad-Helfer", () => {
     expect(a.serverAnzeige("anderes", cfg)).toBeNull();
   });
   test("istNpxFallback erkennt den Launcher-Hinweis, nicht beliebige stderr-Zeilen", () => {
+    expect(a.istNpxFallback("Server stderr: playwright-mcp: lokale Installation fehlt → npx @playwright/mcp@1.2.3")).toBe(true);
     expect(a.istNpxFallback("Server stderr: playwright-mcp: lokale Installation fehlt oder weicht ab → npx @playwright/mcp@1.2.3")).toBe(true);
     expect(a.istNpxFallback("Server stderr: npx -y likec4@1.0.0")).toBe(true);
     expect(a.istNpxFallback("Server stderr: Fehler beim Start")).toBe(false);
