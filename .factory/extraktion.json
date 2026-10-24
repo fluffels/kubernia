@@ -111,6 +111,7 @@
     {"muster":"test/harness/playwright-mcp.test.ts","art":"projekt-test","grund":"Gegenstand ist ein Projekt-Modul, kein Besitz (Browser-Modul)"},
     {"muster":"test/harness/prepush-hook.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/pretooluse-hook.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
+    {"muster":"test/harness/trace-tag-projekt.test.ts","art":"projekt-test","grund":"Gegenstand sind projekteigene Werte (Trace-Tag in Settings, Brain-Seiten), kein Besitz"},
     {"muster":"test/harness/projekt*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/quote-folge.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/repo-texte.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
