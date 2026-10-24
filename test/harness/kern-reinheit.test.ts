@@ -1152,7 +1152,14 @@ export function kernTestIst(pfade: string[], lies: (pfad: string) => string | nu
 
 /** Null-Regel (#1903): jeder Treffer in einem Kern-Test, einer Test-Hilfe oder einer Fixture ist rot, ohne Baseline. Leer = grün. */
 export function kernTestVerstoesse(pfade: string[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): string[] {
-  return vergleiche(kernTestIst(pfade, lies, begriffe), {}).map((m) => `${m} (Kern-Test: Wert aus FREMD bzw. projektConfig() nehmen, Projektinhalt in einen projekt-test)`);
+  const weg = "(Kern-Test: Wert aus FREMD bzw. projektConfig() nehmen, Projektinhalt in einen projekt-test)";
+  return Object.entries(kernTestIst(pfade, lies, begriffe)).flatMap(([datei, z]) =>
+    Object.entries(z).map(([begriff, n]) => {
+      // das gefundene Literal selbst (je Wortlaut einmal), damit die Fundstelle ohne Suchen auffindbar ist
+      const funde = [...new Set((lies(datei) ?? "").replace(/\r\n/g, "\n").match(begriffe[begriff]) ?? [])];
+      return `${vergleiche({ [datei]: { [begriff]: n } }, {})[0]} ${weg} Fund: ${funde.map((f) => `'${f}'`).join(", ")}`;
+    }),
+  );
 }
 
 describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
@@ -1180,6 +1187,10 @@ describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
     assert.equal(v.length, 1);
     assert.ok(v[0].startsWith("test/neu.test.ts: neues Projektliteral 'Praefix' (1x)"), v[0]);
     assert.ok(v[0].includes("projektConfig()") && v[0].includes("projekt-test"), "die Meldung nennt den Weg");
+    assert.ok(v[0].endsWith(` Fund: '${config.praefixe.commitZeile}'`), `die Meldung nennt das gefundene Literal selbst: ${v[0]}`);
+    // mehrere verschiedene Treffer desselben Begriffs stehen einmal je Wortlaut in der Meldung
+    const zwei = kernTestVerstoesse(["test/neu.test.ts"], () => `${config.repo.split("/")[0]} und ${config.repo.split("/")[0].toUpperCase()}`, echteBegriffe);
+    assert.ok(zwei.some((m) => m.includes("'Owner'") && m.includes(` Fund: '${config.repo.split("/")[0]}', '${config.repo.split("/")[0].toUpperCase()}'`)), zwei.join("; "));
     assert.deepEqual(kernTestVerstoesse(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), [], "ohne Literal keine Meldung");
   });
   test("Negativfall: jeder Treffer zählt, auch der zweite (kein Baseline-Ausweg)", () => {
