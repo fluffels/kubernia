@@ -12,7 +12,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";

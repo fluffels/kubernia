@@ -17,7 +17,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";

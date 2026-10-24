@@ -12,7 +12,7 @@
  * Die Funktionen oben sind pur und getestet (test/wiedervorlage.test.ts); die gh-Aufrufe unten nicht.
  */
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { inboxStart } from "./inbox-start-lib.mjs";

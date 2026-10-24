@@ -8,7 +8,7 @@
  * (1.328 Zeilen, 123.253 Bytes): 1,88 bis 1,92 Zeichen je Token, also ≈ 17.000 Tokens; selbst bei 1,3 Zeichen je Token
  * (dichter Code) ≈ 24.600, unter dem Limit.
  */
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync } from "node:fs";
 
 export const MAX_ZEICHEN = 32_000;

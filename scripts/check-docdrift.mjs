@@ -31,7 +31,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, join, relative, sep, posix, resolve } from "node:path";
 import { fenceMaske } from "./docs-gen/markdown.mjs";

@@ -5,7 +5,7 @@
 // Ausfallzeile) steckt in `scripts/mcp-launch.mjs` (`launcherFuer`); hier stehen nur die Werte des Servers.
 // Der Server läuft im Startverzeichnis der Session (`--output-dir .playwright-mcp` ist relativ dazu).
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { dirname, join } from "node:path";
 import { launcherFuer } from "./mcp-launch.mjs";
 

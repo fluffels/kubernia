@@ -32,7 +32,7 @@
  * Ausführen (in der Action):  printf '%s' "$DISC_TITLE" | node scripts/forum-sanitize.mjs
  */
 
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
 /** Standard-Längenlimit für einen Forum-Titel im Issue (GitHub-Issue-Titel

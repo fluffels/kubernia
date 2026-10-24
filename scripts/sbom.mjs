@@ -8,7 +8,7 @@
  *
  * Aufruf: node scripts/sbom.mjs [--aus <pfad>]   (Standard: sbom/bom.cdx.json)
  * Exit: 0 ok, 1 Erzeugung oder Prüfung fehlgeschlagen, 2 falsche Argumente. */
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";

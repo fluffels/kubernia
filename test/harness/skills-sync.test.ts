@@ -439,7 +439,7 @@ describe("Kommandozeile", () => {
       temp.push(w);
       mkdirSync(join(w, "scripts"), { recursive: true });
       mkdirSync(join(w, "scripts/docs-gen"), { recursive: true });
-      for (const f of ["skills-sync.mjs", "skill-pfade.mjs", "flag-lib.mjs", "docs-gen/markdown.mjs"]) writeFileSync(join(w, "scripts", f), readFileSync(join(WURZEL, "scripts", f)));
+      for (const f of ["skills-sync.mjs", "direktaufruf.mjs", "skill-pfade.mjs", "flag-lib.mjs", "docs-gen/markdown.mjs"]) writeFileSync(join(w, "scripts", f), readFileSync(join(WURZEL, "scripts", f)));
       mkdirSync(join(w, ".agents/skills/demo"), { recursive: true });
       writeFileSync(join(w, ".agents/skills/demo/SKILL.md"), quelle);
       return w;

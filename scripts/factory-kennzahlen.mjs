@@ -13,7 +13,7 @@
  * Exit 0 ok (auch mit Kosten-Lücken), 1 Aufruffehler, 2 Lauf-Ergebnis fehlt oder verletzt den Vertrag (Block erscheint trotzdem).
  */
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";

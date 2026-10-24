@@ -39,6 +39,7 @@
     "/scripts/sandbox-doctor.mjs",
     "/scripts/gh-guard-hook.mjs",
     "/scripts/hook-io.mjs",
+    "/scripts/direktaufruf.mjs",
     "/scripts/forum-leser-guard.mjs",
     "/scripts/forum-quarantaene.mjs",
     "/scripts/bash-parser.mjs",

@@ -26,7 +26,7 @@
  * dünnen IO-Helfer (Dateisuche, gh) sind bewusst ungetestet.
  */
 
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";

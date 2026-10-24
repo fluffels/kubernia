@@ -4,7 +4,7 @@
 // Checkouts, in dem die Session gestartet wurde (meist der Haupt-Checkout), nicht den eines Branch-Worktrees.
 // Er ist nie Gate-Quelle (ADR 0017); `apply-semantic-layout` schreibt Layout und steht in settings.json auf `ask`.
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { dirname, join } from "node:path";
 import { launcherFuer } from "./mcp-launch.mjs";
 

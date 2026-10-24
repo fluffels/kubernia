@@ -57,7 +57,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { umgebungsWert } from "./projekt-config-lib.mjs";

@@ -11,7 +11,7 @@
 //   Exit: 0 ok (auch bei gemeldeten Waisen/Volltexten), 1 unbrauchbare Quelle bzw. Befund bei `--check`, 2 Nutzungsfehler.
 // Die pure Prüffunktion `pruefeSkills` bewacht test/harness/skills-sync.test.ts.
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";

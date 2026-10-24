@@ -17,7 +17,7 @@
  * Quelle der Wahrheit für Budget + Ausnahmen, damit nichts auseinanderdriftet.
  */
 
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'

@@ -18,7 +18,7 @@
  * Exit 0 ok, 1 falscher Aufruf, 2 unvollständige Daten (nie still 0: abgeschnittene PR-Liste, lokal fehlender
  * Merge-Commit, gh-/git-Fehler). Reines Node-Skript; der Kern ist pur, git/gh sind injizierbar (Test).
  */
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { labelAus, ladeProjektConfig, repoOwner } from "./projekt-config-lib.mjs";

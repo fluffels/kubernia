@@ -12,7 +12,7 @@
  * Exit 0 = Eingang vertraut, 3 = Fremdeingang (nicht automatisch umsetzen), 2 = Aufruf- oder gh-Fehler
  * (fail-closed). Brain-Seite: docs/sicherheit-agenten.md. Der Kern ist pur, gh und die Projekt-Config (`labels.forum`, Pflicht) werden injiziert (Test).
  */
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { flach, issueKommentare, istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";

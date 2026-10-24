@@ -16,7 +16,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, release as osRelease } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 
 const ok = (text) => ({ status: "OK", text });
 const fehlt = (text) => ({ status: "FEHLT", text });

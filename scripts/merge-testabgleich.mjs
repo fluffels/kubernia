@@ -21,7 +21,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 
 // `test(`, `it(`, `describe(` samt `.skip`/`.only`/`.each`-Zusätzen vor der Klammer, dann ein Zeichenketten-Literal als erstes Argument.
 const TITEL = /\b(?:test|it|describe)(?:\.\w+)*\s*\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1/g;

@@ -3,7 +3,7 @@
  * bleibt der Pfad des Aufrufers (macOS: Temp-Ordner unter /var, ein Symlink nach /private/var). Der alte Vergleich der
  * URL-Strings lief dann ins Leere, das Skript tat nichts und endete mit Exit 0.
  *
- * Zweiter Teil: ein Scan-Wächter. Außer `scripts/hook-io.mjs` darf keine Skriptdatei den Vergleich selbst ausschreiben
+ * Zweiter Teil: ein Scan-Wächter. Außer `scripts/direktaufruf.mjs` darf keine Skriptdatei den Vergleich selbst ausschreiben
  * (geschlossene Musterliste unten); sonst käme die Plattform-Lücke mit der nächsten Kopie zurück.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
-const HOOK_IO = pathToFileURL(join(WURZEL, "scripts", "hook-io.mjs")).href;
+const DIREKT_LIB = pathToFileURL(join(WURZEL, "scripts", "direktaufruf.mjs")).href;
 
 const temps: string[] = [];
 afterAll(() => {
@@ -25,13 +25,13 @@ afterAll(() => {
 
 /** Legt ein Probeskript in einen echten Ordner und einen Link darauf (Junction auf Windows, Symlink sonst). */
 function probe(): { echt: string; link: string } {
-  const basis = mkdtempSync(join(tmpdir(), "kq-direkt-"));
+  const basis = mkdtempSync(join(tmpdir(), "direkt-"));
   temps.push(basis);
   const echt = join(basis, "echt");
   mkdirSync(echt);
   writeFileSync(
     join(echt, "probe.mjs"),
-    `import { istDirektaufruf } from ${JSON.stringify(HOOK_IO)};\nconsole.log(istDirektaufruf(import.meta.url) ? "DIREKT" : "IMPORT");\n`,
+    `import { istDirektaufruf } from ${JSON.stringify(DIREKT_LIB)};\nconsole.log(istDirektaufruf(import.meta.url) ? "DIREKT" : "IMPORT");\n`,
   );
   const link = join(basis, "link");
   symlinkSync(echt, link, "junction");
@@ -63,19 +63,19 @@ describe("istDirektaufruf", () => {
   });
 
   test("nicht auflösbare URL oder fremder Pfad: Rückfall auf den URL-Vergleich, kein Wurf, kein Direktaufruf", async () => {
-    const { istDirektaufruf } = (await import(/* @vite-ignore */ HOOK_IO)) as { istDirektaufruf: (u: string) => boolean };
+    const { istDirektaufruf } = (await import(/* @vite-ignore */ DIREKT_LIB)) as { istDirektaufruf: (u: string) => boolean };
     expect(istDirektaufruf("file:///gibt/es/nicht.mjs")).toBe(false);
     expect(istDirektaufruf("https://example.org/x.mjs")).toBe(false);
   });
 
   test("ohne argv[1] (z. B. `node -e`): kein Direktaufruf", () => {
-    const code = `import(${JSON.stringify(HOOK_IO)}).then((m) => console.log(m.istDirektaufruf("file:///x.mjs") ? "DIREKT" : "IMPORT"))`;
+    const code = `import(${JSON.stringify(DIREKT_LIB)}).then((m) => console.log(m.istDirektaufruf("file:///x.mjs") ? "DIREKT" : "IMPORT"))`;
     const r = spawnSync(process.execPath, ["-e", code], { encoding: "utf8" });
     expect(r.stdout.trim()).toBe("IMPORT");
   });
 });
 
-/** Geschlossene Liste der ausgeschriebenen Schreibweisen, die nur `hook-io.mjs` enthalten darf. */
+/** Geschlossene Liste der ausgeschriebenen Schreibweisen, die nur `direktaufruf.mjs` enthalten darf. */
 const VERBOTEN: [string, RegExp][] = [
   ["pathToFileURL(process.argv[1]…)", /pathToFileURL\(\s*process\.argv\[1\]/],
   ["import.meta.url === …", /import\.meta\.url\s*===/],
@@ -108,13 +108,13 @@ export function ausgeschriebeneGuards(dateien: string[], lies: (p: string) => st
 }
 
 describe("Scan-Wächter: keine ausgeschriebene Kopie des Direktaufruf-Vergleichs", () => {
-  const dateien = skriptDateien().filter((d) => !d.replaceAll("\\", "/").endsWith("scripts/hook-io.mjs"));
+  const dateien = skriptDateien().filter((d) => !d.replaceAll("\\", "/").endsWith("scripts/direktaufruf.mjs"));
 
   test("Plausibilität: der Scan sieht die Skripte", () => {
     expect(dateien.length).toBeGreaterThanOrEqual(80);
   });
 
-  test("außer hook-io.mjs schreibt keine Skriptdatei den Vergleich aus", () => {
+  test("außer direktaufruf.mjs schreibt keine Skriptdatei den Vergleich aus", () => {
     expect(ausgeschriebeneGuards(dateien)).toEqual([]);
   });
 

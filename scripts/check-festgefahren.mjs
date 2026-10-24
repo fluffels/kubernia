@@ -24,7 +24,7 @@
  * steht in ci-laeufe.mjs, geteilt mit token-baseline.mjs und lauf-ergebnis.mjs.
  */
 
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";

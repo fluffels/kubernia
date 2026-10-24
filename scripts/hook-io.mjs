@@ -7,9 +7,9 @@
  *
  * Reines Node-Skript (nur Builtins), die Funktionen sind pur bzw. nehmen ihre Eingabe als Argument.
  */
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { posix } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+export { istDirektaufruf } from "./direktaufruf.mjs";
 
 /** Liest stdin komplett; bei Fehler (kein stdin) leerer Text. */
 export function readStdin() {
@@ -47,19 +47,6 @@ export function mergeDecisions(decisions) {
   const ask = decisions.find((d) => d?.ask);
   return ask ? buildAskOutput(ask.reason) : null;
 }
-
-/** True, wenn `meta.url` das gestartete Skript ist (statt von einem Test importiert zu werden). Beide Seiten werden
- *  über `realpath` verglichen: Node löst den Einstieg zu einem echten Pfad auf, `process.argv[1]` bleibt der Pfad des
- *  Aufrufers (macOS: Temp-Ordner unter /var ist ein Symlink nach /private/var; Windows: Junction). */
-export const istDirektaufruf = (metaUrl) => {
-  const arg = process.argv[1];
-  if (!arg) return false;
-  try {
-    return realpathSync.native(fileURLToPath(metaUrl)) === realpathSync.native(arg);
-  } catch {
-    return metaUrl === pathToFileURL(arg).href;
-  }
-};
 
 /** Gibt die Entscheidung als eine JSON-Zeile aus. Bewusst KEIN process.exit(): auf Windows kann ein Pipe-stdout
  *  asynchron sein, ein sofortiges exit() nach console.log() schnitte die Ausgabe ab. */

@@ -16,7 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { artVon, EXTRAKTION_PFAD } from "./besitz-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 /** Name der Umgebungsvariable, die `ladeProjektConfig` liest; die Probe setzt sie nur im Kindlauf. */

@@ -39,7 +39,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { ghJson } from "./gh-cli.mjs";

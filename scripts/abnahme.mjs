@@ -19,7 +19,7 @@
  * Grenze: scheitert nach dem PR-Kommentar der Hand-off-Kommentar, ist der PR-Kommentar gepostet; ein Neuversuch zählt als weiterer Durchgang (fail-closed).
  * Grenze: der Bericht ist Selbstauskunft des Abnahme-Agenten; das Skript prüft Form, Vollständigkeit und Worktree, nicht die Wahrheit der Belege.
  */
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { OWNER, REPO } from "./board-lib.mjs";

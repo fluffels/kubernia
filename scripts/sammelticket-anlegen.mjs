@@ -20,7 +20,7 @@
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {

@@ -12,7 +12,7 @@
  * Nur Node-Builtins; mermaid selbst kommt aus dem angegebenen Ordner und wird nie mitgeliefert.
  */
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize, sep, resolve } from "node:path";

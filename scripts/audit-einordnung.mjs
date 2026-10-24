@@ -12,7 +12,7 @@
  * Die Funktionen oben sind pur und getestet (test/audit-einordnung.test.ts); die Aufrufe von npm und gh unten nicht.
  */
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fehlerText, ghText } from "./gh-cli.mjs";

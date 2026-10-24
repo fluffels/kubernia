@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inboxStart, ladeBoardLibs } from "./inbox-start-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { pruefLauf } from "./harness-doctor-lib.mjs";

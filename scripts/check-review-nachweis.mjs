@@ -38,7 +38,7 @@
  * Reines Node-Skript (nur Builtins + check-basis.mjs); die Bewertung ist pur exportiert.
  */
 
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";

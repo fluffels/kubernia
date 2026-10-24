@@ -21,7 +21,7 @@
  *
  * Mit `--config <pfad>` liest der Wächter eine andere Projekt-Config. Reines Node-Skript, nur Kern-Module als Importe.
  */
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
