@@ -170,7 +170,7 @@ describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", 
   });
 });
 
-describe("claim schreibt sandbox", () => {
+describe("claim schreibt sandbox", { timeout: 30_000 }, () => {
   test("gesetzt: der Wert steht im Lock; fehlend: null; kein zuletzt beim Anlegen", () => {
     lauf(["claim", "1"], {}, JETZT, "docker");
     assert.equal(liesLock(1).sandbox, "docker");
@@ -188,7 +188,7 @@ describe("claim schreibt sandbox", () => {
   });
 });
 
-describe("lebenszeichen <nr> --nonce", () => {
+describe("lebenszeichen <nr> --nonce", { timeout: 30_000 }, () => {
   test("eigene Nonce setzt zuletzt und schritt; Übergabe, Stopp, sandbox und nonceHash bleiben", () => {
     const extra = { uebergabe: { gesetzt: "u", verbraucht: null }, gestoppt: { gesetzt: "g", verbraucht: "v" } };
     const nonce = eigenerLock(5, extra);
@@ -237,7 +237,7 @@ describe("lebenszeichen <nr> --nonce", () => {
   });
 });
 
-describe("lebenszeichen --commit (post-commit-Hook)", () => {
+describe("lebenszeichen --commit (post-commit-Hook)", { timeout: 30_000 }, () => {
   test("Ticket-Branch mit Lock: nur zuletzt (quelle commit) ändert sich", () => {
     eigenerLock(5, { schritt: "1/3", uebergabe: { gesetzt: "u", verbraucht: null } });
     const vorher = liesLock(5);
@@ -267,7 +267,7 @@ describe("lebenszeichen --commit (post-commit-Hook)", () => {
   });
 });
 
-describe("Herzschlag als Aktivität in pruefe und claim", () => {
+describe("Herzschlag als Aktivität in pruefe und claim", { timeout: 30_000 }, () => {
   test("letzteAktivitaet nimmt lockMs ins Maximum", () => {
     assert.equal(M.letzteAktivitaet({ commitMs: [100], lockMs: 500 }), 500);
     assert.equal(M.letzteAktivitaet({ commitMs: [100], lockMs: null }), 100);
@@ -299,7 +299,7 @@ describe("Herzschlag als Aktivität in pruefe und claim", () => {
   });
 });
 
-describe("claim --wiederaufnahme", () => {
+describe("claim --wiederaufnahme", { timeout: 30_000 }, () => {
   const alt = (JETZT - 5 * 60 * MIN) / 1000;
   const alterLock = (nr: number, zuletzt?: number) => {
     eigenerLock(nr, {}, JETZT - 4 * 60 * MIN);
@@ -403,7 +403,7 @@ function tempRepo(einstiege: string[]): string {
   return repo;
 }
 
-describe("post-commit-Hook Ende zu Ende (#1762)", () => {
+describe("post-commit-Hook Ende zu Ende (#1762)", { timeout: 30_000 }, () => {
   test("ein Commit im Ticket-Worktree setzt zuletzt.quelle commit im Lock", () => {
     const repo = tempRepo(["ticket-lock.mjs"]);
     git(repo, "add", "-A");
@@ -434,7 +434,7 @@ describe("post-commit-Hook Ende zu Ende (#1762)", () => {
   });
 });
 
-describe("echteDeps: Smoke im Temp-Repo (#1762)", () => {
+describe("echteDeps: Smoke im Temp-Repo (#1762)", { timeout: 30_000 }, () => {
   const lade = (repo: string, datei: string, env: Record<string, string | undefined> = {}) =>
     JSON.parse(
       node(

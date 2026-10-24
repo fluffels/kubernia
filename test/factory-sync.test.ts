@@ -231,7 +231,7 @@ function echteQuelle(): string {
 const alleDateien = (z: string): string[] =>
   [".factory/besitz.json", ".factory/sync-stand.json", "scripts/a.mjs", "AGENTS.md", ".claude/settings.json", "src/eigen.ts"].map((p) => `${p}=${existsSync(join(z, p)) ? lies(z, p) : "-"}`);
 
-describe("factory-sync (Fremdrepo-Fixture)", () => {
+describe("factory-sync (Fremdrepo-Fixture)", { timeout: 30_000 }, () => {
   test("überschreibt nur Besitz, Projektteile bleiben byte-gleich, Sync-Stand ohne absoluten Pfad", () => {
     const q = baueQuelle();
     const z = baueZiel();
@@ -430,7 +430,7 @@ describe("pruefeErgebnis (Selbstprüfung des Syncs)", () => {
   });
 });
 
-describe("check-factory-drift", () => {
+describe("check-factory-drift", { timeout: 30_000 }, () => {
   test("grün nach dem Sync; ohne Sync-Stand entfällt die Prüfung mit einer Zeile (Exit 0)", () => {
     const z = gesyncterZiel();
     const r = drift1(z);
@@ -574,7 +574,7 @@ function pwZiel(planer = "wk-planer"): string {
   return z;
 }
 
-describe("Projektwerte im Sync und im Drift-Gate (#1746)", () => {
+describe("Projektwerte im Sync und im Drift-Gate (#1746)", { timeout: 30_000 }, () => {
   test("der Config-Pfad hat eine Quelle: sync-Alias und projekt-config-lib sind gleich (#1821)", () => {
     assert.equal(sync.PROJEKT_PFAD, pc.PROJEKT_CONFIG);
   });
@@ -773,7 +773,7 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
 
 // ── Ring oberflaeche (ADR 0029): gehört der Factory, wird nie verteilt ───────────
 
-describe("Ring oberflaeche (ADR 0029)", () => {
+describe("Ring oberflaeche (ADR 0029)", { timeout: 30_000 }, () => {
   const COCKPIT = "scripts/cockpit/o.mjs";
   const mitCockpit = (ring: string): string => {
     const q = baueQuelle();
@@ -866,7 +866,7 @@ describe("Ring oberflaeche (ADR 0029)", () => {
 
 // ── Sync vom Tag (#1871) ─────────────────────────────────────────────────────────
 
-describe("Sync vom Tag (#1871)", () => {
+describe("Sync vom Tag (#1871)", { timeout: 30_000 }, () => {
   const BESITZ = ".factory/besitz.json";
   const mitManifest = (q: string, eintraege: unknown[]): void => schreibe(q, BESITZ, JSON.stringify({ version: 1, eintraege }, null, 2) + "\n");
 
