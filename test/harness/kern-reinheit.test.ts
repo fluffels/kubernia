@@ -1186,7 +1186,7 @@ describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
     const text = `a ${config.praefixe.commitZeile}1\nb ${config.praefixe.commitZeile}2\n`;
     assert.deepEqual(sprich(kernTestVerstoesse(["test/neu.test.ts"], () => text, echteBegriffe)), ["test/neu.test.ts: neues Projektliteral 'Praefix' (2x), Kern-Einheiten bleiben literalfrei"]);
   });
-  test("Negativfall je Art: eine Fixture mit Board-ID und eine Test-Hilfe mit dem Owner sind rot", () => {
+  test("Negativfall: ein Board-ID-Treffer in einer Fixture und ein Owner-Treffer in einer Test-Hilfe sind rot", () => {
     const statusFeld = config.boards.map((b) => b.statusFeldId).find((id) => id !== undefined);
     assert.ok(statusFeld !== undefined, "die Config trägt ein Status-Feld, sonst wäre die Board-ID-Prüfung stumpf");
     const fixture = kernTestVerstoesse(["test/fixtures/neu.json"], () => `{"feld": "${String(statusFeld)}"}`, echteBegriffe);

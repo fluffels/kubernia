@@ -14,11 +14,8 @@ import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
-const esc = (s: string): string => (escapeRegex as (t: string) => string)(s);
 const agents = readFileSync(WURZEL + "AGENTS.md", "utf8").replace(/\r\n/g, "\n");
 const projektBlock = agents.slice(agents.indexOf(PROJEKT_BLOCK_START as string), agents.indexOf(PROJEKT_BLOCK_ENDE as string));
 
@@ -33,7 +30,9 @@ describe("Projektliterale der Config (#1843, #1903)", () => {
   test.each(pflicht)("projektliterale.%s steht in der Projekt-Config und trifft das Projektwort %s, sonst wäre der Wächter still aus", (begriff, wort) => {
     const wert = projektConfig().projektliterale?.[begriff];
     assert.ok(wert, `projektliterale.${begriff} fehlt`);
-    assert.ok(new RegExp(esc(wert), "iu").test(wort), `${begriff} trifft ${wort} nicht`);
+    // ganzes Wort wie beim Wächter (Wortgrenzen), ohne seine Regex nachzubauen: ein verkürzter Wert („phase“ für „phaser“) trifft nicht mehr
+    const woerter = wort.toLowerCase().split(/[^\p{L}\p{N}_]+/u);
+    assert.ok(woerter.includes(wert.toLowerCase()), `${begriff} trifft ${wort} nicht als ganzes Wort`);
   });
 });
 
