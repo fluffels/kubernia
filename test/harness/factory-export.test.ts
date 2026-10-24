@@ -311,6 +311,8 @@ describe("Prüfungen (pur)", () => {
     assert.deepEqual([mitBefund.durchgelassen, mitBefund.jeMuster], [0, [0, 0, 0]]);
     const posix = lib.pruefeLokalePfade(new Map([["scripts/p.mjs", "/c/dev/proj\n/Users/Max/proj\na/Users/Max/proj\nnichts\n"]]), ["egal"]);
     assert.deepEqual(posix, { befunde: [], durchgelassen: 2, jeMuster: [0, 1, 1] });
+    const mehrere = lib.pruefeLokalePfade(new Map([["scripts/p.mjs", "/c/dev/a und /Users/Max/b\n"]]), ["egal"]);
+    assert.deepEqual(mehrere, { befunde: [], durchgelassen: 1, jeMuster: [0, 1, 1] });
     const eingebettet = lib.pruefeLokalePfade(new Map([["scripts/p.mjs", ["x/c/dev/a", "https://h/c/dev/a", ""].join("\n")]]), ["egal"]);
     assert.deepEqual(eingebettet, { befunde: [], durchgelassen: 0, jeMuster: [0, 0, 0] });
     const ausgeschlossen = lib.pruefeLokalePfade(new Map([["package-lock.json", `${L}Users\\Echt\\x`]]), ["egal"]);
