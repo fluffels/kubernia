@@ -62,6 +62,12 @@ describe("istDirektaufruf", () => {
     expect(starte(haupt)).toBe("IMPORT");
   });
 
+  test("nicht auflösbare URL oder fremder Pfad: Rückfall auf den URL-Vergleich, kein Wurf, kein Direktaufruf", async () => {
+    const { istDirektaufruf } = (await import(/* @vite-ignore */ HOOK_IO)) as { istDirektaufruf: (u: string) => boolean };
+    expect(istDirektaufruf("file:///gibt/es/nicht.mjs")).toBe(false);
+    expect(istDirektaufruf("https://example.org/x.mjs")).toBe(false);
+  });
+
   test("ohne argv[1] (z. B. `node -e`): kein Direktaufruf", () => {
     const code = `import(${JSON.stringify(HOOK_IO)}).then((m) => console.log(m.istDirektaufruf("file:///x.mjs") ? "DIREKT" : "IMPORT"))`;
     const r = spawnSync(process.execPath, ["-e", code], { encoding: "utf8" });
