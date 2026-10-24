@@ -49,7 +49,7 @@ afterEach(() => {
   for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 const tmp = (): string => {
-  const d = mkdtempSync(join(tmpdir(), "kq-fsyncb-"));
+  const d = mkdtempSync(join(tmpdir(), "fsyncb-"));
   temps.push(d);
   return d;
 };
@@ -127,7 +127,7 @@ describe("Berechtigungs-Ergänzung: pure Primitive", () => {
     assert.match(lib.ergaenzungsBefunde({ allow: ["mcp__x", "mcp__x"] }, { allow: ["mcp__x"] }).join("|"), /steht doppelt/);
     assert.deepEqual(lib.ergaenzungsBefunde({ allow: ["a", "mcp__x", "mcp__y"] }, { allow: ["mcp__x", "mcp__y"] }), []);
   });
-  test("ergaenzungsBefunde: ein allow hebt ein deny oder ask auf (gleich, Server-Regel, Platzhalter am Ende), das kubernia-Muster bleibt erlaubt", () => {
+  test("ergaenzungsBefunde: ein allow hebt ein deny oder ask auf (gleich, Server-Regel, Platzhalter am Ende), das Muster des Projekts (allow Server-Regel, ask einzelnes Tool) bleibt erlaubt", () => {
     const heb = (allow: string, r: Perm): string => lib.ergaenzungsBefunde({ allow: [allow], ...r }, { allow: [allow] }).join("|");
     assert.match(heb("mcp__x", { deny: ["mcp__x"] }), /hebt die Regel „mcp__x“/);
     assert.match(heb("mcp__x__t", { deny: ["mcp__x"] }), /hebt die Regel/);

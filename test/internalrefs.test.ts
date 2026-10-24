@@ -266,7 +266,7 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
   });
 
   test("addTerm trägt in die gewählte Liste ein und lässt die andere unberührt (#1217)", () => {
-    const dir = tempOrdner("kq-internalrefs-");
+    const dir = tempOrdner("internalrefs-");
     const file = join(dir, "liste.mjs");
     const source = 'export const ENCODED_TERMS = ["YQ=="];' + String.fromCharCode(10) + 'export const ENCODED_NAME_TERMS = ["Yg=="];' + String.fromCharCode(10);
     writeFileSync(file, source);
@@ -295,7 +295,7 @@ describe("CLI-Flags (#1837)", () => {
   const SKRIPT = fileURLToPath(new URL("../scripts/check-internalrefs.mjs", import.meta.url));
   const hash = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
   const kopie = () => {
-    const f = join(tempOrdner("kq-ir-"), "kopie.mjs");
+    const f = join(tempOrdner("ir-"), "kopie.mjs");
     copyFileSync(SKRIPT, f);
     return f;
   };

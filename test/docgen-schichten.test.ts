@@ -32,20 +32,20 @@ const req = createRequire(import.meta.url);
 const echt = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell; layerOf: (f: string) => string };
 const kern = req("../scripts/schichten-kern.cjs") as { pruefeModell: (m: Modell) => void; verbotsRegeln: (m: Modell) => unknown[] };
 
-const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
+const ENGINE = "node_modules[/\\\\]engine[/\\\\]";
 const basis = (): Modell => ({
   quellwurzel: "src/",
   schichten: [
-    { id: "praesentation", label: "Präsentation", technik: "Phaser/DOM", muster: "^src/ui(\\.ts$|/)", wurzeln: ["ui"], darf: ["anwendung", "domaene", "phaser"] },
+    { id: "praesentation", label: "Präsentation", technik: "Engine/DOM", muster: "^src/ui(\\.ts$|/)", wurzeln: ["ui"], darf: ["anwendung", "domaene", "engine"] },
     { id: "anwendung", label: "Anwendung", muster: "^src/game(\\.ts$|/)", wurzeln: ["game"], darf: ["domaene"] },
     { id: "domaene", label: "pure Domäne", muster: null, wurzeln: [], darf: [] },
   ],
-  extern: [{ id: "phaser", label: "Phaser", muster: PHASER }],
+  extern: [{ id: "engine", label: "Engine", muster: ENGINE }],
 });
 
 const dirs: string[] = [];
 function fixture(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), "kq-schichten-"));
+  const root = mkdtempSync(join(tmpdir(), "schichten-"));
   dirs.push(root);
   for (const [rel, content] of Object.entries(files)) {
     const abs = join(root, rel);
@@ -67,15 +67,15 @@ const cruiseJson = (mods: Record<string, string[]>) => ({
 });
 
 describe("Soll-Diagramm", () => {
-  test("Grundfall: Knoten, Kanten, Phaser/DOM nur an der Präsentation", () => {
+  test("Grundfall: Knoten, Kanten, Engine/DOM nur an der Präsentation", () => {
     const out = soll(basis());
     assert.match(out, /^```mermaid\n---\n/);
-    assert.match(out, /s_praesentation\["Präsentation · Phaser\/DOM<br\/>ui"\]/);
+    assert.match(out, /s_praesentation\["Präsentation · Engine\/DOM<br\/>ui"\]/);
     assert.match(out, /s_domaene\["pure Domäne<br\/>alles übrige unter src\/"\]/);
-    assert.match(out, /x_phaser\{\{"Phaser"\}\}/);
-    for (const k of ["s_praesentation --> s_anwendung", "s_praesentation --> s_domaene", "s_anwendung --> s_domaene", "s_praesentation -.-> x_phaser"])
+    assert.match(out, /x_engine\{\{"Engine"\}\}/);
+    for (const k of ["s_praesentation --> s_anwendung", "s_praesentation --> s_domaene", "s_anwendung --> s_domaene", "s_praesentation -.-> x_engine"])
       assert.ok(out.includes(`\n  ${k}\n`), k);
-    assert.ok(!/s_(anwendung|domaene) -\.->/.test(out), "nur Schichten mit phaser in darf zeigen auf Phaser");
+    assert.ok(!/s_(anwendung|domaene) -\.->/.test(out), "nur Schichten mit engine in darf zeigen auf Engine");
     assert.match(out, /class s_praesentation engine\n/);
     assert.ok(!/engine\b.*s_anwendung/.test(out));
   });
@@ -102,7 +102,7 @@ describe("Soll-Diagramm", () => {
     const m = basis();
     const a = soll(m);
     assert.equal(soll(m), a);
-    m.schichten[0].darf = ["phaser", "domaene", "anwendung"];
+    m.schichten[0].darf = ["engine", "domaene", "anwendung"];
     assert.equal(soll(m), a);
   });
 
@@ -122,11 +122,11 @@ describe("Soll-Diagramm", () => {
     assert.ok(!/title:/.test(out));
   });
 
-  test("Kanten stehen in Modell-Reihenfolge, Phaser-Kanten zuletzt", () => {
+  test("Kanten stehen in Modell-Reihenfolge, Engine-Kanten zuletzt", () => {
     const out = soll(basis());
     const i = (s: string) => out.indexOf(s);
     assert.ok(i("s_praesentation --> s_anwendung") < i("s_anwendung --> s_domaene"));
-    assert.ok(i("s_anwendung --> s_domaene") < i("s_praesentation -.-> x_phaser"));
+    assert.ok(i("s_anwendung --> s_domaene") < i("s_praesentation -.-> x_engine"));
   });
 });
 
@@ -159,7 +159,7 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     wirft((m) => m.schichten[2].wurzeln.push(m.schichten[1].wurzeln[0]), /Wurzel "[a-z-]+" steht in zwei Schichten/);
   });
   test("darf ist keine Liste", () => wirft((m) => ((m.schichten[1] as { darf: unknown }).darf = "domaene"), /darf ist keine Liste/));
-  test("ungültige Technik", () => wirft((m) => (m.schichten[0].technik = 'Phaser"DOM'), /ungültige Technik/));
+  test("ungültige Technik", () => wirft((m) => (m.schichten[0].technik = 'Engine"DOM'), /ungültige Technik/));
   test("leeres Label", () => wirft((m) => (m.schichten[1].label = ""), /ungültiges Label/));
   test("spitze Klammern und Zeilenumbruch im Label", () => {
     wirft((m) => (m.schichten[1].label = "a<b"), /ungültiges Label/);
@@ -167,7 +167,7 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     wirft((m) => (m.schichten[1].label = "a\nb"),/ungültiges Label/);
   });
   test.each(['"', "<", ">", "\r", "\n"])("Technik mit unzulässigem Zeichen %j wirft", (z) =>
-    wirft((m) => (m.schichten[0].technik = `Phaser${z}DOM`), /ungültige Technik bei "praesentation"/),
+    wirft((m) => (m.schichten[0].technik = `Engine${z}DOM`), /ungültige Technik bei "praesentation"/),
   );
   test.each(['"', "<", ">", "\r", "\n"])("Label mit unzulässigem Zeichen %j wirft", (z) =>
     wirft((m) => (m.schichten[1].label = `a${z}b`), /ungültiges Label bei "anwendung"/),
@@ -258,7 +258,7 @@ describe("Ist-Kanten (Verdichtung)", () => {
   test("Kanten innerhalb einer Schicht, .d.ts-Quellen, Assets und fremde Pakete fallen weg", () => {
     const k = api.istKanten(
       cruiseJson({
-        "src/ui/": ["src/ui.ts", "src/game/", "node_modules/phaser/", "node_modules/vite/", "assets/pixellab/x.png"],
+        "src/ui/": ["src/ui.ts", "src/game/", "node_modules/engine/", "node_modules/vite/", "assets/pixellab/x.png"],
         "src/game.ts": ["src/sim/", "src/game/"],
         "src/vite-env.d.ts": ["src/ui/"],
         "src/sim/": ["src/sim/"],
@@ -267,7 +267,7 @@ describe("Ist-Kanten (Verdichtung)", () => {
     );
     assert.deepEqual(k, [
       ["praesentation", "anwendung"],
-      ["praesentation", "phaser"],
+      ["praesentation", "engine"],
       ["anwendung", "domaene"],
     ]);
   });
@@ -275,16 +275,16 @@ describe("Ist-Kanten (Verdichtung)", () => {
     assert.equal(api.schichtVon("src/ui/", m), "praesentation");
     assert.equal(api.schichtVon("src\\game\\x.ts", m), "anwendung");
     assert.equal(api.schichtVon("src/uieval.ts", m), "domaene");
-    assert.equal(api.schichtVon("node_modules\\phaser\\", m), "phaser");
+    assert.equal(api.schichtVon("node_modules\\engine\\", m), "engine");
     assert.equal(api.schichtVon("node_modules/vite/", m), null);
   });
   test("eine Kante außerhalb des Solls wirft; der Prüfbefehl steht nur, wenn die Config ihn nennt", () => {
     assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m, "make arch"), /domaene → anwendung.*\(make arch\)/);
     assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m), (e: Error) => /domaene → anwendung/.test(e.message) && !/npm run|check:arch/.test(e.message));
-    assert.throws(() => api.istKanten(cruiseJson({ "src/game/": ["node_modules/phaser/"] }), m), /anwendung → phaser/);
+    assert.throws(() => api.istKanten(cruiseJson({ "src/game/": ["node_modules/engine/"] }), m), /anwendung → engine/);
   });
-  test("Extern-Quellen (Phaser) werden nicht als Quelle ausgewertet", () => {
-    assert.deepEqual(api.istKanten(cruiseJson({ "node_modules/phaser/": ["src/sim/"] }), m), []);
+  test("Extern-Quellen (Engine) werden nicht als Quelle ausgewertet", () => {
+    assert.deepEqual(api.istKanten(cruiseJson({ "node_modules/engine/": ["src/sim/"] }), m), []);
   });
   test("leeres oder fehlendes modules ergibt keine Kanten", () => {
     assert.deepEqual(api.istKanten({}, m), []);
@@ -292,8 +292,8 @@ describe("Ist-Kanten (Verdichtung)", () => {
   test("ungenutzte Richtungen: Liste bzw. alle N", () => {
     const s = api.sollKanten(m);
     assert.equal(api.ungenutztZeile(m, s, s), "Alle 4 erlaubten Richtungen sind genutzt.");
-    const ist = s.filter(([v, n]) => !(v === "praesentation" && n === "phaser"));
-    assert.equal(api.ungenutztZeile(m, s, ist), "Erlaubt, aber ungenutzt: Präsentation → Phaser.");
+    const ist = s.filter(([v, n]) => !(v === "praesentation" && n === "engine"));
+    assert.equal(api.ungenutztZeile(m, s, ist), "Erlaubt, aber ungenutzt: Präsentation → Engine.");
   });
   test("Ist-Diagramm zeigt nur genutzte Kanten", () => {
     const out = api.renderDiagramm(m, [["anwendung", "domaene"]]);

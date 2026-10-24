@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
  *
- * Der Workflow `kubernia-ticket.js` und der Skill `kubernia-workflow` sind entfernt; dass die Dateien fehlen, prüft der
+ * Der Workflow `<Repo-Name>-ticket.js` und der Skill `<Repo-Name>-workflow` sind entfernt; dass die Dateien fehlen, prüft der
  * Absenz-Test in model-routing.test.ts. Beim Entfernen blieben aber Sätze in Doku, Kommentaren und Wächtern stehen, die
  * den Pfad als vorhanden beschrieben: drei Review-Pässe fanden nacheinander je einen neuen Rest, weil jeder nur nach
  * seinem eigenen Muster suchte. Dieser Test scannt alle getrackten Dateien auf die Namen und Umschreibungen des
@@ -18,18 +18,29 @@
  * Namen mit Projektwort und ein Platzhalter als Dateiname (`<agenten.…>.md`) sind Rückfälle.
  *
  * Ein neues Workflow-Skript unter `.claude/workflows/` heißt anders und löst diesen Wächter nicht aus; trägt ein Satz
- * künftig wieder den Namen `kubernia-ticket`, ist das ein Rückfall und rot.
+ * künftig wieder den Namen `<Repo-Name>-ticket`, ist das ein Rückfall und rot.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { projektConfig, repoName } from "../support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../../scripts/ticket-namen.mjs";
+
+// Die Namen kommen aus der echten Projekt-Config, nicht aus Literalen: der Scan liest die echten Repo-Dateien.
+const C = projektConfig();
+const R = repoName(C);
+const esc = (s: string): string => (escapeRegex as (t: string) => string)(s);
+const NAME_WORKFLOW = `Skill ${R}-workflow`;
+const NAME_TICKET = `Workflow-Skript ${R}-ticket`;
+const ROLLEN_AGENTEN = [C.agenten.planer, C.agenten.umsetzer, C.agenten.lens, C.agenten.gruppe];
 
 /** Namen und Umschreibungen des entfernten Ticket-Workflows und seines Einstiegs-Skills. */
 export const RESTE: { name: string; muster: RegExp; fix: string }[] = [
-  { name: "Skill kubernia-workflow", muster: /kubernia-workflow/, fix: "den Ist-Zustand beschreiben: der Ticket-Skill ist der einzige Ablauf, oder den Satz löschen" },
-  { name: "Workflow-Skript kubernia-ticket", muster: /kubernia-ticket/, fix: "den Ist-Zustand beschreiben: es gibt kein Workflow-Skript für den Ticket-Ablauf, oder den Satz löschen" },
+  { name: NAME_WORKFLOW, muster: new RegExp(`${esc(R)}-workflow`), fix: "den Ist-Zustand beschreiben: der Ticket-Skill ist der einzige Ablauf, oder den Satz löschen" },
+  { name: NAME_TICKET, muster: new RegExp(`${esc(R)}-ticket`), fix: "den Ist-Zustand beschreiben: es gibt kein Workflow-Skript für den Ticket-Ablauf, oder den Satz löschen" },
   { name: "Workflow-Auftrag", muster: /Workflow-Auftrag/, fix: "vom Auftrag des Ticket-Skills sprechen, ein Workflow-Auftrag existiert nicht mehr" },
   { name: "Workflow-Variante", muster: /Workflow-Variante/, fix: "die Variante streichen, es gibt nur den Skill-Ablauf" },
   { name: "cleanup-Agent des Workflows", muster: /im Workflow der `?cleanup/, fix: "das Aufräumen dem Skill-Ablauf zuschreiben, nicht einem Workflow" },
@@ -39,8 +50,8 @@ export const RESTE: { name: string; muster: RegExp; fix: string }[] = [
   { name: "Konstante FACTORY_LABEL", muster: /\bFACTORY_LABEL\b/, fix: "die Konstante aus board-lib nicht mehr nennen, sie ist entfernt" },
   { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/, fix: "die Ausnahmeliste gibt es nicht mehr, den Ist-Zustand des Wächters beschreiben" },
   { name: "Docs-Gen-Schlüssel diagramme.ruleset", muster: /diagramme\.ruleset/, fix: "den Schlüssel aus der Docs-Gen-Konfiguration nicht mehr nennen, er ist entfernt" },
-  { name: "alte Agenten-Dateinamen", muster: /kubernia-(planner|umsetzer|lens|gruppe)\.md/, fix: "den Rollen-Pfad .claude/agents/factory-<rolle>.md nennen" },
-  { name: "altes Ticket-Skill-Verzeichnis", muster: /skills\/kubernia\//, fix: "das Verzeichnis .agents/skills/factory-ticket/ nennen" },
+  { name: "alte Agenten-Dateinamen", muster: new RegExp(`(?:${ROLLEN_AGENTEN.map(esc).join("|")})\\.md`), fix: "den Rollen-Pfad .claude/agents/factory-<rolle>.md nennen" },
+  { name: "altes Ticket-Skill-Verzeichnis", muster: new RegExp(`skills/${esc(C.agenten.ticketSkill)}/`), fix: "das Verzeichnis .agents/skills/factory-ticket/ nennen" },
   { name: "Ticket-Ablauf am alten Ort", muster: /\.claude\/skills\/factory\/ablauf\.md/, fix: "den Ticket-Ablauf unter .agents/skills/factory/ablauf.md nennen (Skill-Quelle, #1850)" },
   {
     name: "Platzhalter als Dateiname, die Datei heißt nach der Rolle",
@@ -171,7 +182,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
   });
 
   describe("Schnappschuss-Block", () => {
-    const rest = "der Skill kubernia-workflow";
+    const rest = `der Skill ${R}-workflow`;
     const datum = "Stand 2026-10-01";
     const start = SCHNAPPSCHUSS_START;
     const ende = SCHNAPPSCHUSS_ENDE;
@@ -181,10 +192,10 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}\n${ende}`), []);
     });
     test("ein Rest nach dem Block ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}\n${ende}\n${rest}`), ["docs/s.md:5: Skill kubernia-workflow"]);
+      assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}\n${ende}\n${rest}`), [`docs/s.md:5: ${NAME_WORKFLOW}`]);
     });
     test("ein Rest vor dem Block ist ein Fund", () => {
-      assert.deepEqual(pruefe(`${rest}\n${start}\n${datum}\n${ende}`), ["docs/s.md:1: Skill kubernia-workflow"]);
+      assert.deepEqual(pruefe(`${rest}\n${start}\n${datum}\n${ende}`), [`docs/s.md:1: ${NAME_WORKFLOW}`]);
     });
     test("ein Start ohne Ende ist ein Fund (fail-closed)", () => {
       assert.deepEqual(pruefe(`${start}\n${datum}\n${rest}`), ["docs/s.md:1: Schnappschuss-Block ohne Ende"]);
@@ -221,8 +232,8 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
 
   test.each(RESTE.map((r) => [r.name, r] as const))("Negativfall: ein eingeschleuster Rest wird gefunden (%s)", (_name, r) => {
     const beispiele: Record<string, string> = {
-      "Skill kubernia-workflow": "Der Skill `kubernia-workflow` startet den Lauf.",
-      "Workflow-Skript kubernia-ticket": "Workflow({ name: \"kubernia-ticket\" })",
+      [NAME_WORKFLOW]: `Der Skill \`${R}-workflow\` startet den Lauf.`,
+      [NAME_TICKET]: `Workflow({ name: "${R}-ticket" })`,
       "Workflow-Auftrag": "der Workflow-Auftrag gleicht ab",
       "Workflow-Variante": "Workflow-Variante nur weich gesichert",
       "cleanup-Agent des Workflows": "im Workflow der `cleanup`-Agent trägt ein",
@@ -232,8 +243,8 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Konstante FACTORY_LABEL": "import { FACTORY_LABEL } from board-lib",
       "Ausnahmeliste des Flag-Parser-Wächters": "die noch nicht migrierten Skripte stehen dort als Liste",
       "Docs-Gen-Schlüssel diagramme.ruleset": "config.diagramme.ruleset fehlt",
-      "alte Agenten-Dateinamen": "Definition in .claude/agents/kubernia-lens.md",
-      "altes Ticket-Skill-Verzeichnis": "Datei .claude/skills/kubernia/SKILL.md",
+      "alte Agenten-Dateinamen": `Definition in .claude/agents/${C.agenten.lens}.md`,
+      "altes Ticket-Skill-Verzeichnis": `Datei .claude/skills/${C.agenten.ticketSkill}/SKILL.md`,
       "Ticket-Ablauf am alten Ort": "Lies .claude/skills/factory/ablauf.md",
       "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
       "Altnamen-Rückfall": "const alt = altNameZuPraefix(name, praefix);",
@@ -247,9 +258,9 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
 
   // Je Alternative der Muster mit „|“ ein eigenes Beispiel (#1748): sonst bliebe eine gestrichene Alternative unbemerkt
   test.each([
-    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-planner.md"],
-    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-umsetzer.md"],
-    ["alte Agenten-Dateinamen", ".claude/agents/kubernia-gruppe.md"],
+    ["alte Agenten-Dateinamen", `.claude/agents/${C.agenten.planer}.md`],
+    ["alte Agenten-Dateinamen", `.claude/agents/${C.agenten.umsetzer}.md`],
+    ["alte Agenten-Dateinamen", `.claude/agents/${C.agenten.gruppe}.md`],
     ["Härtungs-Takt nach Merge-Zahl", "harnessTaktAusCommits({ items })"],
     ["Härtungs-Takt nach Merge-Zahl", "entscheideHarnessTakt({ mergesSeitAbschluss: 5 })"],
     ["Härtungs-Takt nach Merge-Zahl", "holt es nach 5 Ticket-Merges jeder Art"],
@@ -260,8 +271,8 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(findeReste([{ pfad: "docs/b.md", inhalt: text }]), [`docs/b.md:1: ${name}`]);
   });
 
-  test("Negativfall: harmlose Nachbarn lösen nicht aus (kubernia-Ticket groß, Workflows der CI)", () => {
-    const sauber = "Der kubernia-Ticket-Ablauf ist der Skill kubernia; die CI läuft in .github/workflows/ci.yml.";
+  test("Negativfall: harmlose Nachbarn lösen nicht aus (Projektname mit großem T, Workflows der CI)", () => {
+    const sauber = `Der ${R}-Ticket-Ablauf ist der Skill ${C.agenten.ticketSkill}; die CI läuft in .github/workflows/ci.yml.`;
     assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: sauber }]), []);
   });
 
@@ -270,10 +281,24 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
   });
 
   test("Ausnahmen: ADRs und der Absenz-Test dürfen die Namen tragen, andere Pfade nicht", () => {
-    const text = "kubernia-ticket.js und kubernia-workflow";
+    const text = `${R}-ticket.js und ${R}-workflow`;
     assert.deepEqual(findeReste([{ pfad: "docs/adr/0028-ein-ticket-ablauf.md", inhalt: text }]), []);
     assert.deepEqual(findeReste([{ pfad: "test/harness/model-routing.test.ts", inhalt: text }]), []);
     assert.ok(findeReste([{ pfad: "docs/modul.md", inhalt: text }]).length > 0);
+  });
+
+  test("Verankerung am echten Projekt: die abgeleiteten Muster treffen die echten Altnamen aus den ADRs (außerhalb der Ausnahme)", () => {
+    // Die Muster kommen aus der Config; ein falsch abgeleiteter Name (z. B. der Owner-Präfix) bliebe mit selbstgebauten Beispielen grün.
+    const adr = (nr: string): string => {
+      const pfad = getrackteTextdateien().find((d) => d.pfad.startsWith(`docs/adr/${nr}-`));
+      assert.ok(pfad, `ADR ${nr} fehlt`);
+      return pfad.inhalt;
+    };
+    const namen = (inhalt: string): string[] => findeReste([{ pfad: "docs/x.md", inhalt }]).map((t) => t.replace(/^docs\/x\.md:\d+: /, ""));
+    const aus0022 = namen(adr("0022"));
+    assert.ok(aus0022.includes(NAME_WORKFLOW), "ADR 0022 trägt den alten Skill-Namen");
+    assert.ok(aus0022.includes(NAME_TICKET), "ADR 0022 trägt den alten Workflow-Skript-Namen");
+    assert.ok(namen(adr("0012")).includes("alte Agenten-Dateinamen"), "ADR 0012 trägt alte Agenten-Dateinamen");
   });
 
   test("jede Ausnahme nennt einen Grund", () => {
