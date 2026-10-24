@@ -42,6 +42,8 @@ import { ergaenzungAusText, PROJEKT_CONFIG, pruefeProjektConfig, repoName } from
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = ".factory/besitz.json";
+/** Lock-Datei: von der Literal-Prüfung ausgenommen, weil ihre Integritäts-Hashes (Base64) zufällig als ganzes Wort wie `KQ` enden können; die Wurzel kommt aus der Vorlage. */
+const LOCK = "package-lock.json";
 const USAGE = "Aufruf: node scripts/factory-export.mjs --ziel <leerer Ordner> [--commit <rev>] [--quelle <repo>]";
 
 /** Dateien, die der Export aus einer Vorlage nicht braucht, weil er sie aus dem Quellstand filtert (Lint- und Any-Suppressionen). */
@@ -222,7 +224,7 @@ export function baueExport({ leser }) {
   const pak = pruefePaketImporte(texte, kubPkg, pkgVorlage);
   const pfade = pruefeLokalePfade(texte, [repoName(factoryConfig), repoName(kubConfig)]);
   const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
-  const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === PROJEKT_CONFIG ? "frei" : seiten.has(p) ? "zaehlen" : null));
+  const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === PROJEKT_CONFIG || p === LOCK ? "frei" : seiten.has(p) ? "zaehlen" : null));
   const intern = findViolations([...texte.keys()].filter((p) => isCheckable(p)), decodeTerms(), (p) => texte.get(p), decodeTerms(ENCODED_NAME_TERMS));
   befunde.push(...rel.befunde, ...pak.befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
   befunde.push(...intern.map((h) => `${h.file}:${h.line}: interner Bezug (${h.kind})`));
@@ -244,7 +246,7 @@ function berichtZeilen(b) {
     `Dateien: ${b.anzahl} (Besitz ${h.besitz}, Extraktionsliste ${h.extraktion}, Vorlagen ${h.vorlage}, berechnet ${h.berechnet})`,
     `Lokale Pfade durchgelassen (Platzhalter, Fixture-Wurzeln): ${b.durchgelassen}`,
     `Relative Importe, in der Quelle schon unauflösbar (Fixture-Text): ${b.relativUnaufloesbar}`,
-    `Paket-Spezifizierer, die kubernia nicht kennt (Fixture-Text): ${b.paketUnbekannt.length}${b.paketUnbekannt.length > 0 ? ` (${b.paketUnbekannt.join(", ")})` : ""}`,
+    `Paket-Spezifizierer, die kubernia nicht kennt (Fixture-Text): ${b.paketUnbekannt.length} (Namen: ${b.paketUnbekannt.filter((n) => !n.startsWith("?")).join(", ")}; ${b.paketUnbekannt.filter((n) => n.startsWith("?")).length} Texte, die kein Paketname sind)`,
     `kubernia-Rest in Factory-Seiten: ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,
     ...b.literalRest.map(([p, n]) => `  ${p}: ${n}`),
   ];

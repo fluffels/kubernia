@@ -1,0 +1,439 @@
+/* Export-Werkzeug des Factory-Repos (#1923, ADR 0022 F10, Teil 7a): `scripts/factory-export.mjs` schreibt den Anfangsstand des Factory-Repos aus einem Commit.
+ * Dieser Test ist ein `projekt-test` und entfällt mit dem einmaligen Werkzeug (K9, #1882).
+ *
+ * Reale Quelle ist `HEAD` dieses Repos (gelesen per git wie beim Sync). Ein uncommittetes Vorlagen-File macht den Integrationsteil darum rot:
+ * erst committen, dann testen. Die Negativfälle verändern einen Hüll-Leser (`mitAenderung`), nie die Datei auf der Platte. */
+import { beforeAll, describe, test } from "vitest";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawExport from "../../scripts/factory-export.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../../scripts/factory-export-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawSync from "../../scripts/factory-sync.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+
+interface Leser {
+  fehler?: string;
+  commit: string;
+  pfade: string[];
+  lies(pfad: string): string | null;
+  ausfuehrbar(pfad: string): boolean;
+  vorladen(pfade: string[]): void;
+}
+interface Ergebnis {
+  dateien: Map<string, { text: string; ausfuehrbar: boolean }>;
+  befunde: string[];
+  bericht: { sha: string; anzahl: number; durchgelassen: number; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][] };
+}
+interface Lock {
+  name?: string;
+  version?: string;
+  packages: Record<string, Record<string, unknown>>;
+}
+const ex = rawExport as unknown as {
+  baueExport(opt: { leser: Leser }): Ergebnis;
+  cli(argv: string[], opt?: { leser?: Leser; out?: (s: string) => void; err?: (s: string) => void }): number;
+  WAECHTER_DATEN: Record<string, unknown>;
+};
+const lib = rawLib as unknown as {
+  lockAuszug(lock: Lock, pkg: Record<string, unknown>): { lock: Lock | null; befunde: string[] };
+  kuberniaBegriffe(kub: unknown, fac: unknown): Record<string, RegExp>;
+  pruefePaketImporte(d: Map<string, string>, kub: unknown, vorlage: unknown): { befunde: string[]; unbekannt: string[] };
+  pruefeRelativeImporte(d: Map<string, string>, quelle: Set<string>): { befunde: string[]; unaufloesbar: number };
+  pruefeSkriptBezuege(d: Map<string, string>): { befunde: string[] };
+  pruefeLokalePfade(d: Map<string, string>, repos: string[]): { befunde: string[]; durchgelassen: number };
+  pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
+  paketName(spec: string): string | null;
+};
+const leserVomCommit = (rawSync as unknown as { leserVomCommit(quelle: string, rev: string): Leser }).leserVomCommit;
+const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf(wurzel: string, config: () => unknown): { dateien: number; fehler: string[]; abweichungen: string[] } };
+
+const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
+const temp: string[] = [];
+const leerOrdner = (): string => {
+  const d = mkdtempSync(join(tmpdir(), "fexp-"));
+  temp.push(d);
+  return d;
+};
+// Aufräumen am Ende der Datei (kein afterAll-Import nötig: Temp-Ordner sind klein, der Lauf räumt sie weg).
+const aufraeumen = (): void => {
+  for (const d of temp.splice(0)) rmSync(d, { recursive: true, force: true });
+};
+
+/** Leser mit Änderungen: `text` ersetzt oder ergänzt die Datei, `null` entfernt sie (aus `pfade` und `lies`). */
+function mitAenderung(basis: Leser, aend: Record<string, string | null>): Leser {
+  const pfade = new Set(basis.pfade.filter((p) => aend[p] !== null));
+  for (const [p, t] of Object.entries(aend)) if (t !== null) pfade.add(p);
+  return {
+    commit: basis.commit,
+    pfade: [...pfade],
+    lies: (p) => (Object.hasOwn(aend, p) ? aend[p] : basis.lies(p)),
+    ausfuehrbar: (p) => basis.ausfuehrbar(p),
+    vorladen: (ps) => basis.vorladen(ps),
+  };
+}
+
+function lauf(argv: string[], leser?: Leser): { code: number; out: string; err: string } {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = ex.cli(argv, { leser, out: (s) => out.push(s), err: (s) => err.push(s) });
+  return { code, out: out.join("\n"), err: err.join("\n") };
+}
+
+function dateiListe(wurzel: string, rel = ""): string[] {
+  const out: string[] = [];
+  for (const d of readdirSync(join(wurzel, rel), { withFileTypes: true })) {
+    const pfad = rel === "" ? d.name : `${rel}/${d.name}`;
+    if (d.isDirectory()) out.push(...dateiListe(wurzel, pfad));
+    else out.push(pfad);
+  }
+  return out.sort();
+}
+
+describe("lockAuszug", () => {
+  const lock: Lock = {
+    packages: {
+      "": { name: "alt", version: "9.9.9", dependencies: { x: "^1" }, devDependencies: { y: "^1" } },
+      "node_modules/x": { version: "1.0.0", dependencies: { b: "^1" } },
+      "node_modules/x/node_modules/b": { version: "1.1.0" },
+      "node_modules/b": { version: "2.0.0", dev: true },
+      "node_modules/y": { version: "1.0.0", dependencies: { b: "^2" }, optionalDependencies: { opt: "^1" }, peerDependencies: { pe: "^1" } },
+      "node_modules/pe": { version: "1.0.0", peer: true },
+      "node_modules/unbenutzt": { version: "1.0.0" },
+    },
+  };
+  const pkg = { name: "neu", version: "0.1.0", devDependencies: { x: "^1", y: "^1" }, engines: { node: ">=22" } };
+
+  test("Hülle der Wurzel-Abhängigkeiten in Quellreihenfolge, neue Wurzel aus der Vorlage, Flags unverändert", () => {
+    const r = lib.lockAuszug(lock, pkg);
+    assert.deepEqual(r.befunde, []);
+    assert.deepEqual(Object.keys(r.lock?.packages ?? {}), ["", "node_modules/x", "node_modules/x/node_modules/b", "node_modules/b", "node_modules/y", "node_modules/pe"]);
+    assert.deepEqual(r.lock?.packages[""], pkg);
+    assert.deepEqual(r.lock?.packages["node_modules/b"], { version: "2.0.0", dev: true });
+    assert.equal(r.lock?.name, "neu");
+  });
+
+  test("ein verschachtelter Eintrag verdeckt den gehobenen: nicht erreichbare Einträge entfallen", () => {
+    const r = lib.lockAuszug(lock, { name: "neu", version: "0.1.0", devDependencies: { x: "^1" } });
+    assert.deepEqual(Object.keys(r.lock?.packages ?? {}), ["", "node_modules/x", "node_modules/x/node_modules/b"]);
+  });
+
+  test("fehlendes Pflichtziel ist ein Befund, ein fehlendes optionales oder Peer-Ziel nicht", () => {
+    const r = lib.lockAuszug(lock, { name: "neu", version: "0.1.0", devDependencies: { x: "^1", nix: "^1" } });
+    assert.equal(r.befunde.length, 1);
+    assert.match(r.befunde[0], /'nix' \(Wurzel\)/);
+    const kaputt = structuredClone(lock);
+    kaputt.packages["node_modules/x"].dependencies = { b: "^1", zz: "^1" };
+    assert.match(lib.lockAuszug(kaputt, pkg).befunde.join("|"), /'zz' \(node_modules\/x\)/);
+  });
+});
+
+describe("kuberniaBegriffe", () => {
+  const kub = {
+    repo: "o/kub",
+    boards: [{ besitzer: "o" }],
+    praefixe: { commitZeile: "AA-", branch: "feature/aa-", worktree: "aa-" },
+    labels: { harness: "area:harness" },
+    agenten: { planer: "kub-planer", umsetzer: "kub-u", lens: "kub-l", gruppe: "kub-g", ticketSkill: "kub-t" },
+    skills: { abschluss: "brain" },
+    projektliterale: { Hof: "hof" },
+  };
+  const fac = { ...kub, repo: "o/fac", praefixe: { commitZeile: "BB-", branch: "feature/bb-", worktree: "bb-" }, agenten: { planer: "fac-p", umsetzer: "fac-u", lens: "fac-l", gruppe: "fac-g", ticketSkill: "fac-t" }, projektliterale: { Hof: "hof", kub: "kub" } };
+
+  test("geteilte Begriffe (Owner, Label, Skill) entfallen, verschiedene und Projektliterale der Factory bleiben", () => {
+    const b = lib.kuberniaBegriffe(kub, fac);
+    assert.deepEqual(Object.keys(b).sort(), ["Agent", "Branch", "Hof", "Praefix", "Repo", "Worktree", "kub"].sort());
+    assert.ok("kub".match(b.kub));
+  });
+
+  test("ein Projektliteral der Factory bleibt auch dann, wenn die Regex in beiden Configs gleich ist", () => {
+    assert.ok("Hof" in lib.kuberniaBegriffe(kub, fac));
+  });
+});
+
+describe("Prüfungen (pur)", () => {
+  test("relative Importe: im Export unauflösbar, in der Quelle auflösbar ist ein Befund, in der Quelle unauflösbar wird gezählt", () => {
+    const dateien = new Map([
+      ["scripts/a.mjs", 'import "./b.mjs";\nimport "./c.mjs";\nimport "./fehlt.mjs";\n'],
+      ["scripts/b.mjs", "export const b = 1;\n"],
+    ]);
+    const r = lib.pruefeRelativeImporte(dateien, new Set(["scripts/a.mjs", "scripts/b.mjs", "scripts/c.mjs"]));
+    assert.equal(r.befunde.length, 1);
+    assert.match(r.befunde[0], /scripts\/a\.mjs: relativer Import '\.\/c\.mjs'/);
+    assert.equal(r.unaufloesbar, 1);
+  });
+
+  test("Paket-Importe: unbekannter Name und Builtins zählen nicht, ein Paket von kubernia ohne Vorlage ist ein Befund, ebenso Vorlage ohne kubernia oder mit anderer Range", () => {
+    const d = new Map([["scripts/a.mjs", 'import "lodash";\nimport "yaml";\nimport "node:fs";\nimport "fs/promises";\nimport "picomatch/lib";\nimport "vitest/config";\n']]);
+    const kub = { dependencies: { yaml: "^2" }, devDependencies: { picomatch: "^4", vitest: "^5" } };
+    const r = lib.pruefePaketImporte(d, kub, { devDependencies: { yaml: "^2", vitest: "^5" } });
+    assert.deepEqual(r.unbekannt, ["lodash"]);
+    assert.equal(r.befunde.length, 1);
+    assert.match(r.befunde[0], /Paket 'picomatch' steht nicht in der package\.json-Vorlage/);
+    const vorlage = lib.pruefePaketImporte(new Map(), kub, { devDependencies: { yaml: "^3", nur: "^1" } }).befunde.join("|");
+    assert.match(vorlage, /'yaml' hat die Range \^3, kubernia \^2/);
+    assert.match(vorlage, /'nur' steht in kubernia nicht/);
+  });
+
+  test("paketName kürzt Pfade auf das Paket und erkennt Nicht-Namen", () => {
+    assert.equal(lib.paketName("vitest/config"), "vitest");
+    assert.equal(lib.paketName("@a/b/c"), "@a/b");
+    assert.equal(lib.paketName("./x.mjs"), null);
+    assert.equal(lib.paketName("node:fs"), null);
+    assert.equal(lib.paketName("fs/promises"), null);
+    assert.equal(lib.paketName("${ziel}"), "?${ziel}");
+  });
+
+  test("Skriptbezüge: nur package.json, settings und Workflows zählen, ein Bezug ohne Datei im Export ist ein Befund", () => {
+    const d = new Map([
+      ["package.json", '{"scripts":{"a":"node scripts/da.mjs","b":"node scripts/fehlt.mjs"}}'],
+      ["scripts/da.mjs", ""],
+      ["docs/x.md", "scripts/ignoriert.mjs"],
+      [".github/workflows/ci.yml", "run: node scripts/weg.cjs"],
+    ]);
+    const r = lib.pruefeSkriptBezuege(d).befunde.join("|");
+    assert.match(r, /package\.json: nennt scripts\/fehlt\.mjs/);
+    assert.match(r, /ci\.yml: nennt scripts\/weg\.cjs/);
+    assert.doesNotMatch(r, /da\.mjs|ignoriert/);
+  });
+
+  test("lokale Pfade: ein echter Name ist ein Befund, Platzhalter und Fixture-Wurzeln werden nur gezählt", () => {
+    const L = "C" + ":\\";
+    const d = new Map([
+      ["scripts/a.mjs", `${L}Users\\Echt\\x\n${L}Users\\Max\\x\n${L}dev\\repo\nnichts\n`],
+      ["docs/b.md", "kein Pfad\n"],
+    ]);
+    const r = lib.pruefeLokalePfade(d, ["egal"]);
+    assert.equal(r.befunde.length, 1);
+    assert.match(r.befunde[0], /scripts\/a\.mjs:1: lokaler Pfad \(nutzer\)/);
+    assert.equal(r.durchgelassen, 2);
+  });
+
+  test("Literale: Befund je Datei und Begriff, ausgenommene Dateien werden gezählt oder übersprungen", () => {
+    const d = new Map([
+      ["a.mjs", "kub und kub"],
+      ["docs/s.md", "kub"],
+      ["frei.json", "kub kub kub"],
+      ["sauber.mjs", "nichts"],
+    ]);
+    const r = lib.pruefeLiterale(d, { Repo: /kub/g }, (p) => (p === "docs/s.md" ? "zaehlen" : p === "frei.json" ? "frei" : null));
+    assert.deepEqual(r.befunde, ["a.mjs: kubernia-Literal 'Repo' (2x)"]);
+    assert.deepEqual([...r.rest], [["docs/s.md", 1]]);
+  });
+});
+
+describe("Export aus HEAD", () => {
+  let leser: Leser;
+  let echt: Ergebnis;
+  beforeAll(() => {
+    leser = leserVomCommit(WURZEL, "HEAD");
+    assert.equal(leser.fehler, undefined);
+    echt = ex.baueExport({ leser });
+  }, 60_000);
+
+  test("der echte Stand hat keinen Befund und der Bericht nennt den Export-SHA", () => {
+    assert.deepEqual(echt.befunde, []);
+    assert.equal(echt.bericht.sha, execFileSync("git", ["-C", WURZEL, "rev-parse", "HEAD"], { encoding: "utf8" }).trim());
+    assert.ok(echt.dateien.size > 300);
+    assert.equal(echt.bericht.anzahl, echt.dateien.size);
+  }, 60_000);
+
+  test("AK1: zwei Läufe in zwei leere Ordner sind byte-gleich (Dateiliste, Inhalt, Ausführbar-Bit)", () => {
+    const [a, b] = [leerOrdner(), leerOrdner()];
+    const [la, lb] = [lauf(["--ziel", a], leser), lauf(["--ziel", b], leser)];
+    assert.equal(la.code, 0, la.err);
+    assert.equal(lb.code, 0, lb.err);
+    assert.match(la.out, new RegExp(`Export-SHA ${echt.bericht.sha}`));
+    const liste = dateiListe(a);
+    assert.deepEqual(liste, dateiListe(b));
+    assert.deepEqual(liste, [...echt.dateien.keys()].sort());
+    for (const p of liste) {
+      assert.ok(readFileSync(join(a, p)).equals(readFileSync(join(b, p))), `${p} weicht ab`);
+      if (process.platform !== "win32") assert.equal((statSync(join(a, p)).mode & 0o111) !== 0, echt.dateien.get(p)?.ausfuehrbar, `${p}: Ausführbar-Bit`);
+    }
+    aufraeumen();
+  }, 60_000);
+
+  test("AK1: ein nicht leeres Ziel endet mit Exit 1, und nichts wird geschrieben; fehlendes --ziel ist Exit 2", () => {
+    const z = leerOrdner();
+    writeFileSync(join(z, "vorhanden.txt"), "x");
+    const r = lauf(["--ziel", z], leser);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /kein leerer Ordner/);
+    assert.deepEqual(readdirSync(z), ["vorhanden.txt"]);
+    const datei = join(z, "vorhanden.txt");
+    assert.equal(lauf(["--ziel", datei], leser).code, 1);
+    assert.equal(lauf([], leser).code, 2);
+    aufraeumen();
+  });
+
+  test("AK1: ein Ziel, das noch nicht existiert, wird angelegt", () => {
+    const z = join(leerOrdner(), "neu", "tief");
+    assert.equal(lauf(["--ziel", z], leser).code, 0);
+    assert.ok(existsSync(join(z, "AGENTS.md")));
+    aufraeumen();
+  }, 60_000);
+
+  test("Config, AGENTS.md und settings des Exports tragen die Factory-Werte, nichts von kubernia", () => {
+    const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
+    const config = JSON.parse(text(".factory/projekt.json")) as Record<string, Record<string, string> | string>;
+    const kub = JSON.parse(leser.lies(".factory/projekt.json") ?? "{}") as Record<string, Record<string, string> | string>;
+    assert.equal(config.repo, "fluffels/self-improving-agent-harness-and-factory");
+    assert.deepEqual(config.praefixe, { commitZeile: "SIH-", branch: "feature/sih-", worktree: "sih-" });
+    assert.deepEqual(config.agenten, { planer: "sih-planer", umsetzer: "sih-umsetzer", lens: "sih-lens", gruppe: "sih-gruppe", ticketSkill: "sih-ticket" });
+    assert.deepEqual(config.labels, kub.labels);
+    assert.deepEqual(config.boards, kub.boards);
+    assert.deepEqual(config.projektliterale, { ...(kub.projektliterale as Record<string, string>), kubernia: "kubernia", KQ: "KQ" });
+    const agents = text("AGENTS.md");
+    assert.match(agents, /\| `praefixe\.commitZeile` \| `SIH-` \|/);
+    assert.match(agents, /\| `agenten\.ticketSkill` \| `sih-ticket` \|/);
+    assert.doesNotMatch(agents, /KQ-|kubernia/i);
+    assert.match(agents, /<!-- factory-projekt:start -->[\s\S]*<!-- factory-projekt:ende -->/);
+    const settings = JSON.parse(text(".claude/settings.json")) as { permissions: { allow: string[] }; hooks: unknown; model: string };
+    assert.ok(settings.permissions.allow.includes("mcp__langfuse__queryMetrics"));
+    assert.ok(!settings.permissions.allow.includes("mcp__playwright"));
+    assert.ok(settings.hooks !== undefined);
+    assert.equal(settings.model, "sonnet");
+  });
+
+  test("Projektwerte: der Wächter der Projektwert-Blöcke meldet im geschriebenen Export keinen Fehler", () => {
+    const z = leerOrdner();
+    assert.equal(lauf(["--ziel", z], leser).code, 0);
+    const config = JSON.parse(readFileSync(join(z, ".factory/projekt.json"), "utf8")) as unknown;
+    const r = projektwertLauf(z, () => config);
+    assert.deepEqual(r.fehler, []);
+    assert.deepEqual(r.abweichungen, []);
+    assert.ok(r.dateien > 0);
+    aufraeumen();
+  }, 60_000);
+
+  test("AK3: check-internalrefs ist im Export grün (nach git init und git add)", () => {
+    const z = leerOrdner();
+    assert.equal(lauf(["--ziel", z], leser).code, 0);
+    execFileSync("git", ["init", "-q"], { cwd: z });
+    execFileSync("git", ["add", "-A"], { cwd: z });
+    const r = execFileSync("node", ["scripts/check-internalrefs.mjs"], { cwd: z, encoding: "utf8" });
+    assert.match(r, /Keine internen Referenzen/);
+    aufraeumen();
+  }, 60_000);
+
+  test("AK4: Daten-Dateien der Kern-Wächter stehen nur mit ihrem Kern-Anteil im Export", () => {
+    const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
+    const pfade = new Set(echt.dateien.keys());
+    for (const p of ["test/harness/emoji-baseline.json", "eslint-suppressions.json", "any-suppressions.json"]) {
+      for (const k of Object.keys(JSON.parse(text(p)) as object)) assert.ok(pfade.has(k), `${p}: ${k} ist kein Exportpfad`);
+    }
+    const abdeckung = JSON.parse(text("test/harness/kern-abdeckung.json")) as Record<string, unknown>;
+    assert.ok(Object.keys(abdeckung).length > 0);
+    for (const k of Object.keys(abdeckung)) assert.ok(pfade.has(k), `kern-abdeckung: ${k} hat keinen Treffer im Export`);
+    const liste = JSON.parse(text(".factory/extraktion.json")) as { eintraege: { art: string }[] };
+    assert.deepEqual([...new Set(liste.eintraege.map((e) => e.art))].sort(), ["fixture", "kern-test", "test-hilfe"]);
+    assert.equal(text("test/harness/kern-literale-baseline.json"), "{}\n");
+    assert.equal(text("test/harness/kern-links-baseline.json"), leser.lies("test/harness/kern-links-baseline.json"));
+    assert.equal(text(".factory/besitz.json"), leser.lies(".factory/besitz.json"));
+  });
+
+  test("AK4: jede Daten-Datei, die extraktion.test.ts als Daten-Datei des Kern-Wächters nennt, steht in WAECHTER_DATEN", () => {
+    const quelle = readFileSync(join(WURZEL, "test/harness/extraktion.test.ts"), "utf8");
+    const ziele = [...quelle.matchAll(/ -> ([^"\s]+)": DATEN_DATEI/g)].map((m) => m[1]);
+    assert.ok(ziele.length >= 4, "der Abgleich fand keine Ziele");
+    for (const z of ziele) assert.ok(z in ex.WAECHTER_DATEN, `${z} fehlt in WAECHTER_DATEN`);
+  });
+
+  test("Lock: Wurzel entspricht der Vorlage, jede Wurzel-Abhängigkeit hat einen Eintrag, Einträge sind unverändert aus kubernia", () => {
+    const lock = JSON.parse(echt.dateien.get("package-lock.json")?.text ?? "{}") as Lock;
+    const pkg = JSON.parse(echt.dateien.get("package.json")?.text ?? "{}") as { devDependencies: Record<string, string> };
+    const quelle = JSON.parse(leser.lies("package-lock.json") ?? "{}") as Lock;
+    assert.equal(lock.name, "self-improving-agent-harness-and-factory");
+    assert.deepEqual(lock.packages[""].devDependencies, pkg.devDependencies);
+    for (const d of Object.keys(pkg.devDependencies)) assert.ok(`node_modules/${d}` in lock.packages, `${d} fehlt im Lock`);
+    for (const [p, e] of Object.entries(lock.packages)) if (p !== "") assert.deepEqual(e, quelle.packages[p], `${p} weicht von kubernia ab`);
+    assert.ok(Object.keys(lock.packages).length < Object.keys(quelle.packages).length);
+  });
+
+  test("Bericht zählt durchgelassene Pfade, Fixture-Rauschen und den Rest der Factory-Seiten", () => {
+    const b = echt.bericht;
+    assert.ok(b.durchgelassen > 0);
+    assert.ok(b.relativUnaufloesbar > 0);
+    assert.ok(b.paketUnbekannt.includes("lodash"));
+    assert.ok(b.literalRest.length > 0 && b.literalRest.every(([p]) => p.startsWith("docs/")));
+  });
+
+  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", () => {
+    const abbruch = (aend: Record<string, string | null>, muster: RegExp): void => {
+      const z = leerOrdner();
+      const r = lauf(["--ziel", z], mitAenderung(leser, aend));
+      assert.equal(r.code, 1, r.out);
+      assert.match(r.err, muster);
+      assert.match(r.err, /nichts geschrieben/);
+      assert.deepEqual(readdirSync(z), []);
+      aufraeumen();
+    };
+    const befund = (aend: Record<string, string | null>, muster: RegExp): void => {
+      assert.match(ex.baueExport({ leser: mitAenderung(leser, aend) }).befunde.join("\n"), muster);
+    };
+    const basisText = (p: string): string => leser.lies(p) ?? "";
+
+    test("AK6: fehlt eine Besitz-Datei, bricht der Export ab", () => {
+      abbruch({ "scripts/check-size.mjs": null }, /scripts\/check-size\.mjs: Pfad existiert nicht/);
+    });
+
+    test("AK6: hat ein Muster der Extraktionsliste keinen Treffer, bricht der Export ab", () => {
+      abbruch({ "test/fixtures/projekt-fremd.json": null }, /test\/fixtures\/projekt-fremd\.json: Eintrag ohne Treffer/);
+    });
+
+    test("AK6: fehlt die Vorlage eines infrastruktur-anteil, bricht der Export ab", () => {
+      abbruch({ ".factory/produkt/vorlagen/tsconfig.json.vorlage": null }, /tsconfig\.json\.vorlage: Vorlage fehlt/);
+    });
+
+    test("AK6: ein kubernia in einer Kern-Einheit macht die Literal-Prüfung rot", () => {
+      abbruch({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// kubernia\n` }, /scripts\/check-size\.mjs: kubernia-Literal 'kubernia' \(1x\)/);
+    });
+
+    test("eine Vorlage ohne Verwendung ist ein Befund", () => {
+      befund({ ".factory/produkt/vorlagen/zzz.txt.vorlage": "x" }, /zzz\.txt\.vorlage: Vorlage ohne Verwendung/);
+    });
+
+    test("ein Kern-Schlüssel in der settings-Vorlage ist ein Befund", () => {
+      const vorlage = JSON.parse(basisText(".factory/produkt/vorlagen/.claude/settings.json.vorlage")) as Record<string, unknown>;
+      befund({ ".factory/produkt/vorlagen/.claude/settings.json.vorlage": JSON.stringify({ ...vorlage, permissions: { allow: [] } }) }, /Kern-Schlüssel 'permissions' gehört nicht in die Vorlage/);
+    });
+
+    test("ein relativer Import auf eine nicht exportierte Datei ist ein Befund", () => {
+      befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\nimport "./layers.cjs";\n` }, /scripts\/check-size\.mjs: relativer Import '\.\/layers\.cjs' löst im Export nicht auf/);
+    });
+
+    test("ein Paket, das kubernia kennt und die Vorlage nicht, ist ein Befund", () => {
+      befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\nimport "picomatch";\n` }, /scripts\/check-size\.mjs: Paket 'picomatch' steht nicht in der package\.json-Vorlage/);
+    });
+
+    test("ein Skriptbezug auf eine nicht exportierte Datei ist ein Befund", () => {
+      const pkg = JSON.parse(basisText(".factory/produkt/vorlagen/package.json.vorlage")) as { scripts: Record<string, string> };
+      pkg.scripts.setup = "node scripts/setup.mjs";
+      befund({ ".factory/produkt/vorlagen/package.json.vorlage": JSON.stringify(pkg) }, /package\.json: nennt scripts\/setup\.mjs, das nicht im Export liegt/);
+    });
+
+    test("ein lokaler Pfad mit echtem Namen ist ein Befund", () => {
+      const pfad = "C" + ":\\" + "Users\\Echt\\x";
+      befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// ${pfad}\n` }, /scripts\/check-size\.mjs:\d+: lokaler Pfad \(nutzer\)/);
+    });
+
+    test("ein Lock-Eintrag, der in kubernia fehlt, ist ein Befund", () => {
+      const pkg = JSON.parse(basisText(".factory/produkt/vorlagen/package.json.vorlage")) as { devDependencies: Record<string, string> };
+      pkg.devDependencies.nichtda = "^1.0.0";
+      befund({ ".factory/produkt/vorlagen/package.json.vorlage": JSON.stringify(pkg) }, /'nichtda' steht in kubernia nicht|Lock: 'nichtda' \(Wurzel\) hat keinen Eintrag/);
+    });
+
+    test("ein Kern-Test mit kubernia-Literal im Wort wird nur als ganzes Wort gezählt", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// kubernias\n` }) });
+      assert.doesNotMatch(r.befunde.join("\n"), /kubernia-Literal 'kubernia'/);
+    });
+  });
+});

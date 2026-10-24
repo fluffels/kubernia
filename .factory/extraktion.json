@@ -83,6 +83,7 @@
     {"muster":"test/harness/emoji-ratchet.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/entfernte-pfade.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/extraktion.test.ts","art":"projekt-test","grund":"Wächter der einmaligen Extraktion, entfällt mit K9"},
+    {"muster":"test/harness/factory-export.test.ts","art":"projekt-test","grund":"Test des einmaligen Export-Werkzeugs, entfällt mit K9 (#1882)"},
     {"muster":"test/harness/fence-ssot.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/flag-parser.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/forum*.test.ts","art":"projekt-test","grund":"Gegenstand ist ein Projekt-Modul, kein Besitz (Forum-Modul)"},
