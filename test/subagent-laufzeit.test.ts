@@ -17,6 +17,7 @@ const NAMEN = FREMD_NAMEN;
 const escapeRegex = namenModul.escapeRegex;
 const WT = FREMD.praefixe.worktree;
 const { planer: PLANER, lens: LENS } = FREMD.agenten;
+const BASIS_MIN_N = (laufzeitRoh as unknown as { BASIS_MIN_N: number }).BASIS_MIN_N;
 type Offen = (e: object) => unknown;
 const laufzeitModul = laufzeitRoh as unknown as { laufzeiten: Offen; typenUebersicht: Offen; parseArgs: (argv: string[], namen: unknown) => unknown };
 const raw = {
@@ -233,8 +234,14 @@ describe("laufzeiten: Aufzeichnungsbasis des Outputs (#1909)", () => {
     const leer = S.laufzeiten({ laeufe: [] }).aggregat.gesamt as Stat & { outputQuote: number | null };
     expect(leer.outputQuote).toBeNull();
   });
+  /** `n` Läufe mit derselben Quote am selben Tag (die Basiswarnung braucht je Tag und je Schnitt-Seite mindestens BASIS_MIN_N Läufe). */
+  const viele = (n: number, tag: number, z: number, min = 0): Lauf[] => Array.from({ length: n }, (_, i) => quoteLauf(`Plane #${i + 1}`, tag, z, min));
+  const N = BASIS_MIN_N;
+  test("Mindest-n: Konstante 5, bindet die Warnung an stabile Tagesquoten", () => {
+    expect(BASIS_MIN_N).toBe(5);
+  });
   test("Tage mit Quoten weiter als 0,2 auseinander: Warnung mit beiden Tagen", () => {
-    const r = S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 8, Z50)] });
+    const r = S.laufzeiten({ laeufe: [...viele(N, 7, Z25), ...viele(N, 8, Z50)] });
     expect(w(r)).toContain("Hinweis Aufzeichnungsbasis");
     expect(w(r)).toContain("2026-10-07");
     expect(w(r)).toContain("2026-10-08");
@@ -242,37 +249,51 @@ describe("laufzeiten: Aufzeichnungsbasis des Outputs (#1909)", () => {
     expect(w(r)).toContain("50 %");
     expect(S.renderMarkdown(r)).toContain(w(r) as string);
   });
+  test("Grenze Mindest-n je Tag: mit 5 Läufen je Tag warnt es, mit 4 an einem der Tage nicht (auch nicht an dem mit 5)", () => {
+    expect(w(S.laufzeiten({ laeufe: [...viele(N, 7, Z25), ...viele(N, 8, Z50)] }))).not.toBeNull();
+    expect(w(S.laufzeiten({ laeufe: [...viele(N - 1, 7, Z25), ...viele(N, 8, Z50)] }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: [...viele(N, 7, Z25), ...viele(N - 1, 8, Z50)] }))).toBeNull();
+  });
+  test("ein dünner Ausreißer-Tag verdeckt die Warnung der übrigen Tage nicht", () => {
+    const r = S.laufzeiten({ laeufe: [...viele(N, 7, Z25), ...viele(1, 9, Z45), ...viele(N, 8, Z50)] });
+    expect(w(r)).toContain("2026-10-07");
+    expect(w(r)).toContain("2026-10-08");
+    expect(w(r)).not.toContain("2026-10-09");
+  });
   test("Grenze: genau 0,2 Unterschied warnt nicht", () => {
-    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 8, Z45)] }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: [...viele(N, 7, Z25), ...viele(N, 8, Z45)] }))).toBeNull();
   });
   test("gleiche Quoten oder ein einzelner Tag warnen nicht", () => {
-    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 8, Z25)] }))).toBeNull();
-    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }))).toBeNull();
-    expect(S.renderMarkdown(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }))).not.toContain("Hinweis Aufzeichnungsbasis");
+    expect(w(S.laufzeiten({ laeufe: [...viele(N, 7, Z25), ...viele(N, 8, Z25)] }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: viele(N, 7, Z25) }))).toBeNull();
+    expect(S.renderMarkdown(S.laufzeiten({ laeufe: viele(N, 7, Z25) }))).not.toContain("Hinweis Aufzeichnungsbasis");
   });
   test("ohne Lauf (alle Quoten null) keine Warnung", () => {
     expect(w(S.laufzeiten({ laeufe: [] }))).toBeNull();
   });
   test("Schnitt: alt und neu am selben Tag, Quoten weiter als 0,2 auseinander: Warnung mit alt und neu", () => {
-    const laeufe = [quoteLauf("Plane #1", 7, Z25, 0), quoteLauf("Plane #2", 7, Z50, 60)];
+    const laeufe = [...viele(N, 7, Z25, 0), ...viele(N, 7, Z50, 60)];
     const r = S.laufzeiten({ laeufe, schnitt: t(30) });
     expect(w(r)).toContain("alt 25 %");
     expect(w(r)).toContain("neu 50 %");
     expect(w(S.laufzeiten({ laeufe }))).toBeNull(); // ohne Schnitt nur ein Tag
   });
+  test("Schnitt: Mindest-n gilt je Seite (4 Läufe alt oder neu warnen nicht)", () => {
+    expect(w(S.laufzeiten({ laeufe: [...viele(N - 1, 7, Z25, 0), ...viele(N, 7, Z50, 60)], schnitt: t(30) }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: [...viele(N, 7, Z25, 0), ...viele(N - 1, 7, Z50, 60)], schnitt: t(30) }))).toBeNull();
+  });
   test("Schnitt: genau 0,2 und eine leere Seite warnen nicht", () => {
-    const grenze = [quoteLauf("Plane #1", 7, Z25, 0), quoteLauf("Plane #2", 7, Z45, 60)];
+    const grenze = [...viele(N, 7, Z25, 0), ...viele(N, 7, Z45, 60)];
     expect(w(S.laufzeiten({ laeufe: grenze, schnitt: t(30) }))).toBeNull();
-    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25, 0)], schnitt: t(30) }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: viele(N, 7, Z25, 0), schnitt: t(30) }))).toBeNull();
   });
   test("Schnitt: eine leere Seite „alt“ (alle Läufe ab dem Schnitt) warnt nicht, auch wenn „neu“ eine Quote hat", () => {
-    const nurNeu = [quoteLauf("Plane #1", 7, Z25, 60)];
-    expect(w(S.laufzeiten({ laeufe: nurNeu, schnitt: t(30) }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: viele(N, 7, Z25, 60), schnitt: t(30) }))).toBeNull();
   });
   test("Gleitkomma: Quoten 0,6 und 0,8 liegen genau 0,2 auseinander (0,8 − 0,6 ist in JS 0,20000000000000007) und warnen nicht", () => {
     expect(0.8 - 0.6).toBeGreaterThan(0.2);
-    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, 900), quoteLauf("Plane #2", 8, 525)] }))).toBeNull();
-    const l = [quoteLauf("Plane #1", 7, 900, 0), quoteLauf("Plane #2", 7, 525, 60)];
+    expect(w(S.laufzeiten({ laeufe: [...viele(N, 7, 900), ...viele(N, 8, 525)] }))).toBeNull();
+    const l = [...viele(N, 7, 900, 0), ...viele(N, 7, 525, 60)];
     expect(w(S.laufzeiten({ laeufe: l, schnitt: t(30) }))).toBeNull();
   });
   test("renderMarkdown nennt Kosten geschätzt (Median) und Output-Quote je Gruppe", () => {

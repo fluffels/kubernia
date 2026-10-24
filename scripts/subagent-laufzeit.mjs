@@ -67,6 +67,8 @@ const statRoh = (laeufe) => ({
   maxDauerMin: laeufe.length ? Math.max(...laeufe.map((l) => l.dauerMin)) : null,
 });
 
+/** Mindestzahl Läufe je Tag (und je Schnitt-Seite), damit deren Output-Quote in den Vergleich der Basiswarnung eingeht: wenige Läufe schwanken von Natur aus. */
+export const BASIS_MIN_N = 5;
 /** Quoten (aufgezeichneter / geschätzter Output) weiter als dies auseinander: die Aufzeichnungsbasis hat gewechselt, aufgezeichnete Kosten sind nicht vergleichbar. */
 const BASIS_SPRUNG = 0.2;
 const prozent = (q) => `${Math.round(q * 100)} %`;
@@ -77,10 +79,11 @@ const BASIS_HINWEIS = "aufgezeichnete Kosten über diese Gruppen nicht vergleich
 /** Warnzeile zur Aufzeichnungsbasis oder `null`: Schnitt-Vergleich (alt/neu) zuerst, sonst die Spanne der Tagesquoten. */
 function basisWarnung(aggregat) {
   const { alt, neu } = aggregat;
-  if (alt && neu && alt.outputQuote !== null && neu.outputQuote !== null && spruenge(alt.outputQuote, neu.outputQuote)) {
+  const tragfaehig = (s) => s.n >= BASIS_MIN_N && s.outputQuote !== null;
+  if (alt && neu && tragfaehig(alt) && tragfaehig(neu) && spruenge(alt.outputQuote, neu.outputQuote)) {
     return `Hinweis Aufzeichnungsbasis: Output-Aufzeichnung schwankt (alt ${prozent(alt.outputQuote)}, neu ${prozent(neu.outputQuote)}): ${BASIS_HINWEIS}`;
   }
-  const tage = aggregat.jeTag.filter((t) => t.outputQuote !== null);
+  const tage = aggregat.jeTag.filter(tragfaehig);
   if (tage.length < 2) return null;
   const sortiert = [...tage].sort((a, b) => a.outputQuote - b.outputQuote);
   const klein = sortiert[0];
