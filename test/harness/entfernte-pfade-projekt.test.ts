@@ -11,7 +11,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "vitest";
-import { type Ausnahme, type Rest, AUSNAHMEN, findeReste as findeResteMit, getrackteTextdateien, meldungMitFix } from "../support/entfernte-pfade";
+import { type Rest, findeReste as findeResteMit, getrackteTextdateien, meldungMitFix } from "../support/entfernte-pfade";
 import { projektConfig, repoName } from "../support/fremd-config";
 import { escapeRe as esc } from "../support/regex";
 
@@ -28,10 +28,7 @@ const RESTE_PROJEKT: Rest[] = [
   { name: NAME_VERZEICHNIS, muster: new RegExp(`skills/${esc(C.agenten.ticketSkill)}/`), fix: "das Verzeichnis .agents/skills/factory-ticket/ nennen" },
 ];
 
-/** Die gemeinsamen Ausnahmen plus dieser Wächter selbst (er trägt die Muster). */
-const AUSNAHMEN_PROJEKT: Ausnahme[] = [...AUSNAHMEN, { praefix: "test/harness/entfernte-pfade-projekt.test.ts", grund: "dieser Wächter trägt die Muster selbst" }];
-
-const findeReste = (dateien: { pfad: string; inhalt: string }[]): string[] => findeResteMit(dateien, RESTE_PROJEKT, AUSNAHMEN_PROJEKT);
+const findeReste = (dateien: { pfad: string; inhalt: string }[]): string[] => findeResteMit(dateien, RESTE_PROJEKT);
 const reste = (pfad: string, inhalt: string): string[] => findeReste([{ pfad, inhalt }]);
 
 describe("Textreste mit Projektnamen (#1906)", () => {
