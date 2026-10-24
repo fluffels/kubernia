@@ -303,6 +303,14 @@ describe("Extraktionsliste: Quellwurzel als Parameter und Vorkompilierung (#1888
     assert.equal(extraktionsArten("lib").infrastruktur?.("src/x.ts"), true);
     assert.equal(extraktionsArten("lib").infrastruktur?.("lib/x.ts"), false);
     assert.equal(extraktionsArten("lib")["infrastruktur-anteil"]?.("docs/x.md"), false);
+    // Ausnahme in docs/: nur die Diagramm-Vorlagen (genau eine Ebene, nur .mmd), für beide Infrastruktur-Arten
+    for (const art of ["infrastruktur", "infrastruktur-anteil"] as const) {
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.mmd"), true, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/x.mmd"), false, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.md"), false, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/sub/x.mmd"), false, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/xmmd"), false, art);
+    }
   });
   test("ohne Quellwurzel bricht die Prüfung ab (der Kern kennt keinen festen Namen)", () => {
     assert.throws(() => pruefeExtraktion(l("src/p.ts"), opt), /quelle .* fehlt/);

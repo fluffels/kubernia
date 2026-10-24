@@ -15,10 +15,12 @@ export const EXTRAKTION_PFAD = ".factory/extraktion.json";
 const TEST_DATEI = /^test\/.*\.test\.ts$/;
 const IN_TEST = /^test\//;
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
+/** Diagramm-Vorlagen der Doku-Generatoren: Daten der Kern-Skripte unter `docs/`, die als Infrastruktur oder Anteil ziehen dürfen. */
+const DIAGRAMM_VORLAGE = /^docs\/diagramme\/[^/]+\.mmd$/;
 
 /**
  * Arten der Liste und der Ort, an dem eine Datei dieser Art liegen darf (`null`: nur als Ring-Eintrag). Geschlossen. `quelle` ist die Quellwurzel
- * des Projekts (`struktur.quelle` der Projekt-Config): Infrastruktur liegt weder in `test/`, `docs/` noch dort; der Kern kennt keinen festen Namen.
+ * des Projekts (`struktur.quelle` der Projekt-Config): Infrastruktur liegt weder in `test/`, `docs/` noch dort (einzige Ausnahme in `docs/`: `docs/diagramme/*.mmd`); der Kern kennt keinen festen Namen.
  */
 export const extraktionsArten = (quelle) => {
   const ausserTestDocsQuelle = (p) => !["test", "docs", quelle].some((d) => p.startsWith(`${d}/`));
@@ -27,8 +29,8 @@ export const extraktionsArten = (quelle) => {
     "projekt-test": (p) => TEST_DATEI.test(p),
     "test-hilfe": (p) => IN_TEST.test(p) && !TEST_DATEI.test(p) && CODE_DATEI.test(p),
     fixture: (p) => IN_TEST.test(p) && !TEST_DATEI.test(p),
-    infrastruktur: ausserTestDocsQuelle,
-    "infrastruktur-anteil": ausserTestDocsQuelle,
+    infrastruktur: (p) => ausserTestDocsQuelle(p) || DIAGRAMM_VORLAGE.test(p),
+    "infrastruktur-anteil": (p) => ausserTestDocsQuelle(p) || DIAGRAMM_VORLAGE.test(p),
     "factory-seite": (p) => /^docs\/.*\.md$/.test(p),
     "produkt-wurzel": (p) => /^\.factory\/produkt\/[^/]+$/.test(p),
     "nur-factory": null,
