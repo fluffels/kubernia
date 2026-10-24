@@ -161,7 +161,7 @@ export function baueExport({ leser }) {
   for (const e of manifest.eintraege.filter(istGanzeDatei)) lege(e.pfad, lies(e.pfad), "besitz", leser.ausfuehrbar(e.pfad));
   for (const p of leser.pfade) {
     const art = artVon(liste, p);
-    if (art === null || !MITZIEHEND.includes(art) || art === "infrastruktur-anteil" || art === "nur-factory") continue;
+    if (art === null || !MITZIEHEND.includes(art) || art === "infrastruktur-anteil") continue;
     lege(art === "produkt-wurzel" ? posix.basename(p) : p, lies(p), "extraktion", leser.ausfuehrbar(p));
   }
   for (const p of anteil) lege(p, vorlagen.get(p), "vorlage");
@@ -200,7 +200,6 @@ export function baueExport({ leser }) {
   const manifestPfade = manifest.eintraege.map((e) => e.pfad);
   for (const pfad of projektwertDateien(manifestPfade, [...dateien.keys()])) {
     const d = dateien.get(pfad);
-    if (d === undefined) continue;
     try {
       d.text = rendereProjektwerte(d.text, factoryConfig, pfad);
     } catch (err) {

@@ -37,6 +37,8 @@ interface Ergebnis {
 interface Lock {
   name?: string;
   version?: string;
+  lockfileVersion?: number;
+  requires?: boolean;
   packages: Record<string, Record<string, unknown>>;
 }
 const ex = rawExport as unknown as {
@@ -53,6 +55,7 @@ const lib = rawLib as unknown as {
   pruefeLokalePfade(d: Map<string, string>, repos: string[]): { befunde: string[]; durchgelassen: number };
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   paketName(spec: string): string | null;
+  vorlagenZiel(pfad: string): string | null;
 };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
 const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] } };
@@ -101,6 +104,8 @@ function dateiListe(wurzel: string, rel = ""): string[] {
 
 describe("lockAuszug", () => {
   const lock: Lock = {
+    lockfileVersion: 3,
+    requires: true,
     packages: {
       "": { name: "alt", version: "9.9.9", dependencies: { x: "^1" }, devDependencies: { y: "^1" } },
       "node_modules/x": { version: "1.0.0", dependencies: { b: "^1" } },
@@ -120,9 +125,36 @@ describe("lockAuszug", () => {
     assert.deepEqual(r.lock?.packages[""], pkg);
     assert.deepEqual(r.lock?.packages["node_modules/b"], { version: "2.0.0", dev: true });
     assert.equal(r.lock?.name, "neu");
+    assert.equal(r.lock?.lockfileVersion, 3);
+    assert.equal(r.lock?.requires, true);
+  });
+
+  test("Auflösung nach Node-Art: ein Eintrag unter dem Elternpaket verdeckt den gehobenen, auch aus einer Zwischenebene heraus", () => {
+    const tief: Lock = {
+      packages: {
+        "": { dependencies: { a: "^1" } },
+        "node_modules/a": { version: "1.0.0", dependencies: { b: "^1" } },
+        "node_modules/a/node_modules/b": { version: "1.0.0", dependencies: { c: "^1" } },
+        "node_modules/a/node_modules/c": { version: "1.0.0" },
+        "node_modules/c": { version: "2.0.0" },
+      },
+    };
+    const r = lib.lockAuszug(tief, { name: "neu", version: "0.1.0", dependencies: { a: "^1" } });
+    assert.deepEqual(Object.keys(r.lock?.packages ?? {}), ["", "node_modules/a", "node_modules/a/node_modules/b", "node_modules/a/node_modules/c"]);
+  });
+
+  test("eine fehlende optionale Wurzel-Abhängigkeit ist kein Befund und bleibt in der neuen Wurzel", () => {
+    const r = lib.lockAuszug(lock, { name: "neu", version: "0.1.0", devDependencies: { x: "^1" }, optionalDependencies: { fehlt: "^1" } });
+    assert.deepEqual(r.befunde, []);
+    assert.deepEqual(r.lock?.packages[""].optionalDependencies, { fehlt: "^1" });
   });
 
   test("ein Lock ohne packages ist ein Befund", () => {
+    for (const kaputt of [{ packages: null }, null]) {
+      const k = lib.lockAuszug(kaputt as unknown as Lock, pkg);
+      assert.equal(k.lock, null);
+      assert.match(k.befunde.join("|"), /keine packages/);
+    }
     const r = lib.lockAuszug({} as Lock, pkg);
     assert.equal(r.lock, null);
     assert.match(r.befunde.join("|"), /keine packages/);
@@ -163,6 +195,12 @@ describe("kuberniaBegriffe", () => {
     assert.ok("kub".match(b.kub));
   });
 
+  test("ein Begriff, den die Factory-Config gar nicht kennt (kein Skill), bleibt; fehlende projektliterale der Factory-Config werfen nicht", () => {
+    assert.ok("Skill" in lib.kuberniaBegriffe(kub, { ...fac, skills: {} }));
+    const ohneLiterale = lib.kuberniaBegriffe(kub, { ...fac, projektliterale: undefined });
+    assert.ok("Hof" in ohneLiterale);
+  });
+
   test("ein Projektliteral der Factory bleibt auch dann, wenn die Regex in beiden Configs gleich ist", () => {
     assert.ok("Hof" in lib.kuberniaBegriffe(kub, fac));
   });
@@ -178,6 +216,8 @@ describe("Prüfungen (pur)", () => {
     assert.equal(r.befunde.length, 1);
     assert.match(r.befunde[0], /scripts\/a\.mjs: relativer Import '\.\/c\.mjs'/);
     assert.equal(r.unaufloesbar, 1);
+    const doku = lib.pruefeRelativeImporte(new Map([["docs/x.md", 'import "./c.mjs";']]), new Set(["docs/x.md", "docs/c.mjs"]));
+    assert.deepEqual(doku, { befunde: [], unaufloesbar: 0 });
   });
 
   test("Paket-Importe: unbekannter Name und Builtins zählen nicht, ein Paket von kubernia ohne Vorlage ist ein Befund, ebenso Vorlage ohne kubernia oder mit anderer Range", () => {
@@ -190,6 +230,7 @@ describe("Prüfungen (pur)", () => {
     const vorlage = lib.pruefePaketImporte(new Map(), kub, { devDependencies: { yaml: "^3", nur: "^1" } }).befunde.join("|");
     assert.match(vorlage, /'yaml' hat die Range \^3, kubernia \^2/);
     assert.match(vorlage, /'nur' steht in kubernia nicht/);
+    assert.deepEqual(lib.pruefePaketImporte(new Map([["docs/x.md", 'import "picomatch";']]), kub, { devDependencies: {} }).befunde, []);
   });
 
   test("paketName kürzt Pfade auf das Paket und erkennt Nicht-Namen", () => {
@@ -214,6 +255,13 @@ describe("Prüfungen (pur)", () => {
     assert.match(r, /ci\.yml: nennt scripts\/weg\.cjs/);
     assert.match(r, /settings\.json: nennt scripts\/hook\.mjs/);
     assert.doesNotMatch(r, /da\.mjs|ignoriert/);
+    assert.match(lib.pruefeSkriptBezuege(new Map([[".github/workflows/b.yaml", "run: node scripts/weg.mjs"]])).befunde.join("|"), /b\.yaml: nennt scripts\/weg\.mjs/);
+  });
+
+  test("vorlagenZiel: nur Dateien mit der Endung .vorlage unter dem Vorlagen-Ordner haben ein Ziel", () => {
+    assert.equal(lib.vorlagenZiel(".factory/produkt/vorlagen/a/b.json.vorlage"), "a/b.json");
+    assert.equal(lib.vorlagenZiel(".factory/produkt/vorlagen/notiz.txt"), null);
+    assert.equal(lib.vorlagenZiel(".factory/produkt/andere/x.vorlage"), null);
   });
 
   test("lokale Pfade: ein echter Name ist ein Befund, Platzhalter und Fixture-Wurzeln werden nur gezählt", () => {
@@ -228,6 +276,19 @@ describe("Prüfungen (pur)", () => {
     assert.equal(r.durchgelassen, 2);
   });
 
+  test("lokale Pfade: ein Laufwerkspfad mit dem Namen eines der beiden Repos ist ein Befund, POSIX-Kandidaten und Laufwerks-Fixtures werden gezählt, ausgeschlossene Dateien nicht geprüft", () => {
+    const L = "C" + ":\\";
+    const repos = lib.pruefeLokalePfade(new Map([["docs/a.md", `${L}foo\\kubernia\\x\n${L}foo\\selbst\\x\n`]]), ["kubernia", "selbst"]);
+    assert.equal(repos.befunde.length, 2);
+    assert.match(repos.befunde.join("|"), /docs\/a\.md:1: lokaler Pfad \(repo\)/);
+    assert.match(repos.befunde.join("|"), /docs\/a\.md:2: lokaler Pfad \(repo\)/);
+    assert.deepEqual(lib.pruefeLokalePfade(new Map([["docs/a.md", `${L}foo\\kubernia\\x`]]), ["egal"]).befunde, []);
+    const posix = lib.pruefeLokalePfade(new Map([["scripts/p.mjs", "/c/dev/proj\n/Users/Max/proj\na/Users/Max/proj\nnichts\n"]]), ["egal"]);
+    assert.deepEqual(posix, { befunde: [], durchgelassen: 2 });
+    const ausgeschlossen = lib.pruefeLokalePfade(new Map([["package-lock.json", `${L}Users\\Echt\\x`]]), ["egal"]);
+    assert.deepEqual(ausgeschlossen, { befunde: [], durchgelassen: 0 });
+  });
+
   test("Literale: Befund je Datei und Begriff, ausgenommene Dateien werden gezählt oder übersprungen", () => {
     const d = new Map([
       ["a.mjs", "kub und kub"],
@@ -238,6 +299,8 @@ describe("Prüfungen (pur)", () => {
     const r = lib.pruefeLiterale(d, { Repo: /kub/g }, (p) => (p === "docs/s.md" ? "zaehlen" : p === "frei.json" ? "frei" : null));
     assert.deepEqual(r.befunde, ["a.mjs: kubernia-Literal 'Repo' (2x)"]);
     assert.deepEqual([...r.rest], [["docs/s.md", 1]]);
+    const zwei = lib.pruefeLiterale(new Map([["docs/s.md", "kub und zwei"]]), { A: /kub/g, B: /zwei/g }, () => "zaehlen");
+    assert.deepEqual([...zwei.rest], [["docs/s.md", 2]]);
   });
 });
 
@@ -389,6 +452,7 @@ describe("Export aus HEAD", () => {
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, new RegExp(`Export-SHA ${echt.bericht.sha}`));
     assert.ok(existsSync(join(z, "package-lock.json")));
+    assert.equal(lauf(["--ziel", leerOrdner()]).code, 0);
     const standard = lauf(["--ziel", leerOrdner(), "--quelle", WURZEL]);
     assert.equal(standard.code, 0, standard.err);
     assert.match(standard.out, new RegExp(`Export-SHA ${echt.bericht.sha}`));
@@ -403,6 +467,8 @@ describe("Export aus HEAD", () => {
     assert.ok(b.relativUnaufloesbar > 0);
     assert.ok(b.paketUnbekannt.includes("lodash"));
     assert.ok(b.literalRest.length > 0 && b.literalRest.every(([p]) => p.startsWith("docs/")));
+    const pfade = b.literalRest.map(([p]) => p);
+    assert.deepEqual(pfade, [...pfade].sort());
   });
 
   describe("Negativfälle: Befund, Exit 1, nichts geschrieben", () => {
@@ -467,13 +533,25 @@ describe("Export aus HEAD", () => {
       const kub = JSON.parse(basisText(".factory/projekt.json")) as Record<string, unknown>;
       delete kub.struktur;
       befund({ ".factory/projekt.json": JSON.stringify(kub) }, /struktur.quelle fehlt/);
+      befund({ ".factory/projekt.json": JSON.stringify({ ...kub, struktur: { quelle: "" } }) }, /struktur\.quelle fehlt/);
+      befund({ "package.json": null }, /package\.json: Eintrag ohne Treffer/);
+      befund({ "package.json": "{" }, /package\.json: kein gültiges JSON/);
+      befund({ "package-lock.json": null }, /package-lock\.json: Datei fehlt/);
+      befund({ "package-lock.json": "{" }, /package-lock\.json: kein gültiges JSON/);
       befund({ "package-lock.json": "{}" }, /Lock: keine packages/);
+    });
+
+    test("ein Laufwerkspfad mit dem Namen der Quelle oder des Factory-Repos ist ein Befund", () => {
+      const L = "C" + ":\\";
+      for (const name of ["kubernia", "self-improving-agent-harness-and-factory"]) {
+        befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// ${L}foo\\${name}\\x\n` }, /scripts\/check-size\.mjs:\d+: lokaler Pfad \(repo\)/);
+      }
     });
 
     test("ein Lock-Eintrag, der in kubernia fehlt, ist ein Befund", () => {
       const pkg = JSON.parse(basisText(".factory/produkt/vorlagen/package.json.vorlage")) as { devDependencies: Record<string, string> };
       pkg.devDependencies.nichtda = "^1.0.0";
-      befund({ ".factory/produkt/vorlagen/package.json.vorlage": JSON.stringify(pkg) }, /'nichtda' steht in kubernia nicht|Lock: 'nichtda' \(Wurzel\) hat keinen Eintrag/);
+      befund({ ".factory/produkt/vorlagen/package.json.vorlage": JSON.stringify(pkg) }, /Lock: 'nichtda' \(Wurzel\) hat keinen Eintrag/);
     });
 
     test("fehlen Manifest, Liste oder Daten-Datei, bricht der Export mit einer Meldung ab", () => {
@@ -506,6 +584,7 @@ describe("Export aus HEAD", () => {
 
     test("ein Kern-Test mit kubernia-Literal im Wort wird nur als ganzes Wort gezählt", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// kubernias\n` }) });
+      assert.match(r.befunde.join("\n"), /kubernia-Literal 'Repo'/);
       assert.doesNotMatch(r.befunde.join("\n"), /kubernia-Literal 'kubernia'/);
     });
   });

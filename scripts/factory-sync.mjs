@@ -12,7 +12,7 @@ import { ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from 
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 
-// Teile der Bibliothek, die Tests und das Export-Werkzeug über dieses Modul kennen.
+// Teile der Bibliothek, die die Tests über dieses Modul kennen (das Export-Werkzeug importiert aus der Bibliothek).
 export { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn };
 
 export const MANIFEST_PFAD = ".factory/besitz.json";
