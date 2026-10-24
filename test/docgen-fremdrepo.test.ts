@@ -1,4 +1,4 @@
-/* docs-gen ist projektneutral (#1373): ein Mini-Repo, das nicht Kubernia ist (Python „wetterdienst“, kein
+/* docs-gen ist projektneutral (#1373): ein Mini-Repo, das nicht das Ursprungsprojekt ist (Python „wetterdienst“, kein
  * package.json, kein src/), läuft durch denselben Kern (Engine, ADR-Liste, Zeitleiste, Schichten Soll/Ist)
  * mit eigener Config, eigener Schicht-Definition, eigenem Import-Adapter und eigener Registry (Kern-Registry plus
  * optional `generatoren` aus der Config, ADR 0022 F6). Dazu ein
@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixture } from "./support/tmp-fixture";
+import { projektConfig, repoName } from "./support/fremd-config";
 import { importeAus } from "./harness/hook-importe";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -130,7 +131,7 @@ const laufKern = async (root: string, ...argv: string[]) => {
 };
 const readme = (root: string) => readFileSync(join(root, "README.md"), "utf8");
 
-describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
+describe("docs-gen auf einem Fremd-Repo (Python, nicht das Ursprungsprojekt)", () => {
   test("schreiben, danach ist der Prüflauf grün", async () => {
     const root = fixture(mini());
     const w = await lauf(root, "--write");
@@ -141,7 +142,7 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
     assert.match(c.out, /aktuell/);
   });
 
-  test("die Ausgabe trägt das Fremd-Repo, nichts von Kubernia", async () => {
+  test("die Ausgabe trägt das Fremd-Repo, nichts vom Ursprungsprojekt", async () => {
     const root = fixture(mini());
     await lauf(root, "--write");
     const t = readme(root);
@@ -154,7 +155,9 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
     assert.match(t, /Alle 4 erlaubten Richtungen sind genutzt/);
     assert.match(t, /s_dienste -\.-> x_httpx/);
     assert.match(t, /Generiert von make docs/);
-    for (const fremd of ["src/", "Phaser", "Kubernia", "npm run"]) assert.ok(!t.includes(fremd), `"${fremd}" darf im Fremd-Repo nicht auftauchen`);
+    for (const fremd of ["src/", "npm run"]) assert.ok(!t.includes(fremd), `"${fremd}" darf im Fremd-Repo nicht auftauchen`);
+    const echt = projektConfig();
+    for (const fremd of [repoName(echt), ...Object.values(echt.projektliterale ?? {})]) assert.ok(!t.toLowerCase().includes(fremd.toLowerCase()), `"${fremd}" darf im Fremd-Repo nicht auftauchen`);
   });
 
   test("ein neues ADR macht den Prüflauf rot, mit dem Befehl aus der Config; die Datei bleibt unverändert", async () => {
