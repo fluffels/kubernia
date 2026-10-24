@@ -13,6 +13,7 @@ import { begriffeAus } from "./besitz-lib.mjs";
 import { importeAus, relativeImporte, zielDatei } from "./besitz-extraktion.mjs";
 import { isCheckable } from "./check-basis.mjs";
 import { pfadBefunde } from "./internalrefs-lib.mjs";
+import { trifftLeitplanke } from "./umsetzer-abschluss.mjs";
 
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
 const BUILTINS = new Set(builtinModules);
@@ -247,3 +248,48 @@ export const vorlagenPfad = (ziel) => `${VORLAGEN_ORDNER}/${ziel}.vorlage`;
 
 /** Zielpfad einer Vorlagendatei (`null`, wenn der Pfad nicht unter dem Vorlagen-Ordner liegt oder nicht auf `.vorlage` endet). */
 export const vorlagenZiel = (pfad) => (pfad.startsWith(`${VORLAGEN_ORDNER}/`) && pfad.endsWith(".vorlage") ? posix.relative(VORLAGEN_ORDNER, pfad).slice(0, -".vorlage".length) : null);
+
+/**
+ * Schutzliste im Export (#1929): `.github/protected-paths.json` und `.github/CODEOWNERS` kommen als Vorlagen; das Werkzeug prüft sie gegen die Quelle,
+ * damit keine zweite Auslegung entsteht (der Treffer-Abgleich ist `trifftLeitplanke` aus `umsetzer-abschluss.mjs`).
+ * Befunde: (a) ein Muster der Vorlage trifft keinen Exportpfad und steht nicht in `SCHUTZ_OHNE_TREFFER`; (b) ein Muster der Quelle trifft einen
+ * Exportpfad, fehlt aber in der Vorlage (Drift-Schutz: ein neuer Schutz in kubernia wandert in die Vorlage); (c) die Muster der CODEOWNERS-Vorlage sind nicht
+ * dieselbe Menge wie die der protected-paths-Vorlage (`harness-approval.test.ts` verlangt das im Export genauso).
+ * Grenze: ein Muster ohne Treffer, das nicht in der geschlossenen Liste steht, ist immer ein Befund; ein Quell-Muster ohne Treffer darf in der Vorlage fehlen.
+ */
+export const SCHUTZ_OHNE_TREFFER = ["/CLAUDE.md", "/CLAUDE.local.md", "/scripts/*-mcp.mjs"];
+
+/** Alle String-Muster einer protected-paths-Datei (`null` bei kaputtem JSON). */
+function schutzMuster(text) {
+  try {
+    return Object.values(JSON.parse(text)).flatMap((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []));
+  } catch {
+    return null;
+  }
+}
+
+/** Eingabe `{ vorlage, codeowners, quelle, pfade }` (Texte der beiden Vorlagen und der Quell-Liste, Pfade des Exports); Rückgabe: Liste der Befunde. */
+export function pruefeSchutzliste({ vorlage, codeowners, quelle, pfade }) {
+  const befunde = [];
+  const vorlagenMuster = schutzMuster(vorlage);
+  const quellMuster = schutzMuster(quelle);
+  if (vorlagenMuster === null) befunde.push("protected-paths.json (Vorlage): kein gültiges JSON");
+  if (quellMuster === null) befunde.push("protected-paths.json (Quelle): kein gültiges JSON");
+  if (vorlagenMuster === null || quellMuster === null) return befunde;
+  const treffer = (muster) => pfade.find((p) => trifftLeitplanke(p, [muster]));
+  for (const m of vorlagenMuster) {
+    if (treffer(m) === undefined && !SCHUTZ_OHNE_TREFFER.includes(m)) befunde.push(`protected-paths.json (Vorlage): Muster '${m}' trifft keinen Exportpfad und steht nicht in der geschlossenen Liste`);
+  }
+  for (const m of quellMuster) {
+    const pfad = treffer(m);
+    if (pfad !== undefined && !vorlagenMuster.includes(m)) befunde.push(`protected-paths.json (Vorlage): Muster '${m}' der Quelle trifft '${pfad}', fehlt aber in der Vorlage`);
+  }
+  const eigentuemer = new Set(codeowners.split(/\r?\n/).map((l) => l.trim().match(/^(\S+)\s+@\S+/)?.[1]).filter((m) => m !== undefined && !m.startsWith("#")));
+  const vorlagenSet = new Set(vorlagenMuster);
+  const nurOwners = [...eigentuemer].filter((m) => !vorlagenSet.has(m));
+  const nurSchutz = [...vorlagenSet].filter((m) => !eigentuemer.has(m));
+  if (nurOwners.length > 0 || nurSchutz.length > 0) {
+    befunde.push(`CODEOWNERS (Vorlage): Muster weichen von protected-paths.json ab (nur in CODEOWNERS: ${nurOwners.join(", ") || "-"}; nur in protected-paths.json: ${nurSchutz.join(", ") || "-"})`);
+  }
+  return befunde;
+}

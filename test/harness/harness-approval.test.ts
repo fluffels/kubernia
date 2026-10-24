@@ -97,7 +97,7 @@ function sourcePaths(src: ProtectedSource): Set<string> {
 // CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
 // AGENTS.md als geladene SSOT verdrängen und muss darum auditpflichtig sein.
 // Dasselbe gilt für CLAUDE.local.md (#1116) – `CLAUDE.md` trifft sie nicht (der Matcher der Produktion verankert Dateinamen).
-const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/agents/x.md", ".mcp.json", "scripts/mcp-launch.mjs", ".agents/x.md", "docs/agent-harness.md"];
+const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/agents/x.md", ".mcp.json", "scripts/mcp-ausfall.mjs", ".agents/x.md", "docs/agent-harness.md"];
 
 /**
  * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,

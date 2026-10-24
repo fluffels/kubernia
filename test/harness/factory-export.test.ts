@@ -56,6 +56,8 @@ const lib = rawLib as unknown as {
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
+  pruefeSchutzliste(e: { vorlage: string; codeowners: string; quelle: string; pfade: string[] }): string[];
+  SCHUTZ_OHNE_TREFFER: string[];
 };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
 const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] } };
@@ -358,6 +360,61 @@ describe("Prüfungen (pur)", () => {
   });
 });
 
+
+describe("pruefeSchutzliste (pur)", () => {
+  const KOPF = ["/scripts/check-*.mjs", "/.github/protected-paths.json", "/.github/CODEOWNERS"];
+  const HARNESS = ["AGENTS.md", "/CLAUDE.md", "/CLAUDE.local.md", "/.claude/", "/scripts/*-mcp.mjs"];
+  const WAECHTER = ["/test/harness/"];
+  const PFADE = ["scripts/check-size.mjs", ".github/protected-paths.json", ".github/CODEOWNERS", "AGENTS.md", ".claude/settings.json", "test/harness/a.test.ts", "src/modul/AGENTS.md", "README.md"];
+  const quelleText = (extra: string[] = []): string => JSON.stringify({ gate: [...KOPF, ...extra], harness: HARNESS, waechter: WAECHTER });
+  const owners = (muster: string[]): string => `# Kopf\n\n${muster.map((m) => `${m} @owner`).join("\n")}\n`;
+  const alle = [...KOPF, ...HARNESS, ...WAECHTER];
+  const pruefe = (o: { vorlage?: string; codeowners?: string; quelle?: string; pfade?: string[] } = {}): string[] =>
+    lib.pruefeSchutzliste({ vorlage: o.vorlage ?? quelleText(), codeowners: o.codeowners ?? owners(alle), quelle: o.quelle ?? quelleText(), pfade: o.pfade ?? PFADE });
+
+  test("deckungsgleiche Vorlage ist kein Befund; die drei Muster der geschlossenen Liste dürfen ohne Treffer stehen", () => {
+    assert.deepEqual(pruefe(), []);
+    assert.deepEqual(lib.SCHUTZ_OHNE_TREFFER, ["/CLAUDE.md", "/CLAUDE.local.md", "/scripts/*-mcp.mjs"]);
+  });
+
+  test("(a) ein Muster der Vorlage ohne Treffer und außerhalb der geschlossenen Liste ist ein Befund", () => {
+    const mit = [...KOPF, "/scripts/gibts-nicht.mjs"];
+    const vorlage = JSON.stringify({ gate: mit, harness: HARNESS, waechter: WAECHTER });
+    const r = pruefe({ vorlage, codeowners: owners([...mit, ...HARNESS, ...WAECHTER]) });
+    assert.deepEqual(r, ["protected-paths.json (Vorlage): Muster '/scripts/gibts-nicht.mjs' trifft keinen Exportpfad und steht nicht in der geschlossenen Liste"]);
+  });
+
+  test("(b) ein Muster der Quelle, das einen Exportpfad trifft und in der Vorlage fehlt, ist ein Befund (Drift-Schutz)", () => {
+    const ohne = JSON.stringify({ gate: KOPF.filter((m) => m !== "/scripts/check-*.mjs"), harness: HARNESS, waechter: WAECHTER });
+    const r = pruefe({ vorlage: ohne, codeowners: owners(alle.filter((m) => m !== "/scripts/check-*.mjs")) });
+    assert.deepEqual(r, ["protected-paths.json (Vorlage): Muster '/scripts/check-*.mjs' der Quelle trifft 'scripts/check-size.mjs', fehlt aber in der Vorlage"]);
+  });
+
+  test("(b) ein Quell-Muster ohne Treffer im Export darf in der Vorlage fehlen; unverankertes AGENTS.md trifft auch modul-lokale Dateien", () => {
+    assert.deepEqual(pruefe({ quelle: quelleText(["/.jscpd.json"]) }), []);
+    const nurModul = pruefe({
+      pfade: ["src/modul/AGENTS.md", ".github/protected-paths.json", ".github/CODEOWNERS"],
+      vorlage: JSON.stringify({ gate: [KOPF[1], KOPF[2]], harness: ["AGENTS.md", "/CLAUDE.md", "/CLAUDE.local.md", "/scripts/*-mcp.mjs"] }),
+      codeowners: owners([KOPF[1], KOPF[2], "AGENTS.md", "/CLAUDE.md", "/CLAUDE.local.md", "/scripts/*-mcp.mjs"]),
+      quelle: JSON.stringify({ gate: [KOPF[1], KOPF[2]], harness: ["AGENTS.md", "/CLAUDE.md", "/CLAUDE.local.md", "/scripts/*-mcp.mjs"] }),
+    });
+    assert.deepEqual(nurModul, [], "AGENTS.md trifft src/modul/AGENTS.md");
+  });
+
+  test("(c) CODEOWNERS und protected-paths-Vorlage müssen dieselbe Menge sein (in beide Richtungen)", () => {
+    const mehr = pruefe({ codeowners: owners([...alle, "/extra.json"]) });
+    assert.equal(mehr.length, 1);
+    assert.match(mehr[0], /CODEOWNERS \(Vorlage\): .*nur in CODEOWNERS: \/extra\.json/);
+    const weniger = pruefe({ codeowners: owners(alle.filter((m) => m !== "/.claude/")) });
+    assert.equal(weniger.length, 1);
+    assert.match(weniger[0], /CODEOWNERS \(Vorlage\): .*nur in protected-paths\.json: \/\.claude\//);
+  });
+
+  test("kaputtes JSON in Vorlage oder Quelle ist ein Befund statt einer Ausnahme", () => {
+    assert.match(pruefe({ vorlage: "{ nein" }).join("|"), /protected-paths\.json \(Vorlage\): kein gültiges JSON/);
+    assert.match(pruefe({ quelle: "{ nein" }).join("|"), /protected-paths\.json \(Quelle\): kein gültiges JSON/);
+  });
+});
 describe("Export aus HEAD", () => {
   let leser: Leser;
   let echt: Ergebnis;
@@ -576,7 +633,7 @@ describe("Export aus HEAD", () => {
     });
 
     test("ein relativer Import auf eine nicht exportierte Datei ist ein Befund", () => {
-      befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\nimport "./layers.cjs";\n` }, /scripts\/check-size\.mjs: relativer Import '\.\/layers\.cjs' löst im Export nicht auf/);
+      befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\nimport "./content-chunks.cjs";\n` }, /scripts\/check-size\.mjs: relativer Import '\.\/content-chunks\.cjs' löst im Export nicht auf/);
     });
 
     test("ein Paket, das kubernia kennt und die Vorlage nicht, ist ein Befund", () => {
@@ -585,8 +642,8 @@ describe("Export aus HEAD", () => {
 
     test("ein Skriptbezug auf eine nicht exportierte Datei ist ein Befund", () => {
       const pkg = JSON.parse(basisText(".factory/produkt/vorlagen/package.json.vorlage")) as { scripts: Record<string, string> };
-      pkg.scripts.setup = "node scripts/setup.mjs";
-      befund({ ".factory/produkt/vorlagen/package.json.vorlage": JSON.stringify(pkg) }, /package\.json: nennt scripts\/setup\.mjs, das nicht im Export liegt/);
+      pkg.scripts.forum = "node scripts/mcp-launch.mjs";
+      befund({ ".factory/produkt/vorlagen/package.json.vorlage": JSON.stringify(pkg) }, /package\.json: nennt scripts\/mcp-launch\.mjs, das nicht im Export liegt/);
     });
 
     test("ein lokaler Pfad mit echtem Namen ist ein Befund", () => {
