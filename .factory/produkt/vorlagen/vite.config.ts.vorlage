@@ -7,6 +7,12 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
+    // Coverage misst nur ein Lauf mit --coverage; lcovonly schreibt coverage/lcov.info, das check-diffcoverage.mjs gegen den Diff auswertet.
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary", "lcovonly"],
+      reportsDirectory: "coverage",
+    },
     maxWorkers: process.env.CI ? undefined : Math.max(2, Math.floor(availableParallelism() / 4)),
   },
 });
