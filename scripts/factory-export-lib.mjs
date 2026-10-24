@@ -5,8 +5,8 @@
 // unauflösbarer Importtext und ein Paketname, den kubernia nicht kennt, sind nur in `*.test.ts` Fixture-Rauschen (gezählt), sonst ein Befund. Skriptbezüge sind Treffer
 // von `scripts/<name>.mjs|cjs|js` ohne Platzhalter; lokale Pfade die Treffer von `pfadBefunde`, durchgelassene Zeilen zählt der Bericht je Muster (eine Zeile kann
 // mehrere Muster treffen); kubernia-Literale die Begriffe der Config (`begriffeAus`), die kein Projektliteral der Factory sind und deren Regex in beiden Configs
-// verschieden ist, als ganze Wörter (Buchstaben und Ziffern grenzen ab, `_` nicht), je Fundstelle einmal, Projektliterale zuerst. Der Kern-Wächter zählt dieselben
-// Begriffe ohne diese Wortgrenze (ein Teilwort trifft dort); das Werkzeug ist enger, damit ein Teilwort wie `kuberniaartig` keinen Export verhindert.
+// verschieden ist, als ganze Wörter (Buchstaben und Ziffern grenzen ab, `_` nicht), je Fundstelle einmal, Projektliterale zuerst. Der Kern-Wächter zählt die rohen
+// Regex-Treffer derselben Begriffe (Owner, Repo, Präfixe, Label und Agent ohne Wortgrenze, ein Teilwort trifft dort); das Werkzeug ist enger, damit ein Teilwort wie `kuberniaartig` keinen Export verhindert.
 import { builtinModules } from "node:module";
 import { posix } from "node:path";
 import { begriffeAus } from "./besitz-lib.mjs";
@@ -86,7 +86,7 @@ export function paketName(spec) {
   return PAKET_NAME.test(name) ? name : `?${spec}`;
 }
 
-/** Text ohne Block- und Zeilenkommentare (ein Durchlauf von links nach rechts, damit ein `/*` im Zeilenkommentar keinen Scheinblock öffnet): ein Import, der nur als Beispiel in einem Kommentar steht, ist keiner. Grenze: ein `//` direkt nach `:`, Anführungszeichen oder Backslash gilt nicht als Kommentar (URL im String). */
+/** Text ohne Block- und Zeilenkommentare (ein Durchlauf von links nach rechts, damit ein `/*` im Zeilenkommentar keinen Scheinblock öffnet): ein Import, der nur als Beispiel in einem Kommentar steht, ist keiner. Grenzen: ein `//` direkt nach `:`, Anführungszeichen, Backtick oder Backslash gilt nicht als Kommentar (URL im String); es gibt keinen String-Kontext (ein Blockanfang in einem String kann bis zum nächsten Blockende Text verschlucken). */
 const ohneKommentare = (text) => text.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`\\])\/\/.*$/gm, (treffer, davor) => (treffer.startsWith("/*") ? "" : davor));
 
 /** Testdateien: nur dort kann ein Importtext Fixture sein (ein Import in einem String oder Template); in jeder anderen Code-Datei ist ein nicht auflösbarer Import ein Befund. */
