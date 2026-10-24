@@ -441,9 +441,9 @@ describe("laufErgebnis (git und gh injiziert)", () => {
   });
   test("Config injiziert (#1741): ein anderes Präfix lässt die Zeile des Config-Präfixes im Squash-Commit nicht zählen, das Label kommt aus der Config", () => {
     const config = (praefix: string, label: string) => () => ({ praefixe: { commitZeile: praefix }, agenten: { planer: PLANER }, labels: { festgefahren: label } });
-    const kq = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config(FREMD.praefixe.commitZeile, LABEL) });
-    assert.equal(kq.zeilen[0].runden, 1);
-    assert.equal(kq.zeilen[0].festgefahren, 1);
+    const fremd = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config(FREMD.praefixe.commitZeile, LABEL) });
+    assert.equal(fremd.zeilen[0].runden, 1);
+    assert.equal(fremd.zeilen[0].festgefahren, 1);
     const ab = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER, ladeConfig: config("AB-", "anderes:label") });
     assert.equal(ab.zeilen[0].runden, null, "Zeilen des Config-Präfixes zählen bei AB- nicht");
     assert.equal(ab.zeilen[0].festgefahren, 0, "ein anderes Label zählt das festgefahren-Label nicht");

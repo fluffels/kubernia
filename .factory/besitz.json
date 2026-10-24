@@ -140,7 +140,7 @@
     {"pfad":"scripts/harness-doctor-melden.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":".github/workflows/harness-doctor.yml","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/check-factory-drift.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
-    {"pfad":".claude/agents/factory-gruppe.md","ring":"kern","quelle":"Inventar `kubernia-gruppe`, Agentenname aus Config ADR 0022 F3 (#1613), Pfad ADR 0022 F3h (#1748)"},
+    {"pfad":".claude/agents/factory-gruppe.md","ring":"kern","quelle":"Inventar, Gruppen-Agent, Agentenname aus Config ADR 0022 F3 (#1613), Pfad ADR 0022 F3h (#1748)"},
     {"pfad":".claude/settings.json","schluessel":"permissions","ring":"kern-nach-entkopplung","quelle":"Inventar, Settings (Folgeschritt F4/F9)"},
     {"pfad":".claude/settings.json","schluessel":"sandbox","ring":"kern-nach-entkopplung","quelle":"Inventar, Settings (Folgeschritt F4/F9)"},
     {"pfad":".claude/settings.json","schluessel":"hooks","ring":"kern-nach-entkopplung","quelle":"Inventar, Settings (Folgeschritt F4/F9)"},
