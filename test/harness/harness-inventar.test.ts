@@ -24,7 +24,7 @@ import * as inventar from "../../scripts/docs-gen/harness-inventar.mjs";
 import * as docsGen from "../../scripts/docs-gen.mjs";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { musterRegex } from "../../scripts/besitz-lib.mjs";
+import { musterRegex } from "../../scripts/besitz-extraktion.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { QUELL_VERZEICHNIS, ZEIGER_MARKE } from "../../scripts/skill-pfade.mjs";
 

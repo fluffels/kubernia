@@ -1,7 +1,7 @@
 /* Extraktionsliste und Test-Hülle (#1875, ADR 0022 F10, Teil 5): `.factory/extraktion.json` ordnet jede Testdatei mit Bezug
  * zum Besitz als `kern-test` (zieht ins Factory-Repo) oder `projekt-test` (bleibt) ein; die Test-Hülle verlangt, dass jeder
  * lokale Import eines Kern-Tests (und der Test-Hilfen und Fixtures) auf Besitz, die Projekt-Config oder einen mitziehenden
- * Eintrag der Liste zeigt. Die Struktur der Liste prüft `pruefeExtraktion` (scripts/besitz-lib.mjs).
+ * Eintrag der Liste zeigt. Die Struktur der Liste prüft `pruefeExtraktion` (scripts/besitz-extraktion.mjs).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
@@ -17,6 +17,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawExtraktion from "../../scripts/besitz-extraktion.mjs";
 
 interface ExtraktionEintrag {
   muster?: string;
@@ -53,7 +55,7 @@ interface Lib {
 }
 // Begründete Ausnahme wie in kern-reinheit.test.ts: das .mjs hat kein Declaration-File.
 const { EXTRAKTION_PFAD, extraktionsArten, MITZIEHEND, RINGE, NUR_FACTORY, musterRegex, artVon, pruefeExtraktion, istGanzeDatei, zielDatei, bezugsTests, zuordnungsLuecken, lesebezuege, huellenVerstoesse, testHuelle } =
-  rawBesitz as unknown as Lib;
+  { ...rawBesitz, ...rawExtraktion } as unknown as Lib;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const PROJEKT_CONFIG = ".factory/projekt.json";

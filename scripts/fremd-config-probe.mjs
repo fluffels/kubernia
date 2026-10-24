@@ -14,7 +14,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { artVon, EXTRAKTION_PFAD } from "./besitz-lib.mjs";
+import { artVon, EXTRAKTION_PFAD } from "./besitz-extraktion.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";

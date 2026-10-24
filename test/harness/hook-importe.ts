@@ -6,7 +6,7 @@
  */
 import { posix } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawLib from "../../scripts/besitz-lib.mjs";
+import * as rawLib from "../../scripts/besitz-extraktion.mjs";
 
 /** Skripte, die `.claude/settings.json` als Hook startet (Argumente auf `scripts/*.mjs`). */
 export function hookSkripte(settingsText: string): string[] {
@@ -35,7 +35,7 @@ export function mcpSkripte(mcpJsonText: string): string[] {
   return [...skripte];
 }
 
-/** Alle Importspezifizierer und die relativen darunter: die Auslegung steht einmal in `scripts/besitz-lib.mjs` (Bezug und Test-Hülle der Extraktion teilen sie). */
+/** Alle Importspezifizierer und die relativen darunter: die Auslegung steht einmal in `scripts/besitz-extraktion.mjs` (Bezug und Test-Hülle der Extraktion teilen sie). */
 const lib = rawLib as unknown as { importeAus(text: string): string[]; relativeImporte(text: string): string[] };
 export const importeAus = (text: string): string[] => lib.importeAus(text);
 export const relativeImporte = (text: string): string[] => lib.relativeImporte(text);

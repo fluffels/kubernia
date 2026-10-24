@@ -32,7 +32,7 @@ import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
-import { HARNESS_TAKT_KOMMENTARE, befundKommentare } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./spielquote-lib.mjs";
 import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -139,7 +139,7 @@ export function imBereich(item, bereich, config) {
 /**
  * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
- * `fuellstand(nr)`: Füllstand des Harness-Sammeltickets (`befundKommentare`) oder `{ fehler }`; das ungeclaimte Harness-Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
+ * `fuellstand(nr)`: Füllstand des Harness-Sammeltickets (`fuellstandVon`) oder `{ fehler }`; das ungeclaimte Harness-Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
  * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
@@ -369,18 +369,15 @@ function messfensterLaeufe(fenster, dir, holeIssue, holeNamen) {
 }
 
 /**
- * Lader für den Füllstand (Härtungs-Takt), I/O: die Kommentare des Sammeltickets per REST (`holeKommentare`), gezählt mit `befundKommentare`. Memo je Nummer;
+ * Lader für den Füllstand (Härtungs-Takt), I/O: die Kommentare des Sammeltickets per REST (`holeKommentare`), gezählt mit `fuellstandVon`. Memo je Nummer;
  * ein Ladefehler wird zu `{ fehler }` (fail-closed: das Sammelticket wird dann übersprungen, die Auswahl läuft weiter).
  */
-export function fuellstandLader({ holeKommentare = (nr) => issueKommentare(nr, ghJson, REPO), owner = OWNER } = {}) {
+export function fuellstandLader({ holeKommentare = (nr, repo) => issueKommentare(nr, ghJson, repo), repo = REPO } = {}) {
   const memo = new Map();
   return (nr) => {
     if (!memo.has(nr)) {
-      try {
-        memo.set(nr, befundKommentare(holeKommentare(nr), owner));
-      } catch (e) {
-        memo.set(nr, { fehler: `Kommentare von #${nr} nicht ladbar: ${e instanceof Error ? e.message.split(/\r?\n/)[0] : String(e)}` });
-      }
+      const r = fuellstandVon({ nr, repo, ladeKommentare: holeKommentare });
+      memo.set(nr, r.fehler === undefined ? r.wert : { fehler: r.fehler });
     }
     return memo.get(nr);
   };

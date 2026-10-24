@@ -135,6 +135,7 @@
     {"pfad":"scripts/budget-pacing.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/statusline.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/besitz-lib.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
+    {"pfad":"scripts/besitz-extraktion.mjs","ring":"kern","quelle":"Schnitt aus besitz-lib (#1906)"},
     {"pfad":"scripts/factory-sync.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
     {"pfad":"scripts/projektwerte.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1746)"},
     {"pfad":"scripts/harness-doctor.mjs","ring":"kern","quelle":"Plan #1799 (Regel ADR 0022 §1)"},

@@ -19,7 +19,7 @@
  */
 import { ghJson, ghText } from "./gh-cli.mjs";
 import { readFileSync } from "node:fs";
-import { musterRegex } from "./besitz-lib.mjs";
+import { musterRegex } from "./besitz-extraktion.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";

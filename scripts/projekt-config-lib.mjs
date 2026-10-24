@@ -369,18 +369,6 @@ export function ergaenzungAus(config) {
   return { ...berechtigungenAus(config), sandbox: sandboxAus(config) };
 }
 
-/** Pur: wie `berechtigungenAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
-export function berechtigungenAusText(text) {
-  if (text === null) return berechtigungenAus({}); // keine Datei: leer (JSON.parse(null) ergäbe dasselbe)
-  let config;
-  try {
-    config = JSON.parse(text);
-  } catch {
-    throw new Error(`${PROJEKT_CONFIG} ist kein gültiges JSON`);
-  }
-  return berechtigungenAus(config);
-}
-
 /** Pur: wie `ergaenzungAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
 export function ergaenzungAusText(text) {
   if (text === null) return ergaenzungAus({});

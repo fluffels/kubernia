@@ -1098,19 +1098,19 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
   });
 
   describe("fuellstandLader: Kommentare vertrauter Nicht-Bot-Autoren, Memo, Ladefehler", () => {
-    const lader = (N as unknown as { fuellstandLader: (o: { holeKommentare: (nr: number) => unknown; owner: string }) => Fuell }).fuellstandLader;
+    const lader = (N as unknown as { fuellstandLader: (o: { holeKommentare: (nr: number, repo: string) => unknown; repo: string }) => Fuell }).fuellstandLader;
     const k = (login: string, type = "User") => ({ user: { login, type } });
     test("zählt nur den Owner ohne Bots, lädt je Nummer einmal", () => {
       let n = 0;
-      const f = lader({ holeKommentare: () => (n++, [k(OWNER), k(OWNER), k("fremd"), k("github-actions[bot]", "Bot")]), owner: OWNER });
+      const f = lader({ holeKommentare: () => (n++, [k(OWNER), k(OWNER), k("fremd"), k("github-actions[bot]", "Bot")]), repo: `${OWNER}/projekt` });
       expect(f(5)).toBe(2);
       expect(f(5)).toBe(2);
       expect(n).toBe(1);
     });
     test("ein Ladefehler oder eine falsche Form wird zu { fehler } (kein Wurf)", () => {
-      const f = lader({ holeKommentare: () => { throw new Error("HTTP 502\nzweite Zeile"); }, owner: OWNER });
+      const f = lader({ holeKommentare: () => { throw new Error("HTTP 502\nzweite Zeile"); }, repo: `${OWNER}/projekt` });
       expect(f(5)).toEqual({ fehler: "Kommentare von #5 nicht ladbar: HTTP 502" });
-      const r = lader({ holeKommentare: () => ({}), owner: OWNER })(5);
+      const r = lader({ holeKommentare: () => ({}), repo: `${OWNER}/projekt` })(5);
       expect(typeof r === "object" ? r.fehler : "").toMatch(/nicht ladbar/);
     });
   });

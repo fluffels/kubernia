@@ -40,6 +40,7 @@ const Q = rawQuote as unknown as {
   zaehleTaktMerges: (commits: unknown, seit?: string | Date | null, sammelIssues?: Set<number>) => number;
   befundKommentare: Takt["befundKommentare"];
   HARNESS_TAKT_KOMMENTARE: number;
+  fuellstandVon: (a: { nr: number; repo: string; ladeKommentare: (nr: number, repo: string) => unknown }) => { wert: number } | { fehler: string };
 };
 const normalizeOffene = (rawLib as unknown as { normalizeOffene: (pages: unknown) => Offen[] }).normalizeOffene;
 const STATUS_TITEL = (rawStatus as unknown as { STATUS_TITEL: string }).STATUS_TITEL;
@@ -158,6 +159,30 @@ describe("Spielquote im Takt (#1425)", () => {
     const q = T.quotenBericht([alt, alt, altSpiel, spiel], "2026-10-07T00:00:00Z");
     expect(q).toMatchObject({ harness: 0, spiel: 1 });
     expect(T.quotenBericht([alt, alt, altSpiel, spiel], null)).toMatchObject({ harness: 2, spiel: 2 });
+  });
+
+  describe("fuellstandVon: Laden, Zählen und Fail-closed an einer Stelle", () => {
+    const k = (login: string) => ({ user: { login, type: "User" } });
+    const repo = `${OWNER}/projekt`;
+    test("zählt die Owner-Kommentare (Owner aus dem Repo) und reicht Nummer und Repo an den Lader", () => {
+      const gesehen: unknown[] = [];
+      const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: (nr, rp) => (gesehen.push([nr, rp]), [k(OWNER), k(OWNER), k("fremd")]) });
+      expect(r).toEqual({ wert: 2 });
+      expect(gesehen).toEqual([[7, repo]]);
+    });
+    test("ein Ladefehler wird zu { fehler } mit erster Zeile (kein Wurf)", () => {
+      const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => { throw new Error("HTTP 502\nzweite Zeile"); } });
+      expect(r).toEqual({ fehler: "Kommentare von #7 nicht ladbar: HTTP 502" });
+    });
+    test("ein geworfener Nicht-Error (String) wird zu { fehler }", () => {
+      const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => { throw "kaputt"; } }); // eslint-disable-line @typescript-eslint/only-throw-error
+      expect(r).toEqual({ fehler: "Kommentare von #7 nicht ladbar: kaputt" });
+    });
+    test("eine falsche Antwortform und ein kaputtes Repo sind fail-closed { fehler }", () => {
+      expect(Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => ({}) })).toHaveProperty("fehler", "Kommentare von #7 nicht ladbar: kommentare muss eine Liste sein.");
+      const kaputt = Q.fuellstandVon({ nr: 7, repo: "ohne-slash", ladeKommentare: () => [] });
+      expect("fehler" in kaputt ? kaputt.fehler : "").toMatch(/nicht ladbar.*owner\/name/);
+    });
   });
 
   test("befundKommentare (#1888): nur Kommentare des vertrauten Owners ohne [bot]; fremde, Bot-, anonyme und gelöschte Autoren zählen nicht", () => {
@@ -409,7 +434,7 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const wahl = lies("scripts/naechstes-ticket.mjs");
     expect(takt).toContain('from "./spielquote-lib.mjs"');
     expect(wahl).not.toMatch(/SPIEL_QUOTE|quotenBericht|zaehleSpielMerges/); // die Spielquote steuert die Auswahl nicht
-    expect(wahl).toMatch(/import \{ HARNESS_TAKT_KOMMENTARE, befundKommentare \} from "\.\/spielquote-lib\.mjs"/);
+    expect(wahl).toMatch(/import \{ HARNESS_TAKT_KOMMENTARE, fuellstandVon \} from "\.\/spielquote-lib\.mjs"/);
     expect(takt).not.toMatch(/from "\.\/naechstes-ticket\.mjs"/);
     expect(wahl).not.toMatch(/from "\.\/board-takt\.mjs"/);
   });

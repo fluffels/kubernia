@@ -64,6 +64,7 @@ AGENTS.md                  @fluffels
 /scripts/langfuse-vorbedingung.mjs @fluffels
 /scripts/cockpit/lauf.mjs @fluffels
 /scripts/besitz-lib.mjs @fluffels
+/scripts/besitz-extraktion.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
 /scripts/harness-doctor.mjs @fluffels
 /scripts/harness-doctor-lib.mjs @fluffels

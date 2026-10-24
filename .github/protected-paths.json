@@ -32,6 +32,7 @@
     "/scripts/langfuse-vorbedingung.mjs",
     "/scripts/cockpit/lauf.mjs",
     "/scripts/besitz-lib.mjs",
+    "/scripts/besitz-extraktion.mjs",
     "/scripts/factory-sync.mjs",
     "/scripts/harness-doctor.mjs",
     "/scripts/harness-doctor-lib.mjs",

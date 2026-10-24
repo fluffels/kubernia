@@ -22,6 +22,8 @@ import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawExtraktion from "../../scripts/besitz-extraktion.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawRegistry from "../../scripts/docs-gen/registry.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "../../scripts/skill-pfade.mjs";
@@ -1117,7 +1119,7 @@ const GEZAEHLTE_ARTEN = ["kern-test", "test-hilfe", "fixture"];
 interface ExtraktionsListe {
   eintraege: { muster?: string; ring?: string; art: string }[];
 }
-const { artVon, EXTRAKTION_PFAD } = rawBesitz as unknown as { artVon: (liste: ExtraktionsListe, pfad: string) => string | null; EXTRAKTION_PFAD: string };
+const { artVon, EXTRAKTION_PFAD } = rawExtraktion as unknown as { artVon: (liste: ExtraktionsListe, pfad: string) => string | null; EXTRAKTION_PFAD: string };
 
 /** Getrackte Dateien der Arten `kern-test`, `test-hilfe` und `fixture` laut Extraktionsliste. */
 export const kernTestPfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));

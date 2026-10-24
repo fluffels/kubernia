@@ -6,6 +6,7 @@
  */
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { zerlegeRepo } from "./projekt-config-lib.mjs";
 
 /** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
 export const SPIEL_QUOTE = 3;
@@ -22,6 +23,20 @@ export const HARNESS_TAKT_KOMMENTARE = 10;
 export function befundKommentare(kommentare, owner) {
   if (!Array.isArray(kommentare)) throw new Error("kommentare muss eine Liste sein.");
   return kommentare.filter((k) => istVertraut(k?.user, owner) && !/\[bot\]$/i.test(String(k.user.login))).length;
+}
+
+/**
+ * Füllstand des Sammeltickets `nr` samt Laden und Fail-closed, die eine Stelle für Takt und Auswahl: `ladeKommentare(nr, repo)` liefert die flache Kommentar-Liste,
+ * gezählt wird mit `befundKommentare` für den Owner aus `repo` (`zerlegeRepo`). Rückgabe `{ wert }` oder, bei jedem Fehler (Laden, Antwortform, kaputtes Repo),
+ * `{ fehler }` mit der ersten Fehlerzeile: kein Wurf, der Aufrufer geht fail-closed vor. Der Lader ist I/O und kommt von außen.
+ */
+export function fuellstandVon({ nr, repo, ladeKommentare }) {
+  try {
+    const { owner } = zerlegeRepo(repo);
+    return { wert: befundKommentare(ladeKommentare(nr, repo), owner) };
+  } catch (e) {
+    return { fehler: `Kommentare von #${nr} nicht ladbar: ${e instanceof Error ? e.message.split(/\r?\n/)[0] : String(e)}` };
+  }
 }
 
 /**
