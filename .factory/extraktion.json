@@ -96,7 +96,6 @@
     {"muster":"test/harness/entfernte-pfade.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/entfernte-pfade-projekt.test.ts","art":"projekt-test","grund":"Muster hängen an der Projekthistorie (Repo-Name, Ticket-Skill), kein Besitz"},
     {"muster":"test/harness/extraktion.test.ts","art":"projekt-test","grund":"Wächter der einmaligen Extraktion, entfällt mit K9"},
-    {"muster":"test/harness/harness-approval-projekt.test.ts","art":"projekt-test","grund":"prüft Projektinhalt (Projekt-Stopps im Projekt-Block, Forum-Skill, modul-lokale AGENTS.md), kein Besitz (#1929)"},
     {"muster":"test/harness/factory-export.test.ts","art":"projekt-test","grund":"Test des einmaligen Export-Werkzeugs, entfällt mit K9 (#1882)"},
     {"muster":"test/harness/fence-ssot.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/flag-parser.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},

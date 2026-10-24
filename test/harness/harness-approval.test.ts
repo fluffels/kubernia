@@ -520,7 +520,7 @@ describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
 /**
  * Die geschlossene Liste der festen Pflicht-Stopps (Irreversibles, Außenwirkung), je Anker ein Name und ein Text. Die Kern-Stopps
  * stehen im Kern-Block `kern` der AGENTS.md (Besitz der Factory, zwischen den Besitz-Markern); die Projekt-Stopps im Projekt-Block
- * prüft `harness-approval-projekt.test.ts`. Grenze: der Wächter prüft Anker-Text und Permission-Einträge, nicht die Bedeutung. Die
+ * prüft `forum-stopps-projekt.test.ts`. Grenze: der Wächter prüft Anker-Text und Permission-Einträge, nicht die Bedeutung. Die
  * Kern-Ankerliste steht hier und im Projekt-Teil (der `KRITERIEN`-Scan nimmt beide Dateien aus).
  */
 const KERN_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen"];
@@ -528,7 +528,7 @@ const KERN_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "V
 const kernMarker = (f: (id: string) => string): string => (escapeRe as (t: string) => string)(f("kern"));
 const KERN_RE = new RegExp(`${kernMarker(markerStart as (id: string) => string)}([\\s\\S]*?)${kernMarker(markerEnde as (id: string) => string)}`);
 
-/** Kern-Stopps, die im Kern-Block fehlen (ohne Marker: alle). Die Projekt-Stopps im Projekt-Block prüft `harness-approval-projekt.test.ts`. */
+/** Kern-Stopps, die im Kern-Block fehlen (ohne Marker: alle). Die Projekt-Stopps im Projekt-Block prüft `forum-stopps-projekt.test.ts`. */
 function kernStoppsFehlend(agentsText: string): string[] {
   const kern = KERN_RE.exec(agentsText)?.[1] ?? "";
   return KERN_STOPPS.filter((anker) => !kern.includes(anker));
