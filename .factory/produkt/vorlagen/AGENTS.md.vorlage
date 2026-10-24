@@ -21,6 +21,10 @@
 
 Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks auf dem PR sind der maßgebliche Riegel. Jedes Gate muss grün sein; ein rotes Gate wird durch Beheben der Ursache grün, nie durch Aufweichen.
 
+### Verifikation
+
+- **Langfuse-Erfassung erhalten (#1293).** Agenten, Subagenten, MCP-Server, Hooks (Registrierung), Plugins geändert: PR belegt per Probe-Lauf, dass Langfuse sie erfasst; [Wann/Ablauf](docs/model-routing.md#langfuse-erfassung-belegen-1293). **Vorbedingung:** kein Ticketlauf startet ohne erreichbares Langfuse (`node scripts/langfuse-vorbedingung.mjs`, Exit 1: stoppen, melden).
+
 ## Architektur
 
 Das Repository besteht aus Node-Skripten (`scripts/`), Tests (`test/`), Agenten, Skills und Hooks (`.claude/`, `.agents/`) und der Doku (`docs/`). Es gibt keine Anwendungsschichten und keinen Build. Die Tests laufen mit Vitest, die Skripte sind reine ES-Module ohne Abhängigkeiten außer Node-Builtins und `yaml`.
