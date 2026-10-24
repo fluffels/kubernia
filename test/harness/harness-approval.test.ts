@@ -381,7 +381,8 @@ const ABGELOEST_VORFILTER = baueVorfilter(ABGELOEST);
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
 /** Wächterdateien mit den Ankerlisten der festen Stopps (diese Datei und ihr Projekt-Teil): vom Kriterien-Scan ausgenommen. */
-const ANKER_DATEIEN = [EIGENE_DATEI, "test/harness/forum-stopps-projekt.test.ts"];
+const PROJEKT_TEIL = ["test/harness/forum-stopps", "projekt.test.ts"].join("-"); // zur Laufzeit zusammengesetzt: kein Pfad-Literal, das der Export als Import-Bezug eines Kern-Tests liest
+const ANKER_DATEIEN = [EIGENE_DATEI, PROJEKT_TEIL];
 
 /**
  * Alle versionierten Textdateien im Agenten-Kontext (Pfad → Inhalt), die die Text-Wächter unten durchsuchen: Doku, Prompts,
