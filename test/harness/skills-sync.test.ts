@@ -19,7 +19,7 @@ import * as besitzLibModul from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL } from "../../scripts/skill-pfade.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 const maskiere = escapeRegex as (s: string) => string;
@@ -30,7 +30,7 @@ interface Quelle { ordner: string; text: string | null }
 interface Zeiger { ordner: string; text: string | null; dateien: string[] }
 interface LaufErgebnis { befunde: Befund[]; unbrauchbar: string[]; geschrieben: string[]; geloescht: string[]; gemeldet: string[] }
 // Typisierung des .mjs-Imports per Assertion (Muster test/docdrift.test.ts), keine neuen eslint-Suppressions.
-const sync = skillsSyncModul as unknown as {
+const sync = { ...(skillsSyncModul as object), zeigerText } as unknown as {
   zeigerText: (name: string, quelltext: string) => string;
   pruefeSkills: (a: { quellen: Quelle[]; zeiger: Zeiger[]; lose?: string[] }) => Befund[];
   liesStand: (wurzel: string) => { quellen: Quelle[]; zeiger: Zeiger[]; lose: string[] };

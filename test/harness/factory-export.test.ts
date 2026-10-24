@@ -21,6 +21,12 @@ import * as rawLib from "../../scripts/factory-export-lib.mjs";
 import * as rawSync from "../../scripts/factory-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawSkills from "../../scripts/skills-sync.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 
 interface Leser {
   fehler?: string;
@@ -578,6 +584,25 @@ describe("Export aus HEAD", () => {
     const layers = createRequire(import.meta.url)(join(dir, "scripts/layers.cjs")) as { LAYERS: Record<string, string>; layerOf: (f: string) => string };
     assert.deepEqual(Object.values(layers.LAYERS).sort(), ["anwendung", "domaene", "einstieg", "praesentation"]);
     assert.equal(layers.layerOf("scripts/check-size.mjs"), layers.LAYERS.DOMAIN, "alles übrige unter der Quellwurzel ist die Auffang-Schicht");
+  });
+
+  test("#1930: Ticket-Skill der Rolle ticketSkill und sein Zeiger liegen im Export, Name aus der Config, nur der Produkt-Bereich", () => {
+    const quellPfad = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+    const ordner = quellPfad.split("/").slice(-2, -1)[0];
+    const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
+    const quelle = text(quellPfad);
+    assert.ok(quelle.length > 0, `${quellPfad} fehlt im Export`);
+    const factory = JSON.parse(text(".factory/projekt.json")) as { agenten: { ticketSkill: string } };
+    assert.match(quelle, new RegExp(`# factory:projektwert agenten\.ticketSkill\nname: ${factory.agenten.ticketSkill}\n`));
+    assert.ok(quelle.includes("--bereich spiel"));
+    assert.ok(!quelle.includes("--bereich agentic"));
+    const zeiger = text(`${String(ZEIGER_WURZEL)}/${ordner}/SKILL.md`);
+    assert.equal(zeiger, (zeigerText as (n: string, t: string) => string)(ordner, quelle), "der Zeiger ist aus der gerenderten Quelle berechnet");
+    const z = leerOrdner();
+    assert.equal(lauf(["--ziel", z], leser).code, 0);
+    const stand = (rawSkills as unknown as { liesStand(w: string): unknown; pruefeSkills(s: unknown): unknown[] });
+    assert.deepEqual(stand.pruefeSkills(stand.liesStand(z)), []);
+    assert.doesNotMatch(quelle + zeiger, /kubernia|KQ/i);
   });
 
   test("Lock: Wurzel entspricht der Vorlage, jede Wurzel-Abhängigkeit hat einen Eintrag, Einträge sind unverändert aus kubernia", () => {
