@@ -206,10 +206,12 @@ describe("Prüfungen (pur)", () => {
       ["scripts/da.mjs", ""],
       ["docs/x.md", "scripts/ignoriert.mjs"],
       [".github/workflows/ci.yml", "run: node scripts/weg.cjs"],
+      [".claude/settings.json", '{"command":"node scripts/hook.mjs"}'],
     ]);
     const r = lib.pruefeSkriptBezuege(d).befunde.join("|");
     assert.match(r, /package\.json: nennt scripts\/fehlt\.mjs/);
     assert.match(r, /ci\.yml: nennt scripts\/weg\.cjs/);
+    assert.match(r, /settings\.json: nennt scripts\/hook\.mjs/);
     assert.doesNotMatch(r, /da\.mjs|ignoriert/);
   });
 
@@ -345,6 +347,8 @@ describe("Export aus HEAD", () => {
     const liste = JSON.parse(text(".factory/extraktion.json")) as { eintraege: { art: string }[] };
     assert.deepEqual([...new Set(liste.eintraege.map((e) => e.art))].sort(), ["fixture", "kern-test", "test-hilfe"]);
     assert.equal(text("test/harness/kern-literale-baseline.json"), "{}\n");
+    const mitBaseline = ex.baueExport({ leser: mitAenderung(leser, { "test/harness/kern-literale-baseline.json": '{"scripts/x.mjs":{"Repo":3}}' }) });
+    assert.equal(mitBaseline.dateien.get("test/harness/kern-literale-baseline.json")?.text, "{}\n");
     assert.equal(text("test/harness/kern-links-baseline.json"), leser.lies("test/harness/kern-links-baseline.json"));
     assert.equal(text(".factory/besitz.json"), leser.lies(".factory/besitz.json"));
   });
