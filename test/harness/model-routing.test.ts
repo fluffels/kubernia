@@ -543,7 +543,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
       erlaubt.filter((r) => r.startsWith("mcp__langfuse__")).sort(),
       "Langfuse-Tools: Umsetzer-`tools:` und `permissions.allow` in .claude/settings.json müssen dieselbe Menge sein",
     );
-    // Darf NICHT passieren: andere Server (PixelLab bleibt im Hauptchat, Claude in Chrome ist
+    // Darf NICHT passieren: andere Server (Projekt-Module bleiben im Hauptchat, Claude in Chrome ist
     // gesperrt) und Node-Code im Serverprozess (steht in settings.json bewusst auf ask).
     // Langfuse nur lesend: der Server bietet auch create/update/upsert/delete an.
     const LANGFUSE_LESEN = new Set(["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"]);

@@ -108,8 +108,8 @@ describe("Kontext-Sockel (#1198)", { timeout: 30_000 }, () => {
       assert.deepEqual(toolsProbleme('"*"'), ["unzulässiges Tool *"]);
       assert.deepEqual(toolsProbleme("[Read, Skill]"), ["unzulässiges Tool Skill"]);
       assert.deepEqual(toolsProbleme("Read, Skill(forum)"), ["unzulässiges Tool Skill(forum)"]);
-      assert.deepEqual(toolsProbleme("Read, mcp__pixellab__*"), ["unzulässiges Tool mcp__pixellab__*"]);
-      assert.deepEqual(toolsProbleme("Read, mcp__playwright"), ["unzulässiges Tool mcp__playwright"]);
+      assert.deepEqual(toolsProbleme("Read, mcp__acme__*"), ["unzulässiges Tool mcp__acme__*"]);
+      assert.deepEqual(toolsProbleme("Read, mcp__acme"), ["unzulässiges Tool mcp__acme"]);
       assert.deepEqual(toolsProbleme("mcp__playwright__browser_click, mcp__claude_ai_Notion__fetch"), []);
       assert.deepEqual(toolsProbleme("Read, Grep, Agent"), []);
     });

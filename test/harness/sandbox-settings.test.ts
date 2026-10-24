@@ -7,7 +7,8 @@
  * der Block nicht still ausgehöhlt wird:
  *   1. Flags exakt (`enabled`, `allowUnsandboxedCommands: false`), kein `failIfUnavailable` im Projekt
  *      (würde native Windows-Sessions aussperren), keine abschwächenden Schlüssel.
- *   2. Die Netz-Allowlist ist eng (kein Voll-Wildcard) und deckungsgleich mit der Doku-Tabelle.
+ *   2. Die Netz-Allowlist ist eng (kein Voll-Wildcard); ihr Kern-Anteil (ohne die Ergänzung der Projekt-Config) ist deckungsgleich mit den
+ *      Tabellenzeilen „Projekt“, die Ergänzung steht vollständig in der Liste (ihre Werte prüft ein Projekt-Test).
  *   3. Secret-Pfade stehen in `filesystem.denyRead` UND als `Read(...)`-deny (Read läuft außerhalb der Sandbox).
  *   4. `filesystem.denyWrite` deckt jedes Hook-/MCP-Skript samt lokalen Importen ab (Hooks laufen ungesandboxt).
  *   5. Keine persönlichen Pfade im Block.
@@ -20,6 +21,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { hookSkripte, lokaleImporteTransitiv, mcpSkripte } from "./hook-importe";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPc from "../../scripts/projekt-config-lib.mjs";
+
+const pc = rawPc as unknown as { sandboxAus(config: unknown): { allowedDomains: string[] } };
 
 type Sandbox = {
   enabled?: boolean;
@@ -144,8 +149,16 @@ describe("Agenten-Sandbox-Konfiguration (#1432)", () => {
   test("Allowlist eng und deckungsgleich mit der Doku-Tabelle", () => {
     const domains = sb.network?.allowedDomains;
     assert.deepEqual(allowlistVerstoesse(domains), []);
+    // Die Zeilen „Projekt“ der Tabelle entsprechen dem Kern-Anteil (die Liste ohne die Ergänzung der Projekt-Config).
+    const erg = pc.sandboxAus(JSON.parse(read(".factory/projekt.json"))).allowedDomains;
+    const kernAnteil = (domains ?? []).filter((d) => !erg.includes(d));
     const tabelle = tabellenDomains(read("docs/agent-harness.md"));
-    assert.deepEqual([...(domains ?? [])].sort(), [...tabelle].sort(), "allowedDomains und Tabelle (Quelle „Projekt“) weichen ab");
+    assert.deepEqual([...kernAnteil].sort(), [...tabelle].sort(), "Kern-Anteil von allowedDomains und Tabelle (Quelle „Projekt“) weichen ab");
+  });
+
+  test("jede Domain der Ergänzung steht in allowedDomains (die Ergänzung wirkt unverändert)", () => {
+    const erg = pc.sandboxAus(JSON.parse(read(".factory/projekt.json"))).allowedDomains;
+    for (const d of erg) assert.ok((sb.network?.allowedDomains ?? []).includes(d), `${d} fehlt in .claude/settings.json`);
   });
 
   test("Secret-Pfade stehen in denyRead UND als Read-deny, /mnt in denyRead", () => {
@@ -192,7 +205,7 @@ describe("Red-Green: die Hilfsfunktionen erkennen Verfälschungen", () => {
     assert.equal(allowlistVerstoesse(["*.com"]).length, 1);
     assert.equal(allowlistVerstoesse(["https://github.com"]).length, 1);
     assert.equal(allowlistVerstoesse(["a*.example.com"]).length, 1);
-    assert.deepEqual(allowlistVerstoesse(["*.pixellab.ai", "github.com"]), []);
+    assert.deepEqual(allowlistVerstoesse(["*.beispiel.example", "github.com"]), []);
   });
 
   test("Read-deny-Normalisierung und fehlende Pfade", () => {
@@ -219,6 +232,7 @@ describe("Red-Green: die Hilfsfunktionen erkennen Verfälschungen", () => {
       "| `github.com` | git | Projekt |",
       "| `<Host aus X>` | Langfuse | nur User-Vorlage |",
       "| `<Host>` | x | Projekt |",
+      "| `ergaenzung.example` | z | Ergänzung |",
       "### Nächster",
       "| `fremd.de` | y | Projekt |",
     ].join("\n");

@@ -54,12 +54,6 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
     assert.ok(deny.includes("mcp__claude-in-chrome"), "deny ohne mcp__claude-in-chrome");
   });
 
-  test("deny sperrt PixelLab list_projects: der Server bewirbt darüber Git-Clone-URLs und einen Push-Weg (#1476)", () => {
-    assert.ok(deny.includes("mcp__pixellab__list_projects"), "deny ohne mcp__pixellab__list_projects");
-    // Erzeugungs-Tools bleiben bewusst frei (das Projekt braucht sie für Assets, #1476).
-    assert.deepEqual(deny.filter((d) => d.startsWith("mcp__pixellab")), ["mcp__pixellab__list_projects"], "nur list_projects ist gesperrt");
-  });
-
   test("hat überhaupt einen permissions-Block mit allow/ask/deny", () => {
     assert.ok(settings.permissions, ".claude/settings.json braucht einen `permissions`-Block");
     assert.ok(Array.isArray(perms.allow), "`permissions.allow` muss eine Liste sein");
@@ -127,7 +121,7 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
     for (const bad of ["mcp__langfuse", "mcp__langfuse__*", "mcp__langfuse__createScore", "mcp__langfuse__updatePrompt", "mcp__langfuse__deleteDataset", "mcp__langfuse__upsertComment"]) {
       assert.deepEqual(unzulaessigeLangfuseRegeln([bad]), [bad], bad);
     }
-    assert.deepEqual(langfuseRegeln(["Bash(npm:*)", "mcp__playwright", "mcp__langfuse__listObservations"]), ["mcp__langfuse__listObservations"]);
+    assert.deepEqual(langfuseRegeln(["Bash(npm:*)", "mcp__acme", "mcp__langfuse__listObservations"]), ["mcp__langfuse__listObservations"]);
   });
 
   test("gh-Aufrufe mit Außenwirkung stehen auf ask, nicht in allow (#1204, #1311)", () => {

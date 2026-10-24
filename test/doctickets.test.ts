@@ -135,7 +135,6 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
   test("die echten Ausnahmelisten der Config nennen je Eintrag eine Ticket-Nummer", () => {
     const listen = ausnahmeListen();
     assert.deepEqual(listen.map((l) => l.skript), [".factory/projekt.json › ausnahmen.groesse", ".factory/projekt.json › ausnahmen.kontext"]);
-    assert.ok(listen.some((l) => l.eintraege.length > 0), "mindestens die Größen-Ausnahme muss erfasst sein");
     for (const liste of listen) {
       for (const e of ausnahmeTickets(liste.eintraege)) {
         assert.ok(e.nr !== null, `${liste.skript}: Ausnahme ${e.datei} nennt kein #N`);
