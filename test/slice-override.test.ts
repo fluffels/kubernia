@@ -431,3 +431,16 @@ describe("commitImSlice / loeseCommit (#1781 L5a): head im Slice an einer Stelle
     expect(so.commitImSlice(git, BASE, IM_SLICE).imSlice).toBe(false);
   });
 });
+
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as abschlussRoh from "../scripts/umsetzer-abschluss.mjs";
+
+const abschluss = abschlussRoh as unknown as { leitplankenMuster: () => string[]; trifftLeitplanke: (pfad: string, muster: string[]) => boolean };
+
+describe("Schutzliste (.github/protected-paths.json, #1929): der Kopfkommentar von slice-override.mjs nennt sie als Quelle", () => {
+  it("scripts/slice-override.mjs ist eine Leitplanke der echten Liste, und ohne seinen Eintrag wäre es keine", () => {
+    const muster = abschluss.leitplankenMuster();
+    expect(abschluss.trifftLeitplanke("scripts/slice-override.mjs", muster)).toBe(true);
+    expect(abschluss.trifftLeitplanke("scripts/slice-override.mjs", muster.filter((m) => m !== "/scripts/slice-override.mjs"))).toBe(false);
+  });
+});

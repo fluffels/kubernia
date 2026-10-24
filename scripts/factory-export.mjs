@@ -204,11 +204,10 @@ export function baueExport({ leser }) {
   }
   const schutz = dateien.get(SCHUTZ_QUELLE);
   const eigner = dateien.get(CODEOWNERS);
-  const schutzQuelle = lies(SCHUTZ_QUELLE);
-  if (schutz === undefined || eigner === undefined || schutzQuelle === null) {
-    befunde.push(`${SCHUTZ_QUELLE} und ${CODEOWNERS} gehören in den Export (Vorlagen und Quelle)`);
+  if (schutz === undefined || eigner === undefined) {
+    befunde.push(`${SCHUTZ_QUELLE} und ${CODEOWNERS} gehören in den Export (je eine Vorlage, Art infrastruktur-anteil)`);
   } else {
-    befunde.push(...pruefeSchutzliste({ vorlage: schutz.text, codeowners: eigner.text, quelle: schutzQuelle, pfade: [...exportPfade] }));
+    befunde.push(...pruefeSchutzliste({ vorlage: schutz.text, codeowners: eigner.text, quelle: lies(SCHUTZ_QUELLE), pfade: [...exportPfade] }));
   }
   const manifestPfade = manifest.eintraege.map((e) => e.pfad);
   for (const pfad of projektwertDateien(manifestPfade, [...dateien.keys()])) {
