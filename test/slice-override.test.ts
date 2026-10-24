@@ -33,7 +33,6 @@ const so = raw as unknown as {
   staleOverrideHinweis: (key: string, warum: string) => string;
   commitZeilen: (praefix?: unknown, planer?: unknown) => Zeilen;
   commitZeilenAus: (config: unknown) => Zeilen;
-  commitZeilenAus: (config: unknown) => Zeilen;
   ladeCommitZeilen: (opt?: { rootDir?: string; pfad?: string }) => Zeilen;
   ladeCommitZeilenOderBeende: (o?: { laden?: () => Zeilen; fehler?: (s: string) => void; exit?: (code: number) => void }) => Zeilen | undefined;
   parseOverrideTrailers: (text: string, key: string) => { valid: { nr: number; reason: string }[]; invalid: string[] };
