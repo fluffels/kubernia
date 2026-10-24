@@ -1,0 +1,12 @@
+{
+  "statusLine": { "type": "command", "command": "node scripts/statusline.mjs" },
+  "model": "sonnet",
+  "env": {
+    "CC_LANGFUSE_TRACE_TAGS": "factory"
+  },
+  "enabledPlugins": {
+    "langfuse-observability@langfuse-observability": true
+  },
+  "disableClaudeAiConnectors": true,
+  "skillListingMaxDescChars": 300
+}

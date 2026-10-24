@@ -424,8 +424,8 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
     const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
     const env = { FACTORY_DIFF_BASE: "basesha" };
-    const kq = checkDiffCoverage({ runGit: mitTrailer(runGit, `${ZEILEN.diffcovOverride}: #1021 bewusst`), readFile, env, zeilen: ZEILEN_AB });
-    assert.equal(kq.failed, true, "die Zeile der Fremd-Config zählt bei AB- nicht");
+    const fremd = checkDiffCoverage({ runGit: mitTrailer(runGit, `${ZEILEN.diffcovOverride}: #1021 bewusst`), readFile, env, zeilen: ZEILEN_AB });
+    assert.equal(fremd.failed, true, "die Zeile der Fremd-Config zählt bei AB- nicht");
     const ab = checkDiffCoverage({ runGit: mitTrailer(runGit, "AB-Diffcov-Override: #1021 bewusst"), readFile, env, zeilen: ZEILEN_AB });
     assert.equal(ab.failed, false);
   });

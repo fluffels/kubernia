@@ -4,6 +4,8 @@
   "scripts/pack-sprites.mjs": {"art":"projekt","grund":"Sprite-Packer des Spiels"},
   "scripts/quiz-golden.mjs": {"art":"projekt","grund":"Quiz-Golden-Werkzeug des Spiels"},
   "scripts/check-bundle.mjs": {"art":"projekt","grund":"Bundle-Budget des Spiels"},
+  "scripts/factory-export.mjs": {"art":"projekt","grund":"einmaliges Export-Werkzeug des Factory-Repos, entfällt mit K9 (#1882)"},
+  "scripts/factory-export-lib.mjs": {"art":"projekt","grund":"Prüfungen und Lock-Auszug des einmaligen Export-Werkzeugs, entfällt mit K9 (#1882)"},
   "scripts/docs-gen/config.json": {"art":"projekt","grund":"Projekt-Config des Doku-Generators"},
   ".github/workflows/deploy-validate.yml": {"art":"projekt","grund":"Deploy-Prüfung des Projekts"},
   ".github/workflows/release.yml": {"art":"projekt","grund":"Release des Projekts"},
