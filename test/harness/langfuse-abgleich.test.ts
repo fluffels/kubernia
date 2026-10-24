@@ -538,6 +538,29 @@ describe("Kosten, Überzählung, Hinweis Modellpreis", () => {
     expect(A.summenzeile([bew(undefined)])).toMatchObject({ kostenLangfuse: null, ueberzaehlung: null });
   });
 
+  test("Summenzeile: Kosten T und L über dieselbe Menge (nur Sessions mit Kosten-Export), die übrigen zählt ohneKostenExport", () => {
+    const mit = bew(T);
+    const ohne = bew(undefined);
+    const s = A.summenzeile([mit, ohne, ohne]) as unknown as Record<string, number | null>;
+    expect(s.kostenTranskript).toBeCloseTo(T, 12);
+    expect(s.kostenLangfuse).toBeCloseTo(T, 12);
+    expect(s.ohneKostenExport).toBe(2);
+    expect(A.summenzeile([mit, mit])).toMatchObject({ ohneKostenExport: 0 });
+    // ohne jeden Export gibt es keine L-Seite zum Vergleichen: T bleibt die Summe aller festen Sessions
+    const keiner = A.summenzeile([ohne, ohne]) as unknown as Record<string, number | null>;
+    expect(keiner.kostenLangfuse).toBeNull();
+    expect(keiner.kostenTranskript).toBeCloseTo(2 * T, 12);
+    expect(keiner.ohneKostenExport).toBe(2);
+    // eine laufende Session zählt auch hier nicht
+    expect(A.summenzeile([mit, bew(undefined, { mtime: now - 60_000 })])).toMatchObject({ ohneKostenExport: 0 });
+  });
+
+  test("Bericht: die Summenzeile nennt Sessions ohne Kosten-Export, sonst keinen Zusatz", () => {
+    const md = (b: Bewertung[]) => A.renderMarkdown(b, A.summenzeile(b));
+    expect(md([bew(T), bew(undefined), bew(undefined)])).toMatch(/\*\*Summe:\*\*.*Kosten [\d,.]+ \/ [\d,.]+ \$.*; ohne Kosten-Export: 2\./);
+    expect(md([bew(T)])).not.toContain("ohne Kosten-Export");
+  });
+
   test("Bericht: eine laufende Session (Ruhefrist) erzeugt keine Überzählungs- und keine Hinweiszeile; Überzählung 0 wird nicht gemeldet", () => {
     const md = (b: Bewertung[]) => A.renderMarkdown(b, A.summenzeile(b));
     const dubLaeuft = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T }, mtime: now - 60_000, now });
