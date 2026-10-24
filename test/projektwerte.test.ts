@@ -39,7 +39,7 @@ const CONFIG: Cfg = {
   labels: { harness: "area:werk" },
   skills: { abschluss: "wk-abschluss" },
 };
-const FM = "---\n# factory:projektwert agenten.planer\nname: kubernia-planer\nmodel: opus\n---\n# Text\n";
+const FM = "---\n# factory:projektwert agenten.planer\nname: alt-planer\nmodel: opus\n---\n# Text\n";
 
 describe("projektwertStellen", () => {
   test("findet Block und Frontmatter-Zeile mit Zeilenindex", () => {
@@ -158,7 +158,7 @@ const schreibe = (w: string, rel: string, text: string): void => {
 };
 const lies = (w: string, rel: string): string => readFileSync(join(w, ...rel.split("/")), "utf8");
 function projekt(): string {
-  const w = mkdtempSync(join(tmpdir(), "kq-pw-"));
+  const w = mkdtempSync(join(tmpdir(), "pw-"));
   temps.push(w);
   const echt = JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { agenten: Record<string, string> };
   echt.agenten.planer = "wk-planer";
@@ -253,7 +253,7 @@ describe("projektwerte CLI", () => {
     assert.match(ohne.err, /Projekt-Config/);
   });
   test("ohne Stellen wird keine Config gebraucht", () => {
-    const w = mkdtempSync(join(tmpdir(), "kq-pw-"));
+    const w = mkdtempSync(join(tmpdir(), "pw-"));
     temps.push(w);
     schreibe(w, ".claude/agents/a.md", "---\nname: x\n---\n");
     assert.equal(lauf(["--check"], w).code, 0);

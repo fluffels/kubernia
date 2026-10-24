@@ -59,10 +59,25 @@ export const RESTE: Rest[] = [
     muster: /\b(?:altNameZuPraefix|ladeAltPraefix|standardAltPraefix)\b/,
     fix: "Kern-Variablen nur als FACTORY_<NAME> lesen; gesetzte Altnamen meldet harness-doctor --pruefen",
   },
+  {
+    name: "Baseline der Kern-Test-Literale",
+    muster: /kern-test-literale-baseline/,
+    fix: "für Kern-Tests gilt die Null-Regel ohne Baseline: Projektwerte aus FREMD bzw. projektConfig() nehmen, Projektinhalt in einen projekt-test",
+  },
 ];
 
 const reste = (dateien: Datei[]): string[] => findeReste(dateien, RESTE);
 const meldungKern = (treffer: string[]): string => meldungMitFix(treffer, RESTE);
+
+/** Entfernte Dateien, die nie wieder angelegt werden dürfen (exakter Pfad, je Eintrag der Grund). */
+export const ENTFERNTE_DATEIEN: { pfad: string; grund: string }[] = [
+  { pfad: "test/harness/kern-test-literale-baseline.json", grund: "Null-Regel der Kern-Tests (#1903)" },
+];
+
+/** Meldungen für wieder angelegte entfernte Dateien; leer = sauber. */
+export function entfernteDateien(pfade: string[]): string[] {
+  return ENTFERNTE_DATEIEN.filter((e) => pfade.includes(e.pfad)).map((e) => `${e.pfad}: entfernte Datei wieder angelegt (${e.grund})`);
+}
 
 describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", () => {
   test("das Repo ist frei von Resten außerhalb der begründeten Ausnahmen", () => {
@@ -70,6 +85,20 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.ok(dateien.length > 200, "Dateiliste unerwartet klein: git ls-files fehlgeschlagen?");
     const treffer = reste(dateien);
     assert.deepEqual(treffer, [], `${meldungKern(treffer)}\nTreffer: ${treffer.join(", ")}`);
+  });
+
+  describe("entfernte Dateien (#1903)", () => {
+    test("im echten Repo ist keine entfernte Datei wieder angelegt", () => {
+      assert.deepEqual(entfernteDateien(getrackteTextdateien().map((d) => d.pfad)), []);
+    });
+    test("Negativfall: eine wieder angelegte Baseline-Datei ist genau eine Meldung mit Pfad und Grund", () => {
+      const meldungen = entfernteDateien(["README.md", ENTFERNTE_DATEIEN[0].pfad]);
+      assert.equal(meldungen.length, 1);
+      assert.ok(meldungen[0].startsWith(ENTFERNTE_DATEIEN[0].pfad) && meldungen[0].includes("Null-Regel"));
+    });
+    test("ein Nachbarpfad mit ähnlichem Namen löst nicht aus", () => {
+      assert.deepEqual(entfernteDateien(["test/harness/kern-test-literale.json"]), []);
+    });
   });
 
   test("jede Regel nennt einen konkreten Fix-Hinweis", () => {
@@ -161,6 +190,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
       "Altnamen-Rückfall": "const alt = altNameZuPraefix(name, praefix);",
       "Härtungs-Takt nach Merge-Zahl": "export const HARNESS_TAKT_MERGES = 5;",
+      "Baseline der Kern-Test-Literale": "gelesen aus test/harness/kern-test-literale-baseline.json",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);

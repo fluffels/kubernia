@@ -441,7 +441,9 @@ describe("zaehle", () => {
   test("Owner, Repo (auch in Zusammensetzungen), Board-ID und Zelda zählen; Bezeichner PROJECT_ID allein nicht", () => {
     assert.deepEqual(zaehle("Demo DEMO demo-umsetzer", B), { Repo: 3 });
     assert.deepEqual(zaehle("x acme y", B), { Owner: 1 });
-    assert.deepEqual(zaehle("PVT_kwHOabc PVTSSF_xyz_1", B), { "Board-ID": 2 });
+    // zur Laufzeit zusammengesetzt: ein ausgeschriebenes Literal dieses Musters wäre in diesem Kern-Test selbst ein Treffer
+    const pvt = (rest: string): string => "PVT" + rest;
+    assert.deepEqual(zaehle(`${pvt("_kwHOabc")} ${pvt("SSF_xyz_1")}`, B), { "Board-ID": 2 });
     assert.deepEqual(zaehle("const PROJECT_ID = 1", B), {});
     assert.deepEqual(zaehle("docs/zelda-referenz.md", B), { Zelda: 1 });
     assert.deepEqual(zaehle("Größe über Äpfel", B), {});
@@ -464,11 +466,11 @@ describe("begriffeAus", () => {
     assert.deepEqual(zaehle("alice bob carol", drei), { Owner: 3 });
     assert.deepEqual(zaehle("acme", B), { Owner: 1 });
   });
-  test("projektliterale zählen als ganzes Wort (Unicode-Wortgrenzen): Phaser ja, phaseRows und Phaserx nein", () => {
-    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Phaser: "phaser" } });
-    assert.deepEqual(zaehle("phaseRows", b2), {});
-    assert.deepEqual(zaehle("Phaserx xphaser phaser_x 1phaser", b2), {});
-    assert.deepEqual(zaehle("Phaser phaser-frei Phaser.Scene (Phaser) PHASER", b2), { Phaser: 5 });
+  test("projektliterale zählen als ganzes Wort (Unicode-Wortgrenzen): Motor ja, motoRows und Motorx nein", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Motor: "motor" } });
+    assert.deepEqual(zaehle("motoRows", b2), {});
+    assert.deepEqual(zaehle("Motorx xmotor motor_x 1motor", b2), {});
+    assert.deepEqual(zaehle("Motor motor-frei Motor.Scene (Motor) MOTOR", b2), { Motor: 5 });
   });
   test("projektliterale: ein Umlaut grenzt als Buchstabe, Nicht-Buchstaben davor und dahinter nicht", () => {
     const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Hof: "hof" } });
@@ -1000,42 +1002,55 @@ describe("Kern-Reinheit (#1610)", () => {
   });
 });
 
-describe("Projektbezüge nicht in den Prompts (#1843)", () => {
-  test("Dev-Helfer und Anti-Corruption-Begriff stehen in der Projekt-Config, sonst wäre der Wächter still aus", () => {
-    assert.ok(echteBegriffe.kqDev?.test("kqDev"), "projektliterale.kqDev fehlt");
-    assert.ok(echteBegriffe.Hafen?.test("Hafen"), "projektliterale.Hafen fehlt");
-    assert.ok(echteBegriffe.Phaser?.test("Phaser.Scene"), "projektliterale.Phaser fehlt (Engine-Name nicht im Kern)");
+describe("Jedes Projektliteral der Config ist ein Begriff des Wächters (#1843)", () => {
+  const literale = Object.entries(projektConfig().projektliterale ?? {});
+  test("die Config trägt Projektliterale, sonst wäre der Wächter still aus", () => {
+    assert.ok(literale.length > 0, "projektliterale fehlt in der Projekt-Config");
+  });
+  test.each(literale)("das Literal %s zählt als ganzes Wort, in Wort-Nachbarschaft nicht", (begriff, wert) => {
+    const re = echteBegriffe[begriff];
+    assert.ok(re, `projektliterale.${begriff} ist kein Begriff des Wächters`);
+    // `zaehle` statt `test`: die Regex sind global und tragen lastIndex
+    assert.deepEqual(zaehle(wert.toUpperCase(), { [begriff]: re }), { [begriff]: 1 });
+    assert.deepEqual(zaehle(`x${wert}x`, { [begriff]: re }), {});
   });
 });
 
-describe("Stardew-Regeln nicht im Kern (#1709, ADR 0022 F5)", () => {
-  const stardew = echteBegriffe.Stardew;
+describe("Projektliterale nicht im Kern (#1709, ADR 0022 F5)", () => {
+  const agentsText = lesenWurzel("AGENTS.md") ?? "";
+  const projektBlock = agentsText.slice(agentsText.indexOf("<!-- factory-projekt:start -->"));
+  // das erste Projektliteral, das im Projekt-Block der Kontextdatei vorkommt (dort ist es erlaubt)
+  const gewaehlt = Object.entries(projektConfig().projektliterale ?? {}).find(([, wert]) => projektBlock.toLowerCase().includes(wert.toLowerCase()));
+  assert.ok(gewaehlt, "projektliterale leer oder nicht im Projekt-Block der Kontextdatei");
+  const [BEGRIFF, WORT] = gewaehlt;
+  const begriff = echteBegriffe[BEGRIFF];
   const IST = (lies: (p: string) => string | null): Baseline => istZaehlung(manifest.eintraege, lies, echteBegriffe);
   const mitAnhang = (pfad: string, anhang: string) => (p: string): string | null => (p === pfad ? (lesenWurzel(p) ?? "") + "\n" + anhang + "\n" : lesenWurzel(p));
 
   test("der Begriff steht in der Projekt-Config und zählt ohne Beachtung der Groß-/Kleinschreibung", () => {
-    assert.ok(stardew, "projektliterale.Stardew fehlt in .factory/projekt.json, der Wächter wäre still aus");
-    assert.deepEqual(zaehle("STARDEW stardew Stardew", { Stardew: stardew }), { Stardew: 3 });
+    assert.ok(begriff, `projektliterale.${BEGRIFF} fehlt in der Projekt-Config, der Wächter wäre still aus`);
+    const schreibungen = [WORT.toUpperCase(), WORT.toLowerCase(), WORT[0].toUpperCase() + WORT.slice(1).toLowerCase()].join(" ");
+    assert.deepEqual(zaehle(schreibungen, { [BEGRIFF]: begriff }), { [BEGRIFF]: 3 });
   });
 
-  test("keine Kern-Einheit trägt den Begriff, die Baseline kennt ihn nicht mehr", () => {
-    const treffer = Object.entries(IST(lesenWurzel)).filter(([, z]) => "Stardew" in z).map(([einheit]) => einheit);
+  test("keine Kern-Einheit trägt irgendein Projektliteral, die Baseline kennt keines", () => {
+    const namen = Object.keys(projektConfig().projektliterale ?? {});
+    const treffer = Object.entries(IST(lesenWurzel)).filter(([, z]) => namen.some((n) => n in z)).map(([einheit]) => einheit);
     assert.deepEqual(treffer, []);
-    assert.deepEqual(Object.values(baseline).filter((z) => "Stardew" in z), []);
+    assert.deepEqual(Object.values(baseline).filter((z) => namen.some((n) => n in z)), []);
   });
 
   test("ein eingeschleuster Treffer ist rot, in einer Markdown- und in einer Skript-Einheit", () => {
     const md = ".claude/agents/factory-planer.md";
     const skript = "scripts/check-size.mjs";
-    assert.deepEqual(vergleiche(IST(mitAnhang(md, "stardew")), baseline), [`${md}: neues Projektliteral 'Stardew' (1x), Kern-Einheiten bleiben literalfrei`]);
-    assert.deepEqual(vergleiche(IST(mitAnhang(skript, "// STARDEW")), baseline), [`${skript}: neues Projektliteral 'Stardew' (1x), Kern-Einheiten bleiben literalfrei`]);
+    assert.deepEqual(vergleiche(IST(mitAnhang(md, WORT.toLowerCase())), baseline), [`${md}: neues Projektliteral '${BEGRIFF}' (1x), Kern-Einheiten bleiben literalfrei`]);
+    assert.deepEqual(vergleiche(IST(mitAnhang(skript, `// ${WORT.toUpperCase()}`)), baseline), [`${skript}: neues Projektliteral '${BEGRIFF}' (1x), Kern-Einheiten bleiben literalfrei`]);
   });
 
   test("im Projekt-Block der AGENTS.md ist der Begriff erlaubt (nur der Kern-Block zählt)", () => {
-    const agents = lesenWurzel("AGENTS.md") ?? "";
-    assert.match(agents.slice(agents.indexOf("<!-- factory-projekt:start -->")), /Stardew/);
-    const imBlock = (p: string): string | null => (p === "AGENTS.md" ? agents.replace("<!-- factory-projekt:ende -->", "Stardew zusätzlich im Projekt-Block\n<!-- factory-projekt:ende -->") : lesenWurzel(p));
-    assert.ok(imBlock("AGENTS.md")?.includes("Stardew zusätzlich"), "der Anhang landet im Projekt-Block");
+    const einschub = `${WORT} zusätzlich im Projekt-Block`;
+    const imBlock = (p: string): string | null => (p === "AGENTS.md" ? agentsText.replace("<!-- factory-projekt:ende -->", `${einschub}\n<!-- factory-projekt:ende -->`) : lesenWurzel(p));
+    assert.ok(imBlock("AGENTS.md")?.includes(einschub), "der Anhang landet im Projekt-Block");
     assert.deepEqual(vergleiche(IST(imBlock), baseline), []);
   });
 });
@@ -1110,9 +1125,8 @@ describe("Kern-Pfade ohne Projektliteral (#1748)", () => {
   });
 });
 
-// ── Kern-Tests ohne Projektliterale (#1875, ADR 0022 F10) ─────────────────────
+// ── Kern-Tests ohne Projektliterale (#1875, #1903, ADR 0022 F10) ──────────────
 
-const KERN_TEST_BASELINE = "test/harness/kern-test-literale-baseline.json";
 /** Arten, deren Dateien ins Factory-Repo ziehen und darum Projektliterale zählen: Kern-Tests, ihre Test-Hilfen und Fixtures. */
 const GEZAEHLTE_ARTEN = ["kern-test", "test-hilfe", "fixture"];
 
@@ -1124,7 +1138,7 @@ const { artVon, EXTRAKTION_PFAD } = rawExtraktion as unknown as { artVon: (liste
 /** Getrackte Dateien der Arten `kern-test`, `test-hilfe` und `fixture` laut Extraktionsliste. */
 export const kernTestPfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));
 
-/** Ist-Zählung je Datei auf dem rohen Text (wie `erlaubt`, damit die Diff-Basis dasselbe zählt); Dateien ohne Treffer fehlen. */
+/** Ist-Zählung je Datei auf dem rohen Text (wie `erlaubt`); Dateien ohne Treffer fehlen. */
 export function kernTestIst(pfade: string[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): Baseline {
   const ist: Baseline = {};
   for (const p of pfade) {
@@ -1134,13 +1148,25 @@ export function kernTestIst(pfade: string[], lies: (pfad: string) => string | nu
   return ist;
 }
 
-describe("Kern-Tests ohne Projektliterale (#1875)", () => {
+/** Null-Regel (#1903): jeder Treffer in einem Kern-Test, einer Test-Hilfe oder einer Fixture ist rot, ohne Baseline. Leer = grün. */
+export function kernTestVerstoesse(pfade: string[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): string[] {
+  const weg = "(Kern-Test: Wert aus FREMD bzw. projektConfig() nehmen, Projektinhalt in einen projekt-test)";
+  return Object.entries(kernTestIst(pfade, lies, begriffe)).flatMap(([datei, z]) =>
+    Object.entries(z).map(([begriff, n]) => {
+      // das gefundene Literal selbst (je Wortlaut einmal), damit die Fundstelle ohne Suchen auffindbar ist
+      const funde = [...new Set((lies(datei) ?? "").replace(/\r\n/g, "\n").match(begriffe[begriff]) ?? [])];
+      return `${vergleiche({ [datei]: { [begriff]: n } }, {})[0]} ${weg} Fund: ${funde.map((f) => `'${f}'`).join(", ")}`;
+    }),
+  );
+}
+
+describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
   const liste = JSON.parse(readFileSync(WURZEL + EXTRAKTION_PFAD, "utf8")) as ExtraktionsListe;
-  const kernBaseline = JSON.parse(readFileSync(WURZEL + KERN_TEST_BASELINE, "utf8")) as Baseline;
   const gitIn = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const getrackt = gitIn(["ls-files"]).split("\n").filter((p) => p !== "" && existsSync(WURZEL + p));
   const pfade = kernTestPfade(liste, getrackt);
   const config = projektConfig();
+  const sprich = (verstoesse: string[]): string[] => verstoesse.map((v) => v.split(" (Kern-Test:")[0]);
 
   test("kernTestPfade: Kern-Test, Test-Hilfe und Fixture zählen, projekt-test und nicht Eingeordnetes nicht", () => {
     const l: ExtraktionsListe = {
@@ -1148,94 +1174,47 @@ describe("Kern-Tests ohne Projektliterale (#1875)", () => {
     };
     assert.deepEqual(kernTestPfade(l, ["t/kern-test.ts", "t/projekt-test.ts", "t/test-hilfe.ts", "t/fixture.ts", "t/infrastruktur.ts", "t/frei.ts"]), ["t/kern-test.ts", "t/test-hilfe.ts", "t/fixture.ts"]);
   });
-  test("im echten Repo hält jeder Kern-Test seine Baseline an Projektliteralen, nur sinkend", () => {
+  test("im echten Repo trägt keine Datei der drei Arten ein Projektliteral, es gibt keine Baseline", () => {
     assert.ok(pfade.length > 100, "die Kern-Tests werden gefunden (sonst wäre der Wächter still aus)");
-    assert.deepEqual(vergleiche(kernTestIst(pfade, lesenWurzel, echteBegriffe), kernBaseline), []);
+    for (const art of GEZAEHLTE_ARTEN) assert.ok(pfade.some((p) => artVon(liste, p) === art), `Art ${art} hat keine Datei, der Wächter wäre dafür still aus`);
+    assert.deepEqual(kernTestVerstoesse(pfade, lesenWurzel, echteBegriffe), []);
   });
-  test("Negativfall: ein neuer Kern-Test mit einem Commit-Zeilen-Präfix ist rot, auch ohne dass das Literal im Quelltext steht", () => {
+  test("Negativfall: ein neuer Kern-Test mit einem Commit-Zeilen-Präfix ist rot (eine Meldung mit Datei, Begriff und Weg), auch ohne dass das Literal im Quelltext steht", () => {
     const text = `const zeile = "${config.praefixe.commitZeile}Review: head=abc";\n`;
-    const ist = kernTestIst(["test/neu.test.ts"], () => text, echteBegriffe);
-    assert.deepEqual(ist, { "test/neu.test.ts": { Praefix: 1 } });
-    assert.deepEqual(vergleiche({ ...kernTestIst(pfade, lesenWurzel, echteBegriffe), ...ist }, kernBaseline), ["test/neu.test.ts: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei"]);
-    assert.deepEqual(kernTestIst(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), {}, "ohne Literal keine Zählung");
+    const v = kernTestVerstoesse(["test/neu.test.ts"], () => text, echteBegriffe);
+    assert.equal(v.length, 1);
+    assert.ok(v[0].startsWith("test/neu.test.ts: neues Projektliteral 'Praefix' (1x)"), v[0]);
+    assert.ok(v[0].includes("projektConfig()") && v[0].includes("projekt-test"), "die Meldung nennt den Weg");
+    assert.ok(v[0].endsWith(` Fund: '${config.praefixe.commitZeile}'`), `die Meldung nennt das gefundene Literal selbst: ${v[0]}`);
+    // mehrere verschiedene Treffer desselben Begriffs stehen einmal je Wortlaut in der Meldung
+    const zwei = kernTestVerstoesse(["test/neu.test.ts"], () => `${config.repo.split("/")[0]} und ${config.repo.split("/")[0].toUpperCase()}`, echteBegriffe);
+    assert.ok(zwei.some((m) => m.includes("'Owner'") && m.includes(` Fund: '${config.repo.split("/")[0]}', '${config.repo.split("/")[0].toUpperCase()}'`)), zwei.join("; "));
+    assert.deepEqual(kernTestVerstoesse(["test/neu.test.ts"], () => "const x = 1;\n", echteBegriffe), [], "ohne Literal keine Meldung");
   });
-  // Geschlossene Liste der literalfrei umgebauten Kern-Tests (Mindestbestand: Hooks und Guards, Board und Tickets, Nachweis und Review); sie wird nicht erweitert, die Rückfall-Prüfung unten leitet ihre Dateien aus der Baseline ab.
-  const LITERALFREIE_KERN_TESTS = [
-    "test/harness/claims-pruefen.test.ts",
-    "test/harness/lebenszyklus-namen.test.ts",
-    "test/harness/sammelticket.test.ts",
-    "test/harness/ticket-lock-lebenszeichen.test.ts",
-    "test/harness/ticket-lock.test.ts",
-    "test/naechstes-ticket.test.ts",
-    "test/sammelticket-anlegen.test.ts",
-    "test/spezifikation.test.ts",
-    "test/board-aufnahme.test.ts",
-    "test/board-haertung.test.ts",
-    "test/board-io-board.test.ts",
-    "test/board-korrektur.test.ts",
-    "test/board-rollen.test.ts",
-    "test/board-takt-io.test.ts",
-    "test/board-takt-lauf.test.ts",
-    "test/board-takt.test.ts",
-    "test/board-verzug.test.ts",
-    "test/board.test.ts",
-    "test/harness/gh-guard.test.ts",
-    "test/harness/holdout-guard.test.ts",
-    "test/harness/lens-edit-guard.test.ts",
-    "test/harness/pretooluse-hook.test.ts",
-    "test/harness/worktree-guard-powershell.test.ts",
-    "test/harness/worktree-guard.test.ts",
-    "test/abnahme-nachweis.test.ts",
-    "test/abnahme.test.ts",
-    "test/harness/holdout.test.ts",
-    "test/harness/quote-folge.test.ts",
-    "test/harness/review-context.test.ts",
-    "test/harness/review-nachweis.test.ts",
-    "test/harness/review-staffel.test.ts",
-    "test/harness/ticket-ablauf.test.ts",
-    "test/harness/umsetzer-abschluss.test.ts",
-    "test/nachweis-lib.test.ts",
-    "test/review-nachweis.test.ts",
-  ];
-  test("literalfreie Kern-Tests (#1876, #1877, #1878): kein Baseline-Eintrag, Ist-Zählung leer, ein zurückkehrendes Literal ist rot", () => {
-    const basis = kernTestIst(pfade, lesenWurzel, echteBegriffe);
-    for (const datei of LITERALFREIE_KERN_TESTS) {
-      assert.ok(pfade.includes(datei), `${datei} ist ein Kern-Test`);
-      assert.equal(datei in kernBaseline, false, `${datei}: kein Baseline-Eintrag, die Datei ist literalfrei`);
-      assert.equal(datei in basis, false, `${datei}: trägt ein Projektliteral`);
+  test("Negativfall: jeder Treffer zählt, auch der zweite (kein Baseline-Ausweg)", () => {
+    const text = `a ${config.praefixe.commitZeile}1\nb ${config.praefixe.commitZeile}2\n`;
+    assert.deepEqual(sprich(kernTestVerstoesse(["test/neu.test.ts"], () => text, echteBegriffe)), ["test/neu.test.ts: neues Projektliteral 'Praefix' (2x), Kern-Einheiten bleiben literalfrei"]);
+    // derselbe Wortlaut zweimal steht im Fund nur einmal (Dedupe je Wortlaut)
+    assert.ok(kernTestVerstoesse(["test/neu.test.ts"], () => text, echteBegriffe)[0].endsWith(` Fund: '${config.praefixe.commitZeile}'`));
+  });
+  test("Negativfall: ein Board-ID-Treffer in einer Fixture und ein Owner-Treffer in einer Test-Hilfe sind rot", () => {
+    const statusFeld = config.boards.map((b) => b.statusFeldId).find((id) => id !== undefined);
+    assert.ok(statusFeld !== undefined, "die Config trägt ein Status-Feld, sonst wäre die Board-ID-Prüfung stumpf");
+    const fixture = kernTestVerstoesse(["test/fixtures/neu.json"], () => `{"feld": "${String(statusFeld)}"}`, echteBegriffe);
+    assert.deepEqual(sprich(fixture), ["test/fixtures/neu.json: neues Projektliteral 'Board-ID' (1x), Kern-Einheiten bleiben literalfrei"]);
+    const owner = config.repo.split("/")[0];
+    const hilfe = kernTestVerstoesse(["test/support/neu.ts"], () => `export const OWNER = "${owner}";\n`, echteBegriffe);
+    // `includes` statt Gleichheit: in einer Config mit überlappenden Werten (Owner enthält das Worktree-Präfix) zählen weitere Begriffe mit
+    assert.ok(sprich(hilfe).includes("test/support/neu.ts: neues Projektliteral 'Owner' (1x), Kern-Einheiten bleiben literalfrei"), hilfe.join("; "));
+  });
+  test("Rückfall-Prüfung: ein angehängtes Literal ist in jeder Datei der drei Arten rot, genau eine Meldung", () => {
+    const nurPraefix = { Praefix: echteBegriffe.Praefix };
+    for (const datei of pfade) {
+      const vorher = zaehle(lesenWurzel(datei) ?? "", nurPraefix).Praefix ?? 0; // 0 im Repo ohne Treffer; die Probe mit einer Fremd-Config zählt vorhandene mit
+      const text = `${lesenWurzel(datei) ?? ""}\nexpect(x).toBe("${config.praefixe.commitZeile}1");\n`;
+      const v = kernTestVerstoesse([datei], () => text, echteBegriffe);
+      assert.ok(v.some((m) => m.startsWith(`${datei}: neues Projektliteral 'Praefix' (${vorher + 1}x)`)), `${datei}: ${v.join("; ")}`);
+      if (vorher === 0 && Object.keys(kernTestIst([datei], lesenWurzel, echteBegriffe)).length === 0) assert.equal(v.length, 1, `${datei}: genau eine Meldung`);
     }
-    // Die Rückfall-Prüfung läuft über jeden Kern-Test ohne Baseline-Eintrag (aus der Baseline abgeleitet, nicht von Hand je Teil gepflegt).
-    const literalfrei = pfade.filter((p) => !(p in kernBaseline));
-    for (const datei of LITERALFREIE_KERN_TESTS) assert.ok(literalfrei.includes(datei), `${datei} gehört zu den literalfreien Kern-Tests`);
-    for (const datei of literalfrei) {
-      const rueckfall = { ...basis, ...kernTestIst([datei], () => `${lesenWurzel(datei) ?? ""}\nexpect(x).toBe("${config.praefixe.commitZeile}1");\n`, echteBegriffe) };
-      assert.deepEqual(vergleiche(rueckfall, kernBaseline), [`${datei}: neues Projektliteral 'Praefix' (1x), Kern-Einheiten bleiben literalfrei`]);
-    }
-  });
-  test("Anheben der Kern-Test-Baseline gegen die Diff-Basis: ein neuer Test mit Baseline-Eintrag ist rot (Status A), ein gleich bleibender grün", () => {
-    const pseudo = (p: string): Eintrag => ({ pfad: p, ring: "kern", quelle: "extraktion" });
-    const neu = new Map<string, string | null>([["test/neu.test.ts", null]]);
-    const erl = erlaubt([pseudo("test/neu.test.ts")], neu, () => null, echteBegriffe);
-    assert.deepEqual(anhebungen({ "test/neu.test.ts": { Praefix: 1 } }, erl), ["test/neu.test.ts: Baseline 'Praefix' 1 über dem Wert an der Diff-Basis (0), anheben ist verboten"]);
-    const alt = new Map<string, string | null>([["test/alt.test.ts", "test/alt.test.ts"]]);
-    const textAlt = `x ${config.praefixe.commitZeile}\n`;
-    assert.deepEqual(anhebungen({ "test/alt.test.ts": { Praefix: 1 } }, erlaubt([pseudo("test/alt.test.ts")], alt, () => textAlt, echteBegriffe)), []);
-    assert.notDeepEqual(anhebungen({ "test/alt.test.ts": { Praefix: 2 } }, erlaubt([pseudo("test/alt.test.ts")], alt, () => textAlt, echteBegriffe)), []);
-  });
-
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-  const basisKern: string | null = checkBasis.resolveBase(gitIn, process.env) ?? null;
-  test.skipIf(diffBasisModus(basisKern, process.env) === "entfaellt")("die Baseline der Kern-Tests wurde gegen die Diff-Basis nicht angehoben", () => {
-    assert.ok(basisKern, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
-    const aend = parseNameStatus(gitIn(["diff", "-M", "--name-status", basisKern]));
-    const basisText = (alt: string): string | null => {
-      try {
-        return gitIn(["show", `${basisKern}:${alt}`]);
-      } catch {
-        return null;
-      }
-    };
-    const pseudo = pfade.map((p): Eintrag => ({ pfad: p, ring: "kern", quelle: "extraktion" }));
-    assert.deepEqual(anhebungen(kernBaseline, erlaubt(pseudo, aend, basisText, echteBegriffe)), []);
   });
 });

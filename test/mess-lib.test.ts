@@ -4,6 +4,8 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/mess-lib.mjs";
 import { FREMD, projektConfig, repoName } from "./support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../scripts/ticket-namen.mjs";
 
 const WT = FREMD.praefixe.worktree;
 const M = raw as unknown as { median: (w: number[]) => number | null; CACHE_TTL_MS: { fuenfMin: number; eineStunde: number } };
@@ -87,7 +89,7 @@ describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)
   });
   test("keine fest verdrahtete Repo-Wurzel im Quelltext der Messskripte", () => {
     for (const name of ["mess-lib", "kontext-treiber"]) {
-      expect(readFileSync(new URL(`../scripts/${name}.mjs`, import.meta.url), "utf8")).not.toMatch(new RegExp("dev/" + repoName(projektConfig())));
+      expect(readFileSync(new URL(`../scripts/${name}.mjs`, import.meta.url), "utf8")).not.toMatch(new RegExp("dev/" + (escapeRegex as (t: string) => string)(repoName(projektConfig()))));
     }
   });
 });

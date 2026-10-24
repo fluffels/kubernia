@@ -8,6 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { altName } from "./support/env-alt";
+import { projektConfig, repoName } from "./support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
@@ -60,7 +63,7 @@ const gueltig = (): Cfg => ({
 
 const temps: string[] = [];
 const tmp = (): string => {
-  const d = mkdtempSync(join(tmpdir(), "kq-projekt-"));
+  const d = mkdtempSync(join(tmpdir(), "projekt-config-"));
   temps.push(d);
   return d;
 };
@@ -483,7 +486,10 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
-    assert.doesNotMatch((r.stdout + r.stderr).split(d).join(""), /PVT_|fluffels|kubernia/); // ohne den Temp-Pfad, der selbst so heißen könnte
+    // Negativfall „echter Wert erscheint nicht“: Board-ID-Präfix, Owner und Repo-Name der echten Config (das Präfix mit Anführungszeichen dahinter ist keine Board-ID)
+    const echt = projektConfig();
+    const muster = new RegExp(["PVT_", echt.repo.split("/")[0], repoName(echt)].map((w) => (escapeRegex as (t: string) => string)(w)).join("|"));
+    assert.doesNotMatch((r.stdout + r.stderr).split(d).join(""), muster); // ohne den Temp-Pfad, der selbst so heißen könnte
   });
 });
 
