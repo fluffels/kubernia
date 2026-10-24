@@ -1,0 +1,53 @@
+flowchart TD
+  board["Board: oberstes freies Ticket"]
+  claim["Claim: self-assign, verifizieren"]
+  wt["Worktree von origin/main"]
+  szen["Szenarien (nur Tickets mit Kriterien)<br/>${agent:holdout-szenario}"]
+  plan["Plan<br/>${agent:sih-planer}"]
+  epic{"zu groß für eine Session?"}
+  kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
+  pre{"Irreversibel oder<br/>Außenwirkung?"}
+  frage["Rückfrage an die Maintainerin"]
+  umsetzen["Umsetzen (TDD)<br/>${agent:sih-umsetzer}"]
+  gruppen["Sammelticket-Gruppen,<br/>je Gruppe frisch<br/>${agent:sih-gruppe}"]
+  verify{"npm run verify grün?"}
+  lenses{"Lenses ohne Blocker?<br/>${agent:sih-lens}"}
+  fix["Fix-Runde"]
+  handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
+  entwurf["Entwurfs-PR ohne Auto-Merge"]
+  abnahme{"Abnahme bestanden?<br/>${agent:holdout-abnahme}"}
+  handoff2["Hand-off: festgefahren<br/>(nicht prüfbar, Abnahme)"]
+  pr["gh pr ready + Auto-Merge"]
+  ci{"CI grün?"}
+  fest["Label status:festgefahren,<br/>ein Kommentar mit Optionen"]
+  merge["Merge (squash)"]
+  cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
+  alarm["Alarm-Issue: CI rot auf main"]
+
+  board --> claim --> szen --> plan --> epic
+  epic -- ja --> kinder --> board
+  epic -- nein --> pre
+  pre -- ja --> frage --> wt
+  pre -- nein --> wt
+  wt --> umsetzen
+  umsetzen --> verify
+  umsetzen -.->|"Plan mit Block GRUPPEN"| gruppen -.-> umsetzen
+  verify -- nein --> umsetzen
+  verify -- ja --> lenses
+  lenses -- "Blocker, Runde unter ${konstante:lensCap}" --> fix --> lenses
+  lenses -- "Cap von ${konstante:lensCap} Fix-Runden erreicht" --> handoff
+  lenses -- ja --> entwurf --> abnahme
+  abnahme -- "nicht erfüllt: Abnahme-Fix mit eigenem Budget" --> fix
+  abnahme -- "nicht prüfbar" --> handoff2
+  abnahme -- ja --> pr
+  pr --> ci
+  ci -- "rot, unter ${konstante:festgefahrenCommits} roten Commits" --> umsetzen
+  ci -- "${konstante:festgefahrenCommits} rote Commits (festgefahren.yml)" --> fest
+  ci -- grün --> merge --> cleanup
+  merge -.->|"Push auf main: verify erneut"| alarm
+  alarm -.->|"Fix per PR, geht vor"| board
+
+  classDef schleife fill:#f3e3c3,stroke:#8a6a3f,color:#2b2118
+  classDef stopp fill:#f2c9c0,stroke:#9a4a3a,color:#2b2118
+  class verify,lenses,abnahme,ci schleife
+  class handoff,handoff2,fest,alarm stopp
