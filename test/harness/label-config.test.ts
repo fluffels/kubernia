@@ -12,6 +12,7 @@ import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { lies } from "./repo-texte";
 import { echteSprache } from "../support/echte-sprache";
+import { FREMD_OWNER } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -30,6 +31,7 @@ import * as taktRaw from "../../scripts/board-takt.mjs";
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 
 type Cfg = Record<string, unknown>;
+const ECHT = (projektRaw as unknown as { ladeProjektConfig: () => { labels: Record<string, string> } }).ladeProjektConfig().labels;
 const P = projektRaw as unknown as { labelAus: (c: unknown, k: string) => string; ladeProjektConfig: () => { labels: Record<string, string> } };
 type It = { number: number; labels: string[]; id?: string; state?: string; status?: string; contentId?: string };
 const B = boardRaw as unknown as {
@@ -107,7 +109,7 @@ describe("labelAus", () => {
       text = (e as Error).message;
     }
     expect(text).toMatch(/labels\.harness[\s\S]*Fix:/);
-    expect(text).not.toContain("area:harness");
+    expect(text).not.toContain(ECHT.harness);
   });
 });
 
@@ -117,7 +119,7 @@ describe("boardRolleFuer (K3: Fixture-Label bereich:fabrik)", () => {
     expect(B.boardRolleFuer([{ name: "bereich:fabrik" }], FAB)).toBe("factory");
   });
   test("das echte Label gilt mit der Fixture-Config nicht (kein eincodiertes Literal)", () => {
-    expect(B.boardRolleFuer(["area:harness"], FAB)).toBe("produkt");
+    expect(B.boardRolleFuer([ECHT.harness], FAB)).toBe("produkt");
     expect(B.boardRolleFuer([], FAB)).toBe("produkt");
   });
   test("ohne labels.harness wirft die Funktion statt still produkt zu liefern", () => {
@@ -128,13 +130,13 @@ describe("boardRolleFuer (K3: Fixture-Label bereich:fabrik)", () => {
   });
   test("Board-Funktionen mit Fixture-Config: Fixture-Label ist factory, das echte Label produkt", () => {
     const fab = (nr: number): It => ({ number: nr, labels: ["bereich:fabrik"], id: `I${nr}`, state: "open", status: "Todo", contentId: `C${nr}` });
-    const echt = (nr: number): It => ({ number: nr, labels: ["area:harness"], id: `E${nr}`, state: "open", status: "Todo", contentId: `D${nr}` });
+    const echt = (nr: number): It => ({ number: nr, labels: [ECHT.harness], id: `E${nr}`, state: "open", status: "Todo", contentId: `D${nr}` });
     const s = B.seitenListen([fab(1), echt(2)], [echt(3), fab(4)], FAB);
     expect(s.factory.map((i) => i.number)).toEqual([4, 1]);
     expect(s.produkt.map((i) => i.number)).toEqual([2, 3]);
     expect(B.umzugsPlan([fab(1), echt(2)], [], FAB).schritte.map((x) => [x.number, x.nach])).toEqual([[1, "factory"]]);
     const issue = (n: number, labels: string[]) => ({ number: n, state: "open", node_id: `N${n}`, labels });
-    const a = B.aufnahmePlan([1, 2], { 1: issue(1, ["bereich:fabrik"]), 2: issue(2, ["area:harness"]) }, { config: FAB });
+    const a = B.aufnahmePlan([1, 2], { 1: issue(1, ["bereich:fabrik"]), 2: issue(2, [ECHT.harness]) }, { config: FAB });
     expect(a.aufnehmen.map((x) => x.rolle)).toEqual(["factory", "produkt"]);
   });
   test("seitenListen, umzugsPlan und aufnahmePlan ohne Config werfen", () => {
@@ -146,15 +148,15 @@ describe("boardRolleFuer (K3: Fixture-Label bereich:fabrik)", () => {
 });
 
 describe("fremdtext-lib: Fremdeingang-Label aus labels.forum", () => {
-  const eigen = { login: "fluffels", type: "User" };
+  const eigen = { login: FREMD_OWNER, type: "User" };
   test("das Fixture-Label macht Fremdeingang, das echte Forum-Label nicht", () => {
     expect(F.fremdeingangLabels(FAB)).toEqual(["f"]);
-    expect(F.istFremdeingang({ user: eigen, labels: ["f"] }, "fluffels", { config: FAB })).toMatchObject({ fremdeingang: true, label: "f" });
-    expect(F.istFremdeingang({ user: eigen, labels: ["forum"] }, "fluffels", { config: FAB }).fremdeingang).toBe(false);
+    expect(F.istFremdeingang({ user: eigen, labels: ["f"] }, FREMD_OWNER, { config: FAB })).toMatchObject({ fremdeingang: true, label: "f" });
+    expect(F.istFremdeingang({ user: eigen, labels: [ECHT.forum] }, FREMD_OWNER, { config: FAB }).fremdeingang).toBe(false);
   });
   test("ohne labels.forum wirft die Prüfung (fail-closed)", () => {
     expect(() => F.fremdeingangLabels(OHNE_FORUM)).toThrow(FIX);
-    expect(() => F.istFremdeingang({ user: eigen, labels: [] }, "fluffels", { config: OHNE_FORUM })).toThrow(/labels\.forum/);
+    expect(() => F.istFremdeingang({ user: eigen, labels: [] }, FREMD_OWNER, { config: OHNE_FORUM })).toThrow(/labels\.forum/);
   });
 });
 
@@ -167,7 +169,7 @@ describe("check-festgefahren: Label aus labels.festgefahren", () => {
   test("der Kommentar nennt das übergebene Label, nicht das echte", () => {
     const text = FEST.buildStuckComment(4, "https://example.com/run", "zustand:fest");
     expect(text).toContain("zustand:fest");
-    expect(text).not.toContain("status:festgefahren");
+    expect(text).not.toContain(ECHT.festgefahren);
   });
 });
 
@@ -188,10 +190,10 @@ describe("naechstes-ticket: Harness- und Forum-Label aus der Config", () => {
     const item = { title: "T", labels: ["bereich:fabrik"] };
     expect(N.imBereich(item, "agentic", FAB)).toBe(true);
     expect(N.imBereich(item, "spiel", FAB)).toBe(false);
-    expect(N.imBereich({ title: "T", labels: ["area:harness"] }, "agentic", FAB)).toBe(false);
+    expect(N.imBereich({ title: "T", labels: [ECHT.harness] }, "agentic", FAB)).toBe(false);
   });
   test("imBereich und waehleNaechstes ohne Config oder ohne labels.harness werfen (kein stiller Standardwert)", () => {
-    const item = { title: "T", labels: ["area:harness"] };
+    const item = { title: "T", labels: [ECHT.harness] };
     for (const c of [undefined, OHNE_HARNESS]) {
       expect(() => N.imBereich(item, "agentic", c)).toThrow(/labels.harness/);
       expect(() => N.waehleNaechstes({ items: [], offene: new Set(), config: c })).toThrow(/labels.harness/);
@@ -199,9 +201,9 @@ describe("naechstes-ticket: Harness- und Forum-Label aus der Config", () => {
     expect(N.imBereich(item, null, undefined)).toBe(true); // ohne Bereich wird kein Label gebraucht
   });
   test("waehleNaechstes mit Fixture-Config: bereich:fabrik ist Factory, das Forum-Label f ein Fremdeingang", () => {
-    const eigen = "fluffels";
+    const eigen = FREMD_OWNER;
     const mk = (number: number, labels: string[]) => ({ number, title: `T${number}`, status: "Todo", state: "open", labels, assignees: [], autor: { login: eigen, type: "User" }, body: "" });
-    const r = N.waehleNaechstes({ items: [mk(1, ["f"]), mk(2, ["area:harness"]), mk(3, ["bereich:fabrik"])], offene: new Set(), owner: eigen, bereich: "agentic", config: FAB, hartAb: 1_000_000 });
+    const r = N.waehleNaechstes({ items: [mk(1, ["f"]), mk(2, [ECHT.harness]), mk(3, ["bereich:fabrik"])], offene: new Set(), owner: eigen, bereich: "agentic", config: FAB, hartAb: 1_000_000 });
     expect(r.ticket?.nr).toBe(3);
     expect(N.waehleNaechstes({ items: [mk(1, ["f"])], offene: new Set(), owner: eigen, config: FAB }).uebersprungen[0]?.grund).toMatch(/Fremdeingang/);
   });
@@ -255,14 +257,14 @@ describe("check-festgefahren main: fehlendes Label ist rot (K2)", () => {
 });
 
 describe("fremdtext-lib: Config ist Pflicht", () => {
-  const issue = { user: { login: "fluffels" }, labels: ["f"] };
+  const issue = { user: { login: FREMD_OWNER }, labels: ["f"] };
   test("ohne Config oder ohne labels.forum wirft die Funktion (kein Rückfall auf die Platte)", () => {
-    expect(() => F.istFremdeingang(issue, "fluffels")).toThrow(/labels.forum/);
-    expect(() => F.istFremdeingang(issue, "fluffels", {})).toThrow(/labels.forum/);
-    expect(() => F.istFremdeingang(issue, "fluffels", { config: OHNE_FORUM })).toThrow(/forum/);
+    expect(() => F.istFremdeingang(issue, FREMD_OWNER)).toThrow(/labels.forum/);
+    expect(() => F.istFremdeingang(issue, FREMD_OWNER, {})).toThrow(/labels.forum/);
+    expect(() => F.istFremdeingang(issue, FREMD_OWNER, { config: OHNE_FORUM })).toThrow(/forum/);
   });
   test("mit Config liefert sie das Fixture-Label", () => {
-    const r = F.istFremdeingang(issue, "fluffels", { config: FAB });
+    const r = F.istFremdeingang(issue, FREMD_OWNER, { config: FAB });
     expect(r.fremdeingang).toBe(true);
     expect(r.label).toBe("f");
   });
@@ -305,8 +307,8 @@ describe("Workflow-Wächter: Config-Aufrufe", () => {
   test.each([
     ["ohne exit 1", GUT.replace("            exit 1\n", "")],
     ["ohne ::error::", GUT.replace(/echo "::error::[^\n]*"/, "echo kaputt")],
-    ["|| echo als Fallback", GUT.replace("labels.x); then", "labels.x || echo area:harness); then")],
-    ["Standardwert ${…:-…}", `${GUT}          x="\${LABEL:-area:harness}"\n`],
+    ["|| echo als Fallback", GUT.replace("labels.x); then", "labels.x || echo bereich:fabrik); then")],
+    ["Standardwert ${…:-…}", `${GUT}          x="\${LABEL:-bereich:fabrik}"\n`],
     ["Aufruf im echo", '          echo "wert=$(node scripts/projekt-config.mjs labels.x)" >> "$GITHUB_OUTPUT"\n'],
     ["zweiter Aufruf ohne Guard", `${GUT}          y=$(node scripts/projekt-config.mjs labels.y)\n`],
   ])("meldet %s", (_n, yml) => {
@@ -349,14 +351,14 @@ function labelLiterale(rohText: string, werte: string[]): string[] {
 }
 
 describe("Literal-Scan: keine Label-Werte in den Einheiten", () => {
-  const werte = [...new Set(Object.values(P.ladeProjektConfig().labels))];
+  const werte = [...new Set(Object.values(ECHT))];
   test("der Scan erkennt Werte mit und ohne Doppelpunkt", () => {
-    expect(labelLiterale('const x = "area:harness";', werte)).toEqual(["area:harness"]);
-    expect(labelLiterale("# das Label status:festgefahren", werte)).toEqual(["status:festgefahren"]);
-    expect(labelLiterale('const l = "forum";', werte)).toEqual(["forum"]);
-    expect(labelLiterale("gh issue create --label forum", werte)).toEqual(["forum"]);
-    expect(labelLiterale("das forum-inbox.yml und labels.forum", werte)).toEqual([]);
-    expect(labelLiterale('labelAus(cfg, "forum")', werte)).toEqual([]);
+    expect(labelLiterale(`const x = "${ECHT.harness}";`, werte)).toEqual([ECHT.harness]);
+    expect(labelLiterale(`# das Label ${ECHT.festgefahren}`, werte)).toEqual([ECHT.festgefahren]);
+    expect(labelLiterale(`const l = "${ECHT.forum}";`, werte)).toEqual([ECHT.forum]);
+    expect(labelLiterale(`gh issue create --label ${ECHT.forum}`, werte)).toEqual([ECHT.forum]);
+    expect(labelLiterale(`das ${ECHT.forum}-inbox.yml und labels.forum`, werte)).toEqual([]);
+    expect(labelLiterale(`labelAus(cfg, "${ECHT.forum}")`, werte)).toEqual([]);
   });
   test.each([...SKRIPTE, ...WORKFLOWS])("%s enthält kein Label-Literal", (pfad) => {
     expect(labelLiterale(lies(pfad), werte)).toEqual([]);

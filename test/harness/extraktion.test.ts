@@ -66,7 +66,6 @@ export const TEST_HUELLE_AUSNAHMEN: Record<string, string> = {
   "test/harness/kern-links.test.ts -> test/harness/kern-links-baseline.json": DATEN_DATEI,
   "test/harness/kern-reinheit.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
   "test/harness/kern-reinheit.test.ts -> test/harness/kern-literale-baseline.json": DATEN_DATEI,
-  "test/harness/kern-reinheit.test.ts -> test/harness/kern-test-literale-baseline.json": DATEN_DATEI,
   "test/harness/skills-sync.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
 };
 

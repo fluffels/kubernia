@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Kubernia mergt autonom. Leitplanken-Änderungen (Selbstmodifikation) waren bis #1069 ein
+ * Der Agent mergt autonom. Leitplanken-Änderungen (Selbstmodifikation) waren bis #1069 ein
  * Pflicht-Stopp; seitdem mergt der Agent bei der intendierten Änderung seines Tickets selbst und
  * hinterlässt einen Audit-Kommentar (ADR 0014: kein CI-Riegel, keine Label-Pflicht mehr). Dieser
  * Wächter deckt die Fehlklassen ab, die diese Regel leise aushöhlen:
@@ -293,7 +293,7 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
 
   test("Parser lesen echte Listen und ignorieren Kommentare/Leerzeilen", () => {
     assert.deepEqual(
-      [...codeownersPaths("# Kopf\n\n/foo.js   @fluffels\n/bar/*.yml  @fluffels")].sort(),
+      [...codeownersPaths("# Kopf\n\n/foo.js   @team\n/bar/*.yml  @team")].sort(),
       ["bar/", "foo.js"],
     );
     assert.deepEqual([...sourcePaths({ gate: ["/a.js", "/c/*.yml"], harness: ["/b/"] })].sort(), ["a.js", "b/", "c/"]);
@@ -310,12 +310,12 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
     assert.equal(trifftLeitplanke("src/content/AGENTS.md", ["AGENTS.md"]), true);
     assert.equal(decktTestOrdnerAb(["AGENTS.md"]), false);
     // Darum sieht der Sync-Test den Unterschied nie – der Anker-Test auf die rohe Schreibweise ist nötig.
-    assert.deepEqual([...codeownersPaths("/AGENTS.md @fluffels")], [...codeownersPaths("AGENTS.md @fluffels")]);
+    assert.deepEqual([...codeownersPaths("/AGENTS.md @team")], [...codeownersPaths("AGENTS.md @team")]);
   });
 
   test("ein nur in der Quelle ergänzter Pfad würde als Drift auffallen", () => {
     // Beweist, dass der Sync-Test nicht immer grün ist: fehlt ein Pfad in CODEOWNERS, kippt der Vergleich.
-    const co = codeownersPaths("/AGENTS.md  @fluffels");
+    const co = codeownersPaths("/AGENTS.md  @team");
     const sp = sourcePaths({ harness: ["/AGENTS.md", "/CLAUDE.md"] });
     assert.notDeepEqual([...co].sort(), [...sp].sort());
   });
@@ -439,7 +439,7 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
     }
     for (const gueltig of [
       "Weichen (Optik, riskant) entscheidet der Agent selbst, die Maintainerin widerspricht per Revert.",
-      "Optik wird an docs/stardew-referenz.md gemessen.",
+      "Optik wird an der Optik-Messlatte des Projekts gemessen.",
       "Das Sammelticket wird komplett umgesetzt, kein Rest-Übertrag.",
     ]) {
       assert.equal(abgeloesteFundstellen({ "docs/x.md": gueltig }).length, 0, gueltig);

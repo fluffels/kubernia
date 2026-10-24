@@ -1,9 +1,0 @@
-{
-  "test/harness/agents-bloecke.test.ts": {"Stardew":6},
-  "test/harness/harness-approval.test.ts": {"Owner":5,"Repo":1,"Stardew":1},
-  "test/harness/harness-inventar.test.ts": {"Repo":6,"Agent":6},
-  "test/harness/kern-reinheit.test.ts": {"Board-ID":2,"Stardew":20,"kqDev":3,"Hafen":3,"Phaser":12},
-  "test/harness/label-config.test.ts": {"Owner":10,"Label":14},
-  "test/projekt-config.test.ts": {"Owner":1,"Repo":1,"Worktree":1,"Agent":1},
-  "test/projektwerte.test.ts": {"Repo":1,"Worktree":2,"Agent":1}
-}

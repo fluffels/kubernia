@@ -154,9 +154,9 @@ describe("harness-inventar.md: Vollständigkeit gegen die generierte Tabelle (#1
     expect(ohneZeile(namen, inventarZeilen(seite()))).toEqual([]);
   });
 
-  test("Negativ: fehlende Zeile wird gemeldet, `kubernia` wird nicht durch `kubernia-lens` gedeckt", () => {
-    const zeilen: Zeile[] = [{ zellen: ["`kubernia-lens`, `Explore`", "", "", "behalten", "ja"] }];
-    expect(ohneZeile(["Explore", "kubernia", "kubernia-lens", "Stop"], zeilen)).toEqual(["kubernia", "Stop"]);
+  test("Negativ: fehlende Zeile wird gemeldet, `demo` wird nicht durch `demo-lens` gedeckt", () => {
+    const zeilen: Zeile[] = [{ zellen: ["`demo-lens`, `Explore`", "", "", "behalten", "ja"] }];
+    expect(ohneZeile(["Explore", "demo", "demo-lens", "Stop"], zeilen)).toEqual(["demo", "Stop"]);
   });
 
   test("Negativ: der Parser findet nur Tabellen mit dem fünfspaltigen Kopf", () => {
