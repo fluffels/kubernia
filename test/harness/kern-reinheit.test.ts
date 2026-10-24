@@ -1196,6 +1196,8 @@ describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
   test("Negativfall: jeder Treffer zählt, auch der zweite (kein Baseline-Ausweg)", () => {
     const text = `a ${config.praefixe.commitZeile}1\nb ${config.praefixe.commitZeile}2\n`;
     assert.deepEqual(sprich(kernTestVerstoesse(["test/neu.test.ts"], () => text, echteBegriffe)), ["test/neu.test.ts: neues Projektliteral 'Praefix' (2x), Kern-Einheiten bleiben literalfrei"]);
+    // derselbe Wortlaut zweimal steht im Fund nur einmal (Dedupe je Wortlaut)
+    assert.ok(kernTestVerstoesse(["test/neu.test.ts"], () => text, echteBegriffe)[0].endsWith(` Fund: '${config.praefixe.commitZeile}'`));
   });
   test("Negativfall: ein Board-ID-Treffer in einer Fixture und ein Owner-Treffer in einer Test-Hilfe sind rot", () => {
     const statusFeld = config.boards.map((b) => b.statusFeldId).find((id) => id !== undefined);
