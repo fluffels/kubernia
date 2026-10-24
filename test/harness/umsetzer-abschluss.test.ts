@@ -693,6 +693,52 @@ describe("Selbstcheck vor jedem Commit (#1625)", () => {
     assert.ok(!verlangtSelbstcheck(UMSETZER.replace("Block `Selbstcheck:`", "Hinweis")));
     assert.ok(!verlangtSelbstcheck(""));
   });
+
+  /** Der Umsetzer holt die Blöcke aus den Commit-Bodies in den PR-Text und holt einen fehlenden vor `gh pr create` nach; die Gruppen-Berichte tragen ihn mit. */
+  const uebernimmtBloecke = (s: string) =>
+    s.includes("git log origin/main..HEAD --format=%B") && /fehlt der Block im letzten Commit, vor `gh pr create` nachholen/.test(s) && /`SELBSTCHECK`[^.]*PR-Text|PR-Text[^.]*`SELBSTCHECK`/.test(s);
+  const gruppeTraegtBlock = (s: string) => /Block `Selbstcheck:` im Commit-Body/.test(s) && /übernimmt ihn in den PR-Text/.test(s);
+
+  test("Umsetzer übernimmt die Selbstcheck-Blöcke aus den Commits in den PR-Text; Gruppe trägt den Block im Commit-Body", () => {
+    assert.ok(uebernimmtBloecke(UMSETZER), "factory-umsetzer.md");
+    assert.ok(gruppeTraegtBlock(GRUPPE), "factory-gruppe.md");
+  });
+
+  test("Red-Green: ohne Befehl, Nachhol-Satz, Gruppen-Bezug oder Commit-Body greifen die Prädikate nicht", () => {
+    assert.ok(!uebernimmtBloecke(UMSETZER.replace("git log origin/main..HEAD --format=%B", "git log")));
+    assert.ok(!uebernimmtBloecke(UMSETZER.replace("vor `gh pr create` nachholen", "ignorieren")));
+    assert.ok(!uebernimmtBloecke(UMSETZER.replaceAll("`SELBSTCHECK`", "x")));
+    assert.ok(!gruppeTraegtBlock(GRUPPE.replace("im Commit-Body", "irgendwo")));
+    assert.ok(!gruppeTraegtBlock(GRUPPE.replace("übernimmt ihn in den PR-Text", "liest ihn")));
+    assert.ok(!uebernimmtBloecke("") && !gruppeTraegtBlock(""));
+  });
+});
+
+describe("Permission-Blockaden: kein rm -rf in den Agent-Definitionen mit Scratch", () => {
+  const ABNAHME = readFileSync(resolve(ROOT, ".claude/agents/holdout-abnahme.md"), "utf8");
+  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/factory-gruppe.md"), "utf8");
+  const LENS = readFileSync(resolve(ROOT, ".claude/agents/factory-lens.md"), "utf8");
+  /** Nennt die Definition `rm -rf` als gesperrt und sagt, dass Scratch liegen bleibt? */
+  const verbietetRmRf = (s: string) => /`rm -rf`/.test(s) && /Scratch/.test(s) && /`deny`|gesperrt/.test(s) && /liegen/.test(s);
+
+  test("Umsetzer, Gruppe, Lens und Abnahme tragen die Regel", () => {
+    for (const [name, text] of [["umsetzer", UMSETZER], ["gruppe", GRUPPE], ["lens", LENS], ["abnahme", ABNAHME]] as const) {
+      assert.ok(verbietetRmRf(text), name);
+    }
+  });
+
+  test("Abnahme: Dev-Server per PID beenden, kein git checkout/restore/reset auf Dateien", () => {
+    assert.match(ABNAHME, /Kein `rm -rf`, kein Scratch-Aufräumen/);
+    assert.match(ABNAHME, /kein `git checkout`, `git restore` und `git reset`/);
+  });
+
+  test("Red-Green: ohne eines der Merkmale greift das Prädikat nicht", () => {
+    assert.ok(!verbietetRmRf(ABNAHME.replaceAll("`rm -rf`", "rm")));
+    assert.ok(!verbietetRmRf(ABNAHME.replaceAll("Scratch", "Müll")));
+    assert.ok(!verbietetRmRf(ABNAHME.replaceAll("`deny`", "x").replaceAll("gesperrt", "x")));
+    assert.ok(!verbietetRmRf(ABNAHME.replaceAll("liegen", "x")));
+    assert.ok(!verbietetRmRf(""));
+  });
 });
 
 describe("Leitplanken-Audit (#1067)", () => {
