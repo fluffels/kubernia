@@ -427,6 +427,21 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
   test("die echte Matrix hat keine Abweichung", () => {
     assert.deepEqual(matrixAbweichungen(liesMitProjektwerten(ROUTING_SSOT), fmEcht), []);
   });
+  test("die Rohseite der Matrix nennt keinen Agentennamen des Projekts, nur Platzhalter (sonst wird der Export im Factory-Repo rot)", () => {
+    const roh = read(ROUTING_SSOT).split("\n");
+    const kopf = roh.findIndex((z) => z.startsWith("| Phase |"));
+    assert.ok(kopf >= 0, "Kopf der Matrix");
+    let ende = kopf;
+    while (ende < roh.length && roh[ende].startsWith("|")) ende++;
+    const matrix = roh.slice(kopf, ende).join("\n");
+    assert.match(matrix, /<agenten\.planer>/, "Platzhalter vorhanden (Probe, dass der Ausschnitt die Matrix trifft)");
+    const nennt = (text: string) => Object.values(AG).filter((n) => new RegExp(`(?<![\\w-])${n}(?![\\w-])`).test(text));
+    const literale = nennt(matrix);
+    assert.deepEqual(literale, [], "Namen aus der Config stehen als Literal in der Rohseite der Matrix");
+    // Negativfall: ein eingesetzter Name wird erkannt
+    const verfaelscht = matrix.replace("<agenten.planer>", AG.planer);
+    assert.deepEqual(nennt(verfaelscht), [AG.planer]);
+  });
   test("Negativfälle: Umsetzer-Zelle `high` gegen Frontmatter `medium`, falscher Alias, unbekannte Zeile, fehlende Spalte", () => {
     const doku = liesMitProjektwerten(ROUTING_SSOT);
     const zeile = "| Umsetzung | `sonnet` | `medium` |";

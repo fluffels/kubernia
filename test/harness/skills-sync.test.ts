@@ -147,6 +147,11 @@ describe("pruefeSkills: Negativfälle mit Dateiname und Fix-Zeile", () => {
     expect(b[0].meldung).toContain(wort);
   });
 
+  test("Frontmatter muss in der ersten Zeile beginnen: ein `---` erst später ist kein Frontmatter (exakte Meldung)", () => {
+    const b = stand([{ ordner: "spaet", text: "Titel\n---\nname: n\ndescription: d\n---\n" }], []);
+    expect(b.map((x) => x.meldung)).toEqual(["Quelle ohne Frontmatter"]);
+  });
+
   test("Quellordner ohne SKILL.md", () => {
     const b = stand([{ ordner: "leer", text: null }], []);
     expect(b.map((x) => x.datei)).toEqual([".agents/skills/leer/SKILL.md"]);

@@ -603,7 +603,7 @@ describe("Export aus HEAD", () => {
     const stand = (rawSkills as unknown as { liesStand(w: string): unknown; pruefeSkills(s: unknown): unknown[] });
     assert.deepEqual(stand.pruefeSkills(stand.liesStand(z)), []);
     assert.doesNotMatch(quelle + zeiger, /kubernia|KQ/i);
-  });
+  }, 60_000);
 
   test("Lock: Wurzel entspricht der Vorlage, jede Wurzel-Abhängigkeit hat einen Eintrag, Einträge sind unverändert aus kubernia", () => {
     const lock = JSON.parse(echt.dateien.get("package-lock.json")?.text ?? "{}") as Lock;

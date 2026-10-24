@@ -59,7 +59,7 @@ describe("Forum-Anteile der Kern-Wächter (#1930)", () => {
     expect(stand.zeiger.map((z) => z.ordner)).toContain("forum");
   });
 
-  test("die Quelle forum liegt im Markdown-Scan (docdrift, Ticket-Ablauf, Modell-Pins) und unter den versionierten Dateien (Fremdtext, Verweise)", () => {
+  test("die Quelle forum liegt im Markdown-Scan von docdrift und unter den versionierten Dateien (Fremdtext, Verweise)", () => {
     expect(collectMarkdown()).toContain(QUELLE);
     expect(listTrackedFiles()).toContain(QUELLE);
     expect(listTrackedFiles()).toContain(ZEIGER);
