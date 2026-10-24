@@ -371,7 +371,7 @@ describe("pruefeSchutzliste (pur)", () => {
   const owners = (muster: string[]): string => `# Kopf\n\n${muster.map((m) => `${m} @owner`).join("\n")}\n`;
   const alle = [...KOPF, ...HARNESS, ...WAECHTER];
   const pruefe = (o: { vorlage?: string; codeowners?: string; quelle?: string; pfade?: string[] } = {}): string[] =>
-    lib.pruefeSchutzliste({ vorlage: o.vorlage ?? quelleText(), codeowners: o.codeowners ?? owners(alle), quelle: o.quelle ?? quelleText(), pfade: o.pfade ?? PFADE });
+    lib.pruefeSchutzliste({ vorlage: o.vorlage ?? quelleText(), codeowners: o.codeowners ?? owners(alle), quelle: o.quelle === undefined ? quelleText() : o.quelle, pfade: o.pfade ?? PFADE });
 
   test("deckungsgleiche Vorlage ist kein Befund; die drei Muster der geschlossenen Liste dürfen ohne Treffer stehen", () => {
     assert.deepEqual(pruefe(), []);
@@ -547,10 +547,11 @@ describe("Export aus HEAD", () => {
     for (const p of [".github/protected-paths.json", "scripts/docs-gen/config.json", ".mcp.json"]) assert.doesNotThrow(() => JSON.parse(text(p)), p);
     const mcp = JSON.parse(text(".mcp.json")) as { mcpServers: Record<string, { command: string; args: string[] }> };
     assert.deepEqual(Object.keys(mcp.mcpServers), ["playwright"]);
-    const lock = JSON.parse(text("package-lock.json")) as Lock;
-    const version = lock.packages["node_modules/@playwright/mcp"]?.version;
+    const quellLock = JSON.parse(leser.lies("package-lock.json") ?? "") as Lock;
+    const version = quellLock.packages["node_modules/@playwright/mcp"]?.version;
+    assert.match(String(version), /^\d+\.\d+\.\d+/, "kubernia pinnt @playwright/mcp im Lock");
     assert.equal(mcp.mcpServers.playwright.command, "npx");
-    assert.ok(mcp.mcpServers.playwright.args.includes(`@playwright/mcp@${String(version)}`), "der Server ist auf die Version des Locks gepinnt");
+    assert.ok(mcp.mcpServers.playwright.args.includes(`@playwright/mcp@${String(version)}`), "der Server ist auf die Version des Locks von kubernia gepinnt");
     for (const m of ["/CLAUDE.md", "/CLAUDE.local.md", "/scripts/*-mcp.mjs"]) assert.ok(text(".github/protected-paths.json").includes(`"${m}"`), `${m} (geschlossene Liste) fehlt`);
     const ignore = text(".gitignore").split("\n");
     for (const o of ["agents", "skills", "workflows"]) assert.ok(ignore.includes(`!.claude/${o}/`), `.gitignore ohne !.claude/${o}/`);
