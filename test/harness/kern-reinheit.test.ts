@@ -1193,14 +1193,17 @@ describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
     assert.deepEqual(sprich(fixture), ["test/fixtures/neu.json: neues Projektliteral 'Board-ID' (1x), Kern-Einheiten bleiben literalfrei"]);
     const owner = config.repo.split("/")[0];
     const hilfe = kernTestVerstoesse(["test/support/neu.ts"], () => `export const OWNER = "${owner}";\n`, echteBegriffe);
-    assert.deepEqual(sprich(hilfe), ["test/support/neu.ts: neues Projektliteral 'Owner' (1x), Kern-Einheiten bleiben literalfrei"]);
+    // `includes` statt Gleichheit: in einer Config mit überlappenden Werten (Owner enthält das Worktree-Präfix) zählen weitere Begriffe mit
+    assert.ok(sprich(hilfe).includes("test/support/neu.ts: neues Projektliteral 'Owner' (1x), Kern-Einheiten bleiben literalfrei"), hilfe.join("; "));
   });
   test("Rückfall-Prüfung: ein angehängtes Literal ist in jeder Datei der drei Arten rot, genau eine Meldung", () => {
+    const nurPraefix = { Praefix: echteBegriffe.Praefix };
     for (const datei of pfade) {
+      const vorher = zaehle(lesenWurzel(datei) ?? "", nurPraefix).Praefix ?? 0; // 0 im Repo ohne Treffer; die Probe mit einer Fremd-Config zählt vorhandene mit
       const text = `${lesenWurzel(datei) ?? ""}\nexpect(x).toBe("${config.praefixe.commitZeile}1");\n`;
       const v = kernTestVerstoesse([datei], () => text, echteBegriffe);
-      assert.equal(v.length, 1, `${datei}: ${v.join("; ")}`);
-      assert.ok(v[0].startsWith(`${datei}: neues Projektliteral 'Praefix' (1x)`), v[0]);
+      assert.ok(v.some((m) => m.startsWith(`${datei}: neues Projektliteral 'Praefix' (${vorher + 1}x)`)), `${datei}: ${v.join("; ")}`);
+      if (vorher === 0 && Object.keys(kernTestIst([datei], lesenWurzel, echteBegriffe)).length === 0) assert.equal(v.length, 1, `${datei}: genau eine Meldung`);
     }
   });
 });
