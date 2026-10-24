@@ -35,11 +35,11 @@ export function fehlerArten(events) {
 
 const GRUND_KLASSIFIKATOR = /Reason:\s*\[([^\]]+)\]/;
 // Am Präfix erkannt: der Text ist bei langen Befehlen gekappt, das Ende „has been denied“ fehlt dann.
-const REGEL_ABLEHNUNG = /^Permission to use \S+ with command/;
+const REGEL_ABLEHNUNG = /^Permission to use \S+ (?:with |has been denied)/;
 
 /**
  * Grund einer Permission-Ablehnung: der Auto-Mode-Klassifikator nennt ihn in `Reason: [..]`, eine Regel-Ablehnung
- * (`Permission to use … has been denied`) hat keinen und heißt „Regel“. `null`, wenn der Text keine Permission-Meldung ist.
+ * (`Permission to use <Tool> with <Befehl oder Pfad> has been denied` oder `Permission to use <Tool> has been denied`, gekappt ohne Ende) hat keinen und heißt „Regel“. `null`, wenn der Text keine Permission-Meldung ist.
  */
 export function permissionGrund(text) {
   const t = String(text ?? "").trim();
