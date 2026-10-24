@@ -22,6 +22,7 @@ import {
   pruefeLokalePfade,
   pruefePaketImporte,
   pruefeRelativeImporte,
+  pruefeSchutzliste,
   pruefeSkriptBezuege,
   vorlagenPfad,
   vorlagenZiel,
@@ -33,6 +34,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = ".factory/besitz.json";
 /** Lock-Datei: von der Literal-Prüfung ausgenommen, weil ihre Integritäts-Hashes (Base64) zufällig als ganzes Wort wie `KQ` enden können; die Wurzel kommt aus der Vorlage. */
 const LOCK = "package-lock.json";
+/** Schutzliste und ihr Spiegel: Vorlagen im Export, geprüft gegen die Quelle (`pruefeSchutzliste`). */
+const SCHUTZ_QUELLE = ".github/protected-paths.json";
+const CODEOWNERS = ".github/CODEOWNERS";
 const USAGE = "Aufruf: node scripts/factory-export.mjs --ziel <leerer Ordner> [--commit <rev>] [--quelle <repo>]";
 
 /** Dateien, die der Export aus einer Vorlage nicht braucht, weil er sie aus dem Quellstand filtert (Lint- und Any-Suppressionen). */
@@ -197,6 +201,13 @@ export function baueExport({ leser }) {
     } catch (err) {
       befunde.push(`${pfad}: Filter der Daten-Datei scheitert: ${err.message}`);
     }
+  }
+  const schutz = dateien.get(SCHUTZ_QUELLE);
+  const eigner = dateien.get(CODEOWNERS);
+  if (schutz === undefined || eigner === undefined) {
+    befunde.push(`${SCHUTZ_QUELLE} und ${CODEOWNERS} gehören in den Export (je eine Vorlage, Art infrastruktur-anteil)`);
+  } else {
+    befunde.push(...pruefeSchutzliste({ vorlage: schutz.text, codeowners: eigner.text, quelle: lies(SCHUTZ_QUELLE), pfade: [...exportPfade] }));
   }
   const manifestPfade = manifest.eintraege.map((e) => e.pfad);
   for (const pfad of projektwertDateien(manifestPfade, [...dateien.keys()])) {

@@ -12,6 +12,7 @@ export interface ProjektConfig {
   repo: string;
   boards: { rolle: string; besitzer: string; besitzerTyp: string; nummer: number; projectId: string; statusFeldId: number; statusFeldNodeId: string; todoOptionId: string }[];
   praefixe: { commitZeile: string; branch: string; worktree: string };
+  struktur: { quelle: string };
   labels: { harness: string; festgefahren: string; forum: string; dependabotInbox: string };
   agenten: { planer: string; umsetzer: string; lens: string; gruppe: string; ticketSkill: string };
   skills: { abschluss: string };

@@ -1,0 +1,71 @@
+{
+  "markdown": ["README.md", "docs"],
+  "gates": {
+    "package": "package.json",
+    "chains": ["verify"],
+    "descriptions": {
+      "typecheck": "voll `strict`, ganzes Projekt",
+      "lint": "ESLint typbewusst, `--max-warnings 0`, `any` blockt, Komplexität je Funktion",
+      "check:contextsize": "Größenbudget jeder AGENTS.md (Zeichen)",
+      "check:anysuppress": "Ratchet auf die Zahl begründeter `any`-Ausnahmen",
+      "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
+      "check:docgen": "generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
+      "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
+      "check:factorydrift": "Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config)",
+      "check:steuerbytes": "keine Steuerbytes (NUL) in Textdateien",
+      "check:lockfile": "Lockfile passt zur `package.json`",
+      "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",
+      "test": "Verhalten der Skripte und Harness-Wächter, inkl. Negativ- und Grenzfälle (Vitest)"
+    },
+    "ci": [
+      {
+        "command": "node scripts/check-review-nachweis.mjs",
+        "source": ".github/workflows/ci.yml",
+        "description": "Review-Nachweis (Plan- und Review-Zeile) im PR"
+      },
+      {
+        "command": "npm audit --audit-level=high",
+        "source": ".github/workflows/ci.yml",
+        "description": "Security-Gate über die Abhängigkeiten"
+      }
+    ]
+  },
+  "schichten": {
+    "layers": "scripts/layers.cjs",
+    "pruefbefehl": "npm run verify"
+  },
+  "adr": {
+    "ordner": "docs/adr"
+  },
+  "kennzahlen": {
+    "package": "package.json",
+    "chains": ["verify"],
+    "skripte": ["scripts"],
+    "skriptEndungen": [".mjs", ".cjs"],
+    "waechter": { "ordner": "test/harness" },
+    "workflows": ".github/workflows",
+    "adr": "docs/adr"
+  },
+  "diagramme": {
+    "vorlagen": {
+      "agenten-ablauf": "docs/diagramme/agenten-ablauf.mmd",
+      "agenten-sequenz": "docs/diagramme/agenten-sequenz.mmd",
+      "leitplanken-schichten": "docs/diagramme/leitplanken-schichten.mmd"
+    },
+    "vollstaendig": ["agenten-ablauf", "agenten-sequenz"],
+    "konstanten": {
+      "lensCap": { "datei": "scripts/nachweis-lib.mjs", "name": "MAX_FIX_RUNDEN" },
+      "festgefahrenCommits": { "datei": "scripts/check-festgefahren.mjs", "name": "MAX_FAILED_PUSHES" }
+    },
+    "projektConfig": ".factory/projekt.json",
+    "ciWorkflows": ".github/workflows"
+  },
+  "harness": {
+    "agents": ".claude/agents",
+    "skills": ".claude/skills",
+    "workflows": ".claude/workflows",
+    "settings": ".claude/settings.json",
+    "gitHooks": ".githooks",
+    "mcp": ".mcp.json"
+  }
+}

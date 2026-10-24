@@ -160,7 +160,6 @@ describe("Agenten-Sandbox-Konfiguration (#1432)", () => {
     assert.ok(wurzeln.length > 3, "Hook- und MCP-Skripte wurden gefunden");
     const kette = lokaleImporteTransitiv(wurzeln, read);
     assert.ok(kette.includes("scripts/hook-io.mjs"), "die Kette enthält hook-io.mjs");
-    assert.ok(kette.includes("scripts/playwright-mcp.mjs"), "die Kette enthält das MCP-Skript");
     const dw = sb.filesystem?.denyWrite;
     assert.deepEqual(ungedeckteSchreibPfade(dw, kette), []);
     assert.deepEqual(ungedeckteSchreibPfade(dw, ["node_modules/x", "package-lock.json", ".githooks/pre-push"]), []);

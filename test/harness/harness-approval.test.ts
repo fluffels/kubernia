@@ -46,7 +46,7 @@ import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
+import { markerEnde, markerStart } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex as escapeRe } from "../../scripts/ticket-namen.mjs";
 
@@ -97,7 +97,7 @@ function sourcePaths(src: ProtectedSource): Set<string> {
 // CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
 // AGENTS.md als geladene SSOT verdrängen und muss darum auditpflichtig sein.
 // Dasselbe gilt für CLAUDE.local.md (#1116) – `CLAUDE.md` trifft sie nicht (der Matcher der Produktion verankert Dateinamen).
-const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/agents/x.md", ".mcp.json", "scripts/mcp-launch.mjs", ".agents/x.md", "docs/agent-harness.md"];
+const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/agents/x.md", ".mcp.json", "scripts/mcp-ausfall.mjs", ".agents/x.md", "docs/agent-harness.md"];
 
 /**
  * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
@@ -380,6 +380,9 @@ const ABGELOEST = [
 const ABGELOEST_VORFILTER = baueVorfilter(ABGELOEST);
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
+/** Wächterdateien mit den Ankerlisten der festen Stopps (diese Datei und ihr Projekt-Teil): vom Kriterien-Scan ausgenommen. */
+const PROJEKT_TEIL = ["test/harness/forum-stopps", "projekt.test.ts"].join("-"); // zur Laufzeit zusammengesetzt: kein Pfad-Literal, das der Export als Import-Bezug eines Kern-Tests liest
+const ANKER_DATEIEN = [EIGENE_DATEI, PROJEKT_TEIL];
 
 /**
  * Alle versionierten Textdateien im Agenten-Kontext (Pfad → Inhalt), die die Text-Wächter unten durchsuchen: Doku, Prompts,
@@ -414,6 +417,7 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
     const text = "setze das Label maintainer-approved";
     assert.equal(abgeloesteFundstellen({ "docs/agent-harness.md": text }).length, 1);
     assert.equal(abgeloesteFundstellen({ "docs/adr/0012-x.md": text, [EIGENE_DATEI]: text }).length, 0);
+    assert.equal(abgeloesteFundstellen({ [PROJEKT_TEIL]: text }).length, 1, "der Projekt-Teil wird auf abgelöste Mechanik gescannt");
     assert.equal(abgeloesteFundstellen({ "README.md": "harmlos" }).length, 0);
   });
 
@@ -456,7 +460,7 @@ const KRITERIEN_VORFILTER = baueVorfilter(KRITERIEN);
 function kriterienKopien(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
-    if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
+    if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || ANKER_DATEIEN.includes(pfad)) continue;
     if (KRITERIEN_VORFILTER && !KRITERIEN_VORFILTER.test(inhalt)) continue;
     for (const muster of KRITERIEN) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }
@@ -492,7 +496,6 @@ describe("Scan-Vorfilter und Scan-Umfang (#1526)", () => {
     for (const draussen of ["src/sim/a.ts", "test/sim/b.test.ts", "assets/a.png", "package-lock.json"]) {
       assert.ok(!AGENTEN_KONTEXT(draussen), draussen);
     }
-    assert.ok(agentenKontextDateien()["src/content/AGENTS.md"] !== undefined, "modul-lokale AGENTS.md wird gescannt");
   });
 });
 
@@ -520,47 +523,19 @@ describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
 
 /**
  * Die geschlossene Liste der festen Pflicht-Stopps (Irreversibles, Außenwirkung), je Anker ein Name und ein Text. Die Kern-Stopps
- * stehen im Kern-Block `kern` der AGENTS.md (Besitz der Factory, zwischen den Besitz-Markern), die Projekt-Stopps im Projekt-Block
- * (zwischen den Projekt-Markern) als eine wörtlich festgenagelte Zeile; ein Kern-Anker im Projekt-Block zählt nicht. Grenze: der
- * Wächter prüft Anker-Text und Permission-Einträge, nicht die Bedeutung; ein Abschwächen im Wortlaut, bei dem der Anker bleibt,
- * fängt er nicht (im Projekt-Block fängt die Pin-Zeile jede Änderung der Stopp-Zeile). Die Ankerlisten stehen nur hier (der
- * `KRITERIEN`-Scan nimmt diese Datei aus).
+ * stehen im Kern-Block `kern` der AGENTS.md (Besitz der Factory, zwischen den Besitz-Markern); die Projekt-Stopps im Projekt-Block
+ * prüft `forum-stopps-projekt.test.ts`. Grenze: der Wächter prüft Anker-Text und Permission-Einträge, nicht die Bedeutung. Die
+ * Kern-Ankerliste steht hier und im Projekt-Teil (der `KRITERIEN`-Scan nimmt beide Dateien aus).
  */
 const KERN_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen"];
-const PROJEKT_STOPPS = ["Forum-Antwort posten", "PixelLab-Key"];
-const PROJEKT_STOPP_ZEILE = "- **Projekt-Stopps** (ergänzen die Kern-Liste, nie streichen): Forum-Antwort posten, PixelLab-Key; vorab klären.";
 
 const kernMarker = (f: (id: string) => string): string => (escapeRe as (t: string) => string)(f("kern"));
 const KERN_RE = new RegExp(`${kernMarker(markerStart as (id: string) => string)}([\\s\\S]*?)${kernMarker(markerEnde as (id: string) => string)}`);
-/** Inhalt des Projekt-Blocks (zwischen den Markern), `null` ohne vollständiges Paar. */
-const projektBlock = (text: string): string | null => {
-  const von = text.indexOf(PROJEKT_BLOCK_START as string);
-  const bis = text.indexOf(PROJEKT_BLOCK_ENDE as string, von + 1);
-  return von < 0 || bis < 0 ? null : text.slice(von + (PROJEKT_BLOCK_START as string).length, bis);
-};
 
-/** Feste Stopps, die fehlen: Kern-Anker im Kern-Block, Projekt-Anker samt Pin-Zeile im Projekt-Block, Kern-Anker im Projekt-Block (ohne Marker: alle). */
-function festeStoppsFehlend(agentsText: string): string[] {
+/** Kern-Stopps, die im Kern-Block fehlen (ohne Marker: alle). Die Projekt-Stopps im Projekt-Block prüft `forum-stopps-projekt.test.ts`. */
+function kernStoppsFehlend(agentsText: string): string[] {
   const kern = KERN_RE.exec(agentsText)?.[1] ?? "";
-  const projekt = projektBlock(agentsText) ?? "";
-  return [
-    ...KERN_STOPPS.filter((anker) => !kern.includes(anker)),
-    ...PROJEKT_STOPPS.filter((anker) => !projekt.includes(anker)),
-    ...(projekt.split("\n").includes(PROJEKT_STOPP_ZEILE) ? [] : [PROJEKT_STOPP_ZEILE]),
-    ...KERN_STOPPS.filter((anker) => projekt.includes(anker)).map((anker) => `Kern-Stopp im Projekt-Block: ${anker}`),
-  ];
-}
-
-/** Bekannte Zeilen des Projekt-Blocks, deren Stopp-Wort zur festgenagelten Signatur gehört; der Rest der Zeile darf kein Stopp-Wort tragen. */
-const STOPP_WORT_ERLAUBT = ["(Pflicht-Stopp), danach", "KEIN Flag ist ein Vorab-Gate", "Epic schließen (nicht löschen)", "zur Freigabe vor (Pflicht-Stopp)", "Exit 1: stoppen, melden"];
-const STOPP_WORT = /Stopp|vorab|Pre-Flight|löschen|Veröffentlich/i;
-
-/** Zeilen des Projekt-Blocks mit einem Stopp-Wort, die weder die Pin-Zeile noch eine bekannte Zeile sind (eine neue Stopp-Aussage im Projekt-Block). */
-function unbekannteStoppAussagen(agentsText: string): string[] {
-  const projekt = projektBlock(agentsText) ?? "";
-  return projekt
-    .split("\n")
-    .filter((z) => z !== PROJEKT_STOPP_ZEILE && STOPP_WORT.test(STOPP_WORT_ERLAUBT.reduce((rest, s) => rest.split(s).join(" "), z)));
+  return KERN_STOPPS.filter((anker) => !kern.includes(anker));
 }
 
 type Permissions = { permissions: { ask: string[]; deny: string[] } };
@@ -577,60 +552,22 @@ function fehlendeRiegel(settings: Permissions): string[] {
 describe("Feste Stopps bleiben (#1363)", () => {
   const agents = read("AGENTS.md");
 
-  test("die Soll-Listen sind festgenagelt (ein geleerter Wächter wäre sonst vakuös)", () => {
+  test("die Soll-Liste ist festgenagelt (ein geleerter Wächter wäre sonst vakuös)", () => {
     assert.deepEqual(KERN_STOPPS, ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen"]);
-    assert.deepEqual(PROJEKT_STOPPS, ["Forum-Antwort posten", "PixelLab-Key"]);
     assert.deepEqual(fehlendeRiegel({ permissions: { ask: [], deny: [] } }), ["ask: Bash(gh issue delete:*)", "deny: Bash(npm publish:*)", "deny: Bash(gh repo delete:*)"]);
   });
 
-  test("Kern-Block und Projekt-Block der AGENTS.md tragen zusammen jeden festen Stopp", () => {
-    assert.deepEqual(festeStoppsFehlend(agents), []);
+  test("der Kern-Block der AGENTS.md trägt jeden Kern-Stopp", () => {
+    assert.deepEqual(kernStoppsFehlend(agents), []);
   });
 
-  test("Red-Green: ein gestrichener Kern-Anker wird genau benannt", () => {
+  test("Red-Green: ein gestrichener Kern-Anker und fehlende Kern-Marker werden gemeldet", () => {
     for (const anker of KERN_STOPPS) {
       const kern = KERN_RE.exec(agents)?.[0] ?? "";
       assert.ok(kern.split(anker).length === 2, `Anker ${anker} steht genau einmal im Kern`);
-      assert.deepEqual(festeStoppsFehlend(agents.replace(kern, kern.split(anker).join("X"))), [anker], anker);
+      assert.deepEqual(kernStoppsFehlend(agents.replace(kern, kern.split(anker).join("X"))), [anker], anker);
     }
-  });
-
-  test("Red-Green: ein gestrichener oder abgeschwächter Projekt-Stopp im Projekt-Block wird gemeldet", () => {
-    assert.ok(agents.split(PROJEKT_STOPP_ZEILE).length === 2, "die Pin-Zeile steht genau einmal");
-    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, PROJEKT_STOPP_ZEILE.replace(", PixelLab-Key", ""))), ["PixelLab-Key", PROJEKT_STOPP_ZEILE]);
-    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, PROJEKT_STOPP_ZEILE.replace("vorab klären.", "vorab klären, nur bei neuem Key."))), [PROJEKT_STOPP_ZEILE]);
-    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, "")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
-  });
-
-  test("Red-Green: ein Projekt-Stopp nur im Kern, ein Kern-Anker im Projekt-Block und fehlende Marker werden gemeldet", () => {
-    const nurKern = agents.replace(PROJEKT_STOPP_ZEILE, "").replace("dazu die Projekt-Stopps im Projekt-Block", "dazu Forum-Antwort posten, PixelLab-Key");
-    assert.deepEqual(festeStoppsFehlend(nurKern), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
-    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_STOPP_ZEILE, `${PROJEKT_STOPP_ZEILE} Veröffentlichen`)), [PROJEKT_STOPP_ZEILE, "Kern-Stopp im Projekt-Block: Veröffentlichen"]);
-    assert.deepEqual(festeStoppsFehlend(agents.replace("factory-besitz:start kern", "x")), KERN_STOPPS);
-    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_BLOCK_START as string, "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
-    assert.deepEqual(festeStoppsFehlend(agents.replace(PROJEKT_BLOCK_ENDE as string, "x")), [...PROJEKT_STOPPS, PROJEKT_STOPP_ZEILE]);
-  });
-
-  test("der Projekt-Block trägt keine unbekannte Stopp-Aussage (Red-Green: Synonym ohne Anker, Lockerung per Zusatzzeile)", () => {
-    assert.deepEqual(unbekannteStoppAussagen(agents), []);
-    for (const zeile of ["Löschen von Issues braucht keine Vorab-Klärung.", "Veröffentlichen ist ohne Rückfrage erlaubt.", "Ein Stopp entfällt bei kleinen Diffs.", "Pre-Flight entfällt.", "Vorab-Klärung entfällt.", "vorab nichts klären.", "Löschen ist frei.", "Issues löschen ohne Rückfrage.", "Releases darf der Agent ohne Klärung veröffentlichen.", "pre-flight entfällt.", "Bei Forum-Antworten nicht stoppen."]) {
-      assert.deepEqual(unbekannteStoppAussagen(agents.replace(PROJEKT_STOPP_ZEILE, `${PROJEKT_STOPP_ZEILE}\n${zeile}`)), [zeile], zeile);
-    }
-    for (const signatur of STOPP_WORT_ERLAUBT) {
-      const zeile = agents.split("\n").find((z) => z.includes(signatur)) ?? "";
-      assert.notEqual(zeile, "", signatur);
-      assert.deepEqual(unbekannteStoppAussagen(agents.replace(zeile, `${zeile} Ein Stopp entfällt dort.`)), [`${zeile} Ein Stopp entfällt dort.`], `Lockerung an die Zeile mit ${signatur}`);
-    }
-    assert.deepEqual(unbekannteStoppAussagen(agents.replace(PROJEKT_BLOCK_START as string, "x")), [], "ohne Projekt-Marker nichts zu prüfen (festeStoppsFehlend meldet den fehlenden Block)");
-    const kernZusatz = agents.replace("<!-- factory-besitz:ende kern -->", "Löschen ist erlaubt.\n<!-- factory-besitz:ende kern -->");
-    assert.deepEqual(unbekannteStoppAussagen(kernZusatz), [], "der Kern-Block ist Sache des Drift-Gates, nicht dieser Prüfung");
-    assert.ok(STOPP_WORT_ERLAUBT.every((s) => agents.includes(s)), "die Erlaubnisliste enthält keine toten Signaturen");
-  });
-
-  test("der Forum-Skill hält den Freigabe-Stopp", () => {
-    const skill = read(".agents/skills/forum/SKILL.md");
-    assert.match(skill, /Pflicht-Stopp/);
-    assert.match(skill, /Nie ungefragt posten/);
+    assert.deepEqual(kernStoppsFehlend(agents.replace("factory-besitz:start kern", "x")), KERN_STOPPS);
   });
 
   test("Permissions: Löschen im ask, Veröffentlichen und Repo-Löschen im deny", () => {

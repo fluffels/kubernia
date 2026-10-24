@@ -196,7 +196,7 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
     const r = lauf(`${ECHT.diffcovOverride}: ohne Nummer`);
     expect(r.code).toBe(0);
     expect(r.out).toContain("ungültige Override-Zeile ignoriert");
-    expect(r.out).toContain("keinen gemessenen Quellcode (src/**/*.ts)");
+    expect(r.out).toContain(`keinen gemessenen Quellcode (${projektConfig().struktur.quelle}/**/*.ts)`);
   });
 
   it("gültige Override-Zeile ohne messbaren Code ist stale und rot", () => {
@@ -429,5 +429,18 @@ describe("commitImSlice / loeseCommit (#1781 L5a): head im Slice an einer Stelle
   it("Teil-SHA ist kein Treffer im Slice (volle Gleichheit)", () => {
     const { git } = fake({ known: [IM_SLICE], slice: [IM_SLICE.slice(0, 7)] });
     expect(so.commitImSlice(git, BASE, IM_SLICE).imSlice).toBe(false);
+  });
+});
+
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as abschlussRoh from "../scripts/umsetzer-abschluss.mjs";
+
+const abschluss = abschlussRoh as unknown as { leitplankenMuster: () => string[]; trifftLeitplanke: (pfad: string, muster: string[]) => boolean };
+
+describe("Schutzliste (.github/protected-paths.json, #1929): der Kopfkommentar von slice-override.mjs nennt sie als Quelle", () => {
+  it("scripts/slice-override.mjs ist eine Leitplanke der echten Liste, und ohne seinen Eintrag wäre es keine", () => {
+    const muster = abschluss.leitplankenMuster();
+    expect(abschluss.trifftLeitplanke("scripts/slice-override.mjs", muster)).toBe(true);
+    expect(abschluss.trifftLeitplanke("scripts/slice-override.mjs", muster.filter((m) => m !== "/scripts/slice-override.mjs"))).toBe(false);
   });
 });

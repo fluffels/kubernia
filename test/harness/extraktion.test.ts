@@ -303,6 +303,26 @@ describe("Extraktionsliste: Quellwurzel als Parameter und Vorkompilierung (#1888
     assert.equal(extraktionsArten("lib").infrastruktur?.("src/x.ts"), true);
     assert.equal(extraktionsArten("lib").infrastruktur?.("lib/x.ts"), false);
     assert.equal(extraktionsArten("lib")["infrastruktur-anteil"]?.("docs/x.md"), false);
+    // Ausnahme in docs/: nur die Diagramm-Vorlagen (genau eine Ebene, nur .mmd), für beide Infrastruktur-Arten
+    for (const art of ["infrastruktur", "infrastruktur-anteil"] as const) {
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.mmd"), true, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/x.mmd"), false, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.md"), false, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/sub/x.mmd"), false, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/xmmd"), false, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x-mmd"), false, `${art}: der Punkt vor mmd ist maskiert`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.mmd.md"), false, `${art}: die Endung ist verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("test/docs/diagramme/x.mmd"), false, `${art}: der Pfad ist an der Wurzel verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("lib/docs/diagramme/x.mmd"), false, `${art}: auch unter der Quellwurzel`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/.mmd"), false, `${art}: ein Dateiname braucht einen Stamm vor .mmd`);
+      // zweite Ausnahme: genau das Inventar der Eigenbauten
+      assert.equal(extraktionsArten("lib")[art]?.("docs/harness-inventar.md"), true, art);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/harness-inventar.mdx"), false, `${art}: die Endung ist verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/x/harness-inventar.md"), false, `${art}: nur direkt unter docs/`);
+      assert.equal(extraktionsArten("lib")[art]?.("test/docs/harness-inventar.md"), false, `${art}: an der Wurzel verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/xharness-inventar.md"), false, `${art}: der Name ist ganz`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/harness-inventarxmd"), false, `${art}: der Punkt ist maskiert`);
+    }
   });
   test("ohne Quellwurzel bricht die Prüfung ab (der Kern kennt keinen festen Namen)", () => {
     assert.throws(() => pruefeExtraktion(l("src/p.ts"), opt), /quelle .* fehlt/);
