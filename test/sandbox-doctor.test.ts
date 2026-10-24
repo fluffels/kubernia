@@ -458,6 +458,13 @@ describe("CLI", () => {
     expect(json.sandbox?.network?.allowedDomains).toContain("registry.npmjs.org");
     expect(json.sandbox?.network?.allowedDomains).toContain("lf.example");
   });
+  test("--vorlage führt die Projekt-Deny-Variablen aus der settings.json mit", () => {
+    const r = lauf(["--vorlage"]);
+    const json = JSON.parse(r.stdout) as Settings;
+    const soll = D.projektDenyVariablen(readFileSync(fileURLToPath(new URL("../.claude/settings.json", import.meta.url)), "utf8"));
+    const deny = (json.sandbox?.credentials?.envVars ?? []).filter((e) => e.mode === "deny").map((e) => e.name);
+    for (const n of soll) expect(deny).toContain(n);
+  });
   test("unbekanntes oder fehlendes Argument: Usage und Exit 2", () => {
     expect(lauf(["--quatsch"]).status).toBe(2);
     expect(lauf([]).status).toBe(2);
