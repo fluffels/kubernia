@@ -689,6 +689,15 @@ describe("Export aus HEAD", () => {
       );
     });
 
+    test.each([
+      [".github/CODEOWNERS", ".factory/produkt/vorlagen/.github/CODEOWNERS.vorlage"],
+      [".github/protected-paths.json", ".factory/produkt/vorlagen/.github/protected-paths.json.vorlage"],
+    ])("#1929: fehlt nur %s im Export (Eintrag und Vorlage entfernt), ist das ein Befund und keine Ausnahme", (datei, vorlage) => {
+      const liste = JSON.parse(basisText(".factory/extraktion.json")) as { eintraege: { muster?: string }[] };
+      liste.eintraege = liste.eintraege.filter((e) => e.muster !== datei);
+      befund({ ".factory/extraktion.json": JSON.stringify(liste), [vorlage]: null }, /\.github\/protected-paths\.json und \.github\/CODEOWNERS gehören in den Export/);
+    });
+
     test("AK6: ein kubernia in einer Kern-Einheit macht die Literal-Prüfung rot", () => {
       abbruch({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// kubernia\n` }, /scripts\/check-size\.mjs: kubernia-Literal 'kubernia' \(1x\)/);
     });

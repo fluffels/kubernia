@@ -10,7 +10,7 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "skills:sync": "node scripts/skills-sync.mjs",
-    "test":"vitest run",
+    "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check:contextsize": "node scripts/check-context-size.mjs",
