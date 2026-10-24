@@ -6,7 +6,7 @@
 import { beforeAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,8 +52,8 @@ const lib = rawLib as unknown as {
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   paketName(spec: string): string | null;
 };
-const leserVomCommit = (rawSync as unknown as { leserVomCommit(quelle: string, rev: string): Leser }).leserVomCommit;
-const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf(wurzel: string, config: () => unknown): { dateien: number; fehler: string[]; abweichungen: string[] } };
+const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
+const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] } };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const temp: string[] = [];
@@ -149,7 +149,7 @@ describe("kuberniaBegriffe", () => {
 
   test("geteilte Begriffe (Owner, Label, Skill) entfallen, verschiedene und Projektliterale der Factory bleiben", () => {
     const b = lib.kuberniaBegriffe(kub, fac);
-    assert.deepEqual(Object.keys(b).sort(), ["Agent", "Branch", "Hof", "Praefix", "Repo", "Worktree", "kub"].sort());
+    assert.deepEqual(Object.keys(b).sort(), ["Agent", "Branch", "Env", "Hof", "Praefix", "Repo", "Worktree", "kub"].sort());
     assert.ok("kub".match(b.kub));
   });
 
