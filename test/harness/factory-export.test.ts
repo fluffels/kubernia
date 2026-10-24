@@ -285,6 +285,8 @@ describe("Prüfungen (pur)", () => {
     assert.deepEqual(lib.pruefeLokalePfade(new Map([["docs/a.md", `${L}foo\\kubernia\\x`]]), ["egal"]).befunde, []);
     const posix = lib.pruefeLokalePfade(new Map([["scripts/p.mjs", "/c/dev/proj\n/Users/Max/proj\na/Users/Max/proj\nnichts\n"]]), ["egal"]);
     assert.deepEqual(posix, { befunde: [], durchgelassen: 2 });
+    const eingebettet = lib.pruefeLokalePfade(new Map([["scripts/p.mjs", ["x/c/dev/a", "https://h/c/dev/a", ""].join("\n")]]), ["egal"]);
+    assert.deepEqual(eingebettet, { befunde: [], durchgelassen: 0 });
     const ausgeschlossen = lib.pruefeLokalePfade(new Map([["package-lock.json", `${L}Users\\Echt\\x`]]), ["egal"]);
     assert.deepEqual(ausgeschlossen, { befunde: [], durchgelassen: 0 });
   });
@@ -467,7 +469,10 @@ describe("Export aus HEAD", () => {
     assert.ok(b.relativUnaufloesbar > 0);
     assert.ok(b.paketUnbekannt.includes("lodash"));
     assert.ok(b.literalRest.length > 0 && b.literalRest.every(([p]) => p.startsWith("docs/")));
-    const pfade = b.literalRest.map(([p]) => p);
+    const umgekehrt = ex.baueExport({ leser: { ...leser, pfade: [...leser.pfade].reverse() } });
+    assert.deepEqual(umgekehrt.befunde, []);
+    const pfade = umgekehrt.bericht.literalRest.map(([p]) => p);
+    assert.ok(pfade.length > 1);
     assert.deepEqual(pfade, [...pfade].sort());
   });
 
