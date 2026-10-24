@@ -65,7 +65,7 @@ function ergaenzterWert(e, srcText, span, erg) {
 }
 
 /** Wendet alle Teil-Einheiten einer Datei nacheinander auf den Zieltext an (LF-normalisiert). Wirft bei Marker- oder JSON-Fehlern. */
-function wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg) {
+export function wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg) {
   let arbeit = zielLf;
   for (const e of eintraege) {
     if (e.block !== undefined) {
@@ -228,22 +228,10 @@ function gitIn(quelle, args, input) {
   }
 }
 
-/**
- * Leser für einen Tag der Quelle (#1871): `{ fehler }` oder `{ stand, lies, ausfuehrbar, vorladen }`. Nur Tags zählen, ein Branch gleichen Namens nicht;
- * der Commit ist der aufgelöste Commit (auch bei einem annotierten Tag). `lies` liefert `null` für Pfade ohne Blob im Tag, `vorladen` holt viele
- * Pfade mit einem `git cat-file --batch` (die Länge im Kopf zählt Bytes).
- */
-export function quelleVomTag(quelle, tag) {
-  const aufgeloest = gitIn(quelle, ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}^{commit}`]);
-  if (!aufgeloest.ok) {
-    if (!gitIn(quelle, ["rev-parse", "--git-dir"]).ok) return { fehler: "Quelle ist kein Git-Repo" };
-    if (!gitIn(quelle, ["check-ref-format", `refs/tags/${tag}`]).ok) return { fehler: `'${tag}' ist kein gültiger Tag-Name` };
-    const branch = gitIn(quelle, ["rev-parse", "--verify", "--quiet", `refs/heads/${tag}`]).ok;
-    return { fehler: branch ? `'${tag}' ist ein Branch, kein Tag; der Sync nimmt nur Tags` : `Tag '${tag}' gibt es in der Quelle nicht` };
-  }
-  const commit = aufgeloest.out.toString("utf8").trim();
+/** Baum eines aufgelösten Commits lesen: `null`, wenn er nicht lesbar ist, sonst `{ commit, pfade, lies, ausfuehrbar, vorladen }`. */
+function leserFuerCommit(quelle, commit) {
   const baum = gitIn(quelle, ["ls-tree", "-r", "-z", "--full-tree", commit]);
-  if (!baum.ok) return { fehler: `Tag '${tag}': der Baum von ${commit} ist nicht lesbar` };
+  if (!baum.ok) return null;
   const modi = new Map();
   for (const zeile of baum.out.toString("utf8").split("\0")) {
     const m = /^(\d+) blob [0-9a-f]+\t(.*)$/s.exec(zeile);
@@ -276,7 +264,37 @@ export function quelleVomTag(quelle, tag) {
     }
     return cache.get(pfad);
   };
-  return { stand: { commit, tag, sauber: true }, lies, ausfuehrbar: (pfad) => modi.get(pfad) === "100755", vorladen };
+  return { commit, pfade: [...modi.keys()], lies, ausfuehrbar: (pfad) => modi.get(pfad) === "100755", vorladen };
+}
+
+/**
+ * Leser für einen Commit der Quelle (ADR 0022 F10): `rev` ist ein beliebiger Verweis (Commit-SHA, `HEAD`, Branch, Tag). Ergebnis `{ fehler }` oder
+ * `{ commit, pfade, lies, ausfuehrbar, vorladen }`: `commit` der aufgelöste SHA, `pfade` die Blob-Pfade des Baums (ohne Symlinks).
+ */
+export function leserVomCommit(quelle, rev) {
+  const aufgeloest = gitIn(quelle, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]);
+  if (!aufgeloest.ok) return { fehler: gitIn(quelle, ["rev-parse", "--git-dir"]).ok ? `Commit '${rev}' gibt es in der Quelle nicht` : "Quelle ist kein Git-Repo" };
+  const commit = aufgeloest.out.toString("utf8").trim();
+  return leserFuerCommit(quelle, commit) ?? { fehler: `der Baum von ${commit} ist nicht lesbar` };
+}
+
+/**
+ * Leser für einen Tag der Quelle (#1871): `{ fehler }` oder `{ stand, lies, ausfuehrbar, vorladen }`. Nur Tags zählen, ein Branch gleichen Namens nicht;
+ * der Commit ist der aufgelöste Commit (auch bei einem annotierten Tag). `lies` liefert `null` für Pfade ohne Blob im Tag, `vorladen` holt viele
+ * Pfade mit einem `git cat-file --batch` (die Länge im Kopf zählt Bytes).
+ */
+export function quelleVomTag(quelle, tag) {
+  const aufgeloest = gitIn(quelle, ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}^{commit}`]);
+  if (!aufgeloest.ok) {
+    if (!gitIn(quelle, ["rev-parse", "--git-dir"]).ok) return { fehler: "Quelle ist kein Git-Repo" };
+    if (!gitIn(quelle, ["check-ref-format", `refs/tags/${tag}`]).ok) return { fehler: `'${tag}' ist kein gültiger Tag-Name` };
+    const branch = gitIn(quelle, ["rev-parse", "--verify", "--quiet", `refs/heads/${tag}`]).ok;
+    return { fehler: branch ? `'${tag}' ist ein Branch, kein Tag; der Sync nimmt nur Tags` : `Tag '${tag}' gibt es in der Quelle nicht` };
+  }
+  const commit = aufgeloest.out.toString("utf8").trim();
+  const leser = leserFuerCommit(quelle, commit);
+  if (leser === null) return { fehler: `Tag '${tag}': der Baum von ${commit} ist nicht lesbar` };
+  return { stand: { commit, tag, sauber: true }, lies: leser.lies, ausfuehrbar: leser.ausfuehrbar, vorladen: leser.vorladen };
 }
 
 function quelleGit(quelle) {

@@ -911,6 +911,32 @@ describe("Sync vom Tag (#1871)", () => {
     assert.equal(w.lies("scripts/neu.mjs"), null);
   });
 
+  test("leserVomCommit (#1923): HEAD und SHA lösen auf, pfade nennt die Blobs, Ausführbar-Bit aus dem Baum, unbekannter Verweis ist ein Fehler", () => {
+    const q = baueQuelle();
+    taggen(q, "v1", { exec: ["scripts/a.mjs"] });
+    schreibe(q, "scripts/neu.mjs", "nur im Arbeitsbaum\n");
+    const lv = (rawSync as unknown as { leserVomCommit(q: string, rev: string): TagLeser & { commit: string; pfade: string[] } }).leserVomCommit;
+    const sha = commitVon(q);
+    for (const rev of ["HEAD", sha]) {
+      const l = lv(q, rev);
+      assert.equal(l.fehler, undefined);
+      assert.equal(l.commit, sha);
+      assert.ok(l.pfade.includes("scripts/a.mjs") && l.pfade.includes("AGENTS.md"));
+      assert.equal(l.pfade.includes("scripts/neu.mjs"), false);
+      assert.equal(l.ausfuehrbar("scripts/a.mjs"), true);
+      assert.equal(l.ausfuehrbar("AGENTS.md"), false);
+      assert.equal(l.lies("scripts/a.mjs"), "export const a = 1;\n");
+      assert.equal(l.lies("scripts/neu.mjs"), null);
+    }
+    assert.match(lv(q, "gibt-es-nicht").fehler ?? "", /gibt es in der Quelle nicht/);
+    const leer = mkdtempSync(join(tmpdir(), "fsync-leer-"));
+    try {
+      assert.match(lv(leer, "HEAD").fehler ?? "", /kein Git-Repo/);
+    } finally {
+      rmSync(leer, { recursive: true, force: true });
+    }
+  });
+
   test("vorladen füllt den Cache: lies liefert danach auch bei unbrauchbarer Quelle, ohne vorladen nicht", () => {
     const q = baueQuelle();
     taggen(q, "v1");
