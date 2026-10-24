@@ -66,6 +66,6 @@ describe("Trace-Tag des Projekts (#1906)", () => {
     assert.ok(glossarZeileVerlinkt(gl));
     assert.equal(glossarZeileVerlinkt(gl.replace("(model-routing.md#zuordnung-in-langfuse-1266)", "(model-routing.md)")), false);
     assert.equal(glossarZeileVerlinkt(gl.replace("Projektfilter der Langfuse-Auswertung.", "Projektfilter, ab 2026-10-05.")), false);
-    assert.equal(glossarZeileVerlinkt(gl.replace(`| Trace-Tag \`${TAG}\``, "| Anderer Name")), false);
+    assert.equal(glossarZeileVerlinkt(gl.replace(`| Trace-Tag \`${TAG}\``, "| Trace-Tag `anderes-projekt`")), false);
   });
 });
