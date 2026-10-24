@@ -11,11 +11,14 @@
  * Diese Fitness-Function sichert genau das ab:
  *  - `verify` existiert und ruft JEDES Einzel-Gate auf (kein vergessenes Gate –
  *    auch ein künftig neu hinzugefügtes `check:*` muss in die Kette),
- *  - `verify:full` erweitert `verify` um beide Builds + den Boot-Smoke,
+ *  - `verify:full` erweitert `verify` (Coverage und Diff-Coverage dahinter),
  *  - die CI ruft die `verify`-Kette auf, statt die Gates einzeln zu duplizieren.
  *
  * Rein struktureller Wächter (wie readme/docmap/filesize) – bewusst kein
  * Verhaltens-Test. Ausführen mit:  npm test
+ *
+ * Projektneutral (#1932): Builds, Smoke, Bundle-Budget, der TS-7-Wächter und das Alarm-Label des Spiels
+ * prüft der Projekt-Test `gates-projekt.test.ts`; die Gate-Namen dieser Klassen stehen hier nur als Ausschlussliste.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -35,11 +38,9 @@ const pkg = JSON.parse(readRepo("package.json")) as {
 };
 const scripts = pkg.scripts;
 
-// Build-ABHÄNGIGE Gates messen die GEBAUTEN Artefakte und können darum nicht in
-// der build-freien `verify`-Kette laufen – sie gehören (wie test:coverage) hinter
-// die Builds in `verify:full`. #503: check:bundle misst dist-offline/index.html +
-// die dist/-Chunks, existiert also erst NACH `build`/`build:offline`.
-const BUILD_DEPENDENT_GATES = new Set(["check:bundle"]);
+// Projekt-Gates außerhalb der Kette (Bundle-Budget nach den Builds, TS-7-Wächter mit Netz, weicher Duplikat-Bericht): der Projekt-Test
+// `gates-projekt.test.ts` prüft ihre Regeln, hier fallen sie nur aus der Liste der Gates, die `verify` fahren muss.
+const PROJEKT_GATES = new Set(["check:bundle", "check:tseslint-ts7", "check:duplication"]);
 
 // Report-ABHÄNGIGE Gates werten ein Artefakt aus, das erst ein anderer Lauf erzeugt —
 // sie können darum ebenfalls nicht in der schnellen `verify`-Kette laufen. #1021:
@@ -52,30 +53,21 @@ const REPORT_DEPENDENT_GATES = new Map([["check:diffcoverage", "test:coverage"]]
 // Netz-/nicht-deterministische Gates, die bewusst NICHT in der hermetischen,
 // offline-fähigen `verify`-Kette laufen dürfen: #610 check:doctickets gleicht die
 // offen-markierten Roadmap-Tickets gegen den echten `gh issue`-Status ab — das
-// braucht Netz + Token und ist nicht deterministisch. #847 check:tseslint-ts7 fragt
-// die npm-Registry, ob typescript-eslint schon TS 7 zulässt (braucht Netz). Beide
-// laufen als eigener, non-blocking CI-Job (alarmierend) + lokal auf Zuruf.
-const NETWORK_DEPENDENT_GATES = new Set(["check:doctickets", "check:tseslint-ts7"]);
-
-// Bewusst WEICHE, NICHT-blockierende `check:*` — keine Gates, sondern nur berichtende
-// CI-Artefakte, die daher AUSDRÜCKLICH NICHT in die `verify`-Kette gehören. #612:
-// check:duplication (jscpd) ist ein reiner Copy-Paste-Report ohne `threshold`; ein
-// Platz in `verify` würde ihn zum harten Gate machen — genau das soll er nicht sein
-// (die weiche Auslegung sichert test/harness/duplication-config.test.ts).
-const SOFT_NONBLOCKING_GATES = new Set(["check:duplication"]);
+// braucht Netz + Token und ist nicht deterministisch. Es läuft als eigener,
+// non-blocking CI-Job (alarmierend) + lokal auf Zuruf.
+const NETWORK_DEPENDENT_GATES = new Set(["check:doctickets"]);
 
 // Die build-freien Einzel-Gates, die `verify` fährt: jedes `check:*` (außer den
-// build-, netzabhängigen und bewusst weichen) plus die drei Namens-Gates. Aus den
+// Projekt-Gates, report- und netzabhängigen) plus die drei Namens-Gates. Aus den
 // Scripts abgeleitet, damit ein neu hinzugefügtes `check:*`-Gate den Test automatisch
 // mitzieht (statt hier zu verrotten).
 const GATE_SCRIPTS = [
   ...Object.keys(scripts).filter(
     (n) =>
       n.startsWith("check:") &&
-      !BUILD_DEPENDENT_GATES.has(n) &&
+      !PROJEKT_GATES.has(n) &&
       !REPORT_DEPENDENT_GATES.has(n) &&
-      !NETWORK_DEPENDENT_GATES.has(n) &&
-      !SOFT_NONBLOCKING_GATES.has(n),
+      !NETWORK_DEPENDENT_GATES.has(n),
   ),
   "typecheck",
   "lint",
@@ -96,31 +88,10 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     }
   });
 
-  it("`verify:full` erweitert `verify` um beide Builds + Boot-Smoke", () => {
+  it("`verify:full` existiert und erweitert `verify`", () => {
     const full = scripts["verify:full"];
     expect(full, "npm run verify:full muss existieren").toBeTruthy();
     expect(full).toMatch(/\bnpm run verify\b/);
-    expect(full).toMatch(/\bnpm run build\b/);
-    expect(full).toMatch(/\bnpm run build:offline\b/);
-    expect(full).toMatch(/\bnpm run (test:smoke|smoke)\b/);
-  });
-
-  it("build-abhängige Gates (#503 check:bundle) laufen in verify:full, NACH den Builds", () => {
-    const full = scripts["verify:full"];
-    for (const gate of BUILD_DEPENDENT_GATES) {
-      const needle = new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);
-      expect(full, `verify:full muss das build-abhängige Gate "${gate}" enthalten`).toMatch(needle);
-      // ... und zwar hinter build:offline (sonst fehlt das gemessene Artefakt).
-      expect(
-        full.indexOf(`npm run ${gate}`) > full.indexOf("npm run build:offline"),
-        `"${gate}" muss NACH "build:offline" stehen`,
-      ).toBe(true);
-      // NICHT in der build-freien verify-Kette (dort gäbe es kein Artefakt zu messen).
-      expect(
-        new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`).test(scripts.verify),
-        `"${gate}" darf NICHT in der build-freien verify-Kette stehen`,
-      ).toBe(false);
-    }
   });
 
   it("report-abhängige Gates (#1021 check:diffcoverage) laufen in verify:full, NACH ihrem Erzeuger", () => {
@@ -229,7 +200,7 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
       ci,
       "der Alarm darf sich nicht mehr auf das entfernte prio:hoch-Label verlassen",
     ).not.toMatch(/--label "prio:hoch"/);
-    expect(ci).toMatch(/ALARM_LABEL:\s*area:architektur/);
+    expect(ci).toMatch(/ALARM_LABEL:\s*area:[\w-]+/);
     expect(ci).toMatch(/gh issue create[\s\S]*?--label "\$ALARM_LABEL"/);
   });
 

@@ -8,6 +8,7 @@
 // verschieden ist, als ganze Wörter (Buchstaben und Ziffern grenzen ab, `_` nicht), je Fundstelle einmal, Projektliterale zuerst. Der Kern-Wächter zählt die rohen
 // Regex-Treffer derselben Begriffe (Owner, Repo, Präfixe, Label und Agent ohne Wortgrenze, ein Teilwort trifft dort); das Werkzeug ist enger, damit ein Teilwort wie `kuberniaartig` keinen Export verhindert.
 import { builtinModules } from "node:module";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { posix } from "node:path";
 import { begriffeAus } from "./besitz-lib.mjs";
 import { importeAus, relativeImporte, zielDatei } from "./besitz-extraktion.mjs";
@@ -33,6 +34,20 @@ function aufloesen(packages, von, name) {
     const i = basis.lastIndexOf("node_modules/");
     basis = i <= 0 ? "" : basis.slice(0, i - 1);
   }
+}
+
+/**
+ * Schreibt den Commit-Zeilen-Präfix (`KQ-`) in `text` auf den der Factory-Config um, aber nur vor einem Großbuchstaben (`KQ-Review:`, `KQ-Diffsize-Override`).
+ * Teilwörter (`XKQ-A`), Zahlen (`KQ-123`), Kleinschreibung (Branch- und Worktree-Präfix) und der nackte Präfix bleiben stehen. Rückgabe `{ text, anzahl }`.
+ */
+export function schreibePraefixUm(text, von, nach) {
+  const re = new RegExp(`(?<![\\w-])${escapeRegex(von)}(?=[A-ZÄÖÜ])`, "g");
+  let anzahl = 0;
+  const neu = text.replace(re, () => {
+    anzahl++;
+    return nach;
+  });
+  return { text: neu, anzahl };
 }
 
 /**

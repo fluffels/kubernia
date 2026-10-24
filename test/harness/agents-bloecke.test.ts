@@ -154,12 +154,11 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
     assert.match(umsetzer, /Optik-Messlatte/);
     const projekt = agents.slice(agents.indexOf(PROJEKT_START), agents.indexOf(PROJEKT_ENDE));
     assert.match(projekt, /\*\*Projekt-Leitfrage\*\*/);
-    assert.ok(projekt.includes("Optik-Messlatte"), "der Projekt-Block nennt die Optik-Messlatte");
   });
 
   // Projektneutrale Arbeitsregeln sind Kernbesitz (#1843): jeder Anker steht genau 1x in der Datei, und zwar im Kern; der
   // Projekt-Block behält nur den Projektteil der Ticket-Auswahl.
-  test("Kern-Regeln (#1843): jeder Anker genau 1x und im Kern, der Projekt-Block behält den Projektteil der Auswahl", () => {
+  test("Kern-Regeln (#1843): jeder Anker genau 1x und im Kern, der Projekt-Block trägt keinen Kern-Anker", () => {
     const kern = lib.einheitText(KERN, agents) ?? "";
     const projekt = agents.slice(agents.indexOf(PROJEKT_START), agents.indexOf(PROJEKT_ENDE));
     const anker = [
@@ -181,8 +180,6 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
       assert.equal(kern.includes(a), true, `Anker „${a}“ gehört in den Kern`);
       assert.equal(projekt.includes(a), false, `Anker „${a}“ gehört nicht in den Projekt-Block`);
     }
-    assert.match(projekt, /--bereich spiel/);
-    assert.match(projekt, /Spielquote/);
     assert.equal(kern.includes("--bereich"), false, "der Bereichs-Schalter ist Projektwissen");
     assert.equal(kern.includes("Spielquote"), false, "die Spielquote ist Projektwissen");
   });

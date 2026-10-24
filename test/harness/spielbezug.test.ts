@@ -45,4 +45,8 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
     assert.ok(messlatte, "der Projekt-Block nennt die Optik-Messlatte mit ihrer Referenzdatei");
     assert.ok(existsSync(WURZEL + "docs/stardew-referenz.md"), "die Referenzdatei existiert");
   });
+  test("der Projekt-Block trägt den Projektteil der Ticket-Auswahl (--bereich spiel, Spielquote) (#1932)", () => {
+    assert.match(projektBlock, /--bereich spiel/);
+    assert.match(projektBlock, /Spielquote/);
+  });
 });

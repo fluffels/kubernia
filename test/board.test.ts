@@ -411,7 +411,8 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     };
     expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum", "wiedervorlage"]);
     expect(M.KOPF_MARKER).toEqual(M.NOTFAELLE.map((n) => n.marker));
-    for (const n of M.NOTFAELLE) {
+    // Die Art forum prüft der Projekt-Test forum-notfall-projekt.test.ts (der Forum-Workflow ist ein Projekt-Modul).
+    for (const n of M.NOTFAELLE.filter((x) => x.art !== "forum")) {
       const text = readFileSync(new URL(`../${n.quelle}`, import.meta.url), "utf8");
       // Workflows setzen den Titel als marker="…", die Doku nennt den Marker wörtlich.
       expect(text, `${n.art}: ${n.marker} in ${n.quelle}`).toContain(n.quelle.endsWith(".yml") ? `marker="${n.marker}` : n.marker);

@@ -6,6 +6,7 @@
 // Extraktionsliste (`produkt-wurzel` an die Wurzel) und die Vorlagen unter `.factory/produkt/vorlagen/<zielpfad>.vorlage`; zusammengesetzt werden
 // AGENTS.md und .claude/settings.json (Kern-Anteile plus Vorlage) und .factory/projekt.json (Überschreibung der obersten Schlüssel), berechnet die
 // Projektwert-Blöcke, `package-lock.json` (Auszug) und die Daten-Dateien der Kern-Wächter (Kern-Anteil per Filter).
+// In den Factory-Seiten (Art `factory-seite`) wird der Commit-Zeilen-Präfix der Quelle auf den der Factory-Config umgeschrieben (`schreibePraefixUm`, #1932).
 // Bekannte Muster der Prüfungen (Grenzen): siehe Kopf von `factory-export-lib.mjs`.
 import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
@@ -18,6 +19,7 @@ import {
   KANDIDATEN,
   kuberniaBegriffe,
   lockAuszug,
+  schreibePraefixUm,
   pruefeLiterale,
   pruefeLokalePfade,
   pruefePaketImporte,
@@ -136,7 +138,7 @@ function vorpruefung(leser, befunde) {
  */
 export function baueExport({ leser }) {
   const befunde = [];
-  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, durchgelassenJeMuster: [], relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [] };
+  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, durchgelassenJeMuster: [], relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [], praefixUmgeschrieben: 0 };
   const aus = () => ({ dateien: new Map(), befunde, bericht });
   const eingabe = vorpruefung(leser, befunde);
   if (eingabe === null) return aus();
@@ -228,12 +230,24 @@ export function baueExport({ leser }) {
   }
   if (befunde.length > 0) return aus();
 
+  // Factory-Seiten: der Commit-Zeilen-Präfix der Quelle wird auf den der Factory-Config umgeschrieben (nur vor Großbuchstaben).
+  const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
+  let praefixUmgeschrieben = 0;
+  const [vonPraefix, nachPraefix] = [kubConfig.praefixe.commitZeile, factoryConfig.praefixe.commitZeile];
+  if (vonPraefix !== "" && vonPraefix !== nachPraefix) {
+    for (const p of seiten) {
+      const d = dateien.get(p);
+      const r = schreibePraefixUm(d.text, vonPraefix, nachPraefix);
+      d.text = r.text;
+      praefixUmgeschrieben += r.anzahl;
+    }
+  }
+
   // Prüfungen auf dem zusammengebauten Stand.
   const texte = new Map([...dateien].map(([p, d]) => [p, d.text]));
   const rel = pruefeRelativeImporte(texte, new Set(leser.pfade));
   const pak = pruefePaketImporte(texte, kubPkg, pkgVorlage);
   const pfade = pruefeLokalePfade(texte, [repoName(factoryConfig), repoName(kubConfig)]);
-  const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
   const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === LOCK ? "frei" : p === PROJEKT_CONFIG || seiten.has(p) ? "zaehlen" : null));
   befunde.push(...rel.befunde, ...pak.befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
   Object.assign(bericht, {
@@ -243,6 +257,7 @@ export function baueExport({ leser }) {
     relativUnaufloesbar: rel.unaufloesbar,
     paketUnbekannt: pak.unbekannt,
     literalRest: [...lit.rest].sort(([a], [b]) => (a < b ? -1 : 1)),
+    praefixUmgeschrieben,
   });
   return befunde.length > 0 ? aus() : { dateien, befunde, bericht };
 }
@@ -256,6 +271,7 @@ function berichtZeilen(b) {
     `Lokale Pfade durchgelassen (Zeilen mit Platzhalter oder Fixture-Wurzel, ohne Befund; eine Zeile kann mehrere Muster treffen, darum ist die Summe je Muster größer): ${b.durchgelassen}; je Muster ${KANDIDATEN.map((re, k) => `${re.source} = ${b.durchgelassenJeMuster[k]}`).join("; ")}`,
     `Relative Importe, in der Quelle schon unauflösbar (Fixture-Text): ${b.relativUnaufloesbar}`,
     `Paket-Spezifizierer, die kubernia nicht kennt (Fixture-Text): ${b.paketUnbekannt.length} (Namen: ${b.paketUnbekannt.filter((n) => !n.startsWith("?")).join(", ")}; ${b.paketUnbekannt.filter((n) => n.startsWith("?")).length} Texte, die kein Paketname sind)`,
+    `Commit-Präfix in Factory-Seiten umgeschrieben: ${b.praefixUmgeschrieben}`,
     `kubernia-Rest (Factory-Seiten und .factory/projekt.json, ganze Wörter, überlappende Treffer zählen einmal): ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,
     ...b.literalRest.map(([p, n]) => `  ${p}: ${n}`),
   ];
