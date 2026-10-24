@@ -9,6 +9,8 @@ type Lesen = { reads: number; abschnittsweise: number; voll: { n: number; tokens
 const tm = tmModule as {
   fehlerArt: (t?: string | null) => string | null;
   fehlerArten: (e: Ev[]) => Record<string, number>;
+  permissionGrund: (t?: string | null) => string | null;
+  permissionGruende: (e: Ev[]) => Record<string, number>;
   wiederlesen: (e: Ev[]) => Lesen;
   pruefLaeufe: (e: Ev[]) => { voll: number; gezielt: number };
 };
@@ -53,6 +55,39 @@ describe("fehlerArten", () => {
     ];
     assert.deepEqual(tm.fehlerArten(e), { exit: 1, guard: 1 });
     assert.deepEqual(tm.fehlerArten([]), {});
+  });
+});
+
+describe("permissionGrund", () => {
+  const klass = "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Irreversible Local Destruction: löscht Dateien]. If you";
+  test("Klassifikator: Grund aus Reason: [..]; Regel-Ablehnung: „Regel“; sonst „ohne Grund“", () => {
+    assert.equal(tm.permissionGrund(klass), "Irreversible Local Destruction: löscht Dateien");
+    assert.equal(tm.permissionGrund("Permission to use Bash with command rm -rf x has been denied."), "Regel");
+    assert.equal(tm.permissionGrund("Permission for this action was denied."), "ohne Grund");
+  });
+  test("Negativfälle: leer/null und keine Permission-Meldung ergeben null; Reason ohne Klammer ist ohne Grund", () => {
+    assert.equal(tm.permissionGrund(""), null);
+    assert.equal(tm.permissionGrund(null), null);
+    assert.equal(tm.permissionGrund("Exit code 1\nReason: [x]"), null);
+    assert.equal(tm.permissionGrund("Permission for this action was denied by the Claude Code auto mode classifier. Reason: kaputt"), "ohne Grund");
+  });
+});
+
+describe("permissionGruende", () => {
+  test("zählt je Grund, nur Permission-Events; andere Fehlerarten bleiben unberührt", () => {
+    const p = (fehler: string | null): Ev => ({ tool: "Bash", input: {}, resultChars: 0, fehler });
+    const e = [
+      p("Permission to use Bash with command rm -rf a has been denied."),
+      p("Permission to use Bash with command rm -rf b has been denied."),
+      p("Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Security Weaken]. If you"),
+      p("Permission for this action was denied."),
+      p("Exit code 1"),
+      p("Blocked: sleep 1"),
+      p(null),
+    ];
+    assert.deepEqual(tm.permissionGruende(e), { Regel: 2, "Security Weaken": 1, "ohne Grund": 1 });
+    assert.deepEqual(tm.fehlerArten(e), { permission: 4, exit: 1, guard: 1 });
+    assert.deepEqual(tm.permissionGruende([]), {});
   });
 });
 

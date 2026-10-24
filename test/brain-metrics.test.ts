@@ -280,6 +280,21 @@ describe("Härtung nach Review", () => {
     const e = toolEventsFromTranscript(lines);
     assert.deepEqual(e.map((x) => [x.tool, x.resultChars]), [["Read", 1], ["Grep", 2]]);
   });
+  test("Fehlertext: Permission-Meldungen behalten bis 500 Zeichen (Grund steht hinter langem Befehl), andere Fehler 200; Transkript und Langfuse", () => {
+    const lang = "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [" + "G".repeat(450) + "]. If you";
+    const regel = "Permission to use Bash with command " + "x".repeat(600) + " has been denied.";
+    const exit = "Exit code 1\n" + "y".repeat(600);
+    const rows = [
+      JSON.stringify({ type: "assistant", timestamp: "2026-10-01T10:00:00Z", message: { content: ["a", "b", "c"].map((id) => ({ type: "tool_use", id, name: "Bash", input: {} })) } }),
+      JSON.stringify({ type: "user", message: { content: [lang, regel, exit].map((content, i) => ({ type: "tool_result", tool_use_id: ["a", "b", "c"][i], is_error: true, content })) } }),
+    ].join("\n");
+    const e = toolEventsFromTranscript(rows);
+    assert.deepEqual(e.map((x) => x.fehler?.length), [500, 500, 200]);
+    assert.match(e[0].fehler ?? "", /Reason: \[G+/);
+    const l = toolEventsFromLangfuse([{ type: "TOOL", startTime: "2026-10-01T10:00:00Z", level: "ERROR", statusMessage: regel, metadata: { tool_name: "Bash" } }]);
+    assert.equal(l[0].fehler?.length, 500);
+    assert.equal(toolEventsFromTranscript(rows.replace('"is_error":true', '"is_error":false'))[0].fehler, null, "ohne is_error kein Fehlertext");
+  });
   test("Transkript-Adapter mit geparsten Zeilen liefert dasselbe wie mit Text (Zeilen werden nur einmal geparst)", () => {
     const text = [
       JSON.stringify({ type: "assistant", timestamp: T(0), message: { id: "m1", model: "x", usage: { input_tokens: 3, output_tokens: 2 }, content: [use("a", "Read", { file_path: "docs/a.md" })] } }),
