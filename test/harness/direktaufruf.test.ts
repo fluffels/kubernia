@@ -9,7 +9,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -67,7 +67,8 @@ describe("istDirektaufruf", () => {
       datei,
       `import { unlinkSync } from "node:fs";\nimport { fileURLToPath } from "node:url";\nimport { istDirektaufruf } from ${JSON.stringify(DIREKT_LIB)};\nunlinkSync(fileURLToPath(import.meta.url));\nconsole.log(istDirektaufruf(import.meta.url) ? "DIREKT" : "IMPORT");\n`,
     );
-    expect(starte(datei)).toBe("DIREKT");
+    // Über den echten Pfad starten: sonst unterscheidet sich argv[1] von import.meta.url (macOS: /var → /private/var) und der Rückfall hätte nichts zu vergleichen.
+    expect(starte(realpathSync(datei))).toBe("DIREKT");
   });
 
   test("als Modul importiert: IMPORT, nicht DIREKT", () => {
