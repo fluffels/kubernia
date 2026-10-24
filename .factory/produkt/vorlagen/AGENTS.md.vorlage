@@ -24,6 +24,9 @@ Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks 
 ### Verifikation
 
 - **Langfuse-Erfassung erhalten (#1293).** Agenten, Subagenten, MCP-Server, Hooks (Registrierung), Plugins geändert: PR belegt per Probe-Lauf, dass Langfuse sie erfasst; [Wann/Ablauf](docs/model-routing.md#langfuse-erfassung-belegen-1293). **Vorbedingung:** kein Ticketlauf startet ohne erreichbares Langfuse (`node scripts/langfuse-vorbedingung.mjs`, Exit 1: stoppen, melden).
+- **Im Browser verifizieren.** Sicht- oder bedienbare Ausgaben prüft der Agent per Playwright-MCP, nicht nur „sollte gehen“; den Zustand zuerst über den Dev-Helfer des Projekts lesen, einen Screenshot nur für die Optik.
+- **Doku aktuell halten ist Teil von „fertig“.** Sie beschreibt den Ist-Zustand; Historie gehört in ADRs und `git log`, nicht in Agenten-Kontext.
+- **Projekt-Brain pflegen.** Am Ticket-Ende im selben PR Übertragbares (in sechs Monaten noch wahr, nicht aus Code oder Git ableitbar) nach Wissensart ablegen: Regel → AGENTS.md, Entscheidung → ADR, Evergreen → Brain-Seite.
 
 ## Architektur
 
