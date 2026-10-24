@@ -17,6 +17,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fixture } from "./support/tmp-fixture";
+import { FREMD, projektConfig } from "./support/fremd-config";
 
 type Env = Record<string, string | undefined>;
 type Sums = { fileCount: number; changedLines: number };
@@ -46,6 +47,8 @@ import * as checkDiffRaw from "../scripts/check-diffsize.mjs";
 import * as sliceRaw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as basisRaw from "../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as pcRaw from "../scripts/projekt-config-lib.mjs";
 
 // resolveBase steht in der Gate-Lib scripts/check-basis.mjs (#1579).
 const { resolveBase } = basisRaw as unknown as { resolveBase: (runGit: RunGit, env?: Env) => string | null };
@@ -61,14 +64,23 @@ const {
   readThresholds,
   parseNumstat,
   evaluate,
-  checkDiffSize,
+  checkDiffSize: checkDiffSizeRoh,
   isGeneratedArtifact,
 } = checkDiffRaw as CheckDiffSizeModule;
-const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Record<string, string> };
-/** Zeilen der echten Config (KQ-); ein anderes Präfix darf die KQ-Zeile nicht zählen lassen. */
-const ZEILEN = commitZeilen("KQ-", "kubernia-planner");
-const ZEILEN_AB = commitZeilen("AB-", "kubernia-planner");
+const { altEnvPraefix } = pcRaw as unknown as { altEnvPraefix: (config: unknown) => string | null };
+const { commitZeilen, commitZeilenAus } = sliceRaw as unknown as {
+  commitZeilen: (praefix: string, planer: string) => Record<string, string>;
+  commitZeilenAus: (config: unknown) => Record<string, string>;
+};
+/** Zeilen der Fremd-Config; ein anderes Präfix (AB-) darf deren Zeile nicht zählen lassen. */
+const ZEILEN = commitZeilenAus(FREMD);
+const ZEILEN_AB = commitZeilen("AB-", FREMD.agenten.planer);
+/** Zeilen der echten Config: nur für Tests, die echte Doku lesen oder den Standardpfad ohne injizierte Zeilen prüfen. */
+const ECHT = commitZeilenAus(projektConfig());
 const OVERRIDE_KEY = ZEILEN.diffsizeOverride;
+const COV_KEY = ZEILEN.diffcovOverride;
+/** Der Wächter mit den Zeilen der Fremd-Config; ein Test ohne eigene `zeilen` liest damit nie die echte Projekt-Config. */
+const checkDiffSize = (o: Parameters<CheckDiffSizeModule["checkDiffSize"]>[0]) => checkDiffSizeRoh({ zeilen: ZEILEN, ...o });
 
 describe("Diff-Größenbudget (#533)", () => {
   test("parseNumstat: summiert added+deleted, zählt Dateien, behandelt Binärdateien", () => {
@@ -115,7 +127,7 @@ describe("Diff-Größenbudget (#533)", () => {
 
   // ── Override als Commit-Trailer (#1269): wirkt lokal, im PR und auf main gleich ──
   test("parseOverrideTrailers: gültige Zeile liefert Ticketnummer + Begründung", () => {
-    const r = parseOverrideTrailers("feat: x\n\nKQ-Diffsize-Override: #317 Rename-Welle über 40 Dateien\n", OVERRIDE_KEY);
+    const r = parseOverrideTrailers(`feat: x\n\n${OVERRIDE_KEY}: #317 Rename-Welle über 40 Dateien\n`, OVERRIDE_KEY);
     assert.deepEqual(r.valid, [{ nr: 317, reason: "#317 Rename-Welle über 40 Dateien" }]);
     assert.deepEqual(r.invalid, []);
   });
@@ -126,7 +138,7 @@ describe("Diff-Größenbudget (#533)", () => {
       "",
       "* feat: erster Teil",
       "",
-      "KQ-Diffsize-Override: #12 bewusst breit",
+      `${OVERRIDE_KEY}: #12 bewusst breit`,
       "",
       "Co-Authored-By: jemand",
       "",
@@ -137,30 +149,30 @@ describe("Diff-Größenbudget (#533)", () => {
 
   test("parseOverrideTrailers: Erwähnung in Prosa, eingerückt oder in Backticks zählt NICHT", () => {
     const text = [
-      "docs: erklärt KQ-Diffsize-Override: #1 im Satz",
-      "  KQ-Diffsize-Override: #2 eingerückt",
-      "`KQ-Diffsize-Override: #3 backtick`",
-      "  * KQ-Diffsize-Override: #2 x",
-      "- KQ-Diffsize-Override: #3 x",
-      "*KQ-Diffsize-Override: #4 x",
-      "** KQ-Diffsize-Override: #5 x",
-      "*  KQ-Diffsize-Override: #6 x",
-      "* siehe KQ-Diffsize-Override: #7 x",
-      "> KQ-Diffsize-Override: #8 x",
+      `docs: erklärt ${OVERRIDE_KEY}: #1 im Satz`,
+      `  ${OVERRIDE_KEY}: #2 eingerückt`,
+      `\`${OVERRIDE_KEY}: #3 backtick\``,
+      `  * ${OVERRIDE_KEY}: #2 x`,
+      `- ${OVERRIDE_KEY}: #3 x`,
+      `*${OVERRIDE_KEY}: #4 x`,
+      `** ${OVERRIDE_KEY}: #5 x`,
+      `*  ${OVERRIDE_KEY}: #6 x`,
+      `* siehe ${OVERRIDE_KEY}: #7 x`,
+      `> ${OVERRIDE_KEY}: #8 x`,
     ].join("\n");
     assert.deepEqual(parseOverrideTrailers(text, OVERRIDE_KEY), { valid: [], invalid: [] });
   });
 
   test("parseOverrideTrailers: ohne #<nr> oder ohne Begründung ungültig (Pflicht-Begründung)", () => {
-    const text = ["KQ-Diffsize-Override: nur warum", "KQ-Diffsize-Override: #12", "KQ-Diffsize-Override:   "].join("\n");
+    const text = [`${OVERRIDE_KEY}: nur warum`, `${OVERRIDE_KEY}: #12`, `${OVERRIDE_KEY}:   `].join("\n");
     const r = parseOverrideTrailers(text, OVERRIDE_KEY);
     assert.deepEqual(r.valid, []);
     assert.equal(r.invalid.length, 3);
   });
 
   test("parseOverrideTrailers: ein fremder Schlüssel (Diffcov) wird nicht als Diffsize erkannt", () => {
-    assert.deepEqual(parseOverrideTrailers("KQ-Diffcov-Override: #5 warum", OVERRIDE_KEY), { valid: [], invalid: [] });
-    assert.equal(parseOverrideTrailers("KQ-Diffcov-Override: #5 warum", "KQ-Diffcov-Override").valid.length, 1);
+    assert.deepEqual(parseOverrideTrailers(`${COV_KEY}: #5 warum`, OVERRIDE_KEY), { valid: [], invalid: [] });
+    assert.equal(parseOverrideTrailers(`${COV_KEY}: #5 warum`, ZEILEN.diffcovOverride).valid.length, 1);
   });
 
   test("resolveBase: FACTORY_DIFF_BASE zuerst, sonst origin/main vor main, sonst null", () => {
@@ -236,14 +248,25 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(r.stale, false);
   });
 
-  const TRAILER = "chore: bewusst breit\n\nKQ-Diffsize-Override: #317 Epic-Split\n";
+  const TRAILER = `chore: bewusst breit\n\n${OVERRIDE_KEY}: #317 Epic-Split\n`;
 
-  test("Präfix aus der Config (#1741): mit AB- zählt die KQ-Override-Zeile nicht, die AB-Zeile schon", () => {
+  test("Präfix aus der Config (#1741): mit AB- zählt die Override-Zeile der Fremd-Config nicht, die AB-Zeile schon", () => {
     const mitKq = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv, zeilen: ZEILEN_AB });
     assert.equal(mitKq.over, true);
     assert.equal(mitKq.allowed, false);
-    const mitAb = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER.replace("KQ-", "AB-")), env: tightEnv, zeilen: ZEILEN_AB });
+    const mitAb = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER.replace(FREMD.praefixe.commitZeile, "AB-")), env: tightEnv, zeilen: ZEILEN_AB });
     assert.equal(mitAb.allowed, true);
+  });
+
+  test("Standardpfad: ohne injizierte `zeilen` liest der Wächter die Projekt-Config", () => {
+    const echterTrailer = `chore: bewusst breit
+
+${ECHT.diffsizeOverride}: #317 Epic-Split
+`;
+    const r = checkDiffSizeRoh({ runGit: gitWith("BASE", OVER, echterTrailer), env: tightEnv });
+    assert.equal(r.allowed, true);
+    const fremd = checkDiffSizeRoh({ runGit: gitWith("BASE", OVER, echterTrailer), env: tightEnv, zeilen: ZEILEN_AB });
+    assert.equal(fremd.allowed, false, "die Zeile des echten Präfixes zählt nur mit dem echten Präfix");
   });
 
   test("checkDiffSize: über Budget MIT Trailer im Slice → allowed (durchgelassen)", () => {
@@ -255,11 +278,11 @@ describe("Diff-Größenbudget (#533)", () => {
   });
 
   test("checkDiffSize (#1349 Z31): eine knapp danebenliegende Override-Zeile wird gemeldet und nicht still gewertet", () => {
-    const daneben = "chore: x\n\n- KQ-Diffsize-Override: #1349 mit Strich\n  KQ-Diffsize-Override: #1349 eingerückt\n";
+    const daneben = `chore: x\n\n- ${OVERRIDE_KEY}: #1349 mit Strich\n  ${OVERRIDE_KEY}: #1349 eingerückt\n`;
     const r = checkDiffSize({ runGit: gitWith("BASE", OVER, daneben), env: tightEnv });
     assert.equal(r.over, true);
     assert.equal(r.allowed, false, "die versetzten Zeilen zählen nicht als Override");
-    assert.deepEqual(r.versetzteOverrides, ["- KQ-Diffsize-Override: #1349 mit Strich", "KQ-Diffsize-Override: #1349 eingerückt"]);
+    assert.deepEqual(r.versetzteOverrides, [`- ${OVERRIDE_KEY}: #1349 mit Strich`, `${OVERRIDE_KEY}: #1349 eingerückt`]);
     // eine gültige Zeile daneben: Override wirkt, die versetzten bleiben nur Information
     const beides = checkDiffSize({ runGit: gitWith("BASE", OVER, `${daneben}\n${TRAILER}`), env: tightEnv });
     assert.equal(beides.allowed, true);
@@ -275,21 +298,21 @@ describe("Diff-Größenbudget (#533)", () => {
     "",
     "Co-Authored-By: Claude <noreply@anthropic.com>",
     "",
-    "* KQ-Diffsize-Override: #1342 Sammelticket komplett: rund 45 Dateien",
+    `* ${OVERRIDE_KEY}: #1342 Sammelticket komplett: rund 45 Dateien`,
     "",
     "Co-Authored-By: Claude <noreply@anthropic.com>",
     "",
     "* chore(review): Nachweis Plan und Review (#1342)",
     "",
-    "KQ-Plan: kubernia-planner",
-    "KQ-Review: head=2f1025d runden=2 lenses=architektur verdikt=ok",
+    `${ZEILEN.plan}: ${FREMD.agenten.planer}`,
+    `${ZEILEN.review}: head=2f1025d runden=2 lenses=architektur verdikt=ok`,
     "",
     "---------",
     "",
     "Co-authored-by: Claude <noreply@anthropic.com>",
   ].join("\n");
 
-  test("push:main: Override als Commit-Betreff erscheint im Squash als `* KQ-…` und lässt den Slice durch (#1383)", () => {
+  test("push:main: Override als Commit-Betreff erscheint im Squash als `* <Präfix>…` und lässt den Slice durch (#1383)", () => {
     const r = checkDiffSize({ runGit: gitWith("BASE", OVER, SQUASH_1342), env: tightEnv });
     assert.equal(r.over, true);
     assert.equal(r.allowed, true);
@@ -300,9 +323,9 @@ describe("Diff-Größenbudget (#533)", () => {
     );
   });
 
-  test("parseOverrideTrailers: ungültiger Betreff `* KQ-…` wird ohne Präfix gemeldet (#1383)", () => {
-    const r = parseOverrideTrailers("* KQ-Diffsize-Override: ohne nummer", OVERRIDE_KEY);
-    assert.deepEqual(r, { valid: [], invalid: ["KQ-Diffsize-Override: ohne nummer"] });
+  test("parseOverrideTrailers: ungültiger Betreff `* <Präfix>…` wird ohne Präfix gemeldet (#1383)", () => {
+    const r = parseOverrideTrailers(`* ${OVERRIDE_KEY}: ohne nummer`, OVERRIDE_KEY);
+    assert.deepEqual(r, { valid: [], invalid: [`${OVERRIDE_KEY}: ohne nummer`] });
   });
 
   test("checkDiffSize: liest die Commit-Messages genau im Slice-Bereich <basis>..HEAD", () => {
@@ -325,10 +348,10 @@ describe("Diff-Größenbudget (#533)", () => {
   });
 
   test("checkDiffSize: nur ungültiger Trailer → bleibt rot und meldet die Zeile", () => {
-    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, "KQ-Diffsize-Override: ohne nummer"), env: tightEnv });
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, `${OVERRIDE_KEY}: ohne nummer`), env: tightEnv });
     assert.equal(r.over, true);
     assert.equal(r.allowed, false);
-    assert.deepEqual(r.invalidOverrides, ["KQ-Diffsize-Override: ohne nummer"]);
+    assert.deepEqual(r.invalidOverrides, [`${OVERRIDE_KEY}: ohne nummer`]);
   });
 
   test("checkDiffSize: git log scheitert → kein Override, über Budget bleibt rot", () => {
@@ -387,16 +410,16 @@ describe("Diff-Größenbudget (#533)", () => {
   test("Doku nennt den Override so, wie das Skript ihn liest (#1269: keine Env-Variable mehr)", () => {
     for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
       const text = readFileSync(new URL(`../${datei}`, import.meta.url), "utf8");
-      assert.ok(text.includes(`${OVERRIDE_KEY}: #<nr>`), `${datei} beschreibt die Commit-Zeile`);
-      assert.ok(!text.includes("KQ_DIFFSIZE_OVERRIDE="), `${datei} verspricht keine Env-Variable mehr`);
+      assert.ok(text.includes(`${ECHT.diffsizeOverride}: #<nr>`), `${datei} beschreibt die Commit-Zeile`);
+      assert.ok(!text.includes(`${altEnvPraefix(projektConfig())}DIFFSIZE_OVERRIDE=`), `${datei} verspricht keine Env-Variable mehr`);
     }
   });
 
   // Bindung je Override-Schlüssel an die Texte, die ihn beschreiben (#1309): fehlt ein Schlüssel in einer
   // dieser Dateien, driftet die Doku vom Skript weg (vorher war nur Diffsize in AGENTS.md/agent-harness gebunden).
   const BINDUNG: [string, string[]][] = [
-    ["KQ-Diffsize-Override", ["AGENTS.md", "docs/agent-harness.md", "docs/adr/0009-pr-gating-required-checks.md"]],
-    ["KQ-Diffcov-Override", ["docs/agent-harness.md", "docs/adr/0009-pr-gating-required-checks.md"]],
+    [ECHT.diffsizeOverride, ["AGENTS.md", "docs/agent-harness.md", "docs/adr/0009-pr-gating-required-checks.md"]],
+    [ECHT.diffcovOverride, ["docs/agent-harness.md", "docs/adr/0009-pr-gating-required-checks.md"]],
   ];
   for (const [schluessel, dateien] of BINDUNG) {
     test(`Doku-Bindung: ${schluessel} steht in ${dateien.join(", ")}`, () => {
@@ -410,7 +433,7 @@ describe("Diff-Größenbudget (#533)", () => {
     // des normalen git log (neueste zuerst) und die ÄLTESTE Begründung würde angezeigt.
     const runGit: RunGit = (a) => {
       const chronologisch = a.includes("--reverse");
-      const commits = ["alt\n\nKQ-Diffsize-Override: #1 alte Begründung\n", "neu\n\nKQ-Diffsize-Override: #2 neue Begründung\n"];
+      const commits = [`alt\n\n${OVERRIDE_KEY}: #1 alte Begründung\n`, `neu\n\n${OVERRIDE_KEY}: #2 neue Begründung\n`];
       return (chronologisch ? commits : [...commits].reverse()).join("\n");
     };
     assert.equal(sliceOverride(runGit, "BASE", OVERRIDE_KEY).reason, "#2 neue Begründung");
@@ -421,8 +444,8 @@ describe("Diff-Größenbudget (#533)", () => {
       throw new Error("kaputt");
     };
     assert.deepEqual(sliceOverride(wirft, "BASE", OVERRIDE_KEY), { reason: null, invalid: [], versetzt: [] });
-    const nurUngueltig: RunGit = () => "x\n\nKQ-Diffsize-Override: ohne nummer\n";
-    assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: ["KQ-Diffsize-Override: ohne nummer"], versetzt: [] });
+    const nurUngueltig: RunGit = () => `x\n\n${OVERRIDE_KEY}: ohne nummer\n`;
+    assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: [`${OVERRIDE_KEY}: ohne nummer`], versetzt: [] });
   });
 });
 
