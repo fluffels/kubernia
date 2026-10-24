@@ -26,11 +26,13 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { projektConfig, repoName } from "../support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 
 // Die Namen kommen aus der echten Projekt-Config, nicht aus Literalen: der Scan liest die echten Repo-Dateien.
 const C = projektConfig();
 const R = repoName(C);
-const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const esc = (s: string): string => (escapeRegex as (t: string) => string)(s);
 const NAME_WORKFLOW = `Skill ${R}-workflow`;
 const NAME_TICKET = `Workflow-Skript ${R}-ticket`;
 const ROLLEN_AGENTEN = [C.agenten.planer, C.agenten.umsetzer, C.agenten.lens, C.agenten.gruppe];

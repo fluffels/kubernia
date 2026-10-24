@@ -15,8 +15,10 @@ import * as rawSync from "../scripts/factory-sync.mjs";
 import * as rawDrift from "../scripts/check-factory-drift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { escapeRegex } from "../scripts/ticket-namen.mjs";
 
-const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escRe = (s: string): string => (escapeRegex as (t: string) => string)(s);
 
 interface Span {
   start: number;
