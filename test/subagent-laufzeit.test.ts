@@ -208,6 +208,71 @@ describe("laufzeiten: Filter und Aggregat", () => {
   });
 });
 
+/**
+ * Lauf mit drei Calls zu je `o` aufgezeichneten Output-Token und einem Kontext-Zuwachs `z` am ersten: aufgezeichnet 3·o, geschätzt z + 2·o
+ * (Quote 3·o / (z + 2·o), mit o = 300 und z = 3000 genau 0,25, mit z = 1400 genau 0,45).
+ */
+const quoteLauf = (prompt: string, tag: number, z: number, min = 0, o = 300): Lauf => {
+  const l = lauf(prompt, min, min + 4, { tag });
+  l.zeilen.splice(2, 0, call(min + 1, tag, undefined, 1000 + z));
+  for (const r of l.zeilen) {
+    const u = (r as { message?: { usage?: { output_tokens: number } } }).message?.usage;
+    if (u) u.output_tokens = o;
+  }
+  return l;
+};
+const Z25 = 3000;
+const Z45 = 1400;
+const Z50 = 1000;
+
+describe("laufzeiten: Aufzeichnungsbasis des Outputs (#1909)", () => {
+  const w = (r: Erg) => (r.aggregat as unknown as { basisWarnung: string | null }).basisWarnung;
+  test("Output-Quote = aufgezeichnet / geschätzt, null ohne geschätzten Output", () => {
+    const g = S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }).aggregat.gesamt as Stat & { outputQuote: number | null };
+    expect(g.outputQuote).toBeCloseTo(0.25, 10);
+    const leer = S.laufzeiten({ laeufe: [] }).aggregat.gesamt as Stat & { outputQuote: number | null };
+    expect(leer.outputQuote).toBeNull();
+  });
+  test("Tage mit Quoten weiter als 0,2 auseinander: Warnung mit beiden Tagen", () => {
+    const r = S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 8, Z50)] });
+    expect(w(r)).toContain("Hinweis Aufzeichnungsbasis");
+    expect(w(r)).toContain("2026-10-07");
+    expect(w(r)).toContain("2026-10-08");
+    expect(w(r)).toContain("25 %");
+    expect(w(r)).toContain("50 %");
+    expect(S.renderMarkdown(r)).toContain(w(r) as string);
+  });
+  test("Grenze: genau 0,2 Unterschied warnt nicht", () => {
+    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 8, Z45)] }))).toBeNull();
+  });
+  test("gleiche Quoten oder ein einzelner Tag warnen nicht", () => {
+    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 8, Z25)] }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }))).toBeNull();
+    expect(S.renderMarkdown(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }))).not.toContain("Hinweis Aufzeichnungsbasis");
+  });
+  test("ohne Lauf (alle Quoten null) keine Warnung", () => {
+    expect(w(S.laufzeiten({ laeufe: [] }))).toBeNull();
+  });
+  test("Schnitt: alt und neu am selben Tag, Quoten weiter als 0,2 auseinander: Warnung mit alt und neu", () => {
+    const laeufe = [quoteLauf("Plane #1", 7, Z25, 0), quoteLauf("Plane #2", 7, Z50, 60)];
+    const r = S.laufzeiten({ laeufe, schnitt: t(30) });
+    expect(w(r)).toContain("alt 25 %");
+    expect(w(r)).toContain("neu 50 %");
+    expect(w(S.laufzeiten({ laeufe }))).toBeNull(); // ohne Schnitt nur ein Tag
+  });
+  test("Schnitt: genau 0,2 und eine leere Seite warnen nicht", () => {
+    const grenze = [quoteLauf("Plane #1", 7, Z25, 0), quoteLauf("Plane #2", 7, Z45, 60)];
+    expect(w(S.laufzeiten({ laeufe: grenze, schnitt: t(30) }))).toBeNull();
+    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25, 0)], schnitt: t(30) }))).toBeNull();
+  });
+  test("renderMarkdown nennt Kosten geschätzt (Median) und Output-Quote je Gruppe", () => {
+    const md = S.renderMarkdown(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }));
+    expect(md).toContain("Kosten geschätzt ($, Median)");
+    expect(md).toContain("Output-Quote");
+    expect(md).toMatch(/\| alle gemessenen \| 1 \|.*\| 25 % \|/);
+  });
+});
+
 /** Opus 5.5 = 4 $ Input und 20 $ Output je Mio: ein Call mit 1000 Input und 10 Output kostet 0,0042 $. */
 const CALL_KOSTEN = 0.0042;
 /** Lauf mit einem Call eines Modells ohne Preis. */
