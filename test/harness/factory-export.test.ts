@@ -214,6 +214,7 @@ describe("Prüfungen (pur)", () => {
       ["test/t.test.ts", 'const text = `import "./fixture.mjs";`;\n'],
       ["scripts/k.mjs", '// import "./kommentar.mjs";\n/**\n * import "./block.mjs";\n */\nexport const k = 1;\n'],
       ["test/support/h.ts", 'import "./hilfe-fehlt.mjs";\n'],
+      ["scripts/z.mjs", "/* a */\nimport './zwischen.mjs';\n/* b */\n"],
       ["scripts/g.mjs", '// Glob a/*/b im Kopf\nimport "./nach-glob.mjs";\nconst u = "https://h"; import "./gleiche-zeile.mjs";\n/** Ende */\n'],
       [
         "scripts/q.mjs",
@@ -221,13 +222,14 @@ describe("Prüfungen (pur)", () => {
       ],
     ]);
     const r = lib.pruefeRelativeImporte(dateien, new Set(["scripts/a.mjs", "scripts/b.mjs", "scripts/c.mjs"]));
-    assert.equal(r.befunde.length, 9);
+    assert.equal(r.befunde.length, 10);
     assert.match(r.befunde[0], /scripts\/a\.mjs: relativer Import '\.\/c\.mjs' löst im Export nicht auf/);
     assert.match(r.befunde[1], /scripts\/a\.mjs: relativer Import '\.\/fehlt\.mjs' löst weder im Export noch in der Quelle auf/);
     const alle = r.befunde.join("|");
     assert.match(alle, /test\/support\/h\.ts: relativer Import '\.\/hilfe-fehlt\.mjs'/);
     assert.match(alle, /scripts\/g\.mjs: relativer Import '\.\/nach-glob\.mjs'/);
     assert.match(alle, /scripts\/g\.mjs: relativer Import '\.\/gleiche-zeile\.mjs'/);
+    assert.match(alle, /scripts\/z\.mjs: relativer Import '\.\/zwischen\.mjs'/);
     for (const k of ["q1", "q2", "q3", "q4"]) assert.match(alle, new RegExp("scripts/q\\.mjs: relativer Import '\\./" + k + "\\.mjs'"));
     assert.equal(r.unaufloesbar, 1);
     const doku = lib.pruefeRelativeImporte(new Map([["docs/x.md", 'import "./c.mjs";']]), new Set(["docs/x.md", "docs/c.mjs"]));
@@ -331,8 +333,15 @@ describe("Prüfungen (pur)", () => {
     assert.deepEqual(ueberlappt.befunde, ["a.mjs: kubernia-Literal 'KQ' (1x)"]);
     assert.deepEqual([...ueberlappt.rest], [["docs/s.md", 1]]);
     assert.deepEqual(lib.pruefeLiterale(new Map([["a.mjs", "process.env.KQ_NAME"]]), { Env: /\bKQ_(?=[A-Z0-9])/g }, () => null).befunde, ["a.mjs: kubernia-Literal 'Env' (1x)"]);
-    const stoesst = lib.pruefeLiterale(new Map([["a.mjs", "KQ-KQ-Plan"], ["b.mjs", "KQ-feature/kq-1"]]), { P: /KQ-/g, B: /feature\/kq-/g }, () => null);
-    assert.deepEqual(stoesst.befunde, ["a.mjs: kubernia-Literal 'P' (2x)", "b.mjs: kubernia-Literal 'P' (1x)", "b.mjs: kubernia-Literal 'B' (1x)"]);
+    assert.deepEqual(lib.pruefeLiterale(new Map([["a.mjs", "xkq"], ["b.mjs", "kqx"]]), { K: /kq/g }, () => null).befunde, [], "ein Teilwort mit einem Zeichen Abstand zum Rand trifft nicht");
+    const stoesst = lib.pruefeLiterale(new Map([["a.mjs", "KQ-KQ-Plan"], ["b.mjs", "KQ-feature/kq-1"], ["c.mjs", "feature/kq-KQ-1"]]), { P: /KQ-/g, B: /feature\/kq-/g }, () => null);
+    assert.deepEqual(stoesst.befunde, [
+      "a.mjs: kubernia-Literal 'P' (2x)",
+      "b.mjs: kubernia-Literal 'P' (1x)",
+      "b.mjs: kubernia-Literal 'B' (1x)",
+      "c.mjs: kubernia-Literal 'P' (1x)",
+      "c.mjs: kubernia-Literal 'B' (1x)",
+    ]);
     const praefix = lib.pruefeLiterale(new Map([["a.mjs", "KQ-Plan und xKQ-Plan"]]), { Praefix: /KQ-/g }, () => null);
     assert.deepEqual(praefix.befunde, ["a.mjs: kubernia-Literal 'Praefix' (1x)"]);
     const zwei = lib.pruefeLiterale(new Map([["docs/s.md", "kub und zwei"]]), { A: /kub/g, B: /zwei/g }, () => "zaehlen");
