@@ -287,6 +287,20 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.ok(findeReste([{ pfad: "docs/modul.md", inhalt: text }]).length > 0);
   });
 
+  test("Verankerung am echten Projekt: die abgeleiteten Muster treffen die echten Altnamen aus den ADRs (außerhalb der Ausnahme)", () => {
+    // Die Muster kommen aus der Config; ein falsch abgeleiteter Name (z. B. der Owner-Präfix) bliebe mit selbstgebauten Beispielen grün.
+    const adr = (nr: string): string => {
+      const pfad = getrackteTextdateien().find((d) => d.pfad.startsWith(`docs/adr/${nr}-`));
+      assert.ok(pfad, `ADR ${nr} fehlt`);
+      return pfad.inhalt;
+    };
+    const namen = (inhalt: string): string[] => findeReste([{ pfad: "docs/x.md", inhalt }]).map((t) => t.replace(/^docs\/x\.md:\d+: /, ""));
+    const aus0022 = namen(adr("0022"));
+    assert.ok(aus0022.includes(NAME_WORKFLOW), "ADR 0022 trägt den alten Skill-Namen");
+    assert.ok(aus0022.includes(NAME_TICKET), "ADR 0022 trägt den alten Workflow-Skript-Namen");
+    assert.ok(namen(adr("0012")).includes("alte Agenten-Dateinamen"), "ADR 0012 trägt alte Agenten-Dateinamen");
+  });
+
   test("jede Ausnahme nennt einen Grund", () => {
     for (const a of REGEL_AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.pfad} ohne Grund`);
     for (const a of AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.praefix} ohne Grund`);
