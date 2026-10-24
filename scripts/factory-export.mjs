@@ -233,8 +233,8 @@ export function baueExport({ leser }) {
   // Factory-Seiten: der Commit-Zeilen-Präfix der Quelle wird auf den der Factory-Config umgeschrieben (nur vor Großbuchstaben).
   const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
   let praefixUmgeschrieben = 0;
-  const [vonPraefix, nachPraefix] = [kubConfig.praefixe?.commitZeile, factoryConfig.praefixe?.commitZeile];
-  if (typeof vonPraefix === "string" && typeof nachPraefix === "string" && vonPraefix !== "" && vonPraefix !== nachPraefix) {
+  const [vonPraefix, nachPraefix] = [kubConfig.praefixe.commitZeile, factoryConfig.praefixe.commitZeile];
+  if (vonPraefix !== "" && vonPraefix !== nachPraefix) {
     for (const p of seiten) {
       const d = dateien.get(p);
       const r = schreibePraefixUm(d.text, vonPraefix, nachPraefix);

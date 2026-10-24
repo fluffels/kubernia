@@ -193,6 +193,11 @@ describe("schreibePraefixUm (#1932)", () => {
     assert.equal(r.text, "`SIH-Review:` und SIH-Diffsize-Override: #<nr>");
     assert.equal(r.anzahl, 2);
   });
+  test("Grenzen: nicht hinter Bindestrich, Umlaut-Großbuchstabe zählt, Kleinbuchstabe dahinter nicht", () => {
+    assert.equal(lib.schreibePraefixUm("-KQ-Review", "KQ-", "SIH-").text, "-KQ-Review");
+    assert.equal(lib.schreibePraefixUm("KQ-Übersicht KQ-Äpfel KQ-Öl", "KQ-", "SIH-").text, "SIH-Übersicht SIH-Äpfel SIH-Öl");
+    assert.equal(lib.schreibePraefixUm("KQ-review", "KQ-", "SIH-").text, "KQ-review");
+  });
   test("lässt Teilwörter, Zahlen, Kleinschreibung und den nackten Präfix stehen", () => {
     const text = "XKQ-A, KQ-123, kq-foo, `KQ-`, feature/kq-12, NKQ-Review";
     const r = lib.schreibePraefixUm(text, "KQ-", "SIH-");
@@ -470,6 +475,45 @@ describe("Export aus HEAD", () => {
     assert.ok(echt.bericht.praefixUmgeschrieben > 0);
   });
 
+  describe("#1932: Umschreib-Guards in baueExport", () => {
+    const SEITE = "docs/agent-harness.md";
+    const KERN = "scripts/besitz-lib.mjs";
+    const kubText = (): Record<string, unknown> => JSON.parse(leser.lies(".factory/projekt.json") ?? "{}") as Record<string, unknown>;
+    const mitPraefix = (p: unknown): string => JSON.stringify({ ...kubText(), praefixe: p });
+    let kubPraefixe: Record<string, string> = {};
+    beforeAll(() => {
+      kubPraefixe = kubText().praefixe as Record<string, string>;
+    });
+    const zusatz = (text: string): string => `${leser.lies(SEITE) ?? ""}\n${text}\n`;
+
+    test("eine Factory-Seite wird umgeschrieben", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz("KQ-Review: Probe") }) });
+      assert.deepEqual(r.befunde, []);
+      assert.ok(r.dateien.get(SEITE)?.text.includes("SIH-Review: Probe"));
+    });
+    test("ein Kern-Skript (keine Factory-Seite) wird nicht umgeschrieben: der kubernia-Rest bleibt ein Befund", () => {
+      const kern = `${leser.lies(KERN) ?? ""}\n// KQ-Review: Zeile im Kern\n`;
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [KERN]: kern }) });
+      assert.match(r.befunde.join("|"), /scripts\/besitz-lib\.mjs: kubernia-Literal 'KQ'/);
+    });
+    test("leerer Präfix der Quelle: keine Umschreibung, Text unverändert, Zähler 0", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/projekt.json": mitPraefix({ ...kubPraefixe, commitZeile: "" }), [SEITE]: zusatz("Ab Cd") }) });
+      assert.equal(r.bericht.praefixUmgeschrieben, 0);
+      assert.ok(r.dateien.get(SEITE)?.text.includes("\nAb Cd\n"), "kein Präfix vor jedem Großbuchstaben");
+    });
+    test("gleicher Präfix in Quelle und Factory-Config: nichts wird umgeschrieben, Zähler 0", () => {
+      const vor = ".factory/produkt/vorlagen/.factory/projekt.json.vorlage";
+      const nach = (JSON.parse(leser.lies(vor) ?? "{}") as { praefixe: Record<string, string> }).praefixe.commitZeile;
+      const r = ex.baueExport({
+        leser: mitAenderung(leser, { ".factory/projekt.json": mitPraefix({ ...kubPraefixe, commitZeile: nach }), [SEITE]: zusatz(`${nach}Review: Probe`) }),
+      });
+      assert.equal(r.bericht.praefixUmgeschrieben, 0);
+    });
+    test("der Lauf nennt die Zahl der umgeschriebenen Stellen im Bericht", () => {
+      assert.match(lauf(["--ziel", leerOrdner()], leser).out, /Commit-Präfix in Factory-Seiten umgeschrieben: [1-9]\d*/);
+    });
+  });
+
   test("#1932: ci.yml und AGENTS.md des Exports tragen Kern-Jobs und Kern-Regeln (Stolperdraht gegen verlorene Vorlagen-Anteile)", () => {
     const ci = echt.dateien.get(".github/workflows/ci.yml")?.text ?? "";
     assert.match(ci, /^ {2}alarm-red-main:/m);
@@ -480,6 +524,9 @@ describe("Export aus HEAD", () => {
     assert.ok(agents.includes("SIH-Diffsize-Override: #<nr>"), "Diffsize-Override-Zeile");
     assert.ok(agents.includes("SIH-Lockfile-Override"), "Lockfile-Override-Zeile");
     assert.ok(agents.includes("Langfuse-Erfassung erhalten"), "Langfuse-Regel");
+    assert.match(ci, /^ {2}doc-freshness:/m, "Job doc-freshness");
+    const verifyFull = (JSON.parse(echt.dateien.get("package.json")?.text ?? "{}") as { scripts?: Record<string, string> }).scripts?.["verify:full"] ?? "";
+    assert.ok(verifyFull.indexOf("test:coverage") >= 0 && verifyFull.indexOf("check:diffcoverage") > verifyFull.indexOf("test:coverage"), "verify:full mit Coverage vor Diff-Coverage");
   });
 
   test("AK1: zwei Läufe in zwei leere Ordner sind byte-gleich (Dateiliste, Inhalt, Ausführbar-Bit)", () => {
