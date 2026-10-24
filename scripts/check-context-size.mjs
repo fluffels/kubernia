@@ -38,8 +38,9 @@
  * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 // Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
@@ -167,4 +168,4 @@ function main() {
   process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

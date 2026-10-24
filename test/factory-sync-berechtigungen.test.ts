@@ -205,7 +205,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
     assert.match(e.fehler.join("|"), /Ergänzung „mcp__neu“ fehlt[\s\S]*Weg:/);
     const g = gate(z);
     assert.equal(g.code, 1);
-    assert.match(g.err, /Berechtigungs-Ergänzung/);
+    assert.match(g.err, /Projekt-Ergänzungen/);
   });
 
   test("ohne Sync-Stand (Quell-Modus) ist die Ergänzungs-Prüfung aktiv: grün bei Gleichstand, rot bei falscher Reihenfolge", () => {
@@ -340,7 +340,7 @@ describe("Berechtigungs-Ergänzung: Grenzen und kaputter Zustand (Runde 1)", () 
     // Gate-Weg (check-factory-drift) unabhängig von der Sync-Assertion oben: ohne Sync-Stand, nur Config und settings.json.
     const g = gate(z);
     assert.equal(g.code, 1, g.out);
-    assert.match(g.err, /Berechtigungs-Ergänzung[\s\S]*hebt die Regel „mcp__claude-in-chrome“/);
+    assert.match(g.err, /Projekt-Ergänzungen[\s\S]*hebt die Regel „mcp__claude-in-chrome“/);
   });
 
   test("eine fehlende Liste in permissions bei nicht-leerer Ergänzung ist ein Befund, kein Absturz", () => {
@@ -414,7 +414,9 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
   type SbErg = { allowedDomains?: string[]; envVars?: { name: string; mode?: string }[] };
   type Einheit = { pfad: string; schluessel: string };
   const sb = lib as unknown as {
-    ERGAENZBARE_EINHEITEN: string[];
+    ERGAENZBARE: { id: string; block: string; anzahl: unknown; kernAnteil: unknown; mitErgaenzung: unknown; befunde: unknown }[];
+    istErgaenzbar(e: { pfad: string; schluessel?: string; block?: string }): boolean;
+    ergaenzungsAnzahlVon(e: Einheit, erg: unknown): number;
     kernAnteilVon(e: Einheit, wert: unknown, erg: unknown): unknown;
     mitErgaenzungVon(e: Einheit, kern: unknown, erg: unknown): unknown;
     ergaenzungsBefundeVon(e: Einheit, wert: unknown, erg: unknown): string[];
@@ -425,8 +427,19 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
   const mitSb = (kern: Sb, erg: SbErg): Sb => sb.mitErgaenzungVon(E, kern, { sandbox: erg }) as Sb;
   const bef = (wert: unknown, erg: SbErg): string => sb.ergaenzungsBefundeVon(E, wert, { sandbox: erg }).join("|");
 
-  test("die Liste der ergänzbaren Einheiten ist geschlossen: permissions und sandbox", () => {
-    assert.deepEqual(sb.ERGAENZBARE_EINHEITEN, [".claude/settings.json#/permissions", ".claude/settings.json#/sandbox"]);
+  test("die Tabelle der ergänzbaren Einheiten ist geschlossen: permissions und sandbox, je mit Config-Block und allen Primitiven", () => {
+    assert.deepEqual(sb.ERGAENZBARE.map((x) => x.id), [".claude/settings.json#/permissions", ".claude/settings.json#/sandbox"]);
+    assert.deepEqual(sb.ERGAENZBARE.map((x) => x.block), ["berechtigungen", "sandbox"]);
+    for (const x of sb.ERGAENZBARE) {
+      for (const p of ["anzahl", "kernAnteil", "mitErgaenzung", "befunde"] as const) assert.equal(typeof x[p], "function", `${x.id}: ${p}`);
+    }
+  });
+  test("eine unbekannte Einheit ist nicht ergänzbar und wirft in den Primitiven (kein stiller Rückfall auf permissions)", () => {
+    const fremd = { pfad: SETTINGS, schluessel: "hooks" };
+    assert.equal(sb.istErgaenzbar(fremd), false);
+    assert.equal(sb.istErgaenzbar(E), true);
+    assert.throws(() => sb.kernAnteilVon(fremd, {}, {}), /nicht ergänzbar/);
+    assert.throws(() => sb.ergaenzungsAnzahlVon(fremd, {}), /nicht ergänzbar/);
   });
   test("mitErgaenzung hängt je Liste hinten an und legt fehlende Teile an; kernAnteil kehrt es um", () => {
     const m = mitSb(KERN_SB, ERG);

@@ -14,11 +14,11 @@ import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FREMD } from "./support/fremd-config";
+import { FREMD, FREMD_CONFIG_PFAD } from "./support/fremd-config";
 
 // Temp-Ordner dieser Datei: jeder Test legt über `tempOrdner()` an, `afterEach` räumt auf (kein Rest im Temp-Verzeichnis).
 const angelegt: string[] = [];
@@ -46,6 +46,9 @@ type Violation = { file: string; line: number; term: string; kind: "ref" | "name
 type InternalRefsApi = {
   PLATZHALTER_NUTZER: string[];
   FIXTURE_WURZELN: string[];
+  LAUFWERK_MUSTER: RegExp;
+  LAUFWERK_KOPF: RegExp;
+  NACHLAUF: RegExp;
   pfadBefunde: (files: string[], readFile: (f: string) => string, opt?: { repo?: string | null }) => Violation[];
   ENCODED_TERMS: string[];
   ENCODED_NAME_TERMS: string[];
@@ -67,16 +70,20 @@ type InternalRefsApi = {
       readFile?: (rel: string) => string;
       terms?: string[];
       nameTerms?: string[];
+      repo?: string | null;
     },
   ) => { files: string[]; violations: Violation[] };
   checkedLabel: (kind: "repo" | "text") => string;
   addTerm: (term: string, selfPath: string, listName?: string) => { ok: boolean; reason?: string; encoded?: string; count?: number };
-  main: (argv: string[], deps?: { self?: string; out?: (m: string) => void; err?: (m: string) => void }) => number;
+  main: (argv: string[], deps?: { self?: string; out?: (m: string) => void; err?: (m: string) => void; pruefe?: () => { files: string[]; violations: Violation[] } }) => number;
 };
 
 const {
   PLATZHALTER_NUTZER,
   FIXTURE_WURZELN,
+  LAUFWERK_MUSTER,
+  LAUFWERK_KOPF,
+  NACHLAUF,
   pfadBefunde,
   ENCODED_TERMS,
   ENCODED_NAME_TERMS,
@@ -360,6 +367,8 @@ describe("CLI-Flags (#1837)", () => {
 
 // Die Beispielpfade werden aus Teilen gebaut: ein Literal träfe die Pfadregel in dieser Testdatei selbst.
 describe("Pfadregel (#1888)", () => {
+  /** Ratchet der Fixture-Wurzeln: der Stand beim Einführen der Pfadregel. Neue Wurzeln heben ihn nicht still an (den Pfad stattdessen aus Teilen bauen); nach dem Streichen von Einträgen den Deckel auf die neue Länge senken. */
+  const FIXTURE_WURZELN_DECKEL = 36;
   const win = (...teile: string[]) => teile.join("\\");
   const fremderRepo = FREMD.repo.split("/")[1] ?? "";
   const befund = (datei: string, zeile: string, repo: string | null = fremderRepo) => pfadBefunde([datei], () => zeile, { repo }).map((b) => b.term);
@@ -402,12 +411,12 @@ describe("Pfadregel (#1888)", () => {
       } catch {
         continue;
       }
-      for (const m of text.matchAll(/(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g)) {
-        benutzt.add(m[0].replace(/^[A-Z]:[\\/]+/, "").split(/[\\/]+/)[0].replace(/[.,;:)\]}]+$/, "").toLowerCase());
+      for (const m of text.matchAll(LAUFWERK_MUSTER)) {
+        benutzt.add(m[0].replace(LAUFWERK_KOPF, "").split(/[\\/]+/)[0].replace(NACHLAUF, "").toLowerCase());
       }
     }
     assert.deepEqual(FIXTURE_WURZELN.filter((w) => !benutzt.has(w)), [], "verwaiste Fixture-Wurzel: Eintrag streichen");
-    assert.ok(FIXTURE_WURZELN.length <= 36, "die Liste darf nur schrumpfen");
+    assert.ok(FIXTURE_WURZELN.length <= FIXTURE_WURZELN_DECKEL, `die Liste darf nur schrumpfen (Deckel ${FIXTURE_WURZELN_DECKEL}, aktuell ${FIXTURE_WURZELN.length}); nach einem Streichen den Deckel mitsenken`);
   });
 
   test("Benutzerordner-URLs und Teilwörter sind kein Pfad", () => {
@@ -437,6 +446,48 @@ describe("Pfadregel (#1888)", () => {
     assert.deepEqual(befund("test/a.test.ts", "C:/dev/repo/x"), []);
     assert.deepEqual(befund("test/a.test.ts", `C:/dev/${fremderRepo}`, null), [], "ohne Repo-Name entfällt die Regel");
     assert.deepEqual(befund("test/a.test.ts", `/${fremderRepo}/x`), [], "Unix-Pfade und URL-Pfade trägt den Namen zu Recht");
+  });
+
+  test("runCheck ohne nutzbare Projekt-Config: Repo-Regel entfällt, Nutzer- und Wurzelregel laufen weiter", () => {
+    const leer = tempOrdner("ir-leer-");
+    const zeilen = [`C:/dev/${fremderRepo}/x`, win("C:", "Users", "KEINPLATZHALTER", "x"), win("D:", "KeineWurzel", "x")].join("\n");
+    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => zeilen, terms: [], nameTerms: [] } as Parameters<typeof runCheck>[1];
+    const r = runCheck(leer, io);
+    assert.deepEqual(r.violations.map((v) => v.term), ["nutzer", "wurzel"]);
+  });
+
+  test("runCheck liest den Repo-Namen aus der Config im Wurzelordner, kaputte Config zählt als nicht nutzbar", () => {
+    const mitConfig = tempOrdner("ir-cfg-");
+    mkdirSync(join(mitConfig, ".factory"));
+    copyFileSync(join(WURZEL_REPO, FREMD_CONFIG_PFAD), join(mitConfig, ".factory", "projekt.json"));
+    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => `C:/dev/${fremderRepo}/x`, terms: [], nameTerms: [] } as Parameters<typeof runCheck>[1];
+    assert.deepEqual(runCheck(mitConfig, io).violations.map((v) => v.term), ["repo"]);
+    const kaputt = tempOrdner("ir-kaputt-");
+    mkdirSync(join(kaputt, ".factory"));
+    writeFileSync(join(kaputt, ".factory", "projekt.json"), "{");
+    assert.deepEqual(runCheck(kaputt, io).violations, []);
+  });
+
+  test("CLI-Ausgabe: ein Pfadbefund steht mit Datei, Zeile und Regel auf stderr, dazu der Hinweis auf die Pfadregel, Exit 1", () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const befunde = pfadBefunde(["docs/a.md"], () => win("C:", "Users", "KEINPLATZHALTER", "x"), { repo: null });
+    const code = main([], { out: (m) => out.push(m), err: (m) => err.push(m), pruefe: () => ({ files: ["docs/a.md"], violations: befunde }) });
+    assert.equal(code, 1);
+    assert.deepEqual(out, []);
+    const text = err.join("\n");
+    assert.match(text, /docs\/a\.md:1 — lokaler Pfad \(nutzer\)/);
+    assert.match(text, /1 lokale\(r\) Pfad\(e\) gefunden\. Platzhalter aus PLATZHALTER_NUTZER, Fixture-Wurzel aus FIXTURE_WURZELN/);
+    assert.doesNotMatch(text, /interne Referenz|Namensbezug/);
+  });
+
+  test("CLI-Ausgabe: ohne Befund Erfolgszeile mit Anzahl, Exit 0, kein Pfad-Hinweis", () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = main([], { out: (m) => out.push(m), err: (m) => err.push(m), pruefe: () => ({ files: ["a", "b"], violations: [] }) });
+    assert.equal(code, 0);
+    assert.deepEqual(err, []);
+    assert.match(out.join("\n"), /Keine internen Referenzen \(2 Quellen geprüft/);
   });
 
   test("runCheck verdrahtet die Pfadregel (Treffer tragen kind pfad)", () => {

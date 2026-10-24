@@ -11,9 +11,10 @@
  * Hinweiszeile und Fix-Text nennen, ist der optionale Config-Schlüssel `befehl` (Standard `npm run docs:gen`).
  * Reines Node-Skript (nur Builtins); alle Funktionen nehmen `rootDir` entgegen.
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { collectMarkdown, leseConfigObjekt, mermaidBloecke, parseSections, pruefeMermaid } from "./docs-gen/markdown.mjs";
 import { GENERATORS, ladeGeneratoren } from "./docs-gen/registry.mjs";
@@ -190,4 +191,4 @@ export async function cli(argv, { rootDir = ROOT, config, generators, out = cons
   return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exitCode = await cli(process.argv.slice(2));
+if (istDirektaufruf(import.meta.url)) process.exitCode = await cli(process.argv.slice(2));

@@ -8,8 +8,8 @@
  * (1.328 Zeilen, 123.253 Bytes): 1,88 bis 1,92 Zeichen je Token, also ≈ 17.000 Tokens; selbst bei 1,3 Zeichen je Token
  * (dichter Code) ≈ 24.600, unter dem Limit.
  */
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 
 export const MAX_ZEICHEN = 32_000;
 const PRAEFIX = 8;
@@ -35,7 +35,7 @@ export function abschnitte(text, maxZeichen = MAX_ZEICHEN) {
   return out;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   const datei = process.argv[2];
   if (!datei || !existsSync(datei)) {
     console.error(`Patch-Datei fehlt: ${datei ?? "(kein Pfad angegeben)"}`);

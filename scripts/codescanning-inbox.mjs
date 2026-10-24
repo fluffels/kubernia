@@ -18,8 +18,9 @@
  * Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]   (Workflow: .github/workflows/codescanning-inbox.yml)
  * Die Funktionen oben sind pur und getestet (test/codescanning-inbox.test.ts); die Aufrufe von gh unten nicht.
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { ladeBoardLibs, inboxStart } from "./inbox-start-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
@@ -348,4 +349,4 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   return lauf({ io, trocken });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = await main();

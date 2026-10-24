@@ -44,12 +44,6 @@ function lockZustand(datei) {
   return { id: `kaputt-${Math.trunc(mtime)}`, zeit: mtime };
 }
 
-/** Ist der Lock älter als LOCK_VERALTET_MS? Ein fehlender Lock gilt als veraltet. */
-export function lockVeraltet(datei, now) {
-  const z = lockZustand(datei);
-  return !z || now - z.zeit > LOCK_VERALTET_MS;
-}
-
 function raeumeGrabsteine(datei, now) {
   const praefix = `${basename(datei)}.verwaist-`;
   try {

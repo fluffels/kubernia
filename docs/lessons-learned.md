@@ -57,7 +57,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Geändert:** Das CI-Warten läuft unter der Cache-Lebensdauer ([scripts/pr-warten.mjs](../scripts/pr-warten.mjs)), eine Ausgabe-Diät steht in der Umsetzer-Definition. Das Ziel von #1559 wurde nicht erreicht, und das steht dort so.
 
-**Beleg:** [Baseline](model-routing.md#baseline-stand-2026-09-29-alle-vier-läufe-vor-10651067), [Umsetzer-Kontext](model-routing.md#umsetzer-kontext-1559).
+**Beleg:** [Baseline](model-routing.md#baseline-stand-2026-09-29-alle-vier-läufe-vor-10651067), [Umsetzer-Kontext](model-routing.md#umsetzer-kontext).
 
 ## Autonomie und Verfahren
 

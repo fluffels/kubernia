@@ -11,10 +11,11 @@
  * Danach `browser_navigate` auf `http://127.0.0.1:<port>/`, Screenshot, Server beenden (Strg+C bzw. Prozess stoppen).
  * Nur Node-Builtins; mermaid selbst kommt aus dem angegebenen Ordner und wird nie mitgeliefert.
  */
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, extname, join, normalize, resolve, sep } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, extname, join, normalize, sep, resolve } from "node:path";
 import { mermaidBloecke } from "./docs-gen/markdown.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 
@@ -103,4 +104,4 @@ ${AUFRUF}`);
   }).listen(port, "127.0.0.1", () => console.log(`Mermaid-Vorschau: http://127.0.0.1:${port}/ (${md})`));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));
+if (istDirektaufruf(import.meta.url)) main(process.argv.slice(2));

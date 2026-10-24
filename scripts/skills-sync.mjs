@@ -10,9 +10,10 @@
 //   Quell-Skills, aber nur, wenn er die Marke trägt und nur `SKILL.md` enthält; alles andere wird gemeldet.
 //   Exit: 0 ok (auch bei gemeldeten Waisen/Volltexten), 1 unbrauchbare Quelle bzw. Befund bei `--check`, 2 Nutzungsfehler.
 // Die pure Prüffunktion `pruefeSkills` bewacht test/harness/skills-sync.test.ts.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { parseFrontmatter } from "./docs-gen/markdown.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL } from "./skill-pfade.mjs";
@@ -159,4 +160,4 @@ function main() {
   if (e.unbrauchbar.length) process.exit(1);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main();
+if (istDirektaufruf(import.meta.url)) main();

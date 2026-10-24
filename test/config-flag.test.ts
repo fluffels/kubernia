@@ -3,7 +3,7 @@
  * Exit 2 (✖, Schlüssel/Pfad, Fix-Zeile, kein Stacktrace) vor jedem I/O; eine gültige Config wird wirklich gelesen.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,6 +20,8 @@ afterAll(() => {
   for (const d of ordner) rmSync(d, { recursive: true, force: true });
 });
 
+/** `reset` der gestubbten `rate_limit`-Antwort (test/support/gh-stub.mjs): Signatur eines Stub-Laufs im Kosten-Log. */
+const STUB_RESET = 4102444800;
 const STUB = pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href;
 
 /** Läuft offline: `gh` ist gestubbt (`rate_limit` voll, sonst `[]`), das Kosten-Log liegt im Temp-Ordner, nicht im Repo; `cwd` bestimmt, woran `git` arbeitet. */
@@ -149,10 +151,21 @@ describe("Läufe sind offline und fassen das echte Kosten-Log nicht an", { timeo
   test("ein gültiger Lauf schreibt nur in das Temp-Log; das Standard-Log bleibt unverändert", () => {
     const config = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as { repo: string };
     const standard = join(tmpdir(), `${config.repo.split("/")[1]}-gh-kosten.jsonl`);
-    const vorher = existsSync(standard) ? statSync(standard).size : -1;
+    const start = Date.now();
     const r = lauf([join(WURZEL, "scripts", "naechstes-ticket.mjs"), "--ticket", "1"], { cwd: tmp(), env: { STUB_ISSUE: JSON.stringify({ number: 1, title: "T", state: "closed", user: { login: "x", type: "User" }, labels: [], assignees: [], body: "" }) } });
     expect(r.text).not.toMatch(/gh gestubbt, kein Netz/);
     expect(existsSync(r.log), "Kostenmessung schreibt in das Temp-Log").toBe(true);
-    expect(existsSync(standard) ? statSync(standard).size : -1).toBe(vorher);
+    // Laufeigene Markierung statt Dateigröße: das Standard-Log teilen sich parallele Läufe (auch echte), die Größe schwankt.
+    // Ein gestubbter Lauf trägt die Stub-Signatur (reset 4102444800); sie darf seit Teststart nicht im Standard-Log stehen.
+    const zeilen = existsSync(standard) ? readFileSync(standard, "utf8").split("\n").filter(Boolean) : [];
+    const eigene = zeilen.filter((z) => {
+      try {
+        const e = JSON.parse(z) as { ts?: string; reset?: number };
+        return e.reset === STUB_RESET && Date.parse(e.ts ?? "") >= start;
+      } catch {
+        return false;
+      }
+    });
+    expect(eigene, "Stub-Lauf hat das Standard-Log nicht beschrieben").toEqual([]);
   });
 });

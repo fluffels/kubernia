@@ -15,7 +15,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { istDirektaufruf } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig, umgebungsWert } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 

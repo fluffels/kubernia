@@ -275,9 +275,9 @@ describe("Kern-Schnitt: Module der Ring-kern-Ableitung importieren nichts außer
   test("scripts/schichten-kern.cjs importiert nichts außer node:* (#1612)", () => {
     assert.deepEqual(importe("scripts/schichten-kern.cjs").filter((spec) => !spec.startsWith("node:")), []);
   });
-  test("scripts/docs-gen.mjs: nur node:*, markdown.mjs, der Tauschpunkt registry.mjs und der Flag-Leser flag-lib.mjs (Kern, nur node:util)", () => {
+  test("scripts/docs-gen.mjs: nur node:*, markdown.mjs, der Tauschpunkt registry.mjs und der Flag-Leser flag-lib.mjs (Kern, nur node:util), direktaufruf.mjs (Kern, nur node:*)", () => {
     for (const spec of importe("scripts/docs-gen.mjs")) {
-      const ok = spec.startsWith("node:") || spec === "./docs-gen/markdown.mjs" || spec === "./docs-gen/registry.mjs" || spec === "./flag-lib.mjs";
+      const ok = spec.startsWith("node:") || spec === "./docs-gen/markdown.mjs" || spec === "./docs-gen/registry.mjs" || spec === "./flag-lib.mjs" || spec === "./direktaufruf.mjs";
       assert.ok(ok, `docs-gen.mjs importiert ${spec}`);
     }
   });

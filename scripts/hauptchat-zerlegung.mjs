@@ -15,7 +15,7 @@
  * Pur und ohne IO bis auf das CLI (liest `~/.claude/projects`, fragt `gh`); der Kern ist getestet.
  */
 
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
@@ -398,4 +398,4 @@ function main() {
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r, { repoName: namen.repoName }));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

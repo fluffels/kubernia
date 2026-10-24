@@ -13,8 +13,9 @@
  * Ausführen mit:  npm run check:steuerbytes   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 
@@ -70,4 +71,4 @@ function main() {
   process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

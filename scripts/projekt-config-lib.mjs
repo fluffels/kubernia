@@ -369,18 +369,6 @@ export function ergaenzungAus(config) {
   return { ...berechtigungenAus(config), sandbox: sandboxAus(config) };
 }
 
-/** Pur: wie `berechtigungenAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
-export function berechtigungenAusText(text) {
-  if (text === null) return berechtigungenAus({}); // keine Datei: leer (JSON.parse(null) ergäbe dasselbe)
-  let config;
-  try {
-    config = JSON.parse(text);
-  } catch {
-    throw new Error(`${PROJEKT_CONFIG} ist kein gültiges JSON`);
-  }
-  return berechtigungenAus(config);
-}
-
 /** Pur: wie `ergaenzungAus` auf dem Dateitext der Projekt-Config; `null` (keine Datei) heißt leer, kein gültiges JSON wirft. */
 export function ergaenzungAusText(text) {
   if (text === null) return ergaenzungAus({});
@@ -430,9 +418,12 @@ export function boardPfad(board) {
 /**
  * Liest und prüft die Config; wirft mit Pfad, allen Fehlern und einer „Fix:“-Zeile. `pruefen: false` liest nur und parst (ohne Schema-Prüfung):
  * für Werkzeuge, die genau einen Schlüssel brauchen und ihn selbst prüfen (`worktreeNamenOderGrund`).
+ * Pfad-Vorrang: explizites `pfad` (`--config`), dann `FACTORY_PROJEKT_CONFIG` (Fremd-Config-Probe, `scripts/fremd-config-probe.mjs`), sonst `PROJEKT_CONFIG`; leer zählt als nicht gesetzt. Ein explizites `rootDir` (anderes Repo, etwa `--wurzel`) ignoriert die Variable.
  */
-export function ladeProjektConfig({ rootDir = ROOT, pfad = PROJEKT_CONFIG, pruefen = true } = {}) {
-  const abs = isAbsolute(pfad) ? pfad : resolve(rootDir, pfad);
+export function ladeProjektConfig({ rootDir, pfad, pruefen = true, env = process.env } = {}) {
+  const gewaehlt = pfad || (rootDir === undefined ? umgebungsWert(env, "FACTORY_PROJEKT_CONFIG") : undefined) || PROJEKT_CONFIG;
+  rootDir ??= ROOT;
+  const abs = isAbsolute(gewaehlt) ? gewaehlt : resolve(rootDir, gewaehlt);
   let roh;
   try {
     roh = readFileSync(abs, "utf8");

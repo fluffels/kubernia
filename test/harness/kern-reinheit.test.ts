@@ -14,6 +14,7 @@ import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
+import { escapeRe, ganzesWortRe } from "../support/regex";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -21,15 +22,12 @@ import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawNamen from "../../scripts/ticket-namen.mjs";
+import * as rawExtraktion from "../../scripts/besitz-extraktion.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawRegistry from "../../scripts/docs-gen/registry.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "../../scripts/skill-pfade.mjs";
 
-// Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const escapeRe: (t: string) => string = rawNamen.escapeRegex;
 
 interface BesitzLib {
   markerStart: (id: string) => string;
@@ -120,7 +118,7 @@ export function begriffeAus(config: BegriffsConfig): Record<string, RegExp> {
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
   const skills = Object.values(config.skills ?? {});
   if (skills.length > 0) out.Skill = new RegExp(`(?<![\\w-])(?:${alternative(skills)})(?![\\w-])`, "g");
-  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRe(literal)}(?![\\p{L}\\p{N}_])`, "giu");
+  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = ganzesWortRe([literal], "giu");
   return out;
 }
 
@@ -1135,7 +1133,7 @@ const GEZAEHLTE_ARTEN = ["kern-test", "test-hilfe", "fixture"];
 interface ExtraktionsListe {
   eintraege: { muster?: string; ring?: string; art: string }[];
 }
-const { artVon, EXTRAKTION_PFAD } = rawBesitz as unknown as { artVon: (liste: ExtraktionsListe, pfad: string) => string | null; EXTRAKTION_PFAD: string };
+const { artVon, EXTRAKTION_PFAD } = rawExtraktion as unknown as { artVon: (liste: ExtraktionsListe, pfad: string) => string | null; EXTRAKTION_PFAD: string };
 
 /** Getrackte Dateien der Arten `kern-test`, `test-hilfe` und `fixture` laut Extraktionsliste. */
 export const kernTestPfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));

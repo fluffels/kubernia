@@ -64,6 +64,7 @@ AGENTS.md                  @fluffels
 /scripts/langfuse-vorbedingung.mjs @fluffels
 /scripts/cockpit/lauf.mjs @fluffels
 /scripts/besitz-lib.mjs @fluffels
+/scripts/besitz-extraktion.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
 /scripts/harness-doctor.mjs @fluffels
 /scripts/harness-doctor-lib.mjs @fluffels
@@ -71,6 +72,7 @@ AGENTS.md                  @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
 /scripts/hook-io.mjs @fluffels
+/scripts/direktaufruf.mjs @fluffels
 /scripts/forum-leser-guard.mjs @fluffels
 /scripts/forum-quarantaene.mjs @fluffels
 /scripts/bash-parser.mjs @fluffels

@@ -38,8 +38,8 @@
  * Reines Node-Skript (nur Builtins + check-basis.mjs); die Bewertung ist pur exportiert.
  */
 
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
@@ -282,4 +282,4 @@ function main(argv = process.argv.slice(2)) {
   process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

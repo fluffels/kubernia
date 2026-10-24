@@ -15,7 +15,7 @@
  *
  * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts. Exit 0 grün, 1 Fehler, 2 Aufruf-Fehler (vor jedem I/O).
  */
-import { pathToFileURL } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
@@ -52,7 +52,7 @@ import {
 
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { bestaetigeAnlegen, entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
-import { HARNESS_TAKT_KOMMENTARE, SPIEL_QUOTE, befundKommentare, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, SPIEL_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTicketMerges } from "./spielquote-lib.mjs";
 
 // Die Quote liegt in spielquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
 export { HARNESS_TAKT_KOMMENTARE, SPIEL_QUOTE, befundKommentare, istHarnessCommit, zaehleTicketMerges };
@@ -189,13 +189,12 @@ export function entscheideMitFuellstand({ items, offene, position, repo, io }) {
     if (offenes) io.log(`::warning::Board-Verzug: #${offenes.number} fehlt in der Board-Liste (REST hinkt oder Item fehlt), der Härtungs-Takt sieht das Sammelticket nicht.`);
     return { ...entscheideHarnessTakt({ items, befundKommentare: 0, position }), fuellstand: null };
   }
-  let fuellstand;
-  try {
-    fuellstand = befundKommentare(io.ladeKommentare(kandidat.number, repo), repo.split("/")[0]);
-  } catch (err) {
-    io.log(`::warning::Härtungs-Takt: Füllstand von #${kandidat.number} nicht ladbar, keine Bewegung (fail-closed): ${fehlerText(err)}`);
+  const r = fuellstandVon({ nr: kandidat.number, repo, ladeKommentare: io.ladeKommentare });
+  if (r.fehler !== undefined) {
+    io.log(`::warning::Härtungs-Takt: Füllstand von #${kandidat.number} nicht ladbar, keine Bewegung (fail-closed): ${r.fehler}`);
     return { aktion: "nichts", grund: `Füllstand von #${kandidat.number} nicht prüfbar`, fuellstand: null };
   }
+  const fuellstand = r.wert;
   return { ...entscheideHarnessTakt({ items, befundKommentare: fuellstand, position }), fuellstand };
 }
 
@@ -367,7 +366,7 @@ function main() {
   if (fehler) process.exitCode = 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (istDirektaufruf(import.meta.url)) {
   try {
     main();
   } catch (err) {

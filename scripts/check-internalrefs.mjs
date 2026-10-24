@@ -41,9 +41,10 @@
  * Ausführen mit:  npm run check:internalrefs   (oder als Teil von: npm run verify)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -156,9 +157,9 @@ export const FIXTURE_WURZELN = [
 ];
 
 const NUTZER_MUSTER = /(?:(?<![\w])[A-Z]:[\\/]+Users|(?<![\w.:/\\])\/(?:Users|home))[\\/]+([^\\/\s"'`<>*|]+)/g;
-const LAUFWERK_MUSTER = /(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g;
-const LAUFWERK_KOPF = /^[A-Z]:[\\/]+/;
-const NACHLAUF = /[.,;:)\]}]+$/;
+export const LAUFWERK_MUSTER = /(?<![\w])[A-Z]:[\\/]+[^\s"'`<>*|]*/g;
+export const LAUFWERK_KOPF = /^[A-Z]:[\\/]+/;
+export const NACHLAUF = /[.,;:)\]}]+$/;
 const VARIABLE = /^[$%{~]/;
 const imScope = (file) => /^(test|scripts)\//.test(file);
 
@@ -246,8 +247,8 @@ export function addTerm(term, selfPath = SELF, listName = "ENCODED_TERMS") {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-/** Einstieg. `deps` (Tests): `self` (die Datei, in die `--add`/`--add-name` schreiben), `out`, `err`. Rückgabe: Exit-Code. */
-export function main(argv = process.argv.slice(2), { self = SELF, out = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `self` (die Datei, in die `--add`/`--add-name` schreiben), `out`, `err`, `pruefe` (statt `runCheck` gegen das echte Repo). Rückgabe: Exit-Code. */
+export function main(argv = process.argv.slice(2), { self = SELF, out = console.log, err = console.error, pruefe = runCheck } = {}) {
   const { werte, fehler } = flagsLesen(argv, { add: { type: "string" }, "add-name": { type: "string" }, text: { type: "boolean" } });
   if (fehler) {
     err(`${fehler.text}
@@ -279,7 +280,7 @@ Aufruf: node scripts/check-internalrefs.mjs [--add <begriff> | --add-name <begri
     return bericht(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, { red, green, label: checkedLabel("text"), out, err });
   }
 
-  const { files, violations } = runCheck();
+  const { files, violations } = pruefe();
   return bericht(violations, files.length, { red, green, label: checkedLabel("repo"), out, err });
 }
 
@@ -322,4 +323,4 @@ function bericht(violations, checked, { red, green, label, out, err }) {
   return 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();
+if (istDirektaufruf(import.meta.url)) process.exitCode = main();

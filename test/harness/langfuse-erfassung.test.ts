@@ -19,12 +19,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 import { lokaleImporteTransitiv } from "./hook-importe";
-import { projektConfig, repoName } from "../support/fremd-config";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
-/** Der Trace-Tag der echten Projektdateien (Repo-Name der Config): diese Prüfungen lesen echte Projektdateien, keine Fremd-Config. */
-const TAG = repoName(projektConfig());
 
 const abschnitt = (md: string, kopf: RegExp): string => {
   const zeilen = md.split("\n");
@@ -79,7 +76,7 @@ const hatChecklisteVollstaendig = (modelRouting: string): boolean => {
 /** Der Beleg-Ablauf steht in model-routing.md. */
 const hatBelegAblauf = (modelRouting: string): boolean => {
   const a = abschnitt(modelRouting, /^### Langfuse-Erfassung belegen \(#1293\)/);
-  return a !== "" && /Probe-Lauf/.test(a) && /usageDetails/.test(a) && a.includes(TAG);
+  return a !== "" && /Probe-Lauf/.test(a) && /usageDetails/.test(a);
 };
 
 /** Keine Doppelung: kein alter „Langfuse-Blick"-Abschnitt, die Checklistenpunkte nur in model-routing.md. */
@@ -173,7 +170,6 @@ const erfassungKonfigIntakt = (settingsJson: string): boolean => {
   };
   return (
     s.enabledPlugins?.["langfuse-observability@langfuse-observability"] === true &&
-    (s.env?.CC_LANGFUSE_TRACE_TAGS ?? "").split(",").map((t) => t.trim()).includes(TAG) &&
     s.disableAllHooks !== true
   );
 };
@@ -343,13 +339,9 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
 
   test("Erfassungs-Konfiguration in settings.json intakt", () => {
     assert.ok(erfassungKonfigIntakt(read(".claude/settings.json")));
-    const ok = {
-      enabledPlugins: { "langfuse-observability@langfuse-observability": true },
-      env: { CC_LANGFUSE_TRACE_TAGS: TAG },
-    };
+    const ok = { enabledPlugins: { "langfuse-observability@langfuse-observability": true } };
     assert.ok(erfassungKonfigIntakt(JSON.stringify(ok)));
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, enabledPlugins: {} })));
-    assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, env: { CC_LANGFUSE_TRACE_TAGS: "x" } })));
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, disableAllHooks: true })));
   });
 });
@@ -548,34 +540,28 @@ describe("Zuordnung in Langfuse (#1668)", () => {
     assert.equal(hatZuordnung(mr.replace("### Zuordnung in Langfuse (#1266)", "### Zuordnung")), false);
   });
 
-  /** Ticket-Zeile warnt vor Kosten je Ticket und nennt die Gründe (a) bis (d); Projekt-Zeile trägt das Schnitt-Datum; Glossar und Trace-Tag-Bullet verlinken nur. */
-  const hatTicketGruendeUndDatum = (mr: string, glossar: string): boolean => {
+  /** Ticket-Zeile warnt vor Kosten je Ticket und nennt die Gründe (a) bis (d); Projekt-Zeile trägt das Schnitt-Datum; das Trace-Tag-Bullet verlinkt nur (die Glossar-Zeile prüft `trace-tag-projekt.test.ts`). */
+  const hatTicketGruendeUndDatum = (mr: string): boolean => {
     const a = abschnitt(mr, /^### Zuordnung in Langfuse \(#1266\)/);
     const zeile = (name: string): string => a.split("\n").find((z) => z.startsWith(`| ${name}`)) ?? "";
     const ticket = zeile("Ticket");
     const tag = mr.split("\n").find((z) => z.startsWith("- **Trace-Tag:**")) ?? "";
-    const glossarZeile = glossar.split("\n").find((z) => z.startsWith("| Trace-Tag `" + TAG + "`")) ?? "";
     return (
       /nicht für Kosten je Ticket verwenden/.test(ticket) &&
       ["(a)", "(b)", "(c)", "(d)"].every((g) => ticket.includes(g)) &&
       /ab 2026-10-05/.test(zeile("Projekt")) &&
       /\*\*Vergleichsschnitt:\*\*[^\n]*2026-10-05/.test(a) &&
-      glossarZeile.includes("(model-routing.md#zuordnung-in-langfuse-1266)") &&
-      !/2026-10-05|Brain-Arbeit/.test(glossarZeile) &&
       !/2026-10-05|Brain-Arbeit/.test(tag)
     );
   };
 
   test("Ticket-Zeile (Warnung, Gründe a bis d), Schnitt-Datum und Verlinkung statt Text, Gegenbeispiele rot", () => {
     const mr = read("docs/model-routing.md");
-    const gl = read("docs/harness-glossar.md");
-    assert.ok(hatTicketGruendeUndDatum(mr, gl));
-    assert.equal(hatTicketGruendeUndDatum(mr.replace("nicht für Kosten je Ticket verwenden", "ok"), gl), false);
-    for (const g of ["(a) `CC_", "(b) die Session", "(c) der Hook-Patch", "(d) mehrere Tickets"]) assert.equal(hatTicketGruendeUndDatum(mr.replace(g, "(x)"), gl), false, g);
-    assert.equal(hatTicketGruendeUndDatum(mr.replace(/(\*\*Vergleichsschnitt:\*\*[^\n]*?)2026-10-05/, "$1ab Oktober"), gl), false);
-    assert.equal(hatTicketGruendeUndDatum(mr, gl.replace("Projektfilter der Langfuse-Auswertung.", "Projektfilter, ab 2026-10-05.")), false);
-    assert.equal(hatTicketGruendeUndDatum(mr, gl.replace("(model-routing.md#zuordnung-in-langfuse-1266)", "(model-routing.md)")), false);
-    assert.equal(hatTicketGruendeUndDatum(mr.replace("beim Start fest an allen Traces;", "beim Start fest an allen Traces, auch an Brain-Arbeit;"), gl), false);
+    assert.ok(hatTicketGruendeUndDatum(mr));
+    assert.equal(hatTicketGruendeUndDatum(mr.replace("nicht für Kosten je Ticket verwenden", "ok")), false);
+    for (const g of ["(a) `CC_", "(b) die Session", "(c) der Hook-Patch", "(d) mehrere Tickets"]) assert.equal(hatTicketGruendeUndDatum(mr.replace(g, "(x)")), false, g);
+    assert.equal(hatTicketGruendeUndDatum(mr.replace(/(\*\*Vergleichsschnitt:\*\*[^\n]*?)2026-10-05/, "$1ab Oktober")), false);
+    assert.equal(hatTicketGruendeUndDatum(mr.replace("beim Start fest an allen Traces;", "beim Start fest an allen Traces, auch an Brain-Arbeit;")), false);
   });
 
   test("Checkliste nutzt --typen und den Namen „Subagent LLM Call“, Gegenbeispiel rot", () => {

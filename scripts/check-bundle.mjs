@@ -60,8 +60,9 @@
  * Ausführen mit:  npm run check:bundle   (oder als Teil von: npm run verify:full)
  */
 
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync, statSync, readdirSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
@@ -368,4 +369,4 @@ function main() {
   console.log(green(`✔ Bundle-Budgets ok — alle Artefakte im Rahmen.`));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

@@ -71,7 +71,8 @@ describe("permissionGrund", () => {
     assert.equal(tm.permissionGrund("Permission to use Bash with command cat <<E\nzeile\nE\n has been denied."), "Regel", "mehrzeiliger Befehl");
     assert.equal(tm.permissionGrund("Permission to use Read has been denied by your rule Read(~/.geheim)."), "Regel", "Regel-Ablehnung eines anderen Tools mit Regelnennung");
     assert.equal(tm.permissionGrund("Permission to use Edit has been denied."), "Regel", "Regel-Ablehnung ohne Befehl");
-    assert.equal(tm.permissionGrund("Permission to use Read with " + "p/".repeat(300) + " has been denied."), "Regel", "gekappter langer Pfad ohne Ende");
+    assert.equal(tm.permissionGrund("Permission to use Read with " + "p/".repeat(300) + " has been denied."), "Regel", "langer Pfad (ungekappt) mit Satzende");
+    assert.equal(tm.permissionGrund("Permission to use Read with " + "p/".repeat(300)), "Regel", "gekappter langer Pfad: der Text bricht ab, das Ende „has been denied“ fehlt");
     assert.equal(tm.permissionGrund("Permission to use Bash was denied, kein Befehl genannt"), "ohne Grund", "andere Formulierung ist keine Regel-Ablehnung");
     assert.equal(tm.permissionGrund("Permission for this action: Permission to use Bash with command x"), "ohne Grund", "das Präfix muss am Textanfang stehen");
   });
