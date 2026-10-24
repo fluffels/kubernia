@@ -310,10 +310,11 @@ describe("Extraktionsliste: Quellwurzel als Parameter und Vorkompilierung (#1888
       assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.md"), false, art);
       assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/sub/x.mmd"), false, art);
       assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/xmmd"), false, art);
-      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x-mmd"), false, art, "der Punkt vor mmd ist maskiert");
-      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.mmd.md"), false, art, "die Endung ist verankert");
-      assert.equal(extraktionsArten("lib")[art]?.("test/docs/diagramme/x.mmd"), false, art, "der Pfad ist an der Wurzel verankert");
-      assert.equal(extraktionsArten("lib")[art]?.("lib/docs/diagramme/x.mmd"), false, art, "auch unter der Quellwurzel");
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x-mmd"), false, `${art}: der Punkt vor mmd ist maskiert`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/x.mmd.md"), false, `${art}: die Endung ist verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("test/docs/diagramme/x.mmd"), false, `${art}: der Pfad ist an der Wurzel verankert`);
+      assert.equal(extraktionsArten("lib")[art]?.("lib/docs/diagramme/x.mmd"), false, `${art}: auch unter der Quellwurzel`);
+      assert.equal(extraktionsArten("lib")[art]?.("docs/diagramme/.mmd"), false, `${art}: ein Dateiname braucht einen Stamm vor .mmd`);
     }
   });
   test("ohne Quellwurzel bricht die Prüfung ab (der Kern kennt keinen festen Namen)", () => {

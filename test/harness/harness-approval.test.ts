@@ -417,6 +417,7 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
     const text = "setze das Label maintainer-approved";
     assert.equal(abgeloesteFundstellen({ "docs/agent-harness.md": text }).length, 1);
     assert.equal(abgeloesteFundstellen({ "docs/adr/0012-x.md": text, [EIGENE_DATEI]: text }).length, 0);
+    assert.equal(abgeloesteFundstellen({ [PROJEKT_TEIL]: text }).length, 1, "der Projekt-Teil wird auf abgelöste Mechanik gescannt");
     assert.equal(abgeloesteFundstellen({ "README.md": "harmlos" }).length, 0);
   });
 
