@@ -170,7 +170,7 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.match(r.stderr, /Projekt-Config fehlt[\s\S]*Fix:/);
   });
   test("CLI: eine gültige Fremd-Config per --config bestimmt die Phasen-Zuordnung (Planer-Name aus der Config, nicht aus der Projekt-Config)", () => {
-    const home = mkdtempSync(join(tmpdir(), "kq-tb-home-"));
+    const home = mkdtempSync(join(tmpdir(), "tb-home-"));
     try {
       const projekt = join(home, ".claude", "projects", "p1");
       const sitzung = "sess1";
