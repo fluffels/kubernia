@@ -44,6 +44,9 @@ describe("erfuellt", () => {
     expect(erfuellt("22.23.4", min)).toBe(true);
     expect(erfuellt("22.23.5", min)).toBe(true);
   });
+  test("höheres Minor genügt, auch mit kleinerem Patch (22.24.0)", () => {
+    expect(erfuellt("22.24.0", min)).toBe(true);
+  });
   test("höherer Major genügt, auch mit kleinerem Minor/Patch (23.0.0)", () => {
     expect(erfuellt("23.0.0", min)).toBe(true);
   });

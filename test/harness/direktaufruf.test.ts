@@ -54,6 +54,22 @@ describe("istDirektaufruf", () => {
     expect(starte(join(link, "probe.mjs"))).toBe("DIREKT");
   });
 
+  test("Einstieg über den Link, von Node nicht aufgelöst (--preserve-symlinks-main): import.meta.url ist der Linkpfad, DIREKT über die realpath-Seite der URL", () => {
+    const { link } = probe();
+    const r = spawnSync(process.execPath, ["--preserve-symlinks-main", join(link, "probe.mjs")], { encoding: "utf8" });
+    expect(`${r.stdout}${r.stderr}`.trim()).toBe("DIREKT");
+  });
+
+  test("Skript, das sich vor der Prüfung selbst löscht (realpath wirft): Rückfall auf den URL-Vergleich ist DIREKT", () => {
+    const { echt } = probe();
+    const datei = join(echt, "weg.mjs");
+    writeFileSync(
+      datei,
+      `import { unlinkSync } from "node:fs";\nimport { fileURLToPath } from "node:url";\nimport { istDirektaufruf } from ${JSON.stringify(DIREKT_LIB)};\nunlinkSync(fileURLToPath(import.meta.url));\nconsole.log(istDirektaufruf(import.meta.url) ? "DIREKT" : "IMPORT");\n`,
+    );
+    expect(starte(datei)).toBe("DIREKT");
+  });
+
   test("als Modul importiert: IMPORT, nicht DIREKT", () => {
     const { echt } = probe();
     const haupt = join(echt, "haupt.mjs");

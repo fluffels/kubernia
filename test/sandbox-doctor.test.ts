@@ -412,7 +412,7 @@ describe("Integration mit dem echten Projekt", () => {
     for (const n of deny) expect(namen).toContain(n);
   });
   test("projektDenyVariablen: nur Einträge mit mode deny und String-Namen; kaputtes JSON oder fehlender Block liefert eine leere Liste", () => {
-    const text = JSON.stringify({ sandbox: { credentials: { envVars: [{ name: "BEISPIEL_A", mode: "deny" }, { name: "BEISPIEL_B", mode: "mask" }, { name: 5, mode: "deny" }, "x"] } } });
+    const text = JSON.stringify({ sandbox: { credentials: { envVars: [{ name: "BEISPIEL_A", mode: "deny" }, { name: "BEISPIEL_B", mode: "mask" }, { name: 5, mode: "deny" }, "x", null] } } });
     expect(D.projektDenyVariablen(text)).toEqual(["BEISPIEL_A"]);
     expect(D.projektDenyVariablen("{")).toEqual([]);
     expect(D.projektDenyVariablen("{}")).toEqual([]);

@@ -266,6 +266,17 @@ describe("ladeProjektConfig", () => {
       const fremd = schreibe(tmp(), "fremd.json", "acme/fremd");
       assert.equal(pc.ladeProjektConfig({ env: { FACTORY_PROJEKT_CONFIG: fremd } }).repo, "acme/fremd");
     });
+    test("Standard-Umgebung ist process.env: ein Kindprozess mit gesetzter Variable lädt die Fremd-Config", () => {
+      const fremd = schreibe(tmp(), "fremd.json", "acme/kind");
+      const lib = pathToFileURL(join(WURZEL, "scripts/projekt-config-lib.mjs")).href;
+      const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(lib)}).then((m) => console.log(m.ladeProjektConfig().repo))`], {
+        encoding: "utf8",
+        cwd: WURZEL,
+        env: { ...process.env, FACTORY_PROJEKT_CONFIG: fremd },
+        timeout: 20_000,
+      });
+      assert.equal(r.stdout.trim(), "acme/kind", r.stderr);
+    });
     test("ein expliziter pfad geht vor der Umgebung", () => {
       const d = tmp();
       const a = schreibe(d, "a.json", "acme/a");

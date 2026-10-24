@@ -15,6 +15,7 @@ type Lauf = { befehl: string; args: string[]; env: Record<string, string | undef
 type Ergebnis = { exit: number; konfigPfad: string; ergaenzt: string[]; tests: string[] };
 interface Probe {
   PROBE_ENV: string;
+  PROBE_TEST: string;
   baueProbeConfig: (fremd: Record<string, unknown>, echt: Record<string, unknown>) => { config: Record<string, unknown>; ergaenzt: string[] };
   kernTestPfade: (liste: unknown, getrackt: string[], ohne?: string[]) => string[];
   probe: (o: {
@@ -126,6 +127,13 @@ describe("probe", () => {
     p.probe({ wurzel, fremdPfad, getrackt: ["test/a.test.ts"], tempOrdner: tmp, env, run: () => ({ status: 0 }) });
     expect(env[p.PROBE_ENV]).toBeUndefined();
   });
+  test("ohne `ohne`-Argument läuft die Probe nie im eigenen Kindlauf, auch wenn die Liste sie als kern-test führt", () => {
+    const { wurzel, fremdPfad } = baue();
+    const liste = { ...LISTE, eintraege: [...LISTE.eintraege, { muster: p.PROBE_TEST, art: "kern-test", grund: "x" }] };
+    writeFileSync(join(wurzel, ".factory/extraktion.json"), JSON.stringify(liste));
+    const r = p.probe({ wurzel, fremdPfad, getrackt: ["test/a.test.ts", p.PROBE_TEST], tempOrdner: tmp, run: () => ({ status: 0 }) });
+    expect(r.tests).toEqual(["test/a.test.ts"]);
+  });
   test("ein Kindlauf ohne Exit-Status (Abbruch) ist rot, nie grün", () => {
     const { wurzel, fremdPfad } = baue();
     const r = p.probe({ wurzel, fremdPfad, getrackt: ["test/a.test.ts"], tempOrdner: tmp, run: () => ({ status: null }) });
@@ -159,5 +167,29 @@ describe("cli", () => {
     const lauf = (status: number) => p.cli(["--fremd", "fremd.json"], { wurzel, out: (s) => out.push(s), err: () => {}, getrackt: ["test/a.test.ts"], run: () => ({ status }) });
     expect(lauf(0)).toBe(0);
     expect(lauf(1)).toBe(1);
+  });
+  test("fehlende Fremd-Config: Exit 1 mit Meldung auf err, nie Exit 0 (fail-closed)", () => {
+    const wurzel = tmp();
+    mkdirSync(join(wurzel, ".factory"));
+    writeFileSync(join(wurzel, ".factory/projekt.json"), JSON.stringify({ repo: "echt/echt" }));
+    writeFileSync(join(wurzel, ".factory/extraktion.json"), JSON.stringify(LISTE));
+    const err: string[] = [];
+    let gestartet = false;
+    const exit = p.cli(["--fremd", "gibt-es-nicht.json"], { wurzel, out: () => {}, err: (s) => err.push(s), getrackt: ["test/a.test.ts"], run: () => ((gestartet = true), { status: 0 }) });
+    expect(exit).toBe(1);
+    expect(err.join("\n")).toMatch(/gibt-es-nicht\.json/);
+    expect(gestartet).toBe(false);
+  });
+  test("--wurzel wählt das Repo, dessen Config und Extraktionsliste gelten", () => {
+    const wurzel = tmp();
+    mkdirSync(join(wurzel, ".factory"));
+    writeFileSync(join(wurzel, ".factory/projekt.json"), JSON.stringify({ repo: "echt/echt" }));
+    writeFileSync(join(wurzel, ".factory/extraktion.json"), JSON.stringify(LISTE));
+    writeFileSync(join(wurzel, "fremd.json"), JSON.stringify({ repo: "zz/z" }));
+    const andere = tmp();
+    const err: string[] = [];
+    const exit = p.cli(["--wurzel", wurzel, "--fremd", "fremd.json"], { wurzel: andere, out: () => {}, err: (s) => err.push(s), getrackt: ["test/a.test.ts"], run: () => ({ status: 0 }) });
+    expect(err).toEqual([]);
+    expect(exit).toBe(0);
   });
 });

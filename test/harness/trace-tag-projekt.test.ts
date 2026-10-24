@@ -13,7 +13,7 @@ import { projektConfig, repoName } from "../support/fremd-config";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
-/** Der Trace-Tag der echten Projektdateien: der Repo-Name der Config (die Probe mit Fremd-Config ändert ihn nicht, siehe `projektConfig()`). */
+/** Der Trace-Tag der echten Projektdateien: der Repo-Name der Config (die Probe fährt nur Kern-Tests, diese Projekt-Test-Datei läuft darin nie). */
 const TAG = repoName(projektConfig());
 
 /** Der Abschnitt ab der Überschrift `kopf` bis zur nächsten Überschrift gleicher oder höherer Ebene. */
