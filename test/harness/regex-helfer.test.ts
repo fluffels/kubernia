@@ -1,4 +1,5 @@
-/* Regex-Hilfen der Kern-Tests (#1906): Escape und Ganzes-Wort-Matcher. */
+/* @harness-waechter
+ * Regex-Hilfen der Kern-Tests (#1906): Escape und Ganzes-Wort-Matcher. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { escapeRe, ganzesWortRe } from "../support/regex";

@@ -1,4 +1,5 @@
-/* Fremd-Config-Probe (#1906): ergänzt die Fremd-Config um die Blöcke der echten Config, wählt die Kern-Tests aus der Extraktionsliste
+/* @harness-waechter
+ * Fremd-Config-Probe (#1906): ergänzt die Fremd-Config um die Blöcke der echten Config, wählt die Kern-Tests aus der Extraktionsliste
  * und fährt sie mit `FACTORY_PROJEKT_CONFIG` im Kindlauf; die echte `.factory/projekt.json` bleibt unberührt.
  *
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
