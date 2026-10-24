@@ -18,6 +18,8 @@ import * as rawLib from "../../scripts/factory-export-lib.mjs";
 import * as rawSync from "../../scripts/factory-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawRefs from "../../scripts/check-internalrefs.mjs";
 
 interface Leser {
   fehler?: string;
@@ -52,6 +54,7 @@ const lib = rawLib as unknown as {
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   paketName(spec: string): string | null;
 };
+const { decodeTerms } = rawRefs as unknown as { decodeTerms: () => string[] };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
 const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] } };
 
@@ -118,6 +121,12 @@ describe("lockAuszug", () => {
     assert.deepEqual(r.lock?.packages[""], pkg);
     assert.deepEqual(r.lock?.packages["node_modules/b"], { version: "2.0.0", dev: true });
     assert.equal(r.lock?.name, "neu");
+  });
+
+  test("ein Lock ohne packages ist ein Befund", () => {
+    const r = lib.lockAuszug({} as Lock, pkg);
+    assert.equal(r.lock, null);
+    assert.match(r.befunde.join("|"), /keine packages/);
   });
 
   test("ein verschachtelter Eintrag verdeckt den gehobenen: nicht erreichbare Einträge entfallen", () => {
@@ -358,6 +367,28 @@ describe("Export aus HEAD", () => {
     assert.ok(Object.keys(lock.packages).length < Object.keys(quelle.packages).length);
   });
 
+  test("das Ausführbar-Bit der Quelle gilt für kopierte Dateien, nie für berechnete; Wurzel-Dateien der Produkt-Art liegen an der Wurzel", () => {
+    const exec = new Set(["scripts/check-size.mjs", "test/support/tmp-fixture.ts", ".factory/produkt/README.md", ".nvmrc"]);
+    const r = ex.baueExport({ leser: { ...leser, ausfuehrbar: (p) => exec.has(p) || p === "AGENTS.md" } });
+    assert.deepEqual(r.befunde, []);
+    for (const p of ["scripts/check-size.mjs", "test/support/tmp-fixture.ts", "README.md", ".nvmrc"]) assert.equal(r.dateien.get(p)?.ausfuehrbar, true, p);
+    for (const p of ["AGENTS.md", "package.json", "scripts/check-docmap.mjs"]) assert.equal(r.dateien.get(p)?.ausfuehrbar, false, p);
+    assert.ok(r.dateien.has("LICENSE"));
+    assert.ok(!r.dateien.has(".factory/produkt/README.md"));
+  });
+
+  test("ohne injizierten Leser liest die Kommandozeile den Commit per git (--commit, --quelle)", () => {
+    const z = leerOrdner();
+    const r = lauf(["--ziel", z, "--commit", echt.bericht.sha, "--quelle", WURZEL]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, new RegExp(`Export-SHA ${echt.bericht.sha}`));
+    assert.ok(existsSync(join(z, "package-lock.json")));
+    const falsch = lauf(["--ziel", leerOrdner(), "--commit", "gibt-es-nicht", "--quelle", WURZEL]);
+    assert.equal(falsch.code, 1);
+    assert.match(falsch.err, /gibt es in der Quelle nicht/);
+    aufraeumen();
+  }, 60_000);
+
   test("Bericht zählt durchgelassene Pfade, Fixture-Rauschen und den Rest der Factory-Seiten", () => {
     const b = echt.bericht;
     assert.ok(b.durchgelassen > 0);
@@ -429,6 +460,37 @@ describe("Export aus HEAD", () => {
       const pkg = JSON.parse(basisText(".factory/produkt/vorlagen/package.json.vorlage")) as { devDependencies: Record<string, string> };
       pkg.devDependencies.nichtda = "^1.0.0";
       befund({ ".factory/produkt/vorlagen/package.json.vorlage": JSON.stringify(pkg) }, /'nichtda' steht in kubernia nicht|Lock: 'nichtda' \(Wurzel\) hat keinen Eintrag/);
+    });
+
+    test("fehlen Manifest, Liste oder Daten-Datei, bricht der Export mit einer Meldung ab", () => {
+      befund({ ".factory/besitz.json": null }, /\.factory\/besitz\.json: Datei fehlt/);
+      befund({ ".factory/extraktion.json": '{"version":1}' }, /Manifest oder Extraktionsliste ohne Liste 'eintraege'/);
+      befund({ ".factory/extraktion.json": "{" }, /\.factory\/extraktion\.json: kein gültiges JSON/);
+      befund({ "test/harness/kern-links-baseline.json": null }, /kern-links-baseline\.json: nicht lesbar/);
+      befund({ "test/harness/kern-abdeckung.json": "{kaputt" }, /kern-abdeckung\.json: Filter der Daten-Datei scheitert/);
+    });
+
+    test("kaputte Vorlagen sind Befunde: ungültiges JSON, Config-Fehler, AGENTS.md ohne Marker", () => {
+      befund({ ".factory/produkt/vorlagen/.factory/projekt.json.vorlage": "{" }, /projekt\.json\.vorlage: kein gültiges JSON/);
+      befund({ ".factory/produkt/vorlagen/.factory/projekt.json.vorlage": '{"berechtigungen":5}' }, /projekt\.json des Exports: .*berechtigungen/);
+      befund({ ".factory/produkt/vorlagen/package.json.vorlage": "{" }, /package\.json\.vorlage: kein gültiges JSON/);
+      befund({ ".factory/produkt/vorlagen/AGENTS.md.vorlage": "# ohne Marker\n" }, /AGENTS\.md: /);
+    });
+
+    test("zwei Quellen auf demselben Zielpfad und eine Binärdatei sind Befunde", () => {
+      const liste = JSON.parse(basisText(".factory/extraktion.json")) as { eintraege: object[] };
+      liste.eintraege.push({ muster: ".factory/produkt/AGENTS.md", art: "produkt-wurzel", grund: "Test" });
+      befund({ ".factory/extraktion.json": JSON.stringify(liste), ".factory/produkt/AGENTS.md": "x" }, /AGENTS\.md: Kollision zweier Quellen/);
+      befund({ "test/fixtures/projekt-fremd.json": "a\0b" }, /projekt-fremd\.json: Binärdatei/);
+    });
+
+    test("ein Projektwert-Block ohne Ende in einer Besitz-Datei ist ein Befund", () => {
+      const p = ".claude/agents/factory-umsetzer.md";
+      befund({ [p]: `${basisText(p)}\n<!-- factory:projektwerte:start -->\n` }, /Projektwert-Block/);
+    });
+
+    test("ein interner Bezug im Export ist ein Befund", () => {
+      befund({ "scripts/check-size.mjs": `${basisText("scripts/check-size.mjs")}\n// ${decodeTerms()[0]}\n` }, /scripts\/check-size\.mjs:\d+: interner Bezug \(ref\)/);
     });
 
     test("ein Kern-Test mit kubernia-Literal im Wort wird nur als ganzes Wort gezählt", () => {

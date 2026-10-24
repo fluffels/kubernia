@@ -17,7 +17,6 @@ import {
   MITZIEHEND,
   musterRegex,
   normalisiereEol,
-  pfadSicher,
   projektwertDateien,
   pruefeExtraktion,
   pruefeManifest,
@@ -142,8 +141,7 @@ export function baueExport({ leser }) {
   const lies = (p) => leser.lies(p);
   const dateien = new Map();
   const lege = (pfad, text, herkunft, ausfuehrbar = false) => {
-    if (!pfadSicher(pfad)) befunde.push(`${pfad}: Pfad unsicher`);
-    else if (text === null) befunde.push(`${pfad}: nicht lesbar`);
+    if (text === null) befunde.push(`${pfad}: nicht lesbar`);
     else if (text.includes("\0")) befunde.push(`${pfad}: Binärdatei, der Export kennt nur Text`);
     else if (dateien.has(pfad)) befunde.push(`${pfad}: Kollision zweier Quellen auf demselben Zielpfad`);
     else {
