@@ -332,7 +332,7 @@ describe("pruefeUserSettings", () => {
   });
   test("Secret im env-Block: rot, nur der Name steht in der Meldung, nie der Wert", () => {
     const u = kopie();
-    u.env = { GH_TOKEN: "ghp_geheimerwert", LANGFUSE_PUBLIC_KEY: "pk-lf-ok", CC_LANGFUSE_TRACE_TAGS: "kubernia" };
+    u.env = { GH_TOKEN: "ghp_geheimerwert", LANGFUSE_PUBLIC_KEY: "pk-lf-ok", CC_LANGFUSE_TRACE_TAGS: "projekt-tag" };
     const r = rot(D.pruefeUserSettings(u, vorlage));
     expect(r).toHaveLength(1);
     expect(r[0].text).toContain("GH_TOKEN");
@@ -421,7 +421,7 @@ describe("CLI", () => {
     expect(r.stdout).toMatch(/^(OK|FEHLT|HINWEIS)\b/m);
   });
   test("--check meldet kaputtes User-Settings-JSON als FEHLT und endet mit Exit 0", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-sandbox-doctor-"));
+    const dir = mkdtempSync(join(tmpdir(), "sandbox-doctor-"));
     try {
       writeFileSync(join(dir, "settings.json"), "{");
       const r = lauf(["--check"], { CLAUDE_CONFIG_DIR: dir });

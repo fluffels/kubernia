@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FREMD } from "./support/fremd-config";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -126,7 +127,7 @@ describe("Harness-Doku-Drift (#529)", () => {
   test("extractLinks liefert interne Links (mit Anker), lässt externe aus", () => {
     const md = [
       "Siehe [Regeln](AGENTS.md#konventionen) und [Karte](../CLAUDE.md).",
-      "Extern: [Repo](https://github.com/fluffels/kubernia) und [Mail](mailto:x@y.z).",
+      `Extern: [Repo](https://github.com/${FREMD.repo}) und [Mail](mailto:x@y.z).`,
       "Bild: ![Logo](assets/logo.png).",
     ].join("\n");
     const links = extractLinks(md);
@@ -244,14 +245,14 @@ describe("Harness-Doku-Drift (#529)", () => {
 // versionierten .claude-Unterordner; Worktrees und lokaler, untrackter Kram bleiben draußen.
 describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nein (#1091)", () => {
   test("erfasst skills/agents/workflows, lässt worktrees, untrackte Ordner und node_modules aus", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-"));
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-"));
     try {
       const files = [
         "docs/x.md",
         ".claude/skills/a/SKILL.md",
         ".claude/agents/b.md",
         ".claude/workflows/c.md",
-        ".claude/worktrees/kq-1/AGENTS.md", // Repo-Kopie eines parallelen Agenten
+        ".claude/worktrees/wt-1/AGENTS.md", // Repo-Kopie eines parallelen Agenten
         ".claude/plugins/lokal.md", // untrackter .claude-Unterordner
         ".claude/lokal.md", // untrackte Datei direkt unter .claude
         "node_modules/pkg/README.md",
@@ -294,7 +295,7 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
   }).auditDocDrift;
 
   test("ein toter Link und ein toter Anker in einer Skill-Quelle werden gemeldet, ein guter Link nicht", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-agents-"));
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-agents-"));
     try {
       const quelle = ".agents/skills/a/SKILL.md";
       const dateien: Record<string, string> = {
@@ -330,7 +331,7 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
 
   test("ein Link auf den Ticket-Ablauf am alten Ort ist rot, am neuen Ort grün (#1850)", () => {
     const alt = [".claude", "skills", "factory", "ablauf.md"].join("/"); // zusammengesetzt: der Wächter für entfernte Pfade scannt diese Datei
-    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-ablauf-"));
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-ablauf-"));
     try {
       const dateien: Record<string, string> = {
         "package.json": JSON.stringify({ scripts: {} }),
@@ -349,7 +350,7 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
   });
 
   test("ein Verweis mit Anker auf den Zeiger ist rot, derselbe Anker auf die Quelle grün (#1849)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-zeiger-"));
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-zeiger-"));
     try {
       const quelle = "# Skill\n\n## Nach jedem Merge von main\n\nText\n";
       const dateien: Record<string, string> = {

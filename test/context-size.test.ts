@@ -41,7 +41,7 @@ const collectAgentsFiles: (rootDir?: string) => string[] = checkContextSize.coll
 
 /** Legt Dateien (repo-relativer POSIX-Pfad → Inhalt) in einem Temp-Repo an. */
 function withTempRepo(files: Record<string, string>, fn: (dir: string) => void): void {
-  const dir = mkdtempSync(join(tmpdir(), "kq-contextsize-"));
+  const dir = mkdtempSync(join(tmpdir(), "contextsize-"));
   try {
     for (const [rel, content] of Object.entries(files)) {
       const abs = join(dir, ...rel.split("/"));
@@ -102,7 +102,7 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
 
   test("Zuwachs INNERHALB bestehender Zeilen schlägt an (#1061/#1064 – die Lücke der alten Zeilen-Metrik)", () => {
     // Genau der Fall, den das Zeilen-Budget nicht sah: gleiche Zeilenzahl, 5.000 Zeichen mehr.
-    const dir = mkdtempSync(join(tmpdir(), "kq-contextsize-"));
+    const dir = mkdtempSync(join(tmpdir(), "contextsize-"));
     try {
       const lines = Array.from({ length: 10 }, (_, i) => `- Regel ${i}: kurz.`);
       writeFileSync(join(dir, "AGENTS.md"), lines.join("\n"));
@@ -176,7 +176,7 @@ describe("Modul-lokale AGENTS.md im Budget (#1088)", () => {
         "node_modules/pkg/AGENTS.md": "fremd",
         ".git/AGENTS.md": "intern",
         "dist/AGENTS.md": "Build",
-        ".claude/worktrees/kq-1/AGENTS.md": "Repo-Kopie eines Parallel-Agenten",
+        ".claude/worktrees/wt-1/AGENTS.md": "Repo-Kopie eines Parallel-Agenten",
         ".claude/AGENTS.md": "lose, unversioniert",
         ".claude/skills/x/AGENTS.md": "versioniert",
       },

@@ -16,6 +16,8 @@ import * as rawDrift from "../scripts/check-factory-drift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
+const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 interface Span {
   start: number;
   ende: number;
@@ -64,7 +66,7 @@ afterEach(() => {
   for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 const tmp = (): string => {
-  const d = mkdtempSync(join(tmpdir(), "kq-fsync-"));
+  const d = mkdtempSync(join(tmpdir(), "fsync-"));
   temps.push(d);
   return d;
 };
@@ -212,7 +214,7 @@ afterAll(() => {
 });
 function echteQuelle(): string {
   if (echteKopie !== null) return echteKopie;
-  const k = mkdtempSync(join(tmpdir(), "kq-fsync-echt-"));
+  const k = mkdtempSync(join(tmpdir(), "fsync-echt-"));
   echteKopie = k;
   const manifestText = readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8");
   const pfade = new Set([".factory/besitz.json", ".factory/projekt.json", ...(JSON.parse(manifestText) as { eintraege: { pfad: string }[] }).eintraege.map((e) => e.pfad)]);
@@ -742,17 +744,23 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     schreibe(z, "AGENTS.md", `# Fremdes Projekt\n\n${kernText("alter Kern")}\n\n${projekt}\n`);
     schreibe(z, ".claude/settings.json", '{\n  "model": "x"\n}\n');
     const echt = JSON.parse(pwConfig("wk-planer")) as Record<string, unknown>;
+    // Spielbezug: alle projektliterale des echten Projekts (ganze Wörter, ohne Groß-/Kleinschreibung).
+    const spielWoerter = Object.values((echt.projektliterale ?? {}) as Record<string, string>);
+    assert.ok(spielWoerter.length > 0, "die echte Config nennt Spielbezüge (sonst wäre der Test vakuös)");
+    const spielWort = `(?<![\\p{L}\\p{N}_])(?:${spielWoerter.map(escRe).join("|")})(?![\\p{L}\\p{N}_])`;
+    const spielRe = new RegExp(spielWort, "iu");
+    const ausgabeRe = new RegExp(`Leitfrage|Messlatte|Optik|${spielWort}`, "iu");
     delete echt.projektliterale;
     schreibe(z, ".factory/projekt.json", JSON.stringify(echt, null, 2) + "\n");
     const r = vomTag(echteQuelle(), z);
     assert.equal(r.code, 0, r.err);
     const p = spawnSync(process.execPath, [join(z, "scripts", "check-factory-drift.mjs")], { cwd: z, encoding: "utf8" });
     assert.equal(p.status, 0, p.stderr);
-    for (const text of [r.out, r.err, p.stdout, p.stderr]) assert.doesNotMatch(text, /Leitfrage|Messlatte|Optik|stardew/i);
+    for (const text of [r.out, r.err, p.stdout, p.stderr]) assert.doesNotMatch(text, ausgabeRe);
     const manifest = JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string; ring: string }[] };
     const verteilt = [...new Set(manifest.eintraege.filter((e) => wirdVerteilt(e)).map((e) => e.pfad))];
     assert.ok(verteilt.includes(".claude/agents/factory-planer.md"), "der Planer wird verteilt (sonst wäre der Test vakuös)");
-    for (const pfad of verteilt) assert.doesNotMatch(lies(z, pfad), /stardew/i, `${pfad} im Ziel trägt den Spielbezug`);
+    for (const pfad of verteilt) assert.doesNotMatch(lies(z, pfad), spielRe, `${pfad} im Ziel trägt den Spielbezug`);
   });
 
   test.skipIf(process.platform === "win32")("das Ausführbit des Pre-Push-Hooks kommt mit", () => {

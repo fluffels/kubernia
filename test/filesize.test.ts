@@ -1,6 +1,6 @@
 /* Dateigröße-Wächter (#390) – Frühwarnung gegen neue God-Files.
  *
- * Große Module sind bei Stardew-Scope teuer: Agenten lesen pro Änderung viel mehr
+ * Große Module sind bei großem Spielumfang teuer: Agenten lesen pro Änderung viel mehr
  * Kontext (Tokens), und je größer eine Datei, desto leichter schleichen sich
  * Regressionen ein (Befund: WorldScene.ts 1344, kubectl.ts 1220). Dieser Test ist
  * das Gate im `npm test`-CI; dieselbe Logik gibt es als CLI `npm run check:size`.
@@ -135,7 +135,7 @@ describe("Deckel für Workflow-Skripte (#1349)", () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const wurzel = mkdtempSync(join(tmpdir(), "kq-size-"));
+    const wurzel = mkdtempSync(join(tmpdir(), "size-"));
     try {
       mkdirSync(join(wurzel, ".claude", "workflows"), { recursive: true });
       writeFileSync(join(wurzel, ".claude", "workflows", "a.js"), "ab\r\ncd\r\n");
@@ -161,7 +161,7 @@ describe("collectWorkflowSizes: Randfälle (#1349)", () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const wurzel = mkdtempSync(join(tmpdir(), "kq-size-"));
+    const wurzel = mkdtempSync(join(tmpdir(), "size-"));
     try {
       assert.deepEqual(collectWorkflowSizes(wurzel), []);
       mkdirSync(join(wurzel, ".claude", "workflows"), { recursive: true });
@@ -179,7 +179,7 @@ describe("Quellwurzel aus der Config (#1843)", () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const wurzel = mkdtempSync(join(tmpdir(), "kq-size-"));
+    const wurzel = mkdtempSync(join(tmpdir(), "size-"));
     try {
       mkdirSync(join(wurzel, "lib", "sub"), { recursive: true });
       mkdirSync(join(wurzel, "src"), { recursive: true });

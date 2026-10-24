@@ -46,7 +46,7 @@ describe("abschnitte", () => {
 
 describe("CLI", () => {
   test("nennt offset/limit je Abschnitt; fehlende Datei endet mit Exit 2", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-pa-"));
+    const dir = mkdtempSync(join(tmpdir(), "pa-"));
     try {
       const f = join(dir, "x.patch");
       writeFileSync(f, zeilen(1000, 100));
