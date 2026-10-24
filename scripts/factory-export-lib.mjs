@@ -84,6 +84,9 @@ export function paketName(spec) {
   return PAKET_NAME.test(name) ? name : `?${spec}`;
 }
 
+/** Text ohne Block- und Zeilenkommentare: ein Import, der nur als Beispiel in einem Kommentar steht, ist keiner (Grenze: `//` in einem String vor einem Import auf derselben Zeile). */
+const ohneKommentare = (text) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+
 /** Testdateien: nur dort kann ein Importtext Fixture sein (ein Import in einem String oder Template); in jeder anderen Code-Datei ist ein nicht auflösbarer Import ein Befund. */
 export const FIXTURE_TOLERIERT = /\.test\.ts$/;
 
@@ -97,7 +100,7 @@ export function pruefeRelativeImporte(dateien, quellPfade) {
   let unaufloesbar = 0;
   for (const [pfad, text] of dateien) {
     if (!CODE_DATEI.test(pfad)) continue;
-    for (const spec of relativeImporte(text)) {
+    for (const spec of relativeImporte(ohneKommentare(text))) {
       if (zielDatei(pfad, spec, exportPfade) !== null) continue;
       const q = zielDatei(pfad, spec, quellPfade);
       if (q === null && FIXTURE_TOLERIERT.test(pfad)) unaufloesbar++;
@@ -119,7 +122,7 @@ export function pruefePaketImporte(dateien, kubPkg, vorlagePkg) {
   const unbekannt = new Set();
   for (const [pfad, text] of dateien) {
     if (!CODE_DATEI.test(pfad)) continue;
-    for (const spec of importeAus(text)) {
+    for (const spec of importeAus(ohneKommentare(text))) {
       const name = paketName(spec);
       if (name === null || vorlage.has(name)) continue;
       if (kub.has(name)) befunde.push(`${pfad}: Paket '${name}' steht nicht in der package.json-Vorlage`);
