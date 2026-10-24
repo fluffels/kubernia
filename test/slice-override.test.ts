@@ -196,7 +196,7 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
     const r = lauf(`${ECHT.diffcovOverride}: ohne Nummer`);
     expect(r.code).toBe(0);
     expect(r.out).toContain("ungültige Override-Zeile ignoriert");
-    expect(r.out).toContain("keinen gemessenen Quellcode (src/**/*.ts)");
+    expect(r.out).toContain(`keinen gemessenen Quellcode (${projektConfig().struktur.quelle}/**/*.ts)`);
   });
 
   it("gültige Override-Zeile ohne messbaren Code ist stale und rot", () => {

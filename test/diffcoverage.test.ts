@@ -19,7 +19,14 @@ import { FREMD, projektConfig } from "./support/fremd-config";
 // Schicht-SSOT (bewusst CommonJS, siehe scripts/layers.cjs) — damit der Floor-Test
 // unten an die ECHTEN Schicht-Buckets gebunden ist statt an vier abgeschriebene Namen.
 const requireCjs = createRequire(import.meta.url);
-const { LAYERS } = requireCjs("../scripts/layers.cjs") as { LAYERS: Record<string, string> };
+const { LAYERS, SCHICHT_MODELL } = requireCjs("../scripts/layers.cjs") as { LAYERS: Record<string, string>; SCHICHT_MODELL: { quellwurzel: string; schichten: { id: string; wurzeln: string[] }[] } };
+
+// Quellwurzel und Schicht-Wurzeln kommen aus der Projekt-Config und den Schichtdaten des Repos, nie als Literal: der Test gilt für jedes Repo, das die Kern-Skripte nutzt.
+const Q = projektConfig().struktur.quelle;
+const wurzelVon = (schicht: string): string => SCHICHT_MODELL.schichten.find((s) => s.id === schicht)?.wurzeln[0] ?? "";
+/** Eine Datei der Präsentations- und eine der Anwendungs-Schicht (die Wurzeln stehen in `SCHICHT_MODELL`). */
+const PRAES = `${Q}/${wurzelVon(LAYERS.PRESENTATION)}/worldscene/clustersync.ts`;
+const ANW = `${Q}/${wurzelVon(LAYERS.APPLICATION)}/idb.ts`;
 
 type Env = Record<string, string | undefined>;
 type RunGit = (args: string[]) => string;
@@ -214,27 +221,27 @@ describe("Diff-Coverage: lcov-Parsing", () => {
 });
 
 describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
-  const P = "src/sim/argocd.ts";
+  const P = `${Q}/sim/argocd.ts`;
   const lcov = (da: Record<number, number>, brda: string[]) =>
     [`SF:${P}`, ...Object.entries(da).map(([l, n]) => `DA:${l},${n}`), ...brda, `end_of_record`].join("\n");
 
   test("BRDA: `-` und 0 sind ungenommen, n > 0 genommen; kaputte Records und Windows-Pfade stören nicht", () => {
     const text = [
       lcov({ 5: 3 }, ["BRDA:5,0,0,2", "BRDA:5,0,1,-", "BRDA:5,1,0,0", "BRDA:kaputt", "BRDA:5,0,0", "BRDA:x,0,0,1"]),
-      "SF:src\\sim\\x.ts",
+      `SF:${Q}\\sim\\x.ts`,
       "BRDA:9,0,0,1",
       "end_of_record",
     ].join("\n");
     const b = parseLcovBranches(text);
     assert.deepEqual(b.get(P)?.get(5), { total: 3, taken: 1 });
-    assert.deepEqual(b.get("src/sim/x.ts")?.get(9), { total: 1, taken: 1 });
+    assert.deepEqual(b.get(`${Q}/sim/x.ts`)?.get(9), { total: 1, taken: 1 });
     assert.equal(b.get(P)?.size, 1);
   });
 
   test("BRDA außerhalb eines SF-Blocks (vor dem ersten SF und nach end_of_record) wird ignoriert", () => {
     assert.equal(parseLcovBranches("BRDA:1,0,0,1").size, 0);
-    const b = parseLcovBranches(["SF:src/a.ts", "BRDA:1,0,0,1", "end_of_record", "BRDA:2,0,0,1"].join("\n"));
-    assert.deepEqual([...(b.get("src/a.ts")?.keys() ?? [])], [1]);
+    const b = parseLcovBranches([`SF:${Q}/a.ts`, "BRDA:1,0,0,1", "end_of_record", "BRDA:2,0,0,1"].join("\n"));
+    assert.deepEqual([...(b.get(`${Q}/a.ts`)?.keys() ?? [])], [1]);
   });
 
   test("meldet geänderte, ausgeführte Zeile mit ungenommenem Zweig", () => {
@@ -246,7 +253,7 @@ describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
   test("meldet NICHT: ungeänderte Zeile, nicht ausgeführte Zeile (DA 0), alle Zweige genommen, .d.ts, außerhalb src", () => {
     const text = [
       lcov({ 7: 4, 8: 0, 9: 2 }, ["BRDA:7,0,0,4", "BRDA:7,0,1,0", "BRDA:8,0,0,0", "BRDA:9,0,0,1", "BRDA:9,0,1,1"]),
-      "SF:src/t.d.ts",
+      `SF:${Q}/t.d.ts`,
       "DA:1,1",
       "BRDA:1,0,0,0",
       "end_of_record",
@@ -257,28 +264,28 @@ describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
     ].join("\n");
     const changed: Changed = new Map([
       [P, new Set([8, 9])], // Zeile 7 nicht geändert
-      ["src/t.d.ts", new Set([1])],
+      [`${Q}/t.d.ts`, new Set([1])],
       ["scripts/x.mjs", new Set([1])],
     ]);
     assert.deepEqual(teilweiseGetestet(changed, parseLcov(text), parseLcovBranches(text)), []);
   });
 
   test("Ende-zu-Ende: `partial` im Ergebnis, `failed` bleibt unberührt", () => {
-    const text = lcov({ 1: 2 }, ["BRDA:1,0,0,2", "BRDA:1,0,1,0"]).replace(P, "src/sim/pods.ts");
+    const text = lcov({ 1: 2 }, ["BRDA:1,0,0,2", "BRDA:1,0,1,0"]).replace(P, `${Q}/sim/pods.ts`);
     const r = checkDiffCoverage({
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      runGit: (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
       readFile: () => text,
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, false);
-    assert.deepEqual(r.partial, [{ path: "src/sim/pods.ts", line: 1, taken: 1, total: 2 }]);
+    assert.deepEqual(r.partial, [{ path: `${Q}/sim/pods.ts`, line: 1, taken: 1, total: 2 }]);
   });
 });
 
 describe("Diff-Coverage: Bewertung pro Schicht", () => {
   test("ungetestete Domänen-Zeile drückt den Bucket unter den Floor (rot)", () => {
-    const changed = new Map([["src/sim/pods.ts", new Set([1, 2, 3, 4, 5])]]);
-    const lcov = new Map([["src/sim/pods.ts", new Map([[1, 2], [2, 1], [3, 1], [4, 1], [5, 0]])]]);
+    const changed = new Map([[`${Q}/sim/pods.ts`, new Set([1, 2, 3, 4, 5])]]);
+    const lcov = new Map([[`${Q}/sim/pods.ts`, new Map([[1, 2], [2, 1], [3, 1], [4, 1], [5, 0]])]]);
     const v = evaluateByLayer(changed, lcov);
     assert.equal(v.buckets["domaene"].covered, 4);
     assert.equal(v.buckets["domaene"].total, 5);
@@ -286,14 +293,14 @@ describe("Diff-Coverage: Bewertung pro Schicht", () => {
   });
 
   test("Gegenprobe: dieselben Zeilen MIT Treffern sind grün (der Test misst wirklich Coverage)", () => {
-    const changed = new Map([["src/sim/pods.ts", new Set([1, 2, 3, 4, 5])]]);
-    const lcov = new Map([["src/sim/pods.ts", new Map([[1, 2], [2, 1], [3, 1], [4, 1], [5, 1]])]]);
+    const changed = new Map([[`${Q}/sim/pods.ts`, new Set([1, 2, 3, 4, 5])]]);
+    const lcov = new Map([[`${Q}/sim/pods.ts`, new Map([[1, 2], [2, 1], [3, 1], [4, 1], [5, 1]])]]);
     assert.deepEqual(evaluateByLayer(changed, lcov).below, []);
   });
 
   test("dieselbe ungetestete Zeile in der PRÄSENTATION ist NICHT rot (Grafik/DOM ist unit-untestbar)", () => {
-    const changed = new Map([["src/scenes/worldscene/clustersync.ts", new Set([1, 2, 3, 4, 5])]]);
-    const lcov = new Map([["src/scenes/worldscene/clustersync.ts", new Map([[1, 0], [2, 0], [3, 0], [4, 0], [5, 0]])]]);
+    const changed = new Map([[PRAES, new Set([1, 2, 3, 4, 5])]]);
+    const lcov = new Map([[PRAES, new Map([[1, 0], [2, 0], [3, 0], [4, 0], [5, 0]])]]);
     const v = evaluateByLayer(changed, lcov);
     assert.equal(v.buckets["praesentation"].total, 5);
     assert.equal(v.buckets["praesentation"].covered, 0);
@@ -301,21 +308,21 @@ describe("Diff-Coverage: Bewertung pro Schicht", () => {
   });
 
   test("Zeilen ohne DA-Record (Kommentar/Typ/Leerzeile) zählen NICHT in den Nenner", () => {
-    const changed = new Map([["src/sim/pods.ts", new Set([1, 2, 3])]]);
-    const lcov = new Map([["src/sim/pods.ts", new Map([[2, 1]])]]);
+    const changed = new Map([[`${Q}/sim/pods.ts`, new Set([1, 2, 3])]]);
+    const lcov = new Map([[`${Q}/sim/pods.ts`, new Map([[2, 1]])]]);
     const v = evaluateByLayer(changed, lcov);
     assert.equal(v.buckets["domaene"].total, 1);
     assert.equal(v.buckets["domaene"].covered, 1);
   });
 
   test("geänderte src-Datei ohne lcov-Record wird gemeldet statt still übersprungen (Gaming-Vektor)", () => {
-    const changed = new Map([["src/sim/neu.ts", new Set([1])]]);
+    const changed = new Map([[`${Q}/sim/neu.ts`, new Set([1])]]);
     const v = evaluateByLayer(changed, new Map());
-    assert.deepEqual(v.missing, ["src/sim/neu.ts"]);
+    assert.deepEqual(v.missing, [`${Q}/sim/neu.ts`]);
   });
 
   test("Nicht-.ts unter src (Content-JSON) fällt aus der Messung — kein ausführbarer Code", () => {
-    const changed = new Map([["src/content/data/quests/ole.json", new Set([1, 2])]]);
+    const changed = new Map([[`${Q}/content/data/quests/ole.json`, new Set([1, 2])]]);
     const v = evaluateByLayer(changed, new Map());
     assert.deepEqual(v.missing, []);
     assert.equal(v.buckets["domaene"].total, 0);
@@ -328,11 +335,11 @@ describe("Diff-Coverage: Bewertung pro Schicht", () => {
   });
 
   test("Anwendungs-Bucket hat einen eigenen, niedrigeren Floor als die Domäne", () => {
-    const changed = new Map([["src/store/idb.ts", new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])]]);
+    const changed = new Map([[ANW, new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])]]);
     // 85 % — unter dem Domänen-Floor (90), über dem Anwendungs-Floor (80).
     const hits = new Map<number, number>();
     for (let i = 1; i <= 10; i++) hits.set(i, i <= 8 ? 1 : 0);
-    const v = evaluateByLayer(changed, new Map([["src/store/idb.ts", hits]]));
+    const v = evaluateByLayer(changed, new Map([[ANW, hits]]));
     assert.equal(v.buckets["anwendung"].pct, 80);
     assert.deepEqual(v.below, []);
   });
@@ -360,25 +367,25 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
   });
 
   test("Typdeklarationen (.d.ts) fallen aus der Messung — sie enthalten keine ausführbare Zeile", () => {
-    assert.equal(isMeasured("src/vite-env.d.ts"), false);
-    assert.equal(isMeasured("src/sim/pods.ts"), true);
+    assert.equal(isMeasured(`${Q}/vite-env.d.ts`), false);
+    assert.equal(isMeasured(`${Q}/sim/pods.ts`), true);
     assert.equal(isMeasured("scripts/check-size.mjs"), false);
   });
 
   test("eigener Override-Schlüssel (#1269): ein Diffsize-Trailer gilt hier nicht", () => {
     assert.equal(ZEILEN.diffcovOverride, `${FREMD.praefixe.commitZeile}Diffcov-Override`);
     const runGit = mitTrailer(
-      (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
       `${ZEILEN.diffsizeOverride}: #1021 falsches Gate`,
     );
-    const r = checkDiffCoverage({ runGit, readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }), env: { FACTORY_DIFF_BASE: "basesha" } });
+    const r = checkDiffCoverage({ runGit, readFile: () => lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 0 }), env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(r.allowed, false);
     assert.equal(r.failed, true);
   });
 
   test("versetzte Override-Zeilen (#1390 Z7): mit Strich oder eingerückt zählen nicht, werden aber gemeldet; eine gültige daneben wirkt", () => {
-    const basis: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
-    const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
+    const basis: RunGit = (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
+    const readFile = () => lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 0 });
     const env = { FACTORY_DIFF_BASE: "basesha" };
     const versetzt = [`- ${ZEILEN.diffcovOverride}: #1390 mit Strich`, `  ${ZEILEN.diffcovOverride}: #1390 eingerückt`];
     const r = checkDiffCoverage({ runGit: mitTrailer(basis, versetzt.join("\n")), readFile, env });
@@ -394,7 +401,7 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
 });
 
 describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
-  const lcovOk = lcovFor("src/sim/pods.ts", { 1: 1, 2: 1 });
+  const lcovOk = lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 1 });
 
   test("keine auflösbare Basis (flacher Checkout) → No-op-grün, statt main rot zu machen", () => {
     const r = checkDiffCoverage({
@@ -409,7 +416,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
 
   test("fehlendes lcov → ROT mit Hinweis, nicht still grün (ein Gate, das nichts gemessen hat)", () => {
     const r = checkDiffCoverage({
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      runGit: (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
       readFile: () => {
         throw new Error("ENOENT");
       },
@@ -421,8 +428,8 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
   });
 
   test("Präfix aus der Config (#1741): mit AB- zählt die Override-Zeile der Fremd-Config nicht, die AB-Zeile schon", () => {
-    const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
-    const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
+    const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
+    const readFile = () => lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 0 });
     const env = { FACTORY_DIFF_BASE: "basesha" };
     const fremd = checkDiffCoverage({ runGit: mitTrailer(runGit, `${ZEILEN.diffcovOverride}: #1021 bewusst`), readFile, env, zeilen: ZEILEN_AB });
     assert.equal(fremd.failed, true, "die Zeile der Fremd-Config zählt bei AB- nicht");
@@ -431,8 +438,8 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
   });
 
   test("Standardpfad: ohne injizierte `zeilen` liest der Wächter die Projekt-Config", () => {
-    const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
-    const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
+    const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
+    const readFile = () => lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 0 });
     const env = { FACTORY_DIFF_BASE: "basesha" };
     const echt = checkDiffCoverageRoh({ runGit: mitTrailer(runGit, `${ECHT.diffcovOverride}: #1021 bewusst`), readFile, env });
     assert.equal(echt.failed, false, "die Zeile des echten Präfixes lässt den Slice durch");
@@ -442,8 +449,8 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
 
   test("ungetesteter Domänen-Slice → rot; Override mit Begründung lässt ihn bewusst durch", () => {
     const runGit: RunGit = (args) =>
-      args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha";
-    const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
+      args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha";
+    const readFile = () => lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 0 });
     const rot = checkDiffCoverage({ runGit, readFile, env: { FACTORY_DIFF_BASE: "basesha" } });
     assert.equal(rot.failed, true);
     const geduldet = checkDiffCoverage({
@@ -459,10 +466,10 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
   test("ungültige Override-Zeile (ohne #<nr>) lässt nichts durch und wird gemeldet", () => {
     const r = checkDiffCoverage({
       runGit: mitTrailer(
-        (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+        (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
         `${ZEILEN.diffcovOverride}: einfach so`,
       ),
-      readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
+      readFile: () => lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 0 }),
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.allowed, false);
@@ -472,7 +479,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
   test("gesetztes Override bei grünem Slice wird als STALE gemeldet (rot)", () => {
     const r = checkDiffCoverage({
       runGit: mitTrailer(
-        (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+        (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
         `${ZEILEN.diffcovOverride}: #1021 unnötig`,
       ),
       readFile: () => lcovOk,
@@ -484,21 +491,21 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
 
   test("geänderte src-Datei fehlt im Report → ROT (Anti-Gaming: Code verstecken)", () => {
     const r = checkDiffCoverage({
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
-      readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
+      runGit: (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/versteckt.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      readFile: () => lcovFor(`${Q}/sim/andere.ts`, { 1: 1 }),
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, true);
-    assert.deepEqual(r.missing, ["src/sim/versteckt.ts"]);
+    assert.deepEqual(r.missing, [`${Q}/sim/versteckt.ts`]);
   });
 
   test("ein Messfehler (missing) ist NICHT über das Override abkürzbar — nur neu messen hilft", () => {
     const r = checkDiffCoverage({
       runGit: mitTrailer(
-        (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+        (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/versteckt.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
         `${ZEILEN.diffcovOverride}: #1021 durchwinken`,
       ),
-      readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
+      readFile: () => lcovFor(`${Q}/sim/andere.ts`, { 1: 1 }),
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, true);
@@ -511,18 +518,18 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const runGit: RunGit = (args) =>
       args[0] === "diff"
         ? [
-            diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]),
-            diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1 @@", "+z"]),
+            diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]),
+            diffFor(`${Q}/sim/versteckt.ts`, ["@@ -0,0 +1 @@", "+z"]),
           ].join("\n")
         : "basesha";
     const r = checkDiffCoverage({
       runGit,
-      readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
+      readFile: () => lcovFor(`${Q}/sim/pods.ts`, { 1: 1, 2: 0 }),
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, true);
     assert.deepEqual(r.below, ["domaene"]);
-    assert.deepEqual(r.missing, ["src/sim/versteckt.ts"]);
+    assert.deepEqual(r.missing, [`${Q}/sim/versteckt.ts`]);
   });
 
   test("reiner Doku-/Tooling-Slice braucht KEINEN Coverage-Report (grün statt rot)", () => {
@@ -572,18 +579,18 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     checkDiffCoverage({
       runGit: (args) => {
         gesehen.push(args);
-        return args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha";
+        return args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha";
       },
       readFile: () => lcovOk,
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     // Pinnt zugleich `-U0` (Kontextzeilen zählten sonst als geändert mit) und den Scope.
-    assert.deepEqual(gesehen.find((a) => a[0] === "diff"), ["diff", "-U0", "basesha...HEAD", "--", "src"]);
+    assert.deepEqual(gesehen.find((a) => a[0] === "diff"), ["diff", "-U0", "basesha...HEAD", "--", Q]);
   });
 
   test("vollständig getesteter Slice ist grün", () => {
     const r = checkDiffCoverage({
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      runGit: (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
       readFile: () => lcovOk,
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
@@ -596,13 +603,13 @@ describe("Diff-Coverage: Quellwurzel aus der Struktur-Config (#1860)", () => {
   test("isMeasured misst nur unter der übergebenen Quellwurzel, mit Segmentgrenze", () => {
     assert.equal(isMeasured("lib/a.ts", "lib"), true);
     assert.equal(isMeasured("lib/sub/a.ts", "lib"), true);
-    assert.equal(isMeasured("src/a.ts", "lib"), false);
+    assert.equal(isMeasured(`${Q}/a.ts`, "lib"), false);
     assert.equal(isMeasured("library/a.ts", "lib"), false);
     assert.equal(isMeasured("lib/a.d.ts", "lib"), false);
     assert.equal(isMeasured("lib/a.mjs", "lib"), false);
   });
   test("ohne Angabe gilt struktur.quelle der Projekt-Config", () => {
-    assert.equal(isMeasured("src/sim/pods.ts"), true);
+    assert.equal(isMeasured(`${Q}/sim/pods.ts`), true);
     assert.equal(isMeasured("lib/a.ts"), false);
   });
   test("checkDiffCoverage fragt den Diff mit der übergebenen Quellwurzel ab und misst dort", () => {
@@ -643,7 +650,7 @@ describe("Diff-Coverage: Quellwurzel aus der Struktur-Config (#1860)", () => {
   test("Änderung nur unter src ist bei quelle=lib nichts zu messen", () => {
     const r = checkDiffCoverage({
       quelle: "lib",
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      runGit: (args) => (args[0] === "diff" ? diffFor(`${Q}/a.ts`, ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
     assert.equal(r.nothingToMeasure, true);
