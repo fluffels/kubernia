@@ -29,8 +29,10 @@ import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as skillsSync from "../scripts/skills-sync.mjs";
-const zeigerText = (skillsSync as unknown as { zeigerText: (name: string, quelltext: string) => string }).zeigerText;
+import { ROLLEN_PFADE } from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { zeigerText as zeigerTextRoh } from "../scripts/skill-pfade.mjs";
+const zeigerText = zeigerTextRoh as (name: string, quelltext: string) => string;
 
 const parseNpmRunMentions: (md: string) => Set<string> = checkDocDrift.parseNpmRunMentions;
 const extractLinks: (md: string) => { target: string; path: string; anchor: string }[] =
@@ -316,17 +318,13 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
     }
   });
 
-  test("im echten Repo liegt die Quelle forum im Scan", () => {
-    assert.ok(collectMarkdown().includes(".agents/skills/forum/SKILL.md"));
-  });
-
   test("im echten Repo liegt die Quelle review-lenses im Scan (#1849)", () => {
     assert.ok(collectMarkdown().includes(".agents/skills/review-lenses/SKILL.md"));
   });
 
   test("im echten Repo liegen die Ticket-Skills und der Ablauf im Scan (#1850)", () => {
     const md = collectMarkdown();
-    for (const f of [".agents/skills/factory/SKILL.md", ".agents/skills/factory-ticket/SKILL.md", ".agents/skills/factory/ablauf.md"]) assert.ok(md.includes(f), f);
+    for (const f of [".agents/skills/factory/SKILL.md", (ROLLEN_PFADE as Record<string, string>).ticketSkill, ".agents/skills/factory/ablauf.md"]) assert.ok(md.includes(f), f);
   });
 
   test("ein Link auf den Ticket-Ablauf am alten Ort ist rot, am neuen Ort grün (#1850)", () => {

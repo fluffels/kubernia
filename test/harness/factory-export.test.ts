@@ -21,6 +21,12 @@ import * as rawLib from "../../scripts/factory-export-lib.mjs";
 import * as rawSync from "../../scripts/factory-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawSkills from "../../scripts/skills-sync.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 
 interface Leser {
   fehler?: string;
@@ -580,6 +586,25 @@ describe("Export aus HEAD", () => {
     assert.equal(layers.layerOf("scripts/check-size.mjs"), layers.LAYERS.DOMAIN, "alles übrige unter der Quellwurzel ist die Auffang-Schicht");
   });
 
+  test("#1930: Ticket-Skill der Rolle ticketSkill und sein Zeiger liegen im Export, Name aus der Config, nur der Produkt-Bereich", () => {
+    const quellPfad = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+    const ordner = quellPfad.split("/").slice(-2, -1)[0];
+    const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
+    const quelle = text(quellPfad);
+    assert.ok(quelle.length > 0, `${quellPfad} fehlt im Export`);
+    const factory = JSON.parse(text(".factory/projekt.json")) as { agenten: { ticketSkill: string } };
+    assert.ok(quelle.split("\n").join("|").includes(`# factory:projektwert agenten.ticketSkill|name: ${factory.agenten.ticketSkill}|`), "Marker und Name der Config stehen untereinander");
+    assert.ok(quelle.includes("--bereich spiel"));
+    assert.ok(!quelle.includes("--bereich agentic"));
+    const zeiger = text(`${String(ZEIGER_WURZEL)}/${ordner}/SKILL.md`);
+    assert.equal(zeiger, (zeigerText as (n: string, t: string) => string)(ordner, quelle), "der Zeiger ist aus der gerenderten Quelle berechnet");
+    const z = leerOrdner();
+    assert.equal(lauf(["--ziel", z], leser).code, 0);
+    const stand = (rawSkills as unknown as { liesStand(w: string): unknown; pruefeSkills(s: unknown): unknown[] });
+    assert.deepEqual(stand.pruefeSkills(stand.liesStand(z)), []);
+    assert.doesNotMatch(quelle + zeiger, /kubernia|KQ/i);
+  }, 60_000);
+
   test("Lock: Wurzel entspricht der Vorlage, jede Wurzel-Abhängigkeit hat einen Eintrag, Einträge sind unverändert aus kubernia", () => {
     const lock = JSON.parse(echt.dateien.get("package-lock.json")?.text ?? "{}") as Lock;
     const pkg = JSON.parse(echt.dateien.get("package.json")?.text ?? "{}") as { devDependencies: Record<string, string> };
@@ -668,6 +693,19 @@ describe("Export aus HEAD", () => {
       abbruch({ ".factory/produkt/vorlagen/tsconfig.json.vorlage": null }, /tsconfig\.json\.vorlage: Vorlage fehlt/);
     });
 
+
+    test("#1930: fehlt die Vorlage des Ticket-Skills, bricht der Export ab", () => {
+      const vorlage = `.factory/produkt/vorlagen/${(ROLLEN_PFADE as Record<string, string>).ticketSkill}.vorlage`;
+      abbruch({ [vorlage]: null }, /SKILL\.md\.vorlage: Vorlage fehlt/);
+    });
+
+    test("#1930: ohne Eintrag der Quelle in der Extraktionsliste und ohne Vorlage meldet der Export den fehlenden Ticket-Skill statt abzustürzen", () => {
+      const quelle = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+      const alle = basisText(".factory/extraktion.json").split("\n");
+      const liste = alle.filter((z) => !z.includes(`"muster":"${quelle}"`));
+      assert.equal(liste.length, alle.length - 1, "genau ein Eintrag entfällt");
+      befund({ ".factory/extraktion.json": liste.join("\n"), [`.factory/produkt/vorlagen/${quelle}.vorlage`]: null }, /Vorlage der Rolle ticketSkill fehlt im Export/);
+    });
 
     test("#1929: fehlt die Vorlage einer der neuen Daten-Dateien, bricht der Export ab", () => {
       abbruch({ ".factory/produkt/vorlagen/.github/wiedervorlagen.json.vorlage": null }, /wiedervorlagen\.json\.vorlage: Vorlage fehlt/);

@@ -82,6 +82,8 @@ import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/ticket-namen.mjs";
@@ -102,7 +104,7 @@ const AG = projektConfig().agenten;
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 /** Der Einstiegs-Skill im Hauptchat; sein Frontmatter gilt nur beim Aufruf als Slash-Command (#1035, #1280). */
-const UMSETZUNGS_SKILL = ".agents/skills/factory-ticket/SKILL.md";
+const UMSETZUNGS_SKILL = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
 /** Der zweite Ticket-Skill (Bereich agentic); der Ablauf selbst steht in `.agents/skills/factory/ablauf.md` (#1806). */
 const FACTORY_SKILL = ".agents/skills/factory/SKILL.md";
 /** Der Subagent, der auf dem Skill-Pfad tatsächlich umsetzt (#1280). */
@@ -363,7 +365,6 @@ const MATRIX_ZIELE: Record<string, { datei: string; mitModel: boolean }> = {
   umsetzer: { datei: ".claude/agents/factory-umsetzer.md", mitModel: true },
   gruppe: { datei: ".claude/agents/factory-gruppe.md", mitModel: true },
   explore: { datei: ".claude/agents/explore.md", mitModel: true },
-  forumLeser: { datei: ".claude/agents/forum-leser.md", mitModel: true },
   holdoutSzenario: { datei: ".claude/agents/holdout-szenario.md", mitModel: true },
   holdoutAbnahme: { datei: ".claude/agents/holdout-abnahme.md", mitModel: true },
   hauptagent: { datei: UMSETZUNGS_SKILL, mitModel: false },
@@ -373,7 +374,7 @@ const zelleOhneCode = (z: string) => z.replace(/`/g, "").trim();
 
 /**
  * Prüft die Phasen-Matrix (§1) gegen die Frontmatter ihrer Ziele (#1609): je Zeile Ziel über die Skill-Pfad-Zelle bestimmen
- * (Reihenfolge `holdout-szenario`, `holdout-abnahme`, `forum-leser`, Planer, Lens, Gruppe, Umsetzer/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
+ * (Reihenfolge `holdout-szenario`, `holdout-abnahme`, Planer, Lens, Gruppe, Umsetzer/„im Umsetzer“, `Explore`, „Hauptagent“), dann `effort`
  * (Spalte „Effort Skill-Pfad“) und bei Subagenten `model` (Spalte „Alias“) gleich dem Frontmatter. Liefert die Verstöße;
  * eine fehlende Spalte, eine fehlende Tabelle oder eine nicht zuordenbare Zeile ist ein Verstoß.
  */
@@ -395,9 +396,7 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
       ? "holdoutSzenario"
       : /`holdout-abnahme`/.test(skill)
         ? "holdoutAbnahme"
-        : /`forum-leser`/.test(skill)
-      ? "forumLeser"
-      : skill.includes("`" + AG.planer + "`")
+        : skill.includes("`" + AG.planer + "`")
         ? "planner"
         : skill.includes("`" + AG.lens + "`")
         ? "lens"
@@ -426,10 +425,25 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
 describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", () => {
   const fmEcht = (datei: string) => frontmatter(read(datei));
   test("die echte Matrix hat keine Abweichung", () => {
-    assert.deepEqual(matrixAbweichungen(read(ROUTING_SSOT), fmEcht), []);
+    assert.deepEqual(matrixAbweichungen(liesMitProjektwerten(ROUTING_SSOT), fmEcht), []);
+  });
+  test("die Rohseite der Matrix nennt keinen Agentennamen des Projekts, nur Platzhalter (sonst wird der Export im Factory-Repo rot)", () => {
+    const roh = read(ROUTING_SSOT).split("\n");
+    const kopf = roh.findIndex((z) => z.startsWith("| Phase |"));
+    assert.ok(kopf >= 0, "Kopf der Matrix");
+    let ende = kopf;
+    while (ende < roh.length && roh[ende].startsWith("|")) ende++;
+    const matrix = roh.slice(kopf, ende).join("\n");
+    assert.match(matrix, /<agenten\.planer>/, "Platzhalter vorhanden (Probe, dass der Ausschnitt die Matrix trifft)");
+    const nennt = (text: string) => Object.values(AG).filter((n) => new RegExp(`(?<![\\w-])${n}(?![\\w-])`).test(text));
+    const literale = nennt(matrix);
+    assert.deepEqual(literale, [], "Namen aus der Config stehen als Literal in der Rohseite der Matrix");
+    // Negativfall: ein eingesetzter Name wird erkannt
+    const verfaelscht = matrix.replace("<agenten.planer>", AG.planer);
+    assert.deepEqual(nennt(verfaelscht), [AG.planer]);
   });
   test("Negativfälle: Umsetzer-Zelle `high` gegen Frontmatter `medium`, falscher Alias, unbekannte Zeile, fehlende Spalte", () => {
-    const doku = read(ROUTING_SSOT);
+    const doku = liesMitProjektwerten(ROUTING_SSOT);
     const zeile = "| Umsetzung | `sonnet` | `medium` |";
     assert.equal(doku.split(zeile).length, 2, "Anker genau einmal");
     const effortFalsch = doku.replace(zeile, "| Umsetzung | `sonnet` | `high` |");
@@ -442,10 +456,6 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
     assert.match(matrixAbweichungen(gruppeEffort, fmEcht).join("\n"), /Sammelticket-Gruppe: Effort Skill-Pfad „high“ ≠ Frontmatter gruppe „medium“/);
     const gruppeAlias = doku.replace(gruppeZeile, "| Sammelticket-Gruppe | `opus` | `medium` |");
     assert.match(matrixAbweichungen(gruppeAlias, fmEcht).join("\n"), /Alias „opus“ ≠ Frontmatter gruppe „sonnet“/);
-    const forumZeile = "| Forum-Triage (Quarantäne) | `sonnet` | `medium` |";
-    assert.equal(doku.split(forumZeile).length, 2, "Forum-Zeile genau einmal");
-    const forumEffort = doku.replace(forumZeile, "| Forum-Triage (Quarantäne) | `sonnet` | `high` |");
-    assert.match(matrixAbweichungen(forumEffort, fmEcht).join("\n"), /Forum-Triage \(Quarantäne\): Effort Skill-Pfad „high“ ≠ Frontmatter forumLeser „medium“/);
     const abnahmeZeile = "| Holdout-Abnahme (nach dem Lens-Review) | `opus` | `medium` |";
     assert.equal(doku.split(abnahmeZeile).length, 2, "Abnahme-Zeile genau einmal");
     const abnahmeEffort = doku.replace(abnahmeZeile, "| Holdout-Abnahme (nach dem Lens-Review) | `opus` | `high` |");
@@ -638,7 +648,7 @@ describe("Keine festen Modell-IDs, genau eine Planungs-Oberfläche (#1065)", () 
     const treffer = routingFiles().filter((f) => hatHartenPin(read(f)));
     assert.deepEqual(treffer, [], `Feste Modell-IDs statt Alias (opus/sonnet/haiku) in:\n${treffer.join("\n")}`);
     assert.ok(routingFiles().length >= 7, "Der Datei-Walk darf nicht leer laufen");
-    assert.ok(routingFiles().includes(".agents/skills/forum/SKILL.md"), "die Skill-Quelle forum liegt im Scan");
+    assert.ok(routingFiles().includes(UMSETZUNGS_SKILL), "die Projekt-Skill-Quelle der Rolle ticketSkill liegt im Scan");
   });
 
   test("Erkennung greift wirklich (Red-Green): ID ja, Alias nein", () => {

@@ -39,6 +39,7 @@ import * as boardRaw from "../../scripts/board-lib.mjs";
 type Cfg = Record<string, unknown>;
 type Namen = { praefixe: { branch: string; worktree: string } };
 const ticketNamen = (namenRaw as unknown as { ticketNamen: (c: Cfg) => Namen }).ticketNamen;
+const TICKET_QUELLE = (projektRaw as unknown as { ROLLEN_PFADE: Record<string, string> }).ROLLEN_PFADE.ticketSkill;
 const ladeProjektConfig = (projektRaw as unknown as { ladeProjektConfig: (o?: { pfad?: string; pruefen?: boolean }) => Cfg }).ladeProjektConfig;
 const worktreeNamenOderGrund = (namenRaw as unknown as { worktreeNamenOderGrund: (w: string, d?: { config?: Cfg; pfad?: string }) => { namen?: Namen & { lensNameKern: string }; grund?: string } }).worktreeNamenOderGrund;
 const R = refsRaw as unknown as {
@@ -319,7 +320,7 @@ describe("naechstes-ticket: Namen aus der Config", () => {
     fields: [{ name: "Status", value: { name: { raw: "Todo" } } }],
     content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: OWNER, type: "User" }, labels: [], body: "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Negativfall: A\n", issue_dependencies_summary: { blocked_by: 0 } },
   });
-  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: OWNER, refs, namen: NAMEN, config: { labels: { harness: FREMD.labels.harness, forum: "forum" }, sprache: AB.sprache } });
+  const waehle = (refs: string[]) => N.waehleNaechstes({ items: normalizeItems([[item(5)]]), offene: new Set(), owner: OWNER, refs, namen: NAMEN, config: { labels: { harness: FREMD.labels.harness, forum: FREMD.labels.forum }, sprache: AB.sprache } });
   test("ein Branch mit dem Präfix der Config überspringt das Ticket, der des echten Projekts nicht", () => {
     expect(waehle(["feature/ab-5-x"]).ticket).toBeNull();
     expect(waehle([`${BRP}5-x`]).ticket?.nr).toBe(5);
@@ -428,9 +429,9 @@ describe("Temp- und Stand-Dateien: Präfix aus der Config", () => {
 
 describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
   test("ordneHarnessAenderungen: der feste Rollen-Pfad factory-ticket/ zählt als Skill, ein anderes Skill-Verzeichnis (demo/) als sonstige", () => {
-    const dateien = [".claude/skills/demo/SKILL.md", ".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"];
+    const dateien = [".claude/skills/demo/SKILL.md", TICKET_QUELLE, "AGENTS.md"];
     const r = H.ordneHarnessAenderungen(dateien);
-    expect(r.skill).toEqual([".agents/skills/factory-ticket/SKILL.md", "AGENTS.md"]);
+    expect(r.skill).toEqual([TICKET_QUELLE, "AGENTS.md"]);
     expect(r.sonstige).toEqual([".claude/skills/demo/SKILL.md"]);
     const mitZweitem = H.ordneHarnessAenderungen as (d: string[], verz: string) => { skill: string[]; sonstige: string[] };
     expect(mitZweitem(dateien, ".claude/skills/demo/")).toEqual(r);
@@ -444,7 +445,7 @@ describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
   });
   test("Kern-Pfad: das Verzeichnis gilt als Skill, auch ohne agenten.ticketSkill; die Config meldet den Grund weiter", () => {
     expect(H.TICKET_SKILL_VERZEICHNIS).toBe(".agents/skills/factory-ticket/");
-    expect(H.ordneHarnessAenderungen([".agents/skills/factory-ticket/SKILL.md", ".claude/skills/ab/SKILL.md"]).skill).toEqual([".agents/skills/factory-ticket/SKILL.md"]);
+    expect(H.ordneHarnessAenderungen([TICKET_QUELLE, ".claude/skills/ab/SKILL.md"]).skill).toEqual([TICKET_QUELLE]);
     expect(H.configGrund({ config: OHNE_SKILL })).toMatch(/agenten\.ticketSkill[\s\S]*Fix:/);
     expect(H.configGrund({ config: AB })).toBeNull();
   });

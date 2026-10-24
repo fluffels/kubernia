@@ -6,23 +6,28 @@
 
 Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ und Opus 4.7+ ist der Effort die Obergrenze des adaptiven Reasonings; ohne explizite Angabe gilt bei Opus 5.5 und Sonnet 5.5 `medium` ([Claude-Code-Doku › Model configuration](https://code.claude.com/docs/en/model-config), Stand 2026-10-05). Die Spalte „Effort Skill-Pfad" nennt den Effort (maschinenlesbar, vom Wächter gegen das Frontmatter geprüft); Spalte „Skill-Pfad" nennt, was dort tatsächlich greift.
 
-| Phase | Alias | Effort Skill-Pfad | Skill-Pfad (`kubernia`) |
+| Phase | Alias | Effort Skill-Pfad | Skill-Pfad (`<agenten.ticketSkill>`) |
 |---|---|---|---|
 | Auswahl + Claim | `sonnet` | `medium` | Hauptagent (Projekt-Default `sonnet`, #1557) |
-| **Epic-Aufteilung** (Schnitt der Kinder; ohne verfügbaren Planer teilt der Anlege-Agent selbst auf) | `opus` | `xhigh` | Subagent `kubernia-planner` schlägt vor |
+| **Epic-Aufteilung** (Schnitt der Kinder; ohne verfügbaren Planer teilt der Anlege-Agent selbst auf) | `opus` | `xhigh` | Subagent `<agenten.planer>` schlägt vor |
 | Epic-Kinder anlegen | `sonnet` | `medium` | Hauptagent (Projekt-Default `sonnet`) |
 | Dependabot-Sammelticket | `sonnet` | `medium` | Hauptagent (Projekt-Default `sonnet`) |
 | Holdout-Szenarien (vor dem Planen) | `opus` | `medium` | Subagent `holdout-szenario`, vom Hauptchat gespawnt (Frontmatter; nur `Read`, `Grep`, `Glob`, liest keinen Code) |
-| **Planung** | `opus` | `xhigh` | Subagent `kubernia-planner` (Frontmatter) |
+| **Planung** | `opus` | `xhigh` | Subagent `<agenten.planer>` (Frontmatter) |
 | Pre-Flight (Weichen selbst entscheiden) | `sonnet` | `medium` | Hauptagent (Projekt-Default `sonnet`; übernimmt die Entscheidungen des Planers, `AskUserQuestion` nur bei Irreversiblem/Außenwirkung) |
-| Umsetzung | `sonnet` | `medium` | Subagent [`kubernia-umsetzer`](../.claude/agents/factory-umsetzer.md) (Frontmatter, unabhängig vom Session-Modell) |
-| Sammelticket-Gruppe | `sonnet` | `medium` | Subagent `kubernia-gruppe`, vom Umsetzer je Gruppe gespawnt (Frontmatter) |
-| **Review (1–3 Lenses, [Staffel](#review-staffel-1265))** | `opus` | `high` | Subagenten `kubernia-lens`, vom Umsetzer über `review-lenses` gespawnt (Frontmatter, `high` wirkt) |
+| Umsetzung | `sonnet` | `medium` | Subagent [`<agenten.umsetzer>`](../.claude/agents/factory-umsetzer.md) (Frontmatter, unabhängig vom Session-Modell) |
+| Sammelticket-Gruppe | `sonnet` | `medium` | Subagent `<agenten.gruppe>`, vom Umsetzer je Gruppe gespawnt (Frontmatter) |
+| **Review (1–3 Lenses, [Staffel](#review-staffel-1265))** | `opus` | `high` | Subagenten `<agenten.lens>`, vom Umsetzer über `review-lenses` gespawnt (Frontmatter, `high` wirkt) |
 | Holdout-Abnahme (nach dem Lens-Review) | `opus` | `medium` | Subagent `holdout-abnahme`, vom Hauptchat gespawnt (Frontmatter; prüft durch Beobachtung, schreibt nur in den eigenen Scratchpad) |
 | Nachbessern, CI-Fix | `sonnet` | `medium` | im Umsetzer |
 | PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | im Umsetzer |
-| Forum-Triage (Quarantäne) | `sonnet` | `medium` | Subagent `forum-leser`, vom `forum`-Skill gespawnt (Frontmatter; nur `Read` auf die Quarantäne-Datei) |
 | Explore / Recherche | `haiku` | `low` | Agent `Explore` (Projekt-Override des eingebauten Explore, Frontmatter); `low` wirkt, weil `haiku` auf der Anthropic-API auf Haiku 5.5 auflöst und Haiku 5.5 Effort unterstützt (Effort-Tabelle der Claude-Code-Modell-Doku, 2026-10-08); auf Cloud-Providern mit Haiku 4.5 wirkt es nicht (§2) |
+
+Platzhalter in spitzen Klammern: die Namen aus `.factory/projekt.json` (Tabelle im Kern-Block der AGENTS.md). Rollen eines Projekts, die nicht zum Kern gehören, stehen in einer eigenen Tabelle (geprüft vom `projekt-test` des Projekts, nicht vom Kern-Wächter der ersten Tabelle):
+
+| Projekt-Phase | Alias | Effort Skill-Pfad | Skill-Pfad |
+|---|---|---|---|
+| Forum-Triage (Quarantäne) | `sonnet` | `medium` | Subagent `forum-leser`, vom `forum`-Skill gespawnt (Frontmatter; nur `Read` auf die Quarantäne-Datei) |
 
 **Warum so:** Fehler in Planung und Review sind teuer (schlechte Architektur kostet viele Sessions), dort lohnt das stärkste Modell mit hohem Reasoning (#741, #745). Auch der Schnitt eines Epics in Kindertickets ist Planung (#1207): ein schlechter Schnitt kostet viele Sessions, das Anlegen per `gh` ist dagegen Tipparbeit. Tippen nach fertigem Plan ist Sonnet-Arbeit: `medium` lässt genug Reasoning für die CI-Fix-Schleife, der Umsetzer fährt es (`low` ist gemessen und verworfen: #1591, Abbruchregel (3)). Explore liest und sucht nur, Haiku genügt. Die Holdout-Agenten (#1754) laufen auf `opus` mit `medium`: der Maßstab der Abnahme darf nicht schwächer sein als der des Reviews, aber sie lesen keinen Code und brauchen kein hohes Reasoning; der Szenario-Agent und die Abnahme spawnt der Hauptchat, nie der Umsetzer.
 

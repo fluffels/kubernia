@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { parseFrontmatter } from "./docs-gen/markdown.mjs";
-import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL } from "./skill-pfade.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL, frontmatterBlock, zeigerText } from "./skill-pfade.mjs";
 
 export const WERKZEUGE = { claude: ZEIGER_WURZEL };
 const FIX = "npm run skills:sync";
@@ -25,14 +25,6 @@ const FIX_PRUNE = "npm run skills:sync -- --prune";
 const lf = (text) => text.replace(/\r\n/g, "\n");
 const traegtMarke = (text) => lf(text).split("\n").includes(ZEIGER_MARKE);
 
-/** Frontmatter-Block (von der ersten `---`-Zeile bis zur nächsten, einschließlich) oder null. */
-export function frontmatterBlock(text) {
-  const zeilen = lf(text).split("\n");
-  if (zeilen[0] !== "---") return null;
-  const ende = zeilen.indexOf("---", 1);
-  return ende < 0 ? null : zeilen.slice(0, ende + 1).join("\n");
-}
-
 /** Quelle brauchbar? `null` oder die Meldung, warum nicht (Frontmatter-Felder über `parseFrontmatter` der Doku-Generatoren). */
 export function quellProblem(q) {
   if (q.text === null) return "Ordner ohne SKILL.md";
@@ -40,12 +32,6 @@ export function quellProblem(q) {
   const felder = parseFrontmatter(frontmatterBlock(q.text));
   const fehlt = ["name", "description"].filter((k) => !felder[k]);
   return fehlt.length ? `Quelle ohne ${fehlt.join(" und ")} im Frontmatter` : null;
-}
-
-/** Gewünschter Zeiger-Text zu einer Quelle (immer LF). */
-export function zeigerText(name, quelltext) {
-  const block = frontmatterBlock(quelltext);
-  return `${block}\n\n${ZEIGER_MARKE}\nLies \`${QUELL_VERZEICHNIS}/${name}/SKILL.md\` und folge ihm.\n`;
 }
 
 /**
