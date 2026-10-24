@@ -87,6 +87,7 @@
     {"muster":"test/harness/fence-ssot.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/flag-parser.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/forum*.test.ts","art":"projekt-test","grund":"Gegenstand ist ein Projekt-Modul, kein Besitz (Forum-Modul)"},
+    {"muster":"test/harness/fremd-config-probe.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/fremdtext-gate.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/gh-cli.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/gh-guard*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
