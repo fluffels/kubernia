@@ -34,7 +34,8 @@ export function fehlerArten(events) {
 }
 
 const GRUND_KLASSIFIKATOR = /Reason:\s*\[([^\]]+)\]/;
-const REGEL_ABLEHNUNG = /^Permission to use .* has been denied/s;
+// Am Präfix erkannt: der Text ist bei langen Befehlen gekappt, das Ende „has been denied“ fehlt dann.
+const REGEL_ABLEHNUNG = /^Permission to use \S+ with command/;
 
 /**
  * Grund einer Permission-Ablehnung: der Auto-Mode-Klassifikator nennt ihn in `Reason: [..]`, eine Regel-Ablehnung

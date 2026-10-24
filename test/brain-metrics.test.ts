@@ -8,7 +8,10 @@ import { readFileSync } from "node:fs";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as bmModule from "../scripts/brain-metrics.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as toolMetrikenRaw from "../scripts/tool-metriken.mjs";
 import { FREMD } from "./support/fremd-config";
+const toolMetriken = toolMetrikenRaw as unknown as { permissionGruende: (e: Ev[]) => Record<string, number> };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../scripts/token-baseline.mjs";
 
@@ -293,6 +296,7 @@ describe("Härtung nach Review", () => {
     assert.match(e[0].fehler ?? "", /Reason: \[G+/);
     const l = toolEventsFromLangfuse([{ type: "TOOL", startTime: "2026-10-01T10:00:00Z", level: "ERROR", statusMessage: regel, metadata: { tool_name: "Bash" } }]);
     assert.equal(l[0].fehler?.length, 500);
+    assert.deepEqual(toolMetriken.permissionGruende(e.filter((x) => x.fehler?.startsWith("Permission to use"))), { Regel: 1 }, "lange Regel-Ablehnung zählt als Regel, nicht als ohne Grund");
     assert.equal(toolEventsFromTranscript(rows.replace('"is_error":true', '"is_error":false'))[0].fehler, null, "ohne is_error kein Fehlertext");
   });
   test("Transkript-Adapter mit geparsten Zeilen liefert dasselbe wie mit Text (Zeilen werden nur einmal geparst)", () => {

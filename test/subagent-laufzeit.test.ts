@@ -265,6 +265,16 @@ describe("laufzeiten: Aufzeichnungsbasis des Outputs (#1909)", () => {
     expect(w(S.laufzeiten({ laeufe: grenze, schnitt: t(30) }))).toBeNull();
     expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25, 0)], schnitt: t(30) }))).toBeNull();
   });
+  test("Schnitt: eine leere Seite „alt“ (alle Läufe ab dem Schnitt) warnt nicht, auch wenn „neu“ eine Quote hat", () => {
+    const nurNeu = [quoteLauf("Plane #1", 7, Z25, 60)];
+    expect(w(S.laufzeiten({ laeufe: nurNeu, schnitt: t(30) }))).toBeNull();
+  });
+  test("Gleitkomma: Quoten 0,6 und 0,8 liegen genau 0,2 auseinander (0,8 − 0,6 ist in JS 0,20000000000000007) und warnen nicht", () => {
+    expect(0.8 - 0.6).toBeGreaterThan(0.2);
+    expect(w(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, 900), quoteLauf("Plane #2", 8, 525)] }))).toBeNull();
+    const l = [quoteLauf("Plane #1", 7, 900, 0), quoteLauf("Plane #2", 7, 525, 60)];
+    expect(w(S.laufzeiten({ laeufe: l, schnitt: t(30) }))).toBeNull();
+  });
   test("renderMarkdown nennt Kosten geschätzt (Median) und Output-Quote je Gruppe", () => {
     const md = S.renderMarkdown(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }));
     expect(md).toContain("Kosten geschätzt ($, Median)");

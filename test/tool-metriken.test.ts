@@ -65,6 +65,13 @@ describe("permissionGrund", () => {
     assert.equal(tm.permissionGrund("Permission to use Bash with command rm -rf x has been denied."), "Regel");
     assert.equal(tm.permissionGrund("Permission for this action was denied."), "ohne Grund");
   });
+  test("Regel-Ablehnung wird am Präfix erkannt: auch wenn der Text hinter einem langen Befehl abgeschnitten ist oder der Befehl Zeilenumbrüche hat", () => {
+    const lang = "Permission to use Bash with command " + "x".repeat(600) + " has been denied.";
+    assert.equal(tm.permissionGrund(lang.slice(0, 500)), "Regel", "ohne das Ende „has been denied“");
+    assert.equal(tm.permissionGrund("Permission to use Bash with command cat <<E\nzeile\nE\n has been denied."), "Regel", "mehrzeiliger Befehl");
+    assert.equal(tm.permissionGrund("Permission to use Bash was denied, kein Befehl genannt"), "ohne Grund", "ohne „with command“ keine Regel-Ablehnung");
+    assert.equal(tm.permissionGrund("Permission for this action: Permission to use Bash with command x"), "ohne Grund", "das Präfix muss am Textanfang stehen");
+  });
   test("Negativfälle: leer/null und keine Permission-Meldung ergeben null; Reason ohne Klammer ist ohne Grund", () => {
     assert.equal(tm.permissionGrund(""), null);
     assert.equal(tm.permissionGrund(null), null);

@@ -538,6 +538,21 @@ describe("Kosten, Überzählung, Hinweis Modellpreis", () => {
     expect(A.summenzeile([bew(undefined)])).toMatchObject({ kostenLangfuse: null, ueberzaehlung: null });
   });
 
+  test("Bericht: eine laufende Session (Ruhefrist) erzeugt keine Überzählungs- und keine Hinweiszeile; Überzählung 0 wird nicht gemeldet", () => {
+    const md = (b: Bewertung[]) => A.renderMarkdown(b, A.summenzeile(b));
+    const dubLaeuft = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T }, mtime: now - 60_000, now });
+    expect(dubLaeuft.status).toBe("läuft");
+    expect(dubLaeuft.ueberzaehlung).toBeGreaterThan(0);
+    expect(md([dubLaeuft])).not.toContain("Überzählung durch Dubletten");
+    const unterLaeuft = bew(0, { mtime: now - 60_000 });
+    expect(unterLaeuft.hinweisModellpreis).toBe(true);
+    expect(md([unterLaeuft])).not.toContain("Hinweis Modellpreis");
+    // Dublette, aber Langfuse unter dem Transkript: Überzählung ist 0 und bleibt ohne Zeile
+    const null0 = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 0.5 * T }, mtime: 0, now });
+    expect(null0.ueberzaehlung).toBe(0);
+    expect(md([null0])).not.toContain("Überzählung durch Dubletten");
+  });
+
   test("Bericht: Kosten-Spalte immer, Überzählungs- und Hinweiszeile nur bei Treffern, getrennt und mit Session-Kürzel", () => {
     const md = (b: Bewertung[]) => A.renderMarkdown(b, A.summenzeile(b));
     const ok = md([bew(T)]);
