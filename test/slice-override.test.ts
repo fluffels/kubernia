@@ -8,6 +8,7 @@ import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { altName, ohneKernEnv } from "./support/env-alt";
+import { FREMD, FREMD_CONFIG_PFAD, projektConfig } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -32,6 +33,7 @@ const so = raw as unknown as {
   staleOverrideHinweis: (key: string, warum: string) => string;
   commitZeilen: (praefix?: unknown, planer?: unknown) => Zeilen;
   commitZeilenAus: (config: unknown) => Zeilen;
+  commitZeilenAus: (config: unknown) => Zeilen;
   ladeCommitZeilen: (opt?: { rootDir?: string; pfad?: string }) => Zeilen;
   ladeCommitZeilenOderBeende: (o?: { laden?: () => Zeilen; fehler?: (s: string) => void; exit?: (code: number) => void }) => Zeilen | undefined;
   parseOverrideTrailers: (text: string, key: string) => { valid: { nr: number; reason: string }[]; invalid: string[] };
@@ -44,7 +46,9 @@ const so = raw as unknown as {
 };
 const nl = nlRaw as unknown as { parseNachweis: (text: string, zeilen?: Zeilen) => { plan: unknown; review: { runden: number; lenses: string[] } | null; abnahme: unknown } };
 const gateModul = gate as unknown as { parseNachweis: unknown };
-const Z = so.commitZeilen("KQ-", "kubernia-planner");
+const Z = so.commitZeilenAus(FREMD);
+/** Zeilen der echten Config: für Kindprozesse, die sie selbst lesen. */
+const ECHT = so.commitZeilenAus(projektConfig());
 const HEAD40 = "a".repeat(40);
 
 describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwert", () => {
@@ -61,11 +65,11 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
       diffcovOverride: "AB-Diffcov-Override",
       lockfileOverride: "AB-Lockfile-Override",
     });
-    expect(Z.diffcovOverride).toBe("KQ-Diffcov-Override");
+    expect(Z.diffcovOverride).toBe(`${FREMD.praefixe.commitZeile}Diffcov-Override`);
   });
   it("ungültiges oder fehlendes Präfix/Planer wirft (kein Default)", () => {
-    for (const p of [undefined, "kq-", "KQ", "KQ--", "", 5, null]) expect(() => so.commitZeilen(p, "x"), String(p)).toThrow(/Präfix/);
-    for (const pl of [undefined, "a:b", "-x", "", "a b"]) expect(() => so.commitZeilen("KQ-", pl), String(pl)).toThrow(/Planer/);
+    for (const p of [undefined, "xq-", "XQ", "XQ--", "", 5, null]) expect(() => so.commitZeilen(p, "x"), String(p)).toThrow(/Präfix/);
+    for (const pl of [undefined, "a:b", "-x", "", "a b"]) expect(() => so.commitZeilen(FREMD.praefixe.commitZeile, pl), String(pl)).toThrow(/Planer/);
   });
   it("commitZeilenAus liest praefixe.commitZeile und agenten.planer; ohne sie wirft es", () => {
     expect(so.commitZeilenAus({ praefixe: { commitZeile: "AB-" }, agenten: { planer: "p" } }).plan).toBe("AB-Plan");
@@ -87,9 +91,10 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
     so.ladeCommitZeilenOderBeende({ ...io, laden: () => { throw "roh"; } });
     expect(meldungen[1]).toBe("✖ roh");
   });
-  it("ladeCommitZeilen liest die echte Config (KQ-) und wirft bei fehlender Datei mit Fix-Zeile", () => {
-    expect(so.ladeCommitZeilen().praefix).toBe("KQ-");
-    const dir = mkdtempSync(join(tmpdir(), "kq-cz-"));
+  it("ladeCommitZeilen liest die echte Config, mit `pfad` die genannte, und wirft bei fehlender Datei mit Fix-Zeile", () => {
+    expect(so.ladeCommitZeilen().praefix).toBe(projektConfig().praefixe.commitZeile);
+    expect(so.ladeCommitZeilen({ pfad: FREMD_CONFIG_PFAD }).praefix).toBe(FREMD.praefixe.commitZeile);
+    const dir = mkdtempSync(join(tmpdir(), "cz-"));
     try {
       expect(() => so.ladeCommitZeilen({ pfad: join(dir, "nein.json") })).toThrow(/Fix:/);
     } finally {
@@ -99,23 +104,23 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
 });
 
 describe("Präfix aus der Config steuert, welche Zeilen zählen (#1741, Red-Green)", () => {
-  const text = `KQ-Plan: kubernia-planner\nKQ-Review: head=${HEAD40} runden=1 lenses=doku blocker=doku:0 verdikt=ok\nKQ-Diffsize-Override: #5 weil`;
-  it("mit AB- zählen echte KQ-Zeilen nicht, AB-Zeilen schon", () => {
-    const ab = so.commitZeilen("AB-", "kubernia-planner");
+  const text = `${Z.plan}: ${FREMD.agenten.planer}\n${Z.review}: head=${HEAD40} runden=1 lenses=doku blocker=doku:0 verdikt=ok\n${Z.diffsizeOverride}: #5 weil`;
+  it("mit AB- zählen die Zeilen der Fremd-Config nicht, AB-Zeilen schon", () => {
+    const ab = so.commitZeilen("AB-", FREMD.agenten.planer);
     const n = nl.parseNachweis(text, ab);
     expect(n.plan).toBeNull();
     expect(n.review).toBeNull();
-    expect(nl.parseNachweis(text.replaceAll("KQ-", "AB-"), ab).plan).toEqual({ art: "planer" });
+    expect(nl.parseNachweis(text.replaceAll(FREMD.praefixe.commitZeile, "AB-"), ab).plan).toEqual({ art: "planer" });
     expect(so.parseOverrideTrailers(text, ab.diffsizeOverride).valid).toEqual([]);
     expect(so.parseOverrideTrailers(text, Z.diffsizeOverride).valid).toHaveLength(1);
   });
   it("der Planer kommt aus der Config: ein anderer Name ist ungültig", () => {
-    expect(nl.parseNachweis(text, so.commitZeilen("KQ-", "anderer")).plan).toEqual({ art: "ungueltig", zeile: "kubernia-planner" });
+    expect(nl.parseNachweis(text, so.commitZeilen(FREMD.praefixe.commitZeile, "anderer")).plan).toEqual({ art: "ungueltig", zeile: FREMD.agenten.planer });
   });
   it("parseNachweis ohne Zeilen wirft, auch mit Teilobjekt", () => {
     expect(() => nl.parseNachweis(text)).toThrow(/Commit-Zeilen/);
-    expect(() => nl.parseNachweis(text, { plan: "KQ-Plan" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/);
-    expect(() => nl.parseNachweis(text, { plan: "KQ-Plan", review: "KQ-Review" } as unknown as Zeilen)).toThrow(/Commit-Zeilen/); // ohne planer
+    expect(() => nl.parseNachweis(text, { plan: Z.plan } as unknown as Zeilen)).toThrow(/Commit-Zeilen/);
+    expect(() => nl.parseNachweis(text, { plan: Z.plan, review: Z.review } as unknown as Zeilen)).toThrow(/Commit-Zeilen/); // ohne planer
   });
   it("Regex-Zeichen im Schlüssel sind wörtlich (kein Joker)", () => {
     expect(so.parseOverrideTrailers("AXB-Plan: #1 x", "A.B-Plan").valid).toEqual([]);
@@ -126,10 +131,10 @@ describe("Präfix aus der Config steuert, welche Zeilen zählen (#1741, Red-Gree
 describe("meldeUngueltigeOverrides", () => {
   it("loggt je ungültiger Zeile genau eine gedimmte Meldung mit der Zeile", () => {
     const zeilen: string[] = [];
-    so.meldeUngueltigeOverrides(["KQ-X-Override: kaputt", "KQ-X-Override: #5"], { dim: (s) => `<${s}>`, log: (s) => zeilen.push(s) });
+    so.meldeUngueltigeOverrides([`${Z.praefix}X-Override: kaputt`, `${Z.praefix}X-Override: #5`], { dim: (s) => `<${s}>`, log: (s) => zeilen.push(s) });
     expect(zeilen).toHaveLength(2);
-    expect(zeilen[0]).toBe("<• ungültige Override-Zeile ignoriert (braucht \"#<nr> <warum>\"): KQ-X-Override: kaputt>");
-    expect(zeilen[1]).toContain("KQ-X-Override: #5");
+    expect(zeilen[0]).toBe(`<• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${Z.praefix}X-Override: kaputt>`);
+    expect(zeilen[1]).toContain(`${Z.praefix}X-Override: #5`);
   });
 
   it("leere, fehlende oder nicht übergebene Liste: keine Ausgabe, kein Wurf", () => {
@@ -141,8 +146,8 @@ describe("meldeUngueltigeOverrides", () => {
 
 describe("staleOverrideHinweis", () => {
   it("nennt Schlüssel und Grund und den Weg, den Override zu entfernen", () => {
-    const t = so.staleOverrideHinweis("KQ-Diffcov-Override", "der Slice erfüllt die Floors");
-    expect(t).toContain("KQ-Diffcov-Override steht im Slice, aber der Slice erfüllt die Floors");
+    const t = so.staleOverrideHinweis(Z.diffcovOverride, "der Slice erfüllt die Floors");
+    expect(t).toContain(`${Z.diffcovOverride} steht im Slice, aber der Slice erfüllt die Floors`);
     expect(t).toContain("stale");
     expect(t).toContain("Feature-Branch");
   });
@@ -151,7 +156,7 @@ describe("staleOverrideHinweis", () => {
 describe("parseNachweis lebt im neutralen Modul nachweis-lib (#1311)", () => {
   it("das Gate re-exportiert dieselbe Funktion; das Messskript liest sie aus nachweis-lib", () => {
     expect(gateModul.parseNachweis).toBe(nl.parseNachweis);
-    const n = nl.parseNachweis(`KQ-Plan: kubernia-planner\nKQ-Review: head=${"a".repeat(40)} runden=2 lenses=architektur,doku verdikt=ok`, Z);
+    const n = nl.parseNachweis(`${Z.plan}: ${FREMD.agenten.planer}\n${Z.review}: head=${"a".repeat(40)} runden=2 lenses=architektur,doku verdikt=ok`, Z);
     expect(n.review?.runden).toBe(2);
     expect(n.review?.lenses).toEqual(["architektur", "doku"]);
   });
@@ -170,7 +175,7 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
 
   /** Temp-Repo: Basis-Commit, dann ein Doku-Commit mit der gegebenen Nachricht; liefert Ergebnis des CLI-Laufs. */
   function lauf(nachricht: string, basisName = "FACTORY_DIFF_BASE") {
-    const dir = mkdtempSync(join(tmpdir(), "kq-dcov-"));
+    const dir = mkdtempSync(join(tmpdir(), "dcov-"));
     try {
       const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: dir, encoding: "utf8" }).trim();
       git("init", "-q");
@@ -189,14 +194,14 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", { timeout: 3
   }
 
   it("ungültige Override-Zeile wird auch im grünen Zweig gemeldet, der Lauf bleibt grün", () => {
-    const r = lauf("KQ-Diffcov-Override: ohne Nummer");
+    const r = lauf(`${ECHT.diffcovOverride}: ohne Nummer`);
     expect(r.code).toBe(0);
     expect(r.out).toContain("ungültige Override-Zeile ignoriert");
     expect(r.out).toContain("keinen gemessenen Quellcode (src/**/*.ts)");
   });
 
   it("gültige Override-Zeile ohne messbaren Code ist stale und rot", () => {
-    const r = lauf("KQ-Diffcov-Override: #1 weil");
+    const r = lauf(`${ECHT.diffcovOverride}: #1 weil`);
     expect(r.code).toBe(1);
     expect(r.out).toContain("stale");
   });
@@ -227,14 +232,14 @@ function branchLog(commits: string[]): string {
 }
 
 describe("PR-Log und Squash-Commit auf main lesen dasselbe (#1383)", () => {
-  const KEY = "KQ-Diffsize-Override";
-  const NACHWEIS = "KQ-Plan: kubernia-planner\nKQ-Review: head=abc1234 runden=1 lenses=architektur verdikt=ok";
+  const KEY = Z.diffsizeOverride;
+  const NACHWEIS = `${Z.plan}: ${FREMD.agenten.planer}\n${Z.review}: head=abc1234 runden=1 lenses=architektur verdikt=ok`;
   const szenarien: [string, string[]][] = [
     ["Override als Betreff", ["feat: a", `${KEY}: #5 breit`, "fix: b"]],
     ["Override als Body-Zeile", [`feat: a\n\n${KEY}: #5 breit`, "fix: b"]],
     ["ungültiger Override als Betreff", ["feat: a", `${KEY}: ohne nummer`]],
     ["alter als Betreff, neuer als Body", [`${KEY}: #1 alt`, `feat: a\n\n${KEY}: #2 neu`]],
-    ["Nachweis mit KQ-Plan als Betreff", ["feat: a", NACHWEIS]],
+    [`Nachweis mit ${Z.plan} als Betreff`, ["feat: a", NACHWEIS]],
     ["Nachweis wie im Skill (beide im Body)", ["feat: a", `chore: Nachweis\n\n${NACHWEIS}`]],
   ];
   it.each(szenarien)("%s", (_name, commits) => {
@@ -257,7 +262,7 @@ describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem F
     versetzteOverrideHinweis: (key: string, zeilen: string[] | undefined) => string[];
     sliceOverride: (runGit: (args: string[]) => string, base: string, key: string) => { reason: string | null; versetzt: string[] };
   };
-  const KEY = "KQ-Diffsize-Override";
+  const KEY = Z.diffsizeOverride;
 
   it("eingerückt, mit '- '-Präfix und mitten im Fließtext: gemeldet", () => {
     const text = [`  ${KEY}: #1 eingerückt`, `- ${KEY}: #1 mit Strich`, `siehe ${KEY}: #1 im Text`].join("\n");
@@ -270,7 +275,7 @@ describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem F
   });
 
   it("anderer Schlüssel und leerer Text: kein Treffer; CRLF stört nicht", () => {
-    expect(V.versetzteOverrideZeilen("KQ-Diffcov-Override: #1 x", KEY)).toEqual([]);
+    expect(V.versetzteOverrideZeilen(`${Z.diffcovOverride}: #1 x`, KEY)).toEqual([]);
     expect(V.versetzteOverrideZeilen("", KEY)).toEqual([]);
     expect(V.versetzteOverrideZeilen(`a\r\n  ${KEY}: #1 x\r\n`, KEY)).toEqual([`${KEY}: #1 x`]);
   });
@@ -297,7 +302,7 @@ describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem F
 
 describe("aktiverOverride: jüngste Zeile mit Widerruf-Logik (#1756)", () => {
   const ao = raw as unknown as { aktiverOverride: (text: string, key: string) => string | null };
-  const KEY = "KQ-Abnahme-Override";
+  const KEY = Z.abnahmeOverride;
   const text = (...zeilen: string[]) => zeilen.join(String.fromCharCode(10));
   it("ohne Zeile: null", () => {
     expect(ao.aktiverOverride("nur Text", KEY)).toBeNull();
@@ -323,7 +328,7 @@ describe("Widerruf eines Overrides: `<key>: #<nr> entfällt` (#1693 L47)", () =>
   const so2 = raw as unknown as {
     sliceOverride: (runGit: (a: string[]) => string, base: string, key: string) => { reason: string | null; invalid: string[] };
   };
-  const KEY = "KQ-Diffsize-Override";
+  const KEY = Z.diffsizeOverride;
   const mit = (...nachrichten: string[]) => so2.sliceOverride(() => nachrichten.join("\n\n"), "base", KEY);
 
   it("ohne Widerruf zählt der Override (Gegenprobe)", () => {
@@ -355,7 +360,7 @@ describe("Widerruf eines Overrides: `<key>: #<nr> entfällt` (#1693 L47)", () =>
 
 describe("Gates ohne Projekt-Config (#1741): kein Standardwert, Exit 1 mit der Meldung des Laders", { timeout: 60_000 }, () => {
   it.each(["check-diffsize.mjs", "check-diffcoverage.mjs", "check-lockfile.mjs"])("%s", (skript) => {
-    const dir = mkdtempSync(join(tmpdir(), "kq-gate-ohne-config-"));
+    const dir = mkdtempSync(join(tmpdir(), "gate-ohne-config-"));
     try {
       // Kopie der Skripte ohne .factory/projekt.json: der Lader sucht die Config relativ zu seinem Ort.
       cpSync(join(__dirname, "..", "scripts"), join(dir, "scripts"), { recursive: true });
