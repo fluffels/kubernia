@@ -77,5 +77,7 @@ describe("Sandbox-Ergänzung des Projekts (#1931)", () => {
     const doku = ["### Agenten-Sandbox (WSL2)", "| `a.example` | x | Projekt |", "| `b.example` | y | Ergänzung |", "### Nächster", "| `c.example` | z | Ergänzung |"].join("\n");
     assert.deepEqual(ergaenzungsZeilen(doku), ["b.example"]);
     assert.deepEqual(ergaenzungsZeilen("nichts"), []);
+    // Abschnitt am Dateiende (keine Folge-Überschrift), und eine Zeile ohne Domain in Backticks wird übergangen
+    assert.deepEqual(ergaenzungsZeilen(["### Agenten-Sandbox (WSL2)", "| ohne.example | z | Ergänzung |", "| `d.example` | x | Ergänzung |"].join("\n")), ["d.example"]);
   });
 });
