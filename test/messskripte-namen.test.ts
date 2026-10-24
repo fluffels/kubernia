@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { FREMD, repoName } from "./support/fremd-config";
+import { FREMD } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRoh from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -325,7 +325,8 @@ describe("hauptchat-zerlegung: Agenten und Repo-Name aus der Config", () => {
   test("ein Subagent mit Namen der Config zählt als eigener (Schlüssel = Repo-Name), der alte Name ist ein Fork", () => {
     const r = H.zerlegeHauptchat({ sessions: [sitzung], config: CFG });
     expect(r.acme.calls).toBe(2);
-    expect(repoName(FREMD) in r).toBe(false);
+    // exakte Schlüsselmenge: der alte Repo-Name ist kein Schlüssel, der Config-Name der einzige Namensschlüssel
+    expect(Object.keys(r).sort()).toEqual(["acme", "fenster", "modellanteil", "ohneBrainWurzel", "ohnePreis", "ohnePreisModelle", "rows", "ttl"]);
     expect(r.rows.filter((z) => z.quelle === "Fork").reduce((n, z) => n + z.calls, 0)).toBe(1);
   });
   test("renderMarkdown nennt `<Repo-Name>-Subagenten`; ohne passenden repoName wirft es", () => {

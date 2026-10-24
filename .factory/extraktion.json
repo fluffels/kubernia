@@ -118,6 +118,7 @@
     {"muster":"test/harness/sandbox-settings.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/settings-permissions.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/skills-sync.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
+    {"muster":"test/harness/spielbezug.test.ts","art":"projekt-test","grund":"prüft Projektinhalt (Projektliterale der Config, Projekt-Block der AGENTS.md), kein Besitz (#1903)"},
     {"muster":"test/harness/stdin-skript-guard.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/stop-verify-hook.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/harness/ticket*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
