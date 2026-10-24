@@ -28,7 +28,8 @@ import {
   vorlagenZiel,
 } from "./factory-export-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ergaenzungAusText, PROJEKT_CONFIG, pruefeProjektConfig, repoName } from "./projekt-config-lib.mjs";
+import { ergaenzungAusText, PROJEKT_CONFIG, pruefeProjektConfig, repoName, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { ZEIGER_WURZEL, zeigerText } from "./skill-pfade.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = ".factory/besitz.json";
@@ -39,8 +40,12 @@ const SCHUTZ_QUELLE = ".github/protected-paths.json";
 const CODEOWNERS = ".github/CODEOWNERS";
 const USAGE = "Aufruf: node scripts/factory-export.mjs --ziel <leerer Ordner> [--commit <rev>] [--quelle <repo>]";
 
-/** Dateien, die der Export aus einer Vorlage nicht braucht, weil er sie aus dem Quellstand filtert (Lint- und Any-Suppressionen). */
-const BERECHNET = ["eslint-suppressions.json", "any-suppressions.json"];
+/** Verzeichnisname des Ticket-Skills der Rolle `ticketSkill` (Quelle `ROLLEN_PFADE.ticketSkill`) und sein Zeiger unter der Zeiger-Wurzel. */
+const TICKET_ORDNER = posix.basename(posix.dirname(ROLLEN_PFADE.ticketSkill));
+const TICKET_ZEIGER = `${ZEIGER_WURZEL}/${TICKET_ORDNER}/SKILL.md`;
+
+/** Dateien, die der Export aus einer Vorlage nicht braucht: er filtert sie aus dem Quellstand (Lint- und Any-Suppressionen) oder berechnet sie (Zeiger des Ticket-Skills aus seiner Vorlage). */
+const BERECHNET = ["eslint-suppressions.json", "any-suppressions.json", TICKET_ZEIGER];
 
 const json = (wert) => `${JSON.stringify(wert, null, 2)}\n`;
 const nurSchluessel = (text, erlaubt) => json(Object.fromEntries(Object.entries(JSON.parse(text)).filter(([k]) => erlaubt(k))));
@@ -170,6 +175,9 @@ export function baueExport({ leser }) {
     lege(art === "produkt-wurzel" ? posix.basename(p) : p, lies(p), "extraktion", leser.ausfuehrbar(p));
   }
   for (const p of anteil) lege(p, vorlagen.get(p), "vorlage");
+  const ticketQuelle = vorlagen.get(ROLLEN_PFADE.ticketSkill);
+  if (ticketQuelle === undefined) befunde.push(`${ROLLEN_PFADE.ticketSkill}: Vorlage der Rolle ticketSkill fehlt im Export`);
+  else lege(TICKET_ZEIGER, zeigerText(TICKET_ORDNER, ticketQuelle), "berechnet");
   for (const [pfad, eintraege] of teile) {
     const vorlageLf = vorlagen.get(pfad);
     const quelleLf = normalisiereEol(lies(pfad));
