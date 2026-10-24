@@ -41,7 +41,7 @@ import { CACHE_TTL_MS, istEchtesModell, istNeuaufbau, kontextVon, median } from 
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
-import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
+import { fehlerArten, permissionGruende, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 
 // Ausgelagert (#1562, hook-taugliche Module ohne gh-/git-Kette); hier re-exportiert, damit Verbraucher und Tests unverändert bleiben.
 export { PRICES, PRICES_STAND, periodAt, priceParts, priceCall, callsFromTranscript, fetchSessionObservations };
@@ -208,6 +208,7 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     out.pflegeUnpaired = unpaired;
     out.pflegeOhneDauer = intervals.filter((iv) => iv.from === iv.to).length; // Start und Ende im selben Befehl: gepaart, aber ohne Messwert (#1382)
     out.fehler = fehlerArten(imFenster);
+    out.permissionGruende = permissionGruende(imFenster);
     out.lesen = wiederlesen(imFenster);
     out.pruef = pruefLaeufe(imFenster);
     // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
@@ -485,7 +486,8 @@ function werkzeugZeilen(summary) {
   const out = [];
   if (summary.fehler) {
     const f = summary.fehler;
-    const teile = FEHLER_LABEL.map(([k, l]) => `${l} ${f[k] ?? 0}`);
+    const gruende = Object.entries(summary.permissionGruende ?? {}).map(([g, n]) => `${g} ${n}`);
+    const teile = FEHLER_LABEL.map(([k, l]) => `${l} ${f[k] ?? 0}${k === "permission" && gruende.length ? ` (${gruende.join(", ")})` : ""}`);
     out.push(`Tool-Fehler: ${teile.join(" · ")} · Exit≠0 ${f.exit ?? 0} (kein Fehlersignal)`);
   }
   const l = summary.lesen;
