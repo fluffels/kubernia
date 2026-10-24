@@ -1,0 +1,45 @@
+{
+  "name": "self-improving-agent-harness-and-factory",
+  "version": "0.1.0",
+  "description": "Selbstoptimierender Harness für Coding-Agenten mit Claude Code: Gates, Wächter-Tests, Hooks, Skills und Ticket-Ablauf.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "skills:sync": "node scripts/skills-sync.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "check:contextsize": "node scripts/check-context-size.mjs",
+    "check:docdrift": "node scripts/check-docdrift.mjs",
+    "check:internalrefs": "node scripts/check-internalrefs.mjs",
+    "check:factorydrift": "node scripts/check-factory-drift.mjs",
+    "factory:sync": "node scripts/factory-sync.mjs",
+    "check:steuerbytes": "node scripts/check-steuerbytes.mjs",
+    "check:diffsize": "node scripts/check-diffsize.mjs",
+    "check:anysuppress": "node scripts/check-any-suppressions.mjs",
+    "check:lockfile": "node scripts/check-lockfile.mjs",
+    "check:doctickets": "node scripts/check-doc-tickets.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "lint:prune": "eslint . --prune-suppressions",
+    "verify": "npm run typecheck && npm run lint && npm run check:contextsize && npm run check:anysuppress && npm run check:docdrift && npm run check:docgen && npm run check:internalrefs && npm run check:factorydrift && npm run check:steuerbytes && npm run check:lockfile && npm run check:diffsize && npm test",
+    "verify:changed": "node scripts/verify-lauf.mjs --changed",
+    "verify:kompakt": "node scripts/verify-lauf.mjs",
+    "docs:gen": "node scripts/docs-gen.mjs --write",
+    "check:docgen": "node scripts/docs-gen.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "@vitest/eslint-plugin": "^1.6.27",
+    "eslint": "^10.13.0",
+    "eslint-plugin-regexp": "^3.3.1",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.2",
+    "yaml": "^2.9.1"
+  }
+}

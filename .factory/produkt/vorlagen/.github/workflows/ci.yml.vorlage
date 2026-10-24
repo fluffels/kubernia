@@ -1,0 +1,79 @@
+name: CI
+
+# Qualitätstore bei jedem Push auf main und bei jedem Pull Request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+# Veraltete Runs desselben Branches oder PRs abbrechen, sobald ein neuer startet.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Tests, Typecheck & Builds
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Volle Historie, damit check:diffsize den PR-Slice gegen die PR-Basis messen kann.
+          fetch-depth: 0
+
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      # Auf einem PR ist die Diff-Basis der erste Elternteil des Merge-Commits, auf main der Vorgänger-Commit.
+      - name: Diff-Basis bestimmen
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base=$(git rev-parse HEAD^1)
+          else
+            base="$BEFORE_SHA"
+          fi
+          echo "FACTORY_DIFF_BASE=$base" >> "$GITHUB_ENV"
+
+      - name: Verify, alle Gates in einer Kette
+        run: npm run verify
+
+      - name: Review- und Plan-Nachweis prüfen
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        run: node scripts/check-review-nachweis.mjs
+
+  security-audit:
+    name: Security-Audit (npm audit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Audit der Abhängigkeiten (blockt bei high und höher)
+        run: npm audit --audit-level=high

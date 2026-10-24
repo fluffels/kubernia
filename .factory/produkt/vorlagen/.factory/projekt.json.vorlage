@@ -1,0 +1,47 @@
+{
+  "repo": "fluffels/self-improving-agent-harness-and-factory",
+  "praefixe": {
+    "commitZeile": "SIH-",
+    "branch": "feature/sih-",
+    "worktree": "sih-"
+  },
+  "agenten": {
+    "planer": "sih-planer",
+    "umsetzer": "sih-umsetzer",
+    "lens": "sih-lens",
+    "gruppe": "sih-gruppe",
+    "ticketSkill": "sih-ticket"
+  },
+  "struktur": {
+    "quelle": "scripts",
+    "moduldoku": "docs"
+  },
+  "ausnahmen": {
+    "groesse": [],
+    "kontext": []
+  },
+  "berechtigungen": {
+    "allow": [
+      "mcp__langfuse__queryMetrics",
+      "mcp__langfuse__getMetricsSchema",
+      "mcp__langfuse__listObservations",
+      "mcp__langfuse__getObservation"
+    ],
+    "ask": [],
+    "deny": []
+  },
+  "sandbox": {
+    "allowedDomains": [],
+    "envVars": []
+  },
+  "projektliterale": {
+    "Stardew": "stardew",
+    "Save-Version": "CURRENT_SAVE_VERSION",
+    "kqDev": "kqdev",
+    "Hafen": "hafen",
+    "Phaser": "phaser",
+    "KubeQuest": "kubequest",
+    "kubernia": "kubernia",
+    "KQ": "KQ"
+  }
+}

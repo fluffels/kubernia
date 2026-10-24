@@ -1,0 +1,27 @@
+# AGENTS.md – Arbeitsanweisung für KI-Agenten
+
+<!-- factory-besitz:start kern -->
+<!-- factory-besitz:ende kern -->
+
+<!-- factory-projekt:start -->
+> Dieses Repository ist der Harness selbst: Gates, Wächter-Tests, Hooks, Skills und Werkzeuge, mit denen Coding-Agenten Tickets bearbeiten. Es enthält kein Spiel und keinen Produktcode; Projekte beziehen den Besitz per Sync.
+
+## Das Wichtigste zuerst
+
+### Oberste Regel
+
+**Vor jeder Änderung die eine Frage stellen: „Funktioniert das für jedes Projekt, das diesen Harness nutzt, ohne ein Projektwort zu tragen?“ Nur umsetzen, wenn die Antwort Ja ist.** Die Frage steht über allen Entscheidungen; ein Projektliteral im Kern ist ein Fehler, kein Zugeständnis.
+
+### Git, PR und Merge
+
+- **PR-gegated, ein PR pro Ticket.** Feature-Branch im Worktree, PR mit Body `Closes #<nr>`, Auto-Merge (`--squash --delete-branch --auto`), grün mergt, rot auf demselben Branch fixen. `main` ist serverseitig geschützt (kein Direkt-Push, kein `--no-verify`).
+- **Projekt-Stopps:** keine über die Kern-Liste hinaus.
+
+### Gates
+
+Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks auf dem PR sind der maßgebliche Riegel. Jedes Gate muss grün sein; ein rotes Gate wird durch Beheben der Ursache grün, nie durch Aufweichen.
+
+## Architektur
+
+Das Repository besteht aus Node-Skripten (`scripts/`), Tests (`test/`), Agenten, Skills und Hooks (`.claude/`, `.agents/`) und der Doku (`docs/`). Es gibt keine Anwendungsschichten und keinen Build. Die Tests laufen mit Vitest, die Skripte sind reine ES-Module ohne Abhängigkeiten außer Node-Builtins und `yaml`.
+<!-- factory-projekt:ende -->

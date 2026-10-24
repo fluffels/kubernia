@@ -631,7 +631,7 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
   });
 
   test("fehlende Datei oder kein Bericht ergeben null (fail-open)", () => {
-    assert.equal(lies(join(tmpdir(), "gibt-es-nicht-kq.jsonl")), null);
+    assert.equal(lies(join(tmpdir(), "gibt-es-nicht-bericht.jsonl")), null);
     assert.equal(lies(datei([zeile("user", "x")])), null);
     assert.equal(lies(datei([zeile("assistant", "kein Bericht")])), null);
   });
