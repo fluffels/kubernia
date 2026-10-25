@@ -196,6 +196,22 @@ describe("collectWorkflowSizes: Randfälle (#1349)", () => {
 });
 
 describe("Quellwurzel aus der Config (#1843)", () => {
+  test("collectSizes misst alle Quelldateien der JS/TS-Familie (ts, mts, cts, js, mjs, cjs), aber keine .d.ts und keine Daten", () => {
+    const wurzel = fixture({
+      "lib/a.ts": "x\n",
+      "lib/b.mts": "x\nx\n",
+      "lib/c.cts": "x\n",
+      "lib/d.js": "x\n",
+      "lib/e.mjs": "x\nx\nx\n",
+      "lib/f.cjs": "x\n",
+      "lib/g.d.ts": "x\n",
+      "lib/h.json": "{}\n",
+      "lib/i.md": "x\n",
+      "lib/j.tsx": "x\n",
+    });
+    assert.deepEqual(collectSizes(wurzel, "lib").map((s) => s.file).sort(), ["lib/a.ts", "lib/b.mts", "lib/c.cts", "lib/d.js", "lib/e.mjs", "lib/f.cjs"]);
+  });
+
   test("collectSizes zählt die übergebene Quellwurzel (lib), nicht src", async () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
