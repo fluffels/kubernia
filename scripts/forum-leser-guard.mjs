@@ -15,7 +15,8 @@
  *
  * Nur Node-Builtins.
  */
-import { emit, istDirektaufruf, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { emit, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
 
 // Groß-/Kleinschreibung egal (Windows-Pfade); Dateiname exakt `forum-<Ziffern>.txt` im Ordner `.claude/forum-quarantaene/`.
 const QUARANTAENE_DATEI = /\/\.claude\/forum-quarantaene\/forum-\d+\.txt$/i;

@@ -12,9 +12,19 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { fixture } from "./support/tmp-fixture";
+import { quelleAusConfig } from "./support/struktur-quelle";
+import { FREMD_CONFIG_PFAD } from "./support/fremd-config";
+
+/** Die Fremd-Config (Datei, volles Schema) mit anderer Quellwurzel. */
+const fremdMitQuelle = (quelle: string): unknown => {
+  const c = JSON.parse(readFileSync(FREMD_CONFIG_PFAD, "utf8")) as object;
+  return { ...c, struktur: { quelle, moduldoku: "docs/module" } };
+};
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs ist aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -26,7 +36,6 @@ import * as pcl from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBasis from "../scripts/check-basis.mjs";
 const listTrackedFiles = (rawBasis as unknown as { listTrackedFiles: (rootDir?: string) => string[] }).listTrackedFiles;
-const quelleDerConfig = (): string => (pcl as unknown as { strukturAus: (c: unknown) => { quelle: string }; ladeProjektConfig: () => unknown }).strukturAus((pcl as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig()).quelle;
 
 type Sized ={ file: string; loc: number; chars?: number };
 type Allow = { datei: string; grund: string };
@@ -93,7 +102,7 @@ describe("Dateigröße-Budget (#390)", () => {
   });
 
   test("Leerlauf-Schutz: jede getrackte, existierende .ts-Datei der Quellwurzel steht in der Messung", () => {
-    const quelle = quelleDerConfig();
+    const quelle = quelleAusConfig();
     const wurzel = fileURLToPath(new URL("../", import.meta.url));
     const gemessen = new Set(sizes.map((s) => s.file));
     const erwartet = listTrackedFiles(wurzel).filter((f) => f.startsWith(`${quelle}/`) && f.endsWith(".ts") && existsSync(`${wurzel}${f}`));
@@ -196,6 +205,22 @@ describe("collectWorkflowSizes: Randfälle (#1349)", () => {
 });
 
 describe("Quellwurzel aus der Config (#1843)", () => {
+  test("collectSizes misst alle Quelldateien der JS/TS-Familie (ts, mts, cts, js, mjs, cjs), aber keine Daten", () => {
+    const wurzel = fixture({
+      "lib/a.ts": "x\n",
+      "lib/b.mts": "x\nx\n",
+      "lib/c.cts": "x\n",
+      "lib/d.js": "x\n",
+      "lib/e.mjs": "x\nx\nx\n",
+      "lib/f.cjs": "x\n",
+      "lib/g.d.ts": "x\n",
+      "lib/h.json": "{}\n",
+      "lib/i.md": "x\n",
+      "lib/j.tsx": "x\n",
+    });
+    assert.deepEqual(collectSizes(wurzel, "lib").map((s) => s.file).sort(), ["lib/a.ts", "lib/b.mts", "lib/c.cts", "lib/d.js", "lib/e.mjs", "lib/f.cjs", "lib/g.d.ts"]);
+  });
+
   test("collectSizes zählt die übergebene Quellwurzel (lib), nicht src", async () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -217,7 +242,17 @@ describe("Quellwurzel aus der Config (#1843)", () => {
     }
   });
 
-  test("ohne Quellwurzel gilt die der Projekt-Config (struktur.quelle), nicht ein fester Name", () => {
-    assert.deepEqual(collectSizes(), collectSizes(undefined, quelleDerConfig()));
+  test("ohne Quellwurzel gilt die der Projekt-Config (struktur.quelle), nicht ein fester Name: Kindlauf mit injizierter Fremd-Config", () => {
+    const d = fixture({ "fremd.json": JSON.stringify(fremdMitQuelle("test/support")) });
+    const code = `import(${JSON.stringify(pathToFileURL(fileURLToPath(new URL("../scripts/check-size.mjs", import.meta.url))).href)}).then((m) => console.log(JSON.stringify(m.collectSizes())))`;
+    const lauf = spawnSync(process.execPath, ["-e", code], {
+      encoding: "utf8",
+      env: { ...process.env, FACTORY_PROJEKT_CONFIG: join(d, "fremd.json"), VITEST: "true", FACTORY_PROJEKT_WURZEL: fileURLToPath(new URL("../", import.meta.url)) },
+    });
+    assert.equal(lauf.status, 0, lauf.stderr);
+    const kind = JSON.parse(lauf.stdout) as Sized[];
+    assert.ok(kind.length > 0 && kind.every((s) => s.file.startsWith("test/support/")), "der Kindlauf misst die Quellwurzel der Fremd-Config");
+    assert.deepEqual(kind, collectSizes(undefined, "test/support"));
+    assert.notDeepEqual(kind, collectSizes(), "die echte Quellwurzel misst anderes");
   });
 });

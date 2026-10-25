@@ -8,8 +8,8 @@
  * Kein Bestand mehr (#1579): jeder Importeur zählt, auch eine Lib; der Test fordert `paare == []`. Ein Einstiegsskript darf aus Libs
  * importieren, nie umgekehrt und nie aus einem anderen Einstieg.
  *
- * Bekannte Grenzen der Erkennung: `GUARD` kennt nur die drei Schreibweisen unten (z.B. `pathToFileURL(process.argv[1] ?? "")` nicht,
- * damit zählen `check-c4.mjs` und `docs-gen.mjs` nicht als Einstieg); `IMPORT` sieht nur statische Importe `from "./x.mjs"` mit
+ * Bekannte Grenzen der Erkennung: `GUARD` kennt nur die Schreibweisen unten (`istDirektaufruf(import.meta.url)` aus `direktaufruf.mjs`, dazu die zwei
+ * ausgeschriebenen Vergleiche; `check-c4.mjs` und `docs-gen.mjs` zählen darüber als Einstieg, jede andere Schreibweise nicht); `IMPORT` sieht nur statische Importe `from "./x.mjs"` mit
  * doppelten Anführungszeichen (kein `import "./x.mjs"`, kein `import()`). Heute fehlt dadurch kein Paar.
  */
 import { readdirSync, readFileSync } from "node:fs";

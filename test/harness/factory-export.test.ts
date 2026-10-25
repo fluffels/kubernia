@@ -24,9 +24,10 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawSkills from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+import { ROLLEN_PFADE, TICKET_SKILL_NAME } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
+import { hookSkripte, importeAus } from "./hook-importe";
 
 interface Leser {
   fehler?: string;
@@ -496,10 +497,10 @@ describe("Export aus HEAD", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { [KERN]: kern }) });
       assert.match(r.befunde.join("|"), /scripts\/besitz-lib\.mjs: kubernia-Literal 'KQ'/);
     });
-    test("leerer Präfix der Quelle: keine Umschreibung, Text unverändert, Zähler 0", () => {
+    test("leerer Präfix der Quelle: Befund der Quelle statt Umschreibung vor jedem Großbuchstaben", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/projekt.json": mitPraefix({ ...kubPraefixe, commitZeile: "" }), [SEITE]: zusatz("Ab Cd") }) });
-      assert.equal(r.bericht.praefixUmgeschrieben, 0);
-      assert.ok(r.dateien.get(SEITE)?.text.includes("\nAb Cd\n"), "kein Präfix vor jedem Großbuchstaben");
+      assert.match(r.befunde.join("\n"), /\.factory\/projekt\.json der Quelle: .*commitZeile/);
+      assert.equal(r.dateien.size, 0);
     });
     test("gleicher Präfix in Quelle und Factory-Config: nichts wird umgeschrieben, Zähler 0", () => {
       const vor = ".factory/produkt/vorlagen/.factory/projekt.json.vorlage";
@@ -674,7 +675,7 @@ describe("Export aus HEAD", () => {
 
   test("#1930: Ticket-Skill der Rolle ticketSkill und sein Zeiger liegen im Export, Name aus der Config, nur der Produkt-Bereich", () => {
     const quellPfad = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
-    const ordner = quellPfad.split("/").slice(-2, -1)[0];
+    const ordner = TICKET_SKILL_NAME as string;
     const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
     const quelle = text(quellPfad);
     assert.ok(quelle.length > 0, `${quellPfad} fehlt im Export`);
@@ -890,6 +891,14 @@ describe("Export aus HEAD", () => {
       befund({ "package-lock.json": "{}" }, /Lock: keine packages/);
     });
 
+    test("#1921: eine Quell-Config ohne praefixe ist ein Befund der Quelle, kein TypeError", () => {
+      const kub = JSON.parse(basisText(".factory/projekt.json")) as Record<string, unknown>;
+      delete kub.praefixe;
+      const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/projekt.json": JSON.stringify(kub) }) });
+      assert.match(r.befunde.join("\n"), /\.factory\/projekt\.json der Quelle: .*praefixe/);
+      assert.equal(r.dateien.size, 0);
+    });
+
     test("ein Laufwerkspfad mit dem Namen der Quelle oder des Factory-Repos ist ein Befund", () => {
       const L = "C" + ":\\";
       for (const name of ["kubernia", "self-improving-agent-harness-and-factory"]) {
@@ -958,5 +967,15 @@ describe("Export aus HEAD", () => {
       const kommentar = ex.baueExport({ leser: mitAenderung(leser, { [lib]: `${basisText(lib)}\n// import x from './gibt-es-nicht.mjs';\n` }) });
       assert.deepEqual(kommentar.befunde, []);
     });
+  });
+});
+
+describe("Wächter: Export-Werkzeug hängt an keinem Hook-Modul (#1921)", () => {
+  test("factory-export-lib.mjs importiert kein Skript, das .claude/settings.json als Hook startet", () => {
+    const hooks = hookSkripte(readFileSync(join(WURZEL, ".claude/settings.json"), "utf8")).map((p) => p.replace(/^scripts\//, ""));
+    assert.ok(hooks.length > 0, "Hook-Skripte gefunden");
+    const text = readFileSync(join(WURZEL, "scripts/factory-export-lib.mjs"), "utf8");
+    const importiert = importeAus(text).map((s) => s.replace(/^\.\//, ""));
+    assert.deepEqual(importiert.filter((i) => hooks.includes(i) || i === "umsetzer-abschluss.mjs"), []);
   });
 });

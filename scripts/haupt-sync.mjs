@@ -30,10 +30,11 @@
  */
 import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
-import { join, posix, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { istDirektaufruf, readStdin } from "./hook-io.mjs";
-import { KERN_TICKET_SKILL, TICKET_SKILL_ORDNER } from "./projekt-config-lib.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { readStdin } from "./hook-io.mjs";
+import { KERN_TICKET_SKILL, TICKET_SKILL_NAME, TICKET_SKILL_ORDNER } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
@@ -79,7 +80,7 @@ export function configGrund(deps = {}) {
 export const KERN_SKILL_VERZEICHNIS = `${QUELL_VERZEICHNIS}/${KERN_TICKET_SKILL}/`;
 
 /** Die generierten Zeiger beider Ticket-Skills unter dem Werkzeug-Verzeichnis (#1850): eine Änderung dort meint immer die Quelle. */
-export const ZEIGER_VERZEICHNISSE = [`${ZEIGER_WURZEL}/${KERN_TICKET_SKILL}/`, `${ZEIGER_WURZEL}/${posix.basename(TICKET_SKILL_ORDNER)}/`];
+export const ZEIGER_VERZEICHNISSE = [`${ZEIGER_WURZEL}/${KERN_TICKET_SKILL}/`, `${ZEIGER_WURZEL}/${TICKET_SKILL_NAME}/`];
 
 /** Pfad eines Zeigers → Pfad seiner Quelle (Zeiger und Quelle heißen gleich); alles andere unverändert. */
 export function quellePfad(d) {

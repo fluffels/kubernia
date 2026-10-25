@@ -120,10 +120,10 @@ export function launcherFuer({ name, pkg, bin }) {
 
 /**
  * Startet den Server (lokal oder per npx) und reicht Exit-Code und Signale durch. `cwd` optional (sonst das der Session).
- * `abhaengigkeiten` ersetzt in Tests Kindprozess, stderr, Prozessende und Signal-Anmeldung (`spawn`, `stderr`, `exit`, `onSignal`); Standard sind die echten.
+ * `abhaengigkeiten` ersetzt in Tests Kindprozess, stderr, Prozessende, Signal-Anmeldung und Plattform (`spawn`, `stderr`, `exit`, `onSignal`, `plattform`); Standard sind die echten.
  */
 export function starte({ name, pkg, bin, root, args, cwd }, abhaengigkeiten = {}) {
-  const { spawn: starten = spawn, stderr = process.stderr, exit = (c) => process.exit(c), onSignal = (sig, fn) => process.on(sig, fn) } = abhaengigkeiten;
+  const { spawn: starten = spawn, stderr = process.stderr, exit = (c) => process.exit(c), onSignal = (sig, fn) => process.on(sig, fn), plattform = process.platform } = abhaengigkeiten;
   const plan = planLaunch({ pkg, lockVersion: readLockVersion(root, pkg), installed: readInstalled(root, pkg, bin) });
   const start = Date.now();
   const vorher = plan.mode === "local" ? statInstallation(plan.binPath) : null;
@@ -137,7 +137,7 @@ export function starte({ name, pkg, bin, root, args, cwd }, abhaengigkeiten = {}
       ? starten(process.execPath, [plan.binPath, ...args], opt)
       : (stderr.write(`${npxHinweis(name, plan.spec)}
 `),
-        starten("npx", ["-y", plan.spec, ...args], { ...opt, shell: process.platform === "win32" }));
+        starten("npx", ["-y", plan.spec, ...args], { ...opt, shell: plattform === "win32" }));
   child.on("error", (e) => {
     stderr.write(`${name}: Start fehlgeschlagen (${e.code ?? e.message})
 `);

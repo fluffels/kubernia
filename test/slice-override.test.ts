@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { altName, ohneKernEnv } from "./support/env-alt";
 import { FREMD, FREMD_CONFIG_PFAD, projektConfig } from "./support/fremd-config";
+import { nurDurchEigenenEintrag } from "./support/schutzliste";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -432,15 +433,8 @@ describe("commitImSlice / loeseCommit (#1781 L5a): head im Slice an einer Stelle
   });
 });
 
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as abschlussRoh from "../scripts/umsetzer-abschluss.mjs";
-
-const abschluss = abschlussRoh as unknown as { leitplankenMuster: () => string[]; trifftLeitplanke: (pfad: string, muster: string[]) => boolean };
-
 describe("Schutzliste (.github/protected-paths.json, #1929): der Kopfkommentar von slice-override.mjs nennt sie als Quelle", () => {
   it("scripts/slice-override.mjs ist eine Leitplanke der echten Liste, und ohne seinen Eintrag wäre es keine", () => {
-    const muster = abschluss.leitplankenMuster();
-    expect(abschluss.trifftLeitplanke("scripts/slice-override.mjs", muster)).toBe(true);
-    expect(abschluss.trifftLeitplanke("scripts/slice-override.mjs", muster.filter((m) => m !== "/scripts/slice-override.mjs"))).toBe(false);
+    expect(nurDurchEigenenEintrag("scripts/slice-override.mjs")).toEqual({ trifftEchte: true, trifftOhneEintrag: false });
   });
 });

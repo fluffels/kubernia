@@ -143,11 +143,20 @@ jobs:
       # Timeout (#1425): der Schritt hing einmal 37 Minuten ohne Fortschritt; Normalläufe dauerten
       # 0:24-4:39 min (letzte 8 Läufe, Maximum 4:39). Ein Hänger wird nach 6 min je Versuch
       # abgebrochen und einmal wiederholt (2 Versuche, 10 s Pause); Obergrenze des Schritts 14 min.
-      - name: Playwright-Browser installieren (Chromium)
+      # apt-Hänger: `--with-deps` startete je Lauf ein apt-get gegen den Azure-Mirror (zeitweise ca. 45 kB/s, 7 bis 10 min).
+      # Der Smoke fährt nur die Headless-Shell (`--only-shell`, Standard-Headless ab Playwright 1.49); apt läuft nur, wenn
+      # `ldd` an ihr eine fehlende Bibliothek meldet (`install-deps`, derselbe Timeout-Rahmen).
+      - name: Playwright-Browser installieren (Chromium-Headless-Shell)
         timeout-minutes: 14
         run: |
           for versuch in 1 2; do
-            if timeout 360 npx playwright install --with-deps chromium; then exit 0; fi
+            if timeout 360 npx playwright install --only-shell chromium; then
+              shell=$(find ~/.cache/ms-playwright -type f -path '*chromium_headless_shell-*' \( -name chrome-headless-shell -o -name headless_shell \) | head -n 1)
+              if [ -z "$shell" ]; then echo "Headless-Shell nicht gefunden"; exit 1; fi
+              if ! ldd "$shell" | grep -q "not found"; then exit 0; fi
+              echo "Fehlende Bibliotheken der Headless-Shell, install-deps"
+              if timeout 360 npx playwright install-deps chromium; then exit 0; fi
+            fi
             echo "Versuch $versuch fehlgeschlagen oder hing"
             sleep 10
           done
@@ -443,12 +452,12 @@ jobs:
           else
             echo "Lege neues Alarm-Issue an."
             body=$(printf '%s\n' \
-              "Der CI-Lauf auf \`main\` ist **rot** — obwohl \`main\` seit #592 PR-gegated ist. Das ist die zweite Grenze aus #605: ein roter \`main\` trotz grüner PR-Checks (semantischer Merge zweier je grüner PRs, ein fehlkonfigurierter Required Check, ein Admin-/Force-Push)." \
+              "Der CI-Lauf auf \`main\` ist **rot**, obwohl \`main\` PR-gegated ist: ein semantischer Merge zweier je grüner PRs, ein fehlkonfigurierter Required Check oder ein Admin- oder Force-Push." \
               "" \
               "- Commit: [\`${short}\`](${COMMIT_URL})" \
               "- Fehlgeschlagener Lauf: ${RUN_URL}" \
               "" \
-              "**Zuerst behandeln** (main muss grün sein, bevor ein paralleler Agent darauf aufbaut): Ursache im Lauf ansehen → auf einem Fix-Branch reparieren → per PR mergen → dieses Issue schließen. Solange main rot bleibt, hängt jeder weitere rote Lauf nur einen Kommentar hier an (kein Issue-Spam).")
+              "**Zuerst behandeln** (main muss grün sein, bevor ein paralleler Agent darauf aufbaut): Ursache im Lauf ansehen, auf einem Fix-Branch reparieren, per PR mergen, dieses Issue schließen. Solange main rot bleibt, hängt jeder weitere rote Lauf nur einen Kommentar hier an (kein Issue-Spam).")
             new_url=$(gh issue create --repo "$REPO" \
               --title "${marker} (${short})" \
               --label "$ALARM_LABEL" \

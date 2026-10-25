@@ -4,7 +4,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { besitzAnker } from "../support/besitz-anker";
+import { besitzAnker, ladeBesitzManifest } from "../support/besitz-anker";
 
 const E = (pfad: string, ring = "kern") => ({ pfad, ring });
 
@@ -27,5 +27,14 @@ describe("besitzAnker", () => {
 
   test("ohne Manifest-Argument liest der Helfer das echte Besitz-Manifest (nicht leer)", () => {
     assert.ok(besitzAnker(() => true).length > 0);
+  });
+});
+
+describe("ladeBesitzManifest", () => {
+  test("liefert das echte Manifest mit Version und Einträgen, jeder Eintrag mit Pfad und Ring", () => {
+    const m = ladeBesitzManifest();
+    assert.equal(m.version, 1);
+    assert.ok(m.eintraege.length > 50);
+    assert.ok(m.eintraege.every((e) => typeof e.pfad === "string" && e.pfad !== "" && typeof e.ring === "string"));
   });
 });

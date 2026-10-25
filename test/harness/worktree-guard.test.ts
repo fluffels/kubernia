@@ -574,6 +574,15 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask('alias g="$X"; g push'), true, "unauflösbarer Alias");
   });
 
+  test("Shell-Variable als -C-Ziel (quotiert wie unquotiert): im Haupt-Checkout blockt es, im Worktree fragt es (bewusste Grenze)", () => {
+    for (const cmd of ["git -C $WT commit -m x", 'git -C "$WT" commit -m x', "git -C ${WT} push", "git -C $WT/sub commit -m x"]) {
+      assert.equal(run(cmd), true, `${cmd}: Session-cwd ist der Haupt-Checkout, das Ziel nicht prüfbar`);
+      assert.equal(run(cmd, wt), false, `${cmd}: im Worktree kein Block`);
+      assert.equal(ask(cmd, wt), true, `${cmd}: im Worktree Rückfrage`);
+    }
+    assert.equal(ask("git -C $WT status", wt), false, "ohne geschützten Aufruf keine Rückfrage");
+  });
+
   test("dynamisches cd/-C: aus dem Worktree wird gefragt, nur bei einem geschützten git-Aufruf", () => {
     for (const cmd of ['cd "$X" && git push', 'git -C "$D" push', "cd - && git push", "popd && git commit -m x", "git -C {} push"]) {
       assert.equal(ask(cmd, wt), true, cmd);

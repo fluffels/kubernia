@@ -452,4 +452,27 @@ describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
   test("Fitness: das Verzeichnis der echten Config existiert (rot, sobald eine Umbenennung es verschiebt)", () => {
     expect(lies(`${H.TICKET_SKILL_VERZEICHNIS}SKILL.md`).length).toBeGreaterThan(0);
   });
+  /** Meldung, wenn `name:` im Frontmatter der Skill-Quelle nicht `agenten.ticketSkill` der Config ist, sonst `null` (#1921). */
+  const ticketSkillNameBefund = (config: Cfg, quelle: string): string | null => {
+    const kopf = /^---\r?\n([\s\S]*?)\r?\n---/.exec(quelle)?.[1] ?? "";
+    const name = /^name:\s*(\S+)\s*$/m.exec(kopf)?.[1];
+    const soll = (config.agenten as { ticketSkill: string }).ticketSkill;
+    return name === soll ? null : `name im Frontmatter von ${TICKET_QUELLE} ist '${name}', agenten.ticketSkill der Config ist '${soll}'`;
+  };
+  test("Fitness: name im Frontmatter der Ticket-Skill-Quelle ist agenten.ticketSkill der echten Config", () => {
+    // Die Datei des Repos selbst, nicht `ladeProjektConfig()`: die Fremd-Config-Probe tauscht deren Quelle, die Skill-Quelle bleibt die echte.
+    expect(ticketSkillNameBefund(JSON.parse(lies(".factory/projekt.json")) as Cfg, lies(TICKET_QUELLE))).toBeNull();
+  });
+  test("Fitness-Probe: eine Config mit anderem Namen (…-gibtsnicht) meldet den Unterschied, ein Frontmatter ohne name ebenso", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lz-skillname-"));
+    try {
+      const echt = JSON.parse(lies(".factory/projekt.json")) as { agenten: Record<string, string> };
+      const pfad = join(dir, "projekt.json");
+      writeFileSync(pfad, JSON.stringify({ ...echt, agenten: { ...echt.agenten, ticketSkill: `${echt.agenten.ticketSkill}-gibtsnicht` } }));
+      expect(ticketSkillNameBefund(ladeProjektConfig({ pfad }), lies(TICKET_QUELLE))).toMatch(/-gibtsnicht/);
+      expect(ticketSkillNameBefund(echt, "---\ndescription: d\n---\n")).toMatch(/ist 'undefined'/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

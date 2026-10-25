@@ -105,7 +105,7 @@ export default tseslint.config(
     },
   },
 
-  // 4) Komplexitäts-/God-Function-Wächter (#502) – NUR Produktionscode (src/**).
+  // 4) Komplexitäts-/God-Function-Wächter (#502) – Produktionscode (src/**) und Tooling-Skripte (scripts/**).
   //    Der Dateigröße-Deckel (scripts/check-size.mjs, 800 LOC/Datei) misst nur
   //    physische Zeilen JE DATEI; er sieht die eigentliche God-Function nicht: eine
   //    400-Zeilen-Datei mit einer 300-Zeilen-verschachtelten Funktion, und er
@@ -116,7 +116,8 @@ export default tseslint.config(
   //      • max-depth             – Verschachtelungstiefe (der „300-Zeilen-nested"-Kern)
   //    Bewusst NICHT auf test/** angewandt: Test-Callbacks (describe/it) sind
   //    legitim lang und keine God-Functions – die Regeln zielen auf die Spiel-/
-  //    Sim-/Wirtschaftslogik in src/, exakt der Ort der im Ticket genannten God-Functions.
+  //    Sim-/Wirtschaftslogik in src/, exakt der Ort der im Ticket genannten God-Functions,
+  //    und auf die Harness-Skripte in scripts/ (dieselben Grenzen, eigener eingefrorener Bestand).
   //
   //    Einführung in eine gewachsene Codebasis OHNE Big-Bang-Refactor: der Bestand
   //    an Verletzungen ist als committete ESLint-Bulk-Suppressions-Baseline
@@ -128,7 +129,7 @@ export default tseslint.config(
   //    „stale-Eintrag wird gemeldet"-Disziplin wie beim Dateigröße-Wächter. Der
   //    Abbau der Baseline läuft über session-große Burn-down-Tickets (Diff-Size-Gate #533).
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.ts", "scripts/**/*.{js,mjs,cjs}"],
     rules: {
       complexity: ["error", 15],
       "max-depth": ["error", 4],

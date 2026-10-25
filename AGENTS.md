@@ -6,7 +6,7 @@
 
 ## Kern-Regeln (Factory-Besitz)
 
-Projektneutraler Factory-Besitz: Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg). Der Projekt-Block ergänzt und streicht nie; über allem steht dessen Projekt-Leitfrage („Oberste Regel“). Platzhalter `<gruppe.schlüssel>` setzt die Tabelle darunter ein.
+Projektneutraler Factory-Besitz: Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg; ohne `.factory/sync-stand.json` ist dieses Repo selbst upstream). Der Projekt-Block ergänzt und streicht nie; über allem steht dessen Projekt-Leitfrage („Oberste Regel“). Platzhalter `<gruppe.schlüssel>` setzt die Tabelle darunter ein.
 
 <!-- factory:projektwerte:start -->
 Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwerte.mjs --write`, nicht von Hand ändern).
@@ -88,7 +88,7 @@ Hauptchat `sonnet`, Umsetzung `<agenten.umsetzer>` (Sonnet), Planung und Review 
 Alle schnellen Gates laufen gebündelt in **`npm run verify`**; `npm run verify:full` ergänzt Coverage, Diff-Coverage, Builds, Bundle-Budget und Smokes. Die **Required-Checks auf dem PR** sind der maßgebliche, nicht umgehbare Riegel; der pre-push-Hook ist nur Zusatznetz. Jedes Gate muss grün sein.
 
 - **Lint muss grün bleiben** (`npm run lint`, `--max-warnings 0`, typbewusst ab `recommendedTypeChecked`). `no-explicit-any` ist ein Fehler; eine echte Ausnahme nur als **begründetes** `// eslint-disable-next-line @typescript-eslint/no-explicit-any` — deren Zahl deckelt **`npm run check:anysuppress`** ([`any-suppressions.json`](any-suppressions.json), anheben nur bewusst mit `--write` + Begründung).
-- **Komplexität je Funktion** (nur `src/**`): `complexity` ≤ 15, `max-lines-per-function` ≤ 120, `max-depth` ≤ 4. Bestand eingefroren in [`eslint-suppressions.json`](eslint-suppressions.json), Neues bricht sofort, stale Einträge `npm run lint:prune`.
+- **Komplexität je Funktion** (`src/**` und `scripts/**`): `complexity` ≤ 15, `max-lines-per-function` ≤ 120, `max-depth` ≤ 4. Bestand eingefroren in [`eslint-suppressions.json`](eslint-suppressions.json), Neues bricht sofort, stale Einträge `npm run lint:prune`.
 - **Schichtung, Zyklen, verwaiste Module** erzwingt **`npm run check:arch`** (dependency-cruiser): Domäne und Anwendung importieren nur die Domäne (kein `phaser`, keine `scenes`/`ui`/`sfx`, kein Einstieg), keine Import-Zyklen (geteilten Zustand nach `runtime.ts`/`sim/state.ts` ziehen), kein toter Code.
 - **Größen:** `npm run check:size` (`src`-Module ≤ 800 LOC), `npm run check:contextsize` (Zeichen-Budget je AGENTS.md).
 - **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `KQ-Diffsize-Override: #<nr> warum`.

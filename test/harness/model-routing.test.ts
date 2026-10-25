@@ -1,4 +1,6 @@
 /* Modell-Routing-Wächter (#1035) – „Planung stark, Umsetzung schnell" darf nicht
+ * @probe-echte-dateien liest die echten Agenten- und Skill-Dateien des Projekts
+ *
  * ins Leere greifen, und keine Doku darf das Gegenteil behaupten.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
@@ -422,6 +424,65 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
   return fehler;
 };
 
+/**
+ * Prüft die Tabelle „Projekt-Phase“ (Rollen außerhalb des Kerns) generisch gegen die Frontmatter ihrer Subagenten: je Zeile nennt die
+ * letzte Zelle „Subagent `name`“, die Datei ist `.claude/agents/<name>.md`; Alias (Spalte „Alias“) und Effort (Spalte „Effort Skill-Pfad“)
+ * müssen dem Frontmatter gleichen. Ohne die Tabelle oder ohne Zeilen gibt es nichts zu prüfen (ein Projekt ohne eigene Rollen). Liefert die Verstöße.
+ */
+const projektPhasenAbweichungen = (doku: string, fmVon: (datei: string) => Record<string, string> | null): string[] => {
+  const zeilen = doku.split("\n");
+  const kopf = zeilen.findIndex((z) => z.startsWith("| Projekt-Phase |"));
+  if (kopf < 0) return [];
+  const zellen = (z: string) => z.split("|").slice(1, -1).map((c) => c.trim());
+  const spalten = zellen(zeilen[kopf]);
+  const [iAlias, iEffort] = [spalten.indexOf("Alias"), spalten.indexOf("Effort Skill-Pfad")];
+  if (iAlias < 0 || iEffort < 0) return [`Projekt-Phase: Spalte fehlt (Alias ${iAlias}, Effort Skill-Pfad ${iEffort})`];
+  const fehler: string[] = [];
+  for (let i = kopf + 2; i < zeilen.length && zeilen[i].startsWith("|"); i++) {
+    const c = zellen(zeilen[i]);
+    const phase = zelleOhneCode(c[0] ?? "");
+    const name = /Subagent `([\w-]+)`/.exec(c[c.length - 1] ?? "")?.[1];
+    if (name === undefined) {
+      fehler.push(`${phase}: Ziel „Subagent name“ in der letzten Zelle nicht zuordenbar`);
+      continue;
+    }
+    const fm = fmVon(`.claude/agents/${name}.md`);
+    if (fm === null) {
+      fehler.push(`${phase}: Agentendatei .claude/agents/${name}.md fehlt`);
+      continue;
+    }
+    const effort = zelleOhneCode(c[iEffort] ?? "");
+    if (fm.effort !== effort) fehler.push(`${phase}: Effort „${effort}“ ≠ Frontmatter ${name} „${fm.effort}“`);
+    const alias = zelleOhneCode(c[iAlias] ?? "");
+    if (fm.model !== alias) fehler.push(`${phase}: Alias „${alias}“ ≠ Frontmatter ${name} „${fm.model}“`);
+  }
+  return fehler;
+};
+
+describe("Projekt-Phasen der Matrix stimmen mit den Frontmatter ihrer Subagenten überein (#1921)", () => {
+  const fmOpt = (datei: string) => (existsSync(REPO_ROOT + datei) ? frontmatter(read(datei)) : null);
+  const KOPF = "| Projekt-Phase | Alias | Effort Skill-Pfad | Skill-Pfad |\n|---|---|---|---|\n";
+  const zeile = "| Eigene Phase | `sonnet` | `medium` | Subagent `x-agent`, vom Skill gespawnt |\n";
+  const fm = (model: string, effort: string) => (datei: string) => (datei === ".claude/agents/x-agent.md" ? { model, effort } : null);
+
+  test("die echte Tabelle hat keine Abweichung", () => {
+    assert.deepEqual(projektPhasenAbweichungen(liesMitProjektwerten(ROUTING_SSOT), fmOpt), []);
+  });
+  test("Fixture: stimmige Zeile grün; Effort, Alias, fehlende Datei, kein Subagent und fehlende Spalte rot", () => {
+    assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile, fm("sonnet", "medium")), []);
+    assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile, fm("sonnet", "high")), ["Eigene Phase: Effort „medium“ ≠ Frontmatter x-agent „high“"]);
+    assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile, fm("opus", "medium")), ["Eigene Phase: Alias „sonnet“ ≠ Frontmatter x-agent „opus“"]);
+    assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile.replace("x-agent", "y-agent"), fm("sonnet", "medium")), ["Eigene Phase: Agentendatei .claude/agents/y-agent.md fehlt"]);
+    assert.match(projektPhasenAbweichungen(KOPF + zeile.replace("Subagent `x-agent`", "irgendwer"), fm("sonnet", "medium")).join(), /Eigene Phase: Ziel .* nicht zuordenbar/);
+    assert.match(projektPhasenAbweichungen("| Projekt-Phase | Alias | Skill-Pfad |\n|---|---|---|\n" + zeile, fm("sonnet", "medium")).join(), /Spalte fehlt/);
+  });
+  test("ohne Tabelle oder ohne Zeilen gibt es nichts zu prüfen; nach der Tabelle endet die Prüfung", () => {
+    assert.deepEqual(projektPhasenAbweichungen("kein Text", fm("sonnet", "medium")), []);
+    assert.deepEqual(projektPhasenAbweichungen(KOPF, fm("sonnet", "medium")), []);
+    assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile + "\n| Fremd | `a` | `b` | nichts |\n", fm("sonnet", "medium")), []);
+  });
+});
+
 describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", () => {
   const fmEcht = (datei: string) => frontmatter(read(datei));
   test("die echte Matrix hat keine Abweichung", () => {
@@ -435,12 +496,20 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
     while (ende < roh.length && roh[ende].startsWith("|")) ende++;
     const matrix = roh.slice(kopf, ende).join("\n");
     assert.match(matrix, /<agenten\.planer>/, "Platzhalter vorhanden (Probe, dass der Ausschnitt die Matrix trifft)");
-    const nennt = (text: string) => Object.values(AG).filter((n) => new RegExp(`(?<![\\w-])${n}(?![\\w-])`).test(text));
+    const nennt = (text: string) => Object.values(AG).filter((n) => new RegExp(`(?<![\\w-])${escapeRegex(n)}(?![\\w-])`).test(text));
     const literale = nennt(matrix);
     assert.deepEqual(literale, [], "Namen aus der Config stehen als Literal in der Rohseite der Matrix");
     // Negativfall: ein eingesetzter Name wird erkannt
     const verfaelscht = matrix.replace("<agenten.planer>", AG.planer);
     assert.deepEqual(nennt(verfaelscht), [AG.planer]);
+    // zweiter Negativfall: auch die Kopfzelle (`<agenten.ticketSkill>`) trägt nur den Platzhalter
+    assert.ok(matrix.includes("<agenten.ticketSkill>"), "Platzhalter in der Kopfzelle vorhanden");
+    assert.deepEqual(nennt(matrix.replace("<agenten.ticketSkill>", AG.ticketSkill)), [AG.ticketSkill]);
+    // Lookbehind und Lookahead: ein Name als Teil eines längeren Worts oder Bindestrich-Namens zählt nicht
+    assert.deepEqual(nennt(`x${AG.planer}`), []);
+    assert.deepEqual(nennt(`vor-${AG.planer}`), []);
+    assert.deepEqual(nennt(`${AG.planer}-nach`), []);
+    assert.deepEqual(nennt(`<${AG.planer}>`), [AG.planer]);
   });
   test("Negativfälle: Umsetzer-Zelle `high` gegen Frontmatter `medium`, falscher Alias, unbekannte Zeile, fehlende Spalte", () => {
     const doku = liesMitProjektwerten(ROUTING_SSOT);

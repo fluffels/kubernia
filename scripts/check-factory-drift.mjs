@@ -9,7 +9,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { einheitHash, einheitId, ERGAENZBARE, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
@@ -20,7 +20,7 @@ const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs -
 
 const BLOCK_HINWEIS = " (Projektergänzungen gehören außerhalb der Besitz-Marker)";
 
-const ergaenzungHinweis = (e) => ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFIG} › ${ERGAENZBARE.find((x) => x.id === einheitId(e))?.block})`;
+const ergaenzungHinweis = (e) => ` (Projekt-Ergänzungen gehören nach ${PROJEKT_CONFIG} › ${ergaenzungsBlockVon(e)})`;
 
 /** Pur: die Ergänzung aus dem Text der Projekt-Config; ohne Datei oder Block leer, bei kaputter Datei oder Form wirft es (Fix-Zeile inklusive). */
 function ergaenzungAus(lies) {

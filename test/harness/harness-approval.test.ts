@@ -30,7 +30,7 @@
  * test-only-Familie (Präzedenz: `test/harness/agents-md-native.test.ts`).
  *
  * Eine Semantik, die der Produktion: Abdeckungsfragen („schützt die Quelle X?“) beantwortet derselbe Matcher
- * wie der Abschluss-Wächter (`trifftLeitplanke(pfad, leitplankenMuster())` aus `scripts/umsetzer-abschluss.mjs`),
+ * wie der Abschluss-Wächter (`trifftLeitplanke(pfad, leitplankenMuster())` (`trifftLeitplanke` aus `scripts/besitz-extraktion.mjs`, `leitplankenMuster` aus `scripts/umsetzer-abschluss.mjs`)),
  * nicht ein eigener Substring-Abgleich. `normalizeProtected` bleibt nur für den String-Vergleich CODEOWNERS ↔ Quelle.
  * Wird eine Abdeckungsfrage rot, ist die Ursache an der Quelle `.github/protected-paths.json` zu beheben, nicht am Test.
  *
@@ -46,11 +46,13 @@ import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as extraktionRaw from "../../scripts/besitz-extraktion.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { markerEnde, markerStart } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex as escapeRe } from "../../scripts/ticket-namen.mjs";
 
-const { trifftLeitplanke, leitplankenMuster } = abschlussRaw as unknown as {
+const { trifftLeitplanke, leitplankenMuster } = { ...abschlussRaw, ...extraktionRaw } as unknown as {
   trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
   leitplankenMuster: () => string[];
 };

@@ -9,7 +9,7 @@
  *   node scripts/ticket-lock.mjs uebernehmen <nr> --nonce <x> --nachfolger   # nur Nachfolger/Fortsetzung (#1593): wie `pruefe`, verbraucht zusätzlich Übergabe bzw. Stopp-Vermerk; ohne `--nachfolger` Exit 2 (der Hauptchat prüft nur mit `pruefe`)
  *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup
  *   node scripts/ticket-lock.mjs uebergeben <nr> --nonce <x>     # Phasen-Schnitt (#1592): letzte Aktion des Vorgängers vor `ERGEBNIS: uebergabe`
- *   node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>       # nach `TaskStop` des eigenen Umsetzers (#1693): das nächste `pruefe --nonce` meldet `uebernehmbar`
+ *   node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>       # nach `TaskStop` oder Absturz des eigenen Umsetzers (#1693): das nächste `pruefe --nonce` meldet `uebernehmbar`
  *   node scripts/ticket-lock.mjs lebenszeichen <nr> --nonce <x> [--schritt <text>]   # Plan-Schritt (#1699): frischt `zuletzt` im eigenen Lock auf
  *   node scripts/ticket-lock.mjs lebenszeichen --commit          # post-commit-Hook (#1699): frischt `zuletzt` des Locks zum Ticket-Branch auf, sonst stiller No-op
  *
@@ -210,10 +210,10 @@ function claim(deps, nr, wiederaufnahme = false) {
   return ergebnis(4, "", `✖ ticket-lock: #${nr} wurde beim Übernehmen des verwaisten Locks von einer anderen Session belegt. ${NICHT_VON_HAND}`);
 }
 
-/** Hinweis für `aktiv` nach einer schon verbrauchten Übergabe bzw. einem verbrauchten Stopp-Vermerk: Verbrauchszeit und Ausweg `gestoppt` (nach `TaskStop` des laufenden Umsetzers). Pur. */
+/** Hinweis für `aktiv` nach einer schon verbrauchten Übergabe bzw. einem verbrauchten Stopp-Vermerk: Verbrauchszeit und Ausweg `gestoppt` (nach `TaskStop` oder Absturz des eigenen Umsetzers). Pur. */
 export function verbrauchtHinweis(lock) {
   const zeit = lock?.uebergabe?.verbraucht ?? lock?.gestoppt?.verbraucht ?? null;
-  return zeit ? ` Die Übergabe bzw. der Stopp-Vermerk wurde schon ${zeit} verbraucht; ein weiterer Nachfolger braucht zuerst "gestoppt <nr> --nonce <x>" (nach TaskStop des laufenden Umsetzers).` : "";
+  return zeit ? ` Die Übergabe bzw. der Stopp-Vermerk wurde schon ${zeit} verbraucht; ein weiterer Nachfolger braucht zuerst "gestoppt <nr> --nonce <x>" (nach TaskStop oder Absturz des eigenen Umsetzers).` : "";
 }
 
 /** `verbrauche` (nur `uebernehmen`, #1593): verbraucht eine offene Übergabe bzw. einen Stopp-Vermerk; `pruefe` ist rein lesend. */
@@ -248,7 +248,7 @@ function uebergeben(deps, nr, nonce) {
   return ergebnis(0, "uebergeben");
 }
 
-/** Stopp-Vermerk (#1693): der Hauptchat hat den eigenen Umsetzer per `TaskStop` beendet. Das nächste `pruefe --nonce` meldet `uebernehmbar` statt `aktiv`; erst `uebernehmen` verbraucht den Vermerk (`pruefe` ändert nie etwas).
+/** Stopp-Vermerk (#1693): der Hauptchat hat den eigenen Umsetzer per `TaskStop` beendet oder belegt tot vorgefunden (Absturz). Das nächste `pruefe --nonce` meldet `uebernehmbar` statt `aktiv`; erst `uebernehmen` verbraucht den Vermerk (`pruefe` ändert nie etwas).
  *  Kein Phasen-Schnitt: das Feld `uebergabe` bleibt unberührt, "eine Übergabe je Lock" gilt weiter. Jeder TaskStop darf einen neuen Vermerk setzen; fremde Nonce oder fehlender Lock → Exit 4. */
 function gestoppt(deps, nr, nonce) {
   const lock = liesLock(deps, nr);

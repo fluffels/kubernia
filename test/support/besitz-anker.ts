@@ -18,9 +18,14 @@ export interface BesitzEintragKurz {
 
 const MANIFEST = fileURLToPath(new URL("../../.factory/besitz.json", import.meta.url));
 
+/** Das echte Besitz-Manifest `.factory/besitz.json` (gemeinsamer Lader der Kern-Tests; der Eintragstyp ist je Konsument enger fassbar). */
+export function ladeBesitzManifest<E extends BesitzEintragKurz = BesitzEintragKurz>(): { version: number; eintraege: E[] } {
+  return JSON.parse(readFileSync(MANIFEST, "utf8")) as { version: number; eintraege: E[] };
+}
+
 /** Eindeutige, sortierte Pfade der verteilten Besitz-Einträge, die `passt` erfüllen. Wirft („Leerlauf-Schutz"), wenn keiner passt. */
 export function besitzAnker(passt: (pfad: string) => boolean, eintraege?: BesitzEintragKurz[]): string[] {
-  const quelle = eintraege ?? (JSON.parse(readFileSync(MANIFEST, "utf8")) as { eintraege: BesitzEintragKurz[] }).eintraege;
+  const quelle = eintraege ?? ladeBesitzManifest().eintraege;
   const pfade = [...new Set(quelle.filter((e) => wirdVerteilt(e)).map((e) => e.pfad))].filter(passt).sort();
   if (pfade.length === 0) {
     throw new Error(`Leerlauf-Schutz: kein verteilter Besitz-Pfad passt zum Prädikat ${String(passt)}: der Scan hätte keinen Anker`);

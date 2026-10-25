@@ -13,6 +13,8 @@ import { NUR_FACTORY, RINGE } from "./besitz-lib.mjs";
 export const EXTRAKTION_PFAD = ".factory/extraktion.json";
 
 const TEST_DATEI = /^test\/.*\.test\.ts$/;
+/** Ist `pfad` eine Testdatei (unter `test/`, Endung `.test.ts`)? Die eine Regel für Liste und Fremd-Config-Probe. */
+export const istTestDatei = (pfad) => TEST_DATEI.test(pfad);
 const IN_TEST = /^test\//;
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
 /** Daten der Kern-Skripte unter `docs/`, die als Infrastruktur oder Anteil ziehen dürfen: die Diagramm-Vorlagen der Doku-Generatoren und das Inventar der Eigenbauten (ein Kern-Test liest es). */
@@ -46,6 +48,36 @@ export const MITZIEHEND = ART_NAMEN.filter((a) => a !== "projekt-test");
 /** Regex eines Pfadmusters: `*` steht für beliebig viele Zeichen außer `/`, alles andere wörtlich (jedes Zeichen außer Buchstaben, Ziffern und `_` wird maskiert). */
 export const musterRegex = (muster) =>
   new RegExp(`^${muster.split("*").map((t) => [...t].map((c) => (/\w/.test(c) ? c : `\\${c}`)).join("")).join("[^/]*")}$`);
+
+/** Alle String-Muster einer Schutzlisten-Datei (`.github/protected-paths.json`): Vereinigung aller String-Arrays; `null` bei kaputtem JSON. Die eine Auslegung der Datei. */
+export function schutzlistenMuster(text) {
+  try {
+    return Object.values(JSON.parse(text)).flatMap((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Trifft `pfad` (Repo-relativ, `/`) eines der Muster? CODEOWNERS-Teilmenge: führendes `/` verankert an der Wurzel;
+ * ohne `/` (außer am Ende) auf jeder Ebene; `/` am Ende = Verzeichnis-Präfix; `*` = beliebige Zeichen außer `/`;
+ * ein Muster, das ein Elternverzeichnis trifft, trifft alle Dateien darin.
+ */
+export function trifftLeitplanke(pfad, muster) {
+  const teile = String(pfad).split("/").filter(Boolean);
+  return muster.some((roh) => {
+    const verzeichnis = roh.endsWith("/");
+    const kern = roh.replace(/^\//, "").replace(/\/$/, "");
+    const segmente = kern.split("/").map(musterRegex);
+    const verankert = roh.startsWith("/") || kern.includes("/");
+    const starts = verankert ? [0] : teile.map((_, i) => i);
+    return starts.some((start) => {
+      const rest = teile.slice(start);
+      if (rest.length < segmente.length + (verzeichnis ? 1 : 0)) return false;
+      return segmente.every((re, i) => re.test(rest[i]));
+    });
+  });
+}
 
 // Vorkompilierte Muster je Liste (Schlüssel: das Listen-Objekt); ändert sich die Eintragsliste (anderes Array oder andere Länge), wird neu kompiliert.
 const KOMPILIERT = new WeakMap();

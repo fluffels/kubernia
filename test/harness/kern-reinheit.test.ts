@@ -1,4 +1,6 @@
 /* Kern-Reinheits-Wächter (#1610, ADR 0022 F1): zählt Projektliterale je Einheit des Besitz-Manifests
+ * @probe-echte-dateien scannt die echten Dateien nach den Literalen der aktiven Config; die Probe-Config trägt sie selbst
+ *
  * `.factory/besitz.json` gegen die Baseline `kern-literale-baseline.json`. Die Baseline darf nur sinken.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
@@ -15,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 import { escapeRe } from "../support/regex";
+import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -55,7 +58,6 @@ const { projektwertStellen } = rawBesitz as unknown as { projektwertStellen: (te
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
-const MANIFEST = ".factory/besitz.json";
 const BASELINE = "test/harness/kern-literale-baseline.json";
 const ABDECKUNG = "test/harness/kern-abdeckung.json";
 
@@ -430,6 +432,16 @@ describe("begriffeAus", () => {
     assert.deepEqual(zaehle("motoRows", b2), {});
     assert.deepEqual(zaehle("Motorx xmotor motor_x 1motor", b2), {});
     assert.deepEqual(zaehle("Motor motor-frei Motor.Scene (Motor) MOTOR", b2), { Motor: 5 });
+  });
+  test("projektliterale können keine Präfixe ausdrücken (Grenze): ein Wert mit Bindestrich oder Unterstrich am Ende trifft nie, Präfixe deckt Praefix/Env", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Bindestrich: "ZD-", Unterstrich: "ZD_" } });
+    assert.deepEqual(zaehle("ZD-12 ZD_X", b2), { Praefix: 1, Env: 1 });
+    assert.equal(b2.Bindestrich.test("ZD-12"), false);
+    assert.equal(b2.Unterstrich.test("ZD_X"), false);
+  });
+  test("projektliterale mit Bindestrich mitten im Wort (Unicode-Modus): zählt ganz, baut ohne SyntaxError", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Doppel: "foo-bar" } });
+    assert.deepEqual(zaehle("foo-bar foo-barx xfoo-bar foo_bar", b2), { Doppel: 1 });
   });
   test("projektliterale: ein Umlaut grenzt als Buchstabe, Nicht-Buchstaben davor und dahinter nicht", () => {
     const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Hof: "hof" } });
@@ -866,7 +878,7 @@ const projektGeneratorPfade = (): string[] => {
   const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
   return [...new Set(Object.values(cfg.generatoren ?? {}).map((g) => g.datei))];
 };
-const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
+const manifest: Manifest = ladeBesitzManifest<Eintrag>();
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
 const echteBegriffe = begriffeAus(projektConfig());
 
@@ -1089,7 +1101,7 @@ interface ExtraktionsListe {
 const { artVon, EXTRAKTION_PFAD } = rawExtraktion as unknown as { artVon: (liste: ExtraktionsListe, pfad: string) => string | null; EXTRAKTION_PFAD: string };
 
 /** Getrackte Dateien der Arten `kern-test`, `test-hilfe` und `fixture` laut Extraktionsliste. */
-export const kernTestPfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));
+export const gezaehltePfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));
 
 /** Ist-Zählung je Datei auf dem rohen Text (wie `erlaubt`); Dateien ohne Treffer fehlen. */
 export function kernTestIst(pfade: string[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): Baseline {
@@ -1117,15 +1129,15 @@ describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
   const liste = JSON.parse(readFileSync(WURZEL + EXTRAKTION_PFAD, "utf8")) as ExtraktionsListe;
   const gitIn = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const getrackt = gitIn(["ls-files"]).split("\n").filter((p) => p !== "" && existsSync(WURZEL + p));
-  const pfade = kernTestPfade(liste, getrackt);
+  const pfade = gezaehltePfade(liste, getrackt);
   const config = projektConfig();
   const sprich = (verstoesse: string[]): string[] => verstoesse.map((v) => v.split(" (Kern-Test:")[0]);
 
-  test("kernTestPfade: Kern-Test, Test-Hilfe und Fixture zählen, projekt-test und nicht Eingeordnetes nicht", () => {
+  test("gezaehltePfade: Kern-Test, Test-Hilfe und Fixture zählen, projekt-test und nicht Eingeordnetes nicht", () => {
     const l: ExtraktionsListe = {
       eintraege: ["kern-test", "projekt-test", "test-hilfe", "fixture", "infrastruktur"].map((art) => ({ muster: `t/${art}.ts`, art })),
     };
-    assert.deepEqual(kernTestPfade(l, ["t/kern-test.ts", "t/projekt-test.ts", "t/test-hilfe.ts", "t/fixture.ts", "t/infrastruktur.ts", "t/frei.ts"]), ["t/kern-test.ts", "t/test-hilfe.ts", "t/fixture.ts"]);
+    assert.deepEqual(gezaehltePfade(l, ["t/kern-test.ts", "t/projekt-test.ts", "t/test-hilfe.ts", "t/fixture.ts", "t/infrastruktur.ts", "t/frei.ts"]), ["t/kern-test.ts", "t/test-hilfe.ts", "t/fixture.ts"]);
   });
   test("im echten Repo trägt keine Datei der drei Arten ein Projektliteral, es gibt keine Baseline", () => {
     assert.ok(pfade.length > 100, "die Kern-Tests werden gefunden (sonst wäre der Wächter still aus)");
