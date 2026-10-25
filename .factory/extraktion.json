@@ -57,6 +57,7 @@
     {"muster":"test/harness/repo-texte.ts","art":"test-hilfe","grund":"Text-Leser der Kern-Wächter"},
     {"muster":"test/fixtures/mess-golden.json","art":"fixture","grund":"Golden-Ausgaben des Kern-Tests mess-ausgaben-golden"},
     {"muster":"test/fixtures/projekt-fremd.json","art":"fixture","grund":"Fremd-Config (ZZ-) der Kern-Tests"},
+    {"muster":"test/fixtures/projekt-probe.json","art":"fixture","grund":"Eigene Config (QX-) der Fremd-Config-Probe, kollidiert nie mit der Fremd-Config der Tests"},
     {"muster":"test/abnahme*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/any-suppressions.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/board*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},

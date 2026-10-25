@@ -415,13 +415,24 @@ export function boardPfad(board) {
   return `${board.besitzerTyp === "org" ? "orgs" : "users"}/${board.besitzer}/projectsV2/${board.nummer}`;
 }
 
+const wurzelSchluessel = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+
+/** Pur (bis auf `ROOT`): der Pfad aus `FACTORY_PROJEKT_CONFIG`, wenn der Riegel passt (`VITEST` gesetzt, `FACTORY_PROJEKT_WURZEL` = Wurzel dieses Laders, normalisiert, unter Windows ohne Groß-/Kleinschreibung), sonst `undefined`. */
+function probeConfigAusUmgebung(env) {
+  const wert = umgebungsWert(env, "FACTORY_PROJEKT_CONFIG");
+  if (!wert || !env.VITEST) return undefined;
+  const wurzel = umgebungsWert(env, "FACTORY_PROJEKT_WURZEL");
+  return wurzel && wurzelSchluessel(wurzel) === wurzelSchluessel(ROOT) ? wert : undefined;
+}
+
 /**
  * Liest und prüft die Config; wirft mit Pfad, allen Fehlern und einer „Fix:“-Zeile. `pruefen: false` liest nur und parst (ohne Schema-Prüfung):
  * für Werkzeuge, die genau einen Schlüssel brauchen und ihn selbst prüfen (`worktreeNamenOderGrund`).
  * Pfad-Vorrang: explizites `pfad` (`--config`), dann `FACTORY_PROJEKT_CONFIG` (Fremd-Config-Probe, `scripts/fremd-config-probe.mjs`), sonst `PROJEKT_CONFIG`; leer zählt als nicht gesetzt. Ein explizites `rootDir` (anderes Repo, etwa `--wurzel`) ignoriert die Variable.
+ * Riegel (`probeConfigAusUmgebung`): die Variable gilt nur unter Vitest (`VITEST` gesetzt) und nur, wenn `FACTORY_PROJEKT_WURZEL` die Wurzel dieses Laders nennt; so erbt sie kein Prozess außerhalb der Probe und kein Temp-Repo.
  */
 export function ladeProjektConfig({ rootDir, pfad, pruefen = true, env = process.env } = {}) {
-  const gewaehlt = pfad || (rootDir === undefined ? umgebungsWert(env, "FACTORY_PROJEKT_CONFIG") : undefined) || PROJEKT_CONFIG;
+  const gewaehlt = pfad || (rootDir === undefined ? probeConfigAusUmgebung(env) : undefined) || PROJEKT_CONFIG;
   rootDir ??= ROOT;
   const abs = isAbsolute(gewaehlt) ? gewaehlt : resolve(rootDir, gewaehlt);
   let roh;

@@ -13,6 +13,8 @@ import { NUR_FACTORY, RINGE } from "./besitz-lib.mjs";
 export const EXTRAKTION_PFAD = ".factory/extraktion.json";
 
 const TEST_DATEI = /^test\/.*\.test\.ts$/;
+/** Ist `pfad` eine Testdatei (unter `test/`, Endung `.test.ts`)? Die eine Regel für Liste und Fremd-Config-Probe. */
+export const istTestDatei = (pfad) => TEST_DATEI.test(pfad);
 const IN_TEST = /^test\//;
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
 /** Daten der Kern-Skripte unter `docs/`, die als Infrastruktur oder Anteil ziehen dürfen: die Diagramm-Vorlagen der Doku-Generatoren und das Inventar der Eigenbauten (ein Kern-Test liest es). */

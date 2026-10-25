@@ -1,4 +1,6 @@
 /* Fremdtext-Wächter (#1433) – Text Dritter bleibt Daten, die Anweisungen verlassen den Weg nicht still.
+ * @probe-echte-dateien prüft die echte Brain-Seite gegen die Vertrauensliste des Projekts
+ *
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *

@@ -299,6 +299,10 @@ describe("ladeProjektConfig", () => {
       });
       assert.equal(r.stdout.trim(), "acme/kind", r.stderr);
     });
+    test.skipIf(process.platform !== "win32")("Riegel unter Windows: die Wurzel gilt ohne Groß-/Kleinschreibung", () => {
+      const fremd = schreibe(tmp(), "fremd.json", "acme/fremd");
+      assert.equal(pc.ladeProjektConfig({ env: mitRiegel(fremd, { FACTORY_PROJEKT_WURZEL: WURZEL.toUpperCase() }) }).repo, "acme/fremd");
+    });
     test("ein expliziter pfad geht vor der Umgebung", () => {
       const d = tmp();
       const a = schreibe(d, "a.json", "acme/a");

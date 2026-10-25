@@ -1,4 +1,6 @@
 /* Kern-Reinheits-Wächter (#1610, ADR 0022 F1): zählt Projektliterale je Einheit des Besitz-Manifests
+ * @probe-echte-dateien scannt die echten Dateien nach den Literalen der aktiven Config; die Probe-Config trägt sie selbst
+ *
  * `.factory/besitz.json` gegen die Baseline `kern-literale-baseline.json`. Die Baseline darf nur sinken.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
@@ -1089,7 +1091,7 @@ interface ExtraktionsListe {
 const { artVon, EXTRAKTION_PFAD } = rawExtraktion as unknown as { artVon: (liste: ExtraktionsListe, pfad: string) => string | null; EXTRAKTION_PFAD: string };
 
 /** Getrackte Dateien der Arten `kern-test`, `test-hilfe` und `fixture` laut Extraktionsliste. */
-export const kernTestPfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));
+export const gezaehltePfade = (liste: ExtraktionsListe, getrackt: string[]): string[] => getrackt.filter((p) => GEZAEHLTE_ARTEN.includes(artVon(liste, p) ?? ""));
 
 /** Ist-Zählung je Datei auf dem rohen Text (wie `erlaubt`); Dateien ohne Treffer fehlen. */
 export function kernTestIst(pfade: string[], lies: (pfad: string) => string | null, begriffe: Record<string, RegExp>): Baseline {
@@ -1117,15 +1119,15 @@ describe("Kern-Tests ohne Projektliterale, Null-Regel (#1903)", () => {
   const liste = JSON.parse(readFileSync(WURZEL + EXTRAKTION_PFAD, "utf8")) as ExtraktionsListe;
   const gitIn = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const getrackt = gitIn(["ls-files"]).split("\n").filter((p) => p !== "" && existsSync(WURZEL + p));
-  const pfade = kernTestPfade(liste, getrackt);
+  const pfade = gezaehltePfade(liste, getrackt);
   const config = projektConfig();
   const sprich = (verstoesse: string[]): string[] => verstoesse.map((v) => v.split(" (Kern-Test:")[0]);
 
-  test("kernTestPfade: Kern-Test, Test-Hilfe und Fixture zählen, projekt-test und nicht Eingeordnetes nicht", () => {
+  test("gezaehltePfade: Kern-Test, Test-Hilfe und Fixture zählen, projekt-test und nicht Eingeordnetes nicht", () => {
     const l: ExtraktionsListe = {
       eintraege: ["kern-test", "projekt-test", "test-hilfe", "fixture", "infrastruktur"].map((art) => ({ muster: `t/${art}.ts`, art })),
     };
-    assert.deepEqual(kernTestPfade(l, ["t/kern-test.ts", "t/projekt-test.ts", "t/test-hilfe.ts", "t/fixture.ts", "t/infrastruktur.ts", "t/frei.ts"]), ["t/kern-test.ts", "t/test-hilfe.ts", "t/fixture.ts"]);
+    assert.deepEqual(gezaehltePfade(l, ["t/kern-test.ts", "t/projekt-test.ts", "t/test-hilfe.ts", "t/fixture.ts", "t/infrastruktur.ts", "t/frei.ts"]), ["t/kern-test.ts", "t/test-hilfe.ts", "t/fixture.ts"]);
   });
   test("im echten Repo trägt keine Datei der drei Arten ein Projektliteral, es gibt keine Baseline", () => {
     assert.ok(pfade.length > 100, "die Kern-Tests werden gefunden (sonst wäre der Wächter still aus)");

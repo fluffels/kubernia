@@ -107,6 +107,16 @@ describe("Extraktionsliste: Muster und Struktur (#1875)", () => {
     assert.equal(artVon(GUT, "test/x.test.ts"), null);
     assert.equal(artVon(liste(ringEintrag("oberflaeche")), "oberflaeche"), null);
   });
+  test("istTestDatei: genau die Pfade unter test/ mit Endung .test.ts, nicht Hilfen, Fixtures oder fremde Ordner", () => {
+    const { istTestDatei } = rawExtraktion as unknown as { istTestDatei: (p: string) => boolean };
+    assert.equal(istTestDatei("test/a.test.ts"), true);
+    assert.equal(istTestDatei("test/harness/b.test.ts"), true);
+    assert.equal(istTestDatei("test/support/h.ts"), false);
+    assert.equal(istTestDatei("test/fixtures/a.json"), false);
+    assert.equal(istTestDatei("src/a.test.ts"), false);
+    assert.equal(istTestDatei("xtest/a.test.ts"), false);
+    assert.equal(istTestDatei("test/a.test.tsx"), false);
+  });
   test("die geschlossene Art-Liste: nur projekt-test zieht nicht mit", () => {
     assert.deepEqual(Object.keys(extraktionsArten("src")).sort(), ["factory-seite", "fixture", "infrastruktur", "infrastruktur-anteil", "kern-test", "nur-factory", "produkt-wurzel", "projekt-test", "test-hilfe"]);
     assert.ok(!MITZIEHEND.includes("projekt-test") && MITZIEHEND.includes("kern-test") && MITZIEHEND.includes("nur-factory"));

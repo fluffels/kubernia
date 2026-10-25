@@ -1,4 +1,6 @@
 /* Lockfile-Integritäts-Wächter (#593, Governance) — fängt Lockfile-Drift lokal.
+ * @probe-echte-dateien liest AGENTS.md auf den Lockfile-Override des Projekts
+ *
  *
  * `package.json` nutzt `^`-Ranges; die CI ist über `npm ci` reproduzierbar, aber
  * ohne dieses Gate fällt ein Drift zwischen package.json und package-lock.json

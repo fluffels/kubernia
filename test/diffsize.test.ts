@@ -1,4 +1,6 @@
 /* Diff-Größenbudget-Wächter (#533) — Frühwarnung gegen zu breite Änderungen.
+ * @probe-echte-dateien liest AGENTS.md und weitere echte Doku auf den Override des Projekts
+ *
  *
  * Ein Ticket, das eigentlich in session-große Kinder gehört (AGENTS.md), kann als
  * ein Riesen-Commit durchrutschen und wird unreviewbar. Dieser Wächter misst den

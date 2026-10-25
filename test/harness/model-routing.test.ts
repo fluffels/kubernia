@@ -1,4 +1,6 @@
 /* Modell-Routing-Wächter (#1035) – „Planung stark, Umsetzung schnell" darf nicht
+ * @probe-echte-dateien liest die echten Agenten- und Skill-Dateien des Projekts
+ *
  * ins Leere greifen, und keine Doku darf das Gegenteil behaupten.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).

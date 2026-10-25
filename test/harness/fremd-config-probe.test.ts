@@ -12,10 +12,17 @@ import * as raw from "../../scripts/fremd-config-probe.mjs";
 import { FREMD, projektConfig } from "../support/fremd-config";
 
 type Lauf = { befehl: string; args: string[]; env: Record<string, string | undefined> };
-type Ergebnis = { exit: number; konfigPfad: string; ergaenzt: string[]; tests: string[] };
+type Bewertung = { exit: number; erwartet: string[]; unerwartet: string[]; ueberfluessig: string[]; meldungen: string[] };
+type Ergebnis = Bewertung & { konfigPfad: string; ergaenzt: string[]; tests: string[] };
 interface Probe {
   PROBE_ENV: string;
+  PROBE_WURZEL_ENV: string;
+  PROBE_STANDARD: string;
+  PROBE_MARKER: string;
   PROBE_TEST: string;
+  istMarkiert: (text: string | null) => boolean;
+  rotePfade: (berichtText: string, wurzel: string) => string[] | null;
+  bewerte: (o: { status: number | null | undefined; rot: string[] | null; markiert: string[] }) => Bewertung;
   baueProbeConfig: (fremd: Record<string, unknown>, echt: Record<string, unknown>) => { config: Record<string, unknown>; ergaenzt: string[] };
   kernTestPfade: (liste: unknown, getrackt: string[], ohne?: string[]) => string[];
   probe: (o: {
@@ -84,7 +91,101 @@ describe("kernTestPfade", () => {
   });
 });
 
+describe("istMarkiert", () => {
+  test("Marker mit Grund in den ersten Zeilen zählt", () => {
+    expect(p.istMarkiert(`/* @harness-waechter\n * @probe-echte-dateien liest echte Projektdateien\n */\nimport x`)).toBe(true);
+    expect(p.istMarkiert("// @probe-echte-dateien Grund\r\nimport x")).toBe(true);
+  });
+  test("Negativ: ohne Grund, ohne Marker, nicht lesbar oder erst nach dem Kopf zählt nicht", () => {
+    expect(p.istMarkiert("// @probe-echte-dateien\nimport x")).toBe(false);
+    expect(p.istMarkiert("// @probe-echte-dateien   \nimport x")).toBe(false);
+    expect(p.istMarkiert("import x")).toBe(false);
+    expect(p.istMarkiert(null)).toBe(false);
+    expect(p.istMarkiert(`${"\n".repeat(60)}// @probe-echte-dateien Grund`)).toBe(false);
+  });
+});
+
+describe("rotePfade", () => {
+  const bericht = (ergebnisse: unknown): string => JSON.stringify({ testResults: ergebnisse });
+  test("nur Dateien mit Status failed, relativ zur Wurzel mit Schrägstrich, sortiert", () => {
+    const w = join(tmpdir(), "w");
+    const t = bericht([
+      { name: join(w, "test", "b.test.ts"), status: "failed" },
+      { name: join(w, "test", "harness", "a.test.ts"), status: "failed" },
+      { name: join(w, "test", "c.test.ts"), status: "passed" },
+    ]);
+    expect(p.rotePfade(t, w)).toEqual(["test/b.test.ts", "test/harness/a.test.ts"]);
+  });
+  test("Negativ: kein JSON, falsche Form oder Eintrag ohne Namen ergibt null bzw. wird übergangen", () => {
+    expect(p.rotePfade("kein json", "/w")).toBeNull();
+    expect(p.rotePfade(JSON.stringify({ x: 1 }), "/w")).toBeNull();
+    expect(p.rotePfade("null", "/w")).toBeNull();
+    expect(p.rotePfade(bericht([{ status: "failed" }, null]), "/w")).toEqual([]);
+  });
+});
+
+describe("bewerte", () => {
+  test("alles grün, nichts markiert: Exit 0, keine Meldung", () => {
+    expect(p.bewerte({ status: 0, rot: null, markiert: [] })).toEqual({ exit: 0, erwartet: [], unerwartet: [], ueberfluessig: [], meldungen: [] });
+  });
+  test("nur markierte Dateien rot: Exit 0 mit Meldung „erwartet rot“", () => {
+    const r = p.bewerte({ status: 1, rot: ["test/a.test.ts"], markiert: ["test/a.test.ts", "test/b.test.ts"] });
+    expect(r.erwartet).toEqual(["test/a.test.ts"]);
+    expect(r.ueberfluessig).toEqual(["test/b.test.ts"]);
+    expect(r.exit).toBe(1);
+    const nur = p.bewerte({ status: 1, rot: ["test/a.test.ts"], markiert: ["test/a.test.ts"] });
+    expect(nur.exit).toBe(0);
+    expect(nur.meldungen.join("\n")).toMatch(/erwartet rot/);
+  });
+  test("Negativ: eine unmarkierte rote Datei ist Exit 1, auch neben markierten", () => {
+    const r = p.bewerte({ status: 1, rot: ["test/a.test.ts", "test/x.test.ts"], markiert: ["test/a.test.ts"] });
+    expect(r.exit).toBe(1);
+    expect(r.unerwartet).toEqual(["test/x.test.ts"]);
+    expect(r.meldungen.join("\n")).toMatch(/ohne Marker[\s\S]*test\/x\.test\.ts/);
+  });
+  test("Ratsche: eine markierte Datei, die grün ist, meldet „Marker entfernen“ und ist Exit 1", () => {
+    const r = p.bewerte({ status: 0, rot: null, markiert: ["test/a.test.ts"] });
+    expect(r.exit).toBe(1);
+    expect(r.meldungen.join("\n")).toMatch(/@probe-echte-dateien entfernen[\s\S]*test\/a\.test\.ts/);
+  });
+  test("Negativ fail-closed: kein Status, rot ohne lesbaren Bericht oder ohne rote Datei ist Exit 1", () => {
+    expect(p.bewerte({ status: null, rot: [], markiert: [] }).exit).toBe(1);
+    expect(p.bewerte({ status: undefined, rot: [], markiert: [] }).exit).toBe(1);
+    expect(p.bewerte({ status: 1, rot: null, markiert: ["test/a.test.ts"] })).toMatchObject({ exit: 1, meldungen: [expect.stringMatching(/Bericht/)] });
+    expect(p.bewerte({ status: 1, rot: [], markiert: ["test/a.test.ts"] })).toMatchObject({ exit: 1, meldungen: [expect.stringMatching(/keine rote/)] });
+  });
+});
+
 describe("probe", () => {
+  test("Kindlauf bekommt Wurzel-Riegel und JSON-Bericht; markierte rote Datei ist Exit 0, ungemarkte rot ist Exit 1", () => {
+    const wurzel = tmp();
+    mkdirSync(join(wurzel, ".factory"));
+    mkdirSync(join(wurzel, "test"));
+    writeFileSync(join(wurzel, ".factory/projekt.json"), JSON.stringify({ repo: "echt/echt" }));
+    writeFileSync(join(wurzel, ".factory/extraktion.json"), JSON.stringify(LISTE));
+    writeFileSync(join(wurzel, "fremd.json"), JSON.stringify({ repo: "zz/z" }));
+    writeFileSync(join(wurzel, "test/a.test.ts"), "// @probe-echte-dateien liest echte Dateien\n");
+    writeFileSync(join(wurzel, "test/b1.test.ts"), "// ohne Marker\n");
+    const rotBei = (rot: string[]) => (lauf: Lauf): { status: number } => {
+      const flag = lauf.args.find((a) => a.startsWith("--outputFile.json=")) ?? "";
+      writeFileSync(flag.slice("--outputFile.json=".length), JSON.stringify({ testResults: rot.map((r) => ({ name: join(wurzel, r), status: "failed" })) }));
+      expect(lauf.args).toEqual(expect.arrayContaining(["--reporter=default", "--reporter=json"]));
+      expect(lauf.env[p.PROBE_WURZEL_ENV]).toBe(wurzel);
+      return { status: 1 };
+    };
+    const getrackt = ["test/a.test.ts", "test/b1.test.ts"];
+    const erwartet = p.probe({ wurzel, fremdPfad: "fremd.json", getrackt, tempOrdner: tmp, run: rotBei(["test/a.test.ts"]) });
+    expect(erwartet.exit).toBe(0);
+    expect(erwartet.erwartet).toEqual(["test/a.test.ts"]);
+    expect(p.probe({ wurzel, fremdPfad: "fremd.json", getrackt, tempOrdner: tmp, run: rotBei(["test/a.test.ts", "test/b1.test.ts"]) }).exit).toBe(1);
+    expect(p.probe({ wurzel, fremdPfad: "fremd.json", getrackt, tempOrdner: tmp, run: () => ({ status: 0 }) }).ueberfluessig).toEqual(["test/a.test.ts"]);
+  });
+  test("der Standard der Probe ist die eigene Fixture, die es gibt und deren Werte von der Fremd-Config abweichen", () => {
+    const eigene = JSON.parse(readFileSync(join(__dirname, "../..", p.PROBE_STANDARD), "utf8")) as { repo: string };
+    expect(eigene.repo).not.toBe(FREMD.repo);
+    expect(JSON.stringify(eigene)).not.toMatch(/zz/i);
+  });
+
   const baue = (): { wurzel: string; fremdPfad: string; projektText: string } => {
     const wurzel = tmp();
     mkdirSync(join(wurzel, ".factory"));
