@@ -89,6 +89,17 @@ const teileJePfad = (eintraege) => {
   return teile;
 };
 
+/** Die Config der Quelle: `struktur.quelle` da und die ganze Config schemagültig (Befunde in `befunde`). */
+function quellConfigGueltig(kubConfig, befunde) {
+  if (typeof kubConfig.struktur?.quelle !== "string" || kubConfig.struktur.quelle === "") {
+    befunde.push(`${PROJEKT_CONFIG}: struktur.quelle fehlt`);
+    return false;
+  }
+  const fehler = pruefeProjektConfig(kubConfig);
+  befunde.push(...fehler.map((m) => `${PROJEKT_CONFIG} der Quelle: ${m}`));
+  return fehler.length === 0;
+}
+
 /** Vorprüfung und Eingaben: Manifest, Liste, Configs, Vorlagen (Befunde stehen in `befunde`, bei Befund ist `null` zurückgegeben). */
 function vorpruefung(leser, befunde) {
   const lies = (p) => leser.lies(p);
@@ -100,15 +111,7 @@ function vorpruefung(leser, befunde) {
     befunde.push("Manifest oder Extraktionsliste ohne Liste 'eintraege'");
     return null;
   }
-  if (typeof kubConfig.struktur?.quelle !== "string" || kubConfig.struktur.quelle === "") {
-    befunde.push(`${PROJEKT_CONFIG}: struktur.quelle fehlt`);
-    return null;
-  }
-  const quellFehler = pruefeProjektConfig(kubConfig);
-  if (quellFehler.length > 0) {
-    befunde.push(...quellFehler.map((m) => `${PROJEKT_CONFIG} der Quelle: ${m}`));
-    return null;
-  }
+  if (!quellConfigGueltig(kubConfig, befunde)) return null;
   const teile = teileJePfad(manifest.eintraege);
   const anteil = leser.pfade.filter((p) => artVon(liste, p) === "infrastruktur-anteil" && !BERECHNET.includes(p));
   const vorlagenZiele = [...new Set([...teile.keys(), PROJEKT_CONFIG, ...anteil])];
