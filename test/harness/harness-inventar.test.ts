@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ladeBesitzManifest } from "../support/besitz-anker";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as inventar from "../../scripts/docs-gen/harness-inventar.mjs";
@@ -254,7 +255,7 @@ describe("harness-inventar.md: Einordnung der Skripte (#1693)", () => {
     einordnungsProbleme({ zeilen, besitz: [{ pfad: "scripts/a.mjs" }], abdeckung: { "scripts/b.mjs": { art: "modul" } }, dateien, ...over });
 
   test("die echten Quellen sind lückenlos eingeordnet", () => {
-    const besitz = (JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string }[] }).eintraege;
+    const besitz = ladeBesitzManifest().eintraege;
     const abdeckung = JSON.parse(readFileSync(join(WURZEL, "test/harness/kern-abdeckung.json"), "utf8")) as Abdeckung;
     const dateien = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8" }).split(/\r?\n/).filter((d) => d !== "");
     expect(einordnungsProbleme({ zeilen: inventarZeilen(seite()), besitz, abdeckung, dateien })).toEqual([]);

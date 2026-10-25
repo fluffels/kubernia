@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -36,7 +37,6 @@ interface BesitzLib {
 const { einheitText, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
-const MANIFEST = ".factory/besitz.json";
 const BASELINE = "test/harness/kern-links-baseline.json";
 
 const lesen = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? readFileSync(WURZEL + pfad, "utf8") : null);
@@ -90,7 +90,7 @@ export function vergleiche(ist: string[], baseline: string[]): string[] {
   return out;
 }
 
-const manifest = JSON.parse(lesen(MANIFEST) ?? "{}") as { eintraege: Eintrag[] };
+const manifest = ladeBesitzManifest<Eintrag>();
 const baselinePaare = (JSON.parse(lesen(BASELINE) ?? "{}") as { paare?: string[] }).paare ?? [];
 
 describe("Kern-Links (#1860)", () => {

@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 import { escapeRe } from "../support/regex";
+import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -57,7 +58,6 @@ const { projektwertStellen } = rawBesitz as unknown as { projektwertStellen: (te
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
-const MANIFEST = ".factory/besitz.json";
 const BASELINE = "test/harness/kern-literale-baseline.json";
 const ABDECKUNG = "test/harness/kern-abdeckung.json";
 
@@ -868,7 +868,7 @@ const projektGeneratorPfade = (): string[] => {
   const cfg = JSON.parse(lesenWurzel("scripts/docs-gen/config.json") ?? "{}") as { generatoren?: Record<string, { datei: string }> };
   return [...new Set(Object.values(cfg.generatoren ?? {}).map((g) => g.datei))];
 };
-const manifest = JSON.parse(readFileSync(WURZEL + MANIFEST, "utf8")) as Manifest;
+const manifest: Manifest = ladeBesitzManifest<Eintrag>();
 const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Baseline;
 const echteBegriffe = begriffeAus(projektConfig());
 
