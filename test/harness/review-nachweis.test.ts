@@ -200,11 +200,11 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
   const unpraezise = (text: string) => text.split(/\r?\n/).filter((z) => z.includes("Cap 2") && !z.includes("Fix-Runde"));
 
   test("jede getrackte Agenten-/Harness-/Doku-Zeile mit „Cap 2“ nennt Fix-Runden", () => {
-    const dateien = execFileSync("git", ["ls-files", ".claude", "AGENTS.md", "docs"], { encoding: "utf8", cwd: fileURLToPath(new URL("../../", import.meta.url)) })
+    const dateien = execFileSync("git", ["ls-files", ".claude", ".agents", "AGENTS.md", "docs"], { encoding: "utf8", cwd: fileURLToPath(new URL("../../", import.meta.url)) })
       .split(/\r?\n/)
       .filter((d) => /\.(md|js)$/.test(d) && !d.startsWith("docs/adr/"));
     // Leerlauf-Schutz: jede verteilte Besitz-Datei des Scans liegt in der Liste (statt einer Größenschwelle des Projekts).
-    const anker = besitzAnker((p) => /^(\.claude\/|AGENTS\.md$|docs\/)/.test(p) && /\.(md|js)$/.test(p) && !p.startsWith("docs/adr/"));
+    const anker = besitzAnker((p) => /^(\.claude\/|\.agents\/|AGENTS\.md$|docs\/)/.test(p) && /\.(md|js)$/.test(p) && !p.startsWith("docs/adr/"));
     for (const a of anker) assert.ok(dateien.includes(a), `Leerlauf-Schutz: ${a} liegt im Scan`);
     const treffer = dateien.flatMap((d) => unpraezise(read(d)).map((z) => `${d}: ${z.trim().slice(0, 80)}`));
     assert.deepEqual(treffer, []);

@@ -601,6 +601,7 @@ describe("uebergeben (#1592, Phasen-Schnitt)", () => {
     assert.equal(zweites.out, "aktiv\n");
     assert.ok(zweites.err.includes(new Date(JETZT).toISOString()), "Verbrauchszeit steht im Text");
     assert.ok(zweites.err.includes("gestoppt"), "Ausweg gestoppt steht im Text");
+    assert.ok(zweites.err.includes("nach TaskStop oder Absturz des eigenen Umsetzers"), "Anlass nennt auch den Absturz: " + zweites.err);
   });
 
   test("eine Übergabe je Lock: ein zweites uebergeben scheitert (offen wie verbraucht)", () => {
@@ -702,6 +703,7 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
     assert.equal(danach.code, 4);
     assert.ok(danach.err.includes(new Date(JETZT).toISOString()), "Verbrauchszeit des Stopp-Vermerks steht im Text");
     assert.ok(danach.err.includes("gestoppt"), "Ausweg steht im Text");
+    assert.ok(danach.err.includes("nach TaskStop oder Absturz des eigenen Umsetzers"), "Anlass nennt auch den Absturz: " + danach.err);
   });
 
   test("uebernehmen akzeptiert --nonce=<x> samt --nachfolger (#1814)", () => {

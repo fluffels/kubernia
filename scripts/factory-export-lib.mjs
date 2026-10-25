@@ -11,11 +11,10 @@ import { builtinModules } from "node:module";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { posix } from "node:path";
 import { begriffeAus } from "./besitz-lib.mjs";
-import { importeAus, relativeImporte, zielDatei } from "./besitz-extraktion.mjs";
+import { importeAus, relativeImporte, schutzlistenMuster, trifftLeitplanke, zielDatei } from "./besitz-extraktion.mjs";
 import { isCheckable } from "./check-basis.mjs";
 import { collectHeadingSlugs, linkStellen, linkZiel } from "./docs-gen/markdown.mjs";
 import { pfadBefunde } from "./internalrefs-lib.mjs";
-import { trifftLeitplanke } from "./umsetzer-abschluss.mjs";
 
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
 const BUILTINS = new Set(builtinModules);
@@ -303,7 +302,7 @@ export const vorlagenZiel = (pfad) => (pfad.startsWith(`${VORLAGEN_ORDNER}/`) &&
 
 /**
  * Schutzliste im Export (#1929): `.github/protected-paths.json` und `.github/CODEOWNERS` kommen als Vorlagen; das Werkzeug prüft sie gegen die Quelle,
- * damit keine zweite Auslegung entsteht (der Treffer-Abgleich ist `trifftLeitplanke` aus `umsetzer-abschluss.mjs`).
+ * damit keine zweite Auslegung entsteht (der Treffer-Abgleich ist `trifftLeitplanke` aus `besitz-extraktion.mjs`).
  * Befunde: (a) ein Muster der Vorlage trifft keinen Exportpfad und steht nicht in `SCHUTZ_OHNE_TREFFER`; (b) ein Muster der Quelle trifft einen
  * Exportpfad, fehlt aber in der Vorlage (Drift-Schutz: ein neuer Schutz in kubernia wandert in die Vorlage); (c) die Muster der CODEOWNERS-Vorlage sind nicht
  * dieselbe Menge wie die der protected-paths-Vorlage (`harness-approval.test.ts` verlangt das im Export genauso).
@@ -311,20 +310,11 @@ export const vorlagenZiel = (pfad) => (pfad.startsWith(`${VORLAGEN_ORDNER}/`) &&
  */
 export const SCHUTZ_OHNE_TREFFER = ["/CLAUDE.md", "/CLAUDE.local.md", "/scripts/*-mcp.mjs"];
 
-/** Alle String-Muster einer protected-paths-Datei (`null` bei kaputtem JSON). */
-function schutzMuster(text) {
-  try {
-    return Object.values(JSON.parse(text)).flatMap((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []));
-  } catch {
-    return null;
-  }
-}
-
 /** Eingabe `{ vorlage, codeowners, quelle, pfade }` (Texte der beiden Vorlagen und der Quell-Liste, Pfade des Exports); Rückgabe: Liste der Befunde. */
 export function pruefeSchutzliste({ vorlage, codeowners, quelle, pfade }) {
   const befunde = [];
-  const vorlagenMuster = schutzMuster(vorlage);
-  const quellMuster = schutzMuster(quelle);
+  const vorlagenMuster = schutzlistenMuster(vorlage);
+  const quellMuster = schutzlistenMuster(quelle);
   if (vorlagenMuster === null) befunde.push("protected-paths.json (Vorlage): kein gültiges JSON");
   if (quellMuster === null) befunde.push("protected-paths.json (Quelle): kein gültiges JSON");
   if (vorlagenMuster === null || quellMuster === null) return befunde;

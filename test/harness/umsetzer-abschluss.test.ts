@@ -21,6 +21,8 @@ import { liesMitProjektwerten } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as extraktionRaw from "../../scripts/besitz-extraktion.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as festRaw from "../../scripts/check-festgefahren.mjs";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -744,7 +746,7 @@ describe("Permission-Blockaden: kein rm -rf in den Agent-Definitionen mit Scratc
 describe("Leitplanken-Audit (#1067)", () => {
   type Kommentare = { author?: { login: string }; comments?: { author?: { login: string }; body: string }[] };
   type AuditDeps = { prStatus?: (nr: string) => Status; prDateien?: (nr: string) => string[]; prKommentare?: (nr: string) => Kommentare };
-  const audit = abschlussRaw as unknown as {
+  const audit = { ...abschlussRaw, ...extraktionRaw } as unknown as {
     trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
     leitplankenMuster: () => string[];
     AUDIT_KOPF: string;

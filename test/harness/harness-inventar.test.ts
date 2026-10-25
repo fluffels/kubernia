@@ -7,7 +7,7 @@
  * Marker, (2) jeder Baustein der generierten README-Tabelle (ADR 0017) steht in einer Inventarzeile,
  * (3) Urteil und Spielunabhängig nutzen nur das feste Vokabular. Negativfälle gegen die pure Hilfsfunktionen.
  * Bewusste Grenzen: Der Generator benennt Hooks nur je Event, ein neuer Guard unter einem bestehenden Event verlangt keine neue Zeile;
- * eine Erwähnung des Namens in Backticks in der ersten Zelle genügt als Zeile; ein Marker in einem Codeblock zählt;
+ * der erste Backtick-Name der ersten Zelle ist der Name der Zeile; ein Marker in einem Codeblock zählt;
  * die Abschnitte B und C (Skripte, Regeln) sind Handlisten ohne Generator-Abgleich.
  * Einordnung (#1693): jede Datei unter scripts/ aus Besitz-Manifest und Kern-Abdeckung (Art `modul`) steht in einer Zeile, jeder
  * genannte Name ist auflösbar und eingeordnet, die Spalte „Modul“ stimmt mit der Art überein. Ring und ja/teilweise/nein werden
@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ladeBesitzManifest } from "../support/besitz-anker";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as inventar from "../../scripts/docs-gen/harness-inventar.mjs";
@@ -88,7 +89,7 @@ function generierteNamen(tabelle: string): string[] {
 
 /** Bausteine ohne Inventarzeile: Name muss exakt als `name` in der ersten Zelle stehen. Pur. */
 function ohneZeile(namen: string[], zeilen: Zeile[]): string[] {
-  const erste = zeilen.flatMap((z) => [...z.zellen[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]));
+  const erste = zeilen.map((z) => /`([^`]+)`/.exec(z.zellen[0])?.[1] ?? z.zellen[0]);
   return [...new Set(namen)].filter((n) => !erste.includes(n));
 }
 
@@ -155,8 +156,13 @@ describe("harness-inventar.md: Vollständigkeit gegen die generierte Tabelle (#1
   });
 
   test("Negativ: fehlende Zeile wird gemeldet, `demo` wird nicht durch `demo-lens` gedeckt", () => {
-    const zeilen: Zeile[] = [{ zellen: ["`demo-lens`, `Explore`", "", "", "behalten", "ja"] }];
-    expect(ohneZeile(["Explore", "demo", "demo-lens", "Stop"], zeilen)).toEqual(["demo", "Stop"]);
+    const zeilen: Zeile[] = [{ zellen: ["`demo-lens`", "", "", "behalten", "ja"] }];
+    expect(ohneZeile(["Explore", "demo", "demo-lens", "Stop"], zeilen)).toEqual(["Explore", "demo", "Stop"]);
+  });
+
+  test("Negativ: nur der erste Backtick-Name der ersten Zelle deckt (ein späterer Name in derselben Zelle nicht)", () => {
+    const zeilen: Zeile[] = [{ zellen: ["`sih-umsetzer`, Hinweis `sih-lens`", "", "", "behalten", "ja"] }];
+    expect(ohneZeile(["sih-umsetzer", "sih-lens"], zeilen)).toEqual(["sih-lens"]);
   });
 
   test("Negativ: der Parser findet nur Tabellen mit dem fünfspaltigen Kopf", () => {
@@ -249,7 +255,7 @@ describe("harness-inventar.md: Einordnung der Skripte (#1693)", () => {
     einordnungsProbleme({ zeilen, besitz: [{ pfad: "scripts/a.mjs" }], abdeckung: { "scripts/b.mjs": { art: "modul" } }, dateien, ...over });
 
   test("die echten Quellen sind lückenlos eingeordnet", () => {
-    const besitz = (JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string }[] }).eintraege;
+    const besitz = ladeBesitzManifest().eintraege;
     const abdeckung = JSON.parse(readFileSync(join(WURZEL, "test/harness/kern-abdeckung.json"), "utf8")) as Abdeckung;
     const dateien = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8" }).split(/\r?\n/).filter((d) => d !== "");
     expect(einordnungsProbleme({ zeilen: inventarZeilen(seite()), besitz, abdeckung, dateien })).toEqual([]);

@@ -10,4 +10,8 @@ export const escapeRe = (text: string): string => (escapeRegex as (t: string) =>
 export const ganzesWortMuster = (woerter: readonly string[]): string => `(?<![\\p{L}\\p{N}_])(?:${woerter.map(escapeRe).join("|")})(?![\\p{L}\\p{N}_])`;
 
 /** Regex für „eines der Wörter als ganzes Wort“; `flags` müssen `u` enthalten (Standard `iu`). */
-export const ganzesWortRe = (woerter: readonly string[], flags = "iu"): RegExp => new RegExp(ganzesWortMuster(woerter), flags);
+export const ganzesWortRe = (woerter: readonly string[], flags = "iu"): RegExp => {
+  // Ohne `u` liest der Ausdruck `\p{L}` als Literal und der Matcher irrt still.
+  if (!flags.includes("u")) throw new Error(`ganzesWortRe: flags müssen "u" enthalten (war "${flags}")`);
+  return new RegExp(ganzesWortMuster(woerter), flags);
+};

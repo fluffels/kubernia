@@ -7,7 +7,9 @@
 import cp from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 
-const RATE_LIMIT = JSON.stringify({ resources: { core: { limit: 5000, remaining: 5000, reset: 4102444800, used: 0 }, graphql: { limit: 5000, remaining: 5000, reset: 4102444800, used: 0 } } });
+/** `reset` der gestubbten `rate_limit`-Antwort: Signatur eines Stub-Laufs im Kosten-Log. */
+export const STUB_RESET = 4102444800;
+const RATE_LIMIT = JSON.stringify({ resources: { core: { limit: 5000, remaining: 5000, reset: STUB_RESET, used: 0 }, graphql: { limit: 5000, remaining: 5000, reset: STUB_RESET, used: 0 } } });
 const echt = cp.execFileSync;
 cp.execFileSync = (cmd, args, opts) => {
   if (cmd !== "gh") return echt(cmd, args, opts);

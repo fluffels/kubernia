@@ -4,7 +4,8 @@
 import { spawn as spawnEcht } from "node:child_process";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { istDirektaufruf, parseSessionHookInput, readStdin } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { parseSessionHookInput, readStdin } from "./hook-io.mjs";
 import { kindEnv } from "./langfuse-zugang.mjs";
 
 /** Session-IDs sind UUIDs; ein führendes `-` würde als Flag des Kindes gelesen. */

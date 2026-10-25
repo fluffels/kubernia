@@ -30,6 +30,10 @@ describe("bewerteLensEdit", () => {
     expect(G.bewerteLensEdit(`/home/x/repo/.claude/worktrees/${W}12-lens-r3/src/a.ts`, "", DEPS).block).toBe(false);
   });
 
+  test("Zusatzpass-Worktrees zählen die Runde weiter (`-lens-r4` bis `-lens-r6`): erlaubt", () => {
+    for (const r of [4, 5, 6]) expect(G.bewerteLensEdit(`C:/dev/projekt/.claude/worktrees/${W}1349-lens-r${r}/src/a.ts`, "", DEPS).block, `r${r}`).toBe(false);
+  });
+
   test("Datei im Feature-Worktree, im Hauptrepo oder anderswo: abgelehnt", () => {
     for (const p of [`${FEATURE}/src/a.ts`, "C:/dev/projekt/src/a.ts", "C:/Users/x/Temp/a.ts", `${FEATURE.replace(/\//g, "\\")}\\src\\a.ts`]) {
       const e = G.bewerteLensEdit(p, "", DEPS);

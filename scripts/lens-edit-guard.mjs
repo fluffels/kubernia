@@ -16,7 +16,8 @@
  * Präfixe und Agentenname kommen je Aufruf aus der Projekt-Config (`ticket-namen.mjs`); ist sie nicht nutzbar, lehnt der Guard ab (fail-closed).
  * Nur Node-Builtins.
  */
-import { emit, istDirektaufruf, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { emit, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
