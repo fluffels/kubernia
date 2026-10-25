@@ -143,11 +143,20 @@ jobs:
       # Timeout (#1425): der Schritt hing einmal 37 Minuten ohne Fortschritt; Normalläufe dauerten
       # 0:24-4:39 min (letzte 8 Läufe, Maximum 4:39). Ein Hänger wird nach 6 min je Versuch
       # abgebrochen und einmal wiederholt (2 Versuche, 10 s Pause); Obergrenze des Schritts 14 min.
-      - name: Playwright-Browser installieren (Chromium)
+      # apt-Hänger: `--with-deps` startete je Lauf ein apt-get gegen den Azure-Mirror (zeitweise ca. 45 kB/s, 7 bis 10 min).
+      # Der Smoke fährt nur die Headless-Shell (`--only-shell`, Standard-Headless ab Playwright 1.49); apt läuft nur, wenn
+      # `ldd` an ihr eine fehlende Bibliothek meldet (`install-deps`, derselbe Timeout-Rahmen).
+      - name: Playwright-Browser installieren (Chromium-Headless-Shell)
         timeout-minutes: 14
         run: |
           for versuch in 1 2; do
-            if timeout 360 npx playwright install --with-deps chromium; then exit 0; fi
+            if timeout 360 npx playwright install --only-shell chromium; then
+              shell=$(ls ~/.cache/ms-playwright/chromium_headless_shell-*/*/headless_shell | head -n 1)
+              if [ -z "$shell" ]; then echo "Headless-Shell nicht gefunden"; exit 1; fi
+              if ! ldd "$shell" | grep -q "not found"; then exit 0; fi
+              echo "Fehlende Bibliotheken der Headless-Shell, install-deps"
+              if timeout 360 npx playwright install-deps chromium; then exit 0; fi
+            fi
             echo "Versuch $versuch fehlgeschlagen oder hing"
             sleep 10
           done
