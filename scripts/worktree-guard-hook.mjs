@@ -44,6 +44,9 @@
  *  - Das PowerShell-Tool deckt scripts/worktree-guard-powershell.mjs ab, beide hängen am Dispatcher.
  *
  * Bewusste Grenzen:
+ *  - Eine Shell-Variable als Ziel (`git -C $WT commit`, `cd "$WT" && git commit`, quotiert oder nicht) gilt wie jedes dynamische Ziel: aus dem
+ *    Haupt-Checkout als Session-`cwd` wird geblockt (der Wert könnte der Haupt-Checkout sein), im Worktree gefragt. Wer aus dem Haupt-Checkout
+ *    committet, nimmt den literalen Pfad (`git -C <worktree> commit`); der Hook wertet Variablenwerte nicht aus.
  *  - Eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte (`bash skript.sh`) und
  *    Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
  *
