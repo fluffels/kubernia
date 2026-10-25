@@ -262,9 +262,31 @@ describe("ladeProjektConfig", () => {
       writeFileSync(p, JSON.stringify({ ...gueltig(), repo }));
       return p;
     };
+    /** Riegel: die Variable gilt nur unter Vitest und nur für die Wurzel, in der die Probe sie setzt. */
+    const mitRiegel = (fremd: string, extra: Record<string, string> = {}): Record<string, string> => ({ FACTORY_PROJEKT_CONFIG: fremd, VITEST: "true", FACTORY_PROJEKT_WURZEL: WURZEL, ...extra });
     test("ohne Pfad und ohne rootDir gilt der Pfad aus der Umgebung statt des Standardpfads", () => {
       const fremd = schreibe(tmp(), "fremd.json", "acme/fremd");
-      assert.equal(pc.ladeProjektConfig({ env: { FACTORY_PROJEKT_CONFIG: fremd } }).repo, "acme/fremd");
+      assert.equal(pc.ladeProjektConfig({ env: mitRiegel(fremd) }).repo, "acme/fremd");
+    });
+    test("Riegel: ohne VITEST wird die Variable ignoriert (Standardpfad gilt)", () => {
+      const fremd = schreibe(tmp(), "fremd.json", "acme/fremd");
+      const standard = pc.ladeProjektConfig({ pfad: ".factory/projekt.json" }).repo;
+      const env = mitRiegel(fremd);
+      delete env.VITEST;
+      assert.equal(pc.ladeProjektConfig({ env }).repo, standard);
+    });
+    test("Riegel: mit VITEST, aber ohne oder mit fremder FACTORY_PROJEKT_WURZEL wird die Variable ignoriert (Vererbung in Temp-Repos)", () => {
+      const d = tmp();
+      const fremd = schreibe(d, "fremd.json", "acme/fremd");
+      const standard = pc.ladeProjektConfig({ pfad: ".factory/projekt.json" }).repo;
+      const ohne = mitRiegel(fremd);
+      delete ohne.FACTORY_PROJEKT_WURZEL;
+      assert.equal(pc.ladeProjektConfig({ env: ohne }).repo, standard);
+      assert.equal(pc.ladeProjektConfig({ env: mitRiegel(fremd, { FACTORY_PROJEKT_WURZEL: d }) }).repo, standard);
+    });
+    test("Riegel: die Wurzel gilt auch in anderer Schreibweise (Pfad-Normalisierung)", () => {
+      const fremd = schreibe(tmp(), "fremd.json", "acme/fremd");
+      assert.equal(pc.ladeProjektConfig({ env: mitRiegel(fremd, { FACTORY_PROJEKT_WURZEL: join(WURZEL, "scripts", "..") }) }).repo, "acme/fremd");
     });
     test("Standard-Umgebung ist process.env: ein Kindprozess mit gesetzter Variable lädt die Fremd-Config", () => {
       const fremd = schreibe(tmp(), "fremd.json", "acme/kind");
@@ -272,7 +294,7 @@ describe("ladeProjektConfig", () => {
       const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(lib)}).then((m) => console.log(m.ladeProjektConfig().repo))`], {
         encoding: "utf8",
         cwd: WURZEL,
-        env: { ...process.env, FACTORY_PROJEKT_CONFIG: fremd },
+        env: { ...process.env, FACTORY_PROJEKT_CONFIG: fremd, FACTORY_PROJEKT_WURZEL: WURZEL, VITEST: "true" },
         timeout: 20_000,
       });
       assert.equal(r.stdout.trim(), "acme/kind", r.stderr);
@@ -281,14 +303,14 @@ describe("ladeProjektConfig", () => {
       const d = tmp();
       const a = schreibe(d, "a.json", "acme/a");
       const b = schreibe(d, "b.json", "acme/b");
-      assert.equal(pc.ladeProjektConfig({ pfad: a, env: { FACTORY_PROJEKT_CONFIG: b } }).repo, "acme/a");
+      assert.equal(pc.ladeProjektConfig({ pfad: a, env: mitRiegel(b) }).repo, "acme/a");
     });
     test("ein explizites rootDir (anderes Repo) ignoriert die Umgebung", () => {
       const d = tmp();
       mkdirSync(join(d, ".factory"));
       writeFileSync(join(d, ".factory/projekt.json"), JSON.stringify({ ...gueltig(), repo: "acme/standard" }));
       const fremd = schreibe(d, "fremd.json", "acme/fremd");
-      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: { FACTORY_PROJEKT_CONFIG: fremd } }).repo, "acme/standard");
+      assert.equal(pc.ladeProjektConfig({ rootDir: d, env: mitRiegel(fremd) }).repo, "acme/standard");
     });
     test("ohne oder leere Variable gilt der Standardpfad des Repos", () => {
       const standard = pc.ladeProjektConfig({ pfad: ".factory/projekt.json" }).repo;
@@ -296,7 +318,7 @@ describe("ladeProjektConfig", () => {
       assert.equal(pc.ladeProjektConfig({ env: { FACTORY_PROJEKT_CONFIG: "" } }).repo, standard);
     });
     test("eine fehlende Datei am Env-Pfad wirft mit Pfad und Fix-Zeile", () => {
-      assert.throws(() => pc.ladeProjektConfig({ env: { FACTORY_PROJEKT_CONFIG: "gibt-es-nicht.json" } }), /gibt-es-nicht\.json[\s\S]*Fix:/);
+      assert.throws(() => pc.ladeProjektConfig({ env: mitRiegel("gibt-es-nicht.json") }), /gibt-es-nicht\.json[\s\S]*Fix:/);
     });
   });
 });
