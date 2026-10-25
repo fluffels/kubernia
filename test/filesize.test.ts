@@ -247,7 +247,7 @@ describe("Quellwurzel aus der Config (#1843)", () => {
     const code = `import(${JSON.stringify(pathToFileURL(fileURLToPath(new URL("../scripts/check-size.mjs", import.meta.url))).href)}).then((m) => console.log(JSON.stringify(m.collectSizes())))`;
     const lauf = spawnSync(process.execPath, ["-e", code], {
       encoding: "utf8",
-      env: { ...process.env, FACTORY_PROJEKT_CONFIG: join(d, "fremd.json"), VITEST: "true", FACTORY_PROJEKT_WURZEL: fileURLToPath(new URL("../", import.meta.url)) },
+      env: { ...process.env, FACTORY_PROJEKT_CONFIG: join(d, "fremd.json"), VITEST: "true", FACTORY_PROJEKT_WURZEL_X: fileURLToPath(new URL("../", import.meta.url)) },
     });
     assert.equal(lauf.status, 0, lauf.stderr);
     const kind = JSON.parse(lauf.stdout) as Sized[];
