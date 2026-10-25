@@ -24,10 +24,7 @@ import { echteConfig, umschriftAus } from "../support/echte-sprache";
 import { FREMD } from "../support/fremd-config";
 import { besitzAnker } from "../support/besitz-anker";
 import { escapeRe } from "../support/regex";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawPc from "../../scripts/projekt-config-lib.mjs";
-
-const strukturAus = (rawPc as unknown as { strukturAus: (config: unknown) => { quelle: string } }).strukturAus;
+import { quelleAusConfig } from "../support/struktur-quelle";
 
 const W = FREMD.praefixe.worktree;
 
@@ -117,7 +114,7 @@ describe("Scan-Umfang", () => {
 describe("Umlaut-Wächter über die echte Fläche", () => {
   test("keine ASCII-Umschrift aus sprache.umschrift in Docs, Agenten und Skills", () => {
     const woerter = umschriftAus(echteConfig());
-    const imScopeEcht = imScope(strukturAus(echteConfig()).quelle);
+    const imScopeEcht = imScope(quelleAusConfig(echteConfig()));
     const dateien = listTrackedFiles(WURZEL).filter(imScopeEcht);
     // Leerlauf-Schutz: jede verteilte Besitz-Datei im Scope liegt im Scan (statt einer Größenschwelle des Projekts).
     for (const anker of besitzAnker(imScopeEcht)) assert.ok(dateien.includes(anker), `Leerlauf-Schutz: ${anker} liegt im Scan`);
