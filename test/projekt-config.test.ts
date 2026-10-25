@@ -726,6 +726,16 @@ describe("struktur.escapeKopien als Projektwert (#1934)", () => {
     for (const p of ["/x", "a\\b", "../x", "C:/x", "a/", "./x"]) assert.match(mit([p]).join("|"), /struktur\.escapeKopien\[0\] muss ein repo-relativer POSIX-Pfad/, p);
     assert.match(mit(["a.ts", "a.ts"]).join("|"), /struktur\.escapeKopien enthält a\.ts doppelt/);
   });
+  test("escapeKopien: Grenzfälle der Prüfung und des Accessors", () => {
+    assert.doesNotMatch(mit([3, 3]).join("|"), /doppelt/);
+    assert.equal(mit(["a.ts", "a.ts", "a.ts"]).filter((m) => m.includes("doppelt")).length, 1);
+    assert.deepEqual(pc.escapeKopienAus(null), []);
+    assert.deepEqual(pc.escapeKopienAus(undefined), []);
+    const liste = ["a.ts"];
+    const r = pc.escapeKopienAus({ struktur: { quelle: "s", moduldoku: "d", escapeKopien: liste } });
+    r.push("b.ts");
+    assert.deepEqual(liste, ["a.ts"]);
+  });
   test("escapeKopienAus: eine kaputte Liste wirft mit Fix-Zeile (kein stiller Standardwert)", () => {
     for (const k of ["a.ts", ["/x"], [""], ["a", "a"]]) {
       assert.throws(() => pc.escapeKopienAus({ struktur: { quelle: "s", moduldoku: "d", escapeKopien: k } }), /escapeKopien[\s\S]*Fix:/, JSON.stringify(k));

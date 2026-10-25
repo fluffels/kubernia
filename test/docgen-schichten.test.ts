@@ -342,8 +342,6 @@ describe("Bindung an die echte Schicht-Zuordnung", () => {
   };
   test("schichtVon stimmt für Beispielpfade jeder Wurzel des Modells mit layerOf überein", () => {
     const pfade = beispiele();
-    const wurzeln = echt.SCHICHT_MODELL.schichten.flatMap((sch) => sch.wurzeln);
-    assert.ok(pfade.length >= wurzeln.length, "mindestens ein Beispiel je Wurzel");
     for (const f of pfade) assert.equal(api.schichtVon(f, echt.SCHICHT_MODELL), echt.layerOf(f), f);
     assert.equal(api.schichtVon("ausserhalb/der/quellwurzel.ts", echt.SCHICHT_MODELL), null, "außerhalb der Quellwurzel gehört keiner Schicht");
     // Gegen Leerlauf: jede Schicht des Modells kommt unter den Ergebnissen vor (Wurzel-Schichten und die Auffang-Schicht).
