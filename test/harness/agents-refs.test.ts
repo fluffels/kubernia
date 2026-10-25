@@ -49,12 +49,23 @@ import { fileURLToPath } from "node:url";
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+import { type BesitzEintragKurz, ladeBesitzManifest } from "../support/besitz-anker";
+
+interface BesitzLibKurz {
+  einheitText: (e: { pfad: string; block?: string }, text: string) => string | null;
+  wirdVerteilt: (e: BesitzEintragKurz) => boolean;
+  istGanzeDatei: (e: { block?: string; schluessel?: string }) => boolean;
+}
+const { einheitText, wirdVerteilt, istGanzeDatei } = rawBesitz as unknown as BesitzLibKurz;
 
 // Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const listTrackedFiles: (rootDir?: string) => string[] = checkBasis.listTrackedFiles;
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const VORLAGE = ".factory/produkt/vorlagen/AGENTS.md.vorlage";
 const read = (rel: string) => readFileSync(ROOT + rel, "utf8");
 
 type Ziel = "AGENTS.md" | "CLAUDE.md";
@@ -120,6 +131,16 @@ function pruefe<V extends Verweis>(verweise: V[], docs: Record<Ziel, string>): V
   return verweise.filter((v) => !norm[v.ziel].includes(v.begriff));
 }
 
+/** Ganze Dateien des verteilten Besitzes (Kern-Ringe) außer der AGENTS.md selbst: ihre Verweise müssen im Zielprojekt auflösen. Pur. */
+function kernDateienVon(eintraege: (BesitzEintragKurz & { block?: string; schluessel?: string })[]): Set<string> {
+  return new Set(eintraege.filter((e) => wirdVerteilt(e) && istGanzeDatei(e) && e.pfad !== "AGENTS.md").map((e) => e.pfad));
+}
+
+/** Verweisziel für Kern-Dateien: der Kern-Block der AGENTS.md plus die AGENTS-Vorlage des Zielprojekts (nicht der Projekt-Block dieses Repos). Pur. */
+function kernDocsVon(agentsText: string, vorlageText: string): Record<Ziel, string> {
+  return { "AGENTS.md": `${einheitText({ pfad: "AGENTS.md", block: "kern" }, agentsText) ?? ""}\n${vorlageText}`, "CLAUDE.md": "" };
+}
+
 const nurBegriffe = (vs: Verweis[]) => vs.map(({ ziel, begriff }) => ({ ziel, begriff }));
 
 // CLAUDE.md ist seit #1087 gelöscht: fehlt sie, gilt sie als leer – ein noch
@@ -144,6 +165,42 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
         "AGENTS.md/CLAUDE.md umbiegen, oder den Titel wiederherstellen, falls er versehentlich " +
         "umformuliert wurde.",
     );
+  });
+
+  test("jeder Verweis einer Kern-Datei trifft den Kern-Block der AGENTS.md oder deren Vorlage (im Zielprojekt gibt es den Projekt-Block dieses Repos nicht)", () => {
+    const kern = kernDateienVon(ladeBesitzManifest().eintraege);
+    const kernVerweise = ECHTE_VERWEISE.filter((v) => kern.has(v.datei));
+    assert.ok(kernVerweise.length > 0, "keine Verweise aus Kern-Dateien extrahiert");
+    assert.deepEqual(
+      pruefe(kernVerweise, kernDocsVon(DOCS["AGENTS.md"], read(VORLAGE))).map((v) => `${v.datei}: ${v.ziel} ${v.form} ${v.begriff}`),
+      [],
+      "Kern-Dateien werden in jedes Projekt verteilt: der Verweis muss im Kern-Block oder in der AGENTS-Vorlage stehen, " +
+        "sonst den Titel in den Kern-Block heben oder in die Vorlage aufnehmen.",
+    );
+  });
+
+  test("Red-Green: ein Titel nur im Projekt-Block trifft für eine Kern-Datei nicht, ein Titel in der Vorlage oder im Kern-Block schon", () => {
+    const agents = [
+      "<!-- factory-besitz:start kern -->\n- **Kern-Titel.**\n<!-- factory-besitz:ende kern -->",
+      "<!-- factory-projekt:start -->\n- **Nur im Projekt.**\n<!-- factory-projekt:ende -->",
+    ].join("\n");
+    const gegen = (text: string, vorlage = "") => pruefe(extrahiereVerweise(text), kernDocsVon(agents, vorlage)).length;
+    assert.equal(gegen("AGENTS.md § Kern-Titel"), 0);
+    assert.equal(gegen("AGENTS.md § Nur im Projekt"), 1);
+    assert.equal(gegen("AGENTS.md § Nur im Projekt", "- **Nur im Projekt.**"), 0);
+    assert.equal(pruefe(extrahiereVerweise("AGENTS.md § Nur im Projekt"), { "AGENTS.md": agents, "CLAUDE.md": "" }).length, 0);
+  });
+
+  test("Kern-Dateien: nur verteilte ganze Dateien, weder Blöcke, Schlüssel, die AGENTS.md noch Factory-Oberfläche", () => {
+    const m = [
+      { pfad: "a.md", ring: "kern" },
+      { pfad: "b.md", ring: "kern-nach-entkopplung" },
+      { pfad: "AGENTS.md", ring: "kern" },
+      { pfad: "c.md", ring: "kern", block: "x" },
+      { pfad: "d.json", ring: "kern", schluessel: "k" },
+      { pfad: "e.md", ring: "oberflaeche" },
+    ];
+    assert.deepEqual([...kernDateienVon(m)].sort(), ["a.md", "b.md"]);
   });
 
   test("Leerlauf-Schutz: jede Verweis-Form wird in den echten Dateien gefunden", () => {
