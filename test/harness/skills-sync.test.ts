@@ -12,7 +12,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, posix } from "node:path";
+import { join } from "node:path";
 import { WURZEL, lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzLibModul from "../../scripts/besitz-lib.mjs";
@@ -21,7 +21,7 @@ import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+import { ROLLEN_PFADE, TICKET_SKILL_NAME, TICKET_SKILL_ZEIGER } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 const maskiere = escapeRegex as (s: string) => string;
@@ -29,7 +29,7 @@ const projektwertLauf = (besitzLibModul as unknown as { projektwertLauf: (w: str
 
 /** Quelle und Verzeichnisname des Ticket-Skills der Rolle ticketSkill (fester Kern-Pfad, in jedem Projekt vorhanden). */
 const TICKET_QUELLE = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
-const TICKET_ORDNER = posix.basename(posix.dirname(TICKET_QUELLE));
+const TICKET_ORDNER = TICKET_SKILL_NAME as string;
 
 interface Befund { datei: string; meldung: string; fix: string }
 interface Quelle { ordner: string; text: string | null }
@@ -588,6 +588,21 @@ describe("Skill-Pfade stehen als Code-Literal nur in skill-pfade.mjs (#1866)", (
 
   test("kein anderer Code nennt die Pfade als Literal", () => {
     const funde = kandidaten().filter((f) => f !== LIB && codeTreffer(lies(f)).length > 0);
+    expect(funde).toEqual([]);
+  });
+});
+
+// Ticket-Skill-Name (#1921): Verzeichnisname und Zeigerpfad des Ticket-Skills stehen einmal in `projekt-config-lib.mjs`.
+describe("Ticket-Skill-Name und Zeigerpfad: eine Ableitung (#1921)", () => {
+  test("die Konstanten stimmen mit der Rolle ticketSkill überein", () => {
+    expect(TICKET_SKILL_NAME).toBe(TICKET_QUELLE.split("/").at(-2));
+    expect(TICKET_SKILL_ZEIGER).toBe(`${ZEIGER_WURZEL}/${TICKET_ORDNER}/SKILL.md`);
+    expect(TICKET_QUELLE).toBe(`${QUELL_VERZEICHNIS}/${TICKET_SKILL_NAME}/SKILL.md`);
+  });
+
+  test("kein Skript leitet den Namen selbst per basename ab", () => {
+    const eigene = /basename\(\s*(?:posix\.)?dirname\(|basename\(\s*TICKET_SKILL_ORDNER/;
+    const funde = repoDateien().filter((f) => /^scripts\/.*\.mjs$/.test(f) && f !== "scripts/projekt-config-lib.mjs" && eigene.test(lies(f)));
     expect(funde).toEqual([]);
   });
 });

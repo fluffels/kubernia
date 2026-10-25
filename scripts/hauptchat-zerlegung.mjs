@@ -21,8 +21,7 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
-import { posix } from "node:path";
-import { KERN_TICKET_SKILL, PROJEKT_CONFIG, TICKET_SKILL_ORDNER, repoName } from "./projekt-config-lib.mjs";
+import { KERN_TICKET_SKILL, PROJEKT_CONFIG, TICKET_SKILL_NAME, repoName } from "./projekt-config-lib.mjs";
 import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
@@ -44,7 +43,7 @@ export function hauptchatNamen(deps = {}) {
   if (ERGEBNIS_SCHLUESSEL.includes(name)) throw new Error(`Repo-Name "${name}" (repo der Projekt-Config) kollidiert mit dem Ergebnisschlüssel gleichen Namens der Zerlegung
 Fix: repo in ${PROJEKT_CONFIG} auf einen Namen außerhalb von ${ERGEBNIS_SCHLUESSEL.join(", ")} ändern`);
   const { planer, umsetzer, lens, gruppe, ticketSkill } = r.namen.agenten;
-  const ticketSkills = [...new Set([ticketSkill, KERN_TICKET_SKILL, posix.basename(TICKET_SKILL_ORDNER)])];
+  const ticketSkills = [...new Set([ticketSkill, KERN_TICKET_SKILL, TICKET_SKILL_NAME])];
   const abschlussSkill = r.config.skills?.abschluss;
   if (typeof abschlussSkill !== "string" || !abschlussSkill) throw new Error(`skills.abschluss fehlt in der Projekt-Config
 Fix: skills.abschluss in ${PROJEKT_CONFIG} setzen (Name des Abschluss-Skills)`);

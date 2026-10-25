@@ -13,7 +13,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
@@ -107,6 +107,10 @@ export const PROJEKT_ROLLEN = Object.freeze(["ticketSkill"]);
 
 /** Verzeichnis des Ticket-Skills (`ROLLEN_PFADE.ticketSkill` ohne Dateiname), die einzige Ableitung für alle Nutzer. */
 export const TICKET_SKILL_ORDNER = posix.dirname(ROLLEN_PFADE.ticketSkill);
+
+/** Verzeichnisname des Ticket-Skills (letztes Segment von `TICKET_SKILL_ORDNER`) und sein generierter Zeiger unter der Zeiger-Wurzel. */
+export const TICKET_SKILL_NAME = posix.basename(TICKET_SKILL_ORDNER);
+export const TICKET_SKILL_ZEIGER = `${ZEIGER_WURZEL}/${TICKET_SKILL_NAME}/SKILL.md`;
 
 /** Pur: prüft `praefixe` (commitZeile, branch, worktree). */
 function pruefePraefixe(p) {

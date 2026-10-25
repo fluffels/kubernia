@@ -24,7 +24,7 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawSkills from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+import { ROLLEN_PFADE, TICKET_SKILL_NAME } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 import { hookSkripte, importeAus } from "./hook-importe";
@@ -675,7 +675,7 @@ describe("Export aus HEAD", () => {
 
   test("#1930: Ticket-Skill der Rolle ticketSkill und sein Zeiger liegen im Export, Name aus der Config, nur der Produkt-Bereich", () => {
     const quellPfad = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
-    const ordner = quellPfad.split("/").slice(-2, -1)[0];
+    const ordner = TICKET_SKILL_NAME as string;
     const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
     const quelle = text(quellPfad);
     assert.ok(quelle.length > 0, `${quellPfad} fehlt im Export`);
