@@ -6,16 +6,18 @@
 // Extraktionsliste (`produkt-wurzel` an die Wurzel) und die Vorlagen unter `.factory/produkt/vorlagen/<zielpfad>.vorlage`; zusammengesetzt werden
 // AGENTS.md und .claude/settings.json (Kern-Anteile plus Vorlage) und .factory/projekt.json (Überschreibung der obersten Schlüssel), berechnet die
 // Projektwert-Blöcke, `package-lock.json` (Auszug) und die Daten-Dateien der Kern-Wächter (Kern-Anteil per Filter).
-// In den Factory-Seiten (Art `factory-seite`) wird der Commit-Zeilen-Präfix der Quelle auf den der Factory-Config umgeschrieben (`schreibePraefixUm`, #1932).
+// In den Factory-Seiten (Art `factory-seite`) wird der Commit-Zeilen-Präfix der Quelle auf den der Factory-Config umgeschrieben (`schreibePraefixUm`, #1932). Danach entlinkt `entlinke` dort jeden Link auf ein Ziel außerhalb des Exports (der Text bleibt) und streicht tote Anker (#1935); der Bericht nennt Zahl und Ziele.
 // Bekannte Muster der Prüfungen (Grenzen): siehe Kopf von `factory-export-lib.mjs`.
 import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
+import { collectHeadingSlugs } from "./docs-gen/markdown.mjs";
 import { istGanzeDatei, normalisiereEol, projektwertDateien, pruefeManifest, rendereProjektwerte } from "./besitz-lib.mjs";
 import { artVon, EXTRAKTION_PFAD, MITZIEHEND, musterRegex, pruefeExtraktion } from "./besitz-extraktion.mjs";
 import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import {
+  entlinke,
   KANDIDATEN,
   kuberniaBegriffe,
   lockAuszug,
@@ -284,8 +286,36 @@ function schreibePraefixeUm(k, seiten) {
   return anzahl;
 }
 
+/**
+ * Entlinken (#1935): in den Factory-Seiten werden Links auf Ziele außerhalb des Exports (Spielinhalte, Projekt-Skripte) zu Text, tote Anker gestrichen;
+ * Besitz, Vorlagen und berechnete Dateien bleiben byte-gleich. Rückgabe `{ links, anker, ziele }` (`ziele`: sortierte Paare Ziel und Anzahl).
+ */
+function entlinkeSeiten(k, seiten) {
+  const { dateien, exportPfade } = k;
+  const dateiPfade = [...exportPfade];
+  const gibt = (ziel) => ziel === "" || exportPfade.has(ziel) || dateiPfade.some((p) => p.startsWith(`${ziel}/`));
+  const ueberschriftenCache = new Map();
+  const ueberschriften = (ziel) => {
+    if (!ueberschriftenCache.has(ziel)) {
+      const d = dateien.get(ziel);
+      ueberschriftenCache.set(ziel, d !== undefined && ziel.endsWith(".md") ? new Set(collectHeadingSlugs(d.text)) : null);
+    }
+    return ueberschriftenCache.get(ziel);
+  };
+  const entlinkt = { links: 0, anker: 0, ziele: new Map() };
+  for (const pfad of [...seiten].sort()) {
+    const d = dateien.get(pfad);
+    const r = entlinke(d.text, pfad, { gibt, ueberschriften });
+    d.text = r.text;
+    entlinkt.links += r.links;
+    entlinkt.anker += r.anker;
+    for (const [z, n] of r.ziele) entlinkt.ziele.set(z, (entlinkt.ziele.get(z) ?? 0) + n);
+  }
+  return { ...entlinkt, ziele: [...entlinkt.ziele].sort(([a], [b]) => (a < b ? -1 : 1)) };
+}
+
 /** Prüfungen auf dem zusammengebauten Stand; schreibt Befunde und Zähler in `k`/`bericht`. */
-function pruefeZusammenbau(k, seiten, praefixUmgeschrieben) {
+function pruefeZusammenbau(k, seiten, praefixUmgeschrieben, entlinkt) {
   const { leser, dateien, kubConfig, factoryConfig, bericht } = k;
   const texte = new Map([...dateien].map(([p, d]) => [p, d.text]));
   const rel = pruefeRelativeImporte(texte, new Set(leser.pfade));
@@ -301,6 +331,7 @@ function pruefeZusammenbau(k, seiten, praefixUmgeschrieben) {
     paketUnbekannt: pak.unbekannt,
     literalRest: [...lit.rest].sort(([a], [b]) => (a < b ? -1 : 1)),
     praefixUmgeschrieben,
+    entlinkt,
   });
 }
 
@@ -318,7 +349,8 @@ export function baueExport({ leser }) {
   for (const schritt of BAU_SCHRITTE) if (!schritt(k)) return aus();
   if (befunde.length > 0) return aus();
   const seiten = new Set([...k.dateien.keys()].filter((p) => artVon(k.liste, p) === "factory-seite"));
-  pruefeZusammenbau(k, seiten, schreibePraefixeUm(k, seiten));
+  const praefixUmgeschrieben = schreibePraefixeUm(k, seiten);
+  pruefeZusammenbau(k, seiten, praefixUmgeschrieben, entlinkeSeiten(k, seiten));
   return befunde.length > 0 ? aus() : { dateien: k.dateien, befunde, bericht };
 }
 
@@ -332,6 +364,8 @@ function berichtZeilen(b) {
     `Relative Importe, in der Quelle schon unauflösbar (Fixture-Text): ${b.relativUnaufloesbar}`,
     `Paket-Spezifizierer, die kubernia nicht kennt (Fixture-Text): ${b.paketUnbekannt.length} (Namen: ${b.paketUnbekannt.filter((n) => !n.startsWith("?")).join(", ")}; ${b.paketUnbekannt.filter((n) => n.startsWith("?")).length} Texte, die kein Paketname sind)`,
     `Commit-Präfix in Factory-Seiten umgeschrieben: ${b.praefixUmgeschrieben}`,
+    `Factory-Seiten entlinkt: ${b.entlinkt.links} Links auf ${b.entlinkt.ziele.length} Ziele, ${b.entlinkt.anker} Anker gestrichen`,
+    ...b.entlinkt.ziele.map(([z, n]) => `  ${z}: ${n}`),
     `kubernia-Rest (Factory-Seiten und .factory/projekt.json, ganze Wörter, überlappende Treffer zählen einmal): ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,
     ...b.literalRest.map(([p, n]) => `  ${p}: ${n}`),
   ];

@@ -33,10 +33,13 @@
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { dirname, join, relative, sep, posix, resolve } from "node:path";
-import { fenceMaske } from "./docs-gen/markdown.mjs";
+import { dirname, join } from "node:path";
+import { collectHeadingSlugs, linkStellen, linkZiel } from "./docs-gen/markdown.mjs";
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
+
+// Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
+export { collectHeadingSlugs, linkStellen, linkZiel, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -54,17 +57,6 @@ export const DOC_EXEMPT_SCRIPTS = new Set([
   "test:watch", // Watch-Modus von Vitest — lokale Convenience (dokumentiert ist `npm test`)
 ]);
 
-// ── Code-Fences ausblenden ─────────────────────────────────────────────────────
-
-/** Ersetzt Zeilen innerhalb ``` / ~~~ -Fences durch Leerzeilen (Zeilenzahl bleibt
- *  erhalten). So werden `#`-Kommentare in bash-Blöcken NICHT als Überschrift und
- *  Beispiel-Links in Codeblöcken NICHT als echter Link gewertet. */
-export function stripFencedCode(md) {
-  const lines = md.split(/\r?\n/);
-  const maske = fenceMaske(lines);
-  return lines.map((line, i) => (maske[i] ? "" : line)).join("\n");
-}
-
 // ── Kommandos ───────────────────────────────────────────────────────────────────
 
 /** Alle in `md` referenzierten npm-Skriptnamen: `npm run <x>` sowie `npm test`
@@ -79,52 +71,10 @@ export function parseNpmRunMentions(md) {
 
 // ── Links & Anker ────────────────────────────────────────────────────────────────
 
-/** Extrahiert interne Markdown-Links (inkl. Bilder) aus `md`. Externe Links
- *  (http/https/mailto/tel/Protokoll-relativ) werden ausgelassen. Rückgabe je
- *  Link: { target, path, anchor } — path repo-/datei-relativ wie geschrieben,
- *  anchor ohne führendes `#` (oder ""). Aus Code-Fence- und Inline-Code-
- *  bereinigtem Text (Beispiel-Links in Backticks zählen nicht). */
+/** Interne Links: { target, path, anchor } — path repo-/datei-relativ wie geschrieben, anchor ohne
+ *  führendes `#` (oder ""). */
 export function extractLinks(md) {
-  const clean = stripFencedCode(md).replace(/`[^`\n]*`/g, "");
-  const out = [];
-  // [text](target) oder ![alt](target), Ziel bis Leerzeichen/Klammer, optionaler "Titel"
-  for (const m of clean.matchAll(/!?\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)) {
-    const target = m[1];
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)) continue; // http:, mailto:, //cdn …
-    const hashAt = target.indexOf("#");
-    const path = hashAt < 0 ? target : target.slice(0, hashAt);
-    const anchor = hashAt < 0 ? "" : target.slice(hashAt + 1);
-    out.push({ target, path, anchor });
-  }
-  return out;
-}
-
-/** GitHub-Überschriften-Slug: klein, Markup entfernt, Satzzeichen/Emoji raus,
- *  Leerzeichen → Bindestrich. Duplikate hängt der Aufrufer mit -1/-2 an. */
-export function slugify(headingText) {
-  return headingText
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) → text
-    .replace(/[`*_~]/g, "") // Inline-Markup-Zeichen entfernen
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "") // nur Buchstaben/Zahlen/Space/_/- behalten
-    .replace(/\s/g, "-");
-}
-
-/** Alle Überschriften-Anker einer Markdown-Datei (GitHub-Slugs inkl. -1/-2 bei
- *  Duplikaten). Code-Fences ausgeblendet, damit `#`-Kommentare nicht zählen. */
-export function collectHeadingSlugs(md) {
-  const slugs = [];
-  const seen = new Map();
-  for (const line of stripFencedCode(md).split(/\r?\n/)) {
-    const m = line.match(/^(#{1,6})\s+(.*\S)\s*$/);
-    if (!m) continue;
-    const base = slugify(m[2]);
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    slugs.push(n === 0 ? base : `${base}-${n}`);
-  }
-  return slugs;
+  return linkStellen(md).map(({ target, path, anchor }) => ({ target, path, anchor }));
 }
 
 // ── verify-Kette ─────────────────────────────────────────────────────────────────
@@ -223,10 +173,9 @@ export function auditDocDrift(rootDir = ROOT) {
   const deadLinks = [];
   const deadAnchors = [];
   for (const f of mdFiles) {
-    const dir = posix.dirname(f);
     for (const { target, path, anchor } of extractLinks(content.get(f))) {
       // Reiner Anker (#foo) → Ziel ist die Datei selbst.
-      const targetFile = path === "" ? f : normalizeRel(dir, path, rootDir);
+      const targetFile = path === "" ? f : linkZiel(f, path);
 
       if (path !== "") {
         const abs = join(rootDir, targetFile);
@@ -249,16 +198,6 @@ export function auditDocDrift(rootDir = ROOT) {
   const verifyChainViolations = auditVerifyChain(rootDir, mdFiles, content, pkg.scripts ?? {});
 
   return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations };
-}
-
-/** Löst einen relativen (oder `/`-absoluten) Link-Pfad auf repo-relativen
- *  POSIX-Pfad auf; strippt einen `:zeile`-Suffix (z.B. foo.ts:42). */
-function normalizeRel(dir, path, rootDir) {
-  const clean = path.replace(/:\d+$/, "");
-  const abs = clean.startsWith("/")
-    ? join(rootDir, clean.slice(1))
-    : resolve(join(rootDir, dir), clean);
-  return relative(rootDir, abs).split(sep).join("/");
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────

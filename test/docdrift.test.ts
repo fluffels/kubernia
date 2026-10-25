@@ -27,6 +27,8 @@ import { FREMD } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { linkStellen as linkStellenRoh, linkZiel as linkZielRoh } from "../scripts/check-docdrift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ROLLEN_PFADE } from "../scripts/projekt-config-lib.mjs";
@@ -38,6 +40,8 @@ const parseNpmRunMentions: (md: string) => Set<string> = checkDocDrift.parseNpmR
 const extractLinks: (md: string) => { target: string; path: string; anchor: string }[] =
   checkDocDrift.extractLinks;
 const slugify: (t: string) => string = checkDocDrift.slugify;
+const linkStellen = linkStellenRoh as (md: string) => { start: number; ende: number; text: string; bild: boolean; target: string; path: string; anchor: string }[];
+const linkZiel = linkZielRoh as (datei: string, pfad: string) => string;
 const collectHeadingSlugs: (md: string) => string[] = checkDocDrift.collectHeadingSlugs;
 const auditDocDrift: () => {
   deadCommands: { file: string; script: string }[];
@@ -151,6 +155,40 @@ describe("Harness-Doku-Drift (#529)", () => {
       ["CLAUDE.md"],
       "Beispiel-Links in ```-Fences und `inline`-Code dürfen nicht als echte Links zählen.",
     );
+  });
+
+  test("linkStellen: Position und Länge treffen den Originaltext, Bild und Beschriftung sind gekennzeichnet", () => {
+    const md = "Vorn [Text a](a.md#x) mitte ![Alt b](b.png) hinten [ext](https://x.de) und [m](mailto:a@b.de) [p](//cdn/x).";
+    const stellen = linkStellen(md);
+    assert.deepEqual(
+      stellen.map((s) => md.slice(s.start, s.ende)),
+      ["[Text a](a.md#x)", "![Alt b](b.png)"],
+      "externe Ziele fehlen",
+    );
+    assert.deepEqual(
+      stellen.map((s) => [s.text, s.bild, s.path, s.anchor]),
+      [
+        ["Text a", false, "a.md", "x"],
+        ["Alt b", true, "b.png", ""],
+      ],
+    );
+  });
+
+  test("linkStellen: Code-Bereiche zählen nicht, Positionen bleiben im Original gültig (auch bei CRLF)", () => {
+    const md = ["```", "[bsp](tot.md)", "```", "Code `[y](z.md)` und [echt](ziel.md)."].join("\r\n");
+    const stellen = linkStellen(md);
+    assert.equal(stellen.length, 1);
+    const s = stellen[0];
+    assert.equal(md.slice(s.start, s.ende), "[echt](ziel.md)");
+  });
+
+  test("linkZiel: löst relativ, mit ../, Wurzel-absolut und ohne :zeile auf", () => {
+    assert.equal(linkZiel("docs/adr/0009.md", "../module/app.md"), "docs/module/app.md");
+    assert.equal(linkZiel("docs/adr/0009.md", "/AGENTS.md"), "AGENTS.md");
+    assert.equal(linkZiel("AGENTS.md", "scripts/x.mjs:42"), "scripts/x.mjs");
+    assert.equal(linkZiel("docs/a.md", "ordner/"), "docs/ordner", "Schrägstrich am Ende entfällt");
+    assert.equal(linkZiel("docs/a.md", ".."), "", "die Wurzel selbst ist der leere Pfad");
+    assert.equal(linkZiel("docs/a.md", "../../x.md"), "../x.md", "über die Wurzel hinaus bleibt sichtbar");
   });
 
   test("slugify folgt der GitHub-Regel (Emoji/Em-Dash/Umlaute)", () => {

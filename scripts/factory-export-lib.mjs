@@ -13,6 +13,7 @@ import { posix } from "node:path";
 import { begriffeAus } from "./besitz-lib.mjs";
 import { importeAus, relativeImporte, schutzlistenMuster, trifftLeitplanke, zielDatei } from "./besitz-extraktion.mjs";
 import { isCheckable } from "./check-basis.mjs";
+import { collectHeadingSlugs, linkStellen, linkZiel } from "./docs-gen/markdown.mjs";
 import { pfadBefunde } from "./internalrefs-lib.mjs";
 
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
@@ -47,6 +48,42 @@ export function schreibePraefixUm(text, von, nach) {
     return nach;
   });
   return { text: neu, anzahl };
+}
+
+/**
+ * Entlinkt eine Factory-Seite (Teil 7b-7, #1935): ein Link auf ein Ziel, das im Export fehlt (`gibt(pfad)` verneint; Datei oder Ordner), wird zu seinem Text
+ * (`[t](x)` zu `t`, `![alt](x)` zu `alt`); ein Anker, den die Überschriften des Ziels (`ueberschriften(pfad)`, `null` für kein Markdown) nicht kennen,
+ * wird gestrichen und der Link bleibt, ein toter Anker auf die eigene Seite macht den Link zum Text. Code-Bereiche, externe Links und lebende Links bleiben.
+ * Rückgabe `{ text, links, anker, ziele }`: Zahl entlinkter Links, Zahl gestrichener Anker und Ziel zu Anzahl der entlinkten Links.
+ */
+export function entlinke(text, seitePfad, { gibt, ueberschriften }) {
+  const eigene = new Set(collectHeadingSlugs(text));
+  const ziele = new Map();
+  let links = 0;
+  let anker = 0;
+  let neu = text;
+  for (const s of linkStellen(text).reverse()) {
+    const ziel = s.path === "" ? seitePfad : linkZiel(seitePfad, s.path);
+    let ersatz = null;
+    if (s.path !== "" && !gibt(ziel)) {
+      links++;
+      ziele.set(ziel, (ziele.get(ziel) ?? 0) + 1);
+      ersatz = s.text;
+    } else if (s.anchor !== "") {
+      const heads = s.path === "" ? eigene : ueberschriften(ziel);
+      if (heads && !heads.has(s.anchor)) {
+        anker++;
+        if (s.path === "") ersatz = s.text;
+        else {
+          const orig = text.slice(s.start, s.ende);
+          const i = orig.indexOf("](");
+          ersatz = orig.slice(0, i) + orig.slice(i).replace(s.target, () => s.path);
+        }
+      }
+    }
+    if (ersatz !== null) neu = neu.slice(0, s.start) + ersatz + neu.slice(s.ende);
+  }
+  return { text: neu, links, anker, ziele: new Map([...ziele].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) };
 }
 
 /**
