@@ -241,6 +241,11 @@ describe("entlinke (#1935)", () => {
     assert.equal(r.links, 1);
     assert.equal(r.anker, 1);
   });
+  test("ein Pfad mit Ersetzungsmuster ($&) bleibt beim Anker-Streichen wörtlich erhalten", () => {
+    const r = lib.entlinke("[a](b$&.md#weg)", SEITE, { gibt: (pfad) => pfad === "docs/b$&.md", ueberschriften: () => new Set(["da"]) });
+    assert.equal(r.text, "[a](b$&.md)");
+    assert.equal(r.anker, 1);
+  });
   test("ein toter Selbst-Anker macht den Link zum Text, ein lebender bleibt", () => {
     const r = e("# Kopf\n\n[x](#weg) und [y](#kopf)");
     assert.equal(r.text, "# Kopf\n\nx und [y](#kopf)");
