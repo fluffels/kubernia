@@ -31,4 +31,8 @@ describe("ganzesWortRe", () => {
     assert.equal(ganzesWortRe(["hof"]).test("HOF"), true);
     assert.equal(ganzesWortRe(["hof"], "u").test("HOF"), false);
   });
+  test("Negativ: Flags ohne u werfen, statt still falsch zu matchen", () => {
+    assert.throws(() => ganzesWortRe(["hof"], "i"), /flags müssen "u" enthalten/);
+    assert.throws(() => ganzesWortRe(["hof"], ""), /flags müssen "u" enthalten/);
+  });
 });

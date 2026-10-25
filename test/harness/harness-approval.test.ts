@@ -30,7 +30,7 @@
  * test-only-Familie (Präzedenz: `test/harness/agents-md-native.test.ts`).
  *
  * Eine Semantik, die der Produktion: Abdeckungsfragen („schützt die Quelle X?“) beantwortet derselbe Matcher
- * wie der Abschluss-Wächter (`trifftLeitplanke(pfad, leitplankenMuster())` aus `scripts/umsetzer-abschluss.mjs`),
+ * wie der Abschluss-Wächter (`trifftLeitplanke(pfad, leitplankenMuster())` aus `scripts/besitz-extraktion.mjs`),
  * nicht ein eigener Substring-Abgleich. `normalizeProtected` bleibt nur für den String-Vergleich CODEOWNERS ↔ Quelle.
  * Wird eine Abdeckungsfrage rot, ist die Ursache an der Quelle `.github/protected-paths.json` zu beheben, nicht am Test.
  *

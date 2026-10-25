@@ -21,7 +21,7 @@ import * as checkBasis from "../../scripts/check-basis.mjs";
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 import { echteConfig, umschriftAus } from "../support/echte-sprache";
-import { FREMD, projektConfig } from "../support/fremd-config";
+import { FREMD } from "../support/fremd-config";
 import { besitzAnker } from "../support/besitz-anker";
 import { escapeRe } from "../support/regex";
 import { quelleAusConfig } from "../support/struktur-quelle";
@@ -126,9 +126,10 @@ describe("Umlaut-Wächter über die echte Fläche", () => {
     const woerter = umschriftAus(echteConfig());
     const imScopeEcht = imScope(quelleAusConfig(echteConfig()));
     const dateien = listTrackedFiles(WURZEL).filter(imScopeEcht);
-    // Verdrahtung: die Quellwurzel kommt aus der echten Config, ihre Modul-AGENTS liegen im Scan.
-    const quelle = projektConfig().struktur.quelle;
-    assert.ok(dateien.some((f) => f.startsWith(`${quelle}/`) && f.endsWith("/AGENTS.md")), `Modul-AGENTS unter ${quelle}/ liegen im Scan`);
+    // Verdrahtung: der Scope kommt aus der Quellwurzel der echten Config (unabhängig davon, ob dort schon eine Modul-AGENTS liegt).
+    const quelle = quelleAusConfig(echteConfig());
+    assert.equal(imScopeEcht(`${quelle}/x/AGENTS.md`), true, `Modul-AGENTS unter ${quelle}/ gehören in den Scan`);
+    assert.equal(imScopeEcht(`${quelle}-fremd/x/AGENTS.md`), false, "nur die Quellwurzel selbst, kein Präfix-Treffer");
     // Leerlauf-Schutz: jede verteilte Besitz-Datei im Scope liegt im Scan (statt einer Größenschwelle des Projekts).
     for (const anker of besitzAnker(imScopeEcht)) assert.ok(dateien.includes(anker), `Leerlauf-Schutz: ${anker} liegt im Scan`);
     const meldungen = dateien.flatMap((f) => findeUmschrift(readFileSync(WURZEL + f, "utf8"), woerter).map((x) => `${f}:${x.zeile}: ${x.wort}`));

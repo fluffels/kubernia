@@ -103,6 +103,10 @@ describe("istMarkiert", () => {
     expect(p.istMarkiert(null)).toBe(false);
     expect(p.istMarkiert(`${"\n".repeat(60)}// @probe-echte-dateien Grund`)).toBe(false);
   });
+  test("Kopf-Fenster: Zeile 40 zählt, Zeile 41 nicht", () => {
+    expect(p.istMarkiert(`${"\n".repeat(39)}// @probe-echte-dateien Grund`)).toBe(true);
+    expect(p.istMarkiert(`${"\n".repeat(40)}// @probe-echte-dateien Grund`)).toBe(false);
+  });
 });
 
 describe("rotePfade", () => {
@@ -127,6 +131,11 @@ describe("rotePfade", () => {
 describe("bewerte", () => {
   test("alles grün, nichts markiert: Exit 0, keine Meldung", () => {
     expect(p.bewerte({ status: 0, rot: null, markiert: [] })).toEqual({ exit: 0, erwartet: [], unerwartet: [], ueberfluessig: [], meldungen: [] });
+  });
+  test("Exit 0 gilt als grün, auch wenn ein Bericht rote Dateien nennen würde", () => {
+    const r = p.bewerte({ status: 0, rot: ["test/a.test.ts"], markiert: [] });
+    expect(r.exit).toBe(0);
+    expect(r.unerwartet).toEqual([]);
   });
   test("nur markierte Dateien rot: Exit 0 mit Meldung „erwartet rot“", () => {
     const r = p.bewerte({ status: 1, rot: ["test/a.test.ts"], markiert: ["test/a.test.ts", "test/b.test.ts"] });
