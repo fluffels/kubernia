@@ -21,7 +21,7 @@ import * as checkBasis from "../../scripts/check-basis.mjs";
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 import { echteConfig, umschriftAus } from "../support/echte-sprache";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, projektConfig } from "../support/fremd-config";
 import { besitzAnker } from "../support/besitz-anker";
 import { escapeRe } from "../support/regex";
 import { quelleAusConfig } from "../support/struktur-quelle";
@@ -111,11 +111,24 @@ describe("Scan-Umfang", () => {
   });
 });
 
+describe("Scan-Umfang: Quellwurzel", () => {
+  test("die Quellwurzel ist ein Literal, kein Muster: Punkt und Klammern in struktur.quelle treffen nur sich selbst", () => {
+    const imScopePunkt = imScope("a.b");
+    assert.equal(imScopePunkt("a.b/AGENTS.md"), true);
+    assert.equal(imScopePunkt("axb/AGENTS.md"), false, "der Punkt darf kein Platzhalter sein");
+    assert.equal(imScope("a(b)")("a(b)/x/AGENTS.md"), true);
+    assert.equal(imScope("a+")("aaa/AGENTS.md"), false);
+  });
+});
+
 describe("Umlaut-Wächter über die echte Fläche", () => {
   test("keine ASCII-Umschrift aus sprache.umschrift in Docs, Agenten und Skills", () => {
     const woerter = umschriftAus(echteConfig());
     const imScopeEcht = imScope(quelleAusConfig(echteConfig()));
     const dateien = listTrackedFiles(WURZEL).filter(imScopeEcht);
+    // Verdrahtung: die Quellwurzel kommt aus der echten Config, ihre Modul-AGENTS liegen im Scan.
+    const quelle = projektConfig().struktur.quelle;
+    assert.ok(dateien.some((f) => f.startsWith(`${quelle}/`) && f.endsWith("/AGENTS.md")), `Modul-AGENTS unter ${quelle}/ liegen im Scan`);
     // Leerlauf-Schutz: jede verteilte Besitz-Datei im Scope liegt im Scan (statt einer Größenschwelle des Projekts).
     for (const anker of besitzAnker(imScopeEcht)) assert.ok(dateien.includes(anker), `Leerlauf-Schutz: ${anker} liegt im Scan`);
     const meldungen = dateien.flatMap((f) => findeUmschrift(readFileSync(WURZEL + f, "utf8"), woerter).map((x) => `${f}:${x.zeile}: ${x.wort}`));
