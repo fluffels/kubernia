@@ -161,8 +161,8 @@ describe("harness-inventar.md: Vollständigkeit gegen die generierte Tabelle (#1
   });
 
   test("Negativ: nur der erste Backtick-Name der ersten Zelle deckt (ein späterer Name in derselben Zelle nicht)", () => {
-    const zeilen: Zeile[] = [{ zellen: ["`sih-umsetzer`, Hinweis `sih-lens`", "", "", "behalten", "ja"] }];
-    expect(ohneZeile(["sih-umsetzer", "sih-lens"], zeilen)).toEqual(["sih-lens"]);
+    const zeilen: Zeile[] = [{ zellen: ["`baustein-eins`, Hinweis `baustein-zwei`", "", "", "behalten", "ja"] }];
+    expect(ohneZeile(["baustein-eins", "baustein-zwei"], zeilen)).toEqual(["baustein-zwei"]);
   });
 
   test("Negativ: der Parser findet nur Tabellen mit dem fünfspaltigen Kopf", () => {
