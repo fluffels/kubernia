@@ -104,6 +104,11 @@ function vorpruefung(leser, befunde) {
     befunde.push(`${PROJEKT_CONFIG}: struktur.quelle fehlt`);
     return null;
   }
+  const quellFehler = pruefeProjektConfig(kubConfig);
+  if (quellFehler.length > 0) {
+    befunde.push(...quellFehler.map((m) => `${PROJEKT_CONFIG} der Quelle: ${m}`));
+    return null;
+  }
   const teile = teileJePfad(manifest.eintraege);
   const anteil = leser.pfade.filter((p) => artVon(liste, p) === "infrastruktur-anteil" && !BERECHNET.includes(p));
   const vorlagenZiele = [...new Set([...teile.keys(), PROJEKT_CONFIG, ...anteil])];
@@ -233,7 +238,7 @@ export function baueExport({ leser }) {
   const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
   let praefixUmgeschrieben = 0;
   const [vonPraefix, nachPraefix] = [kubConfig.praefixe.commitZeile, factoryConfig.praefixe.commitZeile];
-  if (vonPraefix !== "" && vonPraefix !== nachPraefix) {
+  if (vonPraefix !== nachPraefix) {
     for (const p of seiten) {
       const d = dateien.get(p);
       const r = schreibePraefixUm(d.text, vonPraefix, nachPraefix);

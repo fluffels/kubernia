@@ -496,10 +496,10 @@ describe("Export aus HEAD", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { [KERN]: kern }) });
       assert.match(r.befunde.join("|"), /scripts\/besitz-lib\.mjs: kubernia-Literal 'KQ'/);
     });
-    test("leerer Präfix der Quelle: keine Umschreibung, Text unverändert, Zähler 0", () => {
+    test("leerer Präfix der Quelle: Befund der Quelle statt Umschreibung vor jedem Großbuchstaben", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/projekt.json": mitPraefix({ ...kubPraefixe, commitZeile: "" }), [SEITE]: zusatz("Ab Cd") }) });
-      assert.equal(r.bericht.praefixUmgeschrieben, 0);
-      assert.ok(r.dateien.get(SEITE)?.text.includes("\nAb Cd\n"), "kein Präfix vor jedem Großbuchstaben");
+      assert.match(r.befunde.join("\n"), /\.factory\/projekt\.json der Quelle: .*commitZeile/);
+      assert.equal(r.dateien.size, 0);
     });
     test("gleicher Präfix in Quelle und Factory-Config: nichts wird umgeschrieben, Zähler 0", () => {
       const vor = ".factory/produkt/vorlagen/.factory/projekt.json.vorlage";
@@ -888,6 +888,14 @@ describe("Export aus HEAD", () => {
       befund({ "package-lock.json": null }, /package-lock\.json: Datei fehlt/);
       befund({ "package-lock.json": "{" }, /package-lock\.json: kein gültiges JSON/);
       befund({ "package-lock.json": "{}" }, /Lock: keine packages/);
+    });
+
+    test("#1921: eine Quell-Config ohne praefixe ist ein Befund der Quelle, kein TypeError", () => {
+      const kub = JSON.parse(basisText(".factory/projekt.json")) as Record<string, unknown>;
+      delete kub.praefixe;
+      const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/projekt.json": JSON.stringify(kub) }) });
+      assert.match(r.befunde.join("\n"), /\.factory\/projekt\.json der Quelle: .*praefixe/);
+      assert.equal(r.dateien.size, 0);
     });
 
     test("ein Laufwerkspfad mit dem Namen der Quelle oder des Factory-Repos ist ein Befund", () => {
