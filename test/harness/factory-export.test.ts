@@ -241,7 +241,7 @@ describe("entlinke (#1935)", () => {
     assert.equal(r.anker, 1);
   });
   test("ein Anker auf ein Ziel ohne Überschriften (kein Markdown) bleibt unberührt", () => {
-    const text = "[z](c.txt#L3) [w](docs/c.txt#L4)";
+    const text = "[z](c.txt#L3) [w](../docs/c.txt#L4)";
     assert.equal(e(text).text, text);
     assert.equal(e(text).anker, 0);
   });
