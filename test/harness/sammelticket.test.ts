@@ -25,6 +25,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { besitzAnker } from "../support/besitz-anker";
 
 // Die Kern-Doku nennt die Override-Zeile mit dem Platzhalter, nie mit dem Projektpräfix (die Tabelle in AGENTS.md setzt ihn ein); der Wächter braucht keine Projekt-Config.
 const OVERRIDE = "<praefixe.commitZeile>Diffsize-Override";
@@ -179,7 +180,7 @@ describe("keine Zeilengrenze für Sammeltickets (#1687, ADR 0026)", () => {
   });
 
   test("Positivkontrolle: die Liste deckt die Workflows ab, und der Nachfolger beim Claim (--vorgaenger) bleibt", () => {
-    assert.ok(dateien.includes(".github/workflows/board-takt.yml") && dateien.includes(".github/workflows/audit-einordnung.yml"));
+    for (const anker of besitzAnker((p) => /^\.github\/workflows\/[^/]+\.yml$/.test(p))) assert.ok(dateien.includes(anker), `Leerlauf-Schutz: ${anker} liegt im Scan`);
     assert.match(lies("scripts/sammelticket-anlegen.mjs"), /--vorgaenger/);
   });
 

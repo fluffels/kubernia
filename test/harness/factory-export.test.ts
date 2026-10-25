@@ -608,9 +608,10 @@ describe("Export aus HEAD", () => {
   test("AK4: Daten-Dateien der Kern-Wächter stehen nur mit ihrem Kern-Anteil im Export", () => {
     const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
     const pfade = new Set(echt.dateien.keys());
-    for (const p of ["test/harness/emoji-baseline.json", "eslint-suppressions.json", "any-suppressions.json"]) {
+    for (const p of ["eslint-suppressions.json", "any-suppressions.json"]) {
       for (const k of Object.keys(JSON.parse(text(p)) as object)) assert.ok(pfade.has(k), `${p}: ${k} ist kein Exportpfad`);
     }
+    for (const p of ["test/harness/emoji-baseline.json", "test/harness/emoji-ratchet-projekt.test.ts", "test/harness/emoji-ratchet.test.ts"]) assert.equal(pfade.has(p), false, `${p} gehört nicht in den Export (Projekt-Test samt Daten, #1933)`);
     const abdeckung = JSON.parse(text("test/harness/kern-abdeckung.json")) as Record<string, unknown>;
     assert.ok(Object.keys(abdeckung).length > 0);
     for (const k of Object.keys(abdeckung)) assert.ok(pfade.has(k), `kern-abdeckung: ${k} hat keinen Treffer im Export`);

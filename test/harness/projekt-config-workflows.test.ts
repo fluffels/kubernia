@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
+import { besitzAnker } from "../support/besitz-anker";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const EINSTIEG = "scripts/projekt-config.mjs";
@@ -131,8 +132,14 @@ describe("Sparse-Checkout der Workflows", () => {
     assert.deepEqual(huelle, ["scripts/docs-gen/markdown.mjs", "scripts/flag-lib.mjs", LIB, EINSTIEG, "scripts/skill-pfade.mjs", "scripts/spezifikation-lib.mjs"],`Hülle wächst: ${huelle.join(", ")}`);
   });
   test("Workflows mit board-place.mjs checken das volle Repo aus und richten Node ein (#1628)", () => {
-    const nutzer = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml") && lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));
-    assert.deepEqual(nutzer.sort(), ["ci.yml", "dependabot-inbox.yml", "forum-inbox.yml"]);
+    const vorhanden = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml"));
+    const nutzer = vorhanden.filter((n) => lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));
+    // Leerlauf-Schutz (#1933): jeder verteilte Besitz-Workflow liegt im Scan, und jeder davon, der board-place.mjs nennt, ist unter den Nutzern (Menge nicht leer).
+    const besitz = besitzAnker((p) => /^\.github\/workflows\/[^/]+\.yml$/.test(p)).map((p) => p.slice(".github/workflows/".length));
+    for (const n of besitz) assert.ok(vorhanden.includes(n), `Leerlauf-Schutz: ${n} liegt im Scan`);
+    const besitzNutzer = besitz.filter((n) => lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));
+    assert.ok(besitzNutzer.length > 0, "Leerlauf-Schutz: kein Besitz-Workflow nennt board-place.mjs");
+    for (const n of besitzNutzer) assert.ok(nutzer.includes(n), `${n} fehlt unter den board-place-Nutzern`);
     for (const n of nutzer) {
       const yml = lies(`.github/workflows/${n}`);
       assert.ok(!yml.includes("sparse-checkout:"), `${n}: board-place.mjs braucht seine ganze Import-Hülle, kein Sparse-Checkout`);

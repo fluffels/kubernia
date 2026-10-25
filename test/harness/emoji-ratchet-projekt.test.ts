@@ -1,7 +1,9 @@
 /* Emoji-Ratchet (#1311, Kind von #1222): Emojis als Icon brechen die Pixelart-Optik
  * (docs/art-direction.md). Die Zahl je Datei darf nur sinken.
  *
- * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ * @harness-waechter – Projekt-Test (bleibt im Projekt, zieht nicht ins Factory-Repo, #1933): Gegenstand ist die Pixelart-Optik
+ * dieses Projekts (Scope: src/ui, src/scenes, src/main.ts, src/content/data), kein Besitz. Einziger Durchsetzer seiner Regel,
+ * darum im geschützten test/harness/ (#1165).
  *
  * Gezählt wird `\p{Extended_Pictographic}` je versionierter Datei unter src/ui, src/scenes,
  * src/main.ts und src/content/data (ohne quests/** und smalltalk.json: Dialog-Prosa ist Sprache,
@@ -63,7 +65,7 @@ describe("Emoji-Ratchet (#1311)", () => {
       if (n > 0) ist[f] = n;
     }
     const baseline = JSON.parse(readFileSync(WURZEL + BASELINE, "utf8")) as Record<string, number>;
-    assert.ok(Object.keys(baseline).length > 10, "Baseline ist leer – Datei kaputt?");
+    assert.ok(IM_SCOPE("src/main.ts") && listTrackedFiles(WURZEL).includes("src/main.ts"), "Leerlauf-Schutz: src/main.ts liegt im Scope-Scan");
     assert.deepEqual(vergleiche(ist, baseline), []);
     // Test-eigener Timeout (keine Gate-Schwelle, kein globaler Anstieg): der Test startet `git ls-files` und liest jede Datei
     // im Scope von der Platte, das ist unter Last (parallele Vitest-Worker, Windows-Virenscanner) IO-gebunden und lässt

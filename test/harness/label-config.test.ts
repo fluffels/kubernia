@@ -227,7 +227,11 @@ describe("board-takt: Harness-Label der Abfrage", () => {
     T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, config: FAB, io });
     const abfrage = aufrufe.find((a) => a.includes("state=closed")) ?? "";
     expect(abfrage).toContain("labels=bereich%3Afabrik&since=");
-    expect(abfrage).not.toContain("harness");
+    // Der Label-Parameter selbst wird geprüft, nicht ein Teilstring der URL (der Repo-Name kann „harness“ enthalten).
+    const query = abfrage.split("?")[1]?.split(/\s/)[0] ?? "";
+    const labels = new URLSearchParams(query).getAll("labels");
+    expect(labels).toEqual(["bereich:fabrik"]);
+    expect(labels).not.toContain(ECHT.harness);
   });
 
   test("ohne Config oder ohne labels.harness wirft der Lauf, bevor gh aufgerufen wird", () => {

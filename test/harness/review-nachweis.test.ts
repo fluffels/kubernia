@@ -27,6 +27,7 @@ type Mod = {
   pflichtLenses: (d: unknown) => string[];
   bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown }) => string[];
 };
+import { besitzAnker } from "../support/besitz-anker";
 import { ohneKernEnv } from "../support/env-alt";
 import { FREMD, FREMD_CONFIG_PFAD, projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -202,7 +203,9 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
     const dateien = execFileSync("git", ["ls-files", ".claude", "AGENTS.md", "docs"], { encoding: "utf8", cwd: fileURLToPath(new URL("../../", import.meta.url)) })
       .split(/\r?\n/)
       .filter((d) => /\.(md|js)$/.test(d) && !d.startsWith("docs/adr/"));
-    assert.ok(dateien.length > 20, "Dateiliste unerwartet klein: git ls-files fehlgeschlagen?");
+    // Leerlauf-Schutz: jede verteilte Besitz-Datei des Scans liegt in der Liste (statt einer Größenschwelle des Projekts).
+    const anker = besitzAnker((p) => /^(\.claude\/|AGENTS\.md$|docs\/)/.test(p) && /\.(md|js)$/.test(p) && !p.startsWith("docs/adr/"));
+    for (const a of anker) assert.ok(dateien.includes(a), `Leerlauf-Schutz: ${a} liegt im Scan`);
     const treffer = dateien.flatMap((d) => unpraezise(read(d)).map((z) => `${d}: ${z.trim().slice(0, 80)}`));
     assert.deepEqual(treffer, []);
   });
