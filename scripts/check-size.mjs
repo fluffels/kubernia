@@ -49,7 +49,10 @@ export function countLines(text) {
   return lines.length
 }
 
-/** Sammelt alle `<quelle>/**\/*.ts` (repo-relativer POSIX-Pfad) mit ihrer Zeilenzahl,
+/** Quelldateien der JS/TS-Familie (Deklarationsdateien `.d.ts` zählen wie bisher mit); Daten und Doku zählen nicht. */
+const QUELLDATEI = /\.(ts|mts|cts|js|mjs|cjs)$/
+
+/** Sammelt alle Quelldateien der JS/TS-Familie unter `<quelle>/` (ts, mts, cts, js, mjs, cjs; repo-relativer POSIX-Pfad) mit ihrer Zeilenzahl,
  *  größte zuerst. `rootDir` ist überschreibbar, damit der Test deterministisch
  *  dasselbe Repo misst – unabhängig vom aktuellen Arbeitsverzeichnis. `quelle` ist die Quellwurzel;
  *  ohne Angabe gilt `struktur.quelle` der Projekt-Config (wirft ohne diesen Schlüssel, kein stiller Standardwert). */
@@ -59,7 +62,7 @@ export function collectSizes(rootDir = ROOT, quelle = strukturAus(ladeProjektCon
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, ent.name)
       if (ent.isDirectory()) walk(abs)
-      else if (ent.isFile() && ent.name.endsWith('.ts'))
+      else if (ent.isFile() && QUELLDATEI.test(ent.name))
         out.push({ file: relative(rootDir, abs).split(sep).join('/'), loc: countLines(readFileSync(abs, 'utf8')) })
     }
   }
