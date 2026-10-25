@@ -4,6 +4,381 @@
       "count": 1
     }
   },
+  "scripts/abnahme.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/audit-einordnung.mjs": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "scripts/besitz-extraktion.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/besitz-lib.mjs": {
+    "complexity": {
+      "count": 5
+    },
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "scripts/board-lib.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/board-place.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/board-takt.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/brain-metrics.mjs": {
+    "complexity": {
+      "count": 2
+    },
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "scripts/budget-lib.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/check-c4-harness.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/check-c4.mjs": {
+    "complexity": {
+      "count": 6
+    }
+  },
+  "scripts/check-diffcoverage.mjs": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "scripts/check-diffsize.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/check-docdrift.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/check-factory-drift.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/check-lockfile.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/check-review-nachweis.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/claims-pruefen.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/cleanup-worktrees.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/codescanning-inbox.mjs": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "scripts/docs-gen.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/docs-gen/diagramme.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/docs-gen/gates.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/docs-gen/harness-inventar.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/docs-gen/harness-kennzahlen.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/docs-gen/registry.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/factory-export-lib.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/factory-export.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/factory-sync-lib.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/factory-sync.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/flag-lib.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/forum-quarantaene.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/gh-guard-hook.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/harness-doctor.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/haupt-sync.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/hauptchat-zerlegung.mjs": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 2
+    }
+  },
+  "scripts/kontext-treiber.mjs": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "scripts/kontingent-lib.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/langfuse-abgleich-kern.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/langfuse-abgleich.mjs": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "scripts/langfuse-lock.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/langfuse-nachliefern.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/langfuse-otlp.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/langfuse-takt.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/langfuse-vorbedingung.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/lauf-ergebnis.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/mcp-ausfall.mjs": {
+    "complexity": {
+      "count": 2
+    },
+    "max-depth": {
+      "count": 2
+    }
+  },
+  "scripts/nachweis-lib.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/naechstes-ticket.mjs": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "scripts/pack-sprites.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/patch-zugriff.mjs": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 5
+    }
+  },
+  "scripts/pr-warten.mjs": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "scripts/pretooluse-hook.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/projekt-config-lib.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/projekt/docs-gen/quests.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/sammelticket-anlegen.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/sandbox-doctor.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/sbom.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/schichten-kern.cjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/skills-sync.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/spezifikation.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/statusline.mjs": {
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "scripts/stop-verify-hook.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/subagent-laeufe.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/ticket-lock.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/token-baseline.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/tool-metriken.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/transkript-calls.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/umsetzer-abschluss.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/wiedervorlage.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/worktree-aufraeumen.mjs": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "scripts/worktree-guard-powershell.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "src/content/scenario.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
