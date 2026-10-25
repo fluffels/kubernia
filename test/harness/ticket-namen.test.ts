@@ -13,6 +13,8 @@ import { join } from "node:path";
 import { lies, repoDateien } from "./repo-texte";
 import { FREMD, projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as configLibRaw from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as docsGenRaw from "../../scripts/docs-gen/markdown.mjs";
@@ -332,16 +334,13 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
   // Nadel per Verkettung gebaut, damit dieser Wächter sich nicht selbst trifft.
   // Bekannte Grenze: gefunden wird nur die wörtliche Zeichenklasse; eine umgestellte oder umgeordnete Klasse rutscht durch.
   const NADEL = "[.*+?^$" + "{}()|[\\]\\\\";
-  // Die erlaubten Quellen: Kern, docs-gen-Kern (darf nur node:* und sich selbst importieren) und die Produkt-Funktion;
-  // `.dependency-cruiser.cjs` ist ein CommonJS-Config, die den ESM-Kern nicht laden kann.
-  const ERLAUBT = [
-    "scripts/ticket-namen.mjs",
-    "scripts/docs-gen/markdown.mjs",
-    "src/content/drills/shared.ts",
-    ".dependency-cruiser.cjs",
-  ];
-  const kopien = (dateien: string[], lesen: (p: string) => string): string[] =>
-    dateien.filter((f) => /\.(?:ts|mjs|js|cjs)$/.test(f) && !ERLAUBT.includes(f) && lesen(f).includes(NADEL));
+  // Die erlaubten Quellen: Kern und docs-gen-Kern (darf nur node:* und sich selbst importieren) fest hier, die Projektkopien
+  // (z. B. ein CommonJS-Config, die den ESM-Kern nicht laden kann, oder eine Produkt-Funktion) aus `struktur.escapeKopien` der Config.
+  const ERLAUBT_KERN = ["scripts/ticket-namen.mjs", "scripts/docs-gen/markdown.mjs"];
+  const configKopien = (configLibRaw as unknown as { escapeKopienAus: (c: unknown) => string[] }).escapeKopienAus(ECHT);
+  const ERLAUBT = [...ERLAUBT_KERN, ...configKopien];
+  const kopien = (dateien: string[], lesen: (p: string) => string, erlaubt: string[] = ERLAUBT): string[] =>
+    dateien.filter((f) => /\.(?:ts|mjs|js|cjs)$/.test(f) && !erlaubt.includes(f) && lesen(f).includes(NADEL));
 
   test("außerhalb der erlaubten Quellen steht die Zeichenklasse nirgends im Code", () => {
     expect(kopien(repoDateien(), lies)).toEqual([]);
@@ -350,11 +349,18 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
     const inhalt: Record<string, string> = { "test/x.ts": `s.replace(/${NADEL}]/g, "")`, "scripts/ticket-namen.mjs": NADEL, "docs/a.md": NADEL };
     expect(kopien(Object.keys(inhalt), (p) => inhalt[p])).toEqual(["test/x.ts"]);
   });
+  test("eine Projektkopie aus der Config ist erlaubt, derselbe Pfad ohne Eintrag ist eine Kopie", () => {
+    const inhalt: Record<string, string> = { "lib/eigen.cjs": NADEL, "test/x.ts": NADEL };
+    const dateien = Object.keys(inhalt);
+    const lesen = (p: string) => inhalt[p];
+    expect(kopien(dateien, lesen, [...ERLAUBT_KERN, "lib/eigen.cjs"])).toEqual(["test/x.ts"]);
+    expect(kopien(dateien, lesen, ERLAUBT_KERN)).toEqual(["lib/eigen.cjs", "test/x.ts"]);
+  });
   test("docs-gen-Kopie maskiert dieselben Metazeichen wie der Kern (Drift-Schutz)", () => {
     for (const z of ".*+?^$" + "{}()|[]\\") expect(docsGen.escapeRegex(z), z).toBe(N.escapeRegex(z));
     expect(docsGen.escapeRegex("a/b-c")).toBe("a/b-c"); // wie bisher in docs-gen: `/` und `-` bleiben unmaskiert
   });
-  test("die erlaubten Quellen existieren und tragen die Zeichenklasse wirklich", () => {
+  test("die erlaubten Quellen (Kern und Config) existieren und tragen die Zeichenklasse wirklich", () => {
     for (const f of ERLAUBT) expect(lies(f), f).toContain(NADEL);
   });
 });

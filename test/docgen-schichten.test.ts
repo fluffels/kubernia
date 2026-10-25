@@ -4,11 +4,10 @@
  */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as schichten from "../scripts/docs-gen/schichten.mjs";
@@ -335,21 +334,21 @@ describe("Ist-Generator (dependency-cruiser als Prozess)", () => {
 });
 
 describe("Bindung an die echte Schicht-Zuordnung", () => {
-  const srcFiles = (): string[] => {
-    const out: string[] = [];
-    const walk = (rel: string) => {
-      for (const e of readdirSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), { withFileTypes: true })) {
-        if (e.isDirectory()) walk(`${rel}/${e.name}`);
-        else if (e.isFile() && e.name.endsWith(".ts")) out.push(`${rel}/${e.name}`);
-      }
-    };
-    walk("src");
-    return out;
+  /** Beispielpfade aus dem echten Modell: je Wurzel die Datei, die Datei im Ordner und die tiefe Datei, dazu ein Auffang-Pfad. */
+  const beispiele = (): string[] => {
+    const q = echt.SCHICHT_MODELL.quellwurzel;
+    const wurzeln = echt.SCHICHT_MODELL.schichten.flatMap((sch) => sch.wurzeln);
+    return [...wurzeln.flatMap((w) => [`${q}${w}.ts`, `${q}${w}/x.ts`, `${q}${w}/a/b.ts`]), `${q}zz-sonst.ts`];
   };
-  test("schichtVon stimmt für jede src-Datei mit layerOf überein", () => {
-    const files = srcFiles();
-    assert.ok(files.length > 100);
-    for (const f of files) assert.equal(api.schichtVon(f, echt.SCHICHT_MODELL), echt.layerOf(f), f);
+  test("schichtVon stimmt für Beispielpfade jeder Wurzel des Modells mit layerOf überein", () => {
+    const pfade = beispiele();
+    const wurzeln = echt.SCHICHT_MODELL.schichten.flatMap((sch) => sch.wurzeln);
+    assert.ok(pfade.length >= wurzeln.length, "mindestens ein Beispiel je Wurzel");
+    for (const f of pfade) assert.equal(api.schichtVon(f, echt.SCHICHT_MODELL), echt.layerOf(f), f);
+    assert.equal(api.schichtVon("ausserhalb/der/quellwurzel.ts", echt.SCHICHT_MODELL), null, "außerhalb der Quellwurzel gehört keiner Schicht");
+    // Gegen Leerlauf: jede Schicht des Modells kommt unter den Ergebnissen vor (Wurzel-Schichten und die Auffang-Schicht).
+    const ergebnisse = new Set(pfade.map((f) => echt.layerOf(f)));
+    for (const sch of echt.SCHICHT_MODELL.schichten) assert.ok(ergebnisse.has(sch.id), `Schicht ${sch.id} wird von keinem Beispielpfad getroffen`);
   });
   test("ladeModell lädt das echte Modell relativ zu rootDir", () => {
     assert.deepEqual(api.ladeModell(process.cwd(), "scripts/layers.cjs"), echt.SCHICHT_MODELL);

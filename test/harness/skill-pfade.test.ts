@@ -12,7 +12,7 @@
  * `.claude/skills`, `.agents/skills` (Skill-Quellen, #1848) und `agents`. Relative Pfade und URLs (`https://…`) bleiben erlaubt.
  * Nicht erkannt: UNC-Pfade, `~/…`, Umgebungsvariablen, Dateien außerhalb dieser drei Ordner
  * (`settings.json`, `scripts/`). Ein Laufwerks-Buchstabe, gefolgt von `\n`/`\r`/`\t` als eigenes Wort
- * (JS-Escape wie `"A:\n"`), zählt bewusst nicht als Pfad.
+ * (JS-Escape: Buchstabe, Doppelpunkt, Backslash, `n`), zählt bewusst nicht als Pfad.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -60,7 +60,7 @@ describe("Skill-Pfade (#1211)", { timeout: 30_000 }, () => {
     expect(findeAbsolutePfade("https://example.org/a und docs/referenz/x.md")).toEqual([]);
     expect(findeAbsolutePfade("`.claude/worktrees/kq-<nr>`")).toEqual([]);
     expect(findeAbsolutePfade("siehe docs/a/b und und/oder/so")).toEqual([]);
-    expect(findeAbsolutePfade("log('Phase A:\\n')")).toEqual([]);
+    expect(findeAbsolutePfade("log('Phase " + "A:" + "\\n')")).toEqual([]);
     expect(findeAbsolutePfade("Termin 12:30 und foo:bar")).toEqual([]);
   });
 

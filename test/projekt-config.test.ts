@@ -29,6 +29,7 @@ interface Pc {
   ergaenzungAusText(text: string | null): { allow: string[]; sandbox: { allowedDomains: string[]; envVars: unknown[] } };
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
+  escapeKopienAus(config: unknown): string[];
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
   umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
   kernEnvNamen(ordner: string): string[];
@@ -702,6 +703,33 @@ describe("Struktur-Pfade als Projektwert (#1843)", () => {
       assert.throws(() => pc.strukturAus({ struktur: { quelle: p, moduldoku: "d" } }), /repo-relativer POSIX-Pfad[\s\S]*Fix:/, p);
     }
     for (const p of ["src", "docs/module", "a/b.c/d"]) assert.deepEqual(mit({ quelle: p, moduldoku: p }), [], p);
+  });
+});
+
+describe("struktur.escapeKopien als Projektwert (#1934)", () => {
+  const mit = (k: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), struktur: { quelle: "src", moduldoku: "docs/module", escapeKopien: k } });
+
+  test("escapeKopienAus: ohne Block oder Schlüssel leer, sonst die Liste", () => {
+    assert.deepEqual(pc.escapeKopienAus({}), []);
+    assert.deepEqual(pc.escapeKopienAus({ struktur: { quelle: "s", moduldoku: "d" } }), []);
+    assert.deepEqual(pc.escapeKopienAus({ struktur: { quelle: "s", moduldoku: "d", escapeKopien: ["a/b.ts", "c.cjs"] } }), ["a/b.ts", "c.cjs"]);
+  });
+  test("escapeKopien: gültige Liste und leere Liste sind in Ordnung", () => {
+    assert.deepEqual(mit([]), []);
+    assert.deepEqual(mit(["a/b.ts", "c.cjs"]), []);
+  });
+  test("escapeKopien: kein Array, kein String, kein repo-relativer POSIX-Pfad oder doppelt wird gemeldet", () => {
+    assert.match(mit("a.ts").join("|"), /struktur\.escapeKopien muss eine Liste/);
+    assert.match(mit({}).join("|"), /struktur\.escapeKopien muss eine Liste/);
+    assert.match(mit([3]).join("|"), /struktur\.escapeKopien\[0\] muss ein nicht-leerer String/);
+    assert.match(mit([""]).join("|"), /struktur\.escapeKopien\[0\] muss ein nicht-leerer String/);
+    for (const p of ["/x", "a\\b", "../x", "C:/x", "a/", "./x"]) assert.match(mit([p]).join("|"), /struktur\.escapeKopien\[0\] muss ein repo-relativer POSIX-Pfad/, p);
+    assert.match(mit(["a.ts", "a.ts"]).join("|"), /struktur\.escapeKopien enthält a\.ts doppelt/);
+  });
+  test("escapeKopienAus: eine kaputte Liste wirft mit Fix-Zeile (kein stiller Standardwert)", () => {
+    for (const k of ["a.ts", ["/x"], [""], ["a", "a"]]) {
+      assert.throws(() => pc.escapeKopienAus({ struktur: { quelle: "s", moduldoku: "d", escapeKopien: k } }), /escapeKopien[\s\S]*Fix:/, JSON.stringify(k));
+    }
   });
 });
 

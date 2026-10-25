@@ -11,7 +11,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as raw from "../../scripts/pretooluse-hook.mjs";
@@ -23,6 +23,7 @@ import * as ghRaw0 from "../../scripts/gh-guard-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as tabRaw from "../../scripts/shell-tabellen.mjs";
 import { FREMD, projektConfig } from "../support/fremd-config";
+import { besitzAnker } from "../support/besitz-anker";
 
 const ghRaw = ghRaw0 as unknown as { GEPRUEFTE_TOOLS: string[]; bewerte: (c: string, o: unknown) => unknown };
 type Guards = Record<string, (o: never) => unknown>;
@@ -341,10 +342,13 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
     const guards = readdirSync(resolve(WURZEL, "scripts")).filter(
       (n) => /guard.*\.mjs$/.test(n) && (vomDispatcher.has(n) || lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)") || lies(`scripts/${n}`).startsWith("// Kein Einstieg, kein Direktaufruf")),
     );
-    assert.deepEqual(guards.sort(), [
-      "forum-leser-guard.mjs", "gh-guard-hook.mjs", "holdout-auftrag-guard.mjs", "holdout-guard.mjs", "lens-auftrag-guard.mjs", "lens-edit-guard.mjs",
+    // Geschlossene Liste der Kern-Guards (verteilt, im Export vorhanden); ein Projekt-Guard steht in dessen Projekt-Test (Forum: forum-quarantaene.test.ts).
+    const KERN_GUARDS = [
+      "gh-guard-hook.mjs", "holdout-auftrag-guard.mjs", "holdout-guard.mjs", "lens-auftrag-guard.mjs", "lens-edit-guard.mjs",
       "stdin-skript-guard.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs",
-    ]);
+    ];
+    const verteilt = besitzAnker((pfad) => /^scripts\/[^/]+\.mjs$/.test(pfad) && guards.includes(basename(pfad))).map((pfad) => basename(pfad));
+    assert.deepEqual(verteilt.sort(), KERN_GUARDS);
     for (const n of guards) {
       const kopf = /\/\*\*[\s\S]*?\*\//.exec(lies(`scripts/${n}`))?.[0] ?? "";
       assert.equal(kopf.split("\n").filter((z) => /^ \* Bewusste Grenzen:\s*$/.test(z)).length, 1, `${n}: Abschnitt „Bewusste Grenzen:“ genau einmal im Kopfkommentar`);

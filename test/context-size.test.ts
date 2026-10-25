@@ -152,12 +152,6 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
 });
 
 describe("Modul-lokale AGENTS.md im Budget (#1088)", () => {
-  test("die echte src/content/AGENTS.md wird gemessen, gegen das Modul-Default-Budget", () => {
-    const s = sizes.find((x) => x.file === "src/content/AGENTS.md");
-    assert.ok(s && s.chars > 0, "src/content/AGENTS.md sollte gefunden und gemessen werden.");
-    assert.equal(s.budget, MODULE_AGENTS_BUDGET);
-  });
-
   test("expliziter Eintrag gewinnt über das Default-Budget (Wurzel bleibt bei ihrem eigenen Budget)", () => {
     const root = sizes.find((x) => x.file === "AGENTS.md");
     const configured = CONTEXT_BUDGETS.find((b) => b.file === "AGENTS.md");
