@@ -412,6 +412,9 @@ describe("Extraktionsliste im echten Repo (#1875)", () => {
     for (const p of [".gitattributes", ".nvmrc"]) assert.equal(artVon(listeEcht, p), "infrastruktur", p);
     for (const p of ["package.json", "tsconfig.json", "eslint.config.js", "vite.config.ts", ".github/workflows/ci.yml"]) assert.equal(artVon(listeEcht, p), "infrastruktur-anteil", p);
   });
+  test("Pins: Seiten, die Kern-Tests lesen (ADR 0009, ADR 0016 samt Fortschreibung), sind factory-seite", () => {
+    for (const p of ["docs/adr/0009-pr-gating-required-checks.md", "docs/adr/0016-langfuse-takt-woechentlich.md", "docs/adr/fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md", "docs/adr/README.md"]) assert.equal(artVon(listeEcht, p), "factory-seite", p);
+  });
   test("jede Seite, auf die Besitz verlinkt (kern-links-baseline), ist als factory-seite eingetragen", () => {
     const paare = (JSON.parse(readFileSync(WURZEL + "test/harness/kern-links-baseline.json", "utf8")) as { paare: string[] }).paare;
     const ziele = [...new Set(paare.map((p) => p.split(" -> ")[1] ?? "").filter((z) => z.startsWith("docs/")))];

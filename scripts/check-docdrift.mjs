@@ -33,7 +33,7 @@
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { dirname, join, relative, sep, posix, resolve } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { fenceMaske } from "./docs-gen/markdown.mjs";
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
@@ -79,24 +79,51 @@ export function parseNpmRunMentions(md) {
 
 // ── Links & Anker ────────────────────────────────────────────────────────────────
 
-/** Extrahiert interne Markdown-Links (inkl. Bilder) aus `md`. Externe Links
- *  (http/https/mailto/tel/Protokoll-relativ) werden ausgelassen. Rückgabe je
- *  Link: { target, path, anchor } — path repo-/datei-relativ wie geschrieben,
- *  anchor ohne führendes `#` (oder ""). Aus Code-Fence- und Inline-Code-
- *  bereinigtem Text (Beispiel-Links in Backticks zählen nicht). */
-export function extractLinks(md) {
-  const clean = stripFencedCode(md).replace(/`[^`\n]*`/g, "");
+/** Maskiert Code-Fences und Inline-Code längentreu (Leerzeichen statt Inhalt, Zeilenumbrüche
+ *  bleiben): Positionen im maskierten Text gelten unverändert im Original. */
+function codeMaskiert(md) {
+  const zeilen = md.split("\n");
+  const maske = fenceMaske(zeilen.map((z) => z.replace(/\r$/, "")));
+  return zeilen
+    .map((z, i) => (maske[i] ? z.replace(/[^\r]/g, " ") : z.replace(/`[^`\n]*`/g, (s) => " ".repeat(s.length))))
+    .join("\n");
+}
+
+/** Interne Markdown-Links (inkl. Bilder) mit Position im Original: { start, ende, text, bild,
+ *  target, path, anchor }. `start`/`ende` begrenzen den ganzen Link `[text](ziel)`, `text` ist die
+ *  Beschriftung, `bild` kennzeichnet `![alt](ziel)`. Externe Ziele (http/https/mailto/tel/
+ *  Protokoll-relativ) fehlen; Links in Code-Fences und Inline-Code zählen nicht. */
+export function linkStellen(md) {
+  const clean = codeMaskiert(md);
   const out = [];
   // [text](target) oder ![alt](target), Ziel bis Leerzeichen/Klammer, optionaler "Titel"
-  for (const m of clean.matchAll(/!?\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)) {
-    const target = m[1];
+  for (const m of clean.matchAll(/(!?)\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)) {
+    const target = m[3];
     if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)) continue; // http:, mailto:, //cdn …
     const hashAt = target.indexOf("#");
     const path = hashAt < 0 ? target : target.slice(0, hashAt);
     const anchor = hashAt < 0 ? "" : target.slice(hashAt + 1);
-    out.push({ target, path, anchor });
+    const start = m.index;
+    const textStart = start + m[1].length + 1;
+    out.push({ start, ende: start + m[0].length, text: md.slice(textStart, textStart + m[2].length), bild: m[1] === "!", target, path, anchor });
   }
   return out;
+}
+
+/** Interne Links: { target, path, anchor } — path repo-/datei-relativ wie geschrieben, anchor ohne
+ *  führendes `#` (oder ""). */
+export function extractLinks(md) {
+  return linkStellen(md).map(({ target, path, anchor }) => ({ target, path, anchor }));
+}
+
+/** Löst den Link-Pfad `pfad` einer Datei `datei` (repo-relativer POSIX-Pfad) auf einen repo-relativen
+ *  POSIX-Pfad auf; `/` am Anfang meint die Repo-Wurzel, ein `:zeile`-Suffix (foo.ts:42) und
+ *  Schrägstriche am Ende entfallen. */
+export function linkZiel(datei, pfad) {
+  const clean = pfad.replace(/:\d+$/, "");
+  const roh = clean.startsWith("/") ? clean.slice(1) : posix.join(posix.dirname(datei), clean);
+  const r = posix.normalize(roh).replace(/\/+$/, "");
+  return r === "." ? "" : r;
 }
 
 /** GitHub-Überschriften-Slug: klein, Markup entfernt, Satzzeichen/Emoji raus,
@@ -223,10 +250,9 @@ export function auditDocDrift(rootDir = ROOT) {
   const deadLinks = [];
   const deadAnchors = [];
   for (const f of mdFiles) {
-    const dir = posix.dirname(f);
     for (const { target, path, anchor } of extractLinks(content.get(f))) {
       // Reiner Anker (#foo) → Ziel ist die Datei selbst.
-      const targetFile = path === "" ? f : normalizeRel(dir, path, rootDir);
+      const targetFile = path === "" ? f : linkZiel(f, path);
 
       if (path !== "") {
         const abs = join(rootDir, targetFile);
@@ -249,16 +275,6 @@ export function auditDocDrift(rootDir = ROOT) {
   const verifyChainViolations = auditVerifyChain(rootDir, mdFiles, content, pkg.scripts ?? {});
 
   return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations };
-}
-
-/** Löst einen relativen (oder `/`-absoluten) Link-Pfad auf repo-relativen
- *  POSIX-Pfad auf; strippt einen `:zeile`-Suffix (z.B. foo.ts:42). */
-function normalizeRel(dir, path, rootDir) {
-  const clean = path.replace(/:\d+$/, "");
-  const abs = clean.startsWith("/")
-    ? join(rootDir, clean.slice(1))
-    : resolve(join(rootDir, dir), clean);
-  return relative(rootDir, abs).split(sep).join("/");
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────

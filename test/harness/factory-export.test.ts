@@ -5,10 +5,10 @@
  *
  * Reale Quelle ist `HEAD` dieses Repos (gelesen per git wie beim Sync). Ein uncommittetes Vorlagen-File macht den Integrationsteil darum rot:
  * erst committen, dann testen. Die Negativfälle verändern einen Hüll-Leser (`mitAenderung`), nie die Datei auf der Platte. */
-import { afterEach, beforeAll, describe, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 import * as rawExport from "../../scripts/factory-export.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../../scripts/factory-export-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawDocdrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawSync from "../../scripts/factory-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -39,7 +41,7 @@ interface Leser {
 interface Ergebnis {
   dateien: Map<string, { text: string; ausfuehrbar: boolean }>;
   befunde: string[];
-  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][]; praefixUmgeschrieben: number };
+  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][]; praefixUmgeschrieben: number; entlinkt: { links: number; anker: number; ziele: [string, number][] } };
 }
 interface Lock {
   name?: string;
@@ -62,11 +64,13 @@ const lib = rawLib as unknown as {
   pruefeLokalePfade(d: Map<string, string>, repos: string[]): { befunde: string[]; durchgelassen: number; jeMuster: number[] };
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   schreibePraefixUm(text: string, von: string, nach: string): { text: string; anzahl: number };
+  entlinke(text: string, seite: string, h: { gibt(p: string): boolean; ueberschriften(p: string): Set<string> | null }): { text: string; links: number; anker: number; ziele: Map<string, number> };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
   pruefeSchutzliste(e: { vorlage: string; codeowners: string; quelle: string; pfade: string[] }): string[];
   SCHUTZ_OHNE_TREFFER: string[];
 };
+const docdrift = rawDocdrift as unknown as { auditDocDrift(wurzel: string): { deadLinks: { file: string; target: string; resolved: string }[]; deadAnchors: { file: string; target: string }[] } };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
 const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] } };
 
@@ -206,6 +210,52 @@ describe("schreibePraefixUm (#1932)", () => {
   });
   test("ein Präfix mit Regex-Zeichen wird wörtlich genommen", () => {
     assert.equal(lib.schreibePraefixUm("A.-Review und AX-Review", "A.-", "B-").text, "B-Review und AX-Review");
+  });
+});
+
+describe("entlinke (#1935)", () => {
+  const SEITE = "docs/a.md";
+  const dateien: Record<string, string[]> = { "docs/b.md": ["titel", "zweiter-abschnitt"], "docs/c.txt": [], "ordner/x.md": [] };
+  const h = {
+    gibt: (p: string): boolean => p === "" || p in dateien || Object.keys(dateien).some((d) => d.startsWith(`${p}/`)),
+    ueberschriften: (p: string): Set<string> | null => (p.endsWith(".md") && p in dateien ? new Set(dateien[p]) : null),
+  };
+  const e = (text: string) => lib.entlinke(text, SEITE, h);
+
+  test("ein Link auf ein Ziel außerhalb des Exports wird zu seinem Text, ein Bild zu seinem Alt-Text", () => {
+    const r = e("Siehe [Spiel](../src/x.ts) und ![Skizze](tot.png) sowie [ok](b.md).");
+    assert.equal(r.text, "Siehe Spiel und Skizze sowie [ok](b.md).");
+    assert.equal(r.links, 2);
+    assert.equal(r.anker, 0);
+    assert.deepEqual([...r.ziele], [["src/x.ts", 1], ["docs/tot.png", 1]].sort(([a], [b]) => (String(a) < String(b) ? -1 : 1)));
+  });
+  test("ein toter Anker auf eine Export-Datei wird gestrichen, der Link bleibt (mit Titel erhalten)", () => {
+    const r = e('[a](b.md#gibt-es-nicht) [b](b.md#titel "T") [c](b.md#zweiter-abschnitt)');
+    assert.equal(r.text, '[a](b.md) [b](b.md#titel "T") [c](b.md#zweiter-abschnitt)');
+    assert.equal(r.anker, 1);
+    assert.equal(r.links, 0);
+  });
+  test("ein toter Selbst-Anker macht den Link zum Text, ein lebender bleibt", () => {
+    const r = e("# Kopf\n\n[x](#weg) und [y](#kopf)");
+    assert.equal(r.text, "# Kopf\n\nx und [y](#kopf)");
+    assert.equal(r.anker, 1);
+  });
+  test("ein Anker auf ein Ziel ohne Überschriften (kein Markdown) bleibt unberührt", () => {
+    const text = "[z](c.txt#L3) [w](docs/c.txt#L4)";
+    assert.equal(e(text).text, text);
+    assert.equal(e(text).anker, 0);
+  });
+  test("Code-Bereiche, externe und lebende Links (auch auf einen Ordner) bleiben", () => {
+    const text = ["```", "[bsp](tot.md)", "```", "`[i](tot.md)` [e](https://x.de/tot.md) [o](../ordner/) [o2](../ordner/x.md)"].join("\n");
+    const r = e(text);
+    assert.equal(r.text, text);
+    assert.equal(r.links, 0);
+  });
+  test("mehrere Links in einer Zeile behalten ihre Positionen, die Ziel-Zählung addiert je Vorkommen", () => {
+    const r = e("[a](t.md) mitte [b](t.md) und [c](u.md)");
+    assert.equal(r.text, "a mitte b und c");
+    assert.equal(r.ziele.get("docs/t.md"), 2);
+    assert.equal(r.ziele.size, 2);
   });
 });
 
@@ -473,6 +523,60 @@ describe("Export aus HEAD", () => {
     assert.match(harness, /SIH-Lockfile-Override/);
     assert.doesNotMatch(harness, /(?<![\w-])KQ-\p{Lu}/u);
     assert.ok(echt.bericht.praefixUmgeschrieben > 0);
+  });
+
+  describe("#1935: Entlinken in baueExport", () => {
+    const SEITE = "docs/agent-harness.md";
+    const KERN = "scripts/besitz-lib.mjs";
+    const zusatz = (pfad: string, text: string): string => `${leser.lies(pfad) ?? ""}\n${text}\n`;
+
+    test("eine Factory-Seite mit totem Link und totem Anker wird entlinkt, der Bericht nennt Zahl und Ziel", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, "[Probe](src/gibt-es-nicht-1935.ts) und [A](agent-harness-faq.md#gibt-es-nicht-1935)") }) });
+      assert.deepEqual(r.befunde, []);
+      const text = r.dateien.get(SEITE)?.text ?? "";
+      assert.match(text, /\nProbe und \[A\]\(agent-harness-faq\.md\)\n/);
+      assert.equal(r.bericht.entlinkt.links, echt.bericht.entlinkt.links + 1);
+      assert.equal(r.bericht.entlinkt.anker, echt.bericht.entlinkt.anker + 1);
+      assert.ok(r.bericht.entlinkt.ziele.some(([z, n]) => z === "docs/src/gibt-es-nicht-1935.ts" && n === 1));
+    });
+    test("dieselbe Zeile in einer Besitz-Datei bleibt stehen (nur Factory-Seiten werden entlinkt)", () => {
+      const zeile = "// [Probe](src/gibt-es-nicht-1935.ts)";
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [KERN]: zusatz(KERN, zeile) }) });
+      assert.deepEqual(r.befunde, []);
+      assert.ok(r.dateien.get(KERN)?.text.includes(zeile));
+      assert.equal(r.bericht.entlinkt.links, echt.bericht.entlinkt.links);
+    });
+    test("der echte Export entlinkt Links (Zahl und Ziele im Bericht) und der Lauf nennt sie", () => {
+      assert.ok(echt.bericht.entlinkt.links > 0);
+      assert.equal(echt.bericht.entlinkt.ziele.reduce((s, [, n]) => s + n, 0), echt.bericht.entlinkt.links);
+      const out = lauf(["--ziel", leerOrdner()], leser).out;
+      assert.match(out, new RegExp(`Factory-Seiten entlinkt: ${echt.bericht.entlinkt.links} Links auf ${echt.bericht.entlinkt.ziele.length} Ziele, ${echt.bericht.entlinkt.anker} Anker gestrichen`));
+    });
+  });
+
+  describe("#1935: Docdrift auf dem geschriebenen Export", () => {
+    const ZIEL_ADR = ["docs/adr/0016-langfuse-takt-woechentlich.md", "docs/adr/0009-pr-gating-required-checks.md"];
+    let ordner = "";
+    beforeAll(() => {
+      ordner = mkdtempSync(join(tmpdir(), "fexp-dd-"));
+      assert.equal(lauf(["--ziel", ordner], leser).code, 0);
+    }, 60_000);
+    afterAll(() => rmSync(ordner, { recursive: true, force: true }));
+
+    test("tote Links und tote Anker gibt es im Export nicht", () => {
+      const r = docdrift.auditDocDrift(ordner);
+      assert.deepEqual(r.deadLinks, []);
+      assert.deepEqual(r.deadAnchors, []);
+    });
+    test.each(ZIEL_ADR)("Negativfall: fehlt die mitgegebene Seite %s im Export, ist Docdrift dort rot", (seite) => {
+      assert.ok(existsSync(join(ordner, seite)), "die Seite liegt im Export");
+      const kopie = mkdtempSync(join(tmpdir(), "fexp-dd-"));
+      temp.push(kopie);
+      cpSync(ordner, kopie, { recursive: true });
+      rmSync(join(kopie, seite));
+      const r = docdrift.auditDocDrift(kopie);
+      assert.ok(r.deadLinks.some((l) => l.resolved === seite), "ein Link auf die Seite ist tot");
+    });
   });
 
   describe("#1932: Umschreib-Guards in baueExport", () => {
