@@ -2,7 +2,7 @@
 // des Doku-Drift-Wächters (#1355, #1392): Markdown sammeln, Code-Fences erkennen, Frontmatter lesen,
 // dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (nur Builtins).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { isAbsolute, join, posix, relative, sep } from "node:path";
 
 /**
  * Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Richtlinie (Gegenstück: `zelle` in scripts/abnahme.mjs): `cell` maskiert generierte Zellen mit
@@ -235,4 +235,84 @@ export function parseSections(text) {
   });
   if (open) errors.push({ section: open.name, message: `END-Marker für "${open.name}" fehlt (START in Zeile ${open.startLine + 1})` });
   return { sections, errors };
+}
+
+// ── Links und Überschriften-Anker (Doku-Drift-Wächter, Export-Werkzeug) ──────────
+
+/** Ersetzt Zeilen innerhalb ``` / ~~~ -Fences durch Leerzeilen (Zeilenzahl bleibt
+ *  erhalten). So werden `#`-Kommentare in bash-Blöcken NICHT als Überschrift und
+ *  Beispiel-Links in Codeblöcken NICHT als echter Link gewertet. */
+export function stripFencedCode(md) {
+  const lines = md.split(/\r?\n/);
+  const maske = fenceMaske(lines);
+  return lines.map((line, i) => (maske[i] ? "" : line)).join("\n");
+}
+
+/** Maskiert Code-Fences und Inline-Code längentreu (Leerzeichen statt Inhalt, Zeilenumbrüche
+ *  bleiben): Positionen im maskierten Text gelten unverändert im Original. */
+function codeMaskiert(md) {
+  const zeilen = md.split("\n");
+  const maske = fenceMaske(zeilen.map((z) => z.replace(/\r$/, "")));
+  return zeilen
+    .map((z, i) => (maske[i] ? z.replace(/[^\r]/g, " ") : z.replace(/`[^`\n]*`/g, (s) => " ".repeat(s.length))))
+    .join("\n");
+}
+
+/** Interne Markdown-Links (inkl. Bilder) mit Position im Original: { start, ende, text, bild,
+ *  target, path, anchor }. `start`/`ende` begrenzen den ganzen Link `[text](ziel)`, `text` ist die
+ *  Beschriftung, `bild` kennzeichnet `![alt](ziel)`. Externe Ziele (http/https/mailto/tel/
+ *  Protokoll-relativ) fehlen; Links in Code-Fences und Inline-Code zählen nicht. */
+export function linkStellen(md) {
+  const clean = codeMaskiert(md);
+  const out = [];
+  // [text](target) oder ![alt](target), Ziel bis Leerzeichen/Klammer, optionaler "Titel"
+  for (const m of clean.matchAll(/(!?)\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)) {
+    const target = m[3];
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)) continue; // http:, mailto:, //cdn …
+    const hashAt = target.indexOf("#");
+    const path = hashAt < 0 ? target : target.slice(0, hashAt);
+    const anchor = hashAt < 0 ? "" : target.slice(hashAt + 1);
+    const start = m.index;
+    const textStart = start + m[1].length + 1;
+    out.push({ start, ende: start + m[0].length, text: md.slice(textStart, textStart + m[2].length), bild: m[1] === "!", target, path, anchor });
+  }
+  return out;
+}
+
+/** Löst den Link-Pfad `pfad` einer Datei `datei` (repo-relativer POSIX-Pfad) auf einen repo-relativen
+ *  POSIX-Pfad auf; `/` am Anfang meint die Repo-Wurzel, ein `:zeile`-Suffix (foo.ts:42) und
+ *  Schrägstriche am Ende entfallen. */
+export function linkZiel(datei, pfad) {
+  const clean = pfad.replace(/:\d+$/, "");
+  const roh = clean.startsWith("/") ? clean.slice(1) : posix.join(posix.dirname(datei), clean);
+  const r = posix.normalize(roh).replace(/\/+$/, "");
+  return r === "." ? "" : r;
+}
+
+/** GitHub-Überschriften-Slug: klein, Markup entfernt, Satzzeichen/Emoji raus,
+ *  Leerzeichen → Bindestrich. Duplikate hängt der Aufrufer mit -1/-2 an. */
+export function slugify(headingText) {
+  return headingText
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) → text
+    .replace(/[`*_~]/g, "") // Inline-Markup-Zeichen entfernen
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "") // nur Buchstaben/Zahlen/Space/_/- behalten
+    .replace(/\s/g, "-");
+}
+
+/** Alle Überschriften-Anker einer Markdown-Datei (GitHub-Slugs inkl. -1/-2 bei
+ *  Duplikaten). Code-Fences ausgeblendet, damit `#`-Kommentare nicht zählen. */
+export function collectHeadingSlugs(md) {
+  const slugs = [];
+  const seen = new Map();
+  for (const line of stripFencedCode(md).split(/\r?\n/)) {
+    const m = line.match(/^(#{1,6})\s+(.*\S)\s*$/);
+    if (!m) continue;
+    const base = slugify(m[2]);
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    slugs.push(n === 0 ? base : `${base}-${n}`);
+  }
+  return slugs;
 }

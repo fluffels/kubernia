@@ -27,6 +27,8 @@ import { FREMD } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { linkStellen as linkStellenRoh, linkZiel as linkZielRoh } from "../scripts/check-docdrift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ROLLEN_PFADE } from "../scripts/projekt-config-lib.mjs";
@@ -38,9 +40,8 @@ const parseNpmRunMentions: (md: string) => Set<string> = checkDocDrift.parseNpmR
 const extractLinks: (md: string) => { target: string; path: string; anchor: string }[] =
   checkDocDrift.extractLinks;
 const slugify: (t: string) => string = checkDocDrift.slugify;
-const linkStellen: (md: string) => { start: number; ende: number; text: string; bild: boolean; target: string; path: string; anchor: string }[] =
-  checkDocDrift.linkStellen;
-const linkZiel: (datei: string, pfad: string) => string = checkDocDrift.linkZiel;
+const linkStellen = linkStellenRoh as (md: string) => { start: number; ende: number; text: string; bild: boolean; target: string; path: string; anchor: string }[];
+const linkZiel = linkZielRoh as (datei: string, pfad: string) => string;
 const collectHeadingSlugs: (md: string) => string[] = checkDocDrift.collectHeadingSlugs;
 const auditDocDrift: () => {
   deadCommands: { file: string; script: string }[];
@@ -177,7 +178,7 @@ describe("Harness-Doku-Drift (#529)", () => {
     const md = ["```", "[bsp](tot.md)", "```", "Code `[y](z.md)` und [echt](ziel.md)."].join("\r\n");
     const stellen = linkStellen(md);
     assert.equal(stellen.length, 1);
-    const s = stellen[0]!;
+    const s = stellen[0];
     assert.equal(md.slice(s.start, s.ende), "[echt](ziel.md)");
   });
 

@@ -12,7 +12,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync 
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { collectHeadingSlugs } from "./check-docdrift.mjs";
+import { collectHeadingSlugs } from "./docs-gen/markdown.mjs";
 import { istGanzeDatei, normalisiereEol, projektwertDateien, pruefeManifest, rendereProjektwerte } from "./besitz-lib.mjs";
 import { artVon, EXTRAKTION_PFAD, MITZIEHEND, musterRegex, pruefeExtraktion } from "./besitz-extraktion.mjs";
 import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";

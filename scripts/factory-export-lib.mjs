@@ -13,7 +13,7 @@ import { posix } from "node:path";
 import { begriffeAus } from "./besitz-lib.mjs";
 import { importeAus, relativeImporte, zielDatei } from "./besitz-extraktion.mjs";
 import { isCheckable } from "./check-basis.mjs";
-import { collectHeadingSlugs, linkStellen, linkZiel } from "./check-docdrift.mjs";
+import { collectHeadingSlugs, linkStellen, linkZiel } from "./docs-gen/markdown.mjs";
 import { pfadBefunde } from "./internalrefs-lib.mjs";
 import { trifftLeitplanke } from "./umsetzer-abschluss.mjs";
 
