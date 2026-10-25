@@ -460,12 +460,13 @@ describe("haupt-sync: Skill-Verzeichnis als Kern-Pfad (#1748)", () => {
     return name === soll ? null : `name im Frontmatter von ${TICKET_QUELLE} ist '${name}', agenten.ticketSkill der Config ist '${soll}'`;
   };
   test("Fitness: name im Frontmatter der Ticket-Skill-Quelle ist agenten.ticketSkill der echten Config", () => {
-    expect(ticketSkillNameBefund(ladeProjektConfig(), lies(TICKET_QUELLE))).toBeNull();
+    // Die Datei des Repos selbst, nicht `ladeProjektConfig()`: die Fremd-Config-Probe tauscht deren Quelle, die Skill-Quelle bleibt die echte.
+    expect(ticketSkillNameBefund(JSON.parse(lies(".factory/projekt.json")) as Cfg, lies(TICKET_QUELLE))).toBeNull();
   });
   test("Fitness-Probe: eine Config mit anderem Namen (…-gibtsnicht) meldet den Unterschied, ein Frontmatter ohne name ebenso", () => {
     const dir = mkdtempSync(join(tmpdir(), "lz-skillname-"));
     try {
-      const echt = ladeProjektConfig() as { agenten: Record<string, string> };
+      const echt = JSON.parse(lies(".factory/projekt.json")) as { agenten: Record<string, string> };
       const pfad = join(dir, "projekt.json");
       writeFileSync(pfad, JSON.stringify({ ...echt, agenten: { ...echt.agenten, ticketSkill: `${echt.agenten.ticketSkill}-gibtsnicht` } }));
       expect(ticketSkillNameBefund(ladeProjektConfig({ pfad }), lies(TICKET_QUELLE))).toMatch(/-gibtsnicht/);
