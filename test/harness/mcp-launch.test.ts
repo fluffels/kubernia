@@ -4,6 +4,7 @@
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
 import { afterAll, describe, expect, test } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { nurDurchEigenenEintrag } from "../support/schutzliste";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -80,7 +81,7 @@ describe("starte (gestubbter Kindprozess)", () => {
   type Kind = { on: (e: string, f: (...a: unknown[]) => void) => void; kill: (s: string) => void; ereignisse: Record<string, (...a: unknown[]) => void>; getoetet: string[] };
   type Aufruf = { befehl: string; args: string[]; opt: Record<string, unknown> };
   const starte = (launchRoh as unknown as { starte: (o: Record<string, unknown>, d: Record<string, unknown>) => void }).starte;
-  const lauf = (dateien: Record<string, string>, extra: Record<string, unknown> = {}) => {
+  const lauf = (dateien: Record<string, string>, extra: Record<string, unknown> = {}, plattform?: string) => {
     const root = fixture(dateien);
     const stderr: string[] = [];
     const aufrufe: Aufruf[] = [];
@@ -94,6 +95,7 @@ describe("starte (gestubbter Kindprozess)", () => {
         stderr: { write: (t: string) => stderr.push(t) },
         exit: (c: number) => exits.push(c),
         onSignal: (sig: string, fn: () => void) => { signale[sig] = fn; },
+        ...(plattform ? { plattform } : {}),
       },
     );
     return { root, stderr, aufrufe, exits, signale, kind };
@@ -149,6 +151,34 @@ describe("starte (gestubbter Kindprozess)", () => {
     expect(r.exits).toEqual([1]);
   });
 
+  test("Ende nur durch Signal (code null): Exit 1 und Ausfallzeile mit Signal; ohne Code und Signal Exit 0", () => {
+    const r = lauf(installiert("1.2.3"));
+    r.kind.ereignisse.exit(null, "SIGKILL");
+    expect(r.exits).toEqual([1]);
+    expect(r.stderr.join("")).toMatch(/^x-mcp: Server beendet \(Signal SIGKILL, nach \d+ s, Modus local\)\n$/);
+    const still = lauf(installiert("1.2.3"));
+    still.kind.ereignisse.exit(null, null);
+    expect(still.exits).toEqual([0]);
+  });
+
+  test("lokale Installation während der Laufzeit ersetzt: auch Exit 0 meldet es, im npx-Modus nie", () => {
+    const r = lauf(installiert("1.2.3"));
+    rmSync(join(r.root, "node_modules/@scope/x/cli.js"));
+    r.kind.ereignisse.exit(0, null);
+    expect(r.exits).toEqual([0]);
+    expect(r.stderr.join("")).toContain("; lokale Installation während der Laufzeit ersetzt, etwa durch npm ci");
+    const npx = lauf({ "package-lock.json": lock });
+    npx.stderr.length = 0;
+    npx.kind.ereignisse.exit(0, null);
+    expect(npx.stderr).toEqual([]);
+  });
+
+  test("npx-Start: shell nur unter win32 (Plattform injiziert), der lokale Start setzt nie shell", () => {
+    expect(lauf({ "package-lock.json": lock }, {}, "win32").aufrufe[0].opt).toMatchObject({ shell: true });
+    expect(lauf({ "package-lock.json": lock }, {}, "linux").aufrufe[0].opt).toMatchObject({ shell: false });
+    expect(lauf(installiert("1.2.3"), {}, "win32").aufrufe[0].opt).not.toHaveProperty("shell");
+  });
+
   test("Signal vom Host: wird an den Server weitergereicht und gilt nicht als Ausfall", () => {
     const r = lauf(installiert("1.2.3"));
     r.signale.SIGTERM();
@@ -156,5 +186,11 @@ describe("starte (gestubbter Kindprozess)", () => {
     r.kind.ereignisse.exit(1, null); // Exit ≠ 0 nach Signal vom Host: kein Ausfall
     expect(r.stderr).toEqual([]);
     expect(r.exits).toEqual([1]);
+  });
+});
+
+describe("Schutzliste (.github/protected-paths.json): scripts/mcp-launch.mjs", () => {
+  test("ist eine Leitplanke der echten Liste nur durch seinen eigenen Eintrag (`/scripts/*-mcp.mjs` deckt es nicht)", () => {
+    expect(nurDurchEigenenEintrag("scripts/mcp-launch.mjs")).toEqual({ trifftEchte: true, trifftOhneEintrag: false });
   });
 });

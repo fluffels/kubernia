@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+import { mcpSkripte } from "./hook-importe";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 
@@ -39,6 +40,10 @@ const ergaenzungsZeilen = (doku: string): string[] => {
 };
 
 describe("MCP-Module des Projekts in der Berechtigungs-Ergänzung (#1931)", () => {
+  test("das echte .mcp.json startet mindestens ein Skript (sonst prüft der Sandbox-Import-Wächter nichts)", () => {
+    assert.ok(mcpSkripte(lese(".mcp.json")).length >= 1);
+  });
+
   const erg = pc.berechtigungenAus(config);
 
   test("allow trägt Browser und Diagramm, deny sperrt genau PixelLab list_projects", () => {

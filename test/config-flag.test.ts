@@ -8,6 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
+// @ts-expect-error: kein .d.ts für die .mjs-Test-Naht; `STUB_RESET` ist die Signatur eines Stub-Laufs im Kosten-Log.
+import { STUB_RESET } from "./support/gh-stub.mjs";
 
 const WURZEL = join(__dirname, "..");
 const ordner: string[] = [];
@@ -20,8 +22,6 @@ afterAll(() => {
   for (const d of ordner) rmSync(d, { recursive: true, force: true });
 });
 
-/** `reset` der gestubbten `rate_limit`-Antwort (test/support/gh-stub.mjs): Signatur eines Stub-Laufs im Kosten-Log. */
-const STUB_RESET = 4102444800;
 const STUB = pathToFileURL(join(WURZEL, "test", "support", "gh-stub.mjs")).href;
 
 /** Läuft offline: `gh` ist gestubbt (`rate_limit` voll, sonst `[]`), das Kosten-Log liegt im Temp-Ordner, nicht im Repo; `cwd` bestimmt, woran `git` arbeitet. */
