@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { SPIEL_QUOTE } from "../../scripts/spielquote-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const agents = readFileSync(WURZEL + "AGENTS.md", "utf8").replace(/\r\n/g, "\n");
@@ -48,5 +50,14 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
   test("der Projekt-Block trägt den Projektteil der Ticket-Auswahl (--bereich spiel, Spielquote) (#1932)", () => {
     assert.match(projektBlock, /--bereich spiel/);
     assert.match(projektBlock, /Spielquote/);
+  });
+  test("die Spielquote im Projekt-Block ist an die Konstante der Auswahl gebunden (#1663 T5, #1935)", () => {
+    const quote = SPIEL_QUOTE as number;
+    const zahlen = (re: RegExp): number[] => [...agents.matchAll(re)].map((m) => Number(m[1]));
+    for (const re of [/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/g, /Spielquote 1:(\d+)/g]) {
+      const z = zahlen(re);
+      assert.ok(z.length >= 1, `Muster ${re} trifft zu selten`);
+      assert.deepEqual(z.filter((n) => n !== quote), [], `Muster ${re}: ${z.join(", ")} statt ${quote}`);
+    }
   });
 });

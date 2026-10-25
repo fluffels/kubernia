@@ -408,7 +408,6 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const adr = lies("docs/adr/0016-langfuse-takt-woechentlich.md");
     const yml = lies(".github/workflows/board-takt.yml");
     const doc = lies("docs/ticket-reihenfolge.md");
-    const agents = lies("AGENTS.md");
     const fortschreibung = lies("docs/adr/fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md");
     expect(Number(/mindestens (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     bindeAlle(/ab (\d+) Befund-Kommentaren/g, yml, T.HARNESS_TAKT_KOMMENTARE);
@@ -432,9 +431,6 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     bindeAlle(/erst ab (\d+) Befund-Kommentaren als frei/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
     bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
     expect(Number(/Harness-Sammelticket ab (\d+) Befund-Kommentaren/.exec(lies("docs/referenz/anlaufstellen.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
-    // #1663 T5: auch die Regel in AGENTS.md trägt beide Zahlen.
-    bindeAlle(/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/g, agents, Q.SPIEL_QUOTE);
-    bindeAlle(/Spielquote 1:(\d+)/g, agents, T.SPIEL_QUOTE);
   });
   test("das Kennzahl-Soll (#1729) trägt dieselbe Zahl in ticket-reihenfolge.md und, als jüngster Stand, in ADR 0016", () => {
     const wendung = /nach (\d+) Produkt-Merges \(Spielquote 1:\d+\) seit dem letzten Factory-Merge/;
