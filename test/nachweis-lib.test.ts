@@ -226,8 +226,10 @@ describe("vertrauteAbnahmeMarker (#1781 L5b): das Prädikat „vertraut + gülti
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRoh from "../scripts/umsetzer-abschluss.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as extraktionRoh from "../scripts/besitz-extraktion.mjs";
 
-const abschluss = abschlussRoh as unknown as { leitplankenMuster: () => string[]; trifftLeitplanke: (pfad: string, muster: string[]) => boolean };
+const abschluss = { ...abschlussRoh, ...extraktionRoh } as unknown as { leitplankenMuster: () => string[]; trifftLeitplanke: (pfad: string, muster: string[]) => boolean };
 
 describe("Schutzliste (.github/protected-paths.json, #1929): der Kopfkommentar von nachweis-lib.mjs nennt sie als Quelle", () => {
   it("scripts/nachweis-lib.mjs ist eine Leitplanke der echten Liste, und ohne seinen Eintrag wäre es keine", () => {

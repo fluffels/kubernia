@@ -434,8 +434,10 @@ describe("commitImSlice / loeseCommit (#1781 L5a): head im Slice an einer Stelle
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRoh from "../scripts/umsetzer-abschluss.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as extraktionRoh from "../scripts/besitz-extraktion.mjs";
 
-const abschluss = abschlussRoh as unknown as { leitplankenMuster: () => string[]; trifftLeitplanke: (pfad: string, muster: string[]) => boolean };
+const abschluss = { ...abschlussRoh, ...extraktionRoh } as unknown as { leitplankenMuster: () => string[]; trifftLeitplanke: (pfad: string, muster: string[]) => boolean };
 
 describe("Schutzliste (.github/protected-paths.json, #1929): der Kopfkommentar von slice-override.mjs nennt sie als Quelle", () => {
   it("scripts/slice-override.mjs ist eine Leitplanke der echten Liste, und ohne seinen Eintrag wäre es keine", () => {

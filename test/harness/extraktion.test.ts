@@ -429,3 +429,23 @@ describe("Extraktionsliste im echten Repo (#1875)", () => {
     for (const z of ziele) assert.equal(artVon(listeEcht, z), "factory-seite", z);
   });
 });
+
+describe("Schutzlisten-Auslegung in besitz-extraktion.mjs (#1921)", () => {
+  const { schutzlistenMuster, trifftLeitplanke } = rawExtraktion as unknown as {
+    schutzlistenMuster: (text: string) => string[] | null;
+    trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
+  };
+  test("schutzlistenMuster flacht alle String-Arrays ab, ignoriert Nicht-Strings und Nicht-Arrays, kaputtes JSON gibt null", () => {
+    assert.deepEqual(schutzlistenMuster(JSON.stringify({ a: ["/x", 1, "y/"], b: ["/z"], c: "kein Array", d: 3 })), ["/x", "y/", "/z"]);
+    assert.deepEqual(schutzlistenMuster("{}"), []);
+    assert.equal(schutzlistenMuster("{"), null);
+  });
+  test("trifftLeitplanke: Wurzel-Anker, Ebenen-Muster, Verzeichnis-Präfix, Stern ohne Slash", () => {
+    assert.equal(trifftLeitplanke("a/b.mjs", ["/a/b.mjs"]), true);
+    assert.equal(trifftLeitplanke("x/a/b.mjs", ["/a/b.mjs"]), false);
+    assert.equal(trifftLeitplanke("src/content/AGENTS.md", ["AGENTS.md"]), true);
+    assert.equal(trifftLeitplanke("scripts/x/y.mjs", ["/scripts/"]), true);
+    assert.equal(trifftLeitplanke("scripts", ["/scripts/"]), false);
+    assert.equal(trifftLeitplanke("scripts/a/b.mjs", ["/scripts/*.mjs"]), false);
+  });
+});

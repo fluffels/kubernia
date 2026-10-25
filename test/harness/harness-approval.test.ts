@@ -46,11 +46,13 @@ import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as extraktionRaw from "../../scripts/besitz-extraktion.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { markerEnde, markerStart } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex as escapeRe } from "../../scripts/ticket-namen.mjs";
 
-const { trifftLeitplanke, leitplankenMuster } = abschlussRaw as unknown as {
+const { trifftLeitplanke, leitplankenMuster } = { ...abschlussRaw, ...extraktionRaw } as unknown as {
   trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
   leitplankenMuster: () => string[];
 };

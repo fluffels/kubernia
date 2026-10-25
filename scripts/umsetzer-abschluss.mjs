@@ -18,8 +18,8 @@
  * Reines Node-Skript (nur Builtins); `prStatus` ist injizierbar.
  */
 import { ghJson, ghText } from "./gh-cli.mjs";
+import { schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
 import { readFileSync } from "node:fs";
-import { musterRegex } from "./besitz-extraktion.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
@@ -183,28 +183,9 @@ export const AUDIT_KOPF = "\u{1F6E1}\uFE0F Leitplanken-Änderung selbst gemergt"
 /** Leitplanken-Muster: Vereinigung aller String-Arrays in `.github/protected-paths.json` (SSOT, nicht kopieren). */
 export function leitplankenMuster() {
   const quelle = new URL("../.github/protected-paths.json", import.meta.url);
-  return Object.values(JSON.parse(readFileSync(quelle, "utf8"))).flatMap((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []));
-}
-
-/**
- * Trifft `pfad` (Repo-relativ, `/`) eines der Muster? CODEOWNERS-Teilmenge: führendes `/` verankert an der Wurzel;
- * ohne `/` (außer am Ende) auf jeder Ebene; `/` am Ende = Verzeichnis-Präfix; `*` = beliebige Zeichen außer `/`;
- * ein Muster, das ein Elternverzeichnis trifft, trifft alle Dateien darin.
- */
-export function trifftLeitplanke(pfad, muster) {
-  const teile = String(pfad).split("/").filter(Boolean);
-  return muster.some((roh) => {
-    const verzeichnis = roh.endsWith("/");
-    const kern = roh.replace(/^\//, "").replace(/\/$/, "");
-    const segmente = kern.split("/").map(musterRegex);
-    const verankert = roh.startsWith("/") || kern.includes("/");
-    const starts = verankert ? [0] : teile.map((_, i) => i);
-    return starts.some((start) => {
-      const rest = teile.slice(start);
-      if (rest.length < segmente.length + (verzeichnis ? 1 : 0)) return false;
-      return segmente.every((re, i) => re.test(rest[i]));
-    });
-  });
+  const muster = schutzlistenMuster(readFileSync(quelle, "utf8"));
+  if (muster === null) throw new SyntaxError(".github/protected-paths.json: kein gültiges JSON");
+  return muster;
 }
 
 /** GraphQL liefert in `files` höchstens so viele Einträge; genau so viele heißen: möglicherweise abgeschnitten. */

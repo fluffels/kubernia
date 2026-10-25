@@ -27,6 +27,7 @@ import * as rawSkills from "../../scripts/skills-sync.mjs";
 import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
+import { hookSkripte, importeAus } from "./hook-importe";
 
 interface Leser {
   fehler?: string;
@@ -966,5 +967,15 @@ describe("Export aus HEAD", () => {
       const kommentar = ex.baueExport({ leser: mitAenderung(leser, { [lib]: `${basisText(lib)}\n// import x from './gibt-es-nicht.mjs';\n` }) });
       assert.deepEqual(kommentar.befunde, []);
     });
+  });
+});
+
+describe("Wächter: Export-Werkzeug hängt an keinem Hook-Modul (#1921)", () => {
+  test("factory-export-lib.mjs importiert kein Skript, das .claude/settings.json als Hook startet", () => {
+    const hooks = hookSkripte(readFileSync(join(WURZEL, ".claude/settings.json"), "utf8")).map((p) => p.replace(/^scripts\//, ""));
+    assert.ok(hooks.length > 0, "Hook-Skripte gefunden");
+    const text = readFileSync(join(WURZEL, "scripts/factory-export-lib.mjs"), "utf8");
+    const importiert = importeAus(text).map((s) => s.replace(/^\.\//, ""));
+    assert.deepEqual(importiert.filter((i) => hooks.includes(i) || i === "umsetzer-abschluss.mjs"), []);
   });
 });
